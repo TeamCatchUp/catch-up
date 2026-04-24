@@ -139,7 +139,7 @@ class BaseSource(BaseModel):
             "url": metadata.get("url"),
             "created_at": metadata.get("created_at"),
             "updated_at": updated_at,
-            "entity_type": entity_type,
+            "entity_type": entity_type if entity_type != "unknown" else EntityType.COMMENT,
         }
 
         # 1. Jira
@@ -234,7 +234,7 @@ class BaseSource(BaseModel):
         # Fallback
         return UnknownSource(
             **base_data,
-            title="Unknown Source",
+            title=metadata.get("title", "Unknown Source"),
         )
 
 

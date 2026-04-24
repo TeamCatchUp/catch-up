@@ -2,6 +2,7 @@ import logging
 from datetime import datetime
 from typing import Any
 from typing import Dict
+from typing import Literal
 from typing import Optional
 from typing import override
 
@@ -34,8 +35,11 @@ class PostgresFTSRetriever(BaseRetriever):
     session_factory: Any  # e.g) sessionmaker (from sqlalchemy.orm)
     collection_name: str = settings.PGVECTOR_COLLECTION_NAME
     k: int = 4
+    offset: int = 0
     tool_filters: list[SourceType] | None = None
     temporal_filters: list[TemporalFilter] | None = None
+    weighted: bool = False
+    search_mode: Literal["title", "content", "both"] = "both"
 
     @override
     def _get_relevant_documents(
@@ -47,18 +51,19 @@ class PostgresFTSRetriever(BaseRetriever):
         """
         Hybrid Search를 위한 PostgreSQL Full Text search. 
         """
-        
-        # 동적 쿼리 필터
-        filter_clause = ""
-        
-        # pg_bigm similarity 정렬을 위한 원본 쿼리 (리스트일 경우 공백으로 병합)
-        original_query = " ".join(query) if isinstance(query, list) else query
-        tokens = query if isinstance(query, list) else [query]
+        # query가 리스트일 경우 (keyword_tokens 등) 첫 번째 토큰 사용 또는 병합
+        search_query = " ".join(query) if isinstance(query, list) else query
 
+        # PGVectorService의 로직 재사용 (순환 참조 방지를 위해 직접 쿼리 수행하거나 
+        # 필요한 경우 로직을 분리해야 하나, 여기서는 weighted 플래그에 따라 분기)
+        
+        # 동적 쿼리 필터 (기존 로직 유지)
+        filter_clause = ""
         params = {
             "collection_name": self.collection_name,
-            "query": original_query,
-            "k": self.k
+            "query": search_query,
+            "k": self.k,
+            "offset": self.offset
         }
         
         if not self.temporal_filters:
@@ -84,36 +89,96 @@ class PostgresFTSRetriever(BaseRetriever):
                             
             filter_clause = f" AND ({' OR '.join(sql_conditions)})"
 
-        # keyword_tokens가 있으면 LIKE likequery() 필터 생성
-        token_conditions = []
-        for idx, token in enumerate(tokens):
-            param_name = f"keyword_{idx}"
-            token_conditions.append(f"(e.cmetadata ->> 'contextual_content') LIKE likequery(:{param_name})")
-            params[param_name] = token
+        if self.weighted:
+            # Mode에 따른 필드 및 가중치 설정
+            if self.search_mode == "title":
+                exact_boost_sql = "(CASE WHEN (e.cmetadata ->> 'title') LIKE likequery(:query) THEN 1 ELSE 0 END)"
+                sim_score_sql = "bigm_similarity(e.cmetadata ->> 'title', :query)"
+                field_filter_sql = """
+                    AND (
+                        (e.cmetadata ->> 'title') =% :query
+                        OR (e.cmetadata ->> 'title') LIKE likequery(:query)
+                    )
+                """
+            elif self.search_mode == "content":
+                exact_boost_sql = "(CASE WHEN (e.cmetadata ->> 'contextual_content') LIKE likequery(:query) THEN 1 ELSE 0 END)"
+                sim_score_sql = "bigm_similarity(e.cmetadata ->> 'contextual_content', :query)"
+                field_filter_sql = """
+                    AND (
+                        (e.cmetadata ->> 'contextual_content') =% :query
+                        OR (e.cmetadata ->> 'contextual_content') LIKE likequery(:query)
+                    )
+                """
+            else: # both
+                exact_boost_sql = """
+                    (
+                        (CASE WHEN (e.cmetadata ->> 'title') LIKE likequery(:query) THEN 2 ELSE 0 END) +
+                        (CASE WHEN (e.cmetadata ->> 'contextual_content') LIKE likequery(:query) THEN 1 ELSE 0 END)
+                    )
+                """
+                sim_score_sql = """
+                    (
+                        (bigm_similarity(e.cmetadata ->> 'title', :query) * 2.0) +
+                        bigm_similarity(e.cmetadata ->> 'contextual_content', :query)
+                    )
+                """
+                field_filter_sql = """
+                    AND (
+                        (e.cmetadata ->> 'title') =% :query
+                        OR (e.cmetadata ->> 'title') LIKE likequery(:query)
+                        OR (e.cmetadata ->> 'contextual_content') =% :query
+                        OR (e.cmetadata ->> 'contextual_content') LIKE likequery(:query)
+                    )
+                """
 
-        # 1차 검색 (AND 조건)
-        and_filter = f" AND ({' AND '.join(token_conditions)})" if token_conditions else ""
-        
-        search_sql_template = """
-            SELECT e.document, e.cmetadata, e.id
-            FROM langchain_pg_embedding e
-            JOIN langchain_pg_collection c ON e.collection_id = c.uuid
-            WHERE c.name = :collection_name
-              {filter_clause}
-              {keyword_filter}
-            ORDER BY bigm_similarity(e.cmetadata ->> 'contextual_content', :query) DESC
-            LIMIT :k
-        """
+            # Weighted Keyword Search Logic
+            search_sql = text(f"""
+                SELECT e.document, e.cmetadata, e.id,
+                    {exact_boost_sql} as exact_match_boost,
+                    {sim_score_sql} as similarity_score
+                FROM langchain_pg_embedding e
+                JOIN langchain_pg_collection c ON e.collection_id = c.uuid
+                WHERE c.name = :collection_name
+                {filter_clause}
+                {field_filter_sql}
+                ORDER BY 
+                    exact_match_boost DESC,
+                    similarity_score DESC,
+                    (e.cmetadata ->> 'created_at')::timestamp DESC
+                LIMIT :k OFFSET :offset
+            """)
+        else:
+            # 기존 FTS 로직 (Fallback 유지)
+            # keyword_tokens가 있으면 LIKE likequery() 필터 생성
+            tokens = query if isinstance(query, list) else [query]
+            token_conditions = []
+            for idx, token in enumerate(tokens):
+                param_name = f"keyword_{idx}"
+                token_conditions.append(f"(e.cmetadata ->> 'contextual_content') LIKE likequery(:{param_name})")
+                params[param_name] = token
 
-        search_sql_and = text(search_sql_template.format(
-            filter_clause=filter_clause,
-            keyword_filter=and_filter
-        ))
+            # 1차 검색 (AND 조건)
+            and_filter = f" AND ({' AND '.join(token_conditions)})" if token_conditions else ""
+            
+            search_sql_template = """
+                SELECT e.document, e.cmetadata, e.id
+                FROM langchain_pg_embedding e
+                JOIN langchain_pg_collection c ON e.collection_id = c.uuid
+                WHERE c.name = :collection_name
+                {filter_clause}
+                {keyword_filter}
+                ORDER BY bigm_similarity(e.cmetadata ->> 'contextual_content', :query) DESC
+                LIMIT :k OFFSET :offset
+            """
+            search_sql = text(search_sql_template.format(
+                filter_clause=filter_clause,
+                keyword_filter=and_filter
+            ))
+
+        results = list(self._do_query(search_sql, params))
         
-        results = list(self._do_query(search_sql_and, params))
-        
-        # 2차 검색 (Fallback: 결과가 k개 미만이면 OR 조건으로 추가 검색)
-        if len(results) < self.k and len(tokens) > 1:
+        # 2차 검색 (Fallback: weighted가 아니고 결과가 k개 미만이면 OR 조건으로 추가 검색)
+        if not self.weighted and len(results) < self.k and len(tokens) > 1:
             or_filter = f" AND ({' OR '.join(token_conditions)})"
             search_sql_or = text(search_sql_template.format(
                 filter_clause=filter_clause,
@@ -130,7 +195,7 @@ class PostgresFTSRetriever(BaseRetriever):
                     if len(results) >= self.k:
                         break
 
-        docs = self._get_documents_from_results(results[:self.k])
+        docs = self._get_documents_from_results(results)
         return docs
 
     def _do_query(
@@ -203,10 +268,12 @@ class PGVectorService(BaseVectorDbService):
         self,
         query: str,
         k: int = 4,
-        weights: list[float] = [0.5, 0.5],
+        weights: list[float] = [0.3, 0.5, 0.2],
         tool_filters: list[SourceType] | None = None,
         temporal_filters: list[TemporalFilter] | None = None,
         keyword_tokens: list[str] | None = None,
+        offset: int = 0,
+        score_threshold: float = 0.4,
     ) -> list[Document]:
         """
         Langchain 기반 Hybrid Search를 수행한다.
@@ -215,8 +282,12 @@ class PGVectorService(BaseVectorDbService):
             tool_filters=tool_filters,
             temporal_filters=temporal_filters,
             k=k,
-            weights=weights
+            weights=weights,
+            keyword_tokens=keyword_tokens,
+            offset=offset,
+            score_threshold=score_threshold
         )
+
         
         return hybrid_search_chain.invoke({
             "semantic_query": query,
@@ -226,16 +297,22 @@ class PGVectorService(BaseVectorDbService):
     def _hybrid_search_chain(
         self,
         k: int = 4,
-        weights: list[float] = [0.5, 0.5],  # [Vector, Keyword]
+        weights: list[float] = [0.3, 0.5, 0.2],  # [Vector, Title, Content]
         tool_filters: list[SourceType] | None = None,
-        temporal_filters: list[TemporalFilter] | None = None
+        temporal_filters: list[TemporalFilter] | None = None,
+        keyword_tokens: list[str] | None = None,
+        offset: int = 0,
+        score_threshold: float = 0.4
     ) -> RunnableSerializable[RetrieverInput, list[Document]]:
         """
         PostgreSQL FTS와 PGVector Similarity Search를 결합하여 
-        Hybrid Search Chain을 생성한다.
+        3-Way Hybrid Search Chain을 생성한다.
         """
         
-        search_kwargs = {"k": k}
+        # Semantic Retriever (HNSW)
+        # Recall 확보를 위해 k + offset보다 더 많은 후보(100)를 가져옴
+        semantic_k = max(100, k + offset)
+        search_kwargs = {"k": semantic_k}
         
         if not temporal_filters:
             if tool_filters:
@@ -255,111 +332,155 @@ class PGVectorService(BaseVectorDbService):
         
         vector_retriever = self.vector_store.as_retriever(search_kwargs=search_kwargs)
 
-        keyword_retriever = PostgresFTSRetriever(
+        # Title Keyword Retriever
+        title_retriever = PostgresFTSRetriever(
             session_factory=self.session_factory,
             collection_name=self.collection_name,
-            k=k,
+            k=semantic_k, # Fusion 전까지는 충분한 후보 유지
+            offset=offset,
             tool_filters=tool_filters,
-            temporal_filters=temporal_filters
+            temporal_filters=temporal_filters,
+            weighted=True,
+            search_mode="title"
+        )
+        
+        # Content Keyword Retriever
+        content_retriever = PostgresFTSRetriever(
+            session_factory=self.session_factory,
+            collection_name=self.collection_name,
+            k=semantic_k,
+            offset=offset,
+            tool_filters=tool_filters,
+            temporal_filters=temporal_filters,
+            weighted=True,
+            search_mode="content"
         )
         
         retriever_parallel = RunnableParallel(
-            vector_docs=RunnableLambda(lambda x: vector_retriever.invoke(x["semantic_query"])),
-            keyword_docs=RunnableLambda(lambda x: keyword_retriever.invoke(x["keyword_tokens"]))
+            # Semantic 결과 필터링 (score_threshold 미만 제거)
+            vector_docs=RunnableLambda(
+                lambda x: [
+                    doc for doc, score in self.vector_store.similarity_search_with_score(
+                        query=x["semantic_query"], 
+                        k=semantic_k,
+                        filter=search_kwargs.get("filter")
+                    )[offset:]
+                    if score >= score_threshold
+                ]
+            ),
+            title_docs=RunnableLambda(lambda x: title_retriever.invoke(x["keyword_tokens"])),
+            content_docs=RunnableLambda(lambda x: content_retriever.invoke(x["keyword_tokens"]))
         )
         
         def apply_rrf(results):
-            return weighted_reciprocal_rank(
+            # 3-Way RRF Fusion
+            merged_docs = weighted_reciprocal_rank(
                 doc_lists=[
                     results["vector_docs"],
-                    results["keyword_docs"]
+                    results["title_docs"],
+                    results["content_docs"]
                 ],
                 weights=weights                
             )
+            # 최종 limit (k) 적용
+            return merged_docs[:k]
         
         chain = retriever_parallel | RunnableLambda(apply_rrf)
         
         return chain
 
-    def manual_keyword_search(
+    def _weighted_keyword_search(
         self,
-        keyword: str,
-        limit: int = 20,
+        query: str,
+        k: int = 20,
+        tool_filters: list[SourceType] | None = None,
+        search_mode: Literal["title", "content", "both"] = "both",
         offset: int = 0,
-        integrations: list[SourceType] | None = None,
-        start_date: datetime | None = None,
-        end_date: datetime | None = None,
     ) -> list[Document]:
         """
-        SQLAlchemy를 사용하여 pg_bigm 기반 키워드 검색을 수행한다.
+        Weighted Keyword Search Logic
         """
         params = {
             "collection_name": self.collection_name,
-            "query": keyword,
-            "limit": limit,
+            "query": query,
+            "k": k,
             "offset": offset
         }
 
-        # 동적 필터 구성
-        filter_clauses = []
-        if integrations:
-            filter_clauses.append("e.cmetadata ->> 'source' = ANY(:tools)")
-            params["tools"] = [t.value for t in integrations]
-        
-        if start_date and end_date:
-            # 기본적으로 created_at 필드를 기준으로 검색 (필요 시 확장 가능)
-            filter_clauses.append("(e.cmetadata ->> 'created_at')::timestamp BETWEEN :start_date AND :end_date")
-            params["start_date"] = start_date
-            params["end_date"] = end_date
+        filter_clause = ""
+        if tool_filters:
+            filter_clause = " AND e.cmetadata ->> 'source' = ANY(:tools)"
+            params["tools"] = [f.value for f in tool_filters]
 
-        filter_str = " AND ".join(filter_clauses)
-        if filter_str:
-            filter_str = f" AND {filter_str}"
+        # Mode에 따른 필드 및 가중치 설정 (Retriever와 동일 로직)
+        if search_mode == "title":
+            exact_boost_sql = "(CASE WHEN (e.cmetadata ->> 'title') LIKE likequery(:query) THEN 1 ELSE 0 END)"
+            sim_score_sql = "bigm_similarity(e.cmetadata ->> 'title', :query)"
+            field_filter_sql = """
+                AND (
+                    (e.cmetadata ->> 'title') =% :query
+                    OR (e.cmetadata ->> 'title') LIKE likequery(:query)
+                )
+            """
+        elif search_mode == "content":
+            exact_boost_sql = "(CASE WHEN (e.cmetadata ->> 'contextual_content') LIKE likequery(:query) THEN 1 ELSE 0 END)"
+            sim_score_sql = "bigm_similarity(e.cmetadata ->> 'contextual_content', :query)"
+            field_filter_sql = """
+                AND (
+                    (e.cmetadata ->> 'contextual_content') =% :query
+                    OR (e.cmetadata ->> 'contextual_content') LIKE likequery(:query)
+                )
+            """
+        else: # both
+            exact_boost_sql = """
+                (
+                    (CASE WHEN (e.cmetadata ->> 'title') LIKE likequery(:query) THEN 2 ELSE 0 END) +
+                    (CASE WHEN (e.cmetadata ->> 'contextual_content') LIKE likequery(:query) THEN 1 ELSE 0 END)
+                )
+            """
+            sim_score_sql = """
+                (
+                    (bigm_similarity(e.cmetadata ->> 'title', :query) * 2.0) +
+                    bigm_similarity(e.cmetadata ->> 'contextual_content', :query)
+                )
+            """
+            field_filter_sql = """
+                AND (
+                    (e.cmetadata ->> 'title') =% :query
+                    OR (e.cmetadata ->> 'title') LIKE likequery(:query)
+                    OR (e.cmetadata ->> 'contextual_content') =% :query
+                    OR (e.cmetadata ->> 'contextual_content') LIKE likequery(:query)
+                )
+            """
 
-        # 하이브리드 키워드 필터: 유사도(=%) 또는 부분 일치(LIKE likequery)
-        # likequery()는 내부적으로 특수문자 이스케이프 및 앞뒤 % 추가를 처리함
-        keyword_filter = """
-            AND (
-                (e.cmetadata ->> 'contextual_content') =% :query
-                OR (e.cmetadata ->> 'contextual_content') LIKE likequery(:query)
-            )
-        """
-
-        # Precision 극대화: 
-        # 1. Exact Match 여부 (Boolean) - LIKE likequery 사용
-        # 2. 유사도 점수 (float)
-        # 3. 최신성 (timestamp)
         search_sql = text(f"""
             SELECT e.document, e.cmetadata, e.id,
-                   (CASE WHEN (e.cmetadata ->> 'contextual_content') LIKE likequery(:query) THEN 1 ELSE 0 END) as exact_match_boost,
-                   bigm_similarity(e.cmetadata ->> 'contextual_content', :query) as similarity_score
+                {exact_boost_sql} as exact_match_boost,
+                {sim_score_sql} as similarity_score
             FROM langchain_pg_embedding e
             JOIN langchain_pg_collection c ON e.collection_id = c.uuid
             WHERE c.name = :collection_name
-              {filter_str}
-              {keyword_filter}
+            {filter_clause}
+            {field_filter_sql}
             ORDER BY 
                 exact_match_boost DESC,
                 similarity_score DESC,
                 (e.cmetadata ->> 'created_at')::timestamp DESC
-            LIMIT :limit OFFSET :offset
+            LIMIT :k OFFSET :offset
         """)
 
         with self.session_factory() as session:
-            # 유사도 임계치 설정 (Recall 확보를 위해 낮게 유지)
             session.execute(text("SET LOCAL pg_bigm.similarity_limit = 0.02"))
             results = session.execute(search_sql, params).fetchall()
 
-        docs = []
-        for row in results:
-            docs.append(
-                Document(
-                    page_content=row[0],
-                    metadata=row[1] if row[1] else {},
-                    id=row[2]
-                )
+        return [
+            Document(
+                page_content=row[0],
+                metadata=row[1] if row[1] else {},
+                id=row[2]
             )
-        return docs
+            for row in results
+        ]
 
     def similarity_search(
         self,

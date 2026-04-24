@@ -9,7 +9,7 @@ from catchup.components.vector_db.pgvector.pgvector import PGVectorService
 from catchup.db.models import SourceType
 
 
-class TestPGVectorServiceManualSearch(unittest.TestCase):
+class TestPGVectorServiceWeightedSearch(unittest.TestCase):
     def setUp(self):
         self.mock_engine = MagicMock()
         self.mock_embeddings = MagicMock()
@@ -19,7 +19,6 @@ class TestPGVectorServiceManualSearch(unittest.TestCase):
             self.mock_session
         )
 
-        # PGVectorService 초기화 (vector_store 생성 부분은 patch로 우회)
         with patch("catchup.components.vector_db.pgvector.pgvector.PGVector"):
             self.service = PGVectorService(
                 postgresql_engine=self.mock_engine,
@@ -27,59 +26,117 @@ class TestPGVectorServiceManualSearch(unittest.TestCase):
                 session_factory=self.mock_session_factory,
             )
 
-    def test_manual_keyword_search_basic(self):
-        # Mock results (document, metadata, id, exact_match_boost, similarity_score)
-        self.mock_session.execute.return_value.fetchall.return_value = [
-            ("Content 1", {"source": "slack"}, "id1", 1, 1.0),
-            ("Content 2", {"source": "jira"}, "id2", 0, 0.5),
-        ]
-
-        results = self.service.manual_keyword_search(keyword="test")
-
-        self.assertEqual(len(results), 2)
-        self.assertIsInstance(results[0], Document)
-        self.assertEqual(results[0].page_content, "Content 1")
-
-        # SQL 호출 검증
-        args, kwargs = self.mock_session.execute.call_args
-        sql_text = str(args[0])
-        self.assertIn("langchain_pg_embedding", sql_text)
-        self.assertIn("LIKE likequery(:query)", sql_text) # Exact match boost & filter
-        self.assertIn("=% :query", sql_text)         # Similarity filter
-        self.assertIn("ORDER BY", sql_text)
-        self.assertIn("exact_match_boost DESC", sql_text)
-        self.assertIn("similarity_score DESC", sql_text)
-
-        params = args[1]
-        self.assertEqual(params["query"], "test")
-        self.assertNotIn("like_query", params) # like_query 파라미터는 더 이상 사용하지 않음
-        self.assertEqual(params["limit"], 20)
-        self.assertEqual(params["offset"], 0)
-
-    def test_manual_keyword_search_with_filters(self):
+    def test_weighted_keyword_search_sql_structure(self):
         self.mock_session.execute.return_value.fetchall.return_value = []
 
-        start_date = datetime(2023, 1, 1)
-        end_date = datetime(2023, 12, 31)
+        # 1. Both mode (Default)
+        self.service._weighted_keyword_search(query="hybrid test")
+        args, _ = self.mock_session.execute.call_args
+        sql_both = str(args[0])
+        self.assertIn("(CASE WHEN (e.cmetadata ->> 'title') LIKE likequery(:query) THEN 2 ELSE 0 END)", sql_both)
+        self.assertIn("(bigm_similarity(e.cmetadata ->> 'title', :query) * 2.0)", sql_both)
 
-        self.service.manual_keyword_search(
-            keyword="test",
-            limit=10,
-            offset=5,
-            integrations=[SourceType.SLACK, SourceType.JIRA],
-            start_date=start_date,
-            end_date=end_date,
+        # 2. Title mode
+        self.service._weighted_keyword_search(query="title test", search_mode="title")
+        args, _ = self.mock_session.execute.call_args
+        sql_title = str(args[0])
+        self.assertIn("(CASE WHEN (e.cmetadata ->> 'title') LIKE likequery(:query) THEN 1 ELSE 0 END)", sql_title)
+        self.assertNotIn("'contextual_content'", sql_title) # Content 필드 배제 확인
+
+        # 3. Content mode
+        self.service._weighted_keyword_search(query="content test", search_mode="content")
+        args, _ = self.mock_session.execute.call_args
+        sql_content = str(args[0])
+        self.assertIn("(CASE WHEN (e.cmetadata ->> 'contextual_content') LIKE likequery(:query) THEN 1 ELSE 0 END)", sql_content)
+        self.assertNotIn("'title'", sql_content) # Title 필드 배제 확인
+
+    def test_weighted_keyword_search_results_conversion(self):
+        # Mock results: (document, metadata, id, exact_match_boost, similarity_score)
+        self.mock_session.execute.return_value.fetchall.return_value = [
+            ("Doc 1", {"title": "Matched Title"}, "id1", 3, 2.5),
+            ("Doc 2", {"title": "Other"}, "id2", 1, 0.5),
+        ]
+
+        results = self.service._weighted_keyword_search(query="test")
+
+        self.assertEqual(len(results), 2)
+        self.assertEqual(results[0].page_content, "Doc 1")
+        self.assertEqual(results[0].metadata["title"], "Matched Title")
+        self.assertEqual(results[1].page_content, "Doc 2")
+
+    def test_hybrid_search_3way_rrf_logic(self):
+        # hybrid_search가 내부적으로 3개의 retriever를 호출하고 weighted_reciprocal_rank를 사용하는지 확인
+        # vector_store.as_retriever()와 PostgresFTSRetriever를 적절히 모킹해야 함
+        
+        with patch.object(self.service.vector_store, "as_retriever") as mock_vector_retriever, \
+             patch("catchup.components.vector_db.pgvector.pgvector.PostgresFTSRetriever") as mock_fts_class:
+            
+            # Setup mocks
+            mock_vector_retriever.return_value.invoke.return_value = [Document(page_content="V1", id="id1")]
+            
+            mock_title_retriever = MagicMock()
+            mock_title_retriever.invoke.return_value = [Document(page_content="T1", id="id1")]
+            
+            mock_content_retriever = MagicMock()
+            mock_content_retriever.invoke.return_value = [Document(page_content="C1", id="id2")]
+            
+            # Side effect for PostgresFTSRetriever instances (title, then content)
+            mock_fts_class.side_effect = [mock_title_retriever, mock_content_retriever]
+            
+            # Execute
+            results = self.service.hybrid_search(query="test", k=2)
+            
+            # Verify
+            self.assertEqual(len(results), 2)
+            # id1은 Vector와 Title에서 매칭되어 상위권 예상
+            self.assertEqual(results[0].id, "id1")
+            self.assertEqual(results[1].id, "id2")
+            
+            # Check weights passed to RRF (via internal _hybrid_search_chain)
+            # 여기서는 호출 여부와 결과 수 정도로 검증
+            self.assertTrue(mock_vector_retriever.called)
+            self.assertEqual(mock_fts_class.call_count, 2)
+
+    def test_hybrid_search_score_threshold_filtering(self):
+        # score_threshold 이하의 semantic 결과가 필터링되는지 확인
+        with patch.object(self.service.vector_store, "similarity_search_with_score") as mock_sim_search, \
+             patch("catchup.components.vector_db.pgvector.pgvector.PostgresFTSRetriever") as mock_fts_class:
+            
+            # High score (0.8) and Low score (0.2)
+            mock_sim_search.return_value = [
+                (Document(page_content="High", id="id_high"), 0.8),
+                (Document(page_content="Low", id="id_low"), 0.2)
+            ]
+            
+            # Keyword 결과는 빈 리스트 (Semantic만 테스트)
+            mock_retriever = MagicMock()
+            mock_retriever.invoke.return_value = []
+            mock_fts_class.return_value = mock_retriever
+            
+            # Default threshold (0.4)
+            results = self.service.hybrid_search(query="test", score_threshold=0.4)
+            
+            # id_low (0.2)는 필터링되어야 함
+            self.assertEqual(len(results), 1)
+            self.assertEqual(results[0].id, "id_high")
+
+    def test_unknown_source_relevance_score(self):
+        from catchup.rag.schemas.sources import BaseSource
+        
+        # Mock document with no source (will trigger fallback to UnknownSource)
+        doc = Document(
+            page_content="Content",
+            metadata={"score": 0.7}, # RRF score
+            id="unknown_id"
         )
-
-        args, kwargs = self.mock_session.execute.call_args
-        params = args[1]
-        sql_text = str(args[0])
-
-        self.assertEqual(params["limit"], 10)
-        self.assertEqual(params["offset"], 5)
-        self.assertEqual(params["tools"], ["slack", "jira"])
-        self.assertEqual(params["start_date"], start_date)
-        self.assertEqual(params["end_date"], end_date)
-        self.assertIn("BETWEEN :start_date AND :end_date", sql_text)
-        self.assertIn("= ANY(:tools)", sql_text)
+        
+        # Should not raise TypeError: got multiple values for keyword argument 'relevance_score'
+        source = BaseSource.from_document(
+            index=1,
+            doc=doc,
+            relevance_score=doc.metadata["score"]
+        )
+        
+        self.assertEqual(source.relevance_score, 0.7)
+        self.assertEqual(source.title, "Unknown Source")
 

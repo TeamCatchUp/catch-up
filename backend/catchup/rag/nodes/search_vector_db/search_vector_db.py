@@ -36,7 +36,7 @@ async def search_vector_db_node(state: AgentState, vector_db_service: BaseVector
             queries=queries,
             tool_filters=tool_filters,
             k=100,
-            weights=[0.6, 0.4],
+            weights=[0.5, 0.3, 0.2],
         )
     except Exception as e:
         logger.warning(
@@ -62,7 +62,7 @@ async def _get_hybrid_search_results(
     queries: list[VectorDbSearchQuery],
     tool_filters: list[SourceType] | None = None,
     k: int = 10,
-    weights: list[float] = [0.5, 0.5],
+    weights: list[float] = [0.5, 0.3, 0.2],
 ):
     
     loop = asyncio.get_running_loop()
