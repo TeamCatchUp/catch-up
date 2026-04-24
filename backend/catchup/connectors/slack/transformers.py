@@ -112,14 +112,15 @@ class SlackTransformer:
     def extract_message_body(self, data: dict[str, Any]) -> str:
         """Return the best human-readable body from Slack text/blocks/attachments."""
         parts: list[str] = []
+        part_keys: set[str] = set()
 
-        self._append_unique_text(parts, data.get("text"))
+        self._append_unique_text(parts, data.get("text"), part_keys)
 
         for block in data.get("blocks", []) or []:
-            self._append_unique_text(parts, self._extract_block_text(block))
+            self._append_unique_text(parts, self._extract_block_text(block), part_keys)
 
         for attachment in data.get("attachments", []) or []:
-            self._append_unique_text(parts, self._extract_attachment_text(attachment))
+            self._append_unique_text(parts, self._extract_attachment_text(attachment), part_keys)
 
         return "\n\n".join(parts).strip()
 
@@ -373,13 +374,20 @@ class SlackTransformer:
         return re.sub(r"\s+", "", without_list_markers)
 
     @classmethod
-    def _append_unique_text(cls, parts: list[str], value: str | None) -> None:
+    def _append_unique_text(
+        cls,
+        parts: list[str],
+        value: str | None,
+        key_cache: set[str] | None = None,
+    ) -> None:
         text = value.strip() if isinstance(value, str) else ""
         if not text:
             return
 
         new_key = cls._dedupe_key(text)
         if not new_key:
+            return
+        if key_cache is not None and new_key in key_cache:
             return
 
         for index, existing in enumerate(parts):
@@ -392,9 +400,14 @@ class SlackTransformer:
                 return
             if existing_key in new_key:
                 parts[index] = text
+                if key_cache is not None:
+                    key_cache.discard(existing_key)
+                    key_cache.add(new_key)
                 return
 
         parts.append(text)
+        if key_cache is not None:
+            key_cache.add(new_key)
 
     def _extract_block_text(self, block: dict[str, Any]) -> str:
         block_type = block.get("type")
@@ -402,38 +415,44 @@ class SlackTransformer:
             return ""
 
         parts: list[str] = []
+        part_keys: set[str] = set()
 
         if block_type == "rich_text":
             return self._extract_rich_text_elements(block.get("elements", []))
 
         for key in ("text", "label", "hint"):
-            self._append_unique_text(parts, self._extract_text_object(block.get(key)))
+            self._append_unique_text(parts, self._extract_text_object(block.get(key)), part_keys)
 
         for field in block.get("fields", []) or []:
-            self._append_unique_text(parts, self._extract_text_object(field))
+            self._append_unique_text(parts, self._extract_text_object(field), part_keys)
 
         for element in block.get("elements", []) or []:
             if isinstance(element, dict):
-                self._append_unique_text(parts, self._extract_text_object(element))
+                self._append_unique_text(parts, self._extract_text_object(element), part_keys)
 
         if block_type == "input":
-            self._append_unique_text(parts, self._extract_input_element_text(block.get("element")))
+            self._append_unique_text(
+                parts,
+                self._extract_input_element_text(block.get("element")),
+                part_keys,
+            )
 
         return "\n".join(parts).strip()
 
     def _extract_attachment_text(self, attachment: dict[str, Any]) -> str:
         parts: list[str] = []
+        part_keys: set[str] = set()
 
         for key in ("pretext", "title", "text", "fallback"):
-            self._append_unique_text(parts, attachment.get(key))
+            self._append_unique_text(parts, attachment.get(key), part_keys)
 
         for field in attachment.get("fields", []) or []:
             title = field.get("title", "")
             value = field.get("value", "")
             if title and value:
-                self._append_unique_text(parts, f"{title}: {value}")
+                self._append_unique_text(parts, f"{title}: {value}", part_keys)
             else:
-                self._append_unique_text(parts, title or value)
+                self._append_unique_text(parts, title or value, part_keys)
 
         return "\n".join(parts).strip()
 
@@ -451,20 +470,26 @@ class SlackTransformer:
             return ""
 
         parts: list[str] = []
+        part_keys: set[str] = set()
         for key in ("initial_value", "initial_date", "initial_time"):
             value = element.get(key)
             if isinstance(value, str):
-                self._append_unique_text(parts, value)
+                self._append_unique_text(parts, value, part_keys)
 
         if isinstance(element.get("initial_option"), dict):
             self._append_unique_text(
                 parts,
                 self._extract_text_object(element["initial_option"].get("text")),
+                part_keys,
             )
 
         for option in element.get("initial_options", []) or []:
             if isinstance(option, dict):
-                self._append_unique_text(parts, self._extract_text_object(option.get("text")))
+                self._append_unique_text(
+                    parts,
+                    self._extract_text_object(option.get("text")),
+                    part_keys,
+                )
 
         return "\n".join(parts).strip()
 
@@ -485,44 +510,74 @@ class SlackTransformer:
             return ""
 
         element_type = element.get("type")
-
-        if element_type == "text":
-            return element.get("text", "")
-        if element_type == "link":
-            url = element.get("url", "")
-            text = element.get("text")
-            return f"<{url}|{text}>" if text else url
-        if element_type == "user":
-            user_id = element.get("user_id") or element.get("user")
-            return f"<@{user_id}>" if user_id else ""
-        if element_type == "channel":
-            channel_id = element.get("channel_id") or element.get("channel")
-            return f"<#{channel_id}>" if channel_id else ""
-        if element_type == "usergroup":
-            group_id = element.get("usergroup_id") or element.get("usergroup")
-            return f"<!subteam^{group_id}>" if group_id else ""
-        if element_type == "emoji":
-            name = element.get("name")
-            return f":{name}:" if name else ""
-        if element_type == "date":
-            timestamp = element.get("timestamp")
-            fallback = element.get("fallback", "")
-            return f"<!date^{timestamp}^{{date_short_pretty}}|{fallback}>" if timestamp else fallback
-        if element_type == "broadcast":
-            range_name = element.get("range")
-            return f"<!{range_name}>" if range_name else ""
-        if element_type == "rich_text_section":
-            nested = element.get("elements")
-            if isinstance(nested, list):
-                return "".join(self._extract_rich_text_element(item) for item in nested)
-        if element_type == "rich_text_list":
-            return self._extract_rich_text_list(element)
+        handlers = {
+            "text": self._extract_rich_text_plain_text,
+            "link": self._extract_rich_text_link,
+            "user": self._extract_rich_text_user,
+            "channel": self._extract_rich_text_channel,
+            "usergroup": self._extract_rich_text_usergroup,
+            "emoji": self._extract_rich_text_emoji,
+            "date": self._extract_rich_text_date,
+            "broadcast": self._extract_rich_text_broadcast,
+            "rich_text_section": self._extract_rich_text_section,
+            "rich_text_list": self._extract_rich_text_list,
+        }
+        handler = handlers.get(element_type)
+        if handler:
+            return handler(element)
 
         nested = element.get("elements")
         if isinstance(nested, list):
             return self._extract_rich_text_elements(nested)
 
         return self._extract_text_object(element)
+
+    @staticmethod
+    def _extract_rich_text_plain_text(element: dict[str, Any]) -> str:
+        return element.get("text", "")
+
+    @staticmethod
+    def _extract_rich_text_link(element: dict[str, Any]) -> str:
+        url = element.get("url", "")
+        text = element.get("text")
+        return f"<{url}|{text}>" if text else url
+
+    @staticmethod
+    def _extract_rich_text_user(element: dict[str, Any]) -> str:
+        user_id = element.get("user_id") or element.get("user")
+        return f"<@{user_id}>" if user_id else ""
+
+    @staticmethod
+    def _extract_rich_text_channel(element: dict[str, Any]) -> str:
+        channel_id = element.get("channel_id") or element.get("channel")
+        return f"<#{channel_id}>" if channel_id else ""
+
+    @staticmethod
+    def _extract_rich_text_usergroup(element: dict[str, Any]) -> str:
+        group_id = element.get("usergroup_id") or element.get("usergroup")
+        return f"<!subteam^{group_id}>" if group_id else ""
+
+    @staticmethod
+    def _extract_rich_text_emoji(element: dict[str, Any]) -> str:
+        name = element.get("name")
+        return f":{name}:" if name else ""
+
+    @staticmethod
+    def _extract_rich_text_date(element: dict[str, Any]) -> str:
+        timestamp = element.get("timestamp")
+        fallback = element.get("fallback", "")
+        return f"<!date^{timestamp}^{{date_short_pretty}}|{fallback}>" if timestamp else fallback
+
+    @staticmethod
+    def _extract_rich_text_broadcast(element: dict[str, Any]) -> str:
+        range_name = element.get("range")
+        return f"<!{range_name}>" if range_name else ""
+
+    def _extract_rich_text_section(self, element: dict[str, Any]) -> str:
+        nested = element.get("elements")
+        if isinstance(nested, list):
+            return "".join(self._extract_rich_text_element(item) for item in nested)
+        return ""
 
     def _extract_rich_text_list(self, element: dict[str, Any]) -> str:
         items: list[str] = []
