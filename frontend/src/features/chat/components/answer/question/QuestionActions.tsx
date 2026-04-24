@@ -13,9 +13,13 @@ interface QuestionActionsProps {
 }
 
 export default function QuestionActions({ content, onEdit }: QuestionActionsProps) {
-  const handleCopy = () => {
-    navigator.clipboard.writeText(content);
-    toast('질문이 복사되었습니다.');
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(content);
+      toast('질문이 복사되었습니다.');
+    } catch {
+      toast('복사에 실패했습니다.');
+    }
   };
 
   return (
