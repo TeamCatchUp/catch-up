@@ -109,6 +109,20 @@ class SlackTransformer:
         """Slack 마크다운을 LLM 입력용 평문으로 정규화"""
         return self._parse_slack_markdown(text)
 
+    def extract_message_body(self, data: dict[str, Any]) -> str:
+        """Return the best human-readable body from Slack text/blocks/attachments."""
+        parts: list[str] = []
+
+        self._append_unique_text(parts, data.get("text"))
+
+        for block in data.get("blocks", []) or []:
+            self._append_unique_text(parts, self._extract_block_text(block))
+
+        for attachment in data.get("attachments", []) or []:
+            self._append_unique_text(parts, self._extract_attachment_text(attachment))
+
+        return "\n\n".join(parts).strip()
+
     def _build_semantic_content(self, message: SlackMessage) -> str:
         """
         LLM Summarizer에게 전달되는 의미 중심의 텍스트
@@ -341,6 +355,190 @@ class SlackTransformer:
         }
 
     # ================================================================
+    # Slack text/block extraction utilities
+    # ================================================================
+
+    @staticmethod
+    def _compact_text(value: str | None) -> str:
+        if not value:
+            return ""
+        return re.sub(r"\s+", " ", value).strip()
+
+    @classmethod
+    def _dedupe_key(cls, value: str | None) -> str:
+        compacted = cls._compact_text(value).lower()
+        without_formatting = re.sub(r"[*_~`]", "", compacted)
+        without_list_markers = re.sub(r"(?:^|\s)[•*-]\s+", " ", without_formatting)
+        without_list_markers = without_list_markers.replace("•", "")
+        return re.sub(r"\s+", "", without_list_markers)
+
+    @classmethod
+    def _append_unique_text(cls, parts: list[str], value: str | None) -> None:
+        text = value.strip() if isinstance(value, str) else ""
+        if not text:
+            return
+
+        new_key = cls._dedupe_key(text)
+        if not new_key:
+            return
+
+        for index, existing in enumerate(parts):
+            existing_key = cls._dedupe_key(existing)
+            if not existing_key:
+                continue
+            if existing_key == new_key:
+                return
+            if new_key in existing_key:
+                return
+            if existing_key in new_key:
+                parts[index] = text
+                return
+
+        parts.append(text)
+
+    def _extract_block_text(self, block: dict[str, Any]) -> str:
+        block_type = block.get("type")
+        if block_type in {"actions", "divider", "image", "file"}:
+            return ""
+
+        parts: list[str] = []
+
+        if block_type == "rich_text":
+            return self._extract_rich_text_elements(block.get("elements", []))
+
+        for key in ("text", "label", "hint"):
+            self._append_unique_text(parts, self._extract_text_object(block.get(key)))
+
+        for field in block.get("fields", []) or []:
+            self._append_unique_text(parts, self._extract_text_object(field))
+
+        for element in block.get("elements", []) or []:
+            if isinstance(element, dict):
+                self._append_unique_text(parts, self._extract_text_object(element))
+
+        if block_type == "input":
+            self._append_unique_text(parts, self._extract_input_element_text(block.get("element")))
+
+        return "\n".join(parts).strip()
+
+    def _extract_attachment_text(self, attachment: dict[str, Any]) -> str:
+        parts: list[str] = []
+
+        for key in ("pretext", "title", "text", "fallback"):
+            self._append_unique_text(parts, attachment.get(key))
+
+        for field in attachment.get("fields", []) or []:
+            title = field.get("title", "")
+            value = field.get("value", "")
+            if title and value:
+                self._append_unique_text(parts, f"{title}: {value}")
+            else:
+                self._append_unique_text(parts, title or value)
+
+        return "\n".join(parts).strip()
+
+    @staticmethod
+    def _extract_text_object(value: Any) -> str:
+        if isinstance(value, str):
+            return value
+        if isinstance(value, dict):
+            text = value.get("text")
+            return text if isinstance(text, str) else ""
+        return ""
+
+    def _extract_input_element_text(self, element: Any) -> str:
+        if not isinstance(element, dict):
+            return ""
+
+        parts: list[str] = []
+        for key in ("initial_value", "initial_date", "initial_time"):
+            value = element.get(key)
+            if isinstance(value, str):
+                self._append_unique_text(parts, value)
+
+        if isinstance(element.get("initial_option"), dict):
+            self._append_unique_text(
+                parts,
+                self._extract_text_object(element["initial_option"].get("text")),
+            )
+
+        for option in element.get("initial_options", []) or []:
+            if isinstance(option, dict):
+                self._append_unique_text(parts, self._extract_text_object(option.get("text")))
+
+        return "\n".join(parts).strip()
+
+    def _extract_rich_text_elements(self, elements: Any) -> str:
+        if not isinstance(elements, list):
+            return ""
+
+        parts: list[str] = []
+        for element in elements:
+            text = self._extract_rich_text_element(element)
+            if text:
+                parts.append(text)
+
+        return "".join(parts).strip()
+
+    def _extract_rich_text_element(self, element: Any) -> str:
+        if not isinstance(element, dict):
+            return ""
+
+        element_type = element.get("type")
+
+        if element_type == "text":
+            return element.get("text", "")
+        if element_type == "link":
+            url = element.get("url", "")
+            text = element.get("text")
+            return f"<{url}|{text}>" if text else url
+        if element_type == "user":
+            user_id = element.get("user_id") or element.get("user")
+            return f"<@{user_id}>" if user_id else ""
+        if element_type == "channel":
+            channel_id = element.get("channel_id") or element.get("channel")
+            return f"<#{channel_id}>" if channel_id else ""
+        if element_type == "usergroup":
+            group_id = element.get("usergroup_id") or element.get("usergroup")
+            return f"<!subteam^{group_id}>" if group_id else ""
+        if element_type == "emoji":
+            name = element.get("name")
+            return f":{name}:" if name else ""
+        if element_type == "date":
+            timestamp = element.get("timestamp")
+            fallback = element.get("fallback", "")
+            return f"<!date^{timestamp}^{{date_short_pretty}}|{fallback}>" if timestamp else fallback
+        if element_type == "broadcast":
+            range_name = element.get("range")
+            return f"<!{range_name}>" if range_name else ""
+        if element_type == "rich_text_section":
+            nested = element.get("elements")
+            if isinstance(nested, list):
+                return "".join(self._extract_rich_text_element(item) for item in nested)
+        if element_type == "rich_text_list":
+            return self._extract_rich_text_list(element)
+
+        nested = element.get("elements")
+        if isinstance(nested, list):
+            return self._extract_rich_text_elements(nested)
+
+        return self._extract_text_object(element)
+
+    def _extract_rich_text_list(self, element: dict[str, Any]) -> str:
+        items: list[str] = []
+        style = element.get("style")
+
+        for index, item in enumerate(element.get("elements", []) or [], start=1):
+            text = self._extract_rich_text_element(item).strip()
+            if not text:
+                continue
+
+            prefix = f"{index}. " if style == "ordered" else "• "
+            items.append(f"{prefix}{text}")
+
+        return "\n".join(items)
+
+    # ================================================================
     # API 응답 파싱 유틸리티
     # ================================================================
 
@@ -366,7 +564,7 @@ class SlackTransformer:
             SlackMessage 스키마
         """
         ts = data.get("ts", "")
-        text = data.get("text", "")
+        text = self.extract_message_body(data)
         subtype = data.get("subtype")
 
         # 작성자 정보
@@ -510,7 +708,7 @@ class SlackTransformer:
             user_id=user_id,
             user_name=user_info.name if user_info else None,
             user_real_name=user_info.real_name if user_info else None,
-            text=data.get("text", ""),
+            text=self.extract_message_body(data),
             reactions=reactions,
             files=files,
         )
@@ -683,6 +881,10 @@ class SlackTransformer:
         result = re.sub(r"<([^|>]+)\|([^>]+)>", r"\2", result)
         # 단순 URL: <url> → url
         result = re.sub(r"<([^>]+)>", r"\1", result)
+
+        # Basic Slack mrkdwn emphasis markers.
+        result = re.sub(r"\*([^*\n]+)\*", r"\1", result)
+        result = re.sub(r"~([^~\n]+)~", r"\1", result)
 
         # HTML 엔티티 디코딩
         result = result.replace("&amp;", "&")
