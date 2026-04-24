@@ -41,9 +41,7 @@ export function optionsToApi(values: AnswerOption[]): string[] {
 }
 
 export function optionsFromApi(apiValues: string[]): AnswerOption[] {
-  return apiValues
-    .map((v) => optionLabelToValue.get(normalize(v)))
-    .filter((v): v is AnswerOption => v !== undefined);
+  return apiValues.map((v) => optionLabelToValue.get(normalize(v))).filter((v): v is AnswerOption => v !== undefined);
 }
 
 /* ── null ↔ 빈 문자열 변환 ── */
