@@ -57,7 +57,7 @@ export default function RagInput({ filters, isLoading, onSendMessage, onStop, on
   };
 
   return (
-    <div className="px-6 pt-8 pb-2.5 backdrop-blur-[10px] lg:px-24">
+    <div className="px-6 pb-2.5 backdrop-blur-[10px] lg:px-24">
       <div className="mx-auto flex w-full max-w-194 flex-col items-center gap-2">
         {/* Text input 카드 */}
         <div className="border-edge-normal bg-fill-normal flex w-full flex-col rounded-2xl border p-4">
@@ -104,75 +104,6 @@ export default function RagInput({ filters, isLoading, onSendMessage, onStop, on
                   onClick={() => filters.toggleSource('slack')}
                 />
               </div>
-              {/* TODO: 담당자/부서/프로젝트 필터 — 백엔드 API 준비 후 주석 해제 */}
-              {/*
-              <IconDivider className="text-edge-assistive h-6 w-6 shrink-0" />
-              <div className="flex items-center gap-2.5">
-                <FilterDropdown
-                  open={filters.openPopover === 'person'}
-                  onOpenChange={(o) => filters.setOpenPopover(o ? 'person' : null)}
-                  trigger={
-                    <SearchOptionButton
-                      Icon={IconPerson}
-                      label={filters.personLabel}
-                      selected={filters.selectedPeople.length > 0}
-                      onMouseDown={(e) => e.preventDefault()}
-                      onClick={() => filters.setOpenPopover('person')}
-                    />
-                  }
-                >
-                  <FilterOptionList
-                    title="담당자 선택"
-                    options={[]}
-                    selected={filters.selectedPeople}
-                    onToggle={filters.togglePerson}
-                    Icon={IconPerson}
-                  />
-                </FilterDropdown>
-                <FilterDropdown
-                  open={filters.openPopover === 'department'}
-                  onOpenChange={(o) => filters.setOpenPopover(o ? 'department' : null)}
-                  trigger={
-                    <SearchOptionButton
-                      Icon={IconTag}
-                      label={filters.deptLabel}
-                      selected={filters.selectedDepts.length > 0}
-                      onMouseDown={(e) => e.preventDefault()}
-                      onClick={() => filters.setOpenPopover('department')}
-                    />
-                  }
-                >
-                  <FilterOptionList
-                    title="부서 선택"
-                    options={[]}
-                    selected={filters.selectedDepts}
-                    onToggle={filters.toggleDept}
-                    Icon={IconTag}
-                  />
-                </FilterDropdown>
-                <FilterDropdown
-                  open={filters.openPopover === 'project'}
-                  onOpenChange={(o) => filters.setOpenPopover(o ? 'project' : null)}
-                  trigger={
-                    <SearchOptionButton
-                      Icon={IconSpace}
-                      label={filters.projectLabel}
-                      selected={filters.selectedProjects.length > 0}
-                      onMouseDown={(e) => e.preventDefault()}
-                      onClick={() => filters.setOpenPopover('project')}
-                    />
-                  }
-                >
-                  <FilterOptionList
-                    title="프로젝트 선택"
-                    options={[]}
-                    selected={filters.selectedProjects}
-                    onToggle={filters.toggleProject}
-                    Icon={IconSpace}
-                  />
-                </FilterDropdown>
-              </div>
-              */}
             </div>
           </div>
 
@@ -184,8 +115,7 @@ export default function RagInput({ filters, isLoading, onSendMessage, onStop, on
             onChange={handleInputChange}
             onKeyDown={handleKeyDown}
             rows={1}
-            className="text-body-medium text-content-normal placeholder:text-content-assistive w-full resize-none overflow-y-auto outline-none"
-            style={{ height: '26px', maxHeight: '270px' }}
+            className="text-body-medium text-content-normal placeholder:text-content-assistive h-6.5 max-h-67.5 w-full resize-none overflow-y-auto outline-none"
           />
 
           {/* 하단 컨트롤 바 */}
