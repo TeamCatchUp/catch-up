@@ -50,7 +50,7 @@ class ChannelTalkDocumentCredentialsStore(Protocol):
         payload: ChannelTalkDocumentCredentialsUpsert,
     ) -> ChannelTalkDocumentCredentialsRecord | None: ...
 
-    def delete_document_connection(self) -> bool: ...
+    def delete_document_connection(self, channel_id: str | None = None) -> bool: ...
 
     def commit(self) -> None: ...
 
@@ -118,8 +118,16 @@ class ChannelTalkDocumentInstallAuthAdapter:
         return ChannelTalkDocumentCredentialsStatus.from_record(record)
 
     async def uninstall(self) -> ChannelTalkDocumentUninstallResult:
+        base_connection = await self._run_store(
+            self.store.get_base_connection,
+            action="load Channel Talk credentials",
+        )
+        if base_connection is None:
+            return ChannelTalkDocumentUninstallResult(removed=False)
+
         removed = await self._run_store(
             self.store.delete_document_connection,
+            base_connection.channel_id,
             action="delete Channel Talk Documents credentials",
         )
         await self._run_store(

@@ -81,6 +81,8 @@ class _DocumentInstallStore:
     def __init__(self, *, base_channel_id: str | None = "channel-123") -> None:
         self.base_channel_id = base_channel_id
         self.stored_payload = None
+        self.deleted_channel_id = None
+        self.delete_result = False
         self.committed = False
 
     def get_base_connection(self):
@@ -98,8 +100,9 @@ class _DocumentInstallStore:
         self.stored_payload = payload
         return payload.to_record()
 
-    def delete_document_connection(self):
-        return False
+    def delete_document_connection(self, channel_id=None):
+        self.deleted_channel_id = channel_id
+        return self.delete_result
 
     def commit(self):
         self.committed = True
@@ -171,6 +174,28 @@ class ChannelTalkDocumentsInstallAdapterTests(IsolatedAsyncioTestCase):
                 ),
                 verified_at=datetime(2026, 4, 25, tzinfo=timezone.utc),
             )
+
+    async def test_uninstall_deletes_only_base_channel_document_connection(self) -> None:
+        store = _DocumentInstallStore(base_channel_id="channel-123")
+        store.delete_result = True
+        adapter = ChannelTalkDocumentInstallAuthAdapter(store=store)
+
+        result = await adapter.uninstall()
+
+        self.assertTrue(result.removed)
+        self.assertEqual(store.deleted_channel_id, "channel-123")
+        self.assertTrue(store.committed)
+
+    async def test_uninstall_without_base_channel_does_not_delete_documents(self) -> None:
+        store = _DocumentInstallStore(base_channel_id=None)
+        store.delete_result = True
+        adapter = ChannelTalkDocumentInstallAuthAdapter(store=store)
+
+        result = await adapter.uninstall()
+
+        self.assertFalse(result.removed)
+        self.assertIsNone(store.deleted_channel_id)
+        self.assertFalse(store.committed)
 
 
 class _MetadataStore:

@@ -332,8 +332,46 @@ class ChannelTalkRepositoryTests(TestCase):
         loaded = self.document_credentials_repo.get_document_connection("channel-123")
         self.assertIsNotNone(loaded)
         self.assertEqual(loaded.association_status, ChannelTalkDocumentAssociationStatus.API_VERIFIED)
-        self.assertTrue(self.document_credentials_repo.delete_document_connection())
+        self.assertTrue(self.document_credentials_repo.delete_document_connection("channel-123"))
         self.assertIsNone(self.document_credentials_repo.get_document_connection("channel-123"))
+
+    def test_document_credentials_delete_is_scoped_to_channel(self) -> None:
+        verified_at = datetime(2026, 4, 25, tzinfo=timezone.utc)
+        self.document_credentials_repo.upsert_document_connection(
+            ChannelTalkDocumentCredentialsUpsert(
+                channel_id="channel-123",
+                access_key="documents-key-1",
+                access_secret="documents-secret-1",
+                space=ChannelTalkDocumentSpace(
+                    space_id="space-123",
+                    space_name="Help Center",
+                    channel_id="channel-123",
+                ),
+                credential_last_verified_at=verified_at,
+                association_status=ChannelTalkDocumentAssociationStatus.API_VERIFIED,
+            )
+        )
+        self.document_credentials_repo.upsert_document_connection(
+            ChannelTalkDocumentCredentialsUpsert(
+                channel_id="channel-456",
+                access_key="documents-key-2",
+                access_secret="documents-secret-2",
+                space=ChannelTalkDocumentSpace(
+                    space_id="space-456",
+                    space_name="Other Help Center",
+                    channel_id="channel-456",
+                ),
+                credential_last_verified_at=verified_at,
+                association_status=ChannelTalkDocumentAssociationStatus.API_VERIFIED,
+            )
+        )
+
+        self.assertTrue(self.document_credentials_repo.delete_document_connection("channel-123"))
+
+        self.assertIsNone(self.document_credentials_repo.get_document_connection("channel-123"))
+        remaining = self.document_credentials_repo.get_document_connection("channel-456")
+        self.assertIsNotNone(remaining)
+        self.assertEqual(remaining.channel_id, "channel-456")
 
     def test_document_metadata_rows_are_upserted(self) -> None:
         self.document_metadata_repo.upsert_document_space(

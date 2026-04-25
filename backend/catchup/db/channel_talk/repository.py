@@ -277,10 +277,13 @@ class ChannelTalkDocumentCredentialsRepository:
             raise RuntimeError("Channel Talk Documents credentials upsert returned no record")
         return record
 
-    def delete_document_connection(self) -> bool:
+    def delete_document_connection(self, channel_id: str | None = None) -> bool:
+        stmt = delete(db_models.ChannelTalkDocumentCredentials)
+        if channel_id is not None:
+            stmt = stmt.where(db_models.ChannelTalkDocumentCredentials.channel_id == channel_id)
         result = cast(
             CursorResult,
-            self.db.execute(delete(db_models.ChannelTalkDocumentCredentials)),
+            self.db.execute(stmt),
         )
         self.db.flush()
         return (result.rowcount or 0) > 0
