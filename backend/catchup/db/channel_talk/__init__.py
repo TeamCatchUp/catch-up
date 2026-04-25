@@ -1,5 +1,13 @@
-"""
-Channel Talk DB Repository 모듈
+"""Channel Talk database repositories."""
 
-- repository: Channel Talk credential record 관리
-"""
+from catchup.db.channel_talk.repository import ChannelTalkCredentialsRepository
+from catchup.db.channel_talk.repository import ChannelTalkDocumentCredentialsRepository
+from catchup.db.channel_talk.repository import ChannelTalkDocumentMetadataRepository
+from catchup.db.channel_talk.repository import ChannelTalkMetadataRepository
+
+__all__ = [
+    "ChannelTalkCredentialsRepository",
+    "ChannelTalkDocumentCredentialsRepository",
+    "ChannelTalkDocumentMetadataRepository",
+    "ChannelTalkMetadataRepository",
+]

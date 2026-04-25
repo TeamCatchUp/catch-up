@@ -1,10 +1,32 @@
 from __future__ import annotations
 
+from datetime import datetime
+from datetime import timezone
+from typing import Any
+from typing import cast
+
 from sqlalchemy import delete
 from sqlalchemy import select
 from sqlalchemy import tuple_
+from sqlalchemy.engine import CursorResult
 from sqlalchemy.orm import Session
 
+from catchup.connectors.channel_talk.documents_schemas import (
+    ChannelTalkDocumentAssociationStatus,
+)
+from catchup.connectors.channel_talk.documents_schemas import (
+    ChannelTalkDocumentAuthorMetadata,
+)
+from catchup.connectors.channel_talk.documents_schemas import (
+    ChannelTalkDocumentCredentialsRecord,
+)
+from catchup.connectors.channel_talk.documents_schemas import (
+    ChannelTalkDocumentCredentialsUpsert,
+)
+from catchup.connectors.channel_talk.documents_schemas import (
+    ChannelTalkDocumentNavNodeMetadata,
+)
+from catchup.connectors.channel_talk.documents_schemas import ChannelTalkDocumentSpace
 from catchup.connectors.channel_talk.schemas import ChannelTalkChannelMetadata
 from catchup.connectors.channel_talk.schemas import ChannelTalkCredentialsRecord
 from catchup.connectors.channel_talk.schemas import ChannelTalkCredentialsUpsert
@@ -74,14 +96,17 @@ class ChannelTalkMetadataRepository:
         self,
         payload: ChannelTalkChannelMetadata,
     ) -> ChannelTalkChannelMetadata:
-        row = _get_or_create_row(
-            db=self.db,
-            model=db_models.ChannelTalkChannel,
-            lookup={"channel_id": payload.channel_id},
-            create_values={
-                "channel_id": payload.channel_id,
-                "channel_name": payload.channel_name,
-            },
+        row = cast(
+            db_models.ChannelTalkChannel,
+            _get_or_create_row(
+                db=self.db,
+                model=db_models.ChannelTalkChannel,
+                lookup={"channel_id": payload.channel_id},
+                create_values={
+                    "channel_id": payload.channel_id,
+                    "channel_name": payload.channel_name,
+                },
+            ),
         )
         _assign_channel_metadata(row, payload)
         self.db.flush()
@@ -110,15 +135,19 @@ class ChannelTalkMetadataRepository:
             db=self.db,
             model=db_models.ChannelTalkManager,
             key_fields=("channel_id", "manager_id"),
-            keys=[(payload.channel_id, payload.manager_id) for payload in payloads],
+            keys=[
+                (_require_text(payload.channel_id, "channel_id"), payload.manager_id)
+                for payload in payloads
+            ],
         )
         stored_rows: list[db_models.ChannelTalkManager] = []
         for payload in payloads:
-            key = (payload.channel_id, payload.manager_id)
-            row = rows_by_key.get(key)
+            channel_id = _require_text(payload.channel_id, "channel_id")
+            key = (channel_id, payload.manager_id)
+            row = cast(db_models.ChannelTalkManager | None, rows_by_key.get(key))
             if row is None:
                 row = db_models.ChannelTalkManager(
-                    channel_id=payload.channel_id,
+                    channel_id=channel_id,
                     manager_id=payload.manager_id,
                 )
                 self.db.add(row)
@@ -147,15 +176,19 @@ class ChannelTalkMetadataRepository:
             db=self.db,
             model=db_models.ChannelTalkGroup,
             key_fields=("channel_id", "group_id"),
-            keys=[(payload.channel_id, payload.group_id) for payload in payloads],
+            keys=[
+                (_require_text(payload.channel_id, "channel_id"), payload.group_id)
+                for payload in payloads
+            ],
         )
         stored_rows: list[db_models.ChannelTalkGroup] = []
         for payload in payloads:
-            key = (payload.channel_id, payload.group_id)
-            row = rows_by_key.get(key)
+            channel_id = _require_text(payload.channel_id, "channel_id")
+            key = (channel_id, payload.group_id)
+            row = cast(db_models.ChannelTalkGroup | None, rows_by_key.get(key))
             if row is None:
                 row = db_models.ChannelTalkGroup(
-                    channel_id=payload.channel_id,
+                    channel_id=channel_id,
                     group_id=payload.group_id,
                     group_name=payload.group_name,
                 )
@@ -206,6 +239,130 @@ class ChannelTalkMetadataRepository:
         self.db.commit()
 
 
+class ChannelTalkDocumentCredentialsRepository:
+    """documents install-auth"""
+    def __init__(self, db: Session) -> None:
+        self.db = db
+
+    def get_base_connection(self) -> ChannelTalkCredentialsRecord | None:
+        row = _get_channel_talk_credentials(db=self.db)
+        return _to_connection_record(row)
+
+    def get_document_connection(
+        self,
+        channel_id: str | None = None,
+    ) -> ChannelTalkDocumentCredentialsRecord | None:
+        row = _get_channel_talk_document_credentials(
+            db=self.db,
+            channel_id=channel_id,
+        )
+        return _to_document_connection_record(row)
+
+    def upsert_document_connection(
+        self,
+        payload: ChannelTalkDocumentCredentialsUpsert,
+    ) -> ChannelTalkDocumentCredentialsRecord:
+        row = _create_or_replace_channel_talk_document_credentials(
+            db=self.db,
+            channel_id=payload.channel_id,
+            space_id=payload.space.space_id,
+            space_name=payload.space.space_name,
+            access_key=payload.access_key,
+            access_secret=payload.access_secret,
+            credential_last_verified_at=payload.credential_last_verified_at,
+            association_status=payload.association_status,
+        )
+        record = _to_document_connection_record(row)
+        if record is None:
+            raise RuntimeError("Channel Talk Documents credentials upsert returned no record")
+        return record
+
+    def delete_document_connection(self) -> bool:
+        result = cast(
+            CursorResult,
+            self.db.execute(delete(db_models.ChannelTalkDocumentCredentials)),
+        )
+        self.db.flush()
+        return (result.rowcount or 0) > 0
+
+    def commit(self) -> None:
+        self.db.commit()
+
+
+class ChannelTalkDocumentMetadataRepository:
+    def __init__(self, db: Session) -> None:
+        self.db = db
+
+    def get_document_connection(
+        self,
+        channel_id: str | None = None,
+    ) -> ChannelTalkDocumentCredentialsRecord | None:
+        row = _get_channel_talk_document_credentials(
+            db=self.db,
+            channel_id=channel_id,
+        )
+        return _to_document_connection_record(row)
+
+    def upsert_document_space(
+        self,
+        payload: ChannelTalkDocumentSpace,
+        *,
+        channel_id: str,
+    ) -> ChannelTalkDocumentSpace:
+        row = cast(
+            db_models.ChannelTalkDocumentSpace,
+            _get_or_create_row(
+                db=self.db,
+                model=db_models.ChannelTalkDocumentSpace,
+                lookup={"channel_id": channel_id, "space_id": payload.space_id},
+                create_values={
+                    "channel_id": channel_id,
+                    "space_id": payload.space_id,
+                    "space_name": payload.space_name,
+                },
+            ),
+        )
+        row.space_name = payload.space_name
+        row.synced_at = _utcnow()
+        self.db.flush()
+        return ChannelTalkDocumentSpace(
+            space_id=_require_text(row.space_id, "space_id"),
+            space_name=_require_text(row.space_name, "space_name"),
+            channel_id=_require_text(row.channel_id, "channel_id"),
+        )
+
+    def bulk_upsert_document_authors(
+        self,
+        payloads: list[ChannelTalkDocumentAuthorMetadata],
+    ) -> list[ChannelTalkDocumentAuthorMetadata]:
+        return _bulk_upsert_document_metadata(
+            db=self.db,
+            model=db_models.ChannelTalkDocumentAuthor,
+            key_fields=("channel_id", "space_id", "author_id"),
+            payloads=payloads,
+            id_field="author_id",
+            assign_row=_assign_document_author_metadata,
+            to_metadata=_to_document_author_metadata,
+        )
+
+    def bulk_upsert_document_nav_nodes(
+        self,
+        payloads: list[ChannelTalkDocumentNavNodeMetadata],
+    ) -> list[ChannelTalkDocumentNavNodeMetadata]:
+        return _bulk_upsert_document_metadata(
+            db=self.db,
+            model=db_models.ChannelTalkDocumentNavNode,
+            key_fields=("channel_id", "space_id", "nav_node_id"),
+            payloads=payloads,
+            id_field="nav_node_id",
+            assign_row=_assign_document_nav_node_metadata,
+            to_metadata=_to_document_nav_node_metadata,
+        )
+
+    def commit(self) -> None:
+        self.db.commit()
+
+
 def _get_channel_talk_credentials(
     db: Session,
 ) -> db_models.ChannelTalkCredentials | None:
@@ -214,6 +371,17 @@ def _get_channel_talk_credentials(
         .order_by(db_models.ChannelTalkCredentials.id.asc())
         .limit(1)
     )
+    return db.execute(stmt).scalar_one_or_none()
+
+
+def _get_channel_talk_document_credentials(
+    db: Session,
+    channel_id: str | None = None,
+) -> db_models.ChannelTalkDocumentCredentials | None:
+    stmt = select(db_models.ChannelTalkDocumentCredentials)
+    if channel_id is not None:
+        stmt = stmt.where(db_models.ChannelTalkDocumentCredentials.channel_id == channel_id)
+    stmt = stmt.order_by(db_models.ChannelTalkDocumentCredentials.id.asc()).limit(1)
     return db.execute(stmt).scalar_one_or_none()
 
 
@@ -253,9 +421,46 @@ def _create_or_replace_channel_talk_credentials(
 
 def _delete_channel_talk_credentials(db: Session) -> bool:
     stmt = delete(db_models.ChannelTalkCredentials)
-    result = db.execute(stmt)
+    result = cast(CursorResult, db.execute(stmt))
     db.flush()
     return (result.rowcount or 0) > 0
+
+
+def _create_or_replace_channel_talk_document_credentials(
+    db: Session,
+    channel_id: str,
+    space_id: str,
+    space_name: str,
+    access_key: str,
+    access_secret: str,
+    credential_last_verified_at,
+    association_status: ChannelTalkDocumentAssociationStatus,
+) -> db_models.ChannelTalkDocumentCredentials:
+    credentials = _get_channel_talk_document_credentials(
+        db=db,
+        channel_id=channel_id,
+    )
+    if credentials is None:
+        credentials = db_models.ChannelTalkDocumentCredentials(
+            channel_id=channel_id,
+            space_id=space_id,
+            space_name=space_name,
+            access_key=access_key,
+            access_secret=access_secret,
+            credential_last_verified_at=credential_last_verified_at,
+            association_status=str(association_status),
+        )
+        db.add(credentials)
+    else:
+        credentials.channel_id = channel_id
+        credentials.space_id = space_id
+        credentials.space_name = space_name
+        credentials.access_key = access_key
+        credentials.access_secret = access_secret
+        credentials.credential_last_verified_at = credential_last_verified_at
+        credentials.association_status = str(association_status)
+    db.flush()
+    return credentials
 
 
 def _to_connection_record(
@@ -265,12 +470,30 @@ def _to_connection_record(
         return None
 
     return ChannelTalkCredentialsRecord(
-        channel_id=row.channel_id,
-        channel_name=row.channel_name,
-        access_key=row.access_key,
-        access_secret=row.access_secret,
-        webhook_token=row.webhook_token,
+        channel_id=_require_text(row.channel_id, "channel_id"),
+        channel_name=_require_text(row.channel_name, "channel_name"),
+        access_key=_require_text(row.access_key, "access_key"),
+        access_secret=_require_text(row.access_secret, "access_secret"),
+        webhook_token=_require_text(row.webhook_token, "webhook_token"),
         credential_last_verified_at=row.credential_last_verified_at,
+    )
+
+
+def _to_document_connection_record(
+    row: db_models.ChannelTalkDocumentCredentials | None,
+) -> ChannelTalkDocumentCredentialsRecord | None:
+    if row is None:
+        return None
+    return ChannelTalkDocumentCredentialsRecord(
+        channel_id=_require_text(row.channel_id, "channel_id"),
+        space_id=_require_text(row.space_id, "space_id"),
+        space_name=_require_text(row.space_name, "space_name"),
+        access_key=_require_text(row.access_key, "access_key"),
+        access_secret=_require_text(row.access_secret, "access_secret"),
+        credential_last_verified_at=row.credential_last_verified_at,
+        association_status=ChannelTalkDocumentAssociationStatus(
+            _require_text(row.association_status, "association_status")
+        ),
     )
 
 
@@ -281,8 +504,8 @@ def _to_channel_metadata(
         return None
 
     return ChannelTalkChannelMetadata(
-        channel_id=row.channel_id,
-        channel_name=row.channel_name,
+        channel_id=_require_text(row.channel_id, "channel_id"),
+        channel_name=_require_text(row.channel_name, "channel_name"),
         description=row.description,
         bot_name=row.bot_name,
         homepage_url=row.homepage_url,
@@ -298,8 +521,8 @@ def _to_manager_metadata(
     row: db_models.ChannelTalkManager,
 ) -> ChannelTalkManagerMetadata:
     return ChannelTalkManagerMetadata(
-        channel_id=row.channel_id,
-        manager_id=row.manager_id,
+        channel_id=_require_text(row.channel_id, "channel_id"),
+        manager_id=_require_text(row.manager_id, "manager_id"),
         account_id=row.account_id,
         name=row.name,
         description=row.description,
@@ -317,9 +540,9 @@ def _to_group_metadata(
     row: db_models.ChannelTalkGroup,
 ) -> ChannelTalkGroupMetadata:
     return ChannelTalkGroupMetadata(
-        channel_id=row.channel_id,
-        group_id=row.group_id,
-        group_name=row.group_name,
+        channel_id=_require_text(row.channel_id, "channel_id"),
+        group_id=_require_text(row.group_id, "group_id"),
+        group_name=_require_text(row.group_name, "group_name"),
         scope=row.scope,
         description=row.description,
         icon_url=row.icon_url,
@@ -334,9 +557,39 @@ def _to_group_manager_membership(
     row: db_models.ChannelTalkGroupManager,
 ) -> ChannelTalkGroupManagerMembership:
     return ChannelTalkGroupManagerMembership(
-        channel_id=row.channel_id,
-        group_id=row.group_id,
-        manager_id=row.manager_id,
+        channel_id=_require_text(row.channel_id, "channel_id"),
+        group_id=_require_text(row.group_id, "group_id"),
+        manager_id=_require_text(row.manager_id, "manager_id"),
+    )
+
+
+def _to_document_author_metadata(
+    row: db_models.ChannelTalkDocumentAuthor,
+) -> ChannelTalkDocumentAuthorMetadata:
+    return ChannelTalkDocumentAuthorMetadata(
+        channel_id=_require_text(row.channel_id, "channel_id"),
+        space_id=_require_text(row.space_id, "space_id"),
+        author_id=_require_text(row.author_id, "author_id"),
+        name=row.name,
+        email=row.email,
+        avatar_url=row.avatar_url,
+    )
+
+
+def _to_document_nav_node_metadata(
+    row: db_models.ChannelTalkDocumentNavNode,
+) -> ChannelTalkDocumentNavNodeMetadata:
+    return ChannelTalkDocumentNavNodeMetadata(
+        channel_id=_require_text(row.channel_id, "channel_id"),
+        space_id=_require_text(row.space_id, "space_id"),
+        nav_node_id=_require_text(row.nav_node_id, "nav_node_id"),
+        parent_node_id=row.parent_node_id,
+        node_type=row.node_type,
+        entity_type=row.entity_type,
+        entity_id=row.entity_id,
+        name=row.name,
+        rank=row.rank,
+        language=row.language,
     )
 
 
@@ -346,7 +599,7 @@ def _get_or_create_row(
     model,
     lookup: dict[str, object],
     create_values: dict[str, object],
-):
+) -> Any:
     row = db.execute(select(model).filter_by(**lookup)).scalar_one_or_none()
     if row is None:
         row = model(**create_values)
@@ -354,13 +607,86 @@ def _get_or_create_row(
     return row
 
 
+def _require_text(value: object | None, field_name: str) -> str:
+    text = str(value or "").strip()
+    if not text:
+        raise ValueError(f"{field_name} is required")
+    return text
+
+
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def _document_metadata_key(
+    payload: ChannelTalkDocumentAuthorMetadata | ChannelTalkDocumentNavNodeMetadata,
+    *,
+    id_field: str,
+) -> tuple[str, str, str]:
+    return (
+        _require_text(payload.channel_id, "channel_id"),
+        _require_text(payload.space_id, "space_id"),
+        _require_text(getattr(payload, id_field), id_field),
+    )
+
+
+def _document_metadata_keys(
+    payloads: list[ChannelTalkDocumentAuthorMetadata]
+    | list[ChannelTalkDocumentNavNodeMetadata],
+    *,
+    id_field: str,
+) -> list[tuple[object, ...]]:
+    return [
+        _document_metadata_key(payload, id_field=id_field)
+        for payload in payloads
+    ]
+
+
+def _bulk_upsert_document_metadata(
+    *,
+    db: Session,
+    model,
+    key_fields: tuple[str, str, str],
+    payloads: list[Any],
+    id_field: str,
+    assign_row,
+    to_metadata,
+) -> list[Any]:
+    rows_by_key = _load_existing_rows(
+        db=db,
+        model=model,
+        key_fields=key_fields,
+        keys=_document_metadata_keys(payloads, id_field=id_field),
+    )
+    stored_rows: list[Any] = []
+    for payload in payloads:
+        channel_id, space_id, item_id = _document_metadata_key(
+            payload,
+            id_field=id_field,
+        )
+        key = (channel_id, space_id, item_id)
+        row = rows_by_key.get(key)
+        if row is None:
+            row = model(
+                channel_id=channel_id,
+                space_id=space_id,
+                **{id_field: item_id},
+            )
+            db.add(row)
+            rows_by_key[key] = row
+        assign_row(row, payload)
+        stored_rows.append(row)
+    db.flush()
+    return [to_metadata(row) for row in stored_rows]
+
+
 def _load_existing_rows(
     *,
     db: Session,
     model,
-    key_fields: tuple[str, str],
-    keys: list[tuple[str | None, str]],
-) -> dict[tuple[str | None, str], object]:
+    key_fields: tuple[str, ...],
+    keys: list[tuple[object, ...]],
+) -> dict[tuple[object, ...], object]:
     if not keys:
         return {}
 
@@ -379,44 +705,95 @@ def _assign_channel_metadata(
     row: db_models.ChannelTalkChannel,
     payload: ChannelTalkChannelMetadata,
 ) -> None:
-    row.channel_name = payload.channel_name
-    row.description = payload.description
-    row.bot_name = payload.bot_name
-    row.homepage_url = payload.homepage_url
-    row.domain = payload.domain
-    row.subdomain = payload.subdomain
-    row.avatar_url = payload.avatar_url
-    row.country = payload.country
-    row.time_zone = payload.time_zone
+    _assign_fields(
+        row,
+        payload,
+        (
+            "channel_name",
+            "description",
+            "bot_name",
+            "homepage_url",
+            "domain",
+            "subdomain",
+            "avatar_url",
+            "country",
+            "time_zone",
+        ),
+    )
 
 
 def _assign_manager_metadata(
     row: db_models.ChannelTalkManager,
     payload: ChannelTalkManagerMetadata,
 ) -> None:
-    row.account_id = payload.account_id
-    row.name = payload.name
-    row.description = payload.description
-    row.email = payload.email
-    row.mobile_number = payload.mobile_number
-    row.role_id = payload.role_id
-    row.removed = payload.removed
-    row.display_as_channel = payload.display_as_channel
-    row.avatar_url = payload.avatar_url
-    row.remote_created_at = payload.remote_created_at
+    _assign_fields(
+        row,
+        payload,
+        (
+            "account_id",
+            "name",
+            "description",
+            "email",
+            "mobile_number",
+            "role_id",
+            "removed",
+            "display_as_channel",
+            "avatar_url",
+            "remote_created_at",
+        ),
+    )
 
 
 def _assign_group_metadata(
     row: db_models.ChannelTalkGroup,
     payload: ChannelTalkGroupMetadata,
 ) -> None:
-    row.group_name = payload.group_name
-    row.scope = payload.scope
-    row.description = payload.description
-    row.icon_url = payload.icon_url
-    row.active = payload.active
-    row.remote_created_at = payload.remote_created_at
-    row.remote_updated_at = payload.remote_updated_at
+    _assign_fields(
+        row,
+        payload,
+        (
+            "group_name",
+            "scope",
+            "description",
+            "icon_url",
+            "active",
+            "remote_created_at",
+            "remote_updated_at",
+        ),
+    )
+
+
+def _assign_document_author_metadata(
+    row: db_models.ChannelTalkDocumentAuthor,
+    payload: ChannelTalkDocumentAuthorMetadata,
+) -> None:
+    _assign_fields(row, payload, ("name", "email", "avatar_url"))
+    row.synced_at = _utcnow()
+
+
+def _assign_document_nav_node_metadata(
+    row: db_models.ChannelTalkDocumentNavNode,
+    payload: ChannelTalkDocumentNavNodeMetadata,
+) -> None:
+    _assign_fields(
+        row,
+        payload,
+        (
+            "parent_node_id",
+            "node_type",
+            "entity_type",
+            "entity_id",
+            "name",
+            "rank",
+            "language",
+        ),
+    )
+    row.synced_at = _utcnow()
+
+
+def _assign_fields(row: object, payload: object, field_names: tuple[str, ...]) -> None:
+    for field_name in field_names:
+        setattr(row, field_name, getattr(payload, field_name))
 
 
 def _assign_credentials_values(

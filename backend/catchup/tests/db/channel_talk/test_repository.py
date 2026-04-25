@@ -7,14 +7,32 @@ from unittest.mock import patch
 
 from sqlalchemy import Boolean
 from sqlalchemy import DateTime
+from sqlalchemy import Integer
 from sqlalchemy import String
 from sqlalchemy import create_engine
+from sqlalchemy import select
 from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy.orm import Mapped
 from sqlalchemy.orm import Session
 from sqlalchemy.orm import mapped_column
 
 import catchup.db.channel_talk.repository as repository_module
+from catchup.connectors.channel_talk.documents_schemas import (
+    ChannelTalkDocumentAssociationStatus,
+)
+from catchup.connectors.channel_talk.documents_schemas import (
+    ChannelTalkDocumentAuthorMetadata,
+)
+from catchup.connectors.channel_talk.documents_schemas import (
+    ChannelTalkDocumentCredentialsStatus,
+)
+from catchup.connectors.channel_talk.documents_schemas import (
+    ChannelTalkDocumentCredentialsUpsert,
+)
+from catchup.connectors.channel_talk.documents_schemas import (
+    ChannelTalkDocumentNavNodeMetadata,
+)
+from catchup.connectors.channel_talk.documents_schemas import ChannelTalkDocumentSpace
 from catchup.connectors.channel_talk.schemas import ChannelTalkChannel
 from catchup.connectors.channel_talk.schemas import ChannelTalkChannelMetadata
 from catchup.connectors.channel_talk.schemas import ChannelTalkCurrentChannel
@@ -37,6 +55,19 @@ class _ChannelTalkCredentials(_Base):
     access_secret: Mapped[str] = mapped_column(String(512), nullable=False)
     webhook_token: Mapped[str] = mapped_column(String(1024), nullable=False)
     credential_last_verified_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class _ChannelTalkDocumentCredentials(_Base):
+    __tablename__ = "channel_talk_document_credentials"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    channel_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    space_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    space_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    access_key: Mapped[str] = mapped_column(String(512), nullable=False)
+    access_secret: Mapped[str] = mapped_column(String(512), nullable=False)
+    credential_last_verified_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    association_status: Mapped[str] = mapped_column(String(32), nullable=False)
 
 
 class _ChannelTalkChannel(_Base):
@@ -102,6 +133,49 @@ class _ChannelTalkGroupManager(_Base):
     updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
+class _ChannelTalkDocumentSpace(_Base):
+    __tablename__ = "channel_talk_document_spaces"
+
+    channel_id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    space_id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    space_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class _ChannelTalkDocumentAuthor(_Base):
+    __tablename__ = "channel_talk_document_authors"
+
+    channel_id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    space_id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    author_id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    email: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    avatar_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class _ChannelTalkDocumentNavNode(_Base):
+    __tablename__ = "channel_talk_document_nav_nodes"
+
+    channel_id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    space_id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    nav_node_id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    parent_node_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    node_type: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    entity_type: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    entity_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    rank: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    language: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
 class ChannelTalkRepositoryTests(TestCase):
     def setUp(self) -> None:
         self.engine = create_engine("sqlite+pysqlite:///:memory:")
@@ -113,12 +187,18 @@ class ChannelTalkRepositoryTests(TestCase):
             patch.object(repository_module.db_models, "ChannelTalkManager", _ChannelTalkManager),
             patch.object(repository_module.db_models, "ChannelTalkGroup", _ChannelTalkGroup),
             patch.object(repository_module.db_models, "ChannelTalkGroupManager", _ChannelTalkGroupManager),
+            patch.object(repository_module.db_models, "ChannelTalkDocumentCredentials", _ChannelTalkDocumentCredentials),
+            patch.object(repository_module.db_models, "ChannelTalkDocumentSpace", _ChannelTalkDocumentSpace),
+            patch.object(repository_module.db_models, "ChannelTalkDocumentAuthor", _ChannelTalkDocumentAuthor),
+            patch.object(repository_module.db_models, "ChannelTalkDocumentNavNode", _ChannelTalkDocumentNavNode),
         ]
         for patcher in self.model_patchers:
             patcher.start()
         self.addCleanup(self._stop_patchers)
         self.credentials_repo = repository_module.ChannelTalkCredentialsRepository(self.db)
         self.metadata_repo = repository_module.ChannelTalkMetadataRepository(self.db)
+        self.document_credentials_repo = repository_module.ChannelTalkDocumentCredentialsRepository(self.db)
+        self.document_metadata_repo = repository_module.ChannelTalkDocumentMetadataRepository(self.db)
 
     def tearDown(self) -> None:
         self.db.close()
@@ -224,3 +304,79 @@ class ChannelTalkRepositoryTests(TestCase):
 
         self.assertEqual(record.channel_id, "channel-123")
         self.assertEqual(self.credentials_repo.get_connection().channel_name, "Support")
+
+    def test_document_credentials_are_upserted_loaded_and_deleted(self) -> None:
+        verified_at = datetime(2026, 4, 25, tzinfo=timezone.utc)
+
+        record = self.document_credentials_repo.upsert_document_connection(
+            ChannelTalkDocumentCredentialsUpsert(
+                channel_id="channel-123",
+                access_key="documents-key",
+                access_secret="documents-secret",
+                space=ChannelTalkDocumentSpace(
+                    space_id="space-123",
+                    space_name="Help Center",
+                    channel_id="channel-123",
+                ),
+                credential_last_verified_at=verified_at,
+                association_status=ChannelTalkDocumentAssociationStatus.API_VERIFIED,
+            )
+        )
+
+        self.assertEqual(record.channel_id, "channel-123")
+        self.assertEqual(record.space_id, "space-123")
+        self.assertEqual(record.access_secret, "documents-secret")
+        status = ChannelTalkDocumentCredentialsStatus.from_record(record)
+        self.assertNotIn("access_secret", status.model_dump())
+
+        loaded = self.document_credentials_repo.get_document_connection("channel-123")
+        self.assertIsNotNone(loaded)
+        self.assertEqual(loaded.association_status, ChannelTalkDocumentAssociationStatus.API_VERIFIED)
+        self.assertTrue(self.document_credentials_repo.delete_document_connection())
+        self.assertIsNone(self.document_credentials_repo.get_document_connection("channel-123"))
+
+    def test_document_metadata_rows_are_upserted(self) -> None:
+        self.document_metadata_repo.upsert_document_space(
+            ChannelTalkDocumentSpace(
+                space_id="space-123",
+                space_name="Help Center",
+                channel_id="channel-123",
+            ),
+            channel_id="channel-123",
+        )
+        authors = self.document_metadata_repo.bulk_upsert_document_authors(
+            [
+                ChannelTalkDocumentAuthorMetadata(
+                    channel_id="channel-123",
+                    space_id="space-123",
+                    author_id="author-1",
+                    name="Kim",
+                    email="kim@example.com",
+                )
+            ]
+        )
+        nav_nodes = self.document_metadata_repo.bulk_upsert_document_nav_nodes(
+            [
+                ChannelTalkDocumentNavNodeMetadata(
+                    channel_id="channel-123",
+                    space_id="space-123",
+                    nav_node_id="node-1",
+                    entity_type="articles",
+                    entity_id="article-1",
+                    name="Intro",
+                    rank=1,
+                )
+            ]
+        )
+
+        self.assertEqual(authors[0].author_id, "author-1")
+        self.assertEqual(authors[0].email, "kim@example.com")
+        self.assertEqual(nav_nodes[0].nav_node_id, "node-1")
+        self.assertEqual(nav_nodes[0].entity_id, "article-1")
+
+        document_space = self.db.execute(select(_ChannelTalkDocumentSpace)).scalar_one()
+        document_author = self.db.execute(select(_ChannelTalkDocumentAuthor)).scalar_one()
+        document_nav_node = self.db.execute(select(_ChannelTalkDocumentNavNode)).scalar_one()
+        self.assertIsNotNone(document_space.synced_at)
+        self.assertIsNotNone(document_author.synced_at)
+        self.assertIsNotNone(document_nav_node.synced_at)
