@@ -1,18 +1,21 @@
-/** 소스 플랫폼 타입 */
+// 백엔드 `catchup/rag/schemas/sources.py` 와 1:1 동기화.
+// Pydantic 상속이 JSON 직렬화 시 평면화되어 BaseSource 공통 필드와 specific 필드가 같은 레벨로 들어온다.
+// `source` 가 discriminator — 값에 따라 어떤 specific 필드가 채워질지 결정.
+
+/** 백엔드 SourceType enum과 동일 */
 export type SourceTypeApi = 'jira' | 'slack' | 'github' | 'confluence' | 'unknown';
 
-/** 소스 엔티티 타입. 'code'는 프론트 UI 전용 (github + code → 코드 출처 카드) */
-export type EntityTypeApi = 'issue' | 'epic' | 'message' | 'pr' | 'comment' | 'code' | 'page' | 'blogpost';
+/** 백엔드 EntityType enum과 동일 */
+export type EntityTypeApi = 'issue' | 'epic' | 'page' | 'blogpost' | 'message' | 'pr' | 'comment' | 'user_chat';
 
-/** RAG 소스 응답 타입 */
 export interface SourceResponseApi {
   // 공통 (BaseSource)
-  id?: string;
+  id: string;
   source: SourceTypeApi;
   entity_type: EntityTypeApi;
-  title?: string;
+  title: string;
+  text: string;
   url?: string | null;
-  text?: string;
   created_at?: string | null;
   updated_at?: string | null;
   author?: string | null;
@@ -21,30 +24,32 @@ export interface SourceResponseApi {
   is_cited?: boolean;
   citation_rationale?: string | null;
 
-  // github (GithubSource)
-  owner?: string;
-  repo?: string;
-  number?: number;
-  state?: string;
+  // jira / github / confluence 공통
   labels?: string[];
-  merged?: boolean;
-  base_ref?: string;
-  head_ref?: string;
 
-  // jira (JiraSource)
+  // jira
   project_key?: string;
   issue_key?: string;
   status?: string;
   priority?: string;
   assignee?: string;
 
-  // slack (SlackSource)
+  // slack
   channel_name?: string;
   team_id?: string;
   ts?: string;
   thread_ts?: string;
 
-  // confluence (ConfluenceSource)
+  // github
+  owner?: string;
+  repo?: string;
+  number?: number;
+  state?: string;
+  merged?: boolean;
+  base_ref?: string;
+  head_ref?: string;
+
+  // confluence
   space_id?: string;
   space_key?: string;
   space_name?: string;
