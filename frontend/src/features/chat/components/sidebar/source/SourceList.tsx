@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { getCitationDisplayOrderMap } from '@/features/chat/components/answer/markdown/RenderWithBadges';
 import RagSourceSkeleton from '@/features/chat/components/skeleton/RagRightComponentSkeleton';
 import type { ChatSource } from '@/features/chat/types';
-import AddCircle from '@/public/icons/icon/add_circle.svg';
+import AddCircle from '@/public/icons/icon/add_circle_filled.svg';
 import { cn } from '@/shared/utils/cn';
 
 import SourceCard from './SourceCard';
@@ -67,24 +67,9 @@ const SourceList = ({
     [answerContent, validIndices],
   );
 
-  const getSourceCategory = (type: ChatSource['source_type']): Exclude<FilterType, 'all'> => {
-    switch (type) {
-      case 'jira':
-        return 'jira';
-      case 'slack':
-        return 'slack';
-      case 'confluence':
-        return 'confluence';
-      case 'code':
-      case 'pr':
-      case 'github_issue':
-        return 'github';
-    }
-  };
-
   const filteredSources = useMemo(() => {
     if (activeFilter === 'all') return sources;
-    return sources.filter((source) => getSourceCategory(source.source_type) === activeFilter);
+    return sources.filter((source) => source.source_type === activeFilter);
   }, [activeFilter, sources]);
 
   const citedSources = filteredSources
@@ -116,6 +101,7 @@ const SourceList = ({
 
   return (
     <div className="flex min-h-full w-full flex-col gap-2 pt-3">
+      {/* 상단 필터 탭 */}
       <div
         className={cn(
           'no-scrollbar flex w-full items-center gap-2 overflow-x-auto px-4',
@@ -143,19 +129,19 @@ const SourceList = ({
           );
         })}
       </div>
-
+      {/* 내부 SourceCard (Error + Loading) */}
       <div className="flex flex-1 flex-col gap-3">
         {isError ? (
-          <div className="px-4">
+          <div className="px-6">
             <SourceError />
           </div>
         ) : isLoading ? (
-          <div className="px-4">
+          <div className="px-6">
             <RagSourceSkeleton message="출처를 분석하는 중입니다." />
           </div>
         ) : (
           <>
-            <div className="flex flex-col gap-3 px-4">
+            <div className="flex flex-col gap-9 px-6">
               {citedSources.map((source, index) => (
                 <div key={source.id} className={itemTransitionClass} style={buildStaggerStyle(index)}>
                   <SourceCard
@@ -166,16 +152,16 @@ const SourceList = ({
                 </div>
               ))}
             </div>
-
+            {/* 참고하면 좋은 문서 영역 */}
             {recommendedSources.length > 0 && (
               <>
                 <div className="bg-edge-neutral mt-1 h-px w-full" />
-                <div className="flex flex-col gap-2.5 px-4 pb-6">
+                <div className="flex flex-col gap-2.5 px-6 pb-6">
                   <div className="flex items-center gap-1.5 px-1.5">
-                    <AddCircle className="text-icon-normal h-5 w-5" />
+                    <AddCircle className="text-icon-primary-assistive h-5 w-5" />
                     <span className="text-body-small text-content-neutral">참고하면 좋은 문서</span>
                   </div>
-                  <div className="flex flex-col gap-2.5">
+                  <div className="flex flex-col gap-9">
                     {recommendedSources.map((source, index) => (
                       <div
                         key={source.id}
