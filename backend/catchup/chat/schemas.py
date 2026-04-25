@@ -129,7 +129,7 @@ class ChatHistoryResponse(BaseModel):
     sender_type: SenderType = Field(..., description="sender 유형 (user/assistant)")
     content: str = Field(..., description="메시지 내용")
     created_at: datetime = Field(..., description="메시지 생성 시각")
-    sources: Optional[list[BaseSource]] = Field(default_factory=list, description="출처 목록 (sender_type='assistant'인 경우에만 존재)")
+    sources: Optional[list[SourceResponse]] = Field(default_factory=list, description="출처 목록 (sender_type='assistant'인 경우에만 존재)")
     is_liked: Optional[bool] = Field(default=None, description="답변 평가 여부 (True: 긍정, False: 부정, None: 없음)")
     is_saved: bool = Field(default=False, description="사용자의 답변 저장 여부")
 
