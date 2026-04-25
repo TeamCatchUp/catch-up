@@ -22,28 +22,12 @@ export interface ChatSourceModel {
   github_number?: number;
 }
 
-export interface JiraSubTaskModel {
-  id: string;
-  title: string;
-  issue_key?: string;
-  html_url?: string;
-}
-
-export interface JiraTaskModel {
-  id: string;
-  title: string;
-  parent_key?: string;
-  parent_summary?: string;
-  subtasks: JiraSubTaskModel[];
-}
-
 export interface MessageModel {
   id: string;
   chat_history_id?: string;
   role: 'user' | 'assistant';
   content: string;
   sources?: ChatSourceModel[];
-  detailed_tasks?: JiraTaskModel[];
   timestamp: string;
   has_feedback?: boolean;
   is_liked?: boolean;

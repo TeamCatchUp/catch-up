@@ -48,7 +48,6 @@ export const toUiMessage = (item: ChatHistoryMessageResponse): Message => {
     role: 'assistant',
     content: item.content ?? '',
     sources: normalizeHistorySources(rawSources),
-    detailed_tasks: [],
     timestamp,
     chat_history_id: item.chat_history_id ? String(item.chat_history_id) : String(item.id),
     has_feedback: Boolean(item.has_feedback),

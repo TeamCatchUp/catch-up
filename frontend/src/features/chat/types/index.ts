@@ -20,10 +20,6 @@ export type SourceResponse = import('@/features/chat/types/api/sourceApi').Sourc
 
 /** 기존 코드 호환용 별칭: 출처 모델 */
 export type ChatSource = import('@/features/chat/types/model/chatModel').ChatSourceModel;
-/** 기존 코드 호환용 별칭: Jira 서브태스크 모델 */
-export type JiraSubTask = import('@/features/chat/types/model/chatModel').JiraSubTaskModel;
-/** 기존 코드 호환용 별칭: Jira 태스크 모델 */
-export type JiraTask = import('@/features/chat/types/model/chatModel').JiraTaskModel;
 /** 기존 코드 호환용 별칭: 메시지 모델 */
 export type Message = import('@/features/chat/types/model/chatModel').MessageModel;
 /** 기존 코드 호환용 별칭: 채팅 데이터 모델 */
