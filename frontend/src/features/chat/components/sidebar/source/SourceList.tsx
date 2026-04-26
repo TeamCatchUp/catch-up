@@ -39,20 +39,24 @@ const SourceList = ({
   transitionKey = 'default',
   prefersReducedMotion = false,
 }: Props) => {
+  // 칩 활성 필터 — 'all'이면 모든 source 표시
   const [activeFilter, setActiveFilter] = useState<FilterType>('all');
 
+  // 카드 mount 시 entrance stagger 애니메이션 (transitionKey 변경 시 재실행)
   const { getItemStyle, itemClass, listEntered } = useListStaggerAnimation({
     transitionKey,
     prefersReducedMotion,
   });
 
+  // 답변 본문의 [N] 패턴을 source_index로 매칭하기 위한 유효 index Set
   const validIndices = useMemo(() => new Set(sources.map((s) => s.source_index)), [sources]);
+  // 답변 본문에 [N]이 등장한 순서로 정렬하기 위한 source_index -> display order 맵
   const citationOrderMap = useMemo(
     () => getCitationDisplayOrderMap(answerContent ?? '', validIndices),
     [answerContent, validIndices],
   );
 
-  /** 칩별 카운트: 전체 = unknown 포함 총량, 플랫폼별 = 해당 source_type만 */
+  // 칩별 카운트: 전체 = unknown 포함 총량, 플랫폼별 = 해당 source_type만
   const sourceCounts = useMemo<Record<FilterType, number>>(() => {
     const counts = { all: sources.length, github: 0, jira: 0, slack: 0, confluence: 0 };
     for (const s of sources) {
@@ -68,11 +72,13 @@ const SourceList = ({
     return counts;
   }, [sources]);
 
+  // 활성 칩 기준으로 source 목록 필터링
   const filteredSources = useMemo(() => {
     if (activeFilter === 'all') return sources;
     return sources.filter((source) => source.source_type === activeFilter);
   }, [activeFilter, sources]);
 
+  // 인용된 source — 답변 본문 [N] 등장 순서로 정렬, 미등장은 source_index fallback
   const citedSources = filteredSources
     .filter((source) => source.is_cited)
     .sort((a, b) => {
@@ -85,6 +91,7 @@ const SourceList = ({
       return a.source_index - b.source_index;
     });
 
+  // 인용되지 않은 source — "참고하면 좋은 문서" 섹션에 표시
   const recommendedSources = filteredSources.filter((source) => !source.is_cited);
 
   return (
