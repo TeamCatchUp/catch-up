@@ -100,7 +100,7 @@ def get_compiled_graph(
     )
 
     complex_subgraph = build_complex_react_subgraph(
-        llm_large=llm_small,
+        llm_small=llm_small,
         llm_large_stream=llm_large_stream,
         llm_thinking=llm_thinking,
         vector_db_service=vector_db_service,

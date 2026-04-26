@@ -82,7 +82,7 @@ async def _run_search(
         queries=[search_query],
         tool_filters=tool_filters or [],
         k=40,
-        weights=[0.5, 0.3, 0.2],
+        weights=[0.6, 0.25, 0.15],
     )
     docs = _deduplicate_search_results(results)
     summary = _build_search_summary(query=query, docs=docs)
