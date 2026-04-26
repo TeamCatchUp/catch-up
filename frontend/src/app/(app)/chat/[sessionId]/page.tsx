@@ -114,7 +114,7 @@ export default function RagAnswerPage() {
           <div className="border-edge-neutral relative flex flex-1 flex-col overflow-hidden border-r-0">
             <div
               ref={combinedScrollContainerRef}
-              className="flex flex-1 flex-col items-center overflow-y-auto scroll-smooth px-6 pt-3 pb-9 lg:px-24"
+              className="custom-scrollbar flex flex-1 flex-col items-center overflow-y-auto scroll-smooth px-16 pt-3 pb-9"
             >
               {/* 역방향 무한 스크롤 sentinel (위쪽) */}
               <div ref={topSentinelRef} className="h-1 w-full" />
@@ -127,13 +127,13 @@ export default function RagAnswerPage() {
               {/* 날짜 구분선 — 세션 첫 메시지의 생성 시각 기준 (messages는 created_at 오름차순 정렬 — sessionDataLoader 참고) */}
               {chat.chatData?.messages[0]?.timestamp && (
                 <DateDivider
-                  className="mb-8 w-full max-w-192.75"
+                  className="mb-8 w-full max-w-203"
                   date={new Date(chat.chatData.messages[0].timestamp)}
                 />
               )}
 
               {/* 모든 Q&A 쌍을 순서대로 렌더링 */}
-              <div className="mx-auto flex w-full max-w-193.25 flex-1 flex-col gap-12">
+              <div className="mx-auto flex w-full max-w-203 flex-1 flex-col gap-12">
                 {qaPairs.map((qaPair, index) => {
                   const isLastPair = index === qaPairs.length - 1;
 

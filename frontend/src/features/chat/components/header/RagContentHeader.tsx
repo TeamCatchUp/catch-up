@@ -58,8 +58,8 @@ export default function RagHeader({ title, sessionId }: RagHeaderProps) {
               isQuestionsHistoryPanelOpen && 'bg-fill-interaction-pressed rounded-xl',
             )}
           >
-            <AI className="text-content-alternative h-5 w-5" />
-            <span className={`text-heading-small text-content-alternative ml-1.5 hidden cursor-pointer lg:inline`}>
+            <AI className="text-content-alternative h-5 w-5 shrink-0" />
+            <span className="text-heading-small text-content-alternative ml-1.5 hidden shrink-0 cursor-pointer lg:inline">
               캐치스턴트 AI
             </span>
           </button>

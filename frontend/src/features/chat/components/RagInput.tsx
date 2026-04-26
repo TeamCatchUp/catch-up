@@ -60,8 +60,8 @@ export default function RagInput({ filters, isLoading, onSendMessage, onStop, on
   };
 
   return (
-    <div className="px-6 pb-2.5 backdrop-blur-[10px] lg:px-24">
-      <div className="mx-auto flex w-full max-w-194 flex-col items-center gap-2">
+    <div className="px-16 pb-2.5 backdrop-blur-[10px]">
+      <div className="mx-auto flex w-full max-w-203 flex-col items-center gap-2">
         {/* Text input 카드 */}
         <div className="border-edge-normal bg-fill-normal flex w-full flex-col rounded-2xl border p-4">
           {/* Filter Bar (카드 내부 상단) */}

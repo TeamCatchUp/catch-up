@@ -99,7 +99,10 @@ export default function RagSidebar({ currentQA, isLoading, isError }: RagSidebar
 
   return (
     <div className="border-edge-neutral bg-fill-normal hidden w-108.75 flex-none flex-col border-l lg:flex">
-      <div className={cn('min-h-0 flex-1 overflow-y-auto', transitionClass)} style={transitionStyle}>
+      <div
+        className={cn('flex min-h-0 flex-1 flex-col overflow-hidden', transitionClass)}
+        style={transitionStyle}
+      >
         <SourceList
           sources={sources}
           answerContent={answerContent}
