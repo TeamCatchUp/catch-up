@@ -100,7 +100,7 @@ export default function RagSidebar({ currentQA, isLoading, isError }: RagSidebar
   return (
     <div className="border-edge-neutral bg-fill-normal hidden w-108.75 flex-none flex-col border-l lg:flex">
       <div
-        className={cn('custom-scrollbar flex min-h-0 flex-1 flex-col overflow-y-auto', transitionClass)}
+        className={cn('flex min-h-0 flex-1 flex-col overflow-hidden', transitionClass)}
         style={transitionStyle}
       >
         <SourceList
