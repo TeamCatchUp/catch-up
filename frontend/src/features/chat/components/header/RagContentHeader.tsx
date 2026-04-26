@@ -59,7 +59,7 @@ export default function RagHeader({ title, sessionId }: RagHeaderProps) {
             )}
           >
             <AI className="text-content-alternative h-5 w-5 shrink-0" />
-            <span className="text-heading-small text-content-alternative ml-1.5 shrink-0 cursor-pointer">
+            <span className="text-heading-small text-content-alternative ml-1.5 hidden shrink-0 cursor-pointer lg:inline">
               캐치스턴트 AI
             </span>
           </button>
