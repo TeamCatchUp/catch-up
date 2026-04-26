@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 
 import { getCitationDisplayOrderMap } from '@/features/chat/components/answer/markdown/RenderWithBadges';
 import RagSourceSkeleton from '@/features/chat/components/skeleton/RagRightComponentSkeleton';
+import { useListStaggerAnimation } from '@/features/chat/hooks/ui/useListStaggerAnimation';
 import type { ChatSource } from '@/features/chat/types';
 import AddCircle from '@/public/icons/icon/add_circle_filled.svg';
 import { cn } from '@/shared/utils/cn';
@@ -30,9 +31,6 @@ const filterCategory = [
 
 type FilterType = (typeof filterCategory)[number]['type'];
 
-const STAGGER_STEP_MS = 24;
-const STAGGER_MAX_DELAY_MS = 120;
-
 const SourceList = ({
   sources,
   answerContent,
@@ -42,24 +40,11 @@ const SourceList = ({
   prefersReducedMotion = false,
 }: Props) => {
   const [activeFilter, setActiveFilter] = useState<FilterType>('all');
-  const [listEntered, setListEntered] = useState(prefersReducedMotion);
 
-  useEffect(() => {
-    if (prefersReducedMotion) return;
-
-    let enterRafId = 0;
-    const resetRafId = requestAnimationFrame(() => {
-      setListEntered(false);
-      enterRafId = requestAnimationFrame(() => {
-        setListEntered(true);
-      });
-    });
-
-    return () => {
-      cancelAnimationFrame(resetRafId);
-      if (enterRafId) cancelAnimationFrame(enterRafId);
-    };
-  }, [prefersReducedMotion, transitionKey]);
+  const { getItemStyle, itemClass, listEntered } = useListStaggerAnimation({
+    transitionKey,
+    prefersReducedMotion,
+  });
 
   const validIndices = useMemo(() => new Set(sources.map((s) => s.source_index)), [sources]);
   const citationOrderMap = useMemo(
@@ -101,19 +86,6 @@ const SourceList = ({
     });
 
   const recommendedSources = filteredSources.filter((source) => !source.is_cited);
-
-  const buildStaggerStyle = (index: number) => {
-    if (prefersReducedMotion) return undefined;
-    const delay = Math.min(index * STAGGER_STEP_MS, STAGGER_MAX_DELAY_MS);
-    return { transitionDelay: `${delay}ms` };
-  };
-
-  const itemTransitionClass = prefersReducedMotion
-    ? ''
-    : cn(
-        'transition-[opacity,transform] duration-160 ease-out',
-        listEntered ? 'translate-y-0 opacity-100' : 'translate-y-1 opacity-0',
-      );
 
   return (
     <div className="flex min-h-full w-full flex-col gap-2 pt-3">
@@ -168,7 +140,7 @@ const SourceList = ({
           <>
             <div className="flex flex-col gap-9 px-6 pb-2">
               {citedSources.map((source, index) => (
-                <div key={source.id} className={itemTransitionClass} style={buildStaggerStyle(index)}>
+                <div key={source.id} className={itemClass} style={getItemStyle(index)}>
                   <SourceCard
                     source={source}
                     showCount
@@ -194,11 +166,7 @@ const SourceList = ({
                 {/* 카드 리스트 */}
                 <div className="flex flex-col gap-9 px-6 pb-6">
                   {recommendedSources.map((source, index) => (
-                    <div
-                      key={source.id}
-                      className={itemTransitionClass}
-                      style={buildStaggerStyle(index + citedSources.length)}
-                    >
+                    <div key={source.id} className={itemClass} style={getItemStyle(index + citedSources.length)}>
                       <SourceCard source={source} showCount={false} />
                     </div>
                   ))}
