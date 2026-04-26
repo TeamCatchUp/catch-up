@@ -79,20 +79,24 @@ const SourceList = ({
   }, [activeFilter, sources]);
 
   // 인용된 source — 답변 본문 [N] 등장 순서로 정렬, 미등장은 source_index fallback
-  const citedSources = filteredSources
-    .filter((source) => source.is_cited)
-    .sort((a, b) => {
-      const orderA = citationOrderMap.get(a.source_index);
-      const orderB = citationOrderMap.get(b.source_index);
+  const citedSources = useMemo(
+    () =>
+      filteredSources
+        .filter((source) => source.is_cited)
+        .toSorted((a, b) => {
+          const orderA = citationOrderMap.get(a.source_index);
+          const orderB = citationOrderMap.get(b.source_index);
 
-      if (orderA !== undefined && orderB !== undefined) return orderA - orderB;
-      if (orderA !== undefined) return -1;
-      if (orderB !== undefined) return 1;
-      return a.source_index - b.source_index;
-    });
+          if (orderA !== undefined && orderB !== undefined) return orderA - orderB;
+          if (orderA !== undefined) return -1;
+          if (orderB !== undefined) return 1;
+          return a.source_index - b.source_index;
+        }),
+    [filteredSources, citationOrderMap],
+  );
 
   // 인용되지 않은 source — "참고하면 좋은 문서" 섹션에 표시
-  const recommendedSources = filteredSources.filter((source) => !source.is_cited);
+  const recommendedSources = useMemo(() => filteredSources.filter((source) => !source.is_cited), [filteredSources]);
 
   return (
     <div className="flex min-h-full w-full flex-col gap-2 pt-3">

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import { cn } from '@/shared/utils/cn';
 
@@ -57,12 +57,13 @@ export function useListStaggerAnimation({
     return { transitionDelay: `${delay}ms` };
   };
 
-  const itemClass = prefersReducedMotion
-    ? ''
-    : cn(
-        'transition-[opacity,transform] duration-160 ease-out',
-        listEntered ? 'translate-y-0 opacity-100' : 'translate-y-1 opacity-0',
-      );
+  const itemClass = useMemo(() => {
+    if (prefersReducedMotion) return '';
+    return cn(
+      'transition-[opacity,transform] duration-160 ease-out',
+      listEntered ? 'translate-y-0 opacity-100' : 'translate-y-1 opacity-0',
+    );
+  }, [prefersReducedMotion, listEntered]);
 
   return { getItemStyle, itemClass, listEntered };
 }
