@@ -25,7 +25,8 @@ const renderSourceLogo = (sourceType: ChatSource['source_type']) => {
   if (sourceType === 'jira') return <Jira className="h-5 w-5 shrink-0" />;
   if (sourceType === 'slack') return <Slack className="h-5 w-5 shrink-0" />;
   if (sourceType === 'confluence') return <Confluence className="h-5 w-5 shrink-0" />;
-  return <Github className="h-5 w-5 shrink-0" />;
+  if (sourceType === 'github') return <Github className="h-5 w-5 shrink-0" />;
+  return null;
 };
 
 export default function SourceCard({ source, showCount = true, count }: Props) {
