@@ -11,7 +11,9 @@ from catchup.rag.nodes import search_vector_db_node
 from catchup.rag.state import AgentState
 
 
-def build_simple_subgraph(llm_small, llm_fast, vector_db_service, rerank_service):
+def build_simple_subgraph(
+    llm_small, llm_large_stream, vector_db_service, rerank_service
+):
     """Simple 파이프라인 서브그래프.
 
     단일 쿼리 검색 → rerank → fast generation.
@@ -33,7 +35,7 @@ def build_simple_subgraph(llm_small, llm_fast, vector_db_service, rerank_service
     graph.add_node("merge_cache", merge_cache_node)
     graph.add_node(
         "generate_final_answer",
-        partial(generate_final_answer_fast_node, llm=llm_fast),
+        partial(generate_final_answer_fast_node, llm=llm_large_stream),
         metadata={"tags": ["stream_target", "has_citations"]},
     )
 

@@ -9,7 +9,7 @@ from catchup.rag.nodes import rerank_node
 from catchup.rag.state import AgentState
 
 
-def build_reuse_subgraph(llm_large, rerank_service):
+def build_reuse_subgraph(llm_large_stream, rerank_service):
     """Reuse 파이프라인 서브그래프.
 
     새 검색 없이 doc_cache를 현재 쿼리 기준으로 재정렬 후 답변을 생성한다.
@@ -22,7 +22,7 @@ def build_reuse_subgraph(llm_large, rerank_service):
     graph.add_node("rerank", partial(rerank_node, rerank_service=rerank_service))
     graph.add_node(
         "generate_final_answer",
-        partial(generate_final_answer_node, llm=llm_large),
+        partial(generate_final_answer_node, llm=llm_large_stream),
         metadata={"tags": ["stream_target", "has_citations"]},
     )
 

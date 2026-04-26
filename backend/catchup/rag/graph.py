@@ -32,7 +32,7 @@ def get_compiled_graph(
     checkpointer: Optional[BaseCheckpointSaver] = None,
 ):
     # SMALL, non-streaming — rewrite, generate_vector_queries, standard_agent
-    small_llm = get_llm_service(
+    llm_small = get_llm_service(
         LlmProvider.AWS_BEDROCK,
         ModelCapacity.SMALL,
         streaming=False,
@@ -40,7 +40,7 @@ def get_compiled_graph(
     ).get_llm()
 
     # SMALL, streaming — direct_answer
-    small_stream_llm = get_llm_service(
+    llm_small_stream = get_llm_service(
         LlmProvider.AWS_BEDROCK,
         ModelCapacity.SMALL,
         streaming=True,
@@ -48,7 +48,7 @@ def get_compiled_graph(
     ).get_llm()
 
     # LARGE, non-streaming — supervisor, complex_agent (structured output / tool calling)
-    large_llm = get_llm_service(
+    llm_large = get_llm_service(
         LlmProvider.AWS_BEDROCK,
         ModelCapacity.LARGE,
         streaming=False,
@@ -56,7 +56,7 @@ def get_compiled_graph(
     ).get_llm()
 
     # LARGE, streaming — 모든 최종 답변 생성 (reuse / simple / standard / complex)
-    large_stream_llm = get_llm_service(
+    llm_large_stream = get_llm_service(
         LlmProvider.AWS_BEDROCK,
         ModelCapacity.LARGE,
         streaming=True,
@@ -64,10 +64,10 @@ def get_compiled_graph(
     ).get_llm()
 
     # LARGE, non-streaming, extended thinking — complex_planner, gap_analysis
-    thinking_llm = get_llm_service(
+    llm_thinking = get_llm_service(
         LlmProvider.AWS_BEDROCK,
         ModelCapacity.LARGE,
-        streaming=False,
+        streaming=True,
         isolated=True,
         extended_thinking=True,
         thinking_budget_tokens=2048,
@@ -79,26 +79,30 @@ def get_compiled_graph(
     rerank_service = get_rerank_service(RerankerProvider.AWS_BEDROCK)
 
     # Subgraphs
-    reuse_subgraph = build_reuse_subgraph(llm_large=large_stream_llm, rerank_service=rerank_service)
+    reuse_subgraph = build_reuse_subgraph(
+        llm_large_stream=llm_large_stream,
+        rerank_service=rerank_service,
+    )
 
     simple_subgraph = build_simple_subgraph(
-        llm_small=small_llm,
-        llm_fast=large_stream_llm,
+        llm_small=llm_small,
+        llm_large_stream=llm_large_stream,
         vector_db_service=vector_db_service,
         rerank_service=rerank_service,
     )
 
     standard_subgraph = build_standard_react_subgraph(
-        llm_small=small_llm,
-        llm_large=large_stream_llm,
+        llm_small=llm_small,
+        llm_large_stream=llm_large_stream,
+        llm_thinking=llm_thinking,
         vector_db_service=vector_db_service,
         rerank_service=rerank_service,
     )
 
     complex_subgraph = build_complex_react_subgraph(
-        llm_agent=large_llm,
-        llm_final=large_stream_llm,
-        llm_thinking=thinking_llm,
+        llm_large=llm_small,
+        llm_large_stream=llm_large_stream,
+        llm_thinking=llm_thinking,
         vector_db_service=vector_db_service,
         rerank_service=rerank_service,
     )
@@ -106,10 +110,10 @@ def get_compiled_graph(
     # Main Graph
     workflow = StateGraph(AgentState)
 
-    workflow.add_node("supervisor", partial(supervisor_node, llm=large_llm))
+    workflow.add_node("supervisor", partial(supervisor_node, llm=llm_large))
     workflow.add_node(
         "direct_answer",
-        partial(direct_answer_node, llm=small_stream_llm),
+        partial(direct_answer_node, llm=llm_small_stream),
         metadata={"tags": ["stream_target"]},
     )
     workflow.add_node(
