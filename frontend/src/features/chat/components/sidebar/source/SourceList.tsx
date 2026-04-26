@@ -67,6 +67,22 @@ const SourceList = ({
     [answerContent, validIndices],
   );
 
+  /** 칩별 카운트: 전체 = unknown 포함 총량, 플랫폼별 = 해당 source_type만 */
+  const sourceCounts = useMemo<Record<FilterType, number>>(() => {
+    const counts = { all: sources.length, github: 0, jira: 0, slack: 0, confluence: 0 };
+    for (const s of sources) {
+      if (
+        s.source_type === 'github' ||
+        s.source_type === 'jira' ||
+        s.source_type === 'slack' ||
+        s.source_type === 'confluence'
+      ) {
+        counts[s.source_type] += 1;
+      }
+    }
+    return counts;
+  }, [sources]);
+
   const filteredSources = useMemo(() => {
     if (activeFilter === 'all') return sources;
     return sources.filter((source) => source.source_type === activeFilter);
@@ -111,6 +127,7 @@ const SourceList = ({
       >
         {filterCategory.map((category) => {
           const isActive = activeFilter === category.type;
+          const count = sourceCounts[category.type];
 
           return (
             <button
@@ -118,13 +135,21 @@ const SourceList = ({
               type="button"
               onClick={() => setActiveFilter(category.type)}
               className={cn(
-                'text-body-small flex h-9 shrink-0 cursor-pointer items-center justify-center rounded-full border px-3 py-1.5 leading-none whitespace-nowrap transition',
+                'text-body-small flex h-9 shrink-0 cursor-pointer items-center gap-1.5 rounded-full border px-3 py-1.5 whitespace-nowrap transition',
                 isActive
                   ? 'border-accent-black-lighten bg-accent-black-lighten text-content-inverse'
                   : 'border-edge-neutral text-content-neutral hover:bg-fill-interaction-hover bg-fill-normal',
               )}
             >
-              {category.category}
+              <span>{category.category}</span>
+              <span
+                className={cn(
+                  'text-body-xsmall flex min-w-5 items-center justify-center rounded-full px-1',
+                  isActive ? 'bg-dim-white-10' : 'bg-dim-black-10',
+                )}
+              >
+                {count}
+              </span>
             </button>
           );
         })}
