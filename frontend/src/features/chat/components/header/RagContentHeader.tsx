@@ -46,7 +46,7 @@ export default function RagHeader({ title, sessionId }: RagHeaderProps) {
 
   return (
     <>
-      <div className="border-r-edge-neutral border-b-edge-neutral border-r-0.5 bg-fill-normal z-base sticky top-0 flex h-13 justify-between border-b px-6 py-2">
+      <div className="border-b-edge-neutral bg-fill-normal z-base sticky top-0 flex h-13 justify-between border-b px-6 py-2">
         {/* 좌측 메뉴 */}
         <div className="relative flex min-w-0 items-center">
           <button

@@ -5,7 +5,6 @@ import { useEffect, useRef, useState } from 'react';
 import type { QAPair } from '@/features/chat/utils/render/chat';
 import { cn } from '@/shared/utils/cn';
 
-import SidebarHeader from './SidebarHeader';
 import SourceList from './source/SourceList';
 
 const SIDEBAR_FADE_MS = 160;
@@ -88,7 +87,6 @@ export default function RagSidebar({ currentQA, isLoading, isError }: RagSidebar
   // 같은 QA pair → currentQA(최신 데이터), 전환 중 → displayQA(이전 pair 유지)
   const effectiveQA = displayQA?.question.id === currentQA?.question.id ? currentQA : displayQA;
   const sources = effectiveQA?.answer?.sources ?? [];
-  const sourceCount = sources.filter((source) => source.is_cited).length;
   const answerContent = effectiveQA?.answer?.content ?? '';
 
   const transitionClass = prefersReducedMotion
@@ -100,8 +98,7 @@ export default function RagSidebar({ currentQA, isLoading, isError }: RagSidebar
     : { transform: `translateY(${isVisible ? 0 : SIDEBAR_SHIFT_PX}px)` };
 
   return (
-    <div className="border-edge-neutral bg-fill-normal hidden w-100 flex-none flex-col border-l lg:flex">
-      <SidebarHeader sourceCount={sourceCount} className={transitionClass} />
+    <div className="border-edge-neutral bg-fill-normal hidden w-108.75 flex-none flex-col border-l lg:flex">
       <div className={cn('min-h-0 flex-1 overflow-y-auto', transitionClass)} style={transitionStyle}>
         <SourceList
           sources={sources}

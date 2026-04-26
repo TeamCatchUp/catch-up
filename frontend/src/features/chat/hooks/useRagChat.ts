@@ -184,7 +184,6 @@ export const useRagChat = ({
             const mergeWithPrev = (prevMsg: Message) => ({
               ...serverMsg,
               sources: prevMsg.sources,
-              detailed_tasks: prevMsg.detailed_tasks?.length ? prevMsg.detailed_tasks : serverMsg.detailed_tasks,
             });
 
             // 같은 위치의 prev 메시지에서 sources 보존

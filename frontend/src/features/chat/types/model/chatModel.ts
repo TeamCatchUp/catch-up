@@ -1,15 +1,13 @@
-/**
- * UI에서 사용하는 출처 타입.
- */
-export type ChatSourceTypeModel = 'code' | 'pr' | 'github_issue' | 'jira' | 'slack' | 'confluence';
+import type { EntityTypeApi, SourceTypeApi } from '@/features/chat/types/api/sourceApi';
 
-/**
- * 답변 우측 사이드바/배지 렌더링용 출처 모델.
- * @interface ChatSourceModel
- */
+/** 백엔드 SourceType과 동일 */
+export type ChatSourceTypeModel = SourceTypeApi;
+
+/** 답변 사이드바/배지용 출처 모델. 플랫폼은 source_type, 엔티티는 entity_type으로 분기. */
 export interface ChatSourceModel {
   id: string;
   source_type: ChatSourceTypeModel;
+  entity_type: EntityTypeApi;
   is_cited: boolean;
   repo: string;
   title: string;
@@ -18,52 +16,24 @@ export interface ChatSourceModel {
   author: string;
   html_url: string;
   source_index: number;
-}
-
-/**
- * Jira 서브태스크 모델.
- * @interface JiraSubTaskModel
- */
-export interface JiraSubTaskModel {
-  id: string;
-  title: string;
+  /** Jira 이슈키 (예: "CAT-297") */
   issue_key?: string;
-  html_url?: string;
+  /** GitHub PR/Issue 번호 */
+  github_number?: number;
 }
 
-/**
- * Jira 태스크 모델.
- * @interface JiraTaskModel
- */
-export interface JiraTaskModel {
-  id: string;
-  title: string;
-  parent_key?: string;
-  parent_summary?: string;
-  subtasks: JiraSubTaskModel[];
-}
-
-/**
- * 채팅 메시지 모델.
- * @interface MessageModel
- */
 export interface MessageModel {
   id: string;
   chat_history_id?: string;
   role: 'user' | 'assistant';
   content: string;
   sources?: ChatSourceModel[];
-  detailed_tasks?: JiraTaskModel[];
   timestamp: string;
   has_feedback?: boolean;
   is_liked?: boolean;
   is_saved?: boolean;
 }
 
-/**
- * 채팅 세션 모델.
- * @interface ChatDataModel
- */
 export interface ChatDataModel {
   session_id: string;
   title: string;
