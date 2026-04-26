@@ -67,7 +67,7 @@ export default function SourceCard({ source, showCount = true, count }: Props) {
 
       {/* Row 2: tag pill · 채널/워크스페이스/repo */}
       <div className="flex w-full items-center gap-2">
-        <span className="bg-fill-normal border-edge-normal rounded-md2 flex shrink-0 items-center border p-0.5">
+        <span className="bg-fill-normal border-edge-normal rounded-md2 flex size-5 shrink-0 items-center border-2 p-0.5">
           <Tag className="text-icon-neutral size-4" />
         </span>
         <span className="text-body-xsmall text-content-alternative min-w-0 flex-1 truncate">{repoText}</span>
