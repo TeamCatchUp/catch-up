@@ -114,7 +114,7 @@ export default function RagAnswerPage() {
           <div className="border-edge-neutral relative flex flex-1 flex-col overflow-hidden border-r-0">
             <div
               ref={combinedScrollContainerRef}
-              className="flex flex-1 flex-col items-center overflow-y-auto scroll-smooth px-6 pt-3 pb-9 lg:px-24"
+              className="custom-scrollbar flex flex-1 flex-col items-center overflow-y-auto scroll-smooth px-6 pt-3 pb-9 lg:px-24"
             >
               {/* 역방향 무한 스크롤 sentinel (위쪽) */}
               <div ref={topSentinelRef} className="h-1 w-full" />
