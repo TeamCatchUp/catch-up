@@ -38,12 +38,18 @@ def _route_after_gap_analysis(state: AgentState) -> str:
     agent_iteration = state.get("agent_iteration", 0)
 
     gap_analysis = state.get("gap_analysis")
-    if gap_analysis is None or gap_analysis.is_sufficient or agent_iteration >= max_iterations:
+    if (
+        gap_analysis is None
+        or gap_analysis.is_sufficient
+        or agent_iteration >= max_iterations
+    ):
         return "collect_docs"
     return "complex_agent"
 
 
-def build_complex_react_subgraph(llm_agent, llm_final, llm_thinking, vector_db_service, rerank_service):
+def build_complex_react_subgraph(
+    llm_small, llm_large_stream, llm_thinking, vector_db_service, rerank_service
+):
     """Complex ReAct 파이프라인 서브그래프.
 
     rewrite → planner (extended_thinking)
@@ -54,9 +60,9 @@ def build_complex_react_subgraph(llm_agent, llm_final, llm_thinking, vector_db_s
     """
     graph = StateGraph(AgentState)
 
-    graph.add_node("rewrite", partial(rewrite_node, llm=llm_agent))
+    graph.add_node("rewrite", partial(rewrite_node, llm=llm_small))
     graph.add_node("complex_planner", partial(complex_planner_node, llm=llm_thinking))
-    graph.add_node("complex_agent", partial(complex_agent_node, llm=llm_agent))
+    graph.add_node("complex_agent", partial(complex_agent_node, llm=llm_thinking))
     graph.add_node(
         "tool_executor",
         partial(search_tool_executor_node, vector_db_service=vector_db_service),
@@ -67,7 +73,7 @@ def build_complex_react_subgraph(llm_agent, llm_final, llm_thinking, vector_db_s
     graph.add_node("merge_cache", merge_cache_node)
     graph.add_node(
         "generate_final_answer",
-        partial(generate_final_answer_node, llm=llm_final),
+        partial(generate_final_answer_node, llm=llm_large_stream),
         metadata={"tags": ["stream_target", "has_citations"]},
     )
 

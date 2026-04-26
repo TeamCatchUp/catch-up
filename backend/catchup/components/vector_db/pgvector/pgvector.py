@@ -177,23 +177,23 @@ class PostgresFTSRetriever(BaseRetriever):
 
         results = list(self._do_query(search_sql, params))
         
-        # 2차 검색 (Fallback: weighted가 아니고 결과가 k개 미만이면 OR 조건으로 추가 검색)
-        if not self.weighted and len(results) < self.k and len(tokens) > 1:
-            or_filter = f" AND ({' OR '.join(token_conditions)})"
-            search_sql_or = text(search_sql_template.format(
-                filter_clause=filter_clause,
-                keyword_filter=or_filter
-            ))
+        # # 2차 검색 (Fallback: weighted가 아니고 결과가 k개 미만이면 OR 조건으로 추가 검색)
+        # if not self.weighted and len(results) < self.k and len(tokens) > 1:
+        #     or_filter = f" AND ({' OR '.join(token_conditions)})"
+        #     search_sql_or = text(search_sql_template.format(
+        #         filter_clause=filter_clause,
+        #         keyword_filter=or_filter
+        #     ))
             
-            or_results = self._do_query(search_sql_or, params)
+        #     or_results = self._do_query(search_sql_or, params)
             
-            # 중복 제거 (이미 AND 결과에 포함된 문서 제외)
-            existing_ids = {row[2] for row in results}
-            for row in or_results:
-                if row[2] not in existing_ids:
-                    results.append(row)
-                    if len(results) >= self.k:
-                        break
+        #     # 중복 제거 (이미 AND 결과에 포함된 문서 제외)
+        #     existing_ids = {row[2] for row in results}
+        #     for row in or_results:
+        #         if row[2] not in existing_ids:
+        #             results.append(row)
+        #             if len(results) >= self.k:
+        #                 break
 
         docs = self._get_documents_from_results(results)
         return docs
