@@ -99,11 +99,11 @@ const SourceList = ({
   const recommendedSources = useMemo(() => filteredSources.filter((source) => !source.is_cited), [filteredSources]);
 
   return (
-    <div className="flex min-h-full w-full flex-col gap-2 pt-3">
+    <div className="flex min-h-0 w-full flex-1 flex-col gap-2 pt-3">
       {/* 상단 필터 탭 */}
       <div
         className={cn(
-          'no-scrollbar flex w-full items-center gap-2 overflow-x-auto px-4',
+          'flex w-full shrink-0 items-center gap-2 overflow-x-auto px-4',
           !prefersReducedMotion && 'transition-opacity duration-160 ease-out',
           !prefersReducedMotion && (listEntered ? 'opacity-100' : 'opacity-0'),
         )}
@@ -138,7 +138,7 @@ const SourceList = ({
         })}
       </div>
       {/* 내부 SourceCard (Error + Loading) */}
-      <div className="flex flex-1 flex-col gap-3 pt-2">
+      <div className="custom-scrollbar flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto pt-2">
         {isError ? (
           <div className="px-6">
             <SourceError />
