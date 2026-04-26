@@ -23,6 +23,7 @@ const RESOURCE_ICONS: Record<IntegrationService, React.ComponentType<React.SVGPr
   github: IconGithubLogo,
   slack: IconTag,
   confluence: IconSpace,
+  'channel-talk': IconTag,
 };
 
 /** 서비스별 연동 설치 핸들러 */

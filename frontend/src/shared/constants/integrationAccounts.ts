@@ -1,3 +1,4 @@
+import IconChannelTalk from '@/public/icons/logo/ChannelTalk.svg';
 import IconConfluence from '@/public/icons/logo/Confluence.svg';
 import IconGithub from '@/public/icons/logo/GitHub.svg';
 import IconJira from '@/public/icons/logo/Jira.svg';
@@ -10,4 +11,5 @@ export const INTEGRATION_ACCOUNTS: IntegrationAccountMeta[] = [
   { service: 'github', name: 'Github', Icon: IconGithub },
   { service: 'slack', name: 'Slack', Icon: IconSlack },
   { service: 'confluence', name: 'Confluence', Icon: IconConfluence },
+  { service: 'channel-talk', name: '채널톡', Icon: IconChannelTalk },
 ];
