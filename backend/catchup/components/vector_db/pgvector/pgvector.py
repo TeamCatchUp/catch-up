@@ -1,5 +1,4 @@
 import logging
-from datetime import datetime
 from typing import Any
 from typing import Dict
 from typing import Literal
@@ -30,7 +29,7 @@ logger = logging.getLogger(__name__)
 
 class PostgresFTSRetriever(BaseRetriever):
     """PostgreSQL Full Text Search(FTS) 지원"""
-    
+
     # BaseRetriever는 내부적으로 BaseModel을 상속하므로 Pydantic 스타일을 따라야 함
     session_factory: Any  # e.g) sessionmaker (from sqlalchemy.orm)
     collection_name: str = settings.PGVECTOR_COLLECTION_NAME
@@ -38,7 +37,6 @@ class PostgresFTSRetriever(BaseRetriever):
     offset: int = 0
     tool_filters: list[SourceType] | None = None
     temporal_filters: list[TemporalFilter] | None = None
-    weighted: bool = False
     search_mode: Literal["title", "content", "both"] = "both"
 
     @override
@@ -46,166 +44,142 @@ class PostgresFTSRetriever(BaseRetriever):
         self,
         query: str | list[str],
         *,
-        run_manager: CallbackManagerForRetrieverRun,  # BaseRetriever 시그니처
+        run_manager: CallbackManagerForRetrieverRun,  # BaseRetriever Signature
     ) -> list[Document]:
         """
-        Hybrid Search를 위한 PostgreSQL Full Text search. 
+        pg_bigm 유사도 기반 키워드 검색.
         """
-        # query가 리스트일 경우 (keyword_tokens 등) 첫 번째 토큰 사용 또는 병합
-        search_query = " ".join(query) if isinstance(query, list) else query
-
-        # PGVectorService의 로직 재사용 (순환 참조 방지를 위해 직접 쿼리 수행하거나 
-        # 필요한 경우 로직을 분리해야 하나, 여기서는 weighted 플래그에 따라 분기)
-        
-        # 동적 쿼리 필터 (기존 로직 유지)
-        filter_clause = ""
-        params = {
-            "collection_name": self.collection_name,
-            "query": search_query,
-            "k": self.k,
-            "offset": self.offset
-        }
-        
-        if not self.temporal_filters:
-            if self.tool_filters:
-                filter_clause = " AND e.cmetadata ->> 'source' = ANY(:tools)"
-                params["tools"] = [f.value for f in self.tool_filters]
-                
-        else:
-            sql_conditions = []
-            for i, tf in enumerate(self.temporal_filters):
-                tools_param_name = f"tools_{i}"
-                start_param_name = f"start_date_{i}"
-                end_param_name   = f"end_date_{i}"
-                params[tools_param_name] = [t.value for t in tf.tools]
-                params[start_param_name] = tf.start_date
-                params[end_param_name]   = tf.end_date
-
-                sql_conditions.append(
-                    f"(e.cmetadata ->> 'source' = ANY(:{tools_param_name}) "
-                    f"AND (e.cmetadata ->> '{tf.time_field}')::timestamp "
-                    f"BETWEEN :{start_param_name} AND :{end_param_name})"
-                )
-                            
-            filter_clause = f" AND ({' OR '.join(sql_conditions)})"
-
-        if self.weighted:
-            # Mode에 따른 필드 및 가중치 설정
-            if self.search_mode == "title":
-                exact_boost_sql = "(CASE WHEN (e.cmetadata ->> 'title') LIKE likequery(:query) THEN 1 ELSE 0 END)"
-                sim_score_sql = "bigm_similarity(e.cmetadata ->> 'title', :query)"
-                field_filter_sql = """
-                    AND (
-                        (e.cmetadata ->> 'title') =% :query
-                        OR (e.cmetadata ->> 'title') LIKE likequery(:query)
-                    )
-                """
-            elif self.search_mode == "content":
-                exact_boost_sql = "(CASE WHEN (e.cmetadata ->> 'contextual_content') LIKE likequery(:query) THEN 1 ELSE 0 END)"
-                sim_score_sql = "bigm_similarity(e.cmetadata ->> 'contextual_content', :query)"
-                field_filter_sql = """
-                    AND (
-                        (e.cmetadata ->> 'contextual_content') =% :query
-                        OR (e.cmetadata ->> 'contextual_content') LIKE likequery(:query)
-                    )
-                """
-            else: # both
-                exact_boost_sql = """
-                    (
-                        (CASE WHEN (e.cmetadata ->> 'title') LIKE likequery(:query) THEN 2 ELSE 0 END) +
-                        (CASE WHEN (e.cmetadata ->> 'contextual_content') LIKE likequery(:query) THEN 1 ELSE 0 END)
-                    )
-                """
-                sim_score_sql = """
-                    (
-                        (bigm_similarity(e.cmetadata ->> 'title', :query) * 2.0) +
-                        bigm_similarity(e.cmetadata ->> 'contextual_content', :query)
-                    )
-                """
-                field_filter_sql = """
-                    AND (
-                        (e.cmetadata ->> 'title') =% :query
-                        OR (e.cmetadata ->> 'title') LIKE likequery(:query)
-                        OR (e.cmetadata ->> 'contextual_content') =% :query
-                        OR (e.cmetadata ->> 'contextual_content') LIKE likequery(:query)
-                    )
-                """
-
-            # Weighted Keyword Search Logic
-            search_sql = text(f"""
-                SELECT e.document, e.cmetadata, e.id,
-                    {exact_boost_sql} as exact_match_boost,
-                    {sim_score_sql} as similarity_score
-                FROM langchain_pg_embedding e
-                JOIN langchain_pg_collection c ON e.collection_id = c.uuid
-                WHERE c.name = :collection_name
-                {filter_clause}
-                {field_filter_sql}
-                ORDER BY 
-                    exact_match_boost DESC,
-                    similarity_score DESC,
-                    (e.cmetadata ->> 'created_at')::timestamp DESC
-                LIMIT :k OFFSET :offset
-            """)
-        else:
-            # 기존 FTS 로직 (Fallback 유지)
-            # keyword_tokens가 있으면 LIKE likequery() 필터 생성
-            tokens = query if isinstance(query, list) else [query]
-            token_conditions = []
-            for idx, token in enumerate(tokens):
-                param_name = f"keyword_{idx}"
-                token_conditions.append(f"(e.cmetadata ->> 'contextual_content') LIKE likequery(:{param_name})")
-                params[param_name] = token
-
-            # 1차 검색 (AND 조건)
-            and_filter = f" AND ({' AND '.join(token_conditions)})" if token_conditions else ""
-            
-            search_sql_template = """
-                SELECT e.document, e.cmetadata, e.id
-                FROM langchain_pg_embedding e
-                JOIN langchain_pg_collection c ON e.collection_id = c.uuid
-                WHERE c.name = :collection_name
-                {filter_clause}
-                {keyword_filter}
-                ORDER BY bigm_similarity(e.cmetadata ->> 'contextual_content', :query) DESC
-                LIMIT :k OFFSET :offset
-            """
-            search_sql = text(search_sql_template.format(
-                filter_clause=filter_clause,
-                keyword_filter=and_filter
-            ))
+        search_sql, params = self.build_fts_query(
+            collection_name=self.collection_name,
+            query=query,
+            k=self.k,
+            offset=self.offset,
+            search_mode=self.search_mode,
+            tool_filters=self.tool_filters,
+            temporal_filters=self.temporal_filters,
+        )
 
         results = list(self._do_query(search_sql, params))
-        
-        # # 2차 검색 (Fallback: weighted가 아니고 결과가 k개 미만이면 OR 조건으로 추가 검색)
-        # if not self.weighted and len(results) < self.k and len(tokens) > 1:
-        #     or_filter = f" AND ({' OR '.join(token_conditions)})"
-        #     search_sql_or = text(search_sql_template.format(
-        #         filter_clause=filter_clause,
-        #         keyword_filter=or_filter
-        #     ))
-            
-        #     or_results = self._do_query(search_sql_or, params)
-            
-        #     # 중복 제거 (이미 AND 결과에 포함된 문서 제외)
-        #     existing_ids = {row[2] for row in results}
-        #     for row in or_results:
-        #         if row[2] not in existing_ids:
-        #             results.append(row)
-        #             if len(results) >= self.k:
-        #                 break
+        return self._get_documents_from_results(results)
 
-        docs = self._get_documents_from_results(results)
-        return docs
+    @staticmethod
+    def build_fts_query(
+        collection_name: str,
+        query: str | list[str],
+        k: int,
+        offset: int = 0,
+        search_mode: Literal["title", "content", "both"] = "both",
+        tool_filters: list[SourceType] | None = None,
+        temporal_filters: list[TemporalFilter] | None = None,
+    ) -> tuple[Any, dict]:
+        """
+        통합 키워드 검색 SQL 및 파라미터 생성.
+        """
+        if isinstance(query, list):
+            tokens = query
+        else:
+            # 문자열인 경우 공백으로 쪼개서 개별 키워드 리스트 생성
+            tokens = query.split()
+
+        # 빈 토큰 제외 및 중복 제거
+        tokens = list(set([t.strip() for t in tokens if t.strip()]))
+
+        params = {
+            "collection_name": collection_name,
+            "k": k,
+            "offset": offset,
+        }
+
+        # 기본 필터 (Collection)
+        filter_clauses = ["c.name = :collection_name"]
+
+        # 협업 툴 & 시간 필터
+        if not temporal_filters:
+            if tool_filters:
+                filter_clauses.append("e.cmetadata ->> 'source' = ANY(:tools)")
+                params["tools"] = [f.value for f in tool_filters]
+        else:
+            sql_conditions = []
+            for i, tf in enumerate(temporal_filters):
+                tools_p = f"tools_{i}"
+                start_p = f"start_date_{i}"
+                end_p = f"end_date_{i}"
+                params[tools_p] = [t.value for t in tf.tools]
+                # ISO 문자열로 전달하여 텍스트 인덱스 활용 (ISO 8601은 문자열 비교가 시간 비교와 일치함)
+                params[start_p] = tf.start_date.isoformat()
+                params[end_p] = tf.end_date.isoformat()
+
+                sql_conditions.append(
+                    f"(e.cmetadata ->> 'source' = ANY(:{tools_p}) "
+                    f"AND (e.cmetadata ->> '{tf.time_field}') "
+                    f"BETWEEN :{start_p} AND :{end_p})"
+                )
+            filter_clauses.append(f"({' OR '.join(sql_conditions)})")
+
+        # 토큰 기반 필터 및 스코어링 로직
+        # AND 조건을 위해 모든 토큰이 포함되어야 함
+        token_filters = []
+        exact_match_scores = []
+        sim_scores = []
+
+        for i, token in enumerate(tokens):
+            p_name = f"token_{i}"
+            params[p_name] = token
+            
+            # Exact Match (완전 일치) 확인 로직
+            # Title 가중치 2.0, Content 가중치 1.0 (Both 모드 기준)
+            if search_mode in ("title", "both"):
+                exact_match_scores.append(f"(CASE WHEN LOWER(e.cmetadata ->> 'title') = LOWER(:{p_name}) THEN 2.0 ELSE 0.0 END)")
+                sim_scores.append(f"(bigm_similarity(e.cmetadata ->> 'title', :{p_name}) * 2.0)")
+            
+            if search_mode in ("content", "both"):
+                exact_match_scores.append(f"(CASE WHEN LOWER(e.cmetadata ->> 'contextual_content') = LOWER(:{p_name}) THEN 1.0 ELSE 0.0 END)")
+                sim_scores.append(f"bigm_similarity(e.cmetadata ->> 'contextual_content', :{p_name})")
+
+            # AND 필터링: 각 토큰이 제목이나 내용 중 하나에는 반드시 포함되거나 유사해야 함
+            token_conds = []
+            if search_mode in ("title", "both"):
+                token_conds.append(f"((e.cmetadata ->> 'title') =% :{p_name} OR (e.cmetadata ->> 'title') ILIKE likequery(:{p_name}))")
+            if search_mode in ("content", "both"):
+                token_conds.append(f"((e.cmetadata ->> 'contextual_content') =% :{p_name} OR (e.cmetadata ->> 'contextual_content') ILIKE likequery(:{p_name}))")
+            
+            if token_conds:
+                token_filters.append(f"({' OR '.join(token_conds)})")
+
+        if token_filters:
+            filter_clauses.append(f"({' AND '.join(token_filters)})")
+
+        # 필터 조립
+        where_clause = " AND ".join(filter_clauses)
+        
+        # 스코어 조립 (토큰별 점수 합산)
+        exact_boost_sql = " + ".join(exact_match_scores) if exact_match_scores else "0.0"
+        similarity_sql = " + ".join(sim_scores) if sim_scores else "0.0"
+
+        search_sql = text(f"""
+            SELECT e.document, e.cmetadata, e.id,
+                ({exact_boost_sql}) as exact_match_boost,
+                ({similarity_sql}) as similarity_score
+            FROM langchain_pg_embedding e
+            JOIN langchain_pg_collection c ON e.collection_id = c.uuid
+            WHERE {where_clause}
+            ORDER BY 
+                exact_match_boost DESC,
+                similarity_score DESC,
+                (e.cmetadata ->> 'created_at') DESC
+            LIMIT :k OFFSET :offset
+        """)
+
+        return search_sql, params
 
     def _do_query(
         self,
-        search_sql: str,
+        search_sql: Any,
         params: dict
     ):
         with self.session_factory() as session:
-            # HNSW 검색 품질 향상을 위해 ef_search 설정 적용
-            session.execute(text("SET LOCAL hnsw.ef_search = 80"))
+            # pg_bigm 검색을 위해 similarity_limit 설정
+            session.execute(text("SET LOCAL pg_bigm.similarity_limit = 0.02"))
             results = session.execute(search_sql, params)
             return results.fetchall()
 
@@ -340,7 +314,6 @@ class PGVectorService(BaseVectorDbService):
             offset=offset,
             tool_filters=tool_filters,
             temporal_filters=temporal_filters,
-            weighted=True,
             search_mode="title"
         )
         
@@ -352,7 +325,6 @@ class PGVectorService(BaseVectorDbService):
             offset=offset,
             tool_filters=tool_filters,
             temporal_filters=temporal_filters,
-            weighted=True,
             search_mode="content"
         )
         
@@ -398,76 +370,17 @@ class PGVectorService(BaseVectorDbService):
         offset: int = 0,
     ) -> list[Document]:
         """
-        Weighted Keyword Search Logic
+        가중치 기반 키워드 검색.
         """
-        params = {
-            "collection_name": self.collection_name,
-            "query": query,
-            "k": k,
-            "offset": offset
-        }
-
-        filter_clause = ""
-        if tool_filters:
-            filter_clause = " AND e.cmetadata ->> 'source' = ANY(:tools)"
-            params["tools"] = [f.value for f in tool_filters]
-
-        # Mode에 따른 필드 및 가중치 설정 (Retriever와 동일 로직)
-        if search_mode == "title":
-            exact_boost_sql = "(CASE WHEN (e.cmetadata ->> 'title') LIKE likequery(:query) THEN 1 ELSE 0 END)"
-            sim_score_sql = "bigm_similarity(e.cmetadata ->> 'title', :query)"
-            field_filter_sql = """
-                AND (
-                    (e.cmetadata ->> 'title') =% :query
-                    OR (e.cmetadata ->> 'title') LIKE likequery(:query)
-                )
-            """
-        elif search_mode == "content":
-            exact_boost_sql = "(CASE WHEN (e.cmetadata ->> 'contextual_content') LIKE likequery(:query) THEN 1 ELSE 0 END)"
-            sim_score_sql = "bigm_similarity(e.cmetadata ->> 'contextual_content', :query)"
-            field_filter_sql = """
-                AND (
-                    (e.cmetadata ->> 'contextual_content') =% :query
-                    OR (e.cmetadata ->> 'contextual_content') LIKE likequery(:query)
-                )
-            """
-        else: # both
-            exact_boost_sql = """
-                (
-                    (CASE WHEN (e.cmetadata ->> 'title') LIKE likequery(:query) THEN 2 ELSE 0 END) +
-                    (CASE WHEN (e.cmetadata ->> 'contextual_content') LIKE likequery(:query) THEN 1 ELSE 0 END)
-                )
-            """
-            sim_score_sql = """
-                (
-                    (bigm_similarity(e.cmetadata ->> 'title', :query) * 2.0) +
-                    bigm_similarity(e.cmetadata ->> 'contextual_content', :query)
-                )
-            """
-            field_filter_sql = """
-                AND (
-                    (e.cmetadata ->> 'title') =% :query
-                    OR (e.cmetadata ->> 'title') LIKE likequery(:query)
-                    OR (e.cmetadata ->> 'contextual_content') =% :query
-                    OR (e.cmetadata ->> 'contextual_content') LIKE likequery(:query)
-                )
-            """
-
-        search_sql = text(f"""
-            SELECT e.document, e.cmetadata, e.id,
-                {exact_boost_sql} as exact_match_boost,
-                {sim_score_sql} as similarity_score
-            FROM langchain_pg_embedding e
-            JOIN langchain_pg_collection c ON e.collection_id = c.uuid
-            WHERE c.name = :collection_name
-            {filter_clause}
-            {field_filter_sql}
-            ORDER BY 
-                exact_match_boost DESC,
-                similarity_score DESC,
-                (e.cmetadata ->> 'created_at')::timestamp DESC
-            LIMIT :k OFFSET :offset
-        """)
+        search_sql, params = PostgresFTSRetriever.build_fts_query(
+            collection_name=self.collection_name,
+            query=query,
+            k=k,
+            offset=offset,
+            search_mode=search_mode,
+            tool_filters=tool_filters,
+            temporal_filters=None # PGVectorService interface does not yet expose temporal_filters for this method
+        )
 
         with self.session_factory() as session:
             session.execute(text("SET LOCAL pg_bigm.similarity_limit = 0.02"))
