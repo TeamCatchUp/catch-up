@@ -20,13 +20,16 @@ export const SERVICE_NOTICES: Record<ServiceNoticeVariant, ServiceNoticeContent>
         <p>
           안녕하세요. <span className="text-content-primary">Catch Up</span> 입니다.
         </p>
-        <p>&nbsp;</p>
-        <p>현재 AI 답변 생성에 문제가 발생했습니다.</p>
-        <p>검색해도 답변이 오지 않거나, 평소보다 응답이 지연되고 있습니다.</p>
-        <p>&nbsp;</p>
-        <p>즉시 원인 파악과 복구 작업을 진행하고 있습니다.</p>
-        <p>정상화되는 대로 본 공지에서 다시 안내드리겠습니다.</p>
-        <p>&nbsp;</p>
+        <p>
+          현재 AI 답변 생성에 문제가 발생했습니다.
+          <br />
+          검색해도 답변이 오지 않거나, 평소보다 응답이 지연되고 있습니다.
+        </p>
+        <p>
+          즉시 원인 파악과 복구 작업을 진행하고 있습니다.
+          <br />
+          정상화되는 대로 본 공지에서 다시 안내드리겠습니다.
+        </p>
         <p>서비스 이용에 지장을 드려 진심으로 죄송합니다.</p>
       </>
     ),
@@ -40,23 +43,21 @@ export const SERVICE_NOTICES: Record<ServiceNoticeVariant, ServiceNoticeContent>
         <p>
           안녕하세요. <span className="text-content-primary">Catch Up</span> 입니다.
         </p>
-        <p>&nbsp;</p>
         <p>어제 발생한 AI 답변 생성 기능 장애가 복구되었습니다.</p>
-        <p>&nbsp;</p>
         <p>
           팀 전체가 즉시 대응에 착수해
           <br />
           원인을 파악하고 조치를 완료했습니다.
+          <br />
+          현재는 모든 기능이 정상적으로 작동하고 있습니다.
         </p>
-        <p>현재는 모든 기능이 정상적으로 작동하고 있습니다.</p>
-        <p>&nbsp;</p>
-        <p>서비스 이용에 불편을 드려 진심으로 죄송합니다.</p>
         <p>
+          서비스 이용에 불편을 드려 진심으로 죄송합니다.
+          <br />
           동일한 문제가 반복되지 않도록
           <br />
           모니터링과 대응 체계를 강화해 나가겠습니다.
         </p>
-        <p>&nbsp;</p>
         <p>기다려주신 모든 분께 깊이 감사드립니다.</p>
       </>
     ),
