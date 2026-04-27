@@ -215,15 +215,18 @@ async def search_tool_executor_node(
         tool_messages.append(ToolMessage(content=summary, tool_call_id=call_id))
 
     # 기존 누적 문서에 이번 턴 신규 문서를 id 기준 중복 제거 후 통합
+    # 최신 검색 결과가 앞에 오도록 new_unique를 먼저 배치
     existing = state.get("accumulated_docs") or []
-    seen_ids = {doc.id for doc in existing if doc.id}
-    new_unique = []
-    for doc in all_docs:
+    seen_ids = {doc.id if doc.id else hash(doc.page_content) for doc in all_docs}
+    
+    new_unique = list(all_docs)
+    for doc in existing:
         doc_identifier = doc.id if doc.id else hash(doc.page_content)
         if doc_identifier not in seen_ids:
             new_unique.append(doc)
             seen_ids.add(doc_identifier)
-    merged = existing + new_unique
+            
+    merged = new_unique
 
     logger.info(
         "tool_executor_completed",
