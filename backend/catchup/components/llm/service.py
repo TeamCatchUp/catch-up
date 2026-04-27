@@ -81,7 +81,7 @@ class AwsBedrockLlmService(BaseLlmService):
         extended_thinking: bool = False,
         thinking_budget_tokens: int = 8000,
     ):
-        # isolated=True면 rag_executors.llm 전용 pool 사용 (chat 파이프라인용)
+        # isolated=True면 rag_executors.llm_executor 전용 pool 사용 (chat 파이프라인용)
         # isolated=False면 default pool 사용 (ingestion 등 일반 용도)
         self._isolated = isolated
         self._extended_thinking = extended_thinking

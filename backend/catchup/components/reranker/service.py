@@ -105,7 +105,7 @@ class AwsBedrockRerankService(BaseRerankService):
 
         loop = asyncio.get_running_loop()
         reranked_docs: list[Document] = await loop.run_in_executor(
-            rag_executors.bedrock_rerank,
+            rag_executors.rerank_executor,
             partial(reranker.compress_documents, documents=documents, query=query),
         )
 
