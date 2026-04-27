@@ -41,7 +41,6 @@ NODE_STATUS_MAP = {
     "tool_executor": "관련 문서를 검색하고 있습니다...",
     "complex_planner": "복잡한 질문에 대한 검색 전략을 수립하고 있습니다...",
     "complex_agent": "다각도에서 정보를 수집하고 있습니다...",
-    "gap_analysis": "수집된 정보가 충분한지 검토하고 있습니다...",
 }
 
 

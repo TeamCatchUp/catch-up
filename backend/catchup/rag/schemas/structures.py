@@ -96,25 +96,6 @@ class SearchStep(BaseModel):
     )
 
 
-# Complex 파이프라인 gap_analysis_node의 분석 결과
-class GapAnalysis(BaseModel):
-    is_sufficient: bool = Field(
-        description="현재까지 수집된 정보가 질문에 답하기 충분한지 여부"
-    )
-    gaps: list[str] = Field(
-        default_factory=list,
-        description="부족한 정보 목록"
-    )
-    suggested_queries: list[str] = Field(
-        default_factory=list,
-        description="gap을 메우기 위한 추가 검색 쿼리 제안"
-    )
-    reasoning: str = Field(
-        default="",
-        description="분석 근거 (extended thinking 결과 요약)"
-    )
-
-
 # Complex planner LLM 응답 스키마
 class SearchPlan(BaseModel):
     steps: list[SearchStep] = Field(

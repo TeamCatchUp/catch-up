@@ -5,12 +5,11 @@ from langchain_core.messages import HumanMessage
 from catchup.costs.utils import token_usage
 from catchup.prompts.loader import prompt_loader
 from catchup.rag.agents.tools.search_tools import REACT_TOOLS
+from catchup.rag.nodes.utils import ainvoke_llm_with_token_usage
 from catchup.rag.nodes.utils import build_docs_summary
 from catchup.rag.nodes.utils import build_system_message
-from catchup.rag.nodes.utils import ainvoke_llm_with_token_usage
 from catchup.rag.nodes.utils import drop_orphaned_tool_calls
 from catchup.rag.nodes.utils import log_node
-from catchup.rag.schemas.structures import GapAnalysis
 from catchup.rag.schemas.structures import SearchPlan
 from catchup.rag.schemas.structures import SearchStep
 from catchup.rag.semaphores import rag_semaphores
@@ -37,12 +36,12 @@ async def complex_planner_node(state: AgentState, llm: BaseChatModel):
         method="function_calling",
         include_raw=True,
     )
-    
+
     try:
         response, token_usages = await ainvoke_llm_with_token_usage(
             llm=structured_llm,
             messages=[system_message, HumanMessage(content=query)],
-            semaphore=rag_semaphores.final_answer
+            semaphore=rag_semaphores.final_answer,
         )
         plan: SearchPlan = response.get("parsed")
     except Exception:
@@ -56,7 +55,12 @@ async def complex_planner_node(state: AgentState, llm: BaseChatModel):
         logger.debug(
             "complex_plan_steps",
             steps=[
-                {"step": s.step, "intent": s.intent, "queries": s.queries, "parallel": s.parallel}
+                {
+                    "step": s.step,
+                    "intent": s.intent,
+                    "queries": s.queries,
+                    "parallel": s.parallel,
+                }
                 for s in plan.steps
             ],
         )
@@ -82,18 +86,12 @@ async def complex_agent_node(state: AgentState, llm: BaseChatModel):
 
     search_plan = state.get("search_plan") or []
     accumulated_docs = state.get("accumulated_docs", [])
-    gap_analysis: GapAnalysis | None = state.get("gap_analysis")
     global_context = state["global_context"].model_dump()
-
-    gap_suggestions = ""
-    if gap_analysis and not gap_analysis.is_sufficient and gap_analysis.suggested_queries:
-        gap_suggestions = "\n".join(f"- {q}" for q in gap_analysis.suggested_queries)
 
     system_prompt = prompt_loader.get_prompt(
         "rag/complex_agent_system",
         search_plan_text=_format_search_plan(search_plan),
         accumulated_docs_summary=build_docs_summary(accumulated_docs),
-        gap_suggestions=gap_suggestions,
         **global_context,
     )
     system_message = build_system_message(system_prompt)
@@ -106,7 +104,7 @@ async def complex_agent_node(state: AgentState, llm: BaseChatModel):
         response, token_usages = await ainvoke_llm_with_token_usage(
             llm=llm_with_tools,
             messages=[system_message, HumanMessage(content=query)] + existing_messages,
-            semaphore=rag_semaphores.final_answer
+            semaphore=rag_semaphores.final_answer,
         )
     except Exception:
         return {"agent_iteration": agent_iteration + 1}
@@ -134,57 +132,6 @@ async def complex_agent_node(state: AgentState, llm: BaseChatModel):
         "messages": [response],
         "agent_iteration": agent_iteration + 1,
         **reasoning_update,
-        **token_usages,
-    }
-
-
-@log_node
-@token_usage
-async def gap_analysis_node(state: AgentState, llm: BaseChatModel):
-    """Gap Analysis 노드. Extended Thinking LARGE 모델로 정보 충분성을 평가한다."""
-    accumulated_docs = state.get("accumulated_docs", [])
-    global_context = state["global_context"].model_dump()
-    query = state.get("rewritten_query") or state.get("original_query", "")
-
-    system_prompt = prompt_loader.get_prompt(
-        "rag/gap_analysis_system",
-        accumulated_docs_summary=build_docs_summary(accumulated_docs),
-        **global_context,
-    )
-    system_message = build_system_message(system_prompt)
-
-    structured_llm = llm.with_structured_output(
-        GapAnalysis,
-        method="function_calling",
-        include_raw=True,
-    )
-
-    try:
-        response, token_usages = await ainvoke_llm_with_token_usage(
-            llm=structured_llm,
-            messages=[system_message, HumanMessage(content=query)],
-            semaphore=rag_semaphores.final_answer
-        )
-        analysis: GapAnalysis = response.get("parsed")
-    except Exception:
-        # 실패 시 충분한 것으로 간주해 generate 단계로 진행
-        return {"gap_analysis": GapAnalysis(is_sufficient=True, reasoning="gap analysis 실패, 강제 진행")}
-
-    logger.info(
-        "gap_analysis_result",
-        is_sufficient=analysis.is_sufficient if analysis else True,
-        gap_count=len(analysis.gaps) if analysis else 0,
-        suggested_query_count=len(analysis.suggested_queries) if analysis else 0,
-    )
-    if analysis and not analysis.is_sufficient:
-        logger.debug(
-            "gap_analysis_detail",
-            gaps=analysis.gaps,
-            suggested_queries=analysis.suggested_queries,
-        )
-
-    return {
-        "gap_analysis": analysis,
         **token_usages,
     }
 

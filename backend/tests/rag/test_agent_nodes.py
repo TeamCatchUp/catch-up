@@ -43,7 +43,6 @@ def _base_state(messages: list, agent_iteration: int = 0) -> dict:
         "pipeline_plan": None,
         "prompt_settings": PromptSettings(),
         "search_plan": None,
-        "gap_analysis": None,
     }
 
 
@@ -194,34 +193,3 @@ class ComplexAgentMessageHistoryTests(IsolatedAsyncioTestCase):
         self.assertEqual(len(sent_messages), 2)
         self.assertIsInstance(sent_messages[0], SystemMessage)
         self.assertIsInstance(sent_messages[1], HumanMessage)
-
-    @patch(
-        "catchup.rag.agents.complex_agent.prompt_loader.get_prompt",
-        return_value="시스템 프롬프트",
-    )
-    @patch("catchup.rag.nodes.utils.extract_token_usages", return_value={})
-    async def test_gap_analysis_후_재호출_시_이전_이력이_포함된다(
-        self, _mock_tokens, _mock_prompt
-    ):
-        """gap_analysis 재진입: 이전 검색 이력이 messages에 있을 때 LLM에 전달되어야 한다."""
-        prev_ai = AIMessage(content="충분한 정보를 찾았습니다", tool_calls=[])
-        tool_msg = ToolMessage(content="검색 결과", tool_call_id="call_1")
-        llm = _make_llm()
-
-        from catchup.rag.schemas.structures import GapAnalysis
-
-        gap = GapAnalysis(
-            is_sufficient=False,
-            gaps=["추가 정보 필요"],
-            suggested_queries=["보완 검색어"],
-        )
-        state = _base_state(messages=[prev_ai, tool_msg], agent_iteration=1)
-        state["gap_analysis"] = gap
-
-        await complex_agent_node(state, llm)
-
-        call_args = llm.bind_tools.return_value.ainvoke.call_args
-        sent_messages: list = call_args.kwargs.get("input") or call_args.args[0]
-        self.assertEqual(len(sent_messages), 4)
-        self.assertIsInstance(sent_messages[2], AIMessage)
-        self.assertIsInstance(sent_messages[3], ToolMessage)
