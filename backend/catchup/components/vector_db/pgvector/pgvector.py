@@ -1,5 +1,7 @@
-import logging
+import time
 from typing import Optional, Dict, Any, override
+
+import structlog
 from langchain_core.callbacks import CallbackManagerForRetrieverRun
 from langchain_core.retrievers import BaseRetriever, RetrieverInput
 from langchain_core.runnables import RunnableLambda, RunnableParallel, RunnableSerializable
@@ -15,7 +17,7 @@ from catchup.db.engine import SessionLocal
 from catchup.db.models import SourceType
 from catchup.rag.schemas.filters import TemporalFilter
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class PostgresFTSRetriever(BaseRetriever):
@@ -130,10 +132,13 @@ class PostgresFTSRetriever(BaseRetriever):
         params: dict
     ):
         with self.session_factory() as session:
-            # HNSW 검색 품질 향상을 위해 ef_search 설정 적용
             session.execute(text("SET LOCAL hnsw.ef_search = 80"))
+            logger.debug("db_query_started")
+            t = time.perf_counter()
             results = session.execute(search_sql, params)
-            return results.fetchall()
+            rows = results.fetchall()
+            logger.debug("db_query_completed", elapsed=round(time.perf_counter() - t, 3), row_count=len(rows))
+            return rows
 
     def _get_documents_from_results(self, results):
         docs = []
@@ -202,17 +207,23 @@ class PGVectorService(BaseVectorDbService):
         """
         Langchain 기반 Hybrid Search를 수행한다.
         """
+        logger.info("hybrid_search_started", query_len=len(query))
+        t0 = time.perf_counter()
+
         hybrid_search_chain = self._hybrid_search_chain(
             tool_filters=tool_filters,
             temporal_filters=temporal_filters,
             k=k,
             weights=weights
         )
-        
-        return hybrid_search_chain.invoke({
+
+        result = hybrid_search_chain.invoke({
             "semantic_query": query,
             "keyword_tokens": keyword_tokens or [query]
         })
+
+        logger.info("hybrid_search_completed", elapsed=round(time.perf_counter() - t0, 3), result_count=len(result))
+        return result
 
     def _hybrid_search_chain(
         self,
@@ -254,9 +265,23 @@ class PGVectorService(BaseVectorDbService):
             temporal_filters=temporal_filters
         )
         
+        def _invoke_vector(x):
+            t = time.perf_counter()
+            logger.info("vector_retrieval_started")
+            docs = vector_retriever.invoke(x["semantic_query"])
+            logger.info("vector_retrieval_completed", elapsed=round(time.perf_counter() - t, 3), count=len(docs))
+            return docs
+
+        def _invoke_keyword(x):
+            t = time.perf_counter()
+            logger.info("keyword_retrieval_started")
+            docs = keyword_retriever.invoke(x["keyword_tokens"])
+            logger.info("keyword_retrieval_completed", elapsed=round(time.perf_counter() - t, 3), count=len(docs))
+            return docs
+
         retriever_parallel = RunnableParallel(
-            vector_docs=RunnableLambda(lambda x: vector_retriever.invoke(x["semantic_query"])),
-            keyword_docs=RunnableLambda(lambda x: keyword_retriever.invoke(x["keyword_tokens"]))
+            vector_docs=RunnableLambda(_invoke_vector),
+            keyword_docs=RunnableLambda(_invoke_keyword)
         )
         
         def apply_rrf(results):
