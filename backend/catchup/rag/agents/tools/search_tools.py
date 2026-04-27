@@ -16,7 +16,8 @@ from catchup.rag.nodes.search_vector_db.search_vector_db import (
 )
 from catchup.rag.nodes.utils import log_node
 from catchup.rag.nodes.utils import resolve_temporal_context
-from catchup.rag.schemas.structures import VectorDbSearchQuery, MultiSearchRequest
+from catchup.rag.schemas.structures import MultiSearchRequest
+from catchup.rag.schemas.structures import VectorDbSearchQuery
 from catchup.rag.state import AgentState
 
 logger = structlog.get_logger()
@@ -55,6 +56,7 @@ def multi_query_search(
 
 REACT_TOOLS = [single_query_search, multi_query_search]
 
+
 # 헬퍼
 async def _run_search(
     query: str,
@@ -66,9 +68,15 @@ async def _run_search(
 ) -> tuple[list[Document], str]:
     """단일 쿼리 하이브리드 검색"""
     end_dt = datetime.fromisoformat(end_date) if end_date else None
-    # date-only 문자열("YYYY-MM-DD")은 자정으로 파싱되어 
+    # date-only 문자열("YYYY-MM-DD")은 자정으로 파싱되어
     # start==end==00:00:00이 되므로 하루 끝으로 보정
-    if end_dt and end_dt.hour == 0 and end_dt.minute == 0 and end_dt.second == 0 and end_dt.microsecond == 0:
+    if (
+        end_dt
+        and end_dt.hour == 0
+        and end_dt.minute == 0
+        and end_dt.second == 0
+        and end_dt.microsecond == 0
+    ):
         end_dt = end_dt.replace(hour=23, minute=59, second=59)
 
     search_query = VectorDbSearchQuery(
@@ -97,11 +105,17 @@ def _build_search_summary(query: str, docs: list[Document]) -> str:
     source_counts = Counter(d.metadata.get("source", "unknown") for d in docs)
     source_str = ", ".join(f"{src}:{cnt}" for src, cnt in source_counts.items())
 
-    lines = [f"검색 완료: 쿼리='{query}' | 결과 {len(docs)}건 ({source_str})", "상위 문서 요약:"]
-    for i, doc in enumerate(docs[:3], 1):
+    lines = [
+        f"검색 완료: 쿼리='{query}' | 결과 {len(docs)}건 ({source_str})",
+        "상위 문서 요약:",
+    ]
+    for i, doc in enumerate(docs[:10], 1):
         source = doc.metadata.get("source", "unknown")
         temporal = resolve_temporal_context(doc.metadata)
-        snippet = doc.page_content[:150].replace("\n", " ")
+        if source == "confluence":
+            snippet = doc.page_content[:800].replace("\n", " ")
+        else:
+            snippet = doc.page_content.replace("\n", " ")
         lines.append(f"[{i}] ({source}) {temporal}\n    {snippet}")
     return "\n".join(lines)
 
@@ -179,7 +193,9 @@ async def search_tool_executor_node(
                 for req, result in zip(search_requests, results_list):
                     q = req.get("query")
                     if isinstance(result, Exception):
-                        logger.warning("multi_query_search_failed", query=q, error=str(result))
+                        logger.warning(
+                            "multi_query_search_failed", query=q, error=str(result)
+                        )
                         summaries.append(f"search_query='{q}': failed")
                     else:
                         d, s = result
@@ -190,7 +206,9 @@ async def search_tool_executor_node(
                 docs, summary = [], f"unknown tool: {tool_name}"
 
         except Exception as e:
-            logger.warning("tool_executor_failed", tool=tool_name, error=str(e), exc_info=True)
+            logger.warning(
+                "tool_executor_failed", tool=tool_name, error=str(e), exc_info=True
+            )
             docs, summary = [], f"execution error: {str(e)}"
 
         all_docs.extend(docs)
