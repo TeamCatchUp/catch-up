@@ -1,3 +1,5 @@
+import time
+
 import structlog
 from langchain.chat_models import BaseChatModel
 from langchain_core.documents import Document
@@ -56,8 +58,18 @@ async def supervisor_node(state: AgentState, llm: BaseChatModel):
     )
 
     try:
+        t_sem = time.perf_counter()
+        logger.info("semaphore_acquiring", semaphore="final_answer")
         async with rag_semaphores.final_answer:
+            t_llm = time.perf_counter()
+            logger.info(
+                "llm_invoke_start",
+                semaphore_wait_elapsed=round(t_llm - t_sem, 3),
+                history_len=len(history),
+                doc_cache_size=len(doc_cache),
+            )
             raw_response = await structured_llm.ainvoke(input=input_messages)
+            logger.info("llm_invoke_completed", elapsed=round(time.perf_counter() - t_llm, 3))
             token_usages = extract_token_usages(raw_response.get("raw"))
             pipeline_plan: PipelinePlan = raw_response.get("parsed")
 
