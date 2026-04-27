@@ -49,7 +49,7 @@ export default function ServiceNoticeModal({ open, onOpenChange, notice, onDismi
             </button>
           </div>
 
-          <DialogTitle className="text-heading-large text-content-strong">{notice.title}</DialogTitle>
+          <DialogTitle>{notice.title}</DialogTitle>
           <DialogDescription className="sr-only">서비스 장애 또는 정상화에 대한 공지 내용입니다.</DialogDescription>
 
           <section className="bg-fill-primary-assistive text-body-small text-content-normal space-y-5.5 rounded-xl p-5">
