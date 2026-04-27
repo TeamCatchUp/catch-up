@@ -5,7 +5,7 @@ import { useState } from 'react';
 import Cancel from '@/public/icons/icon/cancel.svg';
 import Megaphone from '@/public/icons/icon/megaphone.svg';
 import CheckboxIcon from '@/shared/components/ui/checkbox-icon';
-import { Dialog, DialogContent, DialogTitle } from '@/shared/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/shared/components/ui/dialog';
 import type { ServiceNoticeContent } from '@/shared/constants/serviceNotices';
 
 interface ServiceNoticeModalProps {
@@ -32,15 +32,11 @@ export default function ServiceNoticeModal({ open, onOpenChange, notice, onDismi
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent
-        hideClose
-        className="border-edge-normal w-120 max-w-none gap-5 border p-6"
-        aria-describedby={undefined}
-      >
+      <DialogContent hideClose className="border-edge-normal w-120 max-w-none gap-5 border p-6">
         <div className="flex flex-col gap-3">
           <div className="flex items-center justify-between">
             <span className="bg-fill-primary-normal-neutral rounded-md2 flex items-center gap-1 px-1.5 py-0.5">
-              <Megaphone className="text-content-primary size-4.5" />
+              <Megaphone className="text-content-primary size-4.5" aria-hidden="true" />
               <span className="text-body-xsmall text-content-primary">공지</span>
             </span>
             <button
@@ -49,20 +45,23 @@ export default function ServiceNoticeModal({ open, onOpenChange, notice, onDismi
               onClick={handleClose}
               className="border-edge-neutral bg-fill-normal flex size-9 cursor-pointer items-center justify-center rounded-lg border p-1.5"
             >
-              <Cancel className="text-icon-normal size-6" />
+              <Cancel className="text-icon-normal size-6" aria-hidden="true" />
             </button>
           </div>
 
           <DialogTitle className="text-heading-large text-content-strong">{notice.title}</DialogTitle>
+          <DialogDescription className="sr-only">서비스 장애 또는 정상화에 대한 공지 내용입니다.</DialogDescription>
 
-          <section className="bg-fill-primary-assistive text-body-small text-content-normal rounded-xl p-5">
+          <section className="bg-fill-primary-assistive text-body-small text-content-normal space-y-5.5 rounded-xl p-5">
             {notice.body}
           </section>
         </div>
 
         <div className="flex flex-col gap-2">
           <label className="flex w-fit cursor-pointer items-center gap-1">
-            <CheckboxIcon checked={dontShowAgain} className="size-5" />
+            <span aria-hidden="true">
+              <CheckboxIcon checked={dontShowAgain} className="size-5" />
+            </span>
             <input
               type="checkbox"
               className="sr-only"
