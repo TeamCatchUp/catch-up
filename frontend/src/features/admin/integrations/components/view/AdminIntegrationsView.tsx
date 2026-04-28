@@ -5,7 +5,6 @@ import { cn } from '@/shared/utils/cn';
 
 import { useAdminIntegrationViewModel } from '../../hooks/useAdminIntegrationViewModel';
 import type { AdminIntegrationTab, IntegrationService } from '../../types/integrationModel';
-import ConnectedAccountsAdminSection from '../account/sections/ConnectedAccountsAdminSection';
 import IntegrationManagementSection from '../management/IntegrationManagementSection';
 import IntegrationsSection from '../member/sections/IntegrationsSection';
 
@@ -62,17 +61,14 @@ export default function AdminIntegrationsView() {
         </div>
 
         {activeTab === 'my' ? (
-          <section className="flex flex-col gap-10">
-            <ConnectedAccountsAdminSection />
-            <section className="flex flex-col gap-2.5">
-              <h2 className="text-heading-large text-content-normal">협업툴 연동 관리</h2>
-              <IntegrationManagementSection
-                integrationMenu={integrationMenu}
-                selectedService={selectedService}
-                onSelectService={setSelectedService}
-                detail={getConnectorDetail(selectedService)}
-              />
-            </section>
+          <section className="flex flex-col gap-2.5">
+            <h2 className="text-heading-large text-content-normal">협업툴 연동 관리</h2>
+            <IntegrationManagementSection
+              integrationMenu={integrationMenu}
+              selectedService={selectedService}
+              onSelectService={setSelectedService}
+              detail={getConnectorDetail(selectedService)}
+            />
           </section>
         ) : (
           <IntegrationsSection />
