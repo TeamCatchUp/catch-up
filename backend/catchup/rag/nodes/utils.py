@@ -31,33 +31,40 @@ def drop_orphaned_tool_calls(messages: list[BaseMessage]) -> list[BaseMessage]:
         return messages
     last = messages[-1]
     if isinstance(last, AIMessage) and getattr(last, "tool_calls", None):
-        logger.warning("dropping_orphaned_tool_call_message", message_id=getattr(last, "id", None))
+        logger.warning(
+            "dropping_orphaned_tool_call_message", message_id=getattr(last, "id", None)
+        )
         return list(messages[:-1])
     return messages
 
 
-def build_docs_summary(docs: list[Document], max_docs: int = 5) -> str:
+def build_docs_summary(docs: list[Document], max_docs: int = 10) -> str:
     if not docs:
         return "아직 수집된 문서 없음"
 
     source_counts = Counter(d.metadata.get("source", "unknown") for d in docs)
     source_str = ", ".join(f"{src}:{cnt}" for src, cnt in source_counts.items())
-    lines = [f"총 {len(docs)}개 문서 수집됨 ({source_str})", ""]
+    lines = [
+        f"총 {len(docs)}개 문서 누적됨 ({source_str})",
+        "최근 수집된 주요 문서 목록:",
+    ]
 
     for i, doc in enumerate(docs[:max_docs], 1):
         source = doc.metadata.get("source", "unknown")
         temporal = resolve_temporal_context(doc.metadata)
-        snippet = doc.page_content[:100].replace("\n", " ")
-        lines.append(f"[{i}] ({source}) {temporal}\n{snippet}")
+        snippet = doc.page_content[:50].replace("\n", " ") + "..."
+        lines.append(f"[{i}] ({source}) {temporal} - {snippet}")
 
     if len(docs) > max_docs:
-        lines.append(f"... 외 {len(docs) - max_docs}개")
+        lines.append(
+            f"... 외 {len(docs) - max_docs}개 문서가 더 메모리에 보관 중입니다."
+        )
 
     return "\n".join(lines)
 
 
 async def ainvoke_llm_with_token_usage(
-    llm: Any,
+    llm: Any, 
     messages: list[BaseMessage],
     semaphore: Any = None,
     **kwargs: Any
@@ -66,11 +73,27 @@ async def ainvoke_llm_with_token_usage(
     token_usages = {"token_breakdown": {}}
     try:
         if semaphore:
+            t_sem = time.perf_counter()
+            logger.debug(
+                "semaphore_acquiring",
+                semaphore=semaphore.name,
+            )
             async with semaphore:
+                t_llm = time.perf_counter()
+                logger.debug(
+                    "llm_invoke_start",
+                    semaphore_wait_elapsed=round(t_llm - t_sem, 3),
+                )
                 response = await llm.ainvoke(input=messages, **kwargs)
         else:
-            response = await llm.ainvoke(input=messages, **kwargs)
-        
+            t_llm = time.perf_counter()
+            logger.debug("llm_invoke_without_semaphore_start")
+            response = await llm.ainvoke(input=messages, **kwargs)            
+        logger.debug(
+            "llm_invoke_completed",
+            elapsed=round(time.perf_counter() - t_llm, 3)
+        )
+
         # response가 dict인 경우 (with_structured_output include_raw=True) 처리
         raw_response = response.get("raw") if isinstance(response, dict) else response
         token_usages = extract_token_usages(raw_response)
@@ -101,7 +124,11 @@ def get_conversation_history(messages: Annotated[list, add_messages]):
     """
     # 마지막 HumanMessage = 현재 턴 시작점
     last_human_idx = next(
-        (i for i in range(len(messages) - 1, -1, -1) if isinstance(messages[i], HumanMessage)),
+        (
+            i
+            for i in range(len(messages) - 1, -1, -1)
+            if isinstance(messages[i], HumanMessage)
+        ),
         -1,
     )
     if last_human_idx <= 0:
@@ -111,7 +138,8 @@ def get_conversation_history(messages: Annotated[list, add_messages]):
 
     # tool_calls 있는 AIMessage(에이전트 검색 결정)와 ToolMessage는 파이프라인 내부 메시지 → 제외
     filtered = [
-        m for m in past
+        m
+        for m in past
         if isinstance(m, HumanMessage)
         or (isinstance(m, AIMessage) and not getattr(m, "tool_calls", None))
     ]
@@ -119,7 +147,11 @@ def get_conversation_history(messages: Annotated[list, add_messages]):
     # 연속된 AIMessage → 마지막 것만 유지 (에이전트 stop 메시지 대신 최종 답변만 남김)
     condensed: list = []
     for m in filtered:
-        if isinstance(m, AIMessage) and condensed and isinstance(condensed[-1], AIMessage):
+        if (
+            isinstance(m, AIMessage)
+            and condensed
+            and isinstance(condensed[-1], AIMessage)
+        ):
             condensed[-1] = m
         else:
             condensed.append(m)
@@ -138,7 +170,7 @@ def prepare_retrieved_context_text(documents: list[Document]) -> str:
     for i, doc in enumerate(documents, start=1):
         source = doc.metadata.get("source", "unknown")
         content = doc.metadata.get("contextual_content", "")
-        temporal = resolve_temporal_context(doc.metadata) 
+        temporal = resolve_temporal_context(doc.metadata)
         part = f"[{i}] (Source: {source})\n{content} {temporal}"
         if source == "confluence":
             part = part + f"\nstatus: {doc.metadata.get('status', '')}"
@@ -151,33 +183,27 @@ def build_system_message(
     dynamic_prompts: list[str] | None = None,
     cache_prompt: bool = False,
 ) -> SystemMessage:
-    
+
     # 정적 프롬프트 (캐싱 대상)
-    static_block: dict = {
-        "type": "text",
-        "text": static_prompt
-    }
-    
+    static_block: dict = {"type": "text", "text": static_prompt}
+
     if cache_prompt:
         static_block["cache_control"] = {"type": "ephemeral"}
         # TODO: langchain-aws 지원 시점에 "ttl": "1h" 추가
 
     content = [static_block]
-    
+
     # 동적 프롬프트
     if dynamic_prompts:
         for prompt in dynamic_prompts:
-            content.append({
-                "type": "text",
-                "text": prompt
-            })
+            content.append({"type": "text", "text": prompt})
 
     return SystemMessage(content=content)
 
 
 def resolve_temporal_context(metadata: dict) -> str:
     temporal_fields = [
-        "created_at", 
+        "created_at",
         "updated_at",
         "resolved_at",
         "due_date",
@@ -186,15 +212,15 @@ def resolve_temporal_context(metadata: dict) -> str:
         "merged_at",
         "committed_at",
     ]
-    
+
     parts = [
         f"{field}: {str(metadata[field])}"
         for field in temporal_fields
         if metadata.get(field)
     ]
-    
+
     return " | ".join(parts) if parts else ""
-    
+
 
 def extract_anchor_ids(documents: list[Document]) -> list[str]:
     anchors = [doc.id for doc in documents if doc.id]
@@ -208,7 +234,7 @@ def parse_citations(full_answer: str) -> tuple[str, dict[str, str]]:
     # 정상 동작: 태그가 완전히 닫힘. (<citations>...</citations>)
     match = re.search(r"<citations>(.*?)</citations>", full_answer, DOTALL)
     if match:
-        body_part = full_answer[:match.start()].strip()
+        body_part = full_answer[: match.start()].strip()
         try:
             citation_dict = json.loads(match.group(1).strip())
         except json.JSONDecodeError:
@@ -220,7 +246,7 @@ def parse_citations(full_answer: str) -> tuple[str, dict[str, str]]:
             "citations_block_truncated",
             context="token_overflow",
         )
-        body_part = full_answer[:open_tag_match.start()].strip()
+        body_part = full_answer[: open_tag_match.start()].strip()
         if not body_part:
             body_part = FALLBACK_ANSWER
 
@@ -258,29 +284,21 @@ def log_node(func: Callable[..., Awaitable[dict]]):
         node_name = func.__name__
         start_time = time.perf_counter()
 
-        logger.info(
-            "node_started",
-            node_name=node_name
-        )
+        logger.info("node_started", node_name=node_name)
 
         try:
             result = await func(*args, **kwargs)
 
             elapsed = time.perf_counter() - start_time
             logger.info(
-                "node_completed",
-                node_name=node_name,
-                duration=round(elapsed, 4)
+                "node_completed", node_name=node_name, duration=round(elapsed, 4)
             )
 
             return result
 
         except Exception as e:
             logger.error(
-                "node_failed",
-                node_name=node_name,
-                error=str(e),
-                exc_info=True
+                "node_failed", node_name=node_name, error=str(e), exc_info=True
             )
             raise e
 

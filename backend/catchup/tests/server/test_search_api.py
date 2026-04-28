@@ -1,4 +1,4 @@
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, AsyncMock
 
 import pytest
 from fastapi.testclient import TestClient
@@ -12,6 +12,7 @@ client = TestClient(app)
 @pytest.fixture
 def mock_pgvector_service():
     service = MagicMock()
+    service.hybrid_search = AsyncMock()
     app.dependency_overrides[get_search_service] = lambda: service
     yield service
     app.dependency_overrides.clear()
@@ -36,7 +37,7 @@ def test_hybrid_search_endpoint(mock_pgvector_service):
 
     response = client.get(
         "/api/v1/search/hybrid",
-        params={"keyword": "query", "limit": 5, "offset": 10, "tool_filters": ["slack"], "score_threshold": 0.5}
+        params={"keyword": "query", "limit": 5, "offset": 10, "tool_filters": ["slack"]}
     )
 
     assert response.status_code == 200
@@ -50,5 +51,4 @@ def test_hybrid_search_endpoint(mock_pgvector_service):
     assert kwargs["query"] == "query"
     assert kwargs["k"] == 5
     assert kwargs["offset"] == 10
-    assert kwargs["score_threshold"] == 0.5
     assert "slack" in [t.value for t in kwargs["tool_filters"]]

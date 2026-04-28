@@ -10,7 +10,6 @@ from catchup.db.models import SourceType
 from catchup.rag.schemas.context import GlobalContext
 from catchup.rag.schemas.prompt_settings import PromptSettings
 from catchup.rag.schemas.sources import BaseSource
-from catchup.rag.schemas.structures import GapAnalysis
 from catchup.rag.schemas.structures import PipelinePlan
 from catchup.rag.schemas.structures import SearchStep
 from catchup.rag.schemas.structures import VectorDbSearchQuery
@@ -47,7 +46,6 @@ class AgentState(TypedDict):
 
     search_plan: list[SearchStep] | None  # complex planner 출력
 
-    gap_analysis: GapAnalysis | None  # complex gap_analysis_node 출력
 
     turn_number: int  # supervisor가 매 턴 시작 시 +1. engine.py에서 초기화 안 함 (체크포인터 유지)
 

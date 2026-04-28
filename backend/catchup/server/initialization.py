@@ -22,10 +22,6 @@ LIGHT_INDICES = [
 
 HEAVY_INDICES = [
     """
-    CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_fts_korean_bigm
-    ON langchain_pg_embedding USING GIN (document gin_bigm_ops)
-    """,
-    """
     CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_cmetadata_contextual_bigm
     ON langchain_pg_embedding USING GIN ((cmetadata ->> 'contextual_content') gin_bigm_ops)
     """,
@@ -34,6 +30,9 @@ HEAVY_INDICES = [
     ON langchain_pg_embedding USING GIN ((cmetadata ->> 'title') gin_bigm_ops)
     """,
 ]
+
+# document 컬럼 전체에 걸린 인덱스 — PGBigmRetriever는 cmetadata 필드만 검색하므로 미사용
+OBSOLETE_INDICES = ["idx_fts_korean_bigm"]
 
 async def ensure_pg_indices() -> None:
     conn_string = settings.sqlalchemy_database_url.replace("+psycopg", "")
@@ -45,7 +44,11 @@ async def ensure_pg_indices() -> None:
             
     # GIN은 autocommit 모드에서 Non-blocking으로 처리
     async with await psycopg.AsyncConnection.connect(conn_string, autocommit=True) as conn:
-        heavy_index_names = ["idx_fts_korean_bigm", "idx_cmetadata_contextual_bigm", "idx_cmetadata_title_bigm"]
+        for index_name in OBSOLETE_INDICES:
+            await conn.execute(f"DROP INDEX CONCURRENTLY IF EXISTS {index_name}")
+            logger.info("obsolete_index_dropped", index_name=index_name)
+
+        heavy_index_names = ["idx_cmetadata_contextual_bigm", "idx_cmetadata_title_bigm"]
         for index_name in heavy_index_names:
             row = await (await conn.execute(f"""
                 SELECT indisvalid FROM pg_index

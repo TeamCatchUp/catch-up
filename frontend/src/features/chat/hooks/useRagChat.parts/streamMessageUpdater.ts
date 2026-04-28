@@ -85,7 +85,6 @@ export const appendStreamingToken = ({
         ...currentMessage,
         content: `${currentMessage.content}${token}`,
         sources: latestUiSources,
-        detailed_tasks: currentMessage.detailed_tasks ?? [],
       };
       return {
         nextData: { ...prev, messages },
@@ -102,7 +101,6 @@ export const appendStreamingToken = ({
       ...lastMessage,
       content: `${lastMessage.content}${token}`,
       sources: latestUiSources,
-      detailed_tasks: lastMessage.detailed_tasks ?? [],
     };
     return {
       nextData: { ...prev, messages },
@@ -129,7 +127,6 @@ export const appendStreamingToken = ({
     role: 'assistant',
     content: token,
     sources: latestUiSources,
-    detailed_tasks: [],
     timestamp: new Date().toISOString(),
   };
 
