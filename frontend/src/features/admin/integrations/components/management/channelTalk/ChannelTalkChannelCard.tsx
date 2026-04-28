@@ -235,14 +235,14 @@ export default function ChannelTalkChannelCard({
       <ConfirmDialog
         open={deleteDialogOpen}
         onOpenChange={setDeleteDialogOpen}
-        title="채널을 삭제할까요?"
+        title="채널을 삭제하면 입력한 모든 데이터가 사라집니다."
         description={
           channel.documentSpaces.length > 0
-            ? `이 채널과 ${channel.documentSpaces.length}개의 도큐먼트 스페이스가 함께 삭제됩니다.\n삭제된 데이터는 복구할 수 없어요.`
-            : '삭제된 채널은 복구할 수 없어요.'
+            ? `'${channel.name}' 채널에 연결된 도큐먼트 스페이스 정보 역시 모두 삭제됩니다.`
+            : '이 채널을 삭제하시겠어요?'
         }
-        confirmLabel="삭제"
-        variant="danger"
+        confirmLabel="삭제하기"
+        variant="primary"
         onConfirm={onRemove}
       />
     </div>

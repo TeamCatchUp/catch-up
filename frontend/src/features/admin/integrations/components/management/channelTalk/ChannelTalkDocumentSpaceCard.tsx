@@ -87,10 +87,10 @@ export default function ChannelTalkDocumentSpaceCard({
       <ConfirmDialog
         open={deleteDialogOpen}
         onOpenChange={setDeleteDialogOpen}
-        title="도큐먼트 스페이스를 삭제할까요?"
-        description="삭제된 데이터는 복구할 수 없어요."
-        confirmLabel="삭제"
-        variant="danger"
+        title="도큐먼트 스페이스를 삭제하면 입력한 모든 데이터가 사라집니다."
+        description="이 스페이스를 삭제하시겠어요?"
+        confirmLabel="삭제하기"
+        variant="primary"
         onConfirm={onRemove}
       />
     </div>
