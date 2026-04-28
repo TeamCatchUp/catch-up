@@ -4,6 +4,7 @@ import math
 import sys
 import os
 import csv
+import asyncio
 from datetime import datetime
 from tqdm import tqdm
 
@@ -58,7 +59,7 @@ def save_result_to_csv(filename, s_weight, k_weight, top_k, metrics):
     
     print(f"Result saved to {os.path.basename(CSV_FILE_PATH)}")
 
-def evaluate_retrieval(dataset_path: str, semantic_weight: float, keyword_weight: float, top_k: int):
+async def evaluate_retrieval(dataset_path: str, semantic_weight: float, keyword_weight: float, top_k: int):
     if not os.path.exists(dataset_path):
         print(f"Error: Dataset file not found at {dataset_path}")
         sys.exit(1)
@@ -75,15 +76,19 @@ def evaluate_retrieval(dataset_path: str, semantic_weight: float, keyword_weight
     ndcg_sum = 0.0
     start_time = time.time()
 
+    # hybrid_search expects 3 weights: [vector, title_bigm, content_bigm]
+    # We split the keyword_weight among title and content
+    weights = [semantic_weight, keyword_weight * 0.5, keyword_weight * 0.5]
+
     for case in tqdm(test_cases, desc="Processing"):
         query = case['question']
         gt_id = case['ground_truth_doc_id']
 
         try:
-            results = vector_service.hybrid_search(
+            results = await vector_service.hybrid_search(
                 query=query,
                 k=top_k,
-                weights=[semantic_weight, keyword_weight]
+                weights=weights
             )
 
             found_rank = -1
@@ -139,5 +144,5 @@ if __name__ == "__main__":
     top_k = int(top_k_input) if top_k_input else 5
 
     full_path = os.path.join(DATA_DIR, filename)
-    
-    evaluate_retrieval(full_path, semantic_weight, keyword_weight, top_k)
+
+    asyncio.run(evaluate_retrieval(full_path, semantic_weight, keyword_weight, top_k))

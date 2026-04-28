@@ -52,7 +52,7 @@ async def evaluate_pipeline(dataset_path: str, initial_k: int = 50, final_k: int
         
         try:
             # Hybrid Search
-            initial_docs = vector_service.hybrid_search(query, k=initial_k)
+            initial_docs = await vector_service.hybrid_search(query, k=initial_k)
             
             if not initial_docs:
                 continue

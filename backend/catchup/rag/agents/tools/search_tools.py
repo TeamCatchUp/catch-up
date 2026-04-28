@@ -11,9 +11,6 @@ from catchup.components.vector_db.base import BaseVectorDbService
 from catchup.rag.nodes.search_vector_db.search_vector_db import (
     _deduplicate_search_results,
 )
-from catchup.rag.nodes.search_vector_db.search_vector_db import (
-    _get_hybrid_search_results,
-)
 from catchup.rag.nodes.utils import log_node
 from catchup.rag.nodes.utils import resolve_temporal_context
 from catchup.rag.schemas.structures import MultiSearchRequest
@@ -79,14 +76,13 @@ async def _run_search(
     ):
         end_dt = end_dt.replace(hour=23, minute=59, second=59)
 
-    search_query = VectorDbSearchQuery(
-        query=query,
-        keyword_tokens=keyword_tokens or [],
-        start_date=datetime.fromisoformat(start_date) if start_date else None,
-        end_date=end_dt,
-    )
-    results = await _get_hybrid_search_results(
-        vector_db_service=vector_db_service,
+    search_query = {
+        "query": query,
+        "keyword_tokens": keyword_tokens or [],
+        "start_date": datetime.fromisoformat(start_date) if start_date else None,
+        "end_date": end_dt,
+    }
+    results = await vector_db_service.hybrid_search_batch(
         queries=[search_query],
         tool_filters=tool_filters or [],
         k=40,

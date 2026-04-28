@@ -1,9 +1,7 @@
 import asyncio
 import time
 from typing import Any
-from typing import Dict
 from typing import Literal
-from typing import Optional
 from typing import override
 
 import structlog
@@ -21,6 +19,7 @@ from catchup.configs.config import settings
 from catchup.db.engine import SessionLocal
 from catchup.db.models import SourceType
 from catchup.rag.executors import rag_executors
+from catchup.rag.schemas.filters import build_temporal_filters
 from catchup.rag.schemas.filters import TemporalFilter
 
 logger = structlog.get_logger(__name__)
@@ -257,11 +256,12 @@ class PGVectorService(BaseVectorDbService):
             use_jsonb=True,
         )
 
+    @override
     async def hybrid_search(
         self,
         query: str,
         k: int = 4,
-        weights: list[float] = [0.3, 0.5, 0.2],
+        weights: list[float] = [0.3, 0.5, 0.2],  # [vector, title, content]
         tool_filters: list[SourceType] | None = None,
         temporal_filters: list[TemporalFilter] | None = None,
         keyword_tokens: list[str] | None = None,
@@ -329,6 +329,46 @@ class PGVectorService(BaseVectorDbService):
         logger.debug("hybrid_search_completed", elapsed=round(time.perf_counter() - t0, 3), result_count=len(result))
         
         return result
+
+    @override
+    async def hybrid_search_batch(
+        self,
+        queries: list[dict[str, Any]],
+        k: int = 10,
+        weights: list[float] = [0.6, 0.25, 0.15],
+        tool_filters: list[SourceType] | None = None,
+    ) -> list[list[Document]]:
+        """
+        여러 쿼리에 대해 병렬로 hybrid_search를 수행한다.
+        queries 요소는 'query', 'start_date', 'end_date', 'keyword_tokens' 등을 포함할 수 있다.
+        """
+        tasks = []
+
+        for q in queries:
+            temporal_filters = build_temporal_filters(
+                tool_filters=tool_filters,
+                start_date=q.get("start_date"),
+                end_date=q.get("end_date")
+            )
+            tasks.append(
+                self.hybrid_search(
+                    query=q["query"],
+                    k=k,
+                    weights=weights,
+                    tool_filters=tool_filters,
+                    temporal_filters=temporal_filters,
+                    keyword_tokens=q.get("keyword_tokens"),
+                )
+            )
+
+        t0 = time.perf_counter()
+        results = await asyncio.gather(*tasks)
+        logger.debug(
+            "hybrid_search_batch_completed",
+            elapsed=round(time.perf_counter() - t0, 3),
+            task_count=len(tasks),
+        )
+        return list(results)
     
     def _build_search_kwargs(
         self,
@@ -391,7 +431,7 @@ class PGVectorService(BaseVectorDbService):
         query: str,
         k: int = 4,
         search_type: str = "similarity",
-        filter: Optional[Dict[str, Any]] = None,
+        filter: dict[str, Any] | None = None,
         **kwargs,
     ) -> list[Document]:
         """

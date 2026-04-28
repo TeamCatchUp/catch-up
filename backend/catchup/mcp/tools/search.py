@@ -23,16 +23,12 @@ async def run_search(
     end_date = datetime.fromisoformat(date_to) if date_to else None
     temporal_filters = build_temporal_filters(tool_filters, start_date, end_date)
 
-    loop = asyncio.get_running_loop()
-    docs: list[Document] = await loop.run_in_executor(
-        None,
-        lambda: vector_db_service.hybrid_search(
-            query=query,
-            k=k,
-            weights=[0.6, 0.25, 0.15],  # [vector, title, contextual_content]
-            tool_filters=tool_filters,
-            temporal_filters=temporal_filters or None,
-        ),
+    docs: list[Document] = await vector_db_service.hybrid_search(
+        query=query,
+        k=k,
+        weights=[0.6, 0.25, 0.15],  # [vector, title, contextual_content]
+        tool_filters=tool_filters,
+        temporal_filters=temporal_filters or None,
     )
     return _format_docs(docs)
 

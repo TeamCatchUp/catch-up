@@ -1,5 +1,5 @@
 import unittest
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, ANY
 from unittest.mock import patch
 
 import pytest
@@ -108,6 +108,31 @@ class TestPGVectorService:
             assert len(results) == 2
             assert results[0].id == "id1"
             assert mock_bigm_invoke.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_hybrid_search_batch(self):
+        """hybrid_search_batch가 여러 쿼리를 병렬로 처리하는지 검증."""
+        queries = [
+            {"query": "test1", "start_date": "2024-01-01"},
+            {"query": "test2"}
+        ]
+        
+        with patch.object(self.service, "hybrid_search") as mock_hybrid_search:
+            mock_hybrid_search.return_value = [Document(page_content="result", id="id")]
+            
+            results = await self.service.hybrid_search_batch(queries=queries, k=5)
+            
+            assert len(results) == 2
+            assert mock_hybrid_search.call_count == 2
+            # 쿼리 인자 확인
+            mock_hybrid_search.assert_any_call(
+                query="test1",
+                k=5,
+                weights=[0.6, 0.25, 0.15],
+                tool_filters=None,
+                temporal_filters=ANY,
+                keyword_tokens=None
+            )
 
     def test_weighted_keyword_search_uses_unified_logic(self):
         """단독 키워드 검색 유틸도 통합된 build_bigm_query를 사용하는지 검증."""

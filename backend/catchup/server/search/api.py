@@ -28,7 +28,7 @@ async def hybrid_search(
     """
     Semantic Search와 Weighted Keyword Search를 결합한 하이브리드 검색.
     """
-    docs = service.hybrid_search(
+    docs = await service.hybrid_search(
         query=keyword,
         k=limit,
         tool_filters=tool_filters,
