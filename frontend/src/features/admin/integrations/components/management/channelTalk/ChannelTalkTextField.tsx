@@ -2,7 +2,6 @@
 
 import { useId, useState } from 'react';
 
-import IconVisibility from '@/public/icons/icon/visibility.svg';
 import IconVisibilityOff from '@/public/icons/icon/visibility_off.svg';
 import { cn } from '@/shared/utils/cn';
 
@@ -18,9 +17,9 @@ interface ChannelTalkTextFieldProps {
   value: string;
   placeholder: string;
   state?: ChannelTalkTextFieldState;
-  /** 비밀값 입력 — value가 있을 때 eye 토글 버튼 노출 */
+  /** 비밀값 입력 — eye-off 토글 버튼 노출 (기본은 평문 표시, 클릭 시 마스킹) */
   maskable?: boolean;
-  /** 초기 마스킹 여부 (maskable=true일 때만 적용) */
+  /** 초기 마스킹 여부 (maskable=true일 때만 적용, 기본 false = 평문 표시) */
   defaultMasked?: boolean;
   onChange?: (next: string) => void;
   readOnly?: boolean;
@@ -34,7 +33,7 @@ export default function ChannelTalkTextField({
   placeholder,
   state = 'idle',
   maskable = false,
-  defaultMasked = true,
+  defaultMasked = false,
   onChange,
   readOnly,
   id,
@@ -71,7 +70,7 @@ export default function ChannelTalkTextField({
           onClick={() => setMasked((prev) => !prev)}
           className="text-icon-alternative hover:text-icon-normal flex size-4.5 shrink-0 cursor-pointer items-center justify-center transition-colors"
         >
-          {masked ? <IconVisibilityOff className="size-4.5" /> : <IconVisibility className="size-4.5" />}
+          <IconVisibilityOff className="size-4.5" />
         </button>
       )}
     </div>
