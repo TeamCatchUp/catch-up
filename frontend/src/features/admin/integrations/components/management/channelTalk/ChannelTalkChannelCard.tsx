@@ -3,6 +3,7 @@
 import IconAdd from '@/public/icons/icon/add.svg';
 import IconMegaphone from '@/public/icons/icon/megaphone.svg';
 import IconTag from '@/public/icons/icon/tag.svg';
+import { Button } from '@/shared/components/ui/button';
 
 import type {
   ChannelTalkChannel,
@@ -63,7 +64,7 @@ export default function ChannelTalkChannelCard({
   return (
     <div className="border-edge-neutral bg-fill-normal relative flex flex-col overflow-hidden rounded-xl border">
       {/* 헤더 행 좌측 파란색 indicator strip — height 32px, 카드 좌측 가장자리에서 4px 안쪽 */}
-      <div className="bg-edge-primary-strong absolute top-4 left-1 z-base h-8 w-1 rounded-r-full" aria-hidden />
+      <div className="bg-edge-primary-strong z-base absolute top-4 left-0 h-8 w-1 rounded-full" aria-hidden />
 
       {/* Vertical input form (684×340 영역) */}
       <div className="flex flex-col gap-4 px-4 pt-4 pb-5">
@@ -140,16 +141,17 @@ export default function ChannelTalkChannelCard({
         </div>
       ) : null}
 
-      {/* "도큐먼트 스페이스 추가" 버튼 (default/hover-pressed 2상태) — 마지막 카드 끝과 12px gap */}
+      {/* "도큐먼트 스페이스 추가" 버튼 — 마지막 카드 끝과 12px gap */}
       <div className="px-4 pt-3 pb-4">
-        <button
-          type="button"
+        <Button
+          variant="box-soft-primary"
+          size="md"
           onClick={onAddDocumentSpace}
-          className="bg-fill-primary-normal-neutral hover:bg-fill-primary-interaction-hover-assistive active:bg-fill-primary-interaction-hover-assistive border-edge-neutral text-body-small text-content-primary flex h-11.5 w-full cursor-pointer items-center justify-center gap-2.5 rounded-lg border px-2.5 py-1.5 transition-colors"
+          className="h-11.5 w-full gap-2.5"
         >
-          <IconAdd className="text-icon-primary size-5.5 shrink-0" />
+          <IconAdd className="size-5.5 shrink-0" />
           <span>도큐먼트 스페이스 추가</span>
-        </button>
+        </Button>
       </div>
     </div>
   );

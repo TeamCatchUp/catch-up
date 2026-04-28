@@ -3,6 +3,7 @@
 import IconAddSquare from '@/public/icons/icon/add_square.svg';
 import IconCloudCheckFilled from '@/public/icons/icon/cloud_check_filled.svg';
 import IconOpenInNew from '@/public/icons/icon/open_in_new.svg';
+import { Button } from '@/shared/components/ui/button';
 import { cn } from '@/shared/utils/cn';
 
 import { useChannelTalkViewModel } from '../../../hooks/useChannelTalkViewModel';
@@ -70,13 +71,10 @@ function ConnectionStatusSection({ state }: ConnectionStatusSectionProps) {
         </div>
         <div className="flex items-center justify-between gap-8 px-4 py-3">
           <span className="text-body-small text-content-normal">보안 관련 설명</span>
-          <button
-            type="button"
-            className="text-body-xsmall text-content-neutral flex h-7 cursor-pointer items-center gap-1 rounded-full px-1.5 py-1"
-          >
+          <Button variant="text-secondary-mono" size="sm" className="h-7">
             원문 보기
-            <IconOpenInNew className="text-icon-normal size-5" />
-          </button>
+            <IconOpenInNew className="size-5" />
+          </Button>
         </div>
       </div>
     </div>
