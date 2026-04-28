@@ -3,6 +3,7 @@
 import IconAddSquare from '@/public/icons/icon/add_square.svg';
 import IconCloudCheckFilled from '@/public/icons/icon/cloud_check_filled.svg';
 import IconOpenInNew from '@/public/icons/icon/open_in_new.svg';
+import { cn } from '@/shared/utils/cn';
 
 import type { ChannelTalkChannel, ChannelTalkConnectionState } from '../../../types/channelTalkModel';
 import ChannelTalkChannelCard from './ChannelTalkChannelCard';
@@ -13,16 +14,18 @@ interface ChannelTalkManagementPanelProps {
 
 /** 채널톡 메인 패널 — 연동 상태 관리 / 데이터 범위 / Credential 입력 3개 섹션 */
 export default function ChannelTalkManagementPanel({ state }: ChannelTalkManagementPanelProps) {
+  const hasChannels = state.channels.length > 0;
   const totalDocumentSpaces = state.channels.reduce((sum, ch) => sum + ch.documentSpaces.length, 0);
 
   return (
     <div className="flex flex-col gap-6">
       <ConnectionStatusSection state={state} />
-      <DataRangeSection connected={state.connected} />
+      <DataRangeSection hasChannels={hasChannels} />
       <CredentialSection
         channels={state.channels}
         channelCount={state.channels.length}
         totalDocumentSpaces={totalDocumentSpaces}
+        hasChannels={hasChannels}
       />
     </div>
   );
@@ -66,17 +69,22 @@ function ConnectionStatusSection({ state }: ConnectionStatusSectionProps) {
 }
 
 interface DataRangeSectionProps {
-  connected: boolean;
+  hasChannels: boolean;
 }
 
-/** 연동된 데이터 범위 섹션 — 단일 헤더 + 박스 (mock 단계는 텍스트만) */
-function DataRangeSection({ connected }: DataRangeSectionProps) {
+/** 연동된 데이터 범위 섹션 — 단일 헤더 + 박스 (채널 0개 시 placeholder) */
+function DataRangeSection({ hasChannels }: DataRangeSectionProps) {
   return (
     <div className="flex flex-col gap-1.5">
       <h3 className="text-heading-small text-content-neutral">연동된 데이터 범위</h3>
-      <div className="border-edge-assistive bg-fill-strong text-body-small text-content-assistive flex items-center justify-center overflow-hidden rounded-xl border px-4 py-3">
+      <div
+        className={cn(
+          'border-edge-assistive bg-fill-strong text-body-small flex items-center justify-center overflow-hidden rounded-xl border px-4 py-3',
+          hasChannels ? 'text-content-normal' : 'text-content-assistive',
+        )}
+      >
         <span className="truncate">
-          {connected ? '연동된 채널의 메시지를 임베딩하고 있어요.' : '연동되지 않았습니다.'}
+          {hasChannels ? '연동된 채널의 메시지를 임베딩하고 있어요.' : '연동되지 않았습니다.'}
         </span>
       </div>
     </div>
@@ -87,36 +95,45 @@ interface CredentialSectionProps {
   channels: ChannelTalkChannel[];
   channelCount: number;
   totalDocumentSpaces: number;
+  hasChannels: boolean;
 }
 
-/** Credential Key 입력 및 동기화 주기 설정 — 채널 리스트 헤더 + 채널 카드들 */
-function CredentialSection({ channels, channelCount, totalDocumentSpaces }: CredentialSectionProps) {
+/** Credential Key 입력 및 동기화 주기 설정 — 채널 리스트 헤더 + 채널 카드들 (채널 0개 시 placeholder) */
+function CredentialSection({ channels, channelCount, totalDocumentSpaces, hasChannels }: CredentialSectionProps) {
   return (
     <div className="flex flex-col gap-3">
       <h3 className="text-heading-small text-content-neutral">Credential Key 입력 및 동기화 주기 설정</h3>
 
-      {/* 채널 리스트 헤더 — 박스 전체가 "채널 추가하기" 클릭 영역 (default/hover/pressed 3상태) */}
-      <button
-        type="button"
-        className="border-edge-assistive bg-fill-strong hover:bg-fill-interaction-hover active:bg-fill-interaction-pressed flex w-full cursor-pointer flex-wrap items-center gap-1.5 rounded-xl border px-4 py-3 transition-colors"
-      >
-        <span className="text-body-small text-content-normal shrink-0">{channelCount}개 채널</span>
-        <span className="bg-dim-black-25 size-1 shrink-0 rounded-full" aria-hidden />
-        <span className="text-body-small text-content-normal min-w-0 flex-1 truncate text-left">
-          {totalDocumentSpaces}개 도큐먼트 연결됨
-        </span>
-        <span className="text-body-small text-content-primary flex shrink-0 items-center gap-2">
-          <IconAddSquare className="text-icon-primary size-6 shrink-0" />
-          채널 추가하기
-        </span>
-      </button>
+      {hasChannels ? (
+        <>
+          {/* 채널 리스트 헤더 — 박스 전체가 "채널 추가하기" 클릭 영역 (default/hover/pressed 3상태) */}
+          <button
+            type="button"
+            className="border-edge-assistive bg-fill-strong hover:bg-fill-interaction-hover active:bg-fill-interaction-pressed flex w-full cursor-pointer flex-wrap items-center gap-1.5 rounded-xl border px-4 py-3 transition-colors"
+          >
+            <span className="text-body-small text-content-normal shrink-0">{channelCount}개 채널</span>
+            <span className="bg-dim-black-25 size-1 shrink-0 rounded-full" aria-hidden />
+            <span className="text-body-small text-content-normal min-w-0 flex-1 truncate text-left">
+              {totalDocumentSpaces}개 도큐먼트 연결됨
+            </span>
+            <span className="text-body-small text-content-primary flex shrink-0 items-center gap-2">
+              <IconAddSquare className="text-icon-primary size-6 shrink-0" />
+              채널 추가하기
+            </span>
+          </button>
 
-      {/* 채널 카드 리스트 — mock 5개가 5상태(idle/entered/tested/error/editing)를 각각 시연 */}
-      <div className="flex flex-col gap-3">
-        {channels.map((channel) => (
-          <ChannelTalkChannelCard key={channel.id} channel={channel} />
-        ))}
-      </div>
+          {/* 채널 카드 리스트 — mock 5개가 5상태(idle/entered/tested/error/editing)를 각각 시연 */}
+          <div className="flex flex-col gap-3">
+            {channels.map((channel) => (
+              <ChannelTalkChannelCard key={channel.id} channel={channel} />
+            ))}
+          </div>
+        </>
+      ) : (
+        <div className="border-edge-assistive bg-fill-strong text-body-small text-content-assistive flex items-center justify-center overflow-hidden rounded-xl border px-4 py-3">
+          <span className="truncate">연동되지 않았습니다.</span>
+        </div>
+      )}
     </div>
   );
 }
