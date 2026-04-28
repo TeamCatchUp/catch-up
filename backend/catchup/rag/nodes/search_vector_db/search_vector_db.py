@@ -78,15 +78,6 @@ async def _get_hybrid_search_results(
         query_count=len(queries),
     )
 
-    executor = rag_executors.vector_search
-    logger.info(
-        "vector_search_executor_state",
-        queue_size=executor._work_queue.qsize(),
-        active_threads=len(executor._threads),
-        max_workers=executor._max_workers,
-        query_count=len(queries),
-    )
-
     for q in queries:
         temporal_filters = build_temporal_filters(
             tool_filters=tool_filters,
