@@ -6,7 +6,6 @@ from langchain_core.documents import Document
 
 from catchup.components.vector_db.base import BaseVectorDbService
 from catchup.db.models import SourceType
-from catchup.rag.executors import rag_executors
 from catchup.rag.nodes.utils import log_node
 from catchup.rag.schemas.filters import build_temporal_filters
 from catchup.rag.schemas.structures import VectorDbSearchQuery
@@ -66,17 +65,7 @@ async def _get_hybrid_search_results(
     weights: list[float] = [0.6, 0.25, 0.15],
 ):
     
-    loop = asyncio.get_running_loop()
     tasks = []
-    
-    executor = rag_executors.vector_search_executor
-    logger.debug(
-        "vector_search_executor_state",
-        queue_size=executor._work_queue.qsize(),
-        active_threads=len(executor._threads),
-        max_workers=executor._max_workers,
-        query_count=len(queries),
-    )
 
     for q in queries:
         temporal_filters = build_temporal_filters(
@@ -84,20 +73,17 @@ async def _get_hybrid_search_results(
             start_date=q.start_date,
             end_date=q.end_date
         )
-
         tasks.append(
-            loop.run_in_executor(
-                rag_executors.vector_search_executor,
-                vector_db_service.hybrid_search,
-                q.query,
-                k,
-                weights,
-                tool_filters,
-                temporal_filters,
-                q.keyword_tokens,
+            vector_db_service.hybrid_search(  # async 직접 호출
+                query=q.query,
+                k=k,
+                weights=weights,
+                tool_filters=tool_filters,
+                temporal_filters=temporal_filters,
+                keyword_tokens=q.keyword_tokens,
             )
         )
-    
+
     t0 = time.perf_counter()
     results = await asyncio.gather(*tasks)
     logger.debug(
@@ -105,7 +91,6 @@ async def _get_hybrid_search_results(
         elapsed=round(time.perf_counter() - t0, 3),
         task_count=len(tasks),
     )
-
     return results
 
 
