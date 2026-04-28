@@ -1,7 +1,7 @@
 'use client';
 
 import IconArrowDown from '@/public/icons/icon/arrow_down.svg';
-import IconClock from '@/public/icons/icon/clock.svg';
+import IconClock from '@/public/icons/icon/clock_dropdown.svg';
 import {
   DropdownMenu,
   DropdownMenuContent,
