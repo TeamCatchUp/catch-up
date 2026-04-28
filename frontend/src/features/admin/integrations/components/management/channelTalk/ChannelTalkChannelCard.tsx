@@ -54,7 +54,9 @@ interface ChannelTalkChannelCardProps {
   onAddDocumentSpace: () => void;
   onUpdateDocumentSpace: (dsId: string, patch: Partial<ChannelTalkDocumentSpace>) => void;
   onRemoveDocumentSpace: (dsId: string) => void;
+  onEnterDocumentSpaceEdit: (dsId: string) => void;
   onTestConnection: () => void;
+  onTestDocumentSpaceConnection: (dsId: string) => void;
 }
 
 /** 채널톡 채널 카드 — connectionStatus에 따라 헤더/하단 액션 분기 렌더 */
@@ -66,7 +68,9 @@ export default function ChannelTalkChannelCard({
   onAddDocumentSpace,
   onUpdateDocumentSpace,
   onRemoveDocumentSpace,
+  onEnterDocumentSpaceEdit,
   onTestConnection,
+  onTestDocumentSpaceConnection,
 }: ChannelTalkChannelCardProps) {
   const status = channel.connectionStatus;
   const testStatus = testButtonStatusFor(status);
@@ -204,17 +208,17 @@ export default function ChannelTalkChannelCard({
         )}
       </div>
 
-      {/* 도큐먼트 스페이스 자식 카드들 */}
+      {/* 도큐먼트 스페이스 자식 카드들 — 채널 lock과 독립적으로 자체 connectionStatus 흐름 */}
       {channel.documentSpaces.length > 0 ? (
         <div className="border-edge-neutral flex flex-col border-t px-4">
           {channel.documentSpaces.map((ds) => (
             <ChannelTalkDocumentSpaceCard
               key={ds.id}
               documentSpace={ds}
-              fieldState="idle"
-              disabled={isTested}
               onUpdate={(patch) => onUpdateDocumentSpace(ds.id, patch)}
               onRemove={() => onRemoveDocumentSpace(ds.id)}
+              onEnterEdit={() => onEnterDocumentSpaceEdit(ds.id)}
+              onTestConnection={() => onTestDocumentSpaceConnection(ds.id)}
             />
           ))}
         </div>

@@ -27,9 +27,14 @@ function makeId(prefix: string): string {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
-/** 모든 secret 필드가 채워졌는지 검증 — 화이트스페이스만 있는 값은 빈 값으로 처리 */
-function isAllSecretsFilled(channel: ChannelTalkChannel): boolean {
+/** 채널의 모든 secret 필드가 채워졌는지 검증 — 화이트스페이스만 있는 값은 빈 값으로 처리 */
+function isChannelSecretsFilled(channel: ChannelTalkChannel): boolean {
   return Boolean(channel.accessKey.trim() && channel.accessSecret.trim() && channel.webhookToken.trim());
+}
+
+/** 도큐먼트 스페이스의 모든 secret 필드가 채워졌는지 검증 (Access Key + Access Secret만, Webhook Token 없음) */
+function isDocumentSpaceSecretsFilled(ds: ChannelTalkDocumentSpace): boolean {
+  return Boolean(ds.accessKey.trim() && ds.accessSecret.trim());
 }
 
 interface ChannelTalkViewModel {
@@ -37,12 +42,16 @@ interface ChannelTalkViewModel {
   addChannel: () => void;
   updateChannel: (channelId: string, patch: Partial<ChannelTalkChannel>) => void;
   removeChannel: (channelId: string) => void;
-  /** tested 상태에서 사용자가 "수정하기" 클릭 → editing으로 전환 (lock 해제) */
+  /** 채널 tested → editing 전환 (lock 해제) */
   enterEditMode: (channelId: string) => void;
   addDocumentSpace: (channelId: string) => void;
   updateDocumentSpace: (channelId: string, dsId: string, patch: Partial<ChannelTalkDocumentSpace>) => void;
   removeDocumentSpace: (channelId: string, dsId: string) => void;
   testChannelConnection: (channelId: string) => void;
+  /** 도큐먼트 스페이스 검증 — 채널과 독립 */
+  testDocumentSpaceConnection: (channelId: string, dsId: string) => void;
+  /** 도큐먼트 스페이스 tested → editing 전환 (lock 해제) */
+  enterDocumentSpaceEditMode: (channelId: string, dsId: string) => void;
 }
 
 /**
@@ -126,6 +135,7 @@ export function useChannelTalkViewModel(): ChannelTalkViewModel {
                   accessKey: '',
                   accessSecret: '',
                   syncInterval: DOCUMENT_SPACE_SYNC_INTERVAL_DEFAULT,
+                  connectionStatus: 'idle',
                 },
               ],
             }
@@ -138,14 +148,27 @@ export function useChannelTalkViewModel(): ChannelTalkViewModel {
     (channelId: string, dsId: string, patch: Partial<ChannelTalkDocumentSpace>) => {
       setState((prev) => ({
         ...prev,
-        channels: prev.channels.map((ch) =>
-          ch.id === channelId
-            ? {
-                ...ch,
-                documentSpaces: ch.documentSpaces.map((ds) => (ds.id === dsId ? { ...ds, ...patch } : ds)),
+        channels: prev.channels.map((ch) => {
+          if (ch.id !== channelId) return ch;
+          return {
+            ...ch,
+            documentSpaces: ch.documentSpaces.map((ds) => {
+              if (ds.id !== dsId) return ds;
+              const next = { ...ds, ...patch };
+
+              // 검증 완료(tested) / 실패(error) 후 secret 값 수정 시 → idle로 자동 복귀
+              const hadValidation = ds.connectionStatus === 'tested' || ds.connectionStatus === 'error';
+              const secretChanged =
+                ('accessKey' in patch && patch.accessKey !== ds.accessKey) ||
+                ('accessSecret' in patch && patch.accessSecret !== ds.accessSecret);
+              if (hadValidation && secretChanged) {
+                next.connectionStatus = 'idle';
+                next.errorMessage = undefined;
               }
-            : ch,
-        ),
+              return next;
+            }),
+          };
+        }),
       }));
     },
     [],
@@ -165,13 +188,51 @@ export function useChannelTalkViewModel(): ChannelTalkViewModel {
       ...prev,
       channels: prev.channels.map((ch) => {
         if (ch.id !== channelId) return ch;
-        const allFilled = isAllSecretsFilled(ch);
+        const allFilled = isChannelSecretsFilled(ch);
         return {
           ...ch,
           connectionStatus: allFilled ? 'tested' : 'error',
           errorMessage: allFilled ? undefined : '필수 키가 입력되지 않았습니다. 모든 항목을 채워주세요.',
         };
       }),
+    }));
+  }, []);
+
+  const testDocumentSpaceConnection = useCallback((channelId: string, dsId: string) => {
+    setState((prev) => ({
+      ...prev,
+      channels: prev.channels.map((ch) =>
+        ch.id !== channelId
+          ? ch
+          : {
+              ...ch,
+              documentSpaces: ch.documentSpaces.map((ds) => {
+                if (ds.id !== dsId) return ds;
+                const allFilled = isDocumentSpaceSecretsFilled(ds);
+                return {
+                  ...ds,
+                  connectionStatus: allFilled ? 'tested' : 'error',
+                  errorMessage: allFilled ? undefined : '필수 키가 입력되지 않았습니다. 모든 항목을 채워주세요.',
+                };
+              }),
+            },
+      ),
+    }));
+  }, []);
+
+  const enterDocumentSpaceEditMode = useCallback((channelId: string, dsId: string) => {
+    setState((prev) => ({
+      ...prev,
+      channels: prev.channels.map((ch) =>
+        ch.id !== channelId
+          ? ch
+          : {
+              ...ch,
+              documentSpaces: ch.documentSpaces.map((ds) =>
+                ds.id === dsId ? { ...ds, connectionStatus: 'editing' as const, errorMessage: undefined } : ds,
+              ),
+            },
+      ),
     }));
   }, []);
 
@@ -185,5 +246,7 @@ export function useChannelTalkViewModel(): ChannelTalkViewModel {
     updateDocumentSpace,
     removeDocumentSpace,
     testChannelConnection,
+    testDocumentSpaceConnection,
+    enterDocumentSpaceEditMode,
   };
 }

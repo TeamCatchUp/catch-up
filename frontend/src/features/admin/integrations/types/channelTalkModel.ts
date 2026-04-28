@@ -57,13 +57,16 @@ export type ChannelTalkFieldState = 'idle' | 'error' | 'focus';
  */
 export type ChannelTalkTestButtonStatus = 'idle' | 'active' | 'success';
 
-/** 채널톡 도큐먼트 스페이스 (채널 하위 항목) */
+/** 채널톡 도큐먼트 스페이스 (채널 하위 항목) — 자체 connectionStatus를 가짐 (채널과 독립) */
 export interface ChannelTalkDocumentSpace {
   id: string;
   name: string;
   accessKey: string;
   accessSecret: string;
   syncInterval: ChannelTalkSyncInterval;
+  connectionStatus: ChannelTalkConnectionStatus;
+  /** error 상태일 때 표시할 에러 메시지 (없으면 빈 문자열) */
+  errorMessage?: string;
 }
 
 /** 채널톡 채널 — Access Key/Secret/Webhook + 동기화 주기 + 하위 도큐먼트 스페이스 + 검증 상태 */

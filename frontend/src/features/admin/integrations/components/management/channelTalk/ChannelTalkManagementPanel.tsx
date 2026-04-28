@@ -22,6 +22,8 @@ export default function ChannelTalkManagementPanel() {
     updateDocumentSpace,
     removeDocumentSpace,
     testChannelConnection,
+    testDocumentSpaceConnection,
+    enterDocumentSpaceEditMode,
   } = useChannelTalkViewModel();
 
   const hasChannels = state.channels.length > 0;
@@ -43,7 +45,9 @@ export default function ChannelTalkManagementPanel() {
         onAddDocumentSpace={addDocumentSpace}
         onUpdateDocumentSpace={updateDocumentSpace}
         onRemoveDocumentSpace={removeDocumentSpace}
+        onEnterDocumentSpaceEditMode={enterDocumentSpaceEditMode}
         onTestChannelConnection={testChannelConnection}
+        onTestDocumentSpaceConnection={testDocumentSpaceConnection}
       />
     </div>
   );
@@ -122,7 +126,9 @@ interface CredentialSectionProps {
     patch: Partial<ChannelTalkChannel['documentSpaces'][number]>,
   ) => void;
   onRemoveDocumentSpace: (channelId: string, dsId: string) => void;
+  onEnterDocumentSpaceEditMode: (channelId: string, dsId: string) => void;
   onTestChannelConnection: (channelId: string) => void;
+  onTestDocumentSpaceConnection: (channelId: string, dsId: string) => void;
 }
 
 /** Credential Key 입력 및 동기화 주기 설정 — 채널 리스트 헤더 + 채널 카드들 */
@@ -138,7 +144,9 @@ function CredentialSection({
   onAddDocumentSpace,
   onUpdateDocumentSpace,
   onRemoveDocumentSpace,
+  onEnterDocumentSpaceEditMode,
   onTestChannelConnection,
+  onTestDocumentSpaceConnection,
 }: CredentialSectionProps) {
   return (
     <div className="flex flex-col gap-3">
@@ -167,7 +175,9 @@ function CredentialSection({
                 onAddDocumentSpace={() => onAddDocumentSpace(channel.id)}
                 onUpdateDocumentSpace={(dsId, patch) => onUpdateDocumentSpace(channel.id, dsId, patch)}
                 onRemoveDocumentSpace={(dsId) => onRemoveDocumentSpace(channel.id, dsId)}
+                onEnterDocumentSpaceEdit={(dsId) => onEnterDocumentSpaceEditMode(channel.id, dsId)}
                 onTestConnection={() => onTestChannelConnection(channel.id)}
+                onTestDocumentSpaceConnection={(dsId) => onTestDocumentSpaceConnection(channel.id, dsId)}
               />
             ))}
           </div>
