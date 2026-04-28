@@ -106,7 +106,7 @@ export default function ChannelTalkChannelCard({ channel, onAddDocumentSpace }: 
             <IconMegaphone className="text-icon-alternative size-4.5 shrink-0" />
             <p className="text-body-xsmall text-content-assistive">{MEGAPHONE_NOTICE}</p>
           </div>
-          <ChannelTalkSyncIntervalDropdown value={channel.syncInterval} />
+          <ChannelTalkSyncIntervalDropdown variant="channel" value={channel.syncInterval} />
         </div>
       </div>
 

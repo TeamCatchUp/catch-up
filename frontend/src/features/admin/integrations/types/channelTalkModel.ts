@@ -1,5 +1,5 @@
-/** 채널톡 동기화 주기 옵션 */
-export type ChannelTalkSyncInterval = '5min' | '15min' | '30min' | '1hour' | '6hour' | '24hour';
+/** 채널톡 동기화 주기 옵션 (channel + documentSpace 공용 union) */
+export type ChannelTalkSyncInterval = '5min' | '15min' | '30min' | '1hour' | '6hour' | '12hour' | '24hour';
 
 /** 동기화 주기 표시 라벨 (dropdown 옵션 + 선택값 표시 공용) */
 export const CHANNEL_TALK_SYNC_INTERVAL_LABELS: Record<ChannelTalkSyncInterval, string> = {
@@ -8,8 +8,28 @@ export const CHANNEL_TALK_SYNC_INTERVAL_LABELS: Record<ChannelTalkSyncInterval, 
   '30min': '30분',
   '1hour': '1시간',
   '6hour': '6시간',
+  '12hour': '12시간',
   '24hour': '24시간',
 };
+
+/**
+ * 채널 카드 동기화 주기 옵션 — 실시간 대화 채널이라 짧은 주기 4개.
+ * 5분이 기본값.
+ */
+export const CHANNEL_SYNC_INTERVAL_OPTIONS: ChannelTalkSyncInterval[] = ['5min', '15min', '30min', '1hour'];
+export const CHANNEL_SYNC_INTERVAL_DEFAULT: ChannelTalkSyncInterval = '5min';
+
+/**
+ * 도큐먼트 스페이스 동기화 주기 옵션 — 정적 문서라 긴 주기 4개.
+ * 1시간이 기본값.
+ */
+export const DOCUMENT_SPACE_SYNC_INTERVAL_OPTIONS: ChannelTalkSyncInterval[] = [
+  '1hour',
+  '6hour',
+  '12hour',
+  '24hour',
+];
+export const DOCUMENT_SPACE_SYNC_INTERVAL_DEFAULT: ChannelTalkSyncInterval = '1hour';
 
 /**
  * 채널 카드 연결 상태 머신 (Figma node `12004:101461`).

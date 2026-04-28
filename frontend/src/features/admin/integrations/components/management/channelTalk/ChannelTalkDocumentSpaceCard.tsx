@@ -66,7 +66,7 @@ export default function ChannelTalkDocumentSpaceCard({
         </div>
 
         {/* Sync interval dropdown */}
-        <ChannelTalkSyncIntervalDropdown value={documentSpace.syncInterval} />
+        <ChannelTalkSyncIntervalDropdown variant="documentSpace" value={documentSpace.syncInterval} />
       </div>
     </div>
   );

@@ -10,13 +10,34 @@ import {
 } from '@/shared/components/ui/dropdown-menu';
 import { cn } from '@/shared/utils/cn';
 
-import { CHANNEL_TALK_SYNC_INTERVAL_LABELS, type ChannelTalkSyncInterval } from '../../../types/channelTalkModel';
+import {
+  CHANNEL_SYNC_INTERVAL_DEFAULT,
+  CHANNEL_SYNC_INTERVAL_OPTIONS,
+  CHANNEL_TALK_SYNC_INTERVAL_LABELS,
+  DOCUMENT_SPACE_SYNC_INTERVAL_DEFAULT,
+  DOCUMENT_SPACE_SYNC_INTERVAL_OPTIONS,
+  type ChannelTalkSyncInterval,
+} from '../../../types/channelTalkModel';
 
-const SYNC_INTERVAL_OPTIONS: ChannelTalkSyncInterval[] = ['5min', '15min', '30min', '1hour', '6hour', '24hour'];
+/**
+ * dropdown 옵션 셋 분기.
+ * - `channel`: 5분(기본) / 15분 / 30분 / 1시간 — 실시간 대화 채널
+ * - `documentSpace`: 1시간(기본) / 6시간 / 12시간 / 24시간 — 정적 문서
+ */
+type SyncIntervalDropdownVariant = 'channel' | 'documentSpace';
 
-const DEFAULT_SYNC_INTERVAL: ChannelTalkSyncInterval = '5min';
+const VARIANT_OPTIONS: Record<SyncIntervalDropdownVariant, ChannelTalkSyncInterval[]> = {
+  channel: CHANNEL_SYNC_INTERVAL_OPTIONS,
+  documentSpace: DOCUMENT_SPACE_SYNC_INTERVAL_OPTIONS,
+};
+
+const VARIANT_DEFAULTS: Record<SyncIntervalDropdownVariant, ChannelTalkSyncInterval> = {
+  channel: CHANNEL_SYNC_INTERVAL_DEFAULT,
+  documentSpace: DOCUMENT_SPACE_SYNC_INTERVAL_DEFAULT,
+};
 
 interface ChannelTalkSyncIntervalDropdownProps {
+  variant: SyncIntervalDropdownVariant;
   value: ChannelTalkSyncInterval;
   onChange?: (next: ChannelTalkSyncInterval) => void;
 }
@@ -25,13 +46,20 @@ interface ChannelTalkSyncIntervalDropdownProps {
  * 채널톡 동기화 주기 dropdown — Default / Hover / Pressed(펼침) 3상태.
  *
  * Figma node mapping:
- * - Default: `12060:83652` (652×46) / `12060:84438` (604×46)
+ * - Default: `12060:83652` (652×46, 채널) / `12060:84438` (604×46, 도큐먼트 스페이스)
  * - Hover:   `12060:83662` / `12060:84449`
- * - Pressed: `12060:84298` (펼침 228h, 옵션 4개 가시) / `12060:84387`
+ * - Pressed: `12060:84298` (펼침 228h) / `12060:84387`
  *
- * 부모 컨테이너의 width를 그대로 채움 (w-full). 메뉴는 trigger 폭과 동일하게 펼쳐짐.
+ * `variant`에 따라 옵션 셋 자동 분기. 부모 컨테이너의 width를 그대로 채움 (w-full).
  */
-export default function ChannelTalkSyncIntervalDropdown({ value, onChange }: ChannelTalkSyncIntervalDropdownProps) {
+export default function ChannelTalkSyncIntervalDropdown({
+  variant,
+  value,
+  onChange,
+}: ChannelTalkSyncIntervalDropdownProps) {
+  const options = VARIANT_OPTIONS[variant];
+  const defaultValue = VARIANT_DEFAULTS[variant];
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -56,7 +84,7 @@ export default function ChannelTalkSyncIntervalDropdown({ value, onChange }: Cha
         align="start"
         className="bg-fill-normal w-[var(--radix-dropdown-menu-trigger-width)] min-w-0 rounded-lg border-0 p-1"
       >
-        {SYNC_INTERVAL_OPTIONS.map((option) => (
+        {options.map((option) => (
           <DropdownMenuItem
             key={option}
             onSelect={() => onChange?.(option)}
@@ -67,7 +95,7 @@ export default function ChannelTalkSyncIntervalDropdown({ value, onChange }: Cha
           >
             <span className="flex-1 truncate">
               {CHANNEL_TALK_SYNC_INTERVAL_LABELS[option]}
-              {option === DEFAULT_SYNC_INTERVAL && ' (기본)'}
+              {option === defaultValue && ' (기본)'}
             </span>
           </DropdownMenuItem>
         ))}
