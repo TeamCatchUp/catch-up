@@ -39,10 +39,8 @@ function testButtonStatusFor(status: ChannelTalkConnectionStatus): TestButtonSta
 interface ChannelTalkChannelCardProps {
   channel: ChannelTalkChannel;
   onUpdate: (patch: Partial<ChannelTalkChannel>) => void;
-  onRemove: () => void;
   onAddDocumentSpace: () => void;
   onUpdateDocumentSpace: (dsId: string, patch: Partial<ChannelTalkDocumentSpace>) => void;
-  onRemoveDocumentSpace: (dsId: string) => void;
   onTestConnection: () => void;
 }
 
@@ -52,7 +50,6 @@ export default function ChannelTalkChannelCard({
   onUpdate,
   onAddDocumentSpace,
   onUpdateDocumentSpace,
-  onRemoveDocumentSpace,
   onTestConnection,
 }: ChannelTalkChannelCardProps) {
   const status = channel.connectionStatus;
@@ -135,7 +132,6 @@ export default function ChannelTalkChannelCard({
               fieldState="idle"
               testStatus="idle"
               onUpdate={(patch) => onUpdateDocumentSpace(ds.id, patch)}
-              onRemove={() => onRemoveDocumentSpace(ds.id)}
             />
           ))}
         </div>

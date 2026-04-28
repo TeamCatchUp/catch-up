@@ -14,7 +14,6 @@ interface ChannelTalkDocumentSpaceCardProps {
   /** 연결 테스트 버튼 상태 */
   testStatus?: 'idle' | 'active' | 'success';
   onUpdate: (patch: Partial<ChannelTalkDocumentSpace>) => void;
-  onRemove: () => void;
 }
 
 /**
