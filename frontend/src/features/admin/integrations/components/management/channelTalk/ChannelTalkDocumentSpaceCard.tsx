@@ -1,13 +1,12 @@
 'use client';
 
 import IconBook from '@/public/icons/icon/book.svg';
+import { Button } from '@/shared/components/ui/button';
 
 import type {
   ChannelTalkDocumentSpace,
   ChannelTalkFieldState,
-  ChannelTalkTestButtonStatus,
 } from '../../../types/channelTalkModel';
-import ChannelTalkConnectionTestButton from './ChannelTalkConnectionTestButton';
 import ChannelTalkFieldRow from './ChannelTalkFieldRow';
 import ChannelTalkSyncIntervalDropdown from './ChannelTalkSyncIntervalDropdown';
 
@@ -15,9 +14,10 @@ interface ChannelTalkDocumentSpaceCardProps {
   documentSpace: ChannelTalkDocumentSpace;
   /** 텍스트필드 시각 변형 (부모 channel의 connectionStatus에 종속) */
   fieldState?: ChannelTalkFieldState;
-  /** 연결 테스트 버튼 상태 */
-  testStatus?: ChannelTalkTestButtonStatus;
+  /** lock 상태 (부모 channel이 tested일 때 자식도 lock) */
+  disabled?: boolean;
   onUpdate: (patch: Partial<ChannelTalkDocumentSpace>) => void;
+  onRemove: () => void;
 }
 
 /**
@@ -29,8 +29,9 @@ interface ChannelTalkDocumentSpaceCardProps {
 export default function ChannelTalkDocumentSpaceCard({
   documentSpace,
   fieldState = 'idle',
-  testStatus = 'idle',
+  disabled = false,
   onUpdate,
+  onRemove,
 }: ChannelTalkDocumentSpaceCardProps) {
   return (
     <div className="flex w-full items-start gap-4 pb-5">
@@ -42,12 +43,14 @@ export default function ChannelTalkDocumentSpaceCard({
         <div className="bg-edge-neutral w-px flex-1" aria-hidden />
       </div>
 
-      {/* Right column: input form (604px) — 상단 border-t로 채널/이전 카드와 구분 */}
+      {/* Right column: input form — 상단 border-t로 채널/이전 카드와 구분 */}
       <div className="border-edge-neutral flex min-w-0 flex-1 flex-col gap-5 border-t pt-5">
-        {/* Header — 이름 + 연결 테스트 버튼 */}
+        {/* Header — 이름 + 삭제 버튼 */}
         <div className="flex flex-wrap items-center justify-between gap-x-10 gap-y-2">
           <h4 className="text-heading-small text-content-normal min-w-0 flex-1 truncate">{documentSpace.name}</h4>
-          <ChannelTalkConnectionTestButton status={testStatus} />
+          <Button variant="box-outline-gray" size="sm" onClick={onRemove}>
+            삭제
+          </Button>
         </div>
 
         {/* Access Key + Access Secret (2-column) */}
@@ -57,6 +60,7 @@ export default function ChannelTalkDocumentSpaceCard({
             value={documentSpace.accessKey}
             placeholder="Access Key 입력하기"
             state={fieldState}
+            disabled={disabled}
             onChange={(next) => onUpdate({ accessKey: next })}
           />
           <ChannelTalkFieldRow
@@ -64,6 +68,7 @@ export default function ChannelTalkDocumentSpaceCard({
             value={documentSpace.accessSecret}
             placeholder="Access Secret 입력하기"
             state={fieldState}
+            disabled={disabled}
             onChange={(next) => onUpdate({ accessSecret: next })}
           />
         </div>
@@ -72,6 +77,7 @@ export default function ChannelTalkDocumentSpaceCard({
         <ChannelTalkSyncIntervalDropdown
           variant="documentSpace"
           value={documentSpace.syncInterval}
+          disabled={disabled}
           onChange={(next) => onUpdate({ syncInterval: next })}
         />
       </div>

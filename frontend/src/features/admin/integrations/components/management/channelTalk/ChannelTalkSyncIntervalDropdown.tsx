@@ -39,6 +39,8 @@ const VARIANT_DEFAULTS: Record<SyncIntervalDropdownVariant, ChannelTalkSyncInter
 interface ChannelTalkSyncIntervalDropdownProps {
   variant: SyncIntervalDropdownVariant;
   value: ChannelTalkSyncInterval;
+  /** lock 상태 — 트리거 비활성 + 회색 배경 */
+  disabled?: boolean;
   onChange?: (next: ChannelTalkSyncInterval) => void;
 }
 
@@ -50,6 +52,7 @@ interface ChannelTalkSyncIntervalDropdownProps {
 export default function ChannelTalkSyncIntervalDropdown({
   variant,
   value,
+  disabled,
   onChange,
 }: ChannelTalkSyncIntervalDropdownProps) {
   const options = VARIANT_OPTIONS[variant];
@@ -57,11 +60,15 @@ export default function ChannelTalkSyncIntervalDropdown({
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>
+      <DropdownMenuTrigger asChild disabled={disabled}>
         <button
           type="button"
+          disabled={disabled}
           className={cn(
-            'border-edge-neutral bg-fill-strong hover:bg-fill-interaction-hover data-[state=open]:bg-fill-interaction-pressed flex h-11.5 w-full cursor-pointer items-center gap-1.5 rounded-lg border p-3 transition-colors',
+            'border-edge-neutral flex h-11.5 w-full items-center gap-1.5 rounded-lg border p-3 transition-colors',
+            disabled
+              ? 'bg-fill-interaction-disable text-content-assistive cursor-not-allowed'
+              : 'bg-fill-strong hover:bg-fill-interaction-hover data-[state=open]:bg-fill-interaction-pressed cursor-pointer',
           )}
         >
           <div className="flex min-w-0 flex-1 items-center gap-2">

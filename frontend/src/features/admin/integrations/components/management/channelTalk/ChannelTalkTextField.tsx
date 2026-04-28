@@ -15,6 +15,8 @@ interface ChannelTalkTextFieldProps {
   maskable?: boolean;
   /** 초기 마스킹 여부 (maskable=true일 때만 적용, 기본 false = 평문 표시) */
   defaultMasked?: boolean;
+  /** lock 상태 — readOnly + 회색 배경 (`bg-fill-interaction-disable`). eye 토글은 여전히 동작 */
+  disabled?: boolean;
   onChange?: (next: string) => void;
   readOnly?: boolean;
   id?: string;
@@ -28,6 +30,7 @@ export default function ChannelTalkTextField({
   state = 'idle',
   maskable = false,
   defaultMasked = false,
+  disabled = false,
   onChange,
   readOnly,
   id,
@@ -41,10 +44,11 @@ export default function ChannelTalkTextField({
   return (
     <div
       className={cn(
-        'bg-fill-normal flex h-11.5 max-h-45 min-h-11.5 w-full items-center gap-3 rounded-lg p-3',
-        state === 'idle' && 'border-edge-neutral border',
-        state === 'error' && 'border-status-destructive border-[1.5px]',
-        state === 'focus' && 'border-edge-primary border-[1.5px]',
+        'flex h-11.5 max-h-45 min-h-11.5 w-full items-center gap-3 rounded-lg p-3',
+        disabled ? 'bg-fill-interaction-disable border-edge-neutral border' : 'bg-fill-normal',
+        !disabled && state === 'idle' && 'border-edge-neutral border',
+        !disabled && state === 'error' && 'border-status-destructive border-[1.5px]',
+        !disabled && state === 'focus' && 'border-edge-primary border-[1.5px]',
       )}
     >
       <input
@@ -53,9 +57,12 @@ export default function ChannelTalkTextField({
         value={value}
         onChange={(e) => onChange?.(e.target.value)}
         placeholder={placeholder}
-        readOnly={readOnly}
+        readOnly={readOnly || disabled}
         aria-label={ariaLabel}
-        className="text-body-small text-content-normal placeholder:text-content-assistive min-w-0 flex-1 truncate bg-transparent outline-none"
+        className={cn(
+          'text-body-small placeholder:text-content-assistive min-w-0 flex-1 truncate bg-transparent outline-none',
+          disabled ? 'text-content-assistive cursor-not-allowed' : 'text-content-normal',
+        )}
       />
       {showMaskToggle && (
         <button
