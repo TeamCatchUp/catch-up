@@ -52,7 +52,7 @@ export default function ChannelTalkChannelCard({ channel, onAddDocumentSpace }: 
   return (
     <div className="border-edge-neutral bg-fill-normal relative flex flex-col overflow-hidden rounded-xl border">
       {/* 헤더 행 좌측 파란색 indicator strip — tag icon 영역 높이(32px)와 동일 */}
-      <div className="bg-edge-primary-strong absolute top-4 left-px h-8 w-0.5" aria-hidden />
+      <div className="bg-edge-primary-strong absolute top-4 left-0 h-8 w-1" aria-hidden />
 
       {/* Vertical input form (684×340 영역) */}
       <div className="flex flex-col gap-4 px-4 pt-4 pb-5">
