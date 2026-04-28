@@ -1,4 +1,5 @@
 import asyncio
+import time
 
 import structlog
 from langchain_core.documents import Document
@@ -67,6 +68,15 @@ async def _get_hybrid_search_results(
     
     loop = asyncio.get_running_loop()
     tasks = []
+    
+    executor = rag_executors.vector_search_executor
+    logger.debug(
+        "vector_search_executor_state",
+        queue_size=executor._work_queue.qsize(),
+        active_threads=len(executor._threads),
+        max_workers=executor._max_workers,
+        query_count=len(queries),
+    )
 
     for q in queries:
         temporal_filters = build_temporal_filters(
@@ -87,8 +97,14 @@ async def _get_hybrid_search_results(
                 q.keyword_tokens,
             )
         )
-
+    
+    t0 = time.perf_counter()
     results = await asyncio.gather(*tasks)
+    logger.debug(
+        "hybrid_search_gather_completed",
+        elapsed=round(time.perf_counter() - t0, 3),
+        task_count=len(tasks),
+    )
 
     return results
 
