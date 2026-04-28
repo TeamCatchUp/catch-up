@@ -14,9 +14,9 @@ import {
   CHANNEL_SYNC_INTERVAL_DEFAULT,
   CHANNEL_SYNC_INTERVAL_OPTIONS,
   CHANNEL_TALK_SYNC_INTERVAL_LABELS,
+  type ChannelTalkSyncInterval,
   DOCUMENT_SPACE_SYNC_INTERVAL_DEFAULT,
   DOCUMENT_SPACE_SYNC_INTERVAL_OPTIONS,
-  type ChannelTalkSyncInterval,
 } from '../../../types/channelTalkModel';
 
 /**
