@@ -106,7 +106,7 @@ export default function ChannelTalkChannelCard({ channel, onAddDocumentSpace }: 
         </div>
       </div>
 
-      {/* 도큐먼트 스페이스 자식 카드들 (있을 때만) */}
+      {/* 도큐먼트 스페이스 자식 카드들 (있을 때만) — 각 카드 사이는 우측 form의 border-b로 구분 */}
       {channel.documentSpaces.length > 0 ? (
         <div className="flex flex-col px-4">
           {channel.documentSpaces.map((ds) => (
@@ -115,8 +115,8 @@ export default function ChannelTalkChannelCard({ channel, onAddDocumentSpace }: 
         </div>
       ) : null}
 
-      {/* "도큐먼트 스페이스 추가" 버튼 (default/hover-pressed 2상태) */}
-      <div className="px-4 pb-4">
+      {/* "도큐먼트 스페이스 추가" 버튼 (default/hover-pressed 2상태) — 마지막 카드 끝과 12px gap */}
+      <div className="px-4 pt-3 pb-4">
         <button
           type="button"
           onClick={onAddDocumentSpace}
