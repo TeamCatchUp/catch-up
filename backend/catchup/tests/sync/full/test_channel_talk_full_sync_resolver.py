@@ -7,6 +7,9 @@ from unittest.mock import patch
 from catchup.connectors.channel_talk.full_sync_helper import (
     CHANNEL_TALK_FULL_SYNC_TARGET_ID,
 )
+from catchup.connectors.channel_talk.full_sync_target_contract import (
+    CHANNEL_TALK_DOCUMENT_ARTICLE_TARGET_ID,
+)
 from catchup.connectors.channel_talk.schemas.channel_connection import (
     ChannelTalkCredentialsRecord,
 )
@@ -96,6 +99,23 @@ class ChannelTalkFullSyncResolverTests(IsolatedAsyncioTestCase):
                     request=FullSyncDispatchRequest(
                         scope_id=CHANNEL_ID,
                         target_ids=["group"],
+                        sync_from_ts="1713744000.000000",
+                    ),
+                )
+
+    async def test_resolver_does_not_accept_document_article_yet(self) -> None:
+        with patch(
+            "catchup.sync.full.resolvers.channel_talk_full_sync_resolver.load_channel_talk_connection",
+            return_value=_build_connection_record(),
+        ):
+            with self.assertRaisesRegex(
+                SyncRequestException,
+                "requested target_ids contain unknown channel_talk targets",
+            ):
+                await self.resolver.resolve_full_sync_targets(
+                    request=FullSyncDispatchRequest(
+                        scope_id=CHANNEL_ID,
+                        target_ids=[CHANNEL_TALK_DOCUMENT_ARTICLE_TARGET_ID],
                         sync_from_ts="1713744000.000000",
                     ),
                 )

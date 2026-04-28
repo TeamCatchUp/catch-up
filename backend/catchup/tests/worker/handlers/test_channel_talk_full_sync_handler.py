@@ -10,6 +10,9 @@ from unittest.mock import patch
 from catchup.connectors.channel_talk.full_sync_helper import (
     CHANNEL_TALK_FULL_SYNC_TARGET_ID,
 )
+from catchup.connectors.channel_talk.full_sync_target_contract import (
+    CHANNEL_TALK_DOCUMENT_ARTICLE_TARGET_ID,
+)
 from catchup.connectors.channel_talk.schemas.channel_connection import (
     ChannelTalkCredentialsRecord,
 )
@@ -135,6 +138,22 @@ class ChannelTalkFullSyncHandlerTests(IsolatedAsyncioTestCase):
             ):
                 await self.handler.handle(
                     context=_build_context(target_id="group"),
+                    service_cache={},
+                )
+
+    async def test_handler_does_not_accept_document_article_yet(self) -> None:
+        with patch(
+            "catchup.worker.handlers.channel_talk_full_sync_handler.load_channel_talk_connection",
+            return_value=_build_connection_record(),
+        ):
+            with self.assertRaisesRegex(
+                ValueError,
+                "channel_talk target_id must be user_chat",
+            ):
+                await self.handler.handle(
+                    context=_build_context(
+                        target_id=CHANNEL_TALK_DOCUMENT_ARTICLE_TARGET_ID,
+                    ),
                     service_cache={},
                 )
 

@@ -41,6 +41,21 @@ from catchup.connectors.channel_talk.full_sync_fetcher import ChannelTalkFetched
 from catchup.connectors.channel_talk.full_sync_fetcher import (
     ChannelTalkFetchedUserChatsResult,
 )
+from catchup.connectors.channel_talk.full_sync_target_contract import (
+    CHANNEL_TALK_BOOTSTRAP_TARGET_ID,
+)
+from catchup.connectors.channel_talk.full_sync_target_contract import (
+    CHANNEL_TALK_DOCUMENT_ARTICLE_DISPLAY_NAME,
+)
+from catchup.connectors.channel_talk.full_sync_target_contract import (
+    CHANNEL_TALK_DOCUMENT_ARTICLE_TARGET_ID,
+)
+from catchup.connectors.channel_talk.full_sync_target_contract import (
+    build_channel_talk_bootstrap_metadata,
+)
+from catchup.connectors.channel_talk.full_sync_target_contract import (
+    build_channel_talk_document_article_metadata,
+)
 from catchup.connectors.channel_talk.schemas.channel_connection import (
     ChannelTalkCredentialsRecord,
 )
@@ -370,11 +385,50 @@ class ChannelTalkFullSyncContractTests(TestCase):
         self.assertEqual(checkpoint.target, "user_chat")
         self.assertNotIn("stage", checkpoint.model_dump())
 
-    def test_descriptor_enables_runtime_full_sync_for_user_chat_contract(self) -> None:
+    def test_descriptor_exposes_channel_talk_full_sync_targets(self) -> None:
         descriptor = CHANNEL_TALK_DESCRIPTOR
 
         self.assertTrue(descriptor.runtime.supports_full_sync)
-        self.assertEqual(descriptor.runtime.targets[0], "user_chat")
+        self.assertEqual(
+            descriptor.runtime.targets,
+            (
+                CHANNEL_TALK_BOOTSTRAP_TARGET_ID,
+                CHANNEL_TALK_DOCUMENT_ARTICLE_TARGET_ID,
+            ),
+        )
+
+    def test_document_article_metadata_uses_bootstrap_tenant_contract(self) -> None:
+        metadata = build_channel_talk_document_article_metadata(" channel-123 ")
+
+        self.assertEqual(
+            metadata,
+            {
+                "runtime_target_kind": "bootstrap",
+                "boundary": "tenant",
+                "target": "document_article",
+                "stage": "document_article",
+                "channel_id": "channel-123",
+            },
+        )
+
+    def test_document_article_metadata_rejects_blank_channel_id(self) -> None:
+        with self.assertRaisesRegex(ValueError, "channel_id is required"):
+            build_channel_talk_document_article_metadata(" ")
+
+    def test_document_article_display_name_contract(self) -> None:
+        self.assertEqual(CHANNEL_TALK_DOCUMENT_ARTICLE_DISPLAY_NAME, "DocumentArticle")
+
+    def test_user_chat_metadata_contract_is_unchanged(self) -> None:
+        self.assertEqual(
+            build_channel_talk_bootstrap_metadata("channel-123"),
+            {
+                "runtime_target_kind": "bootstrap",
+                "boundary": "tenant",
+                "target": "user_chat",
+                "stage": "user_chat",
+                "channel_id": "channel-123",
+            },
+        )
 
 
 class ConnectorFullSyncApplicationTests(IsolatedAsyncioTestCase):
