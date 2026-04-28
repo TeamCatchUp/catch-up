@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 from typing import Any
-from typing import Callable
-from typing import TypeVar
 
 import httpx
 import structlog
@@ -10,26 +8,38 @@ import structlog
 from catchup.configs.config import settings
 from catchup.connectors.base.retry import parse_retry_after_header
 from catchup.connectors.channel_talk.exceptions import ChannelTalkAuthenticationError
-from catchup.connectors.channel_talk.exceptions import ChannelTalkPayloadError
 from catchup.connectors.channel_talk.exceptions import ChannelTalkRateLimitError
 from catchup.connectors.channel_talk.exceptions import ChannelTalkTimeoutError
 from catchup.connectors.channel_talk.exceptions import ChannelTalkUpstreamError
 from catchup.connectors.channel_talk.exceptions import ChannelTalkValidationError
-from catchup.connectors.channel_talk.schemas import ChannelTalkCurrentChannel
-from catchup.connectors.channel_talk.schemas import ChannelTalkGroupMetadataPage
-from catchup.connectors.channel_talk.schemas import ChannelTalkManagerMetadataPage
-from catchup.connectors.channel_talk.schemas import ChannelTalkUserChatDetail
-from catchup.connectors.channel_talk.schemas import ChannelTalkUserChatListPage
-from catchup.connectors.channel_talk.schemas import ChannelTalkUserChatMessagePage
-from catchup.connectors.channel_talk.schemas import ChannelTalkUserChatState
+from catchup.connectors.channel_talk.http_helpers import build_since_limit_params
+from catchup.connectors.channel_talk.http_helpers import decode_response_json
+from catchup.connectors.channel_talk.http_helpers import extract_response_error_metadata
+from catchup.connectors.channel_talk.http_helpers import is_success_response
+from catchup.connectors.channel_talk.http_helpers import parse_channel_talk_payload
+from catchup.connectors.channel_talk.schemas.channel_metadata import (
+    ChannelTalkCurrentChannel,
+)
+from catchup.connectors.channel_talk.schemas.channel_metadata import (
+    ChannelTalkGroupMetadataPage,
+)
+from catchup.connectors.channel_talk.schemas.channel_metadata import (
+    ChannelTalkManagerMetadataPage,
+)
+from catchup.connectors.channel_talk.schemas.user_chat import ChannelTalkUserChatDetail
+from catchup.connectors.channel_talk.schemas.user_chat import (
+    ChannelTalkUserChatListPage,
+)
+from catchup.connectors.channel_talk.schemas.user_chat import ChannelTalkUserChatState
+from catchup.connectors.channel_talk.schemas.user_chat_message import (
+    ChannelTalkUserChatMessagePage,
+)
 from catchup.utils.client import get_global_async_client
 
 logger = structlog.get_logger(__name__)
 
-ParsedPayloadT = TypeVar("ParsedPayloadT")
 
-
-class ChannelTalkApiClient:
+class ChannelTalkCoreApiClient:
     def __init__(
         self,
         *,
@@ -37,7 +47,9 @@ class ChannelTalkApiClient:
         timeout_seconds: float | None = None,
         http_client: httpx.AsyncClient | None = None,
     ) -> None:
-        default_base_url = getattr(settings, "CHANNEL_TALK_API_URL", "https://api.channel.io")
+        default_base_url = getattr(
+            settings, "CHANNEL_TALK_API_URL", "https://api.channel.io"
+        )
         default_timeout = getattr(settings, "CHANNEL_TALK_API_TIMEOUT_SECONDS", 10.0)
 
         self.base_url = str(base_url or default_base_url).rstrip("/")
@@ -57,11 +69,12 @@ class ChannelTalkApiClient:
                 access_secret=access_secret,
             ),
         )
-        return self._parse_payload(
+        return parse_channel_talk_payload(
             payload,
             parser=ChannelTalkCurrentChannel.from_api_payload,
             log_event="channel_talk_invalid_payload",
             error_message="Channel Talk returned an invalid channel payload",
+            logger=logger,
         )
 
     async def list_managers(
@@ -79,13 +92,14 @@ class ChannelTalkApiClient:
                 access_key=access_key,
                 access_secret=access_secret,
             ),
-            params=self._build_list_params(since=since, limit=limit),
+            params=build_since_limit_params(since=since, limit=limit),
         )
-        return self._parse_payload(
+        return parse_channel_talk_payload(
             payload,
             parser=ChannelTalkManagerMetadataPage.from_api_payload,
             log_event="channel_talk_invalid_manager_list_payload",
             error_message="Channel Talk returned an invalid manager list payload",
+            logger=logger,
         )
 
     async def list_groups(
@@ -103,13 +117,14 @@ class ChannelTalkApiClient:
                 access_key=access_key,
                 access_secret=access_secret,
             ),
-            params=self._build_list_params(since=since, limit=limit),
+            params=build_since_limit_params(since=since, limit=limit),
         )
-        return self._parse_payload(
+        return parse_channel_talk_payload(
             payload,
             parser=ChannelTalkGroupMetadataPage.from_api_payload,
             log_event="channel_talk_invalid_group_list_payload",
             error_message="Channel Talk returned an invalid group list payload",
+            logger=logger,
         )
 
     async def list_user_chats(
@@ -138,7 +153,7 @@ class ChannelTalkApiClient:
             ),
         )
         payload = self._decode_response(response)
-        return self._parse_payload(
+        return parse_channel_talk_payload(
             payload,
             parser=lambda raw: ChannelTalkUserChatListPage.from_api_payload(
                 raw,
@@ -147,6 +162,7 @@ class ChannelTalkApiClient:
             ),
             log_event="channel_talk_invalid_user_chat_list_payload",
             error_message="Channel Talk returned an invalid user chat list payload",
+            logger=logger,
         )
 
     async def get_user_chat(
@@ -165,7 +181,7 @@ class ChannelTalkApiClient:
                 access_secret=access_secret,
             ),
         )
-        return self._parse_payload(
+        return parse_channel_talk_payload(
             payload,
             parser=lambda raw: ChannelTalkUserChatDetail.from_api_payload(
                 raw,
@@ -173,6 +189,7 @@ class ChannelTalkApiClient:
             ),
             log_event="channel_talk_invalid_user_chat_detail_payload",
             error_message="Channel Talk returned an invalid user chat detail payload",
+            logger=logger,
         )
 
     async def list_user_chat_messages(
@@ -200,7 +217,7 @@ class ChannelTalkApiClient:
             ),
         )
         payload = self._decode_response(response)
-        return self._parse_payload(
+        return parse_channel_talk_payload(
             payload,
             parser=lambda raw: ChannelTalkUserChatMessagePage.from_api_payload(
                 raw,
@@ -209,10 +226,11 @@ class ChannelTalkApiClient:
             ),
             log_event="channel_talk_invalid_user_chat_message_list_payload",
             error_message="Channel Talk returned an invalid user chat message list payload",
+            logger=logger,
         )
 
+    @staticmethod
     def _build_headers(
-        self,
         *,
         access_key: str,
         access_secret: str,
@@ -228,18 +246,6 @@ class ChannelTalkApiClient:
             "x-access-secret": normalized_access_secret,
         }
 
-    def _build_list_params(
-        self,
-        *,
-        since: str | None,
-        limit: int,
-    ) -> dict[str, Any]:
-        normalized_limit = min(max(int(limit), 1), 500)
-        params: dict[str, Any] = {"limit": normalized_limit}
-        if since is not None and str(since).strip():
-            params["since"] = str(since).strip()
-        return params
-
     def _build_user_chat_list_params(
         self,
         *,
@@ -248,7 +254,7 @@ class ChannelTalkApiClient:
         limit: int,
         sort_order: str | None,
     ) -> dict[str, Any]:
-        params = self._build_list_params(
+        params = build_since_limit_params(
             since=since,
             limit=limit,
         )
@@ -263,7 +269,7 @@ class ChannelTalkApiClient:
         limit: int,
         sort_order: str | None,
     ) -> dict[str, Any]:
-        params = self._build_list_params(
+        params = build_since_limit_params(
             since=since,
             limit=limit,
         )
@@ -317,82 +323,47 @@ class ChannelTalkApiClient:
         return response
 
     def _decode_response(self, response: httpx.Response) -> Any:
+        if is_success_response(response):
+            return decode_response_json(
+                response,
+                error_message="Channel Talk returned a non-JSON response",
+            )
 
-        if 200 <= response.status_code < 300:
-            try:
-                return response.json()
-            except ValueError as exc:
-                raise ChannelTalkPayloadError("Channel Talk returned a non-JSON response") from exc
+        raise self._build_response_error(response)
 
-        metadata = self._extract_error_metadata(response)
+    @staticmethod
+    def _build_response_error(response: httpx.Response) -> Exception:
+        metadata = extract_response_error_metadata(response)
         status_code = response.status_code
         if status_code in (401, 403):
-            raise ChannelTalkAuthenticationError(
+            return ChannelTalkAuthenticationError(
                 "Channel Talk credentials are invalid or unauthorized",
                 metadata=metadata,
             )
-
         if status_code == 429:
-            raise ChannelTalkRateLimitError(
+            return ChannelTalkRateLimitError(
                 retry_after=parse_retry_after_header(
                     response.headers.get("Retry-After"),
                     default=60,
                 ),
                 metadata=metadata,
             )
-
         if status_code == 400:
-            raise ChannelTalkValidationError(
+            return ChannelTalkValidationError(
                 "Channel Talk rejected the request",
                 metadata=metadata,
             )
-
         if status_code >= 500:
-            raise ChannelTalkUpstreamError(
+            return ChannelTalkUpstreamError(
                 "Channel Talk API is temporarily unavailable",
                 status_code=status_code,
                 metadata=metadata,
             )
-
-        raise ChannelTalkUpstreamError(
+        return ChannelTalkUpstreamError(
             "Channel Talk API request failed",
             status_code=status_code,
             metadata=metadata,
         )
-
-    @staticmethod
-    def _extract_error_metadata(response: httpx.Response) -> dict[str, Any]:
-        request_id = (
-            response.headers.get("x-request-id")
-            or response.headers.get("x-correlation-id")
-        )
-
-        body: Any
-        try:
-            body = response.json()
-        except ValueError:
-            body = response.text[:500].strip() or None
-
-        metadata: dict[str, Any] = {"status_code": response.status_code}
-        if request_id:
-            metadata["request_id"] = request_id
-        if body is not None:
-            metadata["body"] = body
-        return metadata
-
-    def _parse_payload(
-        self,
-        payload: Any,
-        *,
-        parser: Callable[[Any], ParsedPayloadT],
-        log_event: str,
-        error_message: str,
-    ) -> ParsedPayloadT:
-        try:
-            return parser(payload)
-        except ValueError as exc:
-            logger.exception(log_event)
-            raise ChannelTalkPayloadError(error_message) from exc
 
 
 def _require_user_chat_id(value: str) -> str:

@@ -7,7 +7,9 @@ from unittest.mock import patch
 from catchup.connectors.channel_talk.full_sync_helper import (
     CHANNEL_TALK_FULL_SYNC_TARGET_ID,
 )
-from catchup.connectors.channel_talk.schemas import ChannelTalkCredentialsRecord
+from catchup.connectors.channel_talk.schemas.channel_connection import (
+    ChannelTalkCredentialsRecord,
+)
 from catchup.db.models import SyncConnector
 from catchup.sync.common.exceptions import SyncRequestException
 from catchup.sync.common.schemas import FullSyncDispatchRequest

@@ -4,18 +4,53 @@ import asyncio
 
 from pydantic import BaseModel
 from pydantic import ConfigDict
+from pydantic import ValidationInfo
 from pydantic import field_validator
 from pydantic import model_validator
 
 from catchup.connector_core.ports.full_sync import FullSyncWindow
-from catchup.connectors.channel_talk.client import ChannelTalkApiClient
-from catchup.connectors.channel_talk.schemas import ChannelTalkCredentialsRecord
-from catchup.connectors.channel_talk.schemas import ChannelTalkManagerMetadata
-from catchup.connectors.channel_talk.schemas import ChannelTalkUserChatDetail
-from catchup.connectors.channel_talk.schemas import ChannelTalkUserChatListItem
-from catchup.connectors.channel_talk.schemas import ChannelTalkUserChatMessage
-from catchup.connectors.channel_talk.schemas import ChannelTalkUserChatState
+from catchup.connectors.channel_talk.core_api_client import ChannelTalkCoreApiClient
+from catchup.connectors.channel_talk.schemas.channel_connection import (
+    ChannelTalkCredentialsRecord,
+)
+from catchup.connectors.channel_talk.schemas.channel_metadata import (
+    ChannelTalkManagerMetadata,
+)
+from catchup.connectors.channel_talk.schemas.user_chat import ChannelTalkUserChatDetail
+from catchup.connectors.channel_talk.schemas.user_chat import (
+    ChannelTalkUserChatListItem,
+)
+from catchup.connectors.channel_talk.schemas.user_chat import ChannelTalkUserChatState
+from catchup.connectors.channel_talk.schemas.user_chat_message import (
+    ChannelTalkUserChatMessage,
+)
 from catchup.utils.validation import require_text
+
+
+class ChannelTalkFullSyncConnection(BaseModel):
+    """Full-sync fetch boundary에서 사용하는 validated Channel Talk credentials."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    channel_id: str
+    access_key: str
+    access_secret: str
+
+    @field_validator("channel_id", "access_key", "access_secret")
+    @classmethod
+    def _validate_required_text(cls, value: str, info: ValidationInfo) -> str:
+        return require_text(value, info.field_name or "field")
+
+    @classmethod
+    def from_credentials_record(
+        cls,
+        record: ChannelTalkCredentialsRecord,
+    ) -> "ChannelTalkFullSyncConnection":
+        return cls(
+            channel_id=record.channel_id,
+            access_key=require_text(record.access_key, "access_key"),
+            access_secret=require_text(record.access_secret, "access_secret"),
+        )
 
 
 class ChannelTalkFetchedUserChat(BaseModel):
@@ -44,8 +79,13 @@ class ChannelTalkFetchedUserChatsResult(BaseModel):
 
     @model_validator(mode="after")
     def _validate_checkpoint_shape(self) -> "ChannelTalkFetchedUserChatsResult":
-        if self.next_checkpoint_cursor is not None and self.next_checkpoint_state is None:
-            raise ValueError("next_checkpoint_state is required with next_checkpoint_cursor")
+        if (
+            self.next_checkpoint_cursor is not None
+            and self.next_checkpoint_state is None
+        ):
+            raise ValueError(
+                "next_checkpoint_state is required with next_checkpoint_cursor"
+            )
         return self
 
 
@@ -53,7 +93,7 @@ class ChannelTalkFullSyncFetcher:
     def __init__(
         self,
         *,
-        client: ChannelTalkApiClient | None = None,
+        client: ChannelTalkCoreApiClient | None = None,
         max_concurrent_user_chat_fetches: int = 5,
         max_user_chat_pages_per_run: int | None = None,
     ) -> None:
@@ -61,21 +101,21 @@ class ChannelTalkFullSyncFetcher:
             raise ValueError("max_concurrent_user_chat_fetches must be positive")
         if max_user_chat_pages_per_run is not None and max_user_chat_pages_per_run < 1:
             raise ValueError("max_user_chat_pages_per_run must be positive")
-        self.client = client or ChannelTalkApiClient()
+        self.client = client or ChannelTalkCoreApiClient()
         self._max_concurrent_user_chat_fetches = max_concurrent_user_chat_fetches
         self._max_user_chat_pages_per_run = max_user_chat_pages_per_run
 
     async def fetch_user_chats(
         self,
         *,
-        connection: ChannelTalkCredentialsRecord,
+        connection: ChannelTalkFullSyncConnection,
         states: tuple[ChannelTalkUserChatState, ...],
         sync_window: FullSyncWindow,
         checkpoint_state: ChannelTalkUserChatState | None = None,
         checkpoint_cursor: str | None = None,
     ) -> ChannelTalkFetchedUserChatsResult:
-        access_key = require_text(connection.access_key, "access_key")
-        access_secret = require_text(connection.access_secret, "access_secret")
+        access_key = connection.access_key
+        access_secret = connection.access_secret
 
         fetched: list[ChannelTalkFetchedUserChat] = []
         resume_from_checkpoint = checkpoint_state is not None
@@ -116,7 +156,9 @@ class ChannelTalkFullSyncFetcher:
                     page_items.append(item)
 
                 if page_items:
-                    semaphore = asyncio.Semaphore(self._max_concurrent_user_chat_fetches)
+                    semaphore = asyncio.Semaphore(
+                        self._max_concurrent_user_chat_fetches
+                    )
                     fetched.extend(
                         await asyncio.gather(
                             *(
@@ -203,10 +245,10 @@ class ChannelTalkFullSyncFetcher:
     async def fetch_managers_by_id(
         self,
         *,
-        connection: ChannelTalkCredentialsRecord,
+        connection: ChannelTalkFullSyncConnection,
     ) -> dict[str, ChannelTalkManagerMetadata]:
-        access_key = require_text(connection.access_key, "access_key")
-        access_secret = require_text(connection.access_secret, "access_secret")
+        access_key = connection.access_key
+        access_secret = connection.access_secret
 
         managers_by_id: dict[str, ChannelTalkManagerMetadata] = {}
         next_page_token: str | None = None

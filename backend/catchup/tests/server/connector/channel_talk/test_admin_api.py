@@ -8,20 +8,24 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from catchup.auth.dependencies import require_admin_user
-from catchup.connectors.channel_talk.documents_schemas import (
-    ChannelTalkDocumentAssociationStatus,
-)
-from catchup.connectors.channel_talk.documents_schemas import (
-    ChannelTalkDocumentCredentialsStatus,
-)
-from catchup.connectors.channel_talk.documents_schemas import (
-    ChannelTalkDocumentUninstallResult,
-)
 from catchup.connectors.channel_talk.exceptions import ChannelTalkAuthenticationError
 from catchup.connectors.channel_talk.exceptions import ChannelTalkConflictError
 from catchup.connectors.channel_talk.exceptions import ChannelTalkValidationError
-from catchup.connectors.channel_talk.schemas import ChannelTalkCredentialsStatus
-from catchup.connectors.channel_talk.schemas import ChannelTalkUninstallResult
+from catchup.connectors.channel_talk.schemas.channel_connection import (
+    ChannelTalkCredentialsStatus,
+)
+from catchup.connectors.channel_talk.schemas.channel_connection import (
+    ChannelTalkUninstallResult,
+)
+from catchup.connectors.channel_talk.schemas.document_connection import (
+    ChannelTalkDocumentAssociationStatus,
+)
+from catchup.connectors.channel_talk.schemas.document_connection import (
+    ChannelTalkDocumentCredentialsStatus,
+)
+from catchup.connectors.channel_talk.schemas.document_connection import (
+    ChannelTalkDocumentUninstallResult,
+)
 from catchup.server.connector.channel_talk.admin_api import router
 from catchup.server.connector.channel_talk.dependencies import (
     get_channel_talk_document_metadata_task_runner,

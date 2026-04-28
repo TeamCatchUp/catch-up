@@ -7,13 +7,25 @@ from unittest.mock import patch
 from catchup.connector_core.domain.structure import ConnectorKey
 from catchup.connectors.channel_talk.exceptions import ChannelTalkConflictError
 from catchup.connectors.channel_talk.exceptions import ChannelTalkValidationError
-from catchup.connectors.channel_talk.schemas import ChannelTalkChannel
-from catchup.connectors.channel_talk.schemas import ChannelTalkChannelMetadata
-from catchup.connectors.channel_talk.schemas import ChannelTalkCredentialsRecord
-from catchup.connectors.channel_talk.schemas import ChannelTalkCurrentChannel
-from catchup.connectors.channel_talk.schemas import ChannelTalkGroupMetadata
-from catchup.connectors.channel_talk.schemas import ChannelTalkManagerMetadataPage
-from catchup.connectors.channel_talk.schemas import ChannelTalkMetadataSyncRequest
+from catchup.connectors.channel_talk.schemas.channel_connection import (
+    ChannelTalkCredentialsRecord,
+)
+from catchup.connectors.channel_talk.schemas.channel_metadata import ChannelTalkChannel
+from catchup.connectors.channel_talk.schemas.channel_metadata import (
+    ChannelTalkChannelMetadata,
+)
+from catchup.connectors.channel_talk.schemas.channel_metadata import (
+    ChannelTalkCurrentChannel,
+)
+from catchup.connectors.channel_talk.schemas.channel_metadata import (
+    ChannelTalkGroupMetadata,
+)
+from catchup.connectors.channel_talk.schemas.channel_metadata import (
+    ChannelTalkManagerMetadataPage,
+)
+from catchup.connectors.channel_talk.schemas.channel_metadata import (
+    ChannelTalkMetadataSyncRequest,
+)
 from catchup.connectors.channel_talk.service import ChannelTalkMetadataSyncService
 
 

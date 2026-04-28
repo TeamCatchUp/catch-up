@@ -4,9 +4,9 @@ from unittest import IsolatedAsyncioTestCase
 
 import httpx
 
-from catchup.connectors.channel_talk.client import ChannelTalkApiClient
+from catchup.connectors.channel_talk.core_api_client import ChannelTalkCoreApiClient
 from catchup.connectors.channel_talk.exceptions import ChannelTalkPayloadError
-from catchup.connectors.channel_talk.schemas import ChannelTalkUserChatState
+from catchup.connectors.channel_talk.schemas.user_chat import ChannelTalkUserChatState
 
 
 class ChannelTalkFullSyncClientTests(IsolatedAsyncioTestCase):
@@ -50,7 +50,7 @@ class ChannelTalkFullSyncClientTests(IsolatedAsyncioTestCase):
             transport=httpx.MockTransport(handler),
             base_url="https://api.channel.io",
         ) as http_client:
-            client = ChannelTalkApiClient(http_client=http_client)
+            client = ChannelTalkCoreApiClient(http_client=http_client)
             page = await client.list_user_chats(
                 access_key="access-key",
                 access_secret="access-secret",
@@ -89,7 +89,7 @@ class ChannelTalkFullSyncClientTests(IsolatedAsyncioTestCase):
             transport=httpx.MockTransport(handler),
             base_url="https://api.channel.io",
         ) as http_client:
-            client = ChannelTalkApiClient(http_client=http_client)
+            client = ChannelTalkCoreApiClient(http_client=http_client)
             page = await client.list_user_chats(
                 access_key="access-key",
                 access_secret="access-secret",
@@ -132,7 +132,7 @@ class ChannelTalkFullSyncClientTests(IsolatedAsyncioTestCase):
             transport=httpx.MockTransport(handler),
             base_url="https://api.channel.io",
         ) as http_client:
-            client = ChannelTalkApiClient(http_client=http_client)
+            client = ChannelTalkCoreApiClient(http_client=http_client)
             page = await client.list_user_chats(
                 access_key="access-key",
                 access_secret="access-secret",
@@ -162,7 +162,7 @@ class ChannelTalkFullSyncClientTests(IsolatedAsyncioTestCase):
             transport=httpx.MockTransport(handler),
             base_url="https://api.channel.io",
         ) as http_client:
-            client = ChannelTalkApiClient(http_client=http_client)
+            client = ChannelTalkCoreApiClient(http_client=http_client)
             page = await client.list_user_chats(
                 access_key="access-key",
                 access_secret="access-secret",
@@ -188,7 +188,7 @@ class ChannelTalkFullSyncClientTests(IsolatedAsyncioTestCase):
             transport=httpx.MockTransport(handler),
             base_url="https://api.channel.io",
         ) as http_client:
-            client = ChannelTalkApiClient(http_client=http_client)
+            client = ChannelTalkCoreApiClient(http_client=http_client)
             for state in ChannelTalkUserChatState:
                 page = await client.list_user_chats(
                     access_key="access-key",
@@ -211,7 +211,7 @@ class ChannelTalkFullSyncClientTests(IsolatedAsyncioTestCase):
             transport=httpx.MockTransport(handler),
             base_url="https://api.channel.io",
         ) as http_client:
-            client = ChannelTalkApiClient(http_client=http_client)
+            client = ChannelTalkCoreApiClient(http_client=http_client)
             await client.list_user_chats(
                 access_key="access-key",
                 access_secret="access-secret",
@@ -275,7 +275,7 @@ class ChannelTalkFullSyncClientTests(IsolatedAsyncioTestCase):
             transport=httpx.MockTransport(handler),
             base_url="https://api.channel.io",
         ) as http_client:
-            client = ChannelTalkApiClient(http_client=http_client)
+            client = ChannelTalkCoreApiClient(http_client=http_client)
             detail = await client.get_user_chat(
                 access_key="access-key",
                 access_secret="access-secret",
@@ -314,7 +314,7 @@ class ChannelTalkFullSyncClientTests(IsolatedAsyncioTestCase):
             transport=httpx.MockTransport(handler),
             base_url="https://api.channel.io",
         ) as http_client:
-            client = ChannelTalkApiClient(http_client=http_client)
+            client = ChannelTalkCoreApiClient(http_client=http_client)
             detail = await client.get_user_chat(
                 access_key="access-key",
                 access_secret="access-secret",
@@ -352,7 +352,7 @@ class ChannelTalkFullSyncClientTests(IsolatedAsyncioTestCase):
             transport=httpx.MockTransport(handler),
             base_url="https://api.channel.io",
         ) as http_client:
-            client = ChannelTalkApiClient(http_client=http_client)
+            client = ChannelTalkCoreApiClient(http_client=http_client)
             detail = await client.get_user_chat(
                 access_key="access-key",
                 access_secret="access-secret",
@@ -397,7 +397,7 @@ class ChannelTalkFullSyncClientTests(IsolatedAsyncioTestCase):
             transport=httpx.MockTransport(handler),
             base_url="https://api.channel.io",
         ) as http_client:
-            client = ChannelTalkApiClient(http_client=http_client)
+            client = ChannelTalkCoreApiClient(http_client=http_client)
             detail = await client.get_user_chat(
                 access_key="access-key",
                 access_secret="access-secret",
@@ -422,7 +422,7 @@ class ChannelTalkFullSyncClientTests(IsolatedAsyncioTestCase):
                     "messages": [
                         {
                             "id": "msg-1",
-                            "userChatId": "chat-123",
+                            "chatId": "chat-123",
                             "type": "chat",
                             "personType": "manager",
                             "manager": {
@@ -482,7 +482,7 @@ class ChannelTalkFullSyncClientTests(IsolatedAsyncioTestCase):
             transport=httpx.MockTransport(handler),
             base_url="https://api.channel.io",
         ) as http_client:
-            client = ChannelTalkApiClient(http_client=http_client)
+            client = ChannelTalkCoreApiClient(http_client=http_client)
             page = await client.list_user_chat_messages(
                 access_key="access-key",
                 access_secret="access-secret",
@@ -527,7 +527,7 @@ class ChannelTalkFullSyncClientTests(IsolatedAsyncioTestCase):
             transport=httpx.MockTransport(handler),
             base_url="https://api.channel.io",
         ) as http_client:
-            client = ChannelTalkApiClient(http_client=http_client)
+            client = ChannelTalkCoreApiClient(http_client=http_client)
             page = await client.list_user_chat_messages(
                 access_key="access-key",
                 access_secret="access-secret",
@@ -560,7 +560,7 @@ class ChannelTalkFullSyncClientTests(IsolatedAsyncioTestCase):
             transport=httpx.MockTransport(handler),
             base_url="https://api.channel.io",
         ) as http_client:
-            client = ChannelTalkApiClient(http_client=http_client)
+            client = ChannelTalkCoreApiClient(http_client=http_client)
             page = await client.list_user_chat_messages(
                 access_key="access-key",
                 access_secret="access-secret",
@@ -580,7 +580,7 @@ class ChannelTalkFullSyncClientTests(IsolatedAsyncioTestCase):
                     "messages": [
                         {
                             "id": "msg-1",
-                            "userChatId": "chat-123",
+                            "chatId": "chat-123",
                             "createdAt": "2026-04-21T09:00:00Z",
                         }
                     ]
@@ -591,7 +591,7 @@ class ChannelTalkFullSyncClientTests(IsolatedAsyncioTestCase):
             transport=httpx.MockTransport(handler),
             base_url="https://api.channel.io",
         ) as http_client:
-            client = ChannelTalkApiClient(http_client=http_client)
+            client = ChannelTalkCoreApiClient(http_client=http_client)
             await client.list_user_chat_messages(
                 access_key="access-key",
                 access_secret="access-secret",
@@ -607,7 +607,7 @@ class ChannelTalkFullSyncClientTests(IsolatedAsyncioTestCase):
                         {
                             "id": "msg-private-option",
                             "type": "note",
-                            "userChatId": "chat-123",
+                            "chatId": "chat-123",
                             "options": ["private"],
                             "createdAt": "2026-04-21T09:05:00Z",
                         }
@@ -619,7 +619,7 @@ class ChannelTalkFullSyncClientTests(IsolatedAsyncioTestCase):
             transport=httpx.MockTransport(handler),
             base_url="https://api.channel.io",
         ) as http_client:
-            client = ChannelTalkApiClient(http_client=http_client)
+            client = ChannelTalkCoreApiClient(http_client=http_client)
             page = await client.list_user_chat_messages(
                 access_key="access-key",
                 access_secret="access-secret",
@@ -637,7 +637,7 @@ class ChannelTalkFullSyncClientTests(IsolatedAsyncioTestCase):
                         {
                             "id": "msg-bot-inline",
                             "type": "chat",
-                            "userChatId": "chat-123",
+                            "chatId": "chat-123",
                             "personType": "bot",
                             "personId": "bot-inline-1",
                             "botName": "Reminder Bot",
@@ -651,7 +651,7 @@ class ChannelTalkFullSyncClientTests(IsolatedAsyncioTestCase):
             transport=httpx.MockTransport(handler),
             base_url="https://api.channel.io",
         ) as http_client:
-            client = ChannelTalkApiClient(http_client=http_client)
+            client = ChannelTalkCoreApiClient(http_client=http_client)
             page = await client.list_user_chat_messages(
                 access_key="access-key",
                 access_secret="access-secret",
@@ -671,7 +671,7 @@ class ChannelTalkFullSyncClientTests(IsolatedAsyncioTestCase):
                         {
                             "id": "msg-bot-1",
                             "type": "chat",
-                            "userChatId": "chat-123",
+                            "chatId": "chat-123",
                             "personType": "bot",
                             "personId": "bot-42",
                             "plainText": "Automated reply",
@@ -691,7 +691,7 @@ class ChannelTalkFullSyncClientTests(IsolatedAsyncioTestCase):
             transport=httpx.MockTransport(handler),
             base_url="https://api.channel.io",
         ) as http_client:
-            client = ChannelTalkApiClient(http_client=http_client)
+            client = ChannelTalkCoreApiClient(http_client=http_client)
             page = await client.list_user_chat_messages(
                 access_key="access-key",
                 access_secret="access-secret",
@@ -712,7 +712,7 @@ class ChannelTalkFullSyncClientTests(IsolatedAsyncioTestCase):
                     "messages": [
                         {
                             "id": "msg-log",
-                            "userChatId": "chat-123",
+                            "chatId": "chat-123",
                             "type": "event",
                             "log": {
                                 "action": "chat_closed",
@@ -723,7 +723,7 @@ class ChannelTalkFullSyncClientTests(IsolatedAsyncioTestCase):
                         },
                         {
                             "id": "msg-form",
-                            "userChatId": "chat-123",
+                            "chatId": "chat-123",
                             "type": "form",
                             "form": {
                                 "type": "contact",
@@ -740,7 +740,7 @@ class ChannelTalkFullSyncClientTests(IsolatedAsyncioTestCase):
                         },
                         {
                             "id": "msg-web",
-                            "userChatId": "chat-123",
+                            "chatId": "chat-123",
                             "type": "card",
                             "webPage": {
                                 "title": "Docs",
@@ -757,7 +757,7 @@ class ChannelTalkFullSyncClientTests(IsolatedAsyncioTestCase):
             transport=httpx.MockTransport(handler),
             base_url="https://api.channel.io",
         ) as http_client:
-            client = ChannelTalkApiClient(http_client=http_client)
+            client = ChannelTalkCoreApiClient(http_client=http_client)
             page = await client.list_user_chat_messages(
                 access_key="access-key",
                 access_secret="access-secret",
@@ -780,7 +780,7 @@ class ChannelTalkFullSyncClientTests(IsolatedAsyncioTestCase):
                     "messages": [
                         {
                             "id": "msg-1",
-                            "userChatId": "chat-other",
+                            "chatId": "chat-other",
                             "createdAt": "2026-04-21T09:00:00Z",
                         }
                     ]
@@ -791,7 +791,7 @@ class ChannelTalkFullSyncClientTests(IsolatedAsyncioTestCase):
             transport=httpx.MockTransport(handler),
             base_url="https://api.channel.io",
         ) as http_client:
-            client = ChannelTalkApiClient(http_client=http_client)
+            client = ChannelTalkCoreApiClient(http_client=http_client)
             with self.assertRaisesRegex(
                 ChannelTalkPayloadError,
                 "invalid user chat message list payload",

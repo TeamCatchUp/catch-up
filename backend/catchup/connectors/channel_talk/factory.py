@@ -10,7 +10,7 @@ from catchup.connector_core.adapters.channel_talk import (
     ChannelTalkDocumentMetadataStore,
 )
 from catchup.connector_core.adapters.channel_talk import ChannelTalkMetadataStore
-from catchup.connectors.channel_talk.client import ChannelTalkApiClient
+from catchup.connectors.channel_talk.core_api_client import ChannelTalkCoreApiClient
 from catchup.connectors.channel_talk.documents_client import (
     ChannelTalkDocumentsApiClient,
 )
@@ -31,7 +31,7 @@ from catchup.db.channel_talk import ChannelTalkMetadataRepository
 def create_channel_talk_credentials_service(
     *,
     db: Session,
-    client: ChannelTalkApiClient | None = None,
+    client: ChannelTalkCoreApiClient | None = None,
     store: ChannelTalkCredentialsStore | None = None,
 ) -> ChannelTalkCredentialsService:
     return ChannelTalkCredentialsService(
@@ -43,7 +43,7 @@ def create_channel_talk_credentials_service(
 def create_channel_talk_metadata_service(
     *,
     db: Session,
-    client: ChannelTalkApiClient | None = None,
+    client: ChannelTalkCoreApiClient | None = None,
     store: ChannelTalkMetadataStore | None = None,
 ) -> ChannelTalkMetadataSyncService:
     return ChannelTalkMetadataSyncService(

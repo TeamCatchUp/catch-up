@@ -30,32 +30,46 @@ from catchup.connector_core.application.install_auth import (
 from catchup.connector_core.application.metadata_sync import (
     ConnectorMetadataSyncApplication,
 )
-from catchup.connectors.channel_talk.client import ChannelTalkApiClient
+from catchup.connectors.channel_talk.core_api_client import ChannelTalkCoreApiClient
 from catchup.connectors.channel_talk.documents_client import (
     ChannelTalkDocumentsApiClient,
 )
-from catchup.connectors.channel_talk.documents_schemas import (
+from catchup.connectors.channel_talk.schemas.channel_connection import (
+    ChannelTalkConnectRequest,
+)
+from catchup.connectors.channel_talk.schemas.channel_connection import (
+    ChannelTalkCredentialsStatus,
+)
+from catchup.connectors.channel_talk.schemas.channel_connection import (
+    ChannelTalkUninstallResult,
+)
+from catchup.connectors.channel_talk.schemas.channel_metadata import (
+    ChannelTalkCurrentChannel,
+)
+from catchup.connectors.channel_talk.schemas.channel_metadata import (
+    ChannelTalkMetadataSyncRequest,
+)
+from catchup.connectors.channel_talk.schemas.channel_metadata import (
+    ChannelTalkMetadataSyncResult,
+)
+from catchup.connectors.channel_talk.schemas.document_connection import (
     ChannelTalkDocumentConnectRequest,
 )
-from catchup.connectors.channel_talk.documents_schemas import (
+from catchup.connectors.channel_talk.schemas.document_connection import (
     ChannelTalkDocumentCredentialsStatus,
 )
-from catchup.connectors.channel_talk.documents_schemas import (
-    ChannelTalkDocumentMetadataSyncRequest,
-)
-from catchup.connectors.channel_talk.documents_schemas import (
-    ChannelTalkDocumentMetadataSyncResult,
-)
-from catchup.connectors.channel_talk.documents_schemas import ChannelTalkDocumentSpace
-from catchup.connectors.channel_talk.documents_schemas import (
+from catchup.connectors.channel_talk.schemas.document_connection import (
     ChannelTalkDocumentUninstallResult,
 )
-from catchup.connectors.channel_talk.schemas import ChannelTalkConnectRequest
-from catchup.connectors.channel_talk.schemas import ChannelTalkCredentialsStatus
-from catchup.connectors.channel_talk.schemas import ChannelTalkCurrentChannel
-from catchup.connectors.channel_talk.schemas import ChannelTalkMetadataSyncRequest
-from catchup.connectors.channel_talk.schemas import ChannelTalkMetadataSyncResult
-from catchup.connectors.channel_talk.schemas import ChannelTalkUninstallResult
+from catchup.connectors.channel_talk.schemas.document_metadata import (
+    ChannelTalkDocumentMetadataSyncRequest,
+)
+from catchup.connectors.channel_talk.schemas.document_metadata import (
+    ChannelTalkDocumentMetadataSyncResult,
+)
+from catchup.connectors.channel_talk.schemas.document_metadata import (
+    ChannelTalkDocumentSpace,
+)
 
 
 class ChannelTalkCredentialsService:
@@ -64,7 +78,7 @@ class ChannelTalkCredentialsService:
     def __init__(
         self,
         store: ChannelTalkCredentialsStore,
-        client: ChannelTalkApiClient | None = None,
+        client: ChannelTalkCoreApiClient | None = None,
         application: ConnectorInstallAuthApplication[
             ChannelTalkConnectRequest,
             ChannelTalkCurrentChannel,
@@ -106,7 +120,7 @@ class ChannelTalkMetadataSyncService:
     def __init__(
         self,
         store: ChannelTalkMetadataStore,
-        client: ChannelTalkApiClient | None = None,
+        client: ChannelTalkCoreApiClient | None = None,
         application: ConnectorMetadataSyncApplication | None = None,
     ) -> None:
         self.application = application or ConnectorMetadataSyncApplication(

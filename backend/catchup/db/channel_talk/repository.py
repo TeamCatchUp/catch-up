@@ -11,28 +11,42 @@ from sqlalchemy import tuple_
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.orm import Session
 
-from catchup.connectors.channel_talk.documents_schemas import (
+from catchup.connectors.channel_talk.schemas.channel_connection import (
+    ChannelTalkCredentialsRecord,
+)
+from catchup.connectors.channel_talk.schemas.channel_connection import (
+    ChannelTalkCredentialsUpsert,
+)
+from catchup.connectors.channel_talk.schemas.channel_metadata import (
+    ChannelTalkChannelMetadata,
+)
+from catchup.connectors.channel_talk.schemas.channel_metadata import (
+    ChannelTalkGroupManagerMembership,
+)
+from catchup.connectors.channel_talk.schemas.channel_metadata import (
+    ChannelTalkGroupMetadata,
+)
+from catchup.connectors.channel_talk.schemas.channel_metadata import (
+    ChannelTalkManagerMetadata,
+)
+from catchup.connectors.channel_talk.schemas.document_connection import (
     ChannelTalkDocumentAssociationStatus,
 )
-from catchup.connectors.channel_talk.documents_schemas import (
-    ChannelTalkDocumentAuthorMetadata,
-)
-from catchup.connectors.channel_talk.documents_schemas import (
+from catchup.connectors.channel_talk.schemas.document_connection import (
     ChannelTalkDocumentCredentialsRecord,
 )
-from catchup.connectors.channel_talk.documents_schemas import (
+from catchup.connectors.channel_talk.schemas.document_connection import (
     ChannelTalkDocumentCredentialsUpsert,
 )
-from catchup.connectors.channel_talk.documents_schemas import (
+from catchup.connectors.channel_talk.schemas.document_metadata import (
+    ChannelTalkDocumentAuthorMetadata,
+)
+from catchup.connectors.channel_talk.schemas.document_metadata import (
     ChannelTalkDocumentNavNodeMetadata,
 )
-from catchup.connectors.channel_talk.documents_schemas import ChannelTalkDocumentSpace
-from catchup.connectors.channel_talk.schemas import ChannelTalkChannelMetadata
-from catchup.connectors.channel_talk.schemas import ChannelTalkCredentialsRecord
-from catchup.connectors.channel_talk.schemas import ChannelTalkCredentialsUpsert
-from catchup.connectors.channel_talk.schemas import ChannelTalkGroupManagerMembership
-from catchup.connectors.channel_talk.schemas import ChannelTalkGroupMetadata
-from catchup.connectors.channel_talk.schemas import ChannelTalkManagerMetadata
+from catchup.connectors.channel_talk.schemas.document_metadata import (
+    ChannelTalkDocumentSpace,
+)
 from catchup.db import models as db_models
 
 

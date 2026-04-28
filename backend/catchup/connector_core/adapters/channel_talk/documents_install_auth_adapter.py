@@ -11,30 +11,34 @@ from fastapi.concurrency import run_in_threadpool
 from catchup.connectors.channel_talk.documents_client import (
     ChannelTalkDocumentsApiClient,
 )
-from catchup.connectors.channel_talk.documents_schemas import (
-    ChannelTalkDocumentAssociationStatus,
-)
-from catchup.connectors.channel_talk.documents_schemas import (
-    ChannelTalkDocumentConnectRequest,
-)
-from catchup.connectors.channel_talk.documents_schemas import (
-    ChannelTalkDocumentCredentialsRecord,
-)
-from catchup.connectors.channel_talk.documents_schemas import (
-    ChannelTalkDocumentCredentialsStatus,
-)
-from catchup.connectors.channel_talk.documents_schemas import (
-    ChannelTalkDocumentCredentialsUpsert,
-)
-from catchup.connectors.channel_talk.documents_schemas import ChannelTalkDocumentSpace
-from catchup.connectors.channel_talk.documents_schemas import (
-    ChannelTalkDocumentUninstallResult,
-)
 from catchup.connectors.channel_talk.exceptions import ChannelTalkConflictError
 from catchup.connectors.channel_talk.exceptions import ChannelTalkError
 from catchup.connectors.channel_talk.exceptions import ChannelTalkPersistenceError
 from catchup.connectors.channel_talk.exceptions import ChannelTalkValidationError
-from catchup.connectors.channel_talk.schemas import ChannelTalkCredentialsRecord
+from catchup.connectors.channel_talk.schemas.channel_connection import (
+    ChannelTalkCredentialsRecord,
+)
+from catchup.connectors.channel_talk.schemas.document_connection import (
+    ChannelTalkDocumentAssociationStatus,
+)
+from catchup.connectors.channel_talk.schemas.document_connection import (
+    ChannelTalkDocumentConnectRequest,
+)
+from catchup.connectors.channel_talk.schemas.document_connection import (
+    ChannelTalkDocumentCredentialsRecord,
+)
+from catchup.connectors.channel_talk.schemas.document_connection import (
+    ChannelTalkDocumentCredentialsStatus,
+)
+from catchup.connectors.channel_talk.schemas.document_connection import (
+    ChannelTalkDocumentCredentialsUpsert,
+)
+from catchup.connectors.channel_talk.schemas.document_connection import (
+    ChannelTalkDocumentUninstallResult,
+)
+from catchup.connectors.channel_talk.schemas.document_metadata import (
+    ChannelTalkDocumentSpace,
+)
 
 
 class ChannelTalkDocumentCredentialsStore(Protocol):
@@ -66,16 +70,17 @@ class ChannelTalkDocumentInstallAuthAdapter:
         client: ChannelTalkDocumentsApiClient | None = None,
     ) -> None:
         self.store = store
-        self.client = client or ChannelTalkDocumentsApiClient()
+        self.client = client
 
     async def validate_credentials(
         self,
         request: ChannelTalkDocumentConnectRequest,
     ) -> ChannelTalkDocumentSpace:
-        return await self.client.get_current_space(
+        client = self.client or ChannelTalkDocumentsApiClient(
             access_key=request.access_key,
             access_secret=request.access_secret,
         )
+        return await client.get_current_space()
 
     async def connect(
         self,

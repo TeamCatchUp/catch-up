@@ -8,16 +8,33 @@ from unittest import IsolatedAsyncioTestCase
 from unittest.mock import AsyncMock
 
 from catchup.connector_core.ports.full_sync import FullSyncWindow
+from catchup.connectors.channel_talk.full_sync_fetcher import (
+    ChannelTalkFullSyncConnection,
+)
 from catchup.connectors.channel_talk.full_sync_fetcher import ChannelTalkFullSyncFetcher
-from catchup.connectors.channel_talk.schemas import ChannelTalkCredentialsRecord
-from catchup.connectors.channel_talk.schemas import ChannelTalkManagerMetadata
-from catchup.connectors.channel_talk.schemas import ChannelTalkManagerMetadataPage
-from catchup.connectors.channel_talk.schemas import ChannelTalkUserChatDetail
-from catchup.connectors.channel_talk.schemas import ChannelTalkUserChatListItem
-from catchup.connectors.channel_talk.schemas import ChannelTalkUserChatListPage
-from catchup.connectors.channel_talk.schemas import ChannelTalkUserChatMessage
-from catchup.connectors.channel_talk.schemas import ChannelTalkUserChatMessagePage
-from catchup.connectors.channel_talk.schemas import ChannelTalkUserChatState
+from catchup.connectors.channel_talk.schemas.channel_connection import (
+    ChannelTalkCredentialsRecord,
+)
+from catchup.connectors.channel_talk.schemas.channel_metadata import (
+    ChannelTalkManagerMetadata,
+)
+from catchup.connectors.channel_talk.schemas.channel_metadata import (
+    ChannelTalkManagerMetadataPage,
+)
+from catchup.connectors.channel_talk.schemas.user_chat import ChannelTalkUserChatDetail
+from catchup.connectors.channel_talk.schemas.user_chat import (
+    ChannelTalkUserChatListItem,
+)
+from catchup.connectors.channel_talk.schemas.user_chat import (
+    ChannelTalkUserChatListPage,
+)
+from catchup.connectors.channel_talk.schemas.user_chat import ChannelTalkUserChatState
+from catchup.connectors.channel_talk.schemas.user_chat_message import (
+    ChannelTalkUserChatMessage,
+)
+from catchup.connectors.channel_talk.schemas.user_chat_message import (
+    ChannelTalkUserChatMessagePage,
+)
 
 
 def _window() -> FullSyncWindow:
@@ -27,13 +44,15 @@ def _window() -> FullSyncWindow:
     )
 
 
-def _connection() -> ChannelTalkCredentialsRecord:
-    return ChannelTalkCredentialsRecord(
-        channel_id="channel-123",
-        channel_name="Support",
-        access_key="access-key",
-        access_secret="access-secret",
-        webhook_token="webhook-token",
+def _connection() -> ChannelTalkFullSyncConnection:
+    return ChannelTalkFullSyncConnection.from_credentials_record(
+        ChannelTalkCredentialsRecord(
+            channel_id="channel-123",
+            channel_name="Support",
+            access_key="access-key",
+            access_secret="access-secret",
+            webhook_token="webhook-token",
+        )
     )
 
 
@@ -84,7 +103,7 @@ def _message(
     return ChannelTalkUserChatMessage.from_api_payload(
         {
             "id": message_id,
-            "userChatId": user_chat_id,
+            "chatId": user_chat_id,
             "personType": "manager",
             "manager": {"id": "manager-1", "name": "Agent Lee"},
             "plainText": f"message:{message_id}",

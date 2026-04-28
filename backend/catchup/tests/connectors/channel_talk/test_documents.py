@@ -17,19 +17,35 @@ from catchup.connector_core.ports.metadata_sync import MetadataSyncRequest
 from catchup.connectors.channel_talk.documents_client import (
     ChannelTalkDocumentsApiClient,
 )
-from catchup.connectors.channel_talk.documents_schemas import (
-    ChannelTalkDocumentAssociationStatus,
-)
-from catchup.connectors.channel_talk.documents_schemas import (
-    ChannelTalkDocumentConnectRequest,
-)
-from catchup.connectors.channel_talk.documents_schemas import (
-    ChannelTalkDocumentCredentialsRecord,
-)
-from catchup.connectors.channel_talk.documents_schemas import ChannelTalkDocumentSpace
 from catchup.connectors.channel_talk.exceptions import ChannelTalkConflictError
 from catchup.connectors.channel_talk.exceptions import ChannelTalkPayloadError
-from catchup.connectors.channel_talk.schemas import ChannelTalkCredentialsRecord
+from catchup.connectors.channel_talk.schemas.channel_connection import (
+    ChannelTalkCredentialsRecord,
+)
+from catchup.connectors.channel_talk.schemas.document_connection import (
+    ChannelTalkDocumentAssociationStatus,
+)
+from catchup.connectors.channel_talk.schemas.document_connection import (
+    ChannelTalkDocumentConnectRequest,
+)
+from catchup.connectors.channel_talk.schemas.document_connection import (
+    ChannelTalkDocumentCredentialsRecord,
+)
+from catchup.connectors.channel_talk.schemas.document_metadata import (
+    ChannelTalkDocumentAuthorMetadata,
+)
+from catchup.connectors.channel_talk.schemas.document_metadata import (
+    ChannelTalkDocumentAuthorPage,
+)
+from catchup.connectors.channel_talk.schemas.document_metadata import (
+    ChannelTalkDocumentNavNodeMetadata,
+)
+from catchup.connectors.channel_talk.schemas.document_metadata import (
+    ChannelTalkDocumentNavNodePage,
+)
+from catchup.connectors.channel_talk.schemas.document_metadata import (
+    ChannelTalkDocumentSpace,
+)
 
 
 class ChannelTalkDocumentsClientTests(IsolatedAsyncioTestCase):
@@ -51,8 +67,8 @@ class ChannelTalkDocumentsClientTests(IsolatedAsyncioTestCase):
             )
 
         async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
-            client = ChannelTalkDocumentsApiClient(http_client=http_client)
-            space = await client.get_current_space("documents-key", "documents-secret")
+            client = ChannelTalkDocumentsApiClient(access_key="documents-key", access_secret="documents-secret", http_client=http_client)
+            space = await client.get_current_space()
 
         self.assertEqual(space.space_id, "space-123")
         self.assertEqual(space.space_name, "Help Center")
@@ -72,9 +88,9 @@ class ChannelTalkDocumentsClientTests(IsolatedAsyncioTestCase):
             )
 
         async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
-            client = ChannelTalkDocumentsApiClient(http_client=http_client)
+            client = ChannelTalkDocumentsApiClient(access_key="documents-key", access_secret="documents-secret", http_client=http_client)
             with self.assertRaises(ChannelTalkPayloadError):
-                await client.get_current_space("documents-key", "documents-secret")
+                await client.get_current_space()
 
 
 class _DocumentInstallStore:
@@ -112,7 +128,7 @@ class _SpaceClient:
     def __init__(self, space: ChannelTalkDocumentSpace) -> None:
         self.space = space
 
-    async def get_current_space(self, access_key: str, access_secret: str):
+    async def get_current_space(self):
         return self.space
 
 
@@ -230,33 +246,19 @@ class _MetadataStore:
 
 
 class _MetadataClient:
-    async def get_current_space(self, access_key: str, access_secret: str):
+    async def get_current_space(self):
         return ChannelTalkDocumentSpace(
             space_id="space-123",
             space_name="Help Center",
             channel_id="channel-123",
         )
 
-    async def list_authors(self, access_key: str, access_secret: str, *, since=None):
-        from catchup.connectors.channel_talk.documents_schemas import (
-            ChannelTalkDocumentAuthorMetadata,
-        )
-        from catchup.connectors.channel_talk.documents_schemas import (
-            ChannelTalkDocumentAuthorPage,
-        )
-
+    async def list_authors(self, *, since=None):
         return ChannelTalkDocumentAuthorPage(
             authors=[ChannelTalkDocumentAuthorMetadata(author_id="author-1", name="Kim")]
         )
 
-    async def list_nav_nodes(self, access_key: str, access_secret: str):
-        from catchup.connectors.channel_talk.documents_schemas import (
-            ChannelTalkDocumentNavNodeMetadata,
-        )
-        from catchup.connectors.channel_talk.documents_schemas import (
-            ChannelTalkDocumentNavNodePage,
-        )
-
+    async def list_nav_nodes(self):
         return ChannelTalkDocumentNavNodePage(
             nav_nodes=[
                 ChannelTalkDocumentNavNodeMetadata(
