@@ -129,21 +129,13 @@ function CredentialSection({
       {hasChannels ? (
         <>
           {/* 채널 리스트 헤더 — 박스 전체가 "채널 추가하기" 클릭 영역 (default/hover/pressed 3상태) */}
-          <button
-            type="button"
-            onClick={onAddChannel}
-            className="border-edge-assistive bg-fill-strong hover:bg-fill-interaction-hover active:bg-fill-interaction-pressed flex w-full cursor-pointer flex-wrap items-center gap-1.5 rounded-xl border px-4 py-3 transition-colors"
-          >
+          <AddChannelBox onClick={onAddChannel}>
             <span className="text-body-small text-content-normal shrink-0">{channelCount}개 채널</span>
             <span className="bg-dim-black-25 size-1 shrink-0 rounded-full" aria-hidden />
             <span className="text-body-small text-content-normal min-w-0 flex-1 truncate text-left">
               {totalDocumentSpaces}개 도큐먼트 연결됨
             </span>
-            <span className="text-body-small text-content-primary flex shrink-0 items-center gap-2">
-              <IconAddSquare className="text-icon-primary size-6 shrink-0" />
-              채널 추가하기
-            </span>
-          </button>
+          </AddChannelBox>
 
           {/* 채널 카드 리스트 */}
           <div className="flex flex-col gap-3">
@@ -160,18 +152,37 @@ function CredentialSection({
           </div>
         </>
       ) : (
-        <button
-          type="button"
-          onClick={onAddChannel}
-          className="border-edge-assistive bg-fill-strong hover:bg-fill-interaction-hover active:bg-fill-interaction-pressed flex w-full cursor-pointer flex-wrap items-center justify-between gap-1.5 rounded-xl border px-4 py-3 transition-colors"
-        >
+        <AddChannelBox onClick={onAddChannel} justify="between">
           <span className="text-body-small text-content-assistive truncate">연동되지 않았습니다.</span>
-          <span className="text-body-small text-content-primary flex shrink-0 items-center gap-2">
-            <IconAddSquare className="text-icon-primary size-6 shrink-0" />
-            채널 추가하기
-          </span>
-        </button>
+        </AddChannelBox>
       )}
     </div>
+  );
+}
+
+interface AddChannelBoxProps {
+  onClick: () => void;
+  /** 자식과 우측 "채널 추가하기" 라벨 사이 간격 분기 — `between`은 placeholder 시, 기본은 채널 헤더용 */
+  justify?: 'default' | 'between';
+  children: React.ReactNode;
+}
+
+/** "채널 추가하기" 클릭 영역 박스 — 좌측 자식 컨텐츠 + 우측 고정 라벨 (default/hover/pressed 3상태) */
+function AddChannelBox({ onClick, justify = 'default', children }: AddChannelBoxProps) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        'border-edge-assistive bg-fill-strong hover:bg-fill-interaction-hover active:bg-fill-interaction-pressed flex w-full cursor-pointer flex-wrap items-center gap-1.5 rounded-xl border px-4 py-3 transition-colors',
+        justify === 'between' && 'justify-between',
+      )}
+    >
+      {children}
+      <span className="text-body-small text-content-primary flex shrink-0 items-center gap-2">
+        <IconAddSquare className="text-icon-primary size-6 shrink-0" />
+        채널 추가하기
+      </span>
+    </button>
   );
 }
