@@ -27,19 +27,17 @@ function makeId(prefix: string): string {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
-/** 모든 secret 필드가 채워졌는지 검증 (mock validation) */
+/** 모든 secret 필드가 채워졌는지 검증 — 화이트스페이스만 있는 값은 빈 값으로 처리 */
 function isAllSecretsFilled(channel: ChannelTalkChannel): boolean {
-  return Boolean(channel.accessKey && channel.accessSecret && channel.webhookToken);
+  return Boolean(channel.accessKey.trim() && channel.accessSecret.trim() && channel.webhookToken.trim());
 }
 
 interface ChannelTalkViewModel {
   state: ChannelTalkConnectionState;
   addChannel: () => void;
   updateChannel: (channelId: string, patch: Partial<ChannelTalkChannel>) => void;
-  removeChannel: (channelId: string) => void;
   addDocumentSpace: (channelId: string) => void;
   updateDocumentSpace: (channelId: string, dsId: string, patch: Partial<ChannelTalkDocumentSpace>) => void;
-  removeDocumentSpace: (channelId: string, dsId: string) => void;
   testChannelConnection: (channelId: string) => void;
 }
 
@@ -93,13 +91,6 @@ export function useChannelTalkViewModel(): ChannelTalkViewModel {
     }));
   }, []);
 
-  const removeChannel = useCallback((channelId: string) => {
-    setState((prev) => ({
-      ...prev,
-      channels: prev.channels.filter((ch) => ch.id !== channelId),
-    }));
-  }, []);
-
   const addDocumentSpace = useCallback((channelId: string) => {
     setState((prev) => ({
       ...prev,
@@ -140,15 +131,6 @@ export function useChannelTalkViewModel(): ChannelTalkViewModel {
     [],
   );
 
-  const removeDocumentSpace = useCallback((channelId: string, dsId: string) => {
-    setState((prev) => ({
-      ...prev,
-      channels: prev.channels.map((ch) =>
-        ch.id === channelId ? { ...ch, documentSpaces: ch.documentSpaces.filter((ds) => ds.id !== dsId) } : ch,
-      ),
-    }));
-  }, []);
-
   const testChannelConnection = useCallback((channelId: string) => {
     setState((prev) => ({
       ...prev,
@@ -168,10 +150,8 @@ export function useChannelTalkViewModel(): ChannelTalkViewModel {
     state,
     addChannel,
     updateChannel,
-    removeChannel,
     addDocumentSpace,
     updateDocumentSpace,
-    removeDocumentSpace,
     testChannelConnection,
   };
 }
