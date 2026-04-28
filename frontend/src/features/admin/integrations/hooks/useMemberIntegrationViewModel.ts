@@ -11,7 +11,7 @@ import type {
   MemberIntegrationViewModel,
 } from '../types/integrationModel';
 
-/** 매핑 아이템에서 서비스별 PreMappingInfo 추출 */
+/** 매핑 아이템에서 서비스별 PreMappingInfo 추출 — 채널톡은 user-level mapping이 없어 null */
 const getServiceInfo = (item: UserSyncItem, service: IntegrationService): PreMappingInfo | null => {
   switch (service) {
     case 'jira':
@@ -21,6 +21,8 @@ const getServiceInfo = (item: UserSyncItem, service: IntegrationService): PreMap
       return item.github;
     case 'slack':
       return item.slack;
+    case 'channel-talk':
+      return null;
   }
 };
 

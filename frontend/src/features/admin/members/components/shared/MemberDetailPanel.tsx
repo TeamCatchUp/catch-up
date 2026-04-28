@@ -40,7 +40,7 @@ const isValidAccount = (account: unknown): boolean => {
   return Object.keys(account).length > 0;
 };
 
-/** 서비스별 고유 식별자 추출 */
+/** 서비스별 고유 식별자 추출 — 채널톡은 user-level account가 없어 항상 null */
 const getAccountIdentifier = (service: IntegrationService, integrations: UserIntegrations): string | null => {
   const account = integrations[service];
   if (!isValidAccount(account)) return null;
@@ -52,6 +52,8 @@ const getAccountIdentifier = (service: IntegrationService, integrations: UserInt
       return (account as { login?: string }).login ?? null;
     case 'slack':
       return (account as { userId?: string }).userId ?? null;
+    case 'channel-talk':
+      return null;
   }
 };
 
