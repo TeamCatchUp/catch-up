@@ -1,11 +1,15 @@
 'use client';
 
+import { useState } from 'react';
+import { toast } from 'sonner';
+
 import IconAdd from '@/public/icons/icon/add.svg';
 import IconCheck from '@/public/icons/icon/check.svg';
 import IconEditPencil from '@/public/icons/icon/edit_pencil.svg';
 import IconMegaphone from '@/public/icons/icon/megaphone.svg';
 import IconTag from '@/public/icons/icon/tag.svg';
 import { Button } from '@/shared/components/ui/button';
+import { ConfirmDialog } from '@/shared/components/ui/confirm-dialog';
 
 import type {
   ChannelTalkChannel,
@@ -71,6 +75,22 @@ export default function ChannelTalkChannelCard({
   const webhookTokenState = fieldStateFor(status, 'webhookToken');
   const isTested = status === 'tested';
   const canTestConnection = hasAllSecrets(channel);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+
+  const handleTestConnection = () => {
+    if (canTestConnection) {
+      toast('연결에 성공했어요.', { description: '이제 동기화를 시작할 수 있어요.' });
+    } else {
+      toast('Access Key 또는 Secret Key가 일치하지 않아요.', { description: '채널톡에서 다시 확인해주세요.' });
+    }
+    onTestConnection();
+  };
+
+  const handleLockedFieldInteract = () => {
+    if (isTested) {
+      toast('수정하려면 수정하기 버튼을 눌러주세요.');
+    }
+  };
 
   return (
     <div className="border-edge-neutral bg-fill-normal relative flex flex-col overflow-hidden rounded-xl border">
@@ -94,14 +114,14 @@ export default function ChannelTalkChannelCard({
                 <span className="text-body-xsmall text-content-primary-assistive">테스트 완료</span>
               </div>
             ) : null}
-            <Button variant="box-outline-gray" size="sm" onClick={onRemove}>
+            <Button variant="box-outline-gray" size="sm" onClick={() => setDeleteDialogOpen(true)}>
               삭제
             </Button>
           </div>
         </div>
 
         {/* Access Key + Access Secret (2-column) */}
-        <div className="flex gap-3">
+        <div className="flex gap-3" onPointerDownCapture={handleLockedFieldInteract}>
           <ChannelTalkFieldRow
             label="Access Key"
             value={channel.accessKey}
@@ -121,7 +141,7 @@ export default function ChannelTalkChannelCard({
         </div>
 
         {/* Webhook Token + 동기화 주기 (2-column) */}
-        <div className="flex items-end gap-3">
+        <div className="flex items-end gap-3" onPointerDownCapture={handleLockedFieldInteract}>
           <ChannelTalkFieldRow
             label="Webhook Token"
             value={channel.webhookToken}
@@ -162,7 +182,12 @@ export default function ChannelTalkChannelCard({
               <IconEditPencil className="size-6 shrink-0" />
               수정하기
             </Button>
-            <Button variant="box-soft-primary" size="md" onClick={onTestConnection} className="h-11.5 flex-1 gap-2.5">
+            <Button
+              variant="box-soft-primary"
+              size="md"
+              onClick={handleTestConnection}
+              className="h-11.5 flex-1 gap-2.5"
+            >
               연결 테스트 재시도
             </Button>
           </div>
@@ -170,7 +195,7 @@ export default function ChannelTalkChannelCard({
           <Button
             variant={canTestConnection ? 'box-soft-primary' : 'box-outline-gray'}
             size="md"
-            onClick={onTestConnection}
+            onClick={handleTestConnection}
             disabled={!canTestConnection}
             className="h-11.5 w-full"
           >
@@ -206,6 +231,20 @@ export default function ChannelTalkChannelCard({
           <span>도큐먼트 스페이스 추가</span>
         </button>
       </div>
+
+      <ConfirmDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        title="채널을 삭제할까요?"
+        description={
+          channel.documentSpaces.length > 0
+            ? `이 채널과 ${channel.documentSpaces.length}개의 도큐먼트 스페이스가 함께 삭제됩니다.\n삭제된 데이터는 복구할 수 없어요.`
+            : '삭제된 채널은 복구할 수 없어요.'
+        }
+        confirmLabel="삭제"
+        variant="danger"
+        onConfirm={onRemove}
+      />
     </div>
   );
 }

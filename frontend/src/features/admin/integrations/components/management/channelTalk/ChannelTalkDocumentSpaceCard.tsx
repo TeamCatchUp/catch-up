@@ -1,12 +1,12 @@
 'use client';
 
+import { useState } from 'react';
+
 import IconBook from '@/public/icons/icon/book.svg';
 import { Button } from '@/shared/components/ui/button';
+import { ConfirmDialog } from '@/shared/components/ui/confirm-dialog';
 
-import type {
-  ChannelTalkDocumentSpace,
-  ChannelTalkFieldState,
-} from '../../../types/channelTalkModel';
+import type { ChannelTalkDocumentSpace, ChannelTalkFieldState } from '../../../types/channelTalkModel';
 import ChannelTalkFieldRow from './ChannelTalkFieldRow';
 import ChannelTalkSyncIntervalDropdown from './ChannelTalkSyncIntervalDropdown';
 
@@ -33,6 +33,8 @@ export default function ChannelTalkDocumentSpaceCard({
   onUpdate,
   onRemove,
 }: ChannelTalkDocumentSpaceCardProps) {
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+
   return (
     <div className="flex w-full items-start gap-4 pb-5">
       {/* Left column: book icon (32×32) + vertical line connector — 카드 높이에 따라 자동 신장 */}
@@ -48,7 +50,7 @@ export default function ChannelTalkDocumentSpaceCard({
         {/* Header — 이름 + 삭제 버튼 */}
         <div className="flex flex-wrap items-center justify-between gap-x-10 gap-y-2">
           <h4 className="text-heading-small text-content-normal min-w-0 flex-1 truncate">{documentSpace.name}</h4>
-          <Button variant="box-outline-gray" size="sm" onClick={onRemove}>
+          <Button variant="box-outline-gray" size="sm" onClick={() => setDeleteDialogOpen(true)}>
             삭제
           </Button>
         </div>
@@ -81,6 +83,16 @@ export default function ChannelTalkDocumentSpaceCard({
           onChange={(next) => onUpdate({ syncInterval: next })}
         />
       </div>
+
+      <ConfirmDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        title="도큐먼트 스페이스를 삭제할까요?"
+        description="삭제된 데이터는 복구할 수 없어요."
+        confirmLabel="삭제"
+        variant="danger"
+        onConfirm={onRemove}
+      />
     </div>
   );
 }
