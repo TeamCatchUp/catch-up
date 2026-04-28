@@ -156,8 +156,13 @@ export default function IntegrationManagementSection({
 
             <div className="flex flex-col gap-1.5">
               <h3 className="text-heading-small text-content-neutral">연동된 데이터 범위</h3>
-              <div className="border-edge-assistive bg-fill-strong text-body-small text-content-assistive flex items-center justify-center overflow-hidden rounded-xl border px-4 py-3">
-                <span className="truncate">{detail.dataRange}</span>
+              <div
+                className={cn(
+                  'border-edge-assistive bg-fill-strong text-body-small flex items-center justify-center overflow-hidden rounded-xl border px-4 py-3',
+                  detail.connected ? 'text-content-normal' : 'text-content-assistive',
+                )}
+              >
+                <span className="truncate">{detail.connected ? detail.dataRange : '연동되지 않았습니다.'}</span>
               </div>
             </div>
 
