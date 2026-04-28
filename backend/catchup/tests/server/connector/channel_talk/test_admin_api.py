@@ -8,10 +8,27 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from catchup.auth.dependencies import require_admin_user
+from catchup.connectors.channel_talk.documents_schemas import (
+    ChannelTalkDocumentAssociationStatus,
+)
+from catchup.connectors.channel_talk.documents_schemas import (
+    ChannelTalkDocumentCredentialsStatus,
+)
+from catchup.connectors.channel_talk.documents_schemas import (
+    ChannelTalkDocumentUninstallResult,
+)
 from catchup.connectors.channel_talk.exceptions import ChannelTalkAuthenticationError
+from catchup.connectors.channel_talk.exceptions import ChannelTalkConflictError
+from catchup.connectors.channel_talk.exceptions import ChannelTalkValidationError
 from catchup.connectors.channel_talk.schemas import ChannelTalkCredentialsStatus
 from catchup.connectors.channel_talk.schemas import ChannelTalkUninstallResult
 from catchup.server.connector.channel_talk.admin_api import router
+from catchup.server.connector.channel_talk.dependencies import (
+    get_channel_talk_document_metadata_task_runner,
+)
+from catchup.server.connector.channel_talk.dependencies import (
+    get_channel_talk_document_service,
+)
 from catchup.server.connector.channel_talk.dependencies import (
     get_channel_talk_metadata_task_runner,
 )
@@ -42,20 +59,50 @@ class StubChannelTalkService:
         return self.uninstall_result
 
 
+class StubChannelTalkDocumentService:
+    def __init__(self) -> None:
+        self.connect_result = ChannelTalkDocumentCredentialsStatus(installed=False)
+        self.status_result = ChannelTalkDocumentCredentialsStatus(installed=False)
+        self.uninstall_result = ChannelTalkDocumentUninstallResult(removed=False)
+        self.last_connect_request = None
+        self.connect_error = None
+
+    async def connect(self, request):
+        self.last_connect_request = request
+        if self.connect_error is not None:
+            raise self.connect_error
+        return self.connect_result
+
+    async def get_status(self):
+        return self.status_result
+
+    async def uninstall(self):
+        return self.uninstall_result
+
+
 class ChannelTalkAdminApiTests(TestCase):
     def setUp(self) -> None:
         self.service = StubChannelTalkService()
+        self.document_service = StubChannelTalkDocumentService()
         self.background_sync_calls: list[str] = []
+        self.document_background_sync_calls: list[str] = []
 
         async def background_runner(channel_id: str) -> None:
             self.background_sync_calls.append(channel_id)
+
+        async def document_background_runner(channel_id: str) -> None:
+            self.document_background_sync_calls.append(channel_id)
 
         self.app = FastAPI()
         self.app.include_router(router)
         register_channel_talk_exception_handlers(self.app)
         self.app.dependency_overrides[require_admin_user] = lambda: object()
         self.app.dependency_overrides[get_channel_talk_service] = lambda: self.service
+        self.app.dependency_overrides[get_channel_talk_document_service] = lambda: self.document_service
         self.app.dependency_overrides[get_channel_talk_metadata_task_runner] = lambda: background_runner
+        self.app.dependency_overrides[get_channel_talk_document_metadata_task_runner] = (
+            lambda: document_background_runner
+        )
         self.client = TestClient(self.app)
 
     def tearDown(self) -> None:
@@ -185,3 +232,142 @@ class ChannelTalkAdminApiTests(TestCase):
             },
         )
         self.assertEqual(self.background_sync_calls, [])
+
+    def test_post_document_credentials_returns_connected_payload_and_schedules_background_sync(self) -> None:
+        verified_at = datetime(2026, 4, 25, 8, 30, tzinfo=timezone.utc)
+        self.document_service.connect_result = ChannelTalkDocumentCredentialsStatus(
+            installed=True,
+            channel_id="channel-123",
+            space_id="space-123",
+            space_name="Help Center",
+            credential_last_verified_at=verified_at,
+            association_status=ChannelTalkDocumentAssociationStatus.API_VERIFIED,
+        )
+
+        response = self.client.post(
+            "/api/v1/admin/connector/channel-talk/documents/credentials",
+            json={
+                "access_key": "documents-key",
+                "access_secret": "documents-secret",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(
+            body,
+            {
+                "installed": True,
+                "channel_id": "channel-123",
+                "space_id": "space-123",
+                "space_name": "Help Center",
+                "credential_last_verified_at": verified_at.isoformat(),
+                "association_status": "api_verified",
+                "status_reason": None,
+                "status": "connected",
+                "message": "Channel Talk Documents credentials saved.",
+            },
+        )
+        self.assertNotIn("access_secret", body)
+        self.assertEqual(self.document_service.last_connect_request.access_key, "documents-key")
+        self.assertEqual(
+            self.document_service.last_connect_request.access_secret,
+            "documents-secret",
+        )
+        self.assertEqual(self.document_background_sync_calls, ["channel-123"])
+
+    def test_get_document_credentials_returns_status_payload_without_secret(self) -> None:
+        verified_at = datetime(2026, 4, 25, 8, 30, tzinfo=timezone.utc)
+        self.document_service.status_result = ChannelTalkDocumentCredentialsStatus(
+            installed=True,
+            channel_id="channel-123",
+            space_id="space-123",
+            space_name="Help Center",
+            credential_last_verified_at=verified_at,
+            association_status=ChannelTalkDocumentAssociationStatus.API_VERIFIED,
+        )
+
+        response = self.client.get(
+            "/api/v1/admin/connector/channel-talk/documents/credentials"
+        )
+
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body["association_status"], "api_verified")
+        self.assertNotIn("access_secret", body)
+
+    def test_delete_document_credentials_returns_removed_and_not_found_payloads(self) -> None:
+        self.document_service.uninstall_result = ChannelTalkDocumentUninstallResult(removed=True)
+
+        removed_response = self.client.delete(
+            "/api/v1/admin/connector/channel-talk/documents/credentials"
+        )
+        self.assertEqual(removed_response.status_code, 200)
+        self.assertEqual(
+            removed_response.json(),
+            {
+                "status": "success",
+                "message": "Channel Talk Documents credentials removed.",
+                "installed": False,
+            },
+        )
+
+        self.document_service.uninstall_result = ChannelTalkDocumentUninstallResult(removed=False)
+        missing_response = self.client.delete(
+            "/api/v1/admin/connector/channel-talk/documents/credentials"
+        )
+        self.assertEqual(missing_response.status_code, 200)
+        self.assertEqual(
+            missing_response.json(),
+            {
+                "status": "not_found",
+                "message": "Channel Talk Documents credentials were not installed.",
+                "installed": False,
+            },
+        )
+
+    def test_post_document_credentials_base_channel_missing_fails(self) -> None:
+        self.document_service.connect_error = ChannelTalkValidationError(
+            "Channel Talk credentials are not installed"
+        )
+
+        response = self.client.post(
+            "/api/v1/admin/connector/channel-talk/documents/credentials",
+            json={
+                "access_key": "documents-key",
+                "access_secret": "documents-secret",
+            },
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["detail"]["code"], "invalid_request")
+        self.assertEqual(self.document_background_sync_calls, [])
+
+    def test_post_document_credentials_channel_conflict_fails(self) -> None:
+        self.document_service.connect_error = ChannelTalkConflictError(
+            "Channel Talk Documents space does not match the installed Channel Talk channel"
+        )
+
+        response = self.client.post(
+            "/api/v1/admin/connector/channel-talk/documents/credentials",
+            json={
+                "access_key": "documents-key",
+                "access_secret": "documents-secret",
+            },
+        )
+
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.json()["detail"]["code"], "connection_conflict")
+        self.assertEqual(self.document_background_sync_calls, [])
+
+    def test_post_document_credentials_validation_shape_matches_channel_talk_handler(self) -> None:
+        response = self.client.post(
+            "/api/v1/admin/connector/channel-talk/documents/credentials",
+            json={"access_key": "documents-key"},
+        )
+
+        self.assertEqual(response.status_code, 400)
+        body = response.json()
+        self.assertEqual(body["detail"]["code"], "invalid_request")
+        self.assertEqual(body["detail"]["message"], "Invalid Channel Talk connect request.")
+        self.assertTrue(body["detail"]["metadata"]["errors"])

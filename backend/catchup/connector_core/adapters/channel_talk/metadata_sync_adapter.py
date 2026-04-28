@@ -6,6 +6,7 @@ from collections.abc import Callable
 from collections.abc import Mapping
 from functools import partial
 from typing import Any
+from typing import Protocol
 
 from fastapi.concurrency import run_in_threadpool
 
@@ -27,7 +28,7 @@ from catchup.connectors.channel_talk.schemas import ChannelTalkManagerMetadata
 from catchup.connectors.channel_talk.schemas import ChannelTalkManagerMetadataPage
 
 
-class ChannelTalkMetadataStore:
+class ChannelTalkMetadataStore(Protocol):
     """
     Channel Talk metadata adapter가 기대하는 최소 저장소 계약
 
