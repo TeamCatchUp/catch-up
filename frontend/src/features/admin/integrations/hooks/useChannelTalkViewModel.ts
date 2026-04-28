@@ -2,14 +2,14 @@
 
 import { useCallback, useState } from 'react';
 
-import {
-  CHANNEL_SYNC_INTERVAL_DEFAULT,
-  DOCUMENT_SPACE_SYNC_INTERVAL_DEFAULT,
-} from '../types/channelTalkModel';
 import type {
   ChannelTalkChannel,
   ChannelTalkConnectionState,
   ChannelTalkDocumentSpace,
+} from '../types/channelTalkModel';
+import {
+  CHANNEL_SYNC_INTERVAL_DEFAULT,
+  DOCUMENT_SPACE_SYNC_INTERVAL_DEFAULT,
 } from '../types/channelTalkModel';
 
 /** 인터랙티브 mock 초기 상태 — 빈 채널, 새로고침 시 초기화 */
