@@ -119,12 +119,17 @@ export default function ChannelTalkChannelCard({ channel, onAddDocumentSpace }: 
         </div>
       ) : null}
 
-      {/* "도큐먼트 스페이스 추가" full-width 버튼 */}
+      {/*
+        "도큐먼트 스페이스 추가" 버튼.
+        Figma 2상태:
+        - Default(#eaf2fe): node `12075:48000`
+        - Hover/Pressed(rgba(201,222,254,0.68)): node `12075:48043` (두 상태 동일)
+      */}
       <div className="px-4 pb-4">
         <button
           type="button"
           onClick={onAddDocumentSpace}
-          className="bg-fill-primary-normal-neutral border-edge-neutral text-body-small text-content-primary flex h-11.5 w-full cursor-pointer items-center justify-center gap-2.5 rounded-lg border px-2.5 py-1.5 transition-colors"
+          className="bg-fill-primary-normal-neutral hover:bg-fill-primary-interaction-hover-assistive active:bg-fill-primary-interaction-hover-assistive border-edge-neutral text-body-small text-content-primary flex h-11.5 w-full cursor-pointer items-center justify-center gap-2.5 rounded-lg border px-2.5 py-1.5 transition-colors"
         >
           <IconAdd className="text-icon-primary size-5.5 shrink-0" />
           <span>도큐먼트 스페이스 추가</span>
