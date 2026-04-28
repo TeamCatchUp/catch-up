@@ -3,7 +3,7 @@
 import { cn } from '@/shared/utils/cn';
 
 /**
- * 연결 테스트 버튼의 3가지 상태 (Figma node `12004:101461` 매핑).
+ * 연결 테스트 버튼의 3가지 상태.
  * - `idle`: 입력 전 / Entered — 회색 (`bg-fill-interaction-inactive` + `text-content-assistive`)
  * - `active`: Key 수정 중 — 파란색 active (`bg-fill-primary-normal-neutral` + `text-content-primary`)
  * - `success`: 테스트 성공 — 회색 + 라벨만 "테스트 성공"

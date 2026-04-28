@@ -11,16 +11,7 @@ interface ChannelTalkManagementPanelProps {
   state: ChannelTalkConnectionState;
 }
 
-/**
- * 채널톡 메인 패널 — 연동 상태 관리 / 데이터 범위 / Credential 입력 3개 섹션.
- *
- * Figma node mapping:
- * - 메인 패널 컨테이너: `12045:47557` (684×3613)
- * - 연동 상태 관리 헤더: `12045:47558` (684×142)
- * - 연동된 데이터 범위: `12045:47576` (684×83)
- * - Credential 입력 섹션: `12045:47580` (684×1636)
- * - 채널 리스트 헤더: `12045:47583`
- */
+/** 채널톡 메인 패널 — 연동 상태 관리 / 데이터 범위 / Credential 입력 3개 섹션 */
 export default function ChannelTalkManagementPanel({ state }: ChannelTalkManagementPanelProps) {
   const totalDocumentSpaces = state.channels.reduce((sum, ch) => sum + ch.documentSpaces.length, 0);
 
@@ -102,13 +93,7 @@ function CredentialSection({ channels, channelCount, totalDocumentSpaces }: Cred
     <div className="flex flex-col gap-3">
       <h3 className="text-heading-small text-content-neutral">Credential Key 입력 및 동기화 주기 설정</h3>
 
-      {/*
-        채널 리스트 헤더 — 박스 전체가 "채널 추가하기" 클릭 영역.
-        Figma 3상태:
-        - Default(#f7f7f8): node `12060:84077`
-        - Hover(#eaebec):   node `12060:84088`
-        - Pressed(#e1e2e4): node `12060:84094`
-      */}
+      {/* 채널 리스트 헤더 — 박스 전체가 "채널 추가하기" 클릭 영역 (default/hover/pressed 3상태) */}
       <button
         type="button"
         className="border-edge-assistive bg-fill-strong hover:bg-fill-interaction-hover active:bg-fill-interaction-pressed flex w-full cursor-pointer flex-wrap items-center gap-1.5 rounded-xl border px-4 py-3 transition-colors"

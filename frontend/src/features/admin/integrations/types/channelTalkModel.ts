@@ -32,7 +32,7 @@ export const DOCUMENT_SPACE_SYNC_INTERVAL_OPTIONS: ChannelTalkSyncInterval[] = [
 export const DOCUMENT_SPACE_SYNC_INTERVAL_DEFAULT: ChannelTalkSyncInterval = '1hour';
 
 /**
- * 채널 카드 연결 상태 머신 (Figma node `12004:101461`).
+ * 채널 카드 연결 상태 머신.
  * - `idle`: 입력 전 — 빈 placeholder
  * - `entered`: 입력 완료, 미검증
  * - `tested`: 연결 테스트 성공

@@ -202,7 +202,7 @@ const channels: ChannelTalkChannel[] = [
 
 /**
  * 채널톡 mock 연동 상태.
- * - 헤드라인: "5개 채널 · 18개 도큐먼트 연결됨" (Figma node 12045:47583 매칭)
+ * - 헤드라인: "5개 채널 · 18개 도큐먼트 연결됨"
  * - 5개 채널이 각각 5가지 connectionStatus를 시연 (idle / entered / tested / error / editing)
  */
 export const CHANNEL_TALK_MOCK_STATE: ChannelTalkConnectionState = {

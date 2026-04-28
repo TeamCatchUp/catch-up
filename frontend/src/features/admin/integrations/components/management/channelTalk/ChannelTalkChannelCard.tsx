@@ -41,14 +41,7 @@ interface ChannelTalkChannelCardProps {
   onAddDocumentSpace?: () => void;
 }
 
-/**
- * 채널톡 채널 카드 — connectionStatus(idle/entered/tested/error/editing)에 따라 5변형 렌더.
- *
- * Figma node mapping:
- * - 빈 채널: `12045:47589` (684×402) / `12022:116236` 동일 사양
- * - 자식 포함: `12045:47634` (684×1107)
- * - 5상태 시안: `12022:116236` / `12045:80686` / `12045:80839` / `12075:47904` / `12075:48077`
- */
+/** 채널톡 채널 카드 — connectionStatus(idle/entered/tested/error/editing)에 따라 5변형 렌더 */
 export default function ChannelTalkChannelCard({ channel, onAddDocumentSpace }: ChannelTalkChannelCardProps) {
   const status = channel.connectionStatus;
   const accessKeyState = fieldStateFor(status, 'accessKey');
@@ -119,12 +112,7 @@ export default function ChannelTalkChannelCard({ channel, onAddDocumentSpace }: 
         </div>
       ) : null}
 
-      {/*
-        "도큐먼트 스페이스 추가" 버튼.
-        Figma 2상태:
-        - Default(#eaf2fe): node `12075:48000`
-        - Hover/Pressed(rgba(201,222,254,0.68)): node `12075:48043` (두 상태 동일)
-      */}
+      {/* "도큐먼트 스페이스 추가" 버튼 (default/hover-pressed 2상태) */}
       <div className="px-4 pb-4">
         <button
           type="button"

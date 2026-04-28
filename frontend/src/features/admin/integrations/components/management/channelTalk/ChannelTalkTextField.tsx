@@ -7,7 +7,7 @@ import IconVisibilityOff from '@/public/icons/icon/visibility_off.svg';
 import { cn } from '@/shared/utils/cn';
 
 /**
- * ChannelTalkTextField 시각 변형 (Figma node `12004:101461` 5상태 머신 매핑).
+ * ChannelTalkTextField 시각 변형 — 5상태 머신 매핑.
  * - `idle`: 1px `border-edge-neutral` (#eaebec) — 입력 전 / 입력 완료 / 테스트 성공
  * - `error`: 1.5px `border-status-destructive` (#ff4242) — Error_미입력
  * - `focus`: 1.5px `border-edge-primary` (#69a5ff) — Key 수정 → 재시도 유도

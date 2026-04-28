@@ -18,11 +18,6 @@ interface ChannelTalkDocumentSpaceCardProps {
 /**
  * 채널톡 도큐먼트 스페이스 카드 — 채널 하위 항목.
  *
- * Figma node mapping:
- * - 카드 전체: `12045:47676` / `47705` / `47734` (652×231)
- * - 좌측 32px column (book icon + vertical line): `12045:47677`
- * - 우측 604px input form: `12045:47681`
- *
  * 채널과 달리 Webhook Token이 없고 Access Key + Access Secret + 동기화 주기만 입력.
  * 좌측 column의 vertical line은 다음 도큐먼트 스페이스 카드와 시각적으로 연결.
  */

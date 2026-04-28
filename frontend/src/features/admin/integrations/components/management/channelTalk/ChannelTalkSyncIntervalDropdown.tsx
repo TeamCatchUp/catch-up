@@ -45,11 +45,6 @@ interface ChannelTalkSyncIntervalDropdownProps {
 /**
  * 채널톡 동기화 주기 dropdown — Default / Hover / Pressed(펼침) 3상태.
  *
- * Figma node mapping:
- * - Default: `12060:83652` (652×46, 채널) / `12060:84438` (604×46, 도큐먼트 스페이스)
- * - Hover:   `12060:83662` / `12060:84449`
- * - Pressed: `12060:84298` (펼침 228h) / `12060:84387`
- *
  * `variant`에 따라 옵션 셋 자동 분기. 부모 컨테이너의 width를 그대로 채움 (w-full).
  */
 export default function ChannelTalkSyncIntervalDropdown({
