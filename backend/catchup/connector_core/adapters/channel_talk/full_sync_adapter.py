@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Literal
 
 from fastapi.concurrency import run_in_threadpool
@@ -7,6 +8,7 @@ from langchain_core.documents import Document
 from pydantic import BaseModel
 from pydantic import ConfigDict
 from pydantic import Field
+from pydantic import ValidationInfo
 from pydantic import field_validator
 from pydantic import model_validator
 
@@ -37,20 +39,35 @@ from catchup.connectors.channel_talk.full_sync_fetcher import ChannelTalkFetched
 from catchup.connectors.channel_talk.full_sync_fetcher import (
     ChannelTalkFetchedUserChatsResult,
 )
+from catchup.connectors.channel_talk.full_sync_fetcher import (
+    ChannelTalkFullSyncConnection,
+)
 from catchup.connectors.channel_talk.full_sync_fetcher import ChannelTalkFullSyncFetcher
 from catchup.connectors.channel_talk.full_sync_helper import (
     load_channel_talk_connection,
 )
-from catchup.connectors.channel_talk.schemas import ChannelTalkCredentialsRecord
-from catchup.connectors.channel_talk.schemas import ChannelTalkManagerMetadata
-from catchup.connectors.channel_talk.schemas import ChannelTalkUserChatMessage
-from catchup.connectors.channel_talk.schemas import ChannelTalkUserChatMessageAttachment
-from catchup.connectors.channel_talk.schemas import ChannelTalkUserChatMessageButton
-from catchup.connectors.channel_talk.schemas import ChannelTalkUserChatMessageForm
-from catchup.connectors.channel_talk.schemas import ChannelTalkUserChatMessageLog
-from catchup.connectors.channel_talk.schemas import ChannelTalkUserChatMessageWebPage
-from catchup.connectors.channel_talk.schemas import ChannelTalkUserChatState
-from catchup.connectors.channel_talk.schemas import ChannelTalkUserFoundation
+from catchup.connectors.channel_talk.schemas.channel_metadata import (
+    ChannelTalkManagerMetadata,
+)
+from catchup.connectors.channel_talk.schemas.user_chat import ChannelTalkUserChatState
+from catchup.connectors.channel_talk.schemas.user_chat_message import (
+    ChannelTalkUserChatMessage,
+)
+from catchup.connectors.channel_talk.schemas.user_chat_message import (
+    ChannelTalkUserChatMessageAttachment,
+)
+from catchup.connectors.channel_talk.schemas.user_chat_message import (
+    ChannelTalkUserChatMessageButton,
+)
+from catchup.connectors.channel_talk.schemas.user_chat_message import (
+    ChannelTalkUserChatMessageForm,
+)
+from catchup.connectors.channel_talk.schemas.user_chat_message import (
+    ChannelTalkUserChatMessageLog,
+)
+from catchup.connectors.channel_talk.schemas.user_chat_message import (
+    ChannelTalkUserChatMessageWebPage,
+)
 from catchup.sync.audit import SyncAuditContext
 from catchup.utils.validation import require_text
 
@@ -177,8 +194,8 @@ class ChannelTalkPreparedDocument(BaseModel):
 
     @field_validator("document_id", "page_content")
     @classmethod
-    def _validate_required_text(cls, value: str, info) -> str:
-        return require_text(value, info.field_name)
+    def _validate_required_text(cls, value: str, info: ValidationInfo) -> str:
+        return require_text(value, info.field_name or "field")
 
     @property
     def contextual_content(self) -> str:
@@ -432,7 +449,7 @@ class ChannelTalkFullSyncAdapter:
         self,
         *,
         execution: ChannelTalkFullSyncExecutionRequest,
-    ) -> ChannelTalkCredentialsRecord:
+    ) -> ChannelTalkFullSyncConnection:
         connection = await run_in_threadpool(self._connection_loader)
         if connection is None:
             raise ValueError("channel_talk is not connected")
@@ -440,9 +457,7 @@ class ChannelTalkFullSyncAdapter:
             raise ValueError(
                 "Stored Channel Talk credentials do not match the requested channel"
             )
-        require_text(connection.access_key, "access_key")
-        require_text(connection.access_secret, "access_secret")
-        return connection
+        return ChannelTalkFullSyncConnection.from_credentials_record(connection)
 
     async def _get_repository(self) -> PGVectorRepository:
         if self._repository is None:
@@ -452,6 +467,7 @@ class ChannelTalkFullSyncAdapter:
             except RuntimeError:
                 await repository.initialize(None)
             self._repository = repository
+        assert self._repository is not None
         return self._repository
 
     @staticmethod
@@ -471,14 +487,12 @@ class ChannelTalkFullSyncAdapter:
         managers_by_id: dict[str, ChannelTalkManagerMetadata],
     ) -> ChannelTalkPreparedDocument:
         included_messages, excluded_count = self._partition_messages(bundle.messages)
-        last_message_at = max(
-            (
-                message.created_at or message.updated_at
-                for message in bundle.messages
-                if message.created_at is not None or message.updated_at is not None
-            ),
-            default=None,
-        )
+        message_timestamps = [
+            timestamp
+            for message in bundle.messages
+            if (timestamp := self._message_timestamp(message)) is not None
+        ]
+        last_message_at = max(message_timestamps, default=None)
         author_types = tuple(
             dict.fromkeys(
                 filter(
@@ -668,6 +682,12 @@ class ChannelTalkFullSyncAdapter:
         )
 
     @staticmethod
+    def _message_timestamp(
+        message: ChannelTalkUserChatMessage,
+    ) -> datetime | None:
+        return message.created_at or message.updated_at
+
+    @staticmethod
     def _build_document_id(
         *,
         channel_id: str,
@@ -759,7 +779,6 @@ class ChannelTalkFullSyncAdapter:
             lines.extend(
                 self._format_message_line(
                     message,
-                    customer=customer,
                     managers_by_id=managers_by_id,
                 )
                 for message in included_messages
@@ -773,14 +792,12 @@ class ChannelTalkFullSyncAdapter:
         cls,
         message: ChannelTalkUserChatMessage,
         *,
-        customer: ChannelTalkUserFoundation | None,
         managers_by_id: dict[str, ChannelTalkManagerMetadata],
     ) -> str:
         if message.log is not None:
             return f"[시스템] System: {cls._render_log_message(message.log)}"
         author_label = cls._resolve_message_author_label(
             message=message,
-            customer=customer,
             managers_by_id=managers_by_id,
         )
         content = cls._render_message_content(message)
@@ -794,7 +811,6 @@ class ChannelTalkFullSyncAdapter:
         cls,
         *,
         message: ChannelTalkUserChatMessage,
-        customer: ChannelTalkUserFoundation | None,
         managers_by_id: dict[str, ChannelTalkManagerMetadata],
     ) -> str:
         author = message.author

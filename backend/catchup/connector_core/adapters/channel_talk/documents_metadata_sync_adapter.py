@@ -17,23 +17,25 @@ from catchup.connector_core.ports.metadata_sync import MetadataSyncStepResult
 from catchup.connectors.channel_talk.documents_client import (
     ChannelTalkDocumentsApiClient,
 )
-from catchup.connectors.channel_talk.documents_schemas import (
-    ChannelTalkDocumentAuthorMetadata,
-)
-from catchup.connectors.channel_talk.documents_schemas import (
-    ChannelTalkDocumentAuthorPage,
-)
-from catchup.connectors.channel_talk.documents_schemas import (
-    ChannelTalkDocumentCredentialsRecord,
-)
-from catchup.connectors.channel_talk.documents_schemas import (
-    ChannelTalkDocumentNavNodeMetadata,
-)
-from catchup.connectors.channel_talk.documents_schemas import ChannelTalkDocumentSpace
 from catchup.connectors.channel_talk.exceptions import ChannelTalkConflictError
 from catchup.connectors.channel_talk.exceptions import ChannelTalkError
 from catchup.connectors.channel_talk.exceptions import ChannelTalkPersistenceError
 from catchup.connectors.channel_talk.exceptions import ChannelTalkValidationError
+from catchup.connectors.channel_talk.schemas.document_connection import (
+    ChannelTalkDocumentCredentialsRecord,
+)
+from catchup.connectors.channel_talk.schemas.document_metadata import (
+    ChannelTalkDocumentAuthorMetadata,
+)
+from catchup.connectors.channel_talk.schemas.document_metadata import (
+    ChannelTalkDocumentAuthorPage,
+)
+from catchup.connectors.channel_talk.schemas.document_metadata import (
+    ChannelTalkDocumentNavNodeMetadata,
+)
+from catchup.connectors.channel_talk.schemas.document_metadata import (
+    ChannelTalkDocumentSpace,
+)
 
 
 class ChannelTalkDocumentMetadataStore(Protocol):
@@ -70,7 +72,7 @@ class ChannelTalkDocumentMetadataSyncAdapter:
         client: ChannelTalkDocumentsApiClient | None = None,
     ) -> None:
         self.store = store
-        self.client = client or ChannelTalkDocumentsApiClient()
+        self.client = client
 
     async def build_plan(
         self,
@@ -121,10 +123,8 @@ class ChannelTalkDocumentMetadataSyncAdapter:
         request: MetadataSyncRequest,
         connection: ChannelTalkDocumentCredentialsRecord,
     ) -> MetadataSyncStepResult:
-        space = await self.client.get_current_space(
-            access_key=connection.access_key or "",
-            access_secret=connection.access_secret or "",
-        )
+        client = self._client_for(connection)
+        space = await client.get_current_space()
         if space.space_id != connection.space_id:
             raise ChannelTalkConflictError(
                 "Stored Channel Talk Documents credentials do not match the requested space",
@@ -145,13 +145,8 @@ class ChannelTalkDocumentMetadataSyncAdapter:
         connection: ChannelTalkDocumentCredentialsRecord,
     ) -> MetadataSyncStepResult:
         synced = 0
-        async for page in self._iter_author_pages(
-            lambda since: self.client.list_authors(
-                access_key=connection.access_key or "",
-                access_secret=connection.access_secret or "",
-                since=since,
-            )
-        ):
+        client = self._client_for(connection)
+        async for page in self._iter_author_pages(lambda since: client.list_authors(since=since)):
             payloads = [
                 item.model_copy(
                     update={
@@ -177,10 +172,8 @@ class ChannelTalkDocumentMetadataSyncAdapter:
         request: MetadataSyncRequest,
         connection: ChannelTalkDocumentCredentialsRecord,
     ) -> MetadataSyncStepResult:
-        page = await self.client.list_nav_nodes(
-            access_key=connection.access_key or "",
-            access_secret=connection.access_secret or "",
-        )
+        client = self._client_for(connection)
+        page = await client.list_nav_nodes()
         payloads = [
             item.model_copy(
                 update={
@@ -223,6 +216,17 @@ class ChannelTalkDocumentMetadataSyncAdapter:
                 "Stored Channel Talk Documents credentials do not match the requested channel",
             )
         return record
+
+    def _client_for(
+        self,
+        connection: ChannelTalkDocumentCredentialsRecord,
+    ) -> ChannelTalkDocumentsApiClient:
+        if self.client is not None:
+            return self.client
+        return ChannelTalkDocumentsApiClient(
+            access_key=connection.access_key or "",
+            access_secret=connection.access_secret or "",
+        )
 
     @staticmethod
     async def _iter_author_pages(

@@ -8,18 +8,24 @@ from fastapi import BackgroundTasks
 from fastapi import Depends
 
 from catchup.auth.dependencies import require_admin_user
-from catchup.connectors.channel_talk.documents_schemas import (
+from catchup.connectors.channel_talk.schemas.channel_connection import (
+    ChannelTalkConnectRequest,
+)
+from catchup.connectors.channel_talk.schemas.channel_connection import (
+    ChannelTalkCredentialsStatus,
+)
+from catchup.connectors.channel_talk.schemas.channel_connection import (
+    ChannelTalkUninstallResult,
+)
+from catchup.connectors.channel_talk.schemas.document_connection import (
     ChannelTalkDocumentConnectRequest,
 )
-from catchup.connectors.channel_talk.documents_schemas import (
+from catchup.connectors.channel_talk.schemas.document_connection import (
     ChannelTalkDocumentCredentialsStatus,
 )
-from catchup.connectors.channel_talk.documents_schemas import (
+from catchup.connectors.channel_talk.schemas.document_connection import (
     ChannelTalkDocumentUninstallResult,
 )
-from catchup.connectors.channel_talk.schemas import ChannelTalkConnectRequest
-from catchup.connectors.channel_talk.schemas import ChannelTalkCredentialsStatus
-from catchup.connectors.channel_talk.schemas import ChannelTalkUninstallResult
 from catchup.connectors.channel_talk.service import ChannelTalkCredentialsService
 from catchup.connectors.channel_talk.service import (
     ChannelTalkDocumentCredentialsService,

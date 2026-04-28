@@ -3,7 +3,9 @@ from __future__ import annotations
 from catchup.connectors.channel_talk.full_sync_target_contract import (
     CHANNEL_TALK_BOOTSTRAP_TARGET_ID,
 )
-from catchup.connectors.channel_talk.schemas import ChannelTalkCredentialsRecord
+from catchup.connectors.channel_talk.schemas.channel_connection import (
+    ChannelTalkCredentialsRecord,
+)
 from catchup.db.channel_talk.repository import ChannelTalkCredentialsRepository
 from catchup.db.engine import SessionLocal
 

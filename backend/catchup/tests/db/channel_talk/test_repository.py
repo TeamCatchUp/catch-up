@@ -17,28 +17,40 @@ from sqlalchemy.orm import Session
 from sqlalchemy.orm import mapped_column
 
 import catchup.db.channel_talk.repository as repository_module
-from catchup.connectors.channel_talk.documents_schemas import (
+from catchup.connectors.channel_talk.schemas.channel_metadata import ChannelTalkChannel
+from catchup.connectors.channel_talk.schemas.channel_metadata import (
+    ChannelTalkChannelMetadata,
+)
+from catchup.connectors.channel_talk.schemas.channel_metadata import (
+    ChannelTalkCurrentChannel,
+)
+from catchup.connectors.channel_talk.schemas.channel_metadata import (
+    ChannelTalkGroupManagerMembership,
+)
+from catchup.connectors.channel_talk.schemas.channel_metadata import (
+    ChannelTalkGroupMetadata,
+)
+from catchup.connectors.channel_talk.schemas.channel_metadata import (
+    ChannelTalkManagerMetadata,
+)
+from catchup.connectors.channel_talk.schemas.document_connection import (
     ChannelTalkDocumentAssociationStatus,
 )
-from catchup.connectors.channel_talk.documents_schemas import (
-    ChannelTalkDocumentAuthorMetadata,
-)
-from catchup.connectors.channel_talk.documents_schemas import (
+from catchup.connectors.channel_talk.schemas.document_connection import (
     ChannelTalkDocumentCredentialsStatus,
 )
-from catchup.connectors.channel_talk.documents_schemas import (
+from catchup.connectors.channel_talk.schemas.document_connection import (
     ChannelTalkDocumentCredentialsUpsert,
 )
-from catchup.connectors.channel_talk.documents_schemas import (
+from catchup.connectors.channel_talk.schemas.document_metadata import (
+    ChannelTalkDocumentAuthorMetadata,
+)
+from catchup.connectors.channel_talk.schemas.document_metadata import (
     ChannelTalkDocumentNavNodeMetadata,
 )
-from catchup.connectors.channel_talk.documents_schemas import ChannelTalkDocumentSpace
-from catchup.connectors.channel_talk.schemas import ChannelTalkChannel
-from catchup.connectors.channel_talk.schemas import ChannelTalkChannelMetadata
-from catchup.connectors.channel_talk.schemas import ChannelTalkCurrentChannel
-from catchup.connectors.channel_talk.schemas import ChannelTalkGroupManagerMembership
-from catchup.connectors.channel_talk.schemas import ChannelTalkGroupMetadata
-from catchup.connectors.channel_talk.schemas import ChannelTalkManagerMetadata
+from catchup.connectors.channel_talk.schemas.document_metadata import (
+    ChannelTalkDocumentSpace,
+)
 
 
 class _Base(DeclarativeBase):

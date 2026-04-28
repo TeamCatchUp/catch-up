@@ -41,12 +41,20 @@ from catchup.connectors.channel_talk.full_sync_fetcher import ChannelTalkFetched
 from catchup.connectors.channel_talk.full_sync_fetcher import (
     ChannelTalkFetchedUserChatsResult,
 )
-from catchup.connectors.channel_talk.schemas import ChannelTalkCredentialsRecord
-from catchup.connectors.channel_talk.schemas import ChannelTalkManagerMetadata
-from catchup.connectors.channel_talk.schemas import ChannelTalkUserChatDetail
-from catchup.connectors.channel_talk.schemas import ChannelTalkUserChatListItem
-from catchup.connectors.channel_talk.schemas import ChannelTalkUserChatMessage
-from catchup.connectors.channel_talk.schemas import ChannelTalkUserChatState
+from catchup.connectors.channel_talk.schemas.channel_connection import (
+    ChannelTalkCredentialsRecord,
+)
+from catchup.connectors.channel_talk.schemas.channel_metadata import (
+    ChannelTalkManagerMetadata,
+)
+from catchup.connectors.channel_talk.schemas.user_chat import ChannelTalkUserChatDetail
+from catchup.connectors.channel_talk.schemas.user_chat import (
+    ChannelTalkUserChatListItem,
+)
+from catchup.connectors.channel_talk.schemas.user_chat import ChannelTalkUserChatState
+from catchup.connectors.channel_talk.schemas.user_chat_message import (
+    ChannelTalkUserChatMessage,
+)
 from catchup.db.models import SyncConnector
 from catchup.sync.audit import SyncAuditContext
 
@@ -99,7 +107,7 @@ def _fetched_bundle() -> ChannelTalkFetchedUserChat:
     public_message = ChannelTalkUserChatMessage.from_api_payload(
         {
             "id": "msg-1",
-            "userChatId": "chat-123",
+            "chatId": "chat-123",
             "personType": "manager",
             "manager": {"id": "manager-1", "name": "Agent Lee"},
             "plainText": "Hello from support",
@@ -110,7 +118,7 @@ def _fetched_bundle() -> ChannelTalkFetchedUserChat:
     private_message = ChannelTalkUserChatMessage.from_api_payload(
         {
             "id": "msg-2",
-            "userChatId": "chat-123",
+            "chatId": "chat-123",
             "personType": "manager",
             "personId": "manager-1",
             "text": "private note",
@@ -122,7 +130,7 @@ def _fetched_bundle() -> ChannelTalkFetchedUserChat:
     form_message = ChannelTalkUserChatMessage.from_api_payload(
         {
             "id": "msg-3",
-            "userChatId": "chat-123",
+            "chatId": "chat-123",
             "personType": "user",
             "user": {"id": "user-123", "memberId": "member-123"},
             "form": {
@@ -136,7 +144,7 @@ def _fetched_bundle() -> ChannelTalkFetchedUserChat:
     file_message = ChannelTalkUserChatMessage.from_api_payload(
         {
             "id": "msg-4",
-            "userChatId": "chat-123",
+            "chatId": "chat-123",
             "personType": "manager",
             "personId": "manager-2",
             "files": [
@@ -153,7 +161,7 @@ def _fetched_bundle() -> ChannelTalkFetchedUserChat:
     button_message = ChannelTalkUserChatMessage.from_api_payload(
         {
             "id": "msg-5",
-            "userChatId": "chat-123",
+            "chatId": "chat-123",
             "personType": "manager",
             "personId": "manager-1",
             "plainText": "Choose an action",
@@ -170,7 +178,7 @@ def _fetched_bundle() -> ChannelTalkFetchedUserChat:
     system_message = ChannelTalkUserChatMessage.from_api_payload(
         {
             "id": "msg-6",
-            "userChatId": "chat-123",
+            "chatId": "chat-123",
             "personType": "manager",
             "personId": "manager-1",
             "log": {"action": "assign"},
@@ -182,7 +190,7 @@ def _fetched_bundle() -> ChannelTalkFetchedUserChat:
     web_page_message = ChannelTalkUserChatMessage.from_api_payload(
         {
             "id": "msg-7",
-            "userChatId": "chat-123",
+            "chatId": "chat-123",
             "personType": "manager",
             "personId": "manager-1",
             "plainText": "Read the docs",
@@ -294,7 +302,7 @@ class ChannelTalkFullSyncContractTests(TestCase):
         message = ChannelTalkUserChatMessage.from_api_payload(
             {
                 "id": "msg-web",
-                "userChatId": "chat-123",
+                "chatId": "chat-123",
                 "personType": "manager",
                 "webPage": {
                     "title": "Support Guide",

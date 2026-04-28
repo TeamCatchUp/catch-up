@@ -7,6 +7,7 @@ from collections.abc import Mapping
 from functools import partial
 from typing import Any
 from typing import Protocol
+from typing import TypeVar
 
 from fastapi.concurrency import run_in_threadpool
 
@@ -14,18 +15,41 @@ from catchup.connector_core.ports.metadata_sync import MetadataSyncPlan
 from catchup.connector_core.ports.metadata_sync import MetadataSyncRequest
 from catchup.connector_core.ports.metadata_sync import MetadataSyncStep
 from catchup.connector_core.ports.metadata_sync import MetadataSyncStepResult
-from catchup.connectors.channel_talk.client import ChannelTalkApiClient
+from catchup.connectors.channel_talk.core_api_client import ChannelTalkCoreApiClient
 from catchup.connectors.channel_talk.exceptions import ChannelTalkConflictError
 from catchup.connectors.channel_talk.exceptions import ChannelTalkError
 from catchup.connectors.channel_talk.exceptions import ChannelTalkPersistenceError
 from catchup.connectors.channel_talk.exceptions import ChannelTalkValidationError
-from catchup.connectors.channel_talk.schemas import ChannelTalkChannel
-from catchup.connectors.channel_talk.schemas import ChannelTalkCredentialsRecord
-from catchup.connectors.channel_talk.schemas import ChannelTalkGroupManagerMembership
-from catchup.connectors.channel_talk.schemas import ChannelTalkGroupMetadata
-from catchup.connectors.channel_talk.schemas import ChannelTalkGroupMetadataPage
-from catchup.connectors.channel_talk.schemas import ChannelTalkManagerMetadata
-from catchup.connectors.channel_talk.schemas import ChannelTalkManagerMetadataPage
+from catchup.connectors.channel_talk.schemas.channel_connection import (
+    ChannelTalkCredentialsRecord,
+)
+from catchup.connectors.channel_talk.schemas.channel_metadata import ChannelTalkChannel
+from catchup.connectors.channel_talk.schemas.channel_metadata import (
+    ChannelTalkGroupManagerMembership,
+)
+from catchup.connectors.channel_talk.schemas.channel_metadata import (
+    ChannelTalkGroupMetadata,
+)
+from catchup.connectors.channel_talk.schemas.channel_metadata import (
+    ChannelTalkGroupMetadataPage,
+)
+from catchup.connectors.channel_talk.schemas.channel_metadata import (
+    ChannelTalkManagerMetadata,
+)
+from catchup.connectors.channel_talk.schemas.channel_metadata import (
+    ChannelTalkManagerMetadataPage,
+)
+
+ChannelTalkMetadataT = TypeVar(
+    "ChannelTalkMetadataT",
+    ChannelTalkManagerMetadata,
+    ChannelTalkGroupMetadata,
+)
+ChannelTalkMetadataPageT = TypeVar(
+    "ChannelTalkMetadataPageT",
+    ChannelTalkManagerMetadataPage,
+    ChannelTalkGroupMetadataPage,
+)
 
 
 class ChannelTalkMetadataStore(Protocol):
@@ -70,10 +94,10 @@ class ChannelTalkMetadataSyncAdapter:
         self,
         *,
         store: ChannelTalkMetadataStore,
-        client: ChannelTalkApiClient | None = None,
+        client: ChannelTalkCoreApiClient | None = None,
     ) -> None:
         self.store = store
-        self.client = client or ChannelTalkApiClient()
+        self.client = client or ChannelTalkCoreApiClient()
 
     async def build_plan(
         self,
@@ -256,8 +280,8 @@ class ChannelTalkMetadataSyncAdapter:
 
     @staticmethod
     async def _iter_pages(
-        fetch_page: Callable[[str | None], Awaitable[ChannelTalkManagerMetadataPage | ChannelTalkGroupMetadataPage]],
-    ) -> AsyncIterator[ChannelTalkManagerMetadataPage | ChannelTalkGroupMetadataPage]:
+        fetch_page: Callable[[str | None], Awaitable[ChannelTalkMetadataPageT]],
+    ) -> AsyncIterator[ChannelTalkMetadataPageT]:
         since: str | None = None
 
         while True:
@@ -271,9 +295,9 @@ class ChannelTalkMetadataSyncAdapter:
 
     @staticmethod
     def _with_channel_id(
-        payloads: list[ChannelTalkManagerMetadata] | list[ChannelTalkGroupMetadata],
+        payloads: list[ChannelTalkMetadataT],
         channel_id: str,
-    ) -> list[ChannelTalkManagerMetadata] | list[ChannelTalkGroupMetadata]:
+    ) -> list[ChannelTalkMetadataT]:
         return [
             payload.model_copy(update={"channel_id": channel_id})
             for payload in payloads
