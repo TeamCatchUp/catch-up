@@ -1,12 +1,14 @@
 'use client';
 
-import { cn } from '@/shared/utils/cn';
+import { Button } from '@/shared/components/ui/button';
 
 /**
  * 연결 테스트 버튼의 3가지 상태.
- * - `idle`: 입력 전 / Entered — 회색 (`bg-fill-interaction-inactive` + `text-content-assistive`)
- * - `active`: Key 수정 중 — 파란색 active (`bg-fill-primary-normal-neutral` + `text-content-primary`)
- * - `success`: 테스트 성공 — 회색 + 라벨만 "테스트 성공"
+ * - `idle`: 입력 전 / Entered — active 색으로 사용자에게 검증 권유 (`box-soft-primary`)
+ * - `active`: Key 수정 중 — 동일한 active 색
+ * - `success`: 테스트 성공 — 회색 outline + 라벨만 "테스트 성공"
+ *
+ * shared `Button` 공통 컴포넌트 + `box-soft-primary` / `box-outline-gray` variant 활용.
  */
 type ConnectionTestButtonStatus = 'idle' | 'active' | 'success';
 
@@ -29,18 +31,13 @@ export default function ChannelTalkConnectionTestButton({
   disabled,
 }: ChannelTalkConnectionTestButtonProps) {
   return (
-    <button
-      type="button"
+    <Button
+      variant={status === 'success' ? 'box-outline-gray' : 'box-soft-primary'}
+      size="sm"
       onClick={onClick}
       disabled={disabled}
-      className={cn(
-        'text-body-xsmall flex h-7.5 min-w-9 cursor-pointer items-center justify-center gap-1 rounded-lg border px-2 py-1 transition-colors disabled:cursor-not-allowed disabled:opacity-50',
-        status === 'active'
-          ? 'bg-fill-primary-normal-neutral border-edge-neutral text-content-primary'
-          : 'bg-fill-interaction-inactive border-edge-normal text-content-assistive',
-      )}
     >
       {STATUS_LABELS[status]}
-    </button>
+    </Button>
   );
 }
