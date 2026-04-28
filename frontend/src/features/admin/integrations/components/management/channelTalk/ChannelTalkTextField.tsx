@@ -43,7 +43,7 @@ export default function ChannelTalkTextField({
   const reactId = useId();
   const inputId = id ?? reactId;
   const [masked, setMasked] = useState(defaultMasked);
-  const showMaskToggle = maskable && value.length > 0;
+  const showMaskToggle = maskable;
 
   return (
     <div
