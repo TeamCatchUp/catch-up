@@ -30,17 +30,17 @@ export default function ChannelTalkDocumentSpaceCard({
   onUpdate,
 }: ChannelTalkDocumentSpaceCardProps) {
   return (
-    <div className="flex w-full items-start gap-4 pt-5">
+    <div className="flex w-full items-start gap-4 pb-5">
       {/* Left column: book icon (32×32) + vertical line connector — 카드 높이에 따라 자동 신장 */}
-      <div className="flex shrink-0 flex-col items-center gap-5 self-stretch pb-5">
+      <div className="flex shrink-0 flex-col items-center gap-5 self-stretch pt-5">
         <div className="bg-fill-primary-normal-neutral flex size-8 shrink-0 items-center justify-center rounded-lg">
           <IconBook className="text-icon-primary size-5" />
         </div>
         <div className="bg-edge-neutral w-px flex-1" aria-hidden />
       </div>
 
-      {/* Right column: input form (604px) — 하단 border-b로 다음 도큐먼트 스페이스 카드와 구분 */}
-      <div className="border-edge-neutral flex min-w-0 flex-1 flex-col gap-5 border-b pb-5">
+      {/* Right column: input form (604px) — 상단 border-t로 채널/이전 카드와 구분 */}
+      <div className="border-edge-neutral flex min-w-0 flex-1 flex-col gap-5 border-t pt-5">
         {/* Header — 이름 + 연결 테스트 버튼 */}
         <div className="flex flex-wrap items-center justify-between gap-x-10 gap-y-2">
           <h4 className="text-heading-small text-content-normal min-w-0 flex-1 truncate">{documentSpace.name}</h4>
