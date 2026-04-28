@@ -64,17 +64,18 @@ class TestPGBigmRetriever(unittest.TestCase):
         self.assertIn("'title'", sql_str)
         self.assertNotIn("'contextual_content'", sql_str)
 
-    def test_do_query_sets_correct_db_parameters(self):
-        """DB 쿼리 실행 시 hnsw.ef_search 대신 pg_bigm.similarity_limit을 설정하는지 검증."""
+    def test_do_query_does_not_set_db_parameters_inline(self):
+        """DB 쿼리 실행 시 pg_bigm.similarity_limit을 인라인으로 설정하지 않는지 검증 (engine level에서 처리)."""
         self.mock_session.execute.return_value.fetchall.return_value = []
         
         self.retriever._do_query("SELECT 1", {})
         
         calls = self.mock_session.execute.call_args_list
-        set_limit_call = str(calls[0][0][0])
-        
-        self.assertIn("SET LOCAL pg_bigm.similarity_limit = 0.02", set_limit_call)
-        self.assertNotIn("hnsw.ef_search", set_limit_call)
+        # 쿼리가 한 번만 실행되어야 함 (SET LOCAL이 없으므로)
+        assert len(calls) == 1
+        query_call = str(calls[0][0][0])
+        self.assertIn("SELECT 1", query_call)
+        self.assertNotIn("SET LOCAL pg_bigm.similarity_limit", query_call)
 
 
 class TestPGVectorService:

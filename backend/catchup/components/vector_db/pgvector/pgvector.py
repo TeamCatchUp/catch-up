@@ -189,8 +189,7 @@ class PGBigmRetriever(BaseRetriever):
             logger.debug("db_query_started")
             t0 = time.perf_counter()
             
-            # pg_bigm 검색을 위해 similarity_limit 설정
-            session.execute(text("SET LOCAL pg_bigm.similarity_limit = 0.02"))
+            # pg_bigm 검색을 위해 similarity_limit 설정 (engine.py의 connect event에서 처리됨)
             results = session.execute(search_sql, params)
             rows = results.fetchall()
             
@@ -414,7 +413,6 @@ class PGVectorService(BaseVectorDbService):
         )
 
         with self.session_factory() as session:
-            session.execute(text("SET LOCAL pg_bigm.similarity_limit = 0.02"))
             results = session.execute(search_sql, params).fetchall()
 
         return [

@@ -39,6 +39,9 @@ async def ensure_pg_indices() -> None:
     
     # B-tree는 일반 트랜잭션에서 빠르게 처리
     async with await psycopg.AsyncConnection.connect(conn_string) as conn:
+        # pg_bigm 익스텐션 활성화 (이미 활성화되어 있으면 no-op)
+        await conn.execute("CREATE EXTENSION IF NOT EXISTS pg_bigm")
+        
         for sql in LIGHT_INDICES:
             await conn.execute(sql)
             
