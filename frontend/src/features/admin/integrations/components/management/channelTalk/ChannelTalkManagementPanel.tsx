@@ -38,26 +38,26 @@ function ConnectionStatusSection({ state }: ConnectionStatusSectionProps) {
     <div className="flex flex-col gap-1.5">
       <h3 className="text-heading-small text-content-normal">연동 상태 관리</h3>
 
-      <div className="border-edge-neutral bg-fill-strong overflow-hidden rounded-xl border">
-        <div className="border-edge-neutral flex h-13 items-center justify-between border-b px-4 py-3">
-          <span className="text-body-small text-content-neutral">연동 상태</span>
+      <div className="border-edge-assistive bg-fill-strong overflow-hidden rounded-xl border">
+        <div className="border-edge-neutral flex items-center justify-between gap-8 border-b px-4 py-3">
+          <span className="text-body-small text-content-normal">연동 상태</span>
           {state.connected ? (
-            <div className="flex items-center gap-1">
-              <IconCloudCheckFilled className="text-icon-primary size-5 shrink-0" />
-              <span className="text-body-xsmall text-content-primary">연동됨</span>
+            <div className="flex items-center gap-1 px-1.5 py-1">
+              <IconCloudCheckFilled className="text-icon-primary-assistive size-4.5 shrink-0" />
+              <span className="text-body-xsmall text-content-primary-assistive">연동됨</span>
             </div>
           ) : (
             <span className="text-body-xsmall text-content-alternative">연동 안됨</span>
           )}
         </div>
-        <div className="flex h-13 items-center justify-between px-4 py-3">
-          <span className="text-body-small text-content-neutral">보안 관련 설명</span>
+        <div className="flex items-center justify-between gap-8 px-4 py-3">
+          <span className="text-body-small text-content-normal">보안 관련 설명</span>
           <button
             type="button"
             className="text-body-xsmall text-content-neutral flex h-7 cursor-pointer items-center gap-1 rounded-full px-1.5 py-1"
           >
             원문 보기
-            <IconOpenInNew className="text-icon-normal size-4.5" />
+            <IconOpenInNew className="text-icon-normal size-5" />
           </button>
         </div>
       </div>
@@ -74,8 +74,10 @@ function DataRangeSection({ connected }: DataRangeSectionProps) {
   return (
     <div className="flex flex-col gap-1.5">
       <h3 className="text-heading-small text-content-neutral">연동된 데이터 범위</h3>
-      <div className="border-edge-neutral bg-fill-strong text-body-small text-content-neutral flex h-13 items-center rounded-xl border px-4">
-        {connected ? '연동된 채널의 메시지를 임베딩하고 있어요.' : '연동되지 않았습니다.'}
+      <div className="border-edge-assistive bg-fill-strong text-body-small text-content-assistive flex items-center justify-center overflow-hidden rounded-xl border px-4 py-3">
+        <span className="truncate">
+          {connected ? '연동된 채널의 메시지를 임베딩하고 있어요.' : '연동되지 않았습니다.'}
+        </span>
       </div>
     </div>
   );
