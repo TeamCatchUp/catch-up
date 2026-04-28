@@ -1,5 +1,6 @@
 from collections import defaultdict
 from copy import deepcopy
+import time
 
 import structlog
 from langchain_core.documents import Document
@@ -31,11 +32,29 @@ async def rerank_node(state: AgentState, rerank_service: BaseRerankService):
     retrieved_docs = _validate_retrieved_docs(retrieved_docs)
     final_docs = retrieved_docs
     try:
+        t_sem = time.perf_counter()
+        logger.debug(
+            "semaphore_acquiring",
+            semaphore="rerank",
+            doc_count=len(retrieved_docs)
+        )
         async with rag_semaphores.rerank:
+            t_rerank = time.perf_counter()
+            logger.debug(
+                "rerank_invoke_start",
+                semaphore_wait_elapsed=round(t_rerank - t_sem, 3),
+                doc_count=len(retrieved_docs),
+            )
+            
             reranked_docs = await rerank_service.rerank(
                 query=query,
                 documents=retrieved_docs,
                 top_n=settings.RERANK_TOP_N
+            )
+            
+            logger.debug(
+                "rerank_invoke_completed",
+                elapsed=round(time.perf_counter() - t_rerank, 3)
             )
     except Exception as e:
         logger.warning(

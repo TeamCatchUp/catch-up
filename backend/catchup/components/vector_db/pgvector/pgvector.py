@@ -1,10 +1,11 @@
-import logging
+import time
 from typing import Any
 from typing import Dict
 from typing import Literal
 from typing import Optional
 from typing import override
 
+import structlog
 from langchain_core.callbacks import CallbackManagerForRetrieverRun
 from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
@@ -24,7 +25,7 @@ from catchup.db.engine import SessionLocal
 from catchup.db.models import SourceType
 from catchup.rag.schemas.filters import TemporalFilter
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class PostgresFTSRetriever(BaseRetriever):
@@ -178,10 +179,20 @@ class PostgresFTSRetriever(BaseRetriever):
         params: dict
     ):
         with self.session_factory() as session:
+            logger.debug("db_query_started")
+            t0 = time.perf_counter()
+            
             # pg_bigm 검색을 위해 similarity_limit 설정
             session.execute(text("SET LOCAL pg_bigm.similarity_limit = 0.02"))
             results = session.execute(search_sql, params)
-            return results.fetchall()
+            rows = results.fetchall()
+            
+            logger.debug(
+                "db_query_completed",
+                elapsed=round(time.perf_counter() - t0, 3),
+                row_count=len(rows)
+            )
+            return rows
 
     def _get_documents_from_results(self, results):
         docs = []
@@ -252,6 +263,13 @@ class PGVectorService(BaseVectorDbService):
         """
         Langchain 기반 Hybrid Search를 수행한다.
         """
+        
+        logger.debug(
+            "hybrid_search_started",
+            query_len=len(query)
+        )
+        t0 = time.perf_counter()
+        
         hybrid_search_chain = self._hybrid_search_chain(
             tool_filters=tool_filters,
             temporal_filters=temporal_filters,
@@ -263,10 +281,18 @@ class PGVectorService(BaseVectorDbService):
         )
 
         
-        return hybrid_search_chain.invoke({
+        result = hybrid_search_chain.invoke({
             "semantic_query": query,
             "keyword_tokens": keyword_tokens or [query]
         })
+        
+        logger.debug(
+            "hybrid_search_completed",
+            elapsed=round(time.perf_counter() - t0, 3),
+            result_count=len(result)
+        )
+        
+        return result
 
     def _hybrid_search_chain(
         self,
@@ -282,6 +308,19 @@ class PGVectorService(BaseVectorDbService):
         PostgreSQL FTS와 PGVector Similarity Search를 결합하여 
         3-Way Hybrid Search Chain을 생성한다.
         """
+        
+        def _make_logged_invoker(name: str, fn):
+            def invoker(x):
+                t0 = time.perf_counter()
+                logger.debug(f"{name}_started")
+                result = fn(x)
+                logger.debug(
+                    f"{name}_completed",
+                    elapsed=round(time.perf_counter() - t0, 3),
+                    count=len(result)
+                )
+                return result
+            return invoker
         
         # Semantic Retriever (HNSW)
         # Recall 확보를 위해 k + offset보다 더 많은 후보(100)를 가져옴
@@ -330,7 +369,8 @@ class PGVectorService(BaseVectorDbService):
         
         retriever_parallel = RunnableParallel(
             # Semantic 결과 필터링 (score_threshold 미만 제거)
-            vector_docs=RunnableLambda(
+            vector_docs=RunnableLambda(_make_logged_invoker(
+                "vector_retrieval",
                 lambda x: [
                     doc for doc, score in self.vector_store.similarity_search_with_score(
                         query=x["semantic_query"], 
@@ -339,9 +379,15 @@ class PGVectorService(BaseVectorDbService):
                     )[offset:]
                     if score >= score_threshold
                 ]
-            ),
-            title_docs=RunnableLambda(lambda x: title_retriever.invoke(x["keyword_tokens"])),
-            content_docs=RunnableLambda(lambda x: content_retriever.invoke(x["keyword_tokens"]))
+            )),
+            title_docs=RunnableLambda(_make_logged_invoker(
+                "title_retrieval",
+                lambda x: title_retriever.invoke(x["keyword_tokens"])
+            )),
+            content_docs=RunnableLambda(_make_logged_invoker(
+                "content_retrieval",
+                lambda x: content_retriever.invoke(x["keyword_tokens"])
+            )),
         )
         
         def apply_rrf(results):

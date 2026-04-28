@@ -102,12 +102,24 @@ class AwsBedrockRerankService(BaseRerankService):
         # self.reranker는 싱글톤 공유 객체이므로 top_n 설정 시 race condition 방지를 위해 copy 사용
         reranker = copy(self.reranker)
         reranker.top_n = top_n
+        
+                
+        executor = rag_executors.rerank_executor
+        logger.info(
+            "rerank_executor_state",
+            queue_size=executor._work_queue.qsize(),
+            active_threads=len(executor._threads),
+            max_workers=executor._max_workers,
+            doc_count=len(documents)
+        )
 
         loop = asyncio.get_running_loop()
+        t0 = loop.time()
         reranked_docs: list[Document] = await loop.run_in_executor(
-            rag_executors.rerank_executor,
+            executor,
             partial(reranker.compress_documents, documents=documents, query=query),
         )
+        logger.info("bedrock_rerank_api_completed", elapsed=round(loop.time() - t0, 3))
 
         self._restore_ids(reranked_docs)
 
