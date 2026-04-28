@@ -36,8 +36,8 @@ def _timed(name: str, fn):
     return wrapper
 
 
-class PostgresFTSRetriever(BaseRetriever):
-    """PostgreSQL Full Text Search(FTS) 지원"""
+class PGBigmRetriever(BaseRetriever):
+    """pg_bigm 유사도 기반 키워드 검색 지원"""
 
     # BaseRetriever는 내부적으로 BaseModel을 상속하므로 Pydantic 스타일을 따라야 함
     session_factory: Any  # e.g) sessionmaker (from sqlalchemy.orm)
@@ -58,7 +58,7 @@ class PostgresFTSRetriever(BaseRetriever):
         """
         pg_bigm 유사도 기반 키워드 검색.
         """
-        search_sql, params = self.build_fts_query(
+        search_sql, params = self.build_bigm_query(
             collection_name=self.collection_name,
             query=query,
             k=self.k,
@@ -72,7 +72,7 @@ class PostgresFTSRetriever(BaseRetriever):
         return self._get_documents_from_results(results)
 
     @staticmethod
-    def build_fts_query(
+    def build_bigm_query(
         collection_name: str,
         query: str | list[str],
         k: int,
@@ -216,12 +216,12 @@ class PostgresFTSRetriever(BaseRetriever):
 
         return docs
     
-    def full_text_search(
+    def bigm_search(
         self,
         query: str,
     ) -> list[Document]:
         """
-        단독 Full Text Search 유틸 함수.
+        단독 pg_bigm 키워드 검색 유틸 함수.
         Hybrid Search에서는 사용되지 않는다.
         """
         return self.invoke(query)
@@ -286,7 +286,7 @@ class PGVectorService(BaseVectorDbService):
             if score >= score_threshold
         ])
 
-        _run_title_sync = _timed("title_retrieval", lambda x: PostgresFTSRetriever(
+        _run_title_sync = _timed("title_retrieval", lambda x: PGBigmRetriever(
             session_factory=self.session_factory,
             collection_name=self.collection_name,
             k=max(100, k + offset),
@@ -296,7 +296,7 @@ class PGVectorService(BaseVectorDbService):
             search_mode="title"
         ).invoke(x["keyword_tokens"]))
 
-        _run_content_sync = _timed("content_retrieval", lambda x: PostgresFTSRetriever(
+        _run_content_sync = _timed("content_retrieval", lambda x: PGBigmRetriever(
             session_factory=self.session_factory,
             collection_name=self.collection_name,
             k=max(100, k + offset),
@@ -363,7 +363,7 @@ class PGVectorService(BaseVectorDbService):
         """
         가중치 기반 키워드 검색.
         """
-        search_sql, params = PostgresFTSRetriever.build_fts_query(
+        search_sql, params = PGBigmRetriever.build_bigm_query(
             collection_name=self.collection_name,
             query=query,
             k=k,

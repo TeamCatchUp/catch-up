@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import MagicMock
 from unittest.mock import patch
-from catchup.components.vector_db.pgvector.pgvector import PostgresFTSRetriever
+from catchup.components.vector_db.pgvector.pgvector import PGBigmRetriever
 from langchain_core.callbacks import CallbackManagerForRetrieverRun
 
 class TestPGVectorReproduction(unittest.TestCase):
@@ -10,7 +10,7 @@ class TestPGVectorReproduction(unittest.TestCase):
         self.mock_session = MagicMock()
         self.mock_session_factory.return_value.__enter__.return_value = self.mock_session
         
-        self.retriever = PostgresFTSRetriever(
+        self.retriever = PGBigmRetriever(
             session_factory=self.mock_session_factory,
             collection_name="test_collection",
             k=4,
@@ -40,10 +40,10 @@ class TestPGVectorReproduction(unittest.TestCase):
         self.assertIn("token_0", params)
         self.assertIn("token_1", params)
 
-    def test_no_ef_search_in_fts(self):
+    def test_no_ef_search_in_bigm(self):
         """
         [Corrected Behavior]
-        키워드 검색(FTS) 시 hnsw.ef_search 설정을 호출하지 않아야 함.
+        pg_bigm 키워드 검색 시 hnsw.ef_search 설정을 호출하지 않아야 함.
         """
         self.mock_session.execute.return_value.fetchall.return_value = []
         
