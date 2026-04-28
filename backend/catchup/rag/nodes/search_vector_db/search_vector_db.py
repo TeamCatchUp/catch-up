@@ -77,7 +77,7 @@ async def _get_hybrid_search_results(
 
         tasks.append(
             loop.run_in_executor(
-                rag_executors.vector_search,
+                rag_executors.vector_search_executor,
                 vector_db_service.hybrid_search,
                 q.query,
                 k,

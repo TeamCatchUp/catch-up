@@ -63,7 +63,7 @@ def get_compiled_graph(
         isolated=True,
     ).get_llm()
 
-    # LARGE, non-streaming, extended thinking — complex_planner, gap_analysis
+    # LARGE, non-streaming, extended thinking — complex_planner
     llm_thinking = get_llm_service(
         LlmProvider.AWS_BEDROCK,
         ModelCapacity.LARGE,

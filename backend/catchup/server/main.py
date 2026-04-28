@@ -193,7 +193,7 @@ async def lifespan(app: FastAPI):
         )
         rag_executors.init(
             vector_search_size=settings.RAG_VECTOR_SEARCH_THREAD_POOL_SIZE,
-            bedrock_rerank_size=settings.RAG_BEDROCK_RERANK_THREAD_POOL_SIZE,
+            rerank_size=settings.RAG_BEDROCK_RERANK_THREAD_POOL_SIZE,
             llm_size=settings.RAG_LLM_THREAD_POOL_SIZE,
         )
     except:
