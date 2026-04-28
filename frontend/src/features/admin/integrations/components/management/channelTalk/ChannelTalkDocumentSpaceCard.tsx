@@ -8,8 +8,8 @@ import type {
   ChannelTalkTestButtonStatus,
 } from '../../../types/channelTalkModel';
 import ChannelTalkConnectionTestButton from './ChannelTalkConnectionTestButton';
+import ChannelTalkFieldRow from './ChannelTalkFieldRow';
 import ChannelTalkSyncIntervalDropdown from './ChannelTalkSyncIntervalDropdown';
-import ChannelTalkTextField from './ChannelTalkTextField';
 
 interface ChannelTalkDocumentSpaceCardProps {
   documentSpace: ChannelTalkDocumentSpace;
@@ -52,14 +52,14 @@ export default function ChannelTalkDocumentSpaceCard({
 
         {/* Access Key + Access Secret (2-column) */}
         <div className="flex gap-3">
-          <DocumentSpaceField
+          <ChannelTalkFieldRow
             label="Access Key"
             value={documentSpace.accessKey}
             placeholder="Access Key 입력하기"
             state={fieldState}
             onChange={(next) => onUpdate({ accessKey: next })}
           />
-          <DocumentSpaceField
+          <ChannelTalkFieldRow
             label="Access Secret"
             value={documentSpace.accessSecret}
             placeholder="Access Secret 입력하기"
@@ -79,23 +79,3 @@ export default function ChannelTalkDocumentSpaceCard({
   );
 }
 
-interface DocumentSpaceFieldProps {
-  label: string;
-  value: string;
-  placeholder: string;
-  state: ChannelTalkFieldState;
-  onChange: (next: string) => void;
-}
-
-/** 도큐먼트 스페이스 입력 행 — 라벨 + Required dot + textfield */
-function DocumentSpaceField({ label, value, placeholder, state, onChange }: DocumentSpaceFieldProps) {
-  return (
-    <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-      <div className="flex items-center gap-1">
-        <span className="text-body-small text-content-neutral">{label}</span>
-        <span className="bg-status-destructive size-[5px] rounded-full" aria-label="필수 입력" />
-      </div>
-      <ChannelTalkTextField value={value} placeholder={placeholder} state={state} maskable onChange={onChange} />
-    </div>
-  );
-}

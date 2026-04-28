@@ -14,8 +14,8 @@ import type {
 } from '../../../types/channelTalkModel';
 import ChannelTalkConnectionTestButton from './ChannelTalkConnectionTestButton';
 import ChannelTalkDocumentSpaceCard from './ChannelTalkDocumentSpaceCard';
+import ChannelTalkFieldRow from './ChannelTalkFieldRow';
 import ChannelTalkSyncIntervalDropdown from './ChannelTalkSyncIntervalDropdown';
-import ChannelTalkTextField from './ChannelTalkTextField';
 
 const MEGAPHONE_NOTICE =
   '채널은 실시간으로 문의가 들어오는 공간이에요. 주기를 짧게 설정할수록 최신 대화가 반영되어 답변 품질이 좋아져요.';
@@ -81,14 +81,14 @@ export default function ChannelTalkChannelCard({
 
         {/* Access Key + Access Secret (2-column) */}
         <div className="flex gap-3">
-          <ChannelField
+          <ChannelTalkFieldRow
             label="Access Key"
             value={channel.accessKey}
             placeholder="Access Key 입력하기"
             state={accessKeyState}
             onChange={(next) => onUpdate({ accessKey: next })}
           />
-          <ChannelField
+          <ChannelTalkFieldRow
             label="Access Secret"
             value={channel.accessSecret}
             placeholder="Access Secret 입력하기"
@@ -98,7 +98,7 @@ export default function ChannelTalkChannelCard({
         </div>
 
         {/* Webhook Token */}
-        <ChannelField
+        <ChannelTalkFieldRow
           label="Webhook Token"
           value={channel.webhookToken}
           placeholder="Webhook Token 입력하기"
@@ -156,23 +156,3 @@ export default function ChannelTalkChannelCard({
   );
 }
 
-interface ChannelFieldProps {
-  label: string;
-  value: string;
-  placeholder: string;
-  state: ChannelTalkFieldState;
-  onChange: (next: string) => void;
-}
-
-/** 채널 카드의 입력 행 — 라벨 + Required dot + textfield */
-function ChannelField({ label, value, placeholder, state, onChange }: ChannelFieldProps) {
-  return (
-    <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-      <div className="flex items-center gap-1">
-        <span className="text-body-small text-content-neutral">{label}</span>
-        <span className="bg-status-destructive size-[5px] rounded-full" aria-label="필수 입력" />
-      </div>
-      <ChannelTalkTextField value={value} placeholder={placeholder} state={state} maskable onChange={onChange} />
-    </div>
-  );
-}
