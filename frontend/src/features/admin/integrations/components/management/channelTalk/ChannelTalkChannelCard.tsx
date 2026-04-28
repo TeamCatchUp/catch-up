@@ -62,8 +62,8 @@ export default function ChannelTalkChannelCard({
 
   return (
     <div className="border-edge-neutral bg-fill-normal relative flex flex-col overflow-hidden rounded-xl border">
-      {/* 헤더 행 좌측 파란색 indicator strip — height 32px 유지 + 카드 좌측 가장자리에 노출 */}
-      <div className="bg-edge-primary-strong absolute top-4 left-0.1 z-base h-8 w-1 rounded-r-full" aria-hidden />
+      {/* 헤더 행 좌측 파란색 indicator strip — height 32px, 카드 좌측 가장자리에서 4px 안쪽 */}
+      <div className="bg-edge-primary-strong absolute top-4 left-1 z-base h-8 w-1 rounded-r-full" aria-hidden />
 
       {/* Vertical input form (684×340 영역) */}
       <div className="flex flex-col gap-4 px-4 pt-4 pb-5">
