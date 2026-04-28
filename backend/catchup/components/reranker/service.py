@@ -113,6 +113,15 @@ class AwsBedrockRerankService(BaseRerankService):
             doc_count=len(documents)
         )
 
+        executor = rag_executors.bedrock_rerank
+        logger.info(
+            "bedrock_rerank_executor_state",
+            queue_size=executor._work_queue.qsize(),
+            active_threads=len(executor._threads),
+            max_workers=executor._max_workers,
+            doc_count=len(documents),
+        )
+
         loop = asyncio.get_running_loop()
         t0 = loop.time()
         reranked_docs: list[Document] = await loop.run_in_executor(

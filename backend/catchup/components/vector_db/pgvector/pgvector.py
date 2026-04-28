@@ -294,6 +294,9 @@ class PGVectorService(BaseVectorDbService):
         
         return result
 
+        logger.info("hybrid_search_completed", elapsed=round(time.perf_counter() - t0, 3), result_count=len(result))
+        return result
+
     def _hybrid_search_chain(
         self,
         k: int = 4,
@@ -367,6 +370,20 @@ class PGVectorService(BaseVectorDbService):
             search_mode="content"
         )
         
+        def _invoke_vector(x):
+            t = time.perf_counter()
+            logger.info("vector_retrieval_started")
+            docs = vector_retriever.invoke(x["semantic_query"])
+            logger.info("vector_retrieval_completed", elapsed=round(time.perf_counter() - t, 3), count=len(docs))
+            return docs
+
+        def _invoke_keyword(x):
+            t = time.perf_counter()
+            logger.info("keyword_retrieval_started")
+            docs = keyword_retriever.invoke(x["keyword_tokens"])
+            logger.info("keyword_retrieval_completed", elapsed=round(time.perf_counter() - t, 3), count=len(docs))
+            return docs
+
         retriever_parallel = RunnableParallel(
             # Semantic 결과 필터링 (score_threshold 미만 제거)
             vector_docs=RunnableLambda(_make_logged_invoker(
