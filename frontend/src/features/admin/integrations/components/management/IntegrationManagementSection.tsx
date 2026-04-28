@@ -88,18 +88,18 @@ export default function IntegrationManagementSection({
               )}
             >
               <div className="flex min-w-0 items-center gap-3">
-                <Icon className={service === 'confluence' ? 'h-5.75 w-6 shrink-0' : 'h-6 w-6 shrink-0'} />
+                <Icon className="size-7 shrink-0" />
                 <span className="text-heading-small text-content-normal truncate">{actionText}</span>
               </div>
               <div className="flex shrink-0 items-center gap-1">
                 {connected ? (
                   <>
-                    <IconCloudCheckFilled className="text-icon-primary h-5 w-5" />
-                    <span className="text-body-xsmall text-icon-primary">연동됨</span>
+                    <IconCloudCheckFilled className="text-icon-primary-assistive size-4.5" />
+                    <span className="text-body-xsmall text-content-primary-assistive">연동됨</span>
                   </>
                 ) : (
                   <>
-                    <IconCloudOff className="text-content-assistive h-5 w-5" />
+                    <IconCloudOff className="text-content-assistive size-4.5" />
                     <span className="text-body-xsmall text-content-alternative">연동 안됨</span>
                   </>
                 )}
