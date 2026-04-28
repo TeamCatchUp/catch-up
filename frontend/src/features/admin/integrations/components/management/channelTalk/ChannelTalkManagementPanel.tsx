@@ -102,21 +102,27 @@ function CredentialSection({ channels, channelCount, totalDocumentSpaces }: Cred
     <div className="flex flex-col gap-3">
       <h3 className="text-heading-small text-content-neutral">Credential Key 입력 및 동기화 주기 설정</h3>
 
-      {/* 채널 리스트 헤더 — "N개 채널 · M개 도큐먼트 연결됨" + "채널 추가하기" (Figma node 12045:47583) */}
-      <div className="border-edge-assistive bg-fill-strong flex flex-wrap items-center gap-1.5 rounded-xl border px-4 py-3">
+      {/*
+        채널 리스트 헤더 — 박스 전체가 "채널 추가하기" 클릭 영역.
+        Figma 3상태:
+        - Default(#f7f7f8): node `12060:84077`
+        - Hover(#eaebec):   node `12060:84088`
+        - Pressed(#e1e2e4): node `12060:84094`
+      */}
+      <button
+        type="button"
+        className="border-edge-assistive bg-fill-strong hover:bg-fill-interaction-hover active:bg-fill-interaction-pressed flex w-full cursor-pointer flex-wrap items-center gap-1.5 rounded-xl border px-4 py-3 transition-colors"
+      >
         <span className="text-body-small text-content-normal shrink-0">{channelCount}개 채널</span>
         <span className="bg-dim-black-25 size-1 shrink-0 rounded-full" aria-hidden />
-        <span className="text-body-small text-content-normal min-w-0 flex-1 truncate">
+        <span className="text-body-small text-content-normal min-w-0 flex-1 truncate text-left">
           {totalDocumentSpaces}개 도큐먼트 연결됨
         </span>
-        <button
-          type="button"
-          className="text-body-small text-content-primary flex shrink-0 cursor-pointer items-center gap-2"
-        >
+        <span className="text-body-small text-content-primary flex shrink-0 items-center gap-2">
           <IconAddSquare className="text-icon-primary size-6 shrink-0" />
           채널 추가하기
-        </button>
-      </div>
+        </span>
+      </button>
 
       {/* 채널 카드 리스트 — mock 5개가 5상태(idle/entered/tested/error/editing)를 각각 시연 */}
       <div className="flex flex-col gap-3">
