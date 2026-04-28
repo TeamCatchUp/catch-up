@@ -36,8 +36,12 @@ interface ChannelTalkViewModel {
   state: ChannelTalkConnectionState;
   addChannel: () => void;
   updateChannel: (channelId: string, patch: Partial<ChannelTalkChannel>) => void;
+  removeChannel: (channelId: string) => void;
+  /** tested 상태에서 사용자가 "수정하기" 클릭 → editing으로 전환 (lock 해제) */
+  enterEditMode: (channelId: string) => void;
   addDocumentSpace: (channelId: string) => void;
   updateDocumentSpace: (channelId: string, dsId: string, patch: Partial<ChannelTalkDocumentSpace>) => void;
+  removeDocumentSpace: (channelId: string, dsId: string) => void;
   testChannelConnection: (channelId: string) => void;
 }
 
@@ -91,6 +95,22 @@ export function useChannelTalkViewModel(): ChannelTalkViewModel {
     }));
   }, []);
 
+  const removeChannel = useCallback((channelId: string) => {
+    setState((prev) => ({
+      ...prev,
+      channels: prev.channels.filter((ch) => ch.id !== channelId),
+    }));
+  }, []);
+
+  const enterEditMode = useCallback((channelId: string) => {
+    setState((prev) => ({
+      ...prev,
+      channels: prev.channels.map((ch) =>
+        ch.id === channelId ? { ...ch, connectionStatus: 'editing' as const, errorMessage: undefined } : ch,
+      ),
+    }));
+  }, []);
+
   const addDocumentSpace = useCallback((channelId: string) => {
     setState((prev) => ({
       ...prev,
@@ -131,6 +151,15 @@ export function useChannelTalkViewModel(): ChannelTalkViewModel {
     [],
   );
 
+  const removeDocumentSpace = useCallback((channelId: string, dsId: string) => {
+    setState((prev) => ({
+      ...prev,
+      channels: prev.channels.map((ch) =>
+        ch.id === channelId ? { ...ch, documentSpaces: ch.documentSpaces.filter((ds) => ds.id !== dsId) } : ch,
+      ),
+    }));
+  }, []);
+
   const testChannelConnection = useCallback((channelId: string) => {
     setState((prev) => ({
       ...prev,
@@ -150,8 +179,11 @@ export function useChannelTalkViewModel(): ChannelTalkViewModel {
     state,
     addChannel,
     updateChannel,
+    removeChannel,
+    enterEditMode,
     addDocumentSpace,
     updateDocumentSpace,
+    removeDocumentSpace,
     testChannelConnection,
   };
 }
