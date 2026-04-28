@@ -41,6 +41,22 @@ export const DOCUMENT_SPACE_SYNC_INTERVAL_DEFAULT: ChannelTalkSyncInterval = '1h
  */
 export type ChannelTalkConnectionStatus = 'idle' | 'entered' | 'tested' | 'error' | 'editing';
 
+/**
+ * 텍스트필드 시각 변형.
+ * - `idle`: 1px neutral border
+ * - `error`: 1.5px destructive border (검증 실패)
+ * - `focus`: 1.5px primary border (사용자 수정 중)
+ */
+export type ChannelTalkFieldState = 'idle' | 'error' | 'focus';
+
+/**
+ * 연결 테스트 버튼 시각 상태.
+ * - `idle`: 입력 전 / Entered
+ * - `active`: 사용자 수정 중 (검증 권유)
+ * - `success`: 검증 통과 — 라벨 "테스트 성공"
+ */
+export type ChannelTalkTestButtonStatus = 'idle' | 'active' | 'success';
+
 /** 채널톡 도큐먼트 스페이스 (채널 하위 항목) */
 export interface ChannelTalkDocumentSpace {
   id: string;

@@ -9,6 +9,8 @@ import type {
   ChannelTalkChannel,
   ChannelTalkConnectionStatus,
   ChannelTalkDocumentSpace,
+  ChannelTalkFieldState,
+  ChannelTalkTestButtonStatus,
 } from '../../../types/channelTalkModel';
 import ChannelTalkConnectionTestButton from './ChannelTalkConnectionTestButton';
 import ChannelTalkDocumentSpaceCard from './ChannelTalkDocumentSpaceCard';
@@ -18,19 +20,20 @@ import ChannelTalkTextField from './ChannelTalkTextField';
 const MEGAPHONE_NOTICE =
   '채널은 실시간으로 문의가 들어오는 공간이에요. 주기를 짧게 설정할수록 최신 대화가 반영되어 답변 품질이 좋아져요.';
 
-type FieldState = 'idle' | 'error' | 'focus';
-type TestButtonStatus = 'idle' | 'active' | 'success';
 type ChannelFieldName = 'accessKey' | 'accessSecret' | 'webhookToken';
 
-/** connectionStatus → 각 textfield의 시각 변형 매핑 */
-function fieldStateFor(status: ChannelTalkConnectionStatus, fieldName: ChannelFieldName): FieldState {
+/**
+ * connectionStatus → 각 textfield의 시각 변형 매핑.
+ * `editing` 상태는 사용자가 Access Key를 수정 중인 시점이라 그 필드만 focus border.
+ */
+function fieldStateFor(status: ChannelTalkConnectionStatus, fieldName: ChannelFieldName): ChannelTalkFieldState {
   if (status === 'error') return 'error';
   if (status === 'editing' && fieldName === 'accessKey') return 'focus';
   return 'idle';
 }
 
 /** connectionStatus → 연결 테스트 버튼 상태 매핑 */
-function testButtonStatusFor(status: ChannelTalkConnectionStatus): TestButtonStatus {
+function testButtonStatusFor(status: ChannelTalkConnectionStatus): ChannelTalkTestButtonStatus {
   if (status === 'tested') return 'success';
   if (status === 'editing') return 'active';
   return 'idle';
@@ -157,7 +160,7 @@ interface ChannelFieldProps {
   label: string;
   value: string;
   placeholder: string;
-  state: FieldState;
+  state: ChannelTalkFieldState;
   onChange: (next: string) => void;
 }
 

@@ -2,7 +2,11 @@
 
 import IconBook from '@/public/icons/icon/book.svg';
 
-import type { ChannelTalkDocumentSpace } from '../../../types/channelTalkModel';
+import type {
+  ChannelTalkDocumentSpace,
+  ChannelTalkFieldState,
+  ChannelTalkTestButtonStatus,
+} from '../../../types/channelTalkModel';
 import ChannelTalkConnectionTestButton from './ChannelTalkConnectionTestButton';
 import ChannelTalkSyncIntervalDropdown from './ChannelTalkSyncIntervalDropdown';
 import ChannelTalkTextField from './ChannelTalkTextField';
@@ -10,9 +14,9 @@ import ChannelTalkTextField from './ChannelTalkTextField';
 interface ChannelTalkDocumentSpaceCardProps {
   documentSpace: ChannelTalkDocumentSpace;
   /** 텍스트필드 시각 변형 (부모 channel의 connectionStatus에 종속) */
-  fieldState?: 'idle' | 'error' | 'focus';
+  fieldState?: ChannelTalkFieldState;
   /** 연결 테스트 버튼 상태 */
-  testStatus?: 'idle' | 'active' | 'success';
+  testStatus?: ChannelTalkTestButtonStatus;
   onUpdate: (patch: Partial<ChannelTalkDocumentSpace>) => void;
 }
 
@@ -79,7 +83,7 @@ interface DocumentSpaceFieldProps {
   label: string;
   value: string;
   placeholder: string;
-  state: 'idle' | 'error' | 'focus';
+  state: ChannelTalkFieldState;
   onChange: (next: string) => void;
 }
 

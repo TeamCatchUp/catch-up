@@ -5,18 +5,12 @@ import { useId, useState } from 'react';
 import IconVisibilityOff from '@/public/icons/icon/visibility_off.svg';
 import { cn } from '@/shared/utils/cn';
 
-/**
- * ChannelTalkTextField 시각 변형 — 5상태 머신 매핑.
- * - `idle`: 1px `border-edge-neutral` (#eaebec) — 입력 전 / 입력 완료 / 테스트 성공
- * - `error`: 1.5px `border-status-destructive` (#ff4242) — Error_미입력
- * - `focus`: 1.5px `border-edge-primary` (#69a5ff) — Key 수정 → 재시도 유도
- */
-type ChannelTalkTextFieldState = 'idle' | 'error' | 'focus';
+import type { ChannelTalkFieldState } from '../../../types/channelTalkModel';
 
 interface ChannelTalkTextFieldProps {
   value: string;
   placeholder: string;
-  state?: ChannelTalkTextFieldState;
+  state?: ChannelTalkFieldState;
   /** 비밀값 입력 — eye-off 토글 버튼 노출 (기본은 평문 표시, 클릭 시 마스킹) */
   maskable?: boolean;
   /** 초기 마스킹 여부 (maskable=true일 때만 적용, 기본 false = 평문 표시) */
