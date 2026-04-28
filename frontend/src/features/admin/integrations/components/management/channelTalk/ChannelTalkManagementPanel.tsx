@@ -1,7 +1,6 @@
 'use client';
 
 import IconAddSquare from '@/public/icons/icon/add_square.svg';
-import IconAlarmFilled from '@/public/icons/icon/alarm_filled.svg';
 import IconCloudCheckFilled from '@/public/icons/icon/cloud_check_filled.svg';
 import IconOpenInNew from '@/public/icons/icon/open_in_new.svg';
 
@@ -42,28 +41,11 @@ interface ConnectionStatusSectionProps {
   state: ChannelTalkConnectionState;
 }
 
-/** 연동 상태 관리 — 헤더(최근 동기화/다시 동기화) + 연동 상태 토글 + 보안 관련 설명 */
+/** 연동 상태 관리 — 연동 상태 토글 + 보안 관련 설명 */
 function ConnectionStatusSection({ state }: ConnectionStatusSectionProps) {
   return (
     <div className="flex flex-col gap-1.5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h3 className="text-heading-small text-content-normal">연동 상태 관리</h3>
-        <div className="flex items-center gap-2">
-          {state.lastSyncedAt ? (
-            <div className="flex items-center gap-1.5 px-1.5">
-              <IconAlarmFilled className="text-icon-normal size-4.5 shrink-0" />
-              <span className="text-body-xsmall text-content-neutral">최근 동기화</span>
-              <span className="text-body-xsmall text-content-neutral">{state.lastSyncedAt}</span>
-            </div>
-          ) : null}
-          <button
-            type="button"
-            className="bg-fill-interaction-inactive border-edge-normal text-body-xsmall text-content-neutral hover:bg-fill-interaction-hover flex h-7.5 cursor-pointer items-center gap-1 rounded-lg border px-2 py-1 transition-colors"
-          >
-            다시 동기화
-          </button>
-        </div>
-      </div>
+      <h3 className="text-heading-small text-content-normal">연동 상태 관리</h3>
 
       <div className="border-edge-neutral bg-fill-strong overflow-hidden rounded-xl border">
         <div className="border-edge-neutral flex h-13 items-center justify-between border-b px-4 py-3">
@@ -120,16 +102,16 @@ function CredentialSection({ channels, channelCount, totalDocumentSpaces }: Cred
     <div className="flex flex-col gap-3">
       <h3 className="text-heading-small text-content-neutral">Credential Key 입력 및 동기화 주기 설정</h3>
 
-      {/* 채널 리스트 헤더 — "N개 채널 · M개 도큐먼트 연결됨" + "채널 추가하기" */}
-      <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3.5">
-        <div className="flex items-center gap-2">
-          <span className="text-heading-small text-content-normal">{channelCount}개 채널</span>
-          <span className="bg-edge-neutral size-1 rounded-full" aria-hidden />
-          <span className="text-body-small text-content-neutral">{totalDocumentSpaces}개 도큐먼트 연결됨</span>
-        </div>
+      {/* 채널 리스트 헤더 — "N개 채널 · M개 도큐먼트 연결됨" + "채널 추가하기" (Figma node 12045:47583) */}
+      <div className="border-edge-assistive bg-fill-strong flex flex-wrap items-center gap-1.5 rounded-xl border px-4 py-3">
+        <span className="text-body-small text-content-normal shrink-0">{channelCount}개 채널</span>
+        <span className="bg-dim-black-25 size-1 shrink-0 rounded-full" aria-hidden />
+        <span className="text-body-small text-content-normal min-w-0 flex-1 truncate">
+          {totalDocumentSpaces}개 도큐먼트 연결됨
+        </span>
         <button
           type="button"
-          className="text-body-small text-content-primary flex h-6 cursor-pointer items-center gap-2"
+          className="text-body-small text-content-primary flex shrink-0 cursor-pointer items-center gap-2"
         >
           <IconAddSquare className="text-icon-primary size-6 shrink-0" />
           채널 추가하기
