@@ -11,7 +11,6 @@ import Pagination from '@/shared/components/ui/pagination';
 import { cn } from '@/shared/utils/cn';
 
 import { RESOURCES_PER_PAGE } from '../../constants/integrationsConfig';
-import { useChannelTalkViewModel } from '../../hooks/useChannelTalkViewModel';
 import type { ConnectorDetail, IntegrationMenuItem, IntegrationService } from '../../types/integrationModel';
 import ChannelTalkManagementPanel from './channelTalk/ChannelTalkManagementPanel';
 import ConfluenceGuideSection from './ConfluenceGuideSection';
@@ -56,7 +55,6 @@ export default function IntegrationManagementSection({
   detail,
 }: IntegrationManagementSectionProps) {
   const [currentPage, setCurrentPage] = useState(1);
-  const channelTalkState = useChannelTalkViewModel();
 
   // 서비스 변경 시 페이지 리셋 — 렌더 중 조정 (useEffect 이중 렌더 방지)
   const [prevService, setPrevService] = useState(selectedService);
@@ -111,7 +109,7 @@ export default function IntegrationManagementSection({
 
       <div className="flex flex-2 flex-col gap-6">
         {selectedService === 'channel-talk' ? (
-          <ChannelTalkManagementPanel state={channelTalkState} />
+          <ChannelTalkManagementPanel />
         ) : (
           <>
             <div className="flex flex-col gap-1.5">

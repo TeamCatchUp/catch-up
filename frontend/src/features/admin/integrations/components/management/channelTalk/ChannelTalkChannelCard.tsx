@@ -4,7 +4,11 @@ import IconAdd from '@/public/icons/icon/add.svg';
 import IconMegaphone from '@/public/icons/icon/megaphone.svg';
 import IconTag from '@/public/icons/icon/tag.svg';
 
-import type { ChannelTalkChannel, ChannelTalkConnectionStatus } from '../../../types/channelTalkModel';
+import type {
+  ChannelTalkChannel,
+  ChannelTalkConnectionStatus,
+  ChannelTalkDocumentSpace,
+} from '../../../types/channelTalkModel';
 import ChannelTalkConnectionTestButton from './ChannelTalkConnectionTestButton';
 import ChannelTalkDocumentSpaceCard from './ChannelTalkDocumentSpaceCard';
 import ChannelTalkSyncIntervalDropdown from './ChannelTalkSyncIntervalDropdown';
@@ -17,12 +21,7 @@ type FieldState = 'idle' | 'error' | 'focus';
 type TestButtonStatus = 'idle' | 'active' | 'success';
 type ChannelFieldName = 'accessKey' | 'accessSecret' | 'webhookToken';
 
-/**
- * connectionStatus → 각 textfield의 시각 변형 매핑.
- * - error: 모든 필드 destructive border
- * - editing: Access Key만 focus border (사용자 수정 중), 나머지는 idle
- * - 그 외 (idle/entered/tested): 모두 idle
- */
+/** connectionStatus → 각 textfield의 시각 변형 매핑 */
 function fieldStateFor(status: ChannelTalkConnectionStatus, fieldName: ChannelFieldName): FieldState {
   if (status === 'error') return 'error';
   if (status === 'editing' && fieldName === 'accessKey') return 'focus';
@@ -38,11 +37,23 @@ function testButtonStatusFor(status: ChannelTalkConnectionStatus): TestButtonSta
 
 interface ChannelTalkChannelCardProps {
   channel: ChannelTalkChannel;
-  onAddDocumentSpace?: () => void;
+  onUpdate: (patch: Partial<ChannelTalkChannel>) => void;
+  onRemove: () => void;
+  onAddDocumentSpace: () => void;
+  onUpdateDocumentSpace: (dsId: string, patch: Partial<ChannelTalkDocumentSpace>) => void;
+  onRemoveDocumentSpace: (dsId: string) => void;
+  onTestConnection: () => void;
 }
 
-/** 채널톡 채널 카드 — connectionStatus(idle/entered/tested/error/editing)에 따라 5변형 렌더 */
-export default function ChannelTalkChannelCard({ channel, onAddDocumentSpace }: ChannelTalkChannelCardProps) {
+/** 채널톡 채널 카드 — connectionStatus에 따라 5변형 렌더, 인터랙티브 입력 지원 */
+export default function ChannelTalkChannelCard({
+  channel,
+  onUpdate,
+  onAddDocumentSpace,
+  onUpdateDocumentSpace,
+  onRemoveDocumentSpace,
+  onTestConnection,
+}: ChannelTalkChannelCardProps) {
   const status = channel.connectionStatus;
   const accessKeyState = fieldStateFor(status, 'accessKey');
   const accessSecretState = fieldStateFor(status, 'accessSecret');
@@ -64,7 +75,7 @@ export default function ChannelTalkChannelCard({ channel, onAddDocumentSpace }: 
             </div>
             <h3 className="text-heading-small text-content-normal min-w-0 flex-1 truncate">{channel.name}</h3>
           </div>
-          <ChannelTalkConnectionTestButton status={testStatus} />
+          <ChannelTalkConnectionTestButton status={testStatus} onClick={onTestConnection} />
         </div>
 
         {/* Access Key + Access Secret (2-column) */}
@@ -74,12 +85,14 @@ export default function ChannelTalkChannelCard({ channel, onAddDocumentSpace }: 
             value={channel.accessKey}
             placeholder="Access Key 입력하기"
             state={accessKeyState}
+            onChange={(next) => onUpdate({ accessKey: next })}
           />
           <ChannelField
             label="Access Secret"
             value={channel.accessSecret}
             placeholder="Access Secret 입력하기"
             state={accessSecretState}
+            onChange={(next) => onUpdate({ accessSecret: next })}
           />
         </div>
 
@@ -89,6 +102,7 @@ export default function ChannelTalkChannelCard({ channel, onAddDocumentSpace }: 
           value={channel.webhookToken}
           placeholder="Webhook Token 입력하기"
           state={webhookTokenState}
+          onChange={(next) => onUpdate({ webhookToken: next })}
         />
 
         {/* Error 메시지 — error 상태일 때만 표시 */}
@@ -102,15 +116,26 @@ export default function ChannelTalkChannelCard({ channel, onAddDocumentSpace }: 
             <IconMegaphone className="text-icon-alternative size-4.5 shrink-0" />
             <p className="text-body-xsmall text-content-assistive">{MEGAPHONE_NOTICE}</p>
           </div>
-          <ChannelTalkSyncIntervalDropdown variant="channel" value={channel.syncInterval} />
+          <ChannelTalkSyncIntervalDropdown
+            variant="channel"
+            value={channel.syncInterval}
+            onChange={(next) => onUpdate({ syncInterval: next })}
+          />
         </div>
       </div>
 
-      {/* 도큐먼트 스페이스 자식 카드들 (있을 때만) — 각 카드 사이는 우측 form의 border-b로 구분 */}
+      {/* 도큐먼트 스페이스 자식 카드들 — 각 카드 사이는 우측 form의 border-b로 구분 */}
       {channel.documentSpaces.length > 0 ? (
         <div className="flex flex-col px-4">
           {channel.documentSpaces.map((ds) => (
-            <ChannelTalkDocumentSpaceCard key={ds.id} documentSpace={ds} fieldState="idle" testStatus="idle" />
+            <ChannelTalkDocumentSpaceCard
+              key={ds.id}
+              documentSpace={ds}
+              fieldState="idle"
+              testStatus="idle"
+              onUpdate={(patch) => onUpdateDocumentSpace(ds.id, patch)}
+              onRemove={() => onRemoveDocumentSpace(ds.id)}
+            />
           ))}
         </div>
       ) : null}
@@ -135,17 +160,18 @@ interface ChannelFieldProps {
   value: string;
   placeholder: string;
   state: FieldState;
+  onChange: (next: string) => void;
 }
 
 /** 채널 카드의 입력 행 — 라벨 + Required dot + textfield */
-function ChannelField({ label, value, placeholder, state }: ChannelFieldProps) {
+function ChannelField({ label, value, placeholder, state, onChange }: ChannelFieldProps) {
   return (
     <div className="flex min-w-0 flex-1 flex-col gap-1.5">
       <div className="flex items-center gap-1">
         <span className="text-body-small text-content-neutral">{label}</span>
         <span className="bg-status-destructive size-[5px] rounded-full" aria-label="필수 입력" />
       </div>
-      <ChannelTalkTextField value={value} placeholder={placeholder} state={state} maskable />
+      <ChannelTalkTextField value={value} placeholder={placeholder} state={state} maskable onChange={onChange} />
     </div>
   );
 }

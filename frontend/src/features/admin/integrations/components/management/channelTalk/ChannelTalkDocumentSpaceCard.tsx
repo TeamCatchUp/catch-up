@@ -13,6 +13,8 @@ interface ChannelTalkDocumentSpaceCardProps {
   fieldState?: 'idle' | 'error' | 'focus';
   /** 연결 테스트 버튼 상태 */
   testStatus?: 'idle' | 'active' | 'success';
+  onUpdate: (patch: Partial<ChannelTalkDocumentSpace>) => void;
+  onRemove: () => void;
 }
 
 /**
@@ -25,6 +27,7 @@ export default function ChannelTalkDocumentSpaceCard({
   documentSpace,
   fieldState = 'idle',
   testStatus = 'idle',
+  onUpdate,
 }: ChannelTalkDocumentSpaceCardProps) {
   return (
     <div className="flex w-full items-start gap-4 pt-5">
@@ -51,17 +54,23 @@ export default function ChannelTalkDocumentSpaceCard({
             value={documentSpace.accessKey}
             placeholder="Access Key 입력하기"
             state={fieldState}
+            onChange={(next) => onUpdate({ accessKey: next })}
           />
           <DocumentSpaceField
             label="Access Secret"
             value={documentSpace.accessSecret}
             placeholder="Access Secret 입력하기"
             state={fieldState}
+            onChange={(next) => onUpdate({ accessSecret: next })}
           />
         </div>
 
         {/* Sync interval dropdown */}
-        <ChannelTalkSyncIntervalDropdown variant="documentSpace" value={documentSpace.syncInterval} />
+        <ChannelTalkSyncIntervalDropdown
+          variant="documentSpace"
+          value={documentSpace.syncInterval}
+          onChange={(next) => onUpdate({ syncInterval: next })}
+        />
       </div>
     </div>
   );
@@ -72,17 +81,18 @@ interface DocumentSpaceFieldProps {
   value: string;
   placeholder: string;
   state: 'idle' | 'error' | 'focus';
+  onChange: (next: string) => void;
 }
 
 /** 도큐먼트 스페이스 입력 행 — 라벨 + Required dot + textfield */
-function DocumentSpaceField({ label, value, placeholder, state }: DocumentSpaceFieldProps) {
+function DocumentSpaceField({ label, value, placeholder, state, onChange }: DocumentSpaceFieldProps) {
   return (
     <div className="flex min-w-0 flex-1 flex-col gap-1.5">
       <div className="flex items-center gap-1">
         <span className="text-body-small text-content-neutral">{label}</span>
         <span className="bg-status-destructive size-[5px] rounded-full" aria-label="필수 입력" />
       </div>
-      <ChannelTalkTextField value={value} placeholder={placeholder} state={state} maskable />
+      <ChannelTalkTextField value={value} placeholder={placeholder} state={state} maskable onChange={onChange} />
     </div>
   );
 }

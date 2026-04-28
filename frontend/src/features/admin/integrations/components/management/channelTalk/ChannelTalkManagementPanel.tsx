@@ -5,15 +5,23 @@ import IconCloudCheckFilled from '@/public/icons/icon/cloud_check_filled.svg';
 import IconOpenInNew from '@/public/icons/icon/open_in_new.svg';
 import { cn } from '@/shared/utils/cn';
 
+import { useChannelTalkViewModel } from '../../../hooks/useChannelTalkViewModel';
 import type { ChannelTalkChannel, ChannelTalkConnectionState } from '../../../types/channelTalkModel';
 import ChannelTalkChannelCard from './ChannelTalkChannelCard';
 
-interface ChannelTalkManagementPanelProps {
-  state: ChannelTalkConnectionState;
-}
+/** 채널톡 메인 패널 — 인터랙티브 mock state 자체 관리 (새로고침 시 초기화) */
+export default function ChannelTalkManagementPanel() {
+  const {
+    state,
+    addChannel,
+    updateChannel,
+    removeChannel,
+    addDocumentSpace,
+    updateDocumentSpace,
+    removeDocumentSpace,
+    testChannelConnection,
+  } = useChannelTalkViewModel();
 
-/** 채널톡 메인 패널 — 연동 상태 관리 / 데이터 범위 / Credential 입력 3개 섹션 */
-export default function ChannelTalkManagementPanel({ state }: ChannelTalkManagementPanelProps) {
   const hasChannels = state.channels.length > 0;
   const totalDocumentSpaces = state.channels.reduce((sum, ch) => sum + ch.documentSpaces.length, 0);
 
@@ -26,6 +34,13 @@ export default function ChannelTalkManagementPanel({ state }: ChannelTalkManagem
         channelCount={state.channels.length}
         totalDocumentSpaces={totalDocumentSpaces}
         hasChannels={hasChannels}
+        onAddChannel={addChannel}
+        onUpdateChannel={updateChannel}
+        onRemoveChannel={removeChannel}
+        onAddDocumentSpace={addDocumentSpace}
+        onUpdateDocumentSpace={updateDocumentSpace}
+        onRemoveDocumentSpace={removeDocumentSpace}
+        onTestChannelConnection={testChannelConnection}
       />
     </div>
   );
@@ -72,7 +87,7 @@ interface DataRangeSectionProps {
   hasChannels: boolean;
 }
 
-/** 연동된 데이터 범위 섹션 — 단일 헤더 + 박스 (채널 0개 시 placeholder) */
+/** 연동된 데이터 범위 섹션 — 채널 0개 시 placeholder */
 function DataRangeSection({ hasChannels }: DataRangeSectionProps) {
   return (
     <div className="flex flex-col gap-1.5">
@@ -96,10 +111,33 @@ interface CredentialSectionProps {
   channelCount: number;
   totalDocumentSpaces: number;
   hasChannels: boolean;
+  onAddChannel: () => void;
+  onUpdateChannel: (channelId: string, patch: Partial<ChannelTalkChannel>) => void;
+  onRemoveChannel: (channelId: string) => void;
+  onAddDocumentSpace: (channelId: string) => void;
+  onUpdateDocumentSpace: (
+    channelId: string,
+    dsId: string,
+    patch: Partial<ChannelTalkChannel['documentSpaces'][number]>,
+  ) => void;
+  onRemoveDocumentSpace: (channelId: string, dsId: string) => void;
+  onTestChannelConnection: (channelId: string) => void;
 }
 
-/** Credential Key 입력 및 동기화 주기 설정 — 채널 리스트 헤더 + 채널 카드들 (채널 0개 시 placeholder) */
-function CredentialSection({ channels, channelCount, totalDocumentSpaces, hasChannels }: CredentialSectionProps) {
+/** Credential Key 입력 및 동기화 주기 설정 — 채널 리스트 헤더 + 채널 카드들 */
+function CredentialSection({
+  channels,
+  channelCount,
+  totalDocumentSpaces,
+  hasChannels,
+  onAddChannel,
+  onUpdateChannel,
+  onRemoveChannel,
+  onAddDocumentSpace,
+  onUpdateDocumentSpace,
+  onRemoveDocumentSpace,
+  onTestChannelConnection,
+}: CredentialSectionProps) {
   return (
     <div className="flex flex-col gap-3">
       <h3 className="text-heading-small text-content-neutral">Credential Key 입력 및 동기화 주기 설정</h3>
@@ -109,6 +147,7 @@ function CredentialSection({ channels, channelCount, totalDocumentSpaces, hasCha
           {/* 채널 리스트 헤더 — 박스 전체가 "채널 추가하기" 클릭 영역 (default/hover/pressed 3상태) */}
           <button
             type="button"
+            onClick={onAddChannel}
             className="border-edge-assistive bg-fill-strong hover:bg-fill-interaction-hover active:bg-fill-interaction-pressed flex w-full cursor-pointer flex-wrap items-center gap-1.5 rounded-xl border px-4 py-3 transition-colors"
           >
             <span className="text-body-small text-content-normal shrink-0">{channelCount}개 채널</span>
@@ -122,17 +161,34 @@ function CredentialSection({ channels, channelCount, totalDocumentSpaces, hasCha
             </span>
           </button>
 
-          {/* 채널 카드 리스트 — mock 5개가 5상태(idle/entered/tested/error/editing)를 각각 시연 */}
+          {/* 채널 카드 리스트 */}
           <div className="flex flex-col gap-3">
             {channels.map((channel) => (
-              <ChannelTalkChannelCard key={channel.id} channel={channel} />
+              <ChannelTalkChannelCard
+                key={channel.id}
+                channel={channel}
+                onUpdate={(patch) => onUpdateChannel(channel.id, patch)}
+                onRemove={() => onRemoveChannel(channel.id)}
+                onAddDocumentSpace={() => onAddDocumentSpace(channel.id)}
+                onUpdateDocumentSpace={(dsId, patch) => onUpdateDocumentSpace(channel.id, dsId, patch)}
+                onRemoveDocumentSpace={(dsId) => onRemoveDocumentSpace(channel.id, dsId)}
+                onTestConnection={() => onTestChannelConnection(channel.id)}
+              />
             ))}
           </div>
         </>
       ) : (
-        <div className="border-edge-assistive bg-fill-strong text-body-small text-content-assistive flex items-center justify-center overflow-hidden rounded-xl border px-4 py-3">
-          <span className="truncate">연동되지 않았습니다.</span>
-        </div>
+        <button
+          type="button"
+          onClick={onAddChannel}
+          className="border-edge-assistive bg-fill-strong hover:bg-fill-interaction-hover active:bg-fill-interaction-pressed flex w-full cursor-pointer flex-wrap items-center justify-between gap-1.5 rounded-xl border px-4 py-3 transition-colors"
+        >
+          <span className="text-body-small text-content-assistive truncate">연동되지 않았습니다.</span>
+          <span className="text-body-small text-content-primary flex shrink-0 items-center gap-2">
+            <IconAddSquare className="text-icon-primary size-6 shrink-0" />
+            채널 추가하기
+          </span>
+        </button>
       )}
     </div>
   );
