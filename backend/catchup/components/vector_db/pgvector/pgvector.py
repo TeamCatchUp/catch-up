@@ -1,3 +1,4 @@
+import asyncio
 import time
 from typing import Any
 from typing import Dict
@@ -10,10 +11,6 @@ from langchain_core.callbacks import CallbackManagerForRetrieverRun
 from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
 from langchain_core.retrievers import BaseRetriever
-from langchain_core.retrievers import RetrieverInput
-from langchain_core.runnables import RunnableLambda
-from langchain_core.runnables import RunnableParallel
-from langchain_core.runnables import RunnableSerializable
 from langchain_postgres import PGVector
 from sqlalchemy import Engine
 from sqlalchemy import text
@@ -23,9 +20,20 @@ from catchup.components.vector_db.rank import weighted_reciprocal_rank
 from catchup.configs.config import settings
 from catchup.db.engine import SessionLocal
 from catchup.db.models import SourceType
+from catchup.rag.executors import rag_executors
 from catchup.rag.schemas.filters import TemporalFilter
 
 logger = structlog.get_logger(__name__)
+
+
+def _timed(name: str, fn):
+    def wrapper(*args, **kwargs):
+        t = time.perf_counter()
+        logger.debug(f"{name}_started")
+        result = fn(*args, **kwargs)
+        logger.debug(f"{name}_completed", elapsed=round(time.perf_counter() - t, 3), count=len(result))
+        return result
+    return wrapper
 
 
 class PostgresFTSRetriever(BaseRetriever):
@@ -249,7 +257,7 @@ class PGVectorService(BaseVectorDbService):
             use_jsonb=True,
         )
 
-    def hybrid_search(
+    async def hybrid_search(
         self,
         query: str,
         k: int = 4,
@@ -263,74 +271,74 @@ class PGVectorService(BaseVectorDbService):
         """
         Langchain 기반 Hybrid Search를 수행한다.
         """
-        
-        logger.debug(
-            "hybrid_search_started",
-            query_len=len(query)
-        )
+        logger.debug("hybrid_search_started", query_len=len(query))
         t0 = time.perf_counter()
         
-        hybrid_search_chain = self._hybrid_search_chain(
+        loop = asyncio.get_running_loop()
+        executor = rag_executors.vector_search_executor
+        
+        _run_vector_sync = _timed("vector_retrieval", lambda x: [
+            doc for doc, score in self.vector_store.similarity_search_with_score(
+                query=x["semantic_query"],
+                k=max(100, k + offset),
+                filter=x.get("filter")
+            )[offset:]
+            if score >= score_threshold
+        ])
+
+        _run_title_sync = _timed("title_retrieval", lambda x: PostgresFTSRetriever(
+            session_factory=self.session_factory,
+            collection_name=self.collection_name,
+            k=max(100, k + offset),
+            offset=offset,
             tool_filters=tool_filters,
             temporal_filters=temporal_filters,
-            k=k,
-            weights=weights,
-            keyword_tokens=keyword_tokens,
+            search_mode="title"
+        ).invoke(x["keyword_tokens"]))
+
+        _run_content_sync = _timed("content_retrieval", lambda x: PostgresFTSRetriever(
+            session_factory=self.session_factory,
+            collection_name=self.collection_name,
+            k=max(100, k + offset),
             offset=offset,
-            score_threshold=score_threshold
+            tool_filters=tool_filters,
+            temporal_filters=temporal_filters,
+            search_mode="content"
+        ).invoke(x["keyword_tokens"]))
+        
+        search_kwargs = self._build_search_kwargs(tool_filters, temporal_filters)
+        payload = {
+            "semantic_query": query,
+            "keyword_tokens": keyword_tokens or [query],
+            "filter": search_kwargs.get("filter"),
+        }
+
+        vector_task  = loop.run_in_executor(executor, _run_vector_sync,  payload)
+        title_task   = loop.run_in_executor(executor, _run_title_sync,   payload)
+        content_task = loop.run_in_executor(executor, _run_content_sync, payload)
+
+        vector_docs, title_docs, content_docs = await asyncio.gather(
+            vector_task, title_task, content_task
         )
 
-        
-        result = hybrid_search_chain.invoke({
-            "semantic_query": query,
-            "keyword_tokens": keyword_tokens or [query]
-        })
-        
-        logger.debug(
-            "hybrid_search_completed",
-            elapsed=round(time.perf_counter() - t0, 3),
-            result_count=len(result)
-        )
+        result = weighted_reciprocal_rank(
+            doc_lists=[vector_docs, title_docs, content_docs],
+            weights=weights
+        )[:k]
+
+        logger.debug("hybrid_search_completed", elapsed=round(time.perf_counter() - t0, 3), result_count=len(result))
         
         return result
-
-    def _hybrid_search_chain(
+    
+    def _build_search_kwargs(
         self,
-        k: int = 4,
-        weights: list[float] = [0.3, 0.5, 0.2],  # [Vector, Title, Content]
-        tool_filters: list[SourceType] | None = None,
-        temporal_filters: list[TemporalFilter] | None = None,
-        keyword_tokens: list[str] | None = None,
-        offset: int = 0,
-        score_threshold: float = 0.4
-    ) -> RunnableSerializable[RetrieverInput, list[Document]]:
-        """
-        PostgreSQL FTS와 PGVector Similarity Search를 결합하여 
-        3-Way Hybrid Search Chain을 생성한다.
-        """
-        
-        def _make_logged_invoker(name: str, fn):
-            def invoker(x):
-                t0 = time.perf_counter()
-                logger.debug(f"{name}_started")
-                result = fn(x)
-                logger.debug(
-                    f"{name}_completed",
-                    elapsed=round(time.perf_counter() - t0, 3),
-                    count=len(result)
-                )
-                return result
-            return invoker
-        
-        # Semantic Retriever (HNSW)
-        # Recall 확보를 위해 k + offset보다 더 많은 후보(100)를 가져옴
-        semantic_k = max(100, k + offset)
-        search_kwargs = {"k": semantic_k}
-        
+        tool_filters: list[SourceType] | None,
+        temporal_filters: list[TemporalFilter] | None,
+    ) -> dict:
+        search_kwargs = {}
         if not temporal_filters:
             if tool_filters:
                 search_kwargs["filter"] = {"source": {"$in": [f.value for f in tool_filters]}}
-        
         else:
             or_conditions = []
             for tf in temporal_filters:
@@ -342,70 +350,7 @@ class PGVectorService(BaseVectorDbService):
                     ]
                 })
             search_kwargs["filter"] = {"$or": or_conditions} if len(or_conditions) > 1 else or_conditions[0]
-        
-        vector_retriever = self.vector_store.as_retriever(search_kwargs=search_kwargs)
-
-        # Title Keyword Retriever
-        title_retriever = PostgresFTSRetriever(
-            session_factory=self.session_factory,
-            collection_name=self.collection_name,
-            k=semantic_k, # Fusion 전까지는 충분한 후보 유지
-            offset=offset,
-            tool_filters=tool_filters,
-            temporal_filters=temporal_filters,
-            search_mode="title"
-        )
-        
-        # Content Keyword Retriever
-        content_retriever = PostgresFTSRetriever(
-            session_factory=self.session_factory,
-            collection_name=self.collection_name,
-            k=semantic_k,
-            offset=offset,
-            tool_filters=tool_filters,
-            temporal_filters=temporal_filters,
-            search_mode="content"
-        )
-        
-        retriever_parallel = RunnableParallel(
-            # Semantic 결과 필터링 (score_threshold 미만 제거)
-            vector_docs=RunnableLambda(_make_logged_invoker(
-                "vector_retrieval",
-                lambda x: [
-                    doc for doc, score in self.vector_store.similarity_search_with_score(
-                        query=x["semantic_query"], 
-                        k=semantic_k,
-                        filter=search_kwargs.get("filter")
-                    )[offset:]
-                    if score >= score_threshold
-                ]
-            )),
-            title_docs=RunnableLambda(_make_logged_invoker(
-                "title_retrieval",
-                lambda x: title_retriever.invoke(x["keyword_tokens"])
-            )),
-            content_docs=RunnableLambda(_make_logged_invoker(
-                "content_retrieval",
-                lambda x: content_retriever.invoke(x["keyword_tokens"])
-            )),
-        )
-        
-        def apply_rrf(results):
-            # 3-Way RRF Fusion
-            merged_docs = weighted_reciprocal_rank(
-                doc_lists=[
-                    results["vector_docs"],
-                    results["title_docs"],
-                    results["content_docs"]
-                ],
-                weights=weights                
-            )
-            # 최종 limit (k) 적용
-            return merged_docs[:k]
-        
-        chain = retriever_parallel | RunnableLambda(apply_rrf)
-        
-        return chain
+        return search_kwargs
 
     def _weighted_keyword_search(
         self,
