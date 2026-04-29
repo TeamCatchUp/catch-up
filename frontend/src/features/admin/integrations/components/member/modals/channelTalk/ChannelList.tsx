@@ -4,6 +4,7 @@ import IconTag from '@/public/icons/icon/tag.svg';
 import CheckboxIcon from '@/shared/components/ui/checkbox-icon';
 import { cn } from '@/shared/utils/cn';
 
+import EntityChip from './EntityChip';
 import type { ChannelTalkChannel } from './mockChannels';
 
 interface ChannelListProps {
@@ -48,9 +49,7 @@ export default function ChannelList({ channels, selectedChannelIds, onToggleChan
                 )}
               >
                 <CheckboxIcon checked={isSelected} className="size-6" />
-                <span className="border-edge-neutral bg-fill-strong text-content-alternative rounded-md2 inline-flex shrink-0 items-center justify-center border p-0.5">
-                  <IconTag className="size-4" />
-                </span>
+                <EntityChip icon={IconTag} />
                 <span className="text-body-small text-content-normal line-clamp-1 min-w-0 flex-1 text-left">
                   {channel.display_name}
                 </span>

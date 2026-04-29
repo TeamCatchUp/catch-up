@@ -4,6 +4,7 @@ import IconBook from '@/public/icons/icon/book.svg';
 import IconTag from '@/public/icons/icon/tag.svg';
 import CheckboxIcon from '@/shared/components/ui/checkbox-icon';
 
+import EntityChip from './EntityChip';
 import type { ChannelTalkChannel } from './mockChannels';
 import PeriodSelect, { type Period } from './PeriodSelect';
 
@@ -12,7 +13,8 @@ interface ChannelGroupProps {
   selectedSpaceIds: Set<string>;
   channelPeriod: Period;
   spacePeriods: Record<string, Period>;
-  onToggleChannelHeader: (channelId: string) => void;
+  /** 채널 헤더 체크박스 클릭 시 — 해당 채널의 모든 도큐먼트 스페이스 일괄 토글 */
+  onToggleChannelSpaces: (channelId: string) => void;
   onToggleSpace: (spaceId: string) => void;
   onChangeChannelPeriod: (channelId: string, period: Period) => void;
   onChangeSpacePeriod: (spaceId: string, period: Period) => void;
@@ -23,7 +25,7 @@ export default function ChannelGroup({
   selectedSpaceIds,
   channelPeriod,
   spacePeriods,
-  onToggleChannelHeader,
+  onToggleChannelSpaces,
   onToggleSpace,
   onChangeChannelPeriod,
   onChangeSpacePeriod,
@@ -38,18 +40,17 @@ export default function ChannelGroup({
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
           <button
             type="button"
-            onClick={() => onToggleChannelHeader(channel.channel_id)}
+            onClick={() => onToggleChannelSpaces(channel.channel_id)}
             className="flex w-full min-w-0 cursor-pointer items-center gap-1.5"
             aria-label={`${channel.display_name} 도큐먼트 스페이스 전체 토글`}
           >
             <CheckboxIcon checked={isHeaderChecked} className="size-6" />
-            <span className="border-edge-neutral bg-fill-strong text-content-alternative rounded-md2 inline-flex shrink-0 items-center justify-center border p-0.5">
-              <IconTag className="size-4" />
-            </span>
+            <EntityChip icon={IconTag} />
             <span className="text-body-small text-content-normal line-clamp-1 min-w-0 flex-1 text-left">
               {channel.display_name}
             </span>
           </button>
+          {/* checkbox(36) + gap(6) = 42px 만큼 들여써서 채널명 텍스트 시작 위치와 정렬 */}
           <div className="flex items-center gap-3 pl-10.5">
             <span className="text-body-xsmall text-content-assistive">전체 {totalSpaces}개</span>
             <span className="bg-edge-neutral block h-3 w-px" />
@@ -88,9 +89,7 @@ export default function ChannelGroup({
                     onClick={() => onToggleSpace(space.space_id)}
                     className="flex min-w-0 flex-1 cursor-pointer items-center gap-1.5 text-left"
                   >
-                    <span className="border-edge-neutral bg-fill-strong text-content-alternative rounded-md2 inline-flex shrink-0 items-center justify-center border p-0.5">
-                      <IconBook className="size-4" />
-                    </span>
+                    <EntityChip icon={IconBook} />
                     <span className="text-body-small text-content-normal line-clamp-1 min-w-0 flex-1">
                       {space.display_name}
                     </span>
