@@ -24,11 +24,9 @@ export function useChannelTalkSelection(channels: ChannelTalkChannel[]) {
   const [channelPeriods, setChannelPeriods] = useState<Record<string, Period>>(() =>
     Object.fromEntries(channels.map((channel) => [channel.channel_id, DEFAULT_PERIOD])),
   );
-  const [spacePeriods, setSpacePeriods] = useState<Record<string, Period>>(() =>
-    Object.fromEntries(
-      channels.flatMap((channel) => channel.document_spaces.map((space) => [space.space_id, DEFAULT_PERIOD])),
-    ),
-  );
+  // 빈 객체로 초기화 — 사용자가 명시 설정한 space만 저장.
+  // 미설정 space는 ChannelGroup의 `spacePeriods[id] ?? channelPeriod` fallback으로 채널 기간을 따라간다 (inheritance).
+  const [spacePeriods, setSpacePeriods] = useState<Record<string, Period>>({});
 
   const channelMap = useMemo(() => {
     const map = new Map<string, ChannelTalkChannel>();
