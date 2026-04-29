@@ -23,7 +23,7 @@ export default function ChannelTalkEmbeddingModal({ open, onOpenChange }: Channe
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         hideClose
-        className="border-edge-neutral shadow-modal bg-fill-normal flex h-200 w-200 max-w-200 flex-col gap-0 rounded-3xl border p-0"
+        className="shadow-modal bg-fill-normal flex h-200 w-200 max-w-200 flex-col gap-0 rounded-3xl p-0"
       >
         {open && <ModalBody channels={MOCK_CHANNEL_TALK_CHANNELS} onClose={() => onOpenChange(false)} />}
       </DialogContent>
