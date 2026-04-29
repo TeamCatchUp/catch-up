@@ -167,17 +167,18 @@ function ModalBody({ channels, onClose }: ModalBodyProps) {
             <ChannelGroupListEmpty />
           ) : (
             visibleChannels.map((channel) => (
-              <ChannelGroup
-                key={channel.channel_id}
-                channel={channel}
-                selectedSpaceIds={selectedSpaceIds}
-                channelPeriod={channelPeriods[channel.channel_id] ?? DEFAULT_PERIOD}
-                spacePeriods={spacePeriods}
-                onToggleChannelHeader={toggleChannelGroupSpaces}
-                onToggleSpace={toggleSpace}
-                onChangeChannelPeriod={handleChannelPeriodChange}
-                onChangeSpacePeriod={handleSpacePeriodChange}
-              />
+              <div key={channel.channel_id} className="animate-list-item-enter">
+                <ChannelGroup
+                  channel={channel}
+                  selectedSpaceIds={selectedSpaceIds}
+                  channelPeriod={channelPeriods[channel.channel_id] ?? DEFAULT_PERIOD}
+                  spacePeriods={spacePeriods}
+                  onToggleChannelHeader={toggleChannelGroupSpaces}
+                  onToggleSpace={toggleSpace}
+                  onChangeChannelPeriod={handleChannelPeriodChange}
+                  onChangeSpacePeriod={handleSpacePeriodChange}
+                />
+              </div>
             ))
           )}
         </div>
