@@ -1,5 +1,7 @@
 'use client';
 
+import { useMemo } from 'react';
+
 import IconAddSquare from '@/public/icons/icon/add_square.svg';
 import IconCloudCheckFilled from '@/public/icons/icon/cloud_check_filled.svg';
 import IconOpenInNew from '@/public/icons/icon/open_in_new.svg';
@@ -10,7 +12,6 @@ import { useChannelTalkViewModel } from '../../../hooks/useChannelTalkViewModel'
 import type {
   ChannelTalkChannel,
   ChannelTalkChannelPatch,
-  ChannelTalkConnectionState,
   ChannelTalkDocumentSpacePatch,
 } from '../../../types/channelTalkModel';
 import ChannelTalkChannelCard from './ChannelTalkChannelCard';
@@ -32,13 +33,22 @@ export default function ChannelTalkManagementPanel() {
   } = useChannelTalkViewModel();
 
   const hasChannels = state.channels.length > 0;
-  /** 데이터 범위 영역은 검증 통과(tested)한 채널이 있을 때만 활성 — 단순 채널 추가는 영향 없음 */
-  const hasTestedChannels = state.channels.some((ch) => ch.connectionStatus === 'tested');
-  const totalDocumentSpaces = state.channels.reduce((sum, ch) => sum + ch.documentSpaces.length, 0);
+  /**
+   * 채널 배열 기반 파생값들 — 채널 변경 시에만 재계산.
+   * `hasTestedChannels`: "데이터 범위" + "연동 상태"가 active로 보이는 조건 (검증 통과한 채널 1개 이상)
+   * `totalDocumentSpaces`: "N개 도큐먼트 연결됨" 헤드라인 카운트
+   */
+  const { hasTestedChannels, totalDocumentSpaces } = useMemo(
+    () => ({
+      hasTestedChannels: state.channels.some((ch) => ch.connectionStatus === 'tested'),
+      totalDocumentSpaces: state.channels.reduce((sum, ch) => sum + ch.documentSpaces.length, 0),
+    }),
+    [state.channels],
+  );
 
   return (
     <div className="flex flex-col gap-6">
-      <ConnectionStatusSection state={state} />
+      <ConnectionStatusSection isConnected={hasTestedChannels} />
       <DataRangeSection hasData={hasTestedChannels} />
       <CredentialSection
         channels={state.channels}
@@ -61,11 +71,12 @@ export default function ChannelTalkManagementPanel() {
 }
 
 interface ConnectionStatusSectionProps {
-  state: ChannelTalkConnectionState;
+  /** 검증 통과한 채널 1개 이상일 때 "연동됨" 표시 — `state.connected`와 분리된 파생값 */
+  isConnected: boolean;
 }
 
 /** 연동 상태 관리 — 연동 상태 토글 + 보안 관련 설명 */
-function ConnectionStatusSection({ state }: ConnectionStatusSectionProps) {
+function ConnectionStatusSection({ isConnected }: ConnectionStatusSectionProps) {
   return (
     <div className="flex flex-col gap-1.5">
       <h3 className="text-heading-small text-content-normal">연동 상태 관리</h3>
@@ -73,7 +84,7 @@ function ConnectionStatusSection({ state }: ConnectionStatusSectionProps) {
       <div className="border-edge-assistive bg-fill-strong overflow-hidden rounded-xl border">
         <div className="border-edge-neutral flex items-center justify-between gap-8 border-b px-4 py-3">
           <span className="text-body-small text-content-normal">연동 상태</span>
-          {state.connected ? (
+          {isConnected ? (
             <div className="flex items-center gap-1 px-1.5 py-1">
               <IconCloudCheckFilled className="text-icon-primary-assistive size-4.5 shrink-0" />
               <span className="text-body-xsmall text-content-primary-assistive">연동됨</span>
