@@ -61,9 +61,7 @@ class StandardAgentMessageHistoryTests(IsolatedAsyncioTestCase):
     """standard_agent_node가 LLM에 올바른 메시지 시퀀스를 전달하는지 검증한다."""
 
     def setUp(self):
-        rag_semaphores.init(
-            small_model_sema_value=5, large_model_sema_value=5, rerank_sema_value=5
-        )
+        rag_semaphores.init(small_llm_value=5, large_llm_value=5, reranker_value=5)
 
     @patch(
         "catchup.rag.agents.standard_agent.prompt_loader.get_prompt",
@@ -170,9 +168,7 @@ class ComplexAgentMessageHistoryTests(IsolatedAsyncioTestCase):
     """complex_agent_node가 LLM에 올바른 메시지 시퀀스를 전달하는지 검증한다."""
 
     def setUp(self):
-        rag_semaphores.init(
-            small_model_sema_value=5, large_model_sema_value=5, rerank_sema_value=5
-        )
+        rag_semaphores.init(small_llm_value=5, large_llm_value=5, reranker_value=5)
 
     @patch(
         "catchup.rag.agents.complex_agent.prompt_loader.get_prompt",

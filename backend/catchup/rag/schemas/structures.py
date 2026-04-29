@@ -15,7 +15,7 @@ class BaseSearchQuery(BaseModel):
         Vector 검색 대상 문서의 발생(생성/수정) 기준 시작일.
         반드시 'YYYY-MM-DDTHH:MM:SS' 형식의 ISO 8601 포맷으로 작성할 것.
         (시간 특정 불가 시 null)
-        """
+        """,
     )
     end_date: datetime | None = Field(
         None,
@@ -23,13 +23,15 @@ class BaseSearchQuery(BaseModel):
         Vector 검색 대상 문서의 발생(생성/수정) 기준 종료일.
         반드시 'YYYY-MM-DDTHH:MM:SS' 형식의 ISO 8601 포맷으로 작성할 것.
         (시간 특정 불가 시 null)
-        """
+        """,
     )
 
 
 class VectorDbSearchQuery(BaseSearchQuery):
     query: str = Field(..., description="Vector 검색 엔진에 전달할 최적화된 검색어")
-    keyword_tokens: list[str] = Field(default_factory=list, description="키워드 검색을 위한 핵심 키워드 목록")
+    keyword_tokens: list[str] = Field(
+        default_factory=list, description="키워드 검색을 위한 핵심 키워드 목록"
+    )
 
 
 class VectorDbSearchPlan(BaseModel):
@@ -43,25 +45,27 @@ class VectorDbSearchPlan(BaseModel):
 
 class MultiSearchRequest(BaseModel):
     query: str = Field(description="벡터 DB에 전달할 시맨틱 검색어")
-    keyword_tokens: list[str] | None = Field(default=None, description="쿼리에 매칭되는 1-3개의 핵심 키워드 리스트")
+    keyword_tokens: list[str] | None = Field(
+        default=None, description="쿼리에 매칭되는 1-3개의 핵심 키워드 리스트"
+    )
     start_date: str | None = Field(
-        default=None, 
-        description="Vector 검색 대상 문서의 발생(생성/수정) 기준 시작일. 반드시 'YYYY-MM-DDTHH:MM:SS' 형식의 UTC ISO 8601 포맷으로 작성할 것."
+        default=None,
+        description="Vector 검색 대상 문서의 발생(생성/수정) 기준 시작일. 반드시 'YYYY-MM-DDTHH:MM:SS' 형식의 UTC ISO 8601 포맷으로 작성할 것.",
     )
     end_date: str | None = Field(
-        default=None, 
-        description="Vector 검색 대상 문서의 발생(생성/수정) 기준 종료일. 반드시 'YYYY-MM-DDTHH:MM:SS' 형식의 UTC ISO 8601 포맷으로 작성할 것."
+        default=None,
+        description="Vector 검색 대상 문서의 발생(생성/수정) 기준 종료일. 반드시 'YYYY-MM-DDTHH:MM:SS' 형식의 UTC ISO 8601 포맷으로 작성할 것.",
     )
 
 
 # Supervisor가 결정하는 파이프라인 실행 계획
 class PipelinePlan(BaseModel):
-    pipeline_type: Literal["direct_answer", "reuse", "simple", "standard", "complex", "clarify"] = Field(
-        description="실행할 파이프라인 타입"
-    )
+    pipeline_type: Literal[
+        "direct_answer", "reuse", "simple", "standard", "complex", "clarify"
+    ] = Field(description="실행할 파이프라인 타입")
     max_iterations: int = Field(
         default=3,
-        description="ReAct 루프 최대 반복 횟수. simple=0, standard=3, complex=7"
+        description="ReAct 루프 최대 반복 횟수. simple=0, standard=3, complex=7",
     )
     clarification_question: str | None = Field(
         default=None,
@@ -85,20 +89,21 @@ class SearchStep(BaseModel):
     step: int = Field(description="실행 순서")
     intent: str = Field(description="이 단계에서 찾으려는 정보의 의도")
     queries: list[str] = Field(description="실행할 검색 쿼리 목록")
-    keyword_tokens: list[str] = Field(default_factory=list, description="키워드 검색을 위한 핵심 키워드 목록")
+    keyword_tokens: list[str] = Field(
+        default_factory=list, description="키워드 검색을 위한 핵심 키워드 목록"
+    )
     parallel: bool = Field(
         default=False,
-        description="True면 queries를 병렬 실행 (multi_query_search 사용)"
+        description="True면 queries를 병렬 실행 (multi_query_search 사용)",
     )
     depends_on: list[int] = Field(
         default_factory=list,
-        description="이 단계를 실행하기 전에 완료되어야 하는 선행 step 번호 목록"
+        description="이 단계를 실행하기 전에 완료되어야 하는 선행 step 번호 목록",
     )
 
 
 # Complex planner LLM 응답 스키마
 class SearchPlan(BaseModel):
     steps: list[SearchStep] = Field(
-        default_factory=list,
-        description="순서대로 실행할 검색 단계 목록"
+        default_factory=list, description="순서대로 실행할 검색 단계 목록"
     )

@@ -26,14 +26,12 @@ async def rewrite_node(state: AgentState, llm: BaseChatModel):
         history=history_text,
         feedback=grade_comment,
         original_query=original_query,
-        **global_context
+        **global_context,
     )
 
     try:
         response, token_usages = await ainvoke_llm_with_token_usage(
-            llm=llm,
-            messages=prompt,
-            semaphore=rag_semaphores.analysis
+            llm=llm, messages=prompt, semaphore=rag_semaphores.llm_small
         )
         rewritten_query = response.content
 
@@ -46,10 +44,7 @@ async def rewrite_node(state: AgentState, llm: BaseChatModel):
         "query_rewrite_result",
         original_query=original_query,
         feedback=grade_comment,
-        rewritten_query=rewritten_query
+        rewritten_query=rewritten_query,
     )
 
-    return {
-        "rewritten_query": rewritten_query,
-        **token_usages
-    }
+    return {"rewritten_query": rewritten_query, **token_usages}

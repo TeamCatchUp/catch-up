@@ -21,24 +21,25 @@ _ALLOWED_MSGPACK_MODULES: list[tuple[str, str]] = [
     ("catchup.rag.schemas.structures", "PipelinePlan"),
     ("catchup.rag.schemas.structures", "SearchStep"),
     ("catchup.rag.schemas.structures", "SearchPlan"),
-    ('catchup.db.models', 'SourceType'),
-    ('catchup.rag.schemas.prompt_settings', 'PromptSettings'),
+    ("catchup.db.models", "SourceType"),
+    ("catchup.rag.schemas.prompt_settings", "PromptSettings"),
 ]
 
 _checkpointer = None
 _pool = None
 
+
 async def init_langgraph_checkpointer():
     global _checkpointer, _pool
-    
+
     logger.info(
         "checkpointer_init_started",
         context="checkpointer_initialization",
     )
-    
+
     try:
         conn_string = settings.sqlalchemy_database_url.replace("+psycopg", "")
-        
+
         _pool = AsyncConnectionPool(
             conn_string,
             min_size=2,
@@ -47,17 +48,17 @@ async def init_langgraph_checkpointer():
             open=False,
         )
         await _pool.open()
-        
+
         serde = JsonPlusSerializer(allowed_msgpack_modules=_ALLOWED_MSGPACK_MODULES)
         _checkpointer = AsyncPostgresSaver(conn=_pool, serde=serde)
         await _checkpointer.setup()
-        
+
         logger.info(
             "checkpointer_init_success",
             context="checkpointer_initialization",
         )
         return _checkpointer
-        
+
     except Exception as e:
         logger.error(
             "checkpointer_init_failed",

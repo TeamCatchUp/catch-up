@@ -64,10 +64,7 @@ def build_docs_summary(docs: list[Document], max_docs: int = 10) -> str:
 
 
 async def ainvoke_llm_with_token_usage(
-    llm: Any, 
-    messages: list[BaseMessage],
-    semaphore: Any = None,
-    **kwargs: Any
+    llm: Any, messages: list[BaseMessage], semaphore: Any = None, **kwargs: Any
 ) -> tuple[Any, dict]:
     """LLM을 호출하고 토큰 사용량을 추출한다. 에러 발생 시 예외를 전파한다."""
     token_usages = {"token_breakdown": {}}
@@ -88,10 +85,9 @@ async def ainvoke_llm_with_token_usage(
         else:
             t_llm = time.perf_counter()
             logger.debug("llm_invoke_without_semaphore_start")
-            response = await llm.ainvoke(input=messages, **kwargs)            
+            response = await llm.ainvoke(input=messages, **kwargs)
         logger.debug(
-            "llm_invoke_completed",
-            elapsed=round(time.perf_counter() - t_llm, 3)
+            "llm_invoke_completed", elapsed=round(time.perf_counter() - t_llm, 3)
         )
 
         # response가 dict인 경우 (with_structured_output include_raw=True) 처리

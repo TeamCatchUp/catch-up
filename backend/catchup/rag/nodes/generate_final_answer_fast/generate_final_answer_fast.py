@@ -1,4 +1,3 @@
-
 import structlog
 from langchain_core.documents import Document
 from langchain_core.language_models import BaseChatModel
@@ -7,8 +6,8 @@ from langchain_core.messages import HumanMessage
 
 from catchup.costs.utils import token_usage
 from catchup.prompts.loader import prompt_loader
-from catchup.rag.nodes.utils import build_system_message
 from catchup.rag.nodes.utils import ainvoke_llm_with_token_usage
+from catchup.rag.nodes.utils import build_system_message
 from catchup.rag.nodes.utils import get_conversation_history
 from catchup.rag.nodes.utils import log_node
 from catchup.rag.nodes.utils import mark_citations
@@ -89,9 +88,7 @@ async def generate_final_answer_fast_node(state: AgentState, llm: BaseChatModel)
     # LLM 호출
     try:
         raw_response, token_usages = await ainvoke_llm_with_token_usage(
-            llm=llm,
-            messages=messages,
-            semaphore=rag_semaphores.final_answer
+            llm=llm, messages=messages, semaphore=rag_semaphores.llm_large
         )
         full_answer = raw_response.content
 

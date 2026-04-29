@@ -5,9 +5,9 @@ from langchain_core.messages import HumanMessage
 from catchup.costs.utils import token_usage
 from catchup.prompts.loader import prompt_loader
 from catchup.rag.agents.tools.search_tools import REACT_TOOLS
+from catchup.rag.nodes.utils import ainvoke_llm_with_token_usage
 from catchup.rag.nodes.utils import build_docs_summary
 from catchup.rag.nodes.utils import build_system_message
-from catchup.rag.nodes.utils import ainvoke_llm_with_token_usage
 from catchup.rag.nodes.utils import drop_orphaned_tool_calls
 from catchup.rag.nodes.utils import log_node
 from catchup.rag.semaphores import rag_semaphores
@@ -47,7 +47,7 @@ async def standard_agent_node(state: AgentState, llm: BaseChatModel):
         response, token_usages = await ainvoke_llm_with_token_usage(
             llm=llm_with_tools,
             messages=[system_message, HumanMessage(content=query)] + existing_messages,
-            semaphore=rag_semaphores.analysis
+            semaphore=rag_semaphores.llm_small,
         )
     except Exception:
         return {"agent_iteration": agent_iteration + 1}
@@ -89,9 +89,7 @@ async def collect_docs_node(state: AgentState):
 
     # 점수 내림차순 정렬 (점수가 없는 경우 0.0으로 처리)
     sorted_docs = sorted(
-        accumulated,
-        key=lambda d: d.metadata.get("score", 0.0),
-        reverse=True
+        accumulated, key=lambda d: d.metadata.get("score", 0.0), reverse=True
     )
 
     capped = sorted_docs[:_RERANK_INPUT_WINDOW]

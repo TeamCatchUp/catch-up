@@ -4,9 +4,9 @@ from langchain_core.messages import HumanMessage
 
 from catchup.costs.utils import token_usage
 from catchup.prompts.loader import prompt_loader
+from catchup.rag.nodes.utils import ainvoke_llm_with_token_usage
 from catchup.rag.nodes.utils import build_docs_summary
 from catchup.rag.nodes.utils import build_system_message
-from catchup.rag.nodes.utils import ainvoke_llm_with_token_usage
 from catchup.rag.nodes.utils import get_conversation_history
 from catchup.rag.nodes.utils import log_node
 from catchup.rag.schemas.structures import PipelinePlan
@@ -18,8 +18,13 @@ logger = structlog.get_logger()
 _MAX_DOCS_SUMMARY = 20
 _PIPELINE_ORDER = ["clarify", "direct_answer", "reuse", "simple", "standard", "complex"]
 _DEFAULT_MAX_ITERATIONS: dict[str, int] = {
-    "direct_answer": 0, "reuse": 0, "simple": 0, "standard": 3, "complex": 7
+    "direct_answer": 0,
+    "reuse": 0,
+    "simple": 0,
+    "standard": 3,
+    "complex": 7,
 }
+
 
 @log_node
 @token_usage
@@ -58,34 +63,44 @@ async def supervisor_node(state: AgentState, llm: BaseChatModel):
         response, token_usages = await ainvoke_llm_with_token_usage(
             llm=structured_llm,
             messages=input_messages,
-            semaphore=rag_semaphores.final_answer
+            semaphore=rag_semaphores.llm_large,
         )
         pipeline_plan: PipelinePlan = response.get("parsed")
 
         _NO_RETRIEVAL = {"direct_answer", "clarify"}
-        intent = "chitchat" if pipeline_plan.pipeline_type in _NO_RETRIEVAL else "search_pipeline"
+        intent = (
+            "chitchat"
+            if pipeline_plan.pipeline_type in _NO_RETRIEVAL
+            else "search_pipeline"
+        )
 
         logger.info(
             "supervisor_decision",
             pipeline_type=pipeline_plan.pipeline_type,
             max_iterations=pipeline_plan.max_iterations,
-            inferred_tool_filters=[f.value for f in pipeline_plan.inferred_tool_filters] if pipeline_plan.inferred_tool_filters else None,
+            inferred_tool_filters=[f.value for f in pipeline_plan.inferred_tool_filters]
+            if pipeline_plan.inferred_tool_filters
+            else None,
             doc_cache_size=len(doc_cache),
             history_len=len(history),
         )
 
         # max_pipeline_type 상한 적용 (engine.py에서 mode → max_pipeline_type 변환)
         max_pipeline_type = state.get("max_pipeline_type", "complex")
-        if _PIPELINE_ORDER.index(pipeline_plan.pipeline_type) > _PIPELINE_ORDER.index(max_pipeline_type):
+        if _PIPELINE_ORDER.index(pipeline_plan.pipeline_type) > _PIPELINE_ORDER.index(
+            max_pipeline_type
+        ):
             logger.info(
                 "pipeline_type_capped",
                 original=pipeline_plan.pipeline_type,
                 capped_to=max_pipeline_type,
             )
-            pipeline_plan = pipeline_plan.model_copy(update={
-                "pipeline_type": max_pipeline_type,
-                "max_iterations": _DEFAULT_MAX_ITERATIONS[max_pipeline_type],
-            })
+            pipeline_plan = pipeline_plan.model_copy(
+                update={
+                    "pipeline_type": max_pipeline_type,
+                    "max_iterations": _DEFAULT_MAX_ITERATIONS[max_pipeline_type],
+                }
+            )
 
         result: dict = {
             "intent": intent,

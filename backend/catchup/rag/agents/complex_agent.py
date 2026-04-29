@@ -41,7 +41,7 @@ async def complex_planner_node(state: AgentState, llm: BaseChatModel):
         response, token_usages = await ainvoke_llm_with_token_usage(
             llm=structured_llm,
             messages=[system_message, HumanMessage(content=query)],
-            semaphore=rag_semaphores.final_answer,
+            semaphore=rag_semaphores.llm_large,
         )
         plan: SearchPlan = response.get("parsed")
     except Exception:
@@ -104,7 +104,7 @@ async def complex_agent_node(state: AgentState, llm: BaseChatModel):
         response, token_usages = await ainvoke_llm_with_token_usage(
             llm=llm_with_tools,
             messages=[system_message, HumanMessage(content=query)] + existing_messages,
-            semaphore=rag_semaphores.final_answer,
+            semaphore=rag_semaphores.llm_large,
         )
     except Exception:
         return {"agent_iteration": agent_iteration + 1}
