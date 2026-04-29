@@ -55,7 +55,7 @@ function ChannelGroup({
           {/* checkbox(36) + gap(6) = 42px 만큼 들여써서 채널명 텍스트 시작 위치와 정렬 */}
           <div className="flex items-center gap-3 pl-10.5">
             <span className="text-body-xsmall text-content-assistive">전체 {totalSpaces}개</span>
-            <span className="bg-edge-neutral block h-3 w-px" />
+            <span className="bg-edge-normal block h-3 w-px" />
             <span className="text-body-xsmall text-content-primary">{selectedCount}개 선택됨</span>
           </div>
         </div>
