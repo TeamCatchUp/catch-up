@@ -127,7 +127,8 @@ export default function UsersStatusSection({
   });
 
   // ─── 저장 mutation ───
-  const SERVICE_TO_VENDOR: Record<IntegrationService, VendorType> = {
+  // 채널톡은 organization-level 연동이라 user-level vendor mapping 없음 → Partial로 표현
+  const SERVICE_TO_VENDOR: Partial<Record<IntegrationService, VendorType>> = {
     jira: 'atlassian',
     confluence: 'atlassian',
     github: 'github',
@@ -148,6 +149,7 @@ export default function UsersStatusSection({
 
         for (const [service, override] of Object.entries(serviceOverrides) as [IntegrationService, AccountOverride][]) {
           const vendor = SERVICE_TO_VENDOR[service];
+          if (!vendor) continue; // channel-talk 등 vendor mapping 없는 서비스는 skip
           if (!byVendor[vendor]) byVendor[vendor] = [];
 
           byVendor[vendor]!.push({
