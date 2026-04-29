@@ -135,7 +135,7 @@ function ModalBody({ channels, onClose }: ModalBodyProps) {
 
   return (
     <>
-      <header className="flex items-start gap-3 px-6 pt-6 pb-5">
+      <header className="flex items-start gap-3 px-6 pt-6 pb-4">
         <div className="flex flex-1 flex-col gap-1">
           <DialogTitle className="text-heading-large text-content-strong">
             임베딩 할 채널, 도큐먼트 스페이스 선택해주세요
@@ -183,7 +183,7 @@ function ModalBody({ channels, onClose }: ModalBodyProps) {
         </div>
       </div>
 
-      <footer className="mx-6 mt-6 mb-6 flex h-9 items-center justify-between">
+      <footer className="mx-6 mt-4 mb-5 flex h-9 items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2.5">
             <span className="text-body-small text-content-primary">{channelCount}</span>
