@@ -65,7 +65,7 @@ function ChannelGroup({
           <PeriodSelect
             value={channelPeriod}
             onChange={(period) => onChangeChannelPeriod(channel.channel_id, period)}
-            className="h-9 w-22"
+            className="h-9 w-fit max-w-37.5 min-w-9"
           />
         </div>
       </header>
@@ -101,7 +101,7 @@ function ChannelGroup({
                     <PeriodSelect
                       value={spacePeriod}
                       onChange={(period) => onChangeSpacePeriod(space.space_id, period)}
-                      className="h-9 w-22"
+                      className="h-9 w-fit max-w-37.5 min-w-9"
                     />
                   </div>
                 </div>
