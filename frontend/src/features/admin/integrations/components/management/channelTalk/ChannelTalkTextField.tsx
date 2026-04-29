@@ -78,6 +78,7 @@ export default function ChannelTalkTextField({
       {showMaskToggle && (
         <button
           type="button"
+          data-mask-toggle="true"
           aria-label={masked ? '값 표시' : '값 숨기기'}
           onClick={() => setMasked((prev) => !prev)}
           className="text-icon-alternative hover:text-icon-normal flex size-4.5 shrink-0 cursor-pointer items-center justify-center transition-colors"

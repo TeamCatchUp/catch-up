@@ -59,10 +59,11 @@ export default function ChannelTalkDocumentSpaceCard({
     onTestConnection();
   };
 
-  const handleLockedFieldInteract = () => {
-    if (isTested) {
-      toast('수정하려면 수정하기 버튼을 눌러주세요.');
-    }
+  const handleLockedFieldInteract = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!isTested) return;
+    // eye 토글(마스킹 해제) 버튼은 lock 상태에서도 동작해야 하므로 토스트 무시
+    if ((e.target as HTMLElement).closest('[data-mask-toggle="true"]')) return;
+    toast('수정하려면 수정하기 버튼을 눌러주세요.');
   };
 
   return (
