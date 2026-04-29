@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useId, useState } from 'react';
+import { useId, useState } from 'react';
 
 import IconVisibility from '@/public/icons/icon/visibility.svg';
 import IconVisibilityOff from '@/public/icons/icon/visibility_off.svg';
@@ -39,18 +39,17 @@ export default function ChannelTalkTextField({
 }: ChannelTalkTextFieldProps) {
   const reactId = useId();
   const inputId = id ?? reactId;
-  const [masked, setMasked] = useState(defaultMasked);
+  /** 사용자가 eye 토글로 직접 변경한 마스킹 의도 (defaultMasked 초기값) */
+  const [userMasked, setUserMasked] = useState(defaultMasked);
+  /**
+   * 실제 마스킹 여부 — disabled(tested lock) 진입 시 사용자 의도와 무관하게 강제 마스킹.
+   * 렌더 시점 파생값이라 useEffect + setState 패턴이 불필요.
+   */
+  const masked = disabled ? true : userMasked;
   const showMaskToggle = maskable;
   const isMasked = maskable && masked && value.length > 0;
   /** 마스킹 시 별표 표시 — value 길이만큼 '*' 채움 (보안성 vs 시각 일치 절충) */
   const displayValue = isMasked ? '*'.repeat(value.length) : value;
-
-  /** disabled(tested lock) 진입 시 자동 마스킹 — 사용자가 eye 토글로 해제는 여전히 가능 */
-  useEffect(() => {
-    if (disabled) {
-      setMasked(true);
-    }
-  }, [disabled]);
 
   return (
     <div
@@ -80,7 +79,7 @@ export default function ChannelTalkTextField({
           type="button"
           data-mask-toggle="true"
           aria-label={masked ? '값 표시' : '값 숨기기'}
-          onClick={() => setMasked((prev) => !prev)}
+          onClick={() => setUserMasked((prev) => !prev)}
           className="text-icon-alternative hover:text-icon-normal flex size-4.5 shrink-0 cursor-pointer items-center justify-center transition-colors"
         >
           {masked ? <IconVisibilityOff className="size-4.5" /> : <IconVisibility className="size-4.5" />}
