@@ -117,13 +117,11 @@ function DataRangeSection({ hasData }: DataRangeSectionProps) {
       <h3 className="text-heading-small text-content-neutral">연동된 데이터 범위</h3>
       <div
         className={cn(
-          'border-edge-assistive bg-fill-strong text-body-small flex items-center justify-center overflow-hidden rounded-xl border px-4 py-3',
+          'border-edge-assistive bg-fill-strong text-body-small overflow-hidden rounded-xl border px-4 py-3',
           hasData ? 'text-content-normal' : 'text-content-assistive',
         )}
       >
-        <span className="truncate">
-          {hasData ? '연동된 채널의 메시지를 임베딩하고 있어요.' : '연동되지 않았습니다.'}
-        </span>
+        <span className="truncate">연동되지 않았습니다.</span>
       </div>
     </div>
   );
