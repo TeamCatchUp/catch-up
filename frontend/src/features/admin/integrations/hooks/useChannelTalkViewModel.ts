@@ -3,14 +3,15 @@
 import { useCallback, useState } from 'react';
 
 import type {
-  ChannelTalkChannel,
+  ChannelTalkChannelPatch,
   ChannelTalkConnectionState,
-  ChannelTalkDocumentSpace,
+  ChannelTalkDocumentSpacePatch,
 } from '../types/channelTalkModel';
 import {
   CHANNEL_SYNC_INTERVAL_DEFAULT,
   DOCUMENT_SPACE_SYNC_INTERVAL_DEFAULT,
 } from '../types/channelTalkModel';
+import { isChannelSecretsFilled, isDocumentSpaceSecretsFilled } from '../utils/channelTalkHelpers';
 
 /** 인터랙티브 mock 초기 상태 — 빈 채널, 새로고침 시 초기화 */
 const INITIAL_STATE: ChannelTalkConnectionState = {
