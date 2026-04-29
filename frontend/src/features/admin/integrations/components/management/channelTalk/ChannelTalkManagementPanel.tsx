@@ -27,12 +27,14 @@ export default function ChannelTalkManagementPanel() {
   } = useChannelTalkViewModel();
 
   const hasChannels = state.channels.length > 0;
+  /** 데이터 범위 영역은 검증 통과(tested)한 채널이 있을 때만 활성 — 단순 채널 추가는 영향 없음 */
+  const hasTestedChannels = state.channels.some((ch) => ch.connectionStatus === 'tested');
   const totalDocumentSpaces = state.channels.reduce((sum, ch) => sum + ch.documentSpaces.length, 0);
 
   return (
     <div className="flex flex-col gap-6">
       <ConnectionStatusSection state={state} />
-      <DataRangeSection hasChannels={hasChannels} />
+      <DataRangeSection hasData={hasTestedChannels} />
       <CredentialSection
         channels={state.channels}
         channelCount={state.channels.length}
@@ -88,22 +90,23 @@ function ConnectionStatusSection({ state }: ConnectionStatusSectionProps) {
 }
 
 interface DataRangeSectionProps {
-  hasChannels: boolean;
+  /** 검증(tested) 통과한 채널이 1개 이상일 때만 active 텍스트 표시 — 단순 채널 추가는 영향 없음 */
+  hasData: boolean;
 }
 
-/** 연동된 데이터 범위 섹션 — 채널 0개 시 placeholder */
-function DataRangeSection({ hasChannels }: DataRangeSectionProps) {
+/** 연동된 데이터 범위 섹션 — tested 채널 없으면 placeholder */
+function DataRangeSection({ hasData }: DataRangeSectionProps) {
   return (
     <div className="flex flex-col gap-1.5">
       <h3 className="text-heading-small text-content-neutral">연동된 데이터 범위</h3>
       <div
         className={cn(
           'border-edge-assistive bg-fill-strong text-body-small flex items-center justify-center overflow-hidden rounded-xl border px-4 py-3',
-          hasChannels ? 'text-content-normal' : 'text-content-assistive',
+          hasData ? 'text-content-normal' : 'text-content-assistive',
         )}
       >
         <span className="truncate">
-          {hasChannels ? '연동된 채널의 메시지를 임베딩하고 있어요.' : '연동되지 않았습니다.'}
+          {hasData ? '연동된 채널의 메시지를 임베딩하고 있어요.' : '연동되지 않았습니다.'}
         </span>
       </div>
     </div>
