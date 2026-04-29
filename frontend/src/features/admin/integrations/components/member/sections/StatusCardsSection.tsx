@@ -9,6 +9,7 @@ import type { IntegrationService } from '@/shared/types/integrationService';
 
 import type { MemberIntegrationCardItem } from '../../../types/integrationModel';
 import type { EmbeddingButtonState, SyncConnector } from '../../../types/syncModel';
+import ChannelTalkEmbeddingModal from '../modals/ChannelTalkEmbeddingModal';
 import EmbeddingModal from '../modals/EmbeddingModal';
 import RecoveryCardSection from './RecoveryCardSection';
 
@@ -151,13 +152,23 @@ export default function StatusCardsSection({
         })}
       </div>
 
-      <EmbeddingModal
-        open={embeddingModal.open}
-        onOpenChange={(open) => setEmbeddingModal((prev) => ({ ...prev, open }))}
-        service={embeddingModal.service}
-        serviceName={embeddingModal.serviceName}
-        onJobStart={onJobStart}
-      />
+      {embeddingModal.service !== 'channel-talk' && (
+        <EmbeddingModal
+          open={embeddingModal.open}
+          onOpenChange={(open) => setEmbeddingModal((prev) => ({ ...prev, open }))}
+          service={embeddingModal.service}
+          serviceName={embeddingModal.serviceName}
+          onJobStart={onJobStart}
+        />
+      )}
+
+      {embeddingModal.service === 'channel-talk' && (
+        <ChannelTalkEmbeddingModal
+          open={embeddingModal.open}
+          onOpenChange={(open) => setEmbeddingModal((prev) => ({ ...prev, open }))}
+          serviceName={embeddingModal.serviceName}
+        />
+      )}
     </section>
   );
 }
