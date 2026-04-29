@@ -83,7 +83,7 @@ function ModalBody({ channels, onClose }: ModalBodyProps) {
         </button>
       </header>
 
-      <div className="border-edge-neutral flex flex-1 overflow-hidden border-t">
+      <div className="border-edge-assistive flex flex-1 overflow-hidden border-t">
         <ChannelList
           channels={channels}
           selectedChannelIds={selectedChannelIds}
@@ -119,7 +119,7 @@ function ModalBody({ channels, onClose }: ModalBodyProps) {
             <span className="text-body-small text-content-primary">{channelCount}</span>
             <span className="text-body-small text-content-normal">채널</span>
           </div>
-          <span className="bg-edge-neutral block h-3 w-px" />
+          <span className="bg-edge-normal block h-3 w-px" />
           <div className="flex items-center gap-2.5">
             <span className="text-body-small text-content-primary">{spaceCount}</span>
             <span className="text-body-small text-content-normal">도큐먼트 스페이스</span>
