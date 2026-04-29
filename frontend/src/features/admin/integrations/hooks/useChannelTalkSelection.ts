@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useMemo, useState } from 'react';
+import { toast } from 'sonner';
 
 import type { ChannelTalkChannel } from '../components/member/modals/channelTalk/mockChannels';
 import { DEFAULT_PERIOD, type Period } from '../components/member/modals/channelTalk/PeriodSelect';
@@ -67,6 +68,14 @@ export function useChannelTalkSelection(channels: ChannelTalkChannel[]) {
         });
         return next;
       });
+
+      // 채널 해제 시 도큐먼트 스페이스도 함께 사라지므로 부수 효과를 명시적으로 알림.
+      // 호출은 setState updater 바깥에서 — updater는 pure해야 하며 strict mode 두 번 실행 시 토스트 중복 방지.
+      if (!willSelect && channel.document_spaces.length > 0) {
+        toast(`${channel.display_name} 선택 해제되었습니다`, {
+          description: `${channel.document_spaces.length}개의 도큐먼트 스페이스가 모두 선택 해제되었습니다`,
+        });
+      }
     },
     [channelMap],
   );
