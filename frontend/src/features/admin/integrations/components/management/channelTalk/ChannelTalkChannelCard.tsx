@@ -209,9 +209,9 @@ export default function ChannelTalkChannelCard({
         )}
       </div>
 
-      {/* 도큐먼트 스페이스 자식 카드들 — 채널 lock과 독립적으로 자체 connectionStatus 흐름 */}
+      {/* 도큐먼트 스페이스 자식 카드들 — 각 카드의 우측 form 자체 border-t로 부분 divider 처리 (좌측 book column에는 선 없음) */}
       {channel.documentSpaces.length > 0 ? (
-        <div className="border-edge-neutral flex flex-col border-t px-4">
+        <div className="flex flex-col px-4">
           {channel.documentSpaces.map((ds) => (
             <ChannelTalkDocumentSpaceCard
               key={ds.id}
