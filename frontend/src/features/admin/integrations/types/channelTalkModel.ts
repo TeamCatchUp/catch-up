@@ -90,3 +90,16 @@ export interface ChannelTalkConnectionState {
   lastSyncedAt: string | null;
   channels: ChannelTalkChannel[];
 }
+
+/**
+ * 외부에서 patch 가능한 채널 필드 — 사용자 입력 가능 필드만 허용.
+ * `id`/`connectionStatus`/`errorMessage`는 viewModel의 전용 액션(test/enterEdit/remove)으로만 변경됨.
+ */
+export type ChannelTalkChannelPatch = Partial<
+  Pick<ChannelTalkChannel, 'name' | 'accessKey' | 'accessSecret' | 'webhookToken' | 'syncInterval' | 'documentSpaces'>
+>;
+
+/** 외부에서 patch 가능한 도큐먼트 스페이스 필드 — 채널과 동일 원칙 */
+export type ChannelTalkDocumentSpacePatch = Partial<
+  Pick<ChannelTalkDocumentSpace, 'name' | 'accessKey' | 'accessSecret' | 'syncInterval'>
+>;

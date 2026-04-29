@@ -7,7 +7,12 @@ import { Button } from '@/shared/components/ui/button';
 import { cn } from '@/shared/utils/cn';
 
 import { useChannelTalkViewModel } from '../../../hooks/useChannelTalkViewModel';
-import type { ChannelTalkChannel, ChannelTalkConnectionState } from '../../../types/channelTalkModel';
+import type {
+  ChannelTalkChannel,
+  ChannelTalkChannelPatch,
+  ChannelTalkConnectionState,
+  ChannelTalkDocumentSpacePatch,
+} from '../../../types/channelTalkModel';
 import ChannelTalkChannelCard from './ChannelTalkChannelCard';
 
 /** 채널톡 메인 패널 — 인터랙티브 mock state 자체 관리 (새로고침 시 초기화) */
@@ -119,15 +124,11 @@ interface CredentialSectionProps {
   totalDocumentSpaces: number;
   hasChannels: boolean;
   onAddChannel: () => void;
-  onUpdateChannel: (channelId: string, patch: Partial<ChannelTalkChannel>) => void;
+  onUpdateChannel: (channelId: string, patch: ChannelTalkChannelPatch) => void;
   onRemoveChannel: (channelId: string) => void;
   onEnterEditMode: (channelId: string) => void;
   onAddDocumentSpace: (channelId: string) => void;
-  onUpdateDocumentSpace: (
-    channelId: string,
-    dsId: string,
-    patch: Partial<ChannelTalkChannel['documentSpaces'][number]>,
-  ) => void;
+  onUpdateDocumentSpace: (channelId: string, dsId: string, patch: ChannelTalkDocumentSpacePatch) => void;
   onRemoveDocumentSpace: (channelId: string, dsId: string) => void;
   onEnterDocumentSpaceEditMode: (channelId: string, dsId: string) => void;
   onTestChannelConnection: (channelId: string) => void;

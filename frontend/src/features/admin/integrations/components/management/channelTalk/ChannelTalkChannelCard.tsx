@@ -11,7 +11,11 @@ import IconTag from '@/public/icons/icon/tag.svg';
 import { Button } from '@/shared/components/ui/button';
 import { ConfirmDialog } from '@/shared/components/ui/confirm-dialog';
 
-import type { ChannelTalkChannel, ChannelTalkDocumentSpace } from '../../../types/channelTalkModel';
+import type {
+  ChannelTalkChannel,
+  ChannelTalkChannelPatch,
+  ChannelTalkDocumentSpacePatch,
+} from '../../../types/channelTalkModel';
 import {
   fieldStateFor,
   handleLockedFieldInteract,
@@ -27,11 +31,11 @@ const MEGAPHONE_NOTICE =
 
 interface ChannelTalkChannelCardProps {
   channel: ChannelTalkChannel;
-  onUpdate: (patch: Partial<ChannelTalkChannel>) => void;
+  onUpdate: (patch: ChannelTalkChannelPatch) => void;
   onRemove: () => void;
   onEnterEdit: () => void;
   onAddDocumentSpace: () => void;
-  onUpdateDocumentSpace: (dsId: string, patch: Partial<ChannelTalkDocumentSpace>) => void;
+  onUpdateDocumentSpace: (dsId: string, patch: ChannelTalkDocumentSpacePatch) => void;
   onRemoveDocumentSpace: (dsId: string) => void;
   onEnterDocumentSpaceEdit: (dsId: string) => void;
   onTestConnection: () => void;

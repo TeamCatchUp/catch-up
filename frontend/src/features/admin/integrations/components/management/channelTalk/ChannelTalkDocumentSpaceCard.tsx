@@ -9,7 +9,7 @@ import IconEditPencil from '@/public/icons/icon/edit_pencil.svg';
 import { Button } from '@/shared/components/ui/button';
 import { ConfirmDialog } from '@/shared/components/ui/confirm-dialog';
 
-import type { ChannelTalkDocumentSpace } from '../../../types/channelTalkModel';
+import type { ChannelTalkDocumentSpace, ChannelTalkDocumentSpacePatch } from '../../../types/channelTalkModel';
 import {
   fieldStateFor,
   handleLockedFieldInteract,
@@ -20,7 +20,7 @@ import ChannelTalkSyncIntervalDropdown from './ChannelTalkSyncIntervalDropdown';
 
 interface ChannelTalkDocumentSpaceCardProps {
   documentSpace: ChannelTalkDocumentSpace;
-  onUpdate: (patch: Partial<ChannelTalkDocumentSpace>) => void;
+  onUpdate: (patch: ChannelTalkDocumentSpacePatch) => void;
   onRemove: () => void;
   onEnterEdit: () => void;
   onTestConnection: () => void;

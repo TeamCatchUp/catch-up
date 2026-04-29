@@ -30,12 +30,13 @@ function makeId(prefix: string): string {
 interface ChannelTalkViewModel {
   state: ChannelTalkConnectionState;
   addChannel: () => void;
-  updateChannel: (channelId: string, patch: Partial<ChannelTalkChannel>) => void;
+  /** 사용자 입력 필드만 patch 가능 — `connectionStatus`는 전용 액션으로만 변경 */
+  updateChannel: (channelId: string, patch: ChannelTalkChannelPatch) => void;
   removeChannel: (channelId: string) => void;
   /** 채널 tested → editing 전환 (lock 해제) */
   enterEditMode: (channelId: string) => void;
   addDocumentSpace: (channelId: string) => void;
-  updateDocumentSpace: (channelId: string, dsId: string, patch: Partial<ChannelTalkDocumentSpace>) => void;
+  updateDocumentSpace: (channelId: string, dsId: string, patch: ChannelTalkDocumentSpacePatch) => void;
   removeDocumentSpace: (channelId: string, dsId: string) => void;
   testChannelConnection: (channelId: string) => void;
   /** 도큐먼트 스페이스 검증 — 채널과 독립 */
@@ -72,7 +73,7 @@ export function useChannelTalkViewModel(): ChannelTalkViewModel {
     }));
   }, []);
 
-  const updateChannel = useCallback((channelId: string, patch: Partial<ChannelTalkChannel>) => {
+  const updateChannel = useCallback((channelId: string, patch: ChannelTalkChannelPatch) => {
     setState((prev) => ({
       ...prev,
       channels: prev.channels.map((ch) => {
@@ -135,7 +136,7 @@ export function useChannelTalkViewModel(): ChannelTalkViewModel {
   }, []);
 
   const updateDocumentSpace = useCallback(
-    (channelId: string, dsId: string, patch: Partial<ChannelTalkDocumentSpace>) => {
+    (channelId: string, dsId: string, patch: ChannelTalkDocumentSpacePatch) => {
       setState((prev) => ({
         ...prev,
         channels: prev.channels.map((ch) => {
