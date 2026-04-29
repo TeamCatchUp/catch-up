@@ -67,18 +67,34 @@ export default function ChannelTalkSyncIntervalDropdown({
           className={cn(
             'border-edge-neutral flex h-11.5 w-full items-center gap-1.5 rounded-lg border p-3 transition-colors',
             disabled
-              ? 'bg-fill-interaction-disable text-content-assistive cursor-not-allowed'
+              ? 'bg-fill-interaction-disable cursor-not-allowed'
               : 'bg-fill-strong hover:bg-fill-interaction-hover data-[state=open]:bg-fill-interaction-pressed cursor-pointer',
           )}
         >
           <div className="flex min-w-0 flex-1 items-center gap-2">
-            <IconClock className="text-icon-normal size-5.5 shrink-0" />
-            <span className="text-body-small text-content-neutral truncate">동기화 주기 설정</span>
+            <IconClock
+              className={cn('size-5.5 shrink-0', disabled ? 'text-icon-alternative' : 'text-icon-normal')}
+            />
+            <span
+              className={cn(
+                'text-body-small truncate',
+                disabled ? 'text-content-assistive' : 'text-content-neutral',
+              )}
+            >
+              동기화 주기 설정
+            </span>
           </div>
-          <span className="text-body-small text-content-alternative shrink-0">
+          <span
+            className={cn(
+              'text-body-small shrink-0',
+              disabled ? 'text-content-assistive' : 'text-content-alternative',
+            )}
+          >
             {CHANNEL_TALK_SYNC_INTERVAL_LABELS[value]}
           </span>
-          <IconArrowDown className="text-icon-normal size-6 shrink-0" />
+          <IconArrowDown
+            className={cn('size-6 shrink-0', disabled ? 'text-icon-alternative' : 'text-icon-normal')}
+          />
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent
