@@ -28,10 +28,10 @@ export default function ChannelList({ channels, selectedChannelIds, onToggleChan
             aria-label="채널 전체 선택"
           >
             <CheckboxIcon checked={isAllSelected} className="size-5" />
-            <span className="text-body-small text-content-normal whitespace-nowrap">전체 선택하기</span>
+            <span className="text-body-xsmall text-content-normal whitespace-nowrap">전체 선택하기</span>
           </button>
         </div>
-        <span className="text-body-small text-content-alternative pl-2">전체 {channels.length}개</span>
+        <span className="text-body-xsmall text-content-alternative pl-2">전체 {channels.length}개</span>
       </div>
 
       <ul className="custom-scrollbar flex flex-1 flex-col overflow-y-auto px-1 pt-1.5 pb-4">
