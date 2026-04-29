@@ -1,32 +1,102 @@
 'use client';
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useReducer } from 'react';
 import { toast } from 'sonner';
 
 import type { ChannelTalkChannel } from '../components/member/modals/channelTalk/mockChannels';
 import { DEFAULT_PERIOD, type Period } from '../components/member/modals/channelTalk/PeriodSelect';
 
+interface ChannelTalkSelectionState {
+  selectedChannelIds: Set<string>;
+  selectedSpaceIds: Set<string>;
+  channelPeriods: Record<string, Period>;
+  /** 사용자가 명시 설정한 space만 보관. 미설정 space는 채널 기간을 inheritance로 따라간다. */
+  spacePeriods: Record<string, Period>;
+}
+
+type ChannelTalkSelectionAction =
+  | { type: 'TOGGLE_CHANNEL'; channel: ChannelTalkChannel }
+  | { type: 'TOGGLE_ALL_CHANNELS'; channels: ChannelTalkChannel[] }
+  | { type: 'TOGGLE_SPACE'; spaceId: string }
+  | { type: 'TOGGLE_CHANNEL_SPACES'; channel: ChannelTalkChannel }
+  | { type: 'SET_CHANNEL_PERIOD'; channelId: string; period: Period }
+  | { type: 'SET_SPACE_PERIOD'; spaceId: string; period: Period };
+
+function init(channels: ChannelTalkChannel[]): ChannelTalkSelectionState {
+  return {
+    selectedChannelIds: new Set(channels.map((channel) => channel.channel_id)),
+    selectedSpaceIds: new Set(channels.flatMap((channel) => channel.document_spaces.map((space) => space.space_id))),
+    channelPeriods: Object.fromEntries(channels.map((channel) => [channel.channel_id, DEFAULT_PERIOD])),
+    spacePeriods: {},
+  };
+}
+
+function reducer(state: ChannelTalkSelectionState, action: ChannelTalkSelectionAction): ChannelTalkSelectionState {
+  switch (action.type) {
+    case 'TOGGLE_CHANNEL': {
+      const { channel } = action;
+      const willSelect = !state.selectedChannelIds.has(channel.channel_id);
+      const nextChannelIds = new Set(state.selectedChannelIds);
+      const nextSpaceIds = new Set(state.selectedSpaceIds);
+
+      if (willSelect) {
+        nextChannelIds.add(channel.channel_id);
+        channel.document_spaces.forEach((space) => nextSpaceIds.add(space.space_id));
+      } else {
+        nextChannelIds.delete(channel.channel_id);
+        channel.document_spaces.forEach((space) => nextSpaceIds.delete(space.space_id));
+      }
+
+      return { ...state, selectedChannelIds: nextChannelIds, selectedSpaceIds: nextSpaceIds };
+    }
+    case 'TOGGLE_ALL_CHANNELS': {
+      const { channels } = action;
+      const isAllSelected =
+        channels.length > 0 && channels.every((channel) => state.selectedChannelIds.has(channel.channel_id));
+      if (isAllSelected) {
+        return { ...state, selectedChannelIds: new Set(), selectedSpaceIds: new Set() };
+      }
+      return {
+        ...state,
+        selectedChannelIds: new Set(channels.map((channel) => channel.channel_id)),
+        selectedSpaceIds: new Set(
+          channels.flatMap((channel) => channel.document_spaces.map((space) => space.space_id)),
+        ),
+      };
+    }
+    case 'TOGGLE_SPACE': {
+      const next = new Set(state.selectedSpaceIds);
+      if (next.has(action.spaceId)) next.delete(action.spaceId);
+      else next.add(action.spaceId);
+      return { ...state, selectedSpaceIds: next };
+    }
+    case 'TOGGLE_CHANNEL_SPACES': {
+      const { channel } = action;
+      const allSelected = channel.document_spaces.every((space) => state.selectedSpaceIds.has(space.space_id));
+      const next = new Set(state.selectedSpaceIds);
+      channel.document_spaces.forEach((space) => {
+        if (allSelected) next.delete(space.space_id);
+        else next.add(space.space_id);
+      });
+      return { ...state, selectedSpaceIds: next };
+    }
+    case 'SET_CHANNEL_PERIOD':
+      return { ...state, channelPeriods: { ...state.channelPeriods, [action.channelId]: action.period } };
+    case 'SET_SPACE_PERIOD':
+      return { ...state, spacePeriods: { ...state.spacePeriods, [action.spaceId]: action.period } };
+  }
+}
+
 /**
- * 채널톡 임베딩 모달의 selection 로직(채널/스페이스 체크 + 기간 선택)을 응집한 훅.
+ * 채널톡 임베딩 모달의 selection 로직을 useReducer로 응집한 훅.
  *
- * 초기 상태: 모든 채널/스페이스 선택 + 모든 기간 DEFAULT_PERIOD.
- * 좌측 채널 토글 시 해당 채널의 도큐먼트 스페이스도 함께 add/delete (양방향 동기화).
- *
- * 모든 핸들러는 useCallback으로 안정화되어 React.memo로 감싸진 자식 컴포넌트에서 불필요한 re-render를 줄인다.
+ * - 4개 state(채널/스페이스 선택, 채널/스페이스 기간)를 단일 state object + 6개 action으로 관리
+ * - reducer는 pure (외부 변수 수정 없음, 부수 효과는 반환된 dispatch 호출 후 handler 본문에서 처리)
+ * - 초기 상태: 모든 채널/스페이스 선택 + 모든 채널 기간 DEFAULT_PERIOD + spacePeriods는 빈 객체(inheritance)
+ * - 좌측 채널 토글 시 해당 채널의 도큐먼트 스페이스도 함께 add/delete (양방향 동기화)
  */
 export function useChannelTalkSelection(channels: ChannelTalkChannel[]) {
-  const [selectedChannelIds, setSelectedChannelIds] = useState<Set<string>>(
-    () => new Set(channels.map((channel) => channel.channel_id)),
-  );
-  const [selectedSpaceIds, setSelectedSpaceIds] = useState<Set<string>>(
-    () => new Set(channels.flatMap((channel) => channel.document_spaces.map((space) => space.space_id))),
-  );
-  const [channelPeriods, setChannelPeriods] = useState<Record<string, Period>>(() =>
-    Object.fromEntries(channels.map((channel) => [channel.channel_id, DEFAULT_PERIOD])),
-  );
-  // 빈 객체로 초기화 — 사용자가 명시 설정한 space만 저장.
-  // 미설정 space는 ChannelGroup의 `spacePeriods[id] ?? channelPeriod` fallback으로 채널 기간을 따라간다 (inheritance).
-  const [spacePeriods, setSpacePeriods] = useState<Record<string, Period>>({});
+  const [state, dispatch] = useReducer(reducer, channels, init);
 
   const channelMap = useMemo(() => {
     const map = new Map<string, ChannelTalkChannel>();
@@ -35,12 +105,12 @@ export function useChannelTalkSelection(channels: ChannelTalkChannel[]) {
   }, [channels]);
 
   const visibleChannels = useMemo(
-    () => channels.filter((channel) => selectedChannelIds.has(channel.channel_id)),
-    [channels, selectedChannelIds],
+    () => channels.filter((channel) => state.selectedChannelIds.has(channel.channel_id)),
+    [channels, state.selectedChannelIds],
   );
 
-  const channelCount = selectedChannelIds.size;
-  const spaceCount = selectedSpaceIds.size;
+  const channelCount = state.selectedChannelIds.size;
+  const spaceCount = state.selectedSpaceIds.size;
   const isSubmitDisabled = channelCount === 0 || spaceCount === 0;
 
   const toggleChannel = useCallback(
@@ -48,89 +118,49 @@ export function useChannelTalkSelection(channels: ChannelTalkChannel[]) {
       const channel = channelMap.get(channelId);
       if (!channel) return;
 
-      // 두 setState updater 사이에서 willSelect를 공유하기 위한 외부 변수.
-      // React batching 내에서 setSelectedChannelIds updater가 먼저 실행되어 값이 결정된다.
-      let willSelect = false;
-      setSelectedChannelIds((prev) => {
-        willSelect = !prev.has(channelId);
-        const next = new Set(prev);
-        if (willSelect) next.add(channelId);
-        else next.delete(channelId);
-        return next;
-      });
-      setSelectedSpaceIds((prev) => {
-        const next = new Set(prev);
-        channel.document_spaces.forEach((space) => {
-          if (willSelect) next.add(space.space_id);
-          else next.delete(space.space_id);
-        });
-        return next;
-      });
+      // 토스트는 dispatch 전에 latest state로 willSelect를 결정해 분기.
+      const willSelect = !state.selectedChannelIds.has(channelId);
+      dispatch({ type: 'TOGGLE_CHANNEL', channel });
 
-      // 채널 해제 시 도큐먼트 스페이스도 함께 사라지므로 부수 효과를 명시적으로 알림.
-      // 호출은 setState updater 바깥에서 — updater는 pure해야 하며 strict mode 두 번 실행 시 토스트 중복 방지.
       if (!willSelect && channel.document_spaces.length > 0) {
         toast(`${channel.display_name} 선택 해제되었습니다`, {
           description: `${channel.document_spaces.length}개의 도큐먼트 스페이스가 모두 선택 해제되었습니다`,
         });
       }
     },
-    [channelMap],
+    [channelMap, state.selectedChannelIds],
   );
 
   const toggleAllChannels = useCallback(() => {
-    let isAllSelected = false;
-    setSelectedChannelIds((prev) => {
-      isAllSelected = channels.length > 0 && channels.every((channel) => prev.has(channel.channel_id));
-      if (isAllSelected) return new Set();
-      return new Set(channels.map((channel) => channel.channel_id));
-    });
-    setSelectedSpaceIds(() => {
-      if (isAllSelected) return new Set();
-      return new Set(channels.flatMap((channel) => channel.document_spaces.map((space) => space.space_id)));
-    });
+    dispatch({ type: 'TOGGLE_ALL_CHANNELS', channels });
   }, [channels]);
 
   const toggleSpace = useCallback((spaceId: string) => {
-    setSelectedSpaceIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(spaceId)) next.delete(spaceId);
-      else next.add(spaceId);
-      return next;
-    });
+    dispatch({ type: 'TOGGLE_SPACE', spaceId });
   }, []);
 
-  /** 한 채널 안의 모든 도큐먼트 스페이스를 일괄 토글. 우측 채널 헤더 체크박스가 호출. */
   const toggleChannelSpaces = useCallback(
     (channelId: string) => {
       const channel = channelMap.get(channelId);
       if (!channel) return;
-      setSelectedSpaceIds((prev) => {
-        const allSelected = channel.document_spaces.every((space) => prev.has(space.space_id));
-        const next = new Set(prev);
-        channel.document_spaces.forEach((space) => {
-          if (allSelected) next.delete(space.space_id);
-          else next.add(space.space_id);
-        });
-        return next;
-      });
+      dispatch({ type: 'TOGGLE_CHANNEL_SPACES', channel });
     },
     [channelMap],
   );
 
   const setChannelPeriod = useCallback((channelId: string, period: Period) => {
-    setChannelPeriods((prev) => ({ ...prev, [channelId]: period }));
+    dispatch({ type: 'SET_CHANNEL_PERIOD', channelId, period });
   }, []);
 
   const setSpacePeriod = useCallback((spaceId: string, period: Period) => {
-    setSpacePeriods((prev) => ({ ...prev, [spaceId]: period }));
+    dispatch({ type: 'SET_SPACE_PERIOD', spaceId, period });
   }, []);
 
   return {
-    selectedChannelIds,
-    selectedSpaceIds,
-    channelPeriods,
-    spacePeriods,
+    selectedChannelIds: state.selectedChannelIds,
+    selectedSpaceIds: state.selectedSpaceIds,
+    channelPeriods: state.channelPeriods,
+    spacePeriods: state.spacePeriods,
     visibleChannels,
     channelCount,
     spaceCount,
