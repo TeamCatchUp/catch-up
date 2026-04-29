@@ -73,7 +73,7 @@ export default function ChannelGroup({
             const isSpaceSelected = selectedSpaceIds.has(space.space_id);
             const spacePeriod = spacePeriods[space.space_id] ?? channelPeriod;
             return (
-              <li key={space.space_id} className="flex h-14 items-center gap-2.5 pl-3">
+              <li key={space.space_id} className="flex h-14 items-center gap-2.5 pr-5 pl-3">
                 <button
                   type="button"
                   onClick={() => onToggleSpace(space.space_id)}
@@ -82,7 +82,7 @@ export default function ChannelGroup({
                 >
                   <CheckboxIcon checked={isSpaceSelected} className="size-6" />
                 </button>
-                <div className="border-edge-assistive flex min-w-0 flex-1 items-center gap-8 border-b py-2.5 pr-3">
+                <div className="border-edge-assistive flex min-w-0 flex-1 items-center gap-8 border-b py-2.5">
                   <button
                     type="button"
                     onClick={() => onToggleSpace(space.space_id)}
