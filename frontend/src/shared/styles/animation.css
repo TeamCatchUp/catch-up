@@ -15,17 +15,6 @@
   --animate-duration-slow: 300ms; /* 큰 layout shift, 모달 등 */
 }
 
-@keyframes panel-slide-down {
-  from {
-    opacity: 0;
-    transform: translateY(-8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
 /* ========================================================================
    List item enter
    - 리스트 아이템이 추가될 때의 진입 애니메이션
