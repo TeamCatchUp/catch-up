@@ -11,7 +11,7 @@ import type {
   MemberIntegrationViewModel,
 } from '../types/integrationModel';
 
-/** 매핑 아이템에서 서비스별 PreMappingInfo 추출 — 채널톡은 user-level mapping이 없어 null */
+/** 매핑 아이템에서 서비스별 PreMappingInfo 추출 */
 const getServiceInfo = (item: UserSyncItem, service: IntegrationService): PreMappingInfo | null => {
   switch (service) {
     case 'jira':
@@ -22,7 +22,8 @@ const getServiceInfo = (item: UserSyncItem, service: IntegrationService): PreMap
     case 'slack':
       return item.slack;
     case 'channel-talk':
-      return null;
+      // 백엔드 user-level 채널톡 매핑 미구현 — 응답이 합류하기 전까지는 항상 null.
+      return item.channel_talk ?? null;
   }
 };
 
@@ -66,9 +67,17 @@ export const useMemberIntegrationViewModel = (params: {
       const serviceInfoByService: Partial<Record<IntegrationService, PreMappingInfo>> = {};
       const statusByService = {} as Record<IntegrationService, '미사용' | '완료' | '미등록'>;
 
-      for (const service of ['jira', 'github', 'slack', 'confluence'] as IntegrationService[]) {
+      for (const service of ['jira', 'github', 'slack', 'confluence', 'channel-talk'] as IntegrationService[]) {
         const info = getServiceInfo(item, service);
         if (info) serviceInfoByService[service] = info;
+
+        if (service === 'channel-talk') {
+          // 채널톡은 백엔드 counts가 없어 hasPremapping이 항상 false → mock 단계에서 미매핑은 '미사용'으로 정렬.
+          // 백엔드 합류 시 아래 일반 분기와 동일하게 처리되도록 이 분기 제거.
+          statusByService[service] = info ? '완료' : '미사용';
+          continue;
+        }
+
         const hasPremapping = (syncStatus.counts[service]?.premap ?? 0) > 0;
         statusByService[service] = info ? '완료' : hasPremapping ? '미사용' : '미등록';
       }

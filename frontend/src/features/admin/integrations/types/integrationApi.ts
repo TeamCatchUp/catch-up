@@ -76,9 +76,11 @@ export interface UserSyncItem {
   atlassian: PreMappingInfo | null;
   slack: PreMappingInfo | null;
   github: PreMappingInfo | null;
+  /** 백엔드 미구현 — view model에서 deterministic 합성 */
+  channel_talk?: PreMappingInfo | null;
 }
 
-export type SyncFilterType = 'all' | 'full' | 'partial';
+export type SyncFilterType = 'all' | 'full' | 'partial' | 'channel-talk';
 
 export interface UserSyncStatusResponse {
   total: number;

@@ -1,8 +1,8 @@
 ﻿import type { IntegrationService, MemberIntegrationStatus } from '../types/integrationModel';
 import type { MemberSortKey } from '../types/memberDisplayModel';
 
-/** 이용자 연동 표에서 노출할 서비스 컬럼 */
-export const MEMBER_TABLE_SERVICES: IntegrationService[] = ['github', 'jira', 'slack'];
+/** 이용자 연동 표에서 노출할 서비스 컬럼 (Figma 시안 순서: Atlassian/Github/Slack/채널톡) */
+export const MEMBER_TABLE_SERVICES: IntegrationService[] = ['jira', 'github', 'slack', 'channel-talk'];
 
 /** 이용자 연동 표 상태 칩 공통 클래스 */
 export const MEMBER_LIST_STATUS_BADGE_BASE_CLASS =
