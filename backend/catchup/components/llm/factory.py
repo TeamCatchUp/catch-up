@@ -15,6 +15,7 @@ def get_llm_service(
     isolated: bool = False,
     extended_thinking: bool = False,
     thinking_budget_tokens: int = 8000,
+    max_attempts: int = AwsBedrockLlmService.DEFAULT_MAX_ATTEMPTS,
 ) -> BaseLlmService:
     if provider == LlmProvider.OPENAI:
         return OpenAiLlmService(
@@ -29,6 +30,7 @@ def get_llm_service(
             isolated=isolated,
             extended_thinking=extended_thinking,
             thinking_budget_tokens=thinking_budget_tokens,
+            max_attempts=max_attempts,
         )
 
     raise ValueError(f"Unknown provider: {provider}")

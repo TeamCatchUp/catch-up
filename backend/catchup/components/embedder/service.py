@@ -1,7 +1,8 @@
 import asyncio
 import json
 import logging
-from abc import ABC, abstractmethod
+from abc import ABC
+from abc import abstractmethod
 
 import boto3
 from botocore.config import Config
@@ -44,8 +45,10 @@ class CohereEmbeddingService(BaseEmbeddingService):
 class AwsBedrockEmbeddingService(BaseEmbeddingService):
     MULTIMODAL_MAX_ITEMS = 96
     MULTIMODAL_MAX_PAYLOAD_BYTES = 19 * 1024 * 1024
+    DEFAULT_MAX_ATTEMPTS = 5
 
-    def __init__(self):
+    def __init__(self, max_attempts: int = DEFAULT_MAX_ATTEMPTS):
+        self._max_attempts = max_attempts
         self.client = self._create_client()
         self.model_id = settings.AWS_BEDROCK_EMBEDDING_MODEL
         super().__init__()
@@ -53,7 +56,9 @@ class AwsBedrockEmbeddingService(BaseEmbeddingService):
     def _create_client(self):
         config = Config(
             max_pool_connections=settings.EMBEDDING_MAX_CONCURRENCY * 2,
-            retries={"max_attempts": 5, "mode": "standard"},
+            retries={"max_attempts": self._max_attempts, "mode": "standard"},
+            read_timeout=50,
+            connect_timeout=5,
         )
         return boto3.client(
             "bedrock-runtime",
