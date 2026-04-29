@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { toast } from 'sonner';
 
-import IconAdd from '@/public/icons/icon/add.svg';
+import IconAddSquare from '@/public/icons/icon/add_square.svg';
 import IconCheck from '@/public/icons/icon/check.svg';
 import IconEditPencil from '@/public/icons/icon/edit_pencil.svg';
 import IconMegaphone from '@/public/icons/icon/megaphone.svg';
@@ -231,7 +231,7 @@ export default function ChannelTalkChannelCard({
           onClick={onAddDocumentSpace}
           className="text-body-small text-content-normal flex cursor-pointer items-center justify-center gap-2.5"
         >
-          <IconAdd className="text-icon-normal size-5.5 shrink-0" />
+          <IconAddSquare className="text-icon-normal size-5.5 shrink-0" />
           <span>도큐먼트 스페이스 추가</span>
         </button>
       </div>
