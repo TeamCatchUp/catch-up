@@ -47,7 +47,22 @@ export default function StatusCardsSection({
       );
     }
 
-    const state = buttonStates[service as SyncConnector] ?? 'idle';
+    // channel-talk은 임베딩 백엔드 미구현 — buttonStates 추적 대상이 아니므로 항상 idle 버튼만 노출.
+    // SyncConnector 확장 시 이 분기 제거 가능.
+    if (service === 'channel-talk') {
+      return (
+        <Button
+          variant="box-outline-blue"
+          size="md"
+          className="text-body-small h-9 w-full"
+          onClick={() => openEmbeddingModal(service, name)}
+        >
+          임베딩하기
+        </Button>
+      );
+    }
+
+    const state = buttonStates[service] ?? 'idle';
 
     switch (state) {
       case 'idle':
@@ -166,7 +181,6 @@ export default function StatusCardsSection({
         <ChannelTalkEmbeddingModal
           open={embeddingModal.open}
           onOpenChange={(open) => setEmbeddingModal((prev) => ({ ...prev, open }))}
-          serviceName={embeddingModal.serviceName}
         />
       )}
     </section>

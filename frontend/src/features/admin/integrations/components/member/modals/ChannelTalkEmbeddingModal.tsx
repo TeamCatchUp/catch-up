@@ -1,23 +1,28 @@
 'use client';
 
-import { useMemo, useState } from 'react';
-
 import IconCancel from '@/public/icons/icon/cancel.svg';
 import { Button } from '@/shared/components/ui/button';
 import { Dialog, DialogContent, DialogTitle } from '@/shared/components/ui/dialog';
 
+import { useChannelTalkSelection } from '../../../hooks/useChannelTalkSelection';
 import ChannelGroup from './channelTalk/ChannelGroup';
 import ChannelGroupListEmpty from './channelTalk/ChannelGroupListEmpty';
 import ChannelList from './channelTalk/ChannelList';
 import { type ChannelTalkChannel, MOCK_CHANNEL_TALK_CHANNELS } from './channelTalk/mockChannels';
-import { DEFAULT_PERIOD, type Period } from './channelTalk/PeriodSelect';
+import { DEFAULT_PERIOD } from './channelTalk/PeriodSelect';
 
 interface ChannelTalkEmbeddingModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  serviceName: string;
 }
 
+/**
+ * 채널톡 임베딩 모달 셸.
+ *
+ * ModalBody가 별도 컴포넌트로 분리된 이유: open=true일 때만 마운트되어 selection state가
+ * 매 모달 진입마다 fresh하게 초기화된다. useEffect로 reset하는 패턴은 React 19의
+ * `react-hooks/set-state-in-effect` 룰에 막혀, mount/unmount 기반 초기화로 우회.
+ */
 export default function ChannelTalkEmbeddingModal({ open, onOpenChange }: ChannelTalkEmbeddingModalProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -37,101 +42,25 @@ interface ModalBodyProps {
 }
 
 function ModalBody({ channels, onClose }: ModalBodyProps) {
-  const [selectedChannelIds, setSelectedChannelIds] = useState<Set<string>>(
-    () => new Set(channels.map((channel) => channel.channel_id)),
-  );
-  const [selectedSpaceIds, setSelectedSpaceIds] = useState<Set<string>>(
-    () => new Set(channels.flatMap((channel) => channel.document_spaces.map((space) => space.space_id))),
-  );
-  const [channelPeriods, setChannelPeriods] = useState<Record<string, Period>>(() =>
-    Object.fromEntries(channels.map((channel) => [channel.channel_id, DEFAULT_PERIOD])),
-  );
-  const [spacePeriods, setSpacePeriods] = useState<Record<string, Period>>(() =>
-    Object.fromEntries(
-      channels.flatMap((channel) => channel.document_spaces.map((space) => [space.space_id, DEFAULT_PERIOD])),
-    ),
-  );
+  const {
+    selectedChannelIds,
+    selectedSpaceIds,
+    channelPeriods,
+    spacePeriods,
+    visibleChannels,
+    channelCount,
+    spaceCount,
+    isSubmitDisabled,
+    toggleChannel,
+    toggleAllChannels,
+    toggleSpace,
+    toggleChannelSpaces,
+    setChannelPeriod,
+    setSpacePeriod,
+  } = useChannelTalkSelection(channels);
 
-  const channelMap = useMemo(() => {
-    const map = new Map<string, ChannelTalkChannel>();
-    channels.forEach((channel) => map.set(channel.channel_id, channel));
-    return map;
-  }, [channels]);
-
-  const visibleChannels = useMemo(
-    () => channels.filter((channel) => selectedChannelIds.has(channel.channel_id)),
-    [channels, selectedChannelIds],
-  );
-
-  const channelCount = selectedChannelIds.size;
-  const spaceCount = selectedSpaceIds.size;
-  const isSubmitDisabled = channelCount === 0 || spaceCount === 0;
-
-  const toggleChannel = (channelId: string) => {
-    const channel = channelMap.get(channelId);
-    if (!channel) return;
-    const willSelect = !selectedChannelIds.has(channelId);
-
-    setSelectedChannelIds((prev) => {
-      const next = new Set(prev);
-      if (willSelect) next.add(channelId);
-      else next.delete(channelId);
-      return next;
-    });
-    setSelectedSpaceIds((prev) => {
-      const next = new Set(prev);
-      channel.document_spaces.forEach((space) => {
-        if (willSelect) next.add(space.space_id);
-        else next.delete(space.space_id);
-      });
-      return next;
-    });
-  };
-
-  const toggleAllChannels = () => {
-    const isAllSelected =
-      channels.length > 0 && channels.every((channel) => selectedChannelIds.has(channel.channel_id));
-    if (isAllSelected) {
-      setSelectedChannelIds(new Set());
-      setSelectedSpaceIds(new Set());
-    } else {
-      setSelectedChannelIds(new Set(channels.map((channel) => channel.channel_id)));
-      setSelectedSpaceIds(
-        new Set(channels.flatMap((channel) => channel.document_spaces.map((space) => space.space_id))),
-      );
-    }
-  };
-
-  const toggleSpace = (spaceId: string) => {
-    setSelectedSpaceIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(spaceId)) next.delete(spaceId);
-      else next.add(spaceId);
-      return next;
-    });
-  };
-
-  const toggleChannelGroupSpaces = (channelId: string) => {
-    const channel = channelMap.get(channelId);
-    if (!channel) return;
-    const allSelected = channel.document_spaces.every((space) => selectedSpaceIds.has(space.space_id));
-    setSelectedSpaceIds((prev) => {
-      const next = new Set(prev);
-      channel.document_spaces.forEach((space) => {
-        if (allSelected) next.delete(space.space_id);
-        else next.add(space.space_id);
-      });
-      return next;
-    });
-  };
-
-  const handleChannelPeriodChange = (channelId: string, period: Period) => {
-    setChannelPeriods((prev) => ({ ...prev, [channelId]: period }));
-  };
-
-  const handleSpacePeriodChange = (spaceId: string, period: Period) => {
-    setSpacePeriods((prev) => ({ ...prev, [spaceId]: period }));
-  };
+  // TODO: 백엔드 임베딩 API 연동 시 mutation 호출 후 onClose. 현재는 모달만 닫음.
+  const handleSubmit = onClose;
 
   return (
     <>
@@ -173,10 +102,10 @@ function ModalBody({ channels, onClose }: ModalBodyProps) {
                   selectedSpaceIds={selectedSpaceIds}
                   channelPeriod={channelPeriods[channel.channel_id] ?? DEFAULT_PERIOD}
                   spacePeriods={spacePeriods}
-                  onToggleChannelHeader={toggleChannelGroupSpaces}
+                  onToggleChannelSpaces={toggleChannelSpaces}
                   onToggleSpace={toggleSpace}
-                  onChangeChannelPeriod={handleChannelPeriodChange}
-                  onChangeSpacePeriod={handleSpacePeriodChange}
+                  onChangeChannelPeriod={setChannelPeriod}
+                  onChangeSpacePeriod={setSpacePeriod}
                 />
               </div>
             ))
@@ -200,7 +129,7 @@ function ModalBody({ channels, onClose }: ModalBodyProps) {
           <Button variant="capsule-outline-mono" size="md" onClick={onClose}>
             취소
           </Button>
-          <Button variant="capsule-solid-primary" size="md" disabled={isSubmitDisabled} onClick={onClose}>
+          <Button variant="capsule-solid-primary" size="md" disabled={isSubmitDisabled} onClick={handleSubmit}>
             채널톡 임베딩하기
           </Button>
         </div>
