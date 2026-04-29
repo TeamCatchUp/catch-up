@@ -69,4 +69,4 @@ export const SERVICE_NOTICES: Record<ServiceNoticeVariant, ServiceNoticeContent>
  * 'incident -> 'recovery' 로 변경 시, 정상화 안내 공지 팝업으로 변경됨
  * null 로 변경 시, 두 상태 모두 미노출
  */
-export const ACTIVE_SERVICE_NOTICE: ServiceNoticeVariant | null = 'incident';
+export const ACTIVE_SERVICE_NOTICE: ServiceNoticeVariant | null = null;
