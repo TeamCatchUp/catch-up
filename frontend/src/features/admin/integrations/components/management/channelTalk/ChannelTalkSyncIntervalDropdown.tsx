@@ -72,29 +72,19 @@ export default function ChannelTalkSyncIntervalDropdown({
           )}
         >
           <div className="flex min-w-0 flex-1 items-center gap-2">
-            <IconClock
-              className={cn('size-5.5 shrink-0', disabled ? 'text-icon-alternative' : 'text-icon-normal')}
-            />
+            <IconClock className={cn('size-5.5 shrink-0', disabled ? 'text-icon-alternative' : 'text-icon-normal')} />
             <span
-              className={cn(
-                'text-body-small truncate',
-                disabled ? 'text-content-assistive' : 'text-content-neutral',
-              )}
+              className={cn('text-body-small truncate', disabled ? 'text-content-assistive' : 'text-content-neutral')}
             >
               동기화 주기 설정
             </span>
           </div>
           <span
-            className={cn(
-              'text-body-small shrink-0',
-              disabled ? 'text-content-assistive' : 'text-content-alternative',
-            )}
+            className={cn('text-body-small shrink-0', disabled ? 'text-content-assistive' : 'text-content-alternative')}
           >
             {CHANNEL_TALK_SYNC_INTERVAL_LABELS[value]}
           </span>
-          <IconArrowDown
-            className={cn('size-6 shrink-0', disabled ? 'text-icon-alternative' : 'text-icon-normal')}
-          />
+          <IconArrowDown className={cn('size-6 shrink-0', disabled ? 'text-icon-alternative' : 'text-icon-normal')} />
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent
