@@ -2,6 +2,7 @@
 
 import { useId, useState } from 'react';
 
+import IconVisibility from '@/public/icons/icon/visibility.svg';
 import IconVisibilityOff from '@/public/icons/icon/visibility_off.svg';
 import { cn } from '@/shared/utils/cn';
 
@@ -40,6 +41,9 @@ export default function ChannelTalkTextField({
   const inputId = id ?? reactId;
   const [masked, setMasked] = useState(defaultMasked);
   const showMaskToggle = maskable;
+  const isMasked = maskable && masked && value.length > 0;
+  /** 마스킹 시 별표 표시 — value 길이만큼 '*' 채움 (보안성 vs 시각 일치 절충) */
+  const displayValue = isMasked ? '*'.repeat(value.length) : value;
 
   return (
     <div
@@ -53,11 +57,11 @@ export default function ChannelTalkTextField({
     >
       <input
         id={inputId}
-        type={maskable && masked ? 'password' : 'text'}
-        value={value}
+        type="text"
+        value={displayValue}
         onChange={(e) => onChange?.(e.target.value)}
         placeholder={placeholder}
-        readOnly={readOnly || disabled}
+        readOnly={readOnly || disabled || isMasked}
         aria-label={ariaLabel}
         className={cn(
           'text-body-small placeholder:text-content-assistive min-w-0 flex-1 truncate bg-transparent outline-none',
@@ -71,7 +75,7 @@ export default function ChannelTalkTextField({
           onClick={() => setMasked((prev) => !prev)}
           className="text-icon-alternative hover:text-icon-normal flex size-4.5 shrink-0 cursor-pointer items-center justify-center transition-colors"
         >
-          <IconVisibilityOff className="size-4.5" />
+          {masked ? <IconVisibilityOff className="size-4.5" /> : <IconVisibility className="size-4.5" />}
         </button>
       )}
     </div>
