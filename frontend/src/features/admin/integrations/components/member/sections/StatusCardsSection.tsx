@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import dynamic from 'next/dynamic';
 
 import IconHelp from '@/public/icons/icon/help.svg';
 import IconInfo from '@/public/icons/icon/info.svg';
@@ -9,9 +10,15 @@ import type { IntegrationService } from '@/shared/types/integrationService';
 
 import type { MemberIntegrationCardItem } from '../../../types/integrationModel';
 import type { EmbeddingButtonState, SyncConnector } from '../../../types/syncModel';
-import ChannelTalkEmbeddingModal from '../modals/ChannelTalkEmbeddingModal';
 import EmbeddingModal from '../modals/EmbeddingModal';
 import RecoveryCardSection from './RecoveryCardSection';
+
+// 채널톡 임베딩 모달은 사용자가 "임베딩하기" 버튼을 클릭한 시점에만 필요하므로 lazy load.
+// 임베딩 버튼 hover/focus 시에는 preloadChannelTalkModal()로 chunk를 미리 가져온다.
+const ChannelTalkEmbeddingModal = dynamic(() => import('../modals/ChannelTalkEmbeddingModal'), { ssr: false });
+const preloadChannelTalkModal = () => {
+  void import('../modals/ChannelTalkEmbeddingModal');
+};
 
 interface StatusCardsSectionProps {
   cards: MemberIntegrationCardItem[];
@@ -55,6 +62,8 @@ export default function StatusCardsSection({
           variant="box-outline-blue"
           size="md"
           className="text-body-small h-9 w-full"
+          onMouseEnter={preloadChannelTalkModal}
+          onFocus={preloadChannelTalkModal}
           onClick={() => openEmbeddingModal(service, name)}
         >
           임베딩하기
