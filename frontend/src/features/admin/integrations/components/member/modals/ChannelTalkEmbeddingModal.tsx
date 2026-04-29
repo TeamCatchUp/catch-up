@@ -91,7 +91,7 @@ function ModalBody({ channels, onClose }: ModalBodyProps) {
           onToggleAll={toggleAllChannels}
         />
 
-        <div className="custom-scrollbar flex flex-1 flex-col overflow-y-auto">
+        <div className="custom-scrollbar flex flex-1 flex-col gap-6 overflow-y-auto">
           {visibleChannels.length === 0 ? (
             <ChannelGroupListEmpty />
           ) : (
