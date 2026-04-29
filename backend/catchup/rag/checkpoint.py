@@ -21,7 +21,6 @@ _ALLOWED_MSGPACK_MODULES: list[tuple[str, str]] = [
     ("catchup.rag.schemas.structures", "PipelinePlan"),
     ("catchup.rag.schemas.structures", "SearchStep"),
     ("catchup.rag.schemas.structures", "SearchPlan"),
-    ("catchup.rag.schemas.structures", "GapAnalysis"),
     ('catchup.db.models', 'SourceType'),
     ('catchup.rag.schemas.prompt_settings', 'PromptSettings'),
 ]

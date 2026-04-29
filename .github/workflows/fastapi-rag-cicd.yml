@@ -131,4 +131,4 @@ jobs:
               up -d --remove-orphans
 
             # 리소스 정리
-            docker image prune -f
+            docker image prune -a -f
