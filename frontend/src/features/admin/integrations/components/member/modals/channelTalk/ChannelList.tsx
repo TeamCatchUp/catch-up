@@ -34,7 +34,7 @@ export default function ChannelList({ channels, selectedChannelIds, onToggleChan
         <span className="text-body-xsmall text-content-alternative pl-2">전체 {channels.length}개</span>
       </div>
 
-      <ul className="custom-scrollbar flex flex-1 flex-col overflow-y-auto px-1 pt-1.5 pb-4">
+      <ul className="custom-scrollbar flex flex-1 flex-col overflow-y-auto px-4 pt-1.5 pb-4">
         {channels.map((channel) => {
           const isSelected = selectedChannelIds.has(channel.channel_id);
           return (
@@ -51,12 +51,7 @@ export default function ChannelList({ channels, selectedChannelIds, onToggleChan
                 <span className="border-edge-neutral bg-fill-strong text-content-alternative rounded-md2 inline-flex shrink-0 items-center justify-center border p-0.5">
                   <IconTag className="size-4" />
                 </span>
-                <span
-                  className={cn(
-                    'text-body-small line-clamp-1 min-w-0 flex-1 text-left',
-                    isSelected ? 'text-content-primary' : 'text-content-normal',
-                  )}
-                >
+                <span className="text-body-small text-content-normal line-clamp-1 min-w-0 flex-1 text-left">
                   {channel.display_name}
                 </span>
               </button>
