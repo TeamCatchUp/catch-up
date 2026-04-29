@@ -1,6 +1,6 @@
 'use client';
 
-import { useId, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 
 import IconVisibility from '@/public/icons/icon/visibility.svg';
 import IconVisibilityOff from '@/public/icons/icon/visibility_off.svg';
@@ -44,6 +44,13 @@ export default function ChannelTalkTextField({
   const isMasked = maskable && masked && value.length > 0;
   /** 마스킹 시 별표 표시 — value 길이만큼 '*' 채움 (보안성 vs 시각 일치 절충) */
   const displayValue = isMasked ? '*'.repeat(value.length) : value;
+
+  /** disabled(tested lock) 진입 시 자동 마스킹 — 사용자가 eye 토글로 해제는 여전히 가능 */
+  useEffect(() => {
+    if (disabled) {
+      setMasked(true);
+    }
+  }, [disabled]);
 
   return (
     <div
