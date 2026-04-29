@@ -9,23 +9,14 @@ import IconEditPencil from '@/public/icons/icon/edit_pencil.svg';
 import { Button } from '@/shared/components/ui/button';
 import { ConfirmDialog } from '@/shared/components/ui/confirm-dialog';
 
-import type { ChannelTalkConnectionStatus, ChannelTalkDocumentSpace, ChannelTalkFieldState } from '../../../types/channelTalkModel';
+import type { ChannelTalkDocumentSpace } from '../../../types/channelTalkModel';
+import {
+  fieldStateFor,
+  handleLockedFieldInteract,
+  isDocumentSpaceSecretsFilled,
+} from '../../../utils/channelTalkHelpers';
 import ChannelTalkFieldRow from './ChannelTalkFieldRow';
 import ChannelTalkSyncIntervalDropdown from './ChannelTalkSyncIntervalDropdown';
-
-type DocumentSpaceFieldName = 'accessKey' | 'accessSecret';
-
-/** connectionStatus → 도큐먼트 스페이스 textfield 시각 변형 매핑 */
-function fieldStateFor(status: ChannelTalkConnectionStatus, fieldName: DocumentSpaceFieldName): ChannelTalkFieldState {
-  if (status === 'error') return 'error';
-  if (status === 'editing' && fieldName === 'accessKey') return 'focus';
-  return 'idle';
-}
-
-/** 도큐먼트 스페이스 secret 채워짐 여부 (Access Key + Access Secret) */
-function hasAllSecrets(ds: ChannelTalkDocumentSpace): boolean {
-  return Boolean(ds.accessKey.trim() && ds.accessSecret.trim());
-}
 
 interface ChannelTalkDocumentSpaceCardProps {
   documentSpace: ChannelTalkDocumentSpace;
@@ -47,7 +38,7 @@ export default function ChannelTalkDocumentSpaceCard({
   const accessKeyState = fieldStateFor(status, 'accessKey');
   const accessSecretState = fieldStateFor(status, 'accessSecret');
   const isTested = status === 'tested';
-  const canTestConnection = hasAllSecrets(documentSpace);
+  const canTestConnection = isDocumentSpaceSecretsFilled(documentSpace);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
   const handleTestConnection = () => {
@@ -59,12 +50,7 @@ export default function ChannelTalkDocumentSpaceCard({
     onTestConnection();
   };
 
-  const handleLockedFieldInteract = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!isTested) return;
-    // eye 토글(마스킹 해제) 버튼은 lock 상태에서도 동작해야 하므로 토스트 무시
-    if ((e.target as HTMLElement).closest('[data-mask-toggle="true"]')) return;
-    toast('수정하려면 수정하기 버튼을 눌러주세요.');
-  };
+  const lockGuard = (e: React.PointerEvent<HTMLDivElement>) => handleLockedFieldInteract(e, isTested);
 
   return (
     <div className="flex w-full items-start gap-4 pb-5">
@@ -95,7 +81,7 @@ export default function ChannelTalkDocumentSpaceCard({
         </div>
 
         {/* Access Key + Access Secret (2-column) */}
-        <div className="flex gap-3" onPointerDownCapture={handleLockedFieldInteract}>
+        <div className="flex gap-3" onPointerDownCapture={lockGuard}>
           <ChannelTalkFieldRow
             label="Access Key"
             value={documentSpace.accessKey}
@@ -115,7 +101,7 @@ export default function ChannelTalkDocumentSpaceCard({
         </div>
 
         {/* 동기화 주기 dropdown */}
-        <div className="flex flex-col gap-1.5" onPointerDownCapture={handleLockedFieldInteract}>
+        <div className="flex flex-col gap-1.5" onPointerDownCapture={lockGuard}>
           <div className="flex items-center gap-1">
             <span className="text-body-small text-content-neutral">동기화 주기 설정</span>
             <span className="bg-status-destructive size-[5px] rounded-full" aria-label="필수 입력" />

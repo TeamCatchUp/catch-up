@@ -11,40 +11,19 @@ import IconTag from '@/public/icons/icon/tag.svg';
 import { Button } from '@/shared/components/ui/button';
 import { ConfirmDialog } from '@/shared/components/ui/confirm-dialog';
 
-import type {
-  ChannelTalkChannel,
-  ChannelTalkConnectionStatus,
-  ChannelTalkDocumentSpace,
-  ChannelTalkFieldState,
-  ChannelTalkTestButtonStatus,
-} from '../../../types/channelTalkModel';
+import type { ChannelTalkChannel, ChannelTalkDocumentSpace } from '../../../types/channelTalkModel';
+import {
+  fieldStateFor,
+  handleLockedFieldInteract,
+  isChannelSecretsFilled,
+  testButtonStatusFor,
+} from '../../../utils/channelTalkHelpers';
 import ChannelTalkDocumentSpaceCard from './ChannelTalkDocumentSpaceCard';
 import ChannelTalkFieldRow from './ChannelTalkFieldRow';
 import ChannelTalkSyncIntervalDropdown from './ChannelTalkSyncIntervalDropdown';
 
 const MEGAPHONE_NOTICE =
   '채널은 실시간으로 문의가 들어오는 공간이에요. 주기를 짧게 설정할수록 최신 대화가 반영되어 답변 품질이 좋아져요.';
-
-type ChannelFieldName = 'accessKey' | 'accessSecret' | 'webhookToken';
-
-/** connectionStatus → 각 textfield의 시각 변형 매핑 */
-function fieldStateFor(status: ChannelTalkConnectionStatus, fieldName: ChannelFieldName): ChannelTalkFieldState {
-  if (status === 'error') return 'error';
-  if (status === 'editing' && fieldName === 'accessKey') return 'focus';
-  return 'idle';
-}
-
-/** connectionStatus → 연결 테스트 버튼 상태 매핑 (헤더용 — tested 시 라벨만 표시) */
-function testButtonStatusFor(status: ChannelTalkConnectionStatus): ChannelTalkTestButtonStatus {
-  if (status === 'tested') return 'success';
-  if (status === 'editing') return 'active';
-  return 'idle';
-}
-
-/** 모든 secret 필드가 채워졌는지 (하단 "연결 테스트하기" 버튼 활성 조건) */
-function hasAllSecrets(channel: ChannelTalkChannel): boolean {
-  return Boolean(channel.accessKey.trim() && channel.accessSecret.trim() && channel.webhookToken.trim());
-}
 
 interface ChannelTalkChannelCardProps {
   channel: ChannelTalkChannel;
@@ -78,7 +57,7 @@ export default function ChannelTalkChannelCard({
   const accessSecretState = fieldStateFor(status, 'accessSecret');
   const webhookTokenState = fieldStateFor(status, 'webhookToken');
   const isTested = status === 'tested';
-  const canTestConnection = hasAllSecrets(channel);
+  const canTestConnection = isChannelSecretsFilled(channel);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
   const handleTestConnection = () => {
@@ -90,17 +69,12 @@ export default function ChannelTalkChannelCard({
     onTestConnection();
   };
 
-  const handleLockedFieldInteract = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!isTested) return;
-    // eye 토글(마스킹 해제) 버튼은 lock 상태에서도 동작해야 하므로 토스트 무시
-    if ((e.target as HTMLElement).closest('[data-mask-toggle="true"]')) return;
-    toast('수정하려면 수정하기 버튼을 눌러주세요.');
-  };
+  const lockGuard = (e: React.PointerEvent<HTMLDivElement>) => handleLockedFieldInteract(e, isTested);
 
   return (
     <div className="border-edge-neutral bg-fill-normal relative flex flex-col overflow-hidden rounded-xl border">
       {/* 헤더 행 좌측 파란색 indicator strip */}
-      <div className="bg-edge-primary-strong z-base absolute top-4 left-1 h-8 w-1 rounded-full" aria-hidden />
+      <div className="bg-edge-primary-strong z-base absolute top-4 left-0 h-8 w-1 rounded-full" aria-hidden />
 
       {/* Vertical input form */}
       <div className="flex flex-col gap-4 p-4">
@@ -126,7 +100,7 @@ export default function ChannelTalkChannelCard({
         </div>
 
         {/* Access Key + Access Secret (2-column) */}
-        <div className="flex gap-3" onPointerDownCapture={handleLockedFieldInteract}>
+        <div className="flex gap-3" onPointerDownCapture={lockGuard}>
           <ChannelTalkFieldRow
             label="Access Key"
             value={channel.accessKey}
@@ -146,7 +120,7 @@ export default function ChannelTalkChannelCard({
         </div>
 
         {/* Webhook Token + 동기화 주기 (2-column) */}
-        <div className="flex items-end gap-3" onPointerDownCapture={handleLockedFieldInteract}>
+        <div className="flex items-end gap-3" onPointerDownCapture={lockGuard}>
           <ChannelTalkFieldRow
             label="Webhook Token"
             value={channel.webhookToken}

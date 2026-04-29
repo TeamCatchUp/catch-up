@@ -27,16 +27,6 @@ function makeId(prefix: string): string {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
-/** 채널의 모든 secret 필드가 채워졌는지 검증 — 화이트스페이스만 있는 값은 빈 값으로 처리 */
-function isChannelSecretsFilled(channel: ChannelTalkChannel): boolean {
-  return Boolean(channel.accessKey.trim() && channel.accessSecret.trim() && channel.webhookToken.trim());
-}
-
-/** 도큐먼트 스페이스의 모든 secret 필드가 채워졌는지 검증 (Access Key + Access Secret만, Webhook Token 없음) */
-function isDocumentSpaceSecretsFilled(ds: ChannelTalkDocumentSpace): boolean {
-  return Boolean(ds.accessKey.trim() && ds.accessSecret.trim());
-}
-
 interface ChannelTalkViewModel {
   state: ChannelTalkConnectionState;
   addChannel: () => void;
