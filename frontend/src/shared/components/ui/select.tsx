@@ -12,8 +12,11 @@ const SelectValue = SelectPrimitive.Value;
 
 const SelectTrigger = React.forwardRef<
   React.ComponentRef<typeof SelectPrimitive.Trigger>,
-  React.ComponentPropsWithoutRef<typeof SelectPrimitive.Trigger>
->(({ className, children, ...props }, ref) => (
+  React.ComponentPropsWithoutRef<typeof SelectPrimitive.Trigger> & {
+    /** 트리거 우측 끝에 노출되는 indicator 아이콘. 미지정 시 기본 UnfoldMore 아이콘 사용. */
+    endIcon?: React.ReactNode;
+  }
+>(({ className, children, endIcon, ...props }, ref) => (
   <SelectPrimitive.Trigger
     ref={ref}
     className={cn(
@@ -24,7 +27,7 @@ const SelectTrigger = React.forwardRef<
   >
     {children}
     <SelectPrimitive.Icon asChild>
-      <UnfoldMoreIcon className="text-icon-neutral size-6 shrink-0" />
+      {endIcon ?? <UnfoldMoreIcon className="text-icon-neutral size-6 shrink-0" />}
     </SelectPrimitive.Icon>
   </SelectPrimitive.Trigger>
 ));

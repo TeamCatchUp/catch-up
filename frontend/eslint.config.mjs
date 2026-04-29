@@ -34,6 +34,17 @@ const eslintConfig = defineConfig([
       '@tanstack/query/exhaustive-deps': 'warn',
       '@tanstack/query/no-rest-destructuring': 'warn',
 
+      // _ prefix는 의도적으로 사용하지 않는 인자/변수임을 표시 (관습)
+      '@typescript-eslint/no-unused-vars': [
+        'warn',
+        {
+          argsIgnorePattern: '^_',
+          varsIgnorePattern: '^_',
+          caughtErrorsIgnorePattern: '^_',
+          destructuredArrayIgnorePattern: '^_',
+        },
+      ],
+
       'prettier/prettier': 'off',
     },
   },
