@@ -1,3 +1,4 @@
+import asyncio
 from typing import Any
 
 import structlog
@@ -26,7 +27,11 @@ logger = structlog.get_logger()
 
 @log_node
 @token_usage
-async def generate_final_answer_node(state: AgentState, llm: BaseChatModel):
+async def generate_final_answer_node(
+    state: AgentState,
+    llm: BaseChatModel,
+    timeout: float | None = None,
+):
 
     # 토큰 사용량 초기화
     token_usages = {"token_breakdown": {}}
@@ -89,7 +94,9 @@ async def generate_final_answer_node(state: AgentState, llm: BaseChatModel):
     # LLM 호출
     try:
         raw_response, token_usages = await ainvoke_llm_with_token_usage(
-            llm=llm, messages=messages, semaphore=rag_semaphores.llm_large
+            llm=llm,
+            messages=messages,
+            semaphore=rag_semaphores.llm_large,
         )
         full_answer = raw_response.content
 

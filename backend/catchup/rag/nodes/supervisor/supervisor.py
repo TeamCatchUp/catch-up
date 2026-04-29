@@ -1,3 +1,4 @@
+import asyncio
 import structlog
 from langchain.chat_models import BaseChatModel
 from langchain_core.messages import HumanMessage
@@ -28,7 +29,11 @@ _DEFAULT_MAX_ITERATIONS: dict[str, int] = {
 
 @log_node
 @token_usage
-async def supervisor_node(state: AgentState, llm: BaseChatModel):
+async def supervisor_node(
+    state: AgentState,
+    llm: BaseChatModel,
+    timeout: float | None = None,
+):
     query = state["original_query"]
     global_context = state["global_context"].model_dump()
     messages = state.get("messages", [])
@@ -64,6 +69,7 @@ async def supervisor_node(state: AgentState, llm: BaseChatModel):
             llm=structured_llm,
             messages=input_messages,
             semaphore=rag_semaphores.llm_large,
+            timeout=timeout,
         )
         pipeline_plan: PipelinePlan = response.get("parsed")
 
@@ -126,6 +132,9 @@ async def supervisor_node(state: AgentState, llm: BaseChatModel):
 
         return result
 
+    except asyncio.TimeoutError as e:
+        # TimeoutError는 RetryPolicy에서 처리하도록 상위로 전파
+        raise e
     except Exception as e:
         logger.warning(
             "supervisor_node_failed",

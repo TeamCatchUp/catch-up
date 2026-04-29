@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from functools import partial
 from typing import Optional
@@ -5,6 +6,7 @@ from typing import Optional
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph import END
 from langgraph.graph import StateGraph
+from langgraph.types import RetryPolicy
 
 from catchup.components.embedder.constants import EmbeddingProvider
 from catchup.components.embedder.factory import get_embedding_service
@@ -27,16 +29,38 @@ from catchup.rag.subgraphs import build_standard_react_subgraph
 
 logger = logging.getLogger(__name__)
 
+# Timeout 기반 재시도 정책
+# max_attempt는 최초 시도 횟수를 포함.
+TIMEOUT_RETRY_POLICY = RetryPolicy(
+    retry_on=asyncio.TimeoutError,
+    max_attempts=3,
+    initial_interval=1.0,
+    backoff_factor=2.0,
+)
+
+# Complex Agent는 내부 루프가 길어 재시도 횟수를 제한
+COMPLEX_AGENT_RETRY_POLICY = RetryPolicy(
+    retry_on=asyncio.TimeoutError,
+    max_attempts=2,
+    initial_interval=1.0,
+    backoff_factor=2.0,
+)
+
 
 def get_compiled_graph(
     checkpointer: Optional[BaseCheckpointSaver] = None,
 ):
+    # RAG 파이프라인에서는 LangGraph RetryPolicy를 사용하므로
+    # botocore 레벨의 retry는 비활성화(max_attempts=0).
+    rag_max_attempts = 0
+
     # SMALL, non-streaming — rewrite, generate_vector_queries, standard_agent
     llm_small = get_llm_service(
         LlmProvider.AWS_BEDROCK,
         ModelCapacity.SMALL,
         streaming=False,
         isolated=True,
+        max_attempts=rag_max_attempts,
     ).get_llm()
 
     # SMALL, streaming — direct_answer
@@ -45,6 +69,7 @@ def get_compiled_graph(
         ModelCapacity.SMALL,
         streaming=True,
         isolated=True,
+        max_attempts=rag_max_attempts,
     ).get_llm()
 
     # LARGE, non-streaming — supervisor, complex_agent (structured output / tool calling)
@@ -53,6 +78,7 @@ def get_compiled_graph(
         ModelCapacity.LARGE,
         streaming=False,
         isolated=True,
+        max_attempts=rag_max_attempts,
     ).get_llm()
 
     # LARGE, streaming — 모든 최종 답변 생성 (reuse / simple / standard / complex)
@@ -61,6 +87,7 @@ def get_compiled_graph(
         ModelCapacity.LARGE,
         streaming=True,
         isolated=True,
+        max_attempts=rag_max_attempts,
     ).get_llm()
 
     # LARGE, non-streaming, extended thinking — complex_planner
@@ -71,10 +98,14 @@ def get_compiled_graph(
         isolated=True,
         extended_thinking=True,
         thinking_budget_tokens=2048,
+        max_attempts=rag_max_attempts,
     ).get_llm()
 
     # Common
-    embeddings = get_embedding_service(EmbeddingProvider.AWS_BEDROCK).get_embedder()
+    embeddings = get_embedding_service(
+        EmbeddingProvider.AWS_BEDROCK,
+        max_attempts=rag_max_attempts,
+    ).get_embedder()
     vector_db_service = get_vector_db_service(VectorDbProvider.PGVECTOR, embeddings)
     rerank_service = get_rerank_service(RerankerProvider.AWS_BEDROCK)
 
@@ -110,11 +141,16 @@ def get_compiled_graph(
     # Main Graph
     workflow = StateGraph(AgentState)
 
-    workflow.add_node("supervisor", partial(supervisor_node, llm=llm_large))
+    workflow.add_node(
+        "supervisor",
+        partial(supervisor_node, llm=llm_large, timeout=15.0),
+        retry=TIMEOUT_RETRY_POLICY,
+    )
     workflow.add_node(
         "direct_answer",
-        partial(direct_answer_node, llm=llm_small_stream),
+        partial(direct_answer_node, llm=llm_small_stream, timeout=30.0),
         metadata={"tags": ["stream_target"]},
+        # streaming 노드는 retry 적용 제외
     )
     workflow.add_node(
         "clarify",

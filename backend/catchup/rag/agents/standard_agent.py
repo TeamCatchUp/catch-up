@@ -1,3 +1,4 @@
+import asyncio
 import structlog
 from langchain.chat_models import BaseChatModel
 from langchain_core.messages import HumanMessage
@@ -18,7 +19,11 @@ logger = structlog.get_logger()
 
 @log_node
 @token_usage
-async def standard_agent_node(state: AgentState, llm: BaseChatModel):
+async def standard_agent_node(
+    state: AgentState,
+    llm: BaseChatModel,
+    timeout: float | None = None,
+):
     """Standard ReAct 에이전트. SMALL 모델, max_iter=3.
     accumulated_docs를 보고 추가 검색 여부를 판단해 tool을 호출한다."""
     pipeline_plan = state.get("pipeline_plan")
@@ -48,7 +53,10 @@ async def standard_agent_node(state: AgentState, llm: BaseChatModel):
             llm=llm_with_tools,
             messages=[system_message, HumanMessage(content=query)] + existing_messages,
             semaphore=rag_semaphores.llm_small,
+            timeout=timeout,
         )
+    except asyncio.TimeoutError as e:
+        raise e
     except Exception:
         return {"agent_iteration": agent_iteration + 1}
 

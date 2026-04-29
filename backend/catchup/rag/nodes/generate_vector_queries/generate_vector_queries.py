@@ -1,3 +1,4 @@
+import asyncio
 import structlog
 from langchain.chat_models import BaseChatModel
 
@@ -15,7 +16,11 @@ logger = structlog.get_logger()
 
 @log_node
 @token_usage
-async def generate_vector_queries_node(state: AgentState, llm: BaseChatModel):
+async def generate_vector_queries_node(
+    state: AgentState,
+    llm: BaseChatModel,
+    timeout: float | None = None,
+):
     rewritten_query = state["rewritten_query"]
     global_context = state["global_context"].model_dump()
     prompt = prompt_loader.get_prompt(
@@ -28,10 +33,15 @@ async def generate_vector_queries_node(state: AgentState, llm: BaseChatModel):
 
     try:
         response, token_usages = await ainvoke_llm_with_token_usage(
-            llm=structured_llm, messages=prompt, semaphore=rag_semaphores.llm_small
+            llm=structured_llm,
+            messages=prompt,
+            semaphore=rag_semaphores.llm_small,
+            timeout=timeout,
         )
         plan: VectorDbSearchPlan = response.get("parsed")
 
+    except asyncio.TimeoutError as e:
+        raise e
     except Exception as e:
         logger.warning(
             "generate_vector_queries_node_failed",

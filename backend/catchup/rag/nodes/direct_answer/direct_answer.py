@@ -20,7 +20,11 @@ logger = structlog.get_logger()
 
 @log_node
 @token_usage
-async def direct_answer_node(state: AgentState, llm: BaseChatModel):
+async def direct_answer_node(
+    state: AgentState,
+    llm: BaseChatModel,
+    timeout: float | None = None,
+):
     query = state["original_query"]
     conversation_history = get_conversation_history(state["messages"])
     global_context = state["global_context"].model_dump()
@@ -46,7 +50,10 @@ async def direct_answer_node(state: AgentState, llm: BaseChatModel):
 
     try:
         raw_response, token_usages = await ainvoke_llm_with_token_usage(
-            llm=llm, messages=messages, semaphore=rag_semaphores.llm_small
+            llm=llm,
+            messages=messages,
+            semaphore=rag_semaphores.llm_small,
+            timeout=timeout,
         )
         logger.debug(
             "direct_answer_generated",
@@ -54,6 +61,8 @@ async def direct_answer_node(state: AgentState, llm: BaseChatModel):
             answer=raw_response.content,
         )
 
+    except asyncio.TimeoutError as e:
+        raise e
     except Exception as e:
         logger.error(
             "direct_answer_node_failed",
