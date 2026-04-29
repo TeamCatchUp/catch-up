@@ -38,6 +38,8 @@ interface UsersStatusSectionProps {
   onFilterChange: (type: SyncFilterType) => void;
   currentPage: number;
   onPageChange: (page: number) => void;
+  isLoading?: boolean;
+  pageSize?: number;
 }
 
 const FILTER_OPTIONS: { key: SyncFilterType; label: string }[] = [
@@ -55,6 +57,8 @@ export default function UsersStatusSection({
   onFilterChange,
   currentPage,
   onPageChange,
+  isLoading = false,
+  pageSize,
 }: UsersStatusSectionProps) {
   const [isEditMode, setIsEditMode] = useState(false);
   const [isCsvModalOpen, setIsCsvModalOpen] = useState(false);
@@ -320,6 +324,8 @@ export default function UsersStatusSection({
           displayRows={effectiveRows}
           isEditMode={isEditMode}
           services={filterType === 'channel-talk' ? ['channel-talk'] : MEMBER_TABLE_SERVICES}
+          isLoading={isLoading}
+          skeletonCount={pageSize}
           accountOptionsByService={accountOptionsByService}
           selectedAccounts={selectedAccounts}
           onAccountSelect={handleAccountSelect}

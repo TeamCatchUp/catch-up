@@ -25,6 +25,10 @@ interface UsersTableProps {
   isEditMode: boolean;
   /** 노출할 서비스 컬럼. 미지정 시 기본 3컬럼(github/jira/slack). */
   services?: IntegrationService[];
+  /** 로딩 중 skeleton row 표시 */
+  isLoading?: boolean;
+  /** skeleton row 개수 (default 10, 페이지 사이즈와 일치시키면 height shift 0) */
+  skeletonCount?: number;
   /** 서비스별 선택 가능한 계정 후보 목록 */
   accountOptionsByService?: Partial<Record<IntegrationService, AccountOption[]>>;
   /** 수정 모드에서 선택된 계정 (userKey → service → AccountOption) */
@@ -49,6 +53,8 @@ const UsersTable = ({
   displayRows,
   isEditMode,
   services = MEMBER_TABLE_SERVICES,
+  isLoading = false,
+  skeletonCount = 10,
   accountOptionsByService = EMPTY_ACCOUNT_OPTIONS,
   selectedAccounts,
   onAccountSelect,
@@ -74,7 +80,28 @@ const UsersTable = ({
         ))}
       </div>
 
-      {displayRows.length === 0 ? (
+      {isLoading ? (
+        <div className="flex flex-1 flex-col">
+          {Array.from({ length: skeletonCount }).map((_, idx) => (
+            <div
+              key={`skeleton-${idx}`}
+              className={cn(
+                'border-edge-neutral bg-fill-normal grid h-17.5 items-center gap-4 border-b px-5',
+                gridColsClass,
+              )}
+            >
+              <div className="flex min-w-0 items-center gap-4">
+                <div className="bg-fill-strong size-2.5 shrink-0 animate-pulse rounded-full" />
+                <div className="bg-fill-strong size-7 shrink-0 animate-pulse rounded-full" />
+                <div className="bg-fill-strong h-4 w-20 animate-pulse rounded-md" />
+              </div>
+              {services.map((service) => (
+                <div key={`skeleton-${idx}-${service}`} className="bg-fill-strong h-5 animate-pulse rounded-md" />
+              ))}
+            </div>
+          ))}
+        </div>
+      ) : displayRows.length === 0 ? (
         <div className="text-body-small text-content-alternative flex h-full min-h-25 items-center justify-center px-4 text-center">
           표시할 이용자 연동 데이터가 없습니다.
         </div>
