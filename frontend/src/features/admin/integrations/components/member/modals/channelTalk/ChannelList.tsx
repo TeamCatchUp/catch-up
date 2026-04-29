@@ -1,5 +1,7 @@
 'use client';
 
+import { memo } from 'react';
+
 import IconTag from '@/public/icons/icon/tag.svg';
 import CheckboxIcon from '@/shared/components/ui/checkbox-icon';
 import { cn } from '@/shared/utils/cn';
@@ -14,7 +16,7 @@ interface ChannelListProps {
   onToggleAll: () => void;
 }
 
-export default function ChannelList({ channels, selectedChannelIds, onToggleChannel, onToggleAll }: ChannelListProps) {
+function ChannelList({ channels, selectedChannelIds, onToggleChannel, onToggleAll }: ChannelListProps) {
   const isAllSelected = channels.length > 0 && channels.every((channel) => selectedChannelIds.has(channel.channel_id));
 
   return (
@@ -61,3 +63,5 @@ export default function ChannelList({ channels, selectedChannelIds, onToggleChan
     </div>
   );
 }
+
+export default memo(ChannelList);

@@ -1,5 +1,7 @@
 'use client';
 
+import { memo } from 'react';
+
 import IconBook from '@/public/icons/icon/book.svg';
 import IconTag from '@/public/icons/icon/tag.svg';
 import CheckboxIcon from '@/shared/components/ui/checkbox-icon';
@@ -20,7 +22,7 @@ interface ChannelGroupProps {
   onChangeSpacePeriod: (spaceId: string, period: Period) => void;
 }
 
-export default function ChannelGroup({
+function ChannelGroup({
   channel,
   selectedSpaceIds,
   channelPeriod,
@@ -111,3 +113,5 @@ export default function ChannelGroup({
     </section>
   );
 }
+
+export default memo(ChannelGroup);

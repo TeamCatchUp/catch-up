@@ -1,8 +1,10 @@
 'use client';
 
+import { memo } from 'react';
+
 import IconTag from '@/public/icons/icon/tag.svg';
 
-export default function ChannelGroupListEmpty() {
+function ChannelGroupListEmpty() {
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-2.5 px-5">
       <div className="border-edge-strong inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-dashed p-1.5">
@@ -17,3 +19,5 @@ export default function ChannelGroupListEmpty() {
     </div>
   );
 }
+
+export default memo(ChannelGroupListEmpty);
