@@ -11,6 +11,7 @@ from pydantic import BaseModel
 from pydantic import ConfigDict
 from pydantic import Field
 from pydantic import SkipValidation
+from pydantic import ValidationInfo
 from pydantic import field_validator
 
 from catchup.connectors.channel_talk.schemas._parsing import _first_localized_text
@@ -26,6 +27,7 @@ from catchup.connectors.channel_talk.schemas.document_metadata import (
 from catchup.utils.validation import require_text
 
 ChannelTalkDocumentArticleBody: TypeAlias = str | list[Mapping[str, Any]]
+
 
 class ChannelTalkDocumentArticleState(StrEnum):
     DRAFT = "draft"
@@ -212,6 +214,88 @@ class ChannelTalkDocumentArticleView(BaseModel):
             topics=_parse_mapping_list(
                 reader.list_value("topics"),
                 ChannelTalkDocumentTopic.from_api_payload,
+            ),
+        )
+
+
+class ChannelTalkDocumentArticleRevision(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    revision_id: str
+    article_id: str
+    space_id: str | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+    state: ChannelTalkDocumentArticleState | str | None = None
+    language: str | None = None
+    author_id: str | None = None
+    name: str | None = None
+    cover_image_url: str | None = None
+    title: str | None = None
+    subtitle: str | None = None
+    summary: str | None = None
+    body: SkipValidation[ChannelTalkDocumentArticleBody] | None = None
+    body_html: str | None = None
+
+    @field_validator("revision_id", "article_id")
+    @classmethod
+    def validate_required_text(cls, value: str, info: ValidationInfo) -> str:
+        return require_text(value, info.field_name or "field")
+
+    @classmethod
+    def from_api_payload(cls, payload: Any) -> "ChannelTalkDocumentArticleRevision":
+        source = _unwrap_payload(payload, "revision")
+        reader = _PayloadReader(source)
+        revision_id = _required_reader_text(
+            reader,
+            "revision payload missing revision id",
+            "id",
+        )
+        article_id = _required_reader_text(
+            reader,
+            "revision payload missing article id",
+            "articleId",
+        )
+        return cls(
+            revision_id=revision_id,
+            article_id=article_id,
+            space_id=reader.text("spaceId"),
+            created_at=reader.datetime("createdAt"),
+            updated_at=reader.datetime("updatedAt"),
+            state=_parse_article_state(reader.text("state")),
+            language=reader.text("language"),
+            author_id=reader.text("authorId"),
+            name=reader.text("name"),
+            cover_image_url=reader.text("coverImageUrl"),
+            title=reader.text("title"),
+            subtitle=reader.text("subtitle"),
+            summary=reader.text("summary"),
+            body=source.get("body"),
+            body_html=reader.raw_text("bodyHtml"),
+        )
+
+
+class ChannelTalkDocumentArticleRevisionView(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    revision: ChannelTalkDocumentArticleRevision
+    author: ChannelTalkDocumentAuthorMetadata | None = None
+
+    @classmethod
+    def from_api_payload(cls, payload: Any) -> "ChannelTalkDocumentArticleRevisionView":
+        if not isinstance(payload, Mapping):
+            return cls(
+                revision=ChannelTalkDocumentArticleRevision.from_api_payload(payload)
+            )
+        reader = _PayloadReader(payload)
+        revision_payload = reader.mapping("revision") or payload
+        return cls(
+            revision=ChannelTalkDocumentArticleRevision.from_api_payload(
+                revision_payload
+            ),
+            author=_parse_optional_mapping(
+                reader.mapping("author"),
+                ChannelTalkDocumentAuthorMetadata.from_api_payload,
             ),
         )
 
