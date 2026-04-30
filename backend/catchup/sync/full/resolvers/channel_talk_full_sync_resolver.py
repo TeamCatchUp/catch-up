@@ -7,7 +7,13 @@ from catchup.connectors.channel_talk.full_sync_helper import (
     CHANNEL_TALK_FULL_SYNC_TARGET_ID,
 )
 from catchup.connectors.channel_talk.full_sync_helper import (
+    is_verified_channel_talk_document_connection,
+)
+from catchup.connectors.channel_talk.full_sync_helper import (
     load_channel_talk_connection,
+)
+from catchup.connectors.channel_talk.full_sync_helper import (
+    load_channel_talk_document_connection,
 )
 from catchup.connectors.channel_talk.full_sync_helper import (
     require_channel_talk_channel_id,
@@ -16,15 +22,32 @@ from catchup.connectors.channel_talk.full_sync_target_contract import (
     CHANNEL_TALK_BOOTSTRAP_DISPLAY_NAME,
 )
 from catchup.connectors.channel_talk.full_sync_target_contract import (
+    CHANNEL_TALK_DOCUMENT_ARTICLE_DISPLAY_NAME,
+)
+from catchup.connectors.channel_talk.full_sync_target_contract import (
+    CHANNEL_TALK_DOCUMENT_ARTICLE_TARGET_ID,
+)
+from catchup.connectors.channel_talk.full_sync_target_contract import (
     build_channel_talk_bootstrap_metadata,
+)
+from catchup.connectors.channel_talk.full_sync_target_contract import (
+    build_channel_talk_document_article_metadata,
 )
 from catchup.sync.common.exceptions import SyncRequestException
 from catchup.sync.common.protocols import FullSyncTargetResolverProtocol
 from catchup.sync.common.schemas import FullSyncDispatchRequest
 from catchup.sync.common.schemas import FullSyncResolvedTargets
+from catchup.sync.full.targets import normalize_target_ids
 from catchup.sync.full.targets import resolve_full_sync_targets_from_rows
 
 logger = structlog.get_logger(__name__)
+
+_KNOWN_CHANNEL_TALK_TARGET_IDS = frozenset(
+    {
+        CHANNEL_TALK_FULL_SYNC_TARGET_ID,
+        CHANNEL_TALK_DOCUMENT_ARTICLE_TARGET_ID,
+    }
+)
 
 
 class ChannelTalkFullSyncTargetResolver(FullSyncTargetResolverProtocol):
@@ -56,15 +79,60 @@ class ChannelTalkFullSyncTargetResolver(FullSyncTargetResolverProtocol):
                 },
             )
 
+        requested_target_ids = normalize_target_ids(request.target_ids)
+        unknown_target_ids = [
+            target_id
+            for target_id in requested_target_ids
+            if target_id not in _KNOWN_CHANNEL_TALK_TARGET_IDS
+        ]
+        if unknown_target_ids:
+            raise SyncRequestException(
+                "requested target_ids contain unknown channel_talk targets",
+                metadata={
+                    "channel_id": channel_id,
+                    "requested_target_ids": requested_target_ids,
+                    "invalid_target_ids": unknown_target_ids,
+                },
+            )
+
+        available_target_ids = [CHANNEL_TALK_FULL_SYNC_TARGET_ID]
+        document_connection = None
+        if CHANNEL_TALK_DOCUMENT_ARTICLE_TARGET_ID in requested_target_ids:
+            document_connection = await run_in_threadpool(
+                load_channel_talk_document_connection,
+                channel_id,
+            )
+            if not is_verified_channel_talk_document_connection(
+                document_connection,
+                channel_id=channel_id,
+            ):
+                raise SyncRequestException(
+                    "channel_talk documents is not connected for the requested channel"
+                )
+            available_target_ids.append(CHANNEL_TALK_DOCUMENT_ARTICLE_TARGET_ID)
+
         requested_target_ids, resolved_targets = resolve_full_sync_targets_from_rows(
             request_target_ids=request.target_ids,
-            rows=[CHANNEL_TALK_FULL_SYNC_TARGET_ID],
+            rows=available_target_ids,
             target_type="resource",
             key_getter=lambda target_id: target_id,
-            name_getter=lambda _: CHANNEL_TALK_BOOTSTRAP_DISPLAY_NAME,
+            name_getter=lambda target_id: (
+                CHANNEL_TALK_DOCUMENT_ARTICLE_DISPLAY_NAME
+                if target_id == CHANNEL_TALK_DOCUMENT_ARTICLE_TARGET_ID
+                else CHANNEL_TALK_BOOTSTRAP_DISPLAY_NAME
+            ),
             error_message="requested target_ids contain unknown channel_talk targets",
             error_metadata={"channel_id": channel_id},
-            metadata_getter=lambda _: build_channel_talk_bootstrap_metadata(channel_id),
+            metadata_getter=lambda target_id: (
+                {
+                    **build_channel_talk_document_article_metadata(channel_id),
+                    "space_id": document_connection.space_id,
+                    "space_name": document_connection.space_name,
+                }
+                if target_id == CHANNEL_TALK_DOCUMENT_ARTICLE_TARGET_ID
+                and document_connection is not None
+                else build_channel_talk_bootstrap_metadata(channel_id)
+            ),
             log_context={
                 "connector": "channel_talk",
                 "channel_id": channel_id,

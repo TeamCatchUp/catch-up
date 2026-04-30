@@ -10,6 +10,7 @@ from typing import Any
 
 from fastapi.concurrency import run_in_threadpool
 from sqlalchemy import select
+from sqlalchemy.exc import SQLAlchemyError
 
 from catchup.connectors.atlassian.oauth_client import AtlassianOAuthClient
 from catchup.connectors.atlassian.token_manager import AtlassianTokenManager
@@ -18,7 +19,13 @@ from catchup.connectors.channel_talk.full_sync_helper import (
     CHANNEL_TALK_FULL_SYNC_TARGET_ID,
 )
 from catchup.connectors.channel_talk.full_sync_helper import (
+    is_verified_channel_talk_document_connection,
+)
+from catchup.connectors.channel_talk.full_sync_helper import (
     load_channel_talk_connection,
+)
+from catchup.connectors.channel_talk.full_sync_helper import (
+    load_channel_talk_document_connection,
 )
 from catchup.connectors.channel_talk.full_sync_helper import (
     require_channel_talk_channel_id,
@@ -27,7 +34,16 @@ from catchup.connectors.channel_talk.full_sync_target_contract import (
     CHANNEL_TALK_BOOTSTRAP_DISPLAY_NAME,
 )
 from catchup.connectors.channel_talk.full_sync_target_contract import (
+    CHANNEL_TALK_DOCUMENT_ARTICLE_DISPLAY_NAME,
+)
+from catchup.connectors.channel_talk.full_sync_target_contract import (
+    CHANNEL_TALK_DOCUMENT_ARTICLE_TARGET_ID,
+)
+from catchup.connectors.channel_talk.full_sync_target_contract import (
     build_channel_talk_bootstrap_metadata,
+)
+from catchup.connectors.channel_talk.full_sync_target_contract import (
+    build_channel_talk_document_article_metadata,
 )
 from catchup.connectors.confluence.metadata_service import ConfluenceMetadataService
 from catchup.connectors.github.auth import get_github_app_service
@@ -620,18 +636,51 @@ class SyncQueryService:
                 "Stored Channel Talk credentials do not match the requested channel"
             )
 
+        targets = [
+            SyncTargetResult(
+                target_id=CHANNEL_TALK_FULL_SYNC_TARGET_ID,
+                display_name=CHANNEL_TALK_BOOTSTRAP_DISPLAY_NAME,
+                target_type=SyncTargetType.RESOURCE,
+                is_accessible=True,
+                metadata=build_channel_talk_bootstrap_metadata(normalized_scope_id),
+            )
+        ]
+
+        document_connection = None
+        try:
+            document_connection = await run_in_threadpool(
+                load_channel_talk_document_connection,
+                normalized_scope_id,
+            )
+        except SQLAlchemyError:
+            logger.warning(
+                "channel_talk_document_target_listing_skipped",
+                exc_info=True,
+            )
+        if is_verified_channel_talk_document_connection(
+            document_connection,
+            channel_id=normalized_scope_id,
+        ):
+            targets.append(
+                SyncTargetResult(
+                    target_id=CHANNEL_TALK_DOCUMENT_ARTICLE_TARGET_ID,
+                    display_name=CHANNEL_TALK_DOCUMENT_ARTICLE_DISPLAY_NAME,
+                    target_type=SyncTargetType.RESOURCE,
+                    is_accessible=True,
+                    metadata={
+                        **build_channel_talk_document_article_metadata(
+                            normalized_scope_id,
+                        ),
+                        "space_id": document_connection.space_id,
+                        "space_name": document_connection.space_name,
+                    },
+                )
+            )
+
         return self._build_targets_result(
             connector=SyncConnector.CHANNEL_TALK,
             scope_id=normalized_scope_id,
-            targets=[
-                SyncTargetResult(
-                    target_id=CHANNEL_TALK_FULL_SYNC_TARGET_ID,
-                    display_name=CHANNEL_TALK_BOOTSTRAP_DISPLAY_NAME,
-                    target_type=SyncTargetType.RESOURCE,
-                    is_accessible=True,
-                    metadata=build_channel_talk_bootstrap_metadata(normalized_scope_id),
-                )
-            ],
+            targets=targets,
         )
 
     async def list_targets(

@@ -16,6 +16,12 @@ from catchup.connectors.channel_talk.full_sync_target_contract import (
 from catchup.connectors.channel_talk.schemas.channel_connection import (
     ChannelTalkCredentialsRecord,
 )
+from catchup.connectors.channel_talk.schemas.document_connection import (
+    ChannelTalkDocumentAssociationStatus,
+)
+from catchup.connectors.channel_talk.schemas.document_connection import (
+    ChannelTalkDocumentCredentialsRecord,
+)
 from catchup.db.models import SyncConnector
 from catchup.db.models import SyncType
 from catchup.sync.common.schemas import FullSyncContext
@@ -27,6 +33,10 @@ from catchup.worker.handlers.channel_talk_full_sync_handler import (
 from catchup.worker.registry import get_ingestion_handler
 
 CHANNEL_ID = "channel-123"
+_HANDLER_MODULE = "catchup.worker.handlers.channel_talk_full_sync_handler"
+_LOAD_CONNECTION = f"{_HANDLER_MODULE}.load_channel_talk_connection"
+_LOAD_DOCUMENT_CONNECTION = f"{_HANDLER_MODULE}.load_channel_talk_document_connection"
+_RUN_IN_THREADPOOL = f"{_HANDLER_MODULE}.run_in_threadpool"
 
 
 def _build_connection_record(
@@ -39,6 +49,23 @@ def _build_connection_record(
         access_key="access-key",
         access_secret="access-secret",
         webhook_token="webhook-token",
+    )
+
+
+def _build_document_connection_record(
+    *,
+    channel_id: str = CHANNEL_ID,
+    association_status: ChannelTalkDocumentAssociationStatus = (
+        ChannelTalkDocumentAssociationStatus.API_VERIFIED
+    ),
+) -> ChannelTalkDocumentCredentialsRecord:
+    return ChannelTalkDocumentCredentialsRecord(
+        channel_id=channel_id,
+        space_id="space-123",
+        space_name="Help Center",
+        access_key="documents-access-key",
+        access_secret="documents-access-secret",
+        association_status=association_status,
     )
 
 
@@ -66,11 +93,25 @@ async def _run_immediately(func, *args, **kwargs):
     return func(*args, **kwargs)
 
 
+def _build_application_result(*, persisted_count: int = 0):
+    return type(
+        "_ApplicationResult",
+        (),
+        {
+            "persisted": type(
+                "_PersistedResult",
+                (),
+                {"persisted_count": persisted_count},
+            )(),
+        },
+    )()
+
+
 class ChannelTalkFullSyncHandlerTests(IsolatedAsyncioTestCase):
     def setUp(self) -> None:
         self.handler = ChannelTalkFullSyncHandler()
         self.run_in_threadpool_patcher = patch(
-            "catchup.worker.handlers.channel_talk_full_sync_handler.run_in_threadpool",
+            _RUN_IN_THREADPOOL,
             _run_immediately,
         )
         self.run_in_threadpool_patcher.start()
@@ -80,24 +121,16 @@ class ChannelTalkFullSyncHandlerTests(IsolatedAsyncioTestCase):
         self,
     ) -> None:
         fixed_now = datetime(2026, 4, 22, 12, 0, tzinfo=timezone.utc)
-        application_result = type(
-            "_ApplicationResult",
-            (),
-            {
-                "persisted": type(
-                    "_PersistedResult",
-                    (),
-                    {"persisted_count": 0},
-                )(),
-            },
-        )()
-        self.handler._application.run_full_sync = AsyncMock(
-            return_value=application_result
+        user_chat_application = self.handler._applications[
+            CHANNEL_TALK_FULL_SYNC_TARGET_ID
+        ]
+        user_chat_application.run_full_sync = AsyncMock(
+            return_value=_build_application_result()
         )
         context = _build_context()
 
         with patch(
-            "catchup.worker.handlers.channel_talk_full_sync_handler.load_channel_talk_connection",
+            _LOAD_CONNECTION,
             return_value=_build_connection_record(),
         ), patch(
             "catchup.worker.handlers.channel_talk_full_sync_handler.datetime"
@@ -112,9 +145,13 @@ class ChannelTalkFullSyncHandlerTests(IsolatedAsyncioTestCase):
                 service_cache={},
             )
 
-        self.handler._application.run_full_sync.assert_awaited_once()
-        execution = self.handler._application.run_full_sync.await_args.kwargs["execution"]
-        sync_window = self.handler._application.run_full_sync.await_args.kwargs["sync_window"]
+        user_chat_application.run_full_sync.assert_awaited_once()
+        execution = user_chat_application.run_full_sync.await_args.kwargs[
+            "execution"
+        ]
+        sync_window = user_chat_application.run_full_sync.await_args.kwargs[
+            "sync_window"
+        ]
 
         self.assertEqual(execution.channel_id, CHANNEL_ID)
         self.assertEqual(execution.audit_context.connector, context.connector)
@@ -122,33 +159,132 @@ class ChannelTalkFullSyncHandlerTests(IsolatedAsyncioTestCase):
         self.assertEqual(execution.audit_context.target_id, context.target_id)
         self.assertEqual(execution.audit_context.job_id, context.job_id)
         self.assertEqual(execution.audit_context.task_id, context.event_id)
-        self.assertEqual(sync_window.window_start.isoformat(), "2024-04-22T00:00:00+00:00")
+        self.assertEqual(
+            sync_window.window_start.isoformat(),
+            "2024-04-22T00:00:00+00:00",
+        )
         self.assertEqual(sync_window.window_end, fixed_now)
         self.assertEqual(result.error_count, 0)
         self.assertFalse(result.skipped)
 
-    async def test_handler_rejects_non_user_chat_target(self) -> None:
+    async def test_handler_rejects_unknown_target(self) -> None:
         with patch(
-            "catchup.worker.handlers.channel_talk_full_sync_handler.load_channel_talk_connection",
+            _LOAD_CONNECTION,
             return_value=_build_connection_record(),
         ):
             with self.assertRaisesRegex(
                 ValueError,
-                "channel_talk target_id must be user_chat",
+                "channel_talk target_id must be one of",
             ):
                 await self.handler.handle(
                     context=_build_context(target_id="group"),
                     service_cache={},
                 )
 
-    async def test_handler_does_not_accept_document_article_yet(self) -> None:
+    async def test_handler_routes_document_article_to_document_application(
+        self,
+    ) -> None:
+        document_application = self.handler._applications[
+            CHANNEL_TALK_DOCUMENT_ARTICLE_TARGET_ID
+        ]
+        document_application.run_full_sync = AsyncMock(
+            return_value=_build_application_result()
+        )
+        self.handler._applications[
+            CHANNEL_TALK_FULL_SYNC_TARGET_ID
+        ].run_full_sync = AsyncMock(side_effect=AssertionError("wrong application"))
+        base_connection = _build_connection_record()
+        document_connection = _build_document_connection_record()
+
         with patch(
-            "catchup.worker.handlers.channel_talk_full_sync_handler.load_channel_talk_connection",
+            _LOAD_CONNECTION,
+            return_value=base_connection,
+        ), patch(
+            _LOAD_DOCUMENT_CONNECTION,
+            return_value=document_connection,
+        ):
+            result = await self.handler.handle(
+                context=_build_context(
+                    target_id=CHANNEL_TALK_DOCUMENT_ARTICLE_TARGET_ID,
+                ),
+                service_cache={},
+            )
+
+        document_application.run_full_sync.assert_awaited_once()
+        execution = document_application.run_full_sync.await_args.kwargs["execution"]
+
+        self.assertEqual(execution.target, CHANNEL_TALK_DOCUMENT_ARTICLE_TARGET_ID)
+        self.assertEqual(execution.channel_id, CHANNEL_ID)
+        self.assertIs(execution.channel_connection, base_connection)
+        self.assertIs(execution.document_connection, document_connection)
+        self.assertEqual(execution.space_id, "space-123")
+        self.assertEqual(execution.space_name, "Help Center")
+        self.assertEqual(
+            execution.audit_context.target_id,
+            CHANNEL_TALK_DOCUMENT_ARTICLE_TARGET_ID,
+        )
+        self.assertEqual(result.synced_count, 0)
+        self.assertEqual(result.error_count, 0)
+
+    async def test_handler_rejects_document_article_when_documents_missing(
+        self,
+    ) -> None:
+        with patch(
+            _LOAD_CONNECTION,
             return_value=_build_connection_record(),
+        ), patch(
+            _LOAD_DOCUMENT_CONNECTION,
+            return_value=None,
         ):
             with self.assertRaisesRegex(
                 ValueError,
-                "channel_talk target_id must be user_chat",
+                "channel_talk documents is not connected for the requested channel",
+            ):
+                await self.handler.handle(
+                    context=_build_context(
+                        target_id=CHANNEL_TALK_DOCUMENT_ARTICLE_TARGET_ID,
+                    ),
+                    service_cache={},
+                )
+
+    async def test_handler_rejects_document_article_when_documents_channel_mismatches(
+        self,
+    ) -> None:
+        with patch(
+            _LOAD_CONNECTION,
+            return_value=_build_connection_record(),
+        ), patch(
+            _LOAD_DOCUMENT_CONNECTION,
+            return_value=_build_document_connection_record(channel_id="channel-other"),
+        ):
+            with self.assertRaisesRegex(
+                ValueError,
+                "Stored Channel Talk Documents credentials do not match the "
+                "requested channel",
+            ):
+                await self.handler.handle(
+                    context=_build_context(
+                        target_id=CHANNEL_TALK_DOCUMENT_ARTICLE_TARGET_ID,
+                    ),
+                    service_cache={},
+                )
+
+    async def test_handler_rejects_document_article_when_documents_unverified(
+        self,
+    ) -> None:
+        with patch(
+            _LOAD_CONNECTION,
+            return_value=_build_connection_record(),
+        ), patch(
+            _LOAD_DOCUMENT_CONNECTION,
+            return_value=_build_document_connection_record(
+                association_status=ChannelTalkDocumentAssociationStatus.FAILED,
+            ),
+        ):
+            with self.assertRaisesRegex(
+                ValueError,
+                "channel_talk documents credentials are not API verified for "
+                "the requested channel",
             ):
                 await self.handler.handle(
                     context=_build_context(
@@ -159,7 +295,7 @@ class ChannelTalkFullSyncHandlerTests(IsolatedAsyncioTestCase):
 
     async def test_handler_rejects_missing_connection(self) -> None:
         with patch(
-            "catchup.worker.handlers.channel_talk_full_sync_handler.load_channel_talk_connection",
+            _LOAD_CONNECTION,
             return_value=None,
         ):
             with self.assertRaisesRegex(ValueError, "channel_talk is not connected"):
@@ -170,7 +306,7 @@ class ChannelTalkFullSyncHandlerTests(IsolatedAsyncioTestCase):
 
     async def test_handler_rejects_requested_channel_mismatch(self) -> None:
         with patch(
-            "catchup.worker.handlers.channel_talk_full_sync_handler.load_channel_talk_connection",
+            _LOAD_CONNECTION,
             return_value=_build_connection_record(channel_id="channel-other"),
         ):
             with self.assertRaisesRegex(
