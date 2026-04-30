@@ -1,10 +1,11 @@
 'use client';
 
 import { BODY_SERVICE_COLUMN_CLASS } from '../../../../constants/memberUiConfig';
+import type { UnlinkedStatus } from '../../../../utils/usersTableHelpers';
 import AccountSelectDropdown, { type AccountOption } from '../AccountSelectDropdown';
 
 interface AccountEditCellProps {
-  status: '미사용' | '미등록';
+  status: UnlinkedStatus;
   options: AccountOption[];
   selectedAccount: AccountOption | undefined;
   onSelect: (account: AccountOption) => void;

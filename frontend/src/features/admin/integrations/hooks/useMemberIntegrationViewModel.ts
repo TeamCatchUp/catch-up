@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 
 import { INTEGRATION_ACCOUNTS } from '../constants/integrationsConfig';
+import { MEMBER_TABLE_SERVICES } from '../constants/memberUiConfig';
 import { adminConnectorQueries } from '../queries/adminConnector.queries';
 import type { PreMappingInfo, SyncFilterType, UserSyncItem } from '../types/integrationApi';
 import type {
@@ -68,10 +69,8 @@ export const useMemberIntegrationViewModel = (params: {
       const statusByService = {} as Record<IntegrationService, '미사용' | '완료' | '미등록'>;
 
       // 이용자 연동 테이블에 노출되는 서비스만 데이터 구성.
-      // confluence는 IntegrationService union 멤버이지만 테이블 컬럼에는 미노출(MEMBER_TABLE_SERVICES 참고)
-      // 카드/임베딩/내 연동 탭에서만 사용되므로 view model 영역 밖.
-      // UserDetailPanel 활성화 등으로 confluence 행 데이터 필요 시 이 배열에 'confluence' 추가 + statusByService 타입 narrow 검토.
-      for (const service of ['jira', 'github', 'slack', 'channel-talk'] as const) {
+      // MEMBER_TABLE_SERVICES를 단일 진실의 원천으로 사용 → 컬럼 변경 시 view model 자동 추적.
+      for (const service of MEMBER_TABLE_SERVICES) {
         const info = getServiceInfo(item, service);
         if (info) serviceInfoByService[service] = info;
 
@@ -85,6 +84,10 @@ export const useMemberIntegrationViewModel = (params: {
         const hasPremapping = (syncStatus.counts[service]?.premap ?? 0) > 0;
         statusByService[service] = info ? '완료' : hasPremapping ? '미사용' : '미등록';
       }
+
+      // confluence는 테이블에 미노출이지만 statusByService 타입(`Record<IntegrationService, ...>`)이 키 강제.
+      // cast 정직화 — 미래에 confluence 컬럼 노출되거나 다른 consumer(UserDetailPanel 등)가 lookup 시 undefined 안전.
+      statusByService.confluence = '미등록';
 
       return {
         userKey: item.sub,
