@@ -453,7 +453,10 @@ class ChannelTalkFullSyncAdapter:
         *,
         execution: ChannelTalkFullSyncExecutionRequest,
     ) -> ChannelTalkFullSyncConnection:
-        connection = await run_in_threadpool(self._connection_loader)
+        connection = await run_in_threadpool(
+            self._connection_loader,
+            execution.channel_id,
+        )
         if connection is None:
             raise ValueError("channel_talk is not connected")
         if connection.channel_id != execution.channel_id:

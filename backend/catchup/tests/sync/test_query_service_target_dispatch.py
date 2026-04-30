@@ -183,7 +183,7 @@ class ChannelTalkTargetListingTests(IsolatedAsyncioTestCase):
         self.assertNotIn("pending_worker_support", document_target.metadata)
         self.assertNotIn("status_reason", document_target.metadata)
 
-    async def test_channel_talk_targets_rejects_document_article_when_documents_channel_mismatches(
+    async def test_channel_talk_targets_omits_document_article_when_documents_channel_mismatches(
         self,
     ) -> None:
         with (
@@ -198,13 +198,11 @@ class ChannelTalkTargetListingTests(IsolatedAsyncioTestCase):
                 ),
             ),
         ):
-            with self.assertRaisesRegex(
-                ValueError,
-                "channel_talk documents credentials are not API verified for the requested channel",
-            ):
-                await self.service._list_channel_talk_targets(scope_id=CHANNEL_ID)
+            result = await self.service._list_channel_talk_targets(scope_id=CHANNEL_ID)
 
-    async def test_channel_talk_targets_rejects_missing_document_credentials(
+        self.assertEqual([target.target_id for target in result.targets], [CHANNEL_ID])
+
+    async def test_channel_talk_targets_omits_document_article_when_documents_missing(
         self,
     ) -> None:
         with (
@@ -217,13 +215,11 @@ class ChannelTalkTargetListingTests(IsolatedAsyncioTestCase):
                 return_value=None,
             ),
         ):
-            with self.assertRaisesRegex(
-                ValueError,
-                "channel_talk documents is not connected for the requested channel",
-            ):
-                await self.service._list_channel_talk_targets(scope_id=CHANNEL_ID)
+            result = await self.service._list_channel_talk_targets(scope_id=CHANNEL_ID)
 
-    async def test_channel_talk_targets_rejects_document_article_when_documents_unverified(
+        self.assertEqual([target.target_id for target in result.targets], [CHANNEL_ID])
+
+    async def test_channel_talk_targets_omits_document_article_when_documents_unverified(
         self,
     ) -> None:
         with (
@@ -238,11 +234,9 @@ class ChannelTalkTargetListingTests(IsolatedAsyncioTestCase):
                 ),
             ),
         ):
-            with self.assertRaisesRegex(
-                ValueError,
-                "channel_talk documents credentials are not API verified for the requested channel",
-            ):
-                await self.service._list_channel_talk_targets(scope_id=CHANNEL_ID)
+            result = await self.service._list_channel_talk_targets(scope_id=CHANNEL_ID)
+
+        self.assertEqual([target.target_id for target in result.targets], [CHANNEL_ID])
 
     async def test_channel_talk_targets_rejects_document_article_when_documents_lookup_fails(
         self,

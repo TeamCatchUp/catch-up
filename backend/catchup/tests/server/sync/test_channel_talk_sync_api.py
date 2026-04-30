@@ -213,6 +213,43 @@ class ChannelTalkSyncApiTests(TestCase):
             "Stored Channel Talk credentials do not match the requested channel",
         )
 
+    def test_get_targets_returns_channel_when_documents_are_not_connected(self) -> None:
+        with (
+            patch(
+                "catchup.sync.query_service.load_channel_talk_connection",
+                return_value=_build_connection_record(),
+            ),
+            patch(
+                "catchup.sync.query_service.load_channel_talk_document_connection",
+                return_value=None,
+            ),
+        ):
+            response = self.client.get(
+                "/api/v1/sync/targets",
+                params={
+                    "connector": "channel_talk",
+                    "scope_id": CHANNEL_ID,
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["total_targets"], 1)
+        self.assertEqual(
+            response.json()["targets"],
+            [
+                {
+                    "target_id": CHANNEL_ID,
+                    "display_name": "Support",
+                    "target_type": "channel",
+                    "is_accessible": True,
+                    "metadata": {
+                        "target_kind": "channel_talk.channel",
+                        "channel_id": CHANNEL_ID,
+                    },
+                },
+            ],
+        )
+
     def test_post_full_accepts_channel_talk_with_typed_targets(
         self,
     ) -> None:

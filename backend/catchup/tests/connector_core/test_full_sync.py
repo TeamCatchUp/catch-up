@@ -626,7 +626,7 @@ class ConnectorFullSyncApplicationTests(IsolatedAsyncioTestCase):
         application = ConnectorFullSyncApplication(
             port=ChannelTalkFullSyncAdapter(
                 fetcher=fake_fetcher,
-                connection_loader=_connection,
+                connection_loader=lambda channel_id: _connection(),
                 repository_factory=lambda: fake_repository,
                 enable_summarization=enable_summarization,
                 summarizer=summarizer,
@@ -894,7 +894,7 @@ class ConnectorFullSyncApplicationTests(IsolatedAsyncioTestCase):
         )
         adapter = ChannelTalkFullSyncAdapter(
             fetcher=fake_fetcher,
-            connection_loader=_connection,
+            connection_loader=lambda channel_id: _connection(),
             enable_summarization=False,
         )
 
@@ -913,3 +913,4 @@ class ConnectorFullSyncApplicationTests(IsolatedAsyncioTestCase):
             )
 
         run_in_threadpool.assert_awaited_once()
+        self.assertEqual(run_in_threadpool.await_args.args[1], "channel-123")

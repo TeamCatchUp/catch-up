@@ -657,10 +657,6 @@ class SyncQueryService:
             connection_result,
             channel_id=channel_id,
         )
-        document_connection = self._require_document_connection(
-            document_connection_result,
-            channel_id=channel_id,
-        )
 
         targets = [
             SyncTargetResult(
@@ -669,21 +665,14 @@ class SyncQueryService:
                 target_type=SyncTargetType.CHANNEL,
                 is_accessible=True,
                 metadata=build_channel_talk_channel_metadata(channel_id),
-            ),
-            SyncTargetResult(
-                target_id=document_connection.space_id,
-                display_name=document_connection.space_name,
-                target_type=SyncTargetType.SPACE,
-                is_accessible=True,
-                metadata={
-                    **build_channel_talk_document_space_metadata(
-                        channel_id,
-                    ),
-                    "space_id": document_connection.space_id,
-                    "space_name": document_connection.space_name,
-                },
-            ),
+            )
         ]
+        document_target = self._build_document_target_if_accessible(
+            document_connection_result,
+            channel_id=channel_id,
+        )
+        if document_target is not None:
+            targets.append(document_target)
 
         return self._build_targets_result(
             connector=SyncConnector.CHANNEL_TALK,
@@ -706,23 +695,37 @@ class SyncQueryService:
         return connection
 
     @staticmethod
-    def _require_document_connection(
+    def _build_document_target_if_accessible(
         document_connection: ChannelTalkDocumentCredentialsRecord | None,
         *,
         channel_id: str,
-    ) -> ChannelTalkDocumentCredentialsRecord:
+    ) -> SyncTargetResult | None:
         if document_connection is None:
-            raise ValueError(
-                "channel_talk documents is not connected for the requested channel"
-            )
+            return None
         if not is_verified_channel_talk_document_connection(
             document_connection,
             channel_id=channel_id,
         ):
-            raise ValueError(
-                "channel_talk documents credentials are not API verified for the requested channel"
+            logger.info(
+                "channel_talk_document_target_skipped",
+                channel_id=channel_id,
+                document_channel_id=document_connection.channel_id,
+                association_status=document_connection.association_status,
             )
-        return document_connection
+            return None
+        return SyncTargetResult(
+            target_id=document_connection.space_id,
+            display_name=document_connection.space_name,
+            target_type=SyncTargetType.SPACE,
+            is_accessible=True,
+            metadata={
+                **build_channel_talk_document_space_metadata(
+                    channel_id,
+                ),
+                "space_id": document_connection.space_id,
+                "space_name": document_connection.space_name,
+            },
+        )
 
     async def list_targets(
         self,
