@@ -267,6 +267,24 @@ def deduplicate_documents(documents: list[Document]) -> list[Document]:
     return unique_docs
 
 
+def coerce_message_text(content: Any) -> str:
+    """BaseMessage.content를 일반 텍스트로 정규화한다.
+
+    extended_thinking이 켜진 모델은 content가 블록 리스트로 옴
+    ([{"type": "thinking", ...}, {"type": "text", "text": "..."}]).
+    이 경우 text 블록의 텍스트만 이어 붙이고, 그 외에는 str(content)을 반환한다.
+    """
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        return "".join(
+            block.get("text", "")
+            for block in content
+            if isinstance(block, dict) and block.get("type") == "text"
+        )
+    return str(content) if content is not None else ""
+
+
 def extract_essential_ids(reasoning: str | None, docs: list[Document]) -> set[str]:
     """
     Agent의 reasoning에서 [Key Document Indices]를 추출하여 실제 문서 ID(또는 해시) 세트로 변환한다.

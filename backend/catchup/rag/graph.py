@@ -90,7 +90,7 @@ def get_compiled_graph(
         max_attempts=rag_max_attempts,
     ).get_llm()
 
-    # LARGE, non-streaming, extended thinking — standard_agent, complex_planner, complex_agent
+    # LARGE, streaming, extended thinking — standard_agent, complex_planner, complex_agent
     llm_thinking = get_llm_service(
         LlmProvider.AWS_BEDROCK,
         ModelCapacity.LARGE,

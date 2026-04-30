@@ -498,7 +498,7 @@ class ChatService:
             
             if client := get_langfuse_client():
                 trace_id = client.get_current_trace_id()
-                logger.error("langfuse_trace_id", trace_id=trace_id)
+                logger.debug("langfuse_trace_id", trace_id=trace_id)
                 invoke_config["callbacks"] = [
                     CallbackHandler(trace_context={"trace_id": trace_id})
                 ]

@@ -10,6 +10,7 @@ from catchup.rag.agents.tools.search_tools import REACT_TOOLS
 from catchup.rag.nodes.utils import ainvoke_llm_with_token_usage
 from catchup.rag.nodes.utils import build_docs_summary
 from catchup.rag.nodes.utils import build_system_message
+from catchup.rag.nodes.utils import coerce_message_text
 from catchup.rag.nodes.utils import drop_orphaned_tool_calls
 from catchup.rag.nodes.utils import extract_essential_ids
 from catchup.rag.nodes.utils import log_node
@@ -143,7 +144,7 @@ async def complex_agent_node(
     # 에이전트가 더 이상 도구를 호출하지 않으면(루프 종료), 자신의 판단을 state에 기록해 답변 노드에 전달한다.
     reasoning_update = {}
     if not tool_calls:
-        reasoning = response.content
+        reasoning = coerce_message_text(response.content)
         essential_ids = extract_essential_ids(reasoning, accumulated_docs)
         reasoning_update = {
             "agent_reasoning": reasoning,
