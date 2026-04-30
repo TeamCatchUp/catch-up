@@ -1,4 +1,5 @@
 import asyncio
+
 import structlog
 from langchain.chat_models import BaseChatModel
 from langchain_core.messages import HumanMessage
@@ -10,6 +11,7 @@ from catchup.rag.nodes.utils import ainvoke_llm_with_token_usage
 from catchup.rag.nodes.utils import build_docs_summary
 from catchup.rag.nodes.utils import build_system_message
 from catchup.rag.nodes.utils import drop_orphaned_tool_calls
+from catchup.rag.nodes.utils import extract_essential_ids
 from catchup.rag.nodes.utils import log_node
 from catchup.rag.semaphores import rag_semaphores
 from catchup.rag.state import AgentState
@@ -77,7 +79,12 @@ async def standard_agent_node(
     # 에이전트가 더 이상 도구를 호출하지 않으면(루프 종료), 자신의 판단을 state에 기록해 답변 노드에 전달한다.
     reasoning_update = {}
     if not tool_calls:
-        reasoning_update = {"agent_reasoning": response.content}
+        reasoning = response.content
+        essential_ids = extract_essential_ids(reasoning, accumulated_docs)
+        reasoning_update = {
+            "agent_reasoning": reasoning,
+            "essential_doc_ids": list(essential_ids) if essential_ids else []
+        }
 
     return {
         "messages": [response],
@@ -87,7 +94,7 @@ async def standard_agent_node(
     }
 
 
-_RERANK_INPUT_WINDOW = 300  # reranker 입력 상한
+_RERANK_INPUT_WINDOW = 300  # reranker 입력 상한이다.
 
 
 async def collect_docs_node(state: AgentState):
@@ -107,4 +114,15 @@ async def collect_docs_node(state: AgentState):
         passed_to_reranker=len(capped),
         capped=len(accumulated) > _RERANK_INPUT_WINDOW,
     )
-    return {"retrieved_docs": capped}
+
+    update = {"retrieved_docs": capped}
+
+    # agent_reasoning이 없는데 에이전트 루프가 끝난 경우 (예: max_iterations 도달), 기본 메시지를 설정한다.
+    if not state.get("agent_reasoning"):
+        update["agent_reasoning"] = (
+            "[Key Documents]: Documents were collected across multiple sources.\n"
+            "[Search Coverage]: General search was performed.\n"
+            "[Reason for Stopping]: Search reached maximum allotted iterations."
+        )
+
+    return update

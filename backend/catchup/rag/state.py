@@ -52,6 +52,10 @@ class AgentState(TypedDict):
 
     doc_cache: list[
         Document
-    ]  # 세션 내 누적 문서 캐시. dedup + window cap 100. 검색 파이프라인이 rerank 후 병합
+    ]  # 세션 내 누적 문서 캐시. dedup + window cap 50. 검색 파이프라인이 rerank 후 병합
 
     agent_reasoning: str | None  # 에이전트의 최종 추론 결과 (최종 답변 노드에 전달용)
+
+    essential_doc_ids: list[str]  # 에이전트가 핵심이라고 판단한 문서 ID 목록 (Boosting용)
+
+    rerank_metadata: dict | None  # 리랭킹 결과 및 부스팅 이력 (Langfuse 로깅용)

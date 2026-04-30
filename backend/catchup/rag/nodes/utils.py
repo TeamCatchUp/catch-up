@@ -249,17 +249,67 @@ def extract_anchor_ids(documents: list[Document]) -> list[str]:
     return list(dict.fromkeys(anchors))  # 중복 제거 & 순서 유지
 
 
+def get_document_id(doc: Document) -> str:
+    """문서의 고유 ID를 반환합니다. ID가 없으면 내용의 해시값을 사용한다."""
+    doc_id = doc.id if doc.id else hash(doc.page_content)
+    return str(doc_id)
+
+
 def deduplicate_documents(documents: list[Document]) -> list[Document]:
-    """문서 리스트에서 ID 또는 내용 해시를 기준으로 중복을 제거하고 순서를 유지합니다."""
+    """문서 리스트에서 ID 또는 내용 해시를 기준으로 중복을 제거하고 순서를 유지한다."""
     unique_docs = []
     seen_ids = set()
     for doc in documents:
-        # LangChain Document의 id는 None일 수 있으므로 page_content 해시를 fallback으로 사용
-        doc_id = doc.id if doc.id else hash(doc.page_content)
+        doc_id = get_document_id(doc)
         if doc_id not in seen_ids:
             unique_docs.append(doc)
             seen_ids.add(doc_id)
     return unique_docs
+
+
+def extract_essential_ids(reasoning: str | None, docs: list[Document]) -> set[str]:
+    """
+    Agent의 reasoning에서 [Key Document Indices]를 추출하여 실제 문서 ID(또는 해시) 세트로 변환한다.
+    마크다운 강조(**n**), 대괄호([n]), 콤마/공백 구분 등 다양한 형식을 지원.
+    """
+    if not reasoning or not docs:
+        return set()
+
+    # 1. [Key Document Indices]: 이후의 텍스트를 추출한다.
+    # 대소문자 무시 및 유연한 매칭을 수행한다.
+    pattern = r"\[Key Document Indices\]:\s*(.*)"
+    match = re.search(pattern, reasoning, re.IGNORECASE)
+    if not match:
+        # 패턴 자체가 없으면 조용히 반환한다 (에이전트가 지목을 안 한 경우일 수 있음).
+        return set()
+
+    content = match.group(1).split("\n")[0] # 첫 줄만 취한다.
+
+    # 2. 숫자만 모두 추출한다 (마크다운 등 특수문자 제거 효과).
+    indices = [int(s) for s in re.findall(r"\d+", content)]
+
+    
+    if not indices:
+        logger.warning("essential_indices_not_found_in_pattern", text=content)
+        return set()
+
+    essential_ids = set()
+    invalid_indices = []
+    for idx in indices:
+        # 에이전트가 사용하는 인덱스는 1-based
+        if 1 <= idx <= len(docs):
+            doc = docs[idx - 1]
+            essential_ids.add(get_document_id(doc))
+        else:
+            invalid_indices.append(idx)
+
+    if invalid_indices:
+        logger.warning("agent_cited_out_of_range_indices", invalid=invalid_indices, max_range=len(docs))
+
+    if essential_ids:
+        logger.debug("essential_ids_extracted", count=len(essential_ids), ids=list(essential_ids))
+
+    return essential_ids
 
 
 def parse_citations(full_answer: str) -> tuple[str, dict[str, str]]:

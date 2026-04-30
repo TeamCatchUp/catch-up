@@ -15,7 +15,10 @@ Create a SearchPlan with ordered steps to gather all information needed to fully
 - Set parallel=true and group multiple queries in one step when they are independent of each other.
 - Set depends_on=[N] for steps that require results from step N to formulate their queries (multi-hop).
 - Write the `query` entirely in **English** for semantic search against English summaries.
-- For each step, provide `keyword_tokens` by strictly following the `<keyword_extraction_rules>`. Extract 1-3 terms.
-- Aim for 3-7 steps. Cover all facets of the question without redundancy.
+- For each step, provide `keyword_tokens` by strictly following the `<keyword_extraction_rules>`.
+  Good examples: ["CATDEV-292", "LangGraph"], ["AgentState", "complex_agent_node"], ["배포", "에러"]
+  Bad examples: ["component", "module"], ["search", "query"], ["LLM", "generation"]
+- Aim for 3-5 steps. Prefer fewer, broader steps over many narrow ones.
+  If multiple facets can be answered by the same documents, combine them into one step.
 - Each step's intent should clearly state what specific information it is trying to find.
 </instructions>
