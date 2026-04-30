@@ -59,7 +59,7 @@ export default function StatusCardsSection({
     if (service === 'channel-talk') {
       return (
         <Button
-          variant="box-outline-blue"
+          variant="box-soft-primary"
           size="md"
           className="text-body-small h-9 w-full"
           onMouseEnter={preloadChannelTalkModal}
@@ -77,7 +77,7 @@ export default function StatusCardsSection({
       case 'idle':
         return (
           <Button
-            variant="box-outline-blue"
+            variant="box-soft-primary"
             size="md"
             className="text-body-small h-9 w-full"
             onClick={() => openEmbeddingModal(service, name)}
@@ -96,7 +96,7 @@ export default function StatusCardsSection({
         // TODO: 재임베딩 정책 확정 후 완료/실패 버튼 분리 검토
         return (
           <Button
-            variant="box-outline-blue"
+            variant="box-soft-primary"
             size="md"
             className="text-body-small h-9 w-full"
             onClick={() => openEmbeddingModal(service, name)}
@@ -118,7 +118,7 @@ export default function StatusCardsSection({
 
       <RecoveryCardSection />
 
-      <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-5">
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(320px,1fr))] gap-6">
         {cards.map((card) => {
           const { service, name, Icon, completedCount, totalCount, completionRate } = card;
           const iconClassName = service === 'confluence' ? 'h-5.75 w-6 shrink-0' : 'h-6 w-6 shrink-0';
@@ -126,7 +126,7 @@ export default function StatusCardsSection({
           return (
             <article
               key={service}
-              className="border-edge-neutral bg-fill-normal flex h-51 flex-col gap-4 rounded-xl border p-4"
+              className="border-edge-neutral bg-fill-normal flex h-51 max-w-92.5 flex-col gap-4 rounded-xl border p-4"
             >
               <div className="flex items-center gap-2.5">
                 <Icon className={iconClassName} />

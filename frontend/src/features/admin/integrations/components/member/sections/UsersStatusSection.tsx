@@ -9,9 +9,11 @@ import IconEditPencil from '@/public/icons/icon/edit_pencil.svg';
 import api from '@/shared/api/client';
 import { API } from '@/shared/api/endpoints';
 import { Button } from '@/shared/components/ui/button';
+import { Chip } from '@/shared/components/ui/chips';
 import Pagination from '@/shared/components/ui/pagination';
 import { cn } from '@/shared/utils/cn';
 
+import { MEMBER_TABLE_SERVICES } from '../../../constants/memberUiConfig';
 import { adminConnectorMutations } from '../../../queries/adminConnector.mutations';
 import { adminConnectorQueries } from '../../../queries/adminConnector.queries';
 import type {
@@ -36,13 +38,28 @@ interface UsersStatusSectionProps {
   onFilterChange: (type: SyncFilterType) => void;
   currentPage: number;
   onPageChange: (page: number) => void;
+  isLoading?: boolean;
+  pageSize?: number;
 }
 
 const FILTER_OPTIONS: { key: SyncFilterType; label: string }[] = [
-  { key: 'all', label: '전체' },
-  { key: 'full', label: '모두 연동된 이용자' },
-  { key: 'partial', label: '연동되지 않은 이용자' },
+  { key: 'all', label: '전체 이용자' },
+  { key: 'full', label: '전체 연동' },
+  { key: 'partial', label: '일부 미연동' },
+  { key: 'channel-talk', label: '채널톡' },
 ];
+
+/**
+ * 서비스 → 백엔드 vendor 매핑.
+ * 채널톡은 user-level 매핑이 백엔드 미구현이라 vendor mapping에서 제외 (셀 자체가 read-only).
+ * 모듈 스코프에 두어 매 렌더 재생성 방지.
+ */
+const SERVICE_TO_VENDOR: Partial<Record<IntegrationService, VendorType>> = {
+  jira: 'atlassian',
+  confluence: 'atlassian',
+  github: 'github',
+  slack: 'slack',
+};
 
 /** 이용자 계정 연동 상태 섹션 */
 export default function UsersStatusSection({
@@ -52,6 +69,8 @@ export default function UsersStatusSection({
   onFilterChange,
   currentPage,
   onPageChange,
+  isLoading = false,
+  pageSize = PAGE_SIZE,
 }: UsersStatusSectionProps) {
   const [isEditMode, setIsEditMode] = useState(false);
   const [isCsvModalOpen, setIsCsvModalOpen] = useState(false);
@@ -126,15 +145,6 @@ export default function UsersStatusSection({
     },
   });
 
-  // ─── 저장 mutation ───
-  // 채널톡은 organization-level 연동이라 user-level vendor mapping 없음 → Partial로 표현
-  const SERVICE_TO_VENDOR: Partial<Record<IntegrationService, VendorType>> = {
-    jira: 'atlassian',
-    confluence: 'atlassian',
-    github: 'github',
-    slack: 'slack',
-  };
-
   const queryClient = useQueryClient();
 
   const saveMutation = useMutation({
@@ -149,7 +159,7 @@ export default function UsersStatusSection({
 
         for (const [service, override] of Object.entries(serviceOverrides) as [IntegrationService, AccountOverride][]) {
           const vendor = SERVICE_TO_VENDOR[service];
-          if (!vendor) continue; // channel-talk 등 vendor mapping 없는 서비스는 skip
+          if (!vendor) continue;
           if (!byVendor[vendor]) byVendor[vendor] = [];
 
           byVendor[vendor]!.push({
@@ -249,18 +259,19 @@ export default function UsersStatusSection({
             const isSelected = filterType === key;
 
             return (
-              <button
+              <Chip
                 key={key}
+                variant="capsule"
+                selected={isSelected}
                 onClick={() => onFilterChange(key)}
                 className={cn(
-                  'text-body-small h-9 cursor-pointer rounded-full border px-3 py-1.5 transition-colors',
                   isSelected
-                    ? 'bg-neutral-80 border-transparent text-white'
-                    : 'border-edge-neutral text-content-alternative',
+                    ? 'bg-fill-normal border-edge-strong text-content-normal'
+                    : 'text-content-alternative border-transparent bg-transparent',
                 )}
               >
                 {label}
-              </button>
+              </Chip>
             );
           })}
         </div>
@@ -311,10 +322,13 @@ export default function UsersStatusSection({
       </div>
 
       {/* 테이블 */}
-      <div className="border-edge-neutral w-full border-y">
+      <div className="w-full">
         <UsersTable
           displayRows={effectiveRows}
           isEditMode={isEditMode}
+          services={filterType === 'channel-talk' ? ['channel-talk'] : MEMBER_TABLE_SERVICES}
+          isLoading={isLoading}
+          skeletonCount={pageSize}
           accountOptionsByService={accountOptionsByService}
           selectedAccounts={selectedAccounts}
           onAccountSelect={handleAccountSelect}
@@ -328,11 +342,11 @@ export default function UsersStatusSection({
         {totalPages > 1 && <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={onPageChange} />}
         <div className="flex flex-1 items-center justify-end gap-6">
           <div className="flex items-center gap-2">
-            <div className="bg-status-positive h-2.5 w-2.5 rounded-full" />
+            <div className="bg-status-positive h-2 w-2 rounded-full" />
             <p className="text-body-small text-content-alternative">모두 연동된 이용자</p>
           </div>
           <div className="flex items-center gap-2">
-            <div className="bg-accent-red h-2.5 w-2.5 rounded-full" />
+            <div className="bg-accent-red h-2 w-2 rounded-full" />
             <p className="text-body-small text-content-alternative">연동되지 않은 이용자</p>
           </div>
         </div>

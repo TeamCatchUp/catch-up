@@ -44,7 +44,11 @@ yarn-error.log*
 next-env.d.ts
 
 # claude
+CLAUDE.md
 .claude/
+
+#codex
+AGENTS.md
 
 # Mock data (로컬에만 저장)
 /src/shared/mocks/

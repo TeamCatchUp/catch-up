@@ -30,7 +30,7 @@ export default function IntegrationsSection() {
     totalCount: number;
   } | null>(null);
 
-  const { cards, rows, total } = useMemberIntegrationViewModel({
+  const { cards, rows, total, isLoading } = useMemberIntegrationViewModel({
     filterType,
     page: currentPage,
     size: PAGE_SIZE,
@@ -91,6 +91,8 @@ export default function IntegrationsSection() {
         onFilterChange={handleFilterChange}
         currentPage={currentPage}
         onPageChange={setCurrentPage}
+        isLoading={isLoading}
+        pageSize={PAGE_SIZE}
       />
 
       <ConfirmDialog
