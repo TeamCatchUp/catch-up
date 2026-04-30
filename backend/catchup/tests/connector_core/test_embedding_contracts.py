@@ -235,7 +235,7 @@ class ChannelTalkDocumentArticleLogicalMetadataTests(TestCase):
                 created_at=now,
                 updated_at=now,
                 synced_at=now,
-                contextual_content="Document State: draft\nState Meaning: draft note",
+                contextual_content="Refund draft",
             ),
             document_article_core=ChannelTalkDocumentArticleCoreMetadata(
                 channel_id="channel-1",
@@ -300,6 +300,7 @@ class ChannelTalkDocumentArticleLogicalMetadataTests(TestCase):
             storage["document_article_core"]["title"],
             "Refund draft",
         )
+        self.assertNotIn("summary", storage["document_article_core"])
         self.assertEqual(
             storage["publication"]["updated_at"],
             "2026-04-22T02:10:00Z",

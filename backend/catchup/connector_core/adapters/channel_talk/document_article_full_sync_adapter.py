@@ -4,6 +4,8 @@ from collections.abc import Iterable
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Literal
+from urllib.parse import quote
+from urllib.parse import unquote
 
 from bs4 import BeautifulSoup
 from langchain_core.documents import Document
@@ -79,12 +81,7 @@ from catchup.utils.validation import require_text
 ARTICLE_CHUNK_TARGET_CHARS = 2000
 ARTICLE_CHUNK_MAX_CHARS = 4000
 ARTICLE_CHUNK_MIN_CHARS = 400
-
-ARTICLE_STATE_DESCRIPTIONS = {
-    "published": "This article is published and can be treated as public/current documentation.",
-    "unpublished": "This article is unpublished and may not currently be visible to end users.",
-    "draft": "This article is a draft and may not be finalized or publicly visible.",
-}
+DOCUMENT_ARTICLE_PUBLIC_BASE_URL = "https://guide.catchup.im"
 
 FILE_ATTACHMENT_EXTENSIONS = (
     ".pdf",
@@ -505,14 +502,11 @@ class ChannelTalkDocumentArticleFullSyncAdapter:
 
         state = ChannelTalkDocumentArticleState.PUBLISHED.value
         raw_content = self._normalize_source_content(source_revision)
-        url = current_article.website_url
-        header = self._build_context_header(
-            execution=execution,
-            source=source_revision,
-            state=state,
+        url = self._resolve_public_article_url(
+            article=current_article,
             language=language,
-            url=url,
         )
+        header = self._build_context_header(source=source_revision)
         chunks = self._chunk_article_content(
             header=header,
             body=raw_content,
@@ -623,7 +617,6 @@ class ChannelTalkDocumentArticleFullSyncAdapter:
                 state=state,
                 title=source_revision.title,
                 subtitle=source_revision.subtitle,
-                summary=source_revision.summary,
                 slug=current_article.slug,
                 url=url,
                 author_id=source_revision.author_id
@@ -649,35 +642,35 @@ class ChannelTalkDocumentArticleFullSyncAdapter:
             ),
         )
 
+    @staticmethod
+    def _resolve_public_article_url(
+        *,
+        article: ChannelTalkDocumentArticle,
+        language: str,
+    ) -> str | None:
+        if article.website_url:
+            return article.website_url
+        if not article.slug:
+            return None
+
+        normalized_language = quote(unquote(language.strip()), safe="")
+        normalized_slug = quote(unquote(article.slug.strip()), safe="")
+        if not normalized_language or not normalized_slug:
+            return None
+        return (
+            f"{DOCUMENT_ARTICLE_PUBLIC_BASE_URL}/"
+            f"{normalized_language}/articles/{normalized_slug}"
+        )
+
     def _build_context_header(
         self,
         *,
-        execution: ChannelTalkDocumentArticleFullSyncExecutionRequest,
         source: ChannelTalkDocumentArticleRevision,
-        state: str,
-        language: str,
-        url: str | None,
     ) -> str:
-        state_description = ARTICLE_STATE_DESCRIPTIONS.get(
-            state,
-            "This article has an unrecognized Channel Talk state; use the state metadata when deciding how authoritative it is.",
-        )
-        lines = [
-            "[Channel Talk Document Article]",
-            f"Document State: {state}",
-            f"State Meaning: {state_description}",
-        ]
-        optional_lines = [
-            ("Title", source.title),
-            ("Subtitle", source.subtitle),
-            ("Space", execution.space_name),
-            ("Language", language),
-            ("URL", url),
-        ]
-        for label, value in optional_lines:
-            if value:
-                lines.append(f"{label}: {value}")
-        return "\n".join(lines)
+        for value in (source.title, source.subtitle, source.summary):
+            if value and value.strip():
+                return value.strip()
+        return source.article_id.strip() if source.article_id else ""
 
     @staticmethod
     def _select_author(
@@ -1804,13 +1797,10 @@ class ChannelTalkDocumentArticleFullSyncAdapter:
             body = "\n\n".join(
                 block.text for block in leaf.content_blocks if block.text
             ).strip()
-            section_prefix = self._build_article_section_prefix(leaf.hierarchy)
-            content_parts = [header]
-            if section_prefix:
-                content_parts.append(section_prefix)
-            heading_text = leaf.hierarchy[-1] if leaf.hierarchy else ""
-            if heading_text and not body.startswith(heading_text):
-                content_parts.append(heading_text)
+            content_parts = []
+            chunk_heading = self._build_article_chunk_heading(header, leaf.hierarchy)
+            if chunk_heading:
+                content_parts.append(chunk_heading)
             if body:
                 content_parts.append(body)
             chunks.append(
@@ -1822,10 +1812,18 @@ class ChannelTalkDocumentArticleFullSyncAdapter:
         return chunks
 
     @staticmethod
-    def _build_article_section_prefix(hierarchy: list[str]) -> str:
-        if not hierarchy:
-            return ""
-        return f"[Section: {' > '.join(hierarchy)}]"
+    def _build_article_chunk_heading(article_title: str, hierarchy: list[str]) -> str:
+        title = article_title.strip()
+        section_hierarchy = list(hierarchy)
+        if title and section_hierarchy:
+            normalized_title = " ".join(title.split())
+            first_section = " ".join(section_hierarchy[0].split())
+            if normalized_title == first_section:
+                section_hierarchy = section_hierarchy[1:]
+        section_path = " > ".join(section_hierarchy)
+        if title and section_path:
+            return f"{title} - {section_path}"
+        return title or section_path
 
     @staticmethod
     def _calc_article_leaf_length(leaf: _ArticleLeafSection) -> int:

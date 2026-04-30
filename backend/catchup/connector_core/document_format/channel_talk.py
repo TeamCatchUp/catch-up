@@ -213,7 +213,6 @@ class ChannelTalkDocumentArticleCoreMetadata(BaseModel):
     state: str
     title: str | None = None
     subtitle: str | None = None
-    summary: str | None = None
     slug: str | None = None
     url: str | None = None
     author_id: str | None = None
