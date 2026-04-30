@@ -482,6 +482,61 @@ class ChannelTalkDocumentArticleFullSyncAdapterTests(IsolatedAsyncioTestCase):
         self.assertNotIn("[Section:", page_content)
         self.assertNotIn("\n\n마무리\n\n", page_content)
 
+    async def test_transform_preserves_later_section_heading_when_sections_merge(
+        self,
+    ) -> None:
+        adapter = ChannelTalkDocumentArticleFullSyncAdapter(language="ko")
+        body_html = """
+        <h1>흩어진 사내 정보를 한 번에 찾기</h1>
+        <h2>답변을 받으면 이렇게 활용해요</h2>
+        <p>출처 카드를 열어 답변의 근거를 확인할 수 있어요.</p>
+        <h2>답변이 아쉬울 땐 이렇게 고쳐보세요</h2>
+        <p>질문에 프로젝트명과 시점을 더해 다시 물어보세요.</p>
+        """
+        fetched = ChannelTalkDocumentArticleFullSyncFetchResult(
+            channel_id="channel-123",
+            space_id="space-123",
+            language="ko",
+            bundles=(
+                _bundle(
+                    article_id="merged-sections-1",
+                    state=ChannelTalkDocumentArticleState.DRAFT,
+                    detail=_article_view(
+                        article_id="merged-sections-1",
+                        state=ChannelTalkDocumentArticleState.DRAFT,
+                        body_html="<p>Current body should not be used</p>",
+                        title="흩어진 사내 정보를 한 번에 찾기",
+                    ),
+                    published_revision=_revision_view(
+                        article_id="merged-sections-1",
+                        body_html=body_html,
+                        title="흩어진 사내 정보를 한 번에 찾기",
+                    ),
+                ),
+            ),
+            fetched_count=1,
+            fetched_article_ids=("merged-sections-1",),
+        )
+
+        transformed = await adapter.transform(
+            execution=_execution(),
+            sync_window=_window(),
+            fetched=fetched,
+        )
+
+        self.assertEqual(len(transformed.documents), 1)
+        page_content = transformed.documents[0].page_content
+        self.assertTrue(
+            page_content.startswith(
+                "흩어진 사내 정보를 한 번에 찾기 - 답변을 받으면 이렇게 활용해요"
+            )
+        )
+        self.assertNotIn("\n\n답변을 받으면 이렇게 활용해요\n\n", page_content)
+        self.assertIn(
+            "\n\n답변이 아쉬울 땐 이렇게 고쳐보세요\n\n",
+            page_content,
+        )
+
     async def test_transform_stores_public_article_url_from_website_url(
         self,
     ) -> None:
