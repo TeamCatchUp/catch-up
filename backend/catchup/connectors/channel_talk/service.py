@@ -165,12 +165,14 @@ class ChannelTalkDocumentCredentialsService:
         ]
         | None = None,
     ) -> None:
-        self.application = application or ConnectorInstallAuthApplication(
-            port=ChannelTalkDocumentInstallAuthAdapter(
-                store=store,
-                client=client,
-            )
+        adapter = ChannelTalkDocumentInstallAuthAdapter(
+            store=store,
+            client=client,
         )
+        self.application = application or ConnectorInstallAuthApplication(
+            port=adapter,
+        )
+        self._port = self.application.port
 
     async def connect(
         self,
@@ -183,6 +185,12 @@ class ChannelTalkDocumentCredentialsService:
         request: ChannelTalkDocumentConnectRequest,
     ) -> ChannelTalkDocumentSpace:
         return await self.application.validate_credentials(request)
+
+    async def validate_connection(
+        self,
+        request: ChannelTalkDocumentConnectRequest,
+    ) -> ChannelTalkDocumentCredentialsStatus:
+        return await self._port.validate_connection(request)
 
     async def get_status(self) -> ChannelTalkDocumentCredentialsStatus:
         return await self.application.get_status()

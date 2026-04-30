@@ -1,12 +1,19 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
+from dataclasses import field
 from enum import StrEnum
-from typing import Any, Mapping, TypeAlias
+from typing import Any
+from typing import Mapping
+from typing import TypeAlias
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel
+from pydantic import Field
+from pydantic import field_validator
+from pydantic import model_validator
 
-from catchup.db.models import SyncConnector, SyncType
+from catchup.db.models import SyncConnector
+from catchup.db.models import SyncType
 
 
 def _validate_epoch_ts(value: str | None, *, field_name: str) -> str | None:
@@ -85,9 +92,22 @@ class HandlerKey:
 
 
 @dataclass(slots=True, frozen=True)
+class FullSyncRequestedTarget:
+    target_type: SyncTargetType
+    target_id: str
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "target_type", SyncTargetType(self.target_type))
+        target_id = self.target_id.strip()
+        if not target_id:
+            raise ValueError("target_id must not be empty")
+        object.__setattr__(self, "target_id", target_id)
+
+
+@dataclass(slots=True, frozen=True)
 class FullSyncDispatchRequest:
     scope_id: str
-    target_ids: list[str] | None = None
+    targets: list[FullSyncRequestedTarget] | None = None
     sync_from_ts: str | None = None
     trigger: SyncTrigger = SyncTrigger.API
 
@@ -98,6 +118,27 @@ class FullSyncDispatchRequest:
             "sync_from_ts",
             _validate_epoch_ts(self.sync_from_ts, field_name="sync_from_ts"),
         )
+        if self.targets is None:
+            return
+
+        normalized_targets: list[FullSyncRequestedTarget] = []
+        seen: set[tuple[SyncTargetType, str]] = set()
+        for item in self.targets:
+            target = (
+                item
+                if isinstance(item, FullSyncRequestedTarget)
+                else FullSyncRequestedTarget(
+                    target_type=item["target_type"],
+                    target_id=item["target_id"],
+                )
+            )
+            key = (target.target_type, target.target_id)
+            if key in seen:
+                continue
+            seen.add(key)
+            normalized_targets.append(target)
+
+        object.__setattr__(self, "targets", normalized_targets)
 
 
 @dataclass(slots=True, frozen=True)

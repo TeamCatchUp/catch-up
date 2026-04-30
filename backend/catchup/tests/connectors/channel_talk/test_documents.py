@@ -46,6 +46,9 @@ from catchup.connectors.channel_talk.schemas.document_metadata import (
 from catchup.connectors.channel_talk.schemas.document_metadata import (
     ChannelTalkDocumentSpace,
 )
+from catchup.connectors.channel_talk.service import (
+    ChannelTalkDocumentCredentialsService,
+)
 
 
 class ChannelTalkDocumentsClientTests(IsolatedAsyncioTestCase):
@@ -133,6 +136,60 @@ class _SpaceClient:
 
 
 class ChannelTalkDocumentsInstallAdapterTests(IsolatedAsyncioTestCase):
+    async def test_service_validate_connection_does_not_persist(self) -> None:
+        store = _DocumentInstallStore()
+        service = ChannelTalkDocumentCredentialsService(
+            store=store,
+            client=_SpaceClient(
+                ChannelTalkDocumentSpace(
+                    space_id="space-123",
+                    space_name="Help Center",
+                    channel_id="channel-123",
+                )
+            ),
+        )
+
+        status = await service.validate_connection(
+            ChannelTalkDocumentConnectRequest(
+                access_key="documents-key",
+                access_secret="documents-secret",
+            )
+        )
+
+        self.assertFalse(status.installed)
+        self.assertEqual(status.channel_id, "channel-123")
+        self.assertEqual(status.association_status, ChannelTalkDocumentAssociationStatus.API_VERIFIED)
+        self.assertIsNone(store.stored_payload)
+        self.assertFalse(store.committed)
+
+    async def test_validate_connection_checks_relation_without_persisting(self) -> None:
+        store = _DocumentInstallStore()
+        adapter = ChannelTalkDocumentInstallAuthAdapter(
+            store=store,
+            client=_SpaceClient(
+                ChannelTalkDocumentSpace(
+                    space_id="space-123",
+                    space_name="Help Center",
+                    channel_id="channel-123",
+                )
+            ),
+        )
+
+        status = await adapter.validate_connection(
+            ChannelTalkDocumentConnectRequest(
+                access_key="documents-key",
+                access_secret="documents-secret",
+            )
+        )
+
+        self.assertFalse(status.installed)
+        self.assertEqual(status.channel_id, "channel-123")
+        self.assertEqual(status.space_id, "space-123")
+        self.assertEqual(status.space_name, "Help Center")
+        self.assertEqual(status.association_status, ChannelTalkDocumentAssociationStatus.API_VERIFIED)
+        self.assertIsNone(store.stored_payload)
+        self.assertFalse(store.committed)
+
     async def test_api_relation_sets_api_verified(self) -> None:
         store = _DocumentInstallStore()
         adapter = ChannelTalkDocumentInstallAuthAdapter(

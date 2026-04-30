@@ -2,21 +2,17 @@ from __future__ import annotations
 
 import asyncio
 
-from fastapi.concurrency import run_in_threadpool
 import structlog
+from fastapi.concurrency import run_in_threadpool
 
 from catchup.db.engine import SessionLocal
 from catchup.db.slack import domain_repository as slack_entities
 from catchup.db.slack import oauth_repository as slack_oauth_repository
 from catchup.sync.common.exceptions import SyncRequestException
 from catchup.sync.common.protocols import FullSyncTargetResolverProtocol
-from catchup.sync.common.schemas import (
-    FullSyncDispatchRequest,
-    FullSyncResolvedTargets,
-)
-from catchup.sync.full.targets import (
-    resolve_full_sync_targets_from_rows,
-)
+from catchup.sync.common.schemas import FullSyncDispatchRequest
+from catchup.sync.common.schemas import FullSyncResolvedTargets
+from catchup.sync.full.targets import resolve_full_sync_targets_from_rows
 
 logger = structlog.get_logger(__name__)
 
@@ -35,6 +31,7 @@ class SlackFullSyncTargetResolver(FullSyncTargetResolverProtocol):
         *,
         request: FullSyncDispatchRequest,
     ) -> FullSyncResolvedTargets:
+        # Slack은 scope_id=team_id, target_type=channel, target_id=channel.id 계약이다.
         team_id = request.scope_id.strip()
         if not team_id:
             raise SyncRequestException("scope_id is required")
@@ -49,13 +46,14 @@ class SlackFullSyncTargetResolver(FullSyncTargetResolverProtocol):
                 metadata={"team_id": team_id},
             )
 
-        requested_target_ids, resolved_targets = resolve_full_sync_targets_from_rows(
-            request_target_ids=request.target_ids,
+        # 공통 resolver 유틸이 target_type 검증과 channel id 매칭을 처리한다.
+        requested_ids, resolved_targets = resolve_full_sync_targets_from_rows(
+            request_targets=request.targets,
             rows=channels,
             target_type="channel",
             key_getter=lambda channel: channel.id,
             name_getter=lambda channel: channel.name or channel.id,
-            error_message="requested target_ids contain unknown channels",
+            error_message="requested targets contain unknown channels",
             error_metadata={"team_id": team_id},
             log_context={
                 "connector": "slack",
@@ -67,7 +65,7 @@ class SlackFullSyncTargetResolver(FullSyncTargetResolverProtocol):
         logger.info(
             "slack_full_sync_targets_resolved",
             team_id=team_id,
-            requested_count=len(requested_target_ids),
+            requested_count=len(requested_ids),
             resolved_count=len(resolved_targets.targets),
         )
 

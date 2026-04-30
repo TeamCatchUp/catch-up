@@ -82,6 +82,24 @@ class ChannelTalkDocumentInstallAuthAdapter:
         )
         return await client.get_current_space()
 
+    async def validate_connection(
+        self,
+        request: ChannelTalkDocumentConnectRequest,
+    ) -> ChannelTalkDocumentCredentialsStatus:
+        validated_target = await self.validate_credentials(request)
+        base_connection = await self._load_base_connection()
+        association_status = self._resolve_association_status(
+            base_channel_id=base_connection.channel_id,
+            space=validated_target,
+        )
+        return ChannelTalkDocumentCredentialsStatus(
+            installed=False,
+            channel_id=base_connection.channel_id,
+            space_id=validated_target.space_id,
+            space_name=validated_target.space_name,
+            association_status=association_status,
+        )
+
     async def connect(
         self,
         *,

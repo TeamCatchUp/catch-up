@@ -1,29 +1,35 @@
 from __future__ import annotations
 
 from dataclasses import asdict
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
+from datetime import timedelta
+from datetime import timezone
 from typing import Any
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel
+from pydantic import ConfigDict
+from pydantic import Field
+from pydantic import field_validator
 
-from catchup.db.models import SyncConnector, SyncEventStatus, SyncJobStatus, SyncType
+from catchup.db.models import SyncConnector
+from catchup.db.models import SyncEventStatus
+from catchup.db.models import SyncJobStatus
+from catchup.db.models import SyncType
 from catchup.sync.common.exceptions import SyncRequestException
-from catchup.sync.common.schemas import (
-    FullSyncDispatchRequest,
-    SyncDispatchResult,
-    SyncDispatchStatus,
-    SyncTargetType,
-    SyncTrigger,
-)
-from catchup.sync.query_service import (
-    SyncJobSnapshotResult,
-    SyncJobTargetSnapshotResult,
-    SyncScopeStatusResult,
-    SyncTargetsResult,
-)
+from catchup.sync.common.schemas import FullSyncDispatchRequest
+from catchup.sync.common.schemas import FullSyncRequestedTarget
+from catchup.sync.common.schemas import SyncDispatchResult
+from catchup.sync.common.schemas import SyncDispatchStatus
+from catchup.sync.common.schemas import SyncTargetType
+from catchup.sync.common.schemas import SyncTrigger
+from catchup.sync.query_service import SyncJobSnapshotResult
+from catchup.sync.query_service import SyncJobTargetSnapshotResult
+from catchup.sync.query_service import SyncScopeStatusResult
+from catchup.sync.query_service import SyncTargetsResult
 
 
 class SyncJobTargetSnapshotItem(BaseModel):
+    target_type: SyncTargetType
     target_id: str
     target_name: str
     status: SyncEventStatus
@@ -75,16 +81,23 @@ class FullSyncRequest(BaseModel):
     """
     공통 Full Sync 요청
     """
+    model_config = ConfigDict(extra="forbid")
 
     connector: SyncConnector = Field(..., description="sync connector type")
     scope_id: str = Field(
         ...,
-        description="connector scope id (team_id / installation_id / cloud_id)",
+        description=(
+            "connector scope id "
+            "(team_id / installation_id / cloud_id / channel_id)"
+        ),
     )
-    target_ids: list[str] = Field(
+    targets: list[FullSyncRequestedTarget] = Field(
         ...,
         min_length=1,
-        description="required target ids returned by GET /api/v1/sync/targets",
+        description=(
+            "required targets returned by GET /api/v1/sync/targets "
+            "(target_type + target_id)"
+        ),
     )
     sync_days: int | None = Field(
         default=None,
@@ -92,23 +105,34 @@ class FullSyncRequest(BaseModel):
         description="collection period in days; if omitted connector default is used",
     )
 
-    @field_validator("target_ids")
+    @field_validator("scope_id")
     @classmethod
-    def _validate_target_ids(cls, value: list[str]) -> list[str]:
-        normalized: list[str] = []
-        seen: set[str] = set()
+    def _validate_scope_id(cls, value: str) -> str:
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("scope_id must not be empty")
+        return stripped
+
+    @field_validator("targets")
+    @classmethod
+    def _validate_targets(
+        cls,
+        value: list[FullSyncRequestedTarget],
+    ) -> list[FullSyncRequestedTarget]:
+        normalized: list[FullSyncRequestedTarget] = []
+        seen: set[tuple[SyncTargetType, str]] = set()
 
         for item in value:
-            candidate = (item or "").strip()
-            if not candidate:
-                raise ValueError("target_ids must not contain empty values")
-            if candidate in seen:
+            # 같은 ID라도 target_type이 다르면 서로 다른 리소스다.
+            # 예: Channel Talk channel-123과 space-123은 tuple 기준으로만 비교한다.
+            key = (item.target_type, item.target_id)
+            if key in seen:
                 continue
-            seen.add(candidate)
-            normalized.append(candidate)
+            seen.add(key)
+            normalized.append(item)
 
         if not normalized:
-            raise ValueError("target_ids must not be empty")
+            raise ValueError("targets must not be empty")
 
         return normalized
 
@@ -119,11 +143,13 @@ class FullSyncRequest(BaseModel):
         trigger: SyncTrigger = SyncTrigger.API,
         now: datetime | None = None,
     ) -> FullSyncDispatchRequest:
+        # API 모델은 사용자 입력을 검증하고, 내부 dispatch 모델은 실행에 필요한
+        # sync_from_ts까지 계산한 불변 요청 객체로 넘긴다.
         sync_days = self.sync_days if self.sync_days is not None else default_sync_days
         if sync_days < 1:
             raise SyncRequestException(
                 "sync_days must be greater or equal to 1",
-                code = "invalid_sync_days"
+                code="invalid_sync_days",
             )
 
         current_time = now or datetime.now(timezone.utc)
@@ -131,7 +157,7 @@ class FullSyncRequest(BaseModel):
 
         return FullSyncDispatchRequest(
             scope_id=self.scope_id,
-            target_ids=self.target_ids,
+            targets=self.targets,
             sync_from_ts=sync_from_ts,
             trigger=trigger,
         )

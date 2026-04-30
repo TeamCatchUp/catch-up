@@ -28,6 +28,9 @@ from catchup.connectors.channel_talk.schemas.document_article import (
     ChannelTalkDocumentArticlePage,
 )
 from catchup.connectors.channel_talk.schemas.document_article import (
+    ChannelTalkDocumentArticleRevisionView,
+)
+from catchup.connectors.channel_talk.schemas.document_article import (
     ChannelTalkDocumentArticleState,
 )
 from catchup.connectors.channel_talk.schemas.document_article import (
@@ -137,6 +140,35 @@ class ChannelTalkDocumentsApiClient:
             parser=ChannelTalkDocumentArticleView.from_api_payload,
             log_event="channel_talk_documents_invalid_article_payload",
             error_message="Channel Talk Documents returned an invalid article payload",
+            logger=logger,
+        )
+
+    async def get_article_revision(
+        self,
+        *,
+        article_id: str,
+        revision_id: str,
+    ) -> ChannelTalkDocumentArticleRevisionView:
+        normalized_article_id = self._require_query_text(article_id, "article_id")
+        normalized_revision_id = self._require_query_text(
+            revision_id,
+            "revision_id",
+        )
+        payload = await self._request(
+            method="GET",
+            path=(
+                f"/open/v1/spaces/$me/articles/"
+                f"{quote(normalized_article_id, safe='')}/revisions/"
+                f"{quote(normalized_revision_id, safe='')}"
+            ),
+        )
+        return parse_channel_talk_payload(
+            payload,
+            parser=ChannelTalkDocumentArticleRevisionView.from_api_payload,
+            log_event="channel_talk_documents_invalid_article_revision_payload",
+            error_message=(
+                "Channel Talk Documents returned an invalid article revision payload"
+            ),
             logger=logger,
         )
 

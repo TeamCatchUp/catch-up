@@ -17,6 +17,9 @@ from catchup.connectors.channel_talk.schemas.channel_connection import (
 from catchup.connectors.channel_talk.schemas.channel_connection import (
     ChannelTalkUninstallResult,
 )
+from catchup.connectors.channel_talk.schemas.channel_metadata import (
+    ChannelTalkCurrentChannel,
+)
 from catchup.connectors.channel_talk.schemas.document_connection import (
     ChannelTalkDocumentConnectRequest,
 )
@@ -56,14 +59,33 @@ from catchup.server.connector.channel_talk.schemas import (
 from catchup.server.connector.channel_talk.schemas import (
     ChannelTalkDocumentUninstallResponse,
 )
+from catchup.server.connector.channel_talk.schemas import (
+    ChannelTalkDocumentValidateResponse,
+)
 from catchup.server.connector.channel_talk.schemas import ChannelTalkStatusResponse
 from catchup.server.connector.channel_talk.schemas import ChannelTalkUninstallResponse
+from catchup.server.connector.channel_talk.schemas import ChannelTalkValidateResponse
 
 router = APIRouter(
     prefix="/api/v1/admin/connector/channel-talk",
     tags=["channel-talk"],
     dependencies=[Depends(require_admin_user)],
 )
+
+
+@router.post(
+    "/credentials/validate",
+    response_model=ChannelTalkValidateResponse,
+)
+async def validate_channel_talk_credentials(
+    connect_request: ChannelTalkConnectRequest,
+    service: Annotated[ChannelTalkCredentialsService, Depends(get_channel_talk_service)],
+):
+    result = await service.validate_credentials(request=connect_request)
+    return _build_validate_response(
+        result,
+        webhook_token_configured=bool(connect_request.webhook_token.strip()),
+    )
 
 
 @router.post(
@@ -105,6 +127,21 @@ async def delete_channel_talk_credentials(
 ):
     result = await service.uninstall()
     return _build_uninstall_response(result)
+
+
+@router.post(
+    "/documents/credentials/validate",
+    response_model=ChannelTalkDocumentValidateResponse,
+)
+async def validate_channel_talk_document_credentials(
+    connect_request: ChannelTalkDocumentConnectRequest,
+    service: Annotated[
+        ChannelTalkDocumentCredentialsService,
+        Depends(get_channel_talk_document_service),
+    ],
+):
+    result = await service.validate_connection(request=connect_request)
+    return _build_document_validate_response(result)
 
 
 @router.post(
@@ -157,6 +194,20 @@ async def delete_channel_talk_document_credentials(
     return _build_document_uninstall_response(result)
 
 
+def _build_validate_response(
+    result: ChannelTalkCurrentChannel,
+    *,
+    webhook_token_configured: bool,
+) -> ChannelTalkValidateResponse:
+    return ChannelTalkValidateResponse(
+        channel_id=result.channel_id,
+        channel_name=result.channel_name,
+        manager_id=result.manager.id if result.manager else None,
+        manager_name=result.manager.name if result.manager else None,
+        webhook_token_configured=webhook_token_configured,
+    )
+
+
 def _build_connect_response(result: ChannelTalkCredentialsStatus) -> ChannelTalkConnectResponse:
     return ChannelTalkConnectResponse(
         installed=result.installed,
@@ -193,6 +244,17 @@ def _build_uninstall_response(result: ChannelTalkUninstallResult) -> ChannelTalk
         status="not_found",
         message="Channel Talk credentials were not installed.",
         installed=False,
+    )
+
+
+def _build_document_validate_response(
+    result: ChannelTalkDocumentCredentialsStatus,
+) -> ChannelTalkDocumentValidateResponse:
+    return ChannelTalkDocumentValidateResponse(
+        channel_id=result.channel_id or "",
+        space_id=result.space_id or "",
+        space_name=result.space_name or "",
+        association_status=_stringify_association_status(result) or "",
     )
 
 

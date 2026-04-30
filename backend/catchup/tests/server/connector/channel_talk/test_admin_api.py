@@ -17,6 +17,11 @@ from catchup.connectors.channel_talk.schemas.channel_connection import (
 from catchup.connectors.channel_talk.schemas.channel_connection import (
     ChannelTalkUninstallResult,
 )
+from catchup.connectors.channel_talk.schemas.channel_metadata import ChannelTalkChannel
+from catchup.connectors.channel_talk.schemas.channel_metadata import (
+    ChannelTalkCurrentChannel,
+)
+from catchup.connectors.channel_talk.schemas.channel_metadata import ChannelTalkManager
 from catchup.connectors.channel_talk.schemas.document_connection import (
     ChannelTalkDocumentAssociationStatus,
 )
@@ -45,16 +50,28 @@ from catchup.server.error_handlers.channel_talk import (
 class StubChannelTalkService:
     def __init__(self) -> None:
         self.connect_result = ChannelTalkCredentialsStatus(installed=False)
+        self.validate_result = ChannelTalkCurrentChannel(
+            channel=ChannelTalkChannel(id="channel-123", name="Support"),
+            manager=ChannelTalkManager(id="manager-7", name="Jane"),
+        )
         self.status_result = ChannelTalkCredentialsStatus(installed=False)
         self.uninstall_result = ChannelTalkUninstallResult(removed=False)
         self.last_connect_request = None
+        self.last_validate_request = None
         self.connect_error = None
+        self.validate_error = None
 
     async def connect(self, request):
         self.last_connect_request = request
         if self.connect_error is not None:
             raise self.connect_error
         return self.connect_result
+
+    async def validate_credentials(self, request):
+        self.last_validate_request = request
+        if self.validate_error is not None:
+            raise self.validate_error
+        return self.validate_result
 
     async def get_status(self):
         return self.status_result
@@ -66,16 +83,31 @@ class StubChannelTalkService:
 class StubChannelTalkDocumentService:
     def __init__(self) -> None:
         self.connect_result = ChannelTalkDocumentCredentialsStatus(installed=False)
+        self.validate_result = ChannelTalkDocumentCredentialsStatus(
+            installed=False,
+            channel_id="channel-123",
+            space_id="space-123",
+            space_name="Help Center",
+            association_status=ChannelTalkDocumentAssociationStatus.API_VERIFIED,
+        )
         self.status_result = ChannelTalkDocumentCredentialsStatus(installed=False)
         self.uninstall_result = ChannelTalkDocumentUninstallResult(removed=False)
         self.last_connect_request = None
+        self.last_validate_request = None
         self.connect_error = None
+        self.validate_error = None
 
     async def connect(self, request):
         self.last_connect_request = request
         if self.connect_error is not None:
             raise self.connect_error
         return self.connect_result
+
+    async def validate_connection(self, request):
+        self.last_validate_request = request
+        if self.validate_error is not None:
+            raise self.validate_error
+        return self.validate_result
 
     async def get_status(self):
         return self.status_result
@@ -111,6 +143,61 @@ class ChannelTalkAdminApiTests(TestCase):
 
     def tearDown(self) -> None:
         self.client.close()
+
+    def test_validate_credentials_returns_channel_payload_without_saving(self) -> None:
+        response = self.client.post(
+            "/api/v1/admin/connector/channel-talk/credentials/validate",
+            json={
+                "access_key": "access-key",
+                "access_secret": "access-secret",
+                "webhook_token": "webhook-token",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json(),
+            {
+                "status": "validated",
+                "channel_id": "channel-123",
+                "channel_name": "Support",
+                "manager_id": "manager-7",
+                "manager_name": "Jane",
+                "webhook_token_configured": True,
+            },
+        )
+        self.assertEqual(self.service.last_validate_request.access_key, "access-key")
+        self.assertIsNone(self.service.last_connect_request)
+        self.assertEqual(self.background_sync_calls, [])
+
+    def test_validate_credentials_returns_channel_talk_error_shape(self) -> None:
+        self.service.validate_error = ChannelTalkAuthenticationError(
+            "Channel Talk credentials are invalid or unauthorized",
+            metadata={"status_code": 401, "request_id": "req-validate"},
+        )
+
+        response = self.client.post(
+            "/api/v1/admin/connector/channel-talk/credentials/validate",
+            json={
+                "access_key": "access-key",
+                "access_secret": "access-secret",
+                "webhook_token": "webhook-token",
+            },
+        )
+
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(
+            response.json(),
+            {
+                "detail": {
+                    "code": "invalid_credentials",
+                    "message": "Channel Talk credentials are invalid or unauthorized",
+                    "metadata": {"status_code": 401, "request_id": "req-validate"},
+                }
+            },
+        )
+        self.assertIsNone(self.service.last_connect_request)
+        self.assertEqual(self.background_sync_calls, [])
 
     def test_post_credentials_returns_connected_payload(self) -> None:
         verified_at = datetime(2026, 4, 19, 8, 30, tzinfo=timezone.utc)
@@ -236,6 +323,69 @@ class ChannelTalkAdminApiTests(TestCase):
             },
         )
         self.assertEqual(self.background_sync_calls, [])
+
+    def test_validate_document_credentials_returns_space_payload_without_saving(self) -> None:
+        response = self.client.post(
+            "/api/v1/admin/connector/channel-talk/documents/credentials/validate",
+            json={
+                "access_key": "documents-key",
+                "access_secret": "documents-secret",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json(),
+            {
+                "status": "validated",
+                "channel_id": "channel-123",
+                "space_id": "space-123",
+                "space_name": "Help Center",
+                "association_status": "api_verified",
+            },
+        )
+        self.assertEqual(
+            self.document_service.last_validate_request.access_key,
+            "documents-key",
+        )
+        self.assertIsNone(self.document_service.last_connect_request)
+        self.assertEqual(self.document_background_sync_calls, [])
+
+    def test_validate_document_credentials_base_channel_missing_fails(self) -> None:
+        self.document_service.validate_error = ChannelTalkValidationError(
+            "Channel Talk credentials are not installed"
+        )
+
+        response = self.client.post(
+            "/api/v1/admin/connector/channel-talk/documents/credentials/validate",
+            json={
+                "access_key": "documents-key",
+                "access_secret": "documents-secret",
+            },
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["detail"]["code"], "invalid_request")
+        self.assertIsNone(self.document_service.last_connect_request)
+        self.assertEqual(self.document_background_sync_calls, [])
+
+    def test_validate_document_credentials_channel_conflict_fails(self) -> None:
+        self.document_service.validate_error = ChannelTalkConflictError(
+            "Channel Talk Documents space does not match the installed Channel Talk channel"
+        )
+
+        response = self.client.post(
+            "/api/v1/admin/connector/channel-talk/documents/credentials/validate",
+            json={
+                "access_key": "documents-key",
+                "access_secret": "documents-secret",
+            },
+        )
+
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.json()["detail"]["code"], "connection_conflict")
+        self.assertIsNone(self.document_service.last_connect_request)
+        self.assertEqual(self.document_background_sync_calls, [])
 
     def test_post_document_credentials_returns_connected_payload_and_schedules_background_sync(self) -> None:
         verified_at = datetime(2026, 4, 25, 8, 30, tzinfo=timezone.utc)

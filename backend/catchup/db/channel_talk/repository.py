@@ -56,9 +56,23 @@ class ChannelTalkCredentialsRepository:
     def __init__(self, db: Session) -> None:
         self.db = db
 
-    def get_connection(self) -> ChannelTalkCredentialsRecord | None:
-        row = _get_channel_talk_credentials(db=self.db)
+    def get_connection(
+        self,
+        channel_id: str | None = None,
+    ) -> ChannelTalkCredentialsRecord | None:
+        row = _get_channel_talk_credentials(
+            db=self.db,
+            channel_id=channel_id,
+        )
         return _to_connection_record(row)
+
+    def list_connections(self) -> list[ChannelTalkCredentialsRecord]:
+        rows = _list_channel_talk_credentials(db=self.db)
+        return [
+            record
+            for row in rows
+            if (record := _to_connection_record(row)) is not None
+        ]
 
     def upsert_connection(
         self,
@@ -78,8 +92,14 @@ class ChannelTalkCredentialsRepository:
             raise RuntimeError("Channel Talk credentials upsert returned no record")
         return record
 
-    def delete_connection(self) -> bool:
-        return _delete_channel_talk_credentials(db=self.db)
+    def delete_connection(
+        self,
+        channel_id: str | None = None,
+    ) -> bool:
+        return _delete_channel_talk_credentials(
+            db=self.db,
+            channel_id=channel_id,
+        )
 
     def commit(self) -> None:
         self.db.commit()
@@ -91,8 +111,14 @@ class ChannelTalkMetadataRepository:
     def __init__(self, db: Session) -> None:
         self.db = db
 
-    def get_connection(self) -> ChannelTalkCredentialsRecord | None:
-        row = _get_channel_talk_credentials(db=self.db)
+    def get_connection(
+        self,
+        channel_id: str | None = None,
+    ) -> ChannelTalkCredentialsRecord | None:
+        row = _get_channel_talk_credentials(
+            db=self.db,
+            channel_id=channel_id,
+        )
         return _to_connection_record(row)
 
     def get_channel_metadata(
@@ -258,8 +284,14 @@ class ChannelTalkDocumentCredentialsRepository:
     def __init__(self, db: Session) -> None:
         self.db = db
 
-    def get_base_connection(self) -> ChannelTalkCredentialsRecord | None:
-        row = _get_channel_talk_credentials(db=self.db)
+    def get_base_connection(
+        self,
+        channel_id: str | None = None,
+    ) -> ChannelTalkCredentialsRecord | None:
+        row = _get_channel_talk_credentials(
+            db=self.db,
+            channel_id=channel_id,
+        )
         return _to_connection_record(row)
 
     def get_document_connection(
@@ -292,15 +324,11 @@ class ChannelTalkDocumentCredentialsRepository:
         return record
 
     def delete_document_connection(self, channel_id: str | None = None) -> bool:
-        stmt = delete(db_models.ChannelTalkDocumentCredentials)
-        if channel_id is not None:
-            stmt = stmt.where(db_models.ChannelTalkDocumentCredentials.channel_id == channel_id)
-        result = cast(
-            CursorResult,
-            self.db.execute(stmt),
+        return _delete_channel_scoped_rows(
+            db=self.db,
+            model=db_models.ChannelTalkDocumentCredentials,
+            channel_id=channel_id,
         )
-        self.db.flush()
-        return (result.rowcount or 0) > 0
 
     def commit(self) -> None:
         self.db.commit()
@@ -382,24 +410,33 @@ class ChannelTalkDocumentMetadataRepository:
 
 def _get_channel_talk_credentials(
     db: Session,
+    channel_id: str | None = None,
 ) -> db_models.ChannelTalkCredentials | None:
-    stmt = (
-        select(db_models.ChannelTalkCredentials)
-        .order_by(db_models.ChannelTalkCredentials.id.asc())
-        .limit(1)
+    return _get_first_channel_scoped_row(
+        db=db,
+        model=db_models.ChannelTalkCredentials,
+        channel_id=channel_id,
     )
-    return db.execute(stmt).scalar_one_or_none()
+
+
+def _list_channel_talk_credentials(
+    db: Session,
+) -> list[db_models.ChannelTalkCredentials]:
+    stmt = select(db_models.ChannelTalkCredentials).order_by(
+        db_models.ChannelTalkCredentials.id.asc()
+    )
+    return list(db.execute(stmt).scalars())
 
 
 def _get_channel_talk_document_credentials(
     db: Session,
     channel_id: str | None = None,
 ) -> db_models.ChannelTalkDocumentCredentials | None:
-    stmt = select(db_models.ChannelTalkDocumentCredentials)
-    if channel_id is not None:
-        stmt = stmt.where(db_models.ChannelTalkDocumentCredentials.channel_id == channel_id)
-    stmt = stmt.order_by(db_models.ChannelTalkDocumentCredentials.id.asc()).limit(1)
-    return db.execute(stmt).scalar_one_or_none()
+    return _get_first_channel_scoped_row(
+        db=db,
+        model=db_models.ChannelTalkDocumentCredentials,
+        channel_id=channel_id,
+    )
 
 
 def _create_or_replace_channel_talk_credentials(
@@ -411,7 +448,8 @@ def _create_or_replace_channel_talk_credentials(
     webhook_token: str,
     credential_last_verified_at,
 ) -> db_models.ChannelTalkCredentials:
-    credentials = _get_channel_talk_credentials(db=db)
+    credentials = _get_channel_talk_credentials(db=db, channel_id=channel_id)
+
     if credentials is None:
         credentials = db_models.ChannelTalkCredentials(
             channel_id=channel_id,
@@ -436,8 +474,40 @@ def _create_or_replace_channel_talk_credentials(
     return credentials
 
 
-def _delete_channel_talk_credentials(db: Session) -> bool:
-    stmt = delete(db_models.ChannelTalkCredentials)
+def _delete_channel_talk_credentials(
+    db: Session,
+    channel_id: str | None = None,
+) -> bool:
+    return _delete_channel_scoped_rows(
+        db=db,
+        model=db_models.ChannelTalkCredentials,
+        channel_id=channel_id,
+    )
+
+
+def _get_first_channel_scoped_row(
+    *,
+    db: Session,
+    model: Any,
+    channel_id: str | None,
+) -> Any | None:
+    stmt: Any = select(model)
+    if channel_id is not None:
+        stmt = stmt.filter_by(channel_id=channel_id)
+    stmt = stmt.order_by(model.id.asc()).limit(1)
+    return db.execute(stmt).scalar_one_or_none()
+
+
+def _delete_channel_scoped_rows(
+    *,
+    db: Session,
+    model: Any,
+    channel_id: str | None,
+) -> bool:
+    stmt: Any = delete(model)
+    if channel_id is not None:
+        stmt = stmt.filter_by(channel_id=channel_id)
+
     result = cast(CursorResult, db.execute(stmt))
     db.flush()
     return (result.rowcount or 0) > 0

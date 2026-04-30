@@ -17,6 +17,15 @@ class ChannelTalkConnectResponse(ChannelTalkStatusResponse):
     message: str = "Channel Talk credentials saved."
 
 
+class ChannelTalkValidateResponse(BaseModel):
+    status: str = "validated"
+    channel_id: str
+    channel_name: str
+    manager_id: str | None = None
+    manager_name: str | None = None
+    webhook_token_configured: bool = False
+
+
 class ChannelTalkUninstallResponse(BaseModel):
     status: str
     message: str
@@ -36,6 +45,14 @@ class ChannelTalkDocumentStatusResponse(BaseModel):
 class ChannelTalkDocumentConnectResponse(ChannelTalkDocumentStatusResponse):
     status: str = "connected"
     message: str = "Channel Talk Documents credentials saved."
+
+
+class ChannelTalkDocumentValidateResponse(BaseModel):
+    status: str = "validated"
+    channel_id: str
+    space_id: str
+    space_name: str
+    association_status: str
 
 
 class ChannelTalkDocumentUninstallResponse(BaseModel):

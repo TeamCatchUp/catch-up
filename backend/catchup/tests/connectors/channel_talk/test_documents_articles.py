@@ -24,6 +24,9 @@ from catchup.connectors.channel_talk.schemas.document_article import (
     ChannelTalkDocumentArticlePage,
 )
 from catchup.connectors.channel_talk.schemas.document_article import (
+    ChannelTalkDocumentArticleRevisionView,
+)
+from catchup.connectors.channel_talk.schemas.document_article import (
     ChannelTalkDocumentArticleState,
 )
 
@@ -49,6 +52,23 @@ def _article_payload() -> dict[str, object]:
         "summary": "A short setup guide.",
         "body": "# Getting started\nInstall the integration.",
         "bodyHtml": "<h1>Getting started</h1><p>Install the integration.</p>",
+    }
+
+
+def _revision_payload() -> dict[str, object]:
+    return {
+        "id": "revision-published-1",
+        "spaceId": "space-123",
+        "articleId": "article-1",
+        "language": "ko",
+        "state": "published",
+        "authorId": "author-1",
+        "createdAt": 1776839445123,
+        "updatedAt": 1776839545123,
+        "title": "Published revision title",
+        "summary": "Published revision summary.",
+        "body": "# Published revision\nOnly public content.",
+        "bodyHtml": "<h1>Published revision</h1><p>Only public content.</p>",
     }
 
 
@@ -216,6 +236,26 @@ class ChannelTalkDocumentsArticleSchemaTests(IsolatedAsyncioTestCase):
         self.assertEqual(batch.authors[0].author_id, "author-1")
         self.assertEqual(batch.topics[0].topic_id, "topic-1")
 
+    async def test_article_revision_parser_keeps_revision_and_article_identity(
+        self,
+    ) -> None:
+        view = ChannelTalkDocumentArticleRevisionView.from_api_payload(
+            {
+                "revision": _revision_payload(),
+                "author": {
+                    "id": "author-1",
+                    "name": "Kim",
+                },
+            }
+        )
+
+        self.assertEqual(view.revision.revision_id, "revision-published-1")
+        self.assertEqual(view.revision.article_id, "article-1")
+        self.assertEqual(view.revision.state, "published")
+        self.assertEqual(view.revision.title, "Published revision title")
+        self.assertEqual(view.revision.body_html, "<h1>Published revision</h1><p>Only public content.</p>")
+        self.assertEqual(view.author.author_id, "author-1")
+
 
 class ChannelTalkDocumentsArticleClientTests(IsolatedAsyncioTestCase):
     async def test_list_articles_sends_filter_query_params(self) -> None:
@@ -284,6 +324,23 @@ class ChannelTalkDocumentsArticleClientTests(IsolatedAsyncioTestCase):
             )
 
         self.assertEqual(detail.article.article_id, "article-1")
+
+    async def test_get_article_revision_uses_article_and_revision_path(self) -> None:
+        async def handler(request: httpx.Request) -> httpx.Response:
+            self.assertEqual(
+                request.url.path,
+                "/open/v1/spaces/$me/articles/article-1/revisions/revision-1",
+            )
+            return httpx.Response(200, json={"revision": _revision_payload()})
+
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
+            client = ChannelTalkDocumentsApiClient(access_key="documents-key", access_secret="documents-secret", http_client=http_client)
+            revision = await client.get_article_revision(
+                article_id="article-1",
+                revision_id="revision-1",
+            )
+
+        self.assertEqual(revision.revision.article_id, "article-1")
 
     async def test_batch_get_articles_sends_repeated_ids_and_language_param(self) -> None:
         async def handler(request: httpx.Request) -> httpx.Response:

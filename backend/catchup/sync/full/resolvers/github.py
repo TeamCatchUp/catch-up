@@ -2,21 +2,19 @@ from __future__ import annotations
 
 import asyncio
 
-from fastapi.concurrency import run_in_threadpool
 import structlog
+from fastapi.concurrency import run_in_threadpool
 
 from catchup.db.engine import SessionLocal
 from catchup.db.github import domain_repository as github_entities
-from catchup.db.github.installation_repository import get_installation_by_installation_id
+from catchup.db.github.installation_repository import (
+    get_installation_by_installation_id,
+)
 from catchup.sync.common.exceptions import SyncRequestException
 from catchup.sync.common.protocols import FullSyncTargetResolverProtocol
-from catchup.sync.common.schemas import (
-    FullSyncResolvedTargets,
-    FullSyncDispatchRequest,
-)
-from catchup.sync.full.targets import (
-    resolve_full_sync_targets_from_rows,
-)
+from catchup.sync.common.schemas import FullSyncDispatchRequest
+from catchup.sync.common.schemas import FullSyncResolvedTargets
+from catchup.sync.full.targets import resolve_full_sync_targets_from_rows
 
 logger = structlog.get_logger(__name__)
 
@@ -35,6 +33,7 @@ class GithubFullSyncTargetResolver(FullSyncTargetResolverProtocol):
         *,
         request: FullSyncDispatchRequest,
     ) -> FullSyncResolvedTargets:
+        # GitHub은 scope_id=installation_id, target_type=repository, target_id=repo_id 계약이다.
         scope_id = request.scope_id.strip()
         if not scope_id:
             raise SyncRequestException("scope_id is required")
@@ -57,13 +56,14 @@ class GithubFullSyncTargetResolver(FullSyncTargetResolverProtocol):
                 metadata={"installation_id": installation_id},
             )
 
+        # listing 때 저장된 repository snapshot과 요청 repo_id를 매칭한다.
         requested_repo_ids, resolved_targets = resolve_full_sync_targets_from_rows(
-            request_target_ids=request.target_ids,
+            request_targets=request.targets,
             rows=repositories,
             target_type="repository",
             key_getter=lambda repo: str(repo.repo_id),
             name_getter=lambda repo: repo.full_name,
-            error_message="requested target_ids contain unknown repositories",
+            error_message="requested targets contain unknown repositories",
             error_metadata={"installation_id": installation_id},
             log_context={
                 "connector": "github",
