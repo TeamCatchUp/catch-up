@@ -125,18 +125,19 @@ class AwsBedrockLlmService(BaseLlmService):
             connect_timeout=5,
         )
 
+        cls = IsolatedChatBedrock if self._isolated else ChatBedrock
+
         # Extended thinking은 Claude 3.7 Sonnet 이상에서만 지원.
         # temperature=1 필수 (AWS Bedrock 요구사항).
-        # streaming=False 권장 (thinking 토큰을 사용자에게 노출하지 않음).
         if self._extended_thinking:
-            return ChatBedrock(
+            return cls(
                 model_id=model_id,
                 provider=provider,
                 region_name=settings.AWS_REGION,
                 credentials_profile_name=settings.AWS_CREDENTIALS_PROFILE_NAME,
                 temperature=1,
                 max_tokens=self._thinking_budget_tokens + 4096,
-                streaming=False,
+                streaming=streaming,
                 config=config,
                 model_kwargs={
                     "thinking": {
@@ -146,7 +147,6 @@ class AwsBedrockLlmService(BaseLlmService):
                 },
             )
 
-        cls = IsolatedChatBedrock if self._isolated else ChatBedrock
         return cls(
             model_id=model_id,
             provider=provider,
