@@ -46,12 +46,12 @@ def build_complex_react_subgraph(
     )
     graph.add_node(
         "complex_planner",
-        partial(complex_planner_node, llm=llm_thinking, timeout=30.0),
+        partial(complex_planner_node, llm=llm_thinking),
         retry=TIMEOUT_RETRY_POLICY,
     )
     graph.add_node(
         "complex_agent",
-        partial(complex_agent_node, llm=llm_thinking, timeout=30.0),
+        partial(complex_agent_node, llm=llm_thinking),
         retry=AGENT_TIMEOUT_RETRY_POLICY,
     )
     graph.add_node(

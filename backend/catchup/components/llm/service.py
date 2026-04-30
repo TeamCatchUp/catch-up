@@ -82,6 +82,7 @@ class AwsBedrockLlmService(BaseLlmService):
         isolated: bool = False,
         extended_thinking: bool = False,
         thinking_budget_tokens: int = 8000,
+        max_response_tokens: int | None = None,
         max_attempts: int = DEFAULT_MAX_ATTEMPTS,
     ):
         """AWS Bedrock LLM 서비스.
@@ -93,6 +94,9 @@ class AwsBedrockLlmService(BaseLlmService):
                      False면 default pool 사용 (ingestion 등 일반 용도).
             extended_thinking: Claude 3.7+ thinking 기능 활성화 여부
             thinking_budget_tokens: thinking 예산 토큰
+            max_response_tokens: 응답(thinking 제외) 부분의 최대 토큰.
+                                None이면 기본값 사용 (thinking: 2048, 일반: 8192).
+                                tool-calling 에이전트처럼 짧은 출력만 필요할 때 줄여 wall-clock을 제한한다.
             max_attempts: botocore 레벨의 최대 재시도 횟수.
                          RAG 파이프라인에서는 LangGraph RetryPolicy를 사용하므로 0으로 설정 권장.
                          Ingestion 등 단발성 호출에서는 기본값(5) 사용.
@@ -100,6 +104,7 @@ class AwsBedrockLlmService(BaseLlmService):
         self._isolated = isolated
         self._extended_thinking = extended_thinking
         self._thinking_budget_tokens = thinking_budget_tokens
+        self._max_response_tokens = max_response_tokens
         self._max_attempts = max_attempts
         super().__init__(model_capacity, streaming)
 
@@ -130,13 +135,14 @@ class AwsBedrockLlmService(BaseLlmService):
         # Extended thinking은 Claude 3.7 Sonnet 이상에서만 지원.
         # temperature=1 필수 (AWS Bedrock 요구사항).
         if self._extended_thinking:
+            response_cap = self._max_response_tokens if self._max_response_tokens is not None else 2048
             return cls(
                 model_id=model_id,
                 provider=provider,
                 region_name=settings.AWS_REGION,
                 credentials_profile_name=settings.AWS_CREDENTIALS_PROFILE_NAME,
                 temperature=1,
-                max_tokens=self._thinking_budget_tokens + 4096,
+                max_tokens=self._thinking_budget_tokens + response_cap,
                 streaming=streaming,
                 config=config,
                 model_kwargs={
@@ -153,7 +159,7 @@ class AwsBedrockLlmService(BaseLlmService):
             region_name=settings.AWS_REGION,
             credentials_profile_name=settings.AWS_CREDENTIALS_PROFILE_NAME,
             temperature=0,
-            max_tokens=8192,
+            max_tokens=self._max_response_tokens if self._max_response_tokens is not None else 8192,
             streaming=streaming,
             config=config
         )

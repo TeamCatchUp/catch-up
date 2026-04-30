@@ -87,7 +87,6 @@ async def complex_planner_node(
 async def complex_agent_node(
     state: AgentState,
     llm: BaseChatModel,
-    timeout: float | None = None,
 ):
     """Complex ReAct 에이전트 노드이다. LARGE 모델, max_iter=7을 사용한다.
     search_plan과 accumulated_docs를 참조해 다음 검색 전략을 결정한다."""
@@ -120,7 +119,6 @@ async def complex_agent_node(
             llm=llm_with_tools,
             messages=[system_message, HumanMessage(content=query)] + existing_messages,
             semaphore=rag_semaphores.llm_large,
-            timeout=timeout,
         )
     except asyncio.TimeoutError as e:
         raise e
