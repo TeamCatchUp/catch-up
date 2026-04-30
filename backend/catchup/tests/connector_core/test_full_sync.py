@@ -9,6 +9,27 @@ from unittest.mock import patch
 
 from pydantic import ValidationError
 
+from catchup.connector_core.adapters.channel_talk.document_article_full_sync_adapter import (
+    ChannelTalkDocumentArticleFullSyncAdapter,
+)
+from catchup.connector_core.adapters.channel_talk.document_article_full_sync_adapter import (
+    ChannelTalkDocumentArticleFullSyncExecutionRequest,
+)
+from catchup.connector_core.adapters.channel_talk.document_article_full_sync_adapter import (
+    ChannelTalkDocumentArticleFullSyncExecutionResult,
+)
+from catchup.connector_core.adapters.channel_talk.document_article_full_sync_adapter import (
+    ChannelTalkDocumentArticleFullSyncFetchResult,
+)
+from catchup.connector_core.adapters.channel_talk.document_article_full_sync_adapter import (
+    ChannelTalkDocumentArticleFullSyncPersistResult,
+)
+from catchup.connector_core.adapters.channel_talk.document_article_full_sync_adapter import (
+    ChannelTalkDocumentArticleFullSyncSummaryResult,
+)
+from catchup.connector_core.adapters.channel_talk.document_article_full_sync_adapter import (
+    ChannelTalkDocumentArticleFullSyncTransformResult,
+)
 from catchup.connector_core.adapters.channel_talk.full_sync_adapter import (
     ChannelTalkFullSyncAdapter,
 )
@@ -37,6 +58,15 @@ from catchup.connector_core.application.full_sync import ConnectorFullSyncApplic
 from catchup.connector_core.descriptors.channel_talk import CHANNEL_TALK_DESCRIPTOR
 from catchup.connector_core.domain.structure import ConnectorKey
 from catchup.connector_core.ports.full_sync import FullSyncWindow
+from catchup.connectors.channel_talk.document_article_full_sync_fetcher import (
+    DEFAULT_DOCUMENT_ARTICLE_FULL_SYNC_STATES,
+)
+from catchup.connectors.channel_talk.document_article_full_sync_fetcher import (
+    ChannelTalkFetchedDocumentArticle,
+)
+from catchup.connectors.channel_talk.document_article_full_sync_fetcher import (
+    ChannelTalkFetchedDocumentArticlesResult,
+)
 from catchup.connectors.channel_talk.full_sync_fetcher import ChannelTalkFetchedUserChat
 from catchup.connectors.channel_talk.full_sync_fetcher import (
     ChannelTalkFetchedUserChatsResult,
@@ -61,6 +91,24 @@ from catchup.connectors.channel_talk.schemas.channel_connection import (
 )
 from catchup.connectors.channel_talk.schemas.channel_metadata import (
     ChannelTalkManagerMetadata,
+)
+from catchup.connectors.channel_talk.schemas.document_article import (
+    ChannelTalkDocumentArticle,
+)
+from catchup.connectors.channel_talk.schemas.document_article import (
+    ChannelTalkDocumentArticleRevision,
+)
+from catchup.connectors.channel_talk.schemas.document_article import (
+    ChannelTalkDocumentArticleRevisionView,
+)
+from catchup.connectors.channel_talk.schemas.document_article import (
+    ChannelTalkDocumentArticleState,
+)
+from catchup.connectors.channel_talk.schemas.document_connection import (
+    ChannelTalkDocumentAssociationStatus,
+)
+from catchup.connectors.channel_talk.schemas.document_connection import (
+    ChannelTalkDocumentCredentialsRecord,
 )
 from catchup.connectors.channel_talk.schemas.user_chat import ChannelTalkUserChatDetail
 from catchup.connectors.channel_talk.schemas.user_chat import (
@@ -88,6 +136,17 @@ def _connection() -> ChannelTalkCredentialsRecord:
         access_key="access-key",
         access_secret="access-secret",
         webhook_token="webhook-token",
+    )
+
+
+def _document_connection() -> ChannelTalkDocumentCredentialsRecord:
+    return ChannelTalkDocumentCredentialsRecord(
+        channel_id="channel-123",
+        space_id="space-123",
+        space_name="Help Center",
+        access_key="documents-access-key",
+        access_secret="documents-access-secret",
+        association_status=ChannelTalkDocumentAssociationStatus.API_VERIFIED,
     )
 
 
@@ -285,6 +344,7 @@ class _FakeSummarizer:
 class _FakeRepository:
     def __init__(self) -> None:
         self.deleted_ids: list[str] = []
+        self.deleted_prefixes: list[str] = []
         self.added_documents = []
         self._initialized = False
 
@@ -297,6 +357,9 @@ class _FakeRepository:
 
     async def delete_documents(self, ids: list[str]) -> None:
         self.deleted_ids = list(ids)
+
+    async def delete_by_id_prefix(self, prefix: str) -> None:
+        self.deleted_prefixes.append(prefix)
 
     async def add_documents(self, documents, ids=None):
         self.added_documents = list(documents)
@@ -429,6 +492,122 @@ class ChannelTalkFullSyncContractTests(TestCase):
                 "channel_id": "channel-123",
             },
         )
+
+
+class ChannelTalkDocumentArticleFullSyncApplicationTests(IsolatedAsyncioTestCase):
+    async def test_document_article_application_fetches_transforms_and_persists_articles(
+        self,
+    ) -> None:
+        article_bundle = ChannelTalkFetchedDocumentArticle(
+            language="ko",
+            list_item=ChannelTalkDocumentArticle(
+                article_id="article-1",
+                state=ChannelTalkDocumentArticleState.DRAFT,
+                title="Article draft",
+                published_revision_id="published-revision-1",
+            ),
+            published_revision=ChannelTalkDocumentArticleRevisionView(
+                revision=ChannelTalkDocumentArticleRevision(
+                    revision_id="published-revision-1",
+                    article_id="article-1",
+                    state=ChannelTalkDocumentArticleState.PUBLISHED,
+                    title="Published article",
+                    body_html="<p>Published body</p>",
+                )
+            ),
+        )
+        fake_repository = _FakeRepository()
+        fake_fetcher = AsyncMock()
+        fake_fetcher.fetch_articles = AsyncMock(
+            return_value=ChannelTalkFetchedDocumentArticlesResult(
+                bundles=(article_bundle,),
+                fetched_count=1,
+                article_ids=("article-1",),
+                next_checkpoint_state=ChannelTalkDocumentArticleState.UNPUBLISHED,
+                next_checkpoint_cursor="cursor-2",
+            )
+        )
+        application = ConnectorFullSyncApplication(
+            port=ChannelTalkDocumentArticleFullSyncAdapter(
+                fetcher=fake_fetcher,
+                language="ko",
+                repository_factory=lambda: fake_repository,
+            ),
+        )
+
+        result = await application.run_full_sync(
+            execution=ChannelTalkDocumentArticleFullSyncExecutionRequest(
+                tenant_id="channel-123",
+                channel_connection=_connection(),
+                document_connection=_document_connection(),
+            ),
+            sync_window=_window(),
+        )
+
+        self.assertIsInstance(result, ChannelTalkDocumentArticleFullSyncExecutionResult)
+        self.assertIsInstance(
+            result.fetched,
+            ChannelTalkDocumentArticleFullSyncFetchResult,
+        )
+        self.assertIsInstance(
+            result.transformed,
+            ChannelTalkDocumentArticleFullSyncTransformResult,
+        )
+        self.assertIsInstance(
+            result.summary,
+            ChannelTalkDocumentArticleFullSyncSummaryResult,
+        )
+        self.assertIsInstance(
+            result.persisted,
+            ChannelTalkDocumentArticleFullSyncPersistResult,
+        )
+        self.assertEqual(result.connector, ConnectorKey.CHANNEL_TALK)
+        self.assertEqual(result.target, CHANNEL_TALK_DOCUMENT_ARTICLE_TARGET_ID)
+        self.assertEqual(result.channel_id, "channel-123")
+        self.assertEqual(result.space_id, "space-123")
+        self.assertEqual(result.collected_count, 1)
+        self.assertEqual(result.document_count, 1)
+        self.assertEqual(result.fetched.fetched_count, 1)
+        self.assertEqual(result.fetched.fetched_article_ids, ("article-1",))
+        self.assertEqual(result.fetched.bundles, (article_bundle,))
+        self.assertEqual(
+            result.fetched.next_checkpoint.state,
+            ChannelTalkDocumentArticleState.UNPUBLISHED,
+        )
+        self.assertEqual(result.fetched.next_checkpoint.next_cursor, "cursor-2")
+        fake_fetcher.fetch_articles.assert_awaited_once()
+        fetch_call = fake_fetcher.fetch_articles.await_args.kwargs
+        self.assertEqual(fetch_call["connection"].access_key, "documents-access-key")
+        self.assertEqual(fetch_call["connection"].access_secret, "documents-access-secret")
+        self.assertEqual(fetch_call["language"], "ko")
+        self.assertEqual(fetch_call["states"], DEFAULT_DOCUMENT_ARTICLE_FULL_SYNC_STATES)
+        self.assertEqual(fetch_call["sync_window"], _window())
+        self.assertEqual(result.summary.document_count, 1)
+        self.assertEqual(result.persisted.persisted_count, 1)
+        self.assertEqual(
+            fake_repository.deleted_prefixes,
+            (
+                [
+                    "channel_talk:document_article:"
+                    "channel-123:space-123:ko:article-1:chunk:"
+                ]
+            ),
+        )
+        self.assertEqual(len(fake_repository.added_documents), 1)
+        stored_document = fake_repository.added_documents[0]
+        self.assertIn("Document State: published", stored_document.page_content)
+        self.assertEqual(stored_document.metadata["article_state"], "published")
+        self.assertEqual(stored_document.metadata["state"], "published")
+
+    def test_document_article_execution_requires_aligned_connections(self) -> None:
+        with self.assertRaisesRegex(ValidationError, "document_connection.channel_id"):
+            ChannelTalkDocumentArticleFullSyncExecutionRequest(
+                tenant_id="channel-123",
+                channel_connection=_connection(),
+                document_connection=_document_connection().model_copy(
+                    update={"channel_id": "other-channel"},
+                ),
+            )
 
 
 class ConnectorFullSyncApplicationTests(IsolatedAsyncioTestCase):
