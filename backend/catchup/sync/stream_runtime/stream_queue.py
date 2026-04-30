@@ -1,33 +1,31 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
-from typing import Any, Mapping
+from datetime import datetime
+from datetime import timezone
+from typing import Any
+from typing import Mapping
 
 from redis.exceptions import ConnectionError as RedisConnectionError
 from redis.exceptions import ResponseError
 from redis.exceptions import TimeoutError as RedisTimeoutError
 
 from catchup.configs.config import settings
+from catchup.sync.stream_runtime.stream_constants import STREAM_CLAIM_START_ID
+from catchup.sync.stream_runtime.stream_constants import STREAM_READ_NEW_MESSAGE_ID
+from catchup.sync.stream_runtime.stream_constants import SYNC_EVENTS_CONSUMER_GROUP
 from catchup.sync.stream_runtime.stream_constants import (
-    STREAM_CLAIM_START_ID,
-    STREAM_READ_NEW_MESSAGE_ID,
-    SYNC_EVENTS_CONSUMER_GROUP,
     SYNC_EVENTS_DEADLETTER_STREAM_KEY,
-    SYNC_EVENTS_STREAM_KEY,
-    SyncStreamFailureReason,
 )
-from catchup.sync.stream_runtime.stream_schemas import (
-    PublishTasksResult,
-    SyncClaimBatch,
-    SyncStreamMessage,
-    SyncStreamTask,
-)
-from catchup.utils.redis import (
-    get_redis_client,
-    get_stream_redis_client,
-    reset_stream_redis_client,
-)
+from catchup.sync.stream_runtime.stream_constants import SYNC_EVENTS_STREAM_KEY
+from catchup.sync.stream_runtime.stream_constants import SyncStreamFailureReason
+from catchup.sync.stream_runtime.stream_schemas import PublishTasksResult
+from catchup.sync.stream_runtime.stream_schemas import SyncClaimBatch
+from catchup.sync.stream_runtime.stream_schemas import SyncStreamMessage
+from catchup.sync.stream_runtime.stream_schemas import SyncStreamTask
+from catchup.utils.redis import get_redis_client
+from catchup.utils.redis import get_stream_redis_client
+from catchup.utils.redis import reset_stream_redis_client
 
 logger = logging.getLogger(__name__)
 
@@ -224,14 +222,17 @@ async def read_new_messages(
         else max(0, block_ms)
     )
 
+    xreadgroup_kwargs = {
+        "groupname": SYNC_EVENTS_CONSUMER_GROUP,
+        "consumername": consumer_name,
+        "streams": {SYNC_EVENTS_STREAM_KEY: STREAM_READ_NEW_MESSAGE_ID},
+        "count": max(1, count),
+    }
+    if block_timeout_ms > 0:
+        xreadgroup_kwargs["block"] = block_timeout_ms
+
     try:
-        raw = await redis.xreadgroup(
-            groupname=SYNC_EVENTS_CONSUMER_GROUP,
-            consumername=consumer_name,
-            streams={SYNC_EVENTS_STREAM_KEY: STREAM_READ_NEW_MESSAGE_ID},
-            count=max(1, count),
-            block=block_timeout_ms,
-        )
+        raw = await redis.xreadgroup(**xreadgroup_kwargs)
     except (RedisTimeoutError, RedisConnectionError):
         await reset_stream_redis_client(redis)
         raise

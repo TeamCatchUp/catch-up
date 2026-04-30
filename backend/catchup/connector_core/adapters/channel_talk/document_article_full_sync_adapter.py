@@ -1498,8 +1498,10 @@ class ChannelTalkDocumentArticleFullSyncAdapter:
                 ):
                     leaves[i + 1] = _ArticleLeafSection(
                         hierarchy=current.hierarchy,
-                        content_blocks=current.content_blocks
-                        + next_leaf.content_blocks,
+                        content_blocks=self._append_article_section_blocks(
+                            base=current,
+                            appended=next_leaf,
+                        ),
                         parent_key=current.parent_key,
                     )
                     i += 1
@@ -1763,7 +1765,10 @@ class ChannelTalkDocumentArticleFullSyncAdapter:
             if direction == "prev" and prev is not None:
                 result[i - 1] = _ArticleLeafSection(
                     hierarchy=prev.hierarchy,
-                    content_blocks=prev.content_blocks + current.content_blocks,
+                    content_blocks=self._append_article_section_blocks(
+                        base=prev,
+                        appended=current,
+                    ),
                     parent_key=prev.parent_key,
                 )
                 result.pop(i)
@@ -1772,7 +1777,10 @@ class ChannelTalkDocumentArticleFullSyncAdapter:
             if direction == "next" and next_leaf is not None:
                 result[i] = _ArticleLeafSection(
                     hierarchy=next_leaf.hierarchy,
-                    content_blocks=current.content_blocks + next_leaf.content_blocks,
+                    content_blocks=self._append_article_section_blocks(
+                        base=current,
+                        appended=next_leaf,
+                    ),
                     parent_key=next_leaf.parent_key,
                 )
                 result.pop(i + 1)
@@ -1822,6 +1830,44 @@ class ChannelTalkDocumentArticleFullSyncAdapter:
         prev_len = self._calc_article_leaf_length(prev_leaf)
         next_len = self._calc_article_leaf_length(next_candidate)
         return "prev" if prev_len <= next_len else "next"
+
+    def _append_article_section_blocks(
+        self,
+        *,
+        base: _ArticleLeafSection,
+        appended: _ArticleLeafSection,
+    ) -> list[_ArticleContentBlock]:
+        appended_heading = self._build_embedded_article_section_heading(
+            base_hierarchy=base.hierarchy,
+            appended_hierarchy=appended.hierarchy,
+        )
+        if appended_heading is None:
+            return base.content_blocks + appended.content_blocks
+        return [
+            *base.content_blocks,
+            _ArticleContentBlock(block_type="heading", text=appended_heading),
+            *appended.content_blocks,
+        ]
+
+    @staticmethod
+    def _build_embedded_article_section_heading(
+        *,
+        base_hierarchy: list[str],
+        appended_hierarchy: list[str],
+    ) -> str | None:
+        if not appended_hierarchy or appended_hierarchy == base_hierarchy:
+            return None
+
+        common_prefix_len = 0
+        for base_item, appended_item in zip(base_hierarchy, appended_hierarchy):
+            if base_item != appended_item:
+                break
+            common_prefix_len += 1
+
+        heading_parts = appended_hierarchy[common_prefix_len:]
+        if not heading_parts:
+            return None
+        return " > ".join(heading_parts)
 
     def _build_article_chunks(
         self,
