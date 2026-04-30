@@ -29,6 +29,8 @@ The following documents have already been retrieved:
 - Always use full datetime format "YYYY-MM-DDTHH:MM:SS", never date-only "YYYY-MM-DD".
 </date_search_rules>
 
+{% include 'common/agent_stop_criteria.j2' %}
+
 <instructions>
 - Execute the search plan steps in order, respecting step dependencies.
 - Use multi_query_search when a step has parallel=true or when queries are clearly independent.
