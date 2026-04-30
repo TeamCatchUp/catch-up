@@ -34,7 +34,7 @@ def build_complex_react_subgraph(
             → agent loop (LARGE, max_iter=7) ↔ tool executor
             → collect_docs → rerank (1회) → generate_final_answer → END
     """
-    from catchup.rag.graph import COMPLEX_AGENT_RETRY_POLICY
+    from catchup.rag.graph import AGENT_TIMEOUT_RETRY_POLICY
     from catchup.rag.graph import TIMEOUT_RETRY_POLICY
 
     graph = StateGraph(AgentState)
@@ -52,7 +52,7 @@ def build_complex_react_subgraph(
     graph.add_node(
         "complex_agent",
         partial(complex_agent_node, llm=llm_thinking, timeout=30.0),
-        retry=COMPLEX_AGENT_RETRY_POLICY,
+        retry=AGENT_TIMEOUT_RETRY_POLICY,
     )
     graph.add_node(
         "tool_executor",

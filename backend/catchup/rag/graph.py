@@ -38,8 +38,8 @@ TIMEOUT_RETRY_POLICY = RetryPolicy(
     backoff_factor=2.0,
 )
 
-# Complex Agent는 내부 루프가 길어 재시도 횟수를 제한
-COMPLEX_AGENT_RETRY_POLICY = RetryPolicy(
+# Agent는 내부 루프가 길어 재시도 횟수를 제한
+AGENT_TIMEOUT_RETRY_POLICY = RetryPolicy(
     retry_on=asyncio.TimeoutError,
     max_attempts=2,
     initial_interval=1.0,

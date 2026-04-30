@@ -37,19 +37,19 @@ def build_standard_react_subgraph(
     rewrite → agent loop (SMALL, max_iter=3) ↔ tool executor
             → collect_docs → rerank (1회) → generate_final_answer → END
     """
-    from catchup.rag.graph import TIMEOUT_RETRY_POLICY
+    from catchup.rag.graph import AGENT_TIMEOUT_RETRY_POLICY
 
     graph = StateGraph(AgentState)
 
     graph.add_node(
         "rewrite",
         partial(rewrite_node, llm=llm_small, timeout=10.0),
-        retry=TIMEOUT_RETRY_POLICY,
+        retry=AGENT_TIMEOUT_RETRY_POLICY,
     )
     graph.add_node(
         "standard_agent",
         partial(standard_agent_node, llm=llm_thinking, timeout=30.0),
-        retry=TIMEOUT_RETRY_POLICY,
+        retry=AGENT_TIMEOUT_RETRY_POLICY,
     )
     graph.add_node(
         "tool_executor",
