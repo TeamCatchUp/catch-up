@@ -60,7 +60,7 @@ def build_standard_react_subgraph(
     graph.add_node("merge_cache", merge_cache_node)
     graph.add_node(
         "generate_final_answer",
-        partial(generate_final_answer_node, llm=llm_large_stream, timeout=30.0),
+        partial(generate_final_answer_node, llm=llm_large_stream),
         metadata={"tags": ["stream_target", "has_citations"]},
     )
 

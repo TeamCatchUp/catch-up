@@ -54,7 +54,7 @@ def get_compiled_graph(
     # botocore 레벨의 retry는 비활성화(max_attempts=0).
     rag_max_attempts = 0
 
-    # SMALL, non-streaming — rewrite, generate_vector_queries, standard_agent
+    # SMALL, non-streaming — rewrite, generate_vector_queries
     llm_small = get_llm_service(
         LlmProvider.AWS_BEDROCK,
         ModelCapacity.SMALL,
@@ -72,7 +72,7 @@ def get_compiled_graph(
         max_attempts=rag_max_attempts,
     ).get_llm()
 
-    # LARGE, non-streaming — supervisor, complex_agent (structured output / tool calling)
+    # LARGE, non-streaming — supervisor, complex_agent, standard_agent (structured output / tool calling)
     llm_large = get_llm_service(
         LlmProvider.AWS_BEDROCK,
         ModelCapacity.LARGE,
@@ -90,7 +90,7 @@ def get_compiled_graph(
         max_attempts=rag_max_attempts,
     ).get_llm()
 
-    # LARGE, non-streaming, extended thinking — complex_planner
+    # LARGE, non-streaming, extended thinking — standard_agent, complex_planner, complex_agent
     llm_thinking = get_llm_service(
         LlmProvider.AWS_BEDROCK,
         ModelCapacity.LARGE,
