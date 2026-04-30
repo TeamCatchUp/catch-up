@@ -46,6 +46,10 @@ class AgentState(TypedDict):
         Document
     ]  # ReAct 반복 간 누적 문서 (search_tool_executor_node에서 직접 dedup)
 
+    agent_seen_doc_ids: list[str]  # 에이전트가 ToolMessage로 실제 본 문서 ID 목록.
+                                    # 매 검색 턴마다 신규 문서만 미리보기로 노출하기 위한 추적용.
+                                    # accumulated_docs와 달리 "에이전트 인지" 기준이라 분리 관리.
+
     search_plan: list[SearchStep] | None  # complex planner 출력
 
     turn_number: int  # supervisor가 매 턴 시작 시 +1. engine.py에서 초기화 안 함 (체크포인터 유지)

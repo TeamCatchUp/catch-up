@@ -133,6 +133,7 @@ class ChatService:
                 # Agentic RAG 상태 변수
                 "agent_iteration": 0,
                 "accumulated_docs": [],
+                "agent_seen_doc_ids": [],
 
                 # 비용 변수
                 "token_breakdown": {},

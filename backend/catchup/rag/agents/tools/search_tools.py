@@ -9,9 +9,12 @@ from langchain_core.tools import tool
 from catchup.components.vector_db.base import BaseVectorDbService
 from catchup.rag.nodes.utils import build_docs_summary
 from catchup.rag.nodes.utils import deduplicate_documents
+from catchup.rag.nodes.utils import get_document_id
 from catchup.rag.nodes.utils import log_node
 from catchup.rag.schemas.structures import MultiSearchRequest
 from catchup.rag.state import AgentState
+
+_PREVIEW_LIMIT = 10  # ToolMessage에서 한 번에 보여줄 신규 문서 수
 
 logger = structlog.get_logger()
 
@@ -59,7 +62,10 @@ async def _run_search(
     start_date: str | None = None,
     end_date: str | None = None,
 ) -> tuple[list[Document], str]:
-    """단일 쿼리 하이브리드 검색"""
+    """단일 쿼리 하이브리드 검색. 반환값: (검색 결과 docs, 쿼리 문자열).
+
+    summary 생성은 호출자(executor)가 agent_seen_doc_ids를 참조해 수행한다.
+    """
     end_dt = datetime.fromisoformat(end_date) if end_date else None
     # date-only 문자열("YYYY-MM-DD")은 자정으로 파싱되어
     # start==end==00:00:00이 되므로 하루 끝으로 보정
@@ -87,8 +93,7 @@ async def _run_search(
     # 리스트의 리스트를 평탄화하고 중복 제거
     flattened_results = [doc for sublist in results for doc in sublist]
     docs = deduplicate_documents(flattened_results)
-    summary = f"Search complete: query='{query}'\n{build_docs_summary(docs)}"
-    return docs, summary
+    return docs, query
 
 
 # 실행 노드
@@ -113,8 +118,30 @@ async def search_tool_executor_node(
 
     tool_filters = state.get("tool_filters") or []
 
+    # 에이전트가 이전 iteration까지 ToolMessage로 실제로 본 문서 id (누적).
+    # 이번 호출 안에서 새로 보여주는 id도 같은 set에 즉시 추가해, 같은 응답의 다른 search가
+    # 동일 문서를 또 미리보기로 노출하지 않도록 한다.
+    seen_ids: set[str] = set(state.get("agent_seen_doc_ids") or [])
+
     tool_messages: list[ToolMessage] = []
     all_docs: list[Document] = []
+    newly_shown_ids: list[str] = []
+
+    def _summarize_hits(query: str, hits: list[Document]) -> str:
+        unseen = [d for d in hits if get_document_id(d) not in seen_ids]
+        shown = unseen[:_PREVIEW_LIMIT]
+        for d in shown:
+            doc_id = get_document_id(d)
+            seen_ids.add(doc_id)
+            newly_shown_ids.append(doc_id)
+
+        header = (
+            f"Search complete: query='{query}' | "
+            f"hits={len(hits)} new={len(unseen)} shown={len(shown)}"
+        )
+        if not shown:
+            return f"{header}\n(no new documents in this search)"
+        return f"{header}\n{build_docs_summary(shown, max_docs=_PREVIEW_LIMIT)}"
 
     for tool_call in last_message.tool_calls:
         tool_name = tool_call["name"]
@@ -131,7 +158,7 @@ async def search_tool_executor_node(
                     start_date=args.get("start_date"),
                     end_date=args.get("end_date"),
                 )
-                docs, summary = await _run_search(
+                docs, query_str = await _run_search(
                     query=args["query"],
                     tool_filters=tool_filters,
                     vector_db_service=vector_db_service,
@@ -139,6 +166,7 @@ async def search_tool_executor_node(
                     start_date=args.get("start_date"),
                     end_date=args.get("end_date"),
                 )
+                summary = _summarize_hits(query_str, docs)
             elif tool_name == "multi_query_search":
                 search_requests: list[dict] = args.get("search_requests", [])
                 logger.debug(
@@ -169,9 +197,9 @@ async def search_tool_executor_node(
                         )
                         summaries.append(f"search_query='{q}': failed")
                     else:
-                        d, s = result
+                        d, query_str = result
                         docs.extend(d)
-                        summaries.append(s)
+                        summaries.append(_summarize_hits(query_str, d))
                 summary = "\n---\n".join(summaries)
             else:
                 docs, summary = [], f"unknown tool: {tool_name}"
@@ -195,9 +223,12 @@ async def search_tool_executor_node(
         tool_count=len(last_message.tool_calls),
         new_docs=len(all_docs),
         total_accumulated=len(merged),
+        agent_newly_shown=len(newly_shown_ids),
+        agent_seen_total=len(seen_ids),
     )
 
     return {
         "messages": tool_messages,
         "accumulated_docs": merged,
+        "agent_seen_doc_ids": (state.get("agent_seen_doc_ids") or []) + newly_shown_ids,
     }
