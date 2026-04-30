@@ -89,9 +89,12 @@ class ChannelTalkFullSyncHandler(BaseFullSyncHandler):
                 f"{', '.join(sorted(self._applications))}"
             )
 
-        connection = await run_in_threadpool(load_channel_talk_connection)
+        connection = await run_in_threadpool(
+            load_channel_talk_connection,
+            channel_id,
+        )
         if connection is None:
-            raise ValueError("channel_talk is not connected")
+            raise ValueError("channel_talk is not connected for the requested channel")
         if connection.channel_id != channel_id:
             raise ValueError(
                 "Stored Channel Talk credentials do not match the requested channel"
