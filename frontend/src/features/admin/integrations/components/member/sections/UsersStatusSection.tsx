@@ -319,7 +319,7 @@ export default function UsersStatusSection({
       </div>
 
       {/* 테이블 */}
-      <div className="border-edge-neutral w-full border-y">
+      <div className="w-full">
         <UsersTable
           displayRows={effectiveRows}
           isEditMode={isEditMode}

@@ -39,14 +39,19 @@ interface UsersTableProps {
   onToggleUnused?: (userKey: string, service: IntegrationService, unused: boolean) => void;
 }
 
-/** services 길이에 따른 grid-cols 클래스 (Keycloack 컬럼 + services 컬럼 수) */
-const getGridColsClass = (servicesCount: number) => {
-  // total = 1(Keycloack) + servicesCount
-  if (servicesCount === 1) return 'grid-cols-2';
-  if (servicesCount === 2) return 'grid-cols-3';
-  if (servicesCount === 3) return 'grid-cols-4';
-  return 'grid-cols-5';
-};
+const TABLE_HEADER_ROW_CLASS =
+  'border-edge-normal flex h-9 shrink-0 items-center gap-4 border-y py-1 pr-6 pl-12 transition-colors';
+const TABLE_BODY_ROW_CLASS =
+  'border-edge-neutral bg-fill-normal flex h-16.5 items-center justify-center gap-4 border-b px-6 py-3 transition-colors';
+const KEYCLOAK_COLUMN_CLASS = 'flex min-w-px flex-[1_0_0] items-center';
+const SERVICES_GROUP_CLASS = 'flex min-w-px flex-[1_0_0] items-center';
+const HEADER_COLUMN_CLASS = 'flex min-w-px flex-[1_0_0] flex-col justify-center overflow-hidden';
+const HEADER_SERVICE_COLUMN_CLASS = 'flex min-w-px flex-[1_0_0] flex-col justify-center overflow-hidden';
+const BODY_SERVICE_COLUMN_CLASS = 'flex min-w-px max-w-41.25 flex-[1_0_0]';
+const KEYCLOAK_USER_CELL_CLASS = 'relative justify-center gap-3';
+const KEYCLOAK_USER_NAME_CLASS = 'flex min-w-px flex-[1_0_0] flex-col justify-center overflow-hidden';
+const SERVICE_ACCOUNT_NAME_CLASS = 'flex min-w-px flex-[1_0_0] flex-col justify-center overflow-hidden';
+const SERVICE_ACCOUNT_IDENTIFIER_CLASS = 'flex h-5 w-full shrink-0 flex-col justify-center overflow-hidden';
 
 /** 이용자 연동 상태 테이블 */
 const UsersTable = ({
@@ -60,44 +65,43 @@ const UsersTable = ({
   onAccountSelect,
   onToggleUnused,
 }: UsersTableProps) => {
-  const gridColsClass = getGridColsClass(services.length);
+  const isSingleService = services.length === 1;
+  const keycloakColumnClass = cn(KEYCLOAK_COLUMN_CLASS, !isSingleService && 'max-w-35');
+  const servicesGroupClass = cn(SERVICES_GROUP_CLASS, isSingleService ? 'gap-0' : 'gap-14');
 
   return (
     <section className="bg-fill-normal flex h-full min-h-0 flex-col overflow-clip">
-      {/* 헤더: Figma gap-4(36px), px-5(20px) */}
-      <div
-        className={cn(
-          'border-edge-neutral grid h-9 shrink-0 items-center gap-4 border-b px-5 transition-colors',
-          gridColsClass,
-          isEditMode ? 'bg-fill-primary-normal-neutral' : 'bg-fill-strong',
-        )}
-      >
-        <span className="text-body-xsmall text-content-alternative pl-8">Keycloack 사용자</span>
-        {services.map((service) => (
-          <span key={service} className="text-body-xsmall text-content-alternative text-center">
-            {SERVICE_HEADER_LABELS[service] ?? service}
-          </span>
-        ))}
+      <div className={cn(TABLE_HEADER_ROW_CLASS, isEditMode ? 'bg-fill-primary-normal-neutral' : 'bg-fill-strong')}>
+        <div className={cn(HEADER_COLUMN_CLASS, !isSingleService && 'max-w-35')}>
+          <span className="text-body-xsmall text-content-neutral truncate">Keycloack 사용자</span>
+        </div>
+        <div className={servicesGroupClass}>
+          {services.map((service) => (
+            <div key={service} className={HEADER_SERVICE_COLUMN_CLASS}>
+              <span className="text-body-xsmall text-content-neutral truncate">
+                {SERVICE_HEADER_LABELS[service] ?? service}
+              </span>
+            </div>
+          ))}
+        </div>
       </div>
 
       {isLoading ? (
         <div className="flex flex-1 flex-col">
           {Array.from({ length: skeletonCount }).map((_, idx) => (
-            <div
-              key={`skeleton-${idx}`}
-              className={cn(
-                'border-edge-neutral bg-fill-normal grid h-17.5 items-center gap-4 border-b px-5',
-                gridColsClass,
-              )}
-            >
-              <div className="flex min-w-0 items-center gap-4">
-                <div className="bg-fill-strong size-2.5 shrink-0 animate-pulse rounded-full" />
-                <div className="bg-fill-strong size-7 shrink-0 animate-pulse rounded-full" />
+            <div key={`skeleton-${idx}`} className={TABLE_BODY_ROW_CLASS}>
+              <div className="bg-fill-strong size-2 shrink-0 animate-pulse rounded-full" />
+              <div className={cn(keycloakColumnClass, KEYCLOAK_USER_CELL_CLASS)}>
+                <div className="bg-fill-strong size-5 shrink-0 animate-pulse rounded-full" />
                 <div className="bg-fill-strong h-4 w-20 animate-pulse rounded-md" />
               </div>
-              {services.map((service) => (
-                <div key={`skeleton-${idx}-${service}`} className="bg-fill-strong h-5 animate-pulse rounded-md" />
-              ))}
+              <div className={servicesGroupClass}>
+                {services.map((service) => (
+                  <div key={`skeleton-${idx}-${service}`} className={BODY_SERVICE_COLUMN_CLASS}>
+                    <div className="bg-fill-strong h-10 w-full animate-pulse rounded-md" />
+                  </div>
+                ))}
+              </div>
             </div>
           ))}
         </div>
@@ -112,91 +116,94 @@ const UsersTable = ({
             const isAllLinked = services.every((s) => displayStatusByService[s] === '완료');
 
             return (
-              <div
-                key={renderKey}
-                className={cn(
-                  'border-edge-neutral bg-fill-normal grid h-17.5 items-center gap-4 border-b px-5 transition-colors',
-                  gridColsClass,
-                )}
-              >
-                {/* Keycloack 사용자 컬럼: dot(10px) + gap-4(16px) + profile(28px) + name */}
-                <div className="flex min-w-0 items-center gap-4">
-                  <div
-                    className={cn(
-                      'size-2.5 shrink-0 rounded-full',
-                      isAllLinked ? 'bg-status-positive' : 'bg-accent-red',
-                    )}
-                  />
-                  <DefaultProfile className="text-content-assistive size-7 shrink-0 rounded-full" />
-                  <span className="text-body-small text-content-normal truncate">{row.userName}</span>
+              <div key={renderKey} className={TABLE_BODY_ROW_CLASS}>
+                <div
+                  className={cn('size-2 shrink-0 rounded-full', isAllLinked ? 'bg-status-positive' : 'bg-accent-red')}
+                />
+                <div className={cn(keycloakColumnClass, KEYCLOAK_USER_CELL_CLASS)}>
+                  <DefaultProfile className="border-fill-strong text-content-assistive size-5 shrink-0 rounded-full border" />
+                  <div className={KEYCLOAK_USER_NAME_CLASS}>
+                    <span className="text-body-small text-content-normal truncate">{row.userName}</span>
+                  </div>
                 </div>
 
-                {/* 서비스별 연동 상태 셀 */}
-                {services.map((service) => {
-                  const status = displayStatusByService[service];
-                  const isLinked = status === '완료';
-                  const info = row.serviceInfoByService[service];
+                <div className={servicesGroupClass}>
+                  {services.map((service) => {
+                    const status = displayStatusByService[service];
+                    const isLinked = status === '완료';
+                    const info = row.serviceInfoByService[service];
 
-                  // 채널톡은 user-level 매핑이 백엔드 미구현 — 항상 read-only "미사용" 태그로 고정.
-                  // 백엔드 합류 시 이 분기 제거하면 다른 서비스와 동일한 흐름으로 합류.
-                  if (service === 'channel-talk') {
-                    return (
-                      <div key={`${renderKey}-${service}`} className="flex items-center">
-                        <span className="bg-fill-interaction-hover text-body-xsmall text-content-alternative rounded-md2 inline-flex items-center justify-center px-1.5 py-0.5">
-                          미사용
-                        </span>
-                      </div>
-                    );
-                  }
-
-                  // 연동됨: profile(25px) + name, email 2-line
-                  if (isLinked) {
-                    return (
-                      <div key={`${renderKey}-${service}`} className="flex min-w-0 flex-col gap-0.5 overflow-hidden">
-                        <div className="flex items-center gap-2">
-                          {info?.picture ? (
-                            <Image
-                              src={info.picture}
-                              alt=""
-                              width={25}
-                              height={25}
-                              className="size-6.25 shrink-0 rounded-full"
-                            />
-                          ) : (
-                            <DefaultProfile className="text-content-assistive size-6.25 shrink-0 rounded-full" />
+                    // 연동됨: profile(20px) + name, email 2-line
+                    if (isLinked) {
+                      return (
+                        <div
+                          key={`${renderKey}-${service}`}
+                          className={cn(
+                            BODY_SERVICE_COLUMN_CLASS,
+                            'relative flex-col items-start gap-0.5 overflow-hidden rounded-xl',
                           )}
-                          <span className="text-body-xsmall text-content-normal truncate">{info?.name ?? '-'}</span>
+                        >
+                          <div className="flex w-full shrink-0 items-center gap-2">
+                            {info?.picture ? (
+                              <Image
+                                src={info.picture}
+                                alt=""
+                                width={20}
+                                height={20}
+                                className="border-fill-strong size-5 shrink-0 rounded-full border"
+                              />
+                            ) : (
+                              <DefaultProfile className="border-fill-strong text-content-assistive size-5 shrink-0 rounded-full border" />
+                            )}
+                            <div className={SERVICE_ACCOUNT_NAME_CLASS}>
+                              <span className="text-body-xsmall text-content-normal truncate">{info?.name ?? '-'}</span>
+                            </div>
+                          </div>
+                          <div className={SERVICE_ACCOUNT_IDENTIFIER_CLASS}>
+                            <span className="text-body-xsmall text-content-alternative truncate">
+                              {info?.identifier ?? '-'}
+                            </span>
+                          </div>
                         </div>
-                        <span className="text-body-xsmall text-content-alternative truncate">
-                          {info?.identifier ?? '-'}
-                        </span>
-                      </div>
-                    );
-                  }
+                      );
+                    }
 
-                  // 미연동 (조회 모드): inline 태그 (Figma Tag 컴포넌트 스타일)
-                  if (!isEditMode) {
+                    // 채널톡은 user-level 매핑 수정 API가 합류하기 전까지 미연동 상태를 read-only로 표시한다.
+                    if (service === 'channel-talk') {
+                      return (
+                        <div key={`${renderKey}-${service}`} className={cn(BODY_SERVICE_COLUMN_CLASS, 'items-center')}>
+                          <span className="bg-fill-interaction-hover text-body-xsmall text-content-alternative rounded-md2 inline-flex items-center justify-center px-1.5 py-0.5">
+                            미사용
+                          </span>
+                        </div>
+                      );
+                    }
+
+                    // 미연동 (조회 모드): inline 태그 (Figma Tag 컴포넌트 스타일)
+                    if (!isEditMode) {
+                      return (
+                        <div key={`${renderKey}-${service}`} className={cn(BODY_SERVICE_COLUMN_CLASS, 'items-center')}>
+                          <span className="bg-fill-interaction-hover text-body-xsmall text-content-alternative rounded-md2 inline-flex items-center justify-center px-1.5 py-0.5">
+                            {status === '미사용' ? '미사용' : '-'}
+                          </span>
+                        </div>
+                      );
+                    }
+
+                    // 미연동 (수정 모드): 계정 선택 드롭다운
                     return (
-                      <div key={`${renderKey}-${service}`} className="flex items-center">
-                        <span className="bg-fill-interaction-hover text-body-xsmall text-content-alternative rounded-md2 inline-flex items-center justify-center px-1.5 py-0.5">
-                          {status === '미사용' ? '미사용' : '-'}
-                        </span>
+                      <div key={`${renderKey}-${service}`} className={BODY_SERVICE_COLUMN_CLASS}>
+                        <AccountSelectDropdown
+                          status={status as '미사용' | '미등록'}
+                          options={accountOptionsByService[service] ?? []}
+                          selectedAccount={selectedAccounts?.[row.userKey]?.[service]}
+                          onSelect={(account) => onAccountSelect?.(row.userKey, service, account)}
+                          onToggleUnused={(unused) => onToggleUnused?.(row.userKey, service, unused)}
+                        />
                       </div>
                     );
-                  }
-
-                  // 미연동 (수정 모드): 계정 선택 드롭다운
-                  return (
-                    <AccountSelectDropdown
-                      key={`${renderKey}-${service}`}
-                      status={status as '미사용' | '미등록'}
-                      options={accountOptionsByService[service] ?? []}
-                      selectedAccount={selectedAccounts?.[row.userKey]?.[service]}
-                      onSelect={(account) => onAccountSelect?.(row.userKey, service, account)}
-                      onToggleUnused={(unused) => onToggleUnused?.(row.userKey, service, unused)}
-                    />
-                  );
-                })}
+                  })}
+                </div>
               </div>
             );
           })}
