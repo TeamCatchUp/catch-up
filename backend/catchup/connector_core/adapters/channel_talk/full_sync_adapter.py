@@ -46,6 +46,9 @@ from catchup.connectors.channel_talk.full_sync_fetcher import ChannelTalkFullSyn
 from catchup.connectors.channel_talk.full_sync_helper import (
     load_channel_talk_connection,
 )
+from catchup.connectors.channel_talk.full_sync_target_contract import (
+    CHANNEL_TALK_USER_CHAT_RUNTIME_TARGET,
+)
 from catchup.connectors.channel_talk.schemas.channel_metadata import (
     ChannelTalkManagerMetadata,
 )
@@ -78,7 +81,7 @@ class ChannelTalkFullSyncCheckpoint(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     tenant_id: str
-    target: Literal["user_chat"] = "user_chat"
+    target: Literal["user_chat"] = CHANNEL_TALK_USER_CHAT_RUNTIME_TARGET
     state: ChannelTalkUserChatState
     window: FullSyncWindow
     next_cursor: str | None = None
@@ -93,7 +96,7 @@ class ChannelTalkFullSyncExecutionRequest(FullSyncExecutionRequest):
     """Target-oriented execution request for the current Channel Talk full-sync lane."""
 
     connector: Literal[ConnectorKey.CHANNEL_TALK] = ConnectorKey.CHANNEL_TALK
-    target: Literal["user_chat"] = "user_chat"
+    target: Literal["user_chat"] = CHANNEL_TALK_USER_CHAT_RUNTIME_TARGET
     checkpoint: ChannelTalkFullSyncCheckpoint | None = None
     audit_context: SyncAuditContext | None = None
 
@@ -206,7 +209,7 @@ class ChannelTalkFullSyncExecutionResult(FullSyncExecutionResult):
     """Channel Talk full sync 실행의 최종 typed 결과."""
 
     connector: Literal[ConnectorKey.CHANNEL_TALK] = ConnectorKey.CHANNEL_TALK
-    target: Literal["user_chat"] = "user_chat"
+    target: Literal["user_chat"] = CHANNEL_TALK_USER_CHAT_RUNTIME_TARGET
     collected_count: int = 0
     document_count: int = 0
     fetched: ChannelTalkFullSyncFetchResult
@@ -528,17 +531,13 @@ class ChannelTalkFullSyncAdapter:
         customer = bundle.detail.customer
         assignee_id = bundle.detail.assignment.assignee_id
         assignee_manager = (
-            managers_by_id.get(assignee_id)
-            if assignee_id is not None
-            else None
+            managers_by_id.get(assignee_id) if assignee_id is not None else None
         )
-        assignee_name = (
-            bundle.detail.assignment.assignee_name
-            or (assignee_manager.name if assignee_manager is not None else None)
+        assignee_name = bundle.detail.assignment.assignee_name or (
+            assignee_manager.name if assignee_manager is not None else None
         )
-        assignee_email = (
-            bundle.detail.assignment.assignee_email
-            or (assignee_manager.email if assignee_manager is not None else None)
+        assignee_email = bundle.detail.assignment.assignee_email or (
+            assignee_manager.email if assignee_manager is not None else None
         )
         manager_names = self._resolve_manager_names(
             manager_ids=bundle.detail.assignment.manager_ids,
@@ -652,9 +651,7 @@ class ChannelTalkFullSyncAdapter:
                     operation_total_reply_time=(
                         bundle.detail.metrics.operation_total_reply_time
                     ),
-                    operation_reply_count=(
-                        bundle.detail.metrics.operation_reply_count
-                    ),
+                    operation_reply_count=(bundle.detail.metrics.operation_reply_count),
                 ),
                 anchors=ChannelTalkUserChatAnchorsMetadata(
                     front_message_id=bundle.detail.anchors.front_message_id,
@@ -663,7 +660,9 @@ class ChannelTalkFullSyncAdapter:
                 ),
                 tags=ChannelTalkUserChatTagsMetadata(
                     keys=[tag.key for tag in bundle.detail.tags if tag.key is not None],
-                    names=[tag.name for tag in bundle.detail.tags if tag.name is not None],
+                    names=[
+                        tag.name for tag in bundle.detail.tags if tag.name is not None
+                    ],
                 ),
                 chunk=ChannelTalkUserChatChunkMetadata(
                     chunk_index=0,
@@ -701,7 +700,9 @@ class ChannelTalkFullSyncAdapter:
         channel_id: str,
         user_chat_id: str,
     ) -> str:
-        return f"https://desk.channel.io/#/channels/{channel_id}/user_chats/{user_chat_id}"
+        return (
+            f"https://desk.channel.io/#/channels/{channel_id}/user_chats/{user_chat_id}"
+        )
 
     def _partition_messages(
         self,
@@ -819,10 +820,14 @@ class ChannelTalkFullSyncAdapter:
         if author.user_id is not None:
             return "Customer"
         if author.manager_id is not None:
-            return cls._manager_display_name(
-                manager_id=author.manager_id,
-                managers_by_id=managers_by_id,
-            ) or author.name or "Manager"
+            return (
+                cls._manager_display_name(
+                    manager_id=author.manager_id,
+                    managers_by_id=managers_by_id,
+                )
+                or author.name
+                or "Manager"
+            )
         return author.name or author.bot_name or author.author_type or "Unknown"
 
     @classmethod
@@ -846,9 +851,7 @@ class ChannelTalkFullSyncAdapter:
         content_parts: list[str] = []
         plain_text = str(message.plain_text or "").strip()
         form_text = (
-            cls._render_form_message(message.form)
-            if message.form is not None
-            else ""
+            cls._render_form_message(message.form) if message.form is not None else ""
         )
         if message.form is not None:
             if plain_text and form_text:

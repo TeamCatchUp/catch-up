@@ -50,7 +50,7 @@ from catchup.connectors.channel_talk.document_article_full_sync_fetcher import (
     ChannelTalkFetchedDocumentArticlesResult,
 )
 from catchup.connectors.channel_talk.full_sync_target_contract import (
-    CHANNEL_TALK_DOCUMENT_ARTICLE_TARGET_ID,
+    CHANNEL_TALK_DOCUMENT_ARTICLE_RUNTIME_TARGET,
 )
 from catchup.connectors.channel_talk.schemas.channel_connection import (
     ChannelTalkCredentialsRecord,
@@ -125,7 +125,7 @@ class ChannelTalkDocumentArticleFullSyncCheckpoint(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     tenant_id: str
-    target: Literal["document_article"] = CHANNEL_TALK_DOCUMENT_ARTICLE_TARGET_ID
+    target: Literal["document_article"] = CHANNEL_TALK_DOCUMENT_ARTICLE_RUNTIME_TARGET
     space_id: str
     state: ChannelTalkDocumentArticleState | None = None
     next_cursor: str | None = None
@@ -140,7 +140,7 @@ class ChannelTalkDocumentArticleFullSyncExecutionRequest(FullSyncExecutionReques
     """Execution request for the Channel Talk Documents article full-sync lane."""
 
     connector: Literal[ConnectorKey.CHANNEL_TALK] = ConnectorKey.CHANNEL_TALK
-    target: Literal["document_article"] = CHANNEL_TALK_DOCUMENT_ARTICLE_TARGET_ID
+    target: Literal["document_article"] = CHANNEL_TALK_DOCUMENT_ARTICLE_RUNTIME_TARGET
     channel_connection: ChannelTalkCredentialsRecord
     document_connection: ChannelTalkDocumentCredentialsRecord
     checkpoint: ChannelTalkDocumentArticleFullSyncCheckpoint | None = None
@@ -154,10 +154,7 @@ class ChannelTalkDocumentArticleFullSyncExecutionRequest(FullSyncExecutionReques
             raise ValueError("channel_connection.channel_id must match tenant_id")
         if self.document_connection.channel_id != self.tenant_id:
             raise ValueError("document_connection.channel_id must match tenant_id")
-        if (
-            self.checkpoint is not None
-            and self.checkpoint.tenant_id != self.tenant_id
-        ):
+        if self.checkpoint is not None and self.checkpoint.tenant_id != self.tenant_id:
             raise ValueError("checkpoint.tenant_id must match tenant_id")
         if (
             self.checkpoint is not None
@@ -283,7 +280,7 @@ class ChannelTalkDocumentArticleFullSyncExecutionResult(FullSyncExecutionResult)
     """Final typed result for a document article full-sync run."""
 
     connector: Literal[ConnectorKey.CHANNEL_TALK] = ConnectorKey.CHANNEL_TALK
-    target: Literal["document_article"] = CHANNEL_TALK_DOCUMENT_ARTICLE_TARGET_ID
+    target: Literal["document_article"] = CHANNEL_TALK_DOCUMENT_ARTICLE_RUNTIME_TARGET
     collected_count: int = 0
     document_count: int = 0
     fetched: ChannelTalkDocumentArticleFullSyncFetchResult
@@ -592,7 +589,9 @@ class ChannelTalkDocumentArticleFullSyncAdapter:
         chunk_index: int,
         chunk_count: int,
     ) -> ChannelTalkDocumentArticleLogicalMetadata:
-        author = self._select_author(view=view, published_revision=bundle.published_revision)
+        author = self._select_author(
+            view=view, published_revision=bundle.published_revision
+        )
         category = view.article_category if view is not None else None
         topics = view.topics if view is not None else []
         topic_ids = list(
@@ -627,7 +626,8 @@ class ChannelTalkDocumentArticleFullSyncAdapter:
                 summary=source_revision.summary,
                 slug=current_article.slug,
                 url=url,
-                author_id=source_revision.author_id or (author.author_id if author else None),
+                author_id=source_revision.author_id
+                or (author.author_id if author else None),
                 author_name=author.name if author else None,
                 topic_ids=topic_ids,
                 topic_names=topic_names,
@@ -728,8 +728,8 @@ class ChannelTalkDocumentArticleFullSyncAdapter:
                 label = image.get("alt") or image.get("title")
                 image.replace_with(label.strip() if isinstance(label, str) else "")
         for media in soup.find_all(["figure"]):
-            media_text = (
-                ChannelTalkDocumentArticleFullSyncAdapter._format_html_figure(media)
+            media_text = ChannelTalkDocumentArticleFullSyncAdapter._format_html_figure(
+                media
             )
             if media_text:
                 media.replace_with(f"\n{media_text}\n")
@@ -829,11 +829,9 @@ class ChannelTalkDocumentArticleFullSyncAdapter:
                 yield text
             return
         if node_type in {"image", "video"}:
-            media_text = (
-                ChannelTalkDocumentArticleFullSyncAdapter._format_media_block_from_attrs(
-                    node_type=node_type,
-                    attrs=attrs,
-                )
+            media_text = ChannelTalkDocumentArticleFullSyncAdapter._format_media_block_from_attrs(
+                node_type=node_type,
+                attrs=attrs,
             )
             if media_text:
                 yield media_text
@@ -896,7 +894,9 @@ class ChannelTalkDocumentArticleFullSyncAdapter:
             yield "\n".join(child_blocks)
             return
 
-        text = ChannelTalkDocumentArticleFullSyncAdapter._extract_block_inline_text(value)
+        text = ChannelTalkDocumentArticleFullSyncAdapter._extract_block_inline_text(
+            value
+        )
         if text:
             yield text
 
@@ -946,7 +946,9 @@ class ChannelTalkDocumentArticleFullSyncAdapter:
             return value.strip()
         if isinstance(value, (list, tuple)):
             return "".join(
-                ChannelTalkDocumentArticleFullSyncAdapter._extract_block_inline_text(item)
+                ChannelTalkDocumentArticleFullSyncAdapter._extract_block_inline_text(
+                    item
+                )
                 for item in value
             ).strip()
         if not isinstance(value, Mapping):
@@ -995,7 +997,9 @@ class ChannelTalkDocumentArticleFullSyncAdapter:
 
         if "content" in value:
             return "".join(
-                ChannelTalkDocumentArticleFullSyncAdapter._extract_block_inline_text(item)
+                ChannelTalkDocumentArticleFullSyncAdapter._extract_block_inline_text(
+                    item
+                )
                 for item in ChannelTalkDocumentArticleFullSyncAdapter._sequence_value(
                     value.get("content")
                 )
@@ -1038,7 +1042,9 @@ class ChannelTalkDocumentArticleFullSyncAdapter:
         )
         if blocks:
             return " ".join(block.replace("\n", " ") for block in blocks).strip()
-        return ChannelTalkDocumentArticleFullSyncAdapter._extract_block_inline_text(value)
+        return ChannelTalkDocumentArticleFullSyncAdapter._extract_block_inline_text(
+            value
+        )
 
     @staticmethod
     def _format_block_list(value: Mapping[str, object], *, ordered: bool) -> str:
@@ -1081,14 +1087,15 @@ class ChannelTalkDocumentArticleFullSyncAdapter:
 
     @staticmethod
     def _format_markdown_table(rows: list[list[str]]) -> str:
-        rows = [[cell.strip() for cell in row] for row in rows if any(cell.strip() for cell in row)]
+        rows = [
+            [cell.strip() for cell in row]
+            for row in rows
+            if any(cell.strip() for cell in row)
+        ]
         if not rows:
             return ""
         column_count = max(len(row) for row in rows)
-        normalized_rows = [
-            row + [""] * (column_count - len(row))
-            for row in rows
-        ]
+        normalized_rows = [row + [""] * (column_count - len(row)) for row in rows]
         header = normalized_rows[0]
         data_rows = normalized_rows[1:]
         lines = [
@@ -1182,7 +1189,9 @@ class ChannelTalkDocumentArticleFullSyncAdapter:
         )
         if blocks:
             return " ".join(blocks).strip()
-        return ChannelTalkDocumentArticleFullSyncAdapter._extract_block_inline_text(value)
+        return ChannelTalkDocumentArticleFullSyncAdapter._extract_block_inline_text(
+            value
+        )
 
     @staticmethod
     def _format_link_text(label: object, href: object) -> str:
@@ -1220,15 +1229,13 @@ class ChannelTalkDocumentArticleFullSyncAdapter:
         node_type = str(link.get("data-node-type") or "").strip()
         if node_type in {"file", "attachment"}:
             return True
-        mime = str(
-            link.get("data-node-attrs-mime")
-            or link.get("type")
-            or ""
-        ).lower()
+        mime = str(link.get("data-node-attrs-mime") or link.get("type") or "").lower()
         if mime and not mime.startswith(("text/html", "image/", "video/")):
             return True
         href = str(link.get("href") or "").lower()
-        return any(href.split("?", 1)[0].endswith(ext) for ext in FILE_ATTACHMENT_EXTENSIONS)
+        return any(
+            href.split("?", 1)[0].endswith(ext) for ext in FILE_ATTACHMENT_EXTENSIONS
+        )
 
     @staticmethod
     def _file_name_from_attrs(attrs: Mapping[str, object]) -> str:
@@ -1735,8 +1742,7 @@ class ChannelTalkDocumentArticleFullSyncAdapter:
             if direction == "next" and next_leaf is not None:
                 result[i] = _ArticleLeafSection(
                     hierarchy=next_leaf.hierarchy,
-                    content_blocks=current.content_blocks
-                    + next_leaf.content_blocks,
+                    content_blocks=current.content_blocks + next_leaf.content_blocks,
                     parent_key=next_leaf.parent_key,
                 )
                 result.pop(i + 1)

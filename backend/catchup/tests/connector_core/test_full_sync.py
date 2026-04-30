@@ -72,19 +72,19 @@ from catchup.connectors.channel_talk.full_sync_fetcher import (
     ChannelTalkFetchedUserChatsResult,
 )
 from catchup.connectors.channel_talk.full_sync_target_contract import (
-    CHANNEL_TALK_BOOTSTRAP_TARGET_ID,
-)
-from catchup.connectors.channel_talk.full_sync_target_contract import (
     CHANNEL_TALK_DOCUMENT_ARTICLE_DISPLAY_NAME,
 )
 from catchup.connectors.channel_talk.full_sync_target_contract import (
-    CHANNEL_TALK_DOCUMENT_ARTICLE_TARGET_ID,
+    CHANNEL_TALK_DOCUMENT_ARTICLE_RUNTIME_TARGET,
 )
 from catchup.connectors.channel_talk.full_sync_target_contract import (
-    build_channel_talk_bootstrap_metadata,
+    CHANNEL_TALK_USER_CHAT_RUNTIME_TARGET,
 )
 from catchup.connectors.channel_talk.full_sync_target_contract import (
-    build_channel_talk_document_article_metadata,
+    build_channel_talk_channel_metadata,
+)
+from catchup.connectors.channel_talk.full_sync_target_contract import (
+    build_channel_talk_document_space_metadata,
 )
 from catchup.connectors.channel_talk.schemas.channel_connection import (
     ChannelTalkCredentialsRecord,
@@ -455,40 +455,34 @@ class ChannelTalkFullSyncContractTests(TestCase):
         self.assertEqual(
             descriptor.runtime.targets,
             (
-                CHANNEL_TALK_BOOTSTRAP_TARGET_ID,
-                CHANNEL_TALK_DOCUMENT_ARTICLE_TARGET_ID,
+                CHANNEL_TALK_USER_CHAT_RUNTIME_TARGET,
+                CHANNEL_TALK_DOCUMENT_ARTICLE_RUNTIME_TARGET,
             ),
         )
 
-    def test_document_article_metadata_uses_bootstrap_tenant_contract(self) -> None:
-        metadata = build_channel_talk_document_article_metadata(" channel-123 ")
+    def test_document_space_metadata_describes_real_target(self) -> None:
+        metadata = build_channel_talk_document_space_metadata(" channel-123 ")
 
         self.assertEqual(
             metadata,
             {
-                "runtime_target_kind": "bootstrap",
-                "boundary": "tenant",
-                "target": "document_article",
-                "stage": "document_article",
+                "target_kind": "channel_talk.document_space",
                 "channel_id": "channel-123",
             },
         )
 
     def test_document_article_metadata_rejects_blank_channel_id(self) -> None:
         with self.assertRaisesRegex(ValueError, "channel_id is required"):
-            build_channel_talk_document_article_metadata(" ")
+            build_channel_talk_document_space_metadata(" ")
 
     def test_document_article_display_name_contract(self) -> None:
         self.assertEqual(CHANNEL_TALK_DOCUMENT_ARTICLE_DISPLAY_NAME, "DocumentArticle")
 
-    def test_user_chat_metadata_contract_is_unchanged(self) -> None:
+    def test_channel_metadata_describes_real_target(self) -> None:
         self.assertEqual(
-            build_channel_talk_bootstrap_metadata("channel-123"),
+            build_channel_talk_channel_metadata("channel-123"),
             {
-                "runtime_target_kind": "bootstrap",
-                "boundary": "tenant",
-                "target": "user_chat",
-                "stage": "user_chat",
+                "target_kind": "channel_talk.channel",
                 "channel_id": "channel-123",
             },
         )
@@ -562,7 +556,7 @@ class ChannelTalkDocumentArticleFullSyncApplicationTests(IsolatedAsyncioTestCase
             ChannelTalkDocumentArticleFullSyncPersistResult,
         )
         self.assertEqual(result.connector, ConnectorKey.CHANNEL_TALK)
-        self.assertEqual(result.target, CHANNEL_TALK_DOCUMENT_ARTICLE_TARGET_ID)
+        self.assertEqual(result.target, CHANNEL_TALK_DOCUMENT_ARTICLE_RUNTIME_TARGET)
         self.assertEqual(result.channel_id, "channel-123")
         self.assertEqual(result.space_id, "space-123")
         self.assertEqual(result.collected_count, 1)
@@ -578,9 +572,13 @@ class ChannelTalkDocumentArticleFullSyncApplicationTests(IsolatedAsyncioTestCase
         fake_fetcher.fetch_articles.assert_awaited_once()
         fetch_call = fake_fetcher.fetch_articles.await_args.kwargs
         self.assertEqual(fetch_call["connection"].access_key, "documents-access-key")
-        self.assertEqual(fetch_call["connection"].access_secret, "documents-access-secret")
+        self.assertEqual(
+            fetch_call["connection"].access_secret, "documents-access-secret"
+        )
         self.assertEqual(fetch_call["language"], "ko")
-        self.assertEqual(fetch_call["states"], DEFAULT_DOCUMENT_ARTICLE_FULL_SYNC_STATES)
+        self.assertEqual(
+            fetch_call["states"], DEFAULT_DOCUMENT_ARTICLE_FULL_SYNC_STATES
+        )
         self.assertEqual(fetch_call["sync_window"], _window())
         self.assertEqual(result.summary.document_count, 1)
         self.assertEqual(result.persisted.persisted_count, 1)
@@ -694,15 +692,22 @@ class ConnectorFullSyncApplicationTests(IsolatedAsyncioTestCase):
             original_contextual_content,
         )
         self.assertIn("VIP renewal help", original_contextual_content)
-        self.assertIn("User: Customer Kim / kim@example.com", original_contextual_content)
+        self.assertIn(
+            "User: Customer Kim / kim@example.com", original_contextual_content
+        )
         self.assertIn("Assignee: Agent Lee", original_contextual_content)
         self.assertIn("Managers: Agent Lee, Agent Park", original_contextual_content)
         self.assertIn("Tags: VIP", original_contextual_content)
         self.assertIn("Conversation:", original_contextual_content)
         self.assertIn("Agent Lee: Hello from support", original_contextual_content)
         self.assertIn("[내부대화] Agent Lee: private note", original_contextual_content)
-        self.assertIn("[입력폼] Customer: Email: kim@example.com", original_contextual_content)
-        self.assertIn("[파일] Agent Park: guide.pdf (application/pdf)", original_contextual_content)
+        self.assertIn(
+            "[입력폼] Customer: Email: kim@example.com", original_contextual_content
+        )
+        self.assertIn(
+            "[파일] Agent Park: guide.pdf (application/pdf)",
+            original_contextual_content,
+        )
         self.assertIn(
             "[버튼] Agent Lee: Choose an action | 버튼: Open (https://example.com)",
             original_contextual_content,
@@ -735,7 +740,9 @@ class ConnectorFullSyncApplicationTests(IsolatedAsyncioTestCase):
         )
         self.assertEqual(result.fetched.sync_window, sync_window)
         self.assertEqual(
-            result.transformed.documents[0].logical_metadata.user_chat_core.messages.excluded_message_count,
+            result.transformed.documents[
+                0
+            ].logical_metadata.user_chat_core.messages.excluded_message_count,
             0,
         )
 
@@ -804,7 +811,9 @@ class ConnectorFullSyncApplicationTests(IsolatedAsyncioTestCase):
             stored_document.metadata["contextual_content"],
         )
 
-    async def test_application_rejects_checkpoint_window_mismatch_during_fetch(self) -> None:
+    async def test_application_rejects_checkpoint_window_mismatch_during_fetch(
+        self,
+    ) -> None:
         application, _ = self._build_application(enable_summarization=False)
         execution = ChannelTalkFullSyncExecutionRequest(
             tenant_id="channel-123",
@@ -872,7 +881,9 @@ class ConnectorFullSyncApplicationTests(IsolatedAsyncioTestCase):
         )
 
         self.assertIsNotNone(result.fetched.next_checkpoint)
-        self.assertEqual(result.fetched.next_checkpoint.state, ChannelTalkUserChatState.CLOSED)
+        self.assertEqual(
+            result.fetched.next_checkpoint.state, ChannelTalkUserChatState.CLOSED
+        )
         self.assertEqual(result.fetched.next_checkpoint.next_cursor, "closed-page-2")
 
     async def test_fetch_loads_sync_connection_in_threadpool(self) -> None:

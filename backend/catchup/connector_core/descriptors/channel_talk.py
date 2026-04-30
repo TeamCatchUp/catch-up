@@ -5,10 +5,10 @@ from catchup.connector_core.descriptors.models import ConnectorRuntimePlan
 from catchup.connector_core.domain.structure import ConnectorBoundary
 from catchup.connector_core.domain.structure import ConnectorKey
 from catchup.connectors.channel_talk.full_sync_target_contract import (
-    CHANNEL_TALK_BOOTSTRAP_TARGET_ID,
+    CHANNEL_TALK_DOCUMENT_ARTICLE_RUNTIME_TARGET,
 )
 from catchup.connectors.channel_talk.full_sync_target_contract import (
-    CHANNEL_TALK_DOCUMENT_ARTICLE_TARGET_ID,
+    CHANNEL_TALK_USER_CHAT_RUNTIME_TARGET,
 )
 
 # Channel Talk이 어떤 runtime capability와 logical target을 지원하는지 선언한다.
@@ -24,8 +24,8 @@ CHANNEL_TALK_DESCRIPTOR = ConnectorDescriptor(
         supports_incremental=False,
         supports_observability=False,
         targets=(
-            CHANNEL_TALK_BOOTSTRAP_TARGET_ID,
-            CHANNEL_TALK_DOCUMENT_ARTICLE_TARGET_ID,
+            CHANNEL_TALK_USER_CHAT_RUNTIME_TARGET,
+            CHANNEL_TALK_DOCUMENT_ARTICLE_RUNTIME_TARGET,
         ),
     ),
 )

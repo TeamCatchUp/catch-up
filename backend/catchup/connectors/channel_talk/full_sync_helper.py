@@ -1,8 +1,5 @@
 from __future__ import annotations
 
-from catchup.connectors.channel_talk.full_sync_target_contract import (
-    CHANNEL_TALK_BOOTSTRAP_TARGET_ID,
-)
 from catchup.connectors.channel_talk.schemas.channel_connection import (
     ChannelTalkCredentialsRecord,
 )
@@ -16,12 +13,15 @@ from catchup.db.channel_talk.repository import ChannelTalkCredentialsRepository
 from catchup.db.channel_talk.repository import ChannelTalkDocumentCredentialsRepository
 from catchup.db.engine import SessionLocal
 
-CHANNEL_TALK_FULL_SYNC_TARGET_ID = CHANNEL_TALK_BOOTSTRAP_TARGET_ID
-
 
 def load_channel_talk_connection() -> ChannelTalkCredentialsRecord | None:
     with SessionLocal() as db:
         return ChannelTalkCredentialsRepository(db).get_connection()
+
+
+def list_channel_talk_connections() -> list[ChannelTalkCredentialsRecord]:
+    with SessionLocal() as db:
+        return ChannelTalkCredentialsRepository(db).list_connections()
 
 
 def load_channel_talk_document_connection(

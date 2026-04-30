@@ -10,19 +10,15 @@ from typing import Any
 
 from fastapi.concurrency import run_in_threadpool
 from sqlalchemy import select
-from sqlalchemy.exc import SQLAlchemyError
 
 from catchup.connectors.atlassian.oauth_client import AtlassianOAuthClient
 from catchup.connectors.atlassian.token_manager import AtlassianTokenManager
 from catchup.connectors.atlassian.token_manager import AtlassianTokenProvider
 from catchup.connectors.channel_talk.full_sync_helper import (
-    CHANNEL_TALK_FULL_SYNC_TARGET_ID,
-)
-from catchup.connectors.channel_talk.full_sync_helper import (
     is_verified_channel_talk_document_connection,
 )
 from catchup.connectors.channel_talk.full_sync_helper import (
-    load_channel_talk_connection,
+    list_channel_talk_connections,
 )
 from catchup.connectors.channel_talk.full_sync_helper import (
     load_channel_talk_document_connection,
@@ -31,19 +27,16 @@ from catchup.connectors.channel_talk.full_sync_helper import (
     require_channel_talk_channel_id,
 )
 from catchup.connectors.channel_talk.full_sync_target_contract import (
-    CHANNEL_TALK_BOOTSTRAP_DISPLAY_NAME,
+    build_channel_talk_channel_metadata,
 )
 from catchup.connectors.channel_talk.full_sync_target_contract import (
-    CHANNEL_TALK_DOCUMENT_ARTICLE_DISPLAY_NAME,
+    build_channel_talk_document_space_metadata,
 )
-from catchup.connectors.channel_talk.full_sync_target_contract import (
-    CHANNEL_TALK_DOCUMENT_ARTICLE_TARGET_ID,
+from catchup.connectors.channel_talk.schemas.channel_connection import (
+    ChannelTalkCredentialsRecord,
 )
-from catchup.connectors.channel_talk.full_sync_target_contract import (
-    build_channel_talk_bootstrap_metadata,
-)
-from catchup.connectors.channel_talk.full_sync_target_contract import (
-    build_channel_talk_document_article_metadata,
+from catchup.connectors.channel_talk.schemas.document_connection import (
+    ChannelTalkDocumentCredentialsRecord,
 )
 from catchup.connectors.confluence.metadata_service import ConfluenceMetadataService
 from catchup.connectors.github.auth import get_github_app_service
@@ -72,6 +65,7 @@ from catchup.sync.common.schemas import SyncTargetType
 
 logger = logging.getLogger(__name__)
 
+
 def _load_github_installation_db(installation_id: int):
     with SessionLocal() as db:
         return get_installation_by_installation_id(db, installation_id)
@@ -89,6 +83,7 @@ def _load_confluence_token_db(scope_id: str) -> AtlassianOAuthToken | None:
             .filter(AtlassianOAuthToken.cloud_id == scope_id)
             .first()
         )
+
 
 def _persist_github_repositories_db(
     installation_id: int,
@@ -226,14 +221,10 @@ class SyncQueryService:
             1 for event in events if event.status == SyncEventStatus.IN_PROGRESS
         )
         completed_targets = sum(
-            1
-            for event in events
-            if event.status == SyncEventStatus.SUCCESS
+            1 for event in events if event.status == SyncEventStatus.SUCCESS
         )
         failed_targets = sum(
-            1
-            for event in events
-            if event.status == SyncEventStatus.FAILED
+            1 for event in events if event.status == SyncEventStatus.FAILED
         )
 
         return {
@@ -259,7 +250,8 @@ class SyncQueryService:
         candidates = [
             event
             for event in events
-            if event.status == SyncEventStatus.FAILED and (event.last_error or event.publish_error)
+            if event.status == SyncEventStatus.FAILED
+            and (event.last_error or event.publish_error)
         ]
         if not candidates:
             return None
@@ -306,10 +298,14 @@ class SyncQueryService:
 
         for event in events:
             metadata = (
-                event.resource_metadata if isinstance(event.resource_metadata, dict) else {}
+                event.resource_metadata
+                if isinstance(event.resource_metadata, dict)
+                else {}
             )
             target_id = str(event.resource_id)
-            target_name = str(metadata.get("target_name") or target_id).strip() or target_id
+            target_name = (
+                str(metadata.get("target_name") or target_id).strip() or target_id
+            )
             targets.append(
                 SyncJobTargetSnapshotResult(
                     target_id=target_id,
@@ -420,6 +416,8 @@ class SyncQueryService:
         scope_id: str,
         targets: list[SyncTargetResult],
     ) -> SyncTargetsResult:
+        # 모든 connector의 target listing 응답을 같은 envelope로 맞춘다.
+        # 이 targets 배열이 Full Sync 요청의 입력 후보 목록이 된다.
         logger.info(
             "[SYNC][TARGETS][QUERY] Loaded targets: connector=%s, scope_id=%s, total_targets=%s",
             connector,
@@ -438,6 +436,7 @@ class SyncQueryService:
         *,
         scope_id: str,
     ) -> SyncTargetsResult:
+        # GitHub는 scope_id가 installation_id이고 target_id는 repository id다.
         try:
             installation_id = int(scope_id)
         except ValueError as exc:
@@ -457,6 +456,8 @@ class SyncQueryService:
         repositories = _convert_repos_to_dto(
             await client.list_installation_repos(),
         )
+        # listing 시점에 최신 repo snapshot을 저장해 두면 full sync resolver가
+        # 사용자가 고른 repository id를 DB row와 빠르게 대조할 수 있다.
         await run_in_threadpool(
             _persist_github_repositories_db,
             installation_id,
@@ -487,6 +488,7 @@ class SyncQueryService:
         *,
         scope_id: str,
     ) -> SyncTargetsResult:
+        # Jira는 scope_id가 cloud_id이고 target_id는 project_key다.
         token = await run_in_threadpool(_load_jira_token_db, scope_id)
         if token is None:
             raise ValueError(f"jira cloud is not connected: {scope_id}")
@@ -502,6 +504,8 @@ class SyncQueryService:
         raw_projects = await client.get_all_projects()
         site_url = (token.site_url or "").rstrip("/")
 
+        # API 응답을 target listing과 DB snapshot 양쪽 형태로 동시에 변환한다.
+        # Full Sync 요청은 target_id/project_key만 다시 보내면 된다.
         project_rows: list[dict[str, Any]] = []
         targets: list[SyncTargetResult] = []
         for raw_project in raw_projects:
@@ -510,7 +514,9 @@ class SyncQueryService:
                 continue
 
             project_id = str(raw_project.get("id") or "")
-            project_name = str(raw_project.get("name") or project_key).strip() or project_key
+            project_name = (
+                str(raw_project.get("name") or project_key).strip() or project_key
+            )
             lead = raw_project.get("lead")
             lead_data = lead if isinstance(lead, dict) else {}
 
@@ -557,6 +563,7 @@ class SyncQueryService:
         *,
         scope_id: str,
     ) -> SyncTargetsResult:
+        # Confluence는 scope_id가 cloud_id이고 target_id는 space_key다.
         token = await run_in_threadpool(_load_confluence_token_db, scope_id)
         if token is None:
             raise ValueError(f"confluence cloud is not connected: {scope_id}")
@@ -571,6 +578,8 @@ class SyncQueryService:
             granted_scopes=set((token.scopes or "").split()),
         )
 
+        # sync_space_snapshot이 DB snapshot까지 갱신하므로 resolver는 이후
+        # target_id(space_key)를 저장된 space row와 매칭한다.
         targets = [
             SyncTargetResult(
                 target_id=space["space_key"],
@@ -596,6 +605,7 @@ class SyncQueryService:
         *,
         scope_id: str,
     ) -> SyncTargetsResult:
+        # Slack은 scope_id가 team_id이고 target_id는 channel id다.
         metadata_service = await create_slack_metadata_service(team_id=scope_id)
         channels = await metadata_service.sync_target_channels()
 
@@ -625,57 +635,77 @@ class SyncQueryService:
     async def _list_channel_talk_targets(
         self,
         *,
-        scope_id: str,
+        scope_id: str | None,
     ) -> SyncTargetsResult:
-        normalized_scope_id = require_channel_talk_channel_id(scope_id)
-        connection = await run_in_threadpool(load_channel_talk_connection)
-        if connection is None:
-            raise ValueError("channel_talk is not connected")
-        if connection.channel_id != normalized_scope_id:
-            raise ValueError(
-                "Stored Channel Talk credentials do not match the requested channel"
-            )
+        # Channel Talk은 여러 channel credential row가 존재할 수 있으므로
+        # scope_id가 있으면 해당 channel을 고르고, 없으면 단일 연결일 때만 추론한다.
+        requested_channel_id = (
+            require_channel_talk_channel_id(scope_id)
+            if scope_id is not None and scope_id.strip()
+            else None
+        )
 
-        targets = [
-            SyncTargetResult(
-                target_id=CHANNEL_TALK_FULL_SYNC_TARGET_ID,
-                display_name=CHANNEL_TALK_BOOTSTRAP_DISPLAY_NAME,
-                target_type=SyncTargetType.RESOURCE,
-                is_accessible=True,
-                metadata=build_channel_talk_bootstrap_metadata(normalized_scope_id),
+        if requested_channel_id is not None:
+            connections, document_lookup_result = await asyncio.gather(
+                run_in_threadpool(list_channel_talk_connections),
+                run_in_threadpool(
+                    load_channel_talk_document_connection,
+                    requested_channel_id,
+                ),
+                return_exceptions=True,
             )
-        ]
-
-        document_connection = None
-        try:
+            connection = self._select_channel_talk_connection(
+                connections,
+                channel_id=requested_channel_id,
+            )
+            normalized_scope_id = requested_channel_id
+            if isinstance(document_lookup_result, BaseException):
+                raise document_lookup_result
+            document_connection = document_lookup_result
+        else:
+            connections = await run_in_threadpool(list_channel_talk_connections)
+            connection = self._select_channel_talk_connection(
+                connections,
+                channel_id=None,
+            )
+            normalized_scope_id = connection.channel_id
             document_connection = await run_in_threadpool(
                 load_channel_talk_document_connection,
                 normalized_scope_id,
             )
-        except SQLAlchemyError:
-            logger.warning(
-                "channel_talk_document_target_listing_skipped",
-                exc_info=True,
-            )
-        if is_verified_channel_talk_document_connection(
+
+        document_connection = self._require_verified_channel_talk_document_connection(
             document_connection,
             channel_id=normalized_scope_id,
-        ):
-            targets.append(
-                SyncTargetResult(
-                    target_id=CHANNEL_TALK_DOCUMENT_ARTICLE_TARGET_ID,
-                    display_name=CHANNEL_TALK_DOCUMENT_ARTICLE_DISPLAY_NAME,
-                    target_type=SyncTargetType.RESOURCE,
-                    is_accessible=True,
-                    metadata={
-                        **build_channel_talk_document_article_metadata(
-                            normalized_scope_id,
-                        ),
-                        "space_id": document_connection.space_id,
-                        "space_name": document_connection.space_name,
-                    },
-                )
+        )
+
+        targets = [
+            SyncTargetResult(
+                target_id=connection.channel_id,
+                display_name=connection.channel_name,
+                target_type=SyncTargetType.CHANNEL,
+                is_accessible=True,
+                metadata=build_channel_talk_channel_metadata(normalized_scope_id),
             )
+        ]
+
+        # DocumentArticle full sync target: target_type=space, target_id=space_id.
+        # 프론트는 이 target object를 그대로 /full.targets에 넣으면 된다.
+        targets.append(
+            SyncTargetResult(
+                target_id=document_connection.space_id,
+                display_name=document_connection.space_name,
+                target_type=SyncTargetType.SPACE,
+                is_accessible=True,
+                metadata={
+                    **build_channel_talk_document_space_metadata(
+                        normalized_scope_id,
+                    ),
+                    "space_id": document_connection.space_id,
+                    "space_name": document_connection.space_name,
+                },
+            )
+        )
 
         return self._build_targets_result(
             connector=SyncConnector.CHANNEL_TALK,
@@ -683,13 +713,56 @@ class SyncQueryService:
             targets=targets,
         )
 
+    @staticmethod
+    def _select_channel_talk_connection(
+        connections: list[ChannelTalkCredentialsRecord],
+        *,
+        channel_id: str | None,
+    ) -> ChannelTalkCredentialsRecord:
+        if not connections:
+            raise ValueError("channel_talk is not connected")
+        if channel_id is None:
+            if len(connections) == 1:
+                return connections[0]
+            raise ValueError(
+                "scope_id is required when multiple channel_talk connections exist"
+            )
+
+        for connection in connections:
+            if connection.channel_id == channel_id:
+                return connection
+        raise ValueError(
+            "Stored Channel Talk credentials do not match the requested channel"
+        )
+
+    @staticmethod
+    def _require_verified_channel_talk_document_connection(
+        document_connection: ChannelTalkDocumentCredentialsRecord | None,
+        *,
+        channel_id: str,
+    ) -> ChannelTalkDocumentCredentialsRecord:
+        if document_connection is None:
+            raise ValueError(
+                "channel_talk documents is not connected for the requested channel"
+            )
+        if not is_verified_channel_talk_document_connection(
+            document_connection,
+            channel_id=channel_id,
+        ):
+            raise ValueError(
+                "channel_talk documents credentials are not API verified for the requested channel"
+            )
+        return document_connection
+
     async def list_targets(
         self,
         *,
         connector: SyncConnector,
-        scope_id: str,
+        scope_id: str | None,
     ) -> SyncTargetsResult:
-        key = (connector, scope_id)
+        # 같은 connector/scope 요청이 동시에 들어오면 외부 API를 중복 호출하지 않도록
+        # in-flight task를 공유한다. Channel Talk은 scope_id 없이도 listing할 수 있다.
+        key = (connector, scope_id or "")
 
         async with self._inflight_targets_lock:
             task = self._inflight_targets.get(key)
@@ -714,20 +787,29 @@ class SyncQueryService:
         self,
         *,
         connector: SyncConnector,
-        scope_id: str,
+        scope_id: str | None,
     ) -> SyncTargetsResult:
-        if connector == SyncConnector.GITHUB:
-            return await self._list_github_targets(scope_id=scope_id)
-        if connector == SyncConnector.JIRA:
-            return await self._list_jira_targets(scope_id=scope_id)
-        if connector == SyncConnector.CONFLUENCE:
-            return await self._list_confluence_targets(scope_id=scope_id)
-        if connector == SyncConnector.SLACK:
-            return await self._list_slack_targets(scope_id=scope_id)
+        # connector별 listing 메서드는 target_id/target_type의 의미만 다르고
+        # 최종 응답 envelope는 SyncTargetsResult로 통일된다.
+        normalized_scope_id = (scope_id or "").strip()
         if connector == SyncConnector.CHANNEL_TALK:
-            return await self._list_channel_talk_targets(scope_id=scope_id)
+            return await self._list_channel_talk_targets(
+                scope_id=normalized_scope_id or None
+            )
 
-        raise ValueError(f"unsupported connector for target listing: {connector}")
+        if not normalized_scope_id:
+            raise ValueError("scope_id is required")
+
+        listers = {
+            SyncConnector.GITHUB: self._list_github_targets,
+            SyncConnector.JIRA: self._list_jira_targets,
+            SyncConnector.CONFLUENCE: self._list_confluence_targets,
+            SyncConnector.SLACK: self._list_slack_targets,
+        }
+        lister = listers.get(connector)
+        if lister is None:
+            raise ValueError(f"unsupported connector for target listing: {connector}")
+        return await lister(scope_id=normalized_scope_id)
 
 
 _sync_query_service = SyncQueryService()

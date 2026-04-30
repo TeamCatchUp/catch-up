@@ -60,6 +60,14 @@ class ChannelTalkCredentialsRepository:
         row = _get_channel_talk_credentials(db=self.db)
         return _to_connection_record(row)
 
+    def list_connections(self) -> list[ChannelTalkCredentialsRecord]:
+        rows = _list_channel_talk_credentials(db=self.db)
+        return [
+            record
+            for row in rows
+            if (record := _to_connection_record(row)) is not None
+        ]
+
     def upsert_connection(
         self,
         payload: ChannelTalkCredentialsUpsert,
@@ -389,6 +397,15 @@ def _get_channel_talk_credentials(
         .limit(1)
     )
     return db.execute(stmt).scalar_one_or_none()
+
+
+def _list_channel_talk_credentials(
+    db: Session,
+) -> list[db_models.ChannelTalkCredentials]:
+    stmt = select(db_models.ChannelTalkCredentials).order_by(
+        db_models.ChannelTalkCredentials.id.asc()
+    )
+    return list(db.execute(stmt).scalars())
 
 
 def _get_channel_talk_document_credentials(
