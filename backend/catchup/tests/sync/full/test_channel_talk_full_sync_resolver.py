@@ -570,7 +570,7 @@ class FullSyncRegistryAdmissionTests(TestCase):
 
 
 class ChannelTalkFullSyncServiceDispatchTests(IsolatedAsyncioTestCase):
-    async def test_dispatch_derives_channel_scope_from_selected_channel_target(
+    async def test_dispatch_rejects_blank_scope_id_instead_of_deriving_from_metadata(
         self,
     ) -> None:
         dispatch_service = _FakeDispatchService()
@@ -580,15 +580,14 @@ class ChannelTalkFullSyncServiceDispatchTests(IsolatedAsyncioTestCase):
             f"{_FULL_SYNC_SERVICE_MODULE}.get_full_sync_target_resolver",
             return_value=_FakeResolver(),
         ):
-            result = await service.dispatch(
-                connector=SyncConnector.CHANNEL_TALK,
-                request=FullSyncDispatchRequest(
-                    scope_id="",
-                    targets=[_channel_target()],
-                    sync_from_ts="1713744000.000000",
-                ),
-            )
+            with self.assertRaisesRegex(SyncRequestException, "scope_id is required"):
+                await service.dispatch(
+                    connector=SyncConnector.CHANNEL_TALK,
+                    request=FullSyncDispatchRequest(
+                        scope_id="",
+                        targets=[_channel_target()],
+                        sync_from_ts="1713744000.000000",
+                    ),
+                )
 
-        self.assertEqual(result.scope_id, CHANNEL_ID)
-        self.assertIsNotNone(dispatch_service.request)
-        self.assertEqual(dispatch_service.request.scope_id, CHANNEL_ID)
+        self.assertIsNone(dispatch_service.request)

@@ -271,6 +271,53 @@ class ChannelTalkSyncApiTests(TestCase):
         )
         self.assertIsNotNone(dispatch_request.sync_from_ts)
 
+    def test_post_full_rejects_missing_scope_id(self) -> None:
+        stub_service = _StubFullSyncService()
+
+        with patch(
+            "catchup.server.sync.api.get_full_sync_service",
+            return_value=stub_service,
+        ):
+            response = self.client.post(
+                "/api/v1/sync/full",
+                json={
+                    "connector": "channel_talk",
+                    "targets": [
+                        {
+                            "target_type": "channel",
+                            "target_id": CHANNEL_ID,
+                        }
+                    ],
+                },
+            )
+
+        self.assertEqual(response.status_code, 422)
+        self.assertEqual(stub_service.calls, [])
+
+    def test_post_full_rejects_blank_scope_id(self) -> None:
+        stub_service = _StubFullSyncService()
+
+        with patch(
+            "catchup.server.sync.api.get_full_sync_service",
+            return_value=stub_service,
+        ):
+            response = self.client.post(
+                "/api/v1/sync/full",
+                json={
+                    "connector": "channel_talk",
+                    "scope_id": " ",
+                    "targets": [
+                        {
+                            "target_type": "channel",
+                            "target_id": CHANNEL_ID,
+                        }
+                    ],
+                },
+            )
+
+        self.assertEqual(response.status_code, 422)
+        self.assertEqual(stub_service.calls, [])
+
     def test_post_full_rejects_legacy_target_ids_request_shape(self) -> None:
         stub_service = _StubFullSyncService()
 

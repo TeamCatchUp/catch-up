@@ -51,30 +51,6 @@ class FullSyncService:
             return scope_id
         raise SyncRequestException("scope_id is required")
 
-    def _resolve_dispatch_scope_id(
-        self,
-        *,
-        connector: SyncConnector,
-        request: FullSyncDispatchRequest,
-        event_seeds: list[SyncEventSeed],
-    ) -> str:
-        # 대부분의 connector는 request.scope_id가 필수다.
-        # Channel Talk은 scope_id를 생략할 수 있어 target metadata의 channel_id로 복원한다.
-        scope_id = request.scope_id.strip()
-        if scope_id:
-            return scope_id
-
-        if connector == SyncConnector.CHANNEL_TALK:
-            channel_ids = {
-                str(seed.metadata.get("channel_id") or "").strip()
-                for seed in event_seeds
-            }
-            channel_ids.discard("")
-            if len(channel_ids) == 1:
-                return next(iter(channel_ids))
-
-        return self._normalize_scope_id(request)
-
     def _build_dispatch_request(
         self,
         *,
@@ -107,6 +83,7 @@ class FullSyncService:
             trigger=request.trigger.value,
         )
 
+        scope_id = self._normalize_scope_id(request)
         resolver = get_full_sync_target_resolver(connector)
         sync_from_ts = request.sync_from_ts
         # connector resolver가 요청 targets를 실제 동기화 가능한 FullSyncTarget으로 확정한다.
@@ -115,12 +92,6 @@ class FullSyncService:
             _build_event_seed(target, sync_from_ts=sync_from_ts)
             for target in resolved.targets
         ]
-        # event 생성 직전 최종 scope_id를 확정한다. 특히 Channel Talk blank scope를 여기서 보정한다.
-        scope_id = self._resolve_dispatch_scope_id(
-            connector=connector,
-            request=request,
-            event_seeds=event_seeds,
-        )
         return await self._dispatch_service.dispatch(
             self._build_dispatch_request(
                 connector=connector,

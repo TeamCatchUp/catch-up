@@ -83,9 +83,12 @@ class FullSyncRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     connector: SyncConnector = Field(..., description="sync connector type")
-    scope_id: str | None = Field(
-        default=None,
-        description="connector scope id (team_id / installation_id / cloud_id)",
+    scope_id: str = Field(
+        ...,
+        description=(
+            "connector scope id "
+            "(team_id / installation_id / cloud_id / channel_id)"
+        ),
     )
     targets: list[FullSyncRequestedTarget] = Field(
         ...,
@@ -100,6 +103,14 @@ class FullSyncRequest(BaseModel):
         ge=1,
         description="collection period in days; if omitted connector default is used",
     )
+
+    @field_validator("scope_id")
+    @classmethod
+    def _validate_scope_id(cls, value: str) -> str:
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("scope_id must not be empty")
+        return stripped
 
     @field_validator("targets")
     @classmethod
@@ -143,10 +154,8 @@ class FullSyncRequest(BaseModel):
         current_time = now or datetime.now(timezone.utc)
         sync_from_ts = f"{(current_time - timedelta(days=sync_days)).timestamp():.6f}"
 
-        # Channel Talk은 scope_id를 생략할 수 있으므로 빈 문자열로 내부에 전달한다.
-        # resolver/service가 저장된 channel_id 또는 event metadata로 scope를 복원한다.
         return FullSyncDispatchRequest(
-            scope_id=self.scope_id or "",
+            scope_id=self.scope_id,
             targets=self.targets,
             sync_from_ts=sync_from_ts,
             trigger=trigger,
