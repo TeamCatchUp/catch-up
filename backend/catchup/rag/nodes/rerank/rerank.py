@@ -97,18 +97,44 @@ async def rerank_node(state: AgentState, rerank_service: BaseRerankService):
             total_k=total_k
         )
 
+        # 에이전트가 ToolMessage로 본 적 없는 문서가 최종 답변 풀에 얼마나 들어왔는지 측정.
+        # "에이전트 시야 ⊂ 시스템 풀" 분리의 실질적 가치를 정량화한다.
+        agent_seen = set(state.get("agent_seen_doc_ids") or [])
+        unseen_in_final = sum(
+            1 for d in final_docs if get_document_id(d) not in agent_seen
+        )
+        rerank_metadata["agent_seen_total"] = len(agent_seen)
+        rerank_metadata["unseen_in_final"] = unseen_in_final
+
+        # 에이전트 지목 ∩ rerank top_k 통과 문서 (양쪽이 인정한 신뢰도 높은 문서).
+        # doc_id를 SoT로 보관 — 답변 노드가 retrieved_docs 순서로 인덱스 매핑.
+        # 답변 LLM이 실제로 보는 1-base 인덱스도 metadata에 남겨 Langfuse에서 감사 가능하게 한다.
+        confirmed_essential = []
+        confirmed_indices = []
+        for idx, doc in enumerate(final_docs, start=1):
+            doc_id = get_document_id(doc)
+            if doc_id in essential_doc_ids:
+                confirmed_essential.append(doc_id)
+                confirmed_indices.append(idx)
+        rerank_metadata["confirmed_essential_count"] = len(confirmed_essential)
+        rerank_metadata["confirmed_essential_indices"] = confirmed_indices
+
         logger.info(
             "rerank_node_completed",
             pipeline_type=pipeline_type,
             final_doc_count=len(final_docs),
             total_k=total_k,
-            boosted_count=len(rerank_metadata["boosted_ids"])
+            boosted_count=len(rerank_metadata["boosted_ids"]),
+            agent_seen_total=len(agent_seen),
+            unseen_in_final=unseen_in_final,
+            confirmed_essential_count=len(confirmed_essential),
         )
-        
+
         return {
             "retrieved_docs": final_docs,
             "rerank_count": rerank_count + 1,
-            "rerank_metadata": rerank_metadata
+            "rerank_metadata": rerank_metadata,
+            "confirmed_essential_doc_ids": confirmed_essential,
         }
 
 
@@ -118,7 +144,12 @@ def _apply_boosting(
     total_k: int,
     boost_ratio: float = 0.2  # 점수 격차의 20% 만큼 가산한다.
 ) -> tuple[list[Document], dict]:
-    """리랭커 점수의 분포에 비례하여 에이전트 지목 문서에 가산점을 부여한다."""
+    """리랭커 점수의 분포에 비례하여 에이전트 지목 문서에 가산점을 부여한다.
+
+    alignment_score는 "에이전트 지목 ∩ reranker top_k / 에이전트 지목"으로,
+    essential_doc_ids가 비어 있으면(예: max_iter fallback) 0.0으로 처리한다.
+    "신호 없음 = 영향 없음"으로 보아 score 평균이 위로 왜곡되지 않게 한다.
+    """
     if not reranked_docs:
         return [], {"boosted_ids": [], "alignment_score": 0.0}
 
@@ -137,7 +168,7 @@ def _apply_boosting(
     # 리랭커 Top K 내에 에이전트 지목 문서가 얼마나 있는지 확인한다 (Alignment).
     initial_top_k_ids = {get_document_id(d) for d in reranked_docs[:total_k]}
     hits = essential_doc_ids.intersection(initial_top_k_ids)
-    alignment_score = len(hits) / len(essential_doc_ids) if essential_doc_ids else 1.0
+    alignment_score = len(hits) / len(essential_doc_ids) if essential_doc_ids else 0.0
 
     for doc in reranked_docs:
         doc_id = get_document_id(doc)

@@ -62,4 +62,8 @@ class AgentState(TypedDict):
 
     essential_doc_ids: list[str]  # 에이전트가 핵심이라고 판단한 문서 ID 목록 (Boosting용)
 
+    confirmed_essential_doc_ids: list[str]  # 에이전트 지목 ∩ rerank top_k 통과 문서 ID 목록.
+                                             # 에이전트와 reranker 양쪽이 인정한 신뢰도 높은 문서.
+                                             # 답변 노드가 인덱스로 변환해 LLM에게 우선순위 신호로 전달.
+
     rerank_metadata: dict | None  # 리랭킹 결과 및 부스팅 이력 (Langfuse 로깅용)

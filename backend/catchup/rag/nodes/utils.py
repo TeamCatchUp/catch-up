@@ -19,6 +19,7 @@ from langchain_core.messages import SystemMessage
 from langgraph.graph.message import add_messages
 
 from catchup.costs.utils import extract_token_usages
+from catchup.prompts.loader import prompt_loader
 from catchup.rag.policies import FALLBACK_ANSWER
 from catchup.rag.schemas.sources import BaseSource
 
@@ -184,6 +185,29 @@ def get_conversation_history(messages: Annotated[list, add_messages]):
 def get_latest_query(messages: Annotated[list, add_messages]):
     return next(
         (m.content for m in reversed(messages) if isinstance(m, HumanMessage)), ""
+    )
+
+
+def build_confirmed_priority_prompt(
+    retrieved_docs: list[Document],
+    confirmed_essential_doc_ids: list[str] | None,
+) -> str | None:
+    """confirmed_essential_doc_ids를 retrieved_docs 내 1-base 인덱스로 매핑해
+    confirmed_priority_documents 프롬프트 블록을 렌더링한다.
+
+    매핑 가능한 인덱스가 없으면 None을 반환 (호출자가 dynamic_prompts에서 제외)."""
+    if not confirmed_essential_doc_ids:
+        return None
+    confirmed_id_set = set(confirmed_essential_doc_ids)
+    confirmed_indices = [
+        i for i, doc in enumerate(retrieved_docs, start=1)
+        if get_document_id(doc) in confirmed_id_set
+    ]
+    if not confirmed_indices:
+        return None
+    return prompt_loader.get_prompt(
+        "common/confirmed_priority_documents",
+        confirmed_priority_indices=confirmed_indices,
     )
 
 

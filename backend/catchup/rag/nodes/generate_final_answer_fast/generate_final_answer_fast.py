@@ -7,6 +7,7 @@ from langchain_core.messages import HumanMessage
 from catchup.costs.utils import token_usage
 from catchup.prompts.loader import prompt_loader
 from catchup.rag.nodes.utils import ainvoke_llm_with_token_usage
+from catchup.rag.nodes.utils import build_confirmed_priority_prompt
 from catchup.rag.nodes.utils import build_system_message
 from catchup.rag.nodes.utils import get_conversation_history
 from catchup.rag.nodes.utils import log_node
@@ -71,6 +72,14 @@ async def generate_final_answer_fast_node(
             agent_reasoning=agent_reasoning,
         )
         dynamic_prompts.append(agent_research_prompt)
+
+    # 에이전트 지목 ∩ reranker top_k 교집합 문서를 1-base 인덱스로 LLM에게 전달.
+    confirmed_prompt = build_confirmed_priority_prompt(
+        retrieved_docs=retrieved_docs,
+        confirmed_essential_doc_ids=state.get("confirmed_essential_doc_ids"),
+    )
+    if confirmed_prompt:
+        dynamic_prompts.append(confirmed_prompt)
 
     system_message = build_system_message(
         static_prompt=prompts["system"],
