@@ -18,7 +18,7 @@ from catchup.sync.query_service import SyncQueryService
 
 CHANNEL_ID = "channel-123"
 _QUERY_SERVICE_MODULE = "catchup.sync.query_service"
-_LIST_CONNECTIONS = f"{_QUERY_SERVICE_MODULE}.list_channel_talk_connections"
+_LOAD_CONNECTION = f"{_QUERY_SERVICE_MODULE}.load_channel_talk_connection"
 _LOAD_DOCUMENT_CONNECTION = (
     f"{_QUERY_SERVICE_MODULE}.load_channel_talk_document_connection"
 )
@@ -108,8 +108,8 @@ class ChannelTalkTargetListingTests(IsolatedAsyncioTestCase):
     ) -> None:
         with (
             patch(
-                _LIST_CONNECTIONS,
-                return_value=[_build_connection_record()],
+                _LOAD_CONNECTION,
+                return_value=_build_connection_record(),
             ),
             patch(
                 _LOAD_DOCUMENT_CONNECTION,
@@ -137,34 +137,19 @@ class ChannelTalkTargetListingTests(IsolatedAsyncioTestCase):
         self.assertNotIn("runtime_target_kind", result.targets[0].metadata)
         self.assertNotIn("boundary", result.targets[0].metadata)
 
-    async def test_channel_talk_targets_derive_scope_from_stored_connection(
+    async def test_channel_talk_targets_reject_blank_scope(
         self,
     ) -> None:
-        with (
-            patch(
-                _LIST_CONNECTIONS,
-                return_value=[_build_connection_record()],
-            ),
-            patch(
-                _LOAD_DOCUMENT_CONNECTION,
-                return_value=_build_document_connection_record(),
-            ),
-        ):
-            result = await self.service._list_channel_talk_targets(scope_id=None)
-
-        self.assertEqual(result.scope_id, CHANNEL_ID)
-        self.assertEqual(
-            [target.target_id for target in result.targets],
-            [CHANNEL_ID, "space-123"],
-        )
+        with self.assertRaisesRegex(ValueError, "scope_id is required"):
+            await self.service._list_channel_talk_targets(scope_id="")
 
     async def test_channel_talk_targets_include_accessible_document_article_when_documents_connected(
         self,
     ) -> None:
         with (
             patch(
-                _LIST_CONNECTIONS,
-                return_value=[_build_connection_record()],
+                _LOAD_CONNECTION,
+                return_value=_build_connection_record(),
             ),
             patch(
                 _LOAD_DOCUMENT_CONNECTION,
@@ -203,8 +188,8 @@ class ChannelTalkTargetListingTests(IsolatedAsyncioTestCase):
     ) -> None:
         with (
             patch(
-                _LIST_CONNECTIONS,
-                return_value=[_build_connection_record()],
+                _LOAD_CONNECTION,
+                return_value=_build_connection_record(),
             ),
             patch(
                 _LOAD_DOCUMENT_CONNECTION,
@@ -224,8 +209,8 @@ class ChannelTalkTargetListingTests(IsolatedAsyncioTestCase):
     ) -> None:
         with (
             patch(
-                _LIST_CONNECTIONS,
-                return_value=[_build_connection_record()],
+                _LOAD_CONNECTION,
+                return_value=_build_connection_record(),
             ),
             patch(
                 _LOAD_DOCUMENT_CONNECTION,
@@ -243,8 +228,8 @@ class ChannelTalkTargetListingTests(IsolatedAsyncioTestCase):
     ) -> None:
         with (
             patch(
-                _LIST_CONNECTIONS,
-                return_value=[_build_connection_record()],
+                _LOAD_CONNECTION,
+                return_value=_build_connection_record(),
             ),
             patch(
                 _LOAD_DOCUMENT_CONNECTION,
@@ -264,8 +249,8 @@ class ChannelTalkTargetListingTests(IsolatedAsyncioTestCase):
     ) -> None:
         with (
             patch(
-                _LIST_CONNECTIONS,
-                return_value=[_build_connection_record()],
+                _LOAD_CONNECTION,
+                return_value=_build_connection_record(),
             ),
             patch(
                 _LOAD_DOCUMENT_CONNECTION,
@@ -276,36 +261,32 @@ class ChannelTalkTargetListingTests(IsolatedAsyncioTestCase):
                 await self.service._list_channel_talk_targets(scope_id=CHANNEL_ID)
 
     async def test_channel_talk_targets_reject_missing_base_credentials(self) -> None:
-        with patch(
-            _LIST_CONNECTIONS,
-            return_value=[],
+        with (
+            patch(
+                _LOAD_CONNECTION,
+                return_value=None,
+            ),
+            patch(
+                _LOAD_DOCUMENT_CONNECTION,
+                return_value=_build_document_connection_record(),
+            ),
         ):
             with self.assertRaisesRegex(ValueError, "channel_talk is not connected"):
                 await self.service._list_channel_talk_targets(scope_id=CHANNEL_ID)
 
     async def test_channel_talk_targets_reject_base_channel_mismatch(self) -> None:
-        with patch(
-            _LIST_CONNECTIONS,
-            return_value=[_build_connection_record(channel_id="channel-other")],
+        with (
+            patch(
+                _LOAD_CONNECTION,
+                return_value=_build_connection_record(channel_id="channel-other"),
+            ),
+            patch(
+                _LOAD_DOCUMENT_CONNECTION,
+                return_value=_build_document_connection_record(),
+            ),
         ):
             with self.assertRaisesRegex(
                 ValueError,
                 "Stored Channel Talk credentials do not match the requested channel",
             ):
                 await self.service._list_channel_talk_targets(scope_id=CHANNEL_ID)
-
-    async def test_channel_talk_targets_rejects_blank_scope_when_multiple_connections(
-        self,
-    ) -> None:
-        with patch(
-            _LIST_CONNECTIONS,
-            return_value=[
-                _build_connection_record(channel_id=CHANNEL_ID),
-                _build_connection_record(channel_id="channel-other"),
-            ],
-        ):
-            with self.assertRaisesRegex(
-                ValueError,
-                "scope_id is required when multiple channel_talk connections exist",
-            ):
-                await self.service._list_channel_talk_targets(scope_id=None)

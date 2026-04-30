@@ -155,35 +155,15 @@ class ChannelTalkFullSyncResolverTests(IsolatedAsyncioTestCase):
                     ),
                 )
 
-    async def test_resolver_accepts_selected_channel_id_without_scope_id(self) -> None:
-        with (
-            patch(
-                _LOAD_CONNECTION,
-                return_value=_build_connection_record(),
-            ),
-            patch(
-                _LOAD_DOCUMENT_CONNECTION,
-                return_value=None,
-            ),
-        ):
-            result = await self.resolver.resolve_full_sync_targets(
+    async def test_resolver_rejects_blank_scope_id(self) -> None:
+        with self.assertRaisesRegex(SyncRequestException, "scope_id is required"):
+            await self.resolver.resolve_full_sync_targets(
                 request=FullSyncDispatchRequest(
                     scope_id="",
                     targets=[_channel_target()],
                     sync_from_ts="1713744000.000000",
                 ),
             )
-
-        self.assertEqual(len(result.targets), 1)
-        self.assertEqual(result.targets[0].target_id, CHANNEL_ID)
-        self.assertEqual(result.targets[0].target_type.value, "channel")
-        self.assertEqual(
-            result.targets[0].metadata,
-            {
-                "target_kind": "channel_talk.channel",
-                "channel_id": CHANNEL_ID,
-            },
-        )
 
     async def test_resolver_skips_document_connection_lookup_for_channel_only_request(
         self,
@@ -335,7 +315,7 @@ class ChannelTalkFullSyncResolverTests(IsolatedAsyncioTestCase):
         ):
             with self.assertRaisesRegex(
                 SyncRequestException,
-                "requested targets contain unknown channel_talk targets",
+                "channel_talk documents is not connected for the requested channel",
             ):
                 await self.resolver.resolve_full_sync_targets(
                     request=FullSyncDispatchRequest(
@@ -429,7 +409,7 @@ class ChannelTalkFullSyncResolverTests(IsolatedAsyncioTestCase):
         ):
             with self.assertRaisesRegex(
                 SyncRequestException,
-                "requested targets contain unknown channel_talk targets",
+                "channel_talk documents credentials are not API verified for the requested channel",
             ):
                 await self.resolver.resolve_full_sync_targets(
                     request=FullSyncDispatchRequest(
@@ -456,7 +436,7 @@ class ChannelTalkFullSyncResolverTests(IsolatedAsyncioTestCase):
         ):
             with self.assertRaisesRegex(
                 SyncRequestException,
-                "requested targets contain unknown channel_talk targets",
+                "channel_talk documents credentials are not API verified for the requested channel",
             ):
                 await self.resolver.resolve_full_sync_targets(
                     request=FullSyncDispatchRequest(
@@ -495,29 +475,21 @@ class ChannelTalkFullSyncResolverTests(IsolatedAsyncioTestCase):
             ],
         )
 
-    async def test_resolver_derives_scope_from_stored_connection_when_blank(
+    async def test_resolver_rejects_blank_scope_before_connection_lookup(
         self,
     ) -> None:
-        with (
-            patch(
-                _LOAD_CONNECTION,
-                return_value=_build_connection_record(),
-            ),
-            patch(
-                _LOAD_DOCUMENT_CONNECTION,
-                return_value=None,
-            ),
+        with patch(
+            _LOAD_CONNECTION,
+            side_effect=AssertionError("connection lookup should not run"),
         ):
-            result = await self.resolver.resolve_full_sync_targets(
-                request=FullSyncDispatchRequest(
-                    scope_id="",
-                    targets=[_channel_target()],
-                    sync_from_ts="1713744000.000000",
-                ),
-            )
-
-        self.assertEqual(result.targets[0].target_id, CHANNEL_ID)
-        self.assertEqual(result.targets[0].metadata["channel_id"], CHANNEL_ID)
+            with self.assertRaisesRegex(SyncRequestException, "scope_id is required"):
+                await self.resolver.resolve_full_sync_targets(
+                    request=FullSyncDispatchRequest(
+                        scope_id="",
+                        targets=[_channel_target()],
+                        sync_from_ts="1713744000.000000",
+                    ),
+                )
 
     async def test_resolver_rejects_missing_channel_talk_connection(self) -> None:
         with patch(
@@ -526,7 +498,7 @@ class ChannelTalkFullSyncResolverTests(IsolatedAsyncioTestCase):
         ):
             with self.assertRaisesRegex(
                 SyncRequestException,
-                "channel_talk is not connected",
+                "channel_talk is not connected for the requested channel",
             ):
                 await self.resolver.resolve_full_sync_targets(
                     request=FullSyncDispatchRequest(
@@ -535,6 +507,22 @@ class ChannelTalkFullSyncResolverTests(IsolatedAsyncioTestCase):
                         sync_from_ts="1713744000.000000",
                     ),
                 )
+
+    async def test_resolver_passes_scope_id_to_connection_lookup(self) -> None:
+        with patch(
+            _LOAD_CONNECTION,
+            return_value=_build_connection_record(),
+        ) as load_connection:
+            result = await self.resolver.resolve_full_sync_targets(
+                request=FullSyncDispatchRequest(
+                    scope_id=CHANNEL_ID,
+                    targets=[_channel_target()],
+                    sync_from_ts="1713744000.000000",
+                ),
+            )
+
+        self.assertEqual(result.targets[0].target_id, CHANNEL_ID)
+        load_connection.assert_called_once_with(CHANNEL_ID)
 
     async def test_resolver_rejects_requested_channel_mismatch(self) -> None:
         with (

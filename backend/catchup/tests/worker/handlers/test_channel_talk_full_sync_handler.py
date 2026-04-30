@@ -349,7 +349,10 @@ class ChannelTalkFullSyncHandlerTests(IsolatedAsyncioTestCase):
             _LOAD_CONNECTION,
             return_value=None,
         ):
-            with self.assertRaisesRegex(ValueError, "channel_talk is not connected"):
+            with self.assertRaisesRegex(
+                ValueError,
+                "channel_talk is not connected for the requested channel",
+            ):
                 await self.handler.handle(
                     context=_build_context(),
                     service_cache={},

@@ -78,11 +78,11 @@ class ChannelTalkSyncApiTests(TestCase):
     def tearDown(self) -> None:
         self.client.close()
 
-    def test_get_targets_returns_registered_channel_without_scope_param(self) -> None:
+    def test_get_targets_returns_registered_channel_with_scope_param(self) -> None:
         with (
             patch(
-                "catchup.sync.query_service.list_channel_talk_connections",
-                return_value=[_build_connection_record()],
+                "catchup.sync.query_service.load_channel_talk_connection",
+                return_value=_build_connection_record(),
             ),
             patch(
                 "catchup.sync.query_service.load_channel_talk_document_connection",
@@ -93,6 +93,7 @@ class ChannelTalkSyncApiTests(TestCase):
                 "/api/v1/sync/targets",
                 params={
                     "connector": "channel_talk",
+                    "scope_id": CHANNEL_ID,
                 },
             )
 
@@ -130,6 +131,21 @@ class ChannelTalkSyncApiTests(TestCase):
             },
         )
 
+    def test_get_targets_rejects_missing_scope_id_for_channel_talk(self) -> None:
+        response = self.client.get(
+            "/api/v1/sync/targets",
+            params={
+                "connector": "channel_talk",
+            },
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["detail"]["code"], "invalid_request")
+        self.assertEqual(
+            response.json()["detail"]["message"],
+            "scope_id is required",
+        )
+
     def test_get_targets_rejects_missing_scope_id_for_non_channel_talk(self) -> None:
         response = self.client.get(
             "/api/v1/sync/targets",
@@ -146,9 +162,15 @@ class ChannelTalkSyncApiTests(TestCase):
         )
 
     def test_get_targets_rejects_missing_channel_talk_connection(self) -> None:
-        with patch(
-            "catchup.sync.query_service.list_channel_talk_connections",
-            return_value=[],
+        with (
+            patch(
+                "catchup.sync.query_service.load_channel_talk_connection",
+                return_value=None,
+            ),
+            patch(
+                "catchup.sync.query_service.load_channel_talk_document_connection",
+                return_value=_build_document_connection_record(),
+            ),
         ):
             response = self.client.get(
                 "/api/v1/sync/targets",
@@ -162,13 +184,19 @@ class ChannelTalkSyncApiTests(TestCase):
         self.assertEqual(response.json()["detail"]["code"], "invalid_request")
         self.assertEqual(
             response.json()["detail"]["message"],
-            "channel_talk is not connected",
+            "channel_talk is not connected for the requested channel",
         )
 
     def test_get_targets_rejects_requested_channel_mismatch(self) -> None:
-        with patch(
-            "catchup.sync.query_service.list_channel_talk_connections",
-            return_value=[_build_connection_record(channel_id="channel-other")],
+        with (
+            patch(
+                "catchup.sync.query_service.load_channel_talk_connection",
+                return_value=_build_connection_record(channel_id="channel-other"),
+            ),
+            patch(
+                "catchup.sync.query_service.load_channel_talk_document_connection",
+                return_value=_build_document_connection_record(),
+            ),
         ):
             response = self.client.get(
                 "/api/v1/sync/targets",
@@ -363,8 +391,8 @@ class ChannelTalkSyncApiTests(TestCase):
 
         with (
             patch(
-                "catchup.sync.query_service.list_channel_talk_connections",
-                return_value=[_build_connection_record()],
+                "catchup.sync.query_service.load_channel_talk_connection",
+                return_value=_build_connection_record(),
             ),
             patch(
                 "catchup.sync.query_service.load_channel_talk_document_connection",
@@ -375,6 +403,7 @@ class ChannelTalkSyncApiTests(TestCase):
                 "/api/v1/sync/targets",
                 params={
                     "connector": "channel_talk",
+                    "scope_id": CHANNEL_ID,
                 },
             )
 
