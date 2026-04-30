@@ -67,7 +67,11 @@ export const useMemberIntegrationViewModel = (params: {
       const serviceInfoByService: Partial<Record<IntegrationService, PreMappingInfo>> = {};
       const statusByService = {} as Record<IntegrationService, '미사용' | '완료' | '미등록'>;
 
-      for (const service of ['jira', 'github', 'slack', 'confluence', 'channel-talk'] as IntegrationService[]) {
+      // 이용자 연동 테이블에 노출되는 서비스만 데이터 구성.
+      // confluence는 IntegrationService union 멤버이지만 테이블 컬럼에는 미노출(MEMBER_TABLE_SERVICES 참고)
+      // 카드/임베딩/내 연동 탭에서만 사용되므로 view model 영역 밖.
+      // UserDetailPanel 활성화 등으로 confluence 행 데이터 필요 시 이 배열에 'confluence' 추가 + statusByService 타입 narrow 검토.
+      for (const service of ['jira', 'github', 'slack', 'channel-talk'] as const) {
         const info = getServiceInfo(item, service);
         if (info) serviceInfoByService[service] = info;
 
