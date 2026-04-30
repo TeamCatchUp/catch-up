@@ -2,21 +2,17 @@ from __future__ import annotations
 
 import asyncio
 
-from fastapi.concurrency import run_in_threadpool
 import structlog
+from fastapi.concurrency import run_in_threadpool
 
 from catchup.db.atlassian.oauth_repository import get_token_by_cloud_id
 from catchup.db.confluence import domain_repository as confluence_entities
 from catchup.db.engine import SessionLocal
 from catchup.sync.common.exceptions import SyncRequestException
 from catchup.sync.common.protocols import FullSyncTargetResolverProtocol
-from catchup.sync.common.schemas import (
-    FullSyncResolvedTargets,
-    FullSyncDispatchRequest,
-)
-from catchup.sync.full.targets import (
-    resolve_full_sync_targets_from_rows,
-)
+from catchup.sync.common.schemas import FullSyncDispatchRequest
+from catchup.sync.common.schemas import FullSyncResolvedTargets
+from catchup.sync.full.targets import resolve_full_sync_targets_from_rows
 
 logger = structlog.get_logger(__name__)
 
@@ -35,6 +31,7 @@ class ConfluenceFullSyncTargetResolver(FullSyncTargetResolverProtocol):
         *,
         request: FullSyncDispatchRequest,
     ) -> FullSyncResolvedTargets:
+        # Confluence는 scope_id=cloud_id, target_type=space, target_id=space_key 계약이다.
         cloud_id = request.scope_id.strip()
         if not cloud_id:
             raise SyncRequestException("scope_id is required")
@@ -49,13 +46,14 @@ class ConfluenceFullSyncTargetResolver(FullSyncTargetResolverProtocol):
                 metadata={"cloud_id": cloud_id},
             )
 
+        # listing 때 저장된 space snapshot과 요청 space_key를 매칭한다.
         requested_space_keys, resolved_targets = resolve_full_sync_targets_from_rows(
-            request_target_ids=request.target_ids,
+            request_targets=request.targets,
             rows=spaces,
             target_type="space",
             key_getter=lambda space: space.space_key,
             name_getter=lambda space: space.space_name or space.space_key,
-            error_message="requested target_ids contain unknown spaces",
+            error_message="requested targets contain unknown spaces",
             error_metadata={"cloud_id": cloud_id},
             log_context={
                 "connector": "confluence",

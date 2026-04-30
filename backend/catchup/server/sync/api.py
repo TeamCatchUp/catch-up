@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import structlog
-
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter
+from fastapi import Depends
+from fastapi import HTTPException
+from fastapi import Query
+from fastapi import status
 
 from catchup.audit.actions import SyncTriggerAction
 from catchup.audit.metadata import FullSyncTriggerMetadata
@@ -10,23 +13,24 @@ from catchup.audit.utils import audit_log
 from catchup.auth.dependencies import require_admin_user
 from catchup.configs.config import settings
 from catchup.db.models import SyncConnector
-from catchup.server.sync.schemas import (
-    FullSyncRequest,
-    SlackIncrementalRecoveryResponse,
-    SyncAcceptedResponse,
-    SyncErrorResponse,
-    SyncJobSnapshotResponse,
-    SyncRecordGapResponse,
-    SyncRecordRetryRequest,
-    SyncRecordRetryResponse,
-    SyncStatusResponse,
-    SyncTargetsResponse,
-)
-from catchup.sync.common.exceptions import BaseSyncException, SyncRequestException
+from catchup.server.sync.schemas import FullSyncRequest
+from catchup.server.sync.schemas import SlackIncrementalRecoveryResponse
+from catchup.server.sync.schemas import SyncAcceptedResponse
+from catchup.server.sync.schemas import SyncErrorResponse
+from catchup.server.sync.schemas import SyncJobSnapshotResponse
+from catchup.server.sync.schemas import SyncRecordGapResponse
+from catchup.server.sync.schemas import SyncRecordRetryRequest
+from catchup.server.sync.schemas import SyncRecordRetryResponse
+from catchup.server.sync.schemas import SyncStatusResponse
+from catchup.server.sync.schemas import SyncTargetsResponse
+from catchup.sync.common.exceptions import BaseSyncException
+from catchup.sync.common.exceptions import SyncRequestException
 from catchup.sync.full.service import get_full_sync_service
-from catchup.sync.repair.slack_incremental_recovery_service import get_slack_incremental_recovery_service
-from catchup.sync.repair.record_repair_service import get_record_repair_service
 from catchup.sync.query_service import get_sync_query_service
+from catchup.sync.repair.record_repair_service import get_record_repair_service
+from catchup.sync.repair.slack_incremental_recovery_service import (
+    get_slack_incremental_recovery_service,
+)
 
 logger = structlog.get_logger(__name__)
 
@@ -55,6 +59,7 @@ async def dispatch_full_sync(
 ):
     full_sync_service = get_full_sync_service()
 
+    # FullSyncRequest -> FullSyncDispatchRequest
     dispatch_request = sync_request.to_dispatch_request(
         default_sync_days=settings.DEFAULT_SYNC_DAYS,
     )
@@ -76,11 +81,13 @@ async def dispatch_full_sync(
 )
 async def list_sync_targets(
     connector: SyncConnector = Query(..., description="sync connector"),
-    scope_id: str = Query(..., description="connector scope id"),
+    scope_id: str | None = Query(None, description="connector scope id"),
 ):
     query_service = get_sync_query_service()
 
     try:
+        # 프론트는 이 응답의 target_type/target_id 쌍을 그대로
+        # POST /full 의 targets 배열에 넣으면 된다.
         result = await query_service.list_targets(
             connector=connector,
             scope_id=scope_id,

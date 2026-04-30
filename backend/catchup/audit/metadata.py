@@ -180,7 +180,7 @@ class RegisterWebhookAuditMetadata(BaseAuditMetadata):
 class FullSyncTriggerMetadata(BaseAuditMetadata):
     connector: SyncConnector
     scope_id: str
-    target_ids: list[str]
+    targets: list[dict[str, str]]
     sync_days: int
     job_id: str | None = None
     event_ids: list[str] | None = None
@@ -189,6 +189,8 @@ class FullSyncTriggerMetadata(BaseAuditMetadata):
     def from_audit(cls, data: "AuditLogMetadataInput") -> "FullSyncTriggerMetadata":
         sync_request = data.arguments["sync_request"]
         response = data.result
+        # Audit metadata도 public request 계약과 같은 typed targets 배열을 기록한다.
+        # target_ids는 더 이상 남기지 않아 이후 로그 분석에서도 계약이 한 가지로 보인다.
         resolved_sync_days = (
             sync_request.sync_days
             if sync_request.sync_days is not None
@@ -197,8 +199,14 @@ class FullSyncTriggerMetadata(BaseAuditMetadata):
 
         return cls(
             connector=sync_request.connector,
-            scope_id=sync_request.scope_id,
-            target_ids=sync_request.target_ids,
+            scope_id=sync_request.scope_id or "",
+            targets=[
+                {
+                    "target_type": target.target_type.value,
+                    "target_id": target.target_id,
+                }
+                for target in sync_request.targets
+            ],
             sync_days=resolved_sync_days,
             job_id=getattr(response, "job_id", None),
             event_ids=getattr(response, "event_ids", None),
