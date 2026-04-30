@@ -27,7 +27,7 @@ from catchup.connectors.channel_talk.full_sync_helper import (
     require_channel_talk_channel_id,
 )
 from catchup.connectors.channel_talk.full_sync_target_contract import (
-    ChannelTalkFullSyncTargetShape,
+    ChannelTalkFullSyncTargetPlan,
 )
 from catchup.connectors.channel_talk.schemas.channel_connection import (
     ChannelTalkCredentialsRecord,
@@ -655,11 +655,11 @@ class SyncQueryService:
             channel_id=channel_id,
         )
 
-        channel_shape = ChannelTalkFullSyncTargetShape.channel(
+        channel_plan = ChannelTalkFullSyncTargetPlan.channel(
             channel_id=connection.channel_id,
             channel_name=connection.channel_name,
         )
-        targets = [self._build_channel_talk_target_result(channel_shape)]
+        targets = [self._build_channel_talk_target_result(channel_plan)]
         document_target = self._build_document_target_if_accessible(
             document_connection_result,
             channel_id=channel_id,
@@ -689,14 +689,14 @@ class SyncQueryService:
 
     @staticmethod
     def _build_channel_talk_target_result(
-        shape: ChannelTalkFullSyncTargetShape,
+        plan: ChannelTalkFullSyncTargetPlan,
     ) -> SyncTargetResult:
         return SyncTargetResult(
-            target_id=shape.target_id,
-            display_name=shape.target_name,
-            target_type=SyncTargetType(shape.target_type),
+            target_id=plan.target_id,
+            display_name=plan.target_name,
+            target_type=SyncTargetType(plan.target_type),
             is_accessible=True,
-            metadata=shape.to_metadata(),
+            metadata=plan.to_metadata(),
         )
 
     @classmethod
@@ -719,12 +719,12 @@ class SyncQueryService:
                 association_status=document_connection.association_status,
             )
             return None
-        shape = ChannelTalkFullSyncTargetShape.document_space(
+        plan = ChannelTalkFullSyncTargetPlan.document_space(
             channel_id=channel_id,
             space_id=document_connection.space_id,
             space_name=document_connection.space_name,
         )
-        return cls._build_channel_talk_target_result(shape)
+        return cls._build_channel_talk_target_result(plan)
 
     async def list_targets(
         self,

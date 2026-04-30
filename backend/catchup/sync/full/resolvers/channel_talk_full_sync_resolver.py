@@ -19,7 +19,7 @@ from catchup.connectors.channel_talk.full_sync_helper import (
     require_channel_talk_channel_id,
 )
 from catchup.connectors.channel_talk.full_sync_target_contract import (
-    ChannelTalkFullSyncTargetShape,
+    ChannelTalkFullSyncTargetPlan,
 )
 from catchup.connectors.channel_talk.schemas.channel_connection import (
     ChannelTalkCredentialsRecord,
@@ -161,7 +161,7 @@ class ChannelTalkFullSyncTargetResolver(FullSyncTargetResolverProtocol):
             )
 
         target = ChannelTalkFullSyncTargetResolver._build_full_sync_target(
-            ChannelTalkFullSyncTargetShape.channel(
+            ChannelTalkFullSyncTargetPlan.channel(
                 channel_id=connection.channel_id,
                 channel_name=connection.channel_name,
             )
@@ -216,7 +216,7 @@ class ChannelTalkFullSyncTargetResolver(FullSyncTargetResolverProtocol):
             )
 
         target = ChannelTalkFullSyncTargetResolver._build_full_sync_target(
-            ChannelTalkFullSyncTargetShape.document_space(
+            ChannelTalkFullSyncTargetPlan.document_space(
                 channel_id=channel_id,
                 space_id=document_connection.space_id,
                 space_name=document_connection.space_name,
@@ -228,13 +228,13 @@ class ChannelTalkFullSyncTargetResolver(FullSyncTargetResolverProtocol):
 
     @staticmethod
     def _build_full_sync_target(
-        shape: ChannelTalkFullSyncTargetShape,
+        plan: ChannelTalkFullSyncTargetPlan,
     ) -> FullSyncTarget:
         return FullSyncTarget(
-            target_type=SyncTargetType(shape.target_type),
-            target_id=shape.target_id,
-            target_name=shape.target_name,
-            metadata=shape.to_metadata(),
+            target_type=SyncTargetType(plan.target_type),
+            target_id=plan.target_id,
+            target_name=plan.target_name,
+            metadata=plan.to_metadata(),
         )
 
     @staticmethod

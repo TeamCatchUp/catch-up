@@ -33,7 +33,7 @@ def _normalize_runtime_target(value: str) -> ChannelTalkRuntimeTarget:
 
 
 @dataclass(frozen=True, slots=True)
-class ChannelTalkFullSyncTargetShape:
+class ChannelTalkFullSyncTargetPlan:
     target_type: ChannelTalkPublicTargetType
     target_id: str
     target_name: str
@@ -122,7 +122,7 @@ class ChannelTalkFullSyncTargetShape:
         *,
         channel_id: str,
         channel_name: str,
-    ) -> "ChannelTalkFullSyncTargetShape":
+    ) -> "ChannelTalkFullSyncTargetPlan":
         normalized_channel_id = require_text(channel_id, "channel_id")
         return cls(
             target_type="channel",
@@ -140,7 +140,7 @@ class ChannelTalkFullSyncTargetShape:
         channel_id: str,
         space_id: str,
         space_name: str,
-    ) -> "ChannelTalkFullSyncTargetShape":
+    ) -> "ChannelTalkFullSyncTargetPlan":
         normalized_space_id = require_text(space_id, "space_id")
         normalized_space_name = require_text(space_name, "space_name")
         return cls(
@@ -170,24 +170,3 @@ class ChannelTalkFullSyncTargetShape:
             metadata["space_name"] = require_text(raw_space_name, "space_name")
         return metadata
 
-
-def build_channel_talk_channel_metadata(
-    channel_id: str,
-) -> dict[str, str]:
-    # Metadata는 설명/감사용이다. 실행 분기는 metadata가 아니라 target_type=channel이다.
-    return ChannelTalkFullSyncTargetShape.channel(
-        channel_id=channel_id,
-        channel_name=channel_id,
-    ).to_metadata()
-
-
-def build_channel_talk_document_space_metadata(
-    channel_id: str,
-) -> dict[str, str]:
-    # space_id/space_name은 listing/resolver가 실제 Documents connection에서 채운다.
-    # 이 함수는 공통으로 필요한 target_kind와 channel_id만 책임진다.
-    normalized_channel_id = require_text(channel_id, "channel_id")
-    return {
-        "target_kind": CHANNEL_TALK_DOCUMENT_SPACE_TARGET_KIND,
-        "channel_id": normalized_channel_id,
-    }

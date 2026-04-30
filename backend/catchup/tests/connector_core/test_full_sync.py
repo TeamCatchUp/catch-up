@@ -81,13 +81,7 @@ from catchup.connectors.channel_talk.full_sync_target_contract import (
     CHANNEL_TALK_USER_CHAT_RUNTIME_TARGET,
 )
 from catchup.connectors.channel_talk.full_sync_target_contract import (
-    ChannelTalkFullSyncTargetShape,
-)
-from catchup.connectors.channel_talk.full_sync_target_contract import (
-    build_channel_talk_channel_metadata,
-)
-from catchup.connectors.channel_talk.full_sync_target_contract import (
-    build_channel_talk_document_space_metadata,
+    ChannelTalkFullSyncTargetPlan,
 )
 from catchup.connectors.channel_talk.schemas.channel_connection import (
     ChannelTalkCredentialsRecord,
@@ -463,70 +457,15 @@ class ChannelTalkFullSyncContractTests(TestCase):
             ),
         )
 
-    def test_document_space_metadata_describes_real_target(self) -> None:
-        metadata = build_channel_talk_document_space_metadata(" channel-123 ")
+    def test_document_space_plan_metadata_describes_real_target(self) -> None:
+        metadata = ChannelTalkFullSyncTargetPlan.document_space(
+            channel_id=" channel-123 ",
+            space_id="space-123",
+            space_name="Help Center",
+        ).to_metadata()
 
         self.assertEqual(
             metadata,
-            {
-                "target_kind": "channel_talk.document_space",
-                "channel_id": "channel-123",
-            },
-        )
-
-    def test_document_article_metadata_rejects_blank_channel_id(self) -> None:
-        with self.assertRaisesRegex(ValueError, "channel_id is required"):
-            build_channel_talk_document_space_metadata(" ")
-
-    def test_document_article_display_name_contract(self) -> None:
-        self.assertEqual(CHANNEL_TALK_DOCUMENT_ARTICLE_DISPLAY_NAME, "DocumentArticle")
-
-    def test_channel_metadata_describes_real_target(self) -> None:
-        self.assertEqual(
-            build_channel_talk_channel_metadata("channel-123"),
-            {
-                "target_kind": "channel_talk.channel",
-                "channel_id": "channel-123",
-            },
-        )
-
-    def test_channel_target_shape_separates_public_and_runtime_target(self) -> None:
-        shape = ChannelTalkFullSyncTargetShape.channel(
-            channel_id="channel-123",
-            channel_name="Support",
-        )
-
-        self.assertEqual(shape.target_type, "channel")
-        self.assertEqual(shape.target_id, "channel-123")
-        self.assertEqual(shape.target_name, "Support")
-        self.assertEqual(shape.runtime_target, "user_chat")
-        self.assertEqual(shape.channel_id, "channel-123")
-        self.assertIsNone(shape.space_id)
-        self.assertEqual(
-            shape.to_metadata(),
-            {
-                "target_kind": "channel_talk.channel",
-                "channel_id": "channel-123",
-            },
-        )
-
-    def test_document_space_target_shape_separates_public_and_runtime_target(
-        self,
-    ) -> None:
-        shape = ChannelTalkFullSyncTargetShape.document_space(
-            channel_id="channel-123",
-            space_id="space-123",
-            space_name="Help Center",
-        )
-
-        self.assertEqual(shape.target_type, "space")
-        self.assertEqual(shape.target_id, "space-123")
-        self.assertEqual(shape.target_name, "Help Center")
-        self.assertEqual(shape.runtime_target, "document_article")
-        self.assertEqual(shape.channel_id, "channel-123")
-        self.assertEqual(shape.space_id, "space-123")
-        self.assertEqual(
-            shape.to_metadata(),
             {
                 "target_kind": "channel_talk.document_space",
                 "channel_id": "channel-123",
@@ -535,9 +474,77 @@ class ChannelTalkFullSyncContractTests(TestCase):
             },
         )
 
-    def test_target_shape_rejects_misaligned_public_identity(self) -> None:
+    def test_document_space_plan_rejects_blank_channel_id(self) -> None:
+        with self.assertRaisesRegex(ValueError, "channel_id is required"):
+            ChannelTalkFullSyncTargetPlan.document_space(
+                channel_id=" ",
+                space_id="space-123",
+                space_name="Help Center",
+            )
+
+    def test_document_article_display_name_contract(self) -> None:
+        self.assertEqual(CHANNEL_TALK_DOCUMENT_ARTICLE_DISPLAY_NAME, "DocumentArticle")
+
+    def test_channel_target_plan_metadata_describes_real_target(self) -> None:
+        self.assertEqual(
+            ChannelTalkFullSyncTargetPlan.channel(
+                channel_id="channel-123",
+                channel_name="Support",
+            ).to_metadata(),
+            {
+                "target_kind": "channel_talk.channel",
+                "channel_id": "channel-123",
+            },
+        )
+
+    def test_channel_target_plan_separates_public_and_runtime_target(self) -> None:
+        plan = ChannelTalkFullSyncTargetPlan.channel(
+            channel_id="channel-123",
+            channel_name="Support",
+        )
+
+        self.assertEqual(plan.target_type, "channel")
+        self.assertEqual(plan.target_id, "channel-123")
+        self.assertEqual(plan.target_name, "Support")
+        self.assertEqual(plan.runtime_target, "user_chat")
+        self.assertEqual(plan.channel_id, "channel-123")
+        self.assertIsNone(plan.space_id)
+        self.assertEqual(
+            plan.to_metadata(),
+            {
+                "target_kind": "channel_talk.channel",
+                "channel_id": "channel-123",
+            },
+        )
+
+    def test_document_space_target_plan_separates_public_and_runtime_target(
+        self,
+    ) -> None:
+        plan = ChannelTalkFullSyncTargetPlan.document_space(
+            channel_id="channel-123",
+            space_id="space-123",
+            space_name="Help Center",
+        )
+
+        self.assertEqual(plan.target_type, "space")
+        self.assertEqual(plan.target_id, "space-123")
+        self.assertEqual(plan.target_name, "Help Center")
+        self.assertEqual(plan.runtime_target, "document_article")
+        self.assertEqual(plan.channel_id, "channel-123")
+        self.assertEqual(plan.space_id, "space-123")
+        self.assertEqual(
+            plan.to_metadata(),
+            {
+                "target_kind": "channel_talk.document_space",
+                "channel_id": "channel-123",
+                "space_id": "space-123",
+                "space_name": "Help Center",
+            },
+        )
+
+    def test_target_plan_rejects_misaligned_public_identity(self) -> None:
         with self.assertRaisesRegex(ValueError, "channel target_id must match"):
-            ChannelTalkFullSyncTargetShape(
+            ChannelTalkFullSyncTargetPlan(
                 target_type="channel",
                 target_id="space-123",
                 target_name="Support",
