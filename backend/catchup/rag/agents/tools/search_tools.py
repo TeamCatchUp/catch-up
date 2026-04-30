@@ -8,13 +8,10 @@ from langchain_core.messages import ToolMessage
 from langchain_core.tools import tool
 
 from catchup.components.vector_db.base import BaseVectorDbService
-from catchup.rag.nodes.search_vector_db.search_vector_db import (
-    _deduplicate_search_results,
-)
+from catchup.rag.nodes.search_vector_db.search_vector_db import _deduplicate_search_results
 from catchup.rag.nodes.utils import log_node
 from catchup.rag.nodes.utils import resolve_temporal_context
 from catchup.rag.schemas.structures import MultiSearchRequest
-from catchup.rag.schemas.structures import VectorDbSearchQuery
 from catchup.rag.state import AgentState
 
 logger = structlog.get_logger()
@@ -214,14 +211,14 @@ async def search_tool_executor_node(
     # 최신 검색 결과가 앞에 오도록 new_unique를 먼저 배치
     existing = state.get("accumulated_docs") or []
     seen_ids = {doc.id if doc.id else hash(doc.page_content) for doc in all_docs}
-    
+
     new_unique = list(all_docs)
     for doc in existing:
         doc_identifier = doc.id if doc.id else hash(doc.page_content)
         if doc_identifier not in seen_ids:
             new_unique.append(doc)
             seen_ids.add(doc_identifier)
-            
+
     merged = new_unique
 
     logger.info(

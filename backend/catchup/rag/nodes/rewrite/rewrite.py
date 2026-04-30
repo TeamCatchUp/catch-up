@@ -1,3 +1,4 @@
+import asyncio
 import structlog
 from langchain.chat_models import BaseChatModel
 
@@ -15,7 +16,11 @@ logger = structlog.get_logger()
 
 @log_node
 @token_usage
-async def rewrite_node(state: AgentState, llm: BaseChatModel):
+async def rewrite_node(
+    state: AgentState,
+    llm: BaseChatModel,
+    timeout: float | None = None,
+):
     conversation_history = get_conversation_history(state["messages"])
     history_text = get_formatted_history_text(conversation_history)
     original_query = state["original_query"]
@@ -26,17 +31,20 @@ async def rewrite_node(state: AgentState, llm: BaseChatModel):
         history=history_text,
         feedback=grade_comment,
         original_query=original_query,
-        **global_context
+        **global_context,
     )
 
     try:
         response, token_usages = await ainvoke_llm_with_token_usage(
             llm=llm,
             messages=prompt,
-            semaphore=rag_semaphores.analysis
+            semaphore=rag_semaphores.llm_small,
+            timeout=timeout,
         )
         rewritten_query = response.content
 
+    except asyncio.TimeoutError as e:
+        raise e
     except Exception:
         return {
             "rewritten_query": original_query,
@@ -46,10 +54,7 @@ async def rewrite_node(state: AgentState, llm: BaseChatModel):
         "query_rewrite_result",
         original_query=original_query,
         feedback=grade_comment,
-        rewritten_query=rewritten_query
+        rewritten_query=rewritten_query,
     )
 
-    return {
-        "rewritten_query": rewritten_query,
-        **token_usages
-    }
+    return {"rewritten_query": rewritten_query, **token_usages}

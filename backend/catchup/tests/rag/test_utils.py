@@ -35,7 +35,7 @@ def test_build_docs_summary():
     
     # 기본 요약 (max_docs=5)
     summary = build_docs_summary(docs)
-    assert "총 3개 문서 수집됨" in summary
+    assert "총 3개 문서 누적됨" in summary
     assert "slack:2" in summary
     assert "github:1" in summary
     assert "[1] (slack)" in summary

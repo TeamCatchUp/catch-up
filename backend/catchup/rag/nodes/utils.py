@@ -1,3 +1,4 @@
+import asyncio
 import functools
 import json
 import re
@@ -64,40 +65,51 @@ def build_docs_summary(docs: list[Document], max_docs: int = 10) -> str:
 
 
 async def ainvoke_llm_with_token_usage(
-    llm: Any, 
+    llm: Any,
     messages: list[BaseMessage],
     semaphore: Any = None,
-    **kwargs: Any
+    timeout: float | None = None,
+    **kwargs: Any,
 ) -> tuple[Any, dict]:
     """LLM을 호출하고 토큰 사용량을 추출한다. 에러 발생 시 예외를 전파한다."""
     token_usages = {"token_breakdown": {}}
     try:
-        if semaphore:
-            t_sem = time.perf_counter()
-            logger.debug(
-                "semaphore_acquiring",
-                semaphore=semaphore.name,
-            )
-            async with semaphore:
-                t_llm = time.perf_counter()
+        async with asyncio.timeout(timeout):
+            if semaphore:
+                t_sem = time.perf_counter()
                 logger.debug(
-                    "llm_invoke_start",
-                    semaphore_wait_elapsed=round(t_llm - t_sem, 3),
+                    "semaphore_acquiring",
+                    semaphore=semaphore.name,
                 )
+                async with semaphore:
+                    t_llm = time.perf_counter()
+                    logger.debug(
+                        "llm_invoke_start",
+                        semaphore_wait_elapsed=round(t_llm - t_sem, 3),
+                    )
+                    response = await llm.ainvoke(input=messages, **kwargs)
+            else:
+                t_llm = time.perf_counter()
+                logger.debug("llm_invoke_without_semaphore_start")
                 response = await llm.ainvoke(input=messages, **kwargs)
-        else:
-            t_llm = time.perf_counter()
-            logger.debug("llm_invoke_without_semaphore_start")
-            response = await llm.ainvoke(input=messages, **kwargs)            
+
         logger.debug(
-            "llm_invoke_completed",
-            elapsed=round(time.perf_counter() - t_llm, 3)
+            "llm_invoke_completed", elapsed=round(time.perf_counter() - t_llm, 3)
         )
 
         # response가 dict인 경우 (with_structured_output include_raw=True) 처리
         raw_response = response.get("raw") if isinstance(response, dict) else response
         token_usages = extract_token_usages(raw_response)
         return response, token_usages
+
+    except asyncio.TimeoutError as e:
+        logger.warning(
+            "llm_call_timeout",
+            timeout=timeout,
+            error=str(e),
+            exc_info=True,
+        )
+        raise e
     except Exception as e:
         logger.warning("llm_call_failed", error=str(e), exc_info=True)
         raise e

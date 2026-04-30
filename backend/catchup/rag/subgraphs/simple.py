@@ -21,11 +21,14 @@ def build_simple_subgraph(
     자동으로 쿼리 수를 1개로 제한한다.
     supervisor가 rewritten_query = original_query로 미리 채워두므로 rewrite 불필요.
     """
+    from catchup.rag.graph import TIMEOUT_RETRY_POLICY
+
     graph = StateGraph(AgentState)
 
     graph.add_node(
         "generate_vector_queries",
-        partial(generate_vector_queries_node, llm=llm_small),
+        partial(generate_vector_queries_node, llm=llm_small, timeout=15.0),
+        retry=TIMEOUT_RETRY_POLICY,
     )
     graph.add_node(
         "search_vector_db",

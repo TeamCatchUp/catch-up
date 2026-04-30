@@ -1,3 +1,4 @@
+import asyncio
 import structlog
 from langchain.chat_models import BaseChatModel
 from langchain_core.messages import HumanMessage
@@ -20,7 +21,11 @@ logger = structlog.get_logger()
 
 @log_node
 @token_usage
-async def complex_planner_node(state: AgentState, llm: BaseChatModel):
+async def complex_planner_node(
+    state: AgentState,
+    llm: BaseChatModel,
+    timeout: float | None = None,
+):
     """Complex 파이프라인 플래너. Extended Thinking LARGE 모델로 검색 전략을 수립한다."""
     global_context = state["global_context"].model_dump()
     query = state.get("rewritten_query") or state.get("original_query", "")
@@ -41,9 +46,12 @@ async def complex_planner_node(state: AgentState, llm: BaseChatModel):
         response, token_usages = await ainvoke_llm_with_token_usage(
             llm=structured_llm,
             messages=[system_message, HumanMessage(content=query)],
-            semaphore=rag_semaphores.final_answer,
+            semaphore=rag_semaphores.llm_large,
+            timeout=timeout,
         )
         plan: SearchPlan = response.get("parsed")
+    except asyncio.TimeoutError as e:
+        raise e
     except Exception:
         return {"search_plan": None}
 
@@ -73,7 +81,11 @@ async def complex_planner_node(state: AgentState, llm: BaseChatModel):
 
 @log_node
 @token_usage
-async def complex_agent_node(state: AgentState, llm: BaseChatModel):
+async def complex_agent_node(
+    state: AgentState,
+    llm: BaseChatModel,
+    timeout: float | None = None,
+):
     """Complex ReAct 에이전트. LARGE 모델, max_iter=7.
     search_plan과 accumulated_docs를 참조해 다음 검색 전략을 결정한다."""
     pipeline_plan = state.get("pipeline_plan")
@@ -104,8 +116,11 @@ async def complex_agent_node(state: AgentState, llm: BaseChatModel):
         response, token_usages = await ainvoke_llm_with_token_usage(
             llm=llm_with_tools,
             messages=[system_message, HumanMessage(content=query)] + existing_messages,
-            semaphore=rag_semaphores.final_answer,
+            semaphore=rag_semaphores.llm_large,
+            timeout=timeout,
         )
+    except asyncio.TimeoutError as e:
+        raise e
     except Exception:
         return {"agent_iteration": agent_iteration + 1}
 

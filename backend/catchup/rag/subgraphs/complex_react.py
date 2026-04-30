@@ -34,11 +34,26 @@ def build_complex_react_subgraph(
             → agent loop (LARGE, max_iter=7) ↔ tool executor
             → collect_docs → rerank (1회) → generate_final_answer → END
     """
+    from catchup.rag.graph import AGENT_TIMEOUT_RETRY_POLICY
+    from catchup.rag.graph import TIMEOUT_RETRY_POLICY
+
     graph = StateGraph(AgentState)
 
-    graph.add_node("rewrite", partial(rewrite_node, llm=llm_small))
-    graph.add_node("complex_planner", partial(complex_planner_node, llm=llm_thinking))
-    graph.add_node("complex_agent", partial(complex_agent_node, llm=llm_thinking))
+    graph.add_node(
+        "rewrite",
+        partial(rewrite_node, llm=llm_small, timeout=10.0),
+        retry=TIMEOUT_RETRY_POLICY,
+    )
+    graph.add_node(
+        "complex_planner",
+        partial(complex_planner_node, llm=llm_thinking, timeout=30.0),
+        retry=TIMEOUT_RETRY_POLICY,
+    )
+    graph.add_node(
+        "complex_agent",
+        partial(complex_agent_node, llm=llm_thinking, timeout=30.0),
+        retry=AGENT_TIMEOUT_RETRY_POLICY,
+    )
     graph.add_node(
         "tool_executor",
         partial(search_tool_executor_node, vector_db_service=vector_db_service),
@@ -48,7 +63,7 @@ def build_complex_react_subgraph(
     graph.add_node("merge_cache", merge_cache_node)
     graph.add_node(
         "generate_final_answer",
-        partial(generate_final_answer_node, llm=llm_large_stream),
+        partial(generate_final_answer_node, llm=llm_large_stream, timeout=30.0),
         metadata={"tags": ["stream_target", "has_citations"]},
     )
 

@@ -73,6 +73,8 @@ class OpenAiLlmService(BaseLlmService):
 
 
 class AwsBedrockLlmService(BaseLlmService):
+    DEFAULT_MAX_ATTEMPTS = 5
+
     def __init__(
         self,
         model_capacity: ModelCapacity,
@@ -80,12 +82,25 @@ class AwsBedrockLlmService(BaseLlmService):
         isolated: bool = False,
         extended_thinking: bool = False,
         thinking_budget_tokens: int = 8000,
+        max_attempts: int = DEFAULT_MAX_ATTEMPTS,
     ):
-        # isolated=True면 rag_executors.llm_executor 전용 pool 사용 (chat 파이프라인용)
-        # isolated=False면 default pool 사용 (ingestion 등 일반 용도)
+        """AWS Bedrock LLM 서비스.
+
+        Args:
+            model_capacity: 모델 용량 (SMALL/LARGE)
+            streaming: 스트리밍 여부
+            isolated: True면 rag_executors.llm_executor 전용 pool 사용 (chat 파이프라인용).
+                     False면 default pool 사용 (ingestion 등 일반 용도).
+            extended_thinking: Claude 3.7+ thinking 기능 활성화 여부
+            thinking_budget_tokens: thinking 예산 토큰
+            max_attempts: botocore 레벨의 최대 재시도 횟수.
+                         RAG 파이프라인에서는 LangGraph RetryPolicy를 사용하므로 0으로 설정 권장.
+                         Ingestion 등 단발성 호출에서는 기본값(5) 사용.
+        """
         self._isolated = isolated
         self._extended_thinking = extended_thinking
         self._thinking_budget_tokens = thinking_budget_tokens
+        self._max_attempts = max_attempts
         super().__init__(model_capacity, streaming)
 
     def _create_llm(
@@ -105,7 +120,9 @@ class AwsBedrockLlmService(BaseLlmService):
 
         config = Config(
             max_pool_connections=200,
-            retries={"max_attempts": 5, "mode": "adaptive"},
+            retries={"max_attempts": self._max_attempts, "mode": "standard"},
+            read_timeout=50,
+            connect_timeout=5,
         )
 
         # Extended thinking은 Claude 3.7 Sonnet 이상에서만 지원.

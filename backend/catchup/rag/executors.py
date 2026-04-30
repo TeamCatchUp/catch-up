@@ -26,7 +26,11 @@ class RagExecutors:
         )
 
     def shutdown(self, wait: bool = True, cancel_futures: bool = True) -> None:
-        for executor in [self.vector_search_executor, self.rerank_executor, self.llm_executor]:
+        for executor in [
+            self.vector_search_executor,
+            self.rerank_executor,
+            self.llm_executor,
+        ]:
             if executor:
                 executor.shutdown(wait=wait, cancel_futures=cancel_futures)
 

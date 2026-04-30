@@ -1,11 +1,7 @@
-import asyncio
-import time
-
 import structlog
 from langchain_core.documents import Document
 
 from catchup.components.vector_db.base import BaseVectorDbService
-from catchup.db.models import SourceType
 from catchup.rag.nodes.utils import log_node
 from catchup.rag.schemas.structures import VectorDbSearchQuery
 from catchup.rag.state import AgentState
@@ -14,28 +10,29 @@ logger = structlog.get_logger()
 
 
 @log_node
-async def search_vector_db_node(state: AgentState, vector_db_service: BaseVectorDbService):
+async def search_vector_db_node(
+    state: AgentState, vector_db_service: BaseVectorDbService
+):
 
     queries = state.get("vector_search_queries", [])
     tool_filters = state.get("tool_filters", [])
 
     if not queries:
-        logger.warning(
-            "no_search_plan_generated", 
-            fallback="rewritten_query"
+        logger.warning("no_search_plan_generated", fallback="rewritten_query")
+        queries.append(
+            VectorDbSearchQuery(
+                query=state["rewritten_query"],
+                reasoning="No generated queries found. Fallback to rewritten query.",
+            )
         )
-        queries.append(VectorDbSearchQuery(
-            query=state["rewritten_query"],
-            reasoning="No generated queries found. Fallback to rewritten query."
-        ))
-    
+
     try:
         query_dicts = [
             {
                 "query": q.query,
                 "start_date": q.start_date,
                 "end_date": q.end_date,
-                "keyword_tokens": q.keyword_tokens
+                "keyword_tokens": q.keyword_tokens,
             }
             for q in queries
         ]
@@ -50,16 +47,13 @@ async def search_vector_db_node(state: AgentState, vector_db_service: BaseVector
             "search_vector_db_node_failed",
             fallback="empty_list",
             error=str(e),
-            exc_info=True
+            exc_info=True,
         )
         return {"retrieved_docs": []}
 
     unique_results = _deduplicate_search_results(results)
 
-    logger.info(
-        "search_results_fetched",
-        count=len(unique_results)
-    )
+    logger.info("search_results_fetched", count=len(unique_results))
 
     return {"retrieved_docs": unique_results}
 

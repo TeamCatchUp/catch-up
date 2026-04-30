@@ -1,6 +1,6 @@
+import time
 from collections import defaultdict
 from copy import deepcopy
-import time
 
 import structlog
 from langchain_core.documents import Document
@@ -15,10 +15,11 @@ logger = structlog.get_logger()
 
 MAX_RERANK_DOCUMENT_TEXT_LENGTH = 30_000
 
+
 @log_node
 async def rerank_node(state: AgentState, rerank_service: BaseRerankService):
 
-    retrieved_docs: list[Document] = state.get("retrieved_docs", [])    
+    retrieved_docs: list[Document] = state.get("retrieved_docs", [])
     if not retrieved_docs:
         logger.warning("no_documents_retrieved")
         return {
@@ -28,46 +29,42 @@ async def rerank_node(state: AgentState, rerank_service: BaseRerankService):
 
     rerank_count: int = state.get("rerank_count", 0)
     query = state["rewritten_query"]
-    
+
     retrieved_docs = _validate_retrieved_docs(retrieved_docs)
     final_docs = retrieved_docs
     try:
         t_sem = time.perf_counter()
         logger.debug(
-            "semaphore_acquiring",
-            semaphore="rerank",
-            doc_count=len(retrieved_docs)
+            "semaphore_acquiring", semaphore="reranker", doc_count=len(retrieved_docs)
         )
-        async with rag_semaphores.rerank:
+        async with rag_semaphores.reranker:
             t_rerank = time.perf_counter()
             logger.debug(
                 "rerank_invoke_start",
                 semaphore_wait_elapsed=round(t_rerank - t_sem, 3),
                 doc_count=len(retrieved_docs),
             )
-            
+
             reranked_docs = await rerank_service.rerank(
-                query=query,
-                documents=retrieved_docs,
-                top_n=settings.RERANK_TOP_N
+                query=query, documents=retrieved_docs, top_n=settings.RERANK_TOP_N
             )
-            
+
             logger.debug(
                 "rerank_invoke_completed",
-                elapsed=round(time.perf_counter() - t_rerank, 3)
+                elapsed=round(time.perf_counter() - t_rerank, 3),
             )
     except Exception as e:
         logger.warning(
             "rerank_node_failed",
             fallback="uncompressed_documents",
             error=str(e),
-            exc_info=True
+            exc_info=True,
         )
         return {
             "retrieved_docs": final_docs,
             "rerank_count": 0,
         }
-    else: 
+    else:
         final_docs = _select_diverse_top_k(
             reranked_docs=reranked_docs,
             total_k=settings.RERANK_TOTAL_K,  # LLM에게 최종적으로 제공되는 문서 개수
@@ -83,7 +80,7 @@ def _validate_retrieved_docs(
     retrieved_docs: list[Document],
 ) -> list[Document]:
     valid_docs = []
-    
+
     # page_content 길이 제한 방어 (AWS Bedrock Cohere Rerank 3.5)
     for doc in retrieved_docs:
         content = doc.page_content
@@ -93,7 +90,7 @@ def _validate_retrieved_docs(
         truncated_doc = deepcopy(doc)
         truncated_doc.page_content = content[:MAX_RERANK_DOCUMENT_TEXT_LENGTH]
         valid_docs.append(truncated_doc)
-        
+
     return valid_docs
 
 
