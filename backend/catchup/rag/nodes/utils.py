@@ -40,25 +40,35 @@ def drop_orphaned_tool_calls(messages: list[BaseMessage]) -> list[BaseMessage]:
 
 
 def build_docs_summary(docs: list[Document], max_docs: int = 10) -> str:
+    """Agent가 현재까지 수집된 지식의 '내용'을 파악할 수 있도록 요약 제공."""
     if not docs:
-        return "아직 수집된 문서 없음"
+        return "No documents collected yet."
 
     source_counts = Counter(d.metadata.get("source", "unknown") for d in docs)
     source_str = ", ".join(f"{src}:{cnt}" for src, cnt in source_counts.items())
     lines = [
-        f"총 {len(docs)}개 문서 누적됨 ({source_str})",
-        "최근 수집된 주요 문서 목록:",
+        f"Total {len(docs)}docs accumulated ({source_str})",
+        "Recently collected documents:",
     ]
 
     for i, doc in enumerate(docs[:max_docs], 1):
         source = doc.metadata.get("source", "unknown")
         temporal = resolve_temporal_context(doc.metadata)
-        snippet = doc.page_content[:50].replace("\n", " ") + "..."
-        lines.append(f"[{i}] ({source}) {temporal} - {snippet}")
+
+        # Confluence는 원문 청크이므로 길이를 제한, 나머지는 요약본이므로 전문 활용
+        if source == "confluence":
+            content = doc.page_content[:800].replace("\n", " ")
+            if len(doc.page_content) > 800:
+                content += "..."
+        else:
+            # Slack, Jira, GitHub 등은 page_content가 이미 영문 요약본
+            content = doc.page_content.replace("\n", " ")
+
+        lines.append(f"[{i}] ({source}) {temporal}\n    {content}")
 
     if len(docs) > max_docs:
         lines.append(
-            f"... 외 {len(docs) - max_docs}개 문서가 더 메모리에 보관 중입니다."
+            f"... and {len(docs) - max_docs} more document(s) stored in memory."
         )
 
     return "\n".join(lines)
@@ -237,6 +247,19 @@ def resolve_temporal_context(metadata: dict) -> str:
 def extract_anchor_ids(documents: list[Document]) -> list[str]:
     anchors = [doc.id for doc in documents if doc.id]
     return list(dict.fromkeys(anchors))  # 중복 제거 & 순서 유지
+
+
+def deduplicate_documents(documents: list[Document]) -> list[Document]:
+    """문서 리스트에서 ID 또는 내용 해시를 기준으로 중복을 제거하고 순서를 유지합니다."""
+    unique_docs = []
+    seen_ids = set()
+    for doc in documents:
+        # LangChain Document의 id는 None일 수 있으므로 page_content 해시를 fallback으로 사용
+        doc_id = doc.id if doc.id else hash(doc.page_content)
+        if doc_id not in seen_ids:
+            unique_docs.append(doc)
+            seen_ids.add(doc_id)
+    return unique_docs
 
 
 def parse_citations(full_answer: str) -> tuple[str, dict[str, str]]:

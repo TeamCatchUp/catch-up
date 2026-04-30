@@ -2,6 +2,7 @@ import structlog
 from langchain_core.documents import Document
 
 from catchup.components.vector_db.base import BaseVectorDbService
+from catchup.rag.nodes.utils import deduplicate_documents
 from catchup.rag.nodes.utils import log_node
 from catchup.rag.schemas.structures import VectorDbSearchQuery
 from catchup.rag.state import AgentState
@@ -51,18 +52,10 @@ async def search_vector_db_node(
         )
         return {"retrieved_docs": []}
 
-    unique_results = _deduplicate_search_results(results)
+    # 리스트의 리스트를 평탄화하고 중복 제거
+    flattened_results = [doc for sublist in results for doc in sublist]
+    unique_results = deduplicate_documents(flattened_results)
 
     logger.info("search_results_fetched", count=len(unique_results))
 
     return {"retrieved_docs": unique_results}
-
-
-def _deduplicate_search_results(results: list[list[Document]]):
-    unique_docs = {}
-    for docs in results:
-        for doc in docs:
-            if doc.id not in unique_docs:
-                unique_docs[doc.id] = doc
-    final_docs = list(unique_docs.values())
-    return final_docs

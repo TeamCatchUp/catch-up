@@ -1,5 +1,4 @@
 import asyncio
-from collections import Counter
 from datetime import datetime
 
 import structlog
@@ -8,9 +7,9 @@ from langchain_core.messages import ToolMessage
 from langchain_core.tools import tool
 
 from catchup.components.vector_db.base import BaseVectorDbService
-from catchup.rag.nodes.search_vector_db.search_vector_db import _deduplicate_search_results
+from catchup.rag.nodes.utils import build_docs_summary
+from catchup.rag.nodes.utils import deduplicate_documents
 from catchup.rag.nodes.utils import log_node
-from catchup.rag.nodes.utils import resolve_temporal_context
 from catchup.rag.schemas.structures import MultiSearchRequest
 from catchup.rag.state import AgentState
 
@@ -85,32 +84,11 @@ async def _run_search(
         k=40,
         weights=[0.6, 0.25, 0.15],
     )
-    docs = _deduplicate_search_results(results)
-    summary = _build_search_summary(query=query, docs=docs)
+    # 리스트의 리스트를 평탄화하고 중복 제거
+    flattened_results = [doc for sublist in results for doc in sublist]
+    docs = deduplicate_documents(flattened_results)
+    summary = f"Search complete: query='{query}'\n{build_docs_summary(docs)}"
     return docs, summary
-
-
-def _build_search_summary(query: str, docs: list[Document]) -> str:
-    """Agent가 다음 결정에 활용할 검색 결과 요약 문자열 생성."""
-    if not docs:
-        return f"검색 완료: 쿼리='{query}' | 결과 없음"
-
-    source_counts = Counter(d.metadata.get("source", "unknown") for d in docs)
-    source_str = ", ".join(f"{src}:{cnt}" for src, cnt in source_counts.items())
-
-    lines = [
-        f"검색 완료: 쿼리='{query}' | 결과 {len(docs)}건 ({source_str})",
-        "상위 문서 요약:",
-    ]
-    for i, doc in enumerate(docs[:10], 1):
-        source = doc.metadata.get("source", "unknown")
-        temporal = resolve_temporal_context(doc.metadata)
-        if source == "confluence":
-            snippet = doc.page_content[:800].replace("\n", " ")
-        else:
-            snippet = doc.page_content.replace("\n", " ")
-        lines.append(f"[{i}] ({source}) {temporal}\n    {snippet}")
-    return "\n".join(lines)
 
 
 # 실행 노드
@@ -208,23 +186,14 @@ async def search_tool_executor_node(
         tool_messages.append(ToolMessage(content=summary, tool_call_id=call_id))
 
     # 기존 누적 문서에 이번 턴 신규 문서를 id 기준 중복 제거 후 통합
-    # 최신 검색 결과가 앞에 오도록 new_unique를 먼저 배치
+    # 최신 검색 결과가 앞에 오도록 all_docs를 앞에 배치
     existing = state.get("accumulated_docs") or []
-    seen_ids = {doc.id if doc.id else hash(doc.page_content) for doc in all_docs}
-
-    new_unique = list(all_docs)
-    for doc in existing:
-        doc_identifier = doc.id if doc.id else hash(doc.page_content)
-        if doc_identifier not in seen_ids:
-            new_unique.append(doc)
-            seen_ids.add(doc_identifier)
-
-    merged = new_unique
+    merged = deduplicate_documents(all_docs + existing)
 
     logger.info(
         "tool_executor_completed",
         tool_count=len(last_message.tool_calls),
-        new_docs=len(new_unique),
+        new_docs=len(all_docs),
         total_accumulated=len(merged),
     )
 
