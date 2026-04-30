@@ -48,6 +48,6 @@ export const SERVICE_ACCOUNT_IDENTIFIER_CLASS = 'flex h-5 w-full shrink-0 flex-c
 export const getServicesGroupClass = (isSingleService: boolean): string =>
   `${SERVICES_GROUP_CLASS} ${isSingleService ? 'gap-0' : 'gap-14'}`;
 
-/** Keycloack 컬럼 className — 다중 서비스일 때 max-w-35 캡 적용. */
+/** Keycloak 컬럼 className — 다중 서비스일 때 max-w-35 캡 적용. */
 export const getKeycloakColumnClass = (isSingleService: boolean): string =>
   `${KEYCLOAK_COLUMN_CLASS}${!isSingleService ? ' max-w-35' : ''}`;

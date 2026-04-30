@@ -62,7 +62,7 @@ export default function UsersTable({
       {/* 헤더 */}
       <div className={cn(TABLE_HEADER_ROW_CLASS, isEditMode ? 'bg-fill-primary-normal-neutral' : 'bg-fill-strong')}>
         <div className={cn(FLEX_COLUMN_CELL_CLASS, !isSingleService && 'max-w-35')}>
-          <span className="text-body-xsmall text-content-neutral truncate">Keycloack 사용자</span>
+          <span className="text-body-xsmall text-content-neutral truncate">Keycloak 사용자</span>
         </div>
         <div className={servicesGroupClass}>
           {services.map((service) => (
