@@ -200,3 +200,123 @@ class ChannelTalkUserChatLogicalMetadata(BaseModel):
             storage["updated_at"] = timing.desk_updated_at.isoformat()
 
         return storage
+
+
+class ChannelTalkDocumentArticleCoreMetadata(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    channel_id: str
+    space_id: str
+    space_name: str | None = None
+    article_id: str
+    language: str
+    state: str
+    title: str | None = None
+    subtitle: str | None = None
+    summary: str | None = None
+    slug: str | None = None
+    url: str | None = None
+    author_id: str | None = None
+    author_name: str | None = None
+    topic_ids: list[str] = Field(default_factory=list)
+    topic_names: list[str] = Field(default_factory=list)
+    category_id: str | None = None
+    category_name: str | None = None
+
+    @field_validator("channel_id", "space_id", "article_id", "language", "state")
+    @classmethod
+    def _validate_required_text(cls, value: str, info: ValidationInfo) -> str:
+        return require_text(value, info.field_name or "field")
+
+
+class ChannelTalkDocumentArticlePublicationMetadata(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+    published_at: datetime | None = None
+    published_revision_id: str | None = None
+    current_revision_id: str | None = None
+
+
+class ChannelTalkDocumentArticleChunkMetadata(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    chunk_index: int = 0
+    chunk_count: int = 1
+
+    @model_validator(mode="after")
+    def _validate_chunk_bounds(self) -> "ChannelTalkDocumentArticleChunkMetadata":
+        if self.chunk_index < 0:
+            raise ValueError("chunk_index must be non-negative")
+        if self.chunk_count < 1:
+            raise ValueError("chunk_count must be greater than zero")
+        if self.chunk_index >= self.chunk_count:
+            raise ValueError("chunk_index must be less than chunk_count")
+        return self
+
+
+class ChannelTalkDocumentArticleLogicalMetadata(BaseModel):
+    """
+    Logical contract for Channel Talk document articles stored in PGVector.
+
+    The storage projection keeps the nested contract while exposing commonly
+    queried fields as flat cmetadata keys for current retrieval paths.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    base: DocumentBaseMetadata
+    document_article_core: ChannelTalkDocumentArticleCoreMetadata
+    publication: ChannelTalkDocumentArticlePublicationMetadata
+    chunk: ChannelTalkDocumentArticleChunkMetadata
+
+    @model_validator(mode="after")
+    def _validate_cross_field_consistency(
+        self,
+    ) -> "ChannelTalkDocumentArticleLogicalMetadata":
+        core = self.document_article_core
+
+        if self.base.source != "channel_talk":
+            raise ValueError("base.source must be channel_talk")
+        if self.base.record_id != core.article_id:
+            raise ValueError("base.record_id must match document_article_core.article_id")
+
+        return self
+
+    def to_storage_metadata(self) -> dict[str, object]:
+        base_storage = self.base.model_dump(mode="json")
+        core_storage = self.document_article_core.model_dump(mode="json")
+        publication_storage = self.publication.model_dump(mode="json")
+        chunk_storage = self.chunk.model_dump(mode="json")
+        core = self.document_article_core
+
+        return {
+            **base_storage,
+            "entity_type": "document_article",
+            "channel_id": core.channel_id,
+            "space_id": core.space_id,
+            "space_name": core.space_name,
+            "article_id": core.article_id,
+            "article_state": core.state,
+            "state": core.state,
+            "language": core.language,
+            "title": core.title,
+            "url": core.url,
+            "author_id": core.author_id,
+            "author_name": core.author_name,
+            "topic_ids": list(core.topic_ids),
+            "topic_names": list(core.topic_names),
+            "category_id": core.category_id,
+            "category_name": core.category_name,
+            "chunk_index": self.chunk.chunk_index,
+            "chunk_count": self.chunk.chunk_count,
+            "created_at": publication_storage["created_at"],
+            "updated_at": publication_storage["updated_at"],
+            "published_at": publication_storage["published_at"],
+            "published_revision_id": publication_storage["published_revision_id"],
+            "current_revision_id": publication_storage["current_revision_id"],
+            "document_article_core": core_storage,
+            "publication": publication_storage,
+            "chunk": chunk_storage,
+        }
