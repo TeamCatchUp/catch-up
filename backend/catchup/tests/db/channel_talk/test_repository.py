@@ -9,6 +9,7 @@ from sqlalchemy import Boolean
 from sqlalchemy import DateTime
 from sqlalchemy import Integer
 from sqlalchemy import String
+from sqlalchemy import UniqueConstraint
 from sqlalchemy import create_engine
 from sqlalchemy import select
 from sqlalchemy.orm import DeclarativeBase
@@ -67,6 +68,13 @@ class _ChannelTalkCredentials(_Base):
     access_secret: Mapped[str] = mapped_column(String(512), nullable=False)
     webhook_token: Mapped[str] = mapped_column(String(1024), nullable=False)
     credential_last_verified_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint(
+            "channel_id",
+            name="uq_channel_talk_credentials_channel_id",
+        ),
+    )
 
 
 class _ChannelTalkDocumentCredentials(_Base):

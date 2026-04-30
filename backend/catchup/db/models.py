@@ -935,6 +935,13 @@ class ChannelTalkCredentials(Base):
         onupdate=func.now(),
     )
 
+    __table_args__ = (
+        UniqueConstraint(
+            "channel_id",
+            name="uq_channel_talk_credentials_channel_id",
+        ),
+    )
+
 
 class ChannelTalkDocumentCredentials(Base):
     __tablename__ = "channel_talk_document_credentials"
