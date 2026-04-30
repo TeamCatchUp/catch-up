@@ -5,6 +5,12 @@ from datetime import timezone
 from unittest import TestCase
 
 from catchup.connector_core.document_format import (
+    ChannelTalkDocumentArticleArticleMetadata,
+)
+from catchup.connector_core.document_format import (
+    ChannelTalkDocumentArticleAuthorMetadata,
+)
+from catchup.connector_core.document_format import (
     ChannelTalkDocumentArticleChunkMetadata,
 )
 from catchup.connector_core.document_format import (
@@ -15,6 +21,12 @@ from catchup.connector_core.document_format import (
 )
 from catchup.connector_core.document_format import (
     ChannelTalkDocumentArticlePublicationMetadata,
+)
+from catchup.connector_core.document_format import (
+    ChannelTalkDocumentArticleSpaceMetadata,
+)
+from catchup.connector_core.document_format import (
+    ChannelTalkDocumentArticleTaxonomyMetadata,
 )
 from catchup.connector_core.document_format import ChannelTalkUserChatAnchorsMetadata
 from catchup.connector_core.document_format import ChannelTalkUserChatAssignmentMetadata
@@ -238,31 +250,39 @@ class ChannelTalkDocumentArticleLogicalMetadataTests(TestCase):
                 contextual_content="Refund draft",
             ),
             document_article_core=ChannelTalkDocumentArticleCoreMetadata(
-                channel_id="channel-1",
-                space_id="space-1",
-                space_name="Help Center",
-                article_id="article-123",
-                language="ko",
-                state="draft",
-                title="Refund draft",
-                url="https://docs.example.com/refund",
-                author_id="author-1",
-                author_name="Writer",
-                topic_ids=["topic-1"],
-                topic_names=["Billing"],
-                category_id="category-1",
-                category_name="Payments",
-            ),
-            publication=ChannelTalkDocumentArticlePublicationMetadata(
-                created_at=now,
-                updated_at=now,
-                published_at=None,
-                published_revision_id="revision-1",
-                current_revision_id="revision-2",
-            ),
-            chunk=ChannelTalkDocumentArticleChunkMetadata(
-                chunk_index=0,
-                chunk_count=2,
+                article=ChannelTalkDocumentArticleArticleMetadata(
+                    article_id="article-123",
+                    language="ko",
+                    state="draft",
+                    title="Refund draft",
+                    url="https://docs.example.com/refund",
+                ),
+                space=ChannelTalkDocumentArticleSpaceMetadata(
+                    channel_id="channel-1",
+                    space_id="space-1",
+                    space_name="Help Center",
+                ),
+                author=ChannelTalkDocumentArticleAuthorMetadata(
+                    author_id="author-1",
+                    author_name="Writer",
+                ),
+                taxonomy=ChannelTalkDocumentArticleTaxonomyMetadata(
+                    topic_ids=["topic-1"],
+                    topic_names=["Billing"],
+                    category_id="category-1",
+                    category_name="Payments",
+                ),
+                publication=ChannelTalkDocumentArticlePublicationMetadata(
+                    created_at=now,
+                    updated_at=now,
+                    published_at=None,
+                    published_revision_id="revision-1",
+                    current_revision_id="revision-2",
+                ),
+                chunk=ChannelTalkDocumentArticleChunkMetadata(
+                    chunk_index=0,
+                    chunk_count=2,
+                ),
             ),
         )
 
@@ -272,10 +292,10 @@ class ChannelTalkDocumentArticleLogicalMetadataTests(TestCase):
         self.assertEqual(contract.base.source, "channel_talk")
         self.assertEqual(contract.base.record_id, "article-123")
         self.assertEqual(
-            contract.document_article_core.article_id,
+            contract.document_article_core.article.article_id,
             "article-123",
         )
-        self.assertEqual(contract.document_article_core.state, "draft")
+        self.assertEqual(contract.document_article_core.article.state, "draft")
 
     def test_storage_projection_includes_article_state_and_nested_payload(self) -> None:
         contract = self._build_contract()
@@ -285,24 +305,25 @@ class ChannelTalkDocumentArticleLogicalMetadataTests(TestCase):
         self.assertEqual(storage["source"], "channel_talk")
         self.assertEqual(storage["entity_type"], "document_article")
         self.assertEqual(storage["record_id"], "article-123")
-        self.assertEqual(storage["channel_id"], "channel-1")
-        self.assertEqual(storage["space_id"], "space-1")
-        self.assertEqual(storage["article_id"], "article-123")
-        self.assertEqual(storage["article_state"], "draft")
-        self.assertEqual(storage["state"], "draft")
-        self.assertEqual(storage["language"], "ko")
-        self.assertEqual(storage["chunk_index"], 0)
-        self.assertEqual(storage["chunk_count"], 2)
         self.assertIn("document_article_core", storage)
-        self.assertIn("publication", storage)
-        self.assertIn("chunk", storage)
+        self.assertNotIn("article_state", storage)
+        self.assertNotIn("channel_id", storage)
+        self.assertNotIn("publication", storage)
+        self.assertNotIn("chunk", storage)
+        article_core = storage["document_article_core"]
         self.assertEqual(
-            storage["document_article_core"]["title"],
+            article_core["article"]["title"],
             "Refund draft",
         )
-        self.assertNotIn("summary", storage["document_article_core"])
+        self.assertEqual(article_core["space"]["channel_id"], "channel-1")
+        self.assertEqual(article_core["space"]["space_id"], "space-1")
+        self.assertEqual(article_core["author"]["author_name"], "Writer")
+        self.assertEqual(article_core["taxonomy"]["category_name"], "Payments")
+        self.assertEqual(article_core["chunk"]["chunk_index"], 0)
+        self.assertEqual(article_core["chunk"]["chunk_count"], 2)
+        self.assertNotIn("summary", article_core["article"])
         self.assertEqual(
-            storage["publication"]["updated_at"],
+            article_core["publication"]["updated_at"],
             "2026-04-22T02:10:00Z",
         )
 
@@ -320,8 +341,6 @@ class ChannelTalkDocumentArticleLogicalMetadataTests(TestCase):
             ChannelTalkDocumentArticleLogicalMetadata(
                 base=contract.base.model_copy(update={"record_id": "other"}),
                 document_article_core=contract.document_article_core,
-                publication=contract.publication,
-                chunk=contract.chunk,
             )
 
     def test_contract_rejects_non_channel_talk_source(self) -> None:
@@ -331,6 +350,4 @@ class ChannelTalkDocumentArticleLogicalMetadataTests(TestCase):
             ChannelTalkDocumentArticleLogicalMetadata(
                 base=contract.base.model_copy(update={"source": "slack"}),
                 document_article_core=contract.document_article_core,
-                publication=contract.publication,
-                chunk=contract.chunk,
             )

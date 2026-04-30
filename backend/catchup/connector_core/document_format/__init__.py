@@ -1,5 +1,11 @@
 from catchup.connector_core.document_format.base import DocumentBaseMetadata
 from catchup.connector_core.document_format.channel_talk import (
+    ChannelTalkDocumentArticleArticleMetadata,
+)
+from catchup.connector_core.document_format.channel_talk import (
+    ChannelTalkDocumentArticleAuthorMetadata,
+)
+from catchup.connector_core.document_format.channel_talk import (
     ChannelTalkDocumentArticleChunkMetadata,
 )
 from catchup.connector_core.document_format.channel_talk import (
@@ -10,6 +16,12 @@ from catchup.connector_core.document_format.channel_talk import (
 )
 from catchup.connector_core.document_format.channel_talk import (
     ChannelTalkDocumentArticlePublicationMetadata,
+)
+from catchup.connector_core.document_format.channel_talk import (
+    ChannelTalkDocumentArticleSpaceMetadata,
+)
+from catchup.connector_core.document_format.channel_talk import (
+    ChannelTalkDocumentArticleTaxonomyMetadata,
 )
 from catchup.connector_core.document_format.channel_talk import (
     ChannelTalkUserChatAnchorsMetadata,
@@ -46,10 +58,14 @@ from catchup.connector_core.document_format.channel_talk import (
 )
 
 __all__ = [
+    "ChannelTalkDocumentArticleArticleMetadata",
+    "ChannelTalkDocumentArticleAuthorMetadata",
     "ChannelTalkDocumentArticleChunkMetadata",
     "ChannelTalkDocumentArticleCoreMetadata",
     "ChannelTalkDocumentArticleLogicalMetadata",
     "ChannelTalkDocumentArticlePublicationMetadata",
+    "ChannelTalkDocumentArticleSpaceMetadata",
+    "ChannelTalkDocumentArticleTaxonomyMetadata",
     "ChannelTalkUserChatAnchorsMetadata",
     "ChannelTalkUserChatAssignmentMetadata",
     "ChannelTalkUserChatChatMetadata",

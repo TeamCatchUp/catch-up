@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from collections.abc import Iterable
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -20,6 +21,12 @@ from catchup.components.embedder.factory import get_embedding_service
 from catchup.components.vector_db.factory import get_pgvector_repository
 from catchup.components.vector_db.pgvector.repository import PGVectorRepository
 from catchup.connector_core.document_format import (
+    ChannelTalkDocumentArticleArticleMetadata,
+)
+from catchup.connector_core.document_format import (
+    ChannelTalkDocumentArticleAuthorMetadata,
+)
+from catchup.connector_core.document_format import (
     ChannelTalkDocumentArticleChunkMetadata,
 )
 from catchup.connector_core.document_format import (
@@ -30,6 +37,12 @@ from catchup.connector_core.document_format import (
 )
 from catchup.connector_core.document_format import (
     ChannelTalkDocumentArticlePublicationMetadata,
+)
+from catchup.connector_core.document_format import (
+    ChannelTalkDocumentArticleSpaceMetadata,
+)
+from catchup.connector_core.document_format import (
+    ChannelTalkDocumentArticleTaxonomyMetadata,
 )
 from catchup.connector_core.document_format import DocumentBaseMetadata
 from catchup.connector_core.domain.structure import ConnectorKey
@@ -505,6 +518,7 @@ class ChannelTalkDocumentArticleFullSyncAdapter:
         url = self._resolve_public_article_url(
             article=current_article,
             language=language,
+            title=source_revision.title,
         )
         header = self._build_context_header(source=source_revision)
         chunks = self._chunk_article_content(
@@ -609,36 +623,44 @@ class ChannelTalkDocumentArticleFullSyncAdapter:
                 contextual_content=contextual_content,
             ),
             document_article_core=ChannelTalkDocumentArticleCoreMetadata(
-                channel_id=execution.channel_id,
-                space_id=execution.space_id,
-                space_name=execution.space_name,
-                article_id=current_article.article_id,
-                language=language,
-                state=state,
-                title=source_revision.title,
-                subtitle=source_revision.subtitle,
-                slug=current_article.slug,
-                url=url,
-                author_id=source_revision.author_id
-                or (author.author_id if author else None),
-                author_name=author.name if author else None,
-                topic_ids=topic_ids,
-                topic_names=topic_names,
-                category_id=(
-                    category.article_category_id if category is not None else None
+                article=ChannelTalkDocumentArticleArticleMetadata(
+                    article_id=current_article.article_id,
+                    language=language,
+                    state=state,
+                    title=source_revision.title,
+                    subtitle=source_revision.subtitle,
+                    slug=current_article.slug,
+                    url=url,
                 ),
-                category_name=category.name if category is not None else None,
-            ),
-            publication=ChannelTalkDocumentArticlePublicationMetadata(
-                created_at=source_revision.created_at or current_article.created_at,
-                updated_at=source_revision.updated_at or current_article.updated_at,
-                published_at=current_article.published_at or bundle.published_at,
-                published_revision_id=source_revision.revision_id,
-                current_revision_id=current_article.current_revision_id,
-            ),
-            chunk=ChannelTalkDocumentArticleChunkMetadata(
-                chunk_index=chunk_index,
-                chunk_count=chunk_count,
+                space=ChannelTalkDocumentArticleSpaceMetadata(
+                    channel_id=execution.channel_id,
+                    space_id=execution.space_id,
+                    space_name=execution.space_name,
+                ),
+                author=ChannelTalkDocumentArticleAuthorMetadata(
+                    author_id=source_revision.author_id
+                    or (author.author_id if author else None),
+                    author_name=author.name if author else None,
+                ),
+                taxonomy=ChannelTalkDocumentArticleTaxonomyMetadata(
+                    topic_ids=topic_ids,
+                    topic_names=topic_names,
+                    category_id=(
+                        category.article_category_id if category is not None else None
+                    ),
+                    category_name=category.name if category is not None else None,
+                ),
+                publication=ChannelTalkDocumentArticlePublicationMetadata(
+                    created_at=source_revision.created_at or current_article.created_at,
+                    updated_at=source_revision.updated_at or current_article.updated_at,
+                    published_at=current_article.published_at or bundle.published_at,
+                    published_revision_id=source_revision.revision_id,
+                    current_revision_id=current_article.current_revision_id,
+                ),
+                chunk=ChannelTalkDocumentArticleChunkMetadata(
+                    chunk_index=chunk_index,
+                    chunk_count=chunk_count,
+                ),
             ),
         )
 
@@ -647,6 +669,7 @@ class ChannelTalkDocumentArticleFullSyncAdapter:
         *,
         article: ChannelTalkDocumentArticle,
         language: str,
+        title: str | None,
     ) -> str | None:
         if article.website_url:
             return article.website_url
@@ -654,13 +677,27 @@ class ChannelTalkDocumentArticleFullSyncAdapter:
             return None
 
         normalized_language = quote(unquote(language.strip()), safe="")
-        normalized_slug = quote(unquote(article.slug.strip()), safe="")
+        public_slug = ChannelTalkDocumentArticleFullSyncAdapter._build_public_article_slug(
+            title=title,
+            slug=article.slug,
+        )
+        normalized_slug = quote(unquote(public_slug), safe="")
         if not normalized_language or not normalized_slug:
             return None
         return (
             f"{DOCUMENT_ARTICLE_PUBLIC_BASE_URL}/"
             f"{normalized_language}/articles/{normalized_slug}"
         )
+
+    @staticmethod
+    def _build_public_article_slug(*, title: str | None, slug: str) -> str:
+        normalized_slug = unquote(slug.strip())
+        if not normalized_slug:
+            return ""
+        if not title or not re.fullmatch(r"[0-9a-fA-F]{8,}", normalized_slug):
+            return normalized_slug
+        title_slug = "-".join(title.strip().split())
+        return f"{title_slug}-{normalized_slug}" if title_slug else normalized_slug
 
     def _build_context_header(
         self,

@@ -663,15 +663,28 @@ class ChannelTalkDocumentArticleFullSyncApplicationTests(IsolatedAsyncioTestCase
         self.assertNotIn("Document State:", stored_document.page_content)
         self.assertNotIn("State Meaning:", stored_document.page_content)
         self.assertIn("Published article", stored_document.page_content)
-        self.assertEqual(stored_document.metadata["article_state"], "published")
-        self.assertEqual(stored_document.metadata["state"], "published")
+        self.assertNotIn("article_state", stored_document.metadata)
+        self.assertNotIn("state", stored_document.metadata)
         self.assertEqual(
             stored_document.metadata["url"],
             "https://guide.catchup.im/ko/articles/published-article-23bb29b0",
         )
+        document_article_core = stored_document.metadata["document_article_core"]
+        self.assertEqual(
+            document_article_core["article"]["state"],
+            "published",
+        )
+        self.assertEqual(
+            document_article_core["space"]["space_id"],
+            "space-123",
+        )
+        self.assertEqual(
+            document_article_core["publication"]["published_revision_id"],
+            "published-revision-1",
+        )
         self.assertNotIn(
             "summary",
-            stored_document.metadata["document_article_core"],
+            document_article_core["article"],
         )
 
     def test_document_article_execution_requires_aligned_connections(self) -> None:
