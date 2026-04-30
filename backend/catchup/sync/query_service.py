@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 from dataclasses import dataclass
 from dataclasses import field
 from datetime import datetime
 from datetime import timezone
 from typing import Any
 
+import structlog
 from fastapi.concurrency import run_in_threadpool
 from sqlalchemy import select
 
@@ -27,10 +27,7 @@ from catchup.connectors.channel_talk.full_sync_helper import (
     require_channel_talk_channel_id,
 )
 from catchup.connectors.channel_talk.full_sync_target_contract import (
-    build_channel_talk_channel_metadata,
-)
-from catchup.connectors.channel_talk.full_sync_target_contract import (
-    build_channel_talk_document_space_metadata,
+    ChannelTalkFullSyncTargetShape,
 )
 from catchup.connectors.channel_talk.schemas.channel_connection import (
     ChannelTalkCredentialsRecord,
@@ -63,7 +60,7 @@ from catchup.db.sync import list_events_by_job
 from catchup.db.sync import summarize_events_by_job
 from catchup.sync.common.schemas import SyncTargetType
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 def _load_github_installation_db(installation_id: int):
@@ -419,10 +416,10 @@ class SyncQueryService:
         # 모든 connector의 target listing 응답을 같은 envelope로 맞춘다.
         # 이 targets 배열이 Full Sync 요청의 입력 후보 목록이 된다.
         logger.info(
-            "[SYNC][TARGETS][QUERY] Loaded targets: connector=%s, scope_id=%s, total_targets=%s",
-            connector,
-            scope_id,
-            len(targets),
+            "sync_targets_loaded",
+            connector=connector.value,
+            scope_id=scope_id,
+            total_targets=len(targets),
         )
         return SyncTargetsResult(
             connector=connector,
@@ -658,15 +655,11 @@ class SyncQueryService:
             channel_id=channel_id,
         )
 
-        targets = [
-            SyncTargetResult(
-                target_id=connection.channel_id,
-                display_name=connection.channel_name,
-                target_type=SyncTargetType.CHANNEL,
-                is_accessible=True,
-                metadata=build_channel_talk_channel_metadata(channel_id),
-            )
-        ]
+        channel_shape = ChannelTalkFullSyncTargetShape.channel(
+            channel_id=connection.channel_id,
+            channel_name=connection.channel_name,
+        )
+        targets = [self._build_channel_talk_target_result(channel_shape)]
         document_target = self._build_document_target_if_accessible(
             document_connection_result,
             channel_id=channel_id,
@@ -695,7 +688,20 @@ class SyncQueryService:
         return connection
 
     @staticmethod
+    def _build_channel_talk_target_result(
+        shape: ChannelTalkFullSyncTargetShape,
+    ) -> SyncTargetResult:
+        return SyncTargetResult(
+            target_id=shape.target_id,
+            display_name=shape.target_name,
+            target_type=SyncTargetType(shape.target_type),
+            is_accessible=True,
+            metadata=shape.to_metadata(),
+        )
+
+    @classmethod
     def _build_document_target_if_accessible(
+        cls,
         document_connection: ChannelTalkDocumentCredentialsRecord | None,
         *,
         channel_id: str,
@@ -713,19 +719,12 @@ class SyncQueryService:
                 association_status=document_connection.association_status,
             )
             return None
-        return SyncTargetResult(
-            target_id=document_connection.space_id,
-            display_name=document_connection.space_name,
-            target_type=SyncTargetType.SPACE,
-            is_accessible=True,
-            metadata={
-                **build_channel_talk_document_space_metadata(
-                    channel_id,
-                ),
-                "space_id": document_connection.space_id,
-                "space_name": document_connection.space_name,
-            },
+        shape = ChannelTalkFullSyncTargetShape.document_space(
+            channel_id=channel_id,
+            space_id=document_connection.space_id,
+            space_name=document_connection.space_name,
         )
+        return cls._build_channel_talk_target_result(shape)
 
     async def list_targets(
         self,

@@ -19,10 +19,7 @@ from catchup.connectors.channel_talk.full_sync_helper import (
     require_channel_talk_channel_id,
 )
 from catchup.connectors.channel_talk.full_sync_target_contract import (
-    build_channel_talk_channel_metadata,
-)
-from catchup.connectors.channel_talk.full_sync_target_contract import (
-    build_channel_talk_document_space_metadata,
+    ChannelTalkFullSyncTargetShape,
 )
 from catchup.connectors.channel_talk.schemas.channel_connection import (
     ChannelTalkCredentialsRecord,
@@ -163,14 +160,14 @@ class ChannelTalkFullSyncTargetResolver(FullSyncTargetResolverProtocol):
                 },
             )
 
-        target = FullSyncTarget(
-            target_type=SyncTargetType.CHANNEL,
-            target_id=connection.channel_id,
-            target_name=connection.channel_name,
-            metadata=build_channel_talk_channel_metadata(channel_id),
+        target = ChannelTalkFullSyncTargetResolver._build_full_sync_target(
+            ChannelTalkFullSyncTargetShape.channel(
+                channel_id=connection.channel_id,
+                channel_name=connection.channel_name,
+            )
         )
         return {
-            (SyncTargetType.CHANNEL, connection.channel_id): target,
+            (target.target_type, target.target_id): target,
         }
 
     @staticmethod
@@ -218,19 +215,27 @@ class ChannelTalkFullSyncTargetResolver(FullSyncTargetResolverProtocol):
                 metadata={"channel_id": channel_id},
             )
 
-        target = FullSyncTarget(
-            target_type=SyncTargetType.SPACE,
-            target_id=document_connection.space_id,
-            target_name=document_connection.space_name,
-            metadata={
-                **build_channel_talk_document_space_metadata(channel_id),
-                "space_id": document_connection.space_id,
-                "space_name": document_connection.space_name,
-            },
+        target = ChannelTalkFullSyncTargetResolver._build_full_sync_target(
+            ChannelTalkFullSyncTargetShape.document_space(
+                channel_id=channel_id,
+                space_id=document_connection.space_id,
+                space_name=document_connection.space_name,
+            )
         )
         return {
-            (SyncTargetType.SPACE, document_connection.space_id): target,
+            (target.target_type, target.target_id): target,
         }
+
+    @staticmethod
+    def _build_full_sync_target(
+        shape: ChannelTalkFullSyncTargetShape,
+    ) -> FullSyncTarget:
+        return FullSyncTarget(
+            target_type=SyncTargetType(shape.target_type),
+            target_id=shape.target_id,
+            target_name=shape.target_name,
+            metadata=shape.to_metadata(),
+        )
 
     @staticmethod
     def _target_metadata(target: FullSyncRequestedTarget) -> dict[str, str]:
