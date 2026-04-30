@@ -23,9 +23,6 @@ from catchup.connector_core.adapters.channel_talk.full_sync_adapter import (
 from catchup.connector_core.application.full_sync import ConnectorFullSyncApplication
 from catchup.connector_core.ports.full_sync import FullSyncWindow
 from catchup.connectors.channel_talk.full_sync_helper import (
-    CHANNEL_TALK_FULL_SYNC_TARGET_ID,
-)
-from catchup.connectors.channel_talk.full_sync_helper import (
     is_verified_channel_talk_document_connection,
 )
 from catchup.connectors.channel_talk.full_sync_helper import (
@@ -38,13 +35,17 @@ from catchup.connectors.channel_talk.full_sync_helper import (
     require_channel_talk_channel_id,
 )
 from catchup.connectors.channel_talk.full_sync_target_contract import (
-    CHANNEL_TALK_DOCUMENT_ARTICLE_TARGET_ID,
+    CHANNEL_TALK_DOCUMENT_ARTICLE_RUNTIME_TARGET,
+)
+from catchup.connectors.channel_talk.full_sync_target_contract import (
+    CHANNEL_TALK_USER_CHAT_RUNTIME_TARGET,
 )
 from catchup.connectors.channel_talk.schemas.document_connection import (
     ChannelTalkDocumentCredentialsRecord,
 )
 from catchup.sync.audit import SyncAuditContext
 from catchup.sync.common.schemas import FullSyncContext
+from catchup.sync.common.schemas import SyncTargetType
 from catchup.sync.common.schemas import TargetSyncResult
 from catchup.worker.handlers.base_full_sync_handler import BaseFullSyncHandler
 
@@ -54,11 +55,13 @@ class ChannelTalkFullSyncHandler(BaseFullSyncHandler):
 
     def __init__(self) -> None:
         self._applications = {
-            CHANNEL_TALK_FULL_SYNC_TARGET_ID: ConnectorFullSyncApplication(
+            CHANNEL_TALK_USER_CHAT_RUNTIME_TARGET: ConnectorFullSyncApplication(
                 port=ChannelTalkFullSyncAdapter(),
             ),
-            CHANNEL_TALK_DOCUMENT_ARTICLE_TARGET_ID: ConnectorFullSyncApplication(
-                port=ChannelTalkDocumentArticleFullSyncAdapter(),
+            CHANNEL_TALK_DOCUMENT_ARTICLE_RUNTIME_TARGET: (
+                ConnectorFullSyncApplication(
+                    port=ChannelTalkDocumentArticleFullSyncAdapter(),
+                )
             ),
         }
 
@@ -76,11 +79,13 @@ class ChannelTalkFullSyncHandler(BaseFullSyncHandler):
         _ = service_cache
         channel_id = require_channel_talk_channel_id(context.scope_id)
 
-        target_id = context.target_id.strip()
-        application = self._applications.get(target_id)
+        # Event에는 listing/full request에서 확정된 target_type이 들어 있다.
+        # handler는 metadata stage가 아니라 target_type으로 실행 application을 고른다.
+        runtime_target = self._resolve_runtime_target(context)
+        application = self._applications.get(runtime_target)
         if application is None:
             raise ValueError(
-                "channel_talk target_id must be one of: "
+                "channel_talk target_type must resolve to one of: "
                 f"{', '.join(sorted(self._applications))}"
             )
 
@@ -91,7 +96,17 @@ class ChannelTalkFullSyncHandler(BaseFullSyncHandler):
             raise ValueError(
                 "Stored Channel Talk credentials do not match the requested channel"
             )
+        if (
+            runtime_target == CHANNEL_TALK_USER_CHAT_RUNTIME_TARGET
+            and context.target_id.strip() != channel_id
+        ):
+            # UserChat full sync는 channel target이므로 event target_id도 channel_id여야 한다.
+            raise ValueError(
+                "Stored Channel Talk credentials do not match the requested channel target"
+            )
 
+        # sync_from_ts는 API에서 sync_days로 계산된 epoch seconds다.
+        # worker는 이 값을 application layer의 FullSyncWindow로 변환한다.
         window_end = datetime.now(timezone.utc)
         window_start = (
             datetime.fromtimestamp(float(context.sync_from_ts), tz=timezone.utc)
@@ -105,17 +120,20 @@ class ChannelTalkFullSyncHandler(BaseFullSyncHandler):
             job_id=context.job_id,
             task_id=context.event_id,
         )
+        # UserChat은 channel connection만 필요하고, DocumentArticle은 요청 space_id와
+        # 일치하는 verified Documents connection을 추가로 확인한다.
         execution = (
             ChannelTalkFullSyncExecutionRequest(
                 tenant_id=channel_id,
                 audit_context=audit_context,
             )
-            if target_id == CHANNEL_TALK_FULL_SYNC_TARGET_ID
+            if runtime_target == CHANNEL_TALK_USER_CHAT_RUNTIME_TARGET
             else ChannelTalkDocumentArticleFullSyncExecutionRequest(
                 tenant_id=channel_id,
                 channel_connection=connection,
                 document_connection=await self._load_verified_document_connection(
-                    channel_id
+                    channel_id,
+                    requested_space_id=context.target_id,
                 ),
                 audit_context=audit_context,
             )
@@ -136,7 +154,11 @@ class ChannelTalkFullSyncHandler(BaseFullSyncHandler):
     async def _load_verified_document_connection(
         self,
         channel_id: str,
+        *,
+        requested_space_id: str,
     ) -> ChannelTalkDocumentCredentialsRecord:
+        # space target은 실제 Channel Talk Documents 연결의 space_id와 일치해야 한다.
+        # 이 검증이 있어 target_type=space + 잘못된 target_id event가 실행되지 않는다.
         document_connection = await run_in_threadpool(
             load_channel_talk_document_connection,
             channel_id,
@@ -156,4 +178,18 @@ class ChannelTalkFullSyncHandler(BaseFullSyncHandler):
             raise ValueError(
                 "channel_talk documents credentials are not API verified for the requested channel"
             )
+        normalized_requested_space_id = requested_space_id.strip()
+        if document_connection.space_id != normalized_requested_space_id:
+            raise ValueError(
+                "Stored Channel Talk Documents credentials do not match the requested space"
+            )
         return document_connection
+
+    @staticmethod
+    def _resolve_runtime_target(context: FullSyncContext) -> str:
+        # runtime target literal은 adapter 내부 계약일 뿐, API/listing target_id가 아니다.
+        if context.target_type == SyncTargetType.CHANNEL:
+            return CHANNEL_TALK_USER_CHAT_RUNTIME_TARGET
+        if context.target_type == SyncTargetType.SPACE:
+            return CHANNEL_TALK_DOCUMENT_ARTICLE_RUNTIME_TARGET
+        raise ValueError("channel_talk target_type must be one of: channel, space")
