@@ -7,8 +7,8 @@ import { cn } from '@/shared/utils/cn';
 
 import {
   BODY_SERVICE_COLUMN_CLASS,
+  FLEX_COLUMN_CELL_CLASS,
   SERVICE_ACCOUNT_IDENTIFIER_CLASS,
-  SERVICE_ACCOUNT_NAME_CLASS,
 } from '../../../../constants/memberUiConfig';
 import type { PreMappingInfo } from '../../../../types/integrationApi';
 
@@ -32,7 +32,7 @@ export default function LinkedAccountCell({ info }: LinkedAccountCellProps) {
         ) : (
           <DefaultProfile className="border-fill-strong text-content-assistive size-5 shrink-0 rounded-full border" />
         )}
-        <div className={SERVICE_ACCOUNT_NAME_CLASS}>
+        <div className={FLEX_COLUMN_CELL_CLASS}>
           <span className="text-body-xsmall text-content-normal truncate">{info?.name ?? '-'}</span>
         </div>
       </div>

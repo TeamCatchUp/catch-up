@@ -2,7 +2,7 @@
 
 import { cn } from '@/shared/utils/cn';
 
-import { SERVICES_GROUP_CLASS, TABLE_BODY_ROW_CLASS } from '../../../constants/memberUiConfig';
+import { getServicesGroupClass, TABLE_BODY_ROW_CLASS } from '../../../constants/memberUiConfig';
 import type { IntegrationService } from '../../../types/integrationModel';
 import type { MemberDisplayRow } from '../../../types/memberDisplayModel';
 import { isRowFullyLinked, selectCellMode } from '../../../utils/usersTableHelpers';
@@ -38,23 +38,24 @@ export default function UsersTableRow({
     <div className={TABLE_BODY_ROW_CLASS}>
       <div className={cn('size-2 shrink-0 rounded-full', isAllLinked ? 'bg-status-positive' : 'bg-accent-red')} />
       <KeycloakUserCell userName={row.userName} isSingleService={isSingleService} />
-      <div className={cn(SERVICES_GROUP_CLASS, isSingleService ? 'gap-0' : 'gap-14')}>
+      <div className={getServicesGroupClass(isSingleService)}>
         {services.map((service) => {
           const status = displayStatusByService[service];
           const info = row.serviceInfoByService[service];
-          const mode = selectCellMode({ service, status, isEditMode });
+          const result = selectCellMode({ service, status, isEditMode });
           const key = `${renderKey}-${service}`;
 
-          switch (mode) {
+          switch (result.mode) {
             case 'linked':
               return <LinkedAccountCell key={key} info={info} />;
             case 'unused-tag':
-              return <UnusedTagCell key={key} status={status} />;
+              // result.status는 '미사용' | '미등록'으로 narrow됨 — cast 불필요
+              return <UnusedTagCell key={key} status={result.status} />;
             case 'account-edit':
               return (
                 <AccountEditCell
                   key={key}
-                  status={status as '미사용' | '미등록'}
+                  status={result.status}
                   options={accountOptionsByService[service] ?? []}
                   selectedAccount={selectedAccounts?.[row.userKey]?.[service]}
                   onSelect={(account) => onAccountSelect?.(row.userKey, service, account)}
@@ -62,8 +63,8 @@ export default function UsersTableRow({
                 />
               );
             default: {
-              // exhaustive — CellMode에 새 모드 추가 시 컴파일 에러로 알림
-              const _exhaustive: never = mode;
+              // exhaustive — CellModeResult.mode에 새 모드 추가 시 컴파일 에러로 알림
+              const _exhaustive: never = result;
               return null;
             }
           }

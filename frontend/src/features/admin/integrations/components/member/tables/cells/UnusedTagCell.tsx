@@ -3,11 +3,11 @@
 import { cn } from '@/shared/utils/cn';
 
 import { BODY_SERVICE_COLUMN_CLASS } from '../../../../constants/memberUiConfig';
-import type { MemberIntegrationStatus } from '../../../../types/integrationModel';
+import type { UnlinkedStatus } from '../../../../utils/usersTableHelpers';
 
 interface UnusedTagCellProps {
-  /** '미사용' | '미등록' — '완료'는 이 셀에 안 옴. 채널톡 read-only 케이스는 항상 '미사용'. */
-  status: MemberIntegrationStatus;
+  /** '미사용' | '미등록' — '완료'는 이 셀에 안 옴 (selectCellMode가 보장). 채널톡 read-only 케이스는 항상 '미사용'. */
+  status: UnlinkedStatus;
 }
 
 /**

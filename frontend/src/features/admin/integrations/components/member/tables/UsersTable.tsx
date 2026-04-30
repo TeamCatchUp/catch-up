@@ -3,13 +3,12 @@
 import { cn } from '@/shared/utils/cn';
 
 import {
-  HEADER_COLUMN_CLASS,
-  HEADER_SERVICE_COLUMN_CLASS,
-  KEYCLOAK_COLUMN_CLASS,
+  FLEX_COLUMN_CELL_CLASS,
+  getKeycloakColumnClass,
+  getServicesGroupClass,
   KEYCLOAK_USER_CELL_CLASS,
   MEMBER_TABLE_SERVICES,
   SERVICE_HEADER_LABELS,
-  SERVICES_GROUP_CLASS,
   TABLE_BODY_ROW_CLASS,
   TABLE_HEADER_ROW_CLASS,
 } from '../../../constants/memberUiConfig';
@@ -55,18 +54,19 @@ export default function UsersTable({
   onToggleUnused,
 }: UsersTableProps) {
   const isSingleService = services.length === 1;
-  const servicesGroupClass = cn(SERVICES_GROUP_CLASS, isSingleService ? 'gap-0' : 'gap-14');
+  const servicesGroupClass = getServicesGroupClass(isSingleService);
+  const keycloakColumnClass = getKeycloakColumnClass(isSingleService);
 
   return (
     <section className="bg-fill-normal flex h-full min-h-0 flex-col overflow-clip">
       {/* 헤더 */}
       <div className={cn(TABLE_HEADER_ROW_CLASS, isEditMode ? 'bg-fill-primary-normal-neutral' : 'bg-fill-strong')}>
-        <div className={cn(HEADER_COLUMN_CLASS, !isSingleService && 'max-w-35')}>
+        <div className={cn(FLEX_COLUMN_CELL_CLASS, !isSingleService && 'max-w-35')}>
           <span className="text-body-xsmall text-content-neutral truncate">Keycloack 사용자</span>
         </div>
         <div className={servicesGroupClass}>
           {services.map((service) => (
-            <div key={service} className={HEADER_SERVICE_COLUMN_CLASS}>
+            <div key={service} className={FLEX_COLUMN_CELL_CLASS}>
               <span className="text-body-xsmall text-content-neutral truncate">{SERVICE_HEADER_LABELS[service]}</span>
             </div>
           ))}
@@ -78,7 +78,7 @@ export default function UsersTable({
           {Array.from({ length: skeletonCount }).map((_, idx) => (
             <div key={`skeleton-${idx}`} className={TABLE_BODY_ROW_CLASS}>
               <div className="bg-fill-strong size-2 shrink-0 animate-pulse rounded-full" />
-              <div className={cn(KEYCLOAK_COLUMN_CLASS, !isSingleService && 'max-w-35', KEYCLOAK_USER_CELL_CLASS)}>
+              <div className={cn(keycloakColumnClass, KEYCLOAK_USER_CELL_CLASS)}>
                 <div className="bg-fill-strong size-5 shrink-0 animate-pulse rounded-full" />
                 <div className="bg-fill-strong h-4 w-20 animate-pulse rounded-md" />
               </div>

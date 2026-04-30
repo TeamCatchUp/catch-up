@@ -11,7 +11,19 @@ import type { IntegrationService, MemberIntegrationStatus } from '../types/integ
  * UsersTable은 filter·머지된 displayRows + 노출 services만 받음. 외부 상태 관리 안 함.
  */
 
-export type CellMode = 'linked' | 'unused-tag' | 'account-edit';
+/** 미연동 상태 — '완료' 제외 narrow type. UnusedTag/AccountEdit 셀의 status prop과 호환. */
+export type UnlinkedStatus = '미사용' | '미등록';
+
+/**
+ * 셀 모드 + 모드별 narrow된 status를 함께 묶은 discriminated union.
+ * UsersTableRow의 switch가 이걸 받으면 cast(`as '미사용' | '미등록'`) 없이 type-safe하게 분기.
+ */
+export type CellModeResult =
+  | { mode: 'linked' }
+  | { mode: 'unused-tag'; status: UnlinkedStatus }
+  | { mode: 'account-edit'; status: UnlinkedStatus };
+
+export type CellMode = CellModeResult['mode'];
 
 interface SelectCellModeArgs {
   service: IntegrationService;
@@ -30,13 +42,15 @@ interface SelectCellModeArgs {
  * | 미사용/미등록 | other          | true       | account-edit |
  *
  * (*) 채널톡은 user-level 매핑 API 백엔드 미구현이라 isEditMode=true에서도 read-only로 강제.
+ *     채널톡 미매핑은 항상 '미사용'(view model에서 결정).
  *     백엔드 합류 시 이 한 줄(`if (service === 'channel-talk')`)만 제거.
  */
-export const selectCellMode = ({ service, status, isEditMode }: SelectCellModeArgs): CellMode => {
-  if (status === '완료') return 'linked';
-  if (service === 'channel-talk') return 'unused-tag';
-  if (!isEditMode) return 'unused-tag';
-  return 'account-edit';
+export const selectCellMode = ({ service, status, isEditMode }: SelectCellModeArgs): CellModeResult => {
+  if (status === '완료') return { mode: 'linked' };
+  // 여기서 status는 '완료' 제외 → UnlinkedStatus로 자동 narrow됨.
+  if (service === 'channel-talk') return { mode: 'unused-tag', status: '미사용' };
+  if (!isEditMode) return { mode: 'unused-tag', status };
+  return { mode: 'account-edit', status };
 };
 
 /**

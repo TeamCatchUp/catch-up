@@ -49,6 +49,18 @@ const FILTER_OPTIONS: { key: SyncFilterType; label: string }[] = [
   { key: 'channel-talk', label: '채널톡' },
 ];
 
+/**
+ * 서비스 → 백엔드 vendor 매핑.
+ * 채널톡은 user-level 매핑이 백엔드 미구현이라 vendor mapping에서 제외 (셀 자체가 read-only).
+ * 모듈 스코프에 두어 매 렌더 재생성 방지.
+ */
+const SERVICE_TO_VENDOR: Partial<Record<IntegrationService, VendorType>> = {
+  jira: 'atlassian',
+  confluence: 'atlassian',
+  github: 'github',
+  slack: 'slack',
+};
+
 /** 이용자 계정 연동 상태 섹션 */
 export default function UsersStatusSection({
   total,
@@ -58,7 +70,7 @@ export default function UsersStatusSection({
   currentPage,
   onPageChange,
   isLoading = false,
-  pageSize,
+  pageSize = PAGE_SIZE,
 }: UsersStatusSectionProps) {
   const [isEditMode, setIsEditMode] = useState(false);
   const [isCsvModalOpen, setIsCsvModalOpen] = useState(false);
@@ -132,15 +144,6 @@ export default function UsersStatusSection({
       toast('일시적인 오류가 발생했습니다.', { description: '잠시 후 다시 시도해주세요.' });
     },
   });
-
-  // ─── 저장 mutation ───
-  // 채널톡은 user-level 매핑이 백엔드 미구현이라 vendor mapping에서 제외 (셀 자체가 read-only).
-  const SERVICE_TO_VENDOR: Partial<Record<IntegrationService, VendorType>> = {
-    jira: 'atlassian',
-    confluence: 'atlassian',
-    github: 'github',
-    slack: 'slack',
-  };
 
   const queryClient = useQueryClient();
 

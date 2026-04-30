@@ -38,10 +38,16 @@ export const TABLE_BODY_ROW_CLASS =
   'border-edge-neutral bg-fill-normal flex h-16.5 items-center justify-center gap-4 border-b px-6 py-3 transition-colors';
 export const KEYCLOAK_COLUMN_CLASS = 'flex min-w-px flex-[1_0_0] items-center';
 export const SERVICES_GROUP_CLASS = 'flex min-w-px flex-[1_0_0] items-center';
-export const HEADER_COLUMN_CLASS = 'flex min-w-px flex-[1_0_0] flex-col justify-center overflow-hidden';
-export const HEADER_SERVICE_COLUMN_CLASS = 'flex min-w-px flex-[1_0_0] flex-col justify-center overflow-hidden';
+/** 헤더/계정 정보 셀 공통: 1열 column flex + truncate */
+export const FLEX_COLUMN_CELL_CLASS = 'flex min-w-px flex-[1_0_0] flex-col justify-center overflow-hidden';
 export const BODY_SERVICE_COLUMN_CLASS = 'flex min-w-px max-w-41.25 flex-[1_0_0]';
 export const KEYCLOAK_USER_CELL_CLASS = 'relative justify-center gap-3';
-export const KEYCLOAK_USER_NAME_CLASS = 'flex min-w-px flex-[1_0_0] flex-col justify-center overflow-hidden';
-export const SERVICE_ACCOUNT_NAME_CLASS = 'flex min-w-px flex-[1_0_0] flex-col justify-center overflow-hidden';
 export const SERVICE_ACCOUNT_IDENTIFIER_CLASS = 'flex h-5 w-full shrink-0 flex-col justify-center overflow-hidden';
+
+/** 서비스 컬럼 그룹 className — services 1개(채널톡 단독)면 gap 제거, 다중이면 gap-14. */
+export const getServicesGroupClass = (isSingleService: boolean): string =>
+  `${SERVICES_GROUP_CLASS} ${isSingleService ? 'gap-0' : 'gap-14'}`;
+
+/** Keycloack 컬럼 className — 다중 서비스일 때 max-w-35 캡 적용. */
+export const getKeycloakColumnClass = (isSingleService: boolean): string =>
+  `${KEYCLOAK_COLUMN_CLASS}${!isSingleService ? ' max-w-35' : ''}`;
