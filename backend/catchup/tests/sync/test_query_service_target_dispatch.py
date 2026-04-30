@@ -14,6 +14,8 @@ from catchup.connectors.channel_talk.schemas.document_connection import (
     ChannelTalkDocumentCredentialsRecord,
 )
 from catchup.db.models import SyncConnector
+from catchup.db.models import SyncEventStatus
+from catchup.sync.common.schemas import SyncTargetType
 from catchup.sync.query_service import SyncQueryService
 
 CHANNEL_ID = "channel-123"
@@ -57,6 +59,28 @@ def _build_document_connection_record(
 
 async def _run_immediately(func, *args, **kwargs):
     return func(*args, **kwargs)
+
+
+class SyncQueryServiceSnapshotTests(IsolatedAsyncioTestCase):
+    async def test_job_targets_include_resource_type_as_target_type(self) -> None:
+        service = SyncQueryService()
+        event = type(
+            "_Event",
+            (),
+            {
+                "resource_type": SyncTargetType.SPACE.value,
+                "resource_id": "space-123",
+                "resource_metadata": {"target_name": "Help Center"},
+                "status": SyncEventStatus.SUCCESS,
+            },
+        )()
+
+        result = service._build_job_targets([event])
+
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0].target_type, SyncTargetType.SPACE)
+        self.assertEqual(result[0].target_id, "space-123")
+        self.assertEqual(result[0].target_name, "Help Center")
 
 
 class SyncQueryServiceDispatchTests(IsolatedAsyncioTestCase):

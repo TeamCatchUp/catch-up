@@ -118,6 +118,7 @@ def _persist_jira_projects_db(
 
 @dataclass(slots=True, frozen=True)
 class SyncJobTargetSnapshotResult:
+    target_type: SyncTargetType
     target_id: str
     target_name: str
     status: SyncEventStatus
@@ -305,6 +306,7 @@ class SyncQueryService:
             )
             targets.append(
                 SyncJobTargetSnapshotResult(
+                    target_type=SyncTargetType(event.resource_type),
                     target_id=target_id,
                     target_name=target_name,
                     status=event.status,
@@ -660,7 +662,7 @@ class SyncQueryService:
             channel_name=connection.channel_name,
         )
         targets = [self._build_channel_talk_target_result(channel_plan)]
-        document_target = self._build_document_target_if_accessible(
+        document_target = self._build_optional_document_space_target(
             document_connection_result,
             channel_id=channel_id,
         )
@@ -700,7 +702,7 @@ class SyncQueryService:
         )
 
     @classmethod
-    def _build_document_target_if_accessible(
+    def _build_optional_document_space_target(
         cls,
         document_connection: ChannelTalkDocumentCredentialsRecord | None,
         *,

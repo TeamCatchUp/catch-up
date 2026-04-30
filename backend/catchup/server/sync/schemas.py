@@ -29,6 +29,7 @@ from catchup.sync.query_service import SyncTargetsResult
 
 
 class SyncJobTargetSnapshotItem(BaseModel):
+    target_type: SyncTargetType
     target_id: str
     target_name: str
     status: SyncEventStatus
