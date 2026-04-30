@@ -18,7 +18,7 @@ from catchup.connectors.channel_talk.full_sync_helper import (
     is_verified_channel_talk_document_connection,
 )
 from catchup.connectors.channel_talk.full_sync_helper import (
-    list_channel_talk_connections,
+    load_channel_talk_connection,
 )
 from catchup.connectors.channel_talk.full_sync_helper import (
     load_channel_talk_document_connection,
@@ -635,48 +635,31 @@ class SyncQueryService:
     async def _list_channel_talk_targets(
         self,
         *,
-        scope_id: str | None,
+        scope_id: str,
     ) -> SyncTargetsResult:
-        # Channel Talk은 여러 channel credential row가 존재할 수 있으므로
-        # scope_id가 있으면 해당 channel을 고르고, 없으면 단일 연결일 때만 추론한다.
-        requested_channel_id = (
-            require_channel_talk_channel_id(scope_id)
-            if scope_id is not None and scope_id.strip()
-            else None
+        channel_id = require_channel_talk_channel_id(
+            scope_id,
+            empty_message="scope_id is required",
         )
 
-        if requested_channel_id is not None:
-            connections, document_lookup_result = await asyncio.gather(
-                run_in_threadpool(list_channel_talk_connections),
-                run_in_threadpool(
-                    load_channel_talk_document_connection,
-                    requested_channel_id,
-                ),
-                return_exceptions=True,
-            )
-            connection = self._select_channel_talk_connection(
-                connections,
-                channel_id=requested_channel_id,
-            )
-            normalized_scope_id = requested_channel_id
-            if isinstance(document_lookup_result, BaseException):
-                raise document_lookup_result
-            document_connection = document_lookup_result
-        else:
-            connections = await run_in_threadpool(list_channel_talk_connections)
-            connection = self._select_channel_talk_connection(
-                connections,
-                channel_id=None,
-            )
-            normalized_scope_id = connection.channel_id
-            document_connection = await run_in_threadpool(
+        connection_result, document_connection_result = await asyncio.gather(
+            run_in_threadpool(
+                load_channel_talk_connection,
+                channel_id,
+            ),
+            run_in_threadpool(
                 load_channel_talk_document_connection,
-                normalized_scope_id,
-            )
+                channel_id,
+            ),
+        )
 
-        document_connection = self._require_verified_channel_talk_document_connection(
-            document_connection,
-            channel_id=normalized_scope_id,
+        connection = self._require_channel_talk_connection(
+            connection_result,
+            channel_id=channel_id,
+        )
+        document_connection = self._require_document_connection(
+            document_connection_result,
+            channel_id=channel_id,
         )
 
         targets = [
@@ -685,13 +668,8 @@ class SyncQueryService:
                 display_name=connection.channel_name,
                 target_type=SyncTargetType.CHANNEL,
                 is_accessible=True,
-                metadata=build_channel_talk_channel_metadata(normalized_scope_id),
-            )
-        ]
-
-        # DocumentArticle full sync target: target_type=space, target_id=space_id.
-        # 프론트는 이 target object를 그대로 /full.targets에 넣으면 된다.
-        targets.append(
+                metadata=build_channel_talk_channel_metadata(channel_id),
+            ),
             SyncTargetResult(
                 target_id=document_connection.space_id,
                 display_name=document_connection.space_name,
@@ -699,44 +677,36 @@ class SyncQueryService:
                 is_accessible=True,
                 metadata={
                     **build_channel_talk_document_space_metadata(
-                        normalized_scope_id,
+                        channel_id,
                     ),
                     "space_id": document_connection.space_id,
                     "space_name": document_connection.space_name,
                 },
-            )
-        )
+            ),
+        ]
 
         return self._build_targets_result(
             connector=SyncConnector.CHANNEL_TALK,
-            scope_id=normalized_scope_id,
+            scope_id=channel_id,
             targets=targets,
         )
 
     @staticmethod
-    def _select_channel_talk_connection(
-        connections: list[ChannelTalkCredentialsRecord],
+    def _require_channel_talk_connection(
+        connection: ChannelTalkCredentialsRecord | None,
         *,
-        channel_id: str | None,
+        channel_id: str,
     ) -> ChannelTalkCredentialsRecord:
-        if not connections:
-            raise ValueError("channel_talk is not connected")
-        if channel_id is None:
-            if len(connections) == 1:
-                return connections[0]
+        if connection is None:
+            raise ValueError("channel_talk is not connected for the requested channel")
+        if connection.channel_id != channel_id:
             raise ValueError(
-                "scope_id is required when multiple channel_talk connections exist"
+                "Stored Channel Talk credentials do not match the requested channel"
             )
-
-        for connection in connections:
-            if connection.channel_id == channel_id:
-                return connection
-        raise ValueError(
-            "Stored Channel Talk credentials do not match the requested channel"
-        )
+        return connection
 
     @staticmethod
-    def _require_verified_channel_talk_document_connection(
+    def _require_document_connection(
         document_connection: ChannelTalkDocumentCredentialsRecord | None,
         *,
         channel_id: str,
@@ -760,8 +730,7 @@ class SyncQueryService:
         connector: SyncConnector,
         scope_id: str | None,
     ) -> SyncTargetsResult:
-        # 같은 connector/scope 요청이 동시에 들어오면 외부 API를 중복 호출하지 않도록
-        # in-flight task를 공유한다. Channel Talk은 scope_id 없이도 listing할 수 있다.
+
         key = (connector, scope_id or "")
 
         async with self._inflight_targets_lock:
@@ -789,14 +758,8 @@ class SyncQueryService:
         connector: SyncConnector,
         scope_id: str | None,
     ) -> SyncTargetsResult:
-        # connector별 listing 메서드는 target_id/target_type의 의미만 다르고
-        # 최종 응답 envelope는 SyncTargetsResult로 통일된다.
-        normalized_scope_id = (scope_id or "").strip()
-        if connector == SyncConnector.CHANNEL_TALK:
-            return await self._list_channel_talk_targets(
-                scope_id=normalized_scope_id or None
-            )
 
+        normalized_scope_id = (scope_id or "").strip()
         if not normalized_scope_id:
             raise ValueError("scope_id is required")
 
@@ -805,6 +768,7 @@ class SyncQueryService:
             SyncConnector.JIRA: self._list_jira_targets,
             SyncConnector.CONFLUENCE: self._list_confluence_targets,
             SyncConnector.SLACK: self._list_slack_targets,
+            SyncConnector.CHANNEL_TALK: self._list_channel_talk_targets,
         }
         lister = listers.get(connector)
         if lister is None:
