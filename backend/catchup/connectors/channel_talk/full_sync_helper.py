@@ -14,9 +14,13 @@ from catchup.db.channel_talk.repository import ChannelTalkDocumentCredentialsRep
 from catchup.db.engine import SessionLocal
 
 
-def load_channel_talk_connection() -> ChannelTalkCredentialsRecord | None:
+def load_channel_talk_connection(
+    channel_id: str | None = None,
+) -> ChannelTalkCredentialsRecord | None:
     with SessionLocal() as db:
-        return ChannelTalkCredentialsRepository(db).get_connection()
+        return ChannelTalkCredentialsRepository(db).get_connection(
+            channel_id=channel_id,
+        )
 
 
 def list_channel_talk_connections() -> list[ChannelTalkCredentialsRecord]:
