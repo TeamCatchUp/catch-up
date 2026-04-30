@@ -78,6 +78,8 @@ def _article_view(
     body_html: str | None = None,
     body=None,
     title: str = "Refund policy",
+    slug: str = "refund-policy",
+    website_url: str | None = "https://docs.example.com/refund",
 ) -> ChannelTalkDocumentArticleView:
     article_payload = {
         "id": article_id,
@@ -90,7 +92,7 @@ def _article_view(
         "title": title,
         "subtitle": "Customer refunds",
         "summary": "Refund summary",
-        "slug": "refund-policy",
+        "slug": slug,
         "topicIds": ["topic-1"],
         "authorId": "author-1",
         "createdAt": "2026-04-21T09:00:00Z",
@@ -98,8 +100,9 @@ def _article_view(
         "publishedAt": "2026-04-21T10:00:00Z",
         "publishedRevisionId": "published-revision-1",
         "currentRevisionId": "current-revision-1",
-        "website": {"url": "https://docs.example.com/refund"},
     }
+    if website_url is not None:
+        article_payload["website"] = {"url": website_url}
     if body_html is not None:
         article_payload["bodyHtml"] = body_html
     if body is not None:
@@ -269,20 +272,32 @@ class ChannelTalkDocumentArticleFullSyncAdapterTests(IsolatedAsyncioTestCase):
 
         self.assertEqual(len(transformed.documents), 2)
         states = [
-            document.storage_metadata["article_state"]
+            document.storage_metadata["document_article_core"]["article"]["state"]
             for document in transformed.documents
         ]
         self.assertEqual(states, ["published", "published"])
         for document in transformed.documents:
-            self.assertIn("Document State:", document.page_content)
-            self.assertIn("State Meaning:", document.page_content)
-            self.assertEqual(
-                document.storage_metadata["state"],
-                document.storage_metadata["article_state"],
-            )
+            self.assertNotIn("[Channel Talk Document Article]", document.page_content)
+            self.assertNotIn("Document State:", document.page_content)
+            self.assertNotIn("State Meaning:", document.page_content)
+            self.assertNotIn("Space:", document.page_content)
+            self.assertNotIn("Language:", document.page_content)
+            self.assertNotIn("state", document.storage_metadata)
+            self.assertNotIn("article_state", document.storage_metadata)
+            self.assertNotIn("publication", document.storage_metadata)
+            self.assertNotIn("chunk", document.storage_metadata)
             self.assertIn("document_article_core", document.storage_metadata)
-            self.assertIn("publication", document.storage_metadata)
-            self.assertIn("chunk", document.storage_metadata)
+            article_core = document.storage_metadata["document_article_core"]
+            self.assertIn("article", article_core)
+            self.assertIn("space", article_core)
+            self.assertIn("author", article_core)
+            self.assertIn("taxonomy", article_core)
+            self.assertIn("publication", article_core)
+            self.assertIn("chunk", article_core)
+            self.assertNotIn(
+                "summary",
+                article_core["article"],
+            )
         self.assertIn("Refunds", transformed.documents[0].page_content)
         self.assertIn(
             "guide (https://example.com)",
@@ -351,9 +366,10 @@ class ChannelTalkDocumentArticleFullSyncAdapterTests(IsolatedAsyncioTestCase):
                 "channel_talk:document_article:"
                 f"channel-123:space-123:ko:long-1:chunk:{index}",
             )
-            self.assertEqual(document.storage_metadata["chunk_index"], index)
+            article_core = document.storage_metadata["document_article_core"]
+            self.assertEqual(article_core["chunk"]["chunk_index"], index)
             self.assertEqual(
-                document.storage_metadata["chunk_count"],
+                article_core["chunk"]["chunk_count"],
                 len(transformed.documents),
             )
 
@@ -401,11 +417,205 @@ class ChannelTalkDocumentArticleFullSyncAdapterTests(IsolatedAsyncioTestCase):
         rendered = "\n\n".join(
             document.page_content for document in transformed.documents
         )
-        self.assertIn("[Section: Install Catch Up]", rendered)
-        self.assertIn("[Section: Install Catch Up > Troubleshooting]", rendered)
-        self.assertIn("\n\nInstall Catch Up\n\n", rendered)
-        self.assertIn("\n\nTroubleshooting\n\n", rendered)
+        self.assertIn("Published refund policy - Install Catch Up", rendered)
+        self.assertIn(
+            "Published refund policy - Install Catch Up > Troubleshooting",
+            rendered,
+        )
+        self.assertNotIn("[Section:", rendered)
+        self.assertNotIn("\n\nInstall Catch Up\n\n", rendered)
+        self.assertNotIn("\n\nTroubleshooting\n\n", rendered)
         self.assertNotIn("# Install Catch Up", rendered)
+
+    async def test_transform_uses_title_section_heading_without_duplicate_section_name(
+        self,
+    ) -> None:
+        adapter = ChannelTalkDocumentArticleFullSyncAdapter(language="ko")
+        body_html = """
+        <h1>나에게 맞는 답변 만들기</h1>
+        <h2>마무리</h2>
+        <p>프롬프트 빌더는 한 번 설정해두면 Catch Up이 점점 당신의 동료처럼 느껴지게 만드는 기능입니다.</p>
+        """
+        fetched = ChannelTalkDocumentArticleFullSyncFetchResult(
+            channel_id="channel-123",
+            space_id="space-123",
+            language="ko",
+            bundles=(
+                _bundle(
+                    article_id="closing-1",
+                    state=ChannelTalkDocumentArticleState.PUBLISHED,
+                    detail=_article_view(
+                        article_id="closing-1",
+                        state=ChannelTalkDocumentArticleState.PUBLISHED,
+                        body_html="<p>Current body should not be used</p>",
+                        title="나에게 맞는 답변 만들기",
+                    ),
+                    published_revision=_revision_view(
+                        article_id="closing-1",
+                        body_html=body_html,
+                        title="나에게 맞는 답변 만들기",
+                    ),
+                ),
+            ),
+            fetched_count=1,
+            fetched_article_ids=("closing-1",),
+        )
+
+        transformed = await adapter.transform(
+            execution=_execution(),
+            sync_window=_window(),
+            fetched=fetched,
+        )
+
+        self.assertEqual(len(transformed.documents), 1)
+        page_content = transformed.documents[0].page_content
+        self.assertTrue(
+            page_content.startswith(
+                "나에게 맞는 답변 만들기 - 마무리\n\n프롬프트 빌더는"
+            )
+        )
+        self.assertNotIn("[Channel Talk Document Article]", page_content)
+        self.assertNotIn("Document State:", page_content)
+        self.assertNotIn("State Meaning:", page_content)
+        self.assertNotIn("Space:", page_content)
+        self.assertNotIn("Language:", page_content)
+        self.assertNotIn("[Section:", page_content)
+        self.assertNotIn("\n\n마무리\n\n", page_content)
+
+    async def test_transform_stores_public_article_url_from_website_url(
+        self,
+    ) -> None:
+        adapter = ChannelTalkDocumentArticleFullSyncAdapter(language="ko")
+        fetched = ChannelTalkDocumentArticleFullSyncFetchResult(
+            channel_id="channel-123",
+            space_id="space-123",
+            language="ko",
+            bundles=(
+                _bundle(
+                    article_id="public-url-1",
+                    state=ChannelTalkDocumentArticleState.PUBLISHED,
+                    detail=_article_view(
+                        article_id="public-url-1",
+                        state=ChannelTalkDocumentArticleState.PUBLISHED,
+                        body_html="<p>Published body</p>",
+                        website_url=(
+                            "https://guide.catchup.im/ko/articles/"
+                            "%ED%9D%A9%EC%96%B4%EC%A7%84-%EC%82%AC%EB%82%B4-23bb29b0"
+                        ),
+                    ),
+                    published_revision=_revision_view(
+                        article_id="public-url-1",
+                        body_html="<p>Published body</p>",
+                    ),
+                ),
+            ),
+            fetched_count=1,
+            fetched_article_ids=("public-url-1",),
+        )
+
+        transformed = await adapter.transform(
+            execution=_execution(),
+            sync_window=_window(),
+            fetched=fetched,
+        )
+
+        storage_metadata = transformed.documents[0].storage_metadata
+        self.assertEqual(
+            storage_metadata["url"],
+            "https://guide.catchup.im/ko/articles/"
+            "%ED%9D%A9%EC%96%B4%EC%A7%84-%EC%82%AC%EB%82%B4-23bb29b0",
+        )
+        self.assertEqual(
+            storage_metadata["document_article_core"]["article"]["url"],
+            storage_metadata["url"],
+        )
+
+    async def test_transform_builds_public_article_url_from_slug_when_missing(
+        self,
+    ) -> None:
+        adapter = ChannelTalkDocumentArticleFullSyncAdapter(language="ko")
+        fetched = ChannelTalkDocumentArticleFullSyncFetchResult(
+            channel_id="channel-123",
+            space_id="space-123",
+            language="ko",
+            bundles=(
+                _bundle(
+                    article_id="slug-url-1",
+                    state=ChannelTalkDocumentArticleState.PUBLISHED,
+                    detail=_article_view(
+                        article_id="slug-url-1",
+                        state=ChannelTalkDocumentArticleState.PUBLISHED,
+                        body_html="<p>Published body</p>",
+                        slug="흩어진-사내-정보를-한-번에-찾기-23bb29b0",
+                        website_url=None,
+                    ),
+                    published_revision=_revision_view(
+                        article_id="slug-url-1",
+                        body_html="<p>Published body</p>",
+                    ),
+                ),
+            ),
+            fetched_count=1,
+            fetched_article_ids=("slug-url-1",),
+        )
+
+        transformed = await adapter.transform(
+            execution=_execution(),
+            sync_window=_window(),
+            fetched=fetched,
+        )
+
+        self.assertEqual(
+            transformed.documents[0].storage_metadata["url"],
+            "https://guide.catchup.im/ko/articles/"
+            "%ED%9D%A9%EC%96%B4%EC%A7%84-%EC%82%AC%EB%82%B4-"
+            "%EC%A0%95%EB%B3%B4%EB%A5%BC-%ED%95%9C-%EB%B2%88%EC%97%90-"
+            "%EC%B0%BE%EA%B8%B0-23bb29b0",
+        )
+
+    async def test_transform_builds_public_article_url_from_short_slug_and_title(
+        self,
+    ) -> None:
+        adapter = ChannelTalkDocumentArticleFullSyncAdapter(language="ko")
+        fetched = ChannelTalkDocumentArticleFullSyncFetchResult(
+            channel_id="channel-123",
+            space_id="space-123",
+            language="ko",
+            bundles=(
+                _bundle(
+                    article_id="short-slug-url-1",
+                    state=ChannelTalkDocumentArticleState.PUBLISHED,
+                    detail=_article_view(
+                        article_id="short-slug-url-1",
+                        state=ChannelTalkDocumentArticleState.PUBLISHED,
+                        body_html="<p>Published body</p>",
+                        title="나에게 맞는 답변 만들기",
+                        slug="69e7c182",
+                        website_url=None,
+                    ),
+                    published_revision=_revision_view(
+                        article_id="short-slug-url-1",
+                        body_html="<p>Published body</p>",
+                        title="나에게 맞는 답변 만들기",
+                    ),
+                ),
+            ),
+            fetched_count=1,
+            fetched_article_ids=("short-slug-url-1",),
+        )
+
+        transformed = await adapter.transform(
+            execution=_execution(),
+            sync_window=_window(),
+            fetched=fetched,
+        )
+
+        self.assertEqual(
+            transformed.documents[0].storage_metadata["url"],
+            "https://guide.catchup.im/ko/articles/"
+            "%EB%82%98%EC%97%90%EA%B2%8C-%EB%A7%9E%EB%8A%94-"
+            "%EB%8B%B5%EB%B3%80-%EB%A7%8C%EB%93%A4%EA%B8%B0-69e7c182",
+        )
 
     async def test_transform_keeps_heading_icon_alt_text_in_chunk_body(
         self,
@@ -449,13 +659,10 @@ class ChannelTalkDocumentArticleFullSyncAdapterTests(IsolatedAsyncioTestCase):
             document.page_content for document in transformed.documents
         )
         self.assertIn(
-            "[Section: Catch Up - Slack에서 사용해보세요 > bulb Catch Up 팀은 이렇게 쓰고 있어요]",
+            "Published refund policy - Catch Up - Slack에서 사용해보세요 > bulb Catch Up 팀은 이렇게 쓰고 있어요",
             rendered,
         )
-        self.assertIn(
-            "\n\nbulb Catch Up 팀은 이렇게 쓰고 있어요\n\n",
-            rendered,
-        )
+        self.assertNotIn("\n\nbulb Catch Up 팀은 이렇게 쓰고 있어요\n\n", rendered)
         self.assertIn("저희 팀에서 가장 많이 쓰는 순간은", rendered)
 
     async def test_transform_preserves_structured_rich_blocks(self) -> None:
