@@ -61,16 +61,20 @@ function ChannelTalkManagementPanelInner({ initialState }: ChannelTalkManagement
   const hasChannels = state.channels.length > 0;
   /**
    * 채널 배열 기반 파생값들 — 채널 변경 시에만 재계산.
-   * `hasTestedChannels`: "데이터 범위" + "연동 상태"가 active로 보이는 조건 (검증 통과한 채널 1개 이상)
-   * `totalDocumentSpaces`: "N개 도큐먼트 연결됨" 헤드라인 카운트
+   * 헤더 카운트("N개 채널 / N개 도큐먼트 연결됨")는 백엔드에 실제 등록된(tested) 항목만 노출.
+   * 사용자가 입력 중인 미검증 카드는 카운트에서 제외하여 "연동된 데이터" 의미를 유지.
    */
-  const { hasTestedChannels, totalDocumentSpaces } = useMemo(
-    () => ({
-      hasTestedChannels: state.channels.some((ch) => ch.connectionStatus === 'tested'),
-      totalDocumentSpaces: state.channels.reduce((sum, ch) => sum + ch.documentSpaces.length, 0),
-    }),
-    [state.channels],
-  );
+  const { hasTestedChannels, testedChannelCount, testedDocumentSpaceCount } = useMemo(() => {
+    const testedChannels = state.channels.filter((ch) => ch.connectionStatus === 'tested');
+    return {
+      hasTestedChannels: testedChannels.length > 0,
+      testedChannelCount: testedChannels.length,
+      testedDocumentSpaceCount: testedChannels.reduce(
+        (sum, ch) => sum + ch.documentSpaces.filter((ds) => ds.connectionStatus === 'tested').length,
+        0,
+      ),
+    };
+  }, [state.channels]);
 
   return (
     <div className="flex flex-col gap-6">
@@ -78,8 +82,8 @@ function ChannelTalkManagementPanelInner({ initialState }: ChannelTalkManagement
       <DataRangeSection hasData={hasTestedChannels} />
       <CredentialSection
         channels={state.channels}
-        channelCount={state.channels.length}
-        totalDocumentSpaces={totalDocumentSpaces}
+        channelCount={testedChannelCount}
+        totalDocumentSpaces={testedDocumentSpaceCount}
         hasChannels={hasChannels}
         onAddChannel={addChannel}
         onUpdateChannel={updateChannel}
