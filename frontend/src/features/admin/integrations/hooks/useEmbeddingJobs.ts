@@ -134,7 +134,7 @@ export const useEmbeddingJobs = () => {
         scope_id: singleScopeMap[connector] ?? '',
       })),
       ...channelTalkChannelIds.map((channelId) => ({
-        connector: 'channel_talk' as SyncConnector,
+        connector: 'channel_talk' as const,
         scope_id: channelId,
       })),
     ],
@@ -270,6 +270,9 @@ export const useEmbeddingJobs = () => {
   }, [activeJobs, jobStates]);
 
   // ─── 완료/실패 job → sessionStorage 정리 ───
+  // 외부 시스템(sessionStorage)과의 동기화 + 폴링으로 들어온 새 jobStates에 따라 manualJobs를 정리.
+  // 가드(`manualJobs.some(...)`)가 있어 무한 루프는 발생하지 않으나, React 19의
+  // `set-state-in-effect` 룰이 effect 안 setState를 보수적으로 잡는다 — 의도적 suppress.
   useEffect(() => {
     if (manualJobs.length === 0) return;
     const completedIds = new Set(
@@ -280,6 +283,7 @@ export const useEmbeddingJobs = () => {
     if (completedIds.size === 0) return;
     if (!manualJobs.some((j) => completedIds.has(j.jobId))) return;
 
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setManualJobs((prev) => {
       const updated = prev.filter((j) => !completedIds.has(j.jobId));
       try {

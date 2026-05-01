@@ -9,7 +9,7 @@ import IconOpenInNew from '@/public/icons/icon/open_in_new.svg';
 import { Button } from '@/shared/components/ui/button';
 import { cn } from '@/shared/utils/cn';
 
-import { deriveChannelTalkInitialState, useChannelTalkViewModel } from '../../../hooks/useChannelTalkViewModel';
+import { useChannelTalkViewModel } from '../../../hooks/useChannelTalkViewModel';
 import { channelTalkQueries } from '../../../queries/channelTalk.queries';
 import type { ChannelTalkConnectionState } from '../../../types/channelTalkModel';
 import type {
@@ -17,6 +17,7 @@ import type {
   ChannelTalkChannelPatch,
   ChannelTalkDocumentSpacePatch,
 } from '../../../types/channelTalkModel';
+import { deriveChannelTalkInitialState } from '../../../utils/deriveChannelTalkInitialState';
 import ChannelTalkChannelCard from './ChannelTalkChannelCard';
 
 /**
@@ -33,6 +34,18 @@ export default function ChannelTalkManagementPanel() {
   if (channelListQuery.isLoading || documentListQuery.isLoading) {
     // 채널톡 백엔드 응답 대기 중 — 빈 placeholder. 짧은 폴링이라 별도 스켈레톤 없이 충분.
     return <div className="flex flex-col gap-6" />;
+  }
+
+  // fetch 실패 시 빈 카드로 무음 진입을 막아 "등록된 적 없음"으로 오인하는 것을 방지.
+  // 사용자에게 명시적 에러 + 새로고침 안내. ConnectionStatus/DataRange 섹션 자리는 비워둠.
+  if (channelListQuery.isError || documentListQuery.isError) {
+    return (
+      <div className="flex flex-col gap-6">
+        <div className="border-edge-assistive bg-fill-strong text-body-small text-status-destructive rounded-xl border px-4 py-3">
+          채널톡 연동 정보를 불러오지 못했습니다. 잠시 후 다시 시도해주세요.
+        </div>
+      </div>
+    );
   }
 
   const initialState = deriveChannelTalkInitialState(channelListQuery.data, documentListQuery.data);
