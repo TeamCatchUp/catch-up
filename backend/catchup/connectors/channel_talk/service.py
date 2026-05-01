@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import cast
+
 from catchup.connector_core.adapters.channel_talk.documents_install_auth_adapter import (
     ChannelTalkDocumentCredentialsStore,
 )
@@ -94,6 +96,7 @@ class ChannelTalkCredentialsService:
                 client=client,
             )
         )
+        self._port = cast(ChannelTalkInstallAuthAdapter, self.application.port)
 
     async def connect(
         self,
@@ -110,8 +113,14 @@ class ChannelTalkCredentialsService:
     async def get_status(self) -> ChannelTalkCredentialsStatus:
         return await self.application.get_status()
 
-    async def uninstall(self) -> ChannelTalkUninstallResult:
-        return await self.application.uninstall()
+    async def list_statuses(self) -> list[ChannelTalkCredentialsStatus]:
+        return await self._port.list_statuses()
+
+    async def uninstall(
+        self,
+        channel_id: str,
+    ) -> ChannelTalkUninstallResult:
+        return await self._port.uninstall(channel_id)
 
 
 class ChannelTalkMetadataSyncService:
@@ -172,7 +181,7 @@ class ChannelTalkDocumentCredentialsService:
         self.application = application or ConnectorInstallAuthApplication(
             port=adapter,
         )
-        self._port = self.application.port
+        self._port = cast(ChannelTalkDocumentInstallAuthAdapter, self.application.port)
 
     async def connect(
         self,
@@ -195,8 +204,14 @@ class ChannelTalkDocumentCredentialsService:
     async def get_status(self) -> ChannelTalkDocumentCredentialsStatus:
         return await self.application.get_status()
 
-    async def uninstall(self) -> ChannelTalkDocumentUninstallResult:
-        return await self.application.uninstall()
+    async def list_statuses(self) -> list[ChannelTalkDocumentCredentialsStatus]:
+        return await self._port.list_statuses()
+
+    async def uninstall(
+        self,
+        space_id: str,
+    ) -> ChannelTalkDocumentUninstallResult:
+        return await self._port.uninstall(space_id)
 
 
 class ChannelTalkDocumentMetadataSyncService:

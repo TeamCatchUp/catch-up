@@ -6,6 +6,7 @@ from typing import Annotated
 from fastapi import APIRouter
 from fastapi import BackgroundTasks
 from fastapi import Depends
+from fastapi import Query
 
 from catchup.auth.dependencies import require_admin_user
 from catchup.connectors.channel_talk.schemas.channel_connection import (
@@ -109,13 +110,13 @@ async def upsert_channel_talk_credentials(
 
 @router.get(
     "/credentials",
-    response_model=ChannelTalkStatusResponse,
+    response_model=list[ChannelTalkStatusResponse],
 )
 async def get_channel_talk_credentials(
     service: Annotated[ChannelTalkCredentialsService, Depends(get_channel_talk_service)],
 ):
-    result = await service.get_status()
-    return _build_status_response(result)
+    results = await service.list_statuses()
+    return [_build_status_response(result) for result in results]
 
 
 @router.delete(
@@ -123,9 +124,10 @@ async def get_channel_talk_credentials(
     response_model=ChannelTalkUninstallResponse,
 )
 async def delete_channel_talk_credentials(
+    channel_id: Annotated[str, Query(min_length=1)],
     service: Annotated[ChannelTalkCredentialsService, Depends(get_channel_talk_service)],
 ):
-    result = await service.uninstall()
+    result = await service.uninstall(channel_id)
     return _build_uninstall_response(result)
 
 
@@ -168,7 +170,7 @@ async def upsert_channel_talk_document_credentials(
 
 @router.get(
     "/documents/credentials",
-    response_model=ChannelTalkDocumentStatusResponse,
+    response_model=list[ChannelTalkDocumentStatusResponse],
 )
 async def get_channel_talk_document_credentials(
     service: Annotated[
@@ -176,8 +178,8 @@ async def get_channel_talk_document_credentials(
         Depends(get_channel_talk_document_service),
     ],
 ):
-    result = await service.get_status()
-    return _build_document_status_response(result)
+    results = await service.list_statuses()
+    return [_build_document_status_response(result) for result in results]
 
 
 @router.delete(
@@ -185,12 +187,13 @@ async def get_channel_talk_document_credentials(
     response_model=ChannelTalkDocumentUninstallResponse,
 )
 async def delete_channel_talk_document_credentials(
+    space_id: Annotated[str, Query(min_length=1)],
     service: Annotated[
         ChannelTalkDocumentCredentialsService,
         Depends(get_channel_talk_document_service),
     ],
 ):
-    result = await service.uninstall()
+    result = await service.uninstall(space_id)
     return _build_document_uninstall_response(result)
 
 

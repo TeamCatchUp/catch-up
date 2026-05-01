@@ -324,6 +324,12 @@ class ChannelTalkRepositoryTests(TestCase):
 
         self.assertEqual(record.channel_id, "channel-123")
         self.assertEqual(self.credentials_repo.get_connection().channel_name, "Support")
+        self.assertEqual(
+            [item.channel_id for item in self.credentials_repo.list_connections()],
+            ["channel-123"],
+        )
+        self.assertTrue(self.credentials_repo.delete_connection("channel-123"))
+        self.assertIsNone(self.credentials_repo.get_connection("channel-123"))
 
     def test_document_credentials_are_upserted_loaded_and_deleted(self) -> None:
         verified_at = datetime(2026, 4, 25, tzinfo=timezone.utc)
@@ -352,7 +358,15 @@ class ChannelTalkRepositoryTests(TestCase):
         loaded = self.document_credentials_repo.get_document_connection("channel-123")
         self.assertIsNotNone(loaded)
         self.assertEqual(loaded.association_status, ChannelTalkDocumentAssociationStatus.API_VERIFIED)
-        self.assertTrue(self.document_credentials_repo.delete_document_connection("channel-123"))
+        self.assertEqual(
+            [item.space_id for item in self.document_credentials_repo.list_document_connections()],
+            ["space-123"],
+        )
+        self.assertTrue(
+            self.document_credentials_repo.delete_document_connection_by_space_id(
+                "space-123"
+            )
+        )
         self.assertIsNone(self.document_credentials_repo.get_document_connection("channel-123"))
 
     def test_document_credentials_delete_is_scoped_to_channel(self) -> None:
@@ -386,7 +400,11 @@ class ChannelTalkRepositoryTests(TestCase):
             )
         )
 
-        self.assertTrue(self.document_credentials_repo.delete_document_connection("channel-123"))
+        self.assertTrue(
+            self.document_credentials_repo.delete_document_connection_by_space_id(
+                "space-123"
+            )
+        )
 
         self.assertIsNone(self.document_credentials_repo.get_document_connection("channel-123"))
         remaining = self.document_credentials_repo.get_document_connection("channel-456")
