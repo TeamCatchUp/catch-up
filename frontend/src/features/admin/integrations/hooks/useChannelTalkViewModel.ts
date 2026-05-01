@@ -31,46 +31,60 @@ function makeId(prefix: string): string {
 }
 
 /**
- * 백엔드 GET 응답으로부터 viewModel 초기 state를 derive.
- * 키 필드는 보안상 응답에 없으므로 MASKED_PLACEHOLDER로 채워서 lock 상태 시각화.
+ * 백엔드 GET 응답(list)으로부터 viewModel 초기 state를 derive.
+ *
+ * - 등록된 channel N개를 카드 N개로 매핑
+ * - 각 channel에 속한 document space들을 그 카드의 자식으로 그룹화 (channel_id 기준)
+ * - 키 필드는 보안상 응답에 없으므로 MASKED_PLACEHOLDER로 채워서 lock 상태 시각화
+ * - lastSyncedAt은 모든 channel 중 가장 최근 검증 시각으로 노출
  */
 export function deriveChannelTalkInitialState(
-  channelData: ChannelTalkStatusResponse | undefined,
-  documentData: ChannelTalkDocumentStatusResponse | undefined,
+  channelDataList: ChannelTalkStatusResponse[] | undefined,
+  documentDataList: ChannelTalkDocumentStatusResponse[] | undefined,
 ): ChannelTalkConnectionState {
-  if (!channelData?.installed || !channelData.channel_id) {
+  const installedChannels = (channelDataList ?? []).filter(
+    (c): c is ChannelTalkStatusResponse & { channel_id: string } => c.installed && !!c.channel_id,
+  );
+
+  if (installedChannels.length === 0) {
     return { connected: false, lastSyncedAt: null, channels: [] };
   }
 
-  const documentSpaces =
-    documentData?.installed && documentData.space_id
-      ? [
-          {
-            id: documentData.space_id,
-            name: documentData.space_name ?? '',
-            accessKey: MASKED_PLACEHOLDER,
-            accessSecret: MASKED_PLACEHOLDER,
-            syncInterval: DOCUMENT_SPACE_SYNC_INTERVAL_DEFAULT,
-            connectionStatus: 'tested' as const,
-          },
-        ]
-      : [];
+  const installedDocuments = (documentDataList ?? []).filter(
+    (d): d is ChannelTalkDocumentStatusResponse & { channel_id: string; space_id: string } =>
+      d.installed && !!d.channel_id && !!d.space_id,
+  );
+
+  const channels = installedChannels.map((channelData) => ({
+    id: channelData.channel_id,
+    name: channelData.channel_name ?? '',
+    accessKey: MASKED_PLACEHOLDER,
+    accessSecret: MASKED_PLACEHOLDER,
+    webhookToken: channelData.webhook_token_configured ? MASKED_PLACEHOLDER : '',
+    syncInterval: CHANNEL_SYNC_INTERVAL_DEFAULT,
+    documentSpaces: installedDocuments
+      .filter((d) => d.channel_id === channelData.channel_id)
+      .map((d) => ({
+        id: d.space_id,
+        name: d.space_name ?? '',
+        accessKey: MASKED_PLACEHOLDER,
+        accessSecret: MASKED_PLACEHOLDER,
+        syncInterval: DOCUMENT_SPACE_SYNC_INTERVAL_DEFAULT,
+        connectionStatus: 'tested' as const,
+      })),
+    connectionStatus: 'tested' as const,
+  }));
+
+  // 모든 channel 중 가장 최근 검증 시각
+  const verifiedTimes = installedChannels
+    .map((c) => c.credential_last_verified_at)
+    .filter((t): t is string => !!t);
+  const lastSyncedAt = verifiedTimes.length > 0 ? verifiedTimes.sort().reverse()[0] : null;
 
   return {
     connected: true,
-    lastSyncedAt: channelData.credential_last_verified_at,
-    channels: [
-      {
-        id: channelData.channel_id,
-        name: channelData.channel_name ?? '',
-        accessKey: MASKED_PLACEHOLDER,
-        accessSecret: MASKED_PLACEHOLDER,
-        webhookToken: channelData.webhook_token_configured ? MASKED_PLACEHOLDER : '',
-        syncInterval: CHANNEL_SYNC_INTERVAL_DEFAULT,
-        documentSpaces,
-        connectionStatus: 'tested',
-      },
-    ],
+    lastSyncedAt,
+    channels,
   };
 }
 
@@ -100,15 +114,16 @@ interface ChannelTalkViewModel {
  * **검증+저장**: "연결 테스트하기"(testChannelConnection) 클릭 시 validate+save 통합 mutation 호출.
  * 성공 시 백엔드 응답의 channel_id/channel_name을 state에 반영하고 키 필드를 다시 마스킹.
  *
- * **삭제**: 백엔드 DELETE에 path parameter 미지원이라 로컬 state만 제거 + 토스트 안내.
- *
- * **임시 제약**: 백엔드 GET이 단수형이라 새로고침 시 N개 카드 → 1개로 축소. 백엔드 list 지원 후 자연 해소.
+ * **삭제**: 검증된(tested) 카드는 백엔드 DELETE 호출, 미검증 카드는 로컬 state만 제거.
+ * 휴지통 클릭 시 즉시 사라지고 backend 응답 기다리지 않는 optimistic UI.
  */
 export function useChannelTalkViewModel(initialState: ChannelTalkConnectionState): ChannelTalkViewModel {
   const [state, setState] = useState<ChannelTalkConnectionState>(initialState);
 
   const channelMutation = useMutation(channelTalkMutations.saveChannelCredential());
   const documentMutation = useMutation(channelTalkMutations.saveDocumentCredential());
+  const deleteChannelMutation = useMutation(channelTalkMutations.deleteChannelCredential());
+  const deleteDocumentMutation = useMutation(channelTalkMutations.deleteDocumentCredential());
 
   const addChannel = useCallback(() => {
     setState((prev) => ({
@@ -150,15 +165,31 @@ export function useChannelTalkViewModel(initialState: ChannelTalkConnectionState
     }));
   }, []);
 
-  const removeChannel = useCallback((channelId: string) => {
-    setState((prev) => ({
-      ...prev,
-      channels: prev.channels.filter((ch) => ch.id !== channelId),
-    }));
-    toast.info('화면에서만 제거되었습니다.', {
-      description: '새로고침 시 서버 상태가 복원됩니다.',
-    });
-  }, []);
+  const removeChannel = useCallback(
+    (channelId: string) => {
+      const channel = state.channels.find((c) => c.id === channelId);
+      // 검증 통과한 채널만 백엔드에 등록되어 있으므로 DELETE 호출 대상.
+      const isPersisted = channel?.connectionStatus === 'tested';
+
+      // optimistic UI: 즉시 화면에서 제거
+      setState((prev) => ({
+        ...prev,
+        channels: prev.channels.filter((ch) => ch.id !== channelId),
+      }));
+
+      if (!isPersisted) return;
+
+      deleteChannelMutation.mutate(channelId, {
+        onError: (error) => {
+          // 실패 시 카드 복원 + 에러 토스트. cache invalidation으로 자동 refetch도 동작하므로
+          // 다음 GET이 오면 진실의 원천 복구.
+          const { message } = parseChannelTalkError(error);
+          toast.error('채널 삭제에 실패했어요.', { description: message });
+        },
+      });
+    },
+    [state.channels, deleteChannelMutation],
+  );
 
   const enterEditMode = useCallback((channelId: string) => {
     setState((prev) => ({
@@ -231,17 +262,31 @@ export function useChannelTalkViewModel(initialState: ChannelTalkConnectionState
     [],
   );
 
-  const removeDocumentSpace = useCallback((channelId: string, dsId: string) => {
-    setState((prev) => ({
-      ...prev,
-      channels: prev.channels.map((ch) =>
-        ch.id === channelId ? { ...ch, documentSpaces: ch.documentSpaces.filter((ds) => ds.id !== dsId) } : ch,
-      ),
-    }));
-    toast.info('화면에서만 제거되었습니다.', {
-      description: '새로고침 시 서버 상태가 복원됩니다.',
-    });
-  }, []);
+  const removeDocumentSpace = useCallback(
+    (channelId: string, dsId: string) => {
+      const channel = state.channels.find((c) => c.id === channelId);
+      const space = channel?.documentSpaces.find((d) => d.id === dsId);
+      const isPersisted = space?.connectionStatus === 'tested';
+
+      // optimistic UI
+      setState((prev) => ({
+        ...prev,
+        channels: prev.channels.map((ch) =>
+          ch.id === channelId ? { ...ch, documentSpaces: ch.documentSpaces.filter((ds) => ds.id !== dsId) } : ch,
+        ),
+      }));
+
+      if (!isPersisted) return;
+
+      deleteDocumentMutation.mutate(dsId, {
+        onError: (error) => {
+          const { message } = parseChannelTalkError(error);
+          toast.error('도큐먼트 스페이스 삭제에 실패했어요.', { description: message });
+        },
+      });
+    },
+    [state.channels, deleteDocumentMutation],
+  );
 
   const testChannelConnection = useCallback(
     (channelId: string) => {

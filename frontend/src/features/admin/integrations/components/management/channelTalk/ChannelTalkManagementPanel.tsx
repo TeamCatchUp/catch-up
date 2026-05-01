@@ -27,15 +27,15 @@ import ChannelTalkChannelCard from './ChannelTalkChannelCard';
  * 이 mount/unmount 분리는 React 19 `react-hooks/set-state-in-effect` 룰을 회피하기 위함.
  */
 export default function ChannelTalkManagementPanel() {
-  const channelStatusQuery = useQuery(channelTalkQueries.detail());
-  const documentStatusQuery = useQuery(channelTalkQueries.documentDetail());
+  const channelListQuery = useQuery(channelTalkQueries.list());
+  const documentListQuery = useQuery(channelTalkQueries.documentList());
 
-  if (channelStatusQuery.isLoading || documentStatusQuery.isLoading) {
+  if (channelListQuery.isLoading || documentListQuery.isLoading) {
     // 채널톡 백엔드 응답 대기 중 — 빈 placeholder. 짧은 폴링이라 별도 스켈레톤 없이 충분.
     return <div className="flex flex-col gap-6" />;
   }
 
-  const initialState = deriveChannelTalkInitialState(channelStatusQuery.data, documentStatusQuery.data);
+  const initialState = deriveChannelTalkInitialState(channelListQuery.data, documentListQuery.data);
   return <ChannelTalkManagementPanelInner initialState={initialState} />;
 }
 
