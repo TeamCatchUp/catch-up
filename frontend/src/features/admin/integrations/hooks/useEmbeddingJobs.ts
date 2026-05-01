@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useQueries, useQuery } from '@tanstack/react-query';
 
 import { adminConnectorQueries } from '../queries/adminConnector.queries';
+import { channelTalkQueries } from '../queries/channelTalk.queries';
 import type {
   ConnectorProgress,
   EmbeddingButtonState,
@@ -31,7 +32,7 @@ interface JobState {
   items: EmbeddingProgressItem[];
 }
 
-const CONNECTOR_ORDER: SyncConnector[] = ['jira', 'github', 'slack', 'confluence'];
+const CONNECTOR_ORDER: SyncConnector[] = ['jira', 'github', 'slack', 'confluence', 'channel_talk'];
 
 /** job status → 버튼 상태 변환 */
 const toButtonState = (status: SyncJobStatus | undefined): EmbeddingButtonState => {
@@ -68,11 +69,13 @@ export const useEmbeddingJobs = () => {
     }
   });
 
-  // ─── Step 1: Scope 획득 (3개 API) ───
+  // ─── Step 1: Scope 획득 (4개 API) ───
 
   const githubQuery = useQuery(adminConnectorQueries.githubInstallations());
   const slackQuery = useQuery(adminConnectorQueries.slackInstallationStatus());
   const atlassianQuery = useQuery(adminConnectorQueries.atlassianInstallationStatus());
+  // 채널톡은 useChannelTalkViewModel과 같은 queryKey라 cache 공유 (중복 fetch 없음)
+  const channelTalkQuery = useQuery(channelTalkQueries.detail());
 
   const scopeMap = useMemo((): Partial<Record<SyncConnector, string>> => {
     const map: Partial<Record<SyncConnector, string>> = {};
@@ -89,8 +92,12 @@ export const useEmbeddingJobs = () => {
     const confluenceResource = atlassianQuery.data?.resources?.find(isConfluenceResource);
     if (confluenceResource) map.confluence = confluenceResource.id;
 
+    if (channelTalkQuery.data?.installed && channelTalkQuery.data.channel_id) {
+      map.channel_talk = channelTalkQuery.data.channel_id;
+    }
+
     return map;
-  }, [githubQuery.data, slackQuery.data, atlassianQuery.data]);
+  }, [githubQuery.data, slackQuery.data, atlassianQuery.data, channelTalkQuery.data]);
 
   // ─── Step 2: syncStatus로 활성 job 발견 (1회) ───
 
@@ -158,7 +165,8 @@ export const useEmbeddingJobs = () => {
 
   // ─── 초기 로딩 판별 ───
   // scope 획득 + syncStatus 조회가 끝나야 activeJobs가 확정됨
-  const isScopeLoading = githubQuery.isLoading || slackQuery.isLoading || atlassianQuery.isLoading;
+  const isScopeLoading =
+    githubQuery.isLoading || slackQuery.isLoading || atlassianQuery.isLoading || channelTalkQuery.isLoading;
   const isStatusLoading = statusQueries.some((q, i) => !!scopeMap[CONNECTOR_ORDER[i]] && q.isLoading);
   // sessionStorage에서 복원된 job이 있으면 이미 activeJobs가 있으므로 초기 로딩 아님
   const isInitialLoading = manualJobs.length === 0 && (isScopeLoading || isStatusLoading);
@@ -182,6 +190,7 @@ export const useEmbeddingJobs = () => {
       github: 'idle',
       slack: 'idle',
       confluence: 'idle',
+      channel_talk: 'idle',
     };
     for (const job of activeJobs) {
       const jobState = jobStates[job.jobId];

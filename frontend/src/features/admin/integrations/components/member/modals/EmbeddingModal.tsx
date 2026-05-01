@@ -16,7 +16,7 @@ import { cn } from '@/shared/utils/cn';
 import { useScopeId } from '../../../hooks/useScopeId';
 import { adminConnectorMutations } from '../../../queries/adminConnector.mutations';
 import { adminConnectorQueries } from '../../../queries/adminConnector.queries';
-import type { SyncConnector } from '../../../types/syncModel';
+import type { FullSyncTarget, SyncConnector } from '../../../types/syncModel';
 import EmbeddingModalContent from './EmbeddingModalContent';
 
 const PERIOD_OPTIONS = ['1개월', '3개월', '6개월', '1년', '3년'] as const;
@@ -114,13 +114,15 @@ export default function EmbeddingModal({ open, onOpenChange, service, serviceNam
     if (!scopeId) return;
 
     const syncDays = PERIOD_TO_DAYS[selectedPeriod] ?? 30;
-    const targetIds = targets.filter((t) => selectedItems.has(t.target_id)).map((t) => t.target_id);
+    const selectedTargets: FullSyncTarget[] = targets
+      .filter((t) => selectedItems.has(t.target_id))
+      .map((t) => ({ target_type: t.target_type, target_id: t.target_id }));
 
     try {
       const result = await syncMutation.mutateAsync({
         connector,
         scope_id: scopeId,
-        target_ids: targetIds,
+        targets: selectedTargets,
         sync_days: syncDays,
       });
 

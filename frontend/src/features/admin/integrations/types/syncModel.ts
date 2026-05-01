@@ -1,6 +1,6 @@
 // ─── Sync Enums (백엔드 StrEnum 매핑) ───
 
-export type SyncConnector = 'github' | 'slack' | 'jira' | 'confluence';
+export type SyncConnector = 'github' | 'slack' | 'jira' | 'confluence' | 'channel_talk';
 export type SyncDispatchStatus = 'accepted' | 'no_events' | 'conflict' | 'failed';
 export type SyncType = 'full' | 'incremental';
 export type SyncTargetType = 'resource' | 'channel' | 'repository' | 'project' | 'space';
@@ -16,12 +16,18 @@ export interface SyncJobTargetSnapshotItem {
   status: SyncTargetStatus;
 }
 
-// ─── API Request/Response (추후 API 연결 시 사용) ───
+// ─── API Request/Response ───
+
+/** POST /sync/full 요청에 포함되는 단일 동기화 대상 (백엔드 FullSyncRequestedTarget 매칭) */
+export interface FullSyncTarget {
+  target_type: SyncTargetType;
+  target_id: string;
+}
 
 export interface FullSyncRequest {
   connector: SyncConnector;
   scope_id: string;
-  target_ids: string[];
+  targets: FullSyncTarget[];
   sync_days?: number | null;
 }
 
