@@ -5,11 +5,11 @@ from datetime import timezone
 from unittest import IsolatedAsyncioTestCase
 
 from catchup.connector_core.ports.full_sync import FullSyncWindow
-from catchup.connectors.channel_talk.document_article_full_sync_fetcher import (
-    ChannelTalkDocumentArticleFullSyncConnection,
+from catchup.connectors.channel_talk.document_space.article_full_sync_fetcher import (
+    ChannelTalkArticleFullSyncFetcher,
 )
-from catchup.connectors.channel_talk.document_article_full_sync_fetcher import (
-    ChannelTalkDocumentArticleFullSyncFetcher,
+from catchup.connectors.channel_talk.document_space.article_full_sync_models import (
+    ChannelTalkArticleFullSyncConnection,
 )
 from catchup.connectors.channel_talk.schemas.document_article import (
     ChannelTalkDocumentArticle,
@@ -55,8 +55,8 @@ def _record() -> ChannelTalkDocumentCredentialsRecord:
     )
 
 
-def _connection() -> ChannelTalkDocumentArticleFullSyncConnection:
-    return ChannelTalkDocumentArticleFullSyncConnection.from_credentials_record(
+def _connection() -> ChannelTalkArticleFullSyncConnection:
+    return ChannelTalkArticleFullSyncConnection.from_credentials_record(
         _record(),
     )
 
@@ -160,9 +160,9 @@ class _FakeDocumentsClient:
         return self._revisions_by_key[key]
 
 
-class ChannelTalkDocumentArticleFullSyncConnectionTests(IsolatedAsyncioTestCase):
+class ChannelTalkArticleFullSyncConnectionTests(IsolatedAsyncioTestCase):
     async def test_connection_is_created_from_document_credentials_record(self) -> None:
-        connection = ChannelTalkDocumentArticleFullSyncConnection.from_credentials_record(
+        connection = ChannelTalkArticleFullSyncConnection.from_credentials_record(
             _record(),
         )
 
@@ -172,7 +172,7 @@ class ChannelTalkDocumentArticleFullSyncConnectionTests(IsolatedAsyncioTestCase)
         self.assertEqual(connection.access_secret, "documents-secret")
 
 
-class ChannelTalkDocumentArticleFullSyncFetcherTests(IsolatedAsyncioTestCase):
+class ChannelTalkArticleFullSyncFetcherTests(IsolatedAsyncioTestCase):
     async def test_fetch_articles_sweeps_all_article_states_and_preserves_state(
         self,
     ) -> None:
@@ -206,7 +206,7 @@ class ChannelTalkDocumentArticleFullSyncFetcherTests(IsolatedAsyncioTestCase):
                 ("published-1", "revision-published-1"): _revision("published-1"),
             },
         )
-        fetcher = ChannelTalkDocumentArticleFullSyncFetcher(
+        fetcher = ChannelTalkArticleFullSyncFetcher(
             client_factory=lambda _connection: client,
         )
 
@@ -263,7 +263,7 @@ class ChannelTalkDocumentArticleFullSyncFetcherTests(IsolatedAsyncioTestCase):
                 ("article-1", "revision-published-1"): _revision("article-1"),
             },
         )
-        fetcher = ChannelTalkDocumentArticleFullSyncFetcher(
+        fetcher = ChannelTalkArticleFullSyncFetcher(
             client_factory=lambda _connection: client,
         )
 
@@ -292,7 +292,7 @@ class ChannelTalkDocumentArticleFullSyncFetcherTests(IsolatedAsyncioTestCase):
             pages=[ChannelTalkDocumentArticlePage(articles=[listed])],
             details_by_id={"article-1": detailed},
         )
-        fetcher = ChannelTalkDocumentArticleFullSyncFetcher(
+        fetcher = ChannelTalkArticleFullSyncFetcher(
             client_factory=lambda _connection: client,
         )
 
@@ -314,7 +314,7 @@ class ChannelTalkDocumentArticleFullSyncFetcherTests(IsolatedAsyncioTestCase):
             pages=[ChannelTalkDocumentArticlePage(articles=articles)],
             details_by_id={article.article_id: article for article in articles},
         )
-        fetcher = ChannelTalkDocumentArticleFullSyncFetcher(
+        fetcher = ChannelTalkArticleFullSyncFetcher(
             client_factory=lambda _connection: client,
             page_limit=100,
         )
@@ -347,7 +347,7 @@ class ChannelTalkDocumentArticleFullSyncFetcherTests(IsolatedAsyncioTestCase):
                 article.article_id: article for article in [before, inside, after]
             },
         )
-        fetcher = ChannelTalkDocumentArticleFullSyncFetcher(
+        fetcher = ChannelTalkArticleFullSyncFetcher(
             client_factory=lambda _connection: client,
         )
 
@@ -372,7 +372,7 @@ class ChannelTalkDocumentArticleFullSyncFetcherTests(IsolatedAsyncioTestCase):
             pages=[ChannelTalkDocumentArticlePage(articles=[outside, inside])],
             details_by_id={"outside": outside, "inside": inside},
         )
-        fetcher = ChannelTalkDocumentArticleFullSyncFetcher(
+        fetcher = ChannelTalkArticleFullSyncFetcher(
             client_factory=lambda _connection: client,
         )
 
@@ -390,7 +390,7 @@ class ChannelTalkDocumentArticleFullSyncFetcherTests(IsolatedAsyncioTestCase):
             pages=[ChannelTalkDocumentArticlePage(articles=[untimed])],
             details_by_id={"untimed": untimed},
         )
-        fetcher = ChannelTalkDocumentArticleFullSyncFetcher(
+        fetcher = ChannelTalkArticleFullSyncFetcher(
             client_factory=lambda _connection: client,
         )
 
@@ -416,7 +416,7 @@ class ChannelTalkDocumentArticleFullSyncFetcherTests(IsolatedAsyncioTestCase):
             ],
             details_by_id={"article-1": article},
         )
-        fetcher = ChannelTalkDocumentArticleFullSyncFetcher(
+        fetcher = ChannelTalkArticleFullSyncFetcher(
             client_factory=lambda _connection: client,
             max_article_pages_per_run=1,
         )
@@ -439,7 +439,7 @@ class ChannelTalkDocumentArticleFullSyncFetcherTests(IsolatedAsyncioTestCase):
         client = _FakeDocumentsClient(
             pages=[ChannelTalkDocumentArticlePage(articles=[])],
         )
-        fetcher = ChannelTalkDocumentArticleFullSyncFetcher(
+        fetcher = ChannelTalkArticleFullSyncFetcher(
             client_factory=lambda _connection: client,
         )
 
@@ -462,7 +462,7 @@ class ChannelTalkDocumentArticleFullSyncFetcherTests(IsolatedAsyncioTestCase):
             pages=[ChannelTalkDocumentArticlePage(articles=[article])],
             details_by_id={},
         )
-        fetcher = ChannelTalkDocumentArticleFullSyncFetcher(
+        fetcher = ChannelTalkArticleFullSyncFetcher(
             client_factory=lambda _connection: client,
         )
 

@@ -4,12 +4,12 @@ from unittest import IsolatedAsyncioTestCase
 
 import httpx
 
-from catchup.connectors.channel_talk.core_api_client import ChannelTalkCoreApiClient
+from catchup.connectors.channel_talk.core.client import ChannelTalkCoreApiClient
 from catchup.connectors.channel_talk.exceptions import ChannelTalkPayloadError
 from catchup.connectors.channel_talk.schemas.user_chat import ChannelTalkUserChatState
 
 
-class ChannelTalkFullSyncClientTests(IsolatedAsyncioTestCase):
+class ChannelTalkCoreApiClientTests(IsolatedAsyncioTestCase):
     async def test_list_user_chats_parses_page_and_quota_snapshot(self) -> None:
         async def handler(request: httpx.Request) -> httpx.Response:
             self.assertEqual(request.url.path, "/open/v5/user-chats")

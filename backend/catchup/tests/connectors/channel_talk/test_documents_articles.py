@@ -6,8 +6,10 @@ from unittest import IsolatedAsyncioTestCase
 
 import httpx
 
-from catchup.connectors.channel_talk.documents_client import DEFAULT_ARTICLE_LIST_LIMIT
-from catchup.connectors.channel_talk.documents_client import (
+from catchup.connectors.channel_talk.document_space.client import (
+    DEFAULT_ARTICLE_LIST_LIMIT,
+)
+from catchup.connectors.channel_talk.document_space.client import (
     ChannelTalkDocumentsApiClient,
 )
 from catchup.connectors.channel_talk.exceptions import ChannelTalkValidationError

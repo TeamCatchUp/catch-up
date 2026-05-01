@@ -8,10 +8,12 @@ from unittest import IsolatedAsyncioTestCase
 from unittest.mock import AsyncMock
 
 from catchup.connector_core.ports.full_sync import FullSyncWindow
-from catchup.connectors.channel_talk.full_sync_fetcher import (
-    ChannelTalkFullSyncConnection,
+from catchup.connectors.channel_talk.core.user_chat_full_sync_fetcher import (
+    ChannelTalkUserChatFullSyncFetcher,
 )
-from catchup.connectors.channel_talk.full_sync_fetcher import ChannelTalkFullSyncFetcher
+from catchup.connectors.channel_talk.core.user_chat_full_sync_models import (
+    ChannelTalkUserChatFullSyncConnection,
+)
 from catchup.connectors.channel_talk.schemas.channel_connection import (
     ChannelTalkCredentialsRecord,
 )
@@ -44,8 +46,8 @@ def _window() -> FullSyncWindow:
     )
 
 
-def _connection() -> ChannelTalkFullSyncConnection:
-    return ChannelTalkFullSyncConnection.from_credentials_record(
+def _connection() -> ChannelTalkUserChatFullSyncConnection:
+    return ChannelTalkUserChatFullSyncConnection.from_credentials_record(
         ChannelTalkCredentialsRecord(
             channel_id="channel-123",
             channel_name="Support",
@@ -113,7 +115,7 @@ def _message(
     )
 
 
-class ChannelTalkFullSyncFetcherTests(IsolatedAsyncioTestCase):
+class ChannelTalkUserChatFullSyncFetcherTests(IsolatedAsyncioTestCase):
     async def test_fetch_managers_by_id_loads_once_per_full_sync_run(self) -> None:
         client = SimpleNamespace(
             list_managers=AsyncMock(
@@ -139,7 +141,7 @@ class ChannelTalkFullSyncFetcherTests(IsolatedAsyncioTestCase):
                 ]
             )
         )
-        fetcher = ChannelTalkFullSyncFetcher(client=client)
+        fetcher = ChannelTalkUserChatFullSyncFetcher(client=client)
 
         managers_by_id = await fetcher.fetch_managers_by_id(
             connection=_connection(),
@@ -203,7 +205,7 @@ class ChannelTalkFullSyncFetcherTests(IsolatedAsyncioTestCase):
                 ]
             ),
         )
-        fetcher = ChannelTalkFullSyncFetcher(client=client)
+        fetcher = ChannelTalkUserChatFullSyncFetcher(client=client)
 
         result = await fetcher.fetch_user_chats(
             connection=_connection(),
@@ -333,7 +335,7 @@ class ChannelTalkFullSyncFetcherTests(IsolatedAsyncioTestCase):
                 ]
             ),
         )
-        fetcher = ChannelTalkFullSyncFetcher(client=client)
+        fetcher = ChannelTalkUserChatFullSyncFetcher(client=client)
 
         result = await fetcher.fetch_user_chats(
             connection=_connection(),
@@ -398,7 +400,7 @@ class ChannelTalkFullSyncFetcherTests(IsolatedAsyncioTestCase):
                 return_value=ChannelTalkUserChatMessagePage(messages=[])
             ),
         )
-        fetcher = ChannelTalkFullSyncFetcher(client=client)
+        fetcher = ChannelTalkUserChatFullSyncFetcher(client=client)
 
         result = await fetcher.fetch_user_chats(
             connection=_connection(),
@@ -439,7 +441,7 @@ class ChannelTalkFullSyncFetcherTests(IsolatedAsyncioTestCase):
                 return_value=ChannelTalkUserChatMessagePage(messages=[])
             ),
         )
-        fetcher = ChannelTalkFullSyncFetcher(client=client)
+        fetcher = ChannelTalkUserChatFullSyncFetcher(client=client)
 
         result = await fetcher.fetch_user_chats(
             connection=_connection(),
@@ -482,7 +484,7 @@ class ChannelTalkFullSyncFetcherTests(IsolatedAsyncioTestCase):
                 return_value=ChannelTalkUserChatMessagePage(messages=[])
             ),
         )
-        fetcher = ChannelTalkFullSyncFetcher(
+        fetcher = ChannelTalkUserChatFullSyncFetcher(
             client=client,
             max_user_chat_pages_per_run=1,
         )
@@ -564,7 +566,7 @@ class ChannelTalkFullSyncFetcherTests(IsolatedAsyncioTestCase):
                 return ChannelTalkUserChatMessagePage(messages=[])
 
         client = ConcurrentClient()
-        fetcher = ChannelTalkFullSyncFetcher(
+        fetcher = ChannelTalkUserChatFullSyncFetcher(
             client=client,
             max_concurrent_user_chat_fetches=2,
         )

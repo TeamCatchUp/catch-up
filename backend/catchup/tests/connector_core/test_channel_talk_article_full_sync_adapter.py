@@ -4,18 +4,18 @@ from datetime import datetime
 from datetime import timezone
 from unittest import IsolatedAsyncioTestCase
 
-from catchup.connector_core.adapters.channel_talk.document_article_full_sync_adapter import (
-    ChannelTalkDocumentArticleFullSyncAdapter,
-)
-from catchup.connector_core.adapters.channel_talk.document_article_full_sync_adapter import (
-    ChannelTalkDocumentArticleFullSyncExecutionRequest,
-)
-from catchup.connector_core.adapters.channel_talk.document_article_full_sync_adapter import (
-    ChannelTalkDocumentArticleFullSyncFetchResult,
+from catchup.connector_core.adapters.channel_talk.article_full_sync import (
+    ChannelTalkArticleFullSyncAdapter,
 )
 from catchup.connector_core.ports.full_sync import FullSyncWindow
-from catchup.connectors.channel_talk.document_article_full_sync_fetcher import (
-    ChannelTalkFetchedDocumentArticle,
+from catchup.connectors.channel_talk.document_space.article_full_sync_models import (
+    ChannelTalkArticleFullSyncExecutionRequest,
+)
+from catchup.connectors.channel_talk.document_space.article_full_sync_models import (
+    ChannelTalkArticleFullSyncFetchResult,
+)
+from catchup.connectors.channel_talk.document_space.article_full_sync_models import (
+    ChannelTalkFetchedArticle,
 )
 from catchup.connectors.channel_talk.schemas.channel_connection import (
     ChannelTalkCredentialsRecord,
@@ -50,8 +50,8 @@ def _window() -> FullSyncWindow:
     )
 
 
-def _execution() -> ChannelTalkDocumentArticleFullSyncExecutionRequest:
-    return ChannelTalkDocumentArticleFullSyncExecutionRequest(
+def _execution() -> ChannelTalkArticleFullSyncExecutionRequest:
+    return ChannelTalkArticleFullSyncExecutionRequest(
         tenant_id="channel-123",
         channel_connection=ChannelTalkCredentialsRecord(
             channel_id="channel-123",
@@ -135,7 +135,7 @@ def _bundle(
     detail: ChannelTalkDocumentArticleView | None = None,
     list_body: str | None = None,
     published_revision: ChannelTalkDocumentArticleRevisionView | None = None,
-) -> ChannelTalkFetchedDocumentArticle:
+) -> ChannelTalkFetchedArticle:
     list_item = ChannelTalkDocumentArticle(
         article_id=article_id,
         space_id="space-123",
@@ -144,7 +144,7 @@ def _bundle(
         body=list_body,
         updated_at=datetime(2026, 4, 21, 9, 30, tzinfo=timezone.utc),
     )
-    return ChannelTalkFetchedDocumentArticle(
+    return ChannelTalkFetchedArticle(
         language="ko",
         state=state,
         list_item=list_item,
@@ -207,12 +207,12 @@ class _FakeArticleRepository:
         return ids or []
 
 
-class ChannelTalkDocumentArticleFullSyncAdapterTests(IsolatedAsyncioTestCase):
+class ChannelTalkArticleFullSyncAdapterTests(IsolatedAsyncioTestCase):
     async def test_transform_prepares_only_published_revision_snapshots(
         self,
     ) -> None:
-        adapter = ChannelTalkDocumentArticleFullSyncAdapter(language="ko")
-        fetched = ChannelTalkDocumentArticleFullSyncFetchResult(
+        adapter = ChannelTalkArticleFullSyncAdapter(language="ko")
+        fetched = ChannelTalkArticleFullSyncFetchResult(
             channel_id="channel-123",
             space_id="space-123",
             language="ko",
@@ -322,9 +322,9 @@ class ChannelTalkDocumentArticleFullSyncAdapterTests(IsolatedAsyncioTestCase):
     async def test_transform_splits_long_body_with_deterministic_chunk_ids(
         self,
     ) -> None:
-        adapter = ChannelTalkDocumentArticleFullSyncAdapter(language="ko")
+        adapter = ChannelTalkArticleFullSyncAdapter(language="ko")
         long_body = "\n\n".join(f"paragraph {index} " + ("x" * 220) for index in range(40))
-        fetched = ChannelTalkDocumentArticleFullSyncFetchResult(
+        fetched = ChannelTalkArticleFullSyncFetchResult(
             channel_id="channel-123",
             space_id="space-123",
             language="ko",
@@ -376,7 +376,7 @@ class ChannelTalkDocumentArticleFullSyncAdapterTests(IsolatedAsyncioTestCase):
     async def test_transform_preserves_html_heading_hierarchy_in_chunk_context(
         self,
     ) -> None:
-        adapter = ChannelTalkDocumentArticleFullSyncAdapter(language="ko")
+        adapter = ChannelTalkArticleFullSyncAdapter(language="ko")
         body_html = """
         <h1>Install Catch Up</h1>
         <p>Invite the app to the Slack channel before asking questions.</p>
@@ -385,7 +385,7 @@ class ChannelTalkDocumentArticleFullSyncAdapterTests(IsolatedAsyncioTestCase):
         <p>Check whether the source document has already been indexed.</p>
         <p>Share the exact Slack channel and question when reporting feedback.</p>
         """
-        fetched = ChannelTalkDocumentArticleFullSyncFetchResult(
+        fetched = ChannelTalkArticleFullSyncFetchResult(
             channel_id="channel-123",
             space_id="space-123",
             language="ko",
@@ -430,13 +430,13 @@ class ChannelTalkDocumentArticleFullSyncAdapterTests(IsolatedAsyncioTestCase):
     async def test_transform_uses_title_section_heading_without_duplicate_section_name(
         self,
     ) -> None:
-        adapter = ChannelTalkDocumentArticleFullSyncAdapter(language="ko")
+        adapter = ChannelTalkArticleFullSyncAdapter(language="ko")
         body_html = """
         <h1>나에게 맞는 답변 만들기</h1>
         <h2>마무리</h2>
         <p>프롬프트 빌더는 한 번 설정해두면 Catch Up이 점점 당신의 동료처럼 느껴지게 만드는 기능입니다.</p>
         """
-        fetched = ChannelTalkDocumentArticleFullSyncFetchResult(
+        fetched = ChannelTalkArticleFullSyncFetchResult(
             channel_id="channel-123",
             space_id="space-123",
             language="ko",
@@ -485,7 +485,7 @@ class ChannelTalkDocumentArticleFullSyncAdapterTests(IsolatedAsyncioTestCase):
     async def test_transform_preserves_later_section_heading_when_sections_merge(
         self,
     ) -> None:
-        adapter = ChannelTalkDocumentArticleFullSyncAdapter(language="ko")
+        adapter = ChannelTalkArticleFullSyncAdapter(language="ko")
         body_html = """
         <h1>흩어진 사내 정보를 한 번에 찾기</h1>
         <h2>답변을 받으면 이렇게 활용해요</h2>
@@ -493,7 +493,7 @@ class ChannelTalkDocumentArticleFullSyncAdapterTests(IsolatedAsyncioTestCase):
         <h2>답변이 아쉬울 땐 이렇게 고쳐보세요</h2>
         <p>질문에 프로젝트명과 시점을 더해 다시 물어보세요.</p>
         """
-        fetched = ChannelTalkDocumentArticleFullSyncFetchResult(
+        fetched = ChannelTalkArticleFullSyncFetchResult(
             channel_id="channel-123",
             space_id="space-123",
             language="ko",
@@ -540,8 +540,8 @@ class ChannelTalkDocumentArticleFullSyncAdapterTests(IsolatedAsyncioTestCase):
     async def test_transform_stores_public_article_url_from_website_url(
         self,
     ) -> None:
-        adapter = ChannelTalkDocumentArticleFullSyncAdapter(language="ko")
-        fetched = ChannelTalkDocumentArticleFullSyncFetchResult(
+        adapter = ChannelTalkArticleFullSyncAdapter(language="ko")
+        fetched = ChannelTalkArticleFullSyncFetchResult(
             channel_id="channel-123",
             space_id="space-123",
             language="ko",
@@ -588,8 +588,8 @@ class ChannelTalkDocumentArticleFullSyncAdapterTests(IsolatedAsyncioTestCase):
     async def test_transform_builds_public_article_url_from_slug_when_missing(
         self,
     ) -> None:
-        adapter = ChannelTalkDocumentArticleFullSyncAdapter(language="ko")
-        fetched = ChannelTalkDocumentArticleFullSyncFetchResult(
+        adapter = ChannelTalkArticleFullSyncAdapter(language="ko")
+        fetched = ChannelTalkArticleFullSyncFetchResult(
             channel_id="channel-123",
             space_id="space-123",
             language="ko",
@@ -631,8 +631,8 @@ class ChannelTalkDocumentArticleFullSyncAdapterTests(IsolatedAsyncioTestCase):
     async def test_transform_builds_public_article_url_from_short_slug_and_title(
         self,
     ) -> None:
-        adapter = ChannelTalkDocumentArticleFullSyncAdapter(language="ko")
-        fetched = ChannelTalkDocumentArticleFullSyncFetchResult(
+        adapter = ChannelTalkArticleFullSyncAdapter(language="ko")
+        fetched = ChannelTalkArticleFullSyncFetchResult(
             channel_id="channel-123",
             space_id="space-123",
             language="ko",
@@ -675,13 +675,13 @@ class ChannelTalkDocumentArticleFullSyncAdapterTests(IsolatedAsyncioTestCase):
     async def test_transform_keeps_heading_icon_alt_text_in_chunk_body(
         self,
     ) -> None:
-        adapter = ChannelTalkDocumentArticleFullSyncAdapter(language="ko")
+        adapter = ChannelTalkArticleFullSyncAdapter(language="ko")
         body_html = """
         <h1>Catch Up - Slack에서 사용해보세요</h1>
         <h2><img alt="bulb" /> Catch Up 팀은 이렇게 쓰고 있어요</h2>
         <p>저희 팀에서 가장 많이 쓰는 순간은 '논의 중간' 입니다.</p>
         """
-        fetched = ChannelTalkDocumentArticleFullSyncFetchResult(
+        fetched = ChannelTalkArticleFullSyncFetchResult(
             channel_id="channel-123",
             space_id="space-123",
             language="ko",
@@ -721,7 +721,7 @@ class ChannelTalkDocumentArticleFullSyncAdapterTests(IsolatedAsyncioTestCase):
         self.assertIn("저희 팀에서 가장 많이 쓰는 순간은", rendered)
 
     async def test_transform_preserves_structured_rich_blocks(self) -> None:
-        adapter = ChannelTalkDocumentArticleFullSyncAdapter(language="ko")
+        adapter = ChannelTalkArticleFullSyncAdapter(language="ko")
         body = [
             {
                 "type": "heading",
@@ -844,7 +844,7 @@ class ChannelTalkDocumentArticleFullSyncAdapterTests(IsolatedAsyncioTestCase):
                 },
             },
         ]
-        fetched = ChannelTalkDocumentArticleFullSyncFetchResult(
+        fetched = ChannelTalkArticleFullSyncFetchResult(
             channel_id="channel-123",
             space_id="space-123",
             language="ko",
@@ -892,7 +892,7 @@ class ChannelTalkDocumentArticleFullSyncAdapterTests(IsolatedAsyncioTestCase):
     async def test_transform_preserves_html_table_media_and_file_fallback(
         self,
     ) -> None:
-        adapter = ChannelTalkDocumentArticleFullSyncAdapter(language="ko")
+        adapter = ChannelTalkArticleFullSyncAdapter(language="ko")
         body_html = """
         <h1>HTML content</h1>
         <figure>
@@ -907,7 +907,7 @@ class ChannelTalkDocumentArticleFullSyncAdapterTests(IsolatedAsyncioTestCase):
         <a data-node-type="embed" href="https://app.arcade.software/share/demo">https://app.arcade.software/share/demo</a>
         <a data-node-type="file" href="https://cdn.example.com/guide.pdf">guide.pdf</a>
         """
-        fetched = ChannelTalkDocumentArticleFullSyncFetchResult(
+        fetched = ChannelTalkArticleFullSyncFetchResult(
             channel_id="channel-123",
             space_id="space-123",
             language="ko",
@@ -947,8 +947,8 @@ class ChannelTalkDocumentArticleFullSyncAdapterTests(IsolatedAsyncioTestCase):
         self.assertIn("guide.pdf [파일 첨부]", rendered)
 
     async def test_transform_skips_article_without_published_revision(self) -> None:
-        adapter = ChannelTalkDocumentArticleFullSyncAdapter(language="ko")
-        fetched = ChannelTalkDocumentArticleFullSyncFetchResult(
+        adapter = ChannelTalkArticleFullSyncAdapter(language="ko")
+        fetched = ChannelTalkArticleFullSyncFetchResult(
             channel_id="channel-123",
             space_id="space-123",
             language="ko",
@@ -980,11 +980,11 @@ class ChannelTalkDocumentArticleFullSyncAdapterTests(IsolatedAsyncioTestCase):
 
     async def test_persist_deletes_article_prefixes_before_adding_chunks(self) -> None:
         repository = _FakeArticleRepository()
-        adapter = ChannelTalkDocumentArticleFullSyncAdapter(
+        adapter = ChannelTalkArticleFullSyncAdapter(
             language="ko",
             repository_factory=lambda: repository,
         )
-        fetched = ChannelTalkDocumentArticleFullSyncFetchResult(
+        fetched = ChannelTalkArticleFullSyncFetchResult(
             channel_id="channel-123",
             space_id="space-123",
             language="ko",
@@ -1036,11 +1036,11 @@ class ChannelTalkDocumentArticleFullSyncAdapterTests(IsolatedAsyncioTestCase):
         self,
     ) -> None:
         repository = _FakeArticleRepository()
-        adapter = ChannelTalkDocumentArticleFullSyncAdapter(
+        adapter = ChannelTalkArticleFullSyncAdapter(
             language="ko",
             repository_factory=lambda: repository,
         )
-        fetched = ChannelTalkDocumentArticleFullSyncFetchResult(
+        fetched = ChannelTalkArticleFullSyncFetchResult(
             channel_id="channel-123",
             space_id="space-123",
             language="ko",
@@ -1082,12 +1082,12 @@ class ChannelTalkDocumentArticleFullSyncAdapterTests(IsolatedAsyncioTestCase):
 
     async def test_build_result_counts_prepared_documents(self) -> None:
         repository = _FakeArticleRepository()
-        adapter = ChannelTalkDocumentArticleFullSyncAdapter(
+        adapter = ChannelTalkArticleFullSyncAdapter(
             language="ko",
             repository_factory=lambda: repository,
         )
         execution = _execution()
-        fetched = ChannelTalkDocumentArticleFullSyncFetchResult(
+        fetched = ChannelTalkArticleFullSyncFetchResult(
             channel_id="channel-123",
             space_id="space-123",
             language="ko",
