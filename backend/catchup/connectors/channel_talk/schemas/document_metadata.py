@@ -175,22 +175,32 @@ class ChannelTalkDocumentNavNodePage(BaseModel):
 
 class ChannelTalkDocumentMetadataSyncRequest(BaseModel):
     channel_id: str
+    space_id: str | None = None
 
     @field_validator("channel_id")
     @classmethod
     def validate_channel_id(cls, value: str) -> str:
         return require_text(value, "channel_id")
 
+    @field_validator("space_id")
+    @classmethod
+    def validate_space_id(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return require_text(value, "space_id")
+
     def to_core_request(self) -> MetadataSyncRequest:
         return MetadataSyncRequest(
             connector=ConnectorKey.CHANNEL_TALK,
             tenant_id=self.channel_id,
+            target_id=self.space_id,
         )
 
 
 class ChannelTalkDocumentMetadataSyncResult(BaseModel):
     connector: ConnectorKey
     channel_id: str
+    space_id: str | None = None
     space_synced: bool = False
     authors_synced: int = 0
     nav_nodes_synced: int = 0
@@ -203,6 +213,7 @@ class ChannelTalkDocumentMetadataSyncResult(BaseModel):
         return cls(
             connector=result.connector,
             channel_id=result.tenant_id,
+            space_id=result.target_id,
             space_synced=(space_step.synced_count > 0) if space_step else False,
             authors_synced=authors_step.synced_count if authors_step else 0,
             nav_nodes_synced=nav_step.synced_count if nav_step else 0,

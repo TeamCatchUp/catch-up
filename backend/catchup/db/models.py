@@ -996,12 +996,12 @@ class ChannelTalkDocumentCredentials(Base):
 
     __table_args__ = (
         UniqueConstraint(
-            "channel_id",
-            name="uq_channel_talk_document_credentials_channel_id",
-        ),
-        UniqueConstraint(
             "space_id",
             name="uq_channel_talk_document_credentials_space_id",
+        ),
+        Index(
+            "idx_channel_talk_document_credentials_channel_id",
+            "channel_id",
         ),
         CheckConstraint(
             "association_status IN ('api_verified', 'local_trusted', 'unverified', 'failed')",

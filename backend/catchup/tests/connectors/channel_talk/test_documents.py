@@ -101,7 +101,7 @@ class _DocumentInstallStore:
     def __init__(self, *, base_channel_id: str | None = "channel-123") -> None:
         self.base_channel_id = base_channel_id
         self.stored_payload = None
-        self.deleted_channel_id = None
+        self.deleted_space_id = None
         self.delete_result = False
         self.committed = False
 
@@ -113,22 +113,18 @@ class _DocumentInstallStore:
             channel_name="Support",
         )
 
-    def get_document_connection(self, channel_id=None):
+    def get_document_connection(self, channel_id=None, space_id=None):
         return None
 
-    def list_document_connections(self):
+    def list_document_connections(self, channel_id=None):
         return []
 
     def upsert_document_connection(self, payload):
         self.stored_payload = payload
         return payload.to_record()
 
-    def delete_document_connection(self, channel_id=None):
-        self.deleted_channel_id = channel_id
-        return self.delete_result
-
     def delete_document_connection_by_space_id(self, space_id):
-        self.deleted_channel_id = space_id
+        self.deleted_space_id = space_id
         return self.delete_result
 
     def commit(self):
@@ -264,7 +260,7 @@ class ChannelTalkDocumentsInstallAdapterTests(IsolatedAsyncioTestCase):
         result = await adapter.uninstall("space-123")
 
         self.assertTrue(result.removed)
-        self.assertEqual(store.deleted_channel_id, "space-123")
+        self.assertEqual(store.deleted_space_id, "space-123")
         self.assertTrue(store.committed)
 
     async def test_uninstall_without_space_id_fails_without_deleting_documents(self) -> None:
@@ -274,7 +270,7 @@ class ChannelTalkDocumentsInstallAdapterTests(IsolatedAsyncioTestCase):
 
         with self.assertRaisesRegex(ChannelTalkValidationError, "space_id is required"):
             await adapter.uninstall()
-        self.assertIsNone(store.deleted_channel_id)
+        self.assertIsNone(store.deleted_space_id)
         self.assertFalse(store.committed)
 
 
@@ -284,7 +280,9 @@ class _MetadataStore:
         self.nav_nodes = []
         self.commits = 0
 
-    def get_document_connection(self, channel_id=None):
+    def get_document_connection(self, channel_id=None, space_id=None):
+        if space_id is not None and space_id != "space-123":
+            return None
         return ChannelTalkDocumentCredentialsRecord(
             channel_id=channel_id,
             space_id="space-123",
@@ -294,7 +292,7 @@ class _MetadataStore:
             association_status=ChannelTalkDocumentAssociationStatus.API_VERIFIED,
         )
 
-    def list_document_connections(self):
+    def list_document_connections(self, channel_id=None):
         return [self.get_document_connection("channel-123")]
 
     def upsert_document_space(self, payload, *, channel_id):

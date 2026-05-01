@@ -133,13 +133,16 @@ class ChannelTalkAdminApiTests(TestCase):
         self.service = StubChannelTalkService()
         self.document_service = StubChannelTalkDocumentService()
         self.background_sync_calls: list[str] = []
-        self.document_background_sync_calls: list[str] = []
+        self.document_background_sync_calls: list[tuple[str, str | None]] = []
 
         async def background_runner(channel_id: str) -> None:
             self.background_sync_calls.append(channel_id)
 
-        async def document_background_runner(channel_id: str) -> None:
-            self.document_background_sync_calls.append(channel_id)
+        async def document_background_runner(
+            channel_id: str,
+            space_id: str | None = None,
+        ) -> None:
+            self.document_background_sync_calls.append((channel_id, space_id))
 
         self.app = FastAPI()
         self.app.include_router(router)
@@ -333,6 +336,13 @@ class ChannelTalkAdminApiTests(TestCase):
         )
         self.assertEqual(self.service.last_uninstall_channel_id, "channel-456")
 
+    def test_delete_credentials_requires_channel_id(self) -> None:
+        response = self.client.delete("/api/v1/admin/connector/channel-talk/credentials")
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["detail"]["code"], "invalid_request")
+        self.assertIsNone(self.service.last_uninstall_channel_id)
+
     def test_post_credentials_returns_route_scoped_validation_shape(self) -> None:
         response = self.client.post(
             "/api/v1/admin/connector/channel-talk/credentials",
@@ -480,7 +490,10 @@ class ChannelTalkAdminApiTests(TestCase):
             self.document_service.last_connect_request.access_secret,
             "documents-secret",
         )
-        self.assertEqual(self.document_background_sync_calls, ["channel-123"])
+        self.assertEqual(
+            self.document_background_sync_calls,
+            [("channel-123", "space-123")],
+        )
 
     def test_get_document_credentials_returns_list_payload_without_secret(self) -> None:
         verified_at = datetime(2026, 4, 25, 8, 30, tzinfo=timezone.utc)
@@ -546,6 +559,15 @@ class ChannelTalkAdminApiTests(TestCase):
             },
         )
         self.assertEqual(self.document_service.last_uninstall_space_id, "space-456")
+
+    def test_delete_document_credentials_requires_space_id(self) -> None:
+        response = self.client.delete(
+            "/api/v1/admin/connector/channel-talk/documents/credentials"
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["detail"]["code"], "invalid_request")
+        self.assertIsNone(self.document_service.last_uninstall_space_id)
 
     def test_post_document_credentials_base_channel_missing_fails(self) -> None:
         self.document_service.connect_error = ChannelTalkValidationError(

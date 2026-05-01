@@ -34,7 +34,7 @@ CHANNEL_ID = "channel-123"
 SPACE_ID = "space-123"
 _RESOLVER_MODULE = "catchup.sync.full.resolvers.channel_talk_full_sync_resolver"
 _LOAD_CONNECTION = f"{_RESOLVER_MODULE}.load_channel_talk_connection"
-_LOAD_DOCUMENT_CONNECTION = f"{_RESOLVER_MODULE}.load_channel_talk_document_connection"
+_LIST_DOCUMENT_CONNECTIONS = f"{_RESOLVER_MODULE}.list_channel_talk_document_connections"
 _RUN_IN_THREADPOOL = f"{_RESOLVER_MODULE}.run_in_threadpool"
 _FULL_SYNC_SERVICE_MODULE = "catchup.sync.full.service"
 
@@ -55,14 +55,16 @@ def _build_connection_record(
 def _build_document_connection_record(
     *,
     channel_id: str = CHANNEL_ID,
+    space_id: str = SPACE_ID,
+    space_name: str = "Help Center",
     association_status: ChannelTalkDocumentAssociationStatus = (
         ChannelTalkDocumentAssociationStatus.API_VERIFIED
     ),
 ) -> ChannelTalkDocumentCredentialsRecord:
     return ChannelTalkDocumentCredentialsRecord(
         channel_id=channel_id,
-        space_id=SPACE_ID,
-        space_name="Help Center",
+        space_id=space_id,
+        space_name=space_name,
         access_key="documents-access-key",
         access_secret="documents-access-secret",
         association_status=association_status,
@@ -139,8 +141,8 @@ class ChannelTalkFullSyncResolverTests(IsolatedAsyncioTestCase):
                 return_value=_build_connection_record(),
             ),
             patch(
-                _LOAD_DOCUMENT_CONNECTION,
-                return_value=None,
+                _LIST_DOCUMENT_CONNECTIONS,
+                return_value=[],
             ),
         ):
             with self.assertRaisesRegex(
@@ -174,7 +176,7 @@ class ChannelTalkFullSyncResolverTests(IsolatedAsyncioTestCase):
                 return_value=_build_connection_record(),
             ),
             patch(
-                _LOAD_DOCUMENT_CONNECTION,
+                _LIST_DOCUMENT_CONNECTIONS,
                 side_effect=AssertionError("document lookup should not run"),
             ),
         ):
@@ -196,8 +198,8 @@ class ChannelTalkFullSyncResolverTests(IsolatedAsyncioTestCase):
                 return_value=_build_connection_record(),
             ),
             patch(
-                _LOAD_DOCUMENT_CONNECTION,
-                return_value=None,
+                _LIST_DOCUMENT_CONNECTIONS,
+                return_value=[],
             ),
         ):
             with self.assertRaisesRegex(
@@ -236,7 +238,7 @@ class ChannelTalkFullSyncResolverTests(IsolatedAsyncioTestCase):
                 return_value=_build_connection_record(),
             ),
             patch(
-                _LOAD_DOCUMENT_CONNECTION,
+                _LIST_DOCUMENT_CONNECTIONS,
                 side_effect=AssertionError("document lookup should not run"),
             ),
         ):
@@ -259,8 +261,8 @@ class ChannelTalkFullSyncResolverTests(IsolatedAsyncioTestCase):
                 return_value=_build_connection_record(),
             ),
             patch(
-                _LOAD_DOCUMENT_CONNECTION,
-                return_value=_build_document_connection_record(),
+                _LIST_DOCUMENT_CONNECTIONS,
+                return_value=[_build_document_connection_record()],
             ),
         ):
             with self.assertRaisesRegex(
@@ -284,8 +286,8 @@ class ChannelTalkFullSyncResolverTests(IsolatedAsyncioTestCase):
                 return_value=_build_connection_record(),
             ),
             patch(
-                _LOAD_DOCUMENT_CONNECTION,
-                return_value=_build_document_connection_record(),
+                _LIST_DOCUMENT_CONNECTIONS,
+                return_value=[_build_document_connection_record()],
             ),
         ):
             with self.assertRaisesRegex(
@@ -309,8 +311,8 @@ class ChannelTalkFullSyncResolverTests(IsolatedAsyncioTestCase):
                 return_value=_build_connection_record(),
             ),
             patch(
-                _LOAD_DOCUMENT_CONNECTION,
-                return_value=None,
+                _LIST_DOCUMENT_CONNECTIONS,
+                return_value=[],
             ),
         ):
             with self.assertRaisesRegex(
@@ -334,8 +336,8 @@ class ChannelTalkFullSyncResolverTests(IsolatedAsyncioTestCase):
                 return_value=_build_connection_record(),
             ),
             patch(
-                _LOAD_DOCUMENT_CONNECTION,
-                return_value=_build_document_connection_record(),
+                _LIST_DOCUMENT_CONNECTIONS,
+                return_value=[_build_document_connection_record()],
             ),
         ):
             result = await self.resolver.resolve_full_sync_targets(
@@ -372,8 +374,8 @@ class ChannelTalkFullSyncResolverTests(IsolatedAsyncioTestCase):
                 return_value=_build_connection_record(),
             ),
             patch(
-                _LOAD_DOCUMENT_CONNECTION,
-                return_value=_build_document_connection_record(),
+                _LIST_DOCUMENT_CONNECTIONS,
+                return_value=[_build_document_connection_record()],
             ),
         ):
             result = await self.resolver.resolve_full_sync_targets(
@@ -392,6 +394,38 @@ class ChannelTalkFullSyncResolverTests(IsolatedAsyncioTestCase):
             "channel_talk.document_space",
         )
 
+    async def test_resolver_accepts_second_document_space_for_same_channel(self) -> None:
+        with (
+            patch(
+                _LOAD_CONNECTION,
+                return_value=_build_connection_record(),
+            ),
+            patch(
+                _LIST_DOCUMENT_CONNECTIONS,
+                return_value=[
+                    _build_document_connection_record(
+                        space_id="space-123",
+                        space_name="Help Center",
+                    ),
+                    _build_document_connection_record(
+                        space_id="space-456",
+                        space_name="Developer Docs",
+                    ),
+                ],
+            ),
+        ):
+            result = await self.resolver.resolve_full_sync_targets(
+                request=FullSyncDispatchRequest(
+                    scope_id=CHANNEL_ID,
+                    targets=[_space_target("space-456")],
+                    sync_from_ts="1713744000.000000",
+                ),
+            )
+
+        self.assertEqual(len(result.targets), 1)
+        self.assertEqual(result.targets[0].target_id, "space-456")
+        self.assertEqual(result.targets[0].target_name, "Developer Docs")
+
     async def test_resolver_rejects_document_article_when_documents_channel_mismatches(
         self,
     ) -> None:
@@ -401,10 +435,10 @@ class ChannelTalkFullSyncResolverTests(IsolatedAsyncioTestCase):
                 return_value=_build_connection_record(),
             ),
             patch(
-                _LOAD_DOCUMENT_CONNECTION,
-                return_value=_build_document_connection_record(
+                _LIST_DOCUMENT_CONNECTIONS,
+                return_value=[_build_document_connection_record(
                     channel_id="channel-other"
-                ),
+                )],
             ),
         ):
             with self.assertRaisesRegex(
@@ -428,10 +462,10 @@ class ChannelTalkFullSyncResolverTests(IsolatedAsyncioTestCase):
                 return_value=_build_connection_record(),
             ),
             patch(
-                _LOAD_DOCUMENT_CONNECTION,
-                return_value=_build_document_connection_record(
+                _LIST_DOCUMENT_CONNECTIONS,
+                return_value=[_build_document_connection_record(
                     association_status=ChannelTalkDocumentAssociationStatus.FAILED,
-                ),
+                )],
             ),
         ):
             with self.assertRaisesRegex(
@@ -455,8 +489,8 @@ class ChannelTalkFullSyncResolverTests(IsolatedAsyncioTestCase):
                 return_value=_build_connection_record(),
             ),
             patch(
-                _LOAD_DOCUMENT_CONNECTION,
-                return_value=_build_document_connection_record(),
+                _LIST_DOCUMENT_CONNECTIONS,
+                return_value=[_build_document_connection_record()],
             ),
         ):
             result = await self.resolver.resolve_full_sync_targets(
@@ -531,8 +565,8 @@ class ChannelTalkFullSyncResolverTests(IsolatedAsyncioTestCase):
                 return_value=_build_connection_record(channel_id="channel-other"),
             ),
             patch(
-                _LOAD_DOCUMENT_CONNECTION,
-                return_value=None,
+                _LIST_DOCUMENT_CONNECTIONS,
+                return_value=[],
             ),
         ):
             with self.assertRaisesRegex(

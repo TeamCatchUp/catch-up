@@ -18,10 +18,10 @@ from catchup.connectors.channel_talk.full_sync_helper import (
     is_verified_channel_talk_document_connection,
 )
 from catchup.connectors.channel_talk.full_sync_helper import (
-    load_channel_talk_connection,
+    list_channel_talk_document_connections,
 )
 from catchup.connectors.channel_talk.full_sync_helper import (
-    load_channel_talk_document_connection,
+    load_channel_talk_connection,
 )
 from catchup.connectors.channel_talk.full_sync_helper import (
     require_channel_talk_channel_id,
@@ -641,13 +641,13 @@ class SyncQueryService:
             empty_message="scope_id is required",
         )
 
-        connection_result, document_connection_result = await asyncio.gather(
+        connection_result, document_connections_result = await asyncio.gather(
             run_in_threadpool(
                 load_channel_talk_connection,
                 channel_id,
             ),
             run_in_threadpool(
-                load_channel_talk_document_connection,
+                list_channel_talk_document_connections,
                 channel_id,
             ),
         )
@@ -662,12 +662,11 @@ class SyncQueryService:
             channel_name=connection.channel_name,
         )
         targets = [self._build_channel_talk_target_result(channel_plan)]
-        document_target = self._build_optional_document_space_target(
-            document_connection_result,
+        document_targets = self._build_document_space_targets(
+            document_connections_result,
             channel_id=channel_id,
         )
-        if document_target is not None:
-            targets.append(document_target)
+        targets.extend(document_targets)
 
         return self._build_targets_result(
             connector=SyncConnector.CHANNEL_TALK,
@@ -702,31 +701,33 @@ class SyncQueryService:
         )
 
     @classmethod
-    def _build_optional_document_space_target(
+    def _build_document_space_targets(
         cls,
-        document_connection: ChannelTalkDocumentCredentialsRecord | None,
+        document_connections: list[ChannelTalkDocumentCredentialsRecord],
         *,
         channel_id: str,
-    ) -> SyncTargetResult | None:
-        if document_connection is None:
-            return None
-        if not is_verified_channel_talk_document_connection(
-            document_connection,
-            channel_id=channel_id,
-        ):
-            logger.info(
-                "channel_talk_document_target_skipped",
+    ) -> list[SyncTargetResult]:
+        targets: list[SyncTargetResult] = []
+        for document_connection in document_connections:
+            if not is_verified_channel_talk_document_connection(
+                document_connection,
                 channel_id=channel_id,
-                document_channel_id=document_connection.channel_id,
-                association_status=document_connection.association_status,
+            ):
+                logger.info(
+                    "channel_talk_document_target_skipped",
+                    channel_id=channel_id,
+                    document_channel_id=document_connection.channel_id,
+                    space_id=document_connection.space_id,
+                    association_status=document_connection.association_status,
+                )
+                continue
+            plan = ChannelTalkFullSyncTargetPlan.document_space(
+                channel_id=channel_id,
+                space_id=document_connection.space_id,
+                space_name=document_connection.space_name,
             )
-            return None
-        plan = ChannelTalkFullSyncTargetPlan.document_space(
-            channel_id=channel_id,
-            space_id=document_connection.space_id,
-            space_name=document_connection.space_name,
-        )
-        return cls._build_channel_talk_target_result(plan)
+            targets.append(cls._build_channel_talk_target_result(plan))
+        return targets
 
     async def list_targets(
         self,

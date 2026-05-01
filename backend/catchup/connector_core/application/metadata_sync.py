@@ -26,6 +26,7 @@ class ConnectorMetadataSyncApplication:
         return MetadataSyncResult(
             connector=request.connector,
             tenant_id=request.tenant_id,
+            target_id=request.target_id,
             steps=step_results,
         )
 

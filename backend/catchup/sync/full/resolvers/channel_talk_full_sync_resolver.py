@@ -10,10 +10,10 @@ from catchup.connectors.channel_talk.full_sync_helper import (
     is_verified_channel_talk_document_connection,
 )
 from catchup.connectors.channel_talk.full_sync_helper import (
-    load_channel_talk_connection,
+    list_channel_talk_document_connections,
 )
 from catchup.connectors.channel_talk.full_sync_helper import (
-    load_channel_talk_document_connection,
+    load_channel_talk_connection,
 )
 from catchup.connectors.channel_talk.full_sync_helper import (
     require_channel_talk_channel_id,
@@ -177,15 +177,15 @@ class ChannelTalkFullSyncTargetResolver(FullSyncTargetResolverProtocol):
         channel_connection_task: asyncio.Task[ChannelTalkCredentialsRecord | None],
     ) -> dict[tuple[SyncTargetType, str], FullSyncTarget]:
 
-        document_connection_task = asyncio.create_task(
+        document_connections_task = asyncio.create_task(
             run_in_threadpool(
-                load_channel_talk_document_connection,
+                list_channel_talk_document_connections,
                 channel_id,
             )
         )
-        connection, document_connection = await asyncio.gather(
+        connection, document_connections = await asyncio.gather(
             channel_connection_task,
-            document_connection_task,
+            document_connections_task,
         )
 
         if connection is None:
@@ -201,29 +201,38 @@ class ChannelTalkFullSyncTargetResolver(FullSyncTargetResolverProtocol):
                     "channel_id": connection.channel_id,
                 },
             )
-        if document_connection is None:
+        if not document_connections:
             raise SyncRequestException(
                 "channel_talk documents is not connected for the requested channel",
                 metadata={"channel_id": channel_id},
             )
-        if not is_verified_channel_talk_document_connection(
-            document_connection,
-            channel_id=channel_id,
-        ):
+        verified_document_connections = [
+            document_connection
+            for document_connection in document_connections
+            if is_verified_channel_talk_document_connection(
+                document_connection,
+                channel_id=channel_id,
+            )
+        ]
+        if not verified_document_connections:
             raise SyncRequestException(
                 "channel_talk documents credentials are not API verified for the requested channel",
                 metadata={"channel_id": channel_id},
             )
 
-        target = ChannelTalkFullSyncTargetResolver._build_full_sync_target(
-            ChannelTalkFullSyncTargetPlan.document_space(
-                channel_id=channel_id,
-                space_id=document_connection.space_id,
-                space_name=document_connection.space_name,
+        targets = [
+            ChannelTalkFullSyncTargetResolver._build_full_sync_target(
+                ChannelTalkFullSyncTargetPlan.document_space(
+                    channel_id=channel_id,
+                    space_id=document_connection.space_id,
+                    space_name=document_connection.space_name,
+                )
             )
-        )
+            for document_connection in verified_document_connections
+        ]
         return {
-            (target.target_type, target.target_id): target,
+            (target.target_type, target.target_id): target
+            for target in targets
         }
 
     @staticmethod

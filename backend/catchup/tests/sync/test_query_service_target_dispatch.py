@@ -21,8 +21,8 @@ from catchup.sync.query_service import SyncQueryService
 CHANNEL_ID = "channel-123"
 _QUERY_SERVICE_MODULE = "catchup.sync.query_service"
 _LOAD_CONNECTION = f"{_QUERY_SERVICE_MODULE}.load_channel_talk_connection"
-_LOAD_DOCUMENT_CONNECTION = (
-    f"{_QUERY_SERVICE_MODULE}.load_channel_talk_document_connection"
+_LIST_DOCUMENT_CONNECTIONS = (
+    f"{_QUERY_SERVICE_MODULE}.list_channel_talk_document_connections"
 )
 _RUN_IN_THREADPOOL = f"{_QUERY_SERVICE_MODULE}.run_in_threadpool"
 
@@ -43,14 +43,16 @@ def _build_connection_record(
 def _build_document_connection_record(
     *,
     channel_id: str = CHANNEL_ID,
+    space_id: str = "space-123",
+    space_name: str = "Help Center",
     association_status: ChannelTalkDocumentAssociationStatus = (
         ChannelTalkDocumentAssociationStatus.API_VERIFIED
     ),
 ) -> ChannelTalkDocumentCredentialsRecord:
     return ChannelTalkDocumentCredentialsRecord(
         channel_id=channel_id,
-        space_id="space-123",
-        space_name="Help Center",
+        space_id=space_id,
+        space_name=space_name,
         access_key="documents-access-key",
         access_secret="documents-access-secret",
         association_status=association_status,
@@ -136,8 +138,8 @@ class ChannelTalkTargetListingTests(IsolatedAsyncioTestCase):
                 return_value=_build_connection_record(),
             ),
             patch(
-                _LOAD_DOCUMENT_CONNECTION,
-                return_value=_build_document_connection_record(),
+                _LIST_DOCUMENT_CONNECTIONS,
+                return_value=[_build_document_connection_record()],
             ),
         ):
             result = await self.service._list_channel_talk_targets(scope_id=CHANNEL_ID)
@@ -176,8 +178,8 @@ class ChannelTalkTargetListingTests(IsolatedAsyncioTestCase):
                 return_value=_build_connection_record(),
             ),
             patch(
-                _LOAD_DOCUMENT_CONNECTION,
-                return_value=_build_document_connection_record(),
+                _LIST_DOCUMENT_CONNECTIONS,
+                return_value=[_build_document_connection_record()],
             ),
         ):
             result = await self.service._list_channel_talk_targets(scope_id=CHANNEL_ID)
@@ -207,6 +209,33 @@ class ChannelTalkTargetListingTests(IsolatedAsyncioTestCase):
         self.assertNotIn("pending_worker_support", document_target.metadata)
         self.assertNotIn("status_reason", document_target.metadata)
 
+    async def test_channel_talk_targets_include_multiple_document_spaces(self) -> None:
+        with (
+            patch(
+                _LOAD_CONNECTION,
+                return_value=_build_connection_record(),
+            ),
+            patch(
+                _LIST_DOCUMENT_CONNECTIONS,
+                return_value=[
+                    _build_document_connection_record(
+                        space_id="space-123",
+                        space_name="Help Center",
+                    ),
+                    _build_document_connection_record(
+                        space_id="space-456",
+                        space_name="Developer Docs",
+                    ),
+                ],
+            ),
+        ):
+            result = await self.service._list_channel_talk_targets(scope_id=CHANNEL_ID)
+
+        self.assertEqual(
+            [target.target_id for target in result.targets],
+            [CHANNEL_ID, "space-123", "space-456"],
+        )
+
     async def test_channel_talk_targets_omits_document_article_when_documents_channel_mismatches(
         self,
     ) -> None:
@@ -216,10 +245,10 @@ class ChannelTalkTargetListingTests(IsolatedAsyncioTestCase):
                 return_value=_build_connection_record(),
             ),
             patch(
-                _LOAD_DOCUMENT_CONNECTION,
-                return_value=_build_document_connection_record(
+                _LIST_DOCUMENT_CONNECTIONS,
+                return_value=[_build_document_connection_record(
                     channel_id="channel-other"
-                ),
+                )],
             ),
         ):
             result = await self.service._list_channel_talk_targets(scope_id=CHANNEL_ID)
@@ -235,8 +264,8 @@ class ChannelTalkTargetListingTests(IsolatedAsyncioTestCase):
                 return_value=_build_connection_record(),
             ),
             patch(
-                _LOAD_DOCUMENT_CONNECTION,
-                return_value=None,
+                _LIST_DOCUMENT_CONNECTIONS,
+                return_value=[],
             ),
         ):
             result = await self.service._list_channel_talk_targets(scope_id=CHANNEL_ID)
@@ -252,10 +281,10 @@ class ChannelTalkTargetListingTests(IsolatedAsyncioTestCase):
                 return_value=_build_connection_record(),
             ),
             patch(
-                _LOAD_DOCUMENT_CONNECTION,
-                return_value=_build_document_connection_record(
+                _LIST_DOCUMENT_CONNECTIONS,
+                return_value=[_build_document_connection_record(
                     association_status=ChannelTalkDocumentAssociationStatus.FAILED,
-                ),
+                )],
             ),
         ):
             result = await self.service._list_channel_talk_targets(scope_id=CHANNEL_ID)
@@ -271,7 +300,7 @@ class ChannelTalkTargetListingTests(IsolatedAsyncioTestCase):
                 return_value=_build_connection_record(),
             ),
             patch(
-                _LOAD_DOCUMENT_CONNECTION,
+                _LIST_DOCUMENT_CONNECTIONS,
                 side_effect=RuntimeError("document credentials unavailable"),
             ),
         ):
@@ -285,8 +314,8 @@ class ChannelTalkTargetListingTests(IsolatedAsyncioTestCase):
                 return_value=None,
             ),
             patch(
-                _LOAD_DOCUMENT_CONNECTION,
-                return_value=_build_document_connection_record(),
+                _LIST_DOCUMENT_CONNECTIONS,
+                return_value=[_build_document_connection_record()],
             ),
         ):
             with self.assertRaisesRegex(ValueError, "channel_talk is not connected"):
@@ -299,8 +328,8 @@ class ChannelTalkTargetListingTests(IsolatedAsyncioTestCase):
                 return_value=_build_connection_record(channel_id="channel-other"),
             ),
             patch(
-                _LOAD_DOCUMENT_CONNECTION,
-                return_value=_build_document_connection_record(),
+                _LIST_DOCUMENT_CONNECTIONS,
+                return_value=[_build_document_connection_record()],
             ),
         ):
             with self.assertRaisesRegex(

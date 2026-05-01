@@ -42,6 +42,7 @@ class ChannelTalkDocumentMetadataStore(Protocol):
     def get_document_connection(
         self,
         channel_id: str | None = None,
+        space_id: str | None = None,
     ) -> ChannelTalkDocumentCredentialsRecord | None: ...
 
     def upsert_document_space(
@@ -200,6 +201,7 @@ class ChannelTalkDocumentMetadataSyncAdapter:
             record = await run_in_threadpool(
                 self.store.get_document_connection,
                 request.tenant_id,
+                request.target_id,
             )
         except ChannelTalkError:
             raise

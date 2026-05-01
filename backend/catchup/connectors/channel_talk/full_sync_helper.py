@@ -30,9 +30,20 @@ def list_channel_talk_connections() -> list[ChannelTalkCredentialsRecord]:
 
 def load_channel_talk_document_connection(
     channel_id: str | None = None,
+    space_id: str | None = None,
 ) -> ChannelTalkDocumentCredentialsRecord | None:
     with SessionLocal() as db:
         return ChannelTalkDocumentCredentialsRepository(db).get_document_connection(
+            channel_id=channel_id,
+            space_id=space_id,
+        )
+
+
+def list_channel_talk_document_connections(
+    channel_id: str | None = None,
+) -> list[ChannelTalkDocumentCredentialsRecord]:
+    with SessionLocal() as db:
+        return ChannelTalkDocumentCredentialsRepository(db).list_document_connections(
             channel_id=channel_id,
         )
 

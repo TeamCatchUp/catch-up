@@ -369,6 +369,53 @@ class ChannelTalkRepositoryTests(TestCase):
         )
         self.assertIsNone(self.document_credentials_repo.get_document_connection("channel-123"))
 
+    def test_document_credentials_allows_multiple_spaces_for_one_channel(self) -> None:
+        verified_at = datetime(2026, 4, 25, tzinfo=timezone.utc)
+
+        self.document_credentials_repo.upsert_document_connection(
+            ChannelTalkDocumentCredentialsUpsert(
+                channel_id="channel-123",
+                access_key="documents-key-1",
+                access_secret="documents-secret-1",
+                space=ChannelTalkDocumentSpace(
+                    space_id="space-123",
+                    space_name="Help Center",
+                    channel_id="channel-123",
+                ),
+                credential_last_verified_at=verified_at,
+                association_status=ChannelTalkDocumentAssociationStatus.API_VERIFIED,
+            )
+        )
+        self.document_credentials_repo.upsert_document_connection(
+            ChannelTalkDocumentCredentialsUpsert(
+                channel_id="channel-123",
+                access_key="documents-key-2",
+                access_secret="documents-secret-2",
+                space=ChannelTalkDocumentSpace(
+                    space_id="space-456",
+                    space_name="Developer Docs",
+                    channel_id="channel-123",
+                ),
+                credential_last_verified_at=verified_at,
+                association_status=ChannelTalkDocumentAssociationStatus.API_VERIFIED,
+            )
+        )
+
+        records = self.document_credentials_repo.list_document_connections(
+            channel_id="channel-123"
+        )
+        loaded_second = self.document_credentials_repo.get_document_connection(
+            channel_id="channel-123",
+            space_id="space-456",
+        )
+
+        self.assertEqual(
+            [record.space_id for record in records],
+            ["space-123", "space-456"],
+        )
+        self.assertIsNotNone(loaded_second)
+        self.assertEqual(loaded_second.space_name, "Developer Docs")
+
     def test_document_credentials_delete_is_scoped_to_channel(self) -> None:
         verified_at = datetime(2026, 4, 25, tzinfo=timezone.utc)
         self.document_credentials_repo.upsert_document_connection(

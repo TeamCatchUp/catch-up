@@ -164,7 +164,7 @@ async def upsert_channel_talk_document_credentials(
 ):
     result = await service.connect(request=connect_request)
     if result.installed and result.channel_id:
-        background_tasks.add_task(metadata_task_runner, result.channel_id)
+        background_tasks.add_task(metadata_task_runner, result.channel_id, result.space_id)
     return _build_document_connect_response(result)
 
 

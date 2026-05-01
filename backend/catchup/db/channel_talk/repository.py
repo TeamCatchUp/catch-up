@@ -297,15 +297,20 @@ class ChannelTalkDocumentCredentialsRepository:
     def get_document_connection(
         self,
         channel_id: str | None = None,
+        space_id: str | None = None,
     ) -> ChannelTalkDocumentCredentialsRecord | None:
         row = _get_channel_talk_document_credentials(
             db=self.db,
             channel_id=channel_id,
+            space_id=space_id,
         )
         return _to_document_connection_record(row)
 
-    def list_document_connections(self) -> list[ChannelTalkDocumentCredentialsRecord]:
-        rows = _list_channel_talk_document_credentials(db=self.db)
+    def list_document_connections(
+        self,
+        channel_id: str | None = None,
+    ) -> list[ChannelTalkDocumentCredentialsRecord]:
+        rows = _list_channel_talk_document_credentials(db=self.db, channel_id=channel_id)
         return [
             record
             for row in rows
@@ -331,13 +336,6 @@ class ChannelTalkDocumentCredentialsRepository:
             raise RuntimeError("Channel Talk Documents credentials upsert returned no record")
         return record
 
-    def delete_document_connection(self, channel_id: str | None = None) -> bool:
-        return _delete_channel_scoped_rows(
-            db=self.db,
-            model=db_models.ChannelTalkDocumentCredentials,
-            channel_id=channel_id,
-        )
-
     def delete_document_connection_by_space_id(self, space_id: str) -> bool:
         return _delete_rows_by_field(
             db=self.db,
@@ -357,10 +355,12 @@ class ChannelTalkDocumentMetadataRepository:
     def get_document_connection(
         self,
         channel_id: str | None = None,
+        space_id: str | None = None,
     ) -> ChannelTalkDocumentCredentialsRecord | None:
         row = _get_channel_talk_document_credentials(
             db=self.db,
             channel_id=channel_id,
+            space_id=space_id,
         )
         return _to_document_connection_record(row)
 
@@ -447,20 +447,25 @@ def _list_channel_talk_credentials(
 def _get_channel_talk_document_credentials(
     db: Session,
     channel_id: str | None = None,
+    space_id: str | None = None,
 ) -> db_models.ChannelTalkDocumentCredentials | None:
-    return _get_first_channel_scoped_row(
-        db=db,
-        model=db_models.ChannelTalkDocumentCredentials,
-        channel_id=channel_id,
-    )
+    stmt: Any = select(db_models.ChannelTalkDocumentCredentials)
+    if channel_id is not None:
+        stmt = stmt.filter_by(channel_id=channel_id)
+    if space_id is not None:
+        stmt = stmt.filter_by(space_id=space_id)
+    stmt = stmt.order_by(db_models.ChannelTalkDocumentCredentials.id.asc()).limit(1)
+    return db.execute(stmt).scalar_one_or_none()
 
 
 def _list_channel_talk_document_credentials(
     db: Session,
+    channel_id: str | None = None,
 ) -> list[db_models.ChannelTalkDocumentCredentials]:
-    stmt = select(db_models.ChannelTalkDocumentCredentials).order_by(
-        db_models.ChannelTalkDocumentCredentials.id.asc()
-    )
+    stmt = select(db_models.ChannelTalkDocumentCredentials)
+    if channel_id is not None:
+        stmt = stmt.filter_by(channel_id=channel_id)
+    stmt = stmt.order_by(db_models.ChannelTalkDocumentCredentials.id.asc())
     return list(db.execute(stmt).scalars())
 
 
@@ -563,7 +568,7 @@ def _create_or_replace_channel_talk_document_credentials(
 ) -> db_models.ChannelTalkDocumentCredentials:
     credentials = _get_channel_talk_document_credentials(
         db=db,
-        channel_id=channel_id,
+        space_id=space_id,
     )
     if credentials is None:
         credentials = db_models.ChannelTalkDocumentCredentials(
