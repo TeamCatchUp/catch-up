@@ -39,6 +39,7 @@ from catchup.db.models import SlackUser
 from catchup.db.models import SourceType
 from catchup.db.models import SyncConnector
 from catchup.db.models import User
+from catchup.db.sync.admin_connector_status import AdminConnectorTargetRangeRow
 from catchup.db.sync.admin_connector_status import (
     list_admin_connector_target_range_rows,
 )
@@ -48,11 +49,13 @@ from catchup.db.users import get_all_users_for_admin
 from catchup.events.enums import AdminOAuthAction
 from catchup.events.enums import EventType
 from catchup.onboarding.oauth import sync_initial_keycloak_users
+from catchup.server.admin.schemas import AdminChannelTalkConnectorTargetRangeResponse
 from catchup.server.admin.schemas import AdminConnectorStatusResponse
 from catchup.server.admin.schemas import AdminConnectorTargetRangeResponse
 from catchup.server.admin.schemas import AdminUserDetailResponse
 from catchup.server.admin.schemas import AdminUserListItem
 from catchup.server.admin.schemas import AdminUserListResponse
+from catchup.server.admin.schemas import ChannelTalkConnectorTargetType
 from catchup.server.admin.schemas import ConfluenceAccount
 from catchup.server.admin.schemas import ConfluenceCloudIdListResponse
 from catchup.server.admin.schemas import ConnectorResourceType
@@ -122,7 +125,33 @@ def _get_connector_status_spec(source: ConnectorStatusSource):
         return SyncConnector.SLACK, ConnectorResourceType.CHANNELS
     if source == ConnectorStatusSource.CONFLUENCE:
         return SyncConnector.CONFLUENCE, ConnectorResourceType.SPACES
+    if source == ConnectorStatusSource.CHANNEL_TALK:
+        return SyncConnector.CHANNEL_TALK, ConnectorResourceType.CHANNEL_TALK_TARGETS
     raise HTTPException(status_code=400, detail="unsupported source")
+
+
+def _build_connector_status_target_response(
+    row: AdminConnectorTargetRangeRow,
+    *,
+    source: ConnectorStatusSource,
+) -> AdminConnectorTargetRangeResponse:
+    fields = {
+        "scope_id": row.scope_id,
+        "target_id": row.target_id,
+        "target_name": row.target_name,
+        "event_id": row.event_id,
+        "sync_status": row.sync_status,
+        "last_succeeded_at": _format_datetime(row.last_succeeded_at),
+        "last_failed_at": _format_datetime(row.last_failed_at),
+        "oldest": _format_date(row.oldest_at),
+        "latest": _format_date(row.latest_at),
+    }
+    if source == ConnectorStatusSource.CHANNEL_TALK:
+        return AdminChannelTalkConnectorTargetRangeResponse(
+            **fields,
+            target_type=ChannelTalkConnectorTargetType(row.target_type),
+        )
+    return AdminConnectorTargetRangeResponse(**fields)
 
 
 def _get_connector_status(
@@ -140,16 +169,9 @@ def _get_connector_status(
         resource_type=resource_type,
         total_targets=len(target_rows),
         targets=[
-            AdminConnectorTargetRangeResponse(
-                scope_id=row.scope_id,
-                target_id=row.target_id,
-                target_name=row.target_name,
-                event_id=row.event_id,
-                sync_status=row.sync_status,
-                last_succeeded_at=_format_datetime(row.last_succeeded_at),
-                last_failed_at=_format_datetime(row.last_failed_at),
-                oldest=_format_date(row.oldest_at),
-                latest=_format_date(row.latest_at),
+            _build_connector_status_target_response(
+                row,
+                source=source,
             )
             for row in target_rows
         ],
@@ -162,7 +184,10 @@ def _get_connector_status(
     response_model=AdminConnectorStatusResponse,
 )
 def get_connector_status(
-    source: ConnectorStatusSource = Query(..., description="github, jira, slack, confluence"),
+    source: ConnectorStatusSource = Query(
+        ...,
+        description="github, jira, slack, confluence, channel_talk",
+    ),
     db: Session = Depends(get_db),
     _admin_user: User = Depends(require_admin_user),
 ):
