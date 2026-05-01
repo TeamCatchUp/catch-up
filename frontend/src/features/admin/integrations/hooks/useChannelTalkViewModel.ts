@@ -6,12 +6,10 @@ import { toast } from 'sonner';
 
 import { channelTalkMutations } from '../queries/channelTalk.mutations';
 import type {
-  ChannelTalkDocumentStatusResponse,
-  ChannelTalkStatusResponse,
-} from '../types/channelTalkApi';
-import type {
+  ChannelTalkChannel,
   ChannelTalkChannelPatch,
   ChannelTalkConnectionState,
+  ChannelTalkDocumentSpace,
   ChannelTalkDocumentSpacePatch,
 } from '../types/channelTalkModel';
 import {
@@ -28,64 +26,6 @@ import { parseChannelTalkError } from '../utils/parseChannelTalkError';
  */
 function makeId(prefix: string): string {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-}
-
-/**
- * 백엔드 GET 응답(list)으로부터 viewModel 초기 state를 derive.
- *
- * - 등록된 channel N개를 카드 N개로 매핑
- * - 각 channel에 속한 document space들을 그 카드의 자식으로 그룹화 (channel_id 기준)
- * - 키 필드는 보안상 응답에 없으므로 MASKED_PLACEHOLDER로 채워서 lock 상태 시각화
- * - lastSyncedAt은 모든 channel 중 가장 최근 검증 시각으로 노출
- */
-export function deriveChannelTalkInitialState(
-  channelDataList: ChannelTalkStatusResponse[] | undefined,
-  documentDataList: ChannelTalkDocumentStatusResponse[] | undefined,
-): ChannelTalkConnectionState {
-  const installedChannels = (channelDataList ?? []).filter(
-    (c): c is ChannelTalkStatusResponse & { channel_id: string } => c.installed && !!c.channel_id,
-  );
-
-  if (installedChannels.length === 0) {
-    return { connected: false, lastSyncedAt: null, channels: [] };
-  }
-
-  const installedDocuments = (documentDataList ?? []).filter(
-    (d): d is ChannelTalkDocumentStatusResponse & { channel_id: string; space_id: string } =>
-      d.installed && !!d.channel_id && !!d.space_id,
-  );
-
-  const channels = installedChannels.map((channelData) => ({
-    id: channelData.channel_id,
-    name: channelData.channel_name ?? '',
-    accessKey: MASKED_PLACEHOLDER,
-    accessSecret: MASKED_PLACEHOLDER,
-    webhookToken: channelData.webhook_token_configured ? MASKED_PLACEHOLDER : '',
-    syncInterval: CHANNEL_SYNC_INTERVAL_DEFAULT,
-    documentSpaces: installedDocuments
-      .filter((d) => d.channel_id === channelData.channel_id)
-      .map((d) => ({
-        id: d.space_id,
-        name: d.space_name ?? '',
-        accessKey: MASKED_PLACEHOLDER,
-        accessSecret: MASKED_PLACEHOLDER,
-        syncInterval: DOCUMENT_SPACE_SYNC_INTERVAL_DEFAULT,
-        connectionStatus: 'tested' as const,
-      })),
-    connectionStatus: 'tested' as const,
-  }));
-
-  // 모든 channel 중 가장 최근 검증 시각
-  const verifiedTimes = installedChannels
-    .map((c) => c.credential_last_verified_at)
-    .filter((t): t is string => !!t);
-  const lastSyncedAt = verifiedTimes.length > 0 ? verifiedTimes.sort().reverse()[0] : null;
-
-  return {
-    connected: true,
-    lastSyncedAt,
-    channels,
-  };
 }
 
 interface ChannelTalkViewModel {
@@ -119,6 +59,9 @@ interface ChannelTalkViewModel {
  */
 export function useChannelTalkViewModel(initialState: ChannelTalkConnectionState): ChannelTalkViewModel {
   const [state, setState] = useState<ChannelTalkConnectionState>(initialState);
+  /** 검증 mutation 진행 중인 항목 추적 — 동일 카드 중복 클릭 방지에 사용 */
+  const [pendingChannelIds, setPendingChannelIds] = useState<Set<string>>(() => new Set());
+  const [pendingDocumentSpaceIds, setPendingDocumentSpaceIds] = useState<Set<string>>(() => new Set());
 
   const channelMutation = useMutation(channelTalkMutations.saveChannelCredential());
   const documentMutation = useMutation(channelTalkMutations.saveDocumentCredential());
@@ -167,28 +110,40 @@ export function useChannelTalkViewModel(initialState: ChannelTalkConnectionState
 
   const removeChannel = useCallback(
     (channelId: string) => {
-      const channel = state.channels.find((c) => c.id === channelId);
+      let removed: ChannelTalkChannel | undefined;
+      let removedIndex = -1;
+
+      // optimistic UI: 즉시 화면에서 제거하면서 동시에 snapshot 저장 (rollback용)
+      setState((prev) => {
+        removedIndex = prev.channels.findIndex((c) => c.id === channelId);
+        if (removedIndex < 0) return prev;
+        removed = prev.channels[removedIndex];
+        return {
+          ...prev,
+          channels: prev.channels.filter((ch) => ch.id !== channelId),
+        };
+      });
+
       // 검증 통과한 채널만 백엔드에 등록되어 있으므로 DELETE 호출 대상.
-      const isPersisted = channel?.connectionStatus === 'tested';
+      if (!removed || removed.connectionStatus !== 'tested') return;
 
-      // optimistic UI: 즉시 화면에서 제거
-      setState((prev) => ({
-        ...prev,
-        channels: prev.channels.filter((ch) => ch.id !== channelId),
-      }));
-
-      if (!isPersisted) return;
-
+      const snapshot = removed;
+      const snapshotIndex = removedIndex;
       deleteChannelMutation.mutate(channelId, {
         onError: (error) => {
-          // 실패 시 카드 복원 + 에러 토스트. cache invalidation으로 자동 refetch도 동작하므로
-          // 다음 GET이 오면 진실의 원천 복구.
+          // 백엔드 삭제 실패 → 원래 위치에 복원하여 사용자에게 일관된 view 유지.
+          setState((prev) => {
+            const next = [...prev.channels];
+            const insertAt = Math.min(snapshotIndex, next.length);
+            next.splice(insertAt, 0, snapshot);
+            return { ...prev, channels: next };
+          });
           const { message } = parseChannelTalkError(error);
           toast.error('채널 삭제에 실패했어요.', { description: message });
         },
       });
     },
-    [state.channels, deleteChannelMutation],
+    [deleteChannelMutation],
   );
 
   const enterEditMode = useCallback((channelId: string) => {
@@ -264,32 +219,53 @@ export function useChannelTalkViewModel(initialState: ChannelTalkConnectionState
 
   const removeDocumentSpace = useCallback(
     (channelId: string, dsId: string) => {
-      const channel = state.channels.find((c) => c.id === channelId);
-      const space = channel?.documentSpaces.find((d) => d.id === dsId);
-      const isPersisted = space?.connectionStatus === 'tested';
+      let removed: ChannelTalkDocumentSpace | undefined;
+      let removedIndex = -1;
 
-      // optimistic UI
-      setState((prev) => ({
-        ...prev,
-        channels: prev.channels.map((ch) =>
-          ch.id === channelId ? { ...ch, documentSpaces: ch.documentSpaces.filter((ds) => ds.id !== dsId) } : ch,
-        ),
-      }));
+      setState((prev) => {
+        const targetChannel = prev.channels.find((c) => c.id === channelId);
+        if (!targetChannel) return prev;
+        removedIndex = targetChannel.documentSpaces.findIndex((d) => d.id === dsId);
+        if (removedIndex < 0) return prev;
+        removed = targetChannel.documentSpaces[removedIndex];
+        return {
+          ...prev,
+          channels: prev.channels.map((ch) =>
+            ch.id === channelId ? { ...ch, documentSpaces: ch.documentSpaces.filter((ds) => ds.id !== dsId) } : ch,
+          ),
+        };
+      });
 
-      if (!isPersisted) return;
+      if (!removed || removed.connectionStatus !== 'tested') return;
 
+      const snapshot = removed;
+      const snapshotIndex = removedIndex;
       deleteDocumentMutation.mutate(dsId, {
         onError: (error) => {
+          // 원래 위치에 복원
+          setState((prev) => ({
+            ...prev,
+            channels: prev.channels.map((ch) => {
+              if (ch.id !== channelId) return ch;
+              const next = [...ch.documentSpaces];
+              const insertAt = Math.min(snapshotIndex, next.length);
+              next.splice(insertAt, 0, snapshot);
+              return { ...ch, documentSpaces: next };
+            }),
+          }));
           const { message } = parseChannelTalkError(error);
           toast.error('도큐먼트 스페이스 삭제에 실패했어요.', { description: message });
         },
       });
     },
-    [state.channels, deleteDocumentMutation],
+    [deleteDocumentMutation],
   );
 
   const testChannelConnection = useCallback(
     (channelId: string) => {
+      // 같은 카드의 mutation이 이미 진행 중이면 중복 호출 무시 (validate+save 2번 실행 방지)
+      if (pendingChannelIds.has(channelId)) return;
+
       const channel = state.channels.find((c) => c.id === channelId);
       if (!channel) return;
 
@@ -309,6 +285,12 @@ export function useChannelTalkViewModel(initialState: ChannelTalkConnectionState
         }));
         return;
       }
+
+      setPendingChannelIds((prev) => {
+        const next = new Set(prev);
+        next.add(channelId);
+        return next;
+      });
 
       channelMutation.mutate(
         {
@@ -356,14 +338,24 @@ export function useChannelTalkViewModel(initialState: ChannelTalkConnectionState
               ),
             }));
           },
+          onSettled: () => {
+            setPendingChannelIds((prev) => {
+              if (!prev.has(channelId)) return prev;
+              const next = new Set(prev);
+              next.delete(channelId);
+              return next;
+            });
+          },
         },
       );
     },
-    [state.channels, channelMutation],
+    [pendingChannelIds, state.channels, channelMutation],
   );
 
   const testDocumentSpaceConnection = useCallback(
     (channelId: string, dsId: string) => {
+      if (pendingDocumentSpaceIds.has(dsId)) return;
+
       const channel = state.channels.find((c) => c.id === channelId);
       const ds = channel?.documentSpaces.find((d) => d.id === dsId);
       if (!ds) return;
@@ -390,6 +382,12 @@ export function useChannelTalkViewModel(initialState: ChannelTalkConnectionState
         }));
         return;
       }
+
+      setPendingDocumentSpaceIds((prev) => {
+        const next = new Set(prev);
+        next.add(dsId);
+        return next;
+      });
 
       documentMutation.mutate(
         {
@@ -439,10 +437,18 @@ export function useChannelTalkViewModel(initialState: ChannelTalkConnectionState
               ),
             }));
           },
+          onSettled: () => {
+            setPendingDocumentSpaceIds((prev) => {
+              if (!prev.has(dsId)) return prev;
+              const next = new Set(prev);
+              next.delete(dsId);
+              return next;
+            });
+          },
         },
       );
     },
-    [state.channels, documentMutation],
+    [pendingDocumentSpaceIds, state.channels, documentMutation],
   );
 
   const enterDocumentSpaceEditMode = useCallback((channelId: string, dsId: string) => {
