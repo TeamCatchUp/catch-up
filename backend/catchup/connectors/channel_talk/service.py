@@ -32,8 +32,8 @@ from catchup.connector_core.application.install_auth import (
 from catchup.connector_core.application.metadata_sync import (
     ConnectorMetadataSyncApplication,
 )
-from catchup.connectors.channel_talk.core_api_client import ChannelTalkCoreApiClient
-from catchup.connectors.channel_talk.documents_client import (
+from catchup.connectors.channel_talk.core.client import ChannelTalkCoreApiClient
+from catchup.connectors.channel_talk.document_space.client import (
     ChannelTalkDocumentsApiClient,
 )
 from catchup.connectors.channel_talk.schemas.channel_connection import (

@@ -3,7 +3,16 @@ from __future__ import annotations
 import asyncio
 
 from catchup.connector_core.ports.full_sync import FullSyncWindow
-from catchup.connectors.channel_talk.core_api_client import ChannelTalkCoreApiClient
+from catchup.connectors.channel_talk.core.client import ChannelTalkCoreApiClient
+from catchup.connectors.channel_talk.core.user_chat_full_sync_models import (
+    ChannelTalkFetchedUserChat,
+)
+from catchup.connectors.channel_talk.core.user_chat_full_sync_models import (
+    ChannelTalkFetchedUserChatsResult,
+)
+from catchup.connectors.channel_talk.core.user_chat_full_sync_models import (
+    ChannelTalkUserChatFullSyncConnection,
+)
 from catchup.connectors.channel_talk.schemas.channel_metadata import (
     ChannelTalkManagerMetadata,
 )
@@ -13,15 +22,6 @@ from catchup.connectors.channel_talk.schemas.user_chat import (
 from catchup.connectors.channel_talk.schemas.user_chat import ChannelTalkUserChatState
 from catchup.connectors.channel_talk.schemas.user_chat_message import (
     ChannelTalkUserChatMessage,
-)
-from catchup.connectors.channel_talk.user_chat_full_sync_models import (
-    ChannelTalkFetchedUserChat,
-)
-from catchup.connectors.channel_talk.user_chat_full_sync_models import (
-    ChannelTalkFetchedUserChatsResult,
-)
-from catchup.connectors.channel_talk.user_chat_full_sync_models import (
-    ChannelTalkUserChatFullSyncConnection,
 )
 
 

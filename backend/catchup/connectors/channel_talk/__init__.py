@@ -1,6 +1,6 @@
 """Channel Talk connector client/service/contracts."""
 
-from catchup.connectors.channel_talk.core_api_client import ChannelTalkCoreApiClient
+from catchup.connectors.channel_talk.core.client import ChannelTalkCoreApiClient
 from catchup.connectors.channel_talk.exceptions import ChannelTalkAuthenticationError
 from catchup.connectors.channel_talk.exceptions import ChannelTalkConflictError
 from catchup.connectors.channel_talk.exceptions import ChannelTalkError

@@ -10,8 +10,8 @@ from catchup.connector_core.adapters.channel_talk import (
     ChannelTalkDocumentMetadataStore,
 )
 from catchup.connector_core.adapters.channel_talk import ChannelTalkMetadataStore
-from catchup.connectors.channel_talk.core_api_client import ChannelTalkCoreApiClient
-from catchup.connectors.channel_talk.documents_client import (
+from catchup.connectors.channel_talk.core.client import ChannelTalkCoreApiClient
+from catchup.connectors.channel_talk.document_space.client import (
     ChannelTalkDocumentsApiClient,
 )
 from catchup.connectors.channel_talk.service import ChannelTalkCredentialsService

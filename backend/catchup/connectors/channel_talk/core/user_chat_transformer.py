@@ -15,14 +15,14 @@ from catchup.connector_core.document_format import ChannelTalkUserChatTagsMetada
 from catchup.connector_core.document_format import ChannelTalkUserChatTimingMetadata
 from catchup.connector_core.document_format import DocumentBaseMetadata
 from catchup.connector_core.ports.full_sync import FullSyncWindow
-from catchup.connectors.channel_talk.schemas.channel_metadata import (
-    ChannelTalkManagerMetadata,
-)
-from catchup.connectors.channel_talk.user_chat_full_sync_models import (
+from catchup.connectors.channel_talk.core.user_chat_full_sync_models import (
     ChannelTalkFetchedUserChat,
 )
-from catchup.connectors.channel_talk.user_chat_full_sync_models import (
+from catchup.connectors.channel_talk.core.user_chat_full_sync_models import (
     ChannelTalkUserChatPreparedDocument,
+)
+from catchup.connectors.channel_talk.schemas.channel_metadata import (
+    ChannelTalkManagerMetadata,
 )
 
 from .user_chat_ids import build_user_chat_desk_url

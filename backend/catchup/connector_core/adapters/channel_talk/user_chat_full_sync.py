@@ -11,41 +11,43 @@ from catchup.components.summarizer import get_summarizer_service
 from catchup.components.vector_db.factory import get_pgvector_repository
 from catchup.components.vector_db.pgvector.repository import PGVectorRepository
 from catchup.connector_core.ports.full_sync import FullSyncWindow
+from catchup.connectors.channel_talk.core.user_chat_full_sync_fetcher import (
+    ChannelTalkUserChatFullSyncFetcher,
+)
+from catchup.connectors.channel_talk.core.user_chat_full_sync_models import (
+    ChannelTalkFetchedUserChatsResult,
+)
+from catchup.connectors.channel_talk.core.user_chat_full_sync_models import (
+    ChannelTalkUserChatFullSyncCheckpoint,
+)
+from catchup.connectors.channel_talk.core.user_chat_full_sync_models import (
+    ChannelTalkUserChatFullSyncConnection,
+)
+from catchup.connectors.channel_talk.core.user_chat_full_sync_models import (
+    ChannelTalkUserChatFullSyncExecutionRequest,
+)
+from catchup.connectors.channel_talk.core.user_chat_full_sync_models import (
+    ChannelTalkUserChatFullSyncExecutionResult,
+)
+from catchup.connectors.channel_talk.core.user_chat_full_sync_models import (
+    ChannelTalkUserChatFullSyncFetchResult,
+)
+from catchup.connectors.channel_talk.core.user_chat_full_sync_models import (
+    ChannelTalkUserChatFullSyncPersistResult,
+)
+from catchup.connectors.channel_talk.core.user_chat_full_sync_models import (
+    ChannelTalkUserChatFullSyncSummaryResult,
+)
+from catchup.connectors.channel_talk.core.user_chat_full_sync_models import (
+    ChannelTalkUserChatFullSyncTransformResult,
+)
+from catchup.connectors.channel_talk.core.user_chat_transformer import (
+    UserChatTransformer,
+)
 from catchup.connectors.channel_talk.full_sync_helper import (
     load_channel_talk_connection,
 )
 from catchup.connectors.channel_talk.schemas.user_chat import ChannelTalkUserChatState
-from catchup.connectors.channel_talk.user_chat_full_sync_fetcher import (
-    ChannelTalkUserChatFullSyncFetcher,
-)
-from catchup.connectors.channel_talk.user_chat_full_sync_models import (
-    ChannelTalkFetchedUserChatsResult,
-)
-from catchup.connectors.channel_talk.user_chat_full_sync_models import (
-    ChannelTalkUserChatFullSyncCheckpoint,
-)
-from catchup.connectors.channel_talk.user_chat_full_sync_models import (
-    ChannelTalkUserChatFullSyncConnection,
-)
-from catchup.connectors.channel_talk.user_chat_full_sync_models import (
-    ChannelTalkUserChatFullSyncExecutionRequest,
-)
-from catchup.connectors.channel_talk.user_chat_full_sync_models import (
-    ChannelTalkUserChatFullSyncExecutionResult,
-)
-from catchup.connectors.channel_talk.user_chat_full_sync_models import (
-    ChannelTalkUserChatFullSyncFetchResult,
-)
-from catchup.connectors.channel_talk.user_chat_full_sync_models import (
-    ChannelTalkUserChatFullSyncPersistResult,
-)
-from catchup.connectors.channel_talk.user_chat_full_sync_models import (
-    ChannelTalkUserChatFullSyncSummaryResult,
-)
-from catchup.connectors.channel_talk.user_chat_full_sync_models import (
-    ChannelTalkUserChatFullSyncTransformResult,
-)
-from catchup.connectors.channel_talk.user_chat_transformer import UserChatTransformer
 
 
 class ChannelTalkUserChatFullSyncAdapter:

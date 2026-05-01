@@ -16,7 +16,10 @@ from catchup.connector_core.adapters.channel_talk.user_chat_full_sync import (
 )
 from catchup.connector_core.application.full_sync import ConnectorFullSyncApplication
 from catchup.connector_core.ports.full_sync import FullSyncWindow
-from catchup.connectors.channel_talk.article_full_sync_models import (
+from catchup.connectors.channel_talk.core.user_chat_full_sync_models import (
+    ChannelTalkUserChatFullSyncExecutionRequest,
+)
+from catchup.connectors.channel_talk.document_space.article_full_sync_models import (
     ChannelTalkArticleFullSyncExecutionRequest,
 )
 from catchup.connectors.channel_talk.full_sync_helper import (
@@ -39,9 +42,6 @@ from catchup.connectors.channel_talk.full_sync_target_contract import (
 )
 from catchup.connectors.channel_talk.schemas.document_connection import (
     ChannelTalkDocumentCredentialsRecord,
-)
-from catchup.connectors.channel_talk.user_chat_full_sync_models import (
-    ChannelTalkUserChatFullSyncExecutionRequest,
 )
 from catchup.sync.audit import SyncAuditContext
 from catchup.sync.common.schemas import FullSyncContext

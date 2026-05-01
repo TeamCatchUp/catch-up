@@ -31,11 +31,13 @@ from catchup.connector_core.document_format import (
 )
 from catchup.connector_core.document_format import DocumentBaseMetadata
 from catchup.connector_core.ports.full_sync import FullSyncWindow
-from catchup.connectors.channel_talk.article_full_sync_models import ArticleBuildResult
-from catchup.connectors.channel_talk.article_full_sync_models import (
+from catchup.connectors.channel_talk.document_space.article_full_sync_models import (
+    ArticleBuildResult,
+)
+from catchup.connectors.channel_talk.document_space.article_full_sync_models import (
     ArticlePreparedDocumentPayload,
 )
-from catchup.connectors.channel_talk.article_full_sync_models import (
+from catchup.connectors.channel_talk.document_space.article_full_sync_models import (
     ChannelTalkFetchedArticle,
 )
 from catchup.connectors.channel_talk.schemas.document_article import (
