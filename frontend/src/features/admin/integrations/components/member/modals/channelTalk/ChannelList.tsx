@@ -6,8 +6,8 @@ import IconTag from '@/public/icons/icon/tag.svg';
 import CheckboxIcon from '@/shared/components/ui/checkbox-icon';
 import { cn } from '@/shared/utils/cn';
 
+import type { ChannelTalkChannel } from '../../../../utils/mapChannelTalkSyncTargets';
 import EntityChip from './EntityChip';
-import type { ChannelTalkChannel } from './mockChannels';
 
 interface ChannelListProps {
   channels: ChannelTalkChannel[];

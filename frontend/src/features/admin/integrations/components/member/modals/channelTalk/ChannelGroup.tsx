@@ -6,8 +6,8 @@ import IconBook from '@/public/icons/icon/book.svg';
 import IconTag from '@/public/icons/icon/tag.svg';
 import CheckboxIcon from '@/shared/components/ui/checkbox-icon';
 
+import type { ChannelTalkChannel } from '../../../../utils/mapChannelTalkSyncTargets';
 import EntityChip from './EntityChip';
-import type { ChannelTalkChannel } from './mockChannels';
 import PeriodSelect, { type Period } from './PeriodSelect';
 
 interface ChannelGroupProps {
