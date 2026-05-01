@@ -86,6 +86,7 @@ class ChatService:
         base_config = None
         processor = None
         values = None
+        saved_message_id: int | None = None
 
         try:
             # 채팅방만 보장 (user 메시지 저장은 input_messages 결정 후로 미룸)
@@ -116,7 +117,8 @@ class ChatService:
             )
 
             # 입력 메시지 결정 후 user 쿼리를 DB에 저장 (실제 요청자 귀속)
-            await self._save_message_content(
+            # saved_message_id를 추적해 복구 단계에서 이번 턴 저장 여부를 가드한다.
+            saved_message_id = await self._save_message_content(
                 room_id,
                 "user",
                 query,
@@ -182,30 +184,37 @@ class ChatService:
         except Exception as e:
             logger.exception("streaming_error")
 
-            def _get_chat_room_sync():
-                with SessionLocal() as db:
-                    if is_slack:
-                        room = get_chat_room_by_session_id(db=db, session_id=session_id)
-                    else:
-                        room = get_chat_room(
-                            db=db, session_id=session_id, user_id=global_context.user.id
-                        )
-                    return room.id if room else None
+            # 이번 턴의 user 메시지가 실제로 저장된 경우에만 복구를 수행한다.
+            if saved_message_id is not None:
 
-            room_id = await run_in_threadpool(_get_chat_room_sync)
+                def _get_chat_room_sync():
+                    with SessionLocal() as db:
+                        if is_slack:
+                            room = get_chat_room_by_session_id(
+                                db=db, session_id=session_id
+                            )
+                        else:
+                            room = get_chat_room(
+                                db=db,
+                                session_id=session_id,
+                                user_id=global_context.user.id,
+                            )
+                        return room.id if room else None
 
-            if room_id:
-                await self.reset_last_turn(
-                    room_id=room_id,
-                    session_id=session_id,
-                )
-            else:
-                logger.warning(
-                    "chatroom_not_found",
-                    context="post_streaming_error",
-                    msg="스트리밍 에러 이후 세션 복구 실패",
-                    session_id=str(session_id),
-                )
+                room_id = await run_in_threadpool(_get_chat_room_sync)
+
+                if room_id:
+                    await self.reset_last_turn(
+                        room_id=room_id,
+                        session_id=session_id,
+                    )
+                else:
+                    logger.warning(
+                        "chatroom_not_found",
+                        context="post_streaming_error",
+                        msg="스트리밍 에러 이후 세션 복구 실패",
+                        session_id=str(session_id),
+                    )
 
             emit_audit_event(
                 action=ChatAction.GENERATE_RESPONSE,
@@ -441,7 +450,7 @@ class ChatService:
         sources: list[dict[str, Any]] | None = None,
         trace_id: str | None = None,
         user_id: int | None = None,
-    ):
+    ) -> int:
         def _save_sync():
             with SessionLocal() as db:
                 message = add_message(
