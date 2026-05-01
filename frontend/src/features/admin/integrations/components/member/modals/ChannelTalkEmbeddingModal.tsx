@@ -1,7 +1,7 @@
 'use client';
 
-import { useMemo } from 'react';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMemo, useState } from 'react';
+import { useMutation, useQueries, useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
 
 import IconCancel from '@/public/icons/icon/cancel.svg';
@@ -84,20 +84,30 @@ function pickSyncDays(periods: Period[]): number | null {
 }
 
 function ModalBody({ onClose, onJobStart }: ModalBodyProps) {
-  // 1) 채널 credential GET → channel_id 획득
-  const channelStatusQuery = useQuery(channelTalkQueries.detail());
-  const scopeId = channelStatusQuery.data?.installed ? (channelStatusQuery.data.channel_id ?? '') : '';
+  // 1) 채널 credential 목록 GET → 등록된 N개 channel_id 수집
+  const channelListQuery = useQuery(channelTalkQueries.list());
+  const installedChannelIds = useMemo(
+    () =>
+      (channelListQuery.data ?? [])
+        .filter((c) => c.installed && !!c.channel_id)
+        .map((c) => c.channel_id as string),
+    [channelListQuery.data],
+  );
 
-  // 2) sync targets GET → channel + space flat list
-  const targetsQuery = useQuery({
-    ...adminConnectorQueries.syncTargets('channel_talk', scopeId),
-    enabled: !!scopeId,
+  // 2) sync targets — 각 channel_id별로 호출 (백엔드는 scope_id 단일이라 channel당 1회)
+  const targetsQueries = useQueries({
+    queries: installedChannelIds.map((channelId) => ({
+      ...adminConnectorQueries.syncTargets('channel_talk', channelId),
+      enabled: !!channelId,
+    })),
   });
 
-  // 3) flat list → 1:N 변환 (mockChannels 모델과 동일 구조)
+  // 3) 각 channel별 flat 응답을 1:N 모델로 변환 후 합치기
   const channels: ChannelTalkChannel[] = useMemo(
-    () => (targetsQuery.data ? mapChannelTalkSyncTargets(targetsQuery.data.targets) : []),
-    [targetsQuery.data],
+    () => targetsQueries.flatMap((q) => (q.data ? mapChannelTalkSyncTargets(q.data.targets) : [])),
+    // flatMap은 매 렌더마다 새 배열이지만 useChannelTalkSelection이 channels reference 변경에 reset되지 않으므로 OK.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [...targetsQueries.map((q) => q.data)],
   );
 
   // 4) 선택 + 기간 state
@@ -118,61 +128,108 @@ function ModalBody({ onClose, onJobStart }: ModalBodyProps) {
     setSpacePeriod,
   } = useChannelTalkSelection(channels);
 
-  // 5) 임베딩 mutation
+  // 5) 임베딩 mutation — channel별로 N번 호출하므로 전역 pending state는 별도 추적
   const syncMutation = useMutation(adminConnectorMutations.syncFull());
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSubmit = async () => {
-    if (!scopeId) return;
+    if (channels.length === 0) return;
+    if (selectedChannelIds.size === 0 && selectedSpaceIds.size === 0) return;
 
-    const targets: FullSyncTarget[] = [
-      ...Array.from(selectedChannelIds).map<FullSyncTarget>((id) => ({ target_type: 'channel', target_id: id })),
-      ...Array.from(selectedSpaceIds).map<FullSyncTarget>((id) => ({ target_type: 'space', target_id: id })),
-    ];
-
-    if (targets.length === 0) return;
-
-    // 선택된 target들의 period 수집
+    // 선택된 target들의 period 수집 → 전체 sync_days로 사용
     const usedPeriods: Period[] = [];
     for (const id of selectedChannelIds) {
       usedPeriods.push(channelPeriods[id] ?? DEFAULT_PERIOD);
     }
     for (const id of selectedSpaceIds) {
-      // space는 명시 설정이 없으면 부모 채널 기간을 상속하지만, 현재 selection hook이 부모 매핑을 노출하지 않음.
-      // 명시된 spacePeriods만 반영하고, 미설정 space는 채널 기간 max에 묻혀가도록 한다.
       const explicit = spacePeriods[id];
       if (explicit) usedPeriods.push(explicit);
     }
     const syncDays = pickSyncDays(usedPeriods);
 
-    try {
-      const result = await syncMutation.mutateAsync({
-        connector: 'channel_talk',
-        scope_id: scopeId,
-        targets,
-        sync_days: syncDays,
-      });
-      const response = result.data;
+    // channel별로 그룹화 — 각 channel scope별로 별도 sync 요청 (백엔드 scope_id 단일 제약)
+    const channelGroups = channels
+      .map((channel) => {
+        const targets: FullSyncTarget[] = [];
+        if (selectedChannelIds.has(channel.channel_id)) {
+          targets.push({ target_type: 'channel', target_id: channel.channel_id });
+        }
+        for (const space of channel.document_spaces) {
+          if (selectedSpaceIds.has(space.space_id)) {
+            targets.push({ target_type: 'space', target_id: space.space_id });
+          }
+        }
+        return { channel, targets };
+      })
+      .filter((g) => g.targets.length > 0);
 
-      switch (response.status) {
-        case 'accepted':
-          toast('임베딩이 시작되었습니다.', { description: '준비가 끝나면 즉시 알려드릴게요.' });
-          if (response.job_id) onJobStart?.(response.job_id, 'channel_talk');
-          onClose();
-          break;
-        case 'conflict':
-          toast.warning('이미 진행 중인 임베딩이 있습니다.');
-          if (response.job_id) onJobStart?.(response.job_id, 'channel_talk');
-          onClose();
-          break;
-        case 'no_events':
-          toast.info('임베딩할 대상이 없습니다.');
-          break;
-        case 'failed':
-          toast.error(response.message ?? '임베딩 요청에 실패했습니다.');
-          break;
+    if (channelGroups.length === 0) return;
+
+    setIsSubmitting(true);
+    try {
+      // channel별 병렬 mutation. allSettled로 일부 실패 허용.
+      const results = await Promise.allSettled(
+        channelGroups.map(({ channel, targets }) =>
+          syncMutation.mutateAsync({
+            connector: 'channel_talk',
+            scope_id: channel.channel_id,
+            targets,
+            sync_days: syncDays,
+          }),
+        ),
+      );
+
+      let acceptedCount = 0;
+      let conflictCount = 0;
+      let noEventsCount = 0;
+      let failedCount = 0;
+      let errorCount = 0;
+      let lastFailMessage: string | null = null;
+
+      results.forEach((r) => {
+        if (r.status === 'rejected') {
+          errorCount += 1;
+          return;
+        }
+        const response = r.value.data;
+        switch (response.status) {
+          case 'accepted':
+            acceptedCount += 1;
+            if (response.job_id) onJobStart?.(response.job_id, 'channel_talk');
+            break;
+          case 'conflict':
+            conflictCount += 1;
+            if (response.job_id) onJobStart?.(response.job_id, 'channel_talk');
+            break;
+          case 'no_events':
+            noEventsCount += 1;
+            break;
+          case 'failed':
+            failedCount += 1;
+            lastFailMessage = response.message ?? null;
+            break;
+        }
+      });
+
+      // 결과 요약 토스트 — 가장 사용자 의도에 맞는 1개만 노출.
+      if (acceptedCount > 0) {
+        toast('임베딩이 시작되었습니다.', {
+          description:
+            acceptedCount === channelGroups.length
+              ? '준비가 끝나면 즉시 알려드릴게요.'
+              : `${acceptedCount}/${channelGroups.length} 채널이 시작되었어요.`,
+        });
+        onClose();
+      } else if (conflictCount > 0) {
+        toast.warning('이미 진행 중인 임베딩이 있습니다.');
+        onClose();
+      } else if (noEventsCount === channelGroups.length) {
+        toast.info('임베딩할 대상이 없습니다.');
+      } else if (failedCount > 0 || errorCount > 0) {
+        toast.error(lastFailMessage ?? '임베딩 요청에 실패했습니다.');
       }
-    } catch {
-      toast.error('임베딩 요청 중 오류가 발생했습니다.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -246,7 +303,7 @@ function ModalBody({ onClose, onJobStart }: ModalBodyProps) {
           <Button
             variant="capsule-solid-primary"
             size="md"
-            disabled={isSubmitDisabled || syncMutation.isPending}
+            disabled={isSubmitDisabled || isSubmitting}
             onClick={handleSubmit}
           >
             채널톡 임베딩하기
