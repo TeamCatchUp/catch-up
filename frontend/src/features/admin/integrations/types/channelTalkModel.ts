@@ -1,3 +1,13 @@
+/**
+ * 새로고침 hydrate 시 키 필드 마스킹 placeholder.
+ *
+ * 백엔드 GET /credentials 응답에는 보안상 access_key/secret/token 평문이 없으므로,
+ * `installed: true`로 hydrate된 카드는 키 필드를 이 8자 마스킹 문자로 채워서 보여준다.
+ * 사용자가 "수정하기" 버튼을 누르면 viewModel이 이 값을 빈 문자열로 초기화하여
+ * 새 키 입력을 받는다.
+ */
+export const MASKED_PLACEHOLDER = '●●●●●●●●';
+
 /** 채널톡 동기화 주기 옵션 (channel + documentSpace 공용 union) */
 export type ChannelTalkSyncInterval = '5min' | '15min' | '30min' | '1hour' | '6hour' | '12hour' | '24hour';
 

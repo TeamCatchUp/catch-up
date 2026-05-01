@@ -1,0 +1,83 @@
+// ─── Channel Talk API Types (백엔드 admin_api.py 응답 1:1 매칭, snake_case) ───
+
+// ─── Channel Credential ───
+
+/** POST /api/v1/admin/connector/channel-talk/credentials(/validate) 요청 body */
+export interface ChannelTalkCredentialRequest {
+  access_key: string;
+  access_secret: string;
+  webhook_token: string;
+}
+
+/** POST /api/v1/admin/connector/channel-talk/credentials/validate 응답 */
+export interface ChannelTalkValidateResponse {
+  status: 'validated';
+  channel_id: string;
+  channel_name: string;
+  manager_id: string | null;
+  manager_name: string | null;
+  webhook_token_configured: boolean;
+}
+
+/** POST /api/v1/admin/connector/channel-talk/credentials 응답 (upsert) */
+export interface ChannelTalkConnectResponse {
+  installed: boolean;
+  channel_id: string | null;
+  channel_name: string | null;
+  credential_last_verified_at: string | null;
+  webhook_token_configured: boolean;
+  status_reason: string | null;
+  status: 'connected';
+  message: string;
+}
+
+/** GET /api/v1/admin/connector/channel-talk/credentials 응답 */
+export interface ChannelTalkStatusResponse {
+  installed: boolean;
+  channel_id: string | null;
+  channel_name: string | null;
+  credential_last_verified_at: string | null;
+  webhook_token_configured: boolean;
+  status_reason: string | null;
+}
+
+// ─── Document Space Credential ───
+
+/** POST /api/v1/admin/connector/channel-talk/documents/credentials(/validate) 요청 body */
+export interface ChannelTalkDocumentCredentialRequest {
+  access_key: string;
+  access_secret: string;
+}
+
+/** POST /api/v1/admin/connector/channel-talk/documents/credentials/validate 응답 */
+export interface ChannelTalkDocumentValidateResponse {
+  status: 'validated';
+  channel_id: string;
+  space_id: string;
+  space_name: string;
+  association_status: string;
+}
+
+/** POST /api/v1/admin/connector/channel-talk/documents/credentials 응답 (upsert) */
+export interface ChannelTalkDocumentConnectResponse {
+  installed: boolean;
+  channel_id: string | null;
+  space_id: string | null;
+  space_name: string | null;
+  credential_last_verified_at: string | null;
+  association_status: string | null;
+  status_reason: string | null;
+  status: 'connected';
+  message: string;
+}
+
+/** GET /api/v1/admin/connector/channel-talk/documents/credentials 응답 */
+export interface ChannelTalkDocumentStatusResponse {
+  installed: boolean;
+  channel_id: string | null;
+  space_id: string | null;
+  space_name: string | null;
+  credential_last_verified_at: string | null;
+  association_status: string | null;
+  status_reason: string | null;
+}
