@@ -229,7 +229,7 @@ export interface ConnectorProgress {
 
 // ─── 임베딩 히스토리 타입 (GET /admin/connector/status) ───
 
-export type ConnectorStatusSource = 'github' | 'jira' | 'slack' | 'confluence' | 'channel_talk';
+export type ConnectorStatusSource = 'github' | 'jira' | 'slack' | 'confluence';
 export type ConnectorResourceType = 'repositories' | 'projects' | 'channels' | 'spaces';
 
 /** target별 임베딩 데이터 범위 */
