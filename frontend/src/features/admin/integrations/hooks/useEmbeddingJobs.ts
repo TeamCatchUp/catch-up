@@ -149,11 +149,10 @@ export const useEmbeddingJobs = () => {
     })),
   });
 
-  const statusDataList = statusQueries.map((q) => q.data);
-
   const restoredJobs = useMemo((): ActiveJob[] => {
     const jobs: ActiveJob[] = [];
-    statusDataList.forEach((data, index) => {
+    statusQueries.forEach((q, index) => {
+      const data = q.data;
       if (isActiveStatus(data)) {
         jobs.push({
           jobId: data.job_id,
@@ -163,8 +162,7 @@ export const useEmbeddingJobs = () => {
       }
     });
     return jobs;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [...statusDataList, statusKeys]);
+  }, [statusQueries, statusKeys]);
 
   /** manual + restored 합집합. jobId 기준 dedupe — 같은 connector의 다른 job들은 모두 추적. */
   const activeJobs = useMemo((): ActiveJob[] => {
