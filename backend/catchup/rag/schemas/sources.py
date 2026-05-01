@@ -39,6 +39,7 @@ class EntityType(StrEnum):
 
     # Channel Talk
     USER_CHAT = "user_chat"
+    DOCUMENT_ARTICLE = "document_article"
 
 
 # --------------------------------------------------------------------------
