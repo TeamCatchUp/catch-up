@@ -333,6 +333,13 @@ class ChannelTalkAdminApiTests(TestCase):
         )
         self.assertEqual(self.service.last_uninstall_channel_id, "channel-456")
 
+    def test_delete_credentials_requires_channel_id(self) -> None:
+        response = self.client.delete("/api/v1/admin/connector/channel-talk/credentials")
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["detail"]["code"], "invalid_request")
+        self.assertIsNone(self.service.last_uninstall_channel_id)
+
     def test_post_credentials_returns_route_scoped_validation_shape(self) -> None:
         response = self.client.post(
             "/api/v1/admin/connector/channel-talk/credentials",
@@ -546,6 +553,15 @@ class ChannelTalkAdminApiTests(TestCase):
             },
         )
         self.assertEqual(self.document_service.last_uninstall_space_id, "space-456")
+
+    def test_delete_document_credentials_requires_space_id(self) -> None:
+        response = self.client.delete(
+            "/api/v1/admin/connector/channel-talk/documents/credentials"
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["detail"]["code"], "invalid_request")
+        self.assertIsNone(self.document_service.last_uninstall_space_id)
 
     def test_post_document_credentials_base_channel_missing_fails(self) -> None:
         self.document_service.connect_error = ChannelTalkValidationError(

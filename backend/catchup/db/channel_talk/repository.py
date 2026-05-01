@@ -331,13 +331,6 @@ class ChannelTalkDocumentCredentialsRepository:
             raise RuntimeError("Channel Talk Documents credentials upsert returned no record")
         return record
 
-    def delete_document_connection(self, channel_id: str | None = None) -> bool:
-        return _delete_channel_scoped_rows(
-            db=self.db,
-            model=db_models.ChannelTalkDocumentCredentials,
-            channel_id=channel_id,
-        )
-
     def delete_document_connection_by_space_id(self, space_id: str) -> bool:
         return _delete_rows_by_field(
             db=self.db,
