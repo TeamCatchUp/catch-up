@@ -81,3 +81,15 @@ export interface ChannelTalkDocumentStatusResponse {
   association_status: string | null;
   status_reason: string | null;
 }
+
+// ─── Uninstall (DELETE) ───
+
+/** DELETE /credentials?channel_id=X 응답 */
+export interface ChannelTalkUninstallResponse {
+  status: 'success' | 'not_found';
+  message: string;
+  installed: boolean;
+}
+
+/** DELETE /documents/credentials?space_id=X 응답 (Channel과 동일 형태) */
+export type ChannelTalkDocumentUninstallResponse = ChannelTalkUninstallResponse;

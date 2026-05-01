@@ -9,7 +9,9 @@ import type {
   ChannelTalkCredentialRequest,
   ChannelTalkDocumentConnectResponse,
   ChannelTalkDocumentCredentialRequest,
+  ChannelTalkDocumentUninstallResponse,
   ChannelTalkDocumentValidateResponse,
+  ChannelTalkUninstallResponse,
   ChannelTalkValidateResponse,
 } from '../types/channelTalkApi';
 import { channelTalkQueries } from './channelTalk.queries';
@@ -60,4 +62,26 @@ export const channelTalkMutations = {
       Error,
       ChannelTalkDocumentCredentialRequest
     >,
+
+  /** DELETE /credentials?channel_id=X — 채널 credential 개별 삭제 */
+  deleteChannelCredential: () =>
+    ({
+      mutationKey: ['admin', 'connector', 'channelTalk', 'deleteChannel'] as const,
+      mutationFn: (channelId: string) =>
+        api.delete<ChannelTalkUninstallResponse>(API.admin.connector.channelTalk.credentials, {
+          params: { channel_id: channelId },
+        }),
+      meta: { invalidates: [[...channelTalkQueries.all()]] },
+    }) satisfies UseMutationOptions<AxiosResponse<ChannelTalkUninstallResponse>, Error, string>,
+
+  /** DELETE /documents/credentials?space_id=X — 도큐먼트 스페이스 credential 개별 삭제 */
+  deleteDocumentCredential: () =>
+    ({
+      mutationKey: ['admin', 'connector', 'channelTalk', 'deleteDocument'] as const,
+      mutationFn: (spaceId: string) =>
+        api.delete<ChannelTalkDocumentUninstallResponse>(API.admin.connector.channelTalk.documentCredentials, {
+          params: { space_id: spaceId },
+        }),
+      meta: { invalidates: [[...channelTalkQueries.all()]] },
+    }) satisfies UseMutationOptions<AxiosResponse<ChannelTalkDocumentUninstallResponse>, Error, string>,
 };
