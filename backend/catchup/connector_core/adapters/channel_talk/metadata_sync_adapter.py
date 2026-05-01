@@ -15,7 +15,7 @@ from catchup.connector_core.ports.metadata_sync import MetadataSyncPlan
 from catchup.connector_core.ports.metadata_sync import MetadataSyncRequest
 from catchup.connector_core.ports.metadata_sync import MetadataSyncStep
 from catchup.connector_core.ports.metadata_sync import MetadataSyncStepResult
-from catchup.connectors.channel_talk.core_api_client import ChannelTalkCoreApiClient
+from catchup.connectors.channel_talk.core.client import ChannelTalkCoreApiClient
 from catchup.connectors.channel_talk.exceptions import ChannelTalkConflictError
 from catchup.connectors.channel_talk.exceptions import ChannelTalkError
 from catchup.connectors.channel_talk.exceptions import ChannelTalkPersistenceError

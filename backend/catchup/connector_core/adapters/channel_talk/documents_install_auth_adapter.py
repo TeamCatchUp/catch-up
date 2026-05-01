@@ -8,7 +8,7 @@ from typing import TypeVar
 
 from fastapi.concurrency import run_in_threadpool
 
-from catchup.connectors.channel_talk.documents_client import (
+from catchup.connectors.channel_talk.document_space.client import (
     ChannelTalkDocumentsApiClient,
 )
 from catchup.connectors.channel_talk.exceptions import ChannelTalkConflictError

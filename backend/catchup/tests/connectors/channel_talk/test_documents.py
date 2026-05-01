@@ -14,7 +14,7 @@ from catchup.connector_core.adapters.channel_talk.documents_metadata_sync_adapte
 )
 from catchup.connector_core.domain.structure import ConnectorKey
 from catchup.connector_core.ports.metadata_sync import MetadataSyncRequest
-from catchup.connectors.channel_talk.documents_client import (
+from catchup.connectors.channel_talk.document_space.client import (
     ChannelTalkDocumentsApiClient,
 )
 from catchup.connectors.channel_talk.exceptions import ChannelTalkConflictError
