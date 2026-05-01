@@ -304,6 +304,14 @@ class ChannelTalkDocumentCredentialsRepository:
         )
         return _to_document_connection_record(row)
 
+    def list_document_connections(self) -> list[ChannelTalkDocumentCredentialsRecord]:
+        rows = _list_channel_talk_document_credentials(db=self.db)
+        return [
+            record
+            for row in rows
+            if (record := _to_document_connection_record(row)) is not None
+        ]
+
     def upsert_document_connection(
         self,
         payload: ChannelTalkDocumentCredentialsUpsert,
@@ -328,6 +336,14 @@ class ChannelTalkDocumentCredentialsRepository:
             db=self.db,
             model=db_models.ChannelTalkDocumentCredentials,
             channel_id=channel_id,
+        )
+
+    def delete_document_connection_by_space_id(self, space_id: str) -> bool:
+        return _delete_rows_by_field(
+            db=self.db,
+            model=db_models.ChannelTalkDocumentCredentials,
+            field_name="space_id",
+            field_value=space_id,
         )
 
     def commit(self) -> None:
@@ -439,6 +455,15 @@ def _get_channel_talk_document_credentials(
     )
 
 
+def _list_channel_talk_document_credentials(
+    db: Session,
+) -> list[db_models.ChannelTalkDocumentCredentials]:
+    stmt = select(db_models.ChannelTalkDocumentCredentials).order_by(
+        db_models.ChannelTalkDocumentCredentials.id.asc()
+    )
+    return list(db.execute(stmt).scalars())
+
+
 def _create_or_replace_channel_talk_credentials(
     db: Session,
     channel_id: str,
@@ -508,6 +533,19 @@ def _delete_channel_scoped_rows(
     if channel_id is not None:
         stmt = stmt.filter_by(channel_id=channel_id)
 
+    result = cast(CursorResult, db.execute(stmt))
+    db.flush()
+    return (result.rowcount or 0) > 0
+
+
+def _delete_rows_by_field(
+    *,
+    db: Session,
+    model: Any,
+    field_name: str,
+    field_value: str,
+) -> bool:
+    stmt = delete(model).filter_by(**{field_name: field_value})
     result = cast(CursorResult, db.execute(stmt))
     db.flush()
     return (result.rowcount or 0) > 0

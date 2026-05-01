@@ -55,9 +55,11 @@ class StubChannelTalkService:
             manager=ChannelTalkManager(id="manager-7", name="Jane"),
         )
         self.status_result = ChannelTalkCredentialsStatus(installed=False)
+        self.list_statuses_result: list[ChannelTalkCredentialsStatus] = []
         self.uninstall_result = ChannelTalkUninstallResult(removed=False)
         self.last_connect_request = None
         self.last_validate_request = None
+        self.last_uninstall_channel_id = None
         self.connect_error = None
         self.validate_error = None
 
@@ -76,7 +78,11 @@ class StubChannelTalkService:
     async def get_status(self):
         return self.status_result
 
-    async def uninstall(self):
+    async def list_statuses(self):
+        return self.list_statuses_result
+
+    async def uninstall(self, channel_id):
+        self.last_uninstall_channel_id = channel_id
         return self.uninstall_result
 
 
@@ -91,9 +97,11 @@ class StubChannelTalkDocumentService:
             association_status=ChannelTalkDocumentAssociationStatus.API_VERIFIED,
         )
         self.status_result = ChannelTalkDocumentCredentialsStatus(installed=False)
+        self.list_statuses_result: list[ChannelTalkDocumentCredentialsStatus] = []
         self.uninstall_result = ChannelTalkDocumentUninstallResult(removed=False)
         self.last_connect_request = None
         self.last_validate_request = None
+        self.last_uninstall_space_id = None
         self.connect_error = None
         self.validate_error = None
 
@@ -112,7 +120,11 @@ class StubChannelTalkDocumentService:
     async def get_status(self):
         return self.status_result
 
-    async def uninstall(self):
+    async def list_statuses(self):
+        return self.list_statuses_result
+
+    async def uninstall(self, space_id):
+        self.last_uninstall_space_id = space_id
         return self.uninstall_result
 
 
@@ -237,28 +249,63 @@ class ChannelTalkAdminApiTests(TestCase):
         self.assertEqual(self.service.last_connect_request.webhook_token, "webhook-token")
         self.assertEqual(self.background_sync_calls, ["channel-123"])
 
-    def test_get_credentials_returns_disconnected_payload(self) -> None:
-        self.service.status_result = ChannelTalkCredentialsStatus.disconnected()
+    def test_get_credentials_returns_list_payload(self) -> None:
+        verified_at = datetime(2026, 4, 19, 8, 30, tzinfo=timezone.utc)
+        self.service.list_statuses_result = [
+            ChannelTalkCredentialsStatus(
+                installed=True,
+                channel_id="channel-123",
+                channel_name="Support",
+                credential_last_verified_at=verified_at,
+                webhook_token_configured=True,
+            ),
+            ChannelTalkCredentialsStatus(
+                installed=True,
+                channel_id="channel-456",
+                channel_name="Sales",
+                credential_last_verified_at=verified_at,
+                webhook_token_configured=False,
+            ),
+        ]
 
         response = self.client.get("/api/v1/admin/connector/channel-talk/credentials")
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
             response.json(),
-            {
-                "installed": False,
-                "channel_id": None,
-                "channel_name": None,
-                "credential_last_verified_at": None,
-                "webhook_token_configured": False,
-                "status_reason": None,
-            },
+            [
+                {
+                    "installed": True,
+                    "channel_id": "channel-123",
+                    "channel_name": "Support",
+                    "credential_last_verified_at": verified_at.isoformat(),
+                    "webhook_token_configured": True,
+                    "status_reason": None,
+                },
+                {
+                    "installed": True,
+                    "channel_id": "channel-456",
+                    "channel_name": "Sales",
+                    "credential_last_verified_at": verified_at.isoformat(),
+                    "webhook_token_configured": False,
+                    "status_reason": None,
+                },
+            ],
         )
 
-    def test_delete_credentials_returns_removed_and_not_found_payloads(self) -> None:
+    def test_get_credentials_returns_empty_list_when_disconnected(self) -> None:
+        response = self.client.get("/api/v1/admin/connector/channel-talk/credentials")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), [])
+
+    def test_delete_credentials_uses_channel_id_and_returns_removed_and_not_found_payloads(self) -> None:
         self.service.uninstall_result = ChannelTalkUninstallResult(removed=True)
 
-        removed_response = self.client.delete("/api/v1/admin/connector/channel-talk/credentials")
+        removed_response = self.client.delete(
+            "/api/v1/admin/connector/channel-talk/credentials",
+            params={"channel_id": "channel-123"},
+        )
         self.assertEqual(removed_response.status_code, 200)
         self.assertEqual(
             removed_response.json(),
@@ -268,9 +315,13 @@ class ChannelTalkAdminApiTests(TestCase):
                 "installed": False,
             },
         )
+        self.assertEqual(self.service.last_uninstall_channel_id, "channel-123")
 
         self.service.uninstall_result = ChannelTalkUninstallResult(removed=False)
-        missing_response = self.client.delete("/api/v1/admin/connector/channel-talk/credentials")
+        missing_response = self.client.delete(
+            "/api/v1/admin/connector/channel-talk/credentials",
+            params={"channel_id": "channel-456"},
+        )
         self.assertEqual(missing_response.status_code, 200)
         self.assertEqual(
             missing_response.json(),
@@ -280,6 +331,7 @@ class ChannelTalkAdminApiTests(TestCase):
                 "installed": False,
             },
         )
+        self.assertEqual(self.service.last_uninstall_channel_id, "channel-456")
 
     def test_post_credentials_returns_route_scoped_validation_shape(self) -> None:
         response = self.client.post(
@@ -430,16 +482,26 @@ class ChannelTalkAdminApiTests(TestCase):
         )
         self.assertEqual(self.document_background_sync_calls, ["channel-123"])
 
-    def test_get_document_credentials_returns_status_payload_without_secret(self) -> None:
+    def test_get_document_credentials_returns_list_payload_without_secret(self) -> None:
         verified_at = datetime(2026, 4, 25, 8, 30, tzinfo=timezone.utc)
-        self.document_service.status_result = ChannelTalkDocumentCredentialsStatus(
-            installed=True,
-            channel_id="channel-123",
-            space_id="space-123",
-            space_name="Help Center",
-            credential_last_verified_at=verified_at,
-            association_status=ChannelTalkDocumentAssociationStatus.API_VERIFIED,
-        )
+        self.document_service.list_statuses_result = [
+            ChannelTalkDocumentCredentialsStatus(
+                installed=True,
+                channel_id="channel-123",
+                space_id="space-123",
+                space_name="Help Center",
+                credential_last_verified_at=verified_at,
+                association_status=ChannelTalkDocumentAssociationStatus.API_VERIFIED,
+            ),
+            ChannelTalkDocumentCredentialsStatus(
+                installed=True,
+                channel_id="channel-456",
+                space_id="space-456",
+                space_name="Sales Docs",
+                credential_last_verified_at=verified_at,
+                association_status=ChannelTalkDocumentAssociationStatus.API_VERIFIED,
+            ),
+        ]
 
         response = self.client.get(
             "/api/v1/admin/connector/channel-talk/documents/credentials"
@@ -447,14 +509,16 @@ class ChannelTalkAdminApiTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         body = response.json()
-        self.assertEqual(body["association_status"], "api_verified")
-        self.assertNotIn("access_secret", body)
+        self.assertEqual([item["space_id"] for item in body], ["space-123", "space-456"])
+        self.assertEqual(body[0]["association_status"], "api_verified")
+        self.assertNotIn("access_secret", body[0])
 
-    def test_delete_document_credentials_returns_removed_and_not_found_payloads(self) -> None:
+    def test_delete_document_credentials_uses_space_id_and_returns_removed_and_not_found_payloads(self) -> None:
         self.document_service.uninstall_result = ChannelTalkDocumentUninstallResult(removed=True)
 
         removed_response = self.client.delete(
-            "/api/v1/admin/connector/channel-talk/documents/credentials"
+            "/api/v1/admin/connector/channel-talk/documents/credentials",
+            params={"space_id": "space-123"},
         )
         self.assertEqual(removed_response.status_code, 200)
         self.assertEqual(
@@ -465,10 +529,12 @@ class ChannelTalkAdminApiTests(TestCase):
                 "installed": False,
             },
         )
+        self.assertEqual(self.document_service.last_uninstall_space_id, "space-123")
 
         self.document_service.uninstall_result = ChannelTalkDocumentUninstallResult(removed=False)
         missing_response = self.client.delete(
-            "/api/v1/admin/connector/channel-talk/documents/credentials"
+            "/api/v1/admin/connector/channel-talk/documents/credentials",
+            params={"space_id": "space-456"},
         )
         self.assertEqual(missing_response.status_code, 200)
         self.assertEqual(
@@ -479,6 +545,7 @@ class ChannelTalkAdminApiTests(TestCase):
                 "installed": False,
             },
         )
+        self.assertEqual(self.document_service.last_uninstall_space_id, "space-456")
 
     def test_post_document_credentials_base_channel_missing_fails(self) -> None:
         self.document_service.connect_error = ChannelTalkValidationError(

@@ -19,6 +19,7 @@ from catchup.connectors.channel_talk.documents_client import (
 )
 from catchup.connectors.channel_talk.exceptions import ChannelTalkConflictError
 from catchup.connectors.channel_talk.exceptions import ChannelTalkPayloadError
+from catchup.connectors.channel_talk.exceptions import ChannelTalkValidationError
 from catchup.connectors.channel_talk.schemas.channel_connection import (
     ChannelTalkCredentialsRecord,
 )
@@ -115,12 +116,19 @@ class _DocumentInstallStore:
     def get_document_connection(self, channel_id=None):
         return None
 
+    def list_document_connections(self):
+        return []
+
     def upsert_document_connection(self, payload):
         self.stored_payload = payload
         return payload.to_record()
 
     def delete_document_connection(self, channel_id=None):
         self.deleted_channel_id = channel_id
+        return self.delete_result
+
+    def delete_document_connection_by_space_id(self, space_id):
+        self.deleted_channel_id = space_id
         return self.delete_result
 
     def commit(self):
@@ -248,25 +256,24 @@ class ChannelTalkDocumentsInstallAdapterTests(IsolatedAsyncioTestCase):
                 verified_at=datetime(2026, 4, 25, tzinfo=timezone.utc),
             )
 
-    async def test_uninstall_deletes_only_base_channel_document_connection(self) -> None:
+    async def test_uninstall_deletes_document_connection_by_space_id(self) -> None:
         store = _DocumentInstallStore(base_channel_id="channel-123")
         store.delete_result = True
         adapter = ChannelTalkDocumentInstallAuthAdapter(store=store)
 
-        result = await adapter.uninstall()
+        result = await adapter.uninstall("space-123")
 
         self.assertTrue(result.removed)
-        self.assertEqual(store.deleted_channel_id, "channel-123")
+        self.assertEqual(store.deleted_channel_id, "space-123")
         self.assertTrue(store.committed)
 
-    async def test_uninstall_without_base_channel_does_not_delete_documents(self) -> None:
+    async def test_uninstall_without_space_id_fails_without_deleting_documents(self) -> None:
         store = _DocumentInstallStore(base_channel_id=None)
         store.delete_result = True
         adapter = ChannelTalkDocumentInstallAuthAdapter(store=store)
 
-        result = await adapter.uninstall()
-
-        self.assertFalse(result.removed)
+        with self.assertRaisesRegex(ChannelTalkValidationError, "space_id is required"):
+            await adapter.uninstall()
         self.assertIsNone(store.deleted_channel_id)
         self.assertFalse(store.committed)
 
@@ -286,6 +293,9 @@ class _MetadataStore:
             access_secret="documents-secret",
             association_status=ChannelTalkDocumentAssociationStatus.API_VERIFIED,
         )
+
+    def list_document_connections(self):
+        return [self.get_document_connection("channel-123")]
 
     def upsert_document_space(self, payload, *, channel_id):
         return payload

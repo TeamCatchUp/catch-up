@@ -49,12 +49,16 @@ class ChannelTalkDocumentCredentialsStore(Protocol):
         channel_id: str | None = None,
     ) -> ChannelTalkDocumentCredentialsRecord | None: ...
 
+    def list_document_connections(self) -> list[ChannelTalkDocumentCredentialsRecord]: ...
+
     def upsert_document_connection(
         self,
         payload: ChannelTalkDocumentCredentialsUpsert,
     ) -> ChannelTalkDocumentCredentialsRecord | None: ...
 
     def delete_document_connection(self, channel_id: str | None = None) -> bool: ...
+
+    def delete_document_connection_by_space_id(self, space_id: str) -> bool: ...
 
     def commit(self) -> None: ...
 
@@ -140,17 +144,23 @@ class ChannelTalkDocumentInstallAuthAdapter:
         )
         return ChannelTalkDocumentCredentialsStatus.from_record(record)
 
-    async def uninstall(self) -> ChannelTalkDocumentUninstallResult:
-        base_connection = await self._run_store(
-            self.store.get_base_connection,
-            action="load Channel Talk credentials",
+    async def list_statuses(self) -> list[ChannelTalkDocumentCredentialsStatus]:
+        records = await self._run_store(
+            self.store.list_document_connections,
+            action="list Channel Talk Documents credentials",
         )
-        if base_connection is None:
-            return ChannelTalkDocumentUninstallResult(removed=False)
+        return [ChannelTalkDocumentCredentialsStatus.from_record(record) for record in records]
+
+    async def uninstall(
+        self,
+        space_id: str | None = None,
+    ) -> ChannelTalkDocumentUninstallResult:
+        if not space_id:
+            raise ChannelTalkValidationError("space_id is required")
 
         removed = await self._run_store(
-            self.store.delete_document_connection,
-            base_connection.channel_id,
+            self.store.delete_document_connection_by_space_id,
+            space_id,
             action="delete Channel Talk Documents credentials",
         )
         await self._run_store(
