@@ -12,15 +12,13 @@ import { useChannelTalkSelection } from '../../../hooks/useChannelTalkSelection'
 import { adminConnectorMutations } from '../../../queries/adminConnector.mutations';
 import { adminConnectorQueries } from '../../../queries/adminConnector.queries';
 import { channelTalkQueries } from '../../../queries/channelTalk.queries';
-import type { FullSyncTarget, SyncConnector } from '../../../types/syncModel';
-import {
-  type ChannelTalkChannel,
-  mapChannelTalkSyncTargets,
-} from '../../../utils/mapChannelTalkSyncTargets';
+import type { SyncConnector } from '../../../types/syncModel';
+import { groupChannelTalkSyncDispatch, pickSyncDays } from '../../../utils/channelTalkSyncDispatch';
+import { type ChannelTalkChannel, mapChannelTalkSyncTargets } from '../../../utils/mapChannelTalkSyncTargets';
 import ChannelGroup from './channelTalk/ChannelGroup';
 import ChannelGroupListEmpty from './channelTalk/ChannelGroupListEmpty';
 import ChannelList from './channelTalk/ChannelList';
-import { DEFAULT_PERIOD, type Period } from './channelTalk/PeriodSelect';
+import { DEFAULT_PERIOD } from './channelTalk/PeriodSelect';
 
 interface ChannelTalkEmbeddingModalProps {
   open: boolean;
@@ -57,40 +55,14 @@ interface ModalBodyProps {
   onJobStart?: (jobId: string, connector: SyncConnector) => void;
 }
 
-/** Period(한국어 라벨) → 백엔드 sync_days 일수. '전체'는 null로 백엔드 기본값(1095) 사용. */
-const PERIOD_TO_DAYS: Record<Period, number | null> = {
-  '1개월': 30,
-  '3개월': 90,
-  '6개월': 180,
-  '1년': 365,
-  '3년': 1095,
-  전체: null,
-};
-
-/**
- * 선택된 target들의 period 중 가장 긴 일수를 sync_days로 사용.
- * '전체'(null)가 하나라도 있으면 null 반환 → 백엔드 기본값 사용.
- * 백엔드는 단일 sync_days만 받으므로 보수적으로 가장 넓은 기간 채택.
- */
-function pickSyncDays(periods: Period[]): number | null {
-  if (periods.length === 0) return null;
-  let maxDays = 0;
-  for (const p of periods) {
-    const days = PERIOD_TO_DAYS[p];
-    if (days === null) return null; // '전체'가 포함되면 즉시 null
-    if (days > maxDays) maxDays = days;
-  }
-  return maxDays;
-}
-
 function ModalBody({ onClose, onJobStart }: ModalBodyProps) {
   // 1) 채널 credential 목록 GET → 등록된 N개 channel_id 수집
   const channelListQuery = useQuery(channelTalkQueries.list());
   const installedChannelIds = useMemo(
     () =>
       (channelListQuery.data ?? [])
-        .filter((c) => c.installed && !!c.channel_id)
-        .map((c) => c.channel_id as string),
+        .filter((c): c is typeof c & { channel_id: string } => c.installed && !!c.channel_id)
+        .map((c) => c.channel_id),
     [channelListQuery.data],
   );
 
@@ -136,34 +108,21 @@ function ModalBody({ onClose, onJobStart }: ModalBodyProps) {
     if (channels.length === 0) return;
     if (selectedChannelIds.size === 0 && selectedSpaceIds.size === 0) return;
 
-    // 선택된 target들의 period 수집 → 전체 sync_days로 사용
-    const usedPeriods: Period[] = [];
-    for (const id of selectedChannelIds) {
-      usedPeriods.push(channelPeriods[id] ?? DEFAULT_PERIOD);
-    }
-    for (const id of selectedSpaceIds) {
-      const explicit = spacePeriods[id];
-      if (explicit) usedPeriods.push(explicit);
-    }
-    const syncDays = pickSyncDays(usedPeriods);
-
-    // channel별로 그룹화 — 각 channel scope별로 별도 sync 요청 (백엔드 scope_id 단일 제약)
-    const channelGroups = channels
-      .map((channel) => {
-        const targets: FullSyncTarget[] = [];
-        if (selectedChannelIds.has(channel.channel_id)) {
-          targets.push({ target_type: 'channel', target_id: channel.channel_id });
-        }
-        for (const space of channel.document_spaces) {
-          if (selectedSpaceIds.has(space.space_id)) {
-            targets.push({ target_type: 'space', target_id: space.space_id });
-          }
-        }
-        return { channel, targets };
-      })
-      .filter((g) => g.targets.length > 0);
+    // channel별로 sync 요청 그룹화 (백엔드 scope_id 단일 제약 → channel당 1번 mutation 호출)
+    const channelGroups = groupChannelTalkSyncDispatch(
+      channels,
+      selectedChannelIds,
+      selectedSpaceIds,
+      channelPeriods,
+      spacePeriods,
+    );
 
     if (channelGroups.length === 0) return;
+
+    // 모든 그룹에서 사용된 period를 합쳐 가장 넓은 기간 1개로 sync_days 결정.
+    // 비어있는 채널 period 슬롯은 DEFAULT_PERIOD로 보강 (groupChannelTalkSyncDispatch는 명시 period만 수집).
+    const usedPeriods = channelGroups.flatMap((g) => (g.periods.length > 0 ? g.periods : [DEFAULT_PERIOD]));
+    const syncDays = pickSyncDays(usedPeriods);
 
     setIsSubmitting(true);
     try {
