@@ -229,10 +229,24 @@ export interface ConnectorProgress {
 
 // ─── 임베딩 히스토리 타입 (GET /admin/connector/status) ───
 
-export type ConnectorStatusSource = 'github' | 'jira' | 'slack' | 'confluence';
-export type ConnectorResourceType = 'repositories' | 'projects' | 'channels' | 'spaces';
+export type ConnectorStatusSource = 'github' | 'jira' | 'slack' | 'confluence' | 'channel_talk';
+export type ConnectorResourceType =
+  | 'repositories'
+  | 'projects'
+  | 'channels'
+  | 'spaces'
+  | 'channel_talk_targets';
 
-/** target별 임베딩 데이터 범위 */
+/** 채널톡 target은 channel/space 두 종류가 같은 응답에 섞여 오므로 target_type으로 구분 */
+export type ChannelTalkConnectorTargetType = 'channel' | 'space';
+
+/**
+ * target별 임베딩 데이터 범위.
+ *
+ * `target_type`은 백엔드 schema 상 채널톡 source 응답(`AdminChannelTalkConnectorTargetRangeResponse`)에만
+ * 존재하지만, 프론트는 union을 평탄화하여 optional로 받는다. 다른 connector(github/jira/slack/confluence)는
+ * 항상 undefined.
+ */
 export interface AdminConnectorTargetRangeResponse {
   scope_id: string;
   target_id: string;
@@ -243,6 +257,7 @@ export interface AdminConnectorTargetRangeResponse {
   last_failed_at: string | null;
   oldest: string | null;
   latest: string | null;
+  target_type?: ChannelTalkConnectorTargetType;
 }
 
 /** GET /admin/connector/status 응답 */
