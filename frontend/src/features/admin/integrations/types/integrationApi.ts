@@ -86,10 +86,10 @@ export interface UserSyncItem {
 
 /**
  * 이용자 연동 탭 필터.
- * `'channel-talk'`은 frontend-only 단독 모드 — 백엔드는 이 값을 받아도 무시하고 전체 사용자 반환.
- * 시각 필터링은 UsersStatusSection에서 services=['channel-talk']로 컬럼만 좁혀 처리.
+ * `'channel_talk'`은 frontend-only 단독 모드 — 백엔드는 이 값을 받아도 무시하고 전체 사용자 반환.
+ * 시각 필터링은 UsersStatusSection에서 services=['channel_talk']로 컬럼만 좁혀 처리.
  */
-export type SyncFilterType = 'all' | 'full' | 'partial' | 'channel-talk';
+export type SyncFilterType = 'all' | 'full' | 'partial' | 'channel_talk';
 
 export interface UserSyncStatusResponse {
   total: number;

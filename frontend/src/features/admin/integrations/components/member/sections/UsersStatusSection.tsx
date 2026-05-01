@@ -46,7 +46,7 @@ const FILTER_OPTIONS: { key: SyncFilterType; label: string }[] = [
   { key: 'all', label: '전체 이용자' },
   { key: 'full', label: '전체 연동' },
   { key: 'partial', label: '일부 미연동' },
-  { key: 'channel-talk', label: '채널톡' },
+  { key: 'channel_talk', label: '채널톡' },
 ];
 
 /**
@@ -326,7 +326,7 @@ export default function UsersStatusSection({
         <UsersTable
           displayRows={effectiveRows}
           isEditMode={isEditMode}
-          services={filterType === 'channel-talk' ? ['channel-talk'] : MEMBER_TABLE_SERVICES}
+          services={filterType === 'channel_talk' ? ['channel_talk'] : MEMBER_TABLE_SERVICES}
           isLoading={isLoading}
           skeletonCount={pageSize}
           accountOptionsByService={accountOptionsByService}

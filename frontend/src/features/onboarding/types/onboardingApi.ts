@@ -1,4 +1,4 @@
-import type { JobLevel, CompanySize } from './onboardingModel';
+import type { CompanySize,JobLevel } from './onboardingModel';
 
 /** POST /api/v1/onboarding 요청 바디 */
 export interface UserSignUpRequest {

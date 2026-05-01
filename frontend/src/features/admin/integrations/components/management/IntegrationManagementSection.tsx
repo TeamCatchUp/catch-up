@@ -24,7 +24,7 @@ const RESOURCE_ICONS: Record<IntegrationService, React.ComponentType<React.SVGPr
   github: IconGithubLogo,
   slack: IconTag,
   confluence: IconSpace,
-  'channel-talk': IconTag,
+  'channel_talk': IconTag,
 };
 
 /** 서비스별 연동 설치 핸들러 */
@@ -108,7 +108,7 @@ export default function IntegrationManagementSection({
       </div>
 
       <div className="flex flex-2 flex-col gap-6">
-        {selectedService === 'channel-talk' ? (
+        {selectedService === 'channel_talk' ? (
           <ChannelTalkManagementPanel />
         ) : (
           <>

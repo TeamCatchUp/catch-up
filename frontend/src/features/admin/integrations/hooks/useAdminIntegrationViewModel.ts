@@ -18,7 +18,7 @@ const RESOURCE_LABELS: Record<IntegrationService, string> = {
   github: '임베딩된 Repository',
   slack: '임베딩된 Slack 채널',
   confluence: '임베딩된 Confluence Space',
-  'channel-talk': '연결된 채널톡 채널',
+  'channel_talk': '연결된 채널톡 채널',
 };
 
 /** "YYYY. M. D." 날짜 포맷 */
