@@ -243,6 +243,18 @@ class ChannelTalkDocumentMetadataSyncService:
             ChannelTalkDocumentMetadataSyncRequest(channel_id=channel_id)
         )
 
+    async def sync_space(
+        self,
+        channel_id: str,
+        space_id: str,
+    ) -> ChannelTalkDocumentMetadataSyncResult:
+        return await self.sync_metadata(
+            ChannelTalkDocumentMetadataSyncRequest(
+                channel_id=channel_id,
+                space_id=space_id,
+            )
+        )
+
     async def sync_channel(
         self,
         channel_id: str,

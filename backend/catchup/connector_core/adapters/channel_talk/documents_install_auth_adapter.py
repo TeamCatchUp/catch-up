@@ -47,9 +47,13 @@ class ChannelTalkDocumentCredentialsStore(Protocol):
     def get_document_connection(
         self,
         channel_id: str | None = None,
+        space_id: str | None = None,
     ) -> ChannelTalkDocumentCredentialsRecord | None: ...
 
-    def list_document_connections(self) -> list[ChannelTalkDocumentCredentialsRecord]: ...
+    def list_document_connections(
+        self,
+        channel_id: str | None = None,
+    ) -> list[ChannelTalkDocumentCredentialsRecord]: ...
 
     def upsert_document_connection(
         self,

@@ -133,13 +133,16 @@ class ChannelTalkAdminApiTests(TestCase):
         self.service = StubChannelTalkService()
         self.document_service = StubChannelTalkDocumentService()
         self.background_sync_calls: list[str] = []
-        self.document_background_sync_calls: list[str] = []
+        self.document_background_sync_calls: list[tuple[str, str | None]] = []
 
         async def background_runner(channel_id: str) -> None:
             self.background_sync_calls.append(channel_id)
 
-        async def document_background_runner(channel_id: str) -> None:
-            self.document_background_sync_calls.append(channel_id)
+        async def document_background_runner(
+            channel_id: str,
+            space_id: str | None = None,
+        ) -> None:
+            self.document_background_sync_calls.append((channel_id, space_id))
 
         self.app = FastAPI()
         self.app.include_router(router)
@@ -487,7 +490,10 @@ class ChannelTalkAdminApiTests(TestCase):
             self.document_service.last_connect_request.access_secret,
             "documents-secret",
         )
-        self.assertEqual(self.document_background_sync_calls, ["channel-123"])
+        self.assertEqual(
+            self.document_background_sync_calls,
+            [("channel-123", "space-123")],
+        )
 
     def test_get_document_credentials_returns_list_payload_without_secret(self) -> None:
         verified_at = datetime(2026, 4, 25, 8, 30, tzinfo=timezone.utc)

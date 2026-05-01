@@ -113,10 +113,10 @@ class _DocumentInstallStore:
             channel_name="Support",
         )
 
-    def get_document_connection(self, channel_id=None):
+    def get_document_connection(self, channel_id=None, space_id=None):
         return None
 
-    def list_document_connections(self):
+    def list_document_connections(self, channel_id=None):
         return []
 
     def upsert_document_connection(self, payload):
@@ -280,7 +280,9 @@ class _MetadataStore:
         self.nav_nodes = []
         self.commits = 0
 
-    def get_document_connection(self, channel_id=None):
+    def get_document_connection(self, channel_id=None, space_id=None):
+        if space_id is not None and space_id != "space-123":
+            return None
         return ChannelTalkDocumentCredentialsRecord(
             channel_id=channel_id,
             space_id="space-123",
@@ -290,7 +292,7 @@ class _MetadataStore:
             association_status=ChannelTalkDocumentAssociationStatus.API_VERIFIED,
         )
 
-    def list_document_connections(self):
+    def list_document_connections(self, channel_id=None):
         return [self.get_document_connection("channel-123")]
 
     def upsert_document_space(self, payload, *, channel_id):

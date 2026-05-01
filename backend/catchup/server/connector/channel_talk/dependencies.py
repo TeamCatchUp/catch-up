@@ -28,7 +28,7 @@ from catchup.db.engine import SessionLocal
 logger = structlog.get_logger(__name__)
 
 ChannelTalkMetadataTaskRunner = Callable[[str], Awaitable[None]]
-ChannelTalkDocumentMetadataTaskRunner = Callable[[str], Awaitable[None]]
+ChannelTalkDocumentMetadataTaskRunner = Callable[[str, str | None], Awaitable[None]]
 
 def get_channel_talk_service(
     db: Annotated[Session, Depends(get_db)],
@@ -62,15 +62,20 @@ def get_channel_talk_metadata_task_runner() -> ChannelTalkMetadataTaskRunner:
 
 async def run_channel_talk_document_metadata_sync(
     channel_id: str,
+    space_id: str | None = None,
 ) -> None:
     with SessionLocal() as db:
         service = create_channel_talk_document_metadata_service(db=db)
         try:
-            await service.sync_target(channel_id)
+            if space_id:
+                await service.sync_space(channel_id, space_id)
+            else:
+                await service.sync_target(channel_id)
         except Exception:
             logger.exception(
                 "channel_talk_document_metadata_sync_failed",
                 channel_id=channel_id,
+                space_id=space_id,
             )
 
 

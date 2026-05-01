@@ -85,8 +85,8 @@ class ChannelTalkSyncApiTests(TestCase):
                 return_value=_build_connection_record(),
             ),
             patch(
-                "catchup.sync.query_service.load_channel_talk_document_connection",
-                return_value=_build_document_connection_record(),
+                "catchup.sync.query_service.list_channel_talk_document_connections",
+                return_value=[_build_document_connection_record()],
             ),
         ):
             response = self.client.get(
@@ -168,8 +168,8 @@ class ChannelTalkSyncApiTests(TestCase):
                 return_value=None,
             ),
             patch(
-                "catchup.sync.query_service.load_channel_talk_document_connection",
-                return_value=_build_document_connection_record(),
+                "catchup.sync.query_service.list_channel_talk_document_connections",
+                return_value=[_build_document_connection_record()],
             ),
         ):
             response = self.client.get(
@@ -194,8 +194,8 @@ class ChannelTalkSyncApiTests(TestCase):
                 return_value=_build_connection_record(channel_id="channel-other"),
             ),
             patch(
-                "catchup.sync.query_service.load_channel_talk_document_connection",
-                return_value=_build_document_connection_record(),
+                "catchup.sync.query_service.list_channel_talk_document_connections",
+                return_value=[_build_document_connection_record()],
             ),
         ):
             response = self.client.get(
@@ -220,8 +220,8 @@ class ChannelTalkSyncApiTests(TestCase):
                 return_value=_build_connection_record(),
             ),
             patch(
-                "catchup.sync.query_service.load_channel_talk_document_connection",
-                return_value=None,
+                "catchup.sync.query_service.list_channel_talk_document_connections",
+                return_value=[],
             ),
         ):
             response = self.client.get(
@@ -479,8 +479,8 @@ class ChannelTalkSyncApiTests(TestCase):
                 return_value=_build_connection_record(),
             ),
             patch(
-                "catchup.sync.query_service.load_channel_talk_document_connection",
-                return_value=_build_document_connection_record(),
+                "catchup.sync.query_service.list_channel_talk_document_connections",
+                return_value=[_build_document_connection_record()],
             ),
         ):
             targets_response = self.client.get(
