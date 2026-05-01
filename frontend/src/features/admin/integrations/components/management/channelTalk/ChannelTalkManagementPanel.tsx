@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 
 import IconAddSquare from '@/public/icons/icon/add_square.svg';
 import IconCloudCheckFilled from '@/public/icons/icon/cloud_check_filled.svg';
@@ -8,7 +9,9 @@ import IconOpenInNew from '@/public/icons/icon/open_in_new.svg';
 import { Button } from '@/shared/components/ui/button';
 import { cn } from '@/shared/utils/cn';
 
-import { useChannelTalkViewModel } from '../../../hooks/useChannelTalkViewModel';
+import { deriveChannelTalkInitialState, useChannelTalkViewModel } from '../../../hooks/useChannelTalkViewModel';
+import { channelTalkQueries } from '../../../queries/channelTalk.queries';
+import type { ChannelTalkConnectionState } from '../../../types/channelTalkModel';
 import type {
   ChannelTalkChannel,
   ChannelTalkChannelPatch,
@@ -16,8 +19,31 @@ import type {
 } from '../../../types/channelTalkModel';
 import ChannelTalkChannelCard from './ChannelTalkChannelCard';
 
-/** 채널톡 메인 패널 — 인터랙티브 mock state 자체 관리 (새로고침 시 초기화) */
+/**
+ * 채널톡 메인 패널.
+ *
+ * 외부 컴포넌트는 백엔드 GET 응답 fetch + 로딩 처리만 담당.
+ * 데이터 ready 시 Inner를 mount하면서 deriveChannelTalkInitialState로 만든 initialState를 주입.
+ * 이 mount/unmount 분리는 React 19 `react-hooks/set-state-in-effect` 룰을 회피하기 위함.
+ */
 export default function ChannelTalkManagementPanel() {
+  const channelStatusQuery = useQuery(channelTalkQueries.detail());
+  const documentStatusQuery = useQuery(channelTalkQueries.documentDetail());
+
+  if (channelStatusQuery.isLoading || documentStatusQuery.isLoading) {
+    // 채널톡 백엔드 응답 대기 중 — 빈 placeholder. 짧은 폴링이라 별도 스켈레톤 없이 충분.
+    return <div className="flex flex-col gap-6" />;
+  }
+
+  const initialState = deriveChannelTalkInitialState(channelStatusQuery.data, documentStatusQuery.data);
+  return <ChannelTalkManagementPanelInner initialState={initialState} />;
+}
+
+interface ChannelTalkManagementPanelInnerProps {
+  initialState: ChannelTalkConnectionState;
+}
+
+function ChannelTalkManagementPanelInner({ initialState }: ChannelTalkManagementPanelInnerProps) {
   const {
     state,
     addChannel,
@@ -30,7 +56,7 @@ export default function ChannelTalkManagementPanel() {
     testChannelConnection,
     testDocumentSpaceConnection,
     enterDocumentSpaceEditMode,
-  } = useChannelTalkViewModel();
+  } = useChannelTalkViewModel(initialState);
 
   const hasChannels = state.channels.length > 0;
   /**

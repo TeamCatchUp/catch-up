@@ -30,7 +30,7 @@ interface EmbeddingProgressPanelProps {
 
 type ConnectorEmbeddingStatus = 'in_progress' | 'completed' | 'failed' | 'idle';
 
-const CONNECTOR_ORDER: SyncConnector[] = ['jira', 'github', 'slack', 'confluence'];
+const CONNECTOR_ORDER: SyncConnector[] = ['jira', 'github', 'slack', 'confluence', 'channel_talk'];
 
 const getConnectorStatus = (connector: SyncConnector, progresses: ConnectorProgress[]): ConnectorEmbeddingStatus => {
   const progress = progresses.find((p) => p.connector === connector);

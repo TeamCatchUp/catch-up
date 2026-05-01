@@ -17,7 +17,7 @@ import StatusCardsSection from './StatusCardsSection';
 import UsersStatusSection from './UsersStatusSection';
 
 const PAGE_SIZE = 10;
-const CONNECTOR_ORDER: SyncConnector[] = ['jira', 'github', 'slack', 'confluence'];
+const CONNECTOR_ORDER: SyncConnector[] = ['jira', 'github', 'slack', 'confluence', 'channel_talk'];
 
 /** 관리자 이용자 연동 탭 섹션 */
 export default function IntegrationsSection() {
