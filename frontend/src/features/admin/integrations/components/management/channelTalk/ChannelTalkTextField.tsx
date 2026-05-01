@@ -47,27 +47,34 @@ export default function ChannelTalkTextField({
    */
   const masked = disabled ? true : userMasked;
   const showMaskToggle = maskable;
-  const isMasked = maskable && masked && value.length > 0;
-  /** 마스킹 시 별표 표시 — value 길이만큼 '*' 채움 (보안성 vs 시각 일치 절충) */
-  const displayValue = isMasked ? '*'.repeat(value.length) : value;
+  /**
+   * 마스킹은 input type=password로 처리 (브라우저 native).
+   * 직접 '*'를 value에 채워넣으면 입력 도중 토글 시 readOnly 또는 cursor jump 발생 → 입력 깨짐.
+   * type=password로 두면 raw value는 그대로, 시각만 dot으로 가려져서 입력 도중에도 자유롭게 토글 가능.
+   */
+  const inputType = maskable && masked ? 'password' : 'text';
 
   return (
     <div
       className={cn(
         'flex h-11.5 max-h-45 min-h-11.5 w-full items-center gap-3 rounded-lg p-3',
         disabled ? 'bg-fill-interaction-disable border-edge-neutral border' : 'bg-fill-normal',
-        !disabled && state === 'idle' && 'border-edge-neutral border',
+        // 외부에서 'focus'를 강제 지정한 경우(검증 권유 등)는 그대로 우선.
+        // idle은 native focus-within으로 사용자 입력 시점 자동 강조.
+        !disabled &&
+          state === 'idle' &&
+          'border-edge-neutral focus-within:border-edge-primary border focus-within:border-[1.5px]',
         !disabled && state === 'error' && 'border-status-destructive border-[1.5px]',
         !disabled && state === 'focus' && 'border-edge-primary border-[1.5px]',
       )}
     >
       <input
         id={inputId}
-        type="text"
-        value={displayValue}
+        type={inputType}
+        value={value}
         onChange={(e) => onChange?.(e.target.value)}
         placeholder={placeholder}
-        readOnly={readOnly || disabled || isMasked}
+        readOnly={readOnly || disabled}
         aria-label={ariaLabel}
         className={cn(
           'text-body-small placeholder:text-content-assistive min-w-0 flex-1 truncate bg-transparent outline-none',
