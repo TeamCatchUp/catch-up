@@ -1,4 +1,5 @@
 import asyncio
+
 import structlog
 from langchain.chat_models import BaseChatModel
 from langchain_core.messages import HumanMessage
@@ -9,7 +10,9 @@ from catchup.rag.agents.tools.search_tools import REACT_TOOLS
 from catchup.rag.nodes.utils import ainvoke_llm_with_token_usage
 from catchup.rag.nodes.utils import build_docs_summary
 from catchup.rag.nodes.utils import build_system_message
+from catchup.rag.nodes.utils import coerce_message_text
 from catchup.rag.nodes.utils import drop_orphaned_tool_calls
+from catchup.rag.nodes.utils import extract_essential_ids
 from catchup.rag.nodes.utils import log_node
 from catchup.rag.semaphores import rag_semaphores
 from catchup.rag.state import AgentState
@@ -52,7 +55,7 @@ async def standard_agent_node(
         response, token_usages = await ainvoke_llm_with_token_usage(
             llm=llm_with_tools,
             messages=[system_message, HumanMessage(content=query)] + existing_messages,
-            semaphore=rag_semaphores.llm_small,
+            semaphore=rag_semaphores.llm_large,
             timeout=timeout,
         )
     except asyncio.TimeoutError as e:
@@ -77,7 +80,12 @@ async def standard_agent_node(
     # 에이전트가 더 이상 도구를 호출하지 않으면(루프 종료), 자신의 판단을 state에 기록해 답변 노드에 전달한다.
     reasoning_update = {}
     if not tool_calls:
-        reasoning_update = {"agent_reasoning": response.content}
+        reasoning = coerce_message_text(response.content)
+        essential_ids = extract_essential_ids(reasoning, accumulated_docs)
+        reasoning_update = {
+            "agent_reasoning": reasoning,
+            "essential_doc_ids": list(essential_ids) if essential_ids else []
+        }
 
     return {
         "messages": [response],
@@ -87,7 +95,7 @@ async def standard_agent_node(
     }
 
 
-_RERANK_INPUT_WINDOW = 300  # reranker 입력 상한
+_RERANK_INPUT_WINDOW = 300  # reranker 입력 상한이다.
 
 
 async def collect_docs_node(state: AgentState):
@@ -107,4 +115,5 @@ async def collect_docs_node(state: AgentState):
         passed_to_reranker=len(capped),
         capped=len(accumulated) > _RERANK_INPUT_WINDOW,
     )
+
     return {"retrieved_docs": capped}

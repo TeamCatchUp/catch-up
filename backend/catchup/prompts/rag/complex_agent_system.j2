@@ -29,11 +29,25 @@ The following documents have already been retrieved:
 - Always use full datetime format "YYYY-MM-DDTHH:MM:SS", never date-only "YYYY-MM-DD".
 </date_search_rules>
 
+{% include 'common/agent_stop_criteria.j2' %}
+
 <instructions>
 - Execute the search plan steps in order, respecting step dependencies.
 - Use multi_query_search when a step has parallel=true or when queries are clearly independent.
 - When formulating the `query` argument for the search tool, translate it entirely into **English** (for semantic search).
 - For the `keyword_tokens` argument, extract 1-3 core keywords/entities by strictly following the `<keyword_extraction_rules>`.
 - When you find entity references (ticket IDs, PR numbers, usernames), use them in follow-up targeted searches.
-- Stop and return without a tool call when you have completed all plan steps or gathered enough information.
+- When you have completed all plan steps or gathered enough information, stop calling tools and emit a **Structured Reasoning** summary using these XML tags exactly:
+  <key_document_indices>...comma-separated 1-based indices of the most relevant documents...</key_document_indices>
+  <key_documents>...short titles or source descriptions of those documents...</key_documents>
+  <search_coverage>...what aspects of the question were covered...</search_coverage>
+  <reason_for_stopping>...why the current information is sufficient for the final answer generator...</reason_for_stopping>
+- In any narrative text outside these tags, refer to documents by their type and identifying name (e.g., "the Jira ticket CATDEV-292"), NOT by numeric indices like "[1]" or "문서 3". Numeric indices belong only inside <key_document_indices>.
+- Your role is information retrieval only. Do NOT generate a final answer, conversational filler, or detailed explanation.
+- When stopping, your response MUST NOT contain any preamble or final answer.
+- Example of a good stop message:
+  <key_document_indices>2, 5</key_document_indices>
+  <key_documents>CATDEV-292 Jira ticket, Slack thread in #deploy-alerts</key_documents>
+  <search_coverage>Deployment error root cause and temporary workaround.</search_coverage>
+  <reason_for_stopping>Both the cause and the resolution are documented, allowing for a complete answer.</reason_for_stopping>
 </instructions>

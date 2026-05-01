@@ -9,12 +9,14 @@ from langchain_core.messages import HumanMessage
 from catchup.costs.utils import token_usage
 from catchup.prompts.loader import prompt_loader
 from catchup.rag.nodes.utils import ainvoke_llm_with_token_usage
+from catchup.rag.nodes.utils import build_confirmed_priority_prompt
 from catchup.rag.nodes.utils import build_system_message
 from catchup.rag.nodes.utils import get_conversation_history
 from catchup.rag.nodes.utils import log_node
 from catchup.rag.nodes.utils import mark_citations
 from catchup.rag.nodes.utils import parse_citations
 from catchup.rag.nodes.utils import prepare_retrieved_context_text
+from catchup.rag.nodes.utils import strip_key_document_indices
 from catchup.rag.policies import CITATION_POLICY_MESSAGE
 from catchup.rag.policies import FALLBACK_ANSWER
 from catchup.rag.schemas.sources import BaseSource
@@ -66,12 +68,24 @@ async def generate_final_answer_node(
     ]
 
     # 에이전트의 중간 추론 결과가 있다면 별도의 동적 프롬프트 블록으로 추가한다.
+    # 단, <key_document_indices>는 rerank 후 stale하므로 제거 — 정확한 인덱스는
+    # confirmed_priority_documents 블록으로 별도 전달.
     if agent_reasoning:
-        agent_research_prompt = prompt_loader.get_prompt(
-            "rag/agent_research_summary",
-            agent_reasoning=agent_reasoning,
-        )
-        dynamic_prompts.append(agent_research_prompt)
+        sanitized_reasoning = strip_key_document_indices(agent_reasoning)
+        if sanitized_reasoning:
+            agent_research_prompt = prompt_loader.get_prompt(
+                "rag/agent_research_summary",
+                agent_reasoning=sanitized_reasoning,
+            )
+            dynamic_prompts.append(agent_research_prompt)
+
+    # 에이전트 지목 ∩ reranker top_k 교집합 문서를 1-base 인덱스로 LLM에게 전달.
+    confirmed_prompt = build_confirmed_priority_prompt(
+        retrieved_docs=retrieved_docs,
+        confirmed_essential_doc_ids=state.get("confirmed_essential_doc_ids"),
+    )
+    if confirmed_prompt:
+        dynamic_prompts.append(confirmed_prompt)
 
     system_message = build_system_message(
         static_prompt=prompts["system"],

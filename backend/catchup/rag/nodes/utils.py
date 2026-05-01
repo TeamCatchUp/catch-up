@@ -19,6 +19,7 @@ from langchain_core.messages import SystemMessage
 from langgraph.graph.message import add_messages
 
 from catchup.costs.utils import extract_token_usages
+from catchup.prompts.loader import prompt_loader
 from catchup.rag.policies import FALLBACK_ANSWER
 from catchup.rag.schemas.sources import BaseSource
 
@@ -40,25 +41,35 @@ def drop_orphaned_tool_calls(messages: list[BaseMessage]) -> list[BaseMessage]:
 
 
 def build_docs_summary(docs: list[Document], max_docs: int = 10) -> str:
+    """Agent가 현재까지 수집된 지식의 '내용'을 파악할 수 있도록 요약 제공."""
     if not docs:
-        return "아직 수집된 문서 없음"
+        return "No documents collected yet."
 
     source_counts = Counter(d.metadata.get("source", "unknown") for d in docs)
     source_str = ", ".join(f"{src}:{cnt}" for src, cnt in source_counts.items())
     lines = [
-        f"총 {len(docs)}개 문서 누적됨 ({source_str})",
-        "최근 수집된 주요 문서 목록:",
+        f"Total {len(docs)}docs accumulated ({source_str})",
+        "Recently collected documents:",
     ]
 
     for i, doc in enumerate(docs[:max_docs], 1):
         source = doc.metadata.get("source", "unknown")
         temporal = resolve_temporal_context(doc.metadata)
-        snippet = doc.page_content[:50].replace("\n", " ") + "..."
-        lines.append(f"[{i}] ({source}) {temporal} - {snippet}")
+
+        # Confluence는 원문 청크이므로 길이를 제한, 나머지는 요약본이므로 전문 활용
+        if source == "confluence":
+            content = doc.page_content[:800].replace("\n", " ")
+            if len(doc.page_content) > 800:
+                content += "..."
+        else:
+            # Slack, Jira, GitHub 등은 page_content가 이미 영문 요약본
+            content = doc.page_content.replace("\n", " ")
+
+        lines.append(f"[{i}] ({source}) {temporal}\n    {content}")
 
     if len(docs) > max_docs:
         lines.append(
-            f"... 외 {len(docs) - max_docs}개 문서가 더 메모리에 보관 중입니다."
+            f"... and {len(docs) - max_docs} more document(s) stored in memory."
         )
 
     return "\n".join(lines)
@@ -177,6 +188,29 @@ def get_latest_query(messages: Annotated[list, add_messages]):
     )
 
 
+def build_confirmed_priority_prompt(
+    retrieved_docs: list[Document],
+    confirmed_essential_doc_ids: list[str] | None,
+) -> str | None:
+    """confirmed_essential_doc_ids를 retrieved_docs 내 1-base 인덱스로 매핑해
+    confirmed_priority_documents 프롬프트 블록을 렌더링한다.
+
+    매핑 가능한 인덱스가 없으면 None을 반환 (호출자가 dynamic_prompts에서 제외)."""
+    if not confirmed_essential_doc_ids:
+        return None
+    confirmed_id_set = set(confirmed_essential_doc_ids)
+    confirmed_indices = [
+        i for i, doc in enumerate(retrieved_docs, start=1)
+        if get_document_id(doc) in confirmed_id_set
+    ]
+    if not confirmed_indices:
+        return None
+    return prompt_loader.get_prompt(
+        "common/confirmed_priority_documents",
+        confirmed_priority_indices=confirmed_indices,
+    )
+
+
 def prepare_retrieved_context_text(documents: list[Document]) -> str:
     parts = []
     for i, doc in enumerate(documents, start=1):
@@ -237,6 +271,101 @@ def resolve_temporal_context(metadata: dict) -> str:
 def extract_anchor_ids(documents: list[Document]) -> list[str]:
     anchors = [doc.id for doc in documents if doc.id]
     return list(dict.fromkeys(anchors))  # 중복 제거 & 순서 유지
+
+
+def get_document_id(doc: Document) -> str:
+    """문서의 고유 ID를 반환합니다. ID가 없으면 내용의 해시값을 사용한다."""
+    doc_id = doc.id if doc.id else hash(doc.page_content)
+    return str(doc_id)
+
+
+def deduplicate_documents(documents: list[Document]) -> list[Document]:
+    """문서 리스트에서 ID 또는 내용 해시를 기준으로 중복을 제거하고 순서를 유지한다."""
+    unique_docs = []
+    seen_ids = set()
+    for doc in documents:
+        doc_id = get_document_id(doc)
+        if doc_id not in seen_ids:
+            unique_docs.append(doc)
+            seen_ids.add(doc_id)
+    return unique_docs
+
+
+def coerce_message_text(content: Any) -> str:
+    """BaseMessage.content를 일반 텍스트로 정규화한다.
+
+    extended_thinking이 켜진 모델은 content가 블록 리스트로 옴
+    ([{"type": "thinking", ...}, {"type": "text", "text": "..."}]).
+    이 경우 text 블록의 텍스트만 이어 붙이고, 그 외에는 str(content)을 반환한다.
+    """
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        return "".join(
+            block.get("text", "")
+            for block in content
+            if isinstance(block, dict) and block.get("type") == "text"
+        )
+    return str(content) if content is not None else ""
+
+
+_KEY_DOC_INDICES_TAG_PATTERN = re.compile(
+    r"<\s*key_document_indices\s*>(.*?)<\s*/\s*key_document_indices\s*>",
+    re.IGNORECASE | re.DOTALL,
+)
+
+
+def strip_key_document_indices(reasoning: str) -> str:
+    """답변 LLM에 넘기기 전, agent_reasoning에서 <key_document_indices> 태그를 제거한다.
+
+    rerank 이후 인덱스가 stale해지므로, 정확한 인덱스는 confirmed_priority_documents
+    프롬프트 블록을 통해 따로 전달된다. 여기서는 stale 인덱스 노출만 막는다.
+    """
+    if not reasoning:
+        return reasoning
+    return _KEY_DOC_INDICES_TAG_PATTERN.sub("", reasoning).strip()
+
+
+def extract_essential_ids(reasoning: str | None, docs: list[Document]) -> set[str]:
+    """
+    Agent의 reasoning에서 <key_document_indices> 태그를 추출하여 실제 문서 ID 세트로 변환한다.
+    마크다운 강조(**n**), 대괄호([n]), 콤마/공백 구분 등 다양한 내부 형식을 지원.
+    """
+    if not reasoning or not docs:
+        return set()
+
+    match = _KEY_DOC_INDICES_TAG_PATTERN.search(reasoning)
+    if not match:
+        # 태그가 없으면 조용히 반환한다 (에이전트가 지목을 안 한 경우일 수 있음).
+        return set()
+
+    content = match.group(1)
+
+    # 숫자만 모두 추출한다 (마크다운 등 특수문자 제거 효과).
+    indices = [int(s) for s in re.findall(r"\d+", content)]
+
+    
+    if not indices:
+        logger.warning("essential_indices_not_found_in_pattern", text=content)
+        return set()
+
+    essential_ids = set()
+    invalid_indices = []
+    for idx in indices:
+        # 에이전트가 사용하는 인덱스는 1-based
+        if 1 <= idx <= len(docs):
+            doc = docs[idx - 1]
+            essential_ids.add(get_document_id(doc))
+        else:
+            invalid_indices.append(idx)
+
+    if invalid_indices:
+        logger.warning("agent_cited_out_of_range_indices", invalid=invalid_indices, max_range=len(docs))
+
+    if essential_ids:
+        logger.debug("essential_ids_extracted", count=len(essential_ids), ids=list(essential_ids))
+
+    return essential_ids
 
 
 def parse_citations(full_answer: str) -> tuple[str, dict[str, str]]:

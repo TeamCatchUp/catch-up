@@ -90,7 +90,8 @@ def get_compiled_graph(
         max_attempts=rag_max_attempts,
     ).get_llm()
 
-    # LARGE, non-streaming, extended thinking — standard_agent, complex_planner, complex_agent
+    # LARGE, streaming, extended thinking — standard_agent, complex_planner, complex_agent.
+    # tool-calling/structured-output 응답이라 response 부분은 짧게 캡(1024)해 총 wall-clock을 제한한다.
     llm_thinking = get_llm_service(
         LlmProvider.AWS_BEDROCK,
         ModelCapacity.LARGE,
@@ -98,6 +99,7 @@ def get_compiled_graph(
         isolated=True,
         extended_thinking=True,
         thinking_budget_tokens=2048,
+        max_response_tokens=1024,
         max_attempts=rag_max_attempts,
     ).get_llm()
 

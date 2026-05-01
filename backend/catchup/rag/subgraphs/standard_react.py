@@ -48,7 +48,7 @@ def build_standard_react_subgraph(
     )
     graph.add_node(
         "standard_agent",
-        partial(standard_agent_node, llm=llm_thinking, timeout=30.0),
+        partial(standard_agent_node, llm=llm_thinking),
         retry=AGENT_TIMEOUT_RETRY_POLICY,
     )
     graph.add_node(

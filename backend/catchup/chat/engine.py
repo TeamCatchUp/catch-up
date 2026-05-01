@@ -86,8 +86,9 @@ class ChatService:
 
         base_config = None
         processor = None
+        values = None
         
-        try:            
+        try:
             # 채팅 세션 획득
             room_id: int = await self._setup_chat_room(
                 global_context,
@@ -132,6 +133,8 @@ class ChatService:
                 # Agentic RAG 상태 변수
                 "agent_iteration": 0,
                 "accumulated_docs": [],
+                "agent_seen_doc_ids": [],
+                "confirmed_essential_doc_ids": [],
 
                 # 비용 변수
                 "token_breakdown": {},
@@ -218,33 +221,91 @@ class ChatService:
                 session_id=str(session_id),
                 duration=round(elapsed, 4)
             )
-            
-            if base_config is not None:
-                token_usage_ctx = ChatTokenUsageContext.get()
-                lg_current_state = await self._app.aget_state(base_config)
-                values = lg_current_state.values
 
-                if token_usage_ctx and values:
-                    # langgraph state로부터 rerank 횟수 추출
-                    rerank_count = values.get("rerank_count", 0)
-                    token_usage_ctx.rerank_count = rerank_count
-                
-                if (
-                    token_usage_ctx
-                    and token_usage_ctx.token_breakdown
-                    and token_usage_ctx.message_id
-                ):
-                    emit_chat_token_usage_event(
-                        user_id=global_context.user.id,
-                        workspace_id=global_context.workspace.id,
-                        company_id=global_context.company.id,
+            # base_config가 생성된 경우에만(즉, Graph 호출 시도 후) 후속 처리 진행
+            if base_config is not None:
+                try:
+                    # langgraph state 추출
+                    lg_current_state = await self._app.aget_state(base_config)
+                    values = lg_current_state.values
+
+                    # 토큰 사용량 처리
+                    self._process_token_usage_stats(base_config, values, global_context)
+
+                    # Langfuse 관측 데이터 통합 처리
+                    if settings.ENABLE_LANGFUSE:
+                        client = get_langfuse_client()
+                        if client:
+                            await self._update_langfuse_rerank_metadata(client, trace_id, values)
+                except Exception as stats_err:
+                    # 통계 수집 중 에러가 메인 스트림 에러 처리를 방해하지 않도록 격리 로깅
+                    logger.warning(
+                        "failed_to_process_post_stream_stats", 
+                        error=str(stats_err),
+                        session_id=str(session_id)
                     )
-            
+
             if settings.ENABLE_LANGFUSE:
                 client = get_langfuse_client()
                 if client:
                     await run_in_threadpool(client.flush)
+
                     
+    def _process_token_usage_stats(
+        self,
+        base_config: dict | None,
+        values: dict | None,
+        global_context: GlobalContext,
+    ) -> None:
+        if base_config is None:
+            return None
+
+        token_usage_ctx = ChatTokenUsageContext.get()
+
+        if token_usage_ctx and values:
+            # langgraph state로부터 rerank 횟수 추출
+            rerank_count = values.get("rerank_count", 0)
+            token_usage_ctx.rerank_count = rerank_count
+        
+        if (
+            token_usage_ctx
+            and token_usage_ctx.token_breakdown
+            and token_usage_ctx.message_id
+        ):
+            emit_chat_token_usage_event(
+                user_id=global_context.user.id,
+                workspace_id=global_context.workspace.id,
+                company_id=global_context.company.id,
+            )
+
+    async def _update_langfuse_rerank_metadata(
+        self,
+        client,
+        trace_id: str | None,
+        values: dict | None,
+    ) -> None:
+        if not trace_id or not values:
+            return
+
+        rerank_metadata = values.get("rerank_metadata")
+        if not rerank_metadata:
+            return
+
+        try:
+            def _update_sync():
+                # 별도 score_id로 저장하여 사용자 feedback과 분리
+                client.create_score(
+                    score_id=f"{trace_id}-rerank-stats",
+                    name="rerank_stats",
+                    trace_id=trace_id,
+                    value=rerank_metadata.get("alignment_score", 0.0),
+                    data_type="NUMERIC",
+                    comment=str(rerank_metadata),
+                )
+            await run_in_threadpool(_update_sync)
+        except Exception as e:
+            logger.warning("failed_to_update_langfuse_metadata", trace_id=trace_id, error=str(e))
+
     def _resolve_input_messages(
         self,
         session_id: uuid.UUID,
@@ -434,13 +495,12 @@ class ChatService:
         trace_id = None
         
         if settings.ENABLE_LANGFUSE:
-            from langfuse import Langfuse
             from langfuse.langchain import CallbackHandler
-
             from catchup.observability.langfuse.configs import get_langfuse_client
             
-            if get_langfuse_client():
-                trace_id = Langfuse.create_trace_id()
+            if client := get_langfuse_client():
+                trace_id = client.get_current_trace_id()
+                logger.debug("langfuse_trace_id", trace_id=trace_id)
                 invoke_config["callbacks"] = [
                     CallbackHandler(trace_context={"trace_id": trace_id})
                 ]

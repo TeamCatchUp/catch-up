@@ -18,29 +18,19 @@ from catchup.rag.schemas.sources import BaseSource
 from catchup.rag.schemas.sources import SourceResponse
 
 NODE_STATUS_MAP = {
-    # 레거시 (구 파이프라인)
-    "route": "질문의 성격을 분석하고 있습니다...",
-    "grade": "검색 결과가 충분한지 검토하고 있습니다...",
-    "expand_graph_context": "지식 그래프를 통해 연관된 정보를 확장 탐색 중입니다...",
-    "fetch_details_after_graph_context_expansion": "확장된 정보의 상세 내용을 불러오고 있습니다...",
-    "fallback_cypher_query": "추가적인 그래프 질의(Cypher)를 실행하여 정보를 보완 중입니다...",
-
-    # 공통
-    "rewrite": "검색 정확도를 높이기 위해 질문을 최적화하고 있습니다...",
-    "generate_vector_queries": "최적의 검색 쿼리를 생성하고 있습니다...",
-    "search_vector_db": "지식 저장소(Vector DB)에서 문서를 검색 중입니다...",
-    "rerank": "검색된 문서들의 관련성을 분석하여 우선순위를 정하고 있습니다...",
+    "supervisor": "질문 유형을 파악하고 처리 전략을 결정하고 있습니다...",
     "generate_final_answer": "모든 정보를 종합하여 최종 답변을 작성하고 있습니다...",
     "generate_final_answer_fast": "모든 정보를 종합하여 최종 답변을 작성하고 있습니다...",
     "direct_answer": "답변을 생성하고 있습니다...",
     "clarify": "질문을 보다 정확하게 이해하기 위해 확인이 필요합니다...",
-
-    # Agentic RAG
-    "supervisor": "질문 유형을 파악하고 처리 전략을 결정하고 있습니다...",
     "standard_agent": "추가 검색이 필요한지 판단하고 있습니다...",
     "tool_executor": "관련 문서를 검색하고 있습니다...",
     "complex_planner": "복잡한 질문에 대한 검색 전략을 수립하고 있습니다...",
     "complex_agent": "다각도에서 정보를 수집하고 있습니다...",
+    "rerank": "검색된 문서들의 관련성을 분석하여 우선순위를 정하고 있습니다...",
+    "rewrite": "검색 정확도를 높이기 위해 질문을 최적화하고 있습니다...",
+    "generate_vector_queries": "최적의 검색 쿼리를 생성하고 있습니다...",
+    "search_vector_db": "지식 저장소(Vector DB)에서 문서를 검색 중입니다...",
 }
 
 

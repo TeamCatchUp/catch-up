@@ -67,13 +67,11 @@ class ChatStreamProcessor:
             if lg_node:
                 self.context.current_node = lg_node
 
-        # 최종 답변에서 인용구가 발견된 경우 스트리밍 차단
+        # 최종 답변에서 인용구가 발견된 경우 스트리밍 차단.
+        # 단, has_citations 노드의 종료 이벤트는 최종 sources 전송을 위해 통과시킨다.
         if self.context.is_citation_reached:
-            # generate_final_answer 노드 종료 이벤트 외에는 전부 차단
-            if not (
-                kind == "on_chain_end"
-                and name in ("generate_final_answer", "generate_final_answer_fast")
-            ):
+            tags = event.get("metadata", {}).get("tags", []) or []
+            if not (kind == "on_chain_end" and "has_citations" in tags):
                 return
 
         # 1. 노드 시작
@@ -104,6 +102,7 @@ class ChatStreamProcessor:
     ) -> AsyncGenerator[StreamEvent, None]:
         """노드 단위 답변 생성 과정 스트리밍"""
         name = event["name"]
+        tags = event.get("metadata", {}).get("tags", []) or []
 
         if name in NODE_STATUS_MAP:
             yield ChatStreamingStatusResponse(
@@ -113,7 +112,7 @@ class ChatStreamProcessor:
             )
 
         # 답변 생성 노드 시작 시: 초기 출처 후보 목록 전송
-        if name in ("generate_final_answer", "generate_final_answer_fast"):
+        if "has_citations" in tags:
             input_data = event["data"].get("input", {})
             docs = input_data.get("retrieved_docs", [])
             sources = [
@@ -139,17 +138,35 @@ class ChatStreamProcessor:
     ) -> AsyncGenerator[StreamEvent, None]:
         """토큰 스트리밍 (citation 태그 노출 차단 포함)"""
         chunk = event["data"].get("chunk")
-        node = event["metadata"].get("langgraph_node")
+        tags = event.get("metadata", {}).get("tags", []) or []
 
-        # 타겟 노드가 아니거나 컨텐츠가 없으면 스킵
-        # clarify는 LLM 호출이 없으므로 이 분기에 진입하지 않음 (on_chain_end fallback으로 처리)
-        is_target_node = node in ("direct_answer", "generate_final_answer", "generate_final_answer_fast")
-        if not (is_target_node and chunk and chunk.content):
+        # stream_target 태그가 없으면 사용자 노출 대상이 아님 (graph.py / subgraphs/*.py 참고).
+        # clarify는 LLM 호출이 없으므로 이 분기에 진입하지 않음 (on_custom_event로 처리).
+        if not ("stream_target" in tags and chunk and chunk.content):
+            return
+
+        # extended_thinking 모델은 chunk.content가 list of blocks
+        # ([{"type": "thinking"|"reasoning_content"|"text", ...}]) 형태로 옴.
+        # 사용자에게는 text 델타만 노출하고 thinking은 버린다.
+        raw = chunk.content
+        if isinstance(raw, list):
+            token = "".join(
+                block.get("text", "")
+                for block in raw
+                if isinstance(block, dict) and block.get("type") == "text"
+            )
+        else:
+            token = raw
+
+        if not token:
             return
 
         self.context.has_streamed = True
 
-        token = chunk.content
+        # has_citations 노드가 아니면 인용 태그 차단 로직이 불필요하므로 그대로 전송
+        if "has_citations" not in tags:
+            yield ChatStreamingTokenResponse(session_id=self.session_id, token=token)
+            return
 
         # 사용자에게 출처 인용 정보가 담긴 XML 태그가 노출되지 않도록 검증하기 위한 토큰 버퍼
         current_buffer = self.context.buffer + token
@@ -250,15 +267,6 @@ class ChatStreamProcessor:
         # case 2: 인용 사유를 포함한 최종 소스 전송 (빈 목록도 전송해 프론트엔드 상태 동기화)
         if "sources" in output:
             final_sources = output["sources"]
-            logger.info(
-                "final_sources_sent",
-                session_id=str(self.session_id),
-                count=len(final_sources),
-            )
-            yield ChatStreamingSourceResponse(
-                session_id=self.session_id, sources=final_sources
-            )
-
             logger.info(
                 "final_sources_sent",
                 session_id=str(self.session_id),

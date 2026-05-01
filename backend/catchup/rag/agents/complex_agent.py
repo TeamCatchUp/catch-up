@@ -1,4 +1,5 @@
 import asyncio
+
 import structlog
 from langchain.chat_models import BaseChatModel
 from langchain_core.messages import HumanMessage
@@ -9,7 +10,9 @@ from catchup.rag.agents.tools.search_tools import REACT_TOOLS
 from catchup.rag.nodes.utils import ainvoke_llm_with_token_usage
 from catchup.rag.nodes.utils import build_docs_summary
 from catchup.rag.nodes.utils import build_system_message
+from catchup.rag.nodes.utils import coerce_message_text
 from catchup.rag.nodes.utils import drop_orphaned_tool_calls
+from catchup.rag.nodes.utils import extract_essential_ids
 from catchup.rag.nodes.utils import log_node
 from catchup.rag.schemas.structures import SearchPlan
 from catchup.rag.schemas.structures import SearchStep
@@ -84,9 +87,8 @@ async def complex_planner_node(
 async def complex_agent_node(
     state: AgentState,
     llm: BaseChatModel,
-    timeout: float | None = None,
 ):
-    """Complex ReAct 에이전트. LARGE 모델, max_iter=7.
+    """Complex ReAct 에이전트 노드이다. LARGE 모델, max_iter=7을 사용한다.
     search_plan과 accumulated_docs를 참조해 다음 검색 전략을 결정한다."""
     pipeline_plan = state.get("pipeline_plan")
     max_iterations = pipeline_plan.max_iterations if pipeline_plan else 7
@@ -117,7 +119,6 @@ async def complex_agent_node(
             llm=llm_with_tools,
             messages=[system_message, HumanMessage(content=query)] + existing_messages,
             semaphore=rag_semaphores.llm_large,
-            timeout=timeout,
         )
     except asyncio.TimeoutError as e:
         raise e
@@ -141,7 +142,12 @@ async def complex_agent_node(
     # 에이전트가 더 이상 도구를 호출하지 않으면(루프 종료), 자신의 판단을 state에 기록해 답변 노드에 전달한다.
     reasoning_update = {}
     if not tool_calls:
-        reasoning_update = {"agent_reasoning": response.content}
+        reasoning = coerce_message_text(response.content)
+        essential_ids = extract_essential_ids(reasoning, accumulated_docs)
+        reasoning_update = {
+            "agent_reasoning": reasoning,
+            "essential_doc_ids": list(essential_ids) if essential_ids else []
+        }
 
     return {
         "messages": [response],
