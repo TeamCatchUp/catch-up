@@ -116,14 +116,4 @@ async def collect_docs_node(state: AgentState):
         capped=len(accumulated) > _RERANK_INPUT_WINDOW,
     )
 
-    update = {"retrieved_docs": capped}
-
-    # agent_reasoning이 없는데 에이전트 루프가 끝난 경우 (예: max_iterations 도달), 기본 메시지를 설정한다.
-    if not state.get("agent_reasoning"):
-        update["agent_reasoning"] = (
-            "[Key Documents]: Documents were collected across multiple sources.\n"
-            "[Search Coverage]: General search was performed.\n"
-            "[Reason for Stopping]: Search reached maximum allotted iterations."
-        )
-
-    return update
+    return {"retrieved_docs": capped}

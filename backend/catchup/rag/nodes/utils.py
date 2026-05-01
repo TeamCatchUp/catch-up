@@ -309,25 +309,39 @@ def coerce_message_text(content: Any) -> str:
     return str(content) if content is not None else ""
 
 
+_KEY_DOC_INDICES_TAG_PATTERN = re.compile(
+    r"<\s*key_document_indices\s*>(.*?)<\s*/\s*key_document_indices\s*>",
+    re.IGNORECASE | re.DOTALL,
+)
+
+
+def strip_key_document_indices(reasoning: str) -> str:
+    """답변 LLM에 넘기기 전, agent_reasoning에서 <key_document_indices> 태그를 제거한다.
+
+    rerank 이후 인덱스가 stale해지므로, 정확한 인덱스는 confirmed_priority_documents
+    프롬프트 블록을 통해 따로 전달된다. 여기서는 stale 인덱스 노출만 막는다.
+    """
+    if not reasoning:
+        return reasoning
+    return _KEY_DOC_INDICES_TAG_PATTERN.sub("", reasoning).strip()
+
+
 def extract_essential_ids(reasoning: str | None, docs: list[Document]) -> set[str]:
     """
-    Agent의 reasoning에서 [Key Document Indices]를 추출하여 실제 문서 ID(또는 해시) 세트로 변환한다.
-    마크다운 강조(**n**), 대괄호([n]), 콤마/공백 구분 등 다양한 형식을 지원.
+    Agent의 reasoning에서 <key_document_indices> 태그를 추출하여 실제 문서 ID 세트로 변환한다.
+    마크다운 강조(**n**), 대괄호([n]), 콤마/공백 구분 등 다양한 내부 형식을 지원.
     """
     if not reasoning or not docs:
         return set()
 
-    # 1. [Key Document Indices]: 이후의 텍스트를 추출한다.
-    # 대소문자 무시 및 유연한 매칭을 수행한다.
-    pattern = r"\[Key Document Indices\]:\s*(.*)"
-    match = re.search(pattern, reasoning, re.IGNORECASE)
+    match = _KEY_DOC_INDICES_TAG_PATTERN.search(reasoning)
     if not match:
-        # 패턴 자체가 없으면 조용히 반환한다 (에이전트가 지목을 안 한 경우일 수 있음).
+        # 태그가 없으면 조용히 반환한다 (에이전트가 지목을 안 한 경우일 수 있음).
         return set()
 
-    content = match.group(1).split("\n")[0] # 첫 줄만 취한다.
+    content = match.group(1)
 
-    # 2. 숫자만 모두 추출한다 (마크다운 등 특수문자 제거 효과).
+    # 숫자만 모두 추출한다 (마크다운 등 특수문자 제거 효과).
     indices = [int(s) for s in re.findall(r"\d+", content)]
 
     
