@@ -32,7 +32,11 @@ interface JobState {
   items: EmbeddingProgressItem[];
 }
 
+/** UI 정렬 순서. 채널톡은 마지막. */
 const CONNECTOR_ORDER: SyncConnector[] = ['jira', 'github', 'slack', 'confluence', 'channel_talk'];
+
+/** 단일 scope를 사용하는 connector 목록 (채널톡 제외). 채널톡은 multi-channel이라 별도 처리. */
+const SINGLE_SCOPE_CONNECTORS: Exclude<SyncConnector, 'channel_talk'>[] = ['jira', 'github', 'slack', 'confluence'];
 
 /** job status → 버튼 상태 변환 */
 const toButtonState = (status: SyncJobStatus | undefined): EmbeddingButtonState => {
@@ -51,6 +55,17 @@ const toButtonState = (status: SyncJobStatus | undefined): EmbeddingButtonState 
 /** syncStatus → 복원 대상이면 true */
 const isActiveStatus = (status: SyncStatusResponse | undefined): status is SyncStatusResponse => !!status;
 
+/** in_progress가 'idle'/'completed'를 이김. 같은 connector의 여러 job 중 가장 진행 중인 상태를 우선 표시. */
+const mergeButtonState = (
+  current: EmbeddingButtonState,
+  incoming: EmbeddingButtonState,
+): EmbeddingButtonState => {
+  if (current === 'in_progress') return current;
+  if (incoming === 'in_progress') return 'in_progress';
+  if (current === 'completed' || incoming === 'completed') return 'completed';
+  return 'idle';
+};
+
 /**
  * 임베딩 job 상태 관리 훅 (Polling 기반).
  *
@@ -58,6 +73,10 @@ const isActiveStatus = (status: SyncStatusResponse | undefined): status is SyncS
  * - 모든 활성 job → GET /sync/jobs/{jobId} polling (10초 간격)
  * - 완료/실패 시 polling 자동 중단
  * - 버튼 상태 + 진행 현황 데이터 도출
+ *
+ * 채널톡은 N개 channel을 동시 등록할 수 있어 channel별로 별도 syncStatus 폴링.
+ * `manualJobs`는 같은 connector의 N개 job(jobId 다름)을 동시 보관하며, jobId 기준으로 dedupe.
+ * `buttonStates['channel_talk']`은 N개 channel job 중 가장 진행 중인 상태로 통합.
  */
 export const useEmbeddingJobs = () => {
   const [manualJobs, setManualJobs] = useState<ActiveJob[]>(() => {
@@ -69,16 +88,16 @@ export const useEmbeddingJobs = () => {
     }
   });
 
-  // ─── Step 1: Scope 획득 (4개 API) ───
+  // ─── Step 1: Scope 획득 ───
 
   const githubQuery = useQuery(adminConnectorQueries.githubInstallations());
   const slackQuery = useQuery(adminConnectorQueries.slackInstallationStatus());
   const atlassianQuery = useQuery(adminConnectorQueries.atlassianInstallationStatus());
-  // 채널톡은 useChannelTalkViewModel과 같은 queryKey라 cache 공유 (중복 fetch 없음)
-  const channelTalkQuery = useQuery(channelTalkQueries.detail());
+  // 채널톡은 ManagementPanel과 같은 queryKey라 cache 공유
+  const channelTalkQuery = useQuery(channelTalkQueries.list());
 
-  const scopeMap = useMemo((): Partial<Record<SyncConnector, string>> => {
-    const map: Partial<Record<SyncConnector, string>> = {};
+  const singleScopeMap = useMemo((): Partial<Record<(typeof SINGLE_SCOPE_CONNECTORS)[number], string>> => {
+    const map: Partial<Record<(typeof SINGLE_SCOPE_CONNECTORS)[number], string>> = {};
 
     const githubInstallation = githubQuery.data?.[0];
     if (githubInstallation) map.github = String(githubInstallation.installation_id);
@@ -92,19 +111,40 @@ export const useEmbeddingJobs = () => {
     const confluenceResource = atlassianQuery.data?.resources?.find(isConfluenceResource);
     if (confluenceResource) map.confluence = confluenceResource.id;
 
-    if (channelTalkQuery.data?.installed && channelTalkQuery.data.channel_id) {
-      map.channel_talk = channelTalkQuery.data.channel_id;
-    }
-
     return map;
-  }, [githubQuery.data, slackQuery.data, atlassianQuery.data, channelTalkQuery.data]);
+  }, [githubQuery.data, slackQuery.data, atlassianQuery.data]);
 
-  // ─── Step 2: syncStatus로 활성 job 발견 (1회) ───
+  /** 채널톡은 등록된 모든 channel_id를 추적 대상으로. installed=true + channel_id non-null만. */
+  const channelTalkChannelIds = useMemo(
+    () =>
+      (channelTalkQuery.data ?? [])
+        .filter((c): c is typeof c & { channel_id: string } => c.installed && !!c.channel_id)
+        .map((c) => c.channel_id),
+    [channelTalkQuery.data],
+  );
+
+  // ─── Step 2: syncStatus로 활성 job 발견 ───
+  // 일반 connector 4개 + 채널톡 N개 channel별로 동시 호출.
+
+  /** statusQueries 인덱스 ↔ (connector, scope_id) 매핑 — restoredJobs 도출 시 사용 */
+  const statusKeys = useMemo<{ connector: SyncConnector; scope_id: string }[]>(
+    () => [
+      ...SINGLE_SCOPE_CONNECTORS.map((connector) => ({
+        connector,
+        scope_id: singleScopeMap[connector] ?? '',
+      })),
+      ...channelTalkChannelIds.map((channelId) => ({
+        connector: 'channel_talk' as SyncConnector,
+        scope_id: channelId,
+      })),
+    ],
+    [singleScopeMap, channelTalkChannelIds],
+  );
 
   const statusQueries = useQueries({
-    queries: CONNECTOR_ORDER.map((connector) => ({
-      ...adminConnectorQueries.syncStatus(connector, scopeMap[connector] ?? ''),
-      enabled: !!scopeMap[connector],
+    queries: statusKeys.map(({ connector, scope_id }) => ({
+      ...adminConnectorQueries.syncStatus(connector, scope_id),
+      enabled: !!scope_id,
       staleTime: 0,
     })),
   });
@@ -115,16 +155,27 @@ export const useEmbeddingJobs = () => {
     const jobs: ActiveJob[] = [];
     statusDataList.forEach((data, index) => {
       if (isActiveStatus(data)) {
-        jobs.push({ jobId: data.job_id, connector: CONNECTOR_ORDER[index], initialStatus: data.status });
+        jobs.push({
+          jobId: data.job_id,
+          connector: statusKeys[index].connector,
+          initialStatus: data.status,
+        });
       }
     });
     return jobs;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [...statusDataList]);
+  }, [...statusDataList, statusKeys]);
 
+  /** manual + restored 합집합. jobId 기준 dedupe — 같은 connector의 다른 job들은 모두 추적. */
   const activeJobs = useMemo((): ActiveJob[] => {
-    const manualConnectors = new Set(manualJobs.map((j) => j.connector));
-    return [...manualJobs, ...restoredJobs.filter((j) => !manualConnectors.has(j.connector))];
+    const seen = new Set<string>();
+    const merged: ActiveJob[] = [];
+    for (const job of [...manualJobs, ...restoredJobs]) {
+      if (seen.has(job.jobId)) continue;
+      seen.add(job.jobId);
+      merged.push(job);
+    }
+    return merged;
   }, [manualJobs, restoredJobs]);
 
   // ─── Step 3: Snapshot polling (모든 activeJobs) ───
@@ -135,7 +186,7 @@ export const useEmbeddingJobs = () => {
       refetchInterval: (query: { state: { data?: { status: SyncJobStatus } } }) => {
         const status = query.state.data?.status;
         if (status === 'success' || status === 'failed') return false;
-        return 10000; // 10초로 변경 예정
+        return 10000;
       },
       staleTime: 0,
     })),
@@ -164,19 +215,20 @@ export const useEmbeddingJobs = () => {
   }, [activeJobs, snapshotQueries]);
 
   // ─── 초기 로딩 판별 ───
-  // scope 획득 + syncStatus 조회가 끝나야 activeJobs가 확정됨
   const isScopeLoading =
     githubQuery.isLoading || slackQuery.isLoading || atlassianQuery.isLoading || channelTalkQuery.isLoading;
-  const isStatusLoading = statusQueries.some((q, i) => !!scopeMap[CONNECTOR_ORDER[i]] && q.isLoading);
-  // sessionStorage에서 복원된 job이 있으면 이미 activeJobs가 있으므로 초기 로딩 아님
+  const isStatusLoading = statusQueries.some((q, i) => !!statusKeys[i].scope_id && q.isLoading);
   const isInitialLoading = manualJobs.length === 0 && (isScopeLoading || isStatusLoading);
 
   // ─── Step 4: 파생 상태 ───
 
+  /**
+   * 임베딩 시작 시 호출. jobId 기준 dedupe — 같은 connector의 N개 job이 동시 보관됨 (채널톡 multi-channel).
+   */
   const handleJobStart = useCallback((jobId: string, connector: SyncConnector) => {
     setManualJobs((prev) => {
-      const filtered = prev.filter((j) => j.connector !== connector);
-      const updated = [...filtered, { jobId, connector }];
+      if (prev.some((j) => j.jobId === jobId)) return prev;
+      const updated = [...prev, { jobId, connector }];
       try {
         sessionStorage.setItem(SESSION_KEY, JSON.stringify(updated));
       } catch {}
@@ -194,13 +246,9 @@ export const useEmbeddingJobs = () => {
     };
     for (const job of activeJobs) {
       const jobState = jobStates[job.jobId];
-      if (!jobState) {
-        // manual job (sessionStorage 포함): in_progress로 간주
-        // restored job: syncStatus의 실제 상태 사용 (completed job이 in_progress로 깜빡이는 것 방지)
-        states[job.connector] = toButtonState(job.initialStatus ?? 'in_progress');
-      } else {
-        states[job.connector] = toButtonState(jobState.status);
-      }
+      // manual job(snapshot 미도착) → in_progress로 간주. restored job → initialStatus 사용.
+      const incoming = !jobState ? toButtonState(job.initialStatus ?? 'in_progress') : toButtonState(jobState.status);
+      states[job.connector] = mergeButtonState(states[job.connector], incoming);
     }
     return states;
   }, [activeJobs, jobStates]);
