@@ -9,11 +9,11 @@ ChannelTalkPublicTargetType = Literal["channel", "space"]
 ChannelTalkRuntimeTarget = Literal["user_chat", "document_article"]
 
 CHANNEL_TALK_USER_CHAT_RUNTIME_TARGET: ChannelTalkRuntimeTarget = "user_chat"
-CHANNEL_TALK_USER_CHAT_DISPLAY_NAME = "UserChat"
+CHANNEL_TALK_USER_CHAT_DISPLAY_NAME = "user_chat"
 CHANNEL_TALK_DOCUMENT_ARTICLE_RUNTIME_TARGET: ChannelTalkRuntimeTarget = (
     "document_article"
 )
-CHANNEL_TALK_DOCUMENT_ARTICLE_DISPLAY_NAME = "DocumentArticle"
+CHANNEL_TALK_DOCUMENT_ARTICLE_DISPLAY_NAME = "article"
 CHANNEL_TALK_CHANNEL_TARGET_KIND = "channel_talk.channel"
 CHANNEL_TALK_DOCUMENT_SPACE_TARGET_KIND = "channel_talk.document_space"
 
@@ -169,4 +169,3 @@ class ChannelTalkFullSyncTargetPlan:
             metadata["space_id"] = require_text(raw_space_id, "space_id")
             metadata["space_name"] = require_text(raw_space_name, "space_name")
         return metadata
-

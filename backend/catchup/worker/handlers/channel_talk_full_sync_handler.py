@@ -8,20 +8,17 @@ from fastapi.concurrency import run_in_threadpool
 from catchup.audit.actions import FullSyncAction
 from catchup.audit.metadata import FullSyncEventAuditMetadata
 from catchup.audit.utils import audit_log
-from catchup.connector_core.adapters.channel_talk.document_article_full_sync_adapter import (
-    ChannelTalkDocumentArticleFullSyncAdapter,
+from catchup.connector_core.adapters.channel_talk.article_full_sync import (
+    ChannelTalkArticleFullSyncAdapter,
 )
-from catchup.connector_core.adapters.channel_talk.document_article_full_sync_adapter import (
-    ChannelTalkDocumentArticleFullSyncExecutionRequest,
-)
-from catchup.connector_core.adapters.channel_talk.full_sync_adapter import (
-    ChannelTalkFullSyncAdapter,
-)
-from catchup.connector_core.adapters.channel_talk.full_sync_adapter import (
-    ChannelTalkFullSyncExecutionRequest,
+from catchup.connector_core.adapters.channel_talk.user_chat_full_sync import (
+    ChannelTalkUserChatFullSyncAdapter,
 )
 from catchup.connector_core.application.full_sync import ConnectorFullSyncApplication
 from catchup.connector_core.ports.full_sync import FullSyncWindow
+from catchup.connectors.channel_talk.article_full_sync_models import (
+    ChannelTalkArticleFullSyncExecutionRequest,
+)
 from catchup.connectors.channel_talk.full_sync_helper import (
     is_verified_channel_talk_document_connection,
 )
@@ -43,6 +40,9 @@ from catchup.connectors.channel_talk.full_sync_target_contract import (
 from catchup.connectors.channel_talk.schemas.document_connection import (
     ChannelTalkDocumentCredentialsRecord,
 )
+from catchup.connectors.channel_talk.user_chat_full_sync_models import (
+    ChannelTalkUserChatFullSyncExecutionRequest,
+)
 from catchup.sync.audit import SyncAuditContext
 from catchup.sync.common.schemas import FullSyncContext
 from catchup.sync.common.schemas import SyncTargetType
@@ -56,11 +56,11 @@ class ChannelTalkFullSyncHandler(BaseFullSyncHandler):
     def __init__(self) -> None:
         self._applications = {
             CHANNEL_TALK_USER_CHAT_RUNTIME_TARGET: ConnectorFullSyncApplication(
-                port=ChannelTalkFullSyncAdapter(),
+                port=ChannelTalkUserChatFullSyncAdapter(),
             ),
             CHANNEL_TALK_DOCUMENT_ARTICLE_RUNTIME_TARGET: (
                 ConnectorFullSyncApplication(
-                    port=ChannelTalkDocumentArticleFullSyncAdapter(),
+                    port=ChannelTalkArticleFullSyncAdapter(),
                 )
             ),
         }
@@ -123,15 +123,15 @@ class ChannelTalkFullSyncHandler(BaseFullSyncHandler):
             job_id=context.job_id,
             task_id=context.event_id,
         )
-        # UserChat은 channel connection만 필요하고, DocumentArticle은 요청 space_id와
+        # UserChat은 channel connection만 필요하고, Article은 요청 space_id와
         # 일치하는 verified Documents connection을 추가로 확인한다.
         execution = (
-            ChannelTalkFullSyncExecutionRequest(
+            ChannelTalkUserChatFullSyncExecutionRequest(
                 tenant_id=channel_id,
                 audit_context=audit_context,
             )
             if runtime_target == CHANNEL_TALK_USER_CHAT_RUNTIME_TARGET
-            else ChannelTalkDocumentArticleFullSyncExecutionRequest(
+            else ChannelTalkArticleFullSyncExecutionRequest(
                 tenant_id=channel_id,
                 channel_connection=connection,
                 document_connection=await self._load_verified_document_connection(
