@@ -9,17 +9,18 @@ from catchup.audit.actions import IncrementalSyncAction
 from catchup.audit.metadata import IncrementalRecordAuditMetadata
 from catchup.audit.utils import audit_log
 from catchup.connector_core.adapters.channel_talk.article_incremental import (
-    ChannelTalkArticleIncrementalAdapter,
+    ChannelTalkArticleIncrementalIngestionAdapter,
 )
 from catchup.connector_core.adapters.channel_talk.user_chat_incremental import (
-    ChannelTalkUserChatIncrementalAdapter,
+    ChannelTalkUserChatIncrementalIngestionAdapter,
 )
-from catchup.connector_core.ports.full_sync import FullSyncWindow
+from catchup.connector_core.application.sync_ingestion import run_sync_ingestion
+from catchup.connector_core.ports.sync_ingestion import SyncWindow
 from catchup.connectors.channel_talk.core.user_chat_full_sync_models import (
-    ChannelTalkUserChatFullSyncExecutionRequest,
+    ChannelTalkUserChatIncrementalExecutionRequest,
 )
 from catchup.connectors.channel_talk.document_space.article_full_sync_models import (
-    ChannelTalkArticleFullSyncExecutionRequest,
+    ChannelTalkArticleIncrementalExecutionRequest,
 )
 from catchup.connectors.channel_talk.full_sync_helper import (
     is_verified_channel_talk_document_connection,
@@ -43,8 +44,8 @@ class ChannelTalkIncrementalHandler(BaseIncrementalHandler):
     connector = "channel_talk"
 
     def __init__(self) -> None:
-        self._user_chat_adapter = ChannelTalkUserChatIncrementalAdapter()
-        self._article_adapter = ChannelTalkArticleIncrementalAdapter()
+        self._user_chat_adapter = ChannelTalkUserChatIncrementalIngestionAdapter()
+        self._article_adapter = ChannelTalkArticleIncrementalIngestionAdapter()
 
     @audit_log(
         IncrementalSyncAction.RECORD,
@@ -64,7 +65,7 @@ class ChannelTalkIncrementalHandler(BaseIncrementalHandler):
         if not record_id:
             raise ValueError("channel_talk incremental record_id is empty")
 
-        sync_window = FullSyncWindow(
+        sync_window = SyncWindow(
             window_start=self._resolve_since(context),
             window_end=datetime.now(timezone.utc),
         )
@@ -105,18 +106,19 @@ class ChannelTalkIncrementalHandler(BaseIncrementalHandler):
         *,
         channel_id: str,
         user_chat_id: str,
-        sync_window: FullSyncWindow,
+        sync_window: SyncWindow,
         audit_context: SyncAuditContext,
     ) -> int:
-        result = await self._user_chat_adapter.sync_user_chat_by_id(
-            execution=ChannelTalkUserChatFullSyncExecutionRequest(
+        result = await run_sync_ingestion(
+            port=self._user_chat_adapter,
+            execution=ChannelTalkUserChatIncrementalExecutionRequest(
                 tenant_id=channel_id,
                 audit_context=audit_context,
+                user_chat_id=user_chat_id,
             ),
-            user_chat_id=user_chat_id,
             sync_window=sync_window,
         )
-        return result.persisted_count
+        return result.persisted.persisted_count
 
     async def _sync_document_article(
         self,
@@ -124,7 +126,7 @@ class ChannelTalkIncrementalHandler(BaseIncrementalHandler):
         channel_id: str,
         space_id: str,
         article_id: str,
-        sync_window: FullSyncWindow,
+        sync_window: SyncWindow,
         audit_context: SyncAuditContext,
     ) -> int:
         if not space_id:
@@ -152,14 +154,15 @@ class ChannelTalkIncrementalHandler(BaseIncrementalHandler):
                 "channel_talk documents credentials are not API verified for the requested channel"
             )
 
-        result = await self._article_adapter.sync_article_by_id(
-            execution=ChannelTalkArticleFullSyncExecutionRequest(
+        result = await run_sync_ingestion(
+            port=self._article_adapter,
+            execution=ChannelTalkArticleIncrementalExecutionRequest(
                 tenant_id=channel_id,
                 channel_connection=channel_connection,
                 document_connection=document_connection,
                 audit_context=audit_context,
+                article_id=article_id,
             ),
-            article_id=article_id,
             sync_window=sync_window,
         )
-        return result.persisted_count
+        return result.persisted.persisted_count
