@@ -49,18 +49,25 @@ Your goal is to convert a context-complete Korean question into **High-Density S
 
 </optimization_strategies>
 
-
 <output_schema>
-[
-  {
-    "query": "Optimized semantic query string",
-    "keyword_tokens": ["Key term 1", "Key term 2"],
-    "start_date": "YYYY-MM-DDTHH:MM:SS or null",
-    "end_date": "YYYY-MM-DDTHH:MM:SS or null",
-    "reasoning": "Why this query and tokens are generated"
-  }
-]
+{
+  "reasoning": "One Korean sentence explaining the overall search direction chosen",
+  "queries": [
+    {
+      "query": "Optimized semantic query string",
+      "keyword_tokens": ["Key term 1", "Key term 2"],
+      "start_date": "YYYY-MM-DDTHH:MM:SS or null",
+      "end_date": "YYYY-MM-DDTHH:MM:SS or null",
+      "reasoning": "Why this query and tokens are generated"
+    }
+  ]
+}
 </output_schema>
+
+<output_instructions>
+- Fill in the top-level `reasoning` with **one Korean sentence** explaining the overall search direction (e.g. "다양한 각도에서 접근할 수 있도록 구조·구현·맥락별로 쿼리를 나눴어요.", "특정 티켓 ID가 있어서 키워드 중심으로 단일 쿼리로 접근했어요.").
+- Per-query `reasoning` can be brief English.
+</output_instructions>
 
 <user_query>
 << query >>

@@ -2,6 +2,7 @@ import asyncio
 
 import structlog
 from langchain.chat_models import BaseChatModel
+from langchain_core.callbacks import adispatch_custom_event
 from langchain_core.messages import HumanMessage
 
 from catchup.costs.utils import token_usage
@@ -13,7 +14,9 @@ from catchup.rag.nodes.utils import build_system_message
 from catchup.rag.nodes.utils import coerce_message_text
 from catchup.rag.nodes.utils import drop_orphaned_tool_calls
 from catchup.rag.nodes.utils import extract_essential_ids
+from catchup.rag.nodes.utils import extract_reason_for_stopping
 from catchup.rag.nodes.utils import log_node
+from catchup.rag.static_reasoning import get_static_reasoning
 from catchup.rag.schemas.structures import SearchPlan
 from catchup.rag.schemas.structures import SearchStep
 from catchup.rag.semaphores import rag_semaphores
@@ -45,6 +48,15 @@ async def complex_planner_node(
         include_raw=True,
     )
 
+    await adispatch_custom_event(
+        "process",
+        {
+            "status": "in_progress",
+            "node": "complex_planner",
+            "reasoning": get_static_reasoning("complex_planner"),
+        },
+    )
+
     try:
         response, token_usages = await ainvoke_llm_with_token_usage(
             llm=structured_llm,
@@ -58,10 +70,8 @@ async def complex_planner_node(
     except Exception:
         return {"search_plan": None}
 
-    logger.info(
-        "complex_plan_created",
-        step_count=len(plan.steps) if plan else 0,
-    )
+    step_count = len(plan.steps) if plan else 0
+    logger.info("complex_plan_created", step_count=step_count)
     if plan:
         logger.debug(
             "complex_plan_steps",
@@ -75,6 +85,15 @@ async def complex_planner_node(
                 for s in plan.steps
             ],
         )
+        for s in plan.steps:
+            await adispatch_custom_event(
+                "process",
+                {
+                    "status": "completed",
+                    "node": "complex_planner",
+                    "content": [{"step": s.step, "intent": s.intent}],
+                },
+            )
 
     return {
         "search_plan": plan.steps if plan else None,
@@ -113,6 +132,11 @@ async def complex_agent_node(
 
     llm_with_tools = llm.bind_tools(REACT_TOOLS)
 
+    await adispatch_custom_event(
+        "process",
+        {"status": "in_progress", "node": "complex_agent"},
+    )
+
     existing_messages = drop_orphaned_tool_calls(state.get("messages", []))
     try:
         response, token_usages = await ainvoke_llm_with_token_usage(
@@ -141,13 +165,22 @@ async def complex_agent_node(
 
     # 에이전트가 더 이상 도구를 호출하지 않으면(루프 종료), 자신의 판단을 state에 기록해 답변 노드에 전달한다.
     reasoning_update = {}
+    reasoning = coerce_message_text(response.content)
     if not tool_calls:
-        reasoning = coerce_message_text(response.content)
         essential_ids = extract_essential_ids(reasoning, accumulated_docs)
         reasoning_update = {
             "agent_reasoning": reasoning,
-            "essential_doc_ids": list(essential_ids) if essential_ids else []
+            "essential_doc_ids": list(essential_ids) if essential_ids else [],
         }
+
+    if reasoning:
+        display_reasoning = (
+            extract_reason_for_stopping(reasoning) if not tool_calls else reasoning
+        )
+        await adispatch_custom_event(
+            "process",
+            {"status": "completed", "node": "complex_agent", "reasoning": display_reasoning},
+        )
 
     return {
         "messages": [response],

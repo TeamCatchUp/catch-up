@@ -28,35 +28,41 @@ def _make_processor(save_message: AsyncMock | None = None):
     )
 
 
-def _make_token_event(token: str, node: str = "generate_final_answer") -> dict[str, Any]:
+def _make_token_event(token: str, node: str = "generate_final_answer", tags: list[str] | None = None) -> dict[str, Any]:
     """on_chat_model_stream 이벤트 픽스처."""
+    if tags is None:
+        tags = ["stream_target", "has_citations"]
     chunk = MagicMock()
     chunk.content = token
     return {
         "event": "on_chat_model_stream",
         "name": "ChatModel",
         "data": {"chunk": chunk},
-        "metadata": {"langgraph_node": node},
+        "metadata": {"langgraph_node": node, "tags": tags},
     }
 
 
-def _make_node_start_event(name: str, input_data: dict | None = None) -> dict[str, Any]:
+def _make_node_start_event(name: str, input_data: dict | None = None, tags: list[str] | None = None) -> dict[str, Any]:
     """on_chain_start 이벤트 픽스처."""
+    if tags is None:
+        tags = []
     return {
         "event": "on_chain_start",
         "name": name,
         "data": {"input": input_data or {}},
-        "metadata": {"langgraph_node": name},
+        "metadata": {"langgraph_node": name, "tags": tags},
     }
 
 
-def _make_node_end_event(name: str, output: dict | None = None) -> dict[str, Any]:
+def _make_node_end_event(name: str, output: dict | None = None, tags: list[str] | None = None) -> dict[str, Any]:
     """on_chain_end 이벤트 픽스처."""
+    if tags is None:
+        tags = ["stream_target"]
     return {
         "event": "on_chain_end",
         "name": name,
         "data": {"output": output or {}},
-        "metadata": {"langgraph_node": name},
+        "metadata": {"langgraph_node": name, "tags": tags},
     }
 
 
@@ -145,7 +151,7 @@ class TestTokenStreamCitationBuffer(IsolatedAsyncioTestCase):
 
     async def test_non_target_node_is_skipped(self):
         """target 노드가 아닌 경우 토큰을 전송하지 않는다."""
-        results = await _collect(self.processor, _make_token_event("Hello", node="route"))
+        results = await _collect(self.processor, _make_token_event("Hello", node="route", tags=[]))
         self.assertEqual(results, [])
 
 
@@ -156,15 +162,16 @@ class TestHandleNodeStart(IsolatedAsyncioTestCase):
     def setUp(self):
         self.processor = _make_processor()
 
-    async def test_known_node_yields_status_response(self):
-        """NODE_STATUS_MAP 에 있는 노드는 ChatStreamingStatusResponse를 yield한다."""
-        from catchup.chat.schemas import ChatStreamingStatusResponse
+    async def test_known_node_yields_process_response(self):
+        """INPROGRESS_NODES 에 있는 노드는 ChatStreamingProcessResponse를 yield한다."""
+        from catchup.chat.schemas import ChatStreamingProcessResponse
 
-        results = await _collect(self.processor, _make_node_start_event("route"))
+        results = await _collect(self.processor, _make_node_start_event("rewrite"))
 
         self.assertEqual(len(results), 1)
-        self.assertIsInstance(results[0], ChatStreamingStatusResponse)
-        self.assertEqual(results[0].node, "route")
+        self.assertIsInstance(results[0], ChatStreamingProcessResponse)
+        self.assertEqual(results[0].node, "rewrite")
+        self.assertEqual(results[0].status, "in_progress")
 
     async def test_unknown_node_yields_nothing(self):
         """NODE_STATUS_MAP 에 없는 노드는 아무것도 yield하지 않는다."""
@@ -182,7 +189,11 @@ class TestHandleNodeStart(IsolatedAsyncioTestCase):
         with patch("catchup.chat.stream_processor.BaseSource.from_document", return_value=MagicMock(id="src-1")):
             results = await _collect(
                 self.processor,
-                _make_node_start_event("generate_final_answer", input_data={"retrieved_docs": [doc]}),
+                _make_node_start_event(
+                    "generate_final_answer",
+                    input_data={"retrieved_docs": [doc]},
+                    tags=["has_citations"],
+                ),
             )
 
         # ChatStreamingSourceResponse 가 한 번 생성됐는지 확인
@@ -216,7 +227,7 @@ class TestCitationGating(IsolatedAsyncioTestCase):
 
         results = await _collect(
             self.processor,
-            _make_node_end_event("generate_final_answer", output=output),
+            _make_node_end_event("generate_final_answer", output=output, tags=["stream_target", "has_citations"]),
         )
         # 소스 없으면 빈 리스트지만 차단은 아님 — 예외 없이 통과
         self.assertIsInstance(results, list)

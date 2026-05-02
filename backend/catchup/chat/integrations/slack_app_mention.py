@@ -24,7 +24,7 @@ import structlog
 from fastapi.concurrency import run_in_threadpool
 
 from catchup.chat.factory import get_chat_service
-from catchup.chat.schemas import ChatStreamingSourceResponse
+from catchup.chat.schemas import ChatStreamingProcessResponse, ChatStreamingSourceResponse
 from catchup.chat.schemas import ChatStreamingStatusResponse
 from catchup.chat.schemas import ChatStreamingTokenResponse
 from catchup.db.chat_room import get_chat_room_by_session_id
@@ -247,7 +247,7 @@ class SlackAppMentionOrchestrator:
             mode=APP_MENTION_CHAT_MODE,
             is_slack=True,
         ):
-            if isinstance(chunk, ChatStreamingStatusResponse):
+            if isinstance(chunk, ChatStreamingProcessResponse):
                 await responder.on_node(chunk.node)
                 if chunk.node in {"generate_final_answer_fast", "generate_final_answer", "direct_answer"}:
                     markdown_enabled = True

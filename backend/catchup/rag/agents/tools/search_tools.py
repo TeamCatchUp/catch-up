@@ -2,6 +2,7 @@ import asyncio
 from datetime import datetime
 
 import structlog
+from langchain_core.callbacks import adispatch_custom_event
 from langchain_core.documents import Document
 from langchain_core.messages import ToolMessage
 from langchain_core.tools import tool
@@ -96,6 +97,25 @@ async def _run_search(
     return docs, query
 
 
+def _build_search_queries(tool_calls: list) -> list[dict]:
+    """tool_calls에서 {vector, keyword} 구조로 쿼리 목록을 추출한다."""
+    queries = []
+    for tc in tool_calls:
+        args = tc.get("args", {})
+        if tc["name"] == "single_query_search":
+            queries.append({
+                "vector": args.get("query", ""),
+                "keyword": args.get("keyword_tokens") or [],
+            })
+        elif tc["name"] == "multi_query_search":
+            for req in args.get("search_requests", []):
+                queries.append({
+                    "vector": req.get("query", ""),
+                    "keyword": req.get("keyword_tokens") or [],
+                })
+    return queries
+
+
 # 실행 노드
 @log_node
 async def search_tool_executor_node(
@@ -117,6 +137,16 @@ async def search_tool_executor_node(
         return {}
 
     tool_filters = state.get("tool_filters") or []
+
+    search_queries = _build_search_queries(last_message.tool_calls)
+    await adispatch_custom_event(
+        "process",
+        {
+            "status": "in_progress",
+            "node": "tool_executor",
+            "content": search_queries,
+        },
+    )
 
     # 에이전트가 이전 iteration까지 ToolMessage로 실제로 본 문서 id (누적).
     # 이번 호출 안에서 새로 보여주는 id도 같은 set에 즉시 추가해, 같은 응답의 다른 search가
@@ -225,6 +255,15 @@ async def search_tool_executor_node(
         total_accumulated=len(merged),
         agent_newly_shown=len(newly_shown_ids),
         agent_seen_total=len(seen_ids),
+    )
+
+    await adispatch_custom_event(
+        "process",
+        {
+            "status": "completed",
+            "node": "tool_executor",
+            "reasoning": f"{len(all_docs)}건의 문서를 찾았어요.",
+        },
     )
 
     return {

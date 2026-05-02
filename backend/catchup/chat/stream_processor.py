@@ -14,13 +14,18 @@ from catchup.audit.base import AuditLevel
 from catchup.audit.base import AuditStatus
 from catchup.audit.emitters import emit_audit_event
 from catchup.audit.metadata import ChatAuditMetadata
-from catchup.chat.schemas import NODE_STATUS_MAP
+from catchup.chat.schemas import INPROGRESS_NODES
 from catchup.chat.schemas import ChatStreamingSourceResponse
 from catchup.chat.schemas import ChatStreamingStatusResponse
+from catchup.chat.schemas import ChatStreamingProcessResponse
 from catchup.chat.schemas import ChatStreamingTokenResponse
 from catchup.chat.schemas import StreamEvent
 from catchup.costs.contexts.chat import ChatTokenUsageContext
+from catchup.rag.policies import get_node_completed_payload
+from catchup.rag.policies import get_node_inprogress_payload
 from catchup.rag.schemas.sources import BaseSource
+from catchup.rag.static_reasoning import STATIC_REASONING_NODES
+from catchup.rag.static_reasoning import get_static_reasoning
 
 logger = structlog.get_logger()
 
@@ -91,7 +96,18 @@ class ChatStreamProcessor:
                 self.context.has_streamed = True
                 yield ChatStreamingTokenResponse(session_id=self.session_id, token=token)
 
-        # 4. 노드 종료 (현재는 최종 답변 생성 노드만 관여)
+        # 4. process 스트리밍 (supervisor 등에서 adispatch_custom_event로 발송)
+        elif kind == "on_custom_event" and name == "process":
+            data = event["data"]
+            yield ChatStreamingProcessResponse(
+                session_id=self.session_id,
+                status=data.get("status"),
+                node=data.get("node"),
+                reasoning=data.get("reasoning"),
+                content=data.get("content"),
+            )
+
+        # 5. 노드 종료
         elif kind == "on_chain_end":
             async for res in self._handle_node_end(event):
                 yield res
@@ -104,16 +120,26 @@ class ChatStreamProcessor:
         name = event["name"]
         tags = event.get("metadata", {}).get("tags", []) or []
 
-        if name in NODE_STATUS_MAP:
-            yield ChatStreamingStatusResponse(
+        input_data = event["data"].get("input", {})
+
+        if name in INPROGRESS_NODES:
+            n = len(input_data.get("retrieved_docs", []))
+            reasoning = (
+                get_static_reasoning(name, n=n)
+                if name in STATIC_REASONING_NODES
+                else None
+            )
+            extra = get_node_inprogress_payload(name, input_data) or {}
+            yield ChatStreamingProcessResponse(
+                status="in_progress",
                 session_id=self.session_id,
                 node=name,
-                message=NODE_STATUS_MAP[name],
+                reasoning=reasoning,
+                **extra,
             )
 
         # 답변 생성 노드 시작 시: 초기 출처 후보 목록 전송
         if "has_citations" in tags:
-            input_data = event["data"].get("input", {})
             docs = input_data.get("retrieved_docs", [])
             sources = [
                 BaseSource.from_document(index=i, doc=doc)
@@ -202,14 +228,23 @@ class ChatStreamProcessor:
         self,
         event: dict,
     ) -> AsyncGenerator[StreamEvent, None]:
-        """
-        그래프 종료 시점.
-        인용 사유를 포함한 최종 소스를 업데이트한다.
-        """
+        name = event["name"]
         tags = event.get("metadata", {}).get("tags", [])
-        is_stream_target = "stream_target" in tags
+        output = event["data"].get("output") or {}
 
-        if not is_stream_target:
+        # deterministic 노드 completed 이벤트
+        payload = get_node_completed_payload(name, output)
+        if payload is not None:
+            yield ChatStreamingProcessResponse(
+                status="completed",
+                session_id=self.session_id,
+                node=name,
+                **payload,
+            )
+            return
+
+        # 최종 답변 노드 (기존 로직)
+        if "stream_target" not in tags:
             return
 
         output = event["data"].get("output")
@@ -275,3 +310,9 @@ class ChatStreamProcessor:
             yield ChatStreamingSourceResponse(
                 session_id=self.session_id, sources=final_sources
             )
+
+        yield ChatStreamingProcessResponse(
+            status="completed",
+            session_id=self.session_id,
+            node=name,
+        )

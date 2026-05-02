@@ -35,6 +35,10 @@ class VectorDbSearchQuery(BaseSearchQuery):
 
 
 class VectorDbSearchPlan(BaseModel):
+    reasoning: str = Field(
+        default="",
+        description="이 검색 방향을 선택한 이유 (Korean, 1 sentence)",
+    )
     queries: list[VectorDbSearchQuery] = Field(
         default_factory=list,
         min_length=0,
@@ -60,9 +64,13 @@ class MultiSearchRequest(BaseModel):
 
 # Supervisor가 결정하는 파이프라인 실행 계획
 class PipelinePlan(BaseModel):
-    pipeline_type: Literal[
-        "direct_answer", "reuse", "simple", "standard", "complex", "clarify"
-    ] = Field(description="실행할 파이프라인 타입")
+    reasoning: str = Field(
+        default="",
+        description="이 파이프라인 타입을 선택한 이유 및 분석 결과"
+    )
+    pipeline_type: Literal["direct_answer", "reuse", "simple", "standard", "complex", "clarify"] = Field(
+        description="실행할 파이프라인 타입"
+    )
     max_iterations: int = Field(
         default=3,
         description="ReAct 루프 최대 반복 횟수. simple=0, standard=3, complex=7",

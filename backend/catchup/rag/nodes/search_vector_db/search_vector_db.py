@@ -52,7 +52,6 @@ async def search_vector_db_node(
         )
         return {"retrieved_docs": []}
 
-    # 리스트의 리스트를 평탄화하고 중복 제거
     flattened_results = [doc for sublist in results for doc in sublist]
     unique_results = deduplicate_documents(flattened_results)
 

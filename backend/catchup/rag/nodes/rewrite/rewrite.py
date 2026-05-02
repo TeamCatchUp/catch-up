@@ -46,9 +46,7 @@ async def rewrite_node(
     except asyncio.TimeoutError as e:
         raise e
     except Exception:
-        return {
-            "rewritten_query": original_query,
-        }
+        return {"rewritten_query": original_query}
 
     logger.debug(
         "query_rewrite_result",

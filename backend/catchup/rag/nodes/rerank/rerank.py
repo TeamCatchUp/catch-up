@@ -43,7 +43,7 @@ async def rerank_node(state: AgentState, rerank_service: BaseRerankService):
     essential_doc_ids = set(state.get("essential_doc_ids") or [])
 
     retrieved_docs = _validate_retrieved_docs(retrieved_docs)
-    
+
     try:
         t_sem = time.perf_counter()
         logger.debug(
@@ -129,7 +129,7 @@ async def rerank_node(state: AgentState, rerank_service: BaseRerankService):
             unseen_in_final=unseen_in_final,
             confirmed_essential_count=len(confirmed_essential),
         )
-
+        
         return {
             "retrieved_docs": final_docs,
             "rerank_count": rerank_count + 1,

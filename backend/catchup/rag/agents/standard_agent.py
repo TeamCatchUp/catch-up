@@ -2,6 +2,7 @@ import asyncio
 
 import structlog
 from langchain.chat_models import BaseChatModel
+from langchain_core.callbacks import adispatch_custom_event
 from langchain_core.messages import HumanMessage
 
 from catchup.costs.utils import token_usage
@@ -13,6 +14,7 @@ from catchup.rag.nodes.utils import build_system_message
 from catchup.rag.nodes.utils import coerce_message_text
 from catchup.rag.nodes.utils import drop_orphaned_tool_calls
 from catchup.rag.nodes.utils import extract_essential_ids
+from catchup.rag.nodes.utils import extract_reason_for_stopping
 from catchup.rag.nodes.utils import log_node
 from catchup.rag.semaphores import rag_semaphores
 from catchup.rag.state import AgentState
@@ -50,6 +52,11 @@ async def standard_agent_node(
 
     llm_with_tools = llm.bind_tools(REACT_TOOLS)
 
+    await adispatch_custom_event(
+        "process",
+        {"status": "in_progress", "node": "standard_agent"},
+    )
+
     existing_messages = drop_orphaned_tool_calls(state.get("messages", []))
     try:
         response, token_usages = await ainvoke_llm_with_token_usage(
@@ -79,13 +86,22 @@ async def standard_agent_node(
 
     # 에이전트가 더 이상 도구를 호출하지 않으면(루프 종료), 자신의 판단을 state에 기록해 답변 노드에 전달한다.
     reasoning_update = {}
+    reasoning = coerce_message_text(response.content)
     if not tool_calls:
-        reasoning = coerce_message_text(response.content)
         essential_ids = extract_essential_ids(reasoning, accumulated_docs)
         reasoning_update = {
             "agent_reasoning": reasoning,
-            "essential_doc_ids": list(essential_ids) if essential_ids else []
+            "essential_doc_ids": list(essential_ids) if essential_ids else [],
         }
+
+    if reasoning:
+        display_reasoning = (
+            extract_reason_for_stopping(reasoning) if not tool_calls else reasoning
+        )
+        await adispatch_custom_event(
+            "process",
+            {"status": "completed", "node": "standard_agent", "reasoning": display_reasoning},
+        )
 
     return {
         "messages": [response],

@@ -12,5 +12,5 @@ Use these signals to decide when to stop calling tools:
 - If two consecutive searches each had `new <= 2`, you MUST stop and produce the Structured Reasoning summary.
 - Before issuing another tool call, briefly self-check: "Do I already have enough information to let the answer generator address the user's question?" If yes, stop instead of searching more.
 
-Stopping is a positive action, not a fallback. Producing the Structured Reasoning summary on time is preferred over exhausting iterations.
+Stopping on time is preferred over exhausting iterations. When you stop, record the honest reason in <reason_for_stopping>: was it genuinely sufficient information, search saturation, or hitting the iteration limit? Do not default to "sufficient" when saturation or limits were the real cause.
 </stop_criteria>
