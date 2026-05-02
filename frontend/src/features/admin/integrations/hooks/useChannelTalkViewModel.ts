@@ -8,10 +8,8 @@ import { parseApiError } from '@/shared/api/errors';
 
 import { channelTalkMutations } from '../queries/channelTalk.mutations';
 import type {
-  ChannelTalkChannel,
   ChannelTalkChannelPatch,
   ChannelTalkConnectionState,
-  ChannelTalkDocumentSpace,
   ChannelTalkDocumentSpacePatch,
 } from '../types/channelTalkModel';
 import {
@@ -111,31 +109,28 @@ export function useChannelTalkViewModel(initialState: ChannelTalkConnectionState
 
   const removeChannel = useCallback(
     (channelId: string) => {
-      let removed: ChannelTalkChannel | undefined;
-      let removedIndex = -1;
+      // snapshot은 사용자가 화면에서 본 시점의 state (closure 값) 기준 — 삭제 의도와 일치.
+      // setState updater 안에서 외부 변수를 mutate하던 패턴 대신 외부에서 snapshot을 읽어
+      // updater를 pure하게 유지 (StrictMode 2회 호출 안전).
+      const removedIndex = state.channels.findIndex((c) => c.id === channelId);
+      if (removedIndex < 0) return;
+      const snapshot = state.channels[removedIndex];
 
-      // optimistic UI: 즉시 화면에서 제거하면서 동시에 snapshot 저장 (rollback용)
-      setState((prev) => {
-        removedIndex = prev.channels.findIndex((c) => c.id === channelId);
-        if (removedIndex < 0) return prev;
-        removed = prev.channels[removedIndex];
-        return {
-          ...prev,
-          channels: prev.channels.filter((ch) => ch.id !== channelId),
-        };
-      });
+      // optimistic UI: 즉시 화면에서 제거
+      setState((prev) => ({
+        ...prev,
+        channels: prev.channels.filter((ch) => ch.id !== channelId),
+      }));
 
       // 검증 통과한 채널만 백엔드에 등록되어 있으므로 DELETE 호출 대상.
-      if (!removed || removed.connectionStatus !== 'tested') return;
+      if (snapshot.connectionStatus !== 'tested') return;
 
-      const snapshot = removed;
-      const snapshotIndex = removedIndex;
       deleteChannelMutation.mutate(channelId, {
         onError: (error) => {
           // 백엔드 삭제 실패 → 원래 위치에 복원하여 사용자에게 일관된 view 유지.
           setState((prev) => {
             const next = [...prev.channels];
-            const insertAt = Math.min(snapshotIndex, next.length);
+            const insertAt = Math.min(removedIndex, next.length);
             next.splice(insertAt, 0, snapshot);
             return { ...prev, channels: next };
           });
@@ -144,7 +139,7 @@ export function useChannelTalkViewModel(initialState: ChannelTalkConnectionState
         },
       });
     },
-    [deleteChannelMutation],
+    [deleteChannelMutation, state.channels],
   );
 
   const enterEditMode = useCallback((channelId: string) => {
@@ -220,27 +215,22 @@ export function useChannelTalkViewModel(initialState: ChannelTalkConnectionState
 
   const removeDocumentSpace = useCallback(
     (channelId: string, dsId: string) => {
-      let removed: ChannelTalkDocumentSpace | undefined;
-      let removedIndex = -1;
+      // removeChannel과 동일 패턴 — snapshot을 setState 외부에서 capture해 updater pure 유지.
+      const targetChannel = state.channels.find((c) => c.id === channelId);
+      if (!targetChannel) return;
+      const removedIndex = targetChannel.documentSpaces.findIndex((d) => d.id === dsId);
+      if (removedIndex < 0) return;
+      const snapshot = targetChannel.documentSpaces[removedIndex];
 
-      setState((prev) => {
-        const targetChannel = prev.channels.find((c) => c.id === channelId);
-        if (!targetChannel) return prev;
-        removedIndex = targetChannel.documentSpaces.findIndex((d) => d.id === dsId);
-        if (removedIndex < 0) return prev;
-        removed = targetChannel.documentSpaces[removedIndex];
-        return {
-          ...prev,
-          channels: prev.channels.map((ch) =>
-            ch.id === channelId ? { ...ch, documentSpaces: ch.documentSpaces.filter((ds) => ds.id !== dsId) } : ch,
-          ),
-        };
-      });
+      setState((prev) => ({
+        ...prev,
+        channels: prev.channels.map((ch) =>
+          ch.id === channelId ? { ...ch, documentSpaces: ch.documentSpaces.filter((ds) => ds.id !== dsId) } : ch,
+        ),
+      }));
 
-      if (!removed || removed.connectionStatus !== 'tested') return;
+      if (snapshot.connectionStatus !== 'tested') return;
 
-      const snapshot = removed;
-      const snapshotIndex = removedIndex;
       deleteDocumentMutation.mutate(dsId, {
         onError: (error) => {
           // 원래 위치에 복원
@@ -249,7 +239,7 @@ export function useChannelTalkViewModel(initialState: ChannelTalkConnectionState
             channels: prev.channels.map((ch) => {
               if (ch.id !== channelId) return ch;
               const next = [...ch.documentSpaces];
-              const insertAt = Math.min(snapshotIndex, next.length);
+              const insertAt = Math.min(removedIndex, next.length);
               next.splice(insertAt, 0, snapshot);
               return { ...ch, documentSpaces: next };
             }),
@@ -259,7 +249,7 @@ export function useChannelTalkViewModel(initialState: ChannelTalkConnectionState
         },
       });
     },
-    [deleteDocumentMutation],
+    [deleteDocumentMutation, state.channels],
   );
 
   const testChannelConnection = useCallback(
