@@ -253,6 +253,7 @@ class SourceType(StrEnum):
     JIRA = "jira"
     GITHUB = "github"
     SLACK = "slack"
+    CHANNEL_TALK = "channel_talk"
 
 
 class KnowledgeSource(Base):
@@ -297,6 +298,7 @@ class PreMappingBuffer(Base):
     # Slack: user_id
     # Github: login_id
     # Atlassian: account_id
+    # Channel Talk: manager_id
     external_user_identifier: Mapped[str] = mapped_column(String(128), nullable=False)
     
     is_registered: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")

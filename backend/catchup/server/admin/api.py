@@ -27,6 +27,7 @@ from catchup.auth.dependencies import require_admin_user
 from catchup.chat.schemas import UserQueryWithSaveStatusResponse
 from catchup.db.chat_room import get_all_queries_for_admin
 from catchup.db.dependencies import get_db
+from catchup.db.models import ChannelTalkManager
 from catchup.db.models import ConfluenceSpace
 from catchup.db.models import ConfluenceUser
 from catchup.db.models import GithubRepository
@@ -34,16 +35,19 @@ from catchup.db.models import GitHubUser
 from catchup.db.models import JiraAccountType
 from catchup.db.models import JiraProject
 from catchup.db.models import JiraUser
+from catchup.db.models import OAuthUser
 from catchup.db.models import PreMappingBuffer
 from catchup.db.models import SlackUser
 from catchup.db.models import SourceType
 from catchup.db.models import SyncConnector
 from catchup.db.models import User
+from catchup.db.models import UserSourceMapping
 from catchup.db.sync.admin_connector_status import AdminConnectorTargetRangeRow
 from catchup.db.sync.admin_connector_status import (
     list_admin_connector_target_range_rows,
 )
 from catchup.db.user_source_mapping import SOURCE_MAP
+from catchup.db.user_source_mapping import upsert_user_source_mapping
 from catchup.db.users import get_all_oauth_users_for_admin
 from catchup.db.users import get_all_users_for_admin
 from catchup.events.enums import AdminOAuthAction
@@ -114,6 +118,14 @@ def _format_datetime(dt):
         return dt.isoformat()
     except Exception:
         return None
+
+
+def _source_extra_condition(extra_col, extra_val):
+    if extra_col is None:
+        return None
+    if extra_val is False:
+        return extra_col.is_not(True)
+    return extra_col == extra_val
 
 
 def _get_connector_status_spec(source: ConnectorStatusSource):
@@ -377,6 +389,15 @@ def _get_user_sync_counts(db: Session) -> SyncStatusCounts:
         .filter(ConfluenceUser.account_type == "atlassian")
         .scalar()
     )
+    channel_talk_managers = (
+        db.query(func.count())
+        .select_from(ChannelTalkManager)
+        .filter(
+            ChannelTalkManager.email.is_not(None),
+            ChannelTalkManager.removed.is_not(True),
+        )
+        .scalar()
+    )
 
     premap_rows = (
         db.query(PreMappingBuffer.source_type, func.count())
@@ -399,6 +420,10 @@ def _get_user_sync_counts(db: Session) -> SyncStatusCounts:
             users=confluence_users or 0,
             premap=premap_map.get(SourceType.CONFLUENCE, 0),
         ),
+        channel_talk=SourceUserCount(
+            users=channel_talk_managers or 0,
+            premap=premap_map.get(SourceType.CHANNEL_TALK, 0),
+        ),
     )
 
 
@@ -406,6 +431,51 @@ class PremappingStatus(StrEnum):
     ALL = "all"  # 모든 인원
     FULL = "full"  # 모든 협업 툴에 대해 premapping이 생성된 경우
     PARTIAL = "partial"  # 적어도 하나의 premapping이 이루어지지 않은 협업 툴이 존재하는 경우
+
+
+def _get_registered_user_id_by_sub(db: Session, sub: str) -> int | None:
+    return db.scalar(
+        select(OAuthUser.user_id).where(
+            OAuthUser.sub == sub,
+            OAuthUser.user_id.is_not(None),
+        )
+    )
+
+
+def _delete_registered_user_source_mapping(
+    db: Session,
+    *,
+    sub: str,
+    source_type: SourceType,
+) -> None:
+    user_id = _get_registered_user_id_by_sub(db, sub)
+    if user_id is None:
+        return
+    db.execute(
+        delete(UserSourceMapping).where(
+            UserSourceMapping.user_id == user_id,
+            UserSourceMapping.source_type == source_type,
+        )
+    )
+
+
+def _upsert_registered_user_source_mapping(
+    db: Session,
+    *,
+    sub: str,
+    source_type: SourceType,
+    external_user_identifier: str,
+) -> bool:
+    user_id = _get_registered_user_id_by_sub(db, sub)
+    if user_id is None:
+        return False
+    upsert_user_source_mapping(
+        db,
+        user_id=user_id,
+        source_type=source_type,
+        external_user_identifier=external_user_identifier,
+    )
+    return True
 
 
 def _get_user_sync_mappings(
@@ -419,10 +489,12 @@ def _get_user_sync_mappings(
     JMap = aliased(PreMappingBuffer)
     SMap = aliased(PreMappingBuffer)
     GMap = aliased(PreMappingBuffer)
+    CTMap = aliased(PreMappingBuffer)
 
     SModel, _, s_email, s_xf, s_xf_val = SOURCE_MAP[SourceType.SLACK]
     JModel, _, j_email, j_xf, j_xf_val = SOURCE_MAP[SourceType.JIRA]
     GModel, _, g_email, _, _ = SOURCE_MAP[SourceType.GITHUB]
+    CTModel, _, ct_email, ct_xf, ct_xf_val = SOURCE_MAP[SourceType.CHANNEL_TALK]
 
     base_users = (
         select(
@@ -442,24 +514,60 @@ def _get_user_sync_mappings(
             JModel, 
             SModel, 
             GModel,
+            CTModel,
             JMap.id.label("j_map_id"),
             SMap.id.label("s_map_id"),
-            GMap.id.label("g_map_id")
+            GMap.id.label("g_map_id"),
+            CTMap.id.label("ct_map_id")
         )
         .select_from(base_users)
-        .outerjoin(JModel, and_(func.lower(base_users.c.email) == func.lower(j_email), j_xf == j_xf_val))
-        .outerjoin(SModel, and_(func.lower(base_users.c.email) == func.lower(s_email), s_xf == s_xf_val))
+        .outerjoin(
+            JModel,
+            and_(
+                func.lower(base_users.c.email) == func.lower(j_email),
+                _source_extra_condition(j_xf, j_xf_val),
+            ),
+        )
+        .outerjoin(
+            SModel,
+            and_(
+                func.lower(base_users.c.email) == func.lower(s_email),
+                _source_extra_condition(s_xf, s_xf_val),
+            ),
+        )
         .outerjoin(GModel, func.lower(base_users.c.email) == func.lower(g_email))
+        .outerjoin(
+            CTModel,
+            and_(
+                func.lower(base_users.c.email) == func.lower(ct_email),
+                _source_extra_condition(ct_xf, ct_xf_val),
+            ),
+        )
         .outerjoin(JMap, and_(base_users.c.email == JMap.email, JMap.source_type == SourceType.JIRA))
         .outerjoin(SMap, and_(base_users.c.email == SMap.email, SMap.source_type == SourceType.SLACK))
         .outerjoin(GMap, and_(base_users.c.email == GMap.email, GMap.source_type == SourceType.GITHUB))
+        .outerjoin(CTMap, and_(base_users.c.email == CTMap.email, CTMap.source_type == SourceType.CHANNEL_TALK))
     )
 
     # 필터링 적용
     if filter_type == PremappingStatus.FULL:
-        base_stmt = base_stmt.where(and_(JMap.id.is_not(None), SMap.id.is_not(None), GMap.id.is_not(None)))
+        base_stmt = base_stmt.where(
+            and_(
+                JMap.id.is_not(None),
+                SMap.id.is_not(None),
+                GMap.id.is_not(None),
+                CTMap.id.is_not(None),
+            )
+        )
     elif filter_type == PremappingStatus.PARTIAL:
-        base_stmt = base_stmt.where(or_(JMap.id.is_(None), SMap.id.is_(None), GMap.id.is_(None)))
+        base_stmt = base_stmt.where(
+            or_(
+                JMap.id.is_(None),
+                SMap.id.is_(None),
+                GMap.id.is_(None),
+                CTMap.id.is_(None),
+            )
+        )
 
     # 전체 개수 조회
     count_stmt = select(func.count()).select_from(base_stmt.subquery())
@@ -480,6 +588,7 @@ def _get_user_sync_mappings(
         jira_user = row.JiraUser
         slack_user = row.SlackUser
         github_user = row.GitHubUser
+        channel_talk_manager = row.ChannelTalkManager
 
         # Jira 정보 조립
         atlassian_info = PreMappingInfo(
@@ -502,13 +611,21 @@ def _get_user_sync_mappings(
             picture=getattr(github_user, "avatar_url", None)
         ) if github_user else None
 
+        # Channel Talk 정보 조립
+        channel_talk_info = PreMappingInfo(
+            name=getattr(channel_talk_manager, "name", None),
+            identifier=getattr(channel_talk_manager, "email", None),
+            picture=getattr(channel_talk_manager, "avatar_url", None)
+        ) if channel_talk_manager else None
+
         results.append(UserSyncMapping(
             sub=row.sub,
             name=row.keycloak_name, 
             email=row.keycloak_email,
             atlassian=atlassian_info,
             slack=slack_info,
-            github=github_info
+            github=github_info,
+            channel_talk=channel_talk_info
         ))
 
     return results, total_count
@@ -894,7 +1011,7 @@ async def sync_oauth_user_list(
     """
 )
 def get_tool_users_by_vendor_type(
-    vendor_type: str = Path(..., description="협업 툴 vendor 종류 (github, slack, atlassian)"),
+    vendor_type: str = Path(..., description="협업 툴 vendor 종류 (github, slack, atlassian, channel_talk)"),
     page: int = Query(1, ge=1),
     size: int = Query(50, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -905,7 +1022,8 @@ def get_tool_users_by_vendor_type(
     vendor_map = {
         "github": SourceType.GITHUB,
         "slack": SourceType.SLACK,
-        "atlassian": SourceType.JIRA
+        "atlassian": SourceType.JIRA,
+        "channel_talk": SourceType.CHANNEL_TALK,
     }
     
     source_type = vendor_map.get(vendor_type.lower())
@@ -915,8 +1033,8 @@ def get_tool_users_by_vendor_type(
     SModel, s_id, s_email, s_xf, s_xf_val = SOURCE_MAP[source_type]
     
     stmt = select(SModel)
-    if s_xf is not None:
-        stmt = stmt.where(s_xf == s_xf_val)
+    if (extra_condition := _source_extra_condition(s_xf, s_xf_val)) is not None:
+        stmt = stmt.where(extra_condition)
     
     # 전체 개수 쿼리 최적화
     total_stmt = select(func.count()).select_from(stmt.subquery())
@@ -932,7 +1050,8 @@ def get_tool_users_by_vendor_type(
         name = (getattr(user, "display_name", None) or 
                 getattr(user, "real_name", None) or 
                 getattr(user, "name", None) or 
-                getattr(user, "login", "Unknown"))
+                getattr(user, "login", None) or
+                "Unknown")
         
         if source_type == SourceType.GITHUB:
             identifier = getattr(user, "login")
@@ -961,7 +1080,7 @@ def get_tool_users_by_vendor_type(
     description="어드민용: Pre-mapping 결과 일괄 수정 적용"
 )
 def bulk_update_pre_mappings(
-    vendor_type: str = Path(...),
+    vendor_type: str = Path(..., description="협업 툴 vendor 종류 (github, slack, atlassian, channel_talk)"),
     request: PreMappingBulkUpdateRequest = Body(...),
     db: Session = Depends(get_db),
     _check_admin = Depends(require_admin_user)
@@ -969,7 +1088,8 @@ def bulk_update_pre_mappings(
     vendor_map = {
         "github": SourceType.GITHUB,
         "slack": SourceType.SLACK,
-        "atlassian": SourceType.JIRA
+        "atlassian": SourceType.JIRA,
+        "channel_talk": SourceType.CHANNEL_TALK,
     }
     source_type = vendor_map.get(vendor_type.lower())
     if not source_type:
@@ -985,6 +1105,11 @@ def bulk_update_pre_mappings(
                     PreMappingBuffer.source_type == source_type
                 )
             )
+            _delete_registered_user_source_mapping(
+                db,
+                sub=item.sub,
+                source_type=source_type,
+            )
         else:
             # external_user_identifier가 없는 비정상 요청 방어
             if not item.external_user_identifier:
@@ -999,14 +1124,29 @@ def bulk_update_pre_mappings(
             if buffer:
                 # 이미 데이터가 있으면 식별자만 업데이트
                 buffer.external_user_identifier = item.external_user_identifier
+                registered = _upsert_registered_user_source_mapping(
+                    db,
+                    sub=item.sub,
+                    source_type=source_type,
+                    external_user_identifier=item.external_user_identifier,
+                )
+                if registered:
+                    buffer.is_registered = True
             else:
+                registered = _upsert_registered_user_source_mapping(
+                    db,
+                    sub=item.sub,
+                    source_type=source_type,
+                    external_user_identifier=item.external_user_identifier,
+                )
                 # 데이터가 없으면 새로 생성 (새로운 매핑 추가)
                 new_buffer = PreMappingBuffer(
                     sub=item.sub,
                     email=item.email,
                     name=item.name,
                     source_type=source_type,
-                    external_user_identifier=item.external_user_identifier
+                    external_user_identifier=item.external_user_identifier,
+                    is_registered=registered,
                 )
                 db.add(new_buffer)
 
