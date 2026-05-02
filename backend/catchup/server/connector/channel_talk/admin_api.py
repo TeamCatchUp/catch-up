@@ -271,6 +271,12 @@ def _build_document_connect_response(
         space_name=result.space_name,
         credential_last_verified_at=_stringify_datetime(result.credential_last_verified_at),
         association_status=_stringify_association_status(result),
+        polling_cycle_hours=result.polling_cycle_hours,
+        last_incremental_polled_at=_stringify_datetime(result.last_incremental_polled_at),
+        last_incremental_poll_started_at=_stringify_datetime(
+            result.last_incremental_poll_started_at
+        ),
+        last_incremental_poll_error=result.last_incremental_poll_error,
         status_reason=None,
         status="connected",
         message="Channel Talk Documents credentials saved.",
@@ -287,6 +293,12 @@ def _build_document_status_response(
         space_name=result.space_name,
         credential_last_verified_at=_stringify_datetime(result.credential_last_verified_at),
         association_status=_stringify_association_status(result),
+        polling_cycle_hours=result.polling_cycle_hours,
+        last_incremental_polled_at=_stringify_datetime(result.last_incremental_polled_at),
+        last_incremental_poll_started_at=_stringify_datetime(
+            result.last_incremental_poll_started_at
+        ),
+        last_incremental_poll_error=result.last_incremental_poll_error,
         status_reason=None,
     )
 

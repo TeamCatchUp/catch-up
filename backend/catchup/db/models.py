@@ -984,6 +984,28 @@ class ChannelTalkDocumentCredentials(Base):
         nullable=False,
         comment="api_verified/local_trusted/unverified/failed",
     )
+    polling_cycle_hours: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=1,
+        server_default=text("1"),
+        comment="Document Space incremental polling cycle in hours",
+    )
+    last_incremental_polled_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        comment="Last completed incremental poll time",
+    )
+    last_incremental_poll_started_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        comment="Last started incremental poll time",
+    )
+    last_incremental_poll_error: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+        comment="Last incremental poll error summary",
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -1253,30 +1275,6 @@ class ChannelTalkGroupManager(Base):
         server_default=func.now(),
         onupdate=func.now(),
         comment="Relation row last update time",
-    )
-
-
-class ChannelTalkDocumentSpace(Base):
-    __tablename__ = "channel_talk_document_spaces"
-
-    channel_id: Mapped[str] = mapped_column(String(128), primary_key=True)
-    space_id: Mapped[str] = mapped_column(String(128), primary_key=True)
-    space_name: Mapped[str] = mapped_column(String(255), nullable=False)
-    synced_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        nullable=False,
-        server_default=func.now(),
-    )
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        nullable=False,
-        server_default=func.now(),
-    )
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        nullable=False,
-        server_default=func.now(),
-        onupdate=func.now(),
     )
 
 

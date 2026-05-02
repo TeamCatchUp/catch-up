@@ -64,6 +64,13 @@ class IncrementalService:
 
         return await poll_confluence_incremental_changes()
 
+    async def poll_channel_talk_document_changes(self) -> dict[str, int]:
+        from catchup.sync.incremental.poll.channel_talk import (
+            poll_channel_talk_document_incremental_changes,
+        )
+
+        return await poll_channel_talk_document_incremental_changes()
+
 
 def create_incremental_service() -> IncrementalService:
     return IncrementalService()

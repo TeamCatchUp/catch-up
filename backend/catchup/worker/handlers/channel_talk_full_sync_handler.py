@@ -162,9 +162,11 @@ class ChannelTalkFullSyncHandler(BaseFullSyncHandler):
     ) -> ChannelTalkDocumentCredentialsRecord:
         # space target은 실제 Channel Talk Documents 연결의 space_id와 일치해야 한다.
         # 이 검증이 있어 target_type=space + 잘못된 target_id event가 실행되지 않는다.
+        normalized_requested_space_id = requested_space_id.strip()
         document_connection = await run_in_threadpool(
             load_channel_talk_document_connection,
             channel_id,
+            normalized_requested_space_id,
         )
         if document_connection is None:
             raise ValueError(
@@ -181,7 +183,6 @@ class ChannelTalkFullSyncHandler(BaseFullSyncHandler):
             raise ValueError(
                 "channel_talk documents credentials are not API verified for the requested channel"
             )
-        normalized_requested_space_id = requested_space_id.strip()
         if document_connection.space_id != normalized_requested_space_id:
             raise ValueError(
                 "Stored Channel Talk Documents credentials do not match the requested space"

@@ -33,9 +33,6 @@ from catchup.connectors.channel_talk.schemas.document_metadata import (
 from catchup.connectors.channel_talk.schemas.document_metadata import (
     ChannelTalkDocumentNavNodeMetadata,
 )
-from catchup.connectors.channel_talk.schemas.document_metadata import (
-    ChannelTalkDocumentSpace,
-)
 
 
 class ChannelTalkDocumentMetadataStore(Protocol):
@@ -44,13 +41,6 @@ class ChannelTalkDocumentMetadataStore(Protocol):
         channel_id: str | None = None,
         space_id: str | None = None,
     ) -> ChannelTalkDocumentCredentialsRecord | None: ...
-
-    def upsert_document_space(
-        self,
-        payload: ChannelTalkDocumentSpace,
-        *,
-        channel_id: str,
-    ) -> ChannelTalkDocumentSpace | None: ...
 
     def bulk_upsert_document_authors(
         self,
@@ -130,12 +120,6 @@ class ChannelTalkDocumentMetadataSyncAdapter:
             raise ChannelTalkConflictError(
                 "Stored Channel Talk Documents credentials do not match the requested space",
             )
-        await self._store_and_commit(
-            self.store.upsert_document_space,
-            space,
-            channel_id=request.tenant_id,
-            error_message="Failed to persist Channel Talk Documents space metadata",
-        )
         return MetadataSyncStepResult(synced_count=1)
 
     async def _sync_authors(

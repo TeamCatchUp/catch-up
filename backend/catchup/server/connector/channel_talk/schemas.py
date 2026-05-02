@@ -39,6 +39,10 @@ class ChannelTalkDocumentStatusResponse(BaseModel):
     space_name: str | None = None
     credential_last_verified_at: str | None = None
     association_status: str | None = None
+    polling_cycle_hours: int = 1
+    last_incremental_polled_at: str | None = None
+    last_incremental_poll_started_at: str | None = None
+    last_incremental_poll_error: str | None = None
     status_reason: str | None = None
 
 

@@ -295,9 +295,6 @@ class _MetadataStore:
     def list_document_connections(self, channel_id=None):
         return [self.get_document_connection("channel-123")]
 
-    def upsert_document_space(self, payload, *, channel_id):
-        return payload
-
     def bulk_upsert_document_authors(self, payloads):
         self.authors.extend(payloads)
         return payloads

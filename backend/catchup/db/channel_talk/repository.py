@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from datetime import timedelta
 from datetime import timezone
 from typing import Any
 from typing import cast
@@ -43,9 +44,6 @@ from catchup.connectors.channel_talk.schemas.document_metadata import (
 )
 from catchup.connectors.channel_talk.schemas.document_metadata import (
     ChannelTalkDocumentNavNodeMetadata,
-)
-from catchup.connectors.channel_talk.schemas.document_metadata import (
-    ChannelTalkDocumentSpace,
 )
 from catchup.db import models as db_models
 
@@ -330,11 +328,72 @@ class ChannelTalkDocumentCredentialsRepository:
             access_secret=payload.access_secret,
             credential_last_verified_at=payload.credential_last_verified_at,
             association_status=payload.association_status,
+            polling_cycle_hours=payload.polling_cycle_hours,
         )
         record = _to_document_connection_record(row)
         if record is None:
             raise RuntimeError("Channel Talk Documents credentials upsert returned no record")
         return record
+
+    def list_due_document_connections(
+        self,
+        *,
+        now: datetime,
+        stale_started_before: datetime,
+    ) -> list[ChannelTalkDocumentCredentialsRecord]:
+        rows = _list_due_channel_talk_document_credentials(
+            db=self.db,
+            now=now,
+            stale_started_before=stale_started_before,
+        )
+        return [
+            record
+            for row in rows
+            if (record := _to_document_connection_record(row)) is not None
+        ]
+
+    def mark_document_poll_started(
+        self,
+        *,
+        space_id: str,
+        started_at: datetime,
+    ) -> bool:
+        row = _get_channel_talk_document_credentials(db=self.db, space_id=space_id)
+        if row is None:
+            return False
+        row.last_incremental_poll_started_at = started_at
+        row.last_incremental_poll_error = None
+        self.db.flush()
+        return True
+
+    def mark_document_poll_succeeded(
+        self,
+        *,
+        space_id: str,
+        polled_at: datetime,
+    ) -> bool:
+        row = _get_channel_talk_document_credentials(db=self.db, space_id=space_id)
+        if row is None:
+            return False
+        row.last_incremental_polled_at = polled_at
+        row.last_incremental_poll_started_at = None
+        row.last_incremental_poll_error = None
+        self.db.flush()
+        return True
+
+    def mark_document_poll_failed(
+        self,
+        *,
+        space_id: str,
+        error: str,
+    ) -> bool:
+        row = _get_channel_talk_document_credentials(db=self.db, space_id=space_id)
+        if row is None:
+            return False
+        row.last_incremental_poll_started_at = None
+        row.last_incremental_poll_error = str(error or "").strip()[:2000]
+        self.db.flush()
+        return True
 
     def delete_document_connection_by_space_id(self, space_id: str) -> bool:
         return _delete_rows_by_field(
@@ -363,34 +422,6 @@ class ChannelTalkDocumentMetadataRepository:
             space_id=space_id,
         )
         return _to_document_connection_record(row)
-
-    def upsert_document_space(
-        self,
-        payload: ChannelTalkDocumentSpace,
-        *,
-        channel_id: str,
-    ) -> ChannelTalkDocumentSpace:
-        row = cast(
-            db_models.ChannelTalkDocumentSpace,
-            _get_or_create_row(
-                db=self.db,
-                model=db_models.ChannelTalkDocumentSpace,
-                lookup={"channel_id": channel_id, "space_id": payload.space_id},
-                create_values={
-                    "channel_id": channel_id,
-                    "space_id": payload.space_id,
-                    "space_name": payload.space_name,
-                },
-            ),
-        )
-        row.space_name = payload.space_name
-        row.synced_at = _utcnow()
-        self.db.flush()
-        return ChannelTalkDocumentSpace(
-            space_id=_require_text(row.space_id, "space_id"),
-            space_name=_require_text(row.space_name, "space_name"),
-            channel_id=_require_text(row.channel_id, "channel_id"),
-        )
 
     def bulk_upsert_document_authors(
         self,
@@ -467,6 +498,43 @@ def _list_channel_talk_document_credentials(
         stmt = stmt.filter_by(channel_id=channel_id)
     stmt = stmt.order_by(db_models.ChannelTalkDocumentCredentials.id.asc())
     return list(db.execute(stmt).scalars())
+
+
+def _list_due_channel_talk_document_credentials(
+    db: Session,
+    *,
+    now: datetime,
+    stale_started_before: datetime,
+) -> list[db_models.ChannelTalkDocumentCredentials]:
+    normalized_now = _to_utc(now)
+    normalized_stale_started_before = _to_utc(stale_started_before)
+    rows = _list_channel_talk_document_credentials(db=db)
+    due_rows: list[db_models.ChannelTalkDocumentCredentials] = []
+    for row in rows:
+        try:
+            association_status = ChannelTalkDocumentAssociationStatus(
+                _require_text(row.association_status, "association_status")
+            )
+        except ValueError:
+            continue
+        if association_status != ChannelTalkDocumentAssociationStatus.API_VERIFIED:
+            continue
+
+        started_at = row.last_incremental_poll_started_at
+        if (
+            started_at is not None
+            and _to_utc(started_at) > normalized_stale_started_before
+        ):
+            continue
+
+        polling_cycle_hours = max(1, int(row.polling_cycle_hours or 1))
+        base_at = row.last_incremental_polled_at or row.credential_last_verified_at
+        if base_at is None:
+            due_rows.append(row)
+            continue
+        if normalized_now >= _to_utc(base_at) + timedelta(hours=polling_cycle_hours):
+            due_rows.append(row)
+    return due_rows
 
 
 def _create_or_replace_channel_talk_credentials(
@@ -565,6 +633,7 @@ def _create_or_replace_channel_talk_document_credentials(
     access_secret: str,
     credential_last_verified_at,
     association_status: ChannelTalkDocumentAssociationStatus,
+    polling_cycle_hours: int = 1,
 ) -> db_models.ChannelTalkDocumentCredentials:
     credentials = _get_channel_talk_document_credentials(
         db=db,
@@ -579,6 +648,7 @@ def _create_or_replace_channel_talk_document_credentials(
             access_secret=access_secret,
             credential_last_verified_at=credential_last_verified_at,
             association_status=str(association_status),
+            polling_cycle_hours=max(1, int(polling_cycle_hours or 1)),
         )
         db.add(credentials)
     else:
@@ -589,6 +659,7 @@ def _create_or_replace_channel_talk_document_credentials(
         credentials.access_secret = access_secret
         credentials.credential_last_verified_at = credential_last_verified_at
         credentials.association_status = str(association_status)
+        credentials.polling_cycle_hours = max(1, int(polling_cycle_hours or 1))
     db.flush()
     return credentials
 
@@ -624,6 +695,10 @@ def _to_document_connection_record(
         association_status=ChannelTalkDocumentAssociationStatus(
             _require_text(row.association_status, "association_status")
         ),
+        polling_cycle_hours=max(1, int(row.polling_cycle_hours or 1)),
+        last_incremental_polled_at=row.last_incremental_polled_at,
+        last_incremental_poll_started_at=row.last_incremental_poll_started_at,
+        last_incremental_poll_error=row.last_incremental_poll_error,
     )
 
 
@@ -746,6 +821,12 @@ def _require_text(value: object | None, field_name: str) -> str:
 
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def _to_utc(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
 
 
 def _document_metadata_key(

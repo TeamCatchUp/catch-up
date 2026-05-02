@@ -4,6 +4,7 @@ from datetime import datetime
 from enum import StrEnum
 
 from pydantic import BaseModel
+from pydantic import Field
 from pydantic import ValidationInfo
 from pydantic import field_validator
 
@@ -23,6 +24,7 @@ class ChannelTalkDocumentAssociationStatus(StrEnum):
 class ChannelTalkDocumentConnectRequest(BaseModel):
     access_key: str
     access_secret: str
+    polling_cycle_hours: int = Field(default=1, ge=1, le=168)
 
     @field_validator("access_key", "access_secret")
     @classmethod
@@ -37,6 +39,10 @@ class ChannelTalkDocumentCredentialsRecord(BaseModel):
     access_secret: str | None = None
     credential_last_verified_at: datetime | None = None
     association_status: ChannelTalkDocumentAssociationStatus
+    polling_cycle_hours: int = Field(default=1, ge=1, le=168)
+    last_incremental_polled_at: datetime | None = None
+    last_incremental_poll_started_at: datetime | None = None
+    last_incremental_poll_error: str | None = None
 
     @field_validator("channel_id", "space_id", "space_name")
     @classmethod
@@ -50,6 +56,7 @@ class ChannelTalkDocumentCredentialsUpsert(BaseModel):
     space: ChannelTalkDocumentSpace
     credential_last_verified_at: datetime
     association_status: ChannelTalkDocumentAssociationStatus
+    polling_cycle_hours: int = Field(default=1, ge=1, le=168)
 
     @field_validator("channel_id", "access_key", "access_secret")
     @classmethod
@@ -65,6 +72,7 @@ class ChannelTalkDocumentCredentialsUpsert(BaseModel):
             access_secret=self.access_secret,
             credential_last_verified_at=self.credential_last_verified_at,
             association_status=self.association_status,
+            polling_cycle_hours=self.polling_cycle_hours,
         )
 
 class ChannelTalkDocumentCredentialsStatus(BaseModel):
@@ -74,6 +82,10 @@ class ChannelTalkDocumentCredentialsStatus(BaseModel):
     space_name: str | None = None
     credential_last_verified_at: datetime | None = None
     association_status: ChannelTalkDocumentAssociationStatus | None = None
+    polling_cycle_hours: int = 1
+    last_incremental_polled_at: datetime | None = None
+    last_incremental_poll_started_at: datetime | None = None
+    last_incremental_poll_error: str | None = None
 
     @classmethod
     def disconnected(cls) -> "ChannelTalkDocumentCredentialsStatus":
@@ -93,6 +105,10 @@ class ChannelTalkDocumentCredentialsStatus(BaseModel):
             space_name=record.space_name,
             credential_last_verified_at=record.credential_last_verified_at,
             association_status=record.association_status,
+            polling_cycle_hours=record.polling_cycle_hours,
+            last_incremental_polled_at=record.last_incremental_polled_at,
+            last_incremental_poll_started_at=record.last_incremental_poll_started_at,
+            last_incremental_poll_error=record.last_incremental_poll_error,
         )
 
 class ChannelTalkDocumentUninstallResult(BaseModel):
