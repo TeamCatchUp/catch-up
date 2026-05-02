@@ -19,6 +19,7 @@ from catchup.rag.nodes.utils import prepare_retrieved_context_text
 from catchup.rag.nodes.utils import strip_key_document_indices
 from catchup.rag.policies import CITATION_POLICY_MESSAGE
 from catchup.rag.policies import FALLBACK_ANSWER
+from catchup.rag.policies import NO_DOCUMENTS_ANSWER
 from catchup.rag.schemas.sources import BaseSource
 from catchup.rag.semaphores import rag_semaphores
 from catchup.rag.state import AgentState
@@ -41,7 +42,7 @@ async def generate_final_answer_node(
     if not retrieved_docs:
         logger.warning("no_documents_retrieved", action="fallback_answer_generated")
         return {
-            "messages": [AIMessage(content=FALLBACK_ANSWER)],
+            "messages": [AIMessage(content=NO_DOCUMENTS_ANSWER)],
             "sources": [],
         }
     retrieved_context = prepare_retrieved_context_text(retrieved_docs)
