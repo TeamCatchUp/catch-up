@@ -28,6 +28,7 @@ class SyncStatusCounts(BaseModel):
     slack: SourceUserCount
     github: SourceUserCount
     confluence: SourceUserCount
+    channel_talk: SourceUserCount
 
 
 class UserSyncMapping(BaseModel):
@@ -37,6 +38,7 @@ class UserSyncMapping(BaseModel):
     atlassian: PreMappingInfo | None = None
     slack: PreMappingInfo | None = None
     github: PreMappingInfo | None = None
+    channel_talk: PreMappingInfo | None = None
 
 
 class UserSyncStatusResponse(BaseModel):
