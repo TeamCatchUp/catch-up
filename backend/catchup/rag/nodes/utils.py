@@ -314,6 +314,22 @@ _KEY_DOC_INDICES_TAG_PATTERN = re.compile(
     re.IGNORECASE | re.DOTALL,
 )
 
+_REASON_FOR_STOPPING_PATTERN = re.compile(
+    r"<\s*reason_for_stopping\s*>(.*?)<\s*/\s*reason_for_stopping\s*>",
+    re.IGNORECASE | re.DOTALL,
+)
+
+
+def extract_reason_for_stopping(reasoning: str | None) -> str | None:
+    """agent_reasoning에서 <reason_for_stopping> 태그 내용을 추출한다.
+    태그가 없으면 None을 반환한다."""
+    if not reasoning:
+        return None
+    match = _REASON_FOR_STOPPING_PATTERN.search(reasoning)
+    if not match:
+        return None
+    return match.group(1).strip() or None
+
 
 def strip_key_document_indices(reasoning: str) -> str:
     """답변 LLM에 넘기기 전, agent_reasoning에서 <key_document_indices> 태그를 제거한다.
