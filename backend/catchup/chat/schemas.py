@@ -17,16 +17,17 @@ from catchup.db.models import UserRole
 from catchup.rag.schemas.sources import BaseSource
 from catchup.rag.schemas.sources import SourceResponse
 
-NODE_STATUS_MAP = {
-    "supervisor": "질문 유형을 파악하고 처리 전략을 결정하고 있습니다...",
-    "generate_final_answer": "모든 정보를 종합하여 최종 답변을 작성하고 있습니다...",
-    "generate_final_answer_fast": "모든 정보를 종합하여 최종 답변을 작성하고 있습니다...",
-    "direct_answer": "답변을 생성하고 있습니다...",
-    "clarify": "질문을 보다 정확하게 이해하기 위해 확인이 필요합니다...",
-    "rerank": "검색된 문서들의 관련성을 분석하여 우선순위를 정하고 있습니다...",
-    "rewrite": "검색 정확도를 높이기 위해 질문을 최적화하고 있습니다...",
-    "generate_vector_queries": "최적의 검색 쿼리를 생성하고 있습니다...",
-}
+# stream processor가 on_chain_start 시점에 in_progress 이벤트를 발행할 노드 목록.
+# 이 목록에 없는 노드는 자신이 직접 adispatch_custom_event로 lifecycle을 관리한다.
+INPROGRESS_NODES: frozenset[str] = frozenset({
+    "supervisor",
+    "generate_final_answer",
+    "generate_final_answer_fast",
+    "rerank",
+    "rewrite",
+    "generate_vector_queries",
+    "search_vector_db",
+})
 
 
 class ChatRequest(BaseModel):

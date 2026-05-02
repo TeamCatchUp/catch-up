@@ -1,7 +1,6 @@
 import asyncio
 import structlog
 from langchain.chat_models import BaseChatModel
-from langchain_core.callbacks import adispatch_custom_event
 
 from catchup.costs.utils import token_usage
 from catchup.prompts.loader import prompt_loader
@@ -34,7 +33,7 @@ async def rewrite_node(
         original_query=original_query,
         **global_context,
     )
-    
+
     try:
         response, token_usages = await ainvoke_llm_with_token_usage(
             llm=llm,
@@ -47,17 +46,7 @@ async def rewrite_node(
     except asyncio.TimeoutError as e:
         raise e
     except Exception:
-        await adispatch_custom_event(
-            "process",
-            {
-                "status": "completed",  # Fallback이므로 error 처리하지 않음.
-                "node": "rewrite",
-                "content": original_query,
-            },
-        )
-        return {
-            "rewritten_query": original_query,
-        }
+        return {"rewritten_query": original_query}
 
     logger.debug(
         "query_rewrite_result",
@@ -65,14 +54,5 @@ async def rewrite_node(
         feedback=grade_comment,
         rewritten_query=rewritten_query,
     )
-    
-    await adispatch_custom_event(
-            "process",
-            {
-                "status": "completed",
-                "node": "rewrite",
-                "content": rewritten_query,
-            },
-        )
 
     return {"rewritten_query": rewritten_query, **token_usages}
