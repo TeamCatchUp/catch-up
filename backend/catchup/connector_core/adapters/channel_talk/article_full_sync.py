@@ -1,56 +1,79 @@
-# ruff: noqa: I001
 from __future__ import annotations
 
 from langchain_core.documents import Document
+
 from catchup.components.embedder.constants import EmbeddingProvider
 from catchup.components.embedder.factory import get_embedding_service
 from catchup.components.vector_db.factory import get_pgvector_repository
 from catchup.components.vector_db.pgvector.repository import PGVectorRepository
-from catchup.connector_core.ports.full_sync import FullSyncWindow
-from catchup.connectors.channel_talk.document_space.article_full_sync_fetcher import ChannelTalkArticleFullSyncFetcher
-from catchup.connectors.channel_talk.document_space.article_full_sync_models import DEFAULT_ARTICLE_FULL_SYNC_STATES
-from catchup.connectors.channel_talk.document_space.article_full_sync_models import ChannelTalkArticleFullSyncCheckpoint
-from catchup.connectors.channel_talk.document_space.article_full_sync_models import ChannelTalkArticleFullSyncConnection
-from catchup.connectors.channel_talk.document_space.article_full_sync_models import ChannelTalkArticleFullSyncExecutionRequest
-from catchup.connectors.channel_talk.document_space.article_full_sync_models import ChannelTalkArticleFullSyncExecutionResult
-from catchup.connectors.channel_talk.document_space.article_full_sync_models import ChannelTalkArticleFullSyncFetchResult
-from catchup.connectors.channel_talk.document_space.article_full_sync_models import ChannelTalkArticleFullSyncPersistResult
-from catchup.connectors.channel_talk.document_space.article_full_sync_models import ChannelTalkArticleFullSyncSummaryResult
-from catchup.connectors.channel_talk.document_space.article_full_sync_models import ChannelTalkArticleFullSyncTransformResult
-from catchup.connectors.channel_talk.document_space.article_full_sync_models import ChannelTalkArticlePreparedDocument
-from catchup.connectors.channel_talk.document_space.article_full_sync_models import ChannelTalkFetchedArticlesResult
-from catchup.connectors.channel_talk.document_space.article_transformer import ArticleTransformer
-from catchup.utils.validation import require_text
+from catchup.connector_core.ports.sync_ingestion import SyncWindow
+from catchup.connectors.channel_talk.document_space.article_full_sync_fetcher import (
+    ChannelTalkArticleFullSyncFetcher,
+)
+from catchup.connectors.channel_talk.document_space.article_full_sync_models import (
+    DEFAULT_ARTICLE_FULL_SYNC_STATES,
+)
+from catchup.connectors.channel_talk.document_space.article_full_sync_models import (
+    ChannelTalkArticleFullSyncCheckpoint,
+)
+from catchup.connectors.channel_talk.document_space.article_full_sync_models import (
+    ChannelTalkArticleFullSyncConnection,
+)
+from catchup.connectors.channel_talk.document_space.article_full_sync_models import (
+    ChannelTalkArticleFullSyncFetchResult,
+)
+from catchup.connectors.channel_talk.document_space.article_full_sync_models import (
+    ChannelTalkArticleFullSyncPersistResult,
+)
+from catchup.connectors.channel_talk.document_space.article_full_sync_models import (
+    ChannelTalkArticleFullSyncSummaryResult,
+)
+from catchup.connectors.channel_talk.document_space.article_full_sync_models import (
+    ChannelTalkArticleFullSyncTransformResult,
+)
+from catchup.connectors.channel_talk.document_space.article_full_sync_models import (
+    ChannelTalkArticlePreparedDocument,
+)
+from catchup.connectors.channel_talk.document_space.article_full_sync_models import (
+    ChannelTalkArticleSyncExecutionRequest,
+)
+from catchup.connectors.channel_talk.document_space.article_full_sync_models import (
+    ChannelTalkArticleSyncExecutionResult,
+)
+from catchup.connectors.channel_talk.document_space.article_full_sync_models import (
+    ChannelTalkFetchedArticlesResult,
+)
+from catchup.connectors.channel_talk.document_space.article_transformer import (
+    ArticleTransformer,
+)
+
+CHANNEL_TALK_ARTICLE_LANGUAGE = "ko"
 
 
-class ChannelTalkArticleFullSyncAdapter:
-    """Runtime seam for Channel Talk Documents article full sync."""
+class ChannelTalkArticleFullSyncIngestionAdapter:
+    """Channel Talk Documents article sweep/list ingestion adapter."""
 
     def __init__(
         self,
-        *,
-        fetcher: ChannelTalkArticleFullSyncFetcher | None = None,
-        language: str = "ko",
-        repository_factory=None,
     ) -> None:
-        self.fetcher = fetcher or ChannelTalkArticleFullSyncFetcher()
-        self.language = require_text(language, "language")
-        self._document_builder = ArticleTransformer(language=self.language)
-        self._repository_factory = repository_factory or self._build_repository
+        self._fetcher: ChannelTalkArticleFullSyncFetcher | None = None
+        self._document_builder = ArticleTransformer(
+            language=CHANNEL_TALK_ARTICLE_LANGUAGE
+        )
         self._repository: PGVectorRepository | None = None
 
     async def fetch(
         self,
         *,
-        execution: ChannelTalkArticleFullSyncExecutionRequest,
-        sync_window: FullSyncWindow,
+        execution: ChannelTalkArticleSyncExecutionRequest,
+        sync_window: SyncWindow,
     ) -> ChannelTalkArticleFullSyncFetchResult:
         # API paging은 fetcher가 처리하고, adapter는 pipeline이 이어서 사용할 fetch result와 next checkpoint만 조립
-        fetched_articles = await self.fetcher.fetch_articles(
+        fetched_articles = await self._get_fetcher().fetch_articles(
             connection=ChannelTalkArticleFullSyncConnection.from_credentials_record(
                 execution.document_connection,
             ),
-            language=self.language,
+            language=CHANNEL_TALK_ARTICLE_LANGUAGE,
             sync_window=sync_window,
             states=DEFAULT_ARTICLE_FULL_SYNC_STATES,
             checkpoint_state=(
@@ -65,7 +88,7 @@ class ChannelTalkArticleFullSyncAdapter:
         return ChannelTalkArticleFullSyncFetchResult(
             channel_id=execution.channel_id,
             space_id=execution.space_id,
-            language=self.language,
+            language=CHANNEL_TALK_ARTICLE_LANGUAGE,
             bundles=fetched_articles.bundles,
             fetched_count=fetched_articles.fetched_count,
             fetched_article_ids=fetched_articles.article_ids,
@@ -78,8 +101,8 @@ class ChannelTalkArticleFullSyncAdapter:
     async def transform(
         self,
         *,
-        execution: ChannelTalkArticleFullSyncExecutionRequest,
-        sync_window: FullSyncWindow,
+        execution: ChannelTalkArticleSyncExecutionRequest,
+        sync_window: SyncWindow,
         fetched: ChannelTalkArticleFullSyncFetchResult,
     ) -> ChannelTalkArticleFullSyncTransformResult:
         # 중복 제거된 article만 adapter에 남기고, content/metadata/id 조립은 ArticleTransformer가 수행한다.
@@ -116,8 +139,8 @@ class ChannelTalkArticleFullSyncAdapter:
     async def summarize(
         self,
         *,
-        execution: ChannelTalkArticleFullSyncExecutionRequest,
-        sync_window: FullSyncWindow,
+        execution: ChannelTalkArticleSyncExecutionRequest,
+        sync_window: SyncWindow,
         transformed: ChannelTalkArticleFullSyncTransformResult,
     ) -> ChannelTalkArticleFullSyncSummaryResult:
         # Channel Talk Article은 Summarize를 수행하지 않는다.
@@ -133,8 +156,8 @@ class ChannelTalkArticleFullSyncAdapter:
     async def persist(
         self,
         *,
-        execution: ChannelTalkArticleFullSyncExecutionRequest,
-        sync_window: FullSyncWindow,
+        execution: ChannelTalkArticleSyncExecutionRequest,
+        sync_window: SyncWindow,
         transformed: ChannelTalkArticleFullSyncTransformResult,
         summary: ChannelTalkArticleFullSyncSummaryResult,
     ) -> ChannelTalkArticleFullSyncPersistResult:
@@ -173,16 +196,16 @@ class ChannelTalkArticleFullSyncAdapter:
     def build_result(
         self,
         *,
-        execution: ChannelTalkArticleFullSyncExecutionRequest,
-        sync_window: FullSyncWindow,
+        execution: ChannelTalkArticleSyncExecutionRequest,
+        sync_window: SyncWindow,
         fetched: ChannelTalkArticleFullSyncFetchResult,
         transformed: ChannelTalkArticleFullSyncTransformResult,
         summary: ChannelTalkArticleFullSyncSummaryResult,
         persisted: ChannelTalkArticleFullSyncPersistResult,
-    ) -> ChannelTalkArticleFullSyncExecutionResult:
+    ) -> ChannelTalkArticleSyncExecutionResult:
         _ = self
         _ = sync_window
-        return ChannelTalkArticleFullSyncExecutionResult(
+        return ChannelTalkArticleSyncExecutionResult(
             tenant_id=execution.tenant_id,
             collected_count=len(fetched.fetched_article_ids),
             document_count=len(transformed.documents),
@@ -195,7 +218,7 @@ class ChannelTalkArticleFullSyncAdapter:
     @staticmethod
     def _build_next_checkpoint(
         *,
-        execution: ChannelTalkArticleFullSyncExecutionRequest,
+        execution: ChannelTalkArticleSyncExecutionRequest,
         fetched_articles: ChannelTalkFetchedArticlesResult,
     ) -> ChannelTalkArticleFullSyncCheckpoint | None:
         if fetched_articles.next_checkpoint_state is None:
@@ -213,10 +236,15 @@ class ChannelTalkArticleFullSyncAdapter:
         if self._repository is not None:
             return self._repository
 
-        repository = self._repository_factory()
+        repository = self._build_repository()
         await repository.initialize(None)
         self._repository = repository
         return repository
+
+    def _get_fetcher(self) -> ChannelTalkArticleFullSyncFetcher:
+        if self._fetcher is None:
+            self._fetcher = ChannelTalkArticleFullSyncFetcher()
+        return self._fetcher
 
     @staticmethod
     def _build_repository() -> PGVectorRepository:
@@ -224,3 +252,6 @@ class ChannelTalkArticleFullSyncAdapter:
         return get_pgvector_repository(
             embeddings=embedder
         )
+
+
+ChannelTalkArticleFullSyncAdapter = ChannelTalkArticleFullSyncIngestionAdapter

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 
-from catchup.connector_core.ports.full_sync import FullSyncWindow
+from catchup.connector_core.ports.sync_ingestion import SyncWindow
 from catchup.connectors.channel_talk.core.client import ChannelTalkCoreApiClient
 from catchup.connectors.channel_talk.core.user_chat_full_sync_models import (
     ChannelTalkFetchedUserChat,
@@ -46,7 +46,7 @@ class ChannelTalkUserChatFullSyncFetcher:
         *,
         connection: ChannelTalkUserChatFullSyncConnection,
         states: tuple[ChannelTalkUserChatState, ...],
-        sync_window: FullSyncWindow,
+        sync_window: SyncWindow,
         checkpoint_state: ChannelTalkUserChatState | None = None,
         checkpoint_cursor: str | None = None,
     ) -> ChannelTalkFetchedUserChatsResult:
