@@ -63,12 +63,7 @@ export default function ChannelTalkChannelCard({
   const canTestConnection = isChannelSecretsFilled(channel);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
-  // 토스트는 mutation 응답 기반으로 viewModel onSuccess/onError에서 표시.
-  // 이 컴포넌트는 단순히 액션을 위임만 한다.
-  const handleTestConnection = () => {
-    onTestConnection();
-  };
-
+  // 토스트는 mutation 응답 기반으로 viewModel onSuccess/onError에서 표시. 컴포넌트는 액션만 위임.
   const lockGuard = (e: React.PointerEvent<HTMLDivElement>) => handleLockedFieldInteract(e, isTested);
 
   return (
@@ -164,7 +159,7 @@ export default function ChannelTalkChannelCard({
             <Button
               variant="box-soft-primary"
               size="md"
-              onClick={handleTestConnection}
+              onClick={onTestConnection}
               className="h-11.5 flex-1 gap-2.5"
             >
               연결 테스트 재시도
@@ -174,7 +169,7 @@ export default function ChannelTalkChannelCard({
           <Button
             variant={canTestConnection ? 'box-soft-primary' : 'box-outline-gray'}
             size="md"
-            onClick={handleTestConnection}
+            onClick={onTestConnection}
             disabled={!canTestConnection}
             className="h-11.5 w-full"
           >

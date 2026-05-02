@@ -41,10 +41,6 @@ export default function ChannelTalkDocumentSpaceCard({
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
   // 토스트는 mutation 응답 기반으로 viewModel onSuccess/onError에서 표시.
-  const handleTestConnection = () => {
-    onTestConnection();
-  };
-
   const lockGuard = (e: React.PointerEvent<HTMLDivElement>) => handleLockedFieldInteract(e, isTested);
 
   return (
@@ -124,7 +120,7 @@ export default function ChannelTalkDocumentSpaceCard({
             <Button
               variant="box-soft-primary"
               size="md"
-              onClick={handleTestConnection}
+              onClick={onTestConnection}
               className="h-11.5 flex-1 gap-2.5"
             >
               연결 테스트 재시도
@@ -134,7 +130,7 @@ export default function ChannelTalkDocumentSpaceCard({
           <Button
             variant={canTestConnection ? 'box-soft-primary' : 'box-outline-gray'}
             size="md"
-            onClick={handleTestConnection}
+            onClick={onTestConnection}
             disabled={!canTestConnection}
             className="h-11.5 w-full"
           >
