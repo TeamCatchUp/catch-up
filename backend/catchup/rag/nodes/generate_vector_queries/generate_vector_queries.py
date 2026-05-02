@@ -58,7 +58,7 @@ async def generate_vector_queries_node(
             {
                 "status": "completed",
                 "node": "generate_vector_queries",
-                "content": fallback_query,
+                "reasoning": "쿼리 생성에 실패해서 원래 질문으로 검색할게요.",
             },
         )
         return {
@@ -74,15 +74,14 @@ async def generate_vector_queries_node(
     )
     queries = plan.queries[:max_q]
     
-    for q in queries:
-        await adispatch_custom_event(
-            "process",
-            {
-                "status": "completed",
-                "node": "generate_vector_queries",
-                "content": [q.query, q.keyword_tokens],
-            },
-        )
+    await adispatch_custom_event(
+        "process",
+        {
+            "status": "completed",
+            "node": "generate_vector_queries",
+            "reasoning": plan.reasoning or f"{len(queries)}개 검색 쿼리를 생성했어요.",
+        },
+    )
 
     _print_search_plan_log(plan)
 

@@ -1,4 +1,5 @@
 import structlog
+from langchain_core.callbacks import adispatch_custom_event
 from langchain_core.documents import Document
 
 from catchup.components.vector_db.base import BaseVectorDbService
@@ -26,6 +27,18 @@ async def search_vector_db_node(
                 reasoning="No generated queries found. Fallback to rewritten query.",
             )
         )
+
+    await adispatch_custom_event(
+        "process",
+        {
+            "status": "in_progress",
+            "node": "search_vector_db",
+            "content": [
+                {"vector": q.query, "keyword": q.keyword_tokens}
+                for q in queries
+            ],
+        },
+    )
 
     try:
         query_dicts = [
@@ -57,5 +70,14 @@ async def search_vector_db_node(
     unique_results = deduplicate_documents(flattened_results)
 
     logger.info("search_results_fetched", count=len(unique_results))
+
+    await adispatch_custom_event(
+        "process",
+        {
+            "status": "completed",
+            "node": "search_vector_db",
+            "reasoning": f"{len(unique_results)}건의 문서를 찾았어요.",
+        },
+    )
 
     return {"retrieved_docs": unique_results}

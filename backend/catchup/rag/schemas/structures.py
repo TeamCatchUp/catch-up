@@ -35,6 +35,10 @@ class VectorDbSearchQuery(BaseSearchQuery):
 
 
 class VectorDbSearchPlan(BaseModel):
+    reasoning: str = Field(
+        default="",
+        description="이 검색 방향을 선택한 이유 (Korean, 1 sentence)",
+    )
     queries: list[VectorDbSearchQuery] = Field(
         default_factory=list,
         min_length=0,
