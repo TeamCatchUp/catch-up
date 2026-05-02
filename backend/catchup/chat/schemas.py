@@ -20,12 +20,12 @@ from catchup.rag.schemas.sources import SourceResponse
 # stream processor가 on_chain_start 시점에 in_progress 이벤트를 발행할 노드 목록.
 # 이 목록에 없는 노드는 자신이 직접 adispatch_custom_event로 lifecycle을 관리한다.
 INPROGRESS_NODES: frozenset[str] = frozenset({
-    "supervisor",
+    "clarify",
+    "direct_answer",
     "generate_final_answer",
     "generate_final_answer_fast",
     "rerank",
     "rewrite",
-    "generate_vector_queries",
     "search_vector_db",
 })
 

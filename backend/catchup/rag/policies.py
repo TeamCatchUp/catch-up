@@ -25,16 +25,6 @@ def get_node_completed_payload(node: str, output_data: dict) -> dict | None:
         rewritten = output_data.get("rewritten_query")
         return {"content": rewritten} if rewritten else None
 
-    if node == "generate_vector_queries":
-        count = len(output_data.get("vector_search_queries", []))
-        return {
-            "reasoning": (
-                f"{count}개 검색 쿼리를 생성했어요."
-                if count > 1
-                else "검색 쿼리를 생성했어요."
-            )
-        }
-
     if node == "search_vector_db":
         count = len(output_data.get("retrieved_docs", []))
         return {"reasoning": f"{count}건의 문서를 찾았어요."}

@@ -107,7 +107,7 @@ class ChatStreamProcessor:
                 content=data.get("content"),
             )
 
-        # 5. 노드 종료 (현재는 최종 답변 생성 노드만 관여)
+        # 5. 노드 종료
         elif kind == "on_chain_end":
             async for res in self._handle_node_end(event):
                 yield res
@@ -310,3 +310,9 @@ class ChatStreamProcessor:
             yield ChatStreamingSourceResponse(
                 session_id=self.session_id, sources=final_sources
             )
+
+        yield ChatStreamingProcessResponse(
+            status="completed",
+            session_id=self.session_id,
+            node=name,
+        )

@@ -163,14 +163,14 @@ class TestHandleNodeStart(IsolatedAsyncioTestCase):
         self.processor = _make_processor()
 
     async def test_known_node_yields_process_response(self):
-        """NODE_STATUS_MAP 에 있는 노드는 ChatStreamingProcessResponse를 yield한다."""
+        """INPROGRESS_NODES 에 있는 노드는 ChatStreamingProcessResponse를 yield한다."""
         from catchup.chat.schemas import ChatStreamingProcessResponse
 
-        results = await _collect(self.processor, _make_node_start_event("supervisor"))
+        results = await _collect(self.processor, _make_node_start_event("rewrite"))
 
         self.assertEqual(len(results), 1)
         self.assertIsInstance(results[0], ChatStreamingProcessResponse)
-        self.assertEqual(results[0].node, "supervisor")
+        self.assertEqual(results[0].node, "rewrite")
         self.assertEqual(results[0].status, "in_progress")
 
     async def test_unknown_node_yields_nothing(self):

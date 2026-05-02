@@ -65,6 +65,11 @@ async def supervisor_node(
         include_raw=True,
     )
 
+    await adispatch_custom_event(
+        "process",
+        {"status": "in_progress", "node": "supervisor"},
+    )
+
     try:
         response, token_usages = await ainvoke_llm_with_token_usage(
             llm=structured_llm,
@@ -74,18 +79,21 @@ async def supervisor_node(
         )
         pipeline_plan: PipelinePlan = response.get("parsed")
 
-        # 완료 이벤트 발송
+        _NO_RETRIEVAL = {"direct_answer", "clarify"}
+
         await adispatch_custom_event(
             "process",
             {
                 "status": "completed",
                 "node": "supervisor",
-                "reasoning": pipeline_plan.reasoning,
+                "reasoning": (
+                    None
+                    if pipeline_plan.pipeline_type in _NO_RETRIEVAL
+                    else pipeline_plan.reasoning
+                ),
                 "content": pipeline_plan.pipeline_type,
             },
         )
-
-        _NO_RETRIEVAL = {"direct_answer", "clarify"}
         intent = (
             "chitchat"
             if pipeline_plan.pipeline_type in _NO_RETRIEVAL
