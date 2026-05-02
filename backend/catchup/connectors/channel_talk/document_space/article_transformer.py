@@ -30,7 +30,7 @@ from catchup.connector_core.document_format import (
     ChannelTalkDocumentArticleTaxonomyMetadata,
 )
 from catchup.connector_core.document_format import DocumentBaseMetadata
-from catchup.connector_core.ports.full_sync import FullSyncWindow
+from catchup.connector_core.ports.sync_ingestion import SyncWindow
 from catchup.connectors.channel_talk.document_space.article_full_sync_models import (
     ArticleBuildResult,
 )
@@ -96,7 +96,7 @@ class ArticleTransformer:
         self,
         *,
         execution: ArticleExecution,
-        sync_window: FullSyncWindow,
+        sync_window: SyncWindow,
         bundle: ChannelTalkFetchedArticle,
     ) -> ArticleBuildResult:
         # Source 선택 단계: detail이 있으면 최신 article view를 사용하고,
@@ -196,7 +196,7 @@ class ArticleTransformer:
         self,
         *,
         execution: ArticleExecution,
-        sync_window: FullSyncWindow,
+        sync_window: SyncWindow,
         bundle: ChannelTalkFetchedArticle,
         view: ChannelTalkDocumentArticleView | None,
         current_article: ChannelTalkDocumentArticle,
