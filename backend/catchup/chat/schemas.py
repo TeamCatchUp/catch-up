@@ -23,14 +23,9 @@ NODE_STATUS_MAP = {
     "generate_final_answer_fast": "모든 정보를 종합하여 최종 답변을 작성하고 있습니다...",
     "direct_answer": "답변을 생성하고 있습니다...",
     "clarify": "질문을 보다 정확하게 이해하기 위해 확인이 필요합니다...",
-    "standard_agent": "추가 검색이 필요한지 판단하고 있습니다...",
-    "tool_executor": "관련 문서를 검색하고 있습니다...",
-    "complex_planner": "복잡한 질문에 대한 검색 전략을 수립하고 있습니다...",
-    "complex_agent": "다각도에서 정보를 수집하고 있습니다...",
     "rerank": "검색된 문서들의 관련성을 분석하여 우선순위를 정하고 있습니다...",
     "rewrite": "검색 정확도를 높이기 위해 질문을 최적화하고 있습니다...",
     "generate_vector_queries": "최적의 검색 쿼리를 생성하고 있습니다...",
-    "search_vector_db": "지식 저장소(Vector DB)에서 문서를 검색 중입니다...",
 }
 
 
