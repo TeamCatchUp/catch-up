@@ -326,6 +326,9 @@ export function useChannelTalkViewModel(initialState: ChannelTalkConnectionState
           },
           onError: (error) => {
             const { code, message } = parseChannelTalkError(error);
+            // 백엔드 mutation 실패는 카드의 errorMessage를 비워서 raw 영문(예: "Request failed with status code 500")이
+            // inline에 노출되지 않도록 함. 빨간 테두리(connectionStatus: 'error')만으로도 시각 표시되고,
+            // 자세한 사유는 toast로 안내.
             setState((prev) => ({
               ...prev,
               channels: prev.channels.map((c) =>
@@ -333,16 +336,18 @@ export function useChannelTalkViewModel(initialState: ChannelTalkConnectionState
                   ? {
                       ...c,
                       connectionStatus: 'error',
-                      errorMessage: message,
+                      errorMessage: undefined,
                     }
                   : c,
               ),
             }));
-            // 외부 키 불일치 시 Figma 스펙의 toast 추가 노출 (카드 inline 에러와 별개로)
+            // 에러 분기: 외부 키 불일치는 Figma 스펙 toast, 그 외는 generic toast.
             if (code === 'invalid_credentials') {
               toast('Access Key 또는 Secret Key가 일치하지 않아요.', {
                 description: '채널톡에서 다시 확인해주세요',
               });
+            } else {
+              toast.error('연결 테스트에 실패했어요.', { description: message });
             }
           },
           onSettled: () => {
@@ -439,7 +444,7 @@ export function useChannelTalkViewModel(initialState: ChannelTalkConnectionState
                   : {
                       ...c,
                       documentSpaces: c.documentSpaces.map((d) =>
-                        d.id === dsId ? { ...d, connectionStatus: 'error', errorMessage: message } : d,
+                        d.id === dsId ? { ...d, connectionStatus: 'error', errorMessage: undefined } : d,
                       ),
                     },
               ),
@@ -448,6 +453,8 @@ export function useChannelTalkViewModel(initialState: ChannelTalkConnectionState
               toast('Access Key 또는 Secret Key가 일치하지 않아요.', {
                 description: '채널톡에서 다시 확인해주세요',
               });
+            } else {
+              toast.error('연결 테스트에 실패했어요.', { description: message });
             }
           },
           onSettled: () => {
