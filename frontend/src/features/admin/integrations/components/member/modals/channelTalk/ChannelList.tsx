@@ -37,7 +37,7 @@ function ChannelList({ channels, selectedChannelIds, onToggleChannel, onToggleAl
         <span className="text-body-xsmall text-content-alternative pl-2">전체 {channels.length}개</span>
       </div>
 
-      <ul className="custom-scrollbar flex flex-1 flex-col overflow-y-auto px-4 pt-1.5 pb-4">
+      <ul className="custom-scrollbar flex flex-1 flex-col gap-1 overflow-y-auto px-4 pt-1.5 pb-4">
         {channels.map((channel) => {
           const isSelected = selectedChannelIds.has(channel.channel_id);
           return (
