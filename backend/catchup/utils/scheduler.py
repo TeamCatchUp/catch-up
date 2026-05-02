@@ -3,29 +3,35 @@ APScheduler for Hourly Sync
 """
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
+from datetime import timedelta
+from datetime import timezone
 from zoneinfo import ZoneInfo
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
-from catchup.audit.enums import AuditEventStatus, AuditLevel
+from catchup.audit.enums import AuditEventStatus
+from catchup.audit.enums import AuditLevel
 from catchup.audit.metadata import IntegrationAuditMetadata
 from catchup.audit.service import emit_audit_event
-from catchup.connectors.atlassian.exceptions import (
-    AtlassianAuthError,
-    AtlassianTokenExpiredError,
-)
-from catchup.connectors.atlassian.oauth_client import AtlassianOAuthClient
 from catchup.configs.config import settings
+from catchup.connectors.atlassian.exceptions import AtlassianAuthError
+from catchup.connectors.atlassian.exceptions import AtlassianTokenExpiredError
+from catchup.connectors.atlassian.oauth_client import AtlassianOAuthClient
+from catchup.connectors.jira.dynamic_webhook_service import (
+    get_jira_dynamic_webhook_service,
+)
 from catchup.db.atlassian.oauth_repository import (
     get_all_tokens as get_all_atlassian_tokens,
+)
+from catchup.db.atlassian.oauth_repository import (
     update_refreshed_token as update_atlassian_refreshed_token,
 )
 from catchup.db.engine import SessionLocal
-from catchup.connectors.jira.dynamic_webhook_service import get_jira_dynamic_webhook_service
-from catchup.events.enums import EventType, IntegrationEventAction
 from catchup.db.incremental import recover_stale_processing_records
+from catchup.events.enums import EventType
+from catchup.events.enums import IntegrationEventAction
 from catchup.sync.incremental import get_incremental_service
 
 logger = logging.getLogger(__name__)
@@ -164,6 +170,15 @@ async def poll_confluence_incremental():
     logger.info("[CONFLUENCE][POLL] Incremental poll completed: result=%s", result)
 
 
+async def poll_channel_talk_document_incremental():
+    logger.info("[CHANNEL_TALK][DOCUMENT_POLL] Starting incremental poll")
+    result = await get_incremental_service().poll_channel_talk_document_changes()
+    logger.info(
+        "[CHANNEL_TALK][DOCUMENT_POLL] Incremental poll completed: result=%s",
+        result,
+    )
+
+
 
 def init_scheduler():
     global _scheduler
@@ -214,14 +229,29 @@ def init_scheduler():
         replace_existing=True,
         misfire_grace_time=120,
     )
+
+    channel_talk_document_due_scan_interval_minutes = (
+        settings.CHANNEL_TALK_DOCUMENT_DUE_SCAN_INTERVAL_MINUTES
+    )
+    _scheduler.add_job(
+        poll_channel_talk_document_incremental,
+        trigger=CronTrigger(
+            minute=f"*/{channel_talk_document_due_scan_interval_minutes}"
+        ),
+        id="channel_talk_document_incremental_poll",
+        name="Channel Talk Document Incremental Due Scan",
+        replace_existing=True,
+        misfire_grace_time=120,
+    )
     
     _scheduler.start()
     logger.info(
-        "[SCHEDULER][INIT] Scheduler initialized: jira_webhook_refresh=%s, token_refresh=%s, incremental_interval_minutes=%s, confluence_poll_interval_minutes=%s",
+        "[SCHEDULER][INIT] Scheduler initialized: jira_webhook_refresh=%s, token_refresh=%s, incremental_interval_minutes=%s, confluence_poll_interval_minutes=%s, channel_talk_document_due_scan_interval_minutes=%s",
         jira_webhook_refresh_hours,
         "daily 00:00 Asia/Seoul",
         incremental_interval_minutes,
         confluence_poll_interval_minutes,
+        channel_talk_document_due_scan_interval_minutes,
     )
 
 
