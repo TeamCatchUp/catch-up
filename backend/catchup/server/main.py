@@ -45,6 +45,9 @@ from catchup.server.connector.atlassian.auth_api import router as atlassian_auth
 from catchup.server.connector.channel_talk.admin_api import (
     router as channel_talk_admin_router,
 )
+from catchup.server.connector.channel_talk.webhook_api import (
+    router as channel_talk_webhook_router,
+)
 from catchup.server.connector.github.auth_api import router as github_auth_router
 from catchup.server.connector.github.webhook_api import router as github_webhook_router
 from catchup.server.connector.jira.webhook_api import router as jira_webhook_router
@@ -443,6 +446,7 @@ app.include_router(chatroom_router)
 app.include_router(auth_router)
 app.include_router(admin_router)
 app.include_router(channel_talk_admin_router)
+app.include_router(channel_talk_webhook_router)
 app.include_router(github_auth_router)
 app.include_router(github_webhook_router)
 app.include_router(atlassian_auth_router)
