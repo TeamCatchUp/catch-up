@@ -200,6 +200,45 @@ class ChannelTalkUserChatFullSyncFetcher:
                 return managers_by_id
             next_page_token = page.next_page_token
 
+    async def fetch_user_chat_bundle_by_id(
+        self,
+        *,
+        connection: ChannelTalkUserChatFullSyncConnection,
+        user_chat_id: str,
+    ) -> ChannelTalkFetchedUserChat:
+        access_key = connection.access_key
+        access_secret = connection.access_secret
+        detail = await self.client.get_user_chat(
+            access_key=access_key,
+            access_secret=access_secret,
+            user_chat_id=user_chat_id,
+        )
+        messages = await self._list_user_chat_messages(
+            access_key=access_key,
+            access_secret=access_secret,
+            user_chat_id=user_chat_id,
+        )
+        return ChannelTalkFetchedUserChat(
+            state=detail.state,
+            list_item=ChannelTalkUserChatListItem(
+                user_chat_id=detail.user_chat_id,
+                state=detail.state,
+                ordering_marker=(
+                    detail.timing.desk_updated_at
+                    or detail.timing.updated_at
+                    or detail.timing.created_at
+                ),
+                user_id=detail.customer.external_user_id
+                if detail.customer is not None
+                else None,
+                member_id=detail.customer.member_id
+                if detail.customer is not None
+                else None,
+            ),
+            detail=detail,
+            messages=tuple(messages),
+        )
+
     async def _list_user_chat_messages(
         self,
         *,

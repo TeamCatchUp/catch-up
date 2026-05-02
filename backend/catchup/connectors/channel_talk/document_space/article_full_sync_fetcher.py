@@ -49,6 +49,13 @@ class ChannelTalkArticleSyncWindow(Protocol):
 
 
 class ChannelTalkArticleClient(Protocol):
+    async def get_article(
+        self,
+        *,
+        article_id: str,
+        language: str,
+    ) -> ChannelTalkDocumentArticleView: ...
+
     async def list_articles(
         self,
         *,
@@ -188,6 +195,33 @@ class ChannelTalkArticleFullSyncFetcher:
                 next_cursor = page.next_page_token
 
         return self._build_result(fetched=fetched)
+
+    async def fetch_article_bundle_by_id(
+        self,
+        *,
+        connection: ChannelTalkArticleFullSyncConnection,
+        article_id: str,
+        language: str,
+    ) -> ChannelTalkFetchedArticle:
+        client = self._client_factory(connection)
+        detail = await client.get_article(
+            article_id=article_id,
+            language=language,
+        )
+        source = detail.article
+        published_revision = None
+        if source.published_revision_id is not None:
+            published_revision = await client.get_article_revision(
+                article_id=article_id,
+                revision_id=source.published_revision_id,
+            )
+        return ChannelTalkFetchedArticle(
+            language=language,
+            state=source.state,
+            list_item=source,
+            detail=detail,
+            published_revision=published_revision,
+        )
 
     async def _fetch_published_revisions(
         self,

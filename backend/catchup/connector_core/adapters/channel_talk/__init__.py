@@ -1,3 +1,6 @@
+from catchup.connector_core.adapters.channel_talk.article_incremental import (
+    ChannelTalkArticleIncrementalAdapter,
+)
 from catchup.connector_core.adapters.channel_talk.documents_install_auth_adapter import (
     ChannelTalkDocumentCredentialsStore,
 )
@@ -22,8 +25,12 @@ from catchup.connector_core.adapters.channel_talk.metadata_sync_adapter import (
 from catchup.connector_core.adapters.channel_talk.metadata_sync_adapter import (
     ChannelTalkMetadataSyncAdapter,
 )
+from catchup.connector_core.adapters.channel_talk.user_chat_incremental import (
+    ChannelTalkUserChatIncrementalAdapter,
+)
 
 __all__ = [
+    "ChannelTalkArticleIncrementalAdapter",
     "ChannelTalkCredentialsStore",
     "ChannelTalkInstallAuthAdapter",
     "ChannelTalkDocumentCredentialsStore",
@@ -32,4 +39,5 @@ __all__ = [
     "ChannelTalkDocumentMetadataSyncAdapter",
     "ChannelTalkMetadataStore",
     "ChannelTalkMetadataSyncAdapter",
+    "ChannelTalkUserChatIncrementalAdapter",
 ]

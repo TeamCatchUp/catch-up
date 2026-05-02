@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from datetime import timezone
+from types import SimpleNamespace
 from unittest import IsolatedAsyncioTestCase
 from unittest import TestCase
 from unittest.mock import AsyncMock
@@ -26,9 +27,13 @@ from catchup.db.models import SyncConnector
 from catchup.db.models import SyncType
 from catchup.sync.common.schemas import FullSyncContext
 from catchup.sync.common.schemas import HandlerKey
+from catchup.sync.common.schemas import IncrementalSyncContext
 from catchup.sync.common.schemas import SyncTargetType
 from catchup.worker.handlers.channel_talk_full_sync_handler import (
     ChannelTalkFullSyncHandler,
+)
+from catchup.worker.handlers.channel_talk_incremental_handler import (
+    ChannelTalkIncrementalHandler,
 )
 from catchup.worker.registry import get_ingestion_handler
 
@@ -38,6 +43,16 @@ _HANDLER_MODULE = "catchup.worker.handlers.channel_talk_full_sync_handler"
 _LOAD_CONNECTION = f"{_HANDLER_MODULE}.load_channel_talk_connection"
 _LOAD_DOCUMENT_CONNECTION = f"{_HANDLER_MODULE}.load_channel_talk_document_connection"
 _RUN_IN_THREADPOOL = f"{_HANDLER_MODULE}.run_in_threadpool"
+_INCREMENTAL_HANDLER_MODULE = (
+    "catchup.worker.handlers.channel_talk_incremental_handler"
+)
+_LOAD_INCREMENTAL_CONNECTION = (
+    f"{_INCREMENTAL_HANDLER_MODULE}.load_channel_talk_connection"
+)
+_LOAD_INCREMENTAL_DOCUMENT_CONNECTION = (
+    f"{_INCREMENTAL_HANDLER_MODULE}.load_channel_talk_document_connection"
+)
+_RUN_INCREMENTAL_THREADPOOL = f"{_INCREMENTAL_HANDLER_MODULE}.run_in_threadpool"
 
 
 def _build_connection_record(
@@ -92,6 +107,36 @@ def _build_context(
     )
 
 
+def _build_incremental_context(
+    *,
+    record_type: str = "user_chat",
+    record_id: str = "chat-123",
+    target_id: str = CHANNEL_ID,
+    parent_type: SyncTargetType = SyncTargetType.CHANNEL,
+    parent_id: str = CHANNEL_ID,
+) -> IncrementalSyncContext:
+    return IncrementalSyncContext(
+        event_id="event-123",
+        job_id="job-123",
+        connector=SyncConnector.CHANNEL_TALK,
+        scope_id=CHANNEL_ID,
+        target_type=SyncTargetType.CHANNEL,
+        target_id=target_id,
+        target_name=target_id,
+        attempt=0,
+        max_attempts=3,
+        record_key=(
+            "channel_talk:channel-123:channel:channel-123:user_chat:chat-123"
+        ),
+        generation=1,
+        record_type=record_type,
+        record_id=record_id,
+        parent_type=parent_type,
+        parent_id=parent_id,
+        last_event_at="2026-04-22T12:00:00+00:00",
+    )
+
+
 async def _run_immediately(func, *args, **kwargs):
     return func(*args, **kwargs)
 
@@ -108,6 +153,10 @@ def _build_application_result(*, persisted_count: int = 0):
             )(),
         },
     )()
+
+
+def _build_persist_result(*, persisted_count: int = 0):
+    return SimpleNamespace(persisted_count=persisted_count)
 
 
 class ChannelTalkFullSyncHandlerTests(IsolatedAsyncioTestCase):
@@ -230,7 +279,7 @@ class ChannelTalkFullSyncHandlerTests(IsolatedAsyncioTestCase):
             patch(
                 _LOAD_DOCUMENT_CONNECTION,
                 return_value=document_connection,
-            ),
+            ) as load_document_connection,
         ):
             result = await self.handler.handle(
                 context=_build_context(
@@ -241,6 +290,14 @@ class ChannelTalkFullSyncHandlerTests(IsolatedAsyncioTestCase):
                 service_cache={},
             )
 
+        load_document_connection.assert_called_once()
+        args = load_document_connection.call_args.args
+        kwargs = load_document_connection.call_args.kwargs
+        self.assertEqual(args[0], CHANNEL_ID)
+        self.assertEqual(
+            kwargs.get("space_id", args[1] if len(args) > 1 else None),
+            SPACE_ID,
+        )
         document_application.run_full_sync.assert_awaited_once()
         execution = document_application.run_full_sync.await_args.kwargs["execution"]
 
@@ -373,6 +430,84 @@ class ChannelTalkFullSyncHandlerTests(IsolatedAsyncioTestCase):
                 )
 
 
+class ChannelTalkIncrementalHandlerTests(IsolatedAsyncioTestCase):
+    def setUp(self) -> None:
+        self.handler = ChannelTalkIncrementalHandler()
+        self.run_in_threadpool_patcher = patch(
+            _RUN_INCREMENTAL_THREADPOOL,
+            _run_immediately,
+        )
+        self.run_in_threadpool_patcher.start()
+        self.addCleanup(self.run_in_threadpool_patcher.stop)
+
+    async def test_handler_syncs_user_chat_record_by_id(self) -> None:
+        self.handler._user_chat_adapter.sync_user_chat_by_id = AsyncMock(
+            return_value=_build_persist_result(persisted_count=3)
+        )
+
+        result = await self.handler.handle(
+            context=_build_incremental_context(
+                record_type="user_chat",
+                record_id="chat-123",
+            ),
+            service_cache={},
+        )
+
+        self.handler._user_chat_adapter.sync_user_chat_by_id.assert_awaited_once()
+        call = self.handler._user_chat_adapter.sync_user_chat_by_id.await_args
+        self.assertEqual(call.kwargs["user_chat_id"], "chat-123")
+        self.assertEqual(call.kwargs["execution"].channel_id, CHANNEL_ID)
+        self.assertEqual(
+            call.kwargs["sync_window"].window_start.isoformat(),
+            "2026-04-22T12:00:00+00:00",
+        )
+        self.assertEqual(result.synced_count, 3)
+        self.assertEqual(result.error_count, 0)
+
+    async def test_handler_syncs_document_article_with_channel_and_space_credentials(
+        self,
+    ) -> None:
+        self.handler._article_adapter.sync_article_by_id = AsyncMock(
+            return_value=_build_persist_result(persisted_count=2)
+        )
+        channel_connection = _build_connection_record()
+        document_connection = _build_document_connection_record()
+
+        with (
+            patch(
+                _LOAD_INCREMENTAL_CONNECTION,
+                return_value=channel_connection,
+            ) as load_connection,
+            patch(
+                _LOAD_INCREMENTAL_DOCUMENT_CONNECTION,
+                return_value=document_connection,
+            ) as load_document_connection,
+        ):
+            result = await self.handler.handle(
+                context=_build_incremental_context(
+                    record_type="document_article",
+                    record_id="article-123",
+                    target_id=SPACE_ID,
+                    parent_type=SyncTargetType.SPACE,
+                    parent_id=SPACE_ID,
+                ),
+                service_cache={},
+            )
+
+        load_connection.assert_called_once_with(CHANNEL_ID)
+        load_document_connection.assert_called_once_with(CHANNEL_ID, SPACE_ID)
+        self.handler._article_adapter.sync_article_by_id.assert_awaited_once()
+        call = self.handler._article_adapter.sync_article_by_id.await_args
+        self.assertEqual(call.kwargs["article_id"], "article-123")
+        execution = call.kwargs["execution"]
+        self.assertIs(execution.channel_connection, channel_connection)
+        self.assertIs(execution.document_connection, document_connection)
+        self.assertEqual(execution.channel_id, CHANNEL_ID)
+        self.assertEqual(execution.space_id, SPACE_ID)
+        self.assertEqual(result.synced_count, 2)
+        self.assertEqual(result.error_count, 0)
+
+
 class WorkerRegistryAdmissionTests(TestCase):
     def test_worker_registry_includes_channel_talk_full_handler(self) -> None:
         self.assertIsNotNone(
@@ -404,3 +539,11 @@ class WorkerRegistryAdmissionTests(TestCase):
                     sync_type=SyncType.INCREMENTAL,
                 ),
             )
+
+    def test_worker_registry_includes_channel_talk_incremental_handler(self) -> None:
+        self.assertIsNotNone(
+            get_ingestion_handler(
+                connector=SyncConnector.CHANNEL_TALK,
+                sync_type=SyncType.INCREMENTAL,
+            ),
+        )
