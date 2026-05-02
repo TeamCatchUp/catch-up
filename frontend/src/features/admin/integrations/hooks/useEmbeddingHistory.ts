@@ -1,10 +1,9 @@
 import { useMemo } from 'react';
 import { useQueries } from '@tanstack/react-query';
 
+import { CONNECTOR_STATUS_SOURCE_ORDER as SOURCE_ORDER } from '../constants/connectorOrder';
 import { adminConnectorQueries } from '../queries/adminConnector.queries';
-import type { AdminConnectorTargetRangeResponse, ConnectorStatusSource, SyncConnector } from '../types/syncModel';
-
-const SOURCE_ORDER: ConnectorStatusSource[] = ['jira', 'github', 'slack', 'confluence', 'channel_talk'];
+import type { AdminConnectorTargetRangeResponse, SyncConnector } from '../types/syncModel';
 
 /**
  * 임베딩 히스토리 조회 훅.

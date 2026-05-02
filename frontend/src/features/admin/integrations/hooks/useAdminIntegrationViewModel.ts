@@ -1,6 +1,7 @@
 import { useCallback, useMemo } from 'react';
 import { useQueries } from '@tanstack/react-query';
 
+import { CONNECTOR_STATUS_SOURCE_ORDER } from '../constants/connectorOrder';
 import { INTEGRATION_ACCOUNTS } from '../constants/integrationsConfig';
 import { adminConnectorQueries } from '../queries/adminConnector.queries';
 import type {
@@ -9,9 +10,11 @@ import type {
   ConnectorResource,
   IntegrationService,
 } from '../types/integrationModel';
-import type { AdminConnectorStatusResponse, ConnectorStatusSource } from '../types/syncModel';
+import type { AdminConnectorStatusResponse } from '../types/syncModel';
 
-const SOURCE_ORDER: ConnectorStatusSource[] = ['github', 'jira', 'slack', 'confluence', 'channel_talk'];
+// 단일 source 통합. 이전엔 이 파일이 'github, jira, ...' 순서였고 useEmbeddingHistory는 'jira, github, ...'
+// 순서로 drift되어 있었음 — constants/connectorOrder.ts로 정렬 통일.
+const SOURCE_ORDER = CONNECTOR_STATUS_SOURCE_ORDER;
 
 const RESOURCE_LABELS: Record<IntegrationService, string> = {
   jira: '임베딩된 Jira Project',

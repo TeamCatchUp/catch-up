@@ -1,4 +1,4 @@
-import { DEFAULT_PERIOD, type Period } from '../components/member/modals/channelTalk/PeriodSelect';
+import { DEFAULT_PERIOD, type Period } from '../constants/period';
 import type { FullSyncTarget } from '../types/syncModel';
 import type { ChannelTalkChannel } from './mapChannelTalkSyncTargets';
 
@@ -72,17 +72,4 @@ export function groupChannelTalkSyncDispatch(
       return { channel, targets, periods };
     })
     .filter((g) => g.targets.length > 0);
-}
-
-/** 채널톡 sync 결과 집계 — 토스트 노출에 사용 */
-export interface ChannelTalkSyncResultSummary {
-  acceptedCount: number;
-  conflictCount: number;
-  noEventsCount: number;
-  failedCount: number;
-  errorCount: number;
-  /** 첫 번째 발견된 실패 메시지 (사용자 대면 토스트용) */
-  lastFailMessage: string | null;
-  /** mutation 응답에서 추적 시작할 job_id 목록 (accepted + conflict 모두) */
-  jobIdsToTrack: string[];
 }

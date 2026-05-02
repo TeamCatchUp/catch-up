@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useQueries, useQuery } from '@tanstack/react-query';
 
+import { CONNECTOR_ORDER, SINGLE_SCOPE_CONNECTORS } from '../constants/connectorOrder';
 import { adminConnectorQueries } from '../queries/adminConnector.queries';
 import { channelTalkQueries } from '../queries/channelTalk.queries';
 import type {
@@ -32,13 +33,12 @@ interface JobState {
   items: EmbeddingProgressItem[];
 }
 
-/** UI 정렬 순서. 채널톡은 마지막. */
-const CONNECTOR_ORDER: SyncConnector[] = ['jira', 'github', 'slack', 'confluence', 'channel_talk'];
-
-/** 단일 scope를 사용하는 connector 목록 (채널톡 제외). 채널톡은 multi-channel이라 별도 처리. */
-const SINGLE_SCOPE_CONNECTORS: Exclude<SyncConnector, 'channel_talk'>[] = ['jira', 'github', 'slack', 'confluence'];
-
-/** job status → 버튼 상태 변환 */
+/**
+ * job status → 버튼 상태 변환.
+ *
+ * `SyncJobStatus`에 새 값이 추가되면 default 분기에서 `_exhaustive: never` 할당 실패로
+ * 컴파일 타임에 누락이 잡힌다. switch 안에서 silent하게 건너뛰는 일이 없도록.
+ */
 const toButtonState = (status: SyncJobStatus | undefined): EmbeddingButtonState => {
   if (!status) return 'idle';
   switch (status) {
@@ -46,14 +46,17 @@ const toButtonState = (status: SyncJobStatus | undefined): EmbeddingButtonState 
     case 'in_progress':
       return 'in_progress';
     case 'success':
-      return 'completed';
     case 'failed':
       return 'completed';
+    default: {
+      const _exhaustive: never = status;
+      return _exhaustive;
+    }
   }
 };
 
-/** syncStatus → 복원 대상이면 true */
-const isActiveStatus = (status: SyncStatusResponse | undefined): status is SyncStatusResponse => !!status;
+/** syncStatus 응답이 도착했는지 확인 (단순 undefined 가드) */
+const isDefined = (status: SyncStatusResponse | undefined): status is SyncStatusResponse => !!status;
 
 /** in_progress가 'idle'/'completed'를 이김. 같은 connector의 여러 job 중 가장 진행 중인 상태를 우선 표시. */
 const mergeButtonState = (
@@ -153,7 +156,7 @@ export const useEmbeddingJobs = () => {
     const jobs: ActiveJob[] = [];
     statusQueries.forEach((q, index) => {
       const data = q.data;
-      if (isActiveStatus(data)) {
+      if (isDefined(data)) {
         jobs.push({
           jobId: data.job_id,
           connector: statusKeys[index].connector,

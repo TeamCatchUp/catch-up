@@ -8,6 +8,7 @@ import IconCancel from '@/public/icons/icon/cancel.svg';
 import { Button } from '@/shared/components/ui/button';
 import { Dialog, DialogContent, DialogTitle } from '@/shared/components/ui/dialog';
 
+import { DEFAULT_PERIOD } from '../../../constants/period';
 import { useChannelTalkSelection } from '../../../hooks/useChannelTalkSelection';
 import { adminConnectorMutations } from '../../../queries/adminConnector.mutations';
 import { adminConnectorQueries } from '../../../queries/adminConnector.queries';
@@ -18,7 +19,6 @@ import { type ChannelTalkChannel, mapChannelTalkSyncTargets } from '../../../uti
 import ChannelGroup from './channelTalk/ChannelGroup';
 import ChannelGroupListEmpty from './channelTalk/ChannelGroupListEmpty';
 import ChannelList from './channelTalk/ChannelList';
-import { DEFAULT_PERIOD } from './channelTalk/PeriodSelect';
 
 interface ChannelTalkEmbeddingModalProps {
   open: boolean;

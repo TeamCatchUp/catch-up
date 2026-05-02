@@ -6,9 +6,10 @@ import IconBook from '@/public/icons/icon/book.svg';
 import IconTag from '@/public/icons/icon/tag.svg';
 import CheckboxIcon from '@/shared/components/ui/checkbox-icon';
 
+import type { Period } from '../../../../constants/period';
 import type { ChannelTalkChannel } from '../../../../utils/mapChannelTalkSyncTargets';
 import EntityChip from './EntityChip';
-import PeriodSelect, { type Period } from './PeriodSelect';
+import PeriodSelect from './PeriodSelect';
 
 interface ChannelGroupProps {
   channel: ChannelTalkChannel;

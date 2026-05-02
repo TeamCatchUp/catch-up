@@ -3,7 +3,7 @@
 import { useCallback, useMemo, useReducer } from 'react';
 import { toast } from 'sonner';
 
-import { DEFAULT_PERIOD, type Period } from '../components/member/modals/channelTalk/PeriodSelect';
+import { DEFAULT_PERIOD, type Period } from '../constants/period';
 import type { ChannelTalkChannel } from '../utils/mapChannelTalkSyncTargets';
 
 interface ChannelTalkSelectionState {
