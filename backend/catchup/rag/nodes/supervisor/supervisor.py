@@ -1,6 +1,7 @@
 import asyncio
 import structlog
 from langchain.chat_models import BaseChatModel
+from langchain_core.callbacks import adispatch_custom_event
 from langchain_core.messages import HumanMessage
 
 from catchup.costs.utils import token_usage
@@ -73,6 +74,17 @@ async def supervisor_node(
         )
         pipeline_plan: PipelinePlan = response.get("parsed")
 
+        # 완료 이벤트 발송
+        await adispatch_custom_event(
+            "process",
+            {
+                "status": "completed",
+                "node": "supervisor",
+                "reasoning": pipeline_plan.reasoning,
+                "content": pipeline_plan.pipeline_type,
+            },
+        )
+
         _NO_RETRIEVAL = {"direct_answer", "clarify"}
         intent = (
             "chitchat"
@@ -142,6 +154,17 @@ async def supervisor_node(
             exc_info=True,
             fallback="standard",
         )
+
+        # 에러 이벤트 발송
+        await adispatch_custom_event(
+            "process",
+            {
+                "status": "error",
+                "node": "supervisor",
+                "reasoning": "질문 의도 파악에 실패했어요.",
+            },
+        )
+
         return {
             "intent": "search_pipeline",
             "pipeline_plan": None,

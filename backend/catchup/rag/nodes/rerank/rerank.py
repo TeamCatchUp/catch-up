@@ -3,6 +3,7 @@ from collections import defaultdict
 from copy import deepcopy
 
 import structlog
+from langchain_core.callbacks import adispatch_custom_event
 from langchain_core.documents import Document
 
 from catchup.components.reranker.service import BaseRerankService
@@ -43,7 +44,7 @@ async def rerank_node(state: AgentState, rerank_service: BaseRerankService):
     essential_doc_ids = set(state.get("essential_doc_ids") or [])
 
     retrieved_docs = _validate_retrieved_docs(retrieved_docs)
-    
+
     try:
         t_sem = time.perf_counter()
         logger.debug(
@@ -84,6 +85,13 @@ async def rerank_node(state: AgentState, rerank_service: BaseRerankService):
             retrieved_docs, 
             key=lambda d: get_document_id(d) in essential_doc_ids, 
             reverse=True
+        )
+        await adispatch_custom_event(
+            "process",
+            {
+                "status": "completed",
+                "node": "rerank",
+            },
         )
         return {
             "retrieved_docs": fallback_docs[:total_k],
@@ -128,6 +136,14 @@ async def rerank_node(state: AgentState, rerank_service: BaseRerankService):
             agent_seen_total=len(agent_seen),
             unseen_in_final=unseen_in_final,
             confirmed_essential_count=len(confirmed_essential),
+        )
+        
+        await adispatch_custom_event(
+            "process",
+            {
+                "status": "completed",
+                "node": "rerank",
+            },
         )
 
         return {

@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from typing import Annotated
+from typing import Annotated, Any
 from typing import Literal
 from typing import Optional
 from typing import Union
@@ -80,11 +80,23 @@ class ChatStreamingTokenResponse(BaseModel):
     token: str
 
 
+class ChatStreamingProcessResponse(BaseModel):
+    """답변 생성 과정(에이전트 사고 과정 포함) 스트리밍"""
+
+    type: Literal["process"] = "process"
+    session_id: uuid.UUID = Field(default_factory=uuid.uuid4, description="대화 세션 ID")
+    status: Literal["in_progress", "completed", "error"]
+    node: str
+    reasoning: str | None = None
+    content: str | list[str | Any] | None = None
+
+
 StreamEvent = Annotated[
     Union[
         ChatStreamingStatusResponse,
         ChatStreamingSourceResponse,
         ChatStreamingTokenResponse,
+        ChatStreamingProcessResponse,
     ],
     Field(discriminator="type"),
 ]

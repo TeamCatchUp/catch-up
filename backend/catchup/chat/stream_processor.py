@@ -17,10 +17,13 @@ from catchup.audit.metadata import ChatAuditMetadata
 from catchup.chat.schemas import NODE_STATUS_MAP
 from catchup.chat.schemas import ChatStreamingSourceResponse
 from catchup.chat.schemas import ChatStreamingStatusResponse
+from catchup.chat.schemas import ChatStreamingProcessResponse
 from catchup.chat.schemas import ChatStreamingTokenResponse
 from catchup.chat.schemas import StreamEvent
 from catchup.costs.contexts.chat import ChatTokenUsageContext
 from catchup.rag.schemas.sources import BaseSource
+from catchup.rag.static_reasoning import STATIC_REASONING_NODES
+from catchup.rag.static_reasoning import get_static_reasoning
 
 logger = structlog.get_logger()
 
@@ -91,7 +94,18 @@ class ChatStreamProcessor:
                 self.context.has_streamed = True
                 yield ChatStreamingTokenResponse(session_id=self.session_id, token=token)
 
-        # 4. 노드 종료 (현재는 최종 답변 생성 노드만 관여)
+        # 4. process 스트리밍 (supervisor 등에서 adispatch_custom_event로 발송)
+        elif kind == "on_custom_event" and name == "process":
+            data = event["data"]
+            yield ChatStreamingProcessResponse(
+                session_id=self.session_id,
+                status=data.get("status"),
+                node=data.get("node"),
+                reasoning=data.get("reasoning"),
+                content=data.get("content"),
+            )
+
+        # 5. 노드 종료 (현재는 최종 답변 생성 노드만 관여)
         elif kind == "on_chain_end":
             async for res in self._handle_node_end(event):
                 yield res
@@ -104,16 +118,24 @@ class ChatStreamProcessor:
         name = event["name"]
         tags = event.get("metadata", {}).get("tags", []) or []
 
+        input_data = event["data"].get("input", {})
+
         if name in NODE_STATUS_MAP:
-            yield ChatStreamingStatusResponse(
+            n = len(input_data.get("retrieved_docs", []))
+            reasoning = (
+                get_static_reasoning(name, n=n)
+                if name in STATIC_REASONING_NODES
+                else None
+            )
+            yield ChatStreamingProcessResponse(
+                status="in_progress",
                 session_id=self.session_id,
                 node=name,
-                message=NODE_STATUS_MAP[name],
+                reasoning=reasoning,
             )
 
         # 답변 생성 노드 시작 시: 초기 출처 후보 목록 전송
         if "has_citations" in tags:
-            input_data = event["data"].get("input", {})
             docs = input_data.get("retrieved_docs", [])
             sources = [
                 BaseSource.from_document(index=i, doc=doc)

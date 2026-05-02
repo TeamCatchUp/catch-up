@@ -1,6 +1,7 @@
 import asyncio
 import structlog
 from langchain.chat_models import BaseChatModel
+from langchain_core.callbacks import adispatch_custom_event
 
 from catchup.costs.utils import token_usage
 from catchup.prompts.loader import prompt_loader
@@ -30,7 +31,7 @@ async def generate_vector_queries_node(
     structured_llm = llm.with_structured_output(
         VectorDbSearchPlan, method="function_calling", include_raw=True
     )
-
+    
     try:
         response, token_usages = await ainvoke_llm_with_token_usage(
             llm=structured_llm,
@@ -52,6 +53,14 @@ async def generate_vector_queries_node(
             query=rewritten_query,
             reasoning="Generation failed: using rewritten query as fallback.",
         )
+        await adispatch_custom_event(
+            "process",
+            {
+                "status": "completed",
+                "node": "generate_vector_queries",
+                "content": fallback_query,
+            },
+        )
         return {
             "vector_search_queries": [fallback_query],
         }
@@ -64,6 +73,16 @@ async def generate_vector_queries_node(
         else len(plan.queries)
     )
     queries = plan.queries[:max_q]
+    
+    for q in queries:
+        await adispatch_custom_event(
+            "process",
+            {
+                "status": "completed",
+                "node": "generate_vector_queries",
+                "content": [q.query, q.keyword_tokens],
+            },
+        )
 
     _print_search_plan_log(plan)
 
