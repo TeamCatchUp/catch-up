@@ -69,6 +69,15 @@ Your goal is to convert a context-complete Korean question into **High-Density S
 - Per-query `reasoning` can be brief English.
 </output_instructions>
 
+{% if recent_history %}
+<recent_conversation>
+The last 2 turns of conversation are provided to help resolve referential expressions (e.g., "그거", "이거", "그 티켓") in the user query.
+Use this ONLY to identify what entity the user is referring to — do not let it change the search direction or expand the scope of the query.
+
+{{ recent_history }}
+</recent_conversation>
+{% endif %}
+
 <user_query>
 << query >>
 </user_query>
