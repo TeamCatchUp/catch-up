@@ -10,15 +10,20 @@ from unittest.mock import patch
 from pydantic import ValidationError
 
 from catchup.connector_core.adapters.channel_talk.article_full_sync import (
-    ChannelTalkArticleFullSyncAdapter,
+    ChannelTalkArticleFullSyncIngestionAdapter,
 )
 from catchup.connector_core.adapters.channel_talk.user_chat_full_sync import (
-    ChannelTalkUserChatFullSyncAdapter,
+    ChannelTalkUserChatFullSyncIngestionAdapter,
 )
-from catchup.connector_core.application.full_sync import ConnectorFullSyncApplication
+from catchup.connector_core.adapters.channel_talk.user_chat_incremental import (
+    ChannelTalkUserChatIncrementalIngestionAdapter,
+)
+from catchup.connector_core.application.sync_ingestion import run_sync_ingestion
 from catchup.connector_core.descriptors.channel_talk import CHANNEL_TALK_DESCRIPTOR
 from catchup.connector_core.domain.structure import ConnectorKey
-from catchup.connector_core.ports.full_sync import FullSyncWindow
+from catchup.connector_core.ports.sync_ingestion import SyncExecutionRequest
+from catchup.connector_core.ports.sync_ingestion import SyncExecutionResult
+from catchup.connector_core.ports.sync_ingestion import SyncWindow
 from catchup.connectors.channel_talk.core.user_chat_full_sync_models import (
     ChannelTalkFetchedUserChat,
 )
@@ -29,10 +34,7 @@ from catchup.connectors.channel_talk.core.user_chat_full_sync_models import (
     ChannelTalkUserChatFullSyncCheckpoint,
 )
 from catchup.connectors.channel_talk.core.user_chat_full_sync_models import (
-    ChannelTalkUserChatFullSyncExecutionRequest,
-)
-from catchup.connectors.channel_talk.core.user_chat_full_sync_models import (
-    ChannelTalkUserChatFullSyncExecutionResult,
+    ChannelTalkUserChatFullSyncConnection,
 )
 from catchup.connectors.channel_talk.core.user_chat_full_sync_models import (
     ChannelTalkUserChatFullSyncFetchResult,
@@ -46,17 +48,23 @@ from catchup.connectors.channel_talk.core.user_chat_full_sync_models import (
 from catchup.connectors.channel_talk.core.user_chat_full_sync_models import (
     ChannelTalkUserChatFullSyncTransformResult,
 )
+from catchup.connectors.channel_talk.core.user_chat_full_sync_models import (
+    ChannelTalkUserChatIncrementalExecutionRequest,
+)
+from catchup.connectors.channel_talk.core.user_chat_full_sync_models import (
+    ChannelTalkUserChatIncrementalExecutionResult,
+)
+from catchup.connectors.channel_talk.core.user_chat_full_sync_models import (
+    ChannelTalkUserChatSyncExecutionRequest,
+)
+from catchup.connectors.channel_talk.core.user_chat_full_sync_models import (
+    ChannelTalkUserChatSyncExecutionResult,
+)
 from catchup.connectors.channel_talk.core.user_chat_message_renderer import (
     UserChatMessageRenderer,
 )
 from catchup.connectors.channel_talk.document_space.article_full_sync_models import (
     DEFAULT_ARTICLE_FULL_SYNC_STATES,
-)
-from catchup.connectors.channel_talk.document_space.article_full_sync_models import (
-    ChannelTalkArticleFullSyncExecutionRequest,
-)
-from catchup.connectors.channel_talk.document_space.article_full_sync_models import (
-    ChannelTalkArticleFullSyncExecutionResult,
 )
 from catchup.connectors.channel_talk.document_space.article_full_sync_models import (
     ChannelTalkArticleFullSyncFetchResult,
@@ -69,6 +77,12 @@ from catchup.connectors.channel_talk.document_space.article_full_sync_models imp
 )
 from catchup.connectors.channel_talk.document_space.article_full_sync_models import (
     ChannelTalkArticleFullSyncTransformResult,
+)
+from catchup.connectors.channel_talk.document_space.article_full_sync_models import (
+    ChannelTalkArticleSyncExecutionRequest,
+)
+from catchup.connectors.channel_talk.document_space.article_full_sync_models import (
+    ChannelTalkArticleSyncExecutionResult,
 )
 from catchup.connectors.channel_talk.document_space.article_full_sync_models import (
     ChannelTalkFetchedArticle,
@@ -124,8 +138,8 @@ from catchup.db.models import SyncConnector
 from catchup.sync.audit import SyncAuditContext
 
 
-def _window() -> FullSyncWindow:
-    return FullSyncWindow(
+def _window() -> SyncWindow:
+    return SyncWindow(
         window_start=datetime(2026, 4, 21, 0, 0, tzinfo=timezone.utc),
         window_end=datetime(2026, 4, 22, 0, 0, tzinfo=timezone.utc),
     )
@@ -401,7 +415,7 @@ class ChannelTalkFullSyncContractTests(TestCase):
     def test_execution_request_exposes_explicit_channel_talk_user_chat_contract(
         self,
     ) -> None:
-        execution = ChannelTalkUserChatFullSyncExecutionRequest(
+        execution = ChannelTalkUserChatSyncExecutionRequest(
             tenant_id="channel-123",
         )
 
@@ -414,7 +428,7 @@ class ChannelTalkFullSyncContractTests(TestCase):
 
     def test_execution_request_rejects_blank_tenant_id(self) -> None:
         with self.assertRaisesRegex(ValidationError, "tenant_id is required"):
-            ChannelTalkUserChatFullSyncExecutionRequest(
+            ChannelTalkUserChatSyncExecutionRequest(
                 tenant_id=" ",
             )
 
@@ -423,14 +437,14 @@ class ChannelTalkFullSyncContractTests(TestCase):
             ValidationError,
             "window_start must be less than or equal to window_end",
         ):
-            FullSyncWindow(
+            SyncWindow(
                 window_start=datetime(2026, 4, 22, 0, 0, tzinfo=timezone.utc),
                 window_end=datetime(2026, 4, 21, 0, 0, tzinfo=timezone.utc),
             )
 
     def test_execution_request_keeps_only_tenant_checkpoint_alignment(self) -> None:
         with self.assertRaisesRegex(ValidationError, "checkpoint.tenant_id"):
-            ChannelTalkUserChatFullSyncExecutionRequest(
+            ChannelTalkUserChatSyncExecutionRequest(
                 tenant_id="channel-123",
                 checkpoint=ChannelTalkUserChatFullSyncCheckpoint(
                     tenant_id="other-channel",
@@ -559,7 +573,7 @@ class ChannelTalkFullSyncContractTests(TestCase):
             )
 
 
-class ChannelTalkArticleFullSyncApplicationTests(IsolatedAsyncioTestCase):
+class ChannelTalkArticleSyncIngestionRunnerTests(IsolatedAsyncioTestCase):
     async def test_document_article_application_fetches_transforms_and_persists_articles(
         self,
     ) -> None:
@@ -593,16 +607,13 @@ class ChannelTalkArticleFullSyncApplicationTests(IsolatedAsyncioTestCase):
                 next_checkpoint_cursor="cursor-2",
             )
         )
-        application = ConnectorFullSyncApplication(
-            port=ChannelTalkArticleFullSyncAdapter(
-                fetcher=fake_fetcher,
-                language="ko",
-                repository_factory=lambda: fake_repository,
-            ),
-        )
+        application = ChannelTalkArticleFullSyncIngestionAdapter()
+        application._fetcher = fake_fetcher
+        application._build_repository = lambda: fake_repository
 
-        result = await application.run_full_sync(
-            execution=ChannelTalkArticleFullSyncExecutionRequest(
+        result = await run_sync_ingestion(
+            port=application,
+            execution=ChannelTalkArticleSyncExecutionRequest(
                 tenant_id="channel-123",
                 channel_connection=_connection(),
                 document_connection=_document_connection(),
@@ -610,7 +621,7 @@ class ChannelTalkArticleFullSyncApplicationTests(IsolatedAsyncioTestCase):
             sync_window=_window(),
         )
 
-        self.assertIsInstance(result, ChannelTalkArticleFullSyncExecutionResult)
+        self.assertIsInstance(result, ChannelTalkArticleSyncExecutionResult)
         self.assertIsInstance(
             result.fetched,
             ChannelTalkArticleFullSyncFetchResult,
@@ -694,7 +705,7 @@ class ChannelTalkArticleFullSyncApplicationTests(IsolatedAsyncioTestCase):
 
     def test_document_article_execution_requires_aligned_connections(self) -> None:
         with self.assertRaisesRegex(ValidationError, "document_connection.channel_id"):
-            ChannelTalkArticleFullSyncExecutionRequest(
+            ChannelTalkArticleSyncExecutionRequest(
                 tenant_id="channel-123",
                 channel_connection=_connection(),
                 document_connection=_document_connection().model_copy(
@@ -703,14 +714,74 @@ class ChannelTalkArticleFullSyncApplicationTests(IsolatedAsyncioTestCase):
             )
 
 
-class ConnectorFullSyncApplicationTests(IsolatedAsyncioTestCase):
+class SyncIngestionRunnerTests(IsolatedAsyncioTestCase):
+    async def test_runner_calls_port_methods_in_ingestion_order(self) -> None:
+        calls: list[str] = []
+
+        class _Port:
+            async def fetch(self, *, execution, sync_window):
+                calls.append("fetch")
+                return "fetched"
+
+            async def transform(self, *, execution, sync_window, fetched):
+                calls.append(f"transform:{fetched}")
+                return "transformed"
+
+            async def summarize(self, *, execution, sync_window, transformed):
+                calls.append(f"summarize:{transformed}")
+                return "summary"
+
+            async def persist(self, *, execution, sync_window, transformed, summary):
+                calls.append(f"persist:{transformed}:{summary}")
+                return "persisted"
+
+            def build_result(
+                self,
+                *,
+                execution,
+                sync_window,
+                fetched,
+                transformed,
+                summary,
+                persisted,
+            ):
+                calls.append(
+                    f"build_result:{fetched}:{transformed}:{summary}:{persisted}"
+                )
+                return SyncExecutionResult(
+                    connector=ConnectorKey.CHANNEL_TALK,
+                    tenant_id=execution.tenant_id,
+                    target=execution.target,
+                )
+
+        result = await run_sync_ingestion(
+            port=_Port(),
+            execution=SyncExecutionRequest(
+                connector=ConnectorKey.CHANNEL_TALK,
+                tenant_id="tenant-123",
+                target="user_chat",
+            ),
+            sync_window=_window(),
+        )
+
+        self.assertEqual(
+            calls,
+            [
+                "fetch",
+                "transform:fetched",
+                "summarize:transformed",
+                "persist:transformed:summary",
+                "build_result:fetched:transformed:summary:persisted",
+            ],
+        )
+        self.assertEqual(result.tenant_id, "tenant-123")
+
     def _build_application(
         self,
         *,
-        summarizer=None,
         enable_summarization: bool = True,
         fetched_user_chats: ChannelTalkFetchedUserChatsResult | None = None,
-    ) -> tuple[ConnectorFullSyncApplication, _FakeRepository]:
+    ) -> tuple[ChannelTalkUserChatFullSyncIngestionAdapter, _FakeRepository]:
         fake_fetcher = AsyncMock()
         fake_fetcher.fetch_user_chats = AsyncMock(
             return_value=fetched_user_chats
@@ -718,13 +789,14 @@ class ConnectorFullSyncApplicationTests(IsolatedAsyncioTestCase):
         )
         fake_fetcher.fetch_managers_by_id = AsyncMock(return_value=_managers_by_id())
         fake_repository = _FakeRepository()
-        application = ConnectorFullSyncApplication(
-            port=ChannelTalkUserChatFullSyncAdapter(
-                fetcher=fake_fetcher,
-                connection_loader=lambda channel_id: _connection(),
-                repository_factory=lambda: fake_repository,
-                enable_summarization=enable_summarization,
-                summarizer=summarizer,
+        application = ChannelTalkUserChatFullSyncIngestionAdapter(
+            enable_summarization=enable_summarization,
+        )
+        application._fetcher = fake_fetcher
+        application._build_repository = lambda: fake_repository
+        application._load_connection = AsyncMock(
+            return_value=ChannelTalkUserChatFullSyncConnection.from_credentials_record(
+                _connection()
             )
         )
         return application, fake_repository
@@ -733,22 +805,25 @@ class ConnectorFullSyncApplicationTests(IsolatedAsyncioTestCase):
         self,
     ) -> None:
         fake_summarizer = _FakeSummarizer()
-        application, fake_repository = self._build_application(
-            summarizer=fake_summarizer,
-        )
-        sync_window = FullSyncWindow(
+        application, fake_repository = self._build_application()
+        sync_window = SyncWindow(
             window_start=datetime(2026, 4, 21, 0, 0, tzinfo=timezone.utc),
             window_end=datetime(2026, 4, 22, 0, 0, tzinfo=timezone.utc),
         )
 
-        result = await application.run_full_sync(
-            execution=ChannelTalkUserChatFullSyncExecutionRequest(
-                tenant_id="channel-123",
-            ),
-            sync_window=sync_window,
-        )
+        with patch(
+            "catchup.connector_core.adapters.channel_talk.user_chat_full_sync.get_summarizer_service",
+            return_value=fake_summarizer,
+        ):
+            result = await run_sync_ingestion(
+                port=application,
+                execution=ChannelTalkUserChatSyncExecutionRequest(
+                    tenant_id="channel-123",
+                ),
+                sync_window=sync_window,
+            )
 
-        self.assertIsInstance(result, ChannelTalkUserChatFullSyncExecutionResult)
+        self.assertIsInstance(result, ChannelTalkUserChatSyncExecutionResult)
         self.assertIsInstance(result.fetched, ChannelTalkUserChatFullSyncFetchResult)
         self.assertIsInstance(
             result.transformed,
@@ -843,9 +918,7 @@ class ConnectorFullSyncApplicationTests(IsolatedAsyncioTestCase):
 
     async def test_summarize_uses_channel_talk_user_chat_source_type(self) -> None:
         fake_summarizer = _FakeSummarizer()
-        application, fake_repository = self._build_application(
-            summarizer=fake_summarizer,
-        )
+        application, fake_repository = self._build_application()
         audit_context = SyncAuditContext(
             connector=SyncConnector.CHANNEL_TALK,
             scope_id="channel-123",
@@ -854,13 +927,18 @@ class ConnectorFullSyncApplicationTests(IsolatedAsyncioTestCase):
             task_id="event-123",
         )
 
-        result = await application.run_full_sync(
-            execution=ChannelTalkUserChatFullSyncExecutionRequest(
-                tenant_id="channel-123",
-                audit_context=audit_context,
-            ),
-            sync_window=_window(),
-        )
+        with patch(
+            "catchup.connector_core.adapters.channel_talk.user_chat_full_sync.get_summarizer_service",
+            return_value=fake_summarizer,
+        ):
+            result = await run_sync_ingestion(
+                port=application,
+                execution=ChannelTalkUserChatSyncExecutionRequest(
+                    tenant_id="channel-123",
+                    audit_context=audit_context,
+                ),
+                sync_window=_window(),
+            )
 
         stored_document = fake_repository.added_documents[0]
         self.assertEqual(len(fake_summarizer.requests), 1)
@@ -885,22 +963,24 @@ class ConnectorFullSyncApplicationTests(IsolatedAsyncioTestCase):
     async def test_summarize_disabled_keeps_contextual_content_as_page_content(
         self,
     ) -> None:
-        fake_summarizer = _FakeSummarizer()
         application, fake_repository = self._build_application(
             enable_summarization=False,
-            summarizer=fake_summarizer,
         )
 
-        result = await application.run_full_sync(
-            execution=ChannelTalkUserChatFullSyncExecutionRequest(
-                tenant_id="channel-123",
-            ),
-            sync_window=_window(),
-        )
+        with patch(
+            "catchup.connector_core.adapters.channel_talk.user_chat_full_sync.get_summarizer_service",
+        ) as get_summarizer_service:
+            result = await run_sync_ingestion(
+                port=application,
+                execution=ChannelTalkUserChatSyncExecutionRequest(
+                    tenant_id="channel-123",
+                ),
+                sync_window=_window(),
+            )
 
         stored_document = fake_repository.added_documents[0]
         self.assertFalse(result.summary.summary_applied)
-        self.assertEqual(fake_summarizer.requests, [])
+        get_summarizer_service.assert_not_called()
         self.assertEqual(
             stored_document.page_content,
             stored_document.metadata["contextual_content"],
@@ -910,7 +990,7 @@ class ConnectorFullSyncApplicationTests(IsolatedAsyncioTestCase):
         self,
     ) -> None:
         application, _ = self._build_application(enable_summarization=False)
-        execution = ChannelTalkUserChatFullSyncExecutionRequest(
+        execution = ChannelTalkUserChatSyncExecutionRequest(
             tenant_id="channel-123",
             checkpoint=ChannelTalkUserChatFullSyncCheckpoint(
                 tenant_id="channel-123",
@@ -919,7 +999,7 @@ class ConnectorFullSyncApplicationTests(IsolatedAsyncioTestCase):
                 next_cursor="cursor-1",
             ),
         )
-        mismatched_window = FullSyncWindow(
+        mismatched_window = SyncWindow(
             window_start=datetime(2026, 4, 20, 0, 0, tzinfo=timezone.utc),
             window_end=datetime(2026, 4, 21, 0, 0, tzinfo=timezone.utc),
         )
@@ -928,7 +1008,8 @@ class ConnectorFullSyncApplicationTests(IsolatedAsyncioTestCase):
             ValueError,
             "checkpoint.window must match sync_window",
         ):
-            await application.run_full_sync(
+            await run_sync_ingestion(
+                port=application,
                 execution=execution,
                 sync_window=mismatched_window,
             )
@@ -936,8 +1017,9 @@ class ConnectorFullSyncApplicationTests(IsolatedAsyncioTestCase):
     async def test_application_resolves_fetch_states_inside_adapter(self) -> None:
         application, _ = self._build_application(enable_summarization=False)
 
-        result = await application.run_full_sync(
-            execution=ChannelTalkUserChatFullSyncExecutionRequest(
+        result = await run_sync_ingestion(
+            port=application,
+            execution=ChannelTalkUserChatSyncExecutionRequest(
                 tenant_id="channel-123",
                 checkpoint=ChannelTalkUserChatFullSyncCheckpoint(
                     tenant_id="channel-123",
@@ -968,8 +1050,9 @@ class ConnectorFullSyncApplicationTests(IsolatedAsyncioTestCase):
             ),
         )
 
-        result = await application.run_full_sync(
-            execution=ChannelTalkUserChatFullSyncExecutionRequest(
+        result = await run_sync_ingestion(
+            port=application,
+            execution=ChannelTalkUserChatSyncExecutionRequest(
                 tenant_id="channel-123",
             ),
             sync_window=_window(),
@@ -987,21 +1070,26 @@ class ConnectorFullSyncApplicationTests(IsolatedAsyncioTestCase):
         fake_fetcher.fetch_user_chats = AsyncMock(
             return_value=ChannelTalkFetchedUserChatsResult()
         )
-        adapter = ChannelTalkUserChatFullSyncAdapter(
-            fetcher=fake_fetcher,
-            connection_loader=lambda channel_id: _connection(),
+        adapter = ChannelTalkUserChatFullSyncIngestionAdapter(
             enable_summarization=False,
         )
+        adapter._fetcher = fake_fetcher
 
         async def run_sync(operation, *args, **kwargs):
             return operation(*args, **kwargs)
 
-        with patch(
-            "catchup.connector_core.adapters.channel_talk.user_chat_full_sync.run_in_threadpool",
-            AsyncMock(side_effect=run_sync),
-        ) as run_in_threadpool:
+        with (
+            patch(
+                "catchup.connector_core.adapters.channel_talk.user_chat_full_sync.load_channel_talk_connection",
+                return_value=_connection(),
+            ),
+            patch(
+                "catchup.connector_core.adapters.channel_talk.user_chat_full_sync.run_in_threadpool",
+                AsyncMock(side_effect=run_sync),
+            ) as run_in_threadpool,
+        ):
             await adapter.fetch(
-                execution=ChannelTalkUserChatFullSyncExecutionRequest(
+                execution=ChannelTalkUserChatSyncExecutionRequest(
                     tenant_id="channel-123",
                 ),
                 sync_window=_window(),
@@ -1009,3 +1097,44 @@ class ConnectorFullSyncApplicationTests(IsolatedAsyncioTestCase):
 
         run_in_threadpool.assert_awaited_once()
         self.assertEqual(run_in_threadpool.await_args.args[1], "channel-123")
+
+    async def test_user_chat_incremental_adapter_runs_exact_fetch_through_ingestion_runner(
+        self,
+    ) -> None:
+        fake_fetcher = AsyncMock()
+        fake_fetcher.fetch_managers_by_id = AsyncMock(return_value=_managers_by_id())
+        fake_fetcher.fetch_user_chat_bundle_by_id = AsyncMock(
+            return_value=_fetched_bundle()
+        )
+        fake_repository = _FakeRepository()
+        adapter = ChannelTalkUserChatIncrementalIngestionAdapter(
+            enable_summarization=False,
+        )
+        adapter._fetcher = fake_fetcher
+        adapter._build_repository = lambda: fake_repository
+        adapter._load_connection = AsyncMock(
+            return_value=ChannelTalkUserChatFullSyncConnection.from_credentials_record(
+                _connection()
+            )
+        )
+
+        result = await run_sync_ingestion(
+            port=adapter,
+            execution=ChannelTalkUserChatIncrementalExecutionRequest(
+                tenant_id="channel-123",
+                user_chat_id="chat-123",
+            ),
+            sync_window=_window(),
+        )
+
+        self.assertIsInstance(result, ChannelTalkUserChatIncrementalExecutionResult)
+        fake_fetcher.fetch_user_chat_bundle_by_id.assert_awaited_once()
+        self.assertEqual(
+            fake_fetcher.fetch_user_chat_bundle_by_id.await_args.kwargs[
+                "user_chat_id"
+            ],
+            "chat-123",
+        )
+        self.assertEqual(result.fetched.fetched_record_ids, ("chat-123",))
+        self.assertEqual(result.persisted.persisted_count, 1)
+        self.assertEqual(len(fake_repository.added_documents), 1)
