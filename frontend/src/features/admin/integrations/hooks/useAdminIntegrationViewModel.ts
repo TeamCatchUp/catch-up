@@ -105,13 +105,14 @@ export const useAdminIntegrationViewModel = (): AdminIntegrationViewModel => {
       }));
 
       return {
-        connected: targets.length > 0,
+        // installation status 기반(menu.connected와 동일 의미). 임베딩 없으면 dataRange가 '-'로 표시됨.
+        connected: isServiceConnected(service),
         dataRange: formatRange(globalOldest, globalLatest),
         resources,
         resourceLabel: RESOURCE_LABELS[service],
       };
     },
-    [statusMap],
+    [statusMap, isServiceConnected],
   );
 
   return {

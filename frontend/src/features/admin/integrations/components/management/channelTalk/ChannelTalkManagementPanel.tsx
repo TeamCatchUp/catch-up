@@ -100,11 +100,8 @@ function ChannelTalkManagementPanelInner({ initialState, detail }: ChannelTalkMa
     };
   }, [state.channels]);
 
-  // 다른 connector와 동일하게 백엔드 connector_target_status(임베딩 데이터 기반) 사용.
-  // viewModel의 hasTestedChannels(credential 등록 여부)와는 의미가 다름:
-  //   - detail.connected: 임베딩된 데이터가 있는지
-  //   - hasTestedChannels: credential이 등록된 카드가 있는지
-  // 다른 connector도 임베딩 기준으로 표시하므로 일관성 위해 detail 사용.
+  // detail.connected는 installation status 기반(menu와 일관). dataRange는 임베딩 데이터 범위.
+  // hasTestedChannels(credential 등록 여부)는 카드별 표시용으로만 사용.
   return (
     <div className="flex flex-col gap-6">
       <ConnectionStatusSection isConnected={detail.connected} />
