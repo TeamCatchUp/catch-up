@@ -14,6 +14,7 @@ import type {
   ChannelTalkUninstallResponse,
   ChannelTalkValidateResponse,
 } from '../types/channelTalkApi';
+import { adminConnectorQueries } from './adminConnector.queries';
 import { channelTalkQueries } from './channelTalk.queries';
 
 /**
@@ -40,7 +41,7 @@ export const channelTalkMutations = {
         // Step 2: save (upsert)
         return api.post<ChannelTalkConnectResponse>(API.admin.connector.channelTalk.credentials, body);
       },
-      meta: { invalidates: [[...channelTalkQueries.all()]] },
+      meta: { invalidates: [[...channelTalkQueries.all()], [...adminConnectorQueries.all(), 'targetStatus']] },
     }) satisfies UseMutationOptions<AxiosResponse<ChannelTalkConnectResponse>, Error, ChannelTalkCredentialRequest>,
 
   /** 도큐먼트 스페이스 credential validate + save 통합 mutation */
@@ -56,7 +57,7 @@ export const channelTalkMutations = {
         );
         return api.post<ChannelTalkDocumentConnectResponse>(API.admin.connector.channelTalk.documentCredentials, body);
       },
-      meta: { invalidates: [[...channelTalkQueries.all()]] },
+      meta: { invalidates: [[...channelTalkQueries.all()], [...adminConnectorQueries.all(), 'targetStatus']] },
     }) satisfies UseMutationOptions<
       AxiosResponse<ChannelTalkDocumentConnectResponse>,
       Error,
@@ -71,7 +72,7 @@ export const channelTalkMutations = {
         api.delete<ChannelTalkUninstallResponse>(API.admin.connector.channelTalk.credentials, {
           params: { channel_id: channelId },
         }),
-      meta: { invalidates: [[...channelTalkQueries.all()]] },
+      meta: { invalidates: [[...channelTalkQueries.all()], [...adminConnectorQueries.all(), 'targetStatus']] },
     }) satisfies UseMutationOptions<AxiosResponse<ChannelTalkUninstallResponse>, Error, string>,
 
   /** DELETE /documents/credentials?space_id=X — 도큐먼트 스페이스 credential 개별 삭제 */
@@ -82,6 +83,6 @@ export const channelTalkMutations = {
         api.delete<ChannelTalkDocumentUninstallResponse>(API.admin.connector.channelTalk.documentCredentials, {
           params: { space_id: spaceId },
         }),
-      meta: { invalidates: [[...channelTalkQueries.all()]] },
+      meta: { invalidates: [[...channelTalkQueries.all()], [...adminConnectorQueries.all(), 'targetStatus']] },
     }) satisfies UseMutationOptions<AxiosResponse<ChannelTalkDocumentUninstallResponse>, Error, string>,
 };

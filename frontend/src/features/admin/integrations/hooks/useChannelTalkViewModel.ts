@@ -127,11 +127,11 @@ export function useChannelTalkViewModel(initialState: ChannelTalkConnectionState
       if (removedIndex < 0) return;
       const snapshot = stateRef.current.channels[removedIndex];
 
-      // optimistic UI: 즉시 화면에서 제거
-      setState((prev) => ({
-        ...prev,
-        channels: prev.channels.filter((ch) => ch.id !== channelId),
-      }));
+      // optimistic UI: 즉시 화면에서 제거. 마지막 채널이면 connected=false로 동기화.
+      setState((prev) => {
+        const nextChannels = prev.channels.filter((ch) => ch.id !== channelId);
+        return { ...prev, channels: nextChannels, connected: nextChannels.length > 0 && prev.connected };
+      });
 
       // 검증 통과한 채널만 백엔드에 등록되어 있으므로 DELETE 호출 대상.
       if (snapshot.connectionStatus !== 'tested') return;
@@ -196,33 +196,30 @@ export function useChannelTalkViewModel(initialState: ChannelTalkConnectionState
     }));
   }, []);
 
-  const updateDocumentSpace = useCallback(
-    (channelId: string, dsId: string, patch: ChannelTalkDocumentSpacePatch) => {
-      setState((prev) => ({
-        ...prev,
-        channels: prev.channels.map((ch) => {
-          if (ch.id !== channelId) return ch;
-          return {
-            ...ch,
-            documentSpaces: ch.documentSpaces.map((ds) => {
-              if (ds.id !== dsId) return ds;
-              const next = { ...ds, ...patch };
-              const hadValidation = ds.connectionStatus === 'tested' || ds.connectionStatus === 'error';
-              const secretChanged =
-                ('accessKey' in patch && patch.accessKey !== ds.accessKey) ||
-                ('accessSecret' in patch && patch.accessSecret !== ds.accessSecret);
-              if (hadValidation && secretChanged) {
-                next.connectionStatus = 'idle';
-                next.errorMessage = undefined;
-              }
-              return next;
-            }),
-          };
-        }),
-      }));
-    },
-    [],
-  );
+  const updateDocumentSpace = useCallback((channelId: string, dsId: string, patch: ChannelTalkDocumentSpacePatch) => {
+    setState((prev) => ({
+      ...prev,
+      channels: prev.channels.map((ch) => {
+        if (ch.id !== channelId) return ch;
+        return {
+          ...ch,
+          documentSpaces: ch.documentSpaces.map((ds) => {
+            if (ds.id !== dsId) return ds;
+            const next = { ...ds, ...patch };
+            const hadValidation = ds.connectionStatus === 'tested' || ds.connectionStatus === 'error';
+            const secretChanged =
+              ('accessKey' in patch && patch.accessKey !== ds.accessKey) ||
+              ('accessSecret' in patch && patch.accessSecret !== ds.accessSecret);
+            if (hadValidation && secretChanged) {
+              next.connectionStatus = 'idle';
+              next.errorMessage = undefined;
+            }
+            return next;
+          }),
+        };
+      }),
+    }));
+  }, []);
 
   const removeDocumentSpace = useCallback(
     (channelId: string, dsId: string) => {

@@ -57,15 +57,12 @@ export default function ChannelTalkTextField({
   return (
     <div
       className={cn(
-        'flex h-11.5 max-h-45 min-h-11.5 w-full items-center gap-3 rounded-lg p-3',
-        disabled ? 'bg-fill-interaction-disable border-edge-neutral border' : 'bg-fill-normal',
-        // 외부에서 'focus'를 강제 지정한 경우(검증 권유 등)는 그대로 우선.
-        // idle은 native focus-within으로 사용자 입력 시점 자동 강조.
-        !disabled &&
-          state === 'idle' &&
-          'border-edge-neutral focus-within:border-edge-primary border focus-within:border-[1.5px]',
-        !disabled && state === 'error' && 'border-status-destructive border-[1.5px]',
-        !disabled && state === 'focus' && 'border-edge-primary border-[1.5px]',
+        // ring으로 테두리 표현 — box 크기에 영향 없어 상태 전환 시 layout shift 0.
+        'flex h-11.5 max-h-45 min-h-11.5 w-full items-center gap-3 rounded-lg p-3 ring-[1.5px] ring-inset',
+        disabled ? 'bg-fill-interaction-disable ring-edge-neutral' : 'bg-fill-normal',
+        !disabled && state === 'idle' && 'ring-edge-neutral focus-within:ring-edge-primary',
+        !disabled && state === 'error' && 'ring-status-destructive',
+        !disabled && state === 'focus' && 'ring-edge-primary',
       )}
     >
       <input
