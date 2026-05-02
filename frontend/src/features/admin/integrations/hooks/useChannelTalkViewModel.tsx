@@ -342,9 +342,14 @@ export function useChannelTalkViewModel(initialState: ChannelTalkConnectionState
             }));
             // 에러 분기: 외부 키 불일치는 Figma 스펙 toast, 그 외는 generic toast.
             if (code === 'invalid_credentials') {
-              toast('Access Key 또는 Secret Key가 일치하지 않아요.', {
-                description: '채널톡에서 다시 확인해주세요',
-              });
+              toast(
+                <>
+                  Access Key 또는 Secret Key가 일치하지
+                  <br />
+                  않아요.
+                </>,
+                { description: '채널톡에서 다시 확인해주세요' },
+              );
             } else {
               toast.error('연결 테스트에 실패했어요.', { description: message });
             }
@@ -449,9 +454,14 @@ export function useChannelTalkViewModel(initialState: ChannelTalkConnectionState
               ),
             }));
             if (code === 'invalid_credentials') {
-              toast('Access Key 또는 Secret Key가 일치하지 않아요.', {
-                description: '채널톡에서 다시 확인해주세요',
-              });
+              toast(
+                <>
+                  Access Key 또는 Secret Key가 일치하지
+                  <br />
+                  않아요.
+                </>,
+                { description: '채널톡에서 다시 확인해주세요' },
+              );
             } else {
               toast.error('연결 테스트에 실패했어요.', { description: message });
             }
