@@ -41,13 +41,12 @@ const formatRange = (oldest: string | null, latest: string | null): string => {
 
 /** 관리자 연동 화면에서 필요한 데이터를 조합해 반환 */
 export const useAdminIntegrationViewModel = (): AdminIntegrationViewModel => {
-  // detail(임베딩된 target/dateRange)용 — 각 service의 connectorTargetStatus
+  // dataRange/resources용 — 임베딩된 target 정보
   const statusQueries = useQueries({
     queries: SOURCE_ORDER.map((source) => adminConnectorQueries.connectorTargetStatus(source)),
   });
 
-  // connected(OAuth/설치 완료) 판별용 — installation/list 기반.
-  // total_targets > 0(임베딩 완료)는 너무 엄격해서 OAuth만 한 사용자에게 "안됨"으로 표시되는 문제 회피.
+  // connected 판별용 — OAuth/설치 완료 여부 (임베딩 0개여도 연동됨 표시)
   const atlassianInstall = useQuery(adminConnectorQueries.atlassianInstallationStatus());
   const slackInstall = useQuery(adminConnectorQueries.slackInstallationStatus());
   const githubInstall = useQuery(adminConnectorQueries.githubInstallations());
@@ -105,7 +104,6 @@ export const useAdminIntegrationViewModel = (): AdminIntegrationViewModel => {
       }));
 
       return {
-        // installation status 기반(menu.connected와 동일 의미). 임베딩 없으면 dataRange가 '-'로 표시됨.
         connected: isServiceConnected(service),
         dataRange: formatRange(globalOldest, globalLatest),
         resources,

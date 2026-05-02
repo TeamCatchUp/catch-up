@@ -185,7 +185,7 @@ function ModalBody({ onClose, onJobStart }: ModalBodyProps) {
       } else if (noEventsCount === channelGroups.length) {
         toast.info('임베딩할 대상이 없습니다.');
       } else if (failedCount > 0 || errorCount > 0) {
-        toast.error(lastFailMessage ?? '임베딩 요청에 실패했습니다.');
+        toast('임베딩 요청에 실패했습니다.', { description: lastFailMessage });
       }
     } finally {
       setIsSubmitting(false);

@@ -10,7 +10,7 @@ const api = axios.create({
   },
 });
 
-/** 외부 service credential 401 (channel_talk 등) — catchup access_token과 무관하므로 refresh 우회. */
+/** 외부 service credential 401은 catchup access_token과 무관 → refresh 우회. */
 const isExternalCredentialError = (err: unknown): boolean =>
   parseApiError(err).code === API_ERROR_CODE.INVALID_CREDENTIALS;
 

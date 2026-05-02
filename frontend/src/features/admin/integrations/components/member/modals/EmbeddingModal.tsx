@@ -145,11 +145,11 @@ export default function EmbeddingModal({ open, onOpenChange, service, serviceNam
           toast.info('임베딩할 대상이 없습니다.');
           break;
         case 'failed':
-          toast.error(response.message ?? '임베딩 요청에 실패했습니다.');
+          toast('임베딩 요청에 실패했습니다.', { description: response.message });
           break;
       }
     } catch {
-      toast.error('임베딩 요청 중 오류가 발생했습니다.');
+      toast('임베딩 요청 중 오류가 발생했습니다.');
     }
   };
 

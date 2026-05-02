@@ -100,8 +100,7 @@ function ChannelTalkManagementPanelInner({ initialState, detail }: ChannelTalkMa
     };
   }, [state.channels]);
 
-  // detail.connected는 installation status 기반(menu와 일관). dataRange는 임베딩 데이터 범위.
-  // hasTestedChannels(credential 등록 여부)는 카드별 표시용으로만 사용.
+  // detail.connected: OAuth 설치 여부 / hasTestedChannels: credential 등록된 카드 표시용
   return (
     <div className="flex flex-col gap-6">
       <ConnectionStatusSection isConnected={detail.connected} />

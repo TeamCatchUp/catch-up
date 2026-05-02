@@ -146,7 +146,7 @@ export function useChannelTalkViewModel(initialState: ChannelTalkConnectionState
             return { ...prev, channels: next };
           });
           const { message } = parseApiError(error);
-          toast.error('채널 삭제에 실패했어요.', { description: message });
+          toast('채널 삭제에 실패했어요.', { description: message });
         },
       });
     },
@@ -253,7 +253,7 @@ export function useChannelTalkViewModel(initialState: ChannelTalkConnectionState
             }),
           }));
           const { message } = parseApiError(error);
-          toast.error('도큐먼트 스페이스 삭제에 실패했어요.', { description: message });
+          toast('도큐먼트 스페이스 삭제에 실패했어요.', { description: message });
         },
       });
     },
@@ -351,7 +351,7 @@ export function useChannelTalkViewModel(initialState: ChannelTalkConnectionState
                 { description: '채널톡에서 다시 확인해주세요' },
               );
             } else {
-              toast.error('연결 테스트에 실패했어요.', { description: message });
+              toast('연결 테스트에 실패했어요.', { description: message });
             }
           },
           onSettled: () => {
@@ -463,7 +463,7 @@ export function useChannelTalkViewModel(initialState: ChannelTalkConnectionState
                 { description: '채널톡에서 다시 확인해주세요' },
               );
             } else {
-              toast.error('연결 테스트에 실패했어요.', { description: message });
+              toast('연결 테스트에 실패했어요.', { description: message });
             }
           },
           onSettled: () => {
