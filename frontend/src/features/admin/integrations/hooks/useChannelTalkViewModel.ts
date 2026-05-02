@@ -324,7 +324,7 @@ export function useChannelTalkViewModel(initialState: ChannelTalkConnectionState
             }));
           },
           onError: (error) => {
-            const { message } = parseChannelTalkError(error);
+            const { code, message } = parseChannelTalkError(error);
             setState((prev) => ({
               ...prev,
               channels: prev.channels.map((c) =>
@@ -337,6 +337,12 @@ export function useChannelTalkViewModel(initialState: ChannelTalkConnectionState
                   : c,
               ),
             }));
+            // 외부 키 불일치 시 Figma 스펙의 toast 추가 노출 (카드 inline 에러와 별개로)
+            if (code === 'invalid_credentials') {
+              toast('Access Key 또는 Secret Key가 일치하지 않아요.', {
+                description: '채널톡에서 다시 확인해주세요',
+              });
+            }
           },
           onSettled: () => {
             setPendingChannelIds((prev) => {
@@ -422,7 +428,7 @@ export function useChannelTalkViewModel(initialState: ChannelTalkConnectionState
             }));
           },
           onError: (error) => {
-            const { message } = parseChannelTalkError(error);
+            const { code, message } = parseChannelTalkError(error);
             setState((prev) => ({
               ...prev,
               channels: prev.channels.map((c) =>
@@ -436,6 +442,11 @@ export function useChannelTalkViewModel(initialState: ChannelTalkConnectionState
                     },
               ),
             }));
+            if (code === 'invalid_credentials') {
+              toast('Access Key 또는 Secret Key가 일치하지 않아요.', {
+                description: '채널톡에서 다시 확인해주세요',
+              });
+            }
           },
           onSettled: () => {
             setPendingDocumentSpaceIds((prev) => {
