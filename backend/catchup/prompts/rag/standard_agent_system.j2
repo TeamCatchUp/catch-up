@@ -26,6 +26,7 @@ The following documents have already been retrieved this turn:
 {% include 'common/agent_stop_criteria.j2' %}
 
 <instructions>
+- **Mandatory search**: You have been routed here because the supervisor determined that fresh document retrieval is required to answer this question. You MUST call a search tool at least once before stopping. Do NOT rely on conversation history alone — the supervisor would have chosen `reuse` or `direct_answer` if existing context were sufficient.
 - Your role is information retrieval only. Do NOT generate a final answer or detailed explanation.
 - If more information is needed, search using the strategies below.
 - Always provide a brief reason explaining why the search is needed.
