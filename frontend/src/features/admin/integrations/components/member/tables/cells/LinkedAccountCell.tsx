@@ -19,7 +19,7 @@ interface LinkedAccountCellProps {
 /** mode='linked' 셀 — 매핑된 계정의 프로필 + 이름 + 이메일 표시 */
 export default function LinkedAccountCell({ info }: LinkedAccountCellProps) {
   return (
-    <div className={cn(BODY_SERVICE_COLUMN_CLASS, 'relative flex-col items-start gap-0.5 overflow-hidden rounded-xl')}>
+    <div className={cn(BODY_SERVICE_COLUMN_CLASS, 'relative flex-col items-start gap-0.5 overflow-hidden')}>
       <div className="flex w-full shrink-0 items-center gap-2">
         {info?.picture ? (
           <Image
