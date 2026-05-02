@@ -24,7 +24,7 @@ import { channelTalkQueries } from './channelTalk.queries';
  * mutationFn 내부에서 validate → save로 chain.
  *
  * 실패 분기:
- * - validate 실패 → save 호출 안 함, validate 에러를 throw (호출처에서 parseChannelTalkError로 메시지 추출)
+ * - validate 실패 → save 호출 안 함, validate 에러를 throw (호출처에서 parseApiError로 메시지 추출)
  * - save 실패 → save 에러를 throw (이미 validate 통과한 키이므로 네트워크/서버 이슈일 가능성)
  *
  * 캐시 무효화: meta.invalidates로 channelTalkQueries.all() 키 하위 모두 무효화 → detail/documentDetail 자동 refetch.

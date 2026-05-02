@@ -4,6 +4,8 @@ import { useCallback, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { toast } from 'sonner';
 
+import { parseApiError } from '@/shared/api/errors';
+
 import { channelTalkMutations } from '../queries/channelTalk.mutations';
 import type {
   ChannelTalkChannel,
@@ -18,7 +20,6 @@ import {
   MASKED_PLACEHOLDER,
 } from '../types/channelTalkModel';
 import { isChannelSecretsFilled, isDocumentSpaceSecretsFilled } from '../utils/channelTalkHelpers';
-import { parseChannelTalkError } from '../utils/parseChannelTalkError';
 
 /**
  * 사용자가 새로 추가한 미검증 카드의 임시 client-side ID.
@@ -138,7 +139,7 @@ export function useChannelTalkViewModel(initialState: ChannelTalkConnectionState
             next.splice(insertAt, 0, snapshot);
             return { ...prev, channels: next };
           });
-          const { message } = parseChannelTalkError(error);
+          const { message } = parseApiError(error);
           toast.error('채널 삭제에 실패했어요.', { description: message });
         },
       });
@@ -253,7 +254,7 @@ export function useChannelTalkViewModel(initialState: ChannelTalkConnectionState
               return { ...ch, documentSpaces: next };
             }),
           }));
-          const { message } = parseChannelTalkError(error);
+          const { message } = parseApiError(error);
           toast.error('도큐먼트 스페이스 삭제에 실패했어요.', { description: message });
         },
       });
@@ -325,7 +326,7 @@ export function useChannelTalkViewModel(initialState: ChannelTalkConnectionState
             toast('연결에 성공했어요.', { description: '이제 동기화를 시작할 수 있어요.' });
           },
           onError: (error) => {
-            const { code, message } = parseChannelTalkError(error);
+            const { code, message } = parseApiError(error);
             // 백엔드 mutation 실패는 카드의 errorMessage를 비워서 raw 영문(예: "Request failed with status code 500")이
             // inline에 노출되지 않도록 함. 빨간 테두리(connectionStatus: 'error')만으로도 시각 표시되고,
             // 자세한 사유는 toast로 안내.
@@ -435,7 +436,7 @@ export function useChannelTalkViewModel(initialState: ChannelTalkConnectionState
             toast('연결에 성공했어요.', { description: '이제 동기화를 시작할 수 있어요.' });
           },
           onError: (error) => {
-            const { code, message } = parseChannelTalkError(error);
+            const { code, message } = parseApiError(error);
             setState((prev) => ({
               ...prev,
               channels: prev.channels.map((c) =>
