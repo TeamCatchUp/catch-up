@@ -6,6 +6,8 @@ from langchain_core.callbacks import adispatch_custom_event
 from catchup.costs.utils import token_usage
 from catchup.prompts.loader import prompt_loader
 from catchup.rag.nodes.utils import ainvoke_llm_with_token_usage
+from catchup.rag.nodes.utils import get_conversation_history
+from catchup.rag.nodes.utils import get_formatted_history_text
 from catchup.rag.nodes.utils import log_node
 from catchup.rag.schemas.structures import VectorDbSearchPlan
 from catchup.rag.schemas.structures import VectorDbSearchQuery
@@ -24,8 +26,16 @@ async def generate_vector_queries_node(
 ):
     rewritten_query = state["rewritten_query"]
     global_context = state["global_context"].model_dump()
+
+    messages = state.get("messages", [])
+    recent_history = get_conversation_history(messages)[-4:]  # 직전 2턴
+    recent_history_text = get_formatted_history_text(recent_history) if recent_history else ""
+
     prompt = prompt_loader.get_prompt(
-        "rag/generate_vector_queries", query=rewritten_query, **global_context
+        "rag/generate_vector_queries",
+        query=rewritten_query,
+        recent_history=recent_history_text,
+        **global_context,
     )
     token_usages = {"token_breakdown": {}}
     structured_llm = llm.with_structured_output(
