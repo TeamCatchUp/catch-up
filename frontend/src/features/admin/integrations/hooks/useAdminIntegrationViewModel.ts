@@ -1,9 +1,10 @@
 import { useCallback, useMemo } from 'react';
-import { useQueries } from '@tanstack/react-query';
+import { useQueries, useQuery } from '@tanstack/react-query';
 
 import { CONNECTOR_STATUS_SOURCE_ORDER } from '../constants/connectorOrder';
 import { INTEGRATION_ACCOUNTS } from '../constants/integrationsConfig';
 import { adminConnectorQueries } from '../queries/adminConnector.queries';
+import { channelTalkQueries } from '../queries/channelTalk.queries';
 import type {
   AdminIntegrationViewModel,
   ConnectorDetail,
@@ -21,7 +22,7 @@ const RESOURCE_LABELS: Record<IntegrationService, string> = {
   github: '임베딩된 Repository',
   slack: '임베딩된 Slack 채널',
   confluence: '임베딩된 Confluence Space',
-  'channel_talk': '연결된 채널톡 채널',
+  channel_talk: '연결된 채널톡 채널',
 };
 
 /** "YYYY. M. D." 날짜 포맷 */
@@ -40,9 +41,34 @@ const formatRange = (oldest: string | null, latest: string | null): string => {
 
 /** 관리자 연동 화면에서 필요한 데이터를 조합해 반환 */
 export const useAdminIntegrationViewModel = (): AdminIntegrationViewModel => {
+  // detail(임베딩된 target/dateRange)용 — 각 service의 connectorTargetStatus
   const statusQueries = useQueries({
     queries: SOURCE_ORDER.map((source) => adminConnectorQueries.connectorTargetStatus(source)),
   });
+
+  // connected(OAuth/설치 완료) 판별용 — installation/list 기반.
+  // total_targets > 0(임베딩 완료)는 너무 엄격해서 OAuth만 한 사용자에게 "안됨"으로 표시되는 문제 회피.
+  const atlassianInstall = useQuery(adminConnectorQueries.atlassianInstallationStatus());
+  const slackInstall = useQuery(adminConnectorQueries.slackInstallationStatus());
+  const githubInstall = useQuery(adminConnectorQueries.githubInstallations());
+  const channelTalkList = useQuery(channelTalkQueries.list());
+
+  const isServiceConnected = useCallback(
+    (service: IntegrationService): boolean => {
+      switch (service) {
+        case 'jira':
+        case 'confluence':
+          return atlassianInstall.data?.installed === true;
+        case 'github':
+          return (githubInstall.data?.length ?? 0) > 0;
+        case 'slack':
+          return slackInstall.data?.installed === true;
+        case 'channel_talk':
+          return (channelTalkList.data?.length ?? 0) > 0;
+      }
+    },
+    [atlassianInstall.data, slackInstall.data, githubInstall.data, channelTalkList.data],
+  );
 
   const statusMap = useMemo<Record<IntegrationService, AdminConnectorStatusResponse | undefined>>(() => {
     const map: Record<string, AdminConnectorStatusResponse | undefined> = {};
@@ -57,9 +83,9 @@ export const useAdminIntegrationViewModel = (): AdminIntegrationViewModel => {
       INTEGRATION_ACCOUNTS.map((item) => ({
         ...item,
         actionText: `${item.name} 연동하기`,
-        connected: (statusMap[item.service]?.total_targets ?? 0) > 0,
+        connected: isServiceConnected(item.service),
       })),
-    [statusMap],
+    [isServiceConnected],
   );
 
   const getConnectorDetail = useCallback(
@@ -91,6 +117,11 @@ export const useAdminIntegrationViewModel = (): AdminIntegrationViewModel => {
   return {
     integrationMenu,
     getConnectorDetail,
-    isLoading: statusQueries.some((q) => q.isLoading),
+    isLoading:
+      statusQueries.some((q) => q.isLoading) ||
+      atlassianInstall.isLoading ||
+      slackInstall.isLoading ||
+      githubInstall.isLoading ||
+      channelTalkList.isLoading,
   };
 };
