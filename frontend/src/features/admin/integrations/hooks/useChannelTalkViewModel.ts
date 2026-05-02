@@ -322,6 +322,7 @@ export function useChannelTalkViewModel(initialState: ChannelTalkConnectionState
                   : c,
               ),
             }));
+            toast('연결에 성공했어요.', { description: '이제 동기화를 시작할 수 있어요.' });
           },
           onError: (error) => {
             const { code, message } = parseChannelTalkError(error);
@@ -426,6 +427,7 @@ export function useChannelTalkViewModel(initialState: ChannelTalkConnectionState
                     },
               ),
             }));
+            toast('연결에 성공했어요.', { description: '이제 동기화를 시작할 수 있어요.' });
           },
           onError: (error) => {
             const { code, message } = parseChannelTalkError(error);

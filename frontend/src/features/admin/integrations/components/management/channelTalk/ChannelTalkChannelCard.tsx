@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { toast } from 'sonner';
 
 import IconAddSquare from '@/public/icons/icon/add_square.svg';
 import IconCheck from '@/public/icons/icon/check.svg';
@@ -64,12 +63,9 @@ export default function ChannelTalkChannelCard({
   const canTestConnection = isChannelSecretsFilled(channel);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
+  // 토스트는 mutation 응답 기반으로 viewModel onSuccess/onError에서 표시.
+  // 이 컴포넌트는 단순히 액션을 위임만 한다.
   const handleTestConnection = () => {
-    if (canTestConnection) {
-      toast('연결에 성공했어요.', { description: '이제 동기화를 시작할 수 있어요.' });
-    } else {
-      toast('Access Key 또는 Secret Key가 일치하지 않아요.', { description: '채널톡에서 다시 확인해주세요.' });
-    }
     onTestConnection();
   };
 
