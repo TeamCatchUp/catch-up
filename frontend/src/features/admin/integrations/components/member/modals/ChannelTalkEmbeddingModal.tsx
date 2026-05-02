@@ -74,12 +74,12 @@ function ModalBody({ onClose, onJobStart }: ModalBodyProps) {
     })),
   });
 
-  // 3) 각 channel별 flat 응답을 1:N 모델로 변환 후 합치기
-  const channels: ChannelTalkChannel[] = useMemo(
-    () => targetsQueries.flatMap((q) => (q.data ? mapChannelTalkSyncTargets(q.data.targets) : [])),
-    // flatMap은 매 렌더마다 새 배열이지만 useChannelTalkSelection이 channels reference 변경에 reset되지 않으므로 OK.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [...targetsQueries.map((q) => q.data)],
+  // 3) 각 channel별 flat 응답을 1:N 모델로 변환 후 합치기.
+  // useMemo의 가변 길이 deps spread는 React Hook 룰 위배라 제거. flatMap은 매 렌더마다 새 배열이지만
+  // useChannelTalkSelection은 channels의 reference identity가 아닌 channel_id/space_id 기준으로 reset 판단하므로
+  // memoization 가치가 없다 (`rerender-dependencies` 룰 준수).
+  const channels: ChannelTalkChannel[] = targetsQueries.flatMap((q) =>
+    q.data ? mapChannelTalkSyncTargets(q.data.targets) : [],
   );
 
   // 4) 선택 + 기간 state

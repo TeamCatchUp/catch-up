@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { toast } from 'sonner';
 
@@ -58,6 +58,19 @@ interface ChannelTalkViewModel {
  */
 export function useChannelTalkViewModel(initialState: ChannelTalkConnectionState): ChannelTalkViewModel {
   const [state, setState] = useState<ChannelTalkConnectionState>(initialState);
+  /**
+   * latest state mirror — optimistic delete의 snapshot capture에 사용.
+   * `useCallback` deps에 `state.channels`를 넣으면 매 state 변경마다 callback identity가
+   * 변경돼 자식 카드의 prop reference 비교가 깨진다. ref로 latest를 읽어 callback identity를
+   * stable하게 유지 (`rerender-functional-setstate` 룰 준수).
+   *
+   * React 19 룰(`react-hooks/refs`)에 따라 ref 업데이트는 render 중이 아닌 effect에서.
+   * event handler에서 ref를 읽을 때는 항상 commit 이후라 안전.
+   */
+  const stateRef = useRef(state);
+  useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
   /** 검증 mutation 진행 중인 항목 추적 — 동일 카드 중복 클릭 방지에 사용 */
   const [pendingChannelIds, setPendingChannelIds] = useState<Set<string>>(() => new Set());
   const [pendingDocumentSpaceIds, setPendingDocumentSpaceIds] = useState<Set<string>>(() => new Set());
@@ -109,12 +122,10 @@ export function useChannelTalkViewModel(initialState: ChannelTalkConnectionState
 
   const removeChannel = useCallback(
     (channelId: string) => {
-      // snapshot은 사용자가 화면에서 본 시점의 state (closure 값) 기준 — 삭제 의도와 일치.
-      // setState updater 안에서 외부 변수를 mutate하던 패턴 대신 외부에서 snapshot을 읽어
-      // updater를 pure하게 유지 (StrictMode 2회 호출 안전).
-      const removedIndex = state.channels.findIndex((c) => c.id === channelId);
+      // stateRef로 latest state 읽기 — closure 의존성 제거로 callback identity stable.
+      const removedIndex = stateRef.current.channels.findIndex((c) => c.id === channelId);
       if (removedIndex < 0) return;
-      const snapshot = state.channels[removedIndex];
+      const snapshot = stateRef.current.channels[removedIndex];
 
       // optimistic UI: 즉시 화면에서 제거
       setState((prev) => ({
@@ -139,7 +150,7 @@ export function useChannelTalkViewModel(initialState: ChannelTalkConnectionState
         },
       });
     },
-    [deleteChannelMutation, state.channels],
+    [deleteChannelMutation],
   );
 
   const enterEditMode = useCallback((channelId: string) => {
@@ -215,8 +226,8 @@ export function useChannelTalkViewModel(initialState: ChannelTalkConnectionState
 
   const removeDocumentSpace = useCallback(
     (channelId: string, dsId: string) => {
-      // removeChannel과 동일 패턴 — snapshot을 setState 외부에서 capture해 updater pure 유지.
-      const targetChannel = state.channels.find((c) => c.id === channelId);
+      // removeChannel과 동일 패턴 — stateRef로 latest 읽어 callback identity stable.
+      const targetChannel = stateRef.current.channels.find((c) => c.id === channelId);
       if (!targetChannel) return;
       const removedIndex = targetChannel.documentSpaces.findIndex((d) => d.id === dsId);
       if (removedIndex < 0) return;
@@ -249,7 +260,7 @@ export function useChannelTalkViewModel(initialState: ChannelTalkConnectionState
         },
       });
     },
-    [deleteDocumentMutation, state.channels],
+    [deleteDocumentMutation],
   );
 
   const testChannelConnection = useCallback(
@@ -257,7 +268,7 @@ export function useChannelTalkViewModel(initialState: ChannelTalkConnectionState
       // 같은 카드의 mutation이 이미 진행 중이면 중복 호출 무시 (validate+save 2번 실행 방지)
       if (pendingChannelIds.has(channelId)) return;
 
-      const channel = state.channels.find((c) => c.id === channelId);
+      const channel = stateRef.current.channels.find((c) => c.id === channelId);
       if (!channel) return;
 
       // 클라이언트 단 사전 검증 — 빈 필드면 백엔드 호출 없이 즉시 에러
@@ -352,14 +363,14 @@ export function useChannelTalkViewModel(initialState: ChannelTalkConnectionState
         },
       );
     },
-    [pendingChannelIds, state.channels, channelMutation],
+    [pendingChannelIds, channelMutation],
   );
 
   const testDocumentSpaceConnection = useCallback(
     (channelId: string, dsId: string) => {
       if (pendingDocumentSpaceIds.has(dsId)) return;
 
-      const channel = state.channels.find((c) => c.id === channelId);
+      const channel = stateRef.current.channels.find((c) => c.id === channelId);
       const ds = channel?.documentSpaces.find((d) => d.id === dsId);
       if (!ds) return;
 
@@ -459,7 +470,7 @@ export function useChannelTalkViewModel(initialState: ChannelTalkConnectionState
         },
       );
     },
-    [pendingDocumentSpaceIds, state.channels, documentMutation],
+    [pendingDocumentSpaceIds, documentMutation],
   );
 
   const enterDocumentSpaceEditMode = useCallback((channelId: string, dsId: string) => {
