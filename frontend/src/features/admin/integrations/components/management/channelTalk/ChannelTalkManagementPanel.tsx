@@ -165,7 +165,7 @@ interface DataRangeSectionProps {
 
 /**
  * 연동된 데이터 범위 섹션 — 다른 connector와 동일 동작.
- * `isConnected`가 true면 백엔드의 oldest~latest를 표시, false면 placeholder.
+ * `isConnected`가 true면 백엔드의 oldest~latest를 중앙 정렬로 표시, false면 placeholder를 좌측 정렬.
  */
 function DataRangeSection({ isConnected, dataRange }: DataRangeSectionProps) {
   return (
@@ -173,8 +173,8 @@ function DataRangeSection({ isConnected, dataRange }: DataRangeSectionProps) {
       <h3 className="text-heading-small text-content-neutral">연동된 데이터 범위</h3>
       <div
         className={cn(
-          'border-edge-assistive bg-fill-strong text-body-small overflow-hidden rounded-xl border px-4 py-3',
-          isConnected ? 'text-content-normal' : 'text-content-assistive',
+          'border-edge-assistive bg-fill-strong text-body-small flex items-center overflow-hidden rounded-xl border px-4 py-3',
+          isConnected ? 'text-content-normal justify-center' : 'text-content-assistive',
         )}
       >
         <span className="truncate">{isConnected ? dataRange : '연동되지 않았습니다.'}</span>
