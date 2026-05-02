@@ -17,8 +17,14 @@ import type {
   ChannelTalkChannelPatch,
   ChannelTalkDocumentSpacePatch,
 } from '../../../types/channelTalkModel';
+import type { ConnectorDetail } from '../../../types/integrationModel';
 import { deriveChannelTalkInitialState } from '../../../utils/deriveChannelTalkInitialState';
 import ChannelTalkChannelCard from './ChannelTalkChannelCard';
+
+interface ChannelTalkManagementPanelProps {
+  /** 다른 connector와 동일하게 백엔드 connector_target_status 기반 connected/dataRange 표시 */
+  detail: ConnectorDetail;
+}
 
 /**
  * 채널톡 메인 패널.
@@ -27,7 +33,7 @@ import ChannelTalkChannelCard from './ChannelTalkChannelCard';
  * 데이터 ready 시 Inner를 mount하면서 deriveChannelTalkInitialState로 만든 initialState를 주입.
  * 이 mount/unmount 분리는 React 19 `react-hooks/set-state-in-effect` 룰을 회피하기 위함.
  */
-export default function ChannelTalkManagementPanel() {
+export default function ChannelTalkManagementPanel({ detail }: ChannelTalkManagementPanelProps) {
   const channelListQuery = useQuery(channelTalkQueries.list());
   const documentListQuery = useQuery(channelTalkQueries.documentList());
 
@@ -49,14 +55,15 @@ export default function ChannelTalkManagementPanel() {
   }
 
   const initialState = deriveChannelTalkInitialState(channelListQuery.data, documentListQuery.data);
-  return <ChannelTalkManagementPanelInner initialState={initialState} />;
+  return <ChannelTalkManagementPanelInner initialState={initialState} detail={detail} />;
 }
 
 interface ChannelTalkManagementPanelInnerProps {
   initialState: ChannelTalkConnectionState;
+  detail: ConnectorDetail;
 }
 
-function ChannelTalkManagementPanelInner({ initialState }: ChannelTalkManagementPanelInnerProps) {
+function ChannelTalkManagementPanelInner({ initialState, detail }: ChannelTalkManagementPanelInnerProps) {
   const {
     state,
     addChannel,
@@ -73,14 +80,12 @@ function ChannelTalkManagementPanelInner({ initialState }: ChannelTalkManagement
 
   const hasChannels = state.channels.length > 0;
   /**
-   * 채널 배열 기반 파생값들 — 채널 변경 시에만 재계산.
-   * 헤더 카운트("N개 채널 / N개 도큐먼트 연결됨")는 백엔드에 실제 등록된(tested) 항목만 노출.
-   * 사용자가 입력 중인 미검증 카드는 카운트에서 제외하여 "연동된 데이터" 의미를 유지.
+   * Credential 헤더 카운트("N개 채널 / N개 도큐먼트 연결됨")는 검증된(tested) 항목만 노출.
+   * 사용자가 입력 중인 미검증 카드는 카운트에서 제외하여 "등록된 데이터" 의미를 유지.
    */
-  const { hasTestedChannels, testedChannelCount, testedDocumentSpaceCount } = useMemo(() => {
+  const { testedChannelCount, testedDocumentSpaceCount } = useMemo(() => {
     const testedChannels = state.channels.filter((ch) => ch.connectionStatus === 'tested');
     return {
-      hasTestedChannels: testedChannels.length > 0,
       testedChannelCount: testedChannels.length,
       testedDocumentSpaceCount: testedChannels.reduce(
         (sum, ch) => sum + ch.documentSpaces.filter((ds) => ds.connectionStatus === 'tested').length,
@@ -89,10 +94,15 @@ function ChannelTalkManagementPanelInner({ initialState }: ChannelTalkManagement
     };
   }, [state.channels]);
 
+  // 다른 connector와 동일하게 백엔드 connector_target_status(임베딩 데이터 기반) 사용.
+  // viewModel의 hasTestedChannels(credential 등록 여부)와는 의미가 다름:
+  //   - detail.connected: 임베딩된 데이터가 있는지
+  //   - hasTestedChannels: credential이 등록된 카드가 있는지
+  // 다른 connector도 임베딩 기준으로 표시하므로 일관성 위해 detail 사용.
   return (
     <div className="flex flex-col gap-6">
-      <ConnectionStatusSection isConnected={hasTestedChannels} />
-      <DataRangeSection hasData={hasTestedChannels} />
+      <ConnectionStatusSection isConnected={detail.connected} />
+      <DataRangeSection isConnected={detail.connected} dataRange={detail.dataRange} />
       <CredentialSection
         channels={state.channels}
         channelCount={testedChannelCount}
@@ -149,22 +159,25 @@ function ConnectionStatusSection({ isConnected }: ConnectionStatusSectionProps) 
 }
 
 interface DataRangeSectionProps {
-  /** 검증(tested) 통과한 채널이 1개 이상일 때만 active 텍스트 표시 — 단순 채널 추가는 영향 없음 */
-  hasData: boolean;
+  isConnected: boolean;
+  dataRange: string;
 }
 
-/** 연동된 데이터 범위 섹션 — tested 채널 없으면 placeholder */
-function DataRangeSection({ hasData }: DataRangeSectionProps) {
+/**
+ * 연동된 데이터 범위 섹션 — 다른 connector와 동일 동작.
+ * `isConnected`가 true면 백엔드의 oldest~latest를 표시, false면 placeholder.
+ */
+function DataRangeSection({ isConnected, dataRange }: DataRangeSectionProps) {
   return (
     <div className="flex flex-col gap-1.5">
       <h3 className="text-heading-small text-content-neutral">연동된 데이터 범위</h3>
       <div
         className={cn(
           'border-edge-assistive bg-fill-strong text-body-small overflow-hidden rounded-xl border px-4 py-3',
-          hasData ? 'text-content-normal' : 'text-content-assistive',
+          isConnected ? 'text-content-normal' : 'text-content-assistive',
         )}
       >
-        <span className="truncate">연동되지 않았습니다.</span>
+        <span className="truncate">{isConnected ? dataRange : '연동되지 않았습니다.'}</span>
       </div>
     </div>
   );

@@ -11,7 +11,7 @@ import type {
 } from '../types/integrationModel';
 import type { AdminConnectorStatusResponse, ConnectorStatusSource } from '../types/syncModel';
 
-const SOURCE_ORDER: ConnectorStatusSource[] = ['github', 'jira', 'slack', 'confluence'];
+const SOURCE_ORDER: ConnectorStatusSource[] = ['github', 'jira', 'slack', 'confluence', 'channel_talk'];
 
 const RESOURCE_LABELS: Record<IntegrationService, string> = {
   jira: '임베딩된 Jira Project',

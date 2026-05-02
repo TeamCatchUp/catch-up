@@ -109,7 +109,7 @@ export default function IntegrationManagementSection({
 
       <div className="flex flex-2 flex-col gap-6">
         {selectedService === 'channel_talk' ? (
-          <ChannelTalkManagementPanel />
+          <ChannelTalkManagementPanel detail={detail} />
         ) : (
           <>
             <div className="flex flex-col gap-1.5">
