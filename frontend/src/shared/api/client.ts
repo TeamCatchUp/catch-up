@@ -1,4 +1,4 @@
-import axios from 'axios';
+import axios, { isAxiosError } from 'axios';
 
 import { API } from '@/shared/api/endpoints';
 
@@ -23,7 +23,8 @@ const api = axios.create({
  * 쓰면 자동 적용됨 (`backend/catchup/connectors/channel_talk/exceptions.py:36-38` 참조).
  */
 const isExternalCredentialError = (err: unknown): boolean => {
-  const detail = (err as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
+  if (!isAxiosError(err)) return false;
+  const detail = err.response?.data?.detail;
   if (!detail || typeof detail !== 'object' || Array.isArray(detail)) return false;
   return (detail as { code?: string }).code === 'invalid_credentials';
 };

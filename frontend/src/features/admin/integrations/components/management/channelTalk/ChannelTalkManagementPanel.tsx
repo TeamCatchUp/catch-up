@@ -37,6 +37,13 @@ export default function ChannelTalkManagementPanel({ detail }: ChannelTalkManage
   const channelListQuery = useQuery(channelTalkQueries.list());
   const documentListQuery = useQuery(channelTalkQueries.documentList());
 
+  // outer가 detail 변화 등으로 자주 re-render돼도 derive 비용을 한 번만 지불.
+  // TanStack Query는 동일 fetched data에 대해 stable reference를 보장하므로 cache hit이 잘 동작.
+  const initialState = useMemo(
+    () => deriveChannelTalkInitialState(channelListQuery.data, documentListQuery.data),
+    [channelListQuery.data, documentListQuery.data],
+  );
+
   if (channelListQuery.isLoading || documentListQuery.isLoading) {
     // 채널톡 백엔드 응답 대기 중 — 빈 placeholder. 짧은 폴링이라 별도 스켈레톤 없이 충분.
     return <div className="flex flex-col gap-6" />;
@@ -54,7 +61,6 @@ export default function ChannelTalkManagementPanel({ detail }: ChannelTalkManage
     );
   }
 
-  const initialState = deriveChannelTalkInitialState(channelListQuery.data, documentListQuery.data);
   return <ChannelTalkManagementPanelInner initialState={initialState} detail={detail} />;
 }
 

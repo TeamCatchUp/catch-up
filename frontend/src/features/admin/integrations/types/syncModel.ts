@@ -237,8 +237,11 @@ export type ConnectorResourceType =
   | 'spaces'
   | 'channel_talk_targets';
 
-/** 채널톡 target은 channel/space 두 종류가 같은 응답에 섞여 오므로 target_type으로 구분 */
-export type ChannelTalkConnectorTargetType = 'channel' | 'space';
+/**
+ * 채널톡 target은 channel/space 두 종류가 같은 응답에 섞여 오므로 target_type으로 구분.
+ * `SyncTargetType`에서 직접 추출해 enum drift를 방지.
+ */
+export type ChannelTalkConnectorTargetType = Extract<SyncTargetType, 'channel' | 'space'>;
 
 /**
  * target별 임베딩 데이터 범위.
