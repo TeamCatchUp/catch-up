@@ -11,9 +11,9 @@ from pydantic import model_validator
 
 from catchup.connector_core.document_format import ChannelTalkUserChatLogicalMetadata
 from catchup.connector_core.domain.structure import ConnectorKey
-from catchup.connector_core.ports.full_sync import FullSyncExecutionRequest
-from catchup.connector_core.ports.full_sync import FullSyncExecutionResult
-from catchup.connector_core.ports.full_sync import FullSyncWindow
+from catchup.connector_core.ports.sync_ingestion import SyncExecutionRequest
+from catchup.connector_core.ports.sync_ingestion import SyncExecutionResult
+from catchup.connector_core.ports.sync_ingestion import SyncWindow
 from catchup.connectors.channel_talk.full_sync_target_contract import (
     CHANNEL_TALK_USER_CHAT_RUNTIME_TARGET,
 )
@@ -123,7 +123,7 @@ class ChannelTalkUserChatFullSyncCheckpoint(BaseModel):
     tenant_id: str
     target: Literal["user_chat"] = CHANNEL_TALK_USER_CHAT_RUNTIME_TARGET
     state: ChannelTalkUserChatState
-    window: FullSyncWindow
+    window: SyncWindow
     next_cursor: str | None = None
 
     @field_validator("tenant_id")
@@ -132,8 +132,8 @@ class ChannelTalkUserChatFullSyncCheckpoint(BaseModel):
         return require_text(value, "tenant_id")
 
 
-class ChannelTalkUserChatFullSyncExecutionRequest(FullSyncExecutionRequest):
-    """Target-oriented execution request for the UserChat full-sync lane."""
+class ChannelTalkUserChatSyncExecutionRequest(SyncExecutionRequest):
+    """Target-oriented execution request for the UserChat ingestion lane."""
 
     connector: Literal[ConnectorKey.CHANNEL_TALK] = ConnectorKey.CHANNEL_TALK
     target: Literal["user_chat"] = CHANNEL_TALK_USER_CHAT_RUNTIME_TARGET
@@ -143,7 +143,7 @@ class ChannelTalkUserChatFullSyncExecutionRequest(FullSyncExecutionRequest):
     @model_validator(mode="after")
     def _validate_checkpoint_alignment(
         self,
-    ) -> "ChannelTalkUserChatFullSyncExecutionRequest":
+    ) -> "ChannelTalkUserChatSyncExecutionRequest":
         if self.checkpoint is None:
             return self
         if self.checkpoint.tenant_id != self.tenant_id:
@@ -155,13 +155,26 @@ class ChannelTalkUserChatFullSyncExecutionRequest(FullSyncExecutionRequest):
         return self.tenant_id
 
 
+class ChannelTalkUserChatIncrementalExecutionRequest(
+    ChannelTalkUserChatSyncExecutionRequest
+):
+    """Exact-refresh execution request for one UserChat record."""
+
+    user_chat_id: str
+
+    @field_validator("user_chat_id")
+    @classmethod
+    def _validate_user_chat_id(cls, value: str) -> str:
+        return require_text(value, "user_chat_id")
+
+
 class ChannelTalkUserChatFullSyncFetchResult(BaseModel):
     """Typed fetch result for the UserChat lane."""
 
     model_config = ConfigDict(extra="forbid")
 
     states: tuple[ChannelTalkUserChatState, ...]
-    sync_window: FullSyncWindow
+    sync_window: SyncWindow
     bundles: tuple[ChannelTalkFetchedUserChat, ...] = ()
     managers_by_id: dict[str, ChannelTalkManagerMetadata] = Field(default_factory=dict)
     fetched_record_ids: tuple[str, ...] = ()
@@ -224,8 +237,8 @@ class ChannelTalkUserChatFullSyncPersistResult(BaseModel):
     persisted_ids: tuple[str, ...] = ()
 
 
-class ChannelTalkUserChatFullSyncExecutionResult(FullSyncExecutionResult):
-    """Final typed result for a UserChat full-sync run."""
+class ChannelTalkUserChatSyncExecutionResult(SyncExecutionResult):
+    """Final typed result for a UserChat ingestion run."""
 
     connector: Literal[ConnectorKey.CHANNEL_TALK] = ConnectorKey.CHANNEL_TALK
     target: Literal["user_chat"] = CHANNEL_TALK_USER_CHAT_RUNTIME_TARGET
@@ -239,3 +252,13 @@ class ChannelTalkUserChatFullSyncExecutionResult(FullSyncExecutionResult):
     @property
     def channel_id(self) -> str:
         return self.tenant_id
+
+
+class ChannelTalkUserChatIncrementalExecutionResult(
+    ChannelTalkUserChatSyncExecutionResult
+):
+    """Final typed result for one UserChat exact-refresh run."""
+
+
+ChannelTalkUserChatFullSyncExecutionRequest = ChannelTalkUserChatSyncExecutionRequest
+ChannelTalkUserChatFullSyncExecutionResult = ChannelTalkUserChatSyncExecutionResult
