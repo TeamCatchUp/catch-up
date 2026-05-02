@@ -458,6 +458,7 @@ class ChannelTalkAdminApiTests(TestCase):
             space_name="Help Center",
             credential_last_verified_at=verified_at,
             association_status=ChannelTalkDocumentAssociationStatus.API_VERIFIED,
+            polling_cycle_hours=1,
         )
 
         response = self.client.post(
@@ -470,19 +471,21 @@ class ChannelTalkAdminApiTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         body = response.json()
+        self.assertEqual(body["installed"], True)
+        self.assertEqual(body["channel_id"], "channel-123")
+        self.assertEqual(body["space_id"], "space-123")
+        self.assertEqual(body["space_name"], "Help Center")
         self.assertEqual(
-            body,
-            {
-                "installed": True,
-                "channel_id": "channel-123",
-                "space_id": "space-123",
-                "space_name": "Help Center",
-                "credential_last_verified_at": verified_at.isoformat(),
-                "association_status": "api_verified",
-                "status_reason": None,
-                "status": "connected",
-                "message": "Channel Talk Documents credentials saved.",
-            },
+            body["credential_last_verified_at"],
+            verified_at.isoformat(),
+        )
+        self.assertEqual(body["association_status"], "api_verified")
+        self.assertEqual(body["polling_cycle_hours"], 1)
+        self.assertEqual(body["status_reason"], None)
+        self.assertEqual(body["status"], "connected")
+        self.assertEqual(
+            body["message"],
+            "Channel Talk Documents credentials saved.",
         )
         self.assertNotIn("access_secret", body)
         self.assertEqual(self.document_service.last_connect_request.access_key, "documents-key")
@@ -491,8 +494,41 @@ class ChannelTalkAdminApiTests(TestCase):
             "documents-secret",
         )
         self.assertEqual(
+            self.document_service.last_connect_request.polling_cycle_hours,
+            1,
+        )
+        self.assertEqual(
             self.document_background_sync_calls,
             [("channel-123", "space-123")],
+        )
+
+    def test_post_document_credentials_round_trips_polling_cycle_hours(self) -> None:
+        verified_at = datetime(2026, 4, 25, 8, 30, tzinfo=timezone.utc)
+        self.document_service.connect_result = ChannelTalkDocumentCredentialsStatus(
+            installed=True,
+            channel_id="channel-123",
+            space_id="space-123",
+            space_name="Help Center",
+            credential_last_verified_at=verified_at,
+            association_status=ChannelTalkDocumentAssociationStatus.API_VERIFIED,
+            polling_cycle_hours=6,
+        )
+
+        response = self.client.post(
+            "/api/v1/admin/connector/channel-talk/documents/credentials",
+            json={
+                "access_key": "documents-key",
+                "access_secret": "documents-secret",
+                "polling_cycle_hours": 6,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body["polling_cycle_hours"], 6)
+        self.assertEqual(
+            self.document_service.last_connect_request.polling_cycle_hours,
+            6,
         )
 
     def test_get_document_credentials_returns_list_payload_without_secret(self) -> None:
@@ -505,6 +541,7 @@ class ChannelTalkAdminApiTests(TestCase):
                 space_name="Help Center",
                 credential_last_verified_at=verified_at,
                 association_status=ChannelTalkDocumentAssociationStatus.API_VERIFIED,
+                polling_cycle_hours=1,
             ),
             ChannelTalkDocumentCredentialsStatus(
                 installed=True,
@@ -513,6 +550,7 @@ class ChannelTalkAdminApiTests(TestCase):
                 space_name="Sales Docs",
                 credential_last_verified_at=verified_at,
                 association_status=ChannelTalkDocumentAssociationStatus.API_VERIFIED,
+                polling_cycle_hours=12,
             ),
         ]
 
@@ -524,6 +562,7 @@ class ChannelTalkAdminApiTests(TestCase):
         body = response.json()
         self.assertEqual([item["space_id"] for item in body], ["space-123", "space-456"])
         self.assertEqual(body[0]["association_status"], "api_verified")
+        self.assertEqual([item["polling_cycle_hours"] for item in body], [1, 12])
         self.assertNotIn("access_secret", body[0])
 
     def test_delete_document_credentials_uses_space_id_and_returns_removed_and_not_found_payloads(self) -> None:

@@ -125,6 +125,7 @@ class ChannelTalkDocumentInstallAuthAdapter:
             space=validated_target,
             credential_last_verified_at=verified_at,
             association_status=association_status,
+            polling_cycle_hours=request.polling_cycle_hours,
         )
         stored_record = await self._run_store(
             self.store.upsert_document_connection,
