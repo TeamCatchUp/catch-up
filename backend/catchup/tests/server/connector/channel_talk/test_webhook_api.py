@@ -59,10 +59,10 @@ class ChannelTalkWebhookApiTests(TestCase):
         self.service_patcher.start()
         self.addCleanup(self.service_patcher.stop)
 
-    def test_webhook_accepts_configured_channel_talk_url(self) -> None:
+    def test_webhook_accepts_matching_token(self) -> None:
         with patch(_LOAD_CONNECTION, return_value=self.connection) as load_connection:
             response = self.client.post(
-                "/api/v1/channel_talk/webhooks",
+                "/api/v1/channel_talk/webhooks?token=webhook-token",
                 json={
                     "event": "push",
                     "type": "Message",
@@ -84,7 +84,23 @@ class ChannelTalkWebhookApiTests(TestCase):
         self.assertEqual(change.record_type, "user_chat")
         self.assertEqual(change.record_id, "chat-123")
 
-    def test_webhook_rejects_wrong_optional_token(self) -> None:
+    def test_webhook_rejects_missing_token(self) -> None:
+        response = self.client.post(
+            "/api/v1/channel_talk/webhooks",
+            json={
+                "type": "Message",
+                "entity": {
+                    "channelId": "channel-123",
+                    "chatType": "userChat",
+                    "chatId": "chat-123",
+                },
+            },
+        )
+
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(self.service.changes, [])
+
+    def test_webhook_rejects_wrong_token(self) -> None:
         with patch(_LOAD_CONNECTION, return_value=self.connection):
             response = self.client.post(
                 "/api/v1/channel_talk/webhooks?token=wrong-token",
@@ -99,3 +115,43 @@ class ChannelTalkWebhookApiTests(TestCase):
             )
 
         self.assertEqual(response.status_code, 401)
+        self.assertEqual(self.service.changes, [])
+
+    def test_webhook_rejects_unconfigured_token(self) -> None:
+        connection = ChannelTalkCredentialsRecord(
+            channel_id="channel-123",
+            channel_name="Support",
+            webhook_token=None,
+        )
+        with patch(_LOAD_CONNECTION, return_value=connection):
+            response = self.client.post(
+                "/api/v1/channel_talk/webhooks?token=webhook-token",
+                json={
+                    "type": "Message",
+                    "entity": {
+                        "channelId": "channel-123",
+                        "chatType": "userChat",
+                        "chatId": "chat-123",
+                    },
+                },
+            )
+
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(self.service.changes, [])
+
+    def test_webhook_rejects_unknown_channel_as_auth_failure(self) -> None:
+        with patch(_LOAD_CONNECTION, return_value=None):
+            response = self.client.post(
+                "/api/v1/channel_talk/webhooks?token=webhook-token",
+                json={
+                    "type": "Message",
+                    "entity": {
+                        "channelId": "unknown-channel",
+                        "chatType": "userChat",
+                        "chatId": "chat-123",
+                    },
+                },
+            )
+
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(self.service.changes, [])
