@@ -23,6 +23,7 @@ class IncrementalService:
     @audit_log(
         SyncTriggerAction.INCREMENTAL,
         metadata_factory=IncrementalSyncTriggerMetadata.from_audit,
+        emit_attempt=True,
     )
     async def dispatch_changes(
         self,

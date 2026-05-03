@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import Sized
 from typing import TYPE_CHECKING
+from typing import Literal
+from typing import cast
 
 from pydantic import ConfigDict
 from pydantic import Field
@@ -20,6 +23,12 @@ if TYPE_CHECKING:
     from catchup.audit.utils import AuditLogMetadataInput
     from catchup.sync.incremental.schemas import IncrementalIngestResult
     from catchup.sync.incremental.schemas import RecordChange
+
+
+def _len_or_none(value: object | None) -> int | None:
+    if not isinstance(value, Sized):
+        return None
+    return len(value)
 
 
 class SystemAuditMetadata(BaseAuditMetadata):
@@ -43,12 +52,13 @@ class UserAuditMetadata(BaseAuditMetadata):
         exc = data.exception
         detail = getattr(exc, "detail", {}) if exc else {}
         detail = detail if isinstance(detail, dict) else {}
+        user_id = detail.get(
+            "user_id",
+            result.get("user_id", getattr(payload, "userId", None)),
+        )
 
         return cls(
-            user_id=detail.get(
-                "user_id",
-                result.get("user_id", getattr(payload, "userId", None)),
-            ),
+            user_id=cast(int, user_id),
             before_role=detail.get("before_role", result.get("before_role")),
             after_role=detail.get("after_role", result.get("after_role")),
             status=detail.get("status", result.get("status")),
@@ -98,9 +108,11 @@ class IntegrationAuditMetadata(BaseAuditMetadata):
             provider=provider,
             integration_id=getattr(result, "team_id", None),
             integration_name=getattr(result, "team_name", None),
-            resource_count=len(getattr(result, "resources", [])) if getattr(result, "resources", None) is not None else None,
-            jira_target_count=len(getattr(result, "jira_targets", [])) if getattr(result, "jira_targets", None) is not None else None,
-            confluence_target_count=len(getattr(result, "confluence_targets", [])) if getattr(result, "confluence_targets", None) is not None else None,
+            resource_count=_len_or_none(getattr(result, "resources", None)),
+            jira_target_count=_len_or_none(getattr(result, "jira_targets", None)),
+            confluence_target_count=_len_or_none(
+                getattr(result, "confluence_targets", None)
+            ),
         )
 
     @classmethod
@@ -165,16 +177,135 @@ class RegisterWebhookAuditMetadata(BaseAuditMetadata):
             integration_id=data.arguments["cloud_id"],
             webhook_source=data.arguments["source"],
             result_status=result.get("status"),
-            project_key_count=(
-                len(project_keys)
-                if project_keys is not None
-                else len(argument_project_keys)
-                if argument_project_keys is not None
-                else None
+            project_key_count=_len_or_none(
+                project_keys if project_keys is not None else argument_project_keys
             ),
-            created_webhook_count=len(created_webhook_ids) if created_webhook_ids is not None else None,
+            created_webhook_count=_len_or_none(created_webhook_ids),
             stored_webhook_count=result.get("stored_webhook_count"),
         )
+
+
+class ChannelTalkCredentialAuditMetadata(BaseAuditMetadata):
+    provider: Literal["channel_talk"] = "channel_talk"
+    credential_type: Literal["channel", "documents"]
+    result_status: str | None = None
+    channel_id: str | None = None
+    channel_name: str | None = None
+    space_id: str | None = None
+    space_name: str | None = None
+    webhook_token_configured: bool | None = None
+    association_status: str | None = None
+    polling_cycle_hours: int | None = None
+    installed: bool | None = None
+    removed: bool | None = None
+    error_summary: str | None = None
+
+    @classmethod
+    def from_channel_credentials_audit(
+        cls,
+        data: "AuditLogMetadataInput",
+    ) -> "ChannelTalkCredentialAuditMetadata":
+        return cls._from_audit(data, credential_type="channel")
+
+    @classmethod
+    def from_document_credentials_audit(
+        cls,
+        data: "AuditLogMetadataInput",
+    ) -> "ChannelTalkCredentialAuditMetadata":
+        return cls._from_audit(data, credential_type="documents")
+
+    @classmethod
+    def _from_audit(
+        cls,
+        data: "AuditLogMetadataInput",
+        *,
+        credential_type: Literal["channel", "documents"],
+    ) -> "ChannelTalkCredentialAuditMetadata":
+        result = data.result
+        request = data.arguments.get("connect_request")
+        association_status = getattr(result, "association_status", None)
+
+        return cls(
+            context=cls._failure_context(data),
+            credential_type=credential_type,
+            result_status=cls._result_status(data),
+            channel_id=cls._first_text(
+                getattr(result, "channel_id", None),
+                data.arguments.get("channel_id"),
+            ),
+            channel_name=cls._first_text(getattr(result, "channel_name", None)),
+            space_id=cls._first_text(
+                getattr(result, "space_id", None),
+                data.arguments.get("space_id"),
+            ),
+            space_name=cls._first_text(getattr(result, "space_name", None)),
+            webhook_token_configured=cls._webhook_token_configured(
+                data=data,
+                request=request,
+            ),
+            association_status=cls._first_text(
+                getattr(association_status, "value", None),
+                association_status,
+            ),
+            polling_cycle_hours=getattr(result, "polling_cycle_hours", None)
+            or getattr(request, "polling_cycle_hours", None),
+            installed=getattr(result, "installed", None),
+            removed=getattr(result, "removed", None),
+            error_summary=cls._error_summary(data),
+        )
+
+    @staticmethod
+    def _failure_context(data: "AuditLogMetadataInput") -> str | None:
+        if data.status != AuditStatus.FAILURE:
+            return None
+        return (
+            getattr(data.exception, "reason", None)
+            or getattr(data.exception, "code", None)
+            or "internal_error"
+        )
+
+    @staticmethod
+    def _error_summary(data: "AuditLogMetadataInput") -> str | None:
+        if data.status != AuditStatus.FAILURE or data.exception is None:
+            return None
+        return str(data.exception)
+
+    @classmethod
+    def _result_status(cls, data: "AuditLogMetadataInput") -> str:
+        if data.status == AuditStatus.ATTEMPT:
+            return "attempt"
+        if data.status == AuditStatus.FAILURE:
+            return "failed"
+        response_status = cls._first_text(getattr(data.result, "status", None))
+        if response_status is not None:
+            return response_status
+        if getattr(data.result, "removed", None) is False:
+            return "not_found"
+        return "success"
+
+    @staticmethod
+    def _webhook_token_configured(
+        *,
+        data: "AuditLogMetadataInput",
+        request: object | None,
+    ) -> bool | None:
+        result_value = getattr(data.result, "webhook_token_configured", None)
+        if result_value is not None:
+            return bool(result_value)
+        request_value = getattr(request, "webhook_token", None)
+        if request_value is not None:
+            return bool(str(request_value).strip())
+        return None
+
+    @staticmethod
+    def _first_text(*values: object) -> str | None:
+        for value in values:
+            if value is None:
+                continue
+            text = str(value).strip()
+            if text:
+                return text
+        return None
 
 
 class FullSyncTriggerMetadata(BaseAuditMetadata):
@@ -339,14 +470,17 @@ class IncrementalSyncTriggerMetadata(BaseAuditMetadata):
     blocked_count: int | None = None
 
     @classmethod
-    def from_audit(cls, data: "AuditLogMetadataInput") -> "IncrementalSyncTriggerMetadata" | None:
-        changes = data.arguments["changes"]
+    def from_audit(
+        cls, data: "AuditLogMetadataInput"
+    ) -> "IncrementalSyncTriggerMetadata | None":
+        changes = cast("list[RecordChange]", data.arguments["changes"])
         if not changes:
             return None
 
         first_change = changes[0]
         result = data.result
         record_keys = getattr(result, "record_keys", None)
+        record_key_count = _len_or_none(record_keys)
 
         return cls(
             connector=first_change.connector,
@@ -355,7 +489,7 @@ class IncrementalSyncTriggerMetadata(BaseAuditMetadata):
             record_type=first_change.record_type,
             record_ids=[change.record_id for change in changes],
             change_count=len(changes),
-            record_key_count=len(record_keys) if record_keys is not None else None,
+            record_key_count=record_key_count,
             blocked_count=getattr(result, "blocked_count", None),
         )
 
@@ -374,7 +508,7 @@ class IncrementalSyncTriggerMetadata(BaseAuditMetadata):
             record_type=first_change.record_type,
             record_ids=[change.record_id for change in changes],
             change_count=len(changes),
-            record_key_count=len(result.record_keys),
+            record_key_count=_len_or_none(result.record_keys),
             blocked_count=result.blocked_count,
         )
 

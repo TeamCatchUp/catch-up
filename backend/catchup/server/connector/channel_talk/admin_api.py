@@ -8,6 +8,9 @@ from fastapi import BackgroundTasks
 from fastapi import Depends
 from fastapi import Query
 
+from catchup.audit.actions import IntegrationAction
+from catchup.audit.metadata import ChannelTalkCredentialAuditMetadata
+from catchup.audit.utils import audit_log
 from catchup.auth.dependencies import require_admin_user
 from catchup.connectors.channel_talk.schemas.channel_connection import (
     ChannelTalkConnectRequest,
@@ -78,6 +81,11 @@ router = APIRouter(
     "/credentials/validate",
     response_model=ChannelTalkValidateResponse,
 )
+@audit_log(
+    IntegrationAction.VALIDATE_CREDENTIALS,
+    metadata_factory=ChannelTalkCredentialAuditMetadata.from_channel_credentials_audit,
+    emit_attempt=True,
+)
 async def validate_channel_talk_credentials(
     connect_request: ChannelTalkConnectRequest,
     service: Annotated[ChannelTalkCredentialsService, Depends(get_channel_talk_service)],
@@ -92,6 +100,11 @@ async def validate_channel_talk_credentials(
 @router.post(
     "/credentials",
     response_model=ChannelTalkConnectResponse,
+)
+@audit_log(
+    IntegrationAction.CONNECT_CREDENTIALS,
+    metadata_factory=ChannelTalkCredentialAuditMetadata.from_channel_credentials_audit,
+    emit_attempt=True,
 )
 async def upsert_channel_talk_credentials(
     connect_request: ChannelTalkConnectRequest,
@@ -123,6 +136,11 @@ async def get_channel_talk_credentials(
     "/credentials",
     response_model=ChannelTalkUninstallResponse,
 )
+@audit_log(
+    IntegrationAction.UNINSTALL_CREDENTIALS,
+    metadata_factory=ChannelTalkCredentialAuditMetadata.from_channel_credentials_audit,
+    emit_attempt=True,
+)
 async def delete_channel_talk_credentials(
     channel_id: Annotated[str, Query(min_length=1)],
     service: Annotated[ChannelTalkCredentialsService, Depends(get_channel_talk_service)],
@@ -134,6 +152,11 @@ async def delete_channel_talk_credentials(
 @router.post(
     "/documents/credentials/validate",
     response_model=ChannelTalkDocumentValidateResponse,
+)
+@audit_log(
+    IntegrationAction.VALIDATE_CREDENTIALS,
+    metadata_factory=ChannelTalkCredentialAuditMetadata.from_document_credentials_audit,
+    emit_attempt=True,
 )
 async def validate_channel_talk_document_credentials(
     connect_request: ChannelTalkDocumentConnectRequest,
@@ -149,6 +172,11 @@ async def validate_channel_talk_document_credentials(
 @router.post(
     "/documents/credentials",
     response_model=ChannelTalkDocumentConnectResponse,
+)
+@audit_log(
+    IntegrationAction.CONNECT_CREDENTIALS,
+    metadata_factory=ChannelTalkCredentialAuditMetadata.from_document_credentials_audit,
+    emit_attempt=True,
 )
 async def upsert_channel_talk_document_credentials(
     connect_request: ChannelTalkDocumentConnectRequest,
@@ -185,6 +213,11 @@ async def get_channel_talk_document_credentials(
 @router.delete(
     "/documents/credentials",
     response_model=ChannelTalkDocumentUninstallResponse,
+)
+@audit_log(
+    IntegrationAction.UNINSTALL_CREDENTIALS,
+    metadata_factory=ChannelTalkCredentialAuditMetadata.from_document_credentials_audit,
+    emit_attempt=True,
 )
 async def delete_channel_talk_document_credentials(
     space_id: Annotated[str, Query(min_length=1)],

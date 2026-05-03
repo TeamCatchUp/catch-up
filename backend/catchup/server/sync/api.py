@@ -53,6 +53,7 @@ router = APIRouter(
 @audit_log(
     SyncTriggerAction.FULL_SYNC_REQUEST,
     metadata_factory=FullSyncTriggerMetadata.from_audit,
+    emit_attempt=True,
 )
 async def dispatch_full_sync(
     sync_request: FullSyncRequest,

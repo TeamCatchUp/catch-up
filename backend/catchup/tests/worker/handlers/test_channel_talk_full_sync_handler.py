@@ -8,6 +8,10 @@ from unittest import TestCase
 from unittest.mock import AsyncMock
 from unittest.mock import patch
 
+from catchup.audit.actions import FullSyncAction
+from catchup.audit.base import AuditLevel
+from catchup.audit.base import AuditStatus
+from catchup.audit.metadata import FullSyncEventAuditMetadata
 from catchup.connectors.channel_talk.full_sync_target_contract import (
     CHANNEL_TALK_DOCUMENT_ARTICLE_RUNTIME_TARGET,
 )
@@ -24,11 +28,16 @@ from catchup.connectors.channel_talk.schemas.document_connection import (
     ChannelTalkDocumentCredentialsRecord,
 )
 from catchup.db.models import SyncConnector
+from catchup.db.models import SyncJobStatus
 from catchup.db.models import SyncType
+from catchup.sync.common.schemas import ClaimState
 from catchup.sync.common.schemas import FullSyncContext
 from catchup.sync.common.schemas import HandlerKey
 from catchup.sync.common.schemas import IncrementalSyncContext
+from catchup.sync.common.schemas import SyncStreamMessage
+from catchup.sync.common.schemas import SyncStreamTask
 from catchup.sync.common.schemas import SyncTargetType
+from catchup.worker.full_sync_processor import process_full_sync_message
 from catchup.worker.handlers.channel_talk_full_sync_handler import (
     ChannelTalkFullSyncHandler,
 )
@@ -36,6 +45,8 @@ from catchup.worker.handlers.channel_talk_incremental_handler import (
     ChannelTalkIncrementalHandler,
 )
 from catchup.worker.registry import get_ingestion_handler
+from catchup.worker.schemas import ClaimResult
+from catchup.worker.schemas import JobFinalizeResult
 
 CHANNEL_ID = "channel-123"
 SPACE_ID = "space-123"
@@ -55,6 +66,8 @@ _LOAD_INCREMENTAL_DOCUMENT_CONNECTION = (
 )
 _RUN_INCREMENTAL_THREADPOOL = f"{_INCREMENTAL_HANDLER_MODULE}.run_in_threadpool"
 _RUN_INCREMENTAL_SYNC_INGESTION = f"{_INCREMENTAL_HANDLER_MODULE}.run_sync_ingestion"
+_FULL_SYNC_PROCESSOR_MODULE = "catchup.worker.full_sync_processor"
+_PROCESSOR_RUN_IN_THREADPOOL = f"{_FULL_SYNC_PROCESSOR_MODULE}.run_in_threadpool"
 
 
 def _build_connection_record(
@@ -210,6 +223,178 @@ class ChannelTalkFullSyncHandlerTests(IsolatedAsyncioTestCase):
         self.assertEqual(sync_window.window_end, fixed_now)
         self.assertEqual(result.error_count, 0)
         self.assertFalse(result.skipped)
+
+    async def test_processor_records_channel_talk_full_sync_job_and_event_audit(
+        self,
+    ) -> None:
+        context = _build_context()
+        message = SyncStreamMessage(
+            message_id="message-123",
+            task=SyncStreamTask.full(
+                event_id=context.event_id,
+                job_id=context.job_id,
+                connector=context.connector,
+                scope_id=context.scope_id,
+                target_type=context.target_type,
+                target_id=context.target_id,
+                sync_from_ts=context.sync_from_ts,
+                attempt=context.attempt,
+                max_attempts=context.max_attempts,
+            ),
+        )
+
+        with (
+            patch(
+                f"{_FULL_SYNC_PROCESSOR_MODULE}.claim_event",
+                return_value=ClaimResult(
+                    state=ClaimState.CLAIMED,
+                    context=context,
+                    job_started=True,
+                    total_targets=1,
+                ),
+            ),
+            patch(
+                f"{_FULL_SYNC_PROCESSOR_MODULE}.select_handler",
+                return_value=self.handler,
+            ),
+            patch(
+                f"{_FULL_SYNC_PROCESSOR_MODULE}.mark_event_success_sync",
+                return_value=True,
+            ),
+            patch(
+                f"{_FULL_SYNC_PROCESSOR_MODULE}.finalize_job_if_done_sync",
+                return_value=JobFinalizeResult(
+                    finalized=True,
+                    status=SyncJobStatus.SUCCESS,
+                    total_targets=1,
+                    completed_targets=1,
+                    failed_targets=0,
+                    requeued_targets=0,
+                ),
+            ),
+            patch(_PROCESSOR_RUN_IN_THREADPOOL, _run_immediately),
+            patch(
+                _LOAD_CONNECTION,
+                return_value=_build_connection_record(),
+            ),
+            patch(
+                _RUN_SYNC_INGESTION,
+                AsyncMock(return_value=_build_application_result(persisted_count=5)),
+            ),
+            patch(f"{_FULL_SYNC_PROCESSOR_MODULE}.emit_audit_event") as job_audit,
+            patch("catchup.audit.utils.emit_audit_event") as event_audit,
+        ):
+            await process_full_sync_message(message, service_cache={})
+
+        self.assertEqual(job_audit.call_count, 2)
+        job_attempt = job_audit.call_args_list[0].kwargs
+        self.assertEqual(job_attempt["action"], FullSyncAction.JOB)
+        self.assertEqual(job_attempt["status"], AuditStatus.ATTEMPT)
+        self.assertEqual(job_attempt["metadata"].connector, SyncConnector.CHANNEL_TALK)
+        self.assertEqual(job_attempt["metadata"].scope_id, CHANNEL_ID)
+        self.assertEqual(job_attempt["metadata"].job_id, "job-123")
+        self.assertEqual(job_attempt["metadata"].total_targets, 1)
+
+        job_success = job_audit.call_args_list[1].kwargs
+        self.assertEqual(job_success["action"], FullSyncAction.JOB)
+        self.assertEqual(job_success["status"], AuditStatus.SUCCESS)
+        self.assertEqual(job_success["metadata"].completed_targets, 1)
+        self.assertEqual(job_success["metadata"].failed_targets, 0)
+
+        self.assertEqual(event_audit.call_count, 2)
+        event_attempt = event_audit.call_args_list[0].kwargs
+        self.assertEqual(event_attempt["action"], FullSyncAction.EVENT)
+        self.assertEqual(event_attempt["status"], AuditStatus.ATTEMPT)
+        self.assertEqual(
+            event_attempt["metadata"].connector,
+            SyncConnector.CHANNEL_TALK,
+        )
+        self.assertEqual(event_attempt["metadata"].event_id, "event-123")
+        self.assertEqual(event_attempt["metadata"].target_type, SyncTargetType.CHANNEL)
+        self.assertEqual(event_attempt["metadata"].target_id, CHANNEL_ID)
+
+        event_success = event_audit.call_args_list[1].kwargs
+        self.assertEqual(event_success["action"], FullSyncAction.EVENT)
+        self.assertEqual(event_success["status"], AuditStatus.SUCCESS)
+        self.assertEqual(event_success["metadata"].synced_count, 5)
+        self.assertEqual(event_success["metadata"].error_count, 0)
+
+    async def test_handler_emits_full_sync_event_audit_attempt_and_success(
+        self,
+    ) -> None:
+        context = _build_context()
+
+        with (
+            patch(
+                _LOAD_CONNECTION,
+                return_value=_build_connection_record(),
+            ),
+            patch(
+                _RUN_SYNC_INGESTION,
+                AsyncMock(return_value=_build_application_result(persisted_count=5)),
+            ),
+            patch("catchup.audit.utils.emit_audit_event") as emit_audit_event,
+        ):
+            result = await self.handler.handle(
+                context=context,
+                service_cache={},
+            )
+
+        self.assertEqual(result.synced_count, 5)
+        self.assertEqual(emit_audit_event.call_count, 2)
+
+        attempt = emit_audit_event.call_args_list[0].kwargs
+        self.assertEqual(attempt["action"], FullSyncAction.EVENT)
+        self.assertEqual(attempt["status"], AuditStatus.ATTEMPT)
+        self.assertIsInstance(attempt["metadata"], FullSyncEventAuditMetadata)
+        self.assertEqual(attempt["metadata"].connector, SyncConnector.CHANNEL_TALK)
+        self.assertEqual(attempt["metadata"].scope_id, CHANNEL_ID)
+        self.assertEqual(attempt["metadata"].job_id, "job-123")
+        self.assertEqual(attempt["metadata"].event_id, "event-123")
+        self.assertEqual(attempt["metadata"].target_type, SyncTargetType.CHANNEL)
+        self.assertEqual(attempt["metadata"].target_id, CHANNEL_ID)
+        self.assertEqual(attempt["metadata"].phase, "process")
+        self.assertFalse(attempt["metadata"].is_retry)
+
+        success = emit_audit_event.call_args_list[1].kwargs
+        self.assertEqual(success["action"], FullSyncAction.EVENT)
+        self.assertEqual(success["status"], AuditStatus.SUCCESS)
+        metadata = success["metadata"]
+        self.assertIsInstance(metadata, FullSyncEventAuditMetadata)
+        self.assertEqual(metadata.synced_count, 5)
+        self.assertEqual(metadata.error_count, 0)
+        self.assertFalse(metadata.skipped)
+
+    async def test_handler_emits_full_sync_event_audit_failure(
+        self,
+    ) -> None:
+        with patch("catchup.audit.utils.emit_audit_event") as emit_audit_event:
+            with self.assertRaisesRegex(
+                ValueError,
+                "channel_talk target_type must be one of: channel, space",
+            ):
+                await self.handler.handle(
+                    context=_build_context(
+                        target_id=CHANNEL_ID,
+                        target_type=SyncTargetType.RESOURCE,
+                    ),
+                    service_cache={},
+                )
+
+        self.assertEqual(emit_audit_event.call_count, 2)
+        attempt = emit_audit_event.call_args_list[0].kwargs
+        self.assertEqual(attempt["action"], FullSyncAction.EVENT)
+        self.assertEqual(attempt["status"], AuditStatus.ATTEMPT)
+
+        failure = emit_audit_event.call_args_list[1].kwargs
+        self.assertEqual(failure["action"], FullSyncAction.EVENT)
+        self.assertEqual(failure["status"], AuditStatus.FAILURE)
+        self.assertEqual(failure["level"], AuditLevel.WARNING)
+        metadata = failure["metadata"]
+        self.assertIsInstance(metadata, FullSyncEventAuditMetadata)
+        self.assertEqual(metadata.connector, SyncConnector.CHANNEL_TALK)
+        self.assertIsNone(metadata.context)
+        self.assertIsNone(metadata.error_summary)
 
     async def test_handler_rejects_unknown_target_type(self) -> None:
         with patch(
