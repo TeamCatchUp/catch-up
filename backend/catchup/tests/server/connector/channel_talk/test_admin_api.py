@@ -3,10 +3,15 @@ from __future__ import annotations
 from datetime import datetime
 from datetime import timezone
 from unittest import TestCase
+from unittest.mock import patch
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from catchup.audit.actions import IntegrationAction
+from catchup.audit.base import AuditLevel
+from catchup.audit.base import AuditStatus
+from catchup.audit.metadata import ChannelTalkCredentialAuditMetadata
 from catchup.auth.dependencies import require_admin_user
 from catchup.connectors.channel_talk.exceptions import ChannelTalkAuthenticationError
 from catchup.connectors.channel_talk.exceptions import ChannelTalkConflictError
@@ -252,6 +257,47 @@ class ChannelTalkAdminApiTests(TestCase):
         self.assertEqual(self.service.last_connect_request.webhook_token, "webhook-token")
         self.assertEqual(self.background_sync_calls, ["channel-123"])
 
+    def test_post_credentials_emits_audit_attempt_and_success(self) -> None:
+        self.service.connect_result = ChannelTalkCredentialsStatus(
+            installed=True,
+            channel_id="channel-123",
+            channel_name="Support",
+            webhook_token_configured=True,
+        )
+
+        with patch("catchup.audit.utils.emit_audit_event") as emit_audit_event:
+            response = self.client.post(
+                "/api/v1/admin/connector/channel-talk/credentials",
+                json={
+                    "access_key": "access-key",
+                    "access_secret": "access-secret",
+                    "webhook_token": "webhook-token",
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(emit_audit_event.call_count, 2)
+
+        attempt = emit_audit_event.call_args_list[0].kwargs
+        self.assertEqual(attempt["action"], IntegrationAction.CONNECT_CREDENTIALS)
+        self.assertEqual(attempt["status"], AuditStatus.ATTEMPT)
+        self.assertIsInstance(attempt["metadata"], ChannelTalkCredentialAuditMetadata)
+        self.assertEqual(attempt["metadata"].result_status, "attempt")
+        self.assertTrue(attempt["metadata"].webhook_token_configured)
+
+        success = emit_audit_event.call_args_list[1].kwargs
+        self.assertEqual(success["action"], IntegrationAction.CONNECT_CREDENTIALS)
+        self.assertEqual(success["status"], AuditStatus.SUCCESS)
+        metadata = success["metadata"]
+        self.assertIsInstance(metadata, ChannelTalkCredentialAuditMetadata)
+        self.assertEqual(metadata.credential_type, "channel")
+        self.assertEqual(metadata.result_status, "connected")
+        self.assertEqual(metadata.channel_id, "channel-123")
+        payload = metadata.model_dump(exclude_none=True)
+        self.assertNotIn("access-key", repr(payload))
+        self.assertNotIn("access-secret", repr(payload))
+        self.assertNotIn("webhook-token", repr(payload))
+
     def test_get_credentials_returns_list_payload(self) -> None:
         verified_at = datetime(2026, 4, 19, 8, 30, tzinfo=timezone.utc)
         self.service.list_statuses_result = [
@@ -418,18 +464,37 @@ class ChannelTalkAdminApiTests(TestCase):
             "Channel Talk credentials are not installed"
         )
 
-        response = self.client.post(
-            "/api/v1/admin/connector/channel-talk/documents/credentials/validate",
-            json={
-                "access_key": "documents-key",
-                "access_secret": "documents-secret",
-            },
-        )
+        with patch("catchup.audit.utils.emit_audit_event") as emit_audit_event:
+            response = self.client.post(
+                "/api/v1/admin/connector/channel-talk/documents/credentials/validate",
+                json={
+                    "access_key": "documents-key",
+                    "access_secret": "documents-secret",
+                },
+            )
 
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json()["detail"]["code"], "invalid_request")
         self.assertIsNone(self.document_service.last_connect_request)
         self.assertEqual(self.document_background_sync_calls, [])
+        self.assertEqual(emit_audit_event.call_count, 2)
+        attempt = emit_audit_event.call_args_list[0].kwargs
+        self.assertEqual(attempt["action"], IntegrationAction.VALIDATE_CREDENTIALS)
+        self.assertEqual(attempt["status"], AuditStatus.ATTEMPT)
+
+        failure = emit_audit_event.call_args_list[1].kwargs
+        self.assertEqual(failure["action"], IntegrationAction.VALIDATE_CREDENTIALS)
+        self.assertEqual(failure["status"], AuditStatus.FAILURE)
+        self.assertEqual(failure["level"], AuditLevel.WARNING)
+        metadata = failure["metadata"]
+        self.assertIsInstance(metadata, ChannelTalkCredentialAuditMetadata)
+        self.assertEqual(metadata.credential_type, "documents")
+        self.assertEqual(metadata.result_status, "failed")
+        self.assertEqual(metadata.context, "invalid_request")
+        self.assertEqual(
+            metadata.error_summary,
+            "Channel Talk credentials are not installed",
+        )
 
     def test_validate_document_credentials_channel_conflict_fails(self) -> None:
         self.document_service.validate_error = ChannelTalkConflictError(
