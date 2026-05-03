@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import hmac
-
 import structlog
 from fastapi import APIRouter
 from fastapi import HTTPException
@@ -14,6 +12,7 @@ from pydantic import Field
 from catchup.connectors.channel_talk.full_sync_helper import (
     load_channel_talk_connection,
 )
+from catchup.server.connector.webhook_verifier import WebhookVerifierProvider
 from catchup.sync.incremental.resolve import resolve_channel_talk_user_chat_event
 from catchup.sync.incremental.service import get_incremental_service
 
@@ -37,6 +36,9 @@ async def handle_channel_talk_webhook(
     request: Request,
     token: str | None = Query(default=None),
 ) -> ChannelTalkWebhookResponse:
+    if not str(token or "").strip():
+        raise HTTPException(status_code=401, detail="Invalid Channel Talk webhook token")
+
     try:
         payload = await request.json()
     except Exception as exc:
@@ -67,11 +69,23 @@ async def handle_channel_talk_webhook(
         normalized_channel_id,
     )
     if connection is None:
-        raise HTTPException(status_code=404, detail="Unknown Channel Talk channel")
-    if token and (
-        not connection.webhook_token_configured
-        or not hmac.compare_digest(str(connection.webhook_token or ""), token)
-    ):
+        logger.warning(
+            "channel_talk_webhook_verify_failed",
+            channel_id=normalized_channel_id,
+            reason="unknown_channel",
+        )
+        raise HTTPException(status_code=401, detail="Invalid Channel Talk webhook token")
+
+    verify_result = WebhookVerifierProvider.verify_channel_talk(
+        token=token,
+        expected_token=connection.webhook_token,
+    )
+    if not verify_result.ok:
+        logger.warning(
+            "channel_talk_webhook_verify_failed",
+            channel_id=connection.channel_id,
+            reason=verify_result.reason,
+        )
         raise HTTPException(status_code=401, detail="Invalid Channel Talk webhook token")
 
     resolved = resolve_channel_talk_user_chat_event(
