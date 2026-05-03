@@ -13,8 +13,8 @@ from pydantic import model_validator
 
 from catchup.connector_core.document_format import ChannelTalkDocumentArticleLogicalMetadata
 from catchup.connector_core.domain.structure import ConnectorKey
-from catchup.connector_core.ports.full_sync import FullSyncExecutionRequest
-from catchup.connector_core.ports.full_sync import FullSyncExecutionResult
+from catchup.connector_core.ports.sync_ingestion import SyncExecutionRequest
+from catchup.connector_core.ports.sync_ingestion import SyncExecutionResult
 from catchup.connectors.channel_talk.full_sync_target_contract import CHANNEL_TALK_DOCUMENT_ARTICLE_RUNTIME_TARGET
 from catchup.connectors.channel_talk.schemas.channel_connection import ChannelTalkCredentialsRecord
 from catchup.connectors.channel_talk.schemas.document_article import ChannelTalkDocumentArticle
@@ -159,9 +159,9 @@ class ChannelTalkArticleFullSyncCheckpoint(BaseModel):
     def _validate_required_text(cls, value: str, info: ValidationInfo) -> str:
         return require_text(value, info.field_name or "field")
 
-
-class ChannelTalkArticleFullSyncExecutionRequest(FullSyncExecutionRequest):
-    """Execution request for the Channel Talk Documents article full-sync lane."""
+# TODO : Credential을 Execution Request에서 전달하지 말고, Article Client Initialization 시점에 가져오도록 수정
+class ChannelTalkArticleSyncExecutionRequest(SyncExecutionRequest):
+    """Execution request for the Channel Talk Documents article ingestion lane."""
 
     connector: Literal[ConnectorKey.CHANNEL_TALK] = ConnectorKey.CHANNEL_TALK
     target: Literal["document_article"] = CHANNEL_TALK_DOCUMENT_ARTICLE_RUNTIME_TARGET
@@ -173,7 +173,7 @@ class ChannelTalkArticleFullSyncExecutionRequest(FullSyncExecutionRequest):
     @model_validator(mode="after")
     def _validate_connection_alignment(
         self,
-    ) -> "ChannelTalkArticleFullSyncExecutionRequest":
+    ) -> "ChannelTalkArticleSyncExecutionRequest":
         if self.channel_connection.channel_id != self.tenant_id:
             raise ValueError("channel_connection.channel_id must match tenant_id")
         if self.document_connection.channel_id != self.tenant_id:
@@ -204,6 +204,19 @@ class ChannelTalkArticleFullSyncExecutionRequest(FullSyncExecutionRequest):
     @property
     def space_name(self) -> str:
         return self.document_connection.space_name
+
+
+class ChannelTalkArticleIncrementalExecutionRequest(
+    ChannelTalkArticleSyncExecutionRequest
+):
+    """Exact-refresh execution request for one Channel Talk article."""
+
+    article_id: str
+
+    @field_validator("article_id")
+    @classmethod
+    def _validate_article_id(cls, value: str) -> str:
+        return require_text(value, "article_id")
 
 
 class ChannelTalkArticleFullSyncFetchResult(BaseModel):
@@ -315,8 +328,8 @@ class ChannelTalkArticleFullSyncPersistResult(BaseModel):
     deleted_prefixes: tuple[str, ...] = ()
 
 
-class ChannelTalkArticleFullSyncExecutionResult(FullSyncExecutionResult):
-    """Final typed result for an Article full-sync run."""
+class ChannelTalkArticleSyncExecutionResult(SyncExecutionResult):
+    """Final typed result for an Article ingestion run."""
 
     connector: Literal[ConnectorKey.CHANNEL_TALK] = ConnectorKey.CHANNEL_TALK
     target: Literal["document_article"] = CHANNEL_TALK_DOCUMENT_ARTICLE_RUNTIME_TARGET
@@ -334,3 +347,13 @@ class ChannelTalkArticleFullSyncExecutionResult(FullSyncExecutionResult):
     @property
     def space_id(self) -> str:
         return self.fetched.space_id
+
+
+class ChannelTalkArticleIncrementalExecutionResult(
+    ChannelTalkArticleSyncExecutionResult
+):
+    """Final typed result for one article exact-refresh run."""
+
+
+ChannelTalkArticleFullSyncExecutionRequest = ChannelTalkArticleSyncExecutionRequest
+ChannelTalkArticleFullSyncExecutionResult = ChannelTalkArticleSyncExecutionResult

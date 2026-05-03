@@ -14,11 +14,8 @@ from catchup.connector_core.domain.structure import ConnectorKey
 from catchup.utils.validation import require_text
 
 
-class FullSyncWindow(BaseModel):
-    """
-    Full Sync Request가 요청한 데이터 수집 범위
-    - 기존 sync_from_ts -> FullSyncWindow으로 점진적 마이그레이션 필요
-    """
+class SyncWindow(BaseModel):
+    """Data Collection Window : Shared By Full Sync & Incremental Sync"""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -26,17 +23,14 @@ class FullSyncWindow(BaseModel):
     window_end: datetime
 
     @model_validator(mode="after")
-    def _validate_window_bounds(self) -> "FullSyncWindow":
+    def _validate_window_bounds(self) -> "SyncWindow":
         if self.window_start > self.window_end:
             raise ValueError("window_start must be less than or equal to window_end")
         return self
 
 
-class FullSyncExecutionRequest(BaseModel):
-    """
-    Generic Full Sync execution request.
-    - HTTP Request가 아닌, 내부 execution에서 사용하는 request
-    """
+class SyncExecutionRequest(BaseModel):
+    """Internal Execution Request passed from Handlers to Ingestion Adapters."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -47,14 +41,11 @@ class FullSyncExecutionRequest(BaseModel):
     @field_validator("tenant_id", "target")
     @classmethod
     def _validate_required_text(cls, value: str, info: ValidationInfo) -> str:
-        return require_text(value, info.field_name)
+        return require_text(value, info.field_name or "field")
 
 
-class FullSyncExecutionResult(BaseModel):
-    """
-    Generic Full Sync execution result.
-    - HTTP Response가 아닌, 내부 execution 결과
-    """
+class SyncExecutionResult(BaseModel):
+    """Internal result returned by ingestion adapters."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -65,18 +56,18 @@ class FullSyncExecutionResult(BaseModel):
     @field_validator("tenant_id", "target")
     @classmethod
     def _validate_required_text(cls, value: str, info: ValidationInfo) -> str:
-        return require_text(value, info.field_name)
+        return require_text(value, info.field_name or "field")
 
 
-ExecutionRequestT = TypeVar("ExecutionRequestT", bound=FullSyncExecutionRequest)
+ExecutionRequestT = TypeVar("ExecutionRequestT", bound=SyncExecutionRequest)
 FetchResultT = TypeVar("FetchResultT")
 TransformResultT = TypeVar("TransformResultT")
 SummaryResultT = TypeVar("SummaryResultT")
 PersistResultT = TypeVar("PersistResultT")
-ExecutionResultT = TypeVar("ExecutionResultT", bound=FullSyncExecutionResult)
+ExecutionResultT = TypeVar("ExecutionResultT", bound=SyncExecutionResult)
 
 
-class FullSyncPort(
+class SyncIngestionPort(
     Protocol[
         ExecutionRequestT,
         FetchResultT,
@@ -86,20 +77,20 @@ class FullSyncPort(
         ExecutionResultT,
     ]
 ):
-    """Fetch -> transform -> summarize(no-op 가능) -> persist -> result 순서를 adapter 뒤로 감춘다."""
+    """Fetch -> transform -> summarize(no-op possible) -> persist -> result."""
 
     async def fetch(
         self,
         *,
         execution: ExecutionRequestT,
-        sync_window: FullSyncWindow,
+        sync_window: SyncWindow,
     ) -> FetchResultT: ...
 
     async def transform(
         self,
         *,
         execution: ExecutionRequestT,
-        sync_window: FullSyncWindow,
+        sync_window: SyncWindow,
         fetched: FetchResultT,
     ) -> TransformResultT: ...
 
@@ -107,7 +98,7 @@ class FullSyncPort(
         self,
         *,
         execution: ExecutionRequestT,
-        sync_window: FullSyncWindow,
+        sync_window: SyncWindow,
         transformed: TransformResultT,
     ) -> SummaryResultT: ...
 
@@ -115,7 +106,7 @@ class FullSyncPort(
         self,
         *,
         execution: ExecutionRequestT,
-        sync_window: FullSyncWindow,
+        sync_window: SyncWindow,
         transformed: TransformResultT,
         summary: SummaryResultT,
     ) -> PersistResultT: ...
@@ -124,7 +115,7 @@ class FullSyncPort(
         self,
         *,
         execution: ExecutionRequestT,
-        sync_window: FullSyncWindow,
+        sync_window: SyncWindow,
         fetched: FetchResultT,
         transformed: TransformResultT,
         summary: SummaryResultT,

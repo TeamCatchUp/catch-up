@@ -10,7 +10,7 @@ from catchup.components.summarizer import SummarizerService
 from catchup.components.summarizer import get_summarizer_service
 from catchup.components.vector_db.factory import get_pgvector_repository
 from catchup.components.vector_db.pgvector.repository import PGVectorRepository
-from catchup.connector_core.ports.full_sync import FullSyncWindow
+from catchup.connector_core.ports.sync_ingestion import SyncWindow
 from catchup.connectors.channel_talk.core.user_chat_full_sync_fetcher import (
     ChannelTalkUserChatFullSyncFetcher,
 )
@@ -24,12 +24,6 @@ from catchup.connectors.channel_talk.core.user_chat_full_sync_models import (
     ChannelTalkUserChatFullSyncConnection,
 )
 from catchup.connectors.channel_talk.core.user_chat_full_sync_models import (
-    ChannelTalkUserChatFullSyncExecutionRequest,
-)
-from catchup.connectors.channel_talk.core.user_chat_full_sync_models import (
-    ChannelTalkUserChatFullSyncExecutionResult,
-)
-from catchup.connectors.channel_talk.core.user_chat_full_sync_models import (
     ChannelTalkUserChatFullSyncFetchResult,
 )
 from catchup.connectors.channel_talk.core.user_chat_full_sync_models import (
@@ -41,6 +35,12 @@ from catchup.connectors.channel_talk.core.user_chat_full_sync_models import (
 from catchup.connectors.channel_talk.core.user_chat_full_sync_models import (
     ChannelTalkUserChatFullSyncTransformResult,
 )
+from catchup.connectors.channel_talk.core.user_chat_full_sync_models import (
+    ChannelTalkUserChatSyncExecutionRequest,
+)
+from catchup.connectors.channel_talk.core.user_chat_full_sync_models import (
+    ChannelTalkUserChatSyncExecutionResult,
+)
 from catchup.connectors.channel_talk.core.user_chat_transformer import (
     UserChatTransformer,
 )
@@ -50,37 +50,25 @@ from catchup.connectors.channel_talk.full_sync_helper import (
 from catchup.connectors.channel_talk.schemas.user_chat import ChannelTalkUserChatState
 
 
-class ChannelTalkUserChatFullSyncAdapter:
-    """
-    Channel Talk full sync
-    """
+class ChannelTalkUserChatFullSyncIngestionAdapter:
+    """Channel Talk UserChat sweep/list ingestion adapter."""
 
     def __init__(
         self,
         *,
-        fetcher: ChannelTalkUserChatFullSyncFetcher | None = None,
-        connection_loader=load_channel_talk_connection,
-        repository_factory=None,
         enable_summarization: bool = True,
-        summarizer: SummarizerService | None = None,
     ) -> None:
-        self.fetcher = fetcher or ChannelTalkUserChatFullSyncFetcher()
-        self._connection_loader = connection_loader
+        self._fetcher: ChannelTalkUserChatFullSyncFetcher | None = None
         self._document_builder = UserChatTransformer()
-        self._repository_factory = repository_factory or self._build_repository
-        if not enable_summarization:
-            self.summarizer = None
-        elif summarizer is not None:
-            self.summarizer = summarizer
-        else:
-            self.summarizer = get_summarizer_service()
+        self._enable_summarization = enable_summarization
+        self._summarizer: SummarizerService | None = None
         self._repository: PGVectorRepository | None = None
 
     async def fetch(
         self,
         *,
-        execution: ChannelTalkUserChatFullSyncExecutionRequest,
-        sync_window: FullSyncWindow,
+        execution: ChannelTalkUserChatSyncExecutionRequest,
+        sync_window: SyncWindow,
     ) -> ChannelTalkUserChatFullSyncFetchResult:
         fetch_states = self._default_fetch_states()
         checkpoint = execution.checkpoint
@@ -90,10 +78,11 @@ class ChannelTalkUserChatFullSyncAdapter:
             fetch_states=fetch_states,
         )
         connection = await self._load_connection(execution=execution)
-        managers_by_id = await self.fetcher.fetch_managers_by_id(
+        fetcher = self._get_fetcher()
+        managers_by_id = await fetcher.fetch_managers_by_id(
             connection=connection,
         )
-        fetched_user_chats = await self.fetcher.fetch_user_chats(
+        fetched_user_chats = await fetcher.fetch_user_chats(
             connection=connection,
             states=fetch_states,
             sync_window=sync_window,
@@ -120,8 +109,8 @@ class ChannelTalkUserChatFullSyncAdapter:
     async def transform(
         self,
         *,
-        execution: ChannelTalkUserChatFullSyncExecutionRequest,
-        sync_window: FullSyncWindow,
+        execution: ChannelTalkUserChatSyncExecutionRequest,
+        sync_window: SyncWindow,
         fetched: ChannelTalkUserChatFullSyncFetchResult,
     ) -> ChannelTalkUserChatFullSyncTransformResult:
         return ChannelTalkUserChatFullSyncTransformResult(
@@ -139,8 +128,8 @@ class ChannelTalkUserChatFullSyncAdapter:
     async def summarize(
         self,
         *,
-        execution: ChannelTalkUserChatFullSyncExecutionRequest,
-        sync_window: FullSyncWindow,
+        execution: ChannelTalkUserChatSyncExecutionRequest,
+        sync_window: SyncWindow,
         transformed: ChannelTalkUserChatFullSyncTransformResult,
     ) -> ChannelTalkUserChatFullSyncSummaryResult:
         _ = sync_window
@@ -153,7 +142,7 @@ class ChannelTalkUserChatFullSyncAdapter:
             document.logical_metadata.user_chat_core.messages.excluded_message_count
             for document in documents
         )
-        if self.summarizer is None or not documents:
+        if not self._enable_summarization or not documents:
             return ChannelTalkUserChatFullSyncSummaryResult(
                 summary_applied=False,
                 document_count=len(documents),
@@ -168,7 +157,7 @@ class ChannelTalkUserChatFullSyncAdapter:
             )
             for document in documents
         ]
-        summarized = await self.summarizer.summarize_batch(
+        summarized = await self._get_summarizer().summarize_batch(
             requests,
             audit_context=execution.audit_context,
             context=(
@@ -190,8 +179,8 @@ class ChannelTalkUserChatFullSyncAdapter:
     async def persist(
         self,
         *,
-        execution: ChannelTalkUserChatFullSyncExecutionRequest,
-        sync_window: FullSyncWindow,
+        execution: ChannelTalkUserChatSyncExecutionRequest,
+        sync_window: SyncWindow,
         transformed: ChannelTalkUserChatFullSyncTransformResult,
         summary: ChannelTalkUserChatFullSyncSummaryResult,
     ) -> ChannelTalkUserChatFullSyncPersistResult:
@@ -217,15 +206,15 @@ class ChannelTalkUserChatFullSyncAdapter:
     def build_result(
         self,
         *,
-        execution: ChannelTalkUserChatFullSyncExecutionRequest,
-        sync_window: FullSyncWindow,
+        execution: ChannelTalkUserChatSyncExecutionRequest,
+        sync_window: SyncWindow,
         fetched: ChannelTalkUserChatFullSyncFetchResult,
         transformed: ChannelTalkUserChatFullSyncTransformResult,
         summary: ChannelTalkUserChatFullSyncSummaryResult,
         persisted: ChannelTalkUserChatFullSyncPersistResult,
-    ) -> ChannelTalkUserChatFullSyncExecutionResult:
+    ) -> ChannelTalkUserChatSyncExecutionResult:
         _ = sync_window
-        return ChannelTalkUserChatFullSyncExecutionResult(
+        return ChannelTalkUserChatSyncExecutionResult(
             tenant_id=execution.tenant_id,
             collected_count=len(fetched.fetched_record_ids),
             document_count=len(transformed.documents),
@@ -238,8 +227,8 @@ class ChannelTalkUserChatFullSyncAdapter:
     @staticmethod
     def _validate_checkpoint_window(
         *,
-        execution: ChannelTalkUserChatFullSyncExecutionRequest,
-        sync_window: FullSyncWindow,
+        execution: ChannelTalkUserChatSyncExecutionRequest,
+        sync_window: SyncWindow,
         fetch_states: tuple[ChannelTalkUserChatState, ...],
     ) -> None:
         if execution.checkpoint is None:
@@ -262,8 +251,8 @@ class ChannelTalkUserChatFullSyncAdapter:
     @staticmethod
     def _build_next_checkpoint(
         *,
-        execution: ChannelTalkUserChatFullSyncExecutionRequest,
-        sync_window: FullSyncWindow,
+        execution: ChannelTalkUserChatSyncExecutionRequest,
+        sync_window: SyncWindow,
         fetched_user_chats: ChannelTalkFetchedUserChatsResult,
     ) -> ChannelTalkUserChatFullSyncCheckpoint | None:
         if fetched_user_chats.next_checkpoint_state is None:
@@ -278,10 +267,10 @@ class ChannelTalkUserChatFullSyncAdapter:
     async def _load_connection(
         self,
         *,
-        execution: ChannelTalkUserChatFullSyncExecutionRequest,
+        execution: ChannelTalkUserChatSyncExecutionRequest,
     ) -> ChannelTalkUserChatFullSyncConnection:
         connection = await run_in_threadpool(
-            self._connection_loader,
+            load_channel_talk_connection,
             execution.channel_id,
         )
         if connection is None:
@@ -294,7 +283,7 @@ class ChannelTalkUserChatFullSyncAdapter:
 
     async def _get_repository(self) -> PGVectorRepository:
         if self._repository is None:
-            repository = self._repository_factory()
+            repository = self._build_repository()
             try:
                 repository.ensure_initialized()
             except RuntimeError:
@@ -303,6 +292,16 @@ class ChannelTalkUserChatFullSyncAdapter:
         assert self._repository is not None
         return self._repository
 
+    def _get_fetcher(self) -> ChannelTalkUserChatFullSyncFetcher:
+        if self._fetcher is None:
+            self._fetcher = ChannelTalkUserChatFullSyncFetcher()
+        return self._fetcher
+
+    def _get_summarizer(self) -> SummarizerService:
+        if self._summarizer is None:
+            self._summarizer = get_summarizer_service()
+        return self._summarizer
+
     @staticmethod
     def _build_repository() -> PGVectorRepository:
         return get_pgvector_repository(
@@ -310,3 +309,6 @@ class ChannelTalkUserChatFullSyncAdapter:
                 EmbeddingProvider.AWS_BEDROCK
             ).get_embedder()
         )
+
+
+ChannelTalkUserChatFullSyncAdapter = ChannelTalkUserChatFullSyncIngestionAdapter

@@ -14,7 +14,7 @@ from catchup.connector_core.document_format import ChannelTalkUserChatMetricsMet
 from catchup.connector_core.document_format import ChannelTalkUserChatTagsMetadata
 from catchup.connector_core.document_format import ChannelTalkUserChatTimingMetadata
 from catchup.connector_core.document_format import DocumentBaseMetadata
-from catchup.connector_core.ports.full_sync import FullSyncWindow
+from catchup.connector_core.ports.sync_ingestion import SyncWindow
 from catchup.connectors.channel_talk.core.user_chat_full_sync_models import (
     ChannelTalkFetchedUserChat,
 )
@@ -43,7 +43,7 @@ class UserChatTransformer:
         self,
         *,
         execution: UserChatExecution,
-        sync_window: FullSyncWindow,
+        sync_window: SyncWindow,
         bundle: ChannelTalkFetchedUserChat,
         managers_by_id: dict[str, ChannelTalkManagerMetadata],
     ) -> ChannelTalkUserChatPreparedDocument:

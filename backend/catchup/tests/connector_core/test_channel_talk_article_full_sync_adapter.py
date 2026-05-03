@@ -3,16 +3,27 @@ from __future__ import annotations
 from datetime import datetime
 from datetime import timezone
 from unittest import IsolatedAsyncioTestCase
+from unittest.mock import AsyncMock
 
 from catchup.connector_core.adapters.channel_talk.article_full_sync import (
-    ChannelTalkArticleFullSyncAdapter,
+    ChannelTalkArticleFullSyncIngestionAdapter,
 )
-from catchup.connector_core.ports.full_sync import FullSyncWindow
-from catchup.connectors.channel_talk.document_space.article_full_sync_models import (
-    ChannelTalkArticleFullSyncExecutionRequest,
+from catchup.connector_core.adapters.channel_talk.article_incremental import (
+    ChannelTalkArticleIncrementalIngestionAdapter,
 )
+from catchup.connector_core.application.sync_ingestion import run_sync_ingestion
+from catchup.connector_core.ports.sync_ingestion import SyncWindow
 from catchup.connectors.channel_talk.document_space.article_full_sync_models import (
     ChannelTalkArticleFullSyncFetchResult,
+)
+from catchup.connectors.channel_talk.document_space.article_full_sync_models import (
+    ChannelTalkArticleIncrementalExecutionRequest,
+)
+from catchup.connectors.channel_talk.document_space.article_full_sync_models import (
+    ChannelTalkArticleIncrementalExecutionResult,
+)
+from catchup.connectors.channel_talk.document_space.article_full_sync_models import (
+    ChannelTalkArticleSyncExecutionRequest,
 )
 from catchup.connectors.channel_talk.document_space.article_full_sync_models import (
     ChannelTalkFetchedArticle,
@@ -43,15 +54,15 @@ from catchup.connectors.channel_talk.schemas.document_connection import (
 )
 
 
-def _window() -> FullSyncWindow:
-    return FullSyncWindow(
+def _window() -> SyncWindow:
+    return SyncWindow(
         window_start=datetime(2026, 4, 21, 0, 0, tzinfo=timezone.utc),
         window_end=datetime(2026, 4, 22, 0, 0, tzinfo=timezone.utc),
     )
 
 
-def _execution() -> ChannelTalkArticleFullSyncExecutionRequest:
-    return ChannelTalkArticleFullSyncExecutionRequest(
+def _execution() -> ChannelTalkArticleSyncExecutionRequest:
+    return ChannelTalkArticleSyncExecutionRequest(
         tenant_id="channel-123",
         channel_connection=ChannelTalkCredentialsRecord(
             channel_id="channel-123",
@@ -207,11 +218,11 @@ class _FakeArticleRepository:
         return ids or []
 
 
-class ChannelTalkArticleFullSyncAdapterTests(IsolatedAsyncioTestCase):
+class ChannelTalkArticleFullSyncIngestionAdapterTests(IsolatedAsyncioTestCase):
     async def test_transform_prepares_only_published_revision_snapshots(
         self,
     ) -> None:
-        adapter = ChannelTalkArticleFullSyncAdapter(language="ko")
+        adapter = ChannelTalkArticleFullSyncIngestionAdapter()
         fetched = ChannelTalkArticleFullSyncFetchResult(
             channel_id="channel-123",
             space_id="space-123",
@@ -322,7 +333,7 @@ class ChannelTalkArticleFullSyncAdapterTests(IsolatedAsyncioTestCase):
     async def test_transform_splits_long_body_with_deterministic_chunk_ids(
         self,
     ) -> None:
-        adapter = ChannelTalkArticleFullSyncAdapter(language="ko")
+        adapter = ChannelTalkArticleFullSyncIngestionAdapter()
         long_body = "\n\n".join(f"paragraph {index} " + ("x" * 220) for index in range(40))
         fetched = ChannelTalkArticleFullSyncFetchResult(
             channel_id="channel-123",
@@ -376,7 +387,7 @@ class ChannelTalkArticleFullSyncAdapterTests(IsolatedAsyncioTestCase):
     async def test_transform_preserves_html_heading_hierarchy_in_chunk_context(
         self,
     ) -> None:
-        adapter = ChannelTalkArticleFullSyncAdapter(language="ko")
+        adapter = ChannelTalkArticleFullSyncIngestionAdapter()
         body_html = """
         <h1>Install Catch Up</h1>
         <p>Invite the app to the Slack channel before asking questions.</p>
@@ -430,7 +441,7 @@ class ChannelTalkArticleFullSyncAdapterTests(IsolatedAsyncioTestCase):
     async def test_transform_uses_title_section_heading_without_duplicate_section_name(
         self,
     ) -> None:
-        adapter = ChannelTalkArticleFullSyncAdapter(language="ko")
+        adapter = ChannelTalkArticleFullSyncIngestionAdapter()
         body_html = """
         <h1>나에게 맞는 답변 만들기</h1>
         <h2>마무리</h2>
@@ -485,7 +496,7 @@ class ChannelTalkArticleFullSyncAdapterTests(IsolatedAsyncioTestCase):
     async def test_transform_preserves_later_section_heading_when_sections_merge(
         self,
     ) -> None:
-        adapter = ChannelTalkArticleFullSyncAdapter(language="ko")
+        adapter = ChannelTalkArticleFullSyncIngestionAdapter()
         body_html = """
         <h1>흩어진 사내 정보를 한 번에 찾기</h1>
         <h2>답변을 받으면 이렇게 활용해요</h2>
@@ -540,7 +551,7 @@ class ChannelTalkArticleFullSyncAdapterTests(IsolatedAsyncioTestCase):
     async def test_transform_stores_public_article_url_from_website_url(
         self,
     ) -> None:
-        adapter = ChannelTalkArticleFullSyncAdapter(language="ko")
+        adapter = ChannelTalkArticleFullSyncIngestionAdapter()
         fetched = ChannelTalkArticleFullSyncFetchResult(
             channel_id="channel-123",
             space_id="space-123",
@@ -588,7 +599,7 @@ class ChannelTalkArticleFullSyncAdapterTests(IsolatedAsyncioTestCase):
     async def test_transform_builds_public_article_url_from_slug_when_missing(
         self,
     ) -> None:
-        adapter = ChannelTalkArticleFullSyncAdapter(language="ko")
+        adapter = ChannelTalkArticleFullSyncIngestionAdapter()
         fetched = ChannelTalkArticleFullSyncFetchResult(
             channel_id="channel-123",
             space_id="space-123",
@@ -631,7 +642,7 @@ class ChannelTalkArticleFullSyncAdapterTests(IsolatedAsyncioTestCase):
     async def test_transform_builds_public_article_url_from_short_slug_and_title(
         self,
     ) -> None:
-        adapter = ChannelTalkArticleFullSyncAdapter(language="ko")
+        adapter = ChannelTalkArticleFullSyncIngestionAdapter()
         fetched = ChannelTalkArticleFullSyncFetchResult(
             channel_id="channel-123",
             space_id="space-123",
@@ -675,7 +686,7 @@ class ChannelTalkArticleFullSyncAdapterTests(IsolatedAsyncioTestCase):
     async def test_transform_keeps_heading_icon_alt_text_in_chunk_body(
         self,
     ) -> None:
-        adapter = ChannelTalkArticleFullSyncAdapter(language="ko")
+        adapter = ChannelTalkArticleFullSyncIngestionAdapter()
         body_html = """
         <h1>Catch Up - Slack에서 사용해보세요</h1>
         <h2><img alt="bulb" /> Catch Up 팀은 이렇게 쓰고 있어요</h2>
@@ -721,7 +732,7 @@ class ChannelTalkArticleFullSyncAdapterTests(IsolatedAsyncioTestCase):
         self.assertIn("저희 팀에서 가장 많이 쓰는 순간은", rendered)
 
     async def test_transform_preserves_structured_rich_blocks(self) -> None:
-        adapter = ChannelTalkArticleFullSyncAdapter(language="ko")
+        adapter = ChannelTalkArticleFullSyncIngestionAdapter()
         body = [
             {
                 "type": "heading",
@@ -892,7 +903,7 @@ class ChannelTalkArticleFullSyncAdapterTests(IsolatedAsyncioTestCase):
     async def test_transform_preserves_html_table_media_and_file_fallback(
         self,
     ) -> None:
-        adapter = ChannelTalkArticleFullSyncAdapter(language="ko")
+        adapter = ChannelTalkArticleFullSyncIngestionAdapter()
         body_html = """
         <h1>HTML content</h1>
         <figure>
@@ -947,7 +958,7 @@ class ChannelTalkArticleFullSyncAdapterTests(IsolatedAsyncioTestCase):
         self.assertIn("guide.pdf [파일 첨부]", rendered)
 
     async def test_transform_skips_article_without_published_revision(self) -> None:
-        adapter = ChannelTalkArticleFullSyncAdapter(language="ko")
+        adapter = ChannelTalkArticleFullSyncIngestionAdapter()
         fetched = ChannelTalkArticleFullSyncFetchResult(
             channel_id="channel-123",
             space_id="space-123",
@@ -980,10 +991,8 @@ class ChannelTalkArticleFullSyncAdapterTests(IsolatedAsyncioTestCase):
 
     async def test_persist_deletes_article_prefixes_before_adding_chunks(self) -> None:
         repository = _FakeArticleRepository()
-        adapter = ChannelTalkArticleFullSyncAdapter(
-            language="ko",
-            repository_factory=lambda: repository,
-        )
+        adapter = ChannelTalkArticleFullSyncIngestionAdapter()
+        adapter._build_repository = lambda: repository
         fetched = ChannelTalkArticleFullSyncFetchResult(
             channel_id="channel-123",
             space_id="space-123",
@@ -1036,10 +1045,8 @@ class ChannelTalkArticleFullSyncAdapterTests(IsolatedAsyncioTestCase):
         self,
     ) -> None:
         repository = _FakeArticleRepository()
-        adapter = ChannelTalkArticleFullSyncAdapter(
-            language="ko",
-            repository_factory=lambda: repository,
-        )
+        adapter = ChannelTalkArticleFullSyncIngestionAdapter()
+        adapter._build_repository = lambda: repository
         fetched = ChannelTalkArticleFullSyncFetchResult(
             channel_id="channel-123",
             space_id="space-123",
@@ -1082,10 +1089,8 @@ class ChannelTalkArticleFullSyncAdapterTests(IsolatedAsyncioTestCase):
 
     async def test_build_result_counts_prepared_documents(self) -> None:
         repository = _FakeArticleRepository()
-        adapter = ChannelTalkArticleFullSyncAdapter(
-            language="ko",
-            repository_factory=lambda: repository,
-        )
+        adapter = ChannelTalkArticleFullSyncIngestionAdapter()
+        adapter._build_repository = lambda: repository
         execution = _execution()
         fetched = ChannelTalkArticleFullSyncFetchResult(
             channel_id="channel-123",
@@ -1135,3 +1140,49 @@ class ChannelTalkArticleFullSyncAdapterTests(IsolatedAsyncioTestCase):
         )
 
         self.assertEqual(result.document_count, len(transformed.documents))
+
+    async def test_incremental_adapter_runs_exact_fetch_through_ingestion_runner(
+        self,
+    ) -> None:
+        repository = _FakeArticleRepository()
+        fetcher = AsyncMock()
+        fetcher.fetch_article_bundle_by_id = AsyncMock(
+            return_value=_bundle(
+                article_id="article-123",
+                state=ChannelTalkDocumentArticleState.PUBLISHED,
+                detail=_article_view(
+                    article_id="article-123",
+                    state=ChannelTalkDocumentArticleState.PUBLISHED,
+                    body_html="<p>Current content should not be used</p>",
+                ),
+                published_revision=_revision_view(
+                    article_id="article-123",
+                    body_html="<p>Exact refresh body</p>",
+                ),
+            )
+        )
+        base_execution = _execution()
+        adapter = ChannelTalkArticleIncrementalIngestionAdapter()
+        adapter._fetcher = fetcher
+        adapter._build_repository = lambda: repository
+
+        result = await run_sync_ingestion(
+            port=adapter,
+            execution=ChannelTalkArticleIncrementalExecutionRequest(
+                tenant_id=base_execution.tenant_id,
+                channel_connection=base_execution.channel_connection,
+                document_connection=base_execution.document_connection,
+                article_id="article-123",
+            ),
+            sync_window=_window(),
+        )
+
+        self.assertIsInstance(result, ChannelTalkArticleIncrementalExecutionResult)
+        fetcher.fetch_article_bundle_by_id.assert_awaited_once()
+        self.assertEqual(
+            fetcher.fetch_article_bundle_by_id.await_args.kwargs["article_id"],
+            "article-123",
+        )
+        self.assertEqual(result.fetched.fetched_article_ids, ("article-123",))
+        self.assertEqual(result.persisted.persisted_count, len(repository.added_ids))
+        self.assertGreater(result.persisted.persisted_count, 0)
