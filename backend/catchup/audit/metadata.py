@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import uuid
 from typing import TYPE_CHECKING
+from typing import Literal
 
 from pydantic import ConfigDict
 from pydantic import Field
@@ -175,6 +176,126 @@ class RegisterWebhookAuditMetadata(BaseAuditMetadata):
             created_webhook_count=len(created_webhook_ids) if created_webhook_ids is not None else None,
             stored_webhook_count=result.get("stored_webhook_count"),
         )
+
+
+class ChannelTalkCredentialAuditMetadata(BaseAuditMetadata):
+    provider: Literal["channel_talk"] = "channel_talk"
+    credential_type: Literal["channel", "documents"]
+    result_status: str | None = None
+    channel_id: str | None = None
+    channel_name: str | None = None
+    space_id: str | None = None
+    space_name: str | None = None
+    webhook_token_configured: bool | None = None
+    association_status: str | None = None
+    polling_cycle_hours: int | None = None
+    installed: bool | None = None
+    removed: bool | None = None
+    error_summary: str | None = None
+
+    @classmethod
+    def from_channel_credentials_audit(
+        cls,
+        data: "AuditLogMetadataInput",
+    ) -> "ChannelTalkCredentialAuditMetadata":
+        return cls._from_audit(data, credential_type="channel")
+
+    @classmethod
+    def from_document_credentials_audit(
+        cls,
+        data: "AuditLogMetadataInput",
+    ) -> "ChannelTalkCredentialAuditMetadata":
+        return cls._from_audit(data, credential_type="documents")
+
+    @classmethod
+    def _from_audit(
+        cls,
+        data: "AuditLogMetadataInput",
+        *,
+        credential_type: Literal["channel", "documents"],
+    ) -> "ChannelTalkCredentialAuditMetadata":
+        result = data.result
+        request = data.arguments.get("connect_request")
+        association_status = getattr(result, "association_status", None)
+
+        return cls(
+            context=cls._failure_context(data),
+            credential_type=credential_type,
+            result_status=cls._result_status(data),
+            channel_id=cls._first_text(
+                getattr(result, "channel_id", None),
+                data.arguments.get("channel_id"),
+            ),
+            channel_name=cls._first_text(getattr(result, "channel_name", None)),
+            space_id=cls._first_text(
+                getattr(result, "space_id", None),
+                data.arguments.get("space_id"),
+            ),
+            space_name=cls._first_text(getattr(result, "space_name", None)),
+            webhook_token_configured=cls._webhook_token_configured(
+                data=data,
+                request=request,
+            ),
+            association_status=cls._first_text(
+                getattr(association_status, "value", None),
+                association_status,
+            ),
+            polling_cycle_hours=getattr(result, "polling_cycle_hours", None)
+            or getattr(request, "polling_cycle_hours", None),
+            installed=getattr(result, "installed", None),
+            removed=getattr(result, "removed", None),
+            error_summary=cls._error_summary(data),
+        )
+
+    @staticmethod
+    def _failure_context(data: "AuditLogMetadataInput") -> str | None:
+        if data.status != AuditStatus.FAILURE:
+            return None
+        return (
+            getattr(data.exception, "reason", None)
+            or getattr(data.exception, "code", None)
+            or "internal_error"
+        )
+
+    @staticmethod
+    def _error_summary(data: "AuditLogMetadataInput") -> str | None:
+        if data.status != AuditStatus.FAILURE or data.exception is None:
+            return None
+        return str(data.exception)
+
+    @staticmethod
+    def _result_status(data: "AuditLogMetadataInput") -> str:
+        if data.status == AuditStatus.ATTEMPT:
+            return "attempt"
+        if data.status == AuditStatus.FAILURE:
+            return "failed"
+        if getattr(data.result, "removed", None) is False:
+            return "not_found"
+        return "success"
+
+    @staticmethod
+    def _webhook_token_configured(
+        *,
+        data: "AuditLogMetadataInput",
+        request: object | None,
+    ) -> bool | None:
+        result_value = getattr(data.result, "webhook_token_configured", None)
+        if result_value is not None:
+            return bool(result_value)
+        request_value = getattr(request, "webhook_token", None)
+        if request_value is not None:
+            return bool(str(request_value).strip())
+        return None
+
+    @staticmethod
+    def _first_text(*values: object) -> str | None:
+        for value in values:
+            if value is None:
+                continue
+            text = str(value).strip()
+            if text:
+                return text
+        return None
 
 
 class FullSyncTriggerMetadata(BaseAuditMetadata):

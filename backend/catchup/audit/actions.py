@@ -86,6 +86,9 @@ class IntegrationAction(BaseAuditAction):
     HANDLE_OAUTH_CALLBACK = "handle_oauth_callback"
     HANDLE_INSTALLATION = "handle_installation"
     REGISTER_WEBHOOK = "register_webhook"
+    VALIDATE_CREDENTIALS = "validate_credentials"
+    CONNECT_CREDENTIALS = "connect_credentials"
+    UNINSTALL_CREDENTIALS = "uninstall_credentials"
 
 # ======================= USER AUDIT =======================
 class UserRoleAction(BaseAuditAction):
