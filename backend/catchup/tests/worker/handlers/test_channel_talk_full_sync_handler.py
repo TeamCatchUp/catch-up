@@ -8,6 +8,10 @@ from unittest import TestCase
 from unittest.mock import AsyncMock
 from unittest.mock import patch
 
+from catchup.audit.actions import FullSyncAction
+from catchup.audit.base import AuditLevel
+from catchup.audit.base import AuditStatus
+from catchup.audit.metadata import FullSyncEventAuditMetadata
 from catchup.connectors.channel_talk.full_sync_target_contract import (
     CHANNEL_TALK_DOCUMENT_ARTICLE_RUNTIME_TARGET,
 )
@@ -210,6 +214,83 @@ class ChannelTalkFullSyncHandlerTests(IsolatedAsyncioTestCase):
         self.assertEqual(sync_window.window_end, fixed_now)
         self.assertEqual(result.error_count, 0)
         self.assertFalse(result.skipped)
+
+    async def test_handler_emits_full_sync_event_audit_attempt_and_success(
+        self,
+    ) -> None:
+        context = _build_context()
+
+        with (
+            patch(
+                _LOAD_CONNECTION,
+                return_value=_build_connection_record(),
+            ),
+            patch(
+                _RUN_SYNC_INGESTION,
+                AsyncMock(return_value=_build_application_result(persisted_count=5)),
+            ),
+            patch("catchup.audit.utils.emit_audit_event") as emit_audit_event,
+        ):
+            result = await self.handler.handle(
+                context=context,
+                service_cache={},
+            )
+
+        self.assertEqual(result.synced_count, 5)
+        self.assertEqual(emit_audit_event.call_count, 2)
+
+        attempt = emit_audit_event.call_args_list[0].kwargs
+        self.assertEqual(attempt["action"], FullSyncAction.EVENT)
+        self.assertEqual(attempt["status"], AuditStatus.ATTEMPT)
+        self.assertIsInstance(attempt["metadata"], FullSyncEventAuditMetadata)
+        self.assertEqual(attempt["metadata"].connector, SyncConnector.CHANNEL_TALK)
+        self.assertEqual(attempt["metadata"].scope_id, CHANNEL_ID)
+        self.assertEqual(attempt["metadata"].job_id, "job-123")
+        self.assertEqual(attempt["metadata"].event_id, "event-123")
+        self.assertEqual(attempt["metadata"].target_type, SyncTargetType.CHANNEL)
+        self.assertEqual(attempt["metadata"].target_id, CHANNEL_ID)
+        self.assertEqual(attempt["metadata"].phase, "process")
+        self.assertFalse(attempt["metadata"].is_retry)
+
+        success = emit_audit_event.call_args_list[1].kwargs
+        self.assertEqual(success["action"], FullSyncAction.EVENT)
+        self.assertEqual(success["status"], AuditStatus.SUCCESS)
+        metadata = success["metadata"]
+        self.assertIsInstance(metadata, FullSyncEventAuditMetadata)
+        self.assertEqual(metadata.synced_count, 5)
+        self.assertEqual(metadata.error_count, 0)
+        self.assertFalse(metadata.skipped)
+
+    async def test_handler_emits_full_sync_event_audit_failure(
+        self,
+    ) -> None:
+        with patch("catchup.audit.utils.emit_audit_event") as emit_audit_event:
+            with self.assertRaisesRegex(
+                ValueError,
+                "channel_talk target_type must be one of: channel, space",
+            ):
+                await self.handler.handle(
+                    context=_build_context(
+                        target_id=CHANNEL_ID,
+                        target_type=SyncTargetType.RESOURCE,
+                    ),
+                    service_cache={},
+                )
+
+        self.assertEqual(emit_audit_event.call_count, 2)
+        attempt = emit_audit_event.call_args_list[0].kwargs
+        self.assertEqual(attempt["action"], FullSyncAction.EVENT)
+        self.assertEqual(attempt["status"], AuditStatus.ATTEMPT)
+
+        failure = emit_audit_event.call_args_list[1].kwargs
+        self.assertEqual(failure["action"], FullSyncAction.EVENT)
+        self.assertEqual(failure["status"], AuditStatus.FAILURE)
+        self.assertEqual(failure["level"], AuditLevel.WARNING)
+        metadata = failure["metadata"]
+        self.assertIsInstance(metadata, FullSyncEventAuditMetadata)
+        self.assertEqual(metadata.connector, SyncConnector.CHANNEL_TALK)
+        self.assertIsNone(metadata.context)
+        self.assertIsNone(metadata.error_summary)
 
     async def test_handler_rejects_unknown_target_type(self) -> None:
         with patch(

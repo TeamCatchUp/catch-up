@@ -6,6 +6,9 @@ from unittest.mock import patch
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from catchup.audit.actions import SyncTriggerAction
+from catchup.audit.base import AuditStatus
+from catchup.audit.metadata import FullSyncTriggerMetadata
 from catchup.auth.dependencies import require_admin_user
 from catchup.connectors.channel_talk.schemas.channel_connection import (
     ChannelTalkCredentialsRecord,
@@ -307,6 +310,56 @@ class ChannelTalkSyncApiTests(TestCase):
             ],
         )
         self.assertIsNotNone(dispatch_request.sync_from_ts)
+
+    def test_post_full_emits_audit_attempt_and_success(self) -> None:
+        stub_service = _StubFullSyncService()
+
+        with (
+            patch(
+                "catchup.server.sync.api.get_full_sync_service",
+                return_value=stub_service,
+            ),
+            patch("catchup.audit.utils.emit_audit_event") as emit_audit_event,
+        ):
+            response = self.client.post(
+                "/api/v1/sync/full",
+                json={
+                    "connector": "channel_talk",
+                    "scope_id": CHANNEL_ID,
+                    "targets": [
+                        {
+                            "target_type": "channel",
+                            "target_id": CHANNEL_ID,
+                        }
+                    ],
+                    "sync_days": 7,
+                },
+            )
+
+        self.assertEqual(response.status_code, 202)
+        self.assertEqual(emit_audit_event.call_count, 2)
+
+        attempt = emit_audit_event.call_args_list[0].kwargs
+        self.assertEqual(attempt["action"], SyncTriggerAction.FULL_SYNC_REQUEST)
+        self.assertEqual(attempt["status"], AuditStatus.ATTEMPT)
+        self.assertIsInstance(attempt["metadata"], FullSyncTriggerMetadata)
+        self.assertEqual(attempt["metadata"].connector, SyncConnector.CHANNEL_TALK)
+        self.assertEqual(attempt["metadata"].scope_id, CHANNEL_ID)
+        self.assertEqual(
+            attempt["metadata"].targets,
+            [{"target_type": "channel", "target_id": CHANNEL_ID}],
+        )
+        self.assertEqual(attempt["metadata"].sync_days, 7)
+        self.assertIsNone(attempt["metadata"].job_id)
+        self.assertIsNone(attempt["metadata"].event_ids)
+
+        success = emit_audit_event.call_args_list[1].kwargs
+        self.assertEqual(success["action"], SyncTriggerAction.FULL_SYNC_REQUEST)
+        self.assertEqual(success["status"], AuditStatus.SUCCESS)
+        metadata = success["metadata"]
+        self.assertIsInstance(metadata, FullSyncTriggerMetadata)
+        self.assertEqual(metadata.job_id, "job-123")
+        self.assertEqual(metadata.event_ids, ["event-123"])
 
     def test_post_full_rejects_missing_scope_id(self) -> None:
         stub_service = _StubFullSyncService()
