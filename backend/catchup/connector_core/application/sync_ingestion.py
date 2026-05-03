@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from catchup.connector_core.application.sync_ingestion_logging import sync_ingestion_system_log
 from catchup.connector_core.ports.sync_ingestion import ExecutionRequestT
 from catchup.connector_core.ports.sync_ingestion import ExecutionResultT
 from catchup.connector_core.ports.sync_ingestion import FetchResultT
@@ -10,6 +11,7 @@ from catchup.connector_core.ports.sync_ingestion import SyncWindow
 from catchup.connector_core.ports.sync_ingestion import TransformResultT
 
 
+@sync_ingestion_system_log
 async def run_sync_ingestion(
     *,
     port: SyncIngestionPort[
