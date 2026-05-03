@@ -28,11 +28,16 @@ from catchup.connectors.channel_talk.schemas.document_connection import (
     ChannelTalkDocumentCredentialsRecord,
 )
 from catchup.db.models import SyncConnector
+from catchup.db.models import SyncJobStatus
 from catchup.db.models import SyncType
+from catchup.sync.common.schemas import ClaimState
 from catchup.sync.common.schemas import FullSyncContext
 from catchup.sync.common.schemas import HandlerKey
 from catchup.sync.common.schemas import IncrementalSyncContext
+from catchup.sync.common.schemas import SyncStreamMessage
+from catchup.sync.common.schemas import SyncStreamTask
 from catchup.sync.common.schemas import SyncTargetType
+from catchup.worker.full_sync_processor import process_full_sync_message
 from catchup.worker.handlers.channel_talk_full_sync_handler import (
     ChannelTalkFullSyncHandler,
 )
@@ -40,6 +45,8 @@ from catchup.worker.handlers.channel_talk_incremental_handler import (
     ChannelTalkIncrementalHandler,
 )
 from catchup.worker.registry import get_ingestion_handler
+from catchup.worker.schemas import ClaimResult
+from catchup.worker.schemas import JobFinalizeResult
 
 CHANNEL_ID = "channel-123"
 SPACE_ID = "space-123"
@@ -59,6 +66,8 @@ _LOAD_INCREMENTAL_DOCUMENT_CONNECTION = (
 )
 _RUN_INCREMENTAL_THREADPOOL = f"{_INCREMENTAL_HANDLER_MODULE}.run_in_threadpool"
 _RUN_INCREMENTAL_SYNC_INGESTION = f"{_INCREMENTAL_HANDLER_MODULE}.run_sync_ingestion"
+_FULL_SYNC_PROCESSOR_MODULE = "catchup.worker.full_sync_processor"
+_PROCESSOR_RUN_IN_THREADPOOL = f"{_FULL_SYNC_PROCESSOR_MODULE}.run_in_threadpool"
 
 
 def _build_connection_record(
@@ -214,6 +223,101 @@ class ChannelTalkFullSyncHandlerTests(IsolatedAsyncioTestCase):
         self.assertEqual(sync_window.window_end, fixed_now)
         self.assertEqual(result.error_count, 0)
         self.assertFalse(result.skipped)
+
+    async def test_processor_records_channel_talk_full_sync_job_and_event_audit(
+        self,
+    ) -> None:
+        context = _build_context()
+        message = SyncStreamMessage(
+            message_id="message-123",
+            task=SyncStreamTask.full(
+                event_id=context.event_id,
+                job_id=context.job_id,
+                connector=context.connector,
+                scope_id=context.scope_id,
+                target_type=context.target_type,
+                target_id=context.target_id,
+                sync_from_ts=context.sync_from_ts,
+                attempt=context.attempt,
+                max_attempts=context.max_attempts,
+            ),
+        )
+
+        with (
+            patch(
+                f"{_FULL_SYNC_PROCESSOR_MODULE}.claim_event",
+                return_value=ClaimResult(
+                    state=ClaimState.CLAIMED,
+                    context=context,
+                    job_started=True,
+                    total_targets=1,
+                ),
+            ),
+            patch(
+                f"{_FULL_SYNC_PROCESSOR_MODULE}.select_handler",
+                return_value=self.handler,
+            ),
+            patch(
+                f"{_FULL_SYNC_PROCESSOR_MODULE}.mark_event_success_sync",
+                return_value=True,
+            ),
+            patch(
+                f"{_FULL_SYNC_PROCESSOR_MODULE}.finalize_job_if_done_sync",
+                return_value=JobFinalizeResult(
+                    finalized=True,
+                    status=SyncJobStatus.SUCCESS,
+                    total_targets=1,
+                    completed_targets=1,
+                    failed_targets=0,
+                    requeued_targets=0,
+                ),
+            ),
+            patch(_PROCESSOR_RUN_IN_THREADPOOL, _run_immediately),
+            patch(
+                _LOAD_CONNECTION,
+                return_value=_build_connection_record(),
+            ),
+            patch(
+                _RUN_SYNC_INGESTION,
+                AsyncMock(return_value=_build_application_result(persisted_count=5)),
+            ),
+            patch(f"{_FULL_SYNC_PROCESSOR_MODULE}.emit_audit_event") as job_audit,
+            patch("catchup.audit.utils.emit_audit_event") as event_audit,
+        ):
+            await process_full_sync_message(message, service_cache={})
+
+        self.assertEqual(job_audit.call_count, 2)
+        job_attempt = job_audit.call_args_list[0].kwargs
+        self.assertEqual(job_attempt["action"], FullSyncAction.JOB)
+        self.assertEqual(job_attempt["status"], AuditStatus.ATTEMPT)
+        self.assertEqual(job_attempt["metadata"].connector, SyncConnector.CHANNEL_TALK)
+        self.assertEqual(job_attempt["metadata"].scope_id, CHANNEL_ID)
+        self.assertEqual(job_attempt["metadata"].job_id, "job-123")
+        self.assertEqual(job_attempt["metadata"].total_targets, 1)
+
+        job_success = job_audit.call_args_list[1].kwargs
+        self.assertEqual(job_success["action"], FullSyncAction.JOB)
+        self.assertEqual(job_success["status"], AuditStatus.SUCCESS)
+        self.assertEqual(job_success["metadata"].completed_targets, 1)
+        self.assertEqual(job_success["metadata"].failed_targets, 0)
+
+        self.assertEqual(event_audit.call_count, 2)
+        event_attempt = event_audit.call_args_list[0].kwargs
+        self.assertEqual(event_attempt["action"], FullSyncAction.EVENT)
+        self.assertEqual(event_attempt["status"], AuditStatus.ATTEMPT)
+        self.assertEqual(
+            event_attempt["metadata"].connector,
+            SyncConnector.CHANNEL_TALK,
+        )
+        self.assertEqual(event_attempt["metadata"].event_id, "event-123")
+        self.assertEqual(event_attempt["metadata"].target_type, SyncTargetType.CHANNEL)
+        self.assertEqual(event_attempt["metadata"].target_id, CHANNEL_ID)
+
+        event_success = event_audit.call_args_list[1].kwargs
+        self.assertEqual(event_success["action"], FullSyncAction.EVENT)
+        self.assertEqual(event_success["status"], AuditStatus.SUCCESS)
+        self.assertEqual(event_success["metadata"].synced_count, 5)
+        self.assertEqual(event_success["metadata"].error_count, 0)
 
     async def test_handler_emits_full_sync_event_audit_attempt_and_success(
         self,
