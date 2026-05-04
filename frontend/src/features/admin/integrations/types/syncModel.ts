@@ -101,37 +101,6 @@ export interface SyncTargetsResponse {
   targets: SyncTargetItem[];
 }
 
-// ─── Scope 선택용 타입 ───
-
-/** GitHub scope — GET /github/installations */
-export interface GithubInstallation {
-  installation_id: number;
-  account_login: string;
-  account_type: string;
-}
-
-/** Slack scope — GET /auth/slack/status */
-export interface SlackWorkspace {
-  team_id: string;
-  team_name: string;
-}
-export interface SlackInstallationStatus {
-  installed: boolean;
-  workspaces: SlackWorkspace[];
-}
-
-/** Atlassian scope (Jira + Confluence 공용) — GET /auth/atlassian/status */
-export interface AtlassianResource {
-  id: string;
-  name: string;
-  url: string;
-  scopes: string[];
-}
-export interface AtlassianInstallationStatus {
-  installed: boolean;
-  resources: AtlassianResource[];
-}
-
 // ─── UI 상태 타입 ───
 
 /** 커넥터 카드 버튼 상태 */

@@ -28,10 +28,6 @@ export const API = {
     queryDetail: (messageId: number) => `${API_PREFIX}/rooms/queries/${messageId}/detail`, // GET 질문-답변 상세 (QA 1쌍)
   },
 
-  github: {
-    installations: `${API_PREFIX}/github/installations`, // GET 설치된 GitHub App 목록
-  },
-
   jira: {
     install: `${API_PREFIX}/auth/jira/install`, // GET OAuth 인가 URL로 리다이렉트
     uninstall: `${API_PREFIX}/auth/jira/uninstall`, // DELETE 연동 해제 (?cloud_id=)
@@ -39,13 +35,11 @@ export const API = {
 
   slack: {
     install: `${API_PREFIX}/auth/slack/install`, // GET OAuth 인가 URL로 리다이렉트
-    status: `${API_PREFIX}/auth/slack/status`, // GET 연동 상태 + workspaces
     uninstall: `${API_PREFIX}/auth/slack/uninstall`, // DELETE 연동 해제 (?team_id=)
   },
 
   atlassian: {
     install: `${API_PREFIX}/auth/atlassian/install`, // GET OAuth 인가 URL로 리다이렉트 (Jira + Confluence)
-    status: `${API_PREFIX}/auth/atlassian/status`, // GET 연동 상태 + resources (scope_id 획득용)
   },
 
   // 통합 연결 상태 — vendor별 OAuth/credential 연결 상태 + scope_id 획득용
