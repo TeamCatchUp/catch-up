@@ -44,15 +44,9 @@ export default function ChannelTalkDocumentSpaceCard({
   const fieldState: 'idle' | 'error' = status === 'error' ? 'error' : 'idle';
   const canTestConnection = isDocumentSpaceSecretsFilled(documentSpace);
 
-  // 좌측 column 자체 minimum이 우측 form minimum보다 커지면 outer가 좌측에 의해 결정되고
-  // 우측 form이 stretch되면서 row 아래에 빈 공간이 padding처럼 생김. gap-2(8) + pb 제거로
-  // 좌측 min을 줄여 outer가 우측에 맞춰지도록 → row 아래 빈 공간 0, line은 자동 stretch로 약 10px 표시.
   const leftColumn = (
-    <div className="flex shrink-0 flex-col items-center gap-2">
-      <div className="bg-fill-primary-normal-neutral flex size-8 shrink-0 items-center justify-center rounded-lg">
-        <IconBook className="text-icon-primary size-5" />
-      </div>
-      <div className="bg-edge-neutral min-h-px w-px flex-1" aria-hidden />
+    <div className="bg-fill-primary-normal-neutral flex size-8 shrink-0 items-center justify-center rounded-lg">
+      <IconBook className="text-icon-primary size-5" />
     </div>
   );
 
