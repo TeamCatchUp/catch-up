@@ -56,6 +56,7 @@ from catchup.server.connector.slack.webhook_api import router as slack_webhook_r
 from catchup.server.error_handlers import register_exception_handlers
 from catchup.server.initialization import ensure_pg_indices
 from catchup.server.initialization import ensure_vector_index
+from catchup.server.integrations.api import router as integrations_router
 from catchup.server.mapping.api import router as github_mapping_csv_router
 from catchup.server.middleware.request_context import request_context_middleware
 from catchup.server.onboarding.api import router as onboarding_router
@@ -444,6 +445,7 @@ register_exception_handlers(app)
 app.include_router(chat_router)
 app.include_router(chatroom_router)
 app.include_router(auth_router)
+app.include_router(integrations_router)
 app.include_router(admin_router)
 app.include_router(channel_talk_admin_router)
 app.include_router(channel_talk_webhook_router)
