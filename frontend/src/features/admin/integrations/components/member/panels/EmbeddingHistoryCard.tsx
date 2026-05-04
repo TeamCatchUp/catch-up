@@ -2,7 +2,7 @@ import { useState } from 'react';
 
 import IconCheckCircleFilled from '@/public/icons/icon/check_circle_filled.svg';
 import IconErrorFilled from '@/public/icons/icon/error_filled.svg';
-import { cn } from '@/shared/utils/cn';
+import { Chip } from '@/shared/components/ui/chips';
 
 import type { GapSummary } from '../../../hooks/useEmbeddingGaps';
 import { useSyncRecordRetry } from '../../../queries/syncRecords.mutations';
@@ -83,21 +83,15 @@ export default function EmbeddingHistoryCard({
           <span className="text-body-small text-content-normal">임베딩 히스토리</span>
           <div className="flex items-center gap-0.5">
             {filterOptions.map(({ value, label, count, hasRedTag }) => (
-              <button
-                key={value}
-                type="button"
-                onClick={() => setFilter(value)}
-                className={cn(
-                  'text-body-small relative h-9 cursor-pointer rounded-full px-3',
-                  filter === value ? 'border-edge-strong bg-fill-normal border' : 'text-content-alternative',
-                )}
-              >
-                {label}
-                {count !== undefined && ` ${count}`}
+              <div key={value} className="relative">
+                <Chip variant="outline" selected={filter === value} onClick={() => setFilter(value)}>
+                  {label}
+                  {count !== undefined && ` ${count}`}
+                </Chip>
                 {hasRedTag && (
-                  <span className="bg-status-destructive absolute top-1.5 right-1.5 size-1.5 rounded-full" />
+                  <span className="bg-status-destructive pointer-events-none absolute top-1.5 right-1.5 size-1.5 rounded-full" />
                 )}
-              </button>
+              </div>
             ))}
           </div>
         </div>

@@ -14,6 +14,7 @@ const chipVariants = cva(
       variant: {
         square: 'gap-1 rounded-lg px-2 py-1.5',
         capsule: 'gap-1.5 rounded-full px-3 py-1.5',
+        outline: 'gap-1 rounded-full px-3 py-1.5',
       },
       selected: {
         true: '',
@@ -44,6 +45,18 @@ const chipVariants = cva(
         variant: 'capsule',
         selected: true,
         class: 'bg-accent-green-lighten border-accent-green-neutral text-accent-green',
+      },
+      /* outline — selected에 border + bg, unselected는 텍스트만 노출하는 toggle 패턴 */
+      {
+        variant: 'outline',
+        selected: false,
+        class:
+          'bg-transparent border-transparent text-content-alternative hover:bg-fill-interaction-hover hover:text-content-normal active:bg-fill-interaction-pressed',
+      },
+      {
+        variant: 'outline',
+        selected: true,
+        class: 'bg-fill-normal border-edge-strong text-content-normal',
       },
     ],
     defaultVariants: {
