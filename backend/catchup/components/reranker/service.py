@@ -5,7 +5,7 @@ from copy import copy
 from functools import partial
 
 import structlog
-
+from botocore.config import Config
 from langchain_aws import BedrockRerank
 from langchain_aws.utils import create_aws_client
 from langchain_cohere import CohereRerank
@@ -79,9 +79,15 @@ class CohereRerankService(BaseRerankService):
 
 class AwsBedrockRerankService(BaseRerankService):
     def _create_reranker(self) -> BaseDocumentCompressor:
+        config = Config(
+            read_timeout=50,
+            connect_timeout=5,
+            retries={"max_attempts": 0, "mode": "standard"},
+        )
         client = create_aws_client(
             service_name="bedrock-agent-runtime",
-            region_name=settings.AWS_RERANK_MODEL_REGION
+            region_name=settings.AWS_RERANK_MODEL_REGION,
+            config=config,
         )
         return BedrockRerank(
             model_arn=settings.AWS_RERANK_MODEL_ARN,
@@ -102,14 +108,15 @@ class AwsBedrockRerankService(BaseRerankService):
         # self.reranker는 싱글톤 공유 객체이므로 top_n 설정 시 race condition 방지를 위해 copy 사용
         reranker = copy(self.reranker)
         reranker.top_n = top_n
-
-        executor = rag_executors.bedrock_rerank
+        
+                
+        executor = rag_executors.rerank_executor
         logger.info(
-            "bedrock_rerank_executor_state",
+            "rerank_executor_state",
             queue_size=executor._work_queue.qsize(),
             active_threads=len(executor._threads),
             max_workers=executor._max_workers,
-            doc_count=len(documents),
+            doc_count=len(documents)
         )
 
         loop = asyncio.get_running_loop()

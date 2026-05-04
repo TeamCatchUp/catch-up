@@ -21,6 +21,7 @@ class MetadataSyncRequest(BaseModel):
     """메타데이터 동기화에 필요한 최소 입력을 고정한다."""
     connector: ConnectorKey
     tenant_id: str
+    target_id: str | None = None
 
 
 class MetadataSyncStepResult(BaseModel):
@@ -64,6 +65,7 @@ class MetadataSyncPlan:
 class MetadataSyncResult(BaseModel):
     connector: ConnectorKey
     tenant_id: str
+    target_id: str | None = None
     # Map of step_name + StepResult
     steps: dict[str, MetadataSyncStepResult] = Field(default_factory=dict)
 

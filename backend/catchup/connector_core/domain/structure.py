@@ -11,9 +11,3 @@ class ConnectorKey(StrEnum):
 
 class ConnectorBoundary(StrEnum):
     TENANT = "tenant"
-
-
-class ConnectorStage(StrEnum):
-    METADATA = "metadata"
-    USER_CHAT_LIST = "user_chat_list"
-    MESSAGE = "message"

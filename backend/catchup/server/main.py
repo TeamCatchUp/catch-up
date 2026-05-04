@@ -42,7 +42,12 @@ from catchup.server.auth.api import router as auth_router
 from catchup.server.chat.api import router as chat_router
 from catchup.server.chat_room.api import router as chatroom_router
 from catchup.server.connector.atlassian.auth_api import router as atlassian_auth_router
-from catchup.server.connector.channel_talk.admin_api import router as channel_talk_admin_router
+from catchup.server.connector.channel_talk.admin_api import (
+    router as channel_talk_admin_router,
+)
+from catchup.server.connector.channel_talk.webhook_api import (
+    router as channel_talk_webhook_router,
+)
 from catchup.server.connector.github.auth_api import router as github_auth_router
 from catchup.server.connector.github.webhook_api import router as github_webhook_router
 from catchup.server.connector.jira.webhook_api import router as jira_webhook_router
@@ -54,6 +59,7 @@ from catchup.server.initialization import ensure_vector_index
 from catchup.server.mapping.api import router as github_mapping_csv_router
 from catchup.server.middleware.request_context import request_context_middleware
 from catchup.server.onboarding.api import router as onboarding_router
+from catchup.server.search.api import router as search_router
 from catchup.server.settings.api import router as settings_router
 from catchup.server.state import state
 from catchup.server.stats.api import router as stats_router
@@ -70,6 +76,7 @@ from catchup.worker.worker_event_processor import run_forever as run_sync_worker
 debug_mode = settings.ENV == "development" and settings.DEBUGGER_ENABLED
 if debug_mode:
     import debugpy
+
     debugpy.listen(("0.0.0.0", settings.DEBUGGER_PORT))
     # debugpy.wait_for_client()
 
@@ -80,10 +87,7 @@ logger = structlog.get_logger()
 
 # debugpy 연결 정보 출력
 if debug_mode:
-    logger.info(
-        "debugpy_attachment_success",
-        port=settings.DEBUGGER_PORT
-    )
+    logger.info("debugpy_attachment_success", port=settings.DEBUGGER_PORT)
 
 # 버전 정보 출력
 version = settings.APP_VERSION
@@ -102,15 +106,16 @@ bus.subscribe(EventTopic.AUDIT, audit_event_handler)
 # 토큰 사용 이벤트 리스너 등록
 bus.subscribe(EventTopic.COST, chat_token_usage_handler)
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
 
     logger.info(
         "global_logging_config",
         context="server_startup",
-        log_level=str(settings.LOG_LEVEL).upper()
+        log_level=str(settings.LOG_LEVEL).upper(),
     )
-    
+
     sync_worker_stop_event: asyncio.Event | None = None
     sync_worker_task: asyncio.Task | None = None
     uploader_task: asyncio.Task | None = None  # S3 감사로그 업로드
@@ -125,18 +130,13 @@ async def lifespan(app: FastAPI):
         )
 
     if settings.AWS_S3_AUDIT_ENABLED:
-        logger.info(
-            "s3_audit_file_uploader_inititated",
-            context="server_startup"
-        )
+        logger.info("s3_audit_file_uploader_inititated", context="server_startup")
         uploader_task = asyncio.create_task(audit_log_uploader_task())
 
     # TODO: depenendcy-injector 기반으로 생명 주기 관리 검토
     # Ingestion용 pgvector_repo 생성
     try:
-        embeddings = get_embedding_service(
-            EmbeddingProvider.AWS_BEDROCK
-        ).get_embedder()
+        embeddings = get_embedding_service(EmbeddingProvider.AWS_BEDROCK).get_embedder()
         pgvector_repo = get_pgvector_repository(embeddings)  # Ingestion
         await pgvector_repo.initialize(ensure_pg_indices)
         if settings.PGVECTOR_HNSW_INDEX_ENABLED:
@@ -146,7 +146,7 @@ async def lifespan(app: FastAPI):
             result="success",
             context="server_startup",
         )
-        
+
     except Exception as e:
         logger.error(
             "pgvector_repository_initialized",
@@ -183,16 +183,16 @@ async def lifespan(app: FastAPI):
             ),
             immediate=True,
         )
-        
+
     try:
         rag_semaphores.init(
-            small_model_sema_value=settings.AWS_BEDROCK_SMALL_MODEL_SEMA_VALUE,
-            large_model_sema_value=settings.AWS_BEDROCK_LARGE_MODEL_SEMA_VALUE,
-            rerank_sema_value=settings.AWS_BEDROCK_RERANK_SEMA_VALUE,
+            small_llm_value=settings.AWS_BEDROCK_SMALL_MODEL_SEMA_VALUE,
+            large_llm_value=settings.AWS_BEDROCK_LARGE_MODEL_SEMA_VALUE,
+            reranker_value=settings.AWS_BEDROCK_RERANK_SEMA_VALUE,
         )
         rag_executors.init(
             vector_search_size=settings.RAG_VECTOR_SEARCH_THREAD_POOL_SIZE,
-            bedrock_rerank_size=settings.RAG_BEDROCK_RERANK_THREAD_POOL_SIZE,
+            rerank_size=settings.RAG_BEDROCK_RERANK_THREAD_POOL_SIZE,
             llm_size=settings.RAG_LLM_THREAD_POOL_SIZE,
         )
     except:
@@ -260,14 +260,12 @@ async def lifespan(app: FastAPI):
 
     if settings.SYNC_WORKER_AUTOSTART:
         sync_worker_stop_event = asyncio.Event()
-        sync_worker_task = asyncio.create_task(
-            run_sync_worker(sync_worker_stop_event)
-        )
+        sync_worker_task = asyncio.create_task(run_sync_worker(sync_worker_stop_event))
         logger.info(
             "in_process_worker_started",
             context="sync_worker",
         )
-        
+
     try:
         with SessionLocal() as db:
             # 어드민 온보딩 여부 테스트
@@ -278,7 +276,9 @@ async def lifespan(app: FastAPI):
                 is_admin_initiated=state.is_admin_initiated,
             )
             # 어드민 CSV 파일 최초 업로드 여부
-            state.has_ever_uploaded_user_list_export = has_csv_file_ever_been_uploaded(db)
+            state.has_ever_uploaded_user_list_export = has_csv_file_ever_been_uploaded(
+                db
+            )
             logger.info(
                 "user_list_csv_upload_status_checked",
                 context="server_startup",
@@ -292,14 +292,14 @@ async def lifespan(app: FastAPI):
                 context="server_startup",
                 resolved_count=resolved_count,
             )
-            
+
     except Exception as e:
         logger.critical(
             "admin_initiation_check_failed",
             context="server_startup",
             error=str(e),
         )
-        
+
     try:
         init_langfuse()
     except Exception as e:
@@ -308,9 +308,9 @@ async def lifespan(app: FastAPI):
             context="server_startup",
             error=str(e),
         )
-        
+
     yield
-    
+
     # 서버 종료 전 감사로그 파일 S3 업로드
     if uploader_task:
         # 백그라운드 작업 취소
@@ -319,7 +319,7 @@ async def lifespan(app: FastAPI):
             await uploader_task
         except asyncio.CancelledError:
             pass
-        
+
         try:
             await graceful_shutdown()
             logger.info(
@@ -415,7 +415,7 @@ async def lifespan(app: FastAPI):
             ),
             immediate=True,
         )
-        
+
     try:
         await _shared_client.aclose()
     except Exception as e:
@@ -425,6 +425,7 @@ async def lifespan(app: FastAPI):
             error=str(e),
             exc_info=True,
         )
+
 
 # MAIN
 app = FastAPI(
@@ -445,6 +446,7 @@ app.include_router(chatroom_router)
 app.include_router(auth_router)
 app.include_router(admin_router)
 app.include_router(channel_talk_admin_router)
+app.include_router(channel_talk_webhook_router)
 app.include_router(github_auth_router)
 app.include_router(github_webhook_router)
 app.include_router(atlassian_auth_router)
@@ -456,17 +458,19 @@ app.include_router(onboarding_router)
 app.include_router(settings_router)
 app.include_router(sync_runtime_router)
 app.include_router(stats_router)
+app.include_router(search_router)
 app.include_router(audit_router)
 
 if settings.MCP_SERVER_ENABLED:
     from catchup.mcp.server import mcp as mcp_server
+
     app.mount("/api/mcp", mcp_server.sse_app())
 
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://localhost:5500", # Go Live 포트 허용
+        "http://localhost:5500",  # Go Live 포트 허용
         "http://catchup_web:3000",
     ],
     allow_credentials=True,
@@ -477,6 +481,7 @@ app.add_middleware(
 # 미들웨어 등록
 if settings.PYINSTRUMENT_ENABLED:
     from catchup.server.middleware.pyinstrument import profile_middleware
+
     app.middleware("http")(profile_middleware)
 app.middleware("http")(request_context_middleware)
 

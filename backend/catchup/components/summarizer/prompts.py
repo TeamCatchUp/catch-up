@@ -81,7 +81,16 @@ EXTRACTION_GUIDE: dict[str, str] = {
 - Extract the main topic of the thread and the final conclusion (Contextual/Outcome).
 - Identify key participants and their specific technical inputs or troubleshooting steps (Who/Execution).
 - Extract agreed-upon technical decisions or action items (Outcome).
-- Ignore informal greetings; extract informal context ONLY if it holds business or technical value."""
+- Ignore informal greetings; extract informal context ONLY if it holds business or technical value.""",
+
+    "channel_talk_user_chat": """\
+[Extraction Guide: Channel Talk UserChat]
+- Extract the customer's core request, problem, intent, or support need from the conversation and the UserChat description.
+- Preserve meaningful customer-support context: what the customer asked, how managers responded, what guidance or links were provided, and whether the issue was resolved or is still pending.
+- Use manager names and the Customer role to clarify who said or did what, but do not include non-semantic metadata such as platform IDs, channel IDs, userChat IDs, or message counts.
+- Include form submissions, selected options, file names, buttons, and shared links only when they clarify the customer's request, collected information, or support outcome.
+- Treat internal manager discussion as context only when it affects troubleshooting, decision making, or the final customer-facing response.
+- Ignore boilerplate greetings, lifecycle noise, and repetitive system events unless they materially change the support state."""
 }
 
 FEW_SHOT_EXAMPLES: dict[str, str] = {

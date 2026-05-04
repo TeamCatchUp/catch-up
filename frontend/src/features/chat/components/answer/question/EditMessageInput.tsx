@@ -4,10 +4,12 @@ import { useEffect, useRef, useState } from 'react';
 
 import { cn } from '@/shared/utils/cn';
 
+const MAX_TEXTAREA_HEIGHT_PX = 200;
+
 interface EditMessageInputProps {
   initialContent: string;
   onCancel: () => void;
-  onSubmit: (newContent: string) => void;
+  onSubmit: (newContent: string) => Promise<void>;
 }
 
 export default function EditMessageInput({ initialContent, onCancel, onSubmit }: EditMessageInputProps) {
@@ -25,8 +27,8 @@ export default function EditMessageInput({ initialContent, onCancel, onSubmit }:
   useEffect(() => {
     if (textAreaRef.current) {
       textAreaRef.current.style.height = 'auto';
-      const newHeight = Math.min(textAreaRef.current.scrollHeight, 110);
-      textAreaRef.current.style.height = newHeight + 'px';
+      const newHeight = Math.min(textAreaRef.current.scrollHeight, MAX_TEXTAREA_HEIGHT_PX);
+      textAreaRef.current.style.height = `${newHeight}px`;
     }
   }, [editText]);
 
@@ -42,7 +44,7 @@ export default function EditMessageInput({ initialContent, onCancel, onSubmit }:
   return (
     <div
       className={cn(
-        'bg-fill-normal flex flex-col gap-2.5 rounded-2xl border px-4.5 py-2.5',
+        'bg-fill-normal flex flex-col gap-2.5 rounded-2xl border-[1.5px] p-4',
         isFocused ? 'border-edge-primary' : 'border-edge-neutral',
       )}
     >
@@ -61,9 +63,9 @@ export default function EditMessageInput({ initialContent, onCancel, onSubmit }:
             onCancel();
           }
         }}
-        className="text-body-medium text-content-normal box-border h-6.5 w-full resize-none overflow-y-auto px-1 outline-none"
+        className="text-body-small text-content-normal box-border w-full resize-none overflow-y-auto outline-none"
       />
-      <div className="flex items-center justify-end gap-2">
+      <div className="flex items-center justify-end gap-2.5">
         <button
           onClick={onCancel}
           className="capsule-button-outline-mono flex shrink-0 cursor-pointer items-center justify-center px-3 py-1.5"

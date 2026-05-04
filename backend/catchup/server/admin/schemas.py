@@ -1,10 +1,15 @@
 from datetime import datetime
 from enum import StrEnum
-from typing import List, Optional
-from pydantic import BaseModel, ConfigDict, EmailStr
+from typing import List
+from typing import Optional
 
+from pydantic import BaseModel
+from pydantic import ConfigDict
+from pydantic import EmailStr
+
+from catchup.db.models import JobLevel
 from catchup.db.models import UserRole
-from catchup.db.models import JobLevel, UserRole, UserStatus
+from catchup.db.models import UserStatus
 
 
 class PreMappingInfo(BaseModel):
@@ -23,6 +28,7 @@ class SyncStatusCounts(BaseModel):
     slack: SourceUserCount
     github: SourceUserCount
     confluence: SourceUserCount
+    channel_talk: SourceUserCount
 
 
 class UserSyncMapping(BaseModel):
@@ -32,6 +38,7 @@ class UserSyncMapping(BaseModel):
     atlassian: PreMappingInfo | None = None
     slack: PreMappingInfo | None = None
     github: PreMappingInfo | None = None
+    channel_talk: PreMappingInfo | None = None
 
 
 class UserSyncStatusResponse(BaseModel):
@@ -51,6 +58,7 @@ class ConnectorStatusSource(StrEnum):
     JIRA = "jira"
     SLACK = "slack"
     CONFLUENCE = "confluence"
+    CHANNEL_TALK = "channel_talk"
 
 
 class ConnectorResourceType(StrEnum):
@@ -58,6 +66,12 @@ class ConnectorResourceType(StrEnum):
     PROJECTS = "projects"
     CHANNELS = "channels"
     SPACES = "spaces"
+    CHANNEL_TALK_TARGETS = "channel_talk_targets"
+
+
+class ChannelTalkConnectorTargetType(StrEnum):
+    CHANNEL = "channel"
+    SPACE = "space"
 
 
 class AdminConnectorTargetRangeResponse(BaseModel):
@@ -72,11 +86,18 @@ class AdminConnectorTargetRangeResponse(BaseModel):
     latest: str | None
 
 
+class AdminChannelTalkConnectorTargetRangeResponse(AdminConnectorTargetRangeResponse):
+    target_type: ChannelTalkConnectorTargetType
+
+
 class AdminConnectorStatusResponse(BaseModel):
     source: ConnectorStatusSource
     resource_type: ConnectorResourceType
     total_targets: int
-    targets: list[AdminConnectorTargetRangeResponse]
+    targets: list[
+        AdminChannelTalkConnectorTargetRangeResponse
+        | AdminConnectorTargetRangeResponse
+    ]
 
 
 # 1. 프론트엔드에서 받을 Request Schema (변수명 통일 및 필수값 추가)

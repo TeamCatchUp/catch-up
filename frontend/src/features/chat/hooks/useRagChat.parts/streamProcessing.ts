@@ -8,7 +8,6 @@ import {
 } from '@/features/chat/hooks/useRagChat.parts/streamMessageUpdater';
 import type { SourceResponse, StreamEvent } from '@/features/chat/types';
 import { normalizeStreamSources } from '@/features/chat/utils/normalize/normalizeRagSources';
-import { normalizeRelatedJiraIssues } from '@/features/chat/utils/normalize/normalizeRelatedJiraIssues';
 
 import type { ChatStateSetters, SessionGuardRefs, StreamRuntimeRefs } from './types';
 
@@ -39,7 +38,6 @@ interface UseStreamProcessingReturn {
   appendAssistantAnswer: (
     answer?: string,
     sources?: SourceResponse[],
-    relatedJiraIssues?: SourceResponse[],
     chatHistoryId?: string,
     hasFeedback?: boolean,
   ) => void;
@@ -153,18 +151,11 @@ export const useStreamProcessing = ({
    * - latestSourcesRef/latestUiSourcesRef도 함께 갱신
    */
   const appendAssistantAnswer = useCallback(
-    (
-      answer = '',
-      sources: SourceResponse[] = [],
-      relatedJiraIssues: SourceResponse[] = [],
-      chatHistoryId?: string,
-      hasFeedback?: boolean,
-    ) => {
+    (answer = '', sources: SourceResponse[] = [], chatHistoryId?: string, hasFeedback?: boolean) => {
       setChatData((prev) => {
         if (!prev) return prev;
 
         const uiSources = normalizeStreamSources(sources);
-        const detailedTasks = normalizeRelatedJiraIssues(relatedJiraIssues);
         latestSourcesRef.current = sources;
         latestUiSourcesRef.current = uiSources;
 
@@ -178,7 +169,6 @@ export const useStreamProcessing = ({
               ...currentMessage,
               content: answer || currentMessage.content,
               sources: uiSources.length ? uiSources : (currentMessage.sources ?? []),
-              detailed_tasks: detailedTasks,
               chat_history_id: chatHistoryId ?? currentMessage.chat_history_id,
               has_feedback: hasFeedback ?? currentMessage.has_feedback,
             };
@@ -201,7 +191,6 @@ export const useStreamProcessing = ({
               role: 'assistant',
               content: answer,
               sources: uiSources,
-              detailed_tasks: detailedTasks,
               timestamp: new Date().toISOString(),
               chat_history_id: chatHistoryId,
               has_feedback: hasFeedback,

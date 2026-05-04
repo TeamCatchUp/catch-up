@@ -1,5 +1,19 @@
 from __future__ import annotations
 
+from typing import cast
+
+from catchup.connector_core.adapters.channel_talk.documents_install_auth_adapter import (
+    ChannelTalkDocumentCredentialsStore,
+)
+from catchup.connector_core.adapters.channel_talk.documents_install_auth_adapter import (
+    ChannelTalkDocumentInstallAuthAdapter,
+)
+from catchup.connector_core.adapters.channel_talk.documents_metadata_sync_adapter import (
+    ChannelTalkDocumentMetadataStore,
+)
+from catchup.connector_core.adapters.channel_talk.documents_metadata_sync_adapter import (
+    ChannelTalkDocumentMetadataSyncAdapter,
+)
 from catchup.connector_core.adapters.channel_talk.install_auth_adapter import (
     ChannelTalkCredentialsStore,
 )
@@ -18,13 +32,46 @@ from catchup.connector_core.application.install_auth import (
 from catchup.connector_core.application.metadata_sync import (
     ConnectorMetadataSyncApplication,
 )
-from catchup.connectors.channel_talk.client import ChannelTalkApiClient
-from catchup.connectors.channel_talk.schemas import ChannelTalkConnectRequest
-from catchup.connectors.channel_talk.schemas import ChannelTalkCredentialsStatus
-from catchup.connectors.channel_talk.schemas import ChannelTalkCurrentChannel
-from catchup.connectors.channel_talk.schemas import ChannelTalkMetadataSyncRequest
-from catchup.connectors.channel_talk.schemas import ChannelTalkMetadataSyncResult
-from catchup.connectors.channel_talk.schemas import ChannelTalkUninstallResult
+from catchup.connectors.channel_talk.core.client import ChannelTalkCoreApiClient
+from catchup.connectors.channel_talk.document_space.client import (
+    ChannelTalkDocumentsApiClient,
+)
+from catchup.connectors.channel_talk.schemas.channel_connection import (
+    ChannelTalkConnectRequest,
+)
+from catchup.connectors.channel_talk.schemas.channel_connection import (
+    ChannelTalkCredentialsStatus,
+)
+from catchup.connectors.channel_talk.schemas.channel_connection import (
+    ChannelTalkUninstallResult,
+)
+from catchup.connectors.channel_talk.schemas.channel_metadata import (
+    ChannelTalkCurrentChannel,
+)
+from catchup.connectors.channel_talk.schemas.channel_metadata import (
+    ChannelTalkMetadataSyncRequest,
+)
+from catchup.connectors.channel_talk.schemas.channel_metadata import (
+    ChannelTalkMetadataSyncResult,
+)
+from catchup.connectors.channel_talk.schemas.document_connection import (
+    ChannelTalkDocumentConnectRequest,
+)
+from catchup.connectors.channel_talk.schemas.document_connection import (
+    ChannelTalkDocumentCredentialsStatus,
+)
+from catchup.connectors.channel_talk.schemas.document_connection import (
+    ChannelTalkDocumentUninstallResult,
+)
+from catchup.connectors.channel_talk.schemas.document_metadata import (
+    ChannelTalkDocumentMetadataSyncRequest,
+)
+from catchup.connectors.channel_talk.schemas.document_metadata import (
+    ChannelTalkDocumentMetadataSyncResult,
+)
+from catchup.connectors.channel_talk.schemas.document_metadata import (
+    ChannelTalkDocumentSpace,
+)
 
 
 class ChannelTalkCredentialsService:
@@ -33,7 +80,7 @@ class ChannelTalkCredentialsService:
     def __init__(
         self,
         store: ChannelTalkCredentialsStore,
-        client: ChannelTalkApiClient | None = None,
+        client: ChannelTalkCoreApiClient | None = None,
         application: ConnectorInstallAuthApplication[
             ChannelTalkConnectRequest,
             ChannelTalkCurrentChannel,
@@ -49,6 +96,7 @@ class ChannelTalkCredentialsService:
                 client=client,
             )
         )
+        self._port = cast(ChannelTalkInstallAuthAdapter, self.application.port)
 
     async def connect(
         self,
@@ -65,8 +113,14 @@ class ChannelTalkCredentialsService:
     async def get_status(self) -> ChannelTalkCredentialsStatus:
         return await self.application.get_status()
 
-    async def uninstall(self) -> ChannelTalkUninstallResult:
-        return await self.application.uninstall()
+    async def list_statuses(self) -> list[ChannelTalkCredentialsStatus]:
+        return await self._port.list_statuses()
+
+    async def uninstall(
+        self,
+        channel_id: str,
+    ) -> ChannelTalkUninstallResult:
+        return await self._port.uninstall(channel_id)
 
 
 class ChannelTalkMetadataSyncService:
@@ -75,7 +129,7 @@ class ChannelTalkMetadataSyncService:
     def __init__(
         self,
         store: ChannelTalkMetadataStore,
-        client: ChannelTalkApiClient | None = None,
+        client: ChannelTalkCoreApiClient | None = None,
         application: ConnectorMetadataSyncApplication | None = None,
     ) -> None:
         self.application = application or ConnectorMetadataSyncApplication(
@@ -92,10 +146,117 @@ class ChannelTalkMetadataSyncService:
         result = await self.application.sync_metadata(request.to_core_request())
         return ChannelTalkMetadataSyncResult.from_core_result(result)
 
-    async def sync_channel(
+    async def sync_target(
         self,
         channel_id: str,
     ) -> ChannelTalkMetadataSyncResult:
         return await self.sync_metadata(
             ChannelTalkMetadataSyncRequest(channel_id=channel_id)
         )
+
+    async def sync_channel(
+        self,
+        channel_id: str,
+    ) -> ChannelTalkMetadataSyncResult:
+        return await self.sync_target(channel_id)
+
+
+class ChannelTalkDocumentCredentialsService:
+    def __init__(
+        self,
+        store: ChannelTalkDocumentCredentialsStore,
+        client: ChannelTalkDocumentsApiClient | None = None,
+        application: ConnectorInstallAuthApplication[
+            ChannelTalkDocumentConnectRequest,
+            ChannelTalkDocumentSpace,
+            ChannelTalkDocumentCredentialsStatus,
+            ChannelTalkDocumentUninstallResult,
+        ]
+        | None = None,
+    ) -> None:
+        adapter = ChannelTalkDocumentInstallAuthAdapter(
+            store=store,
+            client=client,
+        )
+        self.application = application or ConnectorInstallAuthApplication(
+            port=adapter,
+        )
+        self._port = cast(ChannelTalkDocumentInstallAuthAdapter, self.application.port)
+
+    async def connect(
+        self,
+        request: ChannelTalkDocumentConnectRequest,
+    ) -> ChannelTalkDocumentCredentialsStatus:
+        return await self.application.connect(request)
+
+    async def validate_credentials(
+        self,
+        request: ChannelTalkDocumentConnectRequest,
+    ) -> ChannelTalkDocumentSpace:
+        return await self.application.validate_credentials(request)
+
+    async def validate_connection(
+        self,
+        request: ChannelTalkDocumentConnectRequest,
+    ) -> ChannelTalkDocumentCredentialsStatus:
+        return await self._port.validate_connection(request)
+
+    async def get_status(self) -> ChannelTalkDocumentCredentialsStatus:
+        return await self.application.get_status()
+
+    async def list_statuses(self) -> list[ChannelTalkDocumentCredentialsStatus]:
+        return await self._port.list_statuses()
+
+    async def uninstall(
+        self,
+        space_id: str,
+    ) -> ChannelTalkDocumentUninstallResult:
+        return await self._port.uninstall(space_id)
+
+
+class ChannelTalkDocumentMetadataSyncService:
+    def __init__(
+        self,
+        store: ChannelTalkDocumentMetadataStore,
+        client: ChannelTalkDocumentsApiClient | None = None,
+        application: ConnectorMetadataSyncApplication | None = None,
+    ) -> None:
+        self.application = application or ConnectorMetadataSyncApplication(
+            port=ChannelTalkDocumentMetadataSyncAdapter(
+                store=store,
+                client=client,
+            )
+        )
+
+    async def sync_metadata(
+        self,
+        request: ChannelTalkDocumentMetadataSyncRequest,
+    ) -> ChannelTalkDocumentMetadataSyncResult:
+        result = await self.application.sync_metadata(request.to_core_request())
+        return ChannelTalkDocumentMetadataSyncResult.from_core_result(result)
+
+    async def sync_target(
+        self,
+        channel_id: str,
+    ) -> ChannelTalkDocumentMetadataSyncResult:
+        return await self.sync_metadata(
+            ChannelTalkDocumentMetadataSyncRequest(channel_id=channel_id)
+        )
+
+    async def sync_space(
+        self,
+        channel_id: str,
+        space_id: str,
+    ) -> ChannelTalkDocumentMetadataSyncResult:
+        return await self.sync_metadata(
+            ChannelTalkDocumentMetadataSyncRequest(
+                channel_id=channel_id,
+                space_id=space_id,
+            )
+        )
+
+    async def sync_channel(
+        self,
+        channel_id: str,
+    ) -> ChannelTalkDocumentMetadataSyncResult:
+        return await self.sync_target(channel_id)

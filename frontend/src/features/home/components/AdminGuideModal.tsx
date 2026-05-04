@@ -63,7 +63,7 @@ export default function AdminGuideModal({ onDismiss }: AdminGuideModalProps) {
     <Dialog open onOpenChange={() => {}}>
       <DialogPortal>
         <DialogOverlay />
-        <div className="fixed inset-0 z-modal flex items-center justify-center">
+        <div className="z-modal fixed inset-0 flex items-center justify-center">
           {showCloseConfirm ? (
             <CloseConfirmContent onDismiss={handleConfirmDismiss} onNavigate={handleNavigateIntegration} />
           ) : (

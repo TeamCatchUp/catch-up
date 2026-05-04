@@ -58,11 +58,21 @@ Evaluate whether the current question is a contextual follow-up that can be answ
 {{ retrieved_docs_summary }}
 </previously_retrieved_documents>
 {% endif %}
-
 <classification_task>
 The conversation history is provided above as prior messages.
 The current user question is in the final Human message.
-Select the most appropriate pipeline_type and fill in all required parameters.
+Select the most appropriate pipeline_type and fill in all required parameters, including the **reasoning** behind your decision.
+
+**Reasoning requirements:**
+- Write in Korean.
+- **COMPACT**: Keep it under 10 words.
+- **TONE**: Use a polite but casual tone (e.g., "~군요. ~할게요", "~이네요. ~해볼게요").
+- **INSIGHT**: 질문을 그대로 반복하지 마세요. 대신 "왜 이 경로를 선택했는지"에 대한 전략적 판단을 적으세요.
+  - 나쁜 예: "슬랙봇 설정을 확인해야 하니 검색해볼게요." (동어반복)
+  - 좋은 예: "대화 이력만으론 부족하니 구체적인 설정 문서를 찾아볼게요."
+  - 좋은 예: "복합적인 분석이 필요해 보여서 여러 정보를 종합해볼게요."
+  - 좋은 예: "특정 티켓 ID가 언급되었으니 바로 검색해서 찾아낼게요."
+
 
 Decision order (follow this sequence):
 1. Can the question be answered from the conversation transcript alone (Global Context + prior AI responses), with no document content needed? → direct_answer

@@ -8,26 +8,44 @@ from typing import TypeVar
 
 from fastapi.concurrency import run_in_threadpool
 
-from catchup.connectors.channel_talk.client import ChannelTalkApiClient
+from catchup.connectors.channel_talk.core.client import ChannelTalkCoreApiClient
 from catchup.connectors.channel_talk.exceptions import ChannelTalkError
 from catchup.connectors.channel_talk.exceptions import ChannelTalkPersistenceError
-from catchup.connectors.channel_talk.schemas import ChannelTalkConnectRequest
-from catchup.connectors.channel_talk.schemas import ChannelTalkCredentialsRecord
-from catchup.connectors.channel_talk.schemas import ChannelTalkCredentialsStatus
-from catchup.connectors.channel_talk.schemas import ChannelTalkCredentialsUpsert
-from catchup.connectors.channel_talk.schemas import ChannelTalkCurrentChannel
-from catchup.connectors.channel_talk.schemas import ChannelTalkUninstallResult
+from catchup.connectors.channel_talk.exceptions import ChannelTalkValidationError
+from catchup.connectors.channel_talk.schemas.channel_connection import (
+    ChannelTalkConnectRequest,
+)
+from catchup.connectors.channel_talk.schemas.channel_connection import (
+    ChannelTalkCredentialsRecord,
+)
+from catchup.connectors.channel_talk.schemas.channel_connection import (
+    ChannelTalkCredentialsStatus,
+)
+from catchup.connectors.channel_talk.schemas.channel_connection import (
+    ChannelTalkCredentialsUpsert,
+)
+from catchup.connectors.channel_talk.schemas.channel_connection import (
+    ChannelTalkUninstallResult,
+)
+from catchup.connectors.channel_talk.schemas.channel_metadata import (
+    ChannelTalkCurrentChannel,
+)
 
 
 class ChannelTalkCredentialsStore(Protocol):
-    def get_connection(self) -> ChannelTalkCredentialsRecord | None: ...
+    def get_connection(
+        self,
+        channel_id: str | None = None,
+    ) -> ChannelTalkCredentialsRecord | None: ...
+
+    def list_connections(self) -> list[ChannelTalkCredentialsRecord]: ...
 
     def upsert_connection(
         self,
         payload: ChannelTalkCredentialsUpsert,
     ) -> ChannelTalkCredentialsRecord | None: ...
 
-    def delete_connection(self) -> bool: ...
+    def delete_connection(self, channel_id: str | None = None) -> bool: ...
 
     def commit(self) -> None: ...
 
@@ -42,10 +60,10 @@ class ChannelTalkInstallAuthAdapter:
         self,
         *,
         store: ChannelTalkCredentialsStore,
-        client: ChannelTalkApiClient | None = None,
+        client: ChannelTalkCoreApiClient | None = None,
     ) -> None:
         self.store = store
-        self.client = client or ChannelTalkApiClient()
+        self.client = client or ChannelTalkCoreApiClient()
 
     async def validate_credentials(
         self,
@@ -88,9 +106,23 @@ class ChannelTalkInstallAuthAdapter:
         )
         return ChannelTalkCredentialsStatus.from_record(record)
 
-    async def uninstall(self) -> ChannelTalkUninstallResult:
+    async def list_statuses(self) -> list[ChannelTalkCredentialsStatus]:
+        records = await self._run_store(
+            self.store.list_connections,
+            action="list Channel Talk credentials",
+        )
+        return [ChannelTalkCredentialsStatus.from_record(record) for record in records]
+
+    async def uninstall(
+        self,
+        channel_id: str | None = None,
+    ) -> ChannelTalkUninstallResult:
+        if not channel_id:
+            raise ChannelTalkValidationError("channel_id is required")
+
         removed = await self._run_store(
             self.store.delete_connection,
+            channel_id,
             action="delete Channel Talk credentials",
         )
         await self._run_store(

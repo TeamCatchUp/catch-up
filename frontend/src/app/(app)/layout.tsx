@@ -7,6 +7,7 @@ import InboxPanel from '@/shared/components/layout/panels/InboxPanel';
 import QuestionsHistoryPanel from '@/shared/components/layout/panels/QuestionsHistoryPanel';
 import SettingsPanel from '@/shared/components/layout/panels/SettingsPanel';
 import SideNavBar from '@/shared/components/layout/sideNavBar/SideNavBar';
+import ServiceNoticeMount from '@/shared/components/notice/ServiceNoticeMount';
 import FloatingActionButton from '@/shared/components/ui/floating-action-button';
 import Toast from '@/shared/components/ui/toast';
 import { TooltipProvider } from '@/shared/components/ui/tooltip';
@@ -57,7 +58,7 @@ export default function AfterLoginLayout({ children }: { children: React.ReactNo
         </aside>
         <div
           className={cn(
-            'absolute top-0 z-panel h-full overflow-hidden transition-[width,left] duration-300 ease-out',
+            'z-panel absolute top-0 h-full overflow-hidden transition-[width,left] duration-300 ease-out',
             isSidebarOpen ? 'left-60.25' : 'left-18',
             activePanel === 'inbox' ? 'w-104.5' : 'w-0',
           )}
@@ -74,7 +75,7 @@ export default function AfterLoginLayout({ children }: { children: React.ReactNo
         </div>
         <div
           className={cn(
-            'absolute top-0 z-panel h-full overflow-hidden transition-[width,left] duration-300 ease-out',
+            'z-panel absolute top-0 h-full overflow-hidden transition-[width,left] duration-300 ease-out',
             isSidebarOpen ? 'left-60.25' : 'left-18',
             activePanel === 'questionsHistory' ? 'w-95' : 'w-0',
           )}
@@ -87,6 +88,7 @@ export default function AfterLoginLayout({ children }: { children: React.ReactNo
       </div>
       <FloatingActionButton />
       <Toast />
+      <ServiceNoticeMount />
     </TooltipProvider>
   );
 }

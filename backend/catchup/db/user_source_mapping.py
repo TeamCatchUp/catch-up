@@ -6,6 +6,7 @@ from sqlalchemy import update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
+from catchup.db.models import ChannelTalkManager
 from catchup.db.models import ConfluenceUser
 from catchup.db.models import GitHubUser
 from catchup.db.models import JiraUser
@@ -23,7 +24,22 @@ SOURCE_MAP = {
     SourceType.JIRA: (JiraUser, JiraUser.account_id, JiraUser.email_address, JiraUser.account_type, 'atlassian'),
     SourceType.CONFLUENCE: (ConfluenceUser, ConfluenceUser.account_id, ConfluenceUser.email, ConfluenceUser.account_type, 'atlassian'),
     SourceType.GITHUB: (GitHubUser, GitHubUser.login, GitHubUser.email, None, None),
+    SourceType.CHANNEL_TALK: (
+        ChannelTalkManager,
+        ChannelTalkManager.manager_id,
+        ChannelTalkManager.email,
+        ChannelTalkManager.removed,
+        False,
+    ),
 }
+
+
+def _source_extra_condition(extra_col, extra_val):
+    if extra_col is None:
+        return None
+    if extra_val is False:
+        return extra_col.is_not(True)
+    return extra_col == extra_val
 
 def find_external_user_id_by_email(
     db: Session,
@@ -44,8 +60,8 @@ def find_external_user_id_by_email(
         .where(filter_col == email)
     )
     
-    if extra_col is not None:
-        stmt = stmt.where(extra_col == extra_val)
+    if (extra_condition := _source_extra_condition(extra_col, extra_val)) is not None:
+        stmt = stmt.where(extra_condition)
 
     return db.scalar(stmt)
 
@@ -60,13 +76,15 @@ def update_tool_user_email(
     if not target:
         return False
     
-    model, id_col, email_col, _, _ = target
+    model, id_col, email_col, extra_col, extra_val = target
     
     stmt = (
         update(model)
         .where(id_col == external_user_id)
-        .values({email_col.key: external_email})
     )
+    if (extra_condition := _source_extra_condition(extra_col, extra_val)) is not None:
+        stmt = stmt.where(extra_condition)
+    stmt = stmt.values({email_col.key: external_email})
     
     result = db.execute(stmt)
     

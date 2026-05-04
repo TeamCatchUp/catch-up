@@ -20,26 +20,27 @@ class GlobalCompanyContext(BaseModel):
     id: int = Field(..., description="DB 조회를 위한 고유 ID")
     name: str = Field(..., description="회사 이름")
     description: Optional[str] = Field(default="", description="조직 설명")
-    
+
     model_config = ConfigDict(from_attributes=True)
 
 
 class GlobalWorkspaceContext(BaseModel):
     id: int = Field(..., description="DB 조회를 위한 고유 ID")
     name: str = Field(..., description="워크스페이스 이름")
-    
+
     model_config = ConfigDict(from_attributes=True)
-    
-    
+
+
 class GlobalCurrentTimeContext(BaseModel):
     kst: str = Field(
-        default_factory=lambda: datetime.now(pytz.timezone("Asia/Seoul")).strftime("%Y-%m-%d %H:%M (%A)"),
-        description="KST"
+        default_factory=lambda: datetime.now(pytz.timezone("Asia/Seoul")).strftime(
+            "%Y-%m-%d %H:%M (%A)"
+        ),
+        description="KST",
     )
-    
+
     utc: str = Field(
-        default_factory=lambda: datetime.now(pytz.UTC).isoformat(),
-        description="UTC"
+        default_factory=lambda: datetime.now(pytz.UTC).isoformat(), description="UTC"
     )
 
 
@@ -48,6 +49,5 @@ class GlobalContext(BaseModel):
     workspace: GlobalWorkspaceContext = Field(..., description="워크스페이스 정보")
     company: GlobalCompanyContext = Field(..., description="조직 및 비즈니스 맥락")
     current_time: GlobalCurrentTimeContext = Field(
-            default_factory=GlobalCurrentTimeContext, 
-            description="현재 시각(kst, utc)"
-        )
+        default_factory=GlobalCurrentTimeContext, description="현재 시각(kst, utc)"
+    )

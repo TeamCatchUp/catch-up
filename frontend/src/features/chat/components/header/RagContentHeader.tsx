@@ -46,7 +46,7 @@ export default function RagHeader({ title, sessionId }: RagHeaderProps) {
 
   return (
     <>
-      <div className="border-r-edge-neutral border-b-edge-neutral border-r-0.5 bg-fill-normal sticky top-0 z-base flex h-13 justify-between border-b px-6 py-2">
+      <div className="border-b-edge-neutral bg-fill-normal z-base sticky top-0 flex h-13 justify-between border-b px-6 py-2">
         {/* 좌측 메뉴 */}
         <div className="relative flex min-w-0 items-center">
           <button
@@ -58,8 +58,8 @@ export default function RagHeader({ title, sessionId }: RagHeaderProps) {
               isQuestionsHistoryPanelOpen && 'bg-fill-interaction-pressed rounded-xl',
             )}
           >
-            <AI className="text-content-alternative h-5 w-5" />
-            <span className={`text-heading-small text-content-alternative ml-1.5 hidden cursor-pointer lg:inline`}>
+            <AI className="text-content-alternative h-5 w-5 shrink-0" />
+            <span className="text-heading-small text-content-alternative ml-1.5 hidden shrink-0 cursor-pointer lg:inline">
               캐치스턴트 AI
             </span>
           </button>
@@ -73,7 +73,7 @@ export default function RagHeader({ title, sessionId }: RagHeaderProps) {
 
           {/* 세션 질문 목록 모달 */}
           {isSessionQuestionsOpen && (
-            <div className="absolute top-full left-0 z-local mt-1">
+            <div className="z-local absolute top-full left-0 mt-1">
               <SessionQuestionsModal
                 sessionId={sessionId}
                 onClose={() => setIsSessionQuestionsOpen(false)}
@@ -87,8 +87,8 @@ export default function RagHeader({ title, sessionId }: RagHeaderProps) {
         <div className="flex shrink-0 items-center gap-2">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="icon-only-gray" size="md">
-                <Kebeb className="text-icon-normal h-6 w-6" />
+              <Button variant="icon-only-gray" size="md" aria-label="더보기 메뉴">
+                <Kebeb className="h-6 w-6" />
               </Button>
             </DropdownMenuTrigger>
             <MoreButtonContent />

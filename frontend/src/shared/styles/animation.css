@@ -4,7 +4,24 @@
   initial-value: 0deg;
 }
 
-@keyframes panel-slide-down {
+/* ========================================================================
+   Duration tokens
+   - Tailwind v4 @theme로 노출되어 duration-{fast|base|slow} utility로 사용 가능
+   - 모든 transition/animation의 timing은 이 토큰을 통해 일관성 유지
+   ======================================================================== */
+@theme {
+  --animate-duration-fast: 150ms; /* hover, micro-feedback */
+  --animate-duration-base: 200ms; /* 표준 진입/퇴장 */
+  --animate-duration-slow: 300ms; /* 큰 layout shift, 모달 등 */
+}
+
+/* ========================================================================
+   List item enter
+   - 리스트 아이템이 추가될 때의 진입 애니메이션
+   - 사용처: 채널톡 임베딩 모달 우측 그룹, toast, inbox, 검색 필터 등
+   - 곡선: ease-out-expo — 빠르게 들어와 부드럽게 안착
+   ======================================================================== */
+@keyframes list-item-enter {
   from {
     opacity: 0;
     transform: translateY(-8px);
@@ -22,6 +39,16 @@
 }
 
 @layer utilities {
+  .animate-list-item-enter {
+    animation: list-item-enter var(--animate-duration-base) cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .animate-list-item-enter {
+      animation: none;
+    }
+  }
+
   .skeleton-loading-card {
     position: relative;
     isolation: isolate;

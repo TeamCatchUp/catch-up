@@ -253,6 +253,7 @@ class SourceType(StrEnum):
     JIRA = "jira"
     GITHUB = "github"
     SLACK = "slack"
+    CHANNEL_TALK = "channel_talk"
 
 
 class KnowledgeSource(Base):
@@ -297,6 +298,7 @@ class PreMappingBuffer(Base):
     # Slack: user_id
     # Github: login_id
     # Atlassian: account_id
+    # Channel Talk: manager_id
     external_user_identifier: Mapped[str] = mapped_column(String(128), nullable=False)
     
     is_registered: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
@@ -935,6 +937,102 @@ class ChannelTalkCredentials(Base):
         onupdate=func.now(),
     )
 
+    __table_args__ = (
+        UniqueConstraint(
+            "channel_id",
+            name="uq_channel_talk_credentials_channel_id",
+        ),
+    )
+
+
+class ChannelTalkDocumentCredentials(Base):
+    __tablename__ = "channel_talk_document_credentials"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    channel_id: Mapped[str] = mapped_column(
+        String(128),
+        nullable=False,
+        comment="Locally associated Channel Talk channel ID",
+    )
+    space_id: Mapped[str] = mapped_column(
+        String(128),
+        nullable=False,
+        comment="Validated Channel Talk Documents space ID",
+    )
+    space_name: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+        comment="Validated Channel Talk Documents space name",
+    )
+    access_key: Mapped[str] = mapped_column(
+        String(512),
+        nullable=False,
+        comment="Channel Talk Documents access key",
+    )
+    access_secret: Mapped[str] = mapped_column(
+        String(512),
+        nullable=False,
+        comment="Channel Talk Documents access secret",
+    )
+    credential_last_verified_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        comment="Last successful Documents credential validation time",
+    )
+    association_status: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+        comment="api_verified/local_trusted/unverified/failed",
+    )
+    polling_cycle_hours: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=1,
+        server_default=text("1"),
+        comment="Document Space incremental polling cycle in hours",
+    )
+    last_incremental_polled_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        comment="Last completed incremental poll time",
+    )
+    last_incremental_poll_started_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        comment="Last started incremental poll time",
+    )
+    last_incremental_poll_error: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+        comment="Last incremental poll error summary",
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "space_id",
+            name="uq_channel_talk_document_credentials_space_id",
+        ),
+        Index(
+            "idx_channel_talk_document_credentials_channel_id",
+            "channel_id",
+        ),
+        CheckConstraint(
+            "association_status IN ('api_verified', 'local_trusted', 'unverified', 'failed')",
+            name="ck_channel_talk_document_credentials_association_status",
+        ),
+    )
+
 
 class ChannelTalkChannel(Base):
     __tablename__ = "channel_talk_channels"
@@ -1177,6 +1275,74 @@ class ChannelTalkGroupManager(Base):
         server_default=func.now(),
         onupdate=func.now(),
         comment="Relation row last update time",
+    )
+
+
+class ChannelTalkDocumentAuthor(Base):
+    __tablename__ = "channel_talk_document_authors"
+
+    channel_id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    space_id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    author_id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    email: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    avatar_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    synced_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+
+class ChannelTalkDocumentNavNode(Base):
+    __tablename__ = "channel_talk_document_nav_nodes"
+
+    channel_id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    space_id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    nav_node_id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    parent_node_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    node_type: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    entity_type: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    entity_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    rank: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    language: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    synced_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+    __table_args__ = (
+        Index(
+            "idx_channel_talk_document_nav_entity",
+            "channel_id",
+            "space_id",
+            "entity_type",
+            "entity_id",
+        ),
     )
 
 
@@ -1716,6 +1882,7 @@ class SyncConnector(StrEnum):
     GITHUB = "github"
     JIRA = "jira"
     CONFLUENCE = "confluence"
+    CHANNEL_TALK = "channel_talk"
 
 
 class SyncType(StrEnum):

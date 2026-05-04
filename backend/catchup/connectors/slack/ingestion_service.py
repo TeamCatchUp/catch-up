@@ -176,7 +176,8 @@ class SlackIngestionService:
     def _should_skip_message(self, msg_data: dict[str, Any]) -> bool:
         if msg_data.get("subtype") in self._SKIP_SUBTYPES:
             return True
-        text = msg_data.get("text", "")
+        transformer = self.transformer or SlackTransformer(self.user_cache)
+        text = transformer.extract_message_body(msg_data)
         return len(text) <= 10
 
     def _sanitize_message_payload(

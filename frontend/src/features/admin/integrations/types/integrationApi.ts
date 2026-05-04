@@ -76,9 +76,20 @@ export interface UserSyncItem {
   atlassian: PreMappingInfo | null;
   slack: PreMappingInfo | null;
   github: PreMappingInfo | null;
+  /**
+   * 채널톡 user-level 매핑 — 백엔드 미구현.
+   * 응답에 필드 자체가 없을 수 있으므로 optional(`?`), 백엔드 합류 후엔 null 가능 → 두 escape 모두 유지.
+   * `getServiceInfo`에서 `item.channel_talk ?? null`로 흡수.
+   */
+  channel_talk?: PreMappingInfo | null;
 }
 
-export type SyncFilterType = 'all' | 'full' | 'partial';
+/**
+ * 이용자 연동 탭 필터.
+ * `'channel-talk'`은 frontend-only 단독 모드 — 백엔드는 이 값을 받아도 무시하고 전체 사용자 반환.
+ * 시각 필터링은 UsersStatusSection에서 services=['channel-talk']로 컬럼만 좁혀 처리.
+ */
+export type SyncFilterType = 'all' | 'full' | 'partial' | 'channel-talk';
 
 export interface UserSyncStatusResponse {
   total: number;

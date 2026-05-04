@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from typing import Any
 
+from catchup.connectors.base.exceptions import ConnectorApiError
+from catchup.connectors.base.exceptions import RateLimitError
+
 
 class ChannelTalkError(Exception):
     code = "channel_talk_error"
@@ -46,10 +49,30 @@ class ChannelTalkPayloadError(ChannelTalkError):
     retryable = True
 
 
-class ChannelTalkUpstreamError(ChannelTalkError):
+class ChannelTalkUpstreamError(ChannelTalkError, ConnectorApiError):
+    service = "channel_talk"
     code = "upstream_error"
     status_code = 502
     retryable = True
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        code: str | None = None,
+        status_code: int | None = None,
+        retryable: bool | None = None,
+        retry_after: int | float | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> None:
+        super().__init__(
+            message,
+            code=code,
+            status_code=status_code,
+            retryable=retryable,
+            metadata=metadata,
+        )
+        self.retry_after = retry_after
 
 
 class ChannelTalkTimeoutError(ChannelTalkUpstreamError):
@@ -57,7 +80,8 @@ class ChannelTalkTimeoutError(ChannelTalkUpstreamError):
     status_code = 503
 
 
-class ChannelTalkRateLimitError(ChannelTalkUpstreamError):
+class ChannelTalkRateLimitError(RateLimitError, ChannelTalkUpstreamError):
+    service = "channel_talk"
     code = "upstream_rate_limited"
     status_code = 429
 
@@ -68,13 +92,16 @@ class ChannelTalkRateLimitError(ChannelTalkUpstreamError):
         retry_after: int = 60,
         metadata: dict[str, Any] | None = None,
     ) -> None:
-        super().__init__(
+        ChannelTalkUpstreamError.__init__(
+            self,
             message,
             status_code=429,
             retryable=True,
+            retry_after=retry_after,
             metadata=metadata,
         )
         self.retry_after = retry_after
+        self.remaining = 0
 
 
 class ChannelTalkPersistenceError(ChannelTalkError):

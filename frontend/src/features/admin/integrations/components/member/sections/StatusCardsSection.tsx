@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import dynamic from 'next/dynamic';
 
 import IconHelp from '@/public/icons/icon/help.svg';
 import IconInfo from '@/public/icons/icon/info.svg';
@@ -11,6 +12,13 @@ import type { MemberIntegrationCardItem } from '../../../types/integrationModel'
 import type { EmbeddingButtonState, SyncConnector } from '../../../types/syncModel';
 import EmbeddingModal from '../modals/EmbeddingModal';
 import RecoveryCardSection from './RecoveryCardSection';
+
+// 채널톡 임베딩 모달은 사용자가 "임베딩하기" 버튼을 클릭한 시점에만 필요하므로 lazy load.
+// 임베딩 버튼 hover/focus 시에는 preloadChannelTalkModal()로 chunk를 미리 가져온다.
+const ChannelTalkEmbeddingModal = dynamic(() => import('../modals/ChannelTalkEmbeddingModal'), { ssr: false });
+const preloadChannelTalkModal = () => {
+  void import('../modals/ChannelTalkEmbeddingModal');
+};
 
 interface StatusCardsSectionProps {
   cards: MemberIntegrationCardItem[];
@@ -46,13 +54,30 @@ export default function StatusCardsSection({
       );
     }
 
-    const state = buttonStates[service as SyncConnector] ?? 'idle';
+    // channel-talk은 임베딩 백엔드 미구현 — buttonStates 추적 대상이 아니므로 항상 idle 버튼만 노출.
+    // SyncConnector 확장 시 이 분기 제거 가능.
+    if (service === 'channel-talk') {
+      return (
+        <Button
+          variant="box-soft-primary"
+          size="md"
+          className="text-body-small h-9 w-full"
+          onMouseEnter={preloadChannelTalkModal}
+          onFocus={preloadChannelTalkModal}
+          onClick={() => openEmbeddingModal(service, name)}
+        >
+          임베딩하기
+        </Button>
+      );
+    }
+
+    const state = buttonStates[service] ?? 'idle';
 
     switch (state) {
       case 'idle':
         return (
           <Button
-            variant="box-outline-blue"
+            variant="box-soft-primary"
             size="md"
             className="text-body-small h-9 w-full"
             onClick={() => openEmbeddingModal(service, name)}
@@ -71,7 +96,7 @@ export default function StatusCardsSection({
         // TODO: 재임베딩 정책 확정 후 완료/실패 버튼 분리 검토
         return (
           <Button
-            variant="box-outline-blue"
+            variant="box-soft-primary"
             size="md"
             className="text-body-small h-9 w-full"
             onClick={() => openEmbeddingModal(service, name)}
@@ -93,7 +118,7 @@ export default function StatusCardsSection({
 
       <RecoveryCardSection />
 
-      <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-5">
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(320px,1fr))] gap-6">
         {cards.map((card) => {
           const { service, name, Icon, completedCount, totalCount, completionRate } = card;
           const iconClassName = service === 'confluence' ? 'h-5.75 w-6 shrink-0' : 'h-6 w-6 shrink-0';
@@ -101,7 +126,7 @@ export default function StatusCardsSection({
           return (
             <article
               key={service}
-              className="border-edge-neutral bg-fill-normal flex h-51 flex-col gap-4 rounded-xl border p-4"
+              className="border-edge-neutral bg-fill-normal flex h-51 max-w-92.5 flex-col gap-4 rounded-xl border p-4"
             >
               <div className="flex items-center gap-2.5">
                 <Icon className={iconClassName} />
@@ -151,13 +176,22 @@ export default function StatusCardsSection({
         })}
       </div>
 
-      <EmbeddingModal
-        open={embeddingModal.open}
-        onOpenChange={(open) => setEmbeddingModal((prev) => ({ ...prev, open }))}
-        service={embeddingModal.service}
-        serviceName={embeddingModal.serviceName}
-        onJobStart={onJobStart}
-      />
+      {embeddingModal.service !== 'channel-talk' && (
+        <EmbeddingModal
+          open={embeddingModal.open}
+          onOpenChange={(open) => setEmbeddingModal((prev) => ({ ...prev, open }))}
+          service={embeddingModal.service}
+          serviceName={embeddingModal.serviceName}
+          onJobStart={onJobStart}
+        />
+      )}
+
+      {embeddingModal.service === 'channel-talk' && (
+        <ChannelTalkEmbeddingModal
+          open={embeddingModal.open}
+          onOpenChange={(open) => setEmbeddingModal((prev) => ({ ...prev, open }))}
+        />
+      )}
     </section>
   );
 }

@@ -4,6 +4,7 @@ Webhook verification provider.
 - GitHub: HMAC SHA256
 - Slack: HMAC SHA256 + request timestamp window
 - Jira: OAuth JWT
+- Channel Talk: URL query token
 """
 
 import hashlib
@@ -23,6 +24,24 @@ class VerifyResult:
 
 
 class WebhookVerifierProvider:
+    @staticmethod
+    def verify_channel_talk(
+        token: Optional[str],
+        expected_token: Optional[str],
+    ) -> VerifyResult:
+        received_token = str(token or "").strip()
+        if not received_token:
+            return VerifyResult(ok=False, reason="missing_token")
+
+        configured_token = str(expected_token or "").strip()
+        if not configured_token:
+            return VerifyResult(ok=False, reason="missing_configured_token")
+
+        if not hmac.compare_digest(configured_token, received_token):
+            return VerifyResult(ok=False, reason="token_mismatch")
+
+        return VerifyResult(ok=True, reason="ok")
+
     @staticmethod
     def verify_github(
         payload_body: bytes,

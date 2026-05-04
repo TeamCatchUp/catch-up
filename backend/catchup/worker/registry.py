@@ -4,6 +4,12 @@ from catchup.db.models import SyncConnector
 from catchup.db.models import SyncType
 from catchup.sync.common.protocols import IngestionHandlerProtocol
 from catchup.sync.common.schemas import HandlerKey
+from catchup.worker.handlers.channel_talk_full_sync_handler import (
+    ChannelTalkFullSyncHandler,
+)
+from catchup.worker.handlers.channel_talk_incremental_handler import (
+    ChannelTalkIncrementalHandler,
+)
 from catchup.worker.handlers.confluence_full_sync_handler import (
     ConfluenceFullSyncHandler,
 )
@@ -50,6 +56,14 @@ _HANDLERS: dict[HandlerKey, IngestionHandlerProtocol] = {
         connector=SyncConnector.CONFLUENCE,
         sync_type=SyncType.INCREMENTAL,
     ): ConfluenceIncrementalHandler(),
+    HandlerKey.of(
+        connector=SyncConnector.CHANNEL_TALK,
+        sync_type=SyncType.FULL,
+    ): ChannelTalkFullSyncHandler(),
+    HandlerKey.of(
+        connector=SyncConnector.CHANNEL_TALK,
+        sync_type=SyncType.INCREMENTAL,
+    ): ChannelTalkIncrementalHandler(),
 }
 
 

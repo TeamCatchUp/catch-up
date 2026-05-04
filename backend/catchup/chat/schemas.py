@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from typing import Annotated
+from typing import Annotated, Any
 from typing import Literal
 from typing import Optional
 from typing import Union
@@ -17,32 +17,17 @@ from catchup.db.models import UserRole
 from catchup.rag.schemas.sources import BaseSource
 from catchup.rag.schemas.sources import SourceResponse
 
-NODE_STATUS_MAP = {
-    # 레거시 (구 파이프라인)
-    "route": "질문의 성격을 분석하고 있습니다...",
-    "grade": "검색 결과가 충분한지 검토하고 있습니다...",
-    "expand_graph_context": "지식 그래프를 통해 연관된 정보를 확장 탐색 중입니다...",
-    "fetch_details_after_graph_context_expansion": "확장된 정보의 상세 내용을 불러오고 있습니다...",
-    "fallback_cypher_query": "추가적인 그래프 질의(Cypher)를 실행하여 정보를 보완 중입니다...",
-
-    # 공통
-    "rewrite": "검색 정확도를 높이기 위해 질문을 최적화하고 있습니다...",
-    "generate_vector_queries": "최적의 검색 쿼리를 생성하고 있습니다...",
-    "search_vector_db": "지식 저장소(Vector DB)에서 문서를 검색 중입니다...",
-    "rerank": "검색된 문서들의 관련성을 분석하여 우선순위를 정하고 있습니다...",
-    "generate_final_answer": "모든 정보를 종합하여 최종 답변을 작성하고 있습니다...",
-    "generate_final_answer_fast": "모든 정보를 종합하여 최종 답변을 작성하고 있습니다...",
-    "direct_answer": "답변을 생성하고 있습니다...",
-    "clarify": "질문을 보다 정확하게 이해하기 위해 확인이 필요합니다...",
-
-    # Agentic RAG
-    "supervisor": "질문 유형을 파악하고 처리 전략을 결정하고 있습니다...",
-    "standard_agent": "추가 검색이 필요한지 판단하고 있습니다...",
-    "tool_executor": "관련 문서를 검색하고 있습니다...",
-    "complex_planner": "복잡한 질문에 대한 검색 전략을 수립하고 있습니다...",
-    "complex_agent": "다각도에서 정보를 수집하고 있습니다...",
-    "gap_analysis": "수집된 정보가 충분한지 검토하고 있습니다...",
-}
+# stream processor가 on_chain_start 시점에 in_progress 이벤트를 발행할 노드 목록.
+# 이 목록에 없는 노드는 자신이 직접 adispatch_custom_event로 lifecycle을 관리한다.
+INPROGRESS_NODES: frozenset[str] = frozenset({
+    "clarify",
+    "direct_answer",
+    "generate_final_answer",
+    "generate_final_answer_fast",
+    "rerank",
+    "rewrite",
+    "search_vector_db",
+})
 
 
 class ChatRequest(BaseModel):
@@ -91,11 +76,23 @@ class ChatStreamingTokenResponse(BaseModel):
     token: str
 
 
+class ChatStreamingProcessResponse(BaseModel):
+    """답변 생성 과정(에이전트 사고 과정 포함) 스트리밍"""
+
+    type: Literal["process"] = "process"
+    session_id: uuid.UUID = Field(default_factory=uuid.uuid4, description="대화 세션 ID")
+    status: Literal["in_progress", "completed", "error"]
+    node: str
+    reasoning: str | None = None
+    content: str | list[str | Any] | None = None
+
+
 StreamEvent = Annotated[
     Union[
         ChatStreamingStatusResponse,
         ChatStreamingSourceResponse,
         ChatStreamingTokenResponse,
+        ChatStreamingProcessResponse,
     ],
     Field(discriminator="type"),
 ]
@@ -129,7 +126,7 @@ class ChatHistoryResponse(BaseModel):
     sender_type: SenderType = Field(..., description="sender 유형 (user/assistant)")
     content: str = Field(..., description="메시지 내용")
     created_at: datetime = Field(..., description="메시지 생성 시각")
-    sources: Optional[list[BaseSource]] = Field(default_factory=list, description="출처 목록 (sender_type='assistant'인 경우에만 존재)")
+    sources: Optional[list[SourceResponse]] = Field(default_factory=list, description="출처 목록 (sender_type='assistant'인 경우에만 존재)")
     is_liked: Optional[bool] = Field(default=None, description="답변 평가 여부 (True: 긍정, False: 부정, None: 없음)")
     is_saved: bool = Field(default=False, description="사용자의 답변 저장 여부")
 

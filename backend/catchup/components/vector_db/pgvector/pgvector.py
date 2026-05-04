@@ -1,143 +1,203 @@
+import asyncio
 import time
-from typing import Optional, Dict, Any, override
+from typing import Any
+from typing import Literal
+from typing import override
 
 import structlog
 from langchain_core.callbacks import CallbackManagerForRetrieverRun
-from langchain_core.retrievers import BaseRetriever, RetrieverInput
-from langchain_core.runnables import RunnableLambda, RunnableParallel, RunnableSerializable
-from langchain_postgres import PGVector
 from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
-from sqlalchemy import Engine, text
+from langchain_core.retrievers import BaseRetriever
+from langchain_postgres import PGVector
+from sqlalchemy import Engine
+from sqlalchemy import text
 
 from catchup.components.vector_db.base import BaseVectorDbService
 from catchup.components.vector_db.rank import weighted_reciprocal_rank
 from catchup.configs.config import settings
 from catchup.db.engine import SessionLocal
 from catchup.db.models import SourceType
+from catchup.rag.executors import rag_executors
+from catchup.rag.schemas.filters import build_temporal_filters
 from catchup.rag.schemas.filters import TemporalFilter
 
 logger = structlog.get_logger(__name__)
 
 
-class PostgresFTSRetriever(BaseRetriever):
-    """PostgreSQL Full Text Search(FTS) 지원"""
-    
+def _timed(name: str, fn):
+    def wrapper(*args, **kwargs):
+        t = time.perf_counter()
+        logger.debug(f"{name}_started")
+        result = fn(*args, **kwargs)
+        logger.debug(f"{name}_completed", elapsed=round(time.perf_counter() - t, 3), count=len(result))
+        return result
+    return wrapper
+
+
+class PGBigmRetriever(BaseRetriever):
+    """pg_bigm 유사도 기반 키워드 검색 지원"""
+
     # BaseRetriever는 내부적으로 BaseModel을 상속하므로 Pydantic 스타일을 따라야 함
     session_factory: Any  # e.g) sessionmaker (from sqlalchemy.orm)
     collection_name: str = settings.PGVECTOR_COLLECTION_NAME
     k: int = 4
+    offset: int = 0
     tool_filters: list[SourceType] | None = None
     temporal_filters: list[TemporalFilter] | None = None
+    search_mode: Literal["title", "content", "both"] = "both"
 
     @override
     def _get_relevant_documents(
         self,
         query: str | list[str],
         *,
-        run_manager: CallbackManagerForRetrieverRun,  # BaseRetriever 시그니처
+        run_manager: CallbackManagerForRetrieverRun,  # BaseRetriever Signature
     ) -> list[Document]:
         """
-        Hybrid Search를 위한 PostgreSQL Full Text search. 
+        pg_bigm 유사도 기반 키워드 검색.
         """
-        
-        # 동적 쿼리 필터
-        filter_clause = ""
-        
-        # pg_bigm similarity 정렬을 위한 원본 쿼리 (리스트일 경우 공백으로 병합)
-        original_query = " ".join(query) if isinstance(query, list) else query
-        tokens = query if isinstance(query, list) else [query]
+        search_sql, params = self.build_bigm_query(
+            collection_name=self.collection_name,
+            query=query,
+            k=self.k,
+            offset=self.offset,
+            search_mode=self.search_mode,
+            tool_filters=self.tool_filters,
+            temporal_filters=self.temporal_filters,
+        )
+
+        results = list(self._do_query(search_sql, params))
+        return self._get_documents_from_results(results)
+
+    @staticmethod
+    def build_bigm_query(
+        collection_name: str,
+        query: str | list[str],
+        k: int,
+        offset: int = 0,
+        search_mode: Literal["title", "content", "both"] = "both",
+        tool_filters: list[SourceType] | None = None,
+        temporal_filters: list[TemporalFilter] | None = None,
+    ) -> tuple[Any, dict]:
+        """
+        통합 키워드 검색 SQL 및 파라미터 생성.
+        """
+        if isinstance(query, list):
+            tokens = query
+        else:
+            # 문자열인 경우 공백으로 쪼개서 개별 키워드 리스트 생성
+            tokens = query.split()
+
+        # 빈 토큰 제외 및 중복 제거
+        tokens = list(set([t.strip() for t in tokens if t.strip()]))
 
         params = {
-            "collection_name": self.collection_name,
-            "query": original_query,
-            "k": self.k
+            "collection_name": collection_name,
+            "k": k,
+            "offset": offset,
         }
-        
-        if not self.temporal_filters:
-            if self.tool_filters:
-                filter_clause = " AND e.cmetadata ->> 'source' = ANY(:tools)"
-                params["tools"] = [f.value for f in self.tool_filters]
-                
+
+        # 기본 필터 (Collection)
+        filter_clauses = ["c.name = :collection_name"]
+
+        # 협업 툴 & 시간 필터
+        if not temporal_filters:
+            if tool_filters:
+                filter_clauses.append("e.cmetadata ->> 'source' = ANY(:tools)")
+                params["tools"] = [f.value for f in tool_filters]
         else:
             sql_conditions = []
-            for i, tf in enumerate(self.temporal_filters):
-                tools_param_name = f"tools_{i}"
-                start_param_name = f"start_date_{i}"
-                end_param_name   = f"end_date_{i}"
-                params[tools_param_name] = [t.value for t in tf.tools]
-                params[start_param_name] = tf.start_date
-                params[end_param_name]   = tf.end_date
+            for i, tf in enumerate(temporal_filters):
+                tools_p = f"tools_{i}"
+                start_p = f"start_date_{i}"
+                end_p = f"end_date_{i}"
+                params[tools_p] = [t.value for t in tf.tools]
+                # ISO 문자열로 전달하여 텍스트 인덱스 활용 (ISO 8601은 문자열 비교가 시간 비교와 일치함)
+                params[start_p] = tf.start_date.isoformat()
+                params[end_p] = tf.end_date.isoformat()
 
                 sql_conditions.append(
-                    f"(e.cmetadata ->> 'source' = ANY(:{tools_param_name}) "
-                    f"AND (e.cmetadata ->> '{tf.time_field}')::timestamp "
-                    f"BETWEEN :{start_param_name} AND :{end_param_name})"
+                    f"(e.cmetadata ->> 'source' = ANY(:{tools_p}) "
+                    f"AND (e.cmetadata ->> '{tf.time_field}') "
+                    f"BETWEEN :{start_p} AND :{end_p})"
                 )
-                            
-            filter_clause = f" AND ({' OR '.join(sql_conditions)})"
+            filter_clauses.append(f"({' OR '.join(sql_conditions)})")
 
-        # keyword_tokens가 있으면 LIKE likequery() 필터 생성
-        token_conditions = []
-        for idx, token in enumerate(tokens):
-            param_name = f"keyword_{idx}"
-            token_conditions.append(f"(e.cmetadata ->> 'contextual_content') LIKE likequery(:{param_name})")
-            params[param_name] = token
+        # 토큰 기반 필터 및 스코어링 로직
+        # AND 조건을 위해 모든 토큰이 포함되어야 함
+        token_filters = []
+        exact_match_scores = []
+        sim_scores = []
 
-        # 1차 검색 (AND 조건)
-        and_filter = f" AND ({' AND '.join(token_conditions)})" if token_conditions else ""
+        for i, token in enumerate(tokens):
+            p_name = f"token_{i}"
+            params[p_name] = token
+            
+            # Exact Match (완전 일치) 확인 로직
+            # Title 가중치 2.0, Content 가중치 1.0 (Both 모드 기준)
+            if search_mode in ("title", "both"):
+                exact_match_scores.append(f"(CASE WHEN LOWER(e.cmetadata ->> 'title') = LOWER(:{p_name}) THEN 2.0 ELSE 0.0 END)")
+                sim_scores.append(f"(bigm_similarity(e.cmetadata ->> 'title', :{p_name}) * 2.0)")
+            
+            if search_mode in ("content", "both"):
+                exact_match_scores.append(f"(CASE WHEN LOWER(e.cmetadata ->> 'contextual_content') = LOWER(:{p_name}) THEN 1.0 ELSE 0.0 END)")
+                sim_scores.append(f"bigm_similarity(e.cmetadata ->> 'contextual_content', :{p_name})")
+
+            # AND 필터링: 각 토큰이 제목이나 내용 중 하나에는 반드시 포함되거나 유사해야 함
+            token_conds = []
+            if search_mode in ("title", "both"):
+                token_conds.append(f"((e.cmetadata ->> 'title') =% :{p_name} OR (e.cmetadata ->> 'title') ILIKE likequery(:{p_name}))")
+            if search_mode in ("content", "both"):
+                token_conds.append(f"((e.cmetadata ->> 'contextual_content') =% :{p_name} OR (e.cmetadata ->> 'contextual_content') ILIKE likequery(:{p_name}))")
+            
+            if token_conds:
+                token_filters.append(f"({' OR '.join(token_conds)})")
+
+        if token_filters:
+            filter_clauses.append(f"({' AND '.join(token_filters)})")
+
+        # 필터 조립
+        where_clause = " AND ".join(filter_clauses)
         
-        search_sql_template = """
-            SELECT e.document, e.cmetadata, e.id
+        # 스코어 조립 (토큰별 점수 합산)
+        exact_boost_sql = " + ".join(exact_match_scores) if exact_match_scores else "0.0"
+        similarity_sql = " + ".join(sim_scores) if sim_scores else "0.0"
+
+        search_sql = text(f"""
+            SELECT e.document, e.cmetadata, e.id,
+                ({exact_boost_sql}) as exact_match_boost,
+                ({similarity_sql}) as similarity_score
             FROM langchain_pg_embedding e
             JOIN langchain_pg_collection c ON e.collection_id = c.uuid
-            WHERE c.name = :collection_name
-              {filter_clause}
-              {keyword_filter}
-            ORDER BY bigm_similarity(e.cmetadata ->> 'contextual_content', :query) DESC
-            LIMIT :k
-        """
+            WHERE {where_clause}
+            ORDER BY 
+                exact_match_boost DESC,
+                similarity_score DESC,
+                (e.cmetadata ->> 'created_at') DESC
+            LIMIT :k OFFSET :offset
+        """)
 
-        search_sql_and = text(search_sql_template.format(
-            filter_clause=filter_clause,
-            keyword_filter=and_filter
-        ))
-        
-        results = list(self._do_query(search_sql_and, params))
-        
-        # 2차 검색 (Fallback: 결과가 k개 미만이면 OR 조건으로 추가 검색)
-        if len(results) < self.k and len(tokens) > 1:
-            or_filter = f" AND ({' OR '.join(token_conditions)})"
-            search_sql_or = text(search_sql_template.format(
-                filter_clause=filter_clause,
-                keyword_filter=or_filter
-            ))
-            
-            or_results = self._do_query(search_sql_or, params)
-            
-            # 중복 제거 (이미 AND 결과에 포함된 문서 제외)
-            existing_ids = {row[2] for row in results}
-            for row in or_results:
-                if row[2] not in existing_ids:
-                    results.append(row)
-                    if len(results) >= self.k:
-                        break
-
-        docs = self._get_documents_from_results(results[:self.k])
-        return docs
+        return search_sql, params
 
     def _do_query(
         self,
-        search_sql: str,
+        search_sql: Any,
         params: dict
     ):
         with self.session_factory() as session:
-            session.execute(text("SET LOCAL hnsw.ef_search = 80"))
             logger.debug("db_query_started")
-            t = time.perf_counter()
+            t0 = time.perf_counter()
+            
+            # pg_bigm 검색을 위해 similarity_limit 설정 (engine.py의 connect event에서 처리됨)
             results = session.execute(search_sql, params)
             rows = results.fetchall()
-            logger.debug("db_query_completed", elapsed=round(time.perf_counter() - t, 3), row_count=len(rows))
+            
+            logger.debug(
+                "db_query_completed",
+                elapsed=round(time.perf_counter() - t0, 3),
+                row_count=len(rows)
+            )
             return rows
 
     def _get_documents_from_results(self, results):
@@ -154,12 +214,12 @@ class PostgresFTSRetriever(BaseRetriever):
 
         return docs
     
-    def full_text_search(
+    def bigm_search(
         self,
         query: str,
     ) -> list[Document]:
         """
-        단독 Full Text Search 유틸 함수.
+        단독 pg_bigm 키워드 검색 유틸 함수.
         Hybrid Search에서는 사용되지 않는다.
         """
         return self.invoke(query)
@@ -195,54 +255,129 @@ class PGVectorService(BaseVectorDbService):
             use_jsonb=True,
         )
 
-    def hybrid_search(
+    @override
+    async def hybrid_search(
         self,
         query: str,
         k: int = 4,
-        weights: list[float] = [0.5, 0.5],
+        weights: list[float] = [0.3, 0.5, 0.2],  # [vector, title, content]
         tool_filters: list[SourceType] | None = None,
         temporal_filters: list[TemporalFilter] | None = None,
         keyword_tokens: list[str] | None = None,
+        offset: int = 0,
+        score_threshold: float = 0.4,
     ) -> list[Document]:
         """
         Langchain 기반 Hybrid Search를 수행한다.
         """
-        logger.info("hybrid_search_started", query_len=len(query))
+        logger.debug("hybrid_search_started", query_len=len(query))
         t0 = time.perf_counter()
+        
+        loop = asyncio.get_running_loop()
+        executor = rag_executors.vector_search_executor
+        
+        _run_vector_sync = _timed("vector_retrieval", lambda x: [
+            doc for doc, score in self.vector_store.similarity_search_with_score(
+                query=x["semantic_query"],
+                k=max(100, k + offset),
+                filter=x.get("filter")
+            )[offset:]
+            if score >= score_threshold
+        ])
 
-        hybrid_search_chain = self._hybrid_search_chain(
+        _run_title_sync = _timed("title_retrieval", lambda x: PGBigmRetriever(
+            session_factory=self.session_factory,
+            collection_name=self.collection_name,
+            k=max(100, k + offset),
+            offset=offset,
             tool_filters=tool_filters,
             temporal_filters=temporal_filters,
-            k=k,
-            weights=weights
+            search_mode="title"
+        ).invoke(x["keyword_tokens"]))
+
+        _run_content_sync = _timed("content_retrieval", lambda x: PGBigmRetriever(
+            session_factory=self.session_factory,
+            collection_name=self.collection_name,
+            k=max(100, k + offset),
+            offset=offset,
+            tool_filters=tool_filters,
+            temporal_filters=temporal_filters,
+            search_mode="content"
+        ).invoke(x["keyword_tokens"]))
+        
+        search_kwargs = self._build_search_kwargs(tool_filters, temporal_filters)
+        payload = {
+            "semantic_query": query,
+            "keyword_tokens": keyword_tokens or [query],
+            "filter": search_kwargs.get("filter"),
+        }
+
+        vector_task  = loop.run_in_executor(executor, _run_vector_sync,  payload)
+        title_task   = loop.run_in_executor(executor, _run_title_sync,   payload)
+        content_task = loop.run_in_executor(executor, _run_content_sync, payload)
+
+        vector_docs, title_docs, content_docs = await asyncio.gather(
+            vector_task, title_task, content_task
         )
 
-        result = hybrid_search_chain.invoke({
-            "semantic_query": query,
-            "keyword_tokens": keyword_tokens or [query]
-        })
+        result = weighted_reciprocal_rank(
+            doc_lists=[vector_docs, title_docs, content_docs],
+            weights=weights
+        )[:k]
 
-        logger.info("hybrid_search_completed", elapsed=round(time.perf_counter() - t0, 3), result_count=len(result))
+        logger.debug("hybrid_search_completed", elapsed=round(time.perf_counter() - t0, 3), result_count=len(result))
+        
         return result
 
-    def _hybrid_search_chain(
+    @override
+    async def hybrid_search_batch(
         self,
-        k: int = 4,
-        weights: list[float] = [0.5, 0.5],  # [Vector, Keyword]
+        queries: list[dict[str, Any]],
+        k: int = 10,
+        weights: list[float] = [0.6, 0.25, 0.15],
         tool_filters: list[SourceType] | None = None,
-        temporal_filters: list[TemporalFilter] | None = None
-    ) -> RunnableSerializable[RetrieverInput, list[Document]]:
+    ) -> list[list[Document]]:
         """
-        PostgreSQL FTS와 PGVector Similarity Search를 결합하여 
-        Hybrid Search Chain을 생성한다.
+        여러 쿼리에 대해 병렬로 hybrid_search를 수행한다.
+        queries 요소는 'query', 'start_date', 'end_date', 'keyword_tokens' 등을 포함할 수 있다.
         """
-        
-        search_kwargs = {"k": k}
-        
+        tasks = []
+
+        for q in queries:
+            temporal_filters = build_temporal_filters(
+                tool_filters=tool_filters,
+                start_date=q.get("start_date"),
+                end_date=q.get("end_date")
+            )
+            tasks.append(
+                self.hybrid_search(
+                    query=q["query"],
+                    k=k,
+                    weights=weights,
+                    tool_filters=tool_filters,
+                    temporal_filters=temporal_filters,
+                    keyword_tokens=q.get("keyword_tokens"),
+                )
+            )
+
+        t0 = time.perf_counter()
+        results = await asyncio.gather(*tasks)
+        logger.debug(
+            "hybrid_search_batch_completed",
+            elapsed=round(time.perf_counter() - t0, 3),
+            task_count=len(tasks),
+        )
+        return list(results)
+    
+    def _build_search_kwargs(
+        self,
+        tool_filters: list[SourceType] | None,
+        temporal_filters: list[TemporalFilter] | None,
+    ) -> dict:
+        search_kwargs = {}
         if not temporal_filters:
             if tool_filters:
                 search_kwargs["filter"] = {"source": {"$in": [f.value for f in tool_filters]}}
-        
         else:
             or_conditions = []
             for tf in temporal_filters:
@@ -254,55 +389,47 @@ class PGVectorService(BaseVectorDbService):
                     ]
                 })
             search_kwargs["filter"] = {"$or": or_conditions} if len(or_conditions) > 1 else or_conditions[0]
-        
-        vector_retriever = self.vector_store.as_retriever(search_kwargs=search_kwargs)
+        return search_kwargs
 
-        keyword_retriever = PostgresFTSRetriever(
-            session_factory=self.session_factory,
+    def _weighted_keyword_search(
+        self,
+        query: str,
+        k: int = 20,
+        tool_filters: list[SourceType] | None = None,
+        search_mode: Literal["title", "content", "both"] = "both",
+        offset: int = 0,
+    ) -> list[Document]:
+        """
+        가중치 기반 키워드 검색.
+        """
+        search_sql, params = PGBigmRetriever.build_bigm_query(
             collection_name=self.collection_name,
+            query=query,
             k=k,
+            offset=offset,
+            search_mode=search_mode,
             tool_filters=tool_filters,
-            temporal_filters=temporal_filters
+            temporal_filters=None # PGVectorService interface does not yet expose temporal_filters for this method
         )
-        
-        def _invoke_vector(x):
-            t = time.perf_counter()
-            logger.info("vector_retrieval_started")
-            docs = vector_retriever.invoke(x["semantic_query"])
-            logger.info("vector_retrieval_completed", elapsed=round(time.perf_counter() - t, 3), count=len(docs))
-            return docs
 
-        def _invoke_keyword(x):
-            t = time.perf_counter()
-            logger.info("keyword_retrieval_started")
-            docs = keyword_retriever.invoke(x["keyword_tokens"])
-            logger.info("keyword_retrieval_completed", elapsed=round(time.perf_counter() - t, 3), count=len(docs))
-            return docs
+        with self.session_factory() as session:
+            results = session.execute(search_sql, params).fetchall()
 
-        retriever_parallel = RunnableParallel(
-            vector_docs=RunnableLambda(_invoke_vector),
-            keyword_docs=RunnableLambda(_invoke_keyword)
-        )
-        
-        def apply_rrf(results):
-            return weighted_reciprocal_rank(
-                doc_lists=[
-                    results["vector_docs"],
-                    results["keyword_docs"]
-                ],
-                weights=weights                
+        return [
+            Document(
+                page_content=row[0],
+                metadata=row[1] if row[1] else {},
+                id=row[2]
             )
-        
-        chain = retriever_parallel | RunnableLambda(apply_rrf)
-        
-        return chain
-    
+            for row in results
+        ]
+
     def similarity_search(
         self,
         query: str,
         k: int = 4,
         search_type: str = "similarity",
-        filter: Optional[Dict[str, Any]] = None,
+        filter: dict[str, Any] | None = None,
         **kwargs,
     ) -> list[Document]:
         """
@@ -314,6 +441,7 @@ class PGVectorService(BaseVectorDbService):
             search_type=search_type, search_kwargs=search_kwargs
         )
         return retriever.invoke(query)
+
     
     def get_documents_by_ids(self, ids: list[str]) -> list[Document]:
         """Graph 확장 시 노드를 특정하기 위한 anchor id 리스트를 반환한다."""

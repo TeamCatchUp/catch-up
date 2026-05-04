@@ -6,11 +6,17 @@ from types import SimpleNamespace
 from unittest import IsolatedAsyncioTestCase
 from unittest.mock import patch
 
-from catchup.connectors.channel_talk.schemas import ChannelTalkChannel
-from catchup.connectors.channel_talk.schemas import ChannelTalkConnectRequest
-from catchup.connectors.channel_talk.schemas import ChannelTalkCredentialsRecord
-from catchup.connectors.channel_talk.schemas import ChannelTalkCurrentChannel
-from catchup.connectors.channel_talk.schemas import ChannelTalkManager
+from catchup.connectors.channel_talk.schemas.channel_connection import (
+    ChannelTalkConnectRequest,
+)
+from catchup.connectors.channel_talk.schemas.channel_connection import (
+    ChannelTalkCredentialsRecord,
+)
+from catchup.connectors.channel_talk.schemas.channel_metadata import ChannelTalkChannel
+from catchup.connectors.channel_talk.schemas.channel_metadata import (
+    ChannelTalkCurrentChannel,
+)
+from catchup.connectors.channel_talk.schemas.channel_metadata import ChannelTalkManager
 from catchup.connectors.channel_talk.service import ChannelTalkCredentialsService
 
 
@@ -22,8 +28,9 @@ class ChannelTalkCredentialsServiceTests(IsolatedAsyncioTestCase):
     def setUp(self) -> None:
         self.store = SimpleNamespace(
             get_connection=lambda: None,
+            list_connections=lambda: [],
             upsert_connection=lambda payload: payload.to_record(),
-            delete_connection=lambda: False,
+            delete_connection=lambda channel_id=None: False,
             commit=lambda: None,
         )
         self.client = SimpleNamespace(
@@ -95,13 +102,42 @@ class ChannelTalkCredentialsServiceTests(IsolatedAsyncioTestCase):
         self.assertIsNone(result.channel_id)
         self.assertFalse(result.webhook_token_configured)
 
-    async def test_uninstall_commits_even_when_nothing_was_removed(self) -> None:
+    async def test_list_statuses_returns_all_store_connections(self) -> None:
+        verified_at = datetime(2026, 4, 19, 8, 30, tzinfo=timezone.utc)
+        self.store.list_connections = lambda: [
+            ChannelTalkCredentialsRecord(
+                channel_id="channel-123",
+                channel_name="Support",
+                credential_last_verified_at=verified_at,
+                webhook_token="webhook-token",
+            ),
+            ChannelTalkCredentialsRecord(
+                channel_id="channel-456",
+                channel_name="Sales",
+                credential_last_verified_at=verified_at,
+            ),
+        ]
+
+        result = await self.service.list_statuses()
+
+        self.assertEqual([item.channel_id for item in result], ["channel-123", "channel-456"])
+        self.assertTrue(result[0].webhook_token_configured)
+        self.assertFalse(result[1].webhook_token_configured)
+
+    async def test_uninstall_deletes_by_channel_id_and_commits_even_when_nothing_was_removed(self) -> None:
         commits: list[str] = []
-        self.store.delete_connection = lambda: False
+        deleted_channel_ids: list[str] = []
+
+        def delete_connection(channel_id=None):
+            deleted_channel_ids.append(channel_id)
+            return False
+
+        self.store.delete_connection = delete_connection
         self.store.commit = lambda: commits.append("commit")
 
-        result = await self.service.uninstall()
+        result = await self.service.uninstall("channel-123")
 
         self.assertFalse(result.removed)
         self.assertFalse(result.installed)
+        self.assertEqual(deleted_channel_ids, ["channel-123"])
         self.assertEqual(commits, ["commit"])

@@ -1,0 +1,16 @@
+<stop_criteria>
+Each ToolMessage from a search starts with a header in the form:
+  Search complete: query='...' | hits=N new=M shown=K
+where:
+  - hits  = total documents returned by this search
+  - new   = of those, how many you have NOT been shown before in this turn
+  - shown = how many are previewed in the body below
+
+Use these signals to decide when to stop calling tools:
+- If `new == 0`, this query produced no documents you haven't already seen. Do not retry the same angle.
+- If `new <= 2` for the most recent search, your queries are saturating. Strongly consider stopping.
+- If two consecutive searches each had `new <= 2`, you MUST stop and produce the Structured Reasoning summary.
+- Before issuing another tool call, briefly self-check: "Do I already have enough information to let the answer generator address the user's question?" If yes, stop instead of searching more.
+
+Stopping on time is preferred over exhausting iterations. When you stop, record the honest reason in <reason_for_stopping>: was it genuinely sufficient information, search saturation, or hitting the iteration limit? Do not default to "sufficient" when saturation or limits were the real cause.
+</stop_criteria>

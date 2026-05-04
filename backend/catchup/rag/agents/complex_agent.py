@@ -1,17 +1,22 @@
+import asyncio
+
 import structlog
 from langchain.chat_models import BaseChatModel
-from langchain_core.messages import AIMessage
+from langchain_core.callbacks import adispatch_custom_event
 from langchain_core.messages import HumanMessage
 
-from catchup.costs.utils import extract_token_usages
 from catchup.costs.utils import token_usage
 from catchup.prompts.loader import prompt_loader
-from catchup.rag.agents.standard_agent import _build_docs_summary
-from catchup.rag.agents.standard_agent import _drop_orphaned_tool_calls
 from catchup.rag.agents.tools.search_tools import REACT_TOOLS
+from catchup.rag.nodes.utils import ainvoke_llm_with_token_usage
+from catchup.rag.nodes.utils import build_docs_summary
 from catchup.rag.nodes.utils import build_system_message
+from catchup.rag.nodes.utils import coerce_message_text
+from catchup.rag.nodes.utils import drop_orphaned_tool_calls
+from catchup.rag.nodes.utils import extract_essential_ids
+from catchup.rag.nodes.utils import extract_reason_for_stopping
 from catchup.rag.nodes.utils import log_node
-from catchup.rag.schemas.structures import GapAnalysis
+from catchup.rag.static_reasoning import get_static_reasoning
 from catchup.rag.schemas.structures import SearchPlan
 from catchup.rag.schemas.structures import SearchStep
 from catchup.rag.semaphores import rag_semaphores
@@ -22,7 +27,11 @@ logger = structlog.get_logger()
 
 @log_node
 @token_usage
-async def complex_planner_node(state: AgentState, llm: BaseChatModel):
+async def complex_planner_node(
+    state: AgentState,
+    llm: BaseChatModel,
+    timeout: float | None = None,
+):
     """Complex 파이프라인 플래너. Extended Thinking LARGE 모델로 검색 전략을 수립한다."""
     global_context = state["global_context"].model_dump()
     query = state.get("rewritten_query") or state.get("original_query", "")
@@ -38,31 +47,53 @@ async def complex_planner_node(state: AgentState, llm: BaseChatModel):
         method="function_calling",
         include_raw=True,
     )
-    token_usages = {"token_breakdown": {}}
+
+    await adispatch_custom_event(
+        "process",
+        {
+            "status": "in_progress",
+            "node": "complex_planner",
+            "reasoning": get_static_reasoning("complex_planner"),
+        },
+    )
 
     try:
-        async with rag_semaphores.final_answer:
-            raw_response = await structured_llm.ainvoke(
-                input=[system_message, HumanMessage(content=query)]
-            )
-            token_usages = extract_token_usages(raw_response.get("raw"))
-            plan: SearchPlan = raw_response.get("parsed")
-    except Exception as e:
-        logger.warning("complex_planner_node_failed", error=str(e), exc_info=True)
+        response, token_usages = await ainvoke_llm_with_token_usage(
+            llm=structured_llm,
+            messages=[system_message, HumanMessage(content=query)],
+            semaphore=rag_semaphores.llm_large,
+            timeout=timeout,
+        )
+        plan: SearchPlan = response.get("parsed")
+    except asyncio.TimeoutError as e:
+        raise e
+    except Exception:
         return {"search_plan": None}
 
-    logger.info(
-        "complex_plan_created",
-        step_count=len(plan.steps) if plan else 0,
-    )
+    step_count = len(plan.steps) if plan else 0
+    logger.info("complex_plan_created", step_count=step_count)
     if plan:
         logger.debug(
             "complex_plan_steps",
             steps=[
-                {"step": s.step, "intent": s.intent, "queries": s.queries, "parallel": s.parallel}
+                {
+                    "step": s.step,
+                    "intent": s.intent,
+                    "queries": s.queries,
+                    "parallel": s.parallel,
+                }
                 for s in plan.steps
             ],
         )
+        for s in plan.steps:
+            await adispatch_custom_event(
+                "process",
+                {
+                    "status": "completed",
+                    "node": "complex_planner",
+                    "content": [{"step": s.step, "intent": s.intent}],
+                },
+            )
 
     return {
         "search_plan": plan.steps if plan else None,
@@ -72,8 +103,11 @@ async def complex_planner_node(state: AgentState, llm: BaseChatModel):
 
 @log_node
 @token_usage
-async def complex_agent_node(state: AgentState, llm: BaseChatModel):
-    """Complex ReAct 에이전트. LARGE 모델, max_iter=7.
+async def complex_agent_node(
+    state: AgentState,
+    llm: BaseChatModel,
+):
+    """Complex ReAct 에이전트 노드이다. LARGE 모델, max_iter=7을 사용한다.
     search_plan과 accumulated_docs를 참조해 다음 검색 전략을 결정한다."""
     pipeline_plan = state.get("pipeline_plan")
     max_iterations = pipeline_plan.max_iterations if pipeline_plan else 7
@@ -85,35 +119,34 @@ async def complex_agent_node(state: AgentState, llm: BaseChatModel):
 
     search_plan = state.get("search_plan") or []
     accumulated_docs = state.get("accumulated_docs", [])
-    gap_analysis: GapAnalysis | None = state.get("gap_analysis")
     global_context = state["global_context"].model_dump()
-
-    gap_suggestions = ""
-    if gap_analysis and not gap_analysis.is_sufficient and gap_analysis.suggested_queries:
-        gap_suggestions = "\n".join(f"- {q}" for q in gap_analysis.suggested_queries)
 
     system_prompt = prompt_loader.get_prompt(
         "rag/complex_agent_system",
         search_plan_text=_format_search_plan(search_plan),
-        accumulated_docs_summary=_build_docs_summary(accumulated_docs),
-        gap_suggestions=gap_suggestions,
+        accumulated_docs_summary=build_docs_summary(accumulated_docs),
         **global_context,
     )
     system_message = build_system_message(system_prompt)
     query = state.get("rewritten_query") or state.get("original_query", "")
 
     llm_with_tools = llm.bind_tools(REACT_TOOLS)
-    token_usages = {"token_breakdown": {}}
 
-    existing_messages = _drop_orphaned_tool_calls(state.get("messages", []))
+    await adispatch_custom_event(
+        "process",
+        {"status": "in_progress", "node": "complex_agent"},
+    )
+
+    existing_messages = drop_orphaned_tool_calls(state.get("messages", []))
     try:
-        async with rag_semaphores.final_answer:
-            response: AIMessage = await llm_with_tools.ainvoke(
-                input=[system_message, HumanMessage(content=query)] + existing_messages
-            )
-            token_usages = extract_token_usages(response)
-    except Exception as e:
-        logger.warning("complex_agent_node_failed", error=str(e), exc_info=True)
+        response, token_usages = await ainvoke_llm_with_token_usage(
+            llm=llm_with_tools,
+            messages=[system_message, HumanMessage(content=query)] + existing_messages,
+            semaphore=rag_semaphores.llm_large,
+        )
+    except asyncio.TimeoutError as e:
+        raise e
+    except Exception:
         return {"agent_iteration": agent_iteration + 1}
 
     tool_calls = getattr(response, "tool_calls", None) or []
@@ -132,66 +165,27 @@ async def complex_agent_node(state: AgentState, llm: BaseChatModel):
 
     # 에이전트가 더 이상 도구를 호출하지 않으면(루프 종료), 자신의 판단을 state에 기록해 답변 노드에 전달한다.
     reasoning_update = {}
+    reasoning = coerce_message_text(response.content)
     if not tool_calls:
-        reasoning_update = {"agent_reasoning": response.content}
+        essential_ids = extract_essential_ids(reasoning, accumulated_docs)
+        reasoning_update = {
+            "agent_reasoning": reasoning,
+            "essential_doc_ids": list(essential_ids) if essential_ids else [],
+        }
+
+    if reasoning:
+        display_reasoning = (
+            extract_reason_for_stopping(reasoning) if not tool_calls else reasoning
+        )
+        await adispatch_custom_event(
+            "process",
+            {"status": "completed", "node": "complex_agent", "reasoning": display_reasoning},
+        )
 
     return {
         "messages": [response],
         "agent_iteration": agent_iteration + 1,
         **reasoning_update,
-        **token_usages,
-    }
-
-
-@log_node
-@token_usage
-async def gap_analysis_node(state: AgentState, llm: BaseChatModel):
-    """Gap Analysis 노드. Extended Thinking LARGE 모델로 정보 충분성을 평가한다."""
-    accumulated_docs = state.get("accumulated_docs", [])
-    global_context = state["global_context"].model_dump()
-    query = state.get("rewritten_query") or state.get("original_query", "")
-
-    system_prompt = prompt_loader.get_prompt(
-        "rag/gap_analysis_system",
-        accumulated_docs_summary=_build_docs_summary(accumulated_docs),
-        **global_context,
-    )
-    system_message = build_system_message(system_prompt)
-
-    structured_llm = llm.with_structured_output(
-        GapAnalysis,
-        method="function_calling",
-        include_raw=True,
-    )
-    token_usages = {"token_breakdown": {}}
-
-    try:
-        async with rag_semaphores.final_answer:
-            raw_response = await structured_llm.ainvoke(
-                input=[system_message, HumanMessage(content=query)]
-            )
-            token_usages = extract_token_usages(raw_response.get("raw"))
-            analysis: GapAnalysis = raw_response.get("parsed")
-    except Exception as e:
-        logger.warning("gap_analysis_node_failed", error=str(e), exc_info=True)
-        # 실패 시 충분한 것으로 간주해 generate 단계로 진행
-        return {"gap_analysis": GapAnalysis(is_sufficient=True, reasoning="gap analysis 실패, 강제 진행")}
-
-    logger.info(
-        "gap_analysis_result",
-        is_sufficient=analysis.is_sufficient if analysis else True,
-        gap_count=len(analysis.gaps) if analysis else 0,
-        suggested_query_count=len(analysis.suggested_queries) if analysis else 0,
-    )
-    if analysis and not analysis.is_sufficient:
-        logger.debug(
-            "gap_analysis_detail",
-            gaps=analysis.gaps,
-            suggested_queries=analysis.suggested_queries,
-        )
-
-    return {
-        "gap_analysis": analysis,
         **token_usages,
     }
 

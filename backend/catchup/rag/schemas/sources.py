@@ -11,6 +11,7 @@ from pydantic import Field
 
 logger = logging.getLogger(__name__)
 
+
 # --------------------------------------------------------------------------
 # Enums
 # --------------------------------------------------------------------------
@@ -36,6 +37,10 @@ class EntityType(StrEnum):
     # Common / Others
     COMMENT = "comment"
 
+    # Channel Talk
+    USER_CHAT = "user_chat"
+    DOCUMENT_ARTICLE = "document_article"
+
 
 # --------------------------------------------------------------------------
 # Base Model
@@ -49,14 +54,16 @@ class BaseSource(BaseModel):
     id: str = Field(..., description="고유 ID (예: jira:issue:CAT-145)")
 
     # 데이터 출처
-    source: SourceType = Field(..., description="데이터 소스 (e.g. Jira, Slack, GitHub)")
+    source: SourceType = Field(
+        ..., description="데이터 소스 (e.g. Jira, Slack, GitHub)"
+    )
     entity_type: EntityType = Field(..., description="엔티티 타입 (툴별 상이)")
 
     # 공통 메타데이터
     title: str = Field(..., description="제목 또는 요약")
     url: str | None = Field(None, description="원본 링크")
     text: str = Field(..., description="본문 내용")
-    
+
     # 시간 정보
     created_at: str | None = Field(None, description="생성일 (ISO 8601)")
     updated_at: str | None = Field(None, description="수정일 (ISO 8601)")
@@ -67,7 +74,9 @@ class BaseSource(BaseModel):
     index: int | None = Field(None, description="LLM이 답변에 활용한 출처 번호")
     relevance_score: float = Field(default=0.0, description="검색 관련성 점수")
     is_cited: bool = Field(default=False, description="LLM 인용 여부")
-    citation_rationale: Optional[str] = Field(default="", description="LLM이 문서를 인용한 이유")
+    citation_rationale: Optional[str] = Field(
+        default="", description="LLM이 문서를 인용한 이유"
+    )
 
     @classmethod
     def from_document(
@@ -83,7 +92,7 @@ class BaseSource(BaseModel):
         metadata = doc.metadata
         source_str = metadata.get("source", "unknown")
         entity_type = metadata.get("entity_type", "unknown")
-        
+
         doc_id = getattr(doc, "id", None)
         if not doc_id:
             # doc.id가 존재하지 않을 경우 fallback
@@ -110,18 +119,19 @@ class BaseSource(BaseModel):
                     repo = metadata.get("repo")
                     if owner and repo:
                         full_name = f"{owner}/{repo}"
-                
+
                 number = metadata.get("number")
-                
+
                 if full_name and number:
                     doc_id = f"github:{entity_type}:{full_name}:{number}"
-                    
+
             elif source_str == "confluence":
                 content_id = metadata.get("id")
                 chunk_index = metadata.get("chunk_index")
                 if content_id and chunk_index is not None:
-                    doc_id = f"confluence:{entity_type}:{content_id}:chunk:{chunk_index}"
-            
+                    doc_id = (
+                        f"confluence:{entity_type}:{content_id}:chunk:{chunk_index}"
+                    )
 
         # Slack은 edited_at을 사용하므로, updated_at이 없으면 edited_at을 찾도록 fallback 처리
         updated_at = metadata.get("updated_at") or metadata.get("edited_at")
@@ -132,20 +142,18 @@ class BaseSource(BaseModel):
             "id": doc_id,
             "relevance_score": relevance_score,
             "is_cited": is_cited,
-            "text": doc.metadata.get('contextual_content', ''),
+            "text": doc.metadata.get("contextual_content", ""),
             "url": metadata.get("url"),
             "created_at": metadata.get("created_at"),
             "updated_at": updated_at,
-            "entity_type": entity_type,
+            "entity_type": entity_type
+            if entity_type != "unknown"
+            else EntityType.COMMENT,
         }
 
         # 1. Jira
         if source_str == "jira":
-            issue_title = (
-                metadata.get("title")
-                or metadata.get("summary")
-                or "No Title"
-            )
+            issue_title = metadata.get("title") or metadata.get("summary") or "No Title"
             return JiraSource(
                 **base_data,
                 source=SourceType.JIRA,
@@ -162,7 +170,6 @@ class BaseSource(BaseModel):
 
         # 2. Slack
         elif source_str == "slack":
-
             return SlackSource(
                 **base_data,
                 source=SourceType.SLACK,
@@ -176,19 +183,19 @@ class BaseSource(BaseModel):
             )
 
         # 3. GitHub
-        elif source_str == "github":            
+        elif source_str == "github":
             full_name = metadata.get("full_name", "")
             owner, repo = (
                 full_name.split("/", 1)  # 최대 한 번만 분리
                 if "/" in full_name
                 else (metadata.get("owner"), metadata.get("repo"))
             )
-            
+
             author_info = metadata.get("author")
             author = ""
             if author_info:
                 author = author_info.get("name") or author_info.get("login")
-            
+
             return GithubSource(
                 **base_data,
                 source=SourceType.GITHUB,
@@ -207,7 +214,7 @@ class BaseSource(BaseModel):
                 base_ref=metadata.get("base_ref"),
                 head_ref=metadata.get("head_ref"),
             )
-        
+
         # 4. Confluence
         elif source_str == "confluence":
             return ConfluenceSource(
@@ -227,11 +234,11 @@ class BaseSource(BaseModel):
                 has_images=metadata.get("has_images", False),
                 image_urls=metadata.get("image_urls", []),
             )
-        
+
         # Fallback
         return UnknownSource(
             **base_data,
-            title="Unknown Source",
+            title=metadata.get("title", "Unknown Source"),
         )
 
 
@@ -242,7 +249,7 @@ class BaseSource(BaseModel):
 
 class JiraSource(BaseSource):
     source: Literal[SourceType.JIRA] = SourceType.JIRA
-    
+
     project_key: str | None = Field(None, description="프로젝트 키")
     issue_key: str | None = Field(None, description="이슈 키")
     status: str | None = Field(None, description="상태")
@@ -253,7 +260,7 @@ class JiraSource(BaseSource):
 
 class SlackSource(BaseSource):
     source: Literal[SourceType.SLACK] = SourceType.SLACK
-    
+
     channel_name: str | None = Field(None, description="채널 이름")
     team_id: str | None = Field(None, description="워크스페이스 ID")
     ts: str | None = Field(None, description="타임스탬프")
@@ -262,7 +269,7 @@ class SlackSource(BaseSource):
 
 class GithubSource(BaseSource):
     source: Literal[SourceType.GITHUB] = SourceType.GITHUB
-    
+
     # Common Fields
     owner: str | None = Field(None, description="Owner")
     repo: str | None = Field(None, description="Repo")
@@ -278,7 +285,7 @@ class GithubSource(BaseSource):
 
 class ConfluenceSource(BaseSource):
     source: Literal[SourceType.CONFLUENCE] = SourceType.CONFLUENCE
-    
+
     space_id: str | None = Field(None, description="스페이스 ID")
     space_key: str | None = Field(None, description="스페이스 키")
     space_name: str | None = Field(None, description="스페이스 이름")
@@ -287,7 +294,9 @@ class ConfluenceSource(BaseSource):
     labels: list[str] = Field(default_factory=list, description="라벨 목록")
     chunk_index: int | None = Field(None, description="현재 청크 인덱스")
     total_chunks: int | None = Field(None, description="전체 청크 수")
-    section_hierarchy: list[str] = Field(default_factory=list, description="섹션 계층 구조")
+    section_hierarchy: list[str] = Field(
+        default_factory=list, description="섹션 계층 구조"
+    )
     has_images: bool = Field(False, description="이미지 포함 여부")
     image_urls: list[str] = Field(default_factory=list, description="이미지 URL 목록")
 
@@ -295,6 +304,7 @@ class ConfluenceSource(BaseSource):
 # Fallback
 class UnknownSource(BaseSource):
     source: Literal[SourceType.UNKNOWN] = SourceType.UNKNOWN
+
 
 # --------------------------------------------------------------------------
 # Response Union
