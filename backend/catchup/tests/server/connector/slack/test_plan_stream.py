@@ -4,6 +4,8 @@ from unittest import IsolatedAsyncioTestCase
 from unittest.mock import AsyncMock
 
 from catchup.chat.schemas import ChatStreamingProcessResponse
+from catchup.server.connector.slack.plan_stream import PLAN_PLACEHOLDER_TASK_ID
+from catchup.server.connector.slack.plan_stream import PLAN_PLACEHOLDER_TASK_TITLE
 from catchup.server.connector.slack.plan_stream import PLAN_TITLE
 from catchup.server.connector.slack.plan_stream import SlackPlanResponder
 from catchup.server.connector.slack.plan_stream import SlackPlanState
@@ -28,7 +30,15 @@ class SlackPlanStateTests(IsolatedAsyncioTestCase):
 
         self.assertEqual(
             state.build_initial_chunks(),
-            [{"type": "plan_update", "title": PLAN_TITLE}],
+            [
+                {"type": "plan_update", "title": PLAN_TITLE},
+                {
+                    "type": "task_update",
+                    "id": PLAN_PLACEHOLDER_TASK_ID,
+                    "title": PLAN_PLACEHOLDER_TASK_TITLE,
+                    "status": "pending",
+                },
+            ],
         )
 
     def test_ignores_process_without_reasoning(self) -> None:
@@ -197,7 +207,6 @@ class SlackPlanStateTests(IsolatedAsyncioTestCase):
             titles,
             [
                 "API 종류를 묻는 일반적인 검색 질문이네요. 문서를 찾아볼게요.",
-                "API 종류를 묻는 일반적인 검색 질문이네요. 문서를 찾아볼게요.",
                 "어떤 답을 원하시는지 헤아려볼게요.",
                 "어떤 답을 원하시는지 헤아려볼게요.",
                 "토큰 사용량 집계 API의 구조와 종류를 찾아보겠습니다.",
@@ -213,6 +222,70 @@ class SlackPlanStateTests(IsolatedAsyncioTestCase):
 
 
 class SlackPlanResponderTests(IsolatedAsyncioTestCase):
+    async def test_start_sends_visible_empty_plan_placeholder_immediately(self) -> None:
+        client = AsyncMock()
+        client.start_stream.return_value = {"ts": "123.456"}
+
+        responder = await SlackPlanResponder.start(
+            client=client,
+            channel_id="C123",
+            thread_ts="1.0",
+            team_id="T123",
+            user_id="U123",
+            query="question",
+        )
+
+        client.start_stream.assert_awaited_once_with(
+            channel="C123",
+            thread_ts="1.0",
+            recipient_user_id="U123",
+            recipient_team_id="T123",
+            task_display_mode="plan",
+            chunks=[
+                {"type": "plan_update", "title": PLAN_TITLE},
+                {
+                    "type": "task_update",
+                    "id": PLAN_PLACEHOLDER_TASK_ID,
+                    "title": PLAN_PLACEHOLDER_TASK_TITLE,
+                    "status": "pending",
+                },
+            ],
+        )
+        self.assertEqual(responder.plan_stream_ts, "123.456")
+
+    async def test_first_reasoning_replaces_initial_placeholder_task(self) -> None:
+        client = AsyncMock()
+        client.start_stream.return_value = {"ts": "123.456"}
+        responder = await SlackPlanResponder.start(
+            client=client,
+            channel_id="C123",
+            thread_ts="1.0",
+            team_id="T123",
+            user_id="U123",
+            query="question",
+        )
+
+        await responder.on_process(
+            _process(
+                status="completed",
+                node="supervisor",
+                reasoning="API 종류를 묻는 일반적인 검색 질문이네요. 문서를 찾아볼게요.",
+            )
+        )
+
+        client.append_stream.assert_awaited_once_with(
+            channel="C123",
+            ts="123.456",
+            chunks=[
+                {
+                    "type": "task_update",
+                    "id": PLAN_PLACEHOLDER_TASK_ID,
+                    "title": "API 종류를 묻는 일반적인 검색 질문이네요. 문서를 찾아볼게요.",
+                    "status": "complete",
+                }
+            ],
+        )
+
     async def test_final_answer_node_switches_to_answer_mode_without_node_copy(self) -> None:
         client = AsyncMock()
         responder = SlackPlanResponder(
