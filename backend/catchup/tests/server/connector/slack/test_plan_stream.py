@@ -41,10 +41,27 @@ class SlackPlanStateTests(IsolatedAsyncioTestCase):
             ],
         )
 
-    def test_ignores_process_without_reasoning(self) -> None:
+    def test_in_progress_without_reasoning_starts_placeholder_task(self) -> None:
         state = SlackPlanState()
 
         chunks = state.apply_process(_process(status="in_progress", reasoning=None))
+
+        self.assertEqual(
+            chunks,
+            [
+                {
+                    "type": "task_update",
+                    "id": PLAN_PLACEHOLDER_TASK_ID,
+                    "title": PLAN_PLACEHOLDER_TASK_TITLE,
+                    "status": "in_progress",
+                }
+            ],
+        )
+
+    def test_completed_without_reasoning_is_ignored(self) -> None:
+        state = SlackPlanState()
+
+        chunks = state.apply_process(_process(status="completed", reasoning=None))
 
         self.assertEqual(chunks, [])
         self.assertEqual(state.tasks, {})
@@ -206,10 +223,12 @@ class SlackPlanStateTests(IsolatedAsyncioTestCase):
         self.assertEqual(
             titles,
             [
+                PLAN_PLACEHOLDER_TASK_TITLE,
                 "API 종류를 묻는 일반적인 검색 질문이네요. 문서를 찾아볼게요.",
                 "어떤 답을 원하시는지 헤아려볼게요.",
                 "어떤 답을 원하시는지 헤아려볼게요.",
                 "토큰 사용량 집계 API의 구조와 종류를 찾아보겠습니다.",
+                PLAN_PLACEHOLDER_TASK_TITLE,
                 "120건의 문서를 찾았어요.",
                 "API 응답 스키마와 파라미터 구조를 확인하기 위해 추가 검색이 필요합니다.",
                 "40건의 문서를 찾았어요.",
@@ -277,6 +296,53 @@ class SlackPlanResponderTests(IsolatedAsyncioTestCase):
             channel="C123",
             ts="123.456",
             chunks=[
+                {
+                    "type": "task_update",
+                    "id": PLAN_PLACEHOLDER_TASK_ID,
+                    "title": "API 종류를 묻는 일반적인 검색 질문이네요. 문서를 찾아볼게요.",
+                    "status": "complete",
+                }
+            ],
+        )
+
+    async def test_placeholder_in_progress_is_replaced_by_first_reasoning(self) -> None:
+        client = AsyncMock()
+        client.start_stream.return_value = {"ts": "123.456"}
+        responder = await SlackPlanResponder.start(
+            client=client,
+            channel_id="C123",
+            thread_ts="1.0",
+            team_id="T123",
+            user_id="U123",
+            query="question",
+        )
+
+        await responder.on_process(
+            _process(status="in_progress", node="supervisor", reasoning=None)
+        )
+        await responder.on_process(
+            _process(
+                status="completed",
+                node="supervisor",
+                reasoning="API 종류를 묻는 일반적인 검색 질문이네요. 문서를 찾아볼게요.",
+            )
+        )
+
+        self.assertEqual(client.append_stream.await_count, 2)
+        self.assertEqual(
+            client.append_stream.await_args_list[0].kwargs["chunks"],
+            [
+                {
+                    "type": "task_update",
+                    "id": PLAN_PLACEHOLDER_TASK_ID,
+                    "title": PLAN_PLACEHOLDER_TASK_TITLE,
+                    "status": "in_progress",
+                }
+            ],
+        )
+        self.assertEqual(
+            client.append_stream.await_args_list[1].kwargs["chunks"],
+            [
                 {
                     "type": "task_update",
                     "id": PLAN_PLACEHOLDER_TASK_ID,
