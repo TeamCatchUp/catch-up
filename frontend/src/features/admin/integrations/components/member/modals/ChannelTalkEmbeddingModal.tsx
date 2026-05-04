@@ -12,7 +12,6 @@ import { DEFAULT_PERIOD } from '../../../constants/period';
 import { useChannelTalkSelection } from '../../../hooks/useChannelTalkSelection';
 import { adminConnectorMutations } from '../../../queries/adminConnector.mutations';
 import { adminConnectorQueries } from '../../../queries/adminConnector.queries';
-import { channelTalkQueries } from '../../../queries/channelTalk.queries';
 import type { SyncConnector } from '../../../types/syncModel';
 import { groupChannelTalkSyncDispatch, pickSyncDays } from '../../../utils/channelTalkSyncDispatch';
 import { type ChannelTalkChannel, mapChannelTalkSyncTargets } from '../../../utils/mapChannelTalkSyncTargets';
@@ -57,14 +56,13 @@ interface ModalBodyProps {
 
 function ModalBody({ onClose, onJobStart }: ModalBodyProps) {
   // 1) 채널 credential 목록 GET → 등록된 N개 channel_id 수집
-  const channelListQuery = useQuery(channelTalkQueries.list());
-  const installedChannelIds = useMemo(
-    () =>
-      (channelListQuery.data ?? [])
-        .filter((c): c is typeof c & { channel_id: string } => c.installed && !!c.channel_id)
-        .map((c) => c.channel_id),
-    [channelListQuery.data],
-  );
+  const channelStatusQuery = useQuery(adminConnectorQueries.connectionStatus('channel_talk'));
+  const installedChannelIds = useMemo(() => {
+    if (channelStatusQuery.data?.vendor !== 'channel_talk') return [];
+    return channelStatusQuery.data.items
+      .filter((item) => item.metadata.credential_type === 'channel')
+      .map((item) => item.id);
+  }, [channelStatusQuery.data]);
 
   // 2) sync targets — 각 channel_id별로 호출 (백엔드는 scope_id 단일이라 channel당 1회)
   const targetsQueries = useQueries({

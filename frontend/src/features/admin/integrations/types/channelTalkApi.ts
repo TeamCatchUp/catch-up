@@ -31,16 +31,6 @@ export interface ChannelTalkConnectResponse {
   message: string;
 }
 
-/** GET /api/v1/admin/connector/channel-talk/credentials 응답 */
-export interface ChannelTalkStatusResponse {
-  installed: boolean;
-  channel_id: string | null;
-  channel_name: string | null;
-  credential_last_verified_at: string | null;
-  webhook_token_configured: boolean;
-  status_reason: string | null;
-}
-
 // ─── Document Space Credential ───
 
 /** POST /api/v1/admin/connector/channel-talk/documents/credentials(/validate) 요청 body */
@@ -69,17 +59,6 @@ export interface ChannelTalkDocumentConnectResponse {
   status_reason: string | null;
   status: 'connected';
   message: string;
-}
-
-/** GET /api/v1/admin/connector/channel-talk/documents/credentials 응답 */
-export interface ChannelTalkDocumentStatusResponse {
-  installed: boolean;
-  channel_id: string | null;
-  space_id: string | null;
-  space_name: string | null;
-  credential_last_verified_at: string | null;
-  association_status: string | null;
-  status_reason: string | null;
 }
 
 // ─── Uninstall (DELETE) ───

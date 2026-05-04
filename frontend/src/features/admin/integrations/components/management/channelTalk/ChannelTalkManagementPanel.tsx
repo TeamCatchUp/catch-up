@@ -10,13 +10,14 @@ import { Button } from '@/shared/components/ui/button';
 import { cn } from '@/shared/utils/cn';
 
 import { useChannelTalkViewModel } from '../../../hooks/useChannelTalkViewModel';
-import { channelTalkQueries } from '../../../queries/channelTalk.queries';
+import { adminConnectorQueries } from '../../../queries/adminConnector.queries';
 import type { ChannelTalkConnectionState } from '../../../types/channelTalkModel';
 import type {
   ChannelTalkChannel,
   ChannelTalkChannelPatch,
   ChannelTalkDocumentSpacePatch,
 } from '../../../types/channelTalkModel';
+import type { ChannelTalkConnectionStatusResponse } from '../../../types/connectionStatusApi';
 import type { ConnectorDetail } from '../../../types/integrationModel';
 import { deriveChannelTalkInitialState } from '../../../utils/deriveChannelTalkInitialState';
 import ChannelTalkChannelCard from './ChannelTalkChannelCard';
@@ -34,24 +35,22 @@ interface ChannelTalkManagementPanelProps {
  * 이 mount/unmount 분리는 React 19 `react-hooks/set-state-in-effect` 룰을 회피하기 위함.
  */
 export default function ChannelTalkManagementPanel({ detail }: ChannelTalkManagementPanelProps) {
-  const channelListQuery = useQuery(channelTalkQueries.list());
-  const documentListQuery = useQuery(channelTalkQueries.documentList());
+  const statusQuery = useQuery(adminConnectorQueries.connectionStatus('channel_talk'));
+  const channelTalkStatus =
+    statusQuery.data?.vendor === 'channel_talk' ? (statusQuery.data as ChannelTalkConnectionStatusResponse) : undefined;
 
   // outer가 detail 변화 등으로 자주 re-render돼도 derive 비용을 한 번만 지불.
   // TanStack Query는 동일 fetched data에 대해 stable reference를 보장하므로 cache hit이 잘 동작.
-  const initialState = useMemo(
-    () => deriveChannelTalkInitialState(channelListQuery.data, documentListQuery.data),
-    [channelListQuery.data, documentListQuery.data],
-  );
+  const initialState = useMemo(() => deriveChannelTalkInitialState(channelTalkStatus), [channelTalkStatus]);
 
-  if (channelListQuery.isLoading || documentListQuery.isLoading) {
+  if (statusQuery.isLoading) {
     // 채널톡 백엔드 응답 대기 중 — 빈 placeholder. 짧은 폴링이라 별도 스켈레톤 없이 충분.
     return <div className="flex flex-col gap-6" />;
   }
 
   // fetch 실패 시 빈 카드로 무음 진입을 막아 "등록된 적 없음"으로 오인하는 것을 방지.
   // 사용자에게 명시적 에러 + 새로고침 안내. ConnectionStatus/DataRange 섹션 자리는 비워둠.
-  if (channelListQuery.isError || documentListQuery.isError) {
+  if (statusQuery.isError) {
     return (
       <div className="flex flex-col gap-6">
         <div className="border-edge-assistive bg-fill-strong text-body-small text-status-destructive rounded-xl border px-4 py-3">
