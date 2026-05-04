@@ -6,12 +6,11 @@ import IconVisibility from '@/public/icons/icon/visibility.svg';
 import IconVisibilityOff from '@/public/icons/icon/visibility_off.svg';
 import { cn } from '@/shared/utils/cn';
 
-import type { ChannelTalkFieldState } from '../../../types/channelTalkModel';
-
 interface ChannelTalkTextFieldProps {
   value: string;
   placeholder: string;
-  state?: ChannelTalkFieldState;
+  /** 텍스트필드 시각 변형 — error는 1.5px destructive border, idle은 1px neutral border */
+  state?: 'idle' | 'error';
   /** 비밀값 입력 — eye-off 토글 버튼 노출 (기본은 평문 표시, 클릭 시 마스킹) */
   maskable?: boolean;
   /** 초기 마스킹 여부 (maskable=true일 때만 적용, 기본 false = 평문 표시) */
@@ -24,7 +23,7 @@ interface ChannelTalkTextFieldProps {
   'aria-label'?: string;
 }
 
-/** 채널톡 Access Key/Secret/Webhook Token 입력용 텍스트필드 (5상태 + 마스킹 토글) */
+/** 채널톡 Access Key/Secret/Webhook Token 입력용 텍스트필드 (idle/error + 마스킹 토글) */
 export default function ChannelTalkTextField({
   value,
   placeholder,
@@ -62,7 +61,6 @@ export default function ChannelTalkTextField({
         disabled ? 'bg-fill-interaction-disable ring-edge-neutral' : 'bg-fill-normal',
         !disabled && state === 'idle' && 'ring-edge-neutral focus-within:ring-edge-primary',
         !disabled && state === 'error' && 'ring-status-destructive',
-        !disabled && state === 'focus' && 'ring-edge-primary',
       )}
     >
       <input
