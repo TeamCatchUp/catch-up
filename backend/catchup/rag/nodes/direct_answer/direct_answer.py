@@ -12,6 +12,7 @@ from catchup.rag.nodes.utils import build_system_message
 from catchup.rag.nodes.utils import get_conversation_history
 from catchup.rag.nodes.utils import log_node
 from catchup.rag.policies import FALLBACK_ANSWER
+from catchup.rag.schemas.sources import SOURCE_METADATA
 from catchup.rag.semaphores import rag_semaphores
 from catchup.rag.state import AgentState
 
@@ -89,6 +90,7 @@ def _load_prompts(
     return {
         "system": prompt_loader.get_prompt(
             "rag/direct_answer",
+            sources=list(SOURCE_METADATA.values()),
             **global_context,
         ),
         "job_role": prompt_loader.get_prompt(

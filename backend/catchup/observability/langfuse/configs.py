@@ -14,11 +14,17 @@ def init_langfuse() -> None:
         return
 
     try:
-        from langfuse import get_client
-        _langfuse_client = get_client()
+        from langfuse import Langfuse
+        _langfuse_client = Langfuse(
+            public_key=settings.LANGFUSE_PUBLIC_KEY,
+            secret_key=settings.LANGFUSE_SECRET_KEY,
+            base_url=settings.LANGFUSE_BASE_URL,
+            timeout=settings.LANGFUSE_TIMEOUT,
+        )
         logger.info(
             "langfuse_client_init",
-            status="success"
+            status="success",
+            timeout=settings.LANGFUSE_TIMEOUT
         )
         
     except Exception as e:
