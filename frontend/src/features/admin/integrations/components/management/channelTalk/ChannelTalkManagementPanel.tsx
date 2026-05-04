@@ -74,13 +74,11 @@ function ChannelTalkManagementPanelInner({ initialState, detail }: ChannelTalkMa
     addChannel,
     updateChannel,
     removeChannel,
-    enterEditMode,
     addDocumentSpace,
     updateDocumentSpace,
     removeDocumentSpace,
     testChannelConnection,
     testDocumentSpaceConnection,
-    enterDocumentSpaceEditMode,
   } = useChannelTalkViewModel(initialState);
 
   const hasChannels = state.channels.length > 0;
@@ -112,11 +110,9 @@ function ChannelTalkManagementPanelInner({ initialState, detail }: ChannelTalkMa
         onAddChannel={addChannel}
         onUpdateChannel={updateChannel}
         onRemoveChannel={removeChannel}
-        onEnterEditMode={enterEditMode}
         onAddDocumentSpace={addDocumentSpace}
         onUpdateDocumentSpace={updateDocumentSpace}
         onRemoveDocumentSpace={removeDocumentSpace}
-        onEnterDocumentSpaceEditMode={enterDocumentSpaceEditMode}
         onTestChannelConnection={testChannelConnection}
         onTestDocumentSpaceConnection={testDocumentSpaceConnection}
       />
@@ -192,11 +188,9 @@ interface CredentialSectionProps {
   onAddChannel: () => void;
   onUpdateChannel: (channelId: string, patch: ChannelTalkChannelPatch) => void;
   onRemoveChannel: (channelId: string) => void;
-  onEnterEditMode: (channelId: string) => void;
   onAddDocumentSpace: (channelId: string) => void;
   onUpdateDocumentSpace: (channelId: string, dsId: string, patch: ChannelTalkDocumentSpacePatch) => void;
   onRemoveDocumentSpace: (channelId: string, dsId: string) => void;
-  onEnterDocumentSpaceEditMode: (channelId: string, dsId: string) => void;
   onTestChannelConnection: (channelId: string) => void;
   onTestDocumentSpaceConnection: (channelId: string, dsId: string) => void;
 }
@@ -210,11 +204,9 @@ function CredentialSection({
   onAddChannel,
   onUpdateChannel,
   onRemoveChannel,
-  onEnterEditMode,
   onAddDocumentSpace,
   onUpdateDocumentSpace,
   onRemoveDocumentSpace,
-  onEnterDocumentSpaceEditMode,
   onTestChannelConnection,
   onTestDocumentSpaceConnection,
 }: CredentialSectionProps) {
@@ -241,11 +233,9 @@ function CredentialSection({
                 channel={channel}
                 onUpdate={(patch) => onUpdateChannel(channel.id, patch)}
                 onRemove={() => onRemoveChannel(channel.id)}
-                onEnterEdit={() => onEnterEditMode(channel.id)}
                 onAddDocumentSpace={() => onAddDocumentSpace(channel.id)}
                 onUpdateDocumentSpace={(dsId, patch) => onUpdateDocumentSpace(channel.id, dsId, patch)}
                 onRemoveDocumentSpace={(dsId) => onRemoveDocumentSpace(channel.id, dsId)}
-                onEnterDocumentSpaceEdit={(dsId) => onEnterDocumentSpaceEditMode(channel.id, dsId)}
                 onTestConnection={() => onTestChannelConnection(channel.id)}
                 onTestDocumentSpaceConnection={(dsId) => onTestDocumentSpaceConnection(channel.id, dsId)}
               />
