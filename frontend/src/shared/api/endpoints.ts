@@ -48,6 +48,11 @@ export const API = {
     status: `${API_PREFIX}/auth/atlassian/status`, // GET 연동 상태 + resources (scope_id 획득용)
   },
 
+  // 통합 연결 상태 — vendor별 OAuth/credential 연결 상태 + scope_id 획득용
+  integrations: {
+    connectionStatus: (vendor: string) => `${API_PREFIX}/integrations/${vendor}/connection-status`, // GET vendor: github | slack | atlassian | jira | confluence | channel_talk
+  },
+
   // 통합 Sync API
   sync: {
     full: `${API_PREFIX}/sync/full`, // POST 통합 Full Sync 요청
