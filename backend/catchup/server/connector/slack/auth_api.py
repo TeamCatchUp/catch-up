@@ -2,37 +2,43 @@ from __future__ import annotations
 
 import secrets
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
+from datetime import timedelta
+from datetime import timezone
 
 import structlog
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
+from fastapi import APIRouter
+from fastapi import BackgroundTasks
+from fastapi import Depends
+from fastapi import HTTPException
+from fastapi import Query
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import RedirectResponse
-from httpx import HTTPStatusError, RequestError
+from httpx import HTTPStatusError
+from httpx import RequestError
 from sqlalchemy import select
 
 from catchup.audit.actions import IntegrationAction
-from catchup.audit.enums import AuditEventStatus, AuditLevel
+from catchup.audit.enums import AuditEventStatus
+from catchup.audit.enums import AuditLevel
 from catchup.audit.metadata import IntegrationAuditMetadata
 from catchup.audit.service import emit_audit_event
 from catchup.audit.utils import audit_log
-from catchup.connectors.slack.auth import get_slack_oauth_service, SlackOAuthService
-from catchup.connectors.slack.client import SlackRateLimitError
-from catchup.connectors.slack.schemas import (
-    SlackInstallationStatus,
-    SlackOAuthTokenResponse,
-    SlackWorkspaceInfo,
-)
 from catchup.configs.config import auth_settings
+from catchup.connectors.slack.auth import SlackOAuthService
+from catchup.connectors.slack.auth import get_slack_oauth_service
+from catchup.connectors.slack.factory import create_slack_metadata_service
+from catchup.connectors.slack.schemas import SlackOAuthTokenResponse
+from catchup.db.engine import SessionLocal
 from catchup.db.knowledge_source import add_knowledge_source
-from catchup.db.models import KnowledgeSource, SourceType
+from catchup.db.models import KnowledgeSource
+from catchup.db.models import SourceType
 from catchup.db.slack import oauth_repository as slack_crud
 from catchup.db.workspaces import get_workspace_limit_one
-from catchup.events.enums import EventType, IntegrationEventAction
-from catchup.connectors.slack.factory import create_slack_metadata_service
-from catchup.db.engine import SessionLocal
-from catchup.utils.redis import store_oauth_state, validate_oauth_state
-
+from catchup.events.enums import EventType
+from catchup.events.enums import IntegrationEventAction
+from catchup.utils.redis import store_oauth_state
+from catchup.utils.redis import validate_oauth_state
 
 logger = structlog.get_logger()
 
@@ -91,62 +97,6 @@ async def slack_oauth_callback(
         )
 
     return RedirectResponse(url=_build_slack_success_redirect_url(result.team_name))
-
-
-@router.get("/status", response_model=SlackInstallationStatus)
-async def slack_installation_status(
-    slack_service: SlackOAuthService = Depends(get_slack_oauth_service),
-):
-    """Slack 설치 상태 조회"""
-    tokens = await run_in_threadpool(_load_all_slack_tokens_db)
-
-    if not tokens:
-        return SlackInstallationStatus(installed=False)
-
-    workspaces = []
-    for token in tokens:
-        try:
-            # 토큰 유효성 확인
-            valid_token = await slack_service.get_valid_access_token(token)
-            await slack_service.test_auth(valid_token)
-
-            workspaces.append(SlackWorkspaceInfo(
-                team_id=token.team_id,
-                team_name=token.team_name or "",
-                bot_user_id=token.bot_user_id,
-                scopes=token.bot_scopes.split() if token.bot_scopes else [],
-                connected_at=token.created_at,
-            ))
-        except (HTTPException, SlackRateLimitError) as e:
-            detail = e.detail if isinstance(e, HTTPException) else e.message
-            logger.warning(
-                "slack_installation_status_failed",
-                team_id=token.team_id,
-                reason=detail,
-            )
-            # 토큰이 유효하지 않더라도 연결된 것으로 표시
-            workspaces.append(SlackWorkspaceInfo(
-                team_id=token.team_id,
-                team_name=token.team_name or "",
-                bot_user_id=token.bot_user_id,
-                scopes=[],
-                connected_at=token.created_at,
-            ))
-        except (HTTPStatusError, RequestError):
-            logger.warning(
-                "slack_installation_status_failed",
-                team_id=token.team_id,
-                reason="api_request_failed",
-            )
-            workspaces.append(SlackWorkspaceInfo(
-                team_id=token.team_id,
-                team_name=token.team_name or "",
-                bot_user_id=token.bot_user_id,
-                scopes=[],
-                connected_at=token.created_at,
-            ))
-
-    return SlackInstallationStatus(installed=True, workspaces=workspaces)
 
 
 @router.delete("/uninstall")
@@ -403,11 +353,6 @@ def _build_slack_failure_redirect_url(reason: str) -> str:
         f"{auth_settings.FRONTEND_REDIRECT_URI}"
         f"?slack_installed=false&reason={reason}"
     )
-
-
-def _load_all_slack_tokens_db():
-    with SessionLocal() as db:
-        return slack_crud.get_all_slack_tokens(db)
 
 
 def _load_slack_token_db(team_id: str):
