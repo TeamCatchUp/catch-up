@@ -11,7 +11,6 @@ import type { IntegrationService } from '@/shared/types/integrationService';
 import type { MemberIntegrationCardItem } from '../../../types/integrationModel';
 import type { EmbeddingButtonState, SyncConnector } from '../../../types/syncModel';
 import EmbeddingModal from '../modals/EmbeddingModal';
-import RecoveryCardSection from './RecoveryCardSection';
 
 // 채널톡 임베딩 모달은 사용자가 "임베딩하기" 버튼을 클릭한 시점에만 필요하므로 lazy load.
 // 임베딩 버튼 hover/focus 시에는 preloadChannelTalkModal()로 chunk를 미리 가져온다.
@@ -106,8 +105,6 @@ export default function StatusCardsSection({
         <h2 className="text-heading-large text-content-normal">계정 등록 상태</h2>
         <p className="text-body-small text-content-alternative">팀의 매핑 등록 상태를 확인할 수 있어요.</p>
       </div>
-
-      <RecoveryCardSection />
 
       <div className="grid grid-cols-[repeat(auto-fill,minmax(320px,1fr))] gap-6">
         {cards.map((card) => {
