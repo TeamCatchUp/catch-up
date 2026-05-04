@@ -1,10 +1,9 @@
 /**
  * 새로고침 hydrate 시 키 필드 마스킹 placeholder.
  *
- * 백엔드 GET /credentials 응답에는 보안상 access_key/secret/token 평문이 없으므로,
- * `installed: true`로 hydrate된 카드는 키 필드를 이 8자 마스킹 문자로 채워서 보여준다.
- * 사용자가 "수정하기" 버튼을 누르면 viewModel이 이 값을 빈 문자열로 초기화하여
- * 새 키 입력을 받는다.
+ * 백엔드 GET 응답에는 보안상 access_key/secret/token 평문이 없으므로 hydrate된 카드의
+ * 키 필드를 이 8자 마스킹 문자로 채운다. 테스트 완료된 카드는 collapsed 상태로 lock되어
+ * 키 자체가 화면에 노출되지 않으며, 변경이 필요하면 카드를 삭제 후 재등록한다.
  */
 export const MASKED_PLACEHOLDER = '●●●●●●●●';
 
@@ -43,29 +42,11 @@ export const DOCUMENT_SPACE_SYNC_INTERVAL_DEFAULT: ChannelTalkSyncInterval = '1h
 
 /**
  * 채널 카드 연결 상태 머신.
- * - `idle`: 입력 전 — 빈 placeholder
- * - `entered`: 입력 완료, 미검증
- * - `tested`: 연결 테스트 성공
- * - `error`: 검증 실패 (필드 1.5px destructive border + eye 토글 + 에러 메시지)
- * - `editing`: Key 수정 중 (focus border + cursor + "연결 테스트하기" 버튼 active)
+ * - `idle`: 입력 전 — 빈 placeholder. 사용자가 키를 수정하면 error에서도 이 상태로 reset된다.
+ * - `tested`: 연결 테스트 성공 → 카드는 collapsed로 lock. 변경하려면 삭제 후 재등록.
+ * - `error`: 검증 실패 (필드 1.5px destructive border + 토스트). 카드는 expanded 유지 — 키 재입력 가능.
  */
-export type ChannelTalkConnectionStatus = 'idle' | 'entered' | 'tested' | 'error' | 'editing';
-
-/**
- * 텍스트필드 시각 변형.
- * - `idle`: 1px neutral border
- * - `error`: 1.5px destructive border (검증 실패)
- * - `focus`: 1.5px primary border (사용자 수정 중)
- */
-export type ChannelTalkFieldState = 'idle' | 'error' | 'focus';
-
-/**
- * 연결 테스트 버튼 시각 상태.
- * - `idle`: 입력 전 / Entered
- * - `active`: 사용자 수정 중 (검증 권유)
- * - `success`: 검증 통과 — 라벨 "테스트 성공"
- */
-export type ChannelTalkTestButtonStatus = 'idle' | 'active' | 'success';
+export type ChannelTalkConnectionStatus = 'idle' | 'tested' | 'error';
 
 /** 채널톡 도큐먼트 스페이스 (채널 하위 항목) — 자체 connectionStatus를 가짐 (채널과 독립) */
 export interface ChannelTalkDocumentSpace {
