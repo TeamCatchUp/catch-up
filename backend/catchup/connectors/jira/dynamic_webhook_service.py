@@ -5,7 +5,9 @@ Jira Dynamic Webhook 관리 서비스
 - DB에 webhook ID/만료 시각 상태 저장
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
+from datetime import timedelta
+from datetime import timezone
 from urllib.parse import urlparse
 
 import structlog
@@ -16,20 +18,16 @@ from catchup.audit.actions import IntegrationAction
 from catchup.audit.metadata import RegisterWebhookAuditMetadata
 from catchup.audit.utils import audit_log
 from catchup.configs.config import settings
-from catchup.connectors.atlassian.exceptions import (
-    AtlassianTokenNotFoundError,
-)
-from catchup.connectors.atlassian.token_manager import (
-    AtlassianTokenManager,
-    AtlassianTokenProvider,
-)
+from catchup.connectors.atlassian.exceptions import AtlassianTokenNotFoundError
 from catchup.connectors.atlassian.oauth_client import AtlassianOAuthClient
+from catchup.connectors.atlassian.token_manager import AtlassianTokenManager
+from catchup.connectors.atlassian.token_manager import AtlassianTokenProvider
 from catchup.connectors.atlassian.utils import parse_atlassian_datetime
 from catchup.connectors.jira.client import JiraApiClient
 from catchup.db.atlassian import oauth_repository as atlassian_oauth
 from catchup.db.engine import SessionLocal
-from catchup.db.jira import webhook_repository as jira_webhook
 from catchup.db.jira import domain_repository as jira_domain
+from catchup.db.jira import webhook_repository as jira_webhook
 
 logger = structlog.get_logger()
 
@@ -168,6 +166,13 @@ class JiraDynamicWebhookService:
             ),
         }
 
+    def _collect_registration_errors(self, registration_results: list[dict]) -> list[str]:
+        errors: list[str] = []
+        for item in registration_results:
+            item_errors = item.get("errors") or []
+            errors.extend(str(error) for error in item_errors if error)
+        return errors
+
     def _store_webhook_state_db(
         self,
         cloud_id: str,
@@ -245,12 +250,17 @@ class JiraDynamicWebhookService:
                 db.rollback()
                 raise
 
-    async def sync_webhook_state(self, cloud_id: str) -> list[dict]:
+    async def sync_webhook_state(
+        self,
+        cloud_id: str,
+        observed_at: datetime | None = None,
+    ) -> list[dict]:
         """
         Jira API 상태를 DB에 동기화
         """
         client = await self._create_client(cloud_id)
         callback_url = self._build_callback_url(cloud_id)
+        sync_observed_at = observed_at or datetime.now(timezone.utc)
 
         webhooks = await client.list_all_dynamic_webhooks()
         own_webhooks = [
@@ -263,7 +273,7 @@ class JiraDynamicWebhookService:
             cloud_id,
             callback_url,
             own_webhooks,
-            datetime.now(timezone.utc),
+            sync_observed_at,
         )
 
     async def register_webhook(
@@ -315,17 +325,52 @@ class JiraDynamicWebhookService:
             if item.get("createdWebhookId") is not None
         ]
 
-        subscriptions = await self.sync_webhook_state(cloud_id)
+        observed_at = datetime.now(timezone.utc)
+        subscriptions = await self.sync_webhook_state(
+            cloud_id,
+            observed_at=observed_at,
+        )
+        registration_errors = self._collect_registration_errors(registration_results)
+
+        if not subscriptions:
+            logger.warning(
+                "jira_dynamic_webhook_register_not_persisted",
+                cloud_id=cloud_id,
+                source=source,
+                created_webhook_count=len(created_webhook_ids),
+                stored_webhook_count=len(subscriptions),
+                registration_errors=registration_errors,
+            )
+            raise HTTPException(
+                status_code=502,
+                detail={
+                    "message": "Jira dynamic webhook was not persisted in jira_webhook_subscriptions",
+                    "cloud_id": cloud_id,
+                    "created_webhook_ids": created_webhook_ids,
+                    "registration_errors": registration_errors,
+                    "stored_webhook_count": len(subscriptions),
+                },
+            )
+
+        result_status = "registered" if created_webhook_ids else "synced_existing"
+        log_event = (
+            "jira_dynamic_webhook_registered"
+            if created_webhook_ids
+            else "jira_dynamic_webhook_synced_existing"
+        )
 
         logger.info(
-            "jira_dynamic_webhook_registered",
+            log_event,
             cloud_id=cloud_id,
             source=source,
+            result_status=result_status,
             created_webhook_count=len(created_webhook_ids),
+            stored_webhook_count=len(subscriptions),
+            registration_errors=registration_errors,
         )
 
         return {
-            "status": "registered",
+            "status": result_status,
             "cloud_id": cloud_id,
             "source": source,
             "callback_url": callback_url,
