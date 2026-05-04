@@ -54,7 +54,6 @@ export const API = {
     targets: `${API_PREFIX}/sync/targets`, // GET Sync 대상 후보 조회 (?connector=&scope_id=)
     status: `${API_PREFIX}/sync/status`, // GET Scope 기준 최신 상태 (?connector=&scope_id=)
     job: (jobId: string) => `${API_PREFIX}/sync/jobs/${jobId}`, // GET Job 스냅샷 조회
-    jobStream: (jobId: string) => `${API_PREFIX}/sync/jobs/${jobId}/stream`, // GET SSE 실시간 이벤트 스트림
     recordGaps: `${API_PREFIX}/sync/records/gaps`, // GET 누락 레코드 조회 (?event_id=)
     retryRecords: `${API_PREFIX}/sync/records/retry`, // POST 누락 레코드 재시도
     slackIncrementalRecovery: `${API_PREFIX}/sync/slack/incremental-recovery`, // POST Slack 증분 동기화 복구
