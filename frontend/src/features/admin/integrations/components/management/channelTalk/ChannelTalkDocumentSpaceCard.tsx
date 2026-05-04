@@ -23,6 +23,11 @@ interface ChannelTalkDocumentSpaceCardProps {
 /**
  * 채널톡 도큐먼트 스페이스 카드 — 자체 connectionStatus + lock/검증 흐름 (채널과 독립).
  *
+ * Layout (Figma 패턴): outer는 `pt-5`, 좌측 column은 `pb-5 self-stretch`, 우측 form은
+ * `border-b pb-5`. 카드 사이 spacing은 다음 카드의 outer `pt-5`가 담당, 카드 하단 구분선은
+ * 우측 form의 `border-b`가 담당. 좌측 column self-stretch는 outer height에 맞춰 늘어나며,
+ * 짧은 vertical line이 IconBook 아래부터 카드 끝까지 채워 카드들 사이 시각 연결을 만든다.
+ *
  * - `tested` 상태는 헤더 한 줄로 collapsed 되어 영구 lock. 변경하려면 삭제 후 재등록.
  * - `idle`/`error` 상태는 expanded — 키 입력 + 연결 테스트 버튼 노출.
  */
@@ -39,55 +44,63 @@ export default function ChannelTalkDocumentSpaceCard({
   const fieldState: 'idle' | 'error' = status === 'error' ? 'error' : 'idle';
   const canTestConnection = isDocumentSpaceSecretsFilled(documentSpace);
 
+  // 좌측 column 자체 minimum이 우측 form minimum보다 커지면 outer가 좌측에 의해 결정되고
+  // 우측 form이 stretch되면서 row 아래에 빈 공간이 padding처럼 생김. gap-2(8) + pb 제거로
+  // 좌측 min을 줄여 outer가 우측에 맞춰지도록 → row 아래 빈 공간 0, line은 자동 stretch로 약 10px 표시.
+  const leftColumn = (
+    <div className="flex shrink-0 flex-col items-center gap-2">
+      <div className="bg-fill-primary-normal-neutral flex size-8 shrink-0 items-center justify-center rounded-lg">
+        <IconBook className="text-icon-primary size-5" />
+      </div>
+      <div className="bg-edge-neutral min-h-px w-px flex-1" aria-hidden />
+    </div>
+  );
+
+  const confirmDialog = (
+    <ConfirmDialog
+      open={deleteDialogOpen}
+      onOpenChange={setDeleteDialogOpen}
+      title="도큐먼트 스페이스를 삭제하면 입력한 모든 데이터가 사라집니다."
+      description="이 스페이스를 삭제하시겠어요?"
+      confirmLabel="삭제하기"
+      variant="primary"
+      onConfirm={onRemove}
+    />
+  );
+
   // ─── tested → collapsed: 헤더 한 줄만 ───
   if (isTested) {
     return (
-      <div className="flex w-full items-start gap-4 pb-5">
-        <div className="flex shrink-0 flex-col items-center gap-5 self-stretch pt-5">
-          <div className="bg-fill-primary-normal-neutral flex size-8 shrink-0 items-center justify-center rounded-lg">
-            <IconBook className="text-icon-primary size-5" />
-          </div>
-          <div className="bg-edge-neutral w-px flex-1" aria-hidden />
-        </div>
+      <div className="flex w-full gap-4 pt-5">
+        {leftColumn}
 
-        <div className="border-edge-neutral flex min-w-0 flex-1 items-center justify-between gap-2 border-t pt-5">
-          <h4 className="text-heading-small text-content-normal min-w-0 flex-1 truncate">{documentSpace.name}</h4>
-          <div className="flex shrink-0 items-center gap-3">
-            <div className="flex items-center gap-1">
-              <IconCheck className="text-icon-primary size-4.5 shrink-0" />
-              <span className="text-body-xsmall text-content-primary">테스트 완료</span>
+        <div className="border-edge-neutral flex min-w-0 flex-1 flex-col items-start border-b pb-5">
+          <div className="flex w-full flex-wrap items-center justify-between gap-2">
+            <h4 className="text-heading-small text-content-normal min-w-0 flex-1 truncate">{documentSpace.name}</h4>
+            <div className="flex shrink-0 items-center gap-3">
+              <div className="flex items-center gap-1">
+                <IconCheck className="text-icon-primary size-4.5 shrink-0" />
+                <span className="text-body-xsmall text-content-primary">테스트 완료</span>
+              </div>
+              <div className="bg-edge-neutral h-4.5 w-px" aria-hidden />
+              <Button variant="box-outline-gray" size="sm" onClick={() => setDeleteDialogOpen(true)}>
+                삭제
+              </Button>
             </div>
-            <div className="bg-edge-neutral h-4.5 w-px" aria-hidden />
-            <Button variant="box-outline-gray" size="sm" onClick={() => setDeleteDialogOpen(true)}>
-              삭제
-            </Button>
           </div>
         </div>
 
-        <ConfirmDialog
-          open={deleteDialogOpen}
-          onOpenChange={setDeleteDialogOpen}
-          title="도큐먼트 스페이스를 삭제하면 입력한 모든 데이터가 사라집니다."
-          description="이 스페이스를 삭제하시겠어요?"
-          confirmLabel="삭제하기"
-          variant="primary"
-          onConfirm={onRemove}
-        />
+        {confirmDialog}
       </div>
     );
   }
 
   // ─── idle/error → expanded: 입력 폼 + 연결 테스트 버튼 ───
   return (
-    <div className="flex w-full items-start gap-4 pb-5">
-      <div className="flex shrink-0 flex-col items-center gap-5 self-stretch pt-5">
-        <div className="bg-fill-primary-normal-neutral flex size-8 shrink-0 items-center justify-center rounded-lg">
-          <IconBook className="text-icon-primary size-5" />
-        </div>
-        <div className="bg-edge-neutral w-px flex-1" aria-hidden />
-      </div>
+    <div className="flex w-full gap-4 pt-5">
+      {leftColumn}
 
-      <div className="border-edge-neutral flex min-w-0 flex-1 flex-col gap-4 border-t pt-5">
+      <div className="border-edge-neutral flex min-w-0 flex-1 flex-col gap-4 border-b pb-5">
         {/* Header — 이름 + 삭제 버튼 */}
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h4 className="text-heading-small text-content-normal min-w-0 flex-1 truncate">{documentSpace.name}</h4>
@@ -145,15 +158,7 @@ export default function ChannelTalkDocumentSpaceCard({
         </Button>
       </div>
 
-      <ConfirmDialog
-        open={deleteDialogOpen}
-        onOpenChange={setDeleteDialogOpen}
-        title="도큐먼트 스페이스를 삭제하면 입력한 모든 데이터가 사라집니다."
-        description="이 스페이스를 삭제하시겠어요?"
-        confirmLabel="삭제하기"
-        variant="primary"
-        onConfirm={onRemove}
-      />
+      {confirmDialog}
     </div>
   );
 }
