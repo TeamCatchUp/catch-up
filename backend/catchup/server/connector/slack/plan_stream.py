@@ -15,6 +15,8 @@ logger = structlog.get_logger(__name__)
 # 최상단 노출 텍스트
 PLAN_TITLE = "Catch Up이 답변을 준비하고 있어요"
 PLAN_COMPLETED_TITLE = "Catch Up이 답변을 완성했어요 :)"
+PLAN_PLACEHOLDER_TASK_ID = "reasoning-1"
+PLAN_PLACEHOLDER_TASK_TITLE = "\u200b"
 
 # section fallback 렌더링 제약조건
 MAX_SECTION_TEXT = 2900
@@ -55,11 +57,25 @@ class SlackPlanState:
         self.tasks: dict[str, TaskState] = {}
         self.reasoning_task_count = 0
         self.open_reasoning_task_id: str | None = None
+        self.placeholder_task_id: str | None = None
         # UI 노출 관련도 높은 출처
         self.top_sources: list[Any] = []
 
     def build_initial_chunks(self) -> list[dict[str, Any]]:
-        return [build_plan_title_chunk(PLAN_TITLE)]
+        self.placeholder_task_id = PLAN_PLACEHOLDER_TASK_ID
+        self.reasoning_task_count = max(self.reasoning_task_count, 1)
+        self.tasks[PLAN_PLACEHOLDER_TASK_ID] = TaskState(
+            title=PLAN_PLACEHOLDER_TASK_TITLE,
+            status="pending",
+        )
+        return [
+            build_plan_title_chunk(PLAN_TITLE),
+            self._task_chunk(
+                task_id=PLAN_PLACEHOLDER_TASK_ID,
+                title=PLAN_PLACEHOLDER_TASK_TITLE,
+                status="pending",
+            ),
+        ]
 
     def apply_process(
         self,
@@ -195,8 +211,12 @@ class SlackPlanState:
         return self.tasks.get(self.open_reasoning_task_id)
 
     def _new_task_chunk(self, *, title: str, status: str) -> dict[str, Any]:
-        self.reasoning_task_count += 1
-        task_id = f"reasoning-{self.reasoning_task_count}"
+        if self.placeholder_task_id is not None:
+            task_id = self.placeholder_task_id
+            self.placeholder_task_id = None
+        else:
+            self.reasoning_task_count += 1
+            task_id = f"reasoning-{self.reasoning_task_count}"
         self.tasks[task_id] = TaskState(title=title, status=status)
         return self._task_chunk(task_id=task_id, title=title, status=status)
 
