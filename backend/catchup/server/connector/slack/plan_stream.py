@@ -88,6 +88,8 @@ class SlackPlanState:
         """
         reasoning = (process.reasoning or "").strip()
         if not reasoning:
+            if process.status == "in_progress":
+                return self._start_placeholder_task()
             return []
 
         if process.status == "in_progress":
@@ -165,12 +167,20 @@ class SlackPlanState:
         return blocks
 
     def _start_reasoning_task(self, title: str) -> list[dict[str, Any]]:
+        placeholder_chunk = self._replace_placeholder_task(title=title, status="in_progress")
+        if placeholder_chunk is not None:
+            return [placeholder_chunk]
+
         chunks = self.complete_open_reasoning_task()
         chunks.append(self._new_task_chunk(title=title, status="in_progress"))
         self.open_reasoning_task_id = chunks[-1]["id"]
         return chunks
 
     def _complete_reasoning_task(self, title: str) -> list[dict[str, Any]]:
+        placeholder_chunk = self._replace_placeholder_task(title=title, status="complete")
+        if placeholder_chunk is not None:
+            return [placeholder_chunk]
+
         open_task = self._open_reasoning_task()
         if open_task is not None and open_task.title == title:
             return self.complete_open_reasoning_task()
@@ -181,10 +191,59 @@ class SlackPlanState:
         ]
 
     def _error_reasoning_task(self, title: str) -> list[dict[str, Any]]:
+        placeholder_chunk = self._replace_placeholder_task(title=title, status="error")
+        if placeholder_chunk is not None:
+            return [placeholder_chunk]
+
         return [
             *self.complete_open_reasoning_task(),
             self._new_task_chunk(title=title, status="error"),
         ]
+
+    def _start_placeholder_task(self) -> list[dict[str, Any]]:
+        if self.open_reasoning_task_id is not None:
+            open_task = self.tasks.get(self.open_reasoning_task_id)
+            if open_task is not None and open_task.title != PLAN_PLACEHOLDER_TASK_TITLE:
+                return []
+
+        task_id = self.placeholder_task_id or self.open_reasoning_task_id
+        if task_id is None:
+            self.reasoning_task_count += 1
+            task_id = f"reasoning-{self.reasoning_task_count}"
+
+        task = self.tasks.get(task_id)
+        if task is not None and task.title == PLAN_PLACEHOLDER_TASK_TITLE and task.status == "in_progress":
+            self.placeholder_task_id = task_id
+            self.open_reasoning_task_id = task_id
+            return []
+
+        self.placeholder_task_id = task_id
+        self.open_reasoning_task_id = task_id
+        self.tasks[task_id] = TaskState(
+            title=PLAN_PLACEHOLDER_TASK_TITLE,
+            status="in_progress",
+        )
+        return [
+            self._task_chunk(
+                task_id=task_id,
+                title=PLAN_PLACEHOLDER_TASK_TITLE,
+                status="in_progress",
+            )
+        ]
+
+    def _replace_placeholder_task(self, *, title: str, status: str) -> dict[str, Any] | None:
+        task_id = self.placeholder_task_id or self.open_reasoning_task_id
+        if task_id is None:
+            return None
+
+        task = self.tasks.get(task_id)
+        if task is None or task.title != PLAN_PLACEHOLDER_TASK_TITLE:
+            return None
+
+        self.placeholder_task_id = None
+        self.open_reasoning_task_id = task_id if status == "in_progress" else None
+        self.tasks[task_id] = TaskState(title=title, status=status)
+        return self._task_chunk(task_id=task_id, title=title, status=status)
 
     def complete_open_reasoning_task(self) -> list[dict[str, Any]]:
         open_task_id = self.open_reasoning_task_id
