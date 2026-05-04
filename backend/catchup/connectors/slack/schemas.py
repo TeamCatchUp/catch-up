@@ -8,8 +8,8 @@ Transformer에서 이 스키마들을 사용하여 LangChain Document를 생성.
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, Field
-
+from pydantic import BaseModel
+from pydantic import Field
 
 # ============================================================
 # 공통 서브 모델
@@ -287,18 +287,6 @@ class SlackOAuthTokenResponse(BaseModel):
     refresh_token: str | None = None
     expires_in: int | None = None
 
-
-class SlackWorkspaceInfo(BaseModel):
-    team_id: str
-    team_name: str
-    bot_user_id: str
-    scopes: list[str]
-    connected_at: datetime
-
-
-class SlackInstallationStatus(BaseModel):
-    installed: bool
-    workspaces: list[SlackWorkspaceInfo] = Field(default_factory=list)
 
 # ============================================================
 # Webhook Event Schemas (Event Subscriptions API)

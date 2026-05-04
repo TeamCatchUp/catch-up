@@ -161,3 +161,41 @@ class IntegrationConnectionStatusQueryTests(TestCase):
         self.assertEqual(payload["id"], "T123")
         self.assertNotIn("bot_access_token", payload["metadata"])
         self.assertNotIn("xoxb-secret", str(payload))
+
+    def test_channel_talk_status_uses_record_fields_only(self) -> None:
+        verified_at = datetime(2026, 5, 4, tzinfo=timezone.utc)
+        channel_record = SimpleNamespace(
+            channel_id="channel-123",
+            channel_name="Support",
+            webhook_token="webhook-secret",
+            credential_last_verified_at=verified_at,
+        )
+
+        with (
+            patch(
+                "catchup.connector_core.adapters.connection_status.connection_status.ChannelTalkCredentialsRepository.list_connections",
+                return_value=[channel_record],
+            ),
+            patch(
+                "catchup.connector_core.adapters.connection_status.connection_status.ChannelTalkDocumentCredentialsRepository.list_document_connections",
+                return_value=[],
+            ),
+        ):
+            items = ConnectionStatusAdapter(
+                db=SimpleNamespace(),
+            ).list_channel_talk_credential_items()
+
+        self.assertEqual(len(items), 1)
+        payload = items[0].model_dump(mode="json")
+        self.assertEqual(payload["id"], "channel-123")
+        self.assertEqual(
+            payload["metadata"],
+            {
+                "credential_type": "channel",
+                "last_verified_at": "2026-05-04T00:00:00Z",
+                "webhook_token_configured": True,
+            },
+        )
+        self.assertNotIn("manager_id", payload["metadata"])
+        self.assertNotIn("manager_name", payload["metadata"])
+        self.assertNotIn("webhook-secret", str(payload))

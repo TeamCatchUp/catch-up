@@ -110,9 +110,9 @@ class ConnectionStatusAdapter:
                 metadata={
                     "credential_type": "channel",
                     "last_verified_at": connection.credential_last_verified_at,
-                    "manager_id": connection.manager_id,
-                    "manager_name": connection.manager_name,
-                    "webhook_token_configured": connection.webhook_token_configured,
+                    "webhook_token_configured": bool(
+                        str(connection.webhook_token or "").strip()
+                    ),
                 },
             )
             for connection in channel_connections

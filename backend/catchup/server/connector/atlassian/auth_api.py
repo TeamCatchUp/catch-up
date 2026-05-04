@@ -10,40 +10,34 @@ from __future__ import annotations
 import secrets
 
 import structlog
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
+from fastapi import APIRouter
+from fastapi import BackgroundTasks
+from fastapi import Depends
+from fastapi import Query
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import RedirectResponse
-from httpx import HTTPStatusError, RequestError
 from sqlalchemy import select
 
 from catchup.audit.actions import IntegrationAction
 from catchup.audit.metadata import IntegrationAuditMetadata
 from catchup.audit.utils import audit_log
-from catchup.connectors.atlassian.oauth_client import (
-    AtlassianOAuthClient,
-    get_atlassian_oauth_client,
-)
-from catchup.connectors.atlassian.exceptions import AtlassianError
-from catchup.connectors.atlassian.callback_service import (
-    AtlassianCallbackService,
-    CallbackError,
-    CallbackResult,
-)
-from catchup.connectors.atlassian.token_manager import (
-    AtlassianTokenManager,
-    AtlassianTokenProvider,
-)
+from catchup.configs.config import auth_settings
+from catchup.connectors.atlassian.callback_service import AtlassianCallbackService
+from catchup.connectors.atlassian.callback_service import CallbackError
+from catchup.connectors.atlassian.callback_service import CallbackResult
+from catchup.connectors.atlassian.oauth_client import AtlassianOAuthClient
+from catchup.connectors.atlassian.oauth_client import get_atlassian_oauth_client
+from catchup.connectors.atlassian.token_manager import AtlassianTokenManager
 from catchup.connectors.confluence.metadata_service import ConfluenceMetadataService
-from catchup.connectors.atlassian.schemas import AtlassianInstallationStatus
-from catchup.connectors.jira.factory import create_jira_ingestion_service
 from catchup.connectors.jira.dynamic_webhook_service import (
     get_jira_dynamic_webhook_service,
 )
-from catchup.configs.config import auth_settings
-from catchup.db.engine import SessionLocal
+from catchup.connectors.jira.factory import create_jira_ingestion_service
 from catchup.db.atlassian import oauth_repository as atlassian_crud
+from catchup.db.engine import SessionLocal
 from catchup.db.knowledge_source import add_knowledge_source
-from catchup.db.models import KnowledgeSource, SourceType
+from catchup.db.models import KnowledgeSource
+from catchup.db.models import SourceType
 from catchup.db.workspaces import get_workspace_limit_one
 from catchup.utils.redis import store_oauth_state
 
@@ -116,49 +110,6 @@ async def atlassian_oauth_callback(
     )
 
 
-@router.get("/status", response_model=AtlassianInstallationStatus)
-async def atlassian_installation_status(
-    atlassian_service: AtlassianOAuthClient = Depends(get_atlassian_oauth_client),
-):
-    """
-    Atlassian 설치 상태 조회
-    """
-    cloud_id = await run_in_threadpool(_load_latest_cloud_id)
-    if cloud_id is None:
-        return AtlassianInstallationStatus(installed=False)
-
-    try:
-        token_manager = AtlassianTokenManager(
-            oauth_client=atlassian_service,
-            oauth_repository=atlassian_crud,
-        )
-        token_provider = AtlassianTokenProvider(token_manager)
-        valid_token = await token_provider.get_access_token(cloud_id)
-        resources = await atlassian_service.get_accessible_resources(valid_token)
-        return AtlassianInstallationStatus(installed=True, resources=resources)
-    except HTTPException as e:
-        logger.warning(
-            "atlassian_installation_status_failed",
-            cloud_id=cloud_id,
-            reason=e.detail,
-        )
-        return AtlassianInstallationStatus(installed=True, resources=[])
-    except AtlassianError as e:
-        logger.warning(
-            "atlassian_installation_status_failed",
-            cloud_id=cloud_id,
-            reason=e.message,
-        )
-        return AtlassianInstallationStatus(installed=True, resources=[])
-    except (HTTPStatusError, RequestError):
-        logger.warning(
-            "atlassian_installation_status_failed",
-            cloud_id=cloud_id,
-            reason="api_request_failed",
-        )
-        return AtlassianInstallationStatus(installed=True, resources=[])
-
-
 @router.delete("/uninstall")
 async def atlassian_uninstall(
     cloud_id: str = Query(..., description="삭제할 Atlassian Cloud ID"),
@@ -197,14 +148,6 @@ async def _handle_atlassian_oauth_callback(
     await _register_atlassian_knowledge_sources(result)
     _schedule_atlassian_followups(background_tasks, result)
     return result
-
-
-def _load_latest_cloud_id() -> str | None:
-    with SessionLocal() as db:
-        tokens = atlassian_crud.get_all_tokens(db)
-        if not tokens:
-            return None
-        return tokens[0].cloud_id
 
 
 def _delete_token_db(cloud_id: str) -> bool:
