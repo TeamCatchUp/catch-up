@@ -1,4 +1,5 @@
 import logging
+from dataclasses import dataclass
 from enum import StrEnum
 from typing import Annotated
 from typing import Literal
@@ -9,20 +10,12 @@ from langchain_core.documents import Document
 from pydantic import BaseModel
 from pydantic import Field
 
+from catchup.db.models import SourceType
+
 logger = logging.getLogger(__name__)
 
 
-# --------------------------------------------------------------------------
 # Enums
-# --------------------------------------------------------------------------
-class SourceType(StrEnum):
-    JIRA = "jira"
-    CONFLUENCE = "confluence"
-    SLACK = "slack"
-    GITHUB = "github"
-    UNKNOWN = "unknown"
-
-
 class EntityType(StrEnum):
     # Jira
     ISSUE = "issue"
@@ -36,15 +29,62 @@ class EntityType(StrEnum):
     PR = "pr"
     # Common / Others
     COMMENT = "comment"
-
     # Channel Talk
     USER_CHAT = "user_chat"
     DOCUMENT_ARTICLE = "document_article"
 
 
-# --------------------------------------------------------------------------
-# Base Model
-# --------------------------------------------------------------------------
+# Source Metadata Registry
+@dataclass(frozen=True)
+class SourceMeta:
+    display: str # 프롬프트에 전달될 이름.
+    role: str # 시스템 프롬프트 내 특정 소스의 역할
+    authority: str # 특정 소스의 책임 & 권위
+
+
+SOURCE_METADATA: dict[SourceType, SourceMeta] = {
+    SourceType.CONFLUENCE: SourceMeta(
+        display="Confluence",
+        role="Project Documentation",
+        authority=(
+            "Official guides, decisions, and specifications. (High Authority)"
+        ),
+    ),
+    SourceType.JIRA: SourceMeta(
+        display="Jira",
+        role="Project Plans",
+        authority=(
+            "Project status, tasks, planned schedules, and ownership "
+            "(assignees in charge of specific tasks or domains)."
+        ),
+    ),
+    SourceType.SLACK: SourceMeta(
+        display="Slack",
+        role="Team Discussions",
+        authority="Real-time discussions, informal feedback, and context.",
+    ),
+    SourceType.GITHUB: SourceMeta(
+        display="GitHub",
+        role="Technical Implementations",
+        authority=(
+            "Context for **technical changes and discussions** "
+            "(Pull Requests, Issues, and Comments). "
+            "It reflects 'what', 'how' and 'why' changes were made, "
+            "rather than the entire codebase."
+        ),
+    ),
+    SourceType.CHANNEL_TALK: SourceMeta(
+        display="ChannelTalk",
+        role="Customer Support",
+        authority=(
+            "Customer conversation history and support knowledge base articles. "
+            "Reflects real customer issues, resolutions, and support patterns."
+        ),
+    ),
+}
+
+
+# Base
 class BaseSource(BaseModel):
     """
     모든 검색 결과의 공통 부모 클래스
@@ -54,7 +94,7 @@ class BaseSource(BaseModel):
     id: str = Field(..., description="고유 ID (예: jira:issue:CAT-145)")
 
     # 데이터 출처
-    source: SourceType = Field(
+    source: SourceType | Literal["unknown"] = Field(
         ..., description="데이터 소스 (e.g. Jira, Slack, GitHub)"
     )
     entity_type: EntityType = Field(..., description="엔티티 타입 (툴별 상이)")
@@ -132,6 +172,21 @@ class BaseSource(BaseModel):
                     doc_id = (
                         f"confluence:{entity_type}:{content_id}:chunk:{chunk_index}"
                     )
+
+            elif source_str == "channel_talk":
+                # channel_talk:{user_chat|document_article}:{channel_id}:{record_id}
+                # channel_id 위치가 entity_type별로 다름
+                entity_id = metadata.get("record_id")
+                if entity_type == "user_chat":
+                    channel_id = metadata.get(
+                        "user_chat_core", {}
+                    ).get("chat", {}).get("channel_id")
+                else:  # document_article
+                    channel_id = metadata.get(
+                        "document_article_core", {}
+                    ).get("space", {}).get("channel_id")
+                if channel_id and entity_id:
+                    doc_id = f"channel_talk:{entity_type}:{channel_id}:{entity_id}"
 
         # Slack은 edited_at을 사용하므로, updated_at이 없으면 edited_at을 찾도록 fallback 처리
         updated_at = metadata.get("updated_at") or metadata.get("edited_at")
@@ -235,6 +290,40 @@ class BaseSource(BaseModel):
                 image_urls=metadata.get("image_urls", []),
             )
 
+        # 5. ChannelTalk
+        elif source_str == "channel_talk":
+            ct_record_id = metadata.get("record_id")
+
+            if entity_type == EntityType.USER_CHAT:
+                uc_core = metadata.get("user_chat_core", {})
+                uc_chat = uc_core.get("chat", {})
+                uc_customer = uc_core.get("customer", {})
+                uc_assignment = uc_core.get("assignment", {})
+                return ChannelTalkSource(
+                    **base_data,
+                    source=SourceType.CHANNEL_TALK,
+                    title=uc_customer.get("name") or metadata.get("title", "ChannelTalk"),
+                    author=uc_assignment.get("assignee_name"),
+                    channel_id=uc_chat.get("channel_id"),
+                    user_chat_id=ct_record_id,
+                    state=uc_chat.get("state"),
+                    priority=uc_chat.get("priority"),
+                )
+            elif entity_type == EntityType.DOCUMENT_ARTICLE:
+                da_core = metadata.get("document_article_core", {})
+                da_article = da_core.get("article", {})
+                da_author = da_core.get("author", {})
+                da_space = da_core.get("space", {})
+                return ChannelTalkSource(
+                    **base_data,
+                    source=SourceType.CHANNEL_TALK,
+                    title=metadata.get("title") or da_article.get("title", "ChannelTalk Article"),
+                    author=da_author.get("author_name"),
+                    channel_id=da_space.get("channel_id"),
+                    article_id=ct_record_id,
+                    state=da_article.get("state"),
+                )
+
         # Fallback
         return UnknownSource(
             **base_data,
@@ -242,11 +331,7 @@ class BaseSource(BaseModel):
         )
 
 
-# --------------------------------------------------------------------------
 # Specific Models (Source별 통합 모델)
-# --------------------------------------------------------------------------
-
-
 class JiraSource(BaseSource):
     source: Literal[SourceType.JIRA] = SourceType.JIRA
 
@@ -301,15 +386,30 @@ class ConfluenceSource(BaseSource):
     image_urls: list[str] = Field(default_factory=list, description="이미지 URL 목록")
 
 
+class ChannelTalkSource(BaseSource):
+    source: Literal[SourceType.CHANNEL_TALK] = SourceType.CHANNEL_TALK
+
+    channel_id: str | None = Field(None, description="채널 ID")
+    user_chat_id: str | None = Field(None, description="고객 대화 ID (user_chat)")
+    article_id: str | None = Field(None, description="아티클 ID (document_article)")
+    state: str | None = Field(None, description="대화 상태 (opened/closed/snoozed)")
+    priority: str | None = Field(None, description="우선순위 (high/medium/low)")
+
+
 # Fallback
 class UnknownSource(BaseSource):
-    source: Literal[SourceType.UNKNOWN] = SourceType.UNKNOWN
+    source: Literal["unknown"] = "unknown"
 
 
-# --------------------------------------------------------------------------
 # Response Union
-# --------------------------------------------------------------------------
 SourceResponse = Annotated[
-    Union[JiraSource, SlackSource, GithubSource, ConfluenceSource, UnknownSource],
+    Union[
+        JiraSource,
+        SlackSource,
+        GithubSource,
+        ConfluenceSource,
+        ChannelTalkSource,
+        UnknownSource,
+    ],
     Field(discriminator="source"),
 ]

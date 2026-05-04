@@ -20,6 +20,7 @@ from catchup.rag.nodes.utils import strip_key_document_indices
 from catchup.rag.policies import CITATION_POLICY_MESSAGE
 from catchup.rag.policies import FALLBACK_ANSWER
 from catchup.rag.policies import NO_DOCUMENTS_ANSWER
+from catchup.rag.schemas.sources import SOURCE_METADATA
 from catchup.rag.schemas.sources import BaseSource
 from catchup.rag.semaphores import rag_semaphores
 from catchup.rag.state import AgentState
@@ -162,12 +163,17 @@ def _load_prompts(
 ) -> dict:
     # Slack 플랫폼은 citations XML을 렌더링할 수 없으므로 fast 프롬프트 템플릿 사용
     is_slack = prompt_settings and getattr(prompt_settings, "platform", None) == "slack"
+    sources = list(SOURCE_METADATA.values())
     if is_slack:
         system = prompt_loader.get_prompt(
-            "rag/generate_final_answer_fast", prompt_settings=prompt_settings
+            "rag/generate_final_answer_fast",
+            prompt_settings=prompt_settings,
+            sources=sources,
         )
     else:
-        system = prompt_loader.get_prompt("rag/generate_final_answer")
+        system = prompt_loader.get_prompt(
+            "rag/generate_final_answer", sources=sources
+        )
 
     return {
         "system": system,

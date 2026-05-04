@@ -11,6 +11,7 @@ from catchup.rag.nodes.utils import build_docs_summary
 from catchup.rag.nodes.utils import build_system_message
 from catchup.rag.nodes.utils import get_conversation_history
 from catchup.rag.nodes.utils import log_node
+from catchup.rag.schemas.sources import SOURCE_METADATA
 from catchup.rag.schemas.structures import PipelinePlan
 from catchup.rag.semaphores import rag_semaphores
 from catchup.rag.state import AgentState
@@ -50,6 +51,7 @@ async def supervisor_node(
     system_prompt = prompt_loader.get_prompt(
         "rag/supervisor",
         retrieved_docs_summary=retrieved_docs_summary,
+        sources=list(SOURCE_METADATA.values()),
         **global_context,
     )
     system_message = build_system_message(system_prompt)

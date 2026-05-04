@@ -19,6 +19,7 @@ from catchup.rag.policies import CITATION_POLICY_MESSAGE
 from catchup.rag.policies import FALLBACK_ANSWER
 from catchup.rag.policies import NO_DOCUMENTS_ANSWER
 from catchup.rag.schemas.prompt_settings import PromptSettings
+from catchup.rag.schemas.sources import SOURCE_METADATA
 from catchup.rag.schemas.sources import BaseSource
 from catchup.rag.semaphores import rag_semaphores
 from catchup.rag.state import AgentState
@@ -166,6 +167,7 @@ def _load_prompts(
         "system": prompt_loader.get_prompt(
             "rag/generate_final_answer_fast",
             prompt_settings=prompt_settings,
+            sources=list(SOURCE_METADATA.values()),
         ),
         "global_context": prompt_loader.get_prompt(
             "common/global_context",

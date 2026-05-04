@@ -16,13 +16,14 @@ _ALLOWED_MSGPACK_MODULES: list[tuple[str, str]] = [
     ("catchup.rag.schemas.sources", "SlackSource"),
     ("catchup.rag.schemas.sources", "GithubSource"),
     ("catchup.rag.schemas.sources", "JiraSource"),
+    ("catchup.rag.schemas.sources", "ChannelTalkSource"),
     ("catchup.rag.schemas.context", "GlobalContext"),
     ("catchup.rag.schemas.structures", "VectorDbSearchQuery"),
     ("catchup.rag.schemas.structures", "PipelinePlan"),
     ("catchup.rag.schemas.structures", "SearchStep"),
     ("catchup.rag.schemas.structures", "SearchPlan"),
-    ("catchup.db.models", "SourceType"),
     ("catchup.rag.schemas.prompt_settings", "PromptSettings"),
+    ("catchup.db.models", "SourceType"),
 ]
 
 _checkpointer = None
