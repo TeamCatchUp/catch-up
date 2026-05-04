@@ -24,7 +24,7 @@ const RESOURCE_ICONS: Record<IntegrationService, React.ComponentType<React.SVGPr
   github: IconGithubLogo,
   slack: IconTag,
   confluence: IconSpace,
-  'channel-talk': IconTag,
+  'channel_talk': IconTag,
 };
 
 /** 서비스별 연동 설치 핸들러 */
@@ -108,8 +108,8 @@ export default function IntegrationManagementSection({
       </div>
 
       <div className="flex flex-2 flex-col gap-6">
-        {selectedService === 'channel-talk' ? (
-          <ChannelTalkManagementPanel />
+        {selectedService === 'channel_talk' ? (
+          <ChannelTalkManagementPanel detail={detail} />
         ) : (
           <>
             <div className="flex flex-col gap-1.5">
@@ -119,7 +119,10 @@ export default function IntegrationManagementSection({
                   <span className="text-body-small text-content-normal">연동 상태</span>
                   <div className="flex items-center gap-1">
                     {detail.connected ? (
-                      <span className="text-body-xsmall text-content-primary-assistive px-1.5 py-1">연동됨</span>
+                      <div className="flex items-center gap-1 px-1.5 py-1">
+                        <IconCloudCheckFilled className="text-icon-primary-assistive size-4.5 shrink-0" />
+                        <span className="text-body-xsmall text-content-primary-assistive">연동됨</span>
+                      </div>
                     ) : (
                       <>
                         <div className="flex items-center gap-1 px-1.5 py-1">

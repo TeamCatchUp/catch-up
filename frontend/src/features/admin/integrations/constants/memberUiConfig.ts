@@ -2,7 +2,7 @@
 import type { MemberSortKey } from '../types/memberDisplayModel';
 
 /** 이용자 연동 표에서 노출할 서비스 컬럼 (Figma 시안 순서: Atlassian/Github/Slack/채널톡) */
-export const MEMBER_TABLE_SERVICES: IntegrationService[] = ['jira', 'github', 'slack', 'channel-talk'];
+export const MEMBER_TABLE_SERVICES: IntegrationService[] = ['jira', 'github', 'slack', 'channel_talk'];
 
 /** 이용자 연동 표 상태 칩 공통 클래스 */
 export const MEMBER_LIST_STATUS_BADGE_BASE_CLASS =
@@ -29,7 +29,7 @@ export const SERVICE_HEADER_LABELS: Record<IntegrationService, string> = {
   jira: 'Atlassian',
   slack: 'Slack',
   confluence: 'Confluence',
-  'channel-talk': '채널톡',
+  'channel_talk': '채널톡',
 };
 
 export const TABLE_HEADER_ROW_CLASS =

@@ -43,7 +43,7 @@ export const RESOURCE_LABEL: Record<IntegrationService, string> = {
   github: '연동된 Repository',
   slack: '연동된 채널',
   confluence: '연동된 스페이스',
-  'channel-talk': '연동된 채널톡 채널',
+  'channel_talk': '연동된 채널톡 채널',
 };
 
 /** 탭 목록 */

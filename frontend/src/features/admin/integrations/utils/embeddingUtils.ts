@@ -10,6 +10,8 @@ export const RESOURCE_ICONS: Record<SyncConnector, React.ComponentType<React.SVG
   github: IconGithubLogo,
   slack: IconTag,
   confluence: IconSpace,
+  // 채널톡은 채널(채팅) + 스페이스(문서) 모두 sync target이지만, 메인은 채널이므로 Slack과 동일한 채널 아이콘 사용.
+  channel_talk: IconTag,
 };
 
 /** 날짜 문자열 → "2026.03.18 (수) 09:52 PM" 포맷. "YYYY-MM-DD" 및 ISO datetime 모두 지원. */

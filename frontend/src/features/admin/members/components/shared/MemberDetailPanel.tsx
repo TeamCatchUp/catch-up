@@ -52,7 +52,7 @@ const getAccountIdentifier = (service: IntegrationService, integrations: UserInt
       return (account as { login?: string }).login ?? null;
     case 'slack':
       return (account as { userId?: string }).userId ?? null;
-    case 'channel-talk':
+    case 'channel_talk':
       return null;
   }
 };

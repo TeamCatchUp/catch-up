@@ -51,7 +51,7 @@ export interface UserIntegrations {
   slack: SlackAccount | null;
   confluence: ConfluenceAccount | null;
   /** 채널톡은 organization-level 연동이라 user-level account가 없음 (항상 null) */
-  'channel-talk': null;
+  'channel_talk': null;
 }
 
 export interface AdminUserDetailResponse {

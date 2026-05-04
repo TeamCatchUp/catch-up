@@ -1,7 +1,7 @@
+import reactQuery from '@tanstack/eslint-plugin-query';
 import { defineConfig, globalIgnores } from 'eslint/config';
 import nextVitals from 'eslint-config-next/core-web-vitals';
 import nextTs from 'eslint-config-next/typescript';
-import reactQuery from '@tanstack/eslint-plugin-query';
 import boundaries from 'eslint-plugin-boundaries';
 import simpleImportSort from 'eslint-plugin-simple-import-sort';
 

@@ -46,6 +46,10 @@ export const useScopeId = (service: IntegrationService) => {
         const resource = atlassianQuery.data?.resources?.find(isConfluenceResource);
         return resource?.id ?? null;
       }
+      case 'channel_talk':
+        // 채널톡은 ChannelTalkEmbeddingModal에서 channelTalkQueries.detail()을 직접 사용해 channel_id를 얻으므로
+        // useScopeId 경로로는 진입하지 않는다. 여기서는 exhaustiveness만 충족.
+        return null;
     }
   };
 
@@ -58,6 +62,8 @@ export const useScopeId = (service: IntegrationService) => {
       case 'jira':
       case 'confluence':
         return atlassianQuery.isLoading;
+      case 'channel_talk':
+        return false;
     }
   })();
 

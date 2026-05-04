@@ -1,6 +1,6 @@
 // ─── Sync Enums (백엔드 StrEnum 매핑) ───
 
-export type SyncConnector = 'github' | 'slack' | 'jira' | 'confluence';
+export type SyncConnector = 'github' | 'slack' | 'jira' | 'confluence' | 'channel_talk';
 export type SyncDispatchStatus = 'accepted' | 'no_events' | 'conflict' | 'failed';
 export type SyncType = 'full' | 'incremental';
 export type SyncTargetType = 'resource' | 'channel' | 'repository' | 'project' | 'space';
@@ -16,12 +16,18 @@ export interface SyncJobTargetSnapshotItem {
   status: SyncTargetStatus;
 }
 
-// ─── API Request/Response (추후 API 연결 시 사용) ───
+// ─── API Request/Response ───
+
+/** POST /sync/full 요청에 포함되는 단일 동기화 대상 (백엔드 FullSyncRequestedTarget 매칭) */
+export interface FullSyncTarget {
+  target_type: SyncTargetType;
+  target_id: string;
+}
 
 export interface FullSyncRequest {
   connector: SyncConnector;
   scope_id: string;
-  target_ids: string[];
+  targets: FullSyncTarget[];
   sync_days?: number | null;
 }
 
@@ -223,10 +229,27 @@ export interface ConnectorProgress {
 
 // ─── 임베딩 히스토리 타입 (GET /admin/connector/status) ───
 
-export type ConnectorStatusSource = 'github' | 'jira' | 'slack' | 'confluence';
-export type ConnectorResourceType = 'repositories' | 'projects' | 'channels' | 'spaces';
+export type ConnectorStatusSource = 'github' | 'jira' | 'slack' | 'confluence' | 'channel_talk';
+export type ConnectorResourceType =
+  | 'repositories'
+  | 'projects'
+  | 'channels'
+  | 'spaces'
+  | 'channel_talk_targets';
 
-/** target별 임베딩 데이터 범위 */
+/**
+ * 채널톡 target은 channel/space 두 종류가 같은 응답에 섞여 오므로 target_type으로 구분.
+ * `SyncTargetType`에서 직접 추출해 enum drift를 방지.
+ */
+export type ChannelTalkConnectorTargetType = Extract<SyncTargetType, 'channel' | 'space'>;
+
+/**
+ * target별 임베딩 데이터 범위.
+ *
+ * `target_type`은 백엔드 schema 상 채널톡 source 응답(`AdminChannelTalkConnectorTargetRangeResponse`)에만
+ * 존재하지만, 프론트는 union을 평탄화하여 optional로 받는다. 다른 connector(github/jira/slack/confluence)는
+ * 항상 undefined.
+ */
 export interface AdminConnectorTargetRangeResponse {
   scope_id: string;
   target_id: string;
@@ -237,6 +260,7 @@ export interface AdminConnectorTargetRangeResponse {
   last_failed_at: string | null;
   oldest: string | null;
   latest: string | null;
+  target_type?: ChannelTalkConnectorTargetType;
 }
 
 /** GET /admin/connector/status 응답 */

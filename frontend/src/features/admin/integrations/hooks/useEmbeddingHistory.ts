@@ -1,15 +1,14 @@
 import { useMemo } from 'react';
 import { useQueries } from '@tanstack/react-query';
 
+import { CONNECTOR_STATUS_SOURCE_ORDER as SOURCE_ORDER } from '../constants/connectorOrder';
 import { adminConnectorQueries } from '../queries/adminConnector.queries';
-import type { AdminConnectorTargetRangeResponse, ConnectorStatusSource, SyncConnector } from '../types/syncModel';
-
-const SOURCE_ORDER: ConnectorStatusSource[] = ['jira', 'github', 'slack', 'confluence'];
+import type { AdminConnectorTargetRangeResponse, SyncConnector } from '../types/syncModel';
 
 /**
  * 임베딩 히스토리 조회 훅.
  *
- * GET /admin/connector/status?source=X 를 4개 커넥터에 대해 병렬 호출.
+ * GET /admin/connector/status?source=X 를 모든 커넥터에 대해 병렬 호출.
  * target별 임베딩 데이터 범위(oldest~latest)를 반환.
  */
 export const useEmbeddingHistory = () => {

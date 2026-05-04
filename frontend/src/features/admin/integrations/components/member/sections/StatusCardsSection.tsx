@@ -54,24 +54,11 @@ export default function StatusCardsSection({
       );
     }
 
-    // channel-talk은 임베딩 백엔드 미구현 — buttonStates 추적 대상이 아니므로 항상 idle 버튼만 노출.
-    // SyncConnector 확장 시 이 분기 제거 가능.
-    if (service === 'channel-talk') {
-      return (
-        <Button
-          variant="box-soft-primary"
-          size="md"
-          className="text-body-small h-9 w-full"
-          onMouseEnter={preloadChannelTalkModal}
-          onFocus={preloadChannelTalkModal}
-          onClick={() => openEmbeddingModal(service, name)}
-        >
-          임베딩하기
-        </Button>
-      );
-    }
+    // IntegrationService와 SyncConnector는 동일 문자열이므로 그대로 lookup.
+    const state = buttonStates[service as SyncConnector] ?? 'idle';
 
-    const state = buttonStates[service] ?? 'idle';
+    // 채널톡 모달은 dynamic import이므로 hover/focus 시 preload (다른 connector는 정적 import).
+    const handleHover = service === 'channel_talk' ? preloadChannelTalkModal : undefined;
 
     switch (state) {
       case 'idle':
@@ -80,6 +67,8 @@ export default function StatusCardsSection({
             variant="box-soft-primary"
             size="md"
             className="text-body-small h-9 w-full"
+            onMouseEnter={handleHover}
+            onFocus={handleHover}
             onClick={() => openEmbeddingModal(service, name)}
           >
             임베딩하기
@@ -99,6 +88,8 @@ export default function StatusCardsSection({
             variant="box-soft-primary"
             size="md"
             className="text-body-small h-9 w-full"
+            onMouseEnter={handleHover}
+            onFocus={handleHover}
             onClick={() => openEmbeddingModal(service, name)}
           >
             임베딩 재시도
@@ -176,7 +167,7 @@ export default function StatusCardsSection({
         })}
       </div>
 
-      {embeddingModal.service !== 'channel-talk' && (
+      {embeddingModal.service !== 'channel_talk' && (
         <EmbeddingModal
           open={embeddingModal.open}
           onOpenChange={(open) => setEmbeddingModal((prev) => ({ ...prev, open }))}
@@ -186,10 +177,11 @@ export default function StatusCardsSection({
         />
       )}
 
-      {embeddingModal.service === 'channel-talk' && (
+      {embeddingModal.service === 'channel_talk' && (
         <ChannelTalkEmbeddingModal
           open={embeddingModal.open}
           onOpenChange={(open) => setEmbeddingModal((prev) => ({ ...prev, open }))}
+          onJobStart={onJobStart}
         />
       )}
     </section>

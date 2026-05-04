@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { toast } from 'sonner';
 
 import IconBook from '@/public/icons/icon/book.svg';
 import IconCheck from '@/public/icons/icon/check.svg';
@@ -41,15 +40,7 @@ export default function ChannelTalkDocumentSpaceCard({
   const canTestConnection = isDocumentSpaceSecretsFilled(documentSpace);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
-  const handleTestConnection = () => {
-    if (canTestConnection) {
-      toast('연결에 성공했어요.', { description: '이제 동기화를 시작할 수 있어요.' });
-    } else {
-      toast('Access Key 또는 Secret Key가 일치하지 않아요.', { description: '채널톡에서 다시 확인해주세요.' });
-    }
-    onTestConnection();
-  };
-
+  // 토스트는 mutation 응답 기반으로 viewModel onSuccess/onError에서 표시.
   const lockGuard = (e: React.PointerEvent<HTMLDivElement>) => handleLockedFieldInteract(e, isTested);
 
   return (
@@ -129,7 +120,7 @@ export default function ChannelTalkDocumentSpaceCard({
             <Button
               variant="box-soft-primary"
               size="md"
-              onClick={handleTestConnection}
+              onClick={onTestConnection}
               className="h-11.5 flex-1 gap-2.5"
             >
               연결 테스트 재시도
@@ -139,7 +130,7 @@ export default function ChannelTalkDocumentSpaceCard({
           <Button
             variant={canTestConnection ? 'box-soft-primary' : 'box-outline-gray'}
             size="md"
-            onClick={handleTestConnection}
+            onClick={onTestConnection}
             disabled={!canTestConnection}
             className="h-11.5 w-full"
           >

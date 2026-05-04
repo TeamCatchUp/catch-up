@@ -74,6 +74,14 @@ export const API = {
       slackStatus: `${API_PREFIX}/admin/connector/slack/status`, // GET Slack 연동 상태
       confluenceStatus: `${API_PREFIX}/admin/connector/confluence/status`, // GET Confluence 연동 상태
       status: `${API_PREFIX}/admin/connector/status`, // GET target별 임베딩 데이터 범위 (?source=)
+      channelTalk: {
+        credentials: `${API_PREFIX}/admin/connector/channel-talk/credentials`, // GET(list)/POST 채널 credential 조회/저장(upsert)
+        credentialsValidate: `${API_PREFIX}/admin/connector/channel-talk/credentials/validate`, // POST 채널 credential 검증
+        // DELETE는 ?channel_id=X query parameter 사용
+        documentCredentials: `${API_PREFIX}/admin/connector/channel-talk/documents/credentials`, // GET(list)/POST 도큐먼트 스페이스 credential 조회/저장
+        documentCredentialsValidate: `${API_PREFIX}/admin/connector/channel-talk/documents/credentials/validate`, // POST 도큐먼트 스페이스 credential 검증
+        // DELETE는 ?space_id=X query parameter 사용
+      },
     },
     users: {
       list: `${API_PREFIX}/admin/users`, // GET 이용자 목록
