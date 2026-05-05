@@ -6,14 +6,11 @@ import { BODY_SERVICE_COLUMN_CLASS } from '../../../../constants/memberUiConfig'
 import type { UnlinkedStatus } from '../../../../utils/usersTableHelpers';
 
 interface UnusedTagCellProps {
-  /** '미사용' | '미등록' — '완료'는 이 셀에 안 옴 (selectCellMode가 보장). 채널톡 read-only 케이스는 항상 '미사용'. */
+  /** '미사용' | '미등록' — '완료'는 이 셀에 안 옴 (selectCellMode가 보장). */
   status: UnlinkedStatus;
 }
 
-/**
- * mode='unused-tag' 셀 — Figma Tag 컴포넌트 시안 (inline 회색 태그).
- * 채널톡 read-only도 동일 시각.
- */
+/** mode='unused-tag' 셀 — Figma Tag 컴포넌트 시안 (inline 회색 태그). */
 export default function UnusedTagCell({ status }: UnusedTagCellProps) {
   return (
     <div className={cn(BODY_SERVICE_COLUMN_CLASS, 'items-center')}>

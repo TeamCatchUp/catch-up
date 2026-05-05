@@ -16,10 +16,13 @@ import { Dialog, DialogContent, DialogTitle } from '@/shared/components/ui/dialo
 
 import type { MappingUploadResponse, VendorType } from '../../../types/integrationApi';
 
+/** CSV 일괄 등록은 atlassian/github/slack만 지원 (채널톡은 백엔드 endpoint 없음). */
+type CsvVendorType = Exclude<VendorType, 'channel_talk'>;
+
 // ─── 벤더 설정 ───
 
 interface VendorConfig {
-  vendor: VendorType;
+  vendor: CsvVendorType;
   label: string;
   helperText: string;
 }
@@ -131,12 +134,12 @@ interface CsvUploadModalProps {
 }
 
 export default function CsvUploadModal({ open, onOpenChange }: CsvUploadModalProps) {
-  const [files, setFiles] = useState<Record<VendorType, File | null>>({
+  const [files, setFiles] = useState<Record<CsvVendorType, File | null>>({
     atlassian: null,
     github: null,
     slack: null,
   });
-  const [errors, setErrors] = useState<Record<VendorType, string | null>>({
+  const [errors, setErrors] = useState<Record<CsvVendorType, string | null>>({
     atlassian: null,
     github: null,
     slack: null,
@@ -151,7 +154,7 @@ export default function CsvUploadModal({ open, onOpenChange }: CsvUploadModalPro
     setErrors({ atlassian: null, github: null, slack: null });
   };
 
-  const handleFileSelect = (vendor: VendorType, file: File) => {
+  const handleFileSelect = (vendor: CsvVendorType, file: File) => {
     if (!isValidFileExtension(file.name)) {
       setErrors((prev) => ({
         ...prev,
@@ -163,7 +166,7 @@ export default function CsvUploadModal({ open, onOpenChange }: CsvUploadModalPro
     setErrors((prev) => ({ ...prev, [vendor]: null }));
   };
 
-  const handleFileRemove = (vendor: VendorType) => {
+  const handleFileRemove = (vendor: CsvVendorType) => {
     setFiles((prev) => ({ ...prev, [vendor]: null }));
     setErrors((prev) => ({ ...prev, [vendor]: null }));
   };
