@@ -25,6 +25,18 @@ const INTEGRATION_LABEL: Record<ChatSource['source_type'], string> = {
   unknown: '',
 };
 
+/** {source_type}.{entity_type} 조합별 라벨 suffix. 매핑 누락 시 base 라벨만 표시. */
+const ENTITY_LABEL_SUFFIX: Partial<Record<`${ChatSource['source_type']}.${ChatSource['entity_type']}`, string>> = {
+  'channel_talk.document_article': '도큐먼트',
+  'channel_talk.user_chat': '문의',
+};
+
+const getIntegrationLabel = (source: ChatSource) => {
+  const base = INTEGRATION_LABEL[source.source_type];
+  const suffix = ENTITY_LABEL_SUFFIX[`${source.source_type}.${source.entity_type}`];
+  return suffix ? `${base} - ${suffix}` : base;
+};
+
 const renderSourceLogo = (sourceType: ChatSource['source_type']) => {
   if (sourceType === 'jira') return <Jira className="h-5 w-5 shrink-0" />;
   if (sourceType === 'slack') return <Slack className="h-5 w-5 shrink-0" />;
@@ -43,7 +55,7 @@ export default function SourceCard({ source, showCount = true, count }: Props) {
   const isSlack = source.source_type === 'slack';
   const isChannelTalkArticle =
     source.source_type === 'channel_talk' && source.entity_type === 'document_article';
-  const integrationLabel = INTEGRATION_LABEL[source.source_type];
+  const integrationLabel = getIntegrationLabel(source);
 
   const repoText = source.repo?.trim() ? source.repo : '-';
   const titleText = source.title?.trim() ? source.title : '-';
