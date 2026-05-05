@@ -108,21 +108,17 @@ def insert_user_source_mapping_if_absent(
 ) -> bool:
     """기존 매핑을 덮어쓰지 않고 없는 사용자-소스 매핑만 추가한다."""
 
-    exists_stmt = select(UserSourceMapping.id).where(
-        UserSourceMapping.user_id == user_id,
-        UserSourceMapping.source_type == source_type,
-    )
-    if db.scalar(exists_stmt) is not None:
-        return False
-
-    db.add(
-        UserSourceMapping(
+    stmt = (
+        insert(UserSourceMapping)
+        .values(
             user_id=user_id,
             source_type=source_type,
             external_user_identifier=external_user_identifier,
         )
+        .on_conflict_do_nothing(constraint="uq_user_source")
     )
-    return True
+    result = db.execute(stmt)
+    return result.rowcount > 0
 
 
 def update_tool_user_email(
