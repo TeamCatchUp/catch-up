@@ -1,5 +1,6 @@
 import type { ChatSource, SourceResponse } from '@/features/chat/types';
 
+import { normalizeChannelTalkFields } from './sources/channelTalk';
 import {
   buildStableSourceId,
   formatCreatedAt,
@@ -22,6 +23,7 @@ const dispatchIntegration = (
   if (sourceType === 'slack') return normalizeSlackFields(source);
   if (sourceType === 'github') return normalizeGithubFields(source);
   if (sourceType === 'confluence') return normalizeConfluenceFields(source);
+  if (sourceType === 'channel_talk') return normalizeChannelTalkFields(source);
   return { repo: '', title: source.title ?? '', author: source.author ?? '' };
 };
 
