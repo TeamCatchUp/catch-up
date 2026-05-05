@@ -40,9 +40,6 @@ from catchup.connectors.channel_talk.document_space.article_full_sync_fetcher im
     ChannelTalkArticleFullSyncFetcher,
 )
 from catchup.connectors.channel_talk.document_space.article_full_sync_models import (
-    DEFAULT_ARTICLE_FULL_SYNC_STATES,
-)
-from catchup.connectors.channel_talk.document_space.article_full_sync_models import (
     ChannelTalkArticleFullSyncConnection,
 )
 from catchup.connectors.channel_talk.document_space.article_full_sync_models import (
@@ -59,6 +56,9 @@ from catchup.connectors.channel_talk.full_sync_helper import (
 )
 from catchup.connectors.channel_talk.schemas.channel_connection import (
     ChannelTalkCredentialsRecord,
+)
+from catchup.connectors.channel_talk.schemas.document_article import (
+    ChannelTalkDocumentArticleState,
 )
 from catchup.connectors.channel_talk.schemas.document_connection import (
     ChannelTalkDocumentCredentialsRecord,
@@ -78,6 +78,10 @@ logger = structlog.get_logger(__name__)
 
 CHANNEL_TALK_USER_CHAT_RECORD_TYPE = "user_chat"
 CHANNEL_TALK_DOCUMENT_ARTICLE_RECORD_TYPE = "document_article"
+CHANNEL_TALK_EXPECTED_ARTICLE_GAP_STATES = (
+    ChannelTalkDocumentArticleState.PUBLISHED,
+    ChannelTalkDocumentArticleState.DRAFT,
+)
 
 
 class ChannelTalkRecordRepository(Protocol):
@@ -130,6 +134,16 @@ def _build_gap_item(
         stored_count=len(set(stored_ids)),
         missing_count=len(missing_ids),
         missing_ids=missing_ids,
+    )
+
+
+def _is_expected_article_gap_bundle(bundle) -> bool:
+    state = str(bundle.state or "").strip()
+    if state == ChannelTalkDocumentArticleState.PUBLISHED.value:
+        return True
+    return (
+        state == ChannelTalkDocumentArticleState.DRAFT.value
+        and bundle.published_revision is not None
     )
 
 
@@ -321,9 +335,13 @@ class ChannelTalkRecordRepairService:
             ),
             language=CHANNEL_TALK_ARTICLE_LANGUAGE,
             sync_window=sync_window,
-            states=DEFAULT_ARTICLE_FULL_SYNC_STATES,
+            states=CHANNEL_TALK_EXPECTED_ARTICLE_GAP_STATES,
         )
-        expected_ids = list(fetched.article_ids)
+        expected_ids = [
+            bundle.article_id
+            for bundle in fetched.bundles
+            if _is_expected_article_gap_bundle(bundle)
+        ]
         stored_ids = await self._list_article_record_ids(
             channel_id=target.channel_id,
             space_id=target.target_id,

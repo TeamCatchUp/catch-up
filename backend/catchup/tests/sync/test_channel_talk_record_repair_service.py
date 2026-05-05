@@ -9,6 +9,9 @@ from unittest.mock import patch
 from catchup.connectors.channel_talk.schemas.channel_connection import (
     ChannelTalkCredentialsRecord,
 )
+from catchup.connectors.channel_talk.schemas.document_article import (
+    ChannelTalkDocumentArticleState,
+)
 from catchup.connectors.channel_talk.schemas.document_connection import (
     ChannelTalkDocumentAssociationStatus,
 )
@@ -71,7 +74,30 @@ class _FakeUserChatFetcher:
 class _FakeArticleFetcher:
     async def fetch_articles(self, *, connection, language, sync_window, states):
         self.last_call = (connection, language, sync_window, states)
-        return SimpleNamespace(article_ids=("article-1", "article-2"))
+        return SimpleNamespace(
+            bundles=(
+                SimpleNamespace(
+                    article_id="article-1",
+                    state=ChannelTalkDocumentArticleState.PUBLISHED,
+                    published_revision=None,
+                ),
+                SimpleNamespace(
+                    article_id="article-2",
+                    state=ChannelTalkDocumentArticleState.DRAFT,
+                    published_revision=SimpleNamespace(),
+                ),
+                SimpleNamespace(
+                    article_id="article-3",
+                    state=ChannelTalkDocumentArticleState.DRAFT,
+                    published_revision=None,
+                ),
+                SimpleNamespace(
+                    article_id="article-4",
+                    state=ChannelTalkDocumentArticleState.UNPUBLISHED,
+                    published_revision=SimpleNamespace(),
+                ),
+            )
+        )
 
 
 class _FakeUserChatIncrementalAdapter:
@@ -191,6 +217,13 @@ class ChannelTalkRecordRepairServiceTests(IsolatedAsyncioTestCase):
         self.assertEqual(response.records[0].stored_count, 1)
         self.assertEqual(response.records[0].missing_count, 1)
         self.assertEqual(response.records[0].missing_ids, ["article-2"])
+        self.assertEqual(
+            self.service._article_fetcher.last_call[3],
+            (
+                ChannelTalkDocumentArticleState.PUBLISHED,
+                ChannelTalkDocumentArticleState.DRAFT,
+            ),
+        )
         self.assertEqual(
             self.repository.last_article_args,
             (CHANNEL_ID, SPACE_ID, SYNC_FROM),
