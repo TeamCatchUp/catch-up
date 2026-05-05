@@ -64,6 +64,46 @@ describe('SourceCard — 5개 source_type 기본 렌더', () => {
   });
 });
 
+describe('SourceCard — integration 라벨 entity_type 분기', () => {
+  it('channel_talk + user_chat은 "채널톡 - 문의"로 노출된다', () => {
+    const source = buildSource({
+      source_type: 'channel_talk',
+      entity_type: 'user_chat',
+    });
+    const { container } = render(<SourceCard source={source} count={1} />);
+    expect(container.textContent).toContain('채널톡 - 문의');
+  });
+
+  it('channel_talk + document_article은 "채널톡 - 도큐먼트"로 노출된다', () => {
+    const source = buildSource({
+      source_type: 'channel_talk',
+      entity_type: 'document_article',
+    });
+    const { container } = render(<SourceCard source={source} count={1} />);
+    expect(container.textContent).toContain('채널톡 - 도큐먼트');
+  });
+
+  it('channel_talk + 매핑되지 않은 entity_type은 base 라벨("채널톡")만 노출', () => {
+    const source = buildSource({
+      source_type: 'channel_talk',
+      entity_type: 'comment',
+    });
+    const { container } = render(<SourceCard source={source} count={1} />);
+    expect(container.textContent).toContain('채널톡');
+    expect(container.textContent).not.toContain('채널톡 -');
+  });
+
+  it('다른 source는 entity_type과 무관하게 base 라벨만 노출 (regression)', () => {
+    const source = buildSource({
+      source_type: 'confluence',
+      entity_type: 'page',
+    });
+    const { container } = render(<SourceCard source={source} count={1} />);
+    expect(container.textContent).toContain('Confluence');
+    expect(container.textContent).not.toContain('Confluence -');
+  });
+});
+
 describe('SourceCard — channel_talk + user_chat', () => {
   it('"발행 완료" 라벨을 표시하지 않는다', () => {
     const source = buildSource({
