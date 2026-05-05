@@ -1,4 +1,12 @@
+from enum import StrEnum
+
 from pydantic import BaseModel
+
+
+class UserSourceMappingStatus(StrEnum):
+    ALL = "all"
+    FULL = "full"
+    PARTIAL = "partial"
 
 
 class MappedSourceInfo(BaseModel):
