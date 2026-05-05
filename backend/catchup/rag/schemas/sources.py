@@ -301,7 +301,7 @@ class BaseSource(BaseModel):
                 return ChannelTalkSource(
                     **base_data,
                     source=SourceType.CHANNEL_TALK,
-                    title=uc_chat.get("description") or uc_chat.get("customer_name", "ChannelTalk"),
+                    title=uc_chat.get("description") or uc_chat.get("customer_name") or metadata.get("title") or "ChannelTalk",
                     author=uc_assignment.get("assignee_name"),
                     channel_id=uc_chat.get("channel_id"),
                     channel_name=uc_chat.get("channel_name"),
