@@ -12,10 +12,10 @@ from catchup.connector_core.application.connection_status import (
     ConnectionStatusApplication,
 )
 from catchup.connector_core.ports.connection_status import ConnectionStatus
-from catchup.db.models import SourceType
 from catchup.mapping.user_source_mapping_models import MappingStatusResponse
 from catchup.mapping.user_source_mapping_models import UserSourceMappingRefreshResponse
 from catchup.mapping.user_source_mapping_models import UserSourceMappingResponse
+from catchup.mapping.user_source_mapping_models import UserSourceMappingStatus
 from catchup.mapping.user_source_mapping_service import UserSourceMappingApplication
 
 connection_status_application = ConnectionStatusApplication(
@@ -43,12 +43,15 @@ def refresh_user_source_mapping_endpoint():
     response_model=UserSourceMappingResponse,
 )
 def get_user_source_mapping(
-    filter: SourceType | None = Query(None, description="jira, slack, github, confluence, channel_talk"),
+    mapping_status: UserSourceMappingStatus = Query(
+        UserSourceMappingStatus.ALL,
+        description="all, full, partial",
+    ),
     page: int = Query(1, ge=1),
     size: int = Query(50, ge=1, le=100),
 ):
     return user_source_mapping_application.list_user_source_mappings(
-        source_type_filter=filter,
+        mapping_status=mapping_status,
         page=page,
         size=size,
     )

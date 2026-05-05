@@ -4,6 +4,7 @@ from collections.abc import Callable
 from contextlib import contextmanager
 from typing import Iterator
 
+from sqlalchemy import and_
 from sqlalchemy import distinct
 from sqlalchemy import func
 from sqlalchemy import select
@@ -26,6 +27,7 @@ from catchup.mapping.user_source_mapping_models import MappingStatusResponse
 from catchup.mapping.user_source_mapping_models import UserSourceMappingItem
 from catchup.mapping.user_source_mapping_models import UserSourceMappingRefreshResponse
 from catchup.mapping.user_source_mapping_models import UserSourceMappingResponse
+from catchup.mapping.user_source_mapping_models import UserSourceMappingStatus
 
 SessionFactory = Callable[[], Session]
 
@@ -41,9 +43,16 @@ ITEM_FIELD_BY_SOURCE = {
     SourceType.JIRA: "atlassian",
     SourceType.SLACK: "slack",
     SourceType.GITHUB: "github",
-    SourceType.CONFLUENCE: "confluence",
+    SourceType.CONFLUENCE: "atlassian",
     SourceType.CHANNEL_TALK: "channel_talk",
 }
+
+FULL_MAPPING_SOURCE_GROUPS: tuple[tuple[SourceType, ...], ...] = (
+    (SourceType.JIRA, SourceType.CONFLUENCE),
+    (SourceType.SLACK,),
+    (SourceType.GITHUB,),
+    (SourceType.CHANNEL_TALK,),
+)
 
 
 def _source_key(source_type: SourceType) -> str:
@@ -103,7 +112,7 @@ class UserSourceMappingApplication:
     def list_user_source_mappings(
         self,
         *,
-        source_type_filter: SourceType | None = None,
+        mapping_status: UserSourceMappingStatus = UserSourceMappingStatus.ALL,
         page: int = 1,
         size: int = 50,
     ) -> UserSourceMappingResponse:
@@ -111,17 +120,17 @@ class UserSourceMappingApplication:
             mapped_users_stmt = select(
                 distinct(UserSourceMapping.user_id).label("user_id")
             ).where(UserSourceMapping.source_type.in_(TRACKED_USER_MAPPING_SOURCES))
-            if source_type_filter is not None:
-                mapped_users_stmt = mapped_users_stmt.where(
-                    UserSourceMapping.source_type == source_type_filter
-                )
             mapped_users = mapped_users_stmt.subquery()
-
             base_stmt = (
                 select(User, OAuthUser.sub.label("sub"))
                 .join(mapped_users, mapped_users.c.user_id == User.id)
                 .outerjoin(OAuthUser, OAuthUser.user_id == User.id)
             )
+            full_mapping_condition = self._full_mapping_condition()
+            if mapping_status == UserSourceMappingStatus.FULL:
+                base_stmt = base_stmt.where(full_mapping_condition)
+            elif mapping_status == UserSourceMappingStatus.PARTIAL:
+                base_stmt = base_stmt.where(~full_mapping_condition)
 
             total = db.scalar(select(func.count()).select_from(base_stmt.subquery())) or 0
             offset = (page - 1) * size
@@ -176,9 +185,16 @@ class UserSourceMappingApplication:
                     user.id
                 ].items():
                     field_name = ITEM_FIELD_BY_SOURCE[source_type]
-                    item_payload[field_name] = source_info_by_source[
-                        source_type
-                    ].get(external_user_identifier)
+                    source_info = source_info_by_source[source_type].get(
+                        external_user_identifier
+                    )
+                    if (
+                        field_name == "atlassian"
+                        and item_payload.get("atlassian") is not None
+                        and source_type != SourceType.JIRA
+                    ):
+                        continue
+                    item_payload[field_name] = source_info
                 items.append(UserSourceMappingItem(**item_payload))
 
             return UserSourceMappingResponse(
@@ -187,6 +203,24 @@ class UserSourceMappingApplication:
                 size=size,
                 items=items,
             )
+
+    def _full_mapping_condition(self):
+        return and_(
+            *(
+                self._has_mapping_for_sources(source_group)
+                for source_group in FULL_MAPPING_SOURCE_GROUPS
+            )
+        )
+
+    def _has_mapping_for_sources(self, source_types: tuple[SourceType, ...]):
+        return (
+            select(UserSourceMapping.user_id)
+            .where(
+                UserSourceMapping.user_id == User.id,
+                UserSourceMapping.source_type.in_(source_types),
+            )
+            .exists()
+        )
 
     def refresh_user_source_mappings(self) -> UserSourceMappingRefreshResponse:
         with self._session() as db:
