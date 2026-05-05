@@ -51,7 +51,6 @@ const FILTER_OPTIONS: { key: SyncFilterType; label: string }[] = [
 
 /**
  * 서비스 → 백엔드 vendor 매핑.
- * 채널톡은 user-level 매핑이 백엔드 미구현이라 vendor mapping에서 제외 (셀 자체가 read-only).
  * 모듈 스코프에 두어 매 렌더 재생성 방지.
  */
 const SERVICE_TO_VENDOR: Partial<Record<IntegrationService, VendorType>> = {
@@ -59,6 +58,7 @@ const SERVICE_TO_VENDOR: Partial<Record<IntegrationService, VendorType>> = {
   confluence: 'atlassian',
   github: 'github',
   slack: 'slack',
+  channel_talk: 'channel_talk',
 };
 
 /** 이용자 계정 연동 상태 섹션 */
@@ -88,6 +88,10 @@ export default function UsersStatusSection({
     ...adminConnectorQueries.vendorUsers({ vendorType: 'slack' }),
     enabled: isEditMode,
   });
+  const channelTalkUsers = useInfiniteQuery({
+    ...adminConnectorQueries.vendorUsers({ vendorType: 'channel_talk' }),
+    enabled: isEditMode,
+  });
 
   const accountOptionsByService = useMemo<Partial<Record<IntegrationService, AccountOption[]>>>(() => {
     if (!isEditMode) return {};
@@ -108,8 +112,15 @@ export default function UsersStatusSection({
       github: toOptions(githubUsers.data?.pages),
       jira: toOptions(atlassianUsers.data?.pages),
       slack: toOptions(slackUsers.data?.pages),
+      channel_talk: toOptions(channelTalkUsers.data?.pages),
     };
-  }, [isEditMode, githubUsers.data?.pages, atlassianUsers.data?.pages, slackUsers.data?.pages]);
+  }, [
+    isEditMode,
+    githubUsers.data?.pages,
+    atlassianUsers.data?.pages,
+    slackUsers.data?.pages,
+    channelTalkUsers.data?.pages,
+  ]);
 
   // 수정 모드에서 계정 선택 / 미사용 토글 로컬 오버라이드
   type AccountOverride = { type: 'account'; account: AccountOption } | { type: 'unused' };
