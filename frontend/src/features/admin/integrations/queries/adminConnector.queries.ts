@@ -3,22 +3,18 @@ import { infiniteQueryOptions, queryOptions } from '@tanstack/react-query';
 import api from '@/shared/api/client';
 import { API } from '@/shared/api/endpoints';
 
+import type { ConnectionStatusResponse, ConnectorVendor } from '../types/connectionStatusApi';
 import type {
   ConfluenceConnectorStatus,
   GithubConnectorStatus,
   JiraConnectorStatus,
   SlackConnectorStatus,
-  SyncFilterType,
-  UserSyncStatusResponse,
   VendorType,
   VendorUsersResponse,
 } from '../types/integrationApi';
 import type {
   AdminConnectorStatusResponse,
-  AtlassianInstallationStatus,
   ConnectorStatusSource,
-  GithubInstallation,
-  SlackInstallationStatus,
   SyncConnector,
   SyncJobSnapshotResponse,
   SyncStatusResponse,
@@ -60,17 +56,6 @@ export const adminConnectorQueries = {
       queryKey: [...adminConnectorQueries.all(), 'confluence'] as const,
       queryFn: async (): Promise<ConfluenceConnectorStatus> => {
         const res = await api.get<ConfluenceConnectorStatus>(API.admin.connector.confluenceStatus);
-        return res.data;
-      },
-    }),
-
-  userSyncStatus: (params: { filterType: SyncFilterType; page: number; size: number }) =>
-    queryOptions({
-      queryKey: ['admin', 'users', 'syncStatus', params] as const,
-      queryFn: async (): Promise<UserSyncStatusResponse> => {
-        const res = await api.get<UserSyncStatusResponse>(API.admin.users.syncStatus, {
-          params: { filter_type: params.filterType, page: params.page, size: params.size },
-        });
         return res.data;
       },
     }),
@@ -138,31 +123,13 @@ export const adminConnectorQueries = {
       },
     }),
 
-  // ─── Scope 획득용 ───
+  // ─── Vendor 연결 상태 (canonical, scope 획득용 통합) ───
 
-  githubInstallations: () =>
+  connectionStatus: (vendor: ConnectorVendor) =>
     queryOptions({
-      queryKey: ['github', 'installations'] as const,
-      queryFn: async (): Promise<GithubInstallation[]> => {
-        const res = await api.get<GithubInstallation[]>(API.github.installations);
-        return res.data;
-      },
-    }),
-
-  slackInstallationStatus: () =>
-    queryOptions({
-      queryKey: ['slack', 'status'] as const,
-      queryFn: async (): Promise<SlackInstallationStatus> => {
-        const res = await api.get<SlackInstallationStatus>(API.slack.status);
-        return res.data;
-      },
-    }),
-
-  atlassianInstallationStatus: () =>
-    queryOptions({
-      queryKey: ['atlassian', 'status'] as const,
-      queryFn: async (): Promise<AtlassianInstallationStatus> => {
-        const res = await api.get<AtlassianInstallationStatus>(API.atlassian.status);
+      queryKey: ['integrations', vendor, 'connection-status'] as const,
+      queryFn: async (): Promise<ConnectionStatusResponse> => {
+        const res = await api.get<ConnectionStatusResponse>(API.integrations.connectionStatus(vendor));
         return res.data;
       },
     }),

@@ -5,7 +5,10 @@ import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-q
 import dynamic from 'next/dynamic';
 import { toast } from 'sonner';
 
+import IconDivider from '@/public/icons/icon/divider.svg';
 import IconEditPencil from '@/public/icons/icon/edit_pencil.svg';
+import IconError from '@/public/icons/icon/error.svg';
+import IconTodo from '@/public/icons/icon/todo.svg';
 import api from '@/shared/api/client';
 import { API } from '@/shared/api/endpoints';
 import { Button } from '@/shared/components/ui/button';
@@ -16,6 +19,8 @@ import { cn } from '@/shared/utils/cn';
 import { MEMBER_TABLE_SERVICES } from '../../../constants/memberUiConfig';
 import { adminConnectorMutations } from '../../../queries/adminConnector.mutations';
 import { adminConnectorQueries } from '../../../queries/adminConnector.queries';
+import { userSourceMappingMutations } from '../../../queries/userSourceMapping.mutations';
+import { userSourceMappingQueries } from '../../../queries/userSourceMapping.queries';
 import type {
   PreMappingBulkUpdateResponse,
   PreMappingUpdateItem,
@@ -46,12 +51,11 @@ const FILTER_OPTIONS: { key: SyncFilterType; label: string }[] = [
   { key: 'all', label: '전체 이용자' },
   { key: 'full', label: '전체 연동' },
   { key: 'partial', label: '일부 미연동' },
-  { key: 'channel-talk', label: '채널톡' },
+  { key: 'channel_talk', label: '채널톡' },
 ];
 
 /**
  * 서비스 → 백엔드 vendor 매핑.
- * 채널톡은 user-level 매핑이 백엔드 미구현이라 vendor mapping에서 제외 (셀 자체가 read-only).
  * 모듈 스코프에 두어 매 렌더 재생성 방지.
  */
 const SERVICE_TO_VENDOR: Partial<Record<IntegrationService, VendorType>> = {
@@ -59,6 +63,7 @@ const SERVICE_TO_VENDOR: Partial<Record<IntegrationService, VendorType>> = {
   confluence: 'atlassian',
   github: 'github',
   slack: 'slack',
+  channel_talk: 'channel_talk',
 };
 
 /** 이용자 계정 연동 상태 섹션 */
@@ -88,6 +93,10 @@ export default function UsersStatusSection({
     ...adminConnectorQueries.vendorUsers({ vendorType: 'slack' }),
     enabled: isEditMode,
   });
+  const channelTalkUsers = useInfiniteQuery({
+    ...adminConnectorQueries.vendorUsers({ vendorType: 'channel_talk' }),
+    enabled: isEditMode,
+  });
 
   const accountOptionsByService = useMemo<Partial<Record<IntegrationService, AccountOption[]>>>(() => {
     if (!isEditMode) return {};
@@ -108,8 +117,15 @@ export default function UsersStatusSection({
       github: toOptions(githubUsers.data?.pages),
       jira: toOptions(atlassianUsers.data?.pages),
       slack: toOptions(slackUsers.data?.pages),
+      channel_talk: toOptions(channelTalkUsers.data?.pages),
     };
-  }, [isEditMode, githubUsers.data?.pages, atlassianUsers.data?.pages, slackUsers.data?.pages]);
+  }, [
+    isEditMode,
+    githubUsers.data?.pages,
+    atlassianUsers.data?.pages,
+    slackUsers.data?.pages,
+    channelTalkUsers.data?.pages,
+  ]);
 
   // 수정 모드에서 계정 선택 / 미사용 토글 로컬 오버라이드
   type AccountOverride = { type: 'account'; account: AccountOption } | { type: 'unused' };
@@ -145,6 +161,23 @@ export default function UsersStatusSection({
     },
   });
 
+  // ─── User Source Mapping refresh mutation (이용자 DB 동기화) ───
+  const refreshMappingMutation = useMutation({
+    ...userSourceMappingMutations.refresh(),
+    onSuccess: () => {
+      toast('이용자 DB 동기화 성공', { description: '데이터가 정상적으로 반영되었습니다.' });
+    },
+    onError: () => {
+      toast(
+        <span className="flex items-center justify-center gap-2">
+          <IconError className="size-6" />
+          <span>이용자 DB 동기화 실패</span>
+        </span>,
+        { description: '잠시 후 다시 시도해주세요.' },
+      );
+    },
+  });
+
   const queryClient = useQueryClient();
 
   const saveMutation = useMutation({
@@ -162,8 +195,9 @@ export default function UsersStatusSection({
           if (!vendor) continue;
           if (!byVendor[vendor]) byVendor[vendor] = [];
 
+          if (row.sub === null) continue; // sub 없는 사용자는 매핑 수정 불가 (백엔드 PreMappingUpdateItem.sub 필수)
           byVendor[vendor]!.push({
-            sub: row.userKey,
+            sub: row.sub,
             email: row.email,
             name: row.userName,
             is_ignored: override.type === 'unused',
@@ -181,7 +215,7 @@ export default function UsersStatusSection({
     },
     onSuccess: () => {
       toast('저장이 완료되었습니다.', { description: '계정 연동 정보가 반영되었습니다.' });
-      queryClient.invalidateQueries({ queryKey: ['admin', 'users', 'syncStatus'] });
+      queryClient.invalidateQueries({ queryKey: userSourceMappingQueries.all() });
       setOverrides({});
       setIsEditMode(false);
     },
@@ -276,7 +310,7 @@ export default function UsersStatusSection({
           })}
         </div>
 
-        {/* 버튼 영역 */}
+        {/* 버튼 영역: SSO/DB 동기화 그룹 → divider → CSV/수정 그룹 */}
         <div className="flex items-center gap-2">
           <Button
             variant="box-outline-gray"
@@ -292,9 +326,22 @@ export default function UsersStatusSection({
             variant="box-outline-gray"
             size="md"
             className="text-body-small h-9"
+            disabled={refreshMappingMutation.isPending}
+            onClick={() => refreshMappingMutation.mutate()}
+          >
+            이용자 DB 동기화
+          </Button>
+
+          <IconDivider className="text-edge-strong h-6 w-6 shrink-0" />
+
+          <Button
+            variant="box-outline-gray"
+            size="md"
+            className="text-body-small flex h-9 items-center gap-1.5"
             onClick={() => setIsCsvModalOpen(true)}
           >
-            CSV 일괄등록
+            <IconTodo className="h-5 w-5" />
+            CSV 일괄 등록
           </Button>
 
           {isEditMode ? (
@@ -326,7 +373,7 @@ export default function UsersStatusSection({
         <UsersTable
           displayRows={effectiveRows}
           isEditMode={isEditMode}
-          services={filterType === 'channel-talk' ? ['channel-talk'] : MEMBER_TABLE_SERVICES}
+          services={filterType === 'channel_talk' ? ['channel_talk'] : MEMBER_TABLE_SERVICES}
           isLoading={isLoading}
           skeletonCount={pageSize}
           accountOptionsByService={accountOptionsByService}

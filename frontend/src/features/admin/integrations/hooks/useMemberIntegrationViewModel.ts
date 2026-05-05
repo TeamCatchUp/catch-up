@@ -3,17 +3,25 @@ import { useQuery } from '@tanstack/react-query';
 
 import { INTEGRATION_ACCOUNTS } from '../constants/integrationsConfig';
 import { MEMBER_TABLE_SERVICES } from '../constants/memberUiConfig';
-import { adminConnectorQueries } from '../queries/adminConnector.queries';
-import type { PreMappingInfo, SyncFilterType, UserSyncItem } from '../types/integrationApi';
+import { userSourceMappingQueries } from '../queries/userSourceMapping.queries';
+import type { SyncFilterType } from '../types/integrationApi';
 import type {
   IntegrationService,
   MemberIntegrationCardItem,
   MemberIntegrationRow,
   MemberIntegrationViewModel,
 } from '../types/integrationModel';
+import type {
+  MappedSourceInfo,
+  UserSourceMappingItem,
+  UserSourceMappingStatus,
+} from '../types/userSourceMappingApi';
 
-/** 매핑 아이템에서 서비스별 PreMappingInfo 추출 */
-const getServiceInfo = (item: UserSyncItem, service: IntegrationService): PreMappingInfo | null => {
+/**
+ * 매핑 아이템에서 서비스별 MappedSourceInfo 추출.
+ * 백엔드(PR #610)는 Confluence 매핑을 atlassian 필드로 합쳐 응답하므로 jira/confluence는 모두 atlassian에서 읽음.
+ */
+const getServiceInfo = (item: UserSourceMappingItem, service: IntegrationService): MappedSourceInfo | null => {
   switch (service) {
     case 'jira':
     case 'confluence':
@@ -22,22 +30,30 @@ const getServiceInfo = (item: UserSyncItem, service: IntegrationService): PreMap
       return item.github;
     case 'slack':
       return item.slack;
-    case 'channel-talk':
-      // 백엔드 user-level 채널톡 매핑 미구현 — 응답이 합류하기 전까지는 항상 null.
-      return item.channel_talk ?? null;
+    case 'channel_talk':
+      return item.channel_talk;
   }
 };
 
-/** 이용자 연동 탭에서 필요한 데이터를 userSyncStatus API 기반으로 조합 */
+/** 이용자 연동 탭에서 필요한 데이터를 user-source-mapping API 두 개로 조합 */
 export const useMemberIntegrationViewModel = (params: {
   filterType: SyncFilterType;
   page: number;
   size: number;
 }): MemberIntegrationViewModel => {
-  const { data: syncStatus, isLoading } = useQuery(adminConnectorQueries.userSyncStatus(params));
+  // 채널톡 칩은 컬럼 좁힘만 담당 — 백엔드에는 항상 'all'을 전송. 그 외는 그대로 pass-through.
+  const mapping_status: UserSourceMappingStatus =
+    params.filterType === 'channel_talk' ? 'all' : params.filterType;
+
+  const listQuery = useQuery(
+    userSourceMappingQueries.list({ mapping_status, page: params.page, size: params.size }),
+  );
+  const statusQuery = useQuery(userSourceMappingQueries.status());
+
+  const isLoading = listQuery.isLoading || statusQuery.isLoading;
 
   const cards = useMemo<MemberIntegrationCardItem[]>(() => {
-    if (!syncStatus) {
+    if (!statusQuery.data) {
       return INTEGRATION_ACCOUNTS.map((account) => ({
         ...account,
         completedCount: 0,
@@ -47,9 +63,9 @@ export const useMemberIntegrationViewModel = (params: {
     }
 
     return INTEGRATION_ACCOUNTS.map((account) => {
-      const count = syncStatus.counts[account.service];
+      const count = statusQuery.data[account.service];
       const totalCount = count?.users ?? 0;
-      const completedCount = count?.premap ?? 0;
+      const completedCount = count?.mapped ?? 0;
       const completionRate = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
 
       return {
@@ -59,13 +75,13 @@ export const useMemberIntegrationViewModel = (params: {
         completionRate,
       };
     });
-  }, [syncStatus]);
+  }, [statusQuery.data]);
 
   const rows = useMemo<MemberIntegrationRow[]>(() => {
-    if (!syncStatus?.items) return [];
+    if (!listQuery.data?.items) return [];
 
-    return syncStatus.items.map((item): MemberIntegrationRow => {
-      const serviceInfoByService: Partial<Record<IntegrationService, PreMappingInfo>> = {};
+    return listQuery.data.items.map((item): MemberIntegrationRow => {
+      const serviceInfoByService: Partial<Record<IntegrationService, MappedSourceInfo>> = {};
       const statusByService = {} as Record<IntegrationService, '미사용' | '완료' | '미등록'>;
 
       // 이용자 연동 테이블에 노출되는 서비스만 데이터 구성.
@@ -74,15 +90,14 @@ export const useMemberIntegrationViewModel = (params: {
         const info = getServiceInfo(item, service);
         if (info) serviceInfoByService[service] = info;
 
-        if (service === 'channel-talk') {
-          // 채널톡은 백엔드 counts가 없어 hasPremapping이 항상 false → mock 단계에서 미매핑은 '미사용'으로 정렬.
-          // 백엔드 합류 시 아래 일반 분기와 동일하게 처리되도록 이 분기 제거.
+        if (service === 'channel_talk') {
+          // 채널톡은 매니저 기반 매핑이라 '미등록' 상태가 도메인상 존재하지 않음 — 미매핑은 항상 '미사용'으로 표기.
           statusByService[service] = info ? '완료' : '미사용';
           continue;
         }
 
-        const hasPremapping = (syncStatus.counts[service]?.premap ?? 0) > 0;
-        statusByService[service] = info ? '완료' : hasPremapping ? '미사용' : '미등록';
+        const hasMapping = (statusQuery.data?.[service]?.mapped ?? 0) > 0;
+        statusByService[service] = info ? '완료' : hasMapping ? '미사용' : '미등록';
       }
 
       // confluence는 테이블에 미노출이지만 statusByService 타입(`Record<IntegrationService, ...>`)이 키 강제.
@@ -90,14 +105,15 @@ export const useMemberIntegrationViewModel = (params: {
       statusByService.confluence = '미등록';
 
       return {
-        userKey: item.sub,
+        userKey: String(item.user_id),
+        sub: item.sub,
         userName: item.name,
         email: item.email,
         serviceInfoByService,
         statusByService,
       };
     });
-  }, [syncStatus]);
+  }, [listQuery.data, statusQuery.data]);
 
-  return { cards, rows, total: syncStatus?.total ?? 0, isLoading };
+  return { cards, rows, total: listQuery.data?.total ?? 0, isLoading };
 };

@@ -6,6 +6,7 @@ from typing import Any
 import structlog
 
 from catchup.chat.integrations.slack_app_mention import SlackChatAnswerRef
+from catchup.chat.schemas import ChatStreamingProcessResponse
 from catchup.connectors.slack.client import SlackApiClientWrapper
 from catchup.server.connector.slack.feedback_actions import build_action_blocks
 
@@ -14,6 +15,8 @@ logger = structlog.get_logger(__name__)
 # 최상단 노출 텍스트
 PLAN_TITLE = "Catch Up이 답변을 준비하고 있어요"
 PLAN_COMPLETED_TITLE = "Catch Up이 답변을 완성했어요 :)"
+PLAN_PLACEHOLDER_TASK_ID = "reasoning-1"
+PLAN_PLACEHOLDER_TASK_TITLE = "\u200b"
 
 # section fallback 렌더링 제약조건
 MAX_SECTION_TEXT = 2900
@@ -26,34 +29,7 @@ MAX_SOURCE_ITEMS = 10
 # 스트리밍 버퍼링 크기
 MARKDOWN_FLUSH_SIZE = 120
 
-# Plan Block Kit 노출 순서
-TASK_ORDER = ("route", "search", "rerank", "answer")
-
-# 각 노드에서의 진행중 텍스트
-TASK_TITLES = {
-    "route": "질문의 의도를 파악하고 있어요",
-    "search": "사내 기록을 꼼꼼히 살펴보는 중이에요",
-    "rerank": "꼭 필요한 내용만 추려볼게요",
-    "answer": "최종 답변을 작성중 ...",
-}
-
-# 노드 완료 시 노출 텍스트
-TASK_OUTPUTS = {
-    "route": "질문을 이해했어요",
-    "search": "관련 기록을 모아왔어요",
-    "rerank": "핵심 5건을 골랐어요",
-    "answer": "답변을 마무리했어요",
-}
-
-# search에 해당하는 노드 목록
-SEARCH_NODES = {
-    "search_vector_db",
-    "expand_graph_context",
-    "fetch_details_after_graph_context_expansion",
-    "fallback_cypher_query",
-}
-
-NO_VALUE = object()
+ANSWER_STREAM_NODES = {"direct_answer", "generate_final_answer", "generate_final_answer_fast"}
 
 
 def build_markdown_text_chunk(text: str) -> dict[str, str]:
@@ -72,97 +48,81 @@ def build_plan_title_chunk(title: str) -> dict[str, str]:
 
 @dataclass(slots=True)
 class TaskState:
-    status: str = "pending"
-    details_sent: bool = False
-    output_sent: bool = False
-    sources_sent: bool = False
+    title: str
+    status: str
 
 
 class SlackPlanState:
     def __init__(self) -> None:
-        self.tasks = {task_id: TaskState() for task_id in TASK_ORDER}
+        self.tasks: dict[str, TaskState] = {}
+        self.reasoning_task_count = 0
+        self.open_reasoning_task_id: str | None = None
+        self.placeholder_task_id: str | None = None
         # UI 노출 관련도 높은 출처
         self.top_sources: list[Any] = []
 
     def build_initial_chunks(self) -> list[dict[str, Any]]:
-        """Initial Plan Block Kit Skeleton"""
-        chunks: list[dict[str, Any]] = [build_plan_title_chunk(PLAN_TITLE)]
-        chunks.extend(self._task_chunk(task_id, status="pending") for task_id in TASK_ORDER)
-        return chunks
+        self.placeholder_task_id = PLAN_PLACEHOLDER_TASK_ID
+        self.reasoning_task_count = max(self.reasoning_task_count, 1)
+        self.tasks[PLAN_PLACEHOLDER_TASK_ID] = TaskState(
+            title=PLAN_PLACEHOLDER_TASK_TITLE,
+            status="pending",
+        )
+        return [
+            build_plan_title_chunk(PLAN_TITLE),
+            self._task_chunk(
+                task_id=PLAN_PLACEHOLDER_TASK_ID,
+                title=PLAN_PLACEHOLDER_TASK_TITLE,
+                status="pending",
+            ),
+        ]
 
-    def apply_node(self, node: str) -> list[dict[str, Any]]:
-        """RAG Pipeline Node -> Task Block"""
-        if node == "route":
-            return self._start_task("route")
+    def apply_process(
+        self,
+        process: ChatStreamingProcessResponse,
+    ) -> list[dict[str, Any]]:
+        """Process reasoning -> Plan timeline.
 
-        if node in {"rewrite", "generate_vector_queries"}:
-            return self._complete_task("route")
+        Visible task copy intentionally comes only from process.reasoning.
+        Node names are handled by SlackPlanResponder only for transport control.
+        """
+        reasoning = (process.reasoning or "").strip()
+        if not reasoning:
+            if process.status == "in_progress":
+                return self._start_placeholder_task()
+            return []
 
-        if node in SEARCH_NODES:
-            return self._move_to("search", complete_task_ids=("route",))
+        if process.status == "in_progress":
+            return self._start_reasoning_task(reasoning)
 
-        if node == "rerank":
-            return self._move_to("rerank", complete_task_ids=("search",))
+        if process.status == "completed":
+            return self._complete_reasoning_task(reasoning)
 
-        # direct_answer 노드 진입시 모든 Task 완료 처리
-        if node == "direct_answer":
-            chunks: list[dict[str, Any]] = []
-            chunks.extend(self._complete_task("route"))
-            chunks.extend(self._complete_task("search", output="검색 단계를 생략했습니다."))
-            chunks.extend(self._complete_task("rerank", output="핵심 문서 선별 단계를 생략했습니다."))
-            chunks.extend(self._start_task("answer"))
-            return chunks
+        if process.status == "error":
+            return self._error_reasoning_task(reasoning)
 
         return []
 
     def apply_sources(self, sources: list[Any]) -> list[dict[str, Any]]:
-        """rerank node 결과를 받아서 MAX_SOURCE_ITEMS만큼 rerank Task Output으로 노출"""
-        if not sources:
-            return []
+        """Store source candidates for the final response.
 
-        previous_task_sources = build_task_sources(self.top_sources)
+        Reasoning-only Plan mode does not render sources inside Plan tasks.
+        """
         self.top_sources = list(sources[:MAX_SOURCE_ITEMS])
-        current_task_sources = build_task_sources(self.top_sources)
-        if self.tasks["rerank"].output_sent and current_task_sources == previous_task_sources:
-            return []
-
-        rerank_output = f"핵심 {len(self.top_sources)}건을 골랐어요"
-
-        updates: list[dict[str, Any]] = []
-        updates.extend(self._complete_task("search"))
-        updates.extend(
-            self._complete_task(
-                "rerank",
-                output=rerank_output,
-            )
-        )
-        return updates
+        return []
 
     def transition_to_answer(self) -> list[dict[str, Any]]:
-        """Plan UI를 유지한 채 answer 단계로 넘어가도록 선행 task를 정리"""
-        updates: list[dict[str, Any]] = []
-        updates.extend(self._complete_task("search"))
-        if self.top_sources:
-            updates.extend(
-                self._complete_task(
-                    "rerank",
-                    output=f"핵심 {len(self.top_sources)}건을 골랐어요",
-                )
-            )
-        else:
-            updates.extend(self._complete_task_without_output("rerank"))
-        updates.extend(self._start_task("answer"))
-        return updates
+        """Complete any visible reasoning before answer streaming begins."""
+        return self.complete_open_reasoning_task()
 
     def finish(self) -> list[dict[str, Any]]:
-        return [build_plan_title_chunk(PLAN_COMPLETED_TITLE), *self._complete_task("answer")]
+        return [
+            build_plan_title_chunk(PLAN_COMPLETED_TITLE),
+            *self.complete_open_reasoning_task(),
+        ]
 
-    def fail(self, message: str) -> list[dict[str, Any]]:
-        task = self.tasks["answer"]
-        task.status = "error"
-        chunk = self._task_chunk("answer", status="error", details=message)
-        task.details_sent = True
-        return [chunk]
+    def fail(self) -> list[dict[str, Any]]:
+        return self.complete_open_reasoning_task()
 
     def build_final_blocks(
         self,
@@ -206,104 +166,132 @@ class SlackPlanState:
         blocks.extend(action_blocks)
         return blocks
 
-    def _move_to(
-        self,
-        task_id: str,
-        *,
-        complete_task_ids: tuple[str, ...],
-    ) -> list[dict[str, Any]]:
-        chunks: list[dict[str, Any]] = []
-        for complete_task_id in complete_task_ids:
-            chunks.extend(self._complete_task(complete_task_id))
-        chunks.extend(self._start_task(task_id))
+    def _start_reasoning_task(self, title: str) -> list[dict[str, Any]]:
+        placeholder_chunk = self._replace_placeholder_task(title=title, status="in_progress")
+        if placeholder_chunk is not None:
+            return [placeholder_chunk]
+
+        chunks = self.complete_open_reasoning_task()
+        chunks.append(self._new_task_chunk(title=title, status="in_progress"))
+        self.open_reasoning_task_id = chunks[-1]["id"]
         return chunks
 
-    def _start_task(self, task_id: str) -> list[dict[str, Any]]:
-        task = self.tasks[task_id]
-        if task.status == "in_progress":
+    def _complete_reasoning_task(self, title: str) -> list[dict[str, Any]]:
+        placeholder_chunk = self._replace_placeholder_task(title=title, status="complete")
+        if placeholder_chunk is not None:
+            return [placeholder_chunk]
+
+        open_task = self._open_reasoning_task()
+        if open_task is not None and open_task.title == title:
+            return self.complete_open_reasoning_task()
+
+        return [
+            *self.complete_open_reasoning_task(),
+            self._new_task_chunk(title=title, status="complete"),
+        ]
+
+    def _error_reasoning_task(self, title: str) -> list[dict[str, Any]]:
+        placeholder_chunk = self._replace_placeholder_task(title=title, status="error")
+        if placeholder_chunk is not None:
+            return [placeholder_chunk]
+
+        return [
+            *self.complete_open_reasoning_task(),
+            self._new_task_chunk(title=title, status="error"),
+        ]
+
+    def _start_placeholder_task(self) -> list[dict[str, Any]]:
+        if self.open_reasoning_task_id is not None:
+            open_task = self.tasks.get(self.open_reasoning_task_id)
+            if open_task is not None and open_task.title != PLAN_PLACEHOLDER_TASK_TITLE:
+                return []
+
+        task_id = self.placeholder_task_id or self.open_reasoning_task_id
+        if task_id is None:
+            self.reasoning_task_count += 1
+            task_id = f"reasoning-{self.reasoning_task_count}"
+
+        task = self.tasks.get(task_id)
+        if task is not None and task.title == PLAN_PLACEHOLDER_TASK_TITLE and task.status == "in_progress":
+            self.placeholder_task_id = task_id
+            self.open_reasoning_task_id = task_id
             return []
 
-        task.status = "in_progress"
-        chunk = self._task_chunk(
-            task_id,
+        self.placeholder_task_id = task_id
+        self.open_reasoning_task_id = task_id
+        self.tasks[task_id] = TaskState(
+            title=PLAN_PLACEHOLDER_TASK_TITLE,
             status="in_progress",
         )
-        return [chunk]
+        return [
+            self._task_chunk(
+                task_id=task_id,
+                title=PLAN_PLACEHOLDER_TASK_TITLE,
+                status="in_progress",
+            )
+        ]
 
-    def _complete_task_without_output(self, task_id: str) -> list[dict[str, Any]]:
-        task = self.tasks[task_id]
-        if task.status == "complete":
+    def _replace_placeholder_task(self, *, title: str, status: str) -> dict[str, Any] | None:
+        task_id = self.placeholder_task_id or self.open_reasoning_task_id
+        if task_id is None:
+            return None
+
+        task = self.tasks.get(task_id)
+        if task is None or task.title != PLAN_PLACEHOLDER_TASK_TITLE:
+            return None
+
+        self.placeholder_task_id = None
+        self.open_reasoning_task_id = task_id if status == "in_progress" else None
+        self.tasks[task_id] = TaskState(title=title, status=status)
+        return self._task_chunk(task_id=task_id, title=title, status=status)
+
+    def complete_open_reasoning_task(self) -> list[dict[str, Any]]:
+        open_task_id = self.open_reasoning_task_id
+        if open_task_id is None:
+            return []
+
+        task = self.tasks.get(open_task_id)
+        self.open_reasoning_task_id = None
+        if task is None or task.status == "complete":
             return []
 
         task.status = "complete"
         return [
             self._task_chunk(
-                task_id,
+                task_id=open_task_id,
+                title=task.title,
                 status="complete",
             )
         ]
 
-    def _complete_task(
-        self,
-        task_id: str,
-        *,
-        output: str | None | object = NO_VALUE,
-        sources: list[dict[str, str]] | None | object = NO_VALUE,
-    ) -> list[dict[str, Any]]:
-        task = self.tasks[task_id]
-        if task.status == "complete" and output is NO_VALUE and sources is NO_VALUE:
-            return []
+    def _open_reasoning_task(self) -> TaskState | None:
+        if self.open_reasoning_task_id is None:
+            return None
+        return self.tasks.get(self.open_reasoning_task_id)
 
-        task.status = "complete"
-
-        output_value = output
-        if output_value is NO_VALUE and not task.output_sent:
-            output_value = TASK_OUTPUTS[task_id]
-
-        sources_value = sources
-        if sources_value is NO_VALUE:
-            sources_value = NO_VALUE
-
-        chunk = self._task_chunk(
-            task_id,
-            status="complete",
-            output=output_value,
-            sources=sources_value,
-        )
-
-        if output_value is not NO_VALUE:
-            task.output_sent = True
-        if sources_value is not NO_VALUE:
-            task.sources_sent = True
-
-        return [chunk]
+    def _new_task_chunk(self, *, title: str, status: str) -> dict[str, Any]:
+        if self.placeholder_task_id is not None:
+            task_id = self.placeholder_task_id
+            self.placeholder_task_id = None
+        else:
+            self.reasoning_task_count += 1
+            task_id = f"reasoning-{self.reasoning_task_count}"
+        self.tasks[task_id] = TaskState(title=title, status=status)
+        return self._task_chunk(task_id=task_id, title=title, status=status)
 
     def _task_chunk(
         self,
         task_id: str,
         *,
+        title: str,
         status: str,
-        details: str | object = NO_VALUE,
-        output: str | object = NO_VALUE,
-        sources: list[dict[str, str]] | None | object = NO_VALUE,
     ) -> dict[str, Any]:
-        chunk: dict[str, Any] = {
+        return {
             "type": "task_update",
             "id": task_id,
-            "title": TASK_TITLES[task_id],
+            "title": title,
             "status": status,
         }
-
-        if details is not NO_VALUE and details is not None:
-            chunk["details"] = details
-
-        if output is not NO_VALUE and output is not None:
-            chunk["output"] = output
-
-        if sources is not NO_VALUE and sources:
-            chunk["sources"] = sources
-
-        return chunk
 
 
 class SlackPlanResponder:
@@ -375,16 +363,14 @@ class SlackPlanResponder:
         responder.state = state
         return responder
 
-    async def on_node(self, node: str) -> None:
-        if node in {"generate_final_answer", "generate_final_answer_fast"}:
-            await self._switch_to_answer_mode(self.state.transition_to_answer())
+    async def on_process(self, process: ChatStreamingProcessResponse) -> None:
+        chunks = self.state.apply_process(process)
+        if process.node in ANSWER_STREAM_NODES:
+            chunks.extend(self.state.transition_to_answer())
+            await self._switch_to_answer_mode(chunks)
             return
 
-        if node == "direct_answer":
-            await self._switch_to_answer_mode(self.state.apply_node("direct_answer"))
-            return
-
-        await self._append_plan_chunks(self.state.apply_node(node))
+        await self._append_plan_chunks(chunks)
 
     async def on_sources(self, sources: list[Any]) -> None:
         await self._append_plan_chunks(self.state.apply_sources(sources))
@@ -454,7 +440,7 @@ class SlackPlanResponder:
         if self.answer_mode:
             await self.flush_answer_markdown()
             if self.answer_stream_ts is not None:
-                failure_chunks = [build_markdown_text_chunk(message), *self.state.fail(message)]
+                failure_chunks = [build_markdown_text_chunk(message), *self.state.fail()]
                 # plan UI를 남긴 채 같은 stream에서 answer task를 error로 종료
                 await self.client.stop_stream(
                     channel=self.channel_id,
@@ -481,7 +467,7 @@ class SlackPlanResponder:
         await self.client.stop_stream(
             channel=self.channel_id,
             ts=self.plan_stream_ts,
-            chunks=self.state.fail(message),
+            chunks=[build_markdown_text_chunk(message), *self.state.fail()],
             blocks=[],
         )
 

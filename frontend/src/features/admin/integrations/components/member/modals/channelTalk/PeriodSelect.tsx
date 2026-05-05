@@ -4,13 +4,7 @@ import IconDropdownDown from '@/public/icons/icon/dropdown_down.svg';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/components/ui/select';
 import { cn } from '@/shared/utils/cn';
 
-export const PERIOD_OPTIONS = ['1개월', '3개월', '6개월', '1년', '3년', '전체'] as const;
-
-export type Period = (typeof PERIOD_OPTIONS)[number];
-
-export const DEFAULT_PERIOD: Period = '전체';
-
-const isPeriod = (value: string): value is Period => (PERIOD_OPTIONS as readonly string[]).includes(value);
+import { isPeriod, type Period,PERIOD_OPTIONS } from '../../../../constants/period';
 
 interface PeriodSelectProps {
   value: Period;

@@ -102,6 +102,7 @@ class Settings(BaseSettings):
     LANGFUSE_SECRET_KEY: str | None = None
     LANGFUSE_PUBLIC_KEY: str | None = None
     LANGFUSE_BASE_URL: str | None = None
+    LANGFUSE_TIMEOUT: int = 30
         
     # AWS Bedrock
     AWS_ACCESS_KEY_ID: str | None = None

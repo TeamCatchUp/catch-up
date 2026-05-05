@@ -5,6 +5,7 @@ import { useQueryClient } from '@tanstack/react-query';
 
 import { ConfirmDialog } from '@/shared/components/ui/confirm-dialog';
 
+import { CONNECTOR_ORDER } from '../../../constants/connectorOrder';
 import { INTEGRATION_ACCOUNTS } from '../../../constants/integrationsConfig';
 import { useEmbeddingHistory } from '../../../hooks/useEmbeddingHistory';
 import { useEmbeddingJobs } from '../../../hooks/useEmbeddingJobs';
@@ -17,7 +18,6 @@ import StatusCardsSection from './StatusCardsSection';
 import UsersStatusSection from './UsersStatusSection';
 
 const PAGE_SIZE = 10;
-const CONNECTOR_ORDER: SyncConnector[] = ['jira', 'github', 'slack', 'confluence'];
 
 /** 관리자 이용자 연동 탭 섹션 */
 export default function IntegrationsSection() {

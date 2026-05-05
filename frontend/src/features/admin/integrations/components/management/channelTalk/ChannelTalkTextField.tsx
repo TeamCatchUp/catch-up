@@ -6,12 +6,11 @@ import IconVisibility from '@/public/icons/icon/visibility.svg';
 import IconVisibilityOff from '@/public/icons/icon/visibility_off.svg';
 import { cn } from '@/shared/utils/cn';
 
-import type { ChannelTalkFieldState } from '../../../types/channelTalkModel';
-
 interface ChannelTalkTextFieldProps {
   value: string;
   placeholder: string;
-  state?: ChannelTalkFieldState;
+  /** 텍스트필드 시각 변형 — error는 1.5px destructive border, idle은 1px neutral border */
+  state?: 'idle' | 'error';
   /** 비밀값 입력 — eye-off 토글 버튼 노출 (기본은 평문 표시, 클릭 시 마스킹) */
   maskable?: boolean;
   /** 초기 마스킹 여부 (maskable=true일 때만 적용, 기본 false = 평문 표시) */
@@ -24,7 +23,7 @@ interface ChannelTalkTextFieldProps {
   'aria-label'?: string;
 }
 
-/** 채널톡 Access Key/Secret/Webhook Token 입력용 텍스트필드 (5상태 + 마스킹 토글) */
+/** 채널톡 Access Key/Secret/Webhook Token 입력용 텍스트필드 (idle/error + 마스킹 토글) */
 export default function ChannelTalkTextField({
   value,
   placeholder,
@@ -47,27 +46,30 @@ export default function ChannelTalkTextField({
    */
   const masked = disabled ? true : userMasked;
   const showMaskToggle = maskable;
-  const isMasked = maskable && masked && value.length > 0;
-  /** 마스킹 시 별표 표시 — value 길이만큼 '*' 채움 (보안성 vs 시각 일치 절충) */
-  const displayValue = isMasked ? '*'.repeat(value.length) : value;
+  /**
+   * 마스킹은 input type=password로 처리 (브라우저 native).
+   * 직접 '*'를 value에 채워넣으면 입력 도중 토글 시 readOnly 또는 cursor jump 발생 → 입력 깨짐.
+   * type=password로 두면 raw value는 그대로, 시각만 dot으로 가려져서 입력 도중에도 자유롭게 토글 가능.
+   */
+  const inputType = maskable && masked ? 'password' : 'text';
 
   return (
     <div
       className={cn(
-        'flex h-11.5 max-h-45 min-h-11.5 w-full items-center gap-3 rounded-lg p-3',
-        disabled ? 'bg-fill-interaction-disable border-edge-neutral border' : 'bg-fill-normal',
-        !disabled && state === 'idle' && 'border-edge-neutral border',
-        !disabled && state === 'error' && 'border-status-destructive border-[1.5px]',
-        !disabled && state === 'focus' && 'border-edge-primary border-[1.5px]',
+        // ring으로 테두리 표현 — box 크기에 영향 없어 상태 전환 시 layout shift 0.
+        'flex h-11.5 max-h-45 min-h-11.5 w-full items-center gap-3 rounded-lg p-3 ring-[1.5px] ring-inset',
+        disabled ? 'bg-fill-interaction-disable ring-edge-neutral' : 'bg-fill-normal',
+        !disabled && state === 'idle' && 'ring-edge-neutral focus-within:ring-edge-primary',
+        !disabled && state === 'error' && 'ring-status-destructive',
       )}
     >
       <input
         id={inputId}
-        type="text"
-        value={displayValue}
+        type={inputType}
+        value={value}
         onChange={(e) => onChange?.(e.target.value)}
         placeholder={placeholder}
-        readOnly={readOnly || disabled || isMasked}
+        readOnly={readOnly || disabled}
         aria-label={ariaLabel}
         className={cn(
           'text-body-small placeholder:text-content-assistive min-w-0 flex-1 truncate bg-transparent outline-none',

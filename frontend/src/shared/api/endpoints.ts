@@ -28,10 +28,6 @@ export const API = {
     queryDetail: (messageId: number) => `${API_PREFIX}/rooms/queries/${messageId}/detail`, // GET 질문-답변 상세 (QA 1쌍)
   },
 
-  github: {
-    installations: `${API_PREFIX}/github/installations`, // GET 설치된 GitHub App 목록
-  },
-
   jira: {
     install: `${API_PREFIX}/auth/jira/install`, // GET OAuth 인가 URL로 리다이렉트
     uninstall: `${API_PREFIX}/auth/jira/uninstall`, // DELETE 연동 해제 (?cloud_id=)
@@ -39,13 +35,21 @@ export const API = {
 
   slack: {
     install: `${API_PREFIX}/auth/slack/install`, // GET OAuth 인가 URL로 리다이렉트
-    status: `${API_PREFIX}/auth/slack/status`, // GET 연동 상태 + workspaces
     uninstall: `${API_PREFIX}/auth/slack/uninstall`, // DELETE 연동 해제 (?team_id=)
   },
 
   atlassian: {
     install: `${API_PREFIX}/auth/atlassian/install`, // GET OAuth 인가 URL로 리다이렉트 (Jira + Confluence)
-    status: `${API_PREFIX}/auth/atlassian/status`, // GET 연동 상태 + resources (scope_id 획득용)
+  },
+
+  // 통합 연결 상태 — vendor별 OAuth/credential 연결 상태 + scope_id 획득용
+  integrations: {
+    connectionStatus: (vendor: string) => `${API_PREFIX}/integrations/${vendor}/connection-status`, // GET vendor: github | slack | atlassian | jira | confluence | channel_talk
+    userSourceMapping: {
+      list: `${API_PREFIX}/integrations/user-source-mapping`, // GET ?mapping_status=&page=&size= 사용자 매핑 목록
+      status: `${API_PREFIX}/integrations/user-source-mapping/status`, // GET 매핑 현황 카운트
+      refresh: `${API_PREFIX}/integrations/user-source-mapping/refresh`, // POST 매핑 재스캔
+    },
   },
 
   // 통합 Sync API
@@ -54,10 +58,8 @@ export const API = {
     targets: `${API_PREFIX}/sync/targets`, // GET Sync 대상 후보 조회 (?connector=&scope_id=)
     status: `${API_PREFIX}/sync/status`, // GET Scope 기준 최신 상태 (?connector=&scope_id=)
     job: (jobId: string) => `${API_PREFIX}/sync/jobs/${jobId}`, // GET Job 스냅샷 조회
-    jobStream: (jobId: string) => `${API_PREFIX}/sync/jobs/${jobId}/stream`, // GET SSE 실시간 이벤트 스트림
     recordGaps: `${API_PREFIX}/sync/records/gaps`, // GET 누락 레코드 조회 (?event_id=)
     retryRecords: `${API_PREFIX}/sync/records/retry`, // POST 누락 레코드 재시도
-    slackIncrementalRecovery: `${API_PREFIX}/sync/slack/incremental-recovery`, // POST Slack 증분 동기화 복구
   },
 
   // 관리자 — 이용자 관리
@@ -74,11 +76,18 @@ export const API = {
       slackStatus: `${API_PREFIX}/admin/connector/slack/status`, // GET Slack 연동 상태
       confluenceStatus: `${API_PREFIX}/admin/connector/confluence/status`, // GET Confluence 연동 상태
       status: `${API_PREFIX}/admin/connector/status`, // GET target별 임베딩 데이터 범위 (?source=)
+      channelTalk: {
+        credentials: `${API_PREFIX}/admin/connector/channel_talk/credentials`, // GET(list)/POST 채널 credential 조회/저장(upsert)
+        credentialsValidate: `${API_PREFIX}/admin/connector/channel_talk/credentials/validate`, // POST 채널 credential 검증
+        // DELETE는 ?channel_id=X query parameter 사용
+        documentCredentials: `${API_PREFIX}/admin/connector/channel_talk/documents/credentials`, // GET(list)/POST 도큐먼트 스페이스 credential 조회/저장
+        documentCredentialsValidate: `${API_PREFIX}/admin/connector/channel_talk/documents/credentials/validate`, // POST 도큐먼트 스페이스 credential 검증
+        // DELETE는 ?space_id=X query parameter 사용
+      },
     },
     users: {
       list: `${API_PREFIX}/admin/users`, // GET 이용자 목록
       detail: (userId: number) => `${API_PREFIX}/admin/users/${userId}/detail`, // GET 이용자 상세
-      syncStatus: `${API_PREFIX}/admin/users/sync-status`, // GET 서비스별 사용자 매핑 현황
       deactivate: `${API_PREFIX}/admin/users/deactivate`, // POST 비활성화 (body: { userId, reason })
       delete: `${API_PREFIX}/admin/users/delete`, // POST 삭제 (body: { userId, reason })
       promote: `${API_PREFIX}/admin/users/promote`, // POST Admin 승격 (body: { userId, reason })

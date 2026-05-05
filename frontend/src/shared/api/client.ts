@@ -1,6 +1,7 @@
 import axios from 'axios';
 
 import { API } from '@/shared/api/endpoints';
+import { API_ERROR_CODE, parseApiError } from '@/shared/api/errors';
 
 const api = axios.create({
   withCredentials: true,
@@ -8,6 +9,10 @@ const api = axios.create({
     'Content-Type': 'application/json',
   },
 });
+
+/** 외부 service credential 401은 catchup access_token과 무관 → refresh 우회. */
+const isExternalCredentialError = (err: unknown): boolean =>
+  parseApiError(err).code === API_ERROR_CODE.INVALID_CREDENTIALS;
 
 // 401 에러 시 토큰 갱신
 api.interceptors.response.use(
@@ -23,8 +28,7 @@ api.interceptors.response.use(
       return Promise.reject(err);
     }
 
-    // 401 error + 재시도 X 요청
-    if (err.response?.status === 401 && !originalRequest._retry) {
+    if (err.response?.status === 401 && !originalRequest._retry && !isExternalCredentialError(err)) {
       originalRequest._retry = true;
 
       try {

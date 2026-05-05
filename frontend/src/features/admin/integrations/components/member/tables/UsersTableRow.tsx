@@ -42,7 +42,7 @@ export default function UsersTableRow({
         {services.map((service) => {
           const status = displayStatusByService[service];
           const info = row.serviceInfoByService[service];
-          const result = selectCellMode({ service, status, isEditMode });
+          const result = selectCellMode({ status, isEditMode });
           const key = `${renderKey}-${service}`;
 
           switch (result.mode) {

@@ -1,6 +1,9 @@
 import type { ChatSource } from '@/features/chat/types';
+import Book from '@/public/icons/icon/book.svg';
+import Check from '@/public/icons/icon/check.svg';
 import OpenInNew from '@/public/icons/icon/open_in_new.svg';
 import Tag from '@/public/icons/icon/tag.svg';
+import ChannelTalk from '@/public/icons/logo/ChannelTalk.svg';
 import Confluence from '@/public/icons/logo/Confluence.svg';
 import Github from '@/public/icons/logo/GitHub.svg';
 import Jira from '@/public/icons/logo/Jira.svg';
@@ -18,7 +21,20 @@ const INTEGRATION_LABEL: Record<ChatSource['source_type'], string> = {
   github: 'Github',
   jira: 'Jira',
   confluence: 'Confluence',
+  channel_talk: '채널톡',
   unknown: '',
+};
+
+/** {source_type}.{entity_type} 조합별 라벨 suffix. 매핑 누락 시 base 라벨만 표시. */
+const ENTITY_LABEL_SUFFIX: Partial<Record<`${ChatSource['source_type']}.${ChatSource['entity_type']}`, string>> = {
+  'channel_talk.document_article': '도큐먼트',
+  'channel_talk.user_chat': '문의',
+};
+
+const getIntegrationLabel = (source: ChatSource) => {
+  const base = INTEGRATION_LABEL[source.source_type];
+  const suffix = ENTITY_LABEL_SUFFIX[`${source.source_type}.${source.entity_type}`];
+  return suffix ? `${base} - ${suffix}` : base;
 };
 
 const renderSourceLogo = (sourceType: ChatSource['source_type']) => {
@@ -26,6 +42,7 @@ const renderSourceLogo = (sourceType: ChatSource['source_type']) => {
   if (sourceType === 'slack') return <Slack className="h-5 w-5 shrink-0" />;
   if (sourceType === 'confluence') return <Confluence className="h-5 w-5 shrink-0" />;
   if (sourceType === 'github') return <Github className="h-5 w-5 shrink-0" />;
+  if (sourceType === 'channel_talk') return <ChannelTalk className="h-5 w-5 shrink-0" />;
   return null;
 };
 
@@ -36,7 +53,9 @@ export default function SourceCard({ source, showCount = true, count }: Props) {
   };
 
   const isSlack = source.source_type === 'slack';
-  const integrationLabel = INTEGRATION_LABEL[source.source_type];
+  const isChannelTalkArticle =
+    source.source_type === 'channel_talk' && source.entity_type === 'document_article';
+  const integrationLabel = getIntegrationLabel(source);
 
   const repoText = source.repo?.trim() ? source.repo : '-';
   const titleText = source.title?.trim() ? source.title : '-';
@@ -66,10 +85,14 @@ export default function SourceCard({ source, showCount = true, count }: Props) {
         </span>
       </div>
 
-      {/* Row 2: tag pill · 채널/워크스페이스/repo */}
+      {/* Row 2: meta pill · 채널/워크스페이스/repo (article은 book 아이콘) */}
       <div className="flex w-full items-center gap-2">
         <span className="bg-fill-normal border-edge-normal rounded-md2 flex size-5 shrink-0 items-center border-2 p-0.5">
-          <Tag className="text-icon-neutral size-4" />
+          {isChannelTalkArticle ? (
+            <Book className="text-icon-neutral size-4" />
+          ) : (
+            <Tag className="text-icon-neutral size-4" />
+          )}
         </span>
         <span className="text-body-xsmall text-content-alternative min-w-0 flex-1 truncate">{repoText}</span>
       </div>
@@ -93,6 +116,15 @@ export default function SourceCard({ source, showCount = true, count }: Props) {
             <span className="whitespace-nowrap">#{source.github_number}</span>
           </>
         ) : null}
+        {isChannelTalkArticle && (
+          <>
+            <span className="bg-dim-black-10 size-1 shrink-0 rounded-full" />
+            <span className="flex items-center gap-1 whitespace-nowrap">
+              발행 완료
+              <Check className="text-icon-primary-assistive size-4.5" />
+            </span>
+          </>
+        )}
       </div>
     </button>
   );

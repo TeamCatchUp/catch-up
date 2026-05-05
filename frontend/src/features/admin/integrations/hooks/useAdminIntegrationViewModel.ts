@@ -1,6 +1,7 @@
 import { useCallback, useMemo } from 'react';
-import { useQueries } from '@tanstack/react-query';
+import { useQueries, useQuery } from '@tanstack/react-query';
 
+import { CONNECTOR_STATUS_SOURCE_ORDER } from '../constants/connectorOrder';
 import { INTEGRATION_ACCOUNTS } from '../constants/integrationsConfig';
 import { adminConnectorQueries } from '../queries/adminConnector.queries';
 import type {
@@ -9,16 +10,18 @@ import type {
   ConnectorResource,
   IntegrationService,
 } from '../types/integrationModel';
-import type { AdminConnectorStatusResponse, ConnectorStatusSource } from '../types/syncModel';
+import type { AdminConnectorStatusResponse } from '../types/syncModel';
 
-const SOURCE_ORDER: ConnectorStatusSource[] = ['github', 'jira', 'slack', 'confluence'];
+// 단일 source 통합. 이전엔 이 파일이 'github, jira, ...' 순서였고 useEmbeddingHistory는 'jira, github, ...'
+// 순서로 drift되어 있었음 — constants/connectorOrder.ts로 정렬 통일.
+const SOURCE_ORDER = CONNECTOR_STATUS_SOURCE_ORDER;
 
 const RESOURCE_LABELS: Record<IntegrationService, string> = {
   jira: '임베딩된 Jira Project',
   github: '임베딩된 Repository',
   slack: '임베딩된 Slack 채널',
   confluence: '임베딩된 Confluence Space',
-  'channel-talk': '연결된 채널톡 채널',
+  channel_talk: '연결된 채널톡 채널',
 };
 
 /** "YYYY. M. D." 날짜 포맷 */
@@ -37,9 +40,34 @@ const formatRange = (oldest: string | null, latest: string | null): string => {
 
 /** 관리자 연동 화면에서 필요한 데이터를 조합해 반환 */
 export const useAdminIntegrationViewModel = (): AdminIntegrationViewModel => {
+  // dataRange/resources용 — 임베딩된 target 정보
   const statusQueries = useQueries({
     queries: SOURCE_ORDER.map((source) => adminConnectorQueries.connectorTargetStatus(source)),
   });
+
+  // connected 판별용 — OAuth/설치 완료 여부 (임베딩 0개여도 연동됨 표시)
+  // canonical connection-status는 connected 플래그 + count를 제공하므로 별 분기 없이 connected만 보면 됨.
+  const atlassianStatus = useQuery(adminConnectorQueries.connectionStatus('atlassian'));
+  const slackStatus = useQuery(adminConnectorQueries.connectionStatus('slack'));
+  const githubStatus = useQuery(adminConnectorQueries.connectionStatus('github'));
+  const channelTalkStatus = useQuery(adminConnectorQueries.connectionStatus('channel_talk'));
+
+  const isServiceConnected = useCallback(
+    (service: IntegrationService): boolean => {
+      switch (service) {
+        case 'jira':
+        case 'confluence':
+          return atlassianStatus.data?.connected === true;
+        case 'github':
+          return githubStatus.data?.connected === true;
+        case 'slack':
+          return slackStatus.data?.connected === true;
+        case 'channel_talk':
+          return channelTalkStatus.data?.connected === true;
+      }
+    },
+    [atlassianStatus.data, slackStatus.data, githubStatus.data, channelTalkStatus.data],
+  );
 
   const statusMap = useMemo<Record<IntegrationService, AdminConnectorStatusResponse | undefined>>(() => {
     const map: Record<string, AdminConnectorStatusResponse | undefined> = {};
@@ -54,9 +82,9 @@ export const useAdminIntegrationViewModel = (): AdminIntegrationViewModel => {
       INTEGRATION_ACCOUNTS.map((item) => ({
         ...item,
         actionText: `${item.name} 연동하기`,
-        connected: (statusMap[item.service]?.total_targets ?? 0) > 0,
+        connected: isServiceConnected(item.service),
       })),
-    [statusMap],
+    [isServiceConnected],
   );
 
   const getConnectorDetail = useCallback(
@@ -76,18 +104,23 @@ export const useAdminIntegrationViewModel = (): AdminIntegrationViewModel => {
       }));
 
       return {
-        connected: targets.length > 0,
+        connected: isServiceConnected(service),
         dataRange: formatRange(globalOldest, globalLatest),
         resources,
         resourceLabel: RESOURCE_LABELS[service],
       };
     },
-    [statusMap],
+    [statusMap, isServiceConnected],
   );
 
   return {
     integrationMenu,
     getConnectorDetail,
-    isLoading: statusQueries.some((q) => q.isLoading),
+    isLoading:
+      statusQueries.some((q) => q.isLoading) ||
+      atlassianStatus.isLoading ||
+      slackStatus.isLoading ||
+      githubStatus.isLoading ||
+      channelTalkStatus.isLoading,
   };
 };

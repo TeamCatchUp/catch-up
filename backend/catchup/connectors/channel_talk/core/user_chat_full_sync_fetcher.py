@@ -101,6 +101,7 @@ class ChannelTalkUserChatFullSyncFetcher:
                                 self._fetch_user_chat_bundle(
                                     access_key=access_key,
                                     access_secret=access_secret,
+                                    channel_name=connection.channel_name,
                                     state=state,
                                     item=item,
                                     semaphore=semaphore,
@@ -156,6 +157,7 @@ class ChannelTalkUserChatFullSyncFetcher:
         *,
         access_key: str,
         access_secret: str,
+        channel_name: str,
         state: ChannelTalkUserChatState,
         item: ChannelTalkUserChatListItem,
         semaphore: asyncio.Semaphore,
@@ -173,6 +175,7 @@ class ChannelTalkUserChatFullSyncFetcher:
             )
         return ChannelTalkFetchedUserChat(
             state=state,
+            channel_name=channel_name,
             list_item=item,
             detail=detail,
             messages=tuple(messages),
@@ -220,6 +223,7 @@ class ChannelTalkUserChatFullSyncFetcher:
         )
         return ChannelTalkFetchedUserChat(
             state=detail.state,
+            channel_name=connection.channel_name,
             list_item=ChannelTalkUserChatListItem(
                 user_chat_id=detail.user_chat_id,
                 state=detail.state,

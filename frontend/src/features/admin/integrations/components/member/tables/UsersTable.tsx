@@ -20,7 +20,7 @@ import UsersTableRow from './UsersTableRow';
 interface UsersTableProps {
   displayRows: MemberDisplayRow[];
   isEditMode: boolean;
-  /** 노출할 서비스 컬럼. 미지정 시 기본 4컬럼(jira/github/slack/channel-talk). */
+  /** 노출할 서비스 컬럼. 미지정 시 기본 4컬럼(jira/github/slack/channel_talk). */
   services?: IntegrationService[];
   /** 로딩 중 skeleton row 표시 */
   isLoading?: boolean;

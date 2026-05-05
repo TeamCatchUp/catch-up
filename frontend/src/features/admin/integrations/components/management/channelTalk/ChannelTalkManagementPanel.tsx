@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 
 import IconAddSquare from '@/public/icons/icon/add_square.svg';
 import IconCloudCheckFilled from '@/public/icons/icon/cloud_check_filled.svg';
@@ -9,60 +10,109 @@ import { Button } from '@/shared/components/ui/button';
 import { cn } from '@/shared/utils/cn';
 
 import { useChannelTalkViewModel } from '../../../hooks/useChannelTalkViewModel';
+import { adminConnectorQueries } from '../../../queries/adminConnector.queries';
+import type { ChannelTalkConnectionState } from '../../../types/channelTalkModel';
 import type {
   ChannelTalkChannel,
   ChannelTalkChannelPatch,
   ChannelTalkDocumentSpacePatch,
 } from '../../../types/channelTalkModel';
+import type { ChannelTalkConnectionStatusResponse } from '../../../types/connectionStatusApi';
+import type { ConnectorDetail } from '../../../types/integrationModel';
+import { deriveChannelTalkInitialState } from '../../../utils/deriveChannelTalkInitialState';
 import ChannelTalkChannelCard from './ChannelTalkChannelCard';
 
-/** 채널톡 메인 패널 — 인터랙티브 mock state 자체 관리 (새로고침 시 초기화) */
-export default function ChannelTalkManagementPanel() {
+interface ChannelTalkManagementPanelProps {
+  /** 다른 connector와 동일하게 백엔드 connector_target_status 기반 connected/dataRange 표시 */
+  detail: ConnectorDetail;
+}
+
+/**
+ * 채널톡 메인 패널.
+ *
+ * 외부 컴포넌트는 백엔드 GET 응답 fetch + 로딩 처리만 담당.
+ * 데이터 ready 시 Inner를 mount하면서 deriveChannelTalkInitialState로 만든 initialState를 주입.
+ * 이 mount/unmount 분리는 React 19 `react-hooks/set-state-in-effect` 룰을 회피하기 위함.
+ */
+export default function ChannelTalkManagementPanel({ detail }: ChannelTalkManagementPanelProps) {
+  const statusQuery = useQuery(adminConnectorQueries.connectionStatus('channel_talk'));
+  const channelTalkStatus =
+    statusQuery.data?.vendor === 'channel_talk' ? (statusQuery.data as ChannelTalkConnectionStatusResponse) : undefined;
+
+  // outer가 detail 변화 등으로 자주 re-render돼도 derive 비용을 한 번만 지불.
+  // TanStack Query는 동일 fetched data에 대해 stable reference를 보장하므로 cache hit이 잘 동작.
+  const initialState = useMemo(() => deriveChannelTalkInitialState(channelTalkStatus), [channelTalkStatus]);
+
+  if (statusQuery.isLoading) {
+    // 채널톡 백엔드 응답 대기 중 — 빈 placeholder. 짧은 폴링이라 별도 스켈레톤 없이 충분.
+    return <div className="flex flex-col gap-6" />;
+  }
+
+  // fetch 실패 시 빈 카드로 무음 진입을 막아 "등록된 적 없음"으로 오인하는 것을 방지.
+  // 사용자에게 명시적 에러 + 새로고침 안내. ConnectionStatus/DataRange 섹션 자리는 비워둠.
+  if (statusQuery.isError) {
+    return (
+      <div className="flex flex-col gap-6">
+        <div className="border-edge-assistive bg-fill-strong text-body-small text-status-destructive rounded-xl border px-4 py-3">
+          채널톡 연동 정보를 불러오지 못했습니다. 잠시 후 다시 시도해주세요.
+        </div>
+      </div>
+    );
+  }
+
+  return <ChannelTalkManagementPanelInner initialState={initialState} detail={detail} />;
+}
+
+interface ChannelTalkManagementPanelInnerProps {
+  initialState: ChannelTalkConnectionState;
+  detail: ConnectorDetail;
+}
+
+function ChannelTalkManagementPanelInner({ initialState, detail }: ChannelTalkManagementPanelInnerProps) {
   const {
     state,
     addChannel,
     updateChannel,
     removeChannel,
-    enterEditMode,
     addDocumentSpace,
     updateDocumentSpace,
     removeDocumentSpace,
     testChannelConnection,
     testDocumentSpaceConnection,
-    enterDocumentSpaceEditMode,
-  } = useChannelTalkViewModel();
+  } = useChannelTalkViewModel(initialState);
 
   const hasChannels = state.channels.length > 0;
   /**
-   * 채널 배열 기반 파생값들 — 채널 변경 시에만 재계산.
-   * `hasTestedChannels`: "데이터 범위" + "연동 상태"가 active로 보이는 조건 (검증 통과한 채널 1개 이상)
-   * `totalDocumentSpaces`: "N개 도큐먼트 연결됨" 헤드라인 카운트
+   * Credential 헤더 카운트("N개 채널 / N개 도큐먼트 연결됨")는 검증된(tested) 항목만 노출.
+   * 사용자가 입력 중인 미검증 카드는 카운트에서 제외하여 "등록된 데이터" 의미를 유지.
    */
-  const { hasTestedChannels, totalDocumentSpaces } = useMemo(
-    () => ({
-      hasTestedChannels: state.channels.some((ch) => ch.connectionStatus === 'tested'),
-      totalDocumentSpaces: state.channels.reduce((sum, ch) => sum + ch.documentSpaces.length, 0),
-    }),
-    [state.channels],
-  );
+  const { testedChannelCount, testedDocumentSpaceCount } = useMemo(() => {
+    const testedChannels = state.channels.filter((ch) => ch.connectionStatus === 'tested');
+    return {
+      testedChannelCount: testedChannels.length,
+      testedDocumentSpaceCount: testedChannels.reduce(
+        (sum, ch) => sum + ch.documentSpaces.filter((ds) => ds.connectionStatus === 'tested').length,
+        0,
+      ),
+    };
+  }, [state.channels]);
 
+  // detail.connected: OAuth 설치 여부 / hasTestedChannels: credential 등록된 카드 표시용
   return (
     <div className="flex flex-col gap-6">
-      <ConnectionStatusSection isConnected={hasTestedChannels} />
-      <DataRangeSection hasData={hasTestedChannels} />
+      <ConnectionStatusSection isConnected={detail.connected} />
+      <DataRangeSection isConnected={detail.connected} dataRange={detail.dataRange} />
       <CredentialSection
         channels={state.channels}
-        channelCount={state.channels.length}
-        totalDocumentSpaces={totalDocumentSpaces}
+        channelCount={testedChannelCount}
+        totalDocumentSpaces={testedDocumentSpaceCount}
         hasChannels={hasChannels}
         onAddChannel={addChannel}
         onUpdateChannel={updateChannel}
         onRemoveChannel={removeChannel}
-        onEnterEditMode={enterEditMode}
         onAddDocumentSpace={addDocumentSpace}
         onUpdateDocumentSpace={updateDocumentSpace}
         onRemoveDocumentSpace={removeDocumentSpace}
-        onEnterDocumentSpaceEditMode={enterDocumentSpaceEditMode}
         onTestChannelConnection={testChannelConnection}
         onTestDocumentSpaceConnection={testDocumentSpaceConnection}
       />
@@ -106,22 +156,25 @@ function ConnectionStatusSection({ isConnected }: ConnectionStatusSectionProps) 
 }
 
 interface DataRangeSectionProps {
-  /** 검증(tested) 통과한 채널이 1개 이상일 때만 active 텍스트 표시 — 단순 채널 추가는 영향 없음 */
-  hasData: boolean;
+  isConnected: boolean;
+  dataRange: string;
 }
 
-/** 연동된 데이터 범위 섹션 — tested 채널 없으면 placeholder */
-function DataRangeSection({ hasData }: DataRangeSectionProps) {
+/**
+ * 연동된 데이터 범위 섹션 — 다른 connector와 동일 동작.
+ * `isConnected`가 true면 백엔드의 oldest~latest를 중앙 정렬로 표시, false면 placeholder를 좌측 정렬.
+ */
+function DataRangeSection({ isConnected, dataRange }: DataRangeSectionProps) {
   return (
     <div className="flex flex-col gap-1.5">
       <h3 className="text-heading-small text-content-neutral">연동된 데이터 범위</h3>
       <div
         className={cn(
-          'border-edge-assistive bg-fill-strong text-body-small overflow-hidden rounded-xl border px-4 py-3',
-          hasData ? 'text-content-normal' : 'text-content-assistive',
+          'border-edge-assistive bg-fill-strong text-body-small flex items-center overflow-hidden rounded-xl border px-4 py-3',
+          isConnected ? 'text-content-normal justify-center' : 'text-content-assistive',
         )}
       >
-        <span className="truncate">연동되지 않았습니다.</span>
+        <span className="truncate">{isConnected ? dataRange : '연동되지 않았습니다.'}</span>
       </div>
     </div>
   );
@@ -135,11 +188,9 @@ interface CredentialSectionProps {
   onAddChannel: () => void;
   onUpdateChannel: (channelId: string, patch: ChannelTalkChannelPatch) => void;
   onRemoveChannel: (channelId: string) => void;
-  onEnterEditMode: (channelId: string) => void;
   onAddDocumentSpace: (channelId: string) => void;
   onUpdateDocumentSpace: (channelId: string, dsId: string, patch: ChannelTalkDocumentSpacePatch) => void;
   onRemoveDocumentSpace: (channelId: string, dsId: string) => void;
-  onEnterDocumentSpaceEditMode: (channelId: string, dsId: string) => void;
   onTestChannelConnection: (channelId: string) => void;
   onTestDocumentSpaceConnection: (channelId: string, dsId: string) => void;
 }
@@ -153,11 +204,9 @@ function CredentialSection({
   onAddChannel,
   onUpdateChannel,
   onRemoveChannel,
-  onEnterEditMode,
   onAddDocumentSpace,
   onUpdateDocumentSpace,
   onRemoveDocumentSpace,
-  onEnterDocumentSpaceEditMode,
   onTestChannelConnection,
   onTestDocumentSpaceConnection,
 }: CredentialSectionProps) {
@@ -184,11 +233,9 @@ function CredentialSection({
                 channel={channel}
                 onUpdate={(patch) => onUpdateChannel(channel.id, patch)}
                 onRemove={() => onRemoveChannel(channel.id)}
-                onEnterEdit={() => onEnterEditMode(channel.id)}
                 onAddDocumentSpace={() => onAddDocumentSpace(channel.id)}
                 onUpdateDocumentSpace={(dsId, patch) => onUpdateDocumentSpace(channel.id, dsId, patch)}
                 onRemoveDocumentSpace={(dsId) => onRemoveDocumentSpace(channel.id, dsId)}
-                onEnterDocumentSpaceEdit={(dsId) => onEnterDocumentSpaceEditMode(channel.id, dsId)}
                 onTestConnection={() => onTestChannelConnection(channel.id)}
                 onTestDocumentSpaceConnection={(dsId) => onTestDocumentSpaceConnection(channel.id, dsId)}
               />

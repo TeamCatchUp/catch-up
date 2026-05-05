@@ -58,21 +58,17 @@ from catchup.server.connector.channel_talk.schemas import (
     ChannelTalkDocumentConnectResponse,
 )
 from catchup.server.connector.channel_talk.schemas import (
-    ChannelTalkDocumentStatusResponse,
-)
-from catchup.server.connector.channel_talk.schemas import (
     ChannelTalkDocumentUninstallResponse,
 )
 from catchup.server.connector.channel_talk.schemas import (
     ChannelTalkDocumentValidateResponse,
 )
-from catchup.server.connector.channel_talk.schemas import ChannelTalkStatusResponse
 from catchup.server.connector.channel_talk.schemas import ChannelTalkUninstallResponse
 from catchup.server.connector.channel_talk.schemas import ChannelTalkValidateResponse
 
 router = APIRouter(
-    prefix="/api/v1/admin/connector/channel-talk",
-    tags=["channel-talk"],
+    prefix="/api/v1/admin/connector/channel_talk",
+    tags=["channel_talk"],
     dependencies=[Depends(require_admin_user)],
 )
 
@@ -119,17 +115,6 @@ async def upsert_channel_talk_credentials(
     if result.installed and result.channel_id:
         background_tasks.add_task(metadata_task_runner, result.channel_id)
     return _build_connect_response(result)
-
-
-@router.get(
-    "/credentials",
-    response_model=list[ChannelTalkStatusResponse],
-)
-async def get_channel_talk_credentials(
-    service: Annotated[ChannelTalkCredentialsService, Depends(get_channel_talk_service)],
-):
-    results = await service.list_statuses()
-    return [_build_status_response(result) for result in results]
 
 
 @router.delete(
@@ -196,20 +181,6 @@ async def upsert_channel_talk_document_credentials(
     return _build_document_connect_response(result)
 
 
-@router.get(
-    "/documents/credentials",
-    response_model=list[ChannelTalkDocumentStatusResponse],
-)
-async def get_channel_talk_document_credentials(
-    service: Annotated[
-        ChannelTalkDocumentCredentialsService,
-        Depends(get_channel_talk_document_service),
-    ],
-):
-    results = await service.list_statuses()
-    return [_build_document_status_response(result) for result in results]
-
-
 @router.delete(
     "/documents/credentials",
     response_model=ChannelTalkDocumentUninstallResponse,
@@ -254,17 +225,6 @@ def _build_connect_response(result: ChannelTalkCredentialsStatus) -> ChannelTalk
         status_reason=None,
         status="connected",
         message="Channel Talk credentials saved.",
-    )
-
-
-def _build_status_response(result: ChannelTalkCredentialsStatus) -> ChannelTalkStatusResponse:
-    return ChannelTalkStatusResponse(
-        installed=result.installed,
-        channel_id=result.channel_id,
-        channel_name=result.channel_name,
-        credential_last_verified_at=_stringify_datetime(result.credential_last_verified_at),
-        webhook_token_configured=result.webhook_token_configured,
-        status_reason=None,
     )
 
 
@@ -313,26 +273,6 @@ def _build_document_connect_response(
         status_reason=None,
         status="connected",
         message="Channel Talk Documents credentials saved.",
-    )
-
-
-def _build_document_status_response(
-    result: ChannelTalkDocumentCredentialsStatus,
-) -> ChannelTalkDocumentStatusResponse:
-    return ChannelTalkDocumentStatusResponse(
-        installed=result.installed,
-        channel_id=result.channel_id,
-        space_id=result.space_id,
-        space_name=result.space_name,
-        credential_last_verified_at=_stringify_datetime(result.credential_last_verified_at),
-        association_status=_stringify_association_status(result),
-        polling_cycle_hours=result.polling_cycle_hours,
-        last_incremental_polled_at=_stringify_datetime(result.last_incremental_polled_at),
-        last_incremental_poll_started_at=_stringify_datetime(
-            result.last_incremental_poll_started_at
-        ),
-        last_incremental_poll_error=result.last_incremental_poll_error,
-        status_reason=None,
     )
 
 

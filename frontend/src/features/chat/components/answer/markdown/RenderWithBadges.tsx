@@ -50,7 +50,9 @@ export const renderWithBadges = (
               ? 'slack'
               : source.source_type === 'confluence'
                 ? 'confluence'
-                : 'github';
+                : source.source_type === 'channel_talk'
+                  ? 'channel_talk'
+                  : 'github';
 
         return (
           <SourceBadge key={index} n={String(displayOrderMap.get(sourceIndex) ?? sourceIndex)} sourceType={badgeType} />

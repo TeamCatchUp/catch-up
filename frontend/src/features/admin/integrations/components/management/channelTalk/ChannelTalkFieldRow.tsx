@@ -1,13 +1,13 @@
 'use client';
 
-import type { ChannelTalkFieldState } from '../../../types/channelTalkModel';
 import ChannelTalkTextField from './ChannelTalkTextField';
 
 interface ChannelTalkFieldRowProps {
   label: string;
   value: string;
   placeholder: string;
-  state: ChannelTalkFieldState;
+  /** 텍스트필드 시각 변형 — error는 1.5px destructive border, idle은 1px neutral border */
+  state: 'idle' | 'error';
   /** lock 상태 — 입력 불가 + 회색 배경 + 자동 마스킹 */
   disabled?: boolean;
   onChange: (next: string) => void;

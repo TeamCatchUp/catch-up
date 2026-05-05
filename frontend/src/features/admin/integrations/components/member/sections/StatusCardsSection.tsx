@@ -11,7 +11,6 @@ import type { IntegrationService } from '@/shared/types/integrationService';
 import type { MemberIntegrationCardItem } from '../../../types/integrationModel';
 import type { EmbeddingButtonState, SyncConnector } from '../../../types/syncModel';
 import EmbeddingModal from '../modals/EmbeddingModal';
-import RecoveryCardSection from './RecoveryCardSection';
 
 // 채널톡 임베딩 모달은 사용자가 "임베딩하기" 버튼을 클릭한 시점에만 필요하므로 lazy load.
 // 임베딩 버튼 hover/focus 시에는 preloadChannelTalkModal()로 chunk를 미리 가져온다.
@@ -54,24 +53,11 @@ export default function StatusCardsSection({
       );
     }
 
-    // channel-talk은 임베딩 백엔드 미구현 — buttonStates 추적 대상이 아니므로 항상 idle 버튼만 노출.
-    // SyncConnector 확장 시 이 분기 제거 가능.
-    if (service === 'channel-talk') {
-      return (
-        <Button
-          variant="box-soft-primary"
-          size="md"
-          className="text-body-small h-9 w-full"
-          onMouseEnter={preloadChannelTalkModal}
-          onFocus={preloadChannelTalkModal}
-          onClick={() => openEmbeddingModal(service, name)}
-        >
-          임베딩하기
-        </Button>
-      );
-    }
+    // IntegrationService와 SyncConnector는 동일 문자열이므로 그대로 lookup.
+    const state = buttonStates[service as SyncConnector] ?? 'idle';
 
-    const state = buttonStates[service] ?? 'idle';
+    // 채널톡 모달은 dynamic import이므로 hover/focus 시 preload (다른 connector는 정적 import).
+    const handleHover = service === 'channel_talk' ? preloadChannelTalkModal : undefined;
 
     switch (state) {
       case 'idle':
@@ -80,6 +66,8 @@ export default function StatusCardsSection({
             variant="box-soft-primary"
             size="md"
             className="text-body-small h-9 w-full"
+            onMouseEnter={handleHover}
+            onFocus={handleHover}
             onClick={() => openEmbeddingModal(service, name)}
           >
             임베딩하기
@@ -99,6 +87,8 @@ export default function StatusCardsSection({
             variant="box-soft-primary"
             size="md"
             className="text-body-small h-9 w-full"
+            onMouseEnter={handleHover}
+            onFocus={handleHover}
             onClick={() => openEmbeddingModal(service, name)}
           >
             임베딩 재시도
@@ -115,8 +105,6 @@ export default function StatusCardsSection({
         <h2 className="text-heading-large text-content-normal">계정 등록 상태</h2>
         <p className="text-body-small text-content-alternative">팀의 매핑 등록 상태를 확인할 수 있어요.</p>
       </div>
-
-      <RecoveryCardSection />
 
       <div className="grid grid-cols-[repeat(auto-fill,minmax(320px,1fr))] gap-6">
         {cards.map((card) => {
@@ -176,7 +164,7 @@ export default function StatusCardsSection({
         })}
       </div>
 
-      {embeddingModal.service !== 'channel-talk' && (
+      {embeddingModal.service !== 'channel_talk' && (
         <EmbeddingModal
           open={embeddingModal.open}
           onOpenChange={(open) => setEmbeddingModal((prev) => ({ ...prev, open }))}
@@ -186,10 +174,11 @@ export default function StatusCardsSection({
         />
       )}
 
-      {embeddingModal.service === 'channel-talk' && (
+      {embeddingModal.service === 'channel_talk' && (
         <ChannelTalkEmbeddingModal
           open={embeddingModal.open}
           onOpenChange={(open) => setEmbeddingModal((prev) => ({ ...prev, open }))}
+          onJobStart={onJobStart}
         />
       )}
     </section>

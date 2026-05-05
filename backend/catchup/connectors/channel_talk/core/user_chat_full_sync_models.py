@@ -41,10 +41,11 @@ class ChannelTalkUserChatFullSyncConnection(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     channel_id: str
+    channel_name: str
     access_key: str
     access_secret: str
 
-    @field_validator("channel_id", "access_key", "access_secret")
+    @field_validator("channel_id", "channel_name", "access_key", "access_secret")
     @classmethod
     def _validate_required_text(cls, value: str, info: ValidationInfo) -> str:
         return require_text(value, info.field_name or "field")
@@ -56,6 +57,7 @@ class ChannelTalkUserChatFullSyncConnection(BaseModel):
     ) -> "ChannelTalkUserChatFullSyncConnection":
         return cls(
             channel_id=record.channel_id,
+            channel_name=record.channel_name,
             access_key=require_text(record.access_key, "access_key"),
             access_secret=require_text(record.access_secret, "access_secret"),
         )
@@ -65,6 +67,7 @@ class ChannelTalkFetchedUserChat(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     state: ChannelTalkUserChatState
+    channel_name: str
     list_item: ChannelTalkUserChatListItem
     detail: ChannelTalkUserChatDetail
     messages: tuple[ChannelTalkUserChatMessage, ...] = ()

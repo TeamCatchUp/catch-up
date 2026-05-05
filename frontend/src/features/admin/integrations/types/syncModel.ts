@@ -1,6 +1,6 @@
 // ─── Sync Enums (백엔드 StrEnum 매핑) ───
 
-export type SyncConnector = 'github' | 'slack' | 'jira' | 'confluence';
+export type SyncConnector = 'github' | 'slack' | 'jira' | 'confluence' | 'channel_talk';
 export type SyncDispatchStatus = 'accepted' | 'no_events' | 'conflict' | 'failed';
 export type SyncType = 'full' | 'incremental';
 export type SyncTargetType = 'resource' | 'channel' | 'repository' | 'project' | 'space';
@@ -9,19 +9,26 @@ export type SyncJobStatus = 'pending' | 'in_progress' | 'success' | 'failed';
 /** target(리소스) 단위 상태 — SyncJobStatus + 'retrying' */
 export type SyncTargetStatus = SyncJobStatus | 'retrying';
 
-/** GET /sync/jobs/{jobId} 및 SSE snapshot의 per-target 상태 */
+/** GET /sync/jobs/{jobId}의 per-target 상태 */
 export interface SyncJobTargetSnapshotItem {
+  target_type: SyncTargetType;
   target_id: string;
   target_name: string;
   status: SyncTargetStatus;
 }
 
-// ─── API Request/Response (추후 API 연결 시 사용) ───
+// ─── API Request/Response ───
+
+/** POST /sync/full 요청에 포함되는 단일 동기화 대상 (백엔드 FullSyncRequestedTarget 매칭) */
+export interface FullSyncTarget {
+  target_type: SyncTargetType;
+  target_id: string;
+}
 
 export interface FullSyncRequest {
   connector: SyncConnector;
   scope_id: string;
-  target_ids: string[];
+  targets: FullSyncTarget[];
   sync_days?: number | null;
 }
 
@@ -34,8 +41,6 @@ export interface SyncAcceptedResponse {
   total_targets: number;
   queued_targets: number;
   message: string | null;
-  snapshot_url: string | null;
-  stream_url: string | null;
 }
 
 export interface SyncJobSnapshotResponse {
@@ -96,109 +101,6 @@ export interface SyncTargetsResponse {
   targets: SyncTargetItem[];
 }
 
-// ─── Scope 선택용 타입 ───
-
-/** GitHub scope — GET /github/installations */
-export interface GithubInstallation {
-  installation_id: number;
-  account_login: string;
-  account_type: string;
-}
-
-/** Slack scope — GET /auth/slack/status */
-export interface SlackWorkspace {
-  team_id: string;
-  team_name: string;
-}
-export interface SlackInstallationStatus {
-  installed: boolean;
-  workspaces: SlackWorkspace[];
-}
-
-/** Atlassian scope (Jira + Confluence 공용) — GET /auth/atlassian/status */
-export interface AtlassianResource {
-  id: string;
-  name: string;
-  url: string;
-  scopes: string[];
-}
-export interface AtlassianInstallationStatus {
-  installed: boolean;
-  resources: AtlassianResource[];
-}
-
-// ─── SSE Stream 타입 (GET /sync/jobs/{job_id}/stream) ───
-
-export type SyncStreamEventType =
-  | 'snapshot'
-  | 'target_started'
-  | 'target_completed'
-  | 'target_failed'
-  | 'target_requeued'
-  | 'job_completed'
-  | 'job_failed'
-  | 'heartbeat';
-
-/** target_* 이벤트의 payload */
-export interface SyncStreamTargetPayload {
-  event_id: string;
-  target_id: string;
-  target_name: string;
-  target_type: string;
-  status: string;
-  sync_type: string;
-  attempt: number;
-}
-
-/** snapshot 이벤트의 payload (SyncJobSnapshotResponse와 동일 구조) */
-export interface SyncStreamSnapshotPayload {
-  job_id: string;
-  connector: SyncConnector;
-  sync_type: SyncType;
-  scope_id: string;
-  status: SyncJobStatus;
-  created_at: string;
-  started_at: string | null;
-  completed_at: string | null;
-  total_targets: number;
-  queued_targets: number;
-  processing_targets: number;
-  completed_targets: number;
-  failed_targets: number;
-  requeued_targets: number;
-  targets: SyncJobTargetSnapshotItem[];
-  last_error: string | null;
-  metrics: Record<string, number>;
-}
-
-/** job 종료 이벤트의 payload */
-export interface SyncStreamJobEndPayload {
-  status: SyncJobStatus;
-  completed_at: string;
-  total_targets: number;
-  completed_targets: number;
-  failed_targets: number;
-  metrics: Record<string, number>;
-}
-
-/** SSE 이벤트 공통 필드 */
-interface SyncStreamEventBase {
-  connector: SyncConnector;
-  job_id: string;
-  scope_id: string;
-  timestamp: string;
-}
-
-/** SSE 이벤트 — event_type으로 payload 타입이 결정되는 discriminated union */
-export type SyncStreamEvent =
-  | (SyncStreamEventBase & { event_type: 'snapshot'; payload: SyncStreamSnapshotPayload })
-  | (SyncStreamEventBase & {
-      event_type: 'target_started' | 'target_completed' | 'target_failed' | 'target_requeued';
-      payload: SyncStreamTargetPayload;
-    })
-  | (SyncStreamEventBase & { event_type: 'job_completed' | 'job_failed'; payload: SyncStreamJobEndPayload })
-  | (SyncStreamEventBase & { event_type: 'heartbeat'; payload: Record<string, unknown> });
-
 // ─── UI 상태 타입 ───
 
 /** 커넥터 카드 버튼 상태 */
@@ -223,10 +125,27 @@ export interface ConnectorProgress {
 
 // ─── 임베딩 히스토리 타입 (GET /admin/connector/status) ───
 
-export type ConnectorStatusSource = 'github' | 'jira' | 'slack' | 'confluence';
-export type ConnectorResourceType = 'repositories' | 'projects' | 'channels' | 'spaces';
+export type ConnectorStatusSource = 'github' | 'jira' | 'slack' | 'confluence' | 'channel_talk';
+export type ConnectorResourceType =
+  | 'repositories'
+  | 'projects'
+  | 'channels'
+  | 'spaces'
+  | 'channel_talk_targets';
 
-/** target별 임베딩 데이터 범위 */
+/**
+ * 채널톡 target은 channel/space 두 종류가 같은 응답에 섞여 오므로 target_type으로 구분.
+ * `SyncTargetType`에서 직접 추출해 enum drift를 방지.
+ */
+export type ChannelTalkConnectorTargetType = Extract<SyncTargetType, 'channel' | 'space'>;
+
+/**
+ * target별 임베딩 데이터 범위.
+ *
+ * `target_type`은 백엔드 schema 상 채널톡 source 응답(`AdminChannelTalkConnectorTargetRangeResponse`)에만
+ * 존재하지만, 프론트는 union을 평탄화하여 optional로 받는다. 다른 connector(github/jira/slack/confluence)는
+ * 항상 undefined.
+ */
 export interface AdminConnectorTargetRangeResponse {
   scope_id: string;
   target_id: string;
@@ -237,6 +156,7 @@ export interface AdminConnectorTargetRangeResponse {
   last_failed_at: string | null;
   oldest: string | null;
   latest: string | null;
+  target_type?: ChannelTalkConnectorTargetType;
 }
 
 /** GET /admin/connector/status 응답 */

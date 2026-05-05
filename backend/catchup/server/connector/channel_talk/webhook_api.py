@@ -18,7 +18,7 @@ from catchup.sync.incremental.service import get_incremental_service
 
 logger = structlog.get_logger(__name__)
 
-router = APIRouter(prefix="/api/v1/channel_talk", tags=["channel-talk-webhook"])
+router = APIRouter(prefix="/api/v1/channel_talk", tags=["channel_talk-webhook"])
 
 
 class ChannelTalkWebhookResponse(BaseModel):

@@ -1,7 +1,8 @@
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter
+from fastapi import Query
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import RedirectResponse
 
@@ -14,24 +15,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/github", tags=["GitHub Connector"])
 
 
-def _load_installations() -> list[dict[str, object]]:
-    with SessionLocal() as db:
-        installations = installation_crud.get_all_installations(db)
-
-    return [
-        {
-            "installation_id": inst.installation_id,
-            "account_type": inst.account_type,
-            "account_login": inst.account_login,
-            "account_id": inst.account_id,
-            "repository_selection": inst.repository_selection,
-            "created_at": inst.created_at,
-            "suspended_at": inst.suspended_at,
-        }
-        for inst in installations
-    ]
-
-
 def _load_installation_account(installation_id: int) -> str | None:
     with SessionLocal() as db:
         installation = installation_crud.get_installation_by_installation_id(
@@ -41,14 +24,6 @@ def _load_installation_account(installation_id: int) -> str | None:
         if installation is None:
             return None
         return installation.account_login
-
-
-@router.get("/installations")
-async def list_installations():
-    """
-    등록된 모든 Installation 목록 조회
-    """
-    return await run_in_threadpool(_load_installations)
 
 
 @router.get("/install")

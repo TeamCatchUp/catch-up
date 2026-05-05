@@ -8,6 +8,7 @@ from catchup.db.models import SourceType
 CREATED_AT_TOOLS = [
     SourceType.GITHUB,
     SourceType.SLACK,
+    SourceType.CHANNEL_TALK,
 ]
 
 UPDATED_AT_TOOLS = [

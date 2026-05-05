@@ -11,5 +11,5 @@ export const INTEGRATION_ACCOUNTS: IntegrationAccountMeta[] = [
   { service: 'github', name: 'Github', Icon: IconGithub },
   { service: 'slack', name: 'Slack', Icon: IconSlack },
   { service: 'confluence', name: 'Confluence', Icon: IconConfluence },
-  { service: 'channel-talk', name: '채널톡', Icon: IconChannelTalk },
+  { service: 'channel_talk', name: '채널톡', Icon: IconChannelTalk },
 ];

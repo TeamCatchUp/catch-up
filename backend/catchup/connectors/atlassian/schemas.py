@@ -3,7 +3,8 @@
 Atlassian OAuth 2.0 인증 응답/상태 DTO.
 """
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
+from pydantic import Field
 
 
 class AtlassianOAuthTokenResponse(BaseModel):
@@ -33,10 +34,3 @@ class AtlassianUserInfo(BaseModel):
     email: str | None = None
     name: str | None = None
     picture: str | None = None
-
-
-class AtlassianInstallationStatus(BaseModel):
-    """Atlassian 설치 상태 응답 DTO."""
-
-    installed: bool
-    resources: list[AtlassianAccessibleResource] = Field(default_factory=list)

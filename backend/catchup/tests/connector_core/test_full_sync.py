@@ -295,6 +295,7 @@ def _fetched_bundle() -> ChannelTalkFetchedUserChat:
     )
     return ChannelTalkFetchedUserChat(
         state=ChannelTalkUserChatState.OPENED,
+        channel_name="Support",
         list_item=ChannelTalkUserChatListItem(
             user_chat_id="chat-123",
             state=ChannelTalkUserChatState.OPENED,
@@ -659,9 +660,7 @@ class ChannelTalkArticleSyncIngestionRunnerTests(IsolatedAsyncioTestCase):
             fetch_call["connection"].access_secret, "documents-access-secret"
         )
         self.assertEqual(fetch_call["language"], "ko")
-        self.assertEqual(
-            fetch_call["states"], DEFAULT_ARTICLE_FULL_SYNC_STATES
-        )
+        self.assertEqual(fetch_call["states"], DEFAULT_ARTICLE_FULL_SYNC_STATES)
         self.assertEqual(fetch_call["sync_window"], _window())
         self.assertEqual(result.summary.document_count, 1)
         self.assertEqual(result.persisted.persisted_count, 1)
@@ -691,8 +690,16 @@ class ChannelTalkArticleSyncIngestionRunnerTests(IsolatedAsyncioTestCase):
             "published",
         )
         self.assertEqual(
+            document_article_core["space"]["channel_id"],
+            "channel-123",
+        )
+        self.assertEqual(
             document_article_core["space"]["space_id"],
             "space-123",
+        )
+        self.assertEqual(
+            document_article_core["space"]["space_name"],
+            "Help Center",
         )
         self.assertEqual(
             document_article_core["publication"]["published_revision_id"],
@@ -830,7 +837,9 @@ class SyncIngestionRunnerTests(IsolatedAsyncioTestCase):
             ChannelTalkUserChatFullSyncTransformResult,
         )
         self.assertIsInstance(result.summary, ChannelTalkUserChatFullSyncSummaryResult)
-        self.assertIsInstance(result.persisted, ChannelTalkUserChatFullSyncPersistResult)
+        self.assertIsInstance(
+            result.persisted, ChannelTalkUserChatFullSyncPersistResult
+        )
         self.assertEqual(result.connector, ConnectorKey.CHANNEL_TALK)
         self.assertEqual(result.channel_id, "channel-123")
         self.assertNotIn("stage", result.model_dump())
@@ -892,6 +901,14 @@ class SyncIngestionRunnerTests(IsolatedAsyncioTestCase):
         self.assertNotIn("Included Messages", original_contextual_content)
         self.assertNotIn("base", stored_document.metadata)
         self.assertNotIn("channel_id", stored_document.metadata)
+        self.assertEqual(
+            stored_document.metadata["user_chat_core"]["chat"]["channel_id"],
+            "channel-123",
+        )
+        self.assertEqual(
+            stored_document.metadata["user_chat_core"]["chat"]["channel_name"],
+            "Support",
+        )
         self.assertEqual(
             stored_document.metadata["url"],
             "https://desk.channel.io/#/channels/channel-123/user_chats/chat-123",
@@ -1130,9 +1147,7 @@ class SyncIngestionRunnerTests(IsolatedAsyncioTestCase):
         self.assertIsInstance(result, ChannelTalkUserChatIncrementalExecutionResult)
         fake_fetcher.fetch_user_chat_bundle_by_id.assert_awaited_once()
         self.assertEqual(
-            fake_fetcher.fetch_user_chat_bundle_by_id.await_args.kwargs[
-                "user_chat_id"
-            ],
+            fake_fetcher.fetch_user_chat_bundle_by_id.await_args.kwargs["user_chat_id"],
             "chat-123",
         )
         self.assertEqual(result.fetched.fetched_record_ids, ("chat-123",))

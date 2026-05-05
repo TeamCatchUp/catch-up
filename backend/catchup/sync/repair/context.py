@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime
+from datetime import timezone
 from typing import Any
 
 from sqlalchemy import select
@@ -13,7 +14,7 @@ from catchup.db.models import SyncEventStatus
 from catchup.db.models import SyncJob
 from catchup.db.models import SyncType
 from catchup.sync.common.exceptions import SyncRequestException
-
+from catchup.sync.common.schemas import SyncTargetType
 
 ACTIVE_EVENT_STATUSES = {
     SyncEventStatus.PENDING,
@@ -29,6 +30,7 @@ class RecordRepairContext:
     event_status: SyncEventStatus
     connector: SyncConnector
     scope_id: str
+    target_type: SyncTargetType
     target_id: str
     target_name: str
     sync_from_ts: str
@@ -140,6 +142,7 @@ def load_record_repair_context(event_id: str) -> RecordRepairContext:
         event_status=event.status,
         connector=event.connector,
         scope_id=scope_id,
+        target_type=SyncTargetType(event.resource_type),
         target_id=target_id,
         target_name=target_name or target_id,
         sync_from_ts=sync_from_ts,
