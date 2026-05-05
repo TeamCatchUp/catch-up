@@ -9,7 +9,7 @@ from fastapi.responses import JSONResponse
 
 from catchup.connectors.channel_talk.exceptions import ChannelTalkError
 
-CHANNEL_TALK_ROUTE_PREFIX = "/api/v1/admin/connector/channel-talk"
+CHANNEL_TALK_ROUTE_PREFIX = "/api/v1/admin/connector/channel_talk"
 
 
 def register_channel_talk_exception_handlers(
