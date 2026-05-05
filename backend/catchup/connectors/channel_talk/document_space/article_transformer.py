@@ -70,6 +70,9 @@ class ArticleExecution(Protocol):
     def channel_id(self) -> str: ...
 
     @property
+    def channel_name(self) -> str: ...
+
+    @property
     def space_id(self) -> str: ...
 
     @property
@@ -87,9 +90,7 @@ class ArticleTransformer:
         chunker: ArticleChunker | None = None,
     ) -> None:
         self.language = require_text(language, "language")
-        self._content_normalizer = (
-            content_normalizer or ArticleContentNormalizer()
-        )
+        self._content_normalizer = content_normalizer or ArticleContentNormalizer()
         self._chunker = chunker or ArticleChunker()
 
     def transform(
@@ -248,6 +249,7 @@ class ArticleTransformer:
                 space=ChannelTalkDocumentArticleSpaceMetadata(
                     channel_id=execution.channel_id,
                     space_id=execution.space_id,
+                    channel_name=execution.channel_name,
                     space_name=execution.space_name,
                 ),
                 author=ChannelTalkDocumentArticleAuthorMetadata(

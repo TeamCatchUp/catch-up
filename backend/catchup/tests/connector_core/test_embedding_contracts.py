@@ -57,8 +57,10 @@ class ChannelTalkUserChatLogicalMetadataTests(TestCase):
             user_chat_core=ChannelTalkUserChatCoreMetadata(
                 chat=ChannelTalkUserChatChatMetadata(
                     channel_id="channel-1",
+                    channel_name="Support",
                     user_chat_id="chat-123",
                     state="opened",
+                    customer_name="VIP customer",
                     description="VIP onboarding question",
                 ),
                 customer=ChannelTalkUserChatCustomerMetadata(
@@ -187,6 +189,7 @@ class ChannelTalkUserChatLogicalMetadataTests(TestCase):
                 user_chat_core=ChannelTalkUserChatCoreMetadata(
                     chat=ChannelTalkUserChatChatMetadata(
                         channel_id="channel-1",
+                        channel_name="Support",
                         user_chat_id="chat-123",
                         state="opened",
                     ),
@@ -219,6 +222,7 @@ class ChannelTalkUserChatLogicalMetadataTests(TestCase):
                 user_chat_core=ChannelTalkUserChatCoreMetadata(
                     chat=ChannelTalkUserChatChatMetadata(
                         channel_id="channel-1",
+                        channel_name="Support",
                         user_chat_id="chat-123",
                         state="opened",
                     ),
@@ -260,6 +264,7 @@ class ChannelTalkDocumentArticleLogicalMetadataTests(TestCase):
                 space=ChannelTalkDocumentArticleSpaceMetadata(
                     channel_id="channel-1",
                     space_id="space-1",
+                    channel_name="Support",
                     space_name="Help Center",
                 ),
                 author=ChannelTalkDocumentArticleAuthorMetadata(
@@ -317,6 +322,8 @@ class ChannelTalkDocumentArticleLogicalMetadataTests(TestCase):
         )
         self.assertEqual(article_core["space"]["channel_id"], "channel-1")
         self.assertEqual(article_core["space"]["space_id"], "space-1")
+        self.assertEqual(article_core["space"]["channel_name"], "Support")
+        self.assertEqual(article_core["space"]["space_name"], "Help Center")
         self.assertEqual(article_core["author"]["author_name"], "Writer")
         self.assertEqual(article_core["taxonomy"]["category_name"], "Payments")
         self.assertEqual(article_core["chunk"]["chunk_index"], 0)

@@ -17,15 +17,16 @@ class ChannelTalkUserChatChatMetadata(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     channel_id: str
+    channel_name: str
     user_chat_id: str
     state: str
     managed: bool | None = None
     priority: str | None = None
-    name: str | None = None
+    customer_name: str | None = None
     description: str | None = None
     goal_state: str | None = None
 
-    @field_validator("channel_id", "user_chat_id", "state")
+    @field_validator("channel_id", "channel_name", "user_chat_id", "state")
     @classmethod
     def _validate_required_text(cls, value: str, info: ValidationInfo) -> str:
         return require_text(value, info.field_name)
@@ -175,7 +176,9 @@ class ChannelTalkUserChatLogicalMetadata(BaseModel):
         if self.base.source != "channel_talk":
             raise ValueError("base.source must be channel_talk")
         if self.base.record_id != chat.user_chat_id:
-            raise ValueError("base.record_id must match user_chat_core.chat.user_chat_id")
+            raise ValueError(
+                "base.record_id must match user_chat_core.chat.user_chat_id"
+            )
 
         return self
 
@@ -196,7 +199,10 @@ class ChannelTalkUserChatLogicalMetadata(BaseModel):
             "user_chat_core": core_storage,
         }
 
-        if base_storage.get("updated_at") is None and timing.desk_updated_at is not None:
+        if (
+            base_storage.get("updated_at") is None
+            and timing.desk_updated_at is not None
+        ):
             storage["updated_at"] = timing.desk_updated_at.isoformat()
 
         return storage
@@ -224,9 +230,10 @@ class ChannelTalkDocumentArticleSpaceMetadata(BaseModel):
 
     channel_id: str
     space_id: str
+    channel_name: str
     space_name: str | None = None
 
-    @field_validator("channel_id", "space_id")
+    @field_validator("channel_id", "space_id", "channel_name")
     @classmethod
     def _validate_required_text(cls, value: str, info: ValidationInfo) -> str:
         return require_text(value, info.field_name or "field")
