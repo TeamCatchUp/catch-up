@@ -297,14 +297,14 @@ class BaseSource(BaseModel):
             if entity_type == EntityType.USER_CHAT:
                 uc_core = metadata.get("user_chat_core", {})
                 uc_chat = uc_core.get("chat", {})
-                uc_customer = uc_core.get("customer", {})
                 uc_assignment = uc_core.get("assignment", {})
                 return ChannelTalkSource(
                     **base_data,
                     source=SourceType.CHANNEL_TALK,
-                    title=uc_customer.get("name") or metadata.get("title", "ChannelTalk"),
+                    title=uc_chat.get("description") or uc_chat.get("customer_name", "ChannelTalk"),
                     author=uc_assignment.get("assignee_name"),
                     channel_id=uc_chat.get("channel_id"),
+                    channel_name=uc_chat.get("channel_name"),
                     user_chat_id=ct_record_id,
                     state=uc_chat.get("state"),
                     priority=uc_chat.get("priority"),
@@ -390,6 +390,7 @@ class ChannelTalkSource(BaseSource):
     source: Literal[SourceType.CHANNEL_TALK] = SourceType.CHANNEL_TALK
 
     channel_id: str | None = Field(None, description="채널 ID")
+    channel_name: str | None = Field(None, description="채널 이름")
     user_chat_id: str | None = Field(None, description="고객 대화 ID (user_chat)")
     article_id: str | None = Field(None, description="아티클 ID (document_article)")
     state: str | None = Field(None, description="대화 상태 (opened/closed/snoozed)")
