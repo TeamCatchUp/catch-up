@@ -16,6 +16,8 @@ import { cn } from '@/shared/utils/cn';
 import { MEMBER_TABLE_SERVICES } from '../../../constants/memberUiConfig';
 import { adminConnectorMutations } from '../../../queries/adminConnector.mutations';
 import { adminConnectorQueries } from '../../../queries/adminConnector.queries';
+import { userSourceMappingMutations } from '../../../queries/userSourceMapping.mutations';
+import { userSourceMappingQueries } from '../../../queries/userSourceMapping.queries';
 import type {
   PreMappingBulkUpdateResponse,
   PreMappingUpdateItem,
@@ -156,6 +158,17 @@ export default function UsersStatusSection({
     },
   });
 
+  // ─── User Source Mapping refresh mutation (이용자 DB 동기화) ───
+  const refreshMappingMutation = useMutation({
+    ...userSourceMappingMutations.refresh(),
+    onSuccess: () => {
+      toast('동기화가 완료되었습니다.', { description: '이용자 매핑 정보가 갱신되었습니다.' });
+    },
+    onError: () => {
+      toast('일시적인 오류가 발생했습니다.', { description: '잠시 후 다시 시도해주세요.' });
+    },
+  });
+
   const queryClient = useQueryClient();
 
   const saveMutation = useMutation({
@@ -173,8 +186,9 @@ export default function UsersStatusSection({
           if (!vendor) continue;
           if (!byVendor[vendor]) byVendor[vendor] = [];
 
+          if (row.sub === null) continue; // sub 없는 사용자는 매핑 수정 불가 (백엔드 PreMappingUpdateItem.sub 필수)
           byVendor[vendor]!.push({
-            sub: row.userKey,
+            sub: row.sub,
             email: row.email,
             name: row.userName,
             is_ignored: override.type === 'unused',
@@ -192,7 +206,7 @@ export default function UsersStatusSection({
     },
     onSuccess: () => {
       toast('저장이 완료되었습니다.', { description: '계정 연동 정보가 반영되었습니다.' });
-      queryClient.invalidateQueries({ queryKey: ['admin', 'users', 'syncStatus'] });
+      queryClient.invalidateQueries({ queryKey: userSourceMappingQueries.all() });
       setOverrides({});
       setIsEditMode(false);
     },
@@ -289,6 +303,16 @@ export default function UsersStatusSection({
 
         {/* 버튼 영역 */}
         <div className="flex items-center gap-2">
+          <Button
+            variant="box-outline-gray"
+            size="md"
+            className="text-body-small h-9"
+            disabled={refreshMappingMutation.isPending}
+            onClick={() => refreshMappingMutation.mutate()}
+          >
+            이용자 DB 동기화
+          </Button>
+
           <Button
             variant="box-outline-gray"
             size="md"

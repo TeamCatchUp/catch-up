@@ -10,10 +10,10 @@ import {
   FLEX_COLUMN_CELL_CLASS,
   SERVICE_ACCOUNT_IDENTIFIER_CLASS,
 } from '../../../../constants/memberUiConfig';
-import type { PreMappingInfo } from '../../../../types/integrationApi';
+import type { MappedSourceInfo } from '../../../../types/userSourceMappingApi';
 
 interface LinkedAccountCellProps {
-  info: PreMappingInfo | undefined;
+  info: MappedSourceInfo | undefined;
 }
 
 /** mode='linked' 셀 — 매핑된 계정의 프로필 + 이름 + 이메일 표시 */

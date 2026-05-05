@@ -17,6 +17,6 @@ export const adminConnectorMutations = {
     ({
       mutationKey: ['admin', 'oauth-users', 'sync'] as const,
       mutationFn: () => api.post<{ message: string }>(API.admin.users.syncOAuthUsers),
-      meta: { invalidates: [['admin', 'users', 'syncStatus']] },
+      meta: { invalidates: [['integrations', 'user-source-mapping']] },
     }) satisfies UseMutationOptions<AxiosResponse<{ message: string }>, Error, void>,
 };

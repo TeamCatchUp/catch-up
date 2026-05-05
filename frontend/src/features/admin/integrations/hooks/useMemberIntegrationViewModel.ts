@@ -3,17 +3,25 @@ import { useQuery } from '@tanstack/react-query';
 
 import { INTEGRATION_ACCOUNTS } from '../constants/integrationsConfig';
 import { MEMBER_TABLE_SERVICES } from '../constants/memberUiConfig';
-import { adminConnectorQueries } from '../queries/adminConnector.queries';
-import type { PreMappingInfo, SyncFilterType, UserSyncItem } from '../types/integrationApi';
+import { userSourceMappingQueries } from '../queries/userSourceMapping.queries';
+import type { SyncFilterType } from '../types/integrationApi';
 import type {
   IntegrationService,
   MemberIntegrationCardItem,
   MemberIntegrationRow,
   MemberIntegrationViewModel,
 } from '../types/integrationModel';
+import type {
+  MappedSourceInfo,
+  UserSourceMappingItem,
+  UserSourceMappingStatus,
+} from '../types/userSourceMappingApi';
 
-/** 매핑 아이템에서 서비스별 PreMappingInfo 추출 */
-const getServiceInfo = (item: UserSyncItem, service: IntegrationService): PreMappingInfo | null => {
+/**
+ * 매핑 아이템에서 서비스별 MappedSourceInfo 추출.
+ * 백엔드(PR #610)는 Confluence 매핑을 atlassian 필드로 합쳐 응답하므로 jira/confluence는 모두 atlassian에서 읽음.
+ */
+const getServiceInfo = (item: UserSourceMappingItem, service: IntegrationService): MappedSourceInfo | null => {
   switch (service) {
     case 'jira':
     case 'confluence':
@@ -27,16 +35,25 @@ const getServiceInfo = (item: UserSyncItem, service: IntegrationService): PreMap
   }
 };
 
-/** 이용자 연동 탭에서 필요한 데이터를 userSyncStatus API 기반으로 조합 */
+/** 이용자 연동 탭에서 필요한 데이터를 user-source-mapping API 두 개로 조합 */
 export const useMemberIntegrationViewModel = (params: {
   filterType: SyncFilterType;
   page: number;
   size: number;
 }): MemberIntegrationViewModel => {
-  const { data: syncStatus, isLoading } = useQuery(adminConnectorQueries.userSyncStatus(params));
+  // 채널톡 칩은 컬럼 좁힘만 담당 — 백엔드에는 항상 'all'을 전송. 그 외는 그대로 pass-through.
+  const mapping_status: UserSourceMappingStatus =
+    params.filterType === 'channel_talk' ? 'all' : params.filterType;
+
+  const listQuery = useQuery(
+    userSourceMappingQueries.list({ mapping_status, page: params.page, size: params.size }),
+  );
+  const statusQuery = useQuery(userSourceMappingQueries.status());
+
+  const isLoading = listQuery.isLoading || statusQuery.isLoading;
 
   const cards = useMemo<MemberIntegrationCardItem[]>(() => {
-    if (!syncStatus) {
+    if (!statusQuery.data) {
       return INTEGRATION_ACCOUNTS.map((account) => ({
         ...account,
         completedCount: 0,
@@ -46,9 +63,9 @@ export const useMemberIntegrationViewModel = (params: {
     }
 
     return INTEGRATION_ACCOUNTS.map((account) => {
-      const count = syncStatus.counts[account.service];
+      const count = statusQuery.data[account.service];
       const totalCount = count?.users ?? 0;
-      const completedCount = count?.premap ?? 0;
+      const completedCount = count?.mapped ?? 0;
       const completionRate = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
 
       return {
@@ -58,13 +75,13 @@ export const useMemberIntegrationViewModel = (params: {
         completionRate,
       };
     });
-  }, [syncStatus]);
+  }, [statusQuery.data]);
 
   const rows = useMemo<MemberIntegrationRow[]>(() => {
-    if (!syncStatus?.items) return [];
+    if (!listQuery.data?.items) return [];
 
-    return syncStatus.items.map((item): MemberIntegrationRow => {
-      const serviceInfoByService: Partial<Record<IntegrationService, PreMappingInfo>> = {};
+    return listQuery.data.items.map((item): MemberIntegrationRow => {
+      const serviceInfoByService: Partial<Record<IntegrationService, MappedSourceInfo>> = {};
       const statusByService = {} as Record<IntegrationService, '미사용' | '완료' | '미등록'>;
 
       // 이용자 연동 테이블에 노출되는 서비스만 데이터 구성.
@@ -79,8 +96,8 @@ export const useMemberIntegrationViewModel = (params: {
           continue;
         }
 
-        const hasPremapping = (syncStatus.counts[service]?.premap ?? 0) > 0;
-        statusByService[service] = info ? '완료' : hasPremapping ? '미사용' : '미등록';
+        const hasMapping = (statusQuery.data?.[service]?.mapped ?? 0) > 0;
+        statusByService[service] = info ? '완료' : hasMapping ? '미사용' : '미등록';
       }
 
       // confluence는 테이블에 미노출이지만 statusByService 타입(`Record<IntegrationService, ...>`)이 키 강제.
@@ -88,14 +105,15 @@ export const useMemberIntegrationViewModel = (params: {
       statusByService.confluence = '미등록';
 
       return {
-        userKey: item.sub,
+        userKey: String(item.user_id),
+        sub: item.sub,
         userName: item.name,
         email: item.email,
         serviceInfoByService,
         statusByService,
       };
     });
-  }, [syncStatus]);
+  }, [listQuery.data, statusQuery.data]);
 
-  return { cards, rows, total: syncStatus?.total ?? 0, isLoading };
+  return { cards, rows, total: listQuery.data?.total ?? 0, isLoading };
 };
