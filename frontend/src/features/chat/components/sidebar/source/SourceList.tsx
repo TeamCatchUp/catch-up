@@ -27,6 +27,7 @@ const filterCategory = [
   { id: 3, category: 'Jira', type: 'jira' },
   { id: 4, category: 'Confluence', type: 'confluence' },
   { id: 5, category: 'Slack', type: 'slack' },
+  { id: 6, category: '채널톡', type: 'channel_talk' },
 ] as const;
 
 type FilterType = (typeof filterCategory)[number]['type'];
@@ -58,13 +59,14 @@ const SourceList = ({
 
   // 칩별 카운트: 전체 = unknown 포함 총량, 플랫폼별 = 해당 source_type만
   const sourceCounts = useMemo<Record<FilterType, number>>(() => {
-    const counts = { all: sources.length, github: 0, jira: 0, slack: 0, confluence: 0 };
+    const counts = { all: sources.length, github: 0, jira: 0, slack: 0, confluence: 0, channel_talk: 0 };
     for (const s of sources) {
       if (
         s.source_type === 'github' ||
         s.source_type === 'jira' ||
         s.source_type === 'slack' ||
-        s.source_type === 'confluence'
+        s.source_type === 'confluence' ||
+        s.source_type === 'channel_talk'
       ) {
         counts[s.source_type] += 1;
       }
