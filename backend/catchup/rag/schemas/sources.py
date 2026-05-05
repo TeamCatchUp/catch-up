@@ -301,7 +301,7 @@ class BaseSource(BaseModel):
                 return ChannelTalkSource(
                     **base_data,
                     source=SourceType.CHANNEL_TALK,
-                    title=uc_chat.get("description") or uc_chat.get("customer_name", "ChannelTalk"),
+                    title=uc_chat.get("description") or uc_chat.get("customer_name") or metadata.get("title") or "ChannelTalk",
                     author=uc_assignment.get("assignee_name"),
                     channel_id=uc_chat.get("channel_id"),
                     channel_name=uc_chat.get("channel_name"),
@@ -320,6 +320,8 @@ class BaseSource(BaseModel):
                     title=metadata.get("title") or da_article.get("title", "ChannelTalk Article"),
                     author=da_author.get("author_name"),
                     channel_id=da_space.get("channel_id"),
+                    channel_name=da_space.get("channel_name"),
+                    space_name=da_space.get("space_name"),
                     article_id=ct_record_id,
                     state=da_article.get("state"),
                 )
@@ -393,6 +395,7 @@ class ChannelTalkSource(BaseSource):
     channel_name: str | None = Field(None, description="채널 이름")
     user_chat_id: str | None = Field(None, description="고객 대화 ID (user_chat)")
     article_id: str | None = Field(None, description="아티클 ID (document_article)")
+    space_name: str | None = Field(None, description="도큐먼트 스페이스 이름")
     state: str | None = Field(None, description="대화 상태 (opened/closed/snoozed)")
     priority: str | None = Field(None, description="우선순위 (high/medium/low)")
 

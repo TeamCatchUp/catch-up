@@ -15,12 +15,12 @@ from catchup.audit.base import AuditStatus
 from catchup.audit.emitters import emit_audit_event
 from catchup.audit.metadata import ChatAuditMetadata
 from catchup.chat.schemas import INPROGRESS_NODES
-from catchup.chat.schemas import ChatStreamingSourceResponse
-from catchup.chat.schemas import ChatStreamingStatusResponse
 from catchup.chat.schemas import ChatStreamingProcessResponse
+from catchup.chat.schemas import ChatStreamingSourceResponse
 from catchup.chat.schemas import ChatStreamingTokenResponse
 from catchup.chat.schemas import StreamEvent
 from catchup.costs.contexts.chat import ChatTokenUsageContext
+from catchup.rag.nodes.utils import build_doc_groups
 from catchup.rag.policies import get_node_completed_payload
 from catchup.rag.policies import get_node_inprogress_payload
 from catchup.rag.schemas.sources import BaseSource
@@ -138,12 +138,14 @@ class ChatStreamProcessor:
                 **extra,
             )
 
-        # 답변 생성 노드 시작 시: 초기 출처 후보 목록 전송
+        # 답변 생성 노드 시작 시: 초기 출처 후보 목록 전송.
+        # LLM이 보는 grouped context와 인덱스/카운트가 일치하도록 동일한 그룹핑을 적용한다.
         if "has_citations" in tags:
             docs = input_data.get("retrieved_docs", [])
+            doc_groups = build_doc_groups(docs)
             sources = [
-                BaseSource.from_document(index=i, doc=doc)
-                for i, doc in enumerate(docs, start=1)
+                BaseSource.from_document(index=g.display_index, doc=g.representative)
+                for g in doc_groups
             ]
             emit_audit_event(
                 action=ChatAction.PROVIDE_SOURCES,

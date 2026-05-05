@@ -1,9 +1,12 @@
+from __future__ import annotations
+
 import asyncio
 import functools
 import json
 import re
 import time
 from collections import Counter
+from dataclasses import dataclass
 from re import DOTALL
 from typing import Annotated
 from typing import Any
@@ -189,19 +192,21 @@ def get_latest_query(messages: Annotated[list, add_messages]):
 
 
 def build_confirmed_priority_prompt(
-    retrieved_docs: list[Document],
+    groups: list[DocGroup],
     confirmed_essential_doc_ids: list[str] | None,
 ) -> str | None:
-    """confirmed_essential_doc_ids를 retrieved_docs 내 1-base 인덱스로 매핑해
+    """confirmed_essential_doc_ids를 groups 내 1-base 인덱스로 매핑해
     confirmed_priority_documents 프롬프트 블록을 렌더링한다.
 
+    그룹 내 어느 청크 하나라도 confirmed 셋에 포함되면 해당 그룹 인덱스를 추가한다.
     매핑 가능한 인덱스가 없으면 None을 반환 (호출자가 dynamic_prompts에서 제외)."""
     if not confirmed_essential_doc_ids:
         return None
     confirmed_id_set = set(confirmed_essential_doc_ids)
     confirmed_indices = [
-        i for i, doc in enumerate(retrieved_docs, start=1)
-        if get_document_id(doc) in confirmed_id_set
+        group.display_index
+        for group in groups
+        if any(get_document_id(d) in confirmed_id_set for d in group.docs)
     ]
     if not confirmed_indices:
         return None
@@ -211,15 +216,164 @@ def build_confirmed_priority_prompt(
     )
 
 
-def prepare_retrieved_context_text(documents: list[Document]) -> str:
-    parts = []
-    for i, doc in enumerate(documents, start=1):
-        source = doc.metadata.get("source", "unknown")
-        content = doc.metadata.get("contextual_content", "")
-        temporal = resolve_temporal_context(doc.metadata)
-        part = f"[{i}] (Source: {source})\n{content} {temporal}"
+# --- Document grouping for chunked sources (Confluence pages, ChannelTalk articles) ---
+# 같은 문서에서 나온 여러 청크가 LLM에게는 별개의 인용 인덱스로 보여 사용자에게
+# 같은 출처가 중복 노출되는 문제를 막기 위해, context 빌드 시 한 인덱스 아래로 묶는다.
+# 그룹 내부에는 chunk_index 오름차순으로 배치하고, 누락된 청크 사이에는
+# ...(Omitted)... 마커를 넣어 LLM이 문맥 단절을 인지하게 한다.
+
+@dataclass
+class DocGroup:
+    display_index: int  # LLM에 노출되는 1-base 인덱스
+    docs: list[Document]  # 그룹 멤버. 청크 그룹은 chunk_index ASC, 단일은 길이 1
+    representative: Document  # BaseSource 빌드용 대표 청크 (그룹 내 최상위 스코어 문서)
+    is_chunked: bool  # 청크 그룹핑이 적용되었는지
+
+
+def _chunk_meta(doc: Document) -> tuple[int | None, int | None]:
+    """청킹된 source(Confluence, ChannelTalk article)에서 (chunk_index, total)을 반환.
+    그렇지 않으면 (None, None)."""
+    md = doc.metadata
+    source = md.get("source")
+    if source == "confluence":
+        return md.get("chunk_index"), md.get("total_chunks")
+    if source == "channel_talk" and md.get("entity_type") == "document_article":
+        chunk = md.get("document_article_core", {}).get("chunk", {}) or {}
+        return chunk.get("chunk_index"), chunk.get("chunk_count")
+    return None, None
+
+
+def _group_key(doc: Document) -> str | None:
+    """청크 그룹 키. doc.id에서 ':chunk:N' 접미사를 떼어 그룹을 식별한다.
+    그룹 대상이 아니면 None."""
+    md = doc.metadata
+    source = md.get("source")
+    is_groupable = source == "confluence" or (
+        source == "channel_talk" and md.get("entity_type") == "document_article"
+    )
+    if not is_groupable:
+        return None
+    doc_id = getattr(doc, "id", None)
+    if not doc_id or ":chunk:" not in doc_id:
+        return None
+    return doc_id.rsplit(":chunk:", 1)[0]
+
+
+def build_doc_groups(retrieved_docs: list[Document]) -> list[DocGroup]:
+    """
+    retrieved_docs 내 문서를 그룹 단위로 묶는다.
+
+    그룹 위치는 첫 등장(=최상위 랭크) 청크 기준이며, 그룹 내부는 chunk_index ASC.
+    그룹 대상이 아닌 doc은 단일 멤버 그룹으로 보존한다.
+    """
+    groups: list[DocGroup] = []
+    key_to_group: dict[str, DocGroup] = {}
+
+    for doc in retrieved_docs:
+        gkey = _group_key(doc)
+        if gkey is None:
+            groups.append(
+                DocGroup(
+                    display_index=len(groups) + 1,
+                    docs=[doc],
+                    representative=doc,
+                    is_chunked=False,
+                )
+            )
+            continue
+        existing = key_to_group.get(gkey)
+        if existing is None:
+            new_group = DocGroup(
+                display_index=len(groups) + 1,
+                docs=[doc],
+                representative=doc,
+                is_chunked=False,
+            )
+            groups.append(new_group)
+            key_to_group[gkey] = new_group
+        else:
+            existing.docs.append(doc)
+            existing.is_chunked = True
+
+    # 청크 그룹은 chunk_index ASC로 내부 정렬 (그룹 외부 순서는 유지).
+    for group in groups:
+        if group.is_chunked:
+            group.docs.sort(key=lambda d: _chunk_meta(d)[0] or 0)
+
+    return groups
+
+
+def _render_chunk_group(group: DocGroup) -> str:
+    """청크 그룹을 단일 인덱스 블록으로 렌더링."""
+    rep = group.representative
+    md = rep.metadata
+    source = md.get("source", "unknown")
+    title = md.get("title") or ""
+    temporal = resolve_temporal_context(md)
+
+    header_bits = [f"[{group.display_index}] (Source: {source})"]
+    if title:
+        header_bits.append(f'Title: "{title}"')
+    if temporal:
+        header_bits.append(temporal)
+    header = " ".join(header_bits)
+
+    lines: list[str] = [header]
+
+    # 누락된 청크 사이에는 ...(Omitted)... 마커를 넣어 LLM이 문맥 단절을 인지하게 한다.
+    prev_idx: int | None = None
+    for doc in group.docs:
+        chunk_idx, total = _chunk_meta(doc)
+        if chunk_idx is None:
+            chunk_label = "chunk ?"
+        elif total is not None:
+            chunk_label = f"chunk {chunk_idx + 1}/{total}"
+        else:
+            chunk_label = f"chunk {chunk_idx + 1}"
+        if (
+            prev_idx is not None
+            and chunk_idx is not None
+            and chunk_idx > prev_idx + 1
+        ):
+            lines.append("...(Omitted)...")
+        lines.append(f"--- {chunk_label} ---")
+        lines.append(doc.metadata.get("contextual_content", ""))
+        prev_idx = chunk_idx
+
+    # 누락된 마지막 청크 표기 (예: total 5인데 마지막이 4번까지만 등장).
+    if group.docs:
+        last_idx, total = _chunk_meta(group.docs[-1])
+        if (
+            last_idx is not None
+            and total is not None
+            and last_idx < total - 1
+        ):
+            lines.append("...(Omitted)...")
+
+    if source == "confluence":
+        lines.append(f"status: {md.get('status', '')}")
+
+    return "\n".join(lines)
+
+
+def render_grouped_context_text(groups: list[DocGroup]) -> str:
+    """
+    그룹 리스트로부터 LLM에게 제공할 retrieved_context 텍스트를 생성한다.
+    """
+    parts: list[str] = []
+    for group in groups:
+        if group.is_chunked:
+            parts.append(_render_chunk_group(group))
+            continue
+        # 단일 doc — 기존 포맷 유지.
+        doc = group.representative
+        md = doc.metadata
+        source = md.get("source", "unknown")
+        content = md.get("contextual_content", "")
+        temporal = resolve_temporal_context(md)
+        part = f"[{group.display_index}] (Source: {source})\n{content} {temporal}"
         if source == "confluence":
-            part = part + f"\nstatus: {doc.metadata.get('status', '')}"
+            part = part + f"\nstatus: {md.get('status', '')}"
         parts.append(part)
     return "\n\n".join(parts)
 
@@ -331,15 +485,53 @@ def extract_reason_for_stopping(reasoning: str | None) -> str | None:
     return match.group(1).strip() or None
 
 
-def strip_key_document_indices(reasoning: str) -> str:
-    """답변 LLM에 넘기기 전, agent_reasoning에서 <key_document_indices> 태그를 제거한다.
+# 본문 안의 인덱스 좌표 패턴들. agent_reasoning은 reuse 턴에 재공급되거나 grouping
+# 도입 후 인덱스 체계가 바뀌므로, 산문 안에 박힌 [N]/**N**/N번 문서 좌표는 모두
+# stale로 간주하고 제거한다. 정확한 인덱스 신호는 confirmed_priority_documents
+# 블록으로 별도 전달된다.
+_INLINE_BRACKET_INDEX_PATTERN = re.compile(r"\[\d+\]")
+_BOLD_BARE_NUMBER_PATTERN = re.compile(r"\*\*\d+\*\*")
+_KOREAN_NUMBER_DOC_PATTERN = re.compile(r"\d+\s*번\s*문서")
 
-    rerank 이후 인덱스가 stale해지므로, 정확한 인덱스는 confirmed_priority_documents
-    프롬프트 블록을 통해 따로 전달된다. 여기서는 stale 인덱스 노출만 막는다.
+
+def sanitize_agent_reasoning(reasoning: str | None) -> str | None:
+    """답변 LLM에 넘기기 전, agent_reasoning에서 stale한 인덱스 좌표를 모두 제거한다.
+
+    제거 대상:
+    - <key_document_indices>...</key_document_indices> 블록
+    - 본문 안의 inline `[N]` (숫자만, `[note]` 같은 식별자는 보존)
+    - `**N**` 마크다운 강조 (숫자만)
+    - "N번 문서" 한국어 표현
+
+    rerank/grouping 이후 또는 reuse 턴에서는 좌표가 의미를 잃으므로, 좌표 자체를
+    탈색해 환각 인용을 차단한다. 정확한 인덱스 신호는 confirmed_priority_documents
+    블록으로 별도 전달된다.
     """
     if not reasoning:
         return reasoning
-    return _KEY_DOC_INDICES_TAG_PATTERN.sub("", reasoning).strip()
+    out = _KEY_DOC_INDICES_TAG_PATTERN.sub("", reasoning)
+    out = _INLINE_BRACKET_INDEX_PATTERN.sub("", out)
+    out = _BOLD_BARE_NUMBER_PATTERN.sub("", out)
+    out = _KOREAN_NUMBER_DOC_PATTERN.sub("", out)
+    return out.strip()
+
+
+def scrub_orphan_indices(body: str, valid_indices: set[int]) -> str:
+    """
+    답변 본문에서 현재 표시 인덱스 범위 밖의 `[N]` 참조를 제거한다.
+
+    LLM이 stale agent_reasoning이나 환각으로 out-of-range `[N]`을 본문에 박는
+    경우를 막아, 프론트가 깨진 인용 아이콘을 그리지 않게 한다. 유효한 인덱스의
+    `[N]`은 그대로 유지된다.
+    """
+    if not body:
+        return body
+
+    def _replace(match: re.Match) -> str:
+        idx = int(match.group(1))
+        return match.group(0) if idx in valid_indices else ""
+
+    return re.sub(r"\[(\d+)\]", _replace, body)
 
 
 def extract_essential_ids(reasoning: str | None, docs: list[Document]) -> set[str]:

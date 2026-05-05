@@ -8,13 +8,15 @@ from catchup.costs.utils import token_usage
 from catchup.prompts.loader import prompt_loader
 from catchup.rag.nodes.utils import ainvoke_llm_with_token_usage
 from catchup.rag.nodes.utils import build_confirmed_priority_prompt
+from catchup.rag.nodes.utils import build_doc_groups
 from catchup.rag.nodes.utils import build_system_message
 from catchup.rag.nodes.utils import get_conversation_history
 from catchup.rag.nodes.utils import log_node
 from catchup.rag.nodes.utils import mark_citations
 from catchup.rag.nodes.utils import parse_citations
-from catchup.rag.nodes.utils import prepare_retrieved_context_text
-from catchup.rag.nodes.utils import strip_key_document_indices
+from catchup.rag.nodes.utils import render_grouped_context_text
+from catchup.rag.nodes.utils import sanitize_agent_reasoning
+from catchup.rag.nodes.utils import scrub_orphan_indices
 from catchup.rag.policies import CITATION_POLICY_MESSAGE
 from catchup.rag.policies import FALLBACK_ANSWER
 from catchup.rag.policies import NO_DOCUMENTS_ANSWER
@@ -45,7 +47,9 @@ async def generate_final_answer_fast_node(
             "messages": [AIMessage(content=NO_DOCUMENTS_ANSWER)],
             "sources": [],
         }
-    retrieved_context = prepare_retrieved_context_text(retrieved_docs)
+    # 같은 문서에서 나온 청크들은 한 인덱스 아래로 묶어 사용자 관점의 출처 중복을 막는다.
+    doc_groups = build_doc_groups(retrieved_docs)
+    retrieved_context = render_grouped_context_text(doc_groups)
     global_context = state["global_context"].model_dump()
 
     # 사용자 질문
@@ -72,7 +76,7 @@ async def generate_final_answer_fast_node(
     # 단, <key_document_indices>는 rerank 후 stale하므로 제거 — 정확한 인덱스는
     # confirmed_priority_documents 블록으로 별도 전달.
     if agent_reasoning:
-        sanitized_reasoning = strip_key_document_indices(agent_reasoning)
+        sanitized_reasoning = sanitize_agent_reasoning(agent_reasoning)
         if sanitized_reasoning:
             agent_research_prompt = prompt_loader.get_prompt(
                 "rag/agent_research_summary",
@@ -82,7 +86,7 @@ async def generate_final_answer_fast_node(
 
     # 에이전트 지목 ∩ reranker top_k 교집합 문서를 1-base 인덱스로 LLM에게 전달.
     confirmed_prompt = build_confirmed_priority_prompt(
-        retrieved_docs=retrieved_docs,
+        groups=doc_groups,
         confirmed_essential_doc_ids=state.get("confirmed_essential_doc_ids"),
     )
     if confirmed_prompt:
@@ -135,12 +139,18 @@ async def generate_final_answer_fast_node(
     # 최종 답변 및 인용 대상 추출
     answer_body, citations = parse_citations(full_answer)
 
+    # 환각 방어: 본문에 박힌 out-of-range [N]은 표시 인덱스에 매칭되지 않으므로 제거.
+    valid_indices = {g.display_index for g in doc_groups}
+    answer_body = scrub_orphan_indices(answer_body, valid_indices)
+
+    # 그룹 단위로 BaseSource를 만들어, 한 문서를 가리키는 여러 청크가 사용자에게는
+    # 한 출처로 보이도록 한다. 대표 청크의 메타데이터를 사용한다.
     candidate_sources = [
         BaseSource.from_document(
-            index=i,
-            doc=document,
+            index=group.display_index,
+            doc=group.representative,
         )
-        for i, document in enumerate(retrieved_docs, start=1)
+        for group in doc_groups
     ]
     final_sources = mark_citations(candidate_sources, citations)
 
