@@ -23,8 +23,7 @@ const getServiceInfo = (item: UserSyncItem, service: IntegrationService): PreMap
     case 'slack':
       return item.slack;
     case 'channel_talk':
-      // 백엔드 user-level 채널톡 매핑 미구현 — 응답이 합류하기 전까지는 항상 null.
-      return item.channel_talk ?? null;
+      return item.channel_talk;
   }
 };
 
@@ -75,8 +74,7 @@ export const useMemberIntegrationViewModel = (params: {
         if (info) serviceInfoByService[service] = info;
 
         if (service === 'channel_talk') {
-          // 채널톡은 백엔드 counts가 없어 hasPremapping이 항상 false → mock 단계에서 미매핑은 '미사용'으로 정렬.
-          // 백엔드 합류 시 아래 일반 분기와 동일하게 처리되도록 이 분기 제거.
+          // 채널톡은 매니저 기반 매핑이라 '미등록' 상태가 도메인상 존재하지 않음 — 미매핑은 항상 '미사용'으로 표기.
           statusByService[service] = info ? '완료' : '미사용';
           continue;
         }
