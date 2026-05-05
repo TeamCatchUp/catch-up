@@ -127,11 +127,12 @@ class UserChatTransformer:
             user_chat_core=ChannelTalkUserChatCoreMetadata(
                 chat=ChannelTalkUserChatChatMetadata(
                     channel_id=execution.channel_id,
+                    channel_name=bundle.channel_name,
                     user_chat_id=detail.user_chat_id,
                     state=detail.state.value,
                     managed=detail.managed,
                     priority=detail.priority,
-                    name=detail.name,
+                    customer_name=detail.name,
                     description=detail.description,
                     goal_state=detail.goal_state,
                 ),

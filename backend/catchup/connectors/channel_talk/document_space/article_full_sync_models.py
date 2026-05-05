@@ -198,6 +198,10 @@ class ChannelTalkArticleSyncExecutionRequest(SyncExecutionRequest):
         return self.tenant_id
 
     @property
+    def channel_name(self) -> str:
+        return self.channel_connection.channel_name
+
+    @property
     def space_id(self) -> str:
         return self.document_connection.space_id
 
