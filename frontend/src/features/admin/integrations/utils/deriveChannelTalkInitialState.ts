@@ -1,9 +1,5 @@
 import type { ChannelTalkConnectionState } from '../types/channelTalkModel';
-import {
-  CHANNEL_SYNC_INTERVAL_DEFAULT,
-  DOCUMENT_SPACE_SYNC_INTERVAL_DEFAULT,
-  MASKED_PLACEHOLDER,
-} from '../types/channelTalkModel';
+import { DOCUMENT_SPACE_SYNC_INTERVAL_DEFAULT, MASKED_PLACEHOLDER } from '../types/channelTalkModel';
 import type { ChannelTalkConnectionStatusResponse } from '../types/connectionStatusApi';
 
 /**
@@ -43,7 +39,6 @@ export function deriveChannelTalkInitialState(
     accessKey: MASKED_PLACEHOLDER,
     accessSecret: MASKED_PLACEHOLDER,
     webhookToken: channelItem.metadata.webhook_token_configured ? MASKED_PLACEHOLDER : '',
-    syncInterval: CHANNEL_SYNC_INTERVAL_DEFAULT,
     documentSpaces: spaceItems
       .filter((space) => space.metadata.channel_id === channelItem.id)
       .map((space) => ({

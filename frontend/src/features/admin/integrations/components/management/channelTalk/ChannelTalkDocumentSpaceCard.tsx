@@ -128,7 +128,6 @@ export default function ChannelTalkDocumentSpaceCard({
             <span className="bg-status-destructive size-[5px] rounded-full" aria-label="필수 입력" />
           </div>
           <ChannelTalkSyncIntervalDropdown
-            variant="documentSpace"
             value={documentSpace.syncInterval}
             onChange={(next) => onUpdate({ syncInterval: next })}
           />
