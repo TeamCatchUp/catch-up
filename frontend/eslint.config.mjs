@@ -15,6 +15,10 @@ const eslintConfig = defineConfig([
     'out/**',
     'build/**',
     'next-env.d.ts',
+    // E2E and test artifacts
+    'e2e/**',
+    'playwright-report/**',
+    'test-results/**',
   ]),
   // import 정렬 자동화 플러그인
   {
@@ -71,7 +75,7 @@ const eslintConfig = defineConfig([
         },
       ],
     },
-    ignores: ['src/shared/components/ui/**'],
+    ignores: ['src/shared/components/ui/**', 'src/test/**'],
   },
   // 3-Layer 아키텍처 의존성 규칙: app → features → shared
   {
@@ -83,6 +87,7 @@ const eslintConfig = defineConfig([
         { type: 'app', pattern: ['src/app'], mode: 'folder' },
         { type: 'features', pattern: ['src/features/*'], mode: 'folder' },
         { type: 'shared', pattern: ['src/shared'], mode: 'folder' },
+        { type: 'test', pattern: ['src/test'], mode: 'folder' },
       ],
     },
     rules: {
@@ -94,6 +99,7 @@ const eslintConfig = defineConfig([
             { from: 'app', allow: ['features', 'shared'] },
             { from: 'features', allow: ['shared'] },
             { from: 'shared', allow: ['shared'] },
+            { from: 'test', allow: ['shared', 'features', 'test'] },
           ],
         },
       ],
