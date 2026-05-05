@@ -10,20 +10,21 @@ from catchup.db.models import SyncConnector
 from catchup.db.models import SyncEventStatus
 from catchup.db.sync import finalize_manual_retry_failed
 from catchup.db.sync import finalize_manual_retry_success
-from catchup.server.sync.schemas import (
-    SyncRecordGapResponse,
-    SyncRecordRetryRequest,
-    SyncRecordRetryResponse,
-)
+from catchup.server.sync.schemas import SyncRecordGapResponse
+from catchup.server.sync.schemas import SyncRecordRetryRequest
+from catchup.server.sync.schemas import SyncRecordRetryResponse
 from catchup.sync.common.exceptions import SyncInternalException
 from catchup.sync.common.exceptions import SyncRequestException
+from catchup.sync.repair.channel_talk_record_repair_service import (
+    get_channel_talk_record_repair_service,
+)
+from catchup.sync.repair.confluence_record_repair_service import (
+    get_confluence_record_repair_service,
+)
 from catchup.sync.repair.context import RecordRepairContext
 from catchup.sync.repair.context import load_record_repair_context
 from catchup.sync.repair.github_record_repair_service import (
     get_github_record_repair_service,
-)
-from catchup.sync.repair.confluence_record_repair_service import (
-    get_confluence_record_repair_service,
 )
 from catchup.sync.repair.jira_record_repair_service import (
     get_jira_record_repair_service,
@@ -52,11 +53,13 @@ class RecordRepairService:
     def __init__(
         self,
         *,
+        channel_talk_handler: RecordRepairHandler,
         confluence_handler: RecordRepairHandler,
         github_handler: RecordRepairHandler,
         jira_handler: RecordRepairHandler,
         slack_handler: RecordRepairHandler,
     ):
+        self._channel_talk_handler = channel_talk_handler
         self._confluence_handler = confluence_handler
         self._github_handler = github_handler
         self._jira_handler = jira_handler
@@ -66,6 +69,8 @@ class RecordRepairService:
         self,
         connector: SyncConnector,
     ) -> RecordRepairHandler:
+        if connector == SyncConnector.CHANNEL_TALK:
+            return self._channel_talk_handler
         if connector == SyncConnector.CONFLUENCE:
             return self._confluence_handler
         if connector == SyncConnector.GITHUB:
@@ -163,6 +168,7 @@ class RecordRepairService:
 @lru_cache(maxsize=1)
 def get_record_repair_service() -> RecordRepairService:
     return RecordRepairService(
+        channel_talk_handler=get_channel_talk_record_repair_service(),
         confluence_handler=get_confluence_record_repair_service(),
         github_handler=get_github_record_repair_service(),
         jira_handler=get_jira_record_repair_service(),
