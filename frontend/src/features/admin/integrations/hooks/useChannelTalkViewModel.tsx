@@ -12,11 +12,7 @@ import type {
   ChannelTalkConnectionState,
   ChannelTalkDocumentSpacePatch,
 } from '../types/channelTalkModel';
-import {
-  CHANNEL_SYNC_INTERVAL_DEFAULT,
-  DOCUMENT_SPACE_SYNC_INTERVAL_DEFAULT,
-  MASKED_PLACEHOLDER,
-} from '../types/channelTalkModel';
+import { DOCUMENT_SPACE_SYNC_INTERVAL_DEFAULT, MASKED_PLACEHOLDER } from '../types/channelTalkModel';
 import { isChannelSecretsFilled, isDocumentSpaceSecretsFilled } from '../utils/channelTalkHelpers';
 
 /**
@@ -89,7 +85,6 @@ export function useChannelTalkViewModel(initialState: ChannelTalkConnectionState
           accessKey: '',
           accessSecret: '',
           webhookToken: '',
-          syncInterval: CHANNEL_SYNC_INTERVAL_DEFAULT,
           documentSpaces: [],
           connectionStatus: 'idle',
         },

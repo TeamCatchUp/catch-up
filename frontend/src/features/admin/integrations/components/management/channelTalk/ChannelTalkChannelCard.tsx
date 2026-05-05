@@ -18,7 +18,6 @@ import type {
 import { isChannelSecretsFilled } from '../../../utils/channelTalkHelpers';
 import ChannelTalkDocumentSpaceCard from './ChannelTalkDocumentSpaceCard';
 import ChannelTalkFieldRow from './ChannelTalkFieldRow';
-import ChannelTalkSyncIntervalDropdown from './ChannelTalkSyncIntervalDropdown';
 
 const MEGAPHONE_NOTICE =
   '채널은 실시간으로 문의가 들어오는 공간이에요. 주기를 짧게 설정할수록 최신 대화가 반영되어 답변 품질이 좋아져요.';
@@ -117,27 +116,14 @@ export default function ChannelTalkChannelCard({
         />
       </div>
 
-      {/* Webhook Token + 동기화 주기 */}
-      <div className="flex items-end gap-3">
-        <ChannelTalkFieldRow
-          label="Webhook Token"
-          value={channel.webhookToken}
-          placeholder="Webhook Token 입력하기"
-          state={fieldState}
-          onChange={(next) => onUpdate({ webhookToken: next })}
-        />
-        <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-          <div className="flex items-center gap-1">
-            <span className="text-body-small text-content-neutral">동기화 주기 설정</span>
-            <span className="bg-status-destructive size-[5px] rounded-full" aria-label="필수 입력" />
-          </div>
-          <ChannelTalkSyncIntervalDropdown
-            variant="channel"
-            value={channel.syncInterval}
-            onChange={(next) => onUpdate({ syncInterval: next })}
-          />
-        </div>
-      </div>
+      {/* Webhook Token — full width */}
+      <ChannelTalkFieldRow
+        label="Webhook Token"
+        value={channel.webhookToken}
+        placeholder="Webhook Token 입력하기"
+        state={fieldState}
+        onChange={(next) => onUpdate({ webhookToken: next })}
+      />
 
       {/* Error 메시지 */}
       {status === 'error' && channel.errorMessage ? (
