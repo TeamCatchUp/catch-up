@@ -9,6 +9,7 @@ import type { ChatSource } from '@/features/chat/types';
 import AddCircle from '@/public/icons/icon/add_circle_filled.svg';
 import { cn } from '@/shared/utils/cn';
 
+import FilterScrollFab from './FilterScrollFab';
 import SourceCard from './SourceCard';
 import SourceError from './SourceError';
 
@@ -42,6 +43,8 @@ const SourceList = ({
 }: Props) => {
   // 칩 활성 필터 — 'all'이면 모든 source 표시
   const [activeFilter, setActiveFilter] = useState<FilterType>('all');
+  // 필터 칩 가로 스크롤 컨테이너 — FAB 좌/우 이동 버튼이 ref로 잡음
+  const [filterScrollContainer, setFilterScrollContainer] = useState<HTMLDivElement | null>(null);
 
   // 카드 mount 시 entrance stagger 애니메이션 (transitionKey 변경 시 재실행)
   const { getItemStyle, itemClass, listEntered } = useListStaggerAnimation({
@@ -102,42 +105,46 @@ const SourceList = ({
 
   return (
     <div className="flex min-h-0 w-full flex-1 flex-col gap-2 pt-3">
-      {/* 상단 필터 탭 */}
-      <div
-        className={cn(
-          'flex w-full shrink-0 items-center gap-2 overflow-x-auto px-4',
-          !prefersReducedMotion && 'transition-opacity duration-160 ease-out',
-          !prefersReducedMotion && (listEntered ? 'opacity-100' : 'opacity-0'),
-        )}
-      >
-        {filterCategory.map((category) => {
-          const isActive = activeFilter === category.type;
-          const count = sourceCounts[category.type];
+      {/* 상단 필터 탭 — 가로 스크롤 + 좌/우 FAB */}
+      <div className="relative w-full shrink-0">
+        <div
+          ref={setFilterScrollContainer}
+          className={cn(
+            'flex w-full items-center gap-2 overflow-x-auto px-4',
+            !prefersReducedMotion && 'transition-opacity duration-160 ease-out',
+            !prefersReducedMotion && (listEntered ? 'opacity-100' : 'opacity-0'),
+          )}
+        >
+          {filterCategory.map((category) => {
+            const isActive = activeFilter === category.type;
+            const count = sourceCounts[category.type];
 
-          return (
-            <button
-              key={category.id}
-              type="button"
-              onClick={() => setActiveFilter(category.type)}
-              className={cn(
-                'text-body-small flex h-9 shrink-0 cursor-pointer items-center gap-1.5 rounded-full border px-3 py-1.5 whitespace-nowrap transition',
-                isActive
-                  ? 'border-accent-black-lighten bg-accent-black-lighten text-content-inverse'
-                  : 'border-edge-neutral text-content-neutral hover:bg-fill-interaction-hover bg-fill-normal',
-              )}
-            >
-              <span>{category.category}</span>
-              <span
+            return (
+              <button
+                key={category.id}
+                type="button"
+                onClick={() => setActiveFilter(category.type)}
                 className={cn(
-                  'text-body-xsmall flex min-w-5 items-center justify-center rounded-full px-1',
-                  isActive ? 'bg-dim-white-10' : 'bg-dim-black-10',
+                  'text-body-small flex h-9 shrink-0 cursor-pointer items-center gap-1.5 rounded-full border px-3 py-1.5 whitespace-nowrap transition',
+                  isActive
+                    ? 'border-accent-black-lighten bg-accent-black-lighten text-content-inverse'
+                    : 'border-edge-neutral text-content-neutral hover:bg-fill-interaction-hover bg-fill-normal',
                 )}
               >
-                {count}
-              </span>
-            </button>
-          );
-        })}
+                <span>{category.category}</span>
+                <span
+                  className={cn(
+                    'text-body-xsmall flex min-w-5 items-center justify-center rounded-full px-1',
+                    isActive ? 'bg-dim-white-10' : 'bg-dim-black-10',
+                  )}
+                >
+                  {count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+        <FilterScrollFab container={filterScrollContainer} />
       </div>
       {/* 내부 SourceCard (Error + Loading) */}
       <div className="custom-scrollbar flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto pt-2">
