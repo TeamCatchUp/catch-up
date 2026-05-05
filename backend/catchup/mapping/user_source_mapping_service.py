@@ -20,10 +20,6 @@ from catchup.db.models import SlackUser
 from catchup.db.models import SourceType
 from catchup.db.models import User
 from catchup.db.models import UserSourceMapping
-from catchup.db.user_source_mapping import (
-    find_external_user_id_by_email_case_insensitive,
-)
-from catchup.db.user_source_mapping import insert_user_source_mapping_if_absent
 from catchup.mapping.user_source_mapping_models import MappedSourceInfo
 from catchup.mapping.user_source_mapping_models import MappingStatusCount
 from catchup.mapping.user_source_mapping_models import MappingStatusResponse
@@ -138,6 +134,9 @@ class UserSourceMappingApplication:
             mappings_by_user: dict[int, dict[SourceType, str]] = {
                 user_id: {} for user_id in user_ids
             }
+            external_ids_by_source: dict[SourceType, set[str]] = {
+                source_type: set() for source_type in TRACKED_USER_MAPPING_SOURCES
+            }
 
             if user_ids:
                 mapping_rows = db.execute(
@@ -151,9 +150,18 @@ class UserSourceMappingApplication:
                     )
                 ).all()
                 for user_id, source_type, external_user_identifier in mapping_rows:
+                    normalized_source_type = SourceType(source_type)
                     mappings_by_user[user_id][
-                        SourceType(source_type)
+                        normalized_source_type
                     ] = external_user_identifier
+                    external_ids_by_source[normalized_source_type].add(
+                        external_user_identifier
+                    )
+
+            source_info_by_source = self._build_source_info_by_source(
+                db=db,
+                external_ids_by_source=external_ids_by_source,
+            )
 
             items: list[UserSourceMappingItem] = []
             for row in rows:
@@ -168,11 +176,9 @@ class UserSourceMappingApplication:
                     user.id
                 ].items():
                     field_name = ITEM_FIELD_BY_SOURCE[source_type]
-                    item_payload[field_name] = self._build_source_info(
-                        db=db,
-                        source_type=source_type,
-                        external_user_identifier=external_user_identifier,
-                    )
+                    item_payload[field_name] = source_info_by_source[
+                        source_type
+                    ].get(external_user_identifier)
                 items.append(UserSourceMappingItem(**item_payload))
 
             return UserSourceMappingResponse(
@@ -198,35 +204,39 @@ class UserSourceMappingApplication:
             inserted = _empty_source_counts()
             skipped_existing = _empty_source_counts()
             not_found = _empty_source_counts()
+            new_mappings: list[UserSourceMapping] = []
 
-            for user in users:
-                for source_type in TRACKED_USER_MAPPING_SOURCES:
-                    source_key = _source_key(source_type)
-                    mapping_key = (user.id, source_type)
-                    if mapping_key in existing:
-                        skipped_existing[source_key] += 1
-                        continue
+            for source_type in TRACKED_USER_MAPPING_SOURCES:
+                source_key = _source_key(source_type)
+                unmapped_users = [
+                    user for user in users if (user.id, source_type) not in existing
+                ]
+                skipped_existing[source_key] = len(users) - len(unmapped_users)
 
-                    external_user_identifier = find_external_user_id_by_email_case_insensitive(
-                        db,
-                        source_type,
-                        user.email,
+                external_ids_by_email = self._find_external_ids_by_email(
+                    db=db,
+                    source_type=source_type,
+                    emails=[user.email for user in unmapped_users],
+                )
+                for user in unmapped_users:
+                    external_user_identifier = external_ids_by_email.get(
+                        user.email.lower()
                     )
                     if not external_user_identifier:
                         not_found[source_key] += 1
                         continue
 
-                    was_inserted = insert_user_source_mapping_if_absent(
-                        db,
-                        user_id=user.id,
-                        source_type=source_type,
-                        external_user_identifier=external_user_identifier,
+                    new_mappings.append(
+                        UserSourceMapping(
+                            user_id=user.id,
+                            source_type=source_type,
+                            external_user_identifier=external_user_identifier,
+                        )
                     )
-                    if was_inserted:
-                        inserted[source_key] += 1
-                        existing.add(mapping_key)
-                    else:
-                        skipped_existing[source_key] += 1
+                    inserted[source_key] += 1
+                    existing.add((user.id, source_type))
+
+            db.add_all(new_mappings)
 
             db.commit()
             return UserSourceMappingRefreshResponse(
@@ -236,96 +246,178 @@ class UserSourceMappingApplication:
                 not_found=not_found,
             )
 
-    def _build_source_info(
+    def _find_external_ids_by_email(
         self,
         *,
         db: Session,
         source_type: SourceType,
-        external_user_identifier: str,
-    ) -> MappedSourceInfo | None:
+        emails: list[str],
+    ) -> dict[str, str]:
+        normalized_emails = {
+            email.lower() for email in emails if email and email.strip()
+        }
+        if not normalized_emails:
+            return {}
+
         if source_type == SourceType.JIRA:
-            row = (
-                db.query(JiraUser)
-                .filter(
-                    JiraUser.account_id == external_user_identifier,
+            rows = db.execute(
+                select(JiraUser.email_address, JiraUser.account_id)
+                .where(
+                    JiraUser.email_address.is_not(None),
+                    JiraUser.account_id.is_not(None),
+                    func.lower(JiraUser.email_address).in_(normalized_emails),
                     JiraUser.account_type == JiraAccountType.ATLASSIAN,
                 )
                 .order_by(JiraUser.synced_at.desc())
-                .first()
-            )
-            if not row:
-                return None
-            return MappedSourceInfo(
-                name=row.display_name,
-                identifier=row.email_address,
-                picture=row.avatar_url,
-            )
-
-        if source_type == SourceType.SLACK:
-            row = (
-                db.query(SlackUser)
-                .filter(
-                    SlackUser.user_id == external_user_identifier,
-                    SlackUser.is_bot == False,  # noqa: E712
+            ).all()
+        elif source_type == SourceType.SLACK:
+            rows = db.execute(
+                select(SlackUser.email, SlackUser.user_id)
+                .where(
+                    SlackUser.email.is_not(None),
+                    SlackUser.user_id.is_not(None),
+                    func.lower(SlackUser.email).in_(normalized_emails),
+                    SlackUser.is_bot.is_(False),
                 )
                 .order_by(SlackUser.synced_at.desc())
-                .first()
-            )
-            if not row:
-                return None
-            return MappedSourceInfo(
-                name=row.real_name or row.display_name,
-                identifier=row.email,
-                picture=row.avatar_url,
-            )
-
-        if source_type == SourceType.GITHUB:
-            row = (
-                db.query(GitHubUser)
-                .filter(GitHubUser.login == external_user_identifier)
-                .first()
-            )
-            if not row:
-                return None
-            return MappedSourceInfo(
-                name=row.name or row.login,
-                identifier=row.email,
-                picture=row.avatar_url,
-            )
-
-        if source_type == SourceType.CONFLUENCE:
-            row = (
-                db.query(ConfluenceUser)
-                .filter(
-                    ConfluenceUser.account_id == external_user_identifier,
+            ).all()
+        elif source_type == SourceType.GITHUB:
+            rows = db.execute(
+                select(GitHubUser.email, GitHubUser.login).where(
+                    GitHubUser.email.is_not(None),
+                    GitHubUser.login.is_not(None),
+                    func.lower(GitHubUser.email).in_(normalized_emails),
+                )
+            ).all()
+        elif source_type == SourceType.CONFLUENCE:
+            rows = db.execute(
+                select(ConfluenceUser.email, ConfluenceUser.account_id)
+                .where(
+                    ConfluenceUser.email.is_not(None),
+                    ConfluenceUser.account_id.is_not(None),
+                    func.lower(ConfluenceUser.email).in_(normalized_emails),
                     ConfluenceUser.account_type == "atlassian",
                 )
                 .order_by(ConfluenceUser.synced_at.desc())
-                .first()
-            )
-            if not row:
-                return None
-            return MappedSourceInfo(
-                name=row.display_name or row.public_name,
-                identifier=row.email,
-                picture=row.avatar_url,
-            )
-
-        if source_type == SourceType.CHANNEL_TALK:
-            row = (
-                db.query(ChannelTalkManager)
-                .filter(
-                    ChannelTalkManager.manager_id == external_user_identifier,
+            ).all()
+        elif source_type == SourceType.CHANNEL_TALK:
+            rows = db.execute(
+                select(ChannelTalkManager.email, ChannelTalkManager.manager_id).where(
+                    ChannelTalkManager.email.is_not(None),
+                    ChannelTalkManager.manager_id.is_not(None),
+                    func.lower(ChannelTalkManager.email).in_(normalized_emails),
                     ChannelTalkManager.removed.is_not(True),
                 )
-                .first()
-            )
-            if not row:
-                return None
-            return MappedSourceInfo(
-                name=row.name,
-                identifier=row.email,
-                picture=row.avatar_url,
-            )
+            ).all()
+        else:
+            return {}
 
-        return None
+        external_ids_by_email: dict[str, str] = {}
+        for email, external_user_identifier in rows:
+            if email and external_user_identifier:
+                external_ids_by_email.setdefault(
+                    email.lower(), external_user_identifier
+                )
+        return external_ids_by_email
+
+    def _build_source_info_by_source(
+        self,
+        *,
+        db: Session,
+        external_ids_by_source: dict[SourceType, set[str]],
+    ) -> dict[SourceType, dict[str, MappedSourceInfo]]:
+        source_info_by_source: dict[SourceType, dict[str, MappedSourceInfo]] = {
+            source_type: {} for source_type in TRACKED_USER_MAPPING_SOURCES
+        }
+
+        jira_ids = external_ids_by_source[SourceType.JIRA]
+        if jira_ids:
+            rows = db.scalars(
+                select(JiraUser)
+                .where(
+                    JiraUser.account_id.in_(jira_ids),
+                    JiraUser.account_type == JiraAccountType.ATLASSIAN,
+                )
+                .order_by(JiraUser.synced_at.desc())
+            ).all()
+            for row in rows:
+                source_info_by_source[SourceType.JIRA].setdefault(
+                    row.account_id,
+                    MappedSourceInfo(
+                        name=row.display_name,
+                        identifier=row.email_address,
+                        picture=row.avatar_url,
+                    ),
+                )
+
+        slack_ids = external_ids_by_source[SourceType.SLACK]
+        if slack_ids:
+            rows = db.scalars(
+                select(SlackUser)
+                .where(
+                    SlackUser.user_id.in_(slack_ids),
+                    SlackUser.is_bot.is_(False),
+                )
+                .order_by(SlackUser.synced_at.desc())
+            ).all()
+            for row in rows:
+                source_info_by_source[SourceType.SLACK].setdefault(
+                    row.user_id,
+                    MappedSourceInfo(
+                        name=row.real_name or row.display_name,
+                        identifier=row.email,
+                        picture=row.avatar_url,
+                    ),
+                )
+
+        github_ids = external_ids_by_source[SourceType.GITHUB]
+        if github_ids:
+            rows = db.scalars(
+                select(GitHubUser).where(GitHubUser.login.in_(github_ids))
+            ).all()
+            for row in rows:
+                source_info_by_source[SourceType.GITHUB][row.login] = MappedSourceInfo(
+                    name=row.name or row.login,
+                    identifier=row.email,
+                    picture=row.avatar_url,
+                )
+
+        confluence_ids = external_ids_by_source[SourceType.CONFLUENCE]
+        if confluence_ids:
+            rows = db.scalars(
+                select(ConfluenceUser)
+                .where(
+                    ConfluenceUser.account_id.in_(confluence_ids),
+                    ConfluenceUser.account_type == "atlassian",
+                )
+                .order_by(ConfluenceUser.synced_at.desc())
+            ).all()
+            for row in rows:
+                source_info_by_source[SourceType.CONFLUENCE].setdefault(
+                    row.account_id,
+                    MappedSourceInfo(
+                        name=row.display_name or row.public_name,
+                        identifier=row.email,
+                        picture=row.avatar_url,
+                    ),
+                )
+
+        channel_talk_ids = external_ids_by_source[SourceType.CHANNEL_TALK]
+        if channel_talk_ids:
+            rows = db.scalars(
+                select(ChannelTalkManager).where(
+                    ChannelTalkManager.manager_id.in_(channel_talk_ids),
+                    ChannelTalkManager.removed.is_not(True),
+                )
+            )
+            for row in rows:
+                source_info_by_source[SourceType.CHANNEL_TALK].setdefault(
+                    row.manager_id,
+                    MappedSourceInfo(
+                        name=row.name,
+                        identifier=row.email,
+                        picture=row.avatar_url,
+                    ),
+                )
+
+        return source_info_by_source

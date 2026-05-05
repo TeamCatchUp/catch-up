@@ -5,6 +5,7 @@ from unittest import TestCase
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
+from sqlalchemy import event
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
@@ -233,6 +234,62 @@ class UserSourceMappingApiTests(TestCase):
         item = response.json()["items"][0]
         self.assertEqual(item["channel_talk"]["name"], "Agent Kim")
         self.assertEqual(item["channel_talk"]["identifier"], "different@example.com")
+
+    def test_list_items_bulk_loads_source_info_for_page(self) -> None:
+        first_user = self._add_user(email="first@example.com", sub="sub-first")
+        second_user = self._add_user(email="second@example.com", sub="sub-second")
+        self._add_channel_talk_manager(
+            manager_id="manager-first",
+            email="first-source@example.com",
+            name="First Manager",
+        )
+        self._add_channel_talk_manager(
+            manager_id="manager-second",
+            email="second-source@example.com",
+            name="Second Manager",
+        )
+        self.db.add_all(
+            [
+                UserSourceMapping(
+                    user_id=first_user.id,
+                    source_type=SourceType.CHANNEL_TALK,
+                    external_user_identifier="manager-first",
+                ),
+                UserSourceMapping(
+                    user_id=second_user.id,
+                    source_type=SourceType.CHANNEL_TALK,
+                    external_user_identifier="manager-second",
+                ),
+            ]
+        )
+        self.db.commit()
+
+        statements: list[str] = []
+
+        def track_statement(conn, cursor, statement, parameters, context, executemany):
+            statements.append(statement)
+
+        event.listen(self.engine, "before_cursor_execute", track_statement)
+        try:
+            response = self.client.get(
+                "/api/v1/integrations/user-source-mapping",
+                params={"page": 1, "size": 50},
+            )
+        finally:
+            event.remove(self.engine, "before_cursor_execute", track_statement)
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["total"], 2)
+        self.assertEqual(
+            {
+                item["channel_talk"]["name"]
+                for item in payload["items"]
+                if item["channel_talk"] is not None
+            },
+            {"First Manager", "Second Manager"},
+        )
+        self.assertLessEqual(len(statements), 4)
 
     def test_filter_returns_users_with_requested_source_mapping(self) -> None:
         channel_talk_user = self._add_user(
