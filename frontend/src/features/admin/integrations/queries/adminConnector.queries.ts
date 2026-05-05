@@ -142,15 +142,8 @@ export const adminConnectorQueries = {
     queryOptions({
       queryKey: ['integrations', vendor, 'connection-status'] as const,
       queryFn: async (): Promise<ConnectionStatusResponse> => {
-        // TODO(backend slug unification): backend가 채널톡 슬러그를 'channel_talk'로 통일하면 이 변환 제거.
-        // 현재 backend는 canonical에서 'channel-talk' (hyphen)을 기대하고 응답 vendor 필드도 hyphen으로 반환.
-        const urlVendor = vendor === 'channel_talk' ? 'channel-talk' : vendor;
-        const res = await api.get<ConnectionStatusResponse>(API.integrations.connectionStatus(urlVendor));
-        const data = res.data;
-        if ((data.vendor as string) === 'channel-talk') {
-          return { ...data, vendor: 'channel_talk' } as ConnectionStatusResponse;
-        }
-        return data;
+        const res = await api.get<ConnectionStatusResponse>(API.integrations.connectionStatus(vendor));
+        return res.data;
       },
     }),
 };
