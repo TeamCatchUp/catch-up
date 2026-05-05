@@ -115,6 +115,8 @@ class RecordRepairService:
                         metadata={"event_id": repair_context.event_id},
                     )
 
+                db.commit()
+
             return next_status
 
         return await run_in_threadpool(_update_status)
