@@ -3,10 +3,19 @@
 // `source` 가 discriminator — 값에 따라 어떤 specific 필드가 채워질지 결정.
 
 /** 백엔드 SourceType enum과 동일 */
-export type SourceTypeApi = 'jira' | 'slack' | 'github' | 'confluence' | 'unknown';
+export type SourceTypeApi = 'jira' | 'slack' | 'github' | 'confluence' | 'channel_talk' | 'unknown';
 
 /** 백엔드 EntityType enum과 동일 */
-export type EntityTypeApi = 'issue' | 'epic' | 'page' | 'blogpost' | 'message' | 'pr' | 'comment' | 'user_chat';
+export type EntityTypeApi =
+  | 'issue'
+  | 'epic'
+  | 'page'
+  | 'blogpost'
+  | 'message'
+  | 'pr'
+  | 'comment'
+  | 'user_chat'
+  | 'document_article';
 
 export interface SourceResponseApi {
   // 공통 (BaseSource)
@@ -35,7 +44,6 @@ export interface SourceResponseApi {
   assignee?: string;
 
   // slack
-  channel_name?: string;
   team_id?: string;
   ts?: string;
   thread_ts?: string;
@@ -52,7 +60,6 @@ export interface SourceResponseApi {
   // confluence
   space_id?: string;
   space_key?: string;
-  space_name?: string;
   parent_page_id?: string;
   version?: number | string;
   chunk_index?: number;
@@ -60,4 +67,15 @@ export interface SourceResponseApi {
   section_hierarchy?: string[];
   has_images?: boolean;
   image_urls?: string[];
+
+  // confluence / channel_talk 공용
+  space_name?: string | null;
+
+  // slack / channel_talk 공용
+  channel_name?: string | null;
+
+  // channel_talk
+  channel_id?: string | null;
+  user_chat_id?: string | null;
+  article_id?: string | null;
 }
