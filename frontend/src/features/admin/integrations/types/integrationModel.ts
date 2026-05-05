@@ -2,7 +2,7 @@ export type { IntegrationAccountMeta, IntegrationService } from '@/shared/types/
 
 import type { IntegrationAccountMeta, IntegrationService } from '@/shared/types/integrationService';
 
-import type { PreMappingInfo } from './integrationApi';
+import type { MappedSourceInfo } from './userSourceMappingApi';
 
 /** 관리자 연동 화면 탭 식별자 */
 export type AdminIntegrationTab = 'my' | 'member';
@@ -40,10 +40,13 @@ export type MemberIntegrationStatus = '미사용' | '완료' | '미등록';
 
 /** 이용자 연동 탭의 사용자 행 데이터 */
 export interface MemberIntegrationRow {
+  /** React key + 행 식별자 (user_id 기반, 항상 존재) */
   userKey: string;
+  /** OAuth sub — pre-mapping bulk update API의 sub 필드로 전송. null인 사용자는 매핑 수정 불가. */
+  sub: string | null;
   userName: string;
   email: string;
-  serviceInfoByService: Partial<Record<IntegrationService, PreMappingInfo>>;
+  serviceInfoByService: Partial<Record<IntegrationService, MappedSourceInfo>>;
   statusByService: Record<IntegrationService, MemberIntegrationStatus>;
 }
 

@@ -14,6 +14,7 @@ import { API } from '@/shared/api/endpoints';
 import { Button } from '@/shared/components/ui/button';
 import { Dialog, DialogContent, DialogTitle } from '@/shared/components/ui/dialog';
 
+import { userSourceMappingQueries } from '../../../queries/userSourceMapping.queries';
 import type { MappingUploadResponse, VendorType } from '../../../types/integrationApi';
 
 /** CSV 일괄 등록은 atlassian/github/slack만 지원 (채널톡은 백엔드 endpoint 없음). */
@@ -189,7 +190,7 @@ export default function CsvUploadModal({ open, onOpenChange }: CsvUploadModalPro
       toast('업로드가 완료되었습니다.', {
         description: '데이터가 정상적으로 반영되었습니다.',
       });
-      queryClient.invalidateQueries({ queryKey: ['admin', 'users', 'syncStatus'] });
+      queryClient.invalidateQueries({ queryKey: userSourceMappingQueries.all() });
       resetState();
       onOpenChange(false);
     },
