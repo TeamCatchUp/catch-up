@@ -19,24 +19,31 @@ langchain-postgres 패키지를 사용하여 LangChain Document를 직접 저장
 """
 
 import asyncio
-import logging
 from datetime import datetime
-from typing import Any, Awaitable, Callable
+from typing import Any
+from typing import Awaitable
+from typing import Callable
 
+import structlog
 from langchain.embeddings import Embeddings
-from langchain_cohere import CohereEmbeddings
 from langchain_core.documents import Document
 from langchain_postgres import PGVector
+from sqlalchemy import DateTime
+from sqlalchemy import and_
+from sqlalchemy import cast
+from sqlalchemy import delete as sa_delete
+from sqlalchemy import func
+from sqlalchemy import select
 
-from sqlalchemy import DateTime, Engine, and_, cast, delete as sa_delete, func, select
-
-from catchup.audit.enums import AuditEventStatus, AuditLevel
+from catchup.audit.enums import AuditEventStatus
+from catchup.audit.enums import AuditLevel
 from catchup.configs.config import settings
 from catchup.db.engine import engine
 from catchup.events.enums import SyncIngestionEventAction
-from catchup.sync.audit import SyncAuditContext, emit_sync_ingestion_audit
+from catchup.sync.audit import SyncAuditContext
+from catchup.sync.audit import emit_sync_ingestion_audit
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 _embedding_semaphore = asyncio.Semaphore(settings.EMBEDDING_MAX_CONCURRENCY)
 class PGVectorRepository:
@@ -88,7 +95,8 @@ class PGVectorRepository:
             return
 
         logger.info(
-            f"Initializing PGVector repository with collection '{self.collection_name}'"
+            "pgvector_repository_initializing",
+            collection_name=self.collection_name,
         )
 
         try:
@@ -106,13 +114,17 @@ class PGVectorRepository:
 
             self._initialized = True
             logger.info(
-                f"PGVector repository initialized successfully. "
-                f"Collection: {self.collection_name}, "
-                f"Embedding dimensions: {settings.PGVECTOR_EMBEDDING_DIMENSIONS}"
+                "pgvector_repository_initialized",
+                collection_name=self.collection_name,
+                embedding_dimensions=settings.PGVECTOR_EMBEDDING_DIMENSIONS,
             )
 
         except Exception as e:
-            logger.error(f"Failed to initialize PGVector repository: {e}")
+            logger.error(
+                "pgvector_repository_initialize_failed",
+                error=str(e),
+                exc_info=True,
+            )
             raise
 
     def ensure_initialized(self) -> None:
@@ -250,11 +262,11 @@ class PGVectorRepository:
             targets.append("metadata")
 
         logger.warning(
-            "[PGVECTOR][SANITIZE] Sanitized document before %s: doc_id=%s, targets=%s, field_count=%s",
-            operation,
-            document.id or "unknown",
-            ",".join(targets),
-            changes["page_content"] + changes["metadata"],
+            "pgvector_document_sanitized",
+            operation=operation,
+            doc_id=document.id or "unknown",
+            targets=targets,
+            field_count=changes["page_content"] + changes["metadata"],
         )
 
     def _sanitize_documents(
@@ -286,7 +298,11 @@ class PGVectorRepository:
         texts = [doc.page_content for doc in documents]
         batch_size = settings.EMBEDDING_BATCH_SIZE
 
-        logger.info(f"Generating embeddings for {len(documents)} documents (batch_size={batch_size})")
+        logger.info(
+            "pgvector_embeddings_generating",
+            document_count=len(documents),
+            batch_size=batch_size,
+        )
 
         try:
             async def _embed_sub_batch(sub_texts: list[str]) -> list[list[float]]:
@@ -302,7 +318,10 @@ class PGVectorRepository:
             sub_results = await asyncio.gather(*tasks)
             embeddings = [emb for sub in sub_results for emb in sub]
 
-            logger.info(f"Successfully generated {len(embeddings)} embeddings")
+            logger.info(
+                "pgvector_embeddings_generated",
+                embedding_count=len(embeddings),
+            )
             if audit_context is not None:
                 emit_sync_ingestion_audit(
                     action=SyncIngestionEventAction.EMBED,
@@ -313,7 +332,11 @@ class PGVectorRepository:
             return embeddings
 
         except Exception as e:
-            logger.error(f"Failed to generate embeddings: {e}")
+            logger.error(
+                "pgvector_embeddings_generate_failed",
+                error=str(e),
+                exc_info=True,
+            )
             if audit_context is not None:
                 emit_sync_ingestion_audit(
                     action=SyncIngestionEventAction.EMBED,
@@ -339,7 +362,10 @@ class PGVectorRepository:
         texts = [doc.page_content for doc in documents]
         metadatas = [doc.metadata for doc in documents]
 
-        logger.info(f"Storing {len(documents)} documents with pre-computed embeddings")
+        logger.info(
+            "pgvector_documents_storing_with_embeddings",
+            document_count=len(documents),
+        )
 
         try:
             result_ids = await asyncio.to_thread(
@@ -350,7 +376,10 @@ class PGVectorRepository:
                 ids=ids,
             )
 
-            logger.info(f"Successfully stored {len(result_ids)} documents")
+            logger.info(
+                "pgvector_documents_stored_with_embeddings",
+                document_count=len(result_ids),
+            )
             if audit_context is not None:
                 emit_sync_ingestion_audit(
                     action=SyncIngestionEventAction.DOCUMENT_PERSISTED,
@@ -361,7 +390,11 @@ class PGVectorRepository:
             return result_ids
 
         except Exception as e:
-            logger.error(f"Failed to store documents with embeddings: {e}")
+            logger.error(
+                "pgvector_documents_store_with_embeddings_failed",
+                error=str(e),
+                exc_info=True,
+            )
             if audit_context is not None:
                 emit_sync_ingestion_audit(
                     action=SyncIngestionEventAction.DOCUMENT_PERSISTED,
@@ -527,14 +560,17 @@ class PGVectorRepository:
         self.ensure_initialized()
 
         if not documents:
-            logger.warning("No documents to add")
+            logger.warning("pgvector_add_documents_empty")
             return []
 
         sanitized_documents = self._sanitize_documents(
             documents,
             operation="add_documents",
         )
-        logger.info(f"Adding {len(documents)} documents to PGVector")
+        logger.info(
+            "pgvector_documents_adding",
+            document_count=len(documents),
+        )
 
         try:
             # 임베딩 생성 및 저장 (rate limit 적용)
@@ -547,11 +583,18 @@ class PGVectorRepository:
                     ids=ids,
                 )
 
-            logger.info(f"Successfully added {len(result_ids)} documents")
+            logger.info(
+                "pgvector_documents_added",
+                document_count=len(result_ids),
+            )
             return result_ids
 
         except Exception as e:
-            logger.error(f"Failed to add documents: {e}")
+            logger.error(
+                "pgvector_documents_add_failed",
+                error=str(e),
+                exc_info=True,
+            )
             raise
 
     async def generate_embeddings(
@@ -665,8 +708,10 @@ class PGVectorRepository:
             batch_num = (i // batch_size) + 1
 
             logger.info(
-                f"Processing batch {batch_num}/{total_batches} "
-                f"({len(batch_docs)} documents)"
+                "pgvector_documents_batch_processing",
+                batch_number=batch_num,
+                total_batches=total_batches,
+                document_count=len(batch_docs),
             )
 
             result_ids = await self.add_documents(batch_docs, batch_ids)
@@ -676,7 +721,10 @@ class PGVectorRepository:
             if i + batch_size < len(documents):
                 await asyncio.sleep(settings.JIRA_API_RATE_LIMIT_DELAY)
 
-        logger.info(f"Batch upload complete: {len(all_ids)} documents added")
+        logger.info(
+            "pgvector_documents_batch_upload_completed",
+            document_count=len(all_ids),
+        )
         return all_ids
 
     async def delete_documents(self, ids: list[str]) -> None:
@@ -690,20 +738,30 @@ class PGVectorRepository:
         self.ensure_initialized()
 
         if not ids:
-            logger.warning("No document IDs to delete")
+            logger.warning("pgvector_delete_documents_empty")
             return
 
-        logger.info(f"Deleting {len(ids)} documents from PGVector")
+        logger.info(
+            "pgvector_documents_deleting",
+            document_count=len(ids),
+        )
 
         try:
             await asyncio.to_thread(
                 self.vector_store.delete,
                 ids=ids,
             )
-            logger.info(f"Successfully deleted {len(ids)} documents")
+            logger.info(
+                "pgvector_documents_deleted",
+                document_count=len(ids),
+            )
 
         except Exception as e:
-            logger.error(f"Failed to delete documents: {e}")
+            logger.error(
+                "pgvector_documents_delete_failed",
+                error=str(e),
+                exc_info=True,
+            )
             raise
 
     async def search(
@@ -736,7 +794,12 @@ class PGVectorRepository:
         """
         self.ensure_initialized()
 
-        logger.info(f"Searching for: '{query}' (k={k}, filter={filter})")
+        logger.info(
+            "pgvector_search_started",
+            query=query,
+            k=k,
+            filter=filter,
+        )
 
         try:
             async with _embedding_semaphore:
@@ -748,11 +811,18 @@ class PGVectorRepository:
                     filter=filter,
                 )
 
-            logger.info(f"Search returned {len(results)} results")
+            logger.info(
+                "pgvector_search_completed",
+                result_count=len(results),
+            )
             return results
 
         except Exception as e:
-            logger.error(f"Search failed: {e}")
+            logger.error(
+                "pgvector_search_failed",
+                error=str(e),
+                exc_info=True,
+            )
             raise
 
     async def search_with_score(
@@ -775,7 +845,12 @@ class PGVectorRepository:
         """
         self.ensure_initialized()
 
-        logger.info(f"Searching with score for: '{query}' (k={k})")
+        logger.info(
+            "pgvector_search_with_score_started",
+            query=query,
+            k=k,
+            filter=filter,
+        )
 
         try:
             async with _embedding_semaphore:
@@ -786,11 +861,18 @@ class PGVectorRepository:
                     filter=filter,
                 )
 
-            logger.info(f"Search with score returned {len(results)} results")
+            logger.info(
+                "pgvector_search_with_score_completed",
+                result_count=len(results),
+            )
             return results
 
         except Exception as e:
-            logger.error(f"Search with score failed: {e}")
+            logger.error(
+                "pgvector_search_with_score_failed",
+                error=str(e),
+                exc_info=True,
+            )
             raise
 
     async def upsert_documents(
@@ -824,7 +906,10 @@ class PGVectorRepository:
             documents,
             operation="upsert_documents",
         )
-        logger.info(f"Upserting {len(documents)} documents")
+        logger.info(
+            "pgvector_documents_upserting",
+            document_count=len(documents),
+        )
 
         # 기존 문서 삭제 후 새로 추가 (atomic하지 않음, 필요시 트랜잭션 추가)
         await self.delete_documents(ids)
@@ -1003,6 +1088,91 @@ class PGVectorRepository:
             since=since,
             record_id_metadata_key="id",
         )
+
+    async def list_channel_talk_user_chat_record_ids(
+        self,
+        *,
+        channel_id: str,
+        since: datetime | None = None,
+    ) -> list[str]:
+        return await self._list_channel_talk_record_ids(
+            entity_type="user_chat",
+            metadata_conditions=lambda embedding_table: [
+                embedding_table.c.cmetadata["user_chat_core"]["chat"][
+                    "channel_id"
+                ].astext
+                == channel_id,
+            ],
+            since=since,
+        )
+
+    async def list_channel_talk_document_article_record_ids(
+        self,
+        *,
+        channel_id: str,
+        space_id: str,
+        since: datetime | None = None,
+    ) -> list[str]:
+        return await self._list_channel_talk_record_ids(
+            entity_type="document_article",
+            metadata_conditions=lambda embedding_table: [
+                embedding_table.c.cmetadata["document_article_core"]["space"][
+                    "channel_id"
+                ].astext
+                == channel_id,
+                embedding_table.c.cmetadata["document_article_core"]["space"][
+                    "space_id"
+                ].astext
+                == space_id,
+            ],
+            since=since,
+        )
+
+    async def _list_channel_talk_record_ids(
+        self,
+        *,
+        entity_type: str,
+        metadata_conditions: Callable[[Any], list[Any]],
+        since: datetime | None = None,
+    ) -> list[str]:
+        self.ensure_initialized()
+
+        def _list_ids() -> list[str]:
+            embedding_table = self._get_embedding_table()
+            collection_table = self._get_collection_table()
+            record_id_expr = embedding_table.c.cmetadata["record_id"].astext
+            conditions: list[Any] = [
+                collection_table.c.name == self.collection_name,
+                embedding_table.c.cmetadata["source"].astext == "channel_talk",
+                embedding_table.c.cmetadata["entity_type"].astext == entity_type,
+                *metadata_conditions(embedding_table),
+            ]
+            if since is not None:
+                conditions.append(
+                    cast(
+                        embedding_table.c.cmetadata["updated_at"].astext,
+                        DateTime(timezone=True),
+                    )
+                    >= since
+                )
+
+            stmt = (
+                select(func.distinct(record_id_expr))
+                .select_from(
+                    embedding_table.join(
+                        collection_table,
+                        embedding_table.c.collection_id == collection_table.c.uuid,
+                    )
+                )
+                .where(and_(*conditions))
+                .order_by(record_id_expr.asc())
+            )
+
+            with self.vector_store._make_sync_session() as session:
+                rows = session.execute(stmt).all()
+                return [str(row[0]) for row in rows if row[0]]
+
+        return await asyncio.to_thread(_list_ids)
     
     async def delete_by_id_prefix(self, prefix: str) -> None:
         self.ensure_initialized()
@@ -1017,7 +1187,11 @@ class PGVectorRepository:
             result = session.execute(stmt)
             session.commit()
 
-        logger.info(f"Deleted {result.rowcount} documents with prefix '{prefix}'")
+        logger.info(
+            "pgvector_documents_deleted_by_prefix",
+            deleted_count=result.rowcount,
+            prefix=prefix,
+        )
 
 
 def _truncate_error(error: Exception) -> str:
