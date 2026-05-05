@@ -36,7 +36,7 @@ CONNECTION_STATUS_VENDOR_LOADERS: dict[
         ConnectionType.OAUTH_TOKEN,
         lambda provider: provider.list_atlassian_oauth_token_items(),
     ),
-    "channel-talk": (
+    "channel_talk": (
         ConnectionType.CREDENTIAL,
         lambda provider: provider.list_channel_talk_credential_items(),
     ),
@@ -44,7 +44,7 @@ CONNECTION_STATUS_VENDOR_LOADERS: dict[
 
 
 def normalize_vendor(vendor: str) -> str:
-    return vendor.strip().lower().replace("_", "-")
+    return vendor.strip().lower()
 
 
 def build_connection_status(

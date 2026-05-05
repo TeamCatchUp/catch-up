@@ -37,6 +37,6 @@ def get_connection_status(
     raise HTTPException(
         status_code=status.HTTP_400_BAD_REQUEST,
         detail=(
-            "vendor must be one of: github, slack, atlassian, jira, confluence, channel-talk"
+            "vendor must be one of: github, slack, atlassian, jira, confluence, channel_talk"
         ),
     )

@@ -166,7 +166,7 @@ class ChannelTalkAdminApiTests(TestCase):
 
     def test_validate_credentials_returns_channel_payload_without_saving(self) -> None:
         response = self.client.post(
-            "/api/v1/admin/connector/channel-talk/credentials/validate",
+            "/api/v1/admin/connector/channel_talk/credentials/validate",
             json={
                 "access_key": "access-key",
                 "access_secret": "access-secret",
@@ -197,7 +197,7 @@ class ChannelTalkAdminApiTests(TestCase):
         )
 
         response = self.client.post(
-            "/api/v1/admin/connector/channel-talk/credentials/validate",
+            "/api/v1/admin/connector/channel_talk/credentials/validate",
             json={
                 "access_key": "access-key",
                 "access_secret": "access-secret",
@@ -230,7 +230,7 @@ class ChannelTalkAdminApiTests(TestCase):
         )
 
         response = self.client.post(
-            "/api/v1/admin/connector/channel-talk/credentials",
+            "/api/v1/admin/connector/channel_talk/credentials",
             json={
                 "access_key": "access-key",
                 "access_secret": "access-secret",
@@ -267,7 +267,7 @@ class ChannelTalkAdminApiTests(TestCase):
 
         with patch("catchup.audit.utils.emit_audit_event") as emit_audit_event:
             response = self.client.post(
-                "/api/v1/admin/connector/channel-talk/credentials",
+                "/api/v1/admin/connector/channel_talk/credentials",
                 json={
                     "access_key": "access-key",
                     "access_secret": "access-secret",
@@ -299,7 +299,7 @@ class ChannelTalkAdminApiTests(TestCase):
         self.assertNotIn("webhook-token", repr(payload))
 
     def test_get_credentials_endpoint_is_removed(self) -> None:
-        response = self.client.get("/api/v1/admin/connector/channel-talk/credentials")
+        response = self.client.get("/api/v1/admin/connector/channel_talk/credentials")
 
         self.assertEqual(response.status_code, 405)
 
@@ -307,7 +307,7 @@ class ChannelTalkAdminApiTests(TestCase):
         self.service.uninstall_result = ChannelTalkUninstallResult(removed=True)
 
         removed_response = self.client.delete(
-            "/api/v1/admin/connector/channel-talk/credentials",
+            "/api/v1/admin/connector/channel_talk/credentials",
             params={"channel_id": "channel-123"},
         )
         self.assertEqual(removed_response.status_code, 200)
@@ -323,7 +323,7 @@ class ChannelTalkAdminApiTests(TestCase):
 
         self.service.uninstall_result = ChannelTalkUninstallResult(removed=False)
         missing_response = self.client.delete(
-            "/api/v1/admin/connector/channel-talk/credentials",
+            "/api/v1/admin/connector/channel_talk/credentials",
             params={"channel_id": "channel-456"},
         )
         self.assertEqual(missing_response.status_code, 200)
@@ -338,7 +338,7 @@ class ChannelTalkAdminApiTests(TestCase):
         self.assertEqual(self.service.last_uninstall_channel_id, "channel-456")
 
     def test_delete_credentials_requires_channel_id(self) -> None:
-        response = self.client.delete("/api/v1/admin/connector/channel-talk/credentials")
+        response = self.client.delete("/api/v1/admin/connector/channel_talk/credentials")
 
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json()["detail"]["code"], "invalid_request")
@@ -346,7 +346,7 @@ class ChannelTalkAdminApiTests(TestCase):
 
     def test_post_credentials_returns_route_scoped_validation_shape(self) -> None:
         response = self.client.post(
-            "/api/v1/admin/connector/channel-talk/credentials",
+            "/api/v1/admin/connector/channel_talk/credentials",
             json={
                 "access_key": "access-key",
                 "access_secret": "access-secret",
@@ -366,7 +366,7 @@ class ChannelTalkAdminApiTests(TestCase):
         )
 
         response = self.client.post(
-            "/api/v1/admin/connector/channel-talk/credentials",
+            "/api/v1/admin/connector/channel_talk/credentials",
             json={
                 "access_key": "access-key",
                 "access_secret": "access-secret",
@@ -389,7 +389,7 @@ class ChannelTalkAdminApiTests(TestCase):
 
     def test_validate_document_credentials_returns_space_payload_without_saving(self) -> None:
         response = self.client.post(
-            "/api/v1/admin/connector/channel-talk/documents/credentials/validate",
+            "/api/v1/admin/connector/channel_talk/documents/credentials/validate",
             json={
                 "access_key": "documents-key",
                 "access_secret": "documents-secret",
@@ -421,7 +421,7 @@ class ChannelTalkAdminApiTests(TestCase):
 
         with patch("catchup.audit.utils.emit_audit_event") as emit_audit_event:
             response = self.client.post(
-                "/api/v1/admin/connector/channel-talk/documents/credentials/validate",
+                "/api/v1/admin/connector/channel_talk/documents/credentials/validate",
                 json={
                     "access_key": "documents-key",
                     "access_secret": "documents-secret",
@@ -457,7 +457,7 @@ class ChannelTalkAdminApiTests(TestCase):
         )
 
         response = self.client.post(
-            "/api/v1/admin/connector/channel-talk/documents/credentials/validate",
+            "/api/v1/admin/connector/channel_talk/documents/credentials/validate",
             json={
                 "access_key": "documents-key",
                 "access_secret": "documents-secret",
@@ -482,7 +482,7 @@ class ChannelTalkAdminApiTests(TestCase):
         )
 
         response = self.client.post(
-            "/api/v1/admin/connector/channel-talk/documents/credentials",
+            "/api/v1/admin/connector/channel_talk/documents/credentials",
             json={
                 "access_key": "documents-key",
                 "access_secret": "documents-secret",
@@ -535,7 +535,7 @@ class ChannelTalkAdminApiTests(TestCase):
         )
 
         response = self.client.post(
-            "/api/v1/admin/connector/channel-talk/documents/credentials",
+            "/api/v1/admin/connector/channel_talk/documents/credentials",
             json={
                 "access_key": "documents-key",
                 "access_secret": "documents-secret",
@@ -553,7 +553,7 @@ class ChannelTalkAdminApiTests(TestCase):
 
     def test_get_document_credentials_endpoint_is_removed(self) -> None:
         response = self.client.get(
-            "/api/v1/admin/connector/channel-talk/documents/credentials"
+            "/api/v1/admin/connector/channel_talk/documents/credentials"
         )
 
         self.assertEqual(response.status_code, 405)
@@ -562,7 +562,7 @@ class ChannelTalkAdminApiTests(TestCase):
         self.document_service.uninstall_result = ChannelTalkDocumentUninstallResult(removed=True)
 
         removed_response = self.client.delete(
-            "/api/v1/admin/connector/channel-talk/documents/credentials",
+            "/api/v1/admin/connector/channel_talk/documents/credentials",
             params={"space_id": "space-123"},
         )
         self.assertEqual(removed_response.status_code, 200)
@@ -578,7 +578,7 @@ class ChannelTalkAdminApiTests(TestCase):
 
         self.document_service.uninstall_result = ChannelTalkDocumentUninstallResult(removed=False)
         missing_response = self.client.delete(
-            "/api/v1/admin/connector/channel-talk/documents/credentials",
+            "/api/v1/admin/connector/channel_talk/documents/credentials",
             params={"space_id": "space-456"},
         )
         self.assertEqual(missing_response.status_code, 200)
@@ -594,7 +594,7 @@ class ChannelTalkAdminApiTests(TestCase):
 
     def test_delete_document_credentials_requires_space_id(self) -> None:
         response = self.client.delete(
-            "/api/v1/admin/connector/channel-talk/documents/credentials"
+            "/api/v1/admin/connector/channel_talk/documents/credentials"
         )
 
         self.assertEqual(response.status_code, 400)
@@ -607,7 +607,7 @@ class ChannelTalkAdminApiTests(TestCase):
         )
 
         response = self.client.post(
-            "/api/v1/admin/connector/channel-talk/documents/credentials",
+            "/api/v1/admin/connector/channel_talk/documents/credentials",
             json={
                 "access_key": "documents-key",
                 "access_secret": "documents-secret",
@@ -624,7 +624,7 @@ class ChannelTalkAdminApiTests(TestCase):
         )
 
         response = self.client.post(
-            "/api/v1/admin/connector/channel-talk/documents/credentials",
+            "/api/v1/admin/connector/channel_talk/documents/credentials",
             json={
                 "access_key": "documents-key",
                 "access_secret": "documents-secret",
@@ -637,7 +637,7 @@ class ChannelTalkAdminApiTests(TestCase):
 
     def test_post_document_credentials_validation_shape_matches_channel_talk_handler(self) -> None:
         response = self.client.post(
-            "/api/v1/admin/connector/channel-talk/documents/credentials",
+            "/api/v1/admin/connector/channel_talk/documents/credentials",
             json={"access_key": "documents-key"},
         )
 

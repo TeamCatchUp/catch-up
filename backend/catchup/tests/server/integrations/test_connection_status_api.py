@@ -81,7 +81,7 @@ class IntegrationConnectionStatusApiTests(TestCase):
             },
         )
 
-    def test_channel_talk_accepts_underscore_alias(self) -> None:
+    def test_channel_talk_uses_canonical_underscore_vendor(self) -> None:
         class EmptyProvider:
             def list_github_installation_items(self):
                 return []
@@ -101,9 +101,29 @@ class IntegrationConnectionStatusApiTests(TestCase):
 
         self.assertIsNotNone(response)
         assert response is not None
-        self.assertEqual(response.vendor, "channel-talk")
+        self.assertEqual(response.vendor, "channel_talk")
         self.assertEqual(response.connection_type, "credential")
         self.assertFalse(response.connected)
+
+    def test_channel_talk_rejects_hyphen_alias(self) -> None:
+        class RaisingProvider:
+            def list_github_installation_items(self):
+                raise AssertionError("provider should not be touched")
+
+            def list_slack_oauth_token_items(self):
+                raise AssertionError("provider should not be touched")
+
+            def list_atlassian_oauth_token_items(self):
+                raise AssertionError("provider should not be touched")
+
+            def list_channel_talk_credential_items(self):
+                raise AssertionError("provider should not be touched")
+
+        response = ConnectionStatusApplication(
+            provider=RaisingProvider(),
+        ).get_status(vendor=f"channel{'-'}talk")
+
+        self.assertIsNone(response)
 
     def test_unsupported_vendor_returns_400(self) -> None:
         response = self.client.get(

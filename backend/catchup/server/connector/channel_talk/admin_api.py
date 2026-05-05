@@ -67,8 +67,8 @@ from catchup.server.connector.channel_talk.schemas import ChannelTalkUninstallRe
 from catchup.server.connector.channel_talk.schemas import ChannelTalkValidateResponse
 
 router = APIRouter(
-    prefix="/api/v1/admin/connector/channel-talk",
-    tags=["channel-talk"],
+    prefix="/api/v1/admin/connector/channel_talk",
+    tags=["channel_talk"],
     dependencies=[Depends(require_admin_user)],
 )
 
