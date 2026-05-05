@@ -17,6 +17,10 @@ vi.mock('@/features/chat/components/skeleton/RagRightComponentSkeleton', () => (
   default: () => <div data-testid="skeleton" />,
 }));
 
+vi.mock('./FilterScrollFab', () => ({
+  default: () => null,
+}));
+
 import SourceList from './SourceList';
 
 const buildSource = (overrides: Partial<ChatSource>): ChatSource => ({
