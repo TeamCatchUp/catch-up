@@ -9,8 +9,6 @@ import type {
   GithubConnectorStatus,
   JiraConnectorStatus,
   SlackConnectorStatus,
-  SyncFilterType,
-  UserSyncStatusResponse,
   VendorType,
   VendorUsersResponse,
 } from '../types/integrationApi';
@@ -58,17 +56,6 @@ export const adminConnectorQueries = {
       queryKey: [...adminConnectorQueries.all(), 'confluence'] as const,
       queryFn: async (): Promise<ConfluenceConnectorStatus> => {
         const res = await api.get<ConfluenceConnectorStatus>(API.admin.connector.confluenceStatus);
-        return res.data;
-      },
-    }),
-
-  userSyncStatus: (params: { filterType: SyncFilterType; page: number; size: number }) =>
-    queryOptions({
-      queryKey: ['admin', 'users', 'syncStatus', params] as const,
-      queryFn: async (): Promise<UserSyncStatusResponse> => {
-        const res = await api.get<UserSyncStatusResponse>(API.admin.users.syncStatus, {
-          params: { filter_type: params.filterType, page: params.page, size: params.size },
-        });
         return res.data;
       },
     }),

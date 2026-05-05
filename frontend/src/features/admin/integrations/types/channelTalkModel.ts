@@ -7,26 +7,16 @@
  */
 export const MASKED_PLACEHOLDER = '●●●●●●●●';
 
-/** 채널톡 동기화 주기 옵션 (channel + documentSpace 공용 union) */
-export type ChannelTalkSyncInterval = '5min' | '15min' | '30min' | '1hour' | '6hour' | '12hour' | '24hour';
+/** 채널톡 도큐먼트 스페이스 동기화 주기 옵션 union */
+export type ChannelTalkSyncInterval = '1hour' | '6hour' | '12hour' | '24hour';
 
 /** 동기화 주기 표시 라벨 (dropdown 옵션 + 선택값 표시 공용) */
 export const CHANNEL_TALK_SYNC_INTERVAL_LABELS: Record<ChannelTalkSyncInterval, string> = {
-  '5min': '5분',
-  '15min': '15분',
-  '30min': '30분',
   '1hour': '1시간',
   '6hour': '6시간',
   '12hour': '12시간',
   '24hour': '24시간',
 };
-
-/**
- * 채널 카드 동기화 주기 옵션 — 실시간 대화 채널이라 짧은 주기 4개.
- * 5분이 기본값.
- */
-export const CHANNEL_SYNC_INTERVAL_OPTIONS: ChannelTalkSyncInterval[] = ['5min', '15min', '30min', '1hour'];
-export const CHANNEL_SYNC_INTERVAL_DEFAULT: ChannelTalkSyncInterval = '5min';
 
 /**
  * 도큐먼트 스페이스 동기화 주기 옵션 — 정적 문서라 긴 주기 4개.
@@ -60,14 +50,13 @@ export interface ChannelTalkDocumentSpace {
   errorMessage?: string;
 }
 
-/** 채널톡 채널 — Access Key/Secret/Webhook + 동기화 주기 + 하위 도큐먼트 스페이스 + 검증 상태 */
+/** 채널톡 채널 — Access Key/Secret/Webhook + 하위 도큐먼트 스페이스 + 검증 상태 */
 export interface ChannelTalkChannel {
   id: string;
   name: string;
   accessKey: string;
   accessSecret: string;
   webhookToken: string;
-  syncInterval: ChannelTalkSyncInterval;
   documentSpaces: ChannelTalkDocumentSpace[];
   connectionStatus: ChannelTalkConnectionStatus;
   /** error 상태일 때 표시할 에러 메시지 (없으면 빈 문자열) */
@@ -87,7 +76,7 @@ export interface ChannelTalkConnectionState {
  * `id`/`connectionStatus`/`errorMessage`는 viewModel의 전용 액션(test/enterEdit/remove)으로만 변경됨.
  */
 export type ChannelTalkChannelPatch = Partial<
-  Pick<ChannelTalkChannel, 'name' | 'accessKey' | 'accessSecret' | 'webhookToken' | 'syncInterval' | 'documentSpaces'>
+  Pick<ChannelTalkChannel, 'name' | 'accessKey' | 'accessSecret' | 'webhookToken' | 'documentSpaces'>
 >;
 
 /** 외부에서 patch 가능한 도큐먼트 스페이스 필드 — 채널과 동일 원칙 */

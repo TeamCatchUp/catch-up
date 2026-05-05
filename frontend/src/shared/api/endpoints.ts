@@ -45,6 +45,11 @@ export const API = {
   // 통합 연결 상태 — vendor별 OAuth/credential 연결 상태 + scope_id 획득용
   integrations: {
     connectionStatus: (vendor: string) => `${API_PREFIX}/integrations/${vendor}/connection-status`, // GET vendor: github | slack | atlassian | jira | confluence | channel_talk
+    userSourceMapping: {
+      list: `${API_PREFIX}/integrations/user-source-mapping`, // GET ?mapping_status=&page=&size= 사용자 매핑 목록
+      status: `${API_PREFIX}/integrations/user-source-mapping/status`, // GET 매핑 현황 카운트
+      refresh: `${API_PREFIX}/integrations/user-source-mapping/refresh`, // POST 매핑 재스캔
+    },
   },
 
   // 통합 Sync API
@@ -83,7 +88,6 @@ export const API = {
     users: {
       list: `${API_PREFIX}/admin/users`, // GET 이용자 목록
       detail: (userId: number) => `${API_PREFIX}/admin/users/${userId}/detail`, // GET 이용자 상세
-      syncStatus: `${API_PREFIX}/admin/users/sync-status`, // GET 서비스별 사용자 매핑 현황
       deactivate: `${API_PREFIX}/admin/users/deactivate`, // POST 비활성화 (body: { userId, reason })
       delete: `${API_PREFIX}/admin/users/delete`, // POST 삭제 (body: { userId, reason })
       promote: `${API_PREFIX}/admin/users/promote`, // POST Admin 승격 (body: { userId, reason })

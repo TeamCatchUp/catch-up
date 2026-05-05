@@ -15,6 +15,7 @@ from catchup.db.models import Base
 from catchup.db.models import ChannelTalkManager
 from catchup.db.models import ConfluenceUser
 from catchup.db.models import GitHubUser
+from catchup.db.models import JiraAccountType
 from catchup.db.models import JiraUser
 from catchup.db.models import JobLevel
 from catchup.db.models import OAuthUser
@@ -119,20 +120,92 @@ class UserSourceMappingApiTests(TestCase):
         self.db.flush()
 
     def _add_github_mapping(self, user: User) -> None:
+        login = f"github-{user.id}"
         self.db.add(
             GitHubUser(
-                database_id=1,
-                login="agent-github",
+                database_id=user.id,
+                login=login,
                 name="Agent GitHub",
                 email=user.email,
                 avatar_url="https://example.com/github.png",
             )
         )
+        self._add_user_source_mapping(user, SourceType.GITHUB, login)
+        self.db.flush()
+
+    def _add_jira_mapping(self, user: User) -> None:
+        account_id = f"jira-account-{user.id}"
+        self.db.add(
+            JiraUser(
+                cloud_id="jira-cloud",
+                account_id=account_id,
+                account_type=JiraAccountType.ATLASSIAN,
+                active=True,
+                display_name=f"Jira {user.name}",
+                email_address=user.email,
+                avatar_url="https://example.com/jira.png",
+            )
+        )
+        self._add_user_source_mapping(user, SourceType.JIRA, account_id)
+        self.db.flush()
+
+    def _add_confluence_mapping(self, user: User) -> None:
+        account_id = f"confluence-account-{user.id}"
+        self.db.add(
+            ConfluenceUser(
+                cloud_id="confluence-cloud",
+                account_id=account_id,
+                account_type="atlassian",
+                display_name=f"Confluence {user.name}",
+                public_name=user.name,
+                email=user.email,
+                avatar_url="https://example.com/confluence.png",
+            )
+        )
+        self._add_user_source_mapping(user, SourceType.CONFLUENCE, account_id)
+        self.db.flush()
+
+    def _add_slack_mapping(self, user: User) -> None:
+        slack_user_id = f"U{user.id}"
+        self.db.add(
+            SlackUser(
+                team_id="T1",
+                user_id=slack_user_id,
+                name=f"slack-{user.id}",
+                real_name=f"Slack {user.name}",
+                deleted=False,
+                email=user.email,
+                display_name=user.name,
+                avatar_url="https://example.com/slack.png",
+                is_bot=False,
+                is_admin=False,
+                is_owner=False,
+                is_restricted=False,
+            )
+        )
+        self._add_user_source_mapping(user, SourceType.SLACK, slack_user_id)
+        self.db.flush()
+
+    def _add_channel_talk_mapping(self, user: User) -> None:
+        manager_id = f"manager-{user.id}"
+        self._add_channel_talk_manager(
+            manager_id=manager_id,
+            email=user.email,
+            name=f"Channel {user.name}",
+        )
+        self._add_user_source_mapping(user, SourceType.CHANNEL_TALK, manager_id)
+
+    def _add_user_source_mapping(
+        self,
+        user: User,
+        source_type: SourceType,
+        external_user_identifier: str,
+    ) -> None:
         self.db.add(
             UserSourceMapping(
                 user_id=user.id,
-                source_type=SourceType.GITHUB,
-                external_user_identifier="agent-github",
+                source_type=source_type,
+                external_user_identifier=external_user_identifier,
             )
         )
         self.db.flush()
@@ -291,47 +364,75 @@ class UserSourceMappingApiTests(TestCase):
         )
         self.assertLessEqual(len(statements), 4)
 
-    def test_filter_returns_users_with_requested_source_mapping(self) -> None:
-        channel_talk_user = self._add_user(
-            email="channel@example.com",
-            sub="sub-channel",
+    def test_mapping_status_full_treats_jira_or_confluence_as_atlassian(self) -> None:
+        jira_user = self._add_user(email="jira-full@example.com", sub="sub-jira-full")
+        confluence_user = self._add_user(
+            email="confluence-full@example.com",
+            sub="sub-confluence-full",
         )
-        github_user = self._add_user(
-            email="github@example.com",
-            sub="sub-github",
+        partial_user = self._add_user(
+            email="partial@example.com",
+            sub="sub-partial",
         )
-        self._add_channel_talk_manager(
-            manager_id="manager-channel",
-            email="channel@example.com",
-        )
-        self._add_github_mapping(github_user)
-        self.db.add(
-            UserSourceMapping(
-                user_id=channel_talk_user.id,
-                source_type=SourceType.CHANNEL_TALK,
-                external_user_identifier="manager-channel",
-            )
-        )
+
+        self._add_jira_mapping(jira_user)
+        self._add_slack_mapping(jira_user)
+        self._add_github_mapping(jira_user)
+        self._add_channel_talk_mapping(jira_user)
+
+        self._add_confluence_mapping(confluence_user)
+        self._add_slack_mapping(confluence_user)
+        self._add_github_mapping(confluence_user)
+        self._add_channel_talk_mapping(confluence_user)
+
+        self._add_confluence_mapping(partial_user)
+        self._add_github_mapping(partial_user)
         self.db.commit()
 
         response = self.client.get(
             "/api/v1/integrations/user-source-mapping",
-            params={"page": 1, "size": 50},
+            params={"mapping_status": "full", "page": 1, "size": 50},
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["total"], 2)
+        payload = response.json()
+        self.assertEqual(payload["total"], 2)
+        self.assertEqual(
+            {item["email"] for item in payload["items"]},
+            {"confluence-full@example.com", "jira-full@example.com"},
+        )
+        confluence_item = next(
+            item
+            for item in payload["items"]
+            if item["email"] == "confluence-full@example.com"
+        )
+        self.assertEqual(
+            confluence_item["atlassian"]["identifier"],
+            "confluence-full@example.com",
+        )
+
+    def test_mapping_status_partial_returns_users_missing_any_mapping_group(self) -> None:
+        full_user = self._add_user(email="full@example.com", sub="sub-full")
+        partial_user = self._add_user(email="partial@example.com", sub="sub-partial")
+
+        self._add_jira_mapping(full_user)
+        self._add_slack_mapping(full_user)
+        self._add_github_mapping(full_user)
+        self._add_channel_talk_mapping(full_user)
+
+        self._add_jira_mapping(partial_user)
+        self._add_github_mapping(partial_user)
+        self.db.commit()
 
         response = self.client.get(
             "/api/v1/integrations/user-source-mapping",
-            params={"filter": "channel_talk", "page": 1, "size": 50},
+            params={"mapping_status": "partial", "page": 1, "size": 50},
         )
 
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertEqual(payload["total"], 1)
-        self.assertEqual(payload["items"][0]["email"], "channel@example.com")
-        self.assertIsNotNone(payload["items"][0]["channel_talk"])
+        self.assertEqual(payload["items"][0]["email"], "partial@example.com")
 
     def test_mapping_status_counts_user_source_mappings(self) -> None:
         user = self._add_user()

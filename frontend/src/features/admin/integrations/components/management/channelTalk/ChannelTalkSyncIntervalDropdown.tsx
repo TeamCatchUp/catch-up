@@ -11,33 +11,13 @@ import {
 import { cn } from '@/shared/utils/cn';
 
 import {
-  CHANNEL_SYNC_INTERVAL_DEFAULT,
-  CHANNEL_SYNC_INTERVAL_OPTIONS,
   CHANNEL_TALK_SYNC_INTERVAL_LABELS,
   type ChannelTalkSyncInterval,
   DOCUMENT_SPACE_SYNC_INTERVAL_DEFAULT,
   DOCUMENT_SPACE_SYNC_INTERVAL_OPTIONS,
 } from '../../../types/channelTalkModel';
 
-/**
- * dropdown 옵션 셋 분기.
- * - `channel`: 5분(기본) / 15분 / 30분 / 1시간 — 실시간 대화 채널
- * - `documentSpace`: 1시간(기본) / 6시간 / 12시간 / 24시간 — 정적 문서
- */
-type SyncIntervalDropdownVariant = 'channel' | 'documentSpace';
-
-const VARIANT_OPTIONS: Record<SyncIntervalDropdownVariant, ChannelTalkSyncInterval[]> = {
-  channel: CHANNEL_SYNC_INTERVAL_OPTIONS,
-  documentSpace: DOCUMENT_SPACE_SYNC_INTERVAL_OPTIONS,
-};
-
-const VARIANT_DEFAULTS: Record<SyncIntervalDropdownVariant, ChannelTalkSyncInterval> = {
-  channel: CHANNEL_SYNC_INTERVAL_DEFAULT,
-  documentSpace: DOCUMENT_SPACE_SYNC_INTERVAL_DEFAULT,
-};
-
 interface ChannelTalkSyncIntervalDropdownProps {
-  variant: SyncIntervalDropdownVariant;
   value: ChannelTalkSyncInterval;
   /** lock 상태 — 트리거 비활성 + 회색 배경 */
   disabled?: boolean;
@@ -45,19 +25,15 @@ interface ChannelTalkSyncIntervalDropdownProps {
 }
 
 /**
- * 채널톡 동기화 주기 dropdown — Default / Hover / Pressed(펼침) 3상태.
+ * 채널톡 도큐먼트 스페이스 동기화 주기 dropdown — Default / Hover / Pressed(펼침) 3상태.
  *
- * `variant`에 따라 옵션 셋 자동 분기. 부모 컨테이너의 width를 그대로 채움 (w-full).
+ * 정적 문서 특성에 맞춘 1시간 / 6시간 / 12시간 / 24시간 옵션. 부모 컨테이너 width 풀폭.
  */
 export default function ChannelTalkSyncIntervalDropdown({
-  variant,
   value,
   disabled,
   onChange,
 }: ChannelTalkSyncIntervalDropdownProps) {
-  const options = VARIANT_OPTIONS[variant];
-  const defaultValue = VARIANT_DEFAULTS[variant];
-
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild disabled={disabled}>
@@ -92,7 +68,7 @@ export default function ChannelTalkSyncIntervalDropdown({
         align="start"
         className="bg-fill-normal w-[var(--radix-dropdown-menu-trigger-width)] min-w-0 rounded-lg border-0 p-1"
       >
-        {options.map((option) => (
+        {DOCUMENT_SPACE_SYNC_INTERVAL_OPTIONS.map((option) => (
           <DropdownMenuItem
             key={option}
             onSelect={() => onChange?.(option)}
@@ -103,7 +79,7 @@ export default function ChannelTalkSyncIntervalDropdown({
           >
             <span className="flex-1 truncate">
               {CHANNEL_TALK_SYNC_INTERVAL_LABELS[option]}
-              {option === defaultValue && ' (기본)'}
+              {option === DOCUMENT_SPACE_SYNC_INTERVAL_DEFAULT && ' (기본)'}
             </span>
           </DropdownMenuItem>
         ))}
