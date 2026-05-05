@@ -32,13 +32,11 @@ interface ChannelTalkViewModel {
   addChannel: () => void;
   updateChannel: (channelId: string, patch: ChannelTalkChannelPatch) => void;
   removeChannel: (channelId: string) => void;
-  enterEditMode: (channelId: string) => void;
   addDocumentSpace: (channelId: string) => void;
   updateDocumentSpace: (channelId: string, dsId: string, patch: ChannelTalkDocumentSpacePatch) => void;
   removeDocumentSpace: (channelId: string, dsId: string) => void;
   testChannelConnection: (channelId: string) => void;
   testDocumentSpaceConnection: (channelId: string, dsId: string) => void;
-  enterDocumentSpaceEditMode: (channelId: string, dsId: string) => void;
 }
 
 /**
@@ -48,10 +46,10 @@ interface ChannelTalkViewModel {
  * 이 hook은 useState의 lazy initialization으로 그 값을 시작점으로 삼는다.
  * (React 19 `react-hooks/set-state-in-effect` 룰을 회피하기 위한 mount/unmount 패턴.)
  *
- * **편집**: "수정하기"(enterEditMode) 클릭 시 마스킹 문자열을 빈 문자열로 초기화.
- *
- * **검증+저장**: "연결 테스트하기"(testChannelConnection) 클릭 시 validate+save 통합 mutation 호출.
+ * **검증+저장**: "연결 테스트 하기"(testChannelConnection) 클릭 시 validate+save 통합 mutation 호출.
  * 성공 시 백엔드 응답의 channel_id/channel_name을 state에 반영하고 키 필드를 다시 마스킹.
+ * 테스트 완료된 카드는 collapsed로 lock되어 키 자체가 화면에 노출되지 않으며, 변경하려면
+ * 카드를 삭제 후 재등록해야 한다.
  *
  * **삭제**: 검증된(tested) 카드는 백엔드 DELETE 호출, 미검증 카드는 로컬 state만 제거.
  * 휴지통 클릭 시 즉시 사라지고 backend 응답 기다리지 않는 optimistic UI.
@@ -152,25 +150,6 @@ export function useChannelTalkViewModel(initialState: ChannelTalkConnectionState
     },
     [deleteChannelMutation],
   );
-
-  const enterEditMode = useCallback((channelId: string) => {
-    setState((prev) => ({
-      ...prev,
-      channels: prev.channels.map((ch) =>
-        ch.id === channelId
-          ? {
-              ...ch,
-              // 마스킹된 키 필드를 비워서 새 키 입력을 받음
-              accessKey: '',
-              accessSecret: '',
-              webhookToken: '',
-              connectionStatus: 'editing' as const,
-              errorMessage: undefined,
-            }
-          : ch,
-      ),
-    }));
-  }, []);
 
   const addDocumentSpace = useCallback((channelId: string) => {
     setState((prev) => ({
@@ -480,41 +459,15 @@ export function useChannelTalkViewModel(initialState: ChannelTalkConnectionState
     [pendingDocumentSpaceIds, documentMutation],
   );
 
-  const enterDocumentSpaceEditMode = useCallback((channelId: string, dsId: string) => {
-    setState((prev) => ({
-      ...prev,
-      channels: prev.channels.map((ch) =>
-        ch.id !== channelId
-          ? ch
-          : {
-              ...ch,
-              documentSpaces: ch.documentSpaces.map((ds) =>
-                ds.id === dsId
-                  ? {
-                      ...ds,
-                      accessKey: '',
-                      accessSecret: '',
-                      connectionStatus: 'editing' as const,
-                      errorMessage: undefined,
-                    }
-                  : ds,
-              ),
-            },
-      ),
-    }));
-  }, []);
-
   return {
     state,
     addChannel,
     updateChannel,
     removeChannel,
-    enterEditMode,
     addDocumentSpace,
     updateDocumentSpace,
     removeDocumentSpace,
     testChannelConnection,
     testDocumentSpaceConnection,
-    enterDocumentSpaceEditMode,
   };
 }

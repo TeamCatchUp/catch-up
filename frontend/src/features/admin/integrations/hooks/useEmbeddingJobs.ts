@@ -3,7 +3,6 @@ import { useQueries, useQuery } from '@tanstack/react-query';
 
 import { CONNECTOR_ORDER, SINGLE_SCOPE_CONNECTORS } from '../constants/connectorOrder';
 import { adminConnectorQueries } from '../queries/adminConnector.queries';
-import { channelTalkQueries } from '../queries/channelTalk.queries';
 import type {
   ConnectorProgress,
   EmbeddingButtonState,
@@ -12,7 +11,7 @@ import type {
   SyncJobStatus,
   SyncStatusResponse,
 } from '../types/syncModel';
-import { isConfluenceResource, isJiraResource } from '../utils/filterAtlassianScope';
+import { isConfluenceScope, isJiraScope } from '../utils/filterAtlassianScope';
 
 const SESSION_KEY = 'catchup:activeEmbeddingJobs';
 
@@ -91,40 +90,48 @@ export const useEmbeddingJobs = () => {
     }
   });
 
-  // ─── Step 1: Scope 획득 ───
+  // ─── Step 1: Scope 획득 (canonical connection-status) ───
+  // jira/confluence는 atlassian endpoint를 공유 호출 후 metadata.scopes로 분리.
 
-  const githubQuery = useQuery(adminConnectorQueries.githubInstallations());
-  const slackQuery = useQuery(adminConnectorQueries.slackInstallationStatus());
-  const atlassianQuery = useQuery(adminConnectorQueries.atlassianInstallationStatus());
-  // 채널톡은 ManagementPanel과 같은 queryKey라 cache 공유
-  const channelTalkQuery = useQuery(channelTalkQueries.list());
+  const githubQuery = useQuery(adminConnectorQueries.connectionStatus('github'));
+  const slackQuery = useQuery(adminConnectorQueries.connectionStatus('slack'));
+  const atlassianQuery = useQuery(adminConnectorQueries.connectionStatus('atlassian'));
+  const channelTalkQuery = useQuery(adminConnectorQueries.connectionStatus('channel_talk'));
 
   const singleScopeMap = useMemo((): Partial<Record<(typeof SINGLE_SCOPE_CONNECTORS)[number], string>> => {
     const map: Partial<Record<(typeof SINGLE_SCOPE_CONNECTORS)[number], string>> = {};
 
-    const githubInstallation = githubQuery.data?.[0];
-    if (githubInstallation) map.github = String(githubInstallation.installation_id);
+    if (githubQuery.data?.vendor === 'github') {
+      const first = githubQuery.data.items[0];
+      if (first) map.github = first.id;
+    }
 
-    const slackWorkspace = slackQuery.data?.workspaces?.[0];
-    if (slackWorkspace) map.slack = slackWorkspace.team_id;
+    if (slackQuery.data?.vendor === 'slack') {
+      const first = slackQuery.data.items[0];
+      if (first) map.slack = first.id;
+    }
 
-    const jiraResource = atlassianQuery.data?.resources?.find(isJiraResource);
-    if (jiraResource) map.jira = jiraResource.id;
-
-    const confluenceResource = atlassianQuery.data?.resources?.find(isConfluenceResource);
-    if (confluenceResource) map.confluence = confluenceResource.id;
+    if (
+      atlassianQuery.data?.vendor === 'atlassian' ||
+      atlassianQuery.data?.vendor === 'jira' ||
+      atlassianQuery.data?.vendor === 'confluence'
+    ) {
+      const jira = atlassianQuery.data.items.find((item) => isJiraScope(item.metadata));
+      if (jira) map.jira = jira.id;
+      const confluence = atlassianQuery.data.items.find((item) => isConfluenceScope(item.metadata));
+      if (confluence) map.confluence = confluence.id;
+    }
 
     return map;
   }, [githubQuery.data, slackQuery.data, atlassianQuery.data]);
 
-  /** 채널톡은 등록된 모든 channel_id를 추적 대상으로. installed=true + channel_id non-null만. */
-  const channelTalkChannelIds = useMemo(
-    () =>
-      (channelTalkQuery.data ?? [])
-        .filter((c): c is typeof c & { channel_id: string } => c.installed && !!c.channel_id)
-        .map((c) => c.channel_id),
-    [channelTalkQuery.data],
-  );
+  /** 채널톡은 등록된 모든 channel_id를 추적 대상으로. credential_type='channel' 항목만. */
+  const channelTalkChannelIds = useMemo(() => {
+    if (channelTalkQuery.data?.vendor !== 'channel_talk') return [];
+    return channelTalkQuery.data.items
+      .filter((item) => item.metadata.credential_type === 'channel')
+      .map((item) => item.id);
+  }, [channelTalkQuery.data]);
 
   // ─── Step 2: syncStatus로 활성 job 발견 ───
   // 일반 connector 4개 + 채널톡 N개 channel별로 동시 호출.

@@ -4,7 +4,6 @@ import { useQueries, useQuery } from '@tanstack/react-query';
 import { CONNECTOR_STATUS_SOURCE_ORDER } from '../constants/connectorOrder';
 import { INTEGRATION_ACCOUNTS } from '../constants/integrationsConfig';
 import { adminConnectorQueries } from '../queries/adminConnector.queries';
-import { channelTalkQueries } from '../queries/channelTalk.queries';
 import type {
   AdminIntegrationViewModel,
   ConnectorDetail,
@@ -47,26 +46,27 @@ export const useAdminIntegrationViewModel = (): AdminIntegrationViewModel => {
   });
 
   // connected 판별용 — OAuth/설치 완료 여부 (임베딩 0개여도 연동됨 표시)
-  const atlassianInstall = useQuery(adminConnectorQueries.atlassianInstallationStatus());
-  const slackInstall = useQuery(adminConnectorQueries.slackInstallationStatus());
-  const githubInstall = useQuery(adminConnectorQueries.githubInstallations());
-  const channelTalkList = useQuery(channelTalkQueries.list());
+  // canonical connection-status는 connected 플래그 + count를 제공하므로 별 분기 없이 connected만 보면 됨.
+  const atlassianStatus = useQuery(adminConnectorQueries.connectionStatus('atlassian'));
+  const slackStatus = useQuery(adminConnectorQueries.connectionStatus('slack'));
+  const githubStatus = useQuery(adminConnectorQueries.connectionStatus('github'));
+  const channelTalkStatus = useQuery(adminConnectorQueries.connectionStatus('channel_talk'));
 
   const isServiceConnected = useCallback(
     (service: IntegrationService): boolean => {
       switch (service) {
         case 'jira':
         case 'confluence':
-          return atlassianInstall.data?.installed === true;
+          return atlassianStatus.data?.connected === true;
         case 'github':
-          return (githubInstall.data?.length ?? 0) > 0;
+          return githubStatus.data?.connected === true;
         case 'slack':
-          return slackInstall.data?.installed === true;
+          return slackStatus.data?.connected === true;
         case 'channel_talk':
-          return (channelTalkList.data?.length ?? 0) > 0;
+          return channelTalkStatus.data?.connected === true;
       }
     },
-    [atlassianInstall.data, slackInstall.data, githubInstall.data, channelTalkList.data],
+    [atlassianStatus.data, slackStatus.data, githubStatus.data, channelTalkStatus.data],
   );
 
   const statusMap = useMemo<Record<IntegrationService, AdminConnectorStatusResponse | undefined>>(() => {
@@ -118,9 +118,9 @@ export const useAdminIntegrationViewModel = (): AdminIntegrationViewModel => {
     getConnectorDetail,
     isLoading:
       statusQueries.some((q) => q.isLoading) ||
-      atlassianInstall.isLoading ||
-      slackInstall.isLoading ||
-      githubInstall.isLoading ||
-      channelTalkList.isLoading,
+      atlassianStatus.isLoading ||
+      slackStatus.isLoading ||
+      githubStatus.isLoading ||
+      channelTalkStatus.isLoading,
   };
 };

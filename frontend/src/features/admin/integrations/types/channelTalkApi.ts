@@ -2,14 +2,14 @@
 
 // ─── Channel Credential ───
 
-/** POST /api/v1/admin/connector/channel-talk/credentials(/validate) 요청 body */
+/** POST /api/v1/admin/connector/channel_talk/credentials(/validate) 요청 body */
 export interface ChannelTalkCredentialRequest {
   access_key: string;
   access_secret: string;
   webhook_token: string;
 }
 
-/** POST /api/v1/admin/connector/channel-talk/credentials/validate 응답 */
+/** POST /api/v1/admin/connector/channel_talk/credentials/validate 응답 */
 export interface ChannelTalkValidateResponse {
   status: 'validated';
   channel_id: string;
@@ -19,7 +19,7 @@ export interface ChannelTalkValidateResponse {
   webhook_token_configured: boolean;
 }
 
-/** POST /api/v1/admin/connector/channel-talk/credentials 응답 (upsert) */
+/** POST /api/v1/admin/connector/channel_talk/credentials 응답 (upsert) */
 export interface ChannelTalkConnectResponse {
   installed: boolean;
   channel_id: string | null;
@@ -31,25 +31,15 @@ export interface ChannelTalkConnectResponse {
   message: string;
 }
 
-/** GET /api/v1/admin/connector/channel-talk/credentials 응답 */
-export interface ChannelTalkStatusResponse {
-  installed: boolean;
-  channel_id: string | null;
-  channel_name: string | null;
-  credential_last_verified_at: string | null;
-  webhook_token_configured: boolean;
-  status_reason: string | null;
-}
-
 // ─── Document Space Credential ───
 
-/** POST /api/v1/admin/connector/channel-talk/documents/credentials(/validate) 요청 body */
+/** POST /api/v1/admin/connector/channel_talk/documents/credentials(/validate) 요청 body */
 export interface ChannelTalkDocumentCredentialRequest {
   access_key: string;
   access_secret: string;
 }
 
-/** POST /api/v1/admin/connector/channel-talk/documents/credentials/validate 응답 */
+/** POST /api/v1/admin/connector/channel_talk/documents/credentials/validate 응답 */
 export interface ChannelTalkDocumentValidateResponse {
   status: 'validated';
   channel_id: string;
@@ -58,7 +48,7 @@ export interface ChannelTalkDocumentValidateResponse {
   association_status: string;
 }
 
-/** POST /api/v1/admin/connector/channel-talk/documents/credentials 응답 (upsert) */
+/** POST /api/v1/admin/connector/channel_talk/documents/credentials 응답 (upsert) */
 export interface ChannelTalkDocumentConnectResponse {
   installed: boolean;
   channel_id: string | null;
@@ -69,17 +59,6 @@ export interface ChannelTalkDocumentConnectResponse {
   status_reason: string | null;
   status: 'connected';
   message: string;
-}
-
-/** GET /api/v1/admin/connector/channel-talk/documents/credentials 응답 */
-export interface ChannelTalkDocumentStatusResponse {
-  installed: boolean;
-  channel_id: string | null;
-  space_id: string | null;
-  space_name: string | null;
-  credential_last_verified_at: string | null;
-  association_status: string | null;
-  status_reason: string | null;
 }
 
 // ─── Uninstall (DELETE) ───

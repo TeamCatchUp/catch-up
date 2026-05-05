@@ -3,6 +3,7 @@ import { infiniteQueryOptions, queryOptions } from '@tanstack/react-query';
 import api from '@/shared/api/client';
 import { API } from '@/shared/api/endpoints';
 
+import type { ConnectionStatusResponse, ConnectorVendor } from '../types/connectionStatusApi';
 import type {
   ConfluenceConnectorStatus,
   GithubConnectorStatus,
@@ -15,10 +16,7 @@ import type {
 } from '../types/integrationApi';
 import type {
   AdminConnectorStatusResponse,
-  AtlassianInstallationStatus,
   ConnectorStatusSource,
-  GithubInstallation,
-  SlackInstallationStatus,
   SyncConnector,
   SyncJobSnapshotResponse,
   SyncStatusResponse,
@@ -138,31 +136,13 @@ export const adminConnectorQueries = {
       },
     }),
 
-  // ─── Scope 획득용 ───
+  // ─── Vendor 연결 상태 (canonical, scope 획득용 통합) ───
 
-  githubInstallations: () =>
+  connectionStatus: (vendor: ConnectorVendor) =>
     queryOptions({
-      queryKey: ['github', 'installations'] as const,
-      queryFn: async (): Promise<GithubInstallation[]> => {
-        const res = await api.get<GithubInstallation[]>(API.github.installations);
-        return res.data;
-      },
-    }),
-
-  slackInstallationStatus: () =>
-    queryOptions({
-      queryKey: ['slack', 'status'] as const,
-      queryFn: async (): Promise<SlackInstallationStatus> => {
-        const res = await api.get<SlackInstallationStatus>(API.slack.status);
-        return res.data;
-      },
-    }),
-
-  atlassianInstallationStatus: () =>
-    queryOptions({
-      queryKey: ['atlassian', 'status'] as const,
-      queryFn: async (): Promise<AtlassianInstallationStatus> => {
-        const res = await api.get<AtlassianInstallationStatus>(API.atlassian.status);
+      queryKey: ['integrations', vendor, 'connection-status'] as const,
+      queryFn: async (): Promise<ConnectionStatusResponse> => {
+        const res = await api.get<ConnectionStatusResponse>(API.integrations.connectionStatus(vendor));
         return res.data;
       },
     }),

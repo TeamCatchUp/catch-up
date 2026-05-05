@@ -3,72 +3,36 @@ import { useQuery } from '@tanstack/react-query';
 import type { IntegrationService } from '@/shared/types/integrationService';
 
 import { adminConnectorQueries } from '../queries/adminConnector.queries';
-import type { SyncConnector } from '../types/syncModel';
-import { isConfluenceResource, isJiraResource } from '../utils/filterAtlassianScope';
+import type { ConnectorVendor } from '../types/connectionStatusApi';
+import { isConfluenceScope, isJiraScope } from '../utils/filterAtlassianScope';
 
 /**
  * 서비스별 scope_id를 자동으로 획득하는 훅.
- * scope는 1개 전제 → 첫 번째 값 자동 선택.
+ * canonical `connection-status` 단일 호출 후 vendor에 맞춰 첫 항목의 id를 추출.
+ * jira/confluence는 atlassian endpoint를 공유해 호출하고 metadata.scopes로 분리.
+ * channel_talk는 multi-scope이므로 이 훅 경로로 진입하지 않는다 (ChannelTalkEmbeddingModal에서 직접 처리).
  */
 export const useScopeId = (service: IntegrationService) => {
-  const connector = service as SyncConnector;
+  const vendor: ConnectorVendor =
+    service === 'jira' || service === 'confluence' ? 'atlassian' : (service as ConnectorVendor);
 
-  const githubQuery = useQuery({
-    ...adminConnectorQueries.githubInstallations(),
-    enabled: service === 'github',
+  const query = useQuery({
+    ...adminConnectorQueries.connectionStatus(vendor),
+    enabled: service !== 'channel_talk',
   });
 
-  const slackQuery = useQuery({
-    ...adminConnectorQueries.slackInstallationStatus(),
-    enabled: service === 'slack',
-  });
-
-  const atlassianQuery = useQuery({
-    ...adminConnectorQueries.atlassianInstallationStatus(),
-    enabled: service === 'jira' || service === 'confluence',
-  });
-
-  const getScopeId = (): string | null => {
-    switch (connector) {
-      case 'github': {
-        const installation = githubQuery.data?.[0];
-        return installation ? String(installation.installation_id) : null;
-      }
-      case 'slack': {
-        const workspace = slackQuery.data?.workspaces?.[0];
-        return workspace?.team_id ?? null;
-      }
-      case 'jira': {
-        const resource = atlassianQuery.data?.resources?.find(isJiraResource);
-        return resource?.id ?? null;
-      }
-      case 'confluence': {
-        const resource = atlassianQuery.data?.resources?.find(isConfluenceResource);
-        return resource?.id ?? null;
-      }
-      case 'channel_talk':
-        // 채널톡은 ChannelTalkEmbeddingModal에서 channelTalkQueries.detail()을 직접 사용해 channel_id를 얻으므로
-        // useScopeId 경로로는 진입하지 않는다. 여기서는 exhaustiveness만 충족.
-        return null;
+  const scopeId = ((): string | null => {
+    const data = query.data;
+    if (!data) return null;
+    if (data.vendor === 'atlassian' || data.vendor === 'jira' || data.vendor === 'confluence') {
+      if (service === 'jira') return data.items.find((item) => isJiraScope(item.metadata))?.id ?? null;
+      if (service === 'confluence') return data.items.find((item) => isConfluenceScope(item.metadata))?.id ?? null;
     }
-  };
-
-  const isLoading = (() => {
-    switch (connector) {
-      case 'github':
-        return githubQuery.isLoading;
-      case 'slack':
-        return slackQuery.isLoading;
-      case 'jira':
-      case 'confluence':
-        return atlassianQuery.isLoading;
-      case 'channel_talk':
-        return false;
-    }
+    return data.items[0]?.id ?? null;
   })();
 
   return {
-    scopeId: getScopeId(),
-    isLoading,
+    scopeId,
+    isLoading: query.isLoading,
   };
 };
