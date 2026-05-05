@@ -2,7 +2,7 @@ import type { IntegrationService } from '@/shared/types/integrationService';
 
 // ─── Vendor Type ───
 
-export type VendorType = 'github' | 'slack' | 'atlassian';
+export type VendorType = 'github' | 'slack' | 'atlassian' | 'channel_talk';
 
 // ─── Mapping Upload ───
 
@@ -76,12 +76,7 @@ export interface UserSyncItem {
   atlassian: PreMappingInfo | null;
   slack: PreMappingInfo | null;
   github: PreMappingInfo | null;
-  /**
-   * 채널톡 user-level 매핑 — 백엔드 미구현.
-   * 응답에 필드 자체가 없을 수 있으므로 optional(`?`), 백엔드 합류 후엔 null 가능 → 두 escape 모두 유지.
-   * `getServiceInfo`에서 `item.channel_talk ?? null`로 흡수.
-   */
-  channel_talk?: PreMappingInfo | null;
+  channel_talk: PreMappingInfo | null;
 }
 
 /**
