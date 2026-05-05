@@ -1,5 +1,4 @@
 import logging
-from enum import StrEnum
 from typing import Optional
 
 from fastapi import APIRouter
@@ -8,13 +7,10 @@ from fastapi import Depends
 from fastapi import HTTPException
 from fastapi import Path
 from fastapi import Query
-from sqlalchemy import and_
 from sqlalchemy import delete
 from sqlalchemy import func
-from sqlalchemy import or_
 from sqlalchemy import select
 from sqlalchemy.orm import Session
-from sqlalchemy.orm import aliased
 
 from catchup.audit.actions import UserRoleAction
 from catchup.audit.enums import AuditEventStatus
@@ -27,12 +23,10 @@ from catchup.auth.dependencies import require_admin_user
 from catchup.chat.schemas import UserQueryWithSaveStatusResponse
 from catchup.db.chat_room import get_all_queries_for_admin
 from catchup.db.dependencies import get_db
-from catchup.db.models import ChannelTalkManager
 from catchup.db.models import ConfluenceSpace
 from catchup.db.models import ConfluenceUser
 from catchup.db.models import GithubRepository
 from catchup.db.models import GitHubUser
-from catchup.db.models import JiraAccountType
 from catchup.db.models import JiraProject
 from catchup.db.models import JiraUser
 from catchup.db.models import OAuthUser
@@ -72,18 +66,14 @@ from catchup.server.admin.schemas import GithubAccount
 from catchup.server.admin.schemas import JiraAccount
 from catchup.server.admin.schemas import OAuthUserResponse
 from catchup.server.admin.schemas import PreMappingBulkUpdateRequest
-from catchup.server.admin.schemas import PreMappingInfo
 from catchup.server.admin.schemas import PromoteUserRequest
 from catchup.server.admin.schemas import PromoteUserResponse
 from catchup.server.admin.schemas import RevokeUserRequest
 from catchup.server.admin.schemas import RevokeUserResponse
 from catchup.server.admin.schemas import SlackAccount
-from catchup.server.admin.schemas import SourceUserCount
-from catchup.server.admin.schemas import SyncStatusCounts
 from catchup.server.admin.schemas import ToolUserResponse
 from catchup.server.admin.schemas import UserIntegrations
 from catchup.server.admin.schemas import UserResponse
-from catchup.server.admin.schemas import UserSyncMapping
 from catchup.server.auth.schemas import ConfluenceSyncableResponse
 from catchup.server.auth.schemas import ConfluenceSyncableSpace
 from catchup.server.auth.schemas import GithubSyncableRepository
@@ -365,74 +355,6 @@ def get_admin_user_detail(
     )
 
 
-# ============================
-# User Sync Status (pre-mapping)
-# ============================
-def _get_user_sync_counts(db: Session) -> SyncStatusCounts:
-    """협업 도구별 실제 사용자 수와 PreMappingBuffer 수를 집계한다."""
-    jira_users = (
-        db.query(func.count())
-        .select_from(JiraUser)
-        .filter(JiraUser.account_type == JiraAccountType.ATLASSIAN)
-        .scalar()
-    )
-    slack_users = (
-        db.query(func.count())
-        .select_from(SlackUser)
-        .filter(SlackUser.is_bot == False)  # noqa: E712
-        .scalar()
-    )
-    github_users = db.query(func.count()).select_from(GitHubUser).scalar()
-    confluence_users = (
-        db.query(func.count())
-        .select_from(ConfluenceUser)
-        .filter(ConfluenceUser.account_type == "atlassian")
-        .scalar()
-    )
-    channel_talk_managers = (
-        db.query(func.count())
-        .select_from(ChannelTalkManager)
-        .filter(
-            ChannelTalkManager.email.is_not(None),
-            ChannelTalkManager.removed.is_not(True),
-        )
-        .scalar()
-    )
-
-    premap_rows = (
-        db.query(PreMappingBuffer.source_type, func.count())
-        .group_by(PreMappingBuffer.source_type)
-        .all()
-    )
-    premap_map = {source_type: count for source_type, count in premap_rows}
-
-    return SyncStatusCounts(
-        jira=SourceUserCount(
-            users=jira_users or 0, premap=premap_map.get(SourceType.JIRA, 0)
-        ),
-        slack=SourceUserCount(
-            users=slack_users or 0, premap=premap_map.get(SourceType.SLACK, 0)
-        ),
-        github=SourceUserCount(
-            users=github_users or 0, premap=premap_map.get(SourceType.GITHUB, 0)
-        ),
-        confluence=SourceUserCount(
-            users=confluence_users or 0,
-            premap=premap_map.get(SourceType.CONFLUENCE, 0),
-        ),
-        channel_talk=SourceUserCount(
-            users=channel_talk_managers or 0,
-            premap=premap_map.get(SourceType.CHANNEL_TALK, 0),
-        ),
-    )
-
-
-class PremappingStatus(StrEnum):
-    ALL = "all"  # 모든 인원
-    FULL = "full"  # 모든 협업 툴에 대해 premapping이 생성된 경우
-    PARTIAL = "partial"  # 적어도 하나의 premapping이 이루어지지 않은 협업 툴이 존재하는 경우
-
-
 def _get_registered_user_id_by_sub(db: Session, sub: str) -> int | None:
     return db.scalar(
         select(OAuthUser.user_id).where(
@@ -476,189 +398,6 @@ def _upsert_registered_user_source_mapping(
         external_user_identifier=external_user_identifier,
     )
     return True
-
-
-def _get_user_sync_mappings(
-    db: Session, 
-    filter_type: PremappingStatus = PremappingStatus.ALL, 
-    skip: int = 0, 
-    limit: int = 50
-) -> tuple[list[UserSyncMapping], int]:
-    """협업 도구 매핑 현황 조회 (이메일 직접 조인 및 서브쿼리 최적화)"""
-
-    JMap = aliased(PreMappingBuffer)
-    SMap = aliased(PreMappingBuffer)
-    GMap = aliased(PreMappingBuffer)
-    CTMap = aliased(PreMappingBuffer)
-
-    SModel, _, s_email, s_xf, s_xf_val = SOURCE_MAP[SourceType.SLACK]
-    JModel, _, j_email, j_xf, j_xf_val = SOURCE_MAP[SourceType.JIRA]
-    GModel, _, g_email, _, _ = SOURCE_MAP[SourceType.GITHUB]
-    CTModel, _, ct_email, ct_xf, ct_xf_val = SOURCE_MAP[SourceType.CHANNEL_TALK]
-
-    base_users = (
-        select(
-            PreMappingBuffer.sub.label("sub"),
-            PreMappingBuffer.email.label("email"),
-            PreMappingBuffer.name.label("name")
-        )
-        .distinct(PreMappingBuffer.email)
-        .subquery()
-    )
-
-    base_stmt = (
-        select(
-            base_users.c.sub.label("sub"),
-            base_users.c.name.label("keycloak_name"),
-            base_users.c.email.label("keycloak_email"),
-            JModel, 
-            SModel, 
-            GModel,
-            CTModel,
-            JMap.id.label("j_map_id"),
-            SMap.id.label("s_map_id"),
-            GMap.id.label("g_map_id"),
-            CTMap.id.label("ct_map_id")
-        )
-        .select_from(base_users)
-        .outerjoin(
-            JModel,
-            and_(
-                func.lower(base_users.c.email) == func.lower(j_email),
-                _source_extra_condition(j_xf, j_xf_val),
-            ),
-        )
-        .outerjoin(
-            SModel,
-            and_(
-                func.lower(base_users.c.email) == func.lower(s_email),
-                _source_extra_condition(s_xf, s_xf_val),
-            ),
-        )
-        .outerjoin(GModel, func.lower(base_users.c.email) == func.lower(g_email))
-        .outerjoin(
-            CTModel,
-            and_(
-                func.lower(base_users.c.email) == func.lower(ct_email),
-                _source_extra_condition(ct_xf, ct_xf_val),
-            ),
-        )
-        .outerjoin(JMap, and_(base_users.c.email == JMap.email, JMap.source_type == SourceType.JIRA))
-        .outerjoin(SMap, and_(base_users.c.email == SMap.email, SMap.source_type == SourceType.SLACK))
-        .outerjoin(GMap, and_(base_users.c.email == GMap.email, GMap.source_type == SourceType.GITHUB))
-        .outerjoin(CTMap, and_(base_users.c.email == CTMap.email, CTMap.source_type == SourceType.CHANNEL_TALK))
-    )
-
-    # 필터링 적용
-    if filter_type == PremappingStatus.FULL:
-        base_stmt = base_stmt.where(
-            and_(
-                JMap.id.is_not(None),
-                SMap.id.is_not(None),
-                GMap.id.is_not(None),
-                CTMap.id.is_not(None),
-            )
-        )
-    elif filter_type == PremappingStatus.PARTIAL:
-        base_stmt = base_stmt.where(
-            or_(
-                JMap.id.is_(None),
-                SMap.id.is_(None),
-                GMap.id.is_(None),
-                CTMap.id.is_(None),
-            )
-        )
-
-    # 전체 개수 조회
-    count_stmt = select(func.count()).select_from(base_stmt.subquery())
-    total_count = db.scalar(count_stmt) or 0
-
-    # 데이터 조회
-    data_stmt = (
-        base_stmt
-        .order_by(base_users.c.email)
-        .offset(skip)
-        .limit(limit)
-    )
-    
-    rows = db.execute(data_stmt).all()    
-    
-    results = []
-    for row in rows:
-        jira_user = row.JiraUser
-        slack_user = row.SlackUser
-        github_user = row.GitHubUser
-        channel_talk_manager = row.ChannelTalkManager
-
-        # Jira 정보 조립
-        atlassian_info = PreMappingInfo(
-            name=getattr(jira_user, "display_name", None),
-            identifier=getattr(jira_user, "email_address", None),
-            picture=getattr(jira_user, "avatar_url", None)
-        ) if jira_user else None
-
-        # Slack 정보 조립
-        slack_info = PreMappingInfo(
-            name=getattr(slack_user, "real_name", None),
-            identifier=getattr(slack_user, "email", None),
-            picture=getattr(slack_user, "avatar_url", None)
-        ) if slack_user else None
-
-        # GitHub 정보 조립
-        github_info = PreMappingInfo(
-            name=getattr(github_user, "name", None) or getattr(github_user, "login", None),
-            identifier=getattr(github_user, "email", None),
-            picture=getattr(github_user, "avatar_url", None)
-        ) if github_user else None
-
-        # Channel Talk 정보 조립
-        channel_talk_info = PreMappingInfo(
-            name=getattr(channel_talk_manager, "name", None),
-            identifier=getattr(channel_talk_manager, "email", None),
-            picture=getattr(channel_talk_manager, "avatar_url", None)
-        ) if channel_talk_manager else None
-
-        results.append(UserSyncMapping(
-            sub=row.sub,
-            name=row.keycloak_name, 
-            email=row.keycloak_email,
-            atlassian=atlassian_info,
-            slack=slack_info,
-            github=github_info,
-            channel_talk=channel_talk_info
-        ))
-
-    return results, total_count
-
-
-@router.get(
-    path="/users/sync-status",
-    description="협업 도구 사용자/프리매핑 현황 및 사용자별 매핑 데이터 (admin 전용)",
-)
-def get_user_sync_status(
-    db: Session = Depends(get_db),
-    filter_type: str = Query(description="all, full, partial"),
-    page: int = Query(1, ge=1),
-    size: int = Query(50, ge=1, le=100),
-    _admin_user: User = Depends(require_admin_user)
-):
-    counts = _get_user_sync_counts(db)
-    
-    skip = calculate_skip(page, size)
-    mappings, total_count = _get_user_sync_mappings(
-        db=db, 
-        filter_type=filter_type, 
-        skip=skip, 
-        limit=size
-    )
-        
-    return {
-        "total": total_count,
-        "page": page,
-        "size": size,
-        "items": mappings,
-        "counts": counts
-    }
 
 
 @router.post(

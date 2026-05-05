@@ -182,14 +182,9 @@ class ChannelTalkUserSyncMappingApiTests(TestCase):
         self.assertIsNotNone(source_mapping)
         self.assertEqual(source_mapping.external_user_identifier, "manager-1")
 
-    def test_sync_status_includes_channel_talk_counts_and_mapping_info(self) -> None:
+    def test_sync_status_endpoint_is_removed(self) -> None:
         self._add_registered_oauth_user()
         self._add_channel_talk_manager()
-        self._add_channel_talk_manager(
-            manager_id="removed-manager",
-            email="removed@example.com",
-            removed=True,
-        )
         sync_users_to_pre_mapping_buffer(self.db, SourceType.CHANNEL_TALK)
         self.db.commit()
 
@@ -198,19 +193,7 @@ class ChannelTalkUserSyncMappingApiTests(TestCase):
             params={"filter_type": "all", "page": 1, "size": 50},
         )
 
-        self.assertEqual(response.status_code, 200)
-        payload = response.json()
-        self.assertEqual(payload["counts"]["channel_talk"], {"users": 1, "premap": 1})
-        self.assertEqual(payload["total"], 1)
-        self.assertEqual(payload["items"][0]["channel_talk"]["name"], "Agent Kim")
-        self.assertEqual(
-            payload["items"][0]["channel_talk"]["identifier"],
-            "agent@example.com",
-        )
-        self.assertEqual(
-            payload["items"][0]["channel_talk"]["picture"],
-            "https://example.com/manager-1.png",
-        )
+        self.assertEqual(response.status_code, 404)
 
     def test_channel_talk_vendor_users_excludes_removed_managers(self) -> None:
         self._add_channel_talk_manager(manager_id="active-manager")

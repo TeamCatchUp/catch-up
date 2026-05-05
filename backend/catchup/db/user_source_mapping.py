@@ -1,6 +1,7 @@
 from typing import Optional
 
 from sqlalchemy import delete
+from sqlalchemy import func
 from sqlalchemy import select
 from sqlalchemy import update
 from sqlalchemy.dialects.postgresql import insert
@@ -64,6 +65,64 @@ def find_external_user_id_by_email(
         stmt = stmt.where(extra_condition)
 
     return db.scalar(stmt)
+
+
+def find_external_user_id_by_email_case_insensitive(
+    db: Session,
+    source_type: SourceType,
+    email: str,
+) -> Optional[str]:
+    """사내 이메일을 대소문자 무시 기준으로 외부 사용자 식별자에 매칭한다."""
+
+    target = SOURCE_MAP.get(source_type)
+    if not target or not email:
+        return None
+
+    model, target_col, filter_col, extra_col, extra_val = target
+    stmt = (
+        select(target_col)
+        .select_from(model)
+        .where(
+            filter_col.is_not(None),
+            target_col.is_not(None),
+            func.lower(filter_col) == email.lower(),
+        )
+    )
+
+    if (extra_condition := _source_extra_condition(extra_col, extra_val)) is not None:
+        stmt = stmt.where(extra_condition)
+
+    synced_at = getattr(model, "synced_at", None)
+    if synced_at is not None:
+        stmt = stmt.order_by(synced_at.desc())
+
+    return db.scalar(stmt)
+
+
+def insert_user_source_mapping_if_absent(
+    db: Session,
+    *,
+    user_id: int,
+    source_type: SourceType,
+    external_user_identifier: str,
+) -> bool:
+    """기존 매핑을 덮어쓰지 않고 없는 사용자-소스 매핑만 추가한다."""
+
+    exists_stmt = select(UserSourceMapping.id).where(
+        UserSourceMapping.user_id == user_id,
+        UserSourceMapping.source_type == source_type,
+    )
+    if db.scalar(exists_stmt) is not None:
+        return False
+
+    db.add(
+        UserSourceMapping(
+            user_id=user_id,
+            source_type=source_type,
+            external_user_identifier=external_user_identifier,
+        )
+    )
+    return True
 
 
 def update_tool_user_email(
