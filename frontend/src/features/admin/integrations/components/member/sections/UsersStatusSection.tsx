@@ -5,7 +5,10 @@ import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-q
 import dynamic from 'next/dynamic';
 import { toast } from 'sonner';
 
+import IconDivider from '@/public/icons/icon/divider.svg';
 import IconEditPencil from '@/public/icons/icon/edit_pencil.svg';
+import IconError from '@/public/icons/icon/error.svg';
+import IconTodo from '@/public/icons/icon/todo.svg';
 import api from '@/shared/api/client';
 import { API } from '@/shared/api/endpoints';
 import { Button } from '@/shared/components/ui/button';
@@ -162,10 +165,16 @@ export default function UsersStatusSection({
   const refreshMappingMutation = useMutation({
     ...userSourceMappingMutations.refresh(),
     onSuccess: () => {
-      toast('동기화가 완료되었습니다.', { description: '이용자 매핑 정보가 갱신되었습니다.' });
+      toast('이용자 DB 동기화 성공', { description: '데이터가 정상적으로 반영되었습니다.' });
     },
     onError: () => {
-      toast('일시적인 오류가 발생했습니다.', { description: '잠시 후 다시 시도해주세요.' });
+      toast(
+        <span className="flex items-center justify-center gap-2">
+          <IconError className="size-6" />
+          <span>이용자 DB 동기화 실패</span>
+        </span>,
+        { description: '잠시 후 다시 시도해주세요.' },
+      );
     },
   });
 
@@ -301,18 +310,8 @@ export default function UsersStatusSection({
           })}
         </div>
 
-        {/* 버튼 영역 */}
+        {/* 버튼 영역: SSO/DB 동기화 그룹 → divider → CSV/수정 그룹 */}
         <div className="flex items-center gap-2">
-          <Button
-            variant="box-outline-gray"
-            size="md"
-            className="text-body-small h-9"
-            disabled={refreshMappingMutation.isPending}
-            onClick={() => refreshMappingMutation.mutate()}
-          >
-            이용자 DB 동기화
-          </Button>
-
           <Button
             variant="box-outline-gray"
             size="md"
@@ -327,9 +326,22 @@ export default function UsersStatusSection({
             variant="box-outline-gray"
             size="md"
             className="text-body-small h-9"
+            disabled={refreshMappingMutation.isPending}
+            onClick={() => refreshMappingMutation.mutate()}
+          >
+            이용자 DB 동기화
+          </Button>
+
+          <IconDivider className="text-edge-strong h-6 w-6 shrink-0" />
+
+          <Button
+            variant="box-outline-gray"
+            size="md"
+            className="text-body-small flex h-9 items-center gap-1.5"
             onClick={() => setIsCsvModalOpen(true)}
           >
-            CSV 일괄등록
+            <IconTodo className="h-5 w-5" />
+            CSV 일괄 등록
           </Button>
 
           {isEditMode ? (
