@@ -1,6 +1,7 @@
 import uuid
 from datetime import datetime
-from typing import Annotated, Any
+from typing import Annotated
+from typing import Any
 from typing import Literal
 from typing import Optional
 from typing import Union
@@ -14,7 +15,6 @@ from catchup.db.models import FeedbackLiteral
 from catchup.db.models import SenderType
 from catchup.db.models import SourceType
 from catchup.db.models import UserRole
-from catchup.rag.schemas.sources import BaseSource
 from catchup.rag.schemas.sources import SourceResponse
 
 # stream processor가 on_chain_start 시점에 in_progress 이벤트를 발행할 노드 목록.
@@ -119,6 +119,10 @@ class ChatHistoryResponse(BaseModel):
     sources: Optional[list[SourceResponse]] = Field(default_factory=list, description="출처 목록 (sender_type='assistant'인 경우에만 존재)")
     is_liked: Optional[bool] = Field(default=None, description="답변 평가 여부 (True: 긍정, False: 부정, None: 없음)")
     is_saved: bool = Field(default=False, description="사용자의 답변 저장 여부")
+    pipeline_result: list[dict] | None = Field(
+        default=None,
+        description="RAG 파이프라인 노드별 status 이벤트 (sender_type='assistant'인 경우에만 존재)"
+    )
 
     model_config = ConfigDict(from_attributes=True)
     
