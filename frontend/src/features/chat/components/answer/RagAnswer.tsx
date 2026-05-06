@@ -73,10 +73,11 @@ export default function RagAnswer({
     [formattedAnswerContent, validIndices],
   );
 
-  const answerContent = currentQA?.answer?.content ?? '';
-  const hasAnswer = Boolean(currentQA?.answer);
+  const answer = currentQA?.answer;
+  const answerContent = answer?.content ?? '';
+  const hasAnswer = Boolean(answer);
   const showAnswerMarkdown = hasAnswer && answerContent.length > 0;
-  const showFinishedSections = !isLoading && hasAnswer && answerContent.length > 0;
+  const finishedAnswer = !isLoading && answer && answerContent.length > 0 ? answer : null;
   const showInlineError = !isLoading && hasAnswer && answerContent.length === 0;
   const showSkeleton =
     isLoading &&
@@ -97,37 +98,37 @@ export default function RagAnswer({
         <div className="markdown-body wrap-break-word max-w-192.75">
           <ReactMarkdown
             remarkPlugins={[remarkGfm, remarkBreaks]}
-            components={MarkDownComponents(currentQA?.answer?.sources, citationOrderMap)}
+            components={MarkDownComponents(answer?.sources, citationOrderMap)}
           >
             {formattedAnswerContent}
           </ReactMarkdown>
         </div>
       )}
 
-      {showFinishedSections && (
+      {finishedAnswer && currentQA && (
         <>
           <div className="text-body-small text-content-assistive">
-            질문과 연관된 {currentQA?.answer?.sources?.length ?? 0}개의 핵심 자료를 선별했어요.
+            질문과 연관된 {finishedAnswer.sources?.length ?? 0}개의 핵심 자료를 선별했어요.
           </div>
           <AnswerActionButtons
             icons={ANSWER_ICONS}
-            messageId={currentQA!.answer!.id}
+            messageId={finishedAnswer.id}
             answerContent={answerContent}
             sessionId={sessionId}
-            chatHistoryId={currentQA!.answer!.chat_history_id}
-            hasFeedback={currentQA!.answer!.has_feedback}
-            isLiked={currentQA!.answer!.is_liked}
-            isSaved={currentQA!.answer!.is_saved}
+            chatHistoryId={finishedAnswer.chat_history_id}
+            hasFeedback={finishedAnswer.has_feedback}
+            isLiked={finishedAnswer.is_liked}
+            isSaved={finishedAnswer.is_saved}
             feedbackVisibleMap={feedbackVisibleMap}
             setFeedbackVisibleMap={setFeedbackVisibleMap}
-            onRetry={() => onRetry?.(currentQA!.question.id, currentQA!.question.content)}
+            onRetry={() => onRetry?.(currentQA.question.id, currentQA.question.content)}
             onFeedbackSubmitted={onFeedbackSubmitted}
           />
           <FeedbackSection
-            messageId={currentQA!.answer!.id}
+            messageId={finishedAnswer.id}
             sessionId={sessionId}
-            chatHistoryId={currentQA!.answer!.chat_history_id}
-            hasFeedback={currentQA!.answer!.has_feedback}
+            chatHistoryId={finishedAnswer.chat_history_id}
+            hasFeedback={finishedAnswer.has_feedback}
             feedbackVisibleMap={feedbackVisibleMap}
             setFeedbackVisibleMap={setFeedbackVisibleMap}
             onFeedbackSubmitted={onFeedbackSubmitted}
@@ -140,7 +141,7 @@ export default function RagAnswer({
           icons={ANSWER_ICONS}
           messageId={`error_${sessionId}`}
           sessionId={sessionId}
-          hasFeedback={currentQA?.answer?.has_feedback}
+          hasFeedback={answer?.has_feedback}
           feedbackVisibleMap={feedbackVisibleMap}
           setFeedbackVisibleMap={setFeedbackVisibleMap}
         />
