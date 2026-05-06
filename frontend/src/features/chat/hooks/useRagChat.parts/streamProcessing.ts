@@ -1,12 +1,12 @@
 import { useCallback } from 'react';
 
-import { NODE_TO_UI_STEP } from '@/features/chat/constants/chatConfig';
 import {
   appendStreamingToken,
   deriveCitedFromAnswerContent,
   updateStreamingSources,
 } from '@/features/chat/hooks/useRagChat.parts/streamMessageUpdater';
-import type { SourceResponse, StreamEvent } from '@/features/chat/types';
+import { upsertStepRow } from '@/features/chat/hooks/useRagChat.parts/upsertStepRow';
+import type { PipelineQueryType, SourceResponse, StreamEvent } from '@/features/chat/types';
 import { normalizeStreamSources } from '@/features/chat/utils/normalize/normalizeRagSources';
 
 import type { ChatStateSetters, SessionGuardRefs, StreamRuntimeRefs } from './types';
@@ -64,7 +64,15 @@ export const useStreamProcessing = ({
   // ---------------------------------------------------------------------------
   // Shared setters/refs
   // ---------------------------------------------------------------------------
-  const { setChatData, setIsLoading, setIsError, setCurrentStep } = stateSetters;
+  const {
+    setChatData,
+    setIsLoading,
+    setIsError,
+    setStepRows,
+    setPipelineQueryType,
+    setTopic,
+    setPipelineReasoning,
+  } = stateSetters;
   const { canReplacePlaceholderRef } = sessionRefs;
   const {
     streamingMessageIdRef,
@@ -91,14 +99,21 @@ export const useStreamProcessing = ({
     canReplacePlaceholderRef.current = false;
     setIsLoading(true);
     setIsError(false);
-    setCurrentStep('router');
+    // step history reset (결정 12 F1)
+    setStepRows([]);
+    setPipelineQueryType(null);
+    setTopic(null);
+    setPipelineReasoning(null);
   }, [
     canReplacePlaceholderRef,
     resetStopped,
     resetStreamStateRefs,
-    setCurrentStep,
     setIsError,
     setIsLoading,
+    setPipelineQueryType,
+    setPipelineReasoning,
+    setStepRows,
+    setTopic,
     streamInFlightRef,
   ]);
 
@@ -141,8 +156,7 @@ export const useStreamProcessing = ({
     if (isStopped()) return;
 
     setIsLoading(false);
-    setCurrentStep('router');
-  }, [isStopped, setCurrentStep, setIsLoading, streamInFlightRef]);
+  }, [isStopped, setIsLoading, streamInFlightRef]);
 
   /**
    * result 이벤트를 assistant 메시지에 반영
@@ -273,7 +287,6 @@ export const useStreamProcessing = ({
     });
 
     setIsLoading(false);
-    setCurrentStep('router');
     streamingMessageIdRef.current = null;
     streamInFlightRef.current = false;
 
@@ -295,7 +308,6 @@ export const useStreamProcessing = ({
     refreshRecentChatsNow,
     resolvedSessionIdRef,
     setChatData,
-    setCurrentStep,
     setIsError,
     setIsLoading,
     streamInFlightRef,
@@ -308,8 +320,9 @@ export const useStreamProcessing = ({
   // ---------------------------------------------------------------------------
   /**
    * SSE 이벤트 라우터
-   * - status: 단계(progress) 업데이트
-   * - token/sources: 메시지 내용 업데이트
+   * - process: 답변 생성 과정(node × status × reasoning/content) -> step rows 누적
+   * - sources: 출처 목록
+   * - token: 답변 마크다운 stream chunk
    */
   const handleStreamEvent = useCallback(
     (event: StreamEvent) => {
@@ -320,11 +333,22 @@ export const useStreamProcessing = ({
       if (isStopped()) return;
 
       switch (event.type) {
-        case 'status': {
-          // 백엔드 node명을 UI 단계로 매핑
-          const mappedStep = NODE_TO_UI_STEP[event.node];
-          if (mappedStep === null || mappedStep === undefined) return;
-          setCurrentStep(mappedStep);
+        case 'process': {
+          const { node, status, reasoning = null, content = null } = event;
+
+          // G3: error는 별도 처리하지 않음. 기존 isError 흐름이 stream 종료 시 처리한다.
+          if (status === 'error') break;
+
+          // supervisor completed: pipeline 분류 / topic / reasoning을 별도 채널로 분배
+          if (node === 'supervisor' && status === 'completed' && content) {
+            const c = content as { query_type?: PipelineQueryType; query_topic?: string };
+            if (c.query_type) setPipelineQueryType(c.query_type);
+            if (c.query_topic) setTopic(c.query_topic);
+            if (reasoning) setPipelineReasoning(reasoning);
+          }
+
+          // F1: stepRows는 항상 누적 (마운트 게이트는 RagAnswerSkeleton 마운트 조건에서)
+          setStepRows((prev) => upsertStepRow(prev, { node, status, reasoning, content }));
           break;
         }
         case 'sources': {
@@ -346,7 +370,10 @@ export const useStreamProcessing = ({
       hasStreamedTokenRef,
       isStopped,
       resolveSessionIdFromStream,
-      setCurrentStep,
+      setPipelineQueryType,
+      setPipelineReasoning,
+      setStepRows,
+      setTopic,
     ],
   );
 

@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState } from 'react';
 
+import StepHistoryScroller from '@/features/chat/components/skeleton/StepHistoryScroller';
+import type { PipelineQueryType, StepRow } from '@/features/chat/types';
 import type { QAPair } from '@/features/chat/utils/render/chat';
 import { cn } from '@/shared/utils/cn';
 
@@ -10,10 +12,21 @@ import SourceList from './source/SourceList';
 const SIDEBAR_FADE_MS = 160;
 const SIDEBAR_SHIFT_PX = 8;
 
+const SHOWING_PIPELINE_TYPES: ReadonlySet<PipelineQueryType> = new Set([
+  'simple',
+  'standard',
+  'complex',
+]);
+
 interface RagSidebarProps {
   currentQA: QAPair | undefined;
   isLoading: boolean;
   isError: boolean;
+  /** 답변 생성 과정 step rows (스트림 중인 마지막 QA pair에서만 의미 있음) */
+  stepRows: StepRow[];
+  topic: string | null;
+  pipelineQueryType: PipelineQueryType | null;
+  pipelineReasoning: string | null;
 }
 
 const usePrefersReducedMotion = () => {
@@ -36,7 +49,15 @@ const usePrefersReducedMotion = () => {
   return prefersReducedMotion;
 };
 
-export default function RagSidebar({ currentQA, isLoading, isError }: RagSidebarProps) {
+export default function RagSidebar({
+  currentQA,
+  isLoading,
+  isError,
+  stepRows,
+  topic,
+  pipelineQueryType,
+  pipelineReasoning,
+}: RagSidebarProps) {
   const [displayQA, setDisplayQA] = useState<QAPair | undefined>(currentQA);
   const [isVisible, setIsVisible] = useState(true);
   const transitionTimerRef = useRef<number | null>(null);
@@ -97,20 +118,30 @@ export default function RagSidebar({ currentQA, isLoading, isError }: RagSidebar
     ? undefined
     : { transform: `translateY(${isVisible ? 0 : SIDEBAR_SHIFT_PX}px)` };
 
+  // 결정 1 D: 사이드바 영역에서 isLoading 중에는 답변 생성 과정(RagAnswerSkeleton),
+  // 종료 시점부터는 SourceList(원래 자리)를 보여준다.
+  // D1: simple/standard/complex일 때만 step UI 마운트.
+  const showStepSkeleton =
+    isLoading && pipelineQueryType !== null && SHOWING_PIPELINE_TYPES.has(pipelineQueryType);
+
   return (
     <div className="border-edge-neutral bg-fill-normal hidden w-108.75 flex-none flex-col border-l lg:flex">
       <div
         className={cn('flex min-h-0 flex-1 flex-col overflow-hidden', transitionClass)}
         style={transitionStyle}
       >
-        <SourceList
-          sources={sources}
-          answerContent={answerContent}
-          isLoading={isLoading}
-          isError={isError}
-          transitionKey={transitionKey}
-          prefersReducedMotion={prefersReducedMotion}
-        />
+        {showStepSkeleton ? (
+          <StepHistoryScroller stepRows={stepRows} topic={topic} />
+        ) : (
+          <SourceList
+            sources={sources}
+            answerContent={answerContent}
+            isLoading={isLoading}
+            isError={isError}
+            transitionKey={transitionKey}
+            prefersReducedMotion={prefersReducedMotion}
+          />
+        )}
       </div>
     </div>
   );

@@ -1,20 +1,34 @@
 'use client';
 
-import RagStepSkeleton from '@/features/chat/components/skeleton/RagStepSkeleton';
-import { RAG_UI_STEPS } from '@/features/chat/constants/steps';
-import type { RagUIStepKey } from '@/features/chat/types';
+import AnswerSkeletonLines from '@/features/chat/components/skeleton/AnswerSkeletonLines';
+import PipelineTypeBanner from '@/features/chat/components/skeleton/PipelineTypeBanner';
+import type { PipelineQueryType } from '@/features/chat/types';
 
-interface Props {
-  currentStep: RagUIStepKey;
+/**
+ * 답변 본문 영역에 마운트되는 skeleton.
+ *
+ * 결정 1 D + 사용자 추가 정정:
+ *  - 답변 본문(메시지 wrapper):
+ *      [PipelineTypeBanner 한 줄 헤더] + [AnswerSkeletonLines 5줄 placeholder]
+ *  - 사이드바(RagSidebar): TopicHeader + StepHistory (chip 박스 포함)
+ *
+ * 결정 10 D1: 호출자가 simple/standard/complex일 때만 마운트한다.
+ * 호출자(RagAnswer)가 답변 token 첫 도착 시점부터 unmount.
+ */
+
+interface RagAnswerSkeletonProps {
+  pipelineType: PipelineQueryType | null;
+  pipelineReasoning: string | null;
 }
 
-export default function RagAnswerSkeleton({ currentStep }: Props) {
-  if (currentStep === 'manage_pr_context') {
-    return null;
-  }
-
-  const step = RAG_UI_STEPS[currentStep];
-  if (!step) return null;
-
-  return <RagStepSkeleton stepKey={currentStep} label={step.label} Icon={step.Icon} />;
+export default function RagAnswerSkeleton({
+  pipelineType,
+  pipelineReasoning,
+}: RagAnswerSkeletonProps) {
+  return (
+    <div className="flex w-full flex-col gap-5">
+      <PipelineTypeBanner pipelineType={pipelineType} pipelineReasoning={pipelineReasoning} />
+      <AnswerSkeletonLines />
+    </div>
+  );
 }

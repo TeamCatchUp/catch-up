@@ -6,7 +6,7 @@ import remarkBreaks from 'remark-breaks';
 import remarkGfm from 'remark-gfm';
 
 import RagAnswerSkeleton from '@/features/chat/components/skeleton/RagAnswerSkeleton';
-import type { RagUIStepKey } from '@/features/chat/types';
+import type { PipelineQueryType } from '@/features/chat/types';
 import type { QAPair } from '@/features/chat/utils/render/chat';
 import { formatMarkdownString } from '@/features/chat/utils/render/markdown';
 import Bookmark from '@/public/icons/icon/bookmark.svg';
@@ -32,26 +32,42 @@ const ANSWER_ICONS = [
   { name: 'Rotate', icon: Rotate },
 ];
 
+/** D1: simple/standard/complex일 때만 RagAnswerSkeleton(PipelineTypeBanner)을 마운트 */
+const SHOWING_PIPELINE_TYPES: ReadonlySet<PipelineQueryType> = new Set([
+  'simple',
+  'standard',
+  'complex',
+]);
+
 interface RagAnswerProps {
   currentQA: QAPair | undefined;
   sessionId: string;
   isLoading: boolean;
   isError: boolean;
-  currentStep: RagUIStepKey;
+  /** PipelineTypeBanner용 — 마지막 QA pair에서만 의미 있음 */
+  pipelineQueryType: PipelineQueryType | null;
+  pipelineReasoning: string | null;
   onFeedbackSubmitted: (messageId: string, isLiked: boolean | undefined) => void;
   onRetry?: (questionId: string, questionContent: string) => void;
 }
 
+/**
+ * 답변 본문 영역.
+ *
+ * 결정 1 D + 사용자 정정:
+ *  - 답변 본문 상단: `PipelineTypeBanner` (RagAnswerSkeleton 내부)
+ *  - 사이드바: `TopicHeader` + `StepHistory` (RagSidebar에서 마운트)
+ */
 export default function RagAnswer({
   currentQA,
   sessionId,
   isLoading,
   isError,
-  currentStep,
+  pipelineQueryType,
+  pipelineReasoning,
   onFeedbackSubmitted,
   onRetry,
 }: RagAnswerProps) {
-  // 섹션 로컬 UI 상태
   const [feedbackVisibleMap, setFeedbackVisibleMap] = useState<Record<string, boolean>>({});
   const formattedAnswerContent = useMemo(
     () => formatMarkdownString(currentQA?.answer?.content ?? ''),
@@ -66,76 +82,76 @@ export default function RagAnswer({
     [formattedAnswerContent, validIndices],
   );
 
-  // 답변이 있는 경우
-  if (currentQA?.answer) {
-    return (
-      <div className="flex flex-col gap-2">
-        {currentQA.answer.content ? (
-          <>
-            {/* 마크다운 답변 */}
-            <div className="markdown-body wrap-break-word max-w-192.75">
-              <ReactMarkdown
-                remarkPlugins={[remarkGfm, remarkBreaks]}
-                components={MarkDownComponents(currentQA.answer.sources, citationOrderMap)}
-              >
-                {formattedAnswerContent}
-              </ReactMarkdown>
-            </div>
+  const answerContent = currentQA?.answer?.content ?? '';
+  const hasAnswer = Boolean(currentQA?.answer);
+  const showAnswerMarkdown = hasAnswer && answerContent.length > 0;
+  const showFinishedSections = !isLoading && hasAnswer && answerContent.length > 0;
+  const showInlineError = !isLoading && hasAnswer && answerContent.length === 0;
+  // PipelineTypeBanner는 답변 token이 도착하는 순간 unmount.
+  // 사이드바의 step history는 별도 (RagSidebar에서 isLoading 종료까지 유지).
+  const showSkeleton =
+    isLoading &&
+    pipelineQueryType !== null &&
+    SHOWING_PIPELINE_TYPES.has(pipelineQueryType) &&
+    answerContent.length === 0;
 
-            <div className="text-body-small text-content-assistive">
-              질문과 연관된 {currentQA.answer.sources?.length || 0}개의 핵심 자료를 선별했어요.
-            </div>
+  return (
+    <div className="flex flex-col gap-2">
+      {showSkeleton && (
+        <RagAnswerSkeleton
+          pipelineType={pipelineQueryType}
+          pipelineReasoning={pipelineReasoning}
+        />
+      )}
 
-            {/* 액션 버튼 */}
-            <AnswerActionButtons
-              icons={ANSWER_ICONS}
-              messageId={currentQA.answer.id}
-              answerContent={currentQA.answer.content}
-              sessionId={sessionId}
-              chatHistoryId={currentQA.answer.chat_history_id}
-              hasFeedback={currentQA.answer.has_feedback}
-              isLiked={currentQA.answer.is_liked}
-              isSaved={currentQA.answer.is_saved}
-              feedbackVisibleMap={feedbackVisibleMap}
-              setFeedbackVisibleMap={setFeedbackVisibleMap}
-              onRetry={() => onRetry?.(currentQA.question.id, currentQA.question.content)}
-              onFeedbackSubmitted={onFeedbackSubmitted}
-            />
+      {showAnswerMarkdown && (
+        <div className="markdown-body wrap-break-word max-w-192.75">
+          <ReactMarkdown
+            remarkPlugins={[remarkGfm, remarkBreaks]}
+            components={MarkDownComponents(currentQA?.answer?.sources, citationOrderMap)}
+          >
+            {formattedAnswerContent}
+          </ReactMarkdown>
+        </div>
+      )}
 
-            {/* 피드백 */}
-            <FeedbackSection
-              messageId={currentQA.answer.id}
-              sessionId={sessionId}
-              chatHistoryId={currentQA.answer.chat_history_id}
-              hasFeedback={currentQA.answer.has_feedback}
-              feedbackVisibleMap={feedbackVisibleMap}
-              setFeedbackVisibleMap={setFeedbackVisibleMap}
-              onFeedbackSubmitted={onFeedbackSubmitted}
-            />
-          </>
-        ) : (
-          <AnswerError
+      {showFinishedSections && (
+        <>
+          <div className="text-body-small text-content-assistive">
+            질문과 연관된 {currentQA?.answer?.sources?.length ?? 0}개의 핵심 자료를 선별했어요.
+          </div>
+          <AnswerActionButtons
             icons={ANSWER_ICONS}
-            messageId={`error_${sessionId}`}
+            messageId={currentQA!.answer!.id}
+            answerContent={answerContent}
             sessionId={sessionId}
-            hasFeedback={currentQA.answer.has_feedback}
+            chatHistoryId={currentQA!.answer!.chat_history_id}
+            hasFeedback={currentQA!.answer!.has_feedback}
+            isLiked={currentQA!.answer!.is_liked}
+            isSaved={currentQA!.answer!.is_saved}
             feedbackVisibleMap={feedbackVisibleMap}
             setFeedbackVisibleMap={setFeedbackVisibleMap}
+            onRetry={() => onRetry?.(currentQA!.question.id, currentQA!.question.content)}
+            onFeedbackSubmitted={onFeedbackSubmitted}
           />
-        )}
-      </div>
-    );
-  }
+          <FeedbackSection
+            messageId={currentQA!.answer!.id}
+            sessionId={sessionId}
+            chatHistoryId={currentQA!.answer!.chat_history_id}
+            hasFeedback={currentQA!.answer!.has_feedback}
+            feedbackVisibleMap={feedbackVisibleMap}
+            setFeedbackVisibleMap={setFeedbackVisibleMap}
+            onFeedbackSubmitted={onFeedbackSubmitted}
+          />
+        </>
+      )}
 
-  // 답변이 없는 경우 (로딩/에러)
-  return (
-    <div>
-      {isLoading && !currentQA?.answer && <RagAnswerSkeleton currentStep={currentStep} />}
-      {isError && (
+      {(showInlineError || isError) && (
         <AnswerError
           icons={ANSWER_ICONS}
           messageId={`error_${sessionId}`}
           sessionId={sessionId}
+          hasFeedback={currentQA?.answer?.has_feedback}
           feedbackVisibleMap={feedbackVisibleMap}
           setFeedbackVisibleMap={setFeedbackVisibleMap}
         />

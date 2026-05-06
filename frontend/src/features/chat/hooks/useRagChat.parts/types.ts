@@ -1,6 +1,12 @@
 import type { Dispatch, RefObject, SetStateAction } from 'react';
 
-import type { ChatData, ChatSource, RagUIStepKey, SourceResponse } from '@/features/chat/types';
+import type {
+  ChatData,
+  ChatSource,
+  PipelineQueryType,
+  SourceResponse,
+  StepRow,
+} from '@/features/chat/types';
 
 /**
  * useRagChat 입력 파라미터
@@ -25,7 +31,14 @@ export interface UseRagChatReturn {
   resolvedSessionId: string | undefined;
   isLoading: boolean;
   isError: boolean;
-  currentStep: RagUIStepKey;
+  /** 답변 생성 과정 step rows (스트림 중 누적, 종료 시 화면에서 unmount) */
+  stepRows: StepRow[];
+  /** supervisor가 결정한 파이프라인 분류 (RagAnswerSkeleton 마운트 게이트) */
+  pipelineQueryType: PipelineQueryType | null;
+  /** supervisor가 추출한 질문 topic (TopicHeader) */
+  topic: string | null;
+  /** supervisor reasoning (PipelineTypeBanner 멘트) */
+  pipelineReasoning: string | null;
   sendMessage: (message: string) => Promise<void>;
   submitEdit: (messageId: string, newContent: string) => Promise<void>;
   handleStop: () => void;
@@ -90,5 +103,8 @@ export interface ChatStateSetters {
   setChatData: Dispatch<SetStateAction<ChatData | null>>;
   setIsLoading: Dispatch<SetStateAction<boolean>>;
   setIsError: Dispatch<SetStateAction<boolean>>;
-  setCurrentStep: Dispatch<SetStateAction<RagUIStepKey>>;
+  setStepRows: Dispatch<SetStateAction<StepRow[]>>;
+  setPipelineQueryType: Dispatch<SetStateAction<PipelineQueryType | null>>;
+  setTopic: Dispatch<SetStateAction<string | null>>;
+  setPipelineReasoning: Dispatch<SetStateAction<string | null>>;
 }
