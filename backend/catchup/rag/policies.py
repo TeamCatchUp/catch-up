@@ -32,13 +32,8 @@ def get_node_completed_payload(node: str, output_data: dict) -> dict | None:
         return {"reasoning": f"{count}건의 문서를 찾았어요."}
 
     if node == "rerank":
-        from catchup.rag.nodes.utils import build_doc_groups
-        docs = output_data.get("retrieved_docs", [])
-        groups = build_doc_groups(docs)
-        source_distribution: dict[str, int] = {}
-        for group in groups:
-            source = group.representative.metadata.get("source", "unknown")
-            source_distribution[source] = source_distribution.get(source, 0) + 1
+        metadata = output_data.get("rerank_metadata") or {}
+        source_distribution = metadata.get("source_distribution")
         return {"content": {"source_distribution": source_distribution}}
 
     return None
