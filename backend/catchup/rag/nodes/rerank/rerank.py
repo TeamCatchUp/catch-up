@@ -1,4 +1,5 @@
 import time
+from collections import Counter
 from collections import defaultdict
 from copy import deepcopy
 
@@ -7,6 +8,7 @@ from langchain_core.documents import Document
 
 from catchup.components.reranker.service import BaseRerankService
 from catchup.configs.config import settings
+from catchup.rag.nodes.utils import build_doc_groups
 from catchup.rag.nodes.utils import get_document_id
 from catchup.rag.nodes.utils import log_node
 from catchup.rag.semaphores import rag_semaphores
@@ -118,6 +120,14 @@ async def rerank_node(state: AgentState, rerank_service: BaseRerankService):
                 confirmed_indices.append(idx)
         rerank_metadata["confirmed_essential_count"] = len(confirmed_essential)
         rerank_metadata["confirmed_essential_indices"] = confirmed_indices
+
+        groups = build_doc_groups(final_docs)
+        rerank_metadata["source_distribution"] = dict(
+            Counter(
+                g.representative.metadata.get("source", "unknown")
+                for g in groups
+            )
+        )
 
         logger.info(
             "rerank_node_completed",
