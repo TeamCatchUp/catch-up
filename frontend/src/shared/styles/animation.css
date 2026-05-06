@@ -10,9 +10,9 @@
    - 모든 transition/animation의 timing은 이 토큰을 통해 일관성 유지
    ======================================================================== */
 @theme {
-  --animate-duration-fast: 150ms; /* hover, micro-feedback */
-  --animate-duration-base: 200ms; /* 표준 진입/퇴장 */
-  --animate-duration-slow: 300ms; /* 큰 layout shift, 모달 등 */
+  --animate-duration-fast: 300ms; /* hover, micro-feedback */
+  --animate-duration-base: 500ms; /* 표준 진입/퇴장 */
+  --animate-duration-slow: 700ms; /* 큰 layout shift, 모달 등 */
 }
 
 /* ========================================================================
@@ -38,11 +38,7 @@
   }
 }
 
-/* ========================================================================
-   Shimmer
-   - 선형 그라디언트가 좌→우로 흘러 로딩 라인을 강조
-   - 답변 본문 도착 전 RagAnswerSkeleton의 line placeholder에 사용
-   ======================================================================== */
+/* Shimmer — 선형 그라디언트가 좌→우로 흘러 로딩 라인 강조. */
 @keyframes shimmer {
   0% {
     background-position: -200% 0;
