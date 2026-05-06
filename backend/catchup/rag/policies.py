@@ -7,10 +7,12 @@ def get_node_inprogress_payload(node: str, input_data: dict) -> dict | None:
     if node == "search_vector_db":
         queries = input_data.get("vector_search_queries", [])
         return {
-            "content": [
-                {"vector": q.query, "keyword": q.keyword_tokens}
-                for q in queries
-            ]
+            "content": {
+                "queries": [
+                    {"vector": q.query, "keyword": q.keyword_tokens}
+                    for q in queries
+                ]
+            }
         }
     return None
 
@@ -23,7 +25,7 @@ def get_node_completed_payload(node: str, output_data: dict) -> dict | None:
     """
     if node == "rewrite":
         rewritten = output_data.get("rewritten_query")
-        return {"content": rewritten} if rewritten else None
+        return {"content": {"query": rewritten}} if rewritten else None
 
     if node == "search_vector_db":
         count = len(output_data.get("retrieved_docs", []))

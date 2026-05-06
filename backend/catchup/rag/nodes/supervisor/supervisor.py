@@ -83,6 +83,10 @@ async def supervisor_node(
 
         _NO_RETRIEVAL = {"direct_answer", "clarify"}
 
+        event_content: dict = {"query_type": pipeline_plan.pipeline_type}
+        if pipeline_plan.pipeline_type not in _NO_RETRIEVAL and pipeline_plan.query_topic:
+            event_content["query_topic"] = pipeline_plan.query_topic
+
         await adispatch_custom_event(
             "process",
             {
@@ -93,7 +97,7 @@ async def supervisor_node(
                     if pipeline_plan.pipeline_type in _NO_RETRIEVAL
                     else pipeline_plan.reasoning
                 ),
-                "content": pipeline_plan.pipeline_type,
+                "content": event_content,
             },
         )
         intent = (
@@ -134,6 +138,7 @@ async def supervisor_node(
             "intent": intent,
             "pipeline_plan": pipeline_plan,
             "turn_number": current_turn,
+            "query_topic": pipeline_plan.query_topic,
             **token_usages,
         }
 

@@ -90,6 +90,14 @@ class PipelinePlan(BaseModel):
             "소스가 불명확하거나 ID·토픽 기반 쿼리처럼 cross-source 가능성이 있으면 null."
         ),
     )
+    query_topic: str | None = Field(
+        default=None,
+        description=(
+            "reuse / simple / standard / complex 파이프라인일 때만 채운다. "
+            "질문의 핵심 주제를 3~5단어의 한국어 명사구로 작성. "
+            "direct_answer 및 clarify일 때는 null."
+        ),
+    )
 
 
 # Complex 파이프라인 planner가 생성하는 검색 단계

@@ -84,7 +84,7 @@ class ChatStreamingProcessResponse(BaseModel):
     status: Literal["in_progress", "completed", "error"]
     node: str
     reasoning: str | None = None
-    content: str | list[str | Any] | None = None
+    content: dict[str, Any] | None = None
 
 
 StreamEvent = Annotated[

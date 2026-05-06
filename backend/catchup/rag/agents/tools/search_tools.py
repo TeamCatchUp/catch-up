@@ -144,7 +144,7 @@ async def search_tool_executor_node(
         {
             "status": "in_progress",
             "node": "tool_executor",
-            "content": search_queries,
+            "content": {"queries": search_queries},
         },
     )
 
