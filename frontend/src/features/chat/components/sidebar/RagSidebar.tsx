@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 import StepHistoryScroller from '@/features/chat/components/skeleton/StepHistoryScroller';
 import type { PipelineQueryType, StepRow } from '@/features/chat/types';
 import type { QAPair } from '@/features/chat/utils/render/chat';
+import { usePrefersReducedMotion } from '@/shared/hooks/usePrefersReducedMotion';
 import { cn } from '@/shared/utils/cn';
 
 import SourceList from './source/SourceList';
@@ -27,26 +28,6 @@ interface RagSidebarProps {
   pipelineQueryType: PipelineQueryType | null;
   pipelineReasoning: string | null;
 }
-
-const usePrefersReducedMotion = () => {
-  const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-
-    const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
-    const onChange = () => setPrefersReducedMotion(mediaQuery.matches);
-
-    onChange();
-    mediaQuery.addEventListener('change', onChange);
-
-    return () => {
-      mediaQuery.removeEventListener('change', onChange);
-    };
-  }, []);
-
-  return prefersReducedMotion;
-};
 
 export default function RagSidebar({
   currentQA,

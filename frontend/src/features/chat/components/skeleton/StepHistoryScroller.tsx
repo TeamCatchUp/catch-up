@@ -1,10 +1,11 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 
 import StepHistory from '@/features/chat/components/skeleton/StepHistory';
 import TopicHeader from '@/features/chat/components/skeleton/TopicHeader';
 import type { StepRow } from '@/features/chat/types';
+import { usePrefersReducedMotion } from '@/shared/hooks/usePrefersReducedMotion';
 
 const STICK_THRESHOLD_PX = 100;
 
@@ -52,16 +53,3 @@ export default function StepHistoryScroller({ stepRows, topic }: StepHistoryScro
     </div>
   );
 }
-
-const usePrefersReducedMotion = () => {
-  const [reduce, setReduce] = useState(false);
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
-    const onChange = () => setReduce(mq.matches);
-    onChange();
-    mq.addEventListener('change', onChange);
-    return () => mq.removeEventListener('change', onChange);
-  }, []);
-  return reduce;
-};
