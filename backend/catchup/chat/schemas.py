@@ -53,15 +53,6 @@ class ChatResponse(BaseModel):
     process_time: float
 
 
-class ChatStreamingStatusResponse(BaseModel):
-    """답변 생성 단계 스트리밍"""
-
-    type: Literal["status"] = "status"
-    session_id: uuid.UUID = Field(default_factory=uuid.uuid4, description="대화 세션 ID")
-    node: str
-    message: str
-
-
 class ChatStreamingSourceResponse(BaseModel):
     """출처 정보 전송 (답변 생성 전 먼저 전송)"""
 
@@ -89,7 +80,6 @@ class ChatStreamingProcessResponse(BaseModel):
 
 StreamEvent = Annotated[
     Union[
-        ChatStreamingStatusResponse,
         ChatStreamingSourceResponse,
         ChatStreamingTokenResponse,
         ChatStreamingProcessResponse,
