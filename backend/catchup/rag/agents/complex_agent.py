@@ -91,7 +91,7 @@ async def complex_planner_node(
                 {
                     "status": "completed",
                     "node": "complex_planner",
-                    "content": [{"step": s.step, "intent": s.intent}],
+                    "content": {"step": s.step, "intent": s.intent},
                 },
             )
 

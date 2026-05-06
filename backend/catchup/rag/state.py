@@ -67,3 +67,5 @@ class AgentState(TypedDict):
                                              # 답변 노드가 인덱스로 변환해 LLM에게 우선순위 신호로 전달.
 
     rerank_metadata: dict | None  # 리랭킹 결과 및 부스팅 이력 (Langfuse 로깅용)
+
+    query_topic: str | None  # supervisor가 추출한 질문 주제 (3~5단어 한국어 명사구)
