@@ -31,13 +31,9 @@ export interface UseRagChatReturn {
   resolvedSessionId: string | undefined;
   isLoading: boolean;
   isError: boolean;
-  /** 답변 생성 과정 step rows (스트림 중 누적, 종료 시 화면에서 unmount) */
   stepRows: StepRow[];
-  /** supervisor가 결정한 파이프라인 분류 (RagAnswerSkeleton 마운트 게이트) */
   pipelineQueryType: PipelineQueryType | null;
-  /** supervisor가 추출한 질문 topic (TopicHeader) */
   topic: string | null;
-  /** supervisor reasoning (PipelineTypeBanner 멘트) */
   pipelineReasoning: string | null;
   sendMessage: (message: string) => Promise<void>;
   submitEdit: (messageId: string, newContent: string) => Promise<void>;

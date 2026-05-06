@@ -25,11 +25,7 @@ export interface ChatHistoryMessageResponse {
   has_feedback?: boolean | null;
   is_liked?: boolean | null;
   is_saved?: boolean | null;
-  /**
-   * 답변 생성 파이프라인 결과(backend `chat_histories.pipeline_result`).
-   * 결정 2 A1: 영속 복구 미구현 — 의도적 ignore.
-   * 추후 step history 영속 복구 시 사용 예정.
-   */
+  /** backend가 보내지만 현재는 의도적 미사용 — 추후 step history 영속 복구 시 도입 예정. */
   pipeline_result?: unknown;
 }
 

@@ -1,32 +1,15 @@
 'use client';
 
 import { useState } from 'react';
+import { AnimatePresence, motion } from 'motion/react';
 
+import ComplexPlanList from '@/features/chat/components/skeleton/details/ComplexPlanList';
 import RewrittenQueryBox from '@/features/chat/components/skeleton/details/RewrittenQueryBox';
 import SourceDistributionChips from '@/features/chat/components/skeleton/details/SourceDistributionChips';
 import VectorKeywordCodeBox from '@/features/chat/components/skeleton/details/VectorKeywordCodeBox';
-import ComplexPlanList from '@/features/chat/components/skeleton/details/ComplexPlanList';
 import type { StepRow as StepRowModel } from '@/features/chat/types';
+import { collapseExpand, crossfade, MotionState } from '@/shared/motion';
 import { cn } from '@/shared/utils/cn';
-
-/**
- * step history의 한 행.
- *
- * Figma: 12861-54620 (normal row), 12861-54638 (active row, 마지막 step)
- *
- * 레이아웃:
- *  - 좌측 22px timeline marker
- *    - normal: 22×22 grey rounded-full, chevron-down icon (16×16) inside
- *    - active: concentric blue/white circle (22→14→7)
- *  - 우측 content (flex-1, pb-4)
- *    - 한 줄 멘트 (15px Medium)
- *    - 노드별 펼침 디테일 박스 (rewritten query / vector / plan list / source chips)
- *
- * row 간 timeline은 marker 아래 vertical line으로 연결.
- * 마지막 row는 line hidden (decorating 끝).
- *
- * 결정 3 (펼침/접힘): 디폴트 펼침, 클릭 시 접기 가능 (chevron rotation).
- */
 
 interface StepRowProps {
   row: StepRowModel;
@@ -50,47 +33,72 @@ export default function StepRow({ row, isActive, isLast }: StepRowProps) {
   const [expanded, setExpanded] = useState(true);
   const renderer = NODE_ICON_BY_RENDERER[row.node] ?? 'plain';
 
-  // 한 줄 멘트: in_progress의 reasoning > completed의 reasoning(첫 항목) 우선
-  const reasoning =
-    row.inProgress?.reasoning ??
-    row.completedItems[0]?.reasoning ??
-    null;
+  const reasoning = row.inProgress?.reasoning ?? row.completedItems[0]?.reasoning ?? null;
 
   const detail = renderDetail({ row, renderer, expanded });
   const hasDetail = detail !== null;
 
   return (
     <div className="flex items-stretch gap-5">
-      {/* Left timeline */}
       <div className="flex w-[22px] shrink-0 flex-col items-center">
-        {isActive ? (
-          <ActiveMarker />
-        ) : (
-          <NormalMarker
-            expanded={expanded}
-            interactive={hasDetail}
-            onToggle={() => setExpanded((v) => !v)}
-          />
-        )}
+        <AnimatePresence mode="wait" initial={false}>
+          {isActive ? (
+            <motion.span
+              key="active"
+              variants={crossfade}
+              initial={MotionState.Hidden}
+              animate={MotionState.Visible}
+              exit={MotionState.Exit}
+              className="flex"
+            >
+              <ActiveMarker />
+            </motion.span>
+          ) : (
+            <motion.span
+              key="normal"
+              variants={crossfade}
+              initial={MotionState.Hidden}
+              animate={MotionState.Visible}
+              exit={MotionState.Exit}
+              className="flex"
+            >
+              <NormalMarker
+                expanded={expanded}
+                interactive={hasDetail}
+                onToggle={() => setExpanded((v) => !v)}
+              />
+            </motion.span>
+          )}
+        </AnimatePresence>
         {!isLast && <span aria-hidden className="bg-edge-neutral mt-0 w-px flex-1" />}
       </div>
 
-      {/* Right content */}
       <div className="flex min-w-0 flex-1 flex-col items-start gap-2 justify-center pb-4">
         {reasoning && (
           <p className="text-body-small text-content-normal w-full break-words">
             {highlightDocCount(reasoning)}
           </p>
         )}
-        {hasDetail && expanded && detail}
+        <AnimatePresence initial={true}>
+          {hasDetail && expanded && (
+            <motion.div
+              key="detail"
+              variants={collapseExpand}
+              initial={MotionState.Hidden}
+              animate={MotionState.Visible}
+              exit={MotionState.Exit}
+              className="w-full overflow-hidden"
+            >
+              {detail}
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </div>
   );
 }
 
-/**
- * "N건의 문서를 찾았어요" 같이 reasoning 안의 "N건" 숫자에만 #005EEB(`text-content-primary`) 색상 강조.
- */
+/** reasoning 안의 "N건" 숫자만 primary 색상으로 강조한다. */
 function highlightDocCount(text: string): React.ReactNode {
   const regex = /(\d+)(건)/g;
   const parts: React.ReactNode[] = [];
@@ -114,10 +122,6 @@ function highlightDocCount(text: string): React.ReactNode {
   return parts;
 }
 
-/**
- * 정상 진행 중인 노드 또는 끝난 노드의 timeline marker.
- * chevron-down 아이콘이 위쪽 22×22 원에. 클릭 시 디테일 펼침/접힘.
- */
 function NormalMarker({
   expanded,
   interactive,
@@ -168,10 +172,6 @@ function NormalMarker({
   );
 }
 
-/**
- * 마지막 active step의 marker (concentric circles).
- * Figma 12861:54640 → 22×22 blue, 14×14 white border, 7×7 white border.
- */
 function ActiveMarker() {
   return (
     <span className="bg-fill-primary flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full p-0.5">
@@ -191,14 +191,11 @@ interface RenderDetailParams {
 function renderDetail({ row, renderer }: RenderDetailParams): React.ReactNode | null {
   switch (renderer) {
     case 'rewrite': {
-      // backend는 string 또는 {query: string} dict로 보낸다 — 정규화는 RewrittenQueryBox에 위임.
       const content = row.completedItems[0]?.content;
       if (content == null) return null;
       return <RewrittenQueryBox query={content} />;
     }
     case 'vector': {
-      // backend는 search_vector_db는 array, tool_executor는 {queries: [...]}로 emit한다.
-      // 정규화는 VectorKeywordCodeBox에 위임 (entries 0개면 자체적으로 null 반환).
       const content = row.inProgress?.content;
       if (!content) return null;
       return <VectorKeywordCodeBox queries={content} />;

@@ -1,23 +1,9 @@
 'use client';
 
 /**
- * search_vector_db / tool_executor 노드 inProgress.content를 vector / keyword 코드 박스로 표시.
- *
- * Figma:
- *  - 12861-55150 / 12861-55143 (Standard 첫 검색, multi vector / no keyword)
- *  - 12861-54709 (Standard 추가 검색, single vector + keyword)
- *  - 12861-55019 (Complex 단계별 검색, multi vector)
- *  - 12861-54842 / 12861-54859 (Complex 추가 검색, vector[N] + keyword[N] 인덱스 표기)
- *
- * 시각: bg white / border 1px #eaebec / radius 12 / px-4 py-3
- *       text 13px Medium #6d7882, vector value orange #ff9200, keyword value green #00b66c.
- *
- * 입력 형태 (3가지 모두 정규화):
- *  - `Array<{vector, keyword}>` — search_vector_db (policies.py)
- *  - `{ queries: Array<{vector, keyword}> }` — tool_executor (search_tools.py, dict 통일 정책)
- *  - 단일 `{vector, keyword}` 객체 (방어적)
+ * backend payload 정규화: array (search_vector_db), `{queries: array}` (tool_executor),
+ * 단일 객체 — 세 형태 모두 받는다.
  */
-
 type RawQueryEntry = {
   vector?: string;
   query?: string;

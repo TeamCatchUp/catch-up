@@ -1,17 +1,6 @@
 'use client';
 
-/**
- * rewrite 노드 completed.content를 박스로 표시.
- *
- * Figma: 12861-55130 / 12861-55140 (Standard 프레임 rewrite row의 박스)
- * - bg: white / border 1px #eaebec / radius 12px / px-4 py-3
- * - text: 13px Medium / color #6d7882 (content-alternative)
- *
- * 입력 형태 (2가지 모두 정규화):
- *  - `string` — 옛 shape (policies.py: `content: rewritten_query`)
- *  - `{ query: string }` — backend dict 통일 정책 신 shape
- */
-
+/** backend는 string 또는 `{query: string}` dict로 보낸다 — 둘 다 정규화. */
 interface RewrittenQueryBoxProps {
   query: unknown;
 }

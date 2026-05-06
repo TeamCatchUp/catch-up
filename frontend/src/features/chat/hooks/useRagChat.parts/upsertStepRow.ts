@@ -8,17 +8,10 @@ interface UpsertInput {
 }
 
 /**
- * stream_processor의 process 이벤트를 step row 배열에 누적한다.
- *
- * 누적 정책 (결정 4 A2 + 결정 8 B1):
- * - `in_progress` 도착 → 항상 새 row push.
- * - `completed` 도착 →
- *   - 마지막 row의 노드가 일치하고:
- *     - `complex_planner`이면 `completedItems`에 누적 push (1·2·3·4 step list가 한 박스에 들어감).
- *     - `completedItems.length === 0` (해당 호출의 in_progress만 받은 상태)이면 같은 row의 `completedItems`에 push (1개).
- *   - 그 외 → 새 row push.
- *
- * `error`는 호출자에서 별도 처리(결정 13 G3 — 무시)되므로 여기 도달하지 않는다.
+ * - `in_progress` → 항상 새 row.
+ * - `completed` → 마지막 row의 같은 노드의 `completedItems`에 push.
+ *   `complex_planner`는 step별 누적 허용, 그 외엔 1번만 가능 (이미 받은 노드면 새 row).
+ * - `error` → 무시 (호출자가 isError 흐름에서 처리).
  */
 export const upsertStepRow = (prev: StepRow[], input: UpsertInput): StepRow[] => {
   const { node, status, reasoning, content } = input;
@@ -62,6 +55,5 @@ export const upsertStepRow = (prev: StepRow[], input: UpsertInput): StepRow[] =>
     ];
   }
 
-  // error 등은 호출자에서 제외 — 안전 fallback
   return prev;
 };

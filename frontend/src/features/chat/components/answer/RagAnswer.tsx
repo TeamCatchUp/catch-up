@@ -32,7 +32,6 @@ const ANSWER_ICONS = [
   { name: 'Rotate', icon: Rotate },
 ];
 
-/** D1: simple/standard/complex일 때만 RagAnswerSkeleton(PipelineTypeBanner)을 마운트 */
 const SHOWING_PIPELINE_TYPES: ReadonlySet<PipelineQueryType> = new Set([
   'simple',
   'standard',
@@ -44,20 +43,12 @@ interface RagAnswerProps {
   sessionId: string;
   isLoading: boolean;
   isError: boolean;
-  /** PipelineTypeBanner용 — 마지막 QA pair에서만 의미 있음 */
   pipelineQueryType: PipelineQueryType | null;
   pipelineReasoning: string | null;
   onFeedbackSubmitted: (messageId: string, isLiked: boolean | undefined) => void;
   onRetry?: (questionId: string, questionContent: string) => void;
 }
 
-/**
- * 답변 본문 영역.
- *
- * 결정 1 D + 사용자 정정:
- *  - 답변 본문 상단: `PipelineTypeBanner` (RagAnswerSkeleton 내부)
- *  - 사이드바: `TopicHeader` + `StepHistory` (RagSidebar에서 마운트)
- */
 export default function RagAnswer({
   currentQA,
   sessionId,
@@ -87,8 +78,6 @@ export default function RagAnswer({
   const showAnswerMarkdown = hasAnswer && answerContent.length > 0;
   const showFinishedSections = !isLoading && hasAnswer && answerContent.length > 0;
   const showInlineError = !isLoading && hasAnswer && answerContent.length === 0;
-  // PipelineTypeBanner는 답변 token이 도착하는 순간 unmount.
-  // 사이드바의 step history는 별도 (RagSidebar에서 isLoading 종료까지 유지).
   const showSkeleton =
     isLoading &&
     pipelineQueryType !== null &&

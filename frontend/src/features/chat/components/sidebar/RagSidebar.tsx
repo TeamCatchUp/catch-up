@@ -22,7 +22,6 @@ interface RagSidebarProps {
   currentQA: QAPair | undefined;
   isLoading: boolean;
   isError: boolean;
-  /** 답변 생성 과정 step rows (스트림 중인 마지막 QA pair에서만 의미 있음) */
   stepRows: StepRow[];
   topic: string | null;
   pipelineQueryType: PipelineQueryType | null;
@@ -118,9 +117,7 @@ export default function RagSidebar({
     ? undefined
     : { transform: `translateY(${isVisible ? 0 : SIDEBAR_SHIFT_PX}px)` };
 
-  // 결정 1 D: 사이드바 영역에서 isLoading 중에는 답변 생성 과정(RagAnswerSkeleton),
-  // 종료 시점부터는 SourceList(원래 자리)를 보여준다.
-  // D1: simple/standard/complex일 때만 step UI 마운트.
+  // 답변 생성 중엔 step history, 종료 시점부터 SourceList. 검색 파이프라인 분류일 때만 step 노출.
   const showStepSkeleton =
     isLoading && pipelineQueryType !== null && SHOWING_PIPELINE_TYPES.has(pipelineQueryType);
 

@@ -99,7 +99,6 @@ export const useStreamProcessing = ({
     canReplacePlaceholderRef.current = false;
     setIsLoading(true);
     setIsError(false);
-    // step history reset (결정 12 F1)
     setStepRows([]);
     setPipelineQueryType(null);
     setTopic(null);
@@ -315,15 +314,6 @@ export const useStreamProcessing = ({
     syncChatDataFromServer,
   ]);
 
-  // ---------------------------------------------------------------------------
-  // SSE event router
-  // ---------------------------------------------------------------------------
-  /**
-   * SSE 이벤트 라우터
-   * - process: 답변 생성 과정(node × status × reasoning/content) -> step rows 누적
-   * - sources: 출처 목록
-   * - token: 답변 마크다운 stream chunk
-   */
   const handleStreamEvent = useCallback(
     (event: StreamEvent) => {
       // 가능한 가장 이른 시점에 session_id를 흡수해 stale session 문제를 줄인다.
@@ -336,10 +326,8 @@ export const useStreamProcessing = ({
         case 'process': {
           const { node, status, reasoning = null, content = null } = event;
 
-          // G3: error는 별도 처리하지 않음. 기존 isError 흐름이 stream 종료 시 처리한다.
           if (status === 'error') break;
 
-          // supervisor completed: pipeline 분류 / topic / reasoning을 별도 채널로 분배
           if (node === 'supervisor' && status === 'completed' && content) {
             const c = content as { query_type?: PipelineQueryType; query_topic?: string };
             if (c.query_type) setPipelineQueryType(c.query_type);
@@ -347,7 +335,6 @@ export const useStreamProcessing = ({
             if (reasoning) setPipelineReasoning(reasoning);
           }
 
-          // F1: stepRows는 항상 누적 (마운트 게이트는 RagAnswerSkeleton 마운트 조건에서)
           setStepRows((prev) => upsertStepRow(prev, { node, status, reasoning, content }));
           break;
         }

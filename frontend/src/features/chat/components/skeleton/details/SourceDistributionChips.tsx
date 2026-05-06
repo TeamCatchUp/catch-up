@@ -1,13 +1,8 @@
 'use client';
 
-/**
- * rerank 노드 completed.content.source_distribution을 chip 박스로 표시.
- *
- * Figma: 12904-93381 (Standard / Complex 프레임 마지막 active row의 chip 박스)
- * - bg: #eaf2fe (fill-primary-normal-neutral) / border 1px #eaebec / radius 12px / px-4 py-3
- * - 각 chip: "{label} {count}" — label color #464c53, count color #005eeb
- * - chip 사이에 14px 세로선
- */
+import { motion } from 'motion/react';
+
+import { fadeInUp, MotionState, staggerListContainer } from '@/shared/motion';
 
 interface SourceDistributionChipsProps {
   distribution: unknown;
@@ -43,9 +38,14 @@ export default function SourceDistributionChips({ distribution }: SourceDistribu
   if (!entries.length) return null;
 
   return (
-    <div className="bg-fill-primary-normal-neutral border-edge-neutral flex w-full flex-wrap items-center gap-2.5 rounded-xl border border-solid px-4 py-3">
+    <motion.div
+      className="bg-fill-primary-normal-neutral border-edge-neutral flex w-full flex-wrap items-center gap-2.5 rounded-xl border border-solid px-4 py-3"
+      initial={MotionState.Hidden}
+      animate={MotionState.Visible}
+      variants={staggerListContainer}
+    >
       {entries.map((entry, idx) => (
-        <span key={entry.key} className="flex items-center">
+        <motion.span key={entry.key} variants={fadeInUp} className="flex items-center">
           <span className="text-body-small flex items-center gap-1 whitespace-nowrap">
             <span className="text-content-neutral">{entry.label}</span>
             <span className="text-content-primary">{entry.count}</span>
@@ -53,8 +53,8 @@ export default function SourceDistributionChips({ distribution }: SourceDistribu
           {idx < entries.length - 1 && (
             <span aria-hidden className="border-edge-neutral ml-2.5 h-3.5 border-l border-solid" />
           )}
-        </span>
+        </motion.span>
       ))}
-    </div>
+    </motion.div>
   );
 }

@@ -14,14 +14,8 @@ interface StepHistoryScrollerProps {
 }
 
 /**
- * 사이드바 내부 답변 생성 과정 wrapper.
- *
- * Auto-scroll 정책 (b):
- *  - 사용자가 bottom 근처(100px 이내)에 있을 때만 새 row 추가 시 자동 bottom 스크롤
- *  - 사용자가 위로 직접 스크롤하면 자동 스크롤 멈춤 → bottom 근처로 다시 내려오면 재개
- *  - `behavior: 'smooth'`로 부드럽게 이동. `prefers-reduced-motion: reduce`면 즉시 이동
- *
- * stepRows reference 변경(새 row push, completedItems 누적)을 effect dependency로 추적.
+ * 사이드바 답변 생성 과정 wrapper. 사용자가 bottom 근처(100px 이내)에 있을 때만
+ * 새 row 도착 시 부드럽게 자동 스크롤. 위로 직접 스크롤하면 멈춘다.
  */
 export default function StepHistoryScroller({ stepRows, topic }: StepHistoryScrollerProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -39,7 +33,6 @@ export default function StepHistoryScroller({ stepRows, topic }: StepHistoryScro
     if (!isStickToBottomRef.current) return;
     const el = scrollRef.current;
     if (!el) return;
-    // Layout 적용 후 scrollHeight를 읽어 정확한 bottom으로 이동
     const raf = requestAnimationFrame(() => {
       el.scrollTo({ top: el.scrollHeight, behavior: reduceMotion ? 'auto' : 'smooth' });
     });
@@ -50,10 +43,12 @@ export default function StepHistoryScroller({ stepRows, topic }: StepHistoryScro
     <div
       ref={scrollRef}
       onScroll={handleScroll}
-      className="flex min-h-0 flex-1 flex-col overflow-y-auto px-6 py-4"
+      className="flex min-h-0 flex-1 flex-col overflow-y-auto"
     >
       <TopicHeader topic={topic} />
-      <StepHistory rows={stepRows} />
+      <div className="px-6 pt-2 pb-4">
+        <StepHistory rows={stepRows} />
+      </div>
     </div>
   );
 }

@@ -2,14 +2,6 @@
 
 import type { PipelineQueryType } from '@/features/chat/types';
 
-/**
- * 답변 생성 과정 헤더 한 줄.
- * Figma: 12587-52126 (fileKey 7UwupbVvmHkElmP2OBJQio)
- *
- * 시각: border 1px #e1e2e4 / radius 12px / padding 12px / gap 12px
- *      라벨(13px, blue) + 멘트(15px, normal)
- */
-
 interface PipelineTypeBannerProps {
   pipelineType: PipelineQueryType | null;
   pipelineReasoning: string | null;
