@@ -9,10 +9,6 @@ vi.mock('./SourceCard', () => ({
   ),
 }));
 
-vi.mock('@/features/chat/hooks/ui/useListStaggerAnimation', () => ({
-  useListStaggerAnimation: () => ({ getItemStyle: () => ({}), itemClass: '', listEntered: true }),
-}));
-
 vi.mock('@/features/chat/components/skeleton/RagRightComponentSkeleton', () => ({
   default: () => <div data-testid="skeleton" />,
 }));
