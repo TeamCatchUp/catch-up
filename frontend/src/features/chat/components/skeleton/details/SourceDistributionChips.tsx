@@ -1,0 +1,60 @@
+'use client';
+
+/**
+ * rerank 노드 completed.content.source_distribution을 chip 박스로 표시.
+ *
+ * Figma: 12904-93381 (Standard / Complex 프레임 마지막 active row의 chip 박스)
+ * - bg: #eaf2fe (fill-primary-normal-neutral) / border 1px #eaebec / radius 12px / px-4 py-3
+ * - 각 chip: "{label} {count}" — label color #464c53, count color #005eeb
+ * - chip 사이에 14px 세로선
+ */
+
+interface SourceDistributionChipsProps {
+  distribution: unknown;
+}
+
+const PLATFORM_LABEL: Record<string, string> = {
+  jira: 'Jira',
+  github: 'GitHub',
+  slack: 'Slack',
+  confluence: 'Confluence',
+  channeltalk: 'ChannelTalk',
+};
+
+const PLATFORM_ORDER = ['confluence', 'github', 'jira', 'slack', 'channeltalk'];
+
+const normalize = (raw: unknown): Array<{ key: string; label: string; count: number }> => {
+  if (!raw || typeof raw !== 'object') return [];
+  const dict = raw as Record<string, unknown>;
+  const keys = Object.keys(dict).sort(
+    (a, b) => PLATFORM_ORDER.indexOf(a) - PLATFORM_ORDER.indexOf(b),
+  );
+  return keys
+    .map((k) => {
+      const count = Number(dict[k] ?? 0);
+      if (!Number.isFinite(count) || count <= 0) return null;
+      return { key: k, label: PLATFORM_LABEL[k] ?? k, count };
+    })
+    .filter(Boolean) as Array<{ key: string; label: string; count: number }>;
+};
+
+export default function SourceDistributionChips({ distribution }: SourceDistributionChipsProps) {
+  const entries = normalize(distribution);
+  if (!entries.length) return null;
+
+  return (
+    <div className="bg-fill-primary-normal-neutral border-edge-neutral flex w-full flex-wrap items-center gap-2.5 rounded-xl border border-solid px-4 py-3">
+      {entries.map((entry, idx) => (
+        <span key={entry.key} className="flex items-center">
+          <span className="text-body-small flex items-center gap-1 whitespace-nowrap">
+            <span className="text-content-neutral">{entry.label}</span>
+            <span className="text-content-primary">{entry.count}</span>
+          </span>
+          {idx < entries.length - 1 && (
+            <span aria-hidden className="border-edge-neutral ml-2.5 h-3.5 border-l border-solid" />
+          )}
+        </span>
+      ))}
+    </div>
+  );
+}
