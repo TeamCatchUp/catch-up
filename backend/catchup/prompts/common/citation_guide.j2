@@ -7,12 +7,9 @@
 2. **Code References:**
    - When referencing code, explicitly mention the file name or PR context in the sentence preceding the code block.
 
-3. **Citation Rationale (Insight & Evidence):**
-   - You MUST append a structured rationale block at the very end of your response.
-   - Wrap a JSON object inside `<citations>` tags.
-   - **Format:** `<citations>{ "index": "Specific insight extracted from this source" }</citations>`
-   - **Key:** The citation number as a string (e.g., "1").
-   - **Value:** A concise explanation (3 sentences at most) of the **specific insight, fact, or decision** derived from this source.
-     - **Goal:** Explain *why* this source helps answer the user's question.
-     - **Constraint:** Do not use generic phrases like "I referenced this document." Be specific (e.g., "Confirmed the API latency issue was resolved in v2.0").
-     - Ensure the text is a single line without line breaks.
+3. **Citation Index List:**
+   - You MUST append a citation index list at the very end of your response.
+   - Wrap comma-separated index numbers inside `<citations>` tags.
+   - **Format:** `<citations>1, 3, 4</citations>`
+   - **Content:** List only the integer indices of sources you actually cited inline, in ascending order.
+   - No descriptions, rationales, or keys — indices only.
