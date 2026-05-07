@@ -40,20 +40,29 @@ class TestPGBigmRetriever(unittest.TestCase):
         token_values_str = {params_str["token_0"], params_str["token_1"]}
         self.assertEqual(token_values_str, {"Apple", "Orange"})
 
-    def test_build_bigm_query_case_insensitivity(self):
-        """SQL 생성 시 대소문자 무시(LOWER, ILIKE) 로직이 포함되는지 검증."""
+    def test_build_bigm_query_exact_mode(self):
+        """exact 모드(RAG 하이브리드 검색): lower() LIKE lower(likequery()) 필터로 GIN 인덱스 사용 검증."""
         sql, _ = PGBigmRetriever.build_bigm_query(
-            collection_name="test", query="Python", k=5
+            collection_name="test", query="Python", k=5, search_mode="exact"
         )
         sql_str = str(sql)
 
-        # 1. Exact Match Boost 시 LOWER() 적용 확인
         self.assertIn("LOWER(e.cmetadata ->> 'contextual_content') = LOWER(:token_0)", sql_str)
-        # 2. 필터링 시 ILIKE 적용 확인
-        self.assertIn("ILIKE likequery(:token_0)", sql_str)
-        # 3. 유사도 연산자(=%) 포함 확인
-        self.assertIn("=% :token_0", sql_str)
-        # 4. title 필드가 쿼리에 포함되지 않는지 확인
+        self.assertIn("lower(e.cmetadata ->> 'contextual_content') LIKE lower(likequery(:token_0))", sql_str)
+        self.assertNotIn("ILIKE", sql_str)
+        self.assertNotIn("=% :token_0", sql_str)
+        self.assertNotIn("'title'", sql_str)
+
+    def test_build_bigm_query_fuzzy_mode(self):
+        """fuzzy 모드(일반 키워드 검색): lower() =% lower() 유사도 필터로 GIN v2 인덱스 사용 검증."""
+        sql, _ = PGBigmRetriever.build_bigm_query(
+            collection_name="test", query="Python", k=5, search_mode="fuzzy"
+        )
+        sql_str = str(sql)
+
+        self.assertIn("LOWER(e.cmetadata ->> 'contextual_content') = LOWER(:token_0)", sql_str)
+        self.assertIn("lower(e.cmetadata ->> 'contextual_content') =% lower(:token_0)", sql_str)
+        self.assertNotIn("ILIKE", sql_str)
         self.assertNotIn("'title'", sql_str)
 
     def test_do_query_does_not_set_db_parameters_inline(self):

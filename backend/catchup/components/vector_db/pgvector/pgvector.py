@@ -45,6 +45,7 @@ class PGBigmRetriever(BaseRetriever):
     offset: int = 0
     tool_filters: list[SourceType] | None = None
     temporal_filters: list[TemporalFilter] | None = None
+    search_mode: str = "fuzzy"  # "exact": ILIKE likequery (RAG), "fuzzy": =% similarity (keyword search)
     @override
     def _get_relevant_documents(
         self,
@@ -62,6 +63,7 @@ class PGBigmRetriever(BaseRetriever):
             offset=self.offset,
             tool_filters=self.tool_filters,
             temporal_filters=self.temporal_filters,
+            search_mode=self.search_mode,
         )
 
         results = list(self._do_query(search_sql, params))
@@ -75,6 +77,7 @@ class PGBigmRetriever(BaseRetriever):
         offset: int = 0,
         tool_filters: list[SourceType] | None = None,
         temporal_filters: list[TemporalFilter] | None = None,
+        search_mode: str = "fuzzy",
     ) -> tuple[Any, dict]:
         """
         contextual_content 기반 키워드 검색 SQL 및 파라미터 생성.
@@ -129,9 +132,14 @@ class PGBigmRetriever(BaseRetriever):
 
             exact_match_scores.append(f"(CASE WHEN LOWER(e.cmetadata ->> 'contextual_content') = LOWER(:{p_name}) THEN 1.0 ELSE 0.0 END)")
             sim_scores.append(f"bigm_similarity(e.cmetadata ->> 'contextual_content', :{p_name})")
-            token_filters.append(
-                f"((e.cmetadata ->> 'contextual_content') =% :{p_name} OR (e.cmetadata ->> 'contextual_content') ILIKE likequery(:{p_name}))"
-            )
+            if search_mode == "exact":
+                token_filters.append(
+                    f"lower(e.cmetadata ->> 'contextual_content') LIKE lower(likequery(:{p_name}))"
+                )
+            else:
+                token_filters.append(
+                    f"lower(e.cmetadata ->> 'contextual_content') =% lower(:{p_name})"
+                )
 
         if token_filters:
             filter_clauses.append(f"({' AND '.join(token_filters)})")
@@ -283,7 +291,7 @@ class PGVectorService(BaseVectorDbService):
             offset=offset,
             tool_filters=tool_filters,
             temporal_filters=temporal_filters,
-            search_mode="content"
+            search_mode="exact",
         ).invoke(x["keyword_tokens"]))
 
         search_kwargs = self._build_search_kwargs(tool_filters, temporal_filters)

@@ -22,8 +22,8 @@ LIGHT_INDICES = [
 
 HEAVY_INDICES = [
     """
-    CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_cmetadata_contextual_bigm
-    ON langchain_pg_embedding USING GIN ((cmetadata ->> 'contextual_content') gin_bigm_ops)
+    CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_cmetadata_contextual_bigm_v2
+    ON langchain_pg_embedding USING GIN ((lower(cmetadata ->> 'contextual_content')) gin_bigm_ops)
     """,
 ]
 
@@ -31,7 +31,8 @@ HEAVY_INDICES = [
 # idx_embedding_hnsw — embedding::vector(1536) 캐스팅 expression index라 쿼리가 타지 않음
 #                      컬럼 타입을 vector(1536)으로 ALTER한 뒤 expression 없는 인덱스로 재생성
 # idx_cmetadata_title_bigm — title 필드 없는 source가 있고, 값은 contextual_content에 포함됨
-OBSOLETE_INDICES = ["idx_fts_korean_bigm", "idx_embedding_hnsw", "idx_cmetadata_title_bigm"]
+# idx_cmetadata_contextual_bigm — lower() 없는 버전, ILIKE는 gin_bigm_ops를 타지 않아 v2로 교체
+OBSOLETE_INDICES = ["idx_fts_korean_bigm", "idx_embedding_hnsw", "idx_cmetadata_title_bigm", "idx_cmetadata_contextual_bigm"]
 
 async def ensure_pg_indices() -> None:
     conn_string = settings.sqlalchemy_database_url.replace("+psycopg", "")
@@ -50,7 +51,7 @@ async def ensure_pg_indices() -> None:
             await conn.execute(f"DROP INDEX CONCURRENTLY IF EXISTS {index_name}")
             logger.info("obsolete_index_dropped", index_name=index_name)
 
-        heavy_index_names = ["idx_cmetadata_contextual_bigm"]
+        heavy_index_names = ["idx_cmetadata_contextual_bigm_v2"]
         for index_name in heavy_index_names:
             row = await (await conn.execute(f"""
                 SELECT indisvalid FROM pg_index
