@@ -16,6 +16,7 @@ from sqlalchemy import text
 from catchup.components.vector_db.base import BaseVectorDbService
 from catchup.components.vector_db.rank import weighted_reciprocal_rank
 from catchup.configs.config import settings
+from catchup.db.engine import parse_plan
 from catchup.db.engine import SessionLocal
 from catchup.db.models import SourceType
 from catchup.rag.executors import rag_executors
@@ -67,7 +68,7 @@ class PGBigmRetriever(BaseRetriever):
             temporal_filters=self.temporal_filters,
         )
 
-        results = list(self._do_query(search_sql, params))
+        results = list(self._do_query(search_sql, params, label=f"bigm_{self.search_mode}"))
         return self._get_documents_from_results(results)
 
     @staticmethod
@@ -183,18 +184,30 @@ class PGBigmRetriever(BaseRetriever):
     def _do_query(
         self,
         search_sql: Any,
-        params: dict
+        params: dict,
+        label: str = "bigm",
     ):
         with self.session_factory() as session:
-            logger.debug("db_query_started")
+            logger.debug("keyword_query_started", label=label)
             t0 = time.perf_counter()
-            
-            # pg_bigm 검색을 위해 similarity_limit 설정 (engine.py의 connect event에서 처리됨)
+
+            if settings.ENABLE_QUERY_EXPLAIN:
+                try:
+                    explain_sql = text(
+                        "EXPLAIN (ANALYZE, BUFFERS, FORMAT TEXT) " + search_sql.text
+                    )
+                    plan_rows = session.execute(explain_sql, params).fetchall()
+                    metrics = parse_plan([row[0] for row in plan_rows])
+                    logger.info("db_query_plan", label=label, **metrics)
+                except Exception as e:
+                    logger.warning("db_query_plan_failed", label=label, error=str(e))
+
             results = session.execute(search_sql, params)
             rows = results.fetchall()
-            
+
             logger.debug(
-                "db_query_completed",
+                "keyword_query_completed",
+                label=label,
                 elapsed=round(time.perf_counter() - t0, 3),
                 row_count=len(rows)
             )

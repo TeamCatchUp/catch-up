@@ -84,6 +84,7 @@ class Settings(BaseSettings):
     DB_POOL_TIMEOUT: int = 30
     DB_POOL_RECYCLE_SECONDS: int = 1800
     DB_POOL_PRE_PING: bool = True
+    ENABLE_QUERY_EXPLAIN: bool = True  # EXPLAIN (ANALYZE, BUFFERS) 결과를 서버 로그로 출력
     
     # AWS S3
     AWS_S3_AUDIT_ENABLED: bool = False
