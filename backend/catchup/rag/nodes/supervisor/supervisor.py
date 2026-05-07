@@ -18,7 +18,7 @@ from catchup.rag.state import AgentState
 
 logger = structlog.get_logger()
 
-_MAX_DOCS_SUMMARY = 20
+_MAX_DOCS_SUMMARY = 15
 _PIPELINE_ORDER = ["clarify", "direct_answer", "reuse", "simple", "standard", "complex"]
 _DEFAULT_MAX_ITERATIONS: dict[str, int] = {
     "direct_answer": 0,
