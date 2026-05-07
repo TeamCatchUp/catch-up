@@ -2,7 +2,12 @@ import type { Dispatch, SetStateAction } from 'react';
 import { useCallback } from 'react';
 
 import chatService from '@/features/chat/services/chatService';
-import type { ChatData, RagUIStepKey, StreamEvent } from '@/features/chat/types';
+import type {
+  ChatData,
+  PipelineQueryType,
+  StepRow,
+  StreamEvent,
+} from '@/features/chat/types';
 
 import type { StreamRuntimeRefs } from './types';
 
@@ -27,7 +32,10 @@ interface UseMessageActionsParams {
   setChatData: Dispatch<SetStateAction<ChatData | null>>;
   setIsLoading: Dispatch<SetStateAction<boolean>>;
   setIsError: Dispatch<SetStateAction<boolean>>;
-  setCurrentStep: Dispatch<SetStateAction<RagUIStepKey>>;
+  setStepRows: Dispatch<SetStateAction<StepRow[]>>;
+  setPipelineQueryType: Dispatch<SetStateAction<PipelineQueryType | null>>;
+  setTopic: Dispatch<SetStateAction<string | null>>;
+  setPipelineReasoning: Dispatch<SetStateAction<string | null>>;
   streamRefs: StreamRuntimeRefs;
 }
 
@@ -57,7 +65,10 @@ export const useMessageActions = ({
   setChatData,
   setIsLoading,
   setIsError,
-  setCurrentStep,
+  setStepRows,
+  setPipelineQueryType,
+  setTopic,
+  setPipelineReasoning,
   streamRefs,
 }: UseMessageActionsParams): UseMessageActionsReturn => {
   // ---------------------------------------------------------------------------
@@ -206,7 +217,10 @@ export const useMessageActions = ({
 
     setIsLoading(false);
     setIsError(false);
-    setCurrentStep('router');
+    setStepRows([]);
+    setPipelineQueryType(null);
+    setTopic(null);
+    setPipelineReasoning(null);
 
     if (!streamingMessageIdRef.current) {
       streamInFlightRef.current = false;
@@ -220,9 +234,12 @@ export const useMessageActions = ({
     appendAssistantAnswer,
     isLoading,
     markStopped,
-    setCurrentStep,
     setIsError,
     setIsLoading,
+    setPipelineQueryType,
+    setPipelineReasoning,
+    setStepRows,
+    setTopic,
     streamInFlightRef,
     streamingMessageIdRef,
   ]);

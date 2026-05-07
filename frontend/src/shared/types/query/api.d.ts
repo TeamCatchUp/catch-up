@@ -25,6 +25,8 @@ export interface ChatHistoryMessageResponse {
   has_feedback?: boolean | null;
   is_liked?: boolean | null;
   is_saved?: boolean | null;
+  /** backend가 보내지만 현재는 의도적 미사용 — 추후 step history 영속 복구 시 도입 예정. */
+  pipeline_result?: unknown;
 }
 
 /** 최근 검색 쿼리 목록 API 응답 */

@@ -1,10 +1,11 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { motion } from 'motion/react';
+import { useEffect, useMemo, useState } from 'react';
 
 import { getCitationDisplayOrderMap } from '@/features/chat/components/answer/markdown/RenderWithBadges';
 import RagSourceSkeleton from '@/features/chat/components/skeleton/RagRightComponentSkeleton';
-import { useListStaggerAnimation } from '@/features/chat/hooks/ui/useListStaggerAnimation';
+import { fadeInUp, MotionState, staggerListContainer } from '@/shared/motion';
 import type { ChatSource } from '@/features/chat/types';
 import AddCircle from '@/public/icons/icon/add_circle_filled.svg';
 import { cn } from '@/shared/utils/cn';
@@ -46,11 +47,24 @@ const SourceList = ({
   // 필터 칩 가로 스크롤 컨테이너 — FAB 좌/우 이동 버튼이 ref로 잡음
   const [filterScrollContainer, setFilterScrollContainer] = useState<HTMLDivElement | null>(null);
 
-  // 카드 mount 시 entrance stagger 애니메이션 (transitionKey 변경 시 재실행)
-  const { getItemStyle, itemClass, listEntered } = useListStaggerAnimation({
-    transitionKey,
-    prefersReducedMotion,
-  });
+  // 필터 탭 fade-in: transitionKey 변경 시 false → true로 1프레임 지연 전환.
+  // (카드 stagger는 framer-motion이 담당)
+  const [listEntered, setListEntered] = useState(prefersReducedMotion);
+  useEffect(() => {
+    if (prefersReducedMotion) {
+      setListEntered(true);
+      return;
+    }
+    setListEntered(false);
+    let enterRaf = 0;
+    const resetRaf = requestAnimationFrame(() => {
+      enterRaf = requestAnimationFrame(() => setListEntered(true));
+    });
+    return () => {
+      cancelAnimationFrame(resetRaf);
+      if (enterRaf) cancelAnimationFrame(enterRaf);
+    };
+  }, [prefersReducedMotion, transitionKey]);
 
   // 답변 본문의 [N] 패턴을 source_index로 매칭하기 위한 유효 index Set
   const validIndices = useMemo(() => new Set(sources.map((s) => s.source_index)), [sources]);
@@ -158,17 +172,23 @@ const SourceList = ({
           </div>
         ) : (
           <>
-            <div className="flex flex-col gap-9 px-6 pb-2">
-              {citedSources.map((source, index) => (
-                <div key={source.id} className={itemClass} style={getItemStyle(index)}>
+            <motion.div
+              key={`cited-${transitionKey}`}
+              initial={MotionState.Hidden}
+              animate={MotionState.Visible}
+              variants={staggerListContainer}
+              className="flex flex-col gap-9 px-6 pb-2"
+            >
+              {citedSources.map((source) => (
+                <motion.div key={source.id} variants={fadeInUp}>
                   <SourceCard
                     source={source}
                     showCount
                     count={citationOrderMap.get(source.source_index) ?? source.source_index}
                   />
-                </div>
+                </motion.div>
               ))}
-            </div>
+            </motion.div>
             {/* 참고하면 좋은 문서 영역 */}
             {recommendedSources.length > 0 && (
               <>
@@ -184,13 +204,19 @@ const SourceList = ({
                   </p>
                 </div>
                 {/* 카드 리스트 */}
-                <div className="flex flex-col gap-9 px-6 pb-6">
-                  {recommendedSources.map((source, index) => (
-                    <div key={source.id} className={itemClass} style={getItemStyle(index + citedSources.length)}>
+                <motion.div
+                  key={`rec-${transitionKey}`}
+                  initial={MotionState.Hidden}
+                  animate={MotionState.Visible}
+                  variants={staggerListContainer}
+                  className="flex flex-col gap-9 px-6 pb-6"
+                >
+                  {recommendedSources.map((source) => (
+                    <motion.div key={source.id} variants={fadeInUp}>
                       <SourceCard source={source} showCount={false} />
-                    </div>
+                    </motion.div>
                   ))}
-                </div>
+                </motion.div>
               </>
             )}
           </>
