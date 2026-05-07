@@ -66,6 +66,28 @@ export const crossfade: Variants = {
   exit: { opacity: 0, transition: fastTransition },
 };
 
+/** Typewriter — 텍스트를 word 단위 stagger로 등장. active step reasoning 등 토큰 흐름 표현용. */
+export const typewriterWordsContainer: Variants = {
+  hidden: {},
+  visible: {
+    transition: {
+      staggerChildren: 0.06,
+      delayChildren: 0.04,
+    },
+  },
+};
+
+export const typewriterWord: Variants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: {
+      duration: motionDuration.fast,
+      ease: motionEase,
+    },
+  },
+};
+
 export const MotionState = {
   Hidden: 'hidden',
   Visible: 'visible',

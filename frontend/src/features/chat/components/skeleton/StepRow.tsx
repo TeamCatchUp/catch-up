@@ -8,7 +8,13 @@ import RewrittenQueryBox from '@/features/chat/components/skeleton/details/Rewri
 import SourceDistributionChips from '@/features/chat/components/skeleton/details/SourceDistributionChips';
 import VectorKeywordCodeBox from '@/features/chat/components/skeleton/details/VectorKeywordCodeBox';
 import type { StepRow as StepRowModel } from '@/features/chat/types';
-import { collapseExpand, crossfade, MotionState } from '@/shared/motion';
+import {
+  collapseExpand,
+  crossfade,
+  MotionState,
+  typewriterWord,
+  typewriterWordsContainer,
+} from '@/shared/motion';
 import { cn } from '@/shared/utils/cn';
 
 interface StepRowProps {
@@ -74,11 +80,14 @@ export default function StepRow({ row, isActive, isLast }: StepRowProps) {
       </div>
 
       <div className="flex min-w-0 flex-1 flex-col items-start gap-2 justify-center pb-4">
-        {reasoning && (
-          <p className="text-body-small text-content-normal w-full break-words">
-            {highlightDocCount(reasoning)}
-          </p>
-        )}
+        {reasoning &&
+          (isActive ? (
+            <ActiveReasoningText text={reasoning} />
+          ) : (
+            <p className="text-body-small text-content-normal w-full break-words">
+              {highlightDocCount(reasoning)}
+            </p>
+          ))}
         <AnimatePresence initial={true}>
           {hasDetail && expanded && (
             <motion.div
@@ -95,6 +104,35 @@ export default function StepRow({ row, isActive, isLast }: StepRowProps) {
         </AnimatePresence>
       </div>
     </div>
+  );
+}
+
+/**
+ * Active step의 reasoning 텍스트.
+ * - Word 단위 stagger로 토큰이 흐르듯 등장
+ * - shimmer-text 클래스로 글자에 빛이 흐르는 효과 (진행 중임을 나타냄)
+ * - text 변경 시 key가 바뀌어 새 텍스트로 다시 등장
+ */
+function ActiveReasoningText({ text }: { text: string }) {
+  const words = text.split(/(\s+)/);
+  return (
+    <motion.p
+      key={text}
+      variants={typewriterWordsContainer}
+      initial={MotionState.Hidden}
+      animate={MotionState.Visible}
+      className="text-body-small shimmer-text w-full break-words"
+    >
+      {words.map((word, idx) =>
+        /^\s+$/.test(word) ? (
+          <span key={idx}>{word}</span>
+        ) : (
+          <motion.span key={idx} variants={typewriterWord}>
+            {word}
+          </motion.span>
+        ),
+      )}
+    </motion.p>
   );
 }
 

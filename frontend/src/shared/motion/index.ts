@@ -5,5 +5,7 @@ export {
   staggerListContainer,
   collapseExpand,
   crossfade,
+  typewriterWordsContainer,
+  typewriterWord,
   MotionState,
 } from './presets';

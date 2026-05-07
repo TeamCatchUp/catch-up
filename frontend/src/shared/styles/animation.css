@@ -48,6 +48,37 @@
   }
 }
 
+/* Text breath — 텍스트가 호흡하듯 부드럽게 페이드. AI 처리 중 인상에 사용. */
+@keyframes text-breath {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+/* Line drop — 위에서 떨어져 안착 후 그 자리에서 fade out. 무한 반복 시 cascade 흐름이 유지됨. */
+@keyframes line-drop {
+  0% {
+    opacity: 0;
+    transform: translateY(-24px);
+  }
+  22% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  78% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(0);
+  }
+}
+
 @layer utilities {
   .animate-list-item-enter {
     animation: list-item-enter var(--animate-duration-base) cubic-bezier(0.16, 1, 0.3, 1) both;
@@ -120,6 +151,35 @@
   @media (prefers-reduced-motion: reduce) {
     .animate-shimmer-line {
       background: var(--color-fill-strong, #f7f7f8);
+      animation: none;
+    }
+  }
+
+  /* AI 처리 중 인상에 사용하는 부드러운 호흡 utility. opacity가 ease-in-out sine으로 변동. */
+  .animate-breath {
+    animation: text-breath 2.4s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
+  }
+
+  /* skeleton line이 위에서 천천히 떨어지는 cascade. animation-delay로 stagger 부여, 무한 반복. */
+  .animate-line-drop {
+    animation: line-drop 3.6s cubic-bezier(0.22, 0.61, 0.36, 1) infinite both;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .animate-line-drop {
+      animation: none;
+    }
+  }
+
+  /* Active step의 reasoning 텍스트에 적용. 텍스트 전체가 호흡. */
+  .shimmer-text {
+    color: var(--color-content-normal);
+    animation: text-breath 2.4s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .animate-breath,
+    .shimmer-text {
       animation: none;
     }
   }
