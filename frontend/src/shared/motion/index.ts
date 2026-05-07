@@ -1,11 +1,11 @@
 export {
-  motionDuration,
-  motionEase,
-  fadeInUp,
-  staggerListContainer,
   collapseExpand,
   crossfade,
-  typewriterWordsContainer,
-  typewriterWord,
+  fadeInUp,
+  motionDuration,
+  motionEase,
   MotionState,
+  staggerListContainer,
+  typewriterWord,
+  typewriterWordsContainer,
 } from './presets';

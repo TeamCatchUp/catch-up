@@ -8,13 +8,7 @@ import RewrittenQueryBox from '@/features/chat/components/skeleton/details/Rewri
 import SourceDistributionChips from '@/features/chat/components/skeleton/details/SourceDistributionChips';
 import VectorKeywordCodeBox from '@/features/chat/components/skeleton/details/VectorKeywordCodeBox';
 import type { StepRow as StepRowModel } from '@/features/chat/types';
-import {
-  collapseExpand,
-  crossfade,
-  MotionState,
-  typewriterWord,
-  typewriterWordsContainer,
-} from '@/shared/motion';
+import { collapseExpand, crossfade, MotionState, typewriterWord, typewriterWordsContainer } from '@/shared/motion';
 import { cn } from '@/shared/utils/cn';
 
 interface StepRowProps {
@@ -68,25 +62,19 @@ export default function StepRow({ row, isActive, isLast }: StepRowProps) {
               exit={MotionState.Exit}
               className="flex"
             >
-              <NormalMarker
-                expanded={expanded}
-                interactive={hasDetail}
-                onToggle={() => setExpanded((v) => !v)}
-              />
+              <NormalMarker expanded={expanded} interactive={hasDetail} onToggle={() => setExpanded((v) => !v)} />
             </motion.span>
           )}
         </AnimatePresence>
         {!isLast && <span aria-hidden className="bg-edge-neutral mt-0 w-px flex-1" />}
       </div>
 
-      <div className="flex min-w-0 flex-1 flex-col items-start gap-2 justify-center pb-4">
+      <div className="flex min-w-0 flex-1 flex-col items-start justify-center gap-2 pb-4">
         {reasoning &&
           (isActive ? (
             <ActiveReasoningText text={reasoning} />
           ) : (
-            <p className="text-body-small text-content-normal w-full break-words">
-              {highlightDocCount(reasoning)}
-            </p>
+            <p className="text-body-small text-content-normal w-full break-words">{highlightDocCount(reasoning)}</p>
           ))}
         <AnimatePresence initial={true}>
           {hasDetail && expanded && (
@@ -175,19 +163,10 @@ function NormalMarker({
       height="12"
       viewBox="0 0 16 16"
       fill="none"
-      className={cn(
-        'text-content-neutral transition-transform duration-150',
-        expanded ? 'rotate-0' : '-rotate-90',
-      )}
+      className={cn('text-content-neutral transition-transform duration-150', expanded ? 'rotate-0' : '-rotate-90')}
       aria-hidden
     >
-      <path
-        d="M4 6l4 4 4-4"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
+      <path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 

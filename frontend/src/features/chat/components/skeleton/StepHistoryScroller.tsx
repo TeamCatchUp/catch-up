@@ -54,11 +54,7 @@ export default function StepHistoryScroller({ stepRows, topic }: StepHistoryScro
   }, [reduceMotion]);
 
   return (
-    <div
-      ref={scrollRef}
-      onScroll={handleScroll}
-      className="flex min-h-0 flex-1 flex-col overflow-y-auto"
-    >
+    <div ref={scrollRef} onScroll={handleScroll} className="flex min-h-0 flex-1 flex-col overflow-y-auto">
       <div ref={contentRef}>
         <TopicHeader topic={topic} />
         <div className="px-6 pt-2 pb-4">

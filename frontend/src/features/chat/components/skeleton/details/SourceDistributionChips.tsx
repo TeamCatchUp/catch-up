@@ -30,9 +30,7 @@ const PLATFORM_ORDER = ['confluence', 'github', 'jira', 'slack', 'channeltalk', 
 const normalize = (raw: unknown): Array<{ key: string; count: number }> => {
   if (!raw || typeof raw !== 'object') return [];
   const dict = raw as Record<string, unknown>;
-  const keys = Object.keys(dict).sort(
-    (a, b) => PLATFORM_ORDER.indexOf(a) - PLATFORM_ORDER.indexOf(b),
-  );
+  const keys = Object.keys(dict).sort((a, b) => PLATFORM_ORDER.indexOf(a) - PLATFORM_ORDER.indexOf(b));
   return keys
     .map((k) => {
       const count = Number(dict[k] ?? 0);
