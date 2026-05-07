@@ -97,6 +97,24 @@ async def _run_search(
     return docs, query
 
 
+def _dedup_tool_calls(tool_calls: list) -> list[dict]:
+    """multi_query_search의 keyword_tokens를 cross-query 중복 제거한 tool_calls 반환."""
+    result = []
+    for tc in tool_calls:
+        if tc["name"] == "multi_query_search":
+            used: set[str] = set()
+            deduped = []
+            for req in tc["args"].get("search_requests", []):
+                tokens = req.get("keyword_tokens") or []
+                unique = [t for t in tokens if t not in used]
+                used.update(unique)
+                deduped.append({**req, "keyword_tokens": unique})
+            result.append({**tc, "args": {**tc["args"], "search_requests": deduped}})
+        else:
+            result.append(tc)
+    return result
+
+
 def _build_search_queries(tool_calls: list) -> list[dict]:
     """tool_calls에서 {vector, keyword} 구조로 쿼리 목록을 추출한다."""
     queries = []
@@ -138,7 +156,8 @@ async def search_tool_executor_node(
 
     tool_filters = state.get("tool_filters") or []
 
-    search_queries = _build_search_queries(last_message.tool_calls)
+    deduped_tool_calls = _dedup_tool_calls(last_message.tool_calls)
+    search_queries = _build_search_queries(deduped_tool_calls)
     await adispatch_custom_event(
         "process",
         {
@@ -173,7 +192,7 @@ async def search_tool_executor_node(
             return f"{header}\n(no new documents in this search)"
         return f"{header}\n{build_docs_summary(shown, max_docs=_PREVIEW_LIMIT)}"
 
-    for tool_call in last_message.tool_calls:
+    for tool_call in deduped_tool_calls:
         tool_name = tool_call["name"]
         args = tool_call["args"]
         call_id = tool_call["id"]
@@ -198,16 +217,7 @@ async def search_tool_executor_node(
                 )
                 summary = _summarize_hits(query_str, docs)
             elif tool_name == "multi_query_search":
-                search_requests: list[dict] = args.get("search_requests", [])
-
-                # 요청 간 중복 키워드 제거)
-                used_keywords: set[str] = set()
-                deduped_requests: list[dict] = []
-                for req in search_requests:
-                    tokens = req.get("keyword_tokens") or []
-                    unique_tokens = [t for t in tokens if t not in used_keywords]
-                    used_keywords.update(unique_tokens)
-                    deduped_requests.append({**req, "keyword_tokens": unique_tokens})
+                deduped_requests: list[dict] = args.get("search_requests", [])
 
                 logger.debug(
                     "tool_executing",
@@ -229,7 +239,7 @@ async def search_tool_executor_node(
                 results_list = await asyncio.gather(*tasks, return_exceptions=True)
                 docs = []
                 summaries = []
-                for req, result in zip(search_requests, results_list):
+                for req, result in zip(deduped_requests, results_list):
                     q = req.get("query")
                     if isinstance(result, Exception):
                         logger.warning(
