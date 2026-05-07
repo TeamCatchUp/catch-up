@@ -27,6 +27,11 @@ interface UseRagScrollReturn {
   scrollContainerHeight: number;
   scrollToLatest: () => void;
   activePairIndex: number;
+  /**
+   * 무한 스크롤 prepend 후 activePairIndex가 같은 인덱스로 다른 페어를 가리키지 않도록
+   * 외부에서 prepend된 페어 수만큼 보정한다.
+   */
+  shiftActivePairIndex: (by: number) => void;
 }
 
 const OBSERVER_THRESHOLDS = [0, 0.15, 0.3, 0.5, 0.7, 1.0];
@@ -169,7 +174,7 @@ export const useRagScroll = ({
   useEffect(() => {
     if (!scrollToMessageId || scrollToHandledRef.current || qaPairs.length === 0) return;
 
-    const targetId = `history_${scrollToMessageId}`;
+    const targetId = String(scrollToMessageId);
     const targetIndex = qaPairs.findIndex((p) => p.question.id === targetId);
     if (targetIndex < 0) return;
 
@@ -197,6 +202,11 @@ export const useRagScroll = ({
     pendingScrollRef.current = true;
   }, []);
 
+  const shiftActivePairIndex = useCallback((by: number) => {
+    if (!by) return;
+    setActivePairIndex((prev) => Math.max(0, prev + by));
+  }, []);
+
   return {
     qaPairs,
     qaRefs,
@@ -204,6 +214,7 @@ export const useRagScroll = ({
     scrollContainerHeight,
     scrollToLatest,
     activePairIndex: clampedActivePairIndex,
+    shiftActivePairIndex,
   };
 };
 

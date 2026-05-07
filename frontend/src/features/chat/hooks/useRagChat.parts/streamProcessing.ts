@@ -340,6 +340,12 @@ export const useStreamProcessing = ({
         }
         case 'sources': {
           applyStreamingSources(event.sources ?? []);
+          // backend 흐름: token stream → _save_message(await) → final sources event.
+          // 따라서 token 이후 도착한 sources event는 항상 최종 → 이 시점에 게이트를 풀어도 안전하다.
+          // finalize에서 setIsLoading(false)가 한 번 더 호출되어도 idempotent.
+          if (hasStreamedTokenRef.current) {
+            setIsLoading(false);
+          }
           break;
         }
         case 'token': {
@@ -357,6 +363,7 @@ export const useStreamProcessing = ({
       hasStreamedTokenRef,
       isStopped,
       resolveSessionIdFromStream,
+      setIsLoading,
       setPipelineQueryType,
       setPipelineReasoning,
       setStepRows,
