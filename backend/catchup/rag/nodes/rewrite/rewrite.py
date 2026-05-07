@@ -1,4 +1,3 @@
-import asyncio
 import structlog
 from langchain.chat_models import BaseChatModel
 
@@ -8,6 +7,7 @@ from catchup.rag.nodes.utils import ainvoke_llm_with_token_usage
 from catchup.rag.nodes.utils import get_conversation_history
 from catchup.rag.nodes.utils import get_formatted_history_text
 from catchup.rag.nodes.utils import log_node
+from catchup.rag.retryable import RETRYABLE_ERRORS
 from catchup.rag.semaphores import rag_semaphores
 from catchup.rag.state import AgentState
 
@@ -43,7 +43,7 @@ async def rewrite_node(
         )
         rewritten_query = response.content
 
-    except asyncio.TimeoutError as e:
+    except RETRYABLE_ERRORS as e:
         raise e
     except Exception:
         return {"rewritten_query": original_query}

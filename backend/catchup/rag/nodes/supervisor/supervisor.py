@@ -1,4 +1,3 @@
-import asyncio
 import structlog
 from langchain.chat_models import BaseChatModel
 from langchain_core.callbacks import adispatch_custom_event
@@ -11,6 +10,7 @@ from catchup.rag.nodes.utils import build_docs_summary
 from catchup.rag.nodes.utils import build_system_message
 from catchup.rag.nodes.utils import get_conversation_history
 from catchup.rag.nodes.utils import log_node
+from catchup.rag.retryable import RETRYABLE_ERRORS
 from catchup.rag.schemas.sources import SOURCE_METADATA
 from catchup.rag.schemas.structures import PipelinePlan
 from catchup.rag.semaphores import rag_semaphores
@@ -159,8 +159,7 @@ async def supervisor_node(
 
         return result
 
-    except asyncio.TimeoutError as e:
-        # TimeoutError는 RetryPolicy에서 처리하도록 상위로 전파
+    except RETRYABLE_ERRORS as e:
         raise e
     except Exception as e:
         logger.warning(

@@ -12,6 +12,7 @@ from catchup.rag.nodes.utils import build_system_message
 from catchup.rag.nodes.utils import get_conversation_history
 from catchup.rag.nodes.utils import log_node
 from catchup.rag.policies import FALLBACK_ANSWER
+from catchup.rag.retryable import RETRYABLE_ERRORS
 from catchup.rag.schemas.sources import SOURCE_METADATA
 from catchup.rag.semaphores import rag_semaphores
 from catchup.rag.state import AgentState
@@ -62,7 +63,7 @@ async def direct_answer_node(
             answer=raw_response.content,
         )
 
-    except asyncio.TimeoutError as e:
+    except RETRYABLE_ERRORS as e:
         raise e
     except Exception as e:
         logger.error(
