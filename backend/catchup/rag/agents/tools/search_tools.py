@@ -89,7 +89,7 @@ async def _run_search(
         queries=[search_query],
         tool_filters=tool_filters or [],
         k=40,
-        weights=[0.6, 0.25, 0.15],
+        weights=[0.6, 0.4],
     )
     # 리스트의 리스트를 평탄화하고 중복 제거
     flattened_results = [doc for sublist in results for doc in sublist]

@@ -1,7 +1,6 @@
 import asyncio
 import time
 from typing import Any
-from typing import Literal
 from typing import override
 
 import structlog
@@ -16,12 +15,12 @@ from sqlalchemy import text
 from catchup.components.vector_db.base import BaseVectorDbService
 from catchup.components.vector_db.rank import weighted_reciprocal_rank
 from catchup.configs.config import settings
-from catchup.db.engine import parse_plan
 from catchup.db.engine import SessionLocal
+from catchup.db.engine import parse_plan
 from catchup.db.models import SourceType
 from catchup.rag.executors import rag_executors
-from catchup.rag.schemas.filters import build_temporal_filters
 from catchup.rag.schemas.filters import TemporalFilter
+from catchup.rag.schemas.filters import build_temporal_filters
 
 logger = structlog.get_logger(__name__)
 
@@ -46,8 +45,6 @@ class PGBigmRetriever(BaseRetriever):
     offset: int = 0
     tool_filters: list[SourceType] | None = None
     temporal_filters: list[TemporalFilter] | None = None
-    search_mode: Literal["title", "content", "both"] = "both"
-
     @override
     def _get_relevant_documents(
         self,
@@ -63,12 +60,11 @@ class PGBigmRetriever(BaseRetriever):
             query=query,
             k=self.k,
             offset=self.offset,
-            search_mode=self.search_mode,
             tool_filters=self.tool_filters,
             temporal_filters=self.temporal_filters,
         )
 
-        results = list(self._do_query(search_sql, params, label=f"bigm_{self.search_mode}"))
+        results = list(self._do_query(search_sql, params))
         return self._get_documents_from_results(results)
 
     @staticmethod
@@ -77,17 +73,15 @@ class PGBigmRetriever(BaseRetriever):
         query: str | list[str],
         k: int,
         offset: int = 0,
-        search_mode: Literal["title", "content", "both"] = "both",
         tool_filters: list[SourceType] | None = None,
         temporal_filters: list[TemporalFilter] | None = None,
     ) -> tuple[Any, dict]:
         """
-        통합 키워드 검색 SQL 및 파라미터 생성.
+        contextual_content 기반 키워드 검색 SQL 및 파라미터 생성.
         """
         if isinstance(query, list):
             tokens = query
         else:
-            # 문자열인 경우 공백으로 쪼개서 개별 키워드 리스트 생성
             tokens = query.split()
 
         # 빈 토큰 제외 및 중복 제거
@@ -125,8 +119,6 @@ class PGBigmRetriever(BaseRetriever):
                 )
             filter_clauses.append(f"({' OR '.join(sql_conditions)})")
 
-        # 토큰 기반 필터 및 스코어링 로직
-        # AND 조건을 위해 모든 토큰이 포함되어야 함
         token_filters = []
         exact_match_scores = []
         sim_scores = []
@@ -134,26 +126,12 @@ class PGBigmRetriever(BaseRetriever):
         for i, token in enumerate(tokens):
             p_name = f"token_{i}"
             params[p_name] = token
-            
-            # Exact Match (완전 일치) 확인 로직
-            # Title 가중치 2.0, Content 가중치 1.0 (Both 모드 기준)
-            if search_mode in ("title", "both"):
-                exact_match_scores.append(f"(CASE WHEN LOWER(e.cmetadata ->> 'title') = LOWER(:{p_name}) THEN 2.0 ELSE 0.0 END)")
-                sim_scores.append(f"(bigm_similarity(e.cmetadata ->> 'title', :{p_name}) * 2.0)")
-            
-            if search_mode in ("content", "both"):
-                exact_match_scores.append(f"(CASE WHEN LOWER(e.cmetadata ->> 'contextual_content') = LOWER(:{p_name}) THEN 1.0 ELSE 0.0 END)")
-                sim_scores.append(f"bigm_similarity(e.cmetadata ->> 'contextual_content', :{p_name})")
 
-            # AND 필터링: 각 토큰이 제목이나 내용 중 하나에는 반드시 포함되거나 유사해야 함
-            token_conds = []
-            if search_mode in ("title", "both"):
-                token_conds.append(f"((e.cmetadata ->> 'title') =% :{p_name} OR (e.cmetadata ->> 'title') ILIKE likequery(:{p_name}))")
-            if search_mode in ("content", "both"):
-                token_conds.append(f"((e.cmetadata ->> 'contextual_content') =% :{p_name} OR (e.cmetadata ->> 'contextual_content') ILIKE likequery(:{p_name}))")
-            
-            if token_conds:
-                token_filters.append(f"({' OR '.join(token_conds)})")
+            exact_match_scores.append(f"(CASE WHEN LOWER(e.cmetadata ->> 'contextual_content') = LOWER(:{p_name}) THEN 1.0 ELSE 0.0 END)")
+            sim_scores.append(f"bigm_similarity(e.cmetadata ->> 'contextual_content', :{p_name})")
+            token_filters.append(
+                f"((e.cmetadata ->> 'contextual_content') =% :{p_name} OR (e.cmetadata ->> 'contextual_content') ILIKE likequery(:{p_name}))"
+            )
 
         if token_filters:
             filter_clauses.append(f"({' AND '.join(token_filters)})")
@@ -273,7 +251,7 @@ class PGVectorService(BaseVectorDbService):
         self,
         query: str,
         k: int = 4,
-        weights: list[float] = [0.3, 0.5, 0.2],  # [vector, title, content]
+        weights: list[float] = [0.6, 0.4],  # [vector, content]
         tool_filters: list[SourceType] | None = None,
         temporal_filters: list[TemporalFilter] | None = None,
         keyword_tokens: list[str] | None = None,
@@ -285,10 +263,10 @@ class PGVectorService(BaseVectorDbService):
         """
         logger.debug("hybrid_search_started", query_len=len(query))
         t0 = time.perf_counter()
-        
+
         loop = asyncio.get_running_loop()
         executor = rag_executors.vector_search_executor
-        
+
         _run_vector_sync = _timed("vector_retrieval", lambda x: [
             doc for doc, score in self.vector_store.similarity_search_with_score(
                 query=x["semantic_query"],
@@ -297,16 +275,6 @@ class PGVectorService(BaseVectorDbService):
             )[offset:]
             if score >= score_threshold
         ])
-
-        _run_title_sync = _timed("title_retrieval", lambda x: PGBigmRetriever(
-            session_factory=self.session_factory,
-            collection_name=self.collection_name,
-            k=max(100, k + offset),
-            offset=offset,
-            tool_filters=tool_filters,
-            temporal_filters=temporal_filters,
-            search_mode="title"
-        ).invoke(x["keyword_tokens"]))
 
         _run_content_sync = _timed("content_retrieval", lambda x: PGBigmRetriever(
             session_factory=self.session_factory,
@@ -317,7 +285,7 @@ class PGVectorService(BaseVectorDbService):
             temporal_filters=temporal_filters,
             search_mode="content"
         ).invoke(x["keyword_tokens"]))
-        
+
         search_kwargs = self._build_search_kwargs(tool_filters, temporal_filters)
         payload = {
             "semantic_query": query,
@@ -328,13 +296,12 @@ class PGVectorService(BaseVectorDbService):
         vector_task = loop.run_in_executor(executor, _run_vector_sync, payload)
 
         if keyword_tokens:
-            title_task   = loop.run_in_executor(executor, _run_title_sync,   payload)
             content_task = loop.run_in_executor(executor, _run_content_sync, payload)
-            vector_docs, title_docs, content_docs = await asyncio.gather(
-                vector_task, title_task, content_task
+            vector_docs, content_docs = await asyncio.gather(
+                vector_task, content_task
             )
             result = weighted_reciprocal_rank(
-                doc_lists=[vector_docs, title_docs, content_docs],
+                doc_lists=[vector_docs, content_docs],
                 weights=weights
             )[:k]
         else:
@@ -350,7 +317,7 @@ class PGVectorService(BaseVectorDbService):
         self,
         queries: list[dict[str, Any]],
         k: int = 10,
-        weights: list[float] = [0.6, 0.25, 0.15],
+        weights: list[float] = [0.6, 0.4],
         tool_filters: list[SourceType] | None = None,
     ) -> list[list[Document]]:
         """
@@ -421,7 +388,6 @@ class PGVectorService(BaseVectorDbService):
         query: str,
         k: int = 20,
         tool_filters: list[SourceType] | None = None,
-        search_mode: Literal["title", "content", "both"] = "both",
         offset: int = 0,
     ) -> list[Document]:
         """
@@ -432,9 +398,8 @@ class PGVectorService(BaseVectorDbService):
             query=query,
             k=k,
             offset=offset,
-            search_mode=search_mode,
             tool_filters=tool_filters,
-            temporal_filters=None # PGVectorService interface does not yet expose temporal_filters for this method
+            temporal_filters=None
         )
 
         with self.session_factory() as session:

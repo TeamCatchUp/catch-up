@@ -40,7 +40,7 @@ async def search_vector_db_node(
         results: list[list[Document]] = await vector_db_service.hybrid_search_batch(
             queries=query_dicts,
             k=100,
-            weights=[0.6, 0.25, 0.15],
+            weights=[0.6, 0.4],
             tool_filters=tool_filters,
         )
     except Exception as e:
