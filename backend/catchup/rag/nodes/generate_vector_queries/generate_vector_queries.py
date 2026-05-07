@@ -1,4 +1,3 @@
-import asyncio
 import structlog
 from langchain.chat_models import BaseChatModel
 from langchain_core.callbacks import adispatch_custom_event
@@ -9,6 +8,7 @@ from catchup.rag.nodes.utils import ainvoke_llm_with_token_usage
 from catchup.rag.nodes.utils import get_conversation_history
 from catchup.rag.nodes.utils import get_formatted_history_text
 from catchup.rag.nodes.utils import log_node
+from catchup.rag.retryable import RETRYABLE_ERRORS
 from catchup.rag.schemas.structures import VectorDbSearchPlan
 from catchup.rag.schemas.structures import VectorDbSearchQuery
 from catchup.rag.semaphores import rag_semaphores
@@ -56,7 +56,7 @@ async def generate_vector_queries_node(
         )
         plan: VectorDbSearchPlan = response.get("parsed")
 
-    except asyncio.TimeoutError as e:
+    except RETRYABLE_ERRORS as e:
         raise e
     except Exception as e:
         logger.warning(

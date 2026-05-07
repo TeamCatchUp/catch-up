@@ -1,5 +1,3 @@
-import asyncio
-
 import structlog
 from langchain.chat_models import BaseChatModel
 from langchain_core.callbacks import adispatch_custom_event
@@ -16,6 +14,7 @@ from catchup.rag.nodes.utils import drop_orphaned_tool_calls
 from catchup.rag.nodes.utils import extract_essential_ids
 from catchup.rag.nodes.utils import extract_reason_for_stopping
 from catchup.rag.nodes.utils import log_node
+from catchup.rag.retryable import RETRYABLE_ERRORS
 from catchup.rag.semaphores import rag_semaphores
 from catchup.rag.state import AgentState
 
@@ -65,7 +64,7 @@ async def standard_agent_node(
             semaphore=rag_semaphores.llm_large,
             timeout=timeout,
         )
-    except asyncio.TimeoutError as e:
+    except RETRYABLE_ERRORS as e:
         raise e
     except Exception:
         return {"agent_iteration": agent_iteration + 1}
