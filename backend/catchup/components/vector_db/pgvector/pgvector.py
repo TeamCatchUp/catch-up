@@ -321,25 +321,28 @@ class PGVectorService(BaseVectorDbService):
         search_kwargs = self._build_search_kwargs(tool_filters, temporal_filters)
         payload = {
             "semantic_query": query,
-            "keyword_tokens": keyword_tokens or [query],
+            "keyword_tokens": keyword_tokens or [],
             "filter": search_kwargs.get("filter"),
         }
 
-        vector_task  = loop.run_in_executor(executor, _run_vector_sync,  payload)
-        title_task   = loop.run_in_executor(executor, _run_title_sync,   payload)
-        content_task = loop.run_in_executor(executor, _run_content_sync, payload)
+        vector_task = loop.run_in_executor(executor, _run_vector_sync, payload)
 
-        vector_docs, title_docs, content_docs = await asyncio.gather(
-            vector_task, title_task, content_task
-        )
-
-        result = weighted_reciprocal_rank(
-            doc_lists=[vector_docs, title_docs, content_docs],
-            weights=weights
-        )[:k]
+        if keyword_tokens:
+            title_task   = loop.run_in_executor(executor, _run_title_sync,   payload)
+            content_task = loop.run_in_executor(executor, _run_content_sync, payload)
+            vector_docs, title_docs, content_docs = await asyncio.gather(
+                vector_task, title_task, content_task
+            )
+            result = weighted_reciprocal_rank(
+                doc_lists=[vector_docs, title_docs, content_docs],
+                weights=weights
+            )[:k]
+        else:
+            vector_docs = await vector_task
+            result = vector_docs[:k]
 
         logger.debug("hybrid_search_completed", elapsed=round(time.perf_counter() - t0, 3), result_count=len(result))
-        
+
         return result
 
     @override
@@ -354,9 +357,18 @@ class PGVectorService(BaseVectorDbService):
         여러 쿼리에 대해 병렬로 hybrid_search를 수행한다.
         queries 요소는 'query', 'start_date', 'end_date', 'keyword_tokens' 등을 포함할 수 있다.
         """
+        # Deduplicate keywords across queries: first-come-first-served per keyword
+        used_keywords: set[str] = set()
+        deduped_queries: list[dict[str, Any]] = []
+        for q in queries:
+            tokens = q.get("keyword_tokens") or []
+            unique_tokens = [t for t in tokens if t not in used_keywords]
+            used_keywords.update(unique_tokens)
+            deduped_queries.append({**q, "keyword_tokens": unique_tokens})
+
         tasks = []
 
-        for q in queries:
+        for q in deduped_queries:
             temporal_filters = build_temporal_filters(
                 tool_filters=tool_filters,
                 start_date=q.get("start_date"),

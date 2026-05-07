@@ -199,11 +199,21 @@ async def search_tool_executor_node(
                 summary = _summarize_hits(query_str, docs)
             elif tool_name == "multi_query_search":
                 search_requests: list[dict] = args.get("search_requests", [])
+
+                # 요청 간 중복 키워드 제거)
+                used_keywords: set[str] = set()
+                deduped_requests: list[dict] = []
+                for req in search_requests:
+                    tokens = req.get("keyword_tokens") or []
+                    unique_tokens = [t for t in tokens if t not in used_keywords]
+                    used_keywords.update(unique_tokens)
+                    deduped_requests.append({**req, "keyword_tokens": unique_tokens})
+
                 logger.debug(
                     "tool_executing",
                     tool=tool_name,
-                    query_count=len(search_requests),
-                    requests=search_requests,
+                    query_count=len(deduped_requests),
+                    requests=deduped_requests,
                 )
                 tasks = [
                     _run_search(
@@ -214,7 +224,7 @@ async def search_tool_executor_node(
                         start_date=req.get("start_date"),
                         end_date=req.get("end_date"),
                     )
-                    for req in search_requests
+                    for req in deduped_requests
                 ]
                 results_list = await asyncio.gather(*tasks, return_exceptions=True)
                 docs = []
