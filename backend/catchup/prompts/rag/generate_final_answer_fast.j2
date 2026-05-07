@@ -42,8 +42,7 @@ List only the sources you actually used in the `<citations>` block at the end.
 <output_format>
 State the answer directly.{% if not is_slack %} Include inline citations [n].{% endif %} Append the `<citations>` block at the end.
 
-   <citations>{"1": "...", "2": "..."}
-   </citations>
+   <citations>1, 2, 3</citations>
 
 </output_format>
 
@@ -57,13 +56,7 @@ State the answer directly.{% if not is_slack %} Include inline citations [n].{% 
 배포는 3월 5일 오전 10시에 완료되었습니다 [1]. 해당 배포는 CATDEV-201 티켓의 핫픽스를 포함하며, GitHub PR #88이 병합된 직후 진행되었습니다 [2][3].
 {% endif %}
 
-<citations>
-{
-  "1": "Slack #deploy 채널 — 3월 5일 배포 완료 알림 메시지.",
-  "2": "Jira CATDEV-201 — 핫픽스 티켓 및 배포 포함 여부 명시.",
-  "3": "GitHub PR #88 — 해당 핫픽스 코드 변경 및 병합 기록."
-}
-</citations>
+<citations>1, 2, 3</citations>
 
 </output_example>
 
