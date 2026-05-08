@@ -1,19 +1,32 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+import asyncio
+from datetime import datetime
+from datetime import timedelta
+from datetime import timezone
 
 from catchup.audit.actions import FullSyncAction
 from catchup.audit.metadata import FullSyncEventAuditMetadata
 from catchup.audit.utils import audit_log
-from catchup.connectors.jira.factory import create_jira_ingestion_service
+from catchup.configs.config import settings
+from catchup.connector_core.adapters.jira import JiraIssueFullSyncAdapter
+from catchup.connector_core.adapters.jira import JiraIssueFullSyncExecutionRequest
+from catchup.connector_core.adapters.jira import (
+    create_jira_issue_ingestion_dependencies,
+)
+from catchup.connector_core.adapters.jira import prepare_jira_issue_transform_context
+from catchup.connector_core.application.sync_ingestion import run_sync_ingestion
+from catchup.connector_core.ports.sync_ingestion import SyncWindow
 from catchup.sync.audit import SyncAuditContext
-from catchup.sync.common.schemas import FullSyncContext, TargetSyncResult
+from catchup.sync.common.schemas import FullSyncContext
+from catchup.sync.common.schemas import TargetSyncResult
 from catchup.worker.handlers.base_full_sync_handler import BaseFullSyncHandler
+
 
 class JiraFullSyncHandler(BaseFullSyncHandler):
     connector = "jira"
 
-    async def _get_service(self, scope_id: str, cache: dict[str, object]):
+    async def _get_dependencies(self, scope_id: str, cache: dict[str, object]):
         cloud_id = scope_id.strip()
         cache_key = self._cache_key(cloud_id)
         cached = cache.get(cache_key)
@@ -23,9 +36,9 @@ class JiraFullSyncHandler(BaseFullSyncHandler):
         if not cloud_id:
             raise ValueError("jira cloud_id(scope_id) is empty")
 
-        service = await create_jira_ingestion_service(cloud_id=cloud_id)
-        cache[cache_key] = service
-        return service
+        dependencies = await create_jira_issue_ingestion_dependencies(cloud_id=cloud_id)
+        cache[cache_key] = dependencies
+        return dependencies
 
     @audit_log(
         FullSyncAction.EVENT,
@@ -38,32 +51,74 @@ class JiraFullSyncHandler(BaseFullSyncHandler):
         context: FullSyncContext,
         service_cache: dict[str, object],
     ) -> TargetSyncResult:
-        service = await self._get_service(context.scope_id, service_cache)
+        dependencies = await self._get_dependencies(context.scope_id, service_cache)
         sync_from_dt = (
             datetime.fromtimestamp(float(context.sync_from_ts), tz=timezone.utc)
             if context.sync_from_ts is not None
-            else None
+            else datetime.now(timezone.utc) - timedelta(days=settings.DEFAULT_SYNC_DAYS)
         )
 
         project_key = context.target_id.strip()
         if not project_key:
             raise ValueError("jira project_key(target_id) is empty")
 
-        result = await service.full_sync(
-            project_keys=[project_key],
-            sync_from_dt=sync_from_dt,
-            audit_context=SyncAuditContext(
-                connector=context.connector,
-                scope_id=context.scope_id,
-                target_id=context.target_id,
-                job_id=context.job_id,
-                task_id=context.event_id,
-            ),
+        window_end = datetime.now(timezone.utc)
+        sync_window = SyncWindow(
+            window_start=sync_from_dt,
+            window_end=window_end,
+        )
+        audit_context = SyncAuditContext(
+            connector=context.connector,
+            scope_id=context.scope_id,
+            target_id=context.target_id,
+            job_id=context.job_id,
+            task_id=context.event_id,
+        )
+        adapter = JiraIssueFullSyncAdapter(
+            dependencies=dependencies,
+        )
+        await prepare_jira_issue_transform_context(
+            dependencies=dependencies,
+            project_key=project_key,
         )
 
-        if result.error_count > 0:
+        synced_count = 0
+        error_count = 0
+        next_page_token: str | None = None
+        batch_index = 0
+        max_results = int(settings.JIRA_SYNC_BATCH_SIZE)
+
+        while True:
+            batch_result = await run_sync_ingestion(
+                port=adapter,
+                execution=JiraIssueFullSyncExecutionRequest(
+                    tenant_id=context.scope_id,
+                    project_key=project_key,
+                    batch_index=batch_index,
+                    next_page_token=next_page_token,
+                    max_results=max_results,
+                    audit_context=audit_context,
+                ),
+                sync_window=sync_window,
+            )
+            synced_count += batch_result.persisted_count
+            error_count += batch_result.error_count
+
+            if batch_result.is_last or not batch_result.next_page_token:
+                break
+
+            next_page_token = batch_result.next_page_token
+            batch_index += 1
+            await asyncio.sleep(settings.JIRA_API_RATE_LIMIT_DELAY)
+
+        result = TargetSyncResult(
+            synced_count=synced_count,
+            error_count=error_count,
+        )
+
+        if error_count > 0:
             raise RuntimeError(
-                "[JIRA][FULL SYNC][WORKER] Target sync failed: "
+                "jira full sync target completed with errors: "
                 f"scope_id={context.scope_id}, project_key={project_key}, errors={result.error_count}"
             )
         return result

@@ -56,6 +56,9 @@ from catchup.connector_core.document_format.channel_talk import (
 from catchup.connector_core.document_format.channel_talk import (
     ChannelTalkUserChatTimingMetadata,
 )
+from catchup.connector_core.document_format.jira import JiraAttachmentMetadata
+from catchup.connector_core.document_format.jira import JiraIssueLogicalMetadata
+from catchup.connector_core.document_format.jira import JiraIssueMetadata
 
 __all__ = [
     "ChannelTalkDocumentArticleArticleMetadata",
@@ -78,4 +81,7 @@ __all__ = [
     "ChannelTalkUserChatTagsMetadata",
     "ChannelTalkUserChatTimingMetadata",
     "DocumentBaseMetadata",
+    "JiraAttachmentMetadata",
+    "JiraIssueLogicalMetadata",
+    "JiraIssueMetadata",
 ]

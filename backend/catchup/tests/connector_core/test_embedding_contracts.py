@@ -40,6 +40,9 @@ from catchup.connector_core.document_format import ChannelTalkUserChatMetricsMet
 from catchup.connector_core.document_format import ChannelTalkUserChatTagsMetadata
 from catchup.connector_core.document_format import ChannelTalkUserChatTimingMetadata
 from catchup.connector_core.document_format import DocumentBaseMetadata
+from catchup.connector_core.document_format import JiraAttachmentMetadata
+from catchup.connector_core.document_format import JiraIssueLogicalMetadata
+from catchup.connector_core.document_format import JiraIssueMetadata
 
 
 class ChannelTalkUserChatLogicalMetadataTests(TestCase):
@@ -206,36 +209,119 @@ class ChannelTalkUserChatLogicalMetadataTests(TestCase):
                 ),
             )
 
-    def test_contract_rejects_non_channel_talk_source(self) -> None:
-        now = datetime(2026, 4, 22, 2, 10, tzinfo=timezone.utc)
+
+class JiraIssueLogicalMetadataTests(TestCase):
+    def test_storage_projection_keeps_existing_flat_jira_shape(self) -> None:
+        now = datetime(2026, 5, 8, 1, 0, tzinfo=timezone.utc)
+        contract = JiraIssueLogicalMetadata(
+            base=DocumentBaseMetadata(
+                source="jira",
+                record_id="GRT-1",
+                url="https://example.atlassian.net/browse/GRT-1",
+                created_at=now,
+                updated_at=now,
+                synced_at=now,
+                contextual_content="[GRT-1] Test issue",
+            ),
+            issue=JiraIssueMetadata(
+                entity_type="issue",
+                issue_key="GRT-1",
+                issue_id="10001",
+                title="Test issue",
+                project_key="GRT",
+                issue_type="Task",
+                status="In Progress",
+                priority="High",
+                assignee="Ada",
+                reporter="Grace",
+                labels=("backend",),
+                attachments=(
+                    JiraAttachmentMetadata(
+                        filename="trace.txt",
+                        url="https://example.atlassian.net/attachment/1",
+                        mime_type="text/plain",
+                    ),
+                ),
+            ),
+        )
+
+        storage = contract.to_storage_metadata()
+
+        self.assertEqual(storage["source"], "jira")
+        self.assertEqual(storage["record_id"], "GRT-1")
+        self.assertTrue(set(DocumentBaseMetadata.model_fields).issubset(storage))
+        self.assertEqual(storage["entity_type"], "issue")
+        self.assertEqual(storage["issue_key"], "GRT-1")
+        self.assertEqual(storage["project_key"], "GRT")
+        self.assertEqual(storage["status"], "In Progress")
+        self.assertEqual(storage["priority"], "High")
+        self.assertEqual(storage["assignee"], "Ada")
+        self.assertEqual(storage["reporter"], "Grace")
+        self.assertEqual(storage["created_at"], "2026-05-08T01:00:00+00:00")
+        self.assertEqual(storage["updated_at"], "2026-05-08T01:00:00+00:00")
+        self.assertEqual(storage["synced_at"], "2026-05-08T01:00:00+00:00")
+        self.assertEqual(storage["labels"], ["backend"])
+        self.assertNotIn("issue", storage)
+        self.assertNotIn("jira_issue_core", storage)
+
+    def test_storage_projection_keeps_none_base_keys(self) -> None:
+        now = datetime(2026, 5, 8, 1, 0, tzinfo=timezone.utc)
+        contract = JiraIssueLogicalMetadata(
+            base=DocumentBaseMetadata(
+                source="jira",
+                record_id="GRT-1",
+                synced_at=now,
+                contextual_content="[GRT-1] Test issue",
+            ),
+            issue=JiraIssueMetadata(
+                issue_key="GRT-1",
+                title="Test issue",
+                project_key="GRT",
+            ),
+        )
+
+        storage = contract.to_storage_metadata()
+
+        self.assertIn("url", storage)
+        self.assertIn("created_at", storage)
+        self.assertIn("updated_at", storage)
+        self.assertIsNone(storage["url"])
+        self.assertIsNone(storage["created_at"])
+        self.assertIsNone(storage["updated_at"])
+
+    def test_contract_rejects_record_id_mismatch(self) -> None:
+        now = datetime(2026, 5, 8, 1, 0, tzinfo=timezone.utc)
+
+        with self.assertRaisesRegex(ValueError, "base.record_id"):
+            JiraIssueLogicalMetadata(
+                base=DocumentBaseMetadata(
+                    source="jira",
+                    record_id="GRT-2",
+                    synced_at=now,
+                    contextual_content="Mismatch",
+                ),
+                issue=JiraIssueMetadata(
+                    issue_key="GRT-1",
+                    title="Test issue",
+                    project_key="GRT",
+                ),
+            )
+
+    def test_contract_rejects_non_jira_source(self) -> None:
+        now = datetime(2026, 5, 8, 1, 0, tzinfo=timezone.utc)
 
         with self.assertRaisesRegex(ValueError, "base.source"):
-            ChannelTalkUserChatLogicalMetadata(
+            JiraIssueLogicalMetadata(
                 base=DocumentBaseMetadata(
                     source="slack",
-                    record_id="chat-123",
-                    created_at=now,
-                    updated_at=now,
+                    record_id="GRT-1",
                     synced_at=now,
-                    contextual_content="Conversation transcript",
+                    contextual_content="Wrong source",
                 ),
-                user_chat_core=ChannelTalkUserChatCoreMetadata(
-                    chat=ChannelTalkUserChatChatMetadata(
-                        channel_id="channel-1",
-                        channel_name="Support",
-                        user_chat_id="chat-123",
-                        state="opened",
-                    ),
-                    customer=ChannelTalkUserChatCustomerMetadata(
-                        user_id="user-1",
-                    ),
-                    assignment=ChannelTalkUserChatAssignmentMetadata(),
-                    messages=ChannelTalkUserChatMessageMetadata(),
-                    timing=ChannelTalkUserChatTimingMetadata(),
-                    metrics=ChannelTalkUserChatMetricsMetadata(),
-                    anchors=ChannelTalkUserChatAnchorsMetadata(),
-                    tags=ChannelTalkUserChatTagsMetadata(),
-                    chunk=ChannelTalkUserChatChunkMetadata(),
+                issue=JiraIssueMetadata(
+                    issue_key="GRT-1",
+                    title="Test issue",
+                    project_key="GRT",
                 ),
             )
 
