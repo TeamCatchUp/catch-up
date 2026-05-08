@@ -2366,12 +2366,18 @@ class ChatHistory(Base):
     )
     
     is_saved: Mapped[bool] = mapped_column(
-        Boolean, 
-        default=False, 
+        Boolean,
+        default=False,
         server_default=text("false"),
         nullable=False,
         index=True,
         comment="사용자가 저장한 답변"
+    )
+
+    pipeline_result: Mapped[list | None] = mapped_column(
+        JSONB,
+        nullable=True,
+        comment="role=assistant일 때 RAG 파이프라인 노드별 status 이벤트"
     )
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

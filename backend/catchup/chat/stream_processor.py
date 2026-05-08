@@ -39,6 +39,7 @@ class StreamContext:
     is_citation_reached: bool = False
     has_streamed: bool = False
     current_node: str | None = None
+    pipeline_events: list[dict] = field(default_factory=list)
 
 
 class ChatStreamProcessor:
@@ -99,6 +100,12 @@ class ChatStreamProcessor:
         # 4. process 스트리밍 (supervisor 등에서 adispatch_custom_event로 발송)
         elif kind == "on_custom_event" and name == "process":
             data = event["data"]
+            self.context.pipeline_events.append({
+                "node": data.get("node"),
+                "status": data.get("status"),
+                "reasoning": data.get("reasoning"),
+                "content": data.get("content"),
+            })
             yield ChatStreamingProcessResponse(
                 session_id=self.session_id,
                 status=data.get("status"),
@@ -130,6 +137,12 @@ class ChatStreamProcessor:
                 else None
             )
             extra = get_node_inprogress_payload(name, input_data) or {}
+            self.context.pipeline_events.append({
+                "node": name,
+                "status": "in_progress",
+                "reasoning": reasoning,
+                "content": extra.get("content"),
+            })
             yield ChatStreamingProcessResponse(
                 status="in_progress",
                 session_id=self.session_id,
@@ -237,6 +250,12 @@ class ChatStreamProcessor:
         # deterministic 노드 completed 이벤트
         payload = get_node_completed_payload(name, output)
         if payload is not None:
+            self.context.pipeline_events.append({
+                "node": name,
+                "status": "completed",
+                "reasoning": payload.get("reasoning"),
+                "content": payload.get("content"),
+            })
             yield ChatStreamingProcessResponse(
                 status="completed",
                 session_id=self.session_id,
@@ -267,12 +286,19 @@ class ChatStreamProcessor:
         trace_id = self.context.langfuse_trace_id
 
         if final_content:
+            self.context.pipeline_events.append({
+                "node": name,
+                "status": "completed",
+                "reasoning": None,
+                "content": None,
+            })
             message_id = await self._save_message(
                 self.room_id,
                 "assistant",
                 final_content,
                 final_sources_data,
                 trace_id,
+                pipeline_result=self.context.pipeline_events or None,
             )
 
             token_usage_ctx = ChatTokenUsageContext.get()

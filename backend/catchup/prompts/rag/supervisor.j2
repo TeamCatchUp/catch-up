@@ -55,7 +55,8 @@ You must select exactly one of six pipeline types and provide the associated par
 These documents were retrieved earlier in this session.
 Evaluate whether the current question is a contextual follow-up that can be answered using these documents, or whether the topic has shifted and a new search is needed.
 
-{{ retrieved_docs_summary }}
+<< retrieved_docs_summary >>
+
 </previously_retrieved_documents>
 {% endif %}
 <classification_task>
@@ -73,6 +74,15 @@ Select the most appropriate pipeline_type and fill in all required parameters, i
   - 좋은 예: "복합적인 분석이 필요해 보여서 여러 정보를 종합해볼게요."
   - 좋은 예: "특정 티켓 ID가 언급되었으니 바로 검색해서 찾아낼게요."
 
+**query_topic requirements (reuse / simple / standard / complex only):**
+- Extract the core subject of the question as a 3–5 word Korean noun phrase.
+- Capture what the user is actually asking about, not the action (omit "검색", "찾기", "알려줘" etc.).
+- Examples:
+  - "CATDEV-119 티켓 내용 알려줘" → "CATDEV-119 티켓 설명"
+  - "지난주 배포 이슈 원인이 뭐야?" → "지난주 배포 이슈 원인"
+  - "슬랙봇 알림 설정 방법" → "슬랙봇 알림 설정"
+  - "김철수가 요즘 뭐 하고 있어?" → "김철수 최근 작업"
+- For direct_answer and clarify: set query_topic to null.
 
 Decision order (follow this sequence):
 1. Can the question be answered from the conversation transcript alone (Global Context + prior AI responses), with no document content needed? → direct_answer

@@ -73,7 +73,15 @@ export const useSessionLifecycle = ({
   // ---------------------------------------------------------------------------
   // Shared setters/refs
   // ---------------------------------------------------------------------------
-  const { setChatData, setIsLoading, setIsError, setCurrentStep } = stateSetters;
+  const {
+    setChatData,
+    setIsLoading,
+    setIsError,
+    setStepRows,
+    setPipelineQueryType,
+    setTopic,
+    setPipelineReasoning,
+  } = stateSetters;
   const {
     syncedSessionRef,
     sessionSyncGuardRef,
@@ -146,7 +154,10 @@ export const useSessionLifecycle = ({
     abortStream();
 
     setIsError(false);
-    setCurrentStep('router');
+    setStepRows([]);
+    setPipelineQueryType(null);
+    setTopic(null);
+    setPipelineReasoning(null);
 
     // UUID가 아닌 placeholder/잘못된 세션은 빈 상태만 세팅
     if (!isValidSessionId(sessionId)) {
@@ -216,9 +227,12 @@ export const useSessionLifecycle = ({
     sessionId,
     sessionSyncGuardRef,
     setChatData,
-    setCurrentStep,
     setIsError,
     setIsLoading,
+    setPipelineQueryType,
+    setPipelineReasoning,
+    setStepRows,
+    setTopic,
     streamInFlightRef,
     syncedSessionRef,
   ]);

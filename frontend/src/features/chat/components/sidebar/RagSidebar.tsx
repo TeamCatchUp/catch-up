@@ -2,7 +2,10 @@
 
 import { useEffect, useRef, useState } from 'react';
 
+import StepHistoryScroller from '@/features/chat/components/skeleton/StepHistoryScroller';
+import type { PipelineQueryType, StepRow } from '@/features/chat/types';
 import type { QAPair } from '@/features/chat/utils/render/chat';
+import { usePrefersReducedMotion } from '@/shared/hooks/usePrefersReducedMotion';
 import { cn } from '@/shared/utils/cn';
 
 import SourceList from './source/SourceList';
@@ -10,33 +13,31 @@ import SourceList from './source/SourceList';
 const SIDEBAR_FADE_MS = 160;
 const SIDEBAR_SHIFT_PX = 8;
 
+const SHOWING_PIPELINE_TYPES: ReadonlySet<PipelineQueryType> = new Set([
+  'simple',
+  'standard',
+  'complex',
+]);
+
 interface RagSidebarProps {
   currentQA: QAPair | undefined;
   isLoading: boolean;
   isError: boolean;
+  stepRows: StepRow[];
+  topic: string | null;
+  pipelineQueryType: PipelineQueryType | null;
+  pipelineReasoning: string | null;
 }
 
-const usePrefersReducedMotion = () => {
-  const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-
-    const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
-    const onChange = () => setPrefersReducedMotion(mediaQuery.matches);
-
-    onChange();
-    mediaQuery.addEventListener('change', onChange);
-
-    return () => {
-      mediaQuery.removeEventListener('change', onChange);
-    };
-  }, []);
-
-  return prefersReducedMotion;
-};
-
-export default function RagSidebar({ currentQA, isLoading, isError }: RagSidebarProps) {
+export default function RagSidebar({
+  currentQA,
+  isLoading,
+  isError,
+  stepRows,
+  topic,
+  pipelineQueryType,
+  pipelineReasoning,
+}: RagSidebarProps) {
   const [displayQA, setDisplayQA] = useState<QAPair | undefined>(currentQA);
   const [isVisible, setIsVisible] = useState(true);
   const transitionTimerRef = useRef<number | null>(null);
@@ -97,20 +98,28 @@ export default function RagSidebar({ currentQA, isLoading, isError }: RagSidebar
     ? undefined
     : { transform: `translateY(${isVisible ? 0 : SIDEBAR_SHIFT_PX}px)` };
 
+  // 답변 생성 중엔 step history, 종료 시점부터 SourceList. 검색 파이프라인 분류일 때만 step 노출.
+  const showStepSkeleton =
+    isLoading && pipelineQueryType !== null && SHOWING_PIPELINE_TYPES.has(pipelineQueryType);
+
   return (
     <div className="border-edge-neutral bg-fill-normal hidden w-108.75 flex-none flex-col border-l lg:flex">
       <div
         className={cn('flex min-h-0 flex-1 flex-col overflow-hidden', transitionClass)}
         style={transitionStyle}
       >
-        <SourceList
-          sources={sources}
-          answerContent={answerContent}
-          isLoading={isLoading}
-          isError={isError}
-          transitionKey={transitionKey}
-          prefersReducedMotion={prefersReducedMotion}
-        />
+        {showStepSkeleton ? (
+          <StepHistoryScroller stepRows={stepRows} topic={topic} />
+        ) : (
+          <SourceList
+            sources={sources}
+            answerContent={answerContent}
+            isLoading={isLoading}
+            isError={isError}
+            transitionKey={transitionKey}
+            prefersReducedMotion={prefersReducedMotion}
+          />
+        )}
       </div>
     </div>
   );

@@ -1,4 +1,3 @@
-import asyncio
 import structlog
 from langchain.chat_models import BaseChatModel
 from langchain_core.callbacks import adispatch_custom_event
@@ -11,6 +10,7 @@ from catchup.rag.nodes.utils import build_docs_summary
 from catchup.rag.nodes.utils import build_system_message
 from catchup.rag.nodes.utils import get_conversation_history
 from catchup.rag.nodes.utils import log_node
+from catchup.rag.retryable import RETRYABLE_ERRORS
 from catchup.rag.schemas.sources import SOURCE_METADATA
 from catchup.rag.schemas.structures import PipelinePlan
 from catchup.rag.semaphores import rag_semaphores
@@ -18,7 +18,7 @@ from catchup.rag.state import AgentState
 
 logger = structlog.get_logger()
 
-_MAX_DOCS_SUMMARY = 20
+_MAX_DOCS_SUMMARY = 15
 _PIPELINE_ORDER = ["clarify", "direct_answer", "reuse", "simple", "standard", "complex"]
 _DEFAULT_MAX_ITERATIONS: dict[str, int] = {
     "direct_answer": 0,
@@ -83,6 +83,10 @@ async def supervisor_node(
 
         _NO_RETRIEVAL = {"direct_answer", "clarify"}
 
+        event_content: dict = {"query_type": pipeline_plan.pipeline_type}
+        if pipeline_plan.pipeline_type not in _NO_RETRIEVAL and pipeline_plan.query_topic:
+            event_content["query_topic"] = pipeline_plan.query_topic
+
         await adispatch_custom_event(
             "process",
             {
@@ -93,7 +97,7 @@ async def supervisor_node(
                     if pipeline_plan.pipeline_type in _NO_RETRIEVAL
                     else pipeline_plan.reasoning
                 ),
-                "content": pipeline_plan.pipeline_type,
+                "content": event_content,
             },
         )
         intent = (
@@ -134,6 +138,7 @@ async def supervisor_node(
             "intent": intent,
             "pipeline_plan": pipeline_plan,
             "turn_number": current_turn,
+            "query_topic": pipeline_plan.query_topic,
             **token_usages,
         }
 
@@ -154,8 +159,7 @@ async def supervisor_node(
 
         return result
 
-    except asyncio.TimeoutError as e:
-        # TimeoutError는 RetryPolicy에서 처리하도록 상위로 전파
+    except RETRYABLE_ERRORS as e:
         raise e
     except Exception as e:
         logger.warning(

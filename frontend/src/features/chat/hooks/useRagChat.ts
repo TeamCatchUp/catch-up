@@ -18,7 +18,13 @@ import { useSessionLifecycle } from '@/features/chat/hooks/useRagChat.parts/sess
 import { useStreamProcessing } from '@/features/chat/hooks/useRagChat.parts/streamProcessing';
 import type { UseRagChatOptions, UseRagChatReturn } from '@/features/chat/hooks/useRagChat.parts/types';
 import { useRagStream } from '@/features/chat/hooks/useRagStream';
-import type { ChatData, Message, RagUIStepKey, StreamEvent } from '@/features/chat/types';
+import type {
+  ChatData,
+  Message,
+  PipelineQueryType,
+  StepRow,
+  StreamEvent,
+} from '@/features/chat/types';
 import { isValidSessionId } from '@/shared/utils/sessionId';
 
 /**
@@ -79,7 +85,10 @@ export const useRagChat = ({
   const [chatData, setChatData] = useState<ChatData | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(isValidSessionId(sessionId));
   const [isError, setIsError] = useState(false);
-  const [currentStep, setCurrentStep] = useState<RagUIStepKey>('router');
+  const [stepRows, setStepRows] = useState<StepRow[]>([]);
+  const [pipelineQueryType, setPipelineQueryType] = useState<PipelineQueryType | null>(null);
+  const [topic, setTopic] = useState<string | null>(null);
+  const [pipelineReasoning, setPipelineReasoning] = useState<string | null>(null);
 
   // 모든 ref 기반 런타임 상태(세션 전환 가드, 스트림 플래그)를 전담 훅에서 관리
   const { sessionRefs, streamRefs, resetStreamStateRefs } = useRagChatRefs(resolvedSessionId);
@@ -244,7 +253,10 @@ export const useRagChat = ({
       setChatData,
       setIsLoading,
       setIsError,
-      setCurrentStep,
+      setStepRows,
+      setPipelineQueryType,
+      setTopic,
+      setPipelineReasoning,
     },
     sessionRefs,
     streamRefs,
@@ -270,7 +282,10 @@ export const useRagChat = ({
       setChatData,
       setIsLoading,
       setIsError,
-      setCurrentStep,
+      setStepRows,
+      setPipelineQueryType,
+      setTopic,
+      setPipelineReasoning,
     },
     sessionRefs,
     streamRefs,
@@ -293,7 +308,10 @@ export const useRagChat = ({
     setChatData,
     setIsLoading,
     setIsError,
-    setCurrentStep,
+    setStepRows,
+    setPipelineQueryType,
+    setTopic,
+    setPipelineReasoning,
     streamRefs,
   });
 
@@ -370,7 +388,10 @@ export const useRagChat = ({
     resolvedSessionId,
     isLoading,
     isError,
-    currentStep,
+    stepRows,
+    pipelineQueryType,
+    topic,
+    pipelineReasoning,
 
     // 사용자 액션
     sendMessage,

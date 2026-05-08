@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import functools
-import json
 import re
 import time
 from collections import Counter
@@ -576,18 +575,17 @@ def extract_essential_ids(reasoning: str | None, docs: list[Document]) -> set[st
     return essential_ids
 
 
-def parse_citations(full_answer: str) -> tuple[str, dict[str, str]]:
+def parse_citations(full_answer: str) -> tuple[str, set[str]]:
     body_part = full_answer
-    citation_dict = {}
+    cited_indices: set[str] = set()
 
-    # 정상 동작: 태그가 완전히 닫힘. (<citations>...</citations>)
+    # 정상 동작: 태그가 완전히 닫힘. (<citations>1, 3, 4</citations>)
     match = re.search(r"<citations>(.*?)</citations>", full_answer, DOTALL)
     if match:
         body_part = full_answer[: match.start()].strip()
-        try:
-            citation_dict = json.loads(match.group(1).strip())
-        except json.JSONDecodeError:
-            logger.warning("citations_parsing_failed")
+        raw = match.group(1).strip()
+        if raw:
+            cited_indices = {s.strip() for s in raw.split(",") if s.strip().isdigit()}
 
     # 비정상 동작: 태그가 열리거나 불완전함. (<citations>...)
     elif open_tag_match := re.search(r"<citations>", full_answer):
@@ -599,24 +597,18 @@ def parse_citations(full_answer: str) -> tuple[str, dict[str, str]]:
         if not body_part:
             body_part = FALLBACK_ANSWER
 
-    return body_part, citation_dict
+    return body_part, cited_indices
 
 
 def mark_citations(
     candidate_sources: list[BaseSource],
-    citations: dict[str, str],
+    citations: set[str],
 ) -> list[BaseSource]:
 
     final_sources = []
 
     for source in candidate_sources:
-        idx = str(source.index)  # JSON Key -> str
-        if idx in citations:
-            source.is_cited = True
-            source.citation_rationale = citations[idx]
-        else:
-            source.is_cited = False
-
+        source.is_cited = str(source.index) in citations
         final_sources.append(source)
 
     return final_sources

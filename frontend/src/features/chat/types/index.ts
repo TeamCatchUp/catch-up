@@ -7,7 +7,7 @@ export * from '@/features/chat/types/api/feedbackApi';
 export * from '@/features/chat/types/api/sourceApi';
 export * from '@/features/chat/types/api/streamApi';
 export * from '@/features/chat/types/model/chatModel';
-export * from '@/features/chat/types/model/stepModel';
+export * from '@/features/chat/types/model/stepRowModel';
 export * from '@/features/chat/types/model/taskModel';
 export * from '@/features/chat/types/props/actionProps';
 
@@ -24,11 +24,6 @@ export type ChatSource = import('@/features/chat/types/model/chatModel').ChatSou
 export type Message = import('@/features/chat/types/model/chatModel').MessageModel;
 /** 기존 코드 호환용 별칭: 채팅 데이터 모델 */
 export type ChatData = import('@/features/chat/types/model/chatModel').ChatDataModel;
-
-/** 기존 코드 호환용 별칭: 전체 RAG 단계 키 */
-export type RagStepKey = import('@/features/chat/types/model/stepModel').RagStepKeyModel;
-/** 기존 코드 호환용 별칭: UI RAG 단계 키 */
-export type RagUIStepKey = import('@/features/chat/types/model/stepModel').RagUIStepKeyModel;
 
 /** 기존 코드 호환용 별칭: 단순 서브태스크 모델 */
 export type SubTask = import('@/features/chat/types/model/taskModel').SubTaskModel;

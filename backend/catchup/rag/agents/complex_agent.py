@@ -1,5 +1,3 @@
-import asyncio
-
 import structlog
 from langchain.chat_models import BaseChatModel
 from langchain_core.callbacks import adispatch_custom_event
@@ -16,11 +14,12 @@ from catchup.rag.nodes.utils import drop_orphaned_tool_calls
 from catchup.rag.nodes.utils import extract_essential_ids
 from catchup.rag.nodes.utils import extract_reason_for_stopping
 from catchup.rag.nodes.utils import log_node
-from catchup.rag.static_reasoning import get_static_reasoning
+from catchup.rag.retryable import RETRYABLE_ERRORS
 from catchup.rag.schemas.structures import SearchPlan
 from catchup.rag.schemas.structures import SearchStep
 from catchup.rag.semaphores import rag_semaphores
 from catchup.rag.state import AgentState
+from catchup.rag.static_reasoning import get_static_reasoning
 
 logger = structlog.get_logger()
 
@@ -65,7 +64,7 @@ async def complex_planner_node(
             timeout=timeout,
         )
         plan: SearchPlan = response.get("parsed")
-    except asyncio.TimeoutError as e:
+    except RETRYABLE_ERRORS as e:
         raise e
     except Exception:
         return {"search_plan": None}
@@ -91,7 +90,7 @@ async def complex_planner_node(
                 {
                     "status": "completed",
                     "node": "complex_planner",
-                    "content": [{"step": s.step, "intent": s.intent}],
+                    "content": {"step": s.step, "intent": s.intent},
                 },
             )
 
@@ -144,7 +143,7 @@ async def complex_agent_node(
             messages=[system_message, HumanMessage(content=query)] + existing_messages,
             semaphore=rag_semaphores.llm_large,
         )
-    except asyncio.TimeoutError as e:
+    except RETRYABLE_ERRORS as e:
         raise e
     except Exception:
         return {"agent_iteration": agent_iteration + 1}

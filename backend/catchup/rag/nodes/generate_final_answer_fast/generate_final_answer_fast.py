@@ -154,7 +154,7 @@ async def generate_final_answer_fast_node(
     ]
     final_sources = mark_citations(candidate_sources, citations)
 
-    sorted_indices = sorted(citations.keys(), key=int)
+    sorted_indices = sorted(citations, key=int)
     logger.debug(
         "llm_cited_sources",
         cited_indices=sorted_indices,

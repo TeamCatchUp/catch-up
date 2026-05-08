@@ -450,6 +450,7 @@ class ChatService:
         sources: list[dict[str, Any]] | None = None,
         trace_id: str | None = None,
         user_id: int | None = None,
+        pipeline_result: list[dict] | None = None,
     ) -> int:
         def _save_sync():
             with SessionLocal() as db:
@@ -461,6 +462,7 @@ class ChatService:
                     sources=sources,
                     trace_id=trace_id,
                     user_id=user_id,
+                    pipeline_result=pipeline_result,
                 )
                 db.commit()
                 db.refresh(message)

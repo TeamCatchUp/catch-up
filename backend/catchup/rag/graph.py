@@ -1,4 +1,3 @@
-import asyncio
 import logging
 from functools import partial
 from typing import Optional
@@ -21,6 +20,7 @@ from catchup.rag.conditional_edges import route_after_supervisor
 from catchup.rag.nodes import clarify_node
 from catchup.rag.nodes import direct_answer_node
 from catchup.rag.nodes import supervisor_node
+from catchup.rag.retryable import RETRYABLE_ERRORS
 from catchup.rag.state import AgentState
 from catchup.rag.subgraphs import build_complex_react_subgraph
 from catchup.rag.subgraphs import build_reuse_subgraph
@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 # Timeout 기반 재시도 정책
 # max_attempt는 최초 시도 횟수를 포함.
 TIMEOUT_RETRY_POLICY = RetryPolicy(
-    retry_on=asyncio.TimeoutError,
+    retry_on=RETRYABLE_ERRORS,
     max_attempts=3,
     initial_interval=1.0,
     backoff_factor=2.0,
@@ -40,7 +40,7 @@ TIMEOUT_RETRY_POLICY = RetryPolicy(
 
 # Agent는 내부 루프가 길어 재시도 횟수를 제한
 AGENT_TIMEOUT_RETRY_POLICY = RetryPolicy(
-    retry_on=asyncio.TimeoutError,
+    retry_on=RETRYABLE_ERRORS,
     max_attempts=2,
     initial_interval=1.0,
     backoff_factor=2.0,

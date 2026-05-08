@@ -158,7 +158,8 @@ export default function RagAnswerPage() {
                         sessionId={chat.resolvedSessionId ?? sessionId}
                         isLoading={chat.isLoading && isLastPair}
                         isError={chat.isError && isLastPair}
-                        currentStep={chat.currentStep}
+                        pipelineQueryType={isLastPair ? chat.pipelineQueryType : null}
+                        pipelineReasoning={isLastPair ? chat.pipelineReasoning : null}
                         onFeedbackSubmitted={chat.updateMessageFeedback}
                         onRetry={chat.submitEdit}
                       />
@@ -173,7 +174,8 @@ export default function RagAnswerPage() {
                       sessionId={chat.resolvedSessionId ?? sessionId}
                       isLoading={chat.isLoading}
                       isError={chat.isError}
-                      currentStep={chat.currentStep}
+                      pipelineQueryType={chat.pipelineQueryType}
+                      pipelineReasoning={chat.pipelineReasoning}
                       onFeedbackSubmitted={chat.updateMessageFeedback}
                     />
                   </div>
@@ -199,6 +201,10 @@ export default function RagAnswerPage() {
           currentQA={qaPairs[chat.isLoading ? qaPairs.length - 1 : activePairIndex]}
           isLoading={chat.isLoading}
           isError={chat.isError}
+          stepRows={chat.stepRows}
+          topic={chat.topic}
+          pipelineQueryType={chat.pipelineQueryType}
+          pipelineReasoning={chat.pipelineReasoning}
         />
       </div>
     </div>

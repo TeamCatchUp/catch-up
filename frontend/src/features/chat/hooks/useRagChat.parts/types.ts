@@ -1,6 +1,12 @@
 import type { Dispatch, RefObject, SetStateAction } from 'react';
 
-import type { ChatData, ChatSource, RagUIStepKey, SourceResponse } from '@/features/chat/types';
+import type {
+  ChatData,
+  ChatSource,
+  PipelineQueryType,
+  SourceResponse,
+  StepRow,
+} from '@/features/chat/types';
 
 /**
  * useRagChat 입력 파라미터
@@ -25,7 +31,10 @@ export interface UseRagChatReturn {
   resolvedSessionId: string | undefined;
   isLoading: boolean;
   isError: boolean;
-  currentStep: RagUIStepKey;
+  stepRows: StepRow[];
+  pipelineQueryType: PipelineQueryType | null;
+  topic: string | null;
+  pipelineReasoning: string | null;
   sendMessage: (message: string) => Promise<void>;
   submitEdit: (messageId: string, newContent: string) => Promise<void>;
   handleStop: () => void;
@@ -90,5 +99,8 @@ export interface ChatStateSetters {
   setChatData: Dispatch<SetStateAction<ChatData | null>>;
   setIsLoading: Dispatch<SetStateAction<boolean>>;
   setIsError: Dispatch<SetStateAction<boolean>>;
-  setCurrentStep: Dispatch<SetStateAction<RagUIStepKey>>;
+  setStepRows: Dispatch<SetStateAction<StepRow[]>>;
+  setPipelineQueryType: Dispatch<SetStateAction<PipelineQueryType | null>>;
+  setTopic: Dispatch<SetStateAction<string | null>>;
+  setPipelineReasoning: Dispatch<SetStateAction<string | null>>;
 }
