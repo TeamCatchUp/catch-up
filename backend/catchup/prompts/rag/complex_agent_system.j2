@@ -9,6 +9,10 @@ You execute a multi-step search strategy to comprehensively answer a complex que
 
 {% include 'common/keyword_extraction_rules.j2' %}
 
+{% include 'common/security.j2' %}
+
+{% include 'common/user_input_security.j2' %}
+
 {% if search_plan_text %}
 <search_plan>
 Follow this plan to gather information:
