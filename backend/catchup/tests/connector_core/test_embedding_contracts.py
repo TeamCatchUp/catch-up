@@ -40,6 +40,9 @@ from catchup.connector_core.document_format import ChannelTalkUserChatMetricsMet
 from catchup.connector_core.document_format import ChannelTalkUserChatTagsMetadata
 from catchup.connector_core.document_format import ChannelTalkUserChatTimingMetadata
 from catchup.connector_core.document_format import DocumentBaseMetadata
+from catchup.connector_core.document_format import JiraAttachmentMetadata
+from catchup.connector_core.document_format import JiraIssueLogicalMetadata
+from catchup.connector_core.document_format import JiraIssueMetadata
 
 
 class ChannelTalkUserChatLogicalMetadataTests(TestCase):
@@ -206,8 +209,6 @@ class ChannelTalkUserChatLogicalMetadataTests(TestCase):
                 ),
             )
 
-    def test_contract_rejects_non_channel_talk_source(self) -> None:
-        now = datetime(2026, 4, 22, 2, 10, tzinfo=timezone.utc)
 
         with self.assertRaisesRegex(ValueError, "base.source"):
             ChannelTalkUserChatLogicalMetadata(

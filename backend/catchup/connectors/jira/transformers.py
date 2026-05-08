@@ -21,25 +21,23 @@ from typing import Any
 
 from langchain_core.documents import Document
 
-from catchup.connectors.atlassian.adf_parser import (
-    extract_media,
-    extract_mentions,
-    extract_text,
-)
+from catchup.connector_core.document_format import DocumentBaseMetadata
+from catchup.connector_core.document_format import JiraAttachmentMetadata
+from catchup.connector_core.document_format import JiraIssueLogicalMetadata
+from catchup.connector_core.document_format import JiraIssueMetadata
+from catchup.connectors.atlassian.adf_parser import extract_media
+from catchup.connectors.atlassian.adf_parser import extract_mentions
+from catchup.connectors.atlassian.adf_parser import extract_text
 from catchup.connectors.atlassian.utils import parse_atlassian_datetime
 from catchup.connectors.jira.field_mapper import JiraFieldMapper
-from catchup.connectors.jira.schemas import (
-    JiraAttachment,
-    JiraComment,
-    JiraEpic,
-    JiraInlineAttachment,
-    JiraIssue,
-    JiraLinkedIssue,
-    JiraMention,
-    JiraSprintInfo,
-    JiraUser,
-)
-
+from catchup.connectors.jira.schemas import JiraAttachment
+from catchup.connectors.jira.schemas import JiraComment
+from catchup.connectors.jira.schemas import JiraInlineAttachment
+from catchup.connectors.jira.schemas import JiraIssue
+from catchup.connectors.jira.schemas import JiraLinkedIssue
+from catchup.connectors.jira.schemas import JiraMention
+from catchup.connectors.jira.schemas import JiraSprintInfo
+from catchup.connectors.jira.schemas import JiraUser
 
 # ============================================================
 # Jira 인스턴스 언어 설정에 관계없이 영어로 통일
@@ -99,10 +97,6 @@ class JiraTransformer:
             LangChain Document with page_content and metadata
         """
         issue = self._parse_issue(issue_data, site_url, comments)
-
-        # Epic인 경우 별도 처리
-        if issue.issue_type.lower() == "epic":
-            return self._issue_to_epic_document(issue)
 
         return self._issue_to_document(issue)
 
@@ -248,68 +242,10 @@ class JiraTransformer:
         # contextual_content: LLM 답변 생성용 (기존 포맷)
         contextual_content = self._build_issue_contextual_content(issue)
 
-        # metadata 생성 (엔티티 접근용 필드만 유지)
-        metadata = {
-            # 기본 식별
-            "source": "jira",
-            "entity_type": "issue",
-            "issue_key": issue.key,
-            "issue_id": issue.id,
-            "url": issue.url,
-            "title": issue.summary,
-
-            # 분류
-            "project_key": issue.project_key,
-            "issue_type": issue.issue_type,
-            "status": issue.status,
-
-            # 담당자
-            "assignee": issue.assignee.display_name if issue.assignee else None,
-            "assignee_email": issue.assignee.email_address if issue.assignee else None,
-
-            # 시간
-            "created_at": issue.created_at.isoformat() if issue.created_at else None,
-            "updated_at": issue.updated_at.isoformat() if issue.updated_at else None,
-            "resolved_at": issue.resolved_at.isoformat() if issue.resolved_at else None,
-
-            # 계층
-            "parent_key": issue.parent_key,
-            "subtask_keys": issue.subtask_keys,
-
-            # Agile
-            "sprint_id": issue.sprint.id if issue.sprint else None,
-            "sprint_name": issue.sprint.name if issue.sprint else None,
-
-            # 분류 태그
-            "components": issue.components,
-            "labels": issue.labels,
-            "fix_versions": issue.fix_versions,
-
-            # 첨부파일 (엔티티 접근용)
-            "inline_attachments": [
-                {
-                    "filename": att.filename or att.alt or f"media:{att.id[:8]}",
-                    "url": att.url,
-                    "type": att.type,
-                }
-                for c in issue.comments
-                for att in c.inline_attachments
-            ],
-            "attachments": [
-                {
-                    "filename": att.filename,
-                    "url": att.url,
-                    "mime_type": att.mime_type,
-                }
-                for att in issue.attachments
-            ],
-
-            # LLM 답변 생성용 (기존 포맷)
-            "contextual_content": contextual_content,
-
-            # 동기화
-            "synced_at": datetime.utcnow().isoformat(),
-        }
+        metadata = self._build_issue_storage_metadata(
+            issue=issue,
+            contextual_content=contextual_content,
+        )
 
         return Document(
             page_content=semantic_content,
@@ -430,83 +366,65 @@ class JiraTransformer:
 
         return "\n".join(lines)
 
-    # ================================================================
-    # Epic 변환
-    # ================================================================
-
-    def _issue_to_epic_document(self, issue: JiraIssue) -> Document:
-        """Epic Issue → LangChain Document (별도 entity_type)"""
-
-        # semantic_content: 임베딩용 (의미 중심)
-        semantic_content = self._build_epic_semantic_content(issue)
-
-        # contextual_content: LLM 답변 생성용 (기존 포맷)
-        contextual_content = self._build_epic_contextual_content(issue)
-
-        # Epic metadata (엔티티 접근용 필드만 유지)
-        metadata = {
-            "source": "jira",
-            "entity_type": "epic",
-            "issue_key": issue.key,
-            "issue_id": issue.id,
-            "url": issue.url,
-            "title": issue.summary,
-            "project_key": issue.project_key,
-            "status": issue.status,
-            "assignee": issue.assignee.display_name if issue.assignee else None,
-            "created_at": issue.created_at.isoformat() if issue.created_at else None,
-            "updated_at": issue.updated_at.isoformat() if issue.updated_at else None,
-            "components": issue.components,
-            "labels": issue.labels,
-            "fix_versions": issue.fix_versions,
-
-            # LLM 답변 생성용 (기존 포맷)
-            "contextual_content": contextual_content,
-
-            "synced_at": datetime.utcnow().isoformat(),
-        }
-
-        return Document(
-            page_content=semantic_content,
-            metadata=metadata,
-            id=f"jira:epic:{issue.key}",
+    def _build_issue_storage_metadata(
+        self,
+        *,
+        issue: JiraIssue,
+        contextual_content: str,
+    ) -> dict[str, object]:
+        synced_at = datetime.utcnow()
+        logical_metadata = JiraIssueLogicalMetadata(
+            base=DocumentBaseMetadata(
+                source="jira",
+                record_id=issue.key,
+                url=issue.url,
+                created_at=issue.created_at,
+                updated_at=issue.updated_at,
+                synced_at=synced_at,
+                contextual_content=contextual_content,
+            ),
+            issue=JiraIssueMetadata(
+                entity_type="issue",
+                issue_key=issue.key,
+                issue_id=issue.id,
+                title=issue.summary,
+                project_key=issue.project_key,
+                issue_type=issue.issue_type,
+                status=issue.status,
+                priority=issue.priority,
+                assignee=issue.assignee.display_name if issue.assignee else None,
+                assignee_email=issue.assignee.email_address
+                if issue.assignee
+                else None,
+                reporter=issue.reporter.display_name if issue.reporter else None,
+                resolved_at=issue.resolved_at,
+                parent_key=issue.parent_key,
+                subtask_keys=tuple(issue.subtask_keys),
+                sprint_id=issue.sprint.id if issue.sprint else None,
+                sprint_name=issue.sprint.name if issue.sprint else None,
+                components=tuple(issue.components),
+                labels=tuple(issue.labels),
+                fix_versions=tuple(issue.fix_versions),
+                inline_attachments=tuple(
+                    JiraAttachmentMetadata(
+                        filename=att.filename or att.alt or f"media:{att.id[:8]}",
+                        url=att.url,
+                        type=att.type,
+                    )
+                    for comment in issue.comments
+                    for att in comment.inline_attachments
+                ),
+                attachments=tuple(
+                    JiraAttachmentMetadata(
+                        filename=att.filename,
+                        url=att.url,
+                        mime_type=att.mime_type,
+                    )
+                    for att in issue.attachments
+                ),
+            ),
         )
-
-    def _build_epic_semantic_content(self, issue: JiraIssue) -> str:
-        """
-        Epic용 semantic_content 생성 (의미 중심)
-
-        포함: summary, description
-        제외: 메타데이터(Status, Priority, Owner 등), 포맷 마커
-        """
-        parts = []
-
-        if issue.summary:
-            parts.append(issue.summary)
-
-        if issue.description:
-            parts.append(issue.description)
-
-        return "\n\n".join(parts)
-
-    def _build_epic_contextual_content(self, issue: JiraIssue) -> str:
-        """Epic용 contextual_content 생성 - LLM 답변 생성용"""
-        lines = [
-            f"[Epic: {issue.key}] {issue.summary}",
-            "",
-            f"Status: {issue.status} | Priority: {issue.priority or 'None'}",
-            f"Owner: {issue.assignee.display_name if issue.assignee else 'Unassigned'}",
-        ]
-
-        if issue.description:
-            lines.extend(["", "Epic Description:", issue.description])
-
-        lines.extend(["", "Technical Context:"])
-        lines.append(f"- Components: {', '.join(issue.components) or 'None'}")
-        lines.append(f"- Labels: {', '.join(issue.labels) or 'None'}")
-        lines.append(f"- Target Version: {', '.join(issue.fix_versions) or 'None'}")
-
-        return "\n".join(lines)
+        return logical_metadata.to_storage_metadata()
 
     # ================================================================
     # 헬퍼 메서드
