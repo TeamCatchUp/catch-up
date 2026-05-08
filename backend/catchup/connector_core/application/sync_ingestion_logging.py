@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Awaitable
 from collections.abc import Callable
+from collections.abc import Mapping
 from collections.abc import Sized
 from enum import Enum
 from functools import wraps
@@ -11,6 +12,7 @@ from typing import TypeVar
 
 import structlog
 
+from catchup.connector_core.ports.sync_ingestion import ConnectorLogSummaryProvider
 from catchup.connector_core.ports.sync_ingestion import SyncExecutionRequest
 from catchup.connector_core.ports.sync_ingestion import SyncWindow
 
@@ -18,7 +20,13 @@ logger = structlog.get_logger(__name__)
 
 ExecutionResultT = TypeVar("ExecutionResultT")
 
-_SCALAR_STAGE_FIELDS = (
+_PIPELINE_STARTED_EVENT = "sync_ingestion_pipeline_started"
+_PIPELINE_COMPLETED_EVENT = "sync_ingestion_pipeline_completed"
+_PIPELINE_FAILED_EVENT = "sync_ingestion_pipeline_failed"
+_STAGE_COMPLETED_EVENT = "sync_ingestion_stage_completed"
+_INITIAL_STAGE = "start"
+
+_SCALAR_STAGE_RESULT_FIELDS = (
     "fetched_count",
     "collected_count",
     "document_count",
@@ -28,7 +36,7 @@ _SCALAR_STAGE_FIELDS = (
     "included_message_count",
     "excluded_message_count",
 )
-_SIZED_STAGE_FIELDS = {
+_SIZED_STAGE_RESULT_FIELDS = {
     "bundles": "bundles_count",
     "documents": "documents_count",
     "persisted_ids": "persisted_ids_count",
@@ -43,21 +51,21 @@ _SIZED_STAGE_FIELDS = {
 def sync_ingestion_system_log(
     run_sync_ingestion: Callable[..., Awaitable[ExecutionResultT]],
 ) -> Callable[..., Awaitable[ExecutionResultT]]:
+    """Decorate sync ingestion with shared pipeline and stage logs."""
 
     @wraps(run_sync_ingestion)
     async def wrapped(*args: Any, **kwargs: Any) -> ExecutionResultT:
         execution = kwargs["execution"]
         sync_window = kwargs["sync_window"]
-        context = _build_log_context(
+        context = _build_pipeline_log_context(
             execution=execution,
             sync_window=sync_window,
         )
-        state = _PipelineLogState()
+        state = _PipelineStageLogState()
         pipeline_started_at = perf_counter()
 
-        logger.info("sync_ingestion_pipeline_started", **context)
-        # SyncIngestionPort를 _SyncIngestionLoggingPort으로 교체
-        kwargs["port"] = _SyncIngestionLoggingPort(
+        logger.info(_PIPELINE_STARTED_EVENT, **context)
+        kwargs["port"] = _SyncIngestionStageLoggingProxy(
             port=kwargs["port"],
             context=context,
             state=state,
@@ -66,10 +74,8 @@ def sync_ingestion_system_log(
         try:
             result = await run_sync_ingestion(*args, **kwargs)
         except Exception as exc:
-            # proxy가 실제 port 메서드를 호출하기 직전에 `state.stage`를 갱신한다.
-            # 덕분에 실패가 어느 단계에서 발생했는지 pipeline 실패 로그에 담을 수 있다.
             logger.warning(
-                "sync_ingestion_pipeline_failed",
+                _PIPELINE_FAILED_EVENT,
                 **context,
                 stage=state.stage,
                 duration_ms=_duration_ms(pipeline_started_at),
@@ -80,30 +86,30 @@ def sync_ingestion_system_log(
             raise
 
         logger.info(
-            "sync_ingestion_pipeline_completed",
+            _PIPELINE_COMPLETED_EVENT,
             **context,
             duration_ms=_duration_ms(pipeline_started_at),
-            **_summarize_stage_result(result),
+            **_build_stage_result_log_fields(result),
         )
         return result
 
     return wrapped
 
 
-class _PipelineLogState:
+class _PipelineStageLogState:
     def __init__(self) -> None:
-        self.stage = "start"
+        self.stage = _INITIAL_STAGE
 
 
-class _SyncIngestionLoggingPort:
-    """Stage 단위의 로그만 추가하는 Logging Proxy"""
+class _SyncIngestionStageLoggingProxy:
+    """Proxy that adds logs around each Sync Ingestion pipeline stage."""
 
     def __init__(
         self,
         *,
         port: Any,
         context: dict[str, object],
-        state: _PipelineLogState,
+        state: _PipelineStageLogState,
     ) -> None:
         self._port = port
         self._context = context
@@ -172,11 +178,11 @@ class _SyncIngestionLoggingPort:
         result: object,
     ) -> None:
         logger.info(
-            "sync_ingestion_stage_completed",
+            _STAGE_COMPLETED_EVENT,
             **self._context,
             stage=stage,
             duration_ms=_duration_ms(stage_started_at),
-            **_summarize_stage_result(result),
+            **_build_stage_result_log_fields(result),
         )
 
 
@@ -190,18 +196,21 @@ def _duration_ms(started_at: float) -> int:
     return max(0, int((perf_counter() - started_at) * 1000))
 
 
-def _build_log_context(
+def _build_pipeline_log_context(
     *,
     execution: SyncExecutionRequest,
     sync_window: SyncWindow,
 ) -> dict[str, object]:
     context: dict[str, object] = {
-        "connector": _log_value(execution.connector),
+        "connector_type": _log_value(execution.connector),
         "tenant_id": execution.tenant_id,
         "target": execution.target,
         "sync_window_start": sync_window.window_start.isoformat(),
         "sync_window_end": sync_window.window_end.isoformat(),
     }
+
+    for key, value in execution.log_context().items():
+        context[key] = _log_value(value)
 
     audit_context = getattr(execution, "audit_context", None)
     if audit_context is not None:
@@ -213,18 +222,33 @@ def _build_log_context(
     return context
 
 
-def _summarize_stage_result(result: object) -> dict[str, object]:
+def _build_stage_result_log_fields(result: object) -> dict[str, object]:
     summary: dict[str, object] = {}
 
-    for field_name in _SCALAR_STAGE_FIELDS:
+    if isinstance(result, ConnectorLogSummaryProvider):
+        _add_scalar_log_fields(summary, result.connector_log_summary())
+
+    for field_name in _SCALAR_STAGE_RESULT_FIELDS:
         value = getattr(result, field_name, None)
         if isinstance(value, (str, int, float, bool)):
             summary[field_name] = value
 
-    for source_field, target_field in _SIZED_STAGE_FIELDS.items():
+    for source_field, target_field in _SIZED_STAGE_RESULT_FIELDS.items():
         value = getattr(result, source_field, None)
         if not isinstance(value, Sized) or isinstance(value, (str, bytes, bytearray)):
             continue
         summary[target_field] = len(value)
 
     return summary
+
+
+def _add_scalar_log_fields(
+    target: dict[str, object],
+    fields: object,
+) -> None:
+    if not isinstance(fields, Mapping):
+        return
+
+    for key, value in fields.items():
+        if isinstance(value, (str, int, float, bool)):
+            target[key] = value
