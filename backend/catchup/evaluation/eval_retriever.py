@@ -1,13 +1,13 @@
-import json
-import time
-import math
-import sys
-import os
-import csv
 import asyncio
+import csv
+import json
+import math
+import os
+import sys
+import time
 from datetime import datetime
-from tqdm import tqdm
 
+from tqdm import tqdm
 
 current_dir = os.path.dirname(os.path.abspath(__file__))  # evaluation
 catchup_dir = os.path.dirname(current_dir)                   # catchup
@@ -16,7 +16,8 @@ backend_dir = os.path.dirname(catchup_dir)                   # backend (ROOT)
 if backend_dir not in sys.path:
     sys.path.append(backend_dir)
 
-from catchup.components.vector_db.factory import VectorDbProvider, get_vector_db_service
+from catchup.components.vector_db.factory import VectorDbProvider
+from catchup.components.vector_db.factory import get_vector_db_service
 
 vector_service = get_vector_db_service(VectorDbProvider.PGVECTOR)
 
@@ -76,9 +77,8 @@ async def evaluate_retrieval(dataset_path: str, semantic_weight: float, keyword_
     ndcg_sum = 0.0
     start_time = time.time()
 
-    # hybrid_search expects 3 weights: [vector, title_bigm, content_bigm]
-    # We split the keyword_weight among title and content
-    weights = [semantic_weight, keyword_weight * 0.5, keyword_weight * 0.5]
+    # hybrid_search expects 2 weights: [vector, content_bigm]
+    weights = [semantic_weight, keyword_weight]
 
     for case in tqdm(test_cases, desc="Processing"):
         query = case['question']

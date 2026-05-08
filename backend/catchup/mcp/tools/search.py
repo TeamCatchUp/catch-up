@@ -1,4 +1,3 @@
-import asyncio
 import json
 from datetime import datetime
 
@@ -26,7 +25,7 @@ async def run_search(
     docs: list[Document] = await vector_db_service.hybrid_search(
         query=query,
         k=k,
-        weights=[0.6, 0.25, 0.15],  # [vector, title, contextual_content]
+        weights=[0.6, 0.4],  # [vector, contextual_content]
         tool_filters=tool_filters,
         temporal_filters=temporal_filters or None,
     )

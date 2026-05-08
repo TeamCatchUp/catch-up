@@ -16,8 +16,10 @@ Even if a term comes from a known source, skip it if it is too common to be dist
 **Rule 3 — No forced translation.**
 Use the exact form as it appears in the source. Never translate between Korean and English.
 
-**Rule 4 — Prioritize by specificity (select 0–3).**
+**Rule 4 — Prioritize by specificity (select 0–3). When in doubt, leave empty.**
 - **Tier 1:** Unique identifiers — ticket IDs, class/function/column names (e.g., `CATDEV-123`, `ChatTokenUsage`, `token_breakdown`)
 - **Tier 2:** Specific proper nouns — library, module, or exact feature names (e.g., `pgvector`, `Langfuse`, `HNSW`)
 - **Tier 3:** Distinctive domain terms in their original language (e.g., `cutover`, `reducer`, `집계 버그`)
+
+**Default to empty.** Only populate `keyword_tokens` when you have at least one Tier 1 or Tier 2 term. A search with no keywords is better than a search with generic keywords.
 </keyword_extraction_rules>
