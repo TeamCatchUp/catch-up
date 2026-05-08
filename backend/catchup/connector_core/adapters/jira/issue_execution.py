@@ -117,7 +117,6 @@ class JiraIssueTransformResult(BaseModel):
     documents: tuple[Document, ...] = ()
     prepared_document_ids: tuple[str, ...] = ()
     issue_count: int = 0
-    epic_count: int = 0
     error_count: int = 0
 
     @property
@@ -128,7 +127,6 @@ class JiraIssueTransformResult(BaseModel):
         return {
             "document_count": self.document_count,
             "issue_count": self.issue_count,
-            "epic_count": self.epic_count,
             "error_count": self.error_count,
         }
 
@@ -161,7 +159,6 @@ class JiraIssueSyncExecutionResult(SyncExecutionResult):
     document_count: int = 0
     persisted_count: int = 0
     issue_count: int = 0
-    epic_count: int = 0
     deleted_count: int = 0
     error_count: int = 0
     skipped: bool = False
@@ -183,7 +180,6 @@ class JiraIssueSyncExecutionResult(SyncExecutionResult):
             "document_count": self.document_count,
             "persisted_count": self.persisted_count,
             "issue_count": self.issue_count,
-            "epic_count": self.epic_count,
             "deleted_count": self.deleted_count,
             "error_count": self.error_count,
             "batch_index": self.batch_index,
