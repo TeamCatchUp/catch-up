@@ -6,6 +6,7 @@ from enum import StrEnum
 
 
 class ConnectorKey(StrEnum):
+    JIRA = "jira"
     CHANNEL_TALK = "channel_talk"
 
 
