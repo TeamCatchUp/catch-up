@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Awaitable
 from collections.abc import Callable
+from collections.abc import Sized
 from enum import Enum
 from functools import wraps
 from time import perf_counter
@@ -54,9 +55,8 @@ def sync_ingestion_system_log(
         state = _PipelineLogState()
         pipeline_started_at = perf_counter()
 
-        logger.info("sync_ingestion_pipeline_started", **context)\
-
-        # SyncIngestionPort를 _SyncIngestionLoggingPort으로 교체하여
+        logger.info("sync_ingestion_pipeline_started", **context)
+        # SyncIngestionPort를 _SyncIngestionLoggingPort으로 교체
         kwargs["port"] = _SyncIngestionLoggingPort(
             port=kwargs["port"],
             context=context,
@@ -195,7 +195,6 @@ def _build_log_context(
     execution: SyncExecutionRequest,
     sync_window: SyncWindow,
 ) -> dict[str, object]:
-
     context: dict[str, object] = {
         "connector": _log_value(execution.connector),
         "tenant_id": execution.tenant_id,
@@ -224,11 +223,8 @@ def _summarize_stage_result(result: object) -> dict[str, object]:
 
     for source_field, target_field in _SIZED_STAGE_FIELDS.items():
         value = getattr(result, source_field, None)
-        if value is None or isinstance(value, (str, bytes, bytearray)):
+        if not isinstance(value, Sized) or isinstance(value, (str, bytes, bytearray)):
             continue
-        try:
-            summary[target_field] = len(value)
-        except TypeError:
-            continue
+        summary[target_field] = len(value)
 
     return summary
