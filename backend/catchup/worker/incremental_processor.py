@@ -382,6 +382,8 @@ async def process_incremental_message(
             )
             return
 
+        await handler.on_target_started(context=context)
+
         result = await handler.handle(
             context=context,
             service_cache=service_cache,
