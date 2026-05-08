@@ -6,6 +6,7 @@ from langchain_core.messages import HumanMessage
 from catchup.costs.utils import token_usage
 from catchup.prompts.loader import prompt_loader
 from catchup.rag.agents.tools.search_tools import REACT_TOOLS
+from catchup.rag.schemas.sources import SOURCE_METADATA
 from catchup.rag.nodes.utils import ainvoke_llm_with_token_usage
 from catchup.rag.nodes.utils import build_docs_summary
 from catchup.rag.nodes.utils import build_system_message
@@ -44,6 +45,7 @@ async def standard_agent_node(
     system_prompt = prompt_loader.get_prompt(
         "rag/standard_agent_system",
         accumulated_docs_summary=build_docs_summary(accumulated_docs),
+        sources=list(SOURCE_METADATA.values()),
         **global_context,
     )
     system_message = build_system_message(system_prompt)
