@@ -59,6 +59,8 @@ Evaluate whether the current question is a contextual follow-up that can be answ
 
 </previously_retrieved_documents>
 {% endif %}
+{% include 'common/user_input_security.j2' %}
+
 <classification_task>
 The conversation history is provided above as prior messages.
 The current user question is in the final Human message.

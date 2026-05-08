@@ -12,6 +12,8 @@ Stop searching when you have gathered sufficient information.
 
 {% include 'common/security.j2' %}
 
+{% include 'common/user_input_security.j2' %}
+
 {% if accumulated_docs_summary %}
 <already_retrieved>
 The following documents have already been retrieved this turn:
