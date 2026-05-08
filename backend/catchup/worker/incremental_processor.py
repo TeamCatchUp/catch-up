@@ -30,6 +30,7 @@ from catchup.sync.incremental.error_policy import is_retryable_incremental_error
 from catchup.sync.stream_runtime.stream_constants import SyncStreamFailureReason
 from catchup.worker.common import deadletter
 from catchup.worker.common import select_handler
+from catchup.worker.handlers.incremental_success_scope import IncrementalSuccessScope
 from catchup.worker.schemas import ClaimResult
 
 logger = logging.getLogger(__name__)
@@ -143,14 +144,19 @@ def _claim_incremental_task(
     return ClaimResult(state=ClaimState.CLAIMED, context=context)
 
 
-def _mark_incremental_success_sync(context: IncrementalSyncContext) -> bool:
+def _mark_incremental_success_sync(
+    context: IncrementalSyncContext,
+    *,
+    success_scope: IncrementalSuccessScope = IncrementalSuccessScope.PARENT_COHORT,
+) -> bool:
     if context.record_key is None or context.generation is None:
         return False
 
     synced_at = datetime.now(timezone.utc)
     with SessionLocal() as db:
         if (
-            context.parent_type
+            success_scope == IncrementalSuccessScope.PARENT_COHORT
+            and context.parent_type
             and context.parent_id
             and context.batch_generation_ceiling is not None
         ):
@@ -271,7 +277,9 @@ async def _handle_incremental_failure(
         )
         return
 
-    next_retry_at = datetime.now(timezone.utc) + _incremental_retry_delay(exc, next_attempt)
+    next_retry_at = datetime.now(timezone.utc) + _incremental_retry_delay(
+        exc, next_attempt
+    )
     transitioned = await run_in_threadpool(
         _transition_incremental_failure_state_sync,
         context=context,
@@ -388,7 +396,19 @@ async def process_incremental_message(
             context=context,
             service_cache=service_cache,
         )
-        if not await run_in_threadpool(_mark_incremental_success_sync, context):
+        success_scope = IncrementalSuccessScope(
+            getattr(
+                handler,
+                "incremental_success_scope",
+                IncrementalSuccessScope.PARENT_COHORT,
+            )
+            or IncrementalSuccessScope.PARENT_COHORT
+        )
+        if not await run_in_threadpool(
+            _mark_incremental_success_sync,
+            context,
+            success_scope=success_scope,
+        ):
             logger.warning(
                 "[INCREMENTAL][WORKER] Success transition skipped: record_key=%s, generation=%s",
                 context.record_key,

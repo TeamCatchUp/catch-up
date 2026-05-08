@@ -1,16 +1,21 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
+from datetime import timedelta
+from datetime import timezone
 
 from catchup.configs.config import settings
 from catchup.db.models import SyncType
 from catchup.sync.common.protocols import IngestionHandlerProtocol
-from catchup.sync.common.schemas import IncrementalSyncContext, TargetSyncResult
+from catchup.sync.common.schemas import IncrementalSyncContext
+from catchup.sync.common.schemas import TargetSyncResult
+from catchup.worker.handlers.incremental_success_scope import IncrementalSuccessScope
 
 
 class BaseIncrementalHandler(IngestionHandlerProtocol):
     connector: str
     sync_type = SyncType.INCREMENTAL
+    incremental_success_scope = IncrementalSuccessScope.PARENT_COHORT
 
     def _cache_key(self, scope_id: str) -> str:
         return f"{self.connector}:{scope_id}"

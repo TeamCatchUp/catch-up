@@ -21,10 +21,12 @@ from catchup.sync.common.exceptions import SyncInternalException
 from catchup.sync.common.schemas import IncrementalSyncContext
 from catchup.sync.common.schemas import TargetSyncResult
 from catchup.worker.handlers.base_incremental_handler import BaseIncrementalHandler
+from catchup.worker.handlers.incremental_success_scope import IncrementalSuccessScope
 
 
 class JiraIncrementalHandler(BaseIncrementalHandler):
     connector = "jira"
+    incremental_success_scope = IncrementalSuccessScope.RECORD
 
     async def _get_dependencies(self, scope_id: str, cache: dict[str, object]):
         cloud_id = scope_id.strip()
@@ -68,6 +70,7 @@ class JiraIncrementalHandler(BaseIncrementalHandler):
         adapter = JiraIssueIncrementalAdapter(
             dependencies=dependencies,
         )
+        event_kind = context.event_kind.value if context.event_kind else "updated"
         await prepare_jira_issue_transform_context(
             dependencies=dependencies,
             project_key=project_key,
@@ -78,7 +81,7 @@ class JiraIncrementalHandler(BaseIncrementalHandler):
                 tenant_id=context.scope_id,
                 project_key=project_key,
                 issue_key=issue_key,
-                event_kind=str(context.event_kind.value if context.event_kind else "updated"),
+                event_kind=event_kind,
                 audit_context=SyncAuditContext(
                     connector=context.connector,
                     scope_id=context.scope_id,
