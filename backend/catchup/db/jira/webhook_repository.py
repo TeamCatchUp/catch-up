@@ -2,9 +2,14 @@
 Jira Dynamic Webhook 상태 저장소
 """
 
-from datetime import datetime, timezone
+from datetime import datetime
+from datetime import timezone
 
-from sqlalchemy import delete, or_, select
+from sqlalchemy import delete
+from sqlalchemy import func
+from sqlalchemy import or_
+from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
 from catchup.db.models import JiraWebhookSubscription
@@ -57,30 +62,37 @@ def upsert_webhook(
     expires_at: datetime | None,
     last_synced_at: datetime | None = None,
 ) -> JiraWebhookSubscription:
-    existing = get_webhook(db, cloud_id, webhook_id)
     encoded_events = _encode_events(events)
 
-    if existing:
-        existing.callback_url = callback_url
-        existing.jql_filter = jql_filter
-        existing.events_csv = encoded_events
-        existing.expires_at = expires_at
-        existing.last_synced_at = last_synced_at
-        db.flush()
-        return existing
-
-    created = JiraWebhookSubscription(
-        cloud_id=cloud_id,
-        webhook_id=webhook_id,
-        callback_url=callback_url,
-        jql_filter=jql_filter,
-        events_csv=encoded_events,
-        expires_at=expires_at,
-        last_synced_at=last_synced_at,
+    stmt = (
+        insert(JiraWebhookSubscription)
+        .values(
+            cloud_id=cloud_id,
+            webhook_id=webhook_id,
+            callback_url=callback_url,
+            jql_filter=jql_filter,
+            events_csv=encoded_events,
+            expires_at=expires_at,
+            last_synced_at=last_synced_at,
+        )
+        .on_conflict_do_update(
+            constraint="uq_jira_webhook_subscriptions_cloud_webhook",
+            set_={
+                "callback_url": callback_url,
+                "jql_filter": jql_filter,
+                "events_csv": encoded_events,
+                "expires_at": expires_at,
+                "last_synced_at": last_synced_at,
+                "updated_at": func.now(),
+            },
+        )
     )
-    db.add(created)
+    db.execute(stmt)
     db.flush()
-    return created
+    subscription = get_webhook(db, cloud_id, webhook_id)
+    if subscription is None:
+        raise RuntimeError("jira webhook upsert did not return a persisted subscription")
+    return subscription
 
 
 def update_webhook_expiration(
