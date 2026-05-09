@@ -45,7 +45,7 @@ class JiraIssueFullSyncExecutionRequest(SyncExecutionRequest):
             "project_key": self.project_key,
             "batch_index": self.batch_index,
             "max_results": self.max_results,
-            "next_page_token_present": bool(self.next_page_token),
+            "request_next_page_token_present": bool(self.next_page_token),
         }
 
 
@@ -101,9 +101,8 @@ class JiraIssueFullSyncFetchResult(JiraIssueFetchedIssuesResult):
     def connector_log_summary(self) -> dict[str, object]:
         return {
             "fetched_count": self.fetched_count,
-            "batch_index": self.batch_index,
             "is_last": self.is_last,
-            "next_page_token_present": self.next_page_token_present,
+            "response_next_page_token_present": self.next_page_token_present,
         }
 
 
@@ -182,7 +181,6 @@ class JiraIssueSyncExecutionResult(SyncExecutionResult):
             "issue_count": self.issue_count,
             "deleted_count": self.deleted_count,
             "error_count": self.error_count,
-            "batch_index": self.batch_index,
             "is_last": self.is_last,
-            "next_page_token_present": self.next_page_token_present,
+            "response_next_page_token_present": self.next_page_token_present,
         }

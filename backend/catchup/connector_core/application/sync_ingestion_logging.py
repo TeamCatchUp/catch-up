@@ -89,7 +89,7 @@ def sync_ingestion_system_log(
             _PIPELINE_COMPLETED_EVENT,
             **context,
             duration_ms=_duration_ms(pipeline_started_at),
-            **_build_stage_result_log_fields(result),
+            **_build_stage_result_log_fields(result, excluded_keys=context.keys()),
         )
         return result
 
@@ -182,7 +182,10 @@ class _SyncIngestionStageLoggingProxy:
             **self._context,
             stage=stage,
             duration_ms=_duration_ms(stage_started_at),
-            **_build_stage_result_log_fields(result),
+            **_build_stage_result_log_fields(
+                result,
+                excluded_keys=self._context.keys(),
+            ),
         )
 
 
@@ -222,18 +225,31 @@ def _build_pipeline_log_context(
     return context
 
 
-def _build_stage_result_log_fields(result: object) -> dict[str, object]:
+def _build_stage_result_log_fields(
+    result: object,
+    *,
+    excluded_keys: object = (),
+) -> dict[str, object]:
     summary: dict[str, object] = {}
+    excluded = set(excluded_keys)
 
     if isinstance(result, ConnectorLogSummaryProvider):
-        _add_scalar_log_fields(summary, result.connector_log_summary())
+        _add_scalar_log_fields(
+            summary,
+            result.connector_log_summary(),
+            excluded_keys=excluded,
+        )
 
     for field_name in _SCALAR_STAGE_RESULT_FIELDS:
+        if field_name in excluded:
+            continue
         value = getattr(result, field_name, None)
         if isinstance(value, (str, int, float, bool)):
             summary[field_name] = value
 
     for source_field, target_field in _SIZED_STAGE_RESULT_FIELDS.items():
+        if target_field in excluded:
+            continue
         value = getattr(result, source_field, None)
         if not isinstance(value, Sized) or isinstance(value, (str, bytes, bytearray)):
             continue
@@ -245,10 +261,14 @@ def _build_stage_result_log_fields(result: object) -> dict[str, object]:
 def _add_scalar_log_fields(
     target: dict[str, object],
     fields: object,
+    *,
+    excluded_keys: set[object],
 ) -> None:
     if not isinstance(fields, Mapping):
         return
 
     for key, value in fields.items():
+        if key in excluded_keys:
+            continue
         if isinstance(value, (str, int, float, bool)):
             target[key] = value
