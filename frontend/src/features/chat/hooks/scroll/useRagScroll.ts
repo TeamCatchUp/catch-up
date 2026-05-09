@@ -97,7 +97,9 @@ export const useRagScroll = ({
     const observer = new IntersectionObserver(
       (entries) => {
         for (const entry of entries) {
-          const idx = Number(entry.target.getAttribute('data-qa-index'));
+          const qaIndexAttr = entry.target.getAttribute('data-qa-index');
+          if (qaIndexAttr === null) continue;
+          const idx = Number(qaIndexAttr);
           if (Number.isNaN(idx)) continue;
 
           if (!entry.isIntersecting) {

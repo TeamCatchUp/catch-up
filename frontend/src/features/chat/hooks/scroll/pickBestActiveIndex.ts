@@ -22,6 +22,7 @@ export const pickBestActiveIndex = ({
 
   let bestIdx = -1;
   let bestDistance = Number.POSITIVE_INFINITY;
+  let currentDistance = Number.POSITIVE_INFINITY;
 
   for (const [idx, entry] of observedEntries) {
     const { top, height } = entry.boundingClientRect;
@@ -32,18 +33,13 @@ export const pickBestActiveIndex = ({
       bestDistance = distance;
       bestIdx = idx;
     }
+
+    if (idx === currentIdx) {
+      currentDistance = distance;
+    }
   }
 
   if (bestIdx < 0 || bestIdx === currentIdx) return null;
-
-  const currentEntry = observedEntries.get(currentIdx);
-  let currentDistance = Number.POSITIVE_INFINITY;
-
-  if (currentEntry) {
-    const { top, height } = currentEntry.boundingClientRect;
-    const currentCenter = top + height / 2;
-    currentDistance = Math.abs(currentCenter - viewportCenter);
-  }
 
   const shouldSwitch = !Number.isFinite(currentDistance) || bestDistance + hysteresisPx < currentDistance;
 
