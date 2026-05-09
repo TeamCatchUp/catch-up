@@ -51,12 +51,19 @@ export default function RagAnswerPage() {
     window.history.replaceState(null, '', url.toString());
   }, []);
 
-  const { qaPairs, qaRefs, scrollContainerCallbackRef, scrollContainerHeight, scrollToLatest, activePairIndex } =
-    useRagScroll({
-      messages: chat.chatData?.messages ?? [],
-      scrollToMessageId,
-      onScrollToComplete: handleScrollToComplete,
-    });
+  const {
+    qaPairs,
+    qaRefs,
+    scrollContainerCallbackRef,
+    scrollContainerHeight,
+    scrollToLatest,
+    activePairIndex,
+    shiftActivePairIndex,
+  } = useRagScroll({
+    messages: chat.chatData?.messages ?? [],
+    scrollToMessageId,
+    onScrollToComplete: handleScrollToComplete,
+  });
 
   // ---------------------------------------------------------------------------
   // 역방향 무한 스크롤: 위로 스크롤 시 이전 메시지 로드
@@ -88,7 +95,9 @@ export default function RagAnswerPage() {
           const prevScrollHeight = container?.scrollHeight ?? 0;
           const prevScrollTop = container?.scrollTop ?? 0;
 
-          chat.loadPreviousMessages().then(() => {
+          chat.loadPreviousMessages().then((prependedPairs) => {
+            // prepend된 user 페어 수만큼 activePairIndex 보정 (동일 인덱스가 다른 페어를 가리키지 않게)
+            if (prependedPairs > 0) shiftActivePairIndex(prependedPairs);
             // 이전 메시지가 위에 삽입된 후 스크롤 위치 보정
             requestAnimationFrame(() => {
               if (!container) return;
@@ -102,7 +111,7 @@ export default function RagAnswerPage() {
     );
     observer.observe(el);
     return () => observer.disconnect();
-  }, [chat.hasOlderMessages, chat.isLoadingOlderMessages, chat.loadPreviousMessages]);
+  }, [chat.hasOlderMessages, chat.isLoadingOlderMessages, chat.loadPreviousMessages, shiftActivePairIndex]);
 
   return (
     <div className="flex h-screen w-full flex-col">
@@ -196,9 +205,14 @@ export default function RagAnswerPage() {
           />
         </div>
 
-        {/* 사이드바 — 스트리밍 중에는 마지막 QA pair(스트리밍 대상)에 고정 */}
+        {/* 사이드바 — 스트리밍 중에는 마지막 QA pair(스트리밍 대상)에 고정.
+            로딩 후에는 activePairIndex 추종. mount 직후처럼 인덱스가 비어있으면 마지막 페어로 fallback. */}
         <RagSidebar
-          currentQA={qaPairs[chat.isLoading ? qaPairs.length - 1 : activePairIndex]}
+          currentQA={
+            chat.isLoading
+              ? qaPairs[qaPairs.length - 1]
+              : (qaPairs[activePairIndex] ?? qaPairs[qaPairs.length - 1])
+          }
           isLoading={chat.isLoading}
           isError={chat.isError}
           stepRows={chat.stepRows}

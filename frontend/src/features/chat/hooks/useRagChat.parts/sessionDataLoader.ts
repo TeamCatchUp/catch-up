@@ -34,7 +34,7 @@ export const toUiMessage = (item: ChatHistoryMessageResponse): Message => {
 
   if (item.sender_type === 'human') {
     return {
-      id: `history_${item.id}`,
+      id: String(item.id),
       role: 'user',
       content: item.content ?? '',
       timestamp,
@@ -44,7 +44,7 @@ export const toUiMessage = (item: ChatHistoryMessageResponse): Message => {
   const rawSources = Array.isArray(item.sources) ? (item.sources as SourceResponse[]) : [];
 
   return {
-    id: `history_${item.id}`,
+    id: String(item.id),
     role: 'assistant',
     content: item.content ?? '',
     sources: normalizeHistorySources(rawSources),

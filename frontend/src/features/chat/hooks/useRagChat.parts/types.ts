@@ -44,7 +44,11 @@ export interface UseRagChatReturn {
   // 역방향 무한 스크롤
   hasOlderMessages: boolean;
   isLoadingOlderMessages: boolean;
-  loadPreviousMessages: () => Promise<void>;
+  /**
+   * 이전 페이지 메시지를 prepend하고, 추가된 user 페어 수를 반환한다.
+   * 호출 측에서 이 수만큼 activePairIndex를 보정해야 동일 인덱스가 다른 페어를 가리키지 않는다.
+   */
+  loadPreviousMessages: () => Promise<number>;
 }
 
 /**
