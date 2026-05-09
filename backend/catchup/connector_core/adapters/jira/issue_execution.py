@@ -101,7 +101,6 @@ class JiraIssueFullSyncFetchResult(JiraIssueFetchedIssuesResult):
     def connector_log_summary(self) -> dict[str, object]:
         return {
             "fetched_count": self.fetched_count,
-            "batch_index": self.batch_index,
             "is_last": self.is_last,
             "next_page_token_present": self.next_page_token_present,
         }
