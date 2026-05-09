@@ -112,7 +112,10 @@ class JiraIssueIngestionAdapterTests(IsolatedAsyncioTestCase):
         )
 
         self.assertEqual(result.fetched_count, 1)
-        self.assertNotIn("batch_index", result.connector_log_summary())
+        log_summary = result.connector_log_summary()
+        self.assertNotIn("batch_index", log_summary)
+        self.assertNotIn("next_page_token_present", log_summary)
+        self.assertTrue(log_summary["response_next_page_token_present"])
         self.assertFalse(result.is_last)
         self.assertEqual(result.next_page_token, "next-token")
         self.assertEqual(client.search_calls[0]["next_page_token"], "cursor-1")
