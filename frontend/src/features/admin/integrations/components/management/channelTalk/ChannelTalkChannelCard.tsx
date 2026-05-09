@@ -33,18 +33,8 @@ interface ChannelTalkChannelCardProps {
   onTestDocumentSpaceConnection: (dsId: string) => void;
 }
 
-/**
- * 채널톡 채널 카드.
- *
- * Layout (Figma node 12653:52488 정합):
- * - 채널 헤더 영역: `px-4 py-5` (가로 16, 세로 20)
- * - Table 영역(도큐먼트 wrapper + Add button): `flex-col gap-3 px-4 pb-4`
- * - 도큐먼트 wrapper: `border-t border-edge-neutral` (채널 헤더와 분리)
- * - Add button: inline `gap-2 px-1.5 py-1`, primary 강조
- *
- * - `tested` 상태는 헤더 한 줄로 collapsed 되어 영구 lock. 변경하려면 삭제 후 재등록.
- * - `idle`/`error` 상태는 expanded — 키 입력 + 연결 테스트 버튼 노출.
- */
+// tested → 헤더 한 줄 collapsed lock (변경하려면 삭제 후 재등록)
+// idle/error → expanded (키 입력 + 연결 테스트 버튼 노출)
 export default function ChannelTalkChannelCard({
   channel,
   onUpdate,
@@ -157,9 +147,8 @@ export default function ChannelTalkChannelCard({
 
       {headerSection}
 
-      {/* Table 영역: 도큐먼트 wrapper + Add button (Figma `Table` 12653:52536 패턴) */}
+      {/* 도큐먼트 wrapper + Add button */}
       <div className="flex flex-col gap-3 px-4 pb-4">
-        {/* Container — 도큐먼트 카드들 wrapper. border-t로 채널 헤더와 분리 (Figma 12653:52537) */}
         {channel.documentSpaces.length > 0 ? (
           <div className="border-edge-neutral flex flex-col border-t">
             {channel.documentSpaces.map((ds) => (
@@ -174,7 +163,6 @@ export default function ChannelTalkChannelCard({
           </div>
         ) : null}
 
-        {/* Add button — inline, primary 강조 (Figma 12653:53284) */}
         <button
           type="button"
           onClick={onAddDocumentSpace}

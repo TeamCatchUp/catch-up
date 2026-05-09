@@ -1,15 +1,15 @@
-// ─── Channel Talk API Types (백엔드 admin_api.py 응답 1:1 매칭, snake_case) ───
+// 백엔드 admin_api.py 응답 1:1 매칭 (snake_case)
 
 // ─── Channel Credential ───
 
-/** POST /api/v1/admin/connector/channel_talk/credentials(/validate) 요청 body */
+// POST /credentials(/validate) request
 export interface ChannelTalkCredentialRequest {
   access_key: string;
   access_secret: string;
   webhook_token: string;
 }
 
-/** POST /api/v1/admin/connector/channel_talk/credentials/validate 응답 */
+// POST /credentials/validate response
 export interface ChannelTalkValidateResponse {
   status: 'validated';
   channel_id: string;
@@ -19,7 +19,7 @@ export interface ChannelTalkValidateResponse {
   webhook_token_configured: boolean;
 }
 
-/** POST /api/v1/admin/connector/channel_talk/credentials 응답 (upsert) */
+// POST /credentials response (upsert)
 export interface ChannelTalkConnectResponse {
   installed: boolean;
   channel_id: string | null;
@@ -33,7 +33,7 @@ export interface ChannelTalkConnectResponse {
 
 // ─── Document Space Credential ───
 
-/** POST /api/v1/admin/connector/channel_talk/documents/credentials(/validate) 요청 body */
+// POST /documents/credentials(/validate) request
 export interface ChannelTalkDocumentCredentialRequest {
   access_key: string;
   access_secret: string;
@@ -41,7 +41,7 @@ export interface ChannelTalkDocumentCredentialRequest {
   polling_cycle_hours: number;
 }
 
-/** POST /api/v1/admin/connector/channel_talk/documents/credentials/validate 응답 */
+// POST /documents/credentials/validate response
 export interface ChannelTalkDocumentValidateResponse {
   status: 'validated';
   channel_id: string;
@@ -50,7 +50,7 @@ export interface ChannelTalkDocumentValidateResponse {
   association_status: string;
 }
 
-/** POST /api/v1/admin/connector/channel_talk/documents/credentials 응답 (upsert) */
+// POST /documents/credentials response (upsert)
 export interface ChannelTalkDocumentConnectResponse {
   installed: boolean;
   channel_id: string | null;
@@ -65,12 +65,12 @@ export interface ChannelTalkDocumentConnectResponse {
 
 // ─── Uninstall (DELETE) ───
 
-/** DELETE /credentials?channel_id=X 응답 */
+// DELETE /credentials?channel_id=X
 export interface ChannelTalkUninstallResponse {
   status: 'success' | 'not_found';
   message: string;
   installed: boolean;
 }
 
-/** DELETE /documents/credentials?space_id=X 응답 (Channel과 동일 형태) */
+// DELETE /documents/credentials?space_id=X (Channel과 동일 형태)
 export type ChannelTalkDocumentUninstallResponse = ChannelTalkUninstallResponse;

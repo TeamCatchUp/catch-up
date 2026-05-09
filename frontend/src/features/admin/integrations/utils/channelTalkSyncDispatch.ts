@@ -2,7 +2,7 @@ import { DEFAULT_PERIOD, type Period } from '../constants/period';
 import type { FullSyncTarget } from '../types/syncModel';
 import type { ChannelTalkChannel } from './mapChannelTalkSyncTargets';
 
-/** Period(한국어 라벨) → 백엔드 sync_days 일수. '전체'는 null로 백엔드 기본값(1095) 사용. */
+// Period 라벨 → 백엔드 sync_days. '전체' = null → 백엔드 기본값(1095) 사용
 const PERIOD_TO_DAYS: Record<Period, number | null> = {
   '1개월': 30,
   '3개월': 90,
@@ -12,13 +12,7 @@ const PERIOD_TO_DAYS: Record<Period, number | null> = {
   전체: null,
 };
 
-/**
- * 선택된 target들의 period 중 가장 긴 일수를 sync_days로 사용.
- * '전체'(null)가 하나라도 포함되면 즉시 null 반환 → 백엔드 기본값(1095) 사용.
- *
- * 백엔드는 단일 sync_days만 받으므로 보수적으로 가장 넓은 기간 채택.
- * channel별 다른 period를 분리해서 보내려면 백엔드 schema 변경이 필요하다.
- */
+// 백엔드가 단일 sync_days만 받아 가장 긴 period 채택. '전체' 포함 시 null
 export function pickSyncDays(periods: Period[]): number | null {
   if (periods.length === 0) return null;
   let maxDays = 0;
@@ -30,20 +24,14 @@ export function pickSyncDays(periods: Period[]): number | null {
   return maxDays;
 }
 
-/** 임베딩 요청 1건 — channel scope_id에 묶인 sync targets + 그 channel에서 사용된 period들 */
+// 임베딩 1건 = channel scope_id 묶음 (sync targets + 사용된 periods)
 export interface ChannelTalkSyncDispatchGroup {
   channel: ChannelTalkChannel;
   targets: FullSyncTarget[];
   periods: Period[];
 }
 
-/**
- * 사용자가 선택한 채널/스페이스를 channel scope별로 그룹화.
- *
- * 백엔드 `POST /sync/full`은 scope_id 1개만 받기 때문에 channel당 1번씩 mutation을
- * 호출해야 한다. 이 함수는 그 호출 단위를 미리 묶어 반환한다. targets가 비어있는
- * channel은 결과에서 제외 (호출 불필요).
- */
+// POST /sync/full은 scope_id 1개라 channel별 1회씩 호출 — 빈 그룹은 제외
 export function groupChannelTalkSyncDispatch(
   channels: ChannelTalkChannel[],
   selectedChannelIds: Set<string>,
@@ -64,7 +52,7 @@ export function groupChannelTalkSyncDispatch(
       for (const space of channel.document_spaces) {
         if (!selectedSpaceIds.has(space.space_id)) continue;
         targets.push({ target_type: 'space', target_id: space.space_id });
-        // space는 명시 설정이 없으면 부모 channel period 상속.
+        // 명시 설정 없으면 부모 channel period 상속
         const explicit = spacePeriods[space.space_id];
         if (explicit) periods.push(explicit);
       }

@@ -6,14 +6,14 @@ interface ChannelTalkFieldRowProps {
   label: string;
   value: string;
   placeholder: string;
-  /** 텍스트필드 시각 변형 — error는 1.5px destructive border, idle은 1px neutral border */
+  // error → 1.5px destructive border, idle → 1px neutral border
   state: 'idle' | 'error';
-  /** lock 상태 — 입력 불가 + 회색 배경 + 자동 마스킹 */
+  // 입력 불가 + 회색 배경 + 자동 마스킹
   disabled?: boolean;
   onChange: (next: string) => void;
 }
 
-/** 채널/도큐먼트 스페이스 공용 입력 행 — 라벨 + 필수 dot + 마스킹 textfield */
+// 채널/도큐먼트 스페이스 공용 입력 행 (라벨 + 필수 dot + 마스킹 textfield)
 export default function ChannelTalkFieldRow({
   label,
   value,

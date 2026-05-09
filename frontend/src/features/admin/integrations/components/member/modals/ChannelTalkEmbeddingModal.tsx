@@ -22,20 +22,12 @@ import ChannelList from './channelTalk/ChannelList';
 interface ChannelTalkEmbeddingModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** 임베딩 mutation 성공 시 useEmbeddingJobs로 job 추적 시작을 알리는 콜백 */
+  // 임베딩 mutation 성공 시 useEmbeddingJobs로 job 추적 시작 콜백
   onJobStart?: (jobId: string, connector: SyncConnector) => void;
 }
 
-/**
- * 채널톡 임베딩 모달.
- *
- * ModalBody가 별도 컴포넌트로 분리된 이유: open=true일 때만 마운트되어 selection state가
- * 매 모달 진입마다 fresh하게 초기화된다. useEffect로 reset하는 패턴은 React 19의
- * `react-hooks/set-state-in-effect` 룰에 막혀, mount/unmount 기반 초기화로 우회.
- *
- * 데이터 흐름: GET /credentials → channel_id → GET /sync/targets → 1:N 변환 → ChannelList/ChannelGroup
- * 임베딩: POST /sync/full({ targets: [{target_type, target_id}, ...] })
- */
+// ModalBody 분리 — open=true일 때만 mount되어 selection state가 매 진입마다 fresh
+// 데이터 흐름: GET /credentials → channel_id → GET /sync/targets → 1:N → POST /sync/full
 export default function ChannelTalkEmbeddingModal({ open, onOpenChange, onJobStart }: ChannelTalkEmbeddingModalProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -72,10 +64,7 @@ function ModalBody({ onClose, onJobStart }: ModalBodyProps) {
     })),
   });
 
-  // 3) 각 channel별 flat 응답을 1:N 모델로 변환 후 합치기.
-  // useMemo의 가변 길이 deps spread는 React Hook 룰 위배라 제거. flatMap은 매 렌더마다 새 배열이지만
-  // useChannelTalkSelection은 channels의 reference identity가 아닌 channel_id/space_id 기준으로 reset 판단하므로
-  // memoization 가치가 없다 (`rerender-dependencies` 룰 준수).
+  // 3) channel별 응답 → 1:N 합치기. memoization 불요 (selection은 id 기준 reset)
   const channels: ChannelTalkChannel[] = targetsQueries.flatMap((q) =>
     q.data ? mapChannelTalkSyncTargets(q.data.targets) : [],
   );
@@ -118,7 +107,7 @@ function ModalBody({ onClose, onJobStart }: ModalBodyProps) {
     if (channelGroups.length === 0) return;
 
     // 모든 그룹에서 사용된 period를 합쳐 가장 넓은 기간 1개로 sync_days 결정.
-    // 비어있는 채널 period 슬롯은 DEFAULT_PERIOD로 보강 (groupChannelTalkSyncDispatch는 명시 period만 수집).
+    // 빈 period 슬롯은 DEFAULT_PERIOD로 보강 (group은 명시 period만 수집)
     const usedPeriods = channelGroups.flatMap((g) => (g.periods.length > 0 ? g.periods : [DEFAULT_PERIOD]));
     const syncDays = pickSyncDays(usedPeriods);
 
@@ -168,7 +157,7 @@ function ModalBody({ onClose, onJobStart }: ModalBodyProps) {
         }
       });
 
-      // 결과 요약 토스트 — 가장 사용자 의도에 맞는 1개만 노출.
+      // 결과 요약 토스트 1개만 노출
       if (acceptedCount > 0) {
         toast('임베딩이 시작되었습니다.', {
           description:

@@ -23,33 +23,24 @@ import { deriveChannelTalkInitialState } from '../../../utils/deriveChannelTalkI
 import ChannelTalkChannelCard from './ChannelTalkChannelCard';
 
 interface ChannelTalkManagementPanelProps {
-  /** 다른 connector와 동일하게 백엔드 connector_target_status 기반 connected/dataRange 표시 */
+  // 백엔드 connector_target_status 기반 connected/dataRange
   detail: ConnectorDetail;
 }
 
-/**
- * 채널톡 메인 패널.
- *
- * 외부 컴포넌트는 백엔드 GET 응답 fetch + 로딩 처리만 담당.
- * 데이터 ready 시 Inner를 mount하면서 deriveChannelTalkInitialState로 만든 initialState를 주입.
- * 이 mount/unmount 분리는 React 19 `react-hooks/set-state-in-effect` 룰을 회피하기 위함.
- */
+// 외부는 fetch + 로딩만, 데이터 ready 시 Inner mount하며 initialState 주입
 export default function ChannelTalkManagementPanel({ detail }: ChannelTalkManagementPanelProps) {
   const statusQuery = useQuery(adminConnectorQueries.connectionStatus('channel_talk'));
   const channelTalkStatus =
     statusQuery.data?.vendor === 'channel_talk' ? (statusQuery.data as ChannelTalkConnectionStatusResponse) : undefined;
 
-  // outer가 detail 변화 등으로 자주 re-render돼도 derive 비용을 한 번만 지불.
-  // TanStack Query는 동일 fetched data에 대해 stable reference를 보장하므로 cache hit이 잘 동작.
+  // TanStack Query stable reference 덕분에 cache hit 시 derive 1회만 실행
   const initialState = useMemo(() => deriveChannelTalkInitialState(channelTalkStatus), [channelTalkStatus]);
 
   if (statusQuery.isLoading) {
-    // 채널톡 백엔드 응답 대기 중 — 빈 placeholder. 짧은 폴링이라 별도 스켈레톤 없이 충분.
     return <div className="flex flex-col gap-6" />;
   }
 
-  // fetch 실패 시 빈 카드로 무음 진입을 막아 "등록된 적 없음"으로 오인하는 것을 방지.
-  // 사용자에게 명시적 에러 + 새로고침 안내. ConnectionStatus/DataRange 섹션 자리는 비워둠.
+  // fetch 실패 시 "등록 없음"으로 오인 방지 — 명시적 에러 표시
   if (statusQuery.isError) {
     return (
       <div className="flex flex-col gap-6">
@@ -82,10 +73,7 @@ function ChannelTalkManagementPanelInner({ initialState, detail }: ChannelTalkMa
   } = useChannelTalkViewModel(initialState);
 
   const hasChannels = state.channels.length > 0;
-  /**
-   * Credential 헤더 카운트("N개 채널 / N개 도큐먼트 연결됨")는 검증된(tested) 항목만 노출.
-   * 사용자가 입력 중인 미검증 카드는 카운트에서 제외하여 "등록된 데이터" 의미를 유지.
-   */
+  // 헤더 카운트는 tested만 — 미검증 카드는 "등록된 데이터" 정의에서 제외
   const { testedChannelCount, testedDocumentSpaceCount } = useMemo(() => {
     const testedChannels = state.channels.filter((ch) => ch.connectionStatus === 'tested');
     return {
@@ -97,7 +85,6 @@ function ChannelTalkManagementPanelInner({ initialState, detail }: ChannelTalkMa
     };
   }, [state.channels]);
 
-  // detail.connected: OAuth 설치 여부 / hasTestedChannels: credential 등록된 카드 표시용
   return (
     <div className="flex flex-col gap-6">
       <ConnectionStatusSection isConnected={detail.connected} />
@@ -121,11 +108,10 @@ function ChannelTalkManagementPanelInner({ initialState, detail }: ChannelTalkMa
 }
 
 interface ConnectionStatusSectionProps {
-  /** 검증 통과한 채널 1개 이상일 때 "연동됨" 표시 — `state.connected`와 분리된 파생값 */
+  // 검증 통과한 채널 1개 이상일 때 true (state.connected와 분리된 파생값)
   isConnected: boolean;
 }
 
-/** 연동 상태 관리 — 연동 상태 토글 + 보안 관련 설명 */
 function ConnectionStatusSection({ isConnected }: ConnectionStatusSectionProps) {
   return (
     <div className="flex flex-col gap-1.5">
@@ -160,10 +146,7 @@ interface DataRangeSectionProps {
   dataRange: string;
 }
 
-/**
- * 연동된 데이터 범위 섹션 — 다른 connector와 동일 동작.
- * `isConnected`가 true면 백엔드의 oldest~latest를 중앙 정렬로 표시, false면 placeholder를 좌측 정렬.
- */
+// connected → 백엔드 oldest~latest 중앙 정렬, 미연결 → placeholder 좌측 정렬
 function DataRangeSection({ isConnected, dataRange }: DataRangeSectionProps) {
   return (
     <div className="flex flex-col gap-1.5">
@@ -195,7 +178,6 @@ interface CredentialSectionProps {
   onTestDocumentSpaceConnection: (channelId: string, dsId: string) => void;
 }
 
-/** Credential Key 입력 및 동기화 주기 설정 — 채널 리스트 헤더 + 채널 카드들 */
 function CredentialSection({
   channels,
   channelCount,
@@ -216,7 +198,6 @@ function CredentialSection({
 
       {hasChannels ? (
         <>
-          {/* 채널 리스트 헤더 — 박스 전체가 "채널 추가하기" 클릭 영역 (default/hover/pressed 3상태) */}
           <AddChannelBox onClick={onAddChannel}>
             <span className="text-body-small text-content-normal shrink-0">{channelCount}개 채널</span>
             <span className="bg-dim-black-25 size-1 shrink-0 rounded-full" aria-hidden />
@@ -225,7 +206,6 @@ function CredentialSection({
             </span>
           </AddChannelBox>
 
-          {/* 채널 카드 리스트 */}
           <div className="flex flex-col gap-3">
             {channels.map((channel) => (
               <ChannelTalkChannelCard
@@ -253,12 +233,11 @@ function CredentialSection({
 
 interface AddChannelBoxProps {
   onClick: () => void;
-  /** 자식과 우측 "채널 추가하기" 라벨 사이 간격 분기 — `between`은 placeholder 시, 기본은 채널 헤더용 */
+  // between → placeholder, default → 채널 헤더
   justify?: 'default' | 'between';
   children: React.ReactNode;
 }
 
-/** "채널 추가하기" 클릭 영역 박스 — 좌측 자식 컨텐츠 + 우측 고정 라벨 (default/hover/pressed 3상태) */
 function AddChannelBox({ onClick, justify = 'default', children }: AddChannelBoxProps) {
   return (
     <button

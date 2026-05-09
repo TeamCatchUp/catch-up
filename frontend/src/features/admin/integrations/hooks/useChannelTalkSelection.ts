@@ -10,7 +10,7 @@ interface ChannelTalkSelectionState {
   selectedChannelIds: Set<string>;
   selectedSpaceIds: Set<string>;
   channelPeriods: Record<string, Period>;
-  /** 사용자가 명시 설정한 space만 보관. 미설정 space는 채널 기간을 inheritance로 따라간다. */
+  // 명시 설정한 space만 보관. 미설정 space는 채널 기간 inheritance
   spacePeriods: Record<string, Period>;
 }
 
@@ -87,14 +87,9 @@ function reducer(state: ChannelTalkSelectionState, action: ChannelTalkSelectionA
   }
 }
 
-/**
- * 채널톡 임베딩 모달의 selection 로직을 useReducer로 응집한 훅.
- *
- * - 4개 state(채널/스페이스 선택, 채널/스페이스 기간)를 단일 state object + 6개 action으로 관리
- * - reducer는 pure (외부 변수 수정 없음, 부수 효과는 반환된 dispatch 호출 후 handler 본문에서 처리)
- * - 초기 상태: 모든 채널/스페이스 선택 + 모든 채널 기간 DEFAULT_PERIOD + spacePeriods는 빈 객체(inheritance)
- * - 좌측 채널 토글 시 해당 채널의 도큐먼트 스페이스도 함께 add/delete (양방향 동기화)
- */
+// 임베딩 모달 selection useReducer
+// 초기값: 모든 채널/스페이스 선택 + 채널 기간 DEFAULT_PERIOD + spacePeriods 빈 객체(inheritance)
+// 채널 토글 시 하위 도큐먼트 스페이스 add/delete 양방향 동기화
 export function useChannelTalkSelection(channels: ChannelTalkChannel[]) {
   const [state, dispatch] = useReducer(reducer, channels, init);
 
@@ -118,7 +113,7 @@ export function useChannelTalkSelection(channels: ChannelTalkChannel[]) {
       const channel = channelMap.get(channelId);
       if (!channel) return;
 
-      // 토스트는 dispatch 전에 latest state로 willSelect를 결정해 분기.
+      // dispatch 전 latest state로 willSelect 분기 결정
       const willSelect = !state.selectedChannelIds.has(channelId);
       dispatch({ type: 'TOGGLE_CHANNEL', channel });
 
