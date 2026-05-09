@@ -18,6 +18,14 @@ export const CHANNEL_TALK_SYNC_INTERVAL_LABELS: Record<ChannelTalkSyncInterval, 
   '24hour': '24시간',
 };
 
+// label union → 백엔드 polling_cycle_hours (int) 변환 매퍼
+export const CHANNEL_TALK_SYNC_INTERVAL_HOURS: Record<ChannelTalkSyncInterval, number> = {
+  '1hour': 1,
+  '6hour': 6,
+  '12hour': 12,
+  '24hour': 24,
+};
+
 /**
  * 도큐먼트 스페이스 동기화 주기 옵션 — 정적 문서라 긴 주기 4개.
  * 1시간이 기본값.

@@ -37,6 +37,8 @@ export interface ChannelTalkConnectResponse {
 export interface ChannelTalkDocumentCredentialRequest {
   access_key: string;
   access_secret: string;
+  // 백엔드 ge=1, le=168. CHANNEL_TALK_SYNC_INTERVAL_HOURS 로 label→int 변환
+  polling_cycle_hours: number;
 }
 
 /** POST /api/v1/admin/connector/channel_talk/documents/credentials/validate 응답 */
