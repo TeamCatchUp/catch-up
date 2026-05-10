@@ -140,9 +140,9 @@ export default function JobSelectionStep({
                     isReadOnly
                       ? 'border-edge-neutral border'
                       : isJobTextAtLimit
-                        ? 'border-status-destructive border'
+                        ? 'border-status-destructive border-[1.5px]'
                         : jobFieldFocused
-                          ? 'border-edge-primary border-[1.2px]'
+                          ? 'border-edge-primary border-[1.5px]'
                           : 'border-edge-neutral border',
                   )}
                 >
@@ -205,9 +205,9 @@ export default function JobSelectionStep({
                     : isDescDisabled
                       ? 'bg-fill-interaction-disable border-edge-neutral border'
                       : isDescAtLimit
-                        ? 'bg-fill-normal border-status-destructive border'
+                        ? 'bg-fill-normal border-status-destructive border-[1.5px]'
                         : descFieldFocused
-                          ? 'bg-fill-normal border-edge-primary border-[1.2px]'
+                          ? 'bg-fill-normal border-edge-primary border-[1.5px]'
                           : 'bg-fill-normal border-edge-neutral border',
                 )}
               >
