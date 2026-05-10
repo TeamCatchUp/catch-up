@@ -56,7 +56,7 @@ const CommandInput = React.forwardRef<
           type="button"
           onMouseDown={(e) => e.preventDefault()}
           onClick={handleClear}
-          className="text-icon-assistive shrink-0 cursor-pointer"
+          className="text-icon-neutral shrink-0 cursor-pointer"
         >
           <TextfieldDelete className="size-5" />
         </button>

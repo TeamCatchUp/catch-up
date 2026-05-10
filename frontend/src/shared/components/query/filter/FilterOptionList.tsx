@@ -99,7 +99,7 @@ export function FilterOptionList({ title, options, selected, onToggle, Icon }: F
                 setSearchTerm('');
                 selected.forEach((name) => onToggle(name));
               }}
-              className="text-content-assistive shrink-0 cursor-pointer"
+              className="text-icon-neutral shrink-0 cursor-pointer"
               onMouseDown={(e) => e.preventDefault()}
             >
               <IconCloseCircle className="size-5" />
