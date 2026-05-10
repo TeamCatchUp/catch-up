@@ -35,10 +35,10 @@ export default function SideNavUser({ isOpen }: SideNavUserProps) {
                     : 'justify-center',
                 )}
               >
-                <div className={cn('flex gap-4', isOpen ? 'mt-auto' : '')}>
+                <div className="flex items-center gap-4">
                   <Profile
                     className={cn(
-                      'border-edge-neutral h-10 w-10 rounded-xl border',
+                      'border-edge-neutral h-9 w-9 rounded-xl border',
                       !isOpen && 'hover:shadow-[0_0_0_5px_var(--fill-interaction-hover)]',
                     )}
                   />
