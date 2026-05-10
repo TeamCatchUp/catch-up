@@ -136,7 +136,7 @@ export default function JobSelectionStep({
                 </div>
                 <div
                   className={cn(
-                    'bg-fill-normal flex h-11.5 items-center rounded-lg p-3',
+                    'bg-fill-normal flex h-11.5 items-center gap-3 rounded-lg p-3',
                     isReadOnly
                       ? 'border-edge-neutral border'
                       : isJobTextAtLimit
@@ -199,7 +199,7 @@ export default function JobSelectionStep({
             <div className="flex flex-col gap-1.5">
               <div
                 className={cn(
-                  'flex h-11.5 items-center rounded-lg p-3',
+                  'flex h-11.5 items-center gap-3 rounded-lg p-3',
                   isReadOnly
                     ? 'bg-fill-normal border-edge-neutral border'
                     : isDescDisabled
