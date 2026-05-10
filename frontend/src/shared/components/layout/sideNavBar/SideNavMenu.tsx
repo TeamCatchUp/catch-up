@@ -72,12 +72,12 @@ export default function SideNavMenu({ isOpen }: SideNavMenuProps) {
                   className={cn(
                     'relative flex cursor-pointer items-center',
                     isActive ? selectedClass : defaultClass,
-                    isOpen ? 'h-10 w-full gap-3 rounded-lg px-2.5 py-2' : 'w-10 justify-center rounded-xl p-1.5',
+                    isOpen ? 'h-10 w-full gap-3 rounded-lg px-2.5 py-2' : 'size-9 justify-center rounded-xl p-1',
                   )}
                 >
                   <item.Icon
                     className={cn(
-                      isOpen ? 'size-5.5' : 'size-7',
+                      isOpen ? 'size-5.5' : 'size-6.5',
                       isActive ? 'text-icon-primary group-hover:text-icon-primary' : 'text-icon-normal',
                     )}
                   />

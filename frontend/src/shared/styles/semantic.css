@@ -81,8 +81,10 @@
     --line-primary-assistive: var(--color-blue-5);
 
     /* Background */
-    --bg-normal: var(--color-white);
-    --bg-alternative: var(--color-neutral-1);
+    --background-normal-normal: var(--color-white);
+    --background-normal-alternative: var(--color-neutral-1);
+    --background-elevated-normal: var(--color-white);
+    --background-elevated-alternative: var(--color-neutral-1);
 
     /* Accent */
     --accent-green: var(--color-green-60);
@@ -213,8 +215,10 @@
     --line-primary-assistive: color-mix(in srgb, var(--color-blue-40) 42%, transparent);
 
     /* Background */
-    --bg-normal: var(--color-neutral-90);
-    --bg-alternative: var(--color-neutral-80);
+    --background-normal-normal: var(--color-neutral-85);
+    --background-normal-alternative: var(--color-neutral-95);
+    --background-elevated-normal: var(--color-neutral-80);
+    --background-elevated-alternative: var(--color-neutral-95);
 
     /* Accent */
     --accent-green: var(--color-green-40);

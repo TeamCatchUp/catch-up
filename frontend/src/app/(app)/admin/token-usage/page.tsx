@@ -1,6 +1,6 @@
 'use client';
 
-import { type KeyboardEvent, useCallback, useRef } from 'react';
+import { useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 
 import LimitReleaseSection from '@/features/admin/token-usage/components/sections/LimitReleaseSection';
@@ -11,52 +11,29 @@ import {
   DEFAULT_TAB_SLUG,
   fromTabSlug,
   TOKEN_USAGE_TABS,
-  type TokenUsageTab,
+  type TokenUsageTabSlug,
   toTabSlug,
 } from '@/features/admin/token-usage/constants/tokenUsageConfig';
-import { cn } from '@/shared/utils/cn';
+import UnderlineTabs, { type UnderlineTabItem } from '@/shared/components/ui/underline-tabs';
+
+const TAB_ITEMS: UnderlineTabItem<TokenUsageTabSlug>[] = TOKEN_USAGE_TABS.map((tab) => ({
+  value: toTabSlug(tab),
+  label: tab,
+}));
 
 /** 관리자 — 토큰 사용량 관리 페이지 */
 export default function AdminTokenUsagePage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const activeTab = fromTabSlug(searchParams.get('tab') ?? DEFAULT_TAB_SLUG);
-  const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const activeSlug = toTabSlug(activeTab);
 
-  const setActiveTab = useCallback(
-    (tab: TokenUsageTab) => {
-      const slug = toTabSlug(tab);
+  const setActiveSlug = useCallback(
+    (slug: TokenUsageTabSlug) => {
       router.replace(`/admin/token-usage?tab=${slug}`);
     },
     [router],
   );
-
-  const handleTabKeyDown = (e: KeyboardEvent, index: number) => {
-    let newIndex = index;
-
-    switch (e.key) {
-      case 'ArrowLeft':
-        newIndex = index === 0 ? TOKEN_USAGE_TABS.length - 1 : index - 1;
-        break;
-      case 'ArrowRight':
-        newIndex = index === TOKEN_USAGE_TABS.length - 1 ? 0 : index + 1;
-        break;
-      case 'Home':
-        newIndex = 0;
-        break;
-      case 'End':
-        newIndex = TOKEN_USAGE_TABS.length - 1;
-        break;
-      default:
-        return;
-    }
-
-    e.preventDefault();
-    setActiveTab(TOKEN_USAGE_TABS[newIndex]);
-    tabRefs.current[newIndex]?.focus();
-  };
-
-  const activeSlug = toTabSlug(activeTab);
 
   return (
     <section className="flex flex-col gap-8 px-16 pt-9 pb-30">
@@ -65,38 +42,22 @@ export default function AdminTokenUsagePage() {
         <h1 className="text-heading-xlarge text-content-normal">토큰 사용량 관리</h1>
 
         {/* 밑줄 탭 */}
-        <div role="tablist" aria-label="토큰 사용량 관리 탭" className="flex items-center gap-6">
-          {TOKEN_USAGE_TABS.map((tab, index) => {
-            const isActive = activeTab === tab;
-            const slug = toTabSlug(tab);
-            return (
-              <button
-                key={tab}
-                ref={(el) => {
-                  tabRefs.current[index] = el;
-                }}
-                role="tab"
-                id={`tab-${slug}`}
-                aria-selected={isActive}
-                aria-controls={`tabpanel-${slug}`}
-                tabIndex={isActive ? 0 : -1}
-                type="button"
-                onClick={() => setActiveTab(tab)}
-                onKeyDown={(e) => handleTabKeyDown(e, index)}
-                className={cn(
-                  'text-heading-large cursor-pointer pb-1.5',
-                  isActive ? 'border-content-normal text-content-normal border-b-2' : 'text-content-assistive',
-                )}
-              >
-                {tab}
-              </button>
-            );
-          })}
-        </div>
+        <UnderlineTabs
+          items={TAB_ITEMS}
+          value={activeSlug}
+          onValueChange={setActiveSlug}
+          ariaLabel="토큰 사용량 관리 탭"
+          panelIdPrefix="token-usage"
+        />
       </div>
 
       {/* 탭 콘텐츠 */}
-      <div role="tabpanel" id={`tabpanel-${activeSlug}`} aria-labelledby={`tab-${activeSlug}`} tabIndex={0}>
+      <div
+        role="tabpanel"
+        id={`tabpanel-token-usage-${activeSlug}`}
+        aria-labelledby={`tab-token-usage-${activeSlug}`}
+        tabIndex={0}
+      >
         {activeTab === '나의 토큰 사용량' ? (
           <MyTokenUsageSection />
         ) : activeTab === '조직 토큰 사용량' ? (

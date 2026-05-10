@@ -326,9 +326,11 @@
   --color-edge-primary: var(--line-primary-normal);
   --color-edge-primary-assistive: var(--line-primary-assistive);
 
-  /* Background → surface */
-  --color-surface-normal: var(--bg-normal);
-  --color-surface-alternative: var(--bg-alternative);
+  /* Background */
+  --color-background-normal-normal: var(--background-normal-normal);
+  --color-background-normal-alternative: var(--background-normal-alternative);
+  --color-background-elevated-normal: var(--background-elevated-normal);
+  --color-background-elevated-alternative: var(--background-elevated-alternative);
 
   /* Accent */
   --color-accent-green: var(--accent-green);

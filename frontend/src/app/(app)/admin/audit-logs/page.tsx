@@ -8,22 +8,27 @@ import IntegrationLogSection from '@/features/admin/audit-logs/components/sectio
 import QuestionLogSection from '@/features/admin/audit-logs/components/sections/QuestionLogSection';
 import {
   AUDIT_TABS,
-  type AuditTab,
+  type AuditTabSlug,
   DEFAULT_TAB_SLUG,
   fromTabSlug,
   toTabSlug,
 } from '@/features/admin/audit-logs/constants/auditLogConfig';
-import { cn } from '@/shared/utils/cn';
+import UnderlineTabs, { type UnderlineTabItem } from '@/shared/components/ui/underline-tabs';
+
+const TAB_ITEMS: UnderlineTabItem<AuditTabSlug>[] = AUDIT_TABS.map((tab) => ({
+  value: toTabSlug(tab),
+  label: tab,
+}));
 
 /** 관리자 — 감사 로그 페이지 */
 export default function AdminAuditLogsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const activeTab = fromTabSlug(searchParams.get('tab') ?? DEFAULT_TAB_SLUG);
+  const activeSlug = toTabSlug(activeTab);
 
-  const setActiveTab = useCallback(
-    (tab: AuditTab) => {
-      const slug = toTabSlug(tab);
+  const setActiveSlug = useCallback(
+    (slug: AuditTabSlug) => {
       router.replace(`/admin/audit-logs?tab=${slug}`);
     },
     [router],
@@ -36,24 +41,13 @@ export default function AdminAuditLogsPage() {
         <h1 className="text-heading-xlarge text-content-normal">감사 로그</h1>
 
         {/* 밑줄 탭 */}
-        <div className="flex items-center gap-6">
-          {AUDIT_TABS.map((tab) => {
-            const isActive = activeTab === tab;
-            return (
-              <button
-                key={tab}
-                type="button"
-                onClick={() => setActiveTab(tab)}
-                className={cn(
-                  'text-heading-large cursor-pointer pb-1.5',
-                  isActive ? 'border-content-normal text-content-normal border-b-2' : 'text-content-assistive',
-                )}
-              >
-                {tab}
-              </button>
-            );
-          })}
-        </div>
+        <UnderlineTabs
+          items={TAB_ITEMS}
+          value={activeSlug}
+          onValueChange={setActiveSlug}
+          ariaLabel="감사 로그 탭"
+          panelIdPrefix="audit-logs"
+        />
       </div>
 
       {/* 탭 콘텐츠 */}
