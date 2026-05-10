@@ -12,13 +12,14 @@ import type {
   ChannelTalkConnectionState,
   ChannelTalkDocumentSpacePatch,
 } from '../types/channelTalkModel';
-import { DOCUMENT_SPACE_SYNC_INTERVAL_DEFAULT, MASKED_PLACEHOLDER } from '../types/channelTalkModel';
+import {
+  CHANNEL_TALK_SYNC_INTERVAL_HOURS,
+  DOCUMENT_SPACE_SYNC_INTERVAL_DEFAULT,
+  MASKED_PLACEHOLDER,
+} from '../types/channelTalkModel';
 import { isChannelSecretsFilled, isDocumentSpaceSecretsFilled } from '../utils/channelTalkHelpers';
 
-/**
- * 사용자가 새로 추가한 미검증 카드의 임시 client-side ID.
- * 검증 통과 시 백엔드가 발급한 channel_id/space_id로 교체된다.
- */
+// 미검증 카드의 임시 client-side ID. 검증 통과 시 백엔드 channel_id/space_id로 교체
 function makeId(prefix: string): string {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
@@ -35,37 +36,18 @@ interface ChannelTalkViewModel {
   testDocumentSpaceConnection: (channelId: string, dsId: string) => void;
 }
 
-/**
- * 채널톡 연동 viewModel — 실제 백엔드 API와 wiring된 버전.
- *
- * **Hydration**: 호출자가 백엔드 GET 응답으로부터 derive한 `initialState`를 prop으로 전달.
- * 이 hook은 useState의 lazy initialization으로 그 값을 시작점으로 삼는다.
- * (React 19 `react-hooks/set-state-in-effect` 룰을 회피하기 위한 mount/unmount 패턴.)
- *
- * **검증+저장**: "연결 테스트 하기"(testChannelConnection) 클릭 시 validate+save 통합 mutation 호출.
- * 성공 시 백엔드 응답의 channel_id/channel_name을 state에 반영하고 키 필드를 다시 마스킹.
- * 테스트 완료된 카드는 collapsed로 lock되어 키 자체가 화면에 노출되지 않으며, 변경하려면
- * 카드를 삭제 후 재등록해야 한다.
- *
- * **삭제**: 검증된(tested) 카드는 백엔드 DELETE 호출, 미검증 카드는 로컬 state만 제거.
- * 휴지통 클릭 시 즉시 사라지고 backend 응답 기다리지 않는 optimistic UI.
- */
+// 채널톡 연동 viewModel. initialState는 호출자가 백엔드 GET 응답에서 derive해 전달
+// 검증+저장은 "연결 테스트 하기" 버튼 클릭 시 validate→save 통합 mutation으로 실행
+// 삭제는 optimistic UI — 백엔드 실패 시 원래 위치에 복원
 export function useChannelTalkViewModel(initialState: ChannelTalkConnectionState): ChannelTalkViewModel {
   const [state, setState] = useState<ChannelTalkConnectionState>(initialState);
-  /**
-   * latest state mirror — optimistic delete의 snapshot capture에 사용.
-   * `useCallback` deps에 `state.channels`를 넣으면 매 state 변경마다 callback identity가
-   * 변경돼 자식 카드의 prop reference 비교가 깨진다. ref로 latest를 읽어 callback identity를
-   * stable하게 유지 (`rerender-functional-setstate` 룰 준수).
-   *
-   * React 19 룰(`react-hooks/refs`)에 따라 ref 업데이트는 render 중이 아닌 effect에서.
-   * event handler에서 ref를 읽을 때는 항상 commit 이후라 안전.
-   */
+  // optimistic delete의 snapshot capture용 latest state mirror.
+  // useCallback deps에서 state.channels 제거하여 callback identity stable 유지
   const stateRef = useRef(state);
   useEffect(() => {
     stateRef.current = state;
   }, [state]);
-  /** 검증 mutation 진행 중인 항목 추적 — 동일 카드 중복 클릭 방지에 사용 */
+  // 진행 중 mutation 추적 — 동일 카드 중복 클릭 방지
   const [pendingChannelIds, setPendingChannelIds] = useState<Set<string>>(() => new Set());
   const [pendingDocumentSpaceIds, setPendingDocumentSpaceIds] = useState<Set<string>>(() => new Set());
 
@@ -299,9 +281,7 @@ export function useChannelTalkViewModel(initialState: ChannelTalkConnectionState
           },
           onError: (error) => {
             const { code, message } = parseApiError(error);
-            // 백엔드 mutation 실패는 카드의 errorMessage를 비워서 raw 영문(예: "Request failed with status code 500")이
-            // inline에 노출되지 않도록 함. 빨간 테두리(connectionStatus: 'error')만으로도 시각 표시되고,
-            // 자세한 사유는 toast로 안내.
+            // raw 영문 에러가 inline에 노출되지 않도록 errorMessage 비움. 빨간 테두리 + toast로 안내
             setState((prev) => ({
               ...prev,
               channels: prev.channels.map((c) =>
@@ -314,7 +294,7 @@ export function useChannelTalkViewModel(initialState: ChannelTalkConnectionState
                   : c,
               ),
             }));
-            // 에러 분기: 외부 키 불일치는 Figma 스펙 toast, 그 외는 generic toast.
+            // 키 불일치는 전용 toast, 그 외는 generic
             if (code === 'invalid_credentials') {
               toast(
                 <>
@@ -383,6 +363,7 @@ export function useChannelTalkViewModel(initialState: ChannelTalkConnectionState
         {
           access_key: ds.accessKey,
           access_secret: ds.accessSecret,
+          polling_cycle_hours: CHANNEL_TALK_SYNC_INTERVAL_HOURS[ds.syncInterval],
         },
         {
           onSuccess: (response) => {

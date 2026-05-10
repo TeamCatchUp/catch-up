@@ -1,16 +1,9 @@
-/**
- * 새로고침 hydrate 시 키 필드 마스킹 placeholder.
- *
- * 백엔드 GET 응답에는 보안상 access_key/secret/token 평문이 없으므로 hydrate된 카드의
- * 키 필드를 이 8자 마스킹 문자로 채운다. 테스트 완료된 카드는 collapsed 상태로 lock되어
- * 키 자체가 화면에 노출되지 않으며, 변경이 필요하면 카드를 삭제 후 재등록한다.
- */
+// hydrate 시 보안상 평문 없는 키 필드를 채우는 마스킹 placeholder
 export const MASKED_PLACEHOLDER = '●●●●●●●●';
 
-/** 채널톡 도큐먼트 스페이스 동기화 주기 옵션 union */
 export type ChannelTalkSyncInterval = '1hour' | '6hour' | '12hour' | '24hour';
 
-/** 동기화 주기 표시 라벨 (dropdown 옵션 + 선택값 표시 공용) */
+// dropdown 옵션 + 선택값 표시 공용 라벨
 export const CHANNEL_TALK_SYNC_INTERVAL_LABELS: Record<ChannelTalkSyncInterval, string> = {
   '1hour': '1시간',
   '6hour': '6시간',
@@ -18,10 +11,14 @@ export const CHANNEL_TALK_SYNC_INTERVAL_LABELS: Record<ChannelTalkSyncInterval, 
   '24hour': '24시간',
 };
 
-/**
- * 도큐먼트 스페이스 동기화 주기 옵션 — 정적 문서라 긴 주기 4개.
- * 1시간이 기본값.
- */
+// label union → 백엔드 polling_cycle_hours (int) 변환 매퍼
+export const CHANNEL_TALK_SYNC_INTERVAL_HOURS: Record<ChannelTalkSyncInterval, number> = {
+  '1hour': 1,
+  '6hour': 6,
+  '12hour': 12,
+  '24hour': 24,
+};
+
 export const DOCUMENT_SPACE_SYNC_INTERVAL_OPTIONS: ChannelTalkSyncInterval[] = [
   '1hour',
   '6hour',
@@ -30,15 +27,10 @@ export const DOCUMENT_SPACE_SYNC_INTERVAL_OPTIONS: ChannelTalkSyncInterval[] = [
 ];
 export const DOCUMENT_SPACE_SYNC_INTERVAL_DEFAULT: ChannelTalkSyncInterval = '1hour';
 
-/**
- * 채널 카드 연결 상태 머신.
- * - `idle`: 입력 전 — 빈 placeholder. 사용자가 키를 수정하면 error에서도 이 상태로 reset된다.
- * - `tested`: 연결 테스트 성공 → 카드는 collapsed로 lock. 변경하려면 삭제 후 재등록.
- * - `error`: 검증 실패 (필드 1.5px destructive border + 토스트). 카드는 expanded 유지 — 키 재입력 가능.
- */
+// idle: 입력 전 / tested: 검증 성공 collapsed lock / error: 검증 실패 expanded 유지
 export type ChannelTalkConnectionStatus = 'idle' | 'tested' | 'error';
 
-/** 채널톡 도큐먼트 스페이스 (채널 하위 항목) — 자체 connectionStatus를 가짐 (채널과 독립) */
+// 채널 하위 항목. 채널과 독립된 connectionStatus 보유
 export interface ChannelTalkDocumentSpace {
   id: string;
   name: string;
@@ -46,11 +38,9 @@ export interface ChannelTalkDocumentSpace {
   accessSecret: string;
   syncInterval: ChannelTalkSyncInterval;
   connectionStatus: ChannelTalkConnectionStatus;
-  /** error 상태일 때 표시할 에러 메시지 (없으면 빈 문자열) */
   errorMessage?: string;
 }
 
-/** 채널톡 채널 — Access Key/Secret/Webhook + 하위 도큐먼트 스페이스 + 검증 상태 */
 export interface ChannelTalkChannel {
   id: string;
   name: string;
@@ -59,27 +49,20 @@ export interface ChannelTalkChannel {
   webhookToken: string;
   documentSpaces: ChannelTalkDocumentSpace[];
   connectionStatus: ChannelTalkConnectionStatus;
-  /** error 상태일 때 표시할 에러 메시지 (없으면 빈 문자열) */
   errorMessage?: string;
 }
 
-/** 채널톡 연동 전체 상태 (mock 표시용) */
 export interface ChannelTalkConnectionState {
   connected: boolean;
-  /** 표시용 포맷된 시각 (예: "2026. 2. 9. 01:31") — 실제 API 도입 시 ISO 문자열로 교체 */
   lastSyncedAt: string | null;
   channels: ChannelTalkChannel[];
 }
 
-/**
- * 외부에서 patch 가능한 채널 필드 — 사용자 입력 가능 필드만 허용.
- * `id`/`connectionStatus`/`errorMessage`는 viewModel의 전용 액션(test/enterEdit/remove)으로만 변경됨.
- */
+// 외부에서 patch 가능한 필드만 — id/connectionStatus/errorMessage는 viewModel 전용 액션으로만 변경
 export type ChannelTalkChannelPatch = Partial<
   Pick<ChannelTalkChannel, 'name' | 'accessKey' | 'accessSecret' | 'webhookToken' | 'documentSpaces'>
 >;
 
-/** 외부에서 patch 가능한 도큐먼트 스페이스 필드 — 채널과 동일 원칙 */
 export type ChannelTalkDocumentSpacePatch = Partial<
   Pick<ChannelTalkDocumentSpace, 'name' | 'accessKey' | 'accessSecret' | 'syncInterval'>
 >;

@@ -19,16 +19,12 @@ import {
 
 interface ChannelTalkSyncIntervalDropdownProps {
   value: ChannelTalkSyncInterval;
-  /** lock 상태 — 트리거 비활성 + 회색 배경 */
+  // 트리거 비활성 + 회색 배경
   disabled?: boolean;
   onChange?: (next: ChannelTalkSyncInterval) => void;
 }
 
-/**
- * 채널톡 도큐먼트 스페이스 동기화 주기 dropdown — Default / Hover / Pressed(펼침) 3상태.
- *
- * 정적 문서 특성에 맞춘 1시간 / 6시간 / 12시간 / 24시간 옵션. 부모 컨테이너 width 풀폭.
- */
+// 도큐먼트 스페이스 동기화 주기 dropdown (1/6/12/24시간 옵션, 부모 width 풀폭)
 export default function ChannelTalkSyncIntervalDropdown({
   value,
   disabled,

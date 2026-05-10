@@ -2,18 +2,9 @@ import type { ChannelTalkConnectionState } from '../types/channelTalkModel';
 import { DOCUMENT_SPACE_SYNC_INTERVAL_DEFAULT, MASKED_PLACEHOLDER } from '../types/channelTalkModel';
 import type { ChannelTalkConnectionStatusResponse } from '../types/connectionStatusApi';
 
-/**
- * canonical connection-status(channel_talk) 응답으로부터 viewModel 초기 state를 derive.
- *
- * - items[]는 channel/document_space가 섞여 옴 — `metadata.credential_type`으로 분기
- * - 등록된 channel N개를 카드 N개로 매핑
- * - 각 channel에 속한 document space들을 그 카드의 자식으로 그룹화 (metadata.channel_id 기준)
- * - 키 필드는 보안상 응답에 없으므로 MASKED_PLACEHOLDER로 채워서 lock 상태 시각화
- * - lastSyncedAt은 모든 channel 중 가장 최근 검증 시각으로 노출 (ISO 사전순 = 시간순)
- *
- * 호출처: `ChannelTalkManagementPanel`이 mount 시 1회만 실행 후 `useChannelTalkViewModel`의
- * `initialState` prop으로 전달. mount/unmount 패턴으로 React 19 set-state-in-effect 룰 회피.
- */
+// connection-status 응답 → viewModel 초기 state
+// items는 channel/document_space 혼합 — credential_type으로 분기, channel_id로 자식 그룹화
+// 키 필드는 보안상 응답에 없어 MASKED_PLACEHOLDER로 lock 시각화
 export function deriveChannelTalkInitialState(
   response: ChannelTalkConnectionStatusResponse | undefined,
 ): ChannelTalkConnectionState {
