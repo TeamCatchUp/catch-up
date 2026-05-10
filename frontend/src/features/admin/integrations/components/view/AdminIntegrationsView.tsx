@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 
-import { cn } from '@/shared/utils/cn';
+import UnderlineTabs, { type UnderlineTabItem } from '@/shared/components/ui/underline-tabs';
 
 import { useAdminIntegrationViewModel } from '../../hooks/useAdminIntegrationViewModel';
 import type { AdminIntegrationTab, IntegrationService } from '../../types/integrationModel';
@@ -10,6 +10,11 @@ import IntegrationsSection from '../member/sections/IntegrationsSection';
 
 const DEFAULT_TAB: AdminIntegrationTab = 'my';
 const isValidTab = (v: string | null): v is AdminIntegrationTab => v === 'my' || v === 'member';
+
+const TAB_ITEMS: UnderlineTabItem<AdminIntegrationTab>[] = [
+  { value: 'my', label: '내 연동' },
+  { value: 'member', label: '이용자 연동' },
+];
 
 /** 관리자 협업툴 연동 화면 */
 export default function AdminIntegrationsView() {
@@ -33,32 +38,13 @@ export default function AdminIntegrationsView() {
       <h1 className="text-heading-xlarge text-content-normal">협업툴 연동</h1>
 
       <div className="flex flex-col gap-8">
-        <div className="flex items-center gap-6">
-          <button
-            type="button"
-            onClick={() => setActiveTab('my')}
-            className={cn(
-              'text-heading-large cursor-pointer border-b-2 pb-1 transition-colors',
-              activeTab === 'my'
-                ? 'border-content-normal text-content-normal'
-                : 'text-content-assistive border-transparent',
-            )}
-          >
-            내 연동
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('member')}
-            className={cn(
-              'text-heading-large cursor-pointer border-b-2 pb-1 transition-colors',
-              activeTab === 'member'
-                ? 'border-content-normal text-content-normal'
-                : 'text-content-assistive border-transparent',
-            )}
-          >
-            이용자 연동
-          </button>
-        </div>
+        <UnderlineTabs
+          items={TAB_ITEMS}
+          value={activeTab}
+          onValueChange={setActiveTab}
+          ariaLabel="협업툴 연동 탭"
+          panelIdPrefix="admin-integrations"
+        />
 
         {activeTab === 'my' ? (
           <section className="flex flex-col gap-2.5">
