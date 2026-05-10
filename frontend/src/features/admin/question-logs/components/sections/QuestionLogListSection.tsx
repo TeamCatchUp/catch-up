@@ -134,7 +134,7 @@ export default function QuestionLogListSection({ userId }: QuestionLogListSectio
           </button>
         </div>
 
-        <label className="border-edge-assistive bg-fill-strong focus-within:border-edge-neutral flex h-10 w-70 items-center gap-1.5 rounded-lg border px-3 py-2">
+        <label className="border-edge-assistive bg-fill-strong focus-within:border-edge-neutral flex h-10 w-70 items-center gap-1.5 rounded-lg border-[1.5px] px-3 py-2">
           <SearchIcon className="text-content-assistive size-5 shrink-0" />
           <input
             type="text"
