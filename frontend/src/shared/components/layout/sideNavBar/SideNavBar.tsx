@@ -33,9 +33,9 @@ export default function SideNavBar() {
     <>
       <nav
         className={cn(
-          'border-edge-neutral bg-fill-normal flex h-screen flex-col border-r',
+          'border-edge-neutral bg-background-normal-normal flex h-screen flex-col border-r',
           'transition-[width,padding] duration-300 ease-out will-change-[width,padding]',
-          isOpen ? 'w-60.25 px-2 pb-2.5' : 'w-18 items-center gap-4 px-3 pt-2.5 pb-5',
+          isOpen ? 'w-60.25 px-2 pb-2.5' : 'w-13 items-center gap-4 px-2 pt-2.5 pb-4',
         )}
       >
         {/* 로고/열림 버튼 */}
@@ -48,7 +48,7 @@ export default function SideNavBar() {
               <TooltipTrigger asChild>
                 <div
                   className={cn(
-                    'group relative flex h-10 w-10 items-center px-1.25 py-1.5',
+                    'group relative flex h-9 w-9 items-center px-1.25 py-1.5',
                     isOpen
                       ? ''
                       : isSettingsRoute
