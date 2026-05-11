@@ -38,8 +38,15 @@ from catchup.db.engine import SessionLocal
 from catchup.db.knowledge_source import add_knowledge_source
 from catchup.db.models import KnowledgeSource
 from catchup.db.models import SourceType
+from catchup.db.models import WorkflowCredentialVendor
 from catchup.db.workspaces import get_workspace_limit_one
+from catchup.utils.redis import consume_oauth_state_payload
 from catchup.utils.redis import store_oauth_state
+from catchup.workflow_credentials.oauth import build_oauth_completion_redirect
+from catchup.workflow_credentials.oauth import consume_workflow_redirect_after
+from catchup.workflow_credentials.schemas import PersonalOAuthCredentialCreateRequest
+from catchup.workflow_credentials.service import WorkflowCredentialAlreadyExists
+from catchup.workflow_credentials.service import WorkflowCredentialService
 
 logger = structlog.get_logger()
 
@@ -67,9 +74,10 @@ async def install_atlassian():
 
 @router.get("/callback")
 async def atlassian_oauth_callback(
-    code: str,
     background_tasks: BackgroundTasks,
+    code: str | None = None,
     state: str | None = None,
+    error: str | None = None,
     atlassian_service: AtlassianOAuthClient = Depends(get_atlassian_oauth_client),
 ):
     """
@@ -80,11 +88,12 @@ async def atlassian_oauth_callback(
     - Jira 동기화/Webhook + Confluence 스텁 작업 등록
     """
     try:
-        result = await _handle_atlassian_oauth_callback(
+        redirect_url = await _handle_atlassian_oauth_callback(
             provider="atlassian",
             code=code,
             background_tasks=background_tasks,
             state=state,
+            error=error,
             atlassian_service=atlassian_service,
         )
     except CallbackError as exc:
@@ -92,9 +101,17 @@ async def atlassian_oauth_callback(
             "atlassian_oauth_callback_failed",
             reason=exc.reason,
         )
-        return RedirectResponse(
-            url=_build_atlassian_failure_redirect_url(exc.reason)
-        )
+        redirect_after = getattr(exc, "redirect_after", None)
+        if redirect_after:
+            return RedirectResponse(
+                url=build_oauth_completion_redirect(
+                    vendor="atlassian",
+                    success=False,
+                    redirect_after=redirect_after,
+                    reason=exc.reason,
+                )
+            )
+        return RedirectResponse(url=_build_atlassian_failure_redirect_url(exc.reason))
     except Exception:
         logger.error(
             "atlassian_oauth_callback_failed",
@@ -105,9 +122,7 @@ async def atlassian_oauth_callback(
             url=_build_atlassian_failure_redirect_url("internal_error")
         )
 
-    return RedirectResponse(
-        url=_build_atlassian_success_redirect_url(len(result.resources))
-    )
+    return RedirectResponse(url=redirect_url)
 
 
 @router.delete("/uninstall")
@@ -126,6 +141,12 @@ async def atlassian_uninstall(
 # =============================================================================
 # Private Helper Functions
 # =============================================================================
+class AtlassianWorkflowCallbackError(CallbackError):
+    def __init__(self, reason: str, redirect_after: str | None):
+        self.redirect_after = redirect_after
+        super().__init__(reason)
+
+
 @audit_log(
     IntegrationAction.HANDLE_OAUTH_CALLBACK,
     metadata_factory=IntegrationAuditMetadata.from_audit,
@@ -134,20 +155,116 @@ async def atlassian_uninstall(
 async def _handle_atlassian_oauth_callback(
     *,
     provider: str,
-    code: str,
+    code: str | None,
     background_tasks: BackgroundTasks,
     state: str | None,
+    error: str | None,
     atlassian_service: AtlassianOAuthClient,
-) -> CallbackResult:
+) -> str:
+    failure_reason = error or ("no_code" if not code else None)
+    if failure_reason:
+        redirect_after = await consume_workflow_redirect_after(
+            provider=provider,
+            state=state,
+        )
+        if redirect_after:
+            raise AtlassianWorkflowCallbackError(failure_reason, redirect_after)
+        raise CallbackError(failure_reason)
+
+    if state is None:
+        raise CallbackError("invalid_state")
+
+    payload = await consume_oauth_state_payload(provider=provider, state=state)
+    if payload is None:
+        raise CallbackError("invalid_state")
+
     callback_service = AtlassianCallbackService(atlassian_service)
-    result = await callback_service.handle_callback(
-        code=code,
-        state=state,
+    try:
+        context = await callback_service.collect_oauth_context(code=code)
+    except Exception as exc:
+        if payload["purpose"] == "workflow_personal":
+            raise AtlassianWorkflowCallbackError(
+                "token_exchange_failed",
+                payload.get("redirect_after"),
+            ) from exc
+        raise
+
+    if payload["purpose"] == "sync_install":
+        result = await callback_service.persist_sync_context(context)
+        await _register_atlassian_knowledge_sources(result)
+        _schedule_atlassian_followups(background_tasks, result)
+        return _build_atlassian_success_redirect_url(len(result.resources))
+
+    if payload["purpose"] == "workflow_personal":
+        try:
+            await run_in_threadpool(_persist_atlassian_workflow_credentials_db, context, payload)
+        except WorkflowCredentialAlreadyExists as exc:
+            raise AtlassianWorkflowCallbackError(
+                "already_connected",
+                payload.get("redirect_after"),
+            ) from exc
+        except Exception as exc:
+            raise AtlassianWorkflowCallbackError(
+                "credential_persist_failed",
+                payload.get("redirect_after"),
+            ) from exc
+        return build_oauth_completion_redirect(
+            vendor="atlassian",
+            success=True,
+            redirect_after=payload.get("redirect_after"),
+        )
+
+    raise CallbackError("unsupported_purpose")
+
+
+def _persist_atlassian_workflow_credentials_db(context, payload: dict) -> None:
+    with SessionLocal() as db:
+        WorkflowCredentialService().create_personal_oauth(
+            db,
+            _build_atlassian_personal_oauth_request(context, payload),
+        )
+
+
+def _build_atlassian_personal_oauth_request(
+    context,
+    payload: dict,
+) -> PersonalOAuthCredentialCreateRequest:
+    resources = [_build_atlassian_resource_metadata(context, resource) for resource in context.resources]
+    scopes = sorted({scope for resource in resources for scope in resource["scopes"]})
+    account_name = context.user_info.name or context.user_info.email or context.user_info.account_id
+    return PersonalOAuthCredentialCreateRequest(
+        vendor=WorkflowCredentialVendor.ATLASSIAN,
+        workspace_id=int(payload["workspace_id"]),
+        user_id=int(payload["user_id"]),
+        display_name=f"Atlassian ({account_name})",
+        external_tenant_id="atlassian",
+        external_tenant_name="Atlassian",
+        external_account_id=context.user_info.account_id,
+        external_account_name=context.user_info.name,
+        external_account_email=context.user_info.email,
+        server_url=None,
+        scopes=scopes,
+        token_payload={
+            "access_token": context.tokens.access_token,
+            "refresh_token": context.tokens.refresh_token,
+            "token_type": context.tokens.token_type,
+            "resources": resources,
+        },
+        extra_metadata={
+            "resources": resources,
+        },
+        expires_in=context.tokens.expires_in,
     )
 
-    await _register_atlassian_knowledge_sources(result)
-    _schedule_atlassian_followups(background_tasks, result)
-    return result
+
+def _build_atlassian_resource_metadata(context, resource) -> dict:
+    return {
+        "id": resource.id,
+        "name": resource.name,
+        "url": resource.url,
+        "avatar_url": resource.avatar_url,
+        "scopes": sorted(context.aggregated_scopes.get(resource.id, set())),
+    }
 
 
 def _delete_token_db(cloud_id: str) -> bool:

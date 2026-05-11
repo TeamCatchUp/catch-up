@@ -8,11 +8,16 @@ GitHub App 인증을 담당하는 서비스.
 """
 
 import base64
-from datetime import datetime, timezone
 import time
 from binascii import Error as BinasciiError
+from dataclasses import dataclass
+from datetime import datetime
+from datetime import timezone
 from functools import lru_cache
 from pathlib import Path
+from urllib.parse import urlencode
+from urllib.parse import urlsplit
+from urllib.parse import urlunsplit
 
 import httpx
 import jwt
@@ -107,6 +112,93 @@ class GitHubAppService:
             return response.json()
 
 
+@dataclass(frozen=True)
+class GitHubUserOAuthToken:
+    access_token: str
+    token_type: str = "bearer"
+    scope: str = ""
+    expires_in: int | None = None
+    refresh_token: str | None = None
+    refresh_token_expires_in: int | None = None
+
+
+class GitHubUserOAuthService:
+    def __init__(self):
+        self.client_id = settings.GITHUB_APP_CLIENT_ID
+        self.client_secret = settings.GITHUB_APP_CLIENT_SECRET
+        self.authorize_url = settings.GITHUB_OAUTH_AUTHORIZE_URL
+        self.token_url = settings.GITHUB_OAUTH_TOKEN_URL
+        self.api_url = settings.GITHUB_API_URL
+        self.redirect_uri = (
+            settings.GITHUB_APP_OAUTH_REDIRECT_URI
+            or _derive_github_oauth_redirect_uri()
+        )
+        self.scopes = settings.GITHUB_OAUTH_SCOPES
+
+    def get_authorization_url(self, state: str) -> str:
+        params = {
+            "client_id": self.client_id,
+            "redirect_uri": self.redirect_uri,
+            "state": state,
+        }
+        if self.scopes:
+            params["scope"] = self.scopes
+        return f"{self.authorize_url}?{urlencode(params)}"
+
+    async def exchange_code_for_token(self, code: str) -> GitHubUserOAuthToken:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                self.token_url,
+                data={
+                    "client_id": self.client_id,
+                    "client_secret": self.client_secret,
+                    "code": code,
+                    "redirect_uri": self.redirect_uri,
+                },
+                headers={"Accept": "application/json"},
+            )
+            response.raise_for_status()
+            data = response.json()
+
+        if not data.get("access_token"):
+            raise ValueError("GitHub OAuth token response missing access_token")
+
+        return GitHubUserOAuthToken(
+            access_token=data["access_token"],
+            token_type=data.get("token_type", "bearer"),
+            scope=data.get("scope", ""),
+            expires_in=data.get("expires_in"),
+            refresh_token=data.get("refresh_token"),
+            refresh_token_expires_in=data.get("refresh_token_expires_in"),
+        )
+
+    async def get_authenticated_user(self, access_token: str) -> dict:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"{self.api_url.rstrip('/')}/user",
+                headers={
+                    "Authorization": f"Bearer {access_token}",
+                    "Accept": "application/vnd.github+json",
+                    "X-GitHub-Api-Version": "2022-11-28",
+                },
+            )
+            response.raise_for_status()
+            return response.json()
+
+
+def _derive_github_oauth_redirect_uri() -> str:
+    parsed = urlsplit(settings.SLACK_REDIRECT_URI or settings.ATLASSIAN_REDIRECT_URI)
+    return urlunsplit(
+        (
+            parsed.scheme,
+            parsed.netloc,
+            "/api/v1/github/oauth/callback",
+            "",
+            "",
+        )
+    )
+
+
 def _load_private_key() -> str:
     """환경변수에 저장된 Private Key를 읽어 반환"""
     private_key = settings.GITHUB_APP_PRIVATE_KEY.strip()
@@ -195,3 +287,8 @@ def get_github_app_service() -> GitHubAppService:
         app_id=settings.GITHUB_APP_ID,
         private_key=private_key,
     )
+
+
+@lru_cache(maxsize=1)
+def get_github_user_oauth_service() -> GitHubUserOAuthService:
+    return GitHubUserOAuthService()

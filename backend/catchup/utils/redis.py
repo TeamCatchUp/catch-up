@@ -1,19 +1,19 @@
+import asyncio
+import json
 import logging
 import time
-import asyncio
+from typing import Any
 from urllib.parse import urlsplit
 
 from redis.asyncio import Redis
 from redis.asyncio.cluster import RedisCluster
 
 from catchup.configs.config import settings
-from catchup.configs.constants import (
-    REDIS_HEALTH_CHECK_INTERVAL_SECONDS,
-    REDIS_PING_TIMEOUT_SECONDS,
-    REDIS_SOCKET_CONNECT_TIMEOUT_SECONDS,
-    REDIS_SOCKET_TIMEOUT_SECONDS,
-    REDIS_STREAM_SOCKET_TIMEOUT_SECONDS,
-)
+from catchup.configs.constants import REDIS_HEALTH_CHECK_INTERVAL_SECONDS
+from catchup.configs.constants import REDIS_PING_TIMEOUT_SECONDS
+from catchup.configs.constants import REDIS_SOCKET_CONNECT_TIMEOUT_SECONDS
+from catchup.configs.constants import REDIS_SOCKET_TIMEOUT_SECONDS
+from catchup.configs.constants import REDIS_STREAM_SOCKET_TIMEOUT_SECONDS
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +24,7 @@ _stream_redis_client_lock = asyncio.Lock()
 
 OAUTH_STATE_PREFIX = "oauth:state:"
 OAUTH_STATE_TTL = 600  # 10분
+OAUTH_STATE_PURPOSES = {"sync_install", "workflow_personal"}
 
 
 async def _create_redis_client(
@@ -285,17 +286,81 @@ async def check_all_redis_health() -> bool:
 
 async def store_oauth_state(state: str, provider: str) -> None:
     """OAuth state를 Redis에 저장 (TTL: 10분)"""
+    await store_oauth_state_payload(
+        provider=provider,
+        state=state,
+        payload={
+            "purpose": "sync_install",
+            "vendor": provider,
+        },
+    )
+
+
+async def store_oauth_state_payload(
+    *,
+    provider: str,
+    state: str,
+    payload: dict[str, Any],
+) -> None:
+    """Payload-aware OAuth state를 Redis에 저장 (TTL: 10분)."""
+    if payload.get("vendor") != provider:
+        raise ValueError("OAuth state payload vendor must match provider")
+
+    if payload.get("purpose") not in OAUTH_STATE_PURPOSES:
+        raise ValueError("Unsupported OAuth state purpose")
+
     redis = await get_redis_client()
     key = f"{OAUTH_STATE_PREFIX}{provider}:{state}"
-    await redis.setex(key, OAUTH_STATE_TTL, "1")
+    await redis.setex(key, OAUTH_STATE_TTL, json.dumps(payload))
+
+
+async def consume_oauth_state_payload(
+    *,
+    provider: str,
+    state: str,
+) -> dict[str, Any] | None:
+    """OAuth state payload를 검증 후 삭제한다.
+
+    Legacy Redis 값 `"1"`은 in-flight compatibility를 위해 `sync_install`로만
+    해석한다. 그 외 malformed payload는 명시적으로 거부한다.
+    """
+    redis = await get_redis_client()
+    key = f"{OAUTH_STATE_PREFIX}{provider}:{state}"
+    raw_value = await redis.getdel(key)
+    if raw_value is None:
+        return None
+
+    if isinstance(raw_value, bytes):
+        raw_value = raw_value.decode("utf-8")
+
+    if raw_value == "1":
+        return {
+            "purpose": "sync_install",
+            "vendor": provider,
+            "legacy": True,
+        }
+
+    try:
+        payload = json.loads(raw_value)
+    except (TypeError, json.JSONDecodeError):
+        return None
+
+    if not isinstance(payload, dict):
+        return None
+
+    if payload.get("vendor") != provider:
+        return None
+
+    if payload.get("purpose") not in OAUTH_STATE_PURPOSES:
+        return None
+
+    return payload
 
 
 async def validate_oauth_state(state: str, provider: str) -> bool:
     """OAuth state 검증 후 삭제 (일회성 사용)"""
-    redis = await get_redis_client()
-    key = f"{OAUTH_STATE_PREFIX}{provider}:{state}"
-    result = await redis.delete(key)
-    return result > 0
+    payload = await consume_oauth_state_payload(provider=provider, state=state)
+    return payload is not None
 
 
 async def check_redis_health() -> bool:

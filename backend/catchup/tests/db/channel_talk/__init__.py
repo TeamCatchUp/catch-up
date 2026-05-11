@@ -1,0 +1,1 @@
+"""Channel Talk DB tests."""

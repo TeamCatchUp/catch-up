@@ -264,6 +264,11 @@ class SlackTeamInfo(BaseModel):
 
 class SlackAuthedUser(BaseModel):
     id: str
+    access_token: str | None = None
+    scope: str = ""
+    token_type: str | None = None
+    refresh_token: str | None = None
+    expires_in: int | None = None
 
 
 class SlackIncomingWebhook(BaseModel):
@@ -275,7 +280,7 @@ class SlackIncomingWebhook(BaseModel):
 
 class SlackOAuthTokenResponse(BaseModel):
     ok: bool
-    access_token: str = Field(description="Bot Access Token (xoxb-)")
+    access_token: str | None = Field(default=None, description="Bot Access Token (xoxb-)")
     token_type: str = Field(default="bot")
     scope: str = Field(default="", description="Bot Token scopes")
     bot_user_id: str = Field(default="", description="Bot User ID")
