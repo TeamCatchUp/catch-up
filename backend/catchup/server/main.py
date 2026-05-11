@@ -65,6 +65,9 @@ from catchup.server.settings.api import router as settings_router
 from catchup.server.state import state
 from catchup.server.stats.api import router as stats_router
 from catchup.server.sync.api import router as sync_runtime_router
+from catchup.server.workflow_credentials.api import (
+    router as workflow_credentials_router,
+)
 from catchup.utils.client import _shared_client
 from catchup.utils.redis import check_all_redis_health
 from catchup.utils.redis import get_redis_client
@@ -462,6 +465,7 @@ app.include_router(sync_runtime_router)
 app.include_router(stats_router)
 app.include_router(search_router)
 app.include_router(audit_router)
+app.include_router(workflow_credentials_router)
 
 if settings.MCP_SERVER_ENABLED:
     from catchup.mcp.server import mcp as mcp_server

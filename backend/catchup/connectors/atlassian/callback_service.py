@@ -13,18 +13,21 @@ from __future__ import annotations
 import base64
 import json
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
-from typing import Any, Sequence
+from datetime import datetime
+from datetime import timedelta
+from datetime import timezone
+from typing import Any
+from typing import Sequence
 
 import structlog
 from fastapi.concurrency import run_in_threadpool
 
-from catchup.connectors.atlassian.constants import (
-    REQUIRED_CONFLUENCE_SCOPES,
-    REQUIRED_JIRA_SCOPES,
-)
-from catchup.connectors.atlassian.oauth_client import AtlassianOAuthClient
 from catchup.configs.config import settings
+from catchup.connectors.atlassian.constants import REQUIRED_CONFLUENCE_SCOPES
+from catchup.connectors.atlassian.constants import REQUIRED_JIRA_SCOPES
+from catchup.connectors.atlassian.oauth_client import AtlassianOAuthClient
+from catchup.connectors.atlassian.schemas import AtlassianOAuthTokenResponse
+from catchup.connectors.atlassian.schemas import AtlassianUserInfo
 from catchup.db.atlassian import oauth_repository as atlassian_crud
 from catchup.db.engine import SessionLocal
 from catchup.utils.redis import validate_oauth_state
@@ -67,6 +70,15 @@ class CallbackResult:
     resources: Sequence[Any]
     confluence_targets: list[str]
     jira_targets: list[str]
+
+
+@dataclass
+class AtlassianOAuthContext:
+    tokens: AtlassianOAuthTokenResponse
+    user_info: AtlassianUserInfo
+    resources: Sequence[Any]
+    aggregated_scopes: dict[str, set[str]]
+    expires_at: datetime
 
 
 # -------------------------
@@ -188,12 +200,14 @@ class AtlassianCallbackService:
         if invalid_state:
             raise StateInvalid()
 
-        # 2) code -> token 교환
+        context = await self.collect_oauth_context(code=code)
+        return await self.persist_sync_context(context)
+
+    async def collect_oauth_context(self, *, code: str) -> AtlassianOAuthContext:
         tokens = await self.oauth_client.exchange_code_for_tokens(code)
         token_payload = _decode_jwt_payload(tokens.access_token)
         _check_audience(token_payload)
 
-        # 3) 사용자 / 리소스 조회
         try:
             user_info = await self.oauth_client.get_user_info(tokens.access_token)
             resources = await self.oauth_client.get_accessible_resources(tokens.access_token)
@@ -204,14 +218,25 @@ class AtlassianCallbackService:
             raise NoResourcesFound()
 
         expires_at = datetime.now(timezone.utc) + timedelta(seconds=tokens.expires_in)
-
         aggregated_scopes = _aggregate_scope(resources, tokens.scope)
-        return await run_in_threadpool(
-            self._persist_tokens_sync,
-            atlassian_account_id=user_info.account_id,
+        return AtlassianOAuthContext(
+            tokens=tokens,
+            user_info=user_info,
             resources=resources,
             aggregated_scopes=aggregated_scopes,
-            access_token=tokens.access_token,
-            refresh_token=tokens.refresh_token,
             expires_at=expires_at,
+        )
+
+    async def persist_sync_context(
+        self,
+        context: AtlassianOAuthContext,
+    ) -> CallbackResult:
+        return await run_in_threadpool(
+            self._persist_tokens_sync,
+            atlassian_account_id=context.user_info.account_id,
+            resources=context.resources,
+            aggregated_scopes=context.aggregated_scopes,
+            access_token=context.tokens.access_token,
+            refresh_token=context.tokens.refresh_token,
+            expires_at=context.expires_at,
         )
