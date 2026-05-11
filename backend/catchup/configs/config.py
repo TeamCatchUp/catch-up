@@ -154,6 +154,12 @@ class Settings(BaseSettings):
     GITHUB_APP_WEBHOOK_SECRET: str
     GITHUB_APP_CLIENT_ID: str
     GITHUB_APP_CLIENT_SECRET: str
+    GITHUB_OAUTH_AUTHORIZE_URL: str = "https://github.com/login/oauth/authorize"
+    GITHUB_OAUTH_TOKEN_URL: str = "https://github.com/login/oauth/access_token"
+    GITHUB_API_URL: str = "https://api.github.com"
+    GITHUB_APP_OAUTH_REDIRECT_URI: str | None = None
+    # TODO : User Scope 결정 필요
+    GITHUB_OAUTH_SCOPES: str = "read:user user:email"
     
     # Atlassian
     ATLASSIAN_CLIENT_ID: str
@@ -184,6 +190,8 @@ class Settings(BaseSettings):
     SLACK_CLIENT_SECRET: str
     SLACK_REDIRECT_URI: str
     SLACK_BOT_SCOPES: str = "channels:read channels:history groups:read groups:history im:history users:read users:read.email users.profile:read usergroups:read team:read app_mentions:read assistant:write chat:write chat:write.customize commands reactions:read reactions:write emoji:read files:read links:read"
+    # TODO : User Scope 결정 필요
+    SLACK_USER_SCOPES: str = "users:read users:read.email team:read"
     SLACK_SIGNING_SECRET: str
 
     # Slack API URLs

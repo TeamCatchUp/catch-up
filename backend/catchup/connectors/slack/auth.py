@@ -12,21 +12,24 @@ Slack OAuth 2.0 V2 인증을 담당하는 서비스.
 
 import asyncio
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
+from datetime import timedelta
+from datetime import timezone
 from functools import lru_cache
 from urllib.parse import urlencode
 
 import httpx
-from fastapi import HTTPException, status
+from fastapi import HTTPException
+from fastapi import status
 from fastapi.concurrency import run_in_threadpool
 
+from catchup.configs.config import settings
 from catchup.connectors.base.retry import parse_retry_after_header
 from catchup.connectors.slack.client import SlackRateLimitError
 from catchup.connectors.slack.schemas import SlackOAuthTokenResponse
-from catchup.configs.config import settings
 from catchup.db.engine import SessionLocal
-from catchup.db.slack import oauth_repository as slack_oauth_repository
 from catchup.db.models import SlackOAuthToken
+from catchup.db.slack import oauth_repository as slack_oauth_repository
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +48,7 @@ class SlackOAuthService:
         self.client_secret = settings.SLACK_CLIENT_SECRET
         self.redirect_uri = settings.SLACK_REDIRECT_URI
         self.bot_scopes = settings.SLACK_BOT_SCOPES
+        self.user_scopes = settings.SLACK_USER_SCOPES
         self.auth_url = settings.SLACK_AUTH_URL
         self.token_url = settings.SLACK_TOKEN_URL
         self.api_url = settings.SLACK_API_URL
@@ -54,6 +58,18 @@ class SlackOAuthService:
         params = {
             "client_id": self.client_id,
             "scope": self.bot_scopes,
+            "redirect_uri": self.redirect_uri,
+        }
+
+        if state:
+            params["state"] = state
+
+        return f"{self.auth_url}?{urlencode(params)}"
+
+    def get_user_authorization_url(self, state: str | None = None) -> str:
+        params = {
+            "client_id": self.client_id,
+            "user_scope": self.user_scopes,
             "redirect_uri": self.redirect_uri,
         }
 
