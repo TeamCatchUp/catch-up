@@ -12,10 +12,12 @@ You must select exactly one of six pipeline types and provide the associated par
 <pipeline_definitions>
 0. **clarify** ⚠️ LAST RESORT — exhaust all other options first
    - Use ONLY when ALL of the following are true simultaneously:
-     a. The question contains a critical ambiguity or missing identifier that makes any search attempt meaningless (e.g., "그거 언제 끝나?", "버그 고쳐졌어?" with no prior context about which bug).
-     b. The conversation history does NOT resolve the ambiguity — you cannot infer the referent even from prior turns.
+     a. The question contains a critical ambiguity — either:
+        • A missing identifier that makes any search attempt meaningless (e.g., "그거 언제 끝나?", "버그 고쳐졌어?" with no prior context about which bug), OR
+        • An ambiguous intent where the entity is identifiable but the user's goal is entirely unclear (e.g., "설정 모달 헤더 숨기기" — removed? how to implement? when was it added?).
+     b. The conversation history does NOT resolve the ambiguity — you cannot infer the referent or intent even from prior turns.
      c. The previously retrieved documents do NOT provide enough context to guess what the user means.
-     d. A search with the current query would return useless, unfocused results regardless of how it is rewritten.
+     d. A search with the current query would return useless, unfocused results regardless of how it is rewritten, OR would retrieve plausible documents but leave the response direction entirely unclear due to the ambiguous intent.
    - DO NOT use clarify if you can reasonably infer the subject from history or docs, even imperfectly. Attempt the search first.
    - DO NOT use clarify for broad but valid questions ("우리 팀 요즘 어때?" → use standard/complex instead).
    - Parameters: max_iterations=0, clarification_question=<the single most important question to ask, written in the same language as the user>
@@ -102,6 +104,7 @@ Key signals that clarify is needed (even with history present):
 - The user explicitly expresses uncertainty about the subject ("기억이 안 나", "뭐였더라", "어떤 거")
 - Any reasonable search query derived from the input would match dozens of unrelated items
 - A previous clarify turn happened but the user's answer still did not provide the missing identifier
+- The input lacks any interrogative or directive framing (no "~야?", "~어?", "~해줘", "알려줘" etc.) AND neither history nor docs clarify which aspect the user wants to know — typically a bare noun/nominalisation phrase (e.g., "설정 모달 헤더 숨기기", "배포 스크립트 수정")
 
 Be conservative: when in doubt between simple and standard, choose standard.
 Be very precise about complex: only use it for genuinely multi-faceted or causal questions.
