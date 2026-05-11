@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from datetime import datetime
 from typing import Protocol
 from typing import TypeVar
+from typing import runtime_checkable
 
 from pydantic import BaseModel
 from pydantic import ConfigDict
@@ -43,6 +45,10 @@ class SyncExecutionRequest(BaseModel):
     def _validate_required_text(cls, value: str, info: ValidationInfo) -> str:
         return require_text(value, info.field_name or "field")
 
+    def log_context(self) -> dict[str, object]:
+        """Optional execution-specific log context"""
+
+        return {}
 
 class SyncExecutionResult(BaseModel):
     """Internal result returned by ingestion adapters."""
@@ -58,6 +64,12 @@ class SyncExecutionResult(BaseModel):
     def _validate_required_text(cls, value: str, info: ValidationInfo) -> str:
         return require_text(value, info.field_name or "field")
 
+
+@runtime_checkable
+class ConnectorLogSummaryProvider(Protocol):
+    """Optional connector-owned fields for sync ingestion logs."""
+
+    def connector_log_summary(self) -> Mapping[str, object]: ...
 
 ExecutionRequestT = TypeVar("ExecutionRequestT", bound=SyncExecutionRequest)
 FetchResultT = TypeVar("FetchResultT")

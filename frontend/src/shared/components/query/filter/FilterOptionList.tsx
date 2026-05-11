@@ -37,7 +37,7 @@ export function FilterOptionList({ title, options, selected, onToggle, Icon }: F
       <div className="flex flex-col items-start self-stretch px-2.5">
         <div
           onClick={handleBoxClick}
-          className="bg-fill-strong focus-within:border-edge-primary flex max-h-60 min-h-10 w-full cursor-text items-start gap-1.5 overflow-hidden rounded-lg border border-transparent px-3 py-2"
+          className="bg-fill-strong focus-within:border-edge-primary flex max-h-60 min-h-10 w-full cursor-text items-start gap-1.5 overflow-hidden rounded-lg border-[1.5px] border-transparent px-3 py-2"
         >
           <div className="flex min-w-0 flex-1 flex-col gap-1.5 overflow-y-auto">
             {/* Selected chips */}
@@ -99,7 +99,7 @@ export function FilterOptionList({ title, options, selected, onToggle, Icon }: F
                 setSearchTerm('');
                 selected.forEach((name) => onToggle(name));
               }}
-              className="text-content-assistive shrink-0 cursor-pointer"
+              className="text-icon-neutral shrink-0 cursor-pointer"
               onMouseDown={(e) => e.preventDefault()}
             >
               <IconCloseCircle className="size-5" />

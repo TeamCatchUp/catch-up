@@ -107,8 +107,8 @@ export default function CustomPromptStep({ customPrompt, onSave, isLoading = fal
             !isActive && !isEditing && 'h-11.5',
             isActive || isEditing
               ? isAtLimit
-                ? 'border-status-destructive'
-                : 'border-edge-primary'
+                ? 'border-status-destructive border-[1.5px]'
+                : 'border-edge-primary border-[1.5px]'
               : 'border-edge-neutral',
           )}
         >

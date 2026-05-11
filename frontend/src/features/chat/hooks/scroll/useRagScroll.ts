@@ -12,6 +12,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Message } from '@/features/chat/types';
 import { extractQAPairs, type QAPair } from '@/features/chat/utils/render/chat';
 
+import { pickBestActiveIndex } from './pickBestActiveIndex';
+
 interface UseRagScrollOptions {
   messages: Message[];
   /** 특정 메시지로 스크롤하기 위한 메시지 ID (RecentQueryResponse.id) */
@@ -27,11 +29,15 @@ interface UseRagScrollReturn {
   scrollContainerHeight: number;
   scrollToLatest: () => void;
   activePairIndex: number;
+  /**
+   * 무한 스크롤 prepend 후 activePairIndex가 같은 인덱스로 다른 페어를 가리키지 않도록
+   * 외부에서 prepend된 페어 수만큼 보정한다.
+   */
+  shiftActivePairIndex: (by: number) => void;
 }
 
 const OBSERVER_THRESHOLDS = [0, 0.15, 0.3, 0.5, 0.7, 1.0];
 const HYSTERESIS_PX = 48;
-const MIN_ACTIVE_RATIO = 0.15;
 
 export const useRagScroll = ({
   messages,
@@ -91,10 +97,12 @@ export const useRagScroll = ({
     const observer = new IntersectionObserver(
       (entries) => {
         for (const entry of entries) {
-          const idx = Number(entry.target.getAttribute('data-qa-index'));
+          const qaIndexAttr = entry.target.getAttribute('data-qa-index');
+          if (qaIndexAttr === null) continue;
+          const idx = Number(qaIndexAttr);
           if (Number.isNaN(idx)) continue;
 
-          if (!entry.isIntersecting || entry.intersectionRatio < MIN_ACTIVE_RATIO) {
+          if (!entry.isIntersecting) {
             observedEntries.delete(idx);
             continue;
           }
@@ -102,43 +110,15 @@ export const useRagScroll = ({
           observedEntries.set(idx, entry);
         }
 
-        if (observedEntries.size === 0) return;
+        const next = pickBestActiveIndex({
+          observedEntries,
+          rootRect: root.getBoundingClientRect(),
+          currentIdx: activePairIndexRef.current,
+          hysteresisPx: HYSTERESIS_PX,
+        });
 
-        const rootRect = root.getBoundingClientRect();
-        const viewportCenter = rootRect.top + rootRect.height / 2;
-
-        let bestIdx = -1;
-        let bestDistance = Number.POSITIVE_INFINITY;
-
-        for (const [idx, entry] of observedEntries) {
-          const { top, height } = entry.boundingClientRect;
-          const pairCenter = top + height / 2;
-          const distance = Math.abs(pairCenter - viewportCenter);
-
-          if (distance < bestDistance) {
-            bestDistance = distance;
-            bestIdx = idx;
-          }
-        }
-
-        if (bestIdx < 0) return;
-
-        const currentIdx = activePairIndexRef.current;
-        if (bestIdx === currentIdx) return;
-
-        const currentEntry = observedEntries.get(currentIdx);
-        let currentDistance = Number.POSITIVE_INFINITY;
-
-        if (currentEntry) {
-          const { top, height } = currentEntry.boundingClientRect;
-          const currentCenter = top + height / 2;
-          currentDistance = Math.abs(currentCenter - viewportCenter);
-        }
-
-        const shouldSwitch = !Number.isFinite(currentDistance) || bestDistance + HYSTERESIS_PX < currentDistance;
-
-        if (shouldSwitch) {
-          setActivePairIndex(bestIdx);
+        if (next !== null) {
+          setActivePairIndex(next);
         }
       },
       {
@@ -169,7 +149,7 @@ export const useRagScroll = ({
   useEffect(() => {
     if (!scrollToMessageId || scrollToHandledRef.current || qaPairs.length === 0) return;
 
-    const targetId = `history_${scrollToMessageId}`;
+    const targetId = String(scrollToMessageId);
     const targetIndex = qaPairs.findIndex((p) => p.question.id === targetId);
     if (targetIndex < 0) return;
 
@@ -197,6 +177,11 @@ export const useRagScroll = ({
     pendingScrollRef.current = true;
   }, []);
 
+  const shiftActivePairIndex = useCallback((by: number) => {
+    if (!by) return;
+    setActivePairIndex((prev) => Math.max(0, prev + by));
+  }, []);
+
   return {
     qaPairs,
     qaRefs,
@@ -204,6 +189,7 @@ export const useRagScroll = ({
     scrollContainerHeight,
     scrollToLatest,
     activePairIndex: clampedActivePairIndex,
+    shiftActivePairIndex,
   };
 };
 

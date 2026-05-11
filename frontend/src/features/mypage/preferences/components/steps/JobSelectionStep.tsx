@@ -136,13 +136,13 @@ export default function JobSelectionStep({
                 </div>
                 <div
                   className={cn(
-                    'bg-fill-normal flex h-11.5 items-center rounded-lg p-3',
+                    'bg-fill-normal flex h-11.5 items-center gap-3 rounded-lg p-3',
                     isReadOnly
                       ? 'border-edge-neutral border'
                       : isJobTextAtLimit
-                        ? 'border-status-destructive border'
+                        ? 'border-status-destructive border-[1.5px]'
                         : jobFieldFocused
-                          ? 'border-edge-primary border-[1.2px]'
+                          ? 'border-edge-primary border-[1.5px]'
                           : 'border-edge-neutral border',
                   )}
                 >
@@ -199,15 +199,15 @@ export default function JobSelectionStep({
             <div className="flex flex-col gap-1.5">
               <div
                 className={cn(
-                  'flex h-11.5 items-center rounded-lg p-3',
+                  'flex h-11.5 items-center gap-3 rounded-lg p-3',
                   isReadOnly
                     ? 'bg-fill-normal border-edge-neutral border'
                     : isDescDisabled
                       ? 'bg-fill-interaction-disable border-edge-neutral border'
                       : isDescAtLimit
-                        ? 'bg-fill-normal border-status-destructive border'
+                        ? 'bg-fill-normal border-status-destructive border-[1.5px]'
                         : descFieldFocused
-                          ? 'bg-fill-normal border-edge-primary border-[1.2px]'
+                          ? 'bg-fill-normal border-edge-primary border-[1.5px]'
                           : 'bg-fill-normal border-edge-neutral border',
                 )}
               >

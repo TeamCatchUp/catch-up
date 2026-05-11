@@ -26,9 +26,26 @@ class _LoggedExecutionRequest(SyncExecutionRequest):
     audit_context: SyncAuditContext | None = None
 
 
+class _PagedExecutionRequest(_LoggedExecutionRequest):
+    def log_context(self) -> dict[str, object]:
+        return {
+            "batch_index": 0,
+            "next_page_token_present": False,
+        }
+
+
+class _ConnectorLogSummaryStageResult(SimpleNamespace):
+    def connector_log_summary(self) -> dict[str, object]:
+        return {
+            "batch_index": 3,
+            "next_page_token_present": False,
+            "raw_payload": object(),
+        }
+
+
 class _Port:
     async def fetch(self, *, execution, sync_window):
-        return SimpleNamespace(
+        return _ConnectorLogSummaryStageResult(
             bundles=("bundle-1", "bundle-2"),
             fetched_count=2,
             fetched_record_ids=("record-1", "record-2"),
@@ -115,7 +132,8 @@ class SyncIngestionLoggingTest(IsolatedAsyncioTestCase):
         )
 
         start_context = logger.info.call_args_list[0].kwargs
-        self.assertEqual(start_context["connector"], "channel_talk")
+        self.assertEqual(start_context["connector_type"], "channel_talk")
+        self.assertNotIn("connector", start_context)
         self.assertEqual(start_context["tenant_id"], "channel-123")
         self.assertEqual(start_context["target"], "user_chat")
         self.assertEqual(start_context["scope_id"], "channel-123")
@@ -133,6 +151,9 @@ class SyncIngestionLoggingTest(IsolatedAsyncioTestCase):
 
         fetch_context = stage_calls[0].kwargs
         self.assertEqual(fetch_context["fetched_count"], 2)
+        self.assertEqual(fetch_context["batch_index"], 3)
+        self.assertFalse(fetch_context["next_page_token_present"])
+        self.assertNotIn("raw_payload", fetch_context)
         self.assertEqual(fetch_context["bundles_count"], 2)
         self.assertEqual(fetch_context["fetched_record_ids_count"], 2)
 
@@ -165,3 +186,28 @@ class SyncIngestionLoggingTest(IsolatedAsyncioTestCase):
         self.assertEqual(failure_call.kwargs["error_type"], "RuntimeError")
         self.assertEqual(failure_call.kwargs["error_message"], "transform failed")
         self.assertTrue(failure_call.kwargs["exc_info"])
+
+    async def test_stage_summary_does_not_duplicate_pipeline_context_keys(self) -> None:
+        execution = _PagedExecutionRequest(
+            connector=ConnectorKey.JIRA,
+            tenant_id="cloud-123",
+            target="issue",
+        )
+
+        with patch(
+            "catchup.connector_core.application.sync_ingestion_logging.logger"
+        ) as logger:
+            await run_sync_ingestion(
+                port=_Port(),
+                execution=execution,
+                sync_window=_window(),
+            )
+
+        fetch_call = next(
+            call
+            for call in logger.info.call_args_list
+            if call.args[0] == "sync_ingestion_stage_completed"
+            and call.kwargs["stage"] == "fetch"
+        )
+        self.assertEqual(fetch_call.kwargs["batch_index"], 0)
+        self.assertFalse(fetch_call.kwargs["next_page_token_present"])

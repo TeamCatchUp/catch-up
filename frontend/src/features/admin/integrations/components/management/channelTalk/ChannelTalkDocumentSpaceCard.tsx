@@ -20,17 +20,8 @@ interface ChannelTalkDocumentSpaceCardProps {
   onTestConnection: () => void;
 }
 
-/**
- * 채널톡 도큐먼트 스페이스 카드 — 자체 connectionStatus + lock/검증 흐름 (채널과 독립).
- *
- * Layout (Figma 패턴): outer는 `pt-5`, 좌측 column은 `pb-5 self-stretch`, 우측 form은
- * `border-b pb-5`. 카드 사이 spacing은 다음 카드의 outer `pt-5`가 담당, 카드 하단 구분선은
- * 우측 form의 `border-b`가 담당. 좌측 column self-stretch는 outer height에 맞춰 늘어나며,
- * 짧은 vertical line이 IconBook 아래부터 카드 끝까지 채워 카드들 사이 시각 연결을 만든다.
- *
- * - `tested` 상태는 헤더 한 줄로 collapsed 되어 영구 lock. 변경하려면 삭제 후 재등록.
- * - `idle`/`error` 상태는 expanded — 키 입력 + 연결 테스트 버튼 노출.
- */
+// 도큐먼트 스페이스 카드 — 자체 connectionStatus 보유 (채널과 독립)
+// tested → 헤더 한 줄 collapsed lock. idle/error → expanded
 export default function ChannelTalkDocumentSpaceCard({
   documentSpace,
   onUpdate,
