@@ -113,6 +113,7 @@ def get_compiled_graph(
 
     # Subgraphs
     reuse_subgraph = build_reuse_subgraph(
+        llm_small=llm_small,
         llm_large_stream=llm_large_stream,
         rerank_service=rerank_service,
     )
