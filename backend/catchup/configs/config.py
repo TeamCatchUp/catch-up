@@ -190,6 +190,7 @@ class Settings(BaseSettings):
     SLACK_AUTH_URL: str = "https://slack.com/oauth/v2/authorize"
     SLACK_TOKEN_URL: str = "https://slack.com/api/oauth.v2.access"
     SLACK_API_URL: str = "https://slack.com/api"
+    WORKFLOW_CREDENTIAL_ENCRYPTION_KEY: str | None = None
 
     # PGVector Settings
     PGVECTOR_COLLECTION_NAME: str = "vectorstore"  # 통합 Collection (Jira, Slack, GitHub 등)
