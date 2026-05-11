@@ -332,6 +332,204 @@ class OAuthUser(Base):
 
 
 # =================
+# Workflow Studio Credentials
+# =================
+class WorkflowCredentialVendor(StrEnum):
+    GITHUB = "github"
+    SLACK = "slack"
+    ATLASSIAN = "atlassian"
+    CHANNEL_TALK = "channel_talk"
+
+
+class WorkflowCredentialAuthType(StrEnum):
+    OAUTH2_USER = "oauth2_user"
+    BOT_TOKEN = "bot_token"
+    APP_INSTALLATION = "app_installation"
+    API_TOKEN = "api_token"
+    SERVICE_ACCOUNT = "service_account"
+    PERSONAL_ACCESS_TOKEN = "personal_access_token"
+
+
+class WorkflowCredentialOwnershipType(StrEnum):
+    WORKSPACE_SHARED = "workspace_shared"
+    USER_PERSONAL = "user_personal"
+
+
+class WorkflowCredentialStatus(StrEnum):
+    ACTIVE = "active"
+    NEEDS_REAUTH = "needs_reauth"
+    EXPIRED = "expired"
+    REVOKED = "revoked"
+    ERROR = "error"
+
+
+class WorkflowCredential(Base):
+    """
+    Workflow Studio에서 사용하는 공통 Credential 저장소.
+
+    Credential은 안전한 기본값으로 개인 소유를 기본값으로 하며, 전사 공유
+    Credential은 명시적으로 workspace_shared ownership을 지정해야 한다.
+    """
+    __tablename__ = "workflow_credentials"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    display_name: Mapped[str] = mapped_column(String(255), nullable=False)
+
+    vendor: Mapped[WorkflowCredentialVendor] = mapped_column(String(32), nullable=False)
+    auth_type: Mapped[WorkflowCredentialAuthType] = mapped_column(String(32), nullable=False)
+
+    ownership_type: Mapped[WorkflowCredentialOwnershipType] = mapped_column(
+        String(32),
+        nullable=False,
+        default=WorkflowCredentialOwnershipType.USER_PERSONAL,
+        server_default=text(f"'{WorkflowCredentialOwnershipType.USER_PERSONAL.value}'"),
+        comment="workspace_shared: 전사 공유 / user_personal: 개인 소유",
+    )
+
+    # CatchUp Workspace / User
+    workspace_id: Mapped[int] = mapped_column(ForeignKey("workspaces.id"), nullable=False)
+    owner_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id"),
+        nullable=True,
+        comment="user_personal Credential 소유자",
+    )
+    created_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id"),
+        nullable=True,
+        index=True,
+        comment="Credential을 등록한 사용자",
+    )
+
+    # External Workspace / User
+    external_tenant_id: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+        comment="Slack team_id, Atlassian cloud_id, GitHub installation/account/server 식별자",
+    )
+    external_tenant_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    external_account_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    external_account_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    external_account_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    server_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+
+    scopes: Mapped[list[str]] = mapped_column(
+        JSONB,
+        nullable=False,
+        default=list,
+        server_default=text("'[]'::jsonb"),
+        comment="Vendor에서 부여한 OAuth/API 권한 목록",
+    )
+    capabilities: Mapped[list[str]] = mapped_column(
+        JSONB,
+        nullable=False,
+        default=list,
+        server_default=text("'[]'::jsonb"),
+        comment="Runtime에 해당 Credential으로 할 수 있는 행동",
+    )
+    encrypted_data: Mapped[dict[str, Any]] = mapped_column(
+        JSONB,
+        nullable=False,
+        default=dict,
+        server_default=text("'{}'::jsonb"),
+        comment="암호화된 access_token, refresh_token, API token, webhook URL 등",
+    )
+    extra_metadata: Mapped[dict[str, Any]] = mapped_column(
+        JSONB,
+        nullable=False,
+        default=dict,
+        server_default=text("'{}'::jsonb"),
+        comment="vendor별 보조 메타데이터",
+    )
+
+    status: Mapped[WorkflowCredentialStatus] = mapped_column(
+        String(32),
+        nullable=False,
+        default=WorkflowCredentialStatus.ACTIVE,
+        server_default=text(f"'{WorkflowCredentialStatus.ACTIVE.value}'"),
+    )
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+    )
+
+    workspace: Mapped["Workspace"] = relationship()
+    owner_user: Mapped[Optional["User"]] = relationship(foreign_keys=[owner_user_id])
+    created_by_user: Mapped[Optional["User"]] = relationship(foreign_keys=[created_by_user_id])
+
+    __table_args__ = (
+        CheckConstraint(
+            "vendor IN ('github', 'slack', 'atlassian', 'channel_talk')",
+            name="ck_workflow_credentials_vendor",
+        ),
+        CheckConstraint(
+            "auth_type IN ("
+            "'oauth2_user', "
+            "'bot_token', "
+            "'app_installation', "
+            "'api_token', "
+            "'service_account', "
+            "'personal_access_token'"
+            ")",
+            name="ck_workflow_credentials_auth_type",
+        ),
+        CheckConstraint(
+            "ownership_type IN ('workspace_shared', 'user_personal')",
+            name="ck_workflow_credentials_ownership_type",
+        ),
+        CheckConstraint(
+            "status IN ('active', 'needs_reauth', 'expired', 'revoked', 'error')",
+            name="ck_workflow_credentials_status",
+        ),
+        CheckConstraint(
+            "("
+            "ownership_type = 'user_personal' AND owner_user_id IS NOT NULL"
+            ") OR ("
+            "ownership_type = 'workspace_shared' AND owner_user_id IS NULL"
+            ")",
+            name="ck_workflow_credentials_owner_matches_ownership",
+        ),
+        Index(
+            "uq_workflow_credentials_workspace_shared_identity",
+            "vendor",
+            "auth_type",
+            "workspace_id",
+            "external_tenant_id",
+            "external_account_id",
+            unique=True,
+            postgresql_where=text("ownership_type = 'workspace_shared'"),
+        ),
+        Index(
+            "uq_workflow_credentials_user_personal_identity",
+            "vendor",
+            "auth_type",
+            "workspace_id",
+            "owner_user_id",
+            "external_tenant_id",
+            "external_account_id",
+            unique=True,
+            postgresql_where=text("ownership_type = 'user_personal'"),
+        ),
+        Index(
+            "idx_workflow_credentials_workspace_owner_user",
+            "workspace_id",
+            "owner_user_id",
+        ),
+        Index(
+            "idx_workflow_credentials_workspace_ownership_vendor_status",
+            "workspace_id",
+            "ownership_type",
+            "vendor",
+            "status",
+        ),
+    )
+
+
+# =================
 # Integration
 # =================
 class JiraAccountType(StrEnum):
