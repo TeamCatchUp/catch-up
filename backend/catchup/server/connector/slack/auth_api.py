@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import secrets
-from dataclasses import dataclass
 from datetime import datetime
 from datetime import timedelta
 from datetime import timezone
@@ -33,12 +32,19 @@ from catchup.db.engine import SessionLocal
 from catchup.db.knowledge_source import add_knowledge_source
 from catchup.db.models import KnowledgeSource
 from catchup.db.models import SourceType
+from catchup.db.models import WorkflowCredentialVendor
 from catchup.db.slack import oauth_repository as slack_crud
 from catchup.db.workspaces import get_workspace_limit_one
 from catchup.events.enums import EventType
 from catchup.events.enums import IntegrationEventAction
+from catchup.utils.redis import consume_oauth_state_payload
 from catchup.utils.redis import store_oauth_state
-from catchup.utils.redis import validate_oauth_state
+from catchup.workflow_credentials.oauth import build_oauth_completion_redirect
+from catchup.workflow_credentials.oauth import consume_workflow_redirect_after
+from catchup.workflow_credentials.oauth import split_oauth_scopes
+from catchup.workflow_credentials.schemas import PersonalOAuthCredentialCreateRequest
+from catchup.workflow_credentials.service import WorkflowCredentialAlreadyExists
+from catchup.workflow_credentials.service import WorkflowCredentialService
 
 logger = structlog.get_logger()
 
@@ -70,7 +76,7 @@ async def slack_oauth_callback(
     - Workspace 정보 저장
     """
     try:
-        result = await _handle_slack_oauth_callback(
+        redirect_url = await _handle_slack_oauth_callback(
             provider="slack",
             code=code,
             state=state,
@@ -84,7 +90,10 @@ async def slack_oauth_callback(
             reason=exc.reason,
         )
         return RedirectResponse(
-            url=_build_slack_failure_redirect_url(exc.reason)
+            url=_build_slack_failure_redirect_url(
+                exc.reason,
+                redirect_after=exc.redirect_after,
+            )
         )
     except Exception:
         logger.error(
@@ -96,7 +105,7 @@ async def slack_oauth_callback(
             url=_build_slack_failure_redirect_url("internal_error")
         )
 
-    return RedirectResponse(url=_build_slack_success_redirect_url(result.team_name))
+    return RedirectResponse(url=redirect_url)
 
 
 @router.delete("/uninstall")
@@ -139,16 +148,14 @@ async def slack_uninstall(
 # Private Helper Functions
 # =============================================================================
 class SlackCallbackError(Exception):
-    def __init__(self, reason: str, detail: str | None = None):
+    def __init__(
+        self,
+        reason: str,
+        redirect_after: str | None = None,
+    ):
         self.reason = reason
-        self.detail = detail
-        super().__init__(detail or reason)
-
-
-@dataclass(slots=True, frozen=True)
-class SlackCallbackResult:
-    team_id: str
-    team_name: str | None
+        self.redirect_after = redirect_after
+        super().__init__(reason)
 
 
 @audit_log(
@@ -164,20 +171,49 @@ async def _handle_slack_oauth_callback(
     error: str | None,
     slack_service: SlackOAuthService,
     background_tasks: BackgroundTasks,
-) -> SlackCallbackResult:
-    await _validate_slack_callback_request(
+) -> str:
+    payload = await _validate_slack_callback_request(
         provider=provider,
         code=code,
         state=state,
         error=error,
     )
 
-    tokens = await slack_service.exchange_code_for_tokens(code)
-    await _persist_slack_installation(tokens)
-    _schedule_slack_followups(background_tasks, tokens.team.id)
-    return SlackCallbackResult(
-        team_id=tokens.team.id,
-        team_name=tokens.team.name,
+    purpose = payload["purpose"]
+    try:
+        tokens = await slack_service.exchange_code_for_tokens(code)
+    except Exception as exc:
+        if purpose == "workflow_personal":
+            raise SlackCallbackError(
+                "token_exchange_failed",
+                redirect_after=payload.get("redirect_after"),
+            ) from exc
+        raise
+
+    if purpose == "sync_install":
+        await _persist_slack_installation(tokens)
+        _schedule_slack_followups(background_tasks, tokens.team.id)
+        return _build_slack_success_redirect_url(tokens.team.name)
+
+    if purpose == "workflow_personal":
+        try:
+            await run_in_threadpool(_persist_slack_workflow_credential_db, tokens, payload)
+        except SlackCallbackError:
+            raise
+        except Exception as exc:
+            raise SlackCallbackError(
+                "credential_persist_failed",
+                redirect_after=payload.get("redirect_after"),
+            ) from exc
+        return build_oauth_completion_redirect(
+            vendor="slack",
+            success=True,
+            redirect_after=payload.get("redirect_after"),
+        )
+
+    raise SlackCallbackError(
+        "unsupported_purpose",
+        redirect_after=payload.get("redirect_after"),
     )
 
 
@@ -187,19 +223,25 @@ async def _validate_slack_callback_request(
     code: str | None,
     state: str | None,
     error: str | None,
-) -> None:
-    if error:
-        raise SlackCallbackError(error)
-
-    if not code:
-        raise SlackCallbackError("no_code")
+) -> dict:
+    failure_reason = error or ("no_code" if not code else None)
+    if failure_reason:
+        raise SlackCallbackError(
+            failure_reason,
+            redirect_after=await consume_workflow_redirect_after(
+                provider=provider,
+                state=state,
+            ),
+        )
 
     if not state:
         raise SlackCallbackError("missing_state")
 
-    is_valid_state = await validate_oauth_state(state, provider=provider)
-    if not is_valid_state:
+    payload = await consume_oauth_state_payload(provider=provider, state=state)
+    if payload is None:
         raise SlackCallbackError("invalid_state")
+
+    return payload
 
 
 async def _persist_slack_installation(tokens: SlackOAuthTokenResponse) -> None:
@@ -323,6 +365,9 @@ def _persist_slack_token_db(
 
 
 def _build_slack_token_payload(tokens: SlackOAuthTokenResponse) -> dict[str, object]:
+    if not tokens.access_token:
+        raise SlackCallbackError("missing_bot_token")
+
     bot_expires_at = None
     if tokens.expires_in:
         bot_expires_at = datetime.now(timezone.utc) + timedelta(seconds=tokens.expires_in)
@@ -341,6 +386,52 @@ def _build_slack_token_payload(tokens: SlackOAuthTokenResponse) -> dict[str, obj
     }
 
 
+def _persist_slack_workflow_credential_db(
+    tokens: SlackOAuthTokenResponse,
+    payload: dict,
+) -> None:
+    authed_user = tokens.authed_user
+    if authed_user is None or not authed_user.access_token:
+        raise SlackCallbackError(
+            "missing_user_token",
+            redirect_after=payload.get("redirect_after"),
+        )
+
+    with SessionLocal() as db:
+        try:
+            WorkflowCredentialService().create_personal_oauth(
+                db,
+                PersonalOAuthCredentialCreateRequest(
+                    vendor=WorkflowCredentialVendor.SLACK,
+                    workspace_id=int(payload["workspace_id"]),
+                    user_id=int(payload["user_id"]),
+                    display_name=tokens.team.name or "Slack",
+                    external_tenant_id=tokens.team.id,
+                    external_tenant_name=tokens.team.name,
+                    external_account_id=authed_user.id,
+                    external_account_name=None,
+                    external_account_email=None,
+                    server_url=None,
+                    scopes=split_oauth_scopes(authed_user.scope),
+                    token_payload={
+                        "access_token": authed_user.access_token,
+                        "refresh_token": authed_user.refresh_token,
+                        "token_type": authed_user.token_type or "Bearer",
+                    },
+                    extra_metadata={
+                        "app_id": tokens.app_id,
+                        "team_id": tokens.team.id,
+                    },
+                    expires_in=authed_user.expires_in,
+                ),
+            )
+        except WorkflowCredentialAlreadyExists as exc:
+            raise SlackCallbackError(
+                "already_connected",
+                redirect_after=payload.get("redirect_after"),
+            ) from exc
+
+
 def _build_slack_success_redirect_url(team_name: str | None) -> str:
     return (
         f"{auth_settings.FRONTEND_REDIRECT_URI}"
@@ -348,7 +439,17 @@ def _build_slack_success_redirect_url(team_name: str | None) -> str:
     )
 
 
-def _build_slack_failure_redirect_url(reason: str) -> str:
+def _build_slack_failure_redirect_url(
+    reason: str,
+    redirect_after: str | None = None,
+) -> str:
+    if redirect_after:
+        return build_oauth_completion_redirect(
+            vendor="slack",
+            success=False,
+            redirect_after=redirect_after,
+            reason=reason,
+        )
     return (
         f"{auth_settings.FRONTEND_REDIRECT_URI}"
         f"?slack_installed=false&reason={reason}"
