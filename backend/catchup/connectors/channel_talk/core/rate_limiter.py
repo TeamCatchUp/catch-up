@@ -42,6 +42,15 @@ class ChannelTalkCoreBucketRateLimiter:
             self._next_slot_at = ready_at + self._interval_seconds
             return max(0.0, ready_at - now)
 
+    async def defer_for(self, delay_seconds: float) -> None:
+        delay = max(0.0, float(delay_seconds))
+        if delay <= 0:
+            return
+
+        async with self._lock:
+            now = self._clock()
+            self._next_slot_at = max(self._next_slot_at, now + delay)
+
 
 class ChannelTalkCoreRateLimiterRegistry:
     def __init__(

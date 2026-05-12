@@ -238,6 +238,8 @@ class Settings(BaseSettings):
 
     # Channel Talk API Rate Limit Control
     CHANNEL_TALK_CORE_API_RPS_LIMIT: float = 8.0
+    CHANNEL_TALK_CORE_API_MAX_RETRY_ATTEMPTS: int = 2
+    CHANNEL_TALK_CORE_API_MAX_WAIT_SECONDS_PER_CALL: int = 30
     CHANNEL_TALK_DOCUMENTS_API_RPS_LIMIT: float = 8.0
 
     # GitHub Sync Settings
