@@ -49,7 +49,14 @@ class BaseNode:
         # 스펙이 있으면 Pydantic 검증 수행, 없으면 raw dict 전달
         validated = spec.input_model(**inputs) if spec else inputs
 
-        return await method(validated, node_results)
+        result = await method(validated, node_results)
+
+        if spec:
+            # OutputModel로 반환값 검증 후 직렬화된 dict로 반환
+            # ValidationError는 그대로 전파 → Builder Agent 피드백 루프에 활용
+            return spec.output_model(**result).model_dump()
+
+        return result
 
 
 class BaseConnector(BaseNode):

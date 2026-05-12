@@ -97,6 +97,18 @@ class FakeMismatchedLlm(BaseTool):
         return {}
 
 
+class _WrongOutputNode(BaseTool):
+    """OutputModel과 다른 필드를 반환하는 노드. output 런타임 검증 테스트용."""
+
+    @action(
+        input_model=_SearchInput,
+        output_model=_FetchOutput,   # message: str 을 요구함
+        description="잘못된 output 반환 테스트용.",
+    )
+    async def run(self, inputs: _SearchInput, node_results: dict) -> dict:
+        return {"wrong_field": "이 필드는 OutputModel에 없음"}
+
+
 # ---------------------------------------------------------------------------
 # 테스트 베이스: NodeRegistry 격리
 # ---------------------------------------------------------------------------
@@ -126,6 +138,11 @@ class CompilerTestBase(IsolatedAsyncioTestCase):
             name="fake_mismatched_llm",
             display_name="Fake Mismatched LLM",
             description="타입 불일치 테스트용.",
+        ))
+        NodeRegistry.register(_WrongOutputNode(
+            name="wrong_output_node",
+            display_name="Wrong Output Node",
+            description="잘못된 output 반환 테스트용.",
         ))
 
 
@@ -335,3 +352,30 @@ class NodeExecutionTests(CompilerTestBase):
         self.assertEqual(result["node_results"]["fetch"]["message"], "테스트 메시지")
         # fetch.message → search.query 로 전달됐는지 확인
         self.assertEqual(result["node_results"]["search"]["query"], "테스트 메시지")
+
+    @pytest.mark.asyncio
+    async def test_output이_OutputModel과_다르면_ValidationError(self) -> None:
+        """노드가 OutputModel에 선언되지 않은 필드를 반환하면 런타임에 ValidationError가 발생한다."""
+        from pydantic import ValidationError
+
+        spec = {
+            "id": "wrong-output-test",
+            "nodes": [
+                {
+                    "id": "wrong",
+                    "node": "wrong_output_node",
+                    "action": "run",
+                    "inputs": {"query": "테스트"},
+                }
+            ],
+            "edges": [],
+        }
+        graph = compile_workflow(spec)
+        initial_state: WorkflowState = {
+            "trigger": {},
+            "node_results": {},
+            "error": None,
+            "status": "in_progress",
+        }
+        with self.assertRaises(ValidationError):
+            await graph.ainvoke(initial_state)
