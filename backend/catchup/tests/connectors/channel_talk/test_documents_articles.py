@@ -12,6 +12,7 @@ from catchup.connectors.channel_talk.document_space.client import (
 from catchup.connectors.channel_talk.document_space.client import (
     ChannelTalkDocumentsApiClient,
 )
+from catchup.connectors.channel_talk.exceptions import ChannelTalkUpstreamError
 from catchup.connectors.channel_talk.exceptions import ChannelTalkValidationError
 from catchup.connectors.channel_talk.schemas.document_article import (
     ChannelTalkDocumentArticle,
@@ -362,6 +363,33 @@ class ChannelTalkDocumentsArticleClientTests(IsolatedAsyncioTestCase):
             )
 
         self.assertEqual(batch.articles[0].article_id, "article-1")
+
+    async def test_upstream_error_message_exposes_status_and_response_body(
+        self,
+    ) -> None:
+        async def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(
+                503,
+                json={
+                    "code": "maintenance",
+                    "message": "documents service maintenance",
+                },
+            )
+
+        async with httpx.AsyncClient(
+            transport=httpx.MockTransport(handler),
+        ) as http_client:
+            client = ChannelTalkDocumentsApiClient(
+                access_key="documents-key",
+                access_secret="documents-secret",
+                http_client=http_client,
+            )
+            with self.assertRaises(ChannelTalkUpstreamError) as raised:
+                await client.list_articles(language="ko")
+
+        message = str(raised.exception)
+        self.assertIn("upstream status 503", message)
+        self.assertIn("documents service maintenance", message)
 
     async def test_batch_get_articles_rejects_plain_string_article_ids(self) -> None:
         async with httpx.AsyncClient(

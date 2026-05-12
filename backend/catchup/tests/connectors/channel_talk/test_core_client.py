@@ -6,6 +6,7 @@ import httpx
 
 from catchup.connectors.channel_talk.core.client import ChannelTalkCoreApiClient
 from catchup.connectors.channel_talk.exceptions import ChannelTalkPayloadError
+from catchup.connectors.channel_talk.exceptions import ChannelTalkUpstreamError
 from catchup.connectors.channel_talk.schemas.user_chat import ChannelTalkUserChatState
 
 
@@ -217,6 +218,34 @@ class ChannelTalkCoreApiClientTests(IsolatedAsyncioTestCase):
                 access_secret="access-secret",
                 state="opened",
             )
+
+    async def test_upstream_error_message_exposes_status_and_response_body(
+        self,
+    ) -> None:
+        async def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(
+                502,
+                json={
+                    "type": "bad_gateway",
+                    "message": "upstream exploded",
+                },
+            )
+
+        async with httpx.AsyncClient(
+            transport=httpx.MockTransport(handler),
+            base_url="https://api.channel.io",
+        ) as http_client:
+            client = ChannelTalkCoreApiClient(http_client=http_client)
+            with self.assertRaises(ChannelTalkUpstreamError) as raised:
+                await client.list_user_chats(
+                    access_key="access-key",
+                    access_secret="access-secret",
+                    state="opened",
+                )
+
+        message = str(raised.exception)
+        self.assertIn("upstream status 502", message)
+        self.assertIn("upstream exploded", message)
 
     async def test_get_user_chat_parses_detail_payload_for_later_document_build(self) -> None:
         async def handler(request: httpx.Request) -> httpx.Response:
