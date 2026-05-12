@@ -80,11 +80,13 @@ class _FakeRedis:
 
     async def execute_command(self, *args):
         self.commands.append(args)
-        if args[0] == "XPENDING":
-            return [["1001-0", "consumer-1", 1, 1]]
         if args[0] == "XTRIM":
             return 7
         raise AssertionError(f"unexpected command: {args}")
+
+    async def xpending_range(self, name, groupname, min, max, count):
+        self.commands.append(("XPENDING_RANGE", name, groupname, min, max, count))
+        return [{"message_id": "1001-0", "consumer": "consumer-1"}]
 
     async def xdel(self, name, *message_ids):
         self.deleted.extend(message_ids)
@@ -148,6 +150,10 @@ class SyncStreamStartupCleanupTests(IsolatedAsyncioTestCase):
         self.assertEqual(result.skipped_pending, 1)
         self.assertEqual(result.skipped_not_terminal, 1)
         self.assertEqual(result.skipped_orphaned, 1)
+        self.assertIn(
+            ("XPENDING_RANGE", "sync:events", "sync:workers", "1000-0", "1003-0", 4),
+            redis.commands,
+        )
 
     async def test_can_delete_orphaned_entries_when_enabled(self) -> None:
         redis = _FakeRedis()

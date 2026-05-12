@@ -214,13 +214,12 @@ async def _pending_ids_for_range(
     count: int,
 ) -> set[str]:
     try:
-        raw_pending = await redis.execute_command(
-            "XPENDING",
+        raw_pending = await redis.xpending_range(
             SYNC_EVENTS_STREAM_KEY,
             SYNC_EVENTS_CONSUMER_GROUP,
-            start_id,
-            end_id,
-            max(1, count),
+            min=start_id,
+            max=end_id,
+            count=max(1, count),
         )
     except ResponseError as exc:
         if "NOGROUP" in str(exc):
@@ -229,6 +228,11 @@ async def _pending_ids_for_range(
 
     pending_ids: set[str] = set()
     for row in raw_pending or []:
+        if isinstance(row, dict):
+            message_id = row.get("message_id")
+            if message_id is not None:
+                pending_ids.add(_decode_redis_value(message_id))
+            continue
         if isinstance(row, (list, tuple)) and row:
             pending_ids.add(_decode_redis_value(row[0]))
     return pending_ids
