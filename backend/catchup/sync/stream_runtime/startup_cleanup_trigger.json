@@ -1,0 +1,11 @@
+{
+  "version": "202605_sync_stream_cleanup_v2",
+  "dry_run": false,
+  "retention_days": 0,
+  "batch_size": 1000,
+  "max_batches": 0,
+  "lock_ttl_seconds": 21600,
+  "sleep_seconds": 0.0,
+  "dlq_maxlen": 100000,
+  "delete_orphaned_entries": false
+}
