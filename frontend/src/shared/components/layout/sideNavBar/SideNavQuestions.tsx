@@ -71,7 +71,7 @@ export default function SideNavQuestions() {
     <div className="flex min-h-0 flex-1 flex-col gap-0.5">
       <button
         onClick={() => togglePanel('questionsHistory')}
-        className="hover:bg-fill-interaction-hover active:bg-fill-interaction-pressed flex h-10 w-full cursor-pointer items-center gap-0.5 rounded-lg px-2.5 py-2"
+        className="hover:bg-fill-interaction-hover active:bg-fill-interaction-pressed flex h-9 w-full cursor-pointer items-center gap-0.5 rounded-lg px-2.5 py-1.5"
       >
         <span className="text-label-small text-content-normal">내 질문</span>
         <ArrowRight2 className="text-icon-neutral relative -top-[0.5px] size-6 shrink-0" />
@@ -86,7 +86,7 @@ export default function SideNavQuestions() {
                 href={`/chat/${chatroom.session_id}`}
                 key={chatroom.session_id}
                 className={cn(
-                  'group flex h-10 cursor-pointer items-center rounded-lg px-2.5 py-2',
+                  'group flex h-9 cursor-pointer items-center rounded-lg px-2.5 py-1.5',
                   isActive ? selectedClass : defaultClass,
                 )}
               >
