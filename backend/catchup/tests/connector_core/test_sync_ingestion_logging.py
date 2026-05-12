@@ -123,12 +123,16 @@ class SyncIngestionLoggingTest(IsolatedAsyncioTestCase):
 
         stage_calls = [
             call
-            for call in logger.info.call_args_list
+            for call in logger.debug.call_args_list
             if call.args[0] == "sync_ingestion_stage_completed"
         ]
         self.assertEqual(
             [call.kwargs["stage"] for call in stage_calls],
             ["fetch", "transform", "summarize", "persist", "build_result"],
+        )
+        self.assertNotIn(
+            "sync_ingestion_stage_completed",
+            events,
         )
 
         start_context = logger.info.call_args_list[0].kwargs
@@ -205,7 +209,7 @@ class SyncIngestionLoggingTest(IsolatedAsyncioTestCase):
 
         fetch_call = next(
             call
-            for call in logger.info.call_args_list
+            for call in logger.debug.call_args_list
             if call.args[0] == "sync_ingestion_stage_completed"
             and call.kwargs["stage"] == "fetch"
         )
