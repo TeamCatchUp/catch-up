@@ -32,9 +32,11 @@ async def direct_answer_node(
     global_context = state["global_context"].model_dump()
 
     prompt_settings = state.get("prompt_settings")
+    slack_thread_context = state.get("slack_thread_context")
     prompts = _load_prompts(
         global_context=global_context,
         prompt_settings=prompt_settings,
+        slack_thread_context=slack_thread_context,
     )
     system_message = build_system_message(
         static_prompt=prompts["system"],
@@ -87,11 +89,13 @@ async def direct_answer_node(
 def _load_prompts(
     global_context: dict,
     prompt_settings: Any,
+    slack_thread_context: str | None = None,
 ) -> dict:
     return {
         "system": prompt_loader.get_prompt(
             "rag/direct_answer",
             sources=list(SOURCE_METADATA.values()),
+            slack_thread_context=slack_thread_context,
             **global_context,
         ),
         "job_role": prompt_loader.get_prompt(

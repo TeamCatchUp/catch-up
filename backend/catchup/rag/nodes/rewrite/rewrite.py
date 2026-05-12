@@ -26,11 +26,13 @@ async def rewrite_node(
     original_query = state["original_query"]
     grade_comment = state.get("grade_comment", "")
     global_context = state["global_context"].model_dump()
+    slack_thread_context = state.get("slack_thread_context")
     prompt = prompt_loader.get_prompt(
         "rag/rewrite",
         history=history_text,
         feedback=grade_comment,
         original_query=original_query,
+        slack_thread_context=slack_thread_context,
         **global_context,
     )
 
