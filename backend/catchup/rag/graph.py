@@ -153,7 +153,7 @@ def get_compiled_graph(
         "direct_answer",
         partial(direct_answer_node, llm=llm_small_stream, timeout=30.0),
         metadata={"tags": ["stream_target"]},
-        # streaming 노드는 retry 적용 제외
+        retry=TIMEOUT_RETRY_POLICY,
     )
     workflow.add_node(
         "clarify",

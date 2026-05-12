@@ -20,6 +20,7 @@ from catchup.rag.nodes.utils import scrub_orphan_indices
 from catchup.rag.policies import CITATION_POLICY_MESSAGE
 from catchup.rag.policies import FALLBACK_ANSWER
 from catchup.rag.policies import NO_DOCUMENTS_ANSWER
+from catchup.rag.retryable import RETRYABLE_ERRORS
 from catchup.rag.schemas.prompt_settings import PromptSettings
 from catchup.rag.schemas.sources import SOURCE_METADATA
 from catchup.rag.schemas.sources import BaseSource
@@ -124,6 +125,8 @@ async def generate_final_answer_fast_node(
             full_answer=full_answer,
         )
 
+    except RETRYABLE_ERRORS:
+        raise
     except Exception as e:
         logger.warning(
             "fast_answer_generation_node_failed",

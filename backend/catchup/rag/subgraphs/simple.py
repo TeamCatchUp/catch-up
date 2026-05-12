@@ -38,13 +38,19 @@ def build_simple_subgraph(
     graph.add_node(
         "search_vector_db",
         partial(search_vector_db_node, vector_db_service=vector_db_service),
+        retry=TIMEOUT_RETRY_POLICY,
     )
-    graph.add_node("rerank", partial(rerank_node, rerank_service=rerank_service))
+    graph.add_node(
+        "rerank",
+        partial(rerank_node, rerank_service=rerank_service),
+        retry=TIMEOUT_RETRY_POLICY,
+    )
     graph.add_node("merge_cache", merge_cache_node)
     graph.add_node(
         "generate_final_answer",
         partial(generate_final_answer_fast_node, llm=llm_large_stream),
         metadata={"tags": ["stream_target", "has_citations"]},
+        retry=TIMEOUT_RETRY_POLICY,
     )
 
     graph.set_entry_point("rewrite")
