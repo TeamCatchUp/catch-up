@@ -37,6 +37,15 @@ class ChannelTalkDocumentSpaceRateLimiter:
             self._next_slot_at = ready_at + self._interval_seconds
             return max(0.0, ready_at - now)
 
+    async def defer_for(self, delay_seconds: float) -> None:
+        delay = max(0.0, float(delay_seconds))
+        if delay <= 0:
+            return
+
+        async with self._lock:
+            now = self._clock()
+            self._next_slot_at = max(self._next_slot_at, now + delay)
+
 
 class ChannelTalkDocumentSpaceRateLimiterRegistry:
     # 3단계: space_id별 limiter를 따로 보관해 각 Document Space의 quota를 독립적으로 보호한다.

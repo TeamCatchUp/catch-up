@@ -47,6 +47,25 @@ class ChannelTalkDocumentSpaceRateLimiterTests(IsolatedAsyncioTestCase):
         self.assertEqual(await limiter.acquire_delay(), 0.0)
         self.assertAlmostEqual(await limiter.acquire_delay(), 0.1)
 
+    async def test_document_space_limiter_defer_for_pushes_next_slot_to_retry_window(
+        self,
+    ) -> None:
+        clock = ManualClock()
+        limiter = ChannelTalkDocumentSpaceRateLimiter(
+            requests_per_second=2.0,
+            clock=clock,
+        )
+
+        self.assertEqual(await limiter.acquire_delay(), 0.0)
+
+        await limiter.defer_for(3.0)
+
+        self.assertEqual(await limiter.acquire_delay(), 3.0)
+
+        clock.advance(1.0)
+
+        self.assertEqual(await limiter.acquire_delay(), 2.5)
+
     def test_document_space_limiter_rejects_non_positive_rps(self) -> None:
         for requests_per_second in (0.0, -1.0):
             with self.assertRaisesRegex(

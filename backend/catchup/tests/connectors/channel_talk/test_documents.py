@@ -17,6 +17,9 @@ from catchup.connector_core.ports.metadata_sync import MetadataSyncRequest
 from catchup.connectors.channel_talk.document_space.client import (
     ChannelTalkDocumentsApiClient,
 )
+from catchup.connectors.channel_talk.document_space.http_client import (
+    ChannelTalkDocumentsHttpClient,
+)
 from catchup.connectors.channel_talk.exceptions import ChannelTalkConflictError
 from catchup.connectors.channel_talk.exceptions import ChannelTalkPayloadError
 from catchup.connectors.channel_talk.exceptions import ChannelTalkValidationError
@@ -52,6 +55,21 @@ from catchup.connectors.channel_talk.service import (
 )
 
 
+def _make_documents_client(
+    *,
+    http_client: httpx.AsyncClient,
+    space_id: str | None = None,
+) -> ChannelTalkDocumentsApiClient:
+    return ChannelTalkDocumentsApiClient(
+        transport=ChannelTalkDocumentsHttpClient(
+            access_key="documents-key",
+            access_secret="documents-secret",
+            http_client=http_client,
+            space_id=space_id,
+        )
+    )
+
+
 class ChannelTalkDocumentsClientTests(IsolatedAsyncioTestCase):
     async def test_get_current_space_uses_basic_auth_and_parses_payload(self) -> None:
         seen_authorization: list[str] = []
@@ -71,7 +89,7 @@ class ChannelTalkDocumentsClientTests(IsolatedAsyncioTestCase):
             )
 
         async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
-            client = ChannelTalkDocumentsApiClient(access_key="documents-key", access_secret="documents-secret", http_client=http_client)
+            client = _make_documents_client(http_client=http_client)
             space = await client.get_current_space()
 
         self.assertEqual(space.space_id, "space-123")
@@ -92,7 +110,7 @@ class ChannelTalkDocumentsClientTests(IsolatedAsyncioTestCase):
             )
 
         async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
-            client = ChannelTalkDocumentsApiClient(access_key="documents-key", access_secret="documents-secret", http_client=http_client)
+            client = _make_documents_client(http_client=http_client)
             with self.assertRaises(ChannelTalkPayloadError):
                 await client.get_current_space()
 

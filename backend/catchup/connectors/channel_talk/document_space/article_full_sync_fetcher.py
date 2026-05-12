@@ -23,6 +23,9 @@ from catchup.connectors.channel_talk.document_space.client import (
 from catchup.connectors.channel_talk.document_space.client import (
     ChannelTalkDocumentsApiClient,
 )
+from catchup.connectors.channel_talk.document_space.http_client import (
+    ChannelTalkDocumentsHttpClient,
+)
 from catchup.connectors.channel_talk.schemas.document_article import (
     ChannelTalkDocumentArticle,
 )
@@ -432,6 +435,9 @@ class ChannelTalkArticleFullSyncFetcher:
         connection: ChannelTalkArticleFullSyncConnection,
     ) -> ChannelTalkDocumentsApiClient:
         return ChannelTalkDocumentsApiClient(
-            access_key=connection.access_key,
-            access_secret=connection.access_secret,
+            transport=ChannelTalkDocumentsHttpClient(
+                access_key=connection.access_key,
+                access_secret=connection.access_secret,
+                space_id=connection.space_id,
+            ),
         )

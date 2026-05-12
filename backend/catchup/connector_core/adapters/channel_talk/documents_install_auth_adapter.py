@@ -11,6 +11,9 @@ from fastapi.concurrency import run_in_threadpool
 from catchup.connectors.channel_talk.document_space.client import (
     ChannelTalkDocumentsApiClient,
 )
+from catchup.connectors.channel_talk.document_space.http_client import (
+    ChannelTalkDocumentsHttpClient,
+)
 from catchup.connectors.channel_talk.exceptions import ChannelTalkConflictError
 from catchup.connectors.channel_talk.exceptions import ChannelTalkError
 from catchup.connectors.channel_talk.exceptions import ChannelTalkPersistenceError
@@ -83,8 +86,10 @@ class ChannelTalkDocumentInstallAuthAdapter:
         request: ChannelTalkDocumentConnectRequest,
     ) -> ChannelTalkDocumentSpace:
         client = self.client or ChannelTalkDocumentsApiClient(
-            access_key=request.access_key,
-            access_secret=request.access_secret,
+            transport=ChannelTalkDocumentsHttpClient(
+                access_key=request.access_key,
+                access_secret=request.access_secret,
+            ),
         )
         return await client.get_current_space()
 
