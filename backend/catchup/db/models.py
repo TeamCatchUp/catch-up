@@ -2286,6 +2286,7 @@ class SyncEvent(Base):
             "publish_status",
             "requested_at",
         ),
+        Index("idx_sync_events_stream_message_id", "stream_message_id"),
     )
 
 
@@ -2446,6 +2447,10 @@ class IncrementalStreamOutbox(Base):
             "connector",
             "status",
             "created_at",
+        ),
+        Index(
+            "idx_incremental_stream_outbox_stream_message_id",
+            "stream_message_id",
         ),
     )
 
