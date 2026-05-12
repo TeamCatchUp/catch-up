@@ -23,6 +23,9 @@ from catchup.connectors.channel_talk.document_space.client import (
 from catchup.connectors.channel_talk.document_space.client import (
     ChannelTalkDocumentsApiClient,
 )
+from catchup.connectors.channel_talk.document_space.http_client import (
+    ChannelTalkDocumentsHttpClient,
+)
 from catchup.connectors.channel_talk.schemas.document_article import (
     ChannelTalkDocumentArticle,
 )
@@ -119,22 +122,23 @@ class ChannelTalkArticleFullSyncFetcher:
             raise ValueError("states must include at least one state")
         if checkpoint_state is not None and checkpoint_state not in states:
             raise ValueError("checkpoint_state must be included in states")
+
         client = self._client_factory(connection)
         fetched: list[ChannelTalkFetchedArticle] = []
         fetched_pages = 0
-        effective_checkpoint_state = checkpoint_state
-        if effective_checkpoint_state is None and checkpoint_cursor is not None:
-            effective_checkpoint_state = states[0]
-        resume_from_checkpoint = effective_checkpoint_state is not None
 
-        for state in states:
-            if resume_from_checkpoint and effective_checkpoint_state != state:
-                continue
+        effective_checkpoint_state = self._effective_checkpoint_state(
+            states=states,
+            checkpoint_state=checkpoint_state,
+            checkpoint_cursor=checkpoint_cursor,
+        )
+        states_to_fetch = self._states_from_checkpoint(
+            states=states,
+            checkpoint_state=effective_checkpoint_state,
+        )
 
-            next_cursor = (
-                checkpoint_cursor if effective_checkpoint_state == state else None
-            )
-            resume_from_checkpoint = False
+        for state_index, state in enumerate(states_to_fetch):
+            next_cursor = checkpoint_cursor if state_index == 0 else None
 
             while True:
                 page = await client.list_articles(
@@ -146,49 +150,30 @@ class ChannelTalkArticleFullSyncFetcher:
                 )
                 fetched_pages += 1
 
-                article_ids = tuple(article.article_id for article in page.articles)
-                details_by_id = await self._batch_get_article_details(
+                page_bundles = await self._fetch_page_bundles(
                     client=client,
-                    article_ids=article_ids,
                     language=language,
-                )
-                published_revisions_by_id = await self._fetch_published_revisions(
-                    client=client,
+                    state=state,
                     articles=page.articles,
-                    details_by_id=details_by_id,
-                )
-                page_bundles = tuple(
-                    ChannelTalkFetchedArticle(
-                        language=language,
-                        state=state,
-                        list_item=article,
-                        detail=details_by_id.get(article.article_id),
-                        published_revision=published_revisions_by_id.get(
-                            article.article_id
-                        ),
-                    )
-                    for article in page.articles
                 )
                 fetched.extend(
                     bundle
                     for bundle in page_bundles
-                    if self._is_in_sync_window(bundle=bundle, sync_window=sync_window)
+                    if self._is_in_sync_window(
+                        bundle=bundle,
+                        sync_window=sync_window,
+                    )
                 )
 
-                if self._reached_page_budget(fetched_pages):
-                    if page.next_page_token is not None:
-                        return self._build_result(
-                            fetched=fetched,
-                            next_checkpoint_state=state,
-                            next_checkpoint_cursor=page.next_page_token,
-                        )
-
-                    next_state = self._next_state(states=states, current=state)
-                    if next_state is not None:
-                        return self._build_result(
-                            fetched=fetched,
-                            next_checkpoint_state=next_state,
-                        )
+                budgeted_result = self._build_page_budget_result(
+                    fetched=fetched,
+                    fetched_pages=fetched_pages,
+                    page=page,
+                    states=states,
+                    state=state,
+                )
+                if budgeted_result is not None:
+                    return budgeted_result
 
                 if page.next_page_token is None:
                     break
@@ -210,10 +195,12 @@ class ChannelTalkArticleFullSyncFetcher:
         )
         source = detail.article
         published_revision = None
-        if source.published_revision_id is not None:
+        # 현재 article 자체가 published revision이면 추가 revision API 호출 없이 detail을 사용한다.
+        published_revision_id = self._published_revision_id_to_fetch(source)
+        if published_revision_id is not None:
             published_revision = await client.get_article_revision(
                 article_id=article_id,
-                revision_id=source.published_revision_id,
+                revision_id=published_revision_id,
             )
         return ChannelTalkFetchedArticle(
             language=language,
@@ -221,6 +208,63 @@ class ChannelTalkArticleFullSyncFetcher:
             list_item=source,
             detail=detail,
             published_revision=published_revision,
+        )
+
+    @staticmethod
+    def _effective_checkpoint_state(
+        *,
+        states: tuple[ChannelTalkDocumentArticleState, ...],
+        checkpoint_state: ChannelTalkDocumentArticleState | None,
+        checkpoint_cursor: str | None,
+    ) -> ChannelTalkDocumentArticleState | None:
+        if checkpoint_state is not None:
+            return checkpoint_state
+        if checkpoint_cursor is not None:
+            return states[0]
+        return None
+
+    @staticmethod
+    def _states_from_checkpoint(
+        *,
+        states: tuple[ChannelTalkDocumentArticleState, ...],
+        checkpoint_state: ChannelTalkDocumentArticleState | None,
+    ) -> tuple[ChannelTalkDocumentArticleState, ...]:
+        if checkpoint_state is None:
+            return states
+        return states[states.index(checkpoint_state) :]
+
+    async def _fetch_page_bundles(
+        self,
+        *,
+        client: ChannelTalkArticleClient,
+        language: str,
+        state: ChannelTalkDocumentArticleState,
+        articles: list[ChannelTalkDocumentArticle],
+    ) -> tuple[ChannelTalkFetchedArticle, ...]:
+        article_ids = tuple(article.article_id for article in articles)
+        # 호출 순서:
+        # 1. list_articles 결과의 id들을 batch_get_articles로 보강한다.
+        # 2. batch 응답만으로 published content를 확정할 수 없는 문서만
+        #    get_article_revision으로 published revision을 가져온다.
+        details_by_id = await self._batch_get_article_details(
+            client=client,
+            article_ids=article_ids,
+            language=language,
+        )
+        published_revisions_by_id = await self._fetch_published_revisions(
+            client=client,
+            articles=articles,
+            details_by_id=details_by_id,
+        )
+        return tuple(
+            ChannelTalkFetchedArticle(
+                language=language,
+                state=state,
+                list_item=article,
+                detail=details_by_id.get(article.article_id),
+                published_revision=published_revisions_by_id.get(article.article_id),
+            )
+            for article in articles
         )
 
     async def _fetch_published_revisions(
@@ -233,14 +277,30 @@ class ChannelTalkArticleFullSyncFetcher:
         revisions: dict[str, ChannelTalkDocumentArticleRevisionView] = {}
         for article in articles:
             detail = details_by_id.get(article.article_id)
+            # batch detail이 있으면 그 값을 기준으로 판단한다.
             source = detail.article if detail is not None else article
-            if source.published_revision_id is None:
+            published_revision_id = self._published_revision_id_to_fetch(source)
+            if published_revision_id is None:
                 continue
             revisions[article.article_id] = await client.get_article_revision(
                 article_id=article.article_id,
-                revision_id=source.published_revision_id,
+                revision_id=published_revision_id,
             )
         return revisions
+
+    @staticmethod
+    def _published_revision_id_to_fetch(
+        source: ChannelTalkDocumentArticle,
+    ) -> str | None:
+        published_revision_id = source.published_revision_id
+        if published_revision_id is None:
+            return None
+        if (
+            source.state == ChannelTalkDocumentArticleState.PUBLISHED
+            and source.current_revision_id == published_revision_id
+        ):
+            return None
+        return published_revision_id
 
     async def _batch_get_article_details(
         self,
@@ -305,6 +365,33 @@ class ChannelTalkArticleFullSyncFetcher:
             and fetched_pages >= self._max_article_pages_per_run
         )
 
+    def _build_page_budget_result(
+        self,
+        *,
+        fetched: list[ChannelTalkFetchedArticle],
+        fetched_pages: int,
+        page: ChannelTalkDocumentArticlePage,
+        states: tuple[ChannelTalkDocumentArticleState, ...],
+        state: ChannelTalkDocumentArticleState,
+    ) -> ChannelTalkFetchedArticlesResult | None:
+        if not self._reached_page_budget(fetched_pages):
+            return None
+
+        if page.next_page_token is not None:
+            return self._build_result(
+                fetched=fetched,
+                next_checkpoint_state=state,
+                next_checkpoint_cursor=page.next_page_token,
+            )
+
+        next_state = self._next_state(states=states, current=state)
+        if next_state is None:
+            return None
+        return self._build_result(
+            fetched=fetched,
+            next_checkpoint_state=next_state,
+        )
+
     @staticmethod
     def _build_result(
         *,
@@ -348,6 +435,9 @@ class ChannelTalkArticleFullSyncFetcher:
         connection: ChannelTalkArticleFullSyncConnection,
     ) -> ChannelTalkDocumentsApiClient:
         return ChannelTalkDocumentsApiClient(
-            access_key=connection.access_key,
-            access_secret=connection.access_secret,
+            transport=ChannelTalkDocumentsHttpClient(
+                access_key=connection.access_key,
+                access_secret=connection.access_secret,
+                space_id=connection.space_id,
+            ),
         )

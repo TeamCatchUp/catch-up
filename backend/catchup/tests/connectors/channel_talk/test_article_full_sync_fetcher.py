@@ -68,6 +68,7 @@ def _article(
     updated_at: datetime | None = None,
     published_at: datetime | None = None,
     published_revision_id: str | None = None,
+    current_revision_id: str | None = None,
 ) -> ChannelTalkDocumentArticle:
     return ChannelTalkDocumentArticle(
         article_id=article_id,
@@ -76,6 +77,7 @@ def _article(
         published_at=published_at,
         state=state,
         published_revision_id=published_revision_id,
+        current_revision_id=current_revision_id,
         title=f"Article {article_id}",
     )
 
@@ -281,6 +283,98 @@ class ChannelTalkArticleFullSyncFetcherTests(IsolatedAsyncioTestCase):
             result.bundles[0].published_revision.revision.title,
             "Published article-1",
         )
+
+    async def test_fetch_articles_skips_revision_when_batch_article_is_published_source(
+        self,
+    ) -> None:
+        listed = _article(
+            "article-1",
+            state=ChannelTalkDocumentArticleState.PUBLISHED,
+            updated_at=datetime(2026, 4, 21, 10, 0, tzinfo=timezone.utc),
+            published_revision_id="revision-published-1",
+            current_revision_id="revision-published-1",
+        )
+        detailed = listed.model_copy(update={"title": "Published detail"})
+        client = _FakeDocumentsClient(
+            pages=[ChannelTalkDocumentArticlePage(articles=[listed])],
+            details_by_id={"article-1": detailed},
+        )
+        fetcher = ChannelTalkArticleFullSyncFetcher(
+            client_factory=lambda _connection: client,
+        )
+
+        result = await fetcher.fetch_articles(
+            connection=_connection(),
+            language="ko",
+            sync_window=_window(),
+        )
+
+        self.assertEqual(client.revision_calls, [])
+        self.assertIsNone(result.bundles[0].published_revision)
+        self.assertEqual(result.bundles[0].detail.article.title, "Published detail")
+
+    async def test_fetch_articles_fetches_only_mismatched_published_revisions(
+        self,
+    ) -> None:
+        current_published = _article(
+            "published-current",
+            state=ChannelTalkDocumentArticleState.PUBLISHED,
+            updated_at=datetime(2026, 4, 21, 10, 0, tzinfo=timezone.utc),
+            published_revision_id="revision-current-published",
+            current_revision_id="revision-current-published",
+        )
+        draft_with_published = _article(
+            "draft-current",
+            state=ChannelTalkDocumentArticleState.PUBLISHED,
+            updated_at=datetime(2026, 4, 21, 11, 0, tzinfo=timezone.utc),
+            published_revision_id="revision-published-old",
+        )
+        draft_detail = draft_with_published.model_copy(
+            update={
+                "state": ChannelTalkDocumentArticleState.DRAFT,
+                "current_revision_id": "revision-draft-current",
+            }
+        )
+        no_published = _article(
+            "no-published",
+            state=ChannelTalkDocumentArticleState.DRAFT,
+            updated_at=datetime(2026, 4, 21, 12, 0, tzinfo=timezone.utc),
+        )
+        client = _FakeDocumentsClient(
+            pages=[
+                ChannelTalkDocumentArticlePage(
+                    articles=[current_published, draft_with_published, no_published]
+                )
+            ],
+            details_by_id={
+                "published-current": current_published,
+                "draft-current": draft_detail,
+                "no-published": no_published,
+            },
+            revisions_by_key={
+                ("draft-current", "revision-published-old"): _revision(
+                    "draft-current",
+                    revision_id="revision-published-old",
+                ),
+            },
+        )
+        fetcher = ChannelTalkArticleFullSyncFetcher(
+            client_factory=lambda _connection: client,
+        )
+
+        result = await fetcher.fetch_articles(
+            connection=_connection(),
+            language="ko",
+            sync_window=_window(),
+        )
+
+        self.assertEqual(
+            client.revision_calls,
+            [("draft-current", "revision-published-old")],
+        )
+        self.assertIsNone(result.bundles[0].published_revision)
+        self.assertIsNotNone(result.bundles[1].published_revision)
+        self.assertIsNone(result.bundles[2].published_revision)
 
     async def test_fetch_articles_batches_list_result_ids_for_details(self) -> None:
         listed = _article(

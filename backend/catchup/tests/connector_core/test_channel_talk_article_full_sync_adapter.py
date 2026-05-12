@@ -91,6 +91,8 @@ def _article_view(
     title: str = "Refund policy",
     slug: str = "refund-policy",
     website_url: str | None = "https://docs.example.com/refund",
+    published_revision_id: str | None = "published-revision-1",
+    current_revision_id: str | None = "current-revision-1",
 ) -> ChannelTalkDocumentArticleView:
     article_payload = {
         "id": article_id,
@@ -109,9 +111,11 @@ def _article_view(
         "createdAt": "2026-04-21T09:00:00Z",
         "updatedAt": "2026-04-21T09:30:00Z",
         "publishedAt": "2026-04-21T10:00:00Z",
-        "publishedRevisionId": "published-revision-1",
-        "currentRevisionId": "current-revision-1",
     }
+    if published_revision_id is not None:
+        article_payload["publishedRevisionId"] = published_revision_id
+    if current_revision_id is not None:
+        article_payload["currentRevisionId"] = current_revision_id
     if website_url is not None:
         article_payload["website"] = {"url": website_url}
     if body_html is not None:
@@ -328,6 +332,52 @@ class ChannelTalkArticleFullSyncIngestionAdapterTests(IsolatedAsyncioTestCase):
                 "channel_talk:document_article:channel-123:space-123:ko:unpublished-1:chunk:",
                 "channel_talk:document_article:channel-123:space-123:ko:draft-1:chunk:",
             ),
+        )
+
+    async def test_transform_uses_batch_article_when_current_revision_is_published(
+        self,
+    ) -> None:
+        adapter = ChannelTalkArticleFullSyncIngestionAdapter()
+        fetched = ChannelTalkArticleFullSyncFetchResult(
+            channel_id="channel-123",
+            space_id="space-123",
+            language="ko",
+            bundles=(
+                _bundle(
+                    article_id="published-current-1",
+                    state=ChannelTalkDocumentArticleState.PUBLISHED,
+                    detail=_article_view(
+                        article_id="published-current-1",
+                        state=ChannelTalkDocumentArticleState.PUBLISHED,
+                        body_html="<h1>Published current</h1><p>Batch article body.</p>",
+                        published_revision_id="published-revision-1",
+                        current_revision_id="published-revision-1",
+                    ),
+                    published_revision=None,
+                ),
+            ),
+            fetched_count=1,
+            fetched_article_ids=("published-current-1",),
+        )
+
+        transformed = await adapter.transform(
+            execution=_execution(),
+            sync_window=_window(),
+            fetched=fetched,
+        )
+
+        self.assertEqual(len(transformed.documents), 1)
+        document = transformed.documents[0]
+        self.assertIn("Published current", document.page_content)
+        self.assertIn("Batch article body.", document.page_content)
+        article_core = document.storage_metadata["document_article_core"]
+        self.assertEqual(
+            article_core["publication"]["published_revision_id"],
+            "published-revision-1",
+        )
+        self.assertEqual(
+            article_core["publication"]["current_revision_id"],
+            "published-revision-1",
         )
 
     async def test_transform_splits_long_body_with_deterministic_chunk_ids(

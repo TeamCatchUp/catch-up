@@ -6,6 +6,9 @@ from collections.abc import Mapping
 from bs4 import BeautifulSoup
 
 from catchup.connectors.channel_talk.schemas.document_article import (
+    ChannelTalkDocumentArticle,
+)
+from catchup.connectors.channel_talk.schemas.document_article import (
     ChannelTalkDocumentArticleRevision,
 )
 
@@ -28,7 +31,7 @@ class ArticleContentNormalizer:
 
     def normalize_source_content(
         self,
-        source: ChannelTalkDocumentArticleRevision,
+        source: ChannelTalkDocumentArticle | ChannelTalkDocumentArticleRevision,
     ) -> str:
         # Source 우선순위: rich block body -> plain body -> body_html -> summary fallback.
         # 기존 API 응답 형태가 섞여 들어와도 downstream chunker는 하나의 text만 받는다.

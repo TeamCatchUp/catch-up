@@ -2,21 +2,11 @@ from __future__ import annotations
 
 from typing import Any
 
-import httpx
 import structlog
 
-from catchup.configs.config import settings
-from catchup.connectors.base.retry import parse_retry_after_header
-from catchup.connectors.channel_talk.exceptions import ChannelTalkAuthenticationError
-from catchup.connectors.channel_talk.exceptions import ChannelTalkRateLimitError
-from catchup.connectors.channel_talk.exceptions import ChannelTalkTimeoutError
-from catchup.connectors.channel_talk.exceptions import ChannelTalkUpstreamError
+from catchup.connectors.channel_talk.core.http_client import ChannelTalkCoreHttpClient
 from catchup.connectors.channel_talk.exceptions import ChannelTalkValidationError
 from catchup.connectors.channel_talk.http_helpers import build_since_limit_params
-from catchup.connectors.channel_talk.http_helpers import build_upstream_error_message
-from catchup.connectors.channel_talk.http_helpers import decode_response_json
-from catchup.connectors.channel_talk.http_helpers import extract_response_error_metadata
-from catchup.connectors.channel_talk.http_helpers import is_success_response
 from catchup.connectors.channel_talk.http_helpers import parse_channel_talk_payload
 from catchup.connectors.channel_talk.schemas.channel_metadata import (
     ChannelTalkCurrentChannel,
@@ -35,7 +25,6 @@ from catchup.connectors.channel_talk.schemas.user_chat import ChannelTalkUserCha
 from catchup.connectors.channel_talk.schemas.user_chat_message import (
     ChannelTalkUserChatMessagePage,
 )
-from catchup.utils.client import get_global_async_client
 
 logger = structlog.get_logger(__name__)
 
@@ -44,25 +33,16 @@ class ChannelTalkCoreApiClient:
     def __init__(
         self,
         *,
-        base_url: str | None = None,
-        timeout_seconds: float | None = None,
-        http_client: httpx.AsyncClient | None = None,
+        transport: ChannelTalkCoreHttpClient | None = None,
     ) -> None:
-        default_base_url = getattr(
-            settings, "CHANNEL_TALK_API_URL", "https://api.channel.io"
-        )
-        default_timeout = getattr(settings, "CHANNEL_TALK_API_TIMEOUT_SECONDS", 10.0)
-
-        self.base_url = str(base_url or default_base_url).rstrip("/")
-        self.timeout_seconds = float(timeout_seconds or default_timeout)
-        self._http_client = http_client or get_global_async_client()
+        self._transport = transport or ChannelTalkCoreHttpClient()
 
     async def get_current_channel(
         self,
         access_key: str,
         access_secret: str,
     ) -> ChannelTalkCurrentChannel:
-        payload = await self._request(
+        payload = await self._transport.request_json(
             method="GET",
             path="/open/v5/channel",
             headers=self._build_headers(
@@ -83,10 +63,11 @@ class ChannelTalkCoreApiClient:
         access_key: str,
         access_secret: str,
         *,
+        channel_id: str | None = None,
         since: str | None = None,
         limit: int = 500,
     ) -> ChannelTalkManagerMetadataPage:
-        payload = await self._request(
+        payload = await self._transport.request_json(
             method="GET",
             path="/open/v5/managers",
             headers=self._build_headers(
@@ -94,6 +75,7 @@ class ChannelTalkCoreApiClient:
                 access_secret=access_secret,
             ),
             params=build_since_limit_params(since=since, limit=limit),
+            channel_id=channel_id,
         )
         return parse_channel_talk_payload(
             payload,
@@ -111,7 +93,7 @@ class ChannelTalkCoreApiClient:
         since: str | None = None,
         limit: int = 500,
     ) -> ChannelTalkGroupMetadataPage:
-        payload = await self._request(
+        payload = await self._transport.request_json(
             method="GET",
             path="/open/v5/groups",
             headers=self._build_headers(
@@ -133,13 +115,14 @@ class ChannelTalkCoreApiClient:
         access_key: str,
         access_secret: str,
         *,
+        channel_id: str | None = None,
         state: ChannelTalkUserChatState | str,
         since: str | None = None,
         limit: int = 500,
         sort_order: str | None = "desc",
     ) -> ChannelTalkUserChatListPage:
         resolved_state = ChannelTalkUserChatState(str(state).strip().lower())
-        response = await self._send_request(
+        response = await self._transport.send(
             method="GET",
             path="/open/v5/user-chats",
             headers=self._build_headers(
@@ -152,8 +135,9 @@ class ChannelTalkCoreApiClient:
                 limit=limit,
                 sort_order=sort_order,
             ),
+            channel_id=channel_id,
         )
-        payload = self._decode_response(response)
+        payload = self._transport.decode_response(response)
         return parse_channel_talk_payload(
             payload,
             parser=lambda raw: ChannelTalkUserChatListPage.from_api_payload(
@@ -171,16 +155,18 @@ class ChannelTalkCoreApiClient:
         access_key: str,
         access_secret: str,
         *,
+        channel_id: str | None = None,
         user_chat_id: str,
     ) -> ChannelTalkUserChatDetail:
         resolved_user_chat_id = _require_user_chat_id(user_chat_id)
-        payload = await self._request(
+        payload = await self._transport.request_json(
             method="GET",
             path=f"/open/v5/user-chats/{resolved_user_chat_id}",
             headers=self._build_headers(
                 access_key=access_key,
                 access_secret=access_secret,
             ),
+            channel_id=channel_id,
         )
         return parse_channel_talk_payload(
             payload,
@@ -198,13 +184,14 @@ class ChannelTalkCoreApiClient:
         access_key: str,
         access_secret: str,
         *,
+        channel_id: str | None = None,
         user_chat_id: str,
         since: str | None = None,
         limit: int = 500,
         sort_order: str | None = "desc",
     ) -> ChannelTalkUserChatMessagePage:
         resolved_user_chat_id = _require_user_chat_id(user_chat_id)
-        response = await self._send_request(
+        response = await self._transport.send(
             method="GET",
             path=f"/open/v5/user-chats/{resolved_user_chat_id}/messages",
             headers=self._build_headers(
@@ -216,8 +203,9 @@ class ChannelTalkCoreApiClient:
                 limit=limit,
                 sort_order=sort_order,
             ),
+            channel_id=channel_id,
         )
-        payload = self._decode_response(response)
+        payload = self._transport.decode_response(response)
         return parse_channel_talk_payload(
             payload,
             parser=lambda raw: ChannelTalkUserChatMessagePage.from_api_payload(
@@ -276,99 +264,6 @@ class ChannelTalkCoreApiClient:
         )
         params["sortOrder"] = _normalize_sort_order(sort_order)
         return params
-
-    async def _request(
-        self,
-        *,
-        method: str,
-        path: str,
-        headers: dict[str, str],
-        params: dict[str, Any] | None = None,
-    ) -> Any:
-        response = await self._send_request(
-            method=method,
-            path=path,
-            headers=headers,
-            params=params,
-        )
-
-        return self._decode_response(response)
-
-    async def _send_request(
-        self,
-        *,
-        method: str,
-        path: str,
-        headers: dict[str, str],
-        params: dict[str, Any] | None = None,
-    ) -> httpx.Response:
-        url = f"{self.base_url}{path}"
-        try:
-            response = await self._http_client.request(
-                method,
-                url,
-                headers=headers,
-                params=params,
-                timeout=self.timeout_seconds,
-            )
-        except httpx.TimeoutException as exc:
-            logger.warning("channel_talk_request_timed_out", url=url)
-            raise ChannelTalkTimeoutError("Channel Talk API request timed out") from exc
-        except httpx.HTTPError as exc:
-            logger.exception("channel_talk_request_failed", url=url)
-            raise ChannelTalkUpstreamError(
-                "Failed to reach Channel Talk API",
-                metadata={"reason": str(exc)},
-            ) from exc
-
-        return response
-
-    def _decode_response(self, response: httpx.Response) -> Any:
-        if is_success_response(response):
-            return decode_response_json(
-                response,
-                error_message="Channel Talk returned a non-JSON response",
-            )
-
-        raise self._build_response_error(response)
-
-    @staticmethod
-    def _build_response_error(response: httpx.Response) -> Exception:
-        metadata = extract_response_error_metadata(response)
-        status_code = response.status_code
-        if status_code in (401, 403):
-            return ChannelTalkAuthenticationError(
-                "Channel Talk credentials are invalid or unauthorized",
-                metadata=metadata,
-            )
-        if status_code == 429:
-            return ChannelTalkRateLimitError(
-                retry_after=parse_retry_after_header(
-                    response.headers.get("Retry-After"),
-                    default=60,
-                ),
-                metadata=metadata,
-            )
-        if status_code == 400:
-            return ChannelTalkValidationError(
-                "Channel Talk rejected the request",
-                metadata=metadata,
-            )
-        if status_code >= 500:
-            return ChannelTalkUpstreamError(
-                build_upstream_error_message(
-                    service_name="Channel Talk API",
-                    status_code=status_code,
-                    metadata=metadata,
-                ),
-                status_code=status_code,
-                metadata=metadata,
-            )
-        return ChannelTalkUpstreamError(
-            "Channel Talk API request failed",
-            status_code=status_code,
-            metadata=metadata,
-        )
 
 
 def _require_user_chat_id(value: str) -> str:
