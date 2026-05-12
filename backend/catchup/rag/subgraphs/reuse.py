@@ -18,26 +18,26 @@ def build_reuse_subgraph(llm_small, llm_large_stream, rerank_service):
     rerank: rewritten_query 기준 재정렬 → RERANK_TOTAL_K로 bound
     """
     
-    from catchup.rag.graph import TIMEOUT_RETRY_POLICY
+    from catchup.rag.graph import BASE_RETRY_POLICY
 
     graph = StateGraph(AgentState)
 
     graph.add_node(
         "rewrite",
         partial(rewrite_node, llm=llm_small, timeout=10.0),
-        retry=TIMEOUT_RETRY_POLICY,
+        retry=BASE_RETRY_POLICY,
     )
     graph.add_node("prepare_cache", prepare_cache_node)
     graph.add_node(
         "rerank",
         partial(rerank_node, rerank_service=rerank_service),
-        retry=TIMEOUT_RETRY_POLICY,
+        retry=BASE_RETRY_POLICY,
     )
     graph.add_node(
         "generate_final_answer",
         partial(generate_final_answer_node, llm=llm_large_stream),
         metadata={"tags": ["stream_target", "has_citations"]},
-        retry=TIMEOUT_RETRY_POLICY,
+        retry=BASE_RETRY_POLICY,
     )
 
     graph.set_entry_point("rewrite")

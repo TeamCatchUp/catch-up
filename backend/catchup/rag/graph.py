@@ -29,9 +29,9 @@ from catchup.rag.subgraphs import build_standard_react_subgraph
 
 logger = logging.getLogger(__name__)
 
-# Timeout 기반 재시도 정책
+# 기본 재시도 정책
 # max_attempt는 최초 시도 횟수를 포함.
-TIMEOUT_RETRY_POLICY = RetryPolicy(
+BASE_RETRY_POLICY = RetryPolicy(
     retry_on=RETRYABLE_ERRORS,
     max_attempts=3,
     initial_interval=1.0,
@@ -39,7 +39,7 @@ TIMEOUT_RETRY_POLICY = RetryPolicy(
 )
 
 # Agent는 내부 루프가 길어 재시도 횟수를 제한
-AGENT_TIMEOUT_RETRY_POLICY = RetryPolicy(
+AGENT_RETRY_POLICY = RetryPolicy(
     retry_on=RETRYABLE_ERRORS,
     max_attempts=2,
     initial_interval=1.0,
@@ -147,13 +147,13 @@ def get_compiled_graph(
     workflow.add_node(
         "supervisor",
         partial(supervisor_node, llm=llm_large, timeout=15.0),
-        retry=TIMEOUT_RETRY_POLICY,
+        retry=BASE_RETRY_POLICY,
     )
     workflow.add_node(
         "direct_answer",
         partial(direct_answer_node, llm=llm_small_stream, timeout=30.0),
         metadata={"tags": ["stream_target"]},
-        retry=TIMEOUT_RETRY_POLICY,
+        retry=BASE_RETRY_POLICY,
     )
     workflow.add_node(
         "clarify",
