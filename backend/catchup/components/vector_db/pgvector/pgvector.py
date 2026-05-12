@@ -133,7 +133,6 @@ class PGBigmRetriever(BaseRetriever):
             params[p_name] = token
 
             exact_match_scores.append(f"(CASE WHEN LOWER(e.cmetadata ->> 'contextual_content') = LOWER(:{p_name}) THEN 1.0 ELSE 0.0 END)")
-            sim_scores.append(f"bigm_similarity(e.cmetadata ->> 'contextual_content', :{p_name})")
             if search_mode == "exact":
                 token_filters.append(
                     f"lower(e.cmetadata ->> 'contextual_content') LIKE lower(likequery(:{p_name}))"
@@ -142,6 +141,7 @@ class PGBigmRetriever(BaseRetriever):
                 token_filters.append(
                     f"lower(e.cmetadata ->> 'contextual_content') =% lower(:{p_name})"
                 )
+                sim_scores.append(f"bigm_similarity(e.cmetadata ->> 'contextual_content', :{p_name})")
 
         if token_filters:
             filter_clauses.append(f"({' AND '.join(token_filters)})")
