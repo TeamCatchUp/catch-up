@@ -1,5 +1,4 @@
 import asyncio
-import re
 import time
 import uuid
 from typing import Any
@@ -148,6 +147,8 @@ class ChatService:
                 # 비용 변수
                 "token_breakdown": {},
                 "rerank_count": 0,
+                # Slack 스레드 맥락 (매 턴 갱신, Slack Bot 요청이 아니면 None으로 이전 값 덮어씀)
+                "slack_thread_context": additional_context,
             }
 
             processor = ChatStreamProcessor(
@@ -348,25 +349,11 @@ class ChatService:
             and len(state_values["messages"]) > 0
         )
 
-        if has_history_in_graph:
+        if has_history_in_graph or additional_context is not None:
             logger.info(
                 "state_retained", context="state_not_empty", session_id=str(session_id)
             )
-            input_messages = self._build_current_turn_messages(
-                query=query,
-                additional_context=additional_context,
-            )
-
-        elif additional_context is not None:
-            logger.info(
-                "state_injected_from_context",
-                context="additional_context_provided",
-                session_id=str(session_id),
-            )
-            input_messages = self._build_current_turn_messages(
-                query=query,
-                additional_context=additional_context,
-            )
+            input_messages = self._build_current_turn_messages(query=query)
 
         else:
             logger.info(
@@ -388,13 +375,8 @@ class ChatService:
         self,
         *,
         query: str,
-        additional_context: str | None,
     ) -> list[BaseMessage]:
-        messages: list[BaseMessage] = []
-        if additional_context is not None:
-            messages.append(HumanMessage(content=additional_context))
-        messages.append(HumanMessage(content=query))
-        return messages
+        return [HumanMessage(content=query)]
 
     async def _ensure_chat_room(
         self,

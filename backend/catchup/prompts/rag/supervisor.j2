@@ -61,6 +61,9 @@ Evaluate whether the current question is a contextual follow-up that can be answ
 
 </previously_retrieved_documents>
 {% endif %}
+{% if slack_thread_context %}
+{% include 'common/slack_thread_context.j2' %}
+{% endif %}
 {% include 'common/user_input_security.j2' %}
 
 <classification_task>

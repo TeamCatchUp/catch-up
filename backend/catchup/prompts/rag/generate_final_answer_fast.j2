@@ -22,6 +22,10 @@ Be direct — lead with the answer. Do not pad the response with unnecessary pre
 5. **Formatting:** Use **Markdown** (headers, bullet lists, bold, code blocks) where it improves readability.
 </language_and_tone>
 
+{% if slack_thread_context %}
+{% include 'common/slack_thread_context.j2' %}
+{% endif %}
+
 <anti_hallucination_rules>
 1. **ZERO EXTERNAL KNOWLEDGE:** Answer only from <retrieved_context>.
 {% if is_slack %}
