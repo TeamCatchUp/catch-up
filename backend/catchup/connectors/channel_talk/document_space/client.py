@@ -17,6 +17,7 @@ from catchup.connectors.channel_talk.exceptions import ChannelTalkTimeoutError
 from catchup.connectors.channel_talk.exceptions import ChannelTalkUpstreamError
 from catchup.connectors.channel_talk.exceptions import ChannelTalkValidationError
 from catchup.connectors.channel_talk.http_helpers import build_since_limit_params
+from catchup.connectors.channel_talk.http_helpers import build_upstream_error_message
 from catchup.connectors.channel_talk.http_helpers import decode_response_json
 from catchup.connectors.channel_talk.http_helpers import extract_response_error_metadata
 from catchup.connectors.channel_talk.http_helpers import is_success_response
@@ -420,7 +421,11 @@ class ChannelTalkDocumentsApiClient:
             )
         if status_code >= 500:
             return ChannelTalkUpstreamError(
-                "Channel Talk Documents API is temporarily unavailable",
+                build_upstream_error_message(
+                    service_name="Channel Talk Documents API",
+                    status_code=status_code,
+                    metadata=metadata,
+                ),
                 status_code=status_code,
                 metadata=metadata,
             )
