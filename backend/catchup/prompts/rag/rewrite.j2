@@ -62,6 +62,14 @@ User: SSO 연동 중에 Keycloak 에러 나네.
    << history >>
    </chat_history>
 
+   {% if slack_thread_context %}
+   <slack_thread_context>
+   The following Slack thread messages preceded the user's question.
+   Use this to resolve any references to people, topics, or discussions not found in the chat history above.
+   << slack_thread_context >>
+   </slack_thread_context>
+   {% endif %}
+
    {% if feedback %}
    <previous_feedback>
    << feedback >>

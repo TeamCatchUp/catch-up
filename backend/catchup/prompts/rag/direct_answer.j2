@@ -13,6 +13,9 @@ When retrieval is needed, guide the user to re-ask with specific keywords.
 {% include 'common/global_context.j2' %}
 </global_context>
 
+{% if slack_thread_context %}
+{% include 'common/slack_thread_context.j2' %}
+{% endif %}
 {% include 'common/user_input_security.j2' %}
 
 <response_guidelines>

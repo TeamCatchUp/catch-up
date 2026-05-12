@@ -30,11 +30,13 @@ async def generate_vector_queries_node(
     messages = state.get("messages", [])
     recent_history = get_conversation_history(messages)[-4:]  # 직전 2턴
     recent_history_text = get_formatted_history_text(recent_history) if recent_history else ""
+    slack_thread_context = state.get("slack_thread_context")
 
     prompt = prompt_loader.get_prompt(
         "rag/generate_vector_queries",
         query=rewritten_query,
         recent_history=recent_history_text,
+        slack_thread_context=slack_thread_context,
         **global_context,
     )
     token_usages = {"token_breakdown": {}}
