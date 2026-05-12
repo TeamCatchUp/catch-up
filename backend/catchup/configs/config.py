@@ -236,8 +236,9 @@ class Settings(BaseSettings):
     SLACK_API_RATE_LIMIT_WINDOW_SECONDS: int = 60
     SLACK_API_MAX_WAIT_SECONDS_PER_CALL: int = 900
 
-    # Channel Talk Core API Rate Limit Control
+    # Channel Talk API Rate Limit Control
     CHANNEL_TALK_CORE_API_RPS_LIMIT: float = 8.0
+    CHANNEL_TALK_DOCUMENTS_API_RPS_LIMIT: float = 8.0
 
     # GitHub Sync Settings
     GITHUB_SYNC_MAX_CONCURRENT_REQUESTS: int = 10  # 동시 요청 수 (5,000 req/hour 제한)
