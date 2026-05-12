@@ -4,6 +4,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from catchup.db.models import User
 from catchup.rag.schemas.structures import VectorDbSearchQuery
 
 
@@ -24,6 +25,19 @@ def _make_planner_state(planned: VectorDbSearchQuery, keyword: str = "q") -> dic
         "last_planned_query": keyword,
         "planned_search": planned,
     }
+
+
+def _make_user(user_id: int = 1) -> MagicMock:
+    user = MagicMock(spec=User)
+    user.id = user_id
+    user.name = "홍길동"
+    user.department = "개발팀"
+    return user
+
+
+@pytest.fixture
+def mock_user():
+    return _make_user()
 
 
 @pytest.fixture
@@ -50,7 +64,7 @@ def service(mock_planner):
 
 
 @pytest.mark.asyncio
-async def test_search_uses_planned_query(service, mock_planner, mock_vector_db):
+async def test_search_uses_planned_query(service, mock_planner, mock_vector_db, mock_user):
     """hybrid_search에 planned_search.query와 keyword_tokens가 전달된다."""
     planned = _make_planned_search(
         query="English optimized query", keyword_tokens=["MyClass"]
@@ -58,7 +72,7 @@ async def test_search_uses_planned_query(service, mock_planner, mock_vector_db):
     mock_planner.ainvoke.return_value = _make_planner_state(planned, "Korean query")
 
     await service.search(
-        user_id=1,
+        user=mock_user,
         keyword="Korean query",
         limit=10,
         offset=0,
@@ -79,7 +93,7 @@ async def test_search_thread_id_uses_user_id(service, mock_planner, mock_vector_
     mock_planner.ainvoke.return_value = _make_planner_state(_make_planned_search())
 
     await service.search(
-        user_id=99,
+        user=_make_user(user_id=99),
         keyword="q",
         limit=20,
         offset=0,
@@ -92,7 +106,7 @@ async def test_search_thread_id_uses_user_id(service, mock_planner, mock_vector_
 
 
 @pytest.mark.asyncio
-async def test_search_returns_base_sources(service, mock_planner, mock_vector_db):
+async def test_search_returns_base_sources(service, mock_planner, mock_vector_db, mock_user):
     """docs를 BaseSource 리스트로 변환해 반환한다."""
     from langchain_core.documents import Document
 
@@ -111,7 +125,7 @@ async def test_search_returns_base_sources(service, mock_planner, mock_vector_db
     ]
 
     results = await service.search(
-        user_id=1,
+        user=mock_user,
         keyword="q",
         limit=20,
         offset=0,

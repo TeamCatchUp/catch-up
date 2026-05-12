@@ -70,7 +70,7 @@ def test_hybrid_search_endpoint(
     assert data["results"][0]["title"] == "Title"
 
     mock_search_service.search.assert_called_once_with(
-        user_id=42,
+        user=mock_current_user,
         keyword="query",
         limit=5,
         offset=10,
@@ -89,7 +89,7 @@ def test_search_delegates_to_service(
     )
 
     mock_search_service.search.assert_called_once_with(
-        user_id=42,
+        user=mock_current_user,
         keyword="테스트 쿼리",
         limit=10,
         offset=20,

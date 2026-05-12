@@ -33,7 +33,7 @@ async def hybrid_search(
     search_service: ManualSearchService = Depends(get_manual_search_service),
 ) -> ManualSearchResponse:
     results = await search_service.search(
-        user_id=current_user.id,
+        user=current_user,
         keyword=keyword,
         limit=limit,
         offset=offset,

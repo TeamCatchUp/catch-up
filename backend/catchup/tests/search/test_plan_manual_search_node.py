@@ -202,5 +202,5 @@ async def test_prompt_loader_called_with_correct_key():
         await plan_manual_search_node(state, llm=mock_llm)
 
     mock_loader.get_prompt.assert_called_once_with(
-        "search/plan_manual_search_node", query="내 검색어"
+        "search/plan_manual_search", query="내 검색어"
     )

@@ -5,6 +5,7 @@ The search engine runs two retrievers in parallel and merges results via Recipro
 - **Keyword retriever** uses your `keyword_tokens` field (pg_bigm substring matching, AND logic).
 
 Your job is to produce the best possible input for both retrievers from a user's raw search keyword.
+Speed is critical. Do not generate `reasoning` — always leave it as an empty string.
 </system_role_definition>
 
 {% include 'common/keyword_extraction_rules.j2' %}
@@ -29,7 +30,7 @@ Return a single JSON object with these fields:
 {
   "query": "Optimized semantic query in English only",
   "keyword_tokens": ["Tier1OrTier2Token"],
-  "reasoning": "One brief English sentence explaining the optimization"
+  "reasoning": ""
 }
 </output_schema>
 

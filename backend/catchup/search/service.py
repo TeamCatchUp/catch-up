@@ -1,12 +1,18 @@
 import structlog
 
 from catchup.components.vector_db.pgvector.pgvector import PGVectorService
+from catchup.configs.config import settings
 from catchup.db.models import SourceType
+from catchup.db.models import User
+from catchup.observability.langfuse.configs import get_langfuse_client
+from catchup.observability.langfuse.configs import get_observe
 from catchup.rag.checkpoint import get_langgraph_checkpointer
 from catchup.rag.schemas.sources import BaseSource
 from catchup.search.planner.graph import get_search_planner_graph
 
 logger = structlog.get_logger()
+
+observe = get_observe()
 
 
 class ManualSearchService:
@@ -19,9 +25,25 @@ class ManualSearchService:
             self._app = get_search_planner_graph(checkpointer)
         return self._app
 
+    def _setup_config(self, user_id: int) -> tuple[dict, dict]:
+        base_config = {"configurable": {"thread_id": f"search:{user_id}"}}
+        invoke_config = {**base_config}
+
+        if settings.ENABLE_LANGFUSE:
+            from langfuse.langchain import CallbackHandler
+
+            if client := get_langfuse_client():
+                trace_id = client.get_current_trace_id()
+                invoke_config["callbacks"] = [
+                    CallbackHandler(trace_context={"trace_id": trace_id})
+                ]
+
+        return base_config, invoke_config
+
+    @observe(name="manual-search")
     async def search(
         self,
-        user_id: int,
+        user: User,
         keyword: str,
         limit: int,
         offset: int,
@@ -29,12 +51,26 @@ class ManualSearchService:
         vector_db_service: PGVectorService,
     ) -> list[BaseSource]:
         planner = self._get_planner()
-        thread_id = f"search:{user_id}"
+        _, invoke_config = self._setup_config(user.id)
 
-        state = await planner.ainvoke(
-            {"original_query": keyword},
-            config={"configurable": {"thread_id": thread_id}},
-        )
+        if settings.ENABLE_LANGFUSE:
+            from langfuse import propagate_attributes
+
+            with propagate_attributes(
+                metadata={
+                    "user_id": str(user.id),
+                    "name": user.name,
+                    "department": user.department,
+                }
+            ):
+                state = await planner.ainvoke(
+                    {"original_query": keyword}, config=invoke_config
+                )
+        else:
+            state = await planner.ainvoke(
+                {"original_query": keyword}, config=invoke_config
+            )
+
         planned = state["planned_search"]
 
         docs = await vector_db_service.hybrid_search(
