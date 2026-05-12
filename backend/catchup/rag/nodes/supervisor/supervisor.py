@@ -48,10 +48,13 @@ async def supervisor_node(
     doc_cache = state.get("doc_cache", [])
     retrieved_docs_summary = build_docs_summary(doc_cache, max_docs=_MAX_DOCS_SUMMARY)
 
+    slack_thread_context = state.get("slack_thread_context")
+
     system_prompt = prompt_loader.get_prompt(
         "rag/supervisor",
         retrieved_docs_summary=retrieved_docs_summary,
         sources=list(SOURCE_METADATA.values()),
+        slack_thread_context=slack_thread_context,
         **global_context,
     )
     system_message = build_system_message(system_prompt)

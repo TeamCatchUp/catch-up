@@ -69,3 +69,5 @@ class AgentState(TypedDict):
     rerank_metadata: dict | None  # 리랭킹 결과 및 부스팅 이력 (Langfuse 로깅용)
 
     query_topic: str | None  # supervisor가 추출한 질문 주제 (3~5단어 한국어 명사구)
+
+    slack_thread_context: str | None  # Slack 스레드 맥락 (턴마다 갱신, 비Slack 요청은 None)
