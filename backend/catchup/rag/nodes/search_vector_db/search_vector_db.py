@@ -4,6 +4,7 @@ from langchain_core.documents import Document
 from catchup.components.vector_db.base import BaseVectorDbService
 from catchup.rag.nodes.utils import deduplicate_documents
 from catchup.rag.nodes.utils import log_node
+from catchup.rag.retryable import RETRYABLE_ERRORS
 from catchup.rag.schemas.structures import VectorDbSearchQuery
 from catchup.rag.state import AgentState
 
@@ -43,6 +44,8 @@ async def search_vector_db_node(
             weights=[0.6, 0.4],
             tool_filters=tool_filters,
         )
+    except RETRYABLE_ERRORS:
+        raise
     except Exception as e:
         logger.warning(
             "search_vector_db_node_failed",

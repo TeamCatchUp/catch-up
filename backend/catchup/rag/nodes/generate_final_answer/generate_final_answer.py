@@ -22,6 +22,7 @@ from catchup.rag.nodes.utils import scrub_orphan_indices
 from catchup.rag.policies import CITATION_POLICY_MESSAGE
 from catchup.rag.policies import FALLBACK_ANSWER
 from catchup.rag.policies import NO_DOCUMENTS_ANSWER
+from catchup.rag.retryable import RETRYABLE_ERRORS
 from catchup.rag.schemas.sources import SOURCE_METADATA
 from catchup.rag.schemas.sources import BaseSource
 from catchup.rag.semaphores import rag_semaphores
@@ -125,6 +126,8 @@ async def generate_final_answer_node(
             full_answer=full_answer,
         )
 
+    except RETRYABLE_ERRORS:
+        raise
     except Exception as e:
         logger.warning(
             "final_answer_generation_node_failed",

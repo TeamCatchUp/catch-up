@@ -11,6 +11,7 @@ from catchup.configs.config import settings
 from catchup.rag.nodes.utils import build_doc_groups
 from catchup.rag.nodes.utils import get_document_id
 from catchup.rag.nodes.utils import log_node
+from catchup.rag.retryable import RETRYABLE_ERRORS
 from catchup.rag.semaphores import rag_semaphores
 from catchup.rag.state import AgentState
 
@@ -74,6 +75,8 @@ async def rerank_node(state: AgentState, rerank_service: BaseRerankService):
                 "rerank_invoke_completed",
                 elapsed=round(time.perf_counter() - t_rerank, 3),
             )
+    except RETRYABLE_ERRORS:
+        raise
     except Exception as e:
         logger.warning(
             "rerank_node_failed",

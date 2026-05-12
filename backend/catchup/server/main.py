@@ -75,6 +75,7 @@ from catchup.utils.redis import get_stream_redis_client
 from catchup.utils.scheduler import init_scheduler
 from catchup.utils.scheduler import shutdown_scheduler
 from catchup.worker.worker_event_processor import run_forever as run_sync_worker
+from catchup.workflows import init_workflow_node_registry
 
 # 디버그 모드 설정
 debug_mode = settings.ENV == "development" and settings.DEBUGGER_ENABLED
@@ -203,6 +204,16 @@ async def lifespan(app: FastAPI):
         # TODO: emit_audit_event()
         logger.error("langgraph_semaphore_init_failed", exc_info=True)
         raise
+
+    try:
+        init_workflow_node_registry()
+        logger.info("workflow_node_registry_initialized", context="server_startup")
+    except Exception as e:
+        logger.warning(
+            "workflow_node_registry_init_failed",
+            context="server_startup",
+            error=str(e),
+        )
 
     # Scheduler 초기화
     try:
