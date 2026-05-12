@@ -1,4 +1,8 @@
-from functools import lru_cache
+import threading
+
+from cachetools import TTLCache
+from cachetools import cached
+from cachetools.keys import hashkey
 
 from catchup.components.llm.constants import LlmProvider
 from catchup.components.llm.service import AwsBedrockLlmService
@@ -6,8 +10,13 @@ from catchup.components.llm.service import BaseLlmService
 from catchup.components.llm.service import ModelCapacity
 from catchup.components.llm.service import OpenAiLlmService
 
+# AWS NAT GW idle timeout(350s)보다 짧게 설정해 만료 전에 커넥션 풀 교체
+_cache = TTLCache(maxsize=16, ttl=240)
+# TTL 만료 시 여러 스레드가 동시에 인스턴스를 생성하는 thundering herd 방지 목적
+_lock = threading.Lock()
 
-@lru_cache(maxsize=16)
+
+@cached(cache=_cache, key=hashkey, lock=_lock)
 def get_llm_service(
     provider: LlmProvider,
     model_capacity: ModelCapacity,
