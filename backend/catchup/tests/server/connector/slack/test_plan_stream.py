@@ -9,6 +9,7 @@ from catchup.server.connector.slack.plan_stream import PLAN_PLACEHOLDER_TASK_TIT
 from catchup.server.connector.slack.plan_stream import PLAN_TITLE
 from catchup.server.connector.slack.plan_stream import SlackPlanResponder
 from catchup.server.connector.slack.plan_stream import SlackPlanState
+from catchup.server.connector.slack.plan_stream import format_source_link
 
 
 def _process(
@@ -25,6 +26,20 @@ def _process(
 
 
 class SlackPlanStateTests(IsolatedAsyncioTestCase):
+    def test_source_link_normalizes_multiline_title(self) -> None:
+        link = format_source_link(
+            {
+                "title": "@팀원D created a Task CATDEV-387 프론트 채널톡 임베딩 화면 퍼블리싱\n"
+                "@팀원D created a Task...",
+                "url": "https://example.slack.com/archives/C00000001/p1777183681984109",
+            }
+        )
+
+        self.assertEqual(
+            link,
+            "[@팀원D created a Task CATDEV-387 프론트 채널톡 임베딩 화면 퍼블리싱 @팀원D created a Task...](https://example.slack.com/archives/C00000001/p1777183681984109)",
+        )
+
     def test_initial_plan_contains_only_container_title(self) -> None:
         state = SlackPlanState()
 
