@@ -61,10 +61,13 @@ async def generate_final_answer_fast_node(
     prompt_settings: PromptSettings = state.get("prompt_settings")
     agent_reasoning = state.get("agent_reasoning")
 
+    slack_thread_context = state.get("slack_thread_context")
+
     prompts = _load_prompts(
         global_context=global_context,
         retrieved_context=retrieved_context,
         prompt_settings=prompt_settings,
+        slack_thread_context=slack_thread_context,
     )
 
     dynamic_prompts = [
@@ -175,12 +178,14 @@ def _load_prompts(
     global_context: dict,
     retrieved_context: str,
     prompt_settings: PromptSettings,
+    slack_thread_context: str | None = None,
 ) -> dict:
     return {
         "system": prompt_loader.get_prompt(
             "rag/generate_final_answer_fast",
             prompt_settings=prompt_settings,
             sources=list(SOURCE_METADATA.values()),
+            slack_thread_context=slack_thread_context,
         ),
         "global_context": prompt_loader.get_prompt(
             "common/global_context",
