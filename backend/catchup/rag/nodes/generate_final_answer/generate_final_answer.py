@@ -190,7 +190,9 @@ def _load_prompts(
         )
     else:
         system = prompt_loader.get_prompt(
-            "rag/generate_final_answer", sources=sources
+            "rag/generate_final_answer",
+            sources=sources,
+            slack_thread_context=slack_thread_context,
         )
 
     return {
