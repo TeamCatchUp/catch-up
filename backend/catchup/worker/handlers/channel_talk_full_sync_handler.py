@@ -52,7 +52,7 @@ from catchup.sync.common.schemas import SyncTargetType
 from catchup.sync.common.schemas import TargetSyncResult
 from catchup.worker.handlers.base_full_sync_handler import BaseFullSyncHandler
 
-CHANNEL_TALK_USER_CHAT_FULL_SYNC_BATCH_SIZE = 2
+CHANNEL_TALK_USER_CHAT_FULL_SYNC_BATCH_SIZE = 50
 CHANNEL_TALK_USER_CHAT_FULL_SYNC_MAX_PAGES_PER_BATCH = 1
 
 
