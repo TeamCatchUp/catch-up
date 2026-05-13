@@ -32,14 +32,18 @@ class ChannelTalkUserChatFullSyncFetcher:
         client: ChannelTalkCoreApiClient | None = None,
         max_concurrent_user_chat_fetches: int = 5,
         max_user_chat_pages_per_run: int | None = None,
+        user_chat_list_limit: int | None = None,
     ) -> None:
         if max_concurrent_user_chat_fetches < 1:
             raise ValueError("max_concurrent_user_chat_fetches must be positive")
         if max_user_chat_pages_per_run is not None and max_user_chat_pages_per_run < 1:
             raise ValueError("max_user_chat_pages_per_run must be positive")
+        if user_chat_list_limit is not None and user_chat_list_limit < 1:
+            raise ValueError("user_chat_list_limit must be positive")
         self.client = client or ChannelTalkCoreApiClient()
         self._max_concurrent_user_chat_fetches = max_concurrent_user_chat_fetches
         self._max_user_chat_pages_per_run = max_user_chat_pages_per_run
+        self._user_chat_list_limit = user_chat_list_limit
 
     async def fetch_user_chats(
         self,
@@ -65,14 +69,18 @@ class ChannelTalkUserChatFullSyncFetcher:
             resume_from_checkpoint = False
 
             while True:
-                page = await self.client.list_user_chats(
-                    access_key=access_key,
-                    access_secret=access_secret,
-                    channel_id=connection.channel_id,
-                    state=state,
-                    since=next_cursor,
-                    sort_order="desc",
-                )
+                list_kwargs: dict[str, object] = {
+                    "access_key": access_key,
+                    "access_secret": access_secret,
+                    "channel_id": connection.channel_id,
+                    "state": state,
+                    "since": next_cursor,
+                    "sort_order": "desc",
+                }
+                if self._user_chat_list_limit is not None:
+                    list_kwargs["limit"] = self._user_chat_list_limit
+
+                page = await self.client.list_user_chats(**list_kwargs)
                 fetched_pages += 1
 
                 reached_older_window = False
