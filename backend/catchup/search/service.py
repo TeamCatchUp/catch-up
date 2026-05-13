@@ -14,6 +14,9 @@ logger = structlog.get_logger()
 
 observe = get_observe()
 
+# manual search 전용 풀 크기: 전체 결과를 가져와 Python 레벨에서 페이지네이션
+_MANUAL_SEARCH_POOL_SIZE: int = 200
+
 
 class ManualSearchService:
     def __init__(self):
@@ -49,7 +52,7 @@ class ManualSearchService:
         offset: int,
         tool_filters: list[SourceType] | None,
         vector_db_service: PGVectorService,
-    ) -> list[BaseSource]:
+    ) -> tuple[list[BaseSource], int]:
         planner = self._get_planner()
         _, invoke_config = self._setup_config(user.id)
 
@@ -73,19 +76,32 @@ class ManualSearchService:
 
         planned = state["planned_search"]
 
-        docs = await vector_db_service.hybrid_search(
+        all_docs = await vector_db_service.hybrid_search(
             query=planned.query,
-            k=limit,
+            k=_MANUAL_SEARCH_POOL_SIZE,
             tool_filters=tool_filters,
             keyword_tokens=planned.keyword_tokens or None,
-            offset=offset,
+            offset=0,
         )
 
-        return [
+        total = len(all_docs)
+        page_docs = all_docs[offset:offset + limit]
+
+        logger.debug(
+            "manual_search_completed",
+            total=total,
+            offset=offset,
+            limit=limit,
+            page_count=len(page_docs),
+        )
+        
+        results = [
             BaseSource.from_document(
                 index=i + 1,
                 doc=doc,
                 relevance_score=doc.metadata.get("score", 0.0),
             )
-            for i, doc in enumerate(docs)
+            for i, doc in enumerate(page_docs)
         ]
+
+        return results, total

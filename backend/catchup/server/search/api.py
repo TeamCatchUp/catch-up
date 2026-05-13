@@ -42,7 +42,7 @@ async def hybrid_search(
     search_service: ManualSearchService = Depends(get_manual_search_service),
     db: Session = Depends(get_db),
 ) -> ManualSearchResponse:
-    results = await search_service.search(
+    results, total = await search_service.search(
         user=current_user,
         keyword=keyword,
         limit=limit,
@@ -54,7 +54,7 @@ async def hybrid_search(
     await run_in_threadpool(save_search_query, db, current_user.id, keyword)
     db.commit()
 
-    return ManualSearchResponse(results=results, total=len(results))
+    return ManualSearchResponse(results=results, total=total)
 
 
 @router.get(
