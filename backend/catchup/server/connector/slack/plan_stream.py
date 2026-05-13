@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import Any
 
@@ -800,7 +801,7 @@ def split_sections(text: str) -> list[str]:
 
 
 def trim_text(text: str, limit: int) -> str:
-    value = (text or "").strip()
+    value = re.sub(r"\s+", " ", text or "").strip()
     if len(value) <= limit:
         return value
     return value[: limit - 3].rstrip() + "..."
