@@ -22,6 +22,7 @@ import { useUserStore } from '@/shared/store/userStore';
 
 import AdminGuideModal from './AdminGuideModal';
 import DocsQueryBox from './DocsQueryBox';
+import DocsSearchHistorySection from './DocsSearchHistorySection';
 import HeroText from './HeroText';
 import HowToUse from './HowToUse';
 import ModePicker, { type HomeMode } from './ModePicker';
@@ -137,6 +138,8 @@ export default function HomeContent() {
           <HowToUse />
         </div>
       )}
+
+      {mode === 'docs' && <DocsSearchHistorySection />}
 
       {showAdminGuide && <AdminGuideModal onDismiss={() => setAdminGuideDismissed(true)} />}
       {showUserGuide && <UserGuideModal onDismiss={() => setUserGuideDismissed(true)} />}
