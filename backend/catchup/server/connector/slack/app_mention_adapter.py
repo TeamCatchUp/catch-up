@@ -313,7 +313,7 @@ class SlackAppMentionAdapter:
         message: dict[str, Any],
     ) -> SlackThreadContextMessage | None:
         text = str(message.get("text") or "").strip()
-        user_id = str(message.get("user") or "").strip()
+        user_id = str(message.get("user") or message.get("bot_id") or "").strip()
 
         if not text or not user_id:
             return None

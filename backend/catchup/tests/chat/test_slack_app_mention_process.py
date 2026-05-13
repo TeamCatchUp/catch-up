@@ -75,7 +75,8 @@ class SlackAppMentionThreadContextTests(IsolatedAsyncioTestCase):
             [
                 {
                     "ts": "1710000000.000000",
-                    "user": "UROOT",
+                    "bot_id": "BROOT",
+                    "subtype": "bot_message",
                     "text": "배포 언제?",
                 },
                 {
@@ -119,7 +120,7 @@ class SlackAppMentionThreadContextTests(IsolatedAsyncioTestCase):
         additional_context = adapter._format_additional_context(
             context_messages,
             user_names_by_id={
-                "UROOT": "원문작성자",
+                "BROOT": "원문작성봇",
                 "UTEAMMATE": "팀원",
                 "UDEPLOYBOT": "DeployBot",
             },
@@ -130,7 +131,7 @@ class SlackAppMentionThreadContextTests(IsolatedAsyncioTestCase):
             "\n".join(
                 [
                     "Thread context:",
-                    "- [원문작성자 at 2024-03-09 16:00] 배포 언제?",
+                    "- [원문작성봇 at 2024-03-09 16:00] 배포 언제?",
                     CATCHUP_TURN_CONTEXT_MARKER,
                     "- [팀원 at 2024-03-09 16:00] 정확히는 오전 10시예요.",
                     "- [DeployBot at 2024-03-09 16:00] 배포 파이프라인은 대기 중입니다.",
