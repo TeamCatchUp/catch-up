@@ -54,6 +54,15 @@ def mock_vector_db():
     return service
 
 
+def _assert_hybrid_search_called_with_pool(mock_vector_db, **expected_kwargs):
+    """hybrid_search가 pool size(k=200)와 offset=0으로 호출됐는지 검증한다."""
+    _, kwargs = mock_vector_db.hybrid_search.call_args
+    assert kwargs.get("k") == 200
+    assert kwargs.get("offset") == 0
+    for key, value in expected_kwargs.items():
+        assert kwargs[key] == value
+
+
 @pytest.fixture
 def service(mock_planner):
     from catchup.search.service import ManualSearchService
@@ -80,11 +89,11 @@ async def test_search_uses_planned_query(service, mock_planner, mock_vector_db, 
         vector_db_service=mock_vector_db,
     )
 
-    _, kwargs = mock_vector_db.hybrid_search.call_args
-    assert kwargs["query"] == "English optimized query"
-    assert kwargs["keyword_tokens"] == ["MyClass"]
-    assert kwargs["k"] == 10
-    assert kwargs["offset"] == 0
+    _assert_hybrid_search_called_with_pool(
+        mock_vector_db,
+        query="English optimized query",
+        keyword_tokens=["MyClass"],
+    )
 
 
 @pytest.mark.asyncio
@@ -124,7 +133,7 @@ async def test_search_returns_base_sources(service, mock_planner, mock_vector_db
         )
     ]
 
-    results = await service.search(
+    results, total, source_distribution = await service.search(
         user=mock_user,
         keyword="q",
         limit=20,
@@ -133,6 +142,8 @@ async def test_search_returns_base_sources(service, mock_planner, mock_vector_db
         vector_db_service=mock_vector_db,
     )
 
+    assert total == 1
+    assert source_distribution == {"slack": 1}
     assert len(results) == 1
     assert results[0].title == "Title"
     assert results[0].index == 1

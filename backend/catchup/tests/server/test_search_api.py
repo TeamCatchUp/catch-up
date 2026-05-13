@@ -66,9 +66,11 @@ def test_hybrid_search_endpoint(
         },
         id="id1",
     )
-    mock_search_service.search.return_value = [
-        BaseSource.from_document(index=1, doc=doc, relevance_score=0.8)
-    ]
+    mock_search_service.search.return_value = (
+        [BaseSource.from_document(index=1, doc=doc, relevance_score=0.8)],
+        1,
+        {"slack": 1},
+    )
 
     response = client.get(
         "/api/v1/search/hybrid",
@@ -79,6 +81,7 @@ def test_hybrid_search_endpoint(
     data = response.json()
     assert len(data["results"]) == 1
     assert data["results"][0]["title"] == "Title"
+    assert data["total"] == 1
 
     mock_search_service.search.assert_called_once_with(
         user=mock_current_user,
@@ -94,6 +97,8 @@ def test_search_delegates_to_service(
     mock_pgvector_service, mock_current_user, mock_search_service
 ):
     """API는 search_service.search()에 올바른 파라미터를 전달한다."""
+    mock_search_service.search.return_value = ([], 0, {})
+
     client.get(
         "/api/v1/search/hybrid",
         params={"keyword": "테스트 쿼리", "limit": 10, "offset": 20},
