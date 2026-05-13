@@ -1,3 +1,5 @@
+from collections import Counter
+
 import structlog
 
 from catchup.components.vector_db.pgvector.pgvector import PGVectorService
@@ -52,7 +54,7 @@ class ManualSearchService:
         offset: int,
         tool_filters: list[SourceType] | None,
         vector_db_service: PGVectorService,
-    ) -> tuple[list[BaseSource], int]:
+    ) -> tuple[list[BaseSource], int, dict[str, int]]:
         planner = self._get_planner()
         _, invoke_config = self._setup_config(user.id)
 
@@ -86,6 +88,9 @@ class ManualSearchService:
 
         total = len(all_docs)
         page_docs = all_docs[offset:offset + limit]
+        source_distribution = dict(
+            Counter(doc.metadata.get("source", "unknown") for doc in all_docs)
+        )
 
         logger.debug(
             "manual_search_completed",
@@ -93,8 +98,9 @@ class ManualSearchService:
             offset=offset,
             limit=limit,
             page_count=len(page_docs),
+            source_distribution=source_distribution,
         )
-        
+
         results = [
             BaseSource.from_document(
                 index=i + 1,
@@ -104,4 +110,4 @@ class ManualSearchService:
             for i, doc in enumerate(page_docs)
         ]
 
-        return results, total
+        return results, total, source_distribution

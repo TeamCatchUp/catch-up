@@ -69,6 +69,7 @@ def test_hybrid_search_endpoint(
     mock_search_service.search.return_value = (
         [BaseSource.from_document(index=1, doc=doc, relevance_score=0.8)],
         1,
+        {"slack": 1},
     )
 
     response = client.get(
@@ -96,7 +97,7 @@ def test_search_delegates_to_service(
     mock_pgvector_service, mock_current_user, mock_search_service
 ):
     """API는 search_service.search()에 올바른 파라미터를 전달한다."""
-    mock_search_service.search.return_value = ([], 0)
+    mock_search_service.search.return_value = ([], 0, {})
 
     client.get(
         "/api/v1/search/hybrid",

@@ -133,7 +133,7 @@ async def test_search_returns_base_sources(service, mock_planner, mock_vector_db
         )
     ]
 
-    results, total = await service.search(
+    results, total, source_distribution = await service.search(
         user=mock_user,
         keyword="q",
         limit=20,
@@ -143,6 +143,7 @@ async def test_search_returns_base_sources(service, mock_planner, mock_vector_db
     )
 
     assert total == 1
+    assert source_distribution == {"slack": 1}
     assert len(results) == 1
     assert results[0].title == "Title"
     assert results[0].index == 1
