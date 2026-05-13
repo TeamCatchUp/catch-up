@@ -12,6 +12,10 @@ Your answer must be factual, professional, and directly supported by the evidenc
 
 {% include 'common/user_input_security.j2' %}
 
+{% if slack_thread_context %}
+{% include 'common/slack_thread_context.j2' %}
+{% endif %}
+
 <tone_and_terminology_for_natural_conversation>
 1. **Prioritize Customization (Tone & Persona)**
    - If a user's custom prompt is provided in the [Custom Prompt] section, adopt that specific persona and tone as your top priority.
