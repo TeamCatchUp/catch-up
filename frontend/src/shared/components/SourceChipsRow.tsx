@@ -1,7 +1,7 @@
 'use client';
 
 // 문서 탐색 모드 입력 박스 아래에 노출되는 소스 chips.
-// FilterBar와 동일한 SearchOptionButton 컴포넌트 사용.
+// home·hybrid-search 양쪽에서 재사용. FilterBar와 동일한 SearchOptionButton 사용.
 
 import { useState } from 'react';
 
@@ -11,13 +11,17 @@ import GitHub from '@/public/icons/logo/GitHub.svg';
 import Jira from '@/public/icons/logo/Jira.svg';
 import Slack from '@/public/icons/logo/Slack.svg';
 import { SearchOptionButton } from '@/shared/components/SearchOptionButton';
-
-type DocsSource = 'confluence' | 'jira' | 'slack' | 'github' | 'channel_talk';
+import type { DocsSource } from '@/shared/types/source';
+import { cn } from '@/shared/utils/cn';
 
 interface SourceItem {
   value: DocsSource;
   label: string;
   Icon: React.FC<React.SVGProps<SVGSVGElement>>;
+}
+
+interface SourceChipsRowProps {
+  className?: string;
 }
 
 const SOURCES: ReadonlyArray<SourceItem> = [
@@ -28,7 +32,7 @@ const SOURCES: ReadonlyArray<SourceItem> = [
   { value: 'channel_talk', label: '채널톡', Icon: ChannelTalk },
 ];
 
-export default function SourceChipsRow() {
+export default function SourceChipsRow({ className }: SourceChipsRowProps) {
   const [selected, setSelected] = useState<DocsSource[]>([]);
 
   const toggle = (value: DocsSource) => {
@@ -36,7 +40,7 @@ export default function SourceChipsRow() {
   };
 
   return (
-    <div className="flex w-222 items-center justify-center gap-2.5">
+    <div className={cn('flex items-center justify-center gap-2.5', className)}>
       {SOURCES.map((s) => (
         <SearchOptionButton
           key={s.value}

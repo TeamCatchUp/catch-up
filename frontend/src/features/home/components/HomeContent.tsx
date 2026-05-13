@@ -11,6 +11,7 @@ import { tipData } from '@/features/home/constants/questionTips';
 import { USER_GUIDE_STORAGE_KEY } from '@/features/home/constants/userGuide';
 import TopNavbar from '@/shared/components/layout/topNavbar/TopNavbar';
 import QueryBox from '@/shared/components/query/QueryBox';
+import SourceChipsRow from '@/shared/components/SourceChipsRow';
 import { useQuestionHistoryGate } from '@/shared/hooks/query/useQuestionHistoryGate';
 import { useSearchFilters } from '@/shared/hooks/query/useSearchFilters';
 import { useSearchInput } from '@/shared/hooks/query/useSearchInput';
@@ -26,7 +27,6 @@ import HowToUse from './HowToUse';
 import ModePicker, { type HomeMode } from './ModePicker';
 import PromptChips from './PromptChips';
 import QuestionTips from './QuestionTips';
-import SourceChipsRow from './SourceChipsRow';
 import UserGuideModal from './UserGuideModal';
 
 type TopNavPageType = 'home' | 'search' | 'docs';
@@ -114,7 +114,7 @@ export default function HomeContent() {
           ) : (
             <>
               <DocsQueryBox />
-              <SourceChipsRow />
+              <SourceChipsRow className="w-222" />
             </>
           )}
         </div>
