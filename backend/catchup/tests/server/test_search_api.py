@@ -5,6 +5,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from catchup.auth.dependencies import get_current_user
+from catchup.db.dependencies import get_db
 from catchup.db.models import User
 from catchup.server.main import app
 from catchup.server.search.dependencies import get_manual_search_service
@@ -13,13 +14,21 @@ from catchup.server.search.dependencies import get_search_service
 client = TestClient(app)
 
 
+@pytest.fixture(autouse=True)
+def mock_db():
+    db = MagicMock()
+    app.dependency_overrides[get_db] = lambda: db
+    yield db
+    app.dependency_overrides.pop(get_db, None)
+
+
 @pytest.fixture
 def mock_pgvector_service():
     service = MagicMock()
     service.hybrid_search = AsyncMock(return_value=[])
     app.dependency_overrides[get_search_service] = lambda: service
     yield service
-    app.dependency_overrides.clear()
+    app.dependency_overrides.pop(get_search_service, None)
 
 
 @pytest.fixture
@@ -28,6 +37,7 @@ def mock_current_user():
     user.id = 42
     app.dependency_overrides[get_current_user] = lambda: user
     yield user
+    app.dependency_overrides.pop(get_current_user, None)
 
 
 @pytest.fixture
@@ -36,6 +46,7 @@ def mock_search_service():
     service.search = AsyncMock(return_value=[])
     app.dependency_overrides[get_manual_search_service] = lambda: service
     yield service
+    app.dependency_overrides.pop(get_manual_search_service, None)
 
 
 def test_hybrid_search_endpoint(
