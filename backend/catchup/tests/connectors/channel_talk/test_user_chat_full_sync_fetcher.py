@@ -518,6 +518,47 @@ class ChannelTalkUserChatFullSyncFetcherTests(IsolatedAsyncioTestCase):
         self.assertEqual(result.next_checkpoint_state, ChannelTalkUserChatState.OPENED)
         self.assertEqual(result.next_checkpoint_cursor, "opened-page-2")
 
+    async def test_fetch_user_chats_passes_configured_list_limit(self) -> None:
+        page = ChannelTalkUserChatListPage(items=[], next_cursor=None)
+        client = SimpleNamespace(
+            list_user_chats=AsyncMock(return_value=page),
+            get_user_chat=AsyncMock(),
+            list_user_chat_messages=AsyncMock(),
+        )
+        fetcher = ChannelTalkUserChatFullSyncFetcher(
+            client=client,
+            user_chat_list_limit=50,
+        )
+
+        result = await fetcher.fetch_user_chats(
+            connection=_connection(),
+            states=(ChannelTalkUserChatState.OPENED,),
+            sync_window=_window(),
+        )
+
+        self.assertEqual(result.bundles, ())
+        client.list_user_chats.assert_awaited_once()
+        self.assertEqual(client.list_user_chats.await_args.kwargs["limit"], 50)
+
+    async def test_fetch_user_chats_omits_list_limit_when_unconfigured(self) -> None:
+        page = ChannelTalkUserChatListPage(items=[], next_cursor=None)
+        client = SimpleNamespace(
+            list_user_chats=AsyncMock(return_value=page),
+            get_user_chat=AsyncMock(),
+            list_user_chat_messages=AsyncMock(),
+        )
+        fetcher = ChannelTalkUserChatFullSyncFetcher(client=client)
+
+        result = await fetcher.fetch_user_chats(
+            connection=_connection(),
+            states=(ChannelTalkUserChatState.OPENED,),
+            sync_window=_window(),
+        )
+
+        self.assertEqual(result.bundles, ())
+        client.list_user_chats.assert_awaited_once()
+        self.assertNotIn("limit", client.list_user_chats.await_args.kwargs)
+
     async def test_fetch_user_chats_fetches_page_details_with_bounded_concurrency(
         self,
     ) -> None:
