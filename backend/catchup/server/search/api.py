@@ -7,6 +7,9 @@ from fastapi import Query
 from fastapi.concurrency import run_in_threadpool
 from sqlalchemy.orm import Session
 
+from catchup.audit.actions import ManualSearchAction
+from catchup.audit.metadata import ManualSearchAuditMetadata
+from catchup.audit.utils import audit_log
 from catchup.auth.dependencies import get_current_user
 from catchup.components.vector_db.pgvector.pgvector import PGVectorService
 from catchup.db.dependencies import get_db
@@ -29,6 +32,10 @@ router = APIRouter(prefix="/api/v1/search", tags=["Search Service"])
     path="/hybrid",
     response_model=ManualSearchResponse,
     description="하이브리드(Vector + Weighted Keyword) 수동 검색 API",
+)
+@audit_log(
+    action=ManualSearchAction.SEND_QUERY,
+    metadata_factory=ManualSearchAuditMetadata.from_audit,
 )
 async def hybrid_search(
     keyword: Annotated[str, Query(description="검색어")],
