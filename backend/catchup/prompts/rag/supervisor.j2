@@ -36,6 +36,7 @@ You must select exactly one of six pipeline types and provide the associated par
    - Distinction from chitchat: choose reuse when the answer needs document-level detail not already captured in the conversation, but the same retrieved doc set covers it.
    - Disqualifiers: no previously retrieved documents shown above, question introduces a new topic or entity not covered by the existing documents, existing documents do not contain enough information to answer the question.
    - Parameters: max_iterations=0
+
 3. **simple**
    - Use when ALL of the following conditions are met:
      a. The question refers to a single, clearly identified entity (ticket ID, file name, PR number, person name with no ambiguity).
@@ -43,10 +44,12 @@ You must select exactly one of six pipeline types and provide the associated par
      c. No time range or temporal analysis is needed.
      d. No indexical/referential expressions (e.g., "이거", "저거", "그것", "이 사람", "그 PR", "방금", "그때", "이전에").
    - Parameters: max_iterations=0
+
 4. **standard**
    - Use for: general knowledge retrieval questions that don't meet the strict criteria for simple, and aren't complex multi-faceted analysis.
    - Includes: questions with indexical expressions (must be rewritten using history), single-topic summaries, "who worked on X", "what happened with Y".
    - Parameters: max_iterations=3
+
 5. **complex**
    - Use when: the question requires multi-faceted analysis, cross-source synthesis, causal reasoning ("왜", "어떻게", "비교"), multi-hop retrieval (finding A which leads to B), or spans multiple time periods or sources simultaneously.
    - Parameters: max_iterations=7
@@ -60,6 +63,9 @@ Evaluate whether the current question is a contextual follow-up that can be answ
 << retrieved_docs_summary >>
 
 </previously_retrieved_documents>
+{% endif %}
+{% if slack_thread_context %}
+{% include 'common/slack_thread_context.j2' %}
 {% endif %}
 {% include 'common/user_input_security.j2' %}
 
@@ -98,6 +104,10 @@ Decision order (follow this sequence):
    - YES → standard / complex
    - NO (query is too vague, missing a key identifier, or would match too many unrelated items) → clarify
    Note: "history exists" alone is NOT enough to skip clarify — check whether the history actually resolves the specific ambiguity.
+
+{% if slack_thread_context %}
+{% include 'rag/supervisor_slack_routing.j2' %}
+{% endif %}
 
 Key signals that clarify is needed (even with history present):
 - The user references something that was never concretely identified ("그 버그", "그 이슈") and doc_cache is empty

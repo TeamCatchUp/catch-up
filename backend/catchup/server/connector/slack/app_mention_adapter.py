@@ -42,6 +42,10 @@ class SlackThreadContextMessage:
     ts: str
     user_id: str
     text: str
+    is_catchup_turn: bool = False
+
+
+CATCHUP_TURN_CONTEXT_MARKER = "--- [CatchUp Turn] ---"
 
 
 class SlackAppMentionClientTransport:
@@ -241,7 +245,7 @@ class SlackAppMentionAdapter:
             )
             return None
 
-        context_messages = self._extract_context_messages(
+        context_messages = self._build_context_messages(
             thread_messages,
             bot_user_id=bot_user_id,
         )
@@ -272,79 +276,73 @@ class SlackAppMentionAdapter:
         )
         return list(response.get("messages") or [])
 
-    def _extract_context_messages(
+    def _build_context_messages(
         self,
         thread_messages: list[dict[str, Any]],
         *,
         bot_user_id: str,
     ) -> list[SlackThreadContextMessage]:
-        visible_messages = [
-            SlackThreadContextMessage(
-                ts=str(message.get("ts") or "").strip(),
-                user_id=str(message.get("user") or "").strip(),
-                text=str(message.get("text") or "").strip(),
-            )
-            for message in thread_messages
-            if self._should_include_context_message(message, bot_user_id=bot_user_id)
-        ]
+        context_messages: list[SlackThreadContextMessage] = []
+        previous_was_catchup_turn = False
 
-        last_question_index = self._find_last_question_index(
-            visible_messages,
-            bot_user_id=bot_user_id,
+        for message in thread_messages:
+            if self._is_catchup_turn_message(message, bot_user_id=bot_user_id):
+                if not previous_was_catchup_turn:
+                    context_messages.append(
+                        SlackThreadContextMessage(
+                            ts=str(message.get("ts") or "").strip(),
+                            user_id="",
+                            text=CATCHUP_TURN_CONTEXT_MARKER,
+                            is_catchup_turn=True,
+                        )
+                    )
+                previous_was_catchup_turn = True
+                continue
+
+            context_message = self._to_visible_context_message(message)
+            if context_message is None:
+                continue
+
+            context_messages.append(context_message)
+            previous_was_catchup_turn = False
+
+        return context_messages
+
+    def _to_visible_context_message(
+        self,
+        message: dict[str, Any],
+    ) -> SlackThreadContextMessage | None:
+        text = str(message.get("text") or "").strip()
+        user_id = str(message.get("user") or message.get("bot_id") or "").strip()
+
+        if not text or not user_id:
+            return None
+
+        return SlackThreadContextMessage(
+            ts=str(message.get("ts") or "").strip(),
+            user_id=user_id,
+            text=text,
         )
-        if last_question_index < 0:
-            return visible_messages
-        return visible_messages[last_question_index + 1:]
 
-    def _should_include_context_message(
+    def _is_catchup_turn_message(
         self,
         message: dict[str, Any],
         *,
         bot_user_id: str,
     ) -> bool:
-        text = str(message.get("text") or "").strip()
         user_id = str(message.get("user") or "").strip()
-
-        if not text or not user_id:
-            return False
-
         if user_id == bot_user_id:
-            return False
+            return True
 
-        if message.get("bot_id") or message.get("subtype") == "bot_message":
-            return False
-
-        return True
-
-    def _find_last_question_index(
-        self,
-        context_messages: list[SlackThreadContextMessage],
-        *,
-        bot_user_id: str,
-    ) -> int:
-        for index in range(len(context_messages) - 1, -1, -1):
-            if self._is_question_boundary_message(
-                context_messages[index],
-                bot_user_id=bot_user_id,
-            ):
-                return index
-        return -1
-
-    def _is_question_boundary_message(
-        self,
-        message: SlackThreadContextMessage,
-        *,
-        bot_user_id: str,
-    ) -> bool:
-        normalized_text = " ".join((message.text or "").split())
-        if not normalized_text:
+        text = str(message.get("text") or "").strip()
+        if not text:
             return False
 
         extracted_query = extract_app_mention_query(
-            normalized_text,
+            text,
             bot_user_id=bot_user_id,
         )
-        return bool(extracted_query) and extracted_query != normalized_text
+        return bool(extracted_query) and extracted_query != " ".join(text.split())
 
     def _collect_context_user_ids(
         self,
@@ -354,6 +352,8 @@ class SlackAppMentionAdapter:
         seen_user_ids: set[str] = set()
 
         for message in context_messages:
+            if message.is_catchup_turn:
+                continue
             for user_id in (message.user_id, *extract_mentioned_slack_user_ids(message.text)):
                 resolved_user_id = str(user_id or "").strip()
                 if not resolved_user_id or resolved_user_id in seen_user_ids:
@@ -387,6 +387,10 @@ class SlackAppMentionAdapter:
         lines = ["Thread context:"]
 
         for message in context_messages:
+            if message.is_catchup_turn:
+                lines.append(CATCHUP_TURN_CONTEXT_MARKER)
+                continue
+
             normalized_text = transformer.normalize_text_for_llm(message.text).strip()
             if not normalized_text:
                 continue

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 from datetime import datetime
 from datetime import timezone
 from typing import Any
@@ -28,6 +29,12 @@ from catchup.utils.redis import get_stream_redis_client
 from catchup.utils.redis import reset_stream_redis_client
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(slots=True, frozen=True)
+class AckDeleteResult:
+    acked: int
+    deleted: int
 
 
 def _decode_redis_value(value: Any) -> str:
@@ -133,27 +140,41 @@ async def publish_tasks(tasks: list[SyncStreamTask]) -> PublishTasksResult:
     )
 
 
-async def ack_message(message_id: str) -> int:
+async def ack_message(message_id: str) -> AckDeleteResult:
+    return await ack_messages([message_id])
+
+
+async def ack_messages(message_ids: list[str]) -> AckDeleteResult:
+    if not message_ids:
+        return AckDeleteResult(acked=0, deleted=0)
+
     redis = await get_redis_client()
-    removed = await redis.xack(
-        SYNC_EVENTS_STREAM_KEY,
-        SYNC_EVENTS_CONSUMER_GROUP,
-        message_id,
+    acked = int(
+        await redis.xack(
+            SYNC_EVENTS_STREAM_KEY,
+            SYNC_EVENTS_CONSUMER_GROUP,
+            *message_ids,
+        )
     )
-    return int(removed)
+    deleted = int(
+        await redis.xdel(
+            SYNC_EVENTS_STREAM_KEY,
+            *message_ids,
+        )
+    )
+    return AckDeleteResult(acked=acked, deleted=deleted)
 
 
-async def ack_messages(message_ids: list[str]) -> int:
+async def delete_messages(message_ids: list[str]) -> int:
     if not message_ids:
         return 0
 
     redis = await get_redis_client()
-    removed = await redis.xack(
+    deleted = await redis.xdel(
         SYNC_EVENTS_STREAM_KEY,
-        SYNC_EVENTS_CONSUMER_GROUP,
         *message_ids,
     )
-    return int(removed)
+    return int(deleted)
 
 
 async def publish_deadletter(
@@ -198,11 +219,15 @@ async def _parse_messages_with_deadletter(
                 fields=normalized_fields,
                 error_message=str(exc),
             )
-            acked = await ack_message(message_id)
+            ack_result = await ack_message(message_id)
             logger.error(
-                "[SYNC][STREAM][QUEUE] Invalid payload moved to deadletter: message_id=%s, acked=%s, error=%s",
+                (
+                    "[SYNC][STREAM][QUEUE] Invalid payload moved to deadletter: "
+                    "message_id=%s, acked=%s, deleted=%s, error=%s"
+                ),
                 message_id,
-                acked,
+                ack_result.acked,
+                ack_result.deleted,
                 exc,
             )
     return parsed_messages

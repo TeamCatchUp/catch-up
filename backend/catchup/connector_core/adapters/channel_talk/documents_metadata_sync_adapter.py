@@ -17,6 +17,9 @@ from catchup.connector_core.ports.metadata_sync import MetadataSyncStepResult
 from catchup.connectors.channel_talk.document_space.client import (
     ChannelTalkDocumentsApiClient,
 )
+from catchup.connectors.channel_talk.document_space.http_client import (
+    ChannelTalkDocumentsHttpClient,
+)
 from catchup.connectors.channel_talk.exceptions import ChannelTalkConflictError
 from catchup.connectors.channel_talk.exceptions import ChannelTalkError
 from catchup.connectors.channel_talk.exceptions import ChannelTalkPersistenceError
@@ -210,8 +213,11 @@ class ChannelTalkDocumentMetadataSyncAdapter:
         if self.client is not None:
             return self.client
         return ChannelTalkDocumentsApiClient(
-            access_key=connection.access_key or "",
-            access_secret=connection.access_secret or "",
+            transport=ChannelTalkDocumentsHttpClient(
+                access_key=connection.access_key or "",
+                access_secret=connection.access_secret or "",
+                space_id=connection.space_id,
+            ),
         )
 
     @staticmethod

@@ -14,6 +14,9 @@ from catchup.connectors.channel_talk.document_space.article_full_sync_models imp
 from catchup.connectors.channel_talk.document_space.client import (
     ChannelTalkDocumentsApiClient,
 )
+from catchup.connectors.channel_talk.document_space.http_client import (
+    ChannelTalkDocumentsHttpClient,
+)
 from catchup.connectors.channel_talk.schemas.document_article import (
     ChannelTalkDocumentArticle,
 )
@@ -140,8 +143,11 @@ async def _collect_document_article_changes(
 ) -> list[RecordChange]:
     lookback_start = _resolve_lookback_start(connection=connection, now=now)
     client = ChannelTalkDocumentsApiClient(
-        access_key=connection.access_key or "",
-        access_secret=connection.access_secret or "",
+        transport=ChannelTalkDocumentsHttpClient(
+            access_key=connection.access_key or "",
+            access_secret=connection.access_secret or "",
+            space_id=connection.space_id,
+        ),
     )
 
     changes: list[RecordChange] = []

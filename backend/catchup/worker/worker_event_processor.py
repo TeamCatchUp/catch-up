@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
-
 from collections import deque
+
 from catchup.configs.config import settings
 from catchup.db.models import SyncType
 from catchup.sync.common.protocols import WorkerProtocol
@@ -53,10 +53,19 @@ async def _process_message(
         )
     finally:
         try:
-            await ack_consumed_messages([message])
+            ack_result = await ack_consumed_messages([message])
+            if ack_result.deleted == 0:
+                logger.warning(
+                    (
+                        "[SYNC][WORKER] Message acked but stream entry was not deleted: "
+                        "message_id=%s, acked=%s"
+                    ),
+                    message.message_id,
+                    ack_result.acked,
+                )
         except Exception:
             logger.exception(
-                "[SYNC][WORKER] Message ack failed: message_id=%s",
+                "[SYNC][WORKER] Message ack/delete failed: message_id=%s",
                 message.message_id,
             )
 

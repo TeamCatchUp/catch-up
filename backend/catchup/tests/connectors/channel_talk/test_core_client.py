@@ -1,12 +1,46 @@
 from __future__ import annotations
 
+from typing import Any
 from unittest import IsolatedAsyncioTestCase
 
 import httpx
 
 from catchup.connectors.channel_talk.core.client import ChannelTalkCoreApiClient
+from catchup.connectors.channel_talk.core.http_client import ChannelTalkCoreHttpClient
 from catchup.connectors.channel_talk.exceptions import ChannelTalkPayloadError
+from catchup.connectors.channel_talk.exceptions import ChannelTalkRateLimitError
+from catchup.connectors.channel_talk.exceptions import ChannelTalkUpstreamError
+from catchup.connectors.channel_talk.exceptions import ChannelTalkValidationError
 from catchup.connectors.channel_talk.schemas.user_chat import ChannelTalkUserChatState
+
+
+class FakeCoreRateLimiter:
+    def __init__(self, delays: list[float] | None = None) -> None:
+        self._delays = list(delays or [])
+        self.acquire_count = 0
+        self.defer_delays: list[float] = []
+
+    async def acquire_delay(self) -> float:
+        self.acquire_count += 1
+        if self._delays:
+            return self._delays.pop(0)
+        return 0.0
+
+    async def defer_for(self, delay_seconds: float) -> None:
+        self.defer_delays.append(delay_seconds)
+
+
+def _make_client(
+    *,
+    http_client: httpx.AsyncClient,
+    **transport_options: Any,
+) -> ChannelTalkCoreApiClient:
+    return ChannelTalkCoreApiClient(
+        transport=ChannelTalkCoreHttpClient(
+            http_client=http_client,
+            **transport_options,
+        )
+    )
 
 
 class ChannelTalkCoreApiClientTests(IsolatedAsyncioTestCase):
@@ -50,7 +84,7 @@ class ChannelTalkCoreApiClientTests(IsolatedAsyncioTestCase):
             transport=httpx.MockTransport(handler),
             base_url="https://api.channel.io",
         ) as http_client:
-            client = ChannelTalkCoreApiClient(http_client=http_client)
+            client = _make_client(http_client=http_client)
             page = await client.list_user_chats(
                 access_key="access-key",
                 access_secret="access-secret",
@@ -89,7 +123,7 @@ class ChannelTalkCoreApiClientTests(IsolatedAsyncioTestCase):
             transport=httpx.MockTransport(handler),
             base_url="https://api.channel.io",
         ) as http_client:
-            client = ChannelTalkCoreApiClient(http_client=http_client)
+            client = _make_client(http_client=http_client)
             page = await client.list_user_chats(
                 access_key="access-key",
                 access_secret="access-secret",
@@ -132,7 +166,7 @@ class ChannelTalkCoreApiClientTests(IsolatedAsyncioTestCase):
             transport=httpx.MockTransport(handler),
             base_url="https://api.channel.io",
         ) as http_client:
-            client = ChannelTalkCoreApiClient(http_client=http_client)
+            client = _make_client(http_client=http_client)
             page = await client.list_user_chats(
                 access_key="access-key",
                 access_secret="access-secret",
@@ -162,7 +196,7 @@ class ChannelTalkCoreApiClientTests(IsolatedAsyncioTestCase):
             transport=httpx.MockTransport(handler),
             base_url="https://api.channel.io",
         ) as http_client:
-            client = ChannelTalkCoreApiClient(http_client=http_client)
+            client = _make_client(http_client=http_client)
             page = await client.list_user_chats(
                 access_key="access-key",
                 access_secret="access-secret",
@@ -188,7 +222,7 @@ class ChannelTalkCoreApiClientTests(IsolatedAsyncioTestCase):
             transport=httpx.MockTransport(handler),
             base_url="https://api.channel.io",
         ) as http_client:
-            client = ChannelTalkCoreApiClient(http_client=http_client)
+            client = _make_client(http_client=http_client)
             for state in ChannelTalkUserChatState:
                 page = await client.list_user_chats(
                     access_key="access-key",
@@ -211,12 +245,368 @@ class ChannelTalkCoreApiClientTests(IsolatedAsyncioTestCase):
             transport=httpx.MockTransport(handler),
             base_url="https://api.channel.io",
         ) as http_client:
-            client = ChannelTalkCoreApiClient(http_client=http_client)
+            client = _make_client(http_client=http_client)
             await client.list_user_chats(
                 access_key="access-key",
                 access_secret="access-secret",
                 state="opened",
             )
+
+    async def test_list_user_chats_applies_channel_rate_limiter_before_request(self) -> None:
+        limiter = FakeCoreRateLimiter(delays=[0.25])
+        limiter_requests: list[dict[str, str]] = []
+        sleeps: list[float] = []
+
+        async def get_limiter(
+            *,
+            channel_id: str,
+            method: str,
+            path: str,
+        ) -> FakeCoreRateLimiter:
+            limiter_requests.append(
+                {
+                    "channel_id": channel_id,
+                    "method": method,
+                    "path": path,
+                }
+            )
+            return limiter
+
+        async def sleep(delay: float) -> None:
+            sleeps.append(delay)
+
+        async def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(
+                200,
+                json={"userChats": [{"id": "chat-1"}]},
+            )
+
+        async with httpx.AsyncClient(
+            transport=httpx.MockTransport(handler),
+            base_url="https://api.channel.io",
+        ) as http_client:
+            client = _make_client(
+                http_client=http_client,
+                sleep=sleep,
+                rate_limiter_getter=get_limiter,
+            )
+            await client.list_user_chats(
+                access_key="access-key",
+                access_secret="access-secret",
+                channel_id="channel-123",
+                state="opened",
+            )
+
+        self.assertEqual(
+            limiter_requests,
+            [
+                {
+                    "channel_id": "channel-123",
+                    "method": "GET",
+                    "path": "/open/v5/user-chats",
+                }
+            ],
+        )
+        self.assertEqual(limiter.acquire_count, 1)
+        self.assertEqual(sleeps, [0.25])
+
+    async def test_list_user_chats_without_channel_id_skips_rate_limiter(self) -> None:
+        async def get_limiter(
+            *,
+            channel_id: str,
+            method: str,
+            path: str,
+        ) -> FakeCoreRateLimiter:
+            _ = channel_id
+            _ = method
+            _ = path
+            raise AssertionError("rate limiter should not be requested")
+
+        async def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(
+                200,
+                json={"userChats": [{"id": "chat-1"}]},
+            )
+
+        async with httpx.AsyncClient(
+            transport=httpx.MockTransport(handler),
+            base_url="https://api.channel.io",
+        ) as http_client:
+            client = _make_client(
+                http_client=http_client,
+                rate_limiter_getter=get_limiter,
+            )
+            await client.list_user_chats(
+                access_key="access-key",
+                access_secret="access-secret",
+                state="opened",
+            )
+
+    async def test_list_user_chats_retries_429_with_retry_after_header(self) -> None:
+        limiter = FakeCoreRateLimiter()
+        sleeps: list[float] = []
+        responses = [
+            httpx.Response(429, headers={"Retry-After": "2"}, json={"message": "slow"}),
+            httpx.Response(200, json={"userChats": [{"id": "chat-1"}]}),
+        ]
+
+        async def get_limiter(
+            *,
+            channel_id: str,
+            method: str,
+            path: str,
+        ) -> FakeCoreRateLimiter:
+            _ = channel_id
+            _ = method
+            _ = path
+            return limiter
+
+        async def sleep(delay: float) -> None:
+            sleeps.append(delay)
+
+        async def handler(request: httpx.Request) -> httpx.Response:
+            _ = request
+            return responses.pop(0)
+
+        async with httpx.AsyncClient(
+            transport=httpx.MockTransport(handler),
+            base_url="https://api.channel.io",
+        ) as http_client:
+            client = _make_client(
+                http_client=http_client,
+                sleep=sleep,
+                rate_limiter_getter=get_limiter,
+                max_rate_limit_retries=1,
+                max_rate_limit_wait_seconds=10,
+            )
+            page = await client.list_user_chats(
+                access_key="access-key",
+                access_secret="access-secret",
+                channel_id="channel-123",
+                state="opened",
+            )
+
+        self.assertEqual([item.user_chat_id for item in page.items], ["chat-1"])
+        self.assertEqual(sleeps, [2])
+        self.assertEqual(limiter.defer_delays, [2])
+        self.assertEqual(limiter.acquire_count, 2)
+
+    async def test_list_user_chats_retries_429_with_reset_header(self) -> None:
+        limiter = FakeCoreRateLimiter()
+        sleeps: list[float] = []
+        responses = [
+            httpx.Response(
+                429,
+                headers={"x-ratelimit-reset": "1003"},
+                json={"message": "slow"},
+            ),
+            httpx.Response(200, json={"userChats": [{"id": "chat-1"}]}),
+        ]
+
+        async def get_limiter(
+            *,
+            channel_id: str,
+            method: str,
+            path: str,
+        ) -> FakeCoreRateLimiter:
+            _ = channel_id
+            _ = method
+            _ = path
+            return limiter
+
+        async def sleep(delay: float) -> None:
+            sleeps.append(delay)
+
+        async def handler(request: httpx.Request) -> httpx.Response:
+            _ = request
+            return responses.pop(0)
+
+        async with httpx.AsyncClient(
+            transport=httpx.MockTransport(handler),
+            base_url="https://api.channel.io",
+        ) as http_client:
+            client = _make_client(
+                http_client=http_client,
+                sleep=sleep,
+                rate_limiter_getter=get_limiter,
+                max_rate_limit_retries=1,
+                max_rate_limit_wait_seconds=10,
+                clock=lambda: 1000.0,
+            )
+            page = await client.list_user_chats(
+                access_key="access-key",
+                access_secret="access-secret",
+                channel_id="channel-123",
+                state="opened",
+            )
+
+        self.assertEqual([item.user_chat_id for item in page.items], ["chat-1"])
+        self.assertEqual(sleeps, [3])
+        self.assertEqual(limiter.defer_delays, [3])
+
+    async def test_list_user_chats_raises_429_when_retry_after_exceeds_max_wait(self) -> None:
+        limiter = FakeCoreRateLimiter()
+        sleeps: list[float] = []
+        request_count = 0
+
+        async def get_limiter(
+            *,
+            channel_id: str,
+            method: str,
+            path: str,
+        ) -> FakeCoreRateLimiter:
+            _ = channel_id
+            _ = method
+            _ = path
+            return limiter
+
+        async def sleep(delay: float) -> None:
+            sleeps.append(delay)
+
+        async def handler(request: httpx.Request) -> httpx.Response:
+            nonlocal request_count
+            _ = request
+            request_count += 1
+            return httpx.Response(
+                429,
+                headers={"Retry-After": "31"},
+                json={"message": "slow"},
+            )
+
+        async with httpx.AsyncClient(
+            transport=httpx.MockTransport(handler),
+            base_url="https://api.channel.io",
+        ) as http_client:
+            client = _make_client(
+                http_client=http_client,
+                sleep=sleep,
+                rate_limiter_getter=get_limiter,
+                max_rate_limit_retries=1,
+                max_rate_limit_wait_seconds=30,
+            )
+            with self.assertRaises(ChannelTalkRateLimitError) as raised:
+                await client.list_user_chats(
+                    access_key="access-key",
+                    access_secret="access-secret",
+                    channel_id="channel-123",
+                    state="opened",
+                )
+
+        self.assertEqual(raised.exception.retry_after, 31)
+        self.assertEqual(str(raised.exception), "Channel Talk API rate limit exceeded")
+        self.assertEqual(request_count, 1)
+        self.assertEqual(sleeps, [])
+        self.assertEqual(limiter.defer_delays, [31])
+
+    async def test_list_user_chats_raises_429_after_retry_budget_exhausted(self) -> None:
+        limiter = FakeCoreRateLimiter()
+        sleeps: list[float] = []
+        responses = [
+            httpx.Response(429, headers={"Retry-After": "1"}, json={"message": "slow"}),
+            httpx.Response(
+                429,
+                headers={"Retry-After": "2"},
+                json={"message": "still slow"},
+            ),
+        ]
+
+        async def get_limiter(
+            *,
+            channel_id: str,
+            method: str,
+            path: str,
+        ) -> FakeCoreRateLimiter:
+            _ = channel_id
+            _ = method
+            _ = path
+            return limiter
+
+        async def sleep(delay: float) -> None:
+            sleeps.append(delay)
+
+        async def handler(request: httpx.Request) -> httpx.Response:
+            _ = request
+            return responses.pop(0)
+
+        async with httpx.AsyncClient(
+            transport=httpx.MockTransport(handler),
+            base_url="https://api.channel.io",
+        ) as http_client:
+            client = _make_client(
+                http_client=http_client,
+                sleep=sleep,
+                rate_limiter_getter=get_limiter,
+                max_rate_limit_retries=1,
+                max_rate_limit_wait_seconds=30,
+            )
+            with self.assertRaises(ChannelTalkRateLimitError) as raised:
+                await client.list_user_chats(
+                    access_key="access-key",
+                    access_secret="access-secret",
+                    channel_id="channel-123",
+                    state="opened",
+                )
+
+        self.assertEqual(raised.exception.retry_after, 2)
+        self.assertEqual(sleeps, [1])
+        self.assertEqual(limiter.defer_delays, [1, 2])
+
+    async def test_validation_error_uses_channel_talk_message_without_wrapping(
+        self,
+    ) -> None:
+        async def handler(request: httpx.Request) -> httpx.Response:
+            _ = request
+            return httpx.Response(
+                400,
+                json={
+                    "type": "invalid_request",
+                    "message": "state must be opened, closed, or snoozed",
+                },
+            )
+
+        async with httpx.AsyncClient(
+            transport=httpx.MockTransport(handler),
+            base_url="https://api.channel.io",
+        ) as http_client:
+            client = _make_client(http_client=http_client)
+            with self.assertRaises(ChannelTalkValidationError) as raised:
+                await client.list_user_chats(
+                    access_key="access-key",
+                    access_secret="access-secret",
+                    state="opened",
+                )
+
+        self.assertEqual(
+            str(raised.exception),
+            "state must be opened, closed, or snoozed",
+        )
+
+    async def test_upstream_error_uses_channel_talk_message_without_wrapping(
+        self,
+    ) -> None:
+        async def handler(request: httpx.Request) -> httpx.Response:
+            _ = request
+            return httpx.Response(
+                502,
+                json={
+                    "type": "bad_gateway",
+                    "message": "upstream exploded",
+                },
+            )
+
+        async with httpx.AsyncClient(
+            transport=httpx.MockTransport(handler),
+            base_url="https://api.channel.io",
+        ) as http_client:
+            client = _make_client(http_client=http_client)
+            with self.assertRaises(ChannelTalkUpstreamError) as raised:
+                await client.list_user_chats(
+                    access_key="access-key",
+                    access_secret="access-secret",
+                    state="opened",
+                )
+
+        self.assertEqual(str(raised.exception), "upstream exploded")
 
     async def test_get_user_chat_parses_detail_payload_for_later_document_build(self) -> None:
         async def handler(request: httpx.Request) -> httpx.Response:
@@ -275,7 +665,7 @@ class ChannelTalkCoreApiClientTests(IsolatedAsyncioTestCase):
             transport=httpx.MockTransport(handler),
             base_url="https://api.channel.io",
         ) as http_client:
-            client = ChannelTalkCoreApiClient(http_client=http_client)
+            client = _make_client(http_client=http_client)
             detail = await client.get_user_chat(
                 access_key="access-key",
                 access_secret="access-secret",
@@ -314,7 +704,7 @@ class ChannelTalkCoreApiClientTests(IsolatedAsyncioTestCase):
             transport=httpx.MockTransport(handler),
             base_url="https://api.channel.io",
         ) as http_client:
-            client = ChannelTalkCoreApiClient(http_client=http_client)
+            client = _make_client(http_client=http_client)
             detail = await client.get_user_chat(
                 access_key="access-key",
                 access_secret="access-secret",
@@ -352,7 +742,7 @@ class ChannelTalkCoreApiClientTests(IsolatedAsyncioTestCase):
             transport=httpx.MockTransport(handler),
             base_url="https://api.channel.io",
         ) as http_client:
-            client = ChannelTalkCoreApiClient(http_client=http_client)
+            client = _make_client(http_client=http_client)
             detail = await client.get_user_chat(
                 access_key="access-key",
                 access_secret="access-secret",
@@ -397,7 +787,7 @@ class ChannelTalkCoreApiClientTests(IsolatedAsyncioTestCase):
             transport=httpx.MockTransport(handler),
             base_url="https://api.channel.io",
         ) as http_client:
-            client = ChannelTalkCoreApiClient(http_client=http_client)
+            client = _make_client(http_client=http_client)
             detail = await client.get_user_chat(
                 access_key="access-key",
                 access_secret="access-secret",
@@ -482,7 +872,7 @@ class ChannelTalkCoreApiClientTests(IsolatedAsyncioTestCase):
             transport=httpx.MockTransport(handler),
             base_url="https://api.channel.io",
         ) as http_client:
-            client = ChannelTalkCoreApiClient(http_client=http_client)
+            client = _make_client(http_client=http_client)
             page = await client.list_user_chat_messages(
                 access_key="access-key",
                 access_secret="access-secret",
@@ -527,7 +917,7 @@ class ChannelTalkCoreApiClientTests(IsolatedAsyncioTestCase):
             transport=httpx.MockTransport(handler),
             base_url="https://api.channel.io",
         ) as http_client:
-            client = ChannelTalkCoreApiClient(http_client=http_client)
+            client = _make_client(http_client=http_client)
             page = await client.list_user_chat_messages(
                 access_key="access-key",
                 access_secret="access-secret",
@@ -560,7 +950,7 @@ class ChannelTalkCoreApiClientTests(IsolatedAsyncioTestCase):
             transport=httpx.MockTransport(handler),
             base_url="https://api.channel.io",
         ) as http_client:
-            client = ChannelTalkCoreApiClient(http_client=http_client)
+            client = _make_client(http_client=http_client)
             page = await client.list_user_chat_messages(
                 access_key="access-key",
                 access_secret="access-secret",
@@ -591,7 +981,7 @@ class ChannelTalkCoreApiClientTests(IsolatedAsyncioTestCase):
             transport=httpx.MockTransport(handler),
             base_url="https://api.channel.io",
         ) as http_client:
-            client = ChannelTalkCoreApiClient(http_client=http_client)
+            client = _make_client(http_client=http_client)
             await client.list_user_chat_messages(
                 access_key="access-key",
                 access_secret="access-secret",
@@ -619,7 +1009,7 @@ class ChannelTalkCoreApiClientTests(IsolatedAsyncioTestCase):
             transport=httpx.MockTransport(handler),
             base_url="https://api.channel.io",
         ) as http_client:
-            client = ChannelTalkCoreApiClient(http_client=http_client)
+            client = _make_client(http_client=http_client)
             page = await client.list_user_chat_messages(
                 access_key="access-key",
                 access_secret="access-secret",
@@ -651,7 +1041,7 @@ class ChannelTalkCoreApiClientTests(IsolatedAsyncioTestCase):
             transport=httpx.MockTransport(handler),
             base_url="https://api.channel.io",
         ) as http_client:
-            client = ChannelTalkCoreApiClient(http_client=http_client)
+            client = _make_client(http_client=http_client)
             page = await client.list_user_chat_messages(
                 access_key="access-key",
                 access_secret="access-secret",
@@ -691,7 +1081,7 @@ class ChannelTalkCoreApiClientTests(IsolatedAsyncioTestCase):
             transport=httpx.MockTransport(handler),
             base_url="https://api.channel.io",
         ) as http_client:
-            client = ChannelTalkCoreApiClient(http_client=http_client)
+            client = _make_client(http_client=http_client)
             page = await client.list_user_chat_messages(
                 access_key="access-key",
                 access_secret="access-secret",
@@ -757,7 +1147,7 @@ class ChannelTalkCoreApiClientTests(IsolatedAsyncioTestCase):
             transport=httpx.MockTransport(handler),
             base_url="https://api.channel.io",
         ) as http_client:
-            client = ChannelTalkCoreApiClient(http_client=http_client)
+            client = _make_client(http_client=http_client)
             page = await client.list_user_chat_messages(
                 access_key="access-key",
                 access_secret="access-secret",
@@ -791,7 +1181,7 @@ class ChannelTalkCoreApiClientTests(IsolatedAsyncioTestCase):
             transport=httpx.MockTransport(handler),
             base_url="https://api.channel.io",
         ) as http_client:
-            client = ChannelTalkCoreApiClient(http_client=http_client)
+            client = _make_client(http_client=http_client)
             with self.assertRaisesRegex(
                 ChannelTalkPayloadError,
                 "invalid user chat message list payload",

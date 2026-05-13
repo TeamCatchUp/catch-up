@@ -177,7 +177,7 @@ class _SyncIngestionStageLoggingProxy:
         stage_started_at: float,
         result: object,
     ) -> None:
-        logger.info(
+        logger.debug(
             _STAGE_COMPLETED_EVENT,
             **self._context,
             stage=stage,

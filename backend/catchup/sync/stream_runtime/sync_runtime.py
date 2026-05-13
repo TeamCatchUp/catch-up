@@ -1,15 +1,12 @@
 from __future__ import annotations
 
 from catchup.sync.stream_runtime.stream_constants import STREAM_CLAIM_START_ID
-from catchup.sync.stream_runtime.stream_queue import (
-    ack_messages,
-    autoclaim_stale_messages,
-    ensure_consumer_group,
-    read_new_messages,
-)
-from catchup.sync.stream_runtime.stream_schemas import (
-    SyncStreamMessage,
-)
+from catchup.sync.stream_runtime.stream_queue import AckDeleteResult
+from catchup.sync.stream_runtime.stream_queue import ack_messages
+from catchup.sync.stream_runtime.stream_queue import autoclaim_stale_messages
+from catchup.sync.stream_runtime.stream_queue import ensure_consumer_group
+from catchup.sync.stream_runtime.stream_queue import read_new_messages
+from catchup.sync.stream_runtime.stream_schemas import SyncStreamMessage
 
 
 async def initialize_stream_runtime() -> None:
@@ -52,6 +49,6 @@ async def read_ready_messages(
     return merged_messages, claim_batch.next_start_id
 
 
-async def ack_consumed_messages(messages: list[SyncStreamMessage]) -> int:
+async def ack_consumed_messages(messages: list[SyncStreamMessage]) -> AckDeleteResult:
     message_ids = [message.message_id for message in messages]
     return await ack_messages(message_ids)

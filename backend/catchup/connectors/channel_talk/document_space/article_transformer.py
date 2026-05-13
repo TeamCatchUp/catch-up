@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 from typing import Protocol
+from typing import TypeAlias
 from urllib.parse import quote
 from urllib.parse import unquote
 
@@ -63,6 +64,9 @@ from .article_ids import build_article_delete_prefix
 from .article_ids import build_article_document_id
 
 ARTICLE_PUBLIC_BASE_URL = "https://guide.catchup.im"
+PublishedArticleSource: TypeAlias = (
+    ChannelTalkDocumentArticle | ChannelTalkDocumentArticleRevision
+)
 
 
 class ArticleExecution(Protocol):
@@ -104,7 +108,7 @@ class ArticleTransformer:
         # 문서화 대상 content는 published revision으로만 제한한다.
         view = bundle.detail
         current_article = self._select_article(bundle)
-        source_revision = self._select_published_revision(bundle)
+        published_source = self._select_published_source(bundle)
         language = require_text(bundle.language or self.language, "language")
 
         # Delete prefix는 published revision이 없어도 반환한다.
@@ -115,19 +119,19 @@ class ArticleTransformer:
             language=language,
             article_id=current_article.article_id,
         )
-        if source_revision is None:
+        if published_source is None:
             return ArticleBuildResult(documents=[], delete_prefix=delete_prefix)
 
         # Content 준비 단계: API body를 plain text로 정규화한 뒤,
         # 제목/섹션 구조를 보존하는 chunk 단위로 나눈다.
         state = ChannelTalkDocumentArticleState.PUBLISHED.value
-        raw_content = self._content_normalizer.normalize_source_content(source_revision)
+        raw_content = self._content_normalizer.normalize_source_content(published_source)
         url = self._resolve_public_article_url(
             article=current_article,
             language=language,
-            title=source_revision.title,
+            title=published_source.title,
         )
-        header = self._build_context_header(source=source_revision)
+        header = self._build_context_header(source=published_source)
         chunks = self._chunker.chunk_article_content(
             header=header,
             body=raw_content,
@@ -144,7 +148,7 @@ class ArticleTransformer:
                 bundle=bundle,
                 view=view,
                 current_article=current_article,
-                source_revision=source_revision,
+                published_source=published_source,
                 language=language,
                 state=state,
                 url=url,
@@ -183,15 +187,28 @@ class ArticleTransformer:
         return bundle.list_item
 
     @staticmethod
-    def _select_published_revision(
+    def _select_published_source(
         bundle: ChannelTalkFetchedArticle,
-    ) -> ChannelTalkDocumentArticleRevision | None:
+    ) -> PublishedArticleSource | None:
         if bundle.published_revision is None:
-            return None
+            return ArticleTransformer._select_current_published_article(bundle)
         revision = bundle.published_revision.revision
         if revision.state != ChannelTalkDocumentArticleState.PUBLISHED:
             return None
         return revision
+
+    @staticmethod
+    def _select_current_published_article(
+        bundle: ChannelTalkFetchedArticle,
+    ) -> ChannelTalkDocumentArticle | None:
+        article = ArticleTransformer._select_article(bundle)
+        if article.published_revision_id is None:
+            return None
+        if article.state != ChannelTalkDocumentArticleState.PUBLISHED:
+            return None
+        if article.current_revision_id != article.published_revision_id:
+            return None
+        return article
 
     def _build_logical_metadata(
         self,
@@ -201,7 +218,7 @@ class ArticleTransformer:
         bundle: ChannelTalkFetchedArticle,
         view: ChannelTalkDocumentArticleView | None,
         current_article: ChannelTalkDocumentArticle,
-        source_revision: ChannelTalkDocumentArticleRevision,
+        published_source: PublishedArticleSource,
         language: str,
         state: str,
         url: str | None,
@@ -231,8 +248,8 @@ class ArticleTransformer:
                 source="channel_talk",
                 record_id=current_article.article_id,
                 url=url,
-                created_at=source_revision.created_at or current_article.created_at,
-                updated_at=source_revision.updated_at or current_article.updated_at,
+                created_at=published_source.created_at or current_article.created_at,
+                updated_at=published_source.updated_at or current_article.updated_at,
                 synced_at=sync_window.window_end,
                 contextual_content=contextual_content,
             ),
@@ -241,8 +258,8 @@ class ArticleTransformer:
                     article_id=current_article.article_id,
                     language=language,
                     state=state,
-                    title=source_revision.title,
-                    subtitle=source_revision.subtitle,
+                    title=published_source.title,
+                    subtitle=published_source.subtitle,
                     slug=current_article.slug,
                     url=url,
                 ),
@@ -253,7 +270,7 @@ class ArticleTransformer:
                     space_name=execution.space_name,
                 ),
                 author=ChannelTalkDocumentArticleAuthorMetadata(
-                    author_id=source_revision.author_id
+                    author_id=published_source.author_id
                     or (author.author_id if author else None),
                     author_name=author.name if author else None,
                 ),
@@ -266,10 +283,14 @@ class ArticleTransformer:
                     category_name=category.name if category is not None else None,
                 ),
                 publication=ChannelTalkDocumentArticlePublicationMetadata(
-                    created_at=source_revision.created_at or current_article.created_at,
-                    updated_at=source_revision.updated_at or current_article.updated_at,
+                    created_at=published_source.created_at
+                    or current_article.created_at,
+                    updated_at=published_source.updated_at
+                    or current_article.updated_at,
                     published_at=current_article.published_at or bundle.published_at,
-                    published_revision_id=source_revision.revision_id,
+                    published_revision_id=self._published_revision_id(
+                        published_source
+                    ),
                     current_revision_id=current_article.current_revision_id,
                 ),
                 chunk=ChannelTalkDocumentArticleChunkMetadata(
@@ -317,11 +338,17 @@ class ArticleTransformer:
         return f"{title_slug}-{normalized_slug}" if title_slug else normalized_slug
 
     @staticmethod
-    def _build_context_header(*, source: ChannelTalkDocumentArticleRevision) -> str:
+    def _build_context_header(*, source: PublishedArticleSource) -> str:
         for value in (source.title, source.subtitle, source.summary):
             if value and value.strip():
                 return value.strip()
         return source.article_id.strip() if source.article_id else ""
+
+    @staticmethod
+    def _published_revision_id(source: PublishedArticleSource) -> str | None:
+        if isinstance(source, ChannelTalkDocumentArticleRevision):
+            return source.revision_id
+        return source.published_revision_id
 
     @staticmethod
     def _select_author(

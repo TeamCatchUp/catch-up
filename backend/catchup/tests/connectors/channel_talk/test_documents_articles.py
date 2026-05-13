@@ -12,6 +12,11 @@ from catchup.connectors.channel_talk.document_space.client import (
 from catchup.connectors.channel_talk.document_space.client import (
     ChannelTalkDocumentsApiClient,
 )
+from catchup.connectors.channel_talk.document_space.http_client import (
+    ChannelTalkDocumentsHttpClient,
+)
+from catchup.connectors.channel_talk.exceptions import ChannelTalkRateLimitError
+from catchup.connectors.channel_talk.exceptions import ChannelTalkUpstreamError
 from catchup.connectors.channel_talk.exceptions import ChannelTalkValidationError
 from catchup.connectors.channel_talk.schemas.document_article import (
     ChannelTalkDocumentArticle,
@@ -31,6 +36,39 @@ from catchup.connectors.channel_talk.schemas.document_article import (
 from catchup.connectors.channel_talk.schemas.document_article import (
     ChannelTalkDocumentArticleState,
 )
+
+
+class FakeDocumentSpaceRateLimiter:
+    def __init__(self, delays: list[float] | None = None) -> None:
+        self._delays = list(delays or [])
+        self.acquire_count = 0
+        self.defer_delays: list[float] = []
+
+    async def acquire_delay(self) -> float:
+        self.acquire_count += 1
+        if self._delays:
+            return self._delays.pop(0)
+        return 0.0
+
+    async def defer_for(self, delay_seconds: float) -> None:
+        self.defer_delays.append(delay_seconds)
+
+
+def _make_documents_client(
+    *,
+    http_client: httpx.AsyncClient,
+    space_id: str | None = None,
+    **transport_options,
+) -> ChannelTalkDocumentsApiClient:
+    return ChannelTalkDocumentsApiClient(
+        transport=ChannelTalkDocumentsHttpClient(
+            access_key="documents-key",
+            access_secret="documents-secret",
+            http_client=http_client,
+            space_id=space_id,
+            **transport_options,
+        )
+    )
 
 
 def _article_payload() -> dict[str, object]:
@@ -272,7 +310,7 @@ class ChannelTalkDocumentsArticleClientTests(IsolatedAsyncioTestCase):
             return httpx.Response(200, json={"articles": [], "next": "cursor-2"})
 
         async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
-            client = ChannelTalkDocumentsApiClient(access_key="documents-key", access_secret="documents-secret", http_client=http_client)
+            client = _make_documents_client(http_client=http_client)
             page = await client.list_articles(
                 language="ko",
                 state="published",
@@ -293,7 +331,7 @@ class ChannelTalkDocumentsArticleClientTests(IsolatedAsyncioTestCase):
             return httpx.Response(200, json={"articles": []})
 
         async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
-            client = ChannelTalkDocumentsApiClient(access_key="documents-key", access_secret="documents-secret", http_client=http_client)
+            client = _make_documents_client(http_client=http_client)
             page = await client.list_articles(
                 language="ko",
             )
@@ -306,7 +344,7 @@ class ChannelTalkDocumentsArticleClientTests(IsolatedAsyncioTestCase):
             return httpx.Response(200, json={"articles": []})
 
         async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
-            client = ChannelTalkDocumentsApiClient(access_key="documents-key", access_secret="documents-secret", http_client=http_client)
+            client = _make_documents_client(http_client=http_client)
             await client.list_articles(
                 language="ko",
                 state=ChannelTalkDocumentArticleState.DRAFT,
@@ -319,7 +357,7 @@ class ChannelTalkDocumentsArticleClientTests(IsolatedAsyncioTestCase):
             return httpx.Response(200, json={"article": _article_payload()})
 
         async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
-            client = ChannelTalkDocumentsApiClient(access_key="documents-key", access_secret="documents-secret", http_client=http_client)
+            client = _make_documents_client(http_client=http_client)
             detail = await client.get_article(
                 article_id="article-1",
                 language="en",
@@ -336,7 +374,7 @@ class ChannelTalkDocumentsArticleClientTests(IsolatedAsyncioTestCase):
             return httpx.Response(200, json={"revision": _revision_payload()})
 
         async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
-            client = ChannelTalkDocumentsApiClient(access_key="documents-key", access_secret="documents-secret", http_client=http_client)
+            client = _make_documents_client(http_client=http_client)
             revision = await client.get_article_revision(
                 article_id="article-1",
                 revision_id="revision-1",
@@ -355,7 +393,7 @@ class ChannelTalkDocumentsArticleClientTests(IsolatedAsyncioTestCase):
             return httpx.Response(200, json={"articles": [_article_payload()]})
 
         async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
-            client = ChannelTalkDocumentsApiClient(access_key="documents-key", access_secret="documents-secret", http_client=http_client)
+            client = _make_documents_client(http_client=http_client)
             batch = await client.batch_get_articles(
                 article_ids=["article-1", "article-2"],
                 language="ko",
@@ -363,11 +401,161 @@ class ChannelTalkDocumentsArticleClientTests(IsolatedAsyncioTestCase):
 
         self.assertEqual(batch.articles[0].article_id, "article-1")
 
+    async def test_list_articles_applies_space_rate_limiter_before_request(
+        self,
+    ) -> None:
+        limiter = FakeDocumentSpaceRateLimiter(delays=[0.25])
+        limiter_requests: list[str] = []
+        sleeps: list[float] = []
+
+        async def get_limiter(*, space_id: str) -> FakeDocumentSpaceRateLimiter:
+            limiter_requests.append(space_id)
+            return limiter
+
+        async def sleep(delay: float) -> None:
+            sleeps.append(delay)
+
+        async def handler(request: httpx.Request) -> httpx.Response:
+            _ = request
+            return httpx.Response(200, json={"articles": []})
+
+        async with httpx.AsyncClient(
+            transport=httpx.MockTransport(handler),
+        ) as http_client:
+            client = _make_documents_client(
+                http_client=http_client,
+                space_id="space-123",
+                sleep=sleep,
+                rate_limiter_getter=get_limiter,
+            )
+            await client.list_articles(language="ko")
+
+        self.assertEqual(limiter_requests, ["space-123"])
+        self.assertEqual(limiter.acquire_count, 1)
+        self.assertEqual(sleeps, [0.25])
+
+    async def test_list_articles_without_space_id_skips_rate_limiter(self) -> None:
+        async def get_limiter(*, space_id: str) -> FakeDocumentSpaceRateLimiter:
+            _ = space_id
+            raise AssertionError("rate limiter should not be requested")
+
+        async def handler(request: httpx.Request) -> httpx.Response:
+            _ = request
+            return httpx.Response(200, json={"articles": []})
+
+        async with httpx.AsyncClient(
+            transport=httpx.MockTransport(handler),
+        ) as http_client:
+            client = _make_documents_client(
+                http_client=http_client,
+                rate_limiter_getter=get_limiter,
+            )
+            await client.list_articles(language="ko")
+
+    async def test_list_articles_retries_429_with_retry_after_header(self) -> None:
+        limiter = FakeDocumentSpaceRateLimiter()
+        sleeps: list[float] = []
+        responses = [
+            httpx.Response(429, headers={"Retry-After": "2"}, json={"message": "slow"}),
+            httpx.Response(200, json={"articles": []}),
+        ]
+
+        async def get_limiter(*, space_id: str) -> FakeDocumentSpaceRateLimiter:
+            _ = space_id
+            return limiter
+
+        async def sleep(delay: float) -> None:
+            sleeps.append(delay)
+
+        async def handler(request: httpx.Request) -> httpx.Response:
+            _ = request
+            return responses.pop(0)
+
+        async with httpx.AsyncClient(
+            transport=httpx.MockTransport(handler),
+        ) as http_client:
+            client = _make_documents_client(
+                http_client=http_client,
+                space_id="space-123",
+                sleep=sleep,
+                rate_limiter_getter=get_limiter,
+                max_rate_limit_retries=1,
+                max_rate_limit_wait_seconds=10,
+            )
+            page = await client.list_articles(language="ko")
+
+        self.assertEqual(page.articles, [])
+        self.assertEqual(sleeps, [2])
+        self.assertEqual(limiter.defer_delays, [2])
+        self.assertEqual(limiter.acquire_count, 2)
+
+    async def test_list_articles_raises_429_when_retry_after_exceeds_max_wait(
+        self,
+    ) -> None:
+        limiter = FakeDocumentSpaceRateLimiter()
+        sleeps: list[float] = []
+
+        async def get_limiter(*, space_id: str) -> FakeDocumentSpaceRateLimiter:
+            _ = space_id
+            return limiter
+
+        async def sleep(delay: float) -> None:
+            sleeps.append(delay)
+
+        async def handler(request: httpx.Request) -> httpx.Response:
+            _ = request
+            return httpx.Response(
+                429,
+                headers={"Retry-After": "31"},
+                json={"message": "slow"},
+            )
+
+        async with httpx.AsyncClient(
+            transport=httpx.MockTransport(handler),
+        ) as http_client:
+            client = _make_documents_client(
+                http_client=http_client,
+                space_id="space-123",
+                sleep=sleep,
+                rate_limiter_getter=get_limiter,
+                max_rate_limit_retries=1,
+                max_rate_limit_wait_seconds=30,
+            )
+            with self.assertRaises(ChannelTalkRateLimitError) as raised:
+                await client.list_articles(language="ko")
+
+        self.assertEqual(raised.exception.retry_after, 31)
+        self.assertEqual(sleeps, [])
+        self.assertEqual(limiter.defer_delays, [31])
+
+    async def test_upstream_error_message_exposes_status_and_response_body(
+        self,
+    ) -> None:
+        async def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(
+                503,
+                json={
+                    "code": "maintenance",
+                    "message": "documents service maintenance",
+                },
+            )
+
+        async with httpx.AsyncClient(
+            transport=httpx.MockTransport(handler),
+        ) as http_client:
+            client = _make_documents_client(http_client=http_client)
+            with self.assertRaises(ChannelTalkUpstreamError) as raised:
+                await client.list_articles(language="ko")
+
+        message = str(raised.exception)
+        self.assertIn("upstream status 503", message)
+        self.assertIn("documents service maintenance", message)
+
     async def test_batch_get_articles_rejects_plain_string_article_ids(self) -> None:
         async with httpx.AsyncClient(
             transport=httpx.MockTransport(lambda request: httpx.Response(500))
         ) as http_client:
-            client = ChannelTalkDocumentsApiClient(access_key="documents-key", access_secret="documents-secret", http_client=http_client)
+            client = _make_documents_client(http_client=http_client)
             with self.assertRaises(ChannelTalkValidationError):
                 await client.batch_get_articles(
                     article_ids="article-1",
@@ -378,7 +566,7 @@ class ChannelTalkDocumentsArticleClientTests(IsolatedAsyncioTestCase):
         async with httpx.AsyncClient(
             transport=httpx.MockTransport(lambda request: httpx.Response(500))
         ) as http_client:
-            client = ChannelTalkDocumentsApiClient(access_key="documents-key", access_secret="documents-secret", http_client=http_client)
+            client = _make_documents_client(http_client=http_client)
             with self.assertRaises(ChannelTalkValidationError):
                 await client.list_articles(
                     language=" ",
@@ -388,7 +576,7 @@ class ChannelTalkDocumentsArticleClientTests(IsolatedAsyncioTestCase):
         async with httpx.AsyncClient(
             transport=httpx.MockTransport(lambda request: httpx.Response(500))
         ) as http_client:
-            client = ChannelTalkDocumentsApiClient(access_key="documents-key", access_secret="documents-secret", http_client=http_client)
+            client = _make_documents_client(http_client=http_client)
             with self.assertRaises(ChannelTalkValidationError):
                 await client.list_articles(
                     language="en",
@@ -399,7 +587,7 @@ class ChannelTalkDocumentsArticleClientTests(IsolatedAsyncioTestCase):
         async with httpx.AsyncClient(
             transport=httpx.MockTransport(lambda request: httpx.Response(500))
         ) as http_client:
-            client = ChannelTalkDocumentsApiClient(access_key="documents-key", access_secret="documents-secret", http_client=http_client)
+            client = _make_documents_client(http_client=http_client)
             with self.assertRaises(ChannelTalkValidationError):
                 await client.list_articles(
                     language="en",
@@ -410,7 +598,7 @@ class ChannelTalkDocumentsArticleClientTests(IsolatedAsyncioTestCase):
         async with httpx.AsyncClient(
             transport=httpx.MockTransport(lambda request: httpx.Response(500))
         ) as http_client:
-            client = ChannelTalkDocumentsApiClient(access_key="documents-key", access_secret="documents-secret", http_client=http_client)
+            client = _make_documents_client(http_client=http_client)
             with self.assertRaises(ChannelTalkValidationError):
                 await client.get_article(
                     article_id=" ",
@@ -421,7 +609,7 @@ class ChannelTalkDocumentsArticleClientTests(IsolatedAsyncioTestCase):
         async with httpx.AsyncClient(
             transport=httpx.MockTransport(lambda request: httpx.Response(500))
         ) as http_client:
-            client = ChannelTalkDocumentsApiClient(access_key="documents-key", access_secret="documents-secret", http_client=http_client)
+            client = _make_documents_client(http_client=http_client)
             with self.assertRaises(ChannelTalkValidationError):
                 await client.batch_get_articles(
                     article_ids=[f"article-{index}" for index in range(26)],

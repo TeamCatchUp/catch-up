@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from typing import Any
 from typing import Callable
 from typing import TypeVar
@@ -45,6 +46,26 @@ def build_since_limit_params(
 
 def is_success_response(response: httpx.Response) -> bool:
     return 200 <= response.status_code < 300
+
+
+def build_upstream_error_message(
+    *,
+    service_name: str,
+    status_code: int,
+    metadata: dict[str, Any],
+) -> str:
+    message = f"{service_name} request failed with upstream status {status_code}"
+    body = metadata.get("body")
+    if body is None:
+        return message
+
+    if isinstance(body, str):
+        body_text = body
+    else:
+        body_text = json.dumps(body, ensure_ascii=False, default=str)
+    if not body_text:
+        return message
+    return f"{message}: body={body_text}"
 
 
 def decode_response_json(response: httpx.Response, *, error_message: str) -> Any:

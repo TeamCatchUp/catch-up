@@ -1,25 +1,16 @@
 from __future__ import annotations
 
-import base64
-from collections.abc import Buffer
 from collections.abc import Sequence
 from typing import Any
 from urllib.parse import quote
 
-import httpx
 import structlog
 
-from catchup.configs.config import settings
-from catchup.connectors.base.retry import parse_retry_after_header
-from catchup.connectors.channel_talk.exceptions import ChannelTalkAuthenticationError
-from catchup.connectors.channel_talk.exceptions import ChannelTalkRateLimitError
-from catchup.connectors.channel_talk.exceptions import ChannelTalkTimeoutError
-from catchup.connectors.channel_talk.exceptions import ChannelTalkUpstreamError
+from catchup.connectors.channel_talk.document_space.http_client import (
+    ChannelTalkDocumentsHttpClient,
+)
 from catchup.connectors.channel_talk.exceptions import ChannelTalkValidationError
 from catchup.connectors.channel_talk.http_helpers import build_since_limit_params
-from catchup.connectors.channel_talk.http_helpers import decode_response_json
-from catchup.connectors.channel_talk.http_helpers import extract_response_error_metadata
-from catchup.connectors.channel_talk.http_helpers import is_success_response
 from catchup.connectors.channel_talk.http_helpers import parse_channel_talk_payload
 from catchup.connectors.channel_talk.schemas.document_article import (
     ChannelTalkDocumentArticleBatchResult,
@@ -45,10 +36,8 @@ from catchup.connectors.channel_talk.schemas.document_metadata import (
 from catchup.connectors.channel_talk.schemas.document_metadata import (
     ChannelTalkDocumentSpace,
 )
-from catchup.utils.client import get_global_async_client
 
 logger = structlog.get_logger(__name__)
-RequestParams = dict[str, Any] | list[tuple[str, str]]
 
 ARTICLE_BATCH_MAX_SIZE = 25
 DEFAULT_ARTICLE_LIST_LIMIT = 25
@@ -59,29 +48,12 @@ class ChannelTalkDocumentsApiClient:
     def __init__(
         self,
         *,
-        access_key: str,
-        access_secret: str,
-        base_url: str | None = None,
-        timeout_seconds: float | None = None,
-        http_client: httpx.AsyncClient | None = None,
+        transport: ChannelTalkDocumentsHttpClient,
     ) -> None:
-        default_base_url = getattr(
-            settings,
-            "CHANNEL_TALK_DOCUMENTS_API_URL",
-            "https://document-api.channel.io",
-        )
-        default_timeout = getattr(settings, "CHANNEL_TALK_API_TIMEOUT_SECONDS", 10.0)
-
-        self.base_url = str(base_url or default_base_url).rstrip("/")
-        self.timeout_seconds = float(timeout_seconds or default_timeout)
-        self._http_client = http_client or get_global_async_client()
-        self._headers = self._build_headers(
-            access_key=access_key,
-            access_secret=access_secret,
-        )
+        self._transport = transport
 
     async def get_current_space(self) -> ChannelTalkDocumentSpace:
-        payload = await self._request(
+        payload = await self._transport.request_json(
             method="GET",
             path="/open/v1/spaces/$me",
         )
@@ -103,7 +75,7 @@ class ChannelTalkDocumentsApiClient:
         limit: int = DEFAULT_ARTICLE_LIST_LIMIT,
         order: str | None = DEFAULT_ARTICLE_LIST_ORDER,
     ) -> ChannelTalkDocumentArticlePage:
-        payload = await self._request(
+        payload = await self._transport.request_json(
             method="GET",
             path="/open/v1/spaces/$me/articles",
             params=self._build_article_list_params(
@@ -130,7 +102,7 @@ class ChannelTalkDocumentsApiClient:
         language: str,
     ) -> ChannelTalkDocumentArticleView:
         normalized_article_id = self._require_query_text(article_id, "article_id")
-        payload = await self._request(
+        payload = await self._transport.request_json(
             method="GET",
             path=f"/open/v1/spaces/$me/articles/{quote(normalized_article_id, safe='')}",
             params={"language": self._require_query_text(language, "language")},
@@ -154,7 +126,7 @@ class ChannelTalkDocumentsApiClient:
             revision_id,
             "revision_id",
         )
-        payload = await self._request(
+        payload = await self._transport.request_json(
             method="GET",
             path=(
                 f"/open/v1/spaces/$me/articles/"
@@ -178,7 +150,7 @@ class ChannelTalkDocumentsApiClient:
         article_ids: Sequence[str],
         language: str,
     ) -> ChannelTalkDocumentArticleBatchResult:
-        payload = await self._request(
+        payload = await self._transport.request_json(
             method="GET",
             path="/open/v1/spaces/$me/articles/batch",
             params=self._build_article_batch_params(
@@ -200,7 +172,7 @@ class ChannelTalkDocumentsApiClient:
         since: str | None = None,
         limit: int = 100,
     ) -> ChannelTalkDocumentAuthorPage:
-        payload = await self._request(
+        payload = await self._transport.request_json(
             method="GET",
             path="/open/v1/spaces/$me/authors",
             params=build_since_limit_params(since=since, limit=limit),
@@ -214,7 +186,7 @@ class ChannelTalkDocumentsApiClient:
         )
 
     async def list_nav_nodes(self) -> ChannelTalkDocumentNavNodePage:
-        payload = await self._request(
+        payload = await self._transport.request_json(
             method="GET",
             path="/open/v1/spaces/$me/nav-nodes/$all",
         )
@@ -225,27 +197,6 @@ class ChannelTalkDocumentsApiClient:
             error_message="Channel Talk Documents returned an invalid navigation payload",
             logger=logger,
         )
-
-    @staticmethod
-    def _build_headers(
-        *,
-        access_key: str,
-        access_secret: str,
-    ) -> dict[str, str]:
-        normalized_access_key = str(access_key or "").strip()
-        normalized_access_secret = str(access_secret or "").strip()
-        if not normalized_access_key or not normalized_access_secret:
-            raise ChannelTalkValidationError(
-                "Channel Talk Documents credentials are required"
-            )
-        credentials: Buffer = (
-            f"{normalized_access_key}:{normalized_access_secret}".encode("utf-8")
-        )
-        token = base64.b64encode(credentials).decode("ascii")
-        return {
-            "Accept": "application/json",
-            "Authorization": f"Basic {token}",
-        }
 
     @classmethod
     def _build_article_list_params(
@@ -344,88 +295,3 @@ class ChannelTalkDocumentsApiClient:
                 f"Channel Talk Documents {field_name} is required"
             )
         return normalized
-
-    async def _request(
-        self,
-        *,
-        method: str,
-        path: str,
-        params: RequestParams | None = None,
-    ) -> Any:
-        response = await self._send_request(
-            method=method,
-            path=path,
-            params=params,
-        )
-        return self._decode_response(response)
-
-    async def _send_request(
-        self,
-        *,
-        method: str,
-        path: str,
-        params: RequestParams | None = None,
-    ) -> httpx.Response:
-        url = f"{self.base_url}{path}"
-        try:
-            return await self._http_client.request(
-                method,
-                url,
-                headers=self._headers,
-                params=params,
-                timeout=self.timeout_seconds,
-            )
-        except httpx.TimeoutException as exc:
-            logger.warning("channel_talk_documents_request_timed_out", url=url)
-            raise ChannelTalkTimeoutError(
-                "Channel Talk Documents API request timed out"
-            ) from exc
-        except httpx.HTTPError as exc:
-            logger.exception("channel_talk_documents_request_failed", url=url)
-            raise ChannelTalkUpstreamError(
-                "Failed to reach Channel Talk Documents API",
-                metadata={"reason": str(exc)},
-            ) from exc
-
-    def _decode_response(self, response: httpx.Response) -> Any:
-        if is_success_response(response):
-            return decode_response_json(
-                response,
-                error_message="Channel Talk Documents returned a non-JSON response",
-            )
-
-        raise self._build_response_error(response)
-
-    @staticmethod
-    def _build_response_error(response: httpx.Response) -> Exception:
-        metadata = extract_response_error_metadata(response)
-        status_code = response.status_code
-        if status_code in (401, 403):
-            return ChannelTalkAuthenticationError(
-                "Channel Talk Documents credentials are invalid or unauthorized",
-                metadata=metadata,
-            )
-        if status_code == 429:
-            return ChannelTalkRateLimitError(
-                retry_after=parse_retry_after_header(
-                    response.headers.get("Retry-After"),
-                    default=60,
-                ),
-                metadata=metadata,
-            )
-        if status_code == 400:
-            return ChannelTalkValidationError(
-                "Channel Talk Documents rejected the request",
-                metadata=metadata,
-            )
-        if status_code >= 500:
-            return ChannelTalkUpstreamError(
-                "Channel Talk Documents API is temporarily unavailable",
-                status_code=status_code,
-                metadata=metadata,
-            )
-        return ChannelTalkUpstreamError(
-            "Channel Talk Documents API request failed",
-            status_code=status_code,
-            metadata=metadata,
-        )

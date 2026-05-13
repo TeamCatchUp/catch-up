@@ -151,6 +151,10 @@ class ChannelTalkUserChatFullSyncFetcherTests(IsolatedAsyncioTestCase):
         self.assertEqual(managers_by_id["manager-2"].name, "Agent Park")
         self.assertEqual(client.list_managers.await_count, 2)
         self.assertEqual(
+            [call.kwargs["channel_id"] for call in client.list_managers.await_args_list],
+            ["channel-123", "channel-123"],
+        )
+        self.assertEqual(
             [call.kwargs["since"] for call in client.list_managers.await_args_list],
             [None, "manager-page-2"],
         )
@@ -239,14 +243,21 @@ class ChannelTalkUserChatFullSyncFetcherTests(IsolatedAsyncioTestCase):
             [call.kwargs["since"] for call in client.list_user_chats.await_args_list],
             ["cursor-1", None],
         )
+        self.assertEqual(
+            [call.kwargs["channel_id"] for call in client.list_user_chats.await_args_list],
+            ["channel-123", "channel-123"],
+        )
         client.get_user_chat.assert_awaited_once_with(
             access_key="access-key",
             access_secret="access-secret",
+            channel_id="channel-123",
             user_chat_id="chat-recent",
         )
         self.assertEqual(client.list_user_chat_messages.await_count, 2)
         first_message_call = client.list_user_chat_messages.await_args_list[0]
         second_message_call = client.list_user_chat_messages.await_args_list[1]
+        self.assertEqual(first_message_call.kwargs["channel_id"], "channel-123")
+        self.assertEqual(second_message_call.kwargs["channel_id"], "channel-123")
         self.assertEqual(first_message_call.kwargs["since"], None)
         self.assertEqual(second_message_call.kwargs["since"], "message-page-2")
 
@@ -364,6 +375,10 @@ class ChannelTalkUserChatFullSyncFetcherTests(IsolatedAsyncioTestCase):
             [call.kwargs["since"] for call in client.list_user_chats.await_args_list],
             [None, "opened-page-2", None],
         )
+        self.assertEqual(
+            [call.kwargs["channel_id"] for call in client.list_user_chats.await_args_list],
+            ["channel-123", "channel-123", "channel-123"],
+        )
 
     async def test_fetch_user_chats_stops_current_state_when_desc_page_reaches_window_start(
         self,
@@ -456,6 +471,7 @@ class ChannelTalkUserChatFullSyncFetcherTests(IsolatedAsyncioTestCase):
         client.get_user_chat.assert_awaited_once_with(
             access_key="access-key",
             access_secret="access-secret",
+            channel_id="channel-123",
             user_chat_id="chat-current",
         )
 
@@ -532,10 +548,12 @@ class ChannelTalkUserChatFullSyncFetcherTests(IsolatedAsyncioTestCase):
                 *,
                 access_key: str,
                 access_secret: str,
+                channel_id: str,
                 user_chat_id: str,
             ) -> ChannelTalkUserChatDetail:
                 _ = access_key
                 _ = access_secret
+                _ = channel_id
                 self.inflight_detail_calls += 1
                 self.max_inflight_detail_calls = max(
                     self.max_inflight_detail_calls,
@@ -553,12 +571,14 @@ class ChannelTalkUserChatFullSyncFetcherTests(IsolatedAsyncioTestCase):
                 *,
                 access_key: str,
                 access_secret: str,
+                channel_id: str,
                 user_chat_id: str,
                 since: str | None,
                 sort_order: str,
             ) -> ChannelTalkUserChatMessagePage:
                 _ = access_key
                 _ = access_secret
+                _ = channel_id
                 _ = user_chat_id
                 _ = since
                 _ = sort_order

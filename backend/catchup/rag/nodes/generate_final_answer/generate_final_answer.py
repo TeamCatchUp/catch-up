@@ -62,10 +62,13 @@ async def generate_final_answer_node(
     prompt_settings = state.get("prompt_settings")
     agent_reasoning = state.get("agent_reasoning")
 
+    slack_thread_context = state.get("slack_thread_context")
+
     prompts = _load_prompts(
         global_context=global_context,
         retrieved_context=retrieved_context,
         prompt_settings=prompt_settings,
+        slack_thread_context=slack_thread_context,
     )
 
     dynamic_prompts = [
@@ -173,6 +176,7 @@ def _load_prompts(
     global_context: dict,
     retrieved_context: str,
     prompt_settings: Any,
+    slack_thread_context: str | None = None,
 ) -> dict:
     # Slack 플랫폼은 citations XML을 렌더링할 수 없으므로 fast 프롬프트 템플릿 사용
     is_slack = prompt_settings and getattr(prompt_settings, "platform", None) == "slack"
@@ -182,10 +186,13 @@ def _load_prompts(
             "rag/generate_final_answer_fast",
             prompt_settings=prompt_settings,
             sources=sources,
+            slack_thread_context=slack_thread_context,
         )
     else:
         system = prompt_loader.get_prompt(
-            "rag/generate_final_answer", sources=sources
+            "rag/generate_final_answer",
+            sources=sources,
+            slack_thread_context=slack_thread_context,
         )
 
     return {

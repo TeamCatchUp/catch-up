@@ -68,6 +68,7 @@ class ChannelTalkUserChatFullSyncFetcher:
                 page = await self.client.list_user_chats(
                     access_key=access_key,
                     access_secret=access_secret,
+                    channel_id=connection.channel_id,
                     state=state,
                     since=next_cursor,
                     sort_order="desc",
@@ -101,6 +102,7 @@ class ChannelTalkUserChatFullSyncFetcher:
                                 self._fetch_user_chat_bundle(
                                     access_key=access_key,
                                     access_secret=access_secret,
+                                    channel_id=connection.channel_id,
                                     channel_name=connection.channel_name,
                                     state=state,
                                     item=item,
@@ -157,6 +159,7 @@ class ChannelTalkUserChatFullSyncFetcher:
         *,
         access_key: str,
         access_secret: str,
+        channel_id: str,
         channel_name: str,
         state: ChannelTalkUserChatState,
         item: ChannelTalkUserChatListItem,
@@ -166,11 +169,13 @@ class ChannelTalkUserChatFullSyncFetcher:
             detail = await self.client.get_user_chat(
                 access_key=access_key,
                 access_secret=access_secret,
+                channel_id=channel_id,
                 user_chat_id=item.user_chat_id,
             )
             messages = await self._list_user_chat_messages(
                 access_key=access_key,
                 access_secret=access_secret,
+                channel_id=channel_id,
                 user_chat_id=item.user_chat_id,
             )
         return ChannelTalkFetchedUserChat(
@@ -195,6 +200,7 @@ class ChannelTalkUserChatFullSyncFetcher:
             page = await self.client.list_managers(
                 access_key=access_key,
                 access_secret=access_secret,
+                channel_id=connection.channel_id,
                 since=next_page_token,
             )
             for manager in page.managers:
@@ -214,11 +220,13 @@ class ChannelTalkUserChatFullSyncFetcher:
         detail = await self.client.get_user_chat(
             access_key=access_key,
             access_secret=access_secret,
+            channel_id=connection.channel_id,
             user_chat_id=user_chat_id,
         )
         messages = await self._list_user_chat_messages(
             access_key=access_key,
             access_secret=access_secret,
+            channel_id=connection.channel_id,
             user_chat_id=user_chat_id,
         )
         return ChannelTalkFetchedUserChat(
@@ -248,6 +256,7 @@ class ChannelTalkUserChatFullSyncFetcher:
         *,
         access_key: str,
         access_secret: str,
+        channel_id: str,
         user_chat_id: str,
     ) -> list[ChannelTalkUserChatMessage]:
         messages: list[ChannelTalkUserChatMessage] = []
@@ -257,6 +266,7 @@ class ChannelTalkUserChatFullSyncFetcher:
             page = await self.client.list_user_chat_messages(
                 access_key=access_key,
                 access_secret=access_secret,
+                channel_id=channel_id,
                 user_chat_id=user_chat_id,
                 since=next_cursor,
                 sort_order="asc",

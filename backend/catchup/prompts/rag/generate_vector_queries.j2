@@ -69,6 +69,13 @@ Your goal is to convert a context-complete Korean question into **High-Density S
 - Per-query `reasoning` can be brief English.
 </output_instructions>
 
+{% if slack_thread_context %}
+<slack_thread_context>
+The following Slack thread messages preceded the user's question. Use this to resolve any references to people, topics, or discussions not found in the conversation history, and to infer temporal context if time-related expressions reference thread events.
+{{ slack_thread_context }}
+</slack_thread_context>
+{% endif %}
+
 {% if recent_history %}
 <recent_conversation>
 The last 2 turns of conversation are provided to help resolve referential expressions (e.g., "그거", "이거", "그 티켓") in the user query.
