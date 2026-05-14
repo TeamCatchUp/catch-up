@@ -36,20 +36,17 @@ function makeDefaultProps() {
 }
 
 describe('ResultPageHeader', () => {
-  it('로딩 중에는 모든 source 탭을 count badge 없이 표시', async () => {
-    server.use(
-      http.get('*/api/v1/search/hybrid', () => new Promise(() => {})),
-    );
-    renderWithClient(<ResultPageHeader {...makeDefaultProps()} />);
+  it('로딩 중에는 모든 source 탭을 count badge 없이 표시', () => {
+    server.use(http.get('*/api/v1/search/hybrid', () => new Promise(() => {})));
+    const { container } = renderWithClient(<ResultPageHeader {...makeDefaultProps()} />);
     expect(screen.getByText('전체')).toBeInTheDocument();
     expect(screen.getByText('Jira')).toBeInTheDocument();
     expect(screen.getByText('Slack')).toBeInTheDocument();
     expect(screen.getByText('Confluence')).toBeInTheDocument();
     expect(screen.getByText('Github')).toBeInTheDocument();
     expect(screen.getByText('채널톡')).toBeInTheDocument();
-    // count badge 미렌더
-    const { container } = renderWithClient(<div />); // dummy, just to compare
-    void container;
+    // count badge 미렌더 — data-tab-state-badge 속성을 가진 요소 없어야 함.
+    expect(container.querySelectorAll('[data-tab-state-badge]')).toHaveLength(0);
   });
 
   it('데이터 도착 후 results=[]면 source 탭은 모두 숨김, 전체 탭만 표시', async () => {
@@ -99,16 +96,12 @@ describe('ResultPageHeader', () => {
         HttpResponse.json({ results, total: results.length, source_distribution: {} }),
       ),
     );
-    renderWithClient(<ResultPageHeader {...makeDefaultProps()} />);
+    const { container } = renderWithClient(<ResultPageHeader {...makeDefaultProps()} />);
 
     await waitFor(() => {
-      const badges = screen
-        .getAllByText(/^\d+$/)
-        .filter((el) => el.hasAttribute('data-tab-state-badge'));
+      const badges = Array.from(container.querySelectorAll('[data-tab-state-badge]'));
       const counts = badges.map((b) => b.textContent);
-      expect(counts).toContain('5');
-      expect(counts).toContain('3');
-      expect(counts).toContain('2');
+      expect(counts).toEqual(expect.arrayContaining(['5', '3', '2']));
     });
   });
 
