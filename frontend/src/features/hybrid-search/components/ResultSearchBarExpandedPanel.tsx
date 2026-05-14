@@ -36,8 +36,13 @@ export default function ResultSearchBarExpandedPanel({
     router.push(`/hybrid-search?${params.toString()}`);
   };
 
+  // onMouseDown preventDefault: 패널 내부 어떤 요소 클릭해도 input focus가 유지됨
+  // (chips, history item 등이 focus를 가져가 onBlur로 패널이 닫히는 문제 방지).
   return (
-    <div className="animate-in fade-in-0 slide-in-from-top-3 flex w-full flex-col gap-2.5 duration-300">
+    <div
+      className="animate-in fade-in-0 slide-in-from-top-3 flex w-full flex-col gap-2.5 duration-300"
+      onMouseDown={(e) => e.preventDefault()}
+    >
       <SourceChipsRow
         className="w-full justify-start"
         selectedSources={selectedSources}
