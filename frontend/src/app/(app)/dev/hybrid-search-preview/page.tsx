@@ -26,53 +26,75 @@ const FILTER_TABS = [
   { value: 'channel_talk' as const, label: '채널톡', count: 1 },
 ];
 
-const MOCK_RESULTS: ReadonlyArray<React.ComponentProps<typeof HybridSearchResultCard>> = [
+import type { RagSourceUiModel } from '@/shared/types/ragSourceModel';
+
+const MOCK_SOURCES: ReadonlyArray<RagSourceUiModel> = [
   {
-    sourceType: 'github',
-    integrationLabel: 'Github',
-    contextLabel: 'catchup-team/catchup-frontend',
+    id: 'github:pr:1',
+    source_type: 'github',
+    entity_type: 'pr',
+    is_cited: false,
+    repo: 'catchup-team/catchup-frontend',
     title: 'feat(frontend): 하이브리드 검색 결과 페이지 컴포넌트 추가',
-    url: 'https://github.com/catchup-team/catchup-frontend/pull/1',
+    content: '',
+    date: '3일 전 변경',
     author: 'fkgrkyr',
-    changedAt: '3일 전 변경',
-    identifier: '#1234',
+    html_url: 'https://github.com/catchup-team/catchup-frontend/pull/1',
+    source_index: 1,
+    github_number: 1234,
   },
   {
-    sourceType: 'jira',
-    integrationLabel: 'Jira',
-    contextLabel: 'CATDEV / Frontend',
+    id: 'jira:issue:CATDEV-476',
+    source_type: 'jira',
+    entity_type: 'issue',
+    is_cited: false,
+    repo: 'CATDEV',
     title: '문서 탐색 결과 페이지 UI 구현',
-    url: '#',
+    content: '',
+    date: '1일 전 변경',
     author: '팀원D',
-    changedAt: '1일 전 변경',
-    identifier: '[CATDEV-476]',
+    html_url: '#',
+    source_index: 2,
+    issue_key: 'CATDEV-476',
   },
   {
-    sourceType: 'slack',
-    integrationLabel: 'Slack',
-    contextLabel: '#frontend-team',
+    id: 'slack:message:1',
+    source_type: 'slack',
+    entity_type: 'message',
+    is_cited: false,
+    repo: '#frontend-team',
     title: '검색 결과 페이지 디자인 리뷰 요청드립니다',
-    url: '#',
+    content: '',
+    date: '5시간 전 변경',
     author: '디자이너',
-    changedAt: '5시간 전',
+    html_url: '#',
+    source_index: 3,
   },
   {
-    sourceType: 'confluence',
-    integrationLabel: 'Confluence',
-    contextLabel: 'CatchUp / 디자인 시스템',
+    id: 'confluence:page:1',
+    source_type: 'confluence',
+    entity_type: 'page',
+    is_cited: false,
+    repo: 'CatchUp / 디자인 시스템',
     title: '하이브리드 검색 결과 페이지 사양 v0.3',
-    url: '#',
+    content: '',
+    date: '6일 전 변경',
     author: 'PM',
-    changedAt: '6일 전 변경',
+    html_url: '#',
+    source_index: 4,
   },
   {
-    sourceType: 'channel_talk',
-    integrationLabel: '채널톡',
-    contextLabel: 'CS / 문의 응대',
+    id: 'channel_talk:user_chat:1',
+    source_type: 'channel_talk',
+    entity_type: 'user_chat',
+    is_cited: false,
+    repo: 'CS / 문의 응대',
     title: '검색 결과가 안 보여요',
-    url: '#',
+    content: '',
+    date: '방금 전 변경',
     author: '고객',
-    changedAt: '오늘',
+    html_url: '#',
+    source_index: 5,
   },
 ];
 
@@ -144,9 +166,9 @@ export default function HybridSearchPreviewPage() {
         <h2 className="text-heading-medium text-content-normal">HybridSearchResultCard — 5개 소스 타입</h2>
         <div className="bg-fill-normal max-w-220 rounded-xl p-4">
           <ul className="flex flex-col gap-2">
-            {MOCK_RESULTS.map((props, i) => (
-              <li key={i}>
-                <HybridSearchResultCard {...props} />
+            {MOCK_SOURCES.map((source) => (
+              <li key={source.id}>
+                <HybridSearchResultCard source={source} />
               </li>
             ))}
           </ul>

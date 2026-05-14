@@ -2,17 +2,23 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import type { RagSourceUiModel } from '@/shared/types/ragSourceModel';
+
 import HybridSearchResultCard from './HybridSearchResultCard';
 
-const BASE_PROPS = {
-  sourceType: 'github' as const,
-  integrationLabel: 'Github',
-  contextLabel: 'catchup/frontend',
+const BASE_SOURCE: RagSourceUiModel = {
+  id: 'github:pr:1234',
+  source_type: 'github',
+  entity_type: 'pr',
+  is_cited: false,
+  repo: 'catchup/frontend',
   title: '검색 결과 카드 타이틀',
-  url: 'https://example.com/issue/1',
+  content: '',
+  date: '3일 전 변경',
   author: '팀원D',
-  changedAt: '3일 전 변경',
-  identifier: '#1234',
+  html_url: 'https://example.com/issue/1',
+  source_index: 1,
+  github_number: 1234,
 };
 
 afterEach(() => {
@@ -20,8 +26,8 @@ afterEach(() => {
 });
 
 describe('HybridSearchResultCard', () => {
-  it('전달받은 라벨/제목/메타를 모두 렌더한다', () => {
-    render(<HybridSearchResultCard {...BASE_PROPS} />);
+  it('integrationLabel/repo/title/author/date/github_number를 모두 렌더한다', () => {
+    render(<HybridSearchResultCard source={BASE_SOURCE} />);
     expect(screen.getByText('Github')).toBeInTheDocument();
     expect(screen.getByText('catchup/frontend')).toBeInTheDocument();
     expect(screen.getByText('검색 결과 카드 타이틀')).toBeInTheDocument();
@@ -30,25 +36,72 @@ describe('HybridSearchResultCard', () => {
     expect(screen.getByText('#1234')).toBeInTheDocument();
   });
 
-  it('identifier 없으면 식별자 영역은 미렌더', () => {
-    const { identifier, ...rest } = BASE_PROPS;
-    void identifier;
-    render(<HybridSearchResultCard {...rest} />);
+  it('issue_key/github_number 없으면 식별자 영역 미렌더', () => {
+    render(<HybridSearchResultCard source={{ ...BASE_SOURCE, github_number: undefined }} />);
     expect(screen.queryByText('#1234')).not.toBeInTheDocument();
   });
 
-  it('카드 클릭 시 url로 window.open 호출', async () => {
+  it('Jira source는 issue_key를 [CU-989] 형태로 표시', () => {
+    render(
+      <HybridSearchResultCard
+        source={{
+          ...BASE_SOURCE,
+          source_type: 'jira',
+          entity_type: 'issue',
+          github_number: undefined,
+          issue_key: 'CU-989',
+        }}
+      />,
+    );
+    expect(screen.getByText('[CU-989]')).toBeInTheDocument();
+  });
+
+  it('channel_talk.document_article은 integrationLabel에 "도큐먼트" suffix', () => {
+    render(
+      <HybridSearchResultCard
+        source={{
+          ...BASE_SOURCE,
+          source_type: 'channel_talk',
+          entity_type: 'document_article',
+          github_number: undefined,
+        }}
+      />,
+    );
+    expect(screen.getByText('채널톡 - 도큐먼트')).toBeInTheDocument();
+  });
+
+  it('Slack source는 title을 따옴표로 wrap', () => {
+    render(
+      <HybridSearchResultCard
+        source={{
+          ...BASE_SOURCE,
+          source_type: 'slack',
+          entity_type: 'message',
+          title: '디자인 리뷰 부탁드립니다',
+          github_number: undefined,
+        }}
+      />,
+    );
+    expect(screen.getByText('"디자인 리뷰 부탁드립니다"')).toBeInTheDocument();
+  });
+
+  it('카드 클릭 시 html_url로 window.open 호출', async () => {
     const user = userEvent.setup();
     const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
-    render(<HybridSearchResultCard {...BASE_PROPS} />);
+    render(<HybridSearchResultCard source={BASE_SOURCE} />);
 
     await user.click(screen.getByRole('button'));
 
     expect(openSpy).toHaveBeenCalledWith('https://example.com/issue/1', '_blank', 'noopener,noreferrer');
   });
 
-  it('sourceType별로 로고 svg가 렌더된다', () => {
-    const { container } = render(<HybridSearchResultCard {...BASE_PROPS} sourceType="slack" />);
-    expect(container.querySelector('svg')).not.toBeNull();
+  it('javascript: URL은 disabled 처리, window.open 호출 안 됨', async () => {
+    const user = userEvent.setup();
+    const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
+    render(<HybridSearchResultCard source={{ ...BASE_SOURCE, html_url: 'javascript:alert(1)' }} />);
+
+    await user.click(screen.getByRole('button'));
+
+    expect(openSpy).not.toHaveBeenCalled();
   });
 });
