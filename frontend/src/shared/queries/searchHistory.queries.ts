@@ -1,5 +1,6 @@
 // 사용자 수동 검색 기록 조회 queryOptions.
-// Backend: GET /api/v1/search/queries?period=all&size=30
+// Backend: GET /api/v1/search/queries?period=all
+// page/size 파라미터 제거됨 (PR #689) — 최근 20개 고정 응답.
 
 import { queryOptions } from '@tanstack/react-query';
 
@@ -9,12 +10,12 @@ import type { SearchQueriesResponse } from '@/shared/types/searchHistoryApi';
 
 export const searchHistoryQueries = {
   all: () => ['search', 'queries'] as const,
-  list: (size = 30) =>
+  list: () =>
     queryOptions({
-      queryKey: [...searchHistoryQueries.all(), { period: 'all', size }] as const,
+      queryKey: [...searchHistoryQueries.all(), { period: 'all' }] as const,
       queryFn: async (): Promise<SearchQueriesResponse> => {
         const { data } = await api.get<SearchQueriesResponse>(API.search.queries, {
-          params: { period: 'all', size, page: 1 },
+          params: { period: 'all' },
         });
         return data;
       },
