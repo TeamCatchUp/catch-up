@@ -40,7 +40,8 @@ export default function DocsQueryBox({ selectedSources }: DocsQueryBoxProps) {
           value={value}
           onChange={(e) => setValue(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === 'Enter') {
+            // IME 조합 중 Enter (한/중/일 마지막 글자 확정)는 submit 트리거하지 않음.
+            if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
               e.preventDefault();
               handleSubmit();
             }

@@ -27,7 +27,7 @@ export default function DocsSearchHistorySection({ selectedSources }: DocsSearch
 
   return (
     <section className="flex w-full justify-center px-16 pb-30">
-      <div className="bg-fill-normal max-h-120 w-full max-w-190 overflow-y-auto rounded-3xl p-5">
+      <div className="custom-scrollbar bg-fill-normal max-h-120 w-full max-w-190 overflow-y-auto rounded-3xl p-5">
         <SearchHistoryList
           entries={entries}
           isLoading={isLoading}

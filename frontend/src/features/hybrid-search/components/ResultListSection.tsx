@@ -3,7 +3,10 @@
 // Figma 11542:64433 — 결과 카드 리스트 + Pagination.
 // backend는 dedup 후 최대 50개 한 번에 반환 → frontend가 active/page로 client-side filter+slice.
 
+import { AnimatePresence, motion } from 'motion/react';
+
 import Pagination from '@/shared/components/ui/pagination';
+import { motionEase, MotionState } from '@/shared/motion/presets';
 import { normalizeSources } from '@/shared/utils/normalize/normalizeRagSources';
 
 import { useHybridSearch } from '../hooks/useHybridSearch';
@@ -14,6 +17,30 @@ import ResultEmptyState from './ResultEmptyState';
 import ResultErrorState from './ResultErrorState';
 import ResultLoadingState from './ResultLoadingState';
 
+// hybrid-search 결과 리스트 전용 fast variants (source panel보다 빠르게).
+const fastStaggerContainer = {
+  hidden: {},
+  visible: {
+    transition: { staggerChildren: 0.05, delayChildren: 0.02 },
+  },
+};
+
+const fastFadeInUp = {
+  hidden: { opacity: 0, y: 4 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.25, ease: motionEase },
+  },
+};
+
+// state 간 crossfade (Loading/Empty/Error/Results 사이).
+const stateCrossfade = {
+  hidden: { opacity: 0 },
+  visible: { opacity: 1, transition: { duration: 0.2, ease: motionEase } },
+  exit: { opacity: 0, transition: { duration: 0.15, ease: motionEase } },
+};
+
 interface ResultListSectionProps {
   keyword: string;
   scope: ToolFilter[];
@@ -21,6 +48,8 @@ interface ResultListSectionProps {
   page: number;
   onPageChange: (next: number) => void;
 }
+
+type ViewState = 'empty' | 'loading' | 'error' | 'results';
 
 export default function ResultListSection({
   keyword,
@@ -34,36 +63,79 @@ export default function ResultListSection({
   // active가 scope 밖이면 결과 없음 (사용자가 보지 못한 source 탭 클릭한 경우).
   const isActiveInScope = active === 'all' || scope.length === 0 || scope.includes(active);
 
-  if (!keyword.trim()) return <ResultEmptyState />;
-  if (query.isLoading) return <ResultLoadingState />;
-  if (query.isError) return <ResultErrorState onRetry={() => query.refetch()} />;
-  if (!isActiveInScope) return <ResultEmptyState />;
-  if (!query.data || query.data.results.length === 0) return <ResultEmptyState />;
+  let view: ViewState;
+  let resultsData: {
+    sources: ReturnType<typeof normalizeSources>;
+    totalPages: number;
+    transitionKey: string;
+  } | null = null;
 
-  // active filter (client-side) — active='all'이면 전체, 아니면 그 source만.
-  const filteredResults =
-    active === 'all'
-      ? query.data.results
-      : query.data.results.filter((r) => r.source === active);
-
-  if (filteredResults.length === 0) return <ResultEmptyState />;
-
-  // page slice (client-side, HYBRID_SEARCH_PAGE_SIZE = 10).
-  const totalPages = Math.max(1, Math.ceil(filteredResults.length / HYBRID_SEARCH_PAGE_SIZE));
-  const pageStart = (page - 1) * HYBRID_SEARCH_PAGE_SIZE;
-  const pageResults = filteredResults.slice(pageStart, pageStart + HYBRID_SEARCH_PAGE_SIZE);
-  const sources = normalizeSources(pageResults);
+  if (!keyword.trim()) {
+    view = 'empty';
+  } else if (query.isLoading) {
+    view = 'loading';
+  } else if (query.isError) {
+    view = 'error';
+  } else if (!isActiveInScope || !query.data || query.data.results.length === 0) {
+    view = 'empty';
+  } else {
+    const filteredResults =
+      active === 'all'
+        ? query.data.results
+        : query.data.results.filter((r) => r.source === active);
+    if (filteredResults.length === 0) {
+      view = 'empty';
+    } else {
+      const totalPages = Math.max(1, Math.ceil(filteredResults.length / HYBRID_SEARCH_PAGE_SIZE));
+      const pageStart = (page - 1) * HYBRID_SEARCH_PAGE_SIZE;
+      const pageResults = filteredResults.slice(pageStart, pageStart + HYBRID_SEARCH_PAGE_SIZE);
+      resultsData = {
+        sources: normalizeSources(pageResults),
+        totalPages,
+        transitionKey: `${keyword}-${scope.join(',')}-${active}-${page}`,
+      };
+      view = 'results';
+    }
+  }
 
   return (
-    <div className="flex w-full flex-col items-center gap-10">
-      <div className="flex w-full flex-col items-start gap-2">
-        {sources.map((source) => (
-          <HybridSearchResultCard key={source.id} source={source} />
-        ))}
-      </div>
-      {totalPages > 1 && (
-        <Pagination currentPage={page} totalPages={totalPages} onPageChange={onPageChange} />
+    <AnimatePresence mode="wait">
+      {view === 'loading' && <ResultLoadingState key="loading" />}
+      {view === 'error' && (
+        <ResultErrorState key="error" onRetry={() => query.refetch()} />
       )}
-    </div>
+      {view === 'empty' && <ResultEmptyState key="empty" />}
+      {view === 'results' && resultsData && (
+        <motion.div
+          key="results"
+          initial={MotionState.Hidden}
+          animate={MotionState.Visible}
+          exit={MotionState.Exit}
+          variants={stateCrossfade}
+          className="flex w-full flex-col items-center gap-10"
+        >
+          <motion.div
+            key={resultsData.transitionKey}
+            initial={MotionState.Hidden}
+            animate={MotionState.Visible}
+            variants={fastStaggerContainer}
+            className="flex w-full flex-col items-start gap-2"
+          >
+            {resultsData.sources.map((source) => (
+              <motion.div key={source.id} variants={fastFadeInUp} className="w-full">
+                <HybridSearchResultCard source={source} />
+              </motion.div>
+            ))}
+          </motion.div>
+          {resultsData.totalPages > 1 && (
+            <Pagination
+              currentPage={page}
+              totalPages={resultsData.totalPages}
+              onPageChange={onPageChange}
+            />
+          )}
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 }

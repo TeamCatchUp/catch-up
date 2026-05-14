@@ -3,38 +3,27 @@
 // ResultSearchBar의 expanded 시각 하단 영역.
 // 좌측: SourceChipsRow + 검색 기록, 우측: CatchupPromoCard.
 // Figma 13426:52888 — chips 위, 그 아래 좌측 history(flex-1) + 우측 promo(w-80).
-// 검색 기록 클릭 시 현재 URL의 tools 유지 (사용자 의도된 scope 보존).
-
-import { useRouter } from 'next/navigation';
+// history click은 부모(ResultSearchBar)로 위임 — submit과 동일하게 처리되어 input blur + URL commit 한 번에.
 
 import SearchHistoryList from '@/shared/components/SearchHistoryList';
 import SourceChipsRow from '@/shared/components/SourceChipsRow';
 import { useSearchHistoryEntries } from '@/shared/hooks/useSearchHistoryEntries';
 import type { DocsSource } from '@/shared/types/source';
 
-import { useHybridSearchUrlState } from '../hooks/useHybridSearchUrlState';
 import CatchupPromoCard from './CatchupPromoCard';
 
 interface ResultSearchBarExpandedPanelProps {
   selectedSources: DocsSource[];
   onSourcesToggle: (next: DocsSource[]) => void;
+  onHistoryItemClick: (query: string) => void;
 }
 
 export default function ResultSearchBarExpandedPanel({
   selectedSources,
   onSourcesToggle,
+  onHistoryItemClick,
 }: ResultSearchBarExpandedPanelProps) {
-  const router = useRouter();
-  const { tools: currentUrlTools } = useHybridSearchUrlState();
   const { entries: history, isLoading: isHistoryLoading } = useSearchHistoryEntries();
-
-  const handleHistoryClick = (query: string) => {
-    const params = new URLSearchParams({ q: query });
-    if (currentUrlTools.length > 0) {
-      params.set('tools', currentUrlTools.join(','));
-    }
-    router.push(`/hybrid-search?${params.toString()}`);
-  };
 
   // onMouseDown preventDefault: 패널 내부 어떤 요소 클릭해도 input focus가 유지됨
   // (chips, history item 등이 focus를 가져가 onBlur로 패널이 닫히는 문제 방지).
@@ -53,7 +42,7 @@ export default function ResultSearchBarExpandedPanel({
           <SearchHistoryList
             entries={history}
             isLoading={isHistoryLoading}
-            onItemClick={(entry) => handleHistoryClick(entry.query)}
+            onItemClick={(entry) => onHistoryItemClick(entry.query)}
           />
         </div>
         <div className="w-80 shrink-0">

@@ -25,19 +25,25 @@ interface ResultPageHeaderProps {
   draftChips: ToolFilter[];
   onDraftChipsChange: (next: ToolFilter[]) => void;
   onSubmit: () => void;
+  onHistorySubmit: (query: string) => void;
   onClear: () => void;
   activeTab: ActiveTab;
   onTabChange: (next: ActiveTab) => void;
 }
 
-function buildTabItems(dist: Record<string, number>): AccentTabItem<ActiveTab>[] {
+// 데이터 도착 후엔 count=0인 source 탭은 숨김. 로딩 중엔 모든 탭을 count badge 없이 표시.
+// '전체'는 항상 노출.
+function buildTabItems(dist: Record<string, number>, hasData: boolean): AccentTabItem<ActiveTab>[] {
+  const sourceTabs: AccentTabItem<ActiveTab>[] = [
+    { value: 'confluence', label: 'Confluence', count: hasData ? (dist.confluence ?? 0) : undefined },
+    { value: 'jira', label: 'Jira', count: hasData ? (dist.jira ?? 0) : undefined },
+    { value: 'slack', label: 'Slack', count: hasData ? (dist.slack ?? 0) : undefined },
+    { value: 'github', label: 'Github', count: hasData ? (dist.github ?? 0) : undefined },
+    { value: 'channel_talk', label: '채널톡', count: hasData ? (dist.channel_talk ?? 0) : undefined },
+  ];
   return [
     { value: 'all', label: '전체' },
-    { value: 'confluence', label: 'Confluence', count: dist.confluence ?? 0 },
-    { value: 'jira', label: 'Jira', count: dist.jira ?? 0 },
-    { value: 'slack', label: 'Slack', count: dist.slack ?? 0 },
-    { value: 'github', label: 'Github', count: dist.github ?? 0 },
-    { value: 'channel_talk', label: '채널톡', count: dist.channel_talk ?? 0 },
+    ...(hasData ? sourceTabs.filter((tab) => (tab.count ?? 0) > 0) : sourceTabs),
   ];
 }
 
@@ -49,6 +55,7 @@ export default function ResultPageHeader({
   draftChips,
   onDraftChipsChange,
   onSubmit,
+  onHistorySubmit,
   onClear,
   activeTab,
   onTabChange,
@@ -67,7 +74,7 @@ export default function ResultPageHeader({
     return counts;
   }, [query.data]);
 
-  const tabItems = buildTabItems(distribution);
+  const tabItems = buildTabItems(distribution, query.data !== undefined);
 
   return (
     <header className="border-edge-normal flex w-full flex-col items-center border-b px-16 pt-5">
@@ -78,6 +85,7 @@ export default function ResultPageHeader({
           chips={draftChips}
           onChipsChange={onDraftChipsChange}
           onSubmit={onSubmit}
+          onHistorySubmit={onHistorySubmit}
           onClear={onClear}
         />
         <AccentTabs
