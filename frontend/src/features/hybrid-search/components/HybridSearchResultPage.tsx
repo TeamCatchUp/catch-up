@@ -1,56 +1,58 @@
 'use client';
 
 // /hybrid-search 컨테이너.
-// URL `tools`(scope, immutable) + `active`(drill-down) 분리.
-// scope = tools 있으면 그것, 없으면 5종 전체 fallback.
-// 검색바 submit은 draftKeyword + draftChips를 한 번에 적용 → keyword/tools 동시 갱신.
+// URL: ?q (keyword) + ?tools (scope) 만 보존.
+// active(drill-down 탭), page(페이지) 는 컴포넌트 state — fetch와 무관.
+// keyword 또는 tools가 바뀌면 draft/active/page 모두 reset (prev-value 패턴).
 
 import { useState } from 'react';
 
-import { type ActiveTab, useHybridSearchUrlState } from '../hooks/useHybridSearchUrlState';
-import { TOOL_FILTERS_ARRAY, type ToolFilter } from '../types/hybridSearchApi';
+import { useHybridSearchUrlState } from '../hooks/useHybridSearchUrlState';
+import { type ActiveTab, TOOL_FILTERS_ARRAY, type ToolFilter } from '../types/hybridSearchApi';
 import CatchupPromoCard from './CatchupPromoCard';
 import ResultListSection from './ResultListSection';
 import ResultPageBody from './ResultPageBody';
 import ResultPageHeader from './ResultPageHeader';
 
 export default function HybridSearchResultPage() {
-  const { keyword, tools, active, page, setKeyword, setActive, setPage, setKeywordAndTools } = useHybridSearchUrlState();
+  const { keyword, tools, setKeyword, setKeywordAndTools } = useHybridSearchUrlState();
 
-  // URL keyword 변경 시 draftKeyword 동기 reset — render-phase prev-value 패턴.
+  // draft state (input/chips 임시 값) + UI state (active/page).
   const [draftKeyword, setDraftKeyword] = useState(keyword);
-  const [prevKeyword, setPrevKeyword] = useState(keyword);
-  if (prevKeyword !== keyword) {
-    setPrevKeyword(keyword);
-    setDraftKeyword(keyword);
-  }
-
-  // URL tools 변경 시 draftChips 동기 reset — 같은 prev-value 패턴.
-  // 배열 비교는 join(',')로 값 비교 (parseTools가 매 렌더 새 배열 반환하므로 reference 비교 불가).
   const [draftChips, setDraftChips] = useState<ToolFilter[]>(tools);
+  const [active, setActive] = useState<ActiveTab>('all');
+  const [page, setPage] = useState(1);
+
+  // URL keyword/tools 변경 시 모든 임시·UI state reset (render-phase prev-value).
+  const [prevKeyword, setPrevKeyword] = useState(keyword);
   const toolsKey = tools.join(',');
   const [prevToolsKey, setPrevToolsKey] = useState(toolsKey);
-  if (prevToolsKey !== toolsKey) {
+  if (prevKeyword !== keyword || prevToolsKey !== toolsKey) {
+    setPrevKeyword(keyword);
     setPrevToolsKey(toolsKey);
+    setDraftKeyword(keyword);
     setDraftChips(tools);
+    setActive('all');
+    setPage(1);
   }
 
-  // scope: chips 선택 있으면 그것, 없으면 5종 전체.
+  // scope: chips 선택 있으면 그것, 없으면 5종 전체 fallback.
   const scope: ToolFilter[] = tools.length > 0 ? tools : TOOL_FILTERS_ARRAY;
 
   const handleSubmit = () => {
     setKeywordAndTools(draftKeyword, draftChips);
   };
 
-  // X 버튼: keyword만 제거, tools(scope)는 보존 — 다음 입력 시 동일 scope 재사용.
+  // X 버튼: keyword만 제거, tools 보존.
   const handleClear = () => {
     setDraftKeyword('');
     setKeyword('');
   };
 
-  // '전체' → active='all' (URL에서 active 제거), source → active=그 source.
+  // 탭 변경 시 페이지도 1로 reset.
   const handleTabChange = (next: ActiveTab) => {
     setActive(next);
+    setPage(1);
   };
 
   return (

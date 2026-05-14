@@ -50,14 +50,34 @@ describe('ResultPageHeader', () => {
     expect(screen.getByText('채널톡')).toBeInTheDocument();
   });
 
-  it('distribution 응답 후 각 탭의 count 표시', async () => {
+  it('list 응답의 results에서 source별 count를 client-side 계산하여 탭 배지 표시', async () => {
+    // distribution은 results 배열에서 계산. source_distribution 필드는 더 이상 사용 안 함.
+    const results = [
+      ...Array.from({ length: 5 }, (_, i) => ({
+        id: `jira-${i}`,
+        source: 'jira',
+        entity_type: 'issue',
+        title: `j${i}`,
+        text: '',
+      })),
+      ...Array.from({ length: 3 }, (_, i) => ({
+        id: `slack-${i}`,
+        source: 'slack',
+        entity_type: 'message',
+        title: `s${i}`,
+        text: '',
+      })),
+      ...Array.from({ length: 2 }, (_, i) => ({
+        id: `github-${i}`,
+        source: 'github',
+        entity_type: 'pr',
+        title: `g${i}`,
+        text: '',
+      })),
+    ];
     server.use(
       http.get('*/api/v1/search/hybrid', () =>
-        HttpResponse.json({
-          results: [],
-          total: 0,
-          source_distribution: { jira: 5, slack: 3, github: 2 },
-        }),
+        HttpResponse.json({ results, total: results.length, source_distribution: {} }),
       ),
     );
     renderWithClient(<ResultPageHeader {...makeDefaultProps()} />);

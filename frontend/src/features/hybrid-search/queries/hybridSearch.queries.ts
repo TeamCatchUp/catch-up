@@ -3,16 +3,14 @@ import { queryOptions } from '@tanstack/react-query';
 import api from '@/shared/api/client';
 import { API } from '@/shared/api/endpoints';
 
-import type { ActiveTab } from '../hooks/useHybridSearchUrlState';
 import type { HybridSearchResponse, ToolFilter } from '../types/hybridSearchApi';
 
-export const HYBRID_SEARCH_PAGE_SIZE = 7;
+// client-side pagination 단위. backend는 최대 50개 dedup 결과 한 번에 반환.
+export const HYBRID_SEARCH_PAGE_SIZE = 10;
 
 interface ListParams {
   keyword: string;
   scope: ToolFilter[];
-  active: ActiveTab;
-  page: number;
 }
 
 // axios 기본 직렬화는 버전/설정에 따라 ?key[]=v 또는 ?key=v1&key=v2로 갈림.
@@ -33,19 +31,16 @@ function serializeListParams(params: Record<string, unknown>): string {
 export const hybridSearchQueries = {
   all: () => ['search', 'hybrid'] as const,
 
-  // 결과 리스트 — scope + active 변경에 반응.
-  // active='all' → scope 전체로 호출, active=source → 그 source만.
+  // 결과 리스트 — keyword + scope에만 의존. active/page는 client-side에서 처리.
+  // backend는 dedup 후 최대 50개 전체를 반환 (limit/offset 무시).
   list: (params: ListParams) =>
     queryOptions({
       queryKey: [...hybridSearchQueries.all(), 'list', params] as const,
       queryFn: async (): Promise<HybridSearchResponse> => {
-        const effectiveFilters = params.active === 'all' ? params.scope : [params.active];
         const { data } = await api.get<HybridSearchResponse>(API.search.hybrid, {
           params: {
             keyword: params.keyword,
-            limit: HYBRID_SEARCH_PAGE_SIZE,
-            offset: (params.page - 1) * HYBRID_SEARCH_PAGE_SIZE,
-            tool_filters: effectiveFilters.length > 0 ? effectiveFilters : undefined,
+            tool_filters: params.scope.length > 0 ? params.scope : undefined,
           },
           paramsSerializer: serializeListParams,
         });
@@ -53,27 +48,5 @@ export const hybridSearchQueries = {
       },
       enabled: params.keyword.trim().length > 0,
       staleTime: 30_000,
-    }),
-
-  // AccentTabs용 source_distribution — keyword + scope에 의존(active 무관).
-  // scope=tools (chips 선택)일 땐 그 풀 기준 분포, scope=[] (5종 fallback)일 땐 전체 풀.
-  // → AccentTabs count가 stable, active 클릭 시 cache hit.
-  distribution: (keyword: string, scope: ToolFilter[]) =>
-    queryOptions({
-      queryKey: [...hybridSearchQueries.all(), 'distribution', keyword, scope] as const,
-      queryFn: async (): Promise<Record<string, number>> => {
-        const { data } = await api.get<HybridSearchResponse>(API.search.hybrid, {
-          params: {
-            keyword,
-            limit: 1,
-            offset: 0,
-            tool_filters: scope.length > 0 ? scope : undefined,
-          },
-          paramsSerializer: serializeListParams,
-        });
-        return data.source_distribution;
-      },
-      enabled: keyword.trim().length > 0,
-      staleTime: 60_000,
     }),
 };
