@@ -10,4 +10,8 @@
 
   --shadow-blue-bottom: 0 4px 0 0 rgba(229, 246, 254, 0.5);
   --shadow-panel: 7px 0 6.5px 0 rgba(126, 126, 126, 0.08);
+
+  /* 떠 있는 오버레이용 강한 그림자 (검색바 expanded 등). */
+  --shadow-strong: 0 6px 12px 0 rgba(0, 0, 0, 0.12), 0 4px 8px 0 rgba(0, 0, 0, 0.08),
+    0 0 4px 0 rgba(0, 0, 0, 0.08);
 }
