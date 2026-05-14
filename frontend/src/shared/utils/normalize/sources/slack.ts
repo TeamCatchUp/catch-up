@@ -1,4 +1,4 @@
-import type { SourceResponse } from '@/features/chat/types';
+import type { SourceResponseApi } from '@/shared/types/sourceApi';
 
 import type { NormalizedIntegrationFields } from './common';
 
@@ -12,7 +12,7 @@ const parseChannelFromText = (text?: string | null) => {
   return match?.[1] ?? '';
 };
 
-export const normalizeSlackFields = (source: SourceResponse): NormalizedIntegrationFields => ({
+export const normalizeSlackFields = (source: SourceResponseApi): NormalizedIntegrationFields => ({
   repo: source.channel_name ?? parseChannelFromText(source.text),
   title: source.title ?? 'Slack 메시지',
   author: source.author ?? '',

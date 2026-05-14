@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import type { SourceResponse } from '@/features/chat/types';
+import type { SourceResponseApi as SourceResponse } from '@/shared/types/sourceApi';
 
 import { normalizeChannelTalkFields } from './channelTalk';
 

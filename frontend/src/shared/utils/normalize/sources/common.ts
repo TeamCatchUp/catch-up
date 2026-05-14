@@ -1,4 +1,4 @@
-import type { SourceResponse } from '@/features/chat/types';
+import type { SourceResponseApi } from '@/shared/types/sourceApi';
 import { formatFullDate, formatRelativeTime } from '@/shared/utils/formatDate';
 
 const RELATIVE_DATE_THRESHOLD_DAYS = 7;
@@ -30,9 +30,9 @@ export const formatCreatedAt = (createdAt?: string | null) => {
   return formatFullDate(iso);
 };
 
-export const getSourceLink = (source: SourceResponse) => source.url ?? '';
+export const getSourceLink = (source: SourceResponseApi) => source.url ?? '';
 
-export const buildStableSourceId = (source: SourceResponse, fallbackIndex: number) => {
+export const buildStableSourceId = (source: SourceResponseApi, fallbackIndex: number) => {
   const explicitId = source.id?.trim();
   if (explicitId) return explicitId;
 
@@ -72,7 +72,7 @@ const pickReasonPreviewFromText = (text?: string | null) => {
 };
 
 /** "이 출처가 사용된 이유" — rationale > 비인용 고정문구 > text 첫 요약줄 */
-export const getSourceContent = (source: SourceResponse) => {
+export const getSourceContent = (source: SourceResponseApi) => {
   const rationale = source.citation_rationale?.trim();
   if (rationale) return rationale;
   if (source.is_cited === false) return NON_CITED_REASON;

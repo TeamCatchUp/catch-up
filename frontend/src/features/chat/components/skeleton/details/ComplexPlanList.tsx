@@ -2,8 +2,8 @@
 
 import { motion } from 'motion/react';
 
-import { fadeInUp, MotionState, staggerListContainer } from '@/shared/motion';
 import type { StepRowEvent } from '@/features/chat/types';
+import { fadeInUp, MotionState, staggerListContainer } from '@/shared/motion';
 import { cn } from '@/shared/utils/cn';
 
 /** backend가 step별로 `{step, intent}` single dict를 emit (옛 shape Array도 호환). */

@@ -1,13 +1,13 @@
 'use client';
 
-import { motion } from 'motion/react';
 import { useEffect, useMemo, useState } from 'react';
+import { motion } from 'motion/react';
 
 import { getCitationDisplayOrderMap } from '@/features/chat/components/answer/markdown/RenderWithBadges';
 import RagSourceSkeleton from '@/features/chat/components/skeleton/RagRightComponentSkeleton';
-import { fadeInUp, MotionState, staggerListContainer } from '@/shared/motion';
 import type { ChatSource } from '@/features/chat/types';
 import AddCircle from '@/public/icons/icon/add_circle_filled.svg';
+import { fadeInUp, MotionState, staggerListContainer } from '@/shared/motion';
 import { cn } from '@/shared/utils/cn';
 
 import FilterScrollFab from './FilterScrollFab';

@@ -1,4 +1,4 @@
-import type { SourceResponse } from '@/features/chat/types';
+import type { SourceResponseApi } from '@/shared/types/sourceApi';
 
 import { getFirstNonEmptyLine, type NormalizedIntegrationFields } from './common';
 
@@ -12,7 +12,7 @@ const parseIssueKeyFromSourceId = (id?: string) => {
   return match?.[1] ?? '';
 };
 
-const getProjectKey = (source: SourceResponse) => {
+const getProjectKey = (source: SourceResponseApi) => {
   if (source.project_key?.trim()) return source.project_key.trim();
   if (source.issue_key?.trim()) return source.issue_key.trim().split('-')[0] ?? '';
 
@@ -42,7 +42,7 @@ const parseAuthorFromText = (text?: string | null) => {
   return '';
 };
 
-const getTitle = (source: SourceResponse) => {
+const getTitle = (source: SourceResponseApi) => {
   const rawTitle = source.title?.trim() ?? '';
   if (rawTitle && !JIRA_NO_TITLE_PATTERN.test(rawTitle)) return rawTitle;
 
@@ -52,7 +52,7 @@ const getTitle = (source: SourceResponse) => {
   return source.issue_key ?? parseIssueKeyFromSourceId(source.id);
 };
 
-export const normalizeJiraFields = (source: SourceResponse): NormalizedIntegrationFields => {
+export const normalizeJiraFields = (source: SourceResponseApi): NormalizedIntegrationFields => {
   const issueKey = source.issue_key?.trim() || parseIssueKeyFromSourceId(source.id);
   const author = (source.assignee ?? source.author ?? parseAuthorFromText(source.text)) || '';
 

@@ -105,6 +105,13 @@ const eslintConfig = defineConfig([
       ],
     },
   },
+  // 코로케이션된 테스트 파일은 boundary 규칙 면제 — MSW server 등 test 인프라 접근 필요.
+  {
+    files: ['**/*.test.{ts,tsx}'],
+    rules: {
+      'boundaries/dependencies': 'off',
+    },
+  },
 ]);
 
 export default eslintConfig;

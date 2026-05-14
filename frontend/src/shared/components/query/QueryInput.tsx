@@ -52,7 +52,10 @@ export default function QueryInput({ input, inputRef, tipData }: QueryInputProps
           <textarea
             ref={inputRef}
             rows={1}
-            className={cn('text-body-medium w-full resize-none outline-none', input.isFromTemplate && 'leading-[1.7]')}
+            className={cn(
+              'text-body-medium placeholder:text-content-assistive w-full resize-none outline-none',
+              input.isFromTemplate && 'leading-[1.7]',
+            )}
             placeholder="업무와 관련해 궁금한 무엇이든 물어보세요!"
             value={input.value}
             onFocus={() => input.setIsFocused(true)}
