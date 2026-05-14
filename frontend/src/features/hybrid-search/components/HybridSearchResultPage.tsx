@@ -2,7 +2,7 @@
 
 // /hybrid-search 컨테이너. URL state + draftKeyword + activeTab 내부 state 보유.
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 
 import { useHybridSearchUrlState } from '../hooks/useHybridSearchUrlState';
 import type { ToolFilter } from '../types/hybridSearchApi';
@@ -16,17 +16,16 @@ type ActiveTab = 'all' | ToolFilter;
 export default function HybridSearchResultPage() {
   const { keyword, tools, page, setKeyword, setTools, setPage } = useHybridSearchUrlState();
 
-  // 입력 중 임시값 — URL의 keyword가 바뀌면 동기화.
+  // URL keyword 변경 시 동기 reset — useEffect 대신 render-phase prev-value 패턴.
+  // (React 공식 권장: https://react.dev/learn/you-might-not-need-an-effect)
   const [draftKeyword, setDraftKeyword] = useState(keyword);
-  useEffect(() => {
-    setDraftKeyword(keyword);
-  }, [keyword]);
-
-  // 새 검색이 시작될 때마다 'all'로 reset (사용자 명시 단순화).
   const [activeTab, setActiveTab] = useState<ActiveTab>('all');
-  useEffect(() => {
+  const [prevKeyword, setPrevKeyword] = useState(keyword);
+  if (prevKeyword !== keyword) {
+    setPrevKeyword(keyword);
+    setDraftKeyword(keyword);
     setActiveTab('all');
-  }, [keyword]);
+  }
 
   const handleSubmit = () => {
     setKeyword(draftKeyword);
