@@ -10,7 +10,6 @@ import type { useSearchFilters } from '@/shared/hooks/query/useSearchFilters';
 import type { useSearchInput } from '@/shared/hooks/query/useSearchInput';
 
 import { tipData } from '../constants/questionTips';
-
 import HeroText from './HeroText';
 import HowToUse from './HowToUse';
 import PromptChips from './PromptChips';

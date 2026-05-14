@@ -4,8 +4,8 @@
 // backend가 /hybrid 호출 시 자동으로 manual_search_history에 기록하므로
 // 응답 후 docs 모드의 검색 기록 영역이 즉시 갱신되도록 invalidate.
 
-import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { searchHistoryQueries } from '@/shared/queries/searchHistory.queries';
 

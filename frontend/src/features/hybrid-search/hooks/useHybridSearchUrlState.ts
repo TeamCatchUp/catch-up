@@ -3,8 +3,8 @@
 // /hybrid-search 의 URL state(?q&tools&page) 파싱·갱신 hook.
 // keyword/tools 변경 시 page=1 리셋. tools 화이트리스트 검증.
 
-import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 
 import { TOOL_FILTERS, type ToolFilter } from '../types/hybridSearchApi';
 

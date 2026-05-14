@@ -10,7 +10,6 @@ import AccentTabs, { type AccentTabItem } from '@/shared/components/ui/accent-ta
 
 import { hybridSearchQueries } from '../queries/hybridSearch.queries';
 import type { ToolFilter } from '../types/hybridSearchApi';
-
 import ResultSearchBar from './ResultSearchBar';
 
 type ActiveTab = 'all' | ToolFilter;

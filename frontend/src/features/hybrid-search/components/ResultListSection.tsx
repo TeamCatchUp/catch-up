@@ -10,7 +10,6 @@ import { useHybridSearch } from '../hooks/useHybridSearch';
 import { HYBRID_SEARCH_PAGE_SIZE } from '../queries/hybridSearch.queries';
 import type { ToolFilter } from '../types/hybridSearchApi';
 import { mapHybridSearchResult } from '../utils/mapHybridSearchResult';
-
 import HybridSearchResultCard from './HybridSearchResultCard';
 import ResultEmptyState from './ResultEmptyState';
 import ResultErrorState from './ResultErrorState';

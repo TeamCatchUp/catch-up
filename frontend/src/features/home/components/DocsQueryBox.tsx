@@ -3,8 +3,8 @@
 // 문서 탐색 모드 전용 입력 박스. 엔터/보내기 클릭 시 /hybrid-search로 navigate.
 // 부모(HomeDocsSection)가 selectedSources를 관리해 tools 쿼리 파라미터로 전달.
 
-import { useRouter } from 'next/navigation';
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 
 import IconArrowSend from '@/public/icons/icon/arrow_send.svg';
 import IconSearch from '@/public/icons/icon/search_2.svg';

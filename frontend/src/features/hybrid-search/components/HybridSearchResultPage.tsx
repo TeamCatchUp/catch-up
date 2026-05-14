@@ -6,7 +6,6 @@ import { useEffect, useState } from 'react';
 
 import { useHybridSearchUrlState } from '../hooks/useHybridSearchUrlState';
 import type { ToolFilter } from '../types/hybridSearchApi';
-
 import CatchupPromoCard from './CatchupPromoCard';
 import ResultListSection from './ResultListSection';
 import ResultPageBody from './ResultPageBody';
@@ -19,11 +18,15 @@ export default function HybridSearchResultPage() {
 
   // 입력 중 임시값 — URL의 keyword가 바뀌면 동기화.
   const [draftKeyword, setDraftKeyword] = useState(keyword);
-  useEffect(() => setDraftKeyword(keyword), [keyword]);
+  useEffect(() => {
+    setDraftKeyword(keyword);
+  }, [keyword]);
 
   // 새 검색이 시작될 때마다 'all'로 reset (사용자 명시 단순화).
   const [activeTab, setActiveTab] = useState<ActiveTab>('all');
-  useEffect(() => setActiveTab('all'), [keyword]);
+  useEffect(() => {
+    setActiveTab('all');
+  }, [keyword]);
 
   const handleSubmit = () => {
     setKeyword(draftKeyword);

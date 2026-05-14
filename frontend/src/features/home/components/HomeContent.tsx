@@ -4,9 +4,9 @@
 // 두 라우트는 단지 경로만 다르고 화면 구성은 동일하다 — TopNavbar 라벨만 path/mode에 따라 분기.
 // mode 분기는 두 section 컴포넌트로 위임 + 다음 task에서 AnimatePresence fade 적용.
 
+import { useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { usePathname, useSearchParams } from 'next/navigation';
-import { useRef, useState } from 'react';
 
 import { ADMIN_GUIDE_STORAGE_KEY } from '@/features/home/constants/adminGuide';
 import { tipData } from '@/features/home/constants/questionTips';
