@@ -19,6 +19,8 @@ import ResultSearchBarExpandedPanel from './ResultSearchBarExpandedPanel';
 interface ResultSearchBarProps {
   value: string;
   onValueChange: (value: string) => void;
+  chips: DocsSource[];
+  onChipsChange: (next: DocsSource[]) => void;
   onSubmit: () => void;
   onClear: () => void;
   // true면 isFocused state 무시하고 항상 expanded. dev preview/Storybook 용도.
@@ -28,21 +30,27 @@ interface ResultSearchBarProps {
 export default function ResultSearchBar({
   value,
   onValueChange,
+  chips,
+  onChipsChange,
   onSubmit,
   onClear,
   forceExpanded = false,
 }: ResultSearchBarProps) {
   const [isFocused, setIsFocused] = useState(false);
-  // expanded 시각 안 chips는 결과 페이지와 별개 의미 — 자체 state 유지.
-  const [chipsSources, setChipsSources] = useState<DocsSource[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
   const hasText = value.trim().length > 0;
   const expanded = forceExpanded || isFocused;
 
+  // submit 후 input blur → onBlur로 setIsFocused(false) → 패널 collapse.
+  const handleSubmit = () => {
+    onSubmit();
+    inputRef.current?.blur();
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
       e.preventDefault();
-      onSubmit();
+      handleSubmit();
     }
   };
 
@@ -98,7 +106,7 @@ export default function ResultSearchBar({
             <button
               type="button"
               onMouseDown={(e) => expanded && e.preventDefault()}
-              onClick={onSubmit}
+              onClick={handleSubmit}
               aria-label="검색"
               className={cn(
                 'flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-full transition-colors',
@@ -122,8 +130,8 @@ export default function ResultSearchBar({
       </div>
       {expanded && (
         <ResultSearchBarExpandedPanel
-          selectedSources={chipsSources}
-          onSourcesToggle={setChipsSources}
+          selectedSources={chips}
+          onSourcesToggle={onChipsChange}
         />
       )}
       </div>

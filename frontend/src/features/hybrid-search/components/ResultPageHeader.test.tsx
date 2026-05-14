@@ -25,6 +25,8 @@ function makeDefaultProps() {
     scope: [],
     draftKeyword: '결제',
     onDraftKeywordChange: () => {},
+    draftChips: [],
+    onDraftChipsChange: () => {},
     onSubmit: () => {},
     onClear: () => {},
     activeTab: 'all' as const,

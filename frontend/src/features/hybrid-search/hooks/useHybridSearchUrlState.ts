@@ -25,6 +25,8 @@ interface HybridSearchUrlState {
   setTools: (next: ToolFilter[]) => void;
   setActive: (next: ActiveTab) => void;
   setPage: (next: number) => void;
+  /** keyword + tools를 한 번의 URL 갱신으로 적용 (검색바 submit 전용). */
+  setKeywordAndTools: (nextKeyword: string, nextTools: ToolFilter[]) => void;
 }
 
 function parseTools(raw: string | null): ToolFilter[] {
@@ -115,5 +117,21 @@ export function useHybridSearchUrlState(): HybridSearchUrlState {
     [writeParams],
   );
 
-  return { keyword, tools, active, page, setKeyword, setTools, setActive, setPage };
+  // setKeyword + setTools를 따로 호출하면 두 router.replace가 stale searchParams로 경쟁 →
+  // 마지막 replace만 살아남아 한쪽 값이 손실됨. 한 번의 writeParams로 묶음.
+  const setKeywordAndTools = useCallback(
+    (nextKeyword: string, nextTools: ToolFilter[]) => {
+      writeParams((p) => {
+        if (nextKeyword) p.set('q', nextKeyword);
+        else p.delete('q');
+        if (nextTools.length > 0) p.set('tools', nextTools.join(','));
+        else p.delete('tools');
+        p.delete('active');
+        p.delete('page');
+      });
+    },
+    [writeParams],
+  );
+
+  return { keyword, tools, active, page, setKeyword, setTools, setActive, setPage, setKeywordAndTools };
 }

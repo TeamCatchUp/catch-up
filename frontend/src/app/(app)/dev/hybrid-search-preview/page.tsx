@@ -119,6 +119,8 @@ export default function HybridSearchPreviewPage() {
           <ResultSearchBar
             value={searchValue}
             onValueChange={setSearchValue}
+            chips={[]}
+            onChipsChange={() => {}}
             onSubmit={() => {}}
             onClear={() => setSearchValue('')}
           />
@@ -134,6 +136,8 @@ export default function HybridSearchPreviewPage() {
           <ResultSearchBar
             value={searchValue}
             onValueChange={setSearchValue}
+            chips={[]}
+            onChipsChange={() => {}}
             onSubmit={() => {}}
             onClear={() => setSearchValue('')}
             forceExpanded
@@ -150,6 +154,8 @@ export default function HybridSearchPreviewPage() {
           <ResultSearchBar
             value={searchValueFilled}
             onValueChange={setSearchValueFilled}
+            chips={[]}
+            onChipsChange={() => {}}
             onSubmit={() => {}}
             onClear={() => setSearchValueFilled('')}
             forceExpanded

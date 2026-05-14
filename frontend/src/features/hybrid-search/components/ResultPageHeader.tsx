@@ -21,6 +21,9 @@ interface ResultPageHeaderProps {
   // 입력 중 임시값
   draftKeyword: string;
   onDraftKeywordChange: (v: string) => void;
+  // expanded 검색바 안 chips의 draft 상태 (submit 시 적용)
+  draftChips: ToolFilter[];
+  onDraftChipsChange: (next: ToolFilter[]) => void;
   onSubmit: () => void;
   onClear: () => void;
   activeTab: ActiveTab;
@@ -43,6 +46,8 @@ export default function ResultPageHeader({
   scope,
   draftKeyword,
   onDraftKeywordChange,
+  draftChips,
+  onDraftChipsChange,
   onSubmit,
   onClear,
   activeTab,
@@ -57,6 +62,8 @@ export default function ResultPageHeader({
         <ResultSearchBar
           value={draftKeyword}
           onValueChange={onDraftKeywordChange}
+          chips={draftChips}
+          onChipsChange={onDraftChipsChange}
           onSubmit={onSubmit}
           onClear={onClear}
         />
