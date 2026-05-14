@@ -22,6 +22,7 @@ function renderWithClient(ui: React.ReactElement) {
 function makeDefaultProps() {
   return {
     keyword: '결제',
+    tools: [],
     draftKeyword: '결제',
     onDraftKeywordChange: () => {},
     onSubmit: () => {},

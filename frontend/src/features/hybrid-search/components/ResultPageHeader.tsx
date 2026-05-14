@@ -17,6 +17,8 @@ type ActiveTab = 'all' | ToolFilter;
 interface ResultPageHeaderProps {
   // 확정된 검색어 — distribution 호출용
   keyword: string;
+  // distribution scope (tools 적용된 풀 기준 분포)
+  tools: ToolFilter[];
   // 입력 중 임시값
   draftKeyword: string;
   onDraftKeywordChange: (v: string) => void;
@@ -39,6 +41,7 @@ function buildTabItems(dist: Record<string, number> | undefined): AccentTabItem<
 
 export default function ResultPageHeader({
   keyword,
+  tools,
   draftKeyword,
   onDraftKeywordChange,
   onSubmit,
@@ -46,7 +49,7 @@ export default function ResultPageHeader({
   activeTab,
   onTabChange,
 }: ResultPageHeaderProps) {
-  const { data: distribution } = useQuery(hybridSearchQueries.distribution(keyword));
+  const { data: distribution } = useQuery(hybridSearchQueries.distribution(keyword, tools));
   const tabItems = buildTabItems(distribution);
 
   return (

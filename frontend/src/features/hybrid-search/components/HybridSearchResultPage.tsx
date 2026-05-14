@@ -1,6 +1,7 @@
 'use client';
 
-// /hybrid-search 컨테이너. URL state + draftKeyword + activeTab 내부 state 보유.
+// /hybrid-search 컨테이너. URL state + draftKeyword 보유.
+// activeTab은 별도 state 없이 tools에서 derive — tools.length === 1이면 그 source, 아니면 'all'.
 
 import { useState } from 'react';
 
@@ -16,16 +17,16 @@ type ActiveTab = 'all' | ToolFilter;
 export default function HybridSearchResultPage() {
   const { keyword, tools, page, setKeyword, setTools, setPage } = useHybridSearchUrlState();
 
-  // URL keyword 변경 시 동기 reset — useEffect 대신 render-phase prev-value 패턴.
-  // (React 공식 권장: https://react.dev/learn/you-might-not-need-an-effect)
+  // URL keyword 변경 시 draftKeyword 동기 reset — render-phase prev-value 패턴.
   const [draftKeyword, setDraftKeyword] = useState(keyword);
-  const [activeTab, setActiveTab] = useState<ActiveTab>('all');
   const [prevKeyword, setPrevKeyword] = useState(keyword);
   if (prevKeyword !== keyword) {
     setPrevKeyword(keyword);
     setDraftKeyword(keyword);
-    setActiveTab('all');
   }
+
+  // activeTab derived from tools — 단일 tool이면 그 탭 활성, 아니면 '전체'.
+  const activeTab: ActiveTab = tools.length === 1 ? tools[0] : 'all';
 
   const handleSubmit = () => {
     setKeyword(draftKeyword);
@@ -36,8 +37,9 @@ export default function HybridSearchResultPage() {
     setKeyword('');
   };
 
+  // '전체' 클릭 → tools=[] (필터 해제, 모든 source 노출).
+  // 특정 source 클릭 → tools=[그 source] (단일 source 좁히기).
   const handleTabChange = (next: ActiveTab) => {
-    setActiveTab(next);
     setTools(next === 'all' ? [] : [next]);
   };
 
@@ -45,6 +47,7 @@ export default function HybridSearchResultPage() {
     <div className="bg-fill-normal flex min-h-full flex-col">
       <ResultPageHeader
         keyword={keyword}
+        tools={tools}
         draftKeyword={draftKeyword}
         onDraftKeywordChange={setDraftKeyword}
         onSubmit={handleSubmit}

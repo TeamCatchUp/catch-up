@@ -51,15 +51,20 @@ export const hybridSearchQueries = {
       staleTime: 30_000,
     }),
 
-  // AccentTabs용 source_distribution — keyword에만 의존(tools 무관).
-  // 첫 검색 시 1회 fetch, 탭 클릭·페이지 이동에는 cache hit.
-  distribution: (keyword: string) =>
+  // AccentTabs용 source_distribution — keyword + tools에 의존.
+  // tools가 적용된 풀 기준 분포 → AccentTabs count가 list 결과와 일관됨.
+  // limit=1로 payload 최소화.
+  distribution: (keyword: string, tools: ToolFilter[]) =>
     queryOptions({
-      queryKey: [...hybridSearchQueries.all(), 'distribution', keyword] as const,
+      queryKey: [...hybridSearchQueries.all(), 'distribution', keyword, tools] as const,
       queryFn: async (): Promise<Record<string, number>> => {
         const { data } = await api.get<HybridSearchResponse>(API.search.hybrid, {
-          // tool_filters 미전달 → 전체 풀 기준 분포. limit=1로 payload 최소화.
-          params: { keyword, limit: 1, offset: 0 },
+          params: {
+            keyword,
+            limit: 1,
+            offset: 0,
+            tool_filters: tools.length > 0 ? tools : undefined,
+          },
           paramsSerializer: serializeListParams,
         });
         return data.source_distribution;
