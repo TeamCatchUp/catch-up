@@ -1,20 +1,32 @@
 'use client';
 
-// 문서 탐색 모드 전용 입력 박스. 확장 동작 없음.
-// 좌측: 돋보기 아이콘(검색), 우측: 보내기 버튼(QueryInput과 동일 시각).
-// API 연동(GET /api/v1/search/hybrid)은 추후 작업.
+// 문서 탐색 모드 전용 입력 박스. 엔터/보내기 클릭 시 /hybrid-search로 navigate.
+// 부모(HomeDocsSection)가 selectedSources를 관리해 tools 쿼리 파라미터로 전달.
 
+import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
 import IconArrowSend from '@/public/icons/icon/arrow_send.svg';
 import IconSearch from '@/public/icons/icon/search_2.svg';
+import type { DocsSource } from '@/shared/types/source';
 
-export default function DocsQueryBox() {
+interface DocsQueryBoxProps {
+  selectedSources: DocsSource[];
+}
+
+export default function DocsQueryBox({ selectedSources }: DocsQueryBoxProps) {
+  const router = useRouter();
   const [value, setValue] = useState('');
   const hasText = value.trim().length > 0;
 
   const handleSubmit = () => {
-    // 결과 페이지는 후속 작업에서 구현. 현재는 no-op.
+    const trimmed = value.trim();
+    if (!trimmed) return;
+    const params = new URLSearchParams({ q: trimmed });
+    if (selectedSources.length > 0) {
+      params.set('tools', selectedSources.join(','));
+    }
+    router.push(`/hybrid-search?${params.toString()}`);
   };
 
   return (

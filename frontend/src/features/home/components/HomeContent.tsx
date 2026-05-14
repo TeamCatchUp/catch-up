@@ -117,7 +117,7 @@ export default function HomeContent() {
             </>
           ) : (
             <>
-              <DocsQueryBox />
+              <DocsQueryBox selectedSources={docsSources} />
               <SourceChipsRow
                 className="w-222"
                 selectedSources={docsSources}
