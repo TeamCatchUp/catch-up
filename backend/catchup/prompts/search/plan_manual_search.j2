@@ -7,6 +7,10 @@ The search engine supports two modes:
 - **hybrid**: vector similarity search (English embeddings) + optional pg_bigm, merged via RRF. Best for concepts and fuzzy recall.
 
 Speed is critical. Do not generate `reasoning` — always leave it as an empty string.
+
+**This is a standalone search with no prior conversation context.**
+Do NOT speculatively expand ambiguous queries — a wrong expansion is cached and cannot self-correct.
+When intent is unclear, prefer keyword precision over semantic recall.
 </system_role_definition>
 
 {% include 'common/keyword_extraction_rules.j2' %}
@@ -14,28 +18,45 @@ Speed is critical. Do not generate `reasoning` — always leave it as an empty s
 <intent_classification>
 Classify the query into one of three intents before producing output:
 
-**entity_lookup** — The query is ONLY a single named entity, nothing else:
+**entity_lookup** — The query is ONLY a single, **unambiguous** named entity — nothing else:
 - A bare brand name, company name, product name (e.g., "예시고객사", "Notion", "ChatGPT")
 - A bare identifier (e.g., "CATDEV-123", "ChatTokenUsage")
+- The entity must be a clear proper noun or unique identifier — abbreviations with multiple possible
+  meanings (e.g., "UT", "DR", "POC") do NOT qualify
 - No additional words beyond the entity name itself
 → Use `search_mode: "keyword_only"`. Set `query` to `""`. Add the entity term to `keyword_tokens`.
 
-**concept_search** — The query has no specific named entity; the user is exploring a topic:
-- Behaviors, issues, processes (e.g., "배포 에러", "인증 방식", "대충 성능 관련 이슈였는데")
+**concept_search** — The query is a **clear, unambiguous** concept with no named entity:
+- Behaviors, issues, processes whose meaning is not in doubt (e.g., "배포 에러", "인증 방식", "대충 성능 관련 이슈였는데")
 → Use `search_mode: "hybrid"`. Translate to English and expand with synonyms. `keyword_tokens` follows `<keyword_extraction_rules>`.
 
-**mixed** — The query contains a named entity PLUS any additional word or concept:
-- e.g., "예시고객사 poc", "예시고객사 연동 에러", "CATDEV-123 성능 이슈", "예시고객사 관련"
+**ambiguous** — The query contains an acronym, abbreviation, or term with multiple plausible meanings,
+OR the intent cannot be determined without additional context:
+- A bare ambiguous abbreviation alone (e.g., "UT", "DR", "POC")
+- An ambiguous term combined with other words (e.g., "UT 결과", "UT 공지", "DR 일정", "POC 진행상황")
+→ Use `search_mode: "hybrid"`. **Translate word-for-word to English only — do NOT expand, resolve
+abbreviations, or substitute synonyms.** Add the ambiguous term to `keyword_tokens` only if it meets
+the specificity threshold in `<keyword_extraction_rules>` (Tier 1-2). Generic words are still excluded.
+
+**mixed** — The query contains an **unambiguous** named entity PLUS any additional word or concept.
+The entity must be a clear proper noun (brand, product, company name, ticket ID) — not an abbreviation:
+- e.g., "예시고객사 연동 에러", "CATDEV-123 성능 이슈", "예시고객사 관련"
+- If the entity-like term is an abbreviation with multiple possible meanings, classify as **ambiguous** instead.
 → Use `search_mode: "hybrid"`. Keep the entity part literal; translate and expand the remaining concept part. Add the entity term to `keyword_tokens`.
 </intent_classification>
 
 <query_rules>
-- **entity_lookup:** `query` = original user input, untranslated, unexpanded.
+- **entity_lookup:** `query` = `""`. No translation needed.
 - **concept_search:** `query` = natural English translation + synonym expansion for maximum recall.
   - "에러" → "error exception failure stacktrace"
   - "배포" → "deployment release deploy CI/CD"
+- **ambiguous:** `query` = word-for-word English translation only. No expansion, no synonym substitution, no abbreviation resolution.
+  - "UT 결과" → "UT result"  [CORRECT: literal translation only]
+  - "UT 결과" → "unit test result outcomes"  [WRONG: resolved abbreviation and expanded synonyms]
+  - "DR 일정" → "DR schedule"  [CORRECT: literal translation only]
 - **mixed:** `query` = entity as-is + expanded concept in one English phrase.
   - "예시고객사 연동 에러" → "예시고객사 integration error exception failure"
+  - "QA 피드백" is NOT mixed — "QA" is an abbreviation → classify as ambiguous → "QA feedback" only
 </query_rules>
 
 <output_schema>
@@ -49,11 +70,27 @@ keyword_only (entity_lookup):
   "reasoning": ""
 }
 
-hybrid (concept_search or mixed):
+hybrid (concept_search):
 {
   "search_mode": "hybrid",
   "query": "deployment error exception failure",
   "keyword_tokens": [],
+  "reasoning": ""
+}
+
+hybrid (ambiguous — bare abbreviation):
+{
+  "search_mode": "hybrid",
+  "query": "UT",
+  "keyword_tokens": ["UT"],
+  "reasoning": ""
+}
+
+hybrid (ambiguous — abbreviation + context):
+{
+  "search_mode": "hybrid",
+  "query": "UT notice",
+  "keyword_tokens": ["UT"],
   "reasoning": ""
 }
 </output_schema>
