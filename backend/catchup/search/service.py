@@ -89,7 +89,7 @@ class ManualSearchService:
                 k=_MANUAL_SEARCH_POOL_SIZE,
                 offset=0,
                 tool_filters=tool_filters,
-                search_mode="fuzzy",
+                search_mode="exact",
             )
             all_docs = await retriever.async_invoke(planned.keyword_tokens)
         else:
