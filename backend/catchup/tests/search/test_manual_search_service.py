@@ -6,6 +6,7 @@ import pytest
 
 from catchup.db.models import User
 from catchup.rag.schemas.structures import ManualSearchQuery
+from catchup.search.planner.state import CachedSearch
 
 
 def _make_planned_search(
@@ -24,7 +25,7 @@ def _make_planned_search(
 def _make_planner_state(planned: ManualSearchQuery, keyword: str = "q") -> dict:
     return {
         "original_query": keyword,
-        "query_cache": {keyword: planned},
+        "query_cache": {keyword: CachedSearch(planned=planned)},
     }
 
 

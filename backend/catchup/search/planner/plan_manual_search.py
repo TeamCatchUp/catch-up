@@ -1,3 +1,6 @@
+from datetime import datetime
+from datetime import timezone
+
 import structlog
 from langchain.chat_models import BaseChatModel
 
@@ -7,6 +10,7 @@ from catchup.rag.nodes.utils import log_node
 from catchup.rag.retryable import RETRYABLE_ERRORS
 from catchup.rag.schemas.structures import ManualSearchQuery
 from catchup.rag.semaphores import rag_semaphores
+from catchup.search.planner.state import CachedSearch
 from catchup.search.planner.state import ManualSearchState
 from catchup.search.planner.state import _QUERY_CACHE_MAX_SIZE
 
@@ -20,17 +24,20 @@ async def plan_manual_search_node(
     timeout: float | None = None,
 ) -> dict:
     original_query = state["original_query"]
-    query_cache: dict[str, ManualSearchQuery] = dict(
+    query_cache: dict[str, CachedSearch] = dict(
         state.get("query_cache") or {}
     )
 
     if original_query in query_cache:
         cached = query_cache[original_query]
-        if isinstance(cached, ManualSearchQuery):
+        if isinstance(cached, CachedSearch):
             logger.debug("plan_manual_search_cache_hit", query=original_query)
-            # LRU: 히트된 항목을 최근 사용으로 갱신
+            # LRU: 히트된 항목을 최근 사용 시각으로 갱신 후 끝으로 이동
             query_cache.pop(original_query)
-            query_cache[original_query] = cached
+            query_cache[original_query] = CachedSearch(
+                planned=cached.planned,
+                searched_at=datetime.now(timezone.utc),
+            )
             return {"query_cache": query_cache, "query_cache_hit": True}
 
     prompt = prompt_loader.get_prompt("search/plan_manual_search", query=original_query)
@@ -72,6 +79,6 @@ async def plan_manual_search_node(
 
     if len(query_cache) >= _QUERY_CACHE_MAX_SIZE:
         query_cache.pop(next(iter(query_cache)))  # LRU 제거
-    query_cache[original_query] = planned
+    query_cache[original_query] = CachedSearch(planned=planned, searched_at=datetime.now(timezone.utc))
 
     return {"query_cache": query_cache, "query_cache_hit": False}

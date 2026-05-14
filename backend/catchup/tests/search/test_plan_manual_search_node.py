@@ -6,6 +6,7 @@ from unittest.mock import patch
 import pytest
 
 from catchup.rag.schemas.structures import ManualSearchQuery
+from catchup.search.planner.state import CachedSearch
 from catchup.search.planner.state import _QUERY_CACHE_MAX_SIZE
 
 
@@ -32,22 +33,26 @@ def _make_planned_search(
     )
 
 
+def _make_cached(planned: ManualSearchQuery) -> CachedSearch:
+    return CachedSearch(planned=planned)
+
+
 @pytest.mark.asyncio
 async def test_cache_hit_returns_cached_plan():
     """query_cache에 쿼리 존재 → LLM 미호출, query_cache만 반환."""
     from catchup.search.planner.plan_manual_search import plan_manual_search_node
 
-    existing_plan = _make_planned_search()
+    existing = _make_cached(_make_planned_search())
     state = _make_state(
         original_query="hello",
-        query_cache={"hello": existing_plan},
+        query_cache={"hello": existing},
     )
     mock_llm = MagicMock()
 
     result = await plan_manual_search_node(state, llm=mock_llm)
 
     assert "planned_search" not in result
-    assert result["query_cache"]["hello"] == existing_plan
+    assert result["query_cache"]["hello"].planned == existing.planned
     assert result["query_cache_hit"] is True
     mock_llm.with_structured_output.assert_not_called()
 
@@ -57,11 +62,11 @@ async def test_cache_hit_moves_entry_to_recent():
     """캐시 히트 시 해당 항목이 LRU에서 최근으로 이동한다."""
     from catchup.search.planner.plan_manual_search import plan_manual_search_node
 
-    plan_a = _make_planned_search(query="plan A")
-    plan_b = _make_planned_search(query="plan B")
+    cached_a = _make_cached(_make_planned_search(query="plan A"))
+    cached_b = _make_cached(_make_planned_search(query="plan B"))
     state = _make_state(
         original_query="query_a",
-        query_cache={"query_a": plan_a, "query_b": plan_b},
+        query_cache={"query_a": cached_a, "query_b": cached_b},
     )
 
     result = await plan_manual_search_node(state, llm=MagicMock())
@@ -71,7 +76,7 @@ async def test_cache_hit_moves_entry_to_recent():
 
 @pytest.mark.asyncio
 async def test_cache_miss_calls_llm():
-    """query_cache에 없으면 LLM 호출 후 캐시에 추가."""
+    """query_cache에 없으면 LLM 호출 후 CachedSearch로 캐시에 추가."""
     from catchup.search.planner.plan_manual_search import plan_manual_search_node
 
     planned = _make_planned_search(query="optimized English query")
@@ -92,7 +97,9 @@ async def test_cache_miss_calls_llm():
         state = _make_state(original_query="new query")
         result = await plan_manual_search_node(state, llm=mock_llm)
 
-    assert result["query_cache"]["new query"] == planned
+    cached = result["query_cache"]["new query"]
+    assert isinstance(cached, CachedSearch)
+    assert cached.planned == planned
     assert result["query_cache_hit"] is False
 
 
@@ -102,9 +109,9 @@ async def test_cache_evicts_lru_when_full():
     from catchup.search.planner.plan_manual_search import plan_manual_search_node
 
     oldest_key = "oldest_query"
-    cache = {oldest_key: _make_planned_search(query="oldest")}
+    cache = {oldest_key: _make_cached(_make_planned_search(query="oldest"))}
     for i in range(1, _QUERY_CACHE_MAX_SIZE):
-        cache[f"query_{i}"] = _make_planned_search(query=f"plan {i}")
+        cache[f"query_{i}"] = _make_cached(_make_planned_search(query=f"plan {i}"))
 
     assert len(cache) == _QUERY_CACHE_MAX_SIZE
 
@@ -133,7 +140,7 @@ async def test_cache_evicts_lru_when_full():
 
 @pytest.mark.asyncio
 async def test_llm_failure_falls_back_to_raw_query():
-    """LLM 예외 시 raw query로 fallback, 예외 미발생."""
+    """LLM 예외 시 raw query로 fallback, CachedSearch로 저장."""
     from catchup.search.planner.plan_manual_search import plan_manual_search_node
 
     mock_llm = MagicMock()
@@ -150,10 +157,11 @@ async def test_llm_failure_falls_back_to_raw_query():
         state = _make_state(original_query="fallback test")
         result = await plan_manual_search_node(state, llm=mock_llm)
 
-    fallback = result["query_cache"]["fallback test"]
-    assert fallback.query == "fallback test"
-    assert fallback.keyword_tokens == []
-    assert fallback.search_mode == "hybrid"
+    cached = result["query_cache"]["fallback test"]
+    assert isinstance(cached, CachedSearch)
+    assert cached.planned.query == "fallback test"
+    assert cached.planned.keyword_tokens == []
+    assert cached.planned.search_mode == "hybrid"
 
 
 @pytest.mark.asyncio
