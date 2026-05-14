@@ -59,9 +59,9 @@ def mock_vector_db():
 
 
 def _assert_hybrid_search_called_with_pool(mock_vector_db, **expected_kwargs):
-    """hybrid_search가 pool size(k=200)와 offset=0으로 호출됐는지 검증한다."""
+    """hybrid_search가 pool size(k=50)와 offset=0으로 호출됐는지 검증한다."""
     _, kwargs = mock_vector_db.hybrid_search.call_args
-    assert kwargs.get("k") == 200
+    assert kwargs.get("k") == 50
     assert kwargs.get("offset") == 0
     for key, value in expected_kwargs.items():
         assert kwargs[key] == value
@@ -87,8 +87,6 @@ async def test_search_uses_planned_query(service, mock_planner, mock_vector_db, 
     await service.search(
         user=mock_user,
         keyword="Korean query",
-        limit=10,
-        offset=0,
         tool_filters=None,
         vector_db_service=mock_vector_db,
     )
@@ -108,8 +106,6 @@ async def test_search_thread_id_uses_user_id(service, mock_planner, mock_vector_
     await service.search(
         user=_make_user(user_id=99),
         keyword="q",
-        limit=20,
-        offset=0,
         tool_filters=None,
         vector_db_service=mock_vector_db,
     )
@@ -140,8 +136,6 @@ async def test_keyword_only_skips_hybrid_search(service, mock_planner, mock_vect
         await service.search(
             user=mock_user,
             keyword="예시고객사",
-            limit=10,
-            offset=0,
             tool_filters=None,
             vector_db_service=mock_vector_db,
         )
@@ -172,8 +166,6 @@ async def test_search_returns_base_sources(service, mock_planner, mock_vector_db
     results, total, source_distribution = await service.search(
         user=mock_user,
         keyword="q",
-        limit=20,
-        offset=0,
         tool_filters=None,
         vector_db_service=mock_vector_db,
     )
