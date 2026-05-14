@@ -5,25 +5,26 @@ from unittest.mock import MagicMock
 import pytest
 
 from catchup.db.models import User
-from catchup.rag.schemas.structures import VectorDbSearchQuery
+from catchup.rag.schemas.structures import ManualSearchQuery
 
 
 def _make_planned_search(
     query: str = "semantic query in English",
     keyword_tokens: list[str] | None = None,
-) -> VectorDbSearchQuery:
-    return VectorDbSearchQuery(
+    search_mode: str = "hybrid",
+) -> ManualSearchQuery:
+    return ManualSearchQuery(
         query=query,
         keyword_tokens=keyword_tokens or [],
+        search_mode=search_mode,
         reasoning="test",
     )
 
 
-def _make_planner_state(planned: VectorDbSearchQuery, keyword: str = "q") -> dict:
+def _make_planner_state(planned: ManualSearchQuery, keyword: str = "q") -> dict:
     return {
         "original_query": keyword,
-        "last_planned_query": keyword,
-        "planned_search": planned,
+        "query_cache": {keyword: planned},
     }
 
 
@@ -51,6 +52,9 @@ def mock_planner():
 def mock_vector_db():
     service = MagicMock()
     service.hybrid_search = AsyncMock(return_value=[])
+    service.session_factory = MagicMock()
+    service.async_session_factory = MagicMock()
+    service.collection_name = "test_collection"
     return service
 
 
@@ -112,6 +116,38 @@ async def test_search_thread_id_uses_user_id(service, mock_planner, mock_vector_
 
     config = mock_planner.ainvoke.call_args[1]["config"]
     assert config["configurable"]["thread_id"] == "search:99"
+
+
+@pytest.mark.asyncio
+async def test_keyword_only_skips_hybrid_search(service, mock_planner, mock_vector_db, mock_user):
+    """search_mode=keyword_only이면 hybrid_search를 호출하지 않고 PGBigmRetriever를 사용한다."""
+    from unittest.mock import patch
+
+    planned = _make_planned_search(
+        query="예시고객사",
+        keyword_tokens=["예시고객사"],
+        search_mode="keyword_only",
+    )
+    mock_planner.ainvoke.return_value = _make_planner_state(planned, "예시고객사")
+
+    with patch(
+        "catchup.search.service.PGBigmRetriever"
+    ) as mock_retriever_cls:
+        mock_retriever = MagicMock()
+        mock_retriever.async_invoke = AsyncMock(return_value=[])
+        mock_retriever_cls.return_value = mock_retriever
+
+        await service.search(
+            user=mock_user,
+            keyword="예시고객사",
+            limit=10,
+            offset=0,
+            tool_filters=None,
+            vector_db_service=mock_vector_db,
+        )
+
+    mock_vector_db.hybrid_search.assert_not_called()
+    mock_retriever.async_invoke.assert_called_once_with(["예시고객사"])
 
 
 @pytest.mark.asyncio
