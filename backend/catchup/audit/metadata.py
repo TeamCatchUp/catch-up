@@ -624,3 +624,20 @@ class AdminOAuthAuditMetadata(BaseAuditMetadata):
 
 class UserOnboardingAuditMetadata(BaseAuditMetadata):
     role: UserRole
+
+
+class ManualSearchAuditMetadata(BaseAuditMetadata):
+    user_id: int
+    query: str
+    result_count: int
+
+    @classmethod
+    def from_audit(cls, data: "AuditLogMetadataInput") -> "ManualSearchAuditMetadata | None":
+        if data.status != AuditStatus.SUCCESS:
+            return None
+        result = data.result
+        return cls(
+            user_id=data.arguments["current_user"].id,
+            query=data.arguments["keyword"],
+            result_count=result.total if result else 0,
+        )

@@ -108,3 +108,7 @@ class UserOnboardingAction(BaseAuditAction):
 
 class UserMappingAction(BaseAuditAction):
     UPLOAD_FILE = "upload_file"
+
+
+class ManualSearchAction(BaseAuditAction):
+    SEND_QUERY = "send_query"
