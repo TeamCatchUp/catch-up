@@ -5,12 +5,12 @@
 // 카드 리스트: flex flex-col gap-2(8px) min-w-[534px] w-full
 
 import Pagination from '@/shared/components/ui/pagination';
+import { normalizeSources } from '@/shared/utils/normalize/normalizeRagSources';
 
 import { useHybridSearch } from '../hooks/useHybridSearch';
 import type { ActiveTab } from '../hooks/useHybridSearchUrlState';
 import { HYBRID_SEARCH_PAGE_SIZE } from '../queries/hybridSearch.queries';
 import type { ToolFilter } from '../types/hybridSearchApi';
-import { mapHybridSearchResult } from '../utils/mapHybridSearchResult';
 import HybridSearchResultCard from './HybridSearchResultCard';
 import ResultEmptyState from './ResultEmptyState';
 import ResultErrorState from './ResultErrorState';
@@ -42,15 +42,14 @@ export default function ResultListSection({
   if (!query.data || query.data.results.length === 0) return <ResultEmptyState />;
 
   const totalPages = Math.max(1, Math.ceil(query.data.total / HYBRID_SEARCH_PAGE_SIZE));
-  const cards = query.data.results.map(mapHybridSearchResult);
+  const sources = normalizeSources(query.data.results);
 
   return (
     <div className="flex w-full flex-col items-center gap-10">
       <div className="flex w-full flex-col items-start gap-2">
-        {cards.map((card) => {
-          const { id, ...rest } = card;
-          return <HybridSearchResultCard key={id} {...rest} />;
-        })}
+        {sources.map((source) => (
+          <HybridSearchResultCard key={source.id} source={source} />
+        ))}
       </div>
       {totalPages > 1 && (
         <Pagination currentPage={page} totalPages={totalPages} onPageChange={onPageChange} />
