@@ -30,15 +30,16 @@ interface ResultPageHeaderProps {
   onTabChange: (next: ActiveTab) => void;
 }
 
+// count=0인 source 탭은 표시하지 않음. '전체'는 항상 노출.
 function buildTabItems(dist: Record<string, number>): AccentTabItem<ActiveTab>[] {
-  return [
-    { value: 'all', label: '전체' },
+  const sourceTabs: AccentTabItem<ActiveTab>[] = [
     { value: 'confluence', label: 'Confluence', count: dist.confluence ?? 0 },
     { value: 'jira', label: 'Jira', count: dist.jira ?? 0 },
     { value: 'slack', label: 'Slack', count: dist.slack ?? 0 },
     { value: 'github', label: 'Github', count: dist.github ?? 0 },
     { value: 'channel_talk', label: '채널톡', count: dist.channel_talk ?? 0 },
   ];
+  return [{ value: 'all', label: '전체' }, ...sourceTabs.filter((tab) => (tab.count ?? 0) > 0)];
 }
 
 export default function ResultPageHeader({

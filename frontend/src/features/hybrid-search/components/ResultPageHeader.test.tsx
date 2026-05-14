@@ -35,7 +35,7 @@ function makeDefaultProps() {
 }
 
 describe('ResultPageHeader', () => {
-  it('AccentTabs를 렌더 (전체/Confluence/Jira/Slack/Github/채널톡)', async () => {
+  it('results=[]면 source 탭은 모두 숨김, 전체 탭만 표시', async () => {
     server.use(
       http.get('*/api/v1/search/hybrid', () =>
         HttpResponse.json({ results: [], total: 0, source_distribution: {} }),
@@ -43,11 +43,11 @@ describe('ResultPageHeader', () => {
     );
     renderWithClient(<ResultPageHeader {...makeDefaultProps()} />);
     expect(screen.getByText('전체')).toBeInTheDocument();
-    expect(screen.getByText('Jira')).toBeInTheDocument();
-    expect(screen.getByText('Slack')).toBeInTheDocument();
-    expect(screen.getByText('Confluence')).toBeInTheDocument();
-    expect(screen.getByText('Github')).toBeInTheDocument();
-    expect(screen.getByText('채널톡')).toBeInTheDocument();
+    expect(screen.queryByText('Jira')).not.toBeInTheDocument();
+    expect(screen.queryByText('Slack')).not.toBeInTheDocument();
+    expect(screen.queryByText('Confluence')).not.toBeInTheDocument();
+    expect(screen.queryByText('Github')).not.toBeInTheDocument();
+    expect(screen.queryByText('채널톡')).not.toBeInTheDocument();
   });
 
   it('list 응답의 results에서 source별 count를 client-side 계산하여 탭 배지 표시', async () => {
@@ -94,16 +94,23 @@ describe('ResultPageHeader', () => {
   });
 
   it('Jira 탭 클릭 시 onTabChange("jira") 호출', async () => {
+    const results = Array.from({ length: 5 }, (_, i) => ({
+      id: `jira-${i}`,
+      source: 'jira',
+      entity_type: 'issue',
+      title: `j${i}`,
+      text: '',
+    }));
     server.use(
       http.get('*/api/v1/search/hybrid', () =>
-        HttpResponse.json({ results: [], total: 0, source_distribution: { jira: 5 } }),
+        HttpResponse.json({ results, total: results.length, source_distribution: {} }),
       ),
     );
     const onTabChange = vi.fn();
     const user = userEvent.setup();
     renderWithClient(<ResultPageHeader {...makeDefaultProps()} onTabChange={onTabChange} />);
 
-    await user.click(screen.getByRole('tab', { name: /Jira/ }));
+    await user.click(await screen.findByRole('tab', { name: /Jira/ }));
     expect(onTabChange).toHaveBeenCalledWith('jira');
   });
 });
