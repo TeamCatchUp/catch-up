@@ -3,8 +3,16 @@
 // violet 강조 톤 underline tab + 옵션 카운트 배지. 기본 톤은 underline-tabs.
 
 import * as TabsPrimitive from '@radix-ui/react-tabs';
+import { AnimatePresence, motion } from 'motion/react';
 
+import { motionEase, MotionState } from '@/shared/motion/presets';
 import { cn } from '@/shared/utils/cn';
+
+const fastCountCrossfade = {
+  hidden: { opacity: 0 },
+  visible: { opacity: 1, transition: { duration: 0.18, ease: motionEase } },
+  exit: { opacity: 0, transition: { duration: 0.12, ease: motionEase } },
+};
 
 export interface AccentTabItem<V extends string = string> {
   value: V;
@@ -57,7 +65,17 @@ export default function AccentTabs<V extends string = string>({
                 )}
                 data-tab-state-badge
               >
-                {item.count}
+                <AnimatePresence mode="popLayout" initial={false}>
+                  <motion.span
+                    key={item.count}
+                    variants={fastCountCrossfade}
+                    initial={MotionState.Hidden}
+                    animate={MotionState.Visible}
+                    exit={MotionState.Exit}
+                  >
+                    {item.count}
+                  </motion.span>
+                </AnimatePresence>
               </span>
             )}
           </TabsPrimitive.Trigger>

@@ -6,6 +6,9 @@
 // keyword 또는 tools가 바뀌면 draft/active/page 모두 reset (prev-value 패턴).
 
 import { useState } from 'react';
+import { motion } from 'motion/react';
+
+import { motionEase, MotionState } from '@/shared/motion/presets';
 
 import { useHybridSearchUrlState } from '../hooks/useHybridSearchUrlState';
 import { type ActiveTab, TOOL_FILTERS_ARRAY, type ToolFilter } from '../types/hybridSearchApi';
@@ -13,6 +16,12 @@ import CatchupPromoCard from './CatchupPromoCard';
 import ResultListSection from './ResultListSection';
 import ResultPageBody from './ResultPageBody';
 import ResultPageHeader from './ResultPageHeader';
+
+// 라우트 진입 시 1회 짧은 fade. 페이지 내부 상태 전환은 ResultListSection 내부 AnimatePresence가 담당.
+const pageEnter = {
+  hidden: { opacity: 0 },
+  visible: { opacity: 1, transition: { duration: 0.2, ease: motionEase } },
+};
 
 export default function HybridSearchResultPage() {
   const { keyword, tools, setKeywordAndTools } = useHybridSearchUrlState();
@@ -62,7 +71,12 @@ export default function HybridSearchResultPage() {
   };
 
   return (
-    <div className="bg-fill-normal flex min-h-full flex-col">
+    <motion.div
+      initial={MotionState.Hidden}
+      animate={MotionState.Visible}
+      variants={pageEnter}
+      className="bg-fill-normal flex min-h-full flex-col"
+    >
       <ResultPageHeader
         keyword={keyword}
         scope={scope}
@@ -85,6 +99,6 @@ export default function HybridSearchResultPage() {
           onPageChange={setPage}
         />
       </ResultPageBody>
-    </div>
+    </motion.div>
   );
 }
