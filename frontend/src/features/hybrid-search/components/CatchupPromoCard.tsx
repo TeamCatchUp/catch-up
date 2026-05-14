@@ -1,6 +1,9 @@
 'use client';
 
 // "동료에게 묻기 전, Catch Up에게 물어보세요" promo 카드.
+// 클릭 시 /search (캐치스턴트 AI 채팅 페이지)로 이동.
+
+import { useRouter } from 'next/navigation';
 
 import ChannelTalk from '@/public/icons/logo/ChannelTalk.svg';
 import Confluence from '@/public/icons/logo/Confluence.svg';
@@ -23,10 +26,14 @@ const SOURCE_LOGOS: ReadonlyArray<React.FC<React.SVGProps<SVGSVGElement>>> = [
 ];
 
 export default function CatchupPromoCard({ className }: CatchupPromoCardProps) {
+  const router = useRouter();
+
   return (
-    <div
+    <button
+      type="button"
+      onClick={() => router.push('/search')}
       className={cn(
-        'bg-fill-strong border-edge-normal flex flex-col gap-4 overflow-clip rounded-xl border pt-5',
+        'bg-fill-strong border-edge-normal flex w-full cursor-pointer flex-col gap-4 overflow-clip rounded-xl border pt-5 text-left transition-colors',
         className,
       )}
     >
@@ -42,7 +49,7 @@ export default function CatchupPromoCard({ className }: CatchupPromoCardProps) {
           {`여러 문서에 흩어진 내용을 연결해 원인, 흐름, \n관련 히스토리까지 한 번에 정리해드립니다`}
         </p>
       </div>
-      <div className="bg-fill-normal flex flex-col gap-2 p-5">
+      <div className="bg-fill-normal flex w-full flex-col gap-2 p-5">
         <div className="flex items-center">
           {SOURCE_LOGOS.map((Logo, i) => (
             <div
@@ -59,6 +66,6 @@ export default function CatchupPromoCard({ className }: CatchupPromoCardProps) {
           <div className="bg-fill-strong h-[15px] w-37 rounded-md" />
         </div>
       </div>
-    </div>
+    </button>
   );
 }
