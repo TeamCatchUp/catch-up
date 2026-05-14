@@ -3,21 +3,17 @@
 // 결과 페이지 상단 검색바.
 // isFocused 상태에 따라 collapsed(rounded-full) / expanded(카드 안에 chips + 검색 기록 + promo) 두 시각.
 // Figma 13426:54489(collapsed), 13426:52872(expanded) — 둘 다 w-225(900px) 고정.
-// expanded 시 z-dropdown으로 화면 위에 떠 있고, 내부 확장 콘텐츠는 QueryBox와 동일한 fade+slide-down 애니메이션.
+// expanded 시 z-dropdown으로 화면 위에 떠 있고, 내부 확장 콘텐츠는 ResultSearchBarExpandedPanel로 분리.
 
 import { useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
 
 import IconArrowSend from '@/public/icons/icon/arrow_send.svg';
 import IconCancel from '@/public/icons/icon/cancel.svg';
 import IconSearch from '@/public/icons/icon/search_2.svg';
-import SearchHistoryList from '@/shared/components/SearchHistoryList';
-import SourceChipsRow from '@/shared/components/SourceChipsRow';
-import { useSearchHistoryEntries } from '@/shared/hooks/useSearchHistoryEntries';
 import type { DocsSource } from '@/shared/types/source';
 import { cn } from '@/shared/utils/cn';
 
-import CatchupPromoCard from './CatchupPromoCard';
+import ResultSearchBarExpandedPanel from './ResultSearchBarExpandedPanel';
 
 interface ResultSearchBarProps {
   value: string;
@@ -35,8 +31,6 @@ export default function ResultSearchBar({
   onClear,
   forceExpanded = false,
 }: ResultSearchBarProps) {
-  const router = useRouter();
-  const { entries: history, isLoading: isHistoryLoading } = useSearchHistoryEntries();
   const [isFocused, setIsFocused] = useState(false);
   // expanded 시각 안 chips는 결과 페이지와 별개 의미 — 자체 state 유지.
   const [chipsSources, setChipsSources] = useState<DocsSource[]>([]);
@@ -116,11 +110,7 @@ export default function ResultSearchBar({
               <IconArrowSend
                 className={cn(
                   'h-6 w-6',
-                  expanded
-                    ? hasText
-                      ? 'brightness-0 invert'
-                      : 'text-content-assistive'
-                    : 'h-7 w-7',
+                  expanded ? (hasText ? 'brightness-0 invert' : 'text-content-assistive') : 'h-7 w-7',
                 )}
               />
             </button>
@@ -129,26 +119,10 @@ export default function ResultSearchBar({
         {expanded && <span aria-hidden className="bg-edge-neutral h-px w-full" />}
       </div>
       {expanded && (
-        <div className="animate-in fade-in-0 slide-in-from-top-3 flex w-full flex-col gap-2.5 duration-300">
-          <SourceChipsRow
-            className="w-full justify-start"
-            selectedSources={chipsSources}
-            onToggle={setChipsSources}
-          />
-          <div className="flex w-full flex-1 items-start gap-6">
-            <div className="min-w-0 flex-1">
-              <SearchHistoryList
-                entries={history}
-                isLoading={isHistoryLoading}
-                maxPerGroup={3}
-                onItemClick={(entry) => router.push(`/hybrid-search?q=${encodeURIComponent(entry.query)}`)}
-              />
-            </div>
-            <div className="w-80 shrink-0">
-              <CatchupPromoCard />
-            </div>
-          </div>
-        </div>
+        <ResultSearchBarExpandedPanel
+          selectedSources={chipsSources}
+          onSourcesToggle={setChipsSources}
+        />
       )}
     </div>
   );
