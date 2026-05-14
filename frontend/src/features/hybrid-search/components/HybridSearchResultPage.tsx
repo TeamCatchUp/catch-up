@@ -15,7 +15,7 @@ import ResultPageBody from './ResultPageBody';
 import ResultPageHeader from './ResultPageHeader';
 
 export default function HybridSearchResultPage() {
-  const { keyword, tools, setKeyword, setKeywordAndTools } = useHybridSearchUrlState();
+  const { keyword, tools, setKeywordAndTools } = useHybridSearchUrlState();
 
   // draft state (input/chips 임시 값) + UI state (active/page).
   const [draftKeyword, setDraftKeyword] = useState(keyword);
@@ -43,10 +43,10 @@ export default function HybridSearchResultPage() {
     setKeywordAndTools(draftKeyword, draftChips);
   };
 
-  // X 버튼: keyword만 제거, tools 보존.
+  // X 버튼: input draft만 비움. URL과 현재 표시 중인 검색 결과는 유지.
+  // 사용자가 새 검색어 타이핑 후 submit해야 결과가 갱신됨.
   const handleClear = () => {
     setDraftKeyword('');
-    setKeyword('');
   };
 
   // 탭 변경 시 페이지도 1로 reset.
