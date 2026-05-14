@@ -3,7 +3,8 @@
 // 결과 페이지 상단 검색바.
 // isFocused 상태에 따라 collapsed(rounded-full) / expanded(카드 안에 chips + 검색 기록 + promo) 두 시각.
 // Figma 13426:54489(collapsed), 13426:52872(expanded) — 둘 다 w-225(900px) 고정.
-// expanded 시 z-dropdown으로 화면 위에 떠 있고, 내부 확장 콘텐츠는 ResultSearchBarExpandedPanel로 분리.
+// 외부 placeholder가 collapsed 높이(h-14)만큼 자리 보존, 실제 바는 absolute로 오버레이 → expanded 시 하단 콘텐츠 안 밀림.
+// 내부 확장 콘텐츠는 ResultSearchBarExpandedPanel로 분리.
 
 import { useRef, useState } from 'react';
 
@@ -46,14 +47,15 @@ export default function ResultSearchBar({
   };
 
   return (
-    <div
-      className={cn(
-        'bg-fill-normal border-edge-normal relative flex w-225 flex-col border',
-        expanded
-          ? 'shadow-strong z-dropdown gap-2.5 rounded-[28px] pt-2 pr-2 pb-4 pl-3'
-          : 'items-center gap-2 rounded-full p-2',
-      )}
-    >
+    <div className="relative h-14 w-225">
+      <div
+        className={cn(
+          'bg-fill-normal border-edge-normal absolute top-0 left-0 flex w-225 flex-col border',
+          expanded
+            ? 'shadow-strong z-dropdown gap-2.5 rounded-[28px] pt-2 pr-2 pb-4 pl-3'
+            : 'items-center gap-2 rounded-full p-2',
+        )}
+      >
       <div className={cn('flex w-full', expanded ? 'flex-col gap-2' : 'items-center gap-2')}>
         <div className={cn('flex w-full items-center', expanded ? 'gap-3 pl-0.5' : 'gap-2')}>
           <div className={cn('flex min-w-0 flex-1 items-center', expanded ? 'gap-3.5' : 'gap-2')}>
@@ -124,6 +126,7 @@ export default function ResultSearchBar({
           onSourcesToggle={setChipsSources}
         />
       )}
+      </div>
     </div>
   );
 }
