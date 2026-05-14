@@ -24,8 +24,6 @@ interface ResultSearchBarProps {
   onSubmit: () => void;
   onHistorySubmit: (query: string) => void;
   onClear: () => void;
-  // true면 isFocused state 무시하고 항상 expanded. dev preview/Storybook 용도.
-  forceExpanded?: boolean;
 }
 
 export default function ResultSearchBar({
@@ -36,12 +34,11 @@ export default function ResultSearchBar({
   onSubmit,
   onHistorySubmit,
   onClear,
-  forceExpanded = false,
 }: ResultSearchBarProps) {
   const [isFocused, setIsFocused] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const hasText = value.trim().length > 0;
-  const expanded = forceExpanded || isFocused;
+  const expanded = isFocused;
 
   // submit 후 input blur → onBlur로 setIsFocused(false) → 패널 collapse.
   const handleSubmit = () => {
@@ -85,7 +82,7 @@ export default function ResultSearchBar({
             )}
             <input
               ref={inputRef}
-              autoFocus={expanded && !forceExpanded}
+              autoFocus={expanded}
               type="text"
               value={value}
               onChange={(e) => onValueChange(e.target.value)}
