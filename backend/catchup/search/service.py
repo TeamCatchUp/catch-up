@@ -1,4 +1,7 @@
 from collections import Counter
+from datetime import datetime
+from datetime import timedelta
+from datetime import timezone
 
 import structlog
 
@@ -13,6 +16,7 @@ from catchup.rag.checkpoint import get_langgraph_checkpointer
 from catchup.rag.nodes.utils import build_doc_groups
 from catchup.rag.schemas.sources import BaseSource
 from catchup.search.planner.graph import get_search_planner_graph
+from catchup.search.planner.state import CachedSearch
 
 logger = structlog.get_logger()
 
@@ -75,7 +79,7 @@ class ManualSearchService:
                 {"original_query": keyword}, config=invoke_config
             )
 
-        planned = state["query_cache"][keyword]
+        planned = state["query_cache"][keyword].planned
 
         if getattr(planned, "search_mode", "hybrid") == "keyword_only":
             retriever = PGBigmRetriever(
@@ -122,3 +126,34 @@ class ManualSearchService:
         ]
 
         return results, total, source_distribution
+
+    async def get_search_history(
+        self,
+        user: User,
+        period: str,
+    ) -> list[tuple[str, datetime]]:
+        """query_cache에서 period 기준으로 필터링한 최근 검색어를 최신순으로 반환."""
+        planner = self._get_planner()
+        base_config, _ = self._setup_config(user.id)
+        snapshot = await planner.aget_state(base_config)
+
+        if not snapshot or not snapshot.values:
+            return []
+
+        query_cache: dict[str, CachedSearch] = snapshot.values.get("query_cache") or {}
+        now = datetime.now(timezone.utc)
+
+        if period == "today":
+            cutoff = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        elif period == "7d":
+            cutoff = now - timedelta(days=7)
+        else:
+            cutoff = None
+
+        entries = [
+            (query, entry.searched_at)
+            for query, entry in query_cache.items()
+            if isinstance(entry, CachedSearch)
+            and (cutoff is None or entry.searched_at >= cutoff)
+        ]
+        return list(reversed(entries))
