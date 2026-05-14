@@ -32,12 +32,31 @@ describe('mapHybridSearchResult', () => {
 
     const out = mapHybridSearchResult(src);
 
+    expect(out.id).toBe('1');
     expect(out.sourceType).toBe('jira');
     expect(out.integrationLabel).toBe('Jira');
     expect(out.title).toBe('결제 롤백 검토');
     expect(out.author).toBe('팀원D');
     expect(out.identifier).toBe('[CU-989]');
     expect(out.contextLabel).toBe('CU');
+  });
+
+  it('unknown source → integrationLabel "기타", sourceType "unknown"', () => {
+    const src: SourceResponseApi = {
+      id: 'u-1',
+      source: 'unknown',
+      entity_type: 'issue',
+      title: '미분류 문서',
+      text: '',
+      author: '시스템',
+    };
+
+    const out = mapHybridSearchResult(src);
+
+    expect(out.sourceType).toBe('unknown');
+    expect(out.integrationLabel).toBe('기타');
+    expect(out.contextLabel).toBe('');
+    expect(out.identifier).toBeUndefined();
   });
 
   it('github source → identifier에 #number, contextLabel은 owner/repo', () => {

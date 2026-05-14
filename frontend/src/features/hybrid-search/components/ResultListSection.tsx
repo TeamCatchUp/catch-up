@@ -37,9 +37,10 @@ export default function ResultListSection({ keyword, tools, page, onPageChange }
   return (
     <div className="flex w-full flex-col items-center gap-10">
       <div className="flex w-full flex-col items-start gap-2">
-        {cards.map((card, idx) => (
-          <HybridSearchResultCard key={`${card.sourceType}-${idx}-${card.url}`} {...card} />
-        ))}
+        {cards.map((card) => {
+          const { id, ...rest } = card;
+          return <HybridSearchResultCard key={id} {...rest} />;
+        })}
       </div>
       {totalPages > 1 && (
         <Pagination currentPage={page} totalPages={totalPages} onPageChange={onPageChange} />

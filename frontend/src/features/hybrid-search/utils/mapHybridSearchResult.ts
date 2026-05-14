@@ -5,8 +5,12 @@ import type { DocsSource } from '@/shared/types/source';
 import type { SourceResponseApi } from '@/shared/types/sourceApi';
 import { formatRelativeTime } from '@/shared/utils/formatDate';
 
+// API에서 'unknown'이 올 수 있어 표시 영역은 fallback 카드로 처리.
+export type CardSourceType = DocsSource | 'unknown';
+
 export interface HybridSearchResultCardData {
-  sourceType: DocsSource;
+  id: string;
+  sourceType: CardSourceType;
   integrationLabel: string;
   contextLabel: string;
   title: string;
@@ -16,12 +20,13 @@ export interface HybridSearchResultCardData {
   identifier?: string;
 }
 
-const INTEGRATION_LABELS: Record<DocsSource, string> = {
+const INTEGRATION_LABELS: Record<CardSourceType, string> = {
   jira: 'Jira',
   github: 'Github',
   slack: 'Slack',
   confluence: 'Confluence',
   channel_talk: '채널톡',
+  unknown: '기타',
 };
 
 function buildContextLabel(src: SourceResponseApi): string {
@@ -48,12 +53,13 @@ function buildIdentifier(src: SourceResponseApi): string | undefined {
   return undefined;
 }
 
-// 'unknown' source는 호출자가 filter — 매퍼는 DocsSource로 narrowing.
+// 'unknown' source는 fallback 카드로 표시 (제네릭 아이콘 + "기타" 라벨).
 export function mapHybridSearchResult(src: SourceResponseApi): HybridSearchResultCardData {
-  const sourceType = src.source as DocsSource;
+  const sourceType: CardSourceType = src.source === 'unknown' ? 'unknown' : (src.source as DocsSource);
   return {
+    id: src.id,
     sourceType,
-    integrationLabel: INTEGRATION_LABELS[sourceType] ?? src.source,
+    integrationLabel: INTEGRATION_LABELS[sourceType],
     contextLabel: buildContextLabel(src),
     title: src.title,
     url: src.url ?? '',

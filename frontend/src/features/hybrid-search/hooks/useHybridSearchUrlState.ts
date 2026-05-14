@@ -9,6 +9,8 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { TOOL_FILTERS, type ToolFilter } from '../types/hybridSearchApi';
 
 const PATHNAME = '/hybrid-search';
+// backend total cap 200 / page size 7 ≈ 29 → 여유 30. URL 수동 조작 방어.
+const MAX_PAGE = 30;
 
 interface HybridSearchUrlState {
   keyword: string;
@@ -30,7 +32,7 @@ function parseTools(raw: string | null): ToolFilter[] {
 function parsePage(raw: string | null): number {
   const n = Number(raw ?? '1');
   if (!Number.isFinite(n) || n < 1) return 1;
-  return Math.floor(n);
+  return Math.min(Math.floor(n), MAX_PAGE);
 }
 
 export function useHybridSearchUrlState(): HybridSearchUrlState {

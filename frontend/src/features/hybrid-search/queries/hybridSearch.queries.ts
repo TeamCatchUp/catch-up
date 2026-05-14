@@ -13,6 +13,21 @@ interface ListParams {
   page: number;
 }
 
+// axios 기본 직렬화는 버전/설정에 따라 ?key[]=v 또는 ?key=v1&key=v2로 갈림.
+// FastAPI는 List 파라미터에 repeat 포맷(?key=v1&key=v2)을 기본 기대 → 명시적으로 처리.
+function serializeListParams(params: Record<string, unknown>): string {
+  const usp = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value === undefined || value === null) continue;
+    if (Array.isArray(value)) {
+      for (const v of value) usp.append(key, String(v));
+    } else {
+      usp.append(key, String(value));
+    }
+  }
+  return usp.toString();
+}
+
 export const hybridSearchQueries = {
   all: () => ['search', 'hybrid'] as const,
 
@@ -28,6 +43,7 @@ export const hybridSearchQueries = {
             offset: (params.page - 1) * HYBRID_SEARCH_PAGE_SIZE,
             tool_filters: params.tools.length > 0 ? params.tools : undefined,
           },
+          paramsSerializer: serializeListParams,
         });
         return data;
       },
@@ -44,6 +60,7 @@ export const hybridSearchQueries = {
         const { data } = await api.get<HybridSearchResponse>(API.search.hybrid, {
           // tool_filters 미전달 → 전체 풀 기준 분포. limit=1로 payload 최소화.
           params: { keyword, limit: 1, offset: 0 },
+          paramsSerializer: serializeListParams,
         });
         return data.source_distribution;
       },
