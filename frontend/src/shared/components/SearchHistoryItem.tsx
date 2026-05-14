@@ -15,7 +15,7 @@ export default function SearchHistoryItem({ query, dateLabel, onClick }: SearchH
     <button
       type="button"
       onClick={onClick}
-      className="flex h-10 w-full cursor-pointer items-center gap-2 rounded-xl px-2 py-1 text-left"
+      className="hover:bg-fill-interaction-hover flex h-10 w-full cursor-pointer items-center gap-2 rounded-xl px-2 py-1 text-left transition-colors"
     >
       <span className="bg-fill-strong border-edge-neutral text-icon-normal flex shrink-0 items-center justify-center rounded-full border p-1.5">
         <Clock className="h-5 w-5" />

@@ -5,6 +5,7 @@
 
 import type { SearchHistoryEntry } from '@/shared/types/searchHistory';
 import { DATE_SECTION_LABELS, groupItemsByDate } from '@/shared/utils/dateGrouping';
+import { formatRelativeTime } from '@/shared/utils/formatDate';
 
 import SearchHistoryItem from './SearchHistoryItem';
 
@@ -13,13 +14,6 @@ interface SearchHistoryListProps {
   isLoading?: boolean;
   maxPerGroup?: number;
   onItemClick?: (entry: SearchHistoryEntry) => void;
-}
-
-function formatDateLabel(d: Date): string {
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  const dd = String(d.getDate()).padStart(2, '0');
-  return `${yyyy}.${mm}.${dd}`;
 }
 
 export default function SearchHistoryList({
@@ -56,7 +50,7 @@ export default function SearchHistoryList({
                 <SearchHistoryItem
                   key={entry.id}
                   query={entry.query}
-                  dateLabel={formatDateLabel(entry.createdAt)}
+                  dateLabel={formatRelativeTime(entry.createdAt.toISOString())}
                   onClick={onItemClick ? () => onItemClick(entry) : undefined}
                 />
               ))}
