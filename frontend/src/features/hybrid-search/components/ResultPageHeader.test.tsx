@@ -28,6 +28,7 @@ function makeDefaultProps() {
     draftChips: [],
     onDraftChipsChange: () => {},
     onSubmit: () => {},
+    onHistorySubmit: () => {},
     onClear: () => {},
     activeTab: 'all' as const,
     onTabChange: () => {},

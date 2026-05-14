@@ -22,6 +22,7 @@ interface ResultSearchBarProps {
   chips: DocsSource[];
   onChipsChange: (next: DocsSource[]) => void;
   onSubmit: () => void;
+  onHistorySubmit: (query: string) => void;
   onClear: () => void;
   // true면 isFocused state 무시하고 항상 expanded. dev preview/Storybook 용도.
   forceExpanded?: boolean;
@@ -33,6 +34,7 @@ export default function ResultSearchBar({
   chips,
   onChipsChange,
   onSubmit,
+  onHistorySubmit,
   onClear,
   forceExpanded = false,
 }: ResultSearchBarProps) {
@@ -44,6 +46,12 @@ export default function ResultSearchBar({
   // submit 후 input blur → onBlur로 setIsFocused(false) → 패널 collapse.
   const handleSubmit = () => {
     onSubmit();
+    inputRef.current?.blur();
+  };
+
+  // history click도 submit과 동일 흐름: URL commit + blur로 패널 close.
+  const handleHistorySubmit = (query: string) => {
+    onHistorySubmit(query);
     inputRef.current?.blur();
   };
 
@@ -133,6 +141,7 @@ export default function ResultSearchBar({
         <ResultSearchBarExpandedPanel
           selectedSources={chips}
           onSourcesToggle={onChipsChange}
+          onHistoryItemClick={handleHistorySubmit}
         />
       )}
       </div>

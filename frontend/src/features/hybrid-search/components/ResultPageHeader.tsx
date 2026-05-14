@@ -25,6 +25,7 @@ interface ResultPageHeaderProps {
   draftChips: ToolFilter[];
   onDraftChipsChange: (next: ToolFilter[]) => void;
   onSubmit: () => void;
+  onHistorySubmit: (query: string) => void;
   onClear: () => void;
   activeTab: ActiveTab;
   onTabChange: (next: ActiveTab) => void;
@@ -50,6 +51,7 @@ export default function ResultPageHeader({
   draftChips,
   onDraftChipsChange,
   onSubmit,
+  onHistorySubmit,
   onClear,
   activeTab,
   onTabChange,
@@ -79,6 +81,7 @@ export default function ResultPageHeader({
           chips={draftChips}
           onChipsChange={onDraftChipsChange}
           onSubmit={onSubmit}
+          onHistorySubmit={onHistorySubmit}
           onClear={onClear}
         />
         <AccentTabs

@@ -43,6 +43,12 @@ export default function HybridSearchResultPage() {
     setKeywordAndTools(draftKeyword, draftChips);
   };
 
+  // history 클릭도 submit과 동등한 commit: entry.query + draft chips를 URL에 한 번에 반영.
+  // ResultSearchBar가 onHistorySubmit 호출 후 input.blur() → expanded panel 자동 close.
+  const handleHistorySubmit = (query: string) => {
+    setKeywordAndTools(query, draftChips);
+  };
+
   // X 버튼: input draft만 비움. URL과 현재 표시 중인 검색 결과는 유지.
   // 사용자가 새 검색어 타이핑 후 submit해야 결과가 갱신됨.
   const handleClear = () => {
@@ -65,6 +71,7 @@ export default function HybridSearchResultPage() {
         draftChips={draftChips}
         onDraftChipsChange={setDraftChips}
         onSubmit={handleSubmit}
+        onHistorySubmit={handleHistorySubmit}
         onClear={handleClear}
         activeTab={active}
         onTabChange={handleTabChange}

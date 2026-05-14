@@ -122,6 +122,7 @@ export default function HybridSearchPreviewPage() {
             chips={[]}
             onChipsChange={() => {}}
             onSubmit={() => {}}
+            onHistorySubmit={() => {}}
             onClear={() => setSearchValue('')}
           />
         </div>
@@ -139,6 +140,7 @@ export default function HybridSearchPreviewPage() {
             chips={[]}
             onChipsChange={() => {}}
             onSubmit={() => {}}
+            onHistorySubmit={() => {}}
             onClear={() => setSearchValue('')}
             forceExpanded
           />
@@ -157,6 +159,7 @@ export default function HybridSearchPreviewPage() {
             chips={[]}
             onChipsChange={() => {}}
             onSubmit={() => {}}
+            onHistorySubmit={() => {}}
             onClear={() => setSearchValueFilled('')}
             forceExpanded
           />
