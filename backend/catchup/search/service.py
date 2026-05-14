@@ -10,6 +10,7 @@ from catchup.db.models import User
 from catchup.observability.langfuse.configs import get_langfuse_client
 from catchup.observability.langfuse.configs import get_observe
 from catchup.rag.checkpoint import get_langgraph_checkpointer
+from catchup.rag.nodes.utils import build_doc_groups
 from catchup.rag.schemas.sources import BaseSource
 from catchup.search.planner.graph import get_search_planner_graph
 
@@ -17,8 +18,7 @@ logger = structlog.get_logger()
 
 observe = get_observe()
 
-# manual search 전용 풀 크기: 전체 결과를 가져와 Python 레벨에서 페이지네이션
-_MANUAL_SEARCH_POOL_SIZE: int = 200
+_MANUAL_SEARCH_POOL_SIZE: int = 50
 
 
 class ManualSearchService:
@@ -51,8 +51,6 @@ class ManualSearchService:
         self,
         user: User,
         keyword: str,
-        limit: int,
-        offset: int,
         tool_filters: list[SourceType] | None,
         vector_db_service: PGVectorService,
     ) -> tuple[list[BaseSource], int, dict[str, int]]:
@@ -99,18 +97,18 @@ class ManualSearchService:
                 offset=0,
             )
 
-        total = len(all_docs)
-        page_docs = all_docs[offset:offset + limit]
+        groups = build_doc_groups(all_docs)
+        deduped_docs = [g.representative for g in groups]
+
+        total = len(deduped_docs)
         source_distribution = dict(
-            Counter(doc.metadata.get("source", "unknown") for doc in all_docs)
+            Counter(doc.metadata.get("source", "unknown") for doc in deduped_docs)
         )
 
         logger.debug(
             "manual_search_completed",
-            total=total,
-            offset=offset,
-            limit=limit,
-            page_count=len(page_docs),
+            raw_count=len(all_docs),
+            deduped_count=total,
             source_distribution=source_distribution,
         )
 
@@ -120,7 +118,7 @@ class ManualSearchService:
                 doc=doc,
                 relevance_score=doc.metadata.get("score", 0.0),
             )
-            for i, doc in enumerate(page_docs)
+            for i, doc in enumerate(deduped_docs)
         ]
 
         return results, total, source_distribution

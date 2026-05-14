@@ -1,5 +1,4 @@
 from typing import Annotated
-from typing import Optional
 
 from fastapi import APIRouter
 from fastapi import Depends
@@ -39,8 +38,6 @@ router = APIRouter(prefix="/api/v1/search", tags=["Search Service"])
 )
 async def hybrid_search(
     keyword: Annotated[str, Query(description="검색어")],
-    limit: Annotated[int, Query(ge=1, le=100, description="최대 결과 수")] = 20,
-    offset: Annotated[int, Query(ge=0, description="오프셋")] = 0,
     tool_filters: Annotated[
         list[SourceType] | None, Query(description="협업 툴 검색 필터")
     ] = None,
@@ -52,8 +49,6 @@ async def hybrid_search(
     results, total, source_distribution = await search_service.search(
         user=current_user,
         keyword=keyword,
-        limit=limit,
-        offset=offset,
         tool_filters=tool_filters,
         vector_db_service=vector_db_service,
     )
