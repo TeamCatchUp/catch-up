@@ -12,6 +12,10 @@ from catchup.audit.actions import FullSyncAction
 from catchup.audit.base import AuditLevel
 from catchup.audit.base import AuditStatus
 from catchup.audit.metadata import FullSyncEventAuditMetadata
+from catchup.connector_core.ports.sync_ingestion import SyncWindow
+from catchup.connectors.channel_talk.core.user_chat_full_sync_models import (
+    ChannelTalkUserChatFullSyncCheckpoint,
+)
 from catchup.connectors.channel_talk.full_sync_target_contract import (
     CHANNEL_TALK_DOCUMENT_ARTICLE_RUNTIME_TARGET,
 )
@@ -27,6 +31,7 @@ from catchup.connectors.channel_talk.schemas.document_connection import (
 from catchup.connectors.channel_talk.schemas.document_connection import (
     ChannelTalkDocumentCredentialsRecord,
 )
+from catchup.connectors.channel_talk.schemas.user_chat import ChannelTalkUserChatState
 from catchup.db.models import SyncConnector
 from catchup.db.models import SyncJobStatus
 from catchup.db.models import SyncType
@@ -38,6 +43,12 @@ from catchup.sync.common.schemas import SyncStreamMessage
 from catchup.sync.common.schemas import SyncStreamTask
 from catchup.sync.common.schemas import SyncTargetType
 from catchup.worker.full_sync_processor import process_full_sync_message
+from catchup.worker.handlers.channel_talk_full_sync_handler import (
+    CHANNEL_TALK_USER_CHAT_FULL_SYNC_BATCH_SIZE,
+)
+from catchup.worker.handlers.channel_talk_full_sync_handler import (
+    CHANNEL_TALK_USER_CHAT_FULL_SYNC_MAX_PAGES_PER_BATCH,
+)
 from catchup.worker.handlers.channel_talk_full_sync_handler import (
     ChannelTalkFullSyncHandler,
 )
@@ -156,8 +167,13 @@ async def _run_immediately(func, *args, **kwargs):
     return func(*args, **kwargs)
 
 
-def _build_application_result(*, persisted_count: int = 0):
+def _build_application_result(
+    *,
+    persisted_count: int = 0,
+    next_checkpoint: ChannelTalkUserChatFullSyncCheckpoint | None = None,
+):
     return SimpleNamespace(
+        fetched=SimpleNamespace(next_checkpoint=next_checkpoint),
         persisted=SimpleNamespace(persisted_count=persisted_count),
     )
 
@@ -223,6 +239,114 @@ class ChannelTalkFullSyncHandlerTests(IsolatedAsyncioTestCase):
         self.assertEqual(sync_window.window_end, fixed_now)
         self.assertEqual(result.error_count, 0)
         self.assertFalse(result.skipped)
+
+    async def test_handler_runs_user_chat_batches_until_checkpoint_exhausted(
+        self,
+    ) -> None:
+        fixed_now = datetime(2026, 4, 22, 12, 0, tzinfo=timezone.utc)
+        sync_window = SyncWindow(
+            window_start=datetime(2024, 4, 22, 0, 0, tzinfo=timezone.utc),
+            window_end=fixed_now,
+        )
+        checkpoint = ChannelTalkUserChatFullSyncCheckpoint(
+            tenant_id=CHANNEL_ID,
+            state=ChannelTalkUserChatState.OPENED,
+            window=sync_window,
+            next_cursor="opened-page-2",
+        )
+
+        with (
+            patch(
+                _LOAD_CONNECTION,
+                return_value=_build_connection_record(),
+            ),
+            patch(
+                _RUN_SYNC_INGESTION,
+                AsyncMock(
+                    side_effect=[
+                        _build_application_result(
+                            persisted_count=3,
+                            next_checkpoint=checkpoint,
+                        ),
+                        _build_application_result(persisted_count=4),
+                    ]
+                ),
+            ) as run_sync_ingestion,
+            patch(
+                "catchup.worker.handlers.channel_talk_full_sync_handler.datetime"
+            ) as mocked_datetime,
+        ):
+            mocked_datetime.now.return_value = fixed_now
+            mocked_datetime.fromtimestamp.side_effect = lambda value, tz=None: (
+                datetime.fromtimestamp(value, tz=tz)
+            )
+
+            result = await self.handler.handle(
+                context=_build_context(),
+                service_cache={},
+            )
+
+        self.assertEqual(result.synced_count, 7)
+        self.assertEqual(run_sync_ingestion.await_count, 2)
+        first_call = run_sync_ingestion.await_args_list[0]
+        second_call = run_sync_ingestion.await_args_list[1]
+        self.assertIsNone(first_call.kwargs["execution"].checkpoint)
+        self.assertIs(second_call.kwargs["execution"].checkpoint, checkpoint)
+        self.assertIs(
+            first_call.kwargs["sync_window"],
+            second_call.kwargs["sync_window"],
+        )
+        self.assertEqual(first_call.kwargs["sync_window"], sync_window)
+
+    async def test_handler_rejects_repeated_user_chat_checkpoint(
+        self,
+    ) -> None:
+        sync_window = SyncWindow(
+            window_start=datetime(2024, 4, 22, 0, 0, tzinfo=timezone.utc),
+            window_end=datetime(2026, 4, 22, 12, 0, tzinfo=timezone.utc),
+        )
+        checkpoint = ChannelTalkUserChatFullSyncCheckpoint(
+            tenant_id=CHANNEL_ID,
+            state=ChannelTalkUserChatState.OPENED,
+            window=sync_window,
+            next_cursor="opened-page-2",
+        )
+
+        with (
+            patch(
+                _LOAD_CONNECTION,
+                return_value=_build_connection_record(),
+            ),
+            patch(
+                _RUN_SYNC_INGESTION,
+                AsyncMock(
+                    side_effect=[
+                        _build_application_result(next_checkpoint=checkpoint),
+                        _build_application_result(next_checkpoint=checkpoint),
+                    ]
+                ),
+            ),
+        ):
+            with self.assertRaisesRegex(
+                ValueError,
+                "channel_talk user_chat full sync checkpoint repeated",
+            ):
+                await self.handler.handle(
+                    context=_build_context(),
+                    service_cache={},
+                )
+
+    def test_handler_configures_user_chat_batch_adapter(self) -> None:
+        adapter = self.handler._user_chat_adapter
+
+        self.assertEqual(
+            adapter._user_chat_list_limit,
+            CHANNEL_TALK_USER_CHAT_FULL_SYNC_BATCH_SIZE,
+        )
+        self.assertEqual(
+            adapter._max_user_chat_pages_per_run,
+            CHANNEL_TALK_USER_CHAT_FULL_SYNC_MAX_PAGES_PER_BATCH,
+        )
 
     async def test_processor_records_channel_talk_full_sync_job_and_event_audit(
         self,

@@ -57,10 +57,14 @@ class ChannelTalkUserChatFullSyncIngestionAdapter:
         self,
         *,
         enable_summarization: bool = True,
+        max_user_chat_pages_per_run: int | None = None,
+        user_chat_list_limit: int | None = None,
     ) -> None:
         self._fetcher: ChannelTalkUserChatFullSyncFetcher | None = None
         self._document_builder = UserChatTransformer()
         self._enable_summarization = enable_summarization
+        self._max_user_chat_pages_per_run = max_user_chat_pages_per_run
+        self._user_chat_list_limit = user_chat_list_limit
         self._summarizer: SummarizerService | None = None
         self._repository: PGVectorRepository | None = None
 
@@ -294,7 +298,10 @@ class ChannelTalkUserChatFullSyncIngestionAdapter:
 
     def _get_fetcher(self) -> ChannelTalkUserChatFullSyncFetcher:
         if self._fetcher is None:
-            self._fetcher = ChannelTalkUserChatFullSyncFetcher()
+            self._fetcher = ChannelTalkUserChatFullSyncFetcher(
+                max_user_chat_pages_per_run=self._max_user_chat_pages_per_run,
+                user_chat_list_limit=self._user_chat_list_limit,
+            )
         return self._fetcher
 
     def _get_summarizer(self) -> SummarizerService:

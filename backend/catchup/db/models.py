@@ -2696,3 +2696,16 @@ class ChatTokenUsage(Base):
         Index("idx_chat_token_usages_workspace_time", "workspace_id", "created_at"),
         Index("idx_chat_token_usages_company_time", "company_id", "created_at"),
     )
+
+
+class ManualSearchHistory(Base):
+    __tablename__ = "manual_search_histories"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    query: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        Index("idx_manual_search_histories_user_created_at", "user_id", "created_at"),
+    )

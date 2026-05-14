@@ -17,6 +17,9 @@ from catchup.connector_core.adapters.channel_talk.user_chat_full_sync import (
 from catchup.connector_core.application.sync_ingestion import run_sync_ingestion
 from catchup.connector_core.ports.sync_ingestion import SyncWindow
 from catchup.connectors.channel_talk.core.user_chat_full_sync_models import (
+    ChannelTalkUserChatFullSyncCheckpoint,
+)
+from catchup.connectors.channel_talk.core.user_chat_full_sync_models import (
     ChannelTalkUserChatSyncExecutionRequest,
 )
 from catchup.connectors.channel_talk.document_space.article_full_sync_models import (
@@ -49,18 +52,24 @@ from catchup.sync.common.schemas import SyncTargetType
 from catchup.sync.common.schemas import TargetSyncResult
 from catchup.worker.handlers.base_full_sync_handler import BaseFullSyncHandler
 
+CHANNEL_TALK_USER_CHAT_FULL_SYNC_BATCH_SIZE = 50
+CHANNEL_TALK_USER_CHAT_FULL_SYNC_MAX_PAGES_PER_BATCH = 1
+
 
 class ChannelTalkFullSyncHandler(BaseFullSyncHandler):
     connector = "channel_talk"
 
     def __init__(self) -> None:
+        self._user_chat_adapter = ChannelTalkUserChatFullSyncIngestionAdapter(
+            max_user_chat_pages_per_run=(
+                CHANNEL_TALK_USER_CHAT_FULL_SYNC_MAX_PAGES_PER_BATCH
+            ),
+            user_chat_list_limit=CHANNEL_TALK_USER_CHAT_FULL_SYNC_BATCH_SIZE,
+        )
+        self._article_adapter = ChannelTalkArticleFullSyncIngestionAdapter()
         self._ingestion_ports = {
-            CHANNEL_TALK_USER_CHAT_RUNTIME_TARGET: (
-                ChannelTalkUserChatFullSyncIngestionAdapter()
-            ),
-            CHANNEL_TALK_DOCUMENT_ARTICLE_RUNTIME_TARGET: (
-                ChannelTalkArticleFullSyncIngestionAdapter()
-            ),
+            CHANNEL_TALK_USER_CHAT_RUNTIME_TARGET: self._user_chat_adapter,
+            CHANNEL_TALK_DOCUMENT_ARTICLE_RUNTIME_TARGET: self._article_adapter,
         }
 
     @audit_log(
@@ -121,34 +130,81 @@ class ChannelTalkFullSyncHandler(BaseFullSyncHandler):
             job_id=context.job_id,
             task_id=context.event_id,
         )
+        sync_window = SyncWindow(
+            window_start=window_start,
+            window_end=window_end,
+        )
+
         # UserChat은 channel connection만 필요하고, Article은 요청 space_id와
         # 일치하는 verified Documents connection을 추가로 확인한다.
-        execution = (
-            ChannelTalkUserChatSyncExecutionRequest(
-                tenant_id=channel_id,
+        if runtime_target == CHANNEL_TALK_USER_CHAT_RUNTIME_TARGET:
+            return await self._handle_user_chat_batches(
+                channel_id=channel_id,
+                ingestion_port=self._user_chat_adapter,
+                sync_window=sync_window,
                 audit_context=audit_context,
             )
-            if runtime_target == CHANNEL_TALK_USER_CHAT_RUNTIME_TARGET
-            else ChannelTalkArticleSyncExecutionRequest(
-                tenant_id=channel_id,
-                channel_connection=connection,
-                document_connection=await self._load_verified_document_connection(
-                    channel_id,
-                    requested_space_id=context.target_id,
-                ),
-                audit_context=audit_context,
-            )
+
+        execution = ChannelTalkArticleSyncExecutionRequest(
+            tenant_id=channel_id,
+            channel_connection=connection,
+            document_connection=await self._load_verified_document_connection(
+                channel_id,
+                requested_space_id=context.target_id,
+            ),
+            audit_context=audit_context,
         )
         result = await run_sync_ingestion(
             port=ingestion_port,
             execution=execution,
-            sync_window=SyncWindow(
-                window_start=window_start,
-                window_end=window_end,
-            ),
+            sync_window=sync_window,
         )
         return self._result(
             synced_count=result.persisted.persisted_count,
+            error_count=0,
+            skipped=False,
+        )
+
+    async def _handle_user_chat_batches(
+        self,
+        *,
+        channel_id: str,
+        ingestion_port: ChannelTalkUserChatFullSyncIngestionAdapter,
+        sync_window: SyncWindow,
+        audit_context: SyncAuditContext,
+    ) -> TargetSyncResult:
+        synced_count = 0
+        checkpoint: ChannelTalkUserChatFullSyncCheckpoint | None = None
+        seen_checkpoints: set[tuple[str, str | None]] = set()
+
+        while True:
+            execution = ChannelTalkUserChatSyncExecutionRequest(
+                tenant_id=channel_id,
+                checkpoint=checkpoint,
+                audit_context=audit_context,
+            )
+            result = await run_sync_ingestion(
+                port=ingestion_port,
+                execution=execution,
+                sync_window=sync_window,
+            )
+            synced_count += result.persisted.persisted_count
+
+            checkpoint = result.fetched.next_checkpoint
+            if checkpoint is None:
+                break
+
+            checkpoint_key = (checkpoint.state.value, checkpoint.next_cursor)
+            if checkpoint_key in seen_checkpoints:
+                raise ValueError(
+                    "channel_talk user_chat full sync checkpoint repeated: "
+                    f"state={checkpoint.state.value}, "
+                    f"next_cursor={checkpoint.next_cursor}"
+                )
+            seen_checkpoints.add(checkpoint_key)
+
+        return self._result(
+            synced_count=synced_count,
             error_count=0,
             skipped=False,
         )

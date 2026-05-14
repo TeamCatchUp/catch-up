@@ -5,6 +5,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from catchup.auth.dependencies import get_current_user
+from catchup.db.dependencies import get_db
 from catchup.db.models import User
 from catchup.server.main import app
 from catchup.server.search.dependencies import get_manual_search_service
@@ -13,13 +14,21 @@ from catchup.server.search.dependencies import get_search_service
 client = TestClient(app)
 
 
+@pytest.fixture(autouse=True)
+def mock_db():
+    db = MagicMock()
+    app.dependency_overrides[get_db] = lambda: db
+    yield db
+    app.dependency_overrides.pop(get_db, None)
+
+
 @pytest.fixture
 def mock_pgvector_service():
     service = MagicMock()
     service.hybrid_search = AsyncMock(return_value=[])
     app.dependency_overrides[get_search_service] = lambda: service
     yield service
-    app.dependency_overrides.clear()
+    app.dependency_overrides.pop(get_search_service, None)
 
 
 @pytest.fixture
@@ -28,6 +37,7 @@ def mock_current_user():
     user.id = 42
     app.dependency_overrides[get_current_user] = lambda: user
     yield user
+    app.dependency_overrides.pop(get_current_user, None)
 
 
 @pytest.fixture
@@ -36,6 +46,7 @@ def mock_search_service():
     service.search = AsyncMock(return_value=[])
     app.dependency_overrides[get_manual_search_service] = lambda: service
     yield service
+    app.dependency_overrides.pop(get_manual_search_service, None)
 
 
 def test_hybrid_search_endpoint(
@@ -55,9 +66,11 @@ def test_hybrid_search_endpoint(
         },
         id="id1",
     )
-    mock_search_service.search.return_value = [
-        BaseSource.from_document(index=1, doc=doc, relevance_score=0.8)
-    ]
+    mock_search_service.search.return_value = (
+        [BaseSource.from_document(index=1, doc=doc, relevance_score=0.8)],
+        1,
+        {"slack": 1},
+    )
 
     response = client.get(
         "/api/v1/search/hybrid",
@@ -68,6 +81,7 @@ def test_hybrid_search_endpoint(
     data = response.json()
     assert len(data["results"]) == 1
     assert data["results"][0]["title"] == "Title"
+    assert data["total"] == 1
 
     mock_search_service.search.assert_called_once_with(
         user=mock_current_user,
@@ -83,6 +97,8 @@ def test_search_delegates_to_service(
     mock_pgvector_service, mock_current_user, mock_search_service
 ):
     """API는 search_service.search()에 올바른 파라미터를 전달한다."""
+    mock_search_service.search.return_value = ([], 0, {})
+
     client.get(
         "/api/v1/search/hybrid",
         params={"keyword": "테스트 쿼리", "limit": 10, "offset": 20},
