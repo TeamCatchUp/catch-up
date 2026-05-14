@@ -4,6 +4,7 @@
 // 두 라우트는 단지 경로만 다르고 화면 구성은 동일하다 — TopNavbar 라벨만 path/mode에 따라 분기.
 // mode 분기는 두 section 컴포넌트로 위임 + 다음 task에서 AnimatePresence fade 적용.
 
+import { AnimatePresence, motion } from 'motion/react';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { useRef, useState } from 'react';
 
@@ -81,18 +82,29 @@ export default function HomeContent() {
         <ModePicker mode={mode} />
       </div>
 
-      {mode === 'ai' ? (
-        <HomeAiSection
-          input={input}
-          filters={filters}
-          inputRef={inputRef}
-          containerRef={containerRef}
-          shouldShowNoHistoryBox={shouldShowNoHistoryBox}
-          isNoHistoryExpanded={isNoHistoryExpanded}
-        />
-      ) : (
-        <HomeDocsSection />
-      )}
+      <AnimatePresence mode="wait" initial={false}>
+        <motion.div
+          key={mode}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.18, ease: 'easeOut' }}
+          className="flex w-full flex-col"
+        >
+          {mode === 'ai' ? (
+            <HomeAiSection
+              input={input}
+              filters={filters}
+              inputRef={inputRef}
+              containerRef={containerRef}
+              shouldShowNoHistoryBox={shouldShowNoHistoryBox}
+              isNoHistoryExpanded={isNoHistoryExpanded}
+            />
+          ) : (
+            <HomeDocsSection />
+          )}
+        </motion.div>
+      </AnimatePresence>
 
       {showAdminGuide && <AdminGuideModal onDismiss={() => setAdminGuideDismissed(true)} />}
       {showUserGuide && <UserGuideModal onDismiss={() => setUserGuideDismissed(true)} />}
