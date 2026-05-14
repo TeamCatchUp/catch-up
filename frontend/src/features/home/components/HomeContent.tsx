@@ -6,6 +6,8 @@
 import { useRef, useState } from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
 
+import type { DocsSource } from '@/shared/types/source';
+
 import { ADMIN_GUIDE_STORAGE_KEY } from '@/features/home/constants/adminGuide';
 import { tipData } from '@/features/home/constants/questionTips';
 import { USER_GUIDE_STORAGE_KEY } from '@/features/home/constants/userGuide';
@@ -62,6 +64,7 @@ export default function HomeContent() {
   const input = useSearchInput({ inputRef, selectedSources: filters.selectedSources, tipData });
   const { shouldShowNoHistoryBox } = useQuestionHistoryGate();
   const [isNoHistoryExpanded, setIsNoHistoryExpanded] = useState(true);
+  const [docsSources, setDocsSources] = useState<DocsSource[]>([]);
 
   // QueryBox 포커스 해제 + no-history 패널 닫기 공통 로직
   const handleClose = () => {
@@ -115,7 +118,11 @@ export default function HomeContent() {
           ) : (
             <>
               <DocsQueryBox />
-              <SourceChipsRow className="w-222" />
+              <SourceChipsRow
+                className="w-222"
+                selectedSources={docsSources}
+                onToggle={setDocsSources}
+              />
             </>
           )}
         </div>

@@ -12,6 +12,7 @@ import IconSearch from '@/public/icons/icon/search_2.svg';
 import SearchHistoryList from '@/shared/components/SearchHistoryList';
 import SourceChipsRow from '@/shared/components/SourceChipsRow';
 import { useSearchHistoryEntries } from '@/shared/hooks/useSearchHistoryEntries';
+import type { DocsSource } from '@/shared/types/source';
 
 import CatchupPromoCard from './CatchupPromoCard';
 
@@ -34,6 +35,8 @@ export default function ResultSearchBar({
   const router = useRouter();
   const { entries: history, isLoading: isHistoryLoading } = useSearchHistoryEntries();
   const [isFocused, setIsFocused] = useState(false);
+  // expanded 시각 안 chips는 결과 페이지와 별개 의미 — 자체 state 유지.
+  const [chipsSources, setChipsSources] = useState<DocsSource[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
   const hasText = value.trim().length > 0;
   const expanded = forceExpanded || isFocused;
@@ -140,7 +143,11 @@ export default function ResultSearchBar({
         </div>
         <span aria-hidden className="bg-edge-neutral h-px w-full" />
       </div>
-      <SourceChipsRow className="w-full justify-start" />
+      <SourceChipsRow
+        className="w-full justify-start"
+        selectedSources={chipsSources}
+        onToggle={setChipsSources}
+      />
       <div className="flex w-full flex-1 items-start gap-6">
         <div className="min-w-0 flex-1">
           <SearchHistoryList

@@ -1,9 +1,7 @@
 'use client';
 
 // 문서 탐색 모드 입력 박스 아래에 노출되는 소스 chips.
-// home·hybrid-search 양쪽에서 재사용. FilterBar와 동일한 SearchOptionButton 사용.
-
-import { useState } from 'react';
+// home·hybrid-search 양쪽에서 재사용. controlled 컴포넌트로 selectedSources/onToggle을 부모가 관리.
 
 import ChannelTalk from '@/public/icons/logo/ChannelTalk.svg';
 import Confluence from '@/public/icons/logo/Confluence.svg';
@@ -22,6 +20,8 @@ interface SourceItem {
 
 interface SourceChipsRowProps {
   className?: string;
+  selectedSources: DocsSource[];
+  onToggle: (next: DocsSource[]) => void;
 }
 
 const SOURCES: ReadonlyArray<SourceItem> = [
@@ -32,11 +32,12 @@ const SOURCES: ReadonlyArray<SourceItem> = [
   { value: 'channel_talk', label: '채널톡', Icon: ChannelTalk },
 ];
 
-export default function SourceChipsRow({ className }: SourceChipsRowProps) {
-  const [selected, setSelected] = useState<DocsSource[]>([]);
-
+export default function SourceChipsRow({ className, selectedSources, onToggle }: SourceChipsRowProps) {
   const toggle = (value: DocsSource) => {
-    setSelected((prev) => (prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value]));
+    const next = selectedSources.includes(value)
+      ? selectedSources.filter((v) => v !== value)
+      : [...selectedSources, value];
+    onToggle(next);
   };
 
   return (
@@ -46,7 +47,7 @@ export default function SourceChipsRow({ className }: SourceChipsRowProps) {
           key={s.value}
           Icon={s.Icon}
           label={s.label}
-          selected={selected.includes(s.value)}
+          selected={selectedSources.includes(s.value)}
           onClick={() => toggle(s.value)}
         />
       ))}
