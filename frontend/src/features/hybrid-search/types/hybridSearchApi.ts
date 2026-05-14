@@ -26,3 +26,6 @@ export const TOOL_FILTERS: readonly ToolFilter[] = [
   'confluence',
   'channel_talk',
 ] as const;
+
+// scope fallback용 mutable 배열 (tools 없는 진입 시 5종 전체).
+export const TOOL_FILTERS_ARRAY: ToolFilter[] = [...TOOL_FILTERS];

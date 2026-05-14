@@ -30,7 +30,7 @@ export default function HomeDocsSection() {
           />
         </div>
       </div>
-      <DocsSearchHistorySection />
+      <DocsSearchHistorySection selectedSources={selectedSources} />
     </>
   );
 }

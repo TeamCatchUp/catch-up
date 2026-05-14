@@ -21,7 +21,7 @@ function renderWithClient(ui: React.ReactElement) {
 describe('ResultListSection', () => {
   it('keyword 빈 문자열이면 Empty 표시 (fetch 없음)', () => {
     renderWithClient(
-      <ResultListSection keyword="" tools={[]} page={1} onPageChange={() => {}} />,
+      <ResultListSection keyword="" scope={[]} active="all" page={1} onPageChange={() => {}} />,
     );
     expect(screen.getByText(/문서에서는 찾지 못했어요/)).toBeInTheDocument();
   });
@@ -31,7 +31,7 @@ describe('ResultListSection', () => {
       http.get('*/api/v1/search/hybrid', () => new Promise(() => {})), // pending
     );
     renderWithClient(
-      <ResultListSection keyword="결제" tools={[]} page={1} onPageChange={() => {}} />,
+      <ResultListSection keyword="결제" scope={[]} active="all" page={1} onPageChange={() => {}} />,
     );
     expect(screen.getByText(/문서를 찾고 있어요/)).toBeInTheDocument();
   });
@@ -43,7 +43,7 @@ describe('ResultListSection', () => {
       ),
     );
     renderWithClient(
-      <ResultListSection keyword="결제" tools={[]} page={1} onPageChange={() => {}} />,
+      <ResultListSection keyword="결제" scope={[]} active="all" page={1} onPageChange={() => {}} />,
     );
     expect(await screen.findByText(/문서에서는 찾지 못했어요/)).toBeInTheDocument();
   });
@@ -69,7 +69,7 @@ describe('ResultListSection', () => {
       ),
     );
     renderWithClient(
-      <ResultListSection keyword="결제" tools={[]} page={1} onPageChange={() => {}} />,
+      <ResultListSection keyword="결제" scope={[]} active="all" page={1} onPageChange={() => {}} />,
     );
     expect(await screen.findByText('이슈 0')).toBeInTheDocument();
     expect(screen.getByLabelText('이전 페이지')).toBeInTheDocument();
@@ -98,10 +98,31 @@ describe('ResultListSection', () => {
       ),
     );
     renderWithClient(
-      <ResultListSection keyword="x" tools={[]} page={1} onPageChange={() => {}} />,
+      <ResultListSection keyword="x" scope={[]} active="all" page={1} onPageChange={() => {}} />,
     );
     await screen.findByText('단일');
     expect(screen.queryByLabelText('이전 페이지')).not.toBeInTheDocument();
+  });
+
+  it('scope 밖 active 클릭 시 API 호출 없이 EmptyState 표시', async () => {
+    let fetchCalled = false;
+    server.use(
+      http.get('*/api/v1/search/hybrid', () => {
+        fetchCalled = true;
+        return HttpResponse.json({ results: [], total: 0, source_distribution: {} });
+      }),
+    );
+    renderWithClient(
+      <ResultListSection
+        keyword="foo"
+        scope={['jira', 'slack']}
+        active="confluence"
+        page={1}
+        onPageChange={() => {}}
+      />,
+    );
+    expect(screen.getByText(/문서에서는 찾지 못했어요/)).toBeInTheDocument();
+    expect(fetchCalled).toBe(false);
   });
 
   it('Pagination 클릭 시 onPageChange 호출', async () => {
@@ -126,7 +147,7 @@ describe('ResultListSection', () => {
     );
     const onPageChange = vi.fn();
     renderWithClient(
-      <ResultListSection keyword="x" tools={[]} page={1} onPageChange={onPageChange} />,
+      <ResultListSection keyword="x" scope={[]} active="all" page={1} onPageChange={onPageChange} />,
     );
     await screen.findByText('이슈 0');
     fireEvent.click(screen.getByText('2'));

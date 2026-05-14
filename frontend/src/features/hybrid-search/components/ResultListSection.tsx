@@ -7,6 +7,7 @@
 import Pagination from '@/shared/components/ui/pagination';
 
 import { useHybridSearch } from '../hooks/useHybridSearch';
+import type { ActiveTab } from '../hooks/useHybridSearchUrlState';
 import { HYBRID_SEARCH_PAGE_SIZE } from '../queries/hybridSearch.queries';
 import type { ToolFilter } from '../types/hybridSearchApi';
 import { mapHybridSearchResult } from '../utils/mapHybridSearchResult';
@@ -17,16 +18,25 @@ import ResultLoadingState from './ResultLoadingState';
 
 interface ResultListSectionProps {
   keyword: string;
-  tools: ToolFilter[];
+  scope: ToolFilter[];
+  active: ActiveTab;
   page: number;
   onPageChange: (next: number) => void;
 }
 
-export default function ResultListSection({ keyword, tools, page, onPageChange }: ResultListSectionProps) {
-  const query = useHybridSearch({ keyword, tools, page });
+export default function ResultListSection({
+  keyword,
+  scope,
+  active,
+  page,
+  onPageChange,
+}: ResultListSectionProps) {
+  const query = useHybridSearch({ keyword, scope, active, page });
 
   // keyword 빈 문자열 → Empty (enabled=false라 fetch 안 함)
   if (!keyword.trim()) return <ResultEmptyState />;
+  // scope 밖 active 탭 클릭 → API 호출 없이 EmptyState
+  if (query.isOutOfScope) return <ResultEmptyState />;
   if (query.isLoading) return <ResultLoadingState />;
   if (query.isError) return <ResultErrorState onRetry={() => query.refetch()} />;
   if (!query.data || query.data.results.length === 0) return <ResultEmptyState />;

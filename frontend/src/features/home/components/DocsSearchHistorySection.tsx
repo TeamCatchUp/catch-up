@@ -1,16 +1,29 @@
 'use client';
 
 // 문서 탐색 모드(`?mode=docs`) 하단 검색 기록 섹션.
-// 상단 섹션과 gap/padding 없이 별도 section으로 분리.
+// 검색 기록 클릭 시 현재 선택된 chips(selectedSources)를 tools로 함께 push.
 
 import { useRouter } from 'next/navigation';
 
 import SearchHistoryList from '@/shared/components/SearchHistoryList';
 import { useSearchHistoryEntries } from '@/shared/hooks/useSearchHistoryEntries';
+import type { DocsSource } from '@/shared/types/source';
 
-export default function DocsSearchHistorySection() {
+interface DocsSearchHistorySectionProps {
+  selectedSources: DocsSource[];
+}
+
+export default function DocsSearchHistorySection({ selectedSources }: DocsSearchHistorySectionProps) {
   const router = useRouter();
   const { entries, isLoading } = useSearchHistoryEntries();
+
+  const handleHistoryClick = (query: string) => {
+    const params = new URLSearchParams({ q: query });
+    if (selectedSources.length > 0) {
+      params.set('tools', selectedSources.join(','));
+    }
+    router.push(`/hybrid-search?${params.toString()}`);
+  };
 
   return (
     <section className="flex w-full justify-center px-16 pb-30">
@@ -19,7 +32,7 @@ export default function DocsSearchHistorySection() {
           entries={entries}
           isLoading={isLoading}
           maxPerGroup={3}
-          onItemClick={(entry) => router.push(`/hybrid-search?q=${encodeURIComponent(entry.query)}`)}
+          onItemClick={(entry) => handleHistoryClick(entry.query)}
         />
       </div>
     </section>

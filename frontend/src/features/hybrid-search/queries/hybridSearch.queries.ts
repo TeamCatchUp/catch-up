@@ -3,13 +3,15 @@ import { queryOptions } from '@tanstack/react-query';
 import api from '@/shared/api/client';
 import { API } from '@/shared/api/endpoints';
 
+import type { ActiveTab } from '../hooks/useHybridSearchUrlState';
 import type { HybridSearchResponse, ToolFilter } from '../types/hybridSearchApi';
 
 export const HYBRID_SEARCH_PAGE_SIZE = 7;
 
 interface ListParams {
   keyword: string;
-  tools: ToolFilter[];
+  scope: ToolFilter[];
+  active: ActiveTab;
   page: number;
 }
 
@@ -31,17 +33,19 @@ function serializeListParams(params: Record<string, unknown>): string {
 export const hybridSearchQueries = {
   all: () => ['search', 'hybrid'] as const,
 
-  // 결과 리스트 — tools/page 변경에 반응.
+  // 결과 리스트 — scope + active 변경에 반응.
+  // active='all' → scope 전체로 호출, active=source → 그 source만.
   list: (params: ListParams) =>
     queryOptions({
       queryKey: [...hybridSearchQueries.all(), 'list', params] as const,
       queryFn: async (): Promise<HybridSearchResponse> => {
+        const effectiveFilters = params.active === 'all' ? params.scope : [params.active];
         const { data } = await api.get<HybridSearchResponse>(API.search.hybrid, {
           params: {
             keyword: params.keyword,
             limit: HYBRID_SEARCH_PAGE_SIZE,
             offset: (params.page - 1) * HYBRID_SEARCH_PAGE_SIZE,
-            tool_filters: params.tools.length > 0 ? params.tools : undefined,
+            tool_filters: effectiveFilters.length > 0 ? effectiveFilters : undefined,
           },
           paramsSerializer: serializeListParams,
         });
@@ -51,19 +55,19 @@ export const hybridSearchQueries = {
       staleTime: 30_000,
     }),
 
-  // AccentTabs용 source_distribution — keyword + tools에 의존.
-  // tools가 적용된 풀 기준 분포 → AccentTabs count가 list 결과와 일관됨.
-  // limit=1로 payload 최소화.
-  distribution: (keyword: string, tools: ToolFilter[]) =>
+  // AccentTabs용 source_distribution — keyword + scope에 의존(active 무관).
+  // scope=tools (chips 선택)일 땐 그 풀 기준 분포, scope=[] (5종 fallback)일 땐 전체 풀.
+  // → AccentTabs count가 stable, active 클릭 시 cache hit.
+  distribution: (keyword: string, scope: ToolFilter[]) =>
     queryOptions({
-      queryKey: [...hybridSearchQueries.all(), 'distribution', keyword, tools] as const,
+      queryKey: [...hybridSearchQueries.all(), 'distribution', keyword, scope] as const,
       queryFn: async (): Promise<Record<string, number>> => {
         const { data } = await api.get<HybridSearchResponse>(API.search.hybrid, {
           params: {
             keyword,
             limit: 1,
             offset: 0,
-            tool_filters: tools.length > 0 ? tools : undefined,
+            tool_filters: scope.length > 0 ? scope : undefined,
           },
           paramsSerializer: serializeListParams,
         });

@@ -1,7 +1,9 @@
 'use client';
 
-// /hybrid-search 의 URL state(?q&tools&page) 파싱·갱신 hook.
-// keyword/tools 변경 시 page=1 리셋. tools 화이트리스트 검증.
+// /hybrid-search 의 URL state(?q&tools&active&page) 파싱·갱신 hook.
+// - tools: scope (chips 진입 시 결정, 페이지 내 immutable)
+// - active: drill-down 탭 ('all' 또는 단일 ToolFilter)
+// - setKeyword/setTools 호출 시 active, page 함께 reset.
 
 import { useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -12,12 +14,16 @@ const PATHNAME = '/hybrid-search';
 // backend total cap 200 / page size 7 ≈ 29 → 여유 30. URL 수동 조작 방어.
 const MAX_PAGE = 30;
 
+export type ActiveTab = 'all' | ToolFilter;
+
 interface HybridSearchUrlState {
   keyword: string;
   tools: ToolFilter[];
+  active: ActiveTab;
   page: number;
   setKeyword: (next: string) => void;
   setTools: (next: ToolFilter[]) => void;
+  setActive: (next: ActiveTab) => void;
   setPage: (next: number) => void;
 }
 
@@ -27,6 +33,13 @@ function parseTools(raw: string | null): ToolFilter[] {
     .split(',')
     .map((s) => s.trim())
     .filter((s): s is ToolFilter => (TOOL_FILTERS as readonly string[]).includes(s));
+}
+
+function parseActive(raw: string | null): ActiveTab {
+  if (raw === null || raw === 'all') return 'all';
+  const candidate = raw as ToolFilter;
+  if ((TOOL_FILTERS as readonly string[]).includes(candidate)) return candidate;
+  return 'all';
 }
 
 function parsePage(raw: string | null): number {
@@ -41,6 +54,7 @@ export function useHybridSearchUrlState(): HybridSearchUrlState {
 
   const keyword = searchParams.get('q') ?? '';
   const tools = parseTools(searchParams.get('tools'));
+  const active = parseActive(searchParams.get('active'));
   const page = parsePage(searchParams.get('page'));
 
   const writeParams = useCallback(
@@ -58,6 +72,8 @@ export function useHybridSearchUrlState(): HybridSearchUrlState {
       writeParams((p) => {
         if (nextKeyword) p.set('q', nextKeyword);
         else p.delete('q');
+        // 새 검색 — drill-down은 의미 없으므로 함께 reset.
+        p.delete('active');
         p.delete('page');
       });
     },
@@ -69,6 +85,20 @@ export function useHybridSearchUrlState(): HybridSearchUrlState {
       writeParams((p) => {
         if (nextTools.length > 0) p.set('tools', nextTools.join(','));
         else p.delete('tools');
+        // scope가 바뀌면 drill-down은 의미 없음.
+        p.delete('active');
+        p.delete('page');
+      });
+    },
+    [writeParams],
+  );
+
+  const setActive = useCallback(
+    (nextActive: ActiveTab) => {
+      writeParams((p) => {
+        if (nextActive === 'all') p.delete('active');
+        else p.set('active', nextActive);
+        // active 변경 시 페이지는 1로 리셋.
         p.delete('page');
       });
     },
@@ -85,5 +115,5 @@ export function useHybridSearchUrlState(): HybridSearchUrlState {
     [writeParams],
   );
 
-  return { keyword, tools, page, setKeyword, setTools, setPage };
+  return { keyword, tools, active, page, setKeyword, setTools, setActive, setPage };
 }
