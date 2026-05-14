@@ -2,6 +2,7 @@ from collections import Counter
 
 import structlog
 
+from catchup.components.vector_db.pgvector.pgvector import PGBigmRetriever
 from catchup.components.vector_db.pgvector.pgvector import PGVectorService
 from catchup.configs.config import settings
 from catchup.db.models import SourceType
@@ -76,15 +77,27 @@ class ManualSearchService:
                 {"original_query": keyword}, config=invoke_config
             )
 
-        planned = state["planned_search"]
+        planned = state["query_cache"][keyword]
 
-        all_docs = await vector_db_service.hybrid_search(
-            query=planned.query,
-            k=_MANUAL_SEARCH_POOL_SIZE,
-            tool_filters=tool_filters,
-            keyword_tokens=planned.keyword_tokens or None,
-            offset=0,
-        )
+        if getattr(planned, "search_mode", "hybrid") == "keyword_only":
+            retriever = PGBigmRetriever(
+                session_factory=vector_db_service.session_factory,
+                async_session_factory=vector_db_service.async_session_factory,
+                collection_name=vector_db_service.collection_name,
+                k=_MANUAL_SEARCH_POOL_SIZE,
+                offset=0,
+                tool_filters=tool_filters,
+                search_mode="fuzzy",
+            )
+            all_docs = await retriever.async_invoke(planned.keyword_tokens)
+        else:
+            all_docs = await vector_db_service.hybrid_search(
+                query=planned.query,
+                k=_MANUAL_SEARCH_POOL_SIZE,
+                tool_filters=tool_filters,
+                keyword_tokens=planned.keyword_tokens or None,
+                offset=0,
+            )
 
         total = len(all_docs)
         page_docs = all_docs[offset:offset + limit]

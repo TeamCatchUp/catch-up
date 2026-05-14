@@ -1,61 +1,77 @@
-"""TDD Red Phase: plan_manual_search_node tests.
-
-Written before implementation. All tests should fail initially with ImportError.
-"""
+"""plan_manual_search_node tests."""
 
 from unittest.mock import MagicMock
 from unittest.mock import patch
 
 import pytest
 
-from catchup.rag.schemas.structures import VectorDbSearchQuery
+from catchup.rag.schemas.structures import ManualSearchQuery
+from catchup.search.planner.state import _QUERY_CACHE_MAX_SIZE
 
 
 def _make_state(
     original_query: str = "테스트 쿼리",
-    last_planned_query: str = "",
-    planned_search: VectorDbSearchQuery | None = None,
+    query_cache: dict | None = None,
 ) -> dict:
     return {
         "original_query": original_query,
-        "last_planned_query": last_planned_query,
-        "planned_search": planned_search,
+        "query_cache": query_cache or {},
     }
 
 
 def _make_planned_search(
     query: str = "semantic query in English",
     keyword_tokens: list[str] | None = None,
-) -> VectorDbSearchQuery:
-    return VectorDbSearchQuery(
+    search_mode: str = "hybrid",
+) -> ManualSearchQuery:
+    return ManualSearchQuery(
         query=query,
         keyword_tokens=keyword_tokens or [],
+        search_mode=search_mode,
         reasoning="test reasoning",
     )
 
 
 @pytest.mark.asyncio
-async def test_cache_hit_returns_empty_dict():
-    """동일 쿼리 + plan 존재 → {} 반환, LLM 미호출."""
+async def test_cache_hit_returns_cached_plan():
+    """query_cache에 쿼리 존재 → LLM 미호출, query_cache만 반환."""
     from catchup.search.planner.plan_manual_search import plan_manual_search_node
 
     existing_plan = _make_planned_search()
     state = _make_state(
         original_query="hello",
-        last_planned_query="hello",
-        planned_search=existing_plan,
+        query_cache={"hello": existing_plan},
     )
     mock_llm = MagicMock()
 
     result = await plan_manual_search_node(state, llm=mock_llm)
 
-    assert result == {}
+    assert "planned_search" not in result
+    assert result["query_cache"]["hello"] == existing_plan
+    assert result["query_cache_hit"] is True
     mock_llm.with_structured_output.assert_not_called()
 
 
 @pytest.mark.asyncio
-async def test_cache_miss_when_planned_search_is_none():
-    """plan=None이면 쿼리가 동일해도 LLM 호출."""
+async def test_cache_hit_moves_entry_to_recent():
+    """캐시 히트 시 해당 항목이 LRU에서 최근으로 이동한다."""
+    from catchup.search.planner.plan_manual_search import plan_manual_search_node
+
+    plan_a = _make_planned_search(query="plan A")
+    plan_b = _make_planned_search(query="plan B")
+    state = _make_state(
+        original_query="query_a",
+        query_cache={"query_a": plan_a, "query_b": plan_b},
+    )
+
+    result = await plan_manual_search_node(state, llm=MagicMock())
+
+    assert list(result["query_cache"].keys()) == ["query_b", "query_a"]
+
+
+@pytest.mark.asyncio
+async def test_cache_miss_calls_llm():
+    """query_cache에 없으면 LLM 호출 후 캐시에 추가."""
     from catchup.search.planner.plan_manual_search import plan_manual_search_node
 
     planned = _make_planned_search(query="optimized English query")
@@ -73,25 +89,26 @@ async def test_cache_miss_when_planned_search_is_none():
             {"token_breakdown": {}},
         )
 
-        state = _make_state(
-            original_query="first query",
-            last_planned_query="first query",
-            planned_search=None,
-        )
+        state = _make_state(original_query="new query")
         result = await plan_manual_search_node(state, llm=mock_llm)
 
-    assert result["planned_search"] == planned
-    assert result["last_planned_query"] == "first query"
+    assert result["query_cache"]["new query"] == planned
+    assert result["query_cache_hit"] is False
 
 
 @pytest.mark.asyncio
-async def test_cache_miss_when_query_changes():
-    """쿼리 변경 시 LLM 재호출, 새 plan 반환."""
+async def test_cache_evicts_lru_when_full():
+    """캐시가 가득 찼을 때 가장 오래된 항목을 제거한다."""
     from catchup.search.planner.plan_manual_search import plan_manual_search_node
 
-    new_plan = _make_planned_search(
-        query="new English plan", keyword_tokens=["NewFeature"]
-    )
+    oldest_key = "oldest_query"
+    cache = {oldest_key: _make_planned_search(query="oldest")}
+    for i in range(1, _QUERY_CACHE_MAX_SIZE):
+        cache[f"query_{i}"] = _make_planned_search(query=f"plan {i}")
+
+    assert len(cache) == _QUERY_CACHE_MAX_SIZE
+
+    new_plan = _make_planned_search(query="new plan")
     mock_llm = MagicMock()
 
     with (
@@ -106,16 +123,12 @@ async def test_cache_miss_when_query_changes():
             {"token_breakdown": {}},
         )
 
-        state = _make_state(
-            original_query="new query",
-            last_planned_query="old query",
-            planned_search=_make_planned_search(query="old English plan"),
-        )
+        state = _make_state(original_query="brand new query", query_cache=cache)
         result = await plan_manual_search_node(state, llm=mock_llm)
 
-    assert result["last_planned_query"] == "new query"
-    assert result["planned_search"].query == "new English plan"
-    assert result["planned_search"].keyword_tokens == ["NewFeature"]
+    assert oldest_key not in result["query_cache"]
+    assert "brand new query" in result["query_cache"]
+    assert len(result["query_cache"]) == _QUERY_CACHE_MAX_SIZE
 
 
 @pytest.mark.asyncio
@@ -134,21 +147,18 @@ async def test_llm_failure_falls_back_to_raw_query():
         mock_loader.get_prompt.return_value = [MagicMock()]
         mock_invoke.side_effect = Exception("LLM timeout")
 
-        state = _make_state(
-            original_query="fallback test",
-            last_planned_query="",
-            planned_search=None,
-        )
+        state = _make_state(original_query="fallback test")
         result = await plan_manual_search_node(state, llm=mock_llm)
 
-    assert result["planned_search"].query == "fallback test"
-    assert result["planned_search"].keyword_tokens == []
-    assert result["last_planned_query"] == "fallback test"
+    fallback = result["query_cache"]["fallback test"]
+    assert fallback.query == "fallback test"
+    assert fallback.keyword_tokens == []
+    assert fallback.search_mode == "hybrid"
 
 
 @pytest.mark.asyncio
-async def test_structured_output_uses_vector_db_search_query_schema():
-    """`with_structured_output`이 VectorDbSearchQuery 스키마로 호출되는지 검증."""
+async def test_structured_output_uses_manual_search_query_schema():
+    """`with_structured_output`이 ManualSearchQuery 스키마로 호출되는지 검증."""
     from catchup.search.planner.plan_manual_search import plan_manual_search_node
 
     planned = _make_planned_search()
@@ -166,13 +176,11 @@ async def test_structured_output_uses_vector_db_search_query_schema():
             {"token_breakdown": {}},
         )
 
-        state = _make_state(
-            original_query="query", last_planned_query="", planned_search=None
-        )
+        state = _make_state(original_query="query")
         await plan_manual_search_node(state, llm=mock_llm)
 
     mock_llm.with_structured_output.assert_called_once_with(
-        VectorDbSearchQuery, method="function_calling", include_raw=True
+        ManualSearchQuery, method="function_calling", include_raw=True
     )
 
 
@@ -196,9 +204,7 @@ async def test_prompt_loader_called_with_correct_key():
             {"token_breakdown": {}},
         )
 
-        state = _make_state(
-            original_query="내 검색어", last_planned_query="", planned_search=None
-        )
+        state = _make_state(original_query="내 검색어")
         await plan_manual_search_node(state, llm=mock_llm)
 
     mock_loader.get_prompt.assert_called_once_with(
