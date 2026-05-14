@@ -1,4 +1,5 @@
-import type { ChatSource, SourceResponse } from '@/features/chat/types';
+import type { RagSourceTypeModel, RagSourceUiModel } from '@/shared/types/ragSourceModel';
+import type { SourceResponseApi } from '@/shared/types/sourceApi';
 
 import { normalizeChannelTalkFields } from './sources/channelTalk';
 import {
@@ -13,11 +14,11 @@ import { normalizeGithubFields } from './sources/github';
 import { normalizeJiraFields } from './sources/jira';
 import { normalizeSlackFields } from './sources/slack';
 
-const getUiSourceType = (source: SourceResponse['source']): ChatSource['source_type'] => source ?? 'unknown';
+const getUiSourceType = (source: SourceResponseApi['source']): RagSourceTypeModel => source ?? 'unknown';
 
 const dispatchIntegration = (
-  source: SourceResponse,
-  sourceType: ChatSource['source_type'],
+  source: SourceResponseApi,
+  sourceType: RagSourceTypeModel,
 ): NormalizedIntegrationFields => {
   if (sourceType === 'jira') return normalizeJiraFields(source);
   if (sourceType === 'slack') return normalizeSlackFields(source);
@@ -27,7 +28,7 @@ const dispatchIntegration = (
   return { repo: '', title: source.title ?? '', author: source.author ?? '' };
 };
 
-const normalize = (sources: SourceResponse[]): ChatSource[] =>
+const normalize = (sources: SourceResponseApi[]): RagSourceUiModel[] =>
   (sources ?? []).map((source, index) => {
     const sourceType = getUiSourceType(source.source);
     const integration = dispatchIntegration(source, sourceType);
@@ -45,6 +46,6 @@ const normalize = (sources: SourceResponse[]): ChatSource[] =>
     };
   });
 
-export const normalizeStreamSources = (sources: SourceResponse[]): ChatSource[] => normalize(sources);
-export const normalizeHistorySources = (sources: SourceResponse[]): ChatSource[] => normalize(sources);
-export const normalizeSources = (sources: SourceResponse[]): ChatSource[] => normalize(sources);
+export const normalizeStreamSources = (sources: SourceResponseApi[]): RagSourceUiModel[] => normalize(sources);
+export const normalizeHistorySources = (sources: SourceResponseApi[]): RagSourceUiModel[] => normalize(sources);
+export const normalizeSources = (sources: SourceResponseApi[]): RagSourceUiModel[] => normalize(sources);

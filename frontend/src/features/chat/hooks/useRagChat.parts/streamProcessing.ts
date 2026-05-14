@@ -7,7 +7,7 @@ import {
 } from '@/features/chat/hooks/useRagChat.parts/streamMessageUpdater';
 import { upsertStepRow } from '@/features/chat/hooks/useRagChat.parts/upsertStepRow';
 import type { PipelineQueryType, SourceResponse, StreamEvent } from '@/features/chat/types';
-import { normalizeStreamSources } from '@/features/chat/utils/normalize/normalizeRagSources';
+import { normalizeStreamSources } from '@/shared/utils/normalize/normalizeRagSources';
 
 import type { ChatStateSetters, SessionGuardRefs, StreamRuntimeRefs } from './types';
 

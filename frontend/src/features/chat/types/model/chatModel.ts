@@ -1,26 +1,13 @@
-import type { EntityTypeApi, SourceTypeApi } from '@/features/chat/types/api/sourceApi';
+// ChatSourceModel은 shared/types/ragSourceModel로 승격됨 (chat + hybrid-search 공유).
+// 본 파일은 backward-compat alias만 유지.
 
-/** 백엔드 SourceType과 동일 */
-export type ChatSourceTypeModel = SourceTypeApi;
+import type { RagSourceTypeModel, RagSourceUiModel } from '@/shared/types/ragSourceModel';
 
-/** 답변 사이드바/배지용 출처 모델. 플랫폼은 source_type, 엔티티는 entity_type으로 분기. */
-export interface ChatSourceModel {
-  id: string;
-  source_type: ChatSourceTypeModel;
-  entity_type: EntityTypeApi;
-  is_cited: boolean;
-  repo: string;
-  title: string;
-  content: string;
-  date: string;
-  author: string;
-  html_url: string;
-  source_index: number;
-  /** Jira 이슈키 (예: "CAT-297") */
-  issue_key?: string;
-  /** GitHub PR/Issue 번호 */
-  github_number?: number;
-}
+/** @deprecated shared의 RagSourceTypeModel을 직접 import 권장. */
+export type ChatSourceTypeModel = RagSourceTypeModel;
+
+/** @deprecated shared의 RagSourceUiModel을 직접 import 권장. */
+export type ChatSourceModel = RagSourceUiModel;
 
 export interface MessageModel {
   id: string;

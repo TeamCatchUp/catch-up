@@ -19,10 +19,10 @@ import CollapsibleQuestionText from '@/features/chat/components/answer/question/
 import SidebarHeader from '@/features/chat/components/sidebar/SidebarHeader';
 import SourceList from '@/features/chat/components/sidebar/source/SourceList';
 import type { SourceResponse } from '@/features/chat/types';
-import { normalizeHistorySources } from '@/features/chat/utils/normalize/normalizeRagSources';
 import { formatMarkdownString } from '@/features/chat/utils/render/markdown';
 // shared
 import { Badge } from '@/shared/components/ui/badge';
+import { normalizeHistorySources } from '@/shared/utils/normalize/normalizeRagSources';
 
 export default function QuestionLogDetailPage() {
   const params = useParams();
