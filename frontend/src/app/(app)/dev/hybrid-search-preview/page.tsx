@@ -7,6 +7,9 @@ import { useState } from 'react';
 
 import CatchupPromoCard from '@/features/hybrid-search/components/CatchupPromoCard';
 import HybridSearchResultCard from '@/features/hybrid-search/components/HybridSearchResultCard';
+import ResultEmptyState from '@/features/hybrid-search/components/ResultEmptyState';
+import ResultErrorState from '@/features/hybrid-search/components/ResultErrorState';
+import ResultLoadingState from '@/features/hybrid-search/components/ResultLoadingState';
 import ResultSearchBar from '@/features/hybrid-search/components/ResultSearchBar';
 import SearchHistoryList from '@/shared/components/SearchHistoryList';
 import AccentTabs from '@/shared/components/ui/accent-tabs';
@@ -160,6 +163,27 @@ export default function HybridSearchPreviewPage() {
         <div className="bg-fill-normal flex max-w-180 items-center justify-center rounded-xl px-4 py-6">
           <SearchHistoryList entries={[]} />
           <span className="text-body-xsmall text-content-alternative">(빈 배열이면 DOM 미렌더)</span>
+        </div>
+      </section>
+
+      <section className="flex flex-col gap-3">
+        <h2 className="text-heading-medium text-content-normal">ResultLoadingState</h2>
+        <div className="bg-fill-normal max-w-180 rounded-xl">
+          <ResultLoadingState />
+        </div>
+      </section>
+
+      <section className="flex flex-col gap-3">
+        <h2 className="text-heading-medium text-content-normal">ResultEmptyState</h2>
+        <div className="bg-fill-normal max-w-180 rounded-xl">
+          <ResultEmptyState />
+        </div>
+      </section>
+
+      <section className="flex flex-col gap-3">
+        <h2 className="text-heading-medium text-content-normal">ResultErrorState</h2>
+        <div className="bg-fill-normal max-w-180 rounded-xl">
+          <ResultErrorState onRetry={() => console.log('retry clicked')} />
         </div>
       </section>
     </div>
