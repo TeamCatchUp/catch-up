@@ -36,7 +36,7 @@ export default function ResultListSection({ keyword, tools, page, onPageChange }
 
   return (
     <div className="flex w-full flex-col items-center gap-10">
-      <div className="flex w-full min-w-[534px] flex-col items-start gap-2">
+      <div className="flex w-full flex-col items-start gap-2">
         {cards.map((card, idx) => (
           <HybridSearchResultCard key={`${card.sourceType}-${idx}-${card.url}`} {...card} />
         ))}

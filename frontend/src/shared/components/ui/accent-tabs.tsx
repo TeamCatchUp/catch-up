@@ -42,7 +42,7 @@ export default function AccentTabs<V extends string = string>({
             id={`tab-${panelKey}-${item.value}`}
             aria-controls={`tabpanel-${panelKey}-${item.value}`}
             className={cn(
-              'group text-heading-small inline-flex cursor-pointer items-center gap-1.5 border-b-2 px-1 pb-2.5',
+              'group text-heading-small inline-flex cursor-pointer items-center gap-1.5 border-b-2 px-1 pb-2',
               'data-[state=active]:text-accent-violet data-[state=active]:border-accent-violet',
               'data-[state=inactive]:text-content-alternative data-[state=inactive]:border-transparent',
             )}
