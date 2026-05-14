@@ -27,11 +27,10 @@ export default function DocsSearchHistorySection({ selectedSources }: DocsSearch
 
   return (
     <section className="flex w-full justify-center px-16 pb-30">
-      <div className="bg-fill-normal flex w-full max-w-190 flex-col gap-5 rounded-3xl p-5">
+      <div className="bg-fill-normal max-h-120 w-full max-w-190 overflow-y-auto rounded-3xl p-5">
         <SearchHistoryList
           entries={entries}
           isLoading={isLoading}
-          maxPerGroup={3}
           onItemClick={(entry) => handleHistoryClick(entry.query)}
         />
       </div>

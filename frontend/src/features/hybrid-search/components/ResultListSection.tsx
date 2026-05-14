@@ -1,16 +1,14 @@
 'use client';
 
 // Figma 11542:64433 — 결과 카드 리스트 + Pagination.
-// 외부: flex flex-col gap-10(40px) items-center
-// 카드 리스트: flex flex-col gap-2(8px) min-w-[534px] w-full
+// backend는 dedup 후 최대 50개 한 번에 반환 → frontend가 active/page로 client-side filter+slice.
 
 import Pagination from '@/shared/components/ui/pagination';
 import { normalizeSources } from '@/shared/utils/normalize/normalizeRagSources';
 
 import { useHybridSearch } from '../hooks/useHybridSearch';
-import type { ActiveTab } from '../hooks/useHybridSearchUrlState';
 import { HYBRID_SEARCH_PAGE_SIZE } from '../queries/hybridSearch.queries';
-import type { ToolFilter } from '../types/hybridSearchApi';
+import type { ActiveTab, ToolFilter } from '../types/hybridSearchApi';
 import HybridSearchResultCard from './HybridSearchResultCard';
 import ResultEmptyState from './ResultEmptyState';
 import ResultErrorState from './ResultErrorState';
@@ -31,18 +29,30 @@ export default function ResultListSection({
   page,
   onPageChange,
 }: ResultListSectionProps) {
-  const query = useHybridSearch({ keyword, scope, active, page });
+  const query = useHybridSearch({ keyword, scope });
 
-  // keyword 빈 문자열 → Empty (enabled=false라 fetch 안 함)
+  // active가 scope 밖이면 결과 없음 (사용자가 보지 못한 source 탭 클릭한 경우).
+  const isActiveInScope = active === 'all' || scope.length === 0 || scope.includes(active);
+
   if (!keyword.trim()) return <ResultEmptyState />;
-  // scope 밖 active 탭 클릭 → API 호출 없이 EmptyState
-  if (query.isOutOfScope) return <ResultEmptyState />;
   if (query.isLoading) return <ResultLoadingState />;
   if (query.isError) return <ResultErrorState onRetry={() => query.refetch()} />;
+  if (!isActiveInScope) return <ResultEmptyState />;
   if (!query.data || query.data.results.length === 0) return <ResultEmptyState />;
 
-  const totalPages = Math.max(1, Math.ceil(query.data.total / HYBRID_SEARCH_PAGE_SIZE));
-  const sources = normalizeSources(query.data.results);
+  // active filter (client-side) — active='all'이면 전체, 아니면 그 source만.
+  const filteredResults =
+    active === 'all'
+      ? query.data.results
+      : query.data.results.filter((r) => r.source === active);
+
+  if (filteredResults.length === 0) return <ResultEmptyState />;
+
+  // page slice (client-side, HYBRID_SEARCH_PAGE_SIZE = 10).
+  const totalPages = Math.max(1, Math.ceil(filteredResults.length / HYBRID_SEARCH_PAGE_SIZE));
+  const pageStart = (page - 1) * HYBRID_SEARCH_PAGE_SIZE;
+  const pageResults = filteredResults.slice(pageStart, pageStart + HYBRID_SEARCH_PAGE_SIZE);
+  const sources = normalizeSources(pageResults);
 
   return (
     <div className="flex w-full flex-col items-center gap-10">
