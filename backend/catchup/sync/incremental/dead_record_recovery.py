@@ -144,6 +144,7 @@ def _recover_exhausted_dead_records_with_session(
             raise
 
 
+# TODO : 관측성 페이지 추가 이후 DLQ는 수동 복구로 변경
 async def recover_incremental_dead_records(
     *,
     limit: int | None = None,
