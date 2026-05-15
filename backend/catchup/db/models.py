@@ -2112,6 +2112,7 @@ class SyncEventPublishStatus(StrEnum):
 
 class IncrementalRecordStatus(StrEnum):
     DEBOUNCING = "debouncing"
+    WAITING_FULL_SYNC = "waiting_full_sync"
     QUEUED = "queued"
     PROCESSING = "processing"
     RETRY_WAIT = "retry_wait"
@@ -2345,7 +2346,7 @@ class IncrementalRecordState(Base):
 
     __table_args__ = (
         CheckConstraint(
-            "status IN ('debouncing', 'queued', 'processing', 'retry_wait', 'dead', 'synced', 'recovered')",
+            "status IN ('debouncing', 'waiting_full_sync', 'queued', 'processing', 'retry_wait', 'dead', 'synced', 'recovered')",
             name="ck_incremental_record_states_status",
         ),
         CheckConstraint("generation >= 1", name="ck_incremental_record_states_generation_positive"),
