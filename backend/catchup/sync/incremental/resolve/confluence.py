@@ -13,6 +13,7 @@ def build_confluence_record_change(
     record_type: str,
     record_id: str,
     last_event_at: datetime,
+    event_kind: str = "updated",
 ) -> RecordChange:
     return RecordChange(
         connector=SyncConnector.CONFLUENCE,
@@ -21,6 +22,6 @@ def build_confluence_record_change(
         record_id=record_id.strip(),
         parent_type="space",
         parent_id=space_key.strip(),
-        event_kind="updated",
+        event_kind=event_kind.strip(),
         last_event_at=last_event_at,
     )
