@@ -86,7 +86,7 @@ export default function HybridSearchResultCard({ source }: HybridSearchResultCar
     >
       <div className="flex w-full items-center gap-2.5">
         <span className="border-edge-normal bg-fill-normal flex shrink-0 items-center justify-center rounded-full border p-1.5">
-          <Logo className="h-5 w-5" />
+          <Logo className={source.source_type === 'channel_talk' ? 'h-4 w-4' : 'h-5 w-5'} />
         </span>
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
           <div className="flex items-center gap-2">
