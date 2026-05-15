@@ -81,6 +81,24 @@ describe('groupChannelTalkSyncDispatch', () => {
     expect(result[0].channel.channel_id).toBe('ch-b');
   });
 
+  it('스페이스가 0개인 채널만 선택 — channel target 1개, period 1개', () => {
+    const channelNoSpaces: ChannelTalkChannel = {
+      channel_id: 'ch-x',
+      display_name: 'Channel X',
+      document_spaces: [],
+    };
+    const result = groupChannelTalkSyncDispatch(
+      [channelNoSpaces],
+      new Set(['ch-x']),
+      new Set(),
+      { 'ch-x': '6개월' },
+      {},
+    );
+    expect(result).toHaveLength(1);
+    expect(result[0].targets).toEqual([{ target_type: 'channel', target_id: 'ch-x' }]);
+    expect(result[0].periods).toEqual(['6개월']);
+  });
+
   it('스페이스 미설정 시 채널 기간을 상속하지 않음 (독립 모델)', () => {
     // 채널 미선택, 스페이스 선택, 채널 period는 '3개월'로 명시했지만
     // space period에는 영향 없어야 함 → space period는 DEFAULT '전체'
