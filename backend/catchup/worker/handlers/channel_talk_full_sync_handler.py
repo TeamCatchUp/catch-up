@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from datetime import timezone
 
+import structlog
 from fastapi.concurrency import run_in_threadpool
 
 from catchup.audit.actions import FullSyncAction
@@ -46,6 +47,10 @@ from catchup.connectors.channel_talk.full_sync_target_contract import (
 from catchup.connectors.channel_talk.schemas.document_connection import (
     ChannelTalkDocumentCredentialsRecord,
 )
+from catchup.db.engine import SessionLocal
+from catchup.db.incremental import deadletter_waiting_full_sync_records
+from catchup.db.incremental import release_waiting_full_sync_records
+from catchup.db.models import SyncConnector
 from catchup.sync.audit import SyncAuditContext
 from catchup.sync.common.schemas import FullSyncContext
 from catchup.sync.common.schemas import SyncTargetType
@@ -54,6 +59,8 @@ from catchup.worker.handlers.base_full_sync_handler import BaseFullSyncHandler
 
 CHANNEL_TALK_USER_CHAT_FULL_SYNC_BATCH_SIZE = 50
 CHANNEL_TALK_USER_CHAT_FULL_SYNC_MAX_PAGES_PER_BATCH = 1
+
+logger = structlog.get_logger(__name__)
 
 
 class ChannelTalkFullSyncHandler(BaseFullSyncHandler):
@@ -252,3 +259,101 @@ class ChannelTalkFullSyncHandler(BaseFullSyncHandler):
         if context.target_type == SyncTargetType.SPACE:
             return CHANNEL_TALK_DOCUMENT_ARTICLE_RUNTIME_TARGET
         raise ValueError("channel_talk target_type must be one of: channel, space")
+
+    async def on_target_completed(
+        self,
+        *,
+        context: FullSyncContext,
+        result: TargetSyncResult,
+    ) -> None:
+        _ = result
+        if not self._is_user_chat_channel_target(context):
+            return
+
+        released = await run_in_threadpool(
+            _release_waiting_user_chat_full_sync_records,
+            scope_id=context.scope_id,
+            parent_id=context.target_id,
+        )
+        logger.info(
+            "channel_talk_user_chat_waiting_full_sync_released",
+            scope_id=context.scope_id,
+            target_id=context.target_id,
+            job_id=context.job_id,
+            released_count=released,
+        )
+
+    async def on_target_failed(
+        self,
+        *,
+        context: FullSyncContext,
+        next_attempt: int,
+        error_summary: str,
+        retryable: bool,
+    ) -> None:
+        _ = next_attempt
+        _ = retryable
+        if not self._is_user_chat_channel_target(context):
+            return
+
+        deadlettered = await run_in_threadpool(
+            _deadletter_waiting_user_chat_full_sync_records,
+            scope_id=context.scope_id,
+            parent_id=context.target_id,
+            last_error=f"full_sync_failed: {error_summary}",
+        )
+        logger.info(
+            "channel_talk_user_chat_waiting_full_sync_deadlettered",
+            scope_id=context.scope_id,
+            target_id=context.target_id,
+            job_id=context.job_id,
+            deadlettered_count=deadlettered,
+        )
+
+    @staticmethod
+    def _is_user_chat_channel_target(context: FullSyncContext) -> bool:
+        if context.target_type != SyncTargetType.CHANNEL:
+            return False
+        if context.target_id.strip() != context.scope_id.strip():
+            logger.warning(
+                "channel_talk_user_chat_waiting_full_sync_scope_mismatch",
+                scope_id=context.scope_id,
+                target_id=context.target_id,
+                job_id=context.job_id,
+            )
+            return False
+        return True
+
+
+def _release_waiting_user_chat_full_sync_records(
+    *,
+    scope_id: str,
+    parent_id: str,
+) -> int:
+    with SessionLocal() as db:
+        return release_waiting_full_sync_records(
+            db,
+            connector=SyncConnector.CHANNEL_TALK,
+            scope_id=scope_id,
+            parent_type=SyncTargetType.CHANNEL.value,
+            parent_id=parent_id,
+            record_type=CHANNEL_TALK_USER_CHAT_RUNTIME_TARGET,
+        )
+
+
+def _deadletter_waiting_user_chat_full_sync_records(
+    *,
+    scope_id: str,
+    parent_id: str,
+    last_error: str,
+) -> int:
+    with SessionLocal() as db:
+        return deadletter_waiting_full_sync_records(
+            db,
+            connector=SyncConnector.CHANNEL_TALK,
+            scope_id=scope_id,
+            parent_type=SyncTargetType.CHANNEL.value,
+            parent_id=parent_id,
+            record_type=CHANNEL_TALK_USER_CHAT_RUNTIME_TARGET,
+            last_error=last_error,
+        )
