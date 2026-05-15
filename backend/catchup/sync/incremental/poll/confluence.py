@@ -17,7 +17,9 @@ from catchup.connectors.confluence.client import ConfluenceApiClient
 from catchup.db.atlassian import oauth_repository
 from catchup.db.confluence import domain_repository as confluence_domain
 from catchup.db.engine import SessionLocal
+from catchup.db.models import IncrementalOutboxStatus
 from catchup.db.models import IncrementalRecordState
+from catchup.db.models import IncrementalStreamOutbox
 from catchup.sync.incremental.resolve import build_confluence_record_change
 from catchup.sync.incremental.schemas import RecordChange
 from catchup.sync.incremental.service import get_incremental_service
@@ -51,7 +53,69 @@ def _load_existing_deleted_record_keys_sync(record_keys: list[str]) -> set[str]:
             IncrementalRecordState.record_key.in_(normalized_record_keys),
             IncrementalRecordState.event_kind == "deleted",
         )
-        return set(db.execute(stmt).scalars().all())
+        existing_deleted_record_keys = set(db.execute(stmt).scalars().all())
+        if not existing_deleted_record_keys:
+            return set()
+
+        skipped_rows = db.execute(
+            select(
+                IncrementalStreamOutbox.record_key,
+                IncrementalStreamOutbox.generation,
+            ).where(
+                IncrementalStreamOutbox.record_key.in_(existing_deleted_record_keys),
+                IncrementalStreamOutbox.status == IncrementalOutboxStatus.SKIPPED,
+                IncrementalStreamOutbox.last_error == "stale_outbox",
+            )
+        ).all()
+        published_rows = db.execute(
+            select(
+                IncrementalStreamOutbox.record_key,
+                IncrementalStreamOutbox.generation,
+            ).where(
+                IncrementalStreamOutbox.record_key.in_(existing_deleted_record_keys),
+                IncrementalStreamOutbox.status == IncrementalOutboxStatus.PUBLISHED,
+            )
+        ).all()
+
+        return _exclude_unrecovered_stale_deleted_keys(
+            existing_deleted_record_keys=existing_deleted_record_keys,
+            stale_skipped_outbox_rows=[
+                (str(record_key), int(generation))
+                for record_key, generation in skipped_rows
+            ],
+            published_outbox_rows=[
+                (str(record_key), int(generation))
+                for record_key, generation in published_rows
+            ],
+        )
+
+
+def _exclude_unrecovered_stale_deleted_keys(
+    *,
+    existing_deleted_record_keys: set[str],
+    stale_skipped_outbox_rows: list[tuple[str, int]],
+    published_outbox_rows: list[tuple[str, int]],
+) -> set[str]:
+    latest_stale_generation: dict[str, int] = {}
+    for record_key, generation in stale_skipped_outbox_rows:
+        latest_stale_generation[record_key] = max(
+            generation,
+            latest_stale_generation.get(record_key, 0),
+        )
+
+    latest_published_generation: dict[str, int] = {}
+    for record_key, generation in published_outbox_rows:
+        latest_published_generation[record_key] = max(
+            generation,
+            latest_published_generation.get(record_key, 0),
+        )
+
+    unrecovered_stale_record_keys = {
+        record_key
+        for record_key, stale_generation in latest_stale_generation.items()
+        if latest_published_generation.get(record_key, 0) <= stale_generation
+    }
+    return existing_deleted_record_keys - unrecovered_stale_record_keys
 
 
 async def poll_confluence_incremental_changes() -> dict[str, int]:
