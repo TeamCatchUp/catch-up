@@ -49,6 +49,7 @@ export default function SourceChipsRow({ className, selectedSources, onToggle }:
           label={s.label}
           selected={selectedSources.includes(s.value)}
           onClick={() => toggle(s.value)}
+          iconClassName={s.value === 'channel_talk' ? 'h-4 w-4' : undefined}
         />
       ))}
     </div>
