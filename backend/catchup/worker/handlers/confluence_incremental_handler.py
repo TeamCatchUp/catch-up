@@ -6,12 +6,15 @@ from catchup.audit.utils import audit_log
 from catchup.connectors.confluence.factory import create_confluence_ingestion_service
 from catchup.sync.audit import SyncAuditContext
 from catchup.sync.common.exceptions import SyncInternalException
-from catchup.sync.common.schemas import IncrementalSyncContext, TargetSyncResult
+from catchup.sync.common.schemas import IncrementalSyncContext
+from catchup.sync.common.schemas import TargetSyncResult
 from catchup.worker.handlers.base_incremental_handler import BaseIncrementalHandler
+from catchup.worker.handlers.incremental_success_scope import IncrementalSuccessScope
 
 
 class ConfluenceIncrementalHandler(BaseIncrementalHandler):
     connector = "confluence"
+    incremental_success_scope = IncrementalSuccessScope.RECORD
 
     async def _get_service(self, scope_id: str, cache: dict[str, object]):
         cloud_id = scope_id.strip()

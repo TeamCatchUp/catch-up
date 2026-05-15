@@ -13,6 +13,9 @@ from catchup.sync.common.schemas import SyncStreamMessage
 from catchup.sync.common.schemas import SyncStreamTask
 from catchup.sync.common.schemas import SyncTargetType
 from catchup.sync.common.schemas import TargetSyncResult
+from catchup.worker.handlers.confluence_incremental_handler import (
+    ConfluenceIncrementalHandler,
+)
 from catchup.worker.handlers.incremental_success_scope import IncrementalSuccessScope
 from catchup.worker.incremental_processor import _mark_incremental_success_sync
 from catchup.worker.incremental_processor import process_incremental_message
@@ -81,6 +84,12 @@ def _message(context: IncrementalSyncContext | None = None) -> SyncStreamMessage
 
 
 class IncrementalProcessorStartedHookTest(IsolatedAsyncioTestCase):
+    async def test_confluence_incremental_handler_uses_record_success_scope(self) -> None:
+        self.assertEqual(
+            ConfluenceIncrementalHandler.incremental_success_scope,
+            IncrementalSuccessScope.RECORD,
+        )
+
     async def test_invokes_start_hook_once_before_handle(self) -> None:
         context = _context()
         call_order: list[str] = []
