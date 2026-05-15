@@ -56,7 +56,7 @@ export default function CatchupPromoCard({ className }: CatchupPromoCardProps) {
               key={i}
               className="bg-fill-strong border-edge-normal -mr-1 flex h-6 w-6 items-center justify-center overflow-clip rounded-full border"
             >
-              <Logo className="h-4 w-4" />
+              <Logo className={Logo === ChannelTalk ? 'h-[13px] w-[13px]' : 'h-4 w-4'} />
             </div>
           ))}
         </div>
