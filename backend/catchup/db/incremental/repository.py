@@ -1,20 +1,22 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
+from datetime import timedelta
+from datetime import timezone
 from typing import Sequence
 
-from sqlalchemy import Select, select, update
+from sqlalchemy import Select
+from sqlalchemy import select
+from sqlalchemy import update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
-from catchup.db.models import (
-    IncrementalOutboxStatus,
-    IncrementalRecordState,
-    IncrementalRecordStatus,
-    IncrementalStreamOutbox,
-    SyncConnector,
-)
+from catchup.db.models import IncrementalOutboxStatus
+from catchup.db.models import IncrementalRecordState
+from catchup.db.models import IncrementalRecordStatus
+from catchup.db.models import IncrementalStreamOutbox
+from catchup.db.models import SyncConnector
 
 
 @dataclass(slots=True, frozen=True)
@@ -47,6 +49,11 @@ _ALLOWED_RECORD_TRANSITIONS: dict[IncrementalRecordStatus, set[IncrementalRecord
         IncrementalRecordStatus.QUEUED,
         IncrementalRecordStatus.DEBOUNCING,
         IncrementalRecordStatus.RECOVERED,
+    },
+    IncrementalRecordStatus.WAITING_FULL_SYNC: {
+        IncrementalRecordStatus.WAITING_FULL_SYNC,
+        IncrementalRecordStatus.DEBOUNCING,
+        IncrementalRecordStatus.DEAD,
     },
     IncrementalRecordStatus.QUEUED: {
         IncrementalRecordStatus.PROCESSING,
@@ -113,6 +120,31 @@ def _normalize_text(value: str, field_name: str) -> str:
     return normalized
 
 
+def _record_change_update_values(
+    payload: IncrementalRecordChangeInput,
+) -> dict[str, object]:
+    return {
+        "connector": payload.connector,
+        "scope_id": _normalize_text(payload.scope_id, "scope_id"),
+        "record_type": _normalize_text(payload.record_type, "record_type"),
+        "record_id": _normalize_text(payload.record_id, "record_id"),
+        "parent_type": _normalize_text(payload.parent_type, "parent_type"),
+        "parent_id": _normalize_text(payload.parent_id, "parent_id"),
+        "event_kind": _normalize_text(payload.event_kind, "event_kind"),
+        "last_event_at": _to_utc(payload.last_event_at),
+        "debounce_until": _to_utc(payload.debounce_until),
+    }
+
+
+def _record_change_insert_values(
+    payload: IncrementalRecordChangeInput,
+) -> dict[str, object]:
+    return {
+        "record_key": _normalize_text(payload.record_key, "record_key"),
+        **_record_change_update_values(payload),
+    }
+
+
 def _validate_record_transition(
     from_statuses: Sequence[IncrementalRecordStatus],
     to_status: IncrementalRecordStatus,
@@ -150,19 +182,10 @@ def upsert_record_change(
 ) -> IncrementalRecordState:
     now = _utc_now()
     stmt = insert(IncrementalRecordState).values(
-        record_key=_normalize_text(payload.record_key, "record_key"),
-        connector=payload.connector,
-        scope_id=_normalize_text(payload.scope_id, "scope_id"),
-        record_type=_normalize_text(payload.record_type, "record_type"),
-        record_id=_normalize_text(payload.record_id, "record_id"),
-        parent_type=_normalize_text(payload.parent_type, "parent_type"),
-        parent_id=_normalize_text(payload.parent_id, "parent_id"),
-        event_kind=_normalize_text(payload.event_kind, "event_kind"),
+        **_record_change_insert_values(payload),
         status=IncrementalRecordStatus.DEBOUNCING,
         generation=1,
         attempt=0,
-        last_event_at=_to_utc(payload.last_event_at),
-        debounce_until=_to_utc(payload.debounce_until),
         next_retry_at=None,
         queued_generation=None,
         processing_generation=None,
@@ -175,18 +198,10 @@ def upsert_record_change(
     stmt = stmt.on_conflict_do_update(
         index_elements=[IncrementalRecordState.record_key],
         set_={
-            "connector": payload.connector,
-            "scope_id": _normalize_text(payload.scope_id, "scope_id"),
-            "record_type": _normalize_text(payload.record_type, "record_type"),
-            "record_id": _normalize_text(payload.record_id, "record_id"),
-            "parent_type": _normalize_text(payload.parent_type, "parent_type"),
-            "parent_id": _normalize_text(payload.parent_id, "parent_id"),
-            "event_kind": _normalize_text(payload.event_kind, "event_kind"),
+            **_record_change_update_values(payload),
             "status": IncrementalRecordStatus.DEBOUNCING,
             "generation": IncrementalRecordState.generation + 1,
             "attempt": 0,
-            "last_event_at": _to_utc(payload.last_event_at),
-            "debounce_until": _to_utc(payload.debounce_until),
             "next_retry_at": None,
             "last_error": None,
             "lease_owner": None,
@@ -198,6 +213,56 @@ def upsert_record_change(
     state = get_record_state(db, payload.record_key)
     if state is None:
         raise RuntimeError("failed to upsert incremental record state")
+    return state
+
+
+def upsert_waiting_full_sync_record_change(
+    db: Session,
+    payload: IncrementalRecordChangeInput,
+) -> IncrementalRecordState | None:
+    now = _utc_now()
+    stmt = insert(IncrementalRecordState).values(
+        **_record_change_insert_values(payload),
+        status=IncrementalRecordStatus.WAITING_FULL_SYNC,
+        generation=1,
+        attempt=0,
+        next_retry_at=None,
+        queued_generation=None,
+        processing_generation=None,
+        last_synced_at=None,
+        last_error="waiting_full_sync",
+        lease_owner=None,
+        lease_until=None,
+        updated_at=now,
+    )
+    stmt = stmt.on_conflict_do_update(
+        index_elements=[IncrementalRecordState.record_key],
+        set_={
+            **_record_change_update_values(payload),
+            "status": IncrementalRecordStatus.WAITING_FULL_SYNC,
+            "generation": IncrementalRecordState.generation + 1,
+            "attempt": 0,
+            "next_retry_at": None,
+            "queued_generation": None,
+            "processing_generation": None,
+            "last_error": "waiting_full_sync",
+            "lease_owner": None,
+            "lease_until": None,
+            "updated_at": now,
+        },
+        where=(
+            IncrementalRecordState.status
+            == IncrementalRecordStatus.WAITING_FULL_SYNC
+        ),
+    )
+    result = db.execute(stmt.returning(IncrementalRecordState.record_key))
+    record_key = result.scalar_one_or_none()
+    if record_key is None:
+        return None
+
+    state = get_record_state(db, payload.record_key)
+    if state is None:
+        raise RuntimeError("failed to upsert waiting full sync record state")
     return state
 
 
@@ -451,6 +516,120 @@ def mark_record_keys_recovered(
             lease_owner=None,
             lease_until=None,
             updated_at=_utc_now(),
+        )
+    )
+    try:
+        result = db.execute(stmt)
+        db.commit()
+        return result.rowcount or 0
+    except Exception:
+        db.rollback()
+        raise
+
+
+def _waiting_full_sync_record_filters(
+    *,
+    connector: SyncConnector,
+    scope_id: str,
+    parent_type: str,
+    parent_id: str,
+    record_type: str,
+) -> tuple[object, ...]:
+    return (
+        IncrementalRecordState.connector == connector,
+        IncrementalRecordState.scope_id == _normalize_text(scope_id, "scope_id"),
+        IncrementalRecordState.parent_type == _normalize_text(parent_type, "parent_type"),
+        IncrementalRecordState.parent_id == _normalize_text(parent_id, "parent_id"),
+        IncrementalRecordState.record_type == _normalize_text(record_type, "record_type"),
+        IncrementalRecordState.status == IncrementalRecordStatus.WAITING_FULL_SYNC,
+    )
+
+
+def release_waiting_full_sync_records(
+    db: Session,
+    *,
+    connector: SyncConnector,
+    scope_id: str,
+    parent_type: str,
+    parent_id: str,
+    record_type: str,
+    released_at: datetime | None = None,
+) -> int:
+    _validate_record_transition(
+        [IncrementalRecordStatus.WAITING_FULL_SYNC],
+        IncrementalRecordStatus.DEBOUNCING,
+    )
+    now = _utc_now()
+    debounce_until = _to_utc(released_at or now)
+    stmt = (
+        update(IncrementalRecordState)
+        .where(
+            *_waiting_full_sync_record_filters(
+                connector=connector,
+                scope_id=scope_id,
+                parent_type=parent_type,
+                parent_id=parent_id,
+                record_type=record_type,
+            )
+        )
+        .values(
+            status=IncrementalRecordStatus.DEBOUNCING,
+            attempt=0,
+            debounce_until=debounce_until,
+            next_retry_at=None,
+            queued_generation=None,
+            processing_generation=None,
+            last_error=None,
+            lease_owner=None,
+            lease_until=None,
+            updated_at=now,
+        )
+    )
+    try:
+        result = db.execute(stmt)
+        db.commit()
+        return result.rowcount or 0
+    except Exception:
+        db.rollback()
+        raise
+
+
+def deadletter_waiting_full_sync_records(
+    db: Session,
+    *,
+    connector: SyncConnector,
+    scope_id: str,
+    parent_type: str,
+    parent_id: str,
+    record_type: str,
+    last_error: str = "full_sync_failed",
+) -> int:
+    _validate_record_transition(
+        [IncrementalRecordStatus.WAITING_FULL_SYNC],
+        IncrementalRecordStatus.DEAD,
+    )
+    now = _utc_now()
+    stmt = (
+        update(IncrementalRecordState)
+        .where(
+            *_waiting_full_sync_record_filters(
+                connector=connector,
+                scope_id=scope_id,
+                parent_type=parent_type,
+                parent_id=parent_id,
+                record_type=record_type,
+            )
+        )
+        .values(
+            status=IncrementalRecordStatus.DEAD,
+            attempt=0,
+            next_retry_at=None,
+            queued_generation=None,
+            processing_generation=None,
+            last_error=last_error,
+            lease_owner=None,
+            lease_until=None,
+            updated_at=now,
         )
     )
     try:

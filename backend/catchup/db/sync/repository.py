@@ -655,6 +655,51 @@ def has_successful_full_sync_event(
     return db.execute(stmt).scalar_one_or_none() is not None
 
 
+def has_active_full_sync_event(
+    db: Session,
+    *,
+    connector: SyncConnector,
+    scope_id: str,
+    resource_type: str,
+    resource_id: str,
+) -> bool:
+    stmt = (
+        select(SyncEvent.event_id)
+        .join(SyncJob, SyncJob.job_id == SyncEvent.job_id)
+        .where(
+            SyncJob.connector == connector,
+            SyncJob.scope_id == scope_id,
+            SyncJob.sync_type == SyncType.FULL,
+            SyncJob.status.in_(
+                [
+                    SyncJobStatus.PENDING,
+                    SyncJobStatus.IN_PROGRESS,
+                ]
+            ),
+            SyncEvent.connector == connector,
+            SyncEvent.resource_type == resource_type,
+            SyncEvent.resource_id == resource_id,
+            SyncEvent.status.in_(
+                [
+                    SyncEventStatus.PENDING,
+                    SyncEventStatus.IN_PROGRESS,
+                    SyncEventStatus.RETRYING,
+                ]
+            ),
+            SyncEvent.publish_status.in_(
+                [
+                    SyncEventPublishStatus.PENDING,
+                    SyncEventPublishStatus.PUBLISHING,
+                    SyncEventPublishStatus.PUBLISHED,
+                    SyncEventPublishStatus.FAILED,
+                ]
+            ),
+        )
+        .limit(1)
+    )
+    return db.execute(stmt).scalar_one_or_none() is not None
+
+
 def update_event_status_cas(
     db: Session,
     *,
