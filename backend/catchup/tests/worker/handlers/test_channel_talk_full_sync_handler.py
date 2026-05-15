@@ -55,6 +55,7 @@ from catchup.worker.handlers.channel_talk_full_sync_handler import (
 from catchup.worker.handlers.channel_talk_incremental_handler import (
     ChannelTalkIncrementalHandler,
 )
+from catchup.worker.handlers.incremental_success_scope import IncrementalSuccessScope
 from catchup.worker.registry import get_ingestion_handler
 from catchup.worker.schemas import ClaimResult
 from catchup.worker.schemas import JobFinalizeResult
@@ -66,6 +67,10 @@ _LOAD_CONNECTION = f"{_HANDLER_MODULE}.load_channel_talk_connection"
 _LOAD_DOCUMENT_CONNECTION = f"{_HANDLER_MODULE}.load_channel_talk_document_connection"
 _RUN_IN_THREADPOOL = f"{_HANDLER_MODULE}.run_in_threadpool"
 _RUN_SYNC_INGESTION = f"{_HANDLER_MODULE}.run_sync_ingestion"
+_RELEASE_WAITING = f"{_HANDLER_MODULE}._release_waiting_user_chat_full_sync_records"
+_DEADLETTER_WAITING = (
+    f"{_HANDLER_MODULE}._deadletter_waiting_user_chat_full_sync_records"
+)
 _INCREMENTAL_HANDLER_MODULE = (
     "catchup.worker.handlers.channel_talk_incremental_handler"
 )
@@ -346,6 +351,63 @@ class ChannelTalkFullSyncHandlerTests(IsolatedAsyncioTestCase):
         self.assertEqual(
             adapter._max_user_chat_pages_per_run,
             CHANNEL_TALK_USER_CHAT_FULL_SYNC_MAX_PAGES_PER_BATCH,
+        )
+
+    async def test_target_completed_releases_waiting_user_chat_records(self) -> None:
+        context = _build_context()
+
+        with patch(_RELEASE_WAITING, return_value=3) as release_waiting:
+            await self.handler.on_target_completed(
+                context=context,
+                result=SimpleNamespace(),
+            )
+
+        release_waiting.assert_called_once()
+        self.assertEqual(release_waiting.call_args.kwargs["scope_id"], CHANNEL_ID)
+        self.assertEqual(release_waiting.call_args.kwargs["parent_id"], CHANNEL_ID)
+
+    async def test_target_completed_skips_non_channel_target(self) -> None:
+        context = _build_context(
+            target_type=SyncTargetType.SPACE,
+            target_id=SPACE_ID,
+        )
+
+        with patch(_RELEASE_WAITING) as release_waiting:
+            await self.handler.on_target_completed(
+                context=context,
+                result=SimpleNamespace(),
+            )
+
+        release_waiting.assert_not_called()
+
+    async def test_target_completed_skips_channel_scope_mismatch(self) -> None:
+        context = _build_context(target_id="channel-other")
+
+        with patch(_RELEASE_WAITING) as release_waiting:
+            await self.handler.on_target_completed(
+                context=context,
+                result=SimpleNamespace(),
+            )
+
+        release_waiting.assert_not_called()
+
+    async def test_target_failed_deadletters_waiting_user_chat_records(self) -> None:
+        context = _build_context()
+
+        with patch(_DEADLETTER_WAITING, return_value=2) as deadletter_waiting:
+            await self.handler.on_target_failed(
+                context=context,
+                next_attempt=3,
+                error_summary="boom",
+                retryable=False,
+            )
+
+        deadletter_waiting.assert_called_once()
+        self.assertEqual(deadletter_waiting.call_args.kwargs["scope_id"], CHANNEL_ID)
+        self.assertEqual(deadletter_waiting.call_args.kwargs["parent_id"], CHANNEL_ID)
+        self.assertEqual(
+            deadletter_waiting.call_args.kwargs["last_error"],
+            "full_sync_failed: boom",
         )
 
     async def test_processor_records_channel_talk_full_sync_job_and_event_audit(
@@ -743,6 +805,12 @@ class ChannelTalkIncrementalHandlerTests(IsolatedAsyncioTestCase):
         )
         self.run_in_threadpool_patcher.start()
         self.addCleanup(self.run_in_threadpool_patcher.stop)
+
+    def test_incremental_success_scope_is_record(self) -> None:
+        self.assertEqual(
+            self.handler.incremental_success_scope,
+            IncrementalSuccessScope.RECORD,
+        )
 
     async def test_handler_syncs_user_chat_record_by_id(self) -> None:
         with patch(
