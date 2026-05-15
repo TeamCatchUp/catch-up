@@ -5,6 +5,7 @@ from unittest import IsolatedAsyncioTestCase
 from unittest.mock import patch
 
 from botocore.exceptions import ClientError
+from botocore.exceptions import ConnectionClosedError
 
 from catchup.audit.enums import AuditEventStatus
 from catchup.components.summarizer.service import SummarizeRequest
@@ -164,6 +165,29 @@ class TestSummarizerServiceRetry(IsolatedAsyncioTestCase):
 
         self.assertEqual(result, "summary")
         self.assertEqual(sleep.delays, [1.0, 2.0])
+
+    async def test_connection_closed_error_is_retried(self) -> None:
+        sleep = SleepRecorder()
+        llm = FakeLlm(
+            [
+                ConnectionClosedError(
+                    endpoint_url="https://bedrock-runtime.ap-northeast-2.amazonaws.com"
+                ),
+                _response("summary"),
+            ]
+        )
+        service = SummarizerService(
+            llm=llm,
+            rate_limiter=FakeRateLimiter(),
+            retry_sleep=sleep,
+            retry_random=lambda: 0.0,
+        )
+
+        result = await service.summarize(_long_content(), "jira_issue")
+
+        self.assertEqual(result, "summary")
+        self.assertEqual(sleep.delays, [1.0])
+        self.assertEqual(llm.calls, 2)
 
     async def test_final_throttling_failure_is_raised(self) -> None:
         sleep = SleepRecorder()

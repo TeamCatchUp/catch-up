@@ -33,6 +33,9 @@ from catchup.db.incremental import recover_stale_processing_records
 from catchup.events.enums import EventType
 from catchup.events.enums import IntegrationEventAction
 from catchup.sync.incremental import get_incremental_service
+from catchup.sync.incremental.dead_record_recovery import (
+    recover_incremental_dead_records,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -164,6 +167,15 @@ async def run_incremental_runtime_jobs():
     )
 
 
+async def recover_incremental_dead_records_job():
+    logger.info("[INCREMENTAL][DEAD][SCHEDULER] Starting dead record recovery cycle")
+    result = await recover_incremental_dead_records()
+    logger.info(
+        "[INCREMENTAL][DEAD][SCHEDULER] Dead record recovery cycle completed: result=%s",
+        result.to_log_fields(),
+    )
+
+
 async def poll_confluence_incremental():
     logger.info("[CONFLUENCE][POLL] Starting incremental poll")
     result = await get_incremental_service().poll_confluence_changes()
@@ -218,6 +230,15 @@ def init_scheduler():
         name="Incremental Runtime Cycle",
         replace_existing=True,
         misfire_grace_time=60,
+    )
+
+    _scheduler.add_job(
+        recover_incremental_dead_records_job,
+        trigger=CronTrigger(minute=0, timezone=SEOUL_TZ),
+        id="incremental_dead_record_recovery",
+        name="Incremental Dead Record Recovery",
+        replace_existing=True,
+        misfire_grace_time=300,
     )
 
     confluence_poll_interval_minutes = settings.CONFLUENCE_INCREMENTAL_POLL_INTERVAL_MINUTES
