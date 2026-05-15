@@ -116,16 +116,6 @@ def filter_record_changes_by_full_sync(
     for change in changes:
         target = build_incremental_target(change)
         cache_key = target.cache_key
-        waiting_cache_key = (*cache_key, change.record_type.strip())
-        waiting = waiting_cache.get(waiting_cache_key)
-        if waiting is None:
-            waiting = is_incremental_target_waiting_on_full_sync(db, change=change)
-            waiting_cache[waiting_cache_key] = waiting
-
-        if waiting:
-            waiting_changes.append(change)
-            continue
-
         eligible = eligibility_cache.get(cache_key)
         if eligible is None:
             eligible = is_incremental_target_eligible(
@@ -139,6 +129,16 @@ def filter_record_changes_by_full_sync(
 
         if eligible:
             allowed_changes.append(change)
+            continue
+
+        waiting_cache_key = (*cache_key, change.record_type.strip())
+        waiting = waiting_cache.get(waiting_cache_key)
+        if waiting is None:
+            waiting = is_incremental_target_waiting_on_full_sync(db, change=change)
+            waiting_cache[waiting_cache_key] = waiting
+
+        if waiting:
+            waiting_changes.append(change)
         else:
             blocked_changes.append(change)
 

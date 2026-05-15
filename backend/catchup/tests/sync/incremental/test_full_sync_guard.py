@@ -18,6 +18,7 @@ from catchup.sync.incremental.schemas import RecordChange
 def _change(
     *,
     record_type: str = "user_chat",
+    record_id: str = "chat-123",
     parent_type: str = SyncTargetType.CHANNEL,
     parent_id: str = "channel-123",
 ) -> RecordChange:
@@ -25,7 +26,7 @@ def _change(
         connector=SyncConnector.CHANNEL_TALK,
         scope_id="channel-123",
         record_type=record_type,
-        record_id="chat-123",
+        record_id=record_id,
         parent_type=parent_type,
         parent_id=parent_id,
         event_kind=SyncEventKind.UPDATED,
@@ -101,18 +102,53 @@ class FullSyncGuardTests(TestCase):
         self.assertEqual(len(result.allowed_changes), 1)
         self.assertEqual(len(result.waiting_changes), 0)
         self.assertEqual(len(result.blocked_changes), 0)
-        has_active.assert_called_once()
+        has_active.assert_not_called()
 
-    def test_active_user_chat_full_sync_takes_precedence_over_success_history(
+    def test_successful_full_sync_history_takes_precedence_over_active_full_sync(
+        self,
+    ) -> None:
+        with _patched_full_sync_events(successful=True, active=True) as (
+            _,
+            has_active,
+        ):
+            result = filter_record_changes_by_full_sync(MagicMock(), [_change()])
+
+        self.assertEqual(len(result.allowed_changes), 1)
+        self.assertEqual(len(result.waiting_changes), 0)
+        self.assertEqual(len(result.blocked_changes), 0)
+        has_active.assert_not_called()
+
+    def test_successful_full_sync_history_uses_batch_cache_before_active_lookup(
         self,
     ) -> None:
         with _patched_full_sync_events(successful=True, active=True) as (
             has_successful,
+            has_active,
+        ):
+            result = filter_record_changes_by_full_sync(
+                MagicMock(),
+                [
+                    _change(record_id="chat-123"),
+                    _change(record_id="chat-456"),
+                ],
+            )
+
+        self.assertEqual(len(result.allowed_changes), 2)
+        self.assertEqual(len(result.waiting_changes), 0)
+        self.assertEqual(len(result.blocked_changes), 0)
+        has_successful.assert_called_once()
+        has_active.assert_not_called()
+
+    def test_active_user_chat_full_sync_only_waits_without_success_history(
+        self,
+    ) -> None:
+        with _patched_full_sync_events(successful=False, active=True) as (
             _,
+            has_active,
         ):
             result = filter_record_changes_by_full_sync(MagicMock(), [_change()])
 
         self.assertEqual(len(result.allowed_changes), 0)
         self.assertEqual(len(result.waiting_changes), 1)
         self.assertEqual(len(result.blocked_changes), 0)
-        has_successful.assert_not_called()
+        has_active.assert_called_once()
