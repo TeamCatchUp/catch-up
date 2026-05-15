@@ -24,16 +24,16 @@ You must select exactly one of six pipeline types and provide the associated par
    - The clarification_question must: be concise, ask for only ONE missing piece of information, sound natural and helpful (not interrogative/demanding).
 
 1. **direct_answer**
-   - Use when the question can be fully answered WITHOUT accessing any retrieved documents — using only:
+   - Use ONLY when the question has NO relevance to any knowledge base content (documents, tickets, code, messages, etc.) and can be answered purely from:
      (a) Global Context (user identity, company name, current time, etc.), OR
-     (b) The conversation history itself (e.g., a fact the AI already stated in a prior turn).
-   - Examples: greetings, thanks, "그게 나야?", "방금 말한 사람이 나야?", "내가 그 PR 작성자야?" when the AI already named the user in a prior response.
-   - Key test: could a reader answer this from the chat transcript alone, with no external documents? If yes → direct_answer.
+     (b) Pure social/meta exchange (greetings, thanks, questions about the AI itself).
+   - Examples: "안녕!", "고마워", "오늘 몇 시야?", "내 이름이 뭐야?", "넌 뭘 할 수 있어?"
+   - Key test: does this question have ANY connection to the team's knowledge base (tickets, PRs, messages, docs, people, features, incidents)? If yes → do NOT use direct_answer.
    - Parameters: max_iterations=0
 
 2. **reuse**
-   - Use when: the question requires the *raw content of previously retrieved documents* (specific details, quotes, file diffs, ticket descriptions) that go beyond what the AI already summarized in its prior responses.
-   - Distinction from chitchat: choose reuse when the answer needs document-level detail not already captured in the conversation, but the same retrieved doc set covers it.
+   - Use when: the question can be answered using the previously retrieved documents shown below.
+   - This includes cases where the prior AI response already mentioned the answer — document-derived knowledge must be re-verified against source documents, not recalled from conversation summary.
    - Disqualifiers: no previously retrieved documents shown above, question introduces a new topic or entity not covered by the existing documents, existing documents do not contain enough information to answer the question.
    - Parameters: max_iterations=0
 
@@ -57,8 +57,8 @@ You must select exactly one of six pipeline types and provide the associated par
 
 {% if retrieved_docs_summary %}
 <previously_retrieved_documents>
-These documents were retrieved earlier in this session.
-Evaluate whether the current question is a contextual follow-up that can be answered using these documents, or whether the topic has shifted and a new search is needed.
+These documents were retrieved in the most recent search turn.
+Evaluate whether the current question can be answered using these documents, or whether the topic has shifted and a new search is needed.
 
 << retrieved_docs_summary >>
 
@@ -95,8 +95,9 @@ Select the most appropriate pipeline_type and fill in all required parameters, i
 - For direct_answer and clarify: set query_topic to null.
 
 Decision order (follow this sequence):
-1. Can the question be answered from the conversation transcript alone (Global Context + prior AI responses), with no document content needed? → direct_answer
-2. Can the question be answered using previously retrieved document content (details beyond what the AI already said)? → reuse
+1. Does the question have NO connection to the knowledge base (tickets, PRs, messages, docs, people, features, incidents)? AND is it a pure social exchange or answerable from Global Context alone? → direct_answer
+2. Can the question be answered using previously retrieved documents? → reuse
+   - Apply reuse even if the prior AI response already contained the answer — prior responses are summaries, not sources.
 3. Is a specific entity (person, ticket ID, PR, document name, feature, etc.) identifiable from the question AND history combined?
    - YES and question is searchable → simple / standard / complex
    - NO → go to step 4

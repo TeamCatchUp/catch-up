@@ -42,7 +42,7 @@ def drop_orphaned_tool_calls(messages: list[BaseMessage]) -> list[BaseMessage]:
     return messages
 
 
-def build_docs_summary(docs: list[Document], max_docs: int = 10) -> str:
+def build_docs_summary(docs: list[Document], max_docs: int = 20) -> str:
     """Agent가 현재까지 수집된 지식의 '내용'을 파악할 수 있도록 요약 제공."""
     if not docs:
         return "No documents collected yet."
@@ -59,7 +59,7 @@ def build_docs_summary(docs: list[Document], max_docs: int = 10) -> str:
         temporal = resolve_temporal_context(doc.metadata)
 
         # Confluence는 원문 청크이므로 길이를 제한, 나머지는 요약본이므로 전문 활용
-        if source == "confluence":
+        if source in ("confluence", "channel_talk"):
             content = doc.page_content[:800].replace("\n", " ")
             if len(doc.page_content) > 800:
                 content += "..."

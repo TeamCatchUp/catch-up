@@ -18,7 +18,6 @@ from catchup.rag.state import AgentState
 
 logger = structlog.get_logger()
 
-_MAX_DOCS_SUMMARY = 15
 _PIPELINE_ORDER = ["clarify", "direct_answer", "reuse", "simple", "standard", "complex"]
 _DEFAULT_MAX_ITERATIONS: dict[str, int] = {
     "direct_answer": 0,
@@ -44,9 +43,10 @@ async def supervisor_node(
     # engine.py에서 초기화하지 않으므로 체크포인터를 통해 턴 간 누적된다.
     current_turn = state.get("turn_number", 0) + 1
 
-    # doc_cache는 세션 내 누적 검색 결과 전체. retrieved_docs(최근 1턴)보다 넓은 맥락을 제공한다.
+    # doc_cache는 직전 검색 턴의 결과.
+    # supervisor가 전체를 보고 reuse 여부를 판단한다.
     doc_cache = state.get("doc_cache", [])
-    retrieved_docs_summary = build_docs_summary(doc_cache, max_docs=_MAX_DOCS_SUMMARY)
+    retrieved_docs_summary = build_docs_summary(doc_cache, max_docs=len(doc_cache))
 
     slack_thread_context = state.get("slack_thread_context")
 
