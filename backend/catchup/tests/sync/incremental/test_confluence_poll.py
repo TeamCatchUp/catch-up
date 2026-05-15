@@ -10,6 +10,9 @@ from catchup.connectors.confluence.service import ConfluenceIngestionService
 from catchup.db.models import SyncConnector
 from catchup.sync.incremental.poll.confluence import _collect_deleted_blogpost_changes
 from catchup.sync.incremental.poll.confluence import _collect_deleted_page_changes
+from catchup.sync.incremental.poll.confluence import (
+    _exclude_unrecovered_stale_deleted_keys,
+)
 from catchup.sync.incremental.poll.confluence import _filter_repeated_deleted_changes
 from catchup.sync.incremental.resolve.confluence import build_confluence_record_change
 
@@ -113,6 +116,25 @@ class ConfluenceIncrementalResolveTests(IsolatedAsyncioTestCase):
 
 
 class ConfluenceIncrementalDeletedDedupeTests(IsolatedAsyncioTestCase):
+    async def test_stale_outbox_deleted_records_are_not_treated_as_processed(self) -> None:
+        processed_key = "confluence:cloud-1:space:DOC:page:processed"
+        stale_key = "confluence:cloud-1:space:DOC:page:stale"
+        recovered_key = "confluence:cloud-1:space:DOC:page:recovered"
+
+        filtered_keys = _exclude_unrecovered_stale_deleted_keys(
+            existing_deleted_record_keys={processed_key, stale_key, recovered_key},
+            stale_skipped_outbox_rows=[
+                (stale_key, 3),
+                (recovered_key, 2),
+            ],
+            published_outbox_rows=[
+                (processed_key, 1),
+                (recovered_key, 4),
+            ],
+        )
+
+        self.assertEqual(filtered_keys, {processed_key, recovered_key})
+
     async def test_filter_repeated_deleted_changes_keeps_new_deletes_and_updates(self) -> None:
         event_at = datetime(2026, 5, 15, 8, 30, tzinfo=timezone.utc)
         update_change = build_confluence_record_change(
