@@ -17,7 +17,7 @@ interface ChannelTalkSelectionState {
 }
 
 type ChannelTalkSelectionAction =
-  | { type: 'TOGGLE_VISIBLE_CHANNEL'; channelId: string }
+  | { type: 'TOGGLE_VISIBLE_CHANNEL'; channel: ChannelTalkChannel }
   | { type: 'TOGGLE_CHANNEL'; channelId: string }
   | { type: 'TOGGLE_ALL'; channels: ChannelTalkChannel[] }
   | { type: 'TOGGLE_SPACE'; spaceId: string }
@@ -53,8 +53,25 @@ function isEverythingSelected(state: ChannelTalkSelectionState, channels: Channe
 
 function reducer(state: ChannelTalkSelectionState, action: ChannelTalkSelectionAction): ChannelTalkSelectionState {
   switch (action.type) {
-    case 'TOGGLE_VISIBLE_CHANNEL':
-      return { ...state, visibleChannelIds: toggleSetMember(state.visibleChannelIds, action.channelId) };
+    case 'TOGGLE_VISIBLE_CHANNEL': {
+      const { channel } = action;
+      const willTurnOff = state.visibleChannelIds.has(channel.channel_id);
+      const nextVisible = toggleSetMember(state.visibleChannelIds, channel.channel_id);
+      if (!willTurnOff) {
+        return { ...state, visibleChannelIds: nextVisible };
+      }
+      // visibility off — 해당 채널과 하위 스페이스의 임베딩 선택도 함께 해제
+      const nextChannelIds = new Set(state.selectedChannelIds);
+      nextChannelIds.delete(channel.channel_id);
+      const nextSpaceIds = new Set(state.selectedSpaceIds);
+      channel.document_spaces.forEach((space) => nextSpaceIds.delete(space.space_id));
+      return {
+        ...state,
+        visibleChannelIds: nextVisible,
+        selectedChannelIds: nextChannelIds,
+        selectedSpaceIds: nextSpaceIds,
+      };
+    }
     case 'TOGGLE_CHANNEL':
       return { ...state, selectedChannelIds: toggleSetMember(state.selectedChannelIds, action.channelId) };
     case 'TOGGLE_ALL': {
@@ -88,6 +105,12 @@ function reducer(state: ChannelTalkSelectionState, action: ChannelTalkSelectionA
 export function useChannelTalkSelection(channels: ChannelTalkChannel[]) {
   const [state, dispatch] = useReducer(reducer, channels, init);
 
+  const channelMap = useMemo(() => {
+    const map = new Map<string, ChannelTalkChannel>();
+    channels.forEach((channel) => map.set(channel.channel_id, channel));
+    return map;
+  }, [channels]);
+
   const visibleChannels = useMemo(
     () => channels.filter((channel) => state.visibleChannelIds.has(channel.channel_id)),
     [channels, state.visibleChannelIds],
@@ -98,9 +121,14 @@ export function useChannelTalkSelection(channels: ChannelTalkChannel[]) {
   const isSubmitDisabled = channelCount === 0 && spaceCount === 0;
   const isAllSelected = useMemo(() => isEverythingSelected(state, channels), [state, channels]);
 
-  const toggleVisibility = useCallback((channelId: string) => {
-    dispatch({ type: 'TOGGLE_VISIBLE_CHANNEL', channelId });
-  }, []);
+  const toggleVisibility = useCallback(
+    (channelId: string) => {
+      const channel = channelMap.get(channelId);
+      if (!channel) return;
+      dispatch({ type: 'TOGGLE_VISIBLE_CHANNEL', channel });
+    },
+    [channelMap],
+  );
 
   const toggleChannel = useCallback((channelId: string) => {
     dispatch({ type: 'TOGGLE_CHANNEL', channelId });
