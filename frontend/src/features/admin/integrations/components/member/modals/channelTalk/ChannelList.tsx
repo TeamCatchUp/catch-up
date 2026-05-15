@@ -51,7 +51,7 @@ function ChannelList({ channels, visibleChannelIds, isAllSelected, onToggleVisib
                   isVisible ? 'bg-fill-primary-normal-neutral' : 'hover:bg-fill-strong',
                 )}
                 aria-pressed={isVisible}
-                aria-label={`${channel.display_name} 표시`}
+                aria-label={`${channel.display_name} 표시 (해제 시 임베딩 선택도 함께 해제됨)`}
               >
                 <EntityChip icon={IconTag} />
                 <span className="text-body-small text-content-normal line-clamp-1 min-w-0 flex-1 text-left">
