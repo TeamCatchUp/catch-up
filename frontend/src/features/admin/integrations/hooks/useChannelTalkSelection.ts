@@ -17,7 +17,7 @@ interface ChannelTalkSelectionState {
 }
 
 type ChannelTalkSelectionAction =
-  | { type: 'TOGGLE_VISIBLE_CHANNEL'; channel: ChannelTalkChannel }
+  | { type: 'TOGGLE_VISIBLE_CHANNEL'; channelId: string; spaceIds: readonly string[] }
   | { type: 'TOGGLE_CHANNEL'; channelId: string }
   | { type: 'TOGGLE_ALL'; channels: ChannelTalkChannel[] }
   | { type: 'TOGGLE_SPACE'; spaceId: string }
@@ -54,17 +54,17 @@ function isEverythingSelected(state: ChannelTalkSelectionState, channels: Channe
 function reducer(state: ChannelTalkSelectionState, action: ChannelTalkSelectionAction): ChannelTalkSelectionState {
   switch (action.type) {
     case 'TOGGLE_VISIBLE_CHANNEL': {
-      const { channel } = action;
-      const willTurnOff = state.visibleChannelIds.has(channel.channel_id);
-      const nextVisible = toggleSetMember(state.visibleChannelIds, channel.channel_id);
+      const { channelId, spaceIds } = action;
+      const willTurnOff = state.visibleChannelIds.has(channelId);
+      const nextVisible = toggleSetMember(state.visibleChannelIds, channelId);
       if (!willTurnOff) {
         return { ...state, visibleChannelIds: nextVisible };
       }
       // visibility off — 해당 채널과 하위 스페이스의 임베딩 선택도 함께 해제
       const nextChannelIds = new Set(state.selectedChannelIds);
-      nextChannelIds.delete(channel.channel_id);
+      nextChannelIds.delete(channelId);
       const nextSpaceIds = new Set(state.selectedSpaceIds);
-      channel.document_spaces.forEach((space) => nextSpaceIds.delete(space.space_id));
+      spaceIds.forEach((id) => nextSpaceIds.delete(id));
       return {
         ...state,
         visibleChannelIds: nextVisible,
@@ -125,7 +125,8 @@ export function useChannelTalkSelection(channels: ChannelTalkChannel[]) {
     (channelId: string) => {
       const channel = channelMap.get(channelId);
       if (!channel) return;
-      dispatch({ type: 'TOGGLE_VISIBLE_CHANNEL', channel });
+      const spaceIds = channel.document_spaces.map((space) => space.space_id);
+      dispatch({ type: 'TOGGLE_VISIBLE_CHANNEL', channelId, spaceIds });
     },
     [channelMap],
   );
