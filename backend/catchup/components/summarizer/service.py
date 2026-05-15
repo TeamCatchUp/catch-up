@@ -16,6 +16,10 @@ from collections.abc import Iterator
 from dataclasses import dataclass
 
 from botocore.exceptions import ClientError
+from botocore.exceptions import ConnectionClosedError
+from botocore.exceptions import ConnectTimeoutError
+from botocore.exceptions import EndpointConnectionError
+from botocore.exceptions import ReadTimeoutError
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import BaseMessage
 from langchain_core.messages import HumanMessage
@@ -171,7 +175,7 @@ class SummarizerService:
             return content
 
         messages = self._build_summary_messages(content, source_type)
-        response = await self._invoke_with_bedrock_throttling_retry(messages)
+        response = await self._invoke_with_bedrock_retry(messages)
         return self._extract_summary(response.content, fallback=content)
 
     def _should_skip_summarization(self, content: str) -> bool:
@@ -199,7 +203,7 @@ class SummarizerService:
                 return first_piece.strip() or fallback
         return fallback
 
-    async def _invoke_with_bedrock_throttling_retry(
+    async def _invoke_with_bedrock_retry(
         self,
         messages: list[BaseMessage],
     ) -> object:
@@ -210,7 +214,7 @@ class SummarizerService:
             except Exception as exc:
                 if (
                     attempt >= self.retry_policy.max_attempts
-                    or not _is_bedrock_throttling_error(exc)
+                    or not _is_retryable_bedrock_error(exc)
                 ):
                     raise
 
@@ -233,7 +237,7 @@ class SummarizerService:
         error: Exception,
     ) -> None:
         logger.warning(
-            "[SummarizerService] Bedrock throttled. Retrying: "
+            "[SummarizerService] Bedrock transient error. Retrying: "
             "attempt=%s/%s, delay=%ss, retry_after_source=%s, error=%s",
             attempt,
             self.retry_policy.max_attempts,
@@ -305,9 +309,11 @@ def _truncate_error(error: Exception) -> str:
     return str(error).strip()[:200] or error.__class__.__name__
 
 
-def _is_bedrock_throttling_error(error: Exception) -> bool:
+def _is_retryable_bedrock_error(error: Exception) -> bool:
     for exc in _iter_exception_chain(error):
         if _is_throttled_client_error(exc):
+            return True
+        if _is_bedrock_transport_error(exc):
             return True
         if _has_throttling_text(exc):
             return True
@@ -339,6 +345,18 @@ def _is_throttled_client_error(error: BaseException) -> bool:
     response = error.response or {}
     error_code = response.get("Error", {}).get("Code")
     return error_code == BEDROCK_THROTTLING_ERROR_CODE
+
+
+def _is_bedrock_transport_error(error: BaseException) -> bool:
+    return isinstance(
+        error,
+        (
+            ConnectTimeoutError,
+            ConnectionClosedError,
+            EndpointConnectionError,
+            ReadTimeoutError,
+        ),
+    )
 
 
 def _has_throttling_text(error: BaseException) -> bool:

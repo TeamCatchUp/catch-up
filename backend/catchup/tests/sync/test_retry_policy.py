@@ -3,6 +3,11 @@ from __future__ import annotations
 from datetime import timedelta
 from unittest import TestCase
 
+from botocore.exceptions import ConnectionClosedError
+from botocore.exceptions import ConnectTimeoutError
+from botocore.exceptions import EndpointConnectionError
+from botocore.exceptions import ReadTimeoutError
+
 from catchup.connectors.base.exceptions import ConnectorApiError
 from catchup.connectors.base.exceptions import RateLimitError
 from catchup.connectors.channel_talk.exceptions import ChannelTalkRateLimitError
@@ -37,3 +42,14 @@ class ChannelTalkRetryPolicyTests(TestCase):
         self.assertIsInstance(exc, ConnectorApiError)
         self.assertTrue(is_retryable_sync_error(exc))
 
+
+class BedrockTransportRetryPolicyTests(TestCase):
+    def test_botocore_transport_errors_are_retryable(self) -> None:
+        for exc in (
+            ConnectionClosedError(endpoint_url="https://bedrock-runtime.example"),
+            EndpointConnectionError(endpoint_url="https://bedrock-runtime.example"),
+            ReadTimeoutError(endpoint_url="https://bedrock-runtime.example"),
+            ConnectTimeoutError(endpoint_url="https://bedrock-runtime.example"),
+        ):
+            with self.subTest(exc=exc.__class__.__name__):
+                self.assertTrue(is_retryable_sync_error(exc))
