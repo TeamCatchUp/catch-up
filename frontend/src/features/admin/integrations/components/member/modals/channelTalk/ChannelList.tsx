@@ -47,7 +47,7 @@ function ChannelList({ channels, visibleChannelIds, isAllSelected, onToggleVisib
                 type="button"
                 onClick={() => onToggleVisibility(channel.channel_id)}
                 className={cn(
-                  'flex h-14 w-full cursor-pointer items-center gap-1.5 rounded-lg px-1 transition-colors',
+                  'flex h-14 w-full cursor-pointer items-center gap-3 rounded-lg p-3 transition-colors',
                   isVisible ? 'bg-fill-primary-normal-neutral' : 'hover:bg-fill-strong',
                 )}
                 aria-pressed={isVisible}
