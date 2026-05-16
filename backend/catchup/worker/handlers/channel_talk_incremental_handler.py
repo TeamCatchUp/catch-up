@@ -38,12 +38,10 @@ from catchup.sync.audit import SyncAuditContext
 from catchup.sync.common.schemas import IncrementalSyncContext
 from catchup.sync.common.schemas import TargetSyncResult
 from catchup.worker.handlers.base_incremental_handler import BaseIncrementalHandler
-from catchup.worker.handlers.incremental_success_scope import IncrementalSuccessScope
 
 
 class ChannelTalkIncrementalHandler(BaseIncrementalHandler):
     connector = "channel_talk"
-    incremental_success_scope = IncrementalSuccessScope.RECORD
 
     def __init__(self) -> None:
         self._user_chat_adapter = ChannelTalkUserChatIncrementalIngestionAdapter()
