@@ -85,5 +85,9 @@ class AgentState(TypedDict):
     # supervisor가 추출한 질문 주제 (3~5단어 한국어 명사구)
     query_topic: str | None
     
+    # "by_choice": 에이전트가 스스로 멈춤. "iteration_limit": max_iterations 도달로 강제 종료.
+    # simple/reuse 파이프라인처럼 agent가 없는 경우는 None.
+    agent_stop_reason: str | None
+
     # Slack 스레드 맥락 (턴마다 갱신, 비Slack 요청은 None)
     slack_thread_context: str | None

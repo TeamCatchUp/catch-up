@@ -144,6 +144,7 @@ class ChatService:
                 "accumulated_docs": [],
                 "agent_seen_doc_ids": [],
                 "confirmed_essential_doc_ids": [],
+                "agent_stop_reason": None,
                 # 비용 변수
                 "token_breakdown": {},
                 "rerank_count": 0,
