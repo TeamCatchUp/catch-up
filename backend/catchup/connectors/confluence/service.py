@@ -1,36 +1,34 @@
 import asyncio
-from dataclasses import dataclass, field
 import logging
-from datetime import datetime, timedelta, timezone
-from typing import Any, Literal
+from dataclasses import dataclass
+from dataclasses import field
+from datetime import datetime
+from datetime import timedelta
+from datetime import timezone
+from typing import Any
+from typing import Literal
 
 from fastapi.concurrency import run_in_threadpool
 from sqlalchemy.orm import Session
 
 from catchup.components.embedder.service import AwsBedrockEmbeddingService
-from catchup.connectors.atlassian.token_manager import AtlassianTokenProvider
-from catchup.connectors.confluence.client import (
-    ConfluenceApiClient,
-    ConfluenceApiError,
-    ConfluenceRateLimitError,
-)
-from catchup.connectors.confluence.schemas import (
-    ConfluenceAttachmentResponse,
-    ConfluenceBlogPostResponse,
-    ConfluenceCommentResponse,
-    ConfluenceLabelResponse,
-    ConfluencePageResponse,
-)
-from catchup.connectors.confluence.transformers import (
-    ConfluenceAttachmentAsset,
-    ConfluenceTransformer,
-    ConfluenceTransformResult,
-)
 from catchup.components.vector_db.pgvector import PGVectorRepository
+from catchup.configs.config import settings
+from catchup.connectors.atlassian.token_manager import AtlassianTokenProvider
 from catchup.connectors.atlassian.utils import parse_atlassian_datetime
+from catchup.connectors.confluence.client import ConfluenceApiClient
+from catchup.connectors.confluence.client import ConfluenceApiError
+from catchup.connectors.confluence.client import ConfluenceRateLimitError
+from catchup.connectors.confluence.schemas import ConfluenceAttachmentResponse
+from catchup.connectors.confluence.schemas import ConfluenceBlogPostResponse
+from catchup.connectors.confluence.schemas import ConfluenceCommentResponse
+from catchup.connectors.confluence.schemas import ConfluenceLabelResponse
+from catchup.connectors.confluence.schemas import ConfluencePageResponse
+from catchup.connectors.confluence.transformers import ConfluenceAttachmentAsset
+from catchup.connectors.confluence.transformers import ConfluenceTransformer
+from catchup.connectors.confluence.transformers import ConfluenceTransformResult
 from catchup.db.confluence import domain_repository
 from catchup.db.engine import SessionLocal
-from catchup.configs.config import settings
 from catchup.sync.audit import SyncAuditContext
 from catchup.sync.common.schemas import TargetSyncResult
 
@@ -243,13 +241,13 @@ class ConfluenceIngestionService:
         audit_context: SyncAuditContext | None = None,
     ) -> None:
         documents = transform_result.documents
+        await self.repository.delete_by_id_prefix(
+            f"confluence:{entity_type}:{content_id}:chunk:"
+        )
         if not documents:
             return
 
         doc_ids = [doc.id for doc in documents]
-        await self.repository.delete_by_id_prefix(
-            f"confluence:{entity_type}:{content_id}:chunk:"
-        )
         embeddings = await self._generate_embeddings(
             transform_result,
             entity_type=entity_type,
@@ -783,6 +781,63 @@ class ConfluenceIngestionService:
 
         return ConfluenceRecordRetryResult(records=result_items)
 
+    async def _sync_exact_record(
+        self,
+        *,
+        record_type: Literal["page", "blogpost"],
+        record_id: str,
+        space_key: str,
+        space_name: str | None,
+        user_name_map: dict[str, str | None],
+        audit_context: SyncAuditContext | None,
+    ) -> dict[str, int]:
+        try:
+            if record_type == "page":
+                raw_content = await self.client.get_page_by_id(
+                    record_id,
+                    body_format="storage",
+                )
+                content = ConfluencePageResponse.model_validate(raw_content)
+                transform_result = await self._process_page(
+                    content,
+                    space_key=space_key,
+                    space_name=space_name,
+                    user_name_map=user_name_map,
+                )
+            else:
+                raw_content = await self.client.get_blogpost_by_id(
+                    record_id,
+                    body_format="storage",
+                )
+                content = ConfluenceBlogPostResponse.model_validate(raw_content)
+                transform_result = await self._process_blogpost(
+                    content,
+                    space_key=space_key,
+                    space_name=space_name,
+                    user_name_map=user_name_map,
+                )
+
+            await self._store_transform_result(
+                entity_type=record_type,
+                content_id=content.id,
+                space_key=space_key,
+                transform_result=transform_result,
+                audit_context=audit_context,
+            )
+            return {"synced": 1, "errors": 0}
+        except Exception as exc:
+            if self._is_retryable_connector_error(exc):
+                raise
+            logger.error(
+                "[CONFLUENCE][INCREMENTAL] Failed to sync exact %s: cloud_id=%s, space_key=%s, content_id=%s, error=%s",
+                record_type,
+                self.cloud_id,
+                space_key,
+                record_id,
+                exc,
+            )
+            return {"synced": 0, "errors": 1}
+
     async def incremental_sync(
         self,
         *,
@@ -805,23 +860,23 @@ class ConfluenceIngestionService:
                 "skipped": False,
             }
 
-        space_id, space_name, user_name_map = await self._load_space_context(space_key)
+        _space_id, space_name, user_name_map = await self._load_space_context(space_key)
         if normalized_record_type == "page":
-            result = await self._sync_space_pages(
-                space_id=space_id,
+            result = await self._sync_exact_record(
+                record_type="page",
+                record_id=record_id,
                 space_key=space_key,
-                since=since,
-                user_name_map=user_name_map,
                 space_name=space_name,
+                user_name_map=user_name_map,
                 audit_context=audit_context,
             )
         elif normalized_record_type == "blogpost":
-            result = await self._sync_space_blogposts(
-                space_id=space_id,
+            result = await self._sync_exact_record(
+                record_type="blogpost",
+                record_id=record_id,
                 space_key=space_key,
-                since=since,
-                user_name_map=user_name_map,
                 space_name=space_name,
+                user_name_map=user_name_map,
                 audit_context=audit_context,
             )
         else:

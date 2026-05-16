@@ -55,7 +55,6 @@ from catchup.worker.handlers.channel_talk_full_sync_handler import (
 from catchup.worker.handlers.channel_talk_incremental_handler import (
     ChannelTalkIncrementalHandler,
 )
-from catchup.worker.handlers.incremental_success_scope import IncrementalSuccessScope
 from catchup.worker.registry import get_ingestion_handler
 from catchup.worker.schemas import ClaimResult
 from catchup.worker.schemas import JobFinalizeResult
@@ -806,12 +805,6 @@ class ChannelTalkIncrementalHandlerTests(IsolatedAsyncioTestCase):
         self.run_in_threadpool_patcher.start()
         self.addCleanup(self.run_in_threadpool_patcher.stop)
 
-    def test_incremental_success_scope_is_record(self) -> None:
-        self.assertEqual(
-            self.handler.incremental_success_scope,
-            IncrementalSuccessScope.RECORD,
-        )
-
     async def test_handler_syncs_user_chat_record_by_id(self) -> None:
         with patch(
             _RUN_INCREMENTAL_SYNC_INGESTION,
@@ -881,6 +874,60 @@ class ChannelTalkIncrementalHandlerTests(IsolatedAsyncioTestCase):
         self.assertEqual(execution.space_id, SPACE_ID)
         self.assertEqual(result.synced_count, 2)
         self.assertEqual(result.error_count, 0)
+
+    async def test_channeltalk_incremental_sync_uses_exact_claimed_record_only(
+        self,
+    ) -> None:
+        with patch(
+            _RUN_INCREMENTAL_SYNC_INGESTION,
+            AsyncMock(return_value=_build_application_result(persisted_count=1)),
+        ) as run_sync_ingestion:
+            await self.handler.handle(
+                context=_build_incremental_context(
+                    record_type="user_chat",
+                    record_id="chat-exact",
+                ),
+                service_cache={},
+            )
+
+        user_chat_call = run_sync_ingestion.await_args
+        self.assertIs(user_chat_call.kwargs["port"], self.handler._user_chat_adapter)
+        self.assertEqual(
+            user_chat_call.kwargs["execution"].user_chat_id,
+            "chat-exact",
+        )
+
+        channel_connection = _build_connection_record()
+        document_connection = _build_document_connection_record()
+        run_sync_ingestion.reset_mock()
+        with (
+            patch(_LOAD_INCREMENTAL_CONNECTION, return_value=channel_connection),
+            patch(
+                _LOAD_INCREMENTAL_DOCUMENT_CONNECTION,
+                return_value=document_connection,
+            ),
+            patch(
+                _RUN_INCREMENTAL_SYNC_INGESTION,
+                run_sync_ingestion,
+            ),
+        ):
+            await self.handler.handle(
+                context=_build_incremental_context(
+                    record_type="document_article",
+                    record_id="article-exact",
+                    target_id=SPACE_ID,
+                    parent_type=SyncTargetType.SPACE,
+                    parent_id=SPACE_ID,
+                ),
+                service_cache={},
+            )
+
+        article_call = run_sync_ingestion.await_args
+        self.assertIs(article_call.kwargs["port"], self.handler._article_adapter)
+        self.assertEqual(
+            article_call.kwargs["execution"].article_id,
+            "article-exact",
+        )
 
 
 class WorkerRegistryAdmissionTests(TestCase):

@@ -4,9 +4,11 @@ from datetime import datetime
 from datetime import timezone
 from types import SimpleNamespace
 from unittest import IsolatedAsyncioTestCase
+from unittest.mock import AsyncMock
 from unittest.mock import patch
 
 from catchup.connectors.confluence.service import ConfluenceIngestionService
+from catchup.connectors.confluence.transformers import ConfluenceTransformResult
 from catchup.db.models import SyncConnector
 from catchup.sync.incremental.poll.confluence import _collect_deleted_blogpost_changes
 from catchup.sync.incremental.poll.confluence import _collect_deleted_page_changes
@@ -43,6 +45,44 @@ class _FakeRepository:
 
     async def delete_by_id_prefix(self, prefix: str) -> None:
         self.deleted_prefixes.append(prefix)
+
+
+def _raw_confluence_page(content_id: str, title: str = "Claimed Page") -> dict[str, object]:
+    return {
+        "id": content_id,
+        "status": "current",
+        "title": title,
+        "spaceId": "space-1",
+        "version": {
+            "number": 1,
+            "createdAt": "2026-05-15T08:30:00.000Z",
+        },
+        "body": {
+            "storage": {
+                "representation": "storage",
+                "value": "<p>claimed page</p>",
+            }
+        },
+    }
+
+
+def _raw_confluence_blogpost(content_id: str, title: str = "Claimed Blog") -> dict[str, object]:
+    return {
+        "id": content_id,
+        "status": "current",
+        "title": title,
+        "spaceId": "space-1",
+        "version": {
+            "number": 1,
+            "createdAt": "2026-05-15T08:30:00.000Z",
+        },
+        "body": {
+            "storage": {
+                "representation": "storage",
+                "value": "<p>claimed blogpost</p>",
+            }
+        },
+    }
 
 
 class ConfluenceIncrementalPollTests(IsolatedAsyncioTestCase):
@@ -194,3 +234,127 @@ class ConfluenceIncrementalDeleteApplyTests(IsolatedAsyncioTestCase):
 
         self.assertEqual(repository.deleted_prefixes, ["confluence:page:123:chunk:"])
         self.assertEqual(result, {"synced": 1, "errors": 0, "skipped": False})
+
+
+class ConfluenceIncrementalExactRecordServiceTests(IsolatedAsyncioTestCase):
+    def _build_service(self) -> ConfluenceIngestionService:
+        return ConfluenceIngestionService(
+            cloud_id="cloud-1",
+            token_provider=SimpleNamespace(),
+            site_url="https://example.atlassian.net/wiki",
+            repository=SimpleNamespace(),
+            embedding_service=SimpleNamespace(),
+        )
+
+    async def test_store_transform_result_deletes_existing_chunks_for_empty_documents(self) -> None:
+        repository = SimpleNamespace(
+            delete_by_id_prefix=AsyncMock(),
+            store_with_embeddings=AsyncMock(),
+        )
+        service = ConfluenceIngestionService(
+            cloud_id="cloud-1",
+            token_provider=SimpleNamespace(),
+            site_url="https://example.atlassian.net/wiki",
+            repository=repository,
+            embedding_service=SimpleNamespace(),
+        )
+        service._generate_embeddings = AsyncMock()
+
+        await service._store_transform_result(
+            entity_type="page",
+            content_id="123",
+            space_key="DOC",
+            transform_result=ConfluenceTransformResult(documents=[], embed_inputs=[]),
+            audit_context=None,
+        )
+
+        repository.delete_by_id_prefix.assert_awaited_once_with(
+            "confluence:page:123:chunk:"
+        )
+        service._generate_embeddings.assert_not_awaited()
+        repository.store_with_embeddings.assert_not_awaited()
+
+    async def test_incremental_sync_page_fetches_and_stores_only_claimed_record(self) -> None:
+        service = self._build_service()
+        transform_result = SimpleNamespace(documents=[SimpleNamespace(id="doc-page-123")])
+        service.client = SimpleNamespace(
+            get_page_by_id=AsyncMock(return_value=_raw_confluence_page("123")),
+            get_blogpost_by_id=AsyncMock(),
+        )
+        service._load_space_context = AsyncMock(
+            return_value=("space-1", "Docs", {"author-1": "Author One"})
+        )
+        service._process_page = AsyncMock(return_value=transform_result)
+        service._store_transform_result = AsyncMock()
+        service._sync_space_pages = AsyncMock(
+            side_effect=AssertionError("incremental page sync must not call broad page sync")
+        )
+        service._sync_space_blogposts = AsyncMock(
+            side_effect=AssertionError("incremental page sync must not call broad blogpost sync")
+        )
+
+        result = await service.incremental_sync(
+            space_key="DOC",
+            record_type="page",
+            record_id="123",
+            event_kind="updated",
+            since=datetime(2026, 5, 15, 8, 0, tzinfo=timezone.utc),
+        )
+
+        self.assertEqual(result, {"synced": 1, "errors": 0, "skipped": False})
+        service.client.get_page_by_id.assert_awaited_once_with("123", body_format="storage")
+        service.client.get_blogpost_by_id.assert_not_awaited()
+        service._sync_space_pages.assert_not_awaited()
+        service._sync_space_blogposts.assert_not_awaited()
+        service._process_page.assert_awaited_once()
+        service._store_transform_result.assert_awaited_once_with(
+            entity_type="page",
+            content_id="123",
+            space_key="DOC",
+            transform_result=transform_result,
+            audit_context=None,
+        )
+
+    async def test_incremental_sync_blogpost_fetches_and_stores_only_claimed_record(self) -> None:
+        service = self._build_service()
+        transform_result = SimpleNamespace(documents=[SimpleNamespace(id="doc-blogpost-456")])
+        service.client = SimpleNamespace(
+            get_page_by_id=AsyncMock(),
+            get_blogpost_by_id=AsyncMock(return_value=_raw_confluence_blogpost("456")),
+        )
+        service._load_space_context = AsyncMock(
+            return_value=("space-1", "Docs", {"author-1": "Author One"})
+        )
+        service._process_blogpost = AsyncMock(return_value=transform_result)
+        service._store_transform_result = AsyncMock()
+        service._sync_space_pages = AsyncMock(
+            side_effect=AssertionError("incremental blogpost sync must not call broad page sync")
+        )
+        service._sync_space_blogposts = AsyncMock(
+            side_effect=AssertionError("incremental blogpost sync must not call broad blogpost sync")
+        )
+
+        result = await service.incremental_sync(
+            space_key="DOC",
+            record_type="blogpost",
+            record_id="456",
+            event_kind="updated",
+            since=datetime(2026, 5, 15, 8, 0, tzinfo=timezone.utc),
+        )
+
+        self.assertEqual(result, {"synced": 1, "errors": 0, "skipped": False})
+        service.client.get_page_by_id.assert_not_awaited()
+        service.client.get_blogpost_by_id.assert_awaited_once_with(
+            "456",
+            body_format="storage",
+        )
+        service._sync_space_pages.assert_not_awaited()
+        service._sync_space_blogposts.assert_not_awaited()
+        service._process_blogpost.assert_awaited_once()
+        service._store_transform_result.assert_awaited_once_with(
+            entity_type="blogpost",
+            content_id="456",
+            space_key="DOC",
+            transform_result=transform_result,
+            audit_context=None,
+        )

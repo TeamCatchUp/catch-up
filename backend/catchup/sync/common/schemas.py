@@ -589,8 +589,6 @@ class IncrementalSyncContext(SyncContextBase):
     parent_id: str = ""
     event_kind: SyncEventKind = SyncEventKind.UPDATED
     last_event_at: str = ""
-    batch_sync_from: str | None = None
-    batch_generation_ceiling: int | None = None
     sync_type: SyncType = field(init=False, default=SyncType.INCREMENTAL)
 
     def __post_init__(self) -> None:

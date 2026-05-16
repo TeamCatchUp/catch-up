@@ -21,12 +21,10 @@ from catchup.sync.common.exceptions import SyncInternalException
 from catchup.sync.common.schemas import IncrementalSyncContext
 from catchup.sync.common.schemas import TargetSyncResult
 from catchup.worker.handlers.base_incremental_handler import BaseIncrementalHandler
-from catchup.worker.handlers.incremental_success_scope import IncrementalSuccessScope
 
 
 class JiraIncrementalHandler(BaseIncrementalHandler):
     connector = "jira"
-    incremental_success_scope = IncrementalSuccessScope.RECORD
 
     async def _get_dependencies(self, scope_id: str, cache: dict[str, object]):
         cloud_id = scope_id.strip()
