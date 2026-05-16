@@ -15,15 +15,13 @@ from catchup.rag.nodes.utils import log_node
 from catchup.rag.schemas.structures import MultiSearchRequest
 from catchup.rag.state import AgentState
 
-_PREVIEW_LIMIT = 10  # ToolMessage에서 한 번에 보여줄 신규 문서 수
-
 logger = structlog.get_logger()
+
+_PREVIEW_LIMIT = 10  # ToolMessage에서 한 번에 보여줄 신규 문서 수
 
 
 # ---- LLM에 바인딩할 tool 스키마 ----
 # 실제 실행은 search_tool_executor_node에서 처리한다.
-
-
 @tool
 def single_query_search(
     query: str,
@@ -105,6 +103,10 @@ def _dedup_tool_calls(tool_calls: list) -> list[dict]:
             used: set[str] = set()
             deduped = []
             for req in tc["args"].get("search_requests", []):
+                # LLM이 간혹 dict 대신 string을 반환하는 경우 방어 처리
+                if not isinstance(req, dict):
+                    logger.warning("multi_query_search_invalid_request", req=req)
+                    continue
                 tokens = req.get("keyword_tokens") or []
                 unique = [t for t in tokens if t not in used]
                 used.update(unique)
@@ -167,22 +169,25 @@ async def search_tool_executor_node(
         },
     )
 
-    # 에이전트가 이전 iteration까지 ToolMessage로 실제로 본 문서 id (누적).
-    # 이번 호출 안에서 새로 보여주는 id도 같은 set에 즉시 추가해, 같은 응답의 다른 search가
-    # 동일 문서를 또 미리보기로 노출하지 않도록 한다.
+    # agent가 ToolMessage로 본 doc ID 집합. 
+    # 중복 노출 방지 + 전역 인덱스 계산에 사용.
     seen_ids: set[str] = set(state.get("agent_seen_doc_ids") or [])
+    shown_ids: list[str] = []  # 이번 호출에서 노출한 doc ID 목록 (순서 보존)
 
     tool_messages: list[ToolMessage] = []
     all_docs: list[Document] = []
-    newly_shown_ids: list[str] = []
 
     def _summarize_hits(query: str, hits: list[Document]) -> str:
         unseen = [d for d in hits if get_document_id(d) not in seen_ids]
         shown = unseen[:_PREVIEW_LIMIT]
+
+        # len(seen_ids)는 이 배치를 추가하기 전 전체 노출 수 → 1-based 시작 인덱스
+        start = len(seen_ids) + 1
+
         for d in shown:
             doc_id = get_document_id(d)
             seen_ids.add(doc_id)
-            newly_shown_ids.append(doc_id)
+            shown_ids.append(doc_id)
 
         header = (
             f"Search complete: query='{query}' | "
@@ -190,7 +195,7 @@ async def search_tool_executor_node(
         )
         if not shown:
             return f"{header}\n(no new documents in this search)"
-        return f"{header}\n{build_docs_summary(shown, max_docs=_PREVIEW_LIMIT)}"
+        return f"{header}\n{build_docs_summary(shown, max_docs=_PREVIEW_LIMIT, start_index=start)}"
 
     for tool_call in deduped_tool_calls:
         tool_name = tool_call["name"]
@@ -273,7 +278,7 @@ async def search_tool_executor_node(
         tool_count=len(last_message.tool_calls),
         new_docs=len(all_docs),
         total_accumulated=len(merged),
-        agent_newly_shown=len(newly_shown_ids),
+        agent_newly_shown=len(shown_ids),
         agent_seen_total=len(seen_ids),
     )
 
@@ -289,5 +294,5 @@ async def search_tool_executor_node(
     return {
         "messages": tool_messages,
         "accumulated_docs": merged,
-        "agent_seen_doc_ids": (state.get("agent_seen_doc_ids") or []) + newly_shown_ids,
+        "agent_seen_doc_ids": (state.get("agent_seen_doc_ids") or []) + shown_ids,
     }

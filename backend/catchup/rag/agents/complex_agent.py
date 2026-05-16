@@ -12,7 +12,7 @@ from catchup.rag.nodes.utils import build_docs_summary
 from catchup.rag.nodes.utils import build_system_message
 from catchup.rag.nodes.utils import coerce_message_text
 from catchup.rag.nodes.utils import drop_orphaned_tool_calls
-from catchup.rag.nodes.utils import extract_essential_ids
+from catchup.rag.nodes.utils import extract_essential_ids_from_agent_view
 from catchup.rag.nodes.utils import extract_reason_for_stopping
 from catchup.rag.nodes.utils import log_node
 from catchup.rag.retryable import RETRYABLE_ERRORS
@@ -168,7 +168,11 @@ async def complex_agent_node(
     reasoning_update = {}
     reasoning = coerce_message_text(response.content)
     if not tool_calls:
-        essential_ids = extract_essential_ids(reasoning, accumulated_docs)
+        essential_ids = extract_essential_ids_from_agent_view(
+            reasoning,
+            accumulated_docs,
+            state.get("agent_seen_doc_ids") or [],
+        )
         reasoning_update = {
             "agent_reasoning": reasoning,
             "essential_doc_ids": list(essential_ids) if essential_ids else [],
