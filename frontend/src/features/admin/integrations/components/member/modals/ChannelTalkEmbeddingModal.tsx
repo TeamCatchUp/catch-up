@@ -71,6 +71,7 @@ function ModalBody({ onClose, onJobStart }: ModalBodyProps) {
 
   // 4) 선택 + 기간 state
   const {
+    visibleChannelIds,
     selectedChannelIds,
     selectedSpaceIds,
     channelPeriods,
@@ -79,10 +80,11 @@ function ModalBody({ onClose, onJobStart }: ModalBodyProps) {
     channelCount,
     spaceCount,
     isSubmitDisabled,
+    isAllSelected,
+    toggleVisibility,
     toggleChannel,
-    toggleAllChannels,
+    toggleAll,
     toggleSpace,
-    toggleChannelSpaces,
     setChannelPeriod,
     setSpacePeriod,
   } = useChannelTalkSelection(channels);
@@ -203,9 +205,10 @@ function ModalBody({ onClose, onJobStart }: ModalBodyProps) {
       <div className="border-edge-assistive flex flex-1 overflow-hidden border-t">
         <ChannelList
           channels={channels}
-          selectedChannelIds={selectedChannelIds}
-          onToggleChannel={toggleChannel}
-          onToggleAll={toggleAllChannels}
+          visibleChannelIds={visibleChannelIds}
+          isAllSelected={isAllSelected}
+          onToggleVisibility={toggleVisibility}
+          onToggleAll={toggleAll}
         />
 
         <div className="custom-scrollbar flex flex-1 flex-col gap-6 overflow-y-auto">
@@ -216,10 +219,11 @@ function ModalBody({ onClose, onJobStart }: ModalBodyProps) {
               <div key={channel.channel_id} className="animate-list-item-enter">
                 <ChannelGroup
                   channel={channel}
+                  selectedChannelIds={selectedChannelIds}
                   selectedSpaceIds={selectedSpaceIds}
                   channelPeriod={channelPeriods[channel.channel_id] ?? DEFAULT_PERIOD}
                   spacePeriods={spacePeriods}
-                  onToggleChannelSpaces={toggleChannelSpaces}
+                  onToggleChannel={toggleChannel}
                   onToggleSpace={toggleSpace}
                   onChangeChannelPeriod={setChannelPeriod}
                   onChangeSpacePeriod={setSpacePeriod}
