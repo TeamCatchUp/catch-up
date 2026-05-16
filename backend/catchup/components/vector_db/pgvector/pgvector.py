@@ -493,27 +493,14 @@ class PGVectorService(BaseVectorDbService):
             for row in results
         ]
 
-    def similarity_search(
-        self,
-        query: str,
-        k: int = 4,
-        search_type: str = "similarity",
-        filter: dict[str, Any] | None = None,
-        **kwargs,
-    ) -> list[Document]:
-        """
-        단독 Similarity Search 유틸 함수.
-        Hybrid Search에서는 사용되지 않는다.
-        """
-        search_kwargs = {"k": k, "filter": filter, **kwargs}
-        retriever = self.vector_store.as_retriever(
-            search_type=search_type, search_kwargs=search_kwargs
-        )
-        return retriever.invoke(query)
-
-    
-    def get_documents_by_ids(self, ids: list[str]) -> list[Document]:
-        """Graph 확장 시 노드를 특정하기 위한 anchor id 리스트를 반환한다."""
+    @override
+    async def fetch_by_ids(self, ids: list[str]) -> list[Document]:
+        """과거 검색 턴 doc_ids를 DB에서 lazy fetch한다 (reuse 파이프라인용)."""
         if not ids:
             return []
-        return self.vector_store.get_by_ids(ids)
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(
+            rag_executors.vector_search_executor,
+            self.vector_store.get_by_ids,
+            ids,
+        )

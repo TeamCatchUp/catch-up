@@ -12,6 +12,7 @@ from catchup.rag.schemas.prompt_settings import PromptSettings
 from catchup.rag.schemas.sources import BaseSource
 from catchup.rag.schemas.structures import PipelinePlan
 from catchup.rag.schemas.structures import SearchStep
+from catchup.rag.schemas.structures import SearchTurnMeta
 from catchup.rag.schemas.structures import VectorDbSearchQuery
 
 
@@ -58,9 +59,14 @@ class AgentState(TypedDict):
     # engine.py에서 초기화 안 함 (체크포인터 유지)
     turn_number: int  
 
-    # 직전 검색 턴(simple/standard/complex)의 rerank 결과.
+    # 직전 검색 턴(simple/standard/complex)의 rerank 결과. hot cache.
     # 검색 턴마다 overwrite. reuse 턴에서는 갱신 안 됨.
     doc_cache: list[Document]
+
+    # 모든 검색 턴(simple/standard/complex)의 경량 메타데이터 누적.
+    # doc_ids만 저장 (full Document 미보관). reuse 시 필요한 과거 턴 docs를 DB에서 lazy fetch.
+    # 리스트 내 순서(1-based)가 supervisor에게 노출되는 검색 턴 ID 역할.
+    search_turn_history: list[SearchTurnMeta]
 
     # 에이전트의 최종 추론 결과 (최종 답변 노드에 전달용)
     agent_reasoning: str | None

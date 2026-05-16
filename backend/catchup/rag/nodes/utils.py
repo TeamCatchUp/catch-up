@@ -24,6 +24,7 @@ from catchup.costs.utils import extract_token_usages
 from catchup.prompts.loader import prompt_loader
 from catchup.rag.policies import FALLBACK_ANSWER
 from catchup.rag.schemas.sources import BaseSource
+from catchup.rag.schemas.structures import SearchTurnMeta
 
 # node 로깅 데코레이터
 logger = structlog.get_logger("catchup.graph")
@@ -42,10 +43,40 @@ def drop_orphaned_tool_calls(messages: list[BaseMessage]) -> list[BaseMessage]:
     return messages
 
 
+def build_search_history_summary(snapshots: list) -> str:
+    """search_turn_history를 supervisor용 경량 요약으로 변환한다.
+
+    리스트 내 순서(1-based)가 supervisor에게 노출되는 검색 턴 ID 역할을 한다.
+    마지막 항목은 hot cache(previously_retrieved_documents에 전문 표시)임을 명시한다.
+
+    체크포인터 복원 시 dict로 역직렬화될 수 있으므로 dict/Pydantic 모두 처리한다.
+    """
+    if not snapshots:
+        return ""
+
+    lines = []
+    last_idx = len(snapshots)
+
+    for i, raw in enumerate(snapshots, 1):
+        snap = SearchTurnMeta.model_validate(raw) if isinstance(raw, dict) else raw
+        src_str = ", ".join(
+            f"{src}:{cnt}" for src, cnt in snap.source_distribution.items()
+        )
+        total = sum(snap.source_distribution.values())
+        label = f"[Search {i}] (hot cache)" if i == last_idx else f"[Search {i}]"
+        lines.append(
+            f'{label}\n'
+            f'Query: "{snap.rewritten_query}"\n'
+            f'Sources: {src_str} ({total} docs)'
+        )
+
+    return "\n\n".join(lines)
+
+
 def build_docs_summary(docs: list[Document], max_docs: int = 20) -> str:
     """Agent가 현재까지 수집된 지식의 '내용'을 파악할 수 있도록 요약 제공."""
     if not docs:
-        return "No documents collected yet."
+        return ""
 
     source_counts = Counter(d.metadata.get("source", "unknown") for d in docs)
     source_str = ", ".join(f"{src}:{cnt}" for src, cnt in source_counts.items())
@@ -58,16 +89,13 @@ def build_docs_summary(docs: list[Document], max_docs: int = 20) -> str:
         source = doc.metadata.get("source", "unknown")
         temporal = resolve_temporal_context(doc.metadata)
 
-        # Confluence는 원문 청크이므로 길이를 제한, 나머지는 요약본이므로 전문 활용
-        if source in ("confluence", "channel_talk"):
-            content = doc.page_content[:800].replace("\n", " ")
-            if len(doc.page_content) > 800:
-                content += "..."
-        else:
-            # Slack, Jira, GitHub 등은 page_content가 이미 영문 요약본
-            content = doc.page_content.replace("\n", " ")
+        raw = doc.page_content[:300].strip()
+        if len(doc.page_content) > 300:
+            raw += "..."
+        content = re.sub(r"[ \t]+", " ", raw)
+        content = re.sub(r"\n{3,}", "\n\n", content)
 
-        lines.append(f"[{i}] ({source}) {temporal}\n    {content}")
+        lines.append(f"[{i}] ({source}) {temporal}\n{content}")
 
     if len(docs) > max_docs:
         lines.append(

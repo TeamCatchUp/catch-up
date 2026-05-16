@@ -61,7 +61,7 @@ async def complex_planner_node(
         response, token_usages = await ainvoke_llm_with_token_usage(
             llm=structured_llm,
             messages=[system_message, HumanMessage(content=query)],
-            semaphore=rag_semaphores.llm_large,
+            semaphore=rag_semaphores.llm_small,
             timeout=timeout,
         )
         plan: SearchPlan = response.get("parsed")
@@ -143,7 +143,7 @@ async def complex_agent_node(
         response, token_usages = await ainvoke_llm_with_token_usage(
             llm=llm_with_tools,
             messages=[system_message, HumanMessage(content=query)] + existing_messages,
-            semaphore=rag_semaphores.llm_large,
+            semaphore=rag_semaphores.llm_small,
         )
     except RETRYABLE_ERRORS as e:
         raise e
