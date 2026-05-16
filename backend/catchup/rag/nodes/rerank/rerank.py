@@ -96,11 +96,10 @@ async def rerank_node(state: AgentState, rerank_service: BaseRerankService):
             "rerank_count": 0,
         }
     else:
-        # Floor 기반 비례 가산점 부스팅을 적용한다.
-        final_docs, rerank_metadata = _apply_boosting(
+        final_docs, rerank_metadata = _apply_two_pool_selection(
             reranked_docs=reranked_docs,
             essential_doc_ids=essential_doc_ids,
-            total_k=total_k
+            total_k=total_k,
         )
 
         # 에이전트가 ToolMessage로 본 적 없는 문서가 최종 답변 풀에 얼마나 들어왔는지 측정.
@@ -138,7 +137,9 @@ async def rerank_node(state: AgentState, rerank_service: BaseRerankService):
             pipeline_type=pipeline_type,
             final_doc_count=len(final_docs),
             total_k=total_k,
-            boosted_count=len(rerank_metadata["boosted_ids"]),
+            bypass_count=rerank_metadata["bypass_count"],
+            bypass_budget=rerank_metadata["bypass_budget"],
+            reranker_essential_recall=rerank_metadata["reranker_essential_recall"],
             agent_seen_total=len(agent_seen),
             unseen_in_final=unseen_in_final,
             confirmed_essential_count=len(confirmed_essential),
@@ -150,81 +151,6 @@ async def rerank_node(state: AgentState, rerank_service: BaseRerankService):
             "rerank_metadata": rerank_metadata,
             "confirmed_essential_doc_ids": confirmed_essential,
         }
-
-
-def _apply_boosting(
-    reranked_docs: list[Document], 
-    essential_doc_ids: set[str], 
-    total_k: int,
-    boost_ratio: float = 0.2  # 점수 격차의 20% 만큼 가산한다.
-) -> tuple[list[Document], dict]:
-    """리랭커 점수의 분포에 비례하여 에이전트 지목 문서에 가산점을 부여한다.
-
-    alignment_score는 "에이전트 지목 ∩ reranker top_k / 에이전트 지목"으로,
-    essential_doc_ids가 비어 있으면(예: max_iter fallback) 0.0으로 처리한다.
-    "신호 없음 = 영향 없음"으로 보아 score 평균이 위로 왜곡되지 않게 한다.
-    """
-    if not reranked_docs:
-        return [], {"boosted_ids": [], "alignment_score": 0.0}
-
-    scores = [d.metadata.get("relevance_score", 0.0) for d in reranked_docs]
-    min_score = min(scores)
-    max_score = max(scores)
-    score_range = max_score - min_score
-
-    # Floor를 적용해 동점 상황에서도 에이전트의 판단이 타이 브레이커가 되도록 보장한다.
-    effective_range = max(score_range, 0.05)
-    boost_value = boost_ratio * effective_range
-
-    boosted_docs = []
-    boosted_ids = []
-    
-    # 리랭커 Top K 내에 에이전트 지목 문서가 얼마나 있는지 확인한다 (Alignment).
-    initial_top_k_ids = {get_document_id(d) for d in reranked_docs[:total_k]}
-    hits = essential_doc_ids.intersection(initial_top_k_ids)
-    alignment_score = len(hits) / len(essential_doc_ids) if essential_doc_ids else 0.0
-
-    for doc in reranked_docs:
-        doc_id = get_document_id(doc)
-        original_score = doc.metadata.get("relevance_score", 0.0)
-        
-        is_essential = doc_id in essential_doc_ids
-        final_score = original_score + (boost_value if is_essential else 0.0)
-        
-        # 메타데이터를 업데이트한다: 답변 생성 노드와 관측에 꼭 필요한 필드만 남긴다.
-        doc.metadata.update({
-            "original_rerank_score": original_score,
-            "boosted_score": final_score,
-            "is_agent_cited": is_essential
-        })
-        
-        if is_essential:
-            boosted_ids.append(doc_id)
-            logger.debug(
-                "document_boosted", 
-                id=doc_id, 
-                original=original_score, 
-                boosted=final_score,
-                range=score_range
-            )
-        
-        boosted_docs.append(doc)
-
-    # 최종 점수 기준으로 재정렬한다.
-    boosted_docs.sort(key=lambda x: x.metadata["boosted_score"], reverse=True)
-    final_docs = boosted_docs[:total_k]
-
-    # 글로벌 통계는 metadata에 모은다.
-    metadata = {
-        "boosted_ids": boosted_ids,
-        "alignment_score": alignment_score,
-        "score_range": float(score_range),
-        "effective_range": float(effective_range),
-        "boost_value": float(boost_value),
-        "boost_ratio": boost_ratio
-    }
-
-    return final_docs, metadata
 
 
 def _apply_two_pool_selection(
