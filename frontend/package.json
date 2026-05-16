@@ -85,8 +85,5 @@
     "vite": "^8.0.13",
     "vite-plugin-svgr": "^5.2.0",
     "vitest": "^4.1.6"
-  },
-  "overrides": {
-    "postcss": "^8.5.14"
   }
 }
