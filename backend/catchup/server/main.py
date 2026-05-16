@@ -68,7 +68,6 @@ from catchup.server.sync.api import router as sync_runtime_router
 from catchup.server.workflow_credentials.api import (
     router as workflow_credentials_router,
 )
-from catchup.sync.stream_runtime.startup_cleanup import run_startup_sync_stream_cleanup
 from catchup.utils.client import _shared_client
 from catchup.utils.redis import check_all_redis_health
 from catchup.utils.redis import get_redis_client
@@ -273,26 +272,6 @@ async def lifespan(app: FastAPI):
             immediate=True,
         )
         raise
-
-    try:
-        cleanup_result = await run_startup_sync_stream_cleanup()
-        should_log_cleanup_result = (
-            cleanup_result.enabled
-            or cleanup_result.skipped_reason != "trigger_not_found"
-        )
-        if should_log_cleanup_result:
-            logger.info(
-                "sync_stream_startup_cleanup_completed",
-                context="server_startup",
-                **cleanup_result.to_log_fields(),
-            )
-    except Exception as e:
-        logger.error(
-            "sync_stream_startup_cleanup_failed",
-            context="server_startup",
-            error=str(e),
-            exc_info=True,
-        )
 
     if settings.SYNC_WORKER_AUTOSTART:
         sync_worker_stop_event = asyncio.Event()
