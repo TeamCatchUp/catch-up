@@ -147,7 +147,8 @@ async def supervisor_node(
 
         # rewrite 노드가 없는 파이프라인은 후속 노드가 rewritten_query를 참조하므로
         # supervisor에서 미리 original_query 값으로 채워둔다.
-        _NO_REWRITE_PIPELINES = {"clarify", "direct_answer"}
+        # reuse: generate_final_answer_node의 LARGE LLM이 conversation_history로 coreference 해소.
+        _NO_REWRITE_PIPELINES = {"clarify", "direct_answer", "reuse"}
         if pipeline_plan.pipeline_type in _NO_REWRITE_PIPELINES:
             result["rewritten_query"] = query
 
