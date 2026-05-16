@@ -7,6 +7,7 @@ from catchup.costs.utils import token_usage
 from catchup.prompts.loader import prompt_loader
 from catchup.rag.nodes.utils import ainvoke_llm_with_token_usage
 from catchup.rag.nodes.utils import build_docs_summary
+from catchup.rag.nodes.utils import build_search_history_summary
 from catchup.rag.nodes.utils import build_system_message
 from catchup.rag.nodes.utils import get_conversation_history
 from catchup.rag.nodes.utils import log_node
@@ -43,16 +44,21 @@ async def supervisor_node(
     # engine.py에서 초기화하지 않으므로 체크포인터를 통해 턴 간 누적된다.
     current_turn = state.get("turn_number", 0) + 1
 
-    # doc_cache는 직전 검색 턴의 결과.
-    # supervisor가 전체를 보고 reuse 여부를 판단한다.
+    # doc_cache: 직전 검색 턴의 full docs (hot cache). supervisor에게 전문 제공.
     doc_cache = state.get("doc_cache", [])
     retrieved_docs_summary = build_docs_summary(doc_cache, max_docs=len(doc_cache))
+
+    # search_turn_history: 모든 검색 턴의 경량 메타데이터.
+    # supervisor가 과거 검색 이력 전체를 보고 reuse 범위를 판단한다.
+    search_turn_history = state.get("search_turn_history", [])
+    search_history_summary = build_search_history_summary(search_turn_history)
 
     slack_thread_context = state.get("slack_thread_context")
 
     system_prompt = prompt_loader.get_prompt(
         "rag/supervisor",
         retrieved_docs_summary=retrieved_docs_summary,
+        search_history_summary=search_history_summary,
         sources=list(SOURCE_METADATA.values()),
         slack_thread_context=slack_thread_context,
         **global_context,
@@ -117,7 +123,8 @@ async def supervisor_node(
             if pipeline_plan.inferred_tool_filters
             else None,
             doc_cache_size=len(doc_cache),
-            history_len=len(history),
+            search_history_len=len(search_turn_history),
+            conversation_history_len=len(history),
         )
 
         # max_pipeline_type 상한 적용 (engine.py에서 mode → max_pipeline_type 변환)

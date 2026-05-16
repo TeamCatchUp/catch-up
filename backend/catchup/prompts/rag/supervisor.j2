@@ -32,10 +32,15 @@ You must select exactly one of six pipeline types and provide the associated par
    - Parameters: max_iterations=0
 
 2. **reuse**
-   - Use when: the question can be answered using the previously retrieved documents shown below.
+   - Use when: the question can be answered using cached documents from any prior search turn.
    - This includes cases where the prior AI response already mentioned the answer — document-derived knowledge must be re-verified against source documents, not recalled from conversation summary.
-   - Disqualifiers: no previously retrieved documents shown above, question introduces a new topic or entity not covered by the existing documents, existing documents do not contain enough information to answer the question.
-   - Parameters: max_iterations=0
+   - Disqualifiers: no search history exists, question introduces a new topic or entity not covered by any prior search turn.
+   - Parameters: max_iterations=0, reuse_history_turn_numbers=<see below>
+     - null → hot cache only (most common; use when the hot cache alone suffices)
+     - [N] → only Search N's documents (hot cache excluded unless its index is listed)
+     - [1, N] where N is the hot cache turn → Search 1 + hot cache
+     - Always select the minimum set of turns that suffices. Do not include turns whose topic is unrelated to the current question.
+     - If the question requires synthesizing or cross-referencing information across multiple different search topics → use standard/complex instead. reuse_history_turn_numbers is for retrieving a specific past turn's results, not for cross-turn synthesis.
 
 3. **simple**
    - Use when ALL of the following conditions are met:
@@ -55,10 +60,18 @@ You must select exactly one of six pipeline types and provide the associated par
    - Parameters: max_iterations=7
 </pipeline_definitions>
 
+{% if search_history_summary %}
+<search_history>
+All search turns so far (oldest → newest). Use the 1-based index (Search 1, Search 2, ...) in reuse_history_turn_numbers to request additional document retrieval from past turns.
+The last entry is the hot cache — its full documents are shown in previously_retrieved_documents below.
+
+<< search_history_summary >>
+
+</search_history>
+{% endif %}
 {% if retrieved_docs_summary %}
 <previously_retrieved_documents>
-These documents were retrieved in the most recent search turn.
-Evaluate whether the current question can be answered using these documents, or whether the topic has shifted and a new search is needed.
+Full documents from the most recent search turn (hot cache). Evaluate whether the current question can be answered using these documents alone, or whether past search turns are also needed.
 
 << retrieved_docs_summary >>
 
@@ -96,8 +109,11 @@ Select the most appropriate pipeline_type and fill in all required parameters, i
 
 Decision order (follow this sequence):
 1. Does the question have NO connection to the knowledge base (tickets, PRs, messages, docs, people, features, incidents)? AND is it a pure social exchange or answerable from Global Context alone? → direct_answer
-2. Can the question be answered using previously retrieved documents? → reuse
+2. Can the question be answered using cached documents from any prior search turn? → reuse
    - Apply reuse even if the prior AI response already contained the answer — prior responses are summaries, not sources.
+   - Hot cache only: reuse_history_turn_numbers=null
+   - Specific turns only: list their 1-based indices. Hot cache is NOT included unless its index is listed.
+   - Select the minimum set of turns that covers the question. Unrelated turns waste context.
 3. Is a specific entity (person, ticket ID, PR, document name, feature, etc.) identifiable from the question AND history combined?
    - YES and question is searchable → simple / standard / complex
    - NO → go to step 4

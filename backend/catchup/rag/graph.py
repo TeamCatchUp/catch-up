@@ -114,6 +114,7 @@ def get_compiled_graph(
     # Subgraphs
     reuse_subgraph = build_reuse_subgraph(
         llm_large_stream=llm_large_stream,
+        vector_db_service=vector_db_service,
     )
 
     simple_subgraph = build_simple_subgraph(
