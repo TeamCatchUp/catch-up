@@ -1,3 +1,4 @@
+import math
 import time
 from collections import Counter
 from collections import defaultdict
@@ -221,6 +222,74 @@ def _apply_boosting(
         "effective_range": float(effective_range),
         "boost_value": float(boost_value),
         "boost_ratio": boost_ratio
+    }
+
+    return final_docs, metadata
+
+
+def _apply_two_pool_selection(
+    reranked_docs: list[Document],
+    essential_doc_ids: set[str],
+    total_k: int,
+) -> tuple[list[Document], dict]:
+    """reranker top-K를 두 풀로 분리해 essential cut-off 문서를 보장한다.
+
+    Pool A: rerank score 상위 (total_k - len(pool_b))개
+    Pool B: reranker가 cut-off한 essential 문서 중 score 상위 essential_budget개
+    essential_budget = floor(total_k * 0.3)
+    """
+    if not reranked_docs:
+        return [], {
+            "reranker_essential_recall": 0.0,
+            "cut_off_essential_count": 0,
+            "bypass_count": 0,
+            "bypass_budget": 0,
+        }
+
+    essential_budget = math.floor(total_k * 0.3)
+    reranker_top_k_ids = {get_document_id(d) for d in reranked_docs[:total_k]}
+
+    reranker_essential_recall = (
+        len(essential_doc_ids & reranker_top_k_ids) / len(essential_doc_ids)
+        if essential_doc_ids
+        else 0.0
+    )
+
+    cut_off_essential = [
+        d for d in reranked_docs[total_k:]
+        if get_document_id(d) in essential_doc_ids
+    ]
+
+    pool_b = sorted(
+        cut_off_essential,
+        key=lambda d: d.metadata.get("relevance_score", 0.0),
+        reverse=True,
+    )[:essential_budget]
+
+    bypass_ids = {get_document_id(d) for d in pool_b}
+    pool_a = reranked_docs[: total_k - len(pool_b)]
+    final_docs = pool_a + pool_b
+
+    rank_map = {
+        get_document_id(d): rank
+        for rank, d in enumerate(reranked_docs, start=1)
+    }
+    for doc in final_docs:
+        doc_id = get_document_id(doc)
+        doc.metadata["original_rerank_score"] = doc.metadata.get(
+            "relevance_score", 0.0
+        )
+        doc.metadata["is_agent_essential"] = doc_id in essential_doc_ids
+        doc.metadata["reranker_rank"] = rank_map.get(doc_id, -1)
+        doc.metadata["selection_pool"] = (
+            "essential_bypass" if doc_id in bypass_ids else "reranker"
+        )
+
+    metadata = {
+        "reranker_essential_recall": reranker_essential_recall,
+        "cut_off_essential_count": len(cut_off_essential),
+        "bypass_count": len(pool_b),
+        "bypass_budget": essential_budget,
     }
 
     return final_docs, metadata
