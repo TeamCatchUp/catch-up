@@ -3,6 +3,7 @@ from functools import partial
 from langgraph.graph import END
 from langgraph.graph import StateGraph
 
+from catchup.rag.agents.limit_extraction import extract_essential_node
 from catchup.rag.agents.standard_agent import collect_docs_node
 from catchup.rag.agents.standard_agent import standard_agent_node
 from catchup.rag.agents.tools.search_tools import search_tool_executor_node
@@ -24,7 +25,7 @@ def _route_after_agent(state: AgentState) -> str:
     pipeline_plan = state.get("pipeline_plan")
     max_iterations = pipeline_plan.max_iterations if pipeline_plan else 3
     if state.get("agent_iteration", 0) >= max_iterations:
-        return "collect_docs"
+        return "extract_essential"
 
     return "collect_docs"
 
@@ -56,6 +57,11 @@ def build_standard_react_subgraph(
         "tool_executor",
         partial(search_tool_executor_node, vector_db_service=vector_db_service),
     )
+    graph.add_node(
+        "extract_essential",
+        partial(extract_essential_node, llm=llm_small),
+        retry=BASE_RETRY_POLICY,
+    )
     graph.add_node("collect_docs", collect_docs_node)
     graph.add_node(
         "rerank",
@@ -77,10 +83,12 @@ def build_standard_react_subgraph(
         _route_after_agent,
         {
             "tool_executor": "tool_executor",
+            "extract_essential": "extract_essential",
             "collect_docs": "collect_docs",
         },
     )
     graph.add_edge("tool_executor", "standard_agent")
+    graph.add_edge("extract_essential", "collect_docs")
     graph.add_edge("collect_docs", "rerank")
     graph.add_edge("rerank", "merge_cache")
     graph.add_edge("merge_cache", "generate_final_answer")
