@@ -9,7 +9,6 @@ from catchup.prompts.loader import prompt_loader
 from catchup.rag.nodes.utils import ainvoke_llm_with_token_usage
 from catchup.rag.nodes.utils import build_system_message
 from catchup.rag.nodes.utils import coerce_message_text
-from catchup.rag.nodes.utils import drop_orphaned_tool_calls
 from catchup.rag.nodes.utils import extract_essential_ids_from_agent_view
 from catchup.rag.nodes.utils import log_node
 from catchup.rag.semaphores import rag_semaphores
@@ -32,18 +31,28 @@ async def extract_essential_node(
     """
     try:
         query = state.get("rewritten_query") or state.get("original_query", "")
-        all_messages = drop_orphaned_tool_calls(state.get("messages", []))
-        existing_messages = [
-            m for m in all_messages if isinstance(m, ToolMessage)
-        ]
+
+        # ToolMessage 내용을 plain text로 추출한다.
+        # ToolMessage 객체를 직접 넘기면 Bedrock API가 대응하는 tool_use 블록이
+        # 없다는 ValidationException을 발생시키므로 텍스트로 변환한다.
+        search_results = "\n\n---\n\n".join(
+            m.content
+            for m in state.get("messages", [])
+            if isinstance(m, ToolMessage) and m.content
+        )
+        user_message = HumanMessage(
+            content=(
+                f"Query: {query}\n\n"
+                f"Search results:\n{search_results}"
+            )
+        )
 
         system_prompt = prompt_loader.get_prompt("rag/agent_limit_extraction")
         system_message = build_system_message(system_prompt)
 
         response, token_usages = await ainvoke_llm_with_token_usage(
             llm=llm,
-            messages=[system_message, HumanMessage(content=query)]
-            + existing_messages,
+            messages=[system_message, user_message],
             semaphore=rag_semaphores.llm_small,
             timeout=10.0,
         )

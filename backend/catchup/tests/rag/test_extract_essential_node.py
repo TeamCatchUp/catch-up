@@ -6,6 +6,7 @@ from unittest.mock import patch
 import pytest
 from langchain_core.documents import Document
 from langchain_core.messages import AIMessage
+from langchain_core.messages import HumanMessage
 from langchain_core.messages import ToolMessage
 
 
@@ -90,11 +91,11 @@ async def test_returns_empty_list_when_no_tag():
 
 
 @pytest.mark.asyncio
-async def test_passes_existing_messages_as_history():
-    """state['messages']를 LLM history로 전달하고 state를 수정하지 않는다."""
+async def test_tool_message_content_embedded_in_user_message():
+    """ToolMessage 내용을 plain text로 변환해 HumanMessage에 담아 전달하고 state를 수정하지 않는다."""
     from catchup.rag.agents.limit_extraction import extract_essential_node
 
-    tool_msg = ToolMessage(content="search result", tool_call_id="call_1")
+    tool_msg = ToolMessage(content="[1] (slack) search result preview", tool_call_id="call_1")
     state = {
         "rewritten_query": "test query",
         "messages": [tool_msg],
@@ -115,6 +116,9 @@ async def test_passes_existing_messages_as_history():
     ):
         await extract_essential_node(state, llm=mock_llm)
 
-    assert any(isinstance(m, ToolMessage) for m in captured_messages)
+    # ToolMessage 객체가 아닌 HumanMessage로 변환돼야 한다 (Bedrock ValidationException 방지).
+    assert not any(isinstance(m, ToolMessage) for m in captured_messages)
+    user_msg = next(m for m in captured_messages if isinstance(m, HumanMessage))
+    assert "search result preview" in user_msg.content
     # state["messages"]는 변경되지 않아야 한다.
     assert len(state["messages"]) == 1
