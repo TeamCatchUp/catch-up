@@ -17,26 +17,31 @@ JiraApiClient, JiraFieldMapper, JiraTransformer, PGVectorRepository를 조합.
 """
 
 import asyncio
-from dataclasses import dataclass, field
 import logging
-from datetime import datetime, timedelta, timezone
-from typing import Any, Literal
+from dataclasses import dataclass
+from dataclasses import field
+from datetime import datetime
+from datetime import timedelta
+from datetime import timezone
+from typing import Any
+from typing import Literal
 
 from fastapi.concurrency import run_in_threadpool
 from langchain_core.documents import Document
 
+from catchup.components.summarizer import SummarizeRequest
+from catchup.components.summarizer import SummarizerService
+from catchup.components.summarizer import get_summarizer_service
+from catchup.components.vector_db.pgvector import PGVectorRepository
+from catchup.configs.config import settings
 from catchup.connectors.atlassian.token_manager import AtlassianTokenProvider
 from catchup.connectors.atlassian.utils import parse_atlassian_datetime
-from catchup.connectors.jira.client import (
-    JiraApiClient,
-    JiraApiError,
-    JiraRateLimitError,
-)
+from catchup.connectors.jira.client import JiraApiClient
+from catchup.connectors.jira.client import JiraApiError
+from catchup.connectors.jira.client import JiraRateLimitError
 from catchup.connectors.jira.field_mapper import JiraFieldMapper
-from catchup.connectors.jira.transformers import JiraTransformer, normalize_issue_type
-from catchup.components.vector_db.pgvector import PGVectorRepository
-from catchup.components.summarizer import SummarizerService, SummarizeRequest, get_summarizer_service
-from catchup.configs.config import settings
+from catchup.connectors.jira.transformers import JiraTransformer
+from catchup.connectors.jira.transformers import normalize_issue_type
 from catchup.db.engine import SessionLocal
 from catchup.db.jira import domain_repository as jira_entities
 from catchup.sync.audit import SyncAuditContext
@@ -1176,14 +1181,96 @@ class JiraIngestionService:
                 "skipped": False,
             }
 
-        result = await self._sync_project_issues(
+        result = await self._sync_exact_issue(
             project_key=project_key,
-            since=since,
+            record_id=record_id,
             audit_context=audit_context,
         )
         return {
-            "synced": int(result.get("issues", 0)) + int(result.get("epics", 0)),
+            "synced": int(result.get("synced", 0)),
             "errors": int(result.get("errors", 0)),
             "skipped": False,
         }
-            
+
+    async def _sync_exact_issue(
+        self,
+        *,
+        project_key: str,
+        record_id: str,
+        audit_context: SyncAuditContext | None,
+    ) -> dict[str, int]:
+        self._ensure_initialized()
+        issue_key = record_id.strip()
+        if not issue_key:
+            raise ValueError("jira incremental record_id is empty")
+
+        try:
+            project_cache, sprint_cache = await self._load_project_sync_context(
+                project_key,
+            )
+            self.transformer.project_cache = project_cache
+            self.transformer.sprint_cache = sprint_cache
+        except Exception as exc:
+            logger.warning(
+                "[JIRA][INCREMENTAL] Failed to load caches, continuing without enrichment: project_key=%s, issue_key=%s, error=%s",
+                project_key,
+                issue_key,
+                exc,
+            )
+
+        try:
+            issue_data = await self.client.get_issue(issue_key)
+        except JiraRateLimitError:
+            raise
+        except JiraApiError as exc:
+            logger.warning(
+                "[JIRA][INCREMENTAL] Failed to fetch exact issue: cloud_id=%s, project_key=%s, issue_key=%s, error=%s",
+                self.cloud_id,
+                project_key,
+                issue_key,
+                exc,
+            )
+            return {"synced": 0, "errors": 1}
+
+        try:
+            document = self.transformer.transform_issue(issue_data, self.site_url)
+        except Exception as exc:
+            logger.warning(
+                "[JIRA][INCREMENTAL] Failed to transform exact issue: cloud_id=%s, project_key=%s, issue_key=%s, error=%s",
+                self.cloud_id,
+                project_key,
+                issue_key,
+                exc,
+            )
+            return {"synced": 0, "errors": 1}
+
+        try:
+            documents = [document]
+            if self.summarizer:
+                documents = await self._summarize_documents(
+                    documents,
+                    project_key=project_key,
+                    audit_context=audit_context,
+                )
+            await self.repository.upsert_documents(
+                documents,
+                [doc.id for doc in documents],
+                audit_context=audit_context,
+                context=(
+                    f"entity_type={self._classify_record_type(issue_data)},"
+                    f"project_key={project_key},"
+                    f"mode=incremental_exact,"
+                    f"doc_count={len(documents)}"
+                ),
+            )
+            return {"synced": len(documents), "errors": 0}
+        except Exception as exc:
+            logger.error(
+                "[JIRA][INCREMENTAL] Failed to upsert exact issue: cloud_id=%s, project_key=%s, issue_key=%s, error=%s",
+                self.cloud_id,
+                project_key,
+                issue_key,
+                exc,
+                exc_info=True,
+            )
+            return {"synced": 0, "errors": 1}
