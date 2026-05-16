@@ -90,11 +90,12 @@ def get_compiled_graph(
         max_attempts=rag_max_attempts,
     ).get_llm()
 
-    # LARGE, streaming, extended thinking — standard_agent, complex_planner, complex_agent.
+    # SMALL, streaming, extended thinking — standard_agent, complex_planner, complex_agent.
+    # Haiku 4.5가 extended thinking을 지원하므로 SMALL로 전환해 비용을 절감한다.
     # tool-calling/structured-output 응답이라 response 부분은 짧게 캡(1024)해 총 wall-clock을 제한한다.
     llm_thinking = get_llm_service(
         LlmProvider.AWS_BEDROCK,
-        ModelCapacity.LARGE,
+        ModelCapacity.SMALL,
         streaming=True,
         isolated=True,
         extended_thinking=True,
