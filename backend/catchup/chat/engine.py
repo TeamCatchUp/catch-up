@@ -322,7 +322,7 @@ class ChatService:
                     score_id=f"{trace_id}-rerank-stats",
                     name="rerank_stats",
                     trace_id=trace_id,
-                    value=rerank_metadata.get("alignment_score", 0.0),
+                    value=rerank_metadata.get("reranker_essential_recall", 0.0),
                     data_type="NUMERIC",
                     comment=str(rerank_metadata),
                 )
