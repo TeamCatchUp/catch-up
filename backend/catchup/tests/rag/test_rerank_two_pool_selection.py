@@ -1,6 +1,4 @@
 # backend/catchup/tests/rag/test_rerank_two_pool_selection.py
-import math
-
 import pytest
 from langchain_core.documents import Document
 
