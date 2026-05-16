@@ -8,6 +8,7 @@ from typing import runtime_checkable
 
 from pydantic import BaseModel
 from pydantic import ConfigDict
+from pydantic import Field
 from pydantic import ValidationInfo
 from pydantic import field_validator
 from pydantic import model_validator
@@ -58,11 +59,24 @@ class SyncExecutionResult(BaseModel):
     connector: ConnectorKey
     tenant_id: str
     target: str
+    persisted_count: int = 0
+    skipped_count: int = 0
+    failed_count: int = 0
+    deleted_count: int = 0
+    metadata: dict[str, object] = Field(default_factory=dict)
 
     @field_validator("tenant_id", "target")
     @classmethod
     def _validate_required_text(cls, value: str, info: ValidationInfo) -> str:
         return require_text(value, info.field_name or "field")
+
+    def connector_log_summary(self) -> Mapping[str, object]:
+        return {
+            "persisted_count": self.persisted_count,
+            "skipped_count": self.skipped_count,
+            "failed_count": self.failed_count,
+            "deleted_count": self.deleted_count,
+        }
 
 
 @runtime_checkable
