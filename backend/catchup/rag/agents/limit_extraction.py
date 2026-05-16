@@ -2,6 +2,7 @@
 import structlog
 from langchain.chat_models import BaseChatModel
 from langchain_core.messages import HumanMessage
+from langchain_core.messages import ToolMessage
 
 from catchup.costs.utils import token_usage
 from catchup.prompts.loader import prompt_loader
@@ -31,7 +32,10 @@ async def extract_essential_node(
     """
     try:
         query = state.get("rewritten_query") or state.get("original_query", "")
-        existing_messages = drop_orphaned_tool_calls(state.get("messages", []))
+        all_messages = drop_orphaned_tool_calls(state.get("messages", []))
+        existing_messages = [
+            m for m in all_messages if isinstance(m, ToolMessage)
+        ]
 
         system_prompt = prompt_loader.get_prompt("rag/agent_limit_extraction")
         system_message = build_system_message(system_prompt)
