@@ -1,12 +1,22 @@
 from __future__ import annotations
 
+from datetime import datetime
+from datetime import timezone
+
 from catchup.audit.actions import IncrementalSyncAction
 from catchup.audit.metadata import IncrementalRecordAuditMetadata
 from catchup.audit.utils import audit_log
+from catchup.connector_core.adapters.github import (
+    GithubRepositoryIncrementalSyncExecutionRequest,
+)
+from catchup.connector_core.adapters.github import GithubRepositorySyncAdapter
+from catchup.connector_core.application.sync_ingestion import run_sync_ingestion
+from catchup.connector_core.ports.sync_ingestion import SyncWindow
 from catchup.connectors.github.factory import create_github_ingestion_service
-from catchup.sync.common.exceptions import SyncInternalException
-from catchup.sync.common.schemas import IncrementalSyncContext, TargetSyncResult
 from catchup.sync.audit import SyncAuditContext
+from catchup.sync.common.exceptions import SyncInternalException
+from catchup.sync.common.schemas import IncrementalSyncContext
+from catchup.sync.common.schemas import TargetSyncResult
 from catchup.worker.handlers.base_incremental_handler import BaseIncrementalHandler
 
 
@@ -43,29 +53,37 @@ class GithubIncrementalHandler(BaseIncrementalHandler):
         if not parent_id:
             raise ValueError("github repository id is empty")
 
-        result = await service.incremental_sync(
-            repo_id=int(parent_id),
-            record_type=context.record_type or "",
-            record_id=context.record_id or "",
-            event_kind=context.event_kind or "updated",
-            since=self._resolve_since(context),
-            audit_context=SyncAuditContext(
-                connector=context.connector,
-                scope_id=context.scope_id,
-                target_id=context.target_id,
-                job_id=context.job_id,
-                task_id=context.event_id,
+        since = self._resolve_since(context)
+        result = await run_sync_ingestion(
+            port=GithubRepositorySyncAdapter(service=service),
+            execution=GithubRepositoryIncrementalSyncExecutionRequest(
+                tenant_id=context.scope_id,
+                repo_id=int(parent_id),
+                record_type=context.record_type or "",
+                record_id=context.record_id or "",
+                event_kind=context.event_kind or "updated",
+                since=since,
+                audit_context=SyncAuditContext(
+                    connector=context.connector,
+                    scope_id=context.scope_id,
+                    target_id=context.target_id,
+                    job_id=context.job_id,
+                    task_id=context.event_id,
+                ),
+            ),
+            sync_window=SyncWindow(
+                window_start=since,
+                window_end=datetime.now(timezone.utc),
             ),
         )
 
-        error_count = int(result.get("errors", 0))
-        if error_count > 0:
+        if result.failed_count > 0:
             raise SyncInternalException(
                 "github incremental sync failed",
                 metadata={"record_key": context.record_key},
             )
         return TargetSyncResult(
-            synced_count=int(result.get("synced", 0)),
-            error_count=error_count,
-            skipped=bool(result.get("skipped", False)),
+            synced_count=result.persisted_count + result.deleted_count,
+            error_count=result.failed_count,
+            skipped=result.skipped,
         )

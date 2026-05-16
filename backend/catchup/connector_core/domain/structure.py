@@ -8,6 +8,9 @@ from enum import StrEnum
 class ConnectorKey(StrEnum):
     JIRA = "jira"
     CHANNEL_TALK = "channel_talk"
+    SLACK = "slack"
+    GITHUB = "github"
+    CONFLUENCE = "confluence"
 
 
 class ConnectorBoundary(StrEnum):

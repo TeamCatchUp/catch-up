@@ -20,24 +20,29 @@ GitHub REST API v3를 사용하며, GitHub App Installation Token으로 인증.
 
 import asyncio
 import logging
-from collections.abc import Awaitable, Callable
-from datetime import datetime, timezone
-from typing import Any, AsyncIterator, Literal
+from collections.abc import Awaitable
+from collections.abc import Callable
+from dataclasses import dataclass
+from datetime import datetime
+from datetime import timezone
+from typing import Any
+from typing import AsyncIterator
+from typing import Literal
 
 from githubkit import GitHub
-from githubkit.exception import RequestFailed, RequestTimeout
+from githubkit.exception import RequestFailed
+from githubkit.exception import RequestTimeout
+
+from catchup.configs.config import settings
 from catchup.connectors.base.retry import parse_reset_timestamp_header
 from catchup.connectors.base.retry import parse_retry_after_header
-from catchup.connectors.github.queries import (
-    ISSUE_BY_NUMBER_QUERY,
-    ISSUE_NUMBERS_QUERY,
-    ISSUES_QUERY,
-    ORG_MEMBERS_QUERY,
-    PULL_REQUEST_BY_NUMBER_QUERY,
-    PULL_REQUEST_NUMBERS_QUERY,
-    PULL_REQUESTS_QUERY,
-)
-from catchup.configs.config import settings
+from catchup.connectors.github.queries import ISSUE_BY_NUMBER_QUERY
+from catchup.connectors.github.queries import ISSUE_NUMBERS_QUERY
+from catchup.connectors.github.queries import ISSUES_QUERY
+from catchup.connectors.github.queries import ORG_MEMBERS_QUERY
+from catchup.connectors.github.queries import PULL_REQUEST_BY_NUMBER_QUERY
+from catchup.connectors.github.queries import PULL_REQUEST_NUMBERS_QUERY
+from catchup.connectors.github.queries import PULL_REQUESTS_QUERY
 
 logger = logging.getLogger(__name__)
 
@@ -46,12 +51,10 @@ logger = logging.getLogger(__name__)
 # 예외 클래스 정의
 # ============================================================
 
-from catchup.connectors.base import (
-    AuthenticationError,
-    ConnectorApiError,
-    NotFoundError,
-    RateLimitError,
-)
+from catchup.connectors.base import AuthenticationError
+from catchup.connectors.base import ConnectorApiError
+from catchup.connectors.base import NotFoundError
+from catchup.connectors.base import RateLimitError
 
 
 class GitHubApiError(ConnectorApiError):
@@ -134,6 +137,14 @@ class GitHubNotFoundError(NotFoundError, GitHubApiError):
     """
 
     service = "github"
+
+
+@dataclass(frozen=True, slots=True)
+class GitHubGraphQLPage:
+    nodes: tuple[dict[str, Any], ...]
+    next_cursor: str | None
+    is_last: bool
+    stopped_by_since: bool = False
 
 
 # ============================================================
@@ -820,6 +831,64 @@ class GitHubApiClient:
             return None
         return datetime.fromisoformat(value.replace("Z", "+00:00"))
 
+    async def _fetch_connection_nodes_graphql_page(
+        self,
+        *,
+        query: str,
+        owner: str,
+        repo: str,
+        connection_name: str,
+        after_cursor: str | None = None,
+        since: datetime | None = None,
+        per_page: int = 100,
+    ) -> GitHubGraphQLPage:
+        response = await self._graphql(
+            query,
+            {
+                "owner": owner,
+                "repo": repo,
+                "first": per_page,
+                "after": after_cursor,
+            },
+        )
+
+        if not response:
+            return GitHubGraphQLPage(nodes=(), next_cursor=None, is_last=True)
+
+        connection = response.get("repository", {}).get(connection_name, {})
+        if not connection:
+            return GitHubGraphQLPage(nodes=(), next_cursor=None, is_last=True)
+
+        nodes = connection.get("nodes") or []
+        batch: list[dict[str, Any]] = []
+
+        for node in nodes:
+            if not node:
+                continue
+
+            updated_at = self._parse_graphql_datetime(node.get("updatedAt"))
+            if since and updated_at and updated_at < since:
+                return GitHubGraphQLPage(
+                    nodes=tuple(batch),
+                    next_cursor=None,
+                    is_last=True,
+                    stopped_by_since=True,
+                )
+
+            batch.append(node)
+
+        page_info = connection.get("pageInfo", {})
+        end_cursor = page_info.get("endCursor")
+        next_cursor = end_cursor if page_info.get("hasNextPage") else None
+        if not isinstance(next_cursor, str) or not next_cursor:
+            next_cursor = None
+
+        return GitHubGraphQLPage(
+            nodes=tuple(batch),
+            next_cursor=next_cursor,
+            is_last=next_cursor is None,
+        )
+
     async def _iterate_connection_nodes_graphql(
         self,
         *,
@@ -833,46 +902,22 @@ class GitHubApiClient:
         after_cursor = None
 
         while True:
-            response = await self._graphql(
-                query,
-                {
-                    "owner": owner,
-                    "repo": repo,
-                    "first": per_page,
-                    "after": after_cursor,
-                },
+            page = await self._fetch_connection_nodes_graphql_page(
+                query=query,
+                owner=owner,
+                repo=repo,
+                connection_name=connection_name,
+                after_cursor=after_cursor,
+                since=since,
+                per_page=per_page,
             )
+            if page.nodes:
+                yield list(page.nodes)
 
-            if not response:
+            if page.is_last:
                 break
 
-            connection = response.get("repository", {}).get(connection_name, {})
-            if not connection:
-                break
-
-            nodes = connection.get("nodes") or []
-            batch: list[dict[str, Any]] = []
-
-            for node in nodes:
-                if not node:
-                    continue
-
-                updated_at = self._parse_graphql_datetime(node.get("updatedAt"))
-                if since and updated_at and updated_at < since:
-                    if batch:
-                        yield batch
-                    return
-
-                batch.append(node)
-
-            if batch:
-                yield batch
-
-            page_info = connection.get("pageInfo", {})
-            if not page_info.get("hasNextPage"):
-                break
-
-            after_cursor = page_info.get("endCursor")
+            after_cursor = page.next_cursor
 
     async def _list_entity_numbers_graphql(
         self,
@@ -905,6 +950,42 @@ class GitHubApiClient:
     # ============================================================
     # GraphQL APIs
     # ============================================================
+
+    async def fetch_pull_requests_graphql_page(
+        self,
+        owner: str,
+        repo: str,
+        *,
+        after_cursor: str | None = None,
+        since: datetime | None = None,
+    ) -> GitHubGraphQLPage:
+        return await self._fetch_connection_nodes_graphql_page(
+            query=PULL_REQUESTS_QUERY,
+            owner=owner,
+            repo=repo,
+            connection_name="pullRequests",
+            after_cursor=after_cursor,
+            since=since,
+            per_page=50,
+        )
+
+    async def fetch_issues_graphql_page(
+        self,
+        owner: str,
+        repo: str,
+        *,
+        after_cursor: str | None = None,
+        since: datetime | None = None,
+    ) -> GitHubGraphQLPage:
+        return await self._fetch_connection_nodes_graphql_page(
+            query=ISSUES_QUERY,
+            owner=owner,
+            repo=repo,
+            connection_name="issues",
+            after_cursor=after_cursor,
+            since=since,
+            per_page=50,
+        )
 
     async def list_pull_requests_graphql(
         self,
