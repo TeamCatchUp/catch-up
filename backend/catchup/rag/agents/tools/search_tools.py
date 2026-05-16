@@ -1,4 +1,5 @@
 import asyncio
+import json
 from datetime import datetime
 
 import structlog
@@ -100,12 +101,27 @@ def _dedup_tool_calls(tool_calls: list) -> list[dict]:
     result = []
     for tc in tool_calls:
         if tc["name"] == "multi_query_search":
+            raw = tc["args"].get("search_requests", [])
+            # Extended thinking + tool use 조합에서 LLM이 list 대신 JSON 문자열로
+            # 직렬화해 반환하는 경우 복구를 시도한다.
+            if isinstance(raw, str):
+                try:
+                    raw = json.loads(raw)
+                    logger.info(
+                        "multi_query_search_requests_recovered",
+                        parsed_count=len(raw),
+                    )
+                except (json.JSONDecodeError, ValueError):
+                    logger.warning(
+                        "multi_query_search_requests_parse_failed",
+                        raw_payload=raw[:300],
+                    )
+                    raw = []
             used: set[str] = set()
             deduped = []
-            for req in tc["args"].get("search_requests", []):
-                # LLM이 간혹 dict 대신 string을 반환하는 경우 방어 처리
+            for req in raw:
                 if not isinstance(req, dict):
-                    logger.warning("multi_query_search_invalid_request", req=req)
+                    logger.warning("multi_query_search_invalid_request", req=repr(req)[:100])
                     continue
                 tokens = req.get("keyword_tokens") or []
                 unique = [t for t in tokens if t not in used]
