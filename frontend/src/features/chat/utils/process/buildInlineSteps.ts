@@ -12,6 +12,9 @@ export interface InlineStep {
 // 검색 단계로 집계할 노드 (simple은 search_vector_db, standard/complex는 tool_executor)
 const SEARCH_NODES = new Set(['tool_executor', 'search_vector_db']);
 
+// 파이프라인 터미널 노드 — 이 노드 completed가 곧 "완료"
+const FINAL_ANSWER_NODES = new Set(['generate_final_answer', 'generate_final_answer_fast']);
+
 const isCompleted = (e: PipelineEvent) => e.status === 'completed';
 
 // reasoning 문자열의 "{N}건"에서 숫자 추출
@@ -81,8 +84,8 @@ export const buildInlineSteps = (events: PipelineEvent[] | null | undefined): In
     lines: [`${searchCompleted.length}회 탐색 · 총 ${totalDocs}건`],
   });
 
-  // 5. 완료 — rerank completed 도달 시
-  if (events.some((e) => e.node === 'rerank' && isCompleted(e))) {
+  // 5. 완료 — 최종 답변 생성 노드 completed 도달 시
+  if (events.some((e) => FINAL_ANSWER_NODES.has(e.node) && isCompleted(e))) {
     steps.push({ kind: 'done', title: '완료', icon: 'done', lines: [] });
   }
 

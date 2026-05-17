@@ -11,6 +11,7 @@ const simpleEvents: PipelineEvent[] = [
   { node: 'search_vector_db', status: 'completed', reasoning: '100건의 문서를 찾았어요.' },
   { node: 'rerank', status: 'in_progress', reasoning: '관련도순으로 정리할게요.' },
   { node: 'rerank', status: 'completed', content: { source_distribution: {} } },
+  { node: 'generate_final_answer', status: 'completed', reasoning: null, content: null },
 ];
 
 const standardEvents: PipelineEvent[] = [
@@ -27,6 +28,7 @@ const standardEvents: PipelineEvent[] = [
   { node: 'tool_executor', status: 'completed', reasoning: '120건의 문서를 찾았어요.' },
   { node: 'tool_executor', status: 'completed', reasoning: '80건의 문서를 찾았어요.' },
   { node: 'rerank', status: 'completed', content: { source_distribution: {} } },
+  { node: 'generate_final_answer', status: 'completed', reasoning: null, content: null },
 ];
 
 const complexEvents: PipelineEvent[] = [
@@ -44,6 +46,7 @@ const complexEvents: PipelineEvent[] = [
   { node: 'complex_agent', status: 'completed', reasoning: '단계별 검색을 시작할게요.' },
   { node: 'tool_executor', status: 'completed', reasoning: '240건의 문서를 찾았어요.' },
   { node: 'rerank', status: 'completed', content: { source_distribution: {} } },
+  { node: 'generate_final_answer', status: 'completed', reasoning: null, content: null },
 ];
 
 describe('buildInlineSteps', () => {
@@ -100,9 +103,9 @@ describe('buildInlineSteps', () => {
     expect(buildInlineSteps(undefined)).toEqual([]);
   });
 
-  it('완료 단계는 rerank completed가 없으면 생략', () => {
-    const noRerank = simpleEvents.filter((e) => e.node !== 'rerank');
-    const steps = buildInlineSteps(noRerank);
+  it('완료 단계는 최종 답변 노드(generate_final_answer) completed가 없으면 생략', () => {
+    const noFinal = simpleEvents.filter((e) => e.node !== 'generate_final_answer');
+    const steps = buildInlineSteps(noFinal);
     expect(steps.some((s) => s.kind === 'done')).toBe(false);
   });
 });
