@@ -36,3 +36,5 @@ export type ChatFeedbackRequest = import('@/features/chat/types/api/feedbackApi'
 export type ChatFeedbackResponse = import('@/features/chat/types/api/feedbackApi').ChatFeedbackResponseApi;
 /** 기존 코드 호환용 별칭: 스트림 이벤트 API */
 export type StreamEvent = import('@/features/chat/types/api/streamApi').StreamEventApi;
+/** 호환용 별칭: 파이프라인 진행 이벤트 */
+export type PipelineEvent = import('@/features/chat/types/api/streamApi').PipelineEventApi;
