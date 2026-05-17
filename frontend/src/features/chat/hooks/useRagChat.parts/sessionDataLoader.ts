@@ -1,7 +1,7 @@
 import type { QueryClient } from '@tanstack/react-query';
 import { isAxiosError } from 'axios';
 
-import type { ChatData, Message, SourceResponse } from '@/features/chat/types';
+import type { ChatData, Message, PipelineEvent, SourceResponse } from '@/features/chat/types';
 import { chatQueries } from '@/shared/queries/chatroom.queries';
 import type { ChatHistoryMessageResponse } from '@/shared/types/query/api';
 import { normalizeHistorySources } from '@/shared/utils/normalize/normalizeRagSources';
@@ -53,6 +53,7 @@ export const toUiMessage = (item: ChatHistoryMessageResponse): Message => {
     has_feedback: Boolean(item.has_feedback),
     is_liked: item.is_liked === true ? true : item.is_liked === false ? false : undefined,
     is_saved: item.is_saved ?? undefined,
+    pipeline_result: Array.isArray(item.pipeline_result) ? (item.pipeline_result as PipelineEvent[]) : null,
   };
 };
 

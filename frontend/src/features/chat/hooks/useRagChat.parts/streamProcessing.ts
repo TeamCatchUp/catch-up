@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useRef } from 'react';
 
 import {
   appendStreamingToken,
@@ -6,7 +6,7 @@ import {
   updateStreamingSources,
 } from '@/features/chat/hooks/useRagChat.parts/streamMessageUpdater';
 import { upsertStepRow } from '@/features/chat/hooks/useRagChat.parts/upsertStepRow';
-import type { PipelineQueryType, SourceResponse, StreamEvent } from '@/features/chat/types';
+import type { PipelineEvent, PipelineQueryType, SourceResponse, StreamEvent } from '@/features/chat/types';
 import { normalizeStreamSources } from '@/shared/utils/normalize/normalizeRagSources';
 
 import type { ChatStateSetters, SessionGuardRefs, StreamRuntimeRefs } from './types';
@@ -64,15 +64,8 @@ export const useStreamProcessing = ({
   // ---------------------------------------------------------------------------
   // Shared setters/refs
   // ---------------------------------------------------------------------------
-  const {
-    setChatData,
-    setIsLoading,
-    setIsError,
-    setStepRows,
-    setPipelineQueryType,
-    setTopic,
-    setPipelineReasoning,
-  } = stateSetters;
+  const { setChatData, setIsLoading, setIsError, setStepRows, setPipelineQueryType, setTopic, setPipelineReasoning } =
+    stateSetters;
   const { canReplacePlaceholderRef } = sessionRefs;
   const {
     streamingMessageIdRef,
@@ -82,6 +75,9 @@ export const useStreamProcessing = ({
     streamInFlightRef,
     resolvedSessionIdRef,
   } = streamRefs;
+
+  // 스트리밍 중 수신한 process 이벤트 raw 누적 — 스트림 종료 시 방금 끝난 메시지에 attach
+  const pipelineEventsRef = useRef<PipelineEvent[]>([]);
 
   // ---------------------------------------------------------------------------
   // Stream lifecycle helpers
@@ -103,6 +99,7 @@ export const useStreamProcessing = ({
     setPipelineQueryType(null);
     setTopic(null);
     setPipelineReasoning(null);
+    pipelineEventsRef.current = [];
   }, [
     canReplacePlaceholderRef,
     resetStopped,
@@ -277,12 +274,23 @@ export const useStreamProcessing = ({
 
     const targetSessionId = resolvedSessionIdRef.current;
 
+    // 방금 끝난 답변 메시지에 attach할 생성 과정 — streamingMessageIdRef가 null 되기 전 캡처
+    const streamedMessageId = streamingMessageIdRef.current;
+    const pipelineEvents = pipelineEventsRef.current;
+
     // 1차 sources SSE는 is_cited 미확정, 답변 완성 후 본문 [N] 패턴으로 is_cited 확정
+    // + 인라인 아코디언이 즉시 표시되도록 누적한 process 이벤트를 해당 메시지에 attach
     setChatData((prev) => {
       if (!prev) return prev;
-      const updated = deriveCitedFromAnswerContent(prev.messages);
-      if (updated === prev.messages) return prev;
-      return { ...prev, messages: updated };
+      const cited = deriveCitedFromAnswerContent(prev.messages);
+      const shouldAttach = pipelineEvents.length > 0 && streamedMessageId != null;
+      if (cited === prev.messages && !shouldAttach) return prev;
+      const messages = shouldAttach
+        ? cited.map((m) =>
+            m.id === streamedMessageId && m.role === 'assistant' ? { ...m, pipeline_result: [...pipelineEvents] } : m,
+          )
+        : cited;
+      return { ...prev, messages };
     });
 
     setIsLoading(false);
@@ -335,6 +343,8 @@ export const useStreamProcessing = ({
             if (reasoning) setPipelineReasoning(reasoning);
           }
 
+          // 사이드바용 stepRows 누적(기존) + 인라인 아코디언용 raw 이벤트 누적(신규)
+          pipelineEventsRef.current.push({ node, status, reasoning, content });
           setStepRows((prev) => upsertStepRow(prev, { node, status, reasoning, content }));
           break;
         }
