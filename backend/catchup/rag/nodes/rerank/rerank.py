@@ -179,10 +179,11 @@ def _apply_two_pool_selection(
     essential_budget = math.floor(total_k * 0.3)
     reranker_top_k_ids = {get_document_id(d) for d in reranked_docs[:total_k]}
 
-    reranker_essential_recall = (
+    reranker_essential_recall = round(
         len(essential_doc_ids & reranker_top_k_ids) / len(essential_doc_ids)
         if essential_doc_ids
-        else 0.0
+        else 0.0,
+        4,
     )
 
     cut_off_essential = [
