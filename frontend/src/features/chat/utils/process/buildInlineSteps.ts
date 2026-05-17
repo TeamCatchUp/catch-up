@@ -17,10 +17,13 @@ const FINAL_ANSWER_NODES = new Set(['generate_final_answer', 'generate_final_ans
 
 const isCompleted = (e: PipelineEvent) => e.status === 'completed';
 
+// reasoning 문자열의 "{N}건" 패턴 — 모듈 레벨로 hoist (호출마다 재생성 회피)
+const DOC_COUNT_PATTERN = /(\d+)\s*건/;
+
 // reasoning 문자열의 "{N}건"에서 숫자 추출
 const parseDocCount = (text: string | null | undefined): number => {
   if (!text) return 0;
-  const matched = text.match(/(\d+)\s*건/);
+  const matched = text.match(DOC_COUNT_PATTERN);
   return matched ? Number(matched[1]) : 0;
 };
 
