@@ -260,6 +260,30 @@ export const useStreamProcessing = ({
   );
 
   /**
+   * 누적한 process 이벤트를 해당 assistant 메시지의 pipeline_result로 attach.
+   * isLoading=false가 되는 sources 이벤트 시점에 호출해 인라인 아코디언이 즉시 표시되게 한다.
+   */
+  const attachPipelineResultToMessage = useCallback(
+    (messageId: string | null | undefined) => {
+      const events = pipelineEventsRef.current;
+      if (!messageId || events.length === 0) return;
+      setChatData((prev) => {
+        if (!prev) return prev;
+        let changed = false;
+        const messages = prev.messages.map((m) => {
+          if (m.id === messageId && m.role === 'assistant') {
+            changed = true;
+            return { ...m, pipeline_result: [...events] };
+          }
+          return m;
+        });
+        return changed ? { ...prev, messages } : prev;
+      });
+    },
+    [setChatData],
+  );
+
+  /**
    * 스트림 종료 후 후처리
    * - stopped면 조용히 종료
    * - 정상 종료면 서버 기준 메시지 재동기화
@@ -274,24 +298,19 @@ export const useStreamProcessing = ({
 
     const targetSessionId = resolvedSessionIdRef.current;
 
-    // 방금 끝난 답변 메시지에 attach할 생성 과정 — streamingMessageIdRef가 null 되기 전 캡처
+    // 방금 끝난 답변 메시지 id — streamingMessageIdRef가 null 되기 전 캡처
     const streamedMessageId = streamingMessageIdRef.current;
-    const pipelineEvents = pipelineEventsRef.current;
 
     // 1차 sources SSE는 is_cited 미확정, 답변 완성 후 본문 [N] 패턴으로 is_cited 확정
-    // + 인라인 아코디언이 즉시 표시되도록 누적한 process 이벤트를 해당 메시지에 attach
     setChatData((prev) => {
       if (!prev) return prev;
-      const cited = deriveCitedFromAnswerContent(prev.messages);
-      const shouldAttach = pipelineEvents.length > 0 && streamedMessageId != null;
-      if (cited === prev.messages && !shouldAttach) return prev;
-      const messages = shouldAttach
-        ? cited.map((m) =>
-            m.id === streamedMessageId && m.role === 'assistant' ? { ...m, pipeline_result: [...pipelineEvents] } : m,
-          )
-        : cited;
-      return { ...prev, messages };
+      const updated = deriveCitedFromAnswerContent(prev.messages);
+      if (updated === prev.messages) return prev;
+      return { ...prev, messages: updated };
     });
+
+    // sources 이벤트에서 이미 attach됐지만, 늦게 도착한 process 이벤트 대비 backstop 재attach
+    attachPipelineResultToMessage(streamedMessageId);
 
     setIsLoading(false);
     streamingMessageIdRef.current = null;
@@ -309,6 +328,7 @@ export const useStreamProcessing = ({
     // status만 수신한 뒤 종료된 경우(예: 백엔드 예외 후 스트림 종료) → 에러 노출
     setIsError(true);
   }, [
+    attachPipelineResultToMessage,
     canReplacePlaceholderRef,
     hasStreamedTokenRef,
     isStopped,
@@ -354,6 +374,8 @@ export const useStreamProcessing = ({
           // 따라서 token 이후 도착한 sources event는 항상 최종 → 이 시점에 게이트를 풀어도 안전하다.
           // finalize에서 setIsLoading(false)가 한 번 더 호출되어도 idempotent.
           if (hasStreamedTokenRef.current) {
+            // isLoading=false와 같은 시점에 pipeline_result attach → 인라인 아코디언 즉시 표시
+            attachPipelineResultToMessage(streamingMessageIdRef.current);
             setIsLoading(false);
           }
           break;
@@ -370,6 +392,8 @@ export const useStreamProcessing = ({
     [
       appendTokenToStreamingMessage,
       applyStreamingSources,
+      attachPipelineResultToMessage,
+      streamingMessageIdRef,
       hasStreamedTokenRef,
       isStopped,
       resolveSessionIdFromStream,
