@@ -7,7 +7,7 @@ import { mergeServerChatData } from './mergeServerChatData';
 const buildSource = (id: string, isCited = false): ChatSource => ({
   id,
   source_type: 'github',
-  entity_type: 'pull_request',
+  entity_type: 'pr',
   is_cited: isCited,
   repo: 'org/repo',
   title: `Source ${id}`,
@@ -46,10 +46,7 @@ describe('mergeServerChatData', () => {
       buildUserMsg('uuid-user', '질문'),
       buildAssistantMsg('uuid-assistant', '답변', [buildSource('s1', true)]),
     ]);
-    const serverData = buildChatData([
-      buildUserMsg('1', '질문'),
-      buildAssistantMsg('2', '답변', []),
-    ]);
+    const serverData = buildChatData([buildUserMsg('1', '질문'), buildAssistantMsg('2', '답변', [])]);
 
     const merged = mergeServerChatData(prev, serverData);
 
@@ -122,10 +119,7 @@ describe('mergeServerChatData', () => {
       buildUserMsg('uuid-user', '질문 '),
       buildAssistantMsg('uuid-assistant', '답변\n', [buildSource('s1')]),
     ]);
-    const serverData = buildChatData([
-      buildUserMsg('1', '질문'),
-      buildAssistantMsg('2', '답변', []),
-    ]);
+    const serverData = buildChatData([buildUserMsg('1', '질문'), buildAssistantMsg('2', '답변', [])]);
 
     const merged = mergeServerChatData(prev, serverData);
 
@@ -152,17 +146,31 @@ describe('mergeServerChatData', () => {
     expect(merged.messages[2].content).toBe('Q2 (방금 보낸 새 질문)');
   });
 
-  it('chat_history_id를 server 응답으로 patch한다', () => {
+  it('스트림 종료 시 attach한 pipeline_result를 server 응답에 없어도 보존한다', () => {
     const prev = buildChatData([
       buildUserMsg('uuid-user', '질문'),
-      buildAssistantMsg('uuid-assistant', '답변'),
+      {
+        ...buildAssistantMsg('uuid-assistant', '답변', [buildSource('s1', true)]),
+        pipeline_result: [{ node: 'supervisor', status: 'completed', reasoning: '분석', content: null }],
+      },
     ]);
+    const serverData = buildChatData([
+      buildUserMsg('1', '질문'),
+      buildAssistantMsg('2', '답변', [buildSource('s1', true)]),
+    ]);
+
+    const merged = mergeServerChatData(prev, serverData);
+
+    expect(merged.messages[1].id).toBe('uuid-assistant');
+    expect(merged.messages[1].pipeline_result).toHaveLength(1);
+    expect(merged.messages[1].pipeline_result?.[0].node).toBe('supervisor');
+  });
+
+  it('chat_history_id를 server 응답으로 patch한다', () => {
+    const prev = buildChatData([buildUserMsg('uuid-user', '질문'), buildAssistantMsg('uuid-assistant', '답변')]);
     const serverData: ChatData = {
       ...buildChatData([buildUserMsg('1', '질문')]),
-      messages: [
-        buildUserMsg('1', '질문'),
-        { ...buildAssistantMsg('2', '답변'), chat_history_id: '2' },
-      ],
+      messages: [buildUserMsg('1', '질문'), { ...buildAssistantMsg('2', '답변'), chat_history_id: '2' }],
     };
 
     const merged = mergeServerChatData(prev, serverData);
