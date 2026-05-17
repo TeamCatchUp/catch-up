@@ -266,6 +266,8 @@ export const useStreamProcessing = ({
   const attachPipelineResultToMessage = useCallback(
     (messageId: string | null | undefined) => {
       const events = pipelineEventsRef.current;
+      // messageId 없음(토큰 없이 종료된 에러 경로) 또는 이벤트 없음 → no-op.
+      // 이 경우 답변 메시지 자체가 없어 인라인 아코디언도 렌더되지 않으므로 데이터 소실 영향 없음.
       if (!messageId || events.length === 0) return;
       setChatData((prev) => {
         if (!prev) return prev;

@@ -85,6 +85,13 @@ describe('buildInlineSteps', () => {
     ]);
   });
 
+  it('supervisor reasoning이 없으면 요청 분석 단계는 생략된다 (rewrite/complex_planner와 동일한 graceful degradation)', () => {
+    const noReasoning = simpleEvents.map((e) => (e.node === 'supervisor' ? { ...e, reasoning: null } : e));
+    const steps = buildInlineSteps(noReasoning);
+    expect(steps.some((s) => s.kind === 'supervisor')).toBe(false);
+    expect(steps.map((s) => s.title)).toEqual(['문서 검색', '완료']);
+  });
+
   it('검색 단계가 없으면 (direct_answer/clarify/reuse) 빈 배열', () => {
     const directAnswer: PipelineEvent[] = [
       {
