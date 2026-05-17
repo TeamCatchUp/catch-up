@@ -24,14 +24,14 @@ export default function VectorKeywordCodeBox({ queries }: VectorKeywordCodeBoxPr
 
   return (
     <div className="bg-fill-normal border-edge-neutral w-full overflow-hidden rounded-xl border border-solid px-4 py-3">
-      <div className="text-body-xsmall text-content-alternative max-h-[226px] overflow-x-clip overflow-y-auto whitespace-pre-wrap break-words">
+      <div className="text-body-xsmall text-content-alternative max-h-[226px] overflow-x-clip overflow-y-auto break-words whitespace-pre-wrap">
         {entries.map((entry, idx) => (
           <div key={idx}>
             <span>vector{isMulti ? `[${idx}]` : ''}: </span>
-            <span className="text-orange-50">{`"${entry.vector ?? ''}"`}</span>
+            <span className="text-status-cautionary">{`"${entry.vector ?? ''}"`}</span>
             <br />
             <span>keyword{isMulti ? `[${idx}]` : ''}: </span>
-            <span className="text-green-40">
+            <span className="text-status-positive">
               {entry.keywords && entry.keywords.length > 0
                 ? `[${entry.keywords.map((k) => `"${k}"`).join(', ')}]`
                 : '[] (없음)'}

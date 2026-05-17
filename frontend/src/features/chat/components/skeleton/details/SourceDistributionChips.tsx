@@ -47,7 +47,7 @@ export default function SourceDistributionChips({ distribution }: SourceDistribu
 
   return (
     <motion.div
-      className="bg-blue-5 border-edge-neutral flex w-full flex-wrap items-center gap-2.5 rounded-xl border border-solid px-4 py-3"
+      className="bg-edge-primary-assistive border-edge-assistive flex w-full flex-wrap items-center gap-2.5 rounded-xl border border-solid px-4 py-3"
       initial={MotionState.Hidden}
       animate={MotionState.Visible}
       variants={staggerListContainer}
