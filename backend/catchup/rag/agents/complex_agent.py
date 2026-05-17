@@ -6,16 +6,16 @@ from langchain_core.messages import HumanMessage
 from catchup.costs.utils import token_usage
 from catchup.prompts.loader import prompt_loader
 from catchup.rag.agents.tools.search_tools import REACT_TOOLS
-from catchup.rag.schemas.sources import SOURCE_METADATA
 from catchup.rag.nodes.utils import ainvoke_llm_with_token_usage
 from catchup.rag.nodes.utils import build_docs_summary
 from catchup.rag.nodes.utils import build_system_message
 from catchup.rag.nodes.utils import coerce_message_text
 from catchup.rag.nodes.utils import drop_orphaned_tool_calls
-from catchup.rag.nodes.utils import extract_essential_ids
+from catchup.rag.nodes.utils import extract_essential_ids_from_agent_view
 from catchup.rag.nodes.utils import extract_reason_for_stopping
 from catchup.rag.nodes.utils import log_node
 from catchup.rag.retryable import RETRYABLE_ERRORS
+from catchup.rag.schemas.sources import SOURCE_METADATA
 from catchup.rag.schemas.structures import SearchPlan
 from catchup.rag.schemas.structures import SearchStep
 from catchup.rag.semaphores import rag_semaphores
@@ -115,7 +115,10 @@ async def complex_agent_node(
 
     if agent_iteration >= max_iterations:
         logger.info("complex_agent_max_iterations_reached", iterations=agent_iteration)
-        return {"agent_iteration": agent_iteration}
+        return {
+            "agent_iteration": agent_iteration,
+            "agent_stop_reason": "iteration_limit",
+        }
 
     search_plan = state.get("search_plan") or []
     accumulated_docs = state.get("accumulated_docs", [])
@@ -168,10 +171,15 @@ async def complex_agent_node(
     reasoning_update = {}
     reasoning = coerce_message_text(response.content)
     if not tool_calls:
-        essential_ids = extract_essential_ids(reasoning, accumulated_docs)
+        essential_ids = extract_essential_ids_from_agent_view(
+            reasoning,
+            accumulated_docs,
+            state.get("agent_seen_doc_ids") or [],
+        )
         reasoning_update = {
             "agent_reasoning": reasoning,
             "essential_doc_ids": list(essential_ids) if essential_ids else [],
+            "agent_stop_reason": "by_choice",
         }
 
     if reasoning:

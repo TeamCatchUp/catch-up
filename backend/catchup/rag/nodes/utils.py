@@ -73,8 +73,12 @@ def build_search_history_summary(snapshots: list) -> str:
     return "\n\n".join(lines)
 
 
-def build_docs_summary(docs: list[Document], max_docs: int = 20) -> str:
-    """Agent가 현재까지 수집된 지식의 '내용'을 파악할 수 있도록 요약 제공."""
+def build_docs_summary(docs: list[Document], max_docs: int = 20, start_index: int = 1) -> str:
+    """Agent가 현재까지 수집된 지식의 '내용'을 파악할 수 있도록 요약 제공.
+
+    start_index: ToolMessage의 전역 인덱스 오프셋. 기본값 1(1-based).
+    search_tool_executor에서 호출 시 global index를 유지하기 위해 사용한다.
+    """
     if not docs:
         return ""
 
@@ -85,7 +89,7 @@ def build_docs_summary(docs: list[Document], max_docs: int = 20) -> str:
         "Recently collected documents:",
     ]
 
-    for i, doc in enumerate(docs[:max_docs], 1):
+    for i, doc in enumerate(docs[:max_docs], start_index):
         source = doc.metadata.get("source", "unknown")
         temporal = resolve_temporal_context(doc.metadata)
 
@@ -559,6 +563,23 @@ def scrub_orphan_indices(body: str, valid_indices: set[int]) -> str:
         return match.group(0) if idx in valid_indices else ""
 
     return re.sub(r"\[(\d+)\]", _replace, body)
+
+
+def extract_essential_ids_from_agent_view(
+    reasoning: str | None,
+    accumulated_docs: list[Document],
+    agent_seen_ids: list[str],
+) -> set[str]:
+    """
+    agent_seen_doc_ids 순서 기반으로 essential doc IDs를 추출한다.
+
+    key_document_indices는 ToolMessage의 global index를 가리키므로,
+    agent가 본 순서 그대로 정렬된 doc list에 매핑해야 정확한 doc을 찾을 수 있다.
+    agent_seen_ids가 비어있으면 accumulated_docs 순서로 fallback.
+    """
+    id_to_doc = {get_document_id(d): d for d in accumulated_docs}
+    agent_seen_docs = [id_to_doc[doc_id] for doc_id in agent_seen_ids if doc_id in id_to_doc]
+    return extract_essential_ids(reasoning, agent_seen_docs or accumulated_docs)
 
 
 def extract_essential_ids(reasoning: str | None, docs: list[Document]) -> set[str]:

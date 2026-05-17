@@ -1,3 +1,4 @@
+import math
 import time
 from collections import Counter
 from collections import defaultdict
@@ -95,11 +96,10 @@ async def rerank_node(state: AgentState, rerank_service: BaseRerankService):
             "rerank_count": 0,
         }
     else:
-        # Floor 기반 비례 가산점 부스팅을 적용한다.
-        final_docs, rerank_metadata = _apply_boosting(
+        final_docs, rerank_metadata = _apply_two_pool_selection(
             reranked_docs=reranked_docs,
             essential_doc_ids=essential_doc_ids,
-            total_k=total_k
+            total_k=total_k,
         )
 
         # 에이전트가 ToolMessage로 본 적 없는 문서가 최종 답변 풀에 얼마나 들어왔는지 측정.
@@ -131,13 +131,19 @@ async def rerank_node(state: AgentState, rerank_service: BaseRerankService):
                 for g in groups
             )
         )
+        rerank_metadata["stop_reason"] = (
+            state.get("agent_stop_reason") or "by_choice"
+        )
 
         logger.info(
             "rerank_node_completed",
             pipeline_type=pipeline_type,
             final_doc_count=len(final_docs),
             total_k=total_k,
-            boosted_count=len(rerank_metadata["boosted_ids"]),
+            bypass_count=rerank_metadata["bypass_count"],
+            bypass_budget=rerank_metadata["bypass_budget"],
+            reranker_essential_recall=rerank_metadata["reranker_essential_recall"],
+            stop_reason=rerank_metadata["stop_reason"],
             agent_seen_total=len(agent_seen),
             unseen_in_final=unseen_in_final,
             confirmed_essential_count=len(confirmed_essential),
@@ -151,76 +157,70 @@ async def rerank_node(state: AgentState, rerank_service: BaseRerankService):
         }
 
 
-def _apply_boosting(
-    reranked_docs: list[Document], 
-    essential_doc_ids: set[str], 
+def _apply_two_pool_selection(
+    reranked_docs: list[Document],
+    essential_doc_ids: set[str],
     total_k: int,
-    boost_ratio: float = 0.2  # 점수 격차의 20% 만큼 가산한다.
 ) -> tuple[list[Document], dict]:
-    """리랭커 점수의 분포에 비례하여 에이전트 지목 문서에 가산점을 부여한다.
+    """reranker top-K를 두 풀로 분리해 essential cut-off 문서를 보장한다.
 
-    alignment_score는 "에이전트 지목 ∩ reranker top_k / 에이전트 지목"으로,
-    essential_doc_ids가 비어 있으면(예: max_iter fallback) 0.0으로 처리한다.
-    "신호 없음 = 영향 없음"으로 보아 score 평균이 위로 왜곡되지 않게 한다.
+    Pool A: rerank score 상위 (total_k - len(pool_b))개
+    Pool B: reranker가 cut-off한 essential 문서 중 score 상위 essential_budget개
+    essential_budget = floor(total_k * 0.3)
     """
     if not reranked_docs:
-        return [], {"boosted_ids": [], "alignment_score": 0.0}
+        return [], {
+            "reranker_essential_recall": 0.0,
+            "cut_off_essential_count": 0,
+            "bypass_count": 0,
+            "bypass_budget": 0,
+        }
 
-    scores = [d.metadata.get("relevance_score", 0.0) for d in reranked_docs]
-    min_score = min(scores)
-    max_score = max(scores)
-    score_range = max_score - min_score
+    essential_budget = math.floor(total_k * 0.3)
+    reranker_top_k_ids = {get_document_id(d) for d in reranked_docs[:total_k]}
 
-    # Floor를 적용해 동점 상황에서도 에이전트의 판단이 타이 브레이커가 되도록 보장한다.
-    effective_range = max(score_range, 0.05)
-    boost_value = boost_ratio * effective_range
+    reranker_essential_recall = round(
+        len(essential_doc_ids & reranker_top_k_ids) / len(essential_doc_ids)
+        if essential_doc_ids
+        else 0.0,
+        4,
+    )
 
-    boosted_docs = []
-    boosted_ids = []
-    
-    # 리랭커 Top K 내에 에이전트 지목 문서가 얼마나 있는지 확인한다 (Alignment).
-    initial_top_k_ids = {get_document_id(d) for d in reranked_docs[:total_k]}
-    hits = essential_doc_ids.intersection(initial_top_k_ids)
-    alignment_score = len(hits) / len(essential_doc_ids) if essential_doc_ids else 0.0
+    cut_off_essential = [
+        d for d in reranked_docs[total_k:]
+        if get_document_id(d) in essential_doc_ids
+    ]
 
-    for doc in reranked_docs:
+    pool_b = sorted(
+        cut_off_essential,
+        key=lambda d: d.metadata.get("relevance_score", 0.0),
+        reverse=True,
+    )[:essential_budget]
+
+    bypass_ids = {get_document_id(d) for d in pool_b}
+    pool_a = reranked_docs[: total_k - len(pool_b)]
+    final_docs = pool_a + pool_b
+
+    rank_map = {
+        get_document_id(d): rank
+        for rank, d in enumerate(reranked_docs, start=1)
+    }
+    for doc in final_docs:
         doc_id = get_document_id(doc)
-        original_score = doc.metadata.get("relevance_score", 0.0)
-        
-        is_essential = doc_id in essential_doc_ids
-        final_score = original_score + (boost_value if is_essential else 0.0)
-        
-        # 메타데이터를 업데이트한다: 답변 생성 노드와 관측에 꼭 필요한 필드만 남긴다.
-        doc.metadata.update({
-            "original_rerank_score": original_score,
-            "boosted_score": final_score,
-            "is_agent_cited": is_essential
-        })
-        
-        if is_essential:
-            boosted_ids.append(doc_id)
-            logger.debug(
-                "document_boosted", 
-                id=doc_id, 
-                original=original_score, 
-                boosted=final_score,
-                range=score_range
-            )
-        
-        boosted_docs.append(doc)
+        doc.metadata["original_rerank_score"] = doc.metadata.get(
+            "relevance_score", 0.0
+        )
+        doc.metadata["is_agent_essential"] = doc_id in essential_doc_ids
+        doc.metadata["reranker_rank"] = rank_map.get(doc_id, -1)
+        doc.metadata["selection_pool"] = (
+            "essential_bypass" if doc_id in bypass_ids else "reranker"
+        )
 
-    # 최종 점수 기준으로 재정렬한다.
-    boosted_docs.sort(key=lambda x: x.metadata["boosted_score"], reverse=True)
-    final_docs = boosted_docs[:total_k]
-
-    # 글로벌 통계는 metadata에 모은다.
     metadata = {
-        "boosted_ids": boosted_ids,
-        "alignment_score": alignment_score,
-        "score_range": float(score_range),
-        "effective_range": float(effective_range),
-        "boost_value": float(boost_value),
-        "boost_ratio": boost_ratio
+        "reranker_essential_recall": reranker_essential_recall,
+        "cut_off_essential_count": len(cut_off_essential),
+        "bypass_count": len(pool_b),
+        "bypass_budget": essential_budget,
     }
 
     return final_docs, metadata
