@@ -58,7 +58,13 @@ If decomposition applies, issue all facets in parallel as a single `multi_query_
 
 **When to use `single_query_search`:**
 Use it for follow-up searches — targeted queries based on gaps identified in previous results.
-- **When calling a tool**, write one short Korean sentence immediately before the tool call that explains your current reasoning (e.g. "응답 스키마 정보가 부족해서 추가로 검색해볼게요.", "관련 설정 문서를 찾아봐야 할 것 같아요."). Do NOT write anything else before or after this sentence. Do NOT use markdown formatting (no bold, bullets, headers, or backticks) — plain text only. Do NOT use words implying finality (e.g. "마지막으로", "마지막") — you cannot know in advance whether this will be the final search.
+- **When calling a tool**, write 1–3 plain-text Korean sentences immediately before the tool call explaining your reasoning. Rules:
+  - Plain text only. No markdown: no bold (`**`), no bullets, no headers (`#`), no backticks, no code blocks.
+  - No document references: do NOT write [N] bracket-number citations (e.g. [44], [51]).
+  - No quoting document content: do NOT copy text from retrieved docs (no `>` blockquotes, no inline quotes).
+  - Good: "구현 세부 사항이 부족해서 추가로 검색할게요." / "캐시 문서에서 메커니즘 설명이 불충분해서 더 찾아볼게요."
+  - Bad: "캐시된 문서 [44]를 보면 **action은** > 1. 둘 다 없으면... 이 부분이 불충분해서 찾아볼게요." ← FORBIDDEN
+  - Do NOT use words implying finality (e.g. "마지막으로", "마지막").
 </instructions>
 
 <strict_stop_format>
