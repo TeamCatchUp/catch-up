@@ -7,6 +7,8 @@ from langchain_core.documents import Document
 from pydantic import BaseModel
 from pydantic import Field
 
+from catchup.components.embedder.constants import EmbeddingProvider
+from catchup.components.embedder.factory import get_embedding_service
 from catchup.components.reranker.constants import RerankerProvider
 from catchup.components.reranker.factory import get_rerank_service
 from catchup.components.vector_db.factory import get_vector_db_service
@@ -60,7 +62,8 @@ def _to_doc_result(doc: Document, score_key: str) -> DocResult:
 
 @router.post("/search-probe", response_model=SearchProbeResponse)
 async def search_probe(body: SearchProbeRequest) -> SearchProbeResponse:
-    vector_db_service = get_vector_db_service(VectorDbProvider.PGVECTOR)
+    embeddings = get_embedding_service(EmbeddingProvider.AWS_BEDROCK).get_embedder()
+    vector_db_service = get_vector_db_service(VectorDbProvider.PGVECTOR, embeddings)
     rerank_service = get_rerank_service(RerankerProvider.AWS_BEDROCK)
 
     try:
