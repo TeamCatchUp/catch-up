@@ -50,7 +50,9 @@ def test_map_indices_empty():
     assert map_indices_to_doc_ids([], [], []) == set()
 
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock
+from unittest.mock import MagicMock
+from unittest.mock import patch
 
 import pytest
 
@@ -139,8 +141,8 @@ async def test_submit_result_does_not_add_messages():
     assert result["agent_stop_reason"] == "by_choice"
 
 
-from catchup.rag.subgraphs.standard_react import _route_after_agent
 from catchup.rag.schemas.structures import PipelinePlan as _PipelinePlan
+from catchup.rag.subgraphs.standard_react import _route_after_agent
 
 
 def _route_state(agent_stop_reason=None, tool_calls=None, agent_iteration=0, max_iterations=4):
