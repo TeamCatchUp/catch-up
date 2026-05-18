@@ -27,6 +27,14 @@ The following documents have already been retrieved:
 </already_retrieved>
 {% endif %}
 
+{% if cached_docs_summary %}
+<cached_documents>
+The following documents were retrieved in a previous search turn and may already answer the question.
+If they are sufficient, respond directly without making any tool calls.
+<< cached_docs_summary >>
+</cached_documents>
+{% endif %}
+
 <date_search_rules>
 - When calling single_query_search or multi_query_search with date filters, always convert Korean (KST, UTC+9) dates to UTC by subtracting 9 hours.
 - For a full KST day (e.g., "4월 19일"): start_date="2026-04-18T15:00:00", end_date="2026-04-19T14:59:59"

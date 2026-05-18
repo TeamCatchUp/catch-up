@@ -43,11 +43,13 @@ async def standard_agent_node(
         }
 
     accumulated_docs = state.get("accumulated_docs", [])
+    cached_docs = state.get("retrieved_docs", []) if agent_iteration == 0 else []
     global_context = state["global_context"].model_dump()
 
     system_prompt = prompt_loader.get_prompt(
         "rag/standard_agent_system",
         accumulated_docs_summary=build_docs_summary(accumulated_docs),
+        cached_docs_summary=build_docs_summary(cached_docs) if cached_docs else "",
         sources=list(SOURCE_METADATA.values()),
         **global_context,
     )

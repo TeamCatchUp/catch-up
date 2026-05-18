@@ -122,12 +122,14 @@ async def complex_agent_node(
 
     search_plan = state.get("search_plan") or []
     accumulated_docs = state.get("accumulated_docs", [])
+    cached_docs = state.get("retrieved_docs", []) if agent_iteration == 0 else []
     global_context = state["global_context"].model_dump()
 
     system_prompt = prompt_loader.get_prompt(
         "rag/complex_agent_system",
         search_plan_text=_format_search_plan(search_plan),
         accumulated_docs_summary=build_docs_summary(accumulated_docs),
+        cached_docs_summary=build_docs_summary(cached_docs) if cached_docs else "",
         sources=list(SOURCE_METADATA.values()),
         **global_context,
     )
