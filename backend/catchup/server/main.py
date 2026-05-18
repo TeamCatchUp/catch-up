@@ -499,6 +499,11 @@ app.include_router(search_router)
 app.include_router(audit_router)
 app.include_router(workflow_credentials_router)
 
+if settings.DEBUG_PROD_MODE:
+    from catchup.server.debug.api import router as debug_router
+    app.include_router(debug_router)
+    logger.warning("debug_prod_mode_enabled", note="disable DEBUG_PROD_MODE after testing")
+
 if settings.MCP_SERVER_ENABLED:
     from catchup.mcp.server import mcp as mcp_server
 
