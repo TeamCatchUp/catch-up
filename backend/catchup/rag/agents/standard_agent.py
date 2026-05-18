@@ -56,7 +56,7 @@ async def standard_agent_node(
     system_message = build_system_message(system_prompt)
     query = state.get("rewritten_query") or state.get("original_query", "")
 
-    llm_with_tools = llm.bind_tools(REACT_TOOLS)
+    llm_with_tools = llm.bind_tools(REACT_TOOLS, tool_choice="any")
 
     await adispatch_custom_event(
         "process",
