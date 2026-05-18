@@ -16,6 +16,7 @@ from catchup.components.vector_db.pgvector.constants import VectorDbProvider
 from catchup.configs.config import settings
 from catchup.db.models import SourceType
 from catchup.observability.langfuse.configs import get_observe
+from catchup.rag.nodes.rerank.rerank import _validate_retrieved_docs
 from catchup.rag.nodes.utils import deduplicate_documents
 from catchup.rag.nodes.utils import get_document_id
 
@@ -124,10 +125,11 @@ async def search_probe(body: SearchProbeRequest) -> SearchProbeResponse:
         )
         pre_rerank_items = [_to_pre_rank_result(d) for d in flattened]
 
+        validated = _validate_retrieved_docs(flattened)
         reranked = await rerank_service.rerank(
             query=body.rewritten_query,
-            documents=flattened,
-            top_n=len(flattened),
+            documents=validated,
+            top_n=50,
         )
         post_rerank_items = [_to_post_rank_result(d) for d in reranked]
 
