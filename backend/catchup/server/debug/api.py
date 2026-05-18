@@ -22,9 +22,14 @@ logger = structlog.get_logger()
 router = APIRouter(prefix="/api/v1/debug", tags=["debug"])
 
 
+class SearchQuery(BaseModel):
+    query: str
+    keyword_tokens: list[str] = Field(default_factory=list)
+
+
 class SearchProbeRequest(BaseModel):
     rewritten_query: str
-    queries: list[str] = Field(..., min_length=1)
+    queries: list[SearchQuery] = Field(..., min_length=1)
     weights: list[float] = Field(default=[0.6, 0.4], min_length=2, max_length=2)
     k: int = Field(default=100, ge=1)
     score_threshold: float = Field(default=0.0)
@@ -75,7 +80,10 @@ async def search_probe(body: SearchProbeRequest) -> SearchProbeResponse:
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-    query_dicts: list[dict[str, Any]] = [{"query": q} for q in body.queries]
+    query_dicts: list[dict[str, Any]] = [
+        {"query": q.query, "keyword_tokens": q.keyword_tokens}
+        for q in body.queries
+    ]
 
     results = await vector_db_service.hybrid_search_batch(
         queries=query_dicts,
