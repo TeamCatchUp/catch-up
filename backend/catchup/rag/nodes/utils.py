@@ -18,6 +18,7 @@ from langchain_core.messages import AIMessage
 from langchain_core.messages import BaseMessage
 from langchain_core.messages import HumanMessage
 from langchain_core.messages import SystemMessage
+from langchain_core.messages import ToolMessage
 from langgraph.graph.message import add_messages
 
 from catchup.costs.utils import extract_token_usages
@@ -31,16 +32,28 @@ logger = structlog.get_logger("catchup.graph")
 
 
 def drop_orphaned_tool_calls(messages: list[BaseMessage]) -> list[BaseMessage]:
-    """마지막 AIMessage에 tool_calls가 있지만 ToolMessage가 없는 경우 제거한다."""
+    """tool_calls가 있는 AIMessage 다음에 ToolMessage가 없는 orphan을 제거한다.
+
+    히스토리 어디서든 AIMessage(tool_calls) 바로 다음 메시지가 ToolMessage가 아니면
+    해당 AIMessage를 제거한다.
+    """
     if not messages:
         return messages
-    last = messages[-1]
-    if isinstance(last, AIMessage) and getattr(last, "tool_calls", None):
-        logger.warning(
-            "dropping_orphaned_tool_call_message", message_id=getattr(last, "id", None)
-        )
-        return list(messages[:-1])
-    return messages
+
+    cleaned = []
+    for i, msg in enumerate(messages):
+        if isinstance(msg, AIMessage) and getattr(msg, "tool_calls", None):
+            next_msg = messages[i + 1] if i + 1 < len(messages) else None
+            if not isinstance(next_msg, ToolMessage):
+                logger.warning(
+                    "dropping_orphaned_tool_call_message",
+                    message_id=getattr(msg, "id", None),
+                    position=i,
+                )
+                continue
+        cleaned.append(msg)
+
+    return cleaned
 
 
 def build_search_history_summary(snapshots: list) -> str:

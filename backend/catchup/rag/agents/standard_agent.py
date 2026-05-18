@@ -64,6 +64,19 @@ async def standard_agent_node(
     )
 
     existing_messages = drop_orphaned_tool_calls(state.get("messages", []))
+    logger.debug(
+        "standard_agent_message_blocks",
+        iteration=agent_iteration,
+        blocks=[
+            {
+                "idx": i,
+                "type": type(m).__name__,
+                "tool_calls": [tc["id"] for tc in getattr(m, "tool_calls", None) or []],
+                "tool_call_id": getattr(m, "tool_call_id", None),
+            }
+            for i, m in enumerate(existing_messages)
+        ],
+    )
     try:
         response, token_usages = await ainvoke_llm_with_token_usage(
             llm=llm_with_tools,
