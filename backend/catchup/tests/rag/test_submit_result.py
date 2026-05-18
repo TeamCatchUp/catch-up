@@ -48,3 +48,92 @@ def test_map_indices_out_of_range_ignored():
 
 def test_map_indices_empty():
     assert map_indices_to_doc_ids([], [], []) == set()
+
+
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+
+from catchup.rag.agents.standard_agent import standard_agent_node
+from catchup.rag.schemas.structures import PipelinePlan
+
+
+def _make_state(agent_iteration: int = 0, accumulated_docs=None, agent_seen_ids=None) -> dict:
+    return {
+        "original_query": "테스트 질문",
+        "rewritten_query": "테스트 질문",
+        "agent_iteration": agent_iteration,
+        "accumulated_docs": accumulated_docs or [],
+        "retrieved_docs": [],
+        "messages": [],
+        "pipeline_plan": PipelinePlan(pipeline_type="standard", max_iterations=4),
+        "global_context": MagicMock(model_dump=lambda: {}),
+        "agent_seen_doc_ids": agent_seen_ids or [],
+    }
+
+
+@pytest.mark.asyncio
+async def test_submit_result_sets_state_correctly():
+    """submit_result tool call이 essential_doc_ids와 agent_reasoning을 올바르게 설정한다."""
+    docs = [
+        Document(page_content="doc1", metadata={"source": "github"}, id="id_A"),
+        Document(page_content="doc2", metadata={"source": "slack"}, id="id_B"),
+    ]
+    state = _make_state(accumulated_docs=docs, agent_seen_ids=["id_A", "id_B"])
+
+    mock_response = MagicMock()
+    mock_response.tool_calls = [{
+        "name": "submit_result",
+        "args": {
+            "key_document_indices": [1, 2],
+            "key_documents": ["doc A", "doc B"],
+            "search_coverage": ["항목 1"],
+            "reason_for_stopping": "정보가 충분히 수집됐어요.",
+        },
+        "id": "call_123",
+    }]
+    mock_response.content = ""
+
+    mock_llm = MagicMock()
+    mock_llm.bind_tools.return_value = mock_llm
+
+    with patch("catchup.rag.agents.standard_agent.prompt_loader.get_prompt", return_value="system"):
+        with patch("catchup.rag.agents.standard_agent.ainvoke_llm_with_token_usage", new_callable=AsyncMock) as mock_invoke:
+            with patch("catchup.rag.agents.standard_agent.adispatch_custom_event", new_callable=AsyncMock):
+                mock_invoke.return_value = (mock_response, {"token_breakdown": {}})
+                result = await standard_agent_node(state, llm=mock_llm)
+
+    assert result["agent_stop_reason"] == "by_choice"
+    assert result["agent_reasoning"] == "정보가 충분히 수집됐어요."
+    assert set(result["essential_doc_ids"]) == {"id_A", "id_B"}
+    assert "messages" not in result
+
+
+@pytest.mark.asyncio
+async def test_submit_result_does_not_add_messages():
+    """submit_result 후 state.messages가 업데이트되지 않아야 한다."""
+    state = _make_state()
+    mock_response = MagicMock()
+    mock_response.tool_calls = [{
+        "name": "submit_result",
+        "args": {
+            "key_document_indices": [],
+            "key_documents": [],
+            "search_coverage": [],
+            "reason_for_stopping": "포화 상태예요.",
+        },
+        "id": "call_456",
+    }]
+    mock_response.content = ""
+
+    mock_llm = MagicMock()
+    mock_llm.bind_tools.return_value = mock_llm
+
+    with patch("catchup.rag.agents.standard_agent.prompt_loader.get_prompt", return_value="system"):
+        with patch("catchup.rag.agents.standard_agent.ainvoke_llm_with_token_usage", new_callable=AsyncMock) as mock_invoke:
+            with patch("catchup.rag.agents.standard_agent.adispatch_custom_event", new_callable=AsyncMock):
+                mock_invoke.return_value = (mock_response, {"token_breakdown": {}})
+                result = await standard_agent_node(state, llm=mock_llm)
+
+    assert "messages" not in result
+    assert result["agent_stop_reason"] == "by_choice"
