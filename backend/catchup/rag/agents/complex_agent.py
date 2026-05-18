@@ -13,6 +13,7 @@ from catchup.rag.nodes.utils import coerce_message_text
 from catchup.rag.nodes.utils import drop_orphaned_tool_calls
 from catchup.rag.nodes.utils import extract_essential_ids_from_agent_view
 from catchup.rag.nodes.utils import extract_reason_for_stopping
+from catchup.rag.nodes.utils import extract_search_reason
 from catchup.rag.nodes.utils import log_node
 from catchup.rag.retryable import RETRYABLE_ERRORS
 from catchup.rag.schemas.sources import SOURCE_METADATA
@@ -194,9 +195,10 @@ async def complex_agent_node(
         }
 
     if reasoning:
-        display_reasoning = (
-            extract_reason_for_stopping(reasoning) if not tool_calls else reasoning
-        )
+        if not tool_calls:
+            display_reasoning = extract_reason_for_stopping(reasoning)
+        else:
+            display_reasoning = extract_search_reason(reasoning)
         await adispatch_custom_event(
             "process",
             {"status": "completed", "node": "complex_agent", "reasoning": display_reasoning},

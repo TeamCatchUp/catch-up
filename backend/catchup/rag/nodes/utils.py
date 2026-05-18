@@ -535,6 +535,17 @@ def extract_reason_for_stopping(reasoning: str | None) -> str | None:
     return match.group(1).strip() or None
 
 
+def extract_search_reason(reasoning: str | None) -> str | None:
+    """tool call 전 reasoning에서 <search_reason> 태그 내용을 추출한다.
+    태그가 없으면 원문을 그대로 반환한다."""
+    if not reasoning:
+        return reasoning
+    match = re.search(r"<search_reason>(.*?)</search_reason>", reasoning, re.DOTALL)
+    if match:
+        return match.group(1).strip() or reasoning
+    return reasoning
+
+
 # 본문 안의 인덱스 좌표 패턴들. agent_reasoning은 reuse 턴에 재공급되거나 grouping
 # 도입 후 인덱스 체계가 바뀌므로, 산문 안에 박힌 [N]/**N**/N번 문서 좌표는 모두
 # stale로 간주하고 제거한다. 정확한 인덱스 신호는 confirmed_priority_documents
