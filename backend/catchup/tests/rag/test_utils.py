@@ -32,17 +32,17 @@ def test_build_docs_summary():
         Document(page_content="content 2", metadata={"source": "github"}),
         Document(page_content="content 3", metadata={"source": "slack"})
     ]
-    
+
     # 기본 요약 (max_docs=5)
     summary = build_docs_summary(docs)
-    assert "총 3개 문서 누적됨" in summary
+    assert "Total 3docs accumulated" in summary
     assert "slack:2" in summary
     assert "github:1" in summary
     assert "[1] (slack)" in summary
-    
+
     # max_docs 제한 확인
     summary_limited = build_docs_summary(docs, max_docs=1)
-    assert "... 외 2개" in summary_limited
+    assert "and 2 more document(s)" in summary_limited
     assert "[2]" not in summary_limited
 
 def test_get_formatted_history_text():
