@@ -97,6 +97,17 @@ def _client_error(
 
 
 class TestSummarizerServiceRetry(IsolatedAsyncioTestCase):
+    async def test_default_bedrock_llm_uses_botocore_retries(self) -> None:
+        fake_service = SimpleNamespace(get_llm=lambda: FakeLlm([_response("unused")]))
+
+        with patch(
+            "catchup.components.summarizer.service.get_llm_service",
+            return_value=fake_service,
+        ) as get_llm_service:
+            SummarizerService()
+
+        self.assertEqual(get_llm_service.call_args.kwargs["max_attempts"], 5)
+
     async def test_retry_after_header_controls_retry_delay(self) -> None:
         sleep = SleepRecorder()
         llm = FakeLlm([_throttling_error(retry_after="37"), _response("summary")])
