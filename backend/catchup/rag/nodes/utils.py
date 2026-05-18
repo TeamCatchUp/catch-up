@@ -513,11 +513,6 @@ def coerce_message_text(content: Any) -> str:
     return str(content) if content is not None else ""
 
 
-_KEY_DOC_INDICES_TAG_PATTERN = re.compile(
-    r"<\s*key_document_indices\s*>(.*?)<\s*/\s*key_document_indices\s*>",
-    re.IGNORECASE | re.DOTALL,
-)
-
 _REASON_FOR_STOPPING_PATTERN = re.compile(
     r"<\s*reason_for_stopping\s*>(.*?)<\s*/\s*reason_for_stopping\s*>",
     re.IGNORECASE | re.DOTALL,
@@ -593,8 +588,7 @@ def sanitize_agent_reasoning(reasoning: str | None) -> str | None:
     """
     if not reasoning:
         return reasoning
-    out = _KEY_DOC_INDICES_TAG_PATTERN.sub("", reasoning)
-    out = _INLINE_BRACKET_INDEX_PATTERN.sub("", out)
+    out = _INLINE_BRACKET_INDEX_PATTERN.sub("", reasoning)
     out = _BOLD_BARE_NUMBER_PATTERN.sub("", out)
     out = _KOREAN_NUMBER_DOC_PATTERN.sub("", out)
     return out.strip()
@@ -618,63 +612,6 @@ def scrub_orphan_indices(body: str, valid_indices: set[int]) -> str:
     return re.sub(r"\[(\d+)\]", _replace, body)
 
 
-def extract_essential_ids_from_agent_view(
-    reasoning: str | None,
-    accumulated_docs: list[Document],
-    agent_seen_ids: list[str],
-) -> set[str]:
-    """
-    agent_seen_doc_ids 순서 기반으로 essential doc IDs를 추출한다.
-
-    key_document_indices는 ToolMessage의 global index를 가리키므로,
-    agent가 본 순서 그대로 정렬된 doc list에 매핑해야 정확한 doc을 찾을 수 있다.
-    agent_seen_ids가 비어있으면 accumulated_docs 순서로 fallback.
-    """
-    id_to_doc = {get_document_id(d): d for d in accumulated_docs}
-    agent_seen_docs = [id_to_doc[doc_id] for doc_id in agent_seen_ids if doc_id in id_to_doc]
-    return extract_essential_ids(reasoning, agent_seen_docs or accumulated_docs)
-
-
-def extract_essential_ids(reasoning: str | None, docs: list[Document]) -> set[str]:
-    """
-    Agent의 reasoning에서 <key_document_indices> 태그를 추출하여 실제 문서 ID 세트로 변환한다.
-    마크다운 강조(**n**), 대괄호([n]), 콤마/공백 구분 등 다양한 내부 형식을 지원.
-    """
-    if not reasoning or not docs:
-        return set()
-
-    match = _KEY_DOC_INDICES_TAG_PATTERN.search(reasoning)
-    if not match:
-        # 태그가 없으면 조용히 반환한다 (에이전트가 지목을 안 한 경우일 수 있음).
-        return set()
-
-    content = match.group(1)
-
-    # 숫자만 모두 추출한다 (마크다운 등 특수문자 제거 효과).
-    indices = [int(s) for s in re.findall(r"\d+", content)]
-
-    
-    if not indices:
-        logger.warning("essential_indices_not_found_in_pattern", text=content)
-        return set()
-
-    essential_ids = set()
-    invalid_indices = []
-    for idx in indices:
-        # 에이전트가 사용하는 인덱스는 1-based
-        if 1 <= idx <= len(docs):
-            doc = docs[idx - 1]
-            essential_ids.add(get_document_id(doc))
-        else:
-            invalid_indices.append(idx)
-
-    if invalid_indices:
-        logger.warning("agent_cited_out_of_range_indices", invalid=invalid_indices, max_range=len(docs))
-
-    if essential_ids:
-        logger.debug("essential_ids_extracted", count=len(essential_ids), ids=list(essential_ids))
-
-    return essential_ids
 
 
 def parse_citations(full_answer: str) -> tuple[str, set[str]]:

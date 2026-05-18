@@ -19,17 +19,6 @@ from catchup.rag.nodes.utils import scrub_orphan_indices
 
 
 class TestSanitizeAgentReasoning:
-    def test_strips_key_document_indices_tag(self):
-        reasoning = (
-            "Some thoughts.\n"
-            "<key_document_indices>1, 3, 14</key_document_indices>\n"
-            "Done."
-        )
-        out = sanitize_agent_reasoning(reasoning)
-        assert "<key_document_indices>" not in out
-        assert "1, 3, 14" not in out
-        assert "Some thoughts." in out
-
     def test_strips_inline_bracket_index_in_prose(self):
         reasoning = "Document [14] explains the formula clearly."
         out = sanitize_agent_reasoning(reasoning)

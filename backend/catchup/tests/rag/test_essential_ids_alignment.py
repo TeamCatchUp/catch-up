@@ -3,16 +3,16 @@ rerank alignment 버그 수정 테스트.
 
 핵심 문제:
 - ToolMessage가 매 iteration마다 [1]부터 리셋 → accumulated_docs 위치와 불일치
-- extract_essential_ids(reasoning, accumulated_docs)가 틀린 문서를 가리킴
+- 구 방식: extract_essential_ids(reasoning_xml, accumulated_docs)가 틀린 문서를 가리킴
 
 수정:
 - ToolMessage에 global index 적용 (existing_seen_count + newly_shown offset)
-- extract_essential_ids_from_agent_view → agent_seen_doc_ids 순서 기반 매핑
+- map_indices_to_doc_ids → agent_seen_doc_ids 순서 기반 매핑 (submit_result 구조화 방식)
 """
 from langchain_core.documents import Document
 
 from catchup.rag.nodes.utils import build_docs_summary
-from catchup.rag.nodes.utils import extract_essential_ids_from_agent_view
+from catchup.rag.nodes.utils import map_indices_to_doc_ids
 
 
 def _doc(doc_id: str, content: str = "content") -> Document:
@@ -41,7 +41,7 @@ def test_build_docs_summary_custom_start_index():
 
 
 # ---------------------------------------------------------------------------
-# extract_essential_ids_from_agent_view
+# map_indices_to_doc_ids (구 extract_essential_ids_from_agent_view 대체)
 # ---------------------------------------------------------------------------
 
 
@@ -67,9 +67,7 @@ def test_extract_maps_to_agent_seen_order():
     # agent_seen_doc_ids: agent가 ToolMessage로 본 순서
     agent_seen_ids = ["id_A", "id_B", "id_C", "id_D", "id_E"]
 
-    reasoning = "<key_document_indices>1, 3</key_document_indices>"
-
-    result = extract_essential_ids_from_agent_view(reasoning, accumulated_docs, agent_seen_ids)
+    result = map_indices_to_doc_ids([1, 3], accumulated_docs, agent_seen_ids)
 
     # [1] = id_A, [3] = id_C (agent_seen 순서 기준)
     assert "id_A" in result
@@ -96,9 +94,7 @@ def test_extract_global_index_across_iterations():
     accumulated_docs = [doc_d, doc_e, doc_a, doc_b, doc_c]
     agent_seen_ids = ["id_A", "id_B", "id_C", "id_D", "id_E"]  # 노출 순서
 
-    reasoning = "<key_document_indices>4, 5</key_document_indices>"
-
-    result = extract_essential_ids_from_agent_view(reasoning, accumulated_docs, agent_seen_ids)
+    result = map_indices_to_doc_ids([4, 5], accumulated_docs, agent_seen_ids)
 
     assert "id_D" in result
     assert "id_E" in result
@@ -111,20 +107,17 @@ def test_extract_fallback_when_no_seen_ids():
     doc_b = _doc("id_B")
     accumulated_docs = [doc_a, doc_b]
 
-    reasoning = "<key_document_indices>1</key_document_indices>"
-
-    result = extract_essential_ids_from_agent_view(reasoning, accumulated_docs, [])
+    result = map_indices_to_doc_ids([1], accumulated_docs, [])
 
     assert "id_A" in result
 
 
-def test_extract_empty_when_no_reasoning():
+def test_extract_empty_when_no_indices():
     docs = [_doc("id_A")]
-    result = extract_essential_ids_from_agent_view(None, docs, ["id_A"])
+    result = map_indices_to_doc_ids([], docs, ["id_A"])
     assert result == set()
 
 
-def test_extract_empty_when_no_tag():
-    docs = [_doc("id_A")]
-    result = extract_essential_ids_from_agent_view("no tag here", docs, ["id_A"])
+def test_extract_empty_when_no_docs():
+    result = map_indices_to_doc_ids([1], [], [])
     assert result == set()
