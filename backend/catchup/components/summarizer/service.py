@@ -140,7 +140,7 @@ class SummarizerService:
             provider=LlmProvider.AWS_BEDROCK,
             model_capacity=model_capacity,
             streaming=False,
-            max_attempts=0,
+            max_attempts=5,
         ).get_llm()
         self.llm = base_llm.bind(
             temperature=temperature,
