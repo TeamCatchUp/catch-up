@@ -10,6 +10,7 @@ from catchup.rag.agents.standard_agent import collect_docs_node
 from catchup.rag.agents.tools.search_tools import search_tool_executor_node
 from catchup.rag.nodes import generate_final_answer_node
 from catchup.rag.nodes import merge_cache_node
+from catchup.rag.nodes import prepare_cache_node
 from catchup.rag.nodes import rerank_node
 from catchup.rag.nodes import rewrite_node
 from catchup.rag.state import AgentState
@@ -51,6 +52,10 @@ def build_complex_react_subgraph(
         retry=BASE_RETRY_POLICY,
     )
     graph.add_node(
+        "prepare_cache",
+        partial(prepare_cache_node, vector_db_service=vector_db_service),
+    )
+    graph.add_node(
         "complex_planner",
         partial(complex_planner_node, llm=llm_thinking),
         retry=BASE_RETRY_POLICY,
@@ -84,7 +89,8 @@ def build_complex_react_subgraph(
     )
 
     graph.set_entry_point("rewrite")
-    graph.add_edge("rewrite", "complex_planner")
+    graph.add_edge("rewrite", "prepare_cache")
+    graph.add_edge("prepare_cache", "complex_planner")
     graph.add_edge("complex_planner", "complex_agent")
     graph.add_conditional_edges(
         "complex_agent",
