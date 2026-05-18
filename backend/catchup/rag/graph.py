@@ -23,7 +23,6 @@ from catchup.rag.nodes import supervisor_node
 from catchup.rag.retryable import RETRYABLE_ERRORS
 from catchup.rag.state import AgentState
 from catchup.rag.subgraphs import build_complex_react_subgraph
-from catchup.rag.subgraphs import build_reuse_subgraph
 from catchup.rag.subgraphs import build_simple_subgraph
 from catchup.rag.subgraphs import build_standard_react_subgraph
 
@@ -113,11 +112,6 @@ def get_compiled_graph(
     rerank_service = get_rerank_service(RerankerProvider.AWS_BEDROCK)
 
     # Subgraphs
-    reuse_subgraph = build_reuse_subgraph(
-        llm_large_stream=llm_large_stream,
-        vector_db_service=vector_db_service,
-    )
-
     simple_subgraph = build_simple_subgraph(
         llm_small=llm_small,
         llm_large_stream=llm_large_stream,
@@ -160,7 +154,6 @@ def get_compiled_graph(
         clarify_node,
         metadata={"tags": ["stream_target"]},
     )
-    workflow.add_node("reuse", reuse_subgraph)
     workflow.add_node("simple", simple_subgraph)
     workflow.add_node("standard", standard_subgraph)
     workflow.add_node("complex", complex_subgraph)
@@ -172,7 +165,6 @@ def get_compiled_graph(
         {
             "clarify": "clarify",
             "direct_answer": "direct_answer",
-            "reuse": "reuse",
             "simple": "simple",
             "standard": "standard",
             "complex": "complex",
@@ -180,7 +172,6 @@ def get_compiled_graph(
     )
     workflow.add_edge("clarify", END)
     workflow.add_edge("direct_answer", END)
-    workflow.add_edge("reuse", END)
     workflow.add_edge("simple", END)
     workflow.add_edge("standard", END)
     workflow.add_edge("complex", END)
