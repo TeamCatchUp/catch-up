@@ -50,7 +50,22 @@ def multi_query_search(
     raise NotImplementedError
 
 
-REACT_TOOLS = [single_query_search, multi_query_search]
+@tool
+def submit_result(
+    key_document_indices: list[int],
+    key_documents: list[str],
+    search_coverage: list[str],
+    reason_for_stopping: str,
+) -> str:
+    """
+    검색을 완료하고 결과를 제출합니다.
+    수집된 문서가 충분하거나 검색이 포화 상태일 때 반드시 이 도구를 호출하세요.
+    절대 자유 형식 텍스트로 답변을 작성하지 마세요 — 이 도구만 사용하세요.
+    """
+    raise NotImplementedError
+
+
+REACT_TOOLS = [single_query_search, multi_query_search, submit_result]
 
 
 # 헬퍼

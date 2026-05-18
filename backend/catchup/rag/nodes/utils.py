@@ -546,6 +546,29 @@ def extract_search_reason(reasoning: str | None) -> str | None:
     return reasoning
 
 
+def map_indices_to_doc_ids(
+    indices: list[int],
+    accumulated_docs: list[Document],
+    agent_seen_ids: list[str],
+) -> set[str]:
+    """submit_result의 key_document_indices (1-based)를 실제 doc ID set으로 변환한다.
+
+    agent_seen_ids 순서 기준으로 매핑해 ToolMessage global index와 일치시킨다.
+    agent_seen_ids가 비어있으면 accumulated_docs 순서로 fallback한다.
+    """
+    id_to_doc = {get_document_id(d): d for d in accumulated_docs}
+    ordered = [id_to_doc[sid] for sid in agent_seen_ids if sid in id_to_doc]
+    docs = ordered or accumulated_docs
+
+    result: set[str] = set()
+    for idx in indices:
+        if 1 <= idx <= len(docs):
+            doc_id = get_document_id(docs[idx - 1])
+            if doc_id:
+                result.add(doc_id)
+    return result
+
+
 # 본문 안의 인덱스 좌표 패턴들. agent_reasoning은 reuse 턴에 재공급되거나 grouping
 # 도입 후 인덱스 체계가 바뀌므로, 산문 안에 박힌 [N]/**N**/N번 문서 좌표는 모두
 # stale로 간주하고 제거한다. 정확한 인덱스 신호는 confirmed_priority_documents
