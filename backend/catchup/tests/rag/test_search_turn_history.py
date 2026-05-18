@@ -77,6 +77,7 @@ async def test_merge_cache_node_creates_snapshot():
     ]
     state = {
         "retrieved_docs": docs,
+        "accumulated_docs": docs,  # 검색이 실제로 일어난 케이스
         "turn_number": 2,
         "rewritten_query": "배포 이슈 원인",
         "query_topic": "배포 이슈",
@@ -108,6 +109,7 @@ async def test_merge_cache_node_accumulates():
     docs = [Document(page_content="new", metadata={"source": "jira"}, id="new1")]
     state = {
         "retrieved_docs": docs,
+        "accumulated_docs": docs,  # 검색이 실제로 일어난 케이스
         "turn_number": 3,
         "rewritten_query": "new query",
         "query_topic": "new topic",

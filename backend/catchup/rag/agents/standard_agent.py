@@ -129,8 +129,15 @@ _RERANK_INPUT_WINDOW = 300  # reranker 입력 상한이다.
 
 async def collect_docs_node(state: AgentState):
     """accumulated_docs를 retrieved_docs로 복사해 rerank → generate 노드가 참조할 수 있게 한다.
-    reranker 입력 크기를 _RERANK_INPUT_WINDOW 이내로 제한하며, 점수(score) 기반으로 상위 문서를 우선 선발한다."""
+    reranker 입력 크기를 _RERANK_INPUT_WINDOW 이내로 제한하며, 점수(score) 기반으로 상위 문서를 우선 선발한다.
+
+    accumulated_docs가 비어있으면(cache hit) prepare_cache가 세팅한 retrieved_docs를 그대로 유지한다.
+    """
     accumulated = state.get("accumulated_docs", [])
+
+    if not accumulated:
+        logger.info("collect_docs_cache_hit", retrieved_docs_count=len(state.get("retrieved_docs", [])))
+        return {}
 
     # 점수 내림차순 정렬 (점수가 없는 경우 0.0으로 처리)
     sorted_docs = sorted(

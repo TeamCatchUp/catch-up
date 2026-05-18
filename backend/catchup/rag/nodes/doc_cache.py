@@ -20,8 +20,11 @@ async def merge_cache_node(state: AgentState):
 
     doc_cache는 직전 검색 턴의 결과만 보존한다(hot cache).
     search_turn_history는 모든 검색 턴의 doc_ids + 메타데이터를 누적한다.
-    reuse 턴에서는 호출되지 않는다.
+    accumulated_docs가 비어있으면(cache hit 턴) doc_cache와 search_turn_history를 갱신하지 않는다.
     """
+    if not state.get("accumulated_docs"):
+        logger.info("merge_cache_skipped_cache_hit")
+        return {}
     new_docs = state.get("retrieved_docs", [])
     turn_number = state.get("turn_number", 0)
     rewritten_query = state.get("rewritten_query", "")
