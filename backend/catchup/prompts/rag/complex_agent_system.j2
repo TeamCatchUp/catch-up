@@ -31,7 +31,7 @@ The following documents have already been retrieved:
 {% if cached_docs_summary %}
 <cached_documents>
 The following documents were retrieved in a previous search turn and may already answer the question.
-If they are sufficient, respond directly without making any tool calls.
+If they are sufficient, call `submit_result` (STEP 3) immediately — do NOT write a free-form answer.
 << cached_docs_summary >>
 </cached_documents>
 {% endif %}

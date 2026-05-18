@@ -141,10 +141,14 @@ async def standard_agent_node(
         }
 
     # No tool calls — iter-0 cache sufficient or error fallback
+    # agent_reasoning을 설정해 generate_final_answer가 활용할 수 있도록 한다.
     reasoning_update = {}
     reasoning = coerce_message_text(response.content)
     if not tool_calls:
-        reasoning_update = {"agent_stop_reason": "by_choice"}
+        reasoning_update = {
+            "agent_stop_reason": "by_choice",
+            "agent_reasoning": reasoning or "",
+        }
 
     if reasoning:
         display_reasoning = extract_search_reason(reasoning)

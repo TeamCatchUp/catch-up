@@ -218,10 +218,14 @@ async def complex_agent_node(
         )
 
     # 에이전트가 더 이상 도구를 호출하지 않으면(루프 종료), 자신의 판단을 state에 기록해 답변 노드에 전달한다.
+    # agent_reasoning을 설정해 generate_final_answer가 활용할 수 있도록 한다.
     reasoning_update = {}
     reasoning = coerce_message_text(response.content)
     if not tool_calls:
-        reasoning_update = {"agent_stop_reason": "by_choice"}
+        reasoning_update = {
+            "agent_stop_reason": "by_choice",
+            "agent_reasoning": reasoning or "",
+        }
 
     if reasoning:
         if not tool_calls:

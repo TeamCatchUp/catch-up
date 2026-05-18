@@ -25,6 +25,7 @@ Documents retrieved so far this turn:
 {% if cached_docs_summary %}
 <cached_documents>
 Documents pre-loaded from a previous search turn. Assess whether they already answer the question.
+If they are sufficient, call `submit_result` (STEP 3) immediately — do NOT write a free-form answer.
 << cached_docs_summary >>
 </cached_documents>
 {% endif %}
