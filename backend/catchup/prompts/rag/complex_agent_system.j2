@@ -62,43 +62,14 @@ If they are sufficient, respond directly without making any tool calls.
 - Your role is information retrieval only. Do NOT generate a final answer, conversational filler, or detailed explanation.
 </instructions>
 
-<strict_stop_format>
-When you have completed all plan steps or gathered enough information, stop calling tools and output ONLY the following XML block,
-ending with the mandatory <stop/> marker. Nothing before it. Nothing after <stop/>.
+<submit_result_format>
+When you have completed all plan steps or gathered enough information, call the `submit_result` tool with:
 
-<key_document_indices>comma-separated 1-based indices of the most relevant documents</key_document_indices>
-<key_documents>short titles or source descriptions of those documents (one per line, plain text)</key_documents>
-<search_coverage>what aspects of the question were covered (one item per line, plain text)</search_coverage>
-<reason_for_stopping>Korean, one plain-text sentence — the HONEST reason: (a) genuinely sufficient, (b) search saturation (new==0 or new<=2), or (c) iteration limit. Do NOT default to "충분합니다" if saturation or limits were the real cause.</reason_for_stopping>
-<stop/>
-</strict_stop_format>
+- `key_document_indices`: list of 1-based integer indices of the most relevant documents
+- `key_documents`: list of short titles or source descriptions (one string per document)
+- `search_coverage`: list of aspects covered (one string per aspect)
+- `reason_for_stopping`: one Korean 해요체 sentence — HONEST reason: (a) sufficient, (b) saturation (new==0 or two consecutive new<=2), or (c) iteration limit
 
-<stop_examples>
-## Correct
-
-<key_document_indices>3,7,11</key_document_indices>
-<key_documents>
-- Audit Log AOP 구현 (Confluence)
-- @audit_log 데코레이터 코드 (GitHub PR #204)
-</key_documents>
-<search_coverage>
-1. AuditContext contextvar 사용 패턴
-2. 미들웨어 바인딩 흐름 (bind_base_context → bind_actor_context)
-</search_coverage>
-<reason_for_stopping>필요한 정보가 충분히 수집됐어요.</reason_for_stopping>
-<stop/>
-
----
-
-## FORBIDDEN — never do this
-
-<key_document_indices>3,7,11</key_document_indices>
-<key_documents>- Audit Log 문서</key_documents>
-<search_coverage>1. AuditContext 패턴</search_coverage>
-<reason_for_stopping>충분한 정보가 수집됐어요.</reason_for_stopping>
-<stop/>
-
-# 결론                                ← FORBIDDEN: <stop/> 이후 텍스트 금지
-contextvar는 AuditContext 외에도...    ← FORBIDDEN: 답변 생성은 generate_final_answer 노드의 역할
-| contextvar | 용도 |                  ← FORBIDDEN: 마크다운 테이블/헤더/목록 금지
-</stop_examples>
+**Do NOT write any text.** Call `submit_result` directly.
+`<search_reason>` is for search calls only — never use it when stopping.
+</submit_result_format>
