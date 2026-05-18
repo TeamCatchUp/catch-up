@@ -116,6 +116,13 @@ async def standard_agent_node(
             accumulated_docs,
             state.get("agent_seen_doc_ids") or [],
         )
+        key_docs = "\n".join(f"- {d}" for d in args.get("key_documents", []))
+        coverage = "\n".join(f"- {c}" for c in args.get("search_coverage", []))
+        agent_reasoning = "\n\n".join(filter(None, [
+            reason,
+            f"Key documents:\n{key_docs}" if key_docs else "",
+            f"Coverage:\n{coverage}" if coverage else "",
+        ]))
         if reason:
             await adispatch_custom_event(
                 "process",
@@ -126,7 +133,7 @@ async def standard_agent_node(
                 },
             )
         return {
-            "agent_reasoning": reason,
+            "agent_reasoning": agent_reasoning,
             "essential_doc_ids": list(essential_ids),
             "agent_stop_reason": "by_choice",
             "agent_iteration": agent_iteration + 1,

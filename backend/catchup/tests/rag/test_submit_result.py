@@ -106,7 +106,9 @@ async def test_submit_result_sets_state_correctly():
                 result = await standard_agent_node(state, llm=mock_llm)
 
     assert result["agent_stop_reason"] == "by_choice"
-    assert result["agent_reasoning"] == "정보가 충분히 수집됐어요."
+    assert "정보가 충분히 수집됐어요." in result["agent_reasoning"]
+    assert "doc A" in result["agent_reasoning"]
+    assert "항목 1" in result["agent_reasoning"]
     assert set(result["essential_doc_ids"]) == {"id_A", "id_B"}
     assert "messages" not in result
 
