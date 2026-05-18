@@ -25,7 +25,7 @@ class Settings(BaseSettings):
     #===========================#
     #     Swagger Settings      #
     #===========================#
-    API_DOCS_ENABLED: bool = False
+    API_DOCS_ENABLED: bool = True
 
     #===========================#
     #     Debug Settings        #
@@ -33,7 +33,7 @@ class Settings(BaseSettings):
     DEBUGGER_ENABLED: bool = False
     DEBUGGER_PORT: int = 5678
     PYINSTRUMENT_ENABLED: bool = False
-    DEBUG_PROD_MODE: bool = False
+    DEBUG_PROD_MODE: bool = True
     
     #=============================#
     #     System Base Settings    #
