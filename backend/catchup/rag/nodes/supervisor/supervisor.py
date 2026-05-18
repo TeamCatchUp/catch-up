@@ -6,7 +6,6 @@ from langchain_core.messages import HumanMessage
 from catchup.costs.utils import token_usage
 from catchup.prompts.loader import prompt_loader
 from catchup.rag.nodes.utils import ainvoke_llm_with_token_usage
-from catchup.rag.nodes.utils import build_docs_summary
 from catchup.rag.nodes.utils import build_search_history_summary
 from catchup.rag.nodes.utils import build_system_message
 from catchup.rag.nodes.utils import get_conversation_history
@@ -19,13 +18,12 @@ from catchup.rag.state import AgentState
 
 logger = structlog.get_logger()
 
-_PIPELINE_ORDER = ["clarify", "direct_answer", "reuse", "simple", "standard", "complex"]
+_PIPELINE_ORDER = ["clarify", "direct_answer", "simple", "standard", "complex"]
 _DEFAULT_MAX_ITERATIONS: dict[str, int] = {
     "direct_answer": 0,
-    "reuse": 0,
     "simple": 0,
-    "standard": 3,
-    "complex": 7,
+    "standard": 4,
+    "complex": 8,
 }
 
 
@@ -44,12 +42,7 @@ async def supervisor_node(
     # engine.py에서 초기화하지 않으므로 체크포인터를 통해 턴 간 누적된다.
     current_turn = state.get("turn_number", 0) + 1
 
-    # doc_cache: 직전 검색 턴의 full docs (hot cache). supervisor에게 전문 제공.
-    doc_cache = state.get("doc_cache", [])
-    retrieved_docs_summary = build_docs_summary(doc_cache, max_docs=len(doc_cache))
-
     # search_turn_history: 모든 검색 턴의 경량 메타데이터.
-    # supervisor가 과거 검색 이력 전체를 보고 reuse 범위를 판단한다.
     search_turn_history = state.get("search_turn_history", [])
     search_history_summary = build_search_history_summary(search_turn_history)
 
@@ -57,7 +50,6 @@ async def supervisor_node(
 
     system_prompt = prompt_loader.get_prompt(
         "rag/supervisor",
-        retrieved_docs_summary=retrieved_docs_summary,
         search_history_summary=search_history_summary,
         sources=list(SOURCE_METADATA.values()),
         slack_thread_context=slack_thread_context,
@@ -122,7 +114,6 @@ async def supervisor_node(
             inferred_tool_filters=[f.value for f in pipeline_plan.inferred_tool_filters]
             if pipeline_plan.inferred_tool_filters
             else None,
-            doc_cache_size=len(doc_cache),
             search_history_len=len(search_turn_history),
             conversation_history_len=len(history),
         )
@@ -154,8 +145,7 @@ async def supervisor_node(
 
         # rewrite 노드가 없는 파이프라인은 후속 노드가 rewritten_query를 참조하므로
         # supervisor에서 미리 original_query 값으로 채워둔다.
-        # reuse: generate_final_answer_node의 LARGE LLM이 conversation_history로 coreference 해소.
-        _NO_REWRITE_PIPELINES = {"clarify", "direct_answer", "reuse"}
+        _NO_REWRITE_PIPELINES = {"clarify", "direct_answer"}
         if pipeline_plan.pipeline_type in _NO_REWRITE_PIPELINES:
             result["rewritten_query"] = query
 
