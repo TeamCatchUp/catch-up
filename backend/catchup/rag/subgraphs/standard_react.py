@@ -16,15 +16,18 @@ from catchup.rag.state import AgentState
 
 
 def _route_after_agent(state: AgentState) -> str:
-    """tool_calls 있으면 executor, 없으면 collect_docs로 라우팅.
+    """agent_stop_reason == 'by_choice' (submit_result 또는 no-tool-call) → collect_docs.
     tool_calls 체크를 max_iterations보다 먼저 수행해 orphaned tool_use 메시지를 방지한다."""
+    if state.get("agent_stop_reason") == "by_choice":
+        return "collect_docs"
+
     messages = state.get("messages", [])
     last = messages[-1] if messages else None
     if last and getattr(last, "tool_calls", None):
         return "tool_executor"
 
     pipeline_plan = state.get("pipeline_plan")
-    max_iterations = pipeline_plan.max_iterations if pipeline_plan else 3
+    max_iterations = pipeline_plan.max_iterations if pipeline_plan else 4
     if state.get("agent_iteration", 0) >= max_iterations:
         return "extract_essential"
 

@@ -25,18 +25,21 @@ def _route_after_prepare_cache(state: AgentState) -> str:
 
 
 def _route_after_complex_agent(state: AgentState) -> str:
-    """tool_calls 있으면 executor, 없으면 collect_docs로 라우팅.
+    """agent_stop_reason == 'by_choice' (submit_result) → collect_docs.
     tool_calls 체크를 max_iterations보다 먼저 수행해 orphaned tool_use 메시지를 방지한다.
 
-    search_plan이 없는 상태에서 tool_calls가 있으면 complex_planner로 먼저 라우팅한다.
+    search_plan이 없는 상태에서 search tool_calls가 있으면 complex_planner로 먼저 라우팅한다.
     iter-0의 tool_calls는 "검색 필요" 신호로만 사용되며, drop_orphaned_tool_calls가 정리한다.
     """
+    if state.get("agent_stop_reason") == "by_choice":
+        return "collect_docs"
+
     messages = state.get("messages", [])
     last = messages[-1] if messages else None
     if last and getattr(last, "tool_calls", None):
         if state.get("search_plan") is None:
-            return "complex_planner"  # 플래너 미시도 → 실행
-        return "tool_executor"  # 플래너 성공([steps]) 또는 실패([]) → 검색 진행
+            return "complex_planner"
+        return "tool_executor"
 
     pipeline_plan = state.get("pipeline_plan")
     max_iterations = pipeline_plan.max_iterations if pipeline_plan else 8

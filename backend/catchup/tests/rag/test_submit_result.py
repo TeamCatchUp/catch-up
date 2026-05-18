@@ -137,3 +137,42 @@ async def test_submit_result_does_not_add_messages():
 
     assert "messages" not in result
     assert result["agent_stop_reason"] == "by_choice"
+
+
+from catchup.rag.subgraphs.standard_react import _route_after_agent
+from catchup.rag.schemas.structures import PipelinePlan as _PipelinePlan
+
+
+def _route_state(agent_stop_reason=None, tool_calls=None, agent_iteration=0, max_iterations=4):
+    from langchain_core.messages import AIMessage
+    msgs = []
+    if tool_calls is not None:
+        ai = AIMessage(content="", tool_calls=tool_calls)
+        msgs = [ai]
+    return {
+        "messages": msgs,
+        "agent_stop_reason": agent_stop_reason,
+        "agent_iteration": agent_iteration,
+        "pipeline_plan": _PipelinePlan(pipeline_type="standard", max_iterations=max_iterations),
+    }
+
+
+def test_route_by_choice_goes_to_collect_docs():
+    state = _route_state(agent_stop_reason="by_choice")
+    assert _route_after_agent(state) == "collect_docs"
+
+
+def test_route_search_tool_calls_goes_to_executor():
+    tc = [{"name": "single_query_search", "args": {}, "id": "c1"}]
+    state = _route_state(tool_calls=tc)
+    assert _route_after_agent(state) == "tool_executor"
+
+
+def test_route_iteration_limit_goes_to_extract_essential():
+    state = _route_state(agent_iteration=4, max_iterations=4)
+    assert _route_after_agent(state) == "extract_essential"
+
+
+def test_route_no_tool_calls_goes_to_collect_docs():
+    state = _route_state()
+    assert _route_after_agent(state) == "collect_docs"

@@ -11,10 +11,10 @@ from catchup.rag.nodes.utils import build_docs_summary
 from catchup.rag.nodes.utils import build_system_message
 from catchup.rag.nodes.utils import coerce_message_text
 from catchup.rag.nodes.utils import drop_orphaned_tool_calls
-from catchup.rag.nodes.utils import extract_essential_ids_from_agent_view
 from catchup.rag.nodes.utils import extract_reason_for_stopping
 from catchup.rag.nodes.utils import extract_search_reason
 from catchup.rag.nodes.utils import log_node
+from catchup.rag.nodes.utils import map_indices_to_doc_ids
 from catchup.rag.retryable import RETRYABLE_ERRORS
 from catchup.rag.schemas.sources import SOURCE_METADATA
 from catchup.rag.schemas.structures import SearchPlan
@@ -146,7 +146,7 @@ async def complex_agent_node(
     system_message = build_system_message(system_prompt)
     query = state.get("rewritten_query") or state.get("original_query", "")
 
-    llm_with_tools = llm.bind_tools(REACT_TOOLS, stop=["<stop/>"])
+    llm_with_tools = llm.bind_tools(REACT_TOOLS)
 
     await adispatch_custom_event(
         "process",
@@ -166,6 +166,37 @@ async def complex_agent_node(
         return {"agent_iteration": agent_iteration + 1}
 
     tool_calls = getattr(response, "tool_calls", None) or []
+
+    # submit_result → structured stop. Messages NOT updated (avoids orphaned tool_use).
+    submit_call = next(
+        (tc for tc in tool_calls if tc["name"] == "submit_result"), None
+    )
+    if submit_call:
+        args = submit_call["args"]
+        reason = args.get("reason_for_stopping", "")
+        key_indices = [int(i) for i in args.get("key_document_indices", [])]
+        essential_ids = map_indices_to_doc_ids(
+            key_indices,
+            accumulated_docs,
+            state.get("agent_seen_doc_ids") or [],
+        )
+        if reason:
+            await adispatch_custom_event(
+                "process",
+                {
+                    "status": "completed",
+                    "node": "complex_agent",
+                    "reasoning": reason,
+                },
+            )
+        return {
+            "agent_reasoning": reason,
+            "essential_doc_ids": list(essential_ids),
+            "agent_stop_reason": "by_choice",
+            "agent_iteration": agent_iteration + 1,
+            **token_usages,
+        }
+
     logger.info(
         "complex_agent_decision",
         iteration=agent_iteration + 1,
@@ -183,16 +214,7 @@ async def complex_agent_node(
     reasoning_update = {}
     reasoning = coerce_message_text(response.content)
     if not tool_calls:
-        essential_ids = extract_essential_ids_from_agent_view(
-            reasoning,
-            accumulated_docs,
-            state.get("agent_seen_doc_ids") or [],
-        )
-        reasoning_update = {
-            "agent_reasoning": reasoning,
-            "essential_doc_ids": list(essential_ids) if essential_ids else [],
-            "agent_stop_reason": "by_choice",
-        }
+        reasoning_update = {"agent_stop_reason": "by_choice"}
 
     if reasoning:
         if not tool_calls:
