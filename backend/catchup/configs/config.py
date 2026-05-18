@@ -33,6 +33,7 @@ class Settings(BaseSettings):
     DEBUGGER_ENABLED: bool = False
     DEBUGGER_PORT: int = 5678
     PYINSTRUMENT_ENABLED: bool = False
+    DEBUG_PROD_MODE: bool = False
     
     #=============================#
     #     System Base Settings    #
