@@ -89,13 +89,19 @@ def build_docs_summary(docs: list[Document], max_docs: int = 20, start_index: in
         "Recently collected documents:",
     ]
 
+    _TRUNCATE_SOURCES = {"confluence", "channel_talk"}
+    _TRUNCATE_LIMIT = 500
+
     for i, doc in enumerate(docs[:max_docs], start_index):
         source = doc.metadata.get("source", "unknown")
         temporal = resolve_temporal_context(doc.metadata)
 
-        raw = doc.page_content[:300].strip()
-        if len(doc.page_content) > 300:
-            raw += "..."
+        if source in _TRUNCATE_SOURCES:
+            raw = doc.page_content[:_TRUNCATE_LIMIT].strip()
+            if len(doc.page_content) > _TRUNCATE_LIMIT:
+                raw += "..."
+        else:
+            raw = doc.page_content.strip()
         content = re.sub(r"[ \t]+", " ", raw)
         content = re.sub(r"\n{3,}", "\n\n", content)
 
