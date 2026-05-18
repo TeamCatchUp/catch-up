@@ -36,9 +36,19 @@ class SearchProbeRequest(BaseModel):
     tool_filters: list[str] = Field(default_factory=list)
 
 
-class DocResult(BaseModel):
+class PreRankDocResult(BaseModel):
     doc_id: str
-    score: float
+    rrf_score: float
+    title: str
+    page_content: str
+    contextual_content: str | None
+    source: str
+    created_at: str | None
+
+
+class PostRankDocResult(BaseModel):
+    doc_id: str
+    relevance_score: float
     title: str
     page_content: str
     contextual_content: str | None
@@ -47,18 +57,31 @@ class DocResult(BaseModel):
 
 
 class SearchProbeResponse(BaseModel):
-    pre_rerank: list[DocResult]
-    post_rerank: list[DocResult]
+    pre_rerank: list[PreRankDocResult]
+    post_rerank: list[PostRankDocResult]
     query_count: int
     pre_rerank_count: int
     post_rerank_count: int
 
 
-def _to_doc_result(doc: Document, score_key: str) -> DocResult:
+def _to_pre_rank_result(doc: Document) -> PreRankDocResult:
     md = doc.metadata
-    return DocResult(
+    return PreRankDocResult(
         doc_id=get_document_id(doc),
-        score=round(float(md.get(score_key) or 0.0), 6),
+        rrf_score=round(float(md.get("score") or 0.0), 6),
+        title=md.get("title") or "",
+        page_content=doc.page_content,
+        contextual_content=md.get("contextual_content"),
+        source=md.get("source", "unknown"),
+        created_at=str(md["created_at"]) if md.get("created_at") else None,
+    )
+
+
+def _to_post_rank_result(doc: Document) -> PostRankDocResult:
+    md = doc.metadata
+    return PostRankDocResult(
+        doc_id=get_document_id(doc),
+        relevance_score=round(float(md.get("relevance_score") or 0.0), 6),
         title=md.get("title") or "",
         page_content=doc.page_content,
         contextual_content=md.get("contextual_content"),
@@ -94,7 +117,7 @@ async def search_probe(body: SearchProbeRequest) -> SearchProbeResponse:
 
     flattened = deduplicate_documents([doc for sublist in results for doc in sublist])
 
-    pre_rerank_items = [_to_doc_result(d, "score") for d in flattened]
+    pre_rerank_items = [_to_pre_rank_result(d) for d in flattened]
 
     reranked = await rerank_service.rerank(
         query=body.rewritten_query,
@@ -102,7 +125,7 @@ async def search_probe(body: SearchProbeRequest) -> SearchProbeResponse:
         top_n=len(flattened),
     )
 
-    post_rerank_items = [_to_doc_result(d, "relevance_score") for d in reranked]
+    post_rerank_items = [_to_post_rank_result(d) for d in reranked]
 
     logger.info(
         "search_probe_completed",
