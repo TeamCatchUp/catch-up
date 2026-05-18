@@ -103,7 +103,7 @@ class PipelinePlan(BaseModel):
         default="",
         description="이 파이프라인 타입을 선택한 이유 및 분석 결과"
     )
-    pipeline_type: Literal["direct_answer", "reuse", "simple", "standard", "complex", "clarify"] = Field(
+    pipeline_type: Literal["direct_answer", "simple", "standard", "complex", "clarify"] = Field(
         description="실행할 파이프라인 타입"
     )
     max_iterations: int = Field(
@@ -133,13 +133,13 @@ class PipelinePlan(BaseModel):
             "direct_answer 및 clarify일 때는 null."
         ),
     )
-    reuse_history_turn_numbers: list[int] | None = Field(
+    cache_turn_numbers: list[int] | None = Field(
         default=None,
         description=(
-            "reuse 파이프라인일 때만 채운다. "
+            "standard / complex 파이프라인일 때 prepare_cache_node에 전달할 과거 검색 턴 인덱스 목록. "
             "null이면 hot cache만 사용. "
-            "값을 지정하면 해당 1-based 인덱스의 검색 턴 문서만 사용 (hot cache 자동 포함 안 됨). "
-            "hot cache를 포함하려면 search_history에서 '(hot cache)' 표시된 턴의 인덱스도 포함. "
+            "값을 지정하면 해당 1-based 인덱스의 검색 턴 문서를 lazy fetch하여 병합 (hot cache 자동 포함 안 됨). "
+            "hot cache를 포함하려면 search_history에서 마지막 턴의 인덱스도 포함. "
             "예: [1] → Search 1만. [1, 3] where Search 3이 hot cache → Search 1 + hot cache."
         ),
     )

@@ -58,9 +58,9 @@ async def prepare_cache_node(
     state: AgentState,
     vector_db_service: BaseVectorDbService,
 ):
-    """reuse 파이프라인 진입 시 retrieved_docs를 구성한다.
+    """prepare_cache_node 진입 시 retrieved_docs를 구성한다.
 
-    항상 doc_cache(hot cache)를 포함하고, supervisor가 reuse_history_turn_numbers를
+    항상 doc_cache(hot cache)를 포함하고, supervisor가 cache_turn_numbers를
     지정한 경우 해당 검색 턴의 docs를 DB에서 lazy fetch하여 병합한다.
     """
     hot_docs = state.get("doc_cache", [])
@@ -68,8 +68,8 @@ async def prepare_cache_node(
 
     pipeline_plan = state.get("pipeline_plan")
     fetch_indices = (
-        pipeline_plan.reuse_history_turn_numbers
-        if pipeline_plan and pipeline_plan.reuse_history_turn_numbers
+        pipeline_plan.cache_turn_numbers
+        if pipeline_plan and pipeline_plan.cache_turn_numbers
         else None
     )
 
