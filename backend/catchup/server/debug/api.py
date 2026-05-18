@@ -35,7 +35,8 @@ class DocResult(BaseModel):
     doc_id: str
     score: float
     title: str
-    content_preview: str
+    page_content: str
+    contextual_content: str | None
     source: str
     created_at: str | None
 
@@ -54,7 +55,8 @@ def _to_doc_result(doc: Document, score_key: str) -> DocResult:
         doc_id=get_document_id(doc),
         score=round(float(md.get(score_key) or 0.0), 6),
         title=md.get("title") or "",
-        content_preview=doc.page_content[:300],
+        page_content=doc.page_content,
+        contextual_content=md.get("contextual_content"),
         source=md.get("source", "unknown"),
         created_at=str(md["created_at"]) if md.get("created_at") else None,
     )
