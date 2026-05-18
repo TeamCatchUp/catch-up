@@ -1,7 +1,7 @@
 'use client';
 
-// 문서 탐색 모드 입력 박스 아래에 노출되는 소스 chips.
-// home·hybrid-search 양쪽에서 재사용. controlled 컴포넌트로 selectedSources/onToggle을 부모가 관리.
+// 입력 박스에 노출되는 소스 chips. 문서 탐색·AI 검색·채팅에서 공용으로 재사용.
+// controlled 컴포넌트로 selectedSources/onToggle을 부모가 관리.
 
 import ChannelTalk from '@/public/icons/logo/ChannelTalk.svg';
 import Confluence from '@/public/icons/logo/Confluence.svg';
