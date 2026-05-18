@@ -23,7 +23,7 @@ router = APIRouter(prefix="/api/v1/debug", tags=["debug"])
 class SearchProbeRequest(BaseModel):
     rewritten_query: str
     queries: list[str] = Field(..., min_length=1)
-    weights: list[float] = Field(default=[0.6, 0.4])
+    weights: list[float] = Field(default=[0.6, 0.4], min_length=2, max_length=2)
     k: int = Field(default=100, ge=1)
     score_threshold: float = Field(default=0.0)
     tool_filters: list[str] = Field(default_factory=list)
