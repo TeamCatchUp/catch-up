@@ -49,13 +49,17 @@ const SourceList = ({
 
   // 필터 탭 fade-in: transitionKey 변경 시 false → true로 1프레임 지연 전환.
   // (카드 stagger는 framer-motion이 담당)
-  const [listEntered, setListEntered] = useState(prefersReducedMotion);
-  useEffect(() => {
-    if (prefersReducedMotion) {
-      setListEntered(true);
-      return;
-    }
+  const [listEntered, setListEntered] = useState(false);
+  const [prevTransitionKey, setPrevTransitionKey] = useState(transitionKey);
+
+  // transitionKey 변경 시 fade-in을 다시 재생하도록 렌더 중 listEntered를 리셋한다.
+  if (transitionKey !== prevTransitionKey) {
+    setPrevTransitionKey(transitionKey);
     setListEntered(false);
+  }
+
+  useEffect(() => {
+    if (prefersReducedMotion) return;
     let enterRaf = 0;
     const resetRaf = requestAnimationFrame(() => {
       enterRaf = requestAnimationFrame(() => setListEntered(true));
