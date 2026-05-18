@@ -7,11 +7,7 @@ import ArrowSend from '@/public/icons/icon/arrow_send.svg';
 import CancelSmall from '@/public/icons/icon/cancel_small.svg';
 import SearchFile from '@/public/icons/icon/search_file.svg';
 import Stop from '@/public/icons/icon/stop.svg';
-import IconConfluence from '@/public/icons/logo/Confluence.svg';
-import IconGithub from '@/public/icons/logo/GitHub.svg';
-import IconJira from '@/public/icons/logo/Jira.svg';
-import IconSlack from '@/public/icons/logo/Slack.svg';
-import { SearchOptionButton } from '@/shared/components/SearchOptionButton';
+import SourceChipsRow from '@/shared/components/SourceChipsRow';
 import { Button } from '@/shared/components/ui/button';
 import { cn } from '@/shared/utils/cn';
 
@@ -81,32 +77,11 @@ export default function RagInput({ filters, isLoading, onSendMessage, onStop, on
               >
                 <CancelSmall className="h-6 w-6" />
               </Button>
-              <div className="flex items-center gap-2.5">
-                <SearchOptionButton
-                  Icon={IconJira}
-                  label="Jira"
-                  selected={filters.selectedSources.includes('jira')}
-                  onClick={() => filters.toggleSource('jira')}
-                />
-                <SearchOptionButton
-                  Icon={IconConfluence}
-                  label="Confluence"
-                  selected={filters.selectedSources.includes('confluence')}
-                  onClick={() => filters.toggleSource('confluence')}
-                />
-                <SearchOptionButton
-                  Icon={IconGithub}
-                  label="Github"
-                  selected={filters.selectedSources.includes('github')}
-                  onClick={() => filters.toggleSource('github')}
-                />
-                <SearchOptionButton
-                  Icon={IconSlack}
-                  label="Slack"
-                  selected={filters.selectedSources.includes('slack')}
-                  onClick={() => filters.toggleSource('slack')}
-                />
-              </div>
+              <SourceChipsRow
+                selectedSources={filters.selectedSources}
+                onToggle={filters.setSelectedSources}
+                className="justify-start"
+              />
             </div>
           </div>
 
