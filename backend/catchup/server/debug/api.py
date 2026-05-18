@@ -13,11 +13,15 @@ from catchup.components.reranker.constants import RerankerProvider
 from catchup.components.reranker.factory import get_rerank_service
 from catchup.components.vector_db.factory import get_vector_db_service
 from catchup.components.vector_db.pgvector.constants import VectorDbProvider
+from catchup.configs.config import settings
 from catchup.db.models import SourceType
+from catchup.observability.langfuse.configs import get_observe
+from catchup.rag.nodes.rerank.rerank import _validate_retrieved_docs
 from catchup.rag.nodes.utils import deduplicate_documents
 from catchup.rag.nodes.utils import get_document_id
 
 logger = structlog.get_logger()
+observe = get_observe()
 
 router = APIRouter(prefix="/api/v1/debug", tags=["debug"])
 
@@ -91,6 +95,7 @@ def _to_post_rank_result(doc: Document) -> PostRankDocResult:
 
 
 @router.post("/search-probe", response_model=SearchProbeResponse)
+@observe(name="debug-search-probe")
 async def search_probe(body: SearchProbeRequest) -> SearchProbeResponse:
     embeddings = get_embedding_service(EmbeddingProvider.AWS_BEDROCK).get_embedder()
     vector_db_service = get_vector_db_service(VectorDbProvider.PGVECTOR, embeddings)
@@ -108,36 +113,52 @@ async def search_probe(body: SearchProbeRequest) -> SearchProbeResponse:
         for q in body.queries
     ]
 
-    results = await vector_db_service.hybrid_search_batch(
-        queries=query_dicts,
-        k=body.k,
-        weights=body.weights,
-        tool_filters=tool_filters,
-    )
+    async def _run() -> SearchProbeResponse:
+        results = await vector_db_service.hybrid_search_batch(
+            queries=query_dicts,
+            k=body.k,
+            weights=body.weights,
+            tool_filters=tool_filters,
+        )
+        flattened = deduplicate_documents(
+            [doc for sublist in results for doc in sublist]
+        )
+        pre_rerank_items = [_to_pre_rank_result(d) for d in flattened]
 
-    flattened = deduplicate_documents([doc for sublist in results for doc in sublist])
+        validated = _validate_retrieved_docs(flattened)
+        reranked = await rerank_service.rerank(
+            query=body.rewritten_query,
+            documents=validated,
+            top_n=50,
+        )
+        post_rerank_items = [_to_post_rank_result(d) for d in reranked]
 
-    pre_rerank_items = [_to_pre_rank_result(d) for d in flattened]
+        logger.info(
+            "search_probe_completed",
+            query_count=len(body.queries),
+            pre_rerank_count=len(pre_rerank_items),
+            post_rerank_count=len(post_rerank_items),
+        )
+        return SearchProbeResponse(
+            pre_rerank=pre_rerank_items,
+            post_rerank=post_rerank_items,
+            query_count=len(body.queries),
+            pre_rerank_count=len(pre_rerank_items),
+            post_rerank_count=len(post_rerank_items),
+        )
 
-    reranked = await rerank_service.rerank(
-        query=body.rewritten_query,
-        documents=flattened,
-        top_n=len(flattened),
-    )
+    if settings.ENABLE_LANGFUSE:
+        from langfuse import propagate_attributes
 
-    post_rerank_items = [_to_post_rank_result(d) for d in reranked]
+        with propagate_attributes(
+            metadata={
+                "rewritten_query": body.rewritten_query,
+                "queries": [q.query for q in body.queries],
+                "keyword_tokens": [q.keyword_tokens for q in body.queries],
+                "weights": body.weights,
+                "tool_filters": body.tool_filters,
+            }
+        ):
+            return await _run()
 
-    logger.info(
-        "search_probe_completed",
-        query_count=len(body.queries),
-        pre_rerank_count=len(pre_rerank_items),
-        post_rerank_count=len(post_rerank_items),
-    )
-
-    return SearchProbeResponse(
-        pre_rerank=pre_rerank_items,
-        post_rerank=post_rerank_items,
-        query_count=len(body.queries),
-        pre_rerank_count=len(pre_rerank_items),
-        post_rerank_count=len(post_rerank_items),
-    )
+    return await _run()
