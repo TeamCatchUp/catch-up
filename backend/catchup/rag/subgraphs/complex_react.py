@@ -16,6 +16,14 @@ from catchup.rag.nodes import rewrite_node
 from catchup.rag.state import AgentState
 
 
+def _route_after_prepare_cache(state: AgentState) -> str:
+    """retrieved_docs가 비어있으면 (cold cache) planner로 직행.
+    캐시가 있을 때만 agent iter-0 cache 평가 단계를 거친다."""
+    if not state.get("retrieved_docs"):
+        return "complex_planner"
+    return "complex_agent"
+
+
 def _route_after_complex_agent(state: AgentState) -> str:
     """tool_calls 있으면 executor, 없으면 collect_docs로 라우팅.
     tool_calls 체크를 max_iterations보다 먼저 수행해 orphaned tool_use 메시지를 방지한다.
@@ -43,11 +51,13 @@ def build_complex_react_subgraph(
 ):
     """Complex ReAct 파이프라인 서브그래프.
 
-    rewrite → prepare_cache → agent iter-0 (cache 평가)
-      → cache 충분 (no tool calls) → collect_docs → rerank → generate
-      → cache 부족 (tool calls, no plan) → complex_planner → agent iter-1+
-            ↔ tool executor (max_iter=8)
-            → collect_docs → rerank (1회) → generate_final_answer → END
+    rewrite → prepare_cache
+      → cold cache (retrieved_docs 없음) → complex_planner → agent iter-0+
+      → warm cache (retrieved_docs 있음) → agent iter-0 (cache 평가)
+          → cache 충분 (no tool calls)        → collect_docs → rerank → generate
+          → cache 부족 (tool calls, no plan)  → complex_planner → agent iter-1+
+                ↔ tool executor (max_iter=8)
+                → collect_docs → rerank (1회) → generate_final_answer → END
     """
     from catchup.rag.graph import AGENT_RETRY_POLICY
     from catchup.rag.graph import BASE_RETRY_POLICY
@@ -98,7 +108,11 @@ def build_complex_react_subgraph(
 
     graph.set_entry_point("rewrite")
     graph.add_edge("rewrite", "prepare_cache")
-    graph.add_edge("prepare_cache", "complex_agent")
+    graph.add_conditional_edges(
+        "prepare_cache",
+        _route_after_prepare_cache,
+        {"complex_planner": "complex_planner", "complex_agent": "complex_agent"},
+    )
     graph.add_edge("complex_planner", "complex_agent")
     graph.add_conditional_edges(
         "complex_agent",
