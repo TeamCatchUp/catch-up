@@ -67,8 +67,17 @@ async def complex_planner_node(
         plan: SearchPlan = response.get("parsed")
     except RETRYABLE_ERRORS as e:
         raise e
-    except Exception:
-        return {"search_plan": None}
+    except Exception as e:
+        logger.warning("complex_planner_failed", error=str(e), exc_info=True)
+        await adispatch_custom_event(
+            "process",
+            {
+                "status": "error",
+                "node": "complex_planner",
+                "reasoning": "검색 계획 수립에 실패했어요.",
+            },
+        )
+        return {"search_plan": []}  # None=미시도, []=실패, [steps]=성공
 
     step_count = len(plan.steps) if plan else 0
     logger.info("complex_plan_created", step_count=step_count)

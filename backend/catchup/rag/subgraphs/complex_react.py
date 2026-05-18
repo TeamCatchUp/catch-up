@@ -34,9 +34,9 @@ def _route_after_complex_agent(state: AgentState) -> str:
     messages = state.get("messages", [])
     last = messages[-1] if messages else None
     if last and getattr(last, "tool_calls", None):
-        if not state.get("search_plan"):
-            return "complex_planner"
-        return "tool_executor"
+        if state.get("search_plan") is None:
+            return "complex_planner"  # 플래너 미시도 → 실행
+        return "tool_executor"  # 플래너 성공([steps]) 또는 실패([]) → 검색 진행
 
     pipeline_plan = state.get("pipeline_plan")
     max_iterations = pipeline_plan.max_iterations if pipeline_plan else 8
