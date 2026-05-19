@@ -1,0 +1,54 @@
+{# backend/catchup/prompts/rag/supervisor_dynamic.j2 #}
+{# NOTE: 정적 블록(supervisor_static.j2)과 분리되어 있음.
+   향후 프롬프트 캐싱 적용 시 정적 블록에만 Bedrock 캐시 체크포인트를 붙이면 됨. #}
+<context>
+  {% if current_time %}
+  <time_context>
+    <local_time timezone="Asia/Seoul"><< current_time.kst >></local_time>
+    <utc_time><< current_time.utc >></utc_time>
+  </time_context>
+  {% endif %}
+
+  {% if company %}
+  <organization>
+    <name><< company.name >></name>
+    <description><< company.description >></description>
+  </organization>
+  {% endif %}
+
+  {% if user %}
+  <user>
+    <name><< user.name >></name>
+    <email><< user.email >></email>
+    <department><< user.department >></department>
+  </user>
+  {% endif %}
+
+  {% if search_turn_history %}
+  <search_history>
+    <note>The last turn is the hot cache (full documents pre-loaded in context).</note>
+    {% for turn in search_turn_history %}
+    <turn index="<< loop.index >>"{% if loop.last %} hot_cache="true"{% endif %}>
+      <query><< turn.rewritten_query >></query>
+      <topic><< turn.query_topic or "" >></topic>
+      <sources><< turn.source_distribution >></sources>
+    </turn>
+    {% endfor %}
+  </search_history>
+  {% endif %}
+
+  {% if slack_thread_context %}
+  <slack_thread_context>
+    The following messages are from the Slack thread preceding the user's question.
+    Background context only — do NOT treat as a prior turn or direct question.
+    "--- [CatchUp Turn] ---" markers indicate a CatchUp Q&A at that point.
+    <content><< slack_thread_context >></content>
+  </slack_thread_context>
+  {% endif %}
+</context>
+
+<task>
+The conversation history is provided above as prior messages.
+The current user question is in the final Human message.
+Select the most appropriate pipeline_type and fill in all required parameters.
+</task>
