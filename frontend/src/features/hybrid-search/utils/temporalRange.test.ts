@@ -22,7 +22,7 @@ describe('dateRangeToUrlParams', () => {
 
   it('range가 없거나 from이 없으면 빈 객체', () => {
     expect(dateRangeToUrlParams(undefined)).toEqual({});
-    expect(dateRangeToUrlParams({})).toEqual({});
+    expect(dateRangeToUrlParams({ from: undefined })).toEqual({});
   });
 });
 
