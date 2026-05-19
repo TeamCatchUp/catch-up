@@ -35,7 +35,7 @@ export default function SortDropdown({ value, onChange }: SortDropdownProps) {
       <DropdownMenuTrigger asChild>
         <button
           type="button"
-          className="hover:bg-fill-interaction-hover flex h-8 max-w-37.5 min-w-9 cursor-pointer items-center gap-2 rounded-lg px-1 pb-2.5 transition-colors"
+          className="flex h-8 max-w-37.5 min-w-9 cursor-pointer items-center gap-2 rounded-lg px-1 pb-2.5"
         >
           <span className="text-heading-small text-content-alternative flex-1 truncate text-left">
             {selectedLabel}
