@@ -8,6 +8,7 @@ import type { DateRange } from 'react-day-picker';
 import { useRouter } from 'next/navigation';
 
 import IconArrowSend from '@/public/icons/icon/arrow_send.svg';
+import IconCancel from '@/public/icons/icon/cancel.svg';
 import IconFilter from '@/public/icons/icon/filter_small.svg';
 import IconSearch from '@/public/icons/icon/search_2.svg';
 import { Button } from '@/shared/components/ui/button';
@@ -86,6 +87,18 @@ export default function DocsQueryBox({ selectedSources }: DocsQueryBoxProps) {
             </Button>
           }
         />
+        {hasText && (
+          <Button
+            variant="icon-only-gray"
+            size="lg"
+            type="button"
+            onClick={() => setValue('')}
+            aria-label="검색어 지우기"
+            className="text-icon-normal rounded-full"
+          >
+            <IconCancel className="size-6" />
+          </Button>
+        )}
         <span aria-hidden className="bg-edge-normal h-6 w-px shrink-0" />
         <button
           type="button"
