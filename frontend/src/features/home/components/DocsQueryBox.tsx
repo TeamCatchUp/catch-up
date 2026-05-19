@@ -61,7 +61,7 @@ export default function DocsQueryBox({ selectedSources }: DocsQueryBoxProps) {
       <DateRangePicker
         value={dateRange}
         onChange={setDateRange}
-        align="start"
+        align="end"
         trigger={
           <button
             type="button"
@@ -70,10 +70,7 @@ export default function DocsQueryBox({ selectedSources }: DocsQueryBoxProps) {
           >
             <IconFilter className="h-7 w-7" />
             {dateRange?.from && (
-              <span
-                aria-hidden
-                className="bg-fill-primary absolute top-2 right-2 size-1.5 rounded-full"
-              />
+              <span aria-hidden className="bg-fill-primary absolute top-2 right-2 size-1.5 rounded-full" />
             )}
           </button>
         }
