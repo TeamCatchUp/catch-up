@@ -38,7 +38,7 @@ export default function ResultSearchBarExpandedPanel({
         onToggle={onSourcesToggle}
       />
       <div className="flex w-full flex-1 items-start gap-6">
-        <div className="min-w-0 max-h-95 flex-1 overflow-y-auto">
+        <div className="custom-scrollbar min-w-0 max-h-95 flex-1 overflow-y-auto">
           <SearchHistoryList
             entries={history}
             isLoading={isHistoryLoading}
