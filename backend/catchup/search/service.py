@@ -15,6 +15,7 @@ from catchup.observability.langfuse.configs import get_observe
 from catchup.rag.checkpoint import get_langgraph_checkpointer
 from catchup.rag.nodes.utils import build_doc_groups
 from catchup.rag.schemas.sources import BaseSource
+from catchup.search.filters import build_manual_search_temporal_filters
 from catchup.search.planner.graph import get_search_planner_graph
 from catchup.search.planner.state import CachedSearch
 
@@ -57,6 +58,8 @@ class ManualSearchService:
         keyword: str,
         tool_filters: list[SourceType] | None,
         vector_db_service: PGVectorService,
+        start_date: datetime | None = None,
+        end_date: datetime | None = None,
     ) -> tuple[list[BaseSource], int, dict[str, int]]:
         planner = self._get_planner()
         _, invoke_config = self._setup_config(user.id)
@@ -81,6 +84,12 @@ class ManualSearchService:
 
         planned = state["query_cache"][keyword].planned
 
+        temporal_filters = build_manual_search_temporal_filters(
+            tool_filters=tool_filters,
+            start_date=start_date,
+            end_date=end_date,
+        ) or None
+
         if getattr(planned, "search_mode", "hybrid") == "keyword_only":
             retriever = PGBigmRetriever(
                 session_factory=vector_db_service.session_factory,
@@ -90,6 +99,7 @@ class ManualSearchService:
                 offset=0,
                 tool_filters=tool_filters,
                 search_mode="exact",
+                temporal_filters=temporal_filters,
             )
             all_docs = await retriever.async_invoke(planned.keyword_tokens)
         else:
@@ -99,6 +109,7 @@ class ManualSearchService:
                 tool_filters=tool_filters,
                 keyword_tokens=planned.keyword_tokens or None,
                 offset=0,
+                temporal_filters=temporal_filters,
             )
 
         groups = build_doc_groups(all_docs)
