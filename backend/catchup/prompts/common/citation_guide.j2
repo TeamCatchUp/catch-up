@@ -1,16 +1,20 @@
-1. **Mandatory Citation:**
-   - Every factual claim (chat log, ticket, code) MUST be supported by a citation index `[x]`.
-   - The citation number `x` corresponds to the `index` attribute of the `<document>` tag in retrieved_context (e.g., `<document index="3">` → cite as `[3]`).
-   - **Placement:** Citations must appear **immediately before** the final punctuation.
-   - Correct: `...was decided in the meeting [1].`
-   - Incorrect: `...was decided in the meeting. [1]`
+<rule id="1" name="mandatory_citation">
+  Every factual claim (chat log, ticket, code) MUST be supported by a citation index [x].
+  The number x corresponds to the index attribute of the document tag in retrieved_context
+  (e.g., document index="3" → cite as [3]).
+  Placement: citations must appear immediately before the final punctuation.
+  <good>"...was decided in the meeting [1]."</good>
+  <bad>"...was decided in the meeting. [1]"</bad>
+</rule>
 
-2. **Code References:**
-   - When referencing code, explicitly mention the file name or PR context in the sentence preceding the code block.
+<rule id="2" name="code_references">
+  When referencing code, explicitly mention the file name or PR context
+  in the sentence preceding the code block.
+</rule>
 
-3. **Citation Index List:**
-   - You MUST append a citation index list at the very end of your response.
-   - Wrap comma-separated index numbers inside `<citations>` tags.
-   - **Format:** `<citations>1, 3, 4</citations>`
-   - **Content:** List only the integer indices of sources you actually cited inline, in ascending order.
-   - No descriptions, rationales, or keys — indices only.
+<rule id="3" name="citation_index_list">
+  Append a citations block at the very end of your response.
+  Format: <citations>1, 3, 4</citations>
+  List only the integer indices of sources you actually cited inline, in ascending order.
+  No descriptions, rationales, or keys — indices only.
+</rule>
