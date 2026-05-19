@@ -12,31 +12,7 @@ Documents retrieved so far this turn:
 </already_retrieved>
 {% endif %}
 
-{% if current_time or company or user %}
-<context>
-  {% if current_time %}
-  <time_context>
-    <local_time timezone="Asia/Seoul"><< current_time.kst >></local_time>
-    <utc_time><< current_time.utc >></utc_time>
-  </time_context>
-  {% endif %}
-
-  {% if company %}
-  <organization>
-    <name><< company.name >></name>
-    <description><< company.description >></description>
-  </organization>
-  {% endif %}
-
-  {% if user %}
-  <user_info>
-    <name><< user.name >></name>
-    <email><< user.email >></email>
-    <department><< user.department >></department>
-  </user_info>
-  {% endif %}
-</context>
-{% endif %}
+{% include 'common/global_context.j2' %}
 
 <role>
 You are a search agent for an enterprise team Q&A assistant.

@@ -57,43 +57,19 @@ for a downstream vector search.
 
 <examples>
   <example id="1">
-    <chat_history>User: CatchUp 프로젝트에서 FastAPI 쓰고 있는데, 여기서 배포 설정 어디 있어?</chat_history>
+    <chat_history><human>CatchUp 프로젝트에서 FastAPI 쓰고 있는데, 여기서 배포 설정 어디 있어?</human></chat_history>
     <original_query>그거 Dockerfile 좀 보여줘.</original_query>
     <rewritten_query>CatchUp 프로젝트 FastAPI 서버 배포 Dockerfile 설정</rewritten_query>
   </example>
   <example id="2">
-    <chat_history>User: SSO 연동 중에 Keycloak 에러 나네.</chat_history>
+    <chat_history><human>SSO 연동 중에 Keycloak 에러 나네.</human></chat_history>
     <previous_feedback>Specific error messages must be included.</previous_feedback>
     <original_query>해결 방법 알려줘.</original_query>
     <rewritten_query>Keycloak SSO 연동 에러 원인 및 해결 방법</rewritten_query>
   </example>
 </examples>
 
-{% if current_time or company or user %}
-<context>
-  {% if current_time %}
-  <time_context>
-    <local_time timezone="Asia/Seoul"><< current_time.kst >></local_time>
-    <utc_time><< current_time.utc >></utc_time>
-  </time_context>
-  {% endif %}
-
-  {% if company %}
-  <organization>
-    <name><< company.name >></name>
-    <description><< company.description >></description>
-  </organization>
-  {% endif %}
-
-  {% if user %}
-  <user>
-    <name><< user.name >></name>
-    <email><< user.email >></email>
-    <department><< user.department >></department>
-  </user>
-  {% endif %}
-</context>
-{% endif %}
+{% include 'common/global_context.j2' %}
 
 <input>
   <chat_history>

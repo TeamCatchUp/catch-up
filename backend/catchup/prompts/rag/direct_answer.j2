@@ -74,31 +74,7 @@ You are currently operating in direct answer mode — without access to the retr
   </example>
 </examples>
 
-{% if current_time or company or user %}
-<context>
-  {% if current_time %}
-  <time_context>
-    <local_time timezone="Asia/Seoul"><< current_time.kst >></local_time>
-    <utc_time><< current_time.utc >></utc_time>
-  </time_context>
-  {% endif %}
-
-  {% if company %}
-  <organization>
-    <name><< company.name >></name>
-    <description><< company.description >></description>
-  </organization>
-  {% endif %}
-
-  {% if user %}
-  <user_info>
-    <name><< user.name >></name>
-    <email><< user.email >></email>
-    <department><< user.department >></department>
-  </user_info>
-  {% endif %}
-</context>
-{% endif %}
+{% include 'common/global_context.j2' %}
 
 {% if slack_thread_context %}
 <slack_thread_context>
