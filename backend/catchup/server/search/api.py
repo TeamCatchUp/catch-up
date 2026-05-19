@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Annotated
 
 from fastapi import APIRouter
@@ -38,6 +39,18 @@ async def hybrid_search(
     tool_filters: Annotated[
         list[SourceType] | None, Query(description="협업 툴 검색 필터")
     ] = None,
+    start_date: Annotated[
+        datetime | None,
+        Query(
+            description="검색 시작 날짜 (ISO 8601, UTC). KST 기준이면 T15:00:00Z로 변환 후 전송. 없으면 전체 기간 시작."
+        ),
+    ] = None,
+    end_date: Annotated[
+        datetime | None,
+        Query(
+            description="검색 종료 날짜 (ISO 8601, UTC). KST 기준이면 T15:00:00Z로 변환 후 전송. 없으면 현재 시간 기준."
+        ),
+    ] = None,
     vector_db_service: PGVectorService = Depends(get_search_service),
     current_user: User = Depends(get_current_user),
     search_service: ManualSearchService = Depends(get_manual_search_service),
@@ -48,6 +61,8 @@ async def hybrid_search(
         keyword=keyword,
         tool_filters=tool_filters,
         vector_db_service=vector_db_service,
+        start_date=start_date,
+        end_date=end_date,
     )
 
     await run_in_threadpool(save_search_query, db, current_user.id, keyword)
