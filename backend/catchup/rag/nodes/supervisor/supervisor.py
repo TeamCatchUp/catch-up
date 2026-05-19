@@ -6,7 +6,6 @@ from langchain_core.messages import HumanMessage
 from catchup.costs.utils import token_usage
 from catchup.prompts.loader import prompt_loader
 from catchup.rag.nodes.utils import ainvoke_llm_with_token_usage
-from catchup.rag.nodes.utils import build_search_history_summary
 from catchup.rag.nodes.utils import build_system_message
 from catchup.rag.nodes.utils import get_conversation_history
 from catchup.rag.nodes.utils import log_node
@@ -44,18 +43,23 @@ async def supervisor_node(
 
     # search_turn_history: 모든 검색 턴의 경량 메타데이터.
     search_turn_history = state.get("search_turn_history", [])
-    search_history_summary = build_search_history_summary(search_turn_history)
-
     slack_thread_context = state.get("slack_thread_context")
 
-    system_prompt = prompt_loader.get_prompt(
-        "rag/supervisor",
-        search_history_summary=search_history_summary,
+    static_prompt = prompt_loader.get_prompt(
+        "rag/supervisor_static",
         sources=list(SOURCE_METADATA.values()),
+        slack_thread_context=slack_thread_context,
+    )
+    dynamic_prompt = prompt_loader.get_prompt(
+        "rag/supervisor_dynamic",
+        search_turn_history=search_turn_history,
         slack_thread_context=slack_thread_context,
         **global_context,
     )
-    system_message = build_system_message(system_prompt)
+    system_message = build_system_message(
+        static_prompt,
+        dynamic_prompts=[dynamic_prompt],
+    )
 
     # [SystemMessage] + 대화 이력(메시지 객체) + [HumanMessage(현재 질문)]
     history = get_conversation_history(messages)
