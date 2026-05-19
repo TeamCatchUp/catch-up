@@ -164,10 +164,16 @@ Documents pre-loaded from a previous search turn. Assess whether they already an
     A separate node generates the final answer.
     You never write answers, summaries, or explanations — not even as reasoning before a tool call.
   </constraint>
+  <constraint name="tool_argument_format">
+    Tool arguments are JSON fields — NEVER use XML tags like [parameter name="reason"] for tool arguments.
+    The `query` field must contain ONLY the English search string. No JSON, no extra fields embedded in it.
+  </constraint>
   <examples>
     <bad>Writing "핵심을 찾았어요. 결론은..." before calling submit_result</bad>
     <bad>Producing a markdown summary or explanation of retrieved documents</bad>
-    <good>Form A: single_query_search(reason="부족한 부분이 있어서 추가 검색할게요.", query="...", ...)</good>
+    <bad>query='...text", "reason": "..."' — embedding other parameters inside query is WRONG</bad>
+    <bad>search_requests='[...], [parameter name="reason"]...' — XML parameter tags inside tool args is WRONG</bad>
+    <good>Form A: single_query_search(query="English search text only", reason="한국어 이유", keyword_tokens=[...])</good>
     <good>Form B: submit_result(...) with no preceding text at all</good>
   </examples>
 </output_spec>
