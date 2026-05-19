@@ -78,7 +78,7 @@ export default function HomeContent() {
     <div className={`bg-home-gradient flex min-h-full flex-col ${input.isFocused ? 'h-full overflow-y-auto' : ''}`}>
       <TopNavbar pageType={resolveTopNavPageType(pathname, mode)} />
 
-      <div className="flex flex-col items-center pt-18 pb-6">
+      <div className="flex flex-col items-center pt-14 pb-6">
         <ModePicker mode={mode} />
       </div>
 
