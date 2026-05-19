@@ -75,10 +75,8 @@ export default function ModePicker({ mode }: ModePickerProps) {
             <span className="text-heading-small relative z-10 whitespace-nowrap">{opt.label}</span>
             {opt.value === 'docs' && (
               <Badge
-                variant="red"
-                size="sm"
                 aria-label="신규"
-                className="relative z-10 size-4 justify-center px-0 py-0"
+                className="bg-fill-interaction-pressed-hover text-accent-red relative z-10 size-4.5 justify-center p-0"
               >
                 N
               </Badge>

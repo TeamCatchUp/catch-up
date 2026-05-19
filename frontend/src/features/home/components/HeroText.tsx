@@ -17,8 +17,8 @@ export default function HeroText({ mode, isFocused }: HeroTextProps) {
   if (mode === 'docs') {
     return (
       <div className="flex flex-col items-center gap-3 text-center [grid-area:1/1]">
-        <div className="flex items-center gap-2">
-          <Badge variant="default" size="sm">
+        <div className="flex items-center gap-3">
+          <Badge variant="default" size="sm" className="rounded-md2 text-body-xsmall py-0.5">
             New
           </Badge>
           <h1 className="text-heading-xlarge text-content-normal">어떤 정보를 찾고 계세요?</h1>
