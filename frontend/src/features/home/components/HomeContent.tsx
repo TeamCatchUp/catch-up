@@ -99,6 +99,8 @@ export default function HomeContent() {
               containerRef={containerRef}
               shouldShowNoHistoryBox={shouldShowNoHistoryBox}
               isNoHistoryExpanded={isNoHistoryExpanded}
+              isHome={pathname === '/'}
+              userName={user?.name ?? ''}
             />
           ) : (
             <HomeDocsSection />

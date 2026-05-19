@@ -11,9 +11,12 @@ import type { HomeMode } from './ModePicker';
 interface HeroTextProps {
   mode: HomeMode;
   isFocused: boolean;
+  // 홈(/) 라우트 여부 — search(/search)와 분기해 인사말 카피를 다르게 노출. ai 모드에서만 사용.
+  isHome?: boolean;
+  userName?: string;
 }
 
-export default function HeroText({ mode, isFocused }: HeroTextProps) {
+export default function HeroText({ mode, isFocused, isHome = false, userName = '' }: HeroTextProps) {
   if (mode === 'docs') {
     return (
       <div className="flex flex-col items-center gap-3 text-center [grid-area:1/1]">
@@ -37,10 +40,23 @@ export default function HeroText({ mode, isFocused }: HeroTextProps) {
           isFocused ? 'pointer-events-none opacity-0' : 'opacity-100'
         }`}
       >
-        <h1 className="text-heading-xlarge text-content-normal">동료에게 말하듯이 질문해 주세요</h1>
-        <p className="text-heading-medium text-content-alternative">
-          어렵게 적지 않아도 괜찮아요. 동료한테 말 걸듯 적으면 더 잘 대답할 수 있어요.
-        </p>
+        {isHome ? (
+          <>
+            <h1 className="text-heading-xlarge text-content-normal">
+              {userName ? `반갑습니다, ${userName}님!` : '반갑습니다!'}
+            </h1>
+            <p className="text-heading-medium text-content-alternative">
+              무엇을 도와드릴까요? 필요한 업무정보를 찾아보세요.
+            </p>
+          </>
+        ) : (
+          <>
+            <h1 className="text-heading-xlarge text-content-normal">동료에게 말하듯이 질문해 주세요</h1>
+            <p className="text-heading-medium text-content-alternative">
+              어렵게 적지 않아도 괜찮아요. 동료한테 말 걸듯 적으면 더 잘 대답할 수 있어요.
+            </p>
+          </>
+        )}
       </div>
       <div
         className={`flex flex-col items-center text-center transition-opacity duration-300 [grid-area:1/1] ${
