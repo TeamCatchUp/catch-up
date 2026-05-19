@@ -47,7 +47,7 @@ export default function HeroText({ mode, isFocused }: HeroTextProps) {
           isFocused ? 'opacity-100' : 'pointer-events-none opacity-0'
         }`}
       >
-        <h1 className="text-display-xlarge text-content-normal">
+        <h1 className="text-heading-xlarge text-content-normal">
           사내 AI 탐색으로
           <br />
           <span className="text-content-primary">필요한 업무 자료를 </span>
