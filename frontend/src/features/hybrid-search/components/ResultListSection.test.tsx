@@ -36,7 +36,7 @@ function makeMockResults(count: number, source = 'jira') {
 describe('ResultListSection', () => {
   it('keyword 빈 문자열이면 Empty 표시 (fetch 없음)', () => {
     renderWithClient(
-      <ResultListSection keyword="" scope={[]} dateRange={undefined} active="all" page={1} onPageChange={() => {}} />,
+      <ResultListSection keyword="" scope={[]} dateRange={undefined} sortOrder="newest" active="all" page={1} onPageChange={() => {}} />,
     );
     expect(screen.getByText(/문서에서는 찾지 못했어요/)).toBeInTheDocument();
   });
@@ -44,7 +44,7 @@ describe('ResultListSection', () => {
   it('로딩 중에는 Loading 표시', () => {
     server.use(http.get('*/api/v1/search/hybrid', () => new Promise(() => {})));
     renderWithClient(
-      <ResultListSection keyword="결제" scope={[]} dateRange={undefined} active="all" page={1} onPageChange={() => {}} />,
+      <ResultListSection keyword="결제" scope={[]} dateRange={undefined} sortOrder="newest" active="all" page={1} onPageChange={() => {}} />,
     );
     expect(screen.getByText(/문서를 찾고 있어요/)).toBeInTheDocument();
   });
@@ -56,7 +56,7 @@ describe('ResultListSection', () => {
       ),
     );
     renderWithClient(
-      <ResultListSection keyword="결제" scope={[]} dateRange={undefined} active="all" page={1} onPageChange={() => {}} />,
+      <ResultListSection keyword="결제" scope={[]} dateRange={undefined} sortOrder="newest" active="all" page={1} onPageChange={() => {}} />,
     );
     expect(await screen.findByText(/문서에서는 찾지 못했어요/)).toBeInTheDocument();
   });
@@ -72,7 +72,7 @@ describe('ResultListSection', () => {
       ),
     );
     renderWithClient(
-      <ResultListSection keyword="결제" scope={[]} dateRange={undefined} active="all" page={1} onPageChange={() => {}} />,
+      <ResultListSection keyword="결제" scope={[]} dateRange={undefined} sortOrder="newest" active="all" page={1} onPageChange={() => {}} />,
     );
     expect(await screen.findByText('이슈 0')).toBeInTheDocument();
     expect(screen.getByText('이슈 9')).toBeInTheDocument();
@@ -92,7 +92,7 @@ describe('ResultListSection', () => {
       ),
     );
     renderWithClient(
-      <ResultListSection keyword="x" scope={[]} dateRange={undefined} active="all" page={1} onPageChange={() => {}} />,
+      <ResultListSection keyword="x" scope={[]} dateRange={undefined} sortOrder="newest" active="all" page={1} onPageChange={() => {}} />,
     );
     await screen.findByText('이슈 0');
     expect(screen.queryByLabelText('이전 페이지')).not.toBeInTheDocument();
@@ -113,6 +113,7 @@ describe('ResultListSection', () => {
         keyword="foo"
         scope={['jira', 'slack']}
         dateRange={undefined}
+        sortOrder="newest"
         active="confluence"
         page={1}
         onPageChange={() => {}}
@@ -139,6 +140,7 @@ describe('ResultListSection', () => {
         keyword="x"
         scope={['jira', 'slack']}
         dateRange={undefined}
+        sortOrder="newest"
         active="jira"
         page={1}
         onPageChange={() => {}}
@@ -163,7 +165,7 @@ describe('ResultListSection', () => {
     );
     const onPageChange = vi.fn();
     renderWithClient(
-      <ResultListSection keyword="x" scope={[]} dateRange={undefined} active="all" page={1} onPageChange={onPageChange} />,
+      <ResultListSection keyword="x" scope={[]} dateRange={undefined} sortOrder="newest" active="all" page={1} onPageChange={onPageChange} />,
     );
     await screen.findByText('이슈 0');
     fireEvent.click(screen.getByText('2'));

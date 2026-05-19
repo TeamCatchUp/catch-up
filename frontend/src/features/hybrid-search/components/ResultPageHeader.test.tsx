@@ -35,6 +35,8 @@ function makeDefaultProps() {
     onClear: () => {},
     activeTab: 'all' as const,
     onTabChange: () => {},
+    sortOrder: 'newest' as const,
+    onSortChange: () => {},
   };
 }
 

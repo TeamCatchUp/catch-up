@@ -9,7 +9,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import Pagination from '@/shared/components/ui/pagination';
 import { motionEase, MotionState } from '@/shared/motion/presets';
 import { normalizeSources } from '@/shared/utils/normalize/normalizeRagSources';
-import { dateRangeToUrlParams } from '@/shared/utils/temporalRange';
+import { dateRangeToUrlParams, sortByCreatedAt, type SortOrder } from '@/shared/utils/temporalRange';
 
 import { useHybridSearch } from '../hooks/useHybridSearch';
 import { HYBRID_SEARCH_PAGE_SIZE } from '../queries/hybridSearch.queries';
@@ -47,6 +47,7 @@ interface ResultListSectionProps {
   keyword: string;
   scope: ToolFilter[];
   dateRange: DateRange | undefined;
+  sortOrder: SortOrder;
   active: ActiveTab;
   page: number;
   onPageChange: (next: number) => void;
@@ -58,6 +59,7 @@ export default function ResultListSection({
   keyword,
   scope,
   dateRange,
+  sortOrder,
   active,
   page,
   onPageChange,
@@ -91,13 +93,14 @@ export default function ResultListSection({
     if (filteredResults.length === 0) {
       view = 'empty';
     } else {
-      const totalPages = Math.max(1, Math.ceil(filteredResults.length / HYBRID_SEARCH_PAGE_SIZE));
+      const sortedResults = sortByCreatedAt(filteredResults, sortOrder);
+      const totalPages = Math.max(1, Math.ceil(sortedResults.length / HYBRID_SEARCH_PAGE_SIZE));
       const pageStart = (page - 1) * HYBRID_SEARCH_PAGE_SIZE;
-      const pageResults = filteredResults.slice(pageStart, pageStart + HYBRID_SEARCH_PAGE_SIZE);
+      const pageResults = sortedResults.slice(pageStart, pageStart + HYBRID_SEARCH_PAGE_SIZE);
       resultsData = {
         sources: normalizeSources(pageResults),
         totalPages,
-        transitionKey: `${keyword}-${scope.join(',')}-${active}-${page}`,
+        transitionKey: `${keyword}-${scope.join(',')}-${active}-${sortOrder}-${page}`,
       };
       view = 'results';
     }

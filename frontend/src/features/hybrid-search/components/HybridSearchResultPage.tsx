@@ -6,10 +6,11 @@
 // keyword 또는 tools가 바뀌면 draft/active/page 모두 reset (prev-value 패턴).
 
 import { useState } from 'react';
-import { motion } from 'motion/react';
 import type { DateRange } from 'react-day-picker';
+import { motion } from 'motion/react';
 
 import { motionEase, MotionState } from '@/shared/motion/presets';
+import type { SortOrder } from '@/shared/utils/temporalRange';
 
 import { useHybridSearchUrlState } from '../hooks/useHybridSearchUrlState';
 import { type ActiveTab, TOOL_FILTERS_ARRAY, type ToolFilter } from '../types/hybridSearchApi';
@@ -33,6 +34,7 @@ export default function HybridSearchResultPage() {
   const [draftDateRange, setDraftDateRange] = useState<DateRange | undefined>(dateRange);
   const [active, setActive] = useState<ActiveTab>('all');
   const [page, setPage] = useState(1);
+  const [sortOrder, setSortOrder] = useState<SortOrder>('newest');
 
   // URL keyword/tools/기간 변경 시 모든 임시·UI state reset (render-phase prev-value).
   const [prevKeyword, setPrevKeyword] = useState(keyword);
@@ -76,6 +78,12 @@ export default function HybridSearchResultPage() {
     setPage(1);
   };
 
+  // 정렬 변경 시 페이지도 1로 reset.
+  const handleSortChange = (next: SortOrder) => {
+    setSortOrder(next);
+    setPage(1);
+  };
+
   return (
     <motion.div
       initial={MotionState.Hidden}
@@ -98,6 +106,8 @@ export default function HybridSearchResultPage() {
         onClear={handleClear}
         activeTab={active}
         onTabChange={handleTabChange}
+        sortOrder={sortOrder}
+        onSortChange={handleSortChange}
       />
       <ResultPageBody side={<CatchupPromoCard />}>
         <ResultListSection
@@ -107,6 +117,7 @@ export default function HybridSearchResultPage() {
           active={active}
           page={page}
           onPageChange={setPage}
+          sortOrder={sortOrder}
         />
       </ResultPageBody>
     </motion.div>

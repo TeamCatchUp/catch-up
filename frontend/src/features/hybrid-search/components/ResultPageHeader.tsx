@@ -9,11 +9,17 @@ import type { DateRange } from 'react-day-picker';
 import { useQuery } from '@tanstack/react-query';
 
 import AccentTabs, { type AccentTabItem } from '@/shared/components/ui/accent-tabs';
-import { dateRangeToUrlParams } from '@/shared/utils/temporalRange';
+import FilterDropdown, { type FilterOption } from '@/shared/components/ui/filter-dropdown';
+import { dateRangeToUrlParams, type SortOrder } from '@/shared/utils/temporalRange';
 
 import { hybridSearchQueries } from '../queries/hybridSearch.queries';
 import type { ActiveTab, ToolFilter } from '../types/hybridSearchApi';
 import ResultSearchBar from './ResultSearchBar';
+
+const SORT_OPTIONS: readonly FilterOption<SortOrder>[] = [
+  { value: 'newest', label: '최신순' },
+  { value: 'oldest', label: '오래된순' },
+];
 
 interface ResultPageHeaderProps {
   // 확정된 검색어 — list query 호출에 사용
@@ -36,6 +42,9 @@ interface ResultPageHeaderProps {
   onClear: () => void;
   activeTab: ActiveTab;
   onTabChange: (next: ActiveTab) => void;
+  // 결과 정렬 — 클라이언트 사이드
+  sortOrder: SortOrder;
+  onSortChange: (next: SortOrder) => void;
 }
 
 // 데이터 도착 후엔 count=0인 source 탭은 숨김. 로딩 중엔 모든 탭을 count badge 없이 표시.
@@ -69,6 +78,8 @@ export default function ResultPageHeader({
   onClear,
   activeTab,
   onTabChange,
+  sortOrder,
+  onSortChange,
 }: ResultPageHeaderProps) {
   // ResultListSection과 같은 queryKey → cache 자동 공유, fetch 1회만.
   const { start, end } = dateRangeToUrlParams(dateRange);
@@ -101,12 +112,15 @@ export default function ResultPageHeader({
           onHistorySubmit={onHistorySubmit}
           onClear={onClear}
         />
-        <AccentTabs
-          items={tabItems}
-          value={activeTab}
-          onValueChange={onTabChange}
-          ariaLabel="결과 필터 탭"
-        />
+        <div className="flex w-full items-center justify-between">
+          <AccentTabs
+            items={tabItems}
+            value={activeTab}
+            onValueChange={onTabChange}
+            ariaLabel="결과 필터 탭"
+          />
+          <FilterDropdown options={SORT_OPTIONS} value={sortOrder} onChange={onSortChange} />
+        </div>
       </div>
     </header>
   );
