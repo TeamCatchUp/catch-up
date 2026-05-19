@@ -31,8 +31,11 @@ def _route_after_complex_agent(state: AgentState) -> str:
     search_plan이 없는 상태에서 search tool_calls가 있으면 complex_planner로 먼저 라우팅한다.
     iter-0의 tool_calls는 "검색 필요" 신호로만 사용되며, drop_orphaned_tool_calls가 정리한다.
     """
-    if state.get("agent_stop_reason") == "by_choice":
+    stop_reason = state.get("agent_stop_reason")
+    if stop_reason == "by_choice":
         return "collect_docs"
+    if stop_reason == "iteration_limit":
+        return "extract_essential"
 
     messages = state.get("messages", [])
     last = messages[-1] if messages else None
@@ -78,7 +81,7 @@ def build_complex_react_subgraph(
     )
     graph.add_node(
         "complex_planner",
-        partial(complex_planner_node, llm=llm_thinking),
+        partial(complex_planner_node, llm=llm_small),
         retry=BASE_RETRY_POLICY,
     )
     graph.add_node(
