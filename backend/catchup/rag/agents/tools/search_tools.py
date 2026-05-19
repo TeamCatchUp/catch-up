@@ -126,10 +126,12 @@ def _dedup_tool_calls(tool_calls: list) -> list[dict]:
                         "multi_query_search_requests_recovered",
                         parsed_count=len(raw),
                     )
-                except (json.JSONDecodeError, ValueError):
+                except (json.JSONDecodeError, ValueError) as e:
                     logger.warning(
                         "multi_query_search_requests_parse_failed",
-                        raw_payload=raw[:300],
+                        raw_payload=raw,
+                        parse_error=str(e),
+                        raw_len=len(raw),
                     )
                     raw = []
             used: set[str] = set()
