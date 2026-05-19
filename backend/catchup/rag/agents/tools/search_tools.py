@@ -1,6 +1,7 @@
 import asyncio
 import json
 from datetime import datetime
+from typing import Annotated
 
 import structlog
 from langchain_core.callbacks import adispatch_custom_event
@@ -25,11 +26,11 @@ _PREVIEW_LIMIT = 10  # ToolMessage에서 한 번에 보여줄 신규 문서 수
 # 실제 실행은 search_tool_executor_node에서 처리한다.
 @tool
 def single_query_search(
-    query: str,
-    reason: str,
-    keyword_tokens: list[str] | None = None,
-    start_date: str | None = None,
-    end_date: str | None = None,
+    query: Annotated[str, "English-only search query text. Must contain ONLY the search string — no JSON syntax, no other fields."],
+    reason: Annotated[str, "Brief Korean sentence explaining why this search is being performed. Separate field — do NOT embed inside query."],
+    keyword_tokens: Annotated[list[str] | None, "Tier 1/2 identifier-level tokens for exact substring matching (ticket IDs, class names, proper nouns). Empty list if none."] = None,
+    start_date: Annotated[str | None, "UTC datetime lower bound (YYYY-MM-DDTHH:MM:SS). Omit if no date filter needed."] = None,
+    end_date: Annotated[str | None, "UTC datetime upper bound (YYYY-MM-DDTHH:MM:SS). Omit if no date filter needed."] = None,
 ) -> str:
     """
     벡터 DB에서 문서를 검색합니다.
@@ -40,8 +41,8 @@ def single_query_search(
 
 @tool
 def multi_query_search(
-    search_requests: list[MultiSearchRequest],
-    reason: str,
+    search_requests: Annotated[list[MultiSearchRequest], "List of independent search requests to run in parallel. Each must have 'query' (English) and optional 'keyword_tokens'."],
+    reason: Annotated[str, "Brief Korean sentence explaining why these searches are being performed. Separate top-level field — do NOT append inside search_requests."],
 ) -> str:
     """
     독립적인 여러 쿼리를 병렬로 실행하고 결과를 통합합니다.
@@ -111,42 +112,62 @@ async def _run_search(
     return docs, query
 
 
+def _parse_search_requests(raw: str | list) -> list[dict]:
+    """JSON 문자열로 직렬화된 search_requests를 복구한다."""
+    if not isinstance(raw, str):
+        return raw
+
+    try:
+        parsed = json.loads(raw)
+        logger.info("multi_query_search_requests_recovered", parsed_count=len(parsed))
+        return parsed
+    except (json.JSONDecodeError, ValueError):
+        pass
+
+    # XML 태그 혼입 등으로 배열 끝이 잘린 경우 부분 복구
+    array_end = raw.rfind("]")
+    if array_end != -1:
+        try:
+            parsed = json.loads(raw[: array_end + 1])
+            logger.info("multi_query_search_requests_recovered_partial", parsed_count=len(parsed))
+            return parsed
+        except (json.JSONDecodeError, ValueError):
+            pass
+
+    logger.warning(
+        "multi_query_search_requests_parse_failed",
+        raw_payload=raw,
+        raw_len=len(raw),
+    )
+    return []
+
+
+def _dedup_keyword_tokens(requests: list) -> list[dict]:
+    """multi_query_search의 keyword_tokens를 cross-query 중복 제거한다."""
+    used: set[str] = set()
+    deduped = []
+    for req in requests:
+        if not isinstance(req, dict):
+            logger.warning("multi_query_search_invalid_request", req=repr(req)[:100])
+            continue
+        tokens = req.get("keyword_tokens") or []
+        unique = [t for t in tokens if t not in used]
+        used.update(unique)
+        deduped.append({**req, "keyword_tokens": unique})
+    return deduped
+
+
 def _dedup_tool_calls(tool_calls: list) -> list[dict]:
     """multi_query_search의 keyword_tokens를 cross-query 중복 제거한 tool_calls 반환."""
     result = []
     for tc in tool_calls:
-        if tc["name"] == "multi_query_search":
-            raw = tc["args"].get("search_requests", [])
-            # Extended thinking + tool use 조합에서 LLM이 list 대신 JSON 문자열로
-            # 직렬화해 반환하는 경우 복구를 시도한다.
-            if isinstance(raw, str):
-                try:
-                    raw = json.loads(raw)
-                    logger.info(
-                        "multi_query_search_requests_recovered",
-                        parsed_count=len(raw),
-                    )
-                except (json.JSONDecodeError, ValueError) as e:
-                    logger.warning(
-                        "multi_query_search_requests_parse_failed",
-                        raw_payload=raw,
-                        parse_error=str(e),
-                        raw_len=len(raw),
-                    )
-                    raw = []
-            used: set[str] = set()
-            deduped = []
-            for req in raw:
-                if not isinstance(req, dict):
-                    logger.warning("multi_query_search_invalid_request", req=repr(req)[:100])
-                    continue
-                tokens = req.get("keyword_tokens") or []
-                unique = [t for t in tokens if t not in used]
-                used.update(unique)
-                deduped.append({**req, "keyword_tokens": unique})
-            result.append({**tc, "args": {**tc["args"], "search_requests": deduped}})
-        else:
+        if tc["name"] != "multi_query_search":
             result.append(tc)
+            continue
+        raw = tc["args"].get("search_requests", [])
+        requests = _parse_search_requests(raw)
+        deduped = _dedup_keyword_tokens(requests)
+        result.append({**tc, "args": {**tc["args"], "search_requests": deduped}})
     return result
 
 
