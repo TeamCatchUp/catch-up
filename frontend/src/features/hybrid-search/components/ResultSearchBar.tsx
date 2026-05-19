@@ -13,6 +13,7 @@ import IconArrowSend from '@/public/icons/icon/arrow_send.svg';
 import IconCancel from '@/public/icons/icon/cancel.svg';
 import IconFilter from '@/public/icons/icon/filter.svg';
 import IconSearch from '@/public/icons/icon/search_2.svg';
+import { Button } from '@/shared/components/ui/button';
 import { DateRangePicker } from '@/shared/components/ui/date-range-picker';
 import type { DocsSource } from '@/shared/types/source';
 import { cn } from '@/shared/utils/cn';
@@ -106,11 +107,13 @@ export default function ResultSearchBar({
               onChange={onDateRangeChange}
               align="end"
               trigger={
-                <button
+                <Button
+                  variant="icon-only-gray"
+                  size="md"
                   type="button"
                   onMouseDown={(e) => expanded && e.preventDefault()}
                   aria-label="기간 필터"
-                  className="text-icon-normal hover:bg-fill-interaction-hover active:bg-fill-interaction-pressed relative flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-full transition-colors"
+                  className="text-icon-normal relative rounded-full"
                 >
                   <IconFilter className="h-7 w-7" />
                   {dateRange?.from && (
@@ -119,7 +122,7 @@ export default function ResultSearchBar({
                       className="bg-fill-primary absolute top-2 right-2 size-1.5 rounded-full"
                     />
                   )}
-                </button>
+                </Button>
               }
             />
             <button
