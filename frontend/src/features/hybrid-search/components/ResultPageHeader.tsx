@@ -95,7 +95,7 @@ export default function ResultPageHeader({
 
   return (
     <header className="border-edge-normal flex w-full flex-col items-center border-b px-16 pt-5">
-      <div className="flex w-full max-w-[1260px] flex-col items-start gap-5">
+      <div className="flex w-full max-w-[1440px] flex-col items-start gap-5">
         <ResultSearchBar
           value={draftKeyword}
           onValueChange={onDraftKeywordChange}
@@ -108,12 +108,7 @@ export default function ResultPageHeader({
           onClear={onClear}
         />
         <div className="flex w-full items-center gap-5">
-          <AccentTabs
-            items={tabItems}
-            value={activeTab}
-            onValueChange={onTabChange}
-            ariaLabel="결과 필터 탭"
-          />
+          <AccentTabs items={tabItems} value={activeTab} onValueChange={onTabChange} ariaLabel="결과 필터 탭" />
           <SortDropdown value={sortOrder} onChange={onSortChange} />
         </div>
       </div>
