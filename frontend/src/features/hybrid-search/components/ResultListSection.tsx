@@ -3,17 +3,17 @@
 // Figma 11542:64433 — 결과 카드 리스트 + Pagination.
 // backend는 dedup 후 최대 50개 한 번에 반환 → frontend가 active/page로 client-side filter+slice.
 
-import { AnimatePresence, motion } from 'motion/react';
 import type { DateRange } from 'react-day-picker';
+import { AnimatePresence, motion } from 'motion/react';
 
 import Pagination from '@/shared/components/ui/pagination';
 import { motionEase, MotionState } from '@/shared/motion/presets';
 import { normalizeSources } from '@/shared/utils/normalize/normalizeRagSources';
+import { dateRangeToUrlParams } from '@/shared/utils/temporalRange';
 
 import { useHybridSearch } from '../hooks/useHybridSearch';
 import { HYBRID_SEARCH_PAGE_SIZE } from '../queries/hybridSearch.queries';
 import type { ActiveTab, ToolFilter } from '../types/hybridSearchApi';
-import { dateRangeToUrlParams } from '../utils/temporalRange';
 import HybridSearchResultCard from './HybridSearchResultCard';
 import ResultEmptyState from './ResultEmptyState';
 import ResultErrorState from './ResultErrorState';

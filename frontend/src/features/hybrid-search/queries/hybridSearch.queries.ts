@@ -2,9 +2,9 @@ import { queryOptions } from '@tanstack/react-query';
 
 import api from '@/shared/api/client';
 import { API } from '@/shared/api/endpoints';
+import { toApiTemporalParams } from '@/shared/utils/temporalRange';
 
 import type { HybridSearchResponse, ToolFilter } from '../types/hybridSearchApi';
-import { toApiTemporalParams } from '../utils/temporalRange';
 
 // client-side pagination 단위. backend는 최대 50개 dedup 결과 한 번에 반환.
 export const HYBRID_SEARCH_PAGE_SIZE = 10;
