@@ -104,7 +104,8 @@ def get_compiled_graph(
 
     # LARGE, streaming, extended thinking — generate_final_answer (standard/complex).
     # 최종 답변 생성이 thinking의 실질적 이득이 가장 큰 지점.
-    # response cap 없음 — 답변 길이 제한 없이 생성.
+    # max_response_tokens 미지정 시 service.py 기본값이 2048로 적용되어 답변이 중간에 끊기므로
+    # 명시적으로 8192로 설정한다.
     llm_large_stream_thinking = get_llm_service(
         LlmProvider.AWS_BEDROCK,
         ModelCapacity.LARGE,
@@ -112,6 +113,7 @@ def get_compiled_graph(
         isolated=True,
         extended_thinking=True,
         thinking_budget_tokens=1024,
+        max_response_tokens=8192,
         max_attempts=rag_max_attempts,
     ).get_llm()
 
@@ -142,7 +144,6 @@ def get_compiled_graph(
     complex_subgraph = build_complex_react_subgraph(
         llm_small=llm_small,
         llm_large_stream_thinking=llm_large_stream_thinking,
-        llm_thinking=llm_thinking,
         vector_db_service=vector_db_service,
         rerank_service=rerank_service,
     )
