@@ -71,7 +71,7 @@ def get_compiled_graph(
         max_attempts=rag_max_attempts,
     ).get_llm()
 
-    # LARGE, non-streaming — supervisor, complex_agent, standard_agent (structured output / tool calling)
+    # LARGE, non-streaming — supervisor (structured output)
     llm_large = get_llm_service(
         LlmProvider.AWS_BEDROCK,
         ModelCapacity.LARGE,
@@ -89,9 +89,8 @@ def get_compiled_graph(
         max_attempts=rag_max_attempts,
     ).get_llm()
 
-    # SMALL, streaming, extended thinking — standard_agent, complex_planner, complex_agent.
-    # Haiku 4.5가 extended thinking을 지원하므로 SMALL로 전환해 비용을 절감한다.
-    # tool-calling/structured-output 응답이라 response 부분은 짧게 캡(1024)해 총 wall-clock을 제한한다.
+    # SMALL, streaming, extended thinking — complex_agent 전용 (plan 수립 후 단계별 검색 결정).
+    # structured_output(with_structured_output)은 thinking과 충돌하므로 planner에는 사용 불가.
     llm_thinking = get_llm_service(
         LlmProvider.AWS_BEDROCK,
         ModelCapacity.SMALL,
@@ -100,6 +99,19 @@ def get_compiled_graph(
         extended_thinking=True,
         thinking_budget_tokens=1024,
         max_response_tokens=512,
+        max_attempts=rag_max_attempts,
+    ).get_llm()
+
+    # LARGE, streaming, extended thinking — generate_final_answer (standard/complex).
+    # 최종 답변 생성이 thinking의 실질적 이득이 가장 큰 지점.
+    # response cap 없음 — 답변 길이 제한 없이 생성.
+    llm_large_stream_thinking = get_llm_service(
+        LlmProvider.AWS_BEDROCK,
+        ModelCapacity.LARGE,
+        streaming=True,
+        isolated=True,
+        extended_thinking=True,
+        thinking_budget_tokens=1024,
         max_attempts=rag_max_attempts,
     ).get_llm()
 
@@ -122,14 +134,14 @@ def get_compiled_graph(
     standard_subgraph = build_standard_react_subgraph(
         llm_small=llm_small,
         llm_large_stream=llm_large_stream,
-        llm_thinking=llm_thinking,
+        llm_large_stream_thinking=llm_large_stream_thinking,
         vector_db_service=vector_db_service,
         rerank_service=rerank_service,
     )
 
     complex_subgraph = build_complex_react_subgraph(
         llm_small=llm_small,
-        llm_large_stream=llm_large_stream,
+        llm_large_stream_thinking=llm_large_stream_thinking,
         llm_thinking=llm_thinking,
         vector_db_service=vector_db_service,
         rerank_service=rerank_service,

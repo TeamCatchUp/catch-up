@@ -1,7 +1,12 @@
 <slack_thread_context>
-The following messages are from the Slack thread preceding the user's current question.
-This is background context only — do NOT treat it as a previous user turn or a question to answer directly.
-"--- [CatchUp Turn] ---" markers indicate a CatchUp Q&A that occurred at that point in the thread; recent exchanges are available in the conversation history above.
+  <instruction>
+    The messages below are from the Slack thread preceding the user's current question.
+    This is background context only — do NOT treat it as a previous user turn or a question to answer directly.
+    "--- [CatchUp Turn] ---" markers indicate a CatchUp Q&A that occurred at that point in the thread;
+    recent exchanges are available in the conversation history.
+  </instruction>
 
-<< slack_thread_context >>
+  <thread_messages>
+    << slack_thread_context >>
+  </thread_messages>
 </slack_thread_context>

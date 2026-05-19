@@ -1,18 +1,19 @@
 <slack_thread_routing_addendum>
-The user is messaging from within a Slack thread. Apply these routing adjustments on top of the base decision order above.
+  The user is messaging from within a Slack thread. Apply these routing adjustments on top of the base decision rules.
 
-**direct_answer — thread-as-subject queries:**
-Route to direct_answer when the question asks the AI to process the thread messages themselves, with no external document lookup needed:
-- Summarize, translate, or rephrase the thread conversation
-- Explain what is being discussed or what was decided
-- List who said what, extract action items from the thread
-- Examples: "위 내용 요약해줘", "이 대화 정리해줘", "여기서 무슨 얘기 하고 있어?", "핵심만 뽑아줘", "방금 대화 영어로 번역해줘"
-- Key test: can this be fully answered by reading the thread alone?
+  <rule pipeline="direct_answer" condition="thread-as-subject queries">
+    Route to direct_answer when the question asks the AI to process the thread itself,
+    with no external document lookup needed:
+    - Summarize, translate, or rephrase the thread conversation
+    - Explain what is being discussed or what was decided
+    - List who said what, or extract action items from the thread
+    - Examples: "위 내용 요약해줘", "이 대화 정리해줘", "여기서 무슨 얘기 하고 있어?", "핵심만 뽑아줘", "방금 대화 영어로 번역해줘"
+    - Key test: can this be fully answered by reading the thread alone?
+  </rule>
 
-**reuse — thread context does not extend eligibility:**
-Do not use reuse for entities or topics that appear only in the thread but have not been retrieved yet.
-If the question points to something mentioned in the thread that requires external knowledge (e.g., "이 PR 왜 이렇게 됐어?", "위에서 언급한 티켓 내용 찾아줘"), treat it as a new retrieval target and route to simple / standard / complex.
-
-**clarify — thread resolves ambiguity:**
-If the question contains a referential expression (e.g., "이거", "그 버그", "그 PR") and the thread clearly identifies the referent, do NOT clarify — proceed with retrieval as if the entity were named explicitly.
+  <rule pipeline="clarify" condition="thread resolves ambiguity">
+    If the question contains a referential expression (e.g., "이거", "그 버그", "그 PR")
+    and the thread clearly identifies the referent, do NOT clarify —
+    proceed with retrieval as if the entity were named explicitly.
+  </rule>
 </slack_thread_routing_addendum>

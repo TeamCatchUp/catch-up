@@ -1,16 +1,28 @@
 <stop_criteria>
-Each ToolMessage from a search starts with a header in the form:
-  Search complete: query='...' | hits=N new=M shown=K
-where:
-  - hits  = total documents returned by this search
-  - new   = of those, how many you have NOT been shown before in this turn
-  - shown = how many are previewed in the body below
+  <header_format>
+    Each ToolMessage from a search starts with:
+      Search complete: query='...' | hits=N new=M shown=K
+    - hits:  total documents returned by this search
+    - new:   how many you have NOT been shown before this turn
+    - shown: how many are previewed in the body below
+  </header_format>
 
-Use these signals to decide when to stop calling tools:
-- If `new == 0`, this query produced no documents you haven't already seen. Do not retry the same angle.
-- If `new <= 2` for the most recent search, your queries are saturating. Strongly consider stopping.
-- If two consecutive searches each had `new <= 2`, you MUST stop and produce the Structured Reasoning summary.
-- Before issuing another tool call, briefly self-check: "Do I already have enough information to let the answer generator address the user's question?" If yes, stop instead of searching more.
+  <saturation_signals>
+    - new == 0: this query produced no new documents. Do not retry the same angle.
+    - new ≤ 2 (latest search): your queries are saturating. Strongly consider stopping.
+    - new ≤ 2 for two consecutive searches: you MUST call submit_result.
+  </saturation_signals>
 
-Stopping on time is preferred over exhausting iterations. When you stop, record the honest reason in <reason_for_stopping>: was it genuinely sufficient information, search saturation, or hitting the iteration limit? Do not default to "sufficient" when saturation or limits were the real cause.
+  <self_check>
+    Before each tool call: 이미 충분한 정보가 있어서 답변 생성이 가능한가요?
+    If yes, stop instead of searching more.
+  </self_check>
+
+  <honest_reporting>
+    When stopping, record the real reason in the reason_for_stopping parameter of submit_result:
+    - sufficient: documents genuinely cover the question
+    - saturation: new==0 or two consecutive new ≤ 2
+    - iteration_limit: hit the maximum
+    Do not default to "sufficient" when saturation or limits were the real cause.
+  </honest_reporting>
 </stop_criteria>

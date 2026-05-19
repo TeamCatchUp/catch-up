@@ -1,11 +1,13 @@
 {% if confirmed_priority_indices %}
-<confirmed_priority_documents>
-The investigation agent flagged the following documents as critical to answering the user's question, AND the reranker independently confirmed they are highly relevant to the query: << confirmed_priority_indices >>
+<confirmed_priority_documents indices="<< confirmed_priority_indices >>">
+  The search agent flagged these documents as critical, AND the reranker independently
+  confirmed them as highly relevant. Two independent signals agreeing makes the evidence
+  more reliable — treat them as anchor evidence:
 
-When two independent signals agree, the underlying evidence is more reliable. Treat these documents as **anchor evidence** for your answer:
-- Cite them where directly applicable; do not omit them if they are factually relevant.
-- Use them to ground claims, then enrich with other documents in the <retrieved_context> for context and cross-reference.
-
-This is a priority hint, not an exclusivity rule. All documents in the <retrieved_context> remain available; use whichever best supports each claim.
+  <instruction>
+    - Cite them where directly applicable; do not omit them if factually relevant.
+    - Use them to ground claims, then enrich with other documents in retrieved documents for context and cross-reference.
+    - This is a priority hint, not an exclusivity rule — all documents in retrieved documents remain available; use whichever best supports each claim.
+  </instruction>
 </confirmed_priority_documents>
 {% endif %}

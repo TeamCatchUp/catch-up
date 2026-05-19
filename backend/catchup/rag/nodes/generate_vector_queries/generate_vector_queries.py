@@ -83,14 +83,7 @@ async def generate_vector_queries_node(
             ],
         }
 
-    # simple 파이프라인은 단일 쿼리만 사용
-    pipeline_plan = state.get("pipeline_plan")
-    max_q = (
-        1
-        if (pipeline_plan and pipeline_plan.pipeline_type == "simple")
-        else len(plan.queries)
-    )
-    queries = plan.queries[:max_q]
+    queries = plan.queries[:1]
 
     await adispatch_custom_event(
         "process",

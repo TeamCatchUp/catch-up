@@ -36,6 +36,7 @@ logger = structlog.get_logger()
 async def generate_final_answer_node(
     state: AgentState,
     llm: BaseChatModel,
+    llm_fast: BaseChatModel | None = None,
 ):
 
     # 토큰 사용량 초기화
@@ -54,9 +55,16 @@ async def generate_final_answer_node(
     retrieved_context = render_grouped_context_text(doc_groups)
     global_context = state["global_context"].model_dump()
 
-    # 사용자 질문
-    query = state["rewritten_query"]
-    query_with_citation_policy = query + CITATION_POLICY_MESSAGE
+    # 사용자 질문 — original은 사용자 의도·말투 보존, rewritten은 검색에 쓰인 확장 쿼리
+    original_query = state.get("original_query", "")
+    rewritten_query = state["rewritten_query"]
+    query_with_citation_policy = (
+        f"<question>\n"
+        f"  <user_query>{original_query}</user_query>\n"
+        f"  <rewritten_query note=\"search-optimized expansion used for retrieval\">{rewritten_query}</rewritten_query>\n"
+        f"</question>"
+        + CITATION_POLICY_MESSAGE
+    )
 
     # 시스템 프롬프트 빌드
     prompt_settings = state.get("prompt_settings")
@@ -71,9 +79,10 @@ async def generate_final_answer_node(
         slack_thread_context=slack_thread_context,
     )
 
+    # Anthropic Long Context 가이드: 데이터(문서)를 지시문보다 먼저 배치한다.
     dynamic_prompts = [
+        prompts["retrieved_context"],  # data first (largest)
         prompts["global_context"],
-        prompts["retrieved_context"],
         prompts["settings"],
     ]
 
@@ -101,6 +110,7 @@ async def generate_final_answer_node(
         static_prompt=prompts["system"],
         dynamic_prompts=dynamic_prompts,
         cache_prompt=False,
+        instructions_last=True,
     )
 
     # 대화 내역 복원
@@ -113,14 +123,27 @@ async def generate_final_answer_node(
         + [HumanMessage(content=query_with_citation_policy)]
     )
 
+    # Slack은 thinking 불필요 — llm_fast(non-thinking)로 대체.
+    is_slack = prompt_settings and getattr(prompt_settings, "platform", None) == "slack"
+    active_llm = llm_fast if (is_slack and llm_fast is not None) else llm
+
     # LLM 호출
     try:
         raw_response, token_usages = await ainvoke_llm_with_token_usage(
-            llm=llm,
+            llm=active_llm,
             messages=messages,
             semaphore=rag_semaphores.llm_large,
         )
-        full_answer = raw_response.content
+        content = raw_response.content
+        if isinstance(content, list):
+            full_answer = "".join(
+                (block.get("text", "") if isinstance(block, dict) else getattr(block, "text", ""))
+                for block in content
+                if (isinstance(block, dict) and block.get("type") == "text")
+                or (not isinstance(block, dict) and getattr(block, "type", None) == "text")
+            )
+        else:
+            full_answer = content
 
         logger.debug(
             "final_answer_generated",
