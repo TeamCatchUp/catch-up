@@ -4,6 +4,8 @@
 // - ai 모드: 기본/포커스 두 줄 (포커스 시 다른 텍스트로 fade)
 // - docs 모드: 단일 텍스트
 
+import { Badge } from '@/shared/components/ui/badge';
+
 import type { HomeMode } from './ModePicker';
 
 interface HeroTextProps {
@@ -15,7 +17,12 @@ export default function HeroText({ mode, isFocused }: HeroTextProps) {
   if (mode === 'docs') {
     return (
       <div className="flex flex-col items-center gap-3 text-center [grid-area:1/1]">
-        <h1 className="text-heading-xlarge text-content-normal">어떤 정보를 찾고 계세요?</h1>
+        <div className="flex items-center gap-2">
+          <Badge variant="default" size="sm">
+            New
+          </Badge>
+          <h1 className="text-heading-xlarge text-content-normal">어떤 정보를 찾고 계세요?</h1>
+        </div>
         <p className="text-heading-medium text-content-alternative">
           {'"지난주 결제 롤백" 처럼 짧은 한 문장으로 적어주시면 빠르게 찾아드려요.'}
         </p>
