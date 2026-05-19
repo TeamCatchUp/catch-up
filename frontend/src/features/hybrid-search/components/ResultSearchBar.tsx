@@ -11,7 +11,7 @@ import type { DateRange } from 'react-day-picker';
 
 import IconArrowSend from '@/public/icons/icon/arrow_send.svg';
 import IconCancel from '@/public/icons/icon/cancel.svg';
-import IconFilter from '@/public/icons/icon/filter.svg';
+import IconFilter from '@/public/icons/icon/filter_small.svg';
 import IconSearch from '@/public/icons/icon/search_2.svg';
 import { Button } from '@/shared/components/ui/button';
 import { DateRangePicker } from '@/shared/components/ui/date-range-picker';
@@ -109,17 +109,20 @@ export default function ResultSearchBar({
               trigger={
                 <Button
                   variant="icon-only-gray"
-                  size="md"
+                  size="lg"
                   type="button"
                   onMouseDown={(e) => expanded && e.preventDefault()}
                   aria-label="기간 필터"
-                  className="text-icon-normal relative rounded-full"
+                  className={cn(
+                    'text-icon-normal relative rounded-full',
+                    dateRange?.from && 'bg-fill-primary-normal-neutral hover:bg-fill-primary-normal-neutral',
+                  )}
                 >
-                  <IconFilter className="h-7 w-7" />
+                  <IconFilter className="size-6" />
                   {dateRange?.from && (
                     <span
                       aria-hidden
-                      className="bg-fill-primary absolute top-2 right-2 size-1.5 rounded-full"
+                      className="bg-fill-primary absolute top-2 right-1.5 size-[5px] rounded-full"
                     />
                   )}
                 </Button>
