@@ -53,7 +53,7 @@ def _route_after_complex_agent(state: AgentState) -> str:
 
 
 def build_complex_react_subgraph(
-    llm_small, llm_large_stream_thinking, llm_thinking, vector_db_service, rerank_service
+    llm_small, llm_large_stream_thinking, vector_db_service, rerank_service
 ):
     """Complex ReAct 파이프라인 서브그래프.
 
