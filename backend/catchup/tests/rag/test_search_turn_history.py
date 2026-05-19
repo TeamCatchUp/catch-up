@@ -77,6 +77,7 @@ async def test_merge_cache_node_creates_snapshot():
     ]
     state = {
         "retrieved_docs": docs,
+        "accumulated_docs": docs,  # 검색이 실제로 일어난 케이스
         "turn_number": 2,
         "rewritten_query": "배포 이슈 원인",
         "query_topic": "배포 이슈",
@@ -108,6 +109,7 @@ async def test_merge_cache_node_accumulates():
     docs = [Document(page_content="new", metadata={"source": "jira"}, id="new1")]
     state = {
         "retrieved_docs": docs,
+        "accumulated_docs": docs,  # 검색이 실제로 일어난 케이스
         "turn_number": 3,
         "rewritten_query": "new query",
         "query_topic": "new topic",
@@ -128,7 +130,7 @@ async def test_merge_cache_node_accumulates():
 
 @pytest.mark.asyncio
 async def test_prepare_cache_node_hot_cache_only():
-    """reuse_history_turn_numbers가 없으면 hot cache만 반환."""
+    """cache_turn_numbers가 없으면 hot cache만 반환."""
     hot_docs = [Document(page_content="hot", metadata={}, id="h1")]
     mock_vdb = MagicMock()
 
@@ -136,8 +138,8 @@ async def test_prepare_cache_node_hot_cache_only():
         "doc_cache": hot_docs,
         "search_turn_history": [],
         "pipeline_plan": PipelinePlan(
-            pipeline_type="reuse",
-            reuse_history_turn_numbers=None,
+            pipeline_type="standard",
+            cache_turn_numbers=None,
         ),
     }
 
@@ -149,7 +151,7 @@ async def test_prepare_cache_node_hot_cache_only():
 
 @pytest.mark.asyncio
 async def test_prepare_cache_node_past_turn_only():
-    """reuse_history_turn_numbers=[1]이면 Search 1만 사용, hot cache 제외."""
+    """cache_turn_numbers=[1]이면 Search 1만 사용, hot cache 제외."""
     hot_docs = [Document(page_content="hot", metadata={}, id="h1")]
     past_docs = [Document(page_content="past", metadata={}, id="p1")]
 
@@ -168,8 +170,8 @@ async def test_prepare_cache_node_past_turn_only():
         "doc_cache": hot_docs,
         "search_turn_history": [snap],  # Search 1 = hot cache (마지막 항목)
         "pipeline_plan": PipelinePlan(
-            pipeline_type="reuse",
-            reuse_history_turn_numbers=[1],  # hot cache 인덱스 = 1 → hot cache 포함
+            pipeline_type="standard",
+            cache_turn_numbers=[1],  # hot cache 인덱스 = 1 → hot cache 포함
         ),
     }
 
@@ -182,7 +184,7 @@ async def test_prepare_cache_node_past_turn_only():
 
 @pytest.mark.asyncio
 async def test_prepare_cache_node_past_turn_excludes_hot():
-    """reuse_history_turn_numbers=[1]이 hot cache가 아닌 경우, hot cache 제외."""
+    """cache_turn_numbers=[1]이 hot cache가 아닌 경우, hot cache 제외."""
     hot_docs = [Document(page_content="hot", metadata={}, id="h1")]
     past_docs = [Document(page_content="past", metadata={}, id="p1")]
 
@@ -208,8 +210,8 @@ async def test_prepare_cache_node_past_turn_excludes_hot():
         "doc_cache": hot_docs,
         "search_turn_history": [snap1, snap2],  # snap2가 hot cache (index=2)
         "pipeline_plan": PipelinePlan(
-            pipeline_type="reuse",
-            reuse_history_turn_numbers=[1],  # hot cache(2) 미포함 → Search 1만
+            pipeline_type="standard",
+            cache_turn_numbers=[1],  # hot cache(2) 미포함 → Search 1만
         ),
     }
 
@@ -222,7 +224,7 @@ async def test_prepare_cache_node_past_turn_excludes_hot():
 
 @pytest.mark.asyncio
 async def test_prepare_cache_node_past_and_hot():
-    """reuse_history_turn_numbers=[1, 2]에서 2가 hot cache이면 둘 다 포함."""
+    """cache_turn_numbers=[1, 2]에서 2가 hot cache이면 둘 다 포함."""
     hot_docs = [Document(page_content="hot", metadata={}, id="h1")]
     past_docs = [Document(page_content="past", metadata={}, id="p1")]
 
@@ -242,8 +244,8 @@ async def test_prepare_cache_node_past_and_hot():
         "doc_cache": hot_docs,
         "search_turn_history": [snap1, snap2],
         "pipeline_plan": PipelinePlan(
-            pipeline_type="reuse",
-            reuse_history_turn_numbers=[1, 2],  # Search 1 + hot cache(2)
+            pipeline_type="standard",
+            cache_turn_numbers=[1, 2],  # Search 1 + hot cache(2)
         ),
     }
 
@@ -263,8 +265,8 @@ async def test_prepare_cache_node_backward_compat():
         "doc_cache": hot_docs,
         # search_turn_history 키 자체가 없는 구 state
         "pipeline_plan": PipelinePlan(
-            pipeline_type="reuse",
-            reuse_history_turn_numbers=[1],  # 요청해도 history 없으면 무시
+            pipeline_type="standard",
+            cache_turn_numbers=[1],  # 요청해도 history 없으면 무시
         ),
     }
 

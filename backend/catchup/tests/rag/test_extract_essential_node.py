@@ -5,9 +5,10 @@ from unittest.mock import patch
 
 import pytest
 from langchain_core.documents import Document
-from langchain_core.messages import AIMessage
 from langchain_core.messages import HumanMessage
 from langchain_core.messages import ToolMessage
+
+from catchup.rag.agents.limit_extraction import EssentialDocResult
 
 
 def _doc(doc_id: str) -> Document:
@@ -19,8 +20,8 @@ def _doc(doc_id: str) -> Document:
 
 
 @pytest.mark.asyncio
-async def test_extracts_ids_when_llm_returns_tag():
-    """LLM이 key_document_indices 태그를 반환하면 agent_seen_doc_ids 기반으로 IDs를 추출한다."""
+async def test_extracts_ids_when_structured_output_returned():
+    """structured output으로 key_document_indices가 반환되면 IDs를 올바르게 추출한다."""
     from catchup.rag.agents.limit_extraction import extract_essential_node
 
     state = {
@@ -30,13 +31,13 @@ async def test_extracts_ids_when_llm_returns_tag():
         "agent_seen_doc_ids": ["id_A", "id_B", "id_C"],
     }
     mock_llm = MagicMock()
-    mock_response = AIMessage(
-        content="<key_document_indices>1, 3</key_document_indices>"
-    )
+    mock_llm.with_structured_output.return_value = mock_llm
+
+    structured_response = {"parsed": EssentialDocResult(key_document_indices=[1, 3]), "raw": MagicMock()}
 
     with patch(
         "catchup.rag.agents.limit_extraction.ainvoke_llm_with_token_usage",
-        new=AsyncMock(return_value=(mock_response, {})),
+        new=AsyncMock(return_value=(structured_response, {})),
     ):
         result = await extract_essential_node(state, llm=mock_llm)
 
@@ -57,6 +58,7 @@ async def test_returns_empty_dict_on_llm_error():
         "agent_seen_doc_ids": [],
     }
     mock_llm = MagicMock()
+    mock_llm.with_structured_output.return_value = mock_llm
 
     with patch(
         "catchup.rag.agents.limit_extraction.ainvoke_llm_with_token_usage",
@@ -68,8 +70,8 @@ async def test_returns_empty_dict_on_llm_error():
 
 
 @pytest.mark.asyncio
-async def test_returns_empty_list_when_no_tag():
-    """LLM 응답에 key_document_indices 태그가 없으면 essential_doc_ids가 비어있다."""
+async def test_returns_empty_list_when_parsed_is_none():
+    """LLM이 파싱 실패(parsed=None) 반환 시 essential_doc_ids가 비어있다."""
     from catchup.rag.agents.limit_extraction import extract_essential_node
 
     state = {
@@ -79,11 +81,13 @@ async def test_returns_empty_list_when_no_tag():
         "agent_seen_doc_ids": ["id_A"],
     }
     mock_llm = MagicMock()
-    mock_response = AIMessage(content="I cannot determine the key documents.")
+    mock_llm.with_structured_output.return_value = mock_llm
+
+    structured_response = {"parsed": None, "raw": MagicMock()}
 
     with patch(
         "catchup.rag.agents.limit_extraction.ainvoke_llm_with_token_usage",
-        new=AsyncMock(return_value=(mock_response, {})),
+        new=AsyncMock(return_value=(structured_response, {})),
     ):
         result = await extract_essential_node(state, llm=mock_llm)
 
@@ -103,12 +107,13 @@ async def test_tool_message_content_embedded_in_user_message():
         "agent_seen_doc_ids": [],
     }
     mock_llm = MagicMock()
-    mock_response = AIMessage(content="")
+    mock_llm.with_structured_output.return_value = mock_llm
+    structured_response = {"parsed": EssentialDocResult(key_document_indices=[]), "raw": MagicMock()}
     captured_messages = []
 
     async def capture(*args, **kwargs):
         captured_messages.extend(kwargs.get("messages", []))
-        return mock_response, {}
+        return structured_response, {}
 
     with patch(
         "catchup.rag.agents.limit_extraction.ainvoke_llm_with_token_usage",

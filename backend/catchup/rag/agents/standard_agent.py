@@ -11,9 +11,9 @@ from catchup.rag.nodes.utils import build_docs_summary
 from catchup.rag.nodes.utils import build_system_message
 from catchup.rag.nodes.utils import coerce_message_text
 from catchup.rag.nodes.utils import drop_orphaned_tool_calls
-from catchup.rag.nodes.utils import extract_essential_ids_from_agent_view
-from catchup.rag.nodes.utils import extract_reason_for_stopping
+from catchup.rag.nodes.utils import extract_search_reason
 from catchup.rag.nodes.utils import log_node
+from catchup.rag.nodes.utils import map_indices_to_doc_ids
 from catchup.rag.retryable import RETRYABLE_ERRORS
 from catchup.rag.schemas.sources import SOURCE_METADATA
 from catchup.rag.semaphores import rag_semaphores
@@ -43,11 +43,13 @@ async def standard_agent_node(
         }
 
     accumulated_docs = state.get("accumulated_docs", [])
+    cached_docs = state.get("retrieved_docs", []) if agent_iteration == 0 else []
     global_context = state["global_context"].model_dump()
 
     system_prompt = prompt_loader.get_prompt(
         "rag/standard_agent_system",
         accumulated_docs_summary=build_docs_summary(accumulated_docs),
+        cached_docs_summary=build_docs_summary(cached_docs) if cached_docs else "",
         sources=list(SOURCE_METADATA.values()),
         **global_context,
     )
@@ -62,6 +64,19 @@ async def standard_agent_node(
     )
 
     existing_messages = drop_orphaned_tool_calls(state.get("messages", []))
+    logger.debug(
+        "standard_agent_message_blocks",
+        iteration=agent_iteration,
+        blocks=[
+            {
+                "idx": i,
+                "type": type(m).__name__,
+                "tool_calls": [tc["id"] for tc in getattr(m, "tool_calls", None) or []],
+                "tool_call_id": getattr(m, "tool_call_id", None),
+            }
+            for i, m in enumerate(existing_messages)
+        ],
+    )
     try:
         response, token_usages = await ainvoke_llm_with_token_usage(
             llm=llm_with_tools,
@@ -88,30 +103,62 @@ async def standard_agent_node(
             calls=[{"name": tc["name"], "args": tc["args"]} for tc in tool_calls],
         )
 
-    # 에이전트가 더 이상 도구를 호출하지 않으면(루프 종료), 자신의 판단을 state에 기록해 답변 노드에 전달한다.
-    reasoning_update = {}
-    reasoning = coerce_message_text(response.content)
-    if not tool_calls:
-        # agent_seen_doc_ids는 agent가 ToolMessage로 본 순서 그대로 누적된 ID 목록.
-        # key_document_indices가 global index를 가리키므로 같은 순서의 doc list로 매핑해야 한다.
-        essential_ids = extract_essential_ids_from_agent_view(
-            reasoning,
+    # submit_result → structured stop. Messages NOT updated (avoids orphaned tool_use).
+    submit_call = next(
+        (tc for tc in tool_calls if tc["name"] == "submit_result"), None
+    )
+    if submit_call:
+        args = submit_call["args"]
+        reason = args.get("reason_for_stopping", "")
+        key_indices = [int(i) for i in args.get("key_document_indices", [])]
+        essential_ids = map_indices_to_doc_ids(
+            key_indices,
             accumulated_docs,
             state.get("agent_seen_doc_ids") or [],
         )
-        reasoning_update = {
-            "agent_reasoning": reasoning,
-            "essential_doc_ids": list(essential_ids) if essential_ids else [],
+        key_docs = "\n".join(f"- {d}" for d in args.get("key_documents", []))
+        coverage = "\n".join(f"- {c}" for c in args.get("search_coverage", []))
+        agent_reasoning = "\n\n".join(filter(None, [
+            reason,
+            f"Key documents:\n{key_docs}" if key_docs else "",
+            f"Coverage:\n{coverage}" if coverage else "",
+        ]))
+        if reason:
+            await adispatch_custom_event(
+                "process",
+                {
+                    "status": "completed",
+                    "node": "standard_agent",
+                    "reasoning": reason,
+                },
+            )
+        return {
+            "agent_reasoning": agent_reasoning,
+            "essential_doc_ids": list(essential_ids),
             "agent_stop_reason": "by_choice",
+            "agent_iteration": agent_iteration + 1,
+            **token_usages,
+        }
+
+    # No tool calls — iter-0 cache sufficient or error fallback
+    # agent_reasoning을 설정해 generate_final_answer가 활용할 수 있도록 한다.
+    reasoning_update = {}
+    reasoning = coerce_message_text(response.content)
+    if not tool_calls:
+        reasoning_update = {
+            "agent_stop_reason": "by_choice",
+            "agent_reasoning": reasoning or "",
         }
 
     if reasoning:
-        display_reasoning = (
-            extract_reason_for_stopping(reasoning) if not tool_calls else reasoning
-        )
+        display_reasoning = extract_search_reason(reasoning)
         await adispatch_custom_event(
             "process",
-            {"status": "completed", "node": "standard_agent", "reasoning": display_reasoning},
+            {
+                "status": "completed",
+                "node": "standard_agent",
+                "reasoning": display_reasoning,
+            },
         )
 
     return {
@@ -127,8 +174,15 @@ _RERANK_INPUT_WINDOW = 300  # reranker 입력 상한이다.
 
 async def collect_docs_node(state: AgentState):
     """accumulated_docs를 retrieved_docs로 복사해 rerank → generate 노드가 참조할 수 있게 한다.
-    reranker 입력 크기를 _RERANK_INPUT_WINDOW 이내로 제한하며, 점수(score) 기반으로 상위 문서를 우선 선발한다."""
+    reranker 입력 크기를 _RERANK_INPUT_WINDOW 이내로 제한하며, 점수(score) 기반으로 상위 문서를 우선 선발한다.
+
+    accumulated_docs가 비어있으면(cache hit) prepare_cache가 세팅한 retrieved_docs를 그대로 유지한다.
+    """
     accumulated = state.get("accumulated_docs", [])
+
+    if not accumulated:
+        logger.info("collect_docs_cache_hit", retrieved_docs_count=len(state.get("retrieved_docs", [])))
+        return {}
 
     # 점수 내림차순 정렬 (점수가 없는 경우 0.0으로 처리)
     sorted_docs = sorted(

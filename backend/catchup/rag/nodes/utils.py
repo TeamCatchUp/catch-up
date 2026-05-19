@@ -18,6 +18,7 @@ from langchain_core.messages import AIMessage
 from langchain_core.messages import BaseMessage
 from langchain_core.messages import HumanMessage
 from langchain_core.messages import SystemMessage
+from langchain_core.messages import ToolMessage
 from langgraph.graph.message import add_messages
 
 from catchup.costs.utils import extract_token_usages
@@ -31,16 +32,28 @@ logger = structlog.get_logger("catchup.graph")
 
 
 def drop_orphaned_tool_calls(messages: list[BaseMessage]) -> list[BaseMessage]:
-    """마지막 AIMessage에 tool_calls가 있지만 ToolMessage가 없는 경우 제거한다."""
+    """tool_calls가 있는 AIMessage 다음에 ToolMessage가 없는 orphan을 제거한다.
+
+    히스토리 어디서든 AIMessage(tool_calls) 바로 다음 메시지가 ToolMessage가 아니면
+    해당 AIMessage를 제거한다.
+    """
     if not messages:
         return messages
-    last = messages[-1]
-    if isinstance(last, AIMessage) and getattr(last, "tool_calls", None):
-        logger.warning(
-            "dropping_orphaned_tool_call_message", message_id=getattr(last, "id", None)
-        )
-        return list(messages[:-1])
-    return messages
+
+    cleaned = []
+    for i, msg in enumerate(messages):
+        if isinstance(msg, AIMessage) and getattr(msg, "tool_calls", None):
+            next_msg = messages[i + 1] if i + 1 < len(messages) else None
+            if not isinstance(next_msg, ToolMessage):
+                logger.warning(
+                    "dropping_orphaned_tool_call_message",
+                    message_id=getattr(msg, "id", None),
+                    position=i,
+                )
+                continue
+        cleaned.append(msg)
+
+    return cleaned
 
 
 def build_search_history_summary(snapshots: list) -> str:
@@ -89,13 +102,19 @@ def build_docs_summary(docs: list[Document], max_docs: int = 20, start_index: in
         "Recently collected documents:",
     ]
 
+    _TRUNCATE_SOURCES = {"confluence", "channel_talk"}
+    _TRUNCATE_LIMIT = 500
+
     for i, doc in enumerate(docs[:max_docs], start_index):
         source = doc.metadata.get("source", "unknown")
         temporal = resolve_temporal_context(doc.metadata)
 
-        raw = doc.page_content[:300].strip()
-        if len(doc.page_content) > 300:
-            raw += "..."
+        if source in _TRUNCATE_SOURCES:
+            raw = doc.page_content[:_TRUNCATE_LIMIT].strip()
+            if len(doc.page_content) > _TRUNCATE_LIMIT:
+                raw += "..."
+        else:
+            raw = doc.page_content.strip()
         content = re.sub(r"[ \t]+", " ", raw)
         content = re.sub(r"\n{3,}", "\n\n", content)
 
@@ -494,11 +513,6 @@ def coerce_message_text(content: Any) -> str:
     return str(content) if content is not None else ""
 
 
-_KEY_DOC_INDICES_TAG_PATTERN = re.compile(
-    r"<\s*key_document_indices\s*>(.*?)<\s*/\s*key_document_indices\s*>",
-    re.IGNORECASE | re.DOTALL,
-)
-
 _REASON_FOR_STOPPING_PATTERN = re.compile(
     r"<\s*reason_for_stopping\s*>(.*?)<\s*/\s*reason_for_stopping\s*>",
     re.IGNORECASE | re.DOTALL,
@@ -514,6 +528,40 @@ def extract_reason_for_stopping(reasoning: str | None) -> str | None:
     if not match:
         return None
     return match.group(1).strip() or None
+
+
+def extract_search_reason(reasoning: str | None) -> str | None:
+    """tool call 전 reasoning에서 <search_reason> 태그 내용을 추출한다.
+    태그가 없으면 원문을 그대로 반환한다."""
+    if not reasoning:
+        return reasoning
+    match = re.search(r"<search_reason>(.*?)</search_reason>", reasoning, re.DOTALL)
+    if match:
+        return match.group(1).strip() or reasoning
+    return reasoning
+
+
+def map_indices_to_doc_ids(
+    indices: list[int],
+    accumulated_docs: list[Document],
+    agent_seen_ids: list[str],
+) -> set[str]:
+    """submit_result의 key_document_indices (1-based)를 실제 doc ID set으로 변환한다.
+
+    agent_seen_ids 순서 기준으로 매핑해 ToolMessage global index와 일치시킨다.
+    agent_seen_ids가 비어있으면 accumulated_docs 순서로 fallback한다.
+    """
+    id_to_doc = {get_document_id(d): d for d in accumulated_docs}
+    ordered = [id_to_doc[sid] for sid in agent_seen_ids if sid in id_to_doc]
+    docs = ordered or accumulated_docs
+
+    result: set[str] = set()
+    for idx in indices:
+        if 1 <= idx <= len(docs):
+            doc_id = get_document_id(docs[idx - 1])
+            if doc_id:
+                result.add(doc_id)
+    return result
 
 
 # 본문 안의 인덱스 좌표 패턴들. agent_reasoning은 reuse 턴에 재공급되거나 grouping
@@ -540,8 +588,7 @@ def sanitize_agent_reasoning(reasoning: str | None) -> str | None:
     """
     if not reasoning:
         return reasoning
-    out = _KEY_DOC_INDICES_TAG_PATTERN.sub("", reasoning)
-    out = _INLINE_BRACKET_INDEX_PATTERN.sub("", out)
+    out = _INLINE_BRACKET_INDEX_PATTERN.sub("", reasoning)
     out = _BOLD_BARE_NUMBER_PATTERN.sub("", out)
     out = _KOREAN_NUMBER_DOC_PATTERN.sub("", out)
     return out.strip()
@@ -565,63 +612,6 @@ def scrub_orphan_indices(body: str, valid_indices: set[int]) -> str:
     return re.sub(r"\[(\d+)\]", _replace, body)
 
 
-def extract_essential_ids_from_agent_view(
-    reasoning: str | None,
-    accumulated_docs: list[Document],
-    agent_seen_ids: list[str],
-) -> set[str]:
-    """
-    agent_seen_doc_ids 순서 기반으로 essential doc IDs를 추출한다.
-
-    key_document_indices는 ToolMessage의 global index를 가리키므로,
-    agent가 본 순서 그대로 정렬된 doc list에 매핑해야 정확한 doc을 찾을 수 있다.
-    agent_seen_ids가 비어있으면 accumulated_docs 순서로 fallback.
-    """
-    id_to_doc = {get_document_id(d): d for d in accumulated_docs}
-    agent_seen_docs = [id_to_doc[doc_id] for doc_id in agent_seen_ids if doc_id in id_to_doc]
-    return extract_essential_ids(reasoning, agent_seen_docs or accumulated_docs)
-
-
-def extract_essential_ids(reasoning: str | None, docs: list[Document]) -> set[str]:
-    """
-    Agent의 reasoning에서 <key_document_indices> 태그를 추출하여 실제 문서 ID 세트로 변환한다.
-    마크다운 강조(**n**), 대괄호([n]), 콤마/공백 구분 등 다양한 내부 형식을 지원.
-    """
-    if not reasoning or not docs:
-        return set()
-
-    match = _KEY_DOC_INDICES_TAG_PATTERN.search(reasoning)
-    if not match:
-        # 태그가 없으면 조용히 반환한다 (에이전트가 지목을 안 한 경우일 수 있음).
-        return set()
-
-    content = match.group(1)
-
-    # 숫자만 모두 추출한다 (마크다운 등 특수문자 제거 효과).
-    indices = [int(s) for s in re.findall(r"\d+", content)]
-
-    
-    if not indices:
-        logger.warning("essential_indices_not_found_in_pattern", text=content)
-        return set()
-
-    essential_ids = set()
-    invalid_indices = []
-    for idx in indices:
-        # 에이전트가 사용하는 인덱스는 1-based
-        if 1 <= idx <= len(docs):
-            doc = docs[idx - 1]
-            essential_ids.add(get_document_id(doc))
-        else:
-            invalid_indices.append(idx)
-
-    if invalid_indices:
-        logger.warning("agent_cited_out_of_range_indices", invalid=invalid_indices, max_range=len(docs))
-
-    if essential_ids:
-        logger.debug("essential_ids_extracted", count=len(essential_ids), ids=list(essential_ids))
-
-    return essential_ids
 
 
 def parse_citations(full_answer: str) -> tuple[str, set[str]]:

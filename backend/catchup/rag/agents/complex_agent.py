@@ -11,9 +11,10 @@ from catchup.rag.nodes.utils import build_docs_summary
 from catchup.rag.nodes.utils import build_system_message
 from catchup.rag.nodes.utils import coerce_message_text
 from catchup.rag.nodes.utils import drop_orphaned_tool_calls
-from catchup.rag.nodes.utils import extract_essential_ids_from_agent_view
 from catchup.rag.nodes.utils import extract_reason_for_stopping
+from catchup.rag.nodes.utils import extract_search_reason
 from catchup.rag.nodes.utils import log_node
+from catchup.rag.nodes.utils import map_indices_to_doc_ids
 from catchup.rag.retryable import RETRYABLE_ERRORS
 from catchup.rag.schemas.sources import SOURCE_METADATA
 from catchup.rag.schemas.structures import SearchPlan
@@ -67,8 +68,17 @@ async def complex_planner_node(
         plan: SearchPlan = response.get("parsed")
     except RETRYABLE_ERRORS as e:
         raise e
-    except Exception:
-        return {"search_plan": None}
+    except Exception as e:
+        logger.warning("complex_planner_failed", error=str(e), exc_info=True)
+        await adispatch_custom_event(
+            "process",
+            {
+                "status": "error",
+                "node": "complex_planner",
+                "reasoning": "검색 계획 수립에 실패했어요.",
+            },
+        )
+        return {"search_plan": []}  # None=미시도, []=실패, [steps]=성공
 
     step_count = len(plan.steps) if plan else 0
     logger.info("complex_plan_created", step_count=step_count)
@@ -122,12 +132,14 @@ async def complex_agent_node(
 
     search_plan = state.get("search_plan") or []
     accumulated_docs = state.get("accumulated_docs", [])
+    cached_docs = state.get("retrieved_docs", []) if agent_iteration == 0 else []
     global_context = state["global_context"].model_dump()
 
     system_prompt = prompt_loader.get_prompt(
         "rag/complex_agent_system",
         search_plan_text=_format_search_plan(search_plan),
         accumulated_docs_summary=build_docs_summary(accumulated_docs),
+        cached_docs_summary=build_docs_summary(cached_docs) if cached_docs else "",
         sources=list(SOURCE_METADATA.values()),
         **global_context,
     )
@@ -154,6 +166,44 @@ async def complex_agent_node(
         return {"agent_iteration": agent_iteration + 1}
 
     tool_calls = getattr(response, "tool_calls", None) or []
+
+    # submit_result → structured stop. Messages NOT updated (avoids orphaned tool_use).
+    submit_call = next(
+        (tc for tc in tool_calls if tc["name"] == "submit_result"), None
+    )
+    if submit_call:
+        args = submit_call["args"]
+        reason = args.get("reason_for_stopping", "")
+        key_indices = [int(i) for i in args.get("key_document_indices", [])]
+        essential_ids = map_indices_to_doc_ids(
+            key_indices,
+            accumulated_docs,
+            state.get("agent_seen_doc_ids") or [],
+        )
+        key_docs = "\n".join(f"- {d}" for d in args.get("key_documents", []))
+        coverage = "\n".join(f"- {c}" for c in args.get("search_coverage", []))
+        agent_reasoning = "\n\n".join(filter(None, [
+            reason,
+            f"Key documents:\n{key_docs}" if key_docs else "",
+            f"Coverage:\n{coverage}" if coverage else "",
+        ]))
+        if reason:
+            await adispatch_custom_event(
+                "process",
+                {
+                    "status": "completed",
+                    "node": "complex_agent",
+                    "reasoning": reason,
+                },
+            )
+        return {
+            "agent_reasoning": agent_reasoning,
+            "essential_doc_ids": list(essential_ids),
+            "agent_stop_reason": "by_choice",
+            "agent_iteration": agent_iteration + 1,
+            **token_usages,
+        }
+
     logger.info(
         "complex_agent_decision",
         iteration=agent_iteration + 1,
@@ -168,24 +218,20 @@ async def complex_agent_node(
         )
 
     # 에이전트가 더 이상 도구를 호출하지 않으면(루프 종료), 자신의 판단을 state에 기록해 답변 노드에 전달한다.
+    # agent_reasoning을 설정해 generate_final_answer가 활용할 수 있도록 한다.
     reasoning_update = {}
     reasoning = coerce_message_text(response.content)
     if not tool_calls:
-        essential_ids = extract_essential_ids_from_agent_view(
-            reasoning,
-            accumulated_docs,
-            state.get("agent_seen_doc_ids") or [],
-        )
         reasoning_update = {
-            "agent_reasoning": reasoning,
-            "essential_doc_ids": list(essential_ids) if essential_ids else [],
             "agent_stop_reason": "by_choice",
+            "agent_reasoning": reasoning or "",
         }
 
     if reasoning:
-        display_reasoning = (
-            extract_reason_for_stopping(reasoning) if not tool_calls else reasoning
-        )
+        if not tool_calls:
+            display_reasoning = extract_reason_for_stopping(reasoning)
+        else:
+            display_reasoning = extract_search_reason(reasoning)
         await adispatch_custom_event(
             "process",
             {"status": "completed", "node": "complex_agent", "reasoning": display_reasoning},

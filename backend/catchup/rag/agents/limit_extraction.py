@@ -3,18 +3,26 @@ import structlog
 from langchain.chat_models import BaseChatModel
 from langchain_core.messages import HumanMessage
 from langchain_core.messages import ToolMessage
+from pydantic import BaseModel
+from pydantic import Field
 
 from catchup.costs.utils import token_usage
 from catchup.prompts.loader import prompt_loader
 from catchup.rag.nodes.utils import ainvoke_llm_with_token_usage
 from catchup.rag.nodes.utils import build_system_message
-from catchup.rag.nodes.utils import coerce_message_text
-from catchup.rag.nodes.utils import extract_essential_ids_from_agent_view
 from catchup.rag.nodes.utils import log_node
+from catchup.rag.nodes.utils import map_indices_to_doc_ids
 from catchup.rag.semaphores import rag_semaphores
 from catchup.rag.state import AgentState
 
 logger = structlog.get_logger()
+
+
+class EssentialDocResult(BaseModel):
+    key_document_indices: list[int] = Field(
+        default_factory=list,
+        description="1-based indices of the most essential documents for answering the query",
+    )
 
 
 @log_node
@@ -50,16 +58,24 @@ async def extract_essential_node(
         system_prompt = prompt_loader.get_prompt("rag/agent_limit_extraction")
         system_message = build_system_message(system_prompt)
 
+        structured_llm = llm.with_structured_output(
+            EssentialDocResult,
+            method="function_calling",
+            include_raw=True,
+        )
+
         response, token_usages = await ainvoke_llm_with_token_usage(
-            llm=llm,
+            llm=structured_llm,
             messages=[system_message, user_message],
             semaphore=rag_semaphores.llm_small,
             timeout=10.0,
         )
 
-        reasoning = coerce_message_text(response.content)
-        essential_ids = extract_essential_ids_from_agent_view(
-            reasoning,
+        result: EssentialDocResult | None = response.get("parsed")
+        indices = result.key_document_indices if result else []
+
+        essential_ids = map_indices_to_doc_ids(
+            indices,
             state.get("accumulated_docs", []),
             state.get("agent_seen_doc_ids") or [],
         )

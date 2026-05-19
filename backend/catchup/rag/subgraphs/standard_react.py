@@ -9,21 +9,25 @@ from catchup.rag.agents.standard_agent import standard_agent_node
 from catchup.rag.agents.tools.search_tools import search_tool_executor_node
 from catchup.rag.nodes import generate_final_answer_node
 from catchup.rag.nodes import merge_cache_node
+from catchup.rag.nodes import prepare_cache_node
 from catchup.rag.nodes import rerank_node
 from catchup.rag.nodes import rewrite_node
 from catchup.rag.state import AgentState
 
 
 def _route_after_agent(state: AgentState) -> str:
-    """tool_calls 있으면 executor, 없으면 collect_docs로 라우팅.
+    """agent_stop_reason == 'by_choice' (submit_result 또는 no-tool-call) → collect_docs.
     tool_calls 체크를 max_iterations보다 먼저 수행해 orphaned tool_use 메시지를 방지한다."""
+    if state.get("agent_stop_reason") == "by_choice":
+        return "collect_docs"
+
     messages = state.get("messages", [])
     last = messages[-1] if messages else None
     if last and getattr(last, "tool_calls", None):
         return "tool_executor"
 
     pipeline_plan = state.get("pipeline_plan")
-    max_iterations = pipeline_plan.max_iterations if pipeline_plan else 3
+    max_iterations = pipeline_plan.max_iterations if pipeline_plan else 4
     if state.get("agent_iteration", 0) >= max_iterations:
         return "extract_essential"
 
@@ -47,6 +51,10 @@ def build_standard_react_subgraph(
         "rewrite",
         partial(rewrite_node, llm=llm_small, timeout=10.0),
         retry=AGENT_RETRY_POLICY,
+    )
+    graph.add_node(
+        "prepare_cache",
+        partial(prepare_cache_node, vector_db_service=vector_db_service),
     )
     graph.add_node(
         "standard_agent",
@@ -77,7 +85,8 @@ def build_standard_react_subgraph(
     )
 
     graph.set_entry_point("rewrite")
-    graph.add_edge("rewrite", "standard_agent")
+    graph.add_edge("rewrite", "prepare_cache")
+    graph.add_edge("prepare_cache", "standard_agent")
     graph.add_conditional_edges(
         "standard_agent",
         _route_after_agent,
