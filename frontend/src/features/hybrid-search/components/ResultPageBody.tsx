@@ -14,7 +14,7 @@ interface ResultPageBodyProps {
 export default function ResultPageBody({ children, side }: PropsWithChildren<ResultPageBodyProps>) {
   return (
     <section className="flex w-full justify-center px-16 pt-4 pb-30">
-      <div className="flex w-full max-w-[1260px] gap-18">
+      <div className="flex w-full max-w-[1440px] gap-18">
         <div className="w-133.5 shrink-0">{children}</div>
         <aside className="w-80 shrink-0">{side}</aside>
       </div>
