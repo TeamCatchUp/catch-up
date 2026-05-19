@@ -50,7 +50,7 @@ def _route_after_complex_agent(state: AgentState) -> str:
 
 
 def build_complex_react_subgraph(
-    llm_small, llm_large_stream, llm_thinking, vector_db_service, rerank_service
+    llm_small, llm_large_stream_thinking, llm_thinking, vector_db_service, rerank_service
 ):
     """Complex ReAct 파이프라인 서브그래프.
 
@@ -83,7 +83,7 @@ def build_complex_react_subgraph(
     )
     graph.add_node(
         "complex_agent",
-        partial(complex_agent_node, llm=llm_thinking),
+        partial(complex_agent_node, llm=llm_small),
         retry=AGENT_RETRY_POLICY,
     )
     graph.add_node(
@@ -104,7 +104,7 @@ def build_complex_react_subgraph(
     graph.add_node("merge_cache", merge_cache_node)
     graph.add_node(
         "generate_final_answer",
-        partial(generate_final_answer_node, llm=llm_large_stream),
+        partial(generate_final_answer_node, llm=llm_large_stream_thinking),
         metadata={"tags": ["stream_target", "has_citations"]},
         retry=BASE_RETRY_POLICY,
     )

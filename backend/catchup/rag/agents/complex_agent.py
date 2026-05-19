@@ -10,9 +10,9 @@ from catchup.rag.nodes.utils import ainvoke_llm_with_token_usage
 from catchup.rag.nodes.utils import build_docs_summary
 from catchup.rag.nodes.utils import build_system_message
 from catchup.rag.nodes.utils import coerce_message_text
+from catchup.rag.nodes.utils import dispatch_search_reason
 from catchup.rag.nodes.utils import drop_orphaned_tool_calls
 from catchup.rag.nodes.utils import extract_reason_for_stopping
-from catchup.rag.nodes.utils import extract_search_reason
 from catchup.rag.nodes.utils import log_node
 from catchup.rag.nodes.utils import map_indices_to_doc_ids
 from catchup.rag.retryable import RETRYABLE_ERRORS
@@ -146,7 +146,7 @@ async def complex_agent_node(
     system_message = build_system_message(system_prompt)
     query = state.get("rewritten_query") or state.get("original_query", "")
 
-    llm_with_tools = llm.bind_tools(REACT_TOOLS)
+    llm_with_tools = llm.bind_tools(REACT_TOOLS, tool_choice="any")
 
     await adispatch_custom_event(
         "process",
@@ -218,24 +218,22 @@ async def complex_agent_node(
         )
 
     # 에이전트가 더 이상 도구를 호출하지 않으면(루프 종료), 자신의 판단을 state에 기록해 답변 노드에 전달한다.
-    # agent_reasoning을 설정해 generate_final_answer가 활용할 수 있도록 한다.
     reasoning_update = {}
-    reasoning = coerce_message_text(response.content)
     if not tool_calls:
+        reasoning = coerce_message_text(response.content)
+        display_reasoning = extract_reason_for_stopping(reasoning) if reasoning else None
+        if display_reasoning:
+            await adispatch_custom_event(
+                "process",
+                {"status": "completed", "node": "complex_agent", "reasoning": display_reasoning},
+            )
         reasoning_update = {
             "agent_stop_reason": "by_choice",
             "agent_reasoning": reasoning or "",
         }
 
-    if reasoning:
-        if not tool_calls:
-            display_reasoning = extract_reason_for_stopping(reasoning)
-        else:
-            display_reasoning = extract_search_reason(reasoning)
-        await adispatch_custom_event(
-            "process",
-            {"status": "completed", "node": "complex_agent", "reasoning": display_reasoning},
-        )
+    # 검색 툴의 reason 파라미터를 프론트엔드로 dispatch한다.
+    await dispatch_search_reason(tool_calls, node_name="complex_agent")
 
     return {
         "messages": [response],
