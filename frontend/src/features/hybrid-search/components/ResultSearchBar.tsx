@@ -7,10 +7,13 @@
 // 내부 확장 콘텐츠는 ResultSearchBarExpandedPanel로 분리.
 
 import { useRef, useState } from 'react';
+import type { DateRange } from 'react-day-picker';
 
 import IconArrowSend from '@/public/icons/icon/arrow_send.svg';
 import IconCancel from '@/public/icons/icon/cancel.svg';
+import IconFilter from '@/public/icons/icon/filter.svg';
 import IconSearch from '@/public/icons/icon/search_2.svg';
+import { DateRangePicker } from '@/shared/components/ui/date-range-picker';
 import type { DocsSource } from '@/shared/types/source';
 import { cn } from '@/shared/utils/cn';
 
@@ -21,6 +24,8 @@ interface ResultSearchBarProps {
   onValueChange: (value: string) => void;
   chips: DocsSource[];
   onChipsChange: (next: DocsSource[]) => void;
+  dateRange: DateRange | undefined;
+  onDateRangeChange: (next: DateRange | undefined) => void;
   onSubmit: () => void;
   onHistorySubmit: (query: string) => void;
   onClear: () => void;
@@ -31,6 +36,8 @@ export default function ResultSearchBar({
   onValueChange,
   chips,
   onChipsChange,
+  dateRange,
+  onDateRangeChange,
   onSubmit,
   onHistorySubmit,
   onClear,
@@ -94,6 +101,27 @@ export default function ResultSearchBar({
             />
           </div>
           <div className="flex shrink-0 items-center gap-2.5">
+            <DateRangePicker
+              value={dateRange}
+              onChange={onDateRangeChange}
+              align="end"
+              trigger={
+                <button
+                  type="button"
+                  onMouseDown={(e) => expanded && e.preventDefault()}
+                  aria-label="기간 필터"
+                  className="text-icon-normal hover:bg-fill-interaction-hover active:bg-fill-interaction-pressed relative flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-full transition-colors"
+                >
+                  <IconFilter className="h-7 w-7" />
+                  {dateRange?.from && (
+                    <span
+                      aria-hidden
+                      className="bg-fill-primary absolute top-2 right-2 size-1.5 rounded-full"
+                    />
+                  )}
+                </button>
+              }
+            />
             <button
               type="button"
               onMouseDown={(e) => expanded && e.preventDefault()}

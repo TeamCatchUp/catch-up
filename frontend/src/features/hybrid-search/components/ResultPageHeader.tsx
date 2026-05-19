@@ -6,11 +6,13 @@
 
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import type { DateRange } from 'react-day-picker';
 
 import AccentTabs, { type AccentTabItem } from '@/shared/components/ui/accent-tabs';
 
 import { hybridSearchQueries } from '../queries/hybridSearch.queries';
 import type { ActiveTab, ToolFilter } from '../types/hybridSearchApi';
+import { dateRangeToUrlParams } from '../utils/temporalRange';
 import ResultSearchBar from './ResultSearchBar';
 
 interface ResultPageHeaderProps {
@@ -24,6 +26,11 @@ interface ResultPageHeaderProps {
   // expanded 검색바 안 chips의 draft 상태 (submit 시 적용)
   draftChips: ToolFilter[];
   onDraftChipsChange: (next: ToolFilter[]) => void;
+  // 확정 기간 — list query에 사용
+  dateRange: DateRange | undefined;
+  // 입력 중 임시 기간 — 검색바 필터에 사용, submit 시 적용
+  draftDateRange: DateRange | undefined;
+  onDraftDateRangeChange: (next: DateRange | undefined) => void;
   onSubmit: () => void;
   onHistorySubmit: (query: string) => void;
   onClear: () => void;
@@ -54,6 +61,9 @@ export default function ResultPageHeader({
   onDraftKeywordChange,
   draftChips,
   onDraftChipsChange,
+  dateRange,
+  draftDateRange,
+  onDraftDateRangeChange,
   onSubmit,
   onHistorySubmit,
   onClear,
@@ -61,7 +71,8 @@ export default function ResultPageHeader({
   onTabChange,
 }: ResultPageHeaderProps) {
   // ResultListSection과 같은 queryKey → cache 자동 공유, fetch 1회만.
-  const query = useQuery(hybridSearchQueries.list({ keyword, scope }));
+  const { start, end } = dateRangeToUrlParams(dateRange);
+  const query = useQuery(hybridSearchQueries.list({ keyword, scope, start, end }));
 
   // results에서 source별 count 직접 계산 — backend의 source_distribution 의존 X.
   const distribution = useMemo(() => {
@@ -84,6 +95,8 @@ export default function ResultPageHeader({
           onValueChange={onDraftKeywordChange}
           chips={draftChips}
           onChipsChange={onDraftChipsChange}
+          dateRange={draftDateRange}
+          onDateRangeChange={onDraftDateRangeChange}
           onSubmit={onSubmit}
           onHistorySubmit={onHistorySubmit}
           onClear={onClear}

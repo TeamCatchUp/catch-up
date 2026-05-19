@@ -4,6 +4,7 @@
 // backend는 dedup 후 최대 50개 한 번에 반환 → frontend가 active/page로 client-side filter+slice.
 
 import { AnimatePresence, motion } from 'motion/react';
+import type { DateRange } from 'react-day-picker';
 
 import Pagination from '@/shared/components/ui/pagination';
 import { motionEase, MotionState } from '@/shared/motion/presets';
@@ -12,6 +13,7 @@ import { normalizeSources } from '@/shared/utils/normalize/normalizeRagSources';
 import { useHybridSearch } from '../hooks/useHybridSearch';
 import { HYBRID_SEARCH_PAGE_SIZE } from '../queries/hybridSearch.queries';
 import type { ActiveTab, ToolFilter } from '../types/hybridSearchApi';
+import { dateRangeToUrlParams } from '../utils/temporalRange';
 import HybridSearchResultCard from './HybridSearchResultCard';
 import ResultEmptyState from './ResultEmptyState';
 import ResultErrorState from './ResultErrorState';
@@ -44,6 +46,7 @@ const stateCrossfade = {
 interface ResultListSectionProps {
   keyword: string;
   scope: ToolFilter[];
+  dateRange: DateRange | undefined;
   active: ActiveTab;
   page: number;
   onPageChange: (next: number) => void;
@@ -54,11 +57,13 @@ type ViewState = 'empty' | 'loading' | 'error' | 'results';
 export default function ResultListSection({
   keyword,
   scope,
+  dateRange,
   active,
   page,
   onPageChange,
 }: ResultListSectionProps) {
-  const query = useHybridSearch({ keyword, scope });
+  const { start, end } = dateRangeToUrlParams(dateRange);
+  const query = useHybridSearch({ keyword, scope, start, end });
 
   // active가 scope 밖이면 결과 없음 (사용자가 보지 못한 source 탭 클릭한 경우).
   const isActiveInScope = active === 'all' || scope.length === 0 || scope.includes(active);
