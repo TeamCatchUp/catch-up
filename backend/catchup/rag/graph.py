@@ -89,8 +89,8 @@ def get_compiled_graph(
         max_attempts=rag_max_attempts,
     ).get_llm()
 
-    # SMALL, streaming, extended thinking — complex_planner 전용.
-    # tool-calling 응답이라 response 부분은 짧게 캡(1024)해 총 wall-clock을 제한한다.
+    # SMALL, streaming, extended thinking — complex_agent 전용 (plan 수립 후 단계별 검색 결정).
+    # structured_output(with_structured_output)은 thinking과 충돌하므로 planner에는 사용 불가.
     llm_thinking = get_llm_service(
         LlmProvider.AWS_BEDROCK,
         ModelCapacity.SMALL,
