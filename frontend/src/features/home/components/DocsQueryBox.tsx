@@ -4,11 +4,15 @@
 // 부모(HomeDocsSection)가 selectedSources를 관리해 tools 쿼리 파라미터로 전달.
 
 import { useState } from 'react';
+import type { DateRange } from 'react-day-picker';
 import { useRouter } from 'next/navigation';
 
 import IconArrowSend from '@/public/icons/icon/arrow_send.svg';
+import IconFilter from '@/public/icons/icon/filter.svg';
 import IconSearch from '@/public/icons/icon/search_2.svg';
+import { DateRangePicker } from '@/shared/components/ui/date-range-picker';
 import type { DocsSource } from '@/shared/types/source';
+import { dateRangeToUrlParams } from '@/shared/utils/temporalRange';
 
 interface DocsQueryBoxProps {
   selectedSources: DocsSource[];
@@ -17,6 +21,7 @@ interface DocsQueryBoxProps {
 export default function DocsQueryBox({ selectedSources }: DocsQueryBoxProps) {
   const router = useRouter();
   const [value, setValue] = useState('');
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
   const hasText = value.trim().length > 0;
 
   const handleSubmit = () => {
@@ -26,6 +31,9 @@ export default function DocsQueryBox({ selectedSources }: DocsQueryBoxProps) {
     if (selectedSources.length > 0) {
       params.set('tools', selectedSources.join(','));
     }
+    const { start, end } = dateRangeToUrlParams(dateRange);
+    if (start) params.set('start', start);
+    if (end) params.set('end', end);
     router.push(`/hybrid-search?${params.toString()}`);
   };
 
@@ -50,6 +58,26 @@ export default function DocsQueryBox({ selectedSources }: DocsQueryBoxProps) {
           className="text-body-medium text-content-normal placeholder:text-content-assistive flex-1 bg-transparent outline-none"
         />
       </div>
+      <DateRangePicker
+        value={dateRange}
+        onChange={setDateRange}
+        align="start"
+        trigger={
+          <button
+            type="button"
+            aria-label="기간 필터"
+            className="text-icon-normal hover:bg-fill-interaction-hover active:bg-fill-interaction-pressed relative flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-full transition-colors"
+          >
+            <IconFilter className="h-7 w-7" />
+            {dateRange?.from && (
+              <span
+                aria-hidden
+                className="bg-fill-primary absolute top-2 right-2 size-1.5 rounded-full"
+              />
+            )}
+          </button>
+        }
+      />
       <button
         type="button"
         onClick={handleSubmit}
