@@ -17,9 +17,9 @@ function Calendar({ className, classNames, ...props }: DayPickerProps) {
         caption_label: 'text-heading-small text-content-normal',
         nav: 'absolute inset-x-0 top-0 z-local flex items-center justify-between',
         button_previous:
-          'flex size-7 cursor-pointer items-center justify-center rounded-full text-icon-neutral hover:bg-fill-interaction-hover',
+          'flex size-7 cursor-pointer items-center justify-center rounded-full text-icon-neutral hover:bg-fill-interaction-hover aria-disabled:cursor-not-allowed aria-disabled:text-icon-assistive aria-disabled:hover:bg-transparent',
         button_next:
-          'flex size-7 cursor-pointer items-center justify-center rounded-full text-icon-neutral hover:bg-fill-interaction-hover',
+          'flex size-7 cursor-pointer items-center justify-center rounded-full text-icon-neutral hover:bg-fill-interaction-hover aria-disabled:cursor-not-allowed aria-disabled:text-icon-assistive aria-disabled:hover:bg-transparent',
         month_grid: 'flex flex-col gap-1',
         weekdays: 'flex',
         weekday: 'flex h-6 flex-1 items-center justify-center text-body-small text-content-alternative',

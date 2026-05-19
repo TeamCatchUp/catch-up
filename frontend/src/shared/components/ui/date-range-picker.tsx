@@ -2,7 +2,7 @@
 
 import { useCallback, useState } from 'react';
 import type { DateRange } from 'react-day-picker';
-import { format, isSameDay, startOfToday } from 'date-fns';
+import { format, isSameDay, startOfToday, subMonths } from 'date-fns';
 import { ko } from 'date-fns/locale';
 
 import IconCalendar from '@/public/icons/icon/calendar.svg';
@@ -122,6 +122,8 @@ function DateRangePicker({
           numberOfMonths={numberOfMonths}
           locale={ko}
           disabled={{ after: startOfToday() }}
+          endMonth={startOfToday()}
+          defaultMonth={subMonths(startOfToday(), numberOfMonths - 1)}
           formatters={{ formatCaption: (month) => format(month, 'yyyy.M') }}
         />
 
