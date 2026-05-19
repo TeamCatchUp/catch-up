@@ -488,7 +488,7 @@ class ChatService:
         session_id: uuid.UUID,
     ) -> tuple[dict, dict, Any]:
         base_config = {"configurable": {"thread_id": session_id}}
-        invoke_config = {**base_config}
+        invoke_config = {**base_config, "recursion_limit": 50}
         trace_id = None
 
         if settings.ENABLE_LANGFUSE:
