@@ -98,8 +98,8 @@ def get_compiled_graph(
         streaming=True,
         isolated=True,
         extended_thinking=True,
-        thinking_budget_tokens=2048,
-        max_response_tokens=1024,
+        thinking_budget_tokens=1024,
+        max_response_tokens=512,
         max_attempts=rag_max_attempts,
     ).get_llm()
 
