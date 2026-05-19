@@ -62,6 +62,18 @@ export default function DocsQueryBox({ selectedSources }: DocsQueryBoxProps) {
         />
       </div>
       <div className="flex items-center gap-2.5">
+        {hasText && (
+          <Button
+            variant="icon-only-gray"
+            size="lg"
+            type="button"
+            onClick={() => setValue('')}
+            aria-label="검색어 지우기"
+            className="text-icon-normal rounded-full"
+          >
+            <IconCancel className="size-6" />
+          </Button>
+        )}
         <DateRangePicker
           value={dateRange}
           onChange={setDateRange}
@@ -87,18 +99,6 @@ export default function DocsQueryBox({ selectedSources }: DocsQueryBoxProps) {
             </Button>
           }
         />
-        {hasText && (
-          <Button
-            variant="icon-only-gray"
-            size="lg"
-            type="button"
-            onClick={() => setValue('')}
-            aria-label="검색어 지우기"
-            className="text-icon-normal rounded-full"
-          >
-            <IconCancel className="size-6" />
-          </Button>
-        )}
         <span aria-hidden className="bg-edge-normal h-6 w-px shrink-0" />
         <button
           type="button"
