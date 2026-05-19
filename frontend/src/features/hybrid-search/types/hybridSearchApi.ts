@@ -12,6 +12,10 @@ export type ActiveTab = 'all' | ToolFilter;
 export interface HybridSearchRequest {
   keyword: string;
   tool_filters?: ToolFilter[];
+  /** UTC ISO datetime. created_at 필터 시작 */
+  start_date?: string;
+  /** UTC ISO datetime. created_at 필터 종료 */
+  end_date?: string;
 }
 
 export interface HybridSearchResponse {
