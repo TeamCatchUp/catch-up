@@ -87,7 +87,7 @@ def build_search_history_summary(snapshots: list) -> str:
 
 
 def build_docs_summary(docs: list[Document], max_docs: int = 20, start_index: int = 1) -> str:
-    """Agent가 현재까지 수집된 지식의 '내용'을 파악할 수 있도록 요약 제공.
+    """Agent가 현재까지 수집된 지식의 '내용'을 파악할 수 있도록 XML 형식 요약을 제공한다.
 
     start_index: ToolMessage의 전역 인덱스 오프셋. 기본값 1(1-based).
     search_tool_executor에서 호출 시 global index를 유지하기 위해 사용한다.
@@ -97,14 +97,11 @@ def build_docs_summary(docs: list[Document], max_docs: int = 20, start_index: in
 
     source_counts = Counter(d.metadata.get("source", "unknown") for d in docs)
     source_str = ", ".join(f"{src}:{cnt}" for src, cnt in source_counts.items())
-    lines = [
-        f"Total {len(docs)}docs accumulated ({source_str})",
-        "Recently collected documents:",
-    ]
 
     _TRUNCATE_SOURCES = {"confluence", "channel_talk"}
     _TRUNCATE_LIMIT = 500
 
+    doc_elements: list[str] = []
     for i, doc in enumerate(docs[:max_docs], start_index):
         source = doc.metadata.get("source", "unknown")
         temporal = resolve_temporal_context(doc.metadata)
@@ -117,15 +114,23 @@ def build_docs_summary(docs: list[Document], max_docs: int = 20, start_index: in
             raw = doc.page_content.strip()
         content = re.sub(r"[ \t]+", " ", raw)
         content = re.sub(r"\n{3,}", "\n\n", content)
+        if temporal:
+            content = f"{content}\n{temporal}"
 
-        lines.append(f"[{i}] ({source}) {temporal}\n{content}")
+        parts = [
+            f'<document index="{i}">',
+            f"  <source>{source}</source>",
+            f"  <document_content>\n{content}\n  </document_content>",
+            "</document>",
+        ]
+        doc_elements.append("\n".join(parts))
 
+    trailing = ""
     if len(docs) > max_docs:
-        lines.append(
-            f"... and {len(docs) - max_docs} more document(s) stored in memory."
-        )
+        trailing = f"\n<!-- {len(docs) - max_docs} more document(s) stored in memory -->"
 
-    return "\n".join(lines)
+    inner = "\n".join(doc_elements)
+    return f'<documents total="{len(docs)}" sources="{source_str}">\n{inner}\n</documents>{trailing}'
 
 
 async def ainvoke_llm_with_token_usage(
@@ -354,21 +359,14 @@ def build_doc_groups(retrieved_docs: list[Document]) -> list[DocGroup]:
 
 
 def _render_chunk_group(group: DocGroup) -> str:
-    """청크 그룹을 단일 인덱스 블록으로 렌더링."""
+    """청크 그룹을 XML document 엘리먼트로 렌더링한다."""
     rep = group.representative
     md = rep.metadata
     source = md.get("source", "unknown")
     title = md.get("title") or ""
     temporal = resolve_temporal_context(md)
 
-    header_bits = [f"[{group.display_index}] (Source: {source})"]
-    if title:
-        header_bits.append(f'Title: "{title}"')
-    if temporal:
-        header_bits.append(temporal)
-    header = " ".join(header_bits)
-
-    lines: list[str] = [header]
+    inner_lines: list[str] = []
 
     # 누락된 청크 사이에는 ...(Omitted)... 마커를 넣어 LLM이 문맥 단절을 인지하게 한다.
     prev_idx: int | None = None
@@ -385,9 +383,9 @@ def _render_chunk_group(group: DocGroup) -> str:
             and chunk_idx is not None
             and chunk_idx > prev_idx + 1
         ):
-            lines.append("...(Omitted)...")
-        lines.append(f"--- {chunk_label} ---")
-        lines.append(doc.metadata.get("contextual_content", ""))
+            inner_lines.append("...(Omitted)...")
+        inner_lines.append(f"--- {chunk_label} ---")
+        inner_lines.append(doc.metadata.get("contextual_content", ""))
         prev_idx = chunk_idx
 
     # 누락된 마지막 청크 표기 (예: total 5인데 마지막이 4번까지만 등장).
@@ -398,42 +396,71 @@ def _render_chunk_group(group: DocGroup) -> str:
             and total is not None
             and last_idx < total - 1
         ):
-            lines.append("...(Omitted)...")
+            inner_lines.append("...(Omitted)...")
 
+    if temporal:
+        inner_lines.append(temporal)
+
+    content_text = "\n".join(inner_lines)
+
+    parts: list[str] = [f'<document index="{group.display_index}">']
+    parts.append(f"  <source>{source}</source>")
+    if title:
+        parts.append(f"  <title>{title}</title>")
+    parts.append(f"  <document_content>\n{content_text}\n  </document_content>")
     if source == "confluence":
-        lines.append(f"status: {md.get('status', '')}")
+        parts.append(f"  <status>{md.get('status', '')}</status>")
+    parts.append("</document>")
 
-    return "\n".join(lines)
+    return "\n".join(parts)
 
 
 def render_grouped_context_text(groups: list[DocGroup]) -> str:
     """
-    그룹 리스트로부터 LLM에게 제공할 retrieved_context 텍스트를 생성한다.
+    그룹 리스트로부터 LLM에게 제공할 retrieved_context XML을 생성한다.
     """
-    parts: list[str] = []
+    doc_elements: list[str] = []
     for group in groups:
         if group.is_chunked:
-            parts.append(_render_chunk_group(group))
+            doc_elements.append(_render_chunk_group(group))
             continue
-        # 단일 doc — 기존 포맷 유지.
+        # 단일 doc — XML 포맷으로 렌더링한다.
         doc = group.representative
         md = doc.metadata
         source = md.get("source", "unknown")
         content = md.get("contextual_content", "")
         temporal = resolve_temporal_context(md)
-        part = f"[{group.display_index}] (Source: {source})\n{content} {temporal}"
+
+        content_text = content
+        if temporal:
+            content_text = f"{content}\n{temporal}"
+
+        parts: list[str] = [f'<document index="{group.display_index}">']
+        parts.append(f"  <source>{source}</source>")
+        parts.append(
+            f"  <document_content>\n{content_text}\n  </document_content>"
+        )
         if source == "confluence":
-            part = part + f"\nstatus: {md.get('status', '')}"
-        parts.append(part)
-    return "\n\n".join(parts)
+            parts.append(f"  <status>{md.get('status', '')}</status>")
+        parts.append("</document>")
+
+        doc_elements.append("\n".join(parts))
+
+    inner = "\n".join(doc_elements)
+    return f"<documents>\n{inner}\n</documents>"
 
 
 def build_system_message(
     static_prompt: str,
     dynamic_prompts: list[str] | None = None,
     cache_prompt: bool = False,
+    instructions_last: bool = False,
 ) -> SystemMessage:
+    """시스템 메시지를 구성한다.
 
+    instructions_last=True이면 Anthropic Long Context 가이드에 따라
+    동적 프롬프트(데이터)를 정적 프롬프트(지시문) 앞에 배치한다.
+    """
     # 정적 프롬프트 (캐싱 대상)
     static_block: dict = {"type": "text", "text": static_prompt}
 
@@ -441,12 +468,18 @@ def build_system_message(
         static_block["cache_control"] = {"type": "ephemeral"}
         # TODO: langchain-aws 지원 시점에 "ttl": "1h" 추가
 
-    content = [static_block]
-
-    # 동적 프롬프트
-    if dynamic_prompts:
-        for prompt in dynamic_prompts:
-            content.append({"type": "text", "text": prompt})
+    if instructions_last:
+        content: list[dict] = []
+        if dynamic_prompts:
+            for prompt in dynamic_prompts:
+                content.append({"type": "text", "text": prompt})
+        content.append(static_block)
+    else:
+        content = [static_block]
+        # 동적 프롬프트
+        if dynamic_prompts:
+            for prompt in dynamic_prompts:
+                content.append({"type": "text", "text": prompt})
 
     return SystemMessage(content=content)
 

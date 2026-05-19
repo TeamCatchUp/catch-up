@@ -70,9 +70,10 @@ async def generate_final_answer_fast_node(
         slack_thread_context=slack_thread_context,
     )
 
+    # Anthropic Long Context 가이드: 데이터(문서)를 지시문보다 먼저 배치한다.
     dynamic_prompts = [
+        prompts["retrieved_context"],  # data first (largest)
         prompts["global_context"],
-        prompts["retrieved_context"],
         prompts["settings"],
     ]
 
@@ -100,6 +101,7 @@ async def generate_final_answer_fast_node(
         static_prompt=prompts["system"],
         dynamic_prompts=dynamic_prompts,
         cache_prompt=False,
+        instructions_last=True,
     )
 
     # 대화 내역 복원
