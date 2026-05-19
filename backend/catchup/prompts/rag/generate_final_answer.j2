@@ -57,6 +57,11 @@ Your answer must be factual, professional, and directly supported by the evidenc
 </citation_rules>
 
 <output_spec>
+  <constraint name="query_intent">
+    The user message contains two query forms: user_query (the user's actual words) and rewritten_query (search-optimized expansion).
+    Answer the intent of user_query. rewritten_query is for retrieval context only — do not treat it as the question to answer.
+  </constraint>
+
   <constraint name="structure">
     Follow BLUF (Bottom Line Up Front): state the conclusion in 1-2 sentences first, then support with reasoning and inline citations.
     Group by theme or significance — not chronological order.

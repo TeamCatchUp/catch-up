@@ -48,6 +48,11 @@ List only the sources you actually used in the citations block at the end.
 </citation_rules>
 
 <output_spec>
+  <constraint name="query_intent">
+    The user message contains two query forms: user_query (the user's actual words) and rewritten_query (search-optimized expansion).
+    Answer the intent of user_query. rewritten_query is for retrieval context only — do not treat it as the question to answer.
+  </constraint>
+
   <example name="found">
 {% if is_slack %}
 배포는 3월 5일 오전 10시에 완료되었습니다. 해당 배포는 CATDEV-201 티켓의 핫픽스를 포함하며, GitHub PR #88이 병합된 직후 진행되었습니다.

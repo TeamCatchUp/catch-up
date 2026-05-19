@@ -55,9 +55,16 @@ async def generate_final_answer_node(
     retrieved_context = render_grouped_context_text(doc_groups)
     global_context = state["global_context"].model_dump()
 
-    # 사용자 질문
-    query = state["rewritten_query"]
-    query_with_citation_policy = query + CITATION_POLICY_MESSAGE
+    # 사용자 질문 — original은 사용자 의도·말투 보존, rewritten은 검색에 쓰인 확장 쿼리
+    original_query = state.get("original_query", "")
+    rewritten_query = state["rewritten_query"]
+    query_with_citation_policy = (
+        f"<question>\n"
+        f"  <user_query>{original_query}</user_query>\n"
+        f"  <rewritten_query note=\"search-optimized expansion used for retrieval\">{rewritten_query}</rewritten_query>\n"
+        f"</question>"
+        + CITATION_POLICY_MESSAGE
+    )
 
     # 시스템 프롬프트 빌드
     prompt_settings = state.get("prompt_settings")
