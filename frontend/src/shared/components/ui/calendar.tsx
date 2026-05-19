@@ -36,7 +36,7 @@ function Calendar({ className, classNames, ...props }: DayPickerProps) {
           "rdp-range_end [&>button]:bg-fill-primary [&>button]:text-white! [&>button]:hover:bg-fill-primary-interaction-hover before:absolute before:inset-y-0 before:left-0 before:w-1/2 before:bg-fill-interaction-pressed before:content-['']",
         range_middle: 'bg-fill-interaction-pressed',
         outside: '!text-content-assistive',
-        disabled: 'text-content-assistive opacity-50',
+        disabled: 'text-content-assistive',
         hidden: 'invisible',
         ...classNames,
       }}

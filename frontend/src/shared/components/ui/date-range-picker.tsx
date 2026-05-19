@@ -121,6 +121,7 @@ function DateRangePicker({
           onSelect={setTempRange}
           numberOfMonths={numberOfMonths}
           locale={ko}
+          disabled={{ after: startOfToday() }}
           formatters={{ formatCaption: (month) => format(month, 'yyyy.M') }}
         />
 
