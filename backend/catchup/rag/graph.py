@@ -133,8 +133,8 @@ def get_compiled_graph(
 
     standard_subgraph = build_standard_react_subgraph(
         llm_small=llm_small,
+        llm_large_stream=llm_large_stream,
         llm_large_stream_thinking=llm_large_stream_thinking,
-        llm_thinking=llm_thinking,
         vector_db_service=vector_db_service,
         rerank_service=rerank_service,
     )

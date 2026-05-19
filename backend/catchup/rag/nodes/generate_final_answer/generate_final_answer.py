@@ -36,6 +36,7 @@ logger = structlog.get_logger()
 async def generate_final_answer_node(
     state: AgentState,
     llm: BaseChatModel,
+    llm_fast: BaseChatModel | None = None,
 ):
 
     # 토큰 사용량 초기화
@@ -115,10 +116,14 @@ async def generate_final_answer_node(
         + [HumanMessage(content=query_with_citation_policy)]
     )
 
+    # Slack은 thinking 불필요 — llm_fast(non-thinking)로 대체.
+    is_slack = prompt_settings and getattr(prompt_settings, "platform", None) == "slack"
+    active_llm = llm_fast if (is_slack and llm_fast is not None) else llm
+
     # LLM 호출
     try:
         raw_response, token_usages = await ainvoke_llm_with_token_usage(
-            llm=llm,
+            llm=active_llm,
             messages=messages,
             semaphore=rag_semaphores.llm_large,
         )
