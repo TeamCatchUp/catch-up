@@ -45,7 +45,7 @@ export default function ResultSearchBarExpandedPanel({
             onItemClick={(entry) => onHistoryItemClick(entry.query)}
           />
         </div>
-        <div className="w-80 shrink-0">
+        <div className="mr-6 w-80 shrink-0">
           <CatchupPromoCard />
         </div>
       </div>
