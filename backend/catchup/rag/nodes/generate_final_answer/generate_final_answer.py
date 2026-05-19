@@ -120,7 +120,16 @@ async def generate_final_answer_node(
             messages=messages,
             semaphore=rag_semaphores.llm_large,
         )
-        full_answer = raw_response.content
+        content = raw_response.content
+        if isinstance(content, list):
+            full_answer = "".join(
+                (block.get("text", "") if isinstance(block, dict) else getattr(block, "text", ""))
+                for block in content
+                if (isinstance(block, dict) and block.get("type") == "text")
+                or (not isinstance(block, dict) and getattr(block, "type", None) == "text")
+            )
+        else:
+            full_answer = content
 
         logger.debug(
             "final_answer_generated",

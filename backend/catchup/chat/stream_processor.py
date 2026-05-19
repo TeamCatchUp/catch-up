@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import uuid
 from collections.abc import AsyncGenerator
 from collections.abc import Callable
@@ -206,7 +207,8 @@ class ChatStreamProcessor:
 
         # has_citations 노드가 아니면 인용 태그 차단 로직이 불필요하므로 그대로 전송
         if "has_citations" not in tags:
-            yield ChatStreamingTokenResponse(session_id=self.session_id, token=token)
+            async for chunk in self._emit_token(token):
+                yield chunk
             return
 
         # 사용자에게 출처 인용 정보가 담긴 XML 태그가 노출되지 않도록 검증하기 위한 토큰 버퍼
@@ -218,7 +220,8 @@ class ChatStreamProcessor:
             self.context.is_citation_reached = True
             clean_content = current_buffer.split("<citations")[0]
             if clean_content:
-                yield ChatStreamingTokenResponse(session_id=self.session_id, token=clean_content)
+                async for chunk in self._emit_token(clean_content):
+                    yield chunk
             return
 
         # case 2: '<' 포함 -> 버퍼링 여부 결정
@@ -230,14 +233,34 @@ class ChatStreamProcessor:
             # 의심되는 부분이 태그의 앞 부분과 일치하는지 여부 확인 "<c", "<cit"
             if TARGET_TAG.startswith(suspicious_part):
                 if safe_part:
-                    yield ChatStreamingTokenResponse(session_id=self.session_id, token=safe_part)
+                    async for chunk in self._emit_token(safe_part):
+                        yield chunk
                 # 의심스러운 뒷부분만 버퍼에 남김
                 self.context.buffer = suspicious_part
                 return
 
         # case 3: 일반 텍스트 -> 전송 & 버퍼 초기화
-        yield ChatStreamingTokenResponse(session_id=self.session_id, token=current_buffer)
+        async for chunk in self._emit_token(current_buffer):
+            yield chunk
         self.context.buffer = ""
+
+    async def _emit_token(
+        self, token: str, chunk_size: int = 4, interval: float = 0.025
+    ) -> AsyncGenerator[ChatStreamingTokenResponse, None]:
+        """큰 청크를 쪼개 일정 간격으로 emit한다.
+
+        Bedrock extended thinking 전환 시 여러 토큰이 묶인 청크가 오는 경우
+        burst 없이 자연스러운 스트리밍이 되도록 throttle한다.
+        chunk_size 이하이면 즉시 단일 emit한다.
+        """
+        if len(token) <= chunk_size:
+            yield ChatStreamingTokenResponse(session_id=self.session_id, token=token)
+            return
+        for i in range(0, len(token), chunk_size):
+            piece = token[i : i + chunk_size]
+            yield ChatStreamingTokenResponse(session_id=self.session_id, token=piece)
+            if i + chunk_size < len(token):
+                await asyncio.sleep(interval)
 
     async def _handle_node_end(
         self,
