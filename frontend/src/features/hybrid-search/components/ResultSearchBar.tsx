@@ -102,6 +102,17 @@ export default function ResultSearchBar({
             />
           </div>
           <div className="flex shrink-0 items-center gap-2.5">
+            {hasText && (
+              <button
+                type="button"
+                onMouseDown={(e) => expanded && e.preventDefault()}
+                onClick={onClear}
+                aria-label="검색어 지우기"
+                className="text-icon-normal hover:bg-fill-interaction-hover active:bg-fill-interaction-pressed flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-full transition-colors"
+              >
+                <IconCancel className="h-7 w-7" />
+              </button>
+            )}
             <DateRangePicker
               value={dateRange}
               onChange={onDateRangeChange}
@@ -128,21 +139,7 @@ export default function ResultSearchBar({
                 </Button>
               }
             />
-            <button
-              type="button"
-              onMouseDown={(e) => expanded && e.preventDefault()}
-              onClick={onClear}
-              aria-label="검색어 지우기"
-              aria-hidden={!hasText}
-              tabIndex={hasText ? 0 : -1}
-              className={cn(
-                'text-icon-normal hover:bg-fill-interaction-hover active:bg-fill-interaction-pressed flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-full transition-colors',
-                hasText ? '' : 'pointer-events-none invisible',
-              )}
-            >
-              <IconCancel className="h-7 w-7" />
-            </button>
-            <span aria-hidden className={cn('bg-edge-normal h-6 w-px shrink-0', hasText ? '' : 'invisible')} />
+            <span aria-hidden className="bg-edge-normal h-6 w-px shrink-0" />
             <button
               type="button"
               onMouseDown={(e) => expanded && e.preventDefault()}
