@@ -541,6 +541,28 @@ def extract_search_reason(reasoning: str | None) -> str | None:
     return reasoning
 
 
+async def dispatch_search_reason(tool_calls: list, node_name: str) -> None:
+    """검색 툴 호출의 reason 파라미터를 프론트엔드 process 이벤트로 dispatch한다.
+
+    tool_choice=any 환경에서 텍스트 출력 없이 tool args에서 reasoning을 추출한다.
+    single_query_search 또는 multi_query_search 중 첫 번째 호출의 reason을 사용한다.
+    """
+    from langchain_core.callbacks import adispatch_custom_event
+
+    search_call = next(
+        (tc for tc in tool_calls if tc["name"] in ("single_query_search", "multi_query_search")),
+        None,
+    )
+    if not search_call:
+        return
+    reason = search_call["args"].get("reason", "")
+    if reason:
+        await adispatch_custom_event(
+            "process",
+            {"status": "completed", "node": node_name, "reasoning": reason},
+        )
+
+
 def map_indices_to_doc_ids(
     indices: list[int],
     accumulated_docs: list[Document],
