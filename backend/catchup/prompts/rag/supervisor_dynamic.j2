@@ -1,6 +1,6 @@
-{# backend/catchup/prompts/rag/supervisor_dynamic.j2 #}
-{# NOTE: 정적 블록(supervisor_static.j2)과 분리되어 있음.
-   향후 프롬프트 캐싱 적용 시 정적 블록에만 Bedrock 캐시 체크포인트를 붙이면 됨. #}
+<# backend/catchup/prompts/rag/supervisor_dynamic.j2 #>
+<# NOTE: 정적 블록(supervisor_static.j2)과 분리되어 있음.
+   향후 프롬프트 캐싱 적용 시 정적 블록에만 Bedrock 캐시 체크포인트를 붙이면 됨. #>
 <context>
   {% if current_time %}
   <time_context>

@@ -126,6 +126,7 @@ def test_dynamic_contains_task():
 
 def test_dynamic_context_wrapper_present_when_time_given():
     from types import SimpleNamespace
+
     time_ctx = SimpleNamespace(kst="2026-05-19 10:00 KST", utc="2026-05-19 01:00 UTC")
     result = prompt_loader.get_prompt(
         "rag/supervisor_dynamic",
@@ -141,7 +142,10 @@ def test_dynamic_context_wrapper_present_when_time_given():
 
 def test_dynamic_organization_wrapper_present():
     from types import SimpleNamespace
-    company = SimpleNamespace(name="CatchUp Inc.", description="Enterprise search service.")
+
+    company = SimpleNamespace(
+        name="CatchUp Inc.", description="Enterprise search service."
+    )
     result = prompt_loader.get_prompt(
         "rag/supervisor_dynamic",
         search_turn_history=[],
@@ -156,7 +160,10 @@ def test_dynamic_organization_wrapper_present():
 
 def test_dynamic_user_wrapper_present():
     from types import SimpleNamespace
-    user = SimpleNamespace(name="홍길동", email="hong@example.com", department="Engineering")
+
+    user = SimpleNamespace(
+        name="홍길동", email="hong@example.com", department="Engineering"
+    )
     result = prompt_loader.get_prompt(
         "rag/supervisor_dynamic",
         search_turn_history=[],
