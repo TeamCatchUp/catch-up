@@ -9,17 +9,12 @@ import type { DateRange } from 'react-day-picker';
 import { useQuery } from '@tanstack/react-query';
 
 import AccentTabs, { type AccentTabItem } from '@/shared/components/ui/accent-tabs';
-import FilterDropdown, { type FilterOption } from '@/shared/components/ui/filter-dropdown';
 import { dateRangeToUrlParams, type SortOrder } from '@/shared/utils/temporalRange';
 
 import { hybridSearchQueries } from '../queries/hybridSearch.queries';
 import type { ActiveTab, ToolFilter } from '../types/hybridSearchApi';
 import ResultSearchBar from './ResultSearchBar';
-
-const SORT_OPTIONS: readonly FilterOption<SortOrder>[] = [
-  { value: 'newest', label: '최신순' },
-  { value: 'oldest', label: '오래된순' },
-];
+import SortDropdown from './SortDropdown';
 
 interface ResultPageHeaderProps {
   // 확정된 검색어 — list query 호출에 사용
@@ -112,14 +107,14 @@ export default function ResultPageHeader({
           onHistorySubmit={onHistorySubmit}
           onClear={onClear}
         />
-        <div className="flex w-full items-center justify-between">
+        <div className="flex w-full items-center gap-5">
           <AccentTabs
             items={tabItems}
             value={activeTab}
             onValueChange={onTabChange}
             ariaLabel="결과 필터 탭"
           />
-          <FilterDropdown options={SORT_OPTIONS} value={sortOrder} onChange={onSortChange} />
+          <SortDropdown value={sortOrder} onChange={onSortChange} />
         </div>
       </div>
     </header>
