@@ -49,14 +49,14 @@ export function toApiTemporalParams(
   return params;
 }
 
-// created_at 기준 정렬. created_at 없는 항목은 끝으로. 원본 불변.
-export function sortByCreatedAt<T extends { created_at?: string | null }>(
+// updated_at 기준 정렬. updated_at 없는 항목은 끝으로. 원본 불변.
+export function sortByUpdatedAt<T extends { updated_at?: string | null }>(
   items: readonly T[],
   order: SortOrder,
 ): T[] {
   return [...items].sort((a, b) => {
-    const ta = a.created_at ? Date.parse(a.created_at) : NaN;
-    const tb = b.created_at ? Date.parse(b.created_at) : NaN;
+    const ta = a.updated_at ? Date.parse(a.updated_at) : NaN;
+    const tb = b.updated_at ? Date.parse(b.updated_at) : NaN;
     const aNaN = Number.isNaN(ta);
     const bNaN = Number.isNaN(tb);
     if (aNaN && bNaN) return 0;

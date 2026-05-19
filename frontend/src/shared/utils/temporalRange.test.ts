@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   dateRangeToUrlParams,
-  sortByCreatedAt,
+  sortByUpdatedAt,
   toApiTemporalParams,
   urlParamsToDateRange,
 } from './temporalRange';
@@ -63,32 +63,32 @@ describe('toApiTemporalParams', () => {
   });
 });
 
-describe('sortByCreatedAt', () => {
+describe('sortByUpdatedAt', () => {
   const items = [
-    { id: 'a', created_at: '2026-05-10T00:00:00Z' },
-    { id: 'b', created_at: '2026-05-20T00:00:00Z' },
-    { id: 'c', created_at: '2026-05-01T00:00:00Z' },
+    { id: 'a', updated_at: '2026-05-10T00:00:00Z' },
+    { id: 'b', updated_at: '2026-05-20T00:00:00Z' },
+    { id: 'c', updated_at: '2026-05-01T00:00:00Z' },
   ];
 
-  it('newest는 created_at 내림차순', () => {
-    expect(sortByCreatedAt(items, 'newest').map((x) => x.id)).toEqual(['b', 'a', 'c']);
+  it('newest는 updated_at 내림차순', () => {
+    expect(sortByUpdatedAt(items, 'newest').map((x) => x.id)).toEqual(['b', 'a', 'c']);
   });
 
-  it('oldest는 created_at 오름차순', () => {
-    expect(sortByCreatedAt(items, 'oldest').map((x) => x.id)).toEqual(['c', 'a', 'b']);
+  it('oldest는 updated_at 오름차순', () => {
+    expect(sortByUpdatedAt(items, 'oldest').map((x) => x.id)).toEqual(['c', 'a', 'b']);
   });
 
-  it('created_at 없는 항목은 끝으로, 원본 순서 유지', () => {
+  it('updated_at 없는 항목은 끝으로, 원본 순서 유지', () => {
     const withNull = [
-      { id: 'x', created_at: null },
-      { id: 'y', created_at: '2026-05-01T00:00:00Z' },
+      { id: 'x', updated_at: null },
+      { id: 'y', updated_at: '2026-05-01T00:00:00Z' },
     ];
-    expect(sortByCreatedAt(withNull, 'newest').map((x) => x.id)).toEqual(['y', 'x']);
+    expect(sortByUpdatedAt(withNull, 'newest').map((x) => x.id)).toEqual(['y', 'x']);
   });
 
   it('원본 배열을 변경하지 않는다', () => {
     const copy = [...items];
-    sortByCreatedAt(items, 'newest');
+    sortByUpdatedAt(items, 'newest');
     expect(items).toEqual(copy);
   });
 });
