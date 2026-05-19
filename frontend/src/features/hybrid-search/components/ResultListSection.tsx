@@ -18,6 +18,7 @@ import HybridSearchResultCard from './HybridSearchResultCard';
 import ResultEmptyState from './ResultEmptyState';
 import ResultErrorState from './ResultErrorState';
 import ResultLoadingState from './ResultLoadingState';
+import SearchPeriodLabel from './SearchPeriodLabel';
 
 // hybrid-search 결과 리스트 전용 fast variants (source panel보다 빠르게).
 const fastStaggerContainer = {
@@ -129,6 +130,7 @@ export default function ResultListSection({
             variants={fastStaggerContainer}
             className="flex w-full flex-col items-start gap-2"
           >
+            {dateRange?.from && <SearchPeriodLabel dateRange={dateRange} />}
             {resultsData.sources.map((source) => (
               <motion.div key={source.id} variants={fastFadeInUp} className="w-full">
                 <HybridSearchResultCard source={source} />
