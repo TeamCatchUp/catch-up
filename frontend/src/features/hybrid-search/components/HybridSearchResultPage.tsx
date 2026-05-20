@@ -34,7 +34,7 @@ export default function HybridSearchResultPage() {
   const [draftDateRange, setDraftDateRange] = useState<DateRange | undefined>(dateRange);
   const [active, setActive] = useState<ActiveTab>('all');
   const [page, setPage] = useState(1);
-  const [sortOrder, setSortOrder] = useState<SortOrder>('newest');
+  const [sortOrder, setSortOrder] = useState<SortOrder>('relevance');
 
   // URL keyword/tools/기간 변경 시 모든 임시·UI state reset (render-phase prev-value).
   const [prevKeyword, setPrevKeyword] = useState(keyword);

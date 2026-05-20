@@ -17,6 +17,7 @@ import { cn } from '@/shared/utils/cn';
 import type { SortOrder } from '@/shared/utils/temporalRange';
 
 const SORT_OPTIONS: ReadonlyArray<{ value: SortOrder; label: string }> = [
+  { value: 'relevance', label: '관련도순' },
   { value: 'newest', label: '최신순' },
   { value: 'oldest', label: '오래된순' },
 ];

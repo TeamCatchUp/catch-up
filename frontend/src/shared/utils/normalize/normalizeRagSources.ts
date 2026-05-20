@@ -1,6 +1,7 @@
 import type { RagSourceTypeModel, RagSourceUiModel } from '@/shared/types/ragSourceModel';
 import type { SourceResponseApi } from '@/shared/types/sourceApi';
 
+import { applySlackDateFallback } from './applySlackDateFallback';
 import { normalizeChannelTalkFields } from './sources/channelTalk';
 import {
   buildStableSourceId,
@@ -29,7 +30,7 @@ const dispatchIntegration = (
 };
 
 const normalize = (sources: SourceResponseApi[]): RagSourceUiModel[] =>
-  (sources ?? []).map((source, index) => {
+  applySlackDateFallback(sources ?? []).map((source, index) => {
     const sourceType = getUiSourceType(source.source);
     const integration = dispatchIntegration(source, sourceType);
 

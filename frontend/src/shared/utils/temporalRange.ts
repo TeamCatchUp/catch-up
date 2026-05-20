@@ -7,7 +7,7 @@ import { format } from 'date-fns';
 const DATE_FMT = 'yyyy-MM-dd';
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
-export type SortOrder = 'newest' | 'oldest';
+export type SortOrder = 'relevance' | 'newest' | 'oldest';
 
 // yyyy-MM-dd 문자열을 로컬 자정 Date로 파싱. 형식 오류 시 undefined.
 function parseLocalDate(value: string | null | undefined): Date | undefined {
@@ -52,19 +52,54 @@ export function toApiTemporalParams(
   return params;
 }
 
-// updated_at 기준 정렬. updated_at 없는 항목은 끝으로. 원본 불변.
-export function sortByUpdatedAt<T extends { updated_at?: string | null }>(
+// KST 자정 기준 day index — "표시 라벨 동일" 판정의 정수 키.
+// UTC ms를 9h 시프트 후 1일(86_400_000ms)로 floor.
+function kstDayIndex(iso: string): number | null {
+  const t = Date.parse(iso);
+  if (Number.isNaN(t)) return null;
+  return Math.floor((t + 9 * 3_600_000) / 86_400_000);
+}
+
+// relevance_score desc 비교. 누락은 끝으로.
+function compareRelevanceDesc<T extends { relevance_score?: number }>(a: T, b: T): number {
+  const sa = a.relevance_score;
+  const sb = b.relevance_score;
+  if (sa === undefined && sb === undefined) return 0;
+  if (sa === undefined) return 1;
+  if (sb === undefined) return -1;
+  return sb - sa;
+}
+
+// updated_at 기준 정렬. 같은 KST 일자 내에서는 relevance_score desc로 tiebreak.
+// updated_at 없는 항목은 끝으로. 원본 불변.
+export function sortByUpdatedAt<T extends { updated_at?: string | null; relevance_score?: number }>(
   items: readonly T[],
-  order: SortOrder,
+  order: 'newest' | 'oldest',
 ): T[] {
   return [...items].sort((a, b) => {
+    const da = a.updated_at ? kstDayIndex(a.updated_at) : null;
+    const db = b.updated_at ? kstDayIndex(b.updated_at) : null;
+    if (da === null && db === null) return 0;
+    if (da === null) return 1;
+    if (db === null) return -1;
+    if (da !== db) return order === 'newest' ? db - da : da - db;
+    return compareRelevanceDesc(a, b);
+  });
+}
+
+// relevance_score desc 정렬. score 동률 시 updated_at desc로 tiebreak.
+// score 누락 항목은 끝으로. 원본 불변.
+export function sortByRelevance<T extends { relevance_score?: number; updated_at?: string | null }>(
+  items: readonly T[],
+): T[] {
+  return [...items].sort((a, b) => {
+    const r = compareRelevanceDesc(a, b);
+    if (r !== 0) return r;
     const ta = a.updated_at ? Date.parse(a.updated_at) : NaN;
     const tb = b.updated_at ? Date.parse(b.updated_at) : NaN;
-    const aNaN = Number.isNaN(ta);
-    const bNaN = Number.isNaN(tb);
-    if (aNaN && bNaN) return 0;
-    if (aNaN) return 1;
-    if (bNaN) return -1;
-    return order === 'newest' ? tb - ta : ta - tb;
+    if (Number.isNaN(ta) && Number.isNaN(tb)) return 0;
+    if (Number.isNaN(ta)) return 1;
+    if (Number.isNaN(tb)) return -1;
+    return tb - ta;
   });
 }
