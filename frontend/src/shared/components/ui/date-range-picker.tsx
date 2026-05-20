@@ -27,9 +27,9 @@ interface DateRangePickerProps {
   placeholder?: string;
   /** 표시할 월 수 (기본: 2) */
   numberOfMonths?: number;
-  /** 커스텀 트리거. 지정 시 기본 날짜 텍스트 바 대신 이 노드를 트리거로 사용. */
+  // 커스텀 트리거. 지정 시 기본 날짜 텍스트 바 대신 이 노드를 트리거로 사용.
   trigger?: React.ReactNode;
-  /** PopoverContent 정렬 (기본: 'end') */
+  // PopoverContent 정렬 (기본: 'end')
   align?: 'start' | 'end';
 }
 

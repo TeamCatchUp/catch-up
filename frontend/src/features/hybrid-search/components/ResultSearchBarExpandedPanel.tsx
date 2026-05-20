@@ -2,7 +2,7 @@
 
 // ResultSearchBar의 expanded 시각 하단 영역.
 // 좌측: SourceChipsRow + 검색 기록, 우측: CatchupPromoCard.
-// Figma 13426:52888 — chips 위, 그 아래 좌측 history(flex-1) + 우측 promo(w-80).
+// chips 위, 그 아래 좌측 history(flex-1) + 우측 promo(w-80).
 // history click은 부모(ResultSearchBar)로 위임 — submit과 동일하게 처리되어 input blur + URL commit 한 번에.
 
 import SearchHistoryList from '@/shared/components/SearchHistoryList';

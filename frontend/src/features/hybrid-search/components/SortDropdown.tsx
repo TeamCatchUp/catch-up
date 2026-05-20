@@ -1,6 +1,6 @@
 'use client';
 
-// 검색 결과 정렬 드롭다운 (Figma 13640:52407) — 테두리·배경 없는 인라인 텍스트 드롭다운.
+// 검색 결과 정렬 드롭다운 — 테두리·배경 없는 인라인 텍스트 드롭다운.
 // 공통 DropdownMenu primitive 사용. 옵션: 최신순/오래된순.
 
 import { useState } from 'react';

@@ -2,7 +2,7 @@
 
 // 문서 탐색 모드(`?mode=docs`) 하단 검색 기록 섹션.
 // 검색 기록 클릭 시 현재 선택된 chips(selectedSources)를 tools로 함께 push.
-// 최근 탐색이 없으면 빈 상태(Figma 13630:62641)를 렌더.
+// 최근 탐색이 없으면 빈 상태를 렌더.
 
 import { useRouter } from 'next/navigation';
 

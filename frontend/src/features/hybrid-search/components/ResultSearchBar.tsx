@@ -2,7 +2,7 @@
 
 // 결과 페이지 상단 검색바.
 // isFocused 상태에 따라 collapsed(rounded-full) / expanded(카드 안에 chips + 검색 기록 + promo) 두 시각.
-// Figma 13426:54489(collapsed), 13426:52872(expanded) — 둘 다 w-225(900px) 고정.
+// collapsed / expanded 둘 다 w-225(900px) 고정.
 // 외부 placeholder가 collapsed 높이(h-14)만큼 자리 보존, 실제 바는 absolute로 오버레이 → expanded 시 하단 콘텐츠 안 밀림.
 // 내부 확장 콘텐츠는 ResultSearchBarExpandedPanel로 분리.
 

@@ -1,6 +1,6 @@
 'use client';
 
-// Figma 11542:64433 — 결과 카드 리스트 + Pagination.
+// 결과 카드 리스트 + Pagination.
 // backend는 dedup 후 최대 50개 한 번에 반환 → frontend가 active/page로 client-side filter+slice.
 
 import type { DateRange } from 'react-day-picker';

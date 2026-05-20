@@ -1,6 +1,6 @@
 'use client';
 
-// Figma 13426:54282 — ResultSearchBar(collapsed) + AccentTabs.
+// ResultSearchBar(collapsed) + AccentTabs.
 // distribution은 list 응답의 results에서 client-side 계산 (별도 fetch 없음).
 // ResultListSection과 같은 list queryKey 사용 → cache 공유로 fetch 1회.
 

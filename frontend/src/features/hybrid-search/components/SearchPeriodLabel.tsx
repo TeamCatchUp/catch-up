@@ -1,6 +1,6 @@
 'use client';
 
-// 기간 검색 결과 라벨 (Figma 13786:55491). 결과 목록 최상단에 표시.
+// 기간 검색 결과 라벨. 결과 목록 최상단에 표시.
 // 기간이 설정된 경우에만 ResultListSection이 렌더한다.
 
 import type { DateRange } from 'react-day-picker';

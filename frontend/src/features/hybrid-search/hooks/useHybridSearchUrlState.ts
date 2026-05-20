@@ -1,6 +1,6 @@
 'use client';
 
-// /hybrid-search 의 URL state(?q&tools) 파싱·갱신 hook.
+// /hybrid-search 의 URL state(?q&tools&start&end) 파싱·갱신 hook.
 // active/page는 client-side state로 분리되어 더 이상 URL에 포함되지 않음.
 // - tools: scope (chips 진입 시 결정, 페이지 내 immutable per URL)
 

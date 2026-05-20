@@ -30,6 +30,7 @@ function Calendar({ className, classNames, ...props }: DayPickerProps) {
           'relative z-base flex size-7 cursor-pointer items-center justify-center rounded-full hover:bg-fill-interaction-hover',
         today: '[&>button]:text-content-primary',
         selected: '',
+        // text-white!: react-day-picker 기본 day 색상 specificity를 이기기 위한 important.
         range_start:
           "rdp-range_start [&>button]:bg-fill-primary [&>button]:text-white! [&>button]:hover:bg-fill-primary-interaction-hover before:absolute before:inset-y-0 before:right-0 before:w-1/2 before:bg-fill-interaction-pressed before:content-['']",
         range_end:
