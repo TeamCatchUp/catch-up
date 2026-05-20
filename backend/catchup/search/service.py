@@ -113,7 +113,11 @@ class ManualSearchService:
             )
 
         groups = build_doc_groups(all_docs)
-        deduped_docs = [g.representative for g in groups]
+        deduped_docs = sorted(
+            (g.representative for g in groups),
+            key=lambda d: d.metadata.get("score", 0.0),
+            reverse=True,
+        )
 
         total = len(deduped_docs)
         source_distribution = dict(
