@@ -14,6 +14,7 @@ import { dateRangeToUrlParams, sortByRelevance, sortByUpdatedAt, type SortOrder 
 import { useHybridSearch } from '../hooks/useHybridSearch';
 import { HYBRID_SEARCH_PAGE_SIZE } from '../queries/hybridSearch.queries';
 import type { ActiveTab, ToolFilter } from '../types/hybridSearchApi';
+import { applySlackDateFallback } from '../utils/applySlackDateFallback';
 import HybridSearchResultCard from './HybridSearchResultCard';
 import ResultEmptyState from './ResultEmptyState';
 import ResultErrorState from './ResultErrorState';
@@ -94,10 +95,12 @@ export default function ResultListSection({
     if (filteredResults.length === 0) {
       view = 'empty';
     } else {
+      // Slack은 ingestion 단에서 미편집 메시지의 updated_at을 채우지 않음 → created_at으로 폴백 후 정렬·표시.
+      const itemsWithDateFallback = applySlackDateFallback(filteredResults);
       const sortedResults =
         sortOrder === 'relevance'
-          ? sortByRelevance(filteredResults)
-          : sortByUpdatedAt(filteredResults, sortOrder);
+          ? sortByRelevance(itemsWithDateFallback)
+          : sortByUpdatedAt(itemsWithDateFallback, sortOrder);
       const totalPages = Math.max(1, Math.ceil(sortedResults.length / HYBRID_SEARCH_PAGE_SIZE));
       const pageStart = (page - 1) * HYBRID_SEARCH_PAGE_SIZE;
       const pageResults = sortedResults.slice(pageStart, pageStart + HYBRID_SEARCH_PAGE_SIZE);
