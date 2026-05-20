@@ -1,7 +1,7 @@
-import { useCallback, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useState } from 'react';
 
 import UnderlineTabs, { type UnderlineTabItem } from '@/shared/components/ui/underline-tabs';
+import { useTabRouting } from '@/shared/hooks/useTabRouting';
 
 import { useAdminIntegrationViewModel } from '../../hooks/useAdminIntegrationViewModel';
 import type { AdminIntegrationTab, IntegrationService } from '../../types/integrationModel';
@@ -18,25 +18,8 @@ const TAB_ITEMS: UnderlineTabItem<AdminIntegrationTab>[] = [
 
 /** 관리자 협업툴 연동 화면 */
 export default function AdminIntegrationsView() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const tabParam = searchParams.get('tab');
-  const urlTab: AdminIntegrationTab = isValidTab(tabParam) ? tabParam : DEFAULT_TAB;
-  const [activeTab, setActiveTabState] = useState<AdminIntegrationTab>(urlTab);
-  const [prevUrlTab, setPrevUrlTab] = useState<AdminIntegrationTab>(urlTab);
-
-  // 뒤로/앞으로·deep-link로 URL이 바뀌면 render 중 state 동기화
-  if (urlTab !== prevUrlTab) {
-    setPrevUrlTab(urlTab);
-    setActiveTabState(urlTab);
-  }
-
-  const setActiveTab = useCallback(
-    (tab: AdminIntegrationTab) => {
-      setActiveTabState(tab);
-      router.replace(`/admin/integrations?tab=${tab}`);
-    },
-    [router],
+  const [activeTab, setActiveTab] = useTabRouting<AdminIntegrationTab>((raw) =>
+    isValidTab(raw) ? raw : DEFAULT_TAB,
   );
 
   const [selectedService, setSelectedService] = useState<IntegrationService>('jira');
