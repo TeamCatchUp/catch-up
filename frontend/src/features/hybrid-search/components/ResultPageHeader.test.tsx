@@ -27,11 +27,16 @@ function makeDefaultProps() {
     onDraftKeywordChange: () => {},
     draftChips: [],
     onDraftChipsChange: () => {},
+    dateRange: undefined,
+    draftDateRange: undefined,
+    onDraftDateRangeChange: () => {},
     onSubmit: () => {},
     onHistorySubmit: () => {},
     onClear: () => {},
     activeTab: 'all' as const,
     onTabChange: () => {},
+    sortOrder: 'newest' as const,
+    onSortChange: () => {},
   };
 }
 

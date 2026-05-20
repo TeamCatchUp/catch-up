@@ -8,6 +8,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 
 import ChatFilled from '@/public/icons/icon/chat2_filled.svg';
 import DocumentSearchFilled from '@/public/icons/icon/document_search_filled.svg';
+import { Badge } from '@/shared/components/ui/badge';
 import { cn } from '@/shared/utils/cn';
 
 export type HomeMode = 'ai' | 'docs';
@@ -72,6 +73,14 @@ export default function ModePicker({ mode }: ModePickerProps) {
             )}
             <opt.Icon className="relative z-10 h-6 w-6 shrink-0" />
             <span className="text-heading-small relative z-10 whitespace-nowrap">{opt.label}</span>
+            {opt.value === 'docs' && (
+              <Badge
+                aria-label="신규"
+                className="bg-fill-interaction-pressed-hover text-accent-red relative z-10 size-4.5 justify-center p-0"
+              >
+                N
+              </Badge>
+            )}
           </button>
         );
       })}

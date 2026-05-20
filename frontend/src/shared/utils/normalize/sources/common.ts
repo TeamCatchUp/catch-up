@@ -14,9 +14,9 @@ export interface NormalizedIntegrationFields {
 }
 
 /** 7일 이내: "N일 전 변경", 그 외: "YYYY.MM.DD" */
-export const formatCreatedAt = (createdAt?: string | null) => {
-  if (!createdAt) return '';
-  const trimmed = createdAt.trim();
+export const formatUpdatedAt = (updatedAt?: string | null) => {
+  if (!updatedAt) return '';
+  const trimmed = updatedAt.trim();
   if (!trimmed) return '';
 
   const parsed = new Date(trimmed);

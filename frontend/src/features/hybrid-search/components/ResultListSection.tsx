@@ -1,13 +1,15 @@
 'use client';
 
-// Figma 11542:64433 — 결과 카드 리스트 + Pagination.
+// 결과 카드 리스트 + Pagination.
 // backend는 dedup 후 최대 50개 한 번에 반환 → frontend가 active/page로 client-side filter+slice.
 
+import type { DateRange } from 'react-day-picker';
 import { AnimatePresence, motion } from 'motion/react';
 
 import Pagination from '@/shared/components/ui/pagination';
 import { motionEase, MotionState } from '@/shared/motion/presets';
 import { normalizeSources } from '@/shared/utils/normalize/normalizeRagSources';
+import { dateRangeToUrlParams, sortByUpdatedAt, type SortOrder } from '@/shared/utils/temporalRange';
 
 import { useHybridSearch } from '../hooks/useHybridSearch';
 import { HYBRID_SEARCH_PAGE_SIZE } from '../queries/hybridSearch.queries';
@@ -16,6 +18,7 @@ import HybridSearchResultCard from './HybridSearchResultCard';
 import ResultEmptyState from './ResultEmptyState';
 import ResultErrorState from './ResultErrorState';
 import ResultLoadingState from './ResultLoadingState';
+import SearchPeriodLabel from './SearchPeriodLabel';
 
 // hybrid-search 결과 리스트 전용 fast variants (source panel보다 빠르게).
 const fastStaggerContainer = {
@@ -44,6 +47,8 @@ const stateCrossfade = {
 interface ResultListSectionProps {
   keyword: string;
   scope: ToolFilter[];
+  dateRange: DateRange | undefined;
+  sortOrder: SortOrder;
   active: ActiveTab;
   page: number;
   onPageChange: (next: number) => void;
@@ -54,11 +59,14 @@ type ViewState = 'empty' | 'loading' | 'error' | 'results';
 export default function ResultListSection({
   keyword,
   scope,
+  dateRange,
+  sortOrder,
   active,
   page,
   onPageChange,
 }: ResultListSectionProps) {
-  const query = useHybridSearch({ keyword, scope });
+  const { start, end } = dateRangeToUrlParams(dateRange);
+  const query = useHybridSearch({ keyword, scope, start, end });
 
   // active가 scope 밖이면 결과 없음 (사용자가 보지 못한 source 탭 클릭한 경우).
   const isActiveInScope = active === 'all' || scope.length === 0 || scope.includes(active);
@@ -86,13 +94,14 @@ export default function ResultListSection({
     if (filteredResults.length === 0) {
       view = 'empty';
     } else {
-      const totalPages = Math.max(1, Math.ceil(filteredResults.length / HYBRID_SEARCH_PAGE_SIZE));
+      const sortedResults = sortByUpdatedAt(filteredResults, sortOrder);
+      const totalPages = Math.max(1, Math.ceil(sortedResults.length / HYBRID_SEARCH_PAGE_SIZE));
       const pageStart = (page - 1) * HYBRID_SEARCH_PAGE_SIZE;
-      const pageResults = filteredResults.slice(pageStart, pageStart + HYBRID_SEARCH_PAGE_SIZE);
+      const pageResults = sortedResults.slice(pageStart, pageStart + HYBRID_SEARCH_PAGE_SIZE);
       resultsData = {
         sources: normalizeSources(pageResults),
         totalPages,
-        transitionKey: `${keyword}-${scope.join(',')}-${active}-${page}`,
+        transitionKey: `${keyword}-${scope.join(',')}-${active}-${sortOrder}-${page}`,
       };
       view = 'results';
     }
@@ -121,6 +130,7 @@ export default function ResultListSection({
             variants={fastStaggerContainer}
             className="flex w-full flex-col items-start gap-2"
           >
+            {dateRange?.from && <SearchPeriodLabel dateRange={dateRange} />}
             {resultsData.sources.map((source) => (
               <motion.div key={source.id} variants={fastFadeInUp} className="w-full">
                 <HybridSearchResultCard source={source} />

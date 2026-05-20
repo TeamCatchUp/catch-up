@@ -2,15 +2,19 @@
 
 // 결과 페이지 상단 검색바.
 // isFocused 상태에 따라 collapsed(rounded-full) / expanded(카드 안에 chips + 검색 기록 + promo) 두 시각.
-// Figma 13426:54489(collapsed), 13426:52872(expanded) — 둘 다 w-225(900px) 고정.
+// collapsed / expanded 둘 다 w-225(900px) 고정.
 // 외부 placeholder가 collapsed 높이(h-14)만큼 자리 보존, 실제 바는 absolute로 오버레이 → expanded 시 하단 콘텐츠 안 밀림.
 // 내부 확장 콘텐츠는 ResultSearchBarExpandedPanel로 분리.
 
 import { useRef, useState } from 'react';
+import type { DateRange } from 'react-day-picker';
 
 import IconArrowSend from '@/public/icons/icon/arrow_send.svg';
 import IconCancel from '@/public/icons/icon/cancel.svg';
+import IconFilter from '@/public/icons/icon/filter_small.svg';
 import IconSearch from '@/public/icons/icon/search_2.svg';
+import { Button } from '@/shared/components/ui/button';
+import { DateRangePicker } from '@/shared/components/ui/date-range-picker';
 import type { DocsSource } from '@/shared/types/source';
 import { cn } from '@/shared/utils/cn';
 
@@ -21,6 +25,8 @@ interface ResultSearchBarProps {
   onValueChange: (value: string) => void;
   chips: DocsSource[];
   onChipsChange: (next: DocsSource[]) => void;
+  dateRange: DateRange | undefined;
+  onDateRangeChange: (next: DateRange | undefined) => void;
   onSubmit: () => void;
   onHistorySubmit: (query: string) => void;
   onClear: () => void;
@@ -31,6 +37,8 @@ export default function ResultSearchBar({
   onValueChange,
   chips,
   onChipsChange,
+  dateRange,
+  onDateRangeChange,
   onSubmit,
   onHistorySubmit,
   onClear,
@@ -94,21 +102,44 @@ export default function ResultSearchBar({
             />
           </div>
           <div className="flex shrink-0 items-center gap-2.5">
-            <button
-              type="button"
-              onMouseDown={(e) => expanded && e.preventDefault()}
-              onClick={onClear}
-              aria-label="검색어 지우기"
-              aria-hidden={!hasText}
-              tabIndex={hasText ? 0 : -1}
-              className={cn(
-                'text-icon-normal hover:bg-fill-interaction-hover active:bg-fill-interaction-pressed flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-full transition-colors',
-                hasText ? '' : 'pointer-events-none invisible',
-              )}
-            >
-              <IconCancel className="h-7 w-7" />
-            </button>
-            <span aria-hidden className={cn('bg-edge-normal h-6 w-px shrink-0', hasText ? '' : 'invisible')} />
+            {hasText && (
+              <button
+                type="button"
+                onMouseDown={(e) => expanded && e.preventDefault()}
+                onClick={onClear}
+                aria-label="검색어 지우기"
+                className="text-icon-normal hover:bg-fill-interaction-hover active:bg-fill-interaction-pressed flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-full transition-colors"
+              >
+                <IconCancel className="h-7 w-7" />
+              </button>
+            )}
+            <DateRangePicker
+              value={dateRange}
+              onChange={onDateRangeChange}
+              align="end"
+              trigger={
+                <Button
+                  variant="icon-only-gray"
+                  size="lg"
+                  type="button"
+                  onMouseDown={(e) => expanded && e.preventDefault()}
+                  aria-label="기간 필터"
+                  className={cn(
+                    'text-icon-normal relative rounded-full',
+                    dateRange?.from && 'bg-fill-primary-normal-neutral hover:bg-fill-primary-normal-neutral',
+                  )}
+                >
+                  <IconFilter className="size-6" />
+                  {dateRange?.from && (
+                    <span
+                      aria-hidden
+                      className="bg-fill-primary absolute top-2 right-1.5 size-[5px] rounded-full"
+                    />
+                  )}
+                </Button>
+              }
+            />
+            <span aria-hidden className="bg-edge-normal h-6 w-px shrink-0" />
             <button
               type="button"
               onMouseDown={(e) => expanded && e.preventDefault()}

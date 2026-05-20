@@ -4,7 +4,7 @@ import type { SourceResponseApi } from '@/shared/types/sourceApi';
 import { normalizeChannelTalkFields } from './sources/channelTalk';
 import {
   buildStableSourceId,
-  formatCreatedAt,
+  formatUpdatedAt,
   getSourceContent,
   getSourceLink,
   type NormalizedIntegrationFields,
@@ -39,7 +39,7 @@ const normalize = (sources: SourceResponseApi[]): RagSourceUiModel[] =>
       entity_type: source.entity_type,
       is_cited: source.is_cited ?? false,
       content: getSourceContent(source),
-      date: formatCreatedAt(source.created_at),
+      date: formatUpdatedAt(source.updated_at),
       html_url: getSourceLink(source),
       source_index: typeof source.index === 'number' ? source.index : index + 1,
       ...integration,

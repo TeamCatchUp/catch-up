@@ -22,6 +22,8 @@ interface HomeAiSectionProps {
   containerRef: RefObject<HTMLDivElement | null>;
   shouldShowNoHistoryBox: boolean;
   isNoHistoryExpanded: boolean;
+  isHome: boolean;
+  userName: string;
 }
 
 export default function HomeAiSection({
@@ -31,12 +33,14 @@ export default function HomeAiSection({
   containerRef,
   shouldShowNoHistoryBox,
   isNoHistoryExpanded,
+  isHome,
+  userName,
 }: HomeAiSectionProps) {
   return (
     <>
       <div className="flex flex-col items-center gap-6 pb-18">
         <div className="grid h-24 place-items-center">
-          <HeroText mode="ai" isFocused={input.isFocused} />
+          <HeroText mode="ai" isFocused={input.isFocused} isHome={isHome} userName={userName} />
         </div>
         <div ref={containerRef} className="flex flex-col items-center gap-4">
           <QueryBox

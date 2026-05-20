@@ -6,9 +6,11 @@
 // keyword 또는 tools가 바뀌면 draft/active/page 모두 reset (prev-value 패턴).
 
 import { useState } from 'react';
+import type { DateRange } from 'react-day-picker';
 import { motion } from 'motion/react';
 
 import { motionEase, MotionState } from '@/shared/motion/presets';
+import type { SortOrder } from '@/shared/utils/temporalRange';
 
 import { useHybridSearchUrlState } from '../hooks/useHybridSearchUrlState';
 import { type ActiveTab, TOOL_FILTERS_ARRAY, type ToolFilter } from '../types/hybridSearchApi';
@@ -24,23 +26,29 @@ const pageEnter = {
 };
 
 export default function HybridSearchResultPage() {
-  const { keyword, tools, setKeywordAndTools } = useHybridSearchUrlState();
+  const { keyword, tools, dateRange, commitSearch } = useHybridSearchUrlState();
 
-  // draft state (input/chips 임시 값) + UI state (active/page).
+  // draft state (input/chips/기간 임시 값) + UI state (active/page).
   const [draftKeyword, setDraftKeyword] = useState(keyword);
   const [draftChips, setDraftChips] = useState<ToolFilter[]>(tools);
+  const [draftDateRange, setDraftDateRange] = useState<DateRange | undefined>(dateRange);
   const [active, setActive] = useState<ActiveTab>('all');
   const [page, setPage] = useState(1);
+  const [sortOrder, setSortOrder] = useState<SortOrder>('newest');
 
-  // URL keyword/tools 변경 시 모든 임시·UI state reset (render-phase prev-value).
+  // URL keyword/tools/기간 변경 시 모든 임시·UI state reset (render-phase prev-value).
   const [prevKeyword, setPrevKeyword] = useState(keyword);
   const toolsKey = tools.join(',');
   const [prevToolsKey, setPrevToolsKey] = useState(toolsKey);
-  if (prevKeyword !== keyword || prevToolsKey !== toolsKey) {
+  const rangeKey = `${dateRange?.from?.getTime() ?? ''}-${dateRange?.to?.getTime() ?? ''}`;
+  const [prevRangeKey, setPrevRangeKey] = useState(rangeKey);
+  if (prevKeyword !== keyword || prevToolsKey !== toolsKey || prevRangeKey !== rangeKey) {
     setPrevKeyword(keyword);
     setPrevToolsKey(toolsKey);
+    setPrevRangeKey(rangeKey);
     setDraftKeyword(keyword);
     setDraftChips(tools);
+    setDraftDateRange(dateRange);
     setActive('all');
     setPage(1);
   }
@@ -49,13 +57,13 @@ export default function HybridSearchResultPage() {
   const scope: ToolFilter[] = tools.length > 0 ? tools : TOOL_FILTERS_ARRAY;
 
   const handleSubmit = () => {
-    setKeywordAndTools(draftKeyword, draftChips);
+    commitSearch(draftKeyword, draftChips, draftDateRange);
   };
 
-  // history 클릭도 submit과 동등한 commit: entry.query + draft chips를 URL에 한 번에 반영.
+  // history 클릭도 submit과 동등한 commit: entry.query + draft chips/기간을 URL에 한 번에 반영.
   // ResultSearchBar가 onHistorySubmit 호출 후 input.blur() → expanded panel 자동 close.
   const handleHistorySubmit = (query: string) => {
-    setKeywordAndTools(query, draftChips);
+    commitSearch(query, draftChips, draftDateRange);
   };
 
   // X 버튼: input draft만 비움. URL과 현재 표시 중인 검색 결과는 유지.
@@ -67,6 +75,12 @@ export default function HybridSearchResultPage() {
   // 탭 변경 시 페이지도 1로 reset.
   const handleTabChange = (next: ActiveTab) => {
     setActive(next);
+    setPage(1);
+  };
+
+  // 정렬 변경 시 페이지도 1로 reset.
+  const handleSortChange = (next: SortOrder) => {
+    setSortOrder(next);
     setPage(1);
   };
 
@@ -84,19 +98,26 @@ export default function HybridSearchResultPage() {
         onDraftKeywordChange={setDraftKeyword}
         draftChips={draftChips}
         onDraftChipsChange={setDraftChips}
+        dateRange={dateRange}
+        draftDateRange={draftDateRange}
+        onDraftDateRangeChange={setDraftDateRange}
         onSubmit={handleSubmit}
         onHistorySubmit={handleHistorySubmit}
         onClear={handleClear}
         activeTab={active}
         onTabChange={handleTabChange}
+        sortOrder={sortOrder}
+        onSortChange={handleSortChange}
       />
       <ResultPageBody side={<CatchupPromoCard />}>
         <ResultListSection
           keyword={keyword}
           scope={scope}
+          dateRange={dateRange}
           active={active}
           page={page}
           onPageChange={setPage}
+          sortOrder={sortOrder}
         />
       </ResultPageBody>
     </motion.div>

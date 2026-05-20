@@ -2,6 +2,7 @@ import { queryOptions } from '@tanstack/react-query';
 
 import api from '@/shared/api/client';
 import { API } from '@/shared/api/endpoints';
+import { toApiTemporalParams } from '@/shared/utils/temporalRange';
 
 import type { HybridSearchResponse, ToolFilter } from '../types/hybridSearchApi';
 
@@ -11,6 +12,9 @@ export const HYBRID_SEARCH_PAGE_SIZE = 10;
 interface ListParams {
   keyword: string;
   scope: ToolFilter[];
+  /** yyyy-MM-dd KST 일자. 미지정 시 기간 필터 없음. */
+  start?: string;
+  end?: string;
 }
 
 // axios 기본 직렬화는 버전/설정에 따라 ?key[]=v 또는 ?key=v1&key=v2로 갈림.
@@ -41,6 +45,7 @@ export const hybridSearchQueries = {
           params: {
             keyword: params.keyword,
             tool_filters: params.scope.length > 0 ? params.scope : undefined,
+            ...toApiTemporalParams(params.start, params.end),
           },
           paramsSerializer: serializeListParams,
         });
