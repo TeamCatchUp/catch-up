@@ -49,13 +49,13 @@ export default function FeatureUpdateNoticeModal({
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent
         hideClose
-        className="flex w-175 max-w-none flex-col gap-2 rounded-3xl p-8"
+        className="border-edge-strong flex w-175 max-w-none flex-col gap-2 rounded-3xl border p-8"
       >
         {/* 컬럼 1: 헤더 + 미디어 + 본문 + 불릿 + 팁 */}
         <div className="flex flex-col gap-6">
           {/* 헤더 */}
-          <div className="flex items-start justify-between gap-2">
-            <div className="flex flex-col gap-3">
+          <div className="flex items-start gap-6">
+            <div className="flex flex-1 flex-col gap-3">
               <span className="bg-fill-primary-normal-neutral rounded-md2 inline-flex w-fit items-center gap-1 px-1.5 py-0.5">
                 <Megaphone className="text-icon-primary size-4.5" aria-hidden="true" />
                 <span className="text-body-xsmall text-content-primary">{notice.tagLabel}</span>
@@ -68,9 +68,9 @@ export default function FeatureUpdateNoticeModal({
               size="lg"
               aria-label="닫기"
               onClick={handleClose}
-              className="size-10 shrink-0"
+              className="size-10 shrink-0 p-1.5"
             >
-              <Cancel className="size-6" aria-hidden="true" />
+              <Cancel className="size-7" aria-hidden="true" />
             </Button>
           </div>
 
@@ -106,8 +106,8 @@ export default function FeatureUpdateNoticeModal({
           </ul>
 
           {/* 팁 박스 */}
-          <div className="bg-fill-primary-normal-neutral flex items-center gap-3 rounded-xl p-4">
-            <div className="bg-fill-normal border-edge-normal flex size-9.5 shrink-0 items-center justify-center rounded-full border">
+          <div className="bg-fill-normal border-edge-normal flex items-center gap-4 rounded-xl border px-4 py-3">
+            <div className="bg-fill-primary-normal-neutral flex size-9.5 shrink-0 items-center justify-center rounded-lg">
               <LightbulbFilled className="text-icon-primary-assistive size-5.5" aria-hidden="true" />
             </div>
             <p className="text-body-small text-content-normal">
@@ -134,7 +134,7 @@ export default function FeatureUpdateNoticeModal({
             variant="box-solid-primary"
             size="lg"
             onClick={handleCTA}
-            className="text-body-medium h-11.5 w-full"
+            className="border-edge-neutral text-body-medium h-11.5 w-full border"
           >
             {notice.ctaLabel}
           </Button>
