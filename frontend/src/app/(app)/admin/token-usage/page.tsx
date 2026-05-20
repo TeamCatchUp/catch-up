@@ -42,7 +42,6 @@ export default function AdminTokenUsagePage() {
   const setActiveSlug = useCallback(
     (slug: TokenUsageTabSlug) => {
       setActiveSlugState(slug);
-      setPrevUrlSlug(slug);
       router.replace(`/admin/token-usage?tab=${slug}`);
     },
     [router],

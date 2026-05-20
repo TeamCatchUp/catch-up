@@ -41,7 +41,6 @@ export default function AdminAuditLogsPage() {
   const setActiveSlug = useCallback(
     (slug: AuditTabSlug) => {
       setActiveSlugState(slug);
-      setPrevUrlSlug(slug);
       router.replace(`/admin/audit-logs?tab=${slug}`);
     },
     [router],
