@@ -10,9 +10,9 @@ from catchup.rag.nodes.utils import log_node
 from catchup.rag.retryable import RETRYABLE_ERRORS
 from catchup.rag.schemas.structures import ManualSearchQuery
 from catchup.rag.semaphores import rag_semaphores
+from catchup.search.planner.state import _QUERY_CACHE_MAX_SIZE
 from catchup.search.planner.state import CachedSearch
 from catchup.search.planner.state import ManualSearchState
-from catchup.search.planner.state import _QUERY_CACHE_MAX_SIZE
 
 logger = structlog.get_logger()
 
@@ -74,7 +74,6 @@ async def plan_manual_search_node(
         original_query=original_query,
         planned_query=planned.query,
         keyword_tokens=planned.keyword_tokens,
-        search_mode=planned.search_mode,
     )
 
     if len(query_cache) >= _QUERY_CACHE_MAX_SIZE:
