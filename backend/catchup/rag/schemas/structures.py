@@ -38,18 +38,7 @@ class VectorDbSearchQuery(BaseSearchQuery):
 class ManualSearchQuery(VectorDbSearchQuery):
     query: str = Field(
         default="",
-        description=(
-            "hybrid 모드: 벡터 검색에 전달할 English 쿼리 (번역 + 동의어 확장). "
-            "keyword_only 모드: 사용되지 않으므로 빈 문자열."
-        ),
-    )
-    search_mode: Literal["keyword_only", "hybrid"] = Field(
-        default="hybrid",
-        description=(
-            "keyword_only: 벡터 검색 없이 pg_bigm 키워드 검색만 수행. "
-            "entity lookup(브랜드명·고유명사·식별자)에 사용. "
-            "hybrid: 벡터 + 키워드 병렬 검색. keyword_tokens가 비어 있으면 벡터 단독."
-        ),
+        description="벡터 검색에 전달할 English 쿼리 (번역 + 동의어 확장). entity는 확장 없이 그대로.",
     )
 
 

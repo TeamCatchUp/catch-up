@@ -5,7 +5,6 @@ from datetime import timezone
 
 import structlog
 
-from catchup.components.vector_db.pgvector.pgvector import PGBigmRetriever
 from catchup.components.vector_db.pgvector.pgvector import PGVectorService
 from catchup.configs.config import settings
 from catchup.db.models import SourceType
@@ -90,27 +89,14 @@ class ManualSearchService:
             end_date=end_date,
         ) or None
 
-        if getattr(planned, "search_mode", "hybrid") == "keyword_only":
-            retriever = PGBigmRetriever(
-                session_factory=vector_db_service.session_factory,
-                async_session_factory=vector_db_service.async_session_factory,
-                collection_name=vector_db_service.collection_name,
-                k=_MANUAL_SEARCH_POOL_SIZE,
-                offset=0,
-                tool_filters=tool_filters,
-                search_mode="exact",
-                temporal_filters=temporal_filters,
-            )
-            all_docs = await retriever.async_invoke(planned.keyword_tokens)
-        else:
-            all_docs = await vector_db_service.hybrid_search(
-                query=planned.query,
-                k=_MANUAL_SEARCH_POOL_SIZE,
-                tool_filters=tool_filters,
-                keyword_tokens=planned.keyword_tokens or None,
-                offset=0,
-                temporal_filters=temporal_filters,
-            )
+        all_docs = await vector_db_service.hybrid_search(
+            query=planned.query,
+            k=_MANUAL_SEARCH_POOL_SIZE,
+            tool_filters=tool_filters,
+            keyword_tokens=planned.keyword_tokens or None,
+            offset=0,
+            temporal_filters=temporal_filters,
+        )
 
         groups = build_doc_groups(all_docs)
         deduped_docs = sorted(

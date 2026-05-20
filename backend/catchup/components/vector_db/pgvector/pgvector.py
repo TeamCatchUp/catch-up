@@ -335,6 +335,10 @@ class PGVectorService(BaseVectorDbService):
         logger.debug("hybrid_search_started", query_len=len(query))
         t0 = time.perf_counter()
 
+        if not query and not keyword_tokens:
+            logger.warning("hybrid_search_skipped", reason="empty query and no keyword_tokens")
+            return []
+
         loop = asyncio.get_running_loop()
         executor = rag_executors.vector_search_executor
 
@@ -361,7 +365,11 @@ class PGVectorService(BaseVectorDbService):
             "filter": search_kwargs.get("filter"),
         }
 
-        vector_task = loop.run_in_executor(executor, _run_vector_sync, payload)
+        vector_task = (
+            loop.run_in_executor(executor, _run_vector_sync, payload)
+            if query
+            else None
+        )
 
         if keyword_tokens:
             # keyword 검색은 async session으로 직접 실행 — thread pool slot 점유 없음
@@ -377,9 +385,10 @@ class PGVectorService(BaseVectorDbService):
                 search_mode="exact",
             )
             content_task = content_retriever.async_invoke(payload["keyword_tokens"])
-            vector_docs, content_docs = await asyncio.gather(
-                vector_task, content_task
-            )
+            if vector_task is not None:
+                vector_docs, content_docs = await asyncio.gather(vector_task, content_task)
+            else:
+                vector_docs, content_docs = [], await content_task
             logger.debug(
                 "content_retrieval_completed",
                 elapsed=round(time.perf_counter() - t_content, 3),
