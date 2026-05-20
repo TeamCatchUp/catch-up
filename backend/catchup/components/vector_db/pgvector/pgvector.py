@@ -327,7 +327,7 @@ class PGVectorService(BaseVectorDbService):
         temporal_filters: list[TemporalFilter] | None = None,
         keyword_tokens: list[str] | None = None,
         offset: int = 0,
-        score_threshold: float = 0.4,
+        score_threshold: float = 0.2,
     ) -> list[Document]:
         """
         Langchain 기반 Hybrid Search를 수행한다.
@@ -346,8 +346,9 @@ class PGVectorService(BaseVectorDbService):
                 k=max(100, k + offset),
                 filter=x.get("filter"),
             )[offset:]:
-                if score >= score_threshold:
-                    doc.metadata["score"] = score
+                similarity = 1 - score  # cosine distance → similarity (높을수록 유사)
+                if similarity >= score_threshold:
+                    doc.metadata["score"] = similarity
                     results.append(doc)
             return results
 
