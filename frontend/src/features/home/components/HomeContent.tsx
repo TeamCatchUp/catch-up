@@ -6,9 +6,10 @@
 
 import { useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { usePathname, useSearchParams } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 
 import { ADMIN_GUIDE_STORAGE_KEY } from '@/features/home/constants/adminGuide';
+import { FEATURE_UPDATE_NOTICE, FEATURE_UPDATE_NOTICE_ID } from '@/features/home/constants/featureUpdateNotice';
 import { tipData } from '@/features/home/constants/questionTips';
 import { USER_GUIDE_STORAGE_KEY } from '@/features/home/constants/userGuide';
 import TopNavbar from '@/shared/components/layout/topNavbar/TopNavbar';
@@ -18,9 +19,11 @@ import { useSearchInput } from '@/shared/hooks/query/useSearchInput';
 import { useEscapeKey } from '@/shared/hooks/useEscapeKey';
 import useLocalStorage from '@/shared/hooks/useLocalStorage';
 import { useOutsideClick } from '@/shared/hooks/useOutsideClick';
+import { useServiceNoticeDismiss } from '@/shared/hooks/useServiceNoticeDismiss';
 import { useUserStore } from '@/shared/store/userStore';
 
 import AdminGuideModal from './AdminGuideModal';
+import FeatureUpdateNoticeModal from './FeatureUpdateNoticeModal';
 import HomeAiSection from './HomeAiSection';
 import HomeDocsSection from './HomeDocsSection';
 import ModePicker, { type HomeMode } from './ModePicker';
@@ -37,6 +40,7 @@ function resolveTopNavPageType(pathname: string, mode: HomeMode): TopNavPageType
 export default function HomeContent() {
   const user = useUserStore((state) => state.user);
   const pathname = usePathname();
+  const router = useRouter();
   const searchParams = useSearchParams();
   const mode: HomeMode = searchParams.get('mode') === 'docs' ? 'docs' : 'ai';
 
@@ -50,6 +54,11 @@ export default function HomeContent() {
   });
   const showAdminGuide = user?.role === 'admin' && !adminGuideDismissed;
   const showUserGuide = user?.role !== 'admin' && !userGuideDismissed;
+
+  // 신규 기능 업데이트 공지. 가이드(admin/user)가 뜬 상태에서는 노출하지 않는다.
+  const { isDismissed: noticeDismissed, dismiss: dismissNotice } = useServiceNoticeDismiss(FEATURE_UPDATE_NOTICE_ID);
+  const [noticeClosed, setNoticeClosed] = useState(false);
+  const showFeatureUpdate = !noticeDismissed && !noticeClosed && !showAdminGuide && !showUserGuide;
 
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -110,6 +119,16 @@ export default function HomeContent() {
 
       {showAdminGuide && <AdminGuideModal onDismiss={() => setAdminGuideDismissed(true)} />}
       {showUserGuide && <UserGuideModal onDismiss={() => setUserGuideDismissed(true)} />}
+      {showFeatureUpdate && (
+        <FeatureUpdateNoticeModal
+          open
+          onOpenChange={(next) => {
+            if (!next) setNoticeClosed(true);
+          }}
+          onConfirm={() => router.replace(FEATURE_UPDATE_NOTICE.ctaHref)}
+          onDismiss={dismissNotice}
+        />
+      )}
     </div>
   );
 }
