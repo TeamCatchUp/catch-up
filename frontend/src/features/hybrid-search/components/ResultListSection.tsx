@@ -9,7 +9,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import Pagination from '@/shared/components/ui/pagination';
 import { motionEase, MotionState } from '@/shared/motion/presets';
 import { normalizeSources } from '@/shared/utils/normalize/normalizeRagSources';
-import { dateRangeToUrlParams, sortByUpdatedAt, type SortOrder } from '@/shared/utils/temporalRange';
+import { dateRangeToUrlParams, sortByRelevance, sortByUpdatedAt, type SortOrder } from '@/shared/utils/temporalRange';
 
 import { useHybridSearch } from '../hooks/useHybridSearch';
 import { HYBRID_SEARCH_PAGE_SIZE } from '../queries/hybridSearch.queries';
@@ -94,7 +94,10 @@ export default function ResultListSection({
     if (filteredResults.length === 0) {
       view = 'empty';
     } else {
-      const sortedResults = sortByUpdatedAt(filteredResults, sortOrder);
+      const sortedResults =
+        sortOrder === 'relevance'
+          ? sortByRelevance(filteredResults)
+          : sortByUpdatedAt(filteredResults, sortOrder);
       const totalPages = Math.max(1, Math.ceil(sortedResults.length / HYBRID_SEARCH_PAGE_SIZE));
       const pageStart = (page - 1) * HYBRID_SEARCH_PAGE_SIZE;
       const pageResults = sortedResults.slice(pageStart, pageStart + HYBRID_SEARCH_PAGE_SIZE);
