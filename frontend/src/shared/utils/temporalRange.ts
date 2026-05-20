@@ -44,7 +44,10 @@ export function toApiTemporalParams(
     params.start_date = new Date(`${start}T00:00:00.000+09:00`).toISOString();
   }
   if (end && DATE_RE.test(end)) {
-    params.end_date = new Date(`${end}T23:59:59.999+09:00`).toISOString();
+    // end 다음날 KST 자정을 상한으로 — 백엔드 inclusive/exclusive 비교 모두 정합.
+    const endBound = new Date(`${end}T00:00:00.000+09:00`);
+    endBound.setUTCDate(endBound.getUTCDate() + 1);
+    params.end_date = endBound.toISOString();
   }
   return params;
 }

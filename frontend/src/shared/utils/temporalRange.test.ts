@@ -45,10 +45,10 @@ describe('urlParamsToDateRange', () => {
 });
 
 describe('toApiTemporalParams', () => {
-  it('KST 일자를 UTC datetime으로 변환한다 (start=00:00, end=23:59:59.999)', () => {
+  it('KST 일자를 UTC datetime으로 변환한다 (start=KST 자정, end=다음날 KST 자정)', () => {
     expect(toApiTemporalParams('2026-05-01', '2026-05-19')).toEqual({
       start_date: '2026-04-30T15:00:00.000Z',
-      end_date: '2026-05-19T14:59:59.999Z',
+      end_date: '2026-05-19T15:00:00.000Z',
     });
   });
 
