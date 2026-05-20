@@ -1,8 +1,5 @@
 'use client';
 
-import { useCallback } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-
 import LimitReleaseSection from '@/features/admin/token-usage/components/sections/LimitReleaseSection';
 import MyTokenUsageSection from '@/features/admin/token-usage/components/sections/MyTokenUsageSection';
 import OrgTokenUsageSection from '@/features/admin/token-usage/components/sections/OrgTokenUsageSection';
@@ -15,6 +12,7 @@ import {
   toTabSlug,
 } from '@/features/admin/token-usage/constants/tokenUsageConfig';
 import UnderlineTabs, { type UnderlineTabItem } from '@/shared/components/ui/underline-tabs';
+import { useTabRouting } from '@/shared/hooks/useTabRouting';
 
 const TAB_ITEMS: UnderlineTabItem<TokenUsageTabSlug>[] = TOKEN_USAGE_TABS.map((tab) => ({
   value: toTabSlug(tab),
@@ -23,17 +21,10 @@ const TAB_ITEMS: UnderlineTabItem<TokenUsageTabSlug>[] = TOKEN_USAGE_TABS.map((t
 
 /** 관리자 — 토큰 사용량 관리 페이지 */
 export default function AdminTokenUsagePage() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const activeTab = fromTabSlug(searchParams.get('tab') ?? DEFAULT_TAB_SLUG);
-  const activeSlug = toTabSlug(activeTab);
-
-  const setActiveSlug = useCallback(
-    (slug: TokenUsageTabSlug) => {
-      router.replace(`/admin/token-usage?tab=${slug}`);
-    },
-    [router],
+  const [activeSlug, setActiveSlug] = useTabRouting<TokenUsageTabSlug>((raw) =>
+    toTabSlug(fromTabSlug(raw ?? DEFAULT_TAB_SLUG)),
   );
+  const activeTab = fromTabSlug(activeSlug);
 
   return (
     <section className="flex flex-col gap-8 px-16 pt-9 pb-30">

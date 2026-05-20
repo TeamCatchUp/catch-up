@@ -1,8 +1,5 @@
 'use client';
 
-import { useCallback } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-
 import AccountLogSection from '@/features/admin/audit-logs/components/sections/AccountLogSection';
 import IntegrationLogSection from '@/features/admin/audit-logs/components/sections/IntegrationLogSection';
 import QuestionLogSection from '@/features/admin/audit-logs/components/sections/QuestionLogSection';
@@ -14,6 +11,7 @@ import {
   toTabSlug,
 } from '@/features/admin/audit-logs/constants/auditLogConfig';
 import UnderlineTabs, { type UnderlineTabItem } from '@/shared/components/ui/underline-tabs';
+import { useTabRouting } from '@/shared/hooks/useTabRouting';
 
 const TAB_ITEMS: UnderlineTabItem<AuditTabSlug>[] = AUDIT_TABS.map((tab) => ({
   value: toTabSlug(tab),
@@ -22,17 +20,10 @@ const TAB_ITEMS: UnderlineTabItem<AuditTabSlug>[] = AUDIT_TABS.map((tab) => ({
 
 /** 관리자 — 감사 로그 페이지 */
 export default function AdminAuditLogsPage() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const activeTab = fromTabSlug(searchParams.get('tab') ?? DEFAULT_TAB_SLUG);
-  const activeSlug = toTabSlug(activeTab);
-
-  const setActiveSlug = useCallback(
-    (slug: AuditTabSlug) => {
-      router.replace(`/admin/audit-logs?tab=${slug}`);
-    },
-    [router],
+  const [activeSlug, setActiveSlug] = useTabRouting<AuditTabSlug>((raw) =>
+    toTabSlug(fromTabSlug(raw ?? DEFAULT_TAB_SLUG)),
   );
+  const activeTab = fromTabSlug(activeSlug);
 
   return (
     <section className="flex flex-col gap-5 px-16 pt-9 pb-25">
