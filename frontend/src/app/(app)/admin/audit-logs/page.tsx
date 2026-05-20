@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 
 import AccountLogSection from '@/features/admin/audit-logs/components/sections/AccountLogSection';
@@ -24,11 +24,24 @@ const TAB_ITEMS: UnderlineTabItem<AuditTabSlug>[] = AUDIT_TABS.map((tab) => ({
 export default function AdminAuditLogsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const activeTab = fromTabSlug(searchParams.get('tab') ?? DEFAULT_TAB_SLUG);
-  const activeSlug = toTabSlug(activeTab);
+  // 로컬 state가 진실 공급원, URL은 사이드카. router.replace 직후 useSearchParams
+  // 지연 반영으로 controlled Radix Tabs가 갇히던 케이스 회피.
+  const urlSlug = toTabSlug(fromTabSlug(searchParams.get('tab') ?? DEFAULT_TAB_SLUG));
+  const [activeSlug, setActiveSlugState] = useState<AuditTabSlug>(urlSlug);
+  const [prevUrlSlug, setPrevUrlSlug] = useState<AuditTabSlug>(urlSlug);
+
+  // 뒤로/앞으로·deep-link로 URL이 바뀌면 render 중 state 동기화
+  if (urlSlug !== prevUrlSlug) {
+    setPrevUrlSlug(urlSlug);
+    setActiveSlugState(urlSlug);
+  }
+
+  const activeTab = fromTabSlug(activeSlug);
 
   const setActiveSlug = useCallback(
     (slug: AuditTabSlug) => {
+      setActiveSlugState(slug);
+      setPrevUrlSlug(slug);
       router.replace(`/admin/audit-logs?tab=${slug}`);
     },
     [router],
