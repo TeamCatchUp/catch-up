@@ -339,14 +339,19 @@ class PGVectorService(BaseVectorDbService):
         executor = rag_executors.vector_search_executor
 
         # langchain PGVector는 sync API이므로 vector 검색은 thread pool 유지
-        _run_vector_sync = _timed("vector_retrieval", lambda x: [
-            doc for doc, score in self.vector_store.similarity_search_with_score(
+        def _vector_search(x):
+            results = []
+            for doc, score in self.vector_store.similarity_search_with_score(
                 query=x["semantic_query"],
                 k=max(100, k + offset),
-                filter=x.get("filter")
-            )[offset:]
-            if score >= score_threshold
-        ])
+                filter=x.get("filter"),
+            )[offset:]:
+                if score >= score_threshold:
+                    doc.metadata["score"] = score
+                    results.append(doc)
+            return results
+
+        _run_vector_sync = _timed("vector_retrieval", _vector_search)
 
         search_kwargs = self._build_search_kwargs(tool_filters, temporal_filters)
         payload = {
