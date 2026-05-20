@@ -82,8 +82,9 @@ export default function FeatureUpdateNoticeModal({
           {/* 본문 */}
           <DialogDescription asChild>
             <p className="text-body-small text-content-normal">
-              캐치업의 검색은 원래 <span className="text-content-primary">&quot;질문에 대한 답&quot;</span>{' '}
-              을 만들어주는 데 최적화돼 있었어요. 그런데 PoC 고객들과 이야기하면서 발견한 게 있어요 — 항상 명확한 질문이 있는 건 아니라는 점이에요. 때로는{' '}
+              캐치업의 검색은 원래 <span className="text-content-primary">&quot;질문에 대한 답&quot;</span> 을
+              만들어주는 데 최적화돼 있었어요. 그런데 고객분들과 이야기하면서 발견한 게 있어요 — 항상 명확한 질문이 있는
+              건 아니라는 점이에요. 때로는{' '}
               <span className="text-content-primary">&quot;그 채용 자동화 관련 문서들 어디 있더라&quot;</span>
               처럼 둘러보고 싶을 때가 있죠.
               <br />
@@ -100,7 +101,8 @@ export default function FeatureUpdateNoticeModal({
             <li className="text-body-small text-content-normal flex items-center gap-3">
               <span className="bg-fill-interaction-pressed-hover size-2 shrink-0 rounded-full" aria-hidden="true" />
               <span>
-                <span className="text-content-primary">탐색 모드 (신규):</span> 관련된 Jira 티켓, Confluence 페이지, Slack 스레드를 한 번에 훑어보고 싶을 때
+                <span className="text-content-primary">탐색 모드 (신규):</span> 관련된 Jira 티켓, Confluence 페이지,
+                Slack 스레드를 한 번에 훑어보고 싶을 때
               </span>
             </li>
           </ul>
@@ -111,7 +113,8 @@ export default function FeatureUpdateNoticeModal({
               <LightbulbFilled className="text-icon-primary-assistive size-5.5" aria-hidden="true" />
             </div>
             <p className="text-body-small text-content-normal">
-              한 단어로 검색해도 되지만, &quot;신입 개발자 온보딩 첫 주&quot;처럼 구체적으로 입력하면 의미가 비슷한 문서까지 더 정확히 찾아드려요.
+              한 단어로 검색해도 되지만, &quot;신입 개발자 온보딩 첫 주&quot;처럼 구체적으로 입력하면 의미가 비슷한
+              문서까지 더 정확히 찾아드려요.
             </p>
           </div>
         </div>
