@@ -218,6 +218,27 @@ class ChannelTalkCoreApiClient:
             logger=logger,
         )
 
+    async def list_user_chat_messages_page(
+        self,
+        access_key: str,
+        access_secret: str,
+        *,
+        channel_id: str | None = None,
+        user_chat_id: str,
+        cursor: str | None = None,
+        limit: int = 500,
+        sort_order: str | None = "asc",
+    ) -> ChannelTalkUserChatMessagePage:
+        return await self.list_user_chat_messages(
+            access_key=access_key,
+            access_secret=access_secret,
+            channel_id=channel_id,
+            user_chat_id=user_chat_id,
+            since=cursor,
+            limit=limit,
+            sort_order=sort_order,
+        )
+
     @staticmethod
     def _build_headers(
         *,
