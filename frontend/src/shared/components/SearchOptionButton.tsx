@@ -6,6 +6,8 @@ interface SearchOptionButtonProps extends React.ButtonHTMLAttributes<HTMLButtonE
   Icon: React.FC<React.SVGProps<SVGSVGElement>>;
   label: string;
   selected?: boolean;
+  // 아이콘 사이즈 등을 override할 때 사용 (기본 h-5 w-5)
+  iconClassName?: string;
 }
 
 interface DisabledButtonProps {
@@ -14,7 +16,7 @@ interface DisabledButtonProps {
 }
 
 export const SearchOptionButton = forwardRef<HTMLButtonElement, SearchOptionButtonProps>(
-  ({ Icon, label, selected = false, onClick, className, ...props }, ref) => {
+  ({ Icon, label, selected = false, onClick, className, iconClassName, ...props }, ref) => {
     return (
       <button
         ref={ref}
@@ -28,7 +30,13 @@ export const SearchOptionButton = forwardRef<HTMLButtonElement, SearchOptionButt
           className,
         )}
       >
-        <Icon className={cn('h-5 w-5 shrink-0', selected ? 'text-icon-primary' : 'text-icon-normal')} />
+        <Icon
+          className={cn(
+            'h-5 w-5 shrink-0',
+            selected ? 'text-icon-primary' : 'text-icon-normal',
+            iconClassName,
+          )}
+        />
         <div
           className={cn(
             'text-body-small truncate whitespace-nowrap',

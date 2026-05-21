@@ -5,25 +5,27 @@ from unittest.mock import MagicMock
 import pytest
 
 from catchup.db.models import User
-from catchup.rag.schemas.structures import VectorDbSearchQuery
+from catchup.rag.schemas.structures import ManualSearchQuery
+from catchup.search.planner.state import CachedSearch
 
 
 def _make_planned_search(
     query: str = "semantic query in English",
     keyword_tokens: list[str] | None = None,
-) -> VectorDbSearchQuery:
-    return VectorDbSearchQuery(
+    search_mode: str = "hybrid",
+) -> ManualSearchQuery:
+    return ManualSearchQuery(
         query=query,
         keyword_tokens=keyword_tokens or [],
+        search_mode=search_mode,
         reasoning="test",
     )
 
 
-def _make_planner_state(planned: VectorDbSearchQuery, keyword: str = "q") -> dict:
+def _make_planner_state(planned: ManualSearchQuery, keyword: str = "q") -> dict:
     return {
         "original_query": keyword,
-        "last_planned_query": keyword,
-        "planned_search": planned,
+        "query_cache": {keyword: CachedSearch(planned=planned)},
     }
 
 
@@ -51,13 +53,16 @@ def mock_planner():
 def mock_vector_db():
     service = MagicMock()
     service.hybrid_search = AsyncMock(return_value=[])
+    service.session_factory = MagicMock()
+    service.async_session_factory = MagicMock()
+    service.collection_name = "test_collection"
     return service
 
 
 def _assert_hybrid_search_called_with_pool(mock_vector_db, **expected_kwargs):
-    """hybrid_search가 pool size(k=200)와 offset=0으로 호출됐는지 검증한다."""
+    """hybrid_search가 pool size(k=50)와 offset=0으로 호출됐는지 검증한다."""
     _, kwargs = mock_vector_db.hybrid_search.call_args
-    assert kwargs.get("k") == 200
+    assert kwargs.get("k") == 50
     assert kwargs.get("offset") == 0
     for key, value in expected_kwargs.items():
         assert kwargs[key] == value
@@ -83,8 +88,6 @@ async def test_search_uses_planned_query(service, mock_planner, mock_vector_db, 
     await service.search(
         user=mock_user,
         keyword="Korean query",
-        limit=10,
-        offset=0,
         tool_filters=None,
         vector_db_service=mock_vector_db,
     )
@@ -104,14 +107,42 @@ async def test_search_thread_id_uses_user_id(service, mock_planner, mock_vector_
     await service.search(
         user=_make_user(user_id=99),
         keyword="q",
-        limit=20,
-        offset=0,
         tool_filters=None,
         vector_db_service=mock_vector_db,
     )
 
     config = mock_planner.ainvoke.call_args[1]["config"]
     assert config["configurable"]["thread_id"] == "search:99"
+
+
+@pytest.mark.asyncio
+async def test_keyword_only_skips_hybrid_search(service, mock_planner, mock_vector_db, mock_user):
+    """search_mode=keyword_only이면 hybrid_search를 호출하지 않고 PGBigmRetriever를 사용한다."""
+    from unittest.mock import patch
+
+    planned = _make_planned_search(
+        query="예시고객사",
+        keyword_tokens=["예시고객사"],
+        search_mode="keyword_only",
+    )
+    mock_planner.ainvoke.return_value = _make_planner_state(planned, "예시고객사")
+
+    with patch(
+        "catchup.search.service.PGBigmRetriever"
+    ) as mock_retriever_cls:
+        mock_retriever = MagicMock()
+        mock_retriever.async_invoke = AsyncMock(return_value=[])
+        mock_retriever_cls.return_value = mock_retriever
+
+        await service.search(
+            user=mock_user,
+            keyword="예시고객사",
+            tool_filters=None,
+            vector_db_service=mock_vector_db,
+        )
+
+    mock_vector_db.hybrid_search.assert_not_called()
+    mock_retriever.async_invoke.assert_called_once_with(["예시고객사"])
 
 
 @pytest.mark.asyncio
@@ -136,8 +167,6 @@ async def test_search_returns_base_sources(service, mock_planner, mock_vector_db
     results, total, source_distribution = await service.search(
         user=mock_user,
         keyword="q",
-        limit=20,
-        offset=0,
         tool_filters=None,
         vector_db_service=mock_vector_db,
     )
@@ -147,3 +176,91 @@ async def test_search_returns_base_sources(service, mock_planner, mock_vector_db
     assert len(results) == 1
     assert results[0].title == "Title"
     assert results[0].index == 1
+
+
+@pytest.mark.asyncio
+async def test_search_passes_temporal_filters_to_hybrid_search(
+    service, mock_planner, mock_vector_db, mock_user
+):
+    """start_date/end_date가 있으면 hybrid_search에 temporal_filters가 전달된다."""
+    from datetime import datetime
+    from datetime import timezone
+
+    planned = _make_planned_search()
+    mock_planner.ainvoke.return_value = _make_planner_state(planned)
+
+    start = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    await service.search(
+        user=mock_user,
+        keyword="q",
+        tool_filters=None,
+        vector_db_service=mock_vector_db,
+        start_date=start,
+    )
+
+    _, kwargs = mock_vector_db.hybrid_search.call_args
+    temporal_filters = kwargs.get("temporal_filters")
+    assert temporal_filters is not None
+    assert len(temporal_filters) == 1
+    assert temporal_filters[0].time_field == "created_at"
+    assert temporal_filters[0].start_date == start
+    assert temporal_filters[0].end_date > start
+
+
+@pytest.mark.asyncio
+async def test_search_no_temporal_filter_when_dates_absent(
+    service, mock_planner, mock_vector_db, mock_user
+):
+    """start_date/end_date 둘 다 없으면 hybrid_search에 temporal_filters=None이 전달된다."""
+    planned = _make_planned_search()
+    mock_planner.ainvoke.return_value = _make_planner_state(planned)
+
+    await service.search(
+        user=mock_user,
+        keyword="q",
+        tool_filters=None,
+        vector_db_service=mock_vector_db,
+    )
+
+    _, kwargs = mock_vector_db.hybrid_search.call_args
+    assert kwargs.get("temporal_filters") is None
+
+
+@pytest.mark.asyncio
+async def test_keyword_only_passes_temporal_filters_to_retriever(
+    service, mock_planner, mock_vector_db, mock_user
+):
+    """keyword_only 모드에서도 temporal_filters가 PGBigmRetriever에 전달된다."""
+    from datetime import datetime
+    from datetime import timezone
+    from unittest.mock import patch
+
+    planned = _make_planned_search(
+        query="예시고객사",
+        keyword_tokens=["예시고객사"],
+        search_mode="keyword_only",
+    )
+    mock_planner.ainvoke.return_value = _make_planner_state(planned, "예시고객사")
+
+    start = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    end = datetime(2026, 4, 1, tzinfo=timezone.utc)
+
+    with patch("catchup.search.service.PGBigmRetriever") as mock_retriever_cls:
+        mock_retriever = MagicMock()
+        mock_retriever.async_invoke = AsyncMock(return_value=[])
+        mock_retriever_cls.return_value = mock_retriever
+
+        await service.search(
+            user=mock_user,
+            keyword="예시고객사",
+            tool_filters=None,
+            vector_db_service=mock_vector_db,
+            start_date=start,
+            end_date=end,
+        )
+
+    _, kwargs = mock_retriever_cls.call_args
+    temporal_filters = kwargs.get("temporal_filters")
+    assert temporal_filters is not None
+    assert temporal_filters[0].start_date == start
+    assert temporal_filters[0].end_date == end

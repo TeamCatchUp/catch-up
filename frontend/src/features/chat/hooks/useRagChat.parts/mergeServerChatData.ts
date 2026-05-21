@@ -75,5 +75,7 @@ const patchMessage = (prevMsg: Message, serverMsg: Message): Message => {
     is_liked: serverMsg.is_liked ?? prevMsg.is_liked,
     is_saved: serverMsg.is_saved ?? prevMsg.is_saved,
     timestamp: serverMsg.timestamp || prevMsg.timestamp,
+    // 스트림 종료 시 attach한 생성 과정 보존 — 서버 값 우선, 없으면 prev 유지
+    pipeline_result: serverMsg.pipeline_result ?? prevMsg.pipeline_result,
   };
 };

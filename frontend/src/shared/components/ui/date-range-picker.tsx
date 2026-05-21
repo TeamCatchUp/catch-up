@@ -2,13 +2,12 @@
 
 import { useCallback, useState } from 'react';
 import type { DateRange } from 'react-day-picker';
-import { format, isSameDay, startOfToday } from 'date-fns';
+import { format, isSameDay, startOfToday, subMonths } from 'date-fns';
 import { ko } from 'date-fns/locale';
 
 import IconCalendar from '@/public/icons/icon/calendar.svg';
 import IconCheck from '@/public/icons/icon/check.svg';
 import IconDeleteCircle from '@/public/icons/icon/delete_circle.svg';
-import IconReset from '@/public/icons/icon/reset.svg';
 import { cn } from '@/shared/utils/cn';
 
 import { Button } from './button';
@@ -28,6 +27,10 @@ interface DateRangePickerProps {
   placeholder?: string;
   /** 표시할 월 수 (기본: 2) */
   numberOfMonths?: number;
+  // 커스텀 트리거. 지정 시 기본 날짜 텍스트 바 대신 이 노드를 트리거로 사용.
+  trigger?: React.ReactNode;
+  // PopoverContent 정렬 (기본: 'end')
+  align?: 'start' | 'end';
 }
 
 function DateRangePicker({
@@ -37,6 +40,8 @@ function DateRangePicker({
   dateFormat = 'yyyy.MM.dd',
   placeholder = '날짜를 선택하세요',
   numberOfMonths = 2,
+  trigger,
+  align = 'end',
 }: DateRangePickerProps) {
   const [open, setOpen] = useState(false);
   const [tempRange, setTempRange] = useState<DateRange | undefined>(value);
@@ -86,47 +91,59 @@ function DateRangePicker({
 
   return (
     <Popover open={open} onOpenChange={handleOpenChange}>
-      <PopoverTrigger
-        className={cn(
-          'border-edge-neutral bg-fill-normal flex h-9 cursor-pointer items-center gap-1.5 rounded-lg border px-2.5 py-2',
-          className,
-        )}
-      >
-        <IconCalendar className="text-icon-neutral size-5" />
-        {displayFrom ? (
-          <>
-            <span className="text-body-small text-content-neutral">{displayFrom}</span>
-            <span className="text-body-small text-content-neutral">-</span>
-            <span className="text-body-small text-content-neutral">{displayTo ?? displayFrom}</span>
-            <IconDeleteCircle
-              className="text-icon-assistive size-5"
-              onClick={(e: React.MouseEvent) => {
-                e.stopPropagation();
-                handleClear();
-              }}
-            />
-          </>
-        ) : (
-          <span className="text-body-small text-content-assistive">{placeholder}</span>
-        )}
-      </PopoverTrigger>
+      {trigger ? (
+        <PopoverTrigger asChild>{trigger}</PopoverTrigger>
+      ) : (
+        <PopoverTrigger
+          className={cn(
+            'border-edge-neutral bg-fill-normal flex h-9 cursor-pointer items-center gap-1.5 rounded-lg border px-2.5 py-2',
+            className,
+          )}
+        >
+          <IconCalendar className="text-icon-neutral size-5" />
+          {displayFrom ? (
+            <>
+              <span className="text-body-small text-content-neutral">{displayFrom}</span>
+              <span className="text-body-small text-content-neutral">-</span>
+              <span className="text-body-small text-content-neutral">{displayTo ?? displayFrom}</span>
+              <IconDeleteCircle
+                className="text-icon-assistive size-5"
+                onClick={(e: React.MouseEvent) => {
+                  e.stopPropagation();
+                  handleClear();
+                }}
+              />
+            </>
+          ) : (
+            <span className="text-body-small text-content-assistive">{placeholder}</span>
+          )}
+        </PopoverTrigger>
+      )}
 
-      <PopoverContent align="start" sideOffset={4} className="shadow-modal w-auto rounded-2xl p-0">
+      <PopoverContent
+        align={align}
+        sideOffset={4}
+        className="shadow-modal flex w-auto flex-col gap-4 rounded-2xl p-5"
+      >
         <Calendar
           mode="range"
           selected={tempRange}
           onSelect={setTempRange}
           numberOfMonths={numberOfMonths}
           locale={ko}
+          disabled={{ after: startOfToday() }}
+          endMonth={startOfToday()}
+          defaultMonth={subMonths(startOfToday(), numberOfMonths - 1)}
+          formatters={{ formatCaption: (month) => format(month, 'yyyy.M') }}
         />
 
         {/* Divider */}
-        <div className="border-edge-neutral border-t" />
+        <div className="border-edge-normal border-t" />
 
         {/* Action Bar */}
-        <div className="flex items-center justify-between px-5 py-3">
+        <div className="flex items-center justify-between">
           {/* 좌측: 오늘 선택 + 초기화 */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
             <Button
               variant="box-outline-gray"
               size="sm"
@@ -138,7 +155,6 @@ function DateRangePicker({
             </Button>
             <Button variant="text-secondary-mono" size="sm" onClick={handleReset}>
               초기화
-              <IconReset className="text-icon-neutral size-5" />
             </Button>
           </div>
 

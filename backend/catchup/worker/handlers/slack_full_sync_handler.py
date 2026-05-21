@@ -1,11 +1,21 @@
 from __future__ import annotations
 
+from datetime import datetime
+from datetime import timedelta
+from datetime import timezone
+
 from catchup.audit.actions import FullSyncAction
 from catchup.audit.metadata import FullSyncEventAuditMetadata
 from catchup.audit.utils import audit_log
+from catchup.configs.config import settings
+from catchup.connector_core.adapters.slack import SlackMessageFullSyncExecutionRequest
+from catchup.connector_core.adapters.slack import SlackMessageSyncAdapter
+from catchup.connector_core.application.sync_ingestion import run_sync_ingestion
+from catchup.connector_core.ports.sync_ingestion import SyncWindow
 from catchup.connectors.slack.factory import create_slack_ingestion_service
 from catchup.sync.audit import SyncAuditContext
-from catchup.sync.common.schemas import FullSyncContext, TargetSyncResult
+from catchup.sync.common.schemas import FullSyncContext
+from catchup.sync.common.schemas import TargetSyncResult
 from catchup.worker.handlers.base_full_sync_handler import BaseFullSyncHandler
 
 
@@ -38,16 +48,56 @@ class SlackFullSyncHandler(BaseFullSyncHandler):
         service_cache: dict[str, object],
     ) -> TargetSyncResult:
         service = await self._get_service(context.scope_id, service_cache)
-        return await service.sync_channel_messages(
-            channel_id=context.target_id,
-            channel_name=context.target_name,
-            sync_from_ts=context.sync_from_ts,
-            skip_delete=True,
-            audit_context=SyncAuditContext(
-                connector=context.connector,
-                scope_id=context.scope_id,
-                target_id=context.target_id,
-                job_id=context.job_id,
-                task_id=context.event_id,
-            ),
+        sync_from_dt = (
+            datetime.fromtimestamp(float(context.sync_from_ts), tz=timezone.utc)
+            if context.sync_from_ts is not None
+            else datetime.now(timezone.utc) - timedelta(days=settings.DEFAULT_SYNC_DAYS)
+        )
+        audit_context = SyncAuditContext(
+            connector=context.connector,
+            scope_id=context.scope_id,
+            target_id=context.target_id,
+            job_id=context.job_id,
+            task_id=context.event_id,
+        )
+        sync_window = SyncWindow(
+            window_start=sync_from_dt,
+            window_end=datetime.now(timezone.utc),
+        )
+        adapter = SlackMessageSyncAdapter(service=service)
+
+        synced_count = 0
+        error_count = 0
+        batch_index = 0
+        cursor: str | None = None
+        while True:
+            result = await run_sync_ingestion(
+                port=adapter,
+                execution=SlackMessageFullSyncExecutionRequest(
+                    tenant_id=context.scope_id,
+                    channel_id=context.target_id,
+                    channel_name=context.target_name,
+                    sync_from_ts=context.sync_from_ts,
+                    skip_delete=True,
+                    batch_index=batch_index,
+                    cursor=cursor,
+                    audit_context=audit_context,
+                ),
+                sync_window=sync_window,
+            )
+            synced_count += result.persisted_count + result.deleted_count
+            error_count += result.failed_count
+            if result.is_last:
+                break
+            cursor = result.next_cursor
+            batch_index += 1
+
+        if error_count > 0:
+            raise RuntimeError(
+                "[SLACK][FULL SYNC][WORKER] Target sync failed: "
+                f"scope_id={context.scope_id}, channel_id={context.target_id}, errors={error_count}"
+            )
+        return TargetSyncResult(
+            synced_count=synced_count,
+            error_count=error_count,
         )

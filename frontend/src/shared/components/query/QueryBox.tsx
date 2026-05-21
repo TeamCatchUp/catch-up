@@ -7,13 +7,13 @@
 
 import { RefObject } from 'react';
 
+import SourceChipsRow from '@/shared/components/SourceChipsRow';
 import type { UseSearchFiltersReturn } from '@/shared/hooks/query/useSearchFilters';
 import type { UseSearchInputReturn } from '@/shared/hooks/query/useSearchInput';
 import type { TipData } from '@/shared/types/template';
 import { cn } from '@/shared/utils/cn';
 
 import ExplorerPanel from './ExplorerPanel';
-import FilterBar from './FilterBar';
 import QueryInput from './QueryInput';
 
 interface QueryBoxProps {
@@ -68,7 +68,11 @@ const QueryBox = ({
             !isNoHistory && 'slide-in-from-top-3 mt-1',
           )}
         >
-          <FilterBar filters={filters} inputRef={inputRef} />
+          <SourceChipsRow
+            selectedSources={filters.selectedSources}
+            onToggle={filters.setSelectedSources}
+            className="justify-start self-stretch overflow-x-scroll py-0.5 whitespace-nowrap"
+          />
           <ExplorerPanel variant={variant} onExampleClick={handleExampleClick} />
         </div>
       )}

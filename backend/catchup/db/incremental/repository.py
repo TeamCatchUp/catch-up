@@ -311,41 +311,6 @@ def list_retry_ready_records(
     return list(db.execute(stmt).scalars().all())
 
 
-def list_parent_cohort_records(
-    db: Session,
-    *,
-    connector: SyncConnector,
-    scope_id: str,
-    parent_type: str,
-    parent_id: str,
-    max_generation: int,
-    statuses: Sequence[IncrementalRecordStatus] | None = None,
-    limit: int = 1000,
-) -> list[IncrementalRecordState]:
-    target_statuses = list(
-        statuses
-        or [
-            IncrementalRecordStatus.QUEUED,
-            IncrementalRecordStatus.RETRY_WAIT,
-            IncrementalRecordStatus.PROCESSING,
-        ]
-    )
-    stmt: Select[tuple[IncrementalRecordState]] = select(IncrementalRecordState).where(
-        IncrementalRecordState.connector == connector,
-        IncrementalRecordState.scope_id == _normalize_text(scope_id, "scope_id"),
-        IncrementalRecordState.parent_type == _normalize_text(parent_type, "parent_type"),
-        IncrementalRecordState.parent_id == _normalize_text(parent_id, "parent_id"),
-        IncrementalRecordState.generation <= max_generation,
-        IncrementalRecordState.status.in_(target_statuses),
-    )
-    stmt = stmt.order_by(
-        IncrementalRecordState.generation.asc(),
-        IncrementalRecordState.last_event_at.asc(),
-        IncrementalRecordState.updated_at.asc(),
-    ).limit(limit)
-    return list(db.execute(stmt).scalars().all())
-
-
 def _update_record_status(
     db: Session,
     *,
@@ -433,55 +398,6 @@ def transition_record_status(
         )
         db.commit()
         return updated == 1
-    except Exception:
-        db.rollback()
-        raise
-
-
-def mark_parent_cohort_synced(
-    db: Session,
-    *,
-    connector: SyncConnector,
-    scope_id: str,
-    parent_type: str,
-    parent_id: str,
-    max_generation: int,
-    last_synced_at: datetime | None = None,
-) -> int:
-    synced_at = _to_utc(last_synced_at or _utc_now())
-    stmt = (
-        update(IncrementalRecordState)
-        .where(
-            IncrementalRecordState.connector == connector,
-            IncrementalRecordState.scope_id == _normalize_text(scope_id, "scope_id"),
-            IncrementalRecordState.parent_type == _normalize_text(parent_type, "parent_type"),
-            IncrementalRecordState.parent_id == _normalize_text(parent_id, "parent_id"),
-            IncrementalRecordState.generation <= max_generation,
-            IncrementalRecordState.status.in_(
-                [
-                    IncrementalRecordStatus.QUEUED,
-                    IncrementalRecordStatus.RETRY_WAIT,
-                    IncrementalRecordStatus.PROCESSING,
-                ]
-            ),
-        )
-        .values(
-            status=IncrementalRecordStatus.SYNCED,
-            attempt=0,
-            next_retry_at=None,
-            queued_generation=None,
-            processing_generation=None,
-            last_synced_at=synced_at,
-            last_error=None,
-            lease_owner=None,
-            lease_until=None,
-            updated_at=_utc_now(),
-        )
-    )
-    try:
-        result = db.execute(stmt)
-        db.commit()
-        return result.rowcount or 0
     except Exception:
         db.rollback()
         raise

@@ -52,14 +52,14 @@ export default function AfterLoginLayout({ children }: { children: React.ReactNo
 
   return (
     <TooltipProvider delayDuration={200}>
-      <div className="relative flex h-full">
+      <div className="relative flex h-full" data-snb={isSidebarOpen ? 'open' : 'collapsed'}>
         <aside className="shrink-0">
           <SideNavBar />
         </aside>
         <div
           className={cn(
             'z-panel absolute top-0 h-full overflow-hidden transition-[width,left] duration-300 ease-out',
-            isSidebarOpen ? 'left-60.25' : 'left-18',
+            'left-snb',
             activePanel === 'inbox' ? 'w-104.5' : 'w-0',
           )}
         >
@@ -76,7 +76,7 @@ export default function AfterLoginLayout({ children }: { children: React.ReactNo
         <div
           className={cn(
             'z-panel absolute top-0 h-full overflow-hidden transition-[width,left] duration-300 ease-out',
-            isSidebarOpen ? 'left-60.25' : 'left-18',
+            'left-snb',
             activePanel === 'questionsHistory' ? 'w-95' : 'w-0',
           )}
         >

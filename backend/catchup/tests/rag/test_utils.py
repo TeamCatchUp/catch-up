@@ -5,6 +5,7 @@ import pytest
 from langchain_core.documents import Document
 from langchain_core.messages import AIMessage
 from langchain_core.messages import HumanMessage
+from langchain_core.messages import ToolMessage
 
 from catchup.rag.nodes.utils import build_docs_summary
 from catchup.rag.nodes.utils import ainvoke_llm_with_token_usage
@@ -26,23 +27,44 @@ def test_drop_orphaned_tool_calls():
     assert len(result) == 2
     assert result == messages
 
+    # 3. Internal orphan: AIMessage(tool_calls) followed by AIMessage instead of ToolMessage
+    # 실제 발생 패턴: AIMessage(G8nL) → AIMessage(V98G) → ToolMessage(V98G)
+    orphan_ai = AIMessage(content="", tool_calls=[{"name": "search", "args": {}, "id": "G8nL"}])
+    valid_ai = AIMessage(content="", tool_calls=[{"name": "search", "args": {}, "id": "V98G"}])
+    tool_msg = ToolMessage(content="result", tool_call_id="V98G")
+    stop_ai = AIMessage(content="done")
+    messages = [HumanMessage(content="q"), orphan_ai, valid_ai, tool_msg, stop_ai]
+    result = drop_orphaned_tool_calls(messages)
+    assert len(result) == 4
+    assert result[0] == HumanMessage(content="q")
+    assert result[1] == valid_ai
+    assert result[2] == tool_msg
+    assert result[3] == stop_ai
+
+    # 4. Valid pair: AIMessage(tool_calls) + ToolMessage → 유지
+    ai_with_tool = AIMessage(content="", tool_calls=[{"name": "search", "args": {}, "id": "xyz"}])
+    tool_msg_valid = ToolMessage(content="ok", tool_call_id="xyz")
+    messages = [HumanMessage(content="q"), ai_with_tool, tool_msg_valid]
+    result = drop_orphaned_tool_calls(messages)
+    assert len(result) == 3
+
 def test_build_docs_summary():
     docs = [
         Document(page_content="content 1", metadata={"source": "slack", "created_at": "2024-01-01"}),
         Document(page_content="content 2", metadata={"source": "github"}),
         Document(page_content="content 3", metadata={"source": "slack"})
     ]
-    
+
     # 기본 요약 (max_docs=5)
     summary = build_docs_summary(docs)
-    assert "총 3개 문서 누적됨" in summary
+    assert "Total 3docs accumulated" in summary
     assert "slack:2" in summary
     assert "github:1" in summary
     assert "[1] (slack)" in summary
-    
+
     # max_docs 제한 확인
     summary_limited = build_docs_summary(docs, max_docs=1)
-    assert "... 외 2개" in summary_limited
+    assert "and 2 more document(s)" in summary_limited
     assert "[2]" not in summary_limited
 
 def test_get_formatted_history_text():

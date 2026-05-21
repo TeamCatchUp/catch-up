@@ -117,6 +117,12 @@ export const API = {
     prompts: `${API_PREFIX}/settings/prompts`, // GET & PATCH 커스텀 프롬프트 지침
   },
 
+  // 하이브리드(Vector + Weighted Keyword) 수동 검색 + 사용자별 검색 기록
+  search: {
+    hybrid: `${API_PREFIX}/search/hybrid`, // GET 하이브리드 검색 (keyword, limit, offset, tool_filters)
+    queries: `${API_PREFIX}/search/queries`, // GET 사용자 검색 기록 (page, size, period: today/7d/all)
+  },
+
   onboarding: {
     signup: `${API_PREFIX}/onboarding`, // POST 일반 유저 온보딩 가입
     adminSignup: `${API_PREFIX}/onboarding/admin`, // POST 루트 어드민 온보딩 가입

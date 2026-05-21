@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from catchup.db.models import SyncType
 from catchup.sync.common.protocols import IngestionHandlerProtocol
-from catchup.sync.common.schemas import FullSyncContext, TargetSyncResult
+from catchup.sync.common.schemas import FullSyncContext
+from catchup.sync.common.schemas import TargetSyncResult
 
 
 class BaseFullSyncHandler(IngestionHandlerProtocol):

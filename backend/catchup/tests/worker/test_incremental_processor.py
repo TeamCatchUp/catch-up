@@ -5,6 +5,7 @@ from unittest import IsolatedAsyncioTestCase
 from unittest.mock import AsyncMock
 from unittest.mock import patch
 
+from catchup.db.models import IncrementalRecordStatus
 from catchup.db.models import SyncConnector
 from catchup.sync.common.schemas import ClaimState
 from catchup.sync.common.schemas import IncrementalSyncContext
@@ -13,7 +14,6 @@ from catchup.sync.common.schemas import SyncStreamMessage
 from catchup.sync.common.schemas import SyncStreamTask
 from catchup.sync.common.schemas import SyncTargetType
 from catchup.sync.common.schemas import TargetSyncResult
-from catchup.worker.handlers.incremental_success_scope import IncrementalSuccessScope
 from catchup.worker.incremental_processor import _mark_incremental_success_sync
 from catchup.worker.incremental_processor import process_incremental_message
 from catchup.worker.schemas import ClaimResult
@@ -96,7 +96,6 @@ class IncrementalProcessorStartedHookTest(IsolatedAsyncioTestCase):
             call_order.append("hook_completed")
 
         handler = SimpleNamespace(
-            incremental_success_scope=IncrementalSuccessScope.RECORD,
             on_target_started=AsyncMock(side_effect=on_target_started),
             handle=AsyncMock(side_effect=handle),
             on_target_completed=AsyncMock(side_effect=on_target_completed),
@@ -121,10 +120,7 @@ class IncrementalProcessorStartedHookTest(IsolatedAsyncioTestCase):
 
         self.assertEqual(handler.on_target_started.await_count, 1)
         self.assertEqual(handler.handle.await_count, 1)
-        mark_success.assert_called_once_with(
-            context,
-            success_scope=IncrementalSuccessScope.RECORD,
-        )
+        mark_success.assert_called_once_with(context)
         self.assertLess(call_order.index("hook_started"), call_order.index("handle"))
 
     async def test_does_not_start_unclaimed_or_unsupported_tasks(
@@ -167,29 +163,43 @@ class IncrementalProcessorStartedHookTest(IsolatedAsyncioTestCase):
                 lease_owner="worker-1",
             )
 
-    async def test_record_success_scope_marks_only_claimed_record(self) -> None:
+    async def test_record_success_marks_only_claimed_record(self) -> None:
         context = _context()
-        context.batch_generation_ceiling = 99
 
         with (
             patch(f"{_PROCESSOR_MODULE}.SessionLocal", return_value=_FakeSession()),
-            patch(f"{_PROCESSOR_MODULE}.mark_parent_cohort_synced") as mark_cohort,
             patch(
                 f"{_PROCESSOR_MODULE}.transition_record_status",
                 return_value=True,
             ) as transition_record,
         ):
-            result = _mark_incremental_success_sync(
-                context,
-                success_scope=IncrementalSuccessScope.RECORD,
-            )
+            result = _mark_incremental_success_sync(context)
 
         self.assertTrue(result)
-        mark_cohort.assert_not_called()
         self.assertEqual(
             transition_record.call_args.kwargs["record_key"], context.record_key
         )
         self.assertEqual(
             transition_record.call_args.kwargs["expected_generation"],
             context.generation,
+        )
+
+    async def test_record_success_ignores_parent_and_sibling_context(self) -> None:
+        context = _context()
+        context.parent_id = "GRT"
+
+        with (
+            patch(f"{_PROCESSOR_MODULE}.SessionLocal", return_value=_FakeSession()),
+            patch(
+                f"{_PROCESSOR_MODULE}.transition_record_status",
+                return_value=True,
+            ) as transition_record,
+        ):
+            result = _mark_incremental_success_sync(context)
+
+        self.assertTrue(result)
+        self.assertEqual(transition_record.call_count, 1)
+        self.assertEqual(
+            transition_record.call_args.kwargs["from_statuses"],
+            [IncrementalRecordStatus.PROCESSING],
         )

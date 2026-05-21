@@ -1,0 +1,27 @@
+/* Side Navigation Bar width
+ *  SNB 너비를 단일 소스로 관리. SNB 열림/닫힘 너비가 사이드 패널 위치(left)와
+ *  동기화돼야 하므로 --snb-width 변수 하나로 묶는다.
+ *
+ *  사용법:
+ *    - 부모 컨테이너: data-snb="open" | "collapsed"
+ *    - SNB nav   : w-snb
+ *    - 사이드 패널 : left-snb
+ */
+
+:root {
+  --snb-width-open: calc(var(--spacing) * 60.25);
+  --snb-width-collapsed: calc(var(--spacing) * 13);
+  --snb-width: var(--snb-width-open);
+}
+
+[data-snb='collapsed'] {
+  --snb-width: var(--snb-width-collapsed);
+}
+
+@utility w-snb {
+  width: var(--snb-width);
+}
+
+@utility left-snb {
+  left: var(--snb-width);
+}

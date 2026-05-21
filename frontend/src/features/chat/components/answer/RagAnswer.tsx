@@ -5,6 +5,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkBreaks from 'remark-breaks';
 import remarkGfm from 'remark-gfm';
 
+import PipelineProcessAccordion from '@/features/chat/components/answer/process/PipelineProcessAccordion';
 import RagAnswerSkeleton from '@/features/chat/components/skeleton/RagAnswerSkeleton';
 import type { PipelineQueryType } from '@/features/chat/types';
 import type { QAPair } from '@/features/chat/utils/render/chat';
@@ -32,11 +33,7 @@ const ANSWER_ICONS = [
   { name: 'Rotate', icon: Rotate },
 ];
 
-const SHOWING_PIPELINE_TYPES: ReadonlySet<PipelineQueryType> = new Set([
-  'simple',
-  'standard',
-  'complex',
-]);
+const SHOWING_PIPELINE_TYPES: ReadonlySet<PipelineQueryType> = new Set(['simple', 'standard', 'complex']);
 
 interface RagAnswerProps {
   currentQA: QAPair | undefined;
@@ -87,15 +84,10 @@ export default function RagAnswer({
 
   return (
     <div className="flex flex-col gap-2">
-      {showSkeleton && (
-        <RagAnswerSkeleton
-          pipelineType={pipelineQueryType}
-          pipelineReasoning={pipelineReasoning}
-        />
-      )}
+      {showSkeleton && <RagAnswerSkeleton pipelineType={pipelineQueryType} pipelineReasoning={pipelineReasoning} />}
 
       {showAnswerMarkdown && (
-        <div className="markdown-body wrap-break-word max-w-192.75">
+        <div className="markdown-body max-w-192.75 wrap-break-word">
           <ReactMarkdown
             remarkPlugins={[remarkGfm, remarkBreaks]}
             components={MarkDownComponents(answer?.sources, citationOrderMap)}
@@ -107,9 +99,10 @@ export default function RagAnswer({
 
       {finishedAnswer && currentQA && (
         <>
-          <div className="text-body-small text-content-assistive">
-            질문과 연관된 {finishedAnswer.sources?.length ?? 0}개의 핵심 자료를 선별했어요.
-          </div>
+          <PipelineProcessAccordion
+            pipelineResult={finishedAnswer.pipeline_result}
+            sourceCount={finishedAnswer.sources?.length ?? 0}
+          />
           <AnswerActionButtons
             icons={ANSWER_ICONS}
             messageId={finishedAnswer.id}

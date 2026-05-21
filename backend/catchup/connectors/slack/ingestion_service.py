@@ -656,8 +656,12 @@ class SlackIngestionService:
         audit_context: SyncAuditContext | None = None,
     ) -> TargetSyncResult:
         normalized_event_kind = event_kind.strip().lower()
+        normalized_record_id = record_id.strip()
+        if not normalized_record_id:
+            raise ValueError("slack incremental record_id is empty")
+        doc_id = f"slack:message:{self.team_id}:{channel_id}:{normalized_record_id}"
+
         if normalized_event_kind == "deleted":
-            doc_id = f"slack:message:{self.team_id}:{channel_id}:{record_id}"
             await self.repository.delete_documents([doc_id])
             return TargetSyncResult(synced_count=1)
 
@@ -665,41 +669,38 @@ class SlackIngestionService:
             self._load_channel_context_db,
             channel_id,
         )
-        normalized_record_id = record_id.strip()
-        if normalized_record_id:
-            try:
-                exact_refresh_result = await self._sync_single_message_document(
-                    channel_id=channel_id,
-                    channel_name=channel_name,
-                    message_id=normalized_record_id,
-                    audit_context=audit_context,
+        try:
+            exact_refresh_result = await self._sync_single_message_document(
+                channel_id=channel_id,
+                channel_name=channel_name,
+                message_id=normalized_record_id,
+                audit_context=audit_context,
+            )
+        except Exception as exc:
+            error_code = self._extract_slack_error_code(exc)
+            if error_code in self._SKIPPABLE_ERRORS:
+                logger.info(
+                    "[SLACK][INGESTION] Removed exact message after skippable refresh error: team_id=%s, channel=%s(%s), ts=%s, reason=%s",
+                    self.team_id,
+                    channel_name,
+                    channel_id,
+                    normalized_record_id,
+                    error_code,
                 )
-            except Exception as exc:
-                error_code = self._extract_slack_error_code(exc)
-                if error_code in self._SKIPPABLE_ERRORS:
-                    logger.info(
-                        "[SLACK][INGESTION] Skipped exact refresh: team_id=%s, channel=%s(%s), ts=%s, reason=%s",
-                        self.team_id,
-                        channel_name,
-                        channel_id,
-                        normalized_record_id,
-                        error_code,
-                    )
-                    return TargetSyncResult(skipped=True)
-                raise
-            if exact_refresh_result is not None:
-                return exact_refresh_result
-
-        sync_ctx = SlackSyncContext(
-            channel_id=channel_id,
-            channel_name=channel_name,
-            sync_from_ts=sync_from,
-            skip_delete=False,
-            audit_context=audit_context,
+                await self.repository.delete_documents([doc_id])
+                return TargetSyncResult(synced_count=1)
+            raise
+        if exact_refresh_result is not None:
+            return exact_refresh_result
+        logger.info(
+            "[SLACK][INGESTION] Removed exact message after refresh miss: team_id=%s, channel=%s(%s), ts=%s",
+            self.team_id,
+            channel_name,
+            channel_id,
+            normalized_record_id,
         )
-        return await self._sync_channel_messages(
-            sync_ctx=sync_ctx,
-        )
+        await self.repository.delete_documents([doc_id])
+        return TargetSyncResult(synced_count=1)
 
     async def _fetch_channel_pages(
         self,

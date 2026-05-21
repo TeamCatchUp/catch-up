@@ -15,9 +15,9 @@ import useRagFilters from '@/features/chat/hooks/filter/useRagFilters';
 import useRagScroll from '@/features/chat/hooks/scroll/useRagScroll';
 // Hooks
 import useRagChat from '@/features/chat/hooks/useRagChat';
-import type { SourceType } from '@/shared/hooks/query/useSearchFilters';
+import type { DocsSource } from '@/shared/types/source';
 
-const ALLOWED_SOURCE_TYPES = new Set<string>(['jira', 'github', 'slack', 'confluence']);
+const ALLOWED_SOURCE_TYPES = new Set<string>(['jira', 'github', 'slack', 'confluence', 'channel_talk']);
 
 export default function RagAnswerPage() {
   const params = useParams();
@@ -31,7 +31,7 @@ export default function RagAnswerPage() {
   const initialSources = searchParams
     .get('sources')
     ?.split(',')
-    .filter((s): s is SourceType => ALLOWED_SOURCE_TYPES.has(s));
+    .filter((s): s is DocsSource => ALLOWED_SOURCE_TYPES.has(s));
 
   // Core hooks — useRagFilters를 먼저 호출하여 selectedSources를 useRagChat에 전달
   const filters = useRagFilters({ initialSources });

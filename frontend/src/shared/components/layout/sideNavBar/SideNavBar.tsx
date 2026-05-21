@@ -33,9 +33,9 @@ export default function SideNavBar() {
     <>
       <nav
         className={cn(
-          'border-edge-neutral bg-background-normal-normal flex h-screen flex-col border-r',
+          'border-edge-neutral bg-background-normal-normal w-snb flex h-screen flex-col border-r',
           'transition-[width,padding] duration-300 ease-out will-change-[width,padding]',
-          isOpen ? 'w-60.25 px-2 pb-2.5' : 'w-13 items-center gap-4 px-2 pt-2.5 pb-4',
+          isOpen ? 'px-2 pb-2.5' : 'items-center gap-4 px-2 pt-2.5 pb-4',
         )}
       >
         {/* 로고/열림 버튼 */}

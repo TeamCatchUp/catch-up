@@ -1,12 +1,22 @@
 from __future__ import annotations
 
+from datetime import datetime
+from datetime import timezone
+
 from catchup.audit.actions import IncrementalSyncAction
 from catchup.audit.metadata import IncrementalRecordAuditMetadata
 from catchup.audit.utils import audit_log
+from catchup.connector_core.adapters.slack import (
+    SlackMessageIncrementalSyncExecutionRequest,
+)
+from catchup.connector_core.adapters.slack import SlackMessageSyncAdapter
+from catchup.connector_core.application.sync_ingestion import run_sync_ingestion
+from catchup.connector_core.ports.sync_ingestion import SyncWindow
 from catchup.connectors.slack.factory import create_slack_ingestion_service
 from catchup.sync.audit import SyncAuditContext
 from catchup.sync.common.exceptions import SyncInternalException
-from catchup.sync.common.schemas import IncrementalSyncContext, TargetSyncResult
+from catchup.sync.common.schemas import IncrementalSyncContext
+from catchup.sync.common.schemas import TargetSyncResult
 from catchup.worker.handlers.base_incremental_handler import BaseIncrementalHandler
 
 
@@ -45,23 +55,35 @@ class SlackIncrementalHandler(BaseIncrementalHandler):
 
         since = self._resolve_since(context)
         sync_from = f"{since.timestamp():.6f}"
-        result = await service.incremental_sync(
-            channel_id=channel_id,
-            record_id=context.record_id or "",
-            event_kind=context.event_kind or "updated",
-            sync_from=sync_from,
-            audit_context=SyncAuditContext(
-                connector=context.connector,
-                scope_id=context.scope_id,
-                target_id=context.target_id,
-                job_id=context.job_id,
-                task_id=context.event_id,
+        result = await run_sync_ingestion(
+            port=SlackMessageSyncAdapter(service=service),
+            execution=SlackMessageIncrementalSyncExecutionRequest(
+                tenant_id=context.scope_id,
+                channel_id=channel_id,
+                record_id=context.record_id or "",
+                event_kind=context.event_kind or "updated",
+                sync_from=sync_from,
+                audit_context=SyncAuditContext(
+                    connector=context.connector,
+                    scope_id=context.scope_id,
+                    target_id=context.target_id,
+                    job_id=context.job_id,
+                    task_id=context.event_id,
+                ),
+            ),
+            sync_window=SyncWindow(
+                window_start=since,
+                window_end=datetime.now(timezone.utc),
             ),
         )
 
-        if result.error_count > 0:
+        if result.failed_count > 0:
             raise SyncInternalException(
                 "slack incremental sync failed",
                 metadata={"record_key": context.record_key},
             )
-        return result
+        return TargetSyncResult(
+            synced_count=result.persisted_count + result.deleted_count,
+            error_count=result.failed_count,
+            skipped=result.skipped,
+        )

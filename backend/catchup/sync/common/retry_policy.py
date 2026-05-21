@@ -6,6 +6,10 @@ import random
 from datetime import timedelta
 
 import httpx
+from botocore.exceptions import ConnectionClosedError
+from botocore.exceptions import ConnectTimeoutError
+from botocore.exceptions import EndpointConnectionError
+from botocore.exceptions import ReadTimeoutError
 from redis.exceptions import ConnectionError as RedisConnectionError
 from redis.exceptions import RedisError
 from redis.exceptions import TimeoutError as RedisTimeoutError
@@ -27,6 +31,10 @@ def is_retryable_sync_error(exc: Exception) -> bool:
             asyncio.TimeoutError,
             TimeoutError,
             httpx.TimeoutException,
+            ConnectTimeoutError,
+            ConnectionClosedError,
+            EndpointConnectionError,
+            ReadTimeoutError,
             RateLimitError,
             RedisConnectionError,
             RedisTimeoutError,

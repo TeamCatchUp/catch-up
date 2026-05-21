@@ -9,13 +9,11 @@ from catchup.db.models import SyncType
 from catchup.sync.common.protocols import IngestionHandlerProtocol
 from catchup.sync.common.schemas import IncrementalSyncContext
 from catchup.sync.common.schemas import TargetSyncResult
-from catchup.worker.handlers.incremental_success_scope import IncrementalSuccessScope
 
 
 class BaseIncrementalHandler(IngestionHandlerProtocol):
     connector: str
     sync_type = SyncType.INCREMENTAL
-    incremental_success_scope = IncrementalSuccessScope.PARENT_COHORT
 
     def _cache_key(self, scope_id: str) -> str:
         return f"{self.connector}:{scope_id}"
@@ -34,7 +32,7 @@ class BaseIncrementalHandler(IngestionHandlerProtocol):
         )
 
     def _resolve_since(self, context: IncrementalSyncContext) -> datetime:
-        raw = context.batch_sync_from or context.last_event_at
+        raw = context.last_event_at
         if raw:
             try:
                 return datetime.fromisoformat(raw.replace("Z", "+00:00")).astimezone(

@@ -144,6 +144,7 @@ class ChatService:
                 "accumulated_docs": [],
                 "agent_seen_doc_ids": [],
                 "confirmed_essential_doc_ids": [],
+                "agent_stop_reason": None,
                 # 비용 변수
                 "token_breakdown": {},
                 "rerank_count": 0,
@@ -322,7 +323,7 @@ class ChatService:
                     score_id=f"{trace_id}-rerank-stats",
                     name="rerank_stats",
                     trace_id=trace_id,
-                    value=rerank_metadata.get("alignment_score", 0.0),
+                    value=rerank_metadata.get("reranker_essential_recall", 0.0),
                     data_type="NUMERIC",
                     comment=str(rerank_metadata),
                 )
@@ -487,7 +488,7 @@ class ChatService:
         session_id: uuid.UUID,
     ) -> tuple[dict, dict, Any]:
         base_config = {"configurable": {"thread_id": session_id}}
-        invoke_config = {**base_config}
+        invoke_config = {**base_config, "recursion_limit": 50}
         trace_id = None
 
         if settings.ENABLE_LANGFUSE:

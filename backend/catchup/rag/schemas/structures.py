@@ -35,6 +35,13 @@ class VectorDbSearchQuery(BaseSearchQuery):
     )
 
 
+class ManualSearchQuery(VectorDbSearchQuery):
+    query: str = Field(
+        default="",
+        description="벡터 검색에 전달할 English 쿼리 (번역 + 동의어 확장). entity는 확장 없이 그대로.",
+    )
+
+
 class VectorDbSearchPlan(BaseModel):
     reasoning: str = Field(
         default="",
@@ -64,13 +71,28 @@ class MultiSearchRequest(BaseModel):
     )
 
 
+class SearchTurnMeta(BaseModel):
+    """단일 검색 턴의 경량 메타데이터.
+
+    doc_ids만 보존하고 full Document는 저장하지 않는다.
+    search_turn_history 리스트 내 순서(1-based)가 supervisor에게 노출되는 ID 역할을 한다.
+    turn_number는 디버깅/로깅용으로만 사용한다.
+    """
+
+    turn_number: int
+    rewritten_query: str
+    query_topic: str | None
+    doc_ids: list[str]
+    source_distribution: dict[str, int]
+
+
 # Supervisor가 결정하는 파이프라인 실행 계획
 class PipelinePlan(BaseModel):
     reasoning: str = Field(
         default="",
         description="이 파이프라인 타입을 선택한 이유 및 분석 결과"
     )
-    pipeline_type: Literal["direct_answer", "reuse", "simple", "standard", "complex", "clarify"] = Field(
+    pipeline_type: Literal["direct_answer", "simple", "standard", "complex", "clarify"] = Field(
         description="실행할 파이프라인 타입"
     )
     max_iterations: int = Field(
@@ -98,6 +120,16 @@ class PipelinePlan(BaseModel):
             "reuse / simple / standard / complex 파이프라인일 때만 채운다. "
             "질문의 핵심 주제를 3~5단어의 한국어 명사구로 작성. "
             "direct_answer 및 clarify일 때는 null."
+        ),
+    )
+    cache_turn_numbers: list[int] | None = Field(
+        default=None,
+        description=(
+            "standard / complex 파이프라인일 때 prepare_cache_node에 전달할 과거 검색 턴 인덱스 목록. "
+            "null이면 hot cache만 사용. "
+            "값을 지정하면 해당 1-based 인덱스의 검색 턴 문서를 lazy fetch하여 병합 (hot cache 자동 포함 안 됨). "
+            "hot cache를 포함하려면 search_history에서 마지막 턴의 인덱스도 포함. "
+            "예: [1] → Search 1만. [1, 3] where Search 3이 hot cache → Search 1 + hot cache."
         ),
     )
 

@@ -23,7 +23,6 @@ from catchup.rag.nodes import supervisor_node
 from catchup.rag.retryable import RETRYABLE_ERRORS
 from catchup.rag.state import AgentState
 from catchup.rag.subgraphs import build_complex_react_subgraph
-from catchup.rag.subgraphs import build_reuse_subgraph
 from catchup.rag.subgraphs import build_simple_subgraph
 from catchup.rag.subgraphs import build_standard_react_subgraph
 
@@ -72,7 +71,7 @@ def get_compiled_graph(
         max_attempts=rag_max_attempts,
     ).get_llm()
 
-    # LARGE, non-streaming — supervisor, complex_agent, standard_agent (structured output / tool calling)
+    # LARGE, non-streaming — supervisor (structured output)
     llm_large = get_llm_service(
         LlmProvider.AWS_BEDROCK,
         ModelCapacity.LARGE,
@@ -90,16 +89,31 @@ def get_compiled_graph(
         max_attempts=rag_max_attempts,
     ).get_llm()
 
-    # LARGE, streaming, extended thinking — standard_agent, complex_planner, complex_agent.
-    # tool-calling/structured-output 응답이라 response 부분은 짧게 캡(1024)해 총 wall-clock을 제한한다.
+    # SMALL, streaming, extended thinking — complex_agent 전용 (plan 수립 후 단계별 검색 결정).
+    # structured_output(with_structured_output)은 thinking과 충돌하므로 planner에는 사용 불가.
     llm_thinking = get_llm_service(
+        LlmProvider.AWS_BEDROCK,
+        ModelCapacity.SMALL,
+        streaming=True,
+        isolated=True,
+        extended_thinking=True,
+        thinking_budget_tokens=1024,
+        max_response_tokens=512,
+        max_attempts=rag_max_attempts,
+    ).get_llm()
+
+    # LARGE, streaming, extended thinking — generate_final_answer (standard/complex).
+    # 최종 답변 생성이 thinking의 실질적 이득이 가장 큰 지점.
+    # max_response_tokens 미지정 시 service.py 기본값이 2048로 적용되어 답변이 중간에 끊기므로
+    # 명시적으로 8192로 설정한다.
+    llm_large_stream_thinking = get_llm_service(
         LlmProvider.AWS_BEDROCK,
         ModelCapacity.LARGE,
         streaming=True,
         isolated=True,
         extended_thinking=True,
-        thinking_budget_tokens=2048,
-        max_response_tokens=1024,
+        thinking_budget_tokens=1024,
+        max_response_tokens=8192,
         max_attempts=rag_max_attempts,
     ).get_llm()
 
@@ -112,12 +126,6 @@ def get_compiled_graph(
     rerank_service = get_rerank_service(RerankerProvider.AWS_BEDROCK)
 
     # Subgraphs
-    reuse_subgraph = build_reuse_subgraph(
-        llm_small=llm_small,
-        llm_large_stream=llm_large_stream,
-        rerank_service=rerank_service,
-    )
-
     simple_subgraph = build_simple_subgraph(
         llm_small=llm_small,
         llm_large_stream=llm_large_stream,
@@ -128,15 +136,14 @@ def get_compiled_graph(
     standard_subgraph = build_standard_react_subgraph(
         llm_small=llm_small,
         llm_large_stream=llm_large_stream,
-        llm_thinking=llm_thinking,
+        llm_large_stream_thinking=llm_large_stream_thinking,
         vector_db_service=vector_db_service,
         rerank_service=rerank_service,
     )
 
     complex_subgraph = build_complex_react_subgraph(
         llm_small=llm_small,
-        llm_large_stream=llm_large_stream,
-        llm_thinking=llm_thinking,
+        llm_large_stream_thinking=llm_large_stream_thinking,
         vector_db_service=vector_db_service,
         rerank_service=rerank_service,
     )
@@ -160,7 +167,6 @@ def get_compiled_graph(
         clarify_node,
         metadata={"tags": ["stream_target"]},
     )
-    workflow.add_node("reuse", reuse_subgraph)
     workflow.add_node("simple", simple_subgraph)
     workflow.add_node("standard", standard_subgraph)
     workflow.add_node("complex", complex_subgraph)
@@ -172,7 +178,6 @@ def get_compiled_graph(
         {
             "clarify": "clarify",
             "direct_answer": "direct_answer",
-            "reuse": "reuse",
             "simple": "simple",
             "standard": "standard",
             "complex": "complex",
@@ -180,7 +185,6 @@ def get_compiled_graph(
     )
     workflow.add_edge("clarify", END)
     workflow.add_edge("direct_answer", END)
-    workflow.add_edge("reuse", END)
     workflow.add_edge("simple", END)
     workflow.add_edge("standard", END)
     workflow.add_edge("complex", END)

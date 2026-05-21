@@ -6,7 +6,6 @@ from langchain_core.messages import HumanMessage
 from catchup.costs.utils import token_usage
 from catchup.prompts.loader import prompt_loader
 from catchup.rag.nodes.utils import ainvoke_llm_with_token_usage
-from catchup.rag.nodes.utils import build_docs_summary
 from catchup.rag.nodes.utils import build_system_message
 from catchup.rag.nodes.utils import get_conversation_history
 from catchup.rag.nodes.utils import log_node
@@ -18,14 +17,12 @@ from catchup.rag.state import AgentState
 
 logger = structlog.get_logger()
 
-_MAX_DOCS_SUMMARY = 15
-_PIPELINE_ORDER = ["clarify", "direct_answer", "reuse", "simple", "standard", "complex"]
+_PIPELINE_ORDER = ["clarify", "direct_answer", "simple", "standard", "complex"]
 _DEFAULT_MAX_ITERATIONS: dict[str, int] = {
     "direct_answer": 0,
-    "reuse": 0,
     "simple": 0,
-    "standard": 3,
-    "complex": 7,
+    "standard": 4,
+    "complex": 8,
 }
 
 
@@ -44,20 +41,25 @@ async def supervisor_node(
     # engine.py에서 초기화하지 않으므로 체크포인터를 통해 턴 간 누적된다.
     current_turn = state.get("turn_number", 0) + 1
 
-    # doc_cache는 세션 내 누적 검색 결과 전체. retrieved_docs(최근 1턴)보다 넓은 맥락을 제공한다.
-    doc_cache = state.get("doc_cache", [])
-    retrieved_docs_summary = build_docs_summary(doc_cache, max_docs=_MAX_DOCS_SUMMARY)
-
+    # search_turn_history: 모든 검색 턴의 경량 메타데이터.
+    search_turn_history = state.get("search_turn_history", [])
     slack_thread_context = state.get("slack_thread_context")
 
-    system_prompt = prompt_loader.get_prompt(
-        "rag/supervisor",
-        retrieved_docs_summary=retrieved_docs_summary,
+    static_prompt = prompt_loader.get_prompt(
+        "rag/supervisor_static",
         sources=list(SOURCE_METADATA.values()),
+        slack_thread_context=slack_thread_context,
+    )
+    dynamic_prompt = prompt_loader.get_prompt(
+        "rag/supervisor_dynamic",
+        search_turn_history=search_turn_history,
         slack_thread_context=slack_thread_context,
         **global_context,
     )
-    system_message = build_system_message(system_prompt)
+    system_message = build_system_message(
+        static_prompt,
+        dynamic_prompts=[dynamic_prompt],
+    )
 
     # [SystemMessage] + 대화 이력(메시지 객체) + [HumanMessage(현재 질문)]
     history = get_conversation_history(messages)
@@ -116,8 +118,8 @@ async def supervisor_node(
             inferred_tool_filters=[f.value for f in pipeline_plan.inferred_tool_filters]
             if pipeline_plan.inferred_tool_filters
             else None,
-            doc_cache_size=len(doc_cache),
-            history_len=len(history),
+            search_history_len=len(search_turn_history),
+            conversation_history_len=len(history),
         )
 
         # max_pipeline_type 상한 적용 (engine.py에서 mode → max_pipeline_type 변환)

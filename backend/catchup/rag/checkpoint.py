@@ -19,9 +19,12 @@ _ALLOWED_MSGPACK_MODULES: list[tuple[str, str]] = [
     ("catchup.rag.schemas.sources", "ChannelTalkSource"),
     ("catchup.rag.schemas.context", "GlobalContext"),
     ("catchup.rag.schemas.structures", "VectorDbSearchQuery"),
+    ("catchup.rag.schemas.structures", "ManualSearchQuery"),
+    ("catchup.search.planner.state", "CachedSearch"),
     ("catchup.rag.schemas.structures", "PipelinePlan"),
     ("catchup.rag.schemas.structures", "SearchStep"),
     ("catchup.rag.schemas.structures", "SearchPlan"),
+    ("catchup.rag.schemas.structures", "SearchTurnMeta"),
     ("catchup.rag.schemas.prompt_settings", "PromptSettings"),
     ("catchup.db.models", "SourceType"),
 ]

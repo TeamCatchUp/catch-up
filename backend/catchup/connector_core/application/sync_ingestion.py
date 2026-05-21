@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from catchup.connector_core.application.sync_ingestion_logging import sync_ingestion_system_log
+from catchup.connector_core.application.sync_ingestion_logging import (
+    sync_ingestion_system_log,
+)
 from catchup.connector_core.ports.sync_ingestion import ExecutionRequestT
 from catchup.connector_core.ports.sync_ingestion import ExecutionResultT
 from catchup.connector_core.ports.sync_ingestion import FetchResultT

@@ -1,5 +1,5 @@
 import { queryOptions } from '@tanstack/react-query';
-import { endOfDay, format } from 'date-fns';
+import { addDays, format, startOfDay } from 'date-fns';
 
 import type { AdminUserListResponse } from '@/features/admin/members/types/adminMemberModel';
 import api from '@/shared/api/client';
@@ -28,7 +28,8 @@ function toApiParams(startDate?: Date, endDate?: Date): ChatTokenUsageParams | u
   if (!startDate) return undefined;
   return {
     start_date: startDate.toISOString(),
-    end_date: endDate ? endOfDay(endDate).toISOString() : undefined,
+    // end 다음날 자정을 상한으로 — 백엔드 created_at < end_date 배타 비교에 정합.
+    end_date: endDate ? startOfDay(addDays(endDate, 1)).toISOString() : undefined,
   };
 }
 

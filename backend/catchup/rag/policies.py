@@ -40,10 +40,10 @@ def get_node_completed_payload(node: str, output_data: dict) -> dict | None:
 
 
 CITATION_POLICY_MESSAGE = (
-    "[CITATION REMINDER]"
-    "ALERT: You must strictly comply with the citation rules "
-    "provided in the system prompt above. "
-    "Do not omit the <citations> block and do not violate placement rules."
+    "\n<citation_reminder>"
+    "Strictly comply with the citation rules in the system prompt. "
+    "Do not omit the citations block. Do not violate placement rules."
+    "</citation_reminder>"
 )
 
 FALLBACK_ANSWER = (

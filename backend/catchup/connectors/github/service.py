@@ -23,33 +23,41 @@ import logging
 import traceback
 from collections.abc import Awaitable
 from collections.abc import Callable
-from dataclasses import dataclass, field
-from datetime import datetime, timezone, timedelta
-from typing import Any, Literal
+from dataclasses import dataclass
+from dataclasses import field
+from datetime import datetime
+from datetime import timedelta
+from datetime import timezone
+from typing import Any
+from typing import Literal
 
 from fastapi.concurrency import run_in_threadpool
 from langchain_core.documents import Document
 from sqlalchemy.orm import Session
 
-from catchup.connectors.github.client import (
-    GitHubApiClient,
-    GitHubApiError,
-    GitHubRateLimitError,
-)
-from catchup.connectors.github.schemas import (
-    GithubUser,
-    GithubIssue,
-    GithubPullRequest,
-)
-from catchup.connectors.github.transformers import GithubTransformer
+from catchup.components.summarizer import SummarizeRequest
+from catchup.components.summarizer import SummarizerService
+from catchup.components.summarizer import get_summarizer_service
 from catchup.components.vector_db.pgvector import PGVectorRepository
-from catchup.components.summarizer import SummarizerService, SummarizeRequest, get_summarizer_service
 from catchup.configs.config import settings
+from catchup.connectors.github.client import GitHubApiClient
+from catchup.connectors.github.client import GitHubApiError
+from catchup.connectors.github.client import GitHubRateLimitError
+from catchup.connectors.github.schemas import GithubIssue
+from catchup.connectors.github.schemas import GithubPullRequest
+from catchup.connectors.github.schemas import GithubUser
+from catchup.connectors.github.transformers import GithubTransformer
 from catchup.db.engine import SessionLocal
 from catchup.db.github import domain_repository as github_entities
-from catchup.db.github.domain_repository import RepositoryUpsertData, UserUpsertData
-from catchup.db.models import GithubEntityType, GithubInstallationType, SourceType
-from catchup.db.user_source_mapping import find_premapped_name_by_external_user_identifier, find_premapped_names_by_source_type
+from catchup.db.github.domain_repository import RepositoryUpsertData
+from catchup.db.github.domain_repository import UserUpsertData
+from catchup.db.models import GithubEntityType
+from catchup.db.models import GithubInstallationType
+from catchup.db.models import SourceType
+from catchup.db.user_source_mapping import (
+    find_premapped_name_by_external_user_identifier,
+)
+from catchup.db.user_source_mapping import find_premapped_names_by_source_type
 from catchup.sync.audit import SyncAuditContext
 from catchup.sync.common.schemas import TargetSyncResult
 
@@ -322,17 +330,17 @@ class GithubIngestionService:
             )
 
         if normalized_record_type == "issue":
-            result = await self._sync_issues(
-                repo_ref.owner,
-                repo_ref.repo,
-                since=since,
+            result = await self._sync_incremental_requested_record(
+                repo_ref=repo_ref,
+                record_type="issue",
+                record_id=record_id,
                 audit_context=audit_context,
             )
         elif normalized_record_type == "pull_request":
-            result = await self._sync_pull_requests(
-                repo_ref.owner,
-                repo_ref.repo,
-                since=since,
+            result = await self._sync_incremental_requested_record(
+                repo_ref=repo_ref,
+                record_type="pull_request",
+                record_id=record_id,
                 audit_context=audit_context,
             )
         else:
@@ -343,8 +351,6 @@ class GithubIngestionService:
             "errors": int(result.get("errors", 0)),
             "skipped": False,
         }
-
-
 
     async def sync_installation_metadata(
         self,
@@ -881,6 +887,77 @@ class GithubIngestionService:
             "errors": 0,
             "skipped": False,
         }
+
+    async def _sync_incremental_requested_record(
+        self,
+        *,
+        repo_ref: GithubRepoRef,
+        record_type: Literal["issue", "pull_request"],
+        record_id: str,
+        audit_context: SyncAuditContext | None,
+    ) -> dict[str, int]:
+        if record_type == "issue":
+            nodes, failed_ids = await self._fetch_issue_nodes(
+                owner=repo_ref.owner,
+                repo=repo_ref.repo,
+                issue_ids=[record_id],
+            )
+            documents, build_failed_ids = await asyncio.to_thread(
+                self._build_issue_documents_sync,
+                repo_ref.owner,
+                repo_ref.repo,
+                nodes,
+            )
+        else:
+            nodes, failed_ids = await self._fetch_pull_request_nodes(
+                owner=repo_ref.owner,
+                repo=repo_ref.repo,
+                pull_request_ids=[record_id],
+            )
+            documents, build_failed_ids = await asyncio.to_thread(
+                self._build_pull_request_documents_sync,
+                repo_ref.owner,
+                repo_ref.repo,
+                nodes,
+            )
+
+        failed_ids.extend(build_failed_ids)
+        if not documents:
+            return {"synced": 0, "errors": max(1, len(set(failed_ids)))}
+
+        try:
+            upsert_documents = documents
+            if self.summarizer:
+                upsert_documents = await self._summarize_documents(
+                    documents,
+                    repo_full_name=repo_ref.full_name,
+                    entity_type=record_type,
+                    audit_context=audit_context,
+                )
+
+            await self.repository.upsert_documents(
+                upsert_documents,
+                [doc.id for doc in upsert_documents],
+                audit_context=audit_context,
+                context=(
+                    f"entity_type={record_type},"
+                    f"repo={repo_ref.full_name},"
+                    f"mode=incremental_exact,"
+                    f"doc_count={len(upsert_documents)}"
+                ),
+            )
+            return {"synced": len(upsert_documents), "errors": len(set(failed_ids))}
+        except Exception as exc:
+            logger.error(
+                "[GITHUB][INCREMENTAL] Failed to upsert %s doc: installation_id=%s, repo=%s, record_id=%s, error=%s",
+                record_type,
+                self.installation_id,
+                repo_ref.full_name,
+                record_id,
+                exc,
+                exc_info=True,
+            )
+            return {"synced": 0, "errors": max(1, len(documents))}
 
     # ============================================================
     # Metadata Sync Internals

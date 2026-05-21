@@ -19,7 +19,7 @@ async_engine = create_async_engine(
     pool_recycle=settings.DB_POOL_RECYCLE_SECONDS,
     pool_pre_ping=settings.DB_POOL_PRE_PING,
     connect_args={
-        "options": "-c pg_bigm.similarity_limit=0.02"
+        "options": "-c pg_bigm.similarity_limit=0.17"
     },
 )
 

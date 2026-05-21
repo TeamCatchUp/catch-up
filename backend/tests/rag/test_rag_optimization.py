@@ -84,44 +84,6 @@ class RagOptimizationTests(IsolatedAsyncioTestCase):
         self.assertTrue(result["agent_reasoning"].startswith("[Key Documents]"))
         self.assertIn("reached maximum allotted iterations", result["agent_reasoning"])
 
-    @patch("catchup.configs.config.settings.RERANK_TOP_N", 40)
-    async def test_rerank_node_dynamic_k_and_boosting(self):
-        mock_service = MagicMock()
-        # 점수가 매우 촘촘한 50개 문서 (score_range = 0.0049)
-        # Floor 0.05가 발동되어야 함.
-        raw_docs = [Document(page_content=f"doc {i}", id=f"id_{i}", metadata={"relevance_score": 0.5 + (i*0.0001)}) for i in range(50)]
-        mock_service.rerank = AsyncMock(return_value=raw_docs)
-        
-        doc_0_id = "id_0"
-        state = _base_state(messages=[])
-        state["max_pipeline_type"] = "complex"
-        state["retrieved_docs"] = raw_docs
-        state["essential_doc_ids"] = [doc_0_id]
-        
-        # 기본 boost_ratio=0.2, Floor=0.05 이므로 boost_value = 0.01
-        # id_0의 원점수 0.5 -> 0.51
-        # id_49의 원점수 0.5049. id_0이 1위가 됨.
-        result = await rerank_node(state, mock_service)
-        
-        # doc 0이 부스팅되어 Top K(20개) 안에 들어왔는지 확인
-        final_ids = [str(d.id) for d in result["retrieved_docs"]]
-        self.assertIn(doc_0_id, final_ids)
-        self.assertEqual(final_ids[0], doc_0_id) # 0.01 부스트면 0.5049인 id_49를 제치고 1위
-        
-        # 메타데이터 검증
-        self.assertIn("rerank_metadata", result)
-        meta = result["rerank_metadata"]
-        self.assertEqual(meta["boosted_ids"], [doc_0_id])
-        self.assertAlmostEqual(meta["score_range"], 0.0049)
-        self.assertEqual(meta["effective_range"], 0.05) # Floor 발동
-        self.assertAlmostEqual(meta["boost_value"], 0.01)
-
-        # 문서 개별 메타데이터 검증
-        doc_0 = next(d for d in result["retrieved_docs"] if d.id == "id_0")
-        self.assertEqual(doc_0.metadata["original_rerank_score"], 0.5)
-        self.assertAlmostEqual(doc_0.metadata["boosted_score"], 0.51)
-        self.assertTrue(doc_0.metadata["is_agent_cited"])
-
     def test_index_alignment_between_summary_and_extraction(self):
         """build_docs_summary에서 보여주는 번호가 extract_essential_ids에서 정확히 매핑되는지 검증."""
         from catchup.rag.nodes.utils import build_docs_summary

@@ -1,25 +1,56 @@
 <keyword_extraction_rules>
-`keyword_tokens` are used for **substring/bigram matching** against document titles and content — all tokens are applied with AND logic, meaning every token must appear in a document for it to be returned. Adding more tokens narrows results further; generic tokens will destroy recall.
+  <purpose>
+    keyword_tokens are used for exact substring matching against document titles and content.
+    All tokens apply AND logic — every token must appear in a document for it to be returned.
+    More tokens narrow results; generic tokens destroy recall.
+  </purpose>
 
-**Rule 1 — Only use terms from known sources.**
-A keyword must come from one of these two sources only:
-- The **user's original question** (specific terms the user actually wrote)
-- **Previously retrieved documents** (exact identifiers, names, or terms seen in ToolMessage results)
+  <rules>
+    <rule id="0" name="preserve_ambiguous_terms">
+      Acronyms, abbreviations, or terms with multiple plausible meanings must never be
+      translated, expanded, or resolved. Add them in their original form only if they meet
+      the Tier 1-2 specificity threshold. Generic words are still excluded even if ambiguous.
+      <good>"UT" → keyword_tokens: ["UT"]</good>
+      <bad>"UT" → keyword_tokens: ["unit test"] (abbreviation was resolved)</bad>
+      <good>"결과" → excluded (generic word, Rule 2 applies regardless)</good>
+    </rule>
 
-If you cannot point to a specific term from one of these sources, leave `keyword_tokens` empty. Do NOT invent keywords to describe your search intent.
+    <rule id="1" name="known_sources_only">
+      A keyword must come from exactly one of these two sources, verbatim:
+      - The user's original question (specific terms the user actually wrote)
+      - Previously retrieved documents (exact identifiers or terms seen in ToolMessage results)
 
-**Rule 2 — No generic words.**
-Even if a term comes from a known source, skip it if it is too common to be distinctive:
-- BAD: `token`, `API`, `schema`, `performance`, `error`, `migration`, `data`, `system`
-- GOOD: `ChatTokenUsage`, `token_breakdown`, `jsonb_object_agg`, `CATDEV-310`, `cutover`, `집계 버그`
+      Do NOT invent keywords to describe search intent.
+      Do NOT add typo-corrected or inferred forms — only the exact string from the source.
+      Corrected or expanded terms belong in query only, where vector search absorbs the uncertainty.
+    </rule>
 
-**Rule 3 — No forced translation.**
-Use the exact form as it appears in the source. Never translate between Korean and English.
+    <rule id="2" name="no_generic_words">
+      Skip a term if it is too common to be distinctive, even if it comes from a known source.
+      <bad>token, API, schema, performance, error, migration, data, system</bad>
+      <good>ChatTokenUsage, token_breakdown, jsonb_object_agg, CATDEV-310, cutover, 집계 버그</good>
+    </rule>
 
-**Rule 4 — Prioritize by specificity (select 0–3). When in doubt, leave empty.**
-- **Tier 1:** Unique identifiers — ticket IDs, class/function/column names (e.g., `CATDEV-123`, `ChatTokenUsage`, `token_breakdown`)
-- **Tier 2:** Specific proper nouns — library, module, or exact feature names (e.g., `pgvector`, `Langfuse`, `HNSW`)
-- **Tier 3:** Distinctive domain terms in their original language (e.g., `cutover`, `reducer`, `집계 버그`)
+    <rule id="3" name="no_forced_translation">
+      Use the exact form as it appears in the source. Never translate between Korean and English.
+    </rule>
 
-**Default to empty.** Only populate `keyword_tokens` when you have at least one Tier 1 or Tier 2 term. A search with no keywords is better than a search with generic keywords.
+    <rule id="4" name="specificity_tiers">
+      Select 0-3 tokens, prioritized by tier. When in doubt, leave empty.
+      <tier level="1" label="unique_identifiers">
+        Ticket IDs, class/function/column names
+        (e.g., CATDEV-123, ChatTokenUsage, token_breakdown)
+      </tier>
+      <tier level="2" label="specific_proper_nouns">
+        Library, module, or exact feature names
+        (e.g., pgvector, Langfuse, HNSW)
+      </tier>
+      <tier level="3" label="distinctive_domain_terms">
+        Distinctive domain terms in their original language
+        (e.g., cutover, reducer, 집계 버그)
+      </tier>
+      Default to empty. Only populate when you have at least one Tier 1 or Tier 2 term.
+      A search with no keywords is better than a search with generic keywords.
+    </rule>
+  </rules>
 </keyword_extraction_rules>

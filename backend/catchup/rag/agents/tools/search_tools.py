@@ -1,5 +1,7 @@
 import asyncio
+import json
 from datetime import datetime
+from typing import Annotated
 
 import structlog
 from langchain_core.callbacks import adispatch_custom_event
@@ -15,22 +17,20 @@ from catchup.rag.nodes.utils import log_node
 from catchup.rag.schemas.structures import MultiSearchRequest
 from catchup.rag.state import AgentState
 
-_PREVIEW_LIMIT = 10  # ToolMessage에서 한 번에 보여줄 신규 문서 수
-
 logger = structlog.get_logger()
+
+_PREVIEW_LIMIT = 10  # ToolMessage에서 한 번에 보여줄 신규 문서 수
 
 
 # ---- LLM에 바인딩할 tool 스키마 ----
 # 실제 실행은 search_tool_executor_node에서 처리한다.
-
-
 @tool
 def single_query_search(
-    query: str,
-    reason: str,
-    keyword_tokens: list[str] | None = None,
-    start_date: str | None = None,
-    end_date: str | None = None,
+    query: Annotated[str, "English-only search query text. Must contain ONLY the search string — no JSON syntax, no other fields."],
+    reason: Annotated[str, "Brief Korean sentence explaining why this search is being performed. Separate field — do NOT embed inside query."],
+    keyword_tokens: Annotated[list[str] | None, "Tier 1/2 identifier-level tokens for exact substring matching (ticket IDs, class names, proper nouns). Empty list if none."] = None,
+    start_date: Annotated[str | None, "UTC datetime lower bound (YYYY-MM-DDTHH:MM:SS). Omit if no date filter needed."] = None,
+    end_date: Annotated[str | None, "UTC datetime upper bound (YYYY-MM-DDTHH:MM:SS). Omit if no date filter needed."] = None,
 ) -> str:
     """
     벡터 DB에서 문서를 검색합니다.
@@ -41,8 +41,8 @@ def single_query_search(
 
 @tool
 def multi_query_search(
-    search_requests: list[MultiSearchRequest],
-    reason: str,
+    search_requests: Annotated[list[MultiSearchRequest], "List of independent search requests to run in parallel. Each must have 'query' (English) and optional 'keyword_tokens'."],
+    reason: Annotated[str, "Brief Korean sentence explaining why these searches are being performed. Separate top-level field — do NOT append inside search_requests."],
 ) -> str:
     """
     독립적인 여러 쿼리를 병렬로 실행하고 결과를 통합합니다.
@@ -51,7 +51,22 @@ def multi_query_search(
     raise NotImplementedError
 
 
-REACT_TOOLS = [single_query_search, multi_query_search]
+@tool
+def submit_result(
+    key_document_indices: list[int],
+    key_documents: list[str],
+    search_coverage: list[str],
+    reason_for_stopping: str,
+) -> str:
+    """
+    검색을 완료하고 결과를 제출합니다.
+    수집된 문서가 충분하거나 검색이 포화 상태일 때 반드시 이 도구를 호출하세요.
+    절대 자유 형식 텍스트로 답변을 작성하지 마세요 — 이 도구만 사용하세요.
+    """
+    raise NotImplementedError
+
+
+REACT_TOOLS = [single_query_search, multi_query_search, submit_result]
 
 
 # 헬퍼
@@ -97,21 +112,62 @@ async def _run_search(
     return docs, query
 
 
+def _parse_search_requests(raw: str | list) -> list[dict]:
+    """JSON 문자열로 직렬화된 search_requests를 복구한다."""
+    if not isinstance(raw, str):
+        return raw
+
+    try:
+        parsed = json.loads(raw)
+        logger.info("multi_query_search_requests_recovered", parsed_count=len(parsed))
+        return parsed
+    except (json.JSONDecodeError, ValueError):
+        pass
+
+    # XML 태그 혼입 등으로 배열 끝이 잘린 경우 부분 복구
+    array_end = raw.rfind("]")
+    if array_end != -1:
+        try:
+            parsed = json.loads(raw[: array_end + 1])
+            logger.info("multi_query_search_requests_recovered_partial", parsed_count=len(parsed))
+            return parsed
+        except (json.JSONDecodeError, ValueError):
+            pass
+
+    logger.warning(
+        "multi_query_search_requests_parse_failed",
+        raw_payload=raw,
+        raw_len=len(raw),
+    )
+    return []
+
+
+def _dedup_keyword_tokens(requests: list) -> list[dict]:
+    """multi_query_search의 keyword_tokens를 cross-query 중복 제거한다."""
+    used: set[str] = set()
+    deduped = []
+    for req in requests:
+        if not isinstance(req, dict):
+            logger.warning("multi_query_search_invalid_request", req=repr(req)[:100])
+            continue
+        tokens = req.get("keyword_tokens") or []
+        unique = [t for t in tokens if t not in used]
+        used.update(unique)
+        deduped.append({**req, "keyword_tokens": unique})
+    return deduped
+
+
 def _dedup_tool_calls(tool_calls: list) -> list[dict]:
     """multi_query_search의 keyword_tokens를 cross-query 중복 제거한 tool_calls 반환."""
     result = []
     for tc in tool_calls:
-        if tc["name"] == "multi_query_search":
-            used: set[str] = set()
-            deduped = []
-            for req in tc["args"].get("search_requests", []):
-                tokens = req.get("keyword_tokens") or []
-                unique = [t for t in tokens if t not in used]
-                used.update(unique)
-                deduped.append({**req, "keyword_tokens": unique})
-            result.append({**tc, "args": {**tc["args"], "search_requests": deduped}})
-        else:
+        if tc["name"] != "multi_query_search":
             result.append(tc)
+            continue
+        raw = tc["args"].get("search_requests", [])
+        requests = _parse_search_requests(raw)
+        deduped = _dedup_keyword_tokens(requests)
+        result.append({**tc, "args": {**tc["args"], "search_requests": deduped}})
     return result
 
 
@@ -167,22 +223,25 @@ async def search_tool_executor_node(
         },
     )
 
-    # 에이전트가 이전 iteration까지 ToolMessage로 실제로 본 문서 id (누적).
-    # 이번 호출 안에서 새로 보여주는 id도 같은 set에 즉시 추가해, 같은 응답의 다른 search가
-    # 동일 문서를 또 미리보기로 노출하지 않도록 한다.
+    # agent가 ToolMessage로 본 doc ID 집합. 
+    # 중복 노출 방지 + 전역 인덱스 계산에 사용.
     seen_ids: set[str] = set(state.get("agent_seen_doc_ids") or [])
+    shown_ids: list[str] = []  # 이번 호출에서 노출한 doc ID 목록 (순서 보존)
 
     tool_messages: list[ToolMessage] = []
     all_docs: list[Document] = []
-    newly_shown_ids: list[str] = []
 
     def _summarize_hits(query: str, hits: list[Document]) -> str:
         unseen = [d for d in hits if get_document_id(d) not in seen_ids]
         shown = unseen[:_PREVIEW_LIMIT]
+
+        # len(seen_ids)는 이 배치를 추가하기 전 전체 노출 수 → 1-based 시작 인덱스
+        start = len(seen_ids) + 1
+
         for d in shown:
             doc_id = get_document_id(d)
             seen_ids.add(doc_id)
-            newly_shown_ids.append(doc_id)
+            shown_ids.append(doc_id)
 
         header = (
             f"Search complete: query='{query}' | "
@@ -190,7 +249,7 @@ async def search_tool_executor_node(
         )
         if not shown:
             return f"{header}\n(no new documents in this search)"
-        return f"{header}\n{build_docs_summary(shown, max_docs=_PREVIEW_LIMIT)}"
+        return f"{header}\n{build_docs_summary(shown, max_docs=_PREVIEW_LIMIT, start_index=start)}"
 
     for tool_call in deduped_tool_calls:
         tool_name = tool_call["name"]
@@ -273,7 +332,7 @@ async def search_tool_executor_node(
         tool_count=len(last_message.tool_calls),
         new_docs=len(all_docs),
         total_accumulated=len(merged),
-        agent_newly_shown=len(newly_shown_ids),
+        agent_newly_shown=len(shown_ids),
         agent_seen_total=len(seen_ids),
     )
 
@@ -289,5 +348,5 @@ async def search_tool_executor_node(
     return {
         "messages": tool_messages,
         "accumulated_docs": merged,
-        "agent_seen_doc_ids": (state.get("agent_seen_doc_ids") or []) + newly_shown_ids,
+        "agent_seen_doc_ids": (state.get("agent_seen_doc_ids") or []) + shown_ids,
     }

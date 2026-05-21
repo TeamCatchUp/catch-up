@@ -52,9 +52,8 @@ export function groupChannelTalkSyncDispatch(
       for (const space of channel.document_spaces) {
         if (!selectedSpaceIds.has(space.space_id)) continue;
         targets.push({ target_type: 'space', target_id: space.space_id });
-        // 명시 설정 없으면 부모 channel period 상속
-        const explicit = spacePeriods[space.space_id];
-        if (explicit) periods.push(explicit);
+        // space 기간은 채널과 독립. 미설정 시 DEFAULT_PERIOD ('전체')
+        periods.push(spacePeriods[space.space_id] ?? DEFAULT_PERIOD);
       }
 
       return { channel, targets, periods };

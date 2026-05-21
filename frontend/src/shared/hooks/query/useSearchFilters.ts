@@ -8,17 +8,16 @@
 import { useCallback, useMemo, useState } from 'react';
 
 import type { FilterLabels, PopoverType } from '@/shared/types/query/search';
-
-export type SourceType = 'jira' | 'github' | 'slack' | 'confluence';
+import type { DocsSource } from '@/shared/types/source';
 
 export interface UseSearchFiltersReturn {
   // Popover
   openPopover: PopoverType;
   setOpenPopover: React.Dispatch<React.SetStateAction<PopoverType>>;
 
-  // 소스 토글
-  selectedSources: SourceType[];
-  toggleSource: (source: SourceType) => void;
+  // 소스 선택
+  selectedSources: DocsSource[];
+  setSelectedSources: (next: DocsSource[]) => void;
 
   // 필터 선택
   selectedPeople: string[];
@@ -36,12 +35,8 @@ export const useSearchFilters = (): UseSearchFiltersReturn => {
   // Popover
   const [openPopover, setOpenPopover] = useState<PopoverType>(null);
 
-  // 소스 토글
-  const [selectedSources, setSelectedSources] = useState<SourceType[]>([]);
-
-  const toggleSource = useCallback((source: SourceType) => {
-    setSelectedSources((prev) => (prev.includes(source) ? prev.filter((s) => s !== source) : [...prev, source]));
-  }, []);
+  // 소스 선택
+  const [selectedSources, setSelectedSources] = useState<DocsSource[]>([]);
 
   // 필터 상태
   const [selectedPeople, setSelectedPeople] = useState<string[]>([]);
@@ -82,6 +77,6 @@ export const useSearchFilters = (): UseSearchFiltersReturn => {
     toggleProject,
     labels,
     selectedSources,
-    toggleSource,
+    setSelectedSources,
   };
 };

@@ -1,3 +1,5 @@
+'use client';
+
 import { IntegrationsPageClient } from '@/features/admin/integrations';
 
 /** 관리자 - 협업툴 연동 페이지 */

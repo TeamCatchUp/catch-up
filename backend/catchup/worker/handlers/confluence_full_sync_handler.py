@@ -1,14 +1,25 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime
+from datetime import timedelta
+from datetime import timezone
 
 from catchup.audit.actions import FullSyncAction
 from catchup.audit.metadata import FullSyncEventAuditMetadata
 from catchup.audit.utils import audit_log
+from catchup.configs.config import settings
+from catchup.connector_core.adapters.confluence import (
+    ConfluenceSpaceFullSyncExecutionRequest,
+)
+from catchup.connector_core.adapters.confluence import ConfluenceSpaceSyncAdapter
+from catchup.connector_core.application.sync_ingestion import run_sync_ingestion
+from catchup.connector_core.ports.sync_ingestion import SyncWindow
 from catchup.connectors.confluence.factory import create_confluence_ingestion_service
 from catchup.sync.audit import SyncAuditContext
-from catchup.sync.common.schemas import FullSyncContext, TargetSyncResult
+from catchup.sync.common.schemas import FullSyncContext
+from catchup.sync.common.schemas import TargetSyncResult
 from catchup.worker.handlers.base_full_sync_handler import BaseFullSyncHandler
+
 
 class ConfluenceFullSyncHandler(BaseFullSyncHandler):
     connector = "confluence"
@@ -42,28 +53,66 @@ class ConfluenceFullSyncHandler(BaseFullSyncHandler):
         sync_from_dt = (
             datetime.fromtimestamp(float(context.sync_from_ts), tz=timezone.utc)
             if context.sync_from_ts is not None
-            else None
+            else datetime.now(timezone.utc) - timedelta(days=settings.DEFAULT_SYNC_DAYS)
         )
 
         space_key = context.target_id.strip()
         if not space_key:
             raise ValueError("confluence space_key(target_id) is empty")
 
-        result = await service.full_sync(
-            space_keys=[space_key],
-            sync_from_dt=sync_from_dt,
-            audit_context=SyncAuditContext(
-                connector=context.connector,
-                scope_id=context.scope_id,
-                target_id=context.target_id,
-                job_id=context.job_id,
-                task_id=context.event_id,
-            ),
-        )
+        record_type = str(
+            context.metadata.get("record_type")
+            or context.metadata.get("content_type")
+            or ""
+        ).strip()
+        if record_type not in {"page", "blogpost"}:
+            raise RuntimeError(
+                "[CONFLUENCE][FULL SYNC][WORKER] Missing content target metadata: "
+                f"scope_id={context.scope_id}, space_key={space_key}, "
+                f"record_type={record_type!r}"
+            )
 
-        if result.error_count > 0:
+        audit_context = SyncAuditContext(
+            connector=context.connector,
+            scope_id=context.scope_id,
+            target_id=context.target_id,
+            job_id=context.job_id,
+            task_id=context.event_id,
+        )
+        sync_window = SyncWindow(
+            window_start=sync_from_dt,
+            window_end=datetime.now(timezone.utc),
+        )
+        adapter = ConfluenceSpaceSyncAdapter(service=service)
+        synced_count = 0
+        error_count = 0
+        batch_index = 0
+        while True:
+            result = await run_sync_ingestion(
+                port=adapter,
+                execution=ConfluenceSpaceFullSyncExecutionRequest(
+                    tenant_id=context.scope_id,
+                    space_key=space_key,
+                    space_name=str(context.metadata.get("space_name") or context.target_name).split(" / ", 1)[0],
+                    record_type=record_type,
+                    batch_index=batch_index,
+                    sync_from_dt=sync_from_dt,
+                    audit_context=audit_context,
+                ),
+                sync_window=sync_window,
+            )
+            synced_count += result.persisted_count + result.deleted_count
+            error_count += result.failed_count
+            if result.is_last or result.transformed.stop_after_batch:
+                break
+            batch_index += 1
+
+        if error_count > 0:
             raise RuntimeError(
                 "[CONFLUENCE][FULL SYNC][WORKER] Target sync failed: "
-                f"scope_id={context.scope_id}, space_key={space_key}, errors={result.error_count}"
+                f"scope_id={context.scope_id}, space_key={space_key}, errors={error_count}"
             )
-        return result
+        return TargetSyncResult(
+            synced_count=synced_count,
+            error_count=error_count,
+        )

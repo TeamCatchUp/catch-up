@@ -12,9 +12,12 @@ from catchup.sync.common.exceptions import SyncRequestException
 from catchup.sync.common.protocols import FullSyncTargetResolverProtocol
 from catchup.sync.common.schemas import FullSyncDispatchRequest
 from catchup.sync.common.schemas import FullSyncResolvedTargets
+from catchup.sync.common.schemas import FullSyncTarget
 from catchup.sync.full.targets import resolve_full_sync_targets_from_rows
 
 logger = structlog.get_logger(__name__)
+
+_CONFLUENCE_FULL_SYNC_CONTENT_TYPES = ("page", "blogpost")
 
 
 class ConfluenceFullSyncTargetResolver(FullSyncTargetResolverProtocol):
@@ -31,7 +34,7 @@ class ConfluenceFullSyncTargetResolver(FullSyncTargetResolverProtocol):
         *,
         request: FullSyncDispatchRequest,
     ) -> FullSyncResolvedTargets:
-        # Confluence는 scope_id=cloud_id, target_type=space, target_id=space_key 계약이다.
+        # Confluence는 요청은 space 단위로 받되, worker event는 space+content type 단위로 쪼갠다.
         cloud_id = request.scope_id.strip()
         if not cloud_id:
             raise SyncRequestException("scope_id is required")
@@ -61,15 +64,32 @@ class ConfluenceFullSyncTargetResolver(FullSyncTargetResolverProtocol):
                 "target_type": "space",
             },
         )
+        content_targets = [
+            FullSyncTarget(
+                target_type=target.target_type,
+                target_id=target.target_id,
+                target_name=f"{target.target_name} / {content_type}",
+                metadata={
+                    **target.metadata,
+                    "space_key": target.target_id,
+                    "space_name": target.target_name,
+                    "content_type": content_type,
+                    "record_type": content_type,
+                },
+            )
+            for target in resolved_targets.targets
+            for content_type in _CONFLUENCE_FULL_SYNC_CONTENT_TYPES
+        ]
 
         logger.info(
             "confluence_full_sync_targets_resolved",
             cloud_id=cloud_id,
             requested_count=len(requested_space_keys),
-            resolved_count=len(resolved_targets.targets),
+            resolved_count=len(content_targets),
+            content_types=list(_CONFLUENCE_FULL_SYNC_CONTENT_TYPES),
         )
 
-        return resolved_targets
+        return FullSyncResolvedTargets(targets=content_targets)
 
 
 _confluence_full_sync_target_resolver = ConfluenceFullSyncTargetResolver()

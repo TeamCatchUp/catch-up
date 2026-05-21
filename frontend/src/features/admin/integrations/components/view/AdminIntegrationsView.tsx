@@ -1,7 +1,7 @@
-import { useCallback, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useState } from 'react';
 
 import UnderlineTabs, { type UnderlineTabItem } from '@/shared/components/ui/underline-tabs';
+import { useTabRouting } from '@/shared/hooks/useTabRouting';
 
 import { useAdminIntegrationViewModel } from '../../hooks/useAdminIntegrationViewModel';
 import type { AdminIntegrationTab, IntegrationService } from '../../types/integrationModel';
@@ -18,16 +18,8 @@ const TAB_ITEMS: UnderlineTabItem<AdminIntegrationTab>[] = [
 
 /** 관리자 협업툴 연동 화면 */
 export default function AdminIntegrationsView() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const tabParam = searchParams.get('tab');
-  const activeTab: AdminIntegrationTab = isValidTab(tabParam) ? tabParam : DEFAULT_TAB;
-
-  const setActiveTab = useCallback(
-    (tab: AdminIntegrationTab) => {
-      router.replace(`/admin/integrations?tab=${tab}`);
-    },
-    [router],
+  const [activeTab, setActiveTab] = useTabRouting<AdminIntegrationTab>((raw) =>
+    isValidTab(raw) ? raw : DEFAULT_TAB,
   );
 
   const [selectedService, setSelectedService] = useState<IntegrationService>('jira');

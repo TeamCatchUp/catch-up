@@ -12,6 +12,7 @@ from catchup.rag.schemas.prompt_settings import PromptSettings
 from catchup.rag.schemas.sources import BaseSource
 from catchup.rag.schemas.structures import PipelinePlan
 from catchup.rag.schemas.structures import SearchStep
+from catchup.rag.schemas.structures import SearchTurnMeta
 from catchup.rag.schemas.structures import VectorDbSearchQuery
 
 
@@ -19,13 +20,15 @@ class AgentState(TypedDict):
     messages: Annotated[list, add_messages]
 
     original_query: str
+    
     rewritten_query: str
 
     vector_search_queries: list[VectorDbSearchQuery]
 
     retrieved_docs: list[Document]
 
-    sources: list[BaseSource]  # 최종 출처 목록
+    # 최종 출처 목록
+    sources: list[BaseSource]
 
     global_context: GlobalContext
 
@@ -36,38 +39,55 @@ class AgentState(TypedDict):
     rerank_count: int
 
     max_pipeline_type: Literal["simple", "standard", "complex"]
-
-    # Agentic RAG
-    pipeline_plan: PipelinePlan | None  # Supervisor 출력. None이면 legacy 경로 fallback
+    
+    # Supervisor 출력. None이면 legacy 경로 fallback
+    pipeline_plan: PipelinePlan | None
 
     agent_iteration: int  # ReAct 루프 현재 반복 수
 
-    accumulated_docs: list[
-        Document
-    ]  # ReAct 반복 간 누적 문서 (search_tool_executor_node에서 직접 dedup)
+    # ReAct 반복 간 누적 문서 (search_tool_executor_node에서 직접 dedup)
+    accumulated_docs: list[Document]
 
-    agent_seen_doc_ids: list[str]  # 에이전트가 ToolMessage로 실제 본 문서 ID 목록.
-                                    # 매 검색 턴마다 신규 문서만 미리보기로 노출하기 위한 추적용.
-                                    # accumulated_docs와 달리 "에이전트 인지" 기준이라 분리 관리.
+    # 에이전트가 ToolMessage로 실제 본 문서 ID 목록.
+    # 매 검색 턴마다 신규 문서만 미리보기로 노출하기 위한 추적용.
+    # accumulated_docs와 달리 "에이전트 인지" 기준이라 분리 관리.
+    agent_seen_doc_ids: list[str]
 
     search_plan: list[SearchStep] | None  # complex planner 출력
 
-    turn_number: int  # supervisor가 매 턴 시작 시 +1. engine.py에서 초기화 안 함 (체크포인터 유지)
+    # supervisor가 매 턴 시작 시 +1.
+    # engine.py에서 초기화 안 함 (체크포인터 유지)
+    turn_number: int  
 
-    doc_cache: list[
-        Document
-    ]  # 세션 내 누적 문서 캐시. dedup + window cap 50. 검색 파이프라인이 rerank 후 병합
+    # 직전 검색 턴(simple/standard/complex)의 rerank 결과. hot cache.
+    # 검색 턴마다 overwrite. reuse 턴에서는 갱신 안 됨.
+    doc_cache: list[Document]
 
-    agent_reasoning: str | None  # 에이전트의 최종 추론 결과 (최종 답변 노드에 전달용)
+    # 모든 검색 턴(simple/standard/complex)의 경량 메타데이터 누적.
+    # doc_ids만 저장 (full Document 미보관). reuse 시 필요한 과거 턴 docs를 DB에서 lazy fetch.
+    # 리스트 내 순서(1-based)가 supervisor에게 노출되는 검색 턴 ID 역할.
+    search_turn_history: list[SearchTurnMeta]
 
-    essential_doc_ids: list[str]  # 에이전트가 핵심이라고 판단한 문서 ID 목록 (Boosting용)
+    # 에이전트의 최종 추론 결과 (최종 답변 노드에 전달용)
+    agent_reasoning: str | None
 
-    confirmed_essential_doc_ids: list[str]  # 에이전트 지목 ∩ rerank top_k 통과 문서 ID 목록.
-                                             # 에이전트와 reranker 양쪽이 인정한 신뢰도 높은 문서.
-                                             # 답변 노드가 인덱스로 변환해 LLM에게 우선순위 신호로 전달.
+    # 에이전트가 핵심이라고 판단한 문서 ID 목록 (Boosting용)
+    essential_doc_ids: list[str]
 
-    rerank_metadata: dict | None  # 리랭킹 결과 및 부스팅 이력 (Langfuse 로깅용)
+    # 에이전트 지목 ∩ rerank top_k 통과 문서 ID 목록.
+    # 에이전트와 reranker 양쪽이 인정한 신뢰도 높은 문서.
+    # 답변 노드가 인덱스로 변환해 LLM에게 우선순위 신호로 전달.
+    confirmed_essential_doc_ids: list[str]
 
-    query_topic: str | None  # supervisor가 추출한 질문 주제 (3~5단어 한국어 명사구)
+    # 리랭킹 결과 및 부스팅 이력 (Langfuse 로깅용)
+    rerank_metadata: dict | None
+    
+    # supervisor가 추출한 질문 주제 (3~5단어 한국어 명사구)
+    query_topic: str | None
+    
+    # "by_choice": 에이전트가 스스로 멈춤. "iteration_limit": max_iterations 도달로 강제 종료.
+    # simple/reuse 파이프라인처럼 agent가 없는 경우는 None.
+    agent_stop_reason: str | None
 
-    slack_thread_context: str | None  # Slack 스레드 맥락 (턴마다 갱신, 비Slack 요청은 None)
+    # Slack 스레드 맥락 (턴마다 갱신, 비Slack 요청은 None)
+    slack_thread_context: str | None

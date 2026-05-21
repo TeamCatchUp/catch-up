@@ -18,63 +18,119 @@ from langchain_core.messages import AIMessage
 from langchain_core.messages import BaseMessage
 from langchain_core.messages import HumanMessage
 from langchain_core.messages import SystemMessage
+from langchain_core.messages import ToolMessage
 from langgraph.graph.message import add_messages
 
 from catchup.costs.utils import extract_token_usages
 from catchup.prompts.loader import prompt_loader
 from catchup.rag.policies import FALLBACK_ANSWER
 from catchup.rag.schemas.sources import BaseSource
+from catchup.rag.schemas.structures import SearchTurnMeta
 
 # node 로깅 데코레이터
 logger = structlog.get_logger("catchup.graph")
 
 
 def drop_orphaned_tool_calls(messages: list[BaseMessage]) -> list[BaseMessage]:
-    """마지막 AIMessage에 tool_calls가 있지만 ToolMessage가 없는 경우 제거한다."""
+    """tool_calls가 있는 AIMessage 다음에 ToolMessage가 없는 orphan을 제거한다.
+
+    히스토리 어디서든 AIMessage(tool_calls) 바로 다음 메시지가 ToolMessage가 아니면
+    해당 AIMessage를 제거한다.
+    """
     if not messages:
         return messages
-    last = messages[-1]
-    if isinstance(last, AIMessage) and getattr(last, "tool_calls", None):
-        logger.warning(
-            "dropping_orphaned_tool_call_message", message_id=getattr(last, "id", None)
+
+    cleaned = []
+    for i, msg in enumerate(messages):
+        if isinstance(msg, AIMessage) and getattr(msg, "tool_calls", None):
+            next_msg = messages[i + 1] if i + 1 < len(messages) else None
+            if not isinstance(next_msg, ToolMessage):
+                logger.warning(
+                    "dropping_orphaned_tool_call_message",
+                    message_id=getattr(msg, "id", None),
+                    position=i,
+                )
+                continue
+        cleaned.append(msg)
+
+    return cleaned
+
+
+def build_search_history_summary(snapshots: list) -> str:
+    """search_turn_history를 supervisor용 경량 요약으로 변환한다.
+
+    리스트 내 순서(1-based)가 supervisor에게 노출되는 검색 턴 ID 역할을 한다.
+    마지막 항목은 hot cache(previously_retrieved_documents에 전문 표시)임을 명시한다.
+
+    체크포인터 복원 시 dict로 역직렬화될 수 있으므로 dict/Pydantic 모두 처리한다.
+    """
+    if not snapshots:
+        return ""
+
+    lines = []
+    last_idx = len(snapshots)
+
+    for i, raw in enumerate(snapshots, 1):
+        snap = SearchTurnMeta.model_validate(raw) if isinstance(raw, dict) else raw
+        src_str = ", ".join(
+            f"{src}:{cnt}" for src, cnt in snap.source_distribution.items()
         )
-        return list(messages[:-1])
-    return messages
+        total = sum(snap.source_distribution.values())
+        label = f"[Search {i}] (hot cache)" if i == last_idx else f"[Search {i}]"
+        lines.append(
+            f'{label}\n'
+            f'Query: "{snap.rewritten_query}"\n'
+            f'Sources: {src_str} ({total} docs)'
+        )
+
+    return "\n\n".join(lines)
 
 
-def build_docs_summary(docs: list[Document], max_docs: int = 10) -> str:
-    """Agent가 현재까지 수집된 지식의 '내용'을 파악할 수 있도록 요약 제공."""
+def build_docs_summary(docs: list[Document], max_docs: int = 20, start_index: int = 1) -> str:
+    """Agent가 현재까지 수집된 지식의 '내용'을 파악할 수 있도록 XML 형식 요약을 제공한다.
+
+    start_index: ToolMessage의 전역 인덱스 오프셋. 기본값 1(1-based).
+    search_tool_executor에서 호출 시 global index를 유지하기 위해 사용한다.
+    """
     if not docs:
-        return "No documents collected yet."
+        return ""
 
     source_counts = Counter(d.metadata.get("source", "unknown") for d in docs)
     source_str = ", ".join(f"{src}:{cnt}" for src, cnt in source_counts.items())
-    lines = [
-        f"Total {len(docs)}docs accumulated ({source_str})",
-        "Recently collected documents:",
-    ]
 
-    for i, doc in enumerate(docs[:max_docs], 1):
+    _TRUNCATE_SOURCES = {"confluence", "channel_talk"}
+    _TRUNCATE_LIMIT = 500
+
+    doc_elements: list[str] = []
+    for i, doc in enumerate(docs[:max_docs], start_index):
         source = doc.metadata.get("source", "unknown")
         temporal = resolve_temporal_context(doc.metadata)
 
-        # Confluence는 원문 청크이므로 길이를 제한, 나머지는 요약본이므로 전문 활용
-        if source == "confluence":
-            content = doc.page_content[:800].replace("\n", " ")
-            if len(doc.page_content) > 800:
-                content += "..."
+        if source in _TRUNCATE_SOURCES:
+            raw = doc.page_content[:_TRUNCATE_LIMIT].strip()
+            if len(doc.page_content) > _TRUNCATE_LIMIT:
+                raw += "..."
         else:
-            # Slack, Jira, GitHub 등은 page_content가 이미 영문 요약본
-            content = doc.page_content.replace("\n", " ")
+            raw = doc.page_content.strip()
+        content = re.sub(r"[ \t]+", " ", raw)
+        content = re.sub(r"\n{3,}", "\n\n", content)
+        if temporal:
+            content = f"{content}\n{temporal}"
 
-        lines.append(f"[{i}] ({source}) {temporal}\n    {content}")
+        parts = [
+            f'<document index="{i}">',
+            f"  <source>{source}</source>",
+            f"  <document_content>\n{content}\n  </document_content>",
+            "</document>",
+        ]
+        doc_elements.append("\n".join(parts))
 
+    trailing = ""
     if len(docs) > max_docs:
-        lines.append(
-            f"... and {len(docs) - max_docs} more document(s) stored in memory."
-        )
+        trailing = f"\n<!-- {len(docs) - max_docs} more document(s) stored in memory -->"
 
-    return "\n".join(lines)
+    inner = "\n".join(doc_elements)
+    return f'<documents total="{len(docs)}" sources="{source_str}">\n{inner}\n</documents>{trailing}'
 
 
 async def ainvoke_llm_with_token_usage(
@@ -303,21 +359,14 @@ def build_doc_groups(retrieved_docs: list[Document]) -> list[DocGroup]:
 
 
 def _render_chunk_group(group: DocGroup) -> str:
-    """청크 그룹을 단일 인덱스 블록으로 렌더링."""
+    """청크 그룹을 XML document 엘리먼트로 렌더링한다."""
     rep = group.representative
     md = rep.metadata
     source = md.get("source", "unknown")
     title = md.get("title") or ""
     temporal = resolve_temporal_context(md)
 
-    header_bits = [f"[{group.display_index}] (Source: {source})"]
-    if title:
-        header_bits.append(f'Title: "{title}"')
-    if temporal:
-        header_bits.append(temporal)
-    header = " ".join(header_bits)
-
-    lines: list[str] = [header]
+    inner_lines: list[str] = []
 
     # 누락된 청크 사이에는 ...(Omitted)... 마커를 넣어 LLM이 문맥 단절을 인지하게 한다.
     prev_idx: int | None = None
@@ -334,9 +383,9 @@ def _render_chunk_group(group: DocGroup) -> str:
             and chunk_idx is not None
             and chunk_idx > prev_idx + 1
         ):
-            lines.append("...(Omitted)...")
-        lines.append(f"--- {chunk_label} ---")
-        lines.append(doc.metadata.get("contextual_content", ""))
+            inner_lines.append("...(Omitted)...")
+        inner_lines.append(f"--- {chunk_label} ---")
+        inner_lines.append(doc.metadata.get("contextual_content", ""))
         prev_idx = chunk_idx
 
     # 누락된 마지막 청크 표기 (예: total 5인데 마지막이 4번까지만 등장).
@@ -347,42 +396,71 @@ def _render_chunk_group(group: DocGroup) -> str:
             and total is not None
             and last_idx < total - 1
         ):
-            lines.append("...(Omitted)...")
+            inner_lines.append("...(Omitted)...")
 
+    if temporal:
+        inner_lines.append(temporal)
+
+    content_text = "\n".join(inner_lines)
+
+    parts: list[str] = [f'<document index="{group.display_index}">']
+    parts.append(f"  <source>{source}</source>")
+    if title:
+        parts.append(f"  <title>{title}</title>")
+    parts.append(f"  <document_content>\n{content_text}\n  </document_content>")
     if source == "confluence":
-        lines.append(f"status: {md.get('status', '')}")
+        parts.append(f"  <status>{md.get('status', '')}</status>")
+    parts.append("</document>")
 
-    return "\n".join(lines)
+    return "\n".join(parts)
 
 
 def render_grouped_context_text(groups: list[DocGroup]) -> str:
     """
-    그룹 리스트로부터 LLM에게 제공할 retrieved_context 텍스트를 생성한다.
+    그룹 리스트로부터 LLM에게 제공할 retrieved_context XML을 생성한다.
     """
-    parts: list[str] = []
+    doc_elements: list[str] = []
     for group in groups:
         if group.is_chunked:
-            parts.append(_render_chunk_group(group))
+            doc_elements.append(_render_chunk_group(group))
             continue
-        # 단일 doc — 기존 포맷 유지.
+        # 단일 doc — XML 포맷으로 렌더링한다.
         doc = group.representative
         md = doc.metadata
         source = md.get("source", "unknown")
         content = md.get("contextual_content", "")
         temporal = resolve_temporal_context(md)
-        part = f"[{group.display_index}] (Source: {source})\n{content} {temporal}"
+
+        content_text = content
+        if temporal:
+            content_text = f"{content}\n{temporal}"
+
+        parts: list[str] = [f'<document index="{group.display_index}">']
+        parts.append(f"  <source>{source}</source>")
+        parts.append(
+            f"  <document_content>\n{content_text}\n  </document_content>"
+        )
         if source == "confluence":
-            part = part + f"\nstatus: {md.get('status', '')}"
-        parts.append(part)
-    return "\n\n".join(parts)
+            parts.append(f"  <status>{md.get('status', '')}</status>")
+        parts.append("</document>")
+
+        doc_elements.append("\n".join(parts))
+
+    inner = "\n".join(doc_elements)
+    return f"<documents>\n{inner}\n</documents>"
 
 
 def build_system_message(
     static_prompt: str,
     dynamic_prompts: list[str] | None = None,
     cache_prompt: bool = False,
+    instructions_last: bool = False,
 ) -> SystemMessage:
+    """시스템 메시지를 구성한다.
 
+    instructions_last=True이면 Anthropic Long Context 가이드에 따라
+    동적 프롬프트(데이터)를 정적 프롬프트(지시문) 앞에 배치한다.
+    """
     # 정적 프롬프트 (캐싱 대상)
     static_block: dict = {"type": "text", "text": static_prompt}
 
@@ -390,12 +468,18 @@ def build_system_message(
         static_block["cache_control"] = {"type": "ephemeral"}
         # TODO: langchain-aws 지원 시점에 "ttl": "1h" 추가
 
-    content = [static_block]
-
-    # 동적 프롬프트
-    if dynamic_prompts:
-        for prompt in dynamic_prompts:
-            content.append({"type": "text", "text": prompt})
+    if instructions_last:
+        content: list[dict] = []
+        if dynamic_prompts:
+            for prompt in dynamic_prompts:
+                content.append({"type": "text", "text": prompt})
+        content.append(static_block)
+    else:
+        content = [static_block]
+        # 동적 프롬프트
+        if dynamic_prompts:
+            for prompt in dynamic_prompts:
+                content.append({"type": "text", "text": prompt})
 
     return SystemMessage(content=content)
 
@@ -462,11 +546,6 @@ def coerce_message_text(content: Any) -> str:
     return str(content) if content is not None else ""
 
 
-_KEY_DOC_INDICES_TAG_PATTERN = re.compile(
-    r"<\s*key_document_indices\s*>(.*?)<\s*/\s*key_document_indices\s*>",
-    re.IGNORECASE | re.DOTALL,
-)
-
 _REASON_FOR_STOPPING_PATTERN = re.compile(
     r"<\s*reason_for_stopping\s*>(.*?)<\s*/\s*reason_for_stopping\s*>",
     re.IGNORECASE | re.DOTALL,
@@ -482,6 +561,62 @@ def extract_reason_for_stopping(reasoning: str | None) -> str | None:
     if not match:
         return None
     return match.group(1).strip() or None
+
+
+def extract_search_reason(reasoning: str | None) -> str | None:
+    """tool call 전 reasoning에서 <search_reason> 태그 내용을 추출한다.
+    태그가 없으면 원문을 그대로 반환한다."""
+    if not reasoning:
+        return reasoning
+    match = re.search(r"<search_reason>(.*?)</search_reason>", reasoning, re.DOTALL)
+    if match:
+        return match.group(1).strip() or reasoning
+    return reasoning
+
+
+async def dispatch_search_reason(tool_calls: list, node_name: str) -> None:
+    """검색 툴 호출의 reason 파라미터를 프론트엔드 process 이벤트로 dispatch한다.
+
+    tool_choice=any 환경에서 텍스트 출력 없이 tool args에서 reasoning을 추출한다.
+    single_query_search 또는 multi_query_search 중 첫 번째 호출의 reason을 사용한다.
+    """
+    from langchain_core.callbacks import adispatch_custom_event
+
+    search_call = next(
+        (tc for tc in tool_calls if tc["name"] in ("single_query_search", "multi_query_search")),
+        None,
+    )
+    if not search_call:
+        return
+    reason = search_call["args"].get("reason", "")
+    if reason:
+        await adispatch_custom_event(
+            "process",
+            {"status": "completed", "node": node_name, "reasoning": reason},
+        )
+
+
+def map_indices_to_doc_ids(
+    indices: list[int],
+    accumulated_docs: list[Document],
+    agent_seen_ids: list[str],
+) -> set[str]:
+    """submit_result의 key_document_indices (1-based)를 실제 doc ID set으로 변환한다.
+
+    agent_seen_ids 순서 기준으로 매핑해 ToolMessage global index와 일치시킨다.
+    agent_seen_ids가 비어있으면 accumulated_docs 순서로 fallback한다.
+    """
+    id_to_doc = {get_document_id(d): d for d in accumulated_docs}
+    ordered = [id_to_doc[sid] for sid in agent_seen_ids if sid in id_to_doc]
+    docs = ordered or accumulated_docs
+
+    result: set[str] = set()
+    for idx in indices:
+        if 1 <= idx <= len(docs):
+            doc_id = get_document_id(docs[idx - 1])
+            if doc_id:
+                result.add(doc_id)
+    return result
 
 
 # 본문 안의 인덱스 좌표 패턴들. agent_reasoning은 reuse 턴에 재공급되거나 grouping
@@ -508,8 +643,7 @@ def sanitize_agent_reasoning(reasoning: str | None) -> str | None:
     """
     if not reasoning:
         return reasoning
-    out = _KEY_DOC_INDICES_TAG_PATTERN.sub("", reasoning)
-    out = _INLINE_BRACKET_INDEX_PATTERN.sub("", out)
+    out = _INLINE_BRACKET_INDEX_PATTERN.sub("", reasoning)
     out = _BOLD_BARE_NUMBER_PATTERN.sub("", out)
     out = _KOREAN_NUMBER_DOC_PATTERN.sub("", out)
     return out.strip()
@@ -533,46 +667,6 @@ def scrub_orphan_indices(body: str, valid_indices: set[int]) -> str:
     return re.sub(r"\[(\d+)\]", _replace, body)
 
 
-def extract_essential_ids(reasoning: str | None, docs: list[Document]) -> set[str]:
-    """
-    Agent의 reasoning에서 <key_document_indices> 태그를 추출하여 실제 문서 ID 세트로 변환한다.
-    마크다운 강조(**n**), 대괄호([n]), 콤마/공백 구분 등 다양한 내부 형식을 지원.
-    """
-    if not reasoning or not docs:
-        return set()
-
-    match = _KEY_DOC_INDICES_TAG_PATTERN.search(reasoning)
-    if not match:
-        # 태그가 없으면 조용히 반환한다 (에이전트가 지목을 안 한 경우일 수 있음).
-        return set()
-
-    content = match.group(1)
-
-    # 숫자만 모두 추출한다 (마크다운 등 특수문자 제거 효과).
-    indices = [int(s) for s in re.findall(r"\d+", content)]
-
-    
-    if not indices:
-        logger.warning("essential_indices_not_found_in_pattern", text=content)
-        return set()
-
-    essential_ids = set()
-    invalid_indices = []
-    for idx in indices:
-        # 에이전트가 사용하는 인덱스는 1-based
-        if 1 <= idx <= len(docs):
-            doc = docs[idx - 1]
-            essential_ids.add(get_document_id(doc))
-        else:
-            invalid_indices.append(idx)
-
-    if invalid_indices:
-        logger.warning("agent_cited_out_of_range_indices", invalid=invalid_indices, max_range=len(docs))
-
-    if essential_ids:
-        logger.debug("essential_ids_extracted", count=len(essential_ids), ids=list(essential_ids))
-
-    return essential_ids
 
 
 def parse_citations(full_answer: str) -> tuple[str, set[str]]:

@@ -8,10 +8,8 @@ from catchup.db.incremental.repository import fail_outbox_publish
 from catchup.db.incremental.repository import get_outbox_entry
 from catchup.db.incremental.repository import get_record_state
 from catchup.db.incremental.repository import list_debounce_ready_records
-from catchup.db.incremental.repository import list_parent_cohort_records
 from catchup.db.incremental.repository import list_pending_outbox_entries
 from catchup.db.incremental.repository import list_retry_ready_records
-from catchup.db.incremental.repository import mark_parent_cohort_synced
 from catchup.db.incremental.repository import mark_record_keys_recovered
 from catchup.db.incremental.repository import promote_record
 from catchup.db.incremental.repository import recover_stale_outbox_claims
@@ -34,10 +32,8 @@ __all__ = [
     "get_outbox_entry",
     "get_record_state",
     "list_debounce_ready_records",
-    "list_parent_cohort_records",
     "list_pending_outbox_entries",
     "list_retry_ready_records",
-    "mark_parent_cohort_synced",
     "mark_record_keys_recovered",
     "promote_record",
     "recover_stale_outbox_claims",

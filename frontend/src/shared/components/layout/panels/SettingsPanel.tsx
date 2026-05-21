@@ -105,7 +105,7 @@ export default function SettingsPanel() {
                   key={item.href}
                   onClick={() => handleClick(item.href)}
                   className={cn(
-                    'flex h-10 w-full cursor-pointer items-center gap-3 rounded-lg px-2.5 py-2 transition-colors',
+                    'flex h-9 w-full cursor-pointer items-center gap-3 rounded-lg px-2.5 py-1.5 transition-colors',
                     isActive
                       ? 'bg-fill-primary-normal-neutral text-content-primary'
                       : 'text-content-normal hover:bg-fill-interaction-hover',

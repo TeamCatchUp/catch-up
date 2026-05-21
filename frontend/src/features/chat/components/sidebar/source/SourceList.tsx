@@ -1,13 +1,13 @@
 'use client';
 
-import { motion } from 'motion/react';
 import { useEffect, useMemo, useState } from 'react';
+import { motion } from 'motion/react';
 
 import { getCitationDisplayOrderMap } from '@/features/chat/components/answer/markdown/RenderWithBadges';
 import RagSourceSkeleton from '@/features/chat/components/skeleton/RagRightComponentSkeleton';
-import { fadeInUp, MotionState, staggerListContainer } from '@/shared/motion';
 import type { ChatSource } from '@/features/chat/types';
 import AddCircle from '@/public/icons/icon/add_circle_filled.svg';
+import { fadeInUp, MotionState, staggerListContainer } from '@/shared/motion';
 import { cn } from '@/shared/utils/cn';
 
 import FilterScrollFab from './FilterScrollFab';
@@ -49,13 +49,17 @@ const SourceList = ({
 
   // 필터 탭 fade-in: transitionKey 변경 시 false → true로 1프레임 지연 전환.
   // (카드 stagger는 framer-motion이 담당)
-  const [listEntered, setListEntered] = useState(prefersReducedMotion);
-  useEffect(() => {
-    if (prefersReducedMotion) {
-      setListEntered(true);
-      return;
-    }
+  const [listEntered, setListEntered] = useState(false);
+  const [prevTransitionKey, setPrevTransitionKey] = useState(transitionKey);
+
+  // transitionKey 변경 시 fade-in을 다시 재생하도록 렌더 중 listEntered를 리셋한다.
+  if (transitionKey !== prevTransitionKey) {
+    setPrevTransitionKey(transitionKey);
     setListEntered(false);
+  }
+
+  useEffect(() => {
+    if (prefersReducedMotion) return;
     let enterRaf = 0;
     const resetRaf = requestAnimationFrame(() => {
       enterRaf = requestAnimationFrame(() => setListEntered(true));

@@ -15,11 +15,8 @@ from catchup.audit.metadata import IncrementalRecordAuditMetadata
 from catchup.configs.config import settings
 from catchup.db.engine import SessionLocal
 from catchup.db.incremental import get_record_state
-from catchup.db.incremental import list_parent_cohort_records
-from catchup.db.incremental import mark_parent_cohort_synced
 from catchup.db.incremental import transition_record_status
 from catchup.db.models import IncrementalRecordStatus
-from catchup.db.models import SyncConnector
 from catchup.sync.common.protocols import IngestionHandlerProtocol
 from catchup.sync.common.retry_policy import resolve_retry_delay
 from catchup.sync.common.schemas import ClaimState
@@ -30,7 +27,6 @@ from catchup.sync.incremental.error_policy import is_retryable_incremental_error
 from catchup.sync.stream_runtime.stream_constants import SyncStreamFailureReason
 from catchup.worker.common import deadletter
 from catchup.worker.common import select_handler
-from catchup.worker.handlers.incremental_success_scope import IncrementalSuccessScope
 from catchup.worker.schemas import ClaimResult
 
 logger = logging.getLogger(__name__)
@@ -105,20 +101,6 @@ def _claim_incremental_task(
         if claimed is None:
             return ClaimResult(state=ClaimState.RECORD_NOT_FOUND)
 
-        cohort = list_parent_cohort_records(
-            db,
-            connector=claimed.connector,
-            scope_id=claimed.scope_id,
-            parent_type=claimed.parent_type,
-            parent_id=claimed.parent_id,
-            max_generation=claimed.generation,
-        )
-        batch_sync_from = claimed.last_event_at.isoformat()
-        batch_generation_ceiling = claimed.generation
-        if cohort:
-            batch_sync_from = min(item.last_event_at for item in cohort).isoformat()
-            batch_generation_ceiling = max(item.generation for item in cohort)
-
         context = IncrementalSyncContext(
             event_id=task.event_id,
             job_id=task.job_id,
@@ -137,40 +119,17 @@ def _claim_incremental_task(
             parent_id=claimed.parent_id,
             event_kind=claimed.event_kind,
             last_event_at=claimed.last_event_at.isoformat(),
-            batch_sync_from=batch_sync_from,
-            batch_generation_ceiling=batch_generation_ceiling,
         )
 
     return ClaimResult(state=ClaimState.CLAIMED, context=context)
 
 
-def _mark_incremental_success_sync(
-    context: IncrementalSyncContext,
-    *,
-    success_scope: IncrementalSuccessScope = IncrementalSuccessScope.PARENT_COHORT,
-) -> bool:
+def _mark_incremental_success_sync(context: IncrementalSyncContext) -> bool:
     if context.record_key is None or context.generation is None:
         return False
 
     synced_at = datetime.now(timezone.utc)
     with SessionLocal() as db:
-        if (
-            success_scope == IncrementalSuccessScope.PARENT_COHORT
-            and context.parent_type
-            and context.parent_id
-            and context.batch_generation_ceiling is not None
-        ):
-            updated = mark_parent_cohort_synced(
-                db,
-                connector=SyncConnector(context.connector),
-                scope_id=context.scope_id,
-                parent_type=context.parent_type,
-                parent_id=context.parent_id,
-                max_generation=context.batch_generation_ceiling,
-                last_synced_at=synced_at,
-            )
-            return updated >= 1
-
         return transition_record_status(
             db,
             record_key=context.record_key,
@@ -396,18 +355,9 @@ async def process_incremental_message(
             context=context,
             service_cache=service_cache,
         )
-        success_scope = IncrementalSuccessScope(
-            getattr(
-                handler,
-                "incremental_success_scope",
-                IncrementalSuccessScope.PARENT_COHORT,
-            )
-            or IncrementalSuccessScope.PARENT_COHORT
-        )
         if not await run_in_threadpool(
             _mark_incremental_success_sync,
             context,
-            success_scope=success_scope,
         ):
             logger.warning(
                 "[INCREMENTAL][WORKER] Success transition skipped: record_key=%s, generation=%s",

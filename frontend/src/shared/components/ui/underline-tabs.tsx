@@ -1,6 +1,8 @@
 'use client';
 
-import { type KeyboardEvent, useRef } from 'react';
+// 기본 중립 톤 underline tab. 강조 톤이 필요하면 accent-tabs 사용.
+
+import * as TabsPrimitive from '@radix-ui/react-tabs';
 
 import { cn } from '@/shared/utils/cn';
 
@@ -14,7 +16,7 @@ export interface UnderlineTabsProps<V extends string = string> {
   value: V;
   onValueChange: (value: V) => void;
   ariaLabel: string;
-  // tabpanel id 접두사. 기본값은 각 탭의 value
+  // tabpanel id 접두사. 기본값은 'underline-tab'
   panelIdPrefix?: string;
   className?: string;
 }
@@ -27,66 +29,27 @@ export default function UnderlineTabs<V extends string = string>({
   panelIdPrefix,
   className,
 }: UnderlineTabsProps<V>) {
-  const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const panelKey = panelIdPrefix ?? 'underline-tab';
 
-  const focusTab = (index: number) => {
-    const next = items[index];
-    if (!next) return;
-    onValueChange(next.value);
-    tabRefs.current[index]?.focus();
-  };
-
-  const handleKeyDown = (e: KeyboardEvent<HTMLButtonElement>, index: number) => {
-    switch (e.key) {
-      case 'ArrowLeft':
-        e.preventDefault();
-        focusTab(index === 0 ? items.length - 1 : index - 1);
-        return;
-      case 'ArrowRight':
-        e.preventDefault();
-        focusTab(index === items.length - 1 ? 0 : index + 1);
-        return;
-      case 'Home':
-        e.preventDefault();
-        focusTab(0);
-        return;
-      case 'End':
-        e.preventDefault();
-        focusTab(items.length - 1);
-        return;
-      default:
-        return;
-    }
-  };
-
   return (
-    <div role="tablist" aria-label={ariaLabel} className={cn('flex items-center gap-6', className)}>
-      {items.map((item, index) => {
-        const isActive = item.value === value;
-        return (
-          <button
+    <TabsPrimitive.Root value={value} onValueChange={(v) => onValueChange(v as V)}>
+      <TabsPrimitive.List aria-label={ariaLabel} className={cn('flex items-center gap-6', className)}>
+        {items.map((item) => (
+          <TabsPrimitive.Trigger
             key={item.value}
-            ref={(el) => {
-              tabRefs.current[index] = el;
-            }}
-            type="button"
-            role="tab"
+            value={item.value}
             id={`tab-${panelKey}-${item.value}`}
-            aria-selected={isActive}
             aria-controls={`tabpanel-${panelKey}-${item.value}`}
-            tabIndex={isActive ? 0 : -1}
-            onClick={() => onValueChange(item.value)}
-            onKeyDown={(e) => handleKeyDown(e, index)}
             className={cn(
               'text-heading-large cursor-pointer border-b-[3px] px-0.5 pb-1.25',
-              isActive ? 'text-content-normal border-edge-strong' : 'text-content-assistive border-transparent',
+              'data-[state=active]:text-content-normal data-[state=active]:border-edge-strong',
+              'data-[state=inactive]:text-content-assistive data-[state=inactive]:border-transparent',
             )}
           >
             {item.label}
-          </button>
-        );
-      })}
-    </div>
+          </TabsPrimitive.Trigger>
+        ))}
+      </TabsPrimitive.List>
+    </TabsPrimitive.Root>
   );
 }

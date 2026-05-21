@@ -6,6 +6,7 @@ from datetime import timedelta
 from datetime import timezone
 
 from fastapi.concurrency import run_in_threadpool
+from sqlalchemy import select
 
 from catchup.configs.config import settings
 from catchup.connectors.atlassian.oauth_client import AtlassianOAuthClient
@@ -16,10 +17,16 @@ from catchup.connectors.confluence.client import ConfluenceApiClient
 from catchup.db.atlassian import oauth_repository
 from catchup.db.confluence import domain_repository as confluence_domain
 from catchup.db.engine import SessionLocal
+from catchup.db.models import IncrementalOutboxStatus
+from catchup.db.models import IncrementalRecordState
+from catchup.db.models import IncrementalStreamOutbox
 from catchup.sync.incremental.resolve import build_confluence_record_change
+from catchup.sync.incremental.schemas import RecordChange
 from catchup.sync.incremental.service import get_incremental_service
 
 logger = logging.getLogger(__name__)
+
+CONFLUENCE_DELETED_CONTENT_STATUSES = ("trashed",)
 
 
 def _load_tokens_sync():
@@ -32,9 +39,93 @@ def _load_spaces_sync(cloud_id: str):
         return confluence_domain.get_spaces_by_cloud_id(db, cloud_id)
 
 
+def _load_existing_deleted_record_keys_sync(record_keys: list[str]) -> set[str]:
+    normalized_record_keys = [
+        record_key.strip()
+        for record_key in record_keys
+        if record_key and record_key.strip()
+    ]
+    if not normalized_record_keys:
+        return set()
+
+    with SessionLocal() as db:
+        stmt = select(IncrementalRecordState.record_key).where(
+            IncrementalRecordState.record_key.in_(normalized_record_keys),
+            IncrementalRecordState.event_kind == "deleted",
+        )
+        existing_deleted_record_keys = set(db.execute(stmt).scalars().all())
+        if not existing_deleted_record_keys:
+            return set()
+
+        skipped_rows = db.execute(
+            select(
+                IncrementalStreamOutbox.record_key,
+                IncrementalStreamOutbox.generation,
+            ).where(
+                IncrementalStreamOutbox.record_key.in_(existing_deleted_record_keys),
+                IncrementalStreamOutbox.status == IncrementalOutboxStatus.SKIPPED,
+                IncrementalStreamOutbox.last_error == "stale_outbox",
+            )
+        ).all()
+        published_rows = db.execute(
+            select(
+                IncrementalStreamOutbox.record_key,
+                IncrementalStreamOutbox.generation,
+            ).where(
+                IncrementalStreamOutbox.record_key.in_(existing_deleted_record_keys),
+                IncrementalStreamOutbox.status == IncrementalOutboxStatus.PUBLISHED,
+            )
+        ).all()
+
+        return _exclude_unrecovered_stale_deleted_keys(
+            existing_deleted_record_keys=existing_deleted_record_keys,
+            stale_skipped_outbox_rows=[
+                (str(record_key), int(generation))
+                for record_key, generation in skipped_rows
+            ],
+            published_outbox_rows=[
+                (str(record_key), int(generation))
+                for record_key, generation in published_rows
+            ],
+        )
+
+
+def _exclude_unrecovered_stale_deleted_keys(
+    *,
+    existing_deleted_record_keys: set[str],
+    stale_skipped_outbox_rows: list[tuple[str, int]],
+    published_outbox_rows: list[tuple[str, int]],
+) -> set[str]:
+    latest_stale_generation: dict[str, int] = {}
+    for record_key, generation in stale_skipped_outbox_rows:
+        latest_stale_generation[record_key] = max(
+            generation,
+            latest_stale_generation.get(record_key, 0),
+        )
+
+    latest_published_generation: dict[str, int] = {}
+    for record_key, generation in published_outbox_rows:
+        latest_published_generation[record_key] = max(
+            generation,
+            latest_published_generation.get(record_key, 0),
+        )
+
+    unrecovered_stale_record_keys = {
+        record_key
+        for record_key, stale_generation in latest_stale_generation.items()
+        if latest_published_generation.get(record_key, 0) <= stale_generation
+    }
+    return existing_deleted_record_keys - unrecovered_stale_record_keys
+
+
 async def poll_confluence_incremental_changes() -> dict[str, int]:
     lookback_minutes = max(1, int(settings.CONFLUENCE_INCREMENTAL_POLL_LOOKBACK_MINUTES))
-    since = datetime.now(timezone.utc) - timedelta(minutes=lookback_minutes)
+    polled_at = datetime.now(timezone.utc)
+    since = polled_at - timedelta(minutes=lookback_minutes)
+    deleted_max_pages = max(
+        1,
+        int(settings.CONFLUENCE_INCREMENTAL_DELETED_POLL_MAX_PAGES),
+    )
     changed = 0
     blocked = 0
     errors = 0
@@ -71,8 +162,30 @@ async def poll_confluence_incremental_changes() -> dict[str, int]:
                     space_key=space_key,
                     since=since,
                 )
+                deleted_page_changes = await _collect_deleted_page_changes(
+                    client=client,
+                    cloud_id=token.cloud_id,
+                    space_id=space_id,
+                    space_key=space_key,
+                    observed_at=polled_at,
+                    max_batches=deleted_max_pages,
+                )
+                deleted_blogpost_changes = await _collect_deleted_blogpost_changes(
+                    client=client,
+                    cloud_id=token.cloud_id,
+                    space_id=space_id,
+                    space_key=space_key,
+                    observed_at=polled_at,
+                    max_batches=deleted_max_pages,
+                )
 
-                changes = [*page_changes, *blogpost_changes]
+                changes = [
+                    *page_changes,
+                    *blogpost_changes,
+                    *deleted_page_changes,
+                    *deleted_blogpost_changes,
+                ]
+                changes = await _filter_repeated_deleted_changes(changes)
                 if not changes:
                     continue
 
@@ -103,6 +216,32 @@ async def poll_confluence_incremental_changes() -> dict[str, int]:
     }
 
 
+async def _filter_repeated_deleted_changes(
+    changes: list[RecordChange],
+) -> list[RecordChange]:
+    deleted_record_keys = [
+        change.record_key
+        for change in changes
+        if change.event_kind == "deleted"
+    ]
+    if not deleted_record_keys:
+        return changes
+
+    existing_deleted_record_keys = await run_in_threadpool(
+        _load_existing_deleted_record_keys_sync,
+        deleted_record_keys,
+    )
+    if not existing_deleted_record_keys:
+        return changes
+
+    return [
+        change
+        for change in changes
+        if change.event_kind != "deleted"
+        or change.record_key not in existing_deleted_record_keys
+    ]
+
+
 async def _collect_page_changes(
     *,
     client: ConfluenceApiClient,
@@ -110,18 +249,28 @@ async def _collect_page_changes(
     space_id: str,
     space_key: str,
     since: datetime,
+    status: str = "current",
+    event_kind: str = "updated",
+    observed_at: datetime | None = None,
+    max_batches: int | None = None,
 ) -> list:
     changes = []
     should_stop = False
-    async for batch in client.iter_pages(space_id=space_id, body_format="storage"):
+    batch_count = 0
+    async for batch in client.iter_pages(
+        space_id=space_id,
+        status=status,
+        body_format="storage",
+    ):
+        batch_count += 1
         for raw_page in batch:
             page_id = str(raw_page.get("id") or "").strip()
-            modified_at = parse_atlassian_datetime(
+            event_at = observed_at or parse_atlassian_datetime(
                 ((raw_page.get("version") or {}).get("createdAt"))
             )
-            if not page_id or modified_at is None:
+            if not page_id or event_at is None:
                 continue
-            if modified_at < since:
+            if event_kind != "deleted" and event_at < since:
                 should_stop = True
                 continue
             changes.append(
@@ -130,10 +279,11 @@ async def _collect_page_changes(
                     space_key=space_key,
                     record_type="page",
                     record_id=page_id,
-                    last_event_at=modified_at,
+                    last_event_at=event_at,
+                    event_kind=event_kind,
                 )
             )
-        if should_stop:
+        if should_stop or (max_batches is not None and batch_count >= max_batches):
             break
     return changes
 
@@ -145,18 +295,28 @@ async def _collect_blogpost_changes(
     space_id: str,
     space_key: str,
     since: datetime,
+    status: str = "current",
+    event_kind: str = "updated",
+    observed_at: datetime | None = None,
+    max_batches: int | None = None,
 ) -> list:
     changes = []
     should_stop = False
-    async for batch in client.iter_blogposts(space_id=space_id, body_format="storage"):
+    batch_count = 0
+    async for batch in client.iter_blogposts(
+        space_id=space_id,
+        status=status,
+        body_format="storage",
+    ):
+        batch_count += 1
         for raw_blogpost in batch:
             blogpost_id = str(raw_blogpost.get("id") or "").strip()
-            modified_at = parse_atlassian_datetime(
+            event_at = observed_at or parse_atlassian_datetime(
                 ((raw_blogpost.get("version") or {}).get("createdAt"))
             )
-            if not blogpost_id or modified_at is None:
+            if not blogpost_id or event_at is None:
                 continue
-            if modified_at < since:
+            if event_kind != "deleted" and event_at < since:
                 should_stop = True
                 continue
             changes.append(
@@ -165,9 +325,64 @@ async def _collect_blogpost_changes(
                     space_key=space_key,
                     record_type="blogpost",
                     record_id=blogpost_id,
-                    last_event_at=modified_at,
+                    last_event_at=event_at,
+                    event_kind=event_kind,
                 )
             )
-        if should_stop:
+        if should_stop or (max_batches is not None and batch_count >= max_batches):
             break
+    return changes
+
+
+async def _collect_deleted_page_changes(
+    *,
+    client: ConfluenceApiClient,
+    cloud_id: str,
+    space_id: str,
+    space_key: str,
+    observed_at: datetime,
+    max_batches: int,
+) -> list:
+    changes = []
+    for status in CONFLUENCE_DELETED_CONTENT_STATUSES:
+        changes.extend(
+            await _collect_page_changes(
+                client=client,
+                cloud_id=cloud_id,
+                space_id=space_id,
+                space_key=space_key,
+                since=observed_at,
+                status=status,
+                event_kind="deleted",
+                observed_at=observed_at,
+                max_batches=max_batches,
+            )
+        )
+    return changes
+
+
+async def _collect_deleted_blogpost_changes(
+    *,
+    client: ConfluenceApiClient,
+    cloud_id: str,
+    space_id: str,
+    space_key: str,
+    observed_at: datetime,
+    max_batches: int,
+) -> list:
+    changes = []
+    for status in CONFLUENCE_DELETED_CONTENT_STATUSES:
+        changes.extend(
+            await _collect_blogpost_changes(
+                client=client,
+                cloud_id=cloud_id,
+                space_id=space_id,
+                space_key=space_key,
+                since=observed_at,
+                status=status,
+                event_kind="deleted",
+                observed_at=observed_at,
+                max_batches=max_batches,
+            )
+        )
     return changes

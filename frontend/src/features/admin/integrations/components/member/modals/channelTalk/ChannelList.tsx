@@ -11,14 +11,15 @@ import EntityChip from './EntityChip';
 
 interface ChannelListProps {
   channels: ChannelTalkChannel[];
-  selectedChannelIds: Set<string>;
-  onToggleChannel: (channelId: string) => void;
+  // 우측 패널에 표시 중인 채널 ids — 임베딩 선택과 무관한 visibility state
+  visibleChannelIds: Set<string>;
+  // 전체 선택 상태 (visibility + 모든 채널 + 모든 스페이스가 모두 선택됨)
+  isAllSelected: boolean;
+  onToggleVisibility: (channelId: string) => void;
   onToggleAll: () => void;
 }
 
-function ChannelList({ channels, selectedChannelIds, onToggleChannel, onToggleAll }: ChannelListProps) {
-  const isAllSelected = channels.length > 0 && channels.every((channel) => selectedChannelIds.has(channel.channel_id));
-
+function ChannelList({ channels, visibleChannelIds, isAllSelected, onToggleVisibility, onToggleAll }: ChannelListProps) {
   return (
     <div className="border-edge-neutral flex w-85 flex-col border-r">
       <div className="flex flex-col gap-3 px-4 pt-4">
@@ -39,18 +40,19 @@ function ChannelList({ channels, selectedChannelIds, onToggleChannel, onToggleAl
 
       <ul className="custom-scrollbar flex flex-1 flex-col gap-1 overflow-y-auto px-4 pt-1.5 pb-4">
         {channels.map((channel) => {
-          const isSelected = selectedChannelIds.has(channel.channel_id);
+          const isVisible = visibleChannelIds.has(channel.channel_id);
           return (
             <li key={channel.channel_id}>
               <button
                 type="button"
-                onClick={() => onToggleChannel(channel.channel_id)}
+                onClick={() => onToggleVisibility(channel.channel_id)}
                 className={cn(
-                  'flex h-14 w-full cursor-pointer items-center gap-1.5 rounded-lg px-1 transition-colors',
-                  isSelected ? 'bg-fill-primary-normal-neutral' : 'hover:bg-fill-strong',
+                  'flex h-14 w-full cursor-pointer items-center gap-3 rounded-lg p-3 transition-colors',
+                  isVisible ? 'bg-fill-primary-normal-neutral' : 'hover:bg-fill-strong',
                 )}
+                aria-pressed={isVisible}
+                aria-label={`${channel.display_name} 표시 (해제 시 임베딩 선택도 함께 해제됨)`}
               >
-                <CheckboxIcon checked={isSelected} className="size-6" />
                 <EntityChip icon={IconTag} />
                 <span className="text-body-small text-content-normal line-clamp-1 min-w-0 flex-1 text-left">
                   {channel.display_name}

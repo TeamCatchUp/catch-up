@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useRef } from 'react';
 
 import {
   appendStreamingToken,
@@ -6,8 +6,8 @@ import {
   updateStreamingSources,
 } from '@/features/chat/hooks/useRagChat.parts/streamMessageUpdater';
 import { upsertStepRow } from '@/features/chat/hooks/useRagChat.parts/upsertStepRow';
-import type { PipelineQueryType, SourceResponse, StreamEvent } from '@/features/chat/types';
-import { normalizeStreamSources } from '@/features/chat/utils/normalize/normalizeRagSources';
+import type { PipelineEvent, PipelineQueryType, SourceResponse, StreamEvent } from '@/features/chat/types';
+import { normalizeStreamSources } from '@/shared/utils/normalize/normalizeRagSources';
 
 import type { ChatStateSetters, SessionGuardRefs, StreamRuntimeRefs } from './types';
 
@@ -64,15 +64,8 @@ export const useStreamProcessing = ({
   // ---------------------------------------------------------------------------
   // Shared setters/refs
   // ---------------------------------------------------------------------------
-  const {
-    setChatData,
-    setIsLoading,
-    setIsError,
-    setStepRows,
-    setPipelineQueryType,
-    setTopic,
-    setPipelineReasoning,
-  } = stateSetters;
+  const { setChatData, setIsLoading, setIsError, setStepRows, setPipelineQueryType, setTopic, setPipelineReasoning } =
+    stateSetters;
   const { canReplacePlaceholderRef } = sessionRefs;
   const {
     streamingMessageIdRef,
@@ -82,6 +75,9 @@ export const useStreamProcessing = ({
     streamInFlightRef,
     resolvedSessionIdRef,
   } = streamRefs;
+
+  // 스트리밍 중 수신한 process 이벤트 raw 누적 — 스트림 종료 시 방금 끝난 메시지에 attach
+  const pipelineEventsRef = useRef<PipelineEvent[]>([]);
 
   // ---------------------------------------------------------------------------
   // Stream lifecycle helpers
@@ -103,6 +99,7 @@ export const useStreamProcessing = ({
     setPipelineQueryType(null);
     setTopic(null);
     setPipelineReasoning(null);
+    pipelineEventsRef.current = [];
   }, [
     canReplacePlaceholderRef,
     resetStopped,
@@ -263,6 +260,32 @@ export const useStreamProcessing = ({
   );
 
   /**
+   * 누적한 process 이벤트를 해당 assistant 메시지의 pipeline_result로 attach.
+   * isLoading=false가 되는 sources 이벤트 시점에 호출해 인라인 아코디언이 즉시 표시되게 한다.
+   */
+  const attachPipelineResultToMessage = useCallback(
+    (messageId: string | null | undefined) => {
+      const events = pipelineEventsRef.current;
+      // messageId 없음(토큰 없이 종료된 에러 경로) 또는 이벤트 없음 → no-op.
+      // 이 경우 답변 메시지 자체가 없어 인라인 아코디언도 렌더되지 않으므로 데이터 소실 영향 없음.
+      if (!messageId || events.length === 0) return;
+      setChatData((prev) => {
+        if (!prev) return prev;
+        let changed = false;
+        const messages = prev.messages.map((m) => {
+          if (m.id === messageId && m.role === 'assistant') {
+            changed = true;
+            return { ...m, pipeline_result: [...events] };
+          }
+          return m;
+        });
+        return changed ? { ...prev, messages } : prev;
+      });
+    },
+    [setChatData],
+  );
+
+  /**
    * 스트림 종료 후 후처리
    * - stopped면 조용히 종료
    * - 정상 종료면 서버 기준 메시지 재동기화
@@ -277,6 +300,9 @@ export const useStreamProcessing = ({
 
     const targetSessionId = resolvedSessionIdRef.current;
 
+    // 방금 끝난 답변 메시지 id — streamingMessageIdRef가 null 되기 전 캡처
+    const streamedMessageId = streamingMessageIdRef.current;
+
     // 1차 sources SSE는 is_cited 미확정, 답변 완성 후 본문 [N] 패턴으로 is_cited 확정
     setChatData((prev) => {
       if (!prev) return prev;
@@ -284,6 +310,9 @@ export const useStreamProcessing = ({
       if (updated === prev.messages) return prev;
       return { ...prev, messages: updated };
     });
+
+    // sources 이벤트에서 이미 attach됐지만, 늦게 도착한 process 이벤트 대비 backstop 재attach
+    attachPipelineResultToMessage(streamedMessageId);
 
     setIsLoading(false);
     streamingMessageIdRef.current = null;
@@ -301,6 +330,7 @@ export const useStreamProcessing = ({
     // status만 수신한 뒤 종료된 경우(예: 백엔드 예외 후 스트림 종료) → 에러 노출
     setIsError(true);
   }, [
+    attachPipelineResultToMessage,
     canReplacePlaceholderRef,
     hasStreamedTokenRef,
     isStopped,
@@ -335,6 +365,8 @@ export const useStreamProcessing = ({
             if (reasoning) setPipelineReasoning(reasoning);
           }
 
+          // 사이드바용 stepRows 누적(기존) + 인라인 아코디언용 raw 이벤트 누적(신규)
+          pipelineEventsRef.current.push({ node, status, reasoning, content });
           setStepRows((prev) => upsertStepRow(prev, { node, status, reasoning, content }));
           break;
         }
@@ -344,6 +376,8 @@ export const useStreamProcessing = ({
           // 따라서 token 이후 도착한 sources event는 항상 최종 → 이 시점에 게이트를 풀어도 안전하다.
           // finalize에서 setIsLoading(false)가 한 번 더 호출되어도 idempotent.
           if (hasStreamedTokenRef.current) {
+            // isLoading=false와 같은 시점에 pipeline_result attach → 인라인 아코디언 즉시 표시
+            attachPipelineResultToMessage(streamingMessageIdRef.current);
             setIsLoading(false);
           }
           break;
@@ -360,6 +394,8 @@ export const useStreamProcessing = ({
     [
       appendTokenToStreamingMessage,
       applyStreamingSources,
+      attachPipelineResultToMessage,
+      streamingMessageIdRef,
       hasStreamedTokenRef,
       isStopped,
       resolveSessionIdFromStream,

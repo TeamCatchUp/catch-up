@@ -42,7 +42,7 @@ const renderSourceLogo = (sourceType: ChatSource['source_type']) => {
   if (sourceType === 'slack') return <Slack className="h-5 w-5 shrink-0" />;
   if (sourceType === 'confluence') return <Confluence className="h-5 w-5 shrink-0" />;
   if (sourceType === 'github') return <Github className="h-5 w-5 shrink-0" />;
-  if (sourceType === 'channel_talk') return <ChannelTalk className="h-5 w-5 shrink-0" />;
+  if (sourceType === 'channel_talk') return <ChannelTalk className="h-4 w-4 shrink-0" />;
   return null;
 };
 

@@ -14,9 +14,12 @@ from catchup.sync.common.exceptions import SyncRequestException
 from catchup.sync.common.protocols import FullSyncTargetResolverProtocol
 from catchup.sync.common.schemas import FullSyncDispatchRequest
 from catchup.sync.common.schemas import FullSyncResolvedTargets
+from catchup.sync.common.schemas import FullSyncTarget
 from catchup.sync.full.targets import resolve_full_sync_targets_from_rows
 
 logger = structlog.get_logger(__name__)
+
+_GITHUB_FULL_SYNC_STREAM_TYPES = ("issue", "pull_request")
 
 
 class GithubFullSyncTargetResolver(FullSyncTargetResolverProtocol):
@@ -33,7 +36,7 @@ class GithubFullSyncTargetResolver(FullSyncTargetResolverProtocol):
         *,
         request: FullSyncDispatchRequest,
     ) -> FullSyncResolvedTargets:
-        # GitHub은 scope_id=installation_id, target_type=repository, target_id=repo_id 계약이다.
+        # GitHub은 요청은 repository 단위로 받되, worker event는 repository+stream 단위로 쪼갠다.
         scope_id = request.scope_id.strip()
         if not scope_id:
             raise SyncRequestException("scope_id is required")
@@ -71,15 +74,32 @@ class GithubFullSyncTargetResolver(FullSyncTargetResolverProtocol):
                 "target_type": "repository",
             },
         )
+        stream_targets = [
+            FullSyncTarget(
+                target_type=target.target_type,
+                target_id=target.target_id,
+                target_name=f"{target.target_name} / {stream_type}",
+                metadata={
+                    **target.metadata,
+                    "repo_id": target.target_id,
+                    "repo_full_name": target.target_name,
+                    "stream_type": stream_type,
+                    "record_type": stream_type,
+                },
+            )
+            for target in resolved_targets.targets
+            for stream_type in _GITHUB_FULL_SYNC_STREAM_TYPES
+        ]
 
         logger.info(
             "github_full_sync_targets_resolved",
             installation_id=installation_id,
             requested_count=len(requested_repo_ids),
-            resolved_count=len(resolved_targets.targets),
+            resolved_count=len(stream_targets),
+            stream_types=list(_GITHUB_FULL_SYNC_STREAM_TYPES),
         )
 
-        return resolved_targets
+        return FullSyncResolvedTargets(targets=stream_targets)
 
 
 _github_full_sync_target_resolver = GithubFullSyncTargetResolver()

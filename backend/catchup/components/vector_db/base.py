@@ -25,3 +25,6 @@ class BaseVectorDbService:
         tool_filters: list[Any] | None = None,
     ) -> list[list[Document]]:
         raise NotImplementedError
+
+    async def fetch_by_ids(self, ids: list[str]) -> list[Document]:
+        raise NotImplementedError

@@ -54,18 +54,31 @@ def mock_pgvector_service():
     app.dependency_overrides.pop(get_search_service, None)
 
 
-# ─── hybrid_search: history recording ────────────────────────────────────────
+# ─── hybrid_search: history recording & audit ────────────────────────────────
 
 def test_hybrid_search_saves_query_to_history(
     mock_db, mock_current_user, mock_search_service, mock_pgvector_service
 ):
-    with patch(
-        "catchup.server.search.api.save_search_query"
-    ) as mock_save:
+    with patch("catchup.server.search.api.save_search_query") as mock_save:
         client.get("/api/v1/search/hybrid", params={"keyword": "PR 리뷰"})
 
     mock_save.assert_called_once_with(mock_db, 42, "PR 리뷰")
     mock_db.commit.assert_called_once()
+
+
+def test_hybrid_search_emits_audit_event(
+    mock_db, mock_current_user, mock_search_service, mock_pgvector_service
+):
+    with patch("catchup.server.search.api.save_search_query"):
+        with patch("catchup.audit.emitters.bus") as mock_bus:
+            client.get("/api/v1/search/hybrid", params={"keyword": "감사 테스트"})
+
+    mock_bus.emit.assert_called_once()
+    call_kwargs = mock_bus.emit.call_args.kwargs
+    assert call_kwargs["action"].value == "search"
+    assert call_kwargs["status"].value == "success"
+    assert call_kwargs["metadata"].query == "감사 테스트"
+    assert call_kwargs["metadata"].user_id == 42
 
 
 def test_hybrid_search_does_not_save_on_unauthenticated(
