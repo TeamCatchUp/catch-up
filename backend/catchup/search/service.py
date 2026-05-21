@@ -96,6 +96,7 @@ class ManualSearchService:
             keyword_tokens=planned.keyword_tokens or None,
             offset=0,
             temporal_filters=temporal_filters,
+            score_threshold=0.3,
             use_title_filter=True,
         )
 
