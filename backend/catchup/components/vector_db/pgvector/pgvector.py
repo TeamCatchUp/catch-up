@@ -48,6 +48,7 @@ class PGBigmRetriever(BaseRetriever):
     tool_filters: list[SourceType] | None = None
     temporal_filters: list[TemporalFilter] | None = None
     search_mode: str = "fuzzy"  # "exact": ILIKE likequery (RAG), "fuzzy": =% similarity (keyword search)
+    title_only: bool = False  # True면 title =% 조건으로만 검색 (manual search 3-way RRF 전용)
     @override
     def _get_relevant_documents(
         self,
@@ -66,6 +67,7 @@ class PGBigmRetriever(BaseRetriever):
             tool_filters=self.tool_filters,
             temporal_filters=self.temporal_filters,
             search_mode=self.search_mode,
+            title_only=self.title_only,
         )
 
         results = list(self._do_query(search_sql, params))
@@ -80,6 +82,7 @@ class PGBigmRetriever(BaseRetriever):
         tool_filters: list[SourceType] | None = None,
         temporal_filters: list[TemporalFilter] | None = None,
         search_mode: str = "fuzzy",
+        title_only: bool = False,
     ) -> tuple[Any, dict]:
         """
         contextual_content 기반 키워드 검색 SQL 및 파라미터 생성.
@@ -127,17 +130,24 @@ class PGBigmRetriever(BaseRetriever):
         token_filters = []
         exact_match_scores = []
         sim_scores = []
+        title_sim_scores = []
 
         for i, token in enumerate(tokens):
             p_name = f"token_{i}"
             params[p_name] = token
 
-            exact_match_scores.append(f"(CASE WHEN LOWER(e.cmetadata ->> 'contextual_content') = LOWER(:{p_name}) THEN 1.0 ELSE 0.0 END)")
-            if search_mode == "exact":
+            title_sim_scores.append(f"bigm_similarity(COALESCE(e.cmetadata ->> 'title', ''), :{p_name})")
+            if title_only:
+                token_filters.append(
+                    f"lower(e.cmetadata ->> 'title') =% lower(:{p_name})"
+                )
+            elif search_mode == "exact":
+                exact_match_scores.append(f"(CASE WHEN LOWER(e.cmetadata ->> 'contextual_content') = LOWER(:{p_name}) THEN 1.0 ELSE 0.0 END)")
                 token_filters.append(
                     f"lower(e.cmetadata ->> 'contextual_content') LIKE lower(likequery(:{p_name}))"
                 )
             else:
+                exact_match_scores.append(f"(CASE WHEN LOWER(e.cmetadata ->> 'contextual_content') = LOWER(:{p_name}) THEN 1.0 ELSE 0.0 END)")
                 token_filters.append(
                     f"lower(e.cmetadata ->> 'contextual_content') =% lower(:{p_name})"
                 )
@@ -148,10 +158,12 @@ class PGBigmRetriever(BaseRetriever):
 
         # 필터 조립
         where_clause = " AND ".join(filter_clauses)
-        
+
         # 스코어 조립 (토큰별 점수 합산)
         exact_boost_sql = " + ".join(exact_match_scores) if exact_match_scores else "0.0"
         similarity_sql = " + ".join(sim_scores) if sim_scores else "0.0"
+        # title이 있는 source(Confluence, Jira)에만 가산점, 없으면 0.0 fallback
+        title_sim_sql = " + ".join(title_sim_scores) if title_sim_scores else "0.0"
 
         search_sql = text(f"""
             SELECT e.document, e.cmetadata, e.id,
@@ -160,7 +172,8 @@ class PGBigmRetriever(BaseRetriever):
             FROM langchain_pg_embedding e
             JOIN langchain_pg_collection c ON e.collection_id = c.uuid
             WHERE {where_clause}
-            ORDER BY 
+            ORDER BY
+                ({title_sim_sql}) DESC,
                 exact_match_boost DESC,
                 similarity_score DESC,
                 (e.cmetadata ->> 'created_at') DESC
@@ -256,6 +269,7 @@ class PGBigmRetriever(BaseRetriever):
             tool_filters=self.tool_filters,
             temporal_filters=self.temporal_filters,
             search_mode=self.search_mode,
+            title_only=self.title_only,
         )
         rows = await self._async_do_query(search_sql, params, label=label)
         return self._get_documents_from_results(rows)
@@ -328,6 +342,7 @@ class PGVectorService(BaseVectorDbService):
         keyword_tokens: list[str] | None = None,
         offset: int = 0,
         score_threshold: float = 0.2,
+        use_title_filter: bool = False,
     ) -> list[Document]:
         """
         Langchain 기반 Hybrid Search를 수행한다.
@@ -374,7 +389,7 @@ class PGVectorService(BaseVectorDbService):
         if keyword_tokens:
             # keyword 검색은 async session으로 직접 실행 — thread pool slot 점유 없음
             t_content = time.perf_counter()
-            content_retriever = PGBigmRetriever(
+            _retriever_base = dict(
                 session_factory=self.session_factory,
                 async_session_factory=self.async_session_factory,
                 collection_name=self.collection_name,
@@ -382,22 +397,47 @@ class PGVectorService(BaseVectorDbService):
                 offset=offset,
                 tool_filters=tool_filters,
                 temporal_filters=temporal_filters,
-                search_mode="exact",
             )
+            content_retriever = PGBigmRetriever(**_retriever_base, search_mode="exact")
             content_task = content_retriever.async_invoke(payload["keyword_tokens"])
-            if vector_task is not None:
-                vector_docs, content_docs = await asyncio.gather(vector_task, content_task)
+
+            if use_title_filter:
+                # 3-way RRF: vector(0.5) + content(0.25) + title(0.25)
+                title_retriever = PGBigmRetriever(**_retriever_base, title_only=True)
+                title_task = title_retriever.async_invoke(payload["keyword_tokens"])
+                tasks = [t for t in [vector_task, content_task, title_task] if t is not None]
+                if vector_task is not None:
+                    vector_docs, content_docs, title_docs = await asyncio.gather(
+                        vector_task, content_task, title_task
+                    )
+                else:
+                    content_docs, title_docs = await asyncio.gather(content_task, title_task)
+                    vector_docs = []
+                logger.debug(
+                    "content_retrieval_completed",
+                    elapsed=round(time.perf_counter() - t_content, 3),
+                    content_count=len(content_docs),
+                    title_count=len(title_docs),
+                )
+                result = weighted_reciprocal_rank(
+                    doc_lists=[vector_docs, content_docs, title_docs],
+                    weights=[0.5, 0.2, 0.3],
+                )[:k]
             else:
-                vector_docs, content_docs = [], await content_task
-            logger.debug(
-                "content_retrieval_completed",
-                elapsed=round(time.perf_counter() - t_content, 3),
-                count=len(content_docs),
-            )
-            result = weighted_reciprocal_rank(
-                doc_lists=[vector_docs, content_docs],
-                weights=weights
-            )[:k]
+                # 2-way RRF: vector + content (RAG 기본)
+                if vector_task is not None:
+                    vector_docs, content_docs = await asyncio.gather(vector_task, content_task)
+                else:
+                    vector_docs, content_docs = [], await content_task
+                logger.debug(
+                    "content_retrieval_completed",
+                    elapsed=round(time.perf_counter() - t_content, 3),
+                    count=len(content_docs),
+                )
+                result = weighted_reciprocal_rank(
+                    doc_lists=[vector_docs, content_docs],
+                    weights=weights,
+                )[:k]
         else:
             vector_docs = await vector_task
             result = vector_docs[:k]

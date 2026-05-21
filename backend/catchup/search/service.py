@@ -22,7 +22,7 @@ logger = structlog.get_logger()
 
 observe = get_observe()
 
-_MANUAL_SEARCH_POOL_SIZE: int = 50
+_MANUAL_SEARCH_POOL_SIZE: int = 70
 
 
 class ManualSearchService:
@@ -96,6 +96,7 @@ class ManualSearchService:
             keyword_tokens=planned.keyword_tokens or None,
             offset=0,
             temporal_filters=temporal_filters,
+            use_title_filter=True,
         )
 
         groups = build_doc_groups(all_docs)
