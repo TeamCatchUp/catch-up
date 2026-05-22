@@ -1,6 +1,6 @@
 'use client';
 
-// 원문 패널 로딩 스켈레톤 — 헤더 / 상담·고객정보 / 메시지 영역의 대략적 배치를 흉내낸다.
+// 원문 패널 로딩 스켈레톤 — 상담·고객정보 / 메시지 영역의 대략적 배치를 흉내낸다.
 
 import { Skeleton } from '@/shared/components/ui/skeleton';
 
@@ -15,11 +15,6 @@ const MESSAGE_ROWS = [
 export default function OriginalPanelSkeleton() {
   return (
     <div className="flex w-full flex-col">
-      {/* 헤더 */}
-      <div className="border-edge-neutral flex items-center gap-2 border-b px-5 py-4">
-        <Skeleton className="h-5 w-1/2" />
-      </div>
-
       {/* 상담·고객정보 */}
       <div className="border-edge-neutral flex flex-col gap-3 border-b px-5 py-4">
         <Skeleton className="h-4 w-24" />

@@ -44,7 +44,6 @@ import OriginalPanelComingSoon from '@/features/hybrid-search/components/origina
 import OriginalPanelContent from '@/features/hybrid-search/components/original/OriginalPanelContent';
 import OriginalPanelEmpty from '@/features/hybrid-search/components/original/OriginalPanelEmpty';
 import OriginalPanelError from '@/features/hybrid-search/components/original/OriginalPanelError';
-import OriginalPanelHeader from '@/features/hybrid-search/components/original/OriginalPanelHeader';
 import OriginalPanelSkeleton from '@/features/hybrid-search/components/original/OriginalPanelSkeleton';
 import type {
   OriginalBlockPayload,
@@ -335,29 +334,6 @@ export default function OriginalPanelGalleryPage() {
         </Case>
       </Section>
 
-      {/* --- 패널 헤더 --- */}
-
-      <Section title="OriginalPanelHeader" description="대화 제목 + 안전한 '원문 열기' 외부 링크.">
-        <Case label="제목 + 안전한 url">
-          <PanelWidth>
-            <OriginalPanelHeader
-              title={fullConversationResponse.title}
-              url={fullConversationResponse.url}
-            />
-          </PanelWidth>
-        </Case>
-        <Case label="url 없음 (링크 미표시)">
-          <PanelWidth>
-            <OriginalPanelHeader title="원문 열기 링크가 없는 대화" url={null} />
-          </PanelWidth>
-        </Case>
-        <Case label="빈 제목 ('제목 없음' 폴백)">
-          <PanelWidth>
-            <OriginalPanelHeader title="" url={null} />
-          </PanelWidth>
-        </Case>
-      </Section>
-
       {/* --- 패널 상태 컴포넌트 --- */}
 
       <Section
@@ -423,7 +399,7 @@ export default function OriginalPanelGalleryPage() {
 
       <Section
         title="OriginalPanelContent"
-        description="헤더 → 상담정보 → 고객정보 → 날짜 그룹별 메시지의 전체 조립."
+        description="상담정보 → 고객정보 → 날짜 그룹별 메시지의 전체 조립."
       >
         <Case label="현실적인 전체 대화 (3개 날짜 그룹, 메시지·콘텐츠 혼합)">
           <PanelFrame>
