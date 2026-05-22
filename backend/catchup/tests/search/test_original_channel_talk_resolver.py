@@ -71,6 +71,8 @@ def _detail() -> ChannelTalkUserChatDetail:
                 "memberId": "member-123",
                 "name": "Customer Kim",
                 "email": "kim@example.com",
+                "mobileNumber": "010-1234-5678",
+                "landlineNumber": "02-1234-5678",
                 "avatarUrl": "https://example.com/avatar.png",
             },
             "assignee": {
@@ -250,7 +252,12 @@ async def test_channel_talk_resolver_maps_first_page_detail_and_messages() -> No
     assert response.metadata["channel_name"] == "Support"
     assert response.metadata["state"] == "opened"
     assert response.metadata["priority"] == "urgent"
+    assert response.metadata["name"] == "Payment issue"
+    assert response.metadata["description"] == "결제 오류 문의"
+    assert response.metadata["customer"]["name"] == "Customer Kim"
     assert response.metadata["customer"]["email"] == "kim@example.com"
+    assert response.metadata["customer"]["mobile_number"] == "010-1234-5678"
+    assert response.metadata["customer"]["landline_number"] == "02-1234-5678"
     assert response.metadata["assignment"]["assignee_name"] == "Agent Lee"
     assert response.metadata["tags"] == [{"key": "payment", "name": "Payment"}]
     assert [item.id for item in response.items] == [

@@ -25,6 +25,7 @@ class ChannelTalkUserFoundation(BaseModel):
     name: str | None = None
     email: str | None = None
     mobile_number: str | None = None
+    landline_number: str | None = None
     avatar_url: str | None = None
     blocked: bool | None = None
     language: str | None = None
@@ -64,8 +65,26 @@ class ChannelTalkUserFoundation(BaseModel):
             user_type=source.text("type"),
             name=source.text("name") or (profile and profile.text("name")),
             email=source.text("email") or (profile and profile.text("email")),
-            mobile_number=source.text("mobileNumber")
-            or (profile and profile.text("mobileNumber")),
+            mobile_number=source.text("mobileNumber", "mobile_number", "phoneNumber")
+            or (
+                profile
+                and profile.text("mobileNumber", "mobile_number", "phoneNumber")
+            ),
+            landline_number=source.text(
+                "landlineNumber",
+                "landline_number",
+                "telephoneNumber",
+                "telephone_number",
+            )
+            or (
+                profile
+                and profile.text(
+                    "landlineNumber",
+                    "landline_number",
+                    "telephoneNumber",
+                    "telephone_number",
+                )
+            ),
             avatar_url=source.text("avatarUrl")
             or (profile and profile.text("avatarUrl")),
             blocked=source.boolean("blocked"),
