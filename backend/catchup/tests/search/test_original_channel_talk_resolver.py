@@ -20,7 +20,7 @@ from catchup.db.models import SourceType
 from catchup.search.original.ids import parse_original_document_id
 from catchup.search.original.resolvers.channel_talk import ChannelTalkOriginalError
 from catchup.search.original.resolvers.channel_talk import ChannelTalkOriginalResolver
-from catchup.search.original.schemas import OriginalSearchRequest
+from catchup.server.search.schemas import OriginalContentRequest
 
 
 class _FakeRepository:
@@ -85,7 +85,7 @@ def _detail() -> ChannelTalkUserChatDetail:
     )
 
 
-def _message() -> ChannelTalkUserChatMessage:
+def _text_file_message() -> ChannelTalkUserChatMessage:
     return ChannelTalkUserChatMessage.from_api_payload(
         {
             "id": "msg-1",
@@ -112,13 +112,109 @@ def _message() -> ChannelTalkUserChatMessage:
     )
 
 
+def _block_button_message() -> ChannelTalkUserChatMessage:
+    return ChannelTalkUserChatMessage.from_api_payload(
+        {
+            "id": "msg-2",
+            "chatId": "chat-456",
+            "type": "chat",
+            "personType": "manager",
+            "personId": "manager-1",
+            "manager": {
+                "id": "manager-1",
+                "name": "Agent Lee",
+                "email": "lee@example.com",
+            },
+            "blocks": [
+                {
+                    "type": "text",
+                    "value": "여기 링크 드릴게요",
+                }
+            ],
+            "buttons": [
+                {
+                    "title": "리포지토리",
+                    "action": "web",
+                    "url": "https://github.com/forrestchan",
+                }
+            ],
+            "createdAt": "2026-05-22T01:02:00Z",
+        },
+        user_chat_id="chat-456",
+    )
+
+
+def _form_message() -> ChannelTalkUserChatMessage:
+    return ChannelTalkUserChatMessage.from_api_payload(
+        {
+            "id": "msg-3",
+            "chatId": "chat-456",
+            "type": "form",
+            "personType": "manager",
+            "personId": "manager-1",
+            "options": ["private"],
+            "form": {
+                "type": "custom",
+                "submittedAt": "2026-05-22T01:03:00Z",
+                "inputs": [
+                    {
+                        "type": "singleSelect",
+                        "dataType": "string",
+                        "label": "저희 서비스를 알게 된 경로",
+                        "value": "검색",
+                        "readOnly": True,
+                    }
+                ],
+            },
+            "createdAt": "2026-05-22T01:03:00Z",
+        },
+        user_chat_id="chat-456",
+    )
+
+
+def _bot_message() -> ChannelTalkUserChatMessage:
+    return ChannelTalkUserChatMessage.from_api_payload(
+        {
+            "id": "msg-4",
+            "chatId": "chat-456",
+            "type": "chat",
+            "personType": "bot",
+            "personId": "bot-1",
+            "botName": "Catch Up",
+            "plainText": "방문해주셔서 감사합니다.",
+            "createdAt": "2026-05-22T01:03:30Z",
+        },
+        user_chat_id="chat-456",
+    )
+
+
+def _log_message() -> ChannelTalkUserChatMessage:
+    return ChannelTalkUserChatMessage.from_api_payload(
+        {
+            "id": "msg-log",
+            "chatId": "chat-456",
+            "personType": "manager",
+            "personId": "manager-1",
+            "log": {"action": "close"},
+            "createdAt": "2026-05-22T01:04:00Z",
+        },
+        user_chat_id="chat-456",
+    )
+
+
 @pytest.mark.asyncio
 async def test_channel_talk_resolver_maps_first_page_detail_and_messages() -> None:
     repository = _FakeRepository(_credentials())
     fetcher = _FakeFetcher(
         ChannelTalkUserChatOriginalPage(
             detail=_detail(),
-            messages=(_message(),),
+            messages=(
+                _text_file_message(),
+                _block_button_message(),
+                _form_message(),
+                _bot_message(),
+                _log_message(),
+            ),
             next_cursor="cursor-2",
         )
     )
@@ -127,7 +223,7 @@ async def test_channel_talk_resolver_maps_first_page_detail_and_messages() -> No
         repository_factory=lambda _db: repository,
         clock=lambda: datetime(2026, 5, 22, 2, 0, tzinfo=timezone.utc),
     )
-    request = OriginalSearchRequest(
+    request = OriginalContentRequest(
         connector=SourceType.CHANNEL_TALK,
         document_id="channel_talk:user_chat:channel-123:chat-456",
     )
@@ -155,16 +251,113 @@ async def test_channel_talk_resolver_maps_first_page_detail_and_messages() -> No
     assert response.metadata["customer"]["email"] == "kim@example.com"
     assert response.metadata["assignment"]["assignee_name"] == "Agent Lee"
     assert response.metadata["tags"] == [{"key": "payment", "name": "Payment"}]
-    assert len(response.items) == 1
-    item = response.items[0]
-    assert item.id == "msg-1"
-    assert item.type == "message"
-    assert item.author is not None
-    assert item.author.type == "customer"
-    assert item.author.name == "Customer Kim"
-    assert item.body.text == "결제가 안 됩니다. | receipt.png (image/png)"
-    assert item.metadata["visibility"] == "public"
-    assert item.metadata["attachments"][0]["file_key"] == "file-1"
+    assert [item.id for item in response.items] == [
+        "msg-1",
+        "msg-2",
+        "msg-3",
+        "msg-4",
+    ]
+
+    text_file_item = response.items[0]
+    assert text_file_item.type == "message"
+    assert text_file_item.visibility == "public"
+    assert text_file_item.author is not None
+    assert text_file_item.author.type == "customer"
+    assert text_file_item.author.name == "Customer Kim"
+    assert [content.content_type for content in text_file_item.contents] == [
+        "text",
+        "file",
+    ]
+    assert text_file_item.contents[0].payload == {"text": "결제가 안 됩니다."}
+    assert text_file_item.contents[1].payload == {
+        "files": [
+            {
+                "file_key": "file-1",
+                "name": "receipt.png",
+                "content_type": "image/png",
+            }
+        ]
+    }
+
+    block_button_item = response.items[1]
+    assert block_button_item.visibility == "public"
+    assert [content.content_type for content in block_button_item.contents] == [
+        "block",
+        "button",
+    ]
+    assert block_button_item.contents[0].payload == {
+        "blocks": [
+            {
+                "block_type": "text",
+                "text": "여기 링크 드릴게요",
+                "value": "여기 링크 드릴게요",
+                "raw_payload": {"type": "text", "value": "여기 링크 드릴게요"},
+            }
+        ]
+    }
+    assert block_button_item.contents[1].payload == {
+        "buttons": [
+            {
+                "text": "리포지토리",
+                "action": "web",
+                "url": "https://github.com/forrestchan",
+            }
+        ]
+    }
+
+    form_item = response.items[2]
+    assert form_item.visibility == "internal"
+    assert [content.content_type for content in form_item.contents] == ["form"]
+    assert form_item.contents[0].payload == {
+        "form": {
+            "form_type": "custom",
+            "submitted_at": "2026-05-22T01:03:00Z",
+            "inputs": [
+                {
+                    "label": "저희 서비스를 알게 된 경로",
+                    "input_type": "singleSelect",
+                    "data_type": "string",
+                    "value": "검색",
+                }
+            ],
+            "raw_payload": {
+                "type": "custom",
+                "submittedAt": "2026-05-22T01:03:00Z",
+                "inputs": [
+                    {
+                        "type": "singleSelect",
+                        "dataType": "string",
+                        "label": "저희 서비스를 알게 된 경로",
+                        "value": "검색",
+                        "readOnly": True,
+                    }
+                ],
+            },
+        }
+    }
+
+    bot_item = response.items[3]
+    assert bot_item.author is not None
+    assert bot_item.author.type == "manager"
+    assert bot_item.author.name == "Catch Up"
+
+    serialized_items = [
+        item.model_dump(mode="json", exclude_none=True)
+        for item in response.items
+    ]
+    assert all("body" not in item for item in serialized_items)
+    assert all("metadata" not in item for item in serialized_items)
+    assert all(item["type"] == "message" for item in serialized_items)
+    assert all(
+        content["content_type"] in {"text", "block", "button", "form", "file"}
+        for item in serialized_items
+        for content in item["contents"]
+    )
+    assert "attachments" not in response.metadata
+    assert "buttons" not in response.metadata
+    assert "blocks" not in response.metadata
+    assert "forms" not in response.metadata
+    assert "logs" not in response.metadata
 
 
 @pytest.mark.asyncio
@@ -182,7 +375,7 @@ async def test_channel_talk_resolver_follow_up_page_returns_minimal_metadata() -
         repository_factory=lambda _db: repository,
         clock=lambda: datetime(2026, 5, 22, 2, 0, tzinfo=timezone.utc),
     )
-    request = OriginalSearchRequest(
+    request = OriginalContentRequest(
         connector=SourceType.CHANNEL_TALK,
         document_id="channel_talk:user_chat:channel-123:chat-456",
         next_cursor="cursor-2",
@@ -212,7 +405,7 @@ async def test_channel_talk_resolver_rejects_missing_credentials() -> None:
         fetcher=_FakeFetcher(ChannelTalkUserChatOriginalPage()),
         repository_factory=lambda _db: repository,
     )
-    request = OriginalSearchRequest(
+    request = OriginalContentRequest(
         connector=SourceType.CHANNEL_TALK,
         document_id="channel_talk:user_chat:channel-123:chat-456",
     )

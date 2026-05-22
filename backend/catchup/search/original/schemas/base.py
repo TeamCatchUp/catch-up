@@ -7,24 +7,6 @@ from pydantic import BaseModel
 from pydantic import ConfigDict
 from pydantic import Field
 
-"""
-JSON Payload Example
-{
-  "items": [
-    {
-      "id": "message-id",
-      "type": "message",
-      "visibility": "public",
-      "author": {},
-      "contents": [
-        { "content_type": "text", "payload": {} },
-        { "content_type": "file", "payload": {} }
-      ],
-      "created_at": "..."
-    }
-  ]
-}
-"""
 
 class OriginalContent(BaseModel):
     model_config = ConfigDict(extra="forbid")
