@@ -20,6 +20,18 @@ from catchup.search.planner.state import CachedSearch
 
 logger = structlog.get_logger()
 
+
+def resolve(intelligent_filter: bool, explicit, inferred):
+    """두 축(툴, 날짜) 공통 resolve 함수. explicit가 falsy면 inferred 허용 여부 판단한다."""
+    if explicit:
+        return explicit
+    if not intelligent_filter:
+        return None
+    if inferred:
+        return inferred
+    return None
+
+
 observe = get_observe()
 
 _MANUAL_SEARCH_POOL_SIZE: int = 70
@@ -83,16 +95,27 @@ class ManualSearchService:
 
         planned = state["query_cache"][keyword].planned
 
+        resolved_tool_filters = (
+            tool_filters if tool_filters is not None
+            else planned.inferred_tool_filters
+        )
+        resolved_start = (
+            start_date if start_date is not None else planned.start_date
+        )
+        resolved_end = (
+            end_date if end_date is not None else planned.end_date
+        )
+
         temporal_filters = build_manual_search_temporal_filters(
-            tool_filters=tool_filters,
-            start_date=start_date,
-            end_date=end_date,
+            tool_filters=resolved_tool_filters,
+            start_date=resolved_start,
+            end_date=resolved_end,
         ) or None
 
         all_docs = await vector_db_service.hybrid_search(
             query=planned.query,
             k=_MANUAL_SEARCH_POOL_SIZE,
-            tool_filters=tool_filters,
+            tool_filters=resolved_tool_filters,
             keyword_tokens=planned.keyword_tokens or None,
             offset=0,
             temporal_filters=temporal_filters,
