@@ -4,8 +4,8 @@ from sqlalchemy.orm import Session
 
 from catchup.search.original.ids import parse_original_document_id
 from catchup.search.original.registry import OriginalResolverRegistry
-from catchup.search.original.schemas import OriginalSearchRequest
-from catchup.search.original.schemas import OriginalSearchResponse
+from catchup.server.search.schemas import OriginalContentRequest
+from catchup.server.search.schemas import OriginalContentResponse
 
 
 class OriginalSearchService:
@@ -15,9 +15,9 @@ class OriginalSearchService:
     async def get_original(
         self,
         *,
-        request: OriginalSearchRequest,
+        request: OriginalContentRequest,
         db: Session,
-    ) -> OriginalSearchResponse:
+    ) -> OriginalContentResponse:
         ref = parse_original_document_id(
             connector=request.connector,
             document_id=request.document_id,
@@ -31,4 +31,3 @@ class OriginalSearchService:
             ref=ref,
             db=db,
         )
-

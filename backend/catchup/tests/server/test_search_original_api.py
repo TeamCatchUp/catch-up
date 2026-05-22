@@ -11,7 +11,14 @@ from catchup.db.dependencies import get_db
 from catchup.db.models import SourceType
 from catchup.db.models import User
 from catchup.search.original.ids import OriginalDocumentIdError
-from catchup.search.original.schemas import OriginalSearchResponse
+from catchup.search.original.schemas.channel_talk import ChannelTalkOriginalAuthor
+from catchup.search.original.schemas.channel_talk import (
+    ChannelTalkUserChatOriginalContent,
+)
+from catchup.search.original.schemas.channel_talk import (
+    ChannelTalkUserChatOriginalContentResponse,
+)
+from catchup.search.original.schemas.channel_talk import ChannelTalkUserChatOriginalItem
 from catchup.server.main import app
 from catchup.server.search.dependencies import get_original_search_service
 
@@ -39,13 +46,31 @@ def mock_current_user():
 def mock_original_search_service():
     service = MagicMock()
     service.get_original = AsyncMock(
-        return_value=OriginalSearchResponse(
+        return_value=ChannelTalkUserChatOriginalContentResponse(
             connector=SourceType.CHANNEL_TALK,
             entity_type="user_chat",
             document_id="channel_talk:user_chat:channel-123:chat-456",
             title="결제 오류 문의",
             url="https://desk.channel.io/#/channels/channel-123/user_chats/chat-456",
-            items=[],
+            items=[
+                ChannelTalkUserChatOriginalItem(
+                    id="msg-1",
+                    type="message",
+                    visibility="public",
+                    author=ChannelTalkOriginalAuthor(
+                        id="user-123",
+                        name="Customer Kim",
+                        type="customer",
+                    ),
+                    contents=[
+                        ChannelTalkUserChatOriginalContent(
+                            content_type="text",
+                            payload={"text": "결제가 안 됩니다."},
+                        )
+                    ],
+                    created_at=datetime(2026, 5, 22, 1, 0, tzinfo=timezone.utc),
+                )
+            ],
             metadata={"channel_id": "channel-123"},
             next_cursor=None,
             fetched_at=datetime(2026, 5, 22, 2, 0, tzinfo=timezone.utc),
@@ -75,7 +100,32 @@ def test_original_search_endpoint_delegates_to_service(
     assert data["connector"] == "channel_talk"
     assert data["entity_type"] == "user_chat"
     assert data["document_id"] == "channel_talk:user_chat:channel-123:chat-456"
-    assert data["items"] == []
+    assert data["items"] == [
+        {
+            "id": "msg-1",
+            "type": "message",
+            "visibility": "public",
+            "author": {
+                "id": "user-123",
+                "name": "Customer Kim",
+                "type": "customer",
+                "email": None,
+                "avatar_url": None,
+            },
+            "contents": [
+                {
+                    "content_type": "text",
+                    "payload": {
+                        "text": "결제가 안 됩니다.",
+                    },
+                }
+            ],
+            "created_at": "2026-05-22T01:00:00Z",
+            "updated_at": None,
+        }
+    ]
+    assert "body" not in data["items"][0]
+    assert "metadata" not in data["items"][0]
     assert data["metadata"] == {"channel_id": "channel-123"}
     assert data["next_cursor"] is None
     mock_original_search_service.get_original.assert_awaited_once()
