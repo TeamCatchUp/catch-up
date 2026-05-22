@@ -25,7 +25,13 @@ function FieldLabel({ icon: Icon, text }: FieldLabelProps) {
 }
 
 export default function ConsultationInfo({ metadata }: ConsultationInfoProps) {
-  const assigneeName = metadata.assignment?.assignee_name?.trim();
+  // 담당자 — 응답엔 assignee_id만 오므로 managers[]에서 이름을 조회.
+  const assignment = metadata.assignment;
+  const assigneeId = assignment?.assignee_id;
+  const assigneeName = assigneeId
+    ? assignment?.managers?.find((manager) => manager.manager_id === assigneeId)?.name?.trim()
+    : undefined;
+  const description = metadata.description?.trim();
   const tagNames = (metadata.tags ?? [])
     .map((tag) => tag.name?.trim())
     .filter((name): name is string => Boolean(name));
@@ -59,8 +65,11 @@ export default function ConsultationInfo({ metadata }: ConsultationInfoProps) {
 
       <div className="flex flex-col gap-2">
         <FieldLabel icon={FileIcon} text="상담 설명" />
-        {/* 백엔드 계약에 상담 설명 free-text 필드가 없어 항상 placeholder. */}
-        <p className="text-body-small text-content-assistive">없음</p>
+        {description ? (
+          <p className="text-body-small text-content-neutral break-words">{description}</p>
+        ) : (
+          <span className="text-body-small text-content-assistive">없음</span>
+        )}
       </div>
     </section>
   );

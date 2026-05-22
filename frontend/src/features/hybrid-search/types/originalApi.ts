@@ -113,6 +113,7 @@ export interface OriginalCustomer {
   name?: string;
   email?: string;
   mobile_number?: string;
+  landline_number?: string;
   avatar_url?: string;
   user_type?: string;
   member_id?: string;
@@ -121,6 +122,7 @@ export interface OriginalCustomer {
   city?: string;
 }
 
+// managers[]가 관측된 응답에서 비어 있어 요소 형태는 미확정 — 최선의 추정.
 export interface OriginalAssignmentManager {
   manager_id?: string;
   name?: string;
@@ -128,10 +130,9 @@ export interface OriginalAssignmentManager {
   role_id?: string;
 }
 
+// 응답엔 assignee_id만 오고 담당자 이름 필드는 없다 — managers[]에서 id로 조회.
 export interface OriginalAssignment {
   assignee_id?: string;
-  assignee_name?: string;
-  assignee_email?: string;
   manager_ids?: string[];
   managers?: OriginalAssignmentManager[];
   first_assignee_id_after_open?: string;
@@ -146,6 +147,9 @@ export interface OriginalMetadata {
   channel_id: string;
   channel_name: string;
   user_chat_id: string;
+  name?: string | null;
+  // 상담 설명 — detail 부재 시 생략, 값이 없으면 null.
+  description?: string | null;
   state?: string;
   priority?: string | number;
   managed?: boolean;

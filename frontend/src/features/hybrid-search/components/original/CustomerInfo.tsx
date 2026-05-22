@@ -1,7 +1,7 @@
 'use client';
 
 // 고객정보 섹션 — 접기/펴기. open 상태를 자체 소유하고 본문은 Collapsible로 렌더.
-// 이름/이메일/전화번호 는 OriginalCustomer 에서, 유선번호는 백엔드 필드 부재로 항상 '없음'.
+// 이름/이메일/전화번호/유선번호 를 OriginalCustomer 에서 렌더.
 
 import { useState } from 'react';
 
@@ -60,8 +60,7 @@ export default function CustomerInfo({ customer }: CustomerInfoProps) {
           <CustomerRow icon={PersonIcon} label="이름" value={customer?.name} />
           <CustomerRow icon={MailIcon} label="이메일" value={customer?.email} />
           <CustomerRow icon={PhoneIcon} label="전화번호" value={customer?.mobile_number} />
-          {/* OriginalCustomer 에 유선번호 필드가 없어 항상 placeholder. */}
-          <CustomerRow icon={CallIcon} label="유선번호" value={undefined} />
+          <CustomerRow icon={CallIcon} label="유선번호" value={customer?.landline_number} />
         </div>
       </Collapsible>
     </section>

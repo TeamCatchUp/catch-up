@@ -10,6 +10,7 @@ export const customerFull: OriginalCustomer = {
   name: '직원04',
   email: 'minsoo.kim@example.com',
   mobile_number: '010-1234-5678',
+  landline_number: '02-789-0123',
   avatar_url: 'https://i.pravatar.cc/80?img=12',
   user_type: 'member',
   member_id: 'member-7781',
@@ -32,6 +33,7 @@ export const metadataFull: OriginalMetadata = {
   channel_id: 'channel-001',
   channel_name: '캐치업 고객지원',
   user_chat_id: 'user-chat-55012',
+  description: '결제 오류로 환불을 요청하는 문의입니다.',
   state: 'closed',
   priority: 'high',
   managed: true,
@@ -39,8 +41,6 @@ export const metadataFull: OriginalMetadata = {
   customer: customerFull,
   assignment: {
     assignee_id: 'mgr-001',
-    assignee_name: '이지은',
-    assignee_email: 'jieun.lee@catchup.example',
     manager_ids: ['mgr-001', 'mgr-002'],
     managers: [
       { manager_id: 'mgr-001', name: '이지은', email: 'jieun.lee@catchup.example', role_id: 'agent' },
@@ -70,8 +70,10 @@ export const metadataNoTags: OriginalMetadata = {
   customer: customerPartial,
   assignment: {
     assignee_id: 'mgr-003',
-    assignee_name: '최상담',
-    assignee_email: 'sangdam.choi@catchup.example',
+    manager_ids: ['mgr-003'],
+    managers: [
+      { manager_id: 'mgr-003', name: '최상담', email: 'sangdam.choi@catchup.example', role_id: 'agent' },
+    ],
   },
   timing: { opened_at: '2026-05-21T14:10:00+09:00' },
 };
