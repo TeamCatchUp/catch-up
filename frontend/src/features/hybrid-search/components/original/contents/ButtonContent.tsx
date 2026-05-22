@@ -17,7 +17,7 @@ function OriginalButtonItem({ button }: { button: OriginalButton }) {
 
   if (isLink) {
     return (
-      <Button asChild variant="text-primary-blue" size="sm">
+      <Button asChild variant="text-primary-blue" size="md">
         <a href={button.url} target="_blank" rel="noopener noreferrer">
           {label}
         </a>
@@ -26,7 +26,7 @@ function OriginalButtonItem({ button }: { button: OriginalButton }) {
   }
 
   return (
-    <Button type="button" variant="text-primary-blue" size="sm" disabled>
+    <Button type="button" variant="text-primary-blue" size="md" disabled>
       {label}
     </Button>
   );

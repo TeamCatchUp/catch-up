@@ -6,7 +6,7 @@
 import type { ReactNode } from 'react';
 
 import type { OriginalFile } from '@/features/hybrid-search/types/originalApi';
-import FileIcon from '@/public/icons/icon/file.svg';
+import FileIcon from '@/public/icons/icon/file_filled.svg';
 import { isSafeUrl } from '@/shared/utils/isSafeUrl';
 
 interface FileRowProps {
@@ -30,34 +30,39 @@ function formatFileSize(bytes: number | undefined): string | null {
   return `${rounded}${FILE_SIZE_UNITS[unitIndex]}`;
 }
 
+// 파일 확장자 우선, 없으면 MIME 서브타입을 짧은 타입 라벨로 (예: pdf).
+function formatFileType(name: string, contentType: string | undefined): string | null {
+  const extMatch = /\.([a-z0-9]+)$/i.exec(name);
+  if (extMatch) return extMatch[1].toLowerCase();
+
+  const mime = contentType?.trim();
+  if (!mime) return null;
+  const subtype = mime.split('/')[1]?.split('+')[0];
+  return subtype ? subtype.toLowerCase() : null;
+}
+
 export default function FileRow({ file }: FileRowProps) {
   const name = file.name?.trim() ? file.name : '이름 없음';
   const sizeLabel = formatFileSize(file.size);
-  const typeLabel = file.content_type?.trim() ? file.content_type : null;
+  const typeLabel = formatFileType(name, file.content_type);
   const isLink = isSafeUrl(file.url);
+
+  const meta = [sizeLabel, typeLabel].filter(Boolean).join(' ∙ ');
 
   const inner = (
     <>
-      <span className="bg-fill-primary flex size-9 shrink-0 items-center justify-center rounded-lg">
-        <FileIcon className="text-icon-inverse h-5 w-5" />
+      <span className="bg-fill-normal flex shrink-0 items-center justify-center rounded-lg p-2">
+        <FileIcon className="text-icon-primary-assistive size-7" />
       </span>
       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
         <span className="text-body-small text-content-neutral truncate">{name}</span>
-        {(sizeLabel || typeLabel) && (
-          <span className="text-body-xsmall text-content-assistive flex items-center gap-1 truncate">
-            {sizeLabel && <span className="shrink-0">{sizeLabel}</span>}
-            {sizeLabel && typeLabel && (
-              <span aria-hidden className="bg-dim-black-10 h-1 w-1 shrink-0 rounded-full" />
-            )}
-            {typeLabel && <span className="truncate">{typeLabel}</span>}
-          </span>
-        )}
+        {meta && <span className="text-body-xsmall text-content-assistive truncate">{meta}</span>}
       </span>
     </>
   );
 
   const className =
-    'bg-fill-strong border-edge-neutral flex w-full items-center gap-2 rounded-lg border p-2 text-left';
+    'bg-fill-strong border-edge-neutral flex w-full items-center gap-2.5 rounded-lg border p-2 text-left';
 
   if (isLink) {
     return (

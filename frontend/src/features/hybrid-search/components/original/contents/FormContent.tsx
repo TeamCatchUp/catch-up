@@ -40,8 +40,8 @@ function FormInputRow({ input }: { input: OriginalFormInput }) {
   const value = input.value?.trim();
 
   return (
-    <div className="flex flex-col gap-1">
-      <span className="text-heading-small text-content-normal font-semibold">{label}</span>
+    <div className="flex flex-col gap-2">
+      <span className="text-heading-small text-content-normal">{label}</span>
       <span className="text-body-small text-content-normal break-words">
         {value ?? <span className="text-content-assistive">없음</span>}
       </span>
@@ -68,14 +68,14 @@ export default function FormContent({ content }: FormContentProps) {
   );
 
   return (
-    <div className="bg-fill-strong border-edge-neutral flex w-full flex-col gap-3 rounded-lg border p-4">
+    <div className="bg-fill-normal border-edge-neutral flex w-full flex-col gap-3 rounded-xl border px-4 py-3">
       {isCollapsible ? (
         <Collapsible
           open={open}
           onOpenChange={setOpen}
           header={
             <div className="flex w-full items-center gap-2">
-              <span className="text-heading-small text-content-normal flex-1 text-left font-semibold">
+              <span className="text-heading-small text-content-normal flex-1 text-left">
                 제출 항목 {inputs.length}개
               </span>
               <ChevronIcon
