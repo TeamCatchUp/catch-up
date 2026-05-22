@@ -28,6 +28,7 @@ class ChannelTalkUserChatMessageAuthor(BaseModel):
     manager_id: str | None = None
     name: str | None = None
     email: str | None = None
+    avatar_url: str | None = None
     role_id: str | None = None
     bot_name: str | None = None
     is_bot: bool = False
@@ -115,7 +116,9 @@ class ChannelTalkUserChatMessage(BaseModel):
     created_at: datetime | None = None
     updated_at: datetime | None = None
     is_private: bool | None = None
-    attachments: list[ChannelTalkUserChatMessageAttachment] = Field(default_factory=list)
+    attachments: list[ChannelTalkUserChatMessageAttachment] = Field(
+        default_factory=list
+    )
     buttons: list[ChannelTalkUserChatMessageButton] = Field(default_factory=list)
     blocks: list[ChannelTalkUserChatMessageBlock] = Field(default_factory=list)
     log: ChannelTalkUserChatMessageLog | None = None
@@ -146,9 +149,14 @@ class ChannelTalkUserChatMessage(BaseModel):
 
         requested_user_chat_id = require_text(user_chat_id, "user_chat_id")
         if "userChatId" in payload:
-            raise ValueError("user chat message payload used unsupported userChatId key")
+            raise ValueError(
+                "user chat message payload used unsupported userChatId key"
+            )
         payload_user_chat_id = reader.text("chatId")
-        if payload_user_chat_id is not None and payload_user_chat_id != requested_user_chat_id:
+        if (
+            payload_user_chat_id is not None
+            and payload_user_chat_id != requested_user_chat_id
+        ):
             raise ValueError("user chat message payload user_chat_id mismatch")
 
         resolved_user_chat_id = payload_user_chat_id or requested_user_chat_id
@@ -204,7 +212,8 @@ class ChannelTalkUserChatMessagePage(BaseModel):
         root_bots = []
         if root_reader is not None:
             root_bots = [
-                value for value in root_reader.items("bots")
+                value
+                for value in root_reader.items("bots")
                 if isinstance(value, Mapping)
             ]
         messages, next_cursor = _parse_metadata_page(
@@ -224,7 +233,10 @@ class ChannelTalkUserChatMessagePage(BaseModel):
             quota_snapshot=_parse_quota_snapshot(headers),
         )
 
-def _parse_message_attachments(reader: "_PayloadReader") -> list[ChannelTalkUserChatMessageAttachment]:
+
+def _parse_message_attachments(
+    reader: "_PayloadReader",
+) -> list[ChannelTalkUserChatMessageAttachment]:
     attachments: list[ChannelTalkUserChatMessageAttachment] = []
     for value in [*reader.items("attachments"), *reader.items("files")]:
         if not isinstance(value, Mapping):
@@ -247,7 +259,9 @@ def _parse_message_attachments(reader: "_PayloadReader") -> list[ChannelTalkUser
     return attachments
 
 
-def _parse_message_buttons(reader: "_PayloadReader") -> list[ChannelTalkUserChatMessageButton]:
+def _parse_message_buttons(
+    reader: "_PayloadReader",
+) -> list[ChannelTalkUserChatMessageButton]:
     buttons: list[ChannelTalkUserChatMessageButton] = []
     for value in reader.items("buttons"):
         if not isinstance(value, Mapping):
@@ -264,7 +278,9 @@ def _parse_message_buttons(reader: "_PayloadReader") -> list[ChannelTalkUserChat
     return buttons
 
 
-def _parse_message_blocks(reader: "_PayloadReader") -> list[ChannelTalkUserChatMessageBlock]:
+def _parse_message_blocks(
+    reader: "_PayloadReader",
+) -> list[ChannelTalkUserChatMessageBlock]:
     blocks: list[ChannelTalkUserChatMessageBlock] = []
     for value in reader.items("blocks"):
         if not isinstance(value, Mapping):
@@ -273,7 +289,9 @@ def _parse_message_blocks(reader: "_PayloadReader") -> list[ChannelTalkUserChatM
         blocks.append(
             ChannelTalkUserChatMessageBlock(
                 block_type=item_reader.text("type", "blockType", "block_type"),
-                text=item_reader.text("text", "plainText", "plain_text", "label", "value"),
+                text=item_reader.text(
+                    "text", "plainText", "plain_text", "label", "value"
+                ),
                 label=item_reader.text("label", "title"),
                 name=item_reader.text("name"),
                 value=item_reader.text("value"),
@@ -283,7 +301,9 @@ def _parse_message_blocks(reader: "_PayloadReader") -> list[ChannelTalkUserChatM
     return blocks
 
 
-def _parse_message_log(reader: "_PayloadReader") -> ChannelTalkUserChatMessageLog | None:
+def _parse_message_log(
+    reader: "_PayloadReader",
+) -> ChannelTalkUserChatMessageLog | None:
     log_reader = reader.nested("log")
     if log_reader is None:
         return None
@@ -295,7 +315,9 @@ def _parse_message_log(reader: "_PayloadReader") -> ChannelTalkUserChatMessageLo
     )
 
 
-def _parse_message_form(reader: "_PayloadReader") -> ChannelTalkUserChatMessageForm | None:
+def _parse_message_form(
+    reader: "_PayloadReader",
+) -> ChannelTalkUserChatMessageForm | None:
     form_reader = reader.nested("form")
     if form_reader is None:
         return None
@@ -323,7 +345,9 @@ def _parse_message_form(reader: "_PayloadReader") -> ChannelTalkUserChatMessageF
     )
 
 
-def _parse_message_web_page(reader: "_PayloadReader") -> ChannelTalkUserChatMessageWebPage | None:
+def _parse_message_web_page(
+    reader: "_PayloadReader",
+) -> ChannelTalkUserChatMessageWebPage | None:
     web_page_reader = reader.nested("webPage", "web_page")
     if web_page_reader is None:
         return None
@@ -353,15 +377,22 @@ def _parse_user_chat_message_author(
     manager_reader = reader.nested("manager")
     user_reader = reader.nested("user", "customer")
     bot_reader = _read_message_bot(reader, root_bots=root_bots)
+    user_profile_reader = user_reader and user_reader.nested("profile")
+    manager_profile_reader = manager_reader and manager_reader.nested("profile")
+    bot_profile_reader = bot_reader and bot_reader.nested("profile")
     person_id = reader.text("personId")
     bot_name = reader.text("botName") or (
         bot_reader and bot_reader.text("name", "botName")
     )
-    bot_id = person_id if (
-        bot_reader is not None
-        or reader.text("personType") == "bot"
-        or bot_name is not None
-    ) else None
+    bot_id = (
+        person_id
+        if (
+            bot_reader is not None
+            or reader.text("personType") == "bot"
+            or bot_name is not None
+        )
+        else None
+    )
 
     author_type = reader.text("personType")
     if author_type is None:
@@ -395,13 +426,42 @@ def _parse_user_chat_message_author(
         member_id=(user_reader and user_reader.text("memberId")),
         manager_id=manager_id,
         name=(manager_reader and manager_reader.text("name", "displayName"))
+        or (
+            manager_profile_reader
+            and manager_profile_reader.text("name", "displayName")
+        )
         or (user_reader and user_reader.text("name"))
+        or (user_profile_reader and user_profile_reader.text("name", "displayName"))
         or (bot_reader and bot_reader.text("name", "botName"))
+        or (bot_profile_reader and bot_profile_reader.text("name", "displayName"))
         or bot_name
         or reader.text("name"),
         email=(manager_reader and manager_reader.text("email"))
+        or (manager_profile_reader and manager_profile_reader.text("email"))
         or (user_reader and user_reader.text("email"))
+        or (user_profile_reader and user_profile_reader.text("email"))
+        or (bot_reader and bot_reader.text("email"))
+        or (bot_profile_reader and bot_profile_reader.text("email"))
         or reader.text("email"),
+        avatar_url=(
+            manager_reader
+            and manager_reader.text("avatarUrl", "avatarURL", "avatar_url")
+        )
+        or (
+            manager_profile_reader
+            and manager_profile_reader.text("avatarUrl", "avatarURL", "avatar_url")
+        )
+        or (user_reader and user_reader.text("avatarUrl", "avatarURL", "avatar_url"))
+        or (
+            user_profile_reader
+            and user_profile_reader.text("avatarUrl", "avatarURL", "avatar_url")
+        )
+        or (bot_reader and bot_reader.text("avatarUrl", "avatarURL", "avatar_url"))
+        or (
+            bot_profile_reader
+            and bot_profile_reader.text("avatarUrl", "avatarURL", "avatar_url")
+        )
+        or reader.text("avatarUrl", "avatarURL", "avatar_url"),
         role_id=(manager_reader and manager_reader.text("roleId")),
         bot_name=bot_name,
         is_bot=bool(bot_name or bot_id) or (author_type == "bot"),
@@ -468,11 +528,7 @@ def _read_message_plain_text(
             return web_page_text
 
     blocks = blocks or _parse_message_blocks(reader)
-    block_texts = [
-        block.text
-        for block in blocks
-        if block.text is not None
-    ]
+    block_texts = [block.text for block in blocks if block.text is not None]
     if block_texts:
         return "\n".join(block_texts)
 
@@ -480,10 +536,7 @@ def _read_message_plain_text(
 
 
 def _build_form_plain_text(message_form: ChannelTalkUserChatMessageForm) -> str | None:
-    parts = [
-        _format_form_input_text(item)
-        for item in message_form.inputs
-    ]
+    parts = [_format_form_input_text(item) for item in message_form.inputs]
     filtered_parts = [value for value in parts if value is not None]
     if filtered_parts:
         return "\n".join(filtered_parts)
