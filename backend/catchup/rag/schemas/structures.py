@@ -11,19 +11,19 @@ class BaseSearchQuery(BaseModel):
     reasoning: str = Field(default="", description="이 검색이 필요한 이유")
     start_date: datetime | None = Field(
         None,
-        description="""
-        Vector 검색 대상 문서의 발생(생성/수정) 기준 시작일.
-        반드시 'YYYY-MM-DDTHH:MM:SS' 형식의 ISO 8601 포맷으로 작성할 것.
-        (시간 특정 불가 시 null)
-        """,
+        description=(
+            "Vector 검색 대상 문서의 발생(생성/수정) 기준 시작일. "
+            "반드시 UTC 기준 'YYYY-MM-DDTHH:MM:SS' ISO 8601 포맷으로 작성할 것. "
+            "(시간 특정 불가 시 null)"
+        ),
     )
     end_date: datetime | None = Field(
         None,
-        description="""
-        Vector 검색 대상 문서의 발생(생성/수정) 기준 종료일.
-        반드시 'YYYY-MM-DDTHH:MM:SS' 형식의 ISO 8601 포맷으로 작성할 것.
-        (시간 특정 불가 시 null)
-        """,
+        description=(
+            "Vector 검색 대상 문서의 발생(생성/수정) 기준 종료일. "
+            "반드시 UTC 기준 'YYYY-MM-DDTHH:MM:SS' ISO 8601 포맷으로 작성할 것. "
+            "(시간 특정 불가 시 null)"
+        ),
     )
 
 
@@ -39,6 +39,14 @@ class ManualSearchQuery(VectorDbSearchQuery):
     query: str = Field(
         default="",
         description="벡터 검색에 전달할 English 쿼리 (번역 + 동의어 확장). entity는 확장 없이 그대로.",
+    )
+    inferred_tool_filters: list[SourceType] | None = Field(
+        default=None,
+        description=(
+            "쿼리가 특정 협업 툴을 명시적 locative phrase로 지정할 때만 채운다 "
+            "(예: 'Slack에서', 'Jira에서'). "
+            "불명확하거나 cross-source 가능성이 있으면 null."
+        ),
     )
 
 

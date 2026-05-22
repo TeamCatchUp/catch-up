@@ -113,6 +113,7 @@ async def test_search_uses_planned_query(service, mock_planner, mock_vector_db, 
         keyword="Korean query",
         tool_filters=None,
         vector_db_service=mock_vector_db,
+        intelligent_filter=False,
     )
 
     _assert_hybrid_search_called_with_pool(
@@ -132,12 +133,11 @@ async def test_search_thread_id_uses_user_id(service, mock_planner, mock_vector_
         keyword="q",
         tool_filters=None,
         vector_db_service=mock_vector_db,
+        intelligent_filter=False,
     )
 
     config = mock_planner.ainvoke.call_args[1]["config"]
     assert config["configurable"]["thread_id"] == "search:99"
-
-
 
 
 @pytest.mark.asyncio
@@ -159,18 +159,19 @@ async def test_search_returns_base_sources(service, mock_planner, mock_vector_db
         )
     ]
 
-    results, total, source_distribution = await service.search(
+    sr = await service.search(
         user=mock_user,
         keyword="q",
         tool_filters=None,
         vector_db_service=mock_vector_db,
+        intelligent_filter=False,
     )
 
-    assert total == 1
-    assert source_distribution == {"slack": 1}
-    assert len(results) == 1
-    assert results[0].title == "Title"
-    assert results[0].index == 1
+    assert sr.total == 1
+    assert sr.source_distribution == {"slack": 1}
+    assert len(sr.results) == 1
+    assert sr.results[0].title == "Title"
+    assert sr.results[0].index == 1
 
 
 @pytest.mark.asyncio
@@ -190,6 +191,7 @@ async def test_search_passes_temporal_filters_to_hybrid_search(
         keyword="q",
         tool_filters=None,
         vector_db_service=mock_vector_db,
+        intelligent_filter=False,
         start_date=start,
     )
 
@@ -215,6 +217,7 @@ async def test_search_no_temporal_filter_when_dates_absent(
         keyword="q",
         tool_filters=None,
         vector_db_service=mock_vector_db,
+        intelligent_filter=False,
     )
 
     _, kwargs = mock_vector_db.hybrid_search.call_args
@@ -233,15 +236,17 @@ async def test_inferred_tool_filters_used_when_ui_absent(
     )
     mock_planner.ainvoke.return_value = _make_planner_state(planned)
 
-    await service.search(
+    sr = await service.search(
         user=mock_user,
         keyword="q",
         tool_filters=None,
         vector_db_service=mock_vector_db,
+        intelligent_filter=True,
     )
 
     _, kwargs = mock_vector_db.hybrid_search.call_args
     assert kwargs.get("tool_filters") == [SourceType.SLACK]
+    assert sr.is_tool_filter_inferred is True
 
 
 @pytest.mark.asyncio
@@ -256,15 +261,17 @@ async def test_ui_tool_filters_override_inferred(
     )
     mock_planner.ainvoke.return_value = _make_planner_state(planned)
 
-    await service.search(
+    sr = await service.search(
         user=mock_user,
         keyword="q",
         tool_filters=[SourceType.GITHUB],
         vector_db_service=mock_vector_db,
+        intelligent_filter=True,
     )
 
     _, kwargs = mock_vector_db.hybrid_search.call_args
     assert kwargs.get("tool_filters") == [SourceType.GITHUB]
+    assert sr.is_tool_filter_inferred is False
 
 
 @pytest.mark.asyncio
@@ -277,15 +284,17 @@ async def test_empty_ui_tool_filters_searches_all_sources(
     planned = _make_planned_search(inferred_tool_filters=[SourceType.SLACK])
     mock_planner.ainvoke.return_value = _make_planner_state(planned)
 
-    await service.search(
+    sr = await service.search(
         user=mock_user,
         keyword="q",
         tool_filters=[],
         vector_db_service=mock_vector_db,
+        intelligent_filter=False,
     )
 
     _, kwargs = mock_vector_db.hybrid_search.call_args
     assert kwargs.get("tool_filters") is None
+    assert sr.is_tool_filter_inferred is False
 
 
 @pytest.mark.asyncio
@@ -306,6 +315,7 @@ async def test_inferred_dates_used_when_ui_absent(
         keyword="q",
         tool_filters=None,
         vector_db_service=mock_vector_db,
+        intelligent_filter=True,
     )
 
     _, kwargs = mock_vector_db.hybrid_search.call_args
@@ -335,6 +345,7 @@ async def test_ui_dates_override_inferred_dates(
         keyword="q",
         tool_filters=None,
         vector_db_service=mock_vector_db,
+        intelligent_filter=True,
         start_date=ui_start,
         end_date=ui_end,
     )
@@ -344,3 +355,61 @@ async def test_ui_dates_override_inferred_dates(
     assert temporal_filters is not None
     assert temporal_filters[0].start_date == ui_start
     assert temporal_filters[0].end_date == ui_end
+
+
+@pytest.mark.asyncio
+async def test_intelligent_filter_off_ignores_inferred_tool(
+    service, mock_planner, mock_vector_db, mock_user
+):
+    """intelligent_filter=False이면 inferred_tool_filters 무시, 전체 검색."""
+    from catchup.db.models import SourceType
+
+    planned = _make_planned_search(inferred_tool_filters=[SourceType.SLACK])
+    mock_planner.ainvoke.return_value = _make_planner_state(planned)
+
+    sr = await service.search(
+        user=mock_user, keyword="q", tool_filters=[],
+        vector_db_service=mock_vector_db, intelligent_filter=False,
+    )
+
+    _, kwargs = mock_vector_db.hybrid_search.call_args
+    assert kwargs.get("tool_filters") is None
+    assert sr.is_tool_filter_inferred is False
+
+
+@pytest.mark.asyncio
+async def test_intelligent_filter_on_applies_inferred_tool(
+    service, mock_planner, mock_vector_db, mock_user
+):
+    """intelligent_filter=True + tool_filters=[] → inferred_tool_filters 적용."""
+    from catchup.db.models import SourceType
+
+    planned = _make_planned_search(inferred_tool_filters=[SourceType.SLACK])
+    mock_planner.ainvoke.return_value = _make_planner_state(planned)
+
+    sr = await service.search(
+        user=mock_user, keyword="q", tool_filters=[],
+        vector_db_service=mock_vector_db, intelligent_filter=True,
+    )
+
+    _, kwargs = mock_vector_db.hybrid_search.call_args
+    assert kwargs.get("tool_filters") == [SourceType.SLACK]
+    assert sr.is_tool_filter_inferred is True
+
+
+@pytest.mark.asyncio
+async def test_intelligent_filter_on_no_inferred_tool_falls_back(
+    service, mock_planner, mock_vector_db, mock_user
+):
+    """intelligent_filter=True + inferred=None → 전체 검색 fallback."""
+    planned = _make_planned_search(inferred_tool_filters=None)
+    mock_planner.ainvoke.return_value = _make_planner_state(planned)
+
+    sr = await service.search(
+        user=mock_user, keyword="q", tool_filters=[],
+        vector_db_service=mock_vector_db, intelligent_filter=True,
+    )
+
+    _, kwargs = mock_vector_db.hybrid_search.call_args
+    assert kwargs.get("tool_filters") is None
+    assert sr.is_tool_filter_inferred is False

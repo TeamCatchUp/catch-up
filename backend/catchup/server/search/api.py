@@ -64,7 +64,7 @@ async def hybrid_search(
     search_service: ManualSearchService = Depends(get_manual_search_service),
     db: Session = Depends(get_db),
 ) -> ManualSearchResponse:
-    results, total, source_distribution = await search_service.search(
+    sr = await search_service.search(
         user=current_user,
         keyword=keyword,
         tool_filters=tool_filters,
@@ -77,9 +77,9 @@ async def hybrid_search(
     db.commit()
 
     return ManualSearchResponse(
-        results=results,
-        total=total,
-        source_distribution=source_distribution,
+        results=sr.results,
+        total=sr.total,
+        source_distribution=sr.source_distribution,
     )
 
 

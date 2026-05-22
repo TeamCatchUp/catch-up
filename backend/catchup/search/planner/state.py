@@ -13,6 +13,7 @@ _QUERY_CACHE_MAX_SIZE = 20
 class CachedSearch:
     planned: ManualSearchQuery
     searched_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    generated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class ManualSearchState(TypedDict):
