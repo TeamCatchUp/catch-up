@@ -2,7 +2,8 @@
 
 // 하이브리드 검색 결과 카드 (RAG 출처 카드).
 // 데이터 모델은 chat의 SourceCard와 동일한 RagSourceUiModel 사용 → fallback 로직 통일.
-// 시각은 Figma 11686:80941 — count pill, meta pill, OpenInNew 박스 없음 (chat과 시각만 다름).
+// 클릭은 선택(onSelect)만 — 원문은 우측 패널에 로드된다 (링크 열기 동작 없음).
+// hover/selected 시 카드 배경 강조.
 
 import FileIcon from '@/public/icons/icon/file.svg';
 import OpenInNew from '@/public/icons/icon/open_in_new.svg';
@@ -12,10 +13,11 @@ import GitHub from '@/public/icons/logo/GitHub.svg';
 import Jira from '@/public/icons/logo/Jira.svg';
 import Slack from '@/public/icons/logo/Slack.svg';
 import type { RagSourceTypeModel, RagSourceUiModel } from '@/shared/types/ragSourceModel';
-import { isSafeUrl } from '@/shared/utils/isSafeUrl';
 
 interface HybridSearchResultCardProps {
   source: RagSourceUiModel;
+  isSelected: boolean;
+  onSelect: (source: RagSourceUiModel) => void;
 }
 
 const SOURCE_LOGO: Record<RagSourceTypeModel, React.FC<React.SVGProps<SVGSVGElement>>> = {
@@ -47,9 +49,12 @@ const getIntegrationLabel = (source: RagSourceUiModel): string => {
   return suffix ? `${base} - ${suffix}` : base;
 };
 
-export default function HybridSearchResultCard({ source }: HybridSearchResultCardProps) {
+export default function HybridSearchResultCard({
+  source,
+  isSelected,
+  onSelect,
+}: HybridSearchResultCardProps) {
   const Logo = SOURCE_LOGO[source.source_type];
-  const canOpen = isSafeUrl(source.html_url);
 
   const integrationLabel = getIntegrationLabel(source);
   const isSlack = source.source_type === 'slack';
@@ -60,17 +65,15 @@ export default function HybridSearchResultCard({ source }: HybridSearchResultCar
   const dateText = source.date?.trim() ? source.date : '-';
   const authorText = source.author?.trim() ? source.author : '-';
 
-  const handleClick = () => {
-    if (!canOpen) return;
-    window.open(source.html_url, '_blank', 'noopener,noreferrer');
-  };
+  // selected: bg-fill-strong(#F7F7F8), hover: bg-fill-interaction-hover(#EAEBEC).
+  const stateClass = isSelected ? 'bg-fill-strong' : 'hover:bg-fill-interaction-hover';
 
   return (
     <button
       type="button"
-      onClick={handleClick}
-      disabled={!canOpen}
-      className="flex w-full flex-col items-start gap-2.5 rounded-xl py-2 text-left enabled:cursor-pointer disabled:cursor-default"
+      onClick={() => onSelect(source)}
+      aria-pressed={isSelected}
+      className={`flex w-full cursor-pointer flex-col items-start gap-2.5 rounded-xl p-4 text-left ${stateClass}`}
     >
       <div className="flex w-full items-center gap-2.5">
         <span className="border-edge-normal bg-fill-normal flex shrink-0 items-center justify-center rounded-full border p-1.5">

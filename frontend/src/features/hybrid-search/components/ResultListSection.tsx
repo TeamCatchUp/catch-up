@@ -8,6 +8,7 @@ import { AnimatePresence, motion } from 'motion/react';
 
 import Pagination from '@/shared/components/ui/pagination';
 import { motionEase, MotionState } from '@/shared/motion/presets';
+import type { RagSourceUiModel } from '@/shared/types/ragSourceModel';
 import { applySlackDateFallback } from '@/shared/utils/normalize/applySlackDateFallback';
 import { normalizeSources } from '@/shared/utils/normalize/normalizeRagSources';
 import { dateRangeToUrlParams, sortByRelevance, sortByUpdatedAt, type SortOrder } from '@/shared/utils/temporalRange';
@@ -53,6 +54,8 @@ interface ResultListSectionProps {
   active: ActiveTab;
   page: number;
   onPageChange: (next: number) => void;
+  selectedId: string | null;
+  onSelectSource: (source: RagSourceUiModel) => void;
 }
 
 type ViewState = 'empty' | 'loading' | 'error' | 'results';
@@ -65,6 +68,8 @@ export default function ResultListSection({
   active,
   page,
   onPageChange,
+  selectedId,
+  onSelectSource,
 }: ResultListSectionProps) {
   const { start, end } = dateRangeToUrlParams(dateRange);
   const query = useHybridSearch({ keyword, scope, start, end });
@@ -139,7 +144,11 @@ export default function ResultListSection({
             {dateRange?.from && <SearchPeriodLabel dateRange={dateRange} />}
             {resultsData.sources.map((source) => (
               <motion.div key={source.id} variants={fastFadeInUp} className="w-full">
-                <HybridSearchResultCard source={source} />
+                <HybridSearchResultCard
+                  source={source}
+                  isSelected={source.id === selectedId}
+                  onSelect={onSelectSource}
+                />
               </motion.div>
             ))}
           </motion.div>
