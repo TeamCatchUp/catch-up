@@ -21,7 +21,7 @@ from catchup.search.planner.state import CachedSearch
 logger = structlog.get_logger()
 
 
-def resolve(intelligent_filter: bool, explicit, inferred):
+def resolve(intelligent_filter: bool, explicit: list | None, inferred: list | None) -> list | None:
     """두 축(툴, 날짜) 공통 resolve 함수. explicit가 falsy면 inferred 허용 여부 판단한다."""
     if explicit:
         return explicit
@@ -95,9 +95,11 @@ class ManualSearchService:
 
         planned = state["query_cache"][keyword].planned
 
+        # Tool filters: explicit=[] means "search all" (None), not "use inferred"
         resolved_tool_filters = (
-            tool_filters if tool_filters is not None
-            else planned.inferred_tool_filters
+            None if tool_filters is not None and len(tool_filters) == 0
+            else (tool_filters if tool_filters is not None
+                  else planned.inferred_tool_filters)
         )
         resolved_start = (
             start_date if start_date is not None else planned.start_date

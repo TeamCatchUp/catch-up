@@ -285,7 +285,7 @@ async def test_empty_ui_tool_filters_searches_all_sources(
     )
 
     _, kwargs = mock_vector_db.hybrid_search.call_args
-    assert kwargs.get("tool_filters") == []
+    assert kwargs.get("tool_filters") is None
 
 
 @pytest.mark.asyncio
