@@ -310,6 +310,8 @@ def _build_metadata(
 
     metadata.update(
         {
+            "name": detail.name,
+            "description": detail.description,
             "state": detail.state.value,
             "priority": detail.priority,
             "managed": detail.managed,
