@@ -5,16 +5,15 @@ from typing import Protocol
 from sqlalchemy.orm import Session
 
 from catchup.search.original.ids import OriginalDocumentRef
-from catchup.search.original.schemas import OriginalSearchRequest
-from catchup.search.original.schemas import OriginalSearchResponse
+from catchup.server.search.schemas import OriginalContentRequest
+from catchup.server.search.schemas import OriginalContentResponse
 
 
 class OriginalContentResolver(Protocol):
     async def resolve(
         self,
         *,
-        request: OriginalSearchRequest,
+        request: OriginalContentRequest,
         ref: OriginalDocumentRef,
         db: Session,
-    ) -> OriginalSearchResponse: ...
-
+    ) -> OriginalContentResponse: ...

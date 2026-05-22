@@ -2,14 +2,22 @@ from datetime import datetime
 from datetime import timezone
 
 import pytest
+from pydantic import ValidationError
 
 from catchup.db.models import SourceType
 from catchup.search.original.ids import OriginalDocumentRef
 from catchup.search.original.registry import OriginalResolverNotFoundError
 from catchup.search.original.registry import OriginalResolverRegistry
-from catchup.search.original.schemas import OriginalSearchRequest
-from catchup.search.original.schemas import OriginalSearchResponse
+from catchup.search.original.schemas import OriginalContent
+from catchup.search.original.schemas import OriginalItem
+from catchup.search.original.schemas.channel_talk import ChannelTalkOriginalAuthor
+from catchup.search.original.schemas.channel_talk import (
+    ChannelTalkUserChatOriginalContent,
+)
+from catchup.search.original.schemas.channel_talk import ChannelTalkUserChatOriginalItem
 from catchup.search.original.service import OriginalSearchService
+from catchup.server.search.schemas import OriginalContentRequest
+from catchup.server.search.schemas import OriginalContentResponse
 
 
 class _RecordingResolver:
@@ -18,7 +26,7 @@ class _RecordingResolver:
 
     async def resolve(self, *, request, ref, db):
         self.calls.append((request, ref, db))
-        return OriginalSearchResponse(
+        return OriginalContentResponse(
             connector=ref.connector,
             entity_type=ref.entity_type,
             document_id=ref.document_id,
@@ -46,6 +54,93 @@ def test_registry_returns_registered_connector_entity_resolver() -> None:
     ) is resolver
 
 
+def test_original_item_requires_contents_and_rejects_metadata() -> None:
+    with pytest.raises(ValidationError):
+        OriginalItem(id="msg-1", type="message")
+
+    with pytest.raises(ValidationError):
+        OriginalItem(
+            id="msg-1",
+            type="message",
+            contents=[
+                OriginalContent(
+                    content_type="text",
+                    payload={"text": "hello"},
+                )
+            ],
+            metadata={},
+        )
+
+
+def test_original_content_is_connector_neutral_payload_envelope() -> None:
+    content = OriginalContent(
+        content_type="text",
+        payload={"text": "hello"},
+    )
+    assert content.content_type == "text"
+    assert content.payload == {"text": "hello"}
+
+    assert OriginalContent(
+        content_type="custom_connector_card",
+        payload={"title": "Future connector content"},
+    ).content_type == "custom_connector_card"
+
+    with pytest.raises(ValidationError):
+        OriginalContent(content_type="text", text="hello")
+
+
+def test_channel_talk_content_restricts_content_type_values() -> None:
+    assert ChannelTalkUserChatOriginalContent(
+        content_type="file",
+        payload={"files": []},
+    ).content_type == "file"
+
+    with pytest.raises(ValidationError):
+        ChannelTalkUserChatOriginalContent(
+            content_type="custom_connector_card",
+            payload={},
+        )
+
+
+def test_channel_talk_item_fields_restrict_known_string_values() -> None:
+    author = ChannelTalkOriginalAuthor(type="customer")
+    assert author.type == "customer"
+
+    item = ChannelTalkUserChatOriginalItem(
+        id="msg-1",
+        type="message",
+        visibility="public",
+        author=author,
+        contents=[
+            ChannelTalkUserChatOriginalContent(
+                content_type="text",
+                payload={"text": "hello"},
+            )
+        ],
+    )
+    assert item.type == "message"
+    assert item.visibility == "public"
+
+    with pytest.raises(ValidationError):
+        ChannelTalkOriginalAuthor(type="bot")
+
+    with pytest.raises(ValidationError):
+        ChannelTalkUserChatOriginalItem(
+            id="msg-1",
+            type="log",
+            visibility="public",
+            contents=[],
+        )
+
+    with pytest.raises(ValidationError):
+        ChannelTalkUserChatOriginalItem(
+            id="msg-1",
+            type="message",
+            visibility="private",
+            contents=[],
+        )
+
+
 def test_registry_rejects_unsupported_connector_entity_route() -> None:
     registry = OriginalResolverRegistry()
 
@@ -66,7 +161,7 @@ async def test_service_parses_document_id_and_delegates_to_registered_resolver()
         resolver=resolver,
     )
     service = OriginalSearchService(registry=registry)
-    request = OriginalSearchRequest(
+    request = OriginalContentRequest(
         connector=SourceType.CHANNEL_TALK,
         document_id="channel_talk:user_chat:channel-123:chat-456",
     )
@@ -87,7 +182,7 @@ async def test_service_parses_document_id_and_delegates_to_registered_resolver()
 @pytest.mark.asyncio
 async def test_service_raises_when_no_resolver_is_registered() -> None:
     service = OriginalSearchService(registry=OriginalResolverRegistry())
-    request = OriginalSearchRequest(
+    request = OriginalContentRequest(
         connector=SourceType.CHANNEL_TALK,
         document_id="channel_talk:user_chat:channel-123:chat-456",
     )

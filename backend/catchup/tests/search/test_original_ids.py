@@ -4,7 +4,7 @@ from pydantic import ValidationError
 from catchup.db.models import SourceType
 from catchup.search.original.ids import OriginalDocumentIdError
 from catchup.search.original.ids import parse_original_document_id
-from catchup.search.original.schemas import OriginalSearchRequest
+from catchup.server.search.schemas import OriginalContentRequest
 
 
 def test_parse_channel_talk_user_chat_document_id() -> None:
@@ -59,7 +59,7 @@ def test_parse_rejects_malformed_channel_talk_user_chat_document_id(
 
 
 def test_original_search_request_accepts_connector_enum_value() -> None:
-    request = OriginalSearchRequest(
+    request = OriginalContentRequest(
         connector="channel_talk",
         document_id="channel_talk:user_chat:channel-123:chat-456",
         next_cursor="cursor-1",
@@ -72,7 +72,7 @@ def test_original_search_request_accepts_connector_enum_value() -> None:
 
 def test_original_search_request_rejects_unknown_connector() -> None:
     with pytest.raises(ValidationError):
-        OriginalSearchRequest(
+        OriginalContentRequest(
             connector="unknown",
             document_id="unknown:thing:id",
         )

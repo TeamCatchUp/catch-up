@@ -20,8 +20,6 @@ from catchup.db.models import User
 from catchup.search.original.ids import OriginalDocumentIdError
 from catchup.search.original.registry import OriginalResolverNotFoundError
 from catchup.search.original.resolvers.channel_talk import ChannelTalkOriginalError
-from catchup.search.original.schemas import OriginalSearchRequest
-from catchup.search.original.schemas import OriginalSearchResponse
 from catchup.search.original.service import OriginalSearchService
 from catchup.search.service import ManualSearchService
 from catchup.server.search.dependencies import get_manual_search_service
@@ -29,6 +27,8 @@ from catchup.server.search.dependencies import get_original_search_service
 from catchup.server.search.dependencies import get_search_service
 from catchup.server.search.schemas import ManualSearchHistoryResponse
 from catchup.server.search.schemas import ManualSearchResponse
+from catchup.server.search.schemas import OriginalContentRequest
+from catchup.server.search.schemas import OriginalContentResponse
 
 router = APIRouter(prefix="/api/v1/search", tags=["Search Service"])
 
@@ -85,17 +85,17 @@ async def hybrid_search(
 
 @router.post(
     path="/original",
-    response_model=OriginalSearchResponse,
+    response_model=OriginalContentResponse,
     description="검색 결과 document_id 기반 원문 조회 API",
 )
 async def get_original_search_result(
-    request: OriginalSearchRequest,
+    request: OriginalContentRequest,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
     original_search_service: OriginalSearchService = Depends(
         get_original_search_service
     ),
-) -> OriginalSearchResponse:
+) -> OriginalContentResponse:
     _ = current_user
     try:
         return await original_search_service.get_original(
