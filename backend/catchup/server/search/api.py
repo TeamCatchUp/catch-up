@@ -89,6 +89,8 @@ async def hybrid_search(
             [f.value for f in sr.effective_tool_filters]
             if sr.effective_tool_filters else None
         ),
+        effective_start_date=sr.effective_start_date,
+        effective_end_date=sr.effective_end_date,
         is_tool_filter_inferred=sr.is_tool_filter_inferred,
         is_date_inferred=sr.is_date_inferred,
     )

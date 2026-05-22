@@ -16,6 +16,12 @@ class ManualSearchResponse(BaseModel):
     effective_tool_filters: list[str] | None = Field(
         default=None, description="실제 적용된 협업 툴 필터"
     )
+    effective_start_date: datetime | None = Field(
+        default=None, description="실제 적용된 검색 시작 날짜 (UTC)"
+    )
+    effective_end_date: datetime | None = Field(
+        default=None, description="실제 적용된 검색 종료 날짜 (UTC)"
+    )
     is_tool_filter_inferred: bool = Field(
         default=False, description="협업 툴 필터가 LLM 추론으로 결정됐는지 여부"
     )
