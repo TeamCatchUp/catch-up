@@ -12,6 +12,7 @@ import GitHub from '@/public/icons/logo/GitHub.svg';
 import Jira from '@/public/icons/logo/Jira.svg';
 import Slack from '@/public/icons/logo/Slack.svg';
 import type { RagSourceTypeModel, RagSourceUiModel } from '@/shared/types/ragSourceModel';
+import { isSafeUrl } from '@/shared/utils/isSafeUrl';
 
 interface HybridSearchResultCardProps {
   source: RagSourceUiModel;
@@ -45,19 +46,6 @@ const getIntegrationLabel = (source: RagSourceUiModel): string => {
   const suffix = ENTITY_LABEL_SUFFIX[`${source.source_type}.${source.entity_type}`];
   return suffix ? `${base} - ${suffix}` : base;
 };
-
-// 보안: javascript:, data: 등 위험 스킴 차단. http/https만 허용.
-const ALLOWED_URL_SCHEMES = ['http:', 'https:'] as const;
-
-function isSafeUrl(raw: string): boolean {
-  if (!raw) return false;
-  try {
-    const parsed = new URL(raw);
-    return (ALLOWED_URL_SCHEMES as readonly string[]).includes(parsed.protocol);
-  } catch {
-    return false;
-  }
-}
 
 export default function HybridSearchResultCard({ source }: HybridSearchResultCardProps) {
   const Logo = SOURCE_LOGO[source.source_type];

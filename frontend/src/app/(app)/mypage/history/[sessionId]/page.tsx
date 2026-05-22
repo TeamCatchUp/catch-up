@@ -15,13 +15,13 @@ import SidebarHeader from '@/features/chat/components/sidebar/SidebarHeader';
 import SourceList from '@/features/chat/components/sidebar/source/SourceList';
 import { toUiMessage } from '@/features/chat/hooks/useRagChat.parts/sessionDataLoader';
 import { extractQAPairs, findQAPairIndexByQuery } from '@/features/chat/utils/render/chat';
-import { formatMarkdownString } from '@/features/chat/utils/render/markdown';
 // mypage/history feature
 import DetailHeader from '@/features/mypage/history/components/DetailHeader';
 // shared
 import { Badge } from '@/shared/components/ui/badge';
 import { Separator } from '@/shared/components/ui/separator';
 import { chatQueries } from '@/shared/queries/chatroom.queries';
+import { formatMarkdownString } from '@/shared/utils/formatMarkdownString';
 
 export default function HistoryDetailPage() {
   const params = useParams();
