@@ -105,6 +105,7 @@ class ChannelTalkOriginalResolver:
             ],
             metadata=_build_metadata(
                 detail=page.detail,
+                messages=page.messages,
                 channel_id=channel_id,
                 channel_name=connection.channel_name,
                 user_chat_id=user_chat_id,
@@ -296,6 +297,7 @@ def _normalize_author_type(
 def _build_metadata(
     *,
     detail: ChannelTalkUserChatDetail | None,
+    messages: tuple[ChannelTalkUserChatMessage, ...] | list[ChannelTalkUserChatMessage],
     channel_id: str,
     channel_name: str,
     user_chat_id: str,
@@ -306,8 +308,15 @@ def _build_metadata(
         "user_chat_id": user_chat_id,
     }
     if detail is None:
+        customer = _build_customer_metadata_from_messages(messages)
+        if customer is not None:
+            metadata["customer"] = customer
         return metadata
 
+    customer = _merge_customer_with_form_data(
+        detail.customer,
+        messages=messages,
+    )
     metadata.update(
         {
             "name": detail.name,
@@ -316,7 +325,7 @@ def _build_metadata(
             "priority": detail.priority,
             "managed": detail.managed,
             "goal_state": detail.goal_state,
-            "customer": _dump_model(detail.customer),
+            "customer": customer,
             "assignment": _dump_model(detail.assignment),
             "tags": [
                 tag.model_dump(mode="json", exclude_none=True) for tag in detail.tags
@@ -333,3 +342,63 @@ def _dump_model(value: Any) -> dict[str, Any] | None:
     if value is None:
         return None
     return value.model_dump(mode="json", exclude_none=True)
+
+
+def _build_customer_metadata_from_messages(
+    messages: tuple[ChannelTalkUserChatMessage, ...] | list[ChannelTalkUserChatMessage],
+) -> dict[str, Any] | None:
+    values: dict[str, str] = {}
+    for message in messages:
+        if message.form is None:
+            continue
+        for message_input in message.form.inputs:
+            value = message_input.value
+            if value is None or not str(value).strip():
+                continue
+            binding = message_input.binding_key
+            if not binding:
+                continue
+            lowered = binding.strip().lower()
+            if lowered.startswith("user.profile."):
+                lowered = lowered[len("user.profile.") :]
+            lowered = lowered.strip()
+            if lowered in {
+                "name",
+                "email",
+                "mobilenumber",
+                "mobile",
+                "phonenumber",
+                "mobilephone",
+            }:
+                if lowered == "name":
+                    values["name"] = str(value).strip()
+                elif lowered == "email":
+                    values["email"] = str(value).strip()
+                elif lowered in {"mobile", "mobilenumber", "phonenumber", "mobilephone"}:
+                    values["mobile_number"] = str(value).strip()
+            elif lowered in {
+                "landline",
+                "landlinenumber",
+                "telephonenumber",
+                "landlinephone",
+            }:
+                values["landline_number"] = str(value).strip()
+
+    if not values:
+        return None
+    return values
+
+
+def _merge_customer_with_form_data(
+    customer: ChannelTalkUserFoundation | None,
+    *,
+    messages: tuple[ChannelTalkUserChatMessage, ...] | list[ChannelTalkUserChatMessage],
+) -> dict[str, Any] | None:
+    base = _dump_model(customer) or {}
+    form_values = _build_customer_metadata_from_messages(messages)
+    if not form_values:
+        return base or None
+
+    customer_payload = dict(base)
+    customer_payload.update(form_values)
+    return customer_payload
