@@ -61,41 +61,25 @@ class ChannelTalkUserChatOriginalFetcher:
         if resolved_limit < 1:
             raise ValueError("limit must be positive")
 
-        if cursor is None:
-            detail, page = await asyncio.gather(
-                self.client.get_user_chat(
-                    access_key=connection.access_key,
-                    access_secret=connection.access_secret,
-                    channel_id=connection.channel_id,
-                    user_chat_id=user_chat_id,
-                ),
-                self.client.list_user_chat_messages_page(
-                    access_key=connection.access_key,
-                    access_secret=connection.access_secret,
-                    channel_id=connection.channel_id,
-                    user_chat_id=user_chat_id,
-                    cursor=None,
-                    limit=resolved_limit,
-                    sort_order="asc",
-                ),
-            )
-            return ChannelTalkUserChatOriginalPage.from_values(
-                detail=detail,
-                messages=tuple(page.messages),
-                next_cursor=page.next_cursor,
-            )
-
-        page = await self.client.list_user_chat_messages_page(
-            access_key=connection.access_key,
-            access_secret=connection.access_secret,
-            channel_id=connection.channel_id,
-            user_chat_id=user_chat_id,
-            cursor=cursor,
-            limit=resolved_limit,
-            sort_order="asc",
+        detail, page = await asyncio.gather(
+            self.client.get_user_chat(
+                access_key=connection.access_key,
+                access_secret=connection.access_secret,
+                channel_id=connection.channel_id,
+                user_chat_id=user_chat_id,
+            ),
+            self.client.list_user_chat_messages_page(
+                access_key=connection.access_key,
+                access_secret=connection.access_secret,
+                channel_id=connection.channel_id,
+                user_chat_id=user_chat_id,
+                cursor=cursor,
+                limit=resolved_limit,
+                sort_order="asc",
+            ),
         )
         return ChannelTalkUserChatOriginalPage.from_values(
-            detail=None,
+            detail=detail,
             messages=tuple(page.messages),
             next_cursor=page.next_cursor,
         )
