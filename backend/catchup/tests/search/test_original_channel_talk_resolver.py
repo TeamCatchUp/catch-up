@@ -189,6 +189,53 @@ def _bot_message() -> ChannelTalkUserChatMessage:
     )
 
 
+def _customer_profile_form_message() -> ChannelTalkUserChatMessage:
+    return ChannelTalkUserChatMessage.from_api_payload(
+        {
+            "id": "msg-5",
+            "chatId": "chat-456",
+            "type": "form",
+            "personType": "manager",
+            "personId": "manager-1",
+            "form": {
+                "type": "custom",
+                "inputs": [
+                    {
+                        "label": "이름",
+                        "bindingKey": "user.profile.name",
+                        "type": "text",
+                        "dataType": "string",
+                        "value": "유저이름",
+                    },
+                    {
+                        "label": "이메일",
+                        "bindingKey": "user.profile.email",
+                        "type": "text",
+                        "dataType": "string",
+                        "value": "customer@example.com",
+                    },
+                    {
+                        "label": "휴대폰 번호",
+                        "bindingKey": "user.profile.mobileNumber",
+                        "type": "text",
+                        "dataType": "string",
+                        "value": "010-9876-5432",
+                    },
+                    {
+                        "label": "유선 번호",
+                        "bindingKey": "user.profile.landlineNumber",
+                        "type": "text",
+                        "dataType": "string",
+                        "value": "031-3333-4444",
+                    },
+                ],
+            },
+            "createdAt": "2026-05-22T01:04:00Z",
+        },
+        user_chat_id="chat-456",
+    )
+
+
 def _log_message() -> ChannelTalkUserChatMessage:
     return ChannelTalkUserChatMessage.from_api_payload(
         {
@@ -384,6 +431,52 @@ async def test_channel_talk_resolver_maps_first_page_detail_and_messages() -> No
     assert "blocks" not in response.metadata
     assert "forms" not in response.metadata
     assert "logs" not in response.metadata
+
+
+@pytest.mark.asyncio
+async def test_channel_talk_resolver_merges_customer_profile_from_form_inputs() -> None:
+    detail = ChannelTalkUserChatDetail.from_api_payload(
+        {
+            "id": "chat-456",
+            "channelId": "channel-123",
+            "state": ChannelTalkUserChatState.OPENED.value,
+            "priority": "urgent",
+            "name": "Payment issue",
+            "user": {
+                "id": "user-123",
+                "memberId": "member-123",
+            },
+        },
+        user_chat_id="chat-456",
+    )
+    repository = _FakeRepository(_credentials())
+    fetcher = _FakeFetcher(
+        ChannelTalkUserChatOriginalPage(
+            detail=detail,
+            messages=(_customer_profile_form_message(),),
+            next_cursor=None,
+        )
+    )
+    resolver = ChannelTalkOriginalResolver(
+        fetcher=fetcher,
+        repository_factory=lambda _db: repository,
+        clock=lambda: datetime(2026, 5, 22, 2, 0, tzinfo=timezone.utc),
+    )
+    request = OriginalContentRequest(
+        connector=SourceType.CHANNEL_TALK,
+        document_id="channel_talk:user_chat:channel-123:chat-456",
+    )
+    ref = parse_original_document_id(
+        connector=request.connector,
+        document_id=request.document_id,
+    )
+
+    response = await resolver.resolve(request=request, ref=ref, db=object())
+
+    assert response.metadata["customer"]["name"] == "유저이름"
+    assert response.metadata["customer"]["email"] == "customer@example.com"
+    assert response.metadata["customer"]["mobile_number"] == "010-9876-5432"
+    assert response.metadata["customer"]["landline_number"] == "031-3333-4444"
 
 
 @pytest.mark.asyncio
