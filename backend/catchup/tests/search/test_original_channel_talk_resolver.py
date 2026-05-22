@@ -123,7 +123,11 @@ def _block_button_message() -> ChannelTalkUserChatMessage:
             "blocks": [
                 {
                     "type": "text",
-                    "value": "여기 링크 드릴게요",
+                    "value": (
+                        "<b>굵게</b> <i>기울임</i> "
+                        '<link type="url" value="https://github.com/forrestchan">'
+                        "리포지토리</link>"
+                    ),
                 }
             ],
             "buttons": [
@@ -289,9 +293,25 @@ async def test_channel_talk_resolver_maps_first_page_detail_and_messages() -> No
         "blocks": [
             {
                 "block_type": "text",
-                "text": "여기 링크 드릴게요",
-                "value": "여기 링크 드릴게요",
-                "raw_payload": {"type": "text", "value": "여기 링크 드릴게요"},
+                "text": (
+                    "<b>굵게</b> <i>기울임</i> "
+                    '<link type="url" value="https://github.com/forrestchan">'
+                    "리포지토리</link>"
+                ),
+                "value": (
+                    "<b>굵게</b> <i>기울임</i> "
+                    '<link type="url" value="https://github.com/forrestchan">'
+                    "리포지토리</link>"
+                ),
+                "markdown": "**굵게** *기울임* [리포지토리](https://github.com/forrestchan)",
+                "raw_payload": {
+                    "type": "text",
+                    "value": (
+                        "<b>굵게</b> <i>기울임</i> "
+                        '<link type="url" value="https://github.com/forrestchan">'
+                        "리포지토리</link>"
+                    ),
+                },
             }
         ]
     }
