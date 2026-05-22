@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from datetime import datetime
+from html import unescape
+from html.parser import HTMLParser
 from typing import Any
 
 from pydantic import BaseModel
@@ -61,6 +63,7 @@ class ChannelTalkUserChatMessageBlock(BaseModel):
     label: str | None = None
     name: str | None = None
     value: str | None = None
+    markdown: str | None = None
     raw_payload: dict[str, Any] | None = None
 
 
@@ -286,15 +289,24 @@ def _parse_message_blocks(
         if not isinstance(value, Mapping):
             continue
         item_reader = _PayloadReader(value)
+        block_text = item_reader.text(
+            "text",
+            "plainText",
+            "plain_text",
+            "label",
+            "value",
+        )
+        block_value = item_reader.text("value")
         blocks.append(
             ChannelTalkUserChatMessageBlock(
                 block_type=item_reader.text("type", "blockType", "block_type"),
-                text=item_reader.text(
-                    "text", "plainText", "plain_text", "label", "value"
-                ),
+                text=block_text,
                 label=item_reader.text("label", "title"),
                 name=item_reader.text("name"),
-                value=item_reader.text("value"),
+                value=block_value,
+                markdown=_parse_channel_talk_inline_markdown(
+                    block_value or block_text,
+                ),
                 raw_payload=dict(value),
             )
         )
@@ -313,6 +325,76 @@ def _parse_message_log(
         actor_name=log_reader.text("name", "actorName", "actor_name"),
         raw_payload=dict(log_reader.payload),
     )
+
+
+class _ChannelTalkInlineMarkdownParser(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=False)
+        self.parts: list[str] = []
+        self._link_stack: list[str | None] = []
+
+    def handle_starttag(
+        self,
+        tag: str,
+        attrs: list[tuple[str, str | None]],
+    ) -> None:
+        normalized_tag = tag.lower()
+        if normalized_tag == "b":
+            self.parts.append("**")
+            return
+        if normalized_tag == "i":
+            self.parts.append("*")
+            return
+        if normalized_tag == "link":
+            attrs_map = dict(attrs)
+            url = attrs_map.get("value") if attrs_map.get("type") == "url" else None
+            self._link_stack.append(url)
+            if url:
+                self.parts.append("[")
+
+    def handle_endtag(self, tag: str) -> None:
+        normalized_tag = tag.lower()
+        if normalized_tag == "b":
+            self.parts.append("**")
+            return
+        if normalized_tag == "i":
+            self.parts.append("*")
+            return
+        if normalized_tag == "link":
+            url = self._link_stack.pop() if self._link_stack else None
+            if url:
+                self.parts.append(f"]({url})")
+
+    def handle_data(self, data: str) -> None:
+        self.parts.append(data)
+
+    def handle_entityref(self, name: str) -> None:
+        self.parts.append(unescape(f"&{name};"))
+
+    def handle_charref(self, name: str) -> None:
+        self.parts.append(unescape(f"&#{name};"))
+
+    def handle_startendtag(
+        self,
+        tag: str,
+        attrs: list[tuple[str, str | None]],
+    ) -> None:
+        text = self.get_starttag_text()
+        if text:
+            self.parts.append(text)
+
+    def get_markdown(self) -> str:
+        return "".join(self.parts)
+
+
+def _parse_channel_talk_inline_markdown(value: str | None) -> str | None:
+    if value is None:
+        return None
+    parser = _ChannelTalkInlineMarkdownParser()
+    parser.feed(value)
+    parser.close()
+    markdown = parser.get_markdown()
+    return markdown if markdown != value else None
 
 
 def _parse_message_form(
