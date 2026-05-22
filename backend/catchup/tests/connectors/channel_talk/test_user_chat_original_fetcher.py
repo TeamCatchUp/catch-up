@@ -64,6 +64,32 @@ def _message(message_id: str, user_chat_id: str = "chat-123") -> ChannelTalkUser
     )
 
 
+def test_message_author_reads_nested_profile_fields() -> None:
+    message = ChannelTalkUserChatMessage.from_api_payload(
+        {
+            "id": "msg-1",
+            "chatId": "chat-123",
+            "personType": "user",
+            "personId": "user-123",
+            "user": {
+                "id": "user-123",
+                "profile": {
+                    "name": "Customer Kim",
+                    "email": "kim@example.com",
+                    "avatarUrl": "https://example.com/avatar.png",
+                },
+            },
+            "plainText": "hello",
+        },
+        user_chat_id="chat-123",
+    )
+
+    assert message.author is not None
+    assert message.author.name == "Customer Kim"
+    assert message.author.email == "kim@example.com"
+    assert message.author.avatar_url == "https://example.com/avatar.png"
+
+
 @pytest.mark.asyncio
 async def test_first_page_fetches_detail_and_messages_concurrently() -> None:
     detail_started = asyncio.Event()
@@ -118,9 +144,9 @@ async def test_first_page_fetches_detail_and_messages_concurrently() -> None:
 
 
 @pytest.mark.asyncio
-async def test_follow_up_page_fetches_messages_only_with_cursor() -> None:
+async def test_follow_up_page_fetches_detail_and_messages_with_cursor() -> None:
     client = SimpleNamespace(
-        get_user_chat=AsyncMock(),
+        get_user_chat=AsyncMock(return_value=_detail()),
         list_user_chat_messages_page=AsyncMock(
             return_value=ChannelTalkUserChatMessagePage(
                 messages=[_message("msg-2")],
@@ -137,10 +163,16 @@ async def test_follow_up_page_fetches_messages_only_with_cursor() -> None:
         limit=100,
     )
 
-    assert page.detail is None
+    assert page.detail is not None
+    assert page.detail.user_chat_id == "chat-123"
     assert [message.message_id for message in page.messages] == ["msg-2"]
     assert page.next_cursor is None
-    client.get_user_chat.assert_not_awaited()
+    client.get_user_chat.assert_awaited_once_with(
+        access_key="access-key",
+        access_secret="access-secret",
+        channel_id="channel-123",
+        user_chat_id="chat-123",
+    )
     client.list_user_chat_messages_page.assert_awaited_once_with(
         access_key="access-key",
         access_secret="access-secret",

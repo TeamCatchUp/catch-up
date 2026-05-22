@@ -224,12 +224,15 @@ def _matches_block_text(
     text: str,
     blocks: list[dict[str, Any]],
 ) -> bool:
-    block_text = "\n".join(
-        str(value).strip()
-        for block in blocks
-        for value in (block.get("text"), block.get("value"))
-        if isinstance(value, str) and value.strip()
-    )
+    block_text_parts: list[str] = []
+    for block in blocks:
+        for value in (block.get("text"), block.get("value")):
+            if not isinstance(value, str):
+                continue
+            normalized_value = value.strip()
+            if normalized_value and normalized_value not in block_text_parts:
+                block_text_parts.append(normalized_value)
+    block_text = "\n".join(block_text_parts)
     return bool(block_text) and text.strip() == block_text
 
 

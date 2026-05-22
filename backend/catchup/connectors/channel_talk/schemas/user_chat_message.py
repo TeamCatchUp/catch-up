@@ -377,9 +377,9 @@ def _parse_user_chat_message_author(
     manager_reader = reader.nested("manager")
     user_reader = reader.nested("user", "customer")
     bot_reader = _read_message_bot(reader, root_bots=root_bots)
-    user_profile_reader = user_reader and user_reader.nested("profile")
-    manager_profile_reader = manager_reader and manager_reader.nested("profile")
-    bot_profile_reader = bot_reader and bot_reader.nested("profile")
+    manager_sources = _reader_with_profile(manager_reader)
+    user_sources = _reader_with_profile(user_reader)
+    bot_sources = _reader_with_profile(bot_reader)
     person_id = reader.text("personId")
     bot_name = reader.text("botName") or (
         bot_reader and bot_reader.text("name", "botName")
@@ -425,47 +425,48 @@ def _parse_user_chat_message_author(
         user_id=user_id,
         member_id=(user_reader and user_reader.text("memberId")),
         manager_id=manager_id,
-        name=(manager_reader and manager_reader.text("name", "displayName"))
-        or (
-            manager_profile_reader
-            and manager_profile_reader.text("name", "displayName")
+        name=_first_reader_text(
+            [*manager_sources, *user_sources, *bot_sources, reader],
+            "name",
+            "displayName",
         )
-        or (user_reader and user_reader.text("name"))
-        or (user_profile_reader and user_profile_reader.text("name", "displayName"))
-        or (bot_reader and bot_reader.text("name", "botName"))
-        or (bot_profile_reader and bot_profile_reader.text("name", "displayName"))
+        or _first_reader_text(bot_sources, "botName")
         or bot_name
-        or reader.text("name"),
-        email=(manager_reader and manager_reader.text("email"))
-        or (manager_profile_reader and manager_profile_reader.text("email"))
-        or (user_reader and user_reader.text("email"))
-        or (user_profile_reader and user_profile_reader.text("email"))
-        or (bot_reader and bot_reader.text("email"))
-        or (bot_profile_reader and bot_profile_reader.text("email"))
-        or reader.text("email"),
-        avatar_url=(
-            manager_reader
-            and manager_reader.text("avatarUrl", "avatarURL", "avatar_url")
-        )
-        or (
-            manager_profile_reader
-            and manager_profile_reader.text("avatarUrl", "avatarURL", "avatar_url")
-        )
-        or (user_reader and user_reader.text("avatarUrl", "avatarURL", "avatar_url"))
-        or (
-            user_profile_reader
-            and user_profile_reader.text("avatarUrl", "avatarURL", "avatar_url")
-        )
-        or (bot_reader and bot_reader.text("avatarUrl", "avatarURL", "avatar_url"))
-        or (
-            bot_profile_reader
-            and bot_profile_reader.text("avatarUrl", "avatarURL", "avatar_url")
-        )
-        or reader.text("avatarUrl", "avatarURL", "avatar_url"),
+        or reader.text("botName"),
+        email=_first_reader_text(
+            [*manager_sources, *user_sources, *bot_sources, reader],
+            "email",
+        ),
+        avatar_url=_first_reader_text(
+            [*manager_sources, *user_sources, *bot_sources, reader],
+            "avatarUrl",
+            "avatarURL",
+            "avatar_url",
+        ),
         role_id=(manager_reader and manager_reader.text("roleId")),
         bot_name=bot_name,
         is_bot=bool(bot_name or bot_id) or (author_type == "bot"),
     )
+
+
+def _reader_with_profile(reader: "_PayloadReader" | None) -> tuple["_PayloadReader", ...]:
+    if reader is None:
+        return ()
+    profile_reader = reader.nested("profile")
+    if profile_reader is None:
+        return (reader,)
+    return (reader, profile_reader)
+
+
+def _first_reader_text(
+    readers: list["_PayloadReader"] | tuple["_PayloadReader", ...],
+    *keys: str,
+) -> str | None:
+    for reader in readers:
+        value = reader.text(*keys)
+        if value is not None:
+            return value
+    return None
 
 
 def _read_message_bot(
