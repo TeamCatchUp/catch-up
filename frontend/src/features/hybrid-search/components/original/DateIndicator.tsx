@@ -19,9 +19,9 @@ export default function DateIndicator({ date }: DateIndicatorProps) {
   if (!label) return null;
 
   return (
-    <div className="flex w-full items-center gap-2">
+    <div className="flex w-full items-center">
       <span aria-hidden className="bg-edge-neutral h-px flex-1" />
-      <span className="bg-fill-normal border-edge-neutral text-body-xsmall text-content-alternative shrink-0 rounded-full border px-3 py-1 font-medium">
+      <span className="bg-fill-normal border-edge-neutral text-body-xsmall text-content-alternative shrink-0 rounded-full border px-5 py-1 font-medium">
         {label}
       </span>
       <span aria-hidden className="bg-edge-neutral h-px flex-1" />
