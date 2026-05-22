@@ -92,12 +92,7 @@ def _text_file_message() -> ChannelTalkUserChatMessage:
             "chatId": "chat-456",
             "type": "chat",
             "personType": "user",
-            "user": {
-                "id": "user-123",
-                "memberId": "member-123",
-                "name": "Customer Kim",
-                "email": "kim@example.com",
-            },
+            "personId": "user-123",
             "plainText": "결제가 안 됩니다.",
             "createdAt": "2026-05-22T01:01:00Z",
             "files": [
@@ -241,7 +236,10 @@ async def test_channel_talk_resolver_maps_first_page_detail_and_messages() -> No
     assert response.connector == SourceType.CHANNEL_TALK
     assert response.entity_type == "user_chat"
     assert response.title == "결제 오류 문의"
-    assert response.url == "https://desk.channel.io/#/channels/channel-123/user_chats/chat-456"
+    assert (
+        response.url
+        == "https://desk.channel.io/#/channels/channel-123/user_chats/chat-456"
+    )
     assert response.next_cursor == "cursor-2"
     assert response.fetched_at.isoformat() == "2026-05-22T02:00:00+00:00"
     assert response.metadata["channel_id"] == "channel-123"
@@ -264,6 +262,8 @@ async def test_channel_talk_resolver_maps_first_page_detail_and_messages() -> No
     assert text_file_item.author is not None
     assert text_file_item.author.type == "customer"
     assert text_file_item.author.name == "Customer Kim"
+    assert text_file_item.author.email == "kim@example.com"
+    assert text_file_item.author.avatar_url == "https://example.com/avatar.png"
     assert [content.content_type for content in text_file_item.contents] == [
         "text",
         "file",
@@ -342,8 +342,7 @@ async def test_channel_talk_resolver_maps_first_page_detail_and_messages() -> No
     assert bot_item.author.name == "Catch Up"
 
     serialized_items = [
-        item.model_dump(mode="json", exclude_none=True)
-        for item in response.items
+        item.model_dump(mode="json", exclude_none=True) for item in response.items
     ]
     assert all("body" not in item for item in serialized_items)
     assert all("metadata" not in item for item in serialized_items)

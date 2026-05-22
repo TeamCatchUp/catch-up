@@ -15,6 +15,7 @@ from catchup.connectors.channel_talk.core.user_chat_ids import build_user_chat_d
 from catchup.connectors.channel_talk.core.user_chat_original_fetcher import (
     ChannelTalkUserChatOriginalFetcher,
 )
+from catchup.connectors.channel_talk.schemas.user import ChannelTalkUserFoundation
 from catchup.connectors.channel_talk.schemas.user_chat import ChannelTalkUserChatDetail
 from catchup.connectors.channel_talk.schemas.user_chat_message import (
     ChannelTalkUserChatMessage,
@@ -57,7 +58,9 @@ class ChannelTalkOriginalResolver:
         clock: Callable[[], datetime] | None = None,
     ) -> None:
         self._fetcher = fetcher or ChannelTalkUserChatOriginalFetcher()
-        self._repository_factory = repository_factory or ChannelTalkCredentialsRepository
+        self._repository_factory = (
+            repository_factory or ChannelTalkCredentialsRepository
+        )
         self._clock = clock or (lambda: datetime.now(timezone.utc))
 
     async def resolve(
@@ -93,7 +96,10 @@ class ChannelTalkOriginalResolver:
                 user_chat_id=user_chat_id,
             ),
             items=[
-                _map_message_to_item(message)
+                _map_message_to_item(
+                    message,
+                    customer=page.detail.customer if page.detail else None,
+                )
                 for message in page.messages
                 if message.log is None
             ],
@@ -120,6 +126,8 @@ def _build_title(
 
 def _map_message_to_item(
     message: ChannelTalkUserChatMessage,
+    *,
+    customer: ChannelTalkUserFoundation | None = None,
 ) -> ChannelTalkUserChatOriginalItem:
     return ChannelTalkUserChatOriginalItem(
         id=message.message_id,
@@ -129,7 +137,7 @@ def _map_message_to_item(
             if message.is_private is True
             else ChannelTalkUserChatOriginalVisibility.PUBLIC
         ),
-        author=_map_author(message),
+        author=_map_author(message, customer=customer),
         contents=_map_message_contents(message),
         created_at=message.created_at,
         updated_at=message.updated_at,
@@ -142,8 +150,7 @@ def _map_message_contents(
     contents: list[ChannelTalkUserChatOriginalContent] = []
     explicit_text = _read_explicit_plain_text(message)
     block_payloads = [
-        block.model_dump(mode="json", exclude_none=True)
-        for block in message.blocks
+        block.model_dump(mode="json", exclude_none=True) for block in message.blocks
     ]
 
     if explicit_text and not _matches_block_text(
@@ -228,34 +235,44 @@ def _matches_block_text(
 
 def _map_author(
     message: ChannelTalkUserChatMessage,
+    *,
+    customer: ChannelTalkUserFoundation | None = None,
 ) -> ChannelTalkOriginalAuthor | None:
     author = message.author
     if author is None:
         if message.person_type is None:
             return None
+        author_type = _normalize_author_type(message.person_type)
+        is_customer = author_type == ChannelTalkOriginalAuthorType.CUSTOMER
         return ChannelTalkOriginalAuthor(
-            type=_normalize_author_type(message.person_type)
+            id=customer.external_user_id if is_customer and customer else None,
+            name=customer.name if is_customer and customer else None,
+            type=author_type,
+            email=customer.email if is_customer and customer else None,
+            avatar_url=customer.avatar_url if is_customer and customer else None,
         )
 
-    author_id = (
-        author.user_id
-        or author.member_id
-        or author.manager_id
-        or author.bot_id
+    author_id = author.user_id or author.member_id or author.manager_id or author.bot_id
+
+    author_type = _normalize_author_type(
+        author.author_type or message.person_type,
+        has_customer_identity=(
+            author.user_id is not None or author.member_id is not None
+        ),
+        has_manager_identity=author.manager_id is not None,
+        is_bot=author.is_bot,
     )
+    is_customer = author_type == ChannelTalkOriginalAuthorType.CUSTOMER
 
     return ChannelTalkOriginalAuthor(
         id=author_id,
-        name=author.name or author.bot_name,
-        type=_normalize_author_type(
-            author.author_type or message.person_type,
-            has_customer_identity=(
-                author.user_id is not None or author.member_id is not None
-            ),
-            has_manager_identity=author.manager_id is not None,
-            is_bot=author.is_bot,
-        ),
-        email=author.email,
+        name=author.name
+        or author.bot_name
+        or (customer.name if is_customer and customer else None),
+        type=author_type,
+        email=author.email or (customer.email if is_customer and customer else None),
+        avatar_url=author.avatar_url
+        or (customer.avatar_url if is_customer and customer else None),
     )
 
 
@@ -297,8 +314,7 @@ def _build_metadata(
             "customer": _dump_model(detail.customer),
             "assignment": _dump_model(detail.assignment),
             "tags": [
-                tag.model_dump(mode="json", exclude_none=True)
-                for tag in detail.tags
+                tag.model_dump(mode="json", exclude_none=True) for tag in detail.tags
             ],
             "timing": _dump_model(detail.timing),
             "metrics": _dump_model(detail.metrics),
