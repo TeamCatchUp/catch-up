@@ -24,6 +24,7 @@ from catchup.search.original.schemas import OriginalSearchRequest
 from catchup.search.original.schemas import OriginalSearchResponse
 from catchup.search.original.service import OriginalSearchService
 from catchup.search.service import ManualSearchService
+from catchup.search.service import SearchResult
 from catchup.server.search.dependencies import get_manual_search_service
 from catchup.server.search.dependencies import get_original_search_service
 from catchup.server.search.dependencies import get_search_service
@@ -67,7 +68,7 @@ async def hybrid_search(
     search_service: ManualSearchService = Depends(get_manual_search_service),
     db: Session = Depends(get_db),
 ) -> ManualSearchResponse:
-    sr = await search_service.search(
+    sr: SearchResult = await search_service.search(
         user=current_user,
         keyword=keyword,
         tool_filters=tool_filters,
