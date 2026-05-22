@@ -22,8 +22,12 @@ from catchup.search.planner.state import CachedSearch
 logger = structlog.get_logger()
 
 
-def resolve(intelligent_filter: bool, explicit: list | None, inferred: list | None) -> list | None:
-    """두 축(툴, 날짜) 공통 resolve 함수. explicit가 falsy면 inferred 허용 여부 판단한다."""
+def resolve(
+    intelligent_filter: bool,
+    explicit: list | None,
+    inferred: list | None,
+) -> list | None:
+    """협업 툴 필터 resolve 함수. explicit가 falsy면 inferred 허용 여부를 판단한다."""
     if explicit:
         return explicit
     if not intelligent_filter:
