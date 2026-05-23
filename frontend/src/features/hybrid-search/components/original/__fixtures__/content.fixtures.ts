@@ -88,26 +88,13 @@ export const blockContentCodeLong: OriginalContent = {
   },
 };
 
-export const blockContentBulletsSingle: OriginalContent = {
+export const blockContentBullets: OriginalContent = {
   content_type: 'block',
   payload: {
     blocks: [
       { block_type: 'bullets', text: '결제 내역 확인' },
       { block_type: 'bullets', text: '환불 정책 안내' },
       { block_type: 'bullets', text: '재결제 방법 설명' },
-    ],
-  },
-};
-
-export const blockContentBulletsNested: OriginalContent = {
-  content_type: 'block',
-  payload: {
-    blocks: [
-      { block_type: 'bullets', text: '1단계: 설정 메뉴 진입' },
-      { block_type: 'bullets', text: '  - 우측 상단 톱니바퀴 아이콘 클릭' },
-      { block_type: 'bullets', text: '  - 계정 탭 선택' },
-      { block_type: 'bullets', text: '2단계: 결제 수단 등록' },
-      { block_type: 'bullets', text: '  - 카드 정보 입력 후 저장' },
     ],
   },
 };

@@ -8,8 +8,7 @@
 import type { ReactNode } from 'react';
 
 import {
-  blockContentBulletsNested,
-  blockContentBulletsSingle,
+  blockContentBullets,
   blockContentCodeLong,
   blockContentCodeShort,
   blockContentMarkdown,
@@ -120,14 +119,9 @@ const ENTRY_RENDERERS: Record<EntrySlug, () => ReactNode> = {
           <BlockContent content={blockPayload(blockContentCodeLong)} />
         </PanelWidth>
       </Case>
-      <Case label="bullets · 단일 레벨">
+      <Case label="bullets">
         <PanelWidth>
-          <BlockContent content={blockPayload(blockContentBulletsSingle)} />
-        </PanelWidth>
-      </Case>
-      <Case label="bullets · 중첩 (들여쓰기)">
-        <PanelWidth>
-          <BlockContent content={blockPayload(blockContentBulletsNested)} />
+          <BlockContent content={blockPayload(blockContentBullets)} />
         </PanelWidth>
       </Case>
       <Case label="혼합 (text + code + bullets)">

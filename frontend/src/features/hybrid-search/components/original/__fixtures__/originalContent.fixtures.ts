@@ -3,8 +3,7 @@
 // 모든 fixture는 originalApi.ts 타입으로 검증됨.
 
 export {
-  blockContentBulletsNested,
-  blockContentBulletsSingle,
+  blockContentBullets,
   blockContentCodeLong,
   blockContentCodeShort,
   // block
