@@ -18,7 +18,7 @@ export default function ResultPageBody({ children, side }: PropsWithChildren<Res
     <section className="flex w-full justify-center px-16 pb-30">
       <div className="flex w-full max-w-[1440px] gap-6">
         <div className="w-156.25 shrink-0 pt-4">{children}</div>
-        <aside className="border-edge-neutral max-h-340 w-105.75 shrink-0 overflow-hidden border-l">
+        <aside className="border-edge-normal max-h-340 w-105.75 shrink-0 overflow-hidden border-l">
           {side}
         </aside>
       </div>
