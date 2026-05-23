@@ -70,7 +70,7 @@ export default function FileRow({ file }: FileRowProps) {
         href={file.url}
         target="_blank"
         rel="noopener noreferrer"
-        className={`${className} hover:bg-fill-interaction-hover transition-colors`}
+        className={className}
       >
         {inner as ReactNode}
       </a>

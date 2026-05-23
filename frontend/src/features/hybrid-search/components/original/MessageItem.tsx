@@ -11,6 +11,7 @@ import FaceManIcon from '@/public/icons/icon/face_man.svg';
 import HeadphoneIcon from '@/public/icons/icon/headphone.svg';
 import LockIcon from '@/public/icons/icon/lock.svg';
 import SupportAgentIcon from '@/public/icons/icon/support_agent.svg';
+import { Badge } from '@/shared/components/ui/badge';
 
 interface MessageItemProps {
   item: OriginalMessageItem;
@@ -69,10 +70,14 @@ export default function MessageItem({ item }: MessageItemProps) {
             <HeadphoneIcon aria-hidden className="text-accent-green size-4.5 shrink-0" />
           )}
           {isInternal && (
-            <span className="bg-fill-interaction-hover text-content-alternative text-body-xsmall rounded-md2 flex shrink-0 items-center gap-1 px-1.5 py-0.5 font-medium">
+            <Badge
+              variant="secondary"
+              size="md"
+              className="rounded-md2 shrink-0 gap-1 px-1.5 py-0.5 font-medium"
+            >
               <LockIcon aria-hidden className="size-4.5" />
               내부 대화
-            </span>
+            </Badge>
           )}
           {timestamp && (
             <span className="text-body-xsmall text-content-assistive ml-auto shrink-0">

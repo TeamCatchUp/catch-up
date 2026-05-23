@@ -221,9 +221,9 @@ export default function OriginalPanelGalleryPage() {
 
       <Section
         title="FormContent"
-        description="form.inputs[] 라벨/값 행. 입력이 많으면 Collapsible 로 접힘."
+        description="form.inputs[] 라벨/값 행과 제출 시각. 모든 행 인라인 노출."
       >
-        <Case label="다양한 input_type · 접힌 상태 (9개 → 임계치 초과)">
+        <Case label="다양한 input_type (9개)">
           <PanelWidth>
             <FormContent content={formPayload(formContentVariedInputs)} />
           </PanelWidth>
