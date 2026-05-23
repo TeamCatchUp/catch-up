@@ -66,9 +66,9 @@ export default function ConsultationInfo({ metadata }: ConsultationInfoProps) {
         </div>
       </div>
 
-      <div className="flex flex-col gap-2">
-        <FieldLabel icon={TagIcon} text="상담 태그" />
-        {tagNames.length > 0 ? (
+      {tagNames.length > 0 ? (
+        <div className="flex flex-col gap-2">
+          <FieldLabel icon={TagIcon} text="상담 태그" />
           <div className="flex flex-wrap gap-x-1.5 gap-y-3">
             {tagNames.map((name, index) => (
               <Badge
@@ -81,19 +81,25 @@ export default function ConsultationInfo({ metadata }: ConsultationInfoProps) {
               </Badge>
             ))}
           </div>
-        ) : (
+        </div>
+      ) : (
+        <div className="flex items-center gap-10">
+          <FieldLabel icon={TagIcon} text="상담 태그" />
           <span className="text-body-small text-content-assistive">없음</span>
-        )}
-      </div>
+        </div>
+      )}
 
-      <div className="flex flex-col gap-2">
-        <FieldLabel icon={FileIcon} text="상담 설명" />
-        {description ? (
+      {description ? (
+        <div className="flex flex-col gap-2">
+          <FieldLabel icon={FileIcon} text="상담 설명" />
           <p className="text-body-small text-content-neutral break-words">{description}</p>
-        ) : (
+        </div>
+      ) : (
+        <div className="flex items-center gap-10">
+          <FieldLabel icon={FileIcon} text="상담 설명" />
           <span className="text-body-small text-content-assistive">없음</span>
-        )}
-      </div>
+        </div>
+      )}
     </section>
   );
 }
