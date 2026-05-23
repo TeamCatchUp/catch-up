@@ -8,6 +8,7 @@ import { AnimatePresence, motion } from 'motion/react';
 
 import Pagination from '@/shared/components/ui/pagination';
 import { motionEase, MotionState } from '@/shared/motion/presets';
+import type { RagSourceUiModel } from '@/shared/types/ragSourceModel';
 import { applySlackDateFallback } from '@/shared/utils/normalize/applySlackDateFallback';
 import { normalizeSources } from '@/shared/utils/normalize/normalizeRagSources';
 import { dateRangeToUrlParams, sortByRelevance, sortByUpdatedAt, type SortOrder } from '@/shared/utils/temporalRange';
@@ -20,6 +21,7 @@ import ResultEmptyState from './ResultEmptyState';
 import ResultErrorState from './ResultErrorState';
 import ResultLoadingState from './ResultLoadingState';
 import SearchPeriodLabel from './SearchPeriodLabel';
+import SearchToolLabel from './SearchToolLabel';
 
 // hybrid-search 결과 리스트 전용 fast variants (source panel보다 빠르게).
 const fastStaggerContainer = {
@@ -48,11 +50,16 @@ const stateCrossfade = {
 interface ResultListSectionProps {
   keyword: string;
   scope: ToolFilter[];
+  // URL ?tools= 의 raw 값 — 빈 배열이면 필터 미적용(SearchToolLabel 렌더 안 됨).
+  // scope 는 빈 배열일 때 5종 fallback 이 적용된 값이라 라벨 표시용으로 부적절.
+  tools?: ToolFilter[];
   dateRange: DateRange | undefined;
   sortOrder: SortOrder;
   active: ActiveTab;
   page: number;
   onPageChange: (next: number) => void;
+  selectedId: string | null;
+  onSelectSource: (source: RagSourceUiModel) => void;
 }
 
 type ViewState = 'empty' | 'loading' | 'error' | 'results';
@@ -60,11 +67,14 @@ type ViewState = 'empty' | 'loading' | 'error' | 'results';
 export default function ResultListSection({
   keyword,
   scope,
+  tools = [],
   dateRange,
   sortOrder,
   active,
   page,
   onPageChange,
+  selectedId,
+  onSelectSource,
 }: ResultListSectionProps) {
   const { start, end } = dateRangeToUrlParams(dateRange);
   const query = useHybridSearch({ keyword, scope, start, end });
@@ -136,10 +146,19 @@ export default function ResultListSection({
             variants={fastStaggerContainer}
             className="flex w-full flex-col items-start gap-2"
           >
-            {dateRange?.from && <SearchPeriodLabel dateRange={dateRange} />}
+            {(dateRange?.from || tools.length > 0) && (
+              <div className="flex w-full items-center justify-between">
+                <div>{dateRange?.from && <SearchPeriodLabel dateRange={dateRange} />}</div>
+                <SearchToolLabel tools={tools} />
+              </div>
+            )}
             {resultsData.sources.map((source) => (
               <motion.div key={source.id} variants={fastFadeInUp} className="w-full">
-                <HybridSearchResultCard source={source} />
+                <HybridSearchResultCard
+                  source={source}
+                  isSelected={source.id === selectedId}
+                  onSelect={onSelectSource}
+                />
               </motion.div>
             ))}
           </motion.div>

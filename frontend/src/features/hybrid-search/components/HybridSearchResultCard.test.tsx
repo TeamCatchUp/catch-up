@@ -27,7 +27,7 @@ afterEach(() => {
 
 describe('HybridSearchResultCard', () => {
   it('integrationLabel/repo/title/author/date/github_number를 모두 렌더한다', () => {
-    render(<HybridSearchResultCard source={BASE_SOURCE} />);
+    render(<HybridSearchResultCard source={BASE_SOURCE} isSelected={false} onSelect={() => {}} />);
     expect(screen.getByText('Github')).toBeInTheDocument();
     expect(screen.getByText('catchup/frontend')).toBeInTheDocument();
     expect(screen.getByText('검색 결과 카드 타이틀')).toBeInTheDocument();
@@ -37,7 +37,13 @@ describe('HybridSearchResultCard', () => {
   });
 
   it('issue_key/github_number 없으면 식별자 영역 미렌더', () => {
-    render(<HybridSearchResultCard source={{ ...BASE_SOURCE, github_number: undefined }} />);
+    render(
+      <HybridSearchResultCard
+        source={{ ...BASE_SOURCE, github_number: undefined }}
+        isSelected={false}
+        onSelect={() => {}}
+      />,
+    );
     expect(screen.queryByText('#1234')).not.toBeInTheDocument();
   });
 
@@ -51,6 +57,8 @@ describe('HybridSearchResultCard', () => {
           github_number: undefined,
           issue_key: 'CU-989',
         }}
+        isSelected={false}
+        onSelect={() => {}}
       />,
     );
     expect(screen.getByText('[CU-989]')).toBeInTheDocument();
@@ -65,6 +73,8 @@ describe('HybridSearchResultCard', () => {
           entity_type: 'document_article',
           github_number: undefined,
         }}
+        isSelected={false}
+        onSelect={() => {}}
       />,
     );
     expect(screen.getByText('채널톡 - 도큐먼트')).toBeInTheDocument();
@@ -80,28 +90,36 @@ describe('HybridSearchResultCard', () => {
           title: '디자인 리뷰 부탁드립니다',
           github_number: undefined,
         }}
+        isSelected={false}
+        onSelect={() => {}}
       />,
     );
     expect(screen.getByText('"디자인 리뷰 부탁드립니다"')).toBeInTheDocument();
   });
 
-  it('카드 클릭 시 html_url로 window.open 호출', async () => {
+  it('카드 클릭 시 source 인자로 onSelect 호출', async () => {
     const user = userEvent.setup();
-    const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
-    render(<HybridSearchResultCard source={BASE_SOURCE} />);
+    const onSelect = vi.fn();
+    render(<HybridSearchResultCard source={BASE_SOURCE} isSelected={false} onSelect={onSelect} />);
 
     await user.click(screen.getByRole('button'));
 
-    expect(openSpy).toHaveBeenCalledWith('https://example.com/issue/1', '_blank', 'noopener,noreferrer');
+    expect(onSelect).toHaveBeenCalledTimes(1);
+    expect(onSelect).toHaveBeenCalledWith(BASE_SOURCE);
   });
 
-  it('javascript: URL은 disabled 처리, window.open 호출 안 됨', async () => {
-    const user = userEvent.setup();
-    const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
-    render(<HybridSearchResultCard source={{ ...BASE_SOURCE, html_url: 'javascript:alert(1)' }} />);
+  it('isSelected에 따라 aria-pressed가 토글된다', () => {
+    const { rerender } = render(
+      <HybridSearchResultCard source={BASE_SOURCE} isSelected={false} onSelect={() => {}} />,
+    );
+    expect(screen.getByRole('button')).toHaveAttribute('aria-pressed', 'false');
 
-    await user.click(screen.getByRole('button'));
+    rerender(<HybridSearchResultCard source={BASE_SOURCE} isSelected onSelect={() => {}} />);
+    expect(screen.getByRole('button')).toHaveAttribute('aria-pressed', 'true');
+  });
 
-    expect(openSpy).not.toHaveBeenCalled();
+  it('isSelected=true면 선택 배경(bg-fill-strong) 클래스를 가진다', () => {
+    render(<HybridSearchResultCard source={BASE_SOURCE} isSelected onSelect={() => {}} />);
+    expect(screen.getByRole('button').className).toContain('bg-fill-strong');
   });
 });

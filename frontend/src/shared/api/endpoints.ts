@@ -120,6 +120,7 @@ export const API = {
   // 하이브리드(Vector + Weighted Keyword) 수동 검색 + 사용자별 검색 기록
   search: {
     hybrid: `${API_PREFIX}/search/hybrid`, // GET 하이브리드 검색 (keyword, limit, offset, tool_filters)
+    original: `${API_PREFIX}/search/original`, // POST 원문 조회 (connector, document_id, next_cursor)
     queries: `${API_PREFIX}/search/queries`, // GET 사용자 검색 기록 (page, size, period: today/7d/all)
   },
 

@@ -5,16 +5,20 @@
 // active(drill-down 탭), page(페이지) 는 컴포넌트 state — fetch와 무관.
 // keyword 또는 tools가 바뀌면 draft/active/page 모두 reset (prev-value 패턴).
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import type { DateRange } from 'react-day-picker';
 import { motion } from 'motion/react';
 
 import { motionEase, MotionState } from '@/shared/motion/presets';
-import type { SortOrder } from '@/shared/utils/temporalRange';
+import type { RagSourceUiModel } from '@/shared/types/ragSourceModel';
+import type { SourceResponseApi } from '@/shared/types/sourceApi';
+import { normalizeSources } from '@/shared/utils/normalize/normalizeRagSources';
+import { dateRangeToUrlParams, type SortOrder } from '@/shared/utils/temporalRange';
 
+import { useHybridSearch } from '../hooks/useHybridSearch';
 import { useHybridSearchUrlState } from '../hooks/useHybridSearchUrlState';
 import { type ActiveTab, TOOL_FILTERS_ARRAY, type ToolFilter } from '../types/hybridSearchApi';
-import CatchupPromoCard from './CatchupPromoCard';
+import OriginalPanel from './original/OriginalPanel';
 import ResultListSection from './ResultListSection';
 import ResultPageBody from './ResultPageBody';
 import ResultPageHeader from './ResultPageHeader';
@@ -36,6 +40,9 @@ export default function HybridSearchResultPage() {
   const [page, setPage] = useState(1);
   const [sortOrder, setSortOrder] = useState<SortOrder>('relevance');
 
+  // 우측 원문 패널이 보여줄 선택 소스. 미선택이면 첫 결과로 자동 폴백.
+  const [selectedSource, setSelectedSource] = useState<SourceResponseApi | null>(null);
+
   // URL keyword/tools/기간 변경 시 모든 임시·UI state reset (render-phase prev-value).
   const [prevKeyword, setPrevKeyword] = useState(keyword);
   const toolsKey = tools.join(',');
@@ -51,10 +58,35 @@ export default function HybridSearchResultPage() {
     setDraftDateRange(dateRange);
     setActive('all');
     setPage(1);
+    setSelectedSource(null);
   }
 
   // scope: chips 선택 있으면 그것, 없으면 5종 전체 fallback.
   const scope: ToolFilter[] = tools.length > 0 ? tools : TOOL_FILTERS_ARRAY;
+
+  // ResultListSection과 동일한 파생 — 쿼리키 일치로 캐시 공유(추가 fetch 0).
+  const { start, end } = dateRangeToUrlParams(dateRange);
+  const query = useHybridSearch({ keyword, scope, start, end });
+  const results = useMemo(() => query.data?.results ?? [], [query.data]);
+
+  // 카드는 RagSourceUiModel만 들고 있어 원본 SourceResponseApi 역해석이 필요.
+  // normalizeSources 결과와 원본 results를 zip해 id → 원본 Map 구성.
+  const sourceById = useMemo(() => {
+    const map = new Map<string, SourceResponseApi>();
+    normalizeSources(results).forEach((uiSource, index) => {
+      const raw = results[index];
+      if (raw) map.set(uiSource.id, raw);
+    });
+    return map;
+  }, [results]);
+
+  // 자동 선택: 명시 선택 없으면 첫 결과. 첫 결과가 user_chat이 아니면 패널은 Coming Soon.
+  const effectiveSource = selectedSource ?? results[0] ?? null;
+
+  const handleSelectSource = (uiSource: RagSourceUiModel) => {
+    const raw = sourceById.get(uiSource.id);
+    if (raw) setSelectedSource(raw);
+  };
 
   const handleSubmit = () => {
     commitSearch(draftKeyword, draftChips, draftDateRange);
@@ -109,15 +141,26 @@ export default function HybridSearchResultPage() {
         sortOrder={sortOrder}
         onSortChange={handleSortChange}
       />
-      <ResultPageBody side={<CatchupPromoCard />}>
+      <ResultPageBody
+        side={
+          <OriginalPanel
+            connector={effectiveSource?.source ?? null}
+            entityType={effectiveSource?.entity_type ?? null}
+            documentId={effectiveSource?.id ?? null}
+          />
+        }
+      >
         <ResultListSection
           keyword={keyword}
           scope={scope}
+          tools={tools}
           dateRange={dateRange}
           active={active}
           page={page}
           onPageChange={setPage}
           sortOrder={sortOrder}
+          selectedId={effectiveSource?.id ?? null}
+          onSelectSource={handleSelectSource}
         />
       </ResultPageBody>
     </motion.div>

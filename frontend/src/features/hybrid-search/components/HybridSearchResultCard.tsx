@@ -2,7 +2,8 @@
 
 // 하이브리드 검색 결과 카드 (RAG 출처 카드).
 // 데이터 모델은 chat의 SourceCard와 동일한 RagSourceUiModel 사용 → fallback 로직 통일.
-// 시각은 Figma 11686:80941 — count pill, meta pill, OpenInNew 박스 없음 (chat과 시각만 다름).
+// 클릭은 선택(onSelect)만 — 원문은 우측 패널에 로드된다 (링크 열기 동작 없음).
+// hover/selected 시 카드 배경 강조.
 
 import FileIcon from '@/public/icons/icon/file.svg';
 import OpenInNew from '@/public/icons/icon/open_in_new.svg';
@@ -15,6 +16,8 @@ import type { RagSourceTypeModel, RagSourceUiModel } from '@/shared/types/ragSou
 
 interface HybridSearchResultCardProps {
   source: RagSourceUiModel;
+  isSelected: boolean;
+  onSelect: (source: RagSourceUiModel) => void;
 }
 
 const SOURCE_LOGO: Record<RagSourceTypeModel, React.FC<React.SVGProps<SVGSVGElement>>> = {
@@ -46,22 +49,12 @@ const getIntegrationLabel = (source: RagSourceUiModel): string => {
   return suffix ? `${base} - ${suffix}` : base;
 };
 
-// 보안: javascript:, data: 등 위험 스킴 차단. http/https만 허용.
-const ALLOWED_URL_SCHEMES = ['http:', 'https:'] as const;
-
-function isSafeUrl(raw: string): boolean {
-  if (!raw) return false;
-  try {
-    const parsed = new URL(raw);
-    return (ALLOWED_URL_SCHEMES as readonly string[]).includes(parsed.protocol);
-  } catch {
-    return false;
-  }
-}
-
-export default function HybridSearchResultCard({ source }: HybridSearchResultCardProps) {
+export default function HybridSearchResultCard({
+  source,
+  isSelected,
+  onSelect,
+}: HybridSearchResultCardProps) {
   const Logo = SOURCE_LOGO[source.source_type];
-  const canOpen = isSafeUrl(source.html_url);
 
   const integrationLabel = getIntegrationLabel(source);
   const isSlack = source.source_type === 'slack';
@@ -72,28 +65,33 @@ export default function HybridSearchResultCard({ source }: HybridSearchResultCar
   const dateText = source.date?.trim() ? source.date : '-';
   const authorText = source.author?.trim() ? source.author : '-';
 
-  const handleClick = () => {
-    if (!canOpen) return;
-    window.open(source.html_url, '_blank', 'noopener,noreferrer');
-  };
+  // selected: bg-fill-strong(#F7F7F8), hover: bg-fill-interaction-hover(#EAEBEC).
+  const stateClass = isSelected ? 'bg-fill-strong' : 'hover:bg-fill-interaction-hover';
 
   return (
     <button
       type="button"
-      onClick={handleClick}
-      disabled={!canOpen}
-      className="flex w-full flex-col items-start gap-2.5 rounded-xl py-2 text-left enabled:cursor-pointer disabled:cursor-default"
+      onClick={() => onSelect(source)}
+      aria-pressed={isSelected}
+      className={`flex w-full cursor-pointer flex-col items-start gap-2 rounded-xl p-4 text-left ${stateClass}`}
     >
+      {/* 헤더 — [로고 + 커넥터명] / [채널·워크스페이스명 + 외부 링크 아이콘] 단일 행. */}
       <div className="flex w-full items-center gap-2.5">
         <span className="border-edge-normal bg-fill-normal flex shrink-0 items-center justify-center rounded-full border p-1.5">
           <Logo className={source.source_type === 'channel_talk' ? 'h-4 w-4' : 'h-5 w-5'} />
         </span>
-        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <div className="flex items-center gap-2">
-            <span className="text-body-small text-content-neutral truncate">{integrationLabel}</span>
+        <div className="flex min-w-0 flex-1 items-center gap-2">
+          <span className="text-body-small text-content-neutral shrink-0">{integrationLabel}</span>
+          <span aria-hidden className="text-body-medium text-icon-alternative shrink-0">
+            /
+          </span>
+          {/* 워크스페이스명 + 외부 링크 아이콘 호버 시 워크스페이스명에 밑줄 */}
+          <div className="group/name flex min-w-0 flex-1 items-center gap-2">
+            <span className="text-body-small text-content-neutral truncate group-hover/name:underline">
+              {contextLabel}
+            </span>
             <OpenInNew className="text-icon-assistive h-4.5 w-4.5 shrink-0" />
           </div>
-          <span className="text-body-xsmall text-content-neutral max-w-87.5 truncate">{contextLabel}</span>
         </div>
       </div>
       <div className="flex w-full flex-col gap-2">
