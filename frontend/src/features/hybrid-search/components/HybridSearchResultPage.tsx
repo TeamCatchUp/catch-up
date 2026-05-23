@@ -153,6 +153,7 @@ export default function HybridSearchResultPage() {
         <ResultListSection
           keyword={keyword}
           scope={scope}
+          tools={tools}
           dateRange={dateRange}
           active={active}
           page={page}
