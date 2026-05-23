@@ -1,4 +1,5 @@
 // 갤러리 항목 메타데이터. Sidebar 와 [slug] 페이지가 공유하는 source of truth.
+// title 은 디자이너 친화 한국어. slug 는 URL (kebab-case, 변경 시 북마크 깨짐).
 
 export type EntrySlug =
   | 'text-content'
@@ -43,116 +44,116 @@ export const GROUP_ORDER: readonly EntryGroup[] = [
 ];
 
 export const GROUP_LABELS: Record<EntryGroup, string> = {
-  contents: 'Contents',
-  messages: 'Messages',
-  info: 'Info',
-  primitives: 'Primitives',
-  'panel-states': 'Panel States',
-  assembled: 'Assembled',
+  contents: '콘텐츠',
+  messages: '메시지',
+  info: '정보',
+  primitives: '공통 요소',
+  'panel-states': '패널 상태',
+  assembled: '조립',
 };
 
 export const GALLERY_ENTRIES: readonly GalleryEntry[] = [
-  // contents
+  // 콘텐츠
   {
     slug: 'text-content',
-    title: 'TextContent',
+    title: '텍스트',
     group: 'contents',
-    description: 'payload.text 를 줄바꿈 보존 평문으로 렌더.',
+    description: '평문 텍스트 — 줄바꿈 보존.',
   },
   {
     slug: 'block-content',
-    title: 'BlockContent',
+    title: '블록 (마크다운·코드·불릿)',
     group: 'contents',
-    description: 'blocks[] 를 block_type 별로 분기 — text→마크다운, code→코드블럭, bullets→리스트.',
+    description: '마크다운 텍스트 / 코드 / 불릿 리스트로 분기해 렌더.',
   },
   {
     slug: 'button-content',
-    title: 'ButtonContent',
+    title: '버튼',
     group: 'contents',
-    description: 'buttons[] 를 공통 Button 으로 렌더 — url 있는 버튼만 새 탭 링크.',
+    description: 'url 있는 버튼만 새 탭 링크. 공통 Button 컴포넌트 사용.',
   },
   {
     slug: 'form-content',
-    title: 'FormContent',
+    title: '폼',
     group: 'contents',
-    description: 'form.inputs[] 라벨/값 행과 제출 시각. 모든 행 인라인 노출.',
+    description: '입력 항목 라벨/값 + 제출 시각. 모든 행 인라인 노출.',
   },
   {
     slug: 'file-content',
-    title: 'FileContent',
+    title: '파일',
     group: 'contents',
-    description: 'files[] 각 요소를 FileRow 로 — 안전 다운로드 링크.',
+    description: '파일명 + 크기·타입 + 안전 다운로드 링크.',
   },
-  // messages
+  // 메시지
   {
     slug: 'message-item',
-    title: 'MessageItem',
+    title: '메시지 말풍선',
     group: 'messages',
-    description: 'visibility + author.type 별 변형. customer=blue stripe, manager internal=orange stripe+bg.',
+    description: '문의자(파란 stripe+bg) / 내부 대화(주황 stripe+bg) / 일반 상담원 변형.',
   },
   {
     slug: 'date-indicator',
-    title: 'DateIndicator',
+    title: '날짜 구분선',
     group: 'messages',
-    description: '채팅 타임라인의 날짜 구분선.',
+    description: '채팅 타임라인 날짜별 구분 표시.',
   },
-  // info
+  // 정보
   {
     slug: 'consultation-info',
-    title: 'ConsultationInfo',
+    title: '상담 정보',
     group: 'info',
-    description: '담당자/상담 태그/상담 설명. 138px 라벨 컬럼 고정.',
+    description: '담당자 / 상담 태그 / 상담 설명. 라벨 컬럼 138px 고정.',
   },
   {
     slug: 'customer-info',
-    title: 'CustomerInfo',
+    title: '고객 정보',
     group: 'info',
-    description: '고객 이름/이메일/전화번호/유선번호. 접기/펴기.',
+    description: '이름 / 이메일 / 전화번호 / 유선번호. 접기·펴기.',
   },
-  // primitives
+  // 공통 요소
   {
     slug: 'collapsible',
-    title: 'Collapsible',
+    title: '접기·펴기',
     group: 'primitives',
-    description: 'controlled 접기/펴기 primitive.',
+    description: 'controlled expand/collapse primitive. 고객정보·폼이 사용.',
   },
-  // panel-states
+  // 패널 상태
   {
     slug: 'panel-skeleton',
-    title: 'OriginalPanelSkeleton',
+    title: '로딩 스켈레톤',
     group: 'panel-states',
-    description: '로딩 중 패널 골격.',
+    description: '원문 데이터 로딩 중 표시.',
   },
   {
     slug: 'panel-empty',
-    title: 'OriginalPanelEmpty',
+    title: '빈 상태',
     group: 'panel-states',
     description: '선택된 문서가 없을 때.',
   },
   {
     slug: 'panel-error',
-    title: 'OriginalPanelError',
+    title: '에러 상태',
     group: 'panel-states',
-    description: 'API 오류 (400/404/422 분기).',
+    description: 'API 오류 (400 지원 안 함 / 404 연동 없음 / 422 제공처 오류).',
   },
   {
     slug: 'panel-coming-soon',
-    title: 'OriginalPanelComingSoon',
+    title: '준비 중',
     group: 'panel-states',
-    description: 'user_chat 아닌 소스 — 툴명 보간.',
+    description: 'ChannelTalk user_chat 외 다른 소스 선택 시 — 툴명 보간.',
   },
-  // assembled
+  // 조립
   {
     slug: 'panel-content',
-    title: 'OriginalPanelContent',
+    title: '본문 (전체 조립)',
     group: 'assembled',
-    description: '상담정보 → 고객정보 → 메시지 영역 전체 조립.',
+    description: '상담 정보 → 고객 정보 → 메시지 영역의 전체 조립 결과.',
   },
   {
     slug: 'panel',
-    title: 'OriginalPanel',
+    title: '컨테이너 (상태 분기)',
     group: 'assembled',
-    description: 'connector/entityType/documentId 로 상태 분기하는 컨테이너.',
+    description: 'connector/entityType/documentId 입력 → 위 상태들 중 하나로 분기.',
   },
 ];
 
