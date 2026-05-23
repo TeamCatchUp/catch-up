@@ -1,7 +1,7 @@
 'use client';
 
 // button 콘텐츠 — buttons[] 를 공통 Button(text 스타일)으로 렌더.
-// 과거 대화 기록이므로 url 있는 버튼만 새 탭 링크, 나머지는 비활성 표시.
+// 과거 대화 기록 — 모든 버튼 시각 동일. url 있는 버튼만 새 탭 링크, 나머지는 no-op.
 
 import type { OriginalButton, OriginalButtonPayload } from '@/features/hybrid-search/types/originalApi';
 import { Button } from '@/shared/components/ui/button';
@@ -25,8 +25,9 @@ function OriginalButtonItem({ button }: { button: OriginalButton }) {
     );
   }
 
+  // url 없는 버튼(과거 submit 등) — 시각은 link 버튼과 동일, 클릭은 no-op.
   return (
-    <Button type="button" variant="text-primary-blue" size="md" disabled>
+    <Button type="button" variant="text-primary-blue" size="md">
       {label}
     </Button>
   );
