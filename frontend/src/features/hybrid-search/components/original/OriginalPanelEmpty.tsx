@@ -4,13 +4,7 @@
 
 import { motion } from 'motion/react';
 
-import { motionEase, MotionState } from '@/shared/motion/presets';
-
-const fastFadeIn = {
-  hidden: { opacity: 0, y: 4 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.25, ease: motionEase } },
-  exit: { opacity: 0, transition: { duration: 0.15, ease: motionEase } },
-};
+import { MotionState, panelStateFadeIn } from '@/shared/motion/presets';
 
 export default function OriginalPanelEmpty() {
   return (
@@ -18,7 +12,7 @@ export default function OriginalPanelEmpty() {
       initial={MotionState.Hidden}
       animate={MotionState.Visible}
       exit={MotionState.Exit}
-      variants={fastFadeIn}
+      variants={panelStateFadeIn}
       className="flex flex-col items-center gap-1 px-5 py-50"
     >
       <p className="text-heading-small text-content-alternative font-semibold">

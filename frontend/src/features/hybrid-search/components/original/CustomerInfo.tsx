@@ -14,6 +14,8 @@ import MailIcon from '@/public/icons/icon/mail.svg';
 import PersonIcon from '@/public/icons/icon/person.svg';
 import PhoneIcon from '@/public/icons/icon/phone.svg';
 
+import InfoFieldLabel from './InfoFieldLabel';
+
 interface CustomerInfoProps {
   customer: OriginalCustomer | undefined;
 }
@@ -28,10 +30,7 @@ function CustomerRow({ icon: Icon, label, value }: CustomerRowProps) {
   const display = value?.trim();
   return (
     <div className="flex items-center gap-10">
-      <span className="flex w-[138px] shrink-0 items-center gap-4">
-        <Icon className="text-icon-neutral h-5.5 w-5.5" />
-        <span className="text-body-small text-content-alternative">{label}</span>
-      </span>
+      <InfoFieldLabel icon={Icon} text={label} />
       <span className="text-body-small text-content-neutral min-w-0 flex-1 truncate">
         {display ?? <span className="text-content-assistive">없음</span>}
       </span>

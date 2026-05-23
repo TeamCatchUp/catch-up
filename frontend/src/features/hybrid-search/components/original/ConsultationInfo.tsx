@@ -12,22 +12,10 @@ import PersonFilledIcon from '@/public/icons/icon/person_filled.svg';
 import TagIcon from '@/public/icons/icon/tag.svg';
 import { Badge } from '@/shared/components/ui/badge';
 
+import InfoFieldLabel from './InfoFieldLabel';
+
 interface ConsultationInfoProps {
   metadata: OriginalMetadata;
-}
-
-interface FieldLabelProps {
-  icon: typeof TagIcon;
-  text: string;
-}
-
-function FieldLabel({ icon: Icon, text }: FieldLabelProps) {
-  return (
-    <span className="flex w-[138px] shrink-0 items-center gap-4">
-      <Icon className="text-icon-neutral h-5.5 w-5.5" />
-      <span className="text-body-small text-content-alternative">{text}</span>
-    </span>
-  );
 }
 
 export default function ConsultationInfo({ metadata }: ConsultationInfoProps) {
@@ -47,7 +35,7 @@ export default function ConsultationInfo({ metadata }: ConsultationInfoProps) {
   return (
     <section className="bg-fill-strong border-edge-neutral flex w-full flex-col gap-3 rounded-xl border px-5 py-4">
       <div className="flex items-center gap-10">
-        <FieldLabel icon={PersonFilledIcon} text="담당자" />
+        <InfoFieldLabel icon={PersonFilledIcon} text="담당자" />
         <div className="flex min-w-0 flex-1 items-center gap-2">
           {assigneeAvatar ? (
             <Image
@@ -68,7 +56,7 @@ export default function ConsultationInfo({ metadata }: ConsultationInfoProps) {
 
       {tagNames.length > 0 ? (
         <div className="flex flex-col gap-2">
-          <FieldLabel icon={TagIcon} text="상담 태그" />
+          <InfoFieldLabel icon={TagIcon} text="상담 태그" />
           <div className="flex flex-wrap gap-x-1.5 gap-y-3">
             {tagNames.map((name, index) => (
               <Badge
@@ -84,19 +72,19 @@ export default function ConsultationInfo({ metadata }: ConsultationInfoProps) {
         </div>
       ) : (
         <div className="flex items-center gap-10">
-          <FieldLabel icon={TagIcon} text="상담 태그" />
+          <InfoFieldLabel icon={TagIcon} text="상담 태그" />
           <span className="text-body-small text-content-assistive">없음</span>
         </div>
       )}
 
       {description ? (
         <div className="flex flex-col gap-2">
-          <FieldLabel icon={FileIcon} text="상담 설명" />
+          <InfoFieldLabel icon={FileIcon} text="상담 설명" />
           <p className="text-body-small text-content-neutral break-words">{description}</p>
         </div>
       ) : (
         <div className="flex items-center gap-10">
-          <FieldLabel icon={FileIcon} text="상담 설명" />
+          <InfoFieldLabel icon={FileIcon} text="상담 설명" />
           <span className="text-body-small text-content-assistive">없음</span>
         </div>
       )}

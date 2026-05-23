@@ -27,6 +27,7 @@ function isUserChat(connector: SourceTypeApi | null, entityType: string | null):
 // Coming Soon 카피의 협업 툴 표시명 — connector/entityType 매핑 테이블.
 function resolveToolName(connector: SourceTypeApi | null, entityType: string | null): string {
   if (connector === 'channel_talk' && entityType === 'document_article') return '채널톡 도큐먼트';
+  if (connector === null || connector === 'unknown') return '해당 도구';
   switch (connector) {
     case 'confluence':
       return '컨플루언스 위키 문서';
@@ -38,8 +39,11 @@ function resolveToolName(connector: SourceTypeApi | null, entityType: string | n
       return 'Jira';
     case 'channel_talk':
       return '채널톡';
-    default:
-      return '해당 도구';
+    default: {
+      // SourceTypeApi 에 새 connector 추가 시 컴파일 실패 — 위 switch 도 갱신해야 함.
+      const _exhaustive: never = connector;
+      return _exhaustive;
+    }
   }
 }
 
