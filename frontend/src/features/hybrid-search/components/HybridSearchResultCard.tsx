@@ -20,7 +20,7 @@ interface HybridSearchResultCardProps {
   onSelect: (source: RagSourceUiModel) => void;
 }
 
-const SOURCE_LOGO: Record<RagSourceTypeModel, React.FC<React.SVGProps<SVGSVGElement>>> = {
+const SOURCE_LOGO: Record<RagSourceTypeModel, React.ComponentType<React.SVGProps<SVGSVGElement>>> = {
   confluence: Confluence,
   jira: Jira,
   slack: Slack,

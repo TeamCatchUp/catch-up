@@ -3,8 +3,6 @@
 // 원문 메시지의 첨부 파일 한 줄. file 콘텐츠에서 files[] 각 요소를 렌더.
 // file.url 이 안전하면 새 탭 다운로드 링크로, 아니면 비링크로 표시.
 
-import type { ReactNode } from 'react';
-
 import type { OriginalFile } from '@/features/hybrid-search/types/originalApi';
 import FileIcon from '@/public/icons/icon/file_filled.svg';
 import { isSafeUrl } from '@/shared/utils/isSafeUrl';
@@ -72,7 +70,7 @@ export default function FileRow({ file }: FileRowProps) {
         rel="noopener noreferrer"
         className={className}
       >
-        {inner as ReactNode}
+        {inner}
       </a>
     );
   }

@@ -94,7 +94,7 @@ export default function MessageItem({ item }: MessageItemProps) {
         {/* 본문 — contents[] 각 요소를 ContentRenderer 로 */}
         <div className="flex flex-col gap-2">
           {item.contents.map((content, index) => (
-            <ContentRenderer key={index} content={content} />
+            <ContentRenderer key={`${content.content_type}-${index}`} content={content} />
           ))}
         </div>
       </div>

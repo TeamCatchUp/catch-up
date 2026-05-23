@@ -15,7 +15,7 @@ interface SearchToolLabelProps {
   tools: ToolFilter[];
 }
 
-const TOOL_LOGO: Record<ToolFilter, React.FC<React.SVGProps<SVGSVGElement>>> = {
+const TOOL_LOGO: Record<ToolFilter, React.ComponentType<React.SVGProps<SVGSVGElement>>> = {
   confluence: Confluence,
   jira: Jira,
   slack: Slack,
