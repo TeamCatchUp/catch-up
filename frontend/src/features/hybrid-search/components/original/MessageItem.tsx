@@ -1,7 +1,8 @@
 'use client';
 
 // 채팅 타임라인의 한 메시지. visibility + author.type 으로 변형.
-// 배경 채움은 visibility === 'internal' 일 때만 — public 메시지는 배경 없음.
+// 좌측 4px stripe + 배경: customer=blue stripe / manager internal=orange stripe+bg / manager public=없음.
+// customer 가 우선 — customer 면 visibility 와 무관하게 항상 customer 디자인.
 
 import Image from 'next/image';
 
@@ -43,8 +44,12 @@ export default function MessageItem({ item }: MessageItemProps) {
 
   return (
     <div
-      className={`flex w-full gap-3 rounded-xl px-3 py-3 ${
-        isInternal ? 'bg-accent-red-orange-lighten' : ''
+      className={`flex w-full gap-3 px-3 py-3 ${
+        isCustomer
+          ? 'border-edge-primary-strong bg-fill-primary-normal-assistive border-l-4'
+          : isInternal
+            ? 'border-accent-red-orange bg-accent-red-orange-lighten border-l-4'
+            : ''
       }`}
     >
       {/* 아바타 — avatar_url 부재 시 author.type 별 기본 아이콘 */}
