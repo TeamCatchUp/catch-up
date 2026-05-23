@@ -44,6 +44,52 @@ def _make_client(
 
 
 class ChannelTalkCoreApiClientTests(IsolatedAsyncioTestCase):
+    async def test_get_user_chat_file_url_returns_signed_url(self) -> None:
+        async def handler(request: httpx.Request) -> httpx.Response:
+            self.assertEqual(
+                request.url.path,
+                "/open/v5/user-chats/chat-1/messages/file",
+            )
+            self.assertEqual(request.url.params["key"], "file-key")
+            self.assertEqual(request.headers["x-access-key"], "access-key")
+            self.assertEqual(request.headers["x-access-secret"], "access-secret")
+            return httpx.Response(
+                200,
+                json={"result": "https://signed.example/file"},
+            )
+
+        async with httpx.AsyncClient(
+            transport=httpx.MockTransport(handler),
+            base_url="https://api.channel.io",
+        ) as http_client:
+            client = _make_client(http_client=http_client)
+            url = await client.get_user_chat_file_url(
+                access_key="access-key",
+                access_secret="access-secret",
+                channel_id="channel-123",
+                user_chat_id="chat-1",
+                file_key="file-key",
+            )
+
+        self.assertEqual(url, "https://signed.example/file")
+
+    async def test_get_user_chat_file_url_rejects_invalid_payload(self) -> None:
+        async def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(200, json={"result": None})
+
+        async with httpx.AsyncClient(
+            transport=httpx.MockTransport(handler),
+            base_url="https://api.channel.io",
+        ) as http_client:
+            client = _make_client(http_client=http_client)
+            with self.assertRaises(ChannelTalkPayloadError):
+                await client.get_user_chat_file_url(
+                    access_key="access-key",
+                    access_secret="access-secret",
+                    user_chat_id="chat-1",
+                    file_key="file-key",
+                )
+
     async def test_list_user_chats_parses_page_and_quota_snapshot(self) -> None:
         async def handler(request: httpx.Request) -> httpx.Response:
             self.assertEqual(request.url.path, "/open/v5/user-chats")

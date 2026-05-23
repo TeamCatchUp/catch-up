@@ -165,6 +165,21 @@ class ChannelTalkMetadataRepository:
         ).scalars().all()
         return [_to_manager_metadata(row) for row in rows]
 
+    def list_managers_by_channel_and_ids(
+        self,
+        channel_id: str,
+        manager_ids: set[str],
+    ) -> list[ChannelTalkManagerMetadata]:
+        if not manager_ids:
+            return []
+        rows = self.db.execute(
+            select(db_models.ChannelTalkManager).where(
+                db_models.ChannelTalkManager.channel_id == channel_id,
+                db_models.ChannelTalkManager.manager_id.in_(manager_ids),
+            )
+        ).scalars().all()
+        return [_to_manager_metadata(row) for row in rows]
+
     def bulk_upsert_managers(
         self,
         payloads: list[ChannelTalkManagerMetadata],

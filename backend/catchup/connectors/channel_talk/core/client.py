@@ -5,6 +5,7 @@ from typing import Any
 import structlog
 
 from catchup.connectors.channel_talk.core.http_client import ChannelTalkCoreHttpClient
+from catchup.connectors.channel_talk.exceptions import ChannelTalkPayloadError
 from catchup.connectors.channel_talk.exceptions import ChannelTalkValidationError
 from catchup.connectors.channel_talk.http_helpers import build_since_limit_params
 from catchup.connectors.channel_talk.http_helpers import parse_channel_talk_payload
@@ -239,6 +240,38 @@ class ChannelTalkCoreApiClient:
             sort_order=sort_order,
         )
 
+    async def get_user_chat_file_url(
+        self,
+        access_key: str,
+        access_secret: str,
+        *,
+        channel_id: str | None = None,
+        user_chat_id: str,
+        file_key: str,
+    ) -> str:
+        resolved_user_chat_id = _require_user_chat_id(user_chat_id)
+        resolved_file_key = _require_file_key(file_key)
+        payload = await self._transport.request_json(
+            method="GET",
+            path=f"/open/v5/user-chats/{resolved_user_chat_id}/messages/file",
+            headers=self._build_headers(
+                access_key=access_key,
+                access_secret=access_secret,
+            ),
+            params={"key": resolved_file_key},
+            channel_id=channel_id,
+        )
+        if not isinstance(payload, dict):
+            raise ChannelTalkPayloadError(
+                "Channel Talk returned an invalid file URL payload"
+            )
+        url = payload.get("result")
+        if not isinstance(url, str) or not url.strip():
+            raise ChannelTalkPayloadError(
+                "Channel Talk returned an invalid file URL payload"
+            )
+        return url.strip()
+
     @staticmethod
     def _build_headers(
         *,
@@ -291,6 +324,13 @@ def _require_user_chat_id(value: str) -> str:
     text = str(value or "").strip()
     if not text:
         raise ChannelTalkValidationError("user_chat_id is required")
+    return text
+
+
+def _require_file_key(value: str) -> str:
+    text = str(value or "").strip()
+    if not text:
+        raise ChannelTalkValidationError("file_key is required")
     return text
 
 
