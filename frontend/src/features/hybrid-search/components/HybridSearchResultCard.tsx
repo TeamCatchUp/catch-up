@@ -73,18 +73,25 @@ export default function HybridSearchResultCard({
       type="button"
       onClick={() => onSelect(source)}
       aria-pressed={isSelected}
-      className={`flex w-full cursor-pointer flex-col items-start gap-2.5 rounded-xl p-4 text-left ${stateClass}`}
+      className={`flex w-full cursor-pointer flex-col items-start gap-2 rounded-xl p-4 text-left ${stateClass}`}
     >
+      {/* 헤더 — [로고 + 커넥터명] / [채널·워크스페이스명 + 외부 링크 아이콘] 단일 행. */}
       <div className="flex w-full items-center gap-2.5">
         <span className="border-edge-normal bg-fill-normal flex shrink-0 items-center justify-center rounded-full border p-1.5">
           <Logo className={source.source_type === 'channel_talk' ? 'h-4 w-4' : 'h-5 w-5'} />
         </span>
-        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <div className="flex items-center gap-2">
-            <span className="text-body-small text-content-neutral truncate">{integrationLabel}</span>
+        <div className="flex min-w-0 flex-1 items-center gap-2">
+          <span className="text-body-small text-content-neutral shrink-0">{integrationLabel}</span>
+          <span aria-hidden className="text-body-medium text-icon-alternative shrink-0">
+            /
+          </span>
+          {/* 워크스페이스명 + 외부 링크 아이콘 호버 시 워크스페이스명에 밑줄 */}
+          <div className="group/name flex min-w-0 flex-1 items-center gap-2">
+            <span className="text-body-small text-content-neutral truncate group-hover/name:underline">
+              {contextLabel}
+            </span>
             <OpenInNew className="text-icon-assistive h-4.5 w-4.5 shrink-0" />
           </div>
-          <span className="text-body-xsmall text-content-neutral max-w-87.5 truncate">{contextLabel}</span>
         </div>
       </div>
       <div className="flex w-full flex-col gap-2">
