@@ -3,7 +3,7 @@
 import { notFound } from 'next/navigation';
 
 import { GALLERY_ENTRIES } from '../_registry/entries';
-import { ENTRY_RENDERERS } from '../_registry/render';
+import EntryRenderer from '../_registry/render';
 
 export function generateStaticParams() {
   return GALLERY_ENTRIES.map((entry) => ({ slug: entry.slug }));
@@ -17,7 +17,6 @@ export default async function OriginalPanelEntryPage({ params }: PageProps) {
   const { slug } = await params;
   const entry = GALLERY_ENTRIES.find((e) => e.slug === slug);
   if (!entry) notFound();
-  const Renderer = ENTRY_RENDERERS[entry.slug];
 
   return (
     <div className="mx-auto flex max-w-4xl flex-col gap-8 px-8 py-10">
@@ -28,7 +27,7 @@ export default async function OriginalPanelEntryPage({ params }: PageProps) {
         )}
       </header>
       <div className="flex flex-col gap-4">
-        <Renderer />
+        <EntryRenderer slug={entry.slug} />
       </div>
     </div>
   );

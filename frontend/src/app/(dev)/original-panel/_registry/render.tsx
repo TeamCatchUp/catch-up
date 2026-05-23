@@ -2,7 +2,8 @@
 
 // slug 별 케이스 렌더러. fixture/feature 컴포넌트 import 가 모두 이 파일로 격리된다.
 // 'use client' — Collapsible/Error 케이스가 inline 핸들러(onOpenChange/onRetry)를 넘기므로
-// RSC 직렬화 경계를 건너뛰어야 함.
+// RSC 직렬화 경계를 건너뛰어야 함. ENTRY_RENDERERS 는 이 모듈 내부에서만 쓰고,
+// 외부로는 <EntryRenderer slug={...} /> Component 만 노출 (server 가 string slug 만 전달).
 
 import type { ReactNode } from 'react';
 
@@ -82,7 +83,7 @@ function filePayload(content: OriginalContent): OriginalFilePayload {
   return content.payload;
 }
 
-export const ENTRY_RENDERERS: Record<EntrySlug, () => ReactNode> = {
+const ENTRY_RENDERERS: Record<EntrySlug, () => ReactNode> = {
   'text-content': () => (
     <>
       <Case label="짧은 텍스트">
@@ -337,3 +338,12 @@ export const ENTRY_RENDERERS: Record<EntrySlug, () => ReactNode> = {
     </>
   ),
 };
+
+interface EntryRendererProps {
+  slug: EntrySlug;
+}
+
+export default function EntryRenderer({ slug }: EntryRendererProps) {
+  const renderer = ENTRY_RENDERERS[slug];
+  return renderer ? renderer() : null;
+}
