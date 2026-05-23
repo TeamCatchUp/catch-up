@@ -43,7 +43,13 @@ export const metadataFull: OriginalMetadata = {
     assignee_id: 'mgr-001',
     manager_ids: ['mgr-001', 'mgr-002'],
     managers: [
-      { manager_id: 'mgr-001', name: '이지은', email: 'jieun.lee@catchup.example', role_id: 'agent' },
+      {
+        manager_id: 'mgr-001',
+        name: '이지은',
+        email: 'jieun.lee@catchup.example',
+        avatar_url: 'https://i.pravatar.cc/80?img=45',
+        role_id: 'agent',
+      },
       { manager_id: 'mgr-002', name: '박팀장', email: 'team.park@catchup.example', role_id: 'lead' },
     ],
     first_assignee_id_after_open: 'mgr-001',

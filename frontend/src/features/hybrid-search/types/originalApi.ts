@@ -127,6 +127,7 @@ export interface OriginalAssignmentManager {
   manager_id?: string;
   name?: string;
   email?: string;
+  avatar_url?: string | null;
   role_id?: string;
 }
 

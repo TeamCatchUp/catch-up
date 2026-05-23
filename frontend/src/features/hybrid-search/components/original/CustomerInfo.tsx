@@ -1,7 +1,7 @@
 'use client';
 
 // 고객정보 섹션 — 접기/펴기. open 상태를 자체 소유하고 본문은 Collapsible로 렌더.
-// 이름/이메일/전화번호/유선번호 를 OriginalCustomer 에서 렌더.
+// 이름/이메일/전화번호/유선번호 를 OriginalCustomer 에서 렌더. 좌측 라벨 컬럼 138px 고정.
 
 import { useState } from 'react';
 
@@ -28,8 +28,8 @@ function CustomerRow({ icon: Icon, label, value }: CustomerRowProps) {
   const display = value?.trim();
   return (
     <div className="flex items-center gap-10">
-      <span className="flex shrink-0 items-center gap-4">
-        <Icon className="text-icon-alternative h-5.5 w-5.5" />
+      <span className="flex w-[138px] shrink-0 items-center gap-4">
+        <Icon className="text-icon-neutral h-5.5 w-5.5" />
         <span className="text-body-small text-content-alternative">{label}</span>
       </span>
       <span className="text-body-small text-content-neutral min-w-0 flex-1 truncate">
@@ -44,11 +44,11 @@ export default function CustomerInfo({ customer }: CustomerInfoProps) {
 
   const header = (
     <div className="flex w-full items-center gap-4 py-4">
-      <CardClientIcon className="text-icon-alternative h-5.5 w-5.5 shrink-0" />
+      <CardClientIcon className="text-icon-neutral h-5.5 w-5.5 shrink-0" />
       <span className="text-body-small text-content-alternative flex-1 text-left">고객정보</span>
       <ChevronIcon
         aria-hidden
-        className={`text-icon-alternative h-4.5 w-4.5 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`}
+        className={`text-icon-neutral h-4.5 w-4.5 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`}
       />
     </div>
   );
