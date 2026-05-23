@@ -11,10 +11,10 @@ import { useQuery } from '@tanstack/react-query';
 import AccentTabs, { type AccentTabItem } from '@/shared/components/ui/accent-tabs';
 import { dateRangeToUrlParams, type SortOrder } from '@/shared/utils/temporalRange';
 
-import { hybridSearchQueries } from '../queries/hybridSearch.queries';
-import type { ActiveTab, ToolFilter } from '../types/hybridSearchApi';
-import ResultSearchBar from './ResultSearchBar';
-import SortDropdown from './SortDropdown';
+import { hybridSearchQueries } from '../../queries/hybridSearch.queries';
+import type { ActiveTab, ToolFilter } from '../../types/hybridSearchApi';
+import SortDropdown from '../result-list/SortDropdown';
+import ResultSearchBar from '../search-bar/ResultSearchBar';
 
 interface ResultPageHeaderProps {
   // 확정된 검색어 — list query 호출에 사용

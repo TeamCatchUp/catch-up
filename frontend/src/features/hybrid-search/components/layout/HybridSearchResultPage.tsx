@@ -15,11 +15,11 @@ import type { SourceResponseApi } from '@/shared/types/sourceApi';
 import { normalizeSources } from '@/shared/utils/normalize/normalizeRagSources';
 import { dateRangeToUrlParams, type SortOrder } from '@/shared/utils/temporalRange';
 
-import { useHybridSearch } from '../hooks/useHybridSearch';
-import { useHybridSearchUrlState } from '../hooks/useHybridSearchUrlState';
-import { type ActiveTab, TOOL_FILTERS_ARRAY, type ToolFilter } from '../types/hybridSearchApi';
-import OriginalPanel from './original/OriginalPanel';
-import ResultListSection from './ResultListSection';
+import { useHybridSearch } from '../../hooks/useHybridSearch';
+import { useHybridSearchUrlState } from '../../hooks/useHybridSearchUrlState';
+import { type ActiveTab, TOOL_FILTERS_ARRAY, type ToolFilter } from '../../types/hybridSearchApi';
+import OriginalPanel from '../original/OriginalPanel';
+import ResultListSection from '../result-list/ResultListSection';
 import ResultPageBody from './ResultPageBody';
 import ResultPageHeader from './ResultPageHeader';
 

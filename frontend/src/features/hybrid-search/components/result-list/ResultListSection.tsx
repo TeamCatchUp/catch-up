@@ -13,13 +13,13 @@ import { applySlackDateFallback } from '@/shared/utils/normalize/applySlackDateF
 import { normalizeSources } from '@/shared/utils/normalize/normalizeRagSources';
 import { dateRangeToUrlParams, sortByRelevance, sortByUpdatedAt, type SortOrder } from '@/shared/utils/temporalRange';
 
-import { useHybridSearch } from '../hooks/useHybridSearch';
-import { HYBRID_SEARCH_PAGE_SIZE } from '../queries/hybridSearch.queries';
-import type { ActiveTab, ToolFilter } from '../types/hybridSearchApi';
+import { useHybridSearch } from '../../hooks/useHybridSearch';
+import { HYBRID_SEARCH_PAGE_SIZE } from '../../queries/hybridSearch.queries';
+import type { ActiveTab, ToolFilter } from '../../types/hybridSearchApi';
+import ResultEmptyState from '../result-states/ResultEmptyState';
+import ResultErrorState from '../result-states/ResultErrorState';
+import ResultLoadingState from '../result-states/ResultLoadingState';
 import HybridSearchResultCard from './HybridSearchResultCard';
-import ResultEmptyState from './ResultEmptyState';
-import ResultErrorState from './ResultErrorState';
-import ResultLoadingState from './ResultLoadingState';
 import SearchPeriodLabel from './SearchPeriodLabel';
 import SearchToolLabel from './SearchToolLabel';
 
