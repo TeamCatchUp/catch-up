@@ -8,6 +8,7 @@ import Image from 'next/image';
 
 import ContentRenderer from '@/features/hybrid-search/components/original/contents/ContentRenderer';
 import type { OriginalMessageItem } from '@/features/hybrid-search/types/originalApi';
+import { formatTimestamp } from '@/features/hybrid-search/utils/format/formatTimestamp';
 import FaceManIcon from '@/public/icons/icon/face_man.svg';
 import HeadphoneIcon from '@/public/icons/icon/headphone.svg';
 import LockIcon from '@/public/icons/icon/lock.svg';
@@ -16,19 +17,6 @@ import { Badge } from '@/shared/components/ui/badge';
 
 interface MessageItemProps {
   item: OriginalMessageItem;
-}
-
-// ISO datetime → 02:33 PM. 파싱 불가하면 빈 문자열.
-function formatTimestamp(value: string): string {
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return '';
-
-  let hours = parsed.getHours();
-  const minutes = String(parsed.getMinutes()).padStart(2, '0');
-  const meridiem = hours >= 12 ? 'PM' : 'AM';
-  hours %= 12;
-  if (hours === 0) hours = 12;
-  return `${String(hours).padStart(2, '0')}:${minutes} ${meridiem}`;
 }
 
 export default function MessageItem({ item }: MessageItemProps) {

@@ -4,39 +4,13 @@
 // file.url 이 안전하면 새 탭 다운로드 링크로, 아니면 비링크로 표시.
 
 import type { OriginalFile } from '@/features/hybrid-search/types/originalApi';
+import { formatFileSize } from '@/features/hybrid-search/utils/format/formatFileSize';
+import { formatFileType } from '@/features/hybrid-search/utils/format/formatFileType';
 import FileIcon from '@/public/icons/icon/file_filled.svg';
 import { isSafeUrl } from '@/shared/utils/isSafeUrl';
 
 interface FileRowProps {
   file: OriginalFile;
-}
-
-const FILE_SIZE_UNITS = ['B', 'KB', 'MB', 'GB', 'TB'] as const;
-
-// 바이트 → 사람이 읽는 크기 (예: 347.3KB). B 단위는 소수점 없이.
-function formatFileSize(bytes: number | undefined): string | null {
-  if (bytes == null || !Number.isFinite(bytes) || bytes < 0) return null;
-
-  let size = bytes;
-  let unitIndex = 0;
-  while (size >= 1024 && unitIndex < FILE_SIZE_UNITS.length - 1) {
-    size /= 1024;
-    unitIndex += 1;
-  }
-
-  const rounded = unitIndex === 0 ? String(size) : size.toFixed(1);
-  return `${rounded}${FILE_SIZE_UNITS[unitIndex]}`;
-}
-
-// 파일 확장자 우선, 없으면 MIME 서브타입을 짧은 타입 라벨로 (예: pdf).
-function formatFileType(name: string, contentType: string | undefined): string | null {
-  const extMatch = /\.([a-z0-9]+)$/i.exec(name);
-  if (extMatch) return extMatch[1].toLowerCase();
-
-  const mime = contentType?.trim();
-  if (!mime) return null;
-  const subtype = mime.split('/')[1]?.split('+')[0];
-  return subtype ? subtype.toLowerCase() : null;
 }
 
 export default function FileRow({ file }: FileRowProps) {
