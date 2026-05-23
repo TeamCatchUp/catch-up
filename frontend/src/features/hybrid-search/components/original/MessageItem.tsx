@@ -46,7 +46,7 @@ export default function MessageItem({ item }: MessageItemProps) {
     <div
       className={`flex w-full gap-3 px-3 py-3 ${
         isCustomer
-          ? 'border-edge-primary-strong bg-fill-primary-normal-assistive border-l-4'
+          ? 'border-edge-primary-strong bg-fill-primary-assistive border-l-4'
           : isInternal
             ? 'border-accent-red-orange bg-accent-red-orange-lighten border-l-4'
             : ''
