@@ -48,3 +48,23 @@ class OriginalContentResponse(BaseModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
     next_cursor: str | None = None
     fetched_at: datetime
+
+
+class OriginalFileUrlRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    connector: SourceType = Field(..., description="파일 URL 조회 대상 connector")
+    document_id: str = Field(..., min_length=1, description="검색 결과 document id")
+    file_key: str = Field(..., min_length=1, description="원본 connector 파일 key")
+
+
+class OriginalFileUrlResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    connector: SourceType
+    entity_type: str
+    document_id: str
+    file_key: str
+    url: str
+    expires_in_seconds: int = 900
+    fetched_at: datetime

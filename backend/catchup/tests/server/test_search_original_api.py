@@ -11,6 +11,7 @@ from catchup.db.dependencies import get_db
 from catchup.db.models import SourceType
 from catchup.db.models import User
 from catchup.search.original.ids import OriginalDocumentIdError
+from catchup.search.original.resolvers.channel_talk import ChannelTalkOriginalError
 from catchup.search.original.schemas.channel_talk import ChannelTalkOriginalAuthor
 from catchup.search.original.schemas.channel_talk import (
     ChannelTalkUserChatOriginalContent,
@@ -21,6 +22,7 @@ from catchup.search.original.schemas.channel_talk import (
 from catchup.search.original.schemas.channel_talk import ChannelTalkUserChatOriginalItem
 from catchup.server.main import app
 from catchup.server.search.dependencies import get_original_search_service
+from catchup.server.search.schemas import OriginalFileUrlResponse
 
 client = TestClient(app)
 
@@ -82,7 +84,6 @@ def mock_original_search_service():
 
 
 def test_original_search_endpoint_delegates_to_service(
-    mock_db,
     mock_current_user,
     mock_original_search_service,
 ):
@@ -132,7 +133,7 @@ def test_original_search_endpoint_delegates_to_service(
     _, kwargs = mock_original_search_service.get_original.call_args
     assert kwargs["request"].connector == SourceType.CHANNEL_TALK
     assert kwargs["request"].next_cursor is None
-    assert kwargs["db"] is mock_db
+    assert "db" not in kwargs
 
 
 def test_original_search_endpoint_passes_next_cursor(
@@ -150,6 +151,73 @@ def test_original_search_endpoint_passes_next_cursor(
 
     _, kwargs = mock_original_search_service.get_original.call_args
     assert kwargs["request"].next_cursor == "cursor-2"
+
+
+def test_original_file_url_endpoint_delegates_to_service(
+    mock_current_user,
+    mock_original_search_service,
+):
+    mock_original_search_service.get_original_file_url = AsyncMock(
+        return_value=OriginalFileUrlResponse(
+            connector=SourceType.CHANNEL_TALK,
+            entity_type="user_chat",
+            document_id="channel_talk:user_chat:channel-123:chat-456",
+            file_key="file-1",
+            url="https://signed.example/file",
+            expires_in_seconds=900,
+            fetched_at=datetime(2026, 5, 22, 2, 0, tzinfo=timezone.utc),
+        )
+    )
+
+    response = client.post(
+        "/api/v1/search/original/file-url",
+        json={
+            "connector": "channel_talk",
+            "document_id": "channel_talk:user_chat:channel-123:chat-456",
+            "file_key": "file-1",
+        },
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data == {
+        "connector": "channel_talk",
+        "entity_type": "user_chat",
+        "document_id": "channel_talk:user_chat:channel-123:chat-456",
+        "file_key": "file-1",
+        "url": "https://signed.example/file",
+        "expires_in_seconds": 900,
+        "fetched_at": "2026-05-22T02:00:00Z",
+    }
+    mock_original_search_service.get_original_file_url.assert_awaited_once()
+    _, kwargs = mock_original_search_service.get_original_file_url.call_args
+    assert kwargs["request"].connector == SourceType.CHANNEL_TALK
+    assert kwargs["request"].file_key == "file-1"
+    assert "db" not in kwargs
+
+
+def test_original_file_url_endpoint_preserves_resolver_error_status(
+    mock_current_user,
+    mock_original_search_service,
+):
+    mock_original_search_service.get_original_file_url = AsyncMock(
+        side_effect=ChannelTalkOriginalError(
+            "Channel Talk API rate limit exceeded",
+            status_code=429,
+        )
+    )
+
+    response = client.post(
+        "/api/v1/search/original/file-url",
+        json={
+            "connector": "channel_talk",
+            "document_id": "channel_talk:user_chat:channel-123:chat-456",
+            "file_key": "file-1",
+        },
+    )
+
+    assert response.status_code == 429
+    assert response.json()["detail"] == "Channel Talk API rate limit exceeded"
 
 
 def test_original_search_endpoint_maps_bad_document_id_to_400(

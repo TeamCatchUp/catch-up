@@ -18,6 +18,8 @@ from catchup.search.original.schemas.channel_talk import ChannelTalkUserChatOrig
 from catchup.search.original.service import OriginalSearchService
 from catchup.server.search.schemas import OriginalContentRequest
 from catchup.server.search.schemas import OriginalContentResponse
+from catchup.server.search.schemas import OriginalFileUrlRequest
+from catchup.server.search.schemas import OriginalFileUrlResponse
 
 
 class _RecordingResolver:
@@ -34,6 +36,17 @@ class _RecordingResolver:
             items=[],
             metadata={"channel_id": ref.identifiers["channel_id"]},
             next_cursor=None,
+            fetched_at=datetime(2026, 5, 22, tzinfo=timezone.utc),
+        )
+
+    async def resolve_file_url(self, *, request, ref, db):
+        self.calls.append((request, ref, db))
+        return OriginalFileUrlResponse(
+            connector=ref.connector,
+            entity_type=ref.entity_type,
+            document_id=ref.document_id,
+            file_key=request.file_key,
+            url="https://signed.example/file",
             fetched_at=datetime(2026, 5, 22, tzinfo=timezone.utc),
         )
 
@@ -165,9 +178,8 @@ async def test_service_parses_document_id_and_delegates_to_registered_resolver()
         connector=SourceType.CHANNEL_TALK,
         document_id="channel_talk:user_chat:channel-123:chat-456",
     )
-    db = object()
 
-    response = await service.get_original(request=request, db=db)
+    response = await service.get_original(request=request)
 
     assert response.connector == SourceType.CHANNEL_TALK
     assert response.entity_type == "user_chat"
@@ -176,7 +188,38 @@ async def test_service_parses_document_id_and_delegates_to_registered_resolver()
     _, ref, passed_db = resolver.calls[0]
     assert isinstance(ref, OriginalDocumentRef)
     assert ref.identifiers["user_chat_id"] == "chat-456"
-    assert passed_db is db
+    assert passed_db is None
+
+
+@pytest.mark.asyncio
+async def test_service_parses_document_id_and_delegates_file_url_request() -> None:
+    registry = OriginalResolverRegistry()
+    resolver = _RecordingResolver()
+    registry.register(
+        connector=SourceType.CHANNEL_TALK,
+        entity_type="user_chat",
+        resolver=resolver,
+    )
+    service = OriginalSearchService(registry=registry)
+    request = OriginalFileUrlRequest(
+        connector=SourceType.CHANNEL_TALK,
+        document_id="channel_talk:user_chat:channel-123:chat-456",
+        file_key="file-1",
+    )
+
+    response = await service.get_original_file_url(request=request)
+
+    assert response.connector == SourceType.CHANNEL_TALK
+    assert response.entity_type == "user_chat"
+    assert response.file_key == "file-1"
+    assert response.url == "https://signed.example/file"
+    assert response.expires_in_seconds == 900
+    assert len(resolver.calls) == 1
+    _, ref, passed_db = resolver.calls[0]
+    assert isinstance(ref, OriginalDocumentRef)
+    assert ref.identifiers["channel_id"] == "channel-123"
+    assert ref.identifiers["user_chat_id"] == "chat-456"
+    assert passed_db is None
 
 
 @pytest.mark.asyncio

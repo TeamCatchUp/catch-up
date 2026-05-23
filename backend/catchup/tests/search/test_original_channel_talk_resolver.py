@@ -11,6 +11,9 @@ from catchup.connectors.channel_talk.core.user_chat_original_fetcher import (
 from catchup.connectors.channel_talk.schemas.channel_connection import (
     ChannelTalkCredentialsRecord,
 )
+from catchup.connectors.channel_talk.schemas.channel_metadata import (
+    ChannelTalkManagerMetadata,
+)
 from catchup.connectors.channel_talk.schemas.user_chat import ChannelTalkUserChatDetail
 from catchup.connectors.channel_talk.schemas.user_chat import ChannelTalkUserChatState
 from catchup.connectors.channel_talk.schemas.user_chat_message import (
@@ -21,6 +24,7 @@ from catchup.search.original.ids import parse_original_document_id
 from catchup.search.original.resolvers.channel_talk import ChannelTalkOriginalError
 from catchup.search.original.resolvers.channel_talk import ChannelTalkOriginalResolver
 from catchup.server.search.schemas import OriginalContentRequest
+from catchup.server.search.schemas import OriginalFileUrlRequest
 
 
 class _FakeRepository:
@@ -33,6 +37,20 @@ class _FakeRepository:
         return self.credentials
 
 
+class _FakeMetadataRepository:
+    def __init__(self, managers=None):
+        self.managers = managers or []
+        self.calls = []
+
+    def list_managers_by_channel_and_ids(self, channel_id, manager_ids):
+        self.calls.append((channel_id, manager_ids))
+        return [
+            manager
+            for manager in self.managers
+            if manager.manager_id in manager_ids
+        ]
+
+
 class _FakeFetcher:
     def __init__(self, page):
         self.page = page
@@ -41,6 +59,29 @@ class _FakeFetcher:
     async def fetch_user_chat_original_page(self, **kwargs):
         self.calls.append(kwargs)
         return self.page
+
+
+class _FakeClient:
+    def __init__(self, file_url="https://signed.example/file"):
+        self.file_url = file_url
+        self.calls = []
+
+    async def get_user_chat_file_url(self, **kwargs):
+        self.calls.append(kwargs)
+        return self.file_url
+
+
+class _TrackingSession:
+    def __init__(self, events):
+        self.events = events
+
+    def __enter__(self):
+        self.events.append("db_open")
+        return self
+
+    def __exit__(self, exc_type, exc, traceback):
+        self.events.append("db_close")
+        return False
 
 
 def _credentials() -> ChannelTalkCredentialsRecord:
@@ -236,6 +277,31 @@ def _customer_profile_form_message() -> ChannelTalkUserChatMessage:
     )
 
 
+def _manager_without_profile_message() -> ChannelTalkUserChatMessage:
+    return ChannelTalkUserChatMessage.from_api_payload(
+        {
+            "id": "msg-6",
+            "chatId": "chat-456",
+            "type": "chat",
+            "personType": "manager",
+            "personId": "manager-1",
+            "plainText": "프로필 없음",
+            "createdAt": "2026-05-22T01:05:00Z",
+        },
+        user_chat_id="chat-456",
+    )
+
+
+def _manager_metadata() -> ChannelTalkManagerMetadata:
+    return ChannelTalkManagerMetadata(
+        channel_id="channel-123",
+        manager_id="manager-1",
+        name="Agent Lee",
+        email="lee@example.com",
+        avatar_url="https://example.com/manager-avatar.png",
+    )
+
+
 def _log_message() -> ChannelTalkUserChatMessage:
     return ChannelTalkUserChatMessage.from_api_payload(
         {
@@ -269,6 +335,7 @@ async def test_channel_talk_resolver_maps_first_page_detail_and_messages() -> No
     resolver = ChannelTalkOriginalResolver(
         fetcher=fetcher,
         repository_factory=lambda _db: repository,
+        metadata_repository_factory=lambda _db: _FakeMetadataRepository(),
         clock=lambda: datetime(2026, 5, 22, 2, 0, tzinfo=timezone.utc),
     )
     request = OriginalContentRequest(
@@ -460,6 +527,7 @@ async def test_channel_talk_resolver_merges_customer_profile_from_form_inputs() 
     resolver = ChannelTalkOriginalResolver(
         fetcher=fetcher,
         repository_factory=lambda _db: repository,
+        metadata_repository_factory=lambda _db: _FakeMetadataRepository(),
         clock=lambda: datetime(2026, 5, 22, 2, 0, tzinfo=timezone.utc),
     )
     request = OriginalContentRequest(
@@ -480,6 +548,79 @@ async def test_channel_talk_resolver_merges_customer_profile_from_form_inputs() 
 
 
 @pytest.mark.asyncio
+async def test_channel_talk_resolver_maps_manager_profile_from_manager_list() -> None:
+    repository = _FakeRepository(_credentials())
+    metadata_repository = _FakeMetadataRepository(managers=[_manager_metadata()])
+    fetcher = _FakeFetcher(
+        ChannelTalkUserChatOriginalPage(
+            detail=_detail(),
+            messages=(_manager_without_profile_message(),),
+            next_cursor=None,
+        )
+    )
+    resolver = ChannelTalkOriginalResolver(
+        fetcher=fetcher,
+        repository_factory=lambda _db: repository,
+        metadata_repository_factory=lambda _db: metadata_repository,
+        clock=lambda: datetime(2026, 5, 22, 2, 0, tzinfo=timezone.utc),
+    )
+    request = OriginalContentRequest(
+        connector=SourceType.CHANNEL_TALK,
+        document_id="channel_talk:user_chat:channel-123:chat-456",
+    )
+    ref = parse_original_document_id(
+        connector=request.connector,
+        document_id=request.document_id,
+    )
+
+    response = await resolver.resolve(request=request, ref=ref, db=object())
+
+    assert metadata_repository.calls == [("channel-123", {"manager-1"})]
+    assert len(response.items) == 1
+    item = response.items[0]
+    assert item.author is not None
+    assert item.author.type == "manager"
+    assert item.author.id == "manager-1"
+    assert item.author.name == "Agent Lee"
+    assert item.author.email == "lee@example.com"
+    assert item.author.avatar_url == "https://example.com/manager-avatar.png"
+
+
+@pytest.mark.asyncio
+async def test_channel_talk_resolver_skips_manager_lookup_without_manager_messages() -> None:
+    repository = _FakeRepository(_credentials())
+    metadata_repository = _FakeMetadataRepository(managers=[_manager_metadata()])
+    fetcher = _FakeFetcher(
+        ChannelTalkUserChatOriginalPage(
+            detail=_detail(),
+            messages=(_text_file_message(),),
+            next_cursor=None,
+        )
+    )
+    resolver = ChannelTalkOriginalResolver(
+        fetcher=fetcher,
+        repository_factory=lambda _db: repository,
+        metadata_repository_factory=lambda _db: metadata_repository,
+        clock=lambda: datetime(2026, 5, 22, 2, 0, tzinfo=timezone.utc),
+    )
+    request = OriginalContentRequest(
+        connector=SourceType.CHANNEL_TALK,
+        document_id="channel_talk:user_chat:channel-123:chat-456",
+    )
+    ref = parse_original_document_id(
+        connector=request.connector,
+        document_id=request.document_id,
+    )
+
+    response = await resolver.resolve(request=request, ref=ref, db=object())
+
+    assert metadata_repository.calls == []
+    assert len(response.items) == 1
+    assert response.items[0].author is not None
+    assert response.items[0].author.type == "customer"
+
+
+@pytest.mark.asyncio
 async def test_channel_talk_resolver_follow_up_page_returns_minimal_metadata() -> None:
     repository = _FakeRepository(_credentials())
     fetcher = _FakeFetcher(
@@ -492,6 +633,7 @@ async def test_channel_talk_resolver_follow_up_page_returns_minimal_metadata() -
     resolver = ChannelTalkOriginalResolver(
         fetcher=fetcher,
         repository_factory=lambda _db: repository,
+        metadata_repository_factory=lambda _db: _FakeMetadataRepository(),
         clock=lambda: datetime(2026, 5, 22, 2, 0, tzinfo=timezone.utc),
     )
     request = OriginalContentRequest(
@@ -535,3 +677,83 @@ async def test_channel_talk_resolver_rejects_missing_credentials() -> None:
 
     with pytest.raises(ChannelTalkOriginalError, match="credentials not found"):
         await resolver.resolve(request=request, ref=ref, db=object())
+
+
+@pytest.mark.asyncio
+async def test_channel_talk_resolver_fetches_single_file_url() -> None:
+    repository = _FakeRepository(_credentials())
+    client = _FakeClient(file_url="https://signed.example/receipt.png")
+    resolver = ChannelTalkOriginalResolver(
+        client=client,
+        repository_factory=lambda _db: repository,
+        clock=lambda: datetime(2026, 5, 22, 2, 0, tzinfo=timezone.utc),
+    )
+    request = OriginalFileUrlRequest(
+        connector=SourceType.CHANNEL_TALK,
+        document_id="channel_talk:user_chat:channel-123:chat-456",
+        file_key="file-1",
+    )
+    ref = parse_original_document_id(
+        connector=request.connector,
+        document_id=request.document_id,
+    )
+
+    response = await resolver.resolve_file_url(request=request, ref=ref, db=object())
+
+    assert repository.calls == ["channel-123"]
+    assert client.calls == [
+        {
+            "access_key": "access-key",
+            "access_secret": "access-secret",
+            "channel_id": "channel-123",
+            "user_chat_id": "chat-456",
+            "file_key": "file-1",
+        }
+    ]
+    assert response.connector == SourceType.CHANNEL_TALK
+    assert response.entity_type == "user_chat"
+    assert response.document_id == "channel_talk:user_chat:channel-123:chat-456"
+    assert response.file_key == "file-1"
+    assert response.url == "https://signed.example/receipt.png"
+    assert response.expires_in_seconds == 900
+    assert response.fetched_at.isoformat() == "2026-05-22T02:00:00+00:00"
+
+
+@pytest.mark.asyncio
+async def test_channel_talk_resolver_closes_db_session_before_file_url_api_call() -> None:
+    events = []
+
+    class Repository:
+        def get_connection(self, *, channel_id=None):
+            events.append(f"db_query:{channel_id}")
+            return _credentials()
+
+    class Client:
+        async def get_user_chat_file_url(self, **kwargs):
+            events.append("api_call")
+            return "https://signed.example/receipt.png"
+
+    resolver = ChannelTalkOriginalResolver(
+        client=Client(),
+        repository_factory=lambda _db: Repository(),
+        session_factory=lambda: _TrackingSession(events),
+        clock=lambda: datetime(2026, 5, 22, 2, 0, tzinfo=timezone.utc),
+    )
+    request = OriginalFileUrlRequest(
+        connector=SourceType.CHANNEL_TALK,
+        document_id="channel_talk:user_chat:channel-123:chat-456",
+        file_key="file-1",
+    )
+    ref = parse_original_document_id(
+        connector=request.connector,
+        document_id=request.document_id,
+    )
+
+    await resolver.resolve_file_url(request=request, ref=ref)
+
+    assert events == [
+        "db_open",
+        "db_query:channel-123",
+        "db_close",
+        "api_call",
+    ]

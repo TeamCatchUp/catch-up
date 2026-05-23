@@ -29,6 +29,8 @@ from catchup.server.search.schemas import ManualSearchHistoryResponse
 from catchup.server.search.schemas import ManualSearchResponse
 from catchup.server.search.schemas import OriginalContentRequest
 from catchup.server.search.schemas import OriginalContentResponse
+from catchup.server.search.schemas import OriginalFileUrlRequest
+from catchup.server.search.schemas import OriginalFileUrlResponse
 
 router = APIRouter(prefix="/api/v1/search", tags=["Search Service"])
 
@@ -91,7 +93,6 @@ async def hybrid_search(
 async def get_original_search_result(
     request: OriginalContentRequest,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
     original_search_service: OriginalSearchService = Depends(
         get_original_search_service
     ),
@@ -100,12 +101,34 @@ async def get_original_search_result(
     try:
         return await original_search_service.get_original(
             request=request,
-            db=db,
         )
     except (OriginalDocumentIdError, OriginalResolverNotFoundError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except ChannelTalkOriginalError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+
+
+@router.post(
+    path="/original/file-url",
+    response_model=OriginalFileUrlResponse,
+    description="검색 결과 document_id와 단일 file_key 기반 원문 파일 다운로드 URL 조회 API",
+)
+async def get_original_file_url(
+    request: OriginalFileUrlRequest,
+    current_user: User = Depends(get_current_user),
+    original_search_service: OriginalSearchService = Depends(
+        get_original_search_service
+    ),
+) -> OriginalFileUrlResponse:
+    _ = current_user
+    try:
+        return await original_search_service.get_original_file_url(
+            request=request,
+        )
+    except (OriginalDocumentIdError, OriginalResolverNotFoundError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except ChannelTalkOriginalError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
 
 
 @router.get(
