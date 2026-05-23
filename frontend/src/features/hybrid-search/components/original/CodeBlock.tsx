@@ -6,17 +6,11 @@
 
 interface CodeBlockProps {
   code: string;
-  language?: string;
 }
 
-export default function CodeBlock({ code, language }: CodeBlockProps) {
+export default function CodeBlock({ code }: CodeBlockProps) {
   return (
     <div className="bg-fill-strong border-edge-neutral w-full overflow-hidden rounded-lg border">
-      {language && (
-        <span className="text-body-xsmall text-content-alternative border-edge-neutral block border-b px-4 py-1.5">
-          {language}
-        </span>
-      )}
       <pre className="custom-scrollbar m-0 max-h-62.5 overflow-auto px-4 py-3 font-[inherit]">
         <code className="text-body-small text-content-neutral font-[inherit] whitespace-pre">
           {code}

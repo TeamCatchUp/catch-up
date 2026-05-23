@@ -40,7 +40,7 @@ function groupBlocks(blocks: OriginalBlock[]): BlockGroup[] {
 
 function SingleBlock({ block }: { block: OriginalBlock }) {
   if (block.block_type === 'code') {
-    return <CodeBlock code={block.value ?? block.text ?? ''} language={block.label} />;
+    return <CodeBlock code={block.value ?? block.text ?? ''} />;
   }
   return <OriginalMarkdown text={block.markdown ?? block.value ?? block.text ?? ''} />;
 }
