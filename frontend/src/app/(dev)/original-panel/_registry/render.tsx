@@ -57,7 +57,6 @@ import type {
 import Case from '../_components/Case';
 import PanelFrame from '../_components/PanelFrame';
 import PanelWidth from '../_components/PanelWidth';
-
 import type { EntrySlug } from './entries';
 
 // payload narrowing — fixtures 는 OriginalContent 유니온이라 컴포넌트가 받는 구체 payload 로 좁힌다.
