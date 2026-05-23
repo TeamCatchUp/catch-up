@@ -66,14 +66,15 @@ export default function OriginalPanel({ connector, entityType, documentId }: Ori
     documentId: documentId ?? '',
   });
 
-  // (a) ChannelTalk user_chat 이 아닌 선택 — 준비 중 안내.
-  if (!isUserChat(connector, entityType)) {
-    return <OriginalPanelComingSoon toolName={resolveToolName(connector, entityType)} />;
-  }
-
-  // (b) 선택된 문서가 없음 — 빈 상태.
+  // (a) 선택된 문서가 없음 — 빈 상태 (검색 전·결과 0건 포함).
+  // isUserChat 보다 먼저 체크 — connector/entityType 가 모두 null 일 때 잘못 ComingSoon 으로 빠지는 것 방지.
   if (documentId == null) {
     return <OriginalPanelEmpty />;
+  }
+
+  // (b) ChannelTalk user_chat 이 아닌 선택 — 준비 중 안내.
+  if (!isUserChat(connector, entityType)) {
+    return <OriginalPanelComingSoon toolName={resolveToolName(connector, entityType)} />;
   }
 
   // (c) 로딩 중.

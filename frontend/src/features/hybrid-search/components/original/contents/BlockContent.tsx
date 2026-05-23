@@ -23,7 +23,8 @@ function groupBlocks(blocks: OriginalBlock[]): BlockGroup[] {
 
   for (const block of blocks) {
     if (block.block_type === 'bullets') {
-      const text = block.text ?? block.markdown ?? block.value ?? '';
+      // SingleBlock 의 markdown 우선 fallback 순서와 일치 — 같은 데이터가 다른 우선순위로 해석되지 않게.
+      const text = block.markdown ?? block.value ?? block.text ?? '';
       const last = groups.at(-1);
       if (last?.kind === 'bullets') {
         last.items.push(text);
