@@ -92,9 +92,10 @@ export default function HybridSearchResultCard({
     >
       {/* 헤더 — [로고 + 커넥터명] / [채널·워크스페이스명 + 외부 링크 아이콘 (a tag, 카드 선택과 분리)] */}
       <div className="flex w-full items-center gap-2.5">
-        <span className="border-edge-normal bg-fill-normal flex shrink-0 items-center justify-center rounded-full border p-1.5">
-          <Logo className={source.source_type === 'channel_talk' ? 'h-4 w-4' : 'h-5 w-5'} />
-        </span>
+        {/* Figma 14133-69066 — 로고 단독 (배경/border 없음). 채널톡 16, 나머지 20. */}
+        <Logo
+          className={`shrink-0 ${source.source_type === 'channel_talk' ? 'size-4' : 'size-5'}`}
+        />
         <div className="flex min-w-0 flex-1 items-center gap-2">
           <span className="text-body-xsmall text-content-alternative shrink-0">{integrationLabel}</span>
           <span aria-hidden className="text-body-medium text-icon-alternative shrink-0">
