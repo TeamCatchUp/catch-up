@@ -86,7 +86,7 @@ export default function HybridSearchResultCard({
             /
           </span>
           {/* 워크스페이스명 + 외부 링크 아이콘 호버 시 워크스페이스명에 밑줄 */}
-          <div className="group/name flex min-w-0 flex-1 items-center gap-2">
+          <div className="group/name flex min-w-0 flex-1 items-center gap-0.5">
             <span className="text-body-xsmall text-content-alternative truncate group-hover/name:underline">
               {contextLabel}
             </span>
