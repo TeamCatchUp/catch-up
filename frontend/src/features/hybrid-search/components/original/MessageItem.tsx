@@ -36,14 +36,23 @@ export default function MessageItem({ item, connector, documentId }: MessageItem
 
   return (
     <div
-      className={`flex w-full gap-3 px-3 py-3 ${
+      className={`relative flex w-full gap-3 px-3 py-3 ${
         isCustomer
-          ? 'border-edge-primary-strong bg-fill-primary-assistive border-l-4'
+          ? 'bg-fill-primary-assistive'
           : isInternal
-            ? 'border-accent-red-orange bg-accent-red-orange-lighten border-l-4'
+            ? 'bg-accent-red-orange-lighten'
             : ''
       }`}
     >
+      {/* Figma 14065-64693 — 좌측 stripe (3px, 양 끝 반원 cap). 컨테이너 배경/형태 보존 위해 별도 span. */}
+      {(isCustomer || isInternal) && (
+        <span
+          aria-hidden
+          className={`absolute top-0 bottom-0 left-0 w-[3px] rounded-full ${
+            isCustomer ? 'bg-edge-primary-strong' : 'bg-accent-red-orange'
+          }`}
+        />
+      )}
       {/* 아바타 — avatar_url 부재 시 author.type 별 기본 아이콘 */}
       <div
         className={`flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-lg ${
