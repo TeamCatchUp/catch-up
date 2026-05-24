@@ -6,6 +6,7 @@ from typing import Final
 from catchup.db.models import SourceType
 
 CHANNEL_TALK_USER_CHAT_ENTITY_TYPE: Final[str] = "user_chat"
+SLACK_MESSAGE_ENTITY_TYPE: Final[str] = "message"
 
 
 class OriginalDocumentIdError(ValueError):
@@ -40,6 +41,13 @@ def parse_original_document_id(
             document_id=document_id,
         )
 
+    if connector == SourceType.SLACK:
+        return _parse_slack_document_id(
+            entity_type=entity_type,
+            rest=rest,
+            document_id=document_id,
+        )
+
     raise OriginalDocumentIdError(f"unsupported connector: {connector.value}")
 
 
@@ -68,5 +76,35 @@ def _parse_channel_talk_document_id(
         identifiers={
             "channel_id": channel_id,
             "user_chat_id": user_chat_id,
+        },
+    )
+
+
+def _parse_slack_document_id(
+    *,
+    entity_type: str,
+    rest: list[str],
+    document_id: str,
+) -> OriginalDocumentRef:
+    if entity_type != SLACK_MESSAGE_ENTITY_TYPE:
+        raise OriginalDocumentIdError(f"unsupported slack entity_type: {entity_type}")
+    if len(rest) != 3:
+        raise OriginalDocumentIdError(
+            "slack message document_id must be "
+            "slack:message:{team_id}:{channel_id}:{ts}"
+        )
+
+    team_id, channel_id, ts = rest
+    if not team_id or not channel_id or not ts:
+        raise OriginalDocumentIdError("team_id, channel_id, and ts are required")
+
+    return OriginalDocumentRef(
+        connector=SourceType.SLACK,
+        entity_type=SLACK_MESSAGE_ENTITY_TYPE,
+        document_id=document_id,
+        identifiers={
+            "team_id": team_id,
+            "channel_id": channel_id,
+            "ts": ts,
         },
     )

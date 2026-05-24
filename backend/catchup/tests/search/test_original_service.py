@@ -15,7 +15,9 @@ from catchup.search.original.schemas.channel_talk import (
     ChannelTalkUserChatOriginalContent,
 )
 from catchup.search.original.schemas.channel_talk import ChannelTalkUserChatOriginalItem
+from catchup.search.original.schemas.slack import SlackMessageOriginalRawItem
 from catchup.search.original.service import OriginalSearchService
+from catchup.server.search.dependencies import get_original_resolver_registry
 from catchup.server.search.schemas import OriginalContentRequest
 from catchup.server.search.schemas import OriginalContentResponse
 from catchup.server.search.schemas import OriginalFileUrlRequest
@@ -65,6 +67,19 @@ def test_registry_returns_registered_connector_entity_resolver() -> None:
         connector=SourceType.CHANNEL_TALK,
         entity_type="user_chat",
     ) is resolver
+
+
+def test_search_dependency_registry_registers_channel_talk_and_slack() -> None:
+    registry = get_original_resolver_registry()
+
+    assert registry.get(
+        connector=SourceType.CHANNEL_TALK,
+        entity_type="user_chat",
+    )
+    assert registry.get(
+        connector=SourceType.SLACK,
+        entity_type="message",
+    )
 
 
 def test_original_item_requires_contents_and_rejects_metadata() -> None:
@@ -150,6 +165,29 @@ def test_channel_talk_item_fields_restrict_known_string_values() -> None:
             id="msg-1",
             type="message",
             visibility="private",
+            contents=[],
+        )
+
+
+def test_slack_raw_item_preserves_raw_payload_and_rejects_contents() -> None:
+    item = SlackMessageOriginalRawItem(
+        id="1716400000.000100",
+        raw_payload={
+            "ok": True,
+            "messages": [{"type": "message", "text": "hello"}],
+        },
+    )
+
+    assert item.type == "slack_conversations_replies_raw"
+    assert item.raw_payload["messages"][0]["text"] == "hello"
+
+    with pytest.raises(ValidationError):
+        SlackMessageOriginalRawItem(id="1716400000.000100")
+
+    with pytest.raises(ValidationError):
+        SlackMessageOriginalRawItem(
+            id="1716400000.000100",
+            raw_payload={},
             contents=[],
         )
 
