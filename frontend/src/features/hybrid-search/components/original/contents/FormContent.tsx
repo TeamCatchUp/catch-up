@@ -7,28 +7,11 @@ import type {
   OriginalFormInput,
   OriginalFormPayload,
 } from '@/features/hybrid-search/types/originalApi';
+import { formatSubmittedAt } from '@/features/hybrid-search/utils/format/formatSubmittedAt';
 import CheckCircleFilled from '@/public/icons/icon/check_circle_filled.svg';
 
 interface FormContentProps {
   content: OriginalFormPayload;
-}
-
-// ISO datetime → 'YYYY-MM-DD HH:MM AM/PM'. 파싱 불가하면 원문 그대로.
-function formatSubmittedAt(value: string | undefined): string | null {
-  const raw = value?.trim();
-  if (!raw) return null;
-
-  const parsed = new Date(raw);
-  if (Number.isNaN(parsed.getTime())) return raw;
-
-  const year = parsed.getFullYear();
-  const month = String(parsed.getMonth() + 1).padStart(2, '0');
-  const day = String(parsed.getDate()).padStart(2, '0');
-  const hour24 = parsed.getHours();
-  const meridiem = hour24 < 12 ? 'AM' : 'PM';
-  const hour12 = String(hour24 % 12 || 12).padStart(2, '0');
-  const minute = String(parsed.getMinutes()).padStart(2, '0');
-  return `${year}-${month}-${day} ${hour12}:${minute} ${meridiem}`;
 }
 
 function FormInputRow({ input }: { input: OriginalFormInput }) {
@@ -50,7 +33,7 @@ export default function FormContent({ content }: FormContentProps) {
   const submittedAt = formatSubmittedAt(content.form.submitted_at);
 
   return (
-    <div className="bg-fill-normal border-edge-neutral flex w-full flex-col gap-3 rounded-xl border px-4 py-3">
+    <div className="bg-fill-normal border-edge-normal flex w-full flex-col gap-3 rounded-xl border px-4 py-3">
       <div className="flex flex-col gap-3">
         {inputs.length > 0 ? (
           inputs.map((input, index) => (

@@ -121,6 +121,7 @@ export const API = {
   search: {
     hybrid: `${API_PREFIX}/search/hybrid`, // GET 하이브리드 검색 (keyword, limit, offset, tool_filters)
     original: `${API_PREFIX}/search/original`, // POST 원문 조회 (connector, document_id, next_cursor)
+    originalFileUrl: `${API_PREFIX}/search/original/file-url`, // POST 원문 파일 다운로드 URL 조회 (connector, document_id, file_key)
     queries: `${API_PREFIX}/search/queries`, // GET 사용자 검색 기록 (page, size, period: today/7d/all)
   },
 

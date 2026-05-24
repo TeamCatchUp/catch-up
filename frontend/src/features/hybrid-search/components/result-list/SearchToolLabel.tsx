@@ -9,13 +9,13 @@ import GitHub from '@/public/icons/logo/GitHub.svg';
 import Jira from '@/public/icons/logo/Jira.svg';
 import Slack from '@/public/icons/logo/Slack.svg';
 
-import type { ToolFilter } from '../types/hybridSearchApi';
+import type { ToolFilter } from '../../types/hybridSearchApi';
 
 interface SearchToolLabelProps {
   tools: ToolFilter[];
 }
 
-const TOOL_LOGO: Record<ToolFilter, React.FC<React.SVGProps<SVGSVGElement>>> = {
+const TOOL_LOGO: Record<ToolFilter, React.ComponentType<React.SVGProps<SVGSVGElement>>> = {
   confluence: Confluence,
   jira: Jira,
   slack: Slack,
@@ -33,12 +33,20 @@ export default function SearchToolLabel({ tools }: SearchToolLabelProps) {
   const ordered = CANONICAL_ORDER.filter((t) => selected.has(t));
 
   return (
-    <div className="bg-fill-normal border-edge-assistive flex shrink-0 items-center gap-1.5 rounded-full border px-2 py-1">
+    <div className="flex shrink-0 items-center gap-1">
       {ordered.map((tool) => {
         const Logo = TOOL_LOGO[tool];
         // 채널톡 SVG 는 내부 여백이 있어 시각 크기 보정 (HybridSearchResultCard 와 동일 패턴).
         const sizeClass = tool === 'channel_talk' ? 'size-3.75' : 'size-4.5';
-        return <Logo key={tool} className={sizeClass} />;
+        // Figma 14133-72051 — 각 로고 흰색 pill wrapper (Fill/Normal/Normal)
+        return (
+          <span
+            key={tool}
+            className="bg-fill-normal flex items-center justify-center rounded-full px-1 py-0.5"
+          >
+            <Logo className={sizeClass} />
+          </span>
+        );
       })}
     </div>
   );

@@ -26,31 +26,25 @@ function toCalendarDate(value: string): string | null {
 const UNDATED_KEY = '';
 
 export function groupMessagesByDate(items: OriginalMessageItem[]): MessageDateGroup[] {
-  const groups: MessageDateGroup[] = [];
-  const indexByKey = new Map<string, number>();
-
+  // Map insertion-order = 입력의 첫 등장 순서. 단일 패스 O(n) — 매 push 마다 array spread 안 함.
+  // 빌더 패턴: 내부 scratch bucket 만 mutate, 입력·출력 모두 새 배열이라 외부 영향 없음.
+  const buckets = new Map<string, OriginalMessageItem[]>();
   for (const item of items) {
     const key = (item.created_at && toCalendarDate(item.created_at)) || UNDATED_KEY;
-
-    const existingIndex = indexByKey.get(key);
-    if (existingIndex !== undefined) {
-      groups[existingIndex] = {
-        ...groups[existingIndex],
-        items: [...groups[existingIndex].items, item],
-      };
-      continue;
+    let bucket = buckets.get(key);
+    if (!bucket) {
+      bucket = [];
+      buckets.set(key, bucket);
     }
-
-    indexByKey.set(key, groups.length);
-    groups.push({ date: key, items: [item] });
+    bucket.push(item);
   }
 
-  // 날짜 미상(null created_at) 그룹은 항상 맨 뒤로 보낸다.
-  const undatedIndex = groups.findIndex((group) => group.date === UNDATED_KEY);
-  if (undatedIndex !== -1 && undatedIndex !== groups.length - 1) {
-    const [undated] = groups.splice(undatedIndex, 1);
-    groups.push(undated);
+  // dated / undated partition — 날짜 미상 그룹은 항상 맨 뒤. splice mutation 대신 두 array 합성.
+  const dated: MessageDateGroup[] = [];
+  const undated: MessageDateGroup[] = [];
+  for (const [date, groupItems] of buckets) {
+    (date === UNDATED_KEY ? undated : dated).push({ date, items: groupItems });
   }
 
-  return groups;
+  return [...dated, ...undated];
 }

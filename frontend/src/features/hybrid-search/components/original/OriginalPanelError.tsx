@@ -5,13 +5,7 @@
 import { motion } from 'motion/react';
 
 import { Button } from '@/shared/components/ui/button';
-import { motionEase, MotionState } from '@/shared/motion/presets';
-
-const fastFadeIn = {
-  hidden: { opacity: 0, y: 4 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.25, ease: motionEase } },
-  exit: { opacity: 0, transition: { duration: 0.15, ease: motionEase } },
-};
+import { MotionState, panelStateFadeIn } from '@/shared/motion/presets';
 
 interface OriginalPanelErrorProps {
   message: string;
@@ -24,7 +18,7 @@ export default function OriginalPanelError({ message, onRetry }: OriginalPanelEr
       initial={MotionState.Hidden}
       animate={MotionState.Visible}
       exit={MotionState.Exit}
-      variants={fastFadeIn}
+      variants={panelStateFadeIn}
       className="flex flex-col items-center gap-2 px-5 py-50"
     >
       <p className="text-body-small text-content-alternative text-center">{message}</p>

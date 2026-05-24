@@ -93,3 +93,11 @@ export const MotionState = {
   Visible: 'visible',
   Exit: 'exit',
 } as const;
+
+/** 패널 상태 swap(skeleton → empty/error/coming-soon 등)의 짧은 fade-in+up.
+ *  motionDuration.fast(0.3) 보다 빠른 0.25/0.15 — 콘텐츠 등장이 아닌 상태 전환이라 더 빠른 체감이 자연스러움. */
+export const panelStateFadeIn: Variants = {
+  hidden: { opacity: 0, y: 4 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.25, ease: motionEase } },
+  exit: { opacity: 0, transition: { duration: 0.15, ease: motionEase } },
+};

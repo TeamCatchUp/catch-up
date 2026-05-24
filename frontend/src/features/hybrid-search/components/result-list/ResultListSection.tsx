@@ -13,13 +13,13 @@ import { applySlackDateFallback } from '@/shared/utils/normalize/applySlackDateF
 import { normalizeSources } from '@/shared/utils/normalize/normalizeRagSources';
 import { dateRangeToUrlParams, sortByRelevance, sortByUpdatedAt, type SortOrder } from '@/shared/utils/temporalRange';
 
-import { useHybridSearch } from '../hooks/useHybridSearch';
-import { HYBRID_SEARCH_PAGE_SIZE } from '../queries/hybridSearch.queries';
-import type { ActiveTab, ToolFilter } from '../types/hybridSearchApi';
+import { useHybridSearch } from '../../hooks/useHybridSearch';
+import { HYBRID_SEARCH_PAGE_SIZE } from '../../queries/hybridSearch.queries';
+import type { ActiveTab, ToolFilter } from '../../types/hybridSearchApi';
+import ResultEmptyState from '../result-states/ResultEmptyState';
+import ResultErrorState from '../result-states/ResultErrorState';
+import ResultLoadingState from '../result-states/ResultLoadingState';
 import HybridSearchResultCard from './HybridSearchResultCard';
-import ResultEmptyState from './ResultEmptyState';
-import ResultErrorState from './ResultErrorState';
-import ResultLoadingState from './ResultLoadingState';
 import SearchPeriodLabel from './SearchPeriodLabel';
 import SearchToolLabel from './SearchToolLabel';
 
@@ -86,6 +86,7 @@ export default function ResultListSection({
   let resultsData: {
     sources: ReturnType<typeof normalizeSources>;
     totalPages: number;
+    totalCount: number;
     transitionKey: string;
   } | null = null;
 
@@ -117,6 +118,7 @@ export default function ResultListSection({
       resultsData = {
         sources: normalizeSources(pageResults),
         totalPages,
+        totalCount: sortedResults.length,
         transitionKey: `${keyword}-${scope.join(',')}-${active}-${sortOrder}-${page}`,
       };
       view = 'results';
@@ -144,14 +146,21 @@ export default function ResultListSection({
             initial={MotionState.Hidden}
             animate={MotionState.Visible}
             variants={fastStaggerContainer}
-            className="flex w-full flex-col items-start gap-2"
+            className="flex w-full flex-col items-start"
           >
-            {(dateRange?.from || tools.length > 0) && (
-              <div className="flex w-full items-center justify-between">
-                <div>{dateRange?.from && <SearchPeriodLabel dateRange={dateRange} />}</div>
-                <SearchToolLabel tools={tools} />
+            {/* Figma 14133-72051 — bg Fill/Normal/Strong + 1000px pill 컨테이너. 카드 첫 번째와 mb-1.5 (6px) gap. */}
+            <div className="bg-fill-strong mb-1.5 flex w-full items-center justify-between rounded-full px-1.5 py-1">
+              <div className="flex items-center gap-2.5">
+                {dateRange?.from && <SearchPeriodLabel dateRange={dateRange} />}
+                {dateRange?.from && tools.length > 0 && (
+                  <span aria-hidden className="bg-dim-black-25 h-3 w-px shrink-0" />
+                )}
+                {tools.length > 0 && <SearchToolLabel tools={tools} />}
               </div>
-            )}
+              <span className="text-body-xsmall text-content-assistive shrink-0 px-2.5">
+                {resultsData.totalCount}건의 검색 결과
+              </span>
+            </div>
             {resultsData.sources.map((source) => (
               <motion.div key={source.id} variants={fastFadeInUp} className="w-full">
                 <HybridSearchResultCard

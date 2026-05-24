@@ -27,6 +27,7 @@ function isUserChat(connector: SourceTypeApi | null, entityType: string | null):
 // Coming Soon 카피의 협업 툴 표시명 — connector/entityType 매핑 테이블.
 function resolveToolName(connector: SourceTypeApi | null, entityType: string | null): string {
   if (connector === 'channel_talk' && entityType === 'document_article') return '채널톡 도큐먼트';
+  if (connector === null || connector === 'unknown') return '해당 도구';
   switch (connector) {
     case 'confluence':
       return '컨플루언스 위키 문서';
@@ -38,8 +39,11 @@ function resolveToolName(connector: SourceTypeApi | null, entityType: string | n
       return 'Jira';
     case 'channel_talk':
       return '채널톡';
-    default:
-      return '해당 도구';
+    default: {
+      // SourceTypeApi 에 새 connector 추가 시 컴파일 실패 — 위 switch 도 갱신해야 함.
+      const _exhaustive: never = connector;
+      return _exhaustive;
+    }
   }
 }
 
@@ -66,14 +70,15 @@ export default function OriginalPanel({ connector, entityType, documentId }: Ori
     documentId: documentId ?? '',
   });
 
-  // (a) ChannelTalk user_chat 이 아닌 선택 — 준비 중 안내.
-  if (!isUserChat(connector, entityType)) {
-    return <OriginalPanelComingSoon toolName={resolveToolName(connector, entityType)} />;
-  }
-
-  // (b) 선택된 문서가 없음 — 빈 상태.
+  // (a) 선택된 문서가 없음 — 빈 상태 (검색 전·결과 0건 포함).
+  // isUserChat 보다 먼저 체크 — connector/entityType 가 모두 null 일 때 잘못 ComingSoon 으로 빠지는 것 방지.
   if (documentId == null) {
     return <OriginalPanelEmpty />;
+  }
+
+  // (b) ChannelTalk user_chat 이 아닌 선택 — 준비 중 안내.
+  if (!isUserChat(connector, entityType)) {
+    return <OriginalPanelComingSoon toolName={resolveToolName(connector, entityType)} />;
   }
 
   // (c) 로딩 중.

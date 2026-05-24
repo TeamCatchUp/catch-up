@@ -10,7 +10,6 @@ import {
   GROUP_ORDER,
   GROUPED_ENTRIES,
 } from '../_registry/entries';
-
 import SidebarLink from './SidebarLink';
 
 export default function Sidebar() {
