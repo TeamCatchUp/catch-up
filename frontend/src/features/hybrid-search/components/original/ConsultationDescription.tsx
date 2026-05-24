@@ -35,14 +35,16 @@ export default function ConsultationDescription({ description }: ConsultationDes
         >
           {description}
         </p>
-        {/* collapsed + overflow 시 마지막 줄 끝 inline 더보기 — bg solid 로 텍스트 마스킹 */}
+        {/* collapsed + overflow 시 마지막 줄 끝 inline 더보기 — bg solid 가 line-clamp 의 자동 "..." 까지
+            가리므로 버튼 안에 "..." 를 명시적으로 노출 (회색) + "더보기" (파란색) */}
         {!expanded && isOverflowing && (
           <button
             type="button"
             onClick={() => setExpanded(true)}
-            className="bg-fill-strong text-body-small text-content-primary absolute right-0 bottom-0 cursor-pointer pl-4 font-medium"
+            className="bg-fill-strong text-body-small absolute right-0 bottom-0 cursor-pointer pl-4 font-medium"
           >
-            더보기
+            <span className="text-content-neutral">… </span>
+            <span className="text-content-primary">더보기</span>
           </button>
         )}
       </div>
