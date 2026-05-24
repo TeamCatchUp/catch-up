@@ -19,7 +19,7 @@ export default function SearchPeriodLabel({ dateRange }: SearchPeriodLabelProps)
   const to = dateRange.to ? format(dateRange.to, 'yyyy.MM.dd') : from;
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center gap-2.5">
       {/* Figma 14133-72051 — 캘린더 아이콘 흰색 pill wrapper (Fill/Normal/Normal) */}
       <span className="bg-fill-normal flex items-center justify-center rounded-full px-1 py-0.5">
         <IconCalendarFilled className="text-icon-neutral size-4.5 shrink-0" />
