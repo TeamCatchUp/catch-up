@@ -183,3 +183,22 @@ export interface OriginalContentResponse {
   next_cursor: string | null;
   fetched_at: string;
 }
+
+// --- 파일 URL 조회 (POST /api/v1/search/original/file-url) ---
+// 클릭 시 lazy 호출. presigned URL (TTL 15분) 받아 새 탭으로 다운로드/미리보기.
+
+export interface OriginalFileUrlRequest {
+  connector: SourceTypeApi;
+  document_id: string;
+  file_key: string;
+}
+
+export interface OriginalFileUrlResponse {
+  connector: SourceTypeApi;
+  entity_type: string;
+  document_id: string;
+  file_key: string;
+  url: string;
+  expires_in_seconds: number;
+  fetched_at: string;
+}
