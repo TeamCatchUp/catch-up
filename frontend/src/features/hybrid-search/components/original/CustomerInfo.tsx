@@ -7,6 +7,7 @@ import { useState } from 'react';
 
 import Collapsible from '@/features/hybrid-search/components/original/Collapsible';
 import type { OriginalCustomer } from '@/features/hybrid-search/types/originalApi';
+import { formatKoreanPhone } from '@/features/hybrid-search/utils/format/formatKoreanPhone';
 import CallIcon from '@/public/icons/icon/call.svg';
 import CardClientIcon from '@/public/icons/icon/card_client.svg';
 import ChevronIcon from '@/public/icons/icon/dropdown_down.svg';
@@ -58,8 +59,8 @@ export default function CustomerInfo({ customer }: CustomerInfoProps) {
         <div className="flex flex-col gap-3 pb-4">
           <CustomerRow icon={PersonIcon} label="이름" value={customer?.name} />
           <CustomerRow icon={MailIcon} label="이메일" value={customer?.email} />
-          <CustomerRow icon={PhoneIcon} label="전화번호" value={customer?.mobile_number} />
-          <CustomerRow icon={CallIcon} label="유선번호" value={customer?.landline_number} />
+          <CustomerRow icon={PhoneIcon} label="전화번호" value={formatKoreanPhone(customer?.mobile_number)} />
+          <CustomerRow icon={CallIcon} label="유선번호" value={formatKoreanPhone(customer?.landline_number)} />
         </div>
       </Collapsible>
     </section>
