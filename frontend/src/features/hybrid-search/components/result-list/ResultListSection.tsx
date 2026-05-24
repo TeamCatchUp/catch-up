@@ -153,7 +153,7 @@ export default function ResultListSection({
               <div className="flex items-center gap-2.5">
                 {dateRange?.from && <SearchPeriodLabel dateRange={dateRange} />}
                 {dateRange?.from && tools.length > 0 && (
-                  <span aria-hidden className="bg-edge-neutral h-3 w-px shrink-0" />
+                  <span aria-hidden className="bg-dim-black-25 h-3 w-px shrink-0" />
                 )}
                 {tools.length > 0 && <SearchToolLabel tools={tools} />}
               </div>
