@@ -26,7 +26,7 @@ export default function OriginalPanelContent({ data }: OriginalPanelContentProps
       {dateGroups.length > 0 ? (
         <div className="custom-scrollbar flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto overscroll-contain pt-2">
           {dateGroups.map((group) => (
-            <section key={group.date || 'undated'} className="flex flex-col gap-2">
+            <section key={group.date || 'undated'} className="flex flex-col gap-5">
               <DateIndicator date={group.date} />
               {group.items.map((item) => (
                 <MessageItem

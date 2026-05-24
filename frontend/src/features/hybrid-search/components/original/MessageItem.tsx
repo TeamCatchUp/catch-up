@@ -1,8 +1,15 @@
 'use client';
 
 // 채팅 타임라인의 한 메시지. visibility + author.type 으로 변형.
-// 좌측 4px stripe + 배경: customer=blue stripe / manager internal=orange stripe+bg / manager public=없음.
-// customer 가 우선 — customer 면 visibility 와 무관하게 항상 customer 디자인.
+// Figma 14065-64692 (customer) / 14071-65320 (internal):
+//   외부 row [bg, padding 0 10 0 0, gap 12]
+//   ├─ stripe span (w 3px, vertical fill, self-stretch, rounded-full 양끝 cap)
+//   └─ inner row [padding 4 0, gap 12]
+//      ├─ avatar wrapper (size 32, radius 8, bg)
+//      └─ col [gap 8]
+//         ├─ author row (gap 6, 작성자명 #6D7882 + manager 아이콘 + 내부대화 Tag + timestamp)
+//         └─ contents
+// customer 가 우선 — customer 면 visibility 와 무관하게 customer 디자인.
 
 import Image from 'next/image';
 
@@ -33,10 +40,11 @@ export default function MessageItem({ item, connector, documentId }: MessageItem
 
   // 아바타 아이콘 — 문의자는 face_man, 상담원/내부는 support_agent
   const AvatarIcon = isCustomer ? FaceManIcon : SupportAgentIcon;
+  const hasStripe = isCustomer || isInternal;
 
   return (
     <div
-      className={`relative flex w-full gap-3 px-3 py-3 ${
+      className={`flex w-full gap-3 pr-2.5 ${
         isCustomer
           ? 'bg-fill-primary-assistive'
           : isInternal
@@ -44,64 +52,69 @@ export default function MessageItem({ item, connector, documentId }: MessageItem
             : ''
       }`}
     >
-      {/* Figma 14065-64693 — 좌측 stripe (3px, 양 끝 반원 cap). 컨테이너 배경/형태 보존 위해 별도 span. */}
-      {(isCustomer || isInternal) && (
+      {/* Figma 14065-64693 — 좌측 stripe (3px, 양 끝 반원 cap). flex 첫 자식 + self-stretch 로 부모 높이 따라 늘어남. */}
+      {hasStripe && (
         <span
           aria-hidden
-          className={`absolute top-0 bottom-0 left-0 w-[3px] rounded-full ${
+          className={`w-[3px] shrink-0 self-stretch rounded-full ${
             isCustomer ? 'bg-edge-primary-strong' : 'bg-accent-red-orange'
           }`}
         />
       )}
-      {/* 아바타 — avatar_url 부재 시 author.type 별 기본 아이콘 */}
-      <div
-        className={`flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-lg ${
-          isCustomer ? 'bg-accent-light-blue' : 'bg-accent-red-orange'
-        }`}
-      >
-        {avatarUrl ? (
-          <Image src={avatarUrl} alt="" width={32} height={32} className="size-8 object-cover" />
-        ) : (
-          <AvatarIcon aria-hidden className="text-icon-inverse size-6" />
-        )}
-      </div>
 
-      <div className="flex min-w-0 flex-1 flex-col gap-1">
-        {/* 작성자 행 — 이름 / 상담원 아이콘 / 내부 대화 태그 / 작성 시각 */}
-        <div className="flex items-center gap-1.5">
-          <span className="text-body-small text-content-normal truncate font-medium">
-            {authorName ?? <span className="text-content-assistive">없음</span>}
-          </span>
-          {isManager && (
-            <HeadphoneIcon aria-hidden className="text-accent-green size-4.5 shrink-0" />
-          )}
-          {isInternal && (
-            <Badge
-              variant="secondary"
-              size="md"
-              className="rounded-md2 shrink-0 gap-1 px-1.5 py-0.5 font-medium"
-            >
-              <LockIcon aria-hidden className="size-4.5" />
-              내부 대화
-            </Badge>
-          )}
-          {timestamp && (
-            <span className="text-body-xsmall text-content-assistive ml-auto shrink-0">
-              {timestamp}
-            </span>
+      {/* inner row — padding 4 0 (상하 4), gap 12 (아바타 ↔ col) */}
+      <div className="flex min-w-0 flex-1 gap-3 py-1">
+        {/* 아바타 — avatar_url 부재 시 author.type 별 기본 아이콘 */}
+        <div
+          className={`flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-lg ${
+            isCustomer ? 'bg-accent-light-blue' : 'bg-accent-red-orange'
+          }`}
+        >
+          {avatarUrl ? (
+            <Image src={avatarUrl} alt="" width={32} height={32} className="size-8 object-cover" />
+          ) : (
+            <AvatarIcon aria-hidden className="text-icon-inverse size-6" />
           )}
         </div>
 
-        {/* 본문 — contents[] 각 요소를 ContentRenderer 로 */}
-        <div className="flex flex-col gap-2">
-          {item.contents.map((content, index) => (
-            <ContentRenderer
-              key={`${content.content_type}-${index}`}
-              content={content}
-              connector={connector}
-              documentId={documentId}
-            />
-          ))}
+        {/* 우측 col — gap 8 (author row ↔ contents) */}
+        <div className="flex min-w-0 flex-1 flex-col gap-2">
+          {/* 작성자 행 — 이름 / 상담원 아이콘 / 내부 대화 태그 / 작성 시각 */}
+          <div className="flex items-center gap-1.5">
+            <span className="text-body-small text-content-alternative truncate font-medium">
+              {authorName ?? <span className="text-content-assistive">없음</span>}
+            </span>
+            {isManager && (
+              <HeadphoneIcon aria-hidden className="text-accent-green size-4.5 shrink-0" />
+            )}
+            {isInternal && (
+              <Badge
+                variant="secondary"
+                size="md"
+                className="rounded-md2 shrink-0 gap-1 px-1.5 py-0.5 font-medium"
+              >
+                <LockIcon aria-hidden className="size-4.5" />
+                내부 대화
+              </Badge>
+            )}
+            {timestamp && (
+              <span className="text-body-xsmall text-content-assistive ml-auto shrink-0">
+                {timestamp}
+              </span>
+            )}
+          </div>
+
+          {/* 본문 — contents[] 각 요소를 ContentRenderer 로 */}
+          <div className="flex flex-col gap-2">
+            {item.contents.map((content, index) => (
+              <ContentRenderer
+                key={`${content.content_type}-${index}`}
+                content={content}
+                connector={connector}
+                documentId={documentId}
+              />
+            ))}
+          </div>
         </div>
       </div>
     </div>
