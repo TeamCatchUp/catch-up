@@ -208,8 +208,9 @@ describe('ResultListSection', () => {
     renderWithClient(
       <ResultListSection keyword="x" scope={[]} dateRange={undefined} sortOrder="newest" active="all" page={1} onPageChange={() => {}} selectedId="jira-1" onSelectSource={() => {}} />,
     );
-    const selectedButton = (await screen.findByText('이슈 1')).closest('button');
-    const otherButton = screen.getByText('이슈 0').closest('button');
+    // 카드 외곽은 a 를 nest 하기 위해 div role=button 으로 변경됨.
+    const selectedButton = (await screen.findByText('이슈 1')).closest('[role="button"]');
+    const otherButton = screen.getByText('이슈 0').closest('[role="button"]');
     expect(selectedButton).toHaveAttribute('aria-pressed', 'true');
     expect(otherButton).toHaveAttribute('aria-pressed', 'false');
   });
