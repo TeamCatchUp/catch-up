@@ -81,7 +81,7 @@ export default function FileRow({ file, connector, documentId }: FileRowProps) {
       onClick={handleClick}
       disabled={isPending}
       aria-disabled={isPending}
-      className={`${baseClass} ${isPending ? 'pointer-events-none opacity-50' : ''}`.trim()}
+      className={`${baseClass} cursor-pointer ${isPending ? 'pointer-events-none opacity-50' : ''}`.trim()}
     >
       {inner}
     </button>
