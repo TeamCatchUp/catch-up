@@ -38,20 +38,26 @@ export default function ConsultationInfo({ metadata }: ConsultationInfoProps) {
       <div className="flex items-center gap-10">
         <InfoFieldLabel icon={PersonFilledIcon} text="담당자" />
         <div className="flex min-w-0 flex-1 items-center gap-2">
-          {assigneeAvatar ? (
-            <Image
-              src={assigneeAvatar}
-              alt=""
-              width={25}
-              height={25}
-              className="size-6.25 shrink-0 rounded-full object-cover"
-            />
+          {assigneeName ? (
+            <>
+              {assigneeAvatar ? (
+                <Image
+                  src={assigneeAvatar}
+                  alt=""
+                  width={25}
+                  height={25}
+                  className="size-6.25 shrink-0 rounded-full object-cover"
+                />
+              ) : (
+                <DefaultProfileIcon aria-hidden className="size-6.25 shrink-0" />
+              )}
+              <span className="text-body-small text-content-neutral truncate">
+                {assigneeName}
+              </span>
+            </>
           ) : (
-            <DefaultProfileIcon aria-hidden className="size-6.25 shrink-0" />
+            <span className="text-body-small text-content-assistive">없음</span>
           )}
-          <span className="text-body-small text-content-neutral truncate">
-            {assigneeName ?? <span className="text-content-assistive">없음</span>}
-          </span>
         </div>
       </div>
 
