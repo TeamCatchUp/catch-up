@@ -40,7 +40,6 @@ export default function MessageItem({ item, connector, documentId }: MessageItem
 
   // 아바타 아이콘 — 문의자는 face_man, 상담원/내부는 support_agent
   const AvatarIcon = isCustomer ? FaceManIcon : SupportAgentIcon;
-  const hasStripe = isCustomer || isInternal;
 
   return (
     <div
@@ -52,15 +51,18 @@ export default function MessageItem({ item, connector, documentId }: MessageItem
             : ''
       }`}
     >
-      {/* Figma 14065-64693 — 좌측 stripe (3px, 양 끝 반원 cap). flex 첫 자식 + self-stretch 로 부모 높이 따라 늘어남. */}
-      {hasStripe && (
-        <span
-          aria-hidden
-          className={`w-[3px] shrink-0 self-stretch rounded-full ${
-            isCustomer ? 'bg-edge-primary-strong' : 'bg-accent-red-orange'
-          }`}
-        />
-      )}
+      {/* Figma 14065-64693 — 좌측 stripe (3px, 양 끝 반원 cap). stripe 공간은 항상 차지(색만 conditional)
+          하여 bg/stripe 없는 메시지도 동일 좌측 정렬 유지 — Figma 의 form 메시지가 stripe fills empty 인 것과 동일 패턴. */}
+      <span
+        aria-hidden
+        className={`w-[3px] shrink-0 self-stretch rounded-full ${
+          isCustomer
+            ? 'bg-edge-primary-strong'
+            : isInternal
+              ? 'bg-accent-red-orange'
+              : 'bg-transparent'
+        }`}
+      />
 
       {/* inner row — padding 4 0 (상하 4), gap 12 (아바타 ↔ col) */}
       <div className="flex min-w-0 flex-1 gap-3 py-1">
