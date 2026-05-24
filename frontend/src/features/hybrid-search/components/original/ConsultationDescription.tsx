@@ -1,9 +1,12 @@
 'use client';
 
 // 상담 설명 본문 — Figma 14065-64380.
-// collapsed: 3줄 line-clamp + 마지막 줄 끝에 inline "더보기" (absolute, 부모 bg 와 동일 solid 로 텍스트 가림).
+// collapsed: 3줄 자연 truncate + 마지막 줄 끝 inline "… 더보기" (텍스트 자체가 슬라이스됨).
 // expanded: max-h 115px + 세로 스크롤 + 별도 줄 "접기".
-// overflow 안 나면 더보기 자체 안 보임 (useLayoutEffect 로 scrollHeight 측정).
+//
+// 구현 — hidden measure element 의 textContent 를 binary search 로 조작,
+// `slice(0, n) + '… 더보기'` 가 3줄 안에 들어가는 최대 n 을 찾아 setTruncated.
+// CSS line-clamp + absolute 더보기 패턴은 자동 ellipsis 가 버튼에 가려져 부자연스러워서 채택 안 함.
 
 import { useLayoutEffect, useRef, useState } from 'react';
 
@@ -11,44 +14,79 @@ interface ConsultationDescriptionProps {
   description: string;
 }
 
+const MAX_LINES = 3;
+const SUFFIX = '… 더보기';
+const TEXT_CLASS = 'text-body-small text-content-neutral break-words';
+
 export default function ConsultationDescription({ description }: ConsultationDescriptionProps) {
-  const ref = useRef<HTMLParagraphElement>(null);
-  const [isOverflowing, setIsOverflowing] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  // null = truncate 불필요 (전체 텍스트 표시), string = 슬라이스된 부분 텍스트
+  const [truncated, setTruncated] = useState<string | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const measureRef = useRef<HTMLParagraphElement>(null);
 
   useLayoutEffect(() => {
-    if (expanded || !ref.current) return;
-    // line-clamp 적용 상태에서만 측정 의미 있음.
-    setIsOverflowing(ref.current.scrollHeight > ref.current.clientHeight + 1);
+    if (expanded) return;
+    const measure = measureRef.current;
+    const container = containerRef.current;
+    if (!measure || !container) return;
+
+    measure.style.width = `${container.clientWidth}px`;
+
+    const lineHeight = parseFloat(getComputedStyle(measure).lineHeight);
+    const maxHeight = lineHeight * MAX_LINES;
+
+    // 1. 전체가 3줄 이내면 truncate 불필요
+    measure.textContent = description;
+    if (measure.scrollHeight <= maxHeight + 1) {
+      setTruncated(null);
+      return;
+    }
+
+    // 2. binary search — 'slice(0, n) + SUFFIX' 가 3줄 안에 들어가는 최대 n
+    let lo = 0;
+    let hi = description.length;
+    while (lo < hi) {
+      const mid = Math.ceil((lo + hi) / 2);
+      measure.textContent = description.slice(0, mid) + SUFFIX;
+      if (measure.scrollHeight <= maxHeight + 1) lo = mid;
+      else hi = mid - 1;
+    }
+    setTruncated(description.slice(0, lo));
   }, [description, expanded]);
 
   return (
     <div className="flex flex-col gap-1">
-      <div className="relative">
+      <div ref={containerRef} className="relative">
+        {/* hidden measure — text 스타일이 visible element 와 동일해야 측정 정확.
+            useLayoutEffect 가 textContent 를 직접 조작 (React render 외부). */}
         <p
-          ref={ref}
-          className={`text-body-small text-content-neutral break-words ${
-            expanded
-              ? 'custom-scrollbar max-h-28.75 overflow-y-auto whitespace-pre-wrap'
-              : 'line-clamp-3'
-          }`}
-        >
-          {description}
-        </p>
-        {/* collapsed + overflow 시 마지막 줄 끝 inline 더보기 — bg solid 가 line-clamp 의 자동 "..." 까지
-            가리므로 버튼 안에 "..." 를 명시적으로 노출 (회색) + "더보기" (파란색) */}
-        {!expanded && isOverflowing && (
-          <button
-            type="button"
-            onClick={() => setExpanded(true)}
-            className="bg-fill-strong text-body-small absolute right-0 bottom-0 cursor-pointer pl-4 font-medium"
+          ref={measureRef}
+          aria-hidden
+          className={`${TEXT_CLASS} pointer-events-none invisible absolute top-0 left-0`}
+        />
+        {expanded ? (
+          <p
+            className={`${TEXT_CLASS} custom-scrollbar max-h-28.75 overflow-y-auto whitespace-pre-wrap`}
           >
+            {description}
+          </p>
+        ) : truncated === null ? (
+          <p className={TEXT_CLASS}>{description}</p>
+        ) : (
+          <p className={TEXT_CLASS}>
+            {truncated}
             <span className="text-content-neutral">… </span>
-            <span className="text-content-primary">더보기</span>
-          </button>
+            <button
+              type="button"
+              onClick={() => setExpanded(true)}
+              className="text-content-primary cursor-pointer font-medium"
+            >
+              더보기
+            </button>
+          </p>
         )}
       </div>
-      {/* expanded 시 별도 줄 접기 */}
       {expanded && (
         <button
           type="button"
