@@ -43,7 +43,7 @@ export default function MessageItem({ item, connector, documentId }: MessageItem
 
   return (
     <div
-      className={`flex w-full gap-3 pr-2.5 ${
+      className={`flex w-full gap-2.25 pr-2.5 ${
         isCustomer
           ? 'bg-fill-primary-assistive'
           : isInternal
