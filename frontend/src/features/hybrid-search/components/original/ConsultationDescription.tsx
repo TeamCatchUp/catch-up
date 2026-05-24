@@ -91,7 +91,7 @@ export default function ConsultationDescription({ description }: ConsultationDes
         <button
           type="button"
           onClick={() => setExpanded(false)}
-          className="text-body-small text-content-primary cursor-pointer self-end font-medium"
+          className="text-body-small text-content-assistive cursor-pointer self-start font-medium"
         >
           접기
         </button>
