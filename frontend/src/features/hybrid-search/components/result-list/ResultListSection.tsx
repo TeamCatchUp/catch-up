@@ -157,7 +157,7 @@ export default function ResultListSection({
                 )}
                 {tools.length > 0 && <SearchToolLabel tools={tools} />}
               </div>
-              <span className="text-body-xsmall text-content-assistive shrink-0">
+              <span className="text-body-xsmall text-content-assistive shrink-0 px-2.5">
                 {resultsData.totalCount}건의 검색 결과
               </span>
             </div>
