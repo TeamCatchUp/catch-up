@@ -65,6 +65,8 @@ export interface OriginalFile {
   name?: string;
   content_type?: string;
   size?: number;
+  // 백엔드 미전송 (channel_talk 기준) — 호환 위해 옵셔널 보존.
+  // 실제 다운로드는 POST /api/v1/search/original/file-url 로 file_key 기반 조회.
   url?: string;
 }
 
