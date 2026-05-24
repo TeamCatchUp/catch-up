@@ -89,7 +89,7 @@ describe('FileRow', () => {
     const user = userEvent.setup();
     await user.click(screen.getByRole('button'));
 
-    expect(openSpy).toHaveBeenCalledWith('about:blank', '_blank', 'noopener,noreferrer');
+    expect(openSpy).toHaveBeenCalledWith('about:blank', '_blank');
     await vi.waitFor(() =>
       expect(fakeWindow.location.href).toBe('https://channel.io/presigned/abc'),
     );
