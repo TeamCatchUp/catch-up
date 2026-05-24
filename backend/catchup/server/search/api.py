@@ -20,6 +20,7 @@ from catchup.db.models import User
 from catchup.search.original.ids import OriginalDocumentIdError
 from catchup.search.original.registry import OriginalResolverNotFoundError
 from catchup.search.original.resolvers.channel_talk import ChannelTalkOriginalError
+from catchup.search.original.resolvers.slack import SlackOriginalError
 from catchup.search.original.service import OriginalSearchService
 from catchup.search.service import ManualSearchService
 from catchup.server.search.dependencies import get_manual_search_service
@@ -104,7 +105,7 @@ async def get_original_search_result(
         )
     except (OriginalDocumentIdError, OriginalResolverNotFoundError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except ChannelTalkOriginalError as exc:
+    except (ChannelTalkOriginalError, SlackOriginalError) as exc:
         raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
 
 
@@ -127,7 +128,7 @@ async def get_original_file_url(
         )
     except (OriginalDocumentIdError, OriginalResolverNotFoundError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except ChannelTalkOriginalError as exc:
+    except (ChannelTalkOriginalError, SlackOriginalError) as exc:
         raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
 
 

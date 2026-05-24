@@ -6,8 +6,8 @@ from unittest.mock import patch
 import pytest
 
 from catchup.rag.schemas.structures import ManualSearchQuery
-from catchup.search.planner.state import CachedSearch
 from catchup.search.planner.state import _QUERY_CACHE_MAX_SIZE
+from catchup.search.planner.state import CachedSearch
 
 
 def _make_state(
