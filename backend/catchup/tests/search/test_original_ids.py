@@ -22,6 +22,22 @@ def test_parse_channel_talk_user_chat_document_id() -> None:
     }
 
 
+def test_parse_slack_message_document_id() -> None:
+    ref = parse_original_document_id(
+        connector=SourceType.SLACK,
+        document_id="slack:message:T1:C1:1716400000.000100",
+    )
+
+    assert ref.connector == SourceType.SLACK
+    assert ref.entity_type == "message"
+    assert ref.document_id == "slack:message:T1:C1:1716400000.000100"
+    assert ref.identifiers == {
+        "team_id": "T1",
+        "channel_id": "C1",
+        "ts": "1716400000.000100",
+    }
+
+
 def test_parse_rejects_connector_mismatch() -> None:
     with pytest.raises(OriginalDocumentIdError, match="connector does not match"):
         parse_original_document_id(
@@ -35,6 +51,14 @@ def test_parse_rejects_unsupported_channel_talk_entity_type() -> None:
         parse_original_document_id(
             connector=SourceType.CHANNEL_TALK,
             document_id="channel_talk:document_article:channel-123:article-456",
+        )
+
+
+def test_parse_rejects_unsupported_slack_entity_type() -> None:
+    with pytest.raises(OriginalDocumentIdError, match="unsupported slack entity_type"):
+        parse_original_document_id(
+            connector=SourceType.SLACK,
+            document_id="slack:file:T1:C1:1716400000.000100",
         )
 
 
@@ -58,6 +82,28 @@ def test_parse_rejects_malformed_channel_talk_user_chat_document_id(
         )
 
 
+@pytest.mark.parametrize(
+    "document_id",
+    [
+        "",
+        "slack",
+        "slack:message:T1:C1",
+        "slack:message::C1:1716400000.000100",
+        "slack:message:T1::1716400000.000100",
+        "slack:message:T1:C1:",
+        "slack:message:T1:C1:1716400000.000100:extra",
+    ],
+)
+def test_parse_rejects_malformed_slack_message_document_id(
+    document_id: str,
+) -> None:
+    with pytest.raises(OriginalDocumentIdError):
+        parse_original_document_id(
+            connector=SourceType.SLACK,
+            document_id=document_id,
+        )
+
+
 def test_original_search_request_accepts_connector_enum_value() -> None:
     request = OriginalContentRequest(
         connector="channel_talk",
@@ -68,6 +114,16 @@ def test_original_search_request_accepts_connector_enum_value() -> None:
     assert request.connector == SourceType.CHANNEL_TALK
     assert request.document_id == "channel_talk:user_chat:channel-123:chat-456"
     assert request.next_cursor == "cursor-1"
+
+
+def test_original_search_request_accepts_slack_connector_enum_value() -> None:
+    request = OriginalContentRequest(
+        connector="slack",
+        document_id="slack:message:T1:C1:1716400000.000100",
+    )
+
+    assert request.connector == SourceType.SLACK
+    assert request.document_id == "slack:message:T1:C1:1716400000.000100"
 
 
 def test_original_search_request_rejects_unknown_connector() -> None:
