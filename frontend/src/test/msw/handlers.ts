@@ -1,5 +1,5 @@
-import { http, HttpResponse } from 'msw';
 import type { HttpHandler } from 'msw';
+import { http, HttpResponse } from 'msw';
 
 export const handlers: HttpHandler[] = [
   // 원문 파일 URL 조회 — 기본 성공 응답. 개별 테스트에서 server.use(...) 로 오버라이드.
