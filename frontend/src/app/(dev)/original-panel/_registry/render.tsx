@@ -162,12 +162,20 @@ const ENTRY_RENDERERS: Record<EntrySlug, () => ReactNode> = {
     <>
       <Case label="파일 1개">
         <PanelWidth>
-          <FileContent content={filePayload(fileContentSingle)} />
+          <FileContent
+            content={filePayload(fileContentSingle)}
+            connector="channel_talk"
+            documentId="channel_talk:user_chat:dev-fixture"
+          />
         </PanelWidth>
       </Case>
       <Case label="파일 여러 개 (다양한 타입·크기)">
         <PanelWidth>
-          <FileContent content={filePayload(fileContentMultiple)} />
+          <FileContent
+            content={filePayload(fileContentMultiple)}
+            connector="channel_talk"
+            documentId="channel_talk:user_chat:dev-fixture"
+          />
         </PanelWidth>
       </Case>
     </>
@@ -177,7 +185,11 @@ const ENTRY_RENDERERS: Record<EntrySlug, () => ReactNode> = {
       {messageItemVariants.map((variant) => (
         <Case key={variant.item.id} label={variant.label}>
           <PanelWidth>
-            <MessageItem item={variant.item} />
+            <MessageItem
+              item={variant.item}
+              connector="channel_talk"
+              documentId="channel_talk:user_chat:dev-fixture"
+            />
           </PanelWidth>
         </Case>
       ))}

@@ -14,12 +14,16 @@ import HeadphoneIcon from '@/public/icons/icon/headphone.svg';
 import LockIcon from '@/public/icons/icon/lock.svg';
 import SupportAgentIcon from '@/public/icons/icon/support_agent.svg';
 import { Badge } from '@/shared/components/ui/badge';
+import type { SourceTypeApi } from '@/shared/types/sourceApi';
 
 interface MessageItemProps {
   item: OriginalMessageItem;
+  // FileRow 가 파일 다운로드 mutation 호출 시 필요 — 4단 prop drilling.
+  connector: SourceTypeApi;
+  documentId: string;
 }
 
-export default function MessageItem({ item }: MessageItemProps) {
+export default function MessageItem({ item, connector, documentId }: MessageItemProps) {
   const isInternal = item.visibility === 'internal';
   const isCustomer = item.author?.type === 'customer';
   const isManager = item.author?.type === 'manager';
@@ -82,7 +86,12 @@ export default function MessageItem({ item }: MessageItemProps) {
         {/* 본문 — contents[] 각 요소를 ContentRenderer 로 */}
         <div className="flex flex-col gap-2">
           {item.contents.map((content, index) => (
-            <ContentRenderer key={`${content.content_type}-${index}`} content={content} />
+            <ContentRenderer
+              key={`${content.content_type}-${index}`}
+              content={content}
+              connector={connector}
+              documentId={documentId}
+            />
           ))}
         </div>
       </div>

@@ -7,13 +7,20 @@ import type { OriginalFile } from '@/features/hybrid-search/types/originalApi';
 import { formatFileSize } from '@/features/hybrid-search/utils/format/formatFileSize';
 import { formatFileType } from '@/features/hybrid-search/utils/format/formatFileType';
 import FileIcon from '@/public/icons/icon/file_filled.svg';
+import type { SourceTypeApi } from '@/shared/types/sourceApi';
 import { isSafeUrl } from '@/shared/utils/isSafeUrl';
 
 interface FileRowProps {
   file: OriginalFile;
+  // Task 3 에서 mutation 호출에 사용 — 현 시점에선 시그니처만.
+  connector: SourceTypeApi;
+  documentId: string;
 }
 
-export default function FileRow({ file }: FileRowProps) {
+export default function FileRow({ file, connector, documentId }: FileRowProps) {
+  // Task 3 에서 사용 — 일단 unused-var 회피.
+  void connector;
+  void documentId;
   const name = file.name?.trim() ? file.name : '이름 없음';
   const sizeLabel = formatFileSize(file.size);
   const typeLabel = formatFileType(name, file.content_type);

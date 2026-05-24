@@ -29,7 +29,12 @@ export default function OriginalPanelContent({ data }: OriginalPanelContentProps
             <section key={group.date || 'undated'} className="flex flex-col gap-2">
               <DateIndicator date={group.date} />
               {group.items.map((item) => (
-                <MessageItem key={item.id} item={item} />
+                <MessageItem
+                  key={item.id}
+                  item={item}
+                  connector={data.connector}
+                  documentId={data.document_id}
+                />
               ))}
             </section>
           ))}
