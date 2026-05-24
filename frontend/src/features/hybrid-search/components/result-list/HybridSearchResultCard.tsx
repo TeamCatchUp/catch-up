@@ -108,7 +108,7 @@ export default function HybridSearchResultCard({
               target="_blank"
               rel="noopener noreferrer"
               onClick={(e) => e.stopPropagation()}
-              className="group/name flex min-w-0 flex-1 items-center gap-0.5"
+              className="group/name flex min-w-0 items-center gap-0.5"
             >
               <span className="text-body-xsmall text-content-alternative truncate group-hover/name:underline">
                 {contextLabel}
@@ -116,7 +116,7 @@ export default function HybridSearchResultCard({
               <OpenInNew className="text-icon-assistive h-4.5 w-4.5 shrink-0" />
             </a>
           ) : (
-            <div className="flex min-w-0 flex-1 items-center gap-0.5">
+            <div className="flex min-w-0 items-center gap-0.5">
               <span className="text-body-xsmall text-content-alternative truncate">
                 {contextLabel}
               </span>
