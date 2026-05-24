@@ -1,32 +1,38 @@
 'use client';
 
 // 원문 메시지의 첨부 파일 한 줄. file 콘텐츠에서 files[] 각 요소를 렌더.
-// file.url 이 안전하면 새 탭 다운로드 링크로, 아니면 비링크로 표시.
+// 클릭 시 backend mutation 호출 → presigned URL 받아 새 탭에서 다운로드/미리보기.
+// 팝업 차단 회피: 클릭 동기 시점에 about:blank 새 탭을 미리 열고 onSuccess 에서 location 갱신.
+// file_key 없는 파일은 비링크 div 유지.
 
+import { useMutation } from '@tanstack/react-query';
+import { toast } from 'sonner';
+
+import { originalFileUrlMutations } from '@/features/hybrid-search/queries/originalFileUrl.mutations';
 import type { OriginalFile } from '@/features/hybrid-search/types/originalApi';
 import { formatFileSize } from '@/features/hybrid-search/utils/format/formatFileSize';
 import { formatFileType } from '@/features/hybrid-search/utils/format/formatFileType';
 import FileIcon from '@/public/icons/icon/file_filled.svg';
+import { parseApiError } from '@/shared/api/errors';
 import type { SourceTypeApi } from '@/shared/types/sourceApi';
-import { isSafeUrl } from '@/shared/utils/isSafeUrl';
 
 interface FileRowProps {
   file: OriginalFile;
-  // Task 3 에서 mutation 호출에 사용 — 현 시점에선 시그니처만.
   connector: SourceTypeApi;
   documentId: string;
 }
 
 export default function FileRow({ file, connector, documentId }: FileRowProps) {
-  // Task 3 에서 사용 — 일단 unused-var 회피.
-  void connector;
-  void documentId;
+  const { mutate, isPending } = useMutation(originalFileUrlMutations.download());
+
   const name = file.name?.trim() ? file.name : '이름 없음';
   const sizeLabel = formatFileSize(file.size);
   const typeLabel = formatFileType(name, file.content_type);
-  const isLink = isSafeUrl(file.url);
-
   const meta = [sizeLabel, typeLabel].filter(Boolean).join(' ∙ ');
+  const fileKey = file.file_key;
+
+  const baseClass =
+    'bg-fill-strong border-edge-neutral flex w-full items-center gap-2.5 rounded-lg border p-2 text-left';
 
   const inner = (
     <>
@@ -40,21 +46,44 @@ export default function FileRow({ file, connector, documentId }: FileRowProps) {
     </>
   );
 
-  const className =
-    'bg-fill-strong border-edge-neutral flex w-full items-center gap-2.5 rounded-lg border p-2 text-left';
-
-  if (isLink) {
-    return (
-      <a
-        href={file.url}
-        target="_blank"
-        rel="noopener noreferrer"
-        className={className}
-      >
-        {inner}
-      </a>
-    );
+  // file_key 없는 파일은 다운로드 불가 — 정적 표시만 (백엔드 min_length:1 검증 회피).
+  if (!fileKey) {
+    return <div className={baseClass}>{inner}</div>;
   }
 
-  return <div className={className}>{inner}</div>;
+  const handleClick = () => {
+    if (isPending) return;
+    const win = window.open('about:blank', '_blank'); // 동기 — 팝업 차단 통과
+
+    mutate(
+      { connector, document_id: documentId, file_key: fileKey },
+      {
+        onSuccess: (res) => {
+          const url = res.data.url;
+          if (!url) {
+            win?.close();
+            toast.error('파일을 불러올 수 없습니다');
+            return;
+          }
+          if (win) win.location.href = url;
+        },
+        onError: (error) => {
+          win?.close();
+          toast.error(parseApiError(error).message);
+        },
+      },
+    );
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={handleClick}
+      disabled={isPending}
+      aria-disabled={isPending}
+      className={`${baseClass} ${isPending ? 'pointer-events-none opacity-50' : ''}`.trim()}
+    >
+      {inner}
+    </button>
+  );
 }
