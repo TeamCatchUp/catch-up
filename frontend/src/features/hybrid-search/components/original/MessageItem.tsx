@@ -79,8 +79,8 @@ export default function MessageItem({ item, connector, documentId }: MessageItem
           )}
         </div>
 
-        {/* 우측 col — gap 8 (author row ↔ contents) */}
-        <div className="flex min-w-0 flex-1 flex-col gap-2">
+        {/* 우측 col — author row ↔ contents gap */}
+        <div className="flex min-w-0 flex-1 flex-col gap-1">
           {/* 작성자 행 — 이름 / 상담원 아이콘 / 내부 대화 태그 / 작성 시각 */}
           <div className="flex items-center gap-1.5">
             <span className="text-body-small text-content-alternative truncate font-medium">
