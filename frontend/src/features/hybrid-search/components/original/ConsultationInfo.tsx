@@ -12,6 +12,7 @@ import PersonFilledIcon from '@/public/icons/icon/person_filled.svg';
 import TagIcon from '@/public/icons/icon/tag.svg';
 import { Badge } from '@/shared/components/ui/badge';
 
+import ConsultationDescription from './ConsultationDescription';
 import InfoFieldLabel from './InfoFieldLabel';
 
 interface ConsultationInfoProps {
@@ -80,7 +81,7 @@ export default function ConsultationInfo({ metadata }: ConsultationInfoProps) {
       {description ? (
         <div className="flex flex-col gap-2">
           <InfoFieldLabel icon={FileIcon} text="상담 설명" />
-          <p className="text-body-small text-content-neutral break-words">{description}</p>
+          <ConsultationDescription description={description} />
         </div>
       ) : (
         <div className="flex items-center gap-10">

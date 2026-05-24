@@ -91,9 +91,18 @@ export const metadataDetailAbsent: OriginalMetadata = {
   user_chat_id: 'user-chat-55014',
 };
 
+// 긴 상담 설명 — 3줄 넘는 description 으로 "더보기/접기" 동작 검증.
+export const metadataLongDescription: OriginalMetadata = {
+  ...metadataFull,
+  user_chat_id: 'user-chat-55015',
+  description:
+    '결제 시도 시 카드 인증 단계에서 오류 코드가 떨어진다는 문의입니다. 사용자는 동일한 카드로 다른 가맹점에서는 정상 결제가 가능했다고 합니다. 결제 대행사 점검 일정 확인과 사용자의 카드 발급사 측 한도 초과 여부 확인이 필요합니다. 임시로는 다른 결제 수단(계좌이체)을 안내드린 상태이며, 결제 대행사 점검 완료 후 다시 시도해주실 것을 안내했습니다. 추가로 자동 결제 등록 건도 동일 영향을 받는지 확인 중입니다.',
+};
+
 // 갤러리에서 한 번에 순회할 수 있는 변형 목록.
 export const metadataVariants: { label: string; metadata: OriginalMetadata }[] = [
   { label: '전체', metadata: metadataFull },
   { label: '태그 없음', metadata: metadataNoTags },
+  { label: '긴 설명 (더보기/접기)', metadata: metadataLongDescription },
   { label: 'detail 부재 (3키만)', metadata: metadataDetailAbsent },
 ];
