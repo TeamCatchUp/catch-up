@@ -148,8 +148,8 @@ export default function ResultListSection({
             variants={fastStaggerContainer}
             className="flex w-full flex-col items-start gap-2"
           >
-            {/* Figma 14084-65556 — 좌: 날짜·separator·툴 로고 / 우: 결과 카운트 */}
-            <div className="flex w-full items-center justify-between px-1.5 py-1">
+            {/* Figma 14133-72051 — bg Fill/Normal/Strong + 1000px pill 컨테이너 */}
+            <div className="bg-fill-strong flex w-full items-center justify-between rounded-full px-1.5 py-1">
               <div className="flex items-center gap-2.5">
                 {dateRange?.from && <SearchPeriodLabel dateRange={dateRange} />}
                 {dateRange?.from && tools.length > 0 && (
