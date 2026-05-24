@@ -81,13 +81,13 @@ export default function HybridSearchResultCard({
           <Logo className={source.source_type === 'channel_talk' ? 'h-4 w-4' : 'h-5 w-5'} />
         </span>
         <div className="flex min-w-0 flex-1 items-center gap-2">
-          <span className="text-body-small text-content-neutral shrink-0">{integrationLabel}</span>
+          <span className="text-body-xsmall text-content-alternative shrink-0">{integrationLabel}</span>
           <span aria-hidden className="text-body-medium text-icon-alternative shrink-0">
             /
           </span>
           {/* 워크스페이스명 + 외부 링크 아이콘 호버 시 워크스페이스명에 밑줄 */}
           <div className="group/name flex min-w-0 flex-1 items-center gap-2">
-            <span className="text-body-small text-content-neutral truncate group-hover/name:underline">
+            <span className="text-body-xsmall text-content-alternative truncate group-hover/name:underline">
               {contextLabel}
             </span>
             <OpenInNew className="text-icon-assistive h-4.5 w-4.5 shrink-0" />
@@ -95,8 +95,8 @@ export default function HybridSearchResultCard({
         </div>
       </div>
       <div className="flex w-full flex-col gap-2">
-        <p className="text-body-medium text-content-primary max-w-152.5 truncate">{displayTitle}</p>
-        <div className="text-body-xsmall text-content-alternative flex items-center gap-1.5">
+        <p className="text-body-medium text-content-normal max-w-152.5 truncate">{displayTitle}</p>
+        <div className="text-body-small text-content-alternative flex items-center gap-1.5">
           <span className="whitespace-nowrap">{authorText}</span>
           <span aria-hidden className="bg-dim-black-10 h-1 w-1 shrink-0 rounded-full" />
           <span className="whitespace-nowrap">{dateText}</span>
