@@ -33,7 +33,7 @@ export default function SearchToolLabel({ tools }: SearchToolLabelProps) {
   const ordered = CANONICAL_ORDER.filter((t) => selected.has(t));
 
   return (
-    <div className="bg-fill-normal border-edge-assistive flex shrink-0 items-center gap-1.5 rounded-full border px-2 py-1">
+    <div className="flex shrink-0 items-center gap-3">
       {ordered.map((tool) => {
         const Logo = TOOL_LOGO[tool];
         // 채널톡 SVG 는 내부 여백이 있어 시각 크기 보정 (HybridSearchResultCard 와 동일 패턴).

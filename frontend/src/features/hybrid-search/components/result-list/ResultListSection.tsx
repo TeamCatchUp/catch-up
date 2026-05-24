@@ -86,6 +86,7 @@ export default function ResultListSection({
   let resultsData: {
     sources: ReturnType<typeof normalizeSources>;
     totalPages: number;
+    totalCount: number;
     transitionKey: string;
   } | null = null;
 
@@ -117,6 +118,7 @@ export default function ResultListSection({
       resultsData = {
         sources: normalizeSources(pageResults),
         totalPages,
+        totalCount: sortedResults.length,
         transitionKey: `${keyword}-${scope.join(',')}-${active}-${sortOrder}-${page}`,
       };
       view = 'results';
@@ -146,12 +148,19 @@ export default function ResultListSection({
             variants={fastStaggerContainer}
             className="flex w-full flex-col items-start gap-2"
           >
-            {(dateRange?.from || tools.length > 0) && (
-              <div className="flex w-full items-center justify-between">
-                <div>{dateRange?.from && <SearchPeriodLabel dateRange={dateRange} />}</div>
-                <SearchToolLabel tools={tools} />
+            {/* Figma 14084-65556 — 좌: 날짜·separator·툴 로고 / 우: 결과 카운트 */}
+            <div className="flex w-full items-center justify-between px-1.5 py-1">
+              <div className="flex items-center gap-2.5">
+                {dateRange?.from && <SearchPeriodLabel dateRange={dateRange} />}
+                {dateRange?.from && tools.length > 0 && (
+                  <span aria-hidden className="bg-edge-neutral h-3 w-px shrink-0" />
+                )}
+                {tools.length > 0 && <SearchToolLabel tools={tools} />}
               </div>
-            )}
+              <span className="text-body-xsmall text-content-assistive shrink-0">
+                {resultsData.totalCount}건의 검색 결과
+              </span>
+            </div>
             {resultsData.sources.map((source) => (
               <motion.div key={source.id} variants={fastFadeInUp} className="w-full">
                 <HybridSearchResultCard

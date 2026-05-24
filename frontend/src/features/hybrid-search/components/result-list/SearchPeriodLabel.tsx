@@ -21,7 +21,7 @@ export default function SearchPeriodLabel({ dateRange }: SearchPeriodLabelProps)
   return (
     <div className="flex items-center gap-2">
       <IconCalendarFilled className="text-icon-neutral size-4.5 shrink-0" />
-      <span className="text-body-xsmall text-content-neutral">{`${from} ~ ${to} 문서 검색 결과`}</span>
+      <span className="text-body-xsmall text-content-neutral">{`${from} ~ ${to}`}</span>
     </div>
   );
 }
