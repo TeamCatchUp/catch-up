@@ -34,9 +34,78 @@ function makeMockResults(count: number, source = 'jira') {
 }
 
 describe('ResultListSection', () => {
+  it('renders result cards without the filter summary bar when no tool/date filter is applied', async () => {
+    server.use(
+      http.get('*/api/v1/search/hybrid', () =>
+        HttpResponse.json({
+          results: makeMockResults(3).map((result, index) => ({ ...result, title: `Issue ${index}` })),
+          total: 3,
+          source_distribution: { jira: 3 },
+        }),
+      ),
+    );
+
+    renderWithClient(
+      <ResultListSection
+        keyword="x"
+        scope={[]}
+        dateRange={undefined}
+        sortOrder="newest"
+        active="all"
+        page={1}
+        onPageChange={() => {}}
+        selectedId={null}
+        onSelectSource={() => {}}
+      />,
+    );
+
+    expect(await screen.findByText('Issue 0')).toBeInTheDocument();
+    expect(screen.queryByText(/검색 결과/)).not.toBeInTheDocument();
+  });
+
+  it('renders the filter summary bar when a tool filter is applied', async () => {
+    server.use(
+      http.get('*/api/v1/search/hybrid', () =>
+        HttpResponse.json({
+          results: makeMockResults(3).map((result, index) => ({ ...result, title: `Issue ${index}` })),
+          total: 3,
+          source_distribution: { jira: 3 },
+        }),
+      ),
+    );
+
+    renderWithClient(
+      <ResultListSection
+        keyword="x"
+        scope={['jira']}
+        tools={['jira']}
+        dateRange={undefined}
+        sortOrder="newest"
+        active="all"
+        page={1}
+        onPageChange={() => {}}
+        selectedId={null}
+        onSelectSource={() => {}}
+      />,
+    );
+
+    expect(await screen.findByText('Issue 0')).toBeInTheDocument();
+    expect(screen.getByText(/검색 결과/)).toBeInTheDocument();
+  });
+
   it('keyword 빈 문자열이면 Empty 표시 (fetch 없음)', () => {
     renderWithClient(
-      <ResultListSection keyword="" scope={[]} dateRange={undefined} sortOrder="newest" active="all" page={1} onPageChange={() => {}} selectedId={null} onSelectSource={() => {}} />,
+      <ResultListSection
+        keyword=""
+        scope={[]}
+        dateRange={undefined}
+        sortOrder="newest"
+        active="all"
+        page={1}
+        onPageChange={() => {}}
+        selectedId={null}
+        onSelectSource={() => {}}
+      />,
     );
     expect(screen.getByText(/문서에서는 찾지 못했어요/)).toBeInTheDocument();
   });
@@ -44,19 +113,37 @@ describe('ResultListSection', () => {
   it('로딩 중에는 Loading 표시', () => {
     server.use(http.get('*/api/v1/search/hybrid', () => new Promise(() => {})));
     renderWithClient(
-      <ResultListSection keyword="결제" scope={[]} dateRange={undefined} sortOrder="newest" active="all" page={1} onPageChange={() => {}} selectedId={null} onSelectSource={() => {}} />,
+      <ResultListSection
+        keyword="결제"
+        scope={[]}
+        dateRange={undefined}
+        sortOrder="newest"
+        active="all"
+        page={1}
+        onPageChange={() => {}}
+        selectedId={null}
+        onSelectSource={() => {}}
+      />,
     );
     expect(screen.getByText(/문서를 찾고 있어요/)).toBeInTheDocument();
   });
 
   it('results=[] 응답 시 Empty 표시', async () => {
     server.use(
-      http.get('*/api/v1/search/hybrid', () =>
-        HttpResponse.json({ results: [], total: 0, source_distribution: {} }),
-      ),
+      http.get('*/api/v1/search/hybrid', () => HttpResponse.json({ results: [], total: 0, source_distribution: {} })),
     );
     renderWithClient(
-      <ResultListSection keyword="결제" scope={[]} dateRange={undefined} sortOrder="newest" active="all" page={1} onPageChange={() => {}} selectedId={null} onSelectSource={() => {}} />,
+      <ResultListSection
+        keyword="결제"
+        scope={[]}
+        dateRange={undefined}
+        sortOrder="newest"
+        active="all"
+        page={1}
+        onPageChange={() => {}}
+        selectedId={null}
+        onSelectSource={() => {}}
+      />,
     );
     expect(await screen.findByText(/문서에서는 찾지 못했어요/)).toBeInTheDocument();
   });
@@ -72,7 +159,17 @@ describe('ResultListSection', () => {
       ),
     );
     renderWithClient(
-      <ResultListSection keyword="결제" scope={[]} dateRange={undefined} sortOrder="newest" active="all" page={1} onPageChange={() => {}} selectedId={null} onSelectSource={() => {}} />,
+      <ResultListSection
+        keyword="결제"
+        scope={[]}
+        dateRange={undefined}
+        sortOrder="newest"
+        active="all"
+        page={1}
+        onPageChange={() => {}}
+        selectedId={null}
+        onSelectSource={() => {}}
+      />,
     );
     expect(await screen.findByText('이슈 0')).toBeInTheDocument();
     expect(screen.getByText('이슈 9')).toBeInTheDocument();
@@ -92,7 +189,17 @@ describe('ResultListSection', () => {
       ),
     );
     renderWithClient(
-      <ResultListSection keyword="x" scope={[]} dateRange={undefined} sortOrder="newest" active="all" page={1} onPageChange={() => {}} selectedId={null} onSelectSource={() => {}} />,
+      <ResultListSection
+        keyword="x"
+        scope={[]}
+        dateRange={undefined}
+        sortOrder="newest"
+        active="all"
+        page={1}
+        onPageChange={() => {}}
+        selectedId={null}
+        onSelectSource={() => {}}
+      />,
     );
     await screen.findByText('이슈 0');
     expect(screen.queryByLabelText('이전 페이지')).not.toBeInTheDocument();
@@ -169,7 +276,17 @@ describe('ResultListSection', () => {
     );
     const onPageChange = vi.fn();
     renderWithClient(
-      <ResultListSection keyword="x" scope={[]} dateRange={undefined} sortOrder="newest" active="all" page={1} onPageChange={onPageChange} selectedId={null} onSelectSource={() => {}} />,
+      <ResultListSection
+        keyword="x"
+        scope={[]}
+        dateRange={undefined}
+        sortOrder="newest"
+        active="all"
+        page={1}
+        onPageChange={onPageChange}
+        selectedId={null}
+        onSelectSource={() => {}}
+      />,
     );
     await screen.findByText('이슈 0');
     fireEvent.click(screen.getByText('2'));
@@ -188,7 +305,17 @@ describe('ResultListSection', () => {
     );
     const onSelectSource = vi.fn();
     renderWithClient(
-      <ResultListSection keyword="x" scope={[]} dateRange={undefined} sortOrder="newest" active="all" page={1} onPageChange={() => {}} selectedId={null} onSelectSource={onSelectSource} />,
+      <ResultListSection
+        keyword="x"
+        scope={[]}
+        dateRange={undefined}
+        sortOrder="newest"
+        active="all"
+        page={1}
+        onPageChange={() => {}}
+        selectedId={null}
+        onSelectSource={onSelectSource}
+      />,
     );
     fireEvent.click(await screen.findByText('이슈 1'));
     expect(onSelectSource).toHaveBeenCalledTimes(1);
@@ -206,7 +333,17 @@ describe('ResultListSection', () => {
       ),
     );
     renderWithClient(
-      <ResultListSection keyword="x" scope={[]} dateRange={undefined} sortOrder="newest" active="all" page={1} onPageChange={() => {}} selectedId="jira-1" onSelectSource={() => {}} />,
+      <ResultListSection
+        keyword="x"
+        scope={[]}
+        dateRange={undefined}
+        sortOrder="newest"
+        active="all"
+        page={1}
+        onPageChange={() => {}}
+        selectedId="jira-1"
+        onSelectSource={() => {}}
+      />,
     );
     // 카드 외곽은 a 를 nest 하기 위해 div role=button 으로 변경됨.
     const selectedButton = (await screen.findByText('이슈 1')).closest('[role="button"]');

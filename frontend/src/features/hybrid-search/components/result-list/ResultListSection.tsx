@@ -78,6 +78,7 @@ export default function ResultListSection({
 }: ResultListSectionProps) {
   const { start, end } = dateRangeToUrlParams(dateRange);
   const query = useHybridSearch({ keyword, scope, start, end });
+  const hasSearchFilterLabel = Boolean(dateRange?.from) || tools.length > 0;
 
   // active가 scope 밖이면 결과 없음 (사용자가 보지 못한 source 탭 클릭한 경우).
   const isActiveInScope = active === 'all' || scope.length === 0 || scope.includes(active);
@@ -100,9 +101,7 @@ export default function ResultListSection({
     view = 'empty';
   } else {
     const filteredResults =
-      active === 'all'
-        ? query.data.results
-        : query.data.results.filter((r) => r.source === active);
+      active === 'all' ? query.data.results : query.data.results.filter((r) => r.source === active);
     if (filteredResults.length === 0) {
       view = 'empty';
     } else {
@@ -128,9 +127,7 @@ export default function ResultListSection({
   return (
     <AnimatePresence mode="wait">
       {view === 'loading' && <ResultLoadingState key="loading" />}
-      {view === 'error' && (
-        <ResultErrorState key="error" onRetry={() => query.refetch()} />
-      )}
+      {view === 'error' && <ResultErrorState key="error" onRetry={() => query.refetch()} />}
       {view === 'empty' && <ResultEmptyState key="empty" />}
       {view === 'results' && resultsData && (
         <motion.div
@@ -149,18 +146,20 @@ export default function ResultListSection({
             className="flex w-full flex-col items-start"
           >
             {/* Figma 14133-72051 — bg Fill/Normal/Strong + 1000px pill 컨테이너. 카드 첫 번째와 mb-1.5 (6px) gap. */}
-            <div className="bg-fill-strong mb-1.5 flex w-full items-center justify-between rounded-full px-1.5 py-1">
-              <div className="flex items-center gap-2.5">
-                {dateRange?.from && <SearchPeriodLabel dateRange={dateRange} />}
-                {dateRange?.from && tools.length > 0 && (
-                  <span aria-hidden className="bg-dim-black-25 h-3 w-px shrink-0" />
-                )}
-                {tools.length > 0 && <SearchToolLabel tools={tools} />}
+            {hasSearchFilterLabel && (
+              <div className="bg-fill-strong mb-1.5 flex w-full items-center justify-between rounded-full px-1.5 py-1">
+                <div className="flex items-center gap-2.5">
+                  {dateRange?.from && <SearchPeriodLabel dateRange={dateRange} />}
+                  {dateRange?.from && tools.length > 0 && (
+                    <span aria-hidden className="bg-dim-black-25 h-3 w-px shrink-0" />
+                  )}
+                  {tools.length > 0 && <SearchToolLabel tools={tools} />}
+                </div>
+                <span className="text-body-xsmall text-content-assistive shrink-0 px-2.5">
+                  {resultsData.totalCount}건의 검색 결과
+                </span>
               </div>
-              <span className="text-body-xsmall text-content-assistive shrink-0 px-2.5">
-                {resultsData.totalCount}건의 검색 결과
-              </span>
-            </div>
+            )}
             {resultsData.sources.map((source) => (
               <motion.div key={source.id} variants={fastFadeInUp} className="w-full">
                 <HybridSearchResultCard
@@ -172,11 +171,7 @@ export default function ResultListSection({
             ))}
           </motion.div>
           {resultsData.totalPages > 1 && (
-            <Pagination
-              currentPage={page}
-              totalPages={resultsData.totalPages}
-              onPageChange={onPageChange}
-            />
+            <Pagination currentPage={page} totalPages={resultsData.totalPages} onPageChange={onPageChange} />
           )}
         </motion.div>
       )}
