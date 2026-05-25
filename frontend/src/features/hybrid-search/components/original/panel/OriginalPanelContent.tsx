@@ -1,11 +1,11 @@
 // 원문 패널 본문 — 순수 조립 컴포넌트.
 // 상담정보 → 고객정보 → (날짜 그룹별 DateIndicator + MessageItem) 메시지 영역.
 
-import ConsultationInfo from '@/features/hybrid-search/components/original/ConsultationInfo';
-import CustomerInfo from '@/features/hybrid-search/components/original/CustomerInfo';
-import DateIndicator from '@/features/hybrid-search/components/original/DateIndicator';
-import MessageItem from '@/features/hybrid-search/components/original/MessageItem';
-import OriginalPanelEmpty from '@/features/hybrid-search/components/original/OriginalPanelEmpty';
+import ConsultationInfo from '@/features/hybrid-search/components/original/metadata/ConsultationInfo';
+import CustomerInfo from '@/features/hybrid-search/components/original/metadata/CustomerInfo';
+import OriginalPanelEmpty from '@/features/hybrid-search/components/original/panel/states/OriginalPanelEmpty';
+import DateIndicator from '@/features/hybrid-search/components/original/timeline/DateIndicator';
+import MessageItem from '@/features/hybrid-search/components/original/timeline/MessageItem';
 import type { OriginalContentResponse } from '@/features/hybrid-search/types/originalApi';
 import { groupMessagesByDate } from '@/features/hybrid-search/utils/groupMessagesByDate';
 

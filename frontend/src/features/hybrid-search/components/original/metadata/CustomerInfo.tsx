@@ -5,7 +5,6 @@
 
 import { useState } from 'react';
 
-import Collapsible from '@/features/hybrid-search/components/original/Collapsible';
 import type { OriginalCustomer } from '@/features/hybrid-search/types/originalApi';
 import { formatKoreanPhone } from '@/features/hybrid-search/utils/format/formatKoreanPhone';
 import CallIcon from '@/public/icons/icon/call.svg';
@@ -15,6 +14,7 @@ import MailIcon from '@/public/icons/icon/mail.svg';
 import PersonIcon from '@/public/icons/icon/person.svg';
 import PhoneIcon from '@/public/icons/icon/phone.svg';
 
+import Collapsible from './Collapsible';
 import InfoFieldLabel from './InfoFieldLabel';
 
 interface CustomerInfoProps {

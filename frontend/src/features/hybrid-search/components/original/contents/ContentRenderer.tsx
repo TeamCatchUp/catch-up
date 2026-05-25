@@ -26,9 +26,7 @@ export default function ContentRenderer({ content, connector, documentId }: Cont
     case 'form':
       return <FormContent content={content.payload} />;
     case 'file':
-      return (
-        <FileContent content={content.payload} connector={connector} documentId={documentId} />
-      );
+      return <FileContent content={content.payload} connector={connector} documentId={documentId} />;
     default: {
       // content_type 이 늘어나면 컴파일 단계에서 누락을 잡는다.
       const _exhaustive: never = content;

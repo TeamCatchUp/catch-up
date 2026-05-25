@@ -1,21 +1,16 @@
 // block 콘텐츠 — blocks[] 를 block_type 별로 분기 렌더.
 // code → CodeBlock, bullets → 불릿 리스트, 그 외(text/default) → OriginalMarkdown.
 
-import CodeBlock from '@/features/hybrid-search/components/original/CodeBlock';
-import OriginalMarkdown from '@/features/hybrid-search/components/original/OriginalMarkdown';
-import type {
-  OriginalBlock,
-  OriginalBlockPayload,
-} from '@/features/hybrid-search/types/originalApi';
+import CodeBlock from '@/features/hybrid-search/components/original/contents/CodeBlock';
+import OriginalMarkdown from '@/features/hybrid-search/components/original/contents/OriginalMarkdown';
+import type { OriginalBlock, OriginalBlockPayload } from '@/features/hybrid-search/types/originalApi';
 
 interface BlockContentProps {
   content: OriginalBlockPayload;
 }
 
 // 연속한 bullets 블록을 하나의 리스트로 묶기 위한 렌더 단위.
-type BlockGroup =
-  | { kind: 'bullets'; items: string[] }
-  | { kind: 'single'; block: OriginalBlock };
+type BlockGroup = { kind: 'bullets'; items: string[] } | { kind: 'single'; block: OriginalBlock };
 
 // bullets 가 연달아 오면 한 <ul> 로 합치고, 나머지는 개별 블록으로 둔다.
 function groupBlocks(blocks: OriginalBlock[]): BlockGroup[] {
@@ -54,10 +49,7 @@ export default function BlockContent({ content }: BlockContentProps) {
       {groups.map((group, index) => {
         if (group.kind === 'bullets') {
           return (
-            <ul
-              key={`bullets-${index}`}
-              className="text-body-small text-content-normal flex flex-col gap-2 pl-5"
-            >
+            <ul key={`bullets-${index}`} className="text-body-small text-content-normal flex flex-col gap-2 pl-5">
               {group.items.map((item, itemIndex) => (
                 <li key={`bullet-${index}-${itemIndex}`} className="list-disc break-words">
                   {item}

@@ -3,10 +3,7 @@
 // form 콘텐츠 — form.inputs[] 를 라벨/값 행으로, submitted_at 을 하단에 표시.
 // 접기/펴기 없음 — 디자인은 항상 모든 행을 인라인 노출.
 
-import type {
-  OriginalFormInput,
-  OriginalFormPayload,
-} from '@/features/hybrid-search/types/originalApi';
+import type { OriginalFormInput, OriginalFormPayload } from '@/features/hybrid-search/types/originalApi';
 import { formatSubmittedAt } from '@/features/hybrid-search/utils/format/formatSubmittedAt';
 import CheckCircleFilled from '@/public/icons/icon/check_circle_filled.svg';
 
@@ -37,10 +34,7 @@ export default function FormContent({ content }: FormContentProps) {
       <div className="flex flex-col gap-3">
         {inputs.length > 0 ? (
           inputs.map((input, index) => (
-            <FormInputRow
-              key={`${input.binding_key ?? input.label ?? 'input'}-${index}`}
-              input={input}
-            />
+            <FormInputRow key={`${input.binding_key ?? input.label ?? 'input'}-${index}`} input={input} />
           ))
         ) : (
           <span className="text-body-small text-content-assistive">제출된 항목이 없어요.</span>
