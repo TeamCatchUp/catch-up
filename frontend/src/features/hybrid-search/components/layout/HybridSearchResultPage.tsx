@@ -133,7 +133,7 @@ export default function HybridSearchResultPage() {
       initial={MotionState.Hidden}
       animate={MotionState.Visible}
       variants={pageEnter}
-      className="bg-fill-normal flex min-h-full flex-col"
+      className="bg-fill-normal flex h-dvh min-h-0 flex-col overflow-hidden"
     >
       <ResultPageHeader
         keyword={keyword}

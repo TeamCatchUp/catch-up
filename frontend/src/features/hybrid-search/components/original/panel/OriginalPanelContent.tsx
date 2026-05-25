@@ -17,14 +17,12 @@ export default function OriginalPanelContent({ data }: OriginalPanelContentProps
   const dateGroups = groupMessagesByDate(data.items);
 
   return (
-    <div className="flex h-full min-h-0 w-full flex-col gap-3 px-6 py-4">
-      {/* 상담·고객 정보는 상단 고정 — 스크롤되지 않음 */}
+    <div className="flex w-full flex-col gap-3 px-6 py-4">
       <ConsultationInfo metadata={data.metadata} />
       <CustomerInfo customer={data.metadata.customer} />
 
-      {/* 메시지 영역만 내부 세로 스크롤 (custom-scrollbar 8px, overscroll-contain 으로 페이지 스크롤 전파 차단) */}
       {dateGroups.length > 0 ? (
-        <div className="custom-scrollbar flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto overscroll-contain pt-2">
+        <div className="flex flex-col gap-2 pt-2">
           {dateGroups.map((group) => (
             <section key={group.date || 'undated'} className="flex flex-col gap-5">
               <DateIndicator date={group.date} />

@@ -1,8 +1,7 @@
 'use client';
 
-// Figma body shell: px-16 / pb-30, inner max width 1420px, gap 24px.
-// Left result table grows from a 625px minimum; right original panel stays fixed at 423px.
-// The right panel remains always visible and scrolls internally when its content overflows.
+// Body shell: px-16, inner max width 1420px, gap 24px.
+// Left result table and right original panel each scroll inside the remaining viewport height.
 
 import type { PropsWithChildren, ReactNode } from 'react';
 
@@ -12,12 +11,12 @@ interface ResultPageBodyProps {
 
 export default function ResultPageBody({ children, side }: PropsWithChildren<ResultPageBodyProps>) {
   return (
-    <section className="flex w-full justify-center px-16 pb-30">
-      <div className="flex w-full max-w-[1420px] items-start gap-6">
-        <div className="flex min-w-156.25 flex-1 flex-col items-center gap-10 overflow-x-clip overflow-y-auto py-4">
+    <section className="flex min-h-0 flex-1 justify-center overflow-hidden px-16">
+      <div className="flex h-full min-h-0 w-full max-w-[1420px] items-stretch gap-6 overflow-hidden">
+        <div className="custom-scrollbar flex min-h-0 min-w-156.25 flex-1 flex-col items-center gap-10 overflow-x-clip overflow-y-auto pt-4 pr-2 pb-30">
           {children}
         </div>
-        <aside className="custom-scrollbar border-edge-normal max-h-340 w-105.75 shrink-0 overflow-y-auto overscroll-contain border-l">
+        <aside className="custom-scrollbar border-edge-normal min-h-0 w-105.75 shrink-0 overflow-y-auto overscroll-contain border-l">
           {side}
         </aside>
       </div>
