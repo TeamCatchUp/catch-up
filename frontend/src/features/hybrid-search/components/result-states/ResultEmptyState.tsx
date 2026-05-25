@@ -1,6 +1,6 @@
 'use client';
 
-// Figma 13413:53651 — text 2줄 + chat2 아이콘 버튼.
+// text 2줄 + chat2 아이콘 버튼.
 // 컨테이너 py-50(200px), gap-2(8px). 텍스트 그룹 gap-1(4px). 버튼 h-8 rounded-full px-1.5 py-1 gap-1.
 
 import { motion } from 'motion/react';

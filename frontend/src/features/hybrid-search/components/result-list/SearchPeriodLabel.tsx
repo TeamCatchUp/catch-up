@@ -20,7 +20,7 @@ export default function SearchPeriodLabel({ dateRange }: SearchPeriodLabelProps)
 
   return (
     <div className="flex items-center gap-2.5">
-      {/* Figma 14133-72051 — 캘린더 아이콘 흰색 pill wrapper (Fill/Normal/Normal) */}
+      {/* 캘린더 아이콘 흰색 pill wrapper. */}
       <span className="bg-fill-normal flex items-center justify-center rounded-full px-1 py-0.5">
         <IconCalendarFilled className="text-icon-neutral size-4.5 shrink-0" />
       </span>

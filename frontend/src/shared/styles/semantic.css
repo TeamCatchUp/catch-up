@@ -29,7 +29,7 @@
     --chart-4: var(--color-green-60);
     --chart-5: var(--color-red-50);
 
-    /* === Figma 시맨틱 토큰 (Light) === */
+    /* === 시맨틱 토큰 (Light) === */
 
     /* Fill */
     --fill-normal: var(--color-white);
@@ -164,7 +164,7 @@
     --input: var(--color-neutral-75);
     --ring: var(--color-blue-40);
 
-    /* === Figma 시맨틱 토큰 (Dark) === */
+    /* === 시맨틱 토큰 (Dark) === */
 
     /* Fill */
     --fill-normal: var(--color-neutral-85);

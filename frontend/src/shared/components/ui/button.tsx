@@ -120,7 +120,7 @@ const buttonVariants = cva(
         class: 'rounded-md2 text-body-xsmall gap-1 px-1.5 py-1',
       },
 
-      /* ── Capsule sizes (Figma: lg + sm only) ── */
+      /* ── Capsule sizes (lg + sm only) ── */
       {
         variant: [
           'capsule-solid-primary',

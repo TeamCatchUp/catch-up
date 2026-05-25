@@ -1,7 +1,7 @@
 'use client';
 
 // 검색 시 선택된 툴 indicator. URL 의 ?tools= 비어있으면(필터 없음) 렌더 자체 안 함.
-// 캐노니컬 순서: Confluence / Jira / Slack / GitHub / 채널톡 (Figma 14084-65597).
+// 캐노니컬 순서: Confluence / Jira / Slack / GitHub / 채널톡.
 
 import ChannelTalk from '@/public/icons/logo/ChannelTalk.svg';
 import Confluence from '@/public/icons/logo/Confluence.svg';
@@ -38,7 +38,7 @@ export default function SearchToolLabel({ tools }: SearchToolLabelProps) {
         const Logo = TOOL_LOGO[tool];
         // 채널톡 SVG 는 내부 여백이 있어 시각 크기 보정 (HybridSearchResultCard 와 동일 패턴).
         const sizeClass = tool === 'channel_talk' ? 'size-3.75' : 'size-4.5';
-        // Figma 14133-72051 — 각 로고 흰색 pill wrapper (Fill/Normal/Normal)
+        // 각 로고 흰색 pill wrapper.
         return (
           <span
             key={tool}

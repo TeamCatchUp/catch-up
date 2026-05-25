@@ -19,7 +19,7 @@ interface FeatureUpdateNoticeModalProps {
   onDismiss?: () => void;
 }
 
-// 신규 기능 업데이트 공지 팝업 (Figma: 13650:54095).
+// 신규 기능 업데이트 공지 팝업.
 export default function FeatureUpdateNoticeModal({
   open,
   onOpenChange,

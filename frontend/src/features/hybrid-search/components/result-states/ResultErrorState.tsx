@@ -1,6 +1,6 @@
 'use client';
 
-// Figma 명시 없음 — Empty/Loading와 동일한 py-50 + gap-2 패턴으로 시각 통일.
+// Empty/Loading와 동일한 py-50 + gap-2 패턴으로 시각 통일.
 
 import { motion } from 'motion/react';
 

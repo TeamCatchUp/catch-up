@@ -145,7 +145,7 @@ export default function ResultListSection({
             variants={fastStaggerContainer}
             className="flex w-full flex-col items-start"
           >
-            {/* Figma 14133-72051 — bg Fill/Normal/Strong + 1000px pill 컨테이너. 카드 첫 번째와 mb-1.5 (6px) gap. */}
+            {/* bg Fill/Normal/Strong + 1000px pill 컨테이너. 카드 첫 번째와 mb-1.5 (6px) gap. */}
             {hasSearchFilterLabel && (
               <div className="bg-fill-strong mb-1.5 flex w-full items-center justify-between rounded-full px-1.5 py-1">
                 <div className="flex items-center gap-2.5">
