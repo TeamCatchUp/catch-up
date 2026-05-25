@@ -29,22 +29,22 @@ import {
   textContentLong,
   textContentShort,
 } from '@/features/hybrid-search/components/original/__fixtures__/originalContent.fixtures';
-import Collapsible from '@/features/hybrid-search/components/original/Collapsible';
-import ConsultationInfo from '@/features/hybrid-search/components/original/ConsultationInfo';
 import BlockContent from '@/features/hybrid-search/components/original/contents/BlockContent';
 import ButtonContent from '@/features/hybrid-search/components/original/contents/ButtonContent';
 import FileContent from '@/features/hybrid-search/components/original/contents/FileContent';
 import FormContent from '@/features/hybrid-search/components/original/contents/FormContent';
 import TextContent from '@/features/hybrid-search/components/original/contents/TextContent';
-import CustomerInfo from '@/features/hybrid-search/components/original/CustomerInfo';
-import DateIndicator from '@/features/hybrid-search/components/original/DateIndicator';
-import MessageItem from '@/features/hybrid-search/components/original/MessageItem';
+import Collapsible from '@/features/hybrid-search/components/original/metadata/Collapsible';
+import ConsultationInfo from '@/features/hybrid-search/components/original/metadata/ConsultationInfo';
+import CustomerInfo from '@/features/hybrid-search/components/original/metadata/CustomerInfo';
 import OriginalPanel from '@/features/hybrid-search/components/original/OriginalPanel';
-import OriginalPanelComingSoon from '@/features/hybrid-search/components/original/OriginalPanelComingSoon';
-import OriginalPanelContent from '@/features/hybrid-search/components/original/OriginalPanelContent';
-import OriginalPanelEmpty from '@/features/hybrid-search/components/original/OriginalPanelEmpty';
-import OriginalPanelError from '@/features/hybrid-search/components/original/OriginalPanelError';
-import OriginalPanelSkeleton from '@/features/hybrid-search/components/original/OriginalPanelSkeleton';
+import OriginalPanelContent from '@/features/hybrid-search/components/original/panel/OriginalPanelContent';
+import OriginalPanelComingSoon from '@/features/hybrid-search/components/original/panel/states/OriginalPanelComingSoon';
+import OriginalPanelEmpty from '@/features/hybrid-search/components/original/panel/states/OriginalPanelEmpty';
+import OriginalPanelError from '@/features/hybrid-search/components/original/panel/states/OriginalPanelError';
+import OriginalPanelSkeleton from '@/features/hybrid-search/components/original/panel/states/OriginalPanelSkeleton';
+import DateIndicator from '@/features/hybrid-search/components/original/timeline/DateIndicator';
+import MessageItem from '@/features/hybrid-search/components/original/timeline/MessageItem';
 import type {
   OriginalBlockPayload,
   OriginalButtonPayload,

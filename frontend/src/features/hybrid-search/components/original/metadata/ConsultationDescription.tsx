@@ -1,6 +1,6 @@
 'use client';
 
-// 상담 설명 본문 — Figma 14065-64380.
+// 상담 설명 본문.
 // collapsed: 3줄 자연 truncate + 마지막 줄 끝 inline "… 더보기" (텍스트 자체가 슬라이스됨).
 // expanded: max-h 115px + 세로 스크롤 + 별도 줄 "접기".
 //
@@ -39,6 +39,8 @@ export default function ConsultationDescription({ description }: ConsultationDes
     // 1. 전체가 3줄 이내면 truncate 불필요
     measure.textContent = description;
     if (measure.scrollHeight <= maxHeight + 1) {
+      // Layout measurement drives the visible truncation before paint.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setTruncated(null);
       return;
     }
@@ -66,9 +68,7 @@ export default function ConsultationDescription({ description }: ConsultationDes
           className={`${TEXT_CLASS} pointer-events-none invisible absolute top-0 left-0`}
         />
         {expanded ? (
-          <p
-            className={`${TEXT_CLASS} custom-scrollbar max-h-28.75 overflow-y-auto whitespace-pre-wrap`}
-          >
+          <p className={`${TEXT_CLASS} custom-scrollbar max-h-28.75 overflow-y-auto whitespace-pre-wrap`}>
             {description}
           </p>
         ) : truncated === null ? (

@@ -1,14 +1,7 @@
 'use client';
 
 // 채팅 타임라인의 한 메시지. visibility + author.type 으로 변형.
-// Figma 14065-64692 (customer) / 14071-65320 (internal):
-//   외부 row [bg, padding 0 10 0 0, gap 12]
-//   ├─ stripe span (w 3px, vertical fill, self-stretch, rounded-full 양끝 cap)
-//   └─ inner row [padding 4 0, gap 12]
-//      ├─ avatar wrapper (size 32, radius 8, bg)
-//      └─ col [gap 8]
-//         ├─ author row (gap 6, 작성자명 #6D7882 + manager 아이콘 + 내부대화 Tag + timestamp)
-//         └─ contents
+// row → stripe → avatar → author/meta → contents 순서의 컴팩트 메시지 레이아웃.
 // customer 가 우선 — customer 면 visibility 와 무관하게 customer 디자인.
 
 import Image from 'next/image';
@@ -51,8 +44,7 @@ export default function MessageItem({ item, connector, documentId }: MessageItem
             : ''
       }`}
     >
-      {/* Figma 14065-64693 — 좌측 stripe (3px, 양 끝 반원 cap). stripe 공간은 항상 차지(색만 conditional)
-          하여 bg/stripe 없는 메시지도 동일 좌측 정렬 유지 — Figma 의 form 메시지가 stripe fills empty 인 것과 동일 패턴. */}
+      {/* 좌측 stripe 공간은 항상 차지하고 색만 바꿔 메시지 좌측 정렬을 유지한다. */}
       <span
         aria-hidden
         className={`w-[3px] shrink-0 self-stretch rounded-full ${

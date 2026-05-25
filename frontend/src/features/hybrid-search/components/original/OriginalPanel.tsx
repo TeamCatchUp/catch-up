@@ -5,11 +5,11 @@
 
 import { isAxiosError } from 'axios';
 
-import OriginalPanelComingSoon from '@/features/hybrid-search/components/original/OriginalPanelComingSoon';
-import OriginalPanelContent from '@/features/hybrid-search/components/original/OriginalPanelContent';
-import OriginalPanelEmpty from '@/features/hybrid-search/components/original/OriginalPanelEmpty';
-import OriginalPanelError from '@/features/hybrid-search/components/original/OriginalPanelError';
-import OriginalPanelSkeleton from '@/features/hybrid-search/components/original/OriginalPanelSkeleton';
+import OriginalPanelContent from '@/features/hybrid-search/components/original/panel/OriginalPanelContent';
+import OriginalPanelComingSoon from '@/features/hybrid-search/components/original/panel/states/OriginalPanelComingSoon';
+import OriginalPanelEmpty from '@/features/hybrid-search/components/original/panel/states/OriginalPanelEmpty';
+import OriginalPanelError from '@/features/hybrid-search/components/original/panel/states/OriginalPanelError';
+import OriginalPanelSkeleton from '@/features/hybrid-search/components/original/panel/states/OriginalPanelSkeleton';
 import { useOriginalContent } from '@/features/hybrid-search/hooks/useOriginalContent';
 import type { SourceTypeApi } from '@/shared/types/sourceApi';
 
