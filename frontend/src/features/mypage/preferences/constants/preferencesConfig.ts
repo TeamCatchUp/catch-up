@@ -4,7 +4,7 @@ import IconHistory from '@/public/icons/icon/history.svg';
 import IconPerson from '@/public/icons/icon/person2.svg';
 import IconScreen from '@/public/icons/icon/screen.svg';
 import IconStacks from '@/public/icons/icon/stacks.svg';
-import IconTag from '@/public/icons/icon/tag2.svg';
+import IconTag from '@/public/icons/icon/tag_type.svg';
 import IconTarget from '@/public/icons/icon/target.svg';
 
 import type { AnswerOption, JobRole, ThemeMode } from '../types/preferencesModel';

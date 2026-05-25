@@ -35,6 +35,7 @@ interface ResultPageHeaderProps {
   onSubmit: () => void;
   onHistorySubmit: (query: string) => void;
   onClear: () => void;
+  onAiModeClick: () => void;
   activeTab: ActiveTab;
   onTabChange: (next: ActiveTab) => void;
   // 결과 정렬 — 클라이언트 사이드
@@ -71,6 +72,7 @@ export default function ResultPageHeader({
   onSubmit,
   onHistorySubmit,
   onClear,
+  onAiModeClick,
   activeTab,
   onTabChange,
   sortOrder,
@@ -95,7 +97,7 @@ export default function ResultPageHeader({
 
   return (
     <header className="border-edge-normal flex w-full flex-col items-center border-b px-16 pt-5">
-      <div className="flex w-full max-w-[1440px] flex-col items-start gap-5">
+      <div className="flex w-full max-w-[1420px] flex-col items-start gap-5">
         <ResultSearchBar
           value={draftKeyword}
           onValueChange={onDraftKeywordChange}
@@ -106,6 +108,7 @@ export default function ResultPageHeader({
           onSubmit={onSubmit}
           onHistorySubmit={onHistorySubmit}
           onClear={onClear}
+          onAiModeClick={onAiModeClick}
         />
         <div className="flex w-full items-center gap-5">
           <AccentTabs items={tabItems} value={activeTab} onValueChange={onTabChange} ariaLabel="결과 필터 탭" />
