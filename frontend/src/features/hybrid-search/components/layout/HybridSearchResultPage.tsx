@@ -8,6 +8,7 @@
 import { useMemo, useState } from 'react';
 import type { DateRange } from 'react-day-picker';
 import { motion } from 'motion/react';
+import { useRouter } from 'next/navigation';
 
 import { motionEase, MotionState } from '@/shared/motion/presets';
 import type { RagSourceUiModel } from '@/shared/types/ragSourceModel';
@@ -30,6 +31,7 @@ const pageEnter = {
 };
 
 export default function HybridSearchResultPage() {
+  const router = useRouter();
   const { keyword, tools, dateRange, commitSearch } = useHybridSearchUrlState();
 
   // draft state (input/chips/기간 임시 값) + UI state (active/page).
@@ -104,6 +106,16 @@ export default function HybridSearchResultPage() {
     setDraftKeyword('');
   };
 
+  const handleAiModeClick = () => {
+    const trimmed = draftKeyword.trim();
+    if (!trimmed) {
+      router.push('/search');
+      return;
+    }
+    const params = new URLSearchParams({ q: trimmed });
+    router.push(`/search?${params.toString()}`);
+  };
+
   // 탭 변경 시 페이지도 1로 reset.
   const handleTabChange = (next: ActiveTab) => {
     setActive(next);
@@ -121,7 +133,7 @@ export default function HybridSearchResultPage() {
       initial={MotionState.Hidden}
       animate={MotionState.Visible}
       variants={pageEnter}
-      className="bg-fill-normal flex min-h-full flex-col"
+      className="bg-fill-normal flex h-dvh min-h-0 flex-col overflow-hidden"
     >
       <ResultPageHeader
         keyword={keyword}
@@ -136,6 +148,7 @@ export default function HybridSearchResultPage() {
         onSubmit={handleSubmit}
         onHistorySubmit={handleHistorySubmit}
         onClear={handleClear}
+        onAiModeClick={handleAiModeClick}
         activeTab={active}
         onTabChange={handleTabChange}
         sortOrder={sortOrder}

@@ -9,6 +9,7 @@
 import { useRef, useState } from 'react';
 import type { DateRange } from 'react-day-picker';
 
+import IconAi from '@/public/icons/icon/ai.svg';
 import IconArrowSend from '@/public/icons/icon/arrow_send.svg';
 import IconCancel from '@/public/icons/icon/cancel.svg';
 import IconFilter from '@/public/icons/icon/filter_small.svg';
@@ -30,6 +31,21 @@ interface ResultSearchBarProps {
   onSubmit: () => void;
   onHistorySubmit: (query: string) => void;
   onClear: () => void;
+  onAiModeClick: () => void;
+}
+
+function AiModeButton({ expanded, onClick }: { expanded: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onMouseDown={(e) => expanded && e.preventDefault()}
+      onClick={onClick}
+      className="bg-fill-primary-normal-neutral text-content-primary flex h-10 shrink-0 cursor-pointer items-center gap-1.5 rounded-full px-2.5 py-1 transition-colors"
+    >
+      <IconAi aria-hidden className="size-5" />
+      <span className="text-body-small font-medium whitespace-nowrap">AI 모드</span>
+    </button>
+  );
 }
 
 export default function ResultSearchBar({
@@ -42,6 +58,7 @@ export default function ResultSearchBar({
   onSubmit,
   onHistorySubmit,
   onClear,
+  onAiModeClick,
 }: ResultSearchBarProps) {
   const [isFocused, setIsFocused] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -161,6 +178,7 @@ export default function ResultSearchBar({
                 )}
               />
             </button>
+            <AiModeButton expanded={expanded} onClick={onAiModeClick} />
           </div>
         </div>
         {expanded && <span aria-hidden className="bg-edge-neutral h-px w-full" />}

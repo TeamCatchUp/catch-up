@@ -285,6 +285,7 @@
   --color-fill-primary-interaction-disable: var(--fill-primary-interaction-disable);
   --color-fill-primary-interaction-hover-assistive: var(--fill-primary-interaction-hover-assistive);
   --color-fill-primary-normal-neutral: var(--fill-primary-normal-neutral);
+  --color-fill-normal-assistive-dark: var(--fill-normal-assistive-dark);
 
   /* Fill/Overlay */
   --color-fill-overlay-base: var(--fill-overlay-base);

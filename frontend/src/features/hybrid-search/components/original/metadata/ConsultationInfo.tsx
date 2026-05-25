@@ -9,7 +9,7 @@ import type { OriginalMetadata } from '@/features/hybrid-search/types/originalAp
 import DefaultProfileIcon from '@/public/icons/icon/default_profile.svg';
 import FileIcon from '@/public/icons/icon/file.svg';
 import PersonFilledIcon from '@/public/icons/icon/person_filled.svg';
-import TagIcon from '@/public/icons/icon/tag.svg';
+import TagIcon from '@/public/icons/icon/tag_type.svg';
 import { Badge } from '@/shared/components/ui/badge';
 
 import ConsultationDescription from './ConsultationDescription';

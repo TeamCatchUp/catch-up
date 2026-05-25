@@ -10,7 +10,7 @@ interface UnusedTagCellProps {
   status: UnlinkedStatus;
 }
 
-/** mode='unused-tag' 셀 — Figma Tag 컴포넌트 시안 (inline 회색 태그). */
+/** mode='unused-tag' 셀 — inline 회색 태그. */
 export default function UnusedTagCell({ status }: UnusedTagCellProps) {
   return (
     <div className={cn(BODY_SERVICE_COLUMN_CLASS, 'items-center')}>

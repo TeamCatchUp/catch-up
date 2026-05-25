@@ -33,6 +33,7 @@ function makeDefaultProps() {
     onSubmit: () => {},
     onHistorySubmit: () => {},
     onClear: () => {},
+    onAiModeClick: () => {},
     activeTab: 'all' as const,
     onTabChange: () => {},
     sortOrder: 'newest' as const,
@@ -56,9 +57,7 @@ describe('ResultPageHeader', () => {
 
   it('데이터 도착 후 results=[]면 source 탭은 모두 숨김, 전체 탭만 표시', async () => {
     server.use(
-      http.get('*/api/v1/search/hybrid', () =>
-        HttpResponse.json({ results: [], total: 0, source_distribution: {} }),
-      ),
+      http.get('*/api/v1/search/hybrid', () => HttpResponse.json({ results: [], total: 0, source_distribution: {} })),
     );
     renderWithClient(<ResultPageHeader {...makeDefaultProps()} />);
     expect(screen.getByText('전체')).toBeInTheDocument();
@@ -129,5 +128,12 @@ describe('ResultPageHeader', () => {
 
     await user.click(await screen.findByRole('tab', { name: /Jira/ }));
     expect(onTabChange).toHaveBeenCalledWith('jira');
+  });
+
+  it('uses the same 1420px content width as the result body', () => {
+    const { container } = renderWithClient(<ResultPageHeader {...makeDefaultProps()} />);
+
+    const innerShell = container.querySelector('header > div');
+    expect(innerShell).toHaveClass('max-w-[1420px]');
   });
 });

@@ -30,7 +30,7 @@ export default function FormContent({ content }: FormContentProps) {
   const submittedAt = formatSubmittedAt(content.form.submitted_at);
 
   return (
-    <div className="bg-fill-normal border-edge-normal flex w-full flex-col gap-3 rounded-xl border px-4 py-3">
+    <div className="bg-fill-normal-assistive-dark border-edge-normal flex w-full flex-col gap-3 rounded-xl border px-4 py-3">
       <div className="flex flex-col gap-3">
         {inputs.length > 0 ? (
           inputs.map((input, index) => (

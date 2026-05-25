@@ -29,7 +29,7 @@
     --chart-4: var(--color-green-60);
     --chart-5: var(--color-red-50);
 
-    /* === Figma 시맨틱 토큰 (Light) === */
+    /* === 시맨틱 토큰 (Light) === */
 
     /* Fill */
     --fill-normal: var(--color-white);
@@ -47,6 +47,7 @@
     --fill-primary-interaction-disable: var(--color-neutral-4);
     --fill-primary-interaction-hover-assistive: color-mix(in srgb, var(--color-blue-10) 68%, transparent);
     --fill-primary-normal-neutral: var(--color-blue-5);
+    --fill-normal-assistive-dark: var(--color-white);
 
     /* Text */
     --text-strong: var(--color-gray-90);
@@ -163,7 +164,7 @@
     --input: var(--color-neutral-75);
     --ring: var(--color-blue-40);
 
-    /* === Figma 시맨틱 토큰 (Dark) === */
+    /* === 시맨틱 토큰 (Dark) === */
 
     /* Fill */
     --fill-normal: var(--color-neutral-85);
@@ -181,6 +182,7 @@
     --fill-primary-interaction-disable: var(--color-neutral-5);
     --fill-primary-interaction-hover-assistive: color-mix(in srgb, var(--color-blue-10) 20%, transparent);
     --fill-primary-normal-neutral: color-mix(in srgb, var(--color-blue-10) 12%, transparent);
+    --fill-normal-assistive-dark: #212225;
 
     /* Text */
     --text-strong: var(--color-gray-5);

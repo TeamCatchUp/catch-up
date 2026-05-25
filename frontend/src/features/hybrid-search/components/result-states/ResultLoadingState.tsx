@@ -1,6 +1,6 @@
 'use client';
 
-// Figma 13385:55955 — 정적 illustration 대신 chat source panel에서 쓰는 lottie 사용.
+// 정적 illustration 대신 chat source panel에서 쓰는 lottie 사용.
 // 컨테이너 py-50(200px), gap-4(16px). 텍스트 두 줄 사이 gap-2(8px).
 
 import Lottie from 'lottie-react';

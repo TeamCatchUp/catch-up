@@ -10,7 +10,7 @@ interface CheckboxIconProps {
   className?: string;
 }
 
-/** Figma SVG 기반 체크박스 아이콘 (hover 시 원형 배경 효과) */
+/** SVG 기반 체크박스 아이콘 (hover 시 원형 배경 효과) */
 export default function CheckboxIcon({ checked, className }: CheckboxIconProps) {
   return (
     <span

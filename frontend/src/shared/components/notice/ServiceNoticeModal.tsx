@@ -16,7 +16,7 @@ interface ServiceNoticeModalProps {
   onDismiss?: () => void;
 }
 
-/** 서비스 장애/정상화 공지 팝업 (Figma: 12199:49385 / 12199:49436) */
+/** 서비스 장애/정상화 공지 팝업 */
 export default function ServiceNoticeModal({ open, onOpenChange, notice, onDismiss }: ServiceNoticeModalProps) {
   const [dontShowAgain, setDontShowAgain] = useState(false);
 

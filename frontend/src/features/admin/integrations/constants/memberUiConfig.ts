@@ -1,7 +1,7 @@
 ﻿import type { IntegrationService, MemberIntegrationStatus } from '../types/integrationModel';
 import type { MemberSortKey } from '../types/memberDisplayModel';
 
-/** 이용자 연동 표에서 노출할 서비스 컬럼 (Figma 시안 순서: Atlassian/Github/Slack/채널톡) */
+/** 이용자 연동 표에서 노출할 서비스 컬럼 (Atlassian/Github/Slack/채널톡 순서) */
 export const MEMBER_TABLE_SERVICES: IntegrationService[] = ['jira', 'github', 'slack', 'channel_talk'];
 
 /** 이용자 연동 표 상태 칩 공통 클래스 */
@@ -21,7 +21,7 @@ export const SORT_OPTIONS: { key: MemberSortKey; label: string }[] = [
   { key: 'oldest', label: '오래된 순' },
 ];
 
-// ─── UsersTable className 상수 (Figma 시안 spec 그대로) ───
+// ─── UsersTable className 상수 ───
 
 /** UsersTable 컬럼 헤더 라벨 (모든 IntegrationService 정의 — over-coverage 안전) */
 export const SERVICE_HEADER_LABELS: Record<IntegrationService, string> = {
