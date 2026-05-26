@@ -46,6 +46,23 @@ export function validateFigmaLabCases(cases: readonly FigmaLabCase[]): string[] 
     if (item.kind === 'page' && item.layout && item.layout.relationships.length === 0) {
       errors.push(`Case '${item.id}' with kind 'page' must include at least one layout relationship.`);
     }
+    if (item.kind === 'page' && !item.data) {
+      errors.push(`Case '${item.id}' with kind 'page' must include data/state metadata.`);
+    }
+    if (item.kind === 'page' && item.data && item.data.fixtures.length === 0) {
+      errors.push(`Case '${item.id}' with kind 'page' must include at least one data fixture.`);
+    }
+    if (item.kind === 'page' && item.data && item.data.states.length === 0) {
+      errors.push(`Case '${item.id}' with kind 'page' must include at least one data state contract.`);
+    }
+    if (item.kind === 'page' && item.data) {
+      const coveredStates = new Set(item.data.states.map((stateContract) => stateContract.state));
+      for (const state of item.states) {
+        if (!coveredStates.has(state)) {
+          errors.push(`Case '${item.id}' state '${state}' must be covered by data.states.`);
+        }
+      }
+    }
     if (item.states.length === 0) {
       errors.push(`Case '${item.id}' must include at least one state.`);
     }

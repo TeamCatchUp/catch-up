@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { FIGMA_LAB_CASES, findFigmaLabCase, getDefaultFigmaLabCaseId, validateFigmaLabCases } from './cases';
-import type { FigmaLabCase, FigmaLabLayoutContract } from './types';
+import type { FigmaLabCase, FigmaLabDataContract, FigmaLabLayoutContract } from './types';
 
 const validCase: FigmaLabCase = {
   id: 'admin-users-table',
@@ -51,12 +51,31 @@ const validPageLayout: FigmaLabLayoutContract = {
   ],
 };
 
+const validPageData: FigmaLabDataContract = {
+  source: 'fixture',
+  fixtures: ['adminIntegrationsPageFixture.default', 'adminIntegrationsPageFixture.empty'],
+  states: [
+    {
+      state: 'default',
+      fixture: 'adminIntegrationsPageFixture.default',
+      expected: 'Header, status section, and users table are visible.',
+    },
+    {
+      state: 'empty',
+      fixture: 'adminIntegrationsPageFixture.empty',
+      expected: 'Empty table state preserves page spacing.',
+    },
+  ],
+};
+
 const validPageCase: FigmaLabCase = {
   ...validCase,
   id: 'admin-integrations-page',
   kind: 'page',
   title: 'Admin/Integrations/Page',
+  states: ['default', 'empty'],
   layout: validPageLayout,
+  data: validPageData,
 };
 
 describe('figma lab registry', () => {
@@ -120,6 +139,61 @@ describe('figma lab registry', () => {
     expect(errors).toContain(
       "Case 'admin-integrations-page' with kind 'page' must include at least one layout relationship.",
     );
+  });
+
+  it('rejects page cases without data/state metadata', () => {
+    const errors = validateFigmaLabCases([
+      {
+        ...validPageCase,
+        data: undefined,
+      },
+    ]);
+
+    expect(errors).toContain("Case 'admin-integrations-page' with kind 'page' must include data/state metadata.");
+  });
+
+  it('rejects page cases without data fixtures', () => {
+    const errors = validateFigmaLabCases([
+      {
+        ...validPageCase,
+        data: {
+          ...validPageData,
+          fixtures: [],
+        },
+      },
+    ]);
+
+    expect(errors).toContain("Case 'admin-integrations-page' with kind 'page' must include at least one data fixture.");
+  });
+
+  it('rejects page cases without state contracts', () => {
+    const errors = validateFigmaLabCases([
+      {
+        ...validPageCase,
+        data: {
+          ...validPageData,
+          states: [],
+        },
+      },
+    ]);
+
+    expect(errors).toContain(
+      "Case 'admin-integrations-page' with kind 'page' must include at least one data state contract.",
+    );
+  });
+
+  it('rejects page cases when declared visual states are not covered by data contracts', () => {
+    const errors = validateFigmaLabCases([
+      {
+        ...validPageCase,
+        data: {
+          ...validPageData,
+          states: validPageData.states.slice(0, 1),
+        },
+      },
+    ]);
+
+    expect(errors).toContain("Case 'admin-integrations-page' state 'empty' must be covered by data.states.");
   });
 
   it('rejects duplicate case ids', () => {

@@ -121,6 +121,46 @@ export default function FigmaLabChrome({ activeCase, children }: FigmaLabChromeP
             )}
           </MetadataSection>
 
+          <MetadataSection title="Data / States">
+            {activeCase?.data ? (
+              <div className="text-body-small text-content-alternative flex flex-col gap-3">
+                <dl className="flex flex-col gap-1">
+                  <div className="flex justify-between gap-3">
+                    <dt>source</dt>
+                    <dd className="text-content-normal">{activeCase.data.source}</dd>
+                  </div>
+                  {activeCase.data.api && (
+                    <div className="flex justify-between gap-3">
+                      <dt>api</dt>
+                      <dd className="text-content-normal break-all">{activeCase.data.api}</dd>
+                    </div>
+                  )}
+                </dl>
+
+                <ul className="flex flex-col gap-1">
+                  {activeCase.data.fixtures.map((fixture) => (
+                    <li key={fixture}>{fixture}</li>
+                  ))}
+                </ul>
+
+                <ul className="flex flex-col gap-2">
+                  {activeCase.data.states.map((item) => (
+                    <li key={`${item.state}-${item.fixture}`} className="flex flex-col gap-0.5">
+                      <span className="text-content-normal font-medium">{item.state}</span>
+                      <span>{item.fixture}</span>
+                      <span>{item.expected}</span>
+                      {item.note && <span>{item.note}</span>}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : (
+              <p className="text-body-small text-content-alternative">
+                fixture와 visual state coverage를 검증할 data/state contract가 없습니다.
+              </p>
+            )}
+          </MetadataSection>
+
           <MetadataSection title="Component reuse">
             {activeCase && activeCase.reuse.length > 0 ? (
               <ul className="text-body-small text-content-alternative flex flex-col gap-2">

@@ -29,6 +29,23 @@ export interface FigmaLabLayoutContract {
   relationships: readonly FigmaLabLayoutRelationship[];
 }
 
+export type FigmaLabDataSource = 'fixture' | 'mock' | 'api-contract' | 'static';
+
+export interface FigmaLabStateContract {
+  state: string;
+  fixture: string;
+  expected: string;
+  note?: string;
+}
+
+export interface FigmaLabDataContract {
+  source: FigmaLabDataSource;
+  api?: string;
+  fixtures: readonly string[];
+  states: readonly FigmaLabStateContract[];
+  notes?: readonly string[];
+}
+
 export interface FigmaLabReuseDecision {
   figmaPart: string;
   checked: string;
@@ -52,6 +69,7 @@ export interface FigmaLabCase {
   targetRoute?: string;
   viewport: FigmaLabViewport;
   layout?: FigmaLabLayoutContract;
+  data?: FigmaLabDataContract;
   states: readonly string[];
   reuse: readonly FigmaLabReuseDecision[];
   tokens: readonly FigmaLabTokenDecision[];
