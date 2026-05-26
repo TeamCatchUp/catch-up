@@ -1,10 +1,14 @@
-from datetime import datetime, timezone
+from datetime import datetime
+from datetime import timezone
 
-from sqlalchemy import select, delete, func
-from sqlalchemy.orm import Session
+from sqlalchemy import delete
+from sqlalchemy import func
+from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.orm import Session
 
-from catchup.db.models import ConfluenceSpace, ConfluenceUser
+from catchup.db.models import ConfluenceSpace
+from catchup.db.models import ConfluenceUser
 
 
 def _user_email_update_value(stmt):
@@ -133,6 +137,15 @@ def get_space_by_id(
     return db.execute(stmt).scalar_one_or_none()
 
 
+def get_spaces_by_space_id(db: Session, space_id: str) -> list[ConfluenceSpace]:
+    stmt = (
+        select(ConfluenceSpace)
+        .where(ConfluenceSpace.space_id == space_id)
+        .order_by(ConfluenceSpace.cloud_id)
+    )
+    return list(db.execute(stmt).scalars().all())
+
+
 def delete_space(db:Session, cloud_id: str, space_id: str) -> int:
     stmt = delete(ConfluenceSpace).where(
         ConfluenceSpace.cloud_id == cloud_id,
@@ -216,6 +229,20 @@ def get_users_by_cloud_id(db: Session, cloud_id: str) -> list[ConfluenceUser]:
         .order_by(ConfluenceUser.display_name)
     )
     return list(db.execute(stmt).scalars().all())
+
+
+def get_users_by_ids(
+    db: Session,
+    cloud_id: str,
+    account_ids: list[str],
+) -> dict[str, ConfluenceUser]:
+    if not account_ids:
+        return {}
+    stmt = select(ConfluenceUser).where(
+        ConfluenceUser.cloud_id == cloud_id,
+        ConfluenceUser.account_id.in_(account_ids),
+    )
+    return {user.account_id: user for user in db.execute(stmt).scalars().all()}
 
 
 def delete_users_by_cloud_id(db: Session, cloud_id: str) -> int:
