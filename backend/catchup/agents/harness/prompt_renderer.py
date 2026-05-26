@@ -38,7 +38,7 @@ def _build_tool_context(qualified_name: str) -> _ToolContext:
         type=action_spec.type.value,
         description=action_spec.description,
         input_fields=extract_fields(action_spec.input_model),
-        output_fields=extract_fields(action_spec.output_model),
+        output_fields=extract_fields(action_spec.output_model) if action_spec.output_model else {},
     )
 
 
@@ -50,10 +50,10 @@ def render_system_prompt(
     """AgentSpec과 런타임 컨텍스트로 Execution Agent 시스템 프롬프트를 렌더링한다.
 
     섹션별 출처:
-      role, background,execution_guidelines — Builder Agent가 작성한 spec
-      tools                                 — ToolRegistry 자동 렌더링
-      user_inputs, trigger                  — 런타임 주입
-      harness_rules                         — 고정 텍스트
+      role, background, execution_guidelines — Builder Agent가 작성한 spec
+      tools                                  — ToolRegistry 자동 렌더링
+      user_inputs, trigger                   — 런타임 주입
+      harness_rules                          — 고정 텍스트
     """
     tools = [
         _build_tool_context(tool_spec.name)
