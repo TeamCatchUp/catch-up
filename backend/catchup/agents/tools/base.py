@@ -26,7 +26,7 @@ class ActionSpec(BaseModel):
     name: str
     description: str
     input_model: type[BaseModel]
-    output_model: type[BaseModel]
+    output_model: type[BaseModel] | None
     type: ActionType
 
     model_config = {"arbitrary_types_allowed": True}
@@ -38,7 +38,7 @@ _ACTION_SPEC_ATTR = "__action_spec__"
 def action(
     *,
     input_model: type[BaseModel],
-    output_model: type[BaseModel],
+    output_model: type[BaseModel] | None,
     description: str,
     type: ActionType,
 ) -> Callable:
@@ -92,7 +92,7 @@ class BaseTool:
             method = getattr(self, action_name)
             tools.append(
                 StructuredTool(
-                    name=f"{self.name}.{action_name}",
+                    name=f"{self.name}__{action_name}",
                     description=spec.description,
                     args_schema=spec.input_model,
                     coroutine=method,

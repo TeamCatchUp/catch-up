@@ -25,10 +25,11 @@ class ToolRegistry:
         result = []
         for qualified_name in names:
             tool_name = qualified_name.split(".", 1)[0]
+            lc_name = qualified_name.replace(".", "__", 1)
             tool = cls._tools[tool_name]
             result.extend(
                 t for t in tool.to_langchain_tools()
-                if t.name == qualified_name
+                if t.name == lc_name
             )
         return result
 

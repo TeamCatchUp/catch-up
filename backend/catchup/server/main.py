@@ -12,6 +12,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from catchup.agents.tools import init_agent_tool_registry
+from catchup.agents.triggers import init_trigger_registry
 from catchup.audit.enums import AuditEventStatus
 from catchup.audit.enums import AuditLevel
 from catchup.audit.handlers import audit_event_handler
@@ -211,6 +213,26 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(
             "workflow_node_registry_init_failed",
+            context="server_startup",
+            error=str(e),
+        )
+
+    try:
+        init_agent_tool_registry()
+        logger.info("agent_tool_registry_initialized", context="server_startup")
+    except Exception as e:
+        logger.warning(
+            "agent_tool_registry_init_failed",
+            context="server_startup",
+            error=str(e),
+        )
+
+    try:
+        init_trigger_registry()
+        logger.info("trigger_registry_initialized", context="server_startup")
+    except Exception as e:
+        logger.warning(
+            "trigger_registry_init_failed",
             context="server_startup",
             error=str(e),
         )
