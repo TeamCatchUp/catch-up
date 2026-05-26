@@ -472,14 +472,16 @@ def build_system_message(
         content: list[dict] = []
         if dynamic_prompts:
             for prompt in dynamic_prompts:
-                content.append({"type": "text", "text": prompt})
+                if prompt:
+                    content.append({"type": "text", "text": prompt})
         content.append(static_block)
     else:
         content = [static_block]
         # 동적 프롬프트
         if dynamic_prompts:
             for prompt in dynamic_prompts:
-                content.append({"type": "text", "text": prompt})
+                if prompt:
+                    content.append({"type": "text", "text": prompt})
 
     return SystemMessage(content=content)
 
