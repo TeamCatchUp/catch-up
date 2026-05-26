@@ -12,6 +12,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from catchup.agents.tools import init_agent_tool_registry
+from catchup.agents.triggers import init_trigger_registry
 from catchup.audit.enums import AuditEventStatus
 from catchup.audit.enums import AuditLevel
 from catchup.audit.handlers import audit_event_handler
@@ -211,6 +213,26 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(
             "workflow_node_registry_init_failed",
+            context="server_startup",
+            error=str(e),
+        )
+
+    try:
+        init_agent_tool_registry()
+        logger.info("agent_tool_registry_initialized", context="server_startup")
+    except Exception as e:
+        logger.warning(
+            "agent_tool_registry_init_failed",
+            context="server_startup",
+            error=str(e),
+        )
+
+    try:
+        init_trigger_registry()
+        logger.info("trigger_registry_initialized", context="server_startup")
+    except Exception as e:
+        logger.warning(
+            "trigger_registry_init_failed",
             context="server_startup",
             error=str(e),
         )
@@ -478,10 +500,12 @@ app.include_router(search_router)
 app.include_router(audit_router)
 app.include_router(workflow_credentials_router)
 
-if settings.DEBUG_PROD_MODE:
-    from catchup.server.debug.api import router as debug_router
-    app.include_router(debug_router)
-    logger.warning("debug_prod_mode_enabled", note="disable DEBUG_PROD_MODE after testing")
+if settings.DEBUG_API_ENABLED:
+    from catchup.server.debug.agent_simulate import router as agent_simulate_router
+    from catchup.server.debug.search_probe import router as search_probe_router
+    app.include_router(search_probe_router)
+    app.include_router(agent_simulate_router)
+    logger.warning("debug_api_enabled", note="disable DEBUG_API_ENABLED in production")
 
 if settings.MCP_SERVER_ENABLED:
     from catchup.mcp.server import mcp as mcp_server

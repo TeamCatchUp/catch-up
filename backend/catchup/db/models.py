@@ -2710,3 +2710,56 @@ class ManualSearchHistory(Base):
     __table_args__ = (
         Index("idx_manual_search_histories_user_created_at", "user_id", "created_at"),
     )
+
+
+# === Agent Studio ===
+class AgentStatus(StrEnum):
+    DRAFT = "draft"
+    ACTIVE = "active"
+    INACTIVE = "inactive"
+
+
+class AgentSpec(Base):
+    __tablename__ = "agent_specs"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    agent_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    version: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("1"))
+    workspace_id: Mapped[int] = mapped_column(ForeignKey("workspaces.id"), nullable=False)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    spec: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    user_input_values: Mapped[dict] = mapped_column(
+        JSONB, nullable=False, server_default=text("'{}'::jsonb")
+    )
+    status: Mapped[AgentStatus] = mapped_column(
+        String(20), nullable=False, server_default=text(f"'{AgentStatus.DRAFT}'")
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    triggers: Mapped[list["AgentTrigger"]] = relationship(back_populates="agent_spec")
+
+    __table_args__ = (
+        UniqueConstraint("agent_id", "version", name="uq_agent_specs_agent_id_version"),
+    )
+
+
+class AgentTrigger(Base):
+    __tablename__ = "agent_triggers"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    agent_spec_id: Mapped[int] = mapped_column(
+        ForeignKey("agent_specs.id", ondelete="CASCADE"), nullable=False
+    )
+    type: Mapped[str] = mapped_column(String(20), nullable=False)
+    source: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    filter_condition: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    agent_spec: Mapped["AgentSpec"] = relationship(back_populates="triggers")
+
+    __table_args__ = (
+        Index("idx_agent_triggers_source", "type", "source"),
+    )
