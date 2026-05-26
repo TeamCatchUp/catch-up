@@ -65,6 +65,9 @@ exactly one pipeline from the catalog below and fill in all required parameters.
     The question requires: multi-faceted analysis, cross-source synthesis,
     causal reasoning ("왜", "어떻게", "비교"), chronological analysis, multi-hop retrieval,
     or spans multiple sources simultaneously.
+    Also use when the question is exhaustive in scope — phrases like "모든 정보",
+    "전부", "관련된 모든", "총정리", "다 알려줘" signal that the user expects broad coverage
+    across multiple aspects or sources.
     </use_when>
     <parameters>max_iterations=8</parameters>
   </pipeline>
@@ -93,6 +96,8 @@ exactly one pipeline from the catalog below and fill in all required parameters.
     <case>When in doubt between simple and standard → choose standard.</case>
     <case>Use complex ONLY for genuinely multi-faceted, causal, or chronological questions.</case>
     <case>Use clarify ONLY as a last resort — attempt search first whenever possible.</case>
+    <case>Exhaustive scope phrases ("모든", "전부", "총정리", "다 알려줘") → always complex,
+    even if the subject is a single entity. The user expects breadth across sources and time.</case>
   </edge_cases>
 
   <clarify_signals>

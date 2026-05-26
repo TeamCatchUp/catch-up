@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from datetime import datetime
+from html import unescape
+from html.parser import HTMLParser
 from typing import Any
 
 from pydantic import BaseModel
@@ -28,6 +30,7 @@ class ChannelTalkUserChatMessageAuthor(BaseModel):
     manager_id: str | None = None
     name: str | None = None
     email: str | None = None
+    avatar_url: str | None = None
     role_id: str | None = None
     bot_name: str | None = None
     is_bot: bool = False
@@ -60,6 +63,7 @@ class ChannelTalkUserChatMessageBlock(BaseModel):
     label: str | None = None
     name: str | None = None
     value: str | None = None
+    markdown: str | None = None
     raw_payload: dict[str, Any] | None = None
 
 
@@ -115,7 +119,9 @@ class ChannelTalkUserChatMessage(BaseModel):
     created_at: datetime | None = None
     updated_at: datetime | None = None
     is_private: bool | None = None
-    attachments: list[ChannelTalkUserChatMessageAttachment] = Field(default_factory=list)
+    attachments: list[ChannelTalkUserChatMessageAttachment] = Field(
+        default_factory=list
+    )
     buttons: list[ChannelTalkUserChatMessageButton] = Field(default_factory=list)
     blocks: list[ChannelTalkUserChatMessageBlock] = Field(default_factory=list)
     log: ChannelTalkUserChatMessageLog | None = None
@@ -146,9 +152,14 @@ class ChannelTalkUserChatMessage(BaseModel):
 
         requested_user_chat_id = require_text(user_chat_id, "user_chat_id")
         if "userChatId" in payload:
-            raise ValueError("user chat message payload used unsupported userChatId key")
+            raise ValueError(
+                "user chat message payload used unsupported userChatId key"
+            )
         payload_user_chat_id = reader.text("chatId")
-        if payload_user_chat_id is not None and payload_user_chat_id != requested_user_chat_id:
+        if (
+            payload_user_chat_id is not None
+            and payload_user_chat_id != requested_user_chat_id
+        ):
             raise ValueError("user chat message payload user_chat_id mismatch")
 
         resolved_user_chat_id = payload_user_chat_id or requested_user_chat_id
@@ -204,7 +215,8 @@ class ChannelTalkUserChatMessagePage(BaseModel):
         root_bots = []
         if root_reader is not None:
             root_bots = [
-                value for value in root_reader.items("bots")
+                value
+                for value in root_reader.items("bots")
                 if isinstance(value, Mapping)
             ]
         messages, next_cursor = _parse_metadata_page(
@@ -224,7 +236,10 @@ class ChannelTalkUserChatMessagePage(BaseModel):
             quota_snapshot=_parse_quota_snapshot(headers),
         )
 
-def _parse_message_attachments(reader: "_PayloadReader") -> list[ChannelTalkUserChatMessageAttachment]:
+
+def _parse_message_attachments(
+    reader: "_PayloadReader",
+) -> list[ChannelTalkUserChatMessageAttachment]:
     attachments: list[ChannelTalkUserChatMessageAttachment] = []
     for value in [*reader.items("attachments"), *reader.items("files")]:
         if not isinstance(value, Mapping):
@@ -247,7 +262,9 @@ def _parse_message_attachments(reader: "_PayloadReader") -> list[ChannelTalkUser
     return attachments
 
 
-def _parse_message_buttons(reader: "_PayloadReader") -> list[ChannelTalkUserChatMessageButton]:
+def _parse_message_buttons(
+    reader: "_PayloadReader",
+) -> list[ChannelTalkUserChatMessageButton]:
     buttons: list[ChannelTalkUserChatMessageButton] = []
     for value in reader.items("buttons"):
         if not isinstance(value, Mapping):
@@ -264,26 +281,41 @@ def _parse_message_buttons(reader: "_PayloadReader") -> list[ChannelTalkUserChat
     return buttons
 
 
-def _parse_message_blocks(reader: "_PayloadReader") -> list[ChannelTalkUserChatMessageBlock]:
+def _parse_message_blocks(
+    reader: "_PayloadReader",
+) -> list[ChannelTalkUserChatMessageBlock]:
     blocks: list[ChannelTalkUserChatMessageBlock] = []
     for value in reader.items("blocks"):
         if not isinstance(value, Mapping):
             continue
         item_reader = _PayloadReader(value)
+        block_text = item_reader.text(
+            "text",
+            "plainText",
+            "plain_text",
+            "label",
+            "value",
+        )
+        block_value = item_reader.text("value")
         blocks.append(
             ChannelTalkUserChatMessageBlock(
                 block_type=item_reader.text("type", "blockType", "block_type"),
-                text=item_reader.text("text", "plainText", "plain_text", "label", "value"),
+                text=block_text,
                 label=item_reader.text("label", "title"),
                 name=item_reader.text("name"),
-                value=item_reader.text("value"),
+                value=block_value,
+                markdown=_parse_channel_talk_inline_markdown(
+                    block_value or block_text,
+                ),
                 raw_payload=dict(value),
             )
         )
     return blocks
 
 
-def _parse_message_log(reader: "_PayloadReader") -> ChannelTalkUserChatMessageLog | None:
+def _parse_message_log(
+    reader: "_PayloadReader",
+) -> ChannelTalkUserChatMessageLog | None:
     log_reader = reader.nested("log")
     if log_reader is None:
         return None
@@ -295,7 +327,79 @@ def _parse_message_log(reader: "_PayloadReader") -> ChannelTalkUserChatMessageLo
     )
 
 
-def _parse_message_form(reader: "_PayloadReader") -> ChannelTalkUserChatMessageForm | None:
+class _ChannelTalkInlineMarkdownParser(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=False)
+        self.parts: list[str] = []
+        self._link_stack: list[str | None] = []
+
+    def handle_starttag(
+        self,
+        tag: str,
+        attrs: list[tuple[str, str | None]],
+    ) -> None:
+        normalized_tag = tag.lower()
+        if normalized_tag == "b":
+            self.parts.append("**")
+            return
+        if normalized_tag == "i":
+            self.parts.append("*")
+            return
+        if normalized_tag == "link":
+            attrs_map = dict(attrs)
+            url = attrs_map.get("value") if attrs_map.get("type") == "url" else None
+            self._link_stack.append(url)
+            if url:
+                self.parts.append("[")
+
+    def handle_endtag(self, tag: str) -> None:
+        normalized_tag = tag.lower()
+        if normalized_tag == "b":
+            self.parts.append("**")
+            return
+        if normalized_tag == "i":
+            self.parts.append("*")
+            return
+        if normalized_tag == "link":
+            url = self._link_stack.pop() if self._link_stack else None
+            if url:
+                self.parts.append(f"]({url})")
+
+    def handle_data(self, data: str) -> None:
+        self.parts.append(data)
+
+    def handle_entityref(self, name: str) -> None:
+        self.parts.append(unescape(f"&{name};"))
+
+    def handle_charref(self, name: str) -> None:
+        self.parts.append(unescape(f"&#{name};"))
+
+    def handle_startendtag(
+        self,
+        tag: str,
+        attrs: list[tuple[str, str | None]],
+    ) -> None:
+        text = self.get_starttag_text()
+        if text:
+            self.parts.append(text)
+
+    def get_markdown(self) -> str:
+        return "".join(self.parts)
+
+
+def _parse_channel_talk_inline_markdown(value: str | None) -> str | None:
+    if value is None:
+        return None
+    parser = _ChannelTalkInlineMarkdownParser()
+    parser.feed(value)
+    parser.close()
+    markdown = parser.get_markdown()
+    return markdown if markdown != value else None
+
+
+def _parse_message_form(
+    reader: "_PayloadReader",
+) -> ChannelTalkUserChatMessageForm | None:
     form_reader = reader.nested("form")
     if form_reader is None:
         return None
@@ -323,7 +427,9 @@ def _parse_message_form(reader: "_PayloadReader") -> ChannelTalkUserChatMessageF
     )
 
 
-def _parse_message_web_page(reader: "_PayloadReader") -> ChannelTalkUserChatMessageWebPage | None:
+def _parse_message_web_page(
+    reader: "_PayloadReader",
+) -> ChannelTalkUserChatMessageWebPage | None:
     web_page_reader = reader.nested("webPage", "web_page")
     if web_page_reader is None:
         return None
@@ -353,15 +459,22 @@ def _parse_user_chat_message_author(
     manager_reader = reader.nested("manager")
     user_reader = reader.nested("user", "customer")
     bot_reader = _read_message_bot(reader, root_bots=root_bots)
+    manager_sources = _reader_with_profile(manager_reader)
+    user_sources = _reader_with_profile(user_reader)
+    bot_sources = _reader_with_profile(bot_reader)
     person_id = reader.text("personId")
     bot_name = reader.text("botName") or (
         bot_reader and bot_reader.text("name", "botName")
     )
-    bot_id = person_id if (
-        bot_reader is not None
-        or reader.text("personType") == "bot"
-        or bot_name is not None
-    ) else None
+    bot_id = (
+        person_id
+        if (
+            bot_reader is not None
+            or reader.text("personType") == "bot"
+            or bot_name is not None
+        )
+        else None
+    )
 
     author_type = reader.text("personType")
     if author_type is None:
@@ -394,18 +507,48 @@ def _parse_user_chat_message_author(
         user_id=user_id,
         member_id=(user_reader and user_reader.text("memberId")),
         manager_id=manager_id,
-        name=(manager_reader and manager_reader.text("name", "displayName"))
-        or (user_reader and user_reader.text("name"))
-        or (bot_reader and bot_reader.text("name", "botName"))
+        name=_first_reader_text(
+            [*manager_sources, *user_sources, *bot_sources, reader],
+            "name",
+            "displayName",
+        )
+        or _first_reader_text(bot_sources, "botName")
         or bot_name
-        or reader.text("name"),
-        email=(manager_reader and manager_reader.text("email"))
-        or (user_reader and user_reader.text("email"))
-        or reader.text("email"),
+        or reader.text("botName"),
+        email=_first_reader_text(
+            [*manager_sources, *user_sources, *bot_sources, reader],
+            "email",
+        ),
+        avatar_url=_first_reader_text(
+            [*manager_sources, *user_sources, *bot_sources, reader],
+            "avatarUrl",
+            "avatarURL",
+            "avatar_url",
+        ),
         role_id=(manager_reader and manager_reader.text("roleId")),
         bot_name=bot_name,
         is_bot=bool(bot_name or bot_id) or (author_type == "bot"),
     )
+
+
+def _reader_with_profile(reader: "_PayloadReader" | None) -> tuple["_PayloadReader", ...]:
+    if reader is None:
+        return ()
+    profile_reader = reader.nested("profile")
+    if profile_reader is None:
+        return (reader,)
+    return (reader, profile_reader)
+
+
+def _first_reader_text(
+    readers: list["_PayloadReader"] | tuple["_PayloadReader", ...],
+    *keys: str,
+) -> str | None:
+    for reader in readers:
+        value = reader.text(*keys)
+        if value is not None:
+            return value
+    return None
 
 
 def _read_message_bot(
@@ -468,11 +611,7 @@ def _read_message_plain_text(
             return web_page_text
 
     blocks = blocks or _parse_message_blocks(reader)
-    block_texts = [
-        block.text
-        for block in blocks
-        if block.text is not None
-    ]
+    block_texts = [block.text for block in blocks if block.text is not None]
     if block_texts:
         return "\n".join(block_texts)
 
@@ -480,10 +619,7 @@ def _read_message_plain_text(
 
 
 def _build_form_plain_text(message_form: ChannelTalkUserChatMessageForm) -> str | None:
-    parts = [
-        _format_form_input_text(item)
-        for item in message_form.inputs
-    ]
+    parts = [_format_form_input_text(item) for item in message_form.inputs]
     filtered_parts = [value for value in parts if value is not None]
     if filtered_parts:
         return "\n".join(filtered_parts)

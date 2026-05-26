@@ -64,7 +64,13 @@ export default function HomeContent() {
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   const filters = useSearchFilters();
-  const input = useSearchInput({ inputRef, selectedSources: filters.selectedSources, tipData });
+  const initialSearchQuery = pathname === '/search' && mode === 'ai' ? (searchParams.get('q') ?? '') : '';
+  const input = useSearchInput({
+    inputRef,
+    selectedSources: filters.selectedSources,
+    tipData,
+    initialValue: initialSearchQuery,
+  });
   const { shouldShowNoHistoryBox } = useQuestionHistoryGate();
   const [isNoHistoryExpanded, setIsNoHistoryExpanded] = useState(true);
 

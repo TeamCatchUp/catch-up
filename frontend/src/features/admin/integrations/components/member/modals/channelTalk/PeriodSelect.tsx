@@ -20,7 +20,7 @@ export default function PeriodSelect({ value, onChange, className }: PeriodSelec
         if (isPeriod(next)) onChange(next);
       }}
     >
-      {/* Figma 채널톡 dropdown spec(gap/6, padding/8) — shared select default(gap-3, py-1.5)보다 좁음 */}
+      {/* 채널톡 dropdown spec(gap/6, padding/8) — shared select default(gap-3, py-1.5)보다 좁음 */}
       <SelectTrigger
         className={cn('gap-1.5 py-2', className)}
         endIcon={<IconDropdownDown className="text-icon-neutral size-4 shrink-0" />}

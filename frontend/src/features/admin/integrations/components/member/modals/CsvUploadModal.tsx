@@ -83,7 +83,7 @@ const VendorFileUploader = ({
 
   return (
     <div className="flex flex-col gap-1">
-      {/* 라벨 + 필수 표시 — Figma: gap-4(4px), 필수 dot 5px */}
+      {/* 라벨 + 필수 표시 — gap-4(4px), 필수 dot 5px */}
       <div className="flex items-center gap-1">
         <span className="text-body-small text-content-normal font-medium">{label}</span>
         <span className="bg-accent-red size-1.25 rounded-full" />

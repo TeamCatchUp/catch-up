@@ -292,6 +292,10 @@ class ChannelTalkRepositoryTests(TestCase):
 
         channel = self.metadata_repo.get_channel_metadata("channel-123")
         managers = self.metadata_repo.list_managers_by_channel("channel-123")
+        selected_managers = self.metadata_repo.list_managers_by_channel_and_ids(
+            "channel-123",
+            {"manager-2", "manager-missing"},
+        )
         groups = self.metadata_repo.list_groups_by_channel("channel-123")
         memberships = self.metadata_repo.list_group_manager_memberships(channel_id="channel-123")
 
@@ -300,6 +304,7 @@ class ChannelTalkRepositoryTests(TestCase):
         self.assertEqual(channel.channel_name, "Support")
         self.assertCountEqual([item.manager_id for item in managers], ["manager-1", "manager-2"])
         self.assertCountEqual([item.role_id for item in managers], ["role-1", "role-2"])
+        self.assertEqual([item.manager_id for item in selected_managers], ["manager-2"])
         self.assertEqual([item.group_id for item in groups], ["group-1"])
         self.assertEqual(
             [(item.group_id, item.manager_id) for item in memberships],

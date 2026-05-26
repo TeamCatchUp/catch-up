@@ -14,6 +14,7 @@ interface UseSearchInputOptions {
   inputRef: RefObject<HTMLTextAreaElement | null>;
   selectedSources?: string[];
   tipData?: TipData[];
+  initialValue?: string;
 }
 
 export interface UseSearchInputReturn {
@@ -35,9 +36,14 @@ export interface UseSearchInputReturn {
   handleSubmit: (queryOverride?: string) => void;
 }
 
-export const useSearchInput = ({ inputRef, selectedSources, tipData }: UseSearchInputOptions): UseSearchInputReturn => {
+export const useSearchInput = ({
+  inputRef,
+  selectedSources,
+  tipData,
+  initialValue,
+}: UseSearchInputOptions): UseSearchInputReturn => {
   const router = useRouter();
-  const [value, setValue] = useState('');
+  const [value, setValue] = useState(initialValue ?? '');
   const [isFocused, setIsFocused] = useState(false);
   const [isTextareaMultiLine, setIsTextareaMultiLine] = useState(false);
   const [isFromTemplate, setIsFromTemplate] = useState(false);

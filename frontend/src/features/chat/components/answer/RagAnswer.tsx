@@ -9,7 +9,6 @@ import PipelineProcessAccordion from '@/features/chat/components/answer/process/
 import RagAnswerSkeleton from '@/features/chat/components/skeleton/RagAnswerSkeleton';
 import type { PipelineQueryType } from '@/features/chat/types';
 import type { QAPair } from '@/features/chat/utils/render/chat';
-import { formatMarkdownString } from '@/features/chat/utils/render/markdown';
 import Bookmark from '@/public/icons/icon/bookmark.svg';
 import BookmarkFilled from '@/public/icons/icon/bookmark_filled.svg';
 import Copy from '@/public/icons/icon/copy.svg';
@@ -18,6 +17,7 @@ import ThumbsDown from '@/public/icons/icon/thumbs-down.svg';
 import ThumbsDownFilled from '@/public/icons/icon/thumbs-down_filled.svg';
 import ThumbsUp from '@/public/icons/icon/thumbs-up.svg';
 import ThumbsUpFilled from '@/public/icons/icon/thumbs-up_filled.svg';
+import { formatMarkdownString } from '@/shared/utils/formatMarkdownString';
 
 import AnswerActionButtons from './actions/AnswerActionButtons';
 import AnswerError from './actions/AnswerError';

@@ -1,6 +1,7 @@
 .venv/
 venv/
 __pycache__/
+.codegraph/
 .env
 .env.prod
 .DS_Store

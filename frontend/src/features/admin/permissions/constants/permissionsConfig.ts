@@ -61,7 +61,7 @@ export const REVOKE_ERROR_MESSAGES: Record<string, string> = {
   admin_count_violation: 'Admin이 1명뿐이므로 권한을 회수할 수 없습니다.',
 };
 
-/** 권한 조정 사유 (Figma 디자인 기준) */
+/** 권한 조정 사유 */
 export const PERMISSION_ROLE_CHANGE_REASONS = [
   '업무 변경',
   '역할 변경',

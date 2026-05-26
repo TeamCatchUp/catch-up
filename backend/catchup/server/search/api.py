@@ -3,6 +3,7 @@ from typing import Annotated
 
 from fastapi import APIRouter
 from fastapi import Depends
+from fastapi import HTTPException
 from fastapi import Query
 from fastapi.concurrency import run_in_threadpool
 from sqlalchemy.orm import Session
@@ -16,11 +17,21 @@ from catchup.db.dependencies import get_db
 from catchup.db.manual_search_history import save_search_query
 from catchup.db.models import SourceType
 from catchup.db.models import User
+from catchup.search.original.ids import OriginalDocumentIdError
+from catchup.search.original.registry import OriginalResolverNotFoundError
+from catchup.search.original.resolvers.channel_talk import ChannelTalkOriginalError
+from catchup.search.original.resolvers.slack import SlackOriginalError
+from catchup.search.original.service import OriginalSearchService
 from catchup.search.service import ManualSearchService
 from catchup.server.search.dependencies import get_manual_search_service
+from catchup.server.search.dependencies import get_original_search_service
 from catchup.server.search.dependencies import get_search_service
 from catchup.server.search.schemas import ManualSearchHistoryResponse
 from catchup.server.search.schemas import ManualSearchResponse
+from catchup.server.search.schemas import OriginalContentRequest
+from catchup.server.search.schemas import OriginalContentResponse
+from catchup.server.search.schemas import OriginalFileUrlRequest
+from catchup.server.search.schemas import OriginalFileUrlResponse
 
 router = APIRouter(prefix="/api/v1/search", tags=["Search Service"])
 
@@ -73,6 +84,52 @@ async def hybrid_search(
         total=total,
         source_distribution=source_distribution,
     )
+
+
+@router.post(
+    path="/original",
+    response_model=OriginalContentResponse,
+    description="검색 결과 document_id 기반 원문 조회 API",
+)
+async def get_original_search_result(
+    request: OriginalContentRequest,
+    current_user: User = Depends(get_current_user),
+    original_search_service: OriginalSearchService = Depends(
+        get_original_search_service
+    ),
+) -> OriginalContentResponse:
+    _ = current_user
+    try:
+        return await original_search_service.get_original(
+            request=request,
+        )
+    except (OriginalDocumentIdError, OriginalResolverNotFoundError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except (ChannelTalkOriginalError, SlackOriginalError) as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+
+
+@router.post(
+    path="/original/file-url",
+    response_model=OriginalFileUrlResponse,
+    description="검색 결과 document_id와 단일 file_key 기반 원문 파일 다운로드 URL 조회 API",
+)
+async def get_original_file_url(
+    request: OriginalFileUrlRequest,
+    current_user: User = Depends(get_current_user),
+    original_search_service: OriginalSearchService = Depends(
+        get_original_search_service
+    ),
+) -> OriginalFileUrlResponse:
+    _ = current_user
+    try:
+        return await original_search_service.get_original_file_url(
+            request=request,
+        )
+    except (OriginalDocumentIdError, OriginalResolverNotFoundError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except (ChannelTalkOriginalError, SlackOriginalError) as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
 
 
 @router.get(
