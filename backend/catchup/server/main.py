@@ -500,10 +500,12 @@ app.include_router(search_router)
 app.include_router(audit_router)
 app.include_router(workflow_credentials_router)
 
-if settings.DEBUG_PROD_MODE:
-    from catchup.server.debug.api import router as debug_router
-    app.include_router(debug_router)
-    logger.warning("debug_prod_mode_enabled", note="disable DEBUG_PROD_MODE after testing")
+if settings.DEBUG_API_ENABLED:
+    from catchup.server.debug.agent_simulate import router as agent_simulate_router
+    from catchup.server.debug.search_probe import router as search_probe_router
+    app.include_router(search_probe_router)
+    app.include_router(agent_simulate_router)
+    logger.warning("debug_api_enabled", note="disable DEBUG_API_ENABLED in production")
 
 if settings.MCP_SERVER_ENABLED:
     from catchup.mcp.server import mcp as mcp_server
