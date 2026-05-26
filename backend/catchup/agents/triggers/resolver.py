@@ -3,6 +3,8 @@ from sqlalchemy.orm import Session
 
 from catchup.agents.factory import get_execution_service
 from catchup.agents.schemas import AgentSpec
+from catchup.agents.tools.internal.search import CatchUpKnowledgeBaseTool
+from catchup.db.agent_specs import build_agent_global_context
 from catchup.db.agent_triggers import get_webhook_triggers
 from catchup.db.models import AgentTrigger
 
@@ -47,6 +49,13 @@ async def dispatch_webhook(
     agent_spec_row = trigger.agent_spec
     spec = AgentSpec.model_validate(agent_spec_row.spec)
     user_input_values = agent_spec_row.user_input_values or {}
+
+    global_context = build_agent_global_context(
+        db=db,
+        workspace_id=agent_spec_row.workspace_id,
+        user_id=agent_spec_row.user_id,
+    )
+    CatchUpKnowledgeBaseTool.bind(global_context)
 
     logger.info(
         "trigger_matched",

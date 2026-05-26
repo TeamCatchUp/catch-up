@@ -56,4 +56,3 @@ class AgentSpec(BaseModel):
     tools: list[ToolSpec] = Field(description="사용 가능한 도구 목록")
     execution_order: list[str] = Field(description="Harness 검증용 실행 순서")
     required_user_inputs: list[RequiredUserInput]  # TODO: tool binding 메커니즘 도입
-    memory_seed: dict = Field(default={})
