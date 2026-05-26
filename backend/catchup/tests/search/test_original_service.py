@@ -15,6 +15,8 @@ from catchup.search.original.schemas.channel_talk import (
     ChannelTalkUserChatOriginalContent,
 )
 from catchup.search.original.schemas.channel_talk import ChannelTalkUserChatOriginalItem
+from catchup.search.original.schemas.confluence import ConfluenceOriginalContent
+from catchup.search.original.schemas.confluence import ConfluenceOriginalItem
 from catchup.search.original.schemas.slack import SlackMessageOriginalRawItem
 from catchup.search.original.service import OriginalSearchService
 from catchup.server.search.dependencies import get_original_resolver_registry
@@ -69,7 +71,7 @@ def test_registry_returns_registered_connector_entity_resolver() -> None:
     ) is resolver
 
 
-def test_search_dependency_registry_registers_channel_talk_and_slack() -> None:
+def test_search_dependency_registry_registers_original_resolvers() -> None:
     registry = get_original_resolver_registry()
 
     assert registry.get(
@@ -79,6 +81,14 @@ def test_search_dependency_registry_registers_channel_talk_and_slack() -> None:
     assert registry.get(
         connector=SourceType.SLACK,
         entity_type="message",
+    )
+    assert registry.get(
+        connector=SourceType.CONFLUENCE,
+        entity_type="page",
+    )
+    assert registry.get(
+        connector=SourceType.CONFLUENCE,
+        entity_type="blogpost",
     )
 
 
@@ -165,6 +175,38 @@ def test_channel_talk_item_fields_restrict_known_string_values() -> None:
             id="msg-1",
             type="message",
             visibility="private",
+            contents=[],
+        )
+
+
+def test_confluence_content_and_item_fields_restrict_known_values() -> None:
+    item = ConfluenceOriginalItem(
+        id="page:123",
+        type="document",
+        contents=[
+            ConfluenceOriginalContent(
+                content_type="storage",
+                payload={
+                    "representation": "storage",
+                    "value": "<p>Hello</p>",
+                },
+            )
+        ],
+    )
+
+    assert item.type == "document"
+    assert item.contents[0].content_type == "storage"
+
+    with pytest.raises(ValidationError):
+        ConfluenceOriginalContent(
+            content_type="raw",
+            payload={},
+        )
+
+    with pytest.raises(ValidationError):
+        ConfluenceOriginalItem(
+            id="page:123",
+            type="attachment",
             contents=[],
         )
 

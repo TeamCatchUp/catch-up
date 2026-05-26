@@ -7,6 +7,8 @@ from catchup.db.models import SourceType
 
 CHANNEL_TALK_USER_CHAT_ENTITY_TYPE: Final[str] = "user_chat"
 SLACK_MESSAGE_ENTITY_TYPE: Final[str] = "message"
+CONFLUENCE_PAGE_ENTITY_TYPE: Final[str] = "page"
+CONFLUENCE_BLOGPOST_ENTITY_TYPE: Final[str] = "blogpost"
 
 
 class OriginalDocumentIdError(ValueError):
@@ -43,6 +45,13 @@ def parse_original_document_id(
 
     if connector == SourceType.SLACK:
         return _parse_slack_document_id(
+            entity_type=entity_type,
+            rest=rest,
+            document_id=document_id,
+        )
+
+    if connector == SourceType.CONFLUENCE:
+        return _parse_confluence_document_id(
             entity_type=entity_type,
             rest=rest,
             document_id=document_id,
@@ -106,5 +115,39 @@ def _parse_slack_document_id(
             "team_id": team_id,
             "channel_id": channel_id,
             "ts": ts,
+        },
+    )
+
+
+def _parse_confluence_document_id(
+    *,
+    entity_type: str,
+    rest: list[str],
+    document_id: str,
+) -> OriginalDocumentRef:
+    if entity_type not in {
+        CONFLUENCE_PAGE_ENTITY_TYPE,
+        CONFLUENCE_BLOGPOST_ENTITY_TYPE,
+    }:
+        raise OriginalDocumentIdError(f"unsupported confluence entity_type: {entity_type}")
+    if len(rest) != 3 or rest[1] != "chunk":
+        raise OriginalDocumentIdError(
+            "confluence document_id must be "
+            "confluence:{page|blogpost}:{content_id}:chunk:{chunk_index}"
+        )
+
+    content_id, _, chunk_index = rest
+    if not content_id or not chunk_index:
+        raise OriginalDocumentIdError("content_id and chunk_index are required")
+    if not chunk_index.isdigit():
+        raise OriginalDocumentIdError("chunk_index must be a non-negative integer")
+
+    return OriginalDocumentRef(
+        connector=SourceType.CONFLUENCE,
+        entity_type=entity_type,
+        document_id=document_id,
+        identifiers={
+            "content_id": content_id,
+            "chunk_index": chunk_index,
         },
     )
