@@ -24,6 +24,7 @@ from catchup.search.original.resolvers.confluence import ConfluenceOriginalError
 from catchup.search.original.resolvers.slack import SlackOriginalError
 from catchup.search.original.service import OriginalSearchService
 from catchup.search.service import ManualSearchService
+from catchup.search.service import SearchResult
 from catchup.server.search.dependencies import get_manual_search_service
 from catchup.server.search.dependencies import get_original_search_service
 from catchup.server.search.dependencies import get_search_service
@@ -63,27 +64,39 @@ async def hybrid_search(
             description="검색 종료 날짜 (ISO 8601, UTC). KST 기준이면 T15:00:00Z로 변환 후 전송. 없으면 현재 시간 기준."
         ),
     ] = None,
+    smart_filter: Annotated[
+        bool, Query(description="LLM 기반 동적 필터 추출 활성화")
+    ] = False,
     vector_db_service: PGVectorService = Depends(get_search_service),
     current_user: User = Depends(get_current_user),
     search_service: ManualSearchService = Depends(get_manual_search_service),
     db: Session = Depends(get_db),
 ) -> ManualSearchResponse:
-    results, total, source_distribution = await search_service.search(
+    sr: SearchResult = await search_service.search(
         user=current_user,
         keyword=keyword,
         tool_filters=tool_filters,
         vector_db_service=vector_db_service,
         start_date=start_date,
         end_date=end_date,
+        smart_filter=smart_filter,
     )
 
     await run_in_threadpool(save_search_query, db, current_user.id, keyword)
     db.commit()
 
     return ManualSearchResponse(
-        results=results,
-        total=total,
-        source_distribution=source_distribution,
+        results=sr.results,
+        total=sr.total,
+        source_distribution=sr.source_distribution,
+        effective_tool_filters=(
+            [f.value for f in sr.effective_tool_filters]
+            if sr.effective_tool_filters else None
+        ),
+        effective_start_date=sr.effective_start_date,
+        effective_end_date=sr.effective_end_date,
+        is_tool_filter_inferred=sr.is_tool_filter_inferred,
+        is_date_filter_inferred=sr.is_date_filter_inferred,
     )
 
 
