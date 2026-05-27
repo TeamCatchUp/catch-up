@@ -60,7 +60,7 @@ async def hybrid_search(
             description="검색 종료 날짜 (ISO 8601, UTC). KST 기준이면 T15:00:00Z로 변환 후 전송. 없으면 현재 시간 기준."
         ),
     ] = None,
-    intelligent_filter: Annotated[
+    smart_filter: Annotated[
         bool, Query(description="LLM 기반 동적 필터 추출 활성화")
     ] = False,
     vector_db_service: PGVectorService = Depends(get_search_service),
@@ -75,7 +75,7 @@ async def hybrid_search(
         vector_db_service=vector_db_service,
         start_date=start_date,
         end_date=end_date,
-        intelligent_filter=intelligent_filter,
+        smart_filter=smart_filter,
     )
 
     await run_in_threadpool(save_search_query, db, current_user.id, keyword)
@@ -92,7 +92,7 @@ async def hybrid_search(
         effective_start_date=sr.effective_start_date,
         effective_end_date=sr.effective_end_date,
         is_tool_filter_inferred=sr.is_tool_filter_inferred,
-        is_date_inferred=sr.is_date_inferred,
+        is_date_filter_inferred=sr.is_date_filter_inferred,
     )
 
 

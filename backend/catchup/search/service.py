@@ -23,14 +23,14 @@ logger = structlog.get_logger()
 
 
 def resolve(
-    intelligent_filter: bool,
+    smart_filter: bool,
     explicit: list | None,
     inferred: list | None,
 ) -> list | None:
     """협업 툴 필터 resolve 함수. explicit가 falsy면 inferred 허용 여부를 판단한다."""
     if explicit:
         return explicit
-    if not intelligent_filter:
+    if not smart_filter:
         return None
     if inferred:
         return inferred
@@ -48,7 +48,7 @@ class SearchResult:
     effective_start_date: datetime | None
     effective_end_date: datetime | None
     is_tool_filter_inferred: bool
-    is_date_inferred: bool
+    is_date_filter_inferred: bool
 
 
 observe = get_observe()
@@ -88,7 +88,7 @@ class ManualSearchService:
         keyword: str,
         tool_filters: list[SourceType] | None,
         vector_db_service: PGVectorService,
-        intelligent_filter: bool = False,
+        smart_filter: bool = False,
         start_date: datetime | None = None,
         end_date: datetime | None = None,
     ) -> SearchResult:
@@ -116,7 +116,7 @@ class ManualSearchService:
         planned = state["query_cache"][keyword].planned
 
         resolved_tool_filters = resolve(
-            intelligent_filter, tool_filters, planned.inferred_tool_filters
+            smart_filter, tool_filters, planned.inferred_tool_filters
         )
 
         # 날짜는 start/end pair 단위로 resolve한다 — 독립 resolve 금지
@@ -124,18 +124,18 @@ class ManualSearchService:
         explicit_date = start_date or end_date
         if explicit_date:
             resolved_start, resolved_end = start_date, end_date
-        elif not intelligent_filter:
+        elif not smart_filter:
             resolved_start, resolved_end = None, None
         else:
             resolved_start, resolved_end = planned.start_date, planned.end_date
 
         is_tool_filter_inferred = (
-            intelligent_filter
+            smart_filter
             and not tool_filters
             and planned.inferred_tool_filters is not None
         )
-        is_date_inferred = (
-            intelligent_filter
+        is_date_filter_inferred = (
+            smart_filter
             and not explicit_date
             and (planned.start_date is not None or planned.end_date is not None)
         )
@@ -176,7 +176,7 @@ class ManualSearchService:
             source_distribution=source_distribution,
             effective_tool_filters=resolved_tool_filters,
             is_tool_filter_inferred=is_tool_filter_inferred,
-            is_date_inferred=is_date_inferred,
+            is_date_filter_inferred=is_date_filter_inferred,
         )
 
         results = [
@@ -196,7 +196,7 @@ class ManualSearchService:
             effective_start_date=resolved_start,
             effective_end_date=resolved_end,
             is_tool_filter_inferred=is_tool_filter_inferred,
-            is_date_inferred=is_date_inferred,
+            is_date_filter_inferred=is_date_filter_inferred,
         )
 
     async def get_search_history(

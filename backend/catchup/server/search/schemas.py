@@ -25,7 +25,7 @@ class ManualSearchResponse(BaseModel):
     is_tool_filter_inferred: bool = Field(
         default=False, description="협업 툴 필터가 LLM 추론으로 결정됐는지 여부"
     )
-    is_date_inferred: bool = Field(
+    is_date_filter_inferred: bool = Field(
         default=False, description="날짜 필터가 LLM 추론으로 결정됐는지 여부"
     )
 
