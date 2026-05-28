@@ -428,21 +428,25 @@ class PGVectorService(BaseVectorDbService):
         if keyword_tokens:
             # keyword 검색은 async session으로 직접 실행 — thread pool slot 점유 없음
             t_content = time.perf_counter()
-            _retriever_base = dict(
-                session_factory=self.session_factory,
-                async_session_factory=self.async_session_factory,
-                collection_name=self.collection_name,
-                k=max(100, k + offset),
+            _bigm_k = max(100, k + offset)
+            content_retriever = self._make_bigm_retriever(
+                k=_bigm_k,
                 offset=offset,
                 tool_filters=tool_filters,
                 temporal_filters=temporal_filters,
+                search_mode="exact",
             )
-            content_retriever = PGBigmRetriever(**_retriever_base, search_mode="exact")
             content_task = content_retriever.async_invoke(payload["keyword_tokens"])
 
             if use_title_filter:
                 # 3-way RRF: vector(0.5) + content(0.25) + title(0.25)
-                title_retriever = PGBigmRetriever(**_retriever_base, title_only=True)
+                title_retriever = self._make_bigm_retriever(
+                    k=_bigm_k,
+                    offset=offset,
+                    tool_filters=tool_filters,
+                    temporal_filters=temporal_filters,
+                    title_only=True,
+                )
                 title_task = title_retriever.async_invoke(payload["keyword_tokens"])
                 tasks = [
                     t for t in [vector_task, content_task, title_task] if t is not None
@@ -543,6 +547,26 @@ class PGVectorService(BaseVectorDbService):
             task_count=len(tasks),
         )
         return list(results)
+
+    def _make_bigm_retriever(
+        self,
+        k: int,
+        offset: int,
+        tool_filters: list[SourceType] | None,
+        temporal_filters: list[TemporalFilter] | None,
+        **kwargs,
+    ) -> PGBigmRetriever:
+        """PGBigmRetriever를 생성한다."""
+        return PGBigmRetriever(
+            session_factory=self.session_factory,
+            async_session_factory=self.async_session_factory,
+            collection_name=self.collection_name,
+            k=k,
+            offset=offset,
+            tool_filters=tool_filters,
+            temporal_filters=temporal_filters,
+            **kwargs,
+        )
 
     def _build_search_kwargs(
         self,

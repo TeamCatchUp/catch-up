@@ -340,6 +340,31 @@ class TestPGVectorService:
 
             assert mock_build.called
 
+    def test_make_bigm_retriever_sets_common_fields(self):
+        """_make_bigm_retriever가 공통 필드를 올바르게 설정하는지 검증."""
+        retriever = self.service._make_bigm_retriever(
+            k=50,
+            offset=0,
+            tool_filters=None,
+            temporal_filters=None,
+            search_mode="exact",
+        )
+        assert isinstance(retriever, PGBigmRetriever)
+        assert retriever.k == 50
+        assert retriever.search_mode == "exact"
+        assert retriever.collection_name == self.service.collection_name
+
+    def test_make_bigm_retriever_kwargs_override(self):
+        """_make_bigm_retriever가 kwargs 오버라이드를 정상 처리하는지 검증."""
+        retriever = self.service._make_bigm_retriever(
+            k=10,
+            offset=0,
+            tool_filters=None,
+            temporal_filters=None,
+            title_only=True,
+        )
+        assert retriever.title_only is True
+
 
 if __name__ == "__main__":
     unittest.main()
