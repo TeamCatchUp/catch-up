@@ -31,6 +31,7 @@ class VectorDbSearchQuery(BaseSearchQuery):
     query: str = Field(..., description="Vector 검색 엔진에 전달할 최적화된 검색어")
     keyword_tokens: list[str] = Field(
         default_factory=list,
+        max_length=3,
         description="Tier 1/2 식별자 수준의 키워드만 포함 (클래스명·함수명·티켓ID·고유 명사). generic 단어(token, API, data 등)는 제외. 해당 없으면 빈 리스트.",
     )
 
@@ -67,6 +68,7 @@ class MultiSearchRequest(BaseModel):
     query: str = Field(description="벡터 DB에 전달할 시맨틱 검색어")
     keyword_tokens: list[str] | None = Field(
         default=None,
+        max_length=3,
         description="Tier 1/2 식별자 수준의 키워드만 포함 (클래스명·함수명·티켓ID·고유 명사). generic 단어는 제외. 해당 없으면 null.",
     )
     start_date: str | None = Field(
@@ -149,6 +151,7 @@ class SearchStep(BaseModel):
     queries: list[str] = Field(description="실행할 검색 쿼리 목록")
     keyword_tokens: list[str] = Field(
         default_factory=list,
+        max_length=3,
         description="Tier 1/2 식별자 수준의 키워드만 포함 (클래스명·함수명·티켓ID·고유 명사). generic 단어(token, API, data 등)는 제외. 해당 없으면 빈 리스트.",
     )
     parallel: bool = Field(
