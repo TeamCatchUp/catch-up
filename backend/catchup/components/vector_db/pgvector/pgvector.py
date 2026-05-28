@@ -31,8 +31,13 @@ def _timed(name: str, fn):
         t = time.perf_counter()
         logger.debug(f"{name}_started")
         result = fn(*args, **kwargs)
-        logger.debug(f"{name}_completed", elapsed=round(time.perf_counter() - t, 3), count=len(result))
+        logger.debug(
+            f"{name}_completed",
+            elapsed=round(time.perf_counter() - t, 3),
+            count=len(result),
+        )
         return result
+
     return wrapper
 
 
@@ -41,14 +46,19 @@ class PGBigmRetriever(BaseRetriever):
 
     # BaseRetriever는 내부적으로 BaseModel을 상속하므로 Pydantic 스타일을 따라야 함
     session_factory: Any  # e.g) sessionmaker (from sqlalchemy.orm)
-    async_session_factory: Any = None  # async_sessionmaker (from sqlalchemy.ext.asyncio)
+    async_session_factory: Any = (
+        None  # async_sessionmaker (from sqlalchemy.ext.asyncio)
+    )
     collection_name: str = settings.PGVECTOR_COLLECTION_NAME
     k: int = 4
     offset: int = 0
     tool_filters: list[SourceType] | None = None
     temporal_filters: list[TemporalFilter] | None = None
     search_mode: str = "fuzzy"  # "exact": ILIKE likequery (RAG), "fuzzy": =% similarity (keyword search)
-    title_only: bool = False  # True면 title =% 조건으로만 검색 (manual search 3-way RRF 전용)
+    title_only: bool = (
+        False  # True면 title =% 조건으로만 검색 (manual search 3-way RRF 전용)
+    )
+
     @override
     def _get_relevant_documents(
         self,
@@ -74,6 +84,12 @@ class PGBigmRetriever(BaseRetriever):
         return self._get_documents_from_results(results)
 
     @staticmethod
+    def _parse_tokens(query: str | list[str]) -> list[str]:
+        """토큰을 파싱하고 정규화한다."""
+        tokens = query if isinstance(query, list) else query.split()
+        return list(set(t.strip() for t in tokens if t.strip()))
+
+    @staticmethod
     def build_bigm_query(
         collection_name: str,
         query: str | list[str],
@@ -87,13 +103,7 @@ class PGBigmRetriever(BaseRetriever):
         """
         contextual_content 기반 키워드 검색 SQL 및 파라미터 생성.
         """
-        if isinstance(query, list):
-            tokens = query
-        else:
-            tokens = query.split()
-
-        # 빈 토큰 제외 및 중복 제거
-        tokens = list(set([t.strip() for t in tokens if t.strip()]))
+        tokens = PGBigmRetriever._parse_tokens(query)
 
         params = {
             "collection_name": collection_name,
@@ -136,22 +146,30 @@ class PGBigmRetriever(BaseRetriever):
             p_name = f"token_{i}"
             params[p_name] = token
 
-            title_sim_scores.append(f"bigm_similarity(COALESCE(e.cmetadata ->> 'title', ''), :{p_name})")
+            title_sim_scores.append(
+                f"bigm_similarity(COALESCE(e.cmetadata ->> 'title', ''), :{p_name})"
+            )
             if title_only:
                 token_filters.append(
                     f"lower(e.cmetadata ->> 'title') =% lower(:{p_name})"
                 )
             elif search_mode == "exact":
-                exact_match_scores.append(f"(CASE WHEN LOWER(e.cmetadata ->> 'contextual_content') = LOWER(:{p_name}) THEN 1.0 ELSE 0.0 END)")
+                exact_match_scores.append(
+                    f"(CASE WHEN LOWER(e.cmetadata ->> 'contextual_content') = LOWER(:{p_name}) THEN 1.0 ELSE 0.0 END)"
+                )
                 token_filters.append(
                     f"lower(e.cmetadata ->> 'contextual_content') LIKE lower(likequery(:{p_name}))"
                 )
             else:
-                exact_match_scores.append(f"(CASE WHEN LOWER(e.cmetadata ->> 'contextual_content') = LOWER(:{p_name}) THEN 1.0 ELSE 0.0 END)")
+                exact_match_scores.append(
+                    f"(CASE WHEN LOWER(e.cmetadata ->> 'contextual_content') = LOWER(:{p_name}) THEN 1.0 ELSE 0.0 END)"
+                )
                 token_filters.append(
                     f"lower(e.cmetadata ->> 'contextual_content') =% lower(:{p_name})"
                 )
-                sim_scores.append(f"bigm_similarity(e.cmetadata ->> 'contextual_content', :{p_name})")
+                sim_scores.append(
+                    f"bigm_similarity(e.cmetadata ->> 'contextual_content', :{p_name})"
+                )
 
         if token_filters:
             filter_clauses.append(f"({' AND '.join(token_filters)})")
@@ -160,7 +178,9 @@ class PGBigmRetriever(BaseRetriever):
         where_clause = " AND ".join(filter_clauses)
 
         # 스코어 조립 (토큰별 점수 합산)
-        exact_boost_sql = " + ".join(exact_match_scores) if exact_match_scores else "0.0"
+        exact_boost_sql = (
+            " + ".join(exact_match_scores) if exact_match_scores else "0.0"
+        )
         similarity_sql = " + ".join(sim_scores) if sim_scores else "0.0"
         # title이 있는 source(Confluence, Jira)에만 가산점, 없으면 0.0 fallback
         title_sim_sql = " + ".join(title_sim_scores) if title_sim_scores else "0.0"
@@ -210,7 +230,7 @@ class PGBigmRetriever(BaseRetriever):
                 "keyword_query_completed",
                 label=label,
                 elapsed=round(time.perf_counter() - t0, 3),
-                row_count=len(rows)
+                row_count=len(rows),
             )
             return rows
 
@@ -280,14 +300,12 @@ class PGBigmRetriever(BaseRetriever):
         for row in results:
             docs.append(
                 Document(
-                    page_content=row[0],
-                    metadata=row[1] if row[1] else {},
-                    id=row[2]
+                    page_content=row[0], metadata=row[1] if row[1] else {}, id=row[2]
                 )
             )
 
         return docs
-    
+
     def bigm_search(
         self,
         query: str,
@@ -308,21 +326,20 @@ class PGVectorService(BaseVectorDbService):
         session_factory: Any = SessionLocal,
         async_session_factory: Any = AsyncSessionLocal,
     ):
-        logger.info(f"PGVectorService initialized with Collection Name: '{collection_name}'")
+        logger.info(
+            f"PGVectorService initialized with Collection Name: '{collection_name}'"
+        )
         self.session_factory = session_factory
         self.async_session_factory = async_session_factory
         self.collection_name = collection_name
         self.vector_store = self._create_pgvector(
             postgresql_engine=postgresql_engine,
             embeddings=embeddings,
-            collection_name=collection_name
+            collection_name=collection_name,
         )
 
     def _create_pgvector(
-        self,
-        postgresql_engine: Engine,
-        embeddings: Embeddings,
-        collection_name: str
+        self, postgresql_engine: Engine, embeddings: Embeddings, collection_name: str
     ) -> PGVector:
         return PGVector(
             embeddings=embeddings,
@@ -351,7 +368,9 @@ class PGVectorService(BaseVectorDbService):
         t0 = time.perf_counter()
 
         if not query and not keyword_tokens:
-            logger.warning("hybrid_search_skipped", reason="empty query and no keyword_tokens")
+            logger.warning(
+                "hybrid_search_skipped", reason="empty query and no keyword_tokens"
+            )
             return []
 
         loop = asyncio.get_running_loop()
@@ -381,9 +400,7 @@ class PGVectorService(BaseVectorDbService):
         }
 
         vector_task = (
-            loop.run_in_executor(executor, _run_vector_sync, payload)
-            if query
-            else None
+            loop.run_in_executor(executor, _run_vector_sync, payload) if query else None
         )
 
         if keyword_tokens:
@@ -405,13 +422,17 @@ class PGVectorService(BaseVectorDbService):
                 # 3-way RRF: vector(0.5) + content(0.25) + title(0.25)
                 title_retriever = PGBigmRetriever(**_retriever_base, title_only=True)
                 title_task = title_retriever.async_invoke(payload["keyword_tokens"])
-                tasks = [t for t in [vector_task, content_task, title_task] if t is not None]
+                tasks = [
+                    t for t in [vector_task, content_task, title_task] if t is not None
+                ]
                 if vector_task is not None:
                     vector_docs, content_docs, title_docs = await asyncio.gather(
                         vector_task, content_task, title_task
                     )
                 else:
-                    content_docs, title_docs = await asyncio.gather(content_task, title_task)
+                    content_docs, title_docs = await asyncio.gather(
+                        content_task, title_task
+                    )
                     vector_docs = []
                 logger.debug(
                     "content_retrieval_completed",
@@ -426,7 +447,9 @@ class PGVectorService(BaseVectorDbService):
             else:
                 # 2-way RRF: vector + content (RAG 기본)
                 if vector_task is not None:
-                    vector_docs, content_docs = await asyncio.gather(vector_task, content_task)
+                    vector_docs, content_docs = await asyncio.gather(
+                        vector_task, content_task
+                    )
                 else:
                     vector_docs, content_docs = [], await content_task
                 logger.debug(
@@ -442,7 +465,11 @@ class PGVectorService(BaseVectorDbService):
             vector_docs = await vector_task
             result = vector_docs[:k]
 
-        logger.debug("hybrid_search_completed", elapsed=round(time.perf_counter() - t0, 3), result_count=len(result))
+        logger.debug(
+            "hybrid_search_completed",
+            elapsed=round(time.perf_counter() - t0, 3),
+            result_count=len(result),
+        )
 
         return result
 
@@ -473,7 +500,7 @@ class PGVectorService(BaseVectorDbService):
             temporal_filters = build_temporal_filters(
                 tool_filters=tool_filters,
                 start_date=q.get("start_date"),
-                end_date=q.get("end_date")
+                end_date=q.get("end_date"),
             )
             tasks.append(
                 self.hybrid_search(
@@ -494,7 +521,7 @@ class PGVectorService(BaseVectorDbService):
             task_count=len(tasks),
         )
         return list(results)
-    
+
     def _build_search_kwargs(
         self,
         tool_filters: list[SourceType] | None,
@@ -503,18 +530,24 @@ class PGVectorService(BaseVectorDbService):
         search_kwargs = {}
         if not temporal_filters:
             if tool_filters:
-                search_kwargs["filter"] = {"source": {"$in": [f.value for f in tool_filters]}}
+                search_kwargs["filter"] = {
+                    "source": {"$in": [f.value for f in tool_filters]}
+                }
         else:
             or_conditions = []
             for tf in temporal_filters:
-                or_conditions.append({
-                    "$and": [
-                        {"source": {"$in": [t.value for t in tf.tools]}},
-                        {tf.time_field: {"$gte": tf.start_date.isoformat()}},
-                        {tf.time_field: {"$lte": tf.end_date.isoformat()}}
-                    ]
-                })
-            search_kwargs["filter"] = {"$or": or_conditions} if len(or_conditions) > 1 else or_conditions[0]
+                or_conditions.append(
+                    {
+                        "$and": [
+                            {"source": {"$in": [t.value for t in tf.tools]}},
+                            {tf.time_field: {"$gte": tf.start_date.isoformat()}},
+                            {tf.time_field: {"$lte": tf.end_date.isoformat()}},
+                        ]
+                    }
+                )
+            search_kwargs["filter"] = (
+                {"$or": or_conditions} if len(or_conditions) > 1 else or_conditions[0]
+            )
         return search_kwargs
 
     def _weighted_keyword_search(
@@ -533,18 +566,14 @@ class PGVectorService(BaseVectorDbService):
             k=k,
             offset=offset,
             tool_filters=tool_filters,
-            temporal_filters=None
+            temporal_filters=None,
         )
 
         with self.session_factory() as session:
             results = session.execute(search_sql, params).fetchall()
 
         return [
-            Document(
-                page_content=row[0],
-                metadata=row[1] if row[1] else {},
-                id=row[2]
-            )
+            Document(page_content=row[0], metadata=row[1] if row[1] else {}, id=row[2])
             for row in results
         ]
 

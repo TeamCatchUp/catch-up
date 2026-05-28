@@ -5,25 +5,25 @@ from unittest.mock import MagicMock
 from unittest.mock import patch
 
 import pytest
-from langchain_core.callbacks import CallbackManagerForRetrieverRun
 from langchain_core.documents import Document
 from sqlalchemy import text
 
 from catchup.components.vector_db.pgvector.pgvector import PGBigmRetriever
 from catchup.components.vector_db.pgvector.pgvector import PGVectorService
-from catchup.db.models import SourceType
 
 
 class TestPGBigmRetriever(unittest.TestCase):
     def setUp(self):
         self.mock_session_factory = MagicMock()
         self.mock_session = MagicMock()
-        self.mock_session_factory.return_value.__enter__.return_value = self.mock_session
-        
+        self.mock_session_factory.return_value.__enter__.return_value = (
+            self.mock_session
+        )
+
         self.retriever = PGBigmRetriever(
             session_factory=self.mock_session_factory,
             collection_name="test_collection",
-            k=4
+            k=4,
         )
 
     def test_build_bigm_query_tokenization(self):
@@ -51,8 +51,13 @@ class TestPGBigmRetriever(unittest.TestCase):
         )
         sql_str = str(sql)
 
-        self.assertIn("LOWER(e.cmetadata ->> 'contextual_content') = LOWER(:token_0)", sql_str)
-        self.assertIn("lower(e.cmetadata ->> 'contextual_content') LIKE lower(likequery(:token_0))", sql_str)
+        self.assertIn(
+            "LOWER(e.cmetadata ->> 'contextual_content') = LOWER(:token_0)", sql_str
+        )
+        self.assertIn(
+            "lower(e.cmetadata ->> 'contextual_content') LIKE lower(likequery(:token_0))",
+            sql_str,
+        )
         self.assertNotIn("ILIKE", sql_str)
         self.assertNotIn("=% :token_0", sql_str)
         self.assertNotIn("'title'", sql_str)
@@ -64,8 +69,12 @@ class TestPGBigmRetriever(unittest.TestCase):
         )
         sql_str = str(sql)
 
-        self.assertIn("LOWER(e.cmetadata ->> 'contextual_content') = LOWER(:token_0)", sql_str)
-        self.assertIn("lower(e.cmetadata ->> 'contextual_content') =% lower(:token_0)", sql_str)
+        self.assertIn(
+            "LOWER(e.cmetadata ->> 'contextual_content') = LOWER(:token_0)", sql_str
+        )
+        self.assertIn(
+            "lower(e.cmetadata ->> 'contextual_content') =% lower(:token_0)", sql_str
+        )
         self.assertNotIn("ILIKE", sql_str)
         self.assertNotIn("'title'", sql_str)
 
@@ -81,6 +90,18 @@ class TestPGBigmRetriever(unittest.TestCase):
         query_call = str(calls[0][0][0])
         self.assertIn("SELECT 1", query_call)
         self.assertNotIn("SET LOCAL pg_bigm.similarity_limit", query_call)
+
+    def test_parse_tokens_from_string(self):
+        result = PGBigmRetriever._parse_tokens("Apple Orange")
+        self.assertEqual(set(result), {"Apple", "Orange"})
+
+    def test_parse_tokens_from_list(self):
+        result = PGBigmRetriever._parse_tokens(["Apple", "Orange", "Apple"])
+        self.assertEqual(set(result), {"Apple", "Orange"})
+
+    def test_parse_tokens_strips_empty(self):
+        result = PGBigmRetriever._parse_tokens("  Apple  ")
+        self.assertEqual(result, ["Apple"])
 
 
 class TestPGBigmRetrieverAsync(unittest.IsolatedAsyncioTestCase):
@@ -173,9 +194,14 @@ class TestPGVectorService:
     @pytest.mark.asyncio
     async def test_hybrid_search_2way_rrf_flow(self):
         """hybrid_search가 Vector + async Content 결과를 가져와 2-way RRF를 수행하는지 검증."""
-        with patch.object(self.service.vector_store, "similarity_search_with_score") as mock_sim_search, \
-             patch.object(PGBigmRetriever, "async_invoke", new_callable=AsyncMock) as mock_bigm_invoke:
-
+        with (
+            patch.object(
+                self.service.vector_store, "similarity_search_with_score"
+            ) as mock_sim_search,
+            patch.object(
+                PGBigmRetriever, "async_invoke", new_callable=AsyncMock
+            ) as mock_bigm_invoke,
+        ):
             mock_sim_search.return_value = [(Document(page_content="V", id="id1"), 0.8)]
             mock_bigm_invoke.return_value = [Document(page_content="C", id="id2")]
 
@@ -190,10 +216,7 @@ class TestPGVectorService:
     @pytest.mark.asyncio
     async def test_hybrid_search_batch(self):
         """hybrid_search_batch가 여러 쿼리를 병렬로 처리하는지 검증."""
-        queries = [
-            {"query": "test1", "start_date": "2024-01-01"},
-            {"query": "test2"}
-        ]
+        queries = [{"query": "test1", "start_date": "2024-01-01"}, {"query": "test2"}]
 
         with patch.object(self.service, "hybrid_search") as mock_hybrid_search:
             mock_hybrid_search.return_value = [Document(page_content="result", id="id")]
@@ -209,17 +232,20 @@ class TestPGVectorService:
                 weights=[0.6, 0.4],
                 tool_filters=None,
                 temporal_filters=ANY,
-                keyword_tokens=[]
+                keyword_tokens=[],
             )
 
     def test_weighted_keyword_search_uses_unified_logic(self):
         """단독 키워드 검색 유틸도 통합된 build_bigm_query를 사용하는지 검증."""
-        with patch.object(PGBigmRetriever, "build_bigm_query", return_value=("SELECT 1", {})) as mock_build:
+        with patch.object(
+            PGBigmRetriever, "build_bigm_query", return_value=("SELECT 1", {})
+        ) as mock_build:
             self.mock_session_factory.return_value.__enter__.return_value = MagicMock()
 
             self.service._weighted_keyword_search(query="test")
 
             assert mock_build.called
+
 
 if __name__ == "__main__":
     unittest.main()
