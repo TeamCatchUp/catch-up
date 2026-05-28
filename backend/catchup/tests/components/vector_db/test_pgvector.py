@@ -365,6 +365,70 @@ class TestPGVectorService:
         )
         assert retriever.title_only is True
 
+    @pytest.mark.asyncio
+    async def test_gather_keyword_docs_2way(self):
+        """title_task=None이면 2-way gather로 title_docs는 빈 리스트다."""
+        v_doc = Document(page_content="V", id="v1")
+        c_doc = Document(page_content="C", id="c1")
+
+        async def _mock_content():
+            return [c_doc]
+
+        import asyncio
+        loop = asyncio.get_event_loop()
+        vector_task = loop.run_in_executor(None, lambda: [v_doc])
+
+        vector_docs, content_docs, title_docs = await self.service._gather_keyword_docs(
+            vector_task=vector_task,
+            content_task=_mock_content(),
+            title_task=None,
+        )
+        assert vector_docs == [v_doc]
+        assert content_docs == [c_doc]
+        assert title_docs == []
+
+    @pytest.mark.asyncio
+    async def test_gather_keyword_docs_3way(self):
+        """title_task가 있으면 3-way gather로 title_docs가 채워진다."""
+        v_doc = Document(page_content="V", id="v1")
+        c_doc = Document(page_content="C", id="c1")
+        t_doc = Document(page_content="T", id="t1")
+
+        async def _mock_content():
+            return [c_doc]
+
+        async def _mock_title():
+            return [t_doc]
+
+        import asyncio
+        loop = asyncio.get_event_loop()
+        vector_task = loop.run_in_executor(None, lambda: [v_doc])
+
+        vector_docs, content_docs, title_docs = await self.service._gather_keyword_docs(
+            vector_task=vector_task,
+            content_task=_mock_content(),
+            title_task=_mock_title(),
+        )
+        assert vector_docs == [v_doc]
+        assert content_docs == [c_doc]
+        assert title_docs == [t_doc]
+
+    @pytest.mark.asyncio
+    async def test_gather_keyword_docs_no_vector_task(self):
+        """vector_task=None이면 vector_docs는 빈 리스트다."""
+        c_doc = Document(page_content="C", id="c1")
+
+        async def _mock_content():
+            return [c_doc]
+
+        vector_docs, content_docs, title_docs = await self.service._gather_keyword_docs(
+            vector_task=None,
+            content_task=_mock_content(),
+            title_task=None,
+        )
+        assert vector_docs == []
+        assert content_docs == [c_doc]
+
 
 if __name__ == "__main__":
     unittest.main()

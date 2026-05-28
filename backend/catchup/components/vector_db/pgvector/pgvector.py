@@ -439,7 +439,6 @@ class PGVectorService(BaseVectorDbService):
             content_task = content_retriever.async_invoke(payload["keyword_tokens"])
 
             if use_title_filter:
-                # 3-way RRF: vector(0.5) + content(0.25) + title(0.25)
                 title_retriever = self._make_bigm_retriever(
                     k=_bigm_k,
                     offset=offset,
@@ -448,18 +447,14 @@ class PGVectorService(BaseVectorDbService):
                     title_only=True,
                 )
                 title_task = title_retriever.async_invoke(payload["keyword_tokens"])
-                tasks = [
-                    t for t in [vector_task, content_task, title_task] if t is not None
-                ]
-                if vector_task is not None:
-                    vector_docs, content_docs, title_docs = await asyncio.gather(
-                        vector_task, content_task, title_task
-                    )
-                else:
-                    content_docs, title_docs = await asyncio.gather(
-                        content_task, title_task
-                    )
-                    vector_docs = []
+            else:
+                title_task = None
+
+            vector_docs, content_docs, title_docs = await self._gather_keyword_docs(
+                vector_task, content_task, title_task
+            )
+
+            if use_title_filter:
                 logger.debug(
                     "content_retrieval_completed",
                     elapsed=round(time.perf_counter() - t_content, 3),
@@ -471,13 +466,6 @@ class PGVectorService(BaseVectorDbService):
                     weights=[0.5, 0.2, 0.3],
                 )[:k]
             else:
-                # 2-way RRF: vector + content (RAG 기본)
-                if vector_task is not None:
-                    vector_docs, content_docs = await asyncio.gather(
-                        vector_task, content_task
-                    )
-                else:
-                    vector_docs, content_docs = [], await content_task
                 logger.debug(
                     "content_retrieval_completed",
                     elapsed=round(time.perf_counter() - t_content, 3),
@@ -567,6 +555,33 @@ class PGVectorService(BaseVectorDbService):
             temporal_filters=temporal_filters,
             **kwargs,
         )
+
+    async def _gather_keyword_docs(
+        self,
+        vector_task: asyncio.Task | None,
+        content_task,
+        title_task,
+    ) -> tuple[list[Document], list[Document], list[Document]]:
+        """keyword 검색을 위해 vector/content/title 태스크를 조합한다."""
+        if title_task is not None:
+            if vector_task is not None:
+                vector_docs, content_docs, title_docs = await asyncio.gather(
+                    vector_task, content_task, title_task
+                )
+            else:
+                content_docs, title_docs = await asyncio.gather(
+                    content_task, title_task
+                )
+                vector_docs = []
+        else:
+            if vector_task is not None:
+                vector_docs, content_docs = await asyncio.gather(
+                    vector_task, content_task
+                )
+            else:
+                vector_docs, content_docs = [], await content_task
+            title_docs = []
+        return vector_docs, content_docs, title_docs
 
     def _build_search_kwargs(
         self,
