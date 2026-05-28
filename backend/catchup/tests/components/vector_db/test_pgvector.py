@@ -103,6 +103,52 @@ class TestPGBigmRetriever(unittest.TestCase):
         result = PGBigmRetriever._parse_tokens("  Apple  ")
         self.assertEqual(result, ["Apple"])
 
+    def test_build_source_clauses_with_tool_filters(self):
+        from catchup.db.models import SourceType
+
+        params = {}
+        clauses = PGBigmRetriever._build_source_clauses(
+            tool_filters=[SourceType.SLACK],
+            temporal_filters=None,
+            params=params,
+        )
+        self.assertEqual(len(clauses), 1)
+        self.assertIn("ANY(:tools)", clauses[0])
+        self.assertEqual(params["tools"], ["slack"])
+
+    def test_build_source_clauses_no_filters(self):
+        params = {}
+        clauses = PGBigmRetriever._build_source_clauses(
+            tool_filters=None,
+            temporal_filters=None,
+            params=params,
+        )
+        self.assertEqual(clauses, [])
+        self.assertEqual(params, {})
+
+    def test_build_source_clauses_tool_filter_skipped_when_temporal_present(self):
+        """temporal_filters가 있으면 tool_filters는 무시되고 temporal 조건만 생성된다."""
+        import datetime
+
+        from catchup.db.models import SourceType
+        from catchup.rag.schemas.filters import TemporalFilter
+
+        tf = TemporalFilter(
+            tools=[SourceType.SLACK],
+            start_date=datetime.date(2024, 1, 1),
+            end_date=datetime.date(2024, 1, 31),
+            time_field="created_at",
+        )
+        params = {}
+        clauses = PGBigmRetriever._build_source_clauses(
+            tool_filters=[SourceType.GITHUB],
+            temporal_filters=[tf],
+            params=params,
+        )
+        self.assertEqual(len(clauses), 1)
+        self.assertIn("BETWEEN", clauses[0])
+        self.assertNotIn("ANY(:tools)", clauses[0])
+
 
 class TestPGBigmRetrieverAsync(unittest.IsolatedAsyncioTestCase):
     def setUp(self):

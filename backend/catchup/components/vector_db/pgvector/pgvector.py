@@ -90,6 +90,34 @@ class PGBigmRetriever(BaseRetriever):
         return list(set(t.strip() for t in tokens if t.strip()))
 
     @staticmethod
+    def _build_source_clauses(
+        tool_filters: list[SourceType] | None,
+        temporal_filters: list[TemporalFilter] | None,
+        params: dict,
+    ) -> list[str]:
+        """협업 툴 & 시간 필터 SQL 조건을 생성한다."""
+        if not temporal_filters:
+            if not tool_filters:
+                return []
+            params["tools"] = [f.value for f in tool_filters]
+            return ["e.cmetadata ->> 'source' = ANY(:tools)"]
+
+        sql_conditions = []
+        for i, tf in enumerate(temporal_filters):
+            tools_p = f"tools_{i}"
+            start_p = f"start_date_{i}"
+            end_p = f"end_date_{i}"
+            params[tools_p] = [t.value for t in tf.tools]
+            params[start_p] = tf.start_date.isoformat()
+            params[end_p] = tf.end_date.isoformat()
+            sql_conditions.append(
+                f"(e.cmetadata ->> 'source' = ANY(:{tools_p}) "
+                f"AND (e.cmetadata ->> '{tf.time_field}') "
+                f"BETWEEN :{start_p} AND :{end_p})"
+            )
+        return [f"({' OR '.join(sql_conditions)})"]
+
+    @staticmethod
     def build_bigm_query(
         collection_name: str,
         query: str | list[str],
@@ -115,27 +143,11 @@ class PGBigmRetriever(BaseRetriever):
         filter_clauses = ["c.name = :collection_name"]
 
         # 협업 툴 & 시간 필터
-        if not temporal_filters:
-            if tool_filters:
-                filter_clauses.append("e.cmetadata ->> 'source' = ANY(:tools)")
-                params["tools"] = [f.value for f in tool_filters]
-        else:
-            sql_conditions = []
-            for i, tf in enumerate(temporal_filters):
-                tools_p = f"tools_{i}"
-                start_p = f"start_date_{i}"
-                end_p = f"end_date_{i}"
-                params[tools_p] = [t.value for t in tf.tools]
-                # ISO 문자열로 전달하여 텍스트 인덱스 활용 (ISO 8601은 문자열 비교가 시간 비교와 일치함)
-                params[start_p] = tf.start_date.isoformat()
-                params[end_p] = tf.end_date.isoformat()
-
-                sql_conditions.append(
-                    f"(e.cmetadata ->> 'source' = ANY(:{tools_p}) "
-                    f"AND (e.cmetadata ->> '{tf.time_field}') "
-                    f"BETWEEN :{start_p} AND :{end_p})"
-                )
-            filter_clauses.append(f"({' OR '.join(sql_conditions)})")
+        filter_clauses.extend(
+            PGBigmRetriever._build_source_clauses(
+                tool_filters, temporal_filters, params
+            )
+        )
 
         token_filters = []
         exact_match_scores = []
