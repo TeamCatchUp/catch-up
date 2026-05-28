@@ -134,21 +134,31 @@ class PGBigmRetriever(BaseRetriever):
         for i, token in enumerate(tokens):
             p = f"token_{i}"
             params[p] = token
-            title_scores.append(
-                f"bigm_similarity(COALESCE(e.cmetadata ->> 'title', ''), :{p})"
-            )
             if title_only:
+                title_scores.append(
+                    f"bigm_similarity(COALESCE(e.cmetadata ->> 'title', ''), :{p})"
+                )
                 token_filters.append(
                     f"lower(e.cmetadata ->> 'title') =% lower(:{p})"
                 )
             elif search_mode == "exact":
-                exact_scores.append(
-                    f"(CASE WHEN LOWER(e.cmetadata ->> 'contextual_content') = LOWER(:{p}) THEN 1.0 ELSE 0.0 END)"
-                )
+                # exact 모드: 토큰 매칭 수 + title 유사도 스코어링.
+                # Confluence/Jira/GitHub PR은 title이 채워져 있어 유효한 신호.
+                # Slack 등 title=''인 문서는 bigm_similarity('', token)=0으로 영향 없음.
                 token_filters.append(
                     f"lower(e.cmetadata ->> 'contextual_content') LIKE lower(likequery(:{p}))"
                 )
+                exact_scores.append(
+                    f"(CASE WHEN lower(e.cmetadata ->> 'contextual_content') LIKE lower(likequery(:{p})) THEN 1 ELSE 0 END)"
+                )
+                title_scores.append(
+                    f"bigm_similarity(COALESCE(e.cmetadata ->> 'title', ''), :{p})"
+                )
             else:
+                # fuzzy 모드: Confluence/Jira 등 title이 있는 문서에서 유효
+                title_scores.append(
+                    f"bigm_similarity(COALESCE(e.cmetadata ->> 'title', ''), :{p})"
+                )
                 exact_scores.append(
                     f"(CASE WHEN LOWER(e.cmetadata ->> 'contextual_content') = LOWER(:{p}) THEN 1.0 ELSE 0.0 END)"
                 )
@@ -206,7 +216,7 @@ class PGBigmRetriever(BaseRetriever):
         )
 
         if token_filters:
-            filter_clauses.append(f"({' AND '.join(token_filters)})")
+            filter_clauses.append(f"({' OR '.join(token_filters)})")
 
         # 필터 조립
         where_clause = " AND ".join(filter_clauses)
@@ -216,8 +226,9 @@ class PGBigmRetriever(BaseRetriever):
             " + ".join(exact_match_scores) if exact_match_scores else "0.0"
         )
         similarity_sql = " + ".join(sim_scores) if sim_scores else "0.0"
-        # title이 있는 source(Confluence, Jira)에만 가산점, 없으면 0.0 fallback
-        title_sim_sql = " + ".join(title_sim_scores) if title_sim_scores else "0.0"
+        # title이 있는 source(Confluence, Jira)에만 가산점.
+        # ORDER BY에 float literal (0.0)은 PostgreSQL SyntaxError이므로 cast 사용.
+        title_sim_sql = " + ".join(title_sim_scores) if title_sim_scores else "0::float"
 
         search_sql = text(f"""
             SELECT e.document, e.cmetadata, e.id,
@@ -311,20 +322,83 @@ class PGBigmRetriever(BaseRetriever):
     ) -> list[Document]:
         """
         async session 기반 키워드 검색.
-        hybrid_search에서 run_in_executor 없이 직접 await.
+        다중 토큰은 1 세션에서 토큰별 단일 쿼리를 순차 실행 후 Python merge.
+        단일 토큰은 기존 경로(_async_do_query) 사용.
         """
-        search_sql, params = self.build_bigm_query(
-            collection_name=self.collection_name,
-            query=query,
-            k=self.k,
-            offset=self.offset,
-            tool_filters=self.tool_filters,
-            temporal_filters=self.temporal_filters,
-            search_mode=self.search_mode,
-            title_only=self.title_only,
+        tokens = self._parse_tokens(query)
+        if not tokens:
+            return []
+
+        if len(tokens) == 1:
+            search_sql, params = self.build_bigm_query(
+                collection_name=self.collection_name,
+                query=tokens,
+                k=self.k,
+                offset=self.offset,
+                tool_filters=self.tool_filters,
+                temporal_filters=self.temporal_filters,
+                search_mode=self.search_mode,
+                title_only=self.title_only,
+            )
+            rows = await self._async_do_query(search_sql, params, label=label)
+            return self._get_documents_from_results(rows)
+
+        return await self._async_invoke_per_token(tokens, label)
+
+    async def _async_invoke_per_token(
+        self,
+        tokens: list[str],
+        label: str,
+    ) -> list[Document]:
+        """토큰별 단일 쿼리를 1 세션에서 순차 실행, match count 기준으로 merge한다.
+
+        OR 단일 쿼리 대비 heap scan 범위가 줄어 성능이 개선된다.
+        match count가 높은 문서(여러 토큰에 걸친 문서)가 상위에 위치한다.
+        """
+        session_factory = self.async_session_factory or AsyncSessionLocal
+        t0 = time.perf_counter()
+
+        match_count: dict[str, int] = {}
+        doc_map: dict[str, Document] = {}
+
+        async with session_factory() as session:
+            for token in tokens:
+                search_sql, params = self.build_bigm_query(
+                    collection_name=self.collection_name,
+                    query=[token],
+                    k=self.k,
+                    offset=0,
+                    tool_filters=self.tool_filters,
+                    temporal_filters=self.temporal_filters,
+                    search_mode=self.search_mode,
+                    title_only=self.title_only,
+                )
+                result = await session.execute(search_sql, params)
+                for row in result.fetchall():
+                    doc_id = row[2]
+                    match_count[doc_id] = match_count.get(doc_id, 0) + 1
+                    if doc_id not in doc_map:
+                        doc_map[doc_id] = Document(
+                            page_content=row[0],
+                            metadata=row[1] if row[1] else {},
+                            id=doc_id,
+                        )
+
+        # match_count DESC, created_at DESC (ISO 문자열은 lexicographic 정렬 동일)
+        sorted_ids = sorted(
+            doc_map,
+            key=lambda d: (match_count[d], doc_map[d].metadata.get("created_at", "")),
+            reverse=True,
+        )[self.offset : self.offset + self.k]
+
+        logger.debug(
+            "keyword_multi_query_completed",
+            label=label,
+            token_count=len(tokens),
+            elapsed=round(time.perf_counter() - t0, 3),
+            result_count=len(sorted_ids),
         )
-        rows = await self._async_do_query(search_sql, params, label=label)
-        return self._get_documents_from_results(rows)
+        return [doc_map[d] for d in sorted_ids]
 
     def _get_documents_from_results(self, results):
         docs = []

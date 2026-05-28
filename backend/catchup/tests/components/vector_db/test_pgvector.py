@@ -45,38 +45,42 @@ class TestPGBigmRetriever(unittest.TestCase):
         self.assertEqual(token_values_str, {"Apple", "Orange"})
 
     def test_build_bigm_query_exact_mode(self):
-        """exact 모드(RAG 하이브리드 검색): lower() LIKE lower(likequery()) 필터로 GIN 인덱스 사용 검증."""
+        """exact 모드(RAG 하이브리드 검색): LIKE 필터 + 토큰 매칭 수 스코어링 검증."""
         sql, _ = PGBigmRetriever.build_bigm_query(
             collection_name="test", query="Python", k=5, search_mode="exact"
         )
         sql_str = str(sql)
 
-        self.assertIn(
-            "LOWER(e.cmetadata ->> 'contextual_content') = LOWER(:token_0)", sql_str
-        )
+        # LIKE 기반 필터
         self.assertIn(
             "lower(e.cmetadata ->> 'contextual_content') LIKE lower(likequery(:token_0))",
             sql_str,
         )
+        # 토큰 매칭 수 스코어 (LIKE 기반 CASE WHEN — 완전 일치 = 표현식은 항상 0.0이므로 제거됨)
+        self.assertIn("LIKE lower(likequery(:token_0)) THEN 1 ELSE 0", sql_str)
+        # title 유사도 — Confluence/Jira/GitHub PR은 title이 채워져 있어 유효한 정렬 신호
+        self.assertIn("bigm_similarity(COALESCE(e.cmetadata ->> 'title'", sql_str)
         self.assertNotIn("ILIKE", sql_str)
-        self.assertNotIn("=% :token_0", sql_str)
-        self.assertNotIn("'title'", sql_str)
+        self.assertNotIn("=% lower(:token_0)", sql_str)
 
     def test_build_bigm_query_fuzzy_mode(self):
-        """fuzzy 모드(일반 키워드 검색): lower() =% lower() 유사도 필터로 GIN v2 인덱스 사용 검증."""
+        """fuzzy 모드(manual search): =% 필터 + bigm_similarity 스코어링 + title 시그널 검증."""
         sql, _ = PGBigmRetriever.build_bigm_query(
             collection_name="test", query="Python", k=5, search_mode="fuzzy"
         )
         sql_str = str(sql)
 
-        self.assertIn(
-            "LOWER(e.cmetadata ->> 'contextual_content') = LOWER(:token_0)", sql_str
-        )
+        # =% 기반 fuzzy 필터
         self.assertIn(
             "lower(e.cmetadata ->> 'contextual_content') =% lower(:token_0)", sql_str
         )
+        # 완전 일치 부스트 스코어
+        self.assertIn(
+            "LOWER(e.cmetadata ->> 'contextual_content') = LOWER(:token_0)", sql_str
+        )
+        # Confluence/Jira title 유사도 시그널
+        self.assertIn("bigm_similarity(COALESCE(e.cmetadata ->> 'title'", sql_str)
         self.assertNotIn("ILIKE", sql_str)
-        self.assertNotIn("'title'", sql_str)
 
     def test_do_query_does_not_set_db_parameters_inline(self):
         """DB 쿼리 실행 시 pg_bigm.similarity_limit을 인라인으로 설정하지 않는지 검증 (engine level에서 처리)."""
@@ -296,7 +300,7 @@ class TestPGVectorService:
                 PGBigmRetriever, "async_invoke", new_callable=AsyncMock
             ) as mock_bigm_invoke,
         ):
-            mock_sim_search.return_value = [(Document(page_content="V", id="id1"), 0.8)]
+            mock_sim_search.return_value = [(Document(page_content="V", id="id1"), 0.5)]
             mock_bigm_invoke.return_value = [Document(page_content="C", id="id2")]
 
             results = await self.service.hybrid_search(
