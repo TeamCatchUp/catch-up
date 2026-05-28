@@ -2753,13 +2753,31 @@ class AgentTrigger(Base):
     agent_spec_id: Mapped[int] = mapped_column(
         ForeignKey("agent_specs.id", ondelete="CASCADE"), nullable=False
     )
-    type: Mapped[str] = mapped_column(String(20), nullable=False)
-    source: Mapped[str | None] = mapped_column(String(50), nullable=True)
-    filter_condition: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    workspace_id: Mapped[int] = mapped_column(ForeignKey("workspaces.id"), nullable=False)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    type: Mapped[str] = mapped_column(
+        String(20), nullable=False, server_default=text("'webhook'")
+    )
+    source: Mapped[str] = mapped_column(String(50), nullable=False)
+    event_type: Mapped[str] = mapped_column(String(100), nullable=False)
+    condition: Mapped[dict] = mapped_column(
+        JSONB, nullable=False, server_default=text("'{}'::jsonb")
+    )
+    concurrency_key: Mapped[str | None] = mapped_column(String(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
 
     agent_spec: Mapped["AgentSpec"] = relationship(back_populates="triggers")
 
     __table_args__ = (
-        Index("idx_agent_triggers_source", "type", "source"),
+        Index(
+            "idx_agent_triggers_lookup",
+            "workspace_id",
+            "source",
+            "event_type",
+        ),
+        Index("idx_agent_triggers_agent_spec_id", "agent_spec_id"),
+        Index("idx_agent_triggers_concurrency_key", "workspace_id", "concurrency_key"),
     )
