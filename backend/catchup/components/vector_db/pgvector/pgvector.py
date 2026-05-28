@@ -1,6 +1,7 @@
 import asyncio
 import time
 from typing import Any
+from typing import Literal
 from typing import override
 
 import structlog
@@ -54,7 +55,7 @@ class PGBigmRetriever(BaseRetriever):
     offset: int = 0
     tool_filters: list[SourceType] | None = None
     temporal_filters: list[TemporalFilter] | None = None
-    search_mode: str = "fuzzy"  # "exact": ILIKE likequery (RAG), "fuzzy": =% similarity (keyword search)
+    search_mode: Literal["fuzzy", "exact"] = "fuzzy"  # "exact": ILIKE likequery (RAG), "fuzzy": =% similarity (keyword search)
     title_only: bool = (
         False  # True면 title =% 조건으로만 검색 (manual search 3-way RRF 전용)
     )
@@ -120,7 +121,7 @@ class PGBigmRetriever(BaseRetriever):
     @staticmethod
     def _build_token_expressions(
         tokens: list[str],
-        search_mode: str,
+        search_mode: Literal["fuzzy", "exact"],
         title_only: bool,
         params: dict,
     ) -> tuple[list[str], list[str], list[str], list[str]]:
@@ -174,7 +175,7 @@ class PGBigmRetriever(BaseRetriever):
         offset: int = 0,
         tool_filters: list[SourceType] | None = None,
         temporal_filters: list[TemporalFilter] | None = None,
-        search_mode: str = "fuzzy",
+        search_mode: Literal["fuzzy", "exact"] = "fuzzy",
         title_only: bool = False,
     ) -> tuple[Any, dict]:
         """
@@ -336,16 +337,6 @@ class PGBigmRetriever(BaseRetriever):
             )
 
         return docs
-
-    def bigm_search(
-        self,
-        query: str,
-    ) -> list[Document]:
-        """
-        단독 pg_bigm 키워드 검색 유틸 함수.
-        Hybrid Search에서는 사용되지 않는다.
-        """
-        return self.invoke(query)
 
 
 class PGVectorService(BaseVectorDbService):
