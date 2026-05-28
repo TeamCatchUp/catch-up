@@ -5,6 +5,9 @@ from catchup.agents.factory import get_execution_service
 from catchup.agents.schemas import AgentSpec
 from catchup.agents.tools.internal.search import CatchUpKnowledgeBaseTool
 from catchup.agents.triggers.events import AgentWebhookEvent
+from catchup.agents.triggers.policies import ImmediatePolicy
+from catchup.agents.triggers.policies import PolicyValidationError
+from catchup.agents.triggers.validator import trigger_policy_validator
 from catchup.db.agent_specs import build_agent_global_context
 from catchup.db.agent_triggers import get_active_webhook_triggers
 from catchup.db.models import AgentTrigger
@@ -12,13 +15,19 @@ from catchup.db.models import AgentTrigger
 logger = structlog.get_logger(__name__)
 
 
-# TODO: Phase 3에서 normalized event envelope 대상 condition operation을 추가한다.
-def _matches_condition(
-    payload: dict,
-    condition: dict | None,
-) -> bool:
-    flat_condition = condition or {}
-    return all(payload.get(k) == v for k, v in flat_condition.items())
+def _trigger_matches_event(trigger: AgentTrigger, event: AgentWebhookEvent) -> bool:
+    try:
+        policy = trigger_policy_validator.validate_policy(trigger.condition)
+    except PolicyValidationError as exc:
+        logger.warning(
+            "invalid_trigger_policy_ignored",
+            trigger_id=trigger.id,
+            event_id=event.event_id,
+            reason=str(exc),
+        )
+        return False
+
+    return isinstance(policy, ImmediatePolicy)
 
 
 def _resolve_triggers(
@@ -28,7 +37,7 @@ def _resolve_triggers(
     """Webhook event에 매칭되는 AgentTrigger 목록을 반환한다.
 
     workspace/source/event_type이 일치하는 활성 트리거를 조회한 뒤
-    condition의 모든 KV가 event.payload에 존재하는지 검증한다.
+    Phase 1에서는 immediate policy만 dispatch 대상으로 둔다.
     """
     triggers = get_active_webhook_triggers(
         db,
@@ -40,7 +49,7 @@ def _resolve_triggers(
     return [
         trigger
         for trigger in triggers
-        if _matches_condition(event.payload, trigger.condition)
+        if _trigger_matches_event(trigger, event)
     ]
 
 
@@ -62,7 +71,7 @@ async def dispatch_webhook_event(
         event_type=event.event_type,
         workspace_id=event.workspace_id,
     )
-    
+
     triggers = _resolve_triggers(db, event)
 
     if not triggers:

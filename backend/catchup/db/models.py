@@ -2761,7 +2761,11 @@ class AgentTrigger(Base):
     source: Mapped[str] = mapped_column(String(50), nullable=False)
     event_type: Mapped[str] = mapped_column(String(100), nullable=False)
     condition: Mapped[dict] = mapped_column(
-        JSONB, nullable=False, server_default=text("'{}'::jsonb")
+        JSONB,
+        nullable=False,
+        server_default=text(
+            """'{"kind":"immediate","where":{"all":[]}}'::jsonb"""
+        ),
     )
     concurrency_key: Mapped[str | None] = mapped_column(String(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

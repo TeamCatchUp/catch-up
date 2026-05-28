@@ -24,7 +24,7 @@ def upgrade() -> None:
     op.add_column('agent_triggers', sa.Column('workspace_id', sa.Integer(), nullable=True))
     op.add_column('agent_triggers', sa.Column('name', sa.String(length=100), nullable=True))
     op.add_column('agent_triggers', sa.Column('event_type', sa.String(length=100), nullable=True))
-    op.add_column('agent_triggers', sa.Column('condition', postgresql.JSONB(astext_type=sa.Text()), server_default=sa.text("'{}'::jsonb"), nullable=False))
+    op.add_column('agent_triggers', sa.Column('condition', postgresql.JSONB(astext_type=sa.Text()), server_default=sa.text("""'{"kind":"immediate","where":{"all":[]}}'::jsonb"""), nullable=False))
     op.add_column('agent_triggers', sa.Column('concurrency_key', sa.String(length=255), nullable=True))
     op.add_column('agent_triggers', sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False))
     op.execute("""
@@ -34,9 +34,9 @@ def upgrade() -> None:
             name = 'Agent Trigger ' || t.id::text,
             event_type = COALESCE(
                 spec.spec #>> '{trigger,config,event_type}',
-                'legacy.unspecified'
+                'webhook.unspecified'
             ),
-            condition = COALESCE(t.filter_condition, '{}'::jsonb)
+            condition = '{"kind":"immediate","where":{"all":[]}}'::jsonb
         FROM agent_specs AS spec
         WHERE t.agent_spec_id = spec.id
     """)

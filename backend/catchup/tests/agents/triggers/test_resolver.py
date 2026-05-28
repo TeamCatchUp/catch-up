@@ -77,35 +77,55 @@ def _event(
     )
 
 
-def test_matches_condition_requires_all_flat_keys() -> None:
-    payload = {"channel_id": "ch-001", "event_type": "new_message"}
+def _immediate_condition(channel_id: str = "ch-001") -> dict:
+    return {
+        "kind": "immediate",
+        "where": {
+            "all": [
+                {
+                    "path": "$.payload.channel_id",
+                    "op": "eq",
+                    "value": channel_id,
+                },
+            ],
+        },
+    }
 
-    assert resolver._matches_condition(
-        payload,
-        {"channel_id": "ch-001", "event_type": "new_message"},
+
+def test_resolve_triggers_returns_immediate_policy_triggers() -> None:
+    immediate_first = _trigger(id=1, condition=_immediate_condition("ch-001"))
+    immediate_second = _trigger(id=2, condition=_immediate_condition("ch-002"))
+    immediate_without_where = _trigger(
+        id=3,
+        condition={"kind": "immediate", "where": {"all": []}},
     )
-    assert not resolver._matches_condition(
-        payload,
-        {"channel_id": "ch-002"},
+    debounce = _trigger(
+        id=4,
+        condition={
+            "kind": "debounce",
+            "start_event_type": "user_chat.message_created",
+            "reset_event_types": ["user_chat.new_message"],
+            "entity_key_path": "$.payload.entity.id",
+            "reset_entity_key_path": "$.payload.entity.chatId",
+            "quiet_period_seconds": 300,
+        },
     )
-    assert resolver._matches_condition(payload, None)
-
-
-def test_resolve_triggers_returns_all_matching_triggers() -> None:
-    matching_first = _trigger(id=1, condition={"channel_id": "ch-001"})
-    non_matching = _trigger(id=2, condition={"channel_id": "ch-002"})
-    matching_second = _trigger(id=3, condition={})
 
     with patch(
         f"{resolver.__name__}.get_active_webhook_triggers",
-        return_value=[matching_first, non_matching, matching_second],
+        return_value=[
+            immediate_first,
+            immediate_second,
+            immediate_without_where,
+            debounce,
+        ],
     ) as get_triggers:
         result = resolver._resolve_triggers(
             db=Mock(),
             event=_event(payload={"channel_id": "ch-001"}),
         )
 
-    assert result == [matching_first, matching_second]
+    assert result == [immediate_first, immediate_second, immediate_without_where]
     get_triggers.assert_called_once_with(
         ANY,
         workspace_id=1,
@@ -114,12 +134,124 @@ def test_resolve_triggers_returns_all_matching_triggers() -> None:
     )
 
 
+def test_resolve_triggers_does_not_evaluate_where_in_phase_1() -> None:
+    matching = _trigger(
+        id=1,
+        condition={
+            "kind": "immediate",
+            "where": {
+                "all": [
+                    {
+                        "path": "$.payload.channel_id",
+                        "op": "eq",
+                        "value": "ch-001",
+                    },
+                    {
+                        "path": "$.event_type",
+                        "op": "eq",
+                        "value": "user_chat.message_created",
+                    },
+                ],
+            },
+        },
+    )
+    non_matching = _trigger(
+        id=2,
+        condition={
+            "kind": "immediate",
+            "where": {
+                "all": [
+                    {
+                        "path": "$.payload.channel_id",
+                        "op": "eq",
+                        "value": "ch-002",
+                    },
+                ],
+            },
+        },
+    )
+
+    with patch(
+        f"{resolver.__name__}.get_active_webhook_triggers",
+        return_value=[matching, non_matching],
+    ):
+        result = resolver._resolve_triggers(
+            db=Mock(),
+            event=_event(payload={"channel_id": "ch-001"}),
+        )
+
+    assert result == [matching, non_matching]
+
+
+def test_resolve_triggers_ignores_condition_without_policy_kind() -> None:
+    malformed = _trigger(id=1, condition={"where": {"all": []}})
+
+    with patch(
+        f"{resolver.__name__}.get_active_webhook_triggers",
+        return_value=[malformed],
+    ):
+        result = resolver._resolve_triggers(
+            db=Mock(),
+            event=_event(payload={"channel_id": "ch-001"}),
+        )
+
+    assert result == []
+
+
+def test_resolve_triggers_does_not_dispatch_debounce_policy_in_phase_1() -> None:
+    debounce = _trigger(
+        id=1,
+        condition={
+            "kind": "debounce",
+            "start_event_type": "user_chat.message_created",
+            "reset_event_types": ["user_chat.new_message"],
+            "entity_key_path": "$.payload.entity.id",
+            "reset_entity_key_path": "$.payload.entity.chatId",
+            "quiet_period_seconds": 300,
+            "where": {"all": []},
+            "reset_where": {"all": []},
+        },
+    )
+
+    with patch(
+        f"{resolver.__name__}.get_active_webhook_triggers",
+        return_value=[debounce],
+    ):
+        result = resolver._resolve_triggers(
+            db=Mock(),
+            event=_event(payload={"entity": {"id": "chat-1"}}),
+        )
+
+    assert result == []
+
+
+def test_resolve_triggers_ignores_malformed_policy() -> None:
+    malformed = _trigger(
+        id=1,
+        condition={
+            "kind": "debounce",
+            "start_event_type": "user_chat.message_created",
+        },
+    )
+
+    with patch(
+        f"{resolver.__name__}.get_active_webhook_triggers",
+        return_value=[malformed],
+    ):
+        result = resolver._resolve_triggers(
+            db=Mock(),
+            event=_event(payload={"entity": {"id": "chat-1"}}),
+        )
+
+    assert result == []
+
+
 @pytest.mark.asyncio
 async def test_dispatch_webhook_event_runs_first_matching_agent() -> None:
     active_trigger = _trigger(
         id=2,
         status=AgentStatus.ACTIVE,
-        condition={"channel_id": "ch-001"},
+        condition=_immediate_condition("ch-001"),
     )
     service = SimpleNamespace(run=AsyncMock(return_value="ok"))
 
@@ -149,7 +281,7 @@ async def test_dispatch_webhook_event_skips_when_workspace_does_not_match() -> N
     trigger = _trigger(
         id=1,
         status=AgentStatus.ACTIVE,
-        condition={"channel_id": "ch-001"},
+        condition=_immediate_condition("ch-001"),
         workspace_id=2,
     )
     service = SimpleNamespace(run=AsyncMock(return_value="should not run"))
@@ -172,7 +304,17 @@ async def test_dispatch_webhook_event_skips_when_workspace_does_not_match() -> N
 
 @pytest.mark.asyncio
 async def test_dispatch_webhook_event_skips_when_no_trigger_matches() -> None:
-    trigger = _trigger(id=1, condition={"channel_id": "ch-001"})
+    trigger = _trigger(
+        id=1,
+        condition={
+            "kind": "debounce",
+            "start_event_type": "user_chat.message_created",
+            "reset_event_types": ["user_chat.new_message"],
+            "entity_key_path": "$.payload.entity.id",
+            "reset_entity_key_path": "$.payload.entity.chatId",
+            "quiet_period_seconds": 300,
+        },
+    )
     service = SimpleNamespace(run=AsyncMock(return_value="should not run"))
 
     with (
@@ -184,7 +326,7 @@ async def test_dispatch_webhook_event_skips_when_no_trigger_matches() -> None:
     ):
         result = await resolver.dispatch_webhook_event(
             db=Mock(),
-            event=_event(payload={"channel_id": "ch-002"}),
+            event=_event(payload={"channel_id": "ch-001"}),
         )
 
     assert result is None
