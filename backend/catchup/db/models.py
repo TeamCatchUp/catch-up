@@ -2776,6 +2776,12 @@ class AgentTrigger(Base):
     agent_spec: Mapped["AgentSpec"] = relationship(back_populates="triggers")
 
     __table_args__ = (
+        UniqueConstraint(
+            "agent_spec_id",
+            "source",
+            "event_type",
+            name="uq_agent_triggers_agent_spec_source_event_type",
+        ),
         Index(
             "idx_agent_triggers_lookup",
             "workspace_id",
