@@ -15,9 +15,9 @@ class TriggerRegistry:
 
     @classmethod
     def get_event_spec(cls, source: str, event_type: str) -> EventSpec:
-        """trigger resolver에서 filter_condition 유효성 검증 시 사용된다.
+        """trigger resolver에서 condition 유효성 검증 시 사용된다.
 
-        filter_condition의 키가 해당 소스/이벤트의 filterable_fields에
+        condition의 키가 해당 소스/이벤트의 filterable_fields에
         정의된 필드인지 확인하는 진입점이다.
         """
         if source not in cls._sources:
