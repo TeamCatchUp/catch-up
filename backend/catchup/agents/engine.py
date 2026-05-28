@@ -5,6 +5,7 @@ from langgraph.graph.state import CompiledStateGraph
 from catchup.agents.harness.graph import build_execution_graph
 from catchup.agents.harness.graph import run_execution_agent
 from catchup.agents.schemas import AgentSpec
+from catchup.agents.triggers.events import AgentWebhookEvent
 from catchup.configs.config import settings
 from catchup.observability.langfuse.configs import get_langfuse_client
 from catchup.observability.langfuse.configs import get_observe
@@ -47,13 +48,13 @@ class ExecutionService:
         spec_id: int,
         spec: AgentSpec,
         user_input_values: dict,
-        trigger_payload: dict,
+        trigger_event: AgentWebhookEvent,
     ) -> str:
         """Execution Agent를 실행하고 최종 응답 텍스트를 반환한다."""
         result = await run_execution_agent(
             spec=spec,
             user_input_values=user_input_values,
-            trigger_payload=trigger_payload,
+            trigger_event=trigger_event,
             graph=self._get_graph(spec_id, spec),
             invoke_config=self._build_invoke_config(),
         )

@@ -16,6 +16,7 @@ from catchup.agents.harness.prompt_renderer import render_system_prompt
 from catchup.agents.harness.state import ExecutionState
 from catchup.agents.schemas import AgentSpec
 from catchup.agents.tools.registry import ToolRegistry
+from catchup.agents.triggers.events import AgentWebhookEvent
 
 
 def _build_lc_tool_map(
@@ -66,7 +67,7 @@ def build_execution_graph(
 async def run_execution_agent(
     spec: AgentSpec,
     user_input_values: dict,
-    trigger_payload: dict,
+    trigger_event: AgentWebhookEvent,
     graph: CompiledStateGraph,
     invoke_config: dict,
 ) -> str:
@@ -75,7 +76,7 @@ async def run_execution_agent(
     graph와 invoke_config는 ExecutionService에서 주입받는다.
     graph 캐싱과 Langfuse 설정은 호출자(ExecutionService) 책임이다.
     """
-    system_prompt = render_system_prompt(spec, user_input_values, trigger_payload)
+    system_prompt = render_system_prompt(spec, user_input_values, trigger_event)
     allowed_tool_names = [t.name for t in spec.tools]
 
     initial_state: ExecutionState = {
