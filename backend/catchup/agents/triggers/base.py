@@ -1,27 +1,91 @@
-"""
-Trigger Registry: 트리거로 등록 가능한 이벤트 소스와 그 명세를 관리한다.
+"""Trigger Registry가 노출하는 이벤트 소스와 필터 스펙을 정의한다.
 
 핵심 개념 구분:
-  filterable_fields (EventSpec) — "이 이벤트에서 어떤 필드를 조건으로 쓸 수 있는가"의 스키마 선언.
-                                  Builder Agent가 condition을 작성할 때 참조한다.
-  condition (AgentTrigger)      — Builder Agent가 실제로 건 조건값 {"channel_id": "C123ABC"}.
-                                  trigger resolver가 웹훅 payload와 대조해 발동 여부를 결정한다.
+  filterable_fields (EventSpec) — Builder Agent가 policies.py의 where clause를
+                                  만들 수 있도록 path/op/value 계약을 선언한다.
+  condition (AgentTrigger)      — Builder Agent가 실제로 저장하는 실행 정책 JSON.
+                                  policies.py가 이 JSON의 policy shape를 검증한다.
+
+예시:
+  EventSpec(
+      type="user_chat.message_created",
+      description="유저 채팅방에 새 메시지가 생성됨",
+      filterable_fields={
+          "channel_id": FilterFieldSpec(
+              path="$.payload.entity.channelId",
+              type="string",
+              description="메시지가 발생한 채널 ID",
+              operators=["eq", "in"],
+              examples=["ch-001"],
+          ),
+      },
+  )
+
+  Builder Agent는 위 스펙을 보고 다음 condition clause를 만들 수 있다.
+  {
+      "path": "$.payload.entity.channelId",
+      "op": "eq",
+      "value": "ch-001",
+  }
 """
+from typing import Any
 from typing import Literal
 
 from pydantic import BaseModel
 from pydantic import Field
 
+FieldType = Literal["string", "integer", "boolean"]
+FilterOperator = Literal["eq", "neq", "in", "exists"]
+
+
+class FilterFieldSpec(BaseModel):
+    """Builder가 policies.py의 where clause를 만들 때 참조하는 필드 명세."""
+
+    path: str = Field(
+        description="condition.where.all[]에 들어갈 JSONPath 표현식",
+    )
+    type: FieldType = Field(
+        description="value 타입 힌트. Builder가 적절한 값을 요청/생성할 때 사용한다.",
+    )
+    description: str = Field(description="Builder에게 노출할 필드 설명")
+    operators: list[FilterOperator] = Field(
+        default_factory=lambda: ["eq"],
+        min_length=1,
+        description="이 필드에서 사용할 수 있는 where operator 목록",
+    )
+    examples: list[Any] = Field(
+        default_factory=list,
+        description="Builder가 condition 예시를 만들 때 참고할 값",
+    )
+
+    def schema_dict(self) -> dict:
+        """Builder Agent에게 노출할 필터 필드 스펙을 직렬화한다."""
+        return self.model_dump(mode="json")
+
+    def condition_clause(
+        self,
+        value: Any,
+        *,
+        op: FilterOperator | None = None,
+    ) -> dict[str, Any]:
+        """policies.py의 where.all[]에 들어갈 clause를 만든다."""
+        selected_op = op or self.operators[0]
+        if selected_op not in self.operators:
+            raise ValueError(f"Unsupported operator for field: {selected_op}")
+        return {
+            "path": self.path,
+            "op": selected_op,
+            "value": value,
+        }
+
 
 class EventSpec(BaseModel):
     type: str
     description: str
-    filterable_fields: dict[
-        str, Literal["string", "integer", "boolean"]
-    ] = Field(
+    filterable_fields: dict[str, FilterFieldSpec] = Field(
         description=(
-            "이 이벤트에서 어떤 필드를 조건으로 쓸 수 있는지를 나타낸다. "
-            "Builder Agent가 filter를 작성할 때 참조한다."
+            "이 이벤트에서 어떤 필드를 condition.where clause로 쓸 수 있는지를 "
+            "나타낸다. Builder Agent가 trigger.condition을 작성할 때 참조한다."
         )
     )
 
@@ -32,7 +96,10 @@ class EventSpec(BaseModel):
         """
         return {
             "description": self.description,
-            "filterable_fields": self.filterable_fields,
+            "filterable_fields": {
+                name: field.schema_dict()
+                for name, field in self.filterable_fields.items()
+            },
         }
 
 
