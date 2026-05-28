@@ -161,6 +161,12 @@ class PGBigmRetriever(BaseRetriever):
         return token_filters, exact_scores, sim_scores, title_scores
 
     @staticmethod
+    def _log_plan(plan_rows: list, label: str) -> None:
+        """계획 로그를 기록한다."""
+        metrics = parse_plan([row[0] for row in plan_rows])
+        logger.info("db_query_plan", label=label, **metrics)
+
+    @staticmethod
     def build_bigm_query(
         collection_name: str,
         query: str | list[str],
@@ -245,8 +251,7 @@ class PGBigmRetriever(BaseRetriever):
                         "EXPLAIN (ANALYZE, BUFFERS, FORMAT TEXT) " + search_sql.text
                     )
                     plan_rows = session.execute(explain_sql, params).fetchall()
-                    metrics = parse_plan([row[0] for row in plan_rows])
-                    logger.info("db_query_plan", label=label, **metrics)
+                    self._log_plan(plan_rows, label)
                 except Exception as e:
                     logger.warning("db_query_plan_failed", label=label, error=str(e))
 
@@ -283,8 +288,7 @@ class PGBigmRetriever(BaseRetriever):
                     )
                     result = await session.execute(explain_sql, params)
                     plan_rows = result.fetchall()
-                    metrics = parse_plan([row[0] for row in plan_rows])
-                    logger.info("db_query_plan", label=label, **metrics)
+                    self._log_plan(plan_rows, label)
                 except Exception as e:
                     logger.warning("db_query_plan_failed", label=label, error=str(e))
 
