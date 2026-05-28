@@ -149,6 +149,54 @@ class TestPGBigmRetriever(unittest.TestCase):
         self.assertIn("BETWEEN", clauses[0])
         self.assertNotIn("ANY(:tools)", clauses[0])
 
+    def test_build_token_expressions_fuzzy(self):
+        """Fuzzy 모드: =% 연산자와 sim_scores 생성을 검증한다."""
+        params = {}
+        token_filters, exact_scores, sim_scores, title_scores = (
+            PGBigmRetriever._build_token_expressions(
+                tokens=["Python"],
+                search_mode="fuzzy",
+                title_only=False,
+                params=params,
+            )
+        )
+        self.assertEqual(params["token_0"], "Python")
+        self.assertEqual(len(token_filters), 1)
+        self.assertIn("=% lower(:token_0)", token_filters[0])
+        self.assertEqual(len(exact_scores), 1)
+        self.assertEqual(len(sim_scores), 1)
+        self.assertIn("bigm_similarity(e.cmetadata ->> 'contextual_content'", sim_scores[0])
+        self.assertEqual(len(title_scores), 1)
+
+    def test_build_token_expressions_exact(self):
+        """Exact 모드: LIKE likequery() 연산자 및 sim_scores 비활성화를 검증한다."""
+        params = {}
+        token_filters, exact_scores, sim_scores, title_scores = (
+            PGBigmRetriever._build_token_expressions(
+                tokens=["Python"],
+                search_mode="exact",
+                title_only=False,
+                params=params,
+            )
+        )
+        self.assertIn("LIKE lower(likequery(:token_0))", token_filters[0])
+        self.assertEqual(sim_scores, [])
+
+    def test_build_token_expressions_title_only(self):
+        """Title-only 모드: title 필드만 필터링하고 content 스코어는 생성하지 않는다."""
+        params = {}
+        token_filters, exact_scores, sim_scores, title_scores = (
+            PGBigmRetriever._build_token_expressions(
+                tokens=["Python"],
+                search_mode="fuzzy",
+                title_only=True,
+                params=params,
+            )
+        )
+        self.assertIn("'title'", token_filters[0])
+        self.assertEqual(exact_scores, [])
+        self.assertEqual(sim_scores, [])
+
 
 class TestPGBigmRetrieverAsync(unittest.IsolatedAsyncioTestCase):
     def setUp(self):

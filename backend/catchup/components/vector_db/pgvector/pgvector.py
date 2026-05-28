@@ -118,6 +118,49 @@ class PGBigmRetriever(BaseRetriever):
         return [f"({' OR '.join(sql_conditions)})"]
 
     @staticmethod
+    def _build_token_expressions(
+        tokens: list[str],
+        search_mode: str,
+        title_only: bool,
+        params: dict,
+    ) -> tuple[list[str], list[str], list[str], list[str]]:
+        """토큰 필터 및 스코어 SQL 표현식을 생성한다."""
+        token_filters: list[str] = []
+        exact_scores: list[str] = []
+        sim_scores: list[str] = []
+        title_scores: list[str] = []
+
+        for i, token in enumerate(tokens):
+            p = f"token_{i}"
+            params[p] = token
+            title_scores.append(
+                f"bigm_similarity(COALESCE(e.cmetadata ->> 'title', ''), :{p})"
+            )
+            if title_only:
+                token_filters.append(
+                    f"lower(e.cmetadata ->> 'title') =% lower(:{p})"
+                )
+            elif search_mode == "exact":
+                exact_scores.append(
+                    f"(CASE WHEN LOWER(e.cmetadata ->> 'contextual_content') = LOWER(:{p}) THEN 1.0 ELSE 0.0 END)"
+                )
+                token_filters.append(
+                    f"lower(e.cmetadata ->> 'contextual_content') LIKE lower(likequery(:{p}))"
+                )
+            else:
+                exact_scores.append(
+                    f"(CASE WHEN LOWER(e.cmetadata ->> 'contextual_content') = LOWER(:{p}) THEN 1.0 ELSE 0.0 END)"
+                )
+                token_filters.append(
+                    f"lower(e.cmetadata ->> 'contextual_content') =% lower(:{p})"
+                )
+                sim_scores.append(
+                    f"bigm_similarity(e.cmetadata ->> 'contextual_content', :{p})"
+                )
+
+        return token_filters, exact_scores, sim_scores, title_scores
+
+    @staticmethod
     def build_bigm_query(
         collection_name: str,
         query: str | list[str],
@@ -149,39 +192,11 @@ class PGBigmRetriever(BaseRetriever):
             )
         )
 
-        token_filters = []
-        exact_match_scores = []
-        sim_scores = []
-        title_sim_scores = []
-
-        for i, token in enumerate(tokens):
-            p_name = f"token_{i}"
-            params[p_name] = token
-
-            title_sim_scores.append(
-                f"bigm_similarity(COALESCE(e.cmetadata ->> 'title', ''), :{p_name})"
+        token_filters, exact_match_scores, sim_scores, title_sim_scores = (
+            PGBigmRetriever._build_token_expressions(
+                tokens, search_mode, title_only, params
             )
-            if title_only:
-                token_filters.append(
-                    f"lower(e.cmetadata ->> 'title') =% lower(:{p_name})"
-                )
-            elif search_mode == "exact":
-                exact_match_scores.append(
-                    f"(CASE WHEN LOWER(e.cmetadata ->> 'contextual_content') = LOWER(:{p_name}) THEN 1.0 ELSE 0.0 END)"
-                )
-                token_filters.append(
-                    f"lower(e.cmetadata ->> 'contextual_content') LIKE lower(likequery(:{p_name}))"
-                )
-            else:
-                exact_match_scores.append(
-                    f"(CASE WHEN LOWER(e.cmetadata ->> 'contextual_content') = LOWER(:{p_name}) THEN 1.0 ELSE 0.0 END)"
-                )
-                token_filters.append(
-                    f"lower(e.cmetadata ->> 'contextual_content') =% lower(:{p_name})"
-                )
-                sim_scores.append(
-                    f"bigm_similarity(e.cmetadata ->> 'contextual_content', :{p_name})"
-                )
+        )
 
         if token_filters:
             filter_clauses.append(f"({' AND '.join(token_filters)})")
