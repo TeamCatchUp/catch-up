@@ -50,7 +50,7 @@ interface ResultPageHeaderProps {
 
 // 데이터 도착 후엔 count=0인 source 탭은 숨김. 로딩 중엔 모든 탭을 count badge 없이 표시.
 // '전체'는 항상 노출.
-function buildTabItems(dist: Record<string, number>, hasData: boolean): AccentTabItem<ActiveTab>[] {
+function buildTabItems(dist: Record<string, number>, hasData: boolean, totalCount: number): AccentTabItem<ActiveTab>[] {
   const sourceTabs: AccentTabItem<ActiveTab>[] = [
     { value: 'confluence', label: 'Confluence', count: hasData ? (dist.confluence ?? 0) : undefined },
     { value: 'jira', label: 'Jira', count: hasData ? (dist.jira ?? 0) : undefined },
@@ -59,7 +59,7 @@ function buildTabItems(dist: Record<string, number>, hasData: boolean): AccentTa
     { value: 'channel_talk', label: '채널톡', count: hasData ? (dist.channel_talk ?? 0) : undefined },
   ];
   return [
-    { value: 'all', label: '전체' },
+    { value: 'all', label: '전체', count: hasData ? totalCount : undefined },
     ...(hasData ? sourceTabs.filter((tab) => (tab.count ?? 0) > 0) : sourceTabs),
   ];
 }
@@ -101,7 +101,7 @@ export default function ResultPageHeader({
     return counts;
   }, [query.data]);
 
-  const tabItems = buildTabItems(distribution, query.data !== undefined);
+  const tabItems = buildTabItems(distribution, query.data !== undefined, query.data?.results.length ?? 0);
 
   return (
     <header className="border-edge-normal flex w-full shrink-0 flex-col items-center border-b px-16 pt-5">

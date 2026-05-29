@@ -62,9 +62,11 @@ describe('ResultPageHeader', () => {
     server.use(
       http.get('*/api/v1/search/hybrid', () => HttpResponse.json({ results: [], total: 0, source_distribution: {} })),
     );
-    renderWithClient(<ResultPageHeader {...makeDefaultProps()} />);
+    const { container } = renderWithClient(<ResultPageHeader {...makeDefaultProps()} />);
     expect(screen.getByText('전체')).toBeInTheDocument();
     await waitFor(() => {
+      const badges = Array.from(container.querySelectorAll('[data-tab-state-badge]'));
+      expect(badges.map((b) => b.textContent)).toEqual(['0']);
       expect(screen.queryByText('Jira')).not.toBeInTheDocument();
       expect(screen.queryByText('Slack')).not.toBeInTheDocument();
       expect(screen.queryByText('Confluence')).not.toBeInTheDocument();
@@ -108,7 +110,7 @@ describe('ResultPageHeader', () => {
     await waitFor(() => {
       const badges = Array.from(container.querySelectorAll('[data-tab-state-badge]'));
       const counts = badges.map((b) => b.textContent);
-      expect(counts).toEqual(expect.arrayContaining(['5', '3', '2']));
+      expect(counts).toEqual(['10', '5', '3', '2']);
     });
   });
 
