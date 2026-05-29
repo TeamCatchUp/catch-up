@@ -4,6 +4,7 @@ import {
   FIGMA_LAB_CASES,
   findFigmaLabCase,
   getDefaultFigmaLabCaseId,
+  getFigmaLabCaseForRoute,
   getFigmaLabCasesByGroup,
   getRelatedFigmaLabCasesByGroup,
   getVisibleFigmaLabCasesByGroup,
@@ -56,6 +57,21 @@ describe('figma lab registry', () => {
       'document-search-filter-row-source-dropdown-open',
       'document-search-filter-row-date-picker-open',
     ]);
+  });
+
+  it('keeps group routes scoped to visible cases', () => {
+    expect(
+      getFigmaLabCaseForRoute({
+        groupId: 'home-docs',
+        selectedCaseId: 'result-search-bar-expanded',
+      })?.id,
+    ).toBe('document-search-filter-row-entry');
+    expect(
+      getFigmaLabCaseForRoute({
+        groupId: 'home-docs',
+        selectedCaseId: 'document-search-filter-row-source-dropdown-open',
+      })?.id,
+    ).toBe('document-search-filter-row-source-dropdown-open');
   });
 
   it('accepts an empty registry while the harness has no pilot case', () => {
@@ -161,6 +177,25 @@ describe('figma lab registry', () => {
     ]);
 
     expect(errors).toContain("Case 'admin-integrations-page' state 'empty' must be covered by data.states.");
+  });
+
+  it('rejects component cases when declared visual states are not covered by data contracts', () => {
+    const errors = validateFigmaLabCases([
+      {
+        ...validCase,
+        data: {
+          ...validPageData,
+          states: [
+            {
+              ...validPageData.states[0],
+              state: 'selected',
+            },
+          ],
+        },
+      },
+    ]);
+
+    expect(errors).toContain("Case 'admin-users-table' state 'default' must be covered by data.states.");
   });
 
   it('rejects duplicate case ids', () => {

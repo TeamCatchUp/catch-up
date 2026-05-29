@@ -4,11 +4,9 @@ import Link from 'next/link';
 
 import {
   FIGMA_LAB_CASES,
-  findFigmaLabCase,
-  getDefaultFigmaLabCaseId,
+  getFigmaLabCaseForRoute,
   getFigmaLabCasesByGroup,
   getRelatedFigmaLabCasesByGroup,
-  getVisibleFigmaLabCasesByGroup,
 } from './cases';
 import FigmaLabChrome from './FigmaLabChrome';
 import { findFigmaLabGroup } from './groups';
@@ -50,9 +48,7 @@ export default function FigmaLabRenderer({ selectedCaseId, groupId }: FigmaLabRe
   const group = findFigmaLabGroup(groupId);
   const primaryCases = group ? getFigmaLabCasesByGroup(group.id) : FIGMA_LAB_CASES;
   const relatedCases = group ? getRelatedFigmaLabCasesByGroup(group.id) : [];
-  const visibleCases = group ? getVisibleFigmaLabCasesByGroup(group.id) : FIGMA_LAB_CASES;
-  const fallbackCaseId = selectedCaseId ?? getDefaultFigmaLabCaseId(group?.id);
-  const activeCase = visibleCases.find((item) => item.id === fallbackCaseId) ?? findFigmaLabCase(fallbackCaseId);
+  const activeCase = getFigmaLabCaseForRoute({ selectedCaseId, groupId: group?.id });
   const primaryCaseNavTitle = group?.id === 'shared-query-filter' ? 'Shared cases' : 'Feature cases';
 
   if (!activeCase) {

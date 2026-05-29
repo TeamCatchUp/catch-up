@@ -4,6 +4,11 @@ import { SHARED_QUERY_FILTER_FIGMA_LAB_CASES } from './features/shared-query-fil
 import { FIGMA_LAB_GROUPS, findFigmaLabGroup, isFigmaLabGroupId } from './groups';
 import type { FigmaLabCase, FigmaLabGroupId } from './types';
 
+interface FigmaLabRouteCaseOptions {
+  selectedCaseId?: string;
+  groupId?: FigmaLabGroupId;
+}
+
 export const FIGMA_LAB_CASES: readonly FigmaLabCase[] = [
   ...HYBRID_SEARCH_FIGMA_LAB_CASES,
   ...HOME_DOCS_FIGMA_LAB_CASES,
@@ -44,6 +49,22 @@ export function getRelatedFigmaLabCasesByGroup(groupId: FigmaLabGroupId): readon
 
 export function getVisibleFigmaLabCasesByGroup(groupId: FigmaLabGroupId): readonly FigmaLabCase[] {
   return [...getFigmaLabCasesByGroup(groupId), ...getRelatedFigmaLabCasesByGroup(groupId)];
+}
+
+export function getFigmaLabCaseForRoute({
+  selectedCaseId,
+  groupId,
+}: FigmaLabRouteCaseOptions): FigmaLabCase | undefined {
+  if (!groupId) {
+    return findFigmaLabCase(selectedCaseId ?? getDefaultFigmaLabCaseId());
+  }
+
+  const visibleCases = getVisibleFigmaLabCasesByGroup(groupId);
+  const selectedCase = selectedCaseId ? visibleCases.find((item) => item.id === selectedCaseId) : undefined;
+  if (selectedCase) return selectedCase;
+
+  const defaultCaseId = getDefaultFigmaLabCaseId(groupId);
+  return visibleCases.find((item) => item.id === defaultCaseId);
 }
 
 export function validateFigmaLabCases(cases: readonly FigmaLabCase[]): string[] {
@@ -106,7 +127,7 @@ export function validateFigmaLabCases(cases: readonly FigmaLabCase[]): string[] 
     if (item.kind === 'page' && item.data && item.data.states.length === 0) {
       errors.push(`Case '${item.id}' with kind 'page' must include at least one data state contract.`);
     }
-    if (item.kind === 'page' && item.data) {
+    if (item.data) {
       const coveredStates = new Set(item.data.states.map((stateContract) => stateContract.state));
       for (const state of item.states) {
         if (!coveredStates.has(state)) {
