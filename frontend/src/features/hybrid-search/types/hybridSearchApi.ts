@@ -16,22 +16,23 @@ export interface HybridSearchRequest {
   start_date?: string;
   /** UTC ISO datetime. created_at 필터 종료 */
   end_date?: string;
+  /** LLM 기반 Smart Filter 활성화 여부 */
+  smart_filter: boolean;
 }
 
 export interface HybridSearchResponse {
   results: SourceResponseApi[];
   total: number; // backend dedup 후 max 50
   source_distribution: Record<string, number>; // backend 계산값 (참고용, frontend는 results에서 자체 계산)
+  effective_tool_filters: ToolFilter[] | null;
+  effective_start_date: string | null;
+  effective_end_date: string | null;
+  is_tool_filter_inferred: boolean;
+  is_date_filter_inferred: boolean;
 }
 
 // URL ?tools= 파싱 시 화이트리스트 검증용.
-export const TOOL_FILTERS: readonly ToolFilter[] = [
-  'jira',
-  'github',
-  'slack',
-  'confluence',
-  'channel_talk',
-] as const;
+export const TOOL_FILTERS: readonly ToolFilter[] = ['jira', 'github', 'slack', 'confluence', 'channel_talk'] as const;
 
 // scope fallback용 mutable 배열 (tools 없는 진입 시 5종 전체).
 export const TOOL_FILTERS_ARRAY: ToolFilter[] = [...TOOL_FILTERS];

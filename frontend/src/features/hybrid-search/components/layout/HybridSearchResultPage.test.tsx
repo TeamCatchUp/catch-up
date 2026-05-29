@@ -18,10 +18,28 @@ vi.mock('../../hooks/useHybridSearch', () => ({
 }));
 
 vi.mock('./ResultPageHeader', () => ({
-  default: ({ onAiModeClick }: { onAiModeClick?: () => void }) => (
-    <button type="button" onClick={onAiModeClick}>
-      AI 모드
-    </button>
+  default: ({
+    onAiModeClick,
+    onSubmit,
+    onSmartFilterChange,
+    smartFilter,
+  }: {
+    onAiModeClick?: () => void;
+    onSubmit?: () => void;
+    onSmartFilterChange?: (next: boolean) => void;
+    smartFilter?: boolean;
+  }) => (
+    <div>
+      <button type="button" onClick={onAiModeClick}>
+        AI 모드
+      </button>
+      <button type="button" onClick={() => onSmartFilterChange?.(!smartFilter)}>
+        스마트 필터 toggle
+      </button>
+      <button type="button" onClick={onSubmit}>
+        검색
+      </button>
+    </div>
   ),
 }));
 
@@ -68,5 +86,30 @@ describe('HybridSearchResultPage', () => {
     await user.click(screen.getByRole('button', { name: 'AI 모드' }));
 
     expect(mockPush).toHaveBeenCalledWith('/search');
+  });
+
+  it('submit 시 smart_filter를 URL에 명시한다', async () => {
+    mockSearchParams.set('q', '검색어 text');
+    const user = userEvent.setup();
+
+    render(<HybridSearchResultPage />);
+
+    await user.click(screen.getByRole('button', { name: '검색' }));
+
+    const url = mockReplace.mock.calls[0]![0] as string;
+    expect(url).toContain('smart_filter=true');
+  });
+
+  it('smart filter 변경 시 URL에 즉시 반영한다', async () => {
+    mockSearchParams.set('q', '검색어 text');
+    mockSearchParams.set('smart_filter', 'true');
+    const user = userEvent.setup();
+
+    render(<HybridSearchResultPage />);
+
+    await user.click(screen.getByRole('button', { name: '스마트 필터 toggle' }));
+
+    const url = mockReplace.mock.calls[0]![0] as string;
+    expect(url).toContain('smart_filter=false');
   });
 });

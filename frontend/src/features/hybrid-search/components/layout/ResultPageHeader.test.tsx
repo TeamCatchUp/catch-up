@@ -22,7 +22,7 @@ function renderWithClient(ui: React.ReactElement) {
 function makeDefaultProps() {
   return {
     keyword: '결제',
-    scope: [],
+    toolFilters: [],
     draftKeyword: '결제',
     onDraftKeywordChange: () => {},
     draftChips: [],
@@ -30,6 +30,8 @@ function makeDefaultProps() {
     dateRange: undefined,
     draftDateRange: undefined,
     onDraftDateRangeChange: () => {},
+    smartFilter: true,
+    onSmartFilterChange: () => {},
     onSubmit: () => {},
     onHistorySubmit: () => {},
     onClear: () => {},

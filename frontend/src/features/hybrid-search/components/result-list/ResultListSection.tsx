@@ -54,6 +54,7 @@ interface ResultListSectionProps {
   // scope 는 빈 배열일 때 5종 fallback 이 적용된 값이라 라벨 표시용으로 부적절.
   tools?: ToolFilter[];
   dateRange: DateRange | undefined;
+  smartFilter: boolean;
   sortOrder: SortOrder;
   active: ActiveTab;
   page: number;
@@ -69,6 +70,7 @@ export default function ResultListSection({
   scope,
   tools = [],
   dateRange,
+  smartFilter,
   sortOrder,
   active,
   page,
@@ -77,7 +79,7 @@ export default function ResultListSection({
   onSelectSource,
 }: ResultListSectionProps) {
   const { start, end } = dateRangeToUrlParams(dateRange);
-  const query = useHybridSearch({ keyword, scope, start, end });
+  const query = useHybridSearch({ keyword, toolFilters: tools, start, end, smartFilter });
   const hasSearchFilterLabel = Boolean(dateRange?.from) || tools.length > 0;
 
   // active가 scope 밖이면 결과 없음 (사용자가 보지 못한 source 탭 클릭한 경우).

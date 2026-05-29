@@ -32,7 +32,7 @@ const pageEnter = {
 
 export default function HybridSearchResultPage() {
   const router = useRouter();
-  const { keyword, tools, dateRange, commitSearch } = useHybridSearchUrlState();
+  const { keyword, tools, smartFilter, dateRange, commitSearch } = useHybridSearchUrlState();
 
   // draft state (input/chips/기간 임시 값) + UI state (active/page).
   const [draftKeyword, setDraftKeyword] = useState(keyword);
@@ -45,16 +45,23 @@ export default function HybridSearchResultPage() {
   // 우측 원문 패널이 보여줄 선택 소스. 미선택이면 첫 결과로 자동 폴백.
   const [selectedSource, setSelectedSource] = useState<SourceResponseApi | null>(null);
 
-  // URL keyword/tools/기간 변경 시 모든 임시·UI state reset (render-phase prev-value).
+  // URL keyword/tools/기간/smart filter 변경 시 모든 임시·UI state reset (render-phase prev-value).
   const [prevKeyword, setPrevKeyword] = useState(keyword);
   const toolsKey = tools.join(',');
   const [prevToolsKey, setPrevToolsKey] = useState(toolsKey);
   const rangeKey = `${dateRange?.from?.getTime() ?? ''}-${dateRange?.to?.getTime() ?? ''}`;
   const [prevRangeKey, setPrevRangeKey] = useState(rangeKey);
-  if (prevKeyword !== keyword || prevToolsKey !== toolsKey || prevRangeKey !== rangeKey) {
+  const [prevSmartFilter, setPrevSmartFilter] = useState(smartFilter);
+  if (
+    prevKeyword !== keyword ||
+    prevToolsKey !== toolsKey ||
+    prevRangeKey !== rangeKey ||
+    prevSmartFilter !== smartFilter
+  ) {
     setPrevKeyword(keyword);
     setPrevToolsKey(toolsKey);
     setPrevRangeKey(rangeKey);
+    setPrevSmartFilter(smartFilter);
     setDraftKeyword(keyword);
     setDraftChips(tools);
     setDraftDateRange(dateRange);
@@ -63,12 +70,12 @@ export default function HybridSearchResultPage() {
     setSelectedSource(null);
   }
 
-  // scope: chips 선택 있으면 그것, 없으면 5종 전체 fallback.
-  const scope: ToolFilter[] = tools.length > 0 ? tools : TOOL_FILTERS_ARRAY;
+  // displayScope: 탭/결과 화면 표시용 fallback. API에는 수동 tools만 별도로 전달한다.
+  const displayScope: ToolFilter[] = tools.length > 0 ? tools : TOOL_FILTERS_ARRAY;
 
   // ResultListSection과 동일한 파생 — 쿼리키 일치로 캐시 공유(추가 fetch 0).
   const { start, end } = dateRangeToUrlParams(dateRange);
-  const query = useHybridSearch({ keyword, scope, start, end });
+  const query = useHybridSearch({ keyword, toolFilters: tools, start, end, smartFilter });
   const results = useMemo(() => query.data?.results ?? [], [query.data]);
 
   // 카드는 RagSourceUiModel만 들고 있어 원본 SourceResponseApi 역해석이 필요.
@@ -91,13 +98,17 @@ export default function HybridSearchResultPage() {
   };
 
   const handleSubmit = () => {
-    commitSearch(draftKeyword, draftChips, draftDateRange);
+    commitSearch(draftKeyword, draftChips, draftDateRange, smartFilter);
   };
 
   // history 클릭도 submit과 동등한 commit: entry.query + draft chips/기간을 URL에 한 번에 반영.
   // ResultSearchBar가 onHistorySubmit 호출 후 input.blur() → expanded panel 자동 close.
   const handleHistorySubmit = (query: string) => {
-    commitSearch(query, draftChips, draftDateRange);
+    commitSearch(query, draftChips, draftDateRange, smartFilter);
+  };
+
+  const handleSmartFilterChange = (next: boolean) => {
+    commitSearch(draftKeyword, draftChips, draftDateRange, next);
   };
 
   // X 버튼: input draft만 비움. URL과 현재 표시 중인 검색 결과는 유지.
@@ -137,7 +148,7 @@ export default function HybridSearchResultPage() {
     >
       <ResultPageHeader
         keyword={keyword}
-        scope={scope}
+        toolFilters={tools}
         draftKeyword={draftKeyword}
         onDraftKeywordChange={setDraftKeyword}
         draftChips={draftChips}
@@ -145,6 +156,8 @@ export default function HybridSearchResultPage() {
         dateRange={dateRange}
         draftDateRange={draftDateRange}
         onDraftDateRangeChange={setDraftDateRange}
+        smartFilter={smartFilter}
+        onSmartFilterChange={handleSmartFilterChange}
         onSubmit={handleSubmit}
         onHistorySubmit={handleHistorySubmit}
         onClear={handleClear}
@@ -165,9 +178,10 @@ export default function HybridSearchResultPage() {
       >
         <ResultListSection
           keyword={keyword}
-          scope={scope}
+          scope={displayScope}
           tools={tools}
           dateRange={dateRange}
+          smartFilter={smartFilter}
           active={active}
           page={page}
           onPageChange={setPage}
