@@ -1,6 +1,5 @@
-import IconInfoFilled from '@/public/icons/icon/info_filled.svg';
-
 import { Button } from '../../ui/button';
+import SmartFilterInfoTooltip from './SmartFilterInfoTooltip';
 
 interface SmartFilterStatusPillProps {
   enabled: boolean;
@@ -11,7 +10,7 @@ export default function SmartFilterStatusPill({ enabled, onApplyClick }: SmartFi
   if (enabled) {
     return (
       <div className="bg-fill-strong flex h-9 shrink-0 items-center gap-2.5 rounded-lg px-2.5">
-        <IconInfoFilled className="text-icon-neutral size-4.5 shrink-0" />
+        <SmartFilterInfoTooltip />
         <span className="text-body-xsmall text-content-neutral font-medium whitespace-nowrap">스마트 필터 적용됨</span>
       </div>
     );
@@ -20,7 +19,7 @@ export default function SmartFilterStatusPill({ enabled, onApplyClick }: SmartFi
   return (
     <div className="bg-fill-strong flex h-9 shrink-0 items-center gap-2.5 rounded-lg px-2.5">
       <div className="flex items-center gap-2.5">
-        <IconInfoFilled className="text-icon-neutral size-4.5 shrink-0" />
+        <SmartFilterInfoTooltip />
         <span className="text-body-xsmall text-content-alternative font-medium whitespace-nowrap">기본 검색 결과</span>
       </div>
       <span aria-hidden className="bg-edge-neutral h-4 w-px shrink-0" />

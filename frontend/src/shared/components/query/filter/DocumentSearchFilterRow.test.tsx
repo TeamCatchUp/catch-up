@@ -44,6 +44,7 @@ describe('DocumentSearchFilterRow', () => {
   it('SmartFilterStatusPill renders applied indicator when enabled', () => {
     render(<SmartFilterStatusPill enabled />);
     expect(screen.getByText('스마트 필터 적용됨')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '스마트 필터 설명' })).toBeInTheDocument();
   });
 
   it('SmartFilterStatusPill renders CTA and calls handler when disabled', async () => {
