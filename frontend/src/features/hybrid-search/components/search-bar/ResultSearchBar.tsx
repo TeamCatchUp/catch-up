@@ -144,7 +144,7 @@ export default function ResultSearchBar({
                     <IconCancel className="h-7 w-7" />
                   </button>
                 )}
-                {!expanded && hasText && <span aria-hidden className="bg-edge-normal h-6 w-px shrink-0" />}
+                {hasText && <span aria-hidden className="bg-edge-normal h-6 w-px shrink-0" />}
                 <button
                   type="button"
                   onMouseDown={(e) => expanded && e.preventDefault()}
