@@ -7,6 +7,7 @@ export function useResultSearchBarExpansion({ initialExpanded = false }: { initi
   const rootRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const filterOverlayOpenRef = useRef(false);
+  const blurTimeoutRef = useRef<number | null>(null);
   const expanded = isFocused || forceExpanded || filterOverlayOpen;
 
   const focusInput = () => {
@@ -29,7 +30,11 @@ export function useResultSearchBarExpansion({ initialExpanded = false }: { initi
 
   const handleInputBlur = () => {
     setIsFocused(false);
-    window.setTimeout(() => {
+    if (blurTimeoutRef.current !== null) {
+      window.clearTimeout(blurTimeoutRef.current);
+    }
+    blurTimeoutRef.current = window.setTimeout(() => {
+      blurTimeoutRef.current = null;
       if (filterOverlayOpenRef.current) return;
       const activeElement = document.activeElement;
       if (activeElement && rootRef.current?.contains(activeElement)) return;
@@ -42,6 +47,14 @@ export function useResultSearchBarExpansion({ initialExpanded = false }: { initi
     setFilterOverlayOpen(open);
     if (open) setForceExpanded(true);
   };
+
+  useEffect(() => {
+    return () => {
+      if (blurTimeoutRef.current !== null) {
+        window.clearTimeout(blurTimeoutRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (!expanded) return;
