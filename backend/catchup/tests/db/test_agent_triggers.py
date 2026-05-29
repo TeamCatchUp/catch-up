@@ -1,3 +1,4 @@
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock
 
@@ -9,6 +10,16 @@ from catchup.db.agent_triggers import AgentTriggerDefinitionError
 from catchup.db.agent_triggers import create_or_update_agent_trigger_from_definition
 from catchup.db.agent_triggers import get_active_webhook_triggers
 from catchup.db.models import AgentTrigger
+from catchup.db.models import AgentTriggerRun
+from catchup.db.models import AgentTriggerRunStatus
+
+BACKEND_DIR = Path(__file__).resolve().parents[3]
+AGENT_TRIGGER_RUN_MIGRATION = (
+    BACKEND_DIR
+    / "alembic"
+    / "versions"
+    / "1780020100_4c91f2a8e6b3_add_agent_trigger_runs.py"
+)
 
 
 class FakeSession:
@@ -237,3 +248,70 @@ def test_get_active_webhook_triggers_filters_by_normalized_event_fields() -> Non
     assert "agent_triggers.source = 'channel_talk'" in compiled
     assert "agent_triggers.event_type = 'user_chat.message_created'" in compiled
     assert "agent_specs.status = 'active'" in compiled
+
+
+def test_agent_trigger_run_model_declares_runtime_constraints() -> None:
+    assert "workspace_id" not in AgentTriggerRun.__table__.columns
+
+    columns = AgentTriggerRun.__table__.columns
+    assert columns["trigger_id"].nullable is False
+    assert columns["policy_kind"].nullable is False
+    assert columns["entity_key"].nullable is True
+    assert columns["status"].nullable is False
+    assert columns["run_after"].nullable is True
+    assert columns["start_event_id"].nullable is False
+    assert columns["latest_event_id"].nullable is False
+    assert columns["dispatch_token"].nullable is False
+    assert columns["policy_metadata"].nullable is False
+    assert columns["last_error"].nullable is True
+    assert columns["policy_metadata"].server_default is not None
+    assert columns["status"].server_default is not None
+    assert columns["created_at"].nullable is False
+    assert columns["updated_at"].nullable is False
+
+    indexes = {index.name: index for index in AgentTriggerRun.__table__.indexes}
+
+    assert tuple(indexes["idx_agent_trigger_runs_due"].columns.keys()) == (
+        "status",
+        "run_after",
+    )
+    assert tuple(
+        indexes["idx_agent_trigger_runs_trigger_latest_event"].columns.keys()
+    ) == (
+        "trigger_id",
+        "latest_event_id",
+    )
+
+    unique_index = indexes["uq_agent_trigger_runs_active_trigger_entity"]
+    assert unique_index.unique is True
+    assert tuple(unique_index.columns.keys()) == ("trigger_id", "entity_key")
+    partial_where = str(unique_index.dialect_options["postgresql"]["where"])
+    assert "pending" in partial_where
+    assert "dispatching" in partial_where
+    assert "entity_key IS NOT NULL" in partial_where
+
+
+def test_agent_trigger_run_status_values_match_runtime_lifecycle() -> None:
+    assert {status.value for status in AgentTriggerRunStatus} == {
+        "pending",
+        "dispatching",
+        "completed",
+        "failed",
+        "cancelled",
+    }
+
+
+def test_agent_trigger_run_migration_matches_schema_contract() -> None:
+    migration = AGENT_TRIGGER_RUN_MIGRATION.read_text()
+
+    assert '"agent_trigger_runs"' in migration
+    assert '"workspace_id"' not in migration
+    assert '"policy_metadata"' in migration
+    assert "'{}'::jsonb" in migration
+    assert '"idx_agent_trigger_runs_due"' in migration
+    assert '["status", "run_after"]' in migration
+    assert '"idx_agent_trigger_runs_trigger_latest_event"' in migration
+    assert '["trigger_id", "latest_event_id"]' in migration
+    assert '"uq_agent_trigger_runs_active_trigger_entity"' in migration
+    assert '["trigger_id", "entity_key"]' in migration
+    assert "status IN ('pending', 'dispatching') AND entity_key IS NOT NULL" in migration

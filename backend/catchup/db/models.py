@@ -2719,6 +2719,14 @@ class AgentStatus(StrEnum):
     INACTIVE = "inactive"
 
 
+class AgentTriggerRunStatus(StrEnum):
+    PENDING = "pending"
+    DISPATCHING = "dispatching"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+
+
 class AgentSpec(Base):
     __tablename__ = "agent_specs"
 
@@ -2774,6 +2782,7 @@ class AgentTrigger(Base):
     )
 
     agent_spec: Mapped["AgentSpec"] = relationship(back_populates="triggers")
+    runs: Mapped[list["AgentTriggerRun"]] = relationship(back_populates="trigger")
 
     __table_args__ = (
         UniqueConstraint(
@@ -2790,4 +2799,54 @@ class AgentTrigger(Base):
         ),
         Index("idx_agent_triggers_agent_spec_id", "agent_spec_id"),
         Index("idx_agent_triggers_concurrency_key", "workspace_id", "concurrency_key"),
+    )
+
+
+class AgentTriggerRun(Base):
+    __tablename__ = "agent_trigger_runs"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    trigger_id: Mapped[int] = mapped_column(
+        ForeignKey("agent_triggers.id", ondelete="CASCADE"), nullable=False
+    )
+    policy_kind: Mapped[str] = mapped_column(String(30), nullable=False)
+    entity_key: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status: Mapped[AgentTriggerRunStatus] = mapped_column(
+        String(30),
+        nullable=False,
+        server_default=text(f"'{AgentTriggerRunStatus.PENDING}'"),
+    )
+    run_after: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    start_event_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    latest_event_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    dispatch_token: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), nullable=False, default=uuid.uuid4
+    )
+    policy_metadata: Mapped[dict] = mapped_column(
+        JSONB, nullable=False, server_default=text("'{}'::jsonb")
+    )
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    trigger: Mapped["AgentTrigger"] = relationship(back_populates="runs")
+
+    __table_args__ = (
+        Index("idx_agent_trigger_runs_due", "status", "run_after"),
+        Index(
+            "idx_agent_trigger_runs_trigger_latest_event",
+            "trigger_id",
+            "latest_event_id",
+        ),
+        Index(
+            "uq_agent_trigger_runs_active_trigger_entity",
+            "trigger_id",
+            "entity_key",
+            unique=True,
+            postgresql_where=text(
+                "status IN ('pending', 'dispatching') AND entity_key IS NOT NULL"
+            ),
+        ),
     )
