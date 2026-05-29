@@ -17,7 +17,7 @@ from langgraph.graph.state import CompiledStateGraph
 from pydantic import BaseModel
 from pydantic import Field
 
-from catchup.agents.tools.base import ActionType
+from catchup.agents.enums import ActionType
 from catchup.agents.tools.base import BaseTool
 from catchup.agents.tools.base import action
 from catchup.components.embedder.constants import EmbeddingProvider
@@ -189,6 +189,8 @@ class CatchUpKnowledgeBaseTool(BaseTool):
             "Call with different queries to cover different angles, then call rerank() once for the final ranked result."
         ),
         type=ActionType.READ,
+        default_failure_policy="silent_skip",
+        default_max_retry=1,
     )
     async def search(
         self,
@@ -237,6 +239,8 @@ class CatchUpKnowledgeBaseTool(BaseTool):
             "Returns the final ranked passages — synthesize your answer from these."
         ),
         type=ActionType.READ,
+        default_failure_policy="silent_skip",
+        default_max_retry=1,
     )
     async def rerank(self, original_query: str) -> str:
         accumulated = _accumulated_docs_var.get() or []

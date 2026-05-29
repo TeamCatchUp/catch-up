@@ -9,17 +9,15 @@ Tool Registry: Execution Agent가 사용할 수 있는 도구와 그 명세를 �
 @action 데코레이터는 메서드에 ActionSpec을 부착한다.
 BaseTool.to_langchain_tools()가 이를 읽어 LangChain StructuredTool 리스트로 변환한다.
 """
-from enum import StrEnum
 from typing import Any
 from typing import Callable
 
 from langchain_core.tools import StructuredTool
 from pydantic import BaseModel
 
-
-class ActionType(StrEnum):
-    READ = "read"
-    WRITE = "write"
+from catchup.agents.enums import ActionType
+from catchup.agents.enums import ConfirmationGate
+from catchup.agents.enums import FailurePolicy
 
 
 class ActionSpec(BaseModel):
@@ -28,6 +26,10 @@ class ActionSpec(BaseModel):
     input_model: type[BaseModel]
     output_model: type[BaseModel] | None
     type: ActionType
+    
+    default_failure_policy: FailurePolicy
+    default_max_retry: int | None = None
+    default_confirmation_gate: ConfirmationGate = ConfirmationGate.AUTO
 
     model_config = {"arbitrary_types_allowed": True}
 
@@ -41,6 +43,9 @@ def action(
     output_model: type[BaseModel] | None,
     description: str,
     type: ActionType,
+    default_failure_policy: FailurePolicy,
+    default_max_retry: int | None = None,
+    default_confirmation_gate: ConfirmationGate = ConfirmationGate.AUTO,
 ) -> Callable:
     """action 메서드에 ActionSpec을 부착하는 데코레이터."""
     def decorator(fn: Callable) -> Callable:
@@ -50,6 +55,9 @@ def action(
             input_model=input_model,
             output_model=output_model,
             type=type,
+            default_failure_policy=default_failure_policy,
+            default_max_retry=default_max_retry,
+            default_confirmation_gate=default_confirmation_gate,
         )
         setattr(fn, _ACTION_SPEC_ATTR, spec)
         return fn
@@ -110,6 +118,9 @@ class BaseTool:
                 name: {
                     "description": spec.description,
                     "type": spec.type,
+                    "default_failure_policy": spec.default_failure_policy,
+                    "default_max_retry": spec.default_max_retry,
+                    "default_confirmation_gate": spec.default_confirmation_gate,
                 }
                 for name, spec in self._action_specs().items()
             },
