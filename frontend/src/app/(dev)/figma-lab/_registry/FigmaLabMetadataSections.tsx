@@ -26,6 +26,28 @@ export function FigmaMetadataSection({ activeCase }: { activeCase: FigmaLabCase 
             <dd className="text-content-normal">{activeCase.kind}</dd>
           </div>
           <div className="flex justify-between gap-3">
+            <dt>group</dt>
+            <dd className="text-content-normal">{activeCase.groupId}</dd>
+          </div>
+          <div className="flex justify-between gap-3">
+            <dt>owner</dt>
+            <dd className="text-content-normal">{activeCase.owner}</dd>
+          </div>
+          <div className="flex justify-between gap-3">
+            <dt>component</dt>
+            <dd className="text-content-normal text-right">{activeCase.component}</dd>
+          </div>
+          <div className="flex justify-between gap-3">
+            <dt>state</dt>
+            <dd className="text-content-normal text-right">{activeCase.state}</dd>
+          </div>
+          {activeCase.usedBy && activeCase.usedBy.length > 0 && (
+            <div className="flex justify-between gap-3">
+              <dt>usedBy</dt>
+              <dd className="text-content-normal text-right">{activeCase.usedBy.join(', ')}</dd>
+            </div>
+          )}
+          <div className="flex justify-between gap-3">
             <dt>fileKey</dt>
             <dd className="text-content-normal break-all">{activeCase.figma.fileKey}</dd>
           </div>

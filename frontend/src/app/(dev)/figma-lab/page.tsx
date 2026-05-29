@@ -1,3 +1,4 @@
+import FigmaLabGroupIndex from './_registry/FigmaLabGroupIndex';
 import FigmaLabRenderer from './_registry/FigmaLabRenderer';
 
 interface PageProps {
@@ -8,6 +9,10 @@ interface PageProps {
 
 export default async function FigmaLabPage({ searchParams }: PageProps) {
   const params = await searchParams;
+
+  if (!params.case) {
+    return <FigmaLabGroupIndex />;
+  }
 
   return <FigmaLabRenderer selectedCaseId={params.case} />;
 }
