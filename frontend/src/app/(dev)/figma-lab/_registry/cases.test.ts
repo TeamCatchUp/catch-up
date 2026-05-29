@@ -1,19 +1,61 @@
 import { describe, expect, it } from 'vitest';
 
-import { FIGMA_LAB_CASES, findFigmaLabCase, getDefaultFigmaLabCaseId, validateFigmaLabCases } from './cases';
+import {
+  FIGMA_LAB_CASES,
+  findFigmaLabCase,
+  getDefaultFigmaLabCaseId,
+  getFigmaLabCasesByGroup,
+  getRelatedFigmaLabCasesByGroup,
+  getVisibleFigmaLabCasesByGroup,
+  validateFigmaLabCases,
+} from './cases';
 import { validCase, validPageCase, validPageData, validPageLayout } from './cases.test.fixtures';
+import type { FigmaLabCase } from './types';
 
 describe('figma lab registry', () => {
-  it('starts with no registered cases', () => {
-    expect(FIGMA_LAB_CASES).toEqual([]);
+  it('registers the smart filter UI cases without metadata errors', () => {
+    expect(FIGMA_LAB_CASES.map((item) => item.id)).toEqual([
+      'result-search-bar-collapsed',
+      'result-search-bar-expanded',
+      'document-search-filter-row-entry',
+      'document-search-filter-row-source-dropdown-open',
+      'document-search-filter-row-date-picker-open',
+      'document-search-filter-row-result-expanded',
+      'smart-filter-status-pill',
+    ]);
+    expect(validateFigmaLabCases(FIGMA_LAB_CASES)).toEqual([]);
   });
 
   it('returns undefined when a case id is unknown', () => {
     expect(findFigmaLabCase('missing-case')).toBeUndefined();
   });
 
-  it('returns undefined when there is no default case', () => {
-    expect(getDefaultFigmaLabCaseId()).toBeUndefined();
+  it('returns the first registered case as the default case', () => {
+    expect(getDefaultFigmaLabCaseId()).toBe('result-search-bar-collapsed');
+  });
+
+  it('returns the group default case when a group is selected', () => {
+    expect(getDefaultFigmaLabCaseId('hybrid-search')).toBe('result-search-bar-expanded');
+    expect(getDefaultFigmaLabCaseId('shared-query-filter')).toBe('document-search-filter-row-entry');
+  });
+
+  it('returns feature cases and related shared cases by group', () => {
+    expect(getFigmaLabCasesByGroup('hybrid-search').map((item) => item.id)).toEqual([
+      'result-search-bar-collapsed',
+      'result-search-bar-expanded',
+    ]);
+    expect(getRelatedFigmaLabCasesByGroup('hybrid-search').map((item) => item.id)).toEqual([
+      'document-search-filter-row-entry',
+      'document-search-filter-row-source-dropdown-open',
+      'document-search-filter-row-date-picker-open',
+      'document-search-filter-row-result-expanded',
+      'smart-filter-status-pill',
+    ]);
+    expect(getVisibleFigmaLabCasesByGroup('home-docs').map((item) => item.id)).toEqual([
+      'document-search-filter-row-entry',
+      'document-search-filter-row-source-dropdown-open',
+      'document-search-filter-row-date-picker-open',
+    ]);
   });
 
   it('accepts an empty registry while the harness has no pilot case', () => {
@@ -140,6 +182,25 @@ describe('figma lab registry', () => {
     const errors = validateFigmaLabCases([caseWithoutKind]);
 
     expect(errors).toContain("Case 'admin-users-table' must include kind.");
+  });
+
+  it('rejects registered cases without ownership metadata', () => {
+    const errors = validateFigmaLabCases([
+      {
+        ...validCase,
+        groupId: 'missing-group',
+        owner: 'unknown',
+        component: '',
+        state: '',
+        usedBy: ['missing-related-group'],
+      } as FigmaLabCase,
+    ]);
+
+    expect(errors).toContain("Case 'admin-users-table' must include a valid groupId.");
+    expect(errors).toContain("Case 'admin-users-table' must include a valid owner.");
+    expect(errors).toContain("Case 'admin-users-table' must include component.");
+    expect(errors).toContain("Case 'admin-users-table' must include state.");
+    expect(errors).toContain("Case 'admin-users-table' usedBy group 'missing-related-group' is not registered.");
   });
 
   it('rejects registered cases without Figma metadata', () => {

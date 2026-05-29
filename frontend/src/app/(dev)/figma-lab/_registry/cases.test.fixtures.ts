@@ -2,6 +2,10 @@ import type { FigmaLabCase, FigmaLabDataContract, FigmaLabLayoutContract } from 
 
 export const validCase: FigmaLabCase = {
   id: 'admin-users-table',
+  groupId: 'hybrid-search',
+  owner: 'feature',
+  component: 'UsersTable',
+  state: 'default',
   kind: 'component',
   title: 'Admin/UsersTable',
   figma: {

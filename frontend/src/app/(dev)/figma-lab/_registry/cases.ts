@@ -1,6 +1,14 @@
-import type { FigmaLabCase } from './types';
+import { HOME_DOCS_FIGMA_LAB_CASES } from './features/home-docs';
+import { HYBRID_SEARCH_FIGMA_LAB_CASES } from './features/hybrid-search';
+import { SHARED_QUERY_FILTER_FIGMA_LAB_CASES } from './features/shared-query-filter';
+import { FIGMA_LAB_GROUPS, findFigmaLabGroup, isFigmaLabGroupId } from './groups';
+import type { FigmaLabCase, FigmaLabGroupId } from './types';
 
-export const FIGMA_LAB_CASES: readonly FigmaLabCase[] = [];
+export const FIGMA_LAB_CASES: readonly FigmaLabCase[] = [
+  ...HYBRID_SEARCH_FIGMA_LAB_CASES,
+  ...HOME_DOCS_FIGMA_LAB_CASES,
+  ...SHARED_QUERY_FILTER_FIGMA_LAB_CASES,
+];
 
 export function findFigmaLabCase(id: string | undefined): FigmaLabCase | undefined {
   if (!id) return undefined;
@@ -8,8 +16,34 @@ export function findFigmaLabCase(id: string | undefined): FigmaLabCase | undefin
   return FIGMA_LAB_CASES.find((item) => item.id === id);
 }
 
-export function getDefaultFigmaLabCaseId(): string | undefined {
+export function getDefaultFigmaLabCaseId(groupId?: FigmaLabGroupId): string | undefined {
+  if (groupId) {
+    const group = findFigmaLabGroup(groupId);
+    if (group?.defaultCaseId) return group.defaultCaseId;
+
+    return getVisibleFigmaLabCasesByGroup(groupId)[0]?.id;
+  }
+
   return FIGMA_LAB_CASES[0]?.id;
+}
+
+export function getFigmaLabCasesByGroup(groupId: FigmaLabGroupId): readonly FigmaLabCase[] {
+  return FIGMA_LAB_CASES.filter((item) => item.groupId === groupId);
+}
+
+export function getRelatedFigmaLabCasesByGroup(groupId: FigmaLabGroupId): readonly FigmaLabCase[] {
+  const group = findFigmaLabGroup(groupId);
+  const relatedGroupIds = new Set(group?.relatedGroupIds ?? []);
+
+  return FIGMA_LAB_CASES.filter((item) => {
+    if (!relatedGroupIds.has(item.groupId)) return false;
+
+    return item.usedBy?.includes(groupId) ?? false;
+  });
+}
+
+export function getVisibleFigmaLabCasesByGroup(groupId: FigmaLabGroupId): readonly FigmaLabCase[] {
+  return [...getFigmaLabCasesByGroup(groupId), ...getRelatedFigmaLabCasesByGroup(groupId)];
 }
 
 export function validateFigmaLabCases(cases: readonly FigmaLabCase[]): string[] {
@@ -36,6 +70,23 @@ export function validateFigmaLabCases(cases: readonly FigmaLabCase[]): string[] 
     }
     if (!item.kind) {
       errors.push(`Case '${item.id}' must include kind.`);
+    }
+    if (!isFigmaLabGroupId(item.groupId)) {
+      errors.push(`Case '${item.id}' must include a valid groupId.`);
+    }
+    if (item.owner !== 'feature' && item.owner !== 'shared') {
+      errors.push(`Case '${item.id}' must include a valid owner.`);
+    }
+    if (!item.component) {
+      errors.push(`Case '${item.id}' must include component.`);
+    }
+    if (!item.state) {
+      errors.push(`Case '${item.id}' must include state.`);
+    }
+    for (const usedByGroupId of item.usedBy ?? []) {
+      if (!FIGMA_LAB_GROUPS.some((group) => group.id === usedByGroupId)) {
+        errors.push(`Case '${item.id}' usedBy group '${usedByGroupId}' is not registered.`);
+      }
     }
     if (item.kind === 'page' && !item.targetRoute) {
       errors.push(`Case '${item.id}' with kind 'page' must include targetRoute.`);

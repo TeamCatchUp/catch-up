@@ -12,6 +12,16 @@ export interface FigmaLabViewport {
 }
 
 export type FigmaLabCaseKind = 'component' | 'section' | 'page';
+export type FigmaLabGroupId = 'hybrid-search' | 'home-docs' | 'shared-query-filter';
+export type FigmaLabCaseOwner = 'feature' | 'shared';
+
+export interface FigmaLabGroup {
+  id: FigmaLabGroupId;
+  title: string;
+  description: string;
+  defaultCaseId?: string;
+  relatedGroupIds?: readonly FigmaLabGroupId[];
+}
 
 export interface FigmaLabLayoutRelationship {
   from: string;
@@ -62,6 +72,11 @@ export interface FigmaLabTokenDecision {
 
 export interface FigmaLabCase {
   id: string;
+  groupId: FigmaLabGroupId;
+  owner: FigmaLabCaseOwner;
+  component: string;
+  state: string;
+  usedBy?: readonly FigmaLabGroupId[];
   kind: FigmaLabCaseKind;
   title: string;
   description?: string;
