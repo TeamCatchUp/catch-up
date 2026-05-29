@@ -15,6 +15,7 @@ interface SourceFilterDropdownProps {
   onSourcesChange: (next: DocsSource[]) => void;
   activeMaxWidthClassName: string;
   preserveInputFocus?: boolean;
+  defaultOpen?: boolean;
   onOpenChange?: (open: boolean) => void;
 }
 
@@ -23,9 +24,10 @@ export default function SourceFilterDropdown({
   onSourcesChange,
   activeMaxWidthClassName,
   preserveInputFocus,
+  defaultOpen = false,
   onOpenChange,
 }: SourceFilterDropdownProps) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
   const [searchTerm, setSearchTerm] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
 

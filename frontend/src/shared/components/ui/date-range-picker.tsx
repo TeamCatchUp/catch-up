@@ -35,6 +35,7 @@ interface DateRangePickerProps {
   trigger?: React.ReactNode;
   // PopoverContent 정렬 (기본: 'end')
   align?: 'start' | 'end';
+  defaultOpen?: boolean;
   onOpenChange?: (open: boolean) => void;
   contentProps?: DateRangePickerContentProps;
 }
@@ -48,10 +49,11 @@ function DateRangePicker({
   numberOfMonths = 2,
   trigger,
   align = 'end',
+  defaultOpen = false,
   onOpenChange,
   contentProps,
 }: DateRangePickerProps) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
   const [tempRange, setTempRange] = useState<DateRange | undefined>(value);
   const { className: contentClassName, ...contentPropsRest } = contentProps ?? {};
 

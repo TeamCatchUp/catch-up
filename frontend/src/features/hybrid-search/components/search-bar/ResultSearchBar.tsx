@@ -13,6 +13,7 @@ import IconArrowSend from '@/public/icons/icon/arrow_send.svg';
 import IconCancel from '@/public/icons/icon/cancel.svg';
 import IconSearch from '@/public/icons/icon/search_2.svg';
 import SmartFilterStatusPill from '@/shared/components/query/filter/SmartFilterStatusPill';
+import type { SearchHistoryEntry } from '@/shared/types/searchHistory';
 import type { DocsSource } from '@/shared/types/source';
 import { cn } from '@/shared/utils/cn';
 
@@ -35,6 +36,9 @@ interface ResultSearchBarProps {
   onHistorySubmit: (query: string) => void;
   onClear: () => void;
   onAiModeClick: () => void;
+  initialExpanded?: boolean;
+  historyEntries?: SearchHistoryEntry[];
+  historyLoading?: boolean;
 }
 
 function AiModeButton({ expanded, onClick }: { expanded: boolean; onClick: () => void }) {
@@ -65,6 +69,9 @@ export default function ResultSearchBar({
   onHistorySubmit,
   onClear,
   onAiModeClick,
+  initialExpanded = false,
+  historyEntries,
+  historyLoading,
 }: ResultSearchBarProps) {
   const {
     rootRef,
@@ -75,7 +82,7 @@ export default function ResultSearchBar({
     handleInputBlur,
     handleInputFocus,
     handleFilterOverlayOpenChange,
-  } = useResultSearchBarExpansion();
+  } = useResultSearchBarExpansion({ initialExpanded });
   const hasText = value.trim().length > 0;
 
   // submit 후 input blur → onBlur로 setIsFocused(false) → 패널 collapse.
@@ -181,6 +188,8 @@ export default function ResultSearchBar({
               onSmartFilterChange={onDraftSmartFilterChange}
               onFilterOverlayOpenChange={handleFilterOverlayOpenChange}
               onHistoryItemClick={handleHistorySubmit}
+              historyEntries={historyEntries}
+              historyLoading={historyLoading}
             />
           )}
         </div>

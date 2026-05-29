@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 
-export function useResultSearchBarExpansion() {
+export function useResultSearchBarExpansion({ initialExpanded = false }: { initialExpanded?: boolean } = {}) {
   const [isFocused, setIsFocused] = useState(false);
-  const [forceExpanded, setForceExpanded] = useState(false);
+  const [forceExpanded, setForceExpanded] = useState(initialExpanded);
   const [filterOverlayOpen, setFilterOverlayOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);

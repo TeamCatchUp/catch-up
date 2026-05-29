@@ -21,6 +21,7 @@ interface DocumentSearchFilterRowProps {
   smartFilter: boolean;
   onSmartFilterChange: (next: boolean) => void;
   preserveInputFocus?: boolean;
+  initialOpenFilter?: 'source' | 'date';
   onFilterOverlayOpenChange?: (open: boolean) => void;
 }
 
@@ -34,6 +35,7 @@ export default function DocumentSearchFilterRow({
   smartFilter,
   onSmartFilterChange,
   preserveInputFocus = false,
+  initialOpenFilter,
   onFilterOverlayOpenChange,
 }: DocumentSearchFilterRowProps) {
   const isResultExpanded = variant === 'result-expanded';
@@ -47,6 +49,7 @@ export default function DocumentSearchFilterRow({
           onSourcesChange={onSourcesChange}
           activeMaxWidthClassName={activeTriggerMaxWidthClassName}
           preserveInputFocus={preserveInputFocus}
+          defaultOpen={initialOpenFilter === 'source'}
           onOpenChange={onFilterOverlayOpenChange}
         />
         <DateFilterChip
@@ -54,6 +57,7 @@ export default function DocumentSearchFilterRow({
           onChange={onDateRangeChange}
           activeMaxWidthClassName={activeTriggerMaxWidthClassName}
           preserveInputFocus={preserveInputFocus}
+          defaultOpen={initialOpenFilter === 'date'}
           onOpenChange={onFilterOverlayOpenChange}
         />
       </div>

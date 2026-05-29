@@ -13,6 +13,7 @@ interface DateFilterChipProps {
   onChange: (next: DateRange | undefined) => void;
   activeMaxWidthClassName: string;
   preserveInputFocus?: boolean;
+  defaultOpen?: boolean;
   onOpenChange?: (open: boolean) => void;
 }
 
@@ -28,9 +29,10 @@ export default function DateFilterChip({
   onChange,
   activeMaxWidthClassName,
   preserveInputFocus,
+  defaultOpen = false,
   onOpenChange,
 }: DateFilterChipProps) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
   const valueLabel = formatDateRangeLabel(value);
   const handleOpenChange = (next: boolean) => {
     setOpen(next);
@@ -42,6 +44,7 @@ export default function DateFilterChip({
       value={value}
       onChange={onChange}
       align="start"
+      defaultOpen={defaultOpen}
       onOpenChange={handleOpenChange}
       contentProps={{ 'data-document-search-filter-popover': true }}
       trigger={

@@ -9,6 +9,7 @@ import type { DateRange } from 'react-day-picker';
 import DocumentSearchFilterRow from '@/shared/components/query/filter/DocumentSearchFilterRow';
 import SearchHistoryList from '@/shared/components/SearchHistoryList';
 import { useSearchHistoryEntries } from '@/shared/hooks/useSearchHistoryEntries';
+import type { SearchHistoryEntry } from '@/shared/types/searchHistory';
 import type { DocsSource } from '@/shared/types/source';
 
 import CatchupPromoCard from './CatchupPromoCard';
@@ -22,6 +23,8 @@ interface ResultSearchBarExpandedPanelProps {
   onSmartFilterChange: (next: boolean) => void;
   onFilterOverlayOpenChange: (open: boolean) => void;
   onHistoryItemClick: (query: string) => void;
+  historyEntries?: SearchHistoryEntry[];
+  historyLoading?: boolean;
 }
 
 export default function ResultSearchBarExpandedPanel({
@@ -33,8 +36,15 @@ export default function ResultSearchBarExpandedPanel({
   onSmartFilterChange,
   onFilterOverlayOpenChange,
   onHistoryItemClick,
+  historyEntries,
+  historyLoading,
 }: ResultSearchBarExpandedPanelProps) {
-  const { entries: history, isLoading: isHistoryLoading } = useSearchHistoryEntries();
+  const shouldUseHistoryFixture = historyEntries !== undefined;
+  const { entries: queriedHistory, isLoading: isQueriedHistoryLoading } = useSearchHistoryEntries({
+    enabled: !shouldUseHistoryFixture,
+  });
+  const history = historyEntries ?? queriedHistory;
+  const isHistoryLoading = historyLoading ?? isQueriedHistoryLoading;
 
   // onMouseDown preventDefault: 패널 내부 어떤 요소 클릭해도 input focus가 유지됨
   // (chips, history item 등이 focus를 가져가 onBlur로 패널이 닫히는 문제 방지).
