@@ -6,6 +6,7 @@ import { format } from 'date-fns';
 
 import IconCalendar from '@/public/icons/icon/calendar.svg';
 import IconCancelSmall from '@/public/icons/icon/cancel_small.svg';
+import IconDeleteCircle from '@/public/icons/icon/delete_circle.svg';
 import IconDropdownDown from '@/public/icons/icon/dropdown_down.svg';
 import IconDropdownUp from '@/public/icons/icon/dropdown_up.svg';
 import IconFile from '@/public/icons/icon/file.svg';
@@ -28,6 +29,7 @@ interface SourceOption {
   value: DocsSource;
   label: string;
   Icon: React.FC<React.SVGProps<SVGSVGElement>>;
+  iconClassName?: string;
 }
 
 interface FilterTriggerButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
@@ -41,6 +43,7 @@ interface FilterTriggerButtonProps extends React.ButtonHTMLAttributes<HTMLButton
 interface SourceFilterDropdownProps {
   selectedSources: DocsSource[];
   onSourcesChange: (next: DocsSource[]) => void;
+  activeMaxWidthClassName: string;
   preserveInputFocus?: boolean;
   onOpenChange?: (open: boolean) => void;
 }
@@ -48,6 +51,7 @@ interface SourceFilterDropdownProps {
 interface DateFilterChipProps {
   value: DateRange | undefined;
   onChange: (next: DateRange | undefined) => void;
+  activeMaxWidthClassName: string;
   preserveInputFocus?: boolean;
   onOpenChange?: (open: boolean) => void;
 }
@@ -80,7 +84,7 @@ interface DocumentSearchFilterRowProps {
 
 const SOURCE_OPTIONS: readonly SourceOption[] = [
   { value: 'github', label: 'Github', Icon: GitHub },
-  { value: 'channel_talk', label: '채널톡', Icon: ChannelTalk },
+  { value: 'channel_talk', label: '채널톡', Icon: ChannelTalk, iconClassName: 'size-4' },
   { value: 'confluence', label: 'Confluence', Icon: Confluence },
   { value: 'jira', label: 'Jira', Icon: Jira },
   { value: 'slack', label: 'Slack', Icon: Slack },
@@ -130,6 +134,7 @@ function FilterTriggerButton({
 function SourceFilterDropdown({
   selectedSources,
   onSourcesChange,
+  activeMaxWidthClassName,
   preserveInputFocus,
   onOpenChange,
 }: SourceFilterDropdownProps) {
@@ -175,7 +180,7 @@ function SourceFilterDropdown({
           open={open}
           Icon={IconFile}
           aria-label="검색 범위 필터"
-          className={cn(selectedSources.length > 0 && 'max-w-55')}
+          className={cn(selectedSources.length > 0 && activeMaxWidthClassName)}
           onMouseDown={preserveInputFocus ? (event) => event.preventDefault() : undefined}
         />
       </PopoverTrigger>
@@ -212,7 +217,7 @@ function SourceFilterDropdown({
                         className="border-edge-strong bg-fill-normal flex h-[37px] items-center gap-1 rounded-full border px-1.5 py-1.5"
                       >
                         <span className="flex min-w-0 items-center gap-1.5 px-1">
-                          <option.Icon className="size-5 shrink-0" />
+                          <option.Icon className={cn(option.iconClassName ?? 'size-5', 'shrink-0')} />
                           <span className="text-body-small text-content-normal max-w-[150px] truncate">
                             {option.label}
                           </span>
@@ -249,14 +254,14 @@ function SourceFilterDropdown({
               <button
                 type="button"
                 aria-label="검색 범위 필터 초기화"
-                className="text-icon-neutral hover:bg-fill-interaction-hover flex size-[23px] shrink-0 cursor-pointer items-center justify-center rounded-full"
+                className="text-icon-neutral flex size-[23px] shrink-0 cursor-pointer items-center justify-center rounded-full"
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={(event) => {
                   event.stopPropagation();
                   clearSelected();
                 }}
               >
-                <IconCancelSmall className="size-5" />
+                <IconDeleteCircle className="size-5" />
               </button>
             )}
           </div>
@@ -273,12 +278,12 @@ function SourceFilterDropdown({
               <li key={option.value}>
                 <button
                   type="button"
-                  className="hover:bg-fill-interaction-hover active:bg-fill-interaction-pressed flex h-10 w-full cursor-pointer items-center gap-2 rounded-xl px-2 py-1 transition-colors"
+                  className="hover:bg-fill-interaction-hover flex h-10 w-full cursor-pointer items-center gap-2 rounded-xl px-2 py-1 transition-colors"
                   onMouseDown={(event) => event.preventDefault()}
                   onClick={() => toggleSource(option.value)}
                 >
                   <span className="border-edge-neutral bg-fill-strong flex size-[34px] shrink-0 items-center justify-center rounded-full border p-1.5">
-                    <option.Icon className="size-5 shrink-0" />
+                    <option.Icon className={cn(option.iconClassName ?? 'size-5', 'shrink-0')} />
                   </span>
                   <span className="text-body-small text-content-normal min-w-0 flex-1 truncate text-left">
                     {option.label}
@@ -302,7 +307,13 @@ function formatDateRangeLabel(range: DateRange | undefined): string | undefined 
   return from === to ? from : `${from} - ${to}`;
 }
 
-function DateFilterChip({ value, onChange, preserveInputFocus, onOpenChange }: DateFilterChipProps) {
+function DateFilterChip({
+  value,
+  onChange,
+  activeMaxWidthClassName,
+  preserveInputFocus,
+  onOpenChange,
+}: DateFilterChipProps) {
   const [open, setOpen] = useState(false);
   const valueLabel = formatDateRangeLabel(value);
   const handleOpenChange = (next: boolean) => {
@@ -325,7 +336,7 @@ function DateFilterChip({ value, onChange, preserveInputFocus, onOpenChange }: D
           open={open}
           Icon={IconCalendar}
           aria-label="날짜 필터"
-          className={cn(valueLabel && 'max-w-55')}
+          className={cn(valueLabel && activeMaxWidthClassName)}
           onMouseDown={preserveInputFocus ? (event) => event.preventDefault() : undefined}
         />
       }
@@ -405,6 +416,7 @@ export default function DocumentSearchFilterRow({
   onFilterOverlayOpenChange,
 }: DocumentSearchFilterRowProps) {
   const isResultExpanded = variant === 'result-expanded';
+  const activeTriggerMaxWidthClassName = isResultExpanded ? 'max-w-55' : 'max-w-45';
 
   return (
     <div className={cn('flex items-center gap-5', isResultExpanded ? 'w-full px-2' : 'w-182', className)}>
@@ -412,12 +424,14 @@ export default function DocumentSearchFilterRow({
         <SourceFilterDropdown
           selectedSources={selectedSources}
           onSourcesChange={onSourcesChange}
+          activeMaxWidthClassName={activeTriggerMaxWidthClassName}
           preserveInputFocus={preserveInputFocus}
           onOpenChange={onFilterOverlayOpenChange}
         />
         <DateFilterChip
           value={dateRange}
           onChange={onDateRangeChange}
+          activeMaxWidthClassName={activeTriggerMaxWidthClassName}
           preserveInputFocus={preserveInputFocus}
           onOpenChange={onFilterOverlayOpenChange}
         />
