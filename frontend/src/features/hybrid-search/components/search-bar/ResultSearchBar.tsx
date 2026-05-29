@@ -26,13 +26,18 @@ interface ResultSearchBarProps {
   onChipsChange: (next: DocsSource[]) => void;
   dateRange: DateRange | undefined;
   onDateRangeChange: (next: DateRange | undefined) => void;
-  // Committed URL/API state. Used by both the top status pill and the expanded smart filter control.
+  // Committed URL/API state. The top status pill stays URL-based.
   smartFilter: boolean;
   onSmartFilterChange: (next: boolean) => void;
   onSubmit: () => void;
   onHistorySubmit: (query: string) => void;
   onClear: () => void;
   onAiModeClick: () => void;
+}
+
+interface OptimisticSmartFilter {
+  base: boolean;
+  value: boolean;
 }
 
 function AiModeButton({ expanded, onClick }: { expanded: boolean; onClick: () => void }) {
@@ -66,11 +71,13 @@ export default function ResultSearchBar({
   const [isFocused, setIsFocused] = useState(false);
   const [forceExpanded, setForceExpanded] = useState(false);
   const [filterOverlayOpen, setFilterOverlayOpen] = useState(false);
+  const [optimisticSmartFilter, setOptimisticSmartFilter] = useState<OptimisticSmartFilter | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const filterOverlayOpenRef = useRef(false);
   const hasText = value.trim().length > 0;
   const expanded = isFocused || forceExpanded || filterOverlayOpen;
+  const expandedSmartFilter = optimisticSmartFilter?.base === smartFilter ? optimisticSmartFilter.value : smartFilter;
 
   const focusInput = () => {
     const focus = () => inputRef.current?.focus();
@@ -85,6 +92,11 @@ export default function ResultSearchBar({
     filterOverlayOpenRef.current = open;
     setFilterOverlayOpen(open);
     if (open) setForceExpanded(true);
+  };
+
+  const handleSmartFilterChange = (next: boolean) => {
+    setOptimisticSmartFilter({ base: smartFilter, value: next });
+    onSmartFilterChange(next);
   };
 
   useEffect(() => {
@@ -213,8 +225,8 @@ export default function ResultSearchBar({
               onSourcesToggle={onChipsChange}
               dateRange={dateRange}
               onDateRangeChange={onDateRangeChange}
-              smartFilter={smartFilter}
-              onSmartFilterChange={onSmartFilterChange}
+              smartFilter={expandedSmartFilter}
+              onSmartFilterChange={handleSmartFilterChange}
               onFilterOverlayOpenChange={handleFilterOverlayOpenChange}
               onHistoryItemClick={handleHistorySubmit}
             />
@@ -224,7 +236,7 @@ export default function ResultSearchBar({
       <SmartFilterStatusPill
         enabled={smartFilter}
         onApplyClick={() => {
-          onSmartFilterChange(true);
+          handleSmartFilterChange(true);
           setForceExpanded(true);
           focusInput();
         }}

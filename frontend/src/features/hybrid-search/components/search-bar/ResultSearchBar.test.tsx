@@ -13,7 +13,7 @@ vi.mock('./ResultSearchBarExpandedPanel', () => ({
     onFilterOverlayOpenChange: (open: boolean) => void;
   }) => (
     <div data-testid="expanded-panel">
-      url smart: {String(smartFilter)}
+      expanded smart: {String(smartFilter)}
       <button
         type="button"
         onMouseDown={(event) => event.preventDefault()}
@@ -81,7 +81,7 @@ describe('ResultSearchBar', () => {
 
     await user.click(screen.getByRole('button', { name: '스마트 필터 적용하기' }));
 
-    expect(screen.getByTestId('expanded-panel')).toHaveTextContent('url smart: false');
+    expect(screen.getByTestId('expanded-panel')).toHaveTextContent('expanded smart: true');
     expect(onSmartFilterChange).toHaveBeenCalledWith(true);
   });
 
