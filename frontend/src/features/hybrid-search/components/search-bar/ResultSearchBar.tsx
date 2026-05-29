@@ -6,18 +6,18 @@
 // 외부 placeholder가 collapsed 높이(h-14)만큼 자리 보존, 실제 바는 absolute로 오버레이 → expanded 시 하단 콘텐츠 안 밀림.
 // 내부 확장 콘텐츠는 ResultSearchBarExpandedPanel로 분리.
 
-import { useEffect, useRef, useState } from 'react';
 import type { DateRange } from 'react-day-picker';
 
 import IconAi from '@/public/icons/icon/ai.svg';
 import IconArrowSend from '@/public/icons/icon/arrow_send.svg';
 import IconCancel from '@/public/icons/icon/cancel.svg';
 import IconSearch from '@/public/icons/icon/search_2.svg';
-import { SmartFilterStatusPill } from '@/shared/components/query/filter/DocumentSearchFilterRow';
+import SmartFilterStatusPill from '@/shared/components/query/filter/SmartFilterStatusPill';
 import type { DocsSource } from '@/shared/types/source';
 import { cn } from '@/shared/utils/cn';
 
 import ResultSearchBarExpandedPanel from './ResultSearchBarExpandedPanel';
+import { useResultSearchBarExpansion } from './useResultSearchBarExpansion';
 
 interface ResultSearchBarProps {
   value: string;
@@ -28,16 +28,13 @@ interface ResultSearchBarProps {
   onDateRangeChange: (next: DateRange | undefined) => void;
   // Committed URL/API state. The top status pill stays URL-based.
   smartFilter: boolean;
-  onSmartFilterChange: (next: boolean) => void;
+  // Draft state used by the expanded panel. Applied when the user submits the search.
+  draftSmartFilter: boolean;
+  onDraftSmartFilterChange: (next: boolean) => void;
   onSubmit: () => void;
   onHistorySubmit: (query: string) => void;
   onClear: () => void;
   onAiModeClick: () => void;
-}
-
-interface OptimisticSmartFilter {
-  base: boolean;
-  value: boolean;
 }
 
 function AiModeButton({ expanded, onClick }: { expanded: boolean; onClick: () => void }) {
@@ -62,72 +59,35 @@ export default function ResultSearchBar({
   dateRange,
   onDateRangeChange,
   smartFilter,
-  onSmartFilterChange,
+  draftSmartFilter,
+  onDraftSmartFilterChange,
   onSubmit,
   onHistorySubmit,
   onClear,
   onAiModeClick,
 }: ResultSearchBarProps) {
-  const [isFocused, setIsFocused] = useState(false);
-  const [forceExpanded, setForceExpanded] = useState(false);
-  const [filterOverlayOpen, setFilterOverlayOpen] = useState(false);
-  const [optimisticSmartFilter, setOptimisticSmartFilter] = useState<OptimisticSmartFilter | null>(null);
-  const rootRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
-  const filterOverlayOpenRef = useRef(false);
+  const {
+    rootRef,
+    inputRef,
+    expanded,
+    blurInput,
+    expandAndFocusInput,
+    handleInputBlur,
+    handleInputFocus,
+    handleFilterOverlayOpenChange,
+  } = useResultSearchBarExpansion();
   const hasText = value.trim().length > 0;
-  const expanded = isFocused || forceExpanded || filterOverlayOpen;
-  const expandedSmartFilter = optimisticSmartFilter?.base === smartFilter ? optimisticSmartFilter.value : smartFilter;
-
-  const focusInput = () => {
-    const focus = () => inputRef.current?.focus();
-    if (typeof requestAnimationFrame === 'function') {
-      requestAnimationFrame(focus);
-      return;
-    }
-    window.setTimeout(focus, 0);
-  };
-
-  const handleFilterOverlayOpenChange = (open: boolean) => {
-    filterOverlayOpenRef.current = open;
-    setFilterOverlayOpen(open);
-    if (open) setForceExpanded(true);
-  };
-
-  const handleSmartFilterChange = (next: boolean) => {
-    setOptimisticSmartFilter({ base: smartFilter, value: next });
-    onSmartFilterChange(next);
-  };
-
-  useEffect(() => {
-    if (!expanded) return;
-
-    const handlePointerDown = (event: PointerEvent) => {
-      const target = event.target;
-      if (!(target instanceof Node)) return;
-      if (rootRef.current?.contains(target)) return;
-      if (target instanceof Element && target.closest('[data-document-search-filter-popover]')) return;
-
-      filterOverlayOpenRef.current = false;
-      setFilterOverlayOpen(false);
-      setForceExpanded(false);
-      setIsFocused(false);
-    };
-
-    document.addEventListener('pointerdown', handlePointerDown, true);
-    return () => document.removeEventListener('pointerdown', handlePointerDown, true);
-  }, [expanded]);
 
   // submit 후 input blur → onBlur로 setIsFocused(false) → 패널 collapse.
   const handleSubmit = () => {
     onSubmit();
-    inputRef.current?.blur();
+    blurInput();
   };
 
   // history click도 submit과 동일 흐름: URL commit + blur로 패널 close.
   const handleHistorySubmit = (query: string) => {
     onHistorySubmit(query);
-    inputRef.current?.blur();
+    blurInput();
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -140,7 +100,7 @@ export default function ResultSearchBar({
 
   return (
     <div ref={rootRef} className="relative flex h-14 w-full items-center gap-5">
-      <div className="relative h-14 w-225">
+      <div className="relative h-14 w-225 shrink-0">
         <div
           className={cn(
             'bg-fill-normal border-edge-normal absolute top-0 left-0 flex w-225 flex-col border',
@@ -165,16 +125,8 @@ export default function ResultSearchBar({
                   type="text"
                   value={value}
                   onChange={(e) => onValueChange(e.target.value)}
-                  onFocus={() => setIsFocused(true)}
-                  onBlur={() => {
-                    setIsFocused(false);
-                    window.setTimeout(() => {
-                      if (filterOverlayOpenRef.current) return;
-                      const activeElement = document.activeElement;
-                      if (activeElement && rootRef.current?.contains(activeElement)) return;
-                      setForceExpanded(false);
-                    }, 0);
-                  }}
+                  onFocus={handleInputFocus}
+                  onBlur={handleInputBlur}
                   onKeyDown={handleKeyDown}
                   className="text-body-medium text-content-normal placeholder:text-content-assistive min-w-0 flex-1 bg-transparent outline-none"
                   placeholder="업무, 채널 또는 문서를 검색해보세요"
@@ -225,8 +177,8 @@ export default function ResultSearchBar({
               onSourcesToggle={onChipsChange}
               dateRange={dateRange}
               onDateRangeChange={onDateRangeChange}
-              smartFilter={expandedSmartFilter}
-              onSmartFilterChange={handleSmartFilterChange}
+              smartFilter={draftSmartFilter}
+              onSmartFilterChange={onDraftSmartFilterChange}
               onFilterOverlayOpenChange={handleFilterOverlayOpenChange}
               onHistoryItemClick={handleHistorySubmit}
             />
@@ -236,9 +188,8 @@ export default function ResultSearchBar({
       <SmartFilterStatusPill
         enabled={smartFilter}
         onApplyClick={() => {
-          handleSmartFilterChange(true);
-          setForceExpanded(true);
-          focusInput();
+          onDraftSmartFilterChange(true);
+          expandAndFocusInput();
         }}
       />
     </div>

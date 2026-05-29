@@ -38,6 +38,7 @@ export default function HybridSearchResultPage() {
   const [draftKeyword, setDraftKeyword] = useState(keyword);
   const [draftChips, setDraftChips] = useState<ToolFilter[]>(tools);
   const [draftDateRange, setDraftDateRange] = useState<DateRange | undefined>(dateRange);
+  const [draftSmartFilter, setDraftSmartFilter] = useState(smartFilter);
   const [active, setActive] = useState<ActiveTab>('all');
   const [page, setPage] = useState(1);
   const [sortOrder, setSortOrder] = useState<SortOrder>('relevance');
@@ -59,12 +60,14 @@ export default function HybridSearchResultPage() {
     setDraftKeyword(keyword);
     setDraftChips(tools);
     setDraftDateRange(dateRange);
+    setDraftSmartFilter(smartFilter);
     setActive('all');
     setPage(1);
     setSelectedSource(null);
   }
   if (prevSmartFilter !== smartFilter) {
     setPrevSmartFilter(smartFilter);
+    setDraftSmartFilter(smartFilter);
     setActive('all');
     setPage(1);
     setSelectedSource(null);
@@ -98,17 +101,13 @@ export default function HybridSearchResultPage() {
   };
 
   const handleSubmit = () => {
-    commitSearch(draftKeyword, draftChips, draftDateRange, smartFilter);
+    commitSearch(draftKeyword, draftChips, draftDateRange, draftSmartFilter);
   };
 
   // history 클릭도 submit과 동등한 commit: entry.query + draft chips/기간을 URL에 한 번에 반영.
   // ResultSearchBar가 onHistorySubmit 호출 후 input.blur() → expanded panel 자동 close.
   const handleHistorySubmit = (query: string) => {
-    commitSearch(query, draftChips, draftDateRange, smartFilter);
-  };
-
-  const handleSmartFilterChange = (next: boolean) => {
-    commitSearch(keyword, tools, dateRange, next);
+    commitSearch(query, draftChips, draftDateRange, draftSmartFilter);
   };
 
   // X 버튼: input draft만 비움. URL과 현재 표시 중인 검색 결과는 유지.
@@ -157,7 +156,8 @@ export default function HybridSearchResultPage() {
         draftDateRange={draftDateRange}
         onDraftDateRangeChange={setDraftDateRange}
         smartFilter={smartFilter}
-        onSmartFilterChange={handleSmartFilterChange}
+        draftSmartFilter={draftSmartFilter}
+        onDraftSmartFilterChange={setDraftSmartFilter}
         onSubmit={handleSubmit}
         onHistorySubmit={handleHistorySubmit}
         onClear={handleClear}

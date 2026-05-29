@@ -32,8 +32,11 @@ interface ResultPageHeaderProps {
   // 입력 중 임시 기간 — 검색바 필터에 사용, submit 시 적용
   draftDateRange: DateRange | undefined;
   onDraftDateRangeChange: (next: DateRange | undefined) => void;
+  // URL/API에 적용된 현재 결과 기준 상태
   smartFilter: boolean;
-  onSmartFilterChange: (next: boolean) => void;
+  // expanded 검색바 안 smart filter draft 상태 (submit 시 적용)
+  draftSmartFilter: boolean;
+  onDraftSmartFilterChange: (next: boolean) => void;
   onSubmit: () => void;
   onHistorySubmit: (query: string) => void;
   onClear: () => void;
@@ -72,7 +75,8 @@ export default function ResultPageHeader({
   draftDateRange,
   onDraftDateRangeChange,
   smartFilter,
-  onSmartFilterChange,
+  draftSmartFilter,
+  onDraftSmartFilterChange,
   onSubmit,
   onHistorySubmit,
   onClear,
@@ -110,7 +114,8 @@ export default function ResultPageHeader({
           dateRange={draftDateRange}
           onDateRangeChange={onDraftDateRangeChange}
           smartFilter={smartFilter}
-          onSmartFilterChange={onSmartFilterChange}
+          draftSmartFilter={draftSmartFilter}
+          onDraftSmartFilterChange={onDraftSmartFilterChange}
           onSubmit={onSubmit}
           onHistorySubmit={onHistorySubmit}
           onClear={onClear}

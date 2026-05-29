@@ -26,9 +26,10 @@ vi.mock('./ResultPageHeader', () => ({
     onDraftChipsChange,
     onDraftDateRangeChange,
     onAiModeClick,
+    draftSmartFilter,
+    onDraftSmartFilterChange,
     onSubmit,
-    onSmartFilterChange,
-    smartFilter,
+    onHistorySubmit,
   }: {
     draftKeyword?: string;
     onDraftKeywordChange?: (value: string) => void;
@@ -37,9 +38,10 @@ vi.mock('./ResultPageHeader', () => ({
     draftDateRange?: DateRange;
     onDraftDateRangeChange?: (next: DateRange | undefined) => void;
     onAiModeClick?: () => void;
+    draftSmartFilter?: boolean;
+    onDraftSmartFilterChange?: (next: boolean) => void;
     onSubmit?: () => void;
-    onSmartFilterChange?: (next: boolean) => void;
-    smartFilter?: boolean;
+    onHistorySubmit?: (query: string) => void;
   }) => (
     <div>
       <span data-testid="draft-keyword">{draftKeyword}</span>
@@ -58,11 +60,14 @@ vi.mock('./ResultPageHeader', () => ({
       <button type="button" onClick={onAiModeClick}>
         AI 모드
       </button>
-      <button type="button" onClick={() => onSmartFilterChange?.(!smartFilter)}>
+      <button type="button" onClick={() => onDraftSmartFilterChange?.(!draftSmartFilter)}>
         스마트 필터 toggle
       </button>
       <button type="button" onClick={onSubmit}>
         검색
+      </button>
+      <button type="button" onClick={() => onHistorySubmit?.('history query')}>
+        히스토리 검색
       </button>
     </div>
   ),
@@ -125,7 +130,7 @@ describe('HybridSearchResultPage', () => {
     expect(url).toContain('smart_filter=true');
   });
 
-  it('smart filter 변경 시 URL에 즉시 반영한다', async () => {
+  it('smart filter 변경만으로 URL에 즉시 반영하지 않는다', async () => {
     mockSearchParams.set('q', '검색어 text');
     mockSearchParams.set('smart_filter', 'true');
     const user = userEvent.setup();
@@ -134,11 +139,24 @@ describe('HybridSearchResultPage', () => {
 
     await user.click(screen.getByRole('button', { name: '스마트 필터 toggle' }));
 
+    expect(mockReplace).not.toHaveBeenCalled();
+  });
+
+  it('submit 시 draft smart filter를 URL에 반영한다', async () => {
+    mockSearchParams.set('q', '검색어 text');
+    mockSearchParams.set('smart_filter', 'true');
+    const user = userEvent.setup();
+
+    render(<HybridSearchResultPage />);
+
+    await user.click(screen.getByRole('button', { name: '스마트 필터 toggle' }));
+    await user.click(screen.getByRole('button', { name: '검색' }));
+
     const url = mockReplace.mock.calls[0]![0] as string;
     expect(url).toContain('smart_filter=false');
   });
 
-  it('smart filter 변경 시 미제출 draft 검색어와 수동 필터를 URL에 반영하지 않는다', async () => {
+  it('smart filter 변경만으로 미제출 draft 검색어와 수동 필터를 URL에 반영하지 않는다', async () => {
     mockSearchParams.set('q', 'committed');
     mockSearchParams.set('tools', 'github');
     mockSearchParams.set('start', '2026-05-01');
@@ -153,14 +171,53 @@ describe('HybridSearchResultPage', () => {
     await user.click(screen.getByRole('button', { name: 'draft 날짜 변경' }));
     await user.click(screen.getByRole('button', { name: '스마트 필터 toggle' }));
 
+    expect(mockReplace).not.toHaveBeenCalled();
+  });
+
+  it('submit 시 draft 검색어와 수동 필터와 smart filter를 함께 URL에 반영한다', async () => {
+    mockSearchParams.set('q', 'committed');
+    mockSearchParams.set('tools', 'github');
+    mockSearchParams.set('start', '2026-05-01');
+    mockSearchParams.set('end', '2026-05-02');
+    mockSearchParams.set('smart_filter', 'true');
+    const user = userEvent.setup();
+
+    render(<HybridSearchResultPage />);
+
+    await user.click(screen.getByRole('button', { name: 'draft 검색어 변경' }));
+    await user.click(screen.getByRole('button', { name: 'draft 필터 변경' }));
+    await user.click(screen.getByRole('button', { name: 'draft 날짜 변경' }));
+    await user.click(screen.getByRole('button', { name: '스마트 필터 toggle' }));
+    await user.click(screen.getByRole('button', { name: '검색' }));
+
     const url = mockReplace.mock.calls[0]![0] as string;
-    expect(url).toContain('q=committed');
-    expect(url).toContain('tools=github');
-    expect(url).toContain('start=2026-05-01');
-    expect(url).toContain('end=2026-05-02');
+    expect(url).toContain('q=draft+keyword');
+    expect(url).toContain('tools=slack');
+    expect(url).toContain('start=2026-05-20');
+    expect(url).toContain('end=2026-05-21');
     expect(url).toContain('smart_filter=false');
-    expect(url).not.toContain('draft');
-    expect(url).not.toContain('slack');
-    expect(url).not.toContain('2026-05-20');
+  });
+
+  it('history 클릭 시 history query와 draft 수동 필터, smart filter를 함께 URL에 반영한다', async () => {
+    mockSearchParams.set('q', 'committed');
+    mockSearchParams.set('tools', 'github');
+    mockSearchParams.set('start', '2026-05-01');
+    mockSearchParams.set('end', '2026-05-02');
+    mockSearchParams.set('smart_filter', 'true');
+    const user = userEvent.setup();
+
+    render(<HybridSearchResultPage />);
+
+    await user.click(screen.getByRole('button', { name: 'draft 필터 변경' }));
+    await user.click(screen.getByRole('button', { name: 'draft 날짜 변경' }));
+    await user.click(screen.getByRole('button', { name: '스마트 필터 toggle' }));
+    await user.click(screen.getByRole('button', { name: '히스토리 검색' }));
+
+    const url = mockReplace.mock.calls[0]![0] as string;
+    expect(url).toContain('q=history+query');
+    expect(url).toContain('tools=slack');
+    expect(url).toContain('start=2026-05-20');
+    expect(url).toContain('end=2026-05-21');
+    expect(url).toContain('smart_filter=false');
   });
 });
