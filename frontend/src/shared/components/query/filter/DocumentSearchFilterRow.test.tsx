@@ -2,7 +2,8 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
-import DocumentSearchFilterRow, { SmartFilterStatusPill } from './DocumentSearchFilterRow';
+import DocumentSearchFilterRow from './DocumentSearchFilterRow';
+import SmartFilterStatusPill from './SmartFilterStatusPill';
 
 describe('DocumentSearchFilterRow', () => {
   it('renders manual filter chips and Smart Filter switch', () => {
