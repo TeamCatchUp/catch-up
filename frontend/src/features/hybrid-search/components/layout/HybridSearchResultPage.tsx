@@ -45,26 +45,26 @@ export default function HybridSearchResultPage() {
   // 우측 원문 패널이 보여줄 선택 소스. 미선택이면 첫 결과로 자동 폴백.
   const [selectedSource, setSelectedSource] = useState<SourceResponseApi | null>(null);
 
-  // URL keyword/tools/기간/smart filter 변경 시 모든 임시·UI state reset (render-phase prev-value).
+  // URL keyword/tools/기간 변경 시 입력 draft reset. smart filter만 바뀐 경우 draft 입력은 보존한다.
   const [prevKeyword, setPrevKeyword] = useState(keyword);
   const toolsKey = tools.join(',');
   const [prevToolsKey, setPrevToolsKey] = useState(toolsKey);
   const rangeKey = `${dateRange?.from?.getTime() ?? ''}-${dateRange?.to?.getTime() ?? ''}`;
   const [prevRangeKey, setPrevRangeKey] = useState(rangeKey);
   const [prevSmartFilter, setPrevSmartFilter] = useState(smartFilter);
-  if (
-    prevKeyword !== keyword ||
-    prevToolsKey !== toolsKey ||
-    prevRangeKey !== rangeKey ||
-    prevSmartFilter !== smartFilter
-  ) {
+  if (prevKeyword !== keyword || prevToolsKey !== toolsKey || prevRangeKey !== rangeKey) {
     setPrevKeyword(keyword);
     setPrevToolsKey(toolsKey);
     setPrevRangeKey(rangeKey);
-    setPrevSmartFilter(smartFilter);
     setDraftKeyword(keyword);
     setDraftChips(tools);
     setDraftDateRange(dateRange);
+    setActive('all');
+    setPage(1);
+    setSelectedSource(null);
+  }
+  if (prevSmartFilter !== smartFilter) {
+    setPrevSmartFilter(smartFilter);
     setActive('all');
     setPage(1);
     setSelectedSource(null);
@@ -108,7 +108,7 @@ export default function HybridSearchResultPage() {
   };
 
   const handleSmartFilterChange = (next: boolean) => {
-    commitSearch(draftKeyword, draftChips, draftDateRange, next);
+    commitSearch(keyword, tools, dateRange, next);
   };
 
   // X 버튼: input draft만 비움. URL과 현재 표시 중인 검색 결과는 유지.
