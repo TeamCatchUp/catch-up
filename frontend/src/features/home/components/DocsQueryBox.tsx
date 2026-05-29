@@ -9,28 +9,26 @@ import { useRouter } from 'next/navigation';
 
 import IconArrowSend from '@/public/icons/icon/arrow_send.svg';
 import IconCancel from '@/public/icons/icon/cancel.svg';
-import IconFilter from '@/public/icons/icon/filter_small.svg';
 import IconSearch from '@/public/icons/icon/search_2.svg';
 import { Button } from '@/shared/components/ui/button';
-import { DateRangePicker } from '@/shared/components/ui/date-range-picker';
 import type { DocsSource } from '@/shared/types/source';
-import { cn } from '@/shared/utils/cn';
 import { dateRangeToUrlParams } from '@/shared/utils/temporalRange';
 
 interface DocsQueryBoxProps {
   selectedSources: DocsSource[];
+  dateRange: DateRange | undefined;
+  smartFilter: boolean;
 }
 
-export default function DocsQueryBox({ selectedSources }: DocsQueryBoxProps) {
+export default function DocsQueryBox({ selectedSources, dateRange, smartFilter }: DocsQueryBoxProps) {
   const router = useRouter();
   const [value, setValue] = useState('');
-  const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
   const hasText = value.trim().length > 0;
 
   const handleSubmit = () => {
     const trimmed = value.trim();
     if (!trimmed) return;
-    const params = new URLSearchParams({ q: trimmed });
+    const params = new URLSearchParams({ q: trimmed, smart_filter: String(smartFilter) });
     if (selectedSources.length > 0) {
       params.set('tools', selectedSources.join(','));
     }
@@ -74,32 +72,6 @@ export default function DocsQueryBox({ selectedSources }: DocsQueryBoxProps) {
             <IconCancel className="size-6" />
           </Button>
         )}
-        <DateRangePicker
-          value={dateRange}
-          onChange={setDateRange}
-          align="end"
-          trigger={
-            <Button
-              variant="icon-only-gray"
-              size="lg"
-              type="button"
-              aria-label="기간 필터"
-              className={cn(
-                'text-icon-normal relative rounded-full',
-                dateRange?.from && 'bg-fill-primary-normal-neutral hover:bg-fill-primary-normal-neutral',
-              )}
-            >
-              <IconFilter className="size-6" />
-              {dateRange?.from && (
-                <span
-                  aria-hidden
-                  className="bg-fill-primary absolute top-2 right-1.5 size-[5px] rounded-full"
-                />
-              )}
-            </Button>
-          }
-        />
-        <span aria-hidden className="bg-edge-normal h-6 w-px shrink-0" />
         <button
           type="button"
           onClick={handleSubmit}
@@ -108,9 +80,7 @@ export default function DocsQueryBox({ selectedSources }: DocsQueryBoxProps) {
             hasText ? 'border-fill-primary bg-fill-primary' : 'bg-fill-strong border-edge-assistive'
           }`}
         >
-          <IconArrowSend
-            className={`h-6 w-6 ${hasText ? 'brightness-0 invert' : 'text-content-assistive'}`}
-          />
+          <IconArrowSend className={`h-6 w-6 ${hasText ? 'brightness-0 invert' : 'text-content-assistive'}`} />
         </button>
       </div>
     </div>

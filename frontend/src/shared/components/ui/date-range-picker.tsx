@@ -14,6 +14,10 @@ import { Button } from './button';
 import { Calendar } from './calendar';
 import { Popover, PopoverContent, PopoverTrigger } from './popover';
 
+type DateRangePickerContentProps = React.ComponentPropsWithoutRef<typeof PopoverContent> & {
+  [key: `data-${string}`]: string | number | boolean | undefined;
+};
+
 interface DateRangePickerProps {
   /** 선택된 날짜 범위 */
   value?: DateRange;
@@ -31,6 +35,9 @@ interface DateRangePickerProps {
   trigger?: React.ReactNode;
   // PopoverContent 정렬 (기본: 'end')
   align?: 'start' | 'end';
+  defaultOpen?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  contentProps?: DateRangePickerContentProps;
 }
 
 function DateRangePicker({
@@ -42,16 +49,21 @@ function DateRangePicker({
   numberOfMonths = 2,
   trigger,
   align = 'end',
+  defaultOpen = false,
+  onOpenChange,
+  contentProps,
 }: DateRangePickerProps) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
   const [tempRange, setTempRange] = useState<DateRange | undefined>(value);
+  const { className: contentClassName, ...contentPropsRest } = contentProps ?? {};
 
   const handleOpenChange = useCallback(
     (next: boolean) => {
       if (next) setTempRange(value);
       setOpen(next);
+      onOpenChange?.(next);
     },
-    [value],
+    [onOpenChange, value],
   );
 
   const isTodaySelected =
@@ -78,13 +90,13 @@ function DateRangePicker({
   }, [onChange]);
 
   const handleClose = useCallback(() => {
-    setOpen(false);
-  }, []);
+    handleOpenChange(false);
+  }, [handleOpenChange]);
 
   const handleApply = useCallback(() => {
     onChange?.(tempRange);
-    setOpen(false);
-  }, [onChange, tempRange]);
+    handleOpenChange(false);
+  }, [handleOpenChange, onChange, tempRange]);
 
   const displayFrom = value?.from ? format(value.from, dateFormat) : undefined;
   const displayTo = value?.to ? format(value.to, dateFormat) : undefined;
@@ -123,7 +135,8 @@ function DateRangePicker({
       <PopoverContent
         align={align}
         sideOffset={4}
-        className="shadow-modal flex w-auto flex-col gap-4 rounded-2xl p-5"
+        className={cn('shadow-modal flex w-auto flex-col gap-4 rounded-2xl p-5', contentClassName)}
+        {...contentPropsRest}
       >
         <Calendar
           mode="range"

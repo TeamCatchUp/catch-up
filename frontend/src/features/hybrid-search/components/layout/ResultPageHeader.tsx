@@ -19,8 +19,8 @@ import ResultSearchBar from '../search-bar/ResultSearchBar';
 interface ResultPageHeaderProps {
   // 확정된 검색어 — list query 호출에 사용
   keyword: string;
-  // scope: list query 호출에 사용
-  scope: ToolFilter[];
+  // API 전송용 수동 tool filters. 비어 있으면 Smart Filter의 tool 추론을 허용한다.
+  toolFilters: ToolFilter[];
   // 입력 중 임시값
   draftKeyword: string;
   onDraftKeywordChange: (v: string) => void;
@@ -32,6 +32,11 @@ interface ResultPageHeaderProps {
   // 입력 중 임시 기간 — 검색바 필터에 사용, submit 시 적용
   draftDateRange: DateRange | undefined;
   onDraftDateRangeChange: (next: DateRange | undefined) => void;
+  // URL/API에 적용된 현재 결과 기준 상태
+  smartFilter: boolean;
+  // expanded 검색바 안 smart filter draft 상태 (submit 시 적용)
+  draftSmartFilter: boolean;
+  onDraftSmartFilterChange: (next: boolean) => void;
   onSubmit: () => void;
   onHistorySubmit: (query: string) => void;
   onClear: () => void;
@@ -45,7 +50,7 @@ interface ResultPageHeaderProps {
 
 // 데이터 도착 후엔 count=0인 source 탭은 숨김. 로딩 중엔 모든 탭을 count badge 없이 표시.
 // '전체'는 항상 노출.
-function buildTabItems(dist: Record<string, number>, hasData: boolean): AccentTabItem<ActiveTab>[] {
+function buildTabItems(dist: Record<string, number>, hasData: boolean, totalCount: number): AccentTabItem<ActiveTab>[] {
   const sourceTabs: AccentTabItem<ActiveTab>[] = [
     { value: 'confluence', label: 'Confluence', count: hasData ? (dist.confluence ?? 0) : undefined },
     { value: 'jira', label: 'Jira', count: hasData ? (dist.jira ?? 0) : undefined },
@@ -54,14 +59,14 @@ function buildTabItems(dist: Record<string, number>, hasData: boolean): AccentTa
     { value: 'channel_talk', label: '채널톡', count: hasData ? (dist.channel_talk ?? 0) : undefined },
   ];
   return [
-    { value: 'all', label: '전체' },
+    { value: 'all', label: '전체', count: hasData ? totalCount : undefined },
     ...(hasData ? sourceTabs.filter((tab) => (tab.count ?? 0) > 0) : sourceTabs),
   ];
 }
 
 export default function ResultPageHeader({
   keyword,
-  scope,
+  toolFilters,
   draftKeyword,
   onDraftKeywordChange,
   draftChips,
@@ -69,6 +74,9 @@ export default function ResultPageHeader({
   dateRange,
   draftDateRange,
   onDraftDateRangeChange,
+  smartFilter,
+  draftSmartFilter,
+  onDraftSmartFilterChange,
   onSubmit,
   onHistorySubmit,
   onClear,
@@ -80,7 +88,7 @@ export default function ResultPageHeader({
 }: ResultPageHeaderProps) {
   // ResultListSection과 같은 queryKey → cache 자동 공유, fetch 1회만.
   const { start, end } = dateRangeToUrlParams(dateRange);
-  const query = useQuery(hybridSearchQueries.list({ keyword, scope, start, end }));
+  const query = useQuery(hybridSearchQueries.list({ keyword, toolFilters, start, end, smartFilter }));
 
   // results에서 source별 count 직접 계산 — backend의 source_distribution 의존 X.
   const distribution = useMemo(() => {
@@ -93,7 +101,7 @@ export default function ResultPageHeader({
     return counts;
   }, [query.data]);
 
-  const tabItems = buildTabItems(distribution, query.data !== undefined);
+  const tabItems = buildTabItems(distribution, query.data !== undefined, query.data?.results.length ?? 0);
 
   return (
     <header className="border-edge-normal flex w-full shrink-0 flex-col items-center border-b px-16 pt-5">
@@ -105,6 +113,9 @@ export default function ResultPageHeader({
           onChipsChange={onDraftChipsChange}
           dateRange={draftDateRange}
           onDateRangeChange={onDraftDateRangeChange}
+          smartFilter={smartFilter}
+          draftSmartFilter={draftSmartFilter}
+          onDraftSmartFilterChange={onDraftSmartFilterChange}
           onSubmit={onSubmit}
           onHistorySubmit={onHistorySubmit}
           onClear={onClear}

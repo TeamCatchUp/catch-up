@@ -11,10 +11,11 @@ export const HYBRID_SEARCH_PAGE_SIZE = 10;
 
 interface ListParams {
   keyword: string;
-  scope: ToolFilter[];
+  toolFilters: ToolFilter[];
   /** yyyy-MM-dd KST 일자. 미지정 시 기간 필터 없음. */
   start?: string;
   end?: string;
+  smartFilter: boolean;
 }
 
 // axios 기본 직렬화는 버전/설정에 따라 ?key[]=v 또는 ?key=v1&key=v2로 갈림.
@@ -44,7 +45,8 @@ export const hybridSearchQueries = {
         const { data } = await api.get<HybridSearchResponse>(API.search.hybrid, {
           params: {
             keyword: params.keyword,
-            tool_filters: params.scope.length > 0 ? params.scope : undefined,
+            tool_filters: params.toolFilters.length > 0 ? params.toolFilters : undefined,
+            smart_filter: params.smartFilter,
             ...toApiTemporalParams(params.start, params.end),
           },
           paramsSerializer: serializeListParams,

@@ -13,8 +13,11 @@ export interface UseSearchHistoryEntriesResult {
   isLoading: boolean;
 }
 
-export function useSearchHistoryEntries(): UseSearchHistoryEntriesResult {
-  const { data, isLoading } = useQuery(searchHistoryQueries.list());
+export function useSearchHistoryEntries({ enabled = true }: { enabled?: boolean } = {}): UseSearchHistoryEntriesResult {
+  const { data, isLoading } = useQuery({
+    ...searchHistoryQueries.list(),
+    enabled,
+  });
 
   return {
     entries: (data ?? []).map(mapSearchHistory),

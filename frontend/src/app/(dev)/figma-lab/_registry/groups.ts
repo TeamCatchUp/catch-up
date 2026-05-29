@@ -1,0 +1,33 @@
+import type { FigmaLabGroup, FigmaLabGroupId } from './types';
+
+export const FIGMA_LAB_GROUPS: readonly FigmaLabGroup[] = [
+  {
+    id: 'hybrid-search',
+    title: 'Hybrid Search',
+    description: '문서 탐색 결과 페이지와 검색바 조립 상태를 검증합니다.',
+    defaultCaseId: 'result-search-bar-expanded',
+    relatedGroupIds: ['shared-query-filter'],
+  },
+  {
+    id: 'home-docs',
+    title: 'Home Docs',
+    description: '문서 탐색 진입점에서 사용하는 검색 필터 조합을 검증합니다.',
+    relatedGroupIds: ['shared-query-filter'],
+  },
+  {
+    id: 'shared-query-filter',
+    title: 'Shared Query Filter',
+    description: '문서 검색에 재사용되는 공통 filter, chip, status component를 검증합니다.',
+    defaultCaseId: 'document-search-filter-row-entry',
+  },
+];
+
+export function isFigmaLabGroupId(value: string): value is FigmaLabGroupId {
+  return FIGMA_LAB_GROUPS.some((group) => group.id === value);
+}
+
+export function findFigmaLabGroup(groupId: FigmaLabGroupId | undefined): FigmaLabGroup | undefined {
+  if (!groupId) return undefined;
+
+  return FIGMA_LAB_GROUPS.find((group) => group.id === groupId);
+}
