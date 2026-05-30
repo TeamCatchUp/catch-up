@@ -55,11 +55,15 @@ function DateRangePicker({
 }: DateRangePickerProps) {
   const [open, setOpen] = useState(defaultOpen);
   const [tempRange, setTempRange] = useState<DateRange | undefined>(value);
+  const [resetPending, setResetPending] = useState(false);
   const { className: contentClassName, ...contentPropsRest } = contentProps ?? {};
 
   const handleOpenChange = useCallback(
     (next: boolean) => {
-      if (next) setTempRange(value);
+      if (next) {
+        setTempRange(value);
+        setResetPending(false);
+      }
       setOpen(next);
       onOpenChange?.(next);
     },
@@ -75,14 +79,22 @@ function DateRangePicker({
   const handleSelectToday = useCallback(() => {
     if (isTodaySelected) {
       setTempRange(undefined);
+      setResetPending(true);
     } else {
       const today = startOfToday();
       setTempRange({ from: today, to: today });
+      setResetPending(false);
     }
   }, [isTodaySelected]);
 
+  const handleRangeSelect = useCallback((next: DateRange | undefined) => {
+    setTempRange(next);
+    setResetPending(false);
+  }, []);
+
   const handleReset = useCallback(() => {
     setTempRange(undefined);
+    setResetPending(true);
   }, []);
 
   const handleClear = useCallback(() => {
@@ -90,10 +102,14 @@ function DateRangePicker({
   }, [onChange]);
 
   const handleClose = useCallback(() => {
+    if (resetPending && value?.from) {
+      onChange?.(undefined);
+    }
     handleOpenChange(false);
-  }, [handleOpenChange]);
+  }, [handleOpenChange, onChange, resetPending, value?.from]);
 
   const handleApply = useCallback(() => {
+    setResetPending(false);
     onChange?.(tempRange);
     handleOpenChange(false);
   }, [handleOpenChange, onChange, tempRange]);
@@ -141,7 +157,7 @@ function DateRangePicker({
         <Calendar
           mode="range"
           selected={tempRange}
-          onSelect={setTempRange}
+          onSelect={handleRangeSelect}
           numberOfMonths={numberOfMonths}
           locale={ko}
           disabled={{ after: startOfToday() }}

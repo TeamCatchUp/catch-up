@@ -31,10 +31,10 @@ export default function SmartFilterControl({
         <span className="text-body-xsmall text-content-alternative font-medium whitespace-nowrap">{description}</span>
       </div>
       <span aria-hidden className="bg-edge-neutral h-4 w-px shrink-0" />
-      <label className="flex cursor-pointer items-center gap-2.5 px-0.5">
+      <div className="flex items-center gap-2.5 px-0.5">
         <span className="text-body-xsmall text-content-normal font-medium whitespace-nowrap">스마트 필터</span>
         <Switch checked={checked} onCheckedChange={onCheckedChange} aria-label="스마트 필터" />
-      </label>
+      </div>
     </div>
   );
 }

@@ -33,12 +33,13 @@ export default function ModePicker({ mode }: ModePickerProps) {
 
   const handleSelect = (next: HomeMode) => {
     if (next === mode) return;
-    const params = new URLSearchParams(searchParams.toString());
     if (next === 'docs') {
-      params.set('mode', 'docs');
-    } else {
-      params.delete('mode');
+      router.replace('/?mode=docs');
+      return;
     }
+
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete('mode');
     const query = params.toString();
     router.replace(query ? `${pathname}?${query}` : pathname);
   };
