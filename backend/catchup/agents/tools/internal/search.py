@@ -189,7 +189,7 @@ class CatchUpKnowledgeBaseTool(BaseTool):
             "Call with different queries to cover different angles, then call rerank() once for the final ranked result."
         ),
         type=ActionType.READ,
-        default_failure_policy="silent_skip",
+        default_failure_policy="skip",
         default_max_retry=1,
     )
     async def search(
@@ -239,7 +239,7 @@ class CatchUpKnowledgeBaseTool(BaseTool):
             "Returns the final ranked passages — synthesize your answer from these."
         ),
         type=ActionType.READ,
-        default_failure_policy="silent_skip",
+        default_failure_policy="skip",
         default_max_retry=1,
     )
     async def rerank(self, original_query: str) -> str:

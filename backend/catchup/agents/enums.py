@@ -7,9 +7,9 @@ class ActionType(StrEnum):
 
 
 class FailurePolicy(StrEnum):
-    RETRY_THEN_NOTIFY = "retry_then_notify"
-    NOTIFY_AND_STOP = "notify_and_stop"
-    SILENT_SKIP = "silent_skip"
+    SKIP = "skip"        # 실패를 LLM에 숨김, 루프 계속 (optional 툴)
+    CONTINUE = "continue"  # 실패를 LLM에 전달, 루프 계속
+    STOP = "stop"        # 실패를 LLM에 전달, 루프 종료
 
 
 class ConfirmationGate(StrEnum):
