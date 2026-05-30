@@ -3,7 +3,6 @@ from typing import Literal
 from pydantic import BaseModel
 from pydantic import Field
 
-from catchup.agents.enums import ConfirmationGate
 from catchup.agents.enums import FailurePolicy
 
 
@@ -33,7 +32,6 @@ class SystemPromptSpec(BaseModel):
 # === Tool ===
 class ToolSpec(BaseModel):
     name: str = Field(description="'{tool}.{action}' 형식. ToolRegistry 참조")
-    confirmation_gate: ConfirmationGate = Field(description="도구 실행 승인 방식")
     failure_policy: FailurePolicy = Field(description="실패 시 처리 정책")
     max_retry: int | None = Field(
         default=None,

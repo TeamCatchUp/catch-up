@@ -12,6 +12,3 @@ class FailurePolicy(StrEnum):
     STOP = "stop"        # 실패를 LLM에 전달, 루프 종료
 
 
-class ConfirmationGate(StrEnum):
-    AUTO = "auto"
-    MANUAL = "manual"

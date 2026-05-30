@@ -8,7 +8,6 @@ from langchain_core.messages import AIMessage
 from langchain_core.tools import StructuredTool
 from langgraph.graph import END
 
-from catchup.agents.enums import ConfirmationGate
 from catchup.agents.enums import FailurePolicy
 from catchup.agents.harness.nodes import _execute_with_policy
 from catchup.agents.harness.nodes import tool_executor_node
@@ -29,7 +28,6 @@ def _make_spec(
 ) -> ToolSpec:
     return ToolSpec(
         name=name,
-        confirmation_gate=ConfirmationGate.AUTO,
         failure_policy=failure_policy,
         max_retry=max_retry,
     )

@@ -16,7 +16,6 @@ from langchain_core.tools import StructuredTool
 from pydantic import BaseModel
 
 from catchup.agents.enums import ActionType
-from catchup.agents.enums import ConfirmationGate
 from catchup.agents.enums import FailurePolicy
 
 
@@ -26,10 +25,9 @@ class ActionSpec(BaseModel):
     input_model: type[BaseModel]
     output_model: type[BaseModel] | None
     type: ActionType
-    
+
     default_failure_policy: FailurePolicy
     default_max_retry: int | None = None
-    default_confirmation_gate: ConfirmationGate = ConfirmationGate.AUTO
 
     model_config = {"arbitrary_types_allowed": True}
 
@@ -45,7 +43,6 @@ def action(
     type: ActionType,
     default_failure_policy: FailurePolicy,
     default_max_retry: int | None = None,
-    default_confirmation_gate: ConfirmationGate = ConfirmationGate.AUTO,
 ) -> Callable:
     """action 메서드에 ActionSpec을 부착하는 데코레이터."""
     def decorator(fn: Callable) -> Callable:
@@ -57,7 +54,6 @@ def action(
             type=type,
             default_failure_policy=default_failure_policy,
             default_max_retry=default_max_retry,
-            default_confirmation_gate=default_confirmation_gate,
         )
         setattr(fn, _ACTION_SPEC_ATTR, spec)
         return fn
@@ -120,7 +116,7 @@ class BaseTool:
                     "type": spec.type,
                     "default_failure_policy": spec.default_failure_policy,
                     "default_max_retry": spec.default_max_retry,
-                    "default_confirmation_gate": spec.default_confirmation_gate,
+
                 }
                 for name, spec in self._action_specs().items()
             },
