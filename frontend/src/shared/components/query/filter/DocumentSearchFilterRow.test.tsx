@@ -41,6 +41,25 @@ describe('DocumentSearchFilterRow', () => {
     expect(onSmartFilterChange).toHaveBeenCalledWith(false);
   });
 
+  it('does not toggle Smart Filter when clicking the text next to the switch', async () => {
+    const user = userEvent.setup();
+    const onSmartFilterChange = vi.fn();
+    render(
+      <DocumentSearchFilterRow
+        selectedSources={[]}
+        onSourcesChange={vi.fn()}
+        dateRange={undefined}
+        onDateRangeChange={vi.fn()}
+        smartFilter={true}
+        onSmartFilterChange={onSmartFilterChange}
+      />,
+    );
+
+    await user.click(screen.getByText('스마트 필터'));
+
+    expect(onSmartFilterChange).not.toHaveBeenCalled();
+  });
+
   it('SmartFilterStatusPill renders applied indicator when enabled', () => {
     render(<SmartFilterStatusPill enabled />);
     expect(screen.getByText('스마트 필터 적용됨')).toBeInTheDocument();

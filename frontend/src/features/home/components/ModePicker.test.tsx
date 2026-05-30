@@ -45,6 +45,17 @@ describe('ModePicker', () => {
     expect(mockReplace).toHaveBeenCalledWith('/?mode=docs');
   });
 
+  it('/search의 AI 모드에서 문서 탐색 전환 시 홈 문서 탐색 진입점으로 이동한다', async () => {
+    const user = userEvent.setup();
+    mockUsePathname.mockReturnValue('/search');
+    mockUseSearchParams.mockReturnValue(new URLSearchParams('q=검색어'));
+    render(<ModePicker mode="ai" />);
+
+    await user.click(screen.getByRole('tab', { name: /문서 탐색/ }));
+
+    expect(mockReplace).toHaveBeenCalledWith('/?mode=docs');
+  });
+
   it('docs → ai 전환 시 mode 파라미터를 제거한다', async () => {
     const user = userEvent.setup();
     mockUsePathname.mockReturnValue('/search');

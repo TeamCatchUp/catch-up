@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import type { DateRange } from 'react-day-picker';
 import { format, isSameDay, startOfToday, subMonths } from 'date-fns';
 import { ko } from 'date-fns/locale';
@@ -55,15 +55,24 @@ function DateRangePicker({
 }: DateRangePickerProps) {
   const [open, setOpen] = useState(defaultOpen);
   const [tempRange, setTempRange] = useState<DateRange | undefined>(value);
+  const resetPendingRef = useRef(false);
   const { className: contentClassName, ...contentPropsRest } = contentProps ?? {};
 
   const handleOpenChange = useCallback(
     (next: boolean) => {
-      if (next) setTempRange(value);
+      if (next) {
+        setTempRange(value);
+        resetPendingRef.current = false;
+      } else {
+        if (resetPendingRef.current && value?.from) {
+          onChange?.(undefined);
+        }
+        resetPendingRef.current = false;
+      }
       setOpen(next);
       onOpenChange?.(next);
     },
-    [onOpenChange, value],
+    [onChange, onOpenChange, value],
   );
 
   const isTodaySelected =
@@ -75,14 +84,22 @@ function DateRangePicker({
   const handleSelectToday = useCallback(() => {
     if (isTodaySelected) {
       setTempRange(undefined);
+      resetPendingRef.current = true;
     } else {
       const today = startOfToday();
       setTempRange({ from: today, to: today });
+      resetPendingRef.current = false;
     }
   }, [isTodaySelected]);
 
+  const handleRangeSelect = useCallback((next: DateRange | undefined) => {
+    setTempRange(next);
+    resetPendingRef.current = false;
+  }, []);
+
   const handleReset = useCallback(() => {
     setTempRange(undefined);
+    resetPendingRef.current = true;
   }, []);
 
   const handleClear = useCallback(() => {
@@ -94,6 +111,7 @@ function DateRangePicker({
   }, [handleOpenChange]);
 
   const handleApply = useCallback(() => {
+    resetPendingRef.current = false;
     onChange?.(tempRange);
     handleOpenChange(false);
   }, [handleOpenChange, onChange, tempRange]);
@@ -141,7 +159,7 @@ function DateRangePicker({
         <Calendar
           mode="range"
           selected={tempRange}
-          onSelect={setTempRange}
+          onSelect={handleRangeSelect}
           numberOfMonths={numberOfMonths}
           locale={ko}
           disabled={{ after: startOfToday() }}
