@@ -15,6 +15,7 @@ from catchup.agents.harness.nodes import tool_gate
 from catchup.agents.harness.prompt_renderer import render_system_prompt
 from catchup.agents.harness.state import ExecutionState
 from catchup.agents.schemas import AgentSpec
+from catchup.agents.schemas import ToolSpec
 from catchup.agents.tools.registry import ToolRegistry
 
 
@@ -39,12 +40,16 @@ def build_execution_graph(
     """
     allowed_tool_names = [t.name for t in spec.tools]
     lc_tool_map = _build_lc_tool_map(allowed_tool_names)
+    tool_spec_map: dict[str, ToolSpec] = {t.name: t for t in spec.tools}
     lc_tools = list(lc_tool_map.values())
     llm_with_tools = llm.bind_tools(lc_tools)
 
     graph = StateGraph(ExecutionState)
     graph.add_node("agent_node", partial(agent_node, llm_with_tools=llm_with_tools))
-    graph.add_node("tool_executor_node", partial(tool_executor_node, lc_tool_map=lc_tool_map))
+    graph.add_node(
+        "tool_executor_node",
+        partial(tool_executor_node, lc_tool_map=lc_tool_map, tool_spec_map=tool_spec_map),
+    )
     graph.add_node("block_node", block_node)
 
     graph.set_entry_point("agent_node")
@@ -84,6 +89,7 @@ async def run_execution_agent(
             HumanMessage(content="Execute your task based on the trigger context provided in the system prompt."),
         ],
         "allowed_tool_names": allowed_tool_names,
+        "stop_reason": None,
     }
 
     final_state = await graph.ainvoke(initial_state, invoke_config)

@@ -3,6 +3,8 @@ from typing import Literal
 from pydantic import BaseModel
 from pydantic import Field
 
+from catchup.agents.enums import FailurePolicy
+
 
 # === Trigger ===
 class WebhookConfig(BaseModel):
@@ -30,13 +32,10 @@ class SystemPromptSpec(BaseModel):
 # === Tool ===
 class ToolSpec(BaseModel):
     name: str = Field(description="'{tool}.{action}' 형식. ToolRegistry 참조")
-    confirmation_gate: Literal["auto"] = Field(description="도구 실행 승인 방식")
-    failure_policy: Literal[
-        "retry_then_notify", "notify_and_stop", "silent_skip"
-    ] = Field(description="실패 시 처리 정책")
+    failure_policy: FailurePolicy = Field(description="실패 시 처리 정책")
     max_retry: int | None = Field(
         default=None,
-        description="최대 재시도 횟수. Phase 2에서 validator 강제 예정"
+        description="최대 재시도 횟수"
     )
 
 
