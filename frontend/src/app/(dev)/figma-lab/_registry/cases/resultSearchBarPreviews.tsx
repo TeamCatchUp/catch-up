@@ -9,10 +9,10 @@ import type { DocsSource } from '@/shared/types/source';
 import { type ResultSearchBarFixture, resultSearchBarFixture } from './resultSearchBar.fixture';
 
 function useResultSearchBarFixture(fixture: ResultSearchBarFixture) {
-  const [value, setValue] = useState<string>(fixture.value);
+  const [value, setValue] = useState(fixture.value);
   const [chips, setChips] = useState<DocsSource[]>([...fixture.chips]);
   const [dateRange, setDateRange] = useState<DateRange | undefined>(fixture.dateRange);
-  const [draftSmartFilter, setDraftSmartFilter] = useState<boolean>(fixture.draftSmartFilter);
+  const [draftSmartFilter, setDraftSmartFilter] = useState(fixture.draftSmartFilter);
 
   return {
     value,
