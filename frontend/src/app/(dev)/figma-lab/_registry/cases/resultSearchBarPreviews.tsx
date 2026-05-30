@@ -6,13 +6,13 @@ import type { DateRange } from 'react-day-picker';
 import ResultSearchBar from '@/features/hybrid-search/components/search-bar/ResultSearchBar';
 import type { DocsSource } from '@/shared/types/source';
 
-import { resultSearchBarFixture } from './resultSearchBar.fixture';
+import { type ResultSearchBarFixture, resultSearchBarFixture } from './resultSearchBar.fixture';
 
-function useResultSearchBarFixture(fixture: (typeof resultSearchBarFixture)[keyof typeof resultSearchBarFixture]) {
-  const [value, setValue] = useState(fixture.value);
+function useResultSearchBarFixture(fixture: ResultSearchBarFixture) {
+  const [value, setValue] = useState<string>(fixture.value);
   const [chips, setChips] = useState<DocsSource[]>([...fixture.chips]);
   const [dateRange, setDateRange] = useState<DateRange | undefined>(fixture.dateRange);
-  const [draftSmartFilter, setDraftSmartFilter] = useState(fixture.draftSmartFilter);
+  const [draftSmartFilter, setDraftSmartFilter] = useState<boolean>(fixture.draftSmartFilter);
 
   return {
     value,
@@ -30,7 +30,7 @@ function SearchBarPreviewSurface({
   fixture,
   initialExpanded = false,
 }: {
-  fixture: (typeof resultSearchBarFixture)[keyof typeof resultSearchBarFixture];
+  fixture: ResultSearchBarFixture;
   initialExpanded?: boolean;
 }) {
   const state = useResultSearchBarFixture(fixture);
