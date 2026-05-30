@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import type { DateRange } from 'react-day-picker';
 import { format, isSameDay, startOfToday, subMonths } from 'date-fns';
 import { ko } from 'date-fns/locale';
@@ -55,19 +55,24 @@ function DateRangePicker({
 }: DateRangePickerProps) {
   const [open, setOpen] = useState(defaultOpen);
   const [tempRange, setTempRange] = useState<DateRange | undefined>(value);
-  const [resetPending, setResetPending] = useState(false);
+  const resetPendingRef = useRef(false);
   const { className: contentClassName, ...contentPropsRest } = contentProps ?? {};
 
   const handleOpenChange = useCallback(
     (next: boolean) => {
       if (next) {
         setTempRange(value);
-        setResetPending(false);
+        resetPendingRef.current = false;
+      } else {
+        if (resetPendingRef.current && value?.from) {
+          onChange?.(undefined);
+        }
+        resetPendingRef.current = false;
       }
       setOpen(next);
       onOpenChange?.(next);
     },
-    [onOpenChange, value],
+    [onChange, onOpenChange, value],
   );
 
   const isTodaySelected =
@@ -79,22 +84,22 @@ function DateRangePicker({
   const handleSelectToday = useCallback(() => {
     if (isTodaySelected) {
       setTempRange(undefined);
-      setResetPending(true);
+      resetPendingRef.current = true;
     } else {
       const today = startOfToday();
       setTempRange({ from: today, to: today });
-      setResetPending(false);
+      resetPendingRef.current = false;
     }
   }, [isTodaySelected]);
 
   const handleRangeSelect = useCallback((next: DateRange | undefined) => {
     setTempRange(next);
-    setResetPending(false);
+    resetPendingRef.current = false;
   }, []);
 
   const handleReset = useCallback(() => {
     setTempRange(undefined);
-    setResetPending(true);
+    resetPendingRef.current = true;
   }, []);
 
   const handleClear = useCallback(() => {
@@ -102,14 +107,11 @@ function DateRangePicker({
   }, [onChange]);
 
   const handleClose = useCallback(() => {
-    if (resetPending && value?.from) {
-      onChange?.(undefined);
-    }
     handleOpenChange(false);
-  }, [handleOpenChange, onChange, resetPending, value?.from]);
+  }, [handleOpenChange]);
 
   const handleApply = useCallback(() => {
-    setResetPending(false);
+    resetPendingRef.current = false;
     onChange?.(tempRange);
     handleOpenChange(false);
   }, [handleOpenChange, onChange, tempRange]);

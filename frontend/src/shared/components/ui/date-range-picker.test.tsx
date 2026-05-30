@@ -32,4 +32,33 @@ describe('DateRangePicker', () => {
 
     expect(onChange).toHaveBeenCalledWith(undefined);
   });
+
+  it('commits an explicit reset when dismissed with Escape', async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    render(<DateRangePicker value={selectedRange} onChange={onChange} />);
+
+    await user.click(screen.getByText('2026.05.01'));
+    await user.click(await screen.findByRole('button', { name: '초기화' }));
+    await user.keyboard('{Escape}');
+
+    expect(onChange).toHaveBeenCalledWith(undefined);
+  });
+
+  it('commits an explicit reset when dismissed by outside click', async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    render(
+      <div>
+        <DateRangePicker value={selectedRange} onChange={onChange} />
+        <button type="button">외부 버튼</button>
+      </div>,
+    );
+
+    await user.click(screen.getByText('2026.05.01'));
+    await user.click(await screen.findByRole('button', { name: '초기화' }));
+    await user.click(screen.getByRole('button', { name: '외부 버튼' }));
+
+    expect(onChange).toHaveBeenCalledWith(undefined);
+  });
 });
