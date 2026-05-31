@@ -2719,6 +2719,21 @@ class AgentStatus(StrEnum):
     INACTIVE = "inactive"
 
 
+class AgentTriggerRunStatus(StrEnum):
+    PENDING = "pending"
+    DISPATCHING = "dispatching"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+
+
+class AgentTriggerOutboxStatus(StrEnum):
+    PENDING = "pending"
+    PUBLISHING = "publishing"
+    PUBLISHED = "published"
+    FAILED = "failed"
+
+
 class AgentSpec(Base):
     __tablename__ = "agent_specs"
 
@@ -2753,13 +2768,190 @@ class AgentTrigger(Base):
     agent_spec_id: Mapped[int] = mapped_column(
         ForeignKey("agent_specs.id", ondelete="CASCADE"), nullable=False
     )
-    type: Mapped[str] = mapped_column(String(20), nullable=False)
-    source: Mapped[str | None] = mapped_column(String(50), nullable=True)
-    filter_condition: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    workspace_id: Mapped[int] = mapped_column(ForeignKey("workspaces.id"), nullable=False)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    type: Mapped[str] = mapped_column(
+        String(20), nullable=False, server_default=text("'webhook'")
+    )
+    source: Mapped[str] = mapped_column(String(50), nullable=False)
+    event_type: Mapped[str] = mapped_column(String(100), nullable=False)
+    condition: Mapped[dict] = mapped_column(
+        JSONB,
+        nullable=False,
+        server_default=text(
+            """'{"kind":"immediate","where":{"all":[]}}'::jsonb"""
+        ),
+    )
+    concurrency_key: Mapped[str | None] = mapped_column(String(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
 
     agent_spec: Mapped["AgentSpec"] = relationship(back_populates="triggers")
+    subscriptions: Mapped[list["AgentTriggerEventSubscription"]] = relationship(
+        back_populates="trigger",
+        cascade="all, delete-orphan",
+    )
+    runs: Mapped[list["AgentTriggerRun"]] = relationship(back_populates="trigger")
 
     __table_args__ = (
-        Index("idx_agent_triggers_source", "type", "source"),
+        UniqueConstraint(
+            "agent_spec_id",
+            "source",
+            "event_type",
+            name="uq_agent_triggers_agent_spec_source_event_type",
+        ),
+        Index(
+            "idx_agent_triggers_lookup",
+            "workspace_id",
+            "source",
+            "event_type",
+        ),
+        Index("idx_agent_triggers_agent_spec_id", "agent_spec_id"),
+        Index("idx_agent_triggers_concurrency_key", "workspace_id", "concurrency_key"),
+    )
+
+
+class AgentTriggerEventSubscription(Base):
+
+    __tablename__ = "agent_trigger_event_subscriptions"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    trigger_id: Mapped[int] = mapped_column(
+        ForeignKey("agent_triggers.id", ondelete="CASCADE"), nullable=False
+    )
+    source: Mapped[str] = mapped_column(String(50), nullable=False)
+    event_type: Mapped[str] = mapped_column(String(100), nullable=False)
+    role: Mapped[str] = mapped_column(String(30), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    trigger: Mapped["AgentTrigger"] = relationship(back_populates="subscriptions")
+
+    __table_args__ = (
+        UniqueConstraint(
+            "trigger_id",
+            "source",
+            "event_type",
+            "role",
+            name="uq_agent_trigger_event_sub_role",
+        ),
+        Index("idx_agent_trigger_event_sub_lookup", "source", "event_type"),
+        Index("idx_agent_trigger_event_sub_trigger_id", "trigger_id"),
+    )
+
+
+class AgentTriggerRun(Base):
+    """
+    Agent Trigger에 의해 실행된 Agent 실행 기록
+    """
+
+    __tablename__ = "agent_trigger_runs"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    trigger_id: Mapped[int] = mapped_column(
+        ForeignKey("agent_triggers.id", ondelete="CASCADE"), nullable=False
+    )
+    policy_kind: Mapped[str] = mapped_column(String(30), nullable=False)
+    entity_key: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status: Mapped[AgentTriggerRunStatus] = mapped_column(
+        String(30),
+        nullable=False,
+        server_default=text(f"'{AgentTriggerRunStatus.PENDING}'"),
+    )
+    run_after: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    start_event_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    latest_event_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    dispatch_token: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), nullable=False, default=uuid.uuid4
+    )
+    # Worker가 ExecutionService.run()을 실제로 시작한 시각.
+    # Redis Stream Message ID는 delivery 상태를 소유하는 AgentTriggerOutbox에만 저장한다.
+    execution_started_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    policy_metadata: Mapped[dict] = mapped_column(
+        JSONB, nullable=False, server_default=text("'{}'::jsonb")
+    )
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    trigger: Mapped["AgentTrigger"] = relationship(back_populates="runs")
+    outbox_entries: Mapped[list["AgentTriggerOutbox"]] = relationship(
+        back_populates="run",
+        cascade="all, delete-orphan",
+    )
+
+    __table_args__ = (
+        Index("idx_agent_trigger_runs_due", "status", "run_after"),
+        Index(
+            "idx_agent_trigger_runs_trigger_latest_event",
+            "trigger_id",
+            "latest_event_id",
+        ),
+        # immediate Trigger에 대해서 동일 이벤트 중복 처리를 막기 위한 유니크 조건
+        Index(
+            "uq_agent_trigger_runs_immediate_trigger_event",
+            "trigger_id",
+            "latest_event_id",
+            unique=True,
+            postgresql_where=text("policy_kind = 'immediate'"),
+        ),
+        # trigger_id, entity_key에 대해서 pending/dispatching 상태인 run이 유일하도록 강제
+        Index(
+            "uq_agent_trigger_runs_active_trigger_entity",
+            "trigger_id",
+            "entity_key",
+            unique=True,
+            postgresql_where=text(
+                "status IN ('pending', 'dispatching') AND entity_key IS NOT NULL"
+            ),
+        ),
+    )
+
+
+class AgentTriggerOutbox(Base):
+
+    __tablename__ = "agent_trigger_outbox"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    run_id: Mapped[int] = mapped_column(
+        ForeignKey("agent_trigger_runs.id", ondelete="CASCADE"), nullable=False
+    )
+    trigger_id: Mapped[int] = mapped_column(
+        ForeignKey("agent_triggers.id", ondelete="CASCADE"), nullable=False
+    )
+    agent_spec_id: Mapped[int] = mapped_column(
+        ForeignKey("agent_specs.id", ondelete="CASCADE"), nullable=False
+    )
+    event_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    status: Mapped[AgentTriggerOutboxStatus] = mapped_column(
+        String(20),
+        nullable=False,
+        default=AgentTriggerOutboxStatus.PENDING,
+        server_default=text(f"'{AgentTriggerOutboxStatus.PENDING.value}'"),
+    )
+    stream_message_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    run: Mapped["AgentTriggerRun"] = relationship(back_populates="outbox_entries")
+    trigger: Mapped["AgentTrigger"] = relationship()
+    agent_spec: Mapped["AgentSpec"] = relationship()
+
+    __table_args__ = (
+        UniqueConstraint("run_id", name="uq_agent_trigger_outbox_run_id"),
+        CheckConstraint(
+            "status IN ('pending', 'publishing', 'published', 'failed')",
+            name="ck_agent_trigger_outbox_status",
+        ),
+        Index("idx_agent_trigger_outbox_status_created_at", "status", "created_at"),
+        Index("idx_agent_trigger_outbox_stream_message_id", "stream_message_id"),
     )

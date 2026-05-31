@@ -13,7 +13,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from catchup.agents.tools import init_agent_tool_registry
-from catchup.agents.triggers import init_trigger_registry
+from catchup.agents.triggers.listener import run_agent_trigger_listener_forever
+from catchup.agents.triggers.recovery import run_debounce_ttl_listener_forever
 from catchup.audit.enums import AuditEventStatus
 from catchup.audit.enums import AuditLevel
 from catchup.audit.handlers import audit_event_handler
@@ -125,6 +126,10 @@ async def lifespan(app: FastAPI):
 
     sync_worker_stop_event: asyncio.Event | None = None
     sync_worker_task: asyncio.Task | None = None
+    agent_trigger_listener_stop_event: asyncio.Event | None = None
+    agent_trigger_listener_task: asyncio.Task | None = None
+    debounce_ttl_listener_stop_event: asyncio.Event | None = None
+    debounce_ttl_listener_task: asyncio.Task | None = None
     uploader_task: asyncio.Task | None = None  # S3 감사로그 업로드
 
     if settings.LOG_AUDIT_FILE_ENABLED:
@@ -227,16 +232,6 @@ async def lifespan(app: FastAPI):
             error=str(e),
         )
 
-    try:
-        init_trigger_registry()
-        logger.info("trigger_registry_initialized", context="server_startup")
-    except Exception as e:
-        logger.warning(
-            "trigger_registry_init_failed",
-            context="server_startup",
-            error=str(e),
-        )
-
     # Scheduler 초기화
     try:
         init_scheduler()
@@ -301,6 +296,19 @@ async def lifespan(app: FastAPI):
         logger.info(
             "in_process_worker_started",
             context="sync_worker",
+        )
+    if settings.AGENT_TRIGGER_WORKER_AUTOSTART:
+        agent_trigger_listener_stop_event = asyncio.Event()
+        agent_trigger_listener_task = asyncio.create_task(
+            run_agent_trigger_listener_forever(agent_trigger_listener_stop_event)
+        )
+        debounce_ttl_listener_stop_event = asyncio.Event()
+        debounce_ttl_listener_task = asyncio.create_task(
+            run_debounce_ttl_listener_forever(debounce_ttl_listener_stop_event)
+        )
+        logger.info(
+            "in_process_worker_started",
+            context="agent_trigger_worker",
         )
 
     try:
@@ -373,6 +381,10 @@ async def lifespan(app: FastAPI):
 
     if sync_worker_stop_event is not None:
         sync_worker_stop_event.set()
+    if agent_trigger_listener_stop_event is not None:
+        agent_trigger_listener_stop_event.set()
+    if debounce_ttl_listener_stop_event is not None:
+        debounce_ttl_listener_stop_event.set()
 
     if sync_worker_task is not None:
         try:
@@ -382,6 +394,30 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.error(
                 "worker_shutdown_failed",
+                context="server_shutdown",
+                error=str(e),
+                exc_info=True,
+            )
+    if agent_trigger_listener_task is not None:
+        try:
+            await agent_trigger_listener_task
+        except asyncio.CancelledError:
+            pass
+        except Exception as e:
+            logger.error(
+                "agent_trigger_listener_shutdown_failed",
+                context="server_shutdown",
+                error=str(e),
+                exc_info=True,
+            )
+    if debounce_ttl_listener_task is not None:
+        try:
+            await debounce_ttl_listener_task
+        except asyncio.CancelledError:
+            pass
+        except Exception as e:
+            logger.error(
+                "agent_trigger_debounce_ttl_listener_shutdown_failed",
                 context="server_shutdown",
                 error=str(e),
                 exc_info=True,

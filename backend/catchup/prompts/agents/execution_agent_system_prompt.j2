@@ -34,11 +34,14 @@
   <field name="<< key >>"><< value >></field>
 {% endfor %}
 </user_inputs>
-<trigger>
-{% for key, value in trigger_payload.items() %}
+<trigger_event>
+{% for key, value in trigger_event.items() %}
   <field name="<< key >>"><< value >></field>
 {% endfor %}
-</trigger>
+</trigger_event>
+<trigger_payload>
+<< trigger_payload_json >>
+</trigger_payload>
 </context>
 
 <harness_rules>
