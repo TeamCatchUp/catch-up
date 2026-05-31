@@ -1,0 +1,82 @@
+import type {
+  SlackMessageRaw,
+  SlackOriginalContentResponse,
+  SlackUserMetadata,
+} from '@/features/hybrid-search/types/slackOriginalApi';
+import type { SlackMessageView, SlackThreadView } from '@/features/hybrid-search/types/slackOriginalModel';
+
+import { parseSlackBlocks } from './parseSlackBlocks';
+import { parseSlackTextFallback } from './parseSlackTextFallback';
+import { formatSlackDateKey, formatSlackEditedLabel, formatSlackMessageTime } from './slackTimestamp';
+
+function resolveAuthor(
+  message: SlackMessageRaw,
+  usersById: Record<string, SlackUserMetadata>,
+): SlackMessageView['author'] {
+  if (message.bot_id || message.bot_profile || message.subtype === 'bot_message') {
+    return {
+      id: message.bot_id ?? message.bot_profile?.id ?? null,
+      name: message.bot_profile?.name ?? message.username ?? 'Slack Bot',
+      avatarUrl: message.bot_profile?.icons?.image_36 ?? message.bot_profile?.icons?.image_48 ?? null,
+      kind: 'bot',
+    };
+  }
+
+  const user = message.user ? usersById[message.user] : undefined;
+
+  return {
+    id: message.user ?? null,
+    name: user?.display_name || user?.name || message.user || '알 수 없음',
+    avatarUrl: user?.profile_image_url ?? null,
+    kind: message.user ? 'user' : 'unknown',
+  };
+}
+
+function collectMessages(response: SlackOriginalContentResponse): SlackMessageRaw[] {
+  return response.items.flatMap((item) => item.raw_payload.messages ?? []);
+}
+
+function participantNames(messages: SlackMessageRaw[], usersById: Record<string, SlackUserMetadata>): string[] {
+  const names = new Set<string>();
+
+  for (const message of messages) {
+    const author = resolveAuthor(message, usersById);
+    if (author.name) names.add(author.name);
+  }
+
+  return Array.from(names);
+}
+
+function parseMessage(message: SlackMessageRaw, usersById: Record<string, SlackUserMetadata>): SlackMessageView {
+  const parsedBlocks = parseSlackBlocks(message.blocks, usersById);
+  const fallbackBlocks = parseSlackTextFallback(message.text ?? '', usersById);
+
+  return {
+    id: message.ts,
+    ts: message.ts,
+    threadTs: message.thread_ts ?? null,
+    author: resolveAuthor(message, usersById),
+    timeLabel: formatSlackMessageTime(message.ts),
+    editedLabel: formatSlackEditedLabel(message.edited?.ts),
+    dateKey: formatSlackDateKey(message.ts),
+    blocks: parsedBlocks.length > 0 ? parsedBlocks : fallbackBlocks,
+    files: message.files ?? [],
+    attachments: message.attachments ?? [],
+  };
+}
+
+export function parseSlackOriginalThread(response: SlackOriginalContentResponse): SlackThreadView {
+  const usersById = response.metadata.users_by_id;
+  const messages = collectMessages(response);
+
+  return {
+    documentId: response.document_id,
+    title: response.title,
+    url: response.url,
+    channelName: response.metadata.channel_name || response.metadata.channel_id,
+    participantNames: participantNames(messages, usersById),
+    commentCount: Math.max(messages.length - 1, 0),
+    usersById,
+    messages: messages.map((message) => parseMessage(message, usersById)),
+  };
+}
