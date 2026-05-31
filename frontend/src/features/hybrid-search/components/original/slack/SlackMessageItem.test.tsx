@@ -1,14 +1,14 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
-import { slackOriginalPreviewResponse } from '@/features/hybrid-search/components/original/__fixtures__/slackOriginal.fixtures';
+import { slackOriginalThreadResponse } from '@/features/hybrid-search/components/original/__fixtures__/slackOriginal.fixtures';
 import { parseSlackOriginalThread } from '@/features/hybrid-search/utils/slackOriginal/parseSlackOriginal';
 
 import SlackMessageItem from './SlackMessageItem';
 
 describe('SlackMessageItem', () => {
   it('renders author, time, edited label, and body', () => {
-    const thread = parseSlackOriginalThread(slackOriginalPreviewResponse);
+    const thread = parseSlackOriginalThread(slackOriginalThreadResponse);
     render(<SlackMessageItem message={thread.messages[1]} />);
 
     expect(screen.getByText('CatchUpQA')).toBeInTheDocument();

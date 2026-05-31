@@ -1,13 +1,13 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
-import { slackOriginalPreviewResponse } from '@/features/hybrid-search/components/original/__fixtures__/slackOriginal.fixtures';
+import { slackOriginalThreadResponse } from '@/features/hybrid-search/components/original/__fixtures__/slackOriginal.fixtures';
 
-import SlackOriginalPanelPreview from './SlackOriginalPanelPreview';
+import SlackOriginalPanelContent from './SlackOriginalPanelContent';
 
-describe('SlackOriginalPanelPreview', () => {
+describe('SlackOriginalPanelContent', () => {
   it('renders header, date indicator, comment divider, and messages', () => {
-    render(<SlackOriginalPanelPreview response={slackOriginalPreviewResponse} />);
+    render(<SlackOriginalPanelContent response={slackOriginalThreadResponse} />);
 
     expect(screen.getByText('slack-bot-test')).toBeInTheDocument();
     expect(screen.getByText('2개의 댓글')).toBeInTheDocument();

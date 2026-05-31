@@ -5,11 +5,11 @@ import { parseSlackOriginalThread } from '@/features/hybrid-search/utils/slackOr
 import SlackMessageItem from './SlackMessageItem';
 import SlackThreadHeader from './SlackThreadHeader';
 
-interface SlackOriginalPanelPreviewProps {
+interface SlackOriginalPanelContentProps {
   response: SlackOriginalContentResponse;
 }
 
-export default function SlackOriginalPanelPreview({ response }: SlackOriginalPanelPreviewProps) {
+export default function SlackOriginalPanelContent({ response }: SlackOriginalPanelContentProps) {
   const thread = parseSlackOriginalThread(response);
   const [parent, ...replies] = thread.messages;
 

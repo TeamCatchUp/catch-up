@@ -29,7 +29,7 @@ import {
   textContentLong,
   textContentShort,
 } from '@/features/hybrid-search/components/original/__fixtures__/originalContent.fixtures';
-import { slackOriginalPreviewResponse } from '@/features/hybrid-search/components/original/__fixtures__/slackOriginal.fixtures';
+import { slackOriginalThreadResponse } from '@/features/hybrid-search/components/original/__fixtures__/slackOriginal.fixtures';
 import ChannelTalkOriginalPanelContent from '@/features/hybrid-search/components/original/channel-talk/ChannelTalkOriginalPanelContent';
 import BlockContent from '@/features/hybrid-search/components/original/channel-talk/contents/BlockContent';
 import ButtonContent from '@/features/hybrid-search/components/original/channel-talk/contents/ButtonContent';
@@ -47,7 +47,7 @@ import OriginalPanelEmpty from '@/features/hybrid-search/components/original/sha
 import OriginalPanelError from '@/features/hybrid-search/components/original/shared/states/OriginalPanelError';
 import OriginalPanelSkeleton from '@/features/hybrid-search/components/original/shared/states/OriginalPanelSkeleton';
 import SlackMessageItem from '@/features/hybrid-search/components/original/slack/SlackMessageItem';
-import SlackOriginalPanelPreview from '@/features/hybrid-search/components/original/slack/SlackOriginalPanelPreview';
+import SlackOriginalPanelContent from '@/features/hybrid-search/components/original/slack/SlackOriginalPanelContent';
 import SlackThreadHeader from '@/features/hybrid-search/components/original/slack/SlackThreadHeader';
 import type {
   OriginalBlockPayload,
@@ -86,7 +86,7 @@ function filePayload(content: OriginalContent): OriginalFilePayload {
   return content.payload;
 }
 
-function SlackPreviewWidth({ children }: { children: ReactNode }) {
+function SlackPanelWidth({ children }: { children: ReactNode }) {
   return <div className="w-99.75 max-w-full">{children}</div>;
 }
 
@@ -208,32 +208,32 @@ const ENTRY_RENDERERS: Record<EntrySlug, () => ReactNode> = {
     </Case>
   ),
   'slack-thread-header': () => {
-    const thread = parseSlackOriginalThread(slackOriginalPreviewResponse);
+    const thread = parseSlackOriginalThread(slackOriginalThreadResponse);
     return (
       <Case label="Slack header">
-        <SlackPreviewWidth>
+        <SlackPanelWidth>
           <SlackThreadHeader channelName={thread.channelName} participantNames={thread.participantNames} />
-        </SlackPreviewWidth>
+        </SlackPanelWidth>
       </Case>
     );
   },
   'slack-message-item': () => {
-    const thread = parseSlackOriginalThread(slackOriginalPreviewResponse);
+    const thread = parseSlackOriginalThread(slackOriginalThreadResponse);
     return (
       <Case label="일반 메시지">
-        <SlackPreviewWidth>
+        <SlackPanelWidth>
           <SlackMessageItem message={thread.messages[0]} />
-        </SlackPreviewWidth>
+        </SlackPanelWidth>
       </Case>
     );
   },
   'slack-rich-message': () => {
-    const thread = parseSlackOriginalThread(slackOriginalPreviewResponse);
+    const thread = parseSlackOriginalThread(slackOriginalThreadResponse);
     return (
       <Case label="봇 rich 메시지">
-        <SlackPreviewWidth>
+        <SlackPanelWidth>
           <SlackMessageItem message={thread.messages[1]} />
-        </SlackPreviewWidth>
+        </SlackPanelWidth>
       </Case>
     );
   },
@@ -358,7 +358,7 @@ const ENTRY_RENDERERS: Record<EntrySlug, () => ReactNode> = {
   ),
   'slack-panel-preview': () => (
     <Case label="Slack full panel">
-      <SlackOriginalPanelPreview response={slackOriginalPreviewResponse} />
+      <SlackOriginalPanelContent response={slackOriginalThreadResponse} />
     </Case>
   ),
   panel: () => (

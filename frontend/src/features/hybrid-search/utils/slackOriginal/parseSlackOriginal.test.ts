@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { slackOriginalPreviewResponse } from '@/features/hybrid-search/components/original/__fixtures__/slackOriginal.fixtures';
+import { slackOriginalThreadResponse } from '@/features/hybrid-search/components/original/__fixtures__/slackOriginal.fixtures';
 
 import { parseSlackOriginalThread } from './parseSlackOriginal';
 
 describe('parseSlackOriginalThread', () => {
   it('maps API-shaped Slack response into a thread view model', () => {
-    const thread = parseSlackOriginalThread(slackOriginalPreviewResponse);
+    const thread = parseSlackOriginalThread(slackOriginalThreadResponse);
 
     expect(thread).toMatchObject({
       documentId: 'slack:message:T00000000:C00000001:1779601372.378609',

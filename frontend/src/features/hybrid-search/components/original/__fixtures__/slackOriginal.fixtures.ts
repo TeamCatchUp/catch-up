@@ -1,6 +1,6 @@
 import type { SlackOriginalContentResponse } from '@/features/hybrid-search/types/slackOriginalApi';
 
-export const slackOriginalPreviewResponse: SlackOriginalContentResponse = {
+export const slackOriginalThreadResponse: SlackOriginalContentResponse = {
   connector: 'slack',
   entity_type: 'message',
   document_id: 'slack:message:T00000000:C00000001:1779601372.378609',
