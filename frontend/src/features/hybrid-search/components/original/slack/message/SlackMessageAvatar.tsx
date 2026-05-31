@@ -20,7 +20,9 @@ export default function SlackMessageAvatar({ name, avatarUrl, kind }: SlackMessa
     <span
       className={cn(
         'relative flex shrink-0 items-center justify-center rounded-lg',
-        isBot ? 'bg-fill-primary size-9 p-1' : 'size-8 overflow-hidden',
+        isBot
+          ? cn('size-9 p-1', !safeAvatarUrl && 'bg-fill-primary')
+          : 'size-8 overflow-hidden',
       )}
     >
       {safeAvatarUrl ? (
