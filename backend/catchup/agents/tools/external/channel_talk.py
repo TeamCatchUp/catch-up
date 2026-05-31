@@ -72,6 +72,8 @@ class ChannelTalkTool(BaseTool):
             "this agent run. This tool never sends customer-visible messages."
         ),
         type=ActionType.WRITE,
+        default_failure_policy="continue",
+        default_max_retry=2,
     )
     async def send_internal_user_chat_message(
         self,
