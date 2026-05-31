@@ -5,8 +5,8 @@ import { API } from '@/shared/api/endpoints';
 import type { SourceTypeApi } from '@/shared/types/sourceApi';
 
 import type {
+  ChannelTalkOriginalContentResponse,
   OriginalContentRequest,
-  OriginalContentResponse,
 } from '../types/originalApi';
 
 interface DetailParams {
@@ -28,12 +28,15 @@ export const originalContentQueries = {
         params.connector,
         params.documentId,
       ] as const,
-      queryFn: async (): Promise<OriginalContentResponse> => {
+      queryFn: async (): Promise<ChannelTalkOriginalContentResponse> => {
         const body: OriginalContentRequest = {
           connector: params.connector,
           document_id: params.documentId,
         };
-        const { data } = await api.post<OriginalContentResponse>(API.search.original, body);
+        const { data } = await api.post<ChannelTalkOriginalContentResponse>(
+          API.search.original,
+          body,
+        );
         return data;
       },
       enabled: Boolean(

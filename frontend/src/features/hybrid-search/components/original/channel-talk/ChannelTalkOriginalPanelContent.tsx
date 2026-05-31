@@ -6,11 +6,11 @@ import CustomerInfo from '@/features/hybrid-search/components/original/channel-t
 import MessageItem from '@/features/hybrid-search/components/original/channel-talk/timeline/MessageItem';
 import DateIndicator from '@/features/hybrid-search/components/original/shared/DateIndicator';
 import OriginalPanelEmpty from '@/features/hybrid-search/components/original/shared/states/OriginalPanelEmpty';
-import type { OriginalContentResponse } from '@/features/hybrid-search/types/originalApi';
+import type { ChannelTalkOriginalContentResponse } from '@/features/hybrid-search/types/originalApi';
 import { groupMessagesByDate } from '@/features/hybrid-search/utils/groupMessagesByDate';
 
 interface ChannelTalkOriginalPanelContentProps {
-  data: OriginalContentResponse;
+  data: ChannelTalkOriginalContentResponse;
 }
 
 export default function ChannelTalkOriginalPanelContent({
