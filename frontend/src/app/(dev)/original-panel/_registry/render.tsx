@@ -358,7 +358,12 @@ const ENTRY_RENDERERS: Record<EntrySlug, () => ReactNode> = {
   ),
   'slack-panel-preview': () => (
     <Case label="Slack full panel">
-      <SlackOriginalPanelContent response={slackOriginalThreadResponse} />
+      <SlackOriginalPanelContent
+        pages={[slackOriginalThreadResponse]}
+        hasNextPage={false}
+        isFetchingNextPage={false}
+        onLoadNextPage={() => undefined}
+      />
     </Case>
   ),
   panel: () => (
