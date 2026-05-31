@@ -76,7 +76,6 @@ def render_system_prompt(
             "external_event_id": event["external_event_id"],
             "source": event["source"],
             "event_type": event["event_type"],
-            "workspace_id": event["workspace_id"],
             "occurred_at": event["occurred_at"],
             "received_at": event["received_at"],
         },
