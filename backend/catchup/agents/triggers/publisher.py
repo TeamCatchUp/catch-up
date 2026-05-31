@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-import asyncio
 import json
-from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from datetime import timedelta
 from datetime import timezone
@@ -20,7 +18,7 @@ from catchup.db.models import AgentTriggerOutbox
 from catchup.db.models import AgentTriggerOutboxStatus
 from catchup.db.models import AgentTriggerRun
 from catchup.db.models import AgentTriggerRunStatus
-from catchup.utils.redis import get_redis_client
+from catchup.utils.redis import create_sync_redis_client
 
 logger = structlog.get_logger(__name__)
 
@@ -85,7 +83,7 @@ def publish_agent_trigger_outbox(
         dispatch_token=str(run.dispatch_token),
     )
     try:
-        message_id = _run_async(_publish_request(request))
+        message_id = _publish_request_sync(request)
     except Exception as exc:
         db.rollback()
         outbox = db.get(AgentTriggerOutbox, outbox_id)
@@ -119,15 +117,13 @@ def schedule_debounce_wakeup(run: AgentTriggerRun) -> None:
         "dispatch_token": str(run.dispatch_token),
     }
     try:
-        _run_async(
-            _set_debounce_ttl(
-                key=debounce_ttl_key(
-                    run_id=run.id,
-                    dispatch_token=str(run.dispatch_token),
-                ),
-                value=json.dumps(payload, separators=(",", ":")),
-                seconds=seconds,
-            )
+        _set_debounce_ttl_sync(
+            key=debounce_ttl_key(
+                run_id=run.id,
+                dispatch_token=str(run.dispatch_token),
+            ),
+            value=json.dumps(payload, separators=(",", ":")),
+            seconds=seconds,
         )
     except Exception as exc:
         logger.warning(
@@ -143,22 +139,28 @@ def debounce_ttl_key(*, run_id: int, dispatch_token: str) -> str:
     return f"{DEBOUNCE_TTL_KEY_PREFIX}{run_id}:{dispatch_token}"
 
 
-async def _publish_request(request: AgentRunRequest) -> str:
+def _publish_request_sync(request: AgentRunRequest) -> str:
     """Redis Stream 발행 결과를 listener가 저장할 문자열 message id로 정규화한다."""
-    redis = await get_redis_client()
-    message_id = await redis.xadd(
-        AGENT_RUN_REQUEST_STREAM_KEY,
-        request.to_stream_fields(),
-    )
+    redis = create_sync_redis_client(client_type="agent_trigger_publisher")
+    try:
+        message_id = redis.xadd(
+            AGENT_RUN_REQUEST_STREAM_KEY,
+            request.to_stream_fields(),
+        )
+    finally:
+        redis.close()
     if isinstance(message_id, bytes):
         return message_id.decode("utf-8")
     return str(message_id)
 
 
-async def _set_debounce_ttl(*, key: str, value: str, seconds: int) -> None:
+def _set_debounce_ttl_sync(*, key: str, value: str, seconds: int) -> None:
     """debounce wakeup용 TTL key를 Redis에 쓴다."""
-    redis = await get_redis_client()
-    await redis.set(key, value, ex=seconds)
+    redis = create_sync_redis_client(client_type="agent_trigger_debounce_ttl")
+    try:
+        redis.set(key, value, ex=seconds)
+    finally:
+        redis.close()
 
 
 def _claim_outbox_for_publish(
@@ -241,13 +243,3 @@ def _fail_outbox(*, db: Session, outbox: AgentTriggerOutbox, error: str) -> None
     outbox.status = AgentTriggerOutboxStatus.FAILED
     outbox.last_error = error
     db.commit()
-
-
-def _run_async(coro):
-    """동기 ingress/recovery 코드에서 Redis async client를 안전하게 호출한다."""
-    try:
-        asyncio.get_running_loop()
-    except RuntimeError:
-        return asyncio.run(coro)
-    with ThreadPoolExecutor(max_workers=1) as executor:
-        return executor.submit(asyncio.run, coro).result()
