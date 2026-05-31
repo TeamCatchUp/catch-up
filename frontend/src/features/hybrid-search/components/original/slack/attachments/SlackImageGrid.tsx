@@ -12,6 +12,7 @@ import { isSafeUrl } from '@/shared/utils/isSafeUrl';
 
 interface SlackImageGridProps {
   files: SlackFileRaw[];
+  onPreviewError?: (file: SlackFileRaw) => void;
 }
 
 const EDGE_THRESHOLD_PX = 4;
@@ -26,7 +27,7 @@ export function hasSafeSlackImagePreview(file: SlackFileRaw): boolean {
   return Boolean(file.mimetype?.startsWith('image/') && getImageUrl(file));
 }
 
-export default function SlackImageGrid({ files }: SlackImageGridProps) {
+export default function SlackImageGrid({ files, onPreviewError }: SlackImageGridProps) {
   const images = useMemo(
     () =>
       files
@@ -83,6 +84,7 @@ export default function SlackImageGrid({ files }: SlackImageGridProps) {
             width={120}
             height={120}
             className="border-edge-neutral size-30 shrink-0 rounded-xl border object-cover"
+            onError={() => onPreviewError?.(file)}
             unoptimized
           />
         ))}

@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
 import type { SlackMessageView } from '@/features/hybrid-search/types/slackOriginalModel';
@@ -46,5 +46,38 @@ describe('SlackMessageBody', () => {
     expect(screen.getByText('fallback-image.png')).toBeInTheDocument();
     expect(screen.getByText('링크 카드')).toBeInTheDocument();
     expect(screen.getByAltText('image.png')).toBeInTheDocument();
+  });
+
+  it('falls back to a file row when an image preview fails to load', async () => {
+    const message: SlackMessageView = {
+      id: '1',
+      ts: '1779601372.378609',
+      threadTs: '1779601372.378609',
+      author: { id: 'U1', name: '작성자', avatarUrl: null, kind: 'user' },
+      timeLabel: '02:33 PM',
+      editedLabel: '',
+      dateKey: '2026-05-24T05:42:52.378Z',
+      blocks: [{ type: 'paragraph', tokens: [{ type: 'text', text: '본문' }] }],
+      files: [
+        {
+          id: 'F_BROKEN_IMG',
+          name: 'broken-image.png',
+          mimetype: 'image/png',
+          thumb_360: 'https://files.slack.com/broken-preview.png',
+          permalink: 'https://catchup.slack.com/files/F_BROKEN_IMG',
+        },
+      ],
+      attachments: [],
+    };
+
+    render(<SlackMessageBody message={message} />);
+
+    const image = screen.getByAltText('broken-image.png');
+    fireEvent.error(image);
+
+    await waitFor(() => {
+      expect(screen.queryByAltText('broken-image.png')).not.toBeInTheDocument();
+    });
+    expect(screen.getByText('broken-image.png')).toBeInTheDocument();
   });
 });
