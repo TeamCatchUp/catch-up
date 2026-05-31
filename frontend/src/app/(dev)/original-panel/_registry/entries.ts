@@ -9,6 +9,9 @@ export type EntrySlug =
   | 'file-content'
   | 'message-item'
   | 'date-indicator'
+  | 'slack-thread-header'
+  | 'slack-message-item'
+  | 'slack-rich-message'
   | 'consultation-info'
   | 'customer-info'
   | 'collapsible'
@@ -17,15 +20,10 @@ export type EntrySlug =
   | 'panel-error'
   | 'panel-coming-soon'
   | 'panel-content'
+  | 'slack-panel-preview'
   | 'panel';
 
-export type EntryGroup =
-  | 'contents'
-  | 'messages'
-  | 'info'
-  | 'primitives'
-  | 'panel-states'
-  | 'assembled';
+export type EntryGroup = 'contents' | 'messages' | 'info' | 'primitives' | 'panel-states' | 'assembled';
 
 export interface GalleryEntry {
   slug: EntrySlug;
@@ -97,6 +95,24 @@ export const GALLERY_ENTRIES: readonly GalleryEntry[] = [
     group: 'messages',
     description: '채팅 타임라인 날짜별 구분 표시.',
   },
+  {
+    slug: 'slack-thread-header',
+    title: 'Slack 스레드 헤더',
+    group: 'messages',
+    description: 'Slack 채널명과 참여자 목록 헤더.',
+  },
+  {
+    slug: 'slack-message-item',
+    title: 'Slack 일반 메시지',
+    group: 'messages',
+    description: 'Slack 유저 메시지 row.',
+  },
+  {
+    slug: 'slack-rich-message',
+    title: 'Slack Rich 메시지',
+    group: 'messages',
+    description: 'Slack bot, rich text, 파일, 링크, 이미지 케이스.',
+  },
   // 정보
   {
     slug: 'consultation-info',
@@ -148,6 +164,12 @@ export const GALLERY_ENTRIES: readonly GalleryEntry[] = [
     title: '본문 (전체 조립)',
     group: 'assembled',
     description: '상담 정보 → 고객 정보 → 메시지 영역의 전체 조립 결과.',
+  },
+  {
+    slug: 'slack-panel-preview',
+    title: 'Slack 원문 패널',
+    group: 'assembled',
+    description: 'Slack thread 원문 패널 dev preview.',
   },
   {
     slug: 'panel',

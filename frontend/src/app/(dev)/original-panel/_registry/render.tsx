@@ -29,6 +29,7 @@ import {
   textContentLong,
   textContentShort,
 } from '@/features/hybrid-search/components/original/__fixtures__/originalContent.fixtures';
+import { slackOriginalPreviewResponse } from '@/features/hybrid-search/components/original/__fixtures__/slackOriginal.fixtures';
 import BlockContent from '@/features/hybrid-search/components/original/contents/BlockContent';
 import ButtonContent from '@/features/hybrid-search/components/original/contents/ButtonContent';
 import FileContent from '@/features/hybrid-search/components/original/contents/FileContent';
@@ -43,6 +44,9 @@ import OriginalPanelComingSoon from '@/features/hybrid-search/components/origina
 import OriginalPanelEmpty from '@/features/hybrid-search/components/original/panel/states/OriginalPanelEmpty';
 import OriginalPanelError from '@/features/hybrid-search/components/original/panel/states/OriginalPanelError';
 import OriginalPanelSkeleton from '@/features/hybrid-search/components/original/panel/states/OriginalPanelSkeleton';
+import SlackMessageItem from '@/features/hybrid-search/components/original/slack/SlackMessageItem';
+import SlackOriginalPanelPreview from '@/features/hybrid-search/components/original/slack/SlackOriginalPanelPreview';
+import SlackThreadHeader from '@/features/hybrid-search/components/original/slack/SlackThreadHeader';
 import DateIndicator from '@/features/hybrid-search/components/original/timeline/DateIndicator';
 import MessageItem from '@/features/hybrid-search/components/original/timeline/MessageItem';
 import type {
@@ -53,6 +57,7 @@ import type {
   OriginalFormPayload,
   OriginalTextPayload,
 } from '@/features/hybrid-search/types/originalApi';
+import { parseSlackOriginalThread } from '@/features/hybrid-search/utils/slackOriginal/parseSlackOriginal';
 
 import Case from '../_components/Case';
 import PanelFrame from '../_components/PanelFrame';
@@ -79,6 +84,10 @@ function formPayload(content: OriginalContent): OriginalFormPayload {
 function filePayload(content: OriginalContent): OriginalFilePayload {
   if (content.content_type !== 'file') throw new Error('expected file content');
   return content.payload;
+}
+
+function SlackPreviewWidth({ children }: { children: ReactNode }) {
+  return <div className="w-99.75 max-w-full">{children}</div>;
 }
 
 const ENTRY_RENDERERS: Record<EntrySlug, () => ReactNode> = {
@@ -185,11 +194,7 @@ const ENTRY_RENDERERS: Record<EntrySlug, () => ReactNode> = {
       {messageItemVariants.map((variant) => (
         <Case key={variant.item.id} label={variant.label}>
           <PanelWidth>
-            <MessageItem
-              item={variant.item}
-              connector="channel_talk"
-              documentId="channel_talk:user_chat:dev-fixture"
-            />
+            <MessageItem item={variant.item} connector="channel_talk" documentId="channel_talk:user_chat:dev-fixture" />
           </PanelWidth>
         </Case>
       ))}
@@ -202,6 +207,36 @@ const ENTRY_RENDERERS: Record<EntrySlug, () => ReactNode> = {
       </PanelWidth>
     </Case>
   ),
+  'slack-thread-header': () => {
+    const thread = parseSlackOriginalThread(slackOriginalPreviewResponse);
+    return (
+      <Case label="Slack header">
+        <SlackPreviewWidth>
+          <SlackThreadHeader channelName={thread.channelName} participantNames={thread.participantNames} />
+        </SlackPreviewWidth>
+      </Case>
+    );
+  },
+  'slack-message-item': () => {
+    const thread = parseSlackOriginalThread(slackOriginalPreviewResponse);
+    return (
+      <Case label="일반 메시지">
+        <SlackPreviewWidth>
+          <SlackMessageItem message={thread.messages[0]} />
+        </SlackPreviewWidth>
+      </Case>
+    );
+  },
+  'slack-rich-message': () => {
+    const thread = parseSlackOriginalThread(slackOriginalPreviewResponse);
+    return (
+      <Case label="봇 rich 메시지">
+        <SlackPreviewWidth>
+          <SlackMessageItem message={thread.messages[1]} />
+        </SlackPreviewWidth>
+      </Case>
+    );
+  },
   'consultation-info': () => (
     <>
       {metadataVariants.map((variant) => (
@@ -238,11 +273,7 @@ const ENTRY_RENDERERS: Record<EntrySlug, () => ReactNode> = {
         <Collapsible
           open
           onOpenChange={() => {}}
-          header={
-            <span className="text-body-small text-content-normal py-2 font-medium">
-              펼쳐진 헤더
-            </span>
-          }
+          header={<span className="text-body-small text-content-normal py-2 font-medium">펼쳐진 헤더</span>}
         >
           <p className="text-body-small text-content-alternative pb-2">접히는 본문 영역입니다.</p>
         </Collapsible>
@@ -272,10 +303,7 @@ const ENTRY_RENDERERS: Record<EntrySlug, () => ReactNode> = {
       </Case>
       <Case label="404 · 연동 정보 없음">
         <PanelFrame>
-          <OriginalPanelError
-            message="원문을 불러올 수 없어요 (연동 정보 없음)"
-            onRetry={() => {}}
-          />
+          <OriginalPanelError message="원문을 불러올 수 없어요 (연동 정보 없음)" onRetry={() => {}} />
         </PanelFrame>
       </Case>
       <Case label="422 · 제공처 오류">
@@ -327,6 +355,11 @@ const ENTRY_RENDERERS: Record<EntrySlug, () => ReactNode> = {
         </PanelFrame>
       </Case>
     </>
+  ),
+  'slack-panel-preview': () => (
+    <Case label="Slack full panel">
+      <SlackOriginalPanelPreview response={slackOriginalPreviewResponse} />
+    </Case>
   ),
   panel: () => (
     <>
