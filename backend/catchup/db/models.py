@@ -2789,6 +2789,10 @@ class AgentTrigger(Base):
     )
 
     agent_spec: Mapped["AgentSpec"] = relationship(back_populates="triggers")
+    subscriptions: Mapped[list["AgentTriggerEventSubscription"]] = relationship(
+        back_populates="trigger",
+        cascade="all, delete-orphan",
+    )
     runs: Mapped[list["AgentTriggerRun"]] = relationship(back_populates="trigger")
 
     __table_args__ = (
@@ -2806,6 +2810,34 @@ class AgentTrigger(Base):
         ),
         Index("idx_agent_triggers_agent_spec_id", "agent_spec_id"),
         Index("idx_agent_triggers_concurrency_key", "workspace_id", "concurrency_key"),
+    )
+
+
+class AgentTriggerEventSubscription(Base):
+
+    __tablename__ = "agent_trigger_event_subscriptions"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    trigger_id: Mapped[int] = mapped_column(
+        ForeignKey("agent_triggers.id", ondelete="CASCADE"), nullable=False
+    )
+    source: Mapped[str] = mapped_column(String(50), nullable=False)
+    event_type: Mapped[str] = mapped_column(String(100), nullable=False)
+    role: Mapped[str] = mapped_column(String(30), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    trigger: Mapped["AgentTrigger"] = relationship(back_populates="subscriptions")
+
+    __table_args__ = (
+        UniqueConstraint(
+            "trigger_id",
+            "source",
+            "event_type",
+            "role",
+            name="uq_agent_trigger_event_sub_role",
+        ),
+        Index("idx_agent_trigger_event_sub_lookup", "source", "event_type"),
+        Index("idx_agent_trigger_event_sub_trigger_id", "trigger_id"),
     )
 
 
