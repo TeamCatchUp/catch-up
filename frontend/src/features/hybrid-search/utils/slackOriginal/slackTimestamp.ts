@@ -23,5 +23,5 @@ export function formatSlackDateKey(ts: string | undefined): string {
 
 export function formatSlackEditedLabel(ts: string | undefined): string {
   if (!slackTsToDate(ts)) return '';
-  return '1시간 전 편집됨';
+  return '편집됨';
 }

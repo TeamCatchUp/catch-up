@@ -11,6 +11,6 @@ describe('slackTimestamp', () => {
   it('formats visible labels and hides invalid values', () => {
     expect(formatSlackMessageTime('bad')).toBe('');
     expect(formatSlackEditedLabel(undefined)).toBe('');
-    expect(formatSlackEditedLabel('1779601372.378609')).toBe('1시간 전 편집됨');
+    expect(formatSlackEditedLabel('1779601372.378609')).toBe('편집됨');
   });
 });

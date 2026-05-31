@@ -19,7 +19,7 @@ describe('parseSlackOriginalThread', () => {
     expect(thread.messages).toHaveLength(3);
     expect(thread.messages[1]).toMatchObject({
       author: { name: 'CatchUpQA', kind: 'bot' },
-      editedLabel: '1시간 전 편집됨',
+      editedLabel: '편집됨',
     });
     expect(thread.messages[1].blocks.some((block) => block.type === 'code_block')).toBe(true);
   });
