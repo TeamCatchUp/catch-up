@@ -1,4 +1,5 @@
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 from unittest.mock import Mock
 
 import pytest
@@ -141,3 +142,47 @@ def test_decode_agent_run_stream_entries_decodes_bytes_keys_from_redis() -> None
         policy_kind="immediate",
         dispatch_token="token-1",
     )
+
+
+@pytest.mark.asyncio
+async def test_execute_agent_run_enriches_channel_talk_user_chat_inputs(monkeypatch) -> None:
+    captured_inputs = {}
+
+    class FakeExecutionService:
+        async def run(self, **kwargs):
+            captured_inputs.update(kwargs["user_input_values"])
+            return "ok"
+
+    context = listener.AgentRunExecutionContext(
+        run_id=123,
+        message_id="stream-1",
+        spec_id=456,
+        spec=Mock(),
+        user_input_values={"existing": "value"},
+        event=AgentWebhookEvent(
+            event_id="event-1",
+            source="channel_talk",
+            event_type="user_chat.new_message",
+            payload={
+                "entity": {
+                    "channelId": "ch-001",
+                    "chatType": "userChat",
+                    "chatId": "chat-1",
+                },
+            },
+        ),
+        global_context=Mock(),
+    )
+    enrich = AsyncMock(return_value={"channel_talk_user_chat_context": "assembled"})
+    monkeypatch.setattr(listener, "build_channel_talk_user_chat_inputs", enrich)
+    monkeypatch.setattr(listener, "get_execution_service", lambda: FakeExecutionService())
+
+    result, error = await listener._execute_agent_run(context)
+
+    assert result == "ok"
+    assert error is None
+    assert captured_inputs == {
+        "existing": "value",
+        "channel_talk_user_chat_context": "assembled",
+    }
+    enrich.assert_awaited_once_with(context.event.payload)

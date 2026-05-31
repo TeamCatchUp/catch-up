@@ -16,6 +16,9 @@ from sqlalchemy.orm import Session
 from catchup.agents.factory import get_execution_service
 from catchup.agents.schemas import AgentSpec as AgentSpecSchema
 from catchup.agents.tools.internal.search import CatchUpKnowledgeBaseTool
+from catchup.agents.triggers.channel_talk_context import (
+    build_channel_talk_user_chat_inputs,
+)
 from catchup.agents.triggers.events import AgentWebhookEvent
 from catchup.agents.triggers.stream import AGENT_RUN_REQUEST_CLAIM_START_ID
 from catchup.agents.triggers.stream import AGENT_RUN_REQUEST_CONSUMER_GROUP
@@ -268,15 +271,31 @@ async def _execute_agent_run(
     CatchUpKnowledgeBaseTool.bind(context.global_context)
     service = get_execution_service()
     try:
+        user_input_values = await _build_execution_user_inputs(context)
         result = await service.run(
             spec_id=context.spec_id,
             spec=context.spec,
-            user_input_values=context.user_input_values,
+            user_input_values=user_input_values,
             trigger_event=context.event,
         )
     except Exception as exc:
         return None, str(exc)
     return result, None
+
+
+async def _build_execution_user_inputs(
+    context: AgentRunExecutionContext,
+) -> dict[str, Any]:
+
+    user_input_values = dict(context.user_input_values)
+    if (
+        context.event.source == "channel_talk"
+        and context.event.event_type in {"user_chat.created", "user_chat.new_message"}
+    ):
+        user_input_values.update(
+            await build_channel_talk_user_chat_inputs(context.event.payload)
+        )
+    return user_input_values
 
 
 def _record_agent_run_terminal_state(
