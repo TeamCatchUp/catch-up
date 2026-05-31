@@ -1,6 +1,7 @@
 """Channel Talk execution tools."""
 from __future__ import annotations
 
+import asyncio
 from contextvars import ContextVar
 
 from pydantic import BaseModel
@@ -88,7 +89,10 @@ class ChannelTalkTool(BaseTool):
         if not channel_id or not user_chat_id:
             raise RuntimeError("Channel Talk UserChat target not found in trigger event")
 
-        connection = load_channel_talk_connection(channel_id=channel_id)
+        connection = await asyncio.to_thread(
+            load_channel_talk_connection,
+            channel_id=channel_id,
+        )
         if connection is None:
             raise RuntimeError("channel_talk credentials not found")
         if not connection.access_key or not connection.access_secret:

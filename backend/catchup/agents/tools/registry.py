@@ -26,7 +26,7 @@ class ToolRegistry:
         for qualified_name in names:
             tool_name = qualified_name.split(".", 1)[0]
             lc_name = qualified_name.replace(".", "__", 1)
-            tool = cls._tools[tool_name]
+            tool = cls._get_tool(tool_name)
             result.extend(
                 t for t in tool.to_langchain_tools()
                 if t.name == lc_name
@@ -47,7 +47,8 @@ class ToolRegistry:
             tool_name = qualified_name.split(".", 1)[0]
             if tool_name in bound_tool_names:
                 continue
-            cls._tools[tool_name].bind_execution_context(
+            tool = cls._get_tool(tool_name)
+            tool.bind_execution_context(
                 global_context=global_context,
                 trigger_event=trigger_event,
             )
@@ -57,7 +58,7 @@ class ToolRegistry:
     def get_action_spec(cls, qualified_name: str) -> ActionSpec:
         """tool_gate에서 type(read|write) 조회에 사용된다."""
         tool_name, action_name = qualified_name.split(".", 1)
-        return cls._tools[tool_name].get_action_spec(action_name)
+        return cls._get_tool(tool_name).get_action_spec(action_name)
 
     @classmethod
     def schema(cls) -> dict:
@@ -70,3 +71,10 @@ class ToolRegistry:
             name: tool.schema()
             for name, tool in cls._tools.items()
         }
+
+    @classmethod
+    def _get_tool(cls, tool_name: str) -> BaseTool:
+        tool = cls._tools.get(tool_name)
+        if tool is None:
+            raise KeyError(f"Tool '{tool_name}' is not registered in the ToolRegistry.")
+        return tool
