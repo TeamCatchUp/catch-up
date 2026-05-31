@@ -34,6 +34,26 @@ class ToolRegistry:
         return result
 
     @classmethod
+    def bind_execution_context(
+        cls,
+        names: list[str],
+        *,
+        global_context,
+        trigger_event,
+    ) -> None:
+        """spec.tools[*].name에 포함된 tool에만 실행 컨텍스트를 바인딩한다."""
+        bound_tool_names: set[str] = set()
+        for qualified_name in names:
+            tool_name = qualified_name.split(".", 1)[0]
+            if tool_name in bound_tool_names:
+                continue
+            cls._tools[tool_name].bind_execution_context(
+                global_context=global_context,
+                trigger_event=trigger_event,
+            )
+            bound_tool_names.add(tool_name)
+
+    @classmethod
     def get_action_spec(cls, qualified_name: str) -> ActionSpec:
         """tool_gate에서 type(read|write) 조회에 사용된다."""
         tool_name, action_name = qualified_name.split(".", 1)

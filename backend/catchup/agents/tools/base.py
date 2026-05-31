@@ -81,6 +81,15 @@ class BaseTool:
             raise KeyError(f"Unknown action: {action_name}")
         return specs[action_name]
 
+    def bind_execution_context(
+        self,
+        *,
+        global_context: Any,
+        trigger_event: Any,
+    ) -> None:
+        """Agent 실행 직전, spec에 포함된 tool에만 실행 컨텍스트를 바인딩한다."""
+        return None
+
     def to_langchain_tools(self) -> list[StructuredTool]:
         """@action 메서드를 LangChain StructuredTool 리스트로 변환한다.
 

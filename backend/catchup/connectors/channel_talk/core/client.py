@@ -24,6 +24,9 @@ from catchup.connectors.channel_talk.schemas.user_chat import (
 )
 from catchup.connectors.channel_talk.schemas.user_chat import ChannelTalkUserChatState
 from catchup.connectors.channel_talk.schemas.user_chat_message import (
+    ChannelTalkUserChatMessage,
+)
+from catchup.connectors.channel_talk.schemas.user_chat_message import (
     ChannelTalkUserChatMessagePage,
 )
 
@@ -240,6 +243,51 @@ class ChannelTalkCoreApiClient:
             sort_order=sort_order,
         )
 
+    async def send_internal_user_chat_message(
+        self,
+        access_key: str,
+        access_secret: str,
+        *,
+        channel_id: str | None = None,
+        user_chat_id: str,
+        message: str,
+    ) -> ChannelTalkUserChatMessage:
+        resolved_user_chat_id = _require_user_chat_id(user_chat_id)
+        resolved_message = _require_internal_user_chat_message(message)
+        payload = await self._transport.request_json(
+            method="POST",
+            path=f"/open/v5/user-chats/{resolved_user_chat_id}/messages",
+            headers=self._build_headers(
+                access_key=access_key,
+                access_secret=access_secret,
+            ),
+            json_body={
+                "blocks": [
+                    {
+                        "type": "text",
+                        "value": resolved_message,
+                    }
+                ],
+                "options": ["private"],
+            },
+            channel_id=channel_id,
+        )
+        parsed = parse_channel_talk_payload(
+            payload,
+            parser=lambda raw: ChannelTalkUserChatMessage.from_api_payload(
+                _unwrap_message_payload(raw),
+                user_chat_id=resolved_user_chat_id,
+            ),
+            log_event="channel_talk_invalid_internal_user_chat_message_payload",
+            error_message="Channel Talk returned an invalid internal user chat message payload",
+            logger=logger,
+        )
+        if parsed.is_private is not True:
+            raise ChannelTalkPayloadError(
+                "Channel Talk did not confirm the user chat message as private"
+            )
+        return parsed
+
     async def get_user_chat_file_url(
         self,
         access_key: str,
@@ -325,6 +373,19 @@ def _require_user_chat_id(value: str) -> str:
     if not text:
         raise ChannelTalkValidationError("user_chat_id is required")
     return text
+
+
+def _require_internal_user_chat_message(value: str) -> str:
+    text = str(value or "").strip()
+    if not text:
+        raise ChannelTalkValidationError("message is required")
+    return text
+
+
+def _unwrap_message_payload(payload: Any) -> Any:
+    if isinstance(payload, dict) and isinstance(payload.get("message"), dict):
+        return payload["message"]
+    return payload
 
 
 def _require_file_key(value: str) -> str:
