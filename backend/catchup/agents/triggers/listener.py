@@ -132,14 +132,15 @@ async def process_agent_run_message(message: AgentRunStreamMessage) -> None:
     if message.malformed or message.request is None:
         await ack_agent_run_message(message.message_id)
         return
-    process_result = _prepare_agent_run_message(message)
+    process_result = await asyncio.to_thread(_prepare_agent_run_message, message)
     should_ack = process_result.should_ack
     if process_result.execution is not None:
-        if _mark_execution_started(process_result.execution):
+        if await asyncio.to_thread(_mark_execution_started, process_result.execution):
             execution_result, execution_error = await _execute_agent_run(
                 process_result.execution
             )
-            should_ack = _record_agent_run_terminal_state(
+            should_ack = await asyncio.to_thread(
+                _record_agent_run_terminal_state,
                 run_id=process_result.execution.run_id,
                 result=execution_result,
                 error=execution_error,

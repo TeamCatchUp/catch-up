@@ -198,7 +198,7 @@ class ChannelTalkWebhookApiTests(TestCase):
         self.assertEqual(response.json()["status"], "accepted")
         self.assertEqual(response.json()["agent_run_ids"], [44])
 
-    def test_webhook_agent_trigger_failure_does_not_block_sync(self) -> None:
+    def test_webhook_agent_trigger_failure_with_sync_changes_is_retryable(self) -> None:
         self.agent_dispatch.side_effect = RuntimeError("agent trigger failed")
         with patch(_LOAD_CONNECTION, return_value=self.connection):
             response = self.client.post(
@@ -206,9 +206,9 @@ class ChannelTalkWebhookApiTests(TestCase):
                 json=_message_payload("userChat"),
             )
 
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["status"], "accepted")
-        self.assertEqual(len(self.service.changes), 1)
+        self.assertEqual(response.status_code, 500)
+        self.assertEqual(response.json()["detail"], "Agent trigger dispatch failed")
+        self.assertEqual(self.service.changes, [])
 
     def test_webhook_sync_resolve_failure_does_not_skip_agent_trigger(self) -> None:
         with (

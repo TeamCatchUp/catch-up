@@ -109,14 +109,26 @@ async def run_debounce_ttl_listener_forever(stop_event: asyncio.Event) -> None:
             if parsed is None:
                 continue
             run_id, dispatch_token = parsed
-            with SessionLocal() as db:
-                dispatch_due_debounce_run(
-                    db=db,
-                    run_id=run_id,
-                    dispatch_token=dispatch_token,
-                )
+            await asyncio.to_thread(
+                _dispatch_due_debounce_run_sync,
+                run_id=run_id,
+                dispatch_token=dispatch_token,
+            )
     finally:
         await pubsub.close()
+
+
+def _dispatch_due_debounce_run_sync(
+    *,
+    run_id: int,
+    dispatch_token: str,
+) -> bool:
+    with SessionLocal() as db:
+        return dispatch_due_debounce_run(
+            db=db,
+            run_id=run_id,
+            dispatch_token=dispatch_token,
+        )
 
 
 def scan_and_dispatch_due_debounce_runs(*, db: Session, limit: int = 100) -> int:
