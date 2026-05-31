@@ -6,6 +6,7 @@ from fastapi import HTTPException
 from langchain_core.documents import Document
 from pydantic import BaseModel
 from pydantic import Field
+from pydantic import field_validator
 
 from catchup.components.embedder.constants import EmbeddingProvider
 from catchup.components.embedder.factory import get_embedding_service
@@ -39,10 +40,22 @@ class SearchProbeRequest(BaseModel):
     score_threshold: float = Field(default=0.0)
     tool_filters: list[str] = Field(default_factory=list)
 
+    @field_validator("queries", mode="before")
+    @classmethod
+    def _normalize_query_strings(cls, value):
+        if isinstance(value, list):
+            return [
+                {"query": item, "keyword_tokens": []}
+                if isinstance(item, str)
+                else item
+                for item in value
+            ]
+        return value
+
 
 class PreRankDocResult(BaseModel):
     doc_id: str
-    rrf_score: float
+    rrf_score: float = Field(serialization_alias="score")
     title: str
     page_content: str
     contextual_content: str | None
@@ -52,7 +65,7 @@ class PreRankDocResult(BaseModel):
 
 class PostRankDocResult(BaseModel):
     doc_id: str
-    relevance_score: float
+    relevance_score: float = Field(serialization_alias="score")
     title: str
     page_content: str
     contextual_content: str | None
