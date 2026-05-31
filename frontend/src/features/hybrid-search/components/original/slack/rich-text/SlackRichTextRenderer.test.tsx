@@ -31,6 +31,6 @@ describe('SlackRichTextRenderer', () => {
     expect(screen.getByText('bullet')).toBeInTheDocument();
     expect(screen.getByText('ordered')).toBeInTheDocument();
     expect(screen.getByText('quote')).toBeInTheDocument();
-    expect(screen.getByText('const ok = true;')).toBeInTheDocument();
+    expect(screen.getByText('const ok = true;')).toHaveClass('custom-scrollbar', 'max-h-62.5', 'overflow-auto');
   });
 });
