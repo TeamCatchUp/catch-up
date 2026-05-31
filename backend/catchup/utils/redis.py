@@ -5,8 +5,10 @@ import time
 from typing import Any
 from urllib.parse import urlsplit
 
+from redis import Redis as SyncRedis
 from redis.asyncio import Redis
 from redis.asyncio.cluster import RedisCluster
+from redis.cluster import RedisCluster as SyncRedisCluster
 
 from catchup.configs.config import settings
 from catchup.configs.constants import REDIS_HEALTH_CHECK_INTERVAL_SECONDS
@@ -25,6 +27,76 @@ _stream_redis_client_lock = asyncio.Lock()
 OAUTH_STATE_PREFIX = "oauth:state:"
 OAUTH_STATE_TTL = 600  # 10분
 OAUTH_STATE_PURPOSES = {"sync_install", "workflow_personal"}
+
+
+def create_sync_redis_client(
+    *,
+    client_type: str,
+    socket_timeout: float = REDIS_SOCKET_TIMEOUT_SECONDS,
+) -> SyncRedisCluster | SyncRedis:
+
+    socket_connect_timeout = REDIS_SOCKET_CONNECT_TIMEOUT_SECONDS
+    health_check_interval = REDIS_HEALTH_CHECK_INTERVAL_SECONDS
+
+    redis_url = urlsplit(settings.REDIS_URL)
+    redis_host = redis_url.hostname or "unknown"
+    redis_port = redis_url.port or 6379
+    redis_db = redis_url.path.lstrip("/") or "0"
+    is_cluster_mode = settings.REDIS_CLUSTER_MODE
+
+    logger.debug(
+        (
+            "[REDIS][CLIENT][INIT] Creating sync Redis client: "
+            "client_type=%s, host=%s, port=%s, db=%s, cluster_mode=%s, socket_connect_timeout=%.1fs, "
+            "socket_timeout=%.1fs, health_check_interval=%ss"
+        ),
+        client_type,
+        redis_host,
+        redis_port,
+        redis_db,
+        is_cluster_mode,
+        socket_connect_timeout,
+        socket_timeout,
+        health_check_interval,
+    )
+
+    redis_client: SyncRedisCluster | SyncRedis | None = None
+    try:
+        if is_cluster_mode:
+            ssl_opts = {}
+            if redis_url.scheme == "rediss":
+                ssl_opts = {"ssl": True, "ssl_cert_reqs": None}
+
+            redis_client = SyncRedisCluster.from_url(
+                settings.REDIS_URL,
+                socket_connect_timeout=socket_connect_timeout,
+                socket_timeout=socket_timeout,
+                health_check_interval=health_check_interval,
+                require_full_coverage=False,
+                **ssl_opts,
+            )
+        else:
+            redis_client = SyncRedis.from_url(
+                settings.REDIS_URL,
+                socket_connect_timeout=socket_connect_timeout,
+                socket_timeout=socket_timeout,
+                health_check_interval=health_check_interval,
+            )
+        redis_client.ping()
+        return redis_client
+    except Exception:
+        logger.error(
+            "[REDIS][CLIENT][INIT] Failed to initialize sync Redis client: client_type=%s, host=%s, port=%s, db=%s, cluster_mode=%s",
+            client_type,
+            redis_host,
+            redis_port,
+            redis_db,
+            is_cluster_mode,
+            exc_info=True,
+        )
+        if redis_client is not None:
+            redis_client.close()
+        raise
 
 
 async def _create_redis_client(
