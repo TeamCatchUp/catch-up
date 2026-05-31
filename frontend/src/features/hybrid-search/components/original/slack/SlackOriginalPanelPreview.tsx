@@ -1,4 +1,4 @@
-import DateIndicator from '@/features/hybrid-search/components/original/timeline/DateIndicator';
+import DateIndicator from '@/features/hybrid-search/components/original/shared/DateIndicator';
 import type { SlackOriginalContentResponse } from '@/features/hybrid-search/types/slackOriginalApi';
 import { parseSlackOriginalThread } from '@/features/hybrid-search/utils/slackOriginal/parseSlackOriginal';
 

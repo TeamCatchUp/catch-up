@@ -6,7 +6,7 @@
 
 import Image from 'next/image';
 
-import ContentRenderer from '@/features/hybrid-search/components/original/contents/ContentRenderer';
+import ContentRenderer from '@/features/hybrid-search/components/original/channel-talk/contents/ContentRenderer';
 import type { OriginalMessageItem } from '@/features/hybrid-search/types/originalApi';
 import { formatTimestamp } from '@/features/hybrid-search/utils/format/formatTimestamp';
 import FaceManIcon from '@/public/icons/icon/face_man.svg';

@@ -1,11 +1,11 @@
 // content_type 별 콘텐츠 컴포넌트 디스패처. 한 메시지의 contents[] 각 요소를 받는다.
 // file 분기만 connector/documentId 사용 — 나머지는 무시. 시그니처 통일을 위해 모두 받음.
 
-import BlockContent from '@/features/hybrid-search/components/original/contents/BlockContent';
-import ButtonContent from '@/features/hybrid-search/components/original/contents/ButtonContent';
-import FileContent from '@/features/hybrid-search/components/original/contents/FileContent';
-import FormContent from '@/features/hybrid-search/components/original/contents/FormContent';
-import TextContent from '@/features/hybrid-search/components/original/contents/TextContent';
+import BlockContent from '@/features/hybrid-search/components/original/channel-talk/contents/BlockContent';
+import ButtonContent from '@/features/hybrid-search/components/original/channel-talk/contents/ButtonContent';
+import FileContent from '@/features/hybrid-search/components/original/channel-talk/contents/FileContent';
+import FormContent from '@/features/hybrid-search/components/original/channel-talk/contents/FormContent';
+import TextContent from '@/features/hybrid-search/components/original/channel-talk/contents/TextContent';
 import type { OriginalContent } from '@/features/hybrid-search/types/originalApi';
 import type { SourceTypeApi } from '@/shared/types/sourceApi';
 

@@ -5,11 +5,11 @@
 
 import { isAxiosError } from 'axios';
 
-import OriginalPanelContent from '@/features/hybrid-search/components/original/panel/OriginalPanelContent';
-import OriginalPanelComingSoon from '@/features/hybrid-search/components/original/panel/states/OriginalPanelComingSoon';
-import OriginalPanelEmpty from '@/features/hybrid-search/components/original/panel/states/OriginalPanelEmpty';
-import OriginalPanelError from '@/features/hybrid-search/components/original/panel/states/OriginalPanelError';
-import OriginalPanelSkeleton from '@/features/hybrid-search/components/original/panel/states/OriginalPanelSkeleton';
+import ChannelTalkOriginalPanelContent from '@/features/hybrid-search/components/original/channel-talk/ChannelTalkOriginalPanelContent';
+import OriginalPanelComingSoon from '@/features/hybrid-search/components/original/shared/states/OriginalPanelComingSoon';
+import OriginalPanelEmpty from '@/features/hybrid-search/components/original/shared/states/OriginalPanelEmpty';
+import OriginalPanelError from '@/features/hybrid-search/components/original/shared/states/OriginalPanelError';
+import OriginalPanelSkeleton from '@/features/hybrid-search/components/original/shared/states/OriginalPanelSkeleton';
 import { useOriginalContent } from '@/features/hybrid-search/hooks/useOriginalContent';
 import type { SourceTypeApi } from '@/shared/types/sourceApi';
 
@@ -93,7 +93,7 @@ export default function OriginalPanel({ connector, entityType, documentId }: Ori
 
   // (e) 성공.
   if (query.isSuccess) {
-    return <OriginalPanelContent data={query.data} />;
+    return <ChannelTalkOriginalPanelContent data={query.data} />;
   }
 
   return <OriginalPanelSkeleton />;

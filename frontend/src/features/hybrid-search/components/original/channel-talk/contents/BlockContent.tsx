@@ -1,8 +1,8 @@
 // block 콘텐츠 — blocks[] 를 block_type 별로 분기 렌더.
 // code → CodeBlock, bullets → 불릿 리스트, 그 외(text/default) → OriginalMarkdown.
 
-import CodeBlock from '@/features/hybrid-search/components/original/contents/CodeBlock';
-import OriginalMarkdown from '@/features/hybrid-search/components/original/contents/OriginalMarkdown';
+import CodeBlock from '@/features/hybrid-search/components/original/channel-talk/contents/CodeBlock';
+import OriginalMarkdown from '@/features/hybrid-search/components/original/channel-talk/contents/OriginalMarkdown';
 import type { OriginalBlock, OriginalBlockPayload } from '@/features/hybrid-search/types/originalApi';
 
 interface BlockContentProps {

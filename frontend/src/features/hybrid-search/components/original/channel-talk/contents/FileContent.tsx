@@ -1,7 +1,7 @@
 // file 콘텐츠 — files[] 각 요소를 FileRow 로 렌더.
 // connector/documentId 는 FileRow 가 다운로드 mutation 호출 시 사용.
 
-import FileRow from '@/features/hybrid-search/components/original/contents/FileRow';
+import FileRow from '@/features/hybrid-search/components/original/channel-talk/contents/FileRow';
 import type { OriginalFilePayload } from '@/features/hybrid-search/types/originalApi';
 import type { SourceTypeApi } from '@/shared/types/sourceApi';
 

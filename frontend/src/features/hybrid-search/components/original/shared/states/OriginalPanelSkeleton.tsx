@@ -1,7 +1,7 @@
 'use client';
 
 // 원문 패널 로딩 스켈레톤 — 상담정보 카드 + 고객정보 카드 + 메시지 영역의 대략적 배치.
-// 실제 OriginalPanelContent 와 동일한 외곽(gap-3 px-6 py-4) · rounded-xl 카드 · 좌측 avatar 패턴.
+// 실제 ChannelTalkOriginalPanelContent 와 동일한 외곽(gap-3 px-6 py-4) · rounded-xl 카드 · 좌측 avatar 패턴.
 
 import { Skeleton } from '@/shared/components/ui/skeleton';
 

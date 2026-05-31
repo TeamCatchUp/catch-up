@@ -30,25 +30,25 @@ import {
   textContentShort,
 } from '@/features/hybrid-search/components/original/__fixtures__/originalContent.fixtures';
 import { slackOriginalPreviewResponse } from '@/features/hybrid-search/components/original/__fixtures__/slackOriginal.fixtures';
-import BlockContent from '@/features/hybrid-search/components/original/contents/BlockContent';
-import ButtonContent from '@/features/hybrid-search/components/original/contents/ButtonContent';
-import FileContent from '@/features/hybrid-search/components/original/contents/FileContent';
-import FormContent from '@/features/hybrid-search/components/original/contents/FormContent';
-import TextContent from '@/features/hybrid-search/components/original/contents/TextContent';
-import Collapsible from '@/features/hybrid-search/components/original/metadata/Collapsible';
-import ConsultationInfo from '@/features/hybrid-search/components/original/metadata/ConsultationInfo';
-import CustomerInfo from '@/features/hybrid-search/components/original/metadata/CustomerInfo';
+import ChannelTalkOriginalPanelContent from '@/features/hybrid-search/components/original/channel-talk/ChannelTalkOriginalPanelContent';
+import BlockContent from '@/features/hybrid-search/components/original/channel-talk/contents/BlockContent';
+import ButtonContent from '@/features/hybrid-search/components/original/channel-talk/contents/ButtonContent';
+import FileContent from '@/features/hybrid-search/components/original/channel-talk/contents/FileContent';
+import FormContent from '@/features/hybrid-search/components/original/channel-talk/contents/FormContent';
+import TextContent from '@/features/hybrid-search/components/original/channel-talk/contents/TextContent';
+import Collapsible from '@/features/hybrid-search/components/original/channel-talk/metadata/Collapsible';
+import ConsultationInfo from '@/features/hybrid-search/components/original/channel-talk/metadata/ConsultationInfo';
+import CustomerInfo from '@/features/hybrid-search/components/original/channel-talk/metadata/CustomerInfo';
+import MessageItem from '@/features/hybrid-search/components/original/channel-talk/timeline/MessageItem';
 import OriginalPanel from '@/features/hybrid-search/components/original/OriginalPanel';
-import OriginalPanelContent from '@/features/hybrid-search/components/original/panel/OriginalPanelContent';
-import OriginalPanelComingSoon from '@/features/hybrid-search/components/original/panel/states/OriginalPanelComingSoon';
-import OriginalPanelEmpty from '@/features/hybrid-search/components/original/panel/states/OriginalPanelEmpty';
-import OriginalPanelError from '@/features/hybrid-search/components/original/panel/states/OriginalPanelError';
-import OriginalPanelSkeleton from '@/features/hybrid-search/components/original/panel/states/OriginalPanelSkeleton';
+import DateIndicator from '@/features/hybrid-search/components/original/shared/DateIndicator';
+import OriginalPanelComingSoon from '@/features/hybrid-search/components/original/shared/states/OriginalPanelComingSoon';
+import OriginalPanelEmpty from '@/features/hybrid-search/components/original/shared/states/OriginalPanelEmpty';
+import OriginalPanelError from '@/features/hybrid-search/components/original/shared/states/OriginalPanelError';
+import OriginalPanelSkeleton from '@/features/hybrid-search/components/original/shared/states/OriginalPanelSkeleton';
 import SlackMessageItem from '@/features/hybrid-search/components/original/slack/SlackMessageItem';
 import SlackOriginalPanelPreview from '@/features/hybrid-search/components/original/slack/SlackOriginalPanelPreview';
 import SlackThreadHeader from '@/features/hybrid-search/components/original/slack/SlackThreadHeader';
-import DateIndicator from '@/features/hybrid-search/components/original/timeline/DateIndicator';
-import MessageItem from '@/features/hybrid-search/components/original/timeline/MessageItem';
 import type {
   OriginalBlockPayload,
   OriginalButtonPayload,
@@ -346,12 +346,12 @@ const ENTRY_RENDERERS: Record<EntrySlug, () => ReactNode> = {
     <>
       <Case label="현실적인 전체 대화 (3개 날짜 그룹, 메시지·콘텐츠 혼합)">
         <PanelFrame>
-          <OriginalPanelContent data={fullConversationResponse} />
+          <ChannelTalkOriginalPanelContent data={fullConversationResponse} />
         </PanelFrame>
       </Case>
       <Case label="메시지 0건 (빈 대화)">
         <PanelFrame>
-          <OriginalPanelContent data={emptyConversationResponse} />
+          <ChannelTalkOriginalPanelContent data={emptyConversationResponse} />
         </PanelFrame>
       </Case>
     </>
