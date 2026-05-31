@@ -74,7 +74,7 @@ class ChannelTalkDebounceTriggerResponse(BaseModel):
         "agent_triggers에 매칭되는 트리거가 없으면 matched=false를 반환한다."
     ),
 )
-async def simulate_webhook(
+def simulate_webhook(
     body: AgentWebhookEvent,
     db: Session = Depends(get_db),
 ) -> WebhookSimulateResponse:

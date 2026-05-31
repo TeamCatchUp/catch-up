@@ -180,6 +180,14 @@ class CatchUpKnowledgeBaseTool(BaseTool):
         _context_var.set(global_context)
         _accumulated_docs_var.set([])
 
+    def bind_execution_context(
+        self,
+        *,
+        global_context: GlobalContext,
+        trigger_event,
+    ) -> None:
+        self.bind(global_context)
+
     @action(
         input_model=SearchInput,
         output_model=None,

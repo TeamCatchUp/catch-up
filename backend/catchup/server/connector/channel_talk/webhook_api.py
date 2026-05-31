@@ -112,26 +112,31 @@ async def handle_channel_talk_webhook(
     else:
         agent_result, agent_error = agent_dispatch
 
-    if sync_error is not None:
+    if sync_error is not None or agent_error is not None:
+        errors = []
+        if sync_error is not None:
+            errors.append(sync_error)
         if agent_error is not None:
+            errors.append(agent_error)
+        if len(errors) > 1:
             raise HTTPException(
                 status_code=500,
                 detail="Incremental sync resolve and agent trigger dispatch failed",
             ) from ExceptionGroup(
                 "channel_talk_webhook_dispatch_failed",
-                [sync_error, agent_error],
+                errors,
             )
-        raise HTTPException(
-            status_code=500,
-            detail="Incremental sync resolve failed",
-        ) from sync_error
-
-    if not resolved.changes:
-        if agent_error is not None:
+        if sync_error is not None:
             raise HTTPException(
                 status_code=500,
-                detail="Agent trigger dispatch failed",
-            ) from agent_error
+                detail="Incremental sync resolve failed",
+            ) from sync_error
+        raise HTTPException(
+            status_code=500,
+            detail="Agent trigger dispatch failed",
+        ) from agent_error
+
+    if not resolved.changes:
         if agent_result.status == "accepted":
             return ChannelTalkWebhookResponse(
                 status="accepted",

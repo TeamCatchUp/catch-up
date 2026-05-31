@@ -104,6 +104,7 @@ class ChannelTalkCoreHttpClient:
         path: str,
         headers: dict[str, str],
         params: RequestParams | None = None,
+        json_body: Any | None = None,
         channel_id: str | None = None,
     ) -> Any:
         response = await self.send(
@@ -111,6 +112,7 @@ class ChannelTalkCoreHttpClient:
             path=path,
             headers=headers,
             params=params,
+            json_body=json_body,
             channel_id=channel_id,
         )
         return self.decode_response(response)
@@ -122,6 +124,7 @@ class ChannelTalkCoreHttpClient:
         path: str,
         headers: dict[str, str],
         params: RequestParams | None = None,
+        json_body: Any | None = None,
         channel_id: str | None = None,
     ) -> httpx.Response:
         url = f"{self.base_url}{path}"
@@ -138,6 +141,7 @@ class ChannelTalkCoreHttpClient:
                 url=url,
                 headers=headers,
                 params=params,
+                json_body=json_body,
             )
             if response.status_code != 429:
                 return response
@@ -180,6 +184,7 @@ class ChannelTalkCoreHttpClient:
         url: str,
         headers: dict[str, str],
         params: RequestParams | None,
+        json_body: Any | None,
     ) -> httpx.Response:
         try:
             return await self._http_client.request(
@@ -187,6 +192,7 @@ class ChannelTalkCoreHttpClient:
                 url,
                 headers=headers,
                 params=params,
+                json=json_body,
                 timeout=self.timeout_seconds,
             )
         except httpx.TimeoutException as exc:

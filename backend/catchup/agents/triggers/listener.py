@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 
 from catchup.agents.factory import get_execution_service
 from catchup.agents.schemas import AgentSpec as AgentSpecSchema
-from catchup.agents.tools.internal.search import CatchUpKnowledgeBaseTool
+from catchup.agents.tools.registry import ToolRegistry
 from catchup.agents.triggers.channel_talk_context import (
     build_channel_talk_user_chat_inputs,
 )
@@ -132,14 +132,15 @@ async def process_agent_run_message(message: AgentRunStreamMessage) -> None:
     if message.malformed or message.request is None:
         await ack_agent_run_message(message.message_id)
         return
-    process_result = _prepare_agent_run_message(message)
+    process_result = await asyncio.to_thread(_prepare_agent_run_message, message)
     should_ack = process_result.should_ack
     if process_result.execution is not None:
-        if _mark_execution_started(process_result.execution):
+        if await asyncio.to_thread(_mark_execution_started, process_result.execution):
             execution_result, execution_error = await _execute_agent_run(
                 process_result.execution
             )
-            should_ack = _record_agent_run_terminal_state(
+            should_ack = await asyncio.to_thread(
+                _record_agent_run_terminal_state,
                 run_id=process_result.execution.run_id,
                 result=execution_result,
                 error=execution_error,
@@ -268,7 +269,11 @@ async def _execute_agent_run(
     context: AgentRunExecutionContext,
 ) -> tuple[str | None, str | None]:
     """DB 트랜잭션 밖에서 실제 agent를 실행해 lock 보유 시간을 만들지 않는다."""
-    CatchUpKnowledgeBaseTool.bind(context.global_context)
+    ToolRegistry.bind_execution_context(
+        [tool.name for tool in context.spec.tools],
+        global_context=context.global_context,
+        trigger_event=context.event,
+    )
     service = get_execution_service()
     try:
         user_input_values = await _build_execution_user_inputs(context)

@@ -147,6 +147,7 @@ def test_decode_agent_run_stream_entries_decodes_bytes_keys_from_redis() -> None
 @pytest.mark.asyncio
 async def test_execute_agent_run_enriches_channel_talk_user_chat_inputs(monkeypatch) -> None:
     captured_inputs = {}
+    bound_contexts = []
 
     class FakeExecutionService:
         async def run(self, **kwargs):
@@ -157,7 +158,11 @@ async def test_execute_agent_run_enriches_channel_talk_user_chat_inputs(monkeypa
         run_id=123,
         message_id="stream-1",
         spec_id=456,
-        spec=Mock(),
+        spec=SimpleNamespace(
+            tools=[
+                SimpleNamespace(name="channel_talk.send_internal_user_chat_message"),
+            ],
+        ),
         user_input_values={"existing": "value"},
         event=AgentWebhookEvent(
             event_id="event-1",
@@ -176,6 +181,11 @@ async def test_execute_agent_run_enriches_channel_talk_user_chat_inputs(monkeypa
     enrich = AsyncMock(return_value={"channel_talk_user_chat_context": "assembled"})
     monkeypatch.setattr(listener, "build_channel_talk_user_chat_inputs", enrich)
     monkeypatch.setattr(listener, "get_execution_service", lambda: FakeExecutionService())
+    monkeypatch.setattr(
+        listener.ToolRegistry,
+        "bind_execution_context",
+        lambda names, **kwargs: bound_contexts.append((names, kwargs)),
+    )
 
     result, error = await listener._execute_agent_run(context)
 
@@ -185,4 +195,13 @@ async def test_execute_agent_run_enriches_channel_talk_user_chat_inputs(monkeypa
         "existing": "value",
         "channel_talk_user_chat_context": "assembled",
     }
+    assert bound_contexts == [
+        (
+            ["channel_talk.send_internal_user_chat_message"],
+            {
+                "global_context": context.global_context,
+                "trigger_event": context.event,
+            },
+        )
+    ]
     enrich.assert_awaited_once_with(context.event.payload)

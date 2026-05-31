@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from typing import Any
 from unittest import IsolatedAsyncioTestCase
 
@@ -44,6 +45,78 @@ def _make_client(
 
 
 class ChannelTalkCoreApiClientTests(IsolatedAsyncioTestCase):
+    async def test_send_internal_user_chat_message_posts_private_message(self) -> None:
+        async def handler(request: httpx.Request) -> httpx.Response:
+            self.assertEqual(request.method, "POST")
+            self.assertEqual(request.url.path, "/open/v5/user-chats/chat-1/messages")
+            self.assertEqual(request.headers["x-access-key"], "access-key")
+            self.assertEqual(request.headers["x-access-secret"], "access-secret")
+            self.assertEqual(
+                json.loads(request.content),
+                {
+                    "blocks": [
+                        {
+                            "type": "text",
+                            "value": "Agent result",
+                        }
+                    ],
+                    "options": ["private"],
+                },
+            )
+            return httpx.Response(
+                200,
+                json={
+                    "message": {
+                        "id": "message-1",
+                        "chatId": "chat-1",
+                        "plainText": "Agent result",
+                        "options": ["private"],
+                    }
+                },
+            )
+
+        async with httpx.AsyncClient(
+            transport=httpx.MockTransport(handler),
+            base_url="https://api.channel.io",
+        ) as http_client:
+            client = _make_client(http_client=http_client)
+            message = await client.send_internal_user_chat_message(
+                access_key="access-key",
+                access_secret="access-secret",
+                channel_id="channel-123",
+                user_chat_id="chat-1",
+                message="Agent result",
+            )
+
+        self.assertEqual(message.message_id, "message-1")
+        self.assertTrue(message.is_private)
+
+    async def test_send_internal_user_chat_message_rejects_non_private_response(self) -> None:
+        async def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(
+                200,
+                json={
+                    "message": {
+                        "id": "message-1",
+                        "chatId": "chat-1",
+                        "plainText": "Agent result",
+                    }
+                },
+            )
+
+        async with httpx.AsyncClient(
+            transport=httpx.MockTransport(handler),
+            base_url="https://api.channel.io",
+        ) as http_client:
+            client = _make_client(http_client=http_client)
+            with self.assertRaises(ChannelTalkPayloadError):
+                await client.send_internal_user_chat_message(
+                    access_key="access-key",
+                    access_secret="access-secret",
+                    user_chat_id="chat-1",
+                    message="Agent result",
+                )
+
     async def test_get_user_chat_file_url_returns_signed_url(self) -> None:
         async def handler(request: httpx.Request) -> httpx.Response:
             self.assertEqual(
