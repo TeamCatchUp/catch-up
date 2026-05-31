@@ -1,16 +1,20 @@
 'use client';
 
 // 원문 패널 컨테이너 — connector/entityType/documentId 로 상태 분기.
-// user_chat 이 아니면 Coming Soon (fetch 안 함), 그 외엔 useOriginalContent 결과로 분기.
+// 현재 ChannelTalk user_chat과 Slack message만 실제 원문 API를 연결한다.
 
 import { isAxiosError } from 'axios';
 
 import ChannelTalkOriginalPanelContent from '@/features/hybrid-search/components/original/channel-talk/ChannelTalkOriginalPanelContent';
+import SlackOriginalPanelContent from '@/features/hybrid-search/components/original/slack/SlackOriginalPanelContent';
 import OriginalPanelComingSoon from '@/features/hybrid-search/components/original/shared/states/OriginalPanelComingSoon';
 import OriginalPanelEmpty from '@/features/hybrid-search/components/original/shared/states/OriginalPanelEmpty';
 import OriginalPanelError from '@/features/hybrid-search/components/original/shared/states/OriginalPanelError';
 import OriginalPanelSkeleton from '@/features/hybrid-search/components/original/shared/states/OriginalPanelSkeleton';
-import { useOriginalContent } from '@/features/hybrid-search/hooks/useOriginalContent';
+import {
+  useOriginalContent,
+  useSlackOriginalContentInfinite,
+} from '@/features/hybrid-search/hooks/useOriginalContent';
 import type { SourceTypeApi } from '@/shared/types/sourceApi';
 
 interface OriginalPanelProps {
@@ -22,6 +26,10 @@ interface OriginalPanelProps {
 // 선택된 소스가 ChannelTalk user_chat 인지 — 이때만 실제 원문 패널을 띄운다.
 function isUserChat(connector: SourceTypeApi | null, entityType: string | null): boolean {
   return connector === 'channel_talk' && entityType === 'user_chat';
+}
+
+function isSlackMessage(connector: SourceTypeApi | null, entityType: string | null): boolean {
+  return connector === 'slack' && entityType === 'message';
 }
 
 // Coming Soon 카피의 협업 툴 표시명 — connector/entityType 매핑 테이블.
@@ -63,12 +71,13 @@ function resolveErrorMessage(error: unknown): string {
 }
 
 export default function OriginalPanel({ connector, entityType, documentId }: OriginalPanelProps) {
-  // user_chat 이 아니면 query 가 disabled — connector/documentId 폴백은 호출만을 위한 값.
-  const query = useOriginalContent({
+  const params = {
     connector: connector ?? 'unknown',
     entityType: entityType ?? '',
     documentId: documentId ?? '',
-  });
+  };
+  const channelTalkQuery = useOriginalContent(params);
+  const slackQuery = useSlackOriginalContentInfinite(params);
 
   // (a) 선택된 문서가 없음 — 빈 상태 (검색 전·결과 0건 포함).
   // isUserChat 보다 먼저 체크 — connector/entityType 가 모두 null 일 때 잘못 ComingSoon 으로 빠지는 것 방지.
@@ -76,25 +85,54 @@ export default function OriginalPanel({ connector, entityType, documentId }: Ori
     return <OriginalPanelEmpty />;
   }
 
-  // (b) ChannelTalk user_chat 이 아닌 선택 — 준비 중 안내.
-  if (!isUserChat(connector, entityType)) {
-    return <OriginalPanelComingSoon toolName={resolveToolName(connector, entityType)} />;
-  }
+  if (isUserChat(connector, entityType)) {
+    if (channelTalkQuery.isLoading) {
+      return <OriginalPanelSkeleton />;
+    }
 
-  // (c) 로딩 중.
-  if (query.isLoading) {
+    if (channelTalkQuery.isError) {
+      return (
+        <OriginalPanelError
+          message={resolveErrorMessage(channelTalkQuery.error)}
+          onRetry={() => void channelTalkQuery.refetch()}
+        />
+      );
+    }
+
+    if (channelTalkQuery.isSuccess) {
+      return <ChannelTalkOriginalPanelContent data={channelTalkQuery.data} />;
+    }
+
     return <OriginalPanelSkeleton />;
   }
 
-  // (d) 에러 — HTTP status 별 메시지 + 재시도.
-  if (query.isError) {
-    return <OriginalPanelError message={resolveErrorMessage(query.error)} onRetry={query.refetch} />;
+  if (isSlackMessage(connector, entityType)) {
+    if (slackQuery.isLoading) {
+      return <OriginalPanelSkeleton />;
+    }
+
+    if (slackQuery.isError) {
+      return (
+        <OriginalPanelError
+          message={resolveErrorMessage(slackQuery.error)}
+          onRetry={() => void slackQuery.refetch()}
+        />
+      );
+    }
+
+    if (slackQuery.isSuccess) {
+      return (
+        <SlackOriginalPanelContent
+          pages={slackQuery.data.pages}
+          hasNextPage={Boolean(slackQuery.hasNextPage)}
+          isFetchingNextPage={slackQuery.isFetchingNextPage}
+          onLoadNextPage={() => void slackQuery.fetchNextPage()}
+        />
+      );
+    }
+
+    return <OriginalPanelSkeleton />;
   }
 
-  // (e) 성공.
-  if (query.isSuccess) {
-    return <ChannelTalkOriginalPanelContent data={query.data} />;
-  }
-
-  return <OriginalPanelSkeleton />;
+  return <OriginalPanelComingSoon toolName={resolveToolName(connector, entityType)} />;
 }
