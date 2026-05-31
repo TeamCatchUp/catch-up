@@ -46,9 +46,9 @@ import OriginalPanelComingSoon from '@/features/hybrid-search/components/origina
 import OriginalPanelEmpty from '@/features/hybrid-search/components/original/shared/states/OriginalPanelEmpty';
 import OriginalPanelError from '@/features/hybrid-search/components/original/shared/states/OriginalPanelError';
 import OriginalPanelSkeleton from '@/features/hybrid-search/components/original/shared/states/OriginalPanelSkeleton';
-import SlackMessageItem from '@/features/hybrid-search/components/original/slack/SlackMessageItem';
+import SlackThreadHeader from '@/features/hybrid-search/components/original/slack/header/SlackThreadHeader';
+import SlackMessageItem from '@/features/hybrid-search/components/original/slack/message/SlackMessageItem';
 import SlackOriginalPanelContent from '@/features/hybrid-search/components/original/slack/SlackOriginalPanelContent';
-import SlackThreadHeader from '@/features/hybrid-search/components/original/slack/SlackThreadHeader';
 import type {
   OriginalBlockPayload,
   OriginalButtonPayload,

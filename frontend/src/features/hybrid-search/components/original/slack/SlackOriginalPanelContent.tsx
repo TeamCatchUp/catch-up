@@ -2,8 +2,8 @@ import DateIndicator from '@/features/hybrid-search/components/original/shared/D
 import type { SlackOriginalContentResponse } from '@/features/hybrid-search/types/slackOriginalApi';
 import { parseSlackOriginalThread } from '@/features/hybrid-search/utils/slackOriginal/parseSlackOriginal';
 
-import SlackMessageItem from './SlackMessageItem';
-import SlackThreadHeader from './SlackThreadHeader';
+import SlackThreadHeader from './header/SlackThreadHeader';
+import SlackMessageItem from './message/SlackMessageItem';
 
 interface SlackOriginalPanelContentProps {
   response: SlackOriginalContentResponse;

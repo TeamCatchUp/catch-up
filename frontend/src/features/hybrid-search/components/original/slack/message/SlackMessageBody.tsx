@@ -1,9 +1,9 @@
 import type { SlackMessageView } from '@/features/hybrid-search/types/slackOriginalModel';
 
-import SlackFileAttachment from './SlackFileAttachment';
-import SlackImageGrid, { hasSafeSlackImagePreview } from './SlackImageGrid';
-import SlackLinkPreview from './SlackLinkPreview';
-import SlackRichTextRenderer from './SlackRichTextRenderer';
+import SlackFileAttachment from '../attachments/SlackFileAttachment';
+import SlackImageGrid, { hasSafeSlackImagePreview } from '../attachments/SlackImageGrid';
+import SlackLinkPreview from '../attachments/SlackLinkPreview';
+import SlackRichTextRenderer from '../rich-text/SlackRichTextRenderer';
 
 interface SlackMessageBodyProps {
   message: SlackMessageView;

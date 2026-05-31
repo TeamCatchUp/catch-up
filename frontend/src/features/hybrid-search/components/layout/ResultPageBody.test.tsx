@@ -38,9 +38,12 @@ describe('ResultPageBody', () => {
     const rightPanel = screen.getByTestId('original-panel').parentElement;
     expect(rightPanel).toHaveClass(
       'custom-scrollbar',
+      'flex',
       'min-h-0',
+      'min-w-105',
       'w-105.75',
       'shrink-0',
+      'flex-col',
       'overflow-y-auto',
       'overscroll-contain',
       'border-l',

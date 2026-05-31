@@ -110,7 +110,7 @@ export default function SlackRichTextRenderer({ blocks }: SlackRichTextRendererP
         return (
           <pre
             key={index}
-            className="bg-fill-strong border-edge-neutral text-content-neutral max-h-62.5 w-full overflow-hidden rounded-xl border px-4 py-3 whitespace-pre-wrap"
+            className="bg-fill-strong border-edge-neutral text-content-neutral max-h-62.5 w-full overflow-hidden rounded-xl border px-4 py-3 font-[inherit] whitespace-pre-wrap"
           >
             {block.text}
           </pre>

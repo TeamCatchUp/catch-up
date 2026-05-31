@@ -12,8 +12,7 @@ export default function SlackMessageItem({ message }: SlackMessageItemProps) {
   const isBot = message.author.kind === 'bot';
 
   return (
-    <article className="flex w-99.75 max-w-full items-start gap-3 pr-2.5">
-      <span aria-hidden className="border-edge-neutral w-0 shrink-0 self-stretch border-l" />
+    <article className="flex w-99.75 max-w-full items-start pl-3 pr-2.5">
       <div className="flex min-w-0 flex-1 items-start gap-3 overflow-hidden py-1">
         <SlackMessageAvatar
           name={message.author.name}

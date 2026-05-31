@@ -1,4 +1,4 @@
-import GroupIcon from '@/public/icons/icon/group.svg';
+import GroupFilledIcon from '@/public/icons/icon/group_filled.svg';
 import TagIcon from '@/public/icons/icon/tag.svg';
 
 interface SlackThreadHeaderProps {
@@ -20,7 +20,7 @@ export default function SlackThreadHeader({ channelName, participantNames }: Sla
         </span>
       </div>
       <div className="flex h-7 w-full items-center gap-4">
-        <GroupIcon className="text-icon-neutral size-5.5 shrink-0" aria-hidden />
+        <GroupFilledIcon className="text-icon-neutral size-5.5 shrink-0" aria-hidden />
         <span className="text-body-small text-content-neutral min-w-0 flex-1 truncate font-medium">{participants}</span>
       </div>
     </div>
