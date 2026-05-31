@@ -2,6 +2,7 @@
 APScheduler for Hourly Sync
 """
 
+import asyncio
 import logging
 from datetime import datetime
 from datetime import timedelta
@@ -11,6 +12,9 @@ from zoneinfo import ZoneInfo
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
+from catchup.agents.triggers.publisher import publish_pending_agent_trigger_outbox
+from catchup.agents.triggers.recovery import recover_stale_agent_trigger_executions
+from catchup.agents.triggers.recovery import scan_and_dispatch_due_debounce_runs
 from catchup.audit.enums import AuditEventStatus
 from catchup.audit.enums import AuditLevel
 from catchup.audit.metadata import IntegrationAuditMetadata
@@ -176,6 +180,28 @@ async def recover_incremental_dead_records_job():
     )
 
 
+async def run_agent_trigger_recovery_jobs():
+    logger.info("[AGENT_TRIGGER][SCHEDULER] Starting recovery cycle")
+    due_count, outbox_count, stale_execution_count = await asyncio.to_thread(
+        _run_agent_trigger_recovery_jobs_sync
+    )
+    logger.info(
+        "[AGENT_TRIGGER][SCHEDULER] Recovery cycle completed: due=%s outbox=%s stale_execution=%s",
+        due_count,
+        outbox_count,
+        stale_execution_count,
+    )
+
+
+def _run_agent_trigger_recovery_jobs_sync() -> tuple[int, int, int]:
+    """스케줄러 thread 안에서 Trigger recovery용 DB 세션을 짧게 소유한다."""
+    with SessionLocal() as db:
+        due_count = scan_and_dispatch_due_debounce_runs(db=db)
+        outbox_count = publish_pending_agent_trigger_outbox(db=db)
+        stale_execution_count = recover_stale_agent_trigger_executions(db=db)
+        return due_count, outbox_count, stale_execution_count
+
+
 async def poll_confluence_incremental():
     logger.info("[CONFLUENCE][POLL] Starting incremental poll")
     result = await get_incremental_service().poll_confluence_changes()
@@ -239,6 +265,15 @@ def init_scheduler():
         name="Incremental Dead Record Recovery",
         replace_existing=True,
         misfire_grace_time=300,
+    )
+
+    _scheduler.add_job(
+        run_agent_trigger_recovery_jobs,
+        trigger=CronTrigger(minute="*/1", timezone=SEOUL_TZ),
+        id="agent_trigger_recovery",
+        name="Agent Trigger Recovery",
+        replace_existing=True,
+        misfire_grace_time=60,
     )
 
     confluence_poll_interval_minutes = settings.CONFLUENCE_INCREMENTAL_POLL_INTERVAL_MINUTES

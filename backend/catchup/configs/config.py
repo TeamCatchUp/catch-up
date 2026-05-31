@@ -252,6 +252,8 @@ class Settings(BaseSettings):
     GITHUB_SYNC_COMMENTS_LIMIT: int = 10  # Issue/PR에 포함할 최근 코멘트 수
     # api_server 시작 시 Sync Worker 자동 기동 여부
     SYNC_WORKER_AUTOSTART: bool = True
+    # api_server 시작 시 Agent Trigger stream/TTL listener 자동 기동 여부
+    AGENT_TRIGGER_WORKER_AUTOSTART: bool = True
     # 큐가 비었을 때 worker 루프 대기 시간(초)
     SYNC_WORKER_IDLE_SLEEP_SECONDS: float = 0.5
     # Redis blocking pop timeout(초)

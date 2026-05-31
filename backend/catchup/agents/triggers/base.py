@@ -1,4 +1,8 @@
-"""Trigger Registry가 노출하는 이벤트 소스와 필터 스펙을 정의한다.
+"""Builder가 안전한 trigger condition을 만들 수 있도록 이벤트 스펙을 정의한다.
+
+리뷰 흐름에서는 런타임 match보다 앞선 설계 입력으로 읽는다. 이 파일은
+resolver.py가 직접 호출하는 실행 경로가 아니라, Builder/관리 도구가 어떤
+source/event/filter 조합을 저장해도 되는지 알려 주는 계약이다.
 
 핵심 개념 구분:
   filterable_fields (EventSpec) — Builder Agent가 policies.py의 where clause를
@@ -8,7 +12,7 @@
 
 예시:
   EventSpec(
-      type="user_chat.message_created",
+      type="user_chat.new_message",
       description="유저 채팅방에 새 메시지가 생성됨",
       filterable_fields={
           "channel_id": FilterFieldSpec(
@@ -58,10 +62,6 @@ class FilterFieldSpec(BaseModel):
         description="Builder가 condition 예시를 만들 때 참고할 값",
     )
 
-    def schema_dict(self) -> dict:
-        """Builder Agent에게 노출할 필터 필드 스펙을 직렬화한다."""
-        return self.model_dump(mode="json")
-
     def condition_clause(
         self,
         value: Any,
@@ -89,19 +89,6 @@ class EventSpec(BaseModel):
         )
     )
 
-    def schema_dict(self) -> dict:
-        """Builder Agent에게 노출할 이벤트 스펙을 직렬화한다.
-
-        TriggerRegistry.schema()가 이 메서드를 호출해 소스별 스키마를 조립한다.
-        """
-        return {
-            "description": self.description,
-            "filterable_fields": {
-                name: field.schema_dict()
-                for name, field in self.filterable_fields.items()
-            },
-        }
-
 
 class EventSource:
     name: str
@@ -117,7 +104,13 @@ class EventSource:
         return {
             "display_name": self.display_name,
             "events": {
-                event.type: event.schema_dict()
+                event.type: {
+                    "description": event.description,
+                    "filterable_fields": {
+                        name: field.model_dump(mode="json")
+                        for name, field in event.filterable_fields.items()
+                    },
+                }
                 for event in self.supported_events
             },
         }
@@ -125,8 +118,9 @@ class EventSource:
     def get_event_spec(self, event_type: str) -> EventSpec:
         """event_type에 해당하는 EventSpec을 반환한다.
 
-        trigger resolver가 condition의 키가 filterable_fields에
-        정의된 필드인지 검증하는 데 사용된다.
+        현재 런타임 resolver는 저장된 policy JSON과 where clause를 직접
+        평가한다. 이 스펙은 Builder가 안전한 condition 후보를 만들 때 쓰는
+        설계 입력이다.
         """
         for event in self.supported_events:
             if event.type == event_type:

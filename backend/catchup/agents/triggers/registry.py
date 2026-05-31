@@ -1,3 +1,11 @@
+"""Builder/관리 도구에 Trigger 이벤트 스펙 목록을 제공하는 registry.
+
+리뷰 흐름에서는 base.py의 EventSource 구현들이 모인 조회 표면으로 보면 된다.
+현재 webhook ingress 런타임은 registry를 거치지 않고 DB condition을 직접
+검증하므로, 이 파일의 책임은 실행 판정이 아니라 condition 작성 가능 범위를
+외부 도구에 노출하는 데 있다.
+"""
+
 from catchup.agents.triggers.base import EventSource
 from catchup.agents.triggers.base import EventSpec
 
@@ -15,10 +23,10 @@ class TriggerRegistry:
 
     @classmethod
     def get_event_spec(cls, source: str, event_type: str) -> EventSpec:
-        """trigger resolver에서 condition 유효성 검증 시 사용된다.
+        """Builder/관리 도구가 source별 event 스펙을 조회할 때 사용된다.
 
-        condition의 키가 해당 소스/이벤트의 filterable_fields에
-        정의된 필드인지 확인하는 진입점이다.
+        런타임 resolver는 현재 registry를 통하지 않고 DB policy와 where
+        evaluator만으로 match를 결정한다.
         """
         if source not in cls._sources:
             raise KeyError(f"Unknown source: {source}")
@@ -29,7 +37,7 @@ class TriggerRegistry:
         """Builder Agent가 사용 가능한 소스/이벤트/필터 전체 목록을 반환한다.
 
         Builder Agent는 이 스키마를 보고 trigger.config.source와
-        filter를 안전하게 생성한다.
+        filter 후보를 생성한다.
         """
         return {
             name: source.schema()
