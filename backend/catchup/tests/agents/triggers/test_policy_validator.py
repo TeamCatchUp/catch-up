@@ -3,8 +3,7 @@ import pytest
 from catchup.agents.triggers.policies import DebouncePolicy
 from catchup.agents.triggers.policies import ImmediatePolicy
 from catchup.agents.triggers.policies import PolicyValidationError
-from catchup.agents.triggers.validator import TriggerPolicyValidator
-from catchup.agents.triggers.validator import trigger_policy_validator
+from catchup.agents.triggers.policies import parse_policy
 
 
 def _debounce_policy(**overrides):
@@ -33,9 +32,9 @@ def _debounce_policy(**overrides):
                     "value": "userChat",
                 },
                 {
-                    "path": "$.payload.entity.personType",
+                    "path": "$.payload.entity.channelId",
                     "op": "eq",
-                    "value": "user",
+                    "value": "ch-001",
                 },
             ],
         },
@@ -44,14 +43,13 @@ def _debounce_policy(**overrides):
     return policy
 
 
-def test_trigger_policy_validator_can_be_instantiated() -> None:
-    validator = TriggerPolicyValidator()
+def test_parse_policy_reports_validation_errors_with_domain_exception() -> None:
+    with pytest.raises(PolicyValidationError):
+        parse_policy({"kind": "immediate", "unexpected": True})
 
-    assert isinstance(validator, TriggerPolicyValidator)
 
-
-def test_trigger_policy_validator_accepts_immediate_policy() -> None:
-    policy = trigger_policy_validator.validate_policy(
+def test_parse_policy_accepts_immediate_policy() -> None:
+    policy = parse_policy(
         {
             "kind": "immediate",
             "where": {
@@ -70,8 +68,8 @@ def test_trigger_policy_validator_accepts_immediate_policy() -> None:
     assert policy.where["all"][0]["path"] == "$.event_type"
 
 
-def test_trigger_policy_validator_accepts_debounce_policy_without_condition_version() -> None:
-    policy = trigger_policy_validator.validate_policy(_debounce_policy())
+def test_parse_policy_accepts_debounce_policy_without_condition_version() -> None:
+    policy = parse_policy(_debounce_policy())
 
     assert isinstance(policy, DebouncePolicy)
     assert policy.start_event_type == "user_chat.created"
@@ -98,8 +96,8 @@ def test_trigger_policy_validator_accepts_debounce_policy_without_condition_vers
         _debounce_policy(extra_field="not allowed"),
     ],
 )
-def test_trigger_policy_validator_rejects_unsupported_or_malformed_policy(
+def test_parse_policy_rejects_unsupported_or_malformed_policy(
     condition,
 ) -> None:
     with pytest.raises(PolicyValidationError):
-        trigger_policy_validator.validate_policy(condition)
+        parse_policy(condition)

@@ -5,11 +5,17 @@ from unittest.mock import Mock
 import pytest
 
 from catchup.agents.triggers.policies import PolicyValidationError
+from catchup.agents.triggers.policies import parse_policy
+from catchup.db.agent_triggers import TRIGGER_EVENT_ROLE_PRIMARY
+from catchup.db.agent_triggers import TRIGGER_EVENT_ROLE_RESET
+from catchup.db.agent_triggers import TRIGGER_EVENT_ROLE_START
 from catchup.db.agent_triggers import AgentTriggerDefinition
 from catchup.db.agent_triggers import AgentTriggerDefinitionError
 from catchup.db.agent_triggers import create_or_update_agent_trigger_from_definition
-from catchup.db.agent_triggers import get_active_webhook_triggers
+from catchup.db.agent_triggers import derive_trigger_event_subscriptions
+from catchup.db.agent_triggers import get_trigger_event_subscription_candidates
 from catchup.db.models import AgentTrigger
+from catchup.db.models import AgentTriggerEventSubscription
 from catchup.db.models import AgentTriggerRun
 from catchup.db.models import AgentTriggerRunStatus
 
@@ -20,12 +26,19 @@ AGENT_TRIGGER_RUN_MIGRATION = (
     / "versions"
     / "1780020100_4c91f2a8e6b3_add_agent_trigger_runs.py"
 )
+AGENT_TRIGGER_EVENT_SUBSCRIPTION_MIGRATION = (
+    BACKEND_DIR
+    / "alembic"
+    / "versions"
+    / "1780100000_9e7a4b2c1d3f_add_agent_trigger_event_subscriptions.py"
+)
 
 
 class FakeSession:
     def __init__(self, *, agent_spec=None, trigger=None):
         self._scalar_results = [agent_spec, trigger]
         self.added = []
+        self.executed = []
         self.flush_count = 0
         self.commit_count = 0
 
@@ -36,6 +49,10 @@ class FakeSession:
     def add(self, row):
         self.added.append(row)
 
+    def execute(self, stmt):
+        self.executed.append(stmt)
+        return SimpleNamespace(all=lambda: [])
+
     def flush(self):
         self.flush_count += 1
 
@@ -44,7 +61,7 @@ class FakeSession:
 
 
 def _assert_flush_without_commit(db: FakeSession) -> None:
-    assert db.flush_count == 1
+    assert db.flush_count == 2
     assert db.commit_count == 0
 
 
@@ -58,7 +75,7 @@ def _immediate_condition() -> dict:
         "where": {
             "all": [
                 {
-                    "path": "$.payload.channel_id",
+                    "path": "$.payload.entity.channelId",
                     "op": "eq",
                     "value": "ch-001",
                 },
@@ -68,6 +85,15 @@ def _immediate_condition() -> dict:
 
 
 def _debounce_condition() -> dict:
+    channel_where = {
+        "all": [
+            {
+                "path": "$.payload.entity.channelId",
+                "op": "eq",
+                "value": "ch-001",
+            }
+        ]
+    }
     return {
         "kind": "debounce",
         "start_event_type": "user_chat.created",
@@ -75,6 +101,8 @@ def _debounce_condition() -> dict:
         "entity_key_path": "$.payload.entity.id",
         "reset_entity_key_path": "$.payload.entity.chatId",
         "quiet_period_seconds": 300,
+        "where": channel_where,
+        "reset_where": channel_where,
     }
 
 
@@ -101,7 +129,14 @@ def test_create_or_update_agent_trigger_creates_immediate_trigger() -> None:
     )
 
     assert isinstance(trigger, AgentTrigger)
-    assert db.added == [trigger]
+    assert len(db.added) == 2
+    assert db.added[0] is trigger
+    subscription = db.added[1]
+    assert isinstance(subscription, AgentTriggerEventSubscription)
+    assert subscription.trigger is trigger
+    assert subscription.source == "channel_talk"
+    assert subscription.event_type == "user_chat.created"
+    assert subscription.role == TRIGGER_EVENT_ROLE_PRIMARY
     _assert_flush_without_commit(db)
     assert trigger.agent_spec_id == 10
     assert trigger.workspace_id == 1
@@ -132,9 +167,32 @@ def test_create_or_update_agent_trigger_persists_debounce_canonical_defaults() -
         "reset_entity_key_path": "$.payload.entity.chatId",
         "quiet_period_seconds": 300,
         "run_context": "latest_event",
-        "where": {"all": []},
-        "reset_where": {"all": []},
+        "where": {
+            "all": [
+                {
+                    "path": "$.payload.entity.channelId",
+                    "op": "eq",
+                    "value": "ch-001",
+                }
+            ]
+        },
+        "reset_where": {
+            "all": [
+                {
+                    "path": "$.payload.entity.channelId",
+                    "op": "eq",
+                    "value": "ch-001",
+                }
+            ]
+        },
     }
+    subscriptions = [
+        row for row in db.added if isinstance(row, AgentTriggerEventSubscription)
+    ]
+    assert [(row.event_type, row.role) for row in subscriptions] == [
+        ("user_chat.created", TRIGGER_EVENT_ROLE_START),
+        ("user_chat.new_message", TRIGGER_EVENT_ROLE_RESET),
+    ]
 
 
 def test_create_or_update_agent_trigger_updates_existing_upsert_key() -> None:
@@ -148,6 +206,7 @@ def test_create_or_update_agent_trigger_updates_existing_upsert_key() -> None:
         condition={"kind": "immediate", "where": {"all": []}},
         concurrency_key="old-key",
     )
+    existing.id = 99
     db = FakeSession(agent_spec=_agent_spec(), trigger=existing)
 
     trigger = create_or_update_agent_trigger_from_definition(
@@ -160,11 +219,42 @@ def test_create_or_update_agent_trigger_updates_existing_upsert_key() -> None:
     )
 
     assert trigger is existing
-    assert db.added == []
+    subscriptions = [
+        row for row in db.added if isinstance(row, AgentTriggerEventSubscription)
+    ]
+    assert [(row.event_type, row.role) for row in subscriptions] == [
+        ("user_chat.created", TRIGGER_EVENT_ROLE_START),
+        ("user_chat.new_message", TRIGGER_EVENT_ROLE_RESET),
+    ]
     _assert_flush_without_commit(db)
     assert trigger.name == "New trigger"
     assert trigger.condition["kind"] == "debounce"
     assert trigger.concurrency_key is None
+    assert db.executed
+    compiled_delete = str(db.executed[0].compile(compile_kwargs={"literal_binds": True}))
+    assert "DELETE FROM agent_trigger_event_subscriptions" in compiled_delete
+    assert "agent_trigger_event_subscriptions.trigger_id = 99" in compiled_delete
+
+
+def test_derive_trigger_event_subscriptions_deduplicates_reset_events() -> None:
+    condition = {
+        **_debounce_condition(),
+        "reset_event_types": [
+            "user_chat.new_message",
+            "user_chat.new_message",
+        ],
+    }
+
+    definitions = derive_trigger_event_subscriptions(
+        source="channel_talk",
+        primary_event_type="legacy.primary",
+        policy=parse_policy(condition),
+    )
+
+    assert [(row.event_type, row.role) for row in definitions] == [
+        ("user_chat.created", TRIGGER_EVENT_ROLE_START),
+        ("user_chat.new_message", TRIGGER_EVENT_ROLE_RESET),
+    ]
 
 
 @pytest.mark.parametrize(
@@ -178,6 +268,44 @@ def test_create_or_update_agent_trigger_rejects_invalid_condition(condition) -> 
     db = FakeSession(agent_spec=_agent_spec(), trigger=None)
 
     with pytest.raises(PolicyValidationError):
+        create_or_update_agent_trigger_from_definition(
+            db,
+            _definition(condition=condition),
+        )
+
+    assert db.added == []
+    assert db.flush_count == 0
+    assert db.commit_count == 0
+
+
+@pytest.mark.parametrize(
+    "condition",
+    [
+        {"kind": "immediate", "where": {"all": []}},
+        {
+            "kind": "immediate",
+            "where": {
+                "path": "$.payload.entity.channelId",
+                "op": "contains",
+                "value": "ch-001",
+            },
+        },
+        {
+            **_debounce_condition(),
+            "where": {"all": []},
+        },
+        {
+            **_debounce_condition(),
+            "reset_where": {"all": []},
+        },
+    ],
+)
+def test_create_or_update_agent_trigger_requires_channel_talk_channel_boundary(
+    condition: dict,
+) -> None:
+    db = FakeSession(agent_spec=_agent_spec(), trigger=None)
+
+    with pytest.raises(AgentTriggerDefinitionError, match="payload.entity.channelId"):
         create_or_update_agent_trigger_from_definition(
             db,
             _definition(condition=condition),
@@ -224,30 +352,74 @@ def test_agent_trigger_model_declares_definition_upsert_constraint() -> None:
     )
 
 
-def test_get_active_webhook_triggers_filters_by_normalized_event_fields() -> None:
-    result_rows = [object()]
-    scalar_result = Mock()
-    scalar_result.all.return_value = result_rows
-    db = Mock()
-    db.scalars.return_value = scalar_result
+def test_agent_trigger_event_subscription_model_declares_routing_contract() -> None:
+    constraints = {
+        constraint.name: tuple(column.name for column in constraint.columns)
+        for constraint in AgentTriggerEventSubscription.__table__.constraints
+        if constraint.name
+    }
 
-    result = get_active_webhook_triggers(
-        db,
-        workspace_id=1,
-        source="channel_talk",
-        event_type="user_chat.message_created",
+    assert constraints["uq_agent_trigger_event_sub_role"] == (
+        "trigger_id",
+        "source",
+        "event_type",
+        "role",
     )
 
-    assert result == result_rows
-    stmt = db.scalars.call_args.args[0]
-    compiled = str(stmt.compile(compile_kwargs={"literal_binds": True}))
+    indexes = {
+        index.name: tuple(index.columns.keys())
+        for index in AgentTriggerEventSubscription.__table__.indexes
+    }
+    assert indexes["idx_agent_trigger_event_sub_lookup"] == ("source", "event_type")
+    assert indexes["idx_agent_trigger_event_sub_trigger_id"] == ("trigger_id",)
 
-    assert "JOIN agent_specs" in compiled
-    assert "agent_triggers.type = 'webhook'" in compiled
-    assert "agent_triggers.workspace_id = 1" in compiled
-    assert "agent_triggers.source = 'channel_talk'" in compiled
-    assert "agent_triggers.event_type = 'user_chat.message_created'" in compiled
-    assert "agent_specs.status = 'active'" in compiled
+
+def test_get_trigger_event_subscription_candidates_uses_subscription_as_routing_index() -> None:
+    trigger = SimpleNamespace(id=1)
+    subscription_result = Mock()
+    subscription_result.all.return_value = [
+        (1, TRIGGER_EVENT_ROLE_START),
+        (1, TRIGGER_EVENT_ROLE_RESET),
+    ]
+    trigger_result = Mock()
+    trigger_result.all.return_value = [trigger]
+    db = Mock()
+    db.execute.return_value = subscription_result
+    db.scalars.return_value = trigger_result
+
+    result = get_trigger_event_subscription_candidates(
+        db,
+        source="channel_talk",
+        event_type="user_chat.new_message",
+    )
+
+    assert len(result) == 1
+    assert result[0].trigger is trigger
+    assert result[0].roles == frozenset(
+        {TRIGGER_EVENT_ROLE_START, TRIGGER_EVENT_ROLE_RESET}
+    )
+    subscription_stmt = db.execute.call_args.args[0]
+    compiled_subscription = str(
+        subscription_stmt.compile(compile_kwargs={"literal_binds": True})
+    )
+
+    assert "FROM agent_trigger_event_subscriptions" in compiled_subscription
+    assert "JOIN" not in compiled_subscription
+    assert "agent_triggers" not in compiled_subscription
+    assert "agent_specs" not in compiled_subscription
+    assert "agent_trigger_event_subscriptions.source = 'channel_talk'" in compiled_subscription
+    assert (
+        "agent_trigger_event_subscriptions.event_type = "
+        "'user_chat.new_message'" in compiled_subscription
+    )
+
+    trigger_stmt = db.scalars.call_args.args[0]
+    compiled_trigger = str(trigger_stmt.compile(compile_kwargs={"literal_binds": True}))
+    assert "FROM agent_triggers" in compiled_trigger
+    assert "agent_triggers.id IN (1)" in compiled_trigger
+    assert "agent_triggers.type = 'webhook'" not in compiled_trigger
+    assert "agent_triggers.source = 'channel_talk'" not in compiled_trigger
+    assert "agent_specs.status" not in compiled_trigger
 
 
 def test_agent_trigger_run_model_declares_runtime_constraints() -> None:
@@ -315,3 +487,44 @@ def test_agent_trigger_run_migration_matches_schema_contract() -> None:
     assert '"uq_agent_trigger_runs_active_trigger_entity"' in migration
     assert '["trigger_id", "entity_key"]' in migration
     assert "status IN ('pending', 'dispatching') AND entity_key IS NOT NULL" in migration
+
+
+def test_agent_trigger_event_subscription_migration_matches_schema_contract() -> None:
+    migration = AGENT_TRIGGER_EVENT_SUBSCRIPTION_MIGRATION.read_text()
+
+    assert '"agent_trigger_event_subscriptions"' in migration
+    assert '"trigger_id"' in migration
+    assert '"source"' in migration
+    assert '"event_type"' in migration
+    assert '"role"' in migration
+    assert '"uq_agent_trigger_event_sub_role"' in migration
+    assert '"idx_agent_trigger_event_sub_lookup"' in migration
+    assert '["source", "event_type"]' in migration
+    assert "duplicate user_chat.new_message trigger definitions exist" in migration
+    assert "'user_chat.message_created'" in migration
+    assert "'user_chat.new_message'" in migration
+    assert '"user_chat.message_created"' in migration
+    assert '"user_chat.new_message"' in migration
+    assert '"$.payload.channel_id"' in migration
+    assert '"$.payload.entity.channelId"' in migration
+    assert "'$.payload.user_chat_id'" in migration
+    assert "'$.payload.entity.id'" in migration
+    assert "'$.payload.entity.chatId'" in migration
+    assert '"$.payload.user_chat_id"' in migration
+    assert '"$.payload.entity.id"' in migration
+    assert '"$.payload.entity.chatId"' in migration
+    assert "'{where}'" in migration
+    assert "'{reset_where}'" in migration
+    assert "condition->>'kind' = 'immediate'" in migration
+    assert "condition->>'kind' = 'debounce'" in migration
+    assert "condition->>'start_event_type'" in migration
+    assert "jsonb_object_keys" in migration
+    assert "jsonb_array_length" in migration
+    assert "AND CASE" in migration
+    assert "ELSE false" in migration
+    assert "jsonb_typeof(condition->'quiet_period_seconds') = 'number'" in migration
+    assert "jsonb_typeof(t.condition->'quiet_period_seconds') = 'number'" in migration
+    assert "jsonb_array_elements_text" in migration
+    assert "'primary'" in migration
+    assert "'start'" in migration
+    assert "'reset'" in migration
