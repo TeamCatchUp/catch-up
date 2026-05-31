@@ -228,7 +228,7 @@ describe('figma lab registry', () => {
         component: '',
         state: '',
         usedBy: ['missing-related-group'],
-      } as FigmaLabCase,
+      } as unknown as FigmaLabCase,
     ]);
 
     expect(errors).toContain("Case 'admin-users-table' must include a valid groupId.");
