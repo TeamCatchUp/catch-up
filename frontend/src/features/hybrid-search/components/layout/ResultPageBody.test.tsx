@@ -16,7 +16,7 @@ describe('ResultPageBody', () => {
     expect(section).not.toHaveClass('pb-30');
 
     const shell = section?.firstElementChild;
-    expect(shell).toHaveClass('h-full', 'min-h-0', 'max-w-[1420px]', 'items-stretch', 'gap-6', 'overflow-hidden');
+    expect(shell).toHaveClass('h-full', 'min-h-0', 'max-w-355', 'items-stretch', 'gap-6', 'overflow-hidden');
 
     const leftColumn = screen.getByTestId('result-list').parentElement;
     expect(leftColumn).toHaveClass(
