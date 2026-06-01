@@ -12,7 +12,8 @@ describe('SlackMessageItem', () => {
     render(<SlackMessageItem message={thread.messages[1]} />);
 
     expect(screen.getByText('CatchUpQA')).toBeInTheDocument();
-    expect(screen.getByText('1시간 전 편집됨')).toBeInTheDocument();
+    expect(screen.getByText(/^\d{2}:\d{2}\s?(AM|PM)$/i)).toBeInTheDocument();
+    expect(screen.getByText('편집됨')).toBeInTheDocument();
     expect(screen.getByText('Inline code')).toBeInTheDocument();
   });
 });
