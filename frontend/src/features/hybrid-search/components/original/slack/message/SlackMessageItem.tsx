@@ -11,6 +11,7 @@ interface SlackMessageItemProps {
 
 export default function SlackMessageItem({ message, originalUrl }: SlackMessageItemProps) {
   const isBot = message.author.kind === 'bot';
+  const isPrimaryBot = isBot && message.author.avatarSource !== 'message_icons';
 
   return (
     <article className="flex w-99.75 max-w-full items-start pr-2.5 pl-3">
@@ -26,7 +27,7 @@ export default function SlackMessageItem({ message, originalUrl }: SlackMessageI
             <span
               className={cn(
                 'text-heading-small min-w-0 flex-1 truncate font-semibold',
-                isBot ? 'text-content-primary' : 'text-content-alternative',
+                isPrimaryBot ? 'text-content-primary' : 'text-content-alternative',
               )}
             >
               {message.author.name}
