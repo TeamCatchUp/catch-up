@@ -3,7 +3,7 @@
 import { notFound } from 'next/navigation';
 
 import { GALLERY_ENTRIES } from '../_registry/entries';
-import EntryRenderer from '../_registry/render';
+import EntryRenderer from '../_registry/EntryRenderer';
 
 export function generateStaticParams() {
   return GALLERY_ENTRIES.map((entry) => ({ slug: entry.slug }));
