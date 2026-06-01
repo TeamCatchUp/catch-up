@@ -47,11 +47,12 @@ export default function SlackOriginalPanelContent({
   const [parent, ...replies] = thread.messages;
 
   return (
-    <div className="border-edge-normal flex w-105.75 max-w-full flex-col items-start justify-center gap-3 border-l py-4 pl-6">
+    <div className="border-edge-normal flex h-full min-h-0 w-105.75 max-w-full flex-col items-start justify-start gap-3 border-l py-4 pl-6">
       <SlackThreadHeader channelName={thread.channelName} participantNames={thread.participantNames} />
       <div
         ref={scrollRootRef}
-        className="custom-scrollbar flex w-99.75 max-w-full flex-col items-start gap-5 overflow-y-auto pb-5"
+        data-testid="slack-original-scroll-root"
+        className="custom-scrollbar flex min-h-0 w-99.75 max-w-full flex-1 flex-col items-start gap-5 overflow-y-auto pb-5"
       >
         {parent?.dateKey && <DateIndicator date={parent.dateKey} />}
         {parent && <SlackMessageItem message={parent} originalUrl={thread.url} />}

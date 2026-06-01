@@ -7,20 +7,27 @@ import SlackOriginalPanelContent from './SlackOriginalPanelContent';
 
 type ObserverCallback = IntersectionObserverCallback;
 
-const observers: Array<{ callback: ObserverCallback; disconnect: ReturnType<typeof vi.fn> }> = [];
+const observers: Array<{
+  callback: ObserverCallback;
+  disconnect: ReturnType<typeof vi.fn>;
+  options?: IntersectionObserverInit;
+}> = [];
 
 function installIntersectionObserverMock() {
   observers.length = 0;
 
   vi.stubGlobal(
     'IntersectionObserver',
-    vi.fn(function IntersectionObserverMock(callback: ObserverCallback) {
+    vi.fn(function IntersectionObserverMock(
+      callback: ObserverCallback,
+      options?: IntersectionObserverInit,
+    ) {
       const observer = {
         observe: vi.fn(),
         unobserve: vi.fn(),
         disconnect: vi.fn(),
       };
-      observers.push({ callback, disconnect: observer.disconnect });
+      observers.push({ callback, disconnect: observer.disconnect, options });
       return observer;
     }),
   );
@@ -60,6 +67,10 @@ describe('SlackOriginalPanelContent', () => {
         onLoadNextPage={onLoadNextPage}
       />,
     );
+
+    const scrollRoot = screen.getByTestId('slack-original-scroll-root');
+    expect(scrollRoot).toHaveClass('flex-1', 'min-h-0', 'overflow-y-auto');
+    expect(observers[0]?.options?.root).toBe(scrollRoot);
 
     act(() => {
       observers[0]?.callback(
