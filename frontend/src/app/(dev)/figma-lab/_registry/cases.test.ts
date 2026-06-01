@@ -10,6 +10,7 @@ import {
   getVisibleFigmaLabCasesByGroup,
   validateFigmaLabCases,
 } from './cases';
+import { ORIGINAL_PANEL_FIGMA_LAB_CASES } from './cases/original-panel/originalPanelCases';
 import {
   validCase,
   validDevPreviewCase,
@@ -86,6 +87,31 @@ describe('figma lab registry', () => {
 
   it('accepts complete story-like cases', () => {
     expect(validateFigmaLabCases([validCase])).toEqual([]);
+  });
+
+  it('registers every original-panel entry as a Figma Lab case', () => {
+    expect(ORIGINAL_PANEL_FIGMA_LAB_CASES.map((item) => item.id)).toEqual([
+      'text-content',
+      'block-content',
+      'button-content',
+      'form-content',
+      'file-content',
+      'message-item',
+      'date-indicator',
+      'slack-thread-header',
+      'slack-message-item',
+      'slack-rich-message',
+      'consultation-info',
+      'customer-info',
+      'collapsible',
+      'panel-skeleton',
+      'panel-empty',
+      'panel-error',
+      'panel-coming-soon',
+      'panel-content',
+      'slack-panel-preview',
+      'panel',
+    ]);
   });
 
   it('accepts dev-preview cases without Figma metadata or token decisions', () => {
