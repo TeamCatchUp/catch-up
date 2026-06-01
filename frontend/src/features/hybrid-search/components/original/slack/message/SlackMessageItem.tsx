@@ -18,6 +18,7 @@ export default function SlackMessageItem({ message, originalUrl }: SlackMessageI
         <SlackMessageAvatar
           name={message.author.name}
           avatarUrl={message.author.avatarUrl}
+          avatarSource={message.author.avatarSource}
           kind={message.author.kind}
         />
         <div className="flex min-w-0 flex-1 flex-col items-start gap-1">

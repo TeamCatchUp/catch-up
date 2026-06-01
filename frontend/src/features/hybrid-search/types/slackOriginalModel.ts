@@ -12,6 +12,8 @@ export type SlackRichTextToken =
   | { type: 'emoji'; label: string }
   | { type: 'line_break' };
 
+export type SlackAvatarSource = 'user_profile' | 'bot_profile' | 'message_icons' | 'none';
+
 export type SlackBlockView =
   | { type: 'paragraph'; tokens: SlackRichTextToken[] }
   | { type: 'bullet_list'; items: SlackRichTextToken[][] }
@@ -27,6 +29,7 @@ export interface SlackMessageView {
     id: string | null;
     name: string;
     avatarUrl: string | null;
+    avatarSource: SlackAvatarSource;
     kind: 'user' | 'bot' | 'unknown';
   };
   timeLabel: string;

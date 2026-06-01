@@ -56,6 +56,50 @@ describe('parseSlackOriginalThread', () => {
     expect(thread.messages[0]?.author).toMatchObject({
       name: '팀원B / Catch Up',
       avatarUrl: 'https://example.com/slack-app-icon.png',
+      avatarSource: 'message_icons',
+      kind: 'bot',
+    });
+  });
+
+  it('marks bot_profile icons as bot_profile avatar source', () => {
+    const response = {
+      ...slackOriginalThreadResponse,
+      items: [
+        {
+          ...slackOriginalThreadResponse.items[0],
+          raw_payload: {
+            ...slackOriginalThreadResponse.items[0].raw_payload,
+            messages: [
+              {
+                type: 'message',
+                subtype: 'bot_message',
+                username: 'CatchUpQA',
+                bot_id: 'B0TEST',
+                bot_profile: {
+                  id: 'B0TEST',
+                  name: 'CatchUpQA',
+                  icons: {
+                    image_48: 'https://example.com/bot-profile-icon.png',
+                  },
+                },
+                icons: {
+                  image_48: 'https://example.com/message-icon.png',
+                },
+                text: 'bot profile icon wins',
+                ts: '1779424844.293589',
+              },
+            ],
+          },
+        },
+      ],
+    } satisfies SlackOriginalContentResponse;
+
+    const thread = parseSlackOriginalThread(response);
+
+    expect(thread.messages[0]?.author).toMatchObject({
+      name: 'CatchUpQA',
+      avatarUrl: 'https://example.com/bot-profile-icon.png',
+      avatarSource: 'bot_profile',
       kind: 'bot',
     });
   });

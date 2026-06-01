@@ -1,24 +1,42 @@
 import type {
+  SlackMessageIconsRaw,
   SlackMessageRaw,
   SlackOriginalContentResponse,
   SlackUserMetadata,
 } from '@/features/hybrid-search/types/slackOriginalApi';
-import type { SlackMessageView, SlackThreadView } from '@/features/hybrid-search/types/slackOriginalModel';
+import type {
+  SlackAvatarSource,
+  SlackMessageView,
+  SlackThreadView,
+} from '@/features/hybrid-search/types/slackOriginalModel';
 
 import { parseSlackBlocks } from './parseSlackBlocks';
 import { parseSlackTextFallback } from './parseSlackTextFallback';
 import { formatSlackDateKey, formatSlackEditedLabel, formatSlackMessageTime } from './slackTimestamp';
 
-function resolveBotAvatarUrl(message: SlackMessageRaw): string | null {
-  return (
-    message.bot_profile?.icons?.image_36 ??
-    message.bot_profile?.icons?.image_48 ??
-    message.bot_profile?.icons?.image_72 ??
-    message.icons?.image_36 ??
-    message.icons?.image_48 ??
-    message.icons?.image_72 ??
-    null
-  );
+interface ResolvedAvatar {
+  url: string | null;
+  source: SlackAvatarSource;
+}
+
+function pickSlackIconUrl(icons: SlackMessageIconsRaw | undefined): string | null {
+  return icons?.image_36 ?? icons?.image_48 ?? icons?.image_72 ?? null;
+}
+
+function resolveBotAvatar(message: SlackMessageRaw): ResolvedAvatar {
+  const botProfileUrl = pickSlackIconUrl(message.bot_profile?.icons);
+
+  if (botProfileUrl) {
+    return { url: botProfileUrl, source: 'bot_profile' };
+  }
+
+  const messageIconsUrl = pickSlackIconUrl(message.icons);
+
+  if (messageIconsUrl) {
+    return { url: messageIconsUrl, source: 'message_icons' };
+  }
+
+  return { url: null, source: 'none' };
 }
 
 function resolveAuthor(
@@ -26,20 +44,25 @@ function resolveAuthor(
   usersById: Record<string, SlackUserMetadata>,
 ): SlackMessageView['author'] {
   if (message.bot_id || message.bot_profile || message.subtype === 'bot_message') {
+    const avatar = resolveBotAvatar(message);
+
     return {
       id: message.bot_id ?? message.bot_profile?.id ?? null,
       name: message.bot_profile?.name ?? message.username ?? 'Slack Bot',
-      avatarUrl: resolveBotAvatarUrl(message),
+      avatarUrl: avatar.url,
+      avatarSource: avatar.source,
       kind: 'bot',
     };
   }
 
   const user = message.user ? usersById[message.user] : undefined;
+  const avatarUrl = user?.profile_image_url ?? null;
 
   return {
     id: message.user ?? null,
     name: user?.display_name || user?.name || message.user || '알 수 없음',
-    avatarUrl: user?.profile_image_url ?? null,
+    avatarUrl,
+    avatarSource: avatarUrl ? 'user_profile' : 'none',
     kind: message.user ? 'user' : 'unknown',
   };
 }

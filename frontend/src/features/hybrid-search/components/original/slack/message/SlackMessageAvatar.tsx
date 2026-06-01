@@ -1,5 +1,6 @@
 import Image from 'next/image';
 
+import type { SlackAvatarSource } from '@/features/hybrid-search/types/slackOriginalModel';
 import ProfileIcon from '@/public/icons/icon/profile.svg';
 import SlackBotBadgeIcon from '@/public/icons/icon/slack_bot_badge.svg';
 import SlackBotFallbackIcon from '@/public/icons/icon/slack_bot_fallback.svg';
@@ -9,12 +10,19 @@ import { isSafeUrl } from '@/shared/utils/isSafeUrl';
 interface SlackMessageAvatarProps {
   name: string;
   avatarUrl: string | null;
+  avatarSource: SlackAvatarSource;
   kind: 'user' | 'bot' | 'unknown';
 }
 
-export default function SlackMessageAvatar({ name, avatarUrl, kind }: SlackMessageAvatarProps) {
+export default function SlackMessageAvatar({
+  name,
+  avatarUrl,
+  avatarSource,
+  kind,
+}: SlackMessageAvatarProps) {
   const isBot = kind === 'bot';
   const safeAvatarUrl = avatarUrl && isSafeUrl(avatarUrl) ? avatarUrl : null;
+  const showBotBadge = isBot && !(safeAvatarUrl && avatarSource === 'message_icons');
 
   return (
     <span
@@ -39,7 +47,7 @@ export default function SlackMessageAvatar({ name, avatarUrl, kind }: SlackMessa
       ) : (
         <ProfileIcon aria-label={name} className="size-8 rounded-lg" />
       )}
-      {isBot && (
+      {showBotBadge && (
         <span className="bg-fill-normal absolute -top-1 left-5.75 flex size-3.25 items-center justify-center rounded-full p-0.5">
           <SlackBotBadgeIcon aria-hidden className="size-2.75" />
         </span>
