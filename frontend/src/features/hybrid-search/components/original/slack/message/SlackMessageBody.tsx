@@ -10,13 +10,14 @@ import SlackRichTextRenderer from '../rich-text/SlackRichTextRenderer';
 
 interface SlackMessageBodyProps {
   message: SlackMessageView;
+  originalUrl?: string | null;
 }
 
 function getFileKey(file: SlackFileRaw): string {
   return file.id || file.name || file.title || file.permalink || '';
 }
 
-export default function SlackMessageBody({ message }: SlackMessageBodyProps) {
+export default function SlackMessageBody({ message, originalUrl }: SlackMessageBodyProps) {
   const [failedPreviewKeys, setFailedPreviewKeys] = useState<ReadonlySet<string>>(new Set());
   const imageFiles = message.files.filter(
     (file) => hasSafeSlackImagePreview(file) && !failedPreviewKeys.has(getFileKey(file)),
@@ -41,12 +42,12 @@ export default function SlackMessageBody({ message }: SlackMessageBodyProps) {
     <div className="flex w-full flex-col items-start gap-3">
       <SlackRichTextRenderer blocks={message.blocks} />
       {fileRows.map((file) => (
-        <SlackFileAttachment key={file.id || file.name} file={file} />
+        <SlackFileAttachment key={file.id || file.name} file={file} originalUrl={originalUrl} />
       ))}
       {message.attachments.map((attachment, index) => (
         <SlackLinkPreview key={`${attachment.id ?? index}`} attachment={attachment} />
       ))}
-      <SlackImageGrid files={imageFiles} onPreviewError={handlePreviewError} />
+      <SlackImageGrid files={imageFiles} originalUrl={originalUrl} onPreviewError={handlePreviewError} />
     </div>
   );
 }

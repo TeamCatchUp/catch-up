@@ -12,6 +12,7 @@ import { isSafeUrl } from '@/shared/utils/isSafeUrl';
 
 interface SlackImageGridProps {
   files: SlackFileRaw[];
+  originalUrl?: string | null;
   onPreviewError?: (file: SlackFileRaw) => void;
 }
 
@@ -27,7 +28,7 @@ export function hasSafeSlackImagePreview(file: SlackFileRaw): boolean {
   return Boolean(file.mimetype?.startsWith('image/') && getImageUrl(file));
 }
 
-export default function SlackImageGrid({ files, onPreviewError }: SlackImageGridProps) {
+export default function SlackImageGrid({ files, originalUrl, onPreviewError }: SlackImageGridProps) {
   const images = useMemo(
     () =>
       files
@@ -65,6 +66,8 @@ export default function SlackImageGrid({ files, onPreviewError }: SlackImageGrid
 
   if (images.length === 0) return null;
 
+  const href = originalUrl && isSafeUrl(originalUrl) ? originalUrl : null;
+
   const scrollBy = (delta: number) => {
     container?.scrollBy({ left: delta, behavior: 'smooth' });
   };
@@ -76,18 +79,35 @@ export default function SlackImageGrid({ files, onPreviewError }: SlackImageGrid
         data-testid="slack-image-grid-scroll"
         className="no-scrollbar flex w-full items-start gap-2.5 overflow-x-auto scroll-smooth"
       >
-        {images.map(({ file, url }) => (
-          <Image
-            key={file.id || file.name || url}
-            src={url}
-            alt={file.title || file.name || ''}
-            width={120}
-            height={120}
-            className="border-edge-neutral size-30 shrink-0 rounded-xl border object-cover"
-            onError={() => onPreviewError?.(file)}
-            unoptimized
-          />
-        ))}
+        {images.map(({ file, url }) => {
+          const image = (
+            <Image
+              src={url}
+              alt={file.title || file.name || ''}
+              width={120}
+              height={120}
+              className="border-edge-neutral size-30 rounded-xl border object-cover"
+              onError={() => onPreviewError?.(file)}
+              unoptimized
+            />
+          );
+
+          return href ? (
+            <a
+              key={file.id || file.name || url}
+              href={href}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block size-30 shrink-0"
+            >
+              {image}
+            </a>
+          ) : (
+            <span key={file.id || file.name || url} className="block size-30 shrink-0">
+              {image}
+            </span>
+          );
+        })}
       </div>
       <Button
         variant="fab-secondary"

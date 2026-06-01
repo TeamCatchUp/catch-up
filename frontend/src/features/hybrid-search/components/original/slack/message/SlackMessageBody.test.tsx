@@ -39,10 +39,16 @@ describe('SlackMessageBody', () => {
       attachments: [{ id: 1, title: '링크 카드', title_link: 'https://example.com', text: '설명' }],
     };
 
-    render(<SlackMessageBody message={message} />);
+    render(
+      <SlackMessageBody message={message} originalUrl="https://catchup.slack.com/archives/C1/p1779601372378609" />,
+    );
 
     expect(screen.getByText('본문')).toBeInTheDocument();
     expect(screen.getByText('doc.pdf')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /doc.pdf/i })).toHaveAttribute(
+      'href',
+      'https://catchup.slack.com/archives/C1/p1779601372378609',
+    );
     expect(screen.getByText('fallback-image.png')).toBeInTheDocument();
     expect(screen.getByText('링크 카드')).toBeInTheDocument();
     expect(screen.getByAltText('image.png')).toBeInTheDocument();
@@ -70,7 +76,9 @@ describe('SlackMessageBody', () => {
       attachments: [],
     };
 
-    render(<SlackMessageBody message={message} />);
+    render(
+      <SlackMessageBody message={message} originalUrl="https://catchup.slack.com/archives/C1/p1779601372378609" />,
+    );
 
     const image = screen.getByAltText('broken-image.png');
     fireEvent.error(image);
@@ -79,5 +87,9 @@ describe('SlackMessageBody', () => {
       expect(screen.queryByAltText('broken-image.png')).not.toBeInTheDocument();
     });
     expect(screen.getByText('broken-image.png')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /broken-image.png/i })).toHaveAttribute(
+      'href',
+      'https://catchup.slack.com/archives/C1/p1779601372378609',
+    );
   });
 });

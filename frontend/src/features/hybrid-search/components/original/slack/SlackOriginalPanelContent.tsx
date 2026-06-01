@@ -54,7 +54,7 @@ export default function SlackOriginalPanelContent({
         className="custom-scrollbar flex w-99.75 max-w-full flex-col items-start gap-5 overflow-y-auto pb-5"
       >
         {parent?.dateKey && <DateIndicator date={parent.dateKey} />}
-        {parent && <SlackMessageItem message={parent} />}
+        {parent && <SlackMessageItem message={parent} originalUrl={thread.url} />}
         <div className="flex h-5 w-full items-center gap-3 px-3">
           <span className="text-body-xsmall text-content-alternative shrink-0 font-medium">
             {thread.commentCount}개의 댓글
@@ -62,7 +62,7 @@ export default function SlackOriginalPanelContent({
           <span aria-hidden className="bg-edge-neutral h-px min-w-0 flex-1" />
         </div>
         {replies.map((message) => (
-          <SlackMessageItem key={message.id} message={message} />
+          <SlackMessageItem key={message.id} message={message} originalUrl={thread.url} />
         ))}
         {hasNextPage && <div ref={loadMoreRef} aria-hidden className="h-1 w-full" />}
       </div>

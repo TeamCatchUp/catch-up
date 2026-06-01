@@ -4,6 +4,20 @@ import { describe, expect, it, vi } from 'vitest';
 import SlackImageGrid from './SlackImageGrid';
 
 describe('SlackImageGrid', () => {
+  it('opens the Slack thread original URL when an image is clicked', () => {
+    render(
+      <SlackImageGrid
+        originalUrl="https://catchup.slack.com/archives/C1/p1779601372378609"
+        files={[{ id: 'F1', name: 'one.png', mimetype: 'image/png', thumb_360: 'https://placehold.co/360x360/png' }]}
+      />,
+    );
+
+    expect(screen.getByRole('link', { name: 'one.png' })).toHaveAttribute(
+      'href',
+      'https://catchup.slack.com/archives/C1/p1779601372378609',
+    );
+  });
+
   it('moves horizontally with FAB buttons only when images overflow', async () => {
     render(
       <SlackImageGrid

@@ -6,12 +6,13 @@ import { isSafeUrl } from '@/shared/utils/isSafeUrl';
 
 interface SlackFileAttachmentProps {
   file: SlackFileRaw;
+  originalUrl?: string | null;
 }
 
-export default function SlackFileAttachment({ file }: SlackFileAttachmentProps) {
+export default function SlackFileAttachment({ file, originalUrl }: SlackFileAttachmentProps) {
   const name = file.title || file.name || '이름 없음';
   const meta = [formatFileSize(file.size), formatFileType(name, file.mimetype)].filter(Boolean).join(' · ');
-  const href = file.permalink && isSafeUrl(file.permalink) ? file.permalink : null;
+  const href = originalUrl && isSafeUrl(originalUrl) ? originalUrl : null;
   const content = (
     <span className="bg-fill-strong border-edge-neutral flex w-full items-center gap-2.5 rounded-lg border p-2 text-left">
       <span className="bg-fill-normal flex shrink-0 items-center justify-center rounded-lg p-2">
