@@ -23,7 +23,16 @@ function pickSlackIconUrl(icons: SlackMessageIconsRaw | undefined): string | nul
   return icons?.image_36 ?? icons?.image_48 ?? icons?.image_72 ?? null;
 }
 
-function resolveBotAvatar(message: SlackMessageRaw): ResolvedAvatar {
+function resolveBotAvatar(
+  message: SlackMessageRaw,
+  usersById: Record<string, SlackUserMetadata>,
+): ResolvedAvatar {
+  const userProfileUrl = message.user ? (usersById[message.user]?.profile_image_url ?? null) : null;
+
+  if (userProfileUrl) {
+    return { url: userProfileUrl, source: 'user_profile' };
+  }
+
   const botProfileUrl = pickSlackIconUrl(message.bot_profile?.icons);
 
   if (botProfileUrl) {
@@ -44,7 +53,7 @@ function resolveAuthor(
   usersById: Record<string, SlackUserMetadata>,
 ): SlackMessageView['author'] {
   if (message.bot_id || message.bot_profile || message.subtype === 'bot_message') {
-    const avatar = resolveBotAvatar(message);
+    const avatar = resolveBotAvatar(message, usersById);
 
     return {
       id: message.bot_id ?? message.bot_profile?.id ?? null,

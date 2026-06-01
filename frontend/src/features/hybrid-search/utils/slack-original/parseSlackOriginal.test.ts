@@ -82,6 +82,58 @@ describe('parseSlackOriginalThread', () => {
     });
   });
 
+  it('prefers bot user profile image over bot_profile icons', () => {
+    const response = {
+      ...slackOriginalThreadResponse,
+      items: [
+        {
+          ...slackOriginalThreadResponse.items[0],
+          raw_payload: {
+            ...slackOriginalThreadResponse.items[0].raw_payload,
+            messages: [
+              {
+                type: 'message',
+                subtype: 'bot_message',
+                user: 'U_BOT_USER',
+                username: 'CatchUpQA',
+                bot_id: 'B0TEST',
+                bot_profile: {
+                  id: 'B0TEST',
+                  name: 'CatchUpQA',
+                  icons: {
+                    image_48: 'https://example.com/bot-profile-icon.png',
+                  },
+                },
+                text: 'bot user profile image wins',
+                ts: '1779424844.293589',
+              },
+            ],
+          },
+        },
+      ],
+      metadata: {
+        ...slackOriginalThreadResponse.metadata,
+        users_by_id: {
+          U_BOT_USER: {
+            id: 'U_BOT_USER',
+            name: 'catchupqa',
+            display_name: 'catchupqa',
+            profile_image_url: 'https://example.com/bot-user-profile.png',
+          },
+        },
+      },
+    } satisfies SlackOriginalContentResponse;
+
+    const thread = parseSlackOriginalThread(response);
+
+    expect(thread.messages[0]?.author).toMatchObject({
+      name: 'CatchUpQA',
+      avatarUrl: 'https://example.com/bot-user-profile.png',
+      avatarSource: 'user_profile',
+      kind: 'bot',
+    });
+  });
+
   it('marks bot_profile icons as bot_profile avatar source', () => {
     const response = {
       ...slackOriginalThreadResponse,
