@@ -66,4 +66,28 @@ describe('parseSlackTextFallback', () => {
       ],
     });
   });
+
+  it('does not parse underscores inside identifiers as italic text', () => {
+    const [block] = parseSlackTextFallback('[CATCH_UP_ANSWER] _italic_', usersById);
+
+    expect(block).toMatchObject({
+      type: 'paragraph',
+      tokens: [
+        { type: 'text', text: '[CATCH_UP_ANSWER] ' },
+        { type: 'text', text: 'italic', style: { italic: true } },
+      ],
+    });
+  });
+
+  it('renders Slack date tokens from their fallback text', () => {
+    const [block] = parseSlackTextFallback(
+      '<!date^1392734382^{date_num}|Feb 18, 2014>에 업데이트됨',
+      usersById,
+    );
+
+    expect(block).toMatchObject({
+      type: 'paragraph',
+      tokens: [{ type: 'text', text: 'Feb 18, 2014에 업데이트됨' }],
+    });
+  });
 });

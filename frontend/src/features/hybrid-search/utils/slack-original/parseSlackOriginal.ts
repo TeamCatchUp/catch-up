@@ -82,6 +82,13 @@ function participantNames(messages: SlackMessageRaw[], usersById: Record<string,
   return Array.from(names);
 }
 
+function resolveCommentCount(messages: SlackMessageRaw[]): number {
+  const parentReplyCount = messages[0]?.reply_count;
+  if (typeof parentReplyCount === 'number') return Math.max(parentReplyCount, 0);
+
+  return Math.max(messages.length - 1, 0);
+}
+
 function parseMessage(message: SlackMessageRaw, usersById: Record<string, SlackUserMetadata>): SlackMessageView {
   const parsedBlocks = parseSlackBlocks(message.blocks, usersById);
   const fallbackBlocks = parseSlackTextFallback(message.text ?? '', usersById);
@@ -110,7 +117,7 @@ export function parseSlackOriginalThread(response: SlackOriginalContentResponse)
     url: response.url,
     channelName: response.metadata.channel_name || response.metadata.channel_id,
     participantNames: participantNames(messages, usersById),
-    commentCount: Math.max(messages.length - 1, 0),
+    commentCount: resolveCommentCount(messages),
     usersById,
     messages: messages.map((message) => parseMessage(message, usersById)),
   };

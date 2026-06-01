@@ -33,6 +33,32 @@ function normalizeStyle(style: SlackTextStyleRaw | undefined): SlackTextStyleRaw
   return Object.keys(normalized).length > 0 ? normalized : undefined;
 }
 
+function hasSameStyle(a: SlackTextStyleRaw | undefined, b: SlackTextStyleRaw | undefined): boolean {
+  return (
+    Boolean(a?.bold) === Boolean(b?.bold) &&
+    Boolean(a?.italic) === Boolean(b?.italic) &&
+    Boolean(a?.strike) === Boolean(b?.strike) &&
+    Boolean(a?.code) === Boolean(b?.code) &&
+    Boolean(a?.underline) === Boolean(b?.underline)
+  );
+}
+
+function mergeAdjacentTextTokens(tokens: SlackRichTextToken[]): SlackRichTextToken[] {
+  const merged: SlackRichTextToken[] = [];
+
+  for (const token of tokens) {
+    const previous = merged[merged.length - 1];
+    if (previous?.type === 'text' && token.type === 'text' && hasSameStyle(previous.style, token.style)) {
+      merged[merged.length - 1] = { ...previous, text: previous.text + token.text };
+      continue;
+    }
+
+    merged.push(token);
+  }
+
+  return merged;
+}
+
 function textToken(text: string, style?: SlackTextStyleRaw): SlackRichTextToken[] {
   if (!text) return [];
   return [{ type: 'text', text: decodeSlackTextEntities(text), style: normalizeStyle(style) }];
@@ -60,6 +86,11 @@ function parseSlackSpecialToken(
     ];
   }
 
+  if (inner.startsWith('!date^')) {
+    const fallback = inner.includes('|') ? inner.slice(inner.lastIndexOf('|') + 1) : '';
+    return textToken(fallback, style);
+  }
+
   if (inner.startsWith('!')) {
     const label = inner.split('^')[0]?.slice(1) || 'channel';
     return [{ type: 'mention', label: `@${label}`, style: normalizeStyle(style) }];
@@ -73,6 +104,14 @@ function parseSlackSpecialToken(
   }
 
   return textToken(label || inner, style);
+}
+
+function isWordLikeCharacter(value: string | undefined): boolean {
+  return value ? /[\p{L}\p{N}]/u.test(value) : false;
+}
+
+function shouldApplyUnderscoreStyle(source: string, index: number, raw: string): boolean {
+  return !isWordLikeCharacter(source[index - 1]) && !isWordLikeCharacter(source[index + raw.length]);
 }
 
 function parseInlineText(
@@ -100,7 +139,11 @@ function parseInlineText(
     } else if (raw.startsWith(':') && raw.endsWith(':')) {
       tokens.push({ type: 'emoji', label: resolveSlackStandardEmoji(raw.slice(1, -1)) ?? raw });
     } else if (raw.startsWith('_') && raw.endsWith('_')) {
-      tokens.push(...parseInlineText(raw.slice(1, -1), usersById, { ...style, italic: true }));
+      if (shouldApplyUnderscoreStyle(text, index, raw)) {
+        tokens.push(...parseInlineText(raw.slice(1, -1), usersById, { ...style, italic: true }));
+      } else {
+        tokens.push(...textToken(raw, style));
+      }
     } else if (raw.startsWith('~') && raw.endsWith('~')) {
       tokens.push(...parseInlineText(raw.slice(1, -1), usersById, { ...style, strike: true }));
     }
@@ -109,7 +152,7 @@ function parseInlineText(
   }
 
   tokens.push(...textToken(text.slice(lastIndex), style));
-  return tokens;
+  return mergeAdjacentTextTokens(tokens);
 }
 
 export function parseSlackTextTokens(

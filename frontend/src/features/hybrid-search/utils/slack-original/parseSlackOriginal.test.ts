@@ -25,6 +25,27 @@ describe('parseSlackOriginalThread', () => {
     expect(thread.messages[1].blocks.some((block) => block.type === 'code_block')).toBe(true);
   });
 
+  it('uses parent reply_count as the total comment count while pages are partial', () => {
+    const messages = slackOriginalThreadResponse.items[0]?.raw_payload.messages ?? [];
+    const response = {
+      ...slackOriginalThreadResponse,
+      items: [
+        {
+          ...slackOriginalThreadResponse.items[0],
+          raw_payload: {
+            ...slackOriginalThreadResponse.items[0].raw_payload,
+            messages: messages.map((message, index) => (index === 0 ? { ...message, reply_count: 13 } : message)),
+          },
+        },
+      ],
+    } satisfies SlackOriginalContentResponse;
+
+    const thread = parseSlackOriginalThread(response);
+
+    expect(thread.messages).toHaveLength(3);
+    expect(thread.commentCount).toBe(13);
+  });
+
   it('uses top-level bot icons when bot_profile is missing', () => {
     const response = {
       ...slackOriginalThreadResponse,
