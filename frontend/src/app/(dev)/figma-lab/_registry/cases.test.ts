@@ -11,6 +11,10 @@ import {
   validateFigmaLabCases,
 } from './cases';
 import { ORIGINAL_PANEL_FIGMA_LAB_CASES } from './cases/original-panel/originalPanelCases';
+import { HOME_DOCS_FIGMA_LAB_CASES } from './features/home-docs';
+import { HYBRID_SEARCH_FIGMA_LAB_CASES } from './features/hybrid-search';
+import { ORIGINAL_PANEL_FIGMA_LAB_CASES_BY_FEATURE } from './features/original-panel';
+import { SHARED_QUERY_FILTER_FIGMA_LAB_CASES } from './features/shared-query-filter';
 import {
   validCase,
   validDevPreviewCase,
@@ -21,15 +25,12 @@ import {
 import type { FigmaLabCase } from './types';
 
 describe('figma lab registry', () => {
-  it('registers the smart filter UI cases without metadata errors', () => {
+  it('registers all Figma Lab cases without metadata errors', () => {
     expect(FIGMA_LAB_CASES.map((item) => item.id)).toEqual([
-      'result-search-bar-collapsed',
-      'result-search-bar-expanded',
-      'document-search-filter-row-entry',
-      'document-search-filter-row-source-dropdown-open',
-      'document-search-filter-row-date-picker-open',
-      'document-search-filter-row-result-expanded',
-      'smart-filter-status-pill',
+      ...HYBRID_SEARCH_FIGMA_LAB_CASES.map((item) => item.id),
+      ...HOME_DOCS_FIGMA_LAB_CASES.map((item) => item.id),
+      ...SHARED_QUERY_FILTER_FIGMA_LAB_CASES.map((item) => item.id),
+      ...ORIGINAL_PANEL_FIGMA_LAB_CASES_BY_FEATURE.map((item) => item.id),
     ]);
     expect(validateFigmaLabCases(FIGMA_LAB_CASES)).toEqual([]);
   });
@@ -45,6 +46,7 @@ describe('figma lab registry', () => {
   it('returns the group default case when a group is selected', () => {
     expect(getDefaultFigmaLabCaseId('hybrid-search')).toBe('result-search-bar-expanded');
     expect(getDefaultFigmaLabCaseId('shared-query-filter')).toBe('document-search-filter-row-entry');
+    expect(getDefaultFigmaLabCaseId('original-panel')).toBe('slack-panel-preview');
   });
 
   it('returns feature cases and related shared cases by group', () => {
@@ -79,6 +81,12 @@ describe('figma lab registry', () => {
         selectedCaseId: 'document-search-filter-row-source-dropdown-open',
       })?.id,
     ).toBe('document-search-filter-row-source-dropdown-open');
+    expect(
+      getFigmaLabCaseForRoute({
+        groupId: 'original-panel',
+        selectedCaseId: 'result-search-bar-expanded',
+      })?.id,
+    ).toBe('slack-panel-preview');
   });
 
   it('accepts an empty registry while the harness has no pilot case', () => {

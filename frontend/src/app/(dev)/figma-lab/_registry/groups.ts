@@ -20,6 +20,13 @@ export const FIGMA_LAB_GROUPS: readonly FigmaLabGroup[] = [
     description: '문서 검색에 재사용되는 공통 filter, chip, status component를 검증합니다.',
     defaultCaseId: 'document-search-filter-row-entry',
   },
+  {
+    id: 'original-panel',
+    title: 'Original Panel',
+    description: '원문 패널의 Slack Figma-backed case와 ChannelTalk dev-preview case를 검증합니다.',
+    defaultCaseId: 'slack-panel-preview',
+    relatedGroupIds: ['hybrid-search'],
+  },
 ];
 
 export function isFigmaLabGroupId(value: string): value is FigmaLabGroupId {
