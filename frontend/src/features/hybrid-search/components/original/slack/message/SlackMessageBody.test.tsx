@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
 import type { SlackMessageView } from '@/features/hybrid-search/types/slackOriginalModel';
@@ -6,7 +6,7 @@ import type { SlackMessageView } from '@/features/hybrid-search/types/slackOrigi
 import SlackMessageBody from './SlackMessageBody';
 
 describe('SlackMessageBody', () => {
-  it('renders text, non-image files, link previews, and image previews', () => {
+  it('renders text, files, and link previews', () => {
     const message: SlackMessageView = {
       id: '1',
       ts: '1779601372.378609',
@@ -50,44 +50,10 @@ describe('SlackMessageBody', () => {
       'https://catchup.slack.com/archives/C1/p1779601372378609',
     );
     expect(screen.getByText('fallback-image.png')).toBeInTheDocument();
+    expect(screen.getByText('image.png')).toBeInTheDocument();
+    expect(screen.queryByAltText('image.png')).not.toBeInTheDocument();
     expect(screen.getByText('링크 카드')).toBeInTheDocument();
-    expect(screen.getByAltText('image.png')).toBeInTheDocument();
-  });
-
-  it('falls back to a file row when an image preview fails to load', async () => {
-    const message: SlackMessageView = {
-      id: '1',
-      ts: '1779601372.378609',
-      threadTs: '1779601372.378609',
-      author: { id: 'U1', name: '작성자', avatarUrl: null, avatarSource: 'none', kind: 'user' },
-      timeLabel: '02:33 PM',
-      editedLabel: '',
-      dateKey: '2026-05-24T05:42:52.378Z',
-      blocks: [{ type: 'paragraph', tokens: [{ type: 'text', text: '본문' }] }],
-      files: [
-        {
-          id: 'F_BROKEN_IMG',
-          name: 'broken-image.png',
-          mimetype: 'image/png',
-          thumb_360: 'https://files.slack.com/broken-preview.png',
-          permalink: 'https://catchup.slack.com/files/F_BROKEN_IMG',
-        },
-      ],
-      attachments: [],
-    };
-
-    render(
-      <SlackMessageBody message={message} originalUrl="https://catchup.slack.com/archives/C1/p1779601372378609" />,
-    );
-
-    const image = screen.getByAltText('broken-image.png');
-    fireEvent.error(image);
-
-    await waitFor(() => {
-      expect(screen.queryByAltText('broken-image.png')).not.toBeInTheDocument();
-    });
-    expect(screen.getByText('broken-image.png')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /broken-image.png/i })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: /^image\.png\s+png$/i })).toHaveAttribute(
       'href',
       'https://catchup.slack.com/archives/C1/p1779601372378609',
     );
