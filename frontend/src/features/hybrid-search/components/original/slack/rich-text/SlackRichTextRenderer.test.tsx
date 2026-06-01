@@ -33,4 +33,22 @@ describe('SlackRichTextRenderer', () => {
     expect(screen.getByText('quote')).toBeInTheDocument();
     expect(screen.getByText('const ok = true;')).toHaveClass('custom-scrollbar', 'max-h-62.5', 'overflow-auto');
   });
+
+  it('keeps list text constrained so long words can wrap inside the message body', () => {
+    const longText = 'long-unbroken-text-that-should-not-expand-the-slack-message-row';
+    const blocks: SlackBlockView[] = [
+      { type: 'bullet_list', items: [[{ type: 'text', text: longText }]] },
+      { type: 'ordered_list', start: 1, items: [[{ type: 'text', text: `${longText}-ordered` }]] },
+    ];
+
+    render(<SlackRichTextRenderer blocks={blocks} />);
+
+    const bulletItem = screen.getByText(longText).closest('li');
+    const orderedItem = screen.getByText(`${longText}-ordered`).closest('li');
+
+    expect(bulletItem).toHaveClass('min-w-0', 'wrap-break-word');
+    expect(bulletItem?.parentElement).toHaveClass('w-full', 'min-w-0');
+    expect(orderedItem).toHaveClass('min-w-0', 'wrap-break-word');
+    expect(orderedItem?.parentElement).toHaveClass('w-full', 'min-w-0');
+  });
 });

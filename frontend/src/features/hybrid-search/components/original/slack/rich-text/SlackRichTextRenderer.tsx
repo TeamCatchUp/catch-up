@@ -69,11 +69,11 @@ export default function SlackRichTextRenderer({ blocks }: SlackRichTextRendererP
   if (blocks.length === 0) return null;
 
   return (
-    <div className="text-body-small text-content-normal flex w-full flex-col items-start gap-2 font-medium">
+    <div className="text-body-small text-content-normal flex w-full min-w-0 flex-col items-start gap-2 font-medium">
       {blocks.map((block, index) => {
         if (block.type === 'paragraph') {
           return (
-            <p key={index} className="wrap-break-word">
+            <p key={index} className="w-full min-w-0 wrap-break-word">
               {renderTokens(block.tokens)}
             </p>
           );
@@ -81,9 +81,11 @@ export default function SlackRichTextRenderer({ blocks }: SlackRichTextRendererP
 
         if (block.type === 'bullet_list') {
           return (
-            <ul key={index} className="list-disc space-y-1 pl-5 wrap-break-word">
+            <ul key={index} className="flex w-full min-w-0 list-disc flex-col gap-1 pl-5">
               {block.items.map((item, itemIndex) => (
-                <li key={itemIndex}>{renderTokens(item)}</li>
+                <li key={itemIndex} className="min-w-0 wrap-break-word">
+                  {renderTokens(item)}
+                </li>
               ))}
             </ul>
           );
@@ -91,9 +93,11 @@ export default function SlackRichTextRenderer({ blocks }: SlackRichTextRendererP
 
         if (block.type === 'ordered_list') {
           return (
-            <ol key={index} className="list-decimal space-y-1 pl-5 wrap-break-word" start={block.start}>
+            <ol key={index} className="flex w-full min-w-0 list-decimal flex-col gap-1 pl-5" start={block.start}>
               {block.items.map((item, itemIndex) => (
-                <li key={itemIndex}>{renderTokens(item)}</li>
+                <li key={itemIndex} className="min-w-0 wrap-break-word">
+                  {renderTokens(item)}
+                </li>
               ))}
             </ol>
           );
@@ -101,7 +105,7 @@ export default function SlackRichTextRenderer({ blocks }: SlackRichTextRendererP
 
         if (block.type === 'quote') {
           return (
-            <blockquote key={index} className="border-edge-neutral flex w-full gap-4 border-l-4 pl-4 wrap-break-word">
+            <blockquote key={index} className="border-edge-neutral flex w-full min-w-0 gap-4 border-l-4 pl-4 wrap-break-word">
               {renderTokens(block.tokens)}
             </blockquote>
           );
