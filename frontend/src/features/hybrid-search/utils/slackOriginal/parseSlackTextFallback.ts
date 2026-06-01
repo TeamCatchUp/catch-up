@@ -2,7 +2,17 @@ import type { SlackTextStyleRaw, SlackUserMetadata } from '@/features/hybrid-sea
 import type { SlackBlockView, SlackRichTextToken } from '@/features/hybrid-search/types/slackOriginalModel';
 import { isSafeUrl } from '@/shared/utils/isSafeUrl';
 
-const INLINE_TOKEN_PATTERN = /(`[^`\n]+`|\*[^*\n]+\*|_[^_\n]+_|~[^~\n]+~|<[^>\n]+>|\n)/g;
+import { resolveSlackStandardEmoji } from './slackStandardEmoji';
+
+const INLINE_TOKEN_PATTERN = /(`[^`\n]+`|\*[^*\n]+\*|:[A-Za-z0-9_+-]+:|_[^_\n]+_|~[^~\n]+~|<[^>\n]+>|\n)/g;
+
+function decodeSlackTextEntities(text: string): string {
+  return text.replace(/&(amp|lt|gt);/g, (entity) => {
+    if (entity === '&amp;') return '&';
+    if (entity === '&lt;') return '<';
+    return '>';
+  });
+}
 
 function resolveUserLabel(userId: string, usersById: Record<string, SlackUserMetadata>): string {
   const user = usersById[userId];
@@ -25,7 +35,7 @@ function normalizeStyle(style: SlackTextStyleRaw | undefined): SlackTextStyleRaw
 
 function textToken(text: string, style?: SlackTextStyleRaw): SlackRichTextToken[] {
   if (!text) return [];
-  return [{ type: 'text', text, style: normalizeStyle(style) }];
+  return [{ type: 'text', text: decodeSlackTextEntities(text), style: normalizeStyle(style) }];
 }
 
 function parseSlackSpecialToken(
@@ -41,7 +51,13 @@ function parseSlackSpecialToken(
 
   if (inner.startsWith('#')) {
     const [, label] = inner.split('|');
-    return [{ type: 'mention', label: label ? `#${label}` : `#${inner.slice(1)}`, style: normalizeStyle(style) }];
+    return [
+      {
+        type: 'mention',
+        label: label ? `#${decodeSlackTextEntities(label)}` : `#${inner.slice(1)}`,
+        style: normalizeStyle(style),
+      },
+    ];
   }
 
   if (inner.startsWith('!')) {
@@ -49,7 +65,9 @@ function parseSlackSpecialToken(
     return [{ type: 'mention', label: `@${label}`, style: normalizeStyle(style) }];
   }
 
-  const [url, label] = inner.split('|');
+  const [rawUrl, rawLabel] = inner.split('|');
+  const url = decodeSlackTextEntities(rawUrl ?? '');
+  const label = rawLabel ? decodeSlackTextEntities(rawLabel) : undefined;
   if (isSafeUrl(url)) {
     return [{ type: 'link', href: url, text: label || url, style: normalizeStyle(style) }];
   }
@@ -79,6 +97,8 @@ function parseInlineText(
       tokens.push(...textToken(raw.slice(1, -1), { ...style, code: true }));
     } else if (raw.startsWith('*') && raw.endsWith('*')) {
       tokens.push(...parseInlineText(raw.slice(1, -1), usersById, { ...style, bold: true }));
+    } else if (raw.startsWith(':') && raw.endsWith(':')) {
+      tokens.push({ type: 'emoji', label: resolveSlackStandardEmoji(raw.slice(1, -1)) ?? raw });
     } else if (raw.startsWith('_') && raw.endsWith('_')) {
       tokens.push(...parseInlineText(raw.slice(1, -1), usersById, { ...style, italic: true }));
     } else if (raw.startsWith('~') && raw.endsWith('~')) {

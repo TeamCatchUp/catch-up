@@ -34,4 +34,36 @@ describe('parseSlackTextFallback', () => {
       tokens: [{ type: 'text', text: 'bad' }],
     });
   });
+
+  it('decodes Slack text entities without breaking special tokens', () => {
+    const [block] = parseSlackTextFallback(
+      'A -&gt; B &amp; C <https://example.com?a=1&amp;b=2|A &amp; B>',
+      usersById,
+    );
+
+    expect(block).toMatchObject({
+      type: 'paragraph',
+      tokens: [
+        { type: 'text', text: 'A -> B & C ' },
+        { type: 'link', href: 'https://example.com?a=1&b=2', text: 'A & B' },
+      ],
+    });
+  });
+
+  it('resolves standard colon emoji before italic parsing', () => {
+    const [block] = parseSlackTextFallback(':busts_in_silhouette: :smile: :catchup_logo: _italic_', usersById);
+
+    expect(block).toMatchObject({
+      type: 'paragraph',
+      tokens: [
+        { type: 'emoji', label: '👥' },
+        { type: 'text', text: ' ' },
+        { type: 'emoji', label: '😄' },
+        { type: 'text', text: ' ' },
+        { type: 'emoji', label: ':catchup_logo:' },
+        { type: 'text', text: ' ' },
+        { type: 'text', text: 'italic', style: { italic: true } },
+      ],
+    });
+  });
 });
