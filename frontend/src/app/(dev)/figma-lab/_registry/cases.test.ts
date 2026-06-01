@@ -10,11 +10,6 @@ import {
   getVisibleFigmaLabCasesByGroup,
   validateFigmaLabCases,
 } from './cases';
-import { ORIGINAL_PANEL_FIGMA_LAB_CASES } from './cases/original-panel/originalPanelCases';
-import { HOME_DOCS_FIGMA_LAB_CASES } from './features/home-docs';
-import { HYBRID_SEARCH_FIGMA_LAB_CASES } from './features/hybrid-search';
-import { ORIGINAL_PANEL_FIGMA_LAB_CASES_BY_FEATURE } from './features/original-panel';
-import { SHARED_QUERY_FILTER_FIGMA_LAB_CASES } from './features/shared-query-filter';
 import {
   validCase,
   validDevPreviewCase,
@@ -22,6 +17,11 @@ import {
   validPageData,
   validPageLayout,
 } from './cases.test.fixtures';
+import { ORIGINAL_PANEL_FIGMA_LAB_CASES } from './cases/original-panel/originalPanelCases';
+import { HOME_DOCS_FIGMA_LAB_CASES } from './features/home-docs';
+import { HYBRID_SEARCH_FIGMA_LAB_CASES } from './features/hybrid-search';
+import { ORIGINAL_PANEL_FIGMA_LAB_CASES_BY_FEATURE } from './features/original-panel';
+import { SHARED_QUERY_FILTER_FIGMA_LAB_CASES } from './features/shared-query-filter';
 import type { FigmaLabCase } from './types';
 
 describe('figma lab registry', () => {
