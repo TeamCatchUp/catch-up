@@ -9,9 +9,9 @@ import Collapsible from '@/features/hybrid-search/components/original/channel-ta
 import ConsultationInfo from '@/features/hybrid-search/components/original/channel-talk/metadata/ConsultationInfo';
 import CustomerInfo from '@/features/hybrid-search/components/original/channel-talk/metadata/CustomerInfo';
 
-import Case from '../../_components/Case';
-import PanelWidth from '../../_components/PanelWidth';
-import type { EntrySlug } from '../entries';
+import Case from '../components/Case';
+import PanelWidth from '../components/PanelWidth';
+import type { OriginalPanelCaseId } from '../originalPanelEntries';
 
 export const channelTalkMetadataRenderers = {
   'consultation-info': () => (
@@ -57,4 +57,4 @@ export const channelTalkMetadataRenderers = {
       </PanelWidth>
     </Case>
   ),
-} satisfies Partial<Record<EntrySlug, () => ReactNode>>;
+} satisfies Partial<Record<OriginalPanelCaseId, () => ReactNode>>;

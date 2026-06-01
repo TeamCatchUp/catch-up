@@ -7,10 +7,10 @@ import OriginalPanelEmpty from '@/features/hybrid-search/components/original/sha
 import OriginalPanelError from '@/features/hybrid-search/components/original/shared/states/OriginalPanelError';
 import OriginalPanelSkeleton from '@/features/hybrid-search/components/original/shared/states/OriginalPanelSkeleton';
 
-import Case from '../../_components/Case';
-import PanelFrame from '../../_components/PanelFrame';
-import PanelWidth from '../../_components/PanelWidth';
-import type { EntrySlug } from '../entries';
+import Case from '../components/Case';
+import PanelFrame from '../components/PanelFrame';
+import PanelWidth from '../components/PanelWidth';
+import type { OriginalPanelCaseId } from '../originalPanelEntries';
 
 export const panelStateRenderers = {
   'date-indicator': () => (
@@ -96,4 +96,4 @@ export const panelStateRenderers = {
       </Case>
     </>
   ),
-} satisfies Partial<Record<EntrySlug, () => ReactNode>>;
+} satisfies Partial<Record<OriginalPanelCaseId, () => ReactNode>>;

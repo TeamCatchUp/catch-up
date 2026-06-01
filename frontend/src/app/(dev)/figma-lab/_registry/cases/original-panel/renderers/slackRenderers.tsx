@@ -6,8 +6,8 @@ import SlackMessageItem from '@/features/hybrid-search/components/original/slack
 import SlackOriginalPanelContent from '@/features/hybrid-search/components/original/slack/SlackOriginalPanelContent';
 import { parseSlackOriginalThread } from '@/features/hybrid-search/utils/slack-original/parseSlackOriginal';
 
-import Case from '../../_components/Case';
-import type { EntrySlug } from '../entries';
+import Case from '../components/Case';
+import type { OriginalPanelCaseId } from '../originalPanelEntries';
 
 function SlackPanelWidth({ children }: { children: ReactNode }) {
   return <div className="w-99.75 max-w-full">{children}</div>;
@@ -54,4 +54,4 @@ export const slackRenderers = {
       />
     </Case>
   ),
-} satisfies Partial<Record<EntrySlug, () => ReactNode>>;
+} satisfies Partial<Record<OriginalPanelCaseId, () => ReactNode>>;

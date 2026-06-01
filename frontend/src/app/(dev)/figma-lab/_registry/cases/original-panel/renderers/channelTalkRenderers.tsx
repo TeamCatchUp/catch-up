@@ -27,10 +27,10 @@ import FormContent from '@/features/hybrid-search/components/original/channel-ta
 import TextContent from '@/features/hybrid-search/components/original/channel-talk/contents/TextContent';
 import MessageItem from '@/features/hybrid-search/components/original/channel-talk/timeline/MessageItem';
 
-import Case from '../../_components/Case';
-import PanelFrame from '../../_components/PanelFrame';
-import PanelWidth from '../../_components/PanelWidth';
-import type { EntrySlug } from '../entries';
+import Case from '../components/Case';
+import PanelFrame from '../components/PanelFrame';
+import PanelWidth from '../components/PanelWidth';
+import type { OriginalPanelCaseId } from '../originalPanelEntries';
 import { blockPayload, buttonPayload, filePayload, formPayload, textPayload } from './channelTalkPayload';
 
 export const channelTalkRenderers = {
@@ -157,4 +157,4 @@ export const channelTalkRenderers = {
       </Case>
     </>
   ),
-} satisfies Partial<Record<EntrySlug, () => ReactNode>>;
+} satisfies Partial<Record<OriginalPanelCaseId, () => ReactNode>>;
