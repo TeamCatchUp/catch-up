@@ -106,15 +106,17 @@ export interface SlackEditedRaw {
   ts?: string;
 }
 
+export interface SlackMessageIconsRaw {
+  image_36?: string;
+  image_48?: string;
+  image_72?: string;
+}
+
 export interface SlackBotProfileRaw {
   id?: string;
   app_id?: string;
   name?: string;
-  icons?: {
-    image_36?: string;
-    image_48?: string;
-    image_72?: string;
-  };
+  icons?: SlackMessageIconsRaw;
 }
 
 export interface SlackMessageRaw {
@@ -124,6 +126,7 @@ export interface SlackMessageRaw {
   username?: string;
   bot_id?: string;
   bot_profile?: SlackBotProfileRaw;
+  icons?: SlackMessageIconsRaw;
   text?: string;
   ts: string;
   thread_ts?: string;

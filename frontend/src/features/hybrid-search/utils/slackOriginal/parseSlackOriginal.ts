@@ -9,6 +9,18 @@ import { parseSlackBlocks } from './parseSlackBlocks';
 import { parseSlackTextFallback } from './parseSlackTextFallback';
 import { formatSlackDateKey, formatSlackEditedLabel, formatSlackMessageTime } from './slackTimestamp';
 
+function resolveBotAvatarUrl(message: SlackMessageRaw): string | null {
+  return (
+    message.bot_profile?.icons?.image_36 ??
+    message.bot_profile?.icons?.image_48 ??
+    message.bot_profile?.icons?.image_72 ??
+    message.icons?.image_36 ??
+    message.icons?.image_48 ??
+    message.icons?.image_72 ??
+    null
+  );
+}
+
 function resolveAuthor(
   message: SlackMessageRaw,
   usersById: Record<string, SlackUserMetadata>,
@@ -17,7 +29,7 @@ function resolveAuthor(
     return {
       id: message.bot_id ?? message.bot_profile?.id ?? null,
       name: message.bot_profile?.name ?? message.username ?? 'Slack Bot',
-      avatarUrl: message.bot_profile?.icons?.image_36 ?? message.bot_profile?.icons?.image_48 ?? null,
+      avatarUrl: resolveBotAvatarUrl(message),
       kind: 'bot',
     };
   }
