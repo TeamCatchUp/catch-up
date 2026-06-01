@@ -19,7 +19,7 @@ const ORIGINAL_PANEL_RENDERERS = {
   ...slackRenderers,
 } satisfies Partial<Record<OriginalPanelCaseId, () => ReactNode>>;
 
-const SLACK_FIGMA_REFERENCES = {
+const SLACK_FIGMA_REFERENCES: Partial<Record<OriginalPanelCaseId, FigmaReference>> = {
   'slack-thread-header': {
     url: 'https://www.figma.com/design/7UwupbVvmHkElmP2OBJQio/%F0%9F%8D%85-Design-System?node-id=14152-56904&m=dev',
     fileKey: DESIGN_SYSTEM_FILE_KEY,
@@ -40,7 +40,7 @@ const SLACK_FIGMA_REFERENCES = {
     fileKey: DESIGN_SYSTEM_FILE_KEY,
     nodeId: '14152:56488',
   },
-} satisfies Partial<Record<OriginalPanelCaseId, FigmaReference>>;
+};
 
 function originalPanelViewport(caseId: OriginalPanelCaseId): FigmaLabCase['viewport'] {
   if (caseId === 'slack-panel-preview' || caseId === 'panel-content' || caseId === 'panel') {
