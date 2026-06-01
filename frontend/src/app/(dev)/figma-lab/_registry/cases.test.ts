@@ -10,7 +10,13 @@ import {
   getVisibleFigmaLabCasesByGroup,
   validateFigmaLabCases,
 } from './cases';
-import { validCase, validPageCase, validPageData, validPageLayout } from './cases.test.fixtures';
+import {
+  validCase,
+  validDevPreviewCase,
+  validPageCase,
+  validPageData,
+  validPageLayout,
+} from './cases.test.fixtures';
 import type { FigmaLabCase } from './types';
 
 describe('figma lab registry', () => {
@@ -80,6 +86,21 @@ describe('figma lab registry', () => {
 
   it('accepts complete story-like cases', () => {
     expect(validateFigmaLabCases([validCase])).toEqual([]);
+  });
+
+  it('accepts dev-preview cases without Figma metadata or token decisions', () => {
+    expect(validateFigmaLabCases([validDevPreviewCase])).toEqual([]);
+  });
+
+  it('rejects dev-preview cases without notes', () => {
+    const errors = validateFigmaLabCases([
+      {
+        ...validDevPreviewCase,
+        notes: [],
+      },
+    ]);
+
+    expect(errors).toContain("Case 'channel-talk-text-content' dev-preview must include at least one note.");
   });
 
   it('accepts page cases with route and layout metadata', () => {

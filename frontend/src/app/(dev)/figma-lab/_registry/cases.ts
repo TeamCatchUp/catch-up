@@ -72,19 +72,25 @@ export function validateFigmaLabCases(cases: readonly FigmaLabCase[]): string[] 
   const ids = new Set<string>();
 
   for (const item of cases) {
+    const designSource = item.designSource ?? 'figma';
+    const isFigmaBacked = designSource === 'figma';
+    const isDevPreview = designSource === 'dev-preview';
+
     if (ids.has(item.id)) {
       errors.push(`Duplicate figma lab case id: '${item.id}'.`);
     }
     ids.add(item.id);
 
-    if (!item.figma?.url) {
-      errors.push(`Case '${item.id}' must include figma.url.`);
-    }
-    if (!item.figma?.fileKey) {
-      errors.push(`Case '${item.id}' must include figma.fileKey.`);
-    }
-    if (!item.figma?.nodeId) {
-      errors.push(`Case '${item.id}' must include figma.nodeId.`);
+    if (isFigmaBacked) {
+      if (!item.figma?.url) {
+        errors.push(`Case '${item.id}' must include figma.url.`);
+      }
+      if (!item.figma?.fileKey) {
+        errors.push(`Case '${item.id}' must include figma.fileKey.`);
+      }
+      if (!item.figma?.nodeId) {
+        errors.push(`Case '${item.id}' must include figma.nodeId.`);
+      }
     }
     if (item.viewport.width <= 0) {
       errors.push(`Case '${item.id}' viewport.width must be greater than 0.`);
@@ -141,8 +147,11 @@ export function validateFigmaLabCases(cases: readonly FigmaLabCase[]): string[] 
     if (item.reuse.length === 0) {
       errors.push(`Case '${item.id}' must include at least one reuse decision.`);
     }
-    if (item.tokens.length === 0) {
+    if (isFigmaBacked && item.tokens.length === 0) {
       errors.push(`Case '${item.id}' must include at least one token decision.`);
+    }
+    if (isDevPreview && (!item.notes || item.notes.length === 0)) {
+      errors.push(`Case '${item.id}' dev-preview must include at least one note.`);
     }
   }
 

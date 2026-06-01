@@ -78,3 +78,30 @@ export const validPageCase: FigmaLabCase = {
   layout: validPageLayout,
   data: validPageData,
 };
+
+export const validDevPreviewCase: FigmaLabCase = {
+  id: 'channel-talk-text-content',
+  groupId: 'hybrid-search',
+  owner: 'feature',
+  designSource: 'dev-preview',
+  component: 'TextContent',
+  state: 'fixture-preview',
+  kind: 'component',
+  title: 'ChannelTalk/TextContent',
+  viewport: {
+    width: 420,
+    height: 240,
+  },
+  states: ['fixture-preview'],
+  reuse: [
+    {
+      figmaPart: 'dev preview',
+      checked: 'src/features/hybrid-search/components/original/channel-talk/contents/TextContent.tsx',
+      decision: 'feature-local',
+      reason: 'This fixture preview renders the production feature component without a dedicated Figma node.',
+    },
+  ],
+  tokens: [],
+  notes: ['Dev-preview case intentionally has no Figma node or token contract.'],
+  render: () => 'ChannelTalk text preview',
+};
