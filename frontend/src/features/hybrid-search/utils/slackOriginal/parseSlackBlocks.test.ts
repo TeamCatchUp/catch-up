@@ -108,4 +108,42 @@ describe('parseSlackBlocks', () => {
       },
     ]);
   });
+
+  it('keeps rich text code spans with underscores as one token inside lists', () => {
+    const blocks: SlackBlockRaw[] = [
+      {
+        type: 'rich_text',
+        elements: [
+          {
+            type: 'rich_text_list',
+            elements: [
+              {
+                type: 'rich_text_section',
+                elements: [
+                  { type: 'emoji', name: 'white_check_mark', unicode: '2705' },
+                  { type: 'text', text: ' Ingestion 과정에서 CatchUp 봇의 답변이 ' },
+                  { type: 'text', text: '[CATCH_UP_ANSWER]', style: { code: true } },
+                  { type: 'text', text: '로 치환되도록 수정 완료' },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    ];
+
+    expect(parseSlackBlocks(blocks, usersById)).toMatchObject([
+      {
+        type: 'bullet_list',
+        items: [
+          [
+            { type: 'emoji', label: '✅' },
+            { type: 'text', text: ' Ingestion 과정에서 CatchUp 봇의 답변이 ' },
+            { type: 'text', text: '[CATCH_UP_ANSWER]', style: { code: true } },
+            { type: 'text', text: '로 치환되도록 수정 완료' },
+          ],
+        ],
+      },
+    ]);
+  });
 });

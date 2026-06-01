@@ -12,7 +12,7 @@ import type {
 import type { SlackBlockView, SlackRichTextToken } from '@/features/hybrid-search/types/slackOriginalModel';
 import { isSafeUrl } from '@/shared/utils/isSafeUrl';
 
-import { parseSlackTextFallback, parseSlackTextTokens } from './parseSlackTextFallback';
+import { parseSlackTextFallback } from './parseSlackTextFallback';
 import { resolveSlackStandardEmoji } from './slackStandardEmoji';
 
 function isSection(element: SlackRichTextBlockElementRaw): element is SlackRichTextSectionRaw {
@@ -51,9 +51,27 @@ function normalizeStyle(style: SlackTextStyleRaw | undefined): SlackTextStyleRaw
   return Object.keys(normalized).length > 0 ? normalized : undefined;
 }
 
+function decodeSlackTextEntities(text: string): string {
+  return text.replace(/&(amp|lt|gt);/g, (entity) => {
+    if (entity === '&amp;') return '&';
+    if (entity === '&lt;') return '<';
+    return '>';
+  });
+}
+
 function textToTokens(text: string | undefined, style?: SlackTextStyleRaw): SlackRichTextToken[] {
   if (!text) return [];
-  return parseSlackTextTokens(text, {}, normalizeStyle(style));
+
+  const normalizedStyle = normalizeStyle(style);
+  const tokens: SlackRichTextToken[] = [];
+  const parts = decodeSlackTextEntities(text).split('\n');
+
+  parts.forEach((part, index) => {
+    if (index > 0) tokens.push({ type: 'line_break' });
+    if (part) tokens.push({ type: 'text', text: part, style: normalizedStyle });
+  });
+
+  return tokens;
 }
 
 function stringValue(value: unknown): string | undefined {
