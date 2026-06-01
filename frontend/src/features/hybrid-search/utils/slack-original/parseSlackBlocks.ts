@@ -13,7 +13,7 @@ import type { SlackBlockView, SlackRichTextToken } from '@/features/hybrid-searc
 import { isSafeUrl } from '@/shared/utils/isSafeUrl';
 
 import { parseSlackTextFallback } from './parseSlackTextFallback';
-import { resolveSlackStandardEmoji } from './slackStandardEmoji';
+import { resolveSlackStandardEmoji } from './resolveSlackStandardEmoji';
 
 function isSection(element: SlackRichTextBlockElementRaw): element is SlackRichTextSectionRaw {
   return element.type === 'rich_text_section';

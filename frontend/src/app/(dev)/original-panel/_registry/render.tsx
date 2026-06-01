@@ -57,7 +57,7 @@ import type {
   OriginalFormPayload,
   OriginalTextPayload,
 } from '@/features/hybrid-search/types/originalApi';
-import { parseSlackOriginalThread } from '@/features/hybrid-search/utils/slackOriginal/parseSlackOriginal';
+import { parseSlackOriginalThread } from '@/features/hybrid-search/utils/slack-original/parseSlackOriginal';
 
 import Case from '../_components/Case';
 import PanelFrame from '../_components/PanelFrame';

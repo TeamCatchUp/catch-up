@@ -2,7 +2,7 @@ import type { SlackTextStyleRaw, SlackUserMetadata } from '@/features/hybrid-sea
 import type { SlackBlockView, SlackRichTextToken } from '@/features/hybrid-search/types/slackOriginalModel';
 import { isSafeUrl } from '@/shared/utils/isSafeUrl';
 
-import { resolveSlackStandardEmoji } from './slackStandardEmoji';
+import { resolveSlackStandardEmoji } from './resolveSlackStandardEmoji';
 
 const INLINE_TOKEN_PATTERN = /(`[^`\n]+`|\*[^*\n]+\*|:[A-Za-z0-9_+-]+:|_[^_\n]+_|~[^~\n]+~|<[^>\n]+>|\n)/g;
 

@@ -2,8 +2,8 @@ import { useEffect, useMemo, useRef } from 'react';
 
 import DateIndicator from '@/features/hybrid-search/components/original/shared/DateIndicator';
 import type { SlackOriginalContentResponse } from '@/features/hybrid-search/types/slackOriginalApi';
-import { mergeSlackOriginalPages } from '@/features/hybrid-search/utils/slackOriginal/mergeSlackOriginalPages';
-import { parseSlackOriginalThread } from '@/features/hybrid-search/utils/slackOriginal/parseSlackOriginal';
+import { mergeSlackOriginalPages } from '@/features/hybrid-search/utils/slack-original/mergeSlackOriginalPages';
+import { parseSlackOriginalThread } from '@/features/hybrid-search/utils/slack-original/parseSlackOriginal';
 
 import SlackThreadHeader from './header/SlackThreadHeader';
 import SlackMessageItem from './message/SlackMessageItem';

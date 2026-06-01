@@ -2,7 +2,7 @@ import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
 import { slackOriginalThreadResponse } from '@/features/hybrid-search/components/original/__fixtures__/slackOriginal.fixtures';
-import { parseSlackOriginalThread } from '@/features/hybrid-search/utils/slackOriginal/parseSlackOriginal';
+import { parseSlackOriginalThread } from '@/features/hybrid-search/utils/slack-original/parseSlackOriginal';
 
 import SlackMessageItem from './SlackMessageItem';
 
