@@ -8,6 +8,8 @@
 
 import type { SourceTypeApi } from '@/shared/types/sourceApi';
 
+import type { SlackOriginalContentResponse } from './slackOriginalApi';
+
 // --- content_type 별 payload ---
 
 export interface OriginalTextPayload {
@@ -174,9 +176,9 @@ export interface OriginalContentRequest {
   next_cursor?: string | null;
 }
 
-export interface OriginalContentResponse {
-  connector: SourceTypeApi;
-  entity_type: string;
+export interface ChannelTalkOriginalContentResponse {
+  connector: 'channel_talk';
+  entity_type: 'user_chat';
   document_id: string;
   title: string;
   url: string | null;
@@ -185,6 +187,10 @@ export interface OriginalContentResponse {
   next_cursor: string | null;
   fetched_at: string;
 }
+
+export type OriginalContentResponse =
+  | ChannelTalkOriginalContentResponse
+  | SlackOriginalContentResponse;
 
 // --- 파일 URL 조회 (POST /api/v1/search/original/file-url) ---
 // 클릭 시 lazy 호출. presigned URL (TTL 15분) 받아 새 탭으로 다운로드/미리보기.

@@ -12,8 +12,9 @@ export interface FigmaLabViewport {
 }
 
 export type FigmaLabCaseKind = 'component' | 'section' | 'page';
-export type FigmaLabGroupId = 'hybrid-search' | 'home-docs' | 'shared-query-filter';
+export type FigmaLabGroupId = 'hybrid-search' | 'home-docs' | 'shared-query-filter' | 'original-panel';
 export type FigmaLabCaseOwner = 'feature' | 'shared';
+export type FigmaLabDesignSource = 'figma' | 'dev-preview';
 
 export interface FigmaLabGroup {
   id: FigmaLabGroupId;
@@ -74,6 +75,7 @@ export interface FigmaLabCase {
   id: string;
   groupId: FigmaLabGroupId;
   owner: FigmaLabCaseOwner;
+  designSource?: FigmaLabDesignSource;
   component: string;
   state: string;
   usedBy?: readonly FigmaLabGroupId[];

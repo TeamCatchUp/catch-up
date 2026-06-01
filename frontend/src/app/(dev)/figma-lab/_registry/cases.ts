@@ -1,5 +1,6 @@
 import { HOME_DOCS_FIGMA_LAB_CASES } from './features/home-docs';
 import { HYBRID_SEARCH_FIGMA_LAB_CASES } from './features/hybrid-search';
+import { ORIGINAL_PANEL_FIGMA_LAB_CASES_BY_FEATURE } from './features/original-panel';
 import { SHARED_QUERY_FILTER_FIGMA_LAB_CASES } from './features/shared-query-filter';
 import { FIGMA_LAB_GROUPS, findFigmaLabGroup, isFigmaLabGroupId } from './groups';
 import type { FigmaLabCase, FigmaLabGroupId } from './types';
@@ -13,6 +14,7 @@ export const FIGMA_LAB_CASES: readonly FigmaLabCase[] = [
   ...HYBRID_SEARCH_FIGMA_LAB_CASES,
   ...HOME_DOCS_FIGMA_LAB_CASES,
   ...SHARED_QUERY_FILTER_FIGMA_LAB_CASES,
+  ...ORIGINAL_PANEL_FIGMA_LAB_CASES_BY_FEATURE,
 ];
 
 export function findFigmaLabCase(id: string | undefined): FigmaLabCase | undefined {
@@ -72,19 +74,25 @@ export function validateFigmaLabCases(cases: readonly FigmaLabCase[]): string[] 
   const ids = new Set<string>();
 
   for (const item of cases) {
+    const designSource = item.designSource ?? 'figma';
+    const isFigmaBacked = designSource === 'figma';
+    const isDevPreview = designSource === 'dev-preview';
+
     if (ids.has(item.id)) {
       errors.push(`Duplicate figma lab case id: '${item.id}'.`);
     }
     ids.add(item.id);
 
-    if (!item.figma?.url) {
-      errors.push(`Case '${item.id}' must include figma.url.`);
-    }
-    if (!item.figma?.fileKey) {
-      errors.push(`Case '${item.id}' must include figma.fileKey.`);
-    }
-    if (!item.figma?.nodeId) {
-      errors.push(`Case '${item.id}' must include figma.nodeId.`);
+    if (isFigmaBacked) {
+      if (!item.figma?.url) {
+        errors.push(`Case '${item.id}' must include figma.url.`);
+      }
+      if (!item.figma?.fileKey) {
+        errors.push(`Case '${item.id}' must include figma.fileKey.`);
+      }
+      if (!item.figma?.nodeId) {
+        errors.push(`Case '${item.id}' must include figma.nodeId.`);
+      }
     }
     if (item.viewport.width <= 0) {
       errors.push(`Case '${item.id}' viewport.width must be greater than 0.`);
@@ -141,8 +149,11 @@ export function validateFigmaLabCases(cases: readonly FigmaLabCase[]): string[] 
     if (item.reuse.length === 0) {
       errors.push(`Case '${item.id}' must include at least one reuse decision.`);
     }
-    if (item.tokens.length === 0) {
+    if (isFigmaBacked && item.tokens.length === 0) {
       errors.push(`Case '${item.id}' must include at least one token decision.`);
+    }
+    if (isDevPreview && (!item.notes || item.notes.length === 0)) {
+      errors.push(`Case '${item.id}' dev-preview must include at least one note.`);
     }
   }
 

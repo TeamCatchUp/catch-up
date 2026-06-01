@@ -135,10 +135,10 @@ describe('ResultPageHeader', () => {
     expect(onTabChange).toHaveBeenCalledWith('jira');
   });
 
-  it('uses the same 1420px content width as the result body', () => {
+  it('uses the same max content width as the result body', () => {
     const { container } = renderWithClient(<ResultPageHeader {...makeDefaultProps()} />);
 
     const innerShell = container.querySelector('header > div');
-    expect(innerShell).toHaveClass('max-w-[1420px]');
+    expect(innerShell).toHaveClass('max-w-355');
   });
 });

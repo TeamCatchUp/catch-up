@@ -1,0 +1,10 @@
+<svg preserveAspectRatio="none" width="100%" height="100%" overflow="visible" style="display: block;" viewBox="0 0 11 11" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="Container">
+<mask id="mask0_0_4" style="mask-type:alpha" maskUnits="userSpaceOnUse" x="0" y="0" width="11" height="11">
+<rect id="Text input" width="11" height="11" fill="var(--fill-0, #D9D9D9)"/>
+</mask>
+<g mask="url(#mask0_0_4)">
+<path id="check" d="M5.0778 7.47216L10.0105 2.18708C10.1269 2.06236 10.2628 2 10.418 2C10.5732 2 10.709 2.06236 10.8254 2.18708C10.9418 2.3118 11 2.45991 11 2.6314C11 2.8029 10.9418 2.951 10.8254 3.07572L5.48522 8.81292C5.36882 8.93764 5.23301 9 5.0778 9C4.92259 9 4.78678 8.93764 4.67037 8.81292L2.16763 6.1314C2.05122 6.00668 1.99544 5.85857 2.00029 5.68708C2.00514 5.51559 2.06577 5.36748 2.18218 5.24276C2.29858 5.11804 2.43682 5.05568 2.59688 5.05568C2.75694 5.05568 2.89517 5.11804 3.01158 5.24276L5.0778 7.47216Z" fill="var(--fill-0, #0066FF)"/>
+</g>
+</g>
+</svg>

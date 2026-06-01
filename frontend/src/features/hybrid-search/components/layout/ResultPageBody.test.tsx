@@ -16,7 +16,7 @@ describe('ResultPageBody', () => {
     expect(section).not.toHaveClass('pb-30');
 
     const shell = section?.firstElementChild;
-    expect(shell).toHaveClass('h-full', 'min-h-0', 'max-w-[1420px]', 'items-stretch', 'gap-6', 'overflow-hidden');
+    expect(shell).toHaveClass('h-full', 'min-h-0', 'max-w-355', 'items-stretch', 'gap-6', 'overflow-hidden');
 
     const leftColumn = screen.getByTestId('result-list').parentElement;
     expect(leftColumn).toHaveClass(
@@ -38,9 +38,12 @@ describe('ResultPageBody', () => {
     const rightPanel = screen.getByTestId('original-panel').parentElement;
     expect(rightPanel).toHaveClass(
       'custom-scrollbar',
+      'flex',
       'min-h-0',
+      'min-w-105',
       'w-105.75',
       'shrink-0',
+      'flex-col',
       'overflow-y-auto',
       'overscroll-contain',
       'border-l',

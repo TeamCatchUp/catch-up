@@ -1,7 +1,10 @@
-// dev preview 갤러리용 전체 OriginalContentResponse 목 데이터.
+// dev preview 갤러리용 전체 ChannelTalk 원문 목 데이터.
 // 날짜 그룹 여러 개 + 메시지·콘텐츠 타입이 섞인 현실적인 전체 대화 1건.
 
-import type { OriginalContentResponse,OriginalMessageItem } from '../../../types/originalApi';
+import type {
+  ChannelTalkOriginalContentResponse,
+  OriginalMessageItem,
+} from '../../../types/originalApi';
 import {
   blockContentCodeShort,
   blockContentMixed,
@@ -155,7 +158,7 @@ const day3Items: OriginalMessageItem[] = [
 ];
 
 // 현실적인 전체 대화 — 3개 날짜 그룹, 메시지/콘텐츠 타입 혼합.
-export const fullConversationResponse: OriginalContentResponse = {
+export const fullConversationResponse: ChannelTalkOriginalContentResponse = {
   connector: 'channel_talk',
   entity_type: 'user_chat',
   document_id: 'channel_talk:user_chat:55012',
@@ -168,7 +171,7 @@ export const fullConversationResponse: OriginalContentResponse = {
 };
 
 // 메시지 0건 — empty 상태 케이스.
-export const emptyConversationResponse: OriginalContentResponse = {
+export const emptyConversationResponse: ChannelTalkOriginalContentResponse = {
   connector: 'channel_talk',
   entity_type: 'user_chat',
   document_id: 'channel_talk:user_chat:55099',

@@ -10,19 +10,27 @@ import {
   getVisibleFigmaLabCasesByGroup,
   validateFigmaLabCases,
 } from './cases';
-import { validCase, validPageCase, validPageData, validPageLayout } from './cases.test.fixtures';
+import {
+  validCase,
+  validDevPreviewCase,
+  validPageCase,
+  validPageData,
+  validPageLayout,
+} from './cases.test.fixtures';
+import { ORIGINAL_PANEL_FIGMA_LAB_CASES } from './cases/original-panel/originalPanelCases';
+import { HOME_DOCS_FIGMA_LAB_CASES } from './features/home-docs';
+import { HYBRID_SEARCH_FIGMA_LAB_CASES } from './features/hybrid-search';
+import { ORIGINAL_PANEL_FIGMA_LAB_CASES_BY_FEATURE } from './features/original-panel';
+import { SHARED_QUERY_FILTER_FIGMA_LAB_CASES } from './features/shared-query-filter';
 import type { FigmaLabCase } from './types';
 
 describe('figma lab registry', () => {
-  it('registers the smart filter UI cases without metadata errors', () => {
+  it('registers all Figma Lab cases without metadata errors', () => {
     expect(FIGMA_LAB_CASES.map((item) => item.id)).toEqual([
-      'result-search-bar-collapsed',
-      'result-search-bar-expanded',
-      'document-search-filter-row-entry',
-      'document-search-filter-row-source-dropdown-open',
-      'document-search-filter-row-date-picker-open',
-      'document-search-filter-row-result-expanded',
-      'smart-filter-status-pill',
+      ...HYBRID_SEARCH_FIGMA_LAB_CASES.map((item) => item.id),
+      ...HOME_DOCS_FIGMA_LAB_CASES.map((item) => item.id),
+      ...SHARED_QUERY_FILTER_FIGMA_LAB_CASES.map((item) => item.id),
+      ...ORIGINAL_PANEL_FIGMA_LAB_CASES_BY_FEATURE.map((item) => item.id),
     ]);
     expect(validateFigmaLabCases(FIGMA_LAB_CASES)).toEqual([]);
   });
@@ -38,6 +46,7 @@ describe('figma lab registry', () => {
   it('returns the group default case when a group is selected', () => {
     expect(getDefaultFigmaLabCaseId('hybrid-search')).toBe('result-search-bar-expanded');
     expect(getDefaultFigmaLabCaseId('shared-query-filter')).toBe('document-search-filter-row-entry');
+    expect(getDefaultFigmaLabCaseId('original-panel')).toBe('slack-panel-preview');
   });
 
   it('returns feature cases and related shared cases by group', () => {
@@ -72,6 +81,12 @@ describe('figma lab registry', () => {
         selectedCaseId: 'document-search-filter-row-source-dropdown-open',
       })?.id,
     ).toBe('document-search-filter-row-source-dropdown-open');
+    expect(
+      getFigmaLabCaseForRoute({
+        groupId: 'original-panel',
+        selectedCaseId: 'result-search-bar-expanded',
+      })?.id,
+    ).toBe('slack-panel-preview');
   });
 
   it('accepts an empty registry while the harness has no pilot case', () => {
@@ -80,6 +95,46 @@ describe('figma lab registry', () => {
 
   it('accepts complete story-like cases', () => {
     expect(validateFigmaLabCases([validCase])).toEqual([]);
+  });
+
+  it('registers every original-panel entry as a Figma Lab case', () => {
+    expect(ORIGINAL_PANEL_FIGMA_LAB_CASES.map((item) => item.id)).toEqual([
+      'text-content',
+      'block-content',
+      'button-content',
+      'form-content',
+      'file-content',
+      'message-item',
+      'date-indicator',
+      'slack-thread-header',
+      'slack-message-item',
+      'slack-rich-message',
+      'consultation-info',
+      'customer-info',
+      'collapsible',
+      'panel-skeleton',
+      'panel-empty',
+      'panel-error',
+      'panel-coming-soon',
+      'panel-content',
+      'slack-panel-preview',
+      'panel',
+    ]);
+  });
+
+  it('accepts dev-preview cases without Figma metadata or token decisions', () => {
+    expect(validateFigmaLabCases([validDevPreviewCase])).toEqual([]);
+  });
+
+  it('rejects dev-preview cases without notes', () => {
+    const errors = validateFigmaLabCases([
+      {
+        ...validDevPreviewCase,
+        notes: [],
+      },
+    ]);
+
+    expect(errors).toContain("Case 'channel-talk-text-content' dev-preview must include at least one note.");
   });
 
   it('accepts page cases with route and layout metadata', () => {
@@ -228,7 +283,7 @@ describe('figma lab registry', () => {
         component: '',
         state: '',
         usedBy: ['missing-related-group'],
-      } as FigmaLabCase,
+      } as unknown as FigmaLabCase,
     ]);
 
     expect(errors).toContain("Case 'admin-users-table' must include a valid groupId.");

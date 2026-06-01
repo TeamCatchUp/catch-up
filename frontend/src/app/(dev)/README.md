@@ -1,19 +1,22 @@
-# `(dev)` Route Group — 원문 패널 갤러리
+# `(dev)` Route Group — Figma Lab
 
 ## 무엇인가
 
-`/original-panel` 은 ChannelTalk user_chat 원문 패널 컴포넌트의 갤러리 페이지.
-**Storybook 대용**으로, 각 컴포넌트의 모든 상태/케이스를 fixture 로 렌더해
-디자이너·개발자가 시각적으로 확인할 수 있게 한다.
+`/figma-lab` 은 Figma 디자인과 구현 컴포넌트를 같은 화면에서 확인하기 위한
+개발용 갤러리다. Storybook 대용으로, 각 컴포넌트의 상태/fixture/render case를
+라우트에서 직접 확인한다.
+
+현재 원문 패널은 `/figma-lab/original-panel` 그룹 안으로 이관되어 있다.
+기존 `/original-panel` 과 `/original-panel/[slug]` 는 호환용 redirect만 남긴다.
 
 **의도적으로 production 에도 노출된다.** 정식 Storybook 도입까지의 임시 조치 —
 PII 없음, API 호출 없음, 번들 영향 미미.
 
 ## 언제 제거하나
 
-- 정식 Storybook (또는 다른 component dev environment) 이 도입되고 이 갤러리의
+- 정식 Storybook 또는 다른 component dev environment가 도입되고 이 갤러리의
   케이스가 그쪽으로 이관된 시점.
-- `/original-panel` 이 어떤 환경에서도 접근 가능할 필요가 없다고 결정된 시점.
+- `/figma-lab` 이 어떤 환경에서도 접근 가능할 필요가 없다고 결정된 시점.
 
 ## 어떻게 제거하나
 
@@ -47,20 +50,24 @@ cd frontend && npm run build && npm test
 ```
 frontend/src/app/(dev)/
 ├── README.md                       이 파일
-├── layout.tsx                      dev shell (production gate 없음 — 의도적)
+├── layout.tsx                      dev shell (production gate 없음, 의도적)
+├── figma-lab/
+│   ├── page.tsx                    Figma Lab index
+│   ├── [group]/page.tsx            그룹별 case 화면
+│   └── _registry/
+│       ├── groups.ts               group metadata
+│       ├── cases.ts                통합 case registry
+│       ├── features/               feature별 case export
+│       └── cases/
+│           └── original-panel/     원문 패널 preview case/renderers
 └── original-panel/
-    ├── layout.tsx                  sidebar + main flex shell
-    ├── page.tsx                    타일 그리드 index
-    ├── [slug]/page.tsx             동적 라우트 (컴포넌트별 페이지)
-    ├── _registry/
-    │   ├── entries.ts              16개 entry 메타·그룹
-    │   └── render.tsx              slug → cases (client component)
-    └── _components/
-        ├── Sidebar.tsx · SidebarLink.tsx
-        └── Case.tsx · PanelWidth.tsx · PanelFrame.tsx
+    ├── page.tsx                    `/figma-lab/original-panel` redirect
+    └── [slug]/page.tsx             `/figma-lab/original-panel?case=...` redirect
 ```
 
-모두 이 디렉터리 트리에 self-contained.
+원문 패널의 실제 production 컴포넌트는
+`src/features/hybrid-search/components/original/` 아래에 둔다. `(dev)` 내부에는
+개발용 preview registry와 renderer만 둔다.
 
 ## 다시 production 비공개로 돌리고 싶을 때
 
