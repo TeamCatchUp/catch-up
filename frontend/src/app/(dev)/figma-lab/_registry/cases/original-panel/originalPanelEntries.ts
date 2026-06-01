@@ -31,24 +31,6 @@ export interface OriginalPanelEntry {
   description?: string;
 }
 
-export const ORIGINAL_PANEL_GROUP_ORDER: readonly OriginalPanelCaseGroup[] = [
-  'contents',
-  'messages',
-  'info',
-  'primitives',
-  'panel-states',
-  'assembled',
-];
-
-export const ORIGINAL_PANEL_GROUP_LABELS: Record<OriginalPanelCaseGroup, string> = {
-  contents: '콘텐츠',
-  messages: '메시지',
-  info: '정보',
-  primitives: '공통 요소',
-  'panel-states': '패널 상태',
-  assembled: '조립',
-};
-
 export const ORIGINAL_PANEL_ENTRIES: readonly OriginalPanelEntry[] = [
   // 콘텐츠
   {
@@ -177,18 +159,3 @@ export const ORIGINAL_PANEL_ENTRIES: readonly OriginalPanelEntry[] = [
     description: 'connector/entityType/documentId 입력 → 위 상태들 중 하나로 분기.',
   },
 ];
-
-export const ORIGINAL_PANEL_GROUPED_ENTRIES: Record<OriginalPanelCaseGroup, OriginalPanelEntry[]> = (() => {
-  const result: Record<OriginalPanelCaseGroup, OriginalPanelEntry[]> = {
-    contents: [],
-    messages: [],
-    info: [],
-    primitives: [],
-    'panel-states': [],
-    assembled: [],
-  };
-  for (const entry of ORIGINAL_PANEL_ENTRIES) {
-    result[entry.group].push(entry);
-  }
-  return result;
-})();
