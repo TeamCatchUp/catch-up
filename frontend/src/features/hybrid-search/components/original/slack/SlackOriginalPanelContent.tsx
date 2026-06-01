@@ -47,7 +47,7 @@ export default function SlackOriginalPanelContent({
   const [parent, ...replies] = thread.messages;
 
   return (
-    <div className="border-edge-normal flex h-full min-h-0 w-105.75 max-w-full flex-col items-start justify-start gap-3 border-l py-4 pl-6">
+    <div className="flex h-full min-h-0 w-full flex-col items-start justify-start gap-3 py-4 pl-6">
       <SlackThreadHeader channelName={thread.channelName} participantNames={thread.participantNames} />
       <div
         ref={scrollRootRef}

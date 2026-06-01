@@ -1,3 +1,5 @@
+const SLACK_MESSAGE_TIME_ZONE = 'Asia/Seoul';
+
 export function slackTsToDate(ts: string | undefined): Date | null {
   if (!ts) return null;
 
@@ -14,6 +16,7 @@ export function formatSlackMessageTime(ts: string | undefined): string {
   return new Intl.DateTimeFormat('en-US', {
     hour: '2-digit',
     minute: '2-digit',
+    timeZone: SLACK_MESSAGE_TIME_ZONE,
   }).format(date);
 }
 
