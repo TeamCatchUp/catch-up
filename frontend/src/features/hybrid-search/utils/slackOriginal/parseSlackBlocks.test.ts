@@ -19,6 +19,8 @@ describe('parseSlackBlocks', () => {
             elements: [
               { type: 'user', user_id: 'U_REPLY' },
               { type: 'text', text: ' Inline code', style: { code: true } },
+              { type: 'emoji', unicode: '1f972', name: 'smiling_face_with_tear' },
+              { type: 'emoji', name: 'smile' },
             ],
           },
           {
@@ -48,6 +50,8 @@ describe('parseSlackBlocks', () => {
         tokens: [
           { type: 'mention', label: '@참여자 1' },
           { type: 'text', text: ' Inline code', style: { code: true } },
+          { type: 'emoji', label: '🥲' },
+          { type: 'emoji', label: '😄' },
         ],
       },
       {
@@ -82,5 +86,26 @@ describe('parseSlackBlocks', () => {
       type: 'paragraph',
       tokens: [{ type: 'link', href: 'https://example.com', text: '문서', style: undefined }],
     });
+  });
+
+  it('falls back to colon emoji names when rich text unicode is invalid', () => {
+    const blocks: SlackBlockRaw[] = [
+      {
+        type: 'rich_text',
+        elements: [
+          {
+            type: 'rich_text_section',
+            elements: [{ type: 'emoji', unicode: 'not-hex', name: 'custom_emoji' }],
+          },
+        ],
+      },
+    ];
+
+    expect(parseSlackBlocks(blocks, usersById)).toMatchObject([
+      {
+        type: 'paragraph',
+        tokens: [{ type: 'emoji', label: ':custom_emoji:' }],
+      },
+    ]);
   });
 });

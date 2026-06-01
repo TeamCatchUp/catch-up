@@ -13,6 +13,7 @@ import type { SlackBlockView, SlackRichTextToken } from '@/features/hybrid-searc
 import { isSafeUrl } from '@/shared/utils/isSafeUrl';
 
 import { parseSlackTextFallback, parseSlackTextTokens } from './parseSlackTextFallback';
+import { resolveSlackStandardEmoji } from './slackStandardEmoji';
 
 function isSection(element: SlackRichTextBlockElementRaw): element is SlackRichTextSectionRaw {
   return element.type === 'rich_text_section';
@@ -72,6 +73,20 @@ function styleValue(value: unknown): SlackTextStyleRaw | undefined {
   });
 }
 
+function emojiUnicodeToText(unicode: string | undefined): string | null {
+  if (!unicode) return null;
+
+  try {
+    const codePoints = unicode.split('-').map((part) => {
+      if (!/^[0-9a-fA-F]+$/.test(part)) throw new Error('Invalid Slack emoji unicode');
+      return Number.parseInt(part, 16);
+    });
+    return String.fromCodePoint(...codePoints);
+  } catch {
+    return null;
+  }
+}
+
 function elementToTokens(
   element: SlackRichTextElementRaw,
   usersById: Record<string, SlackUserMetadata>,
@@ -115,7 +130,9 @@ function elementToTokens(
         {
           type: 'emoji',
           label:
-            stringValue(element.unicode) || (stringValue(element.name) ? `:${stringValue(element.name)}:` : ':emoji:'),
+            emojiUnicodeToText(stringValue(element.unicode)) ||
+            resolveSlackStandardEmoji(stringValue(element.name)) ||
+            (stringValue(element.name) ? `:${stringValue(element.name)}:` : ':emoji:'),
         },
       ];
     case 'date':
