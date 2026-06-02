@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from collections.abc import Callable
 from datetime import datetime
 from datetime import timezone
@@ -27,6 +28,8 @@ from catchup.search.original.schemas.slack import SlackMessageOriginalRawItem
 from catchup.server.search.schemas import OriginalContentRequest
 from catchup.server.search.schemas import OriginalFileUrlRequest
 from catchup.server.search.schemas import OriginalFileUrlResponse
+
+SLACK_USER_MENTION_PATTERN = re.compile(r"<@([UW][A-Z0-9]+)(?:\|[^>]+)?>")
 
 
 class SlackOriginalError(RuntimeError):
@@ -310,6 +313,7 @@ def _collect_message_user_ids(payload: dict[str, Any]) -> list[str]:
         _add_string_value(user_ids, message.get("user"))
         _add_string_value(user_ids, message.get("parent_user_id"))
         _add_string_values(user_ids, message.get("reply_users"))
+        _add_mentioned_user_ids(user_ids, message)
         reactions = message.get("reactions")
         if isinstance(reactions, list):
             for reaction in reactions:
@@ -328,6 +332,26 @@ def _add_string_values(user_ids: set[str], values: Any) -> None:
         return
     for value in values:
         _add_string_value(user_ids, value)
+
+
+def _add_mentioned_user_ids(user_ids: set[str], value: Any) -> None:
+    if isinstance(value, str):
+        user_ids.update(SLACK_USER_MENTION_PATTERN.findall(value))
+        return
+
+    if isinstance(value, list):
+        for item in value:
+            _add_mentioned_user_ids(user_ids, item)
+        return
+
+    if not isinstance(value, dict):
+        return
+
+    if value.get("type") == "user":
+        _add_string_value(user_ids, value.get("user_id"))
+
+    for nested in value.values():
+        _add_mentioned_user_ids(user_ids, nested)
 
 
 def _map_user_metadata(user: SlackUser) -> dict[str, Any]:
