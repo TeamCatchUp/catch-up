@@ -197,7 +197,7 @@ async def test_execute_agent_run_enriches_channel_talk_user_chat_inputs(monkeypa
     }
     assert bound_contexts == [
         (
-            ["channel_talk.send_internal_user_chat_message"],
+            context.spec.tools,
             {
                 "global_context": context.global_context,
                 "trigger_event": context.event,
