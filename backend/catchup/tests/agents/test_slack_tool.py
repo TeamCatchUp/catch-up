@@ -99,6 +99,68 @@ def _bind_tool(monkeypatch) -> SlackTool:
 
 
 @pytest.mark.asyncio
+async def test_find_channel_talk_user_chat_message_matches_slack_share_slug_url(
+    monkeypatch,
+) -> None:
+    tool = _bind_tool(monkeypatch)
+    FakeSlackClient.history_responses = [
+        {
+            "messages": [
+                {
+                    "ts": "1780389003.000001",
+                    "bot_id": "B123",
+                    "attachments": [
+                        {
+                            "title_link": (
+                                "https://desk.channel.io/zxq46/user-chats/"
+                                "%EC%97%98%EB%A6%AC+708-6a1f0d0dae3106ffdb6a"
+                            ),
+                        }
+                    ],
+                },
+            ],
+            "has_more": False,
+        }
+    ]
+
+    result = await tool.find_channel_talk_user_chat_message(
+        channel_name="채널톡 연동 채널",
+        user_chat_id="6a1f0d0dae3106ffdb6a",
+    )
+
+    assert result.message_ts == "1780389003.000001"
+
+
+@pytest.mark.asyncio
+async def test_find_channel_talk_user_chat_message_matches_desk_canonical_url(
+    monkeypatch,
+) -> None:
+    tool = _bind_tool(monkeypatch)
+    FakeSlackClient.history_responses = [
+        {
+            "messages": [
+                {
+                    "ts": "1780389004.000001",
+                    "bot_id": "B123",
+                    "text": (
+                        "https://desk.channel.io/#/channels/229395/"
+                        "user_chats/6a1f0d0dae3106ffdb6a"
+                    ),
+                },
+            ],
+            "has_more": False,
+        }
+    ]
+
+    result = await tool.find_channel_talk_user_chat_message(
+        channel_name="채널톡 연동 채널",
+        user_chat_id="6a1f0d0dae3106ffdb6a",
+    )
+
+    assert result.message_ts == "1780389004.000001"
+
+
+@pytest.mark.asyncio
 async def test_find_channel_talk_user_chat_message_returns_newest_bot_message(
     monkeypatch,
 ) -> None:

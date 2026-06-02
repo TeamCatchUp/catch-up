@@ -24,7 +24,7 @@ from catchup.db.engine import SessionLocal
 from catchup.db.slack.oauth_repository import get_slack_token_by_id
 
 _USER_CHAT_URL_RE = re.compile(
-    r"https?://[^\s<|>]+/user-chats/(?P<user_chat_id>[^\s<|>/?#]+)"
+    r"https?://[^\s<|>]+/(?:user-chats|user_chats)/(?P<user_chat_id>[^\s<|>/?#]+)"
 )
 _SEARCH_WINDOW = timedelta(minutes=30)
 
@@ -121,7 +121,10 @@ def _message_contains_user_chat_id(message: dict[str, Any], user_chat_id: str) -
         for match in _USER_CHAT_URL_RE.finditer(text):
             segment = match.group("user_chat_id")
             candidates = {segment, unquote(segment), unquote_plus(segment)}
-            if user_chat_id in candidates:
+            if any(
+                candidate == user_chat_id or candidate.endswith(f"-{user_chat_id}")
+                for candidate in candidates
+            ):
                 return True
     return False
 
