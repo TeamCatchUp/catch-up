@@ -162,6 +162,7 @@ async def test_execute_agent_run_enriches_channel_talk_user_chat_inputs(monkeypa
             tools=[
                 SimpleNamespace(name="channel_talk.send_internal_user_chat_message"),
             ],
+            references={},
         ),
         user_input_values={"existing": "value"},
         event=AgentWebhookEvent(
@@ -199,6 +200,7 @@ async def test_execute_agent_run_enriches_channel_talk_user_chat_inputs(monkeypa
         (
             context.spec.tools,
             {
+                "references": {},
                 "global_context": context.global_context,
                 "trigger_event": context.event,
             },
