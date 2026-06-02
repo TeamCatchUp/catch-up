@@ -44,7 +44,7 @@ from catchup.connectors.channel_talk.core.user_chat_full_sync_models import (
 from catchup.connectors.channel_talk.core.user_chat_transformer import (
     UserChatTransformer,
 )
-from catchup.connectors.channel_talk.full_sync_helper import (
+from catchup.connectors.channel_talk.credential_loader import (
     load_channel_talk_connection,
 )
 from catchup.connectors.channel_talk.schemas.user_chat import ChannelTalkUserChatState

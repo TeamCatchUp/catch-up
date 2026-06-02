@@ -17,9 +17,15 @@ from catchup.agents.triggers.channel_talk_context import (
 )
 from catchup.agents.triggers.events import AgentWebhookEvent
 from catchup.connectors.channel_talk.core.client import ChannelTalkCoreApiClient
-from catchup.connectors.channel_talk.credential_loader import load_channel_talk_connection_by_id
-from catchup.connectors.channel_talk.full_sync_helper import load_channel_talk_connection
-from catchup.connectors.channel_talk.schemas.channel_connection import ChannelTalkCredentialsRecord
+from catchup.connectors.channel_talk.credential_loader import (
+    load_channel_talk_connection,
+)
+from catchup.connectors.channel_talk.credential_loader import (
+    load_channel_talk_connection_by_id,
+)
+from catchup.connectors.channel_talk.schemas.channel_connection import (
+    ChannelTalkCredentialsRecord,
+)
 
 _event_var: ContextVar[AgentWebhookEvent | None] = ContextVar(
     "channel_talk_tool_event",

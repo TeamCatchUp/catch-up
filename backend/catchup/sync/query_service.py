@@ -14,14 +14,14 @@ from sqlalchemy import select
 from catchup.connectors.atlassian.oauth_client import AtlassianOAuthClient
 from catchup.connectors.atlassian.token_manager import AtlassianTokenManager
 from catchup.connectors.atlassian.token_manager import AtlassianTokenProvider
-from catchup.connectors.channel_talk.full_sync_helper import (
-    is_verified_channel_talk_document_connection,
-)
-from catchup.connectors.channel_talk.full_sync_helper import (
+from catchup.connectors.channel_talk.credential_loader import (
     list_channel_talk_document_connections,
 )
-from catchup.connectors.channel_talk.full_sync_helper import (
+from catchup.connectors.channel_talk.credential_loader import (
     load_channel_talk_connection,
+)
+from catchup.connectors.channel_talk.full_sync_helper import (
+    is_verified_channel_talk_document_connection,
 )
 from catchup.connectors.channel_talk.full_sync_helper import (
     require_channel_talk_channel_id,

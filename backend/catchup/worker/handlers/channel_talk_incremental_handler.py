@@ -19,17 +19,17 @@ from catchup.connector_core.ports.sync_ingestion import SyncWindow
 from catchup.connectors.channel_talk.core.user_chat_full_sync_models import (
     ChannelTalkUserChatIncrementalExecutionRequest,
 )
+from catchup.connectors.channel_talk.credential_loader import (
+    load_channel_talk_connection,
+)
+from catchup.connectors.channel_talk.credential_loader import (
+    load_channel_talk_document_connection,
+)
 from catchup.connectors.channel_talk.document_space.article_full_sync_models import (
     ChannelTalkArticleIncrementalExecutionRequest,
 )
 from catchup.connectors.channel_talk.full_sync_helper import (
     is_verified_channel_talk_document_connection,
-)
-from catchup.connectors.channel_talk.full_sync_helper import (
-    load_channel_talk_connection,
-)
-from catchup.connectors.channel_talk.full_sync_helper import (
-    load_channel_talk_document_connection,
 )
 from catchup.connectors.channel_talk.full_sync_helper import (
     require_channel_talk_channel_id,
