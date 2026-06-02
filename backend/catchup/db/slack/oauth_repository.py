@@ -1,6 +1,7 @@
 from datetime import datetime
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from catchup.db.models import SlackOAuthToken
@@ -12,6 +13,14 @@ def get_slack_token_by_team_id(
     """Team ID로 Token 조회"""
     stmt = select(SlackOAuthToken).where(SlackOAuthToken.team_id == team_id)
     return db.execute(stmt).scalar_one_or_none()
+
+
+def get_slack_token_by_id(
+    db: Session,
+    credential_id: int,
+) -> SlackOAuthToken | None:
+    """Credential row ID로 Token 조회"""
+    return db.get(SlackOAuthToken, credential_id)
 
 
 def get_all_slack_tokens(db: Session) -> list[SlackOAuthToken]:

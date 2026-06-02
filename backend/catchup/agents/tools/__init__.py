@@ -1,4 +1,5 @@
 from catchup.agents.tools.external.channel_talk import ChannelTalkTool
+from catchup.agents.tools.external.slack import SlackTool
 from catchup.agents.tools.internal.search import CatchUpKnowledgeBaseTool
 from catchup.agents.tools.registry import ToolRegistry
 
@@ -11,3 +12,4 @@ def init_agent_tool_registry() -> None:
     """
     ToolRegistry.register(CatchUpKnowledgeBaseTool())
     ToolRegistry.register(ChannelTalkTool())
+    ToolRegistry.register(SlackTool())
