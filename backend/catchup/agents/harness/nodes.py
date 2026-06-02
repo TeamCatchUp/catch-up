@@ -2,6 +2,7 @@ import asyncio
 
 import structlog
 from langchain_core.language_models import BaseChatModel
+from langchain_core.messages import SystemMessage
 from langchain_core.messages import ToolMessage
 from langchain_core.tools import StructuredTool
 from langgraph.graph import END
@@ -38,6 +39,8 @@ async def _execute_with_policy(
             result = await tool.ainvoke(args)
             # TODO: output_model 직렬화 활성화 시 대체 필요
             content = result if isinstance(result, str) else str(result)
+            if spec.max_output_chars and len(content) > spec.max_output_chars:
+                content = content[: spec.max_output_chars] + "...(truncated)"
             return content, False
         except _RETRYABLE as e:
             last_error = e
@@ -60,13 +63,38 @@ async def _execute_with_policy(
             return f"Tool execution failed: {last_error}", False
 
 
+_TRIM_MAX_MESSAGES = 6
+
+
+def _trim_execution_messages(
+    messages: list,
+    max_messages: int = _TRIM_MAX_MESSAGES,
+) -> list:
+    """SystemMessage + HumanMessage는 항상 보존하고, 나머지 최근 N개만 유지한다."""
+    pinned: list = []
+    rest: list = []
+    for m in messages:
+        if isinstance(m, SystemMessage):
+            pinned.append(m)
+        else:
+            rest.append(m)
+
+    trimmed = rest[-max_messages:]
+
+    while trimmed and isinstance(trimmed[0], ToolMessage):
+        trimmed.pop(0)
+
+    return pinned + trimmed
+
+
 async def agent_node(
     state: ExecutionState,
     *,
     llm_with_tools: BaseChatModel,
 ) -> dict:
     """LLM이 다음 tool_call 또는 최종 응답을 결정한다."""
-    response = await llm_with_tools.ainvoke(state["messages"])
+    messages = _trim_execution_messages(state["messages"])
+    response = await llm_with_tools.ainvoke(messages)
     return {"messages": [response]}
 
 
