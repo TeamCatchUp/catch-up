@@ -125,7 +125,6 @@ class BaseTool:
                     "type": spec.type,
                     "default_failure_policy": spec.default_failure_policy,
                     "default_max_retry": spec.default_max_retry,
-
                 }
                 for name, spec in self._action_specs().items()
             },

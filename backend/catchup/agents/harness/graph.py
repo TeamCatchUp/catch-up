@@ -1,6 +1,7 @@
 from functools import partial
 
 from langchain_core.language_models import BaseChatModel
+from langchain_core.messages import AIMessage
 from langchain_core.messages import HumanMessage
 from langchain_core.messages import SystemMessage
 from langchain_core.tools import StructuredTool
@@ -94,4 +95,24 @@ async def run_execution_agent(
     }
 
     final_state = await graph.ainvoke(initial_state, invoke_config)
-    return final_state["messages"][-1].content
+    return _extract_final_answer(final_state)
+
+
+def _extract_final_answer(final_state: dict) -> str:
+    """messages에서 마지막 AIMessage 텍스트를 추출한다.
+
+    tool_call만 있는 AIMessage와 ToolMessage는 건너뛴다.
+    유효한 답변이 없으면 stop_reason 또는 fallback 문자열을 반환한다.
+    """
+    for message in reversed(final_state["messages"]):
+        if (
+            isinstance(message, AIMessage)
+            and not message.tool_calls
+            and message.content
+        ):
+            return message.content
+
+    stop_reason = final_state.get("stop_reason")
+    if stop_reason:
+        return f"[Agent stopped] {stop_reason}"
+    return "[Agent completed without a final answer]"
