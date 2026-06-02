@@ -1,8 +1,10 @@
 import json
 
 from pydantic import BaseModel
+from pydantic import Field
 
 from catchup.agents.schemas import AgentSpec
+from catchup.agents.schemas import ToolReferenceSpec
 from catchup.agents.tools.registry import ToolRegistry
 from catchup.agents.triggers.events import AgentWebhookEvent
 from catchup.prompts.loader import prompt_loader
@@ -11,6 +13,8 @@ from catchup.prompts.loader import prompt_loader
 class _FieldInfo(BaseModel):
     type: str
     description: str
+    reference_kind: str | None = None
+    allowed_values: list[str] = Field(default_factory=list)
 
 
 class _ToolContext(BaseModel):
@@ -23,9 +27,13 @@ class _ToolContext(BaseModel):
     model_config = {"arbitrary_types_allowed": True}
 
 
-def _build_tool_context(qualified_name: str) -> _ToolContext:
+def _build_tool_context(
+    qualified_name: str,
+    references: list[ToolReferenceSpec],
+) -> _ToolContext:
     """ToolRegistry에서 ActionSpec을 읽어 템플릿용 컨텍스트로 변환한다."""
     action_spec = ToolRegistry.get_action_spec(qualified_name)
+    references_by_argument = {reference.argument: reference for reference in references}
 
     def extract_fields(model: type[BaseModel]) -> dict[str, _FieldInfo]:
         fields = {}
@@ -33,7 +41,13 @@ def _build_tool_context(qualified_name: str) -> _ToolContext:
             annotation = field_info.annotation
             type_str = getattr(annotation, "__name__", str(annotation))
             description = field_info.description or ""
-            fields[field_name] = _FieldInfo(type=type_str, description=description)
+            reference = references_by_argument.get(field_name)
+            fields[field_name] = _FieldInfo(
+                type=type_str,
+                description=description,
+                reference_kind=reference.kind if reference else None,
+                allowed_values=list(reference.values.keys()) if reference else [],
+            )
         return fields
 
     return _ToolContext(
@@ -59,7 +73,10 @@ def render_system_prompt(
       harness_rules                          — 고정 텍스트
     """
     tools = [
-        _build_tool_context(tool_spec.name)
+        _build_tool_context(
+            tool_spec.name,
+            spec.references.get(tool_spec.name, []),
+        )
         for tool_spec in spec.tools
     ]
     event = trigger_event.model_dump(mode="json")
