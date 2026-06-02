@@ -183,6 +183,7 @@ class CatchUpKnowledgeBaseTool(BaseTool):
     def bind_execution_context(
         self,
         *,
+        tool_specs,
         global_context: GlobalContext,
         trigger_event,
     ) -> None:

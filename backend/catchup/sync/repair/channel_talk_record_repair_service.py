@@ -36,6 +36,12 @@ from catchup.connectors.channel_talk.core.user_chat_full_sync_models import (
 from catchup.connectors.channel_talk.core.user_chat_full_sync_models import (
     ChannelTalkUserChatSyncExecutionRequest,
 )
+from catchup.connectors.channel_talk.credential_loader import (
+    load_channel_talk_connection,
+)
+from catchup.connectors.channel_talk.credential_loader import (
+    load_channel_talk_document_connection,
+)
 from catchup.connectors.channel_talk.document_space.article_full_sync_fetcher import (
     ChannelTalkArticleFullSyncFetcher,
 )
@@ -47,12 +53,6 @@ from catchup.connectors.channel_talk.document_space.article_full_sync_models imp
 )
 from catchup.connectors.channel_talk.full_sync_helper import (
     is_verified_channel_talk_document_connection,
-)
-from catchup.connectors.channel_talk.full_sync_helper import (
-    load_channel_talk_connection,
-)
-from catchup.connectors.channel_talk.full_sync_helper import (
-    load_channel_talk_document_connection,
 )
 from catchup.connectors.channel_talk.schemas.channel_connection import (
     ChannelTalkCredentialsRecord,

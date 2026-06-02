@@ -64,6 +64,16 @@ class ChannelTalkCredentialsRepository:
         )
         return _to_connection_record(row)
 
+    def get_connection_by_id(
+        self,
+        credential_id: int,
+    ) -> ChannelTalkCredentialsRecord | None:
+        row = _get_channel_talk_credentials_by_id(
+            db=self.db,
+            credential_id=credential_id,
+        )
+        return _to_connection_record(row)
+
     def list_connections(self) -> list[ChannelTalkCredentialsRecord]:
         rows = _list_channel_talk_credentials(db=self.db)
         return [
@@ -481,6 +491,13 @@ def _get_channel_talk_credentials(
     )
 
 
+def _get_channel_talk_credentials_by_id(
+    db: Session,
+    credential_id: int,
+) -> db_models.ChannelTalkCredentials | None:
+    return db.get(db_models.ChannelTalkCredentials, credential_id)
+
+
 def _list_channel_talk_credentials(
     db: Session,
 ) -> list[db_models.ChannelTalkCredentials]:
@@ -686,6 +703,7 @@ def _to_connection_record(
         return None
 
     return ChannelTalkCredentialsRecord(
+        id=row.id,
         channel_id=_require_text(row.channel_id, "channel_id"),
         channel_name=_require_text(row.channel_name, "channel_name"),
         access_key=_require_text(row.access_key, "access_key"),

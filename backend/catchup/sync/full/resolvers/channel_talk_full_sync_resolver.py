@@ -6,14 +6,14 @@ from collections.abc import Awaitable
 import structlog
 from fastapi.concurrency import run_in_threadpool
 
-from catchup.connectors.channel_talk.full_sync_helper import (
-    is_verified_channel_talk_document_connection,
-)
-from catchup.connectors.channel_talk.full_sync_helper import (
+from catchup.connectors.channel_talk.credential_loader import (
     list_channel_talk_document_connections,
 )
-from catchup.connectors.channel_talk.full_sync_helper import (
+from catchup.connectors.channel_talk.credential_loader import (
     load_channel_talk_connection,
+)
+from catchup.connectors.channel_talk.full_sync_helper import (
+    is_verified_channel_talk_document_connection,
 )
 from catchup.connectors.channel_talk.full_sync_helper import (
     require_channel_talk_channel_id,

@@ -1,23 +1,9 @@
-from typing import Literal
+from typing import Any
 
 from pydantic import BaseModel
 from pydantic import Field
 
 from catchup.agents.enums import FailurePolicy
-
-
-# === Trigger ===
-class WebhookConfig(BaseModel):
-    source: str = Field(description="이벤트 소스. jira, channeltalk, slack 등")
-    filter: dict[str, str] = Field(
-        default=dict,
-        description="KV 매칭 필터. 런타임에서 all(payload[k]==v) 평가"
-    )
-
-
-class TriggerSpec(BaseModel):
-    type: Literal["webhook"] = Field(description="트리거 유형")
-    config: WebhookConfig
 
 
 # === System Prompt ===
@@ -30,6 +16,14 @@ class SystemPromptSpec(BaseModel):
 
 
 # === Tool ===
+class ToolReferenceSpec(BaseModel):
+    argument: str = Field(description="Tool input field name this reference constrains")
+    kind: str = Field(description="Reference kind. Examples: slack_channel")
+    values: dict[str, dict[str, Any]] = Field(
+        description="Allowed human-readable input values mapped to non-secret resolved config"
+    )
+
+
 class ToolSpec(BaseModel):
     name: str = Field(description="'{tool}.{action}' 형식. ToolRegistry 참조")
     failure_policy: FailurePolicy = Field(description="실패 시 처리 정책")
@@ -43,19 +37,14 @@ class ToolSpec(BaseModel):
     )
 
 
-# === User Input ===
-class RequiredUserInput(BaseModel):
-    key: str = Field(description="user_input_values 컬럼(JSONB)에 저장되는 키")
-    label: str = Field(description="사용자에게 보여주는 레이블")
-    type: Literal["string", "integer", "boolean"]
-
-
 # === Execution Agent 구동을 위해 필요한 최종 스펙 === 
 class AgentSpec(BaseModel):
     agent_id: str = Field(description="논리적 에이전트 식별자. 버전 간 공유")
     name: str
-    trigger: TriggerSpec
     system_prompt: SystemPromptSpec
     tools: list[ToolSpec] = Field(description="사용 가능한 도구 목록")
+    references: dict[str, list[ToolReferenceSpec]] = Field(
+        default_factory=dict,
+        description="Tool input argument별 허용 reference key와 resolved non-secret config"
+    )
     execution_order: list[str] = Field(description="Harness 검증용 실행 순서")
-    required_user_inputs: list[RequiredUserInput]  # TODO: tool binding 메커니즘 도입

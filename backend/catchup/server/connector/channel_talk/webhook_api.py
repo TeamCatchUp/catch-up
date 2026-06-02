@@ -14,7 +14,7 @@ from pydantic import Field
 from catchup.agents.triggers.resolver import AgentTriggerIngressResult
 from catchup.agents.triggers.resolver import handle_verified_webhook_event
 from catchup.connector_core.domain.webhooks import VerifiedConnectorWebhookEvent
-from catchup.connectors.channel_talk.full_sync_helper import (
+from catchup.connectors.channel_talk.credential_loader import (
     load_channel_talk_connection,
 )
 from catchup.connectors.channel_talk.schemas.channel_connection import (

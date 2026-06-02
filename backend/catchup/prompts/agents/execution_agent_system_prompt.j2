@@ -12,7 +12,16 @@
   <description><< tool.description >></description>
   <input>
 {% for field_name, field_info in tool.input_fields.items() %}
-    <field name="<< field_name >>" type="<< field_info.type >>"><< field_info.description >></field>
+    <field name="<< field_name >>" type="<< field_info.type >>">
+      <description><< field_info.description >></description>
+{% if field_info.allowed_values %}
+      <allowed_values kind="<< field_info.reference_kind >>">
+{% for value in field_info.allowed_values %}
+        <value><< value >></value>
+{% endfor %}
+      </allowed_values>
+{% endif %}
+    </field>
 {% endfor %}
   </input>
   <output>
