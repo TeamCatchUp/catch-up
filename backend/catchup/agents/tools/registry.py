@@ -1,8 +1,10 @@
 from langchain_core.tools import StructuredTool
 
+from catchup.agents.schemas import ToolReferenceSpec
 from catchup.agents.schemas import ToolSpec
 from catchup.agents.tools.base import ActionSpec
 from catchup.agents.tools.base import BaseTool
+from catchup.agents.tools.references import bind_tool_references
 
 
 class ToolRegistry:
@@ -39,10 +41,13 @@ class ToolRegistry:
         cls,
         tools: list[ToolSpec],
         *,
+        references: dict[str, list[ToolReferenceSpec]] | None = None,
         global_context,
         trigger_event,
     ) -> None:
         """spec.tools[*].name에 포함된 tool에만 실행 컨텍스트를 바인딩한다."""
+        bind_tool_references(references)
+
         tool_specs_by_name: dict[str, list[ToolSpec]] = {}
         for tool_spec in tools:
             qualified_name = tool_spec if isinstance(tool_spec, str) else tool_spec.name

@@ -271,6 +271,7 @@ async def _execute_agent_run(
     """DB 트랜잭션 밖에서 실제 agent를 실행해 lock 보유 시간을 만들지 않는다."""
     ToolRegistry.bind_execution_context(
         context.spec.tools,
+        references=context.spec.references,
         global_context=context.global_context,
         trigger_event=context.event,
     )
