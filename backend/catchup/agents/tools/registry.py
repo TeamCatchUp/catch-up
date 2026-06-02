@@ -4,6 +4,7 @@ from catchup.agents.schemas import ToolReferenceSpec
 from catchup.agents.schemas import ToolSpec
 from catchup.agents.tools.base import ActionSpec
 from catchup.agents.tools.base import BaseTool
+from catchup.agents.tools.context import bind_trigger_context
 from catchup.agents.tools.references import bind_tool_references
 
 
@@ -46,6 +47,7 @@ class ToolRegistry:
         trigger_event,
     ) -> None:
         """spec.tools[*].name에 포함된 tool에만 실행 컨텍스트를 바인딩한다."""
+        bind_trigger_context(trigger_event)
         bind_tool_references(references)
 
         tool_specs_by_name: dict[str, list[ToolSpec]] = {}
