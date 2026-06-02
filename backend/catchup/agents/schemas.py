@@ -1,24 +1,9 @@
 from typing import Any
-from typing import Literal
 
 from pydantic import BaseModel
 from pydantic import Field
 
 from catchup.agents.enums import FailurePolicy
-
-
-# === Trigger ===
-class WebhookConfig(BaseModel):
-    source: str = Field(description="이벤트 소스. jira, channeltalk, slack 등")
-    filter: dict[str, str] = Field(
-        default=dict,
-        description="KV 매칭 필터. 런타임에서 all(payload[k]==v) 평가"
-    )
-
-
-class TriggerSpec(BaseModel):
-    type: Literal["webhook"] = Field(description="트리거 유형")
-    config: WebhookConfig
 
 
 # === System Prompt ===
@@ -48,18 +33,10 @@ class ToolSpec(BaseModel):
     )
 
 
-# === User Input ===
-class RequiredUserInput(BaseModel):
-    key: str = Field(description="user_input_values 컬럼(JSONB)에 저장되는 키")
-    label: str = Field(description="사용자에게 보여주는 레이블")
-    type: Literal["string", "integer", "boolean"]
-
-
 # === Execution Agent 구동을 위해 필요한 최종 스펙 === 
 class AgentSpec(BaseModel):
     agent_id: str = Field(description="논리적 에이전트 식별자. 버전 간 공유")
     name: str
-    trigger: TriggerSpec
     system_prompt: SystemPromptSpec
     tools: list[ToolSpec] = Field(description="사용 가능한 도구 목록")
     references: dict[str, list[ToolReferenceSpec]] = Field(
@@ -67,4 +44,3 @@ class AgentSpec(BaseModel):
         description="Tool input argument별 허용 reference key와 resolved non-secret config"
     )
     execution_order: list[str] = Field(description="Harness 검증용 실행 순서")
-    required_user_inputs: list[RequiredUserInput]  # TODO: tool binding 메커니즘 도입
