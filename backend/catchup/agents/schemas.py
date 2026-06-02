@@ -30,12 +30,21 @@ class SystemPromptSpec(BaseModel):
 
 
 # === Tool ===
+class ToolCredentialRef(BaseModel):
+    vendor: str = Field(description="Credential vendor. Examples: slack, channel_talk")
+    credential_id: int = Field(description="PK of the selected credential row")
+
+
 class ToolSpec(BaseModel):
     name: str = Field(description="'{tool}.{action}' 형식. ToolRegistry 참조")
     failure_policy: FailurePolicy = Field(description="실패 시 처리 정책")
     max_retry: int | None = Field(
         default=None,
         description="최대 재시도 횟수"
+    )
+    credential_ref: ToolCredentialRef | None = Field(
+        default=None,
+        description="Tool 실행에 필요한 저장된 credential 참조. Secret 값은 포함하지 않음"
     )
 
 
