@@ -37,6 +37,10 @@ class ToolSpec(BaseModel):
         default=None,
         description="최대 재시도 횟수"
     )
+    max_output_chars: int | None = Field(
+        default=None,
+        description="tool 결과 최대 길이(chars). None이면 truncation 없음.",
+    )
 
 
 # === User Input ===

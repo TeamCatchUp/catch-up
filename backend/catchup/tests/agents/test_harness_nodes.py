@@ -5,11 +5,15 @@ from unittest.mock import patch
 
 import pytest
 from langchain_core.messages import AIMessage
+from langchain_core.messages import HumanMessage
+from langchain_core.messages import SystemMessage
+from langchain_core.messages import ToolMessage
 from langchain_core.tools import StructuredTool
 from langgraph.graph import END
 
 from catchup.agents.enums import FailurePolicy
 from catchup.agents.harness.nodes import _execute_with_policy
+from catchup.agents.harness.nodes import _trim_execution_messages
 from catchup.agents.harness.nodes import tool_executor_node
 from catchup.agents.harness.nodes import tool_gate
 from catchup.agents.schemas import ToolSpec
@@ -25,11 +29,13 @@ def _make_spec(
     name: str = "catchup_kb.search",
     failure_policy: FailurePolicy = FailurePolicy.SKIP,
     max_retry: int | None = None,
+    max_output_chars: int | None = None,
 ) -> ToolSpec:
     return ToolSpec(
         name=name,
         failure_policy=failure_policy,
         max_retry=max_retry,
+        max_output_chars=max_output_chars,
     )
 
 
@@ -209,3 +215,91 @@ def test_tool_gate_routes_to_block_when_not_allowed():
         stop_reason=None,
     )
     assert tool_gate(state) == "block_node"
+
+
+# === _execute_with_policy — truncation ===
+
+
+@pytest.mark.asyncio
+async def test_execute_with_policy_truncates_when_over_limit():
+    tool = _make_tool(return_value="a" * 200)
+    spec = _make_spec(max_output_chars=100)
+    content, should_stop = await _execute_with_policy(tool, {}, spec)
+    assert len(content) == 100 + len("...(truncated)")
+    assert content.endswith("...(truncated)")
+    assert should_stop is False
+
+
+@pytest.mark.asyncio
+async def test_execute_with_policy_no_truncation_when_under_limit():
+    tool = _make_tool(return_value="a" * 50)
+    spec = _make_spec(max_output_chars=100)
+    content, should_stop = await _execute_with_policy(tool, {}, spec)
+    assert content == "a" * 50
+    assert should_stop is False
+
+
+@pytest.mark.asyncio
+async def test_execute_with_policy_no_truncation_when_max_output_chars_none():
+    long_output = "a" * 10000
+    tool = _make_tool(return_value=long_output)
+    spec = _make_spec(max_output_chars=None)
+    content, should_stop = await _execute_with_policy(tool, {}, spec)
+    assert content == long_output
+    assert should_stop is False
+
+
+# === _trim_execution_messages ===
+
+
+def _msgs(*types: str) -> list:
+    """타입 약어로 메시지 리스트를 생성한다. S=System, H=Human, A=AI, T=Tool"""
+    mapping = {
+        "S": SystemMessage(content="system"),
+        "H": HumanMessage(content="human"),
+        "A": AIMessage(content="", tool_calls=[{"id": "x", "name": "t", "args": {}}]),
+        "F": AIMessage(content="final answer"),
+        "T": ToolMessage(content="result", tool_call_id="x"),
+    }
+    return [mapping[t] for t in types]
+
+
+def test_trim_always_preserves_system_message():
+    messages = _msgs("S", "H", "A", "T", "A", "T", "A", "T", "A", "T")
+    trimmed = _trim_execution_messages(messages, max_messages=2)
+    assert isinstance(trimmed[0], SystemMessage)
+
+
+def test_trim_keeps_last_n_from_rest():
+    # rest = H A T A T A T (7개), max_messages=4 → last 4 = [A, T, A, T]
+    messages = _msgs("S", "H", "A", "T", "A", "T", "A", "T")
+    trimmed = _trim_execution_messages(messages, max_messages=4)
+    rest = [m for m in trimmed if not isinstance(m, SystemMessage)]
+    assert len(rest) == 4
+
+
+def test_trim_drops_leading_tool_message():
+    # rest = H A T A T A T (7개), max_messages=3 → last 3 = [T, A, T] → T 제거
+    messages = _msgs("S", "H", "A", "T", "A", "T", "A", "T")
+    trimmed = _trim_execution_messages(messages, max_messages=3)
+    rest = [m for m in trimmed if not isinstance(m, SystemMessage)]
+    assert not isinstance(rest[0], ToolMessage)
+
+
+def test_trim_no_op_when_under_limit():
+    messages = _msgs("S", "H", "A", "T", "F")
+    trimmed = _trim_execution_messages(messages, max_messages=10)
+    assert len(trimmed) == len(messages)
+
+
+def test_trim_preserves_relative_order_with_multiple_human_messages():
+    # HITL 시나리오: H가 중간에 삽입되어도 상대 순서 유지
+    # S H A T H A T → rest = [H, A, T, H, A, T], max_messages=6 → 전부 유지
+    messages = _msgs("S", "H", "A", "T", "H", "A", "T")
+    trimmed = _trim_execution_messages(messages, max_messages=6)
+    non_system = [m for m in trimmed if not isinstance(m, SystemMessage)]
+    types = [type(m).__name__ for m in non_system]
+    assert types == [
+        "HumanMessage", "AIMessage", "ToolMessage",
+        "HumanMessage", "AIMessage", "ToolMessage",
+    ]
