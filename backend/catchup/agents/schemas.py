@@ -1,3 +1,4 @@
+from typing import Any
 from typing import Literal
 
 from pydantic import BaseModel
@@ -30,9 +31,12 @@ class SystemPromptSpec(BaseModel):
 
 
 # === Tool ===
-class ToolCredentialRef(BaseModel):
-    vendor: str = Field(description="Credential vendor. Examples: slack, channel_talk")
-    credential_id: int = Field(description="PK of the selected credential row")
+class ToolReferenceSpec(BaseModel):
+    argument: str = Field(description="Tool input field name this reference constrains")
+    kind: str = Field(description="Reference kind. Examples: slack_channel")
+    values: dict[str, dict[str, Any]] = Field(
+        description="Allowed human-readable input values mapped to non-secret resolved config"
+    )
 
 
 class ToolSpec(BaseModel):
@@ -41,10 +45,6 @@ class ToolSpec(BaseModel):
     max_retry: int | None = Field(
         default=None,
         description="최대 재시도 횟수"
-    )
-    credential_ref: ToolCredentialRef | None = Field(
-        default=None,
-        description="Tool 실행에 필요한 저장된 credential 참조. Secret 값은 포함하지 않음"
     )
 
 
@@ -62,5 +62,9 @@ class AgentSpec(BaseModel):
     trigger: TriggerSpec
     system_prompt: SystemPromptSpec
     tools: list[ToolSpec] = Field(description="사용 가능한 도구 목록")
+    references: dict[str, list[ToolReferenceSpec]] = Field(
+        default_factory=dict,
+        description="Tool input argument별 허용 reference key와 resolved non-secret config"
+    )
     execution_order: list[str] = Field(description="Harness 검증용 실행 순서")
     required_user_inputs: list[RequiredUserInput]  # TODO: tool binding 메커니즘 도입
