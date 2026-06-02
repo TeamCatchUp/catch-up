@@ -1,5 +1,6 @@
 from langchain_core.tools import StructuredTool
 
+from catchup.agents.schemas import ToolSpec
 from catchup.agents.tools.base import ActionSpec
 from catchup.agents.tools.base import BaseTool
 
@@ -36,23 +37,25 @@ class ToolRegistry:
     @classmethod
     def bind_execution_context(
         cls,
-        names: list[str],
+        tools: list[ToolSpec],
         *,
         global_context,
         trigger_event,
     ) -> None:
         """spec.tools[*].name에 포함된 tool에만 실행 컨텍스트를 바인딩한다."""
-        bound_tool_names: set[str] = set()
-        for qualified_name in names:
+        tool_specs_by_name: dict[str, list[ToolSpec]] = {}
+        for tool_spec in tools:
+            qualified_name = tool_spec if isinstance(tool_spec, str) else tool_spec.name
             tool_name = qualified_name.split(".", 1)[0]
-            if tool_name in bound_tool_names:
-                continue
+            tool_specs_by_name.setdefault(tool_name, []).append(tool_spec)
+
+        for tool_name, tool_specs in tool_specs_by_name.items():
             tool = cls._get_tool(tool_name)
             tool.bind_execution_context(
+                tool_specs=tool_specs,
                 global_context=global_context,
                 trigger_event=trigger_event,
             )
-            bound_tool_names.add(tool_name)
 
     @classmethod
     def get_action_spec(cls, qualified_name: str) -> ActionSpec:

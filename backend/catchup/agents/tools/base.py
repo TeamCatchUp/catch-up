@@ -17,6 +17,7 @@ from pydantic import BaseModel
 
 from catchup.agents.enums import ActionType
 from catchup.agents.enums import FailurePolicy
+from catchup.agents.schemas import ToolSpec
 
 
 class ActionSpec(BaseModel):
@@ -88,6 +89,7 @@ class BaseTool:
     def bind_execution_context(
         self,
         *,
+        tool_specs: list[ToolSpec],
         global_context: Any,
         trigger_event: Any,
     ) -> None:
