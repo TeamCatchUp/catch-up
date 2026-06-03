@@ -218,11 +218,12 @@ async def test_find_channel_talk_user_chat_message_returns_newest_bot_message(
 @pytest.mark.asyncio
 async def test_send_thread_message_uses_message_ts_as_thread_ts(monkeypatch) -> None:
     tool = _bind_tool(monkeypatch)
+    message = "## Agent reply\n\n- 첫 번째\n- 두 번째\n\n```python\nprint('ok')\n```"
 
     result = await tool.send_thread_message(
         channel_name="채널톡 연동 채널",
         message_ts="1780389003.000001",
-        message="Agent reply",
+        message=message,
     )
 
     assert result.channel_name == "채널톡 연동 채널"
@@ -230,8 +231,37 @@ async def test_send_thread_message_uses_message_ts_as_thread_ts(monkeypatch) -> 
     assert FakeSlackClient.post_calls == [
         {
             "channel": "C123",
-            "text": "Agent reply",
+            "text": message,
             "thread_ts": "1780389003.000001",
+            "blocks": [
+                {
+                    "type": "markdown",
+                    "text": message,
+                }
+            ],
+        }
+    ]
+
+
+@pytest.mark.asyncio
+async def test_send_thread_message_falls_back_to_plain_text_over_slack_markdown_limit(
+    monkeypatch,
+) -> None:
+    tool = _bind_tool(monkeypatch)
+    message = "x" * 12001
+
+    await tool.send_thread_message(
+        channel_name="채널톡 연동 채널",
+        message_ts="1780389003.000001",
+        message=message,
+    )
+
+    assert FakeSlackClient.post_calls == [
+        {
+            "channel": "C123",
+            "text": message,
+            "thread_ts": "1780389003.000001",
+            "blocks": None,
         }
     ]
 
