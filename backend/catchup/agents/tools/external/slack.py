@@ -27,6 +27,7 @@ _USER_CHAT_URL_RE = re.compile(
     r"https?://[^\s<|>]+/(?:user-chats|user_chats)/(?P<user_chat_id>[^\s<|>/?#]+)"
 )
 _SEARCH_WINDOW = timedelta(minutes=30)
+_SLACK_MARKDOWN_BLOCK_TEXT_LIMIT = 12_000
 
 
 @dataclass(slots=True, frozen=True)
@@ -63,7 +64,7 @@ class SendThreadMessageInput(BaseModel):
     )
     message: str = Field(
         min_length=1,
-        description="Thread reply text to send.",
+        description="Thread reply text to send. Standard Markdown is rendered with Slack markdown blocks.",
     )
 
 
@@ -137,6 +138,17 @@ def _is_bot_message(message: dict[str, Any]) -> bool:
 
 def _slack_ts(value: datetime) -> str:
     return f"{value.timestamp():.6f}"
+
+
+def _build_thread_reply_blocks(message: str) -> list[dict[str, str]] | None:
+    if len(message) > _SLACK_MARKDOWN_BLOCK_TEXT_LIMIT:
+        return None
+    return [
+        {
+            "type": "markdown",
+            "text": message,
+        }
+    ]
 
 
 class SlackTool(BaseTool):
@@ -257,7 +269,8 @@ class SlackTool(BaseTool):
         output_model=SlackThreadMessageIdentifier,
         description=(
             "Send a Slack thread reply to the root message identified by channel_id and message_ts. "
-            "The message_ts is passed to Slack chat.postMessage as thread_ts."
+            "The message_ts is passed to Slack chat.postMessage as thread_ts. "
+            "Standard Markdown content is sent as a Slack markdown block when it fits Slack's block limit."
         ),
         type=ActionType.WRITE,
         default_failure_policy="continue",
@@ -278,6 +291,7 @@ class SlackTool(BaseTool):
             channel=channel.channel_id,
             text=message,
             thread_ts=message_ts,
+            blocks=_build_thread_reply_blocks(message),
         )
 
         return SlackThreadMessageIdentifier(
