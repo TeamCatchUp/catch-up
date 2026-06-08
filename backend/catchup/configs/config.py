@@ -142,8 +142,7 @@ class Settings(BaseSettings):
     #     RAG Parameters    #
     #=======================#
     # Custom Rerank Parameters
-    RERANK_TOP_N: int
-    RERANK_TOTAL_K: int
+    RERANK_TOP_N: int = 50
 
     #=======================================#
     #     Knowledge Source Integrations     #
