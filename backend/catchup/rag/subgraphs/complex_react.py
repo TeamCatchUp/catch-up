@@ -108,7 +108,6 @@ def build_complex_react_subgraph(
     graph.add_node(
         "select_final_docs",
         select_final_docs_node,
-        retry=BASE_RETRY_POLICY,
     )
     graph.add_node("merge_cache", merge_cache_node)
     graph.add_node(

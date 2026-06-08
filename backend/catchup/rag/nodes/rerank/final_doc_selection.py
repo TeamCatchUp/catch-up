@@ -72,7 +72,7 @@ async def select_final_docs_node(state: AgentState) -> dict:
         )
     )
     rerank_metadata["source_distribution"] = source_distribution
-    # rerank_node의 on_chain_end completed 이벤트를 대신 발화한다.
+    # rerank_node의 on_chain_end completed 이벤트를 대신 발행한다.
     # 프론트엔드에는 node="rerank" completed로 전달되어 UI 변화가 없다.
     await adispatch_custom_event(
         "process",
