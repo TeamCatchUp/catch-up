@@ -7,14 +7,10 @@ from typing import TypedDict
 from langchain_core.documents import Document
 from langgraph.graph.message import add_messages
 
+from catchup.automations.structures import GradeResult
 from catchup.db.models import SourceType
 from catchup.rag.schemas.context import GlobalContext
 from catchup.rag.schemas.structures import VectorDbSearchQuery
-
-
-class GradeResult(TypedDict):
-    reusable: bool
-    reason: str
 
 
 class AutomationState(TypedDict):

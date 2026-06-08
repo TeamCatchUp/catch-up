@@ -5,10 +5,9 @@ from typing import Any
 import structlog
 from langchain_core.documents import Document
 from langchain_core.language_models import BaseChatModel
-from pydantic import BaseModel
 
 from catchup.automations.state import AutomationState
-from catchup.automations.state import GradeResult
+from catchup.automations.structures import GradeResult
 from catchup.prompts.loader import prompt_loader
 from catchup.rag.nodes.utils import build_docs_summary
 
@@ -18,12 +17,6 @@ _NO_DOCS_RESULT: GradeResult = {
     "reusable": False,
     "reason": "No similar cases retrieved.",
 }
-
-
-class _GradeOutput(BaseModel):
-    reusable: bool
-    reason: str
-
 
 async def grade_node(state: AutomationState, llm: BaseChatModel) -> dict[str, Any]:
     """유사 사례 문서를 읽고 재활용 가능 여부를 판단한다."""
@@ -41,7 +34,7 @@ async def grade_node(state: AutomationState, llm: BaseChatModel) -> dict[str, An
         docs_summary=docs_summary,
     )
 
-    structured_llm = llm.with_structured_output(_GradeOutput)
+    structured_llm = llm.with_structured_output(GradeResult)
     output = await structured_llm.ainvoke(prompt)
 
     if isinstance(output, dict):
