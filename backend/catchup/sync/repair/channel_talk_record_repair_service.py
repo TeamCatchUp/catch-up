@@ -26,7 +26,6 @@ from catchup.connector_core.adapters.channel_talk.user_chat_full_sync import (
 from catchup.connector_core.adapters.channel_talk.user_chat_incremental import (
     ChannelTalkUserChatIncrementalIngestionAdapter,
 )
-from catchup.connector_core.ports.sync_ingestion import SyncWindow
 from catchup.connectors.channel_talk.core.user_chat_full_sync_fetcher import (
     ChannelTalkUserChatFullSyncFetcher,
 )
@@ -72,6 +71,7 @@ from catchup.server.sync.schemas import SyncRecordRetryRequest
 from catchup.server.sync.schemas import SyncRecordRetryResponse
 from catchup.sync.common.exceptions import SyncRequestException
 from catchup.sync.common.schemas import SyncTargetType
+from catchup.sync.ingestion.schemas import SyncWindow
 from catchup.sync.repair.context import RecordRepairContext
 
 logger = structlog.get_logger(__name__)

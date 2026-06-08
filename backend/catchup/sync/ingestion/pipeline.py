@@ -1,16 +1,14 @@
 from __future__ import annotations
 
-from catchup.connector_core.application.sync_ingestion_logging import (
-    sync_ingestion_system_log,
-)
-from catchup.connector_core.ports.sync_ingestion import ExecutionRequestT
-from catchup.connector_core.ports.sync_ingestion import ExecutionResultT
-from catchup.connector_core.ports.sync_ingestion import FetchResultT
-from catchup.connector_core.ports.sync_ingestion import PersistResultT
-from catchup.connector_core.ports.sync_ingestion import SummaryResultT
-from catchup.connector_core.ports.sync_ingestion import SyncIngestionPort
-from catchup.connector_core.ports.sync_ingestion import SyncWindow
-from catchup.connector_core.ports.sync_ingestion import TransformResultT
+from catchup.sync.ingestion.logging import sync_ingestion_system_log
+from catchup.sync.ingestion.protocols import ExecutionRequestT
+from catchup.sync.ingestion.protocols import ExecutionResultT
+from catchup.sync.ingestion.protocols import FetchResultT
+from catchup.sync.ingestion.protocols import PersistResultT
+from catchup.sync.ingestion.protocols import SummaryResultT
+from catchup.sync.ingestion.protocols import SyncIngestionPort
+from catchup.sync.ingestion.protocols import TransformResultT
+from catchup.sync.ingestion.schemas import SyncWindow
 
 
 @sync_ingestion_system_log
@@ -55,3 +53,6 @@ async def run_sync_ingestion(
         summary=summary,
         persisted=persisted,
     )
+
+
+__all__ = ["run_sync_ingestion"]

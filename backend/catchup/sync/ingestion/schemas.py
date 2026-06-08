@@ -3,7 +3,6 @@ from __future__ import annotations
 from collections.abc import Mapping
 from datetime import datetime
 from typing import Protocol
-from typing import TypeVar
 from typing import runtime_checkable
 
 from pydantic import BaseModel
@@ -13,12 +12,11 @@ from pydantic import ValidationInfo
 from pydantic import field_validator
 from pydantic import model_validator
 
-from catchup.connector_core.domain.structure import ConnectorKey
 from catchup.utils.validation import require_text
 
 
 class SyncWindow(BaseModel):
-    """Data Collection Window : Shared By Full Sync & Incremental Sync"""
+    """Data collection window shared by full and incremental sync ingestion."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -33,30 +31,31 @@ class SyncWindow(BaseModel):
 
 
 class SyncExecutionRequest(BaseModel):
-    """Internal Execution Request passed from Handlers to Ingestion Adapters."""
+    """Internal request passed from handlers to ingestion adapters."""
 
     model_config = ConfigDict(extra="forbid")
 
-    connector: ConnectorKey
+    connector: str
     tenant_id: str
     target: str
 
-    @field_validator("tenant_id", "target")
+    @field_validator("connector", "tenant_id", "target")
     @classmethod
     def _validate_required_text(cls, value: str, info: ValidationInfo) -> str:
         return require_text(value, info.field_name or "field")
 
     def log_context(self) -> dict[str, object]:
-        """Optional execution-specific log context"""
+        """Optional execution-specific log context."""
 
         return {}
+
 
 class SyncExecutionResult(BaseModel):
     """Internal result returned by ingestion adapters."""
 
     model_config = ConfigDict(extra="forbid")
 
-    connector: ConnectorKey
+    connector: str
     tenant_id: str
     target: str
     persisted_count: int = 0
@@ -65,7 +64,7 @@ class SyncExecutionResult(BaseModel):
     deleted_count: int = 0
     metadata: dict[str, object] = Field(default_factory=dict)
 
-    @field_validator("tenant_id", "target")
+    @field_validator("connector", "tenant_id", "target")
     @classmethod
     def _validate_required_text(cls, value: str, info: ValidationInfo) -> str:
         return require_text(value, info.field_name or "field")
@@ -85,65 +84,10 @@ class ConnectorLogSummaryProvider(Protocol):
 
     def connector_log_summary(self) -> Mapping[str, object]: ...
 
-ExecutionRequestT = TypeVar("ExecutionRequestT", bound=SyncExecutionRequest)
-FetchResultT = TypeVar("FetchResultT")
-TransformResultT = TypeVar("TransformResultT")
-SummaryResultT = TypeVar("SummaryResultT")
-PersistResultT = TypeVar("PersistResultT")
-ExecutionResultT = TypeVar("ExecutionResultT", bound=SyncExecutionResult)
 
-
-class SyncIngestionPort(
-    Protocol[
-        ExecutionRequestT,
-        FetchResultT,
-        TransformResultT,
-        SummaryResultT,
-        PersistResultT,
-        ExecutionResultT,
-    ]
-):
-    """Fetch -> transform -> summarize(no-op possible) -> persist -> result."""
-
-    async def fetch(
-        self,
-        *,
-        execution: ExecutionRequestT,
-        sync_window: SyncWindow,
-    ) -> FetchResultT: ...
-
-    async def transform(
-        self,
-        *,
-        execution: ExecutionRequestT,
-        sync_window: SyncWindow,
-        fetched: FetchResultT,
-    ) -> TransformResultT: ...
-
-    async def summarize(
-        self,
-        *,
-        execution: ExecutionRequestT,
-        sync_window: SyncWindow,
-        transformed: TransformResultT,
-    ) -> SummaryResultT: ...
-
-    async def persist(
-        self,
-        *,
-        execution: ExecutionRequestT,
-        sync_window: SyncWindow,
-        transformed: TransformResultT,
-        summary: SummaryResultT,
-    ) -> PersistResultT: ...
-
-    def build_result(
-        self,
-        *,
-        execution: ExecutionRequestT,
-        sync_window: SyncWindow,
-        fetched: FetchResultT,
-        transformed: TransformResultT,
-        summary: SummaryResultT,
-        persisted: PersistResultT,
-    ) -> ExecutionResultT: ...
+__all__ = [
+    "ConnectorLogSummaryProvider",
+    "SyncExecutionRequest",
+    "SyncExecutionResult",
+    "SyncWindow",
+]

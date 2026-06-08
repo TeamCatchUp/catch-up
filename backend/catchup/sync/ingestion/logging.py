@@ -12,9 +12,9 @@ from typing import TypeVar
 
 import structlog
 
-from catchup.connector_core.ports.sync_ingestion import ConnectorLogSummaryProvider
-from catchup.connector_core.ports.sync_ingestion import SyncExecutionRequest
-from catchup.connector_core.ports.sync_ingestion import SyncWindow
+from catchup.sync.ingestion.schemas import ConnectorLogSummaryProvider
+from catchup.sync.ingestion.schemas import SyncExecutionRequest
+from catchup.sync.ingestion.schemas import SyncWindow
 
 logger = structlog.get_logger(__name__)
 
@@ -272,3 +272,6 @@ def _add_scalar_log_fields(
             continue
         if isinstance(value, (str, int, float, bool)):
             target[key] = value
+
+
+__all__ = ["sync_ingestion_system_log"]

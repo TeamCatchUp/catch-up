@@ -7,11 +7,9 @@ from catchup.connector_core.application.install_auth import (
 from catchup.connector_core.application.metadata_sync import (
     ConnectorMetadataSyncApplication,
 )
-from catchup.connector_core.application.sync_ingestion import run_sync_ingestion
 
 __all__ = [
     "ConnectionStatusApplication",
     "ConnectorInstallAuthApplication",
     "ConnectorMetadataSyncApplication",
-    "run_sync_ingestion",
 ]

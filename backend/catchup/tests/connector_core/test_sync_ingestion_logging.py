@@ -6,13 +6,13 @@ from types import SimpleNamespace
 from unittest import IsolatedAsyncioTestCase
 from unittest.mock import patch
 
-from catchup.connector_core.application.sync_ingestion import run_sync_ingestion
 from catchup.connector_core.domain.structure import ConnectorKey
-from catchup.connector_core.ports.sync_ingestion import SyncExecutionRequest
-from catchup.connector_core.ports.sync_ingestion import SyncExecutionResult
-from catchup.connector_core.ports.sync_ingestion import SyncWindow
 from catchup.db.models import SyncConnector
 from catchup.sync.audit import SyncAuditContext
+from catchup.sync.ingestion.pipeline import run_sync_ingestion
+from catchup.sync.ingestion.schemas import SyncExecutionRequest
+from catchup.sync.ingestion.schemas import SyncExecutionResult
+from catchup.sync.ingestion.schemas import SyncWindow
 
 
 def _window() -> SyncWindow:
@@ -107,7 +107,7 @@ class SyncIngestionLoggingTest(IsolatedAsyncioTestCase):
         )
 
         with patch(
-            "catchup.connector_core.application.sync_ingestion_logging.logger"
+            "catchup.sync.ingestion.logging.logger"
         ) as logger:
             result = await run_sync_ingestion(
                 port=_Port(),
@@ -174,7 +174,7 @@ class SyncIngestionLoggingTest(IsolatedAsyncioTestCase):
         )
 
         with patch(
-            "catchup.connector_core.application.sync_ingestion_logging.logger"
+            "catchup.sync.ingestion.logging.logger"
         ) as logger:
             with self.assertRaisesRegex(RuntimeError, "transform failed"):
                 await run_sync_ingestion(
@@ -199,7 +199,7 @@ class SyncIngestionLoggingTest(IsolatedAsyncioTestCase):
         )
 
         with patch(
-            "catchup.connector_core.application.sync_ingestion_logging.logger"
+            "catchup.sync.ingestion.logging.logger"
         ) as logger:
             await run_sync_ingestion(
                 port=_Port(),
