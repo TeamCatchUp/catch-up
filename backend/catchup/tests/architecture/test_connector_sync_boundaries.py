@@ -58,13 +58,10 @@ KNOWN_CONNECTORS_SYNC_STACK_IMPORTS = {
     ("catchup/connectors/github/factory.py", "catchup.sync.common.exceptions"),
     ("catchup/connectors/github/service.py", "catchup.sync.audit"),
     ("catchup/connectors/github/service.py", "catchup.sync.common.schemas"),
-    ("catchup/connectors/github/webhook/metadata.py", "catchup.sync.common.exceptions"),
-    ("catchup/connectors/github/webhook/metadata.py", "catchup.sync.ingress.types"),
     ("catchup/connectors/github/webhook/responses.py", "catchup.sync.ingress.types"),
     ("catchup/connectors/jira/factory.py", "catchup.sync.common.exceptions"),
     ("catchup/connectors/jira/service.py", "catchup.sync.audit"),
     ("catchup/connectors/jira/service.py", "catchup.sync.common.schemas"),
-    ("catchup/connectors/jira/webhook/metadata.py", "catchup.sync.ingress.types"),
     ("catchup/connectors/jira/webhook/responses.py", "catchup.sync.ingress.types"),
     ("catchup/connectors/slack/factory.py", "catchup.sync.common.exceptions"),
     ("catchup/connectors/slack/ingestion_service.py", "catchup.sync.audit"),
@@ -133,7 +130,13 @@ def test_compatibility_wrapper_modules_are_removed() -> None:
         "catchup/worker/common/handlers.py",
         "catchup/connector_core/application/sync_ingestion.py",
         "catchup/connector_core/application/sync_ingestion_logging.py",
+        "catchup/connector_core/domain/webhooks.py",
         "catchup/connector_core/ports/sync_ingestion.py",
+        "catchup/connectors/github/webhook/metadata.py",
+        "catchup/connectors/jira/webhook/metadata.py",
+        "catchup/connectors/slack/webhook/metadata.py",
+        "catchup/connectors/slack/webhook_service.py",
+        "catchup/server/connector/slack/webhook_dispatcher.py",
         "catchup/worker/handlers/base_incremental_handler.py",
         "catchup/worker/handlers/base_full_sync_handler.py",
         "catchup/worker/handlers/channel_talk_incremental_handler.py",
@@ -149,6 +152,75 @@ def test_compatibility_wrapper_modules_are_removed() -> None:
         "catchup/worker/handlers/__init__.py",
     ):
         assert not (BACKEND_ROOT / relative_path).exists(), relative_path
+
+
+def test_connector_webhook_modules_do_not_own_db_write_path() -> None:
+    violations = _find_imports(
+        (
+            "catchup/connectors/github/webhook",
+            "catchup/connectors/jira/webhook",
+            "catchup/connectors/slack/webhook",
+        ),
+        (
+            "catchup.db",
+            "sqlalchemy",
+            "fastapi.concurrency",
+        ),
+    )
+
+    assert not violations, _format_unexpected(violations, set())
+
+
+def test_sync_ingress_package_stays_as_webhook_entrypoint() -> None:
+    actual_files = {
+        path.relative_to(BACKEND_ROOT).as_posix()
+        for path in (BACKEND_ROOT / "catchup/sync/ingress").glob("*.py")
+    }
+
+    assert actual_files == {
+        "catchup/sync/ingress/__init__.py",
+        "catchup/sync/ingress/github.py",
+        "catchup/sync/ingress/jira.py",
+        "catchup/sync/ingress/slack.py",
+        "catchup/sync/ingress/types.py",
+    }
+
+
+def test_sync_metadata_package_owns_webhook_metadata_state_writes() -> None:
+    actual_files = {
+        path.relative_to(BACKEND_ROOT).as_posix()
+        for path in (BACKEND_ROOT / "catchup/sync/metadata").glob("*.py")
+    }
+
+    assert actual_files == {
+        "catchup/sync/metadata/__init__.py",
+        "catchup/sync/metadata/github.py",
+        "catchup/sync/metadata/jira.py",
+        "catchup/sync/metadata/slack.py",
+        "catchup/sync/metadata/slack_store.py",
+    }
+
+
+def test_jira_dynamic_webhook_service_is_connector_lifecycle_capability() -> None:
+    assert (
+        BACKEND_ROOT / "catchup/connectors/jira/dynamic_webhook_service.py"
+    ).exists()
+    assert not (
+        BACKEND_ROOT / "catchup/sync/ingress/jira_dynamic_webhook_service.py"
+    ).exists()
+
+
+def test_server_webhook_api_uses_sync_ingress_for_product_dispatch() -> None:
+    expected_imports = {
+        "catchup/server/connector/github/webhook_api.py": "catchup.sync.ingress.github",
+        "catchup/server/connector/jira/webhook_api.py": "catchup.sync.ingress.jira",
+        "catchup/server/connector/slack/webhook_api.py": "catchup.sync.ingress.slack",
+    }
+
+    for relative_path, expected_module in expected_imports.items():
+        imports = _imported_modules(BACKEND_ROOT / relative_path)
+
+        assert expected_module in imports, relative_path
 
 
 def test_worker_processors_use_canonical_handler_registry() -> None:

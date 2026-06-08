@@ -1,19 +1,17 @@
 from __future__ import annotations
 
-from typing import Any
-
 import structlog
 from fastapi.concurrency import run_in_threadpool
 from sqlalchemy.orm import Session
 
 from catchup.connectors.atlassian.utils import parse_atlassian_datetime
+from catchup.connectors.jira.webhook.resolver import resolve_jira_metadata_event
+from catchup.connectors.jira.webhook.responses import ignored_event_response
+from catchup.connectors.jira.webhook.responses import processed_metadata_response
 from catchup.db.engine import SessionLocal
 from catchup.db.jira import domain_repository
 from catchup.sync.ingress.types import JiraWebhookRequest
 from catchup.sync.ingress.types import JiraWebhookResponse
-
-from catchup.connectors.jira.webhook.responses import ignored_event_response
-from catchup.connectors.jira.webhook.responses import processed_metadata_response
 
 logger = structlog.get_logger(__name__)
 
@@ -50,11 +48,14 @@ def _process_metadata_event(
 ) -> JiraWebhookResponse:
     cloud_id = request.cloud_id
     event_type = request.event_type
-    payload = request.payload
+    resolved = resolve_jira_metadata_event(
+        event_type=event_type,
+        payload=request.payload,
+    )
 
-    if event_type in {"jira:project_created", "jira:project_updated"}:
-        project = payload.get("project") or {}
-        project_key = project.get("key")
+    if resolved.action == "project_upsert":
+        project = resolved.project or {}
+        project_key = resolved.project_key
         if not project_key:
             raise ValueError("missing_project_key")
 
@@ -88,8 +89,8 @@ def _process_metadata_event(
             key=project_key,
         )
 
-    if event_type == "jira:project_deleted":
-        project_key = _extract_project_key(payload)
+    if resolved.action == "project_delete":
+        project_key = resolved.project_key
         if not project_key:
             raise ValueError("missing_project_key")
 
@@ -105,8 +106,8 @@ def _process_metadata_event(
             key=project_key,
         )
 
-    if event_type in {"sprint_created", "sprint_updated"}:
-        sprint = payload.get("sprint") or {}
+    if resolved.action == "sprint_upsert":
+        sprint = resolved.sprint or {}
         sprint_id = sprint.get("id")
         sprint_name = sprint.get("name")
         if sprint_id is None or not sprint_name:
@@ -119,7 +120,7 @@ def _process_metadata_event(
             sprint_name=sprint_name,
             state=sprint.get("state"),
             goal=sprint.get("goal"),
-            project_key=_extract_project_key(payload),
+            project_key=resolved.project_key,
             board_id=sprint.get("originBoardId"),
             start_date=parse_atlassian_datetime(sprint.get("startDate")),
             end_date=parse_atlassian_datetime(sprint.get("endDate")),
@@ -138,8 +139,8 @@ def _process_metadata_event(
             entity_id=int(sprint_id),
         )
 
-    if event_type == "sprint_deleted":
-        sprint = payload.get("sprint") or {}
+    if resolved.action == "sprint_delete":
+        sprint = resolved.sprint or {}
         sprint_id = sprint.get("id")
         if sprint_id is None:
             raise ValueError("missing_sprint_id")
@@ -156,8 +157,8 @@ def _process_metadata_event(
             entity_id=int(sprint_id),
         )
 
-    if event_type in {"user_created", "user_updated"}:
-        user = _extract_user(payload)
+    if resolved.action == "user_upsert":
+        user = resolved.user or {}
         account_id = user.get("accountId")
         if not account_id:
             raise ValueError("missing_account_id")
@@ -187,8 +188,8 @@ def _process_metadata_event(
             entity_id=account_id,
         )
 
-    if event_type == "user_deleted":
-        user = _extract_user(payload)
+    if resolved.action == "user_delete":
+        user = resolved.user or {}
         account_id = user.get("accountId")
         if not account_id:
             raise ValueError("missing_account_id")
@@ -207,14 +208,5 @@ def _process_metadata_event(
 
     return ignored_event_response(
         event_type=event_type,
-        reason="unsupported_event",
+        reason=resolved.ignored_reason or "unsupported_event",
     )
-
-
-def _extract_project_key(payload: dict[str, Any]) -> str | None:
-    project = payload.get("project") or {}
-    return project.get("key") or payload.get("projectKey")
-
-
-def _extract_user(payload: dict[str, Any]) -> dict[str, Any]:
-    return payload.get("user") or payload.get("account") or {}

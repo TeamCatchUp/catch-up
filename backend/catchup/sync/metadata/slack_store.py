@@ -7,16 +7,15 @@ SlackIngestionService와 달리 PGVector/Transformer 초기화 없이
 """
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime
+from datetime import timezone
 
 from sqlalchemy.orm import Session
 
-from catchup.connectors.slack.schemas import (
-    SlackChannelEvent,
-    SlackMemberEvent,
-    SlackUserEvent,
-    SlackUserProfile as SlackUserProfileSchema,
-)
+from catchup.connectors.slack.schemas import SlackChannelEvent
+from catchup.connectors.slack.schemas import SlackMemberEvent
+from catchup.connectors.slack.schemas import SlackUserEvent
+from catchup.connectors.slack.schemas import SlackUserProfile as SlackUserProfileSchema
 from catchup.db.slack import domain_repository
 
 logger = logging.getLogger(__name__)

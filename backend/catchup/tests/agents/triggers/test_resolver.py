@@ -9,7 +9,7 @@ import pytest
 from catchup.agents.triggers import resolver
 from catchup.agents.triggers.events import AgentTriggerMatch
 from catchup.agents.triggers.events import AgentWebhookEvent
-from catchup.connector_core.domain.webhooks import VerifiedConnectorWebhookEvent
+from catchup.agents.triggers.events import VerifiedConnectorWebhookEvent
 from catchup.db.agent_triggers import TRIGGER_EVENT_ROLE_PRIMARY
 from catchup.db.agent_triggers import TRIGGER_EVENT_ROLE_RESET
 from catchup.db.agent_triggers import TRIGGER_EVENT_ROLE_START

@@ -1,15 +1,15 @@
 from __future__ import annotations
 
-from fastapi import BackgroundTasks
 import structlog
+from fastapi import BackgroundTasks
 
-from catchup.connectors.github.webhook.metadata import handle_metadata_event
 from catchup.connectors.github.webhook.responses import accepted_incremental_response
 from catchup.connectors.github.webhook.responses import ignored_event_response
 from catchup.sync.incremental.resolve import resolve_github_event
 from catchup.sync.incremental.service import get_incremental_service
 from catchup.sync.ingress.types import GithubWebhookRequest
 from catchup.sync.ingress.types import GithubWebhookResponse
+from catchup.sync.metadata.github import handle_metadata_event
 
 logger = structlog.get_logger(__name__)
 

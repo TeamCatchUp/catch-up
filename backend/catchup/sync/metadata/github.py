@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Any
-
 import structlog
 from fastapi import BackgroundTasks
 from fastapi.concurrency import run_in_threadpool
@@ -16,6 +14,14 @@ from catchup.audit.utils import audit_log
 from catchup.connectors.github.factory import create_github_ingestion_service
 from catchup.connectors.github.schemas import InstallationRepositoriesWebhookPayload
 from catchup.connectors.github.schemas import InstallationWebhookPayload
+from catchup.connectors.github.webhook.resolver import GithubMetadataResolution
+from catchup.connectors.github.webhook.resolver import resolve_github_metadata_event
+from catchup.connectors.github.webhook.responses import ignored_event_response
+from catchup.connectors.github.webhook.responses import (
+    installation_repositories_response,
+)
+from catchup.connectors.github.webhook.responses import installation_status_response
+from catchup.connectors.github.webhook.responses import processed_metadata_response
 from catchup.db.engine import SessionLocal
 from catchup.db.github import domain_repository as github_entities
 from catchup.db.github import installation_repository as installation_crud
@@ -32,71 +38,55 @@ from catchup.sync.common.exceptions import BaseSyncException
 from catchup.sync.ingress.types import GithubWebhookRequest
 from catchup.sync.ingress.types import GithubWebhookResponse
 
-from catchup.connectors.github.webhook.responses import ignored_event_response
-from catchup.connectors.github.webhook.responses import installation_repositories_response
-from catchup.connectors.github.webhook.responses import installation_status_response
-from catchup.connectors.github.webhook.responses import processed_metadata_response
-
 logger = structlog.get_logger(__name__)
-
-_REPOSITORY_REFRESH_EVENTS = frozenset({
-    "repository",
-})
-
-_USER_REFRESH_EVENTS = frozenset({
-    "organization",
-    "membership",
-    "member",
-})
 
 
 async def handle_metadata_event(
     request: GithubWebhookRequest,
     background_tasks: BackgroundTasks,
 ) -> GithubWebhookResponse:
-    if request.event_name == "installation":
-        data = InstallationWebhookPayload(**request.payload)
-        if not _is_supported_installation_action(data.action):
-            return ignored_event_response(
-                event=request.event_name,
-                reason="unsupported_action",
-                action=data.action,
-            )
+    resolved = resolve_github_metadata_event(
+        event_name=request.event_name,
+        payload=request.payload,
+    )
+    if resolved.action is None:
+        return ignored_event_response(
+            event=request.event_name,
+            reason=resolved.ignored_reason or "unsupported_event",
+            action=resolved.ignored_action,
+        )
 
+    if resolved.action.startswith("installation_") and resolved.installation:
         return await _handle_installation_event(
-            data=data,
-            provider="github",
+            resolved=resolved,
             background_tasks=background_tasks,
         )
 
-    if request.event_name == "installation_repositories":
+    if (
+        resolved.action == "installation_repositories"
+        and resolved.installation_repositories
+    ):
         return await run_in_threadpool(
             _handle_installation_repositories_event,
-            request.payload,
+            resolved.installation_repositories,
         )
 
-    installation_id = _extract_installation_id(request.payload)
-    if installation_id is None:
+    if resolved.installation_id is None:
         return ignored_event_response(
             event=request.event_name,
             reason="missing_installation_id",
         )
-
     logger.info(
         "github_metadata_refresh_started",
         event_name=request.event_name,
-        installation_id=installation_id,
+        installation_id=resolved.installation_id,
     )
-    _schedule_metadata_sync(background_tasks, installation_id)
-
-    refresh_target = "repositories" if request.event_name in _REPOSITORY_REFRESH_EVENTS else "users"
-    if request.event_name not in _REPOSITORY_REFRESH_EVENTS | _USER_REFRESH_EVENTS:
-        refresh_target = "metadata"
+    _schedule_metadata_sync(background_tasks, resolved.installation_id)
 
     return processed_metadata_response(
         event=request.event_name,
-        installation_id=installation_id,
-        refresh_target=refresh_target,
+        installation_id=resolved.installation_id,
+        refresh_target=resolved.refresh_target or "metadata",
     )
 
 
@@ -107,10 +97,13 @@ async def handle_metadata_event(
 )
 async def _handle_installation_event(
     *,
-    data: InstallationWebhookPayload,
-    provider: str,
+    resolved: GithubMetadataResolution,
     background_tasks: BackgroundTasks,
 ) -> GithubWebhookResponse:
+    if resolved.installation is None:
+        return ignored_event_response(event="installation", reason="missing_installation")
+
+    data = resolved.installation
     action = data.action
     installation_id = data.installation.id
 
@@ -265,9 +258,8 @@ def _handle_installation_unsuspended(
 
 
 def _handle_installation_repositories_event(
-    payload: dict[str, Any],
+    data: InstallationRepositoriesWebhookPayload,
 ) -> GithubWebhookResponse:
-    data = InstallationRepositoriesWebhookPayload(**payload)
     installation_id = data.installation.id
 
     with SessionLocal() as db:
@@ -366,24 +358,8 @@ async def _register_knowledge_source(installation_id: int) -> None:
     await run_in_threadpool(_sync_task)
 
 
-def _extract_installation_id(payload: dict[str, Any]) -> int | None:
-    installation = payload.get("installation") or {}
-    raw = installation.get("id")
-    if raw in (None, ""):
-        return None
-
-    try:
-        return int(raw)
-    except (TypeError, ValueError):
-        return None
-
-
 def _schedule_metadata_sync(
     background_tasks: BackgroundTasks,
     installation_id: int,
 ) -> None:
     background_tasks.add_task(_sync_installation_metadata, installation_id)
-
-
-def _is_supported_installation_action(action: str) -> bool:
-    return action in {"created", "deleted", "suspended", "unsuspended"}

@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import structlog
 
-from catchup.connectors.jira.webhook.metadata import handle_metadata_event
 from catchup.connectors.jira.webhook.responses import accepted_incremental_response
 from catchup.connectors.jira.webhook.responses import ignored_event_response
 from catchup.sync.incremental.resolve import resolve_jira_event
 from catchup.sync.incremental.service import get_incremental_service
 from catchup.sync.ingress.types import JiraWebhookRequest
 from catchup.sync.ingress.types import JiraWebhookResponse
+from catchup.sync.metadata.jira import handle_metadata_event
 
 logger = structlog.get_logger(__name__)
 

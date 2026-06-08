@@ -7,57 +7,44 @@ import structlog
 from fastapi.concurrency import run_in_threadpool
 from sqlalchemy.orm import Session
 
-from catchup.connectors.slack import webhook_service
+from catchup.connectors.slack.webhook.resolver import resolve_slack_metadata_event
 from catchup.connectors.slack.webhook.responses import ignored_event_response
 from catchup.connectors.slack.webhook.responses import metadata_error_response
 from catchup.connectors.slack.webhook.responses import processed_metadata_response
 from catchup.db.engine import SessionLocal
 from catchup.server.connector.slack.schemas import SlackWebhookRequest
 from catchup.server.connector.slack.schemas import SlackWebhookResponse
+from catchup.sync.metadata import slack_store
 
 logger = structlog.get_logger(__name__)
 
-CHANNEL_UPSERT_EVENTS = frozenset(
-    {"channel_created", "channel_rename", "group_created", "group_rename"}
-)
-CHANNEL_DELETE_EVENTS = frozenset({"channel_deleted", "group_deleted"})
-CHANNEL_ARCHIVE_EVENTS = frozenset(
-    {"channel_archive", "channel_unarchive", "group_archive", "group_unarchive"}
-)
-MEMBER_EVENTS = frozenset({"member_joined_channel", "member_left_channel"})
-USER_EVENTS = frozenset({"team_join", "user_change"})
-
-
-def is_supported_channel_membership_event(event: dict[str, Any]) -> bool:
-    channel_type = str(event.get("channel_type") or "").strip().upper()
-    if channel_type:
-        return channel_type in {"C", "G"}
-
-    channel_id = str(event.get("channel") or "").strip()
-    return channel_id.startswith(("C", "G"))
+_METADATA_HANDLERS: dict[str, Callable[[Session, str, dict[str, Any]], None]] = {
+    "channel_upsert": slack_store.handle_channel_upsert,
+    "channel_delete": slack_store.handle_channel_delete,
+    "channel_archive": slack_store.handle_channel_archive,
+    "member": slack_store.handle_member_event,
+    "user": slack_store.handle_user_event,
+}
 
 
 async def handle_metadata_event(
     request: SlackWebhookRequest,
 ) -> SlackWebhookResponse:
-    if request.event_type in MEMBER_EVENTS:
-        if not is_supported_channel_membership_event(request.event):
-            return ignored_event_response(
-                event_type=request.event_type,
-                reason="unsupported_channel",
-            )
-
-    resolved = _resolve_metadata_handler(request.event_type)
-    if resolved is None:
+    resolved = resolve_slack_metadata_event(
+        event_type=request.event_type,
+        event=request.event,
+    )
+    if resolved.action is None:
         return ignored_event_response(
             event_type=request.event_type,
-            reason="unsupported_event",
+            reason=resolved.ignored_reason or "unsupported_event",
         )
 
+    handler = _METADATA_HANDLERS[resolved.action]
     return await run_in_threadpool(
         _handle_metadata_event_sync,
         request,
-        resolved,
+        handler,
     )
 
 
@@ -84,27 +71,6 @@ def _handle_metadata_event_sync(
                 error=str(exc),
             )
             return metadata_error_response()
-
-
-def _resolve_metadata_handler(
-    event_type: str,
-) -> Callable[[Session, str, dict[str, Any]], None] | None:
-    if event_type in CHANNEL_UPSERT_EVENTS:
-        return webhook_service.handle_channel_upsert
-
-    if event_type in CHANNEL_DELETE_EVENTS:
-        return webhook_service.handle_channel_delete
-
-    if event_type in CHANNEL_ARCHIVE_EVENTS:
-        return webhook_service.handle_channel_archive
-
-    if event_type in MEMBER_EVENTS:
-        return webhook_service.handle_member_event
-
-    if event_type in USER_EVENTS:
-        return webhook_service.handle_user_event
-
-    return None
 
 
 def _run_metadata_handler(

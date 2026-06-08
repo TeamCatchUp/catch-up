@@ -1,11 +1,7 @@
-"""
-Server Side Slack Dispatcher
-"""
 from __future__ import annotations
 
 import structlog
 
-from catchup.connectors.slack.webhook.metadata import handle_metadata_event
 from catchup.connectors.slack.webhook.responses import accepted_async_response
 from catchup.connectors.slack.webhook.responses import accepted_incremental_response
 from catchup.connectors.slack.webhook.responses import ignored_event_response
@@ -19,6 +15,7 @@ from catchup.server.connector.slack.schemas import SlackWebhookRequest
 from catchup.server.connector.slack.schemas import SlackWebhookResponse
 from catchup.sync.incremental.resolve import resolve_slack_event
 from catchup.sync.incremental.service import get_incremental_service
+from catchup.sync.metadata.slack import handle_metadata_event
 
 logger = structlog.get_logger(__name__)
 
@@ -53,7 +50,7 @@ def _is_direct_message_chat_event(event: dict[str, object]) -> bool:
         # Bot이 생성한 이벤트는 무시한다 (채널 초대, 자동 메세지 등 ...)
         return False
 
-    if str(event.get("subtype") or "").strip():        
+    if str(event.get("subtype") or "").strip():
         # 수정, 삭제 이벤트로 트리거 되지 않도록 방지
         return False
 

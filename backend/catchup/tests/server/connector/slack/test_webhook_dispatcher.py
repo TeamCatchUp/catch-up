@@ -1,33 +1,13 @@
 from __future__ import annotations
 
-import importlib
 from types import SimpleNamespace
 from unittest import IsolatedAsyncioTestCase
 from unittest.mock import AsyncMock
 from unittest.mock import Mock
 from unittest.mock import patch
 
-
-def _import_first(*module_names: str):
-    last_error: Exception | None = None
-    for module_name in module_names:
-        try:
-            return importlib.import_module(module_name)
-        except ModuleNotFoundError as exc:
-            last_error = exc
-    if last_error is not None:
-        raise last_error
-    raise RuntimeError("no module names provided")
-
-
-schemas = _import_first(
-    "catchup.server.connector.slack.schemas",
-    "catchup.sync.ingress.types",
-)
-dispatcher = _import_first(
-    "catchup.server.connector.slack.webhook_dispatcher",
-    "catchup.sync.ingress.slack",
-)
+from catchup.server.connector.slack import schemas
+from catchup.sync.ingress import slack as dispatcher
 
 SlackWebhookRequest = schemas.SlackWebhookRequest
 
