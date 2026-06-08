@@ -10,6 +10,7 @@ from catchup.sync.handlers.confluence import ConfluenceFullSyncHandler
 from catchup.sync.handlers.github import GithubFullSyncHandler
 from catchup.sync.handlers.jira import JiraFullSyncHandler
 from catchup.sync.handlers.slack import SlackFullSyncHandler
+from catchup.sync.handlers.slack import SlackIncrementalHandler
 from catchup.worker.handlers.channel_talk_incremental_handler import (
     ChannelTalkIncrementalHandler,
 )
@@ -18,7 +19,6 @@ from catchup.worker.handlers.confluence_incremental_handler import (
 )
 from catchup.worker.handlers.github_incremental_handler import GithubIncrementalHandler
 from catchup.worker.handlers.jira_incremental_handler import JiraIncrementalHandler
-from catchup.worker.handlers.slack_incremental_handler import SlackIncrementalHandler
 
 _HANDLERS: dict[HandlerKey, IngestionHandlerProtocol] | None = None
 

@@ -22,7 +22,6 @@ KNOWN_SYNC_WORKER_CONNECTOR_CORE_IMPORTS = {
     ("catchup/sync/handlers/jira.py", "catchup.connector_core.adapters.jira"),
     ("catchup/worker/handlers/jira_incremental_handler.py", "catchup.connector_core.adapters.jira"),
     ("catchup/sync/handlers/slack.py", "catchup.connector_core.adapters.slack"),
-    ("catchup/worker/handlers/slack_incremental_handler.py", "catchup.connector_core.adapters.slack"),
 }
 
 
@@ -138,12 +137,14 @@ def test_compatibility_wrapper_modules_are_removed() -> None:
         "catchup/connector_core/application/sync_ingestion.py",
         "catchup/connector_core/application/sync_ingestion_logging.py",
         "catchup/connector_core/ports/sync_ingestion.py",
+        "catchup/worker/handlers/base_incremental_handler.py",
         "catchup/worker/handlers/base_full_sync_handler.py",
         "catchup/worker/handlers/channel_talk_full_sync_handler.py",
         "catchup/worker/handlers/confluence_full_sync_handler.py",
         "catchup/worker/handlers/github_full_sync_handler.py",
         "catchup/worker/handlers/jira_full_sync_handler.py",
         "catchup/worker/handlers/slack_full_sync_handler.py",
+        "catchup/worker/handlers/slack_incremental_handler.py",
     ):
         assert not (BACKEND_ROOT / relative_path).exists(), relative_path
 
@@ -158,7 +159,7 @@ def test_worker_processors_use_canonical_handler_registry() -> None:
         assert "catchup.sync.handlers.registry" in imports, relative_path
 
 
-def test_slack_full_sync_handler_does_not_import_worker_modules() -> None:
+def test_slack_sync_handlers_do_not_import_worker_modules() -> None:
     imports = _imported_modules(BACKEND_ROOT / "catchup/sync/handlers/slack.py")
 
     assert not any(module.startswith("catchup.worker") for module in imports)

@@ -6,12 +6,10 @@ from catchup.worker.handlers.confluence_incremental_handler import (
 )
 from catchup.worker.handlers.github_incremental_handler import GithubIncrementalHandler
 from catchup.worker.handlers.jira_incremental_handler import JiraIncrementalHandler
-from catchup.worker.handlers.slack_incremental_handler import SlackIncrementalHandler
 
 __all__ = [
     "ChannelTalkIncrementalHandler",
     "ConfluenceIncrementalHandler",
     "GithubIncrementalHandler",
     "JiraIncrementalHandler",
-    "SlackIncrementalHandler",
 ]

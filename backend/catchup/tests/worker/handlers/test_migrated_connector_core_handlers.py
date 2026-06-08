@@ -13,6 +13,7 @@ from catchup.sync.common.schemas import SyncTargetType
 from catchup.sync.handlers.confluence import ConfluenceFullSyncHandler
 from catchup.sync.handlers.github import GithubFullSyncHandler
 from catchup.sync.handlers.slack import SlackFullSyncHandler
+from catchup.sync.handlers.slack import SlackIncrementalHandler
 from catchup.worker.handlers.confluence_incremental_handler import (
     ConfluenceIncrementalHandler,
 )
@@ -63,6 +64,28 @@ def _confluence_full_context() -> FullSyncContext:
         max_attempts=3,
         sync_from_ts="1778899200.0",
         metadata={"content_type": "page", "space_name": "Engineering"},
+    )
+
+
+def _slack_incremental_context() -> IncrementalSyncContext:
+    return IncrementalSyncContext(
+        event_id="event-6",
+        job_id="job-1",
+        connector=SyncConnector.SLACK,
+        scope_id="T123",
+        target_type=SyncTargetType.CHANNEL,
+        target_id="C123",
+        target_name="general",
+        attempt=0,
+        max_attempts=3,
+        record_key="slack:T123:channel:C123:message:1700000000.000000",
+        generation=1,
+        record_type="message",
+        record_id="1700000000.000000",
+        parent_type=SyncTargetType.CHANNEL,
+        parent_id="C123",
+        event_kind=SyncEventKind.UPDATED,
+        last_event_at="2026-05-16T00:00:00+00:00",
     )
 
 
@@ -248,6 +271,37 @@ class MigratedConnectorCoreHandlerTests(IsolatedAsyncioTestCase):
         execution = run_sync_ingestion.await_args.kwargs["execution"]
         self.assertEqual(execution.record_type, "page")
         self.assertEqual(execution.space_key, "ENG")
+        self.assertEqual(result.synced_count, 1)
+
+    async def test_slack_incremental_uses_connector_core_exact_record(self) -> None:
+        handler = SlackIncrementalHandler()
+        core_result = SimpleNamespace(
+            persisted_count=1,
+            deleted_count=0,
+            failed_count=0,
+            skipped=False,
+        )
+
+        with (
+            patch(
+                "catchup.sync.handlers.slack.create_slack_ingestion_service",
+                AsyncMock(return_value=SimpleNamespace()),
+            ),
+            patch(
+                "catchup.sync.handlers.slack.run_sync_ingestion",
+                AsyncMock(return_value=core_result),
+            ) as run_sync_ingestion,
+        ):
+            result = await handler.handle(
+                context=_slack_incremental_context(),
+                service_cache={},
+            )
+
+        run_sync_ingestion.assert_awaited_once()
+        execution = run_sync_ingestion.await_args.kwargs["execution"]
+        self.assertEqual(execution.channel_id, "C123")
+        self.assertEqual(execution.record_id, "1700000000.000000")
+        self.assertEqual(execution.event_kind, "updated")
         self.assertEqual(result.synced_count, 1)
 
     async def test_github_incremental_uses_connector_core_exact_record(self) -> None:

@@ -6,6 +6,7 @@ from catchup.sync.common.schemas import FullSyncContext
 from catchup.sync.common.schemas import SyncTargetType
 from catchup.sync.handlers.registry import get_ingestion_handler
 from catchup.sync.handlers.registry import select_handler
+from catchup.sync.handlers.slack import SlackIncrementalHandler
 
 
 def test_handler_registry_includes_full_and_incremental_handlers() -> None:
@@ -40,3 +41,12 @@ def test_select_handler_resolves_from_sync_context() -> None:
         connector=SyncConnector.SLACK,
         sync_type=SyncType.FULL,
     )
+
+
+def test_slack_incremental_resolves_to_canonical_sync_handler() -> None:
+    handler = get_ingestion_handler(
+        connector=SyncConnector.SLACK,
+        sync_type=SyncType.INCREMENTAL,
+    )
+
+    assert isinstance(handler, SlackIncrementalHandler)

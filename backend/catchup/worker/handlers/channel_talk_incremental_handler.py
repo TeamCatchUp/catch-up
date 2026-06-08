@@ -35,9 +35,9 @@ from catchup.connectors.channel_talk.full_sync_helper import (
 from catchup.sync.audit import SyncAuditContext
 from catchup.sync.common.schemas import IncrementalSyncContext
 from catchup.sync.common.schemas import TargetSyncResult
+from catchup.sync.handlers.base import BaseIncrementalHandler
 from catchup.sync.ingestion.pipeline import run_sync_ingestion
 from catchup.sync.ingestion.schemas import SyncWindow
-from catchup.worker.handlers.base_incremental_handler import BaseIncrementalHandler
 
 
 class ChannelTalkIncrementalHandler(BaseIncrementalHandler):
