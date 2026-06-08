@@ -10,14 +10,12 @@ from catchup.sync.common.schemas import FullSyncContext
 from catchup.sync.common.schemas import IncrementalSyncContext
 from catchup.sync.common.schemas import SyncEventKind
 from catchup.sync.common.schemas import SyncTargetType
+from catchup.sync.handlers.confluence import ConfluenceFullSyncHandler
+from catchup.sync.handlers.github import GithubFullSyncHandler
 from catchup.sync.handlers.slack import SlackFullSyncHandler
-from catchup.worker.handlers.confluence_full_sync_handler import (
-    ConfluenceFullSyncHandler,
-)
 from catchup.worker.handlers.confluence_incremental_handler import (
     ConfluenceIncrementalHandler,
 )
-from catchup.worker.handlers.github_full_sync_handler import GithubFullSyncHandler
 from catchup.worker.handlers.github_incremental_handler import GithubIncrementalHandler
 
 
@@ -156,11 +154,11 @@ class MigratedConnectorCoreHandlerTests(IsolatedAsyncioTestCase):
 
         with (
             patch(
-                "catchup.worker.handlers.github_full_sync_handler.create_github_ingestion_service",
+                "catchup.sync.handlers.github.create_github_ingestion_service",
                 AsyncMock(return_value=service),
             ),
             patch(
-                "catchup.worker.handlers.github_full_sync_handler.run_sync_ingestion",
+                "catchup.sync.handlers.github.run_sync_ingestion",
                 AsyncMock(return_value=core_result),
             ) as run_sync_ingestion,
         ):
@@ -197,11 +195,11 @@ class MigratedConnectorCoreHandlerTests(IsolatedAsyncioTestCase):
 
         with (
             patch(
-                "catchup.worker.handlers.github_full_sync_handler.create_github_ingestion_service",
+                "catchup.sync.handlers.github.create_github_ingestion_service",
                 AsyncMock(return_value=service),
             ),
             patch(
-                "catchup.worker.handlers.github_full_sync_handler.run_sync_ingestion",
+                "catchup.sync.handlers.github.run_sync_ingestion",
                 AsyncMock(side_effect=[first_result, second_result]),
             ) as run_sync_ingestion,
         ):
@@ -233,11 +231,11 @@ class MigratedConnectorCoreHandlerTests(IsolatedAsyncioTestCase):
 
         with (
             patch(
-                "catchup.worker.handlers.confluence_full_sync_handler.create_confluence_ingestion_service",
+                "catchup.sync.handlers.confluence.create_confluence_ingestion_service",
                 AsyncMock(return_value=service),
             ),
             patch(
-                "catchup.worker.handlers.confluence_full_sync_handler.run_sync_ingestion",
+                "catchup.sync.handlers.confluence.run_sync_ingestion",
                 AsyncMock(return_value=core_result),
             ) as run_sync_ingestion,
         ):

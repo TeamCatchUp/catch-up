@@ -11,15 +11,15 @@ KNOWN_SYNC_WORKER_CONNECTOR_CORE_IMPORTS = {
     ("catchup/sync/repair/channel_talk_record_repair_service.py", "catchup.connector_core.adapters.channel_talk.article_incremental"),
     ("catchup/sync/repair/channel_talk_record_repair_service.py", "catchup.connector_core.adapters.channel_talk.user_chat_full_sync"),
     ("catchup/sync/repair/channel_talk_record_repair_service.py", "catchup.connector_core.adapters.channel_talk.user_chat_incremental"),
-    ("catchup/worker/handlers/channel_talk_full_sync_handler.py", "catchup.connector_core.adapters.channel_talk.article_full_sync"),
-    ("catchup/worker/handlers/channel_talk_full_sync_handler.py", "catchup.connector_core.adapters.channel_talk.user_chat_full_sync"),
+    ("catchup/sync/handlers/channel_talk.py", "catchup.connector_core.adapters.channel_talk.article_full_sync"),
+    ("catchup/sync/handlers/channel_talk.py", "catchup.connector_core.adapters.channel_talk.user_chat_full_sync"),
     ("catchup/worker/handlers/channel_talk_incremental_handler.py", "catchup.connector_core.adapters.channel_talk.article_incremental"),
     ("catchup/worker/handlers/channel_talk_incremental_handler.py", "catchup.connector_core.adapters.channel_talk.user_chat_incremental"),
-    ("catchup/worker/handlers/confluence_full_sync_handler.py", "catchup.connector_core.adapters.confluence"),
+    ("catchup/sync/handlers/confluence.py", "catchup.connector_core.adapters.confluence"),
     ("catchup/worker/handlers/confluence_incremental_handler.py", "catchup.connector_core.adapters.confluence"),
-    ("catchup/worker/handlers/github_full_sync_handler.py", "catchup.connector_core.adapters.github"),
+    ("catchup/sync/handlers/github.py", "catchup.connector_core.adapters.github"),
     ("catchup/worker/handlers/github_incremental_handler.py", "catchup.connector_core.adapters.github"),
-    ("catchup/worker/handlers/jira_full_sync_handler.py", "catchup.connector_core.adapters.jira"),
+    ("catchup/sync/handlers/jira.py", "catchup.connector_core.adapters.jira"),
     ("catchup/worker/handlers/jira_incremental_handler.py", "catchup.connector_core.adapters.jira"),
     ("catchup/sync/handlers/slack.py", "catchup.connector_core.adapters.slack"),
     ("catchup/worker/handlers/slack_incremental_handler.py", "catchup.connector_core.adapters.slack"),
@@ -138,6 +138,12 @@ def test_compatibility_wrapper_modules_are_removed() -> None:
         "catchup/connector_core/application/sync_ingestion.py",
         "catchup/connector_core/application/sync_ingestion_logging.py",
         "catchup/connector_core/ports/sync_ingestion.py",
+        "catchup/worker/handlers/base_full_sync_handler.py",
+        "catchup/worker/handlers/channel_talk_full_sync_handler.py",
+        "catchup/worker/handlers/confluence_full_sync_handler.py",
+        "catchup/worker/handlers/github_full_sync_handler.py",
+        "catchup/worker/handlers/jira_full_sync_handler.py",
+        "catchup/worker/handlers/slack_full_sync_handler.py",
     ):
         assert not (BACKEND_ROOT / relative_path).exists(), relative_path
 
@@ -156,6 +162,21 @@ def test_slack_full_sync_handler_does_not_import_worker_modules() -> None:
     imports = _imported_modules(BACKEND_ROOT / "catchup/sync/handlers/slack.py")
 
     assert not any(module.startswith("catchup.worker") for module in imports)
+
+
+def test_canonical_full_sync_handlers_do_not_import_worker_modules() -> None:
+    for relative_path in (
+        "catchup/sync/handlers/channel_talk.py",
+        "catchup/sync/handlers/confluence.py",
+        "catchup/sync/handlers/github.py",
+        "catchup/sync/handlers/jira.py",
+        "catchup/sync/handlers/slack.py",
+    ):
+        imports = _imported_modules(BACKEND_ROOT / relative_path)
+
+        assert not any(module.startswith("catchup.worker") for module in imports), (
+            relative_path
+        )
 
 
 def _find_imports(

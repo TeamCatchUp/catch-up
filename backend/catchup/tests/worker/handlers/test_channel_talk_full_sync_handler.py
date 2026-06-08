@@ -41,18 +41,16 @@ from catchup.sync.common.schemas import IncrementalSyncContext
 from catchup.sync.common.schemas import SyncStreamMessage
 from catchup.sync.common.schemas import SyncStreamTask
 from catchup.sync.common.schemas import SyncTargetType
+from catchup.sync.handlers.channel_talk import (
+    CHANNEL_TALK_USER_CHAT_FULL_SYNC_BATCH_SIZE,
+)
+from catchup.sync.handlers.channel_talk import (
+    CHANNEL_TALK_USER_CHAT_FULL_SYNC_MAX_PAGES_PER_BATCH,
+)
+from catchup.sync.handlers.channel_talk import ChannelTalkFullSyncHandler
 from catchup.sync.handlers.registry import get_ingestion_handler
 from catchup.sync.ingestion.schemas import SyncWindow
 from catchup.worker.full_sync_processor import process_full_sync_message
-from catchup.worker.handlers.channel_talk_full_sync_handler import (
-    CHANNEL_TALK_USER_CHAT_FULL_SYNC_BATCH_SIZE,
-)
-from catchup.worker.handlers.channel_talk_full_sync_handler import (
-    CHANNEL_TALK_USER_CHAT_FULL_SYNC_MAX_PAGES_PER_BATCH,
-)
-from catchup.worker.handlers.channel_talk_full_sync_handler import (
-    ChannelTalkFullSyncHandler,
-)
 from catchup.worker.handlers.channel_talk_incremental_handler import (
     ChannelTalkIncrementalHandler,
 )
@@ -61,7 +59,7 @@ from catchup.worker.schemas import JobFinalizeResult
 
 CHANNEL_ID = "channel-123"
 SPACE_ID = "space-123"
-_HANDLER_MODULE = "catchup.worker.handlers.channel_talk_full_sync_handler"
+_HANDLER_MODULE = "catchup.sync.handlers.channel_talk"
 _LOAD_CONNECTION = f"{_HANDLER_MODULE}.load_channel_talk_connection"
 _LOAD_DOCUMENT_CONNECTION = f"{_HANDLER_MODULE}.load_channel_talk_document_connection"
 _RUN_IN_THREADPOOL = f"{_HANDLER_MODULE}.run_in_threadpool"
@@ -208,7 +206,7 @@ class ChannelTalkFullSyncHandlerTests(IsolatedAsyncioTestCase):
                 AsyncMock(return_value=_build_application_result()),
             ) as run_sync_ingestion,
             patch(
-                "catchup.worker.handlers.channel_talk_full_sync_handler.datetime"
+                "catchup.sync.handlers.channel_talk.datetime"
             ) as mocked_datetime,
         ):
             mocked_datetime.now.return_value = fixed_now
@@ -277,7 +275,7 @@ class ChannelTalkFullSyncHandlerTests(IsolatedAsyncioTestCase):
                 ),
             ) as run_sync_ingestion,
             patch(
-                "catchup.worker.handlers.channel_talk_full_sync_handler.datetime"
+                "catchup.sync.handlers.channel_talk.datetime"
             ) as mocked_datetime,
         ):
             mocked_datetime.now.return_value = fixed_now
@@ -466,6 +464,7 @@ class ChannelTalkFullSyncHandlerTests(IsolatedAsyncioTestCase):
                 _RUN_SYNC_INGESTION,
                 AsyncMock(return_value=_build_application_result(persisted_count=5)),
             ),
+            patch(_RELEASE_WAITING, return_value=0),
             patch(f"{_FULL_SYNC_PROCESSOR_MODULE}.emit_audit_event") as job_audit,
             patch("catchup.audit.utils.emit_audit_event") as event_audit,
         ):

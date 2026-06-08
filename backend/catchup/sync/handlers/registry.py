@@ -5,22 +5,18 @@ from catchup.db.models import SyncType
 from catchup.sync.common.protocols import IngestionHandlerProtocol
 from catchup.sync.common.schemas import HandlerKey
 from catchup.sync.common.schemas import SyncContext
+from catchup.sync.handlers.channel_talk import ChannelTalkFullSyncHandler
+from catchup.sync.handlers.confluence import ConfluenceFullSyncHandler
+from catchup.sync.handlers.github import GithubFullSyncHandler
+from catchup.sync.handlers.jira import JiraFullSyncHandler
 from catchup.sync.handlers.slack import SlackFullSyncHandler
-from catchup.worker.handlers.channel_talk_full_sync_handler import (
-    ChannelTalkFullSyncHandler,
-)
 from catchup.worker.handlers.channel_talk_incremental_handler import (
     ChannelTalkIncrementalHandler,
-)
-from catchup.worker.handlers.confluence_full_sync_handler import (
-    ConfluenceFullSyncHandler,
 )
 from catchup.worker.handlers.confluence_incremental_handler import (
     ConfluenceIncrementalHandler,
 )
-from catchup.worker.handlers.github_full_sync_handler import GithubFullSyncHandler
 from catchup.worker.handlers.github_incremental_handler import GithubIncrementalHandler
-from catchup.worker.handlers.jira_full_sync_handler import JiraFullSyncHandler
 from catchup.worker.handlers.jira_incremental_handler import JiraIncrementalHandler
 from catchup.worker.handlers.slack_incremental_handler import SlackIncrementalHandler
 
