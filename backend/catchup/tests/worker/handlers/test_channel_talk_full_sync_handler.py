@@ -48,12 +48,10 @@ from catchup.sync.handlers.channel_talk import (
     CHANNEL_TALK_USER_CHAT_FULL_SYNC_MAX_PAGES_PER_BATCH,
 )
 from catchup.sync.handlers.channel_talk import ChannelTalkFullSyncHandler
+from catchup.sync.handlers.channel_talk import ChannelTalkIncrementalHandler
 from catchup.sync.handlers.registry import get_ingestion_handler
 from catchup.sync.ingestion.schemas import SyncWindow
 from catchup.worker.full_sync_processor import process_full_sync_message
-from catchup.worker.handlers.channel_talk_incremental_handler import (
-    ChannelTalkIncrementalHandler,
-)
 from catchup.worker.schemas import ClaimResult
 from catchup.worker.schemas import JobFinalizeResult
 
@@ -68,9 +66,7 @@ _RELEASE_WAITING = f"{_HANDLER_MODULE}._release_waiting_user_chat_full_sync_reco
 _DEADLETTER_WAITING = (
     f"{_HANDLER_MODULE}._deadletter_waiting_user_chat_full_sync_records"
 )
-_INCREMENTAL_HANDLER_MODULE = (
-    "catchup.worker.handlers.channel_talk_incremental_handler"
-)
+_INCREMENTAL_HANDLER_MODULE = "catchup.sync.handlers.channel_talk"
 _LOAD_INCREMENTAL_CONNECTION = (
     f"{_INCREMENTAL_HANDLER_MODULE}.load_channel_talk_connection"
 )

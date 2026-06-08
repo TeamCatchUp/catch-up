@@ -6,19 +6,15 @@ from catchup.sync.common.protocols import IngestionHandlerProtocol
 from catchup.sync.common.schemas import HandlerKey
 from catchup.sync.common.schemas import SyncContext
 from catchup.sync.handlers.channel_talk import ChannelTalkFullSyncHandler
+from catchup.sync.handlers.channel_talk import ChannelTalkIncrementalHandler
 from catchup.sync.handlers.confluence import ConfluenceFullSyncHandler
+from catchup.sync.handlers.confluence import ConfluenceIncrementalHandler
 from catchup.sync.handlers.github import GithubFullSyncHandler
+from catchup.sync.handlers.github import GithubIncrementalHandler
 from catchup.sync.handlers.jira import JiraFullSyncHandler
+from catchup.sync.handlers.jira import JiraIncrementalHandler
 from catchup.sync.handlers.slack import SlackFullSyncHandler
 from catchup.sync.handlers.slack import SlackIncrementalHandler
-from catchup.worker.handlers.channel_talk_incremental_handler import (
-    ChannelTalkIncrementalHandler,
-)
-from catchup.worker.handlers.confluence_incremental_handler import (
-    ConfluenceIncrementalHandler,
-)
-from catchup.worker.handlers.github_incremental_handler import GithubIncrementalHandler
-from catchup.worker.handlers.jira_incremental_handler import JiraIncrementalHandler
 
 _HANDLERS: dict[HandlerKey, IngestionHandlerProtocol] | None = None
 

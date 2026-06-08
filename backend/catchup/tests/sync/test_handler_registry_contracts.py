@@ -4,6 +4,10 @@ from catchup.db.models import SyncConnector
 from catchup.db.models import SyncType
 from catchup.sync.common.schemas import FullSyncContext
 from catchup.sync.common.schemas import SyncTargetType
+from catchup.sync.handlers.channel_talk import ChannelTalkIncrementalHandler
+from catchup.sync.handlers.confluence import ConfluenceIncrementalHandler
+from catchup.sync.handlers.github import GithubIncrementalHandler
+from catchup.sync.handlers.jira import JiraIncrementalHandler
 from catchup.sync.handlers.registry import get_ingestion_handler
 from catchup.sync.handlers.registry import select_handler
 from catchup.sync.handlers.slack import SlackIncrementalHandler
@@ -43,10 +47,19 @@ def test_select_handler_resolves_from_sync_context() -> None:
     )
 
 
-def test_slack_incremental_resolves_to_canonical_sync_handler() -> None:
-    handler = get_ingestion_handler(
-        connector=SyncConnector.SLACK,
-        sync_type=SyncType.INCREMENTAL,
-    )
+def test_incremental_handlers_resolve_to_canonical_sync_handlers() -> None:
+    expected_types = {
+        SyncConnector.SLACK: SlackIncrementalHandler,
+        SyncConnector.GITHUB: GithubIncrementalHandler,
+        SyncConnector.JIRA: JiraIncrementalHandler,
+        SyncConnector.CONFLUENCE: ConfluenceIncrementalHandler,
+        SyncConnector.CHANNEL_TALK: ChannelTalkIncrementalHandler,
+    }
 
-    assert isinstance(handler, SlackIncrementalHandler)
+    for connector, expected_type in expected_types.items():
+        handler = get_ingestion_handler(
+            connector=connector,
+            sync_type=SyncType.INCREMENTAL,
+        )
+
+        assert isinstance(handler, expected_type)
