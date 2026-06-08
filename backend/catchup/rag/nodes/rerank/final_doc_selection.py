@@ -127,22 +127,37 @@ def _apply_two_pool_selection(
         reverse=True,
     )[:essential_budget]
     bypass_ids = {get_document_id(d) for d in pool_b}
+    # pool_b는 reranked_docs[total_k:] 에서만 추출되므로 pool_a와 중복되지 않는다.
     pool_a = reranked_docs[: total_k - len(pool_b)]
     final_docs = pool_a + pool_b
     rank_map = {
         get_document_id(d): rank
         for rank, d in enumerate(reranked_docs, start=1)
     }
+    annotated_docs = []
     for doc in final_docs:
         doc_id = get_document_id(doc)
-        doc.metadata["original_rerank_score"] = doc.metadata.get(
-            "relevance_score", 0.0
+        new_metadata = {
+            **doc.metadata,
+            "original_rerank_score": doc.metadata.get(
+                "relevance_score", 0.0
+            ),
+            "is_agent_essential": doc_id in essential_doc_ids,
+            "reranker_rank": rank_map.get(doc_id, -1),
+            "selection_pool": (
+                "essential_bypass"
+                if doc_id in bypass_ids
+                else "reranker"
+            ),
+        }
+        annotated_docs.append(
+            Document(
+                page_content=doc.page_content,
+                metadata=new_metadata,
+                id=doc_id,
+            )
         )
-        doc.metadata["is_agent_essential"] = doc_id in essential_doc_ids
-        doc.metadata["reranker_rank"] = rank_map.get(doc_id, -1)
-        doc.metadata["selection_pool"] = (
-            "essential_bypass" if doc_id in bypass_ids else "reranker"
-        )
+    final_docs = annotated_docs
     metadata = {
         "reranker_essential_recall": reranker_essential_recall,
         "cut_off_essential_count": len(cut_off_essential),
