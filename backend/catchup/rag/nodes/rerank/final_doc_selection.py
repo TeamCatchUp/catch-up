@@ -143,7 +143,7 @@ def _apply_two_pool_selection(
     ]
     pool_b = sorted(
         cut_off_essential,
-        key=lambda d: d.metadata.get("relevance_score", 0.0),
+        key=lambda d: d.metadata.get("relevance_score") or 0.0,
         reverse=True,
     )[:essential_budget]
     bypass_ids = {get_document_id(d) for d in pool_b}
@@ -159,9 +159,7 @@ def _apply_two_pool_selection(
         doc_id = get_document_id(doc)
         new_metadata = {
             **doc.metadata,
-            "original_rerank_score": doc.metadata.get(
-                "relevance_score", 0.0
-            ),
+            "original_rerank_score": doc.metadata.get("relevance_score") or 0.0,
             "is_agent_essential": doc_id in essential_doc_ids,
             "reranker_rank": rank_map.get(doc_id, -1),
             "selection_pool": (
