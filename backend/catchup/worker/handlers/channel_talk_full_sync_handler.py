@@ -15,8 +15,6 @@ from catchup.connector_core.adapters.channel_talk.article_full_sync import (
 from catchup.connector_core.adapters.channel_talk.user_chat_full_sync import (
     ChannelTalkUserChatFullSyncIngestionAdapter,
 )
-from catchup.connector_core.application.sync_ingestion import run_sync_ingestion
-from catchup.connector_core.ports.sync_ingestion import SyncWindow
 from catchup.connectors.channel_talk.core.user_chat_full_sync_models import (
     ChannelTalkUserChatFullSyncCheckpoint,
 )
@@ -55,6 +53,8 @@ from catchup.sync.audit import SyncAuditContext
 from catchup.sync.common.schemas import FullSyncContext
 from catchup.sync.common.schemas import SyncTargetType
 from catchup.sync.common.schemas import TargetSyncResult
+from catchup.sync.ingestion.pipeline import run_sync_ingestion
+from catchup.sync.ingestion.schemas import SyncWindow
 from catchup.worker.handlers.base_full_sync_handler import BaseFullSyncHandler
 
 CHANNEL_TALK_USER_CHAT_FULL_SYNC_BATCH_SIZE = 50

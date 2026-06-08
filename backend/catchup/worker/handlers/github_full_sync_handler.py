@@ -12,13 +12,13 @@ from catchup.connector_core.adapters.github import (
     GithubRepositoryFullSyncExecutionRequest,
 )
 from catchup.connector_core.adapters.github import GithubRepositorySyncAdapter
-from catchup.connector_core.application.sync_ingestion import run_sync_ingestion
-from catchup.connector_core.ports.sync_ingestion import SyncWindow
 from catchup.connectors.github.client import GitHubRateLimitError
 from catchup.connectors.github.factory import create_github_ingestion_service
 from catchup.sync.audit import SyncAuditContext
 from catchup.sync.common.schemas import FullSyncContext
 from catchup.sync.common.schemas import TargetSyncResult
+from catchup.sync.ingestion.pipeline import run_sync_ingestion
+from catchup.sync.ingestion.schemas import SyncWindow
 from catchup.worker.handlers.base_full_sync_handler import BaseFullSyncHandler
 
 

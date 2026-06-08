@@ -10,13 +10,13 @@ from catchup.connector_core.adapters.slack import (
     SlackMessageIncrementalSyncExecutionRequest,
 )
 from catchup.connector_core.adapters.slack import SlackMessageSyncAdapter
-from catchup.connector_core.application.sync_ingestion import run_sync_ingestion
-from catchup.connector_core.ports.sync_ingestion import SyncWindow
 from catchup.connectors.slack.factory import create_slack_ingestion_service
 from catchup.sync.audit import SyncAuditContext
 from catchup.sync.common.exceptions import SyncInternalException
 from catchup.sync.common.schemas import IncrementalSyncContext
 from catchup.sync.common.schemas import TargetSyncResult
+from catchup.sync.ingestion.pipeline import run_sync_ingestion
+from catchup.sync.ingestion.schemas import SyncWindow
 from catchup.worker.handlers.base_incremental_handler import BaseIncrementalHandler
 
 

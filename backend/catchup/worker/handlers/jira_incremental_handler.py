@@ -14,12 +14,12 @@ from catchup.connector_core.adapters.jira import (
     create_jira_issue_ingestion_dependencies,
 )
 from catchup.connector_core.adapters.jira import prepare_jira_issue_transform_context
-from catchup.connector_core.application.sync_ingestion import run_sync_ingestion
-from catchup.connector_core.ports.sync_ingestion import SyncWindow
 from catchup.sync.audit import SyncAuditContext
 from catchup.sync.common.exceptions import SyncInternalException
 from catchup.sync.common.schemas import IncrementalSyncContext
 from catchup.sync.common.schemas import TargetSyncResult
+from catchup.sync.ingestion.pipeline import run_sync_ingestion
+from catchup.sync.ingestion.schemas import SyncWindow
 from catchup.worker.handlers.base_incremental_handler import BaseIncrementalHandler
 
 
