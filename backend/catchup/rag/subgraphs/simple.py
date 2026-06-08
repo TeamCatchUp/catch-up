@@ -7,8 +7,9 @@ from catchup.rag.nodes import generate_final_answer_fast_node
 from catchup.rag.nodes import generate_vector_queries_node
 from catchup.rag.nodes import merge_cache_node
 from catchup.rag.nodes import rerank_node
-from catchup.rag.nodes import search_vector_db_node
 from catchup.rag.nodes import rewrite_node
+from catchup.rag.nodes import search_vector_db_node
+from catchup.rag.nodes import select_final_docs_node
 from catchup.rag.state import AgentState
 
 
@@ -45,6 +46,11 @@ def build_simple_subgraph(
         partial(rerank_node, rerank_service=rerank_service),
         retry=BASE_RETRY_POLICY,
     )
+    graph.add_node(
+        "select_final_docs",
+        select_final_docs_node,
+        retry=BASE_RETRY_POLICY,
+    )
     graph.add_node("merge_cache", merge_cache_node)
     graph.add_node(
         "generate_final_answer",
@@ -57,7 +63,8 @@ def build_simple_subgraph(
     graph.add_edge("rewrite", "generate_vector_queries")
     graph.add_edge("generate_vector_queries", "search_vector_db")
     graph.add_edge("search_vector_db", "rerank")
-    graph.add_edge("rerank", "merge_cache")
+    graph.add_edge("rerank", "select_final_docs")
+    graph.add_edge("select_final_docs", "merge_cache")
     graph.add_edge("merge_cache", "generate_final_answer")
     graph.add_edge("generate_final_answer", END)
 
