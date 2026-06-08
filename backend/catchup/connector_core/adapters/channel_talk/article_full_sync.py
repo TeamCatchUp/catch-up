@@ -6,7 +6,6 @@ from catchup.components.embedder.constants import EmbeddingProvider
 from catchup.components.embedder.factory import get_embedding_service
 from catchup.components.vector_db.factory import get_pgvector_repository
 from catchup.components.vector_db.pgvector.repository import PGVectorRepository
-from catchup.connector_core.ports.sync_ingestion import SyncWindow
 from catchup.connectors.channel_talk.document_space.article_full_sync_fetcher import (
     ChannelTalkArticleFullSyncFetcher,
 )
@@ -46,6 +45,7 @@ from catchup.connectors.channel_talk.document_space.article_full_sync_models imp
 from catchup.connectors.channel_talk.document_space.article_transformer import (
     ArticleTransformer,
 )
+from catchup.sync.ingestion.schemas import SyncWindow
 
 CHANNEL_TALK_ARTICLE_LANGUAGE = "ko"
 

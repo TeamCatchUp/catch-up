@@ -18,12 +18,8 @@ from catchup.connector_core.adapters.channel_talk.user_chat_full_sync import (
 from catchup.connector_core.adapters.channel_talk.user_chat_incremental import (
     ChannelTalkUserChatIncrementalIngestionAdapter,
 )
-from catchup.connector_core.application.sync_ingestion import run_sync_ingestion
 from catchup.connector_core.descriptors.channel_talk import CHANNEL_TALK_DESCRIPTOR
 from catchup.connector_core.domain.structure import ConnectorKey
-from catchup.connector_core.ports.sync_ingestion import SyncExecutionRequest
-from catchup.connector_core.ports.sync_ingestion import SyncExecutionResult
-from catchup.connector_core.ports.sync_ingestion import SyncWindow
 from catchup.connectors.channel_talk.core.user_chat_full_sync_models import (
     ChannelTalkFetchedUserChat,
 )
@@ -136,6 +132,10 @@ from catchup.connectors.channel_talk.schemas.user_chat_message import (
 )
 from catchup.db.models import SyncConnector
 from catchup.sync.audit import SyncAuditContext
+from catchup.sync.ingestion.pipeline import run_sync_ingestion
+from catchup.sync.ingestion.schemas import SyncExecutionRequest
+from catchup.sync.ingestion.schemas import SyncExecutionResult
+from catchup.sync.ingestion.schemas import SyncWindow
 
 
 def _window() -> SyncWindow:

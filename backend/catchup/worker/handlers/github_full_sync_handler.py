@@ -4,6 +4,8 @@ from datetime import datetime
 from datetime import timedelta
 from datetime import timezone
 
+import structlog
+
 from catchup.audit.actions import FullSyncAction
 from catchup.audit.metadata import FullSyncEventAuditMetadata
 from catchup.audit.utils import audit_log
@@ -17,9 +19,11 @@ from catchup.connectors.github.factory import create_github_ingestion_service
 from catchup.sync.audit import SyncAuditContext
 from catchup.sync.common.schemas import FullSyncContext
 from catchup.sync.common.schemas import TargetSyncResult
+from catchup.sync.handlers.base import BaseFullSyncHandler
 from catchup.sync.ingestion.pipeline import run_sync_ingestion
 from catchup.sync.ingestion.schemas import SyncWindow
-from catchup.worker.handlers.base_full_sync_handler import BaseFullSyncHandler
+
+logger = structlog.get_logger(__name__)
 
 
 class GithubFullSyncHandler(BaseFullSyncHandler):
@@ -77,22 +81,34 @@ class GithubFullSyncHandler(BaseFullSyncHandler):
             or ""
         ).strip()
         if record_type not in {"issue", "pull_request"}:
-            raise RuntimeError(
-                "[GITHUB][FULL SYNC][WORKER] Missing stream target metadata: "
-                f"scope_id={context.scope_id}, repository_id={context.target_id}, "
-                f"record_type={record_type!r}"
+            logger.error(
+                "github_full_sync_missing_stream_metadata",
+                connector="github",
+                sync_type="full",
+                scope_id=context.scope_id,
+                repository_id=context.target_id,
+                job_id=context.job_id,
+                event_id=context.event_id,
+                record_type=record_type,
             )
+            raise RuntimeError("github_full_sync_missing_stream_metadata")
 
         repo_full_name = str(
             context.metadata.get("repo_full_name")
             or context.target_name.split(" / ", 1)[0]
         ).strip()
         if "/" not in repo_full_name:
-            raise RuntimeError(
-                "[GITHUB][FULL SYNC][WORKER] Invalid repository target metadata: "
-                f"scope_id={context.scope_id}, repository_id={context.target_id}, "
-                f"repo_full_name={repo_full_name!r}"
+            logger.error(
+                "github_full_sync_invalid_repository_metadata",
+                connector="github",
+                sync_type="full",
+                scope_id=context.scope_id,
+                repository_id=context.target_id,
+                job_id=context.job_id,
+                event_id=context.event_id,
+                repo_full_name=repo_full_name,
             )
+            raise RuntimeError("github_full_sync_invalid_repository_metadata")
         owner, repo = repo_full_name.split("/", 1)
 
         audit_context = SyncAuditContext(
@@ -142,18 +158,32 @@ class GithubFullSyncHandler(BaseFullSyncHandler):
                 break
             after_cursor = result.next_cursor
             if after_cursor is None:
-                raise RuntimeError(
-                    "[GITHUB][FULL SYNC][WORKER] Missing next cursor for non-terminal page: "
-                    f"scope_id={context.scope_id}, repository_id={context.target_id}, "
-                    f"record_type={record_type}, batch_index={batch_index}"
+                logger.error(
+                    "github_full_sync_missing_next_cursor",
+                    connector="github",
+                    sync_type="full",
+                    scope_id=context.scope_id,
+                    repository_id=context.target_id,
+                    job_id=context.job_id,
+                    event_id=context.event_id,
+                    record_type=record_type,
+                    batch_index=batch_index,
                 )
+                raise RuntimeError("github_full_sync_missing_next_cursor")
             batch_index += 1
 
         if error_count > 0:
-            raise RuntimeError(
-                "[GITHUB][FULL SYNC][WORKER] Target sync failed: "
-                f"scope_id={context.scope_id}, repository_id={context.target_id}, errors={error_count}"
+            logger.error(
+                "github_full_sync_failed",
+                connector="github",
+                sync_type="full",
+                scope_id=context.scope_id,
+                repository_id=context.target_id,
+                job_id=context.job_id,
+                event_id=context.event_id,
+                error_count=error_count,
             )
+            raise RuntimeError("github_full_sync_failed")
         return TargetSyncResult(
             synced_count=synced_count,
             error_count=error_count,

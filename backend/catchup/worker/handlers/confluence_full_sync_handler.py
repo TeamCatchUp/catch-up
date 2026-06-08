@@ -4,6 +4,8 @@ from datetime import datetime
 from datetime import timedelta
 from datetime import timezone
 
+import structlog
+
 from catchup.audit.actions import FullSyncAction
 from catchup.audit.metadata import FullSyncEventAuditMetadata
 from catchup.audit.utils import audit_log
@@ -16,9 +18,11 @@ from catchup.connectors.confluence.factory import create_confluence_ingestion_se
 from catchup.sync.audit import SyncAuditContext
 from catchup.sync.common.schemas import FullSyncContext
 from catchup.sync.common.schemas import TargetSyncResult
+from catchup.sync.handlers.base import BaseFullSyncHandler
 from catchup.sync.ingestion.pipeline import run_sync_ingestion
 from catchup.sync.ingestion.schemas import SyncWindow
-from catchup.worker.handlers.base_full_sync_handler import BaseFullSyncHandler
+
+logger = structlog.get_logger(__name__)
 
 
 class ConfluenceFullSyncHandler(BaseFullSyncHandler):
@@ -66,11 +70,17 @@ class ConfluenceFullSyncHandler(BaseFullSyncHandler):
             or ""
         ).strip()
         if record_type not in {"page", "blogpost"}:
-            raise RuntimeError(
-                "[CONFLUENCE][FULL SYNC][WORKER] Missing content target metadata: "
-                f"scope_id={context.scope_id}, space_key={space_key}, "
-                f"record_type={record_type!r}"
+            logger.error(
+                "confluence_full_sync_missing_content_metadata",
+                connector="confluence",
+                sync_type="full",
+                scope_id=context.scope_id,
+                space_key=space_key,
+                job_id=context.job_id,
+                event_id=context.event_id,
+                record_type=record_type,
             )
+            raise RuntimeError("confluence_full_sync_missing_content_metadata")
 
         audit_context = SyncAuditContext(
             connector=context.connector,
@@ -108,10 +118,17 @@ class ConfluenceFullSyncHandler(BaseFullSyncHandler):
             batch_index += 1
 
         if error_count > 0:
-            raise RuntimeError(
-                "[CONFLUENCE][FULL SYNC][WORKER] Target sync failed: "
-                f"scope_id={context.scope_id}, space_key={space_key}, errors={error_count}"
+            logger.error(
+                "confluence_full_sync_failed",
+                connector="confluence",
+                sync_type="full",
+                scope_id=context.scope_id,
+                space_key=space_key,
+                job_id=context.job_id,
+                event_id=context.event_id,
+                error_count=error_count,
             )
+            raise RuntimeError("confluence_full_sync_failed")
         return TargetSyncResult(
             synced_count=synced_count,
             error_count=error_count,

@@ -11,7 +11,6 @@ from catchup.worker.handlers.github_full_sync_handler import GithubFullSyncHandl
 from catchup.worker.handlers.github_incremental_handler import GithubIncrementalHandler
 from catchup.worker.handlers.jira_full_sync_handler import JiraFullSyncHandler
 from catchup.worker.handlers.jira_incremental_handler import JiraIncrementalHandler
-from catchup.worker.handlers.slack_full_sync_handler import SlackFullSyncHandler
 from catchup.worker.handlers.slack_incremental_handler import SlackIncrementalHandler
 
 __all__ = [
@@ -22,6 +21,5 @@ __all__ = [
     "GithubIncrementalHandler",
     "JiraFullSyncHandler",
     "JiraIncrementalHandler",
-    "SlackFullSyncHandler",
     "SlackIncrementalHandler",
 ]

@@ -13,11 +13,11 @@ from pydantic import field_validator
 
 from catchup.configs.config import settings
 from catchup.connector_core.domain.structure import ConnectorKey
-from catchup.connector_core.ports.sync_ingestion import SyncExecutionRequest
-from catchup.connector_core.ports.sync_ingestion import SyncExecutionResult
-from catchup.connector_core.ports.sync_ingestion import SyncWindow
 from catchup.connectors.slack.ingestion_service import SlackIngestionService
 from catchup.sync.audit import SyncAuditContext
+from catchup.sync.ingestion.schemas import SyncExecutionRequest
+from catchup.sync.ingestion.schemas import SyncExecutionResult
+from catchup.sync.ingestion.schemas import SyncWindow
 from catchup.utils.validation import require_text
 
 SlackIncrementalEventKind = Literal["created", "updated", "deleted"]

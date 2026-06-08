@@ -16,7 +16,7 @@ from catchup.connector_core.adapters.jira import (
 from catchup.connector_core.adapters.jira.issue_dependencies import (
     JiraIssueIngestionDependencies,
 )
-from catchup.connector_core.ports.sync_ingestion import SyncWindow
+from catchup.sync.ingestion.schemas import SyncWindow
 
 
 class _FakeClient:

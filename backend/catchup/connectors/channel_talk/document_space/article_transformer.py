@@ -31,7 +31,6 @@ from catchup.connector_core.document_format import (
     ChannelTalkDocumentArticleTaxonomyMetadata,
 )
 from catchup.connector_core.document_format import DocumentBaseMetadata
-from catchup.connector_core.ports.sync_ingestion import SyncWindow
 from catchup.connectors.channel_talk.document_space.article_full_sync_models import (
     ArticleBuildResult,
 )
@@ -56,6 +55,7 @@ from catchup.connectors.channel_talk.schemas.document_article import (
 from catchup.connectors.channel_talk.schemas.document_article import (
     ChannelTalkDocumentArticleView,
 )
+from catchup.sync.ingestion.schemas import SyncWindow
 from catchup.utils.validation import require_text
 
 from .article_chunker import ArticleChunker

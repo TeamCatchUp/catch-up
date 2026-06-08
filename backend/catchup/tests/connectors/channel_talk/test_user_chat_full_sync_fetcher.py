@@ -7,7 +7,6 @@ from types import SimpleNamespace
 from unittest import IsolatedAsyncioTestCase
 from unittest.mock import AsyncMock
 
-from catchup.connector_core.ports.sync_ingestion import SyncWindow
 from catchup.connectors.channel_talk.core.user_chat_full_sync_fetcher import (
     ChannelTalkUserChatFullSyncFetcher,
 )
@@ -37,6 +36,7 @@ from catchup.connectors.channel_talk.schemas.user_chat_message import (
 from catchup.connectors.channel_talk.schemas.user_chat_message import (
     ChannelTalkUserChatMessagePage,
 )
+from catchup.sync.ingestion.schemas import SyncWindow
 
 
 def _window() -> SyncWindow:

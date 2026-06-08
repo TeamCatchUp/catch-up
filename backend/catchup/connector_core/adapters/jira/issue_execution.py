@@ -11,9 +11,9 @@ from pydantic import computed_field
 from pydantic import field_validator
 
 from catchup.connector_core.domain.structure import ConnectorKey
-from catchup.connector_core.ports.sync_ingestion import SyncExecutionRequest
-from catchup.connector_core.ports.sync_ingestion import SyncExecutionResult
 from catchup.sync.audit import SyncAuditContext
+from catchup.sync.ingestion.schemas import SyncExecutionRequest
+from catchup.sync.ingestion.schemas import SyncExecutionResult
 from catchup.utils.validation import require_text
 
 JiraIssueIncrementalEventKind = Literal[

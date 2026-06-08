@@ -4,7 +4,6 @@ from datetime import datetime
 from datetime import timezone
 from unittest import IsolatedAsyncioTestCase
 
-from catchup.connector_core.ports.sync_ingestion import SyncWindow
 from catchup.connectors.channel_talk.document_space.article_full_sync_fetcher import (
     ChannelTalkArticleFullSyncFetcher,
 )
@@ -35,6 +34,7 @@ from catchup.connectors.channel_talk.schemas.document_connection import (
 from catchup.connectors.channel_talk.schemas.document_connection import (
     ChannelTalkDocumentCredentialsRecord,
 )
+from catchup.sync.ingestion.schemas import SyncWindow
 
 
 def _window() -> SyncWindow:

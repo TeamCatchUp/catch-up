@@ -39,9 +39,9 @@ from catchup.connector_core.descriptors.confluence import CONFLUENCE_DESCRIPTOR
 from catchup.connector_core.descriptors.github import GITHUB_DESCRIPTOR
 from catchup.connector_core.descriptors.slack import SLACK_DESCRIPTOR
 from catchup.connector_core.domain.structure import ConnectorKey
-from catchup.connector_core.ports.sync_ingestion import SyncWindow
 from catchup.connectors.confluence.transformers import ConfluenceTransformResult
 from catchup.connectors.github.client import GitHubApiClient
+from catchup.sync.ingestion.schemas import SyncWindow
 
 
 def _window() -> SyncWindow:

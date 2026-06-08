@@ -14,7 +14,6 @@ from catchup.connector_core.document_format import ChannelTalkUserChatMetricsMet
 from catchup.connector_core.document_format import ChannelTalkUserChatTagsMetadata
 from catchup.connector_core.document_format import ChannelTalkUserChatTimingMetadata
 from catchup.connector_core.document_format import DocumentBaseMetadata
-from catchup.connector_core.ports.sync_ingestion import SyncWindow
 from catchup.connectors.channel_talk.core.user_chat_full_sync_models import (
     ChannelTalkFetchedUserChat,
 )
@@ -24,6 +23,7 @@ from catchup.connectors.channel_talk.core.user_chat_full_sync_models import (
 from catchup.connectors.channel_talk.schemas.channel_metadata import (
     ChannelTalkManagerMetadata,
 )
+from catchup.sync.ingestion.schemas import SyncWindow
 
 from .user_chat_ids import build_user_chat_desk_url
 from .user_chat_ids import build_user_chat_document_id

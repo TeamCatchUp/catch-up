@@ -12,7 +12,6 @@ from catchup.audit.actions import FullSyncAction
 from catchup.audit.base import AuditLevel
 from catchup.audit.base import AuditStatus
 from catchup.audit.metadata import FullSyncEventAuditMetadata
-from catchup.connector_core.ports.sync_ingestion import SyncWindow
 from catchup.connectors.channel_talk.core.user_chat_full_sync_models import (
     ChannelTalkUserChatFullSyncCheckpoint,
 )
@@ -42,6 +41,8 @@ from catchup.sync.common.schemas import IncrementalSyncContext
 from catchup.sync.common.schemas import SyncStreamMessage
 from catchup.sync.common.schemas import SyncStreamTask
 from catchup.sync.common.schemas import SyncTargetType
+from catchup.sync.handlers.registry import get_ingestion_handler
+from catchup.sync.ingestion.schemas import SyncWindow
 from catchup.worker.full_sync_processor import process_full_sync_message
 from catchup.worker.handlers.channel_talk_full_sync_handler import (
     CHANNEL_TALK_USER_CHAT_FULL_SYNC_BATCH_SIZE,
@@ -55,7 +56,6 @@ from catchup.worker.handlers.channel_talk_full_sync_handler import (
 from catchup.worker.handlers.channel_talk_incremental_handler import (
     ChannelTalkIncrementalHandler,
 )
-from catchup.worker.registry import get_ingestion_handler
 from catchup.worker.schemas import ClaimResult
 from catchup.worker.schemas import JobFinalizeResult
 
@@ -930,8 +930,8 @@ class ChannelTalkIncrementalHandlerTests(IsolatedAsyncioTestCase):
         )
 
 
-class WorkerRegistryAdmissionTests(TestCase):
-    def test_worker_registry_includes_channel_talk_full_handler(self) -> None:
+class HandlerRegistryAdmissionTests(TestCase):
+    def test_handler_registry_includes_channel_talk_full_handler(self) -> None:
         self.assertIsNotNone(
             get_ingestion_handler(
                 connector=SyncConnector.CHANNEL_TALK,
@@ -946,7 +946,7 @@ class WorkerRegistryAdmissionTests(TestCase):
             SyncConnector.CHANNEL_TALK,
         )
 
-    def test_worker_registry_keeps_existing_incremental_handlers_registered(
+    def test_handler_registry_keeps_existing_incremental_handlers_registered(
         self,
     ) -> None:
         for connector in (
@@ -962,7 +962,7 @@ class WorkerRegistryAdmissionTests(TestCase):
                 ),
             )
 
-    def test_worker_registry_includes_channel_talk_incremental_handler(self) -> None:
+    def test_handler_registry_includes_channel_talk_incremental_handler(self) -> None:
         self.assertIsNotNone(
             get_ingestion_handler(
                 connector=SyncConnector.CHANNEL_TALK,

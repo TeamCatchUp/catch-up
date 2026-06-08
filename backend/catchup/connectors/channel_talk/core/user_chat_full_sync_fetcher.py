@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 
-from catchup.connector_core.ports.sync_ingestion import SyncWindow
 from catchup.connectors.channel_talk.core.client import ChannelTalkCoreApiClient
 from catchup.connectors.channel_talk.core.user_chat_full_sync_models import (
     ChannelTalkFetchedUserChat,
@@ -23,6 +22,7 @@ from catchup.connectors.channel_talk.schemas.user_chat import ChannelTalkUserCha
 from catchup.connectors.channel_talk.schemas.user_chat_message import (
     ChannelTalkUserChatMessage,
 )
+from catchup.sync.ingestion.schemas import SyncWindow
 
 
 class ChannelTalkUserChatFullSyncFetcher:

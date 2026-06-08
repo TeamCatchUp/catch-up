@@ -18,9 +18,9 @@ from catchup.connector_core.adapters.jira import prepare_jira_issue_transform_co
 from catchup.sync.audit import SyncAuditContext
 from catchup.sync.common.schemas import FullSyncContext
 from catchup.sync.common.schemas import TargetSyncResult
+from catchup.sync.handlers.base import BaseFullSyncHandler
 from catchup.sync.ingestion.pipeline import run_sync_ingestion
 from catchup.sync.ingestion.schemas import SyncWindow
-from catchup.worker.handlers.base_full_sync_handler import BaseFullSyncHandler
 
 
 class JiraFullSyncHandler(BaseFullSyncHandler):

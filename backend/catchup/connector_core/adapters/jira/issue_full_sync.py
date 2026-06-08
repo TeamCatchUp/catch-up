@@ -18,7 +18,7 @@ from catchup.connector_core.adapters.jira.issue_execution import (
 from catchup.connector_core.adapters.jira.issue_execution import (
     JiraIssueTransformResult,
 )
-from catchup.connector_core.ports.sync_ingestion import SyncWindow
+from catchup.sync.ingestion.schemas import SyncWindow
 
 
 class JiraIssueFullSyncIngestionAdapter(JiraIssueIngestionAdapterBase):

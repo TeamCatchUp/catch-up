@@ -13,8 +13,8 @@ from pydantic import model_validator
 
 from catchup.connector_core.document_format import ChannelTalkDocumentArticleLogicalMetadata
 from catchup.connector_core.domain.structure import ConnectorKey
-from catchup.connector_core.ports.sync_ingestion import SyncExecutionRequest
-from catchup.connector_core.ports.sync_ingestion import SyncExecutionResult
+from catchup.sync.ingestion.schemas import SyncExecutionRequest
+from catchup.sync.ingestion.schemas import SyncExecutionResult
 from catchup.connectors.channel_talk.full_sync_target_contract import CHANNEL_TALK_DOCUMENT_ARTICLE_RUNTIME_TARGET
 from catchup.connectors.channel_talk.schemas.channel_connection import ChannelTalkCredentialsRecord
 from catchup.connectors.channel_talk.schemas.document_article import ChannelTalkDocumentArticle

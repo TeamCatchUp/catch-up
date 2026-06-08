@@ -53,9 +53,9 @@ from catchup.sync.audit import SyncAuditContext
 from catchup.sync.common.schemas import FullSyncContext
 from catchup.sync.common.schemas import SyncTargetType
 from catchup.sync.common.schemas import TargetSyncResult
+from catchup.sync.handlers.base import BaseFullSyncHandler
 from catchup.sync.ingestion.pipeline import run_sync_ingestion
 from catchup.sync.ingestion.schemas import SyncWindow
-from catchup.worker.handlers.base_full_sync_handler import BaseFullSyncHandler
 
 CHANNEL_TALK_USER_CHAT_FULL_SYNC_BATCH_SIZE = 50
 CHANNEL_TALK_USER_CHAT_FULL_SYNC_MAX_PAGES_PER_BATCH = 1

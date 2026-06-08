@@ -10,6 +10,7 @@ from catchup.sync.common.schemas import FullSyncContext
 from catchup.sync.common.schemas import IncrementalSyncContext
 from catchup.sync.common.schemas import SyncEventKind
 from catchup.sync.common.schemas import SyncTargetType
+from catchup.sync.handlers.slack import SlackFullSyncHandler
 from catchup.worker.handlers.confluence_full_sync_handler import (
     ConfluenceFullSyncHandler,
 )
@@ -18,7 +19,6 @@ from catchup.worker.handlers.confluence_incremental_handler import (
 )
 from catchup.worker.handlers.github_full_sync_handler import GithubFullSyncHandler
 from catchup.worker.handlers.github_incremental_handler import GithubIncrementalHandler
-from catchup.worker.handlers.slack_full_sync_handler import SlackFullSyncHandler
 
 
 def _slack_full_context() -> FullSyncContext:
@@ -127,11 +127,11 @@ class MigratedConnectorCoreHandlerTests(IsolatedAsyncioTestCase):
 
         with (
             patch(
-                "catchup.worker.handlers.slack_full_sync_handler.create_slack_ingestion_service",
+                "catchup.sync.handlers.slack.create_slack_ingestion_service",
                 AsyncMock(return_value=service),
             ),
             patch(
-                "catchup.worker.handlers.slack_full_sync_handler.run_sync_ingestion",
+                "catchup.sync.handlers.slack.run_sync_ingestion",
                 AsyncMock(return_value=core_result),
             ) as run_sync_ingestion,
         ):

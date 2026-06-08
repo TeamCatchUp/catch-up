@@ -21,23 +21,18 @@ KNOWN_SYNC_WORKER_CONNECTOR_CORE_IMPORTS = {
     ("catchup/worker/handlers/github_incremental_handler.py", "catchup.connector_core.adapters.github"),
     ("catchup/worker/handlers/jira_full_sync_handler.py", "catchup.connector_core.adapters.jira"),
     ("catchup/worker/handlers/jira_incremental_handler.py", "catchup.connector_core.adapters.jira"),
-    ("catchup/worker/handlers/slack_full_sync_handler.py", "catchup.connector_core.adapters.slack"),
+    ("catchup/sync/handlers/slack.py", "catchup.connector_core.adapters.slack"),
     ("catchup/worker/handlers/slack_incremental_handler.py", "catchup.connector_core.adapters.slack"),
 }
 
 
 KNOWN_CONNECTORS_CONNECTOR_CORE_IMPORTS = {
-    ("catchup/connectors/channel_talk/core/user_chat_full_sync_fetcher.py", "catchup.connector_core.ports.sync_ingestion"),
     ("catchup/connectors/channel_talk/core/user_chat_full_sync_models.py", "catchup.connector_core.document_format"),
     ("catchup/connectors/channel_talk/core/user_chat_full_sync_models.py", "catchup.connector_core.domain.structure"),
-    ("catchup/connectors/channel_talk/core/user_chat_full_sync_models.py", "catchup.connector_core.ports.sync_ingestion"),
     ("catchup/connectors/channel_talk/core/user_chat_transformer.py", "catchup.connector_core.document_format"),
-    ("catchup/connectors/channel_talk/core/user_chat_transformer.py", "catchup.connector_core.ports.sync_ingestion"),
     ("catchup/connectors/channel_talk/document_space/article_full_sync_models.py", "catchup.connector_core.document_format"),
     ("catchup/connectors/channel_talk/document_space/article_full_sync_models.py", "catchup.connector_core.domain.structure"),
-    ("catchup/connectors/channel_talk/document_space/article_full_sync_models.py", "catchup.connector_core.ports.sync_ingestion"),
     ("catchup/connectors/channel_talk/document_space/article_transformer.py", "catchup.connector_core.document_format"),
-    ("catchup/connectors/channel_talk/document_space/article_transformer.py", "catchup.connector_core.ports.sync_ingestion"),
     ("catchup/connectors/channel_talk/factory.py", "catchup.connector_core.adapters.channel_talk"),
     ("catchup/connectors/channel_talk/schemas/channel_metadata.py", "catchup.connector_core.domain.structure"),
     ("catchup/connectors/channel_talk/schemas/channel_metadata.py", "catchup.connector_core.ports.metadata_sync"),
@@ -54,8 +49,13 @@ KNOWN_CONNECTORS_CONNECTOR_CORE_IMPORTS = {
 
 
 KNOWN_CONNECTORS_SYNC_STACK_IMPORTS = {
+    ("catchup/connectors/channel_talk/core/user_chat_full_sync_fetcher.py", "catchup.sync.ingestion.schemas"),
     ("catchup/connectors/channel_talk/core/user_chat_full_sync_models.py", "catchup.sync.audit"),
+    ("catchup/connectors/channel_talk/core/user_chat_full_sync_models.py", "catchup.sync.ingestion.schemas"),
+    ("catchup/connectors/channel_talk/core/user_chat_transformer.py", "catchup.sync.ingestion.schemas"),
     ("catchup/connectors/channel_talk/document_space/article_full_sync_models.py", "catchup.sync.audit"),
+    ("catchup/connectors/channel_talk/document_space/article_full_sync_models.py", "catchup.sync.ingestion.schemas"),
+    ("catchup/connectors/channel_talk/document_space/article_transformer.py", "catchup.sync.ingestion.schemas"),
     ("catchup/connectors/confluence/factory.py", "catchup.sync.common.exceptions"),
     ("catchup/connectors/confluence/service.py", "catchup.sync.audit"),
     ("catchup/connectors/confluence/service.py", "catchup.sync.common.schemas"),
@@ -129,6 +129,33 @@ def test_connectors_do_not_gain_document_build_imports() -> None:
         violations,
         KNOWN_CONNECTORS_DOCUMENT_IMPORTS,
     )
+
+
+def test_compatibility_wrapper_modules_are_removed() -> None:
+    for relative_path in (
+        "catchup/worker/registry.py",
+        "catchup/worker/common/handlers.py",
+        "catchup/connector_core/application/sync_ingestion.py",
+        "catchup/connector_core/application/sync_ingestion_logging.py",
+        "catchup/connector_core/ports/sync_ingestion.py",
+    ):
+        assert not (BACKEND_ROOT / relative_path).exists(), relative_path
+
+
+def test_worker_processors_use_canonical_handler_registry() -> None:
+    for relative_path in (
+        "catchup/worker/full_sync_processor.py",
+        "catchup/worker/incremental_processor.py",
+    ):
+        imports = _imported_modules(BACKEND_ROOT / relative_path)
+
+        assert "catchup.sync.handlers.registry" in imports, relative_path
+
+
+def test_slack_full_sync_handler_does_not_import_worker_modules() -> None:
+    imports = _imported_modules(BACKEND_ROOT / "catchup/sync/handlers/slack.py")
+
+    assert not any(module.startswith("catchup.worker") for module in imports)
 
 
 def _find_imports(

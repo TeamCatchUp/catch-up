@@ -10,7 +10,6 @@ from catchup.components.summarizer import SummarizerService
 from catchup.components.summarizer import get_summarizer_service
 from catchup.components.vector_db.factory import get_pgvector_repository
 from catchup.components.vector_db.pgvector.repository import PGVectorRepository
-from catchup.connector_core.ports.sync_ingestion import SyncWindow
 from catchup.connectors.channel_talk.core.user_chat_full_sync_fetcher import (
     ChannelTalkUserChatFullSyncFetcher,
 )
@@ -48,6 +47,7 @@ from catchup.connectors.channel_talk.credential_loader import (
     load_channel_talk_connection,
 )
 from catchup.connectors.channel_talk.schemas.user_chat import ChannelTalkUserChatState
+from catchup.sync.ingestion.schemas import SyncWindow
 
 
 class ChannelTalkUserChatFullSyncIngestionAdapter:

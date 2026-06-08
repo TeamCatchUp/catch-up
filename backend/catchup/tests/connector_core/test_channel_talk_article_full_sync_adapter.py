@@ -11,8 +11,6 @@ from catchup.connector_core.adapters.channel_talk.article_full_sync import (
 from catchup.connector_core.adapters.channel_talk.article_incremental import (
     ChannelTalkArticleIncrementalIngestionAdapter,
 )
-from catchup.connector_core.application.sync_ingestion import run_sync_ingestion
-from catchup.connector_core.ports.sync_ingestion import SyncWindow
 from catchup.connectors.channel_talk.document_space.article_full_sync_models import (
     ChannelTalkArticleFullSyncFetchResult,
 )
@@ -52,6 +50,8 @@ from catchup.connectors.channel_talk.schemas.document_connection import (
 from catchup.connectors.channel_talk.schemas.document_connection import (
     ChannelTalkDocumentCredentialsRecord,
 )
+from catchup.sync.ingestion.pipeline import run_sync_ingestion
+from catchup.sync.ingestion.schemas import SyncWindow
 
 
 def _window() -> SyncWindow:
