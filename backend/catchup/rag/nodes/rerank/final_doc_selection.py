@@ -2,6 +2,7 @@ import math
 from collections import Counter
 
 import structlog
+from langchain_core.callbacks import adispatch_custom_event
 from langchain_core.documents import Document
 
 from catchup.rag.nodes.utils import build_doc_groups
@@ -17,6 +18,14 @@ async def select_final_docs_node(state: AgentState) -> dict:
     """reranked_docs에서 최종 문서를 선택하고 에이전틱 후처리 메타데이터를 계산한다."""
     retrieved_docs: list[Document] = state.get("retrieved_docs", [])
     if not retrieved_docs:
+        await adispatch_custom_event(
+            "process",
+            {
+                "status": "completed",
+                "node": "rerank",
+                "content": {"source_distribution": None},
+            },
+        )
         return {
             "retrieved_docs": [],
             "rerank_metadata": {},
@@ -56,11 +65,22 @@ async def select_final_docs_node(state: AgentState) -> dict:
     rerank_metadata["confirmed_essential_indices"] = confirmed_indices
 
     groups = build_doc_groups(final_docs)
-    rerank_metadata["source_distribution"] = dict(
+    source_distribution = dict(
         Counter(
             g.representative.metadata.get("source", "unknown")
             for g in groups
         )
+    )
+    rerank_metadata["source_distribution"] = source_distribution
+    # rerank_node의 on_chain_end completed 이벤트를 대신 발화한다.
+    # 프론트엔드에는 node="rerank" completed로 전달되어 UI 변화가 없다.
+    await adispatch_custom_event(
+        "process",
+        {
+            "status": "completed",
+            "node": "rerank",
+            "content": {"source_distribution": source_distribution},
+        },
     )
     rerank_metadata["stop_reason"] = (
         state.get("agent_stop_reason") or "by_choice"
