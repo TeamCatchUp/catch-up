@@ -12,11 +12,11 @@ from catchup.audit.metadata import FullSyncEventAuditMetadata
 from catchup.audit.metadata import IncrementalRecordAuditMetadata
 from catchup.audit.utils import audit_log
 from catchup.configs.config import settings
-from catchup.connector_core.adapters.slack import SlackMessageFullSyncExecutionRequest
-from catchup.connector_core.adapters.slack import (
+from catchup.sync.ingestion.adapters.slack import SlackMessageFullSyncExecutionRequest
+from catchup.sync.ingestion.adapters.slack import (
     SlackMessageIncrementalSyncExecutionRequest,
 )
-from catchup.connector_core.adapters.slack import SlackMessageSyncAdapter
+from catchup.sync.ingestion.adapters.slack import SlackMessageSyncAdapter
 from catchup.connectors.slack.factory import create_slack_ingestion_service
 from catchup.sync.audit import SyncAuditContext
 from catchup.sync.common.exceptions import SyncInternalException

@@ -28,7 +28,7 @@ from catchup.connectors.github.schemas import (
     PRFileContext,
     PRComment,
 )
-from catchup.connectors.github.transformers import GithubTransformer
+from catchup.sync.ingestion.document_builders.github import GithubTransformer
 from catchup.connectors.github.auth import (
     GitHubAppService,
     get_github_app_service,

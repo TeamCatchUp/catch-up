@@ -46,7 +46,7 @@ from catchup.connectors.github.client import GitHubRateLimitError
 from catchup.connectors.github.schemas import GithubIssue
 from catchup.connectors.github.schemas import GithubPullRequest
 from catchup.connectors.github.schemas import GithubUser
-from catchup.connectors.github.transformers import GithubTransformer
+from catchup.sync.ingestion.document_builders.github import GithubTransformer
 from catchup.db.engine import SessionLocal
 from catchup.db.github import domain_repository as github_entities
 from catchup.db.github.domain_repository import RepositoryUpsertData

@@ -12,13 +12,13 @@ from catchup.audit.metadata import FullSyncEventAuditMetadata
 from catchup.audit.metadata import IncrementalRecordAuditMetadata
 from catchup.audit.utils import audit_log
 from catchup.configs.config import settings
-from catchup.connector_core.adapters.github import (
+from catchup.sync.ingestion.adapters.github import (
     GithubRepositoryFullSyncExecutionRequest,
 )
-from catchup.connector_core.adapters.github import (
+from catchup.sync.ingestion.adapters.github import (
     GithubRepositoryIncrementalSyncExecutionRequest,
 )
-from catchup.connector_core.adapters.github import GithubRepositorySyncAdapter
+from catchup.sync.ingestion.adapters.github import GithubRepositorySyncAdapter
 from catchup.connectors.github.client import GitHubRateLimitError
 from catchup.connectors.github.factory import create_github_ingestion_service
 from catchup.sync.audit import SyncAuditContext

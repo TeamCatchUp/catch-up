@@ -21,7 +21,7 @@ from catchup.connectors.slack.schemas import (
     SlackUserProfile,
     SlackWorkspace,
 )
-from catchup.connectors.slack.transformers import SlackTransformer
+from catchup.sync.ingestion.document_builders.slack import SlackTransformer
 
 __all__ = [
     "SlackApiClientWrapper",

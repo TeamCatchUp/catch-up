@@ -12,13 +12,13 @@ from catchup.audit.metadata import FullSyncEventAuditMetadata
 from catchup.audit.metadata import IncrementalRecordAuditMetadata
 from catchup.audit.utils import audit_log
 from catchup.configs.config import settings
-from catchup.connector_core.adapters.confluence import (
+from catchup.sync.ingestion.adapters.confluence import (
     ConfluenceSpaceFullSyncExecutionRequest,
 )
-from catchup.connector_core.adapters.confluence import (
+from catchup.sync.ingestion.adapters.confluence import (
     ConfluenceSpaceIncrementalSyncExecutionRequest,
 )
-from catchup.connector_core.adapters.confluence import ConfluenceSpaceSyncAdapter
+from catchup.sync.ingestion.adapters.confluence import ConfluenceSpaceSyncAdapter
 from catchup.connectors.confluence.factory import create_confluence_ingestion_service
 from catchup.sync.audit import SyncAuditContext
 from catchup.sync.common.exceptions import SyncInternalException

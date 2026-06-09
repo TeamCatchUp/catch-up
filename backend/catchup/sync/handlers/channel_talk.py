@@ -11,25 +11,25 @@ from catchup.audit.actions import IncrementalSyncAction
 from catchup.audit.metadata import FullSyncEventAuditMetadata
 from catchup.audit.metadata import IncrementalRecordAuditMetadata
 from catchup.audit.utils import audit_log
-from catchup.connector_core.adapters.channel_talk.article_full_sync import (
+from catchup.sync.ingestion.adapters.channel_talk.article_full_sync import (
     ChannelTalkArticleFullSyncIngestionAdapter,
 )
-from catchup.connector_core.adapters.channel_talk.article_incremental import (
+from catchup.sync.ingestion.adapters.channel_talk.article_incremental import (
     ChannelTalkArticleIncrementalIngestionAdapter,
 )
-from catchup.connector_core.adapters.channel_talk.user_chat_full_sync import (
+from catchup.sync.ingestion.adapters.channel_talk.user_chat_full_sync import (
     ChannelTalkUserChatFullSyncIngestionAdapter,
 )
-from catchup.connector_core.adapters.channel_talk.user_chat_incremental import (
+from catchup.sync.ingestion.adapters.channel_talk.user_chat_incremental import (
     ChannelTalkUserChatIncrementalIngestionAdapter,
 )
-from catchup.connectors.channel_talk.core.user_chat_full_sync_models import (
+from catchup.sync.ingestion.adapters.channel_talk.user_chat_models import (
     ChannelTalkUserChatFullSyncCheckpoint,
 )
-from catchup.connectors.channel_talk.core.user_chat_full_sync_models import (
+from catchup.sync.ingestion.adapters.channel_talk.user_chat_models import (
     ChannelTalkUserChatIncrementalExecutionRequest,
 )
-from catchup.connectors.channel_talk.core.user_chat_full_sync_models import (
+from catchup.sync.ingestion.adapters.channel_talk.user_chat_models import (
     ChannelTalkUserChatSyncExecutionRequest,
 )
 from catchup.connectors.channel_talk.credential_loader import (
@@ -38,10 +38,10 @@ from catchup.connectors.channel_talk.credential_loader import (
 from catchup.connectors.channel_talk.credential_loader import (
     load_channel_talk_document_connection,
 )
-from catchup.connectors.channel_talk.document_space.article_full_sync_models import (
+from catchup.sync.ingestion.adapters.channel_talk.article_models import (
     ChannelTalkArticleIncrementalExecutionRequest,
 )
-from catchup.connectors.channel_talk.document_space.article_full_sync_models import (
+from catchup.sync.ingestion.adapters.channel_talk.article_models import (
     ChannelTalkArticleSyncExecutionRequest,
 )
 from catchup.connectors.channel_talk.full_sync_helper import (

@@ -7,13 +7,13 @@ from unittest import IsolatedAsyncioTestCase
 
 from langchain_core.documents import Document
 
-from catchup.connector_core.adapters.jira import JiraIssueFullSyncAdapter
-from catchup.connector_core.adapters.jira import JiraIssueFullSyncExecutionRequest
-from catchup.connector_core.adapters.jira import JiraIssueIncrementalAdapter
-from catchup.connector_core.adapters.jira import (
+from catchup.sync.ingestion.adapters.jira import JiraIssueFullSyncAdapter
+from catchup.sync.ingestion.adapters.jira import JiraIssueFullSyncExecutionRequest
+from catchup.sync.ingestion.adapters.jira import JiraIssueIncrementalAdapter
+from catchup.sync.ingestion.adapters.jira import (
     JiraIssueIncrementalSyncExecutionRequest,
 )
-from catchup.connector_core.adapters.jira.issue_dependencies import (
+from catchup.sync.ingestion.adapters.jira.issue_dependencies import (
     JiraIssueIngestionDependencies,
 )
 from catchup.sync.ingestion.schemas import SyncWindow

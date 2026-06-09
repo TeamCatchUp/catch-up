@@ -14,25 +14,25 @@ from catchup.components.embedder.constants import EmbeddingProvider
 from catchup.components.embedder.factory import get_embedding_service
 from catchup.components.vector_db.factory import get_pgvector_repository
 from catchup.components.vector_db.pgvector.repository import PGVectorRepository
-from catchup.connector_core.adapters.channel_talk.article_full_sync import (
+from catchup.sync.ingestion.adapters.channel_talk.article_full_sync import (
     CHANNEL_TALK_ARTICLE_LANGUAGE,
 )
-from catchup.connector_core.adapters.channel_talk.article_incremental import (
+from catchup.sync.ingestion.adapters.channel_talk.article_incremental import (
     ChannelTalkArticleIncrementalIngestionAdapter,
 )
-from catchup.connector_core.adapters.channel_talk.user_chat_full_sync import (
+from catchup.sync.ingestion.adapters.channel_talk.user_chat_full_sync import (
     ChannelTalkUserChatFullSyncIngestionAdapter,
 )
-from catchup.connector_core.adapters.channel_talk.user_chat_incremental import (
+from catchup.sync.ingestion.adapters.channel_talk.user_chat_incremental import (
     ChannelTalkUserChatIncrementalIngestionAdapter,
 )
 from catchup.connectors.channel_talk.core.user_chat_full_sync_fetcher import (
     ChannelTalkUserChatFullSyncFetcher,
 )
-from catchup.connectors.channel_talk.core.user_chat_full_sync_models import (
+from catchup.sync.ingestion.adapters.channel_talk.user_chat_models import (
     ChannelTalkUserChatFullSyncConnection,
 )
-from catchup.connectors.channel_talk.core.user_chat_full_sync_models import (
+from catchup.sync.ingestion.adapters.channel_talk.user_chat_models import (
     ChannelTalkUserChatSyncExecutionRequest,
 )
 from catchup.connectors.channel_talk.credential_loader import (
@@ -44,10 +44,10 @@ from catchup.connectors.channel_talk.credential_loader import (
 from catchup.connectors.channel_talk.document_space.article_full_sync_fetcher import (
     ChannelTalkArticleFullSyncFetcher,
 )
-from catchup.connectors.channel_talk.document_space.article_full_sync_models import (
+from catchup.sync.ingestion.adapters.channel_talk.article_models import (
     ChannelTalkArticleFullSyncConnection,
 )
-from catchup.connectors.channel_talk.document_space.article_full_sync_models import (
+from catchup.sync.ingestion.adapters.channel_talk.article_models import (
     ChannelTalkArticleSyncExecutionRequest,
 )
 from catchup.connectors.channel_talk.full_sync_helper import (

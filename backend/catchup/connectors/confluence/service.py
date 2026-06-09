@@ -24,9 +24,9 @@ from catchup.connectors.confluence.schemas import ConfluenceBlogPostResponse
 from catchup.connectors.confluence.schemas import ConfluenceCommentResponse
 from catchup.connectors.confluence.schemas import ConfluenceLabelResponse
 from catchup.connectors.confluence.schemas import ConfluencePageResponse
-from catchup.connectors.confluence.transformers import ConfluenceAttachmentAsset
-from catchup.connectors.confluence.transformers import ConfluenceTransformer
-from catchup.connectors.confluence.transformers import ConfluenceTransformResult
+from catchup.sync.ingestion.document_builders.confluence import ConfluenceAttachmentAsset
+from catchup.sync.ingestion.document_builders.confluence import ConfluenceTransformer
+from catchup.sync.ingestion.document_builders.confluence import ConfluenceTransformResult
 from catchup.db.confluence import domain_repository
 from catchup.db.engine import SessionLocal
 from catchup.sync.audit import SyncAuditContext

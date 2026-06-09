@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from catchup.connectors.slack.client import SlackApiClientWrapper
 from catchup.connectors.slack.schemas import SlackChannel, SlackUser, SlackWorkspace
-from catchup.connectors.slack.transformers import SlackTransformer
+from catchup.sync.ingestion.document_builders.slack import SlackTransformer
 from catchup.db.engine import SessionLocal
 from catchup.db.slack import domain_repository
 

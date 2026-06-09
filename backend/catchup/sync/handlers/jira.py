@@ -11,16 +11,16 @@ from catchup.audit.metadata import FullSyncEventAuditMetadata
 from catchup.audit.metadata import IncrementalRecordAuditMetadata
 from catchup.audit.utils import audit_log
 from catchup.configs.config import settings
-from catchup.connector_core.adapters.jira import JiraIssueFullSyncAdapter
-from catchup.connector_core.adapters.jira import JiraIssueFullSyncExecutionRequest
-from catchup.connector_core.adapters.jira import JiraIssueIncrementalAdapter
-from catchup.connector_core.adapters.jira import (
+from catchup.sync.ingestion.adapters.jira import JiraIssueFullSyncAdapter
+from catchup.sync.ingestion.adapters.jira import JiraIssueFullSyncExecutionRequest
+from catchup.sync.ingestion.adapters.jira import JiraIssueIncrementalAdapter
+from catchup.sync.ingestion.adapters.jira import (
     JiraIssueIncrementalSyncExecutionRequest,
 )
-from catchup.connector_core.adapters.jira import (
+from catchup.sync.ingestion.adapters.jira import (
     create_jira_issue_ingestion_dependencies,
 )
-from catchup.connector_core.adapters.jira import prepare_jira_issue_transform_context
+from catchup.sync.ingestion.adapters.jira import prepare_jira_issue_transform_context
 from catchup.sync.audit import SyncAuditContext
 from catchup.sync.common.exceptions import SyncInternalException
 from catchup.sync.common.schemas import FullSyncContext

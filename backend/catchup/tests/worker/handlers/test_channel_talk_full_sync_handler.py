@@ -12,7 +12,7 @@ from catchup.audit.actions import FullSyncAction
 from catchup.audit.base import AuditLevel
 from catchup.audit.base import AuditStatus
 from catchup.audit.metadata import FullSyncEventAuditMetadata
-from catchup.connectors.channel_talk.core.user_chat_full_sync_models import (
+from catchup.sync.ingestion.adapters.channel_talk.user_chat_models import (
     ChannelTalkUserChatFullSyncCheckpoint,
 )
 from catchup.connectors.channel_talk.full_sync_target_contract import (

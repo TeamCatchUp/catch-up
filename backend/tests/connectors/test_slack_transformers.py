@@ -4,7 +4,7 @@ from unittest import TestCase
 
 from catchup.connectors.slack.ingestion_service import SlackIngestionService
 from catchup.connectors.slack.schemas import SlackUser
-from catchup.connectors.slack.transformers import SlackTransformer
+from catchup.sync.ingestion.document_builders.slack import SlackTransformer
 
 
 class SlackTransformerBlockBodyTests(TestCase):

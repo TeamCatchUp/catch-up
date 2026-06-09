@@ -18,7 +18,7 @@ from catchup.connectors.jira.client import (
 )
 from catchup.connectors.jira.field_mapper import JiraFieldMapper
 from catchup.connectors.jira.service import JiraIngestionService
-from catchup.connectors.jira.transformers import JiraTransformer
+from catchup.sync.ingestion.document_builders.jira import JiraTransformer
 
 __all__ = [
     "JiraApiClient",

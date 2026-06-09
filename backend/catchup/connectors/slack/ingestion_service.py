@@ -24,7 +24,7 @@ from catchup.connectors.slack.client import SlackConnectorApiError
 from catchup.connectors.slack.client import SlackRateLimitError
 from catchup.connectors.slack.schemas import SlackThreadReply
 from catchup.connectors.slack.schemas import SlackUser
-from catchup.connectors.slack.transformers import SlackTransformer
+from catchup.sync.ingestion.document_builders.slack import SlackTransformer
 from catchup.db.engine import SessionLocal
 from catchup.db.slack import domain_repository
 from catchup.sync.audit import SyncAuditContext

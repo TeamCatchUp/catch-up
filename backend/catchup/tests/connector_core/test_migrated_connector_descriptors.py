@@ -8,38 +8,38 @@ from unittest.mock import AsyncMock
 
 from langchain_core.documents import Document
 
-from catchup.connector_core.adapters.confluence import (
+from catchup.sync.ingestion.adapters.confluence import (
     ConfluenceSpaceFullSyncExecutionRequest,
 )
-from catchup.connector_core.adapters.confluence import (
+from catchup.sync.ingestion.adapters.confluence import (
     ConfluenceSpaceIncrementalSyncExecutionRequest,
 )
-from catchup.connector_core.adapters.confluence import ConfluenceSpaceSyncAdapter
-from catchup.connector_core.adapters.github import (
+from catchup.sync.ingestion.adapters.confluence import ConfluenceSpaceSyncAdapter
+from catchup.sync.ingestion.adapters.github import (
     GithubRepositoryFullSyncExecutionRequest,
 )
-from catchup.connector_core.adapters.github import (
+from catchup.sync.ingestion.adapters.github import (
     GithubRepositoryIncrementalSyncExecutionRequest,
 )
-from catchup.connector_core.adapters.github import GithubRepositorySyncAdapter
-from catchup.connector_core.adapters.github.repository_sync import (
+from catchup.sync.ingestion.adapters.github import GithubRepositorySyncAdapter
+from catchup.sync.ingestion.adapters.github.repository_sync import (
     GithubRepositoryPersistResult,
 )
-from catchup.connector_core.adapters.github.repository_sync import (
+from catchup.sync.ingestion.adapters.github.repository_sync import (
     GithubRepositorySummaryResult,
 )
-from catchup.connector_core.adapters.github.repository_sync import (
+from catchup.sync.ingestion.adapters.github.repository_sync import (
     GithubRepositoryTransformResult,
 )
-from catchup.connector_core.adapters.slack import (
+from catchup.sync.ingestion.adapters.slack import (
     SlackMessageIncrementalSyncExecutionRequest,
 )
-from catchup.connector_core.adapters.slack import SlackMessageSyncAdapter
+from catchup.sync.ingestion.adapters.slack import SlackMessageSyncAdapter
 from catchup.connector_core.descriptors.confluence import CONFLUENCE_DESCRIPTOR
 from catchup.connector_core.descriptors.github import GITHUB_DESCRIPTOR
 from catchup.connector_core.descriptors.slack import SLACK_DESCRIPTOR
 from catchup.connector_core.domain.structure import ConnectorKey
-from catchup.connectors.confluence.transformers import ConfluenceTransformResult
+from catchup.sync.ingestion.document_builders.confluence import ConfluenceTransformResult
 from catchup.connectors.github.client import GitHubApiClient
 from catchup.sync.ingestion.schemas import SyncWindow
 

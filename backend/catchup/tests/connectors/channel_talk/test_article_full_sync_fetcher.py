@@ -7,7 +7,7 @@ from unittest import IsolatedAsyncioTestCase
 from catchup.connectors.channel_talk.document_space.article_full_sync_fetcher import (
     ChannelTalkArticleFullSyncFetcher,
 )
-from catchup.connectors.channel_talk.document_space.article_full_sync_models import (
+from catchup.sync.ingestion.adapters.channel_talk.article_models import (
     ChannelTalkArticleFullSyncConnection,
 )
 from catchup.connectors.channel_talk.schemas.document_article import (

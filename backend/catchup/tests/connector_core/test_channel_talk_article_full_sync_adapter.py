@@ -5,25 +5,25 @@ from datetime import timezone
 from unittest import IsolatedAsyncioTestCase
 from unittest.mock import AsyncMock
 
-from catchup.connector_core.adapters.channel_talk.article_full_sync import (
+from catchup.sync.ingestion.adapters.channel_talk.article_full_sync import (
     ChannelTalkArticleFullSyncIngestionAdapter,
 )
-from catchup.connector_core.adapters.channel_talk.article_incremental import (
+from catchup.sync.ingestion.adapters.channel_talk.article_incremental import (
     ChannelTalkArticleIncrementalIngestionAdapter,
 )
-from catchup.connectors.channel_talk.document_space.article_full_sync_models import (
+from catchup.sync.ingestion.adapters.channel_talk.article_models import (
     ChannelTalkArticleFullSyncFetchResult,
 )
-from catchup.connectors.channel_talk.document_space.article_full_sync_models import (
+from catchup.sync.ingestion.adapters.channel_talk.article_models import (
     ChannelTalkArticleIncrementalExecutionRequest,
 )
-from catchup.connectors.channel_talk.document_space.article_full_sync_models import (
+from catchup.sync.ingestion.adapters.channel_talk.article_models import (
     ChannelTalkArticleIncrementalExecutionResult,
 )
-from catchup.connectors.channel_talk.document_space.article_full_sync_models import (
+from catchup.sync.ingestion.adapters.channel_talk.article_models import (
     ChannelTalkArticleSyncExecutionRequest,
 )
-from catchup.connectors.channel_talk.document_space.article_full_sync_models import (
+from catchup.sync.ingestion.adapters.channel_talk.article_models import (
     ChannelTalkFetchedArticle,
 )
 from catchup.connectors.channel_talk.schemas.channel_connection import (

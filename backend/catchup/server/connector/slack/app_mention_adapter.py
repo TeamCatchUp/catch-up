@@ -19,7 +19,7 @@ from catchup.chat.integrations.slack_app_mention import (
 )
 from catchup.chat.integrations.slack_app_mention import parse_app_mention_event
 from catchup.connectors.slack.client import SlackApiClientWrapper
-from catchup.connectors.slack.transformers import SlackTransformer
+from catchup.sync.ingestion.document_builders.slack import SlackTransformer
 from catchup.db.engine import SessionLocal
 from catchup.db.models import SourceType
 from catchup.db.slack.oauth_repository import get_slack_token_by_team_id

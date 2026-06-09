@@ -40,8 +40,8 @@ from catchup.connectors.jira.client import JiraApiClient
 from catchup.connectors.jira.client import JiraApiError
 from catchup.connectors.jira.client import JiraRateLimitError
 from catchup.connectors.jira.field_mapper import JiraFieldMapper
-from catchup.connectors.jira.transformers import JiraTransformer
-from catchup.connectors.jira.transformers import normalize_issue_type
+from catchup.sync.ingestion.document_builders.jira import JiraTransformer
+from catchup.sync.ingestion.document_builders.jira import normalize_issue_type
 from catchup.db.engine import SessionLocal
 from catchup.db.jira import domain_repository as jira_entities
 from catchup.sync.audit import SyncAuditContext

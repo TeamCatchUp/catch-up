@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from catchup.connectors.channel_talk.core.client import ChannelTalkCoreApiClient
-from catchup.connectors.channel_talk.core.user_chat_full_sync_models import (
+from catchup.sync.ingestion.adapters.channel_talk.user_chat_models import (
     ChannelTalkUserChatFullSyncConnection,
 )
 from catchup.connectors.channel_talk.core.user_chat_original_fetcher import (

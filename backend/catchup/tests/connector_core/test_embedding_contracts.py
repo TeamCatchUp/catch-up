@@ -4,45 +4,45 @@ from datetime import datetime
 from datetime import timezone
 from unittest import TestCase
 
-from catchup.connector_core.document_format import (
+from catchup.sync.ingestion.document_format import (
     ChannelTalkDocumentArticleArticleMetadata,
 )
-from catchup.connector_core.document_format import (
+from catchup.sync.ingestion.document_format import (
     ChannelTalkDocumentArticleAuthorMetadata,
 )
-from catchup.connector_core.document_format import (
+from catchup.sync.ingestion.document_format import (
     ChannelTalkDocumentArticleChunkMetadata,
 )
-from catchup.connector_core.document_format import (
+from catchup.sync.ingestion.document_format import (
     ChannelTalkDocumentArticleCoreMetadata,
 )
-from catchup.connector_core.document_format import (
+from catchup.sync.ingestion.document_format import (
     ChannelTalkDocumentArticleLogicalMetadata,
 )
-from catchup.connector_core.document_format import (
+from catchup.sync.ingestion.document_format import (
     ChannelTalkDocumentArticlePublicationMetadata,
 )
-from catchup.connector_core.document_format import (
+from catchup.sync.ingestion.document_format import (
     ChannelTalkDocumentArticleSpaceMetadata,
 )
-from catchup.connector_core.document_format import (
+from catchup.sync.ingestion.document_format import (
     ChannelTalkDocumentArticleTaxonomyMetadata,
 )
-from catchup.connector_core.document_format import ChannelTalkUserChatAnchorsMetadata
-from catchup.connector_core.document_format import ChannelTalkUserChatAssignmentMetadata
-from catchup.connector_core.document_format import ChannelTalkUserChatChatMetadata
-from catchup.connector_core.document_format import ChannelTalkUserChatChunkMetadata
-from catchup.connector_core.document_format import ChannelTalkUserChatCoreMetadata
-from catchup.connector_core.document_format import ChannelTalkUserChatCustomerMetadata
-from catchup.connector_core.document_format import ChannelTalkUserChatLogicalMetadata
-from catchup.connector_core.document_format import ChannelTalkUserChatMessageMetadata
-from catchup.connector_core.document_format import ChannelTalkUserChatMetricsMetadata
-from catchup.connector_core.document_format import ChannelTalkUserChatTagsMetadata
-from catchup.connector_core.document_format import ChannelTalkUserChatTimingMetadata
-from catchup.connector_core.document_format import DocumentBaseMetadata
-from catchup.connector_core.document_format import JiraAttachmentMetadata
-from catchup.connector_core.document_format import JiraIssueLogicalMetadata
-from catchup.connector_core.document_format import JiraIssueMetadata
+from catchup.sync.ingestion.document_format import ChannelTalkUserChatAnchorsMetadata
+from catchup.sync.ingestion.document_format import ChannelTalkUserChatAssignmentMetadata
+from catchup.sync.ingestion.document_format import ChannelTalkUserChatChatMetadata
+from catchup.sync.ingestion.document_format import ChannelTalkUserChatChunkMetadata
+from catchup.sync.ingestion.document_format import ChannelTalkUserChatCoreMetadata
+from catchup.sync.ingestion.document_format import ChannelTalkUserChatCustomerMetadata
+from catchup.sync.ingestion.document_format import ChannelTalkUserChatLogicalMetadata
+from catchup.sync.ingestion.document_format import ChannelTalkUserChatMessageMetadata
+from catchup.sync.ingestion.document_format import ChannelTalkUserChatMetricsMetadata
+from catchup.sync.ingestion.document_format import ChannelTalkUserChatTagsMetadata
+from catchup.sync.ingestion.document_format import ChannelTalkUserChatTimingMetadata
+from catchup.sync.ingestion.document_format import DocumentBaseMetadata
+from catchup.sync.ingestion.document_format import JiraAttachmentMetadata
+from catchup.sync.ingestion.document_format import JiraIssueLogicalMetadata
+from catchup.sync.ingestion.document_format import JiraIssueMetadata
 
 
 class ChannelTalkUserChatLogicalMetadataTests(TestCase):

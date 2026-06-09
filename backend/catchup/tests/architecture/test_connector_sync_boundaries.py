@@ -7,18 +7,18 @@ BACKEND_ROOT = Path(__file__).resolve().parents[3]
 
 
 KNOWN_SYNC_WORKER_CONNECTOR_CORE_IMPORTS = {
-    ("catchup/sync/repair/channel_talk_record_repair_service.py", "catchup.connector_core.adapters.channel_talk.article_full_sync"),
-    ("catchup/sync/repair/channel_talk_record_repair_service.py", "catchup.connector_core.adapters.channel_talk.article_incremental"),
-    ("catchup/sync/repair/channel_talk_record_repair_service.py", "catchup.connector_core.adapters.channel_talk.user_chat_full_sync"),
-    ("catchup/sync/repair/channel_talk_record_repair_service.py", "catchup.connector_core.adapters.channel_talk.user_chat_incremental"),
-    ("catchup/sync/handlers/channel_talk.py", "catchup.connector_core.adapters.channel_talk.article_full_sync"),
-    ("catchup/sync/handlers/channel_talk.py", "catchup.connector_core.adapters.channel_talk.article_incremental"),
-    ("catchup/sync/handlers/channel_talk.py", "catchup.connector_core.adapters.channel_talk.user_chat_full_sync"),
-    ("catchup/sync/handlers/channel_talk.py", "catchup.connector_core.adapters.channel_talk.user_chat_incremental"),
-    ("catchup/sync/handlers/confluence.py", "catchup.connector_core.adapters.confluence"),
-    ("catchup/sync/handlers/github.py", "catchup.connector_core.adapters.github"),
-    ("catchup/sync/handlers/jira.py", "catchup.connector_core.adapters.jira"),
-    ("catchup/sync/handlers/slack.py", "catchup.connector_core.adapters.slack"),
+    ("catchup/sync/repair/channel_talk_record_repair_service.py", "catchup.sync.ingestion.adapters.channel_talk.article_full_sync"),
+    ("catchup/sync/repair/channel_talk_record_repair_service.py", "catchup.sync.ingestion.adapters.channel_talk.article_incremental"),
+    ("catchup/sync/repair/channel_talk_record_repair_service.py", "catchup.sync.ingestion.adapters.channel_talk.user_chat_full_sync"),
+    ("catchup/sync/repair/channel_talk_record_repair_service.py", "catchup.sync.ingestion.adapters.channel_talk.user_chat_incremental"),
+    ("catchup/sync/handlers/channel_talk.py", "catchup.sync.ingestion.adapters.channel_talk.article_full_sync"),
+    ("catchup/sync/handlers/channel_talk.py", "catchup.sync.ingestion.adapters.channel_talk.article_incremental"),
+    ("catchup/sync/handlers/channel_talk.py", "catchup.sync.ingestion.adapters.channel_talk.user_chat_full_sync"),
+    ("catchup/sync/handlers/channel_talk.py", "catchup.sync.ingestion.adapters.channel_talk.user_chat_incremental"),
+    ("catchup/sync/handlers/confluence.py", "catchup.sync.ingestion.adapters.confluence"),
+    ("catchup/sync/handlers/github.py", "catchup.sync.ingestion.adapters.github"),
+    ("catchup/sync/handlers/jira.py", "catchup.sync.ingestion.adapters.jira"),
+    ("catchup/sync/handlers/slack.py", "catchup.sync.ingestion.adapters.slack"),
     ("catchup/sync/metadata/channel_talk.py", "catchup.connector_core.domain.structure"),
     ("catchup/sync/metadata/channel_talk_documents.py", "catchup.connector_core.domain.structure"),
     ("catchup/sync/metadata/registry.py", "catchup.connector_core.domain.structure"),
@@ -27,55 +27,45 @@ KNOWN_SYNC_WORKER_CONNECTOR_CORE_IMPORTS = {
 
 
 KNOWN_CONNECTORS_CONNECTOR_CORE_IMPORTS = {
-    ("catchup/connectors/channel_talk/core/user_chat_full_sync_models.py", "catchup.connector_core.document_format"),
-    ("catchup/connectors/channel_talk/core/user_chat_full_sync_models.py", "catchup.connector_core.domain.structure"),
-    ("catchup/connectors/channel_talk/core/user_chat_transformer.py", "catchup.connector_core.document_format"),
-    ("catchup/connectors/channel_talk/document_space/article_full_sync_models.py", "catchup.connector_core.document_format"),
-    ("catchup/connectors/channel_talk/document_space/article_full_sync_models.py", "catchup.connector_core.domain.structure"),
-    ("catchup/connectors/channel_talk/document_space/article_transformer.py", "catchup.connector_core.document_format"),
     ("catchup/connectors/channel_talk/factory.py", "catchup.connector_core.adapters.channel_talk"),
     ("catchup/connectors/channel_talk/schemas/channel_metadata.py", "catchup.connector_core.domain.structure"),
     ("catchup/connectors/channel_talk/schemas/document_metadata.py", "catchup.connector_core.domain.structure"),
     ("catchup/connectors/channel_talk/service.py", "catchup.connector_core.adapters.channel_talk.documents_install_auth_adapter"),
     ("catchup/connectors/channel_talk/service.py", "catchup.connector_core.adapters.channel_talk.install_auth_adapter"),
     ("catchup/connectors/channel_talk/service.py", "catchup.connector_core.application.install_auth"),
-    ("catchup/connectors/jira/transformers.py", "catchup.connector_core.document_format"),
 }
 
 
 KNOWN_CONNECTORS_SYNC_STACK_IMPORTS = {
-    ("catchup/connectors/channel_talk/core/user_chat_full_sync_fetcher.py", "catchup.sync.ingestion.schemas"),
-    ("catchup/connectors/channel_talk/core/user_chat_full_sync_models.py", "catchup.sync.audit"),
-    ("catchup/connectors/channel_talk/core/user_chat_full_sync_models.py", "catchup.sync.ingestion.schemas"),
-    ("catchup/connectors/channel_talk/core/user_chat_transformer.py", "catchup.sync.ingestion.schemas"),
-    ("catchup/connectors/channel_talk/document_space/article_full_sync_models.py", "catchup.sync.audit"),
-    ("catchup/connectors/channel_talk/document_space/article_full_sync_models.py", "catchup.sync.ingestion.schemas"),
-    ("catchup/connectors/channel_talk/document_space/article_transformer.py", "catchup.sync.ingestion.schemas"),
     ("catchup/connectors/confluence/factory.py", "catchup.sync.common.exceptions"),
     ("catchup/connectors/confluence/service.py", "catchup.sync.audit"),
     ("catchup/connectors/confluence/service.py", "catchup.sync.common.schemas"),
+    ("catchup/connectors/confluence/service.py", "catchup.sync.ingestion.document_builders.confluence"),
     ("catchup/connectors/github/factory.py", "catchup.sync.common.exceptions"),
+    ("catchup/connectors/github/__init__.py", "catchup.sync.ingestion.document_builders.github"),
     ("catchup/connectors/github/service.py", "catchup.sync.audit"),
     ("catchup/connectors/github/service.py", "catchup.sync.common.schemas"),
+    ("catchup/connectors/github/service.py", "catchup.sync.ingestion.document_builders.github"),
     ("catchup/connectors/github/webhook/responses.py", "catchup.sync.ingress.types"),
     ("catchup/connectors/jira/factory.py", "catchup.sync.common.exceptions"),
+    ("catchup/connectors/jira/__init__.py", "catchup.sync.ingestion.document_builders.jira"),
     ("catchup/connectors/jira/service.py", "catchup.sync.audit"),
     ("catchup/connectors/jira/service.py", "catchup.sync.common.schemas"),
+    ("catchup/connectors/jira/service.py", "catchup.sync.ingestion.document_builders.jira"),
     ("catchup/connectors/jira/webhook/responses.py", "catchup.sync.ingress.types"),
     ("catchup/connectors/slack/factory.py", "catchup.sync.common.exceptions"),
+    ("catchup/connectors/slack/__init__.py", "catchup.sync.ingestion.document_builders.slack"),
     ("catchup/connectors/slack/ingestion_service.py", "catchup.sync.audit"),
     ("catchup/connectors/slack/ingestion_service.py", "catchup.sync.common.schemas"),
+    ("catchup/connectors/slack/ingestion_service.py", "catchup.sync.ingestion.document_builders.slack"),
+    ("catchup/connectors/slack/metadata_service.py", "catchup.sync.ingestion.document_builders.slack"),
 }
 
 
 KNOWN_CONNECTORS_DOCUMENT_IMPORTS = {
-    ("catchup/connectors/confluence/transformers.py", "langchain_core.documents"),
     ("catchup/connectors/github/service.py", "langchain_core.documents"),
-    ("catchup/connectors/github/transformers.py", "langchain_core.documents"),
     ("catchup/connectors/jira/service.py", "langchain_core.documents"),
-    ("catchup/connectors/jira/transformers.py", "langchain_core.documents"),
     ("catchup/connectors/slack/ingestion_service.py", "langchain_core.documents"),
-    ("catchup/connectors/slack/transformers.py", "langchain_core.documents"),
 }
 
 

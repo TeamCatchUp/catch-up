@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock
 from unittest.mock import patch
 
 from catchup.connectors.confluence.service import ConfluenceIngestionService
-from catchup.connectors.confluence.transformers import ConfluenceTransformResult
+from catchup.sync.ingestion.document_builders.confluence import ConfluenceTransformResult
 from catchup.db.models import SyncConnector
 from catchup.sync.incremental.poll.confluence import _collect_deleted_blogpost_changes
 from catchup.sync.incremental.poll.confluence import _collect_deleted_page_changes

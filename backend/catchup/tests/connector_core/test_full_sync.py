@@ -9,81 +9,81 @@ from unittest.mock import patch
 
 from pydantic import ValidationError
 
-from catchup.connector_core.adapters.channel_talk.article_full_sync import (
+from catchup.sync.ingestion.adapters.channel_talk.article_full_sync import (
     ChannelTalkArticleFullSyncIngestionAdapter,
 )
-from catchup.connector_core.adapters.channel_talk.user_chat_full_sync import (
+from catchup.sync.ingestion.adapters.channel_talk.user_chat_full_sync import (
     ChannelTalkUserChatFullSyncIngestionAdapter,
 )
-from catchup.connector_core.adapters.channel_talk.user_chat_incremental import (
+from catchup.sync.ingestion.adapters.channel_talk.user_chat_incremental import (
     ChannelTalkUserChatIncrementalIngestionAdapter,
 )
 from catchup.connector_core.descriptors.channel_talk import CHANNEL_TALK_DESCRIPTOR
 from catchup.connector_core.domain.structure import ConnectorKey
-from catchup.connectors.channel_talk.core.user_chat_full_sync_models import (
+from catchup.sync.ingestion.adapters.channel_talk.user_chat_models import (
     ChannelTalkFetchedUserChat,
 )
-from catchup.connectors.channel_talk.core.user_chat_full_sync_models import (
+from catchup.sync.ingestion.adapters.channel_talk.user_chat_models import (
     ChannelTalkFetchedUserChatsResult,
 )
-from catchup.connectors.channel_talk.core.user_chat_full_sync_models import (
+from catchup.sync.ingestion.adapters.channel_talk.user_chat_models import (
     ChannelTalkUserChatFullSyncCheckpoint,
 )
-from catchup.connectors.channel_talk.core.user_chat_full_sync_models import (
+from catchup.sync.ingestion.adapters.channel_talk.user_chat_models import (
     ChannelTalkUserChatFullSyncConnection,
 )
-from catchup.connectors.channel_talk.core.user_chat_full_sync_models import (
+from catchup.sync.ingestion.adapters.channel_talk.user_chat_models import (
     ChannelTalkUserChatFullSyncFetchResult,
 )
-from catchup.connectors.channel_talk.core.user_chat_full_sync_models import (
+from catchup.sync.ingestion.adapters.channel_talk.user_chat_models import (
     ChannelTalkUserChatFullSyncPersistResult,
 )
-from catchup.connectors.channel_talk.core.user_chat_full_sync_models import (
+from catchup.sync.ingestion.adapters.channel_talk.user_chat_models import (
     ChannelTalkUserChatFullSyncSummaryResult,
 )
-from catchup.connectors.channel_talk.core.user_chat_full_sync_models import (
+from catchup.sync.ingestion.adapters.channel_talk.user_chat_models import (
     ChannelTalkUserChatFullSyncTransformResult,
 )
-from catchup.connectors.channel_talk.core.user_chat_full_sync_models import (
+from catchup.sync.ingestion.adapters.channel_talk.user_chat_models import (
     ChannelTalkUserChatIncrementalExecutionRequest,
 )
-from catchup.connectors.channel_talk.core.user_chat_full_sync_models import (
+from catchup.sync.ingestion.adapters.channel_talk.user_chat_models import (
     ChannelTalkUserChatIncrementalExecutionResult,
 )
-from catchup.connectors.channel_talk.core.user_chat_full_sync_models import (
+from catchup.sync.ingestion.adapters.channel_talk.user_chat_models import (
     ChannelTalkUserChatSyncExecutionRequest,
 )
-from catchup.connectors.channel_talk.core.user_chat_full_sync_models import (
+from catchup.sync.ingestion.adapters.channel_talk.user_chat_models import (
     ChannelTalkUserChatSyncExecutionResult,
 )
 from catchup.connectors.channel_talk.core.user_chat_message_renderer import (
     UserChatMessageRenderer,
 )
-from catchup.connectors.channel_talk.document_space.article_full_sync_models import (
+from catchup.sync.ingestion.adapters.channel_talk.article_models import (
     DEFAULT_ARTICLE_FULL_SYNC_STATES,
 )
-from catchup.connectors.channel_talk.document_space.article_full_sync_models import (
+from catchup.sync.ingestion.adapters.channel_talk.article_models import (
     ChannelTalkArticleFullSyncFetchResult,
 )
-from catchup.connectors.channel_talk.document_space.article_full_sync_models import (
+from catchup.sync.ingestion.adapters.channel_talk.article_models import (
     ChannelTalkArticleFullSyncPersistResult,
 )
-from catchup.connectors.channel_talk.document_space.article_full_sync_models import (
+from catchup.sync.ingestion.adapters.channel_talk.article_models import (
     ChannelTalkArticleFullSyncSummaryResult,
 )
-from catchup.connectors.channel_talk.document_space.article_full_sync_models import (
+from catchup.sync.ingestion.adapters.channel_talk.article_models import (
     ChannelTalkArticleFullSyncTransformResult,
 )
-from catchup.connectors.channel_talk.document_space.article_full_sync_models import (
+from catchup.sync.ingestion.adapters.channel_talk.article_models import (
     ChannelTalkArticleSyncExecutionRequest,
 )
-from catchup.connectors.channel_talk.document_space.article_full_sync_models import (
+from catchup.sync.ingestion.adapters.channel_talk.article_models import (
     ChannelTalkArticleSyncExecutionResult,
 )
-from catchup.connectors.channel_talk.document_space.article_full_sync_models import (
+from catchup.sync.ingestion.adapters.channel_talk.article_models import (
     ChannelTalkFetchedArticle,
 )
-from catchup.connectors.channel_talk.document_space.article_full_sync_models import (
+from catchup.sync.ingestion.adapters.channel_talk.article_models import (
     ChannelTalkFetchedArticlesResult,
 )
 from catchup.connectors.channel_talk.full_sync_target_contract import (
@@ -819,7 +819,7 @@ class SyncIngestionRunnerTests(IsolatedAsyncioTestCase):
         )
 
         with patch(
-            "catchup.connector_core.adapters.channel_talk.user_chat_full_sync.get_summarizer_service",
+            "catchup.sync.ingestion.adapters.channel_talk.user_chat_full_sync.get_summarizer_service",
             return_value=fake_summarizer,
         ):
             result = await run_sync_ingestion(
@@ -945,7 +945,7 @@ class SyncIngestionRunnerTests(IsolatedAsyncioTestCase):
         )
 
         with patch(
-            "catchup.connector_core.adapters.channel_talk.user_chat_full_sync.get_summarizer_service",
+            "catchup.sync.ingestion.adapters.channel_talk.user_chat_full_sync.get_summarizer_service",
             return_value=fake_summarizer,
         ):
             result = await run_sync_ingestion(
@@ -985,7 +985,7 @@ class SyncIngestionRunnerTests(IsolatedAsyncioTestCase):
         )
 
         with patch(
-            "catchup.connector_core.adapters.channel_talk.user_chat_full_sync.get_summarizer_service",
+            "catchup.sync.ingestion.adapters.channel_talk.user_chat_full_sync.get_summarizer_service",
         ) as get_summarizer_service:
             result = await run_sync_ingestion(
                 port=application,
@@ -1097,11 +1097,11 @@ class SyncIngestionRunnerTests(IsolatedAsyncioTestCase):
 
         with (
             patch(
-                "catchup.connector_core.adapters.channel_talk.user_chat_full_sync.load_channel_talk_connection",
+                "catchup.sync.ingestion.adapters.channel_talk.user_chat_full_sync.load_channel_talk_connection",
                 return_value=_connection(),
             ),
             patch(
-                "catchup.connector_core.adapters.channel_talk.user_chat_full_sync.run_in_threadpool",
+                "catchup.sync.ingestion.adapters.channel_talk.user_chat_full_sync.run_in_threadpool",
                 AsyncMock(side_effect=run_sync),
             ) as run_in_threadpool,
         ):

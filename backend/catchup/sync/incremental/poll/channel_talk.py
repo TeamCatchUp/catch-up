@@ -8,7 +8,7 @@ from datetime import timezone
 from fastapi.concurrency import run_in_threadpool
 
 from catchup.configs.config import settings
-from catchup.connectors.channel_talk.document_space.article_full_sync_models import (
+from catchup.sync.ingestion.adapters.channel_talk.article_models import (
     DEFAULT_ARTICLE_FULL_SYNC_STATES,
 )
 from catchup.connectors.channel_talk.document_space.client import (
