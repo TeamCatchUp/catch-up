@@ -13,7 +13,6 @@ from sqlalchemy import select
 
 from catchup.connectors.atlassian.oauth_client import AtlassianOAuthClient
 from catchup.connectors.atlassian.token_manager import AtlassianTokenManager
-from catchup.connectors.atlassian.token_manager import AtlassianTokenProvider
 from catchup.connectors.channel_talk.credential_loader import (
     list_channel_talk_document_connections,
 )
@@ -35,19 +34,8 @@ from catchup.connectors.channel_talk.schemas.channel_connection import (
 from catchup.connectors.channel_talk.schemas.document_connection import (
     ChannelTalkDocumentCredentialsRecord,
 )
-from catchup.connectors.confluence.metadata_service import ConfluenceMetadataService
-from catchup.connectors.github.auth import get_github_app_service
-from catchup.connectors.github.client import GitHubApiClient
-from catchup.connectors.github.service import _convert_repos_to_dto
-from catchup.connectors.jira.client import JiraApiClient
-from catchup.connectors.slack.factory import create_slack_metadata_service
 from catchup.db.atlassian import oauth_repository as atlassian_oauth_repository
 from catchup.db.engine import SessionLocal
-from catchup.db.github import domain_repository as github_entities
-from catchup.db.github.installation_repository import (
-    get_installation_by_installation_id,
-)
-from catchup.db.jira import domain_repository as jira_entities
 from catchup.db.models import AtlassianOAuthToken
 from catchup.db.models import SyncConnector
 from catchup.db.models import SyncEventStatus
@@ -59,18 +47,12 @@ from catchup.db.sync import get_job
 from catchup.db.sync import list_events_by_job
 from catchup.db.sync import summarize_events_by_job
 from catchup.sync.common.schemas import SyncTargetType
+from catchup.sync.metadata.confluence_service import ConfluenceMetadataService
+from catchup.sync.metadata.github_service import create_github_metadata_service
+from catchup.sync.metadata.jira_service import create_jira_metadata_service
+from catchup.sync.metadata.slack_service import create_slack_metadata_service
 
 logger = structlog.get_logger(__name__)
-
-
-def _load_github_installation_db(installation_id: int):
-    with SessionLocal() as db:
-        return get_installation_by_installation_id(db, installation_id)
-
-
-def _load_jira_token_db(scope_id: str) -> AtlassianOAuthToken | None:
-    with SessionLocal() as db:
-        return atlassian_oauth_repository.get_token_by_cloud_id(db, scope_id)
 
 
 def _load_confluence_token_db(scope_id: str) -> AtlassianOAuthToken | None:
@@ -80,40 +62,6 @@ def _load_confluence_token_db(scope_id: str) -> AtlassianOAuthToken | None:
             .filter(AtlassianOAuthToken.cloud_id == scope_id)
             .first()
         )
-
-
-def _persist_github_repositories_db(
-    installation_id: int,
-    repositories: list[Any],
-) -> None:
-    with SessionLocal() as db:
-        try:
-            github_entities.sync_repositories_snapshot(
-                db,
-                installation_id,
-                repositories,
-            )
-            db.commit()
-        except Exception:
-            db.rollback()
-            raise
-
-
-def _persist_jira_projects_db(
-    cloud_id: str,
-    projects: list[dict[str, Any]],
-) -> None:
-    with SessionLocal() as db:
-        try:
-            jira_entities.sync_projects_snapshot(
-                db,
-                cloud_id,
-                projects,
-            )
-            db.commit()
-        except Exception:
-            db.rollback()
-            raise
 
 
 @dataclass(slots=True, frozen=True)
@@ -441,27 +389,8 @@ class SyncQueryService:
         except ValueError as exc:
             raise ValueError(f"github installation not found: {scope_id}") from exc
 
-        installation = await run_in_threadpool(
-            _load_github_installation_db,
-            installation_id,
-        )
-        if installation is None:
-            raise ValueError(f"github installation not found: {scope_id}")
-
-        access_token = await get_github_app_service().get_installation_access_token(
-            installation_id,
-        )
-        client = GitHubApiClient(access_token)
-        repositories = _convert_repos_to_dto(
-            await client.list_installation_repos(),
-        )
-        # listing 시점에 최신 repo snapshot을 저장해 두면 full sync resolver가
-        # 사용자가 고른 repository id를 DB row와 빠르게 대조할 수 있다.
-        await run_in_threadpool(
-            _persist_github_repositories_db,
-            installation_id,
-            repositories,
-        )
+        metadata_service = await create_github_metadata_service(installation_id)
+        repositories = await metadata_service.sync_repository_snapshot()
 
         targets = [
             SyncTargetResult(
@@ -488,50 +417,13 @@ class SyncQueryService:
         scope_id: str,
     ) -> SyncTargetsResult:
         # Jira는 scope_id가 cloud_id이고 target_id는 project_key다.
-        token = await run_in_threadpool(_load_jira_token_db, scope_id)
-        if token is None:
-            raise ValueError(f"jira cloud is not connected: {scope_id}")
-
-        token_manager = AtlassianTokenManager(
-            oauth_client=AtlassianOAuthClient(),
-            oauth_repository=atlassian_oauth_repository,
-        )
-        client = JiraApiClient(
-            scope_id,
-            AtlassianTokenProvider(token_manager),
-        )
-        raw_projects = await client.get_all_projects()
-        site_url = (token.site_url or "").rstrip("/")
-
-        # API 응답을 target listing과 DB snapshot 양쪽 형태로 동시에 변환한다.
-        # Full Sync 요청은 target_id/project_key만 다시 보내면 된다.
-        project_rows: list[dict[str, Any]] = []
+        metadata_service = await create_jira_metadata_service(scope_id)
+        project_rows = await metadata_service.sync_project_snapshot_from_listing()
         targets: list[SyncTargetResult] = []
-        for raw_project in raw_projects:
-            project_key = str(raw_project.get("key") or "").strip()
-            if not project_key:
-                continue
-
-            project_id = str(raw_project.get("id") or "")
-            project_name = (
-                str(raw_project.get("name") or project_key).strip() or project_key
-            )
-            lead = raw_project.get("lead")
-            lead_data = lead if isinstance(lead, dict) else {}
-
-            project_rows.append(
-                {
-                    "cloud_id": scope_id,
-                    "project_key": project_key,
-                    "project_id": project_id,
-                    "project_name": project_name,
-                    "description": raw_project.get("description"),
-                    "project_type": raw_project.get("projectTypeKey"),
-                    "lead_account_id": lead_data.get("accountId"),
-                    "lead_display_name": lead_data.get("displayName"),
-                    "url": f"{site_url}/projects/{project_key}" if site_url else None,
-                }
-            )
+        for project_row in project_rows:
+            project_key = str(project_row["project_key"])
+            project_id = str(project_row.get("project_id") or "")
+            project_name = str(project_row.get("project_name") or project_key)
             targets.append(
                 SyncTargetResult(
                     target_id=project_key,
@@ -545,12 +437,6 @@ class SyncQueryService:
                 )
             )
         targets.sort(key=lambda item: item.target_id)
-
-        await run_in_threadpool(
-            _persist_jira_projects_db,
-            scope_id,
-            project_rows,
-        )
         return self._build_targets_result(
             connector=SyncConnector.JIRA,
             scope_id=scope_id,

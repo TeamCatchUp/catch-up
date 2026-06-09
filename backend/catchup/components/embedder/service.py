@@ -12,7 +12,7 @@ from langchain_cohere import CohereEmbeddings
 from langchain_openai import OpenAIEmbeddings
 
 from catchup.configs.config import settings
-from catchup.connectors.confluence.transformers import ConfluenceEmbedInput
+from catchup.sync.ingestion.document_builders.confluence import ConfluenceEmbedInput
 
 logger = logging.getLogger(__name__)
 

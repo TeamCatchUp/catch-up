@@ -11,9 +11,9 @@ from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel
 from pydantic import Field
 
+from catchup.agents.triggers.events import VerifiedConnectorWebhookEvent
 from catchup.agents.triggers.resolver import AgentTriggerIngressResult
 from catchup.agents.triggers.resolver import handle_verified_webhook_event
-from catchup.connector_core.domain.webhooks import VerifiedConnectorWebhookEvent
 from catchup.connectors.channel_talk.credential_loader import (
     load_channel_talk_connection,
 )

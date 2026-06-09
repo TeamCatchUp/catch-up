@@ -4,17 +4,13 @@ from urllib.parse import urlencode
 
 import httpx
 
-from catchup.connectors.atlassian.exceptions import (
-    AtlassianAuthError,
-    AtlassianResourceError,
-    AtlassianTokenExpiredError,
-)
-from catchup.connectors.atlassian.schemas import (
-    AtlassianAccessibleResource,
-    AtlassianOAuthTokenResponse,
-    AtlassianUserInfo,
-)
 from catchup.configs.config import settings
+from catchup.connectors.atlassian.exceptions import AtlassianAuthError
+from catchup.connectors.atlassian.exceptions import AtlassianResourceError
+from catchup.connectors.atlassian.exceptions import AtlassianTokenExpiredError
+from catchup.connectors.atlassian.schemas import AtlassianAccessibleResource
+from catchup.connectors.atlassian.schemas import AtlassianOAuthTokenResponse
+from catchup.connectors.atlassian.schemas import AtlassianUserInfo
 
 logger = logging.getLogger(__name__)
 

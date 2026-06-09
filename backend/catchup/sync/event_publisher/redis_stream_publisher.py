@@ -4,7 +4,8 @@ import logging
 
 from catchup.sync.common.exceptions import RedisStreamInitializationException
 from catchup.sync.common.protocols import EventPublisherProtocol
-from catchup.sync.common.schemas import PublishTasksResult, SyncStreamTask
+from catchup.sync.common.schemas import PublishTasksResult
+from catchup.sync.common.schemas import SyncStreamTask
 from catchup.sync.stream_runtime.stream_queue import publish_tasks
 from catchup.sync.stream_runtime.sync_runtime import initialize_stream_runtime
 

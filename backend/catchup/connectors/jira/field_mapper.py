@@ -15,7 +15,8 @@ TODO : 현재 구조는 Jira 관련 Sync가 있을 때 마다 FieldMapper를 초
 """
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
+from dataclasses import field
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:

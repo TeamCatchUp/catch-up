@@ -2,8 +2,8 @@ from datetime import datetime
 from datetime import timezone
 
 from catchup.agents.triggers.events import AgentWebhookEvent
+from catchup.agents.triggers.events import VerifiedConnectorWebhookEvent
 from catchup.agents.triggers.events import normalize_verified_connector_event
-from catchup.connector_core.domain.webhooks import VerifiedConnectorWebhookEvent
 
 
 def test_agent_webhook_event_carries_normalized_webhook_envelope() -> None:

@@ -5,8 +5,8 @@ from datetime import datetime
 from datetime import timedelta
 from datetime import timezone
 
-from fastapi.concurrency import run_in_threadpool
 import structlog
+from fastapi.concurrency import run_in_threadpool
 
 from catchup.audit.actions import FullSyncAction
 from catchup.audit.base import AuditLevel
@@ -22,9 +22,9 @@ from catchup.sync.common.retry_policy import resolve_retry_delay
 from catchup.sync.common.schemas import ClaimState
 from catchup.sync.common.schemas import FullSyncContext
 from catchup.sync.common.schemas import SyncStreamMessage
+from catchup.sync.handlers.registry import select_handler
 from catchup.sync.stream_runtime.stream_constants import SyncStreamFailureReason
 from catchup.worker.common import deadletter
-from catchup.worker.common import select_handler
 from catchup.worker.full import claim_event
 from catchup.worker.full import finalize_job_if_done_sync
 from catchup.worker.full import mark_event_failed_sync

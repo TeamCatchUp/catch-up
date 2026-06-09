@@ -1,16 +1,17 @@
 import asyncio
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
+from datetime import timedelta
+from datetime import timezone
 from threading import Lock
 from types import ModuleType
-from typing import Callable, ClassVar
+from typing import Callable
+from typing import ClassVar
 
 from fastapi.concurrency import run_in_threadpool
 from sqlalchemy.orm import Session
 
-from catchup.connectors.atlassian.exceptions import (
-    AtlassianTokenNotFoundError,
-)
+from catchup.connectors.atlassian.exceptions import AtlassianTokenNotFoundError
 from catchup.connectors.atlassian.oauth_client import AtlassianOAuthClient
 from catchup.db.engine import SessionLocal
 from catchup.db.models import AtlassianOAuthToken

@@ -11,7 +11,7 @@ from fastapi.concurrency import run_in_threadpool
 from sqlalchemy.orm import Session
 
 from catchup.connectors.channel_talk.core.client import ChannelTalkCoreApiClient
-from catchup.connectors.channel_talk.core.user_chat_full_sync_models import (
+from catchup.sync.ingestion.adapters.channel_talk.user_chat_models import (
     ChannelTalkUserChatFullSyncConnection,
 )
 from catchup.connectors.channel_talk.core.user_chat_ids import build_user_chat_desk_url

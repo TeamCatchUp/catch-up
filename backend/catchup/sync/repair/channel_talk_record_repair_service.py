@@ -14,27 +14,8 @@ from catchup.components.embedder.constants import EmbeddingProvider
 from catchup.components.embedder.factory import get_embedding_service
 from catchup.components.vector_db.factory import get_pgvector_repository
 from catchup.components.vector_db.pgvector.repository import PGVectorRepository
-from catchup.connector_core.adapters.channel_talk.article_full_sync import (
-    CHANNEL_TALK_ARTICLE_LANGUAGE,
-)
-from catchup.connector_core.adapters.channel_talk.article_incremental import (
-    ChannelTalkArticleIncrementalIngestionAdapter,
-)
-from catchup.connector_core.adapters.channel_talk.user_chat_full_sync import (
-    ChannelTalkUserChatFullSyncIngestionAdapter,
-)
-from catchup.connector_core.adapters.channel_talk.user_chat_incremental import (
-    ChannelTalkUserChatIncrementalIngestionAdapter,
-)
-from catchup.connector_core.ports.sync_ingestion import SyncWindow
 from catchup.connectors.channel_talk.core.user_chat_full_sync_fetcher import (
     ChannelTalkUserChatFullSyncFetcher,
-)
-from catchup.connectors.channel_talk.core.user_chat_full_sync_models import (
-    ChannelTalkUserChatFullSyncConnection,
-)
-from catchup.connectors.channel_talk.core.user_chat_full_sync_models import (
-    ChannelTalkUserChatSyncExecutionRequest,
 )
 from catchup.connectors.channel_talk.credential_loader import (
     load_channel_talk_connection,
@@ -44,12 +25,6 @@ from catchup.connectors.channel_talk.credential_loader import (
 )
 from catchup.connectors.channel_talk.document_space.article_full_sync_fetcher import (
     ChannelTalkArticleFullSyncFetcher,
-)
-from catchup.connectors.channel_talk.document_space.article_full_sync_models import (
-    ChannelTalkArticleFullSyncConnection,
-)
-from catchup.connectors.channel_talk.document_space.article_full_sync_models import (
-    ChannelTalkArticleSyncExecutionRequest,
 )
 from catchup.connectors.channel_talk.full_sync_helper import (
     is_verified_channel_talk_document_connection,
@@ -72,6 +47,31 @@ from catchup.server.sync.schemas import SyncRecordRetryRequest
 from catchup.server.sync.schemas import SyncRecordRetryResponse
 from catchup.sync.common.exceptions import SyncRequestException
 from catchup.sync.common.schemas import SyncTargetType
+from catchup.sync.ingestion.adapters.channel_talk.article_full_sync import (
+    CHANNEL_TALK_ARTICLE_LANGUAGE,
+)
+from catchup.sync.ingestion.adapters.channel_talk.article_incremental import (
+    ChannelTalkArticleIncrementalIngestionAdapter,
+)
+from catchup.sync.ingestion.adapters.channel_talk.article_models import (
+    ChannelTalkArticleFullSyncConnection,
+)
+from catchup.sync.ingestion.adapters.channel_talk.article_models import (
+    ChannelTalkArticleSyncExecutionRequest,
+)
+from catchup.sync.ingestion.adapters.channel_talk.user_chat_full_sync import (
+    ChannelTalkUserChatFullSyncIngestionAdapter,
+)
+from catchup.sync.ingestion.adapters.channel_talk.user_chat_incremental import (
+    ChannelTalkUserChatIncrementalIngestionAdapter,
+)
+from catchup.sync.ingestion.adapters.channel_talk.user_chat_models import (
+    ChannelTalkUserChatFullSyncConnection,
+)
+from catchup.sync.ingestion.adapters.channel_talk.user_chat_models import (
+    ChannelTalkUserChatSyncExecutionRequest,
+)
+from catchup.sync.ingestion.schemas import SyncWindow
 from catchup.sync.repair.context import RecordRepairContext
 
 logger = structlog.get_logger(__name__)

@@ -23,10 +23,10 @@ from catchup.sync.common.schemas import ClaimState
 from catchup.sync.common.schemas import IncrementalSyncContext
 from catchup.sync.common.schemas import SyncStreamMessage
 from catchup.sync.common.schemas import SyncStreamTask
+from catchup.sync.handlers.registry import select_handler
 from catchup.sync.incremental.error_policy import is_retryable_incremental_error
 from catchup.sync.stream_runtime.stream_constants import SyncStreamFailureReason
 from catchup.worker.common import deadletter
-from catchup.worker.common import select_handler
 from catchup.worker.schemas import ClaimResult
 
 logger = logging.getLogger(__name__)

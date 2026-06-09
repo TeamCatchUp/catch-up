@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from catchup.audit.enums import AuditEventStatus, AuditLevel
+from catchup.audit.enums import AuditEventStatus
+from catchup.audit.enums import AuditLevel
 from catchup.audit.metadata import SyncAuditMetadata
 from catchup.audit.service import emit_audit_event
 from catchup.db.models import SyncConnector

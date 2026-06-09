@@ -3,9 +3,12 @@ XHTML -> Section Tree Parser
 """
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
+from dataclasses import field
 
-from bs4 import BeautifulSoup, NavigableString, Tag
+from bs4 import BeautifulSoup
+from bs4 import NavigableString
+from bs4 import Tag
 
 logger = logging.getLogger(__name__)
 

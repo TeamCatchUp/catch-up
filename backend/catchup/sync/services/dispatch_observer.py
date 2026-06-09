@@ -1,11 +1,15 @@
 from __future__ import annotations
 
-from typing import Protocol, Sequence
+from typing import Protocol
+from typing import Sequence
 
-from catchup.audit.enums import AuditEventStatus, AuditLevel
-from catchup.db.models import SyncConnector, SyncType
+from catchup.audit.enums import AuditEventStatus
+from catchup.audit.enums import AuditLevel
+from catchup.db.models import SyncConnector
+from catchup.db.models import SyncType
 from catchup.events.enums import SyncTriggerEventAction
-from catchup.sync.audit import SyncAuditContext, emit_sync_trigger_audit
+from catchup.sync.audit import SyncAuditContext
+from catchup.sync.audit import emit_sync_trigger_audit
 from catchup.sync.common.schemas import SyncEventSeed
 from catchup.sync.dispatch.types import DispatchContext
 

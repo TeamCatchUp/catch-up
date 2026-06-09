@@ -2,10 +2,8 @@ import logging
 
 from sqlalchemy.orm import Session
 
-from catchup.connectors.atlassian.token_manager import (
-    AtlassianTokenManager,
-    AtlassianTokenProvider,
-)
+from catchup.connectors.atlassian.token_manager import AtlassianTokenManager
+from catchup.connectors.atlassian.token_manager import AtlassianTokenProvider
 from catchup.connectors.confluence.client import ConfluenceApiClient
 from catchup.connectors.jira.client import JiraApiClient
 

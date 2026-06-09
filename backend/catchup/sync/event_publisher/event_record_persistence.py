@@ -4,13 +4,13 @@ from datetime import datetime
 
 from sqlalchemy.orm import Session
 
-from catchup.db.models import SyncConnector, SyncEvent, SyncType
-from catchup.db.sync import (
-    SyncEventCreateInput as DbSyncEventCreateInput,
-    SyncJobCreateInput as DbSyncJobCreateInput,
-    create_events as create_db_sync_events,
-    create_job as create_db_sync_job,
-)
+from catchup.db.models import SyncConnector
+from catchup.db.models import SyncEvent
+from catchup.db.models import SyncType
+from catchup.db.sync import SyncEventCreateInput as DbSyncEventCreateInput
+from catchup.db.sync import SyncJobCreateInput as DbSyncJobCreateInput
+from catchup.db.sync import create_events as create_db_sync_events
+from catchup.db.sync import create_job as create_db_sync_job
 from catchup.sync.common.schemas import SyncEventSeed
 
 

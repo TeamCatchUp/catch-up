@@ -1,23 +1,24 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
+from dataclasses import field
 from functools import lru_cache
 
 from fastapi.concurrency import run_in_threadpool
 
-from catchup.connectors.confluence.factory import create_confluence_ingestion_service
 from catchup.db.confluence import domain_repository as confluence_entities
 from catchup.db.engine import SessionLocal
 from catchup.db.models import SyncConnector
-from catchup.server.sync.schemas import (
-    SyncRecordGapItem,
-    SyncRecordGapResponse,
-    SyncRecordRetryItemRequest,
-    SyncRecordRetryItemResponse,
-    SyncRecordRetryRequest,
-    SyncRecordRetryResponse,
-)
+from catchup.server.sync.schemas import SyncRecordGapItem
+from catchup.server.sync.schemas import SyncRecordGapResponse
+from catchup.server.sync.schemas import SyncRecordRetryItemRequest
+from catchup.server.sync.schemas import SyncRecordRetryItemResponse
+from catchup.server.sync.schemas import SyncRecordRetryRequest
+from catchup.server.sync.schemas import SyncRecordRetryResponse
 from catchup.sync.common.exceptions import SyncRequestException
+from catchup.sync.ingestion.factories.confluence import (
+    create_confluence_ingestion_service,
+)
 from catchup.sync.repair.context import RecordRepairContext
 
 

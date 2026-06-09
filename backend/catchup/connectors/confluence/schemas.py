@@ -1,4 +1,6 @@
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel
+from pydantic import Field
+from pydantic import model_validator
 
 
 class ConfluenceSpaceDescription(BaseModel):

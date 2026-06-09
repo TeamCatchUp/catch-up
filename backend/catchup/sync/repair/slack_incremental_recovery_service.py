@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
+from dataclasses import field
 from functools import lru_cache
 from typing import Iterable
 
@@ -8,17 +9,13 @@ from fastapi.concurrency import run_in_threadpool
 from sqlalchemy import select
 
 from catchup.connectors.slack.client import SlackRateLimitError
-from catchup.connectors.slack.factory import create_slack_ingestion_service
 from catchup.db.engine import SessionLocal
 from catchup.db.incremental import mark_record_keys_recovered
-from catchup.db.models import (
-    IncrementalRecordState,
-    IncrementalRecordStatus,
-    SyncConnector,
-)
-from catchup.server.sync.schemas import (
-    SlackIncrementalRecoveryResponse,
-)
+from catchup.db.models import IncrementalRecordState
+from catchup.db.models import IncrementalRecordStatus
+from catchup.db.models import SyncConnector
+from catchup.server.sync.schemas import SlackIncrementalRecoveryResponse
+from catchup.sync.ingestion.factories.slack import create_slack_ingestion_service
 
 
 @dataclass(slots=True, frozen=True)

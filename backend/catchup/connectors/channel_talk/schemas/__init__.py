@@ -42,12 +42,6 @@ from catchup.connectors.channel_talk.schemas.channel_metadata import (
 from catchup.connectors.channel_talk.schemas.channel_metadata import (
     ChannelTalkManagerMetadataPage as ChannelTalkManagerMetadataPage,
 )
-from catchup.connectors.channel_talk.schemas.channel_metadata import (
-    ChannelTalkMetadataSyncRequest as ChannelTalkMetadataSyncRequest,
-)
-from catchup.connectors.channel_talk.schemas.channel_metadata import (
-    ChannelTalkMetadataSyncResult as ChannelTalkMetadataSyncResult,
-)
 from catchup.connectors.channel_talk.schemas.document_article import (
     ChannelTalkDocumentArticle as ChannelTalkDocumentArticle,
 )
@@ -101,12 +95,6 @@ from catchup.connectors.channel_talk.schemas.document_metadata import (
 )
 from catchup.connectors.channel_talk.schemas.document_metadata import (
     ChannelTalkDocumentAuthorPage as ChannelTalkDocumentAuthorPage,
-)
-from catchup.connectors.channel_talk.schemas.document_metadata import (
-    ChannelTalkDocumentMetadataSyncRequest as ChannelTalkDocumentMetadataSyncRequest,
-)
-from catchup.connectors.channel_talk.schemas.document_metadata import (
-    ChannelTalkDocumentMetadataSyncResult as ChannelTalkDocumentMetadataSyncResult,
 )
 from catchup.connectors.channel_talk.schemas.document_metadata import (
     ChannelTalkDocumentNavNodeMetadata as ChannelTalkDocumentNavNodeMetadata,
@@ -207,8 +195,6 @@ __all__ = (
     "ChannelTalkDocumentCredentialsRecord",
     "ChannelTalkDocumentCredentialsStatus",
     "ChannelTalkDocumentCredentialsUpsert",
-    "ChannelTalkDocumentMetadataSyncRequest",
-    "ChannelTalkDocumentMetadataSyncResult",
     "ChannelTalkDocumentNavNodeMetadata",
     "ChannelTalkDocumentNavNodePage",
     "ChannelTalkDocumentSpace",
@@ -221,8 +207,6 @@ __all__ = (
     "ChannelTalkManager",
     "ChannelTalkManagerMetadata",
     "ChannelTalkManagerMetadataPage",
-    "ChannelTalkMetadataSyncRequest",
-    "ChannelTalkMetadataSyncResult",
     "ChannelTalkUninstallResult",
     "ChannelTalkUserChatAnchors",
     "ChannelTalkUserChatAssignment",

@@ -42,12 +42,6 @@ from catchup.connectors.channel_talk.schemas.channel_metadata import ChannelTalk
 from catchup.connectors.channel_talk.schemas.channel_metadata import (
     ChannelTalkManagerMetadata,
 )
-from catchup.connectors.channel_talk.schemas.channel_metadata import (
-    ChannelTalkMetadataSyncRequest,
-)
-from catchup.connectors.channel_talk.schemas.channel_metadata import (
-    ChannelTalkMetadataSyncResult,
-)
 from catchup.connectors.channel_talk.schemas.user import ChannelTalkUserFoundation
 from catchup.connectors.channel_talk.schemas.user_chat import ChannelTalkUserChatDetail
 from catchup.connectors.channel_talk.schemas.user_chat import (
@@ -81,8 +75,6 @@ __all__ = [
     "ChannelTalkGroupMetadata",
     "ChannelTalkManager",
     "ChannelTalkManagerMetadata",
-    "ChannelTalkMetadataSyncRequest",
-    "ChannelTalkMetadataSyncResult",
     "ChannelTalkPayloadError",
     "ChannelTalkPersistenceError",
     "ChannelTalkRateLimitError",

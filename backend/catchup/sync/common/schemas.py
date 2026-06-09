@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from dataclasses import field
-from enum import StrEnum
 from typing import Any
 from typing import Mapping
 from typing import TypeAlias
@@ -14,6 +13,42 @@ from pydantic import model_validator
 
 from catchup.db.models import SyncConnector
 from catchup.db.models import SyncType
+from catchup.sync.common.context import FullSyncContext
+from catchup.sync.common.context import IncrementalSyncContext
+from catchup.sync.common.context import SyncContext
+from catchup.sync.common.context import SyncContextBase
+from catchup.sync.common.enums import ClaimState
+from catchup.sync.common.enums import SyncDispatchStatus
+from catchup.sync.common.enums import SyncEventKind
+from catchup.sync.common.enums import SyncTargetType
+from catchup.sync.common.enums import SyncTrigger
+from catchup.sync.common.results import TargetSyncResult
+
+__all__ = [
+    "ClaimState",
+    "FullSyncContext",
+    "FullSyncDispatchRequest",
+    "FullSyncRequestedTarget",
+    "FullSyncResolvedTargets",
+    "FullSyncTarget",
+    "FullSyncTaskPayload",
+    "HandlerKey",
+    "IncrementalSyncContext",
+    "IncrementalSyncTaskPayload",
+    "PublishTasksResult",
+    "SyncClaimBatch",
+    "SyncContext",
+    "SyncContextBase",
+    "SyncDispatchResult",
+    "SyncDispatchStatus",
+    "SyncEventKind",
+    "SyncEventSeed",
+    "SyncStreamMessage",
+    "SyncStreamTask",
+    "SyncTargetType",
+    "SyncTrigger",
+    "TargetSyncResult",
+]
 
 
 def _validate_epoch_ts(value: str | None, *, field_name: str) -> str | None:
@@ -31,46 +66,6 @@ def _validate_epoch_ts(value: str | None, *, field_name: str) -> str | None:
     if parsed < 0:
         raise ValueError(f"{field_name} must be non-negative")
     return stripped
-
-
-class SyncDispatchStatus(StrEnum):
-    ACCEPTED = "accepted"
-    NO_EVENTS = "no_events"
-    CONFLICT = "conflict"
-    FAILED = "failed"
-
-
-class SyncTrigger(StrEnum):
-    API = "api"
-    SCHEDULER = "scheduler"
-    SYSTEM = "system"
-
-
-class SyncTargetType(StrEnum):
-    RESOURCE = "resource"
-    CHANNEL = "channel"
-    REPOSITORY = "repository"
-    PROJECT = "project"
-    SPACE = "space"
-
-
-class SyncEventKind(StrEnum):
-    CREATED = "created"
-    UPDATED = "updated"
-    DELETED = "deleted"
-
-
-class ClaimState(StrEnum):
-    CLAIMED = "claimed"
-    EVENT_NOT_FOUND = "event_not_found"
-    EVENT_JOB_MISMATCH = "event_job_mismatch"
-    EVENT_ALREADY_TERMINAL = "event_already_terminal"
-    EVENT_CAS_CONFLICT = "event_cas_conflict"
-    JOB_NOT_FOUND = "job_not_found"
-    INVALID_INCREMENTAL_TASK = "invalid_incremental_task"
-    RECORD_NOT_FOUND = "record_not_found"
-    STALE_TASK = "stale_task"
-    RECORD_CAS_CONFLICT = "record_cas_conflict"
 
 
 @dataclass(slots=True, frozen=True)
@@ -196,13 +191,6 @@ class SyncEventSeed:
             "sync_from_ts",
             _validate_epoch_ts(self.sync_from_ts, field_name="sync_from_ts"),
         )
-
-
-@dataclass(slots=True, frozen=True)
-class TargetSyncResult:
-    synced_count: int = 0
-    error_count: int = 0
-    skipped: bool = False
 
 
 class FullSyncTaskPayload(BaseModel):
@@ -553,48 +541,3 @@ class PublishTasksResult(BaseModel):
     error_message: str | None = None
     failed_at_index: int | None = Field(default=None, ge=0)
     failed_event_id: str | None = None
-
-
-@dataclass(slots=True)
-class SyncContextBase:
-    event_id: str
-    job_id: str
-    connector: SyncConnector
-    scope_id: str
-    target_type: SyncTargetType
-    target_id: str
-    target_name: str
-    attempt: int
-    max_attempts: int
-
-    def __post_init__(self) -> None:
-        self.connector = SyncConnector(self.connector)
-        self.target_type = SyncTargetType(self.target_type)
-
-
-@dataclass(slots=True)
-class FullSyncContext(SyncContextBase):
-    sync_from_ts: str | None
-    metadata: dict[str, Any] = field(default_factory=dict)
-    sync_type: SyncType = field(init=False, default=SyncType.FULL)
-
-
-@dataclass(slots=True)
-class IncrementalSyncContext(SyncContextBase):
-    record_key: str
-    generation: int
-    record_type: str | None = None
-    record_id: str | None = None
-    parent_type: SyncTargetType = SyncTargetType.RESOURCE
-    parent_id: str = ""
-    event_kind: SyncEventKind = SyncEventKind.UPDATED
-    last_event_at: str = ""
-    sync_type: SyncType = field(init=False, default=SyncType.INCREMENTAL)
-
-    def __post_init__(self) -> None:
-        SyncContextBase.__post_init__(self)
-        self.parent_type = SyncTargetType(self.parent_type)
-        self.event_kind = SyncEventKind(self.event_kind)
-
-
-SyncContext: TypeAlias = FullSyncContext | IncrementalSyncContext

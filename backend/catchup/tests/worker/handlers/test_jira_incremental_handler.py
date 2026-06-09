@@ -9,9 +9,9 @@ from catchup.db.models import SyncConnector
 from catchup.sync.common.schemas import IncrementalSyncContext
 from catchup.sync.common.schemas import SyncEventKind
 from catchup.sync.common.schemas import SyncTargetType
-from catchup.worker.handlers.jira_incremental_handler import JiraIncrementalHandler
+from catchup.sync.handlers.jira import JiraIncrementalHandler
 
-_HANDLER_MODULE = "catchup.worker.handlers.jira_incremental_handler"
+_HANDLER_MODULE = "catchup.sync.handlers.jira"
 
 
 def _context() -> IncrementalSyncContext:
@@ -60,7 +60,7 @@ class JiraIncrementalHandlerTests(IsolatedAsyncioTestCase):
                 AsyncMock(return_value=result),
             ) as run_sync_ingestion,
             patch(
-                "catchup.connectors.jira.service.JiraIngestionService.incremental_sync",
+                "catchup.sync.ingestion.services.jira.JiraIngestionService.incremental_sync",
                 AsyncMock(),
             ) as legacy_incremental_sync,
         ):

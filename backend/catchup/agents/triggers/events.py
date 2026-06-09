@@ -7,7 +7,13 @@ from typing import Any
 from pydantic import BaseModel
 from pydantic import Field
 
-from catchup.connector_core.domain.webhooks import VerifiedConnectorWebhookEvent
+
+class VerifiedConnectorWebhookEvent(BaseModel):
+    """Server connector layer에서 검증한 agent-trigger용 webhook envelope."""
+
+    source: str
+    event_type: str
+    payload: dict[str, Any]
 
 
 class AgentWebhookEvent(BaseModel):

@@ -4,14 +4,13 @@ from datetime import datetime
 from datetime import timezone
 from typing import Any
 
-from catchup.connector_core.ports.sync_ingestion import SyncWindow
 from catchup.connectors.channel_talk.core.user_chat_full_sync_fetcher import (
     ChannelTalkUserChatFullSyncFetcher,
 )
-from catchup.connectors.channel_talk.core.user_chat_full_sync_models import (
+from catchup.sync.ingestion.adapters.channel_talk.user_chat_models import (
     ChannelTalkUserChatFullSyncConnection,
 )
-from catchup.connectors.channel_talk.core.user_chat_transformer import (
+from catchup.sync.ingestion.document_builders.channel_talk_user_chat import (
     UserChatTransformer,
 )
 from catchup.connectors.channel_talk.credential_loader import (
@@ -20,6 +19,7 @@ from catchup.connectors.channel_talk.credential_loader import (
 from catchup.connectors.channel_talk.schemas.channel_connection import (
     ChannelTalkCredentialsRecord,
 )
+from catchup.sync.ingestion.schemas import SyncWindow
 
 CHANNEL_TALK_USER_CHAT_CONTEXT_KEY = "channel_talk_user_chat_context"
 CHANNEL_TALK_USER_CHAT_ID_KEY = "channel_talk_user_chat_id"

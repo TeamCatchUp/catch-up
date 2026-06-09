@@ -8,7 +8,7 @@ from catchup.configs.config import settings
 from catchup.db.models import SyncType
 from catchup.sync.common.protocols import WorkerProtocol
 from catchup.sync.common.schemas import SyncStreamMessage
-from catchup.sync.full_retry import publish_retry_ready_full_sync_events
+from catchup.sync.repair.full_retry import publish_retry_ready_full_sync_events
 from catchup.sync.stream_runtime.stream_constants import STREAM_CLAIM_START_ID
 from catchup.sync.stream_runtime.sync_runtime import ack_consumed_messages
 from catchup.sync.stream_runtime.sync_runtime import initialize_stream_runtime

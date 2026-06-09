@@ -6,12 +6,11 @@ from sqlalchemy.orm import Session
 
 from catchup.configs.config import settings
 from catchup.db.engine import SessionLocal
-from catchup.db.incremental import (
-    list_debounce_ready_records,
-    list_retry_ready_records,
-    promote_record,
-)
-from catchup.db.models import IncrementalRecordState, SyncConnector
+from catchup.db.incremental import list_debounce_ready_records
+from catchup.db.incremental import list_retry_ready_records
+from catchup.db.incremental import promote_record
+from catchup.db.models import IncrementalRecordState
+from catchup.db.models import SyncConnector
 
 logger = logging.getLogger(__name__)
 

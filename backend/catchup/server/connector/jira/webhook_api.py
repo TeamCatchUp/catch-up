@@ -1,5 +1,6 @@
 from typing import Optional
 
+import structlog
 from fastapi import APIRouter
 from fastapi import Depends
 from fastapi import Header
@@ -8,11 +9,12 @@ from fastapi import Query
 from fastapi import Request
 from fastapi import status
 from fastapi.encoders import jsonable_encoder
-import structlog
 
 from catchup.configs.config import settings
 from catchup.connectors.jira.dynamic_webhook_service import JiraDynamicWebhookService
-from catchup.connectors.jira.dynamic_webhook_service import get_jira_dynamic_webhook_service
+from catchup.connectors.jira.dynamic_webhook_service import (
+    get_jira_dynamic_webhook_service,
+)
 from catchup.server.connector.webhook_verifier import WebhookVerifierProvider
 from catchup.sync.ingress.jira import handle_jira_webhook as handle_jira_webhook_ingress
 from catchup.sync.ingress.types import JiraWebhookRequest

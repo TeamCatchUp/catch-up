@@ -1,4 +1,6 @@
-from datetime import datetime, timezone
+from datetime import datetime
+from datetime import timezone
+
 
 def parse_atlassian_datetime(dt_str: str | None) -> datetime | None:
     if not dt_str:

@@ -4,16 +4,16 @@ from collections.abc import Callable
 from datetime import datetime
 from typing import Protocol
 
-from catchup.connectors.channel_talk.document_space.article_full_sync_models import (
+from catchup.connectors.channel_talk.document_space.article_fetch_models import (
     DEFAULT_ARTICLE_FULL_SYNC_STATES,
 )
-from catchup.connectors.channel_talk.document_space.article_full_sync_models import (
+from catchup.connectors.channel_talk.document_space.article_fetch_models import (
     ChannelTalkArticleFullSyncConnection,
 )
-from catchup.connectors.channel_talk.document_space.article_full_sync_models import (
+from catchup.connectors.channel_talk.document_space.article_fetch_models import (
     ChannelTalkFetchedArticle,
 )
-from catchup.connectors.channel_talk.document_space.article_full_sync_models import (
+from catchup.connectors.channel_talk.document_space.article_fetch_models import (
     ChannelTalkFetchedArticlesResult,
 )
 from catchup.connectors.channel_talk.document_space.client import ARTICLE_BATCH_MAX_SIZE
