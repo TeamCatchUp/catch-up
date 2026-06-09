@@ -1,12 +1,10 @@
 from __future__ import annotations
 
 from functools import lru_cache
-from typing import Protocol
 
 from fastapi.concurrency import run_in_threadpool
 
 from catchup.db.engine import SessionLocal
-from catchup.db.models import SyncConnector
 from catchup.db.models import SyncEventStatus
 from catchup.db.sync import finalize_manual_retry_failed
 from catchup.db.sync import finalize_manual_retry_success
@@ -14,77 +12,19 @@ from catchup.server.sync.schemas import SyncRecordGapResponse
 from catchup.server.sync.schemas import SyncRecordRetryRequest
 from catchup.server.sync.schemas import SyncRecordRetryResponse
 from catchup.sync.common.exceptions import SyncInternalException
-from catchup.sync.common.exceptions import SyncRequestException
-from catchup.sync.repair.channel_talk_record_repair_service import (
-    get_channel_talk_record_repair_service,
-)
-from catchup.sync.repair.confluence_record_repair_service import (
-    get_confluence_record_repair_service,
-)
 from catchup.sync.repair.context import RecordRepairContext
 from catchup.sync.repair.context import load_record_repair_context
-from catchup.sync.repair.github_record_repair_service import (
-    get_github_record_repair_service,
-)
-from catchup.sync.repair.jira_record_repair_service import (
-    get_jira_record_repair_service,
-)
-from catchup.sync.repair.slack_record_repair_service import (
-    get_slack_record_repair_service,
-)
-
-
-class RecordRepairHandler(Protocol):
-    async def get_record_gaps(
-        self,
-        *,
-        repair_context: RecordRepairContext,
-    ) -> SyncRecordGapResponse: ...
-
-    async def retry_records(
-        self,
-        *,
-        request: SyncRecordRetryRequest,
-        repair_context: RecordRepairContext,
-    ) -> SyncRecordRetryResponse: ...
+from catchup.sync.repair.registry import RecordRepairHandlerRegistry
+from catchup.sync.repair.registry import get_record_repair_handler_registry
 
 
 class RecordRepairService:
     def __init__(
         self,
         *,
-        channel_talk_handler: RecordRepairHandler,
-        confluence_handler: RecordRepairHandler,
-        github_handler: RecordRepairHandler,
-        jira_handler: RecordRepairHandler,
-        slack_handler: RecordRepairHandler,
-    ):
-        self._channel_talk_handler = channel_talk_handler
-        self._confluence_handler = confluence_handler
-        self._github_handler = github_handler
-        self._jira_handler = jira_handler
-        self._slack_handler = slack_handler
-
-    def _resolve_handler(
-        self,
-        connector: SyncConnector,
-    ) -> RecordRepairHandler:
-        if connector == SyncConnector.CHANNEL_TALK:
-            return self._channel_talk_handler
-        if connector == SyncConnector.CONFLUENCE:
-            return self._confluence_handler
-        if connector == SyncConnector.GITHUB:
-            return self._github_handler
-        if connector == SyncConnector.JIRA:
-            return self._jira_handler
-        if connector == SyncConnector.SLACK:
-            return self._slack_handler
-
-        raise SyncRequestException(
-            "record repair not supported for this connector",
-            code="unsupported_connector",
-            metadata={"connector": connector.value},
-        )
+        registry: RecordRepairHandlerRegistry,
+    ) -> None:
+        self._registry = registry
 
     async def _load_repair_context(
         self,
@@ -127,7 +67,7 @@ class RecordRepairService:
         event_id: str,
     ) -> SyncRecordGapResponse:
         repair_context = await self._load_repair_context(event_id=event_id)
-        handler = self._resolve_handler(repair_context.connector)
+        handler = self._registry.handler_for(repair_context.connector)
         response = await handler.get_record_gaps(
             repair_context=repair_context,
         )
@@ -146,7 +86,7 @@ class RecordRepairService:
         request: SyncRecordRetryRequest,
     ) -> SyncRecordRetryResponse:
         repair_context = await self._load_repair_context(event_id=request.event_id)
-        handler = self._resolve_handler(repair_context.connector)
+        handler = self._registry.handler_for(repair_context.connector)
         response = await handler.retry_records(
             request=request,
             repair_context=repair_context,
@@ -170,9 +110,5 @@ class RecordRepairService:
 @lru_cache(maxsize=1)
 def get_record_repair_service() -> RecordRepairService:
     return RecordRepairService(
-        channel_talk_handler=get_channel_talk_record_repair_service(),
-        confluence_handler=get_confluence_record_repair_service(),
-        github_handler=get_github_record_repair_service(),
-        jira_handler=get_jira_record_repair_service(),
-        slack_handler=get_slack_record_repair_service(),
+        registry=get_record_repair_handler_registry(),
     )

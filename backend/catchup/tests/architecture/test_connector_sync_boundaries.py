@@ -133,6 +133,7 @@ def test_compatibility_wrapper_modules_are_removed() -> None:
         "catchup/connector_core/domain/webhooks.py",
         "catchup/connector_core/ports/sync_ingestion.py",
         "catchup/connector_core/ports/metadata_sync.py",
+        "catchup/sync/full_retry.py",
         "catchup/connector_core/adapters/channel_talk/metadata_sync_adapter.py",
         "catchup/connector_core/adapters/channel_talk/documents_metadata_sync_adapter.py",
         "catchup/connectors/github/webhook/metadata.py",
@@ -264,6 +265,24 @@ def test_worker_processors_use_canonical_handler_registry() -> None:
         imports = _imported_modules(BACKEND_ROOT / relative_path)
 
         assert "catchup.sync.handlers.registry" in imports, relative_path
+
+
+def test_worker_event_processor_uses_repair_full_retry_boundary() -> None:
+    imports = _imported_modules(BACKEND_ROOT / "catchup/worker/worker_event_processor.py")
+
+    assert "catchup.sync.repair.full_retry" in imports
+    assert "catchup.sync.full_retry" not in imports
+
+
+def test_record_repair_service_routes_through_repair_registry() -> None:
+    imports = _imported_modules(BACKEND_ROOT / "catchup/sync/repair/record_repair_service.py")
+
+    assert "catchup.sync.repair.registry" in imports
+    assert not any(
+        module.endswith("_record_repair_service")
+        and module != "catchup.sync.repair.record_repair_service"
+        for module in imports
+    )
 
 
 def test_slack_sync_handlers_do_not_import_worker_modules() -> None:

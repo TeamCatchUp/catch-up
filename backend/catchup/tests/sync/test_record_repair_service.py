@@ -3,25 +3,38 @@ from __future__ import annotations
 from datetime import datetime
 from datetime import timezone
 from unittest import IsolatedAsyncioTestCase
+from unittest import TestCase
 from unittest.mock import MagicMock
 from unittest.mock import patch
 
 from catchup.db.models import SyncConnector
 from catchup.db.models import SyncEventStatus
+from catchup.sync.common.exceptions import SyncRequestException
 from catchup.sync.common.schemas import SyncTargetType
 from catchup.sync.repair.context import RecordRepairContext
+from catchup.sync.repair.protocols import RecordRepairHandler
 from catchup.sync.repair.record_repair_service import RecordRepairService
+from catchup.sync.repair.registry import RecordRepairHandlerRegistry
+
+
+def _repair_registry(
+    overrides: dict[SyncConnector, RecordRepairHandler] | None = None,
+) -> RecordRepairHandlerRegistry:
+    handlers: dict[SyncConnector, RecordRepairHandler] = {
+        SyncConnector.CHANNEL_TALK: MagicMock(),
+        SyncConnector.CONFLUENCE: MagicMock(),
+        SyncConnector.GITHUB: MagicMock(),
+        SyncConnector.JIRA: MagicMock(),
+        SyncConnector.SLACK: MagicMock(),
+    }
+    if overrides:
+        handlers.update(overrides)
+    return RecordRepairHandlerRegistry(handlers=handlers)
 
 
 class RecordRepairServiceStatusTests(IsolatedAsyncioTestCase):
     async def test_mark_retry_event_success_commits_status_update(self) -> None:
-        service = RecordRepairService(
-            channel_talk_handler=MagicMock(),
-            confluence_handler=MagicMock(),
-            github_handler=MagicMock(),
-            jira_handler=MagicMock(),
-            slack_handler=MagicMock(),
-        )
+        service = RecordRepairService(registry=_repair_registry())
         repair_context = RecordRepairContext(
             event_id="event-123",
             attempt=1,
@@ -56,3 +69,26 @@ class RecordRepairServiceStatusTests(IsolatedAsyncioTestCase):
         self.assertEqual(status, SyncEventStatus.SUCCESS)
         finalize_success.assert_called_once_with(db, "event-123")
         db.commit.assert_called_once_with()
+
+
+class RecordRepairHandlerRegistryTests(TestCase):
+    def test_registry_returns_connector_handler(self) -> None:
+        handler = MagicMock()
+        registry = _repair_registry({SyncConnector.CHANNEL_TALK: handler})
+
+        self.assertIs(
+            registry.handler_for(SyncConnector.CHANNEL_TALK),
+            handler,
+        )
+
+    def test_registry_rejects_unsupported_connector(self) -> None:
+        registry = RecordRepairHandlerRegistry(handlers={})
+
+        with self.assertRaises(SyncRequestException) as raised:
+            registry.handler_for(SyncConnector.CHANNEL_TALK)
+
+        self.assertEqual(raised.exception.code, "unsupported_connector")
+        self.assertEqual(
+            raised.exception.metadata,
+            {"connector": SyncConnector.CHANNEL_TALK.value},
+        )
