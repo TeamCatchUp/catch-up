@@ -4,6 +4,7 @@ import asyncio
 import uuid
 from typing import Annotated
 from typing import Any
+from typing import Literal
 
 from fastapi import APIRouter
 from fastapi import Depends
@@ -71,7 +72,7 @@ class InquiryAutomationItem(BaseModel):
 class InquiryAutomationUpdateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    status: AgentStatus
+    status: Literal[AgentStatus.ACTIVE, AgentStatus.INACTIVE]
 
 
 class InquiryAutomationPublishResponse(BaseModel):
