@@ -60,7 +60,7 @@ class JiraIncrementalHandlerTests(IsolatedAsyncioTestCase):
                 AsyncMock(return_value=result),
             ) as run_sync_ingestion,
             patch(
-                "catchup.connectors.jira.service.JiraIngestionService.incremental_sync",
+                "catchup.sync.ingestion.services.jira.JiraIngestionService.incremental_sync",
                 AsyncMock(),
             ) as legacy_incremental_sync,
         ):

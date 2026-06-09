@@ -14,8 +14,8 @@ Transformer에서 이 스키마들을 사용하여 LangChain Document를 생성.
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, Field
-
+from pydantic import BaseModel
+from pydantic import Field
 
 # ============================================================
 # 공통 서브 모델

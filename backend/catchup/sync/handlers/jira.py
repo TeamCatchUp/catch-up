@@ -11,6 +11,13 @@ from catchup.audit.metadata import FullSyncEventAuditMetadata
 from catchup.audit.metadata import IncrementalRecordAuditMetadata
 from catchup.audit.utils import audit_log
 from catchup.configs.config import settings
+from catchup.sync.audit import SyncAuditContext
+from catchup.sync.common.exceptions import SyncInternalException
+from catchup.sync.common.schemas import FullSyncContext
+from catchup.sync.common.schemas import IncrementalSyncContext
+from catchup.sync.common.schemas import TargetSyncResult
+from catchup.sync.handlers.base import BaseFullSyncHandler
+from catchup.sync.handlers.base import BaseIncrementalHandler
 from catchup.sync.ingestion.adapters.jira import JiraIssueFullSyncAdapter
 from catchup.sync.ingestion.adapters.jira import JiraIssueFullSyncExecutionRequest
 from catchup.sync.ingestion.adapters.jira import JiraIssueIncrementalAdapter
@@ -21,13 +28,6 @@ from catchup.sync.ingestion.adapters.jira import (
     create_jira_issue_ingestion_dependencies,
 )
 from catchup.sync.ingestion.adapters.jira import prepare_jira_issue_transform_context
-from catchup.sync.audit import SyncAuditContext
-from catchup.sync.common.exceptions import SyncInternalException
-from catchup.sync.common.schemas import FullSyncContext
-from catchup.sync.common.schemas import IncrementalSyncContext
-from catchup.sync.common.schemas import TargetSyncResult
-from catchup.sync.handlers.base import BaseFullSyncHandler
-from catchup.sync.handlers.base import BaseIncrementalHandler
 from catchup.sync.ingestion.pipeline import run_sync_ingestion
 from catchup.sync.ingestion.schemas import SyncWindow
 

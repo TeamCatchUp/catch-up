@@ -12,12 +12,12 @@ from pydantic import computed_field
 from pydantic import field_validator
 
 from catchup.configs.config import settings
-from catchup.connectors.slack.ingestion_service import SlackIngestionService
 from catchup.db.models import SyncConnector
 from catchup.sync.audit import SyncAuditContext
 from catchup.sync.ingestion.schemas import SyncExecutionRequest
 from catchup.sync.ingestion.schemas import SyncExecutionResult
 from catchup.sync.ingestion.schemas import SyncWindow
+from catchup.sync.ingestion.services.slack import SlackIngestionService
 from catchup.utils.validation import require_text
 
 SlackIncrementalEventKind = Literal["created", "updated", "deleted"]

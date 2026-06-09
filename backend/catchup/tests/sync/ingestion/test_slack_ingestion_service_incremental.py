@@ -9,8 +9,8 @@ from unittest.mock import patch
 from langchain_core.documents import Document
 
 from catchup.connectors.slack.client import SlackConnectorApiError
-from catchup.connectors.slack.ingestion_service import SlackIngestionService
 from catchup.sync.common.schemas import TargetSyncResult
+from catchup.sync.ingestion.services.slack import SlackIngestionService
 
 
 def _make_service() -> tuple[SlackIngestionService, SimpleNamespace]:
@@ -20,7 +20,7 @@ def _make_service() -> tuple[SlackIngestionService, SimpleNamespace]:
     )
 
     with patch(
-        "catchup.connectors.slack.ingestion_service.SlackApiClientWrapper",
+        "catchup.sync.ingestion.services.slack.SlackApiClientWrapper",
         return_value=SimpleNamespace(),
     ):
         service = SlackIngestionService(

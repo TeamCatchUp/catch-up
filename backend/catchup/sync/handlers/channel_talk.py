@@ -11,38 +11,11 @@ from catchup.audit.actions import IncrementalSyncAction
 from catchup.audit.metadata import FullSyncEventAuditMetadata
 from catchup.audit.metadata import IncrementalRecordAuditMetadata
 from catchup.audit.utils import audit_log
-from catchup.sync.ingestion.adapters.channel_talk.article_full_sync import (
-    ChannelTalkArticleFullSyncIngestionAdapter,
-)
-from catchup.sync.ingestion.adapters.channel_talk.article_incremental import (
-    ChannelTalkArticleIncrementalIngestionAdapter,
-)
-from catchup.sync.ingestion.adapters.channel_talk.user_chat_full_sync import (
-    ChannelTalkUserChatFullSyncIngestionAdapter,
-)
-from catchup.sync.ingestion.adapters.channel_talk.user_chat_incremental import (
-    ChannelTalkUserChatIncrementalIngestionAdapter,
-)
-from catchup.sync.ingestion.adapters.channel_talk.user_chat_models import (
-    ChannelTalkUserChatFullSyncCheckpoint,
-)
-from catchup.sync.ingestion.adapters.channel_talk.user_chat_models import (
-    ChannelTalkUserChatIncrementalExecutionRequest,
-)
-from catchup.sync.ingestion.adapters.channel_talk.user_chat_models import (
-    ChannelTalkUserChatSyncExecutionRequest,
-)
 from catchup.connectors.channel_talk.credential_loader import (
     load_channel_talk_connection,
 )
 from catchup.connectors.channel_talk.credential_loader import (
     load_channel_talk_document_connection,
-)
-from catchup.sync.ingestion.adapters.channel_talk.article_models import (
-    ChannelTalkArticleIncrementalExecutionRequest,
-)
-from catchup.sync.ingestion.adapters.channel_talk.article_models import (
-    ChannelTalkArticleSyncExecutionRequest,
 )
 from catchup.connectors.channel_talk.full_sync_helper import (
     is_verified_channel_talk_document_connection,
@@ -70,6 +43,33 @@ from catchup.sync.common.schemas import SyncTargetType
 from catchup.sync.common.schemas import TargetSyncResult
 from catchup.sync.handlers.base import BaseFullSyncHandler
 from catchup.sync.handlers.base import BaseIncrementalHandler
+from catchup.sync.ingestion.adapters.channel_talk.article_full_sync import (
+    ChannelTalkArticleFullSyncIngestionAdapter,
+)
+from catchup.sync.ingestion.adapters.channel_talk.article_incremental import (
+    ChannelTalkArticleIncrementalIngestionAdapter,
+)
+from catchup.sync.ingestion.adapters.channel_talk.article_models import (
+    ChannelTalkArticleIncrementalExecutionRequest,
+)
+from catchup.sync.ingestion.adapters.channel_talk.article_models import (
+    ChannelTalkArticleSyncExecutionRequest,
+)
+from catchup.sync.ingestion.adapters.channel_talk.user_chat_full_sync import (
+    ChannelTalkUserChatFullSyncIngestionAdapter,
+)
+from catchup.sync.ingestion.adapters.channel_talk.user_chat_incremental import (
+    ChannelTalkUserChatIncrementalIngestionAdapter,
+)
+from catchup.sync.ingestion.adapters.channel_talk.user_chat_models import (
+    ChannelTalkUserChatFullSyncCheckpoint,
+)
+from catchup.sync.ingestion.adapters.channel_talk.user_chat_models import (
+    ChannelTalkUserChatIncrementalExecutionRequest,
+)
+from catchup.sync.ingestion.adapters.channel_talk.user_chat_models import (
+    ChannelTalkUserChatSyncExecutionRequest,
+)
 from catchup.sync.ingestion.pipeline import run_sync_ingestion
 from catchup.sync.ingestion.schemas import SyncWindow
 

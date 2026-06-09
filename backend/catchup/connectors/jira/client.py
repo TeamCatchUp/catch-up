@@ -37,8 +37,8 @@ from typing import Any
 import httpx
 
 from catchup.configs.config import settings
-from catchup.connectors.base.retry import parse_retry_after_header
 from catchup.connectors.atlassian.token_manager import AtlassianTokenProvider
+from catchup.connectors.base.retry import parse_retry_after_header
 
 logger = logging.getLogger(__name__)
 
@@ -47,11 +47,9 @@ logger = logging.getLogger(__name__)
 # 예외 클래스 정의
 # ============================================================
 
-from catchup.connectors.base import (
-    AuthenticationError,
-    ConnectorApiError,
-    RateLimitError,
-)
+from catchup.connectors.base import AuthenticationError
+from catchup.connectors.base import ConnectorApiError
+from catchup.connectors.base import RateLimitError
 
 
 class JiraApiError(ConnectorApiError):

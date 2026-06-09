@@ -16,12 +16,11 @@ from catchup.components.vector_db.factory import get_pgvector_repository
 from catchup.connectors.slack.auth import get_slack_oauth_service
 from catchup.connectors.slack.client import SlackConnectorApiError
 from catchup.connectors.slack.client import SlackRateLimitError
-from catchup.connectors.slack.ingestion_service import SlackIngestionService
-from catchup.connectors.slack.metadata_service import SlackMetadataService
 from catchup.db.engine import SessionLocal
 from catchup.db.slack import oauth_repository as slack_crud
 from catchup.sync.common.exceptions import SyncConnectorException
 from catchup.sync.common.exceptions import SyncInternalException
+from catchup.sync.ingestion.services.slack import SlackIngestionService
 
 logger = logging.getLogger(__name__)
 
@@ -81,7 +80,6 @@ async def _resolve_access_token(
             metadata={"team_id": team_id},
         ) from exc
 
-
 async def create_slack_ingestion_service(
     team_id: str,
 ) -> SlackIngestionService:
@@ -117,30 +115,5 @@ async def create_slack_ingestion_service(
         )
         raise SyncInternalException(
             "Slack ingestion service 초기화에 실패했습니다",
-            metadata={"team_id": team_id},
-        ) from exc
-
-
-async def create_slack_metadata_service(
-    team_id: str,
-) -> SlackMetadataService:
-    access_token = await _resolve_access_token(team_id)
-
-    try:
-        service = SlackMetadataService(
-            team_id=team_id,
-            access_token=access_token,
-        )
-        await service.initialize()
-        return service
-    except Exception as exc:
-        logger.error(
-            "[SLACK][FACTORY] Failed to initialize metadata service: team_id=%s, error=%s",
-            team_id,
-            exc,
-            exc_info=True,
-        )
-        raise SyncInternalException(
-            "Slack metadata service 초기화에 실패했습니다",
             metadata={"team_id": team_id},
         ) from exc

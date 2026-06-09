@@ -11,17 +11,10 @@ from catchup.audit.enums import AuditLevel
 from catchup.audit.metadata import IntegrationAuditMetadata
 from catchup.audit.service import emit_audit_event
 from catchup.audit.utils import audit_log
-from catchup.connectors.github.factory import create_github_ingestion_service
 from catchup.connectors.github.schemas import InstallationRepositoriesWebhookPayload
 from catchup.connectors.github.schemas import InstallationWebhookPayload
 from catchup.connectors.github.webhook.resolver import GithubMetadataResolution
 from catchup.connectors.github.webhook.resolver import resolve_github_metadata_event
-from catchup.connectors.github.webhook.responses import ignored_event_response
-from catchup.connectors.github.webhook.responses import (
-    installation_repositories_response,
-)
-from catchup.connectors.github.webhook.responses import installation_status_response
-from catchup.connectors.github.webhook.responses import processed_metadata_response
 from catchup.db.engine import SessionLocal
 from catchup.db.github import domain_repository as github_entities
 from catchup.db.github import installation_repository as installation_crud
@@ -37,6 +30,19 @@ from catchup.events.enums import IntegrationEventAction
 from catchup.sync.common.exceptions import BaseSyncException
 from catchup.sync.ingress.types import GithubWebhookRequest
 from catchup.sync.ingress.types import GithubWebhookResponse
+from catchup.sync.ingress.types import (
+    github_installation_repositories_response as installation_repositories_response,
+)
+from catchup.sync.ingress.types import (
+    github_installation_status_response as installation_status_response,
+)
+from catchup.sync.ingress.types import (
+    ignored_github_event_response as ignored_event_response,
+)
+from catchup.sync.ingress.types import (
+    processed_github_metadata_response as processed_metadata_response,
+)
+from catchup.sync.metadata.github_service import create_github_metadata_service
 
 logger = structlog.get_logger(__name__)
 
@@ -308,7 +314,7 @@ def _handle_installation_repositories_event(
 
 async def _sync_installation_metadata(installation_id: int) -> None:
     try:
-        service = await create_github_ingestion_service(installation_id)
+        service = await create_github_metadata_service(installation_id)
         await service.sync_installation_metadata()
     except BaseSyncException as exc:
         logger.warning(

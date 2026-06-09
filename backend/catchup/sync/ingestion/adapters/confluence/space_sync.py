@@ -16,7 +16,6 @@ from pydantic import field_validator
 from catchup.connectors.atlassian.utils import parse_atlassian_datetime
 from catchup.connectors.confluence.schemas import ConfluenceBlogPostResponse
 from catchup.connectors.confluence.schemas import ConfluencePageResponse
-from catchup.connectors.confluence.service import ConfluenceIngestionService
 from catchup.db.models import SyncConnector
 from catchup.sync.audit import SyncAuditContext
 from catchup.sync.ingestion.document_builders.confluence import (
@@ -25,6 +24,7 @@ from catchup.sync.ingestion.document_builders.confluence import (
 from catchup.sync.ingestion.schemas import SyncExecutionRequest
 from catchup.sync.ingestion.schemas import SyncExecutionResult
 from catchup.sync.ingestion.schemas import SyncWindow
+from catchup.sync.ingestion.services.confluence import ConfluenceIngestionService
 from catchup.utils.validation import require_text
 
 ConfluenceRecordType = Literal["page", "blogpost"]

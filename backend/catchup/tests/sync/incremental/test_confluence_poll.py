@@ -7,8 +7,6 @@ from unittest import IsolatedAsyncioTestCase
 from unittest.mock import AsyncMock
 from unittest.mock import patch
 
-from catchup.connectors.confluence.service import ConfluenceIngestionService
-from catchup.sync.ingestion.document_builders.confluence import ConfluenceTransformResult
 from catchup.db.models import SyncConnector
 from catchup.sync.incremental.poll.confluence import _collect_deleted_blogpost_changes
 from catchup.sync.incremental.poll.confluence import _collect_deleted_page_changes
@@ -17,6 +15,10 @@ from catchup.sync.incremental.poll.confluence import (
 )
 from catchup.sync.incremental.poll.confluence import _filter_repeated_deleted_changes
 from catchup.sync.incremental.resolve.confluence import build_confluence_record_change
+from catchup.sync.ingestion.document_builders.confluence import (
+    ConfluenceTransformResult,
+)
+from catchup.sync.ingestion.services.confluence import ConfluenceIngestionService
 
 
 class _FakeConfluenceClient:

@@ -12,41 +12,16 @@ KNOWN_SYNC_WORKER_CONNECTOR_CORE_IMPORTS: set[tuple[str, str]] = set()
 KNOWN_CONNECTORS_CONNECTOR_CORE_IMPORTS: set[tuple[str, str]] = set()
 
 
-KNOWN_CONNECTORS_SYNC_STACK_IMPORTS = {
-    ("catchup/connectors/confluence/factory.py", "catchup.sync.common.exceptions"),
-    ("catchup/connectors/confluence/service.py", "catchup.sync.audit"),
-    ("catchup/connectors/confluence/service.py", "catchup.sync.common.schemas"),
-    ("catchup/connectors/confluence/service.py", "catchup.sync.ingestion.document_builders.confluence"),
-    ("catchup/connectors/github/factory.py", "catchup.sync.common.exceptions"),
-    ("catchup/connectors/github/__init__.py", "catchup.sync.ingestion.document_builders.github"),
-    ("catchup/connectors/github/service.py", "catchup.sync.audit"),
-    ("catchup/connectors/github/service.py", "catchup.sync.common.schemas"),
-    ("catchup/connectors/github/service.py", "catchup.sync.ingestion.document_builders.github"),
-    ("catchup/connectors/github/webhook/responses.py", "catchup.sync.ingress.types"),
-    ("catchup/connectors/jira/factory.py", "catchup.sync.common.exceptions"),
-    ("catchup/connectors/jira/__init__.py", "catchup.sync.ingestion.document_builders.jira"),
-    ("catchup/connectors/jira/service.py", "catchup.sync.audit"),
-    ("catchup/connectors/jira/service.py", "catchup.sync.common.schemas"),
-    ("catchup/connectors/jira/service.py", "catchup.sync.ingestion.document_builders.jira"),
-    ("catchup/connectors/jira/webhook/responses.py", "catchup.sync.ingress.types"),
-    ("catchup/connectors/slack/factory.py", "catchup.sync.common.exceptions"),
-    ("catchup/connectors/slack/__init__.py", "catchup.sync.ingestion.document_builders.slack"),
-    ("catchup/connectors/slack/ingestion_service.py", "catchup.sync.audit"),
-    ("catchup/connectors/slack/ingestion_service.py", "catchup.sync.common.schemas"),
-    ("catchup/connectors/slack/ingestion_service.py", "catchup.sync.ingestion.document_builders.slack"),
-    ("catchup/connectors/slack/metadata_service.py", "catchup.sync.ingestion.document_builders.slack"),
-}
+KNOWN_CONNECTORS_SYNC_STACK_IMPORTS: set[tuple[str, str]] = set()
 
 
-KNOWN_CONNECTORS_DOCUMENT_IMPORTS = {
-    ("catchup/connectors/github/service.py", "langchain_core.documents"),
-    ("catchup/connectors/jira/service.py", "langchain_core.documents"),
-    ("catchup/connectors/slack/ingestion_service.py", "langchain_core.documents"),
-}
+KNOWN_CONNECTORS_DOCUMENT_IMPORTS: set[tuple[str, str]] = set()
+
+CONNECTOR_CORE_IMPORT = "catchup." + "connector_core"
 
 
 def test_sync_and_worker_do_not_gain_connector_core_imports() -> None:
-    violations = _find_imports(("catchup/sync", "catchup/worker"), ("catchup.connector_core",))
+    violations = _find_imports(("catchup/sync", "catchup/worker"), (CONNECTOR_CORE_IMPORT,))
 
     assert violations <= KNOWN_SYNC_WORKER_CONNECTOR_CORE_IMPORTS, _format_unexpected(
         violations,
@@ -55,7 +30,7 @@ def test_sync_and_worker_do_not_gain_connector_core_imports() -> None:
 
 
 def test_connectors_do_not_gain_connector_core_imports() -> None:
-    violations = _find_imports(("catchup/connectors",), ("catchup.connector_core",))
+    violations = _find_imports(("catchup/connectors",), (CONNECTOR_CORE_IMPORT,))
 
     assert violations <= KNOWN_CONNECTORS_CONNECTOR_CORE_IMPORTS, _format_unexpected(
         violations,
@@ -137,6 +112,14 @@ def test_phase_11_connector_core_owner_modules_are_removed() -> None:
         assert not (BACKEND_ROOT / relative_path).exists(), relative_path
 
 
+def test_connector_core_directory_is_removed() -> None:
+    assert not (BACKEND_ROOT / "catchup/connector_core").exists()
+
+
+def test_connector_core_tests_are_moved_to_owner_packages() -> None:
+    assert not (BACKEND_ROOT / "catchup/tests/connector_core").exists()
+
+
 def test_connector_webhook_modules_do_not_own_db_write_path() -> None:
     violations = _find_imports(
         (
@@ -179,15 +162,37 @@ def test_sync_metadata_package_owns_webhook_metadata_state_writes() -> None:
         "catchup/sync/metadata/__init__.py",
         "catchup/sync/metadata/channel_talk.py",
         "catchup/sync/metadata/channel_talk_documents.py",
+        "catchup/sync/metadata/confluence_service.py",
         "catchup/sync/metadata/github.py",
+        "catchup/sync/metadata/github_service.py",
         "catchup/sync/metadata/jira.py",
+        "catchup/sync/metadata/jira_service.py",
         "catchup/sync/metadata/registry.py",
         "catchup/sync/metadata/result_store.py",
         "catchup/sync/metadata/schemas.py",
         "catchup/sync/metadata/service.py",
         "catchup/sync/metadata/slack.py",
+        "catchup/sync/metadata/slack_service.py",
         "catchup/sync/metadata/slack_store.py",
     }
+
+
+def test_sync_metadata_does_not_depend_on_ingestion() -> None:
+    violations = _find_imports(
+        ("catchup/sync/metadata",),
+        ("catchup.sync.ingestion",),
+    )
+
+    assert not violations, _format_unexpected(violations, set())
+
+
+def test_sync_ingestion_does_not_orchestrate_metadata() -> None:
+    violations = _find_imports(
+        ("catchup/sync/ingestion",),
+        ("catchup.sync.metadata",),
+    )
+
+    assert not violations, _format_unexpected(violations, set())
 
 
 def test_connector_services_do_not_own_metadata_sync_facades() -> None:

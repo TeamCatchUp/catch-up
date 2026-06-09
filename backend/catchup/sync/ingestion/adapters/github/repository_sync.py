@@ -13,14 +13,14 @@ from pydantic import computed_field
 from pydantic import field_validator
 
 from catchup.connectors.github.client import GitHubRateLimitError
-from catchup.connectors.github.service import GithubIngestionService
-from catchup.connectors.github.service import SyncOperation
 from catchup.db.models import GithubEntityType
 from catchup.db.models import SyncConnector
 from catchup.sync.audit import SyncAuditContext
 from catchup.sync.ingestion.schemas import SyncExecutionRequest
 from catchup.sync.ingestion.schemas import SyncExecutionResult
 from catchup.sync.ingestion.schemas import SyncWindow
+from catchup.sync.ingestion.services.github import GithubIngestionService
+from catchup.sync.ingestion.services.github import SyncOperation
 from catchup.utils.validation import require_text
 
 GithubRecordType = Literal["issue", "pull_request"]

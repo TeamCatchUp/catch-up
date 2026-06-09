@@ -8,10 +8,10 @@ from fastapi.concurrency import run_in_threadpool
 from sqlalchemy.orm import Session
 
 from catchup.connectors.slack.webhook.resolver import resolve_slack_metadata_event
-from catchup.connectors.slack.webhook.responses import ignored_event_response
-from catchup.connectors.slack.webhook.responses import metadata_error_response
-from catchup.connectors.slack.webhook.responses import processed_metadata_response
 from catchup.db.engine import SessionLocal
+from catchup.server.connector.slack.responses import ignored_event_response
+from catchup.server.connector.slack.responses import metadata_error_response
+from catchup.server.connector.slack.responses import processed_metadata_response
 from catchup.server.connector.slack.schemas import SlackWebhookRequest
 from catchup.server.connector.slack.schemas import SlackWebhookResponse
 from catchup.sync.metadata import slack_store

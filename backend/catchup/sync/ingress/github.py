@@ -3,12 +3,16 @@ from __future__ import annotations
 import structlog
 from fastapi import BackgroundTasks
 
-from catchup.connectors.github.webhook.responses import accepted_incremental_response
-from catchup.connectors.github.webhook.responses import ignored_event_response
 from catchup.sync.incremental.resolve import resolve_github_event
 from catchup.sync.incremental.service import get_incremental_service
 from catchup.sync.ingress.types import GithubWebhookRequest
 from catchup.sync.ingress.types import GithubWebhookResponse
+from catchup.sync.ingress.types import (
+    accepted_github_incremental_response as accepted_incremental_response,
+)
+from catchup.sync.ingress.types import (
+    ignored_github_event_response as ignored_event_response,
+)
 from catchup.sync.metadata.github import handle_metadata_event
 
 logger = structlog.get_logger(__name__)

@@ -6,12 +6,16 @@ from sqlalchemy.orm import Session
 
 from catchup.connectors.atlassian.utils import parse_atlassian_datetime
 from catchup.connectors.jira.webhook.resolver import resolve_jira_metadata_event
-from catchup.connectors.jira.webhook.responses import ignored_event_response
-from catchup.connectors.jira.webhook.responses import processed_metadata_response
 from catchup.db.engine import SessionLocal
 from catchup.db.jira import domain_repository
 from catchup.sync.ingress.types import JiraWebhookRequest
 from catchup.sync.ingress.types import JiraWebhookResponse
+from catchup.sync.ingress.types import (
+    ignored_jira_event_response as ignored_event_response,
+)
+from catchup.sync.ingress.types import (
+    processed_jira_metadata_response as processed_metadata_response,
+)
 
 logger = structlog.get_logger(__name__)
 

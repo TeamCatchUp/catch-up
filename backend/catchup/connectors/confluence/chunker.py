@@ -13,9 +13,11 @@ Confluence Section Tree -> Semantic Chunk
 """
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
+from dataclasses import field
 
-from catchup.connectors.confluence.storage_parser import ContentBlock, Section
+from catchup.connectors.confluence.storage_parser import ContentBlock
+from catchup.connectors.confluence.storage_parser import Section
 
 logger = logging.getLogger(__name__)
 

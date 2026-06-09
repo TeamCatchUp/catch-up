@@ -7,16 +7,20 @@ GithubIngestionService 인스턴스 생성을 위한 팩토리 함수.
 import logging
 
 from fastapi.concurrency import run_in_threadpool
-from httpx import HTTPStatusError, RequestError
+from httpx import HTTPStatusError
+from httpx import RequestError
 
 from catchup.components.embedder.constants import EmbeddingProvider
 from catchup.components.embedder.factory import get_embedding_service
 from catchup.components.vector_db.factory import get_pgvector_repository
-from catchup.connectors.github.service import GithubIngestionService
-from catchup.db.engine import SessionLocal
-from catchup.db.github.installation_repository import get_installation_by_installation_id
 from catchup.connectors.github.auth import get_github_app_service
-from catchup.sync.common.exceptions import SyncConnectorException, SyncInternalException
+from catchup.db.engine import SessionLocal
+from catchup.db.github.installation_repository import (
+    get_installation_by_installation_id,
+)
+from catchup.sync.common.exceptions import SyncConnectorException
+from catchup.sync.common.exceptions import SyncInternalException
+from catchup.sync.ingestion.services.github import GithubIngestionService
 
 logger = logging.getLogger(__name__)
 

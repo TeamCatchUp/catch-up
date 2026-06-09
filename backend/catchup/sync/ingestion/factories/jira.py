@@ -12,19 +12,16 @@ from fastapi.concurrency import run_in_threadpool
 from catchup.components.embedder.constants import EmbeddingProvider
 from catchup.components.embedder.factory import get_embedding_service
 from catchup.components.vector_db.factory import get_pgvector_repository
-from catchup.connectors.atlassian.exceptions import (
-    AtlassianTokenExpiredError,
-    AtlassianTokenNotFoundError,
-)
+from catchup.connectors.atlassian.exceptions import AtlassianTokenExpiredError
+from catchup.connectors.atlassian.exceptions import AtlassianTokenNotFoundError
 from catchup.connectors.atlassian.oauth_client import AtlassianOAuthClient
-from catchup.connectors.atlassian.token_manager import (
-    AtlassianTokenManager,
-    AtlassianTokenProvider,
-)
-from catchup.connectors.jira.service import JiraIngestionService
+from catchup.connectors.atlassian.token_manager import AtlassianTokenManager
+from catchup.connectors.atlassian.token_manager import AtlassianTokenProvider
 from catchup.db.atlassian import oauth_repository
 from catchup.db.engine import SessionLocal
-from catchup.sync.common.exceptions import SyncConnectorException, SyncInternalException
+from catchup.sync.common.exceptions import SyncConnectorException
+from catchup.sync.common.exceptions import SyncInternalException
+from catchup.sync.ingestion.services.jira import JiraIngestionService
 
 logger = logging.getLogger(__name__)
 

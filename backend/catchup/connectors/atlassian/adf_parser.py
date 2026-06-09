@@ -4,6 +4,7 @@ Atlassian Document Format Parser
 from dataclasses import dataclass
 from typing import Any
 
+
 # ──────────────────────────────────────────
 # DTO
 # ──────────────────────────────────────────

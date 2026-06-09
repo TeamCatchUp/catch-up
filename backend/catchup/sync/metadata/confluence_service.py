@@ -8,23 +8,21 @@ Confluence 메타데이터 동기화 서비스
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from dataclasses import dataclass
+from dataclasses import field
+from datetime import datetime
+from datetime import timezone
 from typing import Any
 
 from fastapi.concurrency import run_in_threadpool
 from sqlalchemy.orm import Session
 
 from catchup.connectors.atlassian.constants import REQUIRED_CONFLUENCE_SCOPES
-from catchup.connectors.atlassian.token_manager import (
-    AtlassianTokenManager,
-    AtlassianTokenProvider,
-)
+from catchup.connectors.atlassian.token_manager import AtlassianTokenManager
+from catchup.connectors.atlassian.token_manager import AtlassianTokenProvider
 from catchup.connectors.confluence.client import ConfluenceApiClient
-from catchup.connectors.confluence.schemas import (
-    ConfluenceSpaceResponse,
-    ConfluenceUserResponse,
-)
+from catchup.connectors.confluence.schemas import ConfluenceSpaceResponse
+from catchup.connectors.confluence.schemas import ConfluenceUserResponse
 from catchup.db.atlassian import oauth_repository as atlassian_crud
 from catchup.db.confluence import domain_repository as confluence_entities
 from catchup.db.engine import SessionLocal

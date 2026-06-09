@@ -1,42 +1,29 @@
 """
 Slack Connector
 
-Slack 데이터를 PGVector에 적재하기 위한 커넥터.
+Slack vendor API primitive.
 """
 
 from catchup.connectors.slack.client import SlackApiClientWrapper
-from catchup.connectors.slack.client import SlackConnectorApiError, SlackRateLimitError
-from catchup.connectors.slack.factory import (
-    create_slack_ingestion_service,
-    create_slack_metadata_service,
-)
-from catchup.connectors.slack.ingestion_service import SlackIngestionService
-from catchup.connectors.slack.metadata_service import SlackMetadataService
-from catchup.connectors.slack.schemas import (
-    SlackChannel,
-    SlackFile,
-    SlackMessage,
-    SlackThreadReply,
-    SlackUser,
-    SlackUserProfile,
-    SlackWorkspace,
-)
-from catchup.sync.ingestion.document_builders.slack import SlackTransformer
+from catchup.connectors.slack.client import SlackConnectorApiError
+from catchup.connectors.slack.client import SlackRateLimitError
+from catchup.connectors.slack.schemas import SlackChannel
+from catchup.connectors.slack.schemas import SlackFile
+from catchup.connectors.slack.schemas import SlackMessage
+from catchup.connectors.slack.schemas import SlackThreadReply
+from catchup.connectors.slack.schemas import SlackUser
+from catchup.connectors.slack.schemas import SlackUserProfile
+from catchup.connectors.slack.schemas import SlackWorkspace
 
 __all__ = [
     "SlackApiClientWrapper",
     "SlackChannel",
     "SlackConnectorApiError",
     "SlackFile",
-    "SlackIngestionService",
-    "SlackMetadataService",
     "SlackMessage",
     "SlackRateLimitError",
     "SlackThreadReply",
-    "SlackTransformer",
     "SlackUser",
     "SlackUserProfile",
     "SlackWorkspace",
-    "create_slack_ingestion_service",
-    "create_slack_metadata_service",
 ]

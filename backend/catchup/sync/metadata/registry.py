@@ -10,9 +10,6 @@ from sqlalchemy.orm import Session
 
 from catchup.connectors.atlassian.oauth_client import AtlassianOAuthClient
 from catchup.connectors.atlassian.token_manager import AtlassianTokenManager
-from catchup.connectors.confluence.metadata_service import ConfluenceMetadataService
-from catchup.connectors.jira.factory import create_jira_ingestion_service
-from catchup.connectors.slack.factory import create_slack_metadata_service
 from catchup.db.atlassian import oauth_repository as atlassian_crud
 from catchup.db.channel_talk import ChannelTalkDocumentMetadataRepository
 from catchup.db.channel_talk import ChannelTalkMetadataRepository
@@ -26,7 +23,10 @@ from catchup.sync.metadata.channel_talk_documents import (
 from catchup.sync.metadata.channel_talk_documents import (
     ChannelTalkDocumentMetadataSyncService,
 )
+from catchup.sync.metadata.confluence_service import ConfluenceMetadataService
+from catchup.sync.metadata.jira_service import create_jira_metadata_service
 from catchup.sync.metadata.schemas import MetadataSyncRequest
+from catchup.sync.metadata.slack_service import create_slack_metadata_service
 
 logger = structlog.get_logger(__name__)
 
@@ -101,7 +101,7 @@ async def run_jira_metadata_sync(cloud_id: str) -> None:
     logger.info("jira_metadata_sync_started", cloud_id=cloud_id)
 
     try:
-        service = await create_jira_ingestion_service(cloud_id=cloud_id)
+        service = await create_jira_metadata_service(cloud_id=cloud_id)
         await service.sync_metadata()
         logger.info("jira_metadata_sync_completed", cloud_id=cloud_id)
     except Exception:

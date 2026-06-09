@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from unittest import TestCase
 
-from catchup.connectors.slack.ingestion_service import SlackIngestionService
 from catchup.connectors.slack.schemas import SlackUser
 from catchup.sync.ingestion.document_builders.slack import SlackTransformer
+from catchup.sync.ingestion.services.slack import SlackIngestionService
 
 
 class SlackTransformerBlockBodyTests(TestCase):

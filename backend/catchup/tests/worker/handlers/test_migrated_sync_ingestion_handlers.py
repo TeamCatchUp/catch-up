@@ -131,8 +131,8 @@ def _confluence_incremental_context() -> IncrementalSyncContext:
     )
 
 
-class MigratedConnectorCoreHandlerTests(IsolatedAsyncioTestCase):
-    async def test_slack_full_sync_uses_connector_core_execution(self) -> None:
+class MigratedSyncIngestionHandlerTests(IsolatedAsyncioTestCase):
+    async def test_slack_full_sync_uses_sync_ingestion_execution(self) -> None:
         handler = SlackFullSyncHandler()
         service = SimpleNamespace()
         core_result = SimpleNamespace(
@@ -162,7 +162,7 @@ class MigratedConnectorCoreHandlerTests(IsolatedAsyncioTestCase):
         self.assertEqual(execution.channel_name, "general")
         self.assertEqual(result.synced_count, 3)
 
-    async def test_github_full_sync_uses_connector_core_stream_target(self) -> None:
+    async def test_github_full_sync_uses_sync_ingestion_stream_target(self) -> None:
         handler = GithubFullSyncHandler()
         service = SimpleNamespace()
         core_result = SimpleNamespace(
@@ -238,7 +238,7 @@ class MigratedConnectorCoreHandlerTests(IsolatedAsyncioTestCase):
         self.assertEqual(second_execution.batch_index, 1)
         self.assertEqual(result.synced_count, 2)
 
-    async def test_confluence_full_sync_uses_connector_core_content_target(self) -> None:
+    async def test_confluence_full_sync_uses_sync_ingestion_content_target(self) -> None:
         handler = ConfluenceFullSyncHandler()
         service = SimpleNamespace()
         core_result = SimpleNamespace(
@@ -271,7 +271,7 @@ class MigratedConnectorCoreHandlerTests(IsolatedAsyncioTestCase):
         self.assertEqual(execution.space_key, "ENG")
         self.assertEqual(result.synced_count, 1)
 
-    async def test_slack_incremental_uses_connector_core_exact_record(self) -> None:
+    async def test_slack_incremental_uses_sync_ingestion_exact_record(self) -> None:
         handler = SlackIncrementalHandler()
         core_result = SimpleNamespace(
             persisted_count=1,
@@ -302,7 +302,7 @@ class MigratedConnectorCoreHandlerTests(IsolatedAsyncioTestCase):
         self.assertEqual(execution.event_kind, "updated")
         self.assertEqual(result.synced_count, 1)
 
-    async def test_github_incremental_uses_connector_core_exact_record(self) -> None:
+    async def test_github_incremental_uses_sync_ingestion_exact_record(self) -> None:
         handler = GithubIncrementalHandler()
         core_result = SimpleNamespace(
             persisted_count=0,
@@ -334,7 +334,7 @@ class MigratedConnectorCoreHandlerTests(IsolatedAsyncioTestCase):
         self.assertEqual(execution.event_kind, "deleted")
         self.assertEqual(result.synced_count, 1)
 
-    async def test_confluence_incremental_uses_connector_core_deleted_record(self) -> None:
+    async def test_confluence_incremental_uses_sync_ingestion_deleted_record(self) -> None:
         handler = ConfluenceIncrementalHandler()
         core_result = SimpleNamespace(
             persisted_count=0,

@@ -41,16 +41,12 @@ from catchup.components.summarizer import get_summarizer_service
 from catchup.components.vector_db.pgvector import PGVectorRepository
 from catchup.configs.config import settings
 from catchup.connectors.github.client import GitHubApiClient
-from catchup.connectors.github.client import GitHubApiError
 from catchup.connectors.github.client import GitHubRateLimitError
 from catchup.connectors.github.schemas import GithubIssue
 from catchup.connectors.github.schemas import GithubPullRequest
 from catchup.connectors.github.schemas import GithubUser
-from catchup.sync.ingestion.document_builders.github import GithubTransformer
 from catchup.db.engine import SessionLocal
 from catchup.db.github import domain_repository as github_entities
-from catchup.db.github.domain_repository import RepositoryUpsertData
-from catchup.db.github.domain_repository import UserUpsertData
 from catchup.db.models import GithubEntityType
 from catchup.db.models import GithubInstallationType
 from catchup.db.models import SourceType
@@ -60,6 +56,7 @@ from catchup.db.user_source_mapping import (
 from catchup.db.user_source_mapping import find_premapped_names_by_source_type
 from catchup.sync.audit import SyncAuditContext
 from catchup.sync.common.schemas import TargetSyncResult
+from catchup.sync.ingestion.document_builders.github import GithubTransformer
 
 logger = logging.getLogger(__name__)
 
@@ -76,39 +73,6 @@ class SyncOperation:
     REPO_SYNC = "REPO_SYNC"
     ISSUE_SYNC = "ISSUE_SYNC"
     PR_SYNC = "PR_SYNC"
-
-
-def _convert_repos_to_dto(raw_repos: list[dict]) -> list[RepositoryUpsertData]:
-    """GitHub API 응답 dict 리스트를 RepositoryUpsertData DTO 리스트로 변환"""
-    return [
-        RepositoryUpsertData(
-            repo_id=repo.get("id", 0),
-            owner=repo.get("owner", {}).get("login", ""),
-            name=repo.get("name", ""),
-            full_name=repo.get("full_name", ""),
-            html_url=repo.get("html_url", ""),
-            description=repo.get("description"),
-            default_branch=repo.get("default_branch", "main"),
-            language=repo.get("language"),
-            topics=repo.get("topics", []),
-            stargazers_count=repo.get("stargazers_count", 0),
-            forks_count=repo.get("forks_count", 0),
-            open_issues_count=repo.get("open_issues_count", 0),
-            private=repo.get("private", False),
-            archived=repo.get("archived", False),
-            disabled=repo.get("disabled", False),
-            pushed_at=repo.get("pushed_at"),
-            repo_created_at=repo.get("created_at"),
-            repo_updated_at=repo.get("updated_at"),
-        )
-        for repo in raw_repos
-    ]
-
-
-@dataclass(slots=True, frozen=True)
-class GithubMetadataSnapshot:
-    users: list[UserUpsertData] = field(default_factory=list)
-    repositories: list[RepositoryUpsertData] = field(default_factory=list)
 
 
 @dataclass(slots=True, frozen=True)
@@ -231,11 +195,7 @@ class GithubIngestionService:
         }
 
         try:
-            repos_to_sync = (
-                await self._sync_repositories()
-                if repo_ids is None
-                else resolved_repo_names or []
-            )
+            repos_to_sync = resolved_repo_names or []
 
             if repo_ids is not None and not repos_to_sync:
                 results["repositories"]["errors"] = max(1, len(repo_ids))
@@ -352,27 +312,6 @@ class GithubIngestionService:
             "skipped": False,
         }
 
-    async def sync_installation_metadata(
-        self,
-        *,
-        raise_on_error: bool = False,
-    ) -> dict[str, Any]:
-        """
-        User + Repository 동기화
-        """
-        snapshot, result = await self.collect_installation_metadata(
-            raise_on_error=raise_on_error,
-        )
-        await run_in_threadpool(
-            self._persist_installation_snapshot,
-            snapshot,
-        )
-        logger.info(
-            f"[GITHUB][INSTALLATION] Completed User + Repository Sync "
-            f"users : {result['users']}, repositories {result['repositories']}"
-        )
-        return result
-
     async def build_record_gap_report(
         self,
         *,
@@ -468,98 +407,15 @@ class GithubIngestionService:
     def _prepare_full_sync_context(
         self,
         repo_ids: list[int] | None,
-    ) -> tuple[int, list[str] | None]:
+    ) -> tuple[int, list[str]]:
         with SessionLocal() as db:
             preloaded_count = self._preload_premapped_github_names(db)
             repo_names = (
                 self._get_repo_names_by_ids(db, repo_ids)
                 if repo_ids is not None
-                else None
+                else self._get_all_repo_names(db)
             )
         return preloaded_count, repo_names
-
-    async def _sync_repositories(self) -> list[str]:
-        """
-        Installation에서 접근 가능한 Repository 목록 조회 및 RDBMS 저장
-
-        Returns:
-            Repository full_name 리스트
-        """
-        repo_full_name = "_installation_"
-
-        try:
-            self._start_sync(
-                repo_full_name,
-                GithubEntityType.REPOSITORY,
-                SyncOperation.REPO_SYNC,
-            )
-
-            raw_repos = await self.client.list_installation_repos()
-            logger.info(f"[GITHUB][{SyncOperation.REPO_SYNC}] Found {len(raw_repos)} accessible repositories")
-
-            repos_data = _convert_repos_to_dto(raw_repos)
-            repo_names = await run_in_threadpool(
-                self._persist_repository_snapshot,
-                repos_data,
-            )
-
-            self._complete_sync(
-                repo_full_name,
-                GithubEntityType.REPOSITORY,
-                len(repos_data),
-                SyncOperation.REPO_SYNC,
-            )
-            return repo_names
-
-        except GitHubRateLimitError as e:
-            self._handle_rate_limit(
-                repo_full_name,
-                GithubEntityType.REPOSITORY,
-                e,
-                SyncOperation.REPO_SYNC,
-            )
-            raise
-
-        except GitHubApiError as e:
-            logger.error(f"[GITHUB][{SyncOperation.REPO_SYNC}] API error: {e}")
-            self._fail_sync(
-                repo_full_name,
-                GithubEntityType.REPOSITORY,
-                str(e),
-                SyncOperation.REPO_SYNC,
-            )
-            raise
-
-        except Exception as e:
-            logger.error(f"[GITHUB][{SyncOperation.REPO_SYNC}] Unexpected error: {e}", exc_info=True)
-            self._fail_sync(
-                repo_full_name,
-                GithubEntityType.REPOSITORY,
-                str(e),
-                SyncOperation.REPO_SYNC,
-            )
-            raise
-
-    def _persist_repository_snapshot(
-        self,
-        repos_data: list[RepositoryUpsertData],
-    ) -> list[str]:
-        with SessionLocal() as db:
-            sync_result = github_entities.sync_repositories_snapshot(
-                db,
-                self.installation_id,
-                repos_data,
-            )
-            db.commit()
-
-        logger.info(
-            "[GITHUB][%s] Repository snapshot synced: installation_id=%s, upserted=%s, deleted=%s",
-            SyncOperation.REPO_SYNC,
-            self.installation_id,
-            sync_result["upserted"],
-            sync_result["deleted"],
-        )
-        return [repo.full_name for repo in repos_data]
 
     async def _sync_issues(
         self,
@@ -960,132 +816,6 @@ class GithubIngestionService:
             return {"synced": 0, "errors": max(1, len(documents))}
 
     # ============================================================
-    # Metadata Sync Internals
-    # ============================================================
-
-    async def collect_installation_metadata(
-        self,
-        *,
-        raise_on_error: bool = False,
-    ) -> tuple[GithubMetadataSnapshot, dict[str, Any]]:
-        logger.info(
-            f"[GITHUB][INSTALLATION] Starting User + Repository Sync "
-            f"for installation {self.installation_id}"
-        )
-
-        users, users_result = await self._collect_users_snapshot()
-        if raise_on_error and users_result["errors"] > 0:
-            raise GitHubApiError(
-                f"github user metadata refresh failed: installation_id={self.installation_id}",
-                metadata={"installation_id": self.installation_id},
-            )
-
-        repositories = await self._collect_repository_snapshot()
-        repo_names = [repo.full_name for repo in repositories]
-
-        snapshot = GithubMetadataSnapshot(
-            users=users,
-            repositories=repositories,
-        )
-        return snapshot, {"users": users_result, "repositories": repo_names}
-
-    def _persist_installation_snapshot(
-        self,
-        snapshot: GithubMetadataSnapshot,
-    ) -> None:
-        with SessionLocal() as db:
-            if snapshot.users:
-                github_entities.upsert_users_bulk(
-                    db,
-                    snapshot.users,
-                )
-            sync_result = github_entities.sync_repositories_snapshot(
-                db,
-                self.installation_id,
-                snapshot.repositories,
-            )
-            db.commit()
-
-        logger.info(
-            "[GITHUB][%s] Repository snapshot synced: installation_id=%s, upserted=%s, deleted=%s",
-            SyncOperation.REPO_SYNC,
-            self.installation_id,
-            sync_result["upserted"],
-            sync_result["deleted"],
-        )
-
-    async def _collect_users_snapshot(self) -> tuple[list[UserUpsertData], dict[str, int]]:
-        try:
-            logger.info(
-                f"[GITHUB][{SyncOperation.USER_SYNC}] Syncing {self.account_type} '{self.account_login}' "
-                f"(installation_id={self.installation_id})"
-            )
-
-            users_data: list[UserUpsertData] = []
-
-            if self.account_type == GithubInstallationType.ORGANIZATION:
-                try:
-                    members = await self.client.list_org_members_graphql(self.account_login)
-                    logger.info(
-                        f"[GITHUB][{SyncOperation.USER_SYNC}] Found {len(members)} members "
-                        f"in organization '{self.account_login}'"
-                    )
-                    users_data.extend([
-                        UserUpsertData(
-                            database_id=member.get("database_id"),
-                            login=member.get("login", ""),
-                            name=member.get("name"),
-                            email=member.get("email"),
-                            avatar_url=member.get("avatar_url"),
-                            org_role=member.get("org_role"),
-                        )
-                        for member in members
-                    ])
-                except GitHubRateLimitError:
-                    raise
-                except GitHubApiError as exc:
-                    error_msg = (
-                        f"Failed to fetch org members for '{self.account_login}': {exc}. "
-                        "Organization members permission may be required."
-                    )
-                    logger.warning(f"[GITHUB][{SyncOperation.USER_SYNC}] {error_msg}")
-                    return [], {"synced": 0, "errors": 1}
-            else:
-                try:
-                    user_info = await self.client.get_user(self.account_login)
-                    if user_info:
-                        users_data.append(
-                            UserUpsertData(
-                                database_id=user_info.get("id"),
-                                login=user_info.get("login", ""),
-                                name=user_info.get("name"),
-                                email=user_info.get("email"),
-                                avatar_url=user_info.get("avatar_url"),
-                                org_role=None,
-                            )
-                        )
-                        logger.info(f"[GITHUB][{SyncOperation.USER_SYNC}] Found user '{self.account_login}'")
-                except GitHubRateLimitError:
-                    raise
-                except GitHubApiError as exc:
-                    logger.warning(
-                        f"[GITHUB][{SyncOperation.USER_SYNC}] Failed to fetch user '{self.account_login}': {exc}"
-                    )
-                    return [], {"synced": 0, "errors": 1}
-
-            return users_data, {"synced": len(users_data), "errors": 0}
-        except GitHubRateLimitError:
-            raise
-        except Exception as exc:
-            logger.error(f"[GITHUB][{SyncOperation.USER_SYNC}] Unexpected error: {exc}", exc_info=True)
-            return [], {"synced": 0, "errors": 1}
-
-    async def _collect_repository_snapshot(self) -> list[RepositoryUpsertData]:
-        raw_repos = await self.client.list_installation_repos()
-        logger.info(f"[GITHUB][{SyncOperation.REPO_SYNC}] Found {len(raw_repos)} accessible repositories")
-        return _convert_repos_to_dto(raw_repos)
-
-    # ============================================================
     # Repair Internals
     # ============================================================
 
@@ -1464,6 +1194,10 @@ class GithubIngestionService:
         repos = github_entities.get_repositories_by_installation(db, self.installation_id)
         repo_id_set = set(repo_ids)
         return [repo.full_name for repo in repos if repo.repo_id in repo_id_set]
+
+    def _get_all_repo_names(self, db: Session) -> list[str]:
+        repos = github_entities.get_repositories_by_installation(db, self.installation_id)
+        return [repo.full_name for repo in repos]
 
     def _resolve_github_real_name(self, db: Session, login: str | None) -> str | None:
         if not login:

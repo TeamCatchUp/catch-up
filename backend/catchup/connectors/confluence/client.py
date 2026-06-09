@@ -4,17 +4,16 @@ Confluence REST API v2 비동기 클라이언트
 import asyncio
 import logging
 from typing import Any
-from urllib.parse import urlparse, parse_qs
+from urllib.parse import parse_qs
+from urllib.parse import urlparse
 
 import httpx
 
 from catchup.configs.config import settings
 from catchup.connectors.atlassian.token_manager import AtlassianTokenProvider
-from catchup.connectors.base import (
-    AuthenticationError,
-    ConnectorApiError,
-    RateLimitError,
-)
+from catchup.connectors.base import AuthenticationError
+from catchup.connectors.base import ConnectorApiError
+from catchup.connectors.base import RateLimitError
 from catchup.connectors.base.retry import parse_retry_after_header
 
 logger = logging.getLogger(__name__)

@@ -1,5 +1,6 @@
 from enum import StrEnum
 
+
 class AtlassianProduct(StrEnum):
     JIRA = "jira"
     CONFLUENCE = "confluence"

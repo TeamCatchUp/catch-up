@@ -12,9 +12,6 @@ from catchup.audit.actions import FullSyncAction
 from catchup.audit.base import AuditLevel
 from catchup.audit.base import AuditStatus
 from catchup.audit.metadata import FullSyncEventAuditMetadata
-from catchup.sync.ingestion.adapters.channel_talk.user_chat_models import (
-    ChannelTalkUserChatFullSyncCheckpoint,
-)
 from catchup.connectors.channel_talk.full_sync_target_contract import (
     CHANNEL_TALK_DOCUMENT_ARTICLE_RUNTIME_TARGET,
 )
@@ -50,6 +47,9 @@ from catchup.sync.handlers.channel_talk import (
 from catchup.sync.handlers.channel_talk import ChannelTalkFullSyncHandler
 from catchup.sync.handlers.channel_talk import ChannelTalkIncrementalHandler
 from catchup.sync.handlers.registry import get_ingestion_handler
+from catchup.sync.ingestion.adapters.channel_talk.user_chat_models import (
+    ChannelTalkUserChatFullSyncCheckpoint,
+)
 from catchup.sync.ingestion.schemas import SyncWindow
 from catchup.worker.full_sync_processor import process_full_sync_message
 from catchup.worker.schemas import ClaimResult

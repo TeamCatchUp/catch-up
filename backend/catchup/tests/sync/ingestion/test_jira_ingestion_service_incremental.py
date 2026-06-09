@@ -10,7 +10,7 @@ from unittest.mock import patch
 
 from langchain_core.documents import Document
 
-from catchup.connectors.jira.service import JiraIngestionService
+from catchup.sync.ingestion.services.jira import JiraIngestionService
 
 
 def _make_service() -> tuple[JiraIngestionService, SimpleNamespace]:
@@ -21,7 +21,7 @@ def _make_service() -> tuple[JiraIngestionService, SimpleNamespace]:
     )
 
     with patch(
-        "catchup.connectors.jira.service.JiraApiClient",
+        "catchup.sync.ingestion.services.jira.JiraApiClient",
         return_value=SimpleNamespace(),
     ):
         service = JiraIngestionService(

@@ -2,14 +2,14 @@ from __future__ import annotations
 
 import structlog
 
-from catchup.connectors.slack.webhook.responses import accepted_async_response
-from catchup.connectors.slack.webhook.responses import accepted_incremental_response
-from catchup.connectors.slack.webhook.responses import ignored_event_response
-from catchup.connectors.slack.webhook.responses import ignored_wrapper_response
-from catchup.connectors.slack.webhook.responses import url_verification_response
 from catchup.server.connector.slack.app_mention_adapter import schedule_app_mention
 from catchup.server.connector.slack.interaction_handler import handle_block_actions
 from catchup.server.connector.slack.interaction_handler import handle_view_submission
+from catchup.server.connector.slack.responses import accepted_async_response
+from catchup.server.connector.slack.responses import accepted_incremental_response
+from catchup.server.connector.slack.responses import ignored_event_response
+from catchup.server.connector.slack.responses import ignored_wrapper_response
+from catchup.server.connector.slack.responses import url_verification_response
 from catchup.server.connector.slack.schemas import SlackIgnoredWebhookResponse
 from catchup.server.connector.slack.schemas import SlackWebhookRequest
 from catchup.server.connector.slack.schemas import SlackWebhookResponse

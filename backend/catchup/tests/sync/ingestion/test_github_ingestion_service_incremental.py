@@ -10,9 +10,9 @@ from unittest.mock import patch
 
 from langchain_core.documents import Document
 
-from catchup.connectors.github.service import GithubIngestionService
-from catchup.connectors.github.service import GithubRepoRef
 from catchup.db.models import GithubInstallationType
+from catchup.sync.ingestion.services.github import GithubIngestionService
+from catchup.sync.ingestion.services.github import GithubRepoRef
 
 
 def _make_service() -> tuple[GithubIngestionService, SimpleNamespace]:
@@ -22,7 +22,7 @@ def _make_service() -> tuple[GithubIngestionService, SimpleNamespace]:
     )
 
     with patch(
-        "catchup.connectors.github.service.GitHubApiClient",
+        "catchup.sync.ingestion.services.github.GitHubApiClient",
         return_value=SimpleNamespace(),
     ):
         service = GithubIngestionService(
