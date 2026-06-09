@@ -32,6 +32,7 @@ from catchup.agents.triggers.stream import AckDeleteResult
 from catchup.agents.triggers.stream import AgentRunRequest
 from catchup.agents.triggers.stream import AgentRunStreamMessage
 from catchup.agents.triggers.stream import decode_agent_run_stream_entries
+from catchup.automations.config import InquiryAutomationConfig
 from catchup.automations.runner import AutomationInput
 from catchup.automations.runner import run_inquiry_automation
 from catchup.db.agent_specs import build_agent_global_context
@@ -64,7 +65,8 @@ class AgentRunExecutionContext:
     run_id: int
     message_id: str
     spec_id: int
-    spec: AgentSpecSchema
+    spec: AgentSpecSchema | None
+    raw_spec: dict[str, Any]
     user_input_values: dict[str, Any]
     event: AgentWebhookEvent
     global_context: Any
@@ -246,7 +248,10 @@ def run_agent_request(
 
     try:
         event = _event_from_run(run)
-        spec = AgentSpecSchema.model_validate(agent_spec_row.spec)
+        try:
+            spec = AgentSpecSchema.model_validate(agent_spec_row.spec)
+        except Exception:
+            spec = None
         global_context = build_agent_global_context(
             db=db,
             workspace_id=agent_spec_row.workspace_id,
@@ -264,6 +269,7 @@ def run_agent_request(
             message_id=message_id,
             spec_id=agent_spec_row.id,
             spec=spec,
+            raw_spec=agent_spec_row.spec or {},
             user_input_values=agent_spec_row.user_input_values or {},
             event=event,
             global_context=global_context,
@@ -324,23 +330,11 @@ async def _build_automation_input(
     inquiry_text: str = ct_inputs.get(CHANNEL_TALK_USER_CHAT_CONTEXT_KEY, "")
     user_chat_id: str = ct_inputs.get(CHANNEL_TALK_USER_CHAT_ID_KEY, "")
 
-    slack_channel_id = ""
-    slack_credential_id: int | None = None
-    for ref_list in (context.spec.references or {}).values():
-        for ref in ref_list:
-            if ref.kind == "slack_channel" and ref.values:
-                config = next(iter(ref.values.values()))
-                slack_channel_id = str(config.get("channel_id") or "").strip()
-                cred = config.get("credential_id")
-                if cred is not None:
-                    slack_credential_id = int(cred)
-                break
-        if slack_channel_id:
-            break
-
-    if not slack_channel_id or slack_credential_id is None:
+    try:
+        config = InquiryAutomationConfig.model_validate(context.raw_spec)
+    except Exception:
         logger.warning(
-            "automation_input_missing_slack_config",
+            "automation_input_invalid_config",
             user_chat_id=user_chat_id,
         )
         return None
@@ -348,8 +342,8 @@ async def _build_automation_input(
     return AutomationInput(
         inquiry_text=inquiry_text,
         user_chat_id=user_chat_id,
-        slack_channel_id=slack_channel_id,
-        slack_credential_id=slack_credential_id,
+        slack_channel_id=config.slack_channel_id,
+        slack_credential_id=config.slack_credential_id,
         global_context=context.global_context,
     )
 

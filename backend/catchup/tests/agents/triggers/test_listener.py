@@ -23,6 +23,7 @@ async def test_process_agent_run_message_commits_execution_claim_before_run(monk
         message_id="stream-1",
         spec_id=456,
         spec=Mock(),
+        raw_spec={},
         user_input_values={},
         event=AgentWebhookEvent(
             event_id="event-1",
@@ -145,26 +146,17 @@ def test_decode_agent_run_stream_entries_decodes_bytes_keys_from_redis() -> None
 
 
 @pytest.mark.asyncio
-async def test_execute_agent_run_enriches_channel_talk_user_chat_inputs(monkeypatch) -> None:
-    captured_inputs = {}
-    bound_contexts = []
-
-    class FakeExecutionService:
-        async def run(self, **kwargs):
-            captured_inputs.update(kwargs["user_input_values"])
-            return "ok"
-
+async def test_execute_agent_run_skips_execution_for_channeltalk_with_invalid_config(
+    monkeypatch,
+) -> None:
+    """채널톡 이벤트이지만 InquiryAutomationConfig 파싱 실패 시 조용히 성공 반환한다."""
     context = listener.AgentRunExecutionContext(
         run_id=123,
         message_id="stream-1",
         spec_id=456,
-        spec=SimpleNamespace(
-            tools=[
-                SimpleNamespace(name="channel_talk.send_internal_user_chat_message"),
-            ],
-            references={},
-        ),
-        user_input_values={"existing": "value"},
+        spec=None,
+        raw_spec={},
+        user_input_values={},
         event=AgentWebhookEvent(
             event_id="event-1",
             source="channel_talk",
@@ -179,31 +171,96 @@ async def test_execute_agent_run_enriches_channel_talk_user_chat_inputs(monkeypa
         ),
         global_context=Mock(),
     )
-    enrich = AsyncMock(return_value={"channel_talk_user_chat_context": "assembled"})
-    monkeypatch.setattr(listener, "build_channel_talk_user_chat_inputs", enrich)
-    monkeypatch.setattr(listener, "get_execution_service", lambda: FakeExecutionService())
     monkeypatch.setattr(
-        listener.ToolRegistry,
-        "bind_execution_context",
-        lambda names, **kwargs: bound_contexts.append((names, kwargs)),
+        listener,
+        "build_channel_talk_user_chat_inputs",
+        AsyncMock(return_value={"channel_talk_user_chat_context": "assembled"}),
     )
 
     result, error = await listener._execute_agent_run(context)
 
-    assert result == "ok"
+    assert result == ""
     assert error is None
-    assert captured_inputs == {
-        "existing": "value",
-        "channel_talk_user_chat_context": "assembled",
-    }
-    assert bound_contexts == [
-        (
-            context.spec.tools,
-            {
-                "references": {},
-                "global_context": context.global_context,
-                "trigger_event": context.event,
-            },
-        )
-    ]
-    enrich.assert_awaited_once_with(context.event.payload)
+
+
+@pytest.mark.asyncio
+async def test_build_automation_input_reads_inquiry_automation_config(
+    monkeypatch,
+) -> None:
+    from catchup.automations.config import INQUIRY_AUTOMATION_PRESET_KEY
+    from catchup.automations.config import InquiryAutomationConfig
+
+    config = InquiryAutomationConfig(
+        preset_key=INQUIRY_AUTOMATION_PRESET_KEY,
+        channel_talk_credential_id=1,
+        slack_channel_id="C123",
+        slack_credential_id=42,
+    )
+    context = listener.AgentRunExecutionContext(
+        run_id=1,
+        message_id="msg-1",
+        spec_id=1,
+        spec=None,
+        raw_spec=config.model_dump(mode="json"),
+        user_input_values={},
+        event=AgentWebhookEvent(
+            event_id="evt-1",
+            source="channel_talk",
+            event_type="user_chat.created",
+            payload={},
+        ),
+        global_context=Mock(),
+    )
+    monkeypatch.setattr(
+        listener,
+        "build_channel_talk_user_chat_inputs",
+        AsyncMock(
+            return_value={
+                "channel_talk_user_chat_context": "결제가 안 돼요",
+                "channel_talk_user_chat_id": "uc-1",
+            }
+        ),
+    )
+
+    result = await listener._build_automation_input(context)
+
+    assert result is not None
+    assert result.slack_channel_id == "C123"
+    assert result.slack_credential_id == 42
+    assert result.inquiry_text == "결제가 안 돼요"
+    assert result.user_chat_id == "uc-1"
+
+
+@pytest.mark.asyncio
+async def test_build_automation_input_returns_none_for_invalid_config(
+    monkeypatch,
+) -> None:
+    context = listener.AgentRunExecutionContext(
+        run_id=1,
+        message_id="msg-1",
+        spec_id=1,
+        spec=None,
+        raw_spec={"unexpected_field": "value"},
+        user_input_values={},
+        event=AgentWebhookEvent(
+            event_id="evt-1",
+            source="channel_talk",
+            event_type="user_chat.created",
+            payload={},
+        ),
+        global_context=Mock(),
+    )
+    monkeypatch.setattr(
+        listener,
+        "build_channel_talk_user_chat_inputs",
+        AsyncMock(
+            return_value={
+                "channel_talk_user_chat_context": "안녕하세요",
+                "channel_talk_user_chat_id": "uc-1",
+            }
+        ),
+    )
+
+    result = await listener._build_automation_input(context)
+
+    assert result is None
