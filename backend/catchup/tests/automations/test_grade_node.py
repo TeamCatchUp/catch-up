@@ -37,8 +37,8 @@ async def test_grade_node_reusable_true():
     ):
         result = await grade_node(state, llm=mock_llm)
 
-    assert result["grade_result"]["reusable"] is True
-    assert "reason" in result["grade_result"]
+    assert result["grade_result"].reusable is True
+    assert result["grade_result"].reason is not None
 
 
 @pytest.mark.asyncio
@@ -58,7 +58,7 @@ async def test_grade_node_reusable_false():
     ):
         result = await grade_node(state, llm=mock_llm)
 
-    assert result["grade_result"]["reusable"] is False
+    assert result["grade_result"].reusable is False
 
 
 @pytest.mark.asyncio
@@ -71,5 +71,5 @@ async def test_grade_node_empty_docs():
     result = await grade_node(state, llm=mock_llm)
 
     mock_llm.with_structured_output.assert_not_called()
-    assert result["grade_result"]["reusable"] is False
-    assert "reason" in result["grade_result"]
+    assert result["grade_result"].reusable is False
+    assert result["grade_result"].reason is not None

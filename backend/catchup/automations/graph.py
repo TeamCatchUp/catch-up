@@ -32,7 +32,7 @@ from catchup.rag.nodes import search_vector_db_node
 def _route_after_grade(state: AutomationState) -> str:
     """grade_result에 따라 다음 노드를 결정한다."""
     grade_result = state.get("grade_result")
-    if grade_result and grade_result.get("reusable"):
+    if grade_result and grade_result.reusable:
         return "generate_guide"
     return "prepare_hybrid_search"
 
