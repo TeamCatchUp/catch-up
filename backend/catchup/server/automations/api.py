@@ -13,7 +13,6 @@ from pydantic import BaseModel
 from pydantic import ConfigDict
 from pydantic import Field
 from sqlalchemy import select
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from catchup.auth.dependencies import get_current_user
@@ -106,17 +105,6 @@ def publish_inquiry_automation(
         channel_talk_channel_id=channel_talk_credential.channel_id,
         slack_channel_id=str(slack_reference["channel_id"]),
     )
-    existing = db.scalar(
-        select(AgentSpec)
-        .where(AgentSpec.agent_id == agent_id)
-        .with_for_update()
-    )
-    if existing is not None:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Automation already exists for this channel and Slack selection",
-        )
-
     config = InquiryAutomationConfig(
         preset_key=INQUIRY_AUTOMATION_PRESET_KEY,
         channel_talk_credential_id=body.channel_talk_credential_id,
@@ -124,14 +112,23 @@ def publish_inquiry_automation(
         slack_credential_id=slack_reference["credential_id"],
         guide_instruction=body.guide_instruction,
     )
-    agent_spec = AgentSpec(
-        agent_id=agent_id,
-        workspace_id=workspace_id,
-        user_id=current_user.id,
-        spec=config.model_dump(mode="json"),
-        status=AgentStatus.ACTIVE,
+    agent_spec = db.scalar(
+        select(AgentSpec)
+        .where(AgentSpec.agent_id == agent_id)
+        .with_for_update()
     )
-    db.add(agent_spec)
+    if agent_spec is not None:
+        agent_spec.spec = config.model_dump(mode="json")
+        agent_spec.status = AgentStatus.ACTIVE
+    else:
+        agent_spec = AgentSpec(
+            agent_id=agent_id,
+            workspace_id=workspace_id,
+            user_id=current_user.id,
+            spec=config.model_dump(mode="json"),
+            status=AgentStatus.ACTIVE,
+        )
+        db.add(agent_spec)
     db.flush()
 
     condition = _build_channel_talk_debounce_condition(
@@ -161,12 +158,6 @@ def publish_inquiry_automation(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(exc),
-        ) from exc
-    except IntegrityError as exc:
-        db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Automation already exists for this channel and Slack selection",
         ) from exc
     except Exception:
         db.rollback()
