@@ -9,11 +9,7 @@ import httpx
 from catchup.connector_core.adapters.channel_talk.documents_install_auth_adapter import (
     ChannelTalkDocumentInstallAuthAdapter,
 )
-from catchup.connector_core.adapters.channel_talk.documents_metadata_sync_adapter import (
-    ChannelTalkDocumentMetadataSyncAdapter,
-)
 from catchup.connector_core.domain.structure import ConnectorKey
-from catchup.connector_core.ports.metadata_sync import MetadataSyncRequest
 from catchup.connectors.channel_talk.document_space.client import (
     ChannelTalkDocumentsApiClient,
 )
@@ -53,6 +49,10 @@ from catchup.connectors.channel_talk.schemas.document_metadata import (
 from catchup.connectors.channel_talk.service import (
     ChannelTalkDocumentCredentialsService,
 )
+from catchup.sync.metadata.channel_talk_documents import (
+    ChannelTalkDocumentMetadataSyncAdapter,
+)
+from catchup.sync.metadata.schemas import MetadataSyncRequest
 
 
 def _make_documents_client(

@@ -27,12 +27,9 @@ from catchup.connectors.atlassian.callback_service import CallbackError
 from catchup.connectors.atlassian.callback_service import CallbackResult
 from catchup.connectors.atlassian.oauth_client import AtlassianOAuthClient
 from catchup.connectors.atlassian.oauth_client import get_atlassian_oauth_client
-from catchup.connectors.atlassian.token_manager import AtlassianTokenManager
-from catchup.connectors.confluence.metadata_service import ConfluenceMetadataService
 from catchup.connectors.jira.dynamic_webhook_service import (
     get_jira_dynamic_webhook_service,
 )
-from catchup.connectors.jira.factory import create_jira_ingestion_service
 from catchup.db.atlassian import oauth_repository as atlassian_crud
 from catchup.db.engine import SessionLocal
 from catchup.db.knowledge_source import add_knowledge_source
@@ -40,6 +37,8 @@ from catchup.db.models import KnowledgeSource
 from catchup.db.models import SourceType
 from catchup.db.models import WorkflowCredentialVendor
 from catchup.db.workspaces import get_workspace_limit_one
+from catchup.sync.metadata.registry import run_confluence_metadata_sync
+from catchup.sync.metadata.registry import run_jira_metadata_sync
 from catchup.utils.redis import consume_oauth_state_payload
 from catchup.utils.redis import store_oauth_state
 from catchup.workflow_credentials.oauth import build_oauth_completion_redirect
@@ -285,11 +284,11 @@ def _schedule_atlassian_followups(
     result: CallbackResult,
 ) -> None:
     for cloud_id in result.jira_targets:
-        background_tasks.add_task(_sync_jira_metadata, cloud_id)
+        background_tasks.add_task(run_jira_metadata_sync, cloud_id)
         background_tasks.add_task(_ensure_jira_dynamic_webhook, cloud_id)
 
     for cloud_id in result.confluence_targets:
-        background_tasks.add_task(_sync_confluence_metadata, cloud_id)
+        background_tasks.add_task(run_confluence_metadata_sync, cloud_id)
 
 
 async def _register_knowledge_source(cloud_id: str, source_type: SourceType):
@@ -335,24 +334,6 @@ async def _register_knowledge_source(cloud_id: str, source_type: SourceType):
     await run_in_threadpool(_register_knowledge_source_db)
 
 
-async def _sync_jira_metadata(cloud_id: str) -> None:
-    """
-    Jira 메타데이터 동기화 (BackgroundTask)
-    """
-    logger.info("jira_metadata_sync_started", cloud_id=cloud_id)
-
-    try:
-        service = await create_jira_ingestion_service(cloud_id=cloud_id)
-        await service.sync_metadata()
-        logger.info("jira_metadata_sync_completed", cloud_id=cloud_id)
-    except Exception:
-        logger.error(
-            "jira_metadata_sync_failed",
-            cloud_id=cloud_id,
-            exc_info=True,
-        )
-
-
 async def _ensure_jira_dynamic_webhook(cloud_id: str) -> None:
     """
     Jira Dynamic Webhook 등록 보장 (BackgroundTask)
@@ -369,26 +350,6 @@ async def _ensure_jira_dynamic_webhook(cloud_id: str) -> None:
     except Exception:
         logger.error(
             "jira_dynamic_webhook_ensure_failed",
-            cloud_id=cloud_id,
-            exc_info=True,
-        )
-
-
-async def _sync_confluence_metadata(cloud_id: str) -> None:
-    """Confluence Space 메타데이터 동기화 (BackgroundTask)."""
-    logger.info("confluence_metadata_sync_started", cloud_id=cloud_id)
-
-    try:
-        token_manager = AtlassianTokenManager(
-            oauth_client=AtlassianOAuthClient(),
-            oauth_repository=atlassian_crud,
-        )
-        service = ConfluenceMetadataService(token_manager)
-        await service.sync_all(cloud_id)
-        logger.info("confluence_metadata_sync_completed", cloud_id=cloud_id)
-    except Exception:
-        logger.error(
-            "confluence_metadata_sync_failed",
             cloud_id=cloud_id,
             exc_info=True,
         )

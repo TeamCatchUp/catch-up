@@ -9,11 +9,10 @@ from typing import Any
 from typing import Protocol
 
 from fastapi.concurrency import run_in_threadpool
+from pydantic import BaseModel
+from pydantic import field_validator
 
-from catchup.connector_core.ports.metadata_sync import MetadataSyncPlan
-from catchup.connector_core.ports.metadata_sync import MetadataSyncRequest
-from catchup.connector_core.ports.metadata_sync import MetadataSyncStep
-from catchup.connector_core.ports.metadata_sync import MetadataSyncStepResult
+from catchup.connector_core.domain.structure import ConnectorKey
 from catchup.connectors.channel_talk.document_space.client import (
     ChannelTalkDocumentsApiClient,
 )
@@ -36,6 +35,63 @@ from catchup.connectors.channel_talk.schemas.document_metadata import (
 from catchup.connectors.channel_talk.schemas.document_metadata import (
     ChannelTalkDocumentNavNodeMetadata,
 )
+from catchup.sync.metadata.schemas import MetadataSyncPlan
+from catchup.sync.metadata.schemas import MetadataSyncRequest
+from catchup.sync.metadata.schemas import MetadataSyncResult
+from catchup.sync.metadata.schemas import MetadataSyncStep
+from catchup.sync.metadata.schemas import MetadataSyncStepResult
+from catchup.sync.metadata.service import MetadataSyncService
+from catchup.utils.validation import require_text
+
+
+class ChannelTalkDocumentMetadataSyncRequest(BaseModel):
+    channel_id: str
+    space_id: str | None = None
+
+    @field_validator("channel_id")
+    @classmethod
+    def validate_channel_id(cls, value: str) -> str:
+        return require_text(value, "channel_id")
+
+    @field_validator("space_id")
+    @classmethod
+    def validate_space_id(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return require_text(value, "space_id")
+
+    def to_metadata_request(self) -> MetadataSyncRequest:
+        return MetadataSyncRequest(
+            connector=ConnectorKey.CHANNEL_TALK,
+            tenant_id=self.channel_id,
+            target_id=self.space_id,
+        )
+
+
+class ChannelTalkDocumentMetadataSyncResult(BaseModel):
+    connector: ConnectorKey
+    channel_id: str
+    space_id: str | None = None
+    space_synced: bool = False
+    authors_synced: int = 0
+    nav_nodes_synced: int = 0
+
+    @classmethod
+    def from_metadata_result(
+        cls,
+        result: MetadataSyncResult,
+    ) -> "ChannelTalkDocumentMetadataSyncResult":
+        space_step = result.step_result("document_space")
+        authors_step = result.step_result("document_authors")
+        nav_step = result.step_result("document_nav_nodes")
+        return cls(
+            connector=result.connector,
+            channel_id=result.tenant_id,
+            space_id=result.target_id,
+            space_synced=(space_step.synced_count > 0) if space_step else False,
+            authors_synced=authors_step.synced_count if authors_step else 0,
+            nav_nodes_synced=nav_step.synced_count if nav_step else 0,
+        )
 
 
 class ChannelTalkDocumentMetadataStore(Protocol):
@@ -248,3 +304,53 @@ class ChannelTalkDocumentMetadataSyncAdapter:
             raise
         except Exception as exc:
             raise ChannelTalkPersistenceError(error_message) from exc
+
+
+class ChannelTalkDocumentMetadataSyncService:
+    """Channel Talk Documents metadata sync facade."""
+
+    def __init__(
+        self,
+        store: ChannelTalkDocumentMetadataStore,
+        client: ChannelTalkDocumentsApiClient | None = None,
+        service: MetadataSyncService | None = None,
+    ) -> None:
+        self.service = service or MetadataSyncService(
+            port=ChannelTalkDocumentMetadataSyncAdapter(
+                store=store,
+                client=client,
+            )
+        )
+
+    async def sync_metadata(
+        self,
+        request: ChannelTalkDocumentMetadataSyncRequest,
+    ) -> ChannelTalkDocumentMetadataSyncResult:
+        result = await self.service.sync_metadata(request.to_metadata_request())
+        return ChannelTalkDocumentMetadataSyncResult.from_metadata_result(result)
+
+    async def sync_target(
+        self,
+        channel_id: str,
+    ) -> ChannelTalkDocumentMetadataSyncResult:
+        return await self.sync_metadata(
+            ChannelTalkDocumentMetadataSyncRequest(channel_id=channel_id)
+        )
+
+    async def sync_space(
+        self,
+        channel_id: str,
+        space_id: str,
+    ) -> ChannelTalkDocumentMetadataSyncResult:
+        return await self.sync_metadata(
+            ChannelTalkDocumentMetadataSyncRequest(
+                channel_id=channel_id,
+                space_id=space_id,
+            )
+        )
+
+    async def sync_channel(
+        self,
+        channel_id: str,
+    ) -> ChannelTalkDocumentMetadataSyncResult:
+        return await self.sync_target(channel_id)

@@ -1,40 +1,52 @@
 from __future__ import annotations
 
-from catchup.connector_core.ports.metadata_sync import MetadataSyncPlan
-from catchup.connector_core.ports.metadata_sync import MetadataSyncPort
-from catchup.connector_core.ports.metadata_sync import MetadataSyncRequest
-from catchup.connector_core.ports.metadata_sync import MetadataSyncResult
-from catchup.connector_core.ports.metadata_sync import MetadataSyncStepResult
+from catchup.sync.metadata.result_store import MetadataSyncResultStore
+from catchup.sync.metadata.result_store import NoopMetadataSyncResultStore
+from catchup.sync.metadata.schemas import MetadataSyncPlan
+from catchup.sync.metadata.schemas import MetadataSyncPort
+from catchup.sync.metadata.schemas import MetadataSyncRequest
+from catchup.sync.metadata.schemas import MetadataSyncResult
+from catchup.sync.metadata.schemas import MetadataSyncStepResult
 
 
-class ConnectorMetadataSyncApplication:
-    """Connector adapter가 만든 metadata step plan을 generic하게 실행한다."""
+class MetadataSyncService:
+    """Metadata handler가 만든 step plan을 sync 소유 runner로 실행한다."""
 
     def __init__(
         self,
         *,
         port: MetadataSyncPort,
+        result_store: MetadataSyncResultStore | None = None,
     ) -> None:
         self.port = port
+        self.result_store = result_store or NoopMetadataSyncResultStore()
 
     async def sync_metadata(
         self,
         request: MetadataSyncRequest,
     ) -> MetadataSyncResult:
-        plan = await self.port.build_plan(request)
-        step_results = await self._run_plan(plan)
-        return MetadataSyncResult(
-            connector=request.connector,
-            tenant_id=request.tenant_id,
-            target_id=request.target_id,
-            steps=step_results,
-        )
+        await self.result_store.record_started(request)
+        try:
+            plan = await self.port.build_plan(request)
+            step_results = await self._run_plan(plan)
+            result = MetadataSyncResult(
+                connector=request.connector,
+                tenant_id=request.tenant_id,
+                target_id=request.target_id,
+                steps=step_results,
+            )
+        except Exception as exc:
+            await self.result_store.record_failed(request, exc)
+            raise
+
+        await self.result_store.record_succeeded(result)
+        return result
 
     async def _run_plan(
         self,
         plan: MetadataSyncPlan,
     ) -> dict[str, MetadataSyncStepResult]:
-        # 아직 실행되지 않은 step 
+        # 아직 실행되지 않은 step
         pending = {step.name: step for step in plan.steps}
 
         # 이미 끝난 step

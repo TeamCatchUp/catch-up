@@ -3,15 +3,13 @@ from __future__ import annotations
 from collections.abc import Mapping
 from unittest import IsolatedAsyncioTestCase
 
-from catchup.connector_core.application.metadata_sync import (
-    ConnectorMetadataSyncApplication,
-)
 from catchup.connector_core.domain.structure import ConnectorKey
-from catchup.connector_core.ports.metadata_sync import MetadataSyncPlan
-from catchup.connector_core.ports.metadata_sync import MetadataSyncRequest
-from catchup.connector_core.ports.metadata_sync import MetadataSyncResult
-from catchup.connector_core.ports.metadata_sync import MetadataSyncStep
-from catchup.connector_core.ports.metadata_sync import MetadataSyncStepResult
+from catchup.sync.metadata.schemas import MetadataSyncPlan
+from catchup.sync.metadata.schemas import MetadataSyncRequest
+from catchup.sync.metadata.schemas import MetadataSyncResult
+from catchup.sync.metadata.schemas import MetadataSyncStep
+from catchup.sync.metadata.schemas import MetadataSyncStepResult
+from catchup.sync.metadata.service import MetadataSyncService
 
 
 class _RecordingMetadataPort:
@@ -76,12 +74,49 @@ class _RecordingMetadataPort:
         return MetadataSyncStepResult(synced_count=3)
 
 
-class ConnectorMetadataSyncApplicationTests(IsolatedAsyncioTestCase):
+class _FailingMetadataPort:
+    async def build_plan(
+        self,
+        request: MetadataSyncRequest,
+    ) -> MetadataSyncPlan:
+        return MetadataSyncPlan(
+            request=request,
+            steps=(
+                MetadataSyncStep(name="boom", run=self._run_boom),
+            ),
+        )
+
+    async def _run_boom(
+        self,
+        _completed: Mapping[str, MetadataSyncStepResult],
+    ) -> MetadataSyncStepResult:
+        raise RuntimeError("metadata sync failed")
+
+
+class _RecordingResultStore:
+    def __init__(self) -> None:
+        self.calls: list[str] = []
+
+    async def record_started(self, request: MetadataSyncRequest) -> None:
+        self.calls.append(f"started:{request.tenant_id}")
+
+    async def record_succeeded(self, result: MetadataSyncResult) -> None:
+        self.calls.append(f"succeeded:{result.tenant_id}:{len(result.steps)}")
+
+    async def record_failed(
+        self,
+        request: MetadataSyncRequest,
+        error: BaseException,
+    ) -> None:
+        self.calls.append(f"failed:{request.tenant_id}:{type(error).__name__}")
+
+
+class MetadataSyncServiceTests(IsolatedAsyncioTestCase):
     async def test_sync_runs_connector_defined_plan_without_knowing_step_names(self) -> None:
         port = _RecordingMetadataPort()
-        application = ConnectorMetadataSyncApplication(port=port)
+        service = MetadataSyncService(port=port)
 
-        result = await application.sync_metadata(
+        result = await service.sync_metadata(
             MetadataSyncRequest(
                 connector=ConnectorKey.CHANNEL_TALK,
                 tenant_id="channel-123",
@@ -103,3 +138,48 @@ class ConnectorMetadataSyncApplicationTests(IsolatedAsyncioTestCase):
         self.assertEqual(result.steps["alpha"].synced_count, 1)
         self.assertEqual(result.steps["beta"].synced_count, 2)
         self.assertEqual(result.steps["gamma"].synced_count, 3)
+
+    async def test_sync_records_success_boundary(self) -> None:
+        store = _RecordingResultStore()
+        service = MetadataSyncService(
+            port=_RecordingMetadataPort(),
+            result_store=store,
+        )
+
+        await service.sync_metadata(
+            MetadataSyncRequest(
+                connector=ConnectorKey.CHANNEL_TALK,
+                tenant_id="channel-123",
+            )
+        )
+
+        self.assertEqual(
+            store.calls,
+            [
+                "started:channel-123",
+                "succeeded:channel-123:3",
+            ],
+        )
+
+    async def test_sync_records_failure_boundary(self) -> None:
+        store = _RecordingResultStore()
+        service = MetadataSyncService(
+            port=_FailingMetadataPort(),
+            result_store=store,
+        )
+
+        with self.assertRaisesRegex(RuntimeError, "metadata sync failed"):
+            await service.sync_metadata(
+                MetadataSyncRequest(
+                    connector=ConnectorKey.CHANNEL_TALK,
+                    tenant_id="channel-123",
+                )
+            )
+
+        self.assertEqual(
+            store.calls,
+            [
+                "started:channel-123",
+                "failed:channel-123:RuntimeError",
+            ],
+        )

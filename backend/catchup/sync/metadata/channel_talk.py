@@ -10,11 +10,10 @@ from typing import Protocol
 from typing import TypeVar
 
 from fastapi.concurrency import run_in_threadpool
+from pydantic import BaseModel
+from pydantic import field_validator
 
-from catchup.connector_core.ports.metadata_sync import MetadataSyncPlan
-from catchup.connector_core.ports.metadata_sync import MetadataSyncRequest
-from catchup.connector_core.ports.metadata_sync import MetadataSyncStep
-from catchup.connector_core.ports.metadata_sync import MetadataSyncStepResult
+from catchup.connector_core.domain.structure import ConnectorKey
 from catchup.connectors.channel_talk.core.client import ChannelTalkCoreApiClient
 from catchup.connectors.channel_talk.exceptions import ChannelTalkConflictError
 from catchup.connectors.channel_talk.exceptions import ChannelTalkError
@@ -39,6 +38,13 @@ from catchup.connectors.channel_talk.schemas.channel_metadata import (
 from catchup.connectors.channel_talk.schemas.channel_metadata import (
     ChannelTalkManagerMetadataPage,
 )
+from catchup.sync.metadata.schemas import MetadataSyncPlan
+from catchup.sync.metadata.schemas import MetadataSyncRequest
+from catchup.sync.metadata.schemas import MetadataSyncResult
+from catchup.sync.metadata.schemas import MetadataSyncStep
+from catchup.sync.metadata.schemas import MetadataSyncStepResult
+from catchup.sync.metadata.service import MetadataSyncService
+from catchup.utils.validation import require_text
 
 ChannelTalkMetadataT = TypeVar(
     "ChannelTalkMetadataT",
@@ -50,6 +56,51 @@ ChannelTalkMetadataPageT = TypeVar(
     ChannelTalkManagerMetadataPage,
     ChannelTalkGroupMetadataPage,
 )
+
+
+class ChannelTalkMetadataSyncRequest(BaseModel):
+    channel_id: str
+
+    @field_validator("channel_id")
+    @classmethod
+    def validate_channel_id(cls, value: str) -> str:
+        return require_text(value, "channel_id")
+
+    def to_metadata_request(self) -> MetadataSyncRequest:
+        return MetadataSyncRequest(
+            connector=ConnectorKey.CHANNEL_TALK,
+            tenant_id=self.channel_id,
+        )
+
+
+class ChannelTalkMetadataSyncResult(BaseModel):
+    connector: ConnectorKey
+    channel_id: str
+    channel_synced: bool = False
+    managers_synced: int = 0
+    groups_synced: int = 0
+    group_manager_links_synced: int = 0
+
+    @classmethod
+    def from_metadata_result(
+        cls,
+        result: MetadataSyncResult,
+    ) -> "ChannelTalkMetadataSyncResult":
+        channel_step = result.step_result("channel")
+        managers_step = result.step_result("managers")
+        groups_step = result.step_result("groups")
+        group_memberships_step = result.step_result("group_memberships")
+
+        return cls(
+            connector=result.connector,
+            channel_id=result.tenant_id,
+            channel_synced=(channel_step.synced_count > 0) if channel_step else False,
+            managers_synced=managers_step.synced_count if managers_step else 0,
+            groups_synced=groups_step.synced_count if groups_step else 0,
+            group_manager_links_synced=(
+                group_memberships_step.synced_count if group_memberships_step else 0
+            ),
+        )
 
 
 class ChannelTalkMetadataStore(Protocol):
@@ -342,3 +393,41 @@ class ChannelTalkMetadataSyncAdapter:
             raise
         except Exception as exc:
             raise ChannelTalkPersistenceError(error_message) from exc
+
+
+class ChannelTalkMetadataSyncService:
+    """Channel Talk target snapshot metadata sync facade."""
+
+    def __init__(
+        self,
+        store: ChannelTalkMetadataStore,
+        client: ChannelTalkCoreApiClient | None = None,
+        service: MetadataSyncService | None = None,
+    ) -> None:
+        self.service = service or MetadataSyncService(
+            port=ChannelTalkMetadataSyncAdapter(
+                store=store,
+                client=client,
+            )
+        )
+
+    async def sync_metadata(
+        self,
+        request: ChannelTalkMetadataSyncRequest,
+    ) -> ChannelTalkMetadataSyncResult:
+        result = await self.service.sync_metadata(request.to_metadata_request())
+        return ChannelTalkMetadataSyncResult.from_metadata_result(result)
+
+    async def sync_target(
+        self,
+        channel_id: str,
+    ) -> ChannelTalkMetadataSyncResult:
+        return await self.sync_metadata(
+            ChannelTalkMetadataSyncRequest(channel_id=channel_id)
+        )
+
+    async def sync_channel(
+        self,
+        channel_id: str,
+    ) -> ChannelTalkMetadataSyncResult:
+        return await self.sync_target(channel_id)

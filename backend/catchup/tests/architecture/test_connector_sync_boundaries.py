@@ -19,6 +19,10 @@ KNOWN_SYNC_WORKER_CONNECTOR_CORE_IMPORTS = {
     ("catchup/sync/handlers/github.py", "catchup.connector_core.adapters.github"),
     ("catchup/sync/handlers/jira.py", "catchup.connector_core.adapters.jira"),
     ("catchup/sync/handlers/slack.py", "catchup.connector_core.adapters.slack"),
+    ("catchup/sync/metadata/channel_talk.py", "catchup.connector_core.domain.structure"),
+    ("catchup/sync/metadata/channel_talk_documents.py", "catchup.connector_core.domain.structure"),
+    ("catchup/sync/metadata/registry.py", "catchup.connector_core.domain.structure"),
+    ("catchup/sync/metadata/schemas.py", "catchup.connector_core.domain.structure"),
 }
 
 
@@ -31,15 +35,10 @@ KNOWN_CONNECTORS_CONNECTOR_CORE_IMPORTS = {
     ("catchup/connectors/channel_talk/document_space/article_transformer.py", "catchup.connector_core.document_format"),
     ("catchup/connectors/channel_talk/factory.py", "catchup.connector_core.adapters.channel_talk"),
     ("catchup/connectors/channel_talk/schemas/channel_metadata.py", "catchup.connector_core.domain.structure"),
-    ("catchup/connectors/channel_talk/schemas/channel_metadata.py", "catchup.connector_core.ports.metadata_sync"),
     ("catchup/connectors/channel_talk/schemas/document_metadata.py", "catchup.connector_core.domain.structure"),
-    ("catchup/connectors/channel_talk/schemas/document_metadata.py", "catchup.connector_core.ports.metadata_sync"),
     ("catchup/connectors/channel_talk/service.py", "catchup.connector_core.adapters.channel_talk.documents_install_auth_adapter"),
-    ("catchup/connectors/channel_talk/service.py", "catchup.connector_core.adapters.channel_talk.documents_metadata_sync_adapter"),
     ("catchup/connectors/channel_talk/service.py", "catchup.connector_core.adapters.channel_talk.install_auth_adapter"),
-    ("catchup/connectors/channel_talk/service.py", "catchup.connector_core.adapters.channel_talk.metadata_sync_adapter"),
     ("catchup/connectors/channel_talk/service.py", "catchup.connector_core.application.install_auth"),
-    ("catchup/connectors/channel_talk/service.py", "catchup.connector_core.application.metadata_sync"),
     ("catchup/connectors/jira/transformers.py", "catchup.connector_core.document_format"),
 }
 
@@ -130,8 +129,12 @@ def test_compatibility_wrapper_modules_are_removed() -> None:
         "catchup/worker/common/handlers.py",
         "catchup/connector_core/application/sync_ingestion.py",
         "catchup/connector_core/application/sync_ingestion_logging.py",
+        "catchup/connector_core/application/metadata_sync.py",
         "catchup/connector_core/domain/webhooks.py",
         "catchup/connector_core/ports/sync_ingestion.py",
+        "catchup/connector_core/ports/metadata_sync.py",
+        "catchup/connector_core/adapters/channel_talk/metadata_sync_adapter.py",
+        "catchup/connector_core/adapters/channel_talk/documents_metadata_sync_adapter.py",
         "catchup/connectors/github/webhook/metadata.py",
         "catchup/connectors/jira/webhook/metadata.py",
         "catchup/connectors/slack/webhook/metadata.py",
@@ -194,11 +197,41 @@ def test_sync_metadata_package_owns_webhook_metadata_state_writes() -> None:
 
     assert actual_files == {
         "catchup/sync/metadata/__init__.py",
+        "catchup/sync/metadata/channel_talk.py",
+        "catchup/sync/metadata/channel_talk_documents.py",
         "catchup/sync/metadata/github.py",
         "catchup/sync/metadata/jira.py",
+        "catchup/sync/metadata/registry.py",
+        "catchup/sync/metadata/result_store.py",
+        "catchup/sync/metadata/schemas.py",
+        "catchup/sync/metadata/service.py",
         "catchup/sync/metadata/slack.py",
         "catchup/sync/metadata/slack_store.py",
     }
+
+
+def test_connector_services_do_not_own_metadata_sync_facades() -> None:
+    for relative_path in (
+        "catchup/connectors/channel_talk/service.py",
+        "catchup/connectors/channel_talk/factory.py",
+    ):
+        imports = _imported_modules(BACKEND_ROOT / relative_path)
+
+        assert not any(module.startswith("catchup.sync.metadata") for module in imports)
+        assert not any("metadata_sync" in module for module in imports)
+
+
+def test_installation_background_metadata_sync_uses_sync_registry() -> None:
+    expected_imports = {
+        "catchup/server/connector/slack/auth_api.py": "catchup.sync.metadata.registry",
+        "catchup/server/connector/atlassian/auth_api.py": "catchup.sync.metadata.registry",
+        "catchup/server/connector/channel_talk/dependencies.py": "catchup.sync.metadata.registry",
+    }
+
+    for relative_path, expected_module in expected_imports.items():
+        imports = _imported_modules(BACKEND_ROOT / relative_path)
+
+        assert expected_module in imports, relative_path
 
 
 def test_jira_dynamic_webhook_service_is_connector_lifecycle_capability() -> None:

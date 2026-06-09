@@ -23,10 +23,8 @@ from catchup.connectors.channel_talk.schemas.channel_metadata import (
 from catchup.connectors.channel_talk.schemas.channel_metadata import (
     ChannelTalkManagerMetadataPage,
 )
-from catchup.connectors.channel_talk.schemas.channel_metadata import (
-    ChannelTalkMetadataSyncRequest,
-)
-from catchup.connectors.channel_talk.service import ChannelTalkMetadataSyncService
+from catchup.sync.metadata.channel_talk import ChannelTalkMetadataSyncRequest
+from catchup.sync.metadata.channel_talk import ChannelTalkMetadataSyncService
 
 
 async def _run_immediately(func, *args, **kwargs):
@@ -94,7 +92,7 @@ class ChannelTalkMetadataSyncServiceTests(IsolatedAsyncioTestCase):
         )
         self.service = ChannelTalkMetadataSyncService(store=self.store, client=self.client)
         self.run_in_threadpool_patcher = patch(
-            "catchup.connector_core.adapters.channel_talk.metadata_sync_adapter.run_in_threadpool",
+            "catchup.sync.metadata.channel_talk.run_in_threadpool",
             _run_immediately,
         )
         self.run_in_threadpool_patcher.start()

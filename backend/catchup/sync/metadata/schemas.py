@@ -1,6 +1,7 @@
 """
 Metadata Sync Contract
-- core는 각 Connector Metadata Sync에는 여러 Step이 존재하고 Step 단위로 실행한다만 알고 있다.
+- sync.metadata는 각 connector metadata sync가 여러 step으로 실행된다는
+  최소 실행 계약만 알고 있다.
 """
 from __future__ import annotations
 
@@ -39,8 +40,8 @@ class MetadataSyncStepResult(BaseModel):
 # - "호출 가능한 객체(함수)"를 뜻한다.
 #
 # StepRunner:
-# - Mapping[str, MetadataSyncStepResult]: 앞서 끝난 step 결과들 
-# - Awaitable[MetadataSyncStepResult]: await 가능한 현재 step 결과 
+# - Mapping[str, MetadataSyncStepResult]: 앞서 끝난 step 결과들
+# - Awaitable[MetadataSyncStepResult]: await 가능한 현재 step 결과
 # "이전 step 결과들을 입력으로 받아, 비동기로 실행되고, 현재 step 결과를 돌려주는 함수"
 StepRunner = Callable[
     [Mapping[str, MetadataSyncStepResult]],
@@ -50,7 +51,7 @@ StepRunner = Callable[
 
 @dataclass(frozen=True)
 class MetadataSyncStep:
-    """Core가 이해하는 최소 실행 단위."""
+    """sync.metadata가 이해하는 최소 실행 단위."""
     name: str
     run: StepRunner
     depends_on: tuple[str, ...] = ()
@@ -75,7 +76,7 @@ class MetadataSyncResult(BaseModel):
 
 class MetadataSyncPort(Protocol):
     """
-    Adapter에서 Step을 조립하여 core에게 넘김
+    Metadata handler가 step plan을 조립하여 sync runner에게 넘긴다.
     """
     async def build_plan(
         self,

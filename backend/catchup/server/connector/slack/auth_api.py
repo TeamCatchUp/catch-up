@@ -26,7 +26,6 @@ from catchup.audit.utils import audit_log
 from catchup.configs.config import auth_settings
 from catchup.connectors.slack.auth import SlackOAuthService
 from catchup.connectors.slack.auth import get_slack_oauth_service
-from catchup.connectors.slack.factory import create_slack_metadata_service
 from catchup.connectors.slack.schemas import SlackOAuthTokenResponse
 from catchup.db.engine import SessionLocal
 from catchup.db.knowledge_source import add_knowledge_source
@@ -37,6 +36,7 @@ from catchup.db.slack import oauth_repository as slack_crud
 from catchup.db.workspaces import get_workspace_limit_one
 from catchup.events.enums import EventType
 from catchup.events.enums import IntegrationEventAction
+from catchup.sync.metadata.registry import run_slack_metadata_sync
 from catchup.utils.redis import consume_oauth_state_payload
 from catchup.utils.redis import store_oauth_state
 from catchup.workflow_credentials.oauth import build_oauth_completion_redirect
@@ -256,7 +256,7 @@ def _schedule_slack_followups(
     background_tasks: BackgroundTasks,
     team_id: str,
 ) -> None:
-    background_tasks.add_task(_refresh_workspace_metadata, team_id)
+    background_tasks.add_task(run_slack_metadata_sync, team_id)
 
 
 async def _register_knowledge_source(team_id: str):
@@ -297,26 +297,6 @@ async def _register_knowledge_source(team_id: str):
             add_knowledge_source(db, new_source)
             db.commit()
     await run_in_threadpool(_sync_task)
-
-
-async def _refresh_workspace_metadata(team_id: str) -> None:
-    """
-    OAuth 설치 직후 메타데이터 동기화 (BackgroundTask)
-
-    독립 DB 세션으로 Workspace, Users, Channels, Channel Members 수집.
-    """
-    logger.info("slack_metadata_sync_started", team_id=team_id)
-
-    try:
-        service = await create_slack_metadata_service(team_id)
-        await service.sync_metadata()
-        logger.info("slack_metadata_sync_completed", team_id=team_id)
-    except Exception:
-        logger.error(
-            "slack_metadata_sync_failed",
-            team_id=team_id,
-            exc_info=True,
-        )
 
 
 def _persist_slack_token_db(
