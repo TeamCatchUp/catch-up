@@ -1,14 +1,20 @@
+from types import SimpleNamespace
+from unittest.mock import MagicMock
+
 import pytest
 from fastapi import HTTPException
 from pydantic import ValidationError
 
 from catchup.automations.config import INQUIRY_AUTOMATION_PRESET_KEY
 from catchup.connectors.slack.client import SlackConnectorApiError
+from catchup.db.models import AgentStatus
 from catchup.server.automations import api
 from catchup.server.automations.api import InquiryAutomationPublishRequest
 from catchup.server.automations.api import _build_agent_id
 from catchup.server.automations.api import _build_channel_talk_debounce_condition
 from catchup.server.automations.api import _validate_slack_channel_history_access
+from catchup.server.automations.api import list_inquiry_automations
+from catchup.server.automations.api import update_inquiry_automation
 
 
 def test_publish_request_requires_slack_channel() -> None:
@@ -119,6 +125,111 @@ def test_build_channel_talk_debounce_condition_resets_only_user_messages() -> No
             ]
         },
     }
+
+
+def _make_spec_row(
+    *,
+    spec_id: int = 1,
+    status: AgentStatus = AgentStatus.ACTIVE,
+    channel_talk_credential_id: int = 7,
+    slack_channel_id: str = "C123",
+    slack_credential_id: int = 1,
+    guide_instruction: str | None = None,
+    quiet_period_seconds: int | None = 60,
+) -> MagicMock:
+    trigger = SimpleNamespace(
+        id=99,
+        condition={"quiet_period_seconds": quiet_period_seconds}
+        if quiet_period_seconds is not None
+        else {},
+    )
+    row = MagicMock()
+    row.id = spec_id
+    row.status = status
+    row.spec = {
+        "preset_key": INQUIRY_AUTOMATION_PRESET_KEY,
+        "channel_talk_credential_id": channel_talk_credential_id,
+        "slack_channel_id": slack_channel_id,
+        "slack_credential_id": slack_credential_id,
+        "guide_instruction": guide_instruction,
+    }
+    row.triggers = [trigger]
+    return row
+
+
+def test_list_inquiry_automations_returns_items(monkeypatch) -> None:
+    row = _make_spec_row(guide_instruction="환불은 영수증 먼저")
+    db = MagicMock()
+    db.scalars.return_value.all.return_value = [row]
+    user = SimpleNamespace(id=1)
+
+    monkeypatch.setattr(api, "_resolve_user_workspace_id", lambda *_: 1)
+
+    result = list_inquiry_automations(db=db, current_user=user)
+
+    assert len(result) == 1
+    assert result[0].agent_spec_id == 1
+    assert result[0].status == AgentStatus.ACTIVE
+    assert result[0].slack_channel_id == "C123"
+    assert result[0].guide_instruction == "환불은 영수증 먼저"
+    assert result[0].quiet_period_seconds == 60
+    assert result[0].trigger_id == 99
+
+
+def test_list_inquiry_automations_skips_invalid_spec(monkeypatch) -> None:
+    bad_row = MagicMock()
+    bad_row.spec = {"preset_key": INQUIRY_AUTOMATION_PRESET_KEY}
+    bad_row.triggers = []
+    db = MagicMock()
+    db.scalars.return_value.all.return_value = [bad_row]
+    user = SimpleNamespace(id=1)
+
+    monkeypatch.setattr(api, "_resolve_user_workspace_id", lambda *_: 1)
+
+    result = list_inquiry_automations(db=db, current_user=user)
+
+    assert result == []
+
+
+def test_update_inquiry_automation_sets_inactive(monkeypatch) -> None:
+    from catchup.server.automations.api import InquiryAutomationUpdateRequest
+
+    row = _make_spec_row()
+    db = MagicMock()
+    db.scalar.return_value = row
+    user = SimpleNamespace(id=1)
+
+    monkeypatch.setattr(api, "_resolve_user_workspace_id", lambda *_: 1)
+
+    update_inquiry_automation(
+        agent_spec_id=1,
+        body=InquiryAutomationUpdateRequest(status=AgentStatus.INACTIVE),
+        db=db,
+        current_user=user,
+    )
+
+    assert row.status == AgentStatus.INACTIVE
+    db.commit.assert_called_once()
+
+
+def test_update_inquiry_automation_raises_404_when_not_found(monkeypatch) -> None:
+    from catchup.server.automations.api import InquiryAutomationUpdateRequest
+
+    db = MagicMock()
+    db.scalar.return_value = None
+    user = SimpleNamespace(id=1)
+
+    monkeypatch.setattr(api, "_resolve_user_workspace_id", lambda *_: 1)
+
+    with pytest.raises(HTTPException) as exc_info:
+        update_inquiry_automation(
+            agent_spec_id=999,
+            body=InquiryAutomationUpdateRequest(status=AgentStatus.INACTIVE),
+            db=db,
+            current_user=user,
+        )
+
+    assert exc_info.value.status_code == 404
 
 
 def test_validate_slack_channel_history_access_probes_latest_message(
