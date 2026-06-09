@@ -27,12 +27,14 @@ async def generate_guide_node(state: AutomationState, llm: BaseChatModel) -> dic
 
     docs_summary = build_docs_summary(docs)
     inquiry_text = state["inquiry_text"]
+    guide_instruction = state.get("guide_instruction")
     global_context = state["global_context"].model_dump()
 
     prompt = prompt_loader.get_prompt(
         "automations/generate_guide",
         inquiry_text=inquiry_text,
         docs_summary=docs_summary,
+        guide_instruction=guide_instruction,
         **global_context,
     )
 

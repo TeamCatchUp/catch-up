@@ -195,6 +195,7 @@ async def test_build_automation_input_reads_inquiry_automation_config(
         channel_talk_credential_id=1,
         slack_channel_id="C123",
         slack_credential_id=42,
+        guide_instruction="환불 문의는 주문번호를 먼저 확인하세요.",
     )
     context = listener.AgentRunExecutionContext(
         run_id=1,
@@ -229,6 +230,7 @@ async def test_build_automation_input_reads_inquiry_automation_config(
     assert result.slack_credential_id == 42
     assert result.inquiry_text == "결제가 안 돼요"
     assert result.user_chat_id == "uc-1"
+    assert result.guide_instruction == "환불 문의는 주문번호를 먼저 확인하세요."
 
 
 @pytest.mark.asyncio

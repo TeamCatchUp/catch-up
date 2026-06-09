@@ -53,6 +53,28 @@ async def test_generate_guide_node_returns_guide_text():
 
 
 @pytest.mark.asyncio
+async def test_generate_guide_node_passes_guide_instruction_to_prompt():
+    """guide_instruction이 있으면 prompt_loader에 전달된다."""
+    docs = [Document(page_content="환불 정책 내용", id="d1")]
+    state = {
+        **_make_state(docs),
+        "guide_instruction": "결제 문의는 영수증을 먼저 요청하세요.",
+    }
+
+    mock_llm = MagicMock()
+    mock_llm.ainvoke = AsyncMock(return_value=AIMessage(content="가이드"))
+
+    with patch(
+        "catchup.automations.nodes.generate_guide.prompt_loader.get_prompt",
+        return_value=[MagicMock()],
+    ) as mock_get_prompt:
+        await generate_guide_node(state, llm=mock_llm)
+
+    _, kwargs = mock_get_prompt.call_args
+    assert kwargs.get("guide_instruction") == "결제 문의는 영수증을 먼저 요청하세요."
+
+
+@pytest.mark.asyncio
 async def test_generate_guide_node_no_docs_returns_fallback():
     """문서가 없으면 fallback 가이드를 반환한다."""
     state = _make_state([])

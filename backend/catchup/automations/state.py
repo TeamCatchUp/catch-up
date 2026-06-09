@@ -30,5 +30,6 @@ class AutomationState(TypedDict):
     rerank_count: int
 
     # automation 전용
+    guide_instruction: Optional[str]
     grade_result: Optional[GradeResult]
     guide_text: Optional[str]

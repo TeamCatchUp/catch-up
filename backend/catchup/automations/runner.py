@@ -20,6 +20,7 @@ class AutomationInput:
     slack_channel_id: str
     slack_credential_id: int
     global_context: GlobalContext
+    guide_instruction: str | None = None
 
 
 async def run_inquiry_automation(input: AutomationInput) -> None:
@@ -36,6 +37,7 @@ async def run_inquiry_automation(input: AutomationInput) -> None:
         slack_channel_id=input.slack_channel_id,
         slack_credential_id=input.slack_credential_id,
         global_context=input.global_context,
+        guide_instruction=input.guide_instruction,
         messages=[HumanMessage(content=input.inquiry_text)],
         rewritten_query=input.inquiry_text,
         vector_search_queries=[],

@@ -345,6 +345,7 @@ async def _build_automation_input(
         slack_channel_id=config.slack_channel_id,
         slack_credential_id=config.slack_credential_id,
         global_context=context.global_context,
+        guide_instruction=config.guide_instruction,
     )
 
 
