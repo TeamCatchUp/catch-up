@@ -2,22 +2,18 @@ import pytest
 from fastapi import HTTPException
 from pydantic import ValidationError
 
+from catchup.automations.config import INQUIRY_AUTOMATION_PRESET_KEY
 from catchup.connectors.slack.client import SlackConnectorApiError
-from catchup.server.agents import build
-from catchup.server.agents.build import PRESET_KEY
-from catchup.server.agents.build import SLACK_FIND_TOOL_NAME
-from catchup.server.agents.build import SLACK_SEND_TOOL_NAME
-from catchup.server.agents.build import TempAgentPublishRequest
-from catchup.server.agents.build import _build_channel_talk_debounce_condition
-from catchup.server.agents.build import _build_preset_agent_id
-from catchup.server.agents.build import _build_preset_agent_spec
-from catchup.server.agents.build import _build_references
-from catchup.server.agents.build import _validate_slack_channel_history_access
+from catchup.server.automations import api
+from catchup.server.automations.api import InquiryAutomationPublishRequest
+from catchup.server.automations.api import _build_agent_id
+from catchup.server.automations.api import _build_channel_talk_debounce_condition
+from catchup.server.automations.api import _validate_slack_channel_history_access
 
 
-def test_temp_agent_publish_request_requires_slack_channel() -> None:
+def test_publish_request_requires_slack_channel() -> None:
     with pytest.raises(ValidationError):
-        TempAgentPublishRequest.model_validate(
+        InquiryAutomationPublishRequest.model_validate(
             {
                 "channel_talk_credential_id": 7,
                 "quiet_period_seconds": 60,
@@ -25,12 +21,72 @@ def test_temp_agent_publish_request_requires_slack_channel() -> None:
         )
 
 
+def test_publish_request_guide_instruction_is_optional() -> None:
+    req = InquiryAutomationPublishRequest.model_validate(
+        {
+            "channel_talk_credential_id": 7,
+            "quiet_period_seconds": 60,
+            "slack_channel": {
+                "credential_id": 1,
+                "channel_id": "C123",
+            },
+        }
+    )
+    assert req.guide_instruction is None
+
+
+def test_publish_request_accepts_guide_instruction() -> None:
+    req = InquiryAutomationPublishRequest.model_validate(
+        {
+            "channel_talk_credential_id": 7,
+            "quiet_period_seconds": 60,
+            "slack_channel": {
+                "credential_id": 1,
+                "channel_id": "C123",
+            },
+            "guide_instruction": "결제 문의는 영수증을 요청하세요.",
+        }
+    )
+    assert req.guide_instruction == "결제 문의는 영수증을 요청하세요."
+
+
+def test_build_agent_id_is_stable_for_idempotency_key() -> None:
+    first = _build_agent_id(
+        workspace_id=1,
+        preset_key=INQUIRY_AUTOMATION_PRESET_KEY,
+        channel_talk_channel_id="229395",
+        slack_channel_id="C123",
+    )
+    second = _build_agent_id(
+        workspace_id=1,
+        preset_key=INQUIRY_AUTOMATION_PRESET_KEY,
+        channel_talk_channel_id="229395",
+        slack_channel_id="C123",
+    )
+    assert first == second
+
+
+def test_build_agent_id_differs_for_different_slack_channels() -> None:
+    a = _build_agent_id(
+        workspace_id=1,
+        preset_key=INQUIRY_AUTOMATION_PRESET_KEY,
+        channel_talk_channel_id="229395",
+        slack_channel_id="C123",
+    )
+    b = _build_agent_id(
+        workspace_id=1,
+        preset_key=INQUIRY_AUTOMATION_PRESET_KEY,
+        channel_talk_channel_id="229395",
+        slack_channel_id="C999",
+    )
+    assert a != b
+
+
 def test_build_channel_talk_debounce_condition_resets_only_user_messages() -> None:
     condition = _build_channel_talk_debounce_condition(
         channel_id="229395",
         quiet_period_seconds=60,
     )
-
     assert condition == {
         "kind": "debounce",
         "start_event_type": "user_chat.created",
@@ -65,74 +121,6 @@ def test_build_channel_talk_debounce_condition_resets_only_user_messages() -> No
     }
 
 
-def test_build_references_materializes_required_slack_values() -> None:
-    references = _build_references(
-        slack_reference={
-            "channel_name": "cs-alerts",
-            "channel_id": "C123",
-            "credential_id": 42,
-        },
-    )
-
-    for tool_name in (SLACK_FIND_TOOL_NAME, SLACK_SEND_TOOL_NAME):
-        assert references[tool_name] == [
-            {
-                "argument": "channel_name",
-                "kind": "slack_channel",
-                "values": {
-                    "cs-alerts": {
-                        "channel_id": "C123",
-                        "credential_id": 42,
-                    }
-                },
-            }
-        ]
-
-
-def test_build_preset_agent_spec_contains_tools_order_and_references() -> None:
-    references = _build_references(
-        slack_reference={
-            "channel_name": "cs-alerts",
-            "channel_id": "C123",
-            "credential_id": 42,
-        },
-    )
-
-    spec = _build_preset_agent_spec(references=references)
-
-    assert spec.agent_id == PRESET_KEY
-    assert [tool.name for tool in spec.tools] == [
-        "catchup_kb.search",
-        "catchup_kb.rerank",
-        SLACK_FIND_TOOL_NAME,
-        SLACK_SEND_TOOL_NAME,
-    ]
-    assert spec.execution_order == [
-        "catchup_kb.search",
-        "catchup_kb.rerank",
-        SLACK_FIND_TOOL_NAME,
-        SLACK_SEND_TOOL_NAME,
-    ]
-    assert spec.model_dump(mode="json")["references"] == references
-
-
-def test_build_preset_agent_id_is_stable_for_idempotency_key() -> None:
-    first = _build_preset_agent_id(
-        workspace_id=1,
-        preset_key=PRESET_KEY,
-        channel_talk_channel_id="229395",
-        slack_channel_id="C123",
-    )
-    second = _build_preset_agent_id(
-        workspace_id=1,
-        preset_key=PRESET_KEY,
-        channel_talk_channel_id="229395",
-        slack_channel_id="C123",
-    )
-
-    assert first == second
-
-
 def test_validate_slack_channel_history_access_probes_latest_message(
     monkeypatch,
 ) -> None:
@@ -146,7 +134,7 @@ def test_validate_slack_channel_history_access_probes_latest_message(
             calls.append(("history", channel, limit))
             return {"messages": []}
 
-    monkeypatch.setattr(build, "SlackApiClientWrapper", FakeSlackClient)
+    monkeypatch.setattr(api, "SlackApiClientWrapper", FakeSlackClient)
 
     _validate_slack_channel_history_access(
         bot_access_token="xoxb-token",
@@ -176,7 +164,7 @@ def test_validate_slack_channel_history_access_rejects_slack_api_error(
                 metadata={"error": "not_in_channel"},
             )
 
-    monkeypatch.setattr(build, "SlackApiClientWrapper", FakeSlackClient)
+    monkeypatch.setattr(api, "SlackApiClientWrapper", FakeSlackClient)
 
     with pytest.raises(HTTPException) as exc_info:
         _validate_slack_channel_history_access(
