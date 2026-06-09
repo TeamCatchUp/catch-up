@@ -120,7 +120,7 @@ async def test_graph_reusable_path():
         )
         final_state = await graph.ainvoke(_initial_state())
 
-    assert final_state["grade_result"]["reusable"] is True
+    assert final_state["grade_result"].reusable is True
     assert final_state["guide_text"] is not None
 
 
@@ -184,5 +184,5 @@ async def test_graph_not_reusable_path():
         )
         final_state = await graph.ainvoke(_initial_state())
 
-    assert final_state["grade_result"]["reusable"] is False
+    assert final_state["grade_result"].reusable is False
     assert final_state["guide_text"] is not None

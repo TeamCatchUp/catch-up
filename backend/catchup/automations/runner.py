@@ -23,23 +23,23 @@ class AutomationInput:
     guide_instruction: str | None = None
 
 
-async def run_inquiry_automation(input: AutomationInput) -> None:
+async def run_inquiry_automation(automation_input: AutomationInput) -> None:
     """Channel Talk 문의 자동화 파이프라인을 실행한다."""
     logger.info(
         "inquiry_automation_started",
-        user_chat_id=input.user_chat_id,
-        workspace_id=input.global_context.workspace.id,
+        user_chat_id=automation_input.user_chat_id,
+        workspace_id=automation_input.global_context.workspace.id,
     )
 
     state = AutomationState(
-        inquiry_text=input.inquiry_text,
-        user_chat_id=input.user_chat_id,
-        slack_channel_id=input.slack_channel_id,
-        slack_credential_id=input.slack_credential_id,
-        global_context=input.global_context,
-        guide_instruction=input.guide_instruction,
-        messages=[HumanMessage(content=input.inquiry_text)],
-        rewritten_query=input.inquiry_text,
+        inquiry_text=automation_input.inquiry_text,
+        user_chat_id=automation_input.user_chat_id,
+        slack_channel_id=automation_input.slack_channel_id,
+        slack_credential_id=automation_input.slack_credential_id,
+        global_context=automation_input.global_context,
+        guide_instruction=automation_input.guide_instruction,
+        messages=[HumanMessage(content=automation_input.inquiry_text)],
+        rewritten_query=automation_input.inquiry_text,
         vector_search_queries=[],
         retrieved_docs=[],
         tool_filters=[SourceType.CHANNEL_TALK],
@@ -52,5 +52,5 @@ async def run_inquiry_automation(input: AutomationInput) -> None:
 
     logger.info(
         "inquiry_automation_completed",
-        user_chat_id=input.user_chat_id,
+        user_chat_id=automation_input.user_chat_id,
     )

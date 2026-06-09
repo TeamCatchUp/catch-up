@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from typing import Annotated
-from typing import Optional
 from typing import TypedDict
 
 from langchain_core.documents import Document
@@ -26,10 +25,10 @@ class AutomationState(TypedDict):
     rewritten_query: str
     vector_search_queries: list[VectorDbSearchQuery]
     retrieved_docs: list[Document]
-    tool_filters: Optional[list[SourceType]]
+    tool_filters: list[SourceType] | None
     rerank_count: int
 
     # automation 전용
-    guide_instruction: Optional[str]
-    grade_result: Optional[GradeResult]
-    guide_text: Optional[str]
+    guide_instruction: str | None
+    grade_result: GradeResult | None
+    guide_text: str | None
