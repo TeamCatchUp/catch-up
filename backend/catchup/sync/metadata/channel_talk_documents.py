@@ -12,7 +12,6 @@ from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel
 from pydantic import field_validator
 
-from catchup.connector_core.domain.structure import ConnectorKey
 from catchup.connectors.channel_talk.document_space.client import (
     ChannelTalkDocumentsApiClient,
 )
@@ -35,6 +34,7 @@ from catchup.connectors.channel_talk.schemas.document_metadata import (
 from catchup.connectors.channel_talk.schemas.document_metadata import (
     ChannelTalkDocumentNavNodeMetadata,
 )
+from catchup.db.models import SyncConnector
 from catchup.sync.metadata.schemas import MetadataSyncPlan
 from catchup.sync.metadata.schemas import MetadataSyncRequest
 from catchup.sync.metadata.schemas import MetadataSyncResult
@@ -62,14 +62,14 @@ class ChannelTalkDocumentMetadataSyncRequest(BaseModel):
 
     def to_metadata_request(self) -> MetadataSyncRequest:
         return MetadataSyncRequest(
-            connector=ConnectorKey.CHANNEL_TALK,
+            connector=SyncConnector.CHANNEL_TALK,
             tenant_id=self.channel_id,
             target_id=self.space_id,
         )
 
 
 class ChannelTalkDocumentMetadataSyncResult(BaseModel):
-    connector: ConnectorKey
+    connector: SyncConnector
     channel_id: str
     space_id: str | None = None
     space_synced: bool = False

@@ -6,7 +6,6 @@ from types import SimpleNamespace
 from unittest import IsolatedAsyncioTestCase
 from unittest.mock import patch
 
-from catchup.connector_core.domain.structure import ConnectorKey
 from catchup.db.models import SyncConnector
 from catchup.sync.audit import SyncAuditContext
 from catchup.sync.ingestion.pipeline import run_sync_ingestion
@@ -80,7 +79,7 @@ class _Port:
         persisted,
     ):
         return SyncExecutionResult(
-            connector=ConnectorKey.CHANNEL_TALK,
+            connector=SyncConnector.CHANNEL_TALK,
             tenant_id=execution.tenant_id,
             target=execution.target,
         )
@@ -94,7 +93,7 @@ class _FailingTransformPort(_Port):
 class SyncIngestionLoggingTest(IsolatedAsyncioTestCase):
     async def test_logs_shared_pipeline_stage_completion(self) -> None:
         execution = _LoggedExecutionRequest(
-            connector=ConnectorKey.CHANNEL_TALK,
+            connector=SyncConnector.CHANNEL_TALK,
             tenant_id="channel-123",
             target="user_chat",
             audit_context=SyncAuditContext(
@@ -168,7 +167,7 @@ class SyncIngestionLoggingTest(IsolatedAsyncioTestCase):
 
     async def test_logs_pipeline_failure_with_failed_stage(self) -> None:
         execution = SyncExecutionRequest(
-            connector=ConnectorKey.CHANNEL_TALK,
+            connector=SyncConnector.CHANNEL_TALK,
             tenant_id="channel-123",
             target="user_chat",
         )
@@ -193,7 +192,7 @@ class SyncIngestionLoggingTest(IsolatedAsyncioTestCase):
 
     async def test_stage_summary_does_not_duplicate_pipeline_context_keys(self) -> None:
         execution = _PagedExecutionRequest(
-            connector=ConnectorKey.JIRA,
+            connector=SyncConnector.JIRA,
             tenant_id="cloud-123",
             target="issue",
         )

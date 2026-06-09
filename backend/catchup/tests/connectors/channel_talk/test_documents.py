@@ -6,15 +6,14 @@ from unittest import IsolatedAsyncioTestCase
 
 import httpx
 
-from catchup.connector_core.adapters.channel_talk.documents_install_auth_adapter import (
-    ChannelTalkDocumentInstallAuthAdapter,
-)
-from catchup.connector_core.domain.structure import ConnectorKey
 from catchup.connectors.channel_talk.document_space.client import (
     ChannelTalkDocumentsApiClient,
 )
 from catchup.connectors.channel_talk.document_space.http_client import (
     ChannelTalkDocumentsHttpClient,
+)
+from catchup.connectors.channel_talk.documents_install_auth_adapter import (
+    ChannelTalkDocumentInstallAuthAdapter,
 )
 from catchup.connectors.channel_talk.exceptions import ChannelTalkConflictError
 from catchup.connectors.channel_talk.exceptions import ChannelTalkPayloadError
@@ -49,6 +48,7 @@ from catchup.connectors.channel_talk.schemas.document_metadata import (
 from catchup.connectors.channel_talk.service import (
     ChannelTalkDocumentCredentialsService,
 )
+from catchup.db.models import SyncConnector
 from catchup.sync.metadata.channel_talk_documents import (
     ChannelTalkDocumentMetadataSyncAdapter,
 )
@@ -360,7 +360,7 @@ class ChannelTalkDocumentsMetadataAdapterTests(IsolatedAsyncioTestCase):
 
         plan = await adapter.build_plan(
             MetadataSyncRequest(
-                connector=ConnectorKey.CHANNEL_TALK,
+                connector=SyncConnector.CHANNEL_TALK,
                 tenant_id="channel-123",
             )
         )

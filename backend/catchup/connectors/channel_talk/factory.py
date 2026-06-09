@@ -2,13 +2,15 @@ from __future__ import annotations
 
 from sqlalchemy.orm import Session
 
-from catchup.connector_core.adapters.channel_talk import ChannelTalkCredentialsStore
-from catchup.connector_core.adapters.channel_talk import (
-    ChannelTalkDocumentCredentialsStore,
-)
 from catchup.connectors.channel_talk.core.client import ChannelTalkCoreApiClient
 from catchup.connectors.channel_talk.document_space.client import (
     ChannelTalkDocumentsApiClient,
+)
+from catchup.connectors.channel_talk.documents_install_auth_adapter import (
+    ChannelTalkDocumentCredentialsStore,
+)
+from catchup.connectors.channel_talk.install_auth_adapter import (
+    ChannelTalkCredentialsStore,
 )
 from catchup.connectors.channel_talk.service import ChannelTalkCredentialsService
 from catchup.connectors.channel_talk.service import (

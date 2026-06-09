@@ -10,9 +10,6 @@ from unittest.mock import AsyncMock
 from catchup.connectors.channel_talk.core.user_chat_full_sync_fetcher import (
     ChannelTalkUserChatFullSyncFetcher,
 )
-from catchup.sync.ingestion.adapters.channel_talk.user_chat_models import (
-    ChannelTalkUserChatFullSyncConnection,
-)
 from catchup.connectors.channel_talk.schemas.channel_connection import (
     ChannelTalkCredentialsRecord,
 )
@@ -35,6 +32,9 @@ from catchup.connectors.channel_talk.schemas.user_chat_message import (
 )
 from catchup.connectors.channel_talk.schemas.user_chat_message import (
     ChannelTalkUserChatMessagePage,
+)
+from catchup.sync.ingestion.adapters.channel_talk.user_chat_models import (
+    ChannelTalkUserChatFullSyncConnection,
 )
 from catchup.sync.ingestion.schemas import SyncWindow
 

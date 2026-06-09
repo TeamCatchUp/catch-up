@@ -6,34 +6,10 @@ from pathlib import Path
 BACKEND_ROOT = Path(__file__).resolve().parents[3]
 
 
-KNOWN_SYNC_WORKER_CONNECTOR_CORE_IMPORTS = {
-    ("catchup/sync/repair/channel_talk_record_repair_service.py", "catchup.sync.ingestion.adapters.channel_talk.article_full_sync"),
-    ("catchup/sync/repair/channel_talk_record_repair_service.py", "catchup.sync.ingestion.adapters.channel_talk.article_incremental"),
-    ("catchup/sync/repair/channel_talk_record_repair_service.py", "catchup.sync.ingestion.adapters.channel_talk.user_chat_full_sync"),
-    ("catchup/sync/repair/channel_talk_record_repair_service.py", "catchup.sync.ingestion.adapters.channel_talk.user_chat_incremental"),
-    ("catchup/sync/handlers/channel_talk.py", "catchup.sync.ingestion.adapters.channel_talk.article_full_sync"),
-    ("catchup/sync/handlers/channel_talk.py", "catchup.sync.ingestion.adapters.channel_talk.article_incremental"),
-    ("catchup/sync/handlers/channel_talk.py", "catchup.sync.ingestion.adapters.channel_talk.user_chat_full_sync"),
-    ("catchup/sync/handlers/channel_talk.py", "catchup.sync.ingestion.adapters.channel_talk.user_chat_incremental"),
-    ("catchup/sync/handlers/confluence.py", "catchup.sync.ingestion.adapters.confluence"),
-    ("catchup/sync/handlers/github.py", "catchup.sync.ingestion.adapters.github"),
-    ("catchup/sync/handlers/jira.py", "catchup.sync.ingestion.adapters.jira"),
-    ("catchup/sync/handlers/slack.py", "catchup.sync.ingestion.adapters.slack"),
-    ("catchup/sync/metadata/channel_talk.py", "catchup.connector_core.domain.structure"),
-    ("catchup/sync/metadata/channel_talk_documents.py", "catchup.connector_core.domain.structure"),
-    ("catchup/sync/metadata/registry.py", "catchup.connector_core.domain.structure"),
-    ("catchup/sync/metadata/schemas.py", "catchup.connector_core.domain.structure"),
-}
+KNOWN_SYNC_WORKER_CONNECTOR_CORE_IMPORTS: set[tuple[str, str]] = set()
 
 
-KNOWN_CONNECTORS_CONNECTOR_CORE_IMPORTS = {
-    ("catchup/connectors/channel_talk/factory.py", "catchup.connector_core.adapters.channel_talk"),
-    ("catchup/connectors/channel_talk/schemas/channel_metadata.py", "catchup.connector_core.domain.structure"),
-    ("catchup/connectors/channel_talk/schemas/document_metadata.py", "catchup.connector_core.domain.structure"),
-    ("catchup/connectors/channel_talk/service.py", "catchup.connector_core.adapters.channel_talk.documents_install_auth_adapter"),
-    ("catchup/connectors/channel_talk/service.py", "catchup.connector_core.adapters.channel_talk.install_auth_adapter"),
-    ("catchup/connectors/channel_talk/service.py", "catchup.connector_core.application.install_auth"),
-}
+KNOWN_CONNECTORS_CONNECTOR_CORE_IMPORTS: set[tuple[str, str]] = set()
 
 
 KNOWN_CONNECTORS_SYNC_STACK_IMPORTS = {
@@ -144,6 +120,19 @@ def test_compatibility_wrapper_modules_are_removed() -> None:
         "catchup/worker/handlers/slack_full_sync_handler.py",
         "catchup/worker/handlers/slack_incremental_handler.py",
         "catchup/worker/handlers/__init__.py",
+    ):
+        assert not (BACKEND_ROOT / relative_path).exists(), relative_path
+
+
+def test_phase_11_connector_core_owner_modules_are_removed() -> None:
+    for relative_path in (
+        "catchup/connector_core/adapters/channel_talk",
+        "catchup/connector_core/adapters/connection_status",
+        "catchup/connector_core/application",
+        "catchup/connector_core/descriptors",
+        "catchup/connector_core/ports/connection_status.py",
+        "catchup/connector_core/ports/install_auth.py",
+        "catchup/connector_core/runtime",
     ):
         assert not (BACKEND_ROOT / relative_path).exists(), relative_path
 

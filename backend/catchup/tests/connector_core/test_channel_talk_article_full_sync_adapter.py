@@ -5,27 +5,6 @@ from datetime import timezone
 from unittest import IsolatedAsyncioTestCase
 from unittest.mock import AsyncMock
 
-from catchup.sync.ingestion.adapters.channel_talk.article_full_sync import (
-    ChannelTalkArticleFullSyncIngestionAdapter,
-)
-from catchup.sync.ingestion.adapters.channel_talk.article_incremental import (
-    ChannelTalkArticleIncrementalIngestionAdapter,
-)
-from catchup.sync.ingestion.adapters.channel_talk.article_models import (
-    ChannelTalkArticleFullSyncFetchResult,
-)
-from catchup.sync.ingestion.adapters.channel_talk.article_models import (
-    ChannelTalkArticleIncrementalExecutionRequest,
-)
-from catchup.sync.ingestion.adapters.channel_talk.article_models import (
-    ChannelTalkArticleIncrementalExecutionResult,
-)
-from catchup.sync.ingestion.adapters.channel_talk.article_models import (
-    ChannelTalkArticleSyncExecutionRequest,
-)
-from catchup.sync.ingestion.adapters.channel_talk.article_models import (
-    ChannelTalkFetchedArticle,
-)
 from catchup.connectors.channel_talk.schemas.channel_connection import (
     ChannelTalkCredentialsRecord,
 )
@@ -49,6 +28,27 @@ from catchup.connectors.channel_talk.schemas.document_connection import (
 )
 from catchup.connectors.channel_talk.schemas.document_connection import (
     ChannelTalkDocumentCredentialsRecord,
+)
+from catchup.sync.ingestion.adapters.channel_talk.article_full_sync import (
+    ChannelTalkArticleFullSyncIngestionAdapter,
+)
+from catchup.sync.ingestion.adapters.channel_talk.article_incremental import (
+    ChannelTalkArticleIncrementalIngestionAdapter,
+)
+from catchup.sync.ingestion.adapters.channel_talk.article_models import (
+    ChannelTalkArticleFullSyncFetchResult,
+)
+from catchup.sync.ingestion.adapters.channel_talk.article_models import (
+    ChannelTalkArticleIncrementalExecutionRequest,
+)
+from catchup.sync.ingestion.adapters.channel_talk.article_models import (
+    ChannelTalkArticleIncrementalExecutionResult,
+)
+from catchup.sync.ingestion.adapters.channel_talk.article_models import (
+    ChannelTalkArticleSyncExecutionRequest,
+)
+from catchup.sync.ingestion.adapters.channel_talk.article_models import (
+    ChannelTalkFetchedArticle,
 )
 from catchup.sync.ingestion.pipeline import run_sync_ingestion
 from catchup.sync.ingestion.schemas import SyncWindow

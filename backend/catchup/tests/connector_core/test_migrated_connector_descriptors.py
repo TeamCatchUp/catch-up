@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock
 
 from langchain_core.documents import Document
 
+from catchup.connectors.github.client import GitHubApiClient
 from catchup.sync.ingestion.adapters.confluence import (
     ConfluenceSpaceFullSyncExecutionRequest,
 )
@@ -35,12 +36,9 @@ from catchup.sync.ingestion.adapters.slack import (
     SlackMessageIncrementalSyncExecutionRequest,
 )
 from catchup.sync.ingestion.adapters.slack import SlackMessageSyncAdapter
-from catchup.connector_core.descriptors.confluence import CONFLUENCE_DESCRIPTOR
-from catchup.connector_core.descriptors.github import GITHUB_DESCRIPTOR
-from catchup.connector_core.descriptors.slack import SLACK_DESCRIPTOR
-from catchup.connector_core.domain.structure import ConnectorKey
-from catchup.sync.ingestion.document_builders.confluence import ConfluenceTransformResult
-from catchup.connectors.github.client import GitHubApiClient
+from catchup.sync.ingestion.document_builders.confluence import (
+    ConfluenceTransformResult,
+)
 from catchup.sync.ingestion.schemas import SyncWindow
 
 
@@ -50,15 +48,6 @@ def _window() -> SyncWindow:
 
 
 class MigratedConnectorDescriptorTests(IsolatedAsyncioTestCase):
-    def test_descriptors_expose_migrated_connectors(self) -> None:
-        self.assertEqual(SLACK_DESCRIPTOR.key, ConnectorKey.SLACK)
-        self.assertTrue(SLACK_DESCRIPTOR.runtime.supports_full_sync)
-        self.assertTrue(SLACK_DESCRIPTOR.runtime.supports_incremental)
-        self.assertEqual(GITHUB_DESCRIPTOR.key, ConnectorKey.GITHUB)
-        self.assertIn("issue", GITHUB_DESCRIPTOR.runtime.targets)
-        self.assertEqual(CONFLUENCE_DESCRIPTOR.key, ConnectorKey.CONFLUENCE)
-        self.assertIn("page", CONFLUENCE_DESCRIPTOR.runtime.targets)
-
     async def test_slack_deleted_incremental_result_reports_deleted_count(self) -> None:
         repository = SimpleNamespace(delete_documents=AsyncMock())
         service = SimpleNamespace(repository=repository)

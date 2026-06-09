@@ -15,12 +15,12 @@ from typing import Protocol
 from pydantic import BaseModel
 from pydantic import Field
 
-from catchup.connector_core.domain.structure import ConnectorKey
+from catchup.db.models import SyncConnector
 
 
 class MetadataSyncRequest(BaseModel):
     """메타데이터 동기화에 필요한 최소 입력을 고정한다."""
-    connector: ConnectorKey
+    connector: SyncConnector
     tenant_id: str
     target_id: str | None = None
 
@@ -64,7 +64,7 @@ class MetadataSyncPlan:
 
 
 class MetadataSyncResult(BaseModel):
-    connector: ConnectorKey
+    connector: SyncConnector
     tenant_id: str
     target_id: str | None = None
     # Map of step_name + StepResult

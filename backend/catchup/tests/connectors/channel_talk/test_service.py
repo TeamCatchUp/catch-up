@@ -38,7 +38,7 @@ class ChannelTalkCredentialsServiceTests(IsolatedAsyncioTestCase):
         )
         self.service = ChannelTalkCredentialsService(store=self.store, client=self.client)
         self.run_in_threadpool_patcher = patch(
-            "catchup.connector_core.adapters.channel_talk.install_auth_adapter.run_in_threadpool",
+            "catchup.connectors.channel_talk.install_auth_adapter.run_in_threadpool",
             _run_immediately,
         )
         self.run_in_threadpool_patcher.start()

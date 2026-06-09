@@ -8,7 +8,6 @@ from typing import Any
 import structlog
 from sqlalchemy.orm import Session
 
-from catchup.connector_core.domain.structure import ConnectorKey
 from catchup.connectors.atlassian.oauth_client import AtlassianOAuthClient
 from catchup.connectors.atlassian.token_manager import AtlassianTokenManager
 from catchup.connectors.confluence.metadata_service import ConfluenceMetadataService
@@ -18,6 +17,7 @@ from catchup.db.atlassian import oauth_repository as atlassian_crud
 from catchup.db.channel_talk import ChannelTalkDocumentMetadataRepository
 from catchup.db.channel_talk import ChannelTalkMetadataRepository
 from catchup.db.engine import SessionLocal
+from catchup.db.models import SyncConnector
 from catchup.sync.metadata.channel_talk import ChannelTalkMetadataStore
 from catchup.sync.metadata.channel_talk import ChannelTalkMetadataSyncService
 from catchup.sync.metadata.channel_talk_documents import (
@@ -35,7 +35,7 @@ MetadataSyncRunner = Callable[[MetadataSyncRequest], Awaitable[Any]]
 
 @dataclass(frozen=True)
 class MetadataSyncRegistration:
-    connector: ConnectorKey
+    connector: SyncConnector
     runner: MetadataSyncRunner
 
 
@@ -43,11 +43,11 @@ class MetadataSyncRegistry:
     """Connector metadata capability registry."""
 
     def __init__(self) -> None:
-        self._registrations: dict[ConnectorKey, MetadataSyncRunner] = {}
+        self._registrations: dict[SyncConnector, MetadataSyncRunner] = {}
 
     def register(
         self,
-        connector: ConnectorKey,
+        connector: SyncConnector,
         runner: MetadataSyncRunner,
     ) -> None:
         self._registrations[connector] = runner

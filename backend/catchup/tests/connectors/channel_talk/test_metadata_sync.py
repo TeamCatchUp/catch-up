@@ -4,7 +4,6 @@ from types import SimpleNamespace
 from unittest import IsolatedAsyncioTestCase
 from unittest.mock import patch
 
-from catchup.connector_core.domain.structure import ConnectorKey
 from catchup.connectors.channel_talk.exceptions import ChannelTalkConflictError
 from catchup.connectors.channel_talk.exceptions import ChannelTalkValidationError
 from catchup.connectors.channel_talk.schemas.channel_connection import (
@@ -23,6 +22,7 @@ from catchup.connectors.channel_talk.schemas.channel_metadata import (
 from catchup.connectors.channel_talk.schemas.channel_metadata import (
     ChannelTalkManagerMetadataPage,
 )
+from catchup.db.models import SyncConnector
 from catchup.sync.metadata.channel_talk import ChannelTalkMetadataSyncRequest
 from catchup.sync.metadata.channel_talk import ChannelTalkMetadataSyncService
 
@@ -188,7 +188,7 @@ class ChannelTalkMetadataSyncServiceTests(IsolatedAsyncioTestCase):
         self.assertEqual(group_calls, [None])
         # channel, managers(page1/page2), groups, group-memberships까지 stage별 commit을 남긴다.
         self.assertEqual(commits, ["commit", "commit", "commit", "commit", "commit"])
-        self.assertEqual(result.connector, ConnectorKey.CHANNEL_TALK)
+        self.assertEqual(result.connector, SyncConnector.CHANNEL_TALK)
         self.assertTrue(result.channel_synced)
         self.assertEqual(result.managers_synced, 2)
         self.assertEqual(result.groups_synced, 1)

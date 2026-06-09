@@ -9,91 +9,14 @@ from unittest.mock import patch
 
 from pydantic import ValidationError
 
-from catchup.sync.ingestion.adapters.channel_talk.article_full_sync import (
-    ChannelTalkArticleFullSyncIngestionAdapter,
-)
-from catchup.sync.ingestion.adapters.channel_talk.user_chat_full_sync import (
-    ChannelTalkUserChatFullSyncIngestionAdapter,
-)
-from catchup.sync.ingestion.adapters.channel_talk.user_chat_incremental import (
-    ChannelTalkUserChatIncrementalIngestionAdapter,
-)
-from catchup.connector_core.descriptors.channel_talk import CHANNEL_TALK_DESCRIPTOR
-from catchup.connector_core.domain.structure import ConnectorKey
-from catchup.sync.ingestion.adapters.channel_talk.user_chat_models import (
-    ChannelTalkFetchedUserChat,
-)
-from catchup.sync.ingestion.adapters.channel_talk.user_chat_models import (
-    ChannelTalkFetchedUserChatsResult,
-)
-from catchup.sync.ingestion.adapters.channel_talk.user_chat_models import (
-    ChannelTalkUserChatFullSyncCheckpoint,
-)
-from catchup.sync.ingestion.adapters.channel_talk.user_chat_models import (
-    ChannelTalkUserChatFullSyncConnection,
-)
-from catchup.sync.ingestion.adapters.channel_talk.user_chat_models import (
-    ChannelTalkUserChatFullSyncFetchResult,
-)
-from catchup.sync.ingestion.adapters.channel_talk.user_chat_models import (
-    ChannelTalkUserChatFullSyncPersistResult,
-)
-from catchup.sync.ingestion.adapters.channel_talk.user_chat_models import (
-    ChannelTalkUserChatFullSyncSummaryResult,
-)
-from catchup.sync.ingestion.adapters.channel_talk.user_chat_models import (
-    ChannelTalkUserChatFullSyncTransformResult,
-)
-from catchup.sync.ingestion.adapters.channel_talk.user_chat_models import (
-    ChannelTalkUserChatIncrementalExecutionRequest,
-)
-from catchup.sync.ingestion.adapters.channel_talk.user_chat_models import (
-    ChannelTalkUserChatIncrementalExecutionResult,
-)
-from catchup.sync.ingestion.adapters.channel_talk.user_chat_models import (
-    ChannelTalkUserChatSyncExecutionRequest,
-)
-from catchup.sync.ingestion.adapters.channel_talk.user_chat_models import (
-    ChannelTalkUserChatSyncExecutionResult,
-)
 from catchup.connectors.channel_talk.core.user_chat_message_renderer import (
     UserChatMessageRenderer,
-)
-from catchup.sync.ingestion.adapters.channel_talk.article_models import (
-    DEFAULT_ARTICLE_FULL_SYNC_STATES,
-)
-from catchup.sync.ingestion.adapters.channel_talk.article_models import (
-    ChannelTalkArticleFullSyncFetchResult,
-)
-from catchup.sync.ingestion.adapters.channel_talk.article_models import (
-    ChannelTalkArticleFullSyncPersistResult,
-)
-from catchup.sync.ingestion.adapters.channel_talk.article_models import (
-    ChannelTalkArticleFullSyncSummaryResult,
-)
-from catchup.sync.ingestion.adapters.channel_talk.article_models import (
-    ChannelTalkArticleFullSyncTransformResult,
-)
-from catchup.sync.ingestion.adapters.channel_talk.article_models import (
-    ChannelTalkArticleSyncExecutionRequest,
-)
-from catchup.sync.ingestion.adapters.channel_talk.article_models import (
-    ChannelTalkArticleSyncExecutionResult,
-)
-from catchup.sync.ingestion.adapters.channel_talk.article_models import (
-    ChannelTalkFetchedArticle,
-)
-from catchup.sync.ingestion.adapters.channel_talk.article_models import (
-    ChannelTalkFetchedArticlesResult,
 )
 from catchup.connectors.channel_talk.full_sync_target_contract import (
     CHANNEL_TALK_DOCUMENT_ARTICLE_DISPLAY_NAME,
 )
 from catchup.connectors.channel_talk.full_sync_target_contract import (
     CHANNEL_TALK_DOCUMENT_ARTICLE_RUNTIME_TARGET,
-)
-from catchup.connectors.channel_talk.full_sync_target_contract import (
-    CHANNEL_TALK_USER_CHAT_RUNTIME_TARGET,
 )
 from catchup.connectors.channel_talk.full_sync_target_contract import (
     ChannelTalkFullSyncTargetPlan,
@@ -132,6 +55,78 @@ from catchup.connectors.channel_talk.schemas.user_chat_message import (
 )
 from catchup.db.models import SyncConnector
 from catchup.sync.audit import SyncAuditContext
+from catchup.sync.ingestion.adapters.channel_talk.article_full_sync import (
+    ChannelTalkArticleFullSyncIngestionAdapter,
+)
+from catchup.sync.ingestion.adapters.channel_talk.article_models import (
+    DEFAULT_ARTICLE_FULL_SYNC_STATES,
+)
+from catchup.sync.ingestion.adapters.channel_talk.article_models import (
+    ChannelTalkArticleFullSyncFetchResult,
+)
+from catchup.sync.ingestion.adapters.channel_talk.article_models import (
+    ChannelTalkArticleFullSyncPersistResult,
+)
+from catchup.sync.ingestion.adapters.channel_talk.article_models import (
+    ChannelTalkArticleFullSyncSummaryResult,
+)
+from catchup.sync.ingestion.adapters.channel_talk.article_models import (
+    ChannelTalkArticleFullSyncTransformResult,
+)
+from catchup.sync.ingestion.adapters.channel_talk.article_models import (
+    ChannelTalkArticleSyncExecutionRequest,
+)
+from catchup.sync.ingestion.adapters.channel_talk.article_models import (
+    ChannelTalkArticleSyncExecutionResult,
+)
+from catchup.sync.ingestion.adapters.channel_talk.article_models import (
+    ChannelTalkFetchedArticle,
+)
+from catchup.sync.ingestion.adapters.channel_talk.article_models import (
+    ChannelTalkFetchedArticlesResult,
+)
+from catchup.sync.ingestion.adapters.channel_talk.user_chat_full_sync import (
+    ChannelTalkUserChatFullSyncIngestionAdapter,
+)
+from catchup.sync.ingestion.adapters.channel_talk.user_chat_incremental import (
+    ChannelTalkUserChatIncrementalIngestionAdapter,
+)
+from catchup.sync.ingestion.adapters.channel_talk.user_chat_models import (
+    ChannelTalkFetchedUserChat,
+)
+from catchup.sync.ingestion.adapters.channel_talk.user_chat_models import (
+    ChannelTalkFetchedUserChatsResult,
+)
+from catchup.sync.ingestion.adapters.channel_talk.user_chat_models import (
+    ChannelTalkUserChatFullSyncCheckpoint,
+)
+from catchup.sync.ingestion.adapters.channel_talk.user_chat_models import (
+    ChannelTalkUserChatFullSyncConnection,
+)
+from catchup.sync.ingestion.adapters.channel_talk.user_chat_models import (
+    ChannelTalkUserChatFullSyncFetchResult,
+)
+from catchup.sync.ingestion.adapters.channel_talk.user_chat_models import (
+    ChannelTalkUserChatFullSyncPersistResult,
+)
+from catchup.sync.ingestion.adapters.channel_talk.user_chat_models import (
+    ChannelTalkUserChatFullSyncSummaryResult,
+)
+from catchup.sync.ingestion.adapters.channel_talk.user_chat_models import (
+    ChannelTalkUserChatFullSyncTransformResult,
+)
+from catchup.sync.ingestion.adapters.channel_talk.user_chat_models import (
+    ChannelTalkUserChatIncrementalExecutionRequest,
+)
+from catchup.sync.ingestion.adapters.channel_talk.user_chat_models import (
+    ChannelTalkUserChatIncrementalExecutionResult,
+)
+from catchup.sync.ingestion.adapters.channel_talk.user_chat_models import (
+    ChannelTalkUserChatSyncExecutionRequest,
+)
+from catchup.sync.ingestion.adapters.channel_talk.user_chat_models import (
+    ChannelTalkUserChatSyncExecutionResult,
+)
 from catchup.sync.ingestion.pipeline import run_sync_ingestion
 from catchup.sync.ingestion.schemas import SyncExecutionRequest
 from catchup.sync.ingestion.schemas import SyncExecutionResult
@@ -420,7 +415,7 @@ class ChannelTalkFullSyncContractTests(TestCase):
             tenant_id="channel-123",
         )
 
-        self.assertEqual(execution.connector, ConnectorKey.CHANNEL_TALK)
+        self.assertEqual(execution.connector, SyncConnector.CHANNEL_TALK)
         self.assertEqual(execution.channel_id, "channel-123")
         self.assertEqual(execution.target, "user_chat")
         self.assertNotIn("stage", execution.model_dump())
@@ -464,18 +459,6 @@ class ChannelTalkFullSyncContractTests(TestCase):
 
         self.assertEqual(checkpoint.target, "user_chat")
         self.assertNotIn("stage", checkpoint.model_dump())
-
-    def test_descriptor_exposes_channel_talk_full_sync_targets(self) -> None:
-        descriptor = CHANNEL_TALK_DESCRIPTOR
-
-        self.assertTrue(descriptor.runtime.supports_full_sync)
-        self.assertEqual(
-            descriptor.runtime.targets,
-            (
-                CHANNEL_TALK_USER_CHAT_RUNTIME_TARGET,
-                CHANNEL_TALK_DOCUMENT_ARTICLE_RUNTIME_TARGET,
-            ),
-        )
 
     def test_document_space_plan_metadata_describes_real_target(self) -> None:
         metadata = ChannelTalkFullSyncTargetPlan.document_space(
@@ -639,7 +622,7 @@ class ChannelTalkArticleSyncIngestionRunnerTests(IsolatedAsyncioTestCase):
             result.persisted,
             ChannelTalkArticleFullSyncPersistResult,
         )
-        self.assertEqual(result.connector, ConnectorKey.CHANNEL_TALK)
+        self.assertEqual(result.connector, SyncConnector.CHANNEL_TALK)
         self.assertEqual(result.target, CHANNEL_TALK_DOCUMENT_ARTICLE_RUNTIME_TARGET)
         self.assertEqual(result.channel_id, "channel-123")
         self.assertEqual(result.space_id, "space-123")
@@ -756,7 +739,7 @@ class SyncIngestionRunnerTests(IsolatedAsyncioTestCase):
                     f"build_result:{fetched}:{transformed}:{summary}:{persisted}"
                 )
                 return SyncExecutionResult(
-                    connector=ConnectorKey.CHANNEL_TALK,
+                    connector=SyncConnector.CHANNEL_TALK,
                     tenant_id=execution.tenant_id,
                     target=execution.target,
                 )
@@ -764,7 +747,7 @@ class SyncIngestionRunnerTests(IsolatedAsyncioTestCase):
         result = await run_sync_ingestion(
             port=_Port(),
             execution=SyncExecutionRequest(
-                connector=ConnectorKey.CHANNEL_TALK,
+                connector=SyncConnector.CHANNEL_TALK,
                 tenant_id="tenant-123",
                 target="user_chat",
             ),
@@ -840,7 +823,7 @@ class SyncIngestionRunnerTests(IsolatedAsyncioTestCase):
         self.assertIsInstance(
             result.persisted, ChannelTalkUserChatFullSyncPersistResult
         )
-        self.assertEqual(result.connector, ConnectorKey.CHANNEL_TALK)
+        self.assertEqual(result.connector, SyncConnector.CHANNEL_TALK)
         self.assertEqual(result.channel_id, "channel-123")
         self.assertNotIn("stage", result.model_dump())
         self.assertNotIn("stage", result.fetched.model_dump())

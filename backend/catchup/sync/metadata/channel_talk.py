@@ -13,7 +13,6 @@ from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel
 from pydantic import field_validator
 
-from catchup.connector_core.domain.structure import ConnectorKey
 from catchup.connectors.channel_talk.core.client import ChannelTalkCoreApiClient
 from catchup.connectors.channel_talk.exceptions import ChannelTalkConflictError
 from catchup.connectors.channel_talk.exceptions import ChannelTalkError
@@ -38,6 +37,7 @@ from catchup.connectors.channel_talk.schemas.channel_metadata import (
 from catchup.connectors.channel_talk.schemas.channel_metadata import (
     ChannelTalkManagerMetadataPage,
 )
+from catchup.db.models import SyncConnector
 from catchup.sync.metadata.schemas import MetadataSyncPlan
 from catchup.sync.metadata.schemas import MetadataSyncRequest
 from catchup.sync.metadata.schemas import MetadataSyncResult
@@ -68,13 +68,13 @@ class ChannelTalkMetadataSyncRequest(BaseModel):
 
     def to_metadata_request(self) -> MetadataSyncRequest:
         return MetadataSyncRequest(
-            connector=ConnectorKey.CHANNEL_TALK,
+            connector=SyncConnector.CHANNEL_TALK,
             tenant_id=self.channel_id,
         )
 
 
 class ChannelTalkMetadataSyncResult(BaseModel):
-    connector: ConnectorKey
+    connector: SyncConnector
     channel_id: str
     channel_synced: bool = False
     managers_synced: int = 0

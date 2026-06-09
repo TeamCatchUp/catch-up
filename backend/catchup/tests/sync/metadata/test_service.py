@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from unittest import IsolatedAsyncioTestCase
 
-from catchup.connector_core.domain.structure import ConnectorKey
+from catchup.db.models import SyncConnector
 from catchup.sync.metadata.schemas import MetadataSyncPlan
 from catchup.sync.metadata.schemas import MetadataSyncRequest
 from catchup.sync.metadata.schemas import MetadataSyncResult
@@ -118,7 +118,7 @@ class MetadataSyncServiceTests(IsolatedAsyncioTestCase):
 
         result = await service.sync_metadata(
             MetadataSyncRequest(
-                connector=ConnectorKey.CHANNEL_TALK,
+                connector=SyncConnector.CHANNEL_TALK,
                 tenant_id="channel-123",
             )
         )
@@ -131,7 +131,7 @@ class MetadataSyncServiceTests(IsolatedAsyncioTestCase):
                 "gamma:channel-123:1",
             ],
         )
-        self.assertEqual(result.connector, ConnectorKey.CHANNEL_TALK)
+        self.assertEqual(result.connector, SyncConnector.CHANNEL_TALK)
         self.assertEqual(result.tenant_id, "channel-123")
         self.assertIsInstance(result, MetadataSyncResult)
         self.assertEqual(sorted(result.steps), ["alpha", "beta", "gamma"])
@@ -148,7 +148,7 @@ class MetadataSyncServiceTests(IsolatedAsyncioTestCase):
 
         await service.sync_metadata(
             MetadataSyncRequest(
-                connector=ConnectorKey.CHANNEL_TALK,
+                connector=SyncConnector.CHANNEL_TALK,
                 tenant_id="channel-123",
             )
         )
@@ -171,7 +171,7 @@ class MetadataSyncServiceTests(IsolatedAsyncioTestCase):
         with self.assertRaisesRegex(RuntimeError, "metadata sync failed"):
             await service.sync_metadata(
                 MetadataSyncRequest(
-                    connector=ConnectorKey.CHANNEL_TALK,
+                    connector=SyncConnector.CHANNEL_TALK,
                     tenant_id="channel-123",
                 )
             )

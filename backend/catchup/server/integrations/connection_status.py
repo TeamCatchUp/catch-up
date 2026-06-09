@@ -2,11 +2,16 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from contextlib import contextmanager
+from datetime import datetime
+from enum import StrEnum
+from typing import Any
 from typing import Iterator
+from typing import Protocol
 
+from pydantic import BaseModel
+from pydantic import Field
 from sqlalchemy.orm import Session
 
-from catchup.connector_core.ports.connection_status import ConnectionStatusItem
 from catchup.db.atlassian import oauth_repository as atlassian_oauth_repository
 from catchup.db.channel_talk.repository import ChannelTalkCredentialsRepository
 from catchup.db.channel_talk.repository import ChannelTalkDocumentCredentialsRepository
@@ -17,14 +22,122 @@ from catchup.db.slack import oauth_repository as slack_oauth_repository
 SessionFactory = Callable[[], Session]
 
 
+class ConnectionType(StrEnum):
+    OAUTH_TOKEN = "oauth_token"
+    CREDENTIAL = "credential"
+    INSTALLATION = "installation"
+
+
+class ConnectionStatusItem(BaseModel):
+    id: str
+    name: str | None = None
+    connected_at: datetime | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class ConnectionStatus(BaseModel):
+    vendor: str
+    connected: bool
+    connection_type: ConnectionType
+    count: int
+    items: list[ConnectionStatusItem] = Field(default_factory=list)
+
+
+class ConnectionStatusProvider(Protocol):
+    def list_github_installation_items(self) -> list[ConnectionStatusItem]: ...
+
+    def list_slack_oauth_token_items(self) -> list[ConnectionStatusItem]: ...
+
+    def list_atlassian_oauth_token_items(self) -> list[ConnectionStatusItem]: ...
+
+    def list_channel_talk_credential_items(self) -> list[ConnectionStatusItem]: ...
+
+
+ConnectionStatusItemLoader = Callable[
+    [ConnectionStatusProvider],
+    list[ConnectionStatusItem],
+]
+
+CONNECTION_STATUS_VENDOR_LOADERS: dict[
+    str,
+    tuple[ConnectionType, ConnectionStatusItemLoader],
+] = {
+    "github": (
+        ConnectionType.INSTALLATION,
+        lambda provider: provider.list_github_installation_items(),
+    ),
+    "slack": (
+        ConnectionType.OAUTH_TOKEN,
+        lambda provider: provider.list_slack_oauth_token_items(),
+    ),
+    "atlassian": (
+        ConnectionType.OAUTH_TOKEN,
+        lambda provider: provider.list_atlassian_oauth_token_items(),
+    ),
+    "jira": (
+        ConnectionType.OAUTH_TOKEN,
+        lambda provider: provider.list_atlassian_oauth_token_items(),
+    ),
+    "confluence": (
+        ConnectionType.OAUTH_TOKEN,
+        lambda provider: provider.list_atlassian_oauth_token_items(),
+    ),
+    "channel_talk": (
+        ConnectionType.CREDENTIAL,
+        lambda provider: provider.list_channel_talk_credential_items(),
+    ),
+}
+
+
 def split_scopes(scopes: str | None) -> list[str]:
     if not scopes:
         return []
     return [scope for scope in scopes.split() if scope]
 
 
+def normalize_vendor(vendor: str) -> str:
+    return vendor.strip().lower()
+
+
+def build_connection_status(
+    *,
+    vendor: str,
+    connection_type: ConnectionType,
+    items: list[ConnectionStatusItem],
+) -> ConnectionStatus:
+    return ConnectionStatus(
+        vendor=vendor,
+        connected=bool(items),
+        connection_type=connection_type,
+        count=len(items),
+        items=items,
+    )
+
+
+class ConnectionStatusApplication:
+    def __init__(
+        self,
+        *,
+        provider: ConnectionStatusProvider,
+    ) -> None:
+        self.provider = provider
+
+    def get_status(self, *, vendor: str) -> ConnectionStatus | None:
+        normalized_vendor = normalize_vendor(vendor)
+        status_loader = CONNECTION_STATUS_VENDOR_LOADERS.get(normalized_vendor)
+        if status_loader is None:
+            return None
+
+        connection_type, load_items = status_loader
+        return build_connection_status(
+            vendor=normalized_vendor,
+            connection_type=connection_type,
+            items=load_items(self.provider),
+        )
+
+
 class ConnectionStatusAdapter:
-    """기존 repository 조회를 connection-status port 뒤로 감싸는 adapter."""
+    """Integration API DB 조회 adapter."""
 
     def __init__(
         self,

@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from datetime import timezone
 
-from catchup.connector_core.domain.structure import ConnectorKey
+from catchup.db.models import SyncConnector
 from catchup.sync.ingestion import SyncExecutionRequest
 from catchup.sync.ingestion import SyncExecutionResult
 from catchup.sync.ingestion import SyncWindow
@@ -11,18 +11,18 @@ from catchup.sync.ingestion import SyncWindow
 
 def test_sync_ingestion_contract_accepts_legacy_connector_key_values() -> None:
     request = SyncExecutionRequest(
-        connector=ConnectorKey.JIRA,
+        connector=SyncConnector.JIRA,
         tenant_id="cloud-123",
         target="issue",
     )
     result = SyncExecutionResult(
-        connector=ConnectorKey.JIRA,
+        connector=SyncConnector.JIRA,
         tenant_id="cloud-123",
         target="issue",
     )
 
-    assert request.connector == ConnectorKey.JIRA
-    assert result.connector == ConnectorKey.JIRA
+    assert request.connector == SyncConnector.JIRA
+    assert result.connector == SyncConnector.JIRA
 
 
 def test_sync_window_rejects_reversed_bounds() -> None:

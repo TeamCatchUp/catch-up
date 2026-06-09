@@ -5,11 +5,11 @@ from datetime import timezone
 from typing import Callable
 from typing import Generic
 
-from catchup.connector_core.ports.install_auth import InstallAuthPort
-from catchup.connector_core.ports.install_auth import RequestT
-from catchup.connector_core.ports.install_auth import StatusT
-from catchup.connector_core.ports.install_auth import UninstallResultT
-from catchup.connector_core.ports.install_auth import ValidatedT
+from catchup.connectors.channel_talk.install_auth_port import InstallAuthPort
+from catchup.connectors.channel_talk.install_auth_port import RequestT
+from catchup.connectors.channel_talk.install_auth_port import StatusT
+from catchup.connectors.channel_talk.install_auth_port import UninstallResultT
+from catchup.connectors.channel_talk.install_auth_port import ValidatedT
 
 
 def _utcnow() -> datetime:

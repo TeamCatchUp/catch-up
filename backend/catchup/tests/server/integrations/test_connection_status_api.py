@@ -10,16 +10,12 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from catchup.auth.dependencies import require_admin_user
-from catchup.connector_core.adapters.connection_status.connection_status import (
-    ConnectionStatusAdapter,
-)
-from catchup.connector_core.application.connection_status import (
-    ConnectionStatusApplication,
-)
-from catchup.connector_core.ports.connection_status import ConnectionStatus
-from catchup.connector_core.ports.connection_status import ConnectionStatusItem
-from catchup.connector_core.ports.connection_status import ConnectionType
 from catchup.server.integrations.api import router
+from catchup.server.integrations.connection_status import ConnectionStatus
+from catchup.server.integrations.connection_status import ConnectionStatusAdapter
+from catchup.server.integrations.connection_status import ConnectionStatusApplication
+from catchup.server.integrations.connection_status import ConnectionStatusItem
+from catchup.server.integrations.connection_status import ConnectionType
 
 
 class IntegrationConnectionStatusApiTests(TestCase):
@@ -169,7 +165,7 @@ class IntegrationConnectionStatusQueryTests(TestCase):
         )
 
         with patch(
-            "catchup.connector_core.adapters.connection_status.connection_status.slack_oauth_repository.get_all_slack_tokens",
+            "catchup.server.integrations.connection_status.slack_oauth_repository.get_all_slack_tokens",
             return_value=db.rows,
         ):
             items = ConnectionStatusAdapter(
@@ -193,11 +189,11 @@ class IntegrationConnectionStatusQueryTests(TestCase):
 
         with (
             patch(
-                "catchup.connector_core.adapters.connection_status.connection_status.ChannelTalkCredentialsRepository.list_connections",
+                "catchup.server.integrations.connection_status.ChannelTalkCredentialsRepository.list_connections",
                 return_value=[channel_record],
             ),
             patch(
-                "catchup.connector_core.adapters.connection_status.connection_status.ChannelTalkDocumentCredentialsRepository.list_document_connections",
+                "catchup.server.integrations.connection_status.ChannelTalkDocumentCredentialsRepository.list_document_connections",
                 return_value=[],
             ),
         ):
