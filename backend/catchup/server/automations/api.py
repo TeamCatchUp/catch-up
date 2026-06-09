@@ -4,6 +4,7 @@ import asyncio
 import uuid
 from typing import Annotated
 from typing import Any
+from typing import Literal
 
 from fastapi import APIRouter
 from fastapi import Depends
@@ -13,11 +14,11 @@ from pydantic import BaseModel
 from pydantic import ConfigDict
 from pydantic import Field
 from sqlalchemy import select
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from catchup.agents.schemas import AgentSpec as AgentSpecSchema
 from catchup.auth.dependencies import get_current_user
+from catchup.automations.config import INQUIRY_AUTOMATION_PRESET_KEY
+from catchup.automations.config import InquiryAutomationConfig
 from catchup.connectors.slack.client import SlackApiClientWrapper
 from catchup.connectors.slack.client import SlackConnectorApiError
 from catchup.db.agent_triggers import AgentTriggerDefinition
@@ -33,14 +34,11 @@ from catchup.db.models import UserWorkspace
 from catchup.db.slack.oauth_repository import get_slack_token_by_id
 
 router = APIRouter(
-    prefix="/api/v1/agent/build",
-    tags=["agent-build"],
+    prefix="/api/v1/automations/inqueries",
+    tags=["automations"],
 )
 
-PRESET_KEY = "channel_talk_slack_response_guide"
-SLACK_FIND_TOOL_NAME = "slack.find_channel_talk_user_chat_message"
-SLACK_SEND_TOOL_NAME = "slack.send_thread_message"
-AGENT_ID_NAMESPACE = uuid.UUID("8d94ed94-b9c1-47b6-8716-e7a69e778a95")
+_AGENT_ID_NAMESPACE = uuid.UUID("8d94ed94-b9c1-47b6-8716-e7a69e778a95")
 
 
 class SlackChannelSelection(BaseModel):
@@ -51,48 +49,133 @@ class SlackChannelSelection(BaseModel):
     channel_name: str | None = Field(default=None, min_length=1)
 
 
-class TempAgentPublishRequest(BaseModel):
+class InquiryAutomationPublishRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    preset_key: str = PRESET_KEY
     channel_talk_credential_id: int = Field(gt=0)
     quiet_period_seconds: int = Field(ge=1, le=86_400)
     slack_channel: SlackChannelSelection
+    guide_instruction: str | None = None
 
 
-class TempAgentPublishResponse(BaseModel):
+class InquiryAutomationItem(BaseModel):
     agent_spec_id: int
-    preset_key: str
+    status: AgentStatus
+    channel_talk_credential_id: int
+    slack_channel_id: str
+    slack_credential_id: int
+    guide_instruction: str | None
+    quiet_period_seconds: int | None
+    trigger_id: int | None
+
+
+class InquiryAutomationUpdateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    status: Literal[AgentStatus.ACTIVE, AgentStatus.INACTIVE]
+
+
+class InquiryAutomationPublishResponse(BaseModel):
+    agent_spec_id: int
     trigger_id: int
     status: AgentStatus
     channel_talk_channel_id: str
     channel_talk_channel_name: str
     quiet_period_seconds: int
     slack_channel_id: str
-    configured_reference_tools: list[str]
     start_event_type: str
     reset_event_types: list[str]
 
 
-@router.post(
-    "/temp/publish",
-    response_model=TempAgentPublishResponse,
+@router.get(
+    "",
+    response_model=list[InquiryAutomationItem],
     status_code=status.HTTP_200_OK,
-    summary="문의 자동화 v0 빌드 및 Publish MVP 엔드포인트",
+    summary="채널톡 문의 자동화 목록 조회",
 )
-def publish_temp_agent(
-    body: TempAgentPublishRequest,
+def list_inquiry_automations(
     db: Annotated[Session, Depends(get_db)],
     current_user: Annotated[User, Depends(get_current_user)],
-) -> TempAgentPublishResponse:
-    """Preset 기반 AgentSpec/Trigger를 신규 생성하고 즉시 활성화한다."""
-
-    if body.preset_key != PRESET_KEY:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Unsupported preset_key",
+) -> list[InquiryAutomationItem]:
+    """워크스페이스에 등록된 문의 자동화 설정 목록을 반환한다."""
+    workspace_id = _resolve_user_workspace_id(db, current_user.id)
+    rows = db.scalars(
+        select(AgentSpec).where(
+            AgentSpec.workspace_id == workspace_id,
+            AgentSpec.spec["preset_key"].as_string()
+            == INQUIRY_AUTOMATION_PRESET_KEY,
         )
+    ).all()
 
+    items = []
+    for row in rows:
+        try:
+            config = InquiryAutomationConfig.model_validate(row.spec)
+        except Exception:
+            continue
+        trigger = row.triggers[0] if row.triggers else None
+        quiet_period_seconds = None
+        if trigger is not None:
+            quiet_period_seconds = trigger.condition.get("quiet_period_seconds")
+        items.append(
+            InquiryAutomationItem(
+                agent_spec_id=row.id,
+                status=row.status,
+                channel_talk_credential_id=config.channel_talk_credential_id,
+                slack_channel_id=config.slack_channel_id,
+                slack_credential_id=config.slack_credential_id,
+                guide_instruction=config.guide_instruction,
+                quiet_period_seconds=quiet_period_seconds,
+                trigger_id=trigger.id if trigger is not None else None,
+            )
+        )
+    return items
+
+
+@router.patch(
+    "/{agent_spec_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="채널톡 문의 자동화 상태 변경",
+)
+def update_inquiry_automation(
+    agent_spec_id: int,
+    body: InquiryAutomationUpdateRequest,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> None:
+    """문의 자동화 상태를 변경한다. inactive로 비활성화, active로 재활성화한다."""
+    workspace_id = _resolve_user_workspace_id(db, current_user.id)
+    agent_spec = db.scalar(
+        select(AgentSpec)
+        .where(
+            AgentSpec.id == agent_spec_id,
+            AgentSpec.workspace_id == workspace_id,
+            AgentSpec.spec["preset_key"].as_string()
+            == INQUIRY_AUTOMATION_PRESET_KEY,
+        )
+        .with_for_update()
+    )
+    if agent_spec is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Automation not found",
+        )
+    agent_spec.status = body.status
+    db.commit()
+
+
+@router.post(
+    "/publish",
+    response_model=InquiryAutomationPublishResponse,
+    status_code=status.HTTP_200_OK,
+    summary="채널톡 문의 자동화 설정 생성 및 활성화",
+)
+def publish_inquiry_automation(
+    body: InquiryAutomationPublishRequest,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> InquiryAutomationPublishResponse:
+    """채널톡-슬랙 문의 자동화 설정을 신규 생성하고 즉시 활성화한다."""
     workspace_id = _resolve_user_workspace_id(db, current_user.id)
 
     channel_talk_credential = ChannelTalkCredentialsRepository(
@@ -111,40 +194,38 @@ def publish_temp_agent(
 
     slack_reference = _resolve_slack_channel_reference(db, body.slack_channel)
 
-
-    agent_id = _build_preset_agent_id(
+    agent_id = _build_agent_id(
         workspace_id=workspace_id,
-        preset_key=body.preset_key,
+        preset_key=INQUIRY_AUTOMATION_PRESET_KEY,
         channel_talk_channel_id=channel_talk_credential.channel_id,
         slack_channel_id=str(slack_reference["channel_id"]),
     )
-    existing_agent_spec = db.scalar(
+    config = InquiryAutomationConfig(
+        preset_key=INQUIRY_AUTOMATION_PRESET_KEY,
+        channel_talk_credential_id=body.channel_talk_credential_id,
+        slack_channel_id=str(slack_reference["channel_id"]),
+        slack_credential_id=slack_reference["credential_id"],
+        guide_instruction=body.guide_instruction,
+    )
+    agent_spec = db.scalar(
         select(AgentSpec)
         .where(AgentSpec.agent_id == agent_id)
         .with_for_update()
     )
-    if existing_agent_spec is not None:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="AgentSpec already exists for this preset and channel selection",
+    if agent_spec is not None:
+        agent_spec.spec = config.model_dump(mode="json")
+        agent_spec.status = AgentStatus.ACTIVE
+    else:
+        agent_spec = AgentSpec(
+            agent_id=agent_id,
+            workspace_id=workspace_id,
+            user_id=current_user.id,
+            spec=config.model_dump(mode="json"),
+            status=AgentStatus.ACTIVE,
         )
-
-    #  Preset spec에 고객사 Slack reference 값을 주입해 완성된 AgentSpec을 만든다.
-    references = _build_references(
-        slack_reference=slack_reference,
-    )
-    spec = _build_preset_agent_spec(references=references)
-    agent_spec = AgentSpec(
-        agent_id=agent_id,
-        workspace_id=workspace_id,
-        user_id=current_user.id,
-        spec=spec.model_dump(mode="json"),
-        status=AgentStatus.ACTIVE,
-    )
-    db.add(agent_spec)
+        db.add(agent_spec)
     db.flush()
 
-    # Trigger condition & Trigger Subscription 생성
     condition = _build_channel_talk_debounce_condition(
         channel_id=channel_talk_credential.channel_id,
         quiet_period_seconds=body.quiet_period_seconds,
@@ -155,7 +236,9 @@ def publish_temp_agent(
             AgentTriggerDefinition(
                 agent_spec_id=agent_spec.id,
                 workspace_id=agent_spec.workspace_id,
-                name=f"Channel Talk debounce - {channel_talk_credential.channel_name}",
+                name=(
+                    f"Channel Talk debounce - {channel_talk_credential.channel_name}"
+                ),
                 source="channel_talk",
                 event_type="user_chat.created",
                 condition=condition,
@@ -171,26 +254,18 @@ def publish_temp_agent(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(exc),
         ) from exc
-    except IntegrityError as exc:
-        db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="AgentSpec already exists for this preset and channel selection",
-        ) from exc
     except Exception:
         db.rollback()
         raise
 
-    return TempAgentPublishResponse(
+    return InquiryAutomationPublishResponse(
         agent_spec_id=agent_spec.id,
-        preset_key=body.preset_key,
         trigger_id=trigger.id,
         status=agent_spec.status,
         channel_talk_channel_id=channel_talk_credential.channel_id,
         channel_talk_channel_name=channel_talk_credential.channel_name,
         quiet_period_seconds=body.quiet_period_seconds,
         slack_channel_id=str(slack_reference["channel_id"]),
-        configured_reference_tools=sorted(references.keys()),
         start_event_type="user_chat.created",
         reset_event_types=["user_chat.new_message"],
     )
@@ -211,7 +286,7 @@ def _resolve_user_workspace_id(db: Session, user_id: int) -> int:
     return workspace_link.workspace_id
 
 
-def _build_preset_agent_id(
+def _build_agent_id(
     *,
     workspace_id: int,
     preset_key: str,
@@ -219,7 +294,7 @@ def _build_preset_agent_id(
     slack_channel_id: str,
 ) -> uuid.UUID:
     return uuid.uuid5(
-        AGENT_ID_NAMESPACE,
+        _AGENT_ID_NAMESPACE,
         ":".join(
             [
                 str(workspace_id),
@@ -304,81 +379,6 @@ def _validate_slack_channel_history_access(
             ),
         ) from exc
 
-
-def _build_references(
-    *,
-    slack_reference: dict[str, Any],
-) -> dict[str, list[dict[str, Any]]]:
-    slack_reference_key = str(slack_reference["channel_name"])
-    slack_value = {
-        "channel_id": slack_reference["channel_id"],
-        "credential_id": slack_reference["credential_id"],
-    }
-    references: dict[str, list[dict[str, Any]]] = {}
-    for tool_name in (SLACK_FIND_TOOL_NAME, SLACK_SEND_TOOL_NAME):
-        references[tool_name] = [
-            {
-                "argument": "channel_name",
-                "kind": "slack_channel",
-                "values": {
-                    slack_reference_key: slack_value,
-                },
-            }
-        ]
-    return references
-
-
-def _build_preset_agent_spec(
-    *,
-    references: dict[str, list[dict[str, Any]]],
-) -> AgentSpecSchema:
-    return AgentSpecSchema.model_validate(
-        {
-            "agent_id": PRESET_KEY,
-            "name": "Channel Talk Slack Response Guide",
-            "system_prompt": {
-                "role": "채널톡으로 인입된 고객 문의를 분석하고, 지식베이스를 검색해 관련 맥락을 찾은 뒤 CS 담당자가 바로 활용할 수 있는 문의대응 가이드 초안을 작성하는 에이전트입니다.",
-                "background": "B2B SaaS 고객사. 고객 문의는 결제/기술/일반 세 카테고리로 분류됩니다. CS 담당자는 초안을 바탕으로 고객에게 직접 답변합니다.",
-                "execution_guidelines": (
-                    "Step 1: [No tool] Read the customer inquiry from the user input field named 'channel_talk_user_chat_context'. This context contains the accumulated Channel Talk UserChat messages available at execution time. If the content is not a substantive inquiry (e.g., a greeting, thank-you, acknowledgement, or single-word response), skip Steps 2–3 and prepare a natural Korean guide draft. Otherwise, classify the inquiry into one of: 결제 / 기술 / 일반.\n"
-                    "Step 2: [catchup_kb.search × 1–3] Search the knowledge base. Always set original_query to the exact value of the user input field 'channel_talk_user_chat_context'. Set query to an English semantic search phrase targeting a specific aspect of the inquiry. Repeat with a different query angle if the returned passages are insufficient or miss key aspects — each call accumulates results independently.\n"
-                    "Step 3: [catchup_kb.rerank × 1] Once all searches are done, rerank the accumulated results. Set original_query to the exact value of the user input field 'channel_talk_user_chat_context'. Returns the final ranked passages — do not expect a generated answer.\n"
-                    "Step 4: [No tool] Write a response guide draft in Korean for the CS agent. Structure: (1) 문의 요약 (one sentence), (2) 관련 맥락 (key facts from passages, or '확인된 관련 문서 없음' if search was skipped/insufficient), (3) 권장 답변 초안 (2-3 sentences the CS agent can send to the customer).\n"
-                    "Step 5: [slack.find_channel_talk_user_chat_message × 1] Find the Slack message linked to this Channel Talk UserChat. Use channel_name='채널톡 연동 채널'. Set user_chat_id to the exact value of the user input field 'channel_talk_user_chat_id'.\n"
-                    "Step 6: [slack.send_thread_message × 1] Send the Korean response guide draft from Step 4 to the Slack thread found in Step 5. Use channel_name='채널톡 연동 채널'. Set message_ts to the message_ts returned by Step 5. Set message to the full guide draft. If Slack lookup or delivery fails, do not retry manually; return the guide draft and mention that Slack delivery failed."
-                ),
-            },
-            "tools": [
-                {
-                    "name": "catchup_kb.search",
-                    "max_retry": 1,
-                    "failure_policy": "skip",
-                },
-                {
-                    "name": "catchup_kb.rerank",
-                    "max_retry": 1,
-                    "failure_policy": "skip",
-                },
-                {
-                    "name": SLACK_FIND_TOOL_NAME,
-                    "max_retry": 1,
-                    "failure_policy": "continue",
-                },
-                {
-                    "name": SLACK_SEND_TOOL_NAME,
-                    "max_retry": 2,
-                    "failure_policy": "continue",
-                },
-            ],
-            "references": references,
-            "execution_order": [
-                "catchup_kb.search",
-                "catchup_kb.rerank",
-                SLACK_FIND_TOOL_NAME,
-                SLACK_SEND_TOOL_NAME,
-            ],
-        }
-    )
 
 
 def _build_channel_talk_debounce_condition(
