@@ -22,6 +22,8 @@ from catchup.connectors.github.schemas import GithubCommit
 from catchup.connectors.github.schemas import GithubCommitFile
 from catchup.connectors.github.schemas import GithubIssue
 from catchup.connectors.github.schemas import GithubIssueComment
+from catchup.connectors.github.schemas import GithubLabel
+from catchup.connectors.github.schemas import GithubMilestone
 from catchup.connectors.github.schemas import GithubPRComment
 from catchup.connectors.github.schemas import GithubPRCommitInfo
 from catchup.connectors.github.schemas import GithubPRReview
@@ -59,9 +61,6 @@ class GithubTransformer:
     변환 흐름:
         API Response (dict) → parse_*() → Schema → transform_*() → Document
     """
-
-    def __init__(self):
-        pass
 
     # ============================================================
     # Issue 파싱 및 변환
@@ -304,12 +303,48 @@ class GithubTransformer:
             if reviewer:
                 reviewers.append(reviewer)
 
+        labels = [
+            GithubLabel(
+                name=node.get("name", ""),
+                color=node.get("color"),
+                description=node.get("description"),
+            )
+            for node in (data.get("labels", {}).get("nodes") or [])
+            if node and node.get("name")
+        ]
+        milestone_data = data.get("milestone")
+        milestone = (
+            GithubMilestone(
+                number=milestone_data.get("number", 0),
+                title=milestone_data.get("title", ""),
+                state=milestone_data.get("state", ""),
+                due_on=self._parse_datetime(milestone_data.get("dueOn")),
+            )
+            if milestone_data
+            else None
+        )
+
+        issue_comments = []
+        for comment_node in (data.get("comments", {}).get("nodes") or []):
+            if not comment_node:
+                continue
+            issue_comments.append(
+                GithubIssueComment(
+                    id=comment_node.get("databaseId"),
+                    author=self._parse_graphql_user(comment_node.get("author")),
+                    body=comment_node.get("body", ""),
+                    created_at=self._parse_datetime(comment_node.get("createdAt")),
+                    updated_at=self._parse_datetime(comment_node.get("updatedAt")),
+                )
+            )
+
         # 리뷰 파싱
         parsed_reviews = []
         for node in (data.get("reviews", {}).get("nodes") or []):
             if not node:
                 continue
             parsed_reviews.append(GithubPRReview(
+                id=node.get("databaseId"),
                 author=self._parse_graphql_user(node.get("author")),
                 state=node.get("state"),
                 body=node.get("body"),
@@ -325,12 +360,14 @@ class GithubTransformer:
                 if not comment_node:
                     continue
                 parsed_comments.append(GithubPRComment(
+                    id=comment_node.get("databaseId"),
                     author=self._parse_graphql_user(comment_node.get("author")),
                     body=comment_node.get("body", ""),
                     path=comment_node.get("path"),
                     line=comment_node.get("line"),
                     original_line=comment_node.get("originalLine"),
                     diff_hunk=comment_node.get("diffHunk"),
+                    outdated=comment_node.get("outdated"),
                     created_at=self._parse_datetime(comment_node.get("createdAt")),
                     updated_at=self._parse_datetime(comment_node.get("updatedAt")),
                 ))
@@ -342,11 +379,13 @@ class GithubTransformer:
                 continue
             commit = node.get("commit", {})
             commit_author = commit.get("author", {})
+            author_user = self._parse_graphql_user(commit_author.get("user"))
             parsed_commits.append(GithubPRCommitInfo(
                 sha=commit.get("oid", ""),
                 message=commit.get("message", ""),
+                author=author_user,
                 author_name=commit_author.get("name"),
-                author_login=(commit_author.get("user") or {}).get("login"),
+                author_login=author_user.login if author_user else None,
                 committed_at=self._parse_datetime(commit.get("committedDate")),
             ))
 
@@ -374,7 +413,14 @@ class GithubTransformer:
             closed_at=self._parse_datetime(data.get("closedAt")),
             changed_files=data.get("changedFiles", 0),
             commits_count=len(parsed_commits),
+            additions=data.get("additions"),
+            deletions=data.get("deletions"),
+            is_draft=data.get("isDraft"),
+            review_decision=data.get("reviewDecision"),
+            labels=labels,
+            milestone=milestone,
             reviews=parsed_reviews,
+            issue_comments=issue_comments,
             comments=parsed_comments,
             commits=parsed_commits,
         )
@@ -839,11 +885,13 @@ class GithubTransformer:
         if not data or not data.get("login"):
             return None
         return GithubUser(
-            id=0,
+            id=self._to_int(data.get("databaseId"), 0),
             login=data["login"],
             name=data.get("name"),
             email=data.get("email"),
             avatar_url=data.get("avatarUrl"),
+            html_url=data.get("url"),
+            type=data.get("__typename"),
         )
 
     def _parse_datetime(self, value: str | datetime | None) -> datetime | None:
