@@ -13,29 +13,53 @@ createdAt
 updatedAt
 closedAt
 author {
+  __typename
   login
   avatarUrl
+  url
   ... on User {
+    databaseId
     name
     email
   }
 }
 assignees(first: 10) {
   nodes {
+    __typename
     login
     avatarUrl
+    url
     ... on User {
+      databaseId
       name
       email
     }
   }
 }
-comments(first: 50) {
+labels(first: 20) {
   nodes {
+    name
+    color
+    description
+  }
+}
+milestone {
+  number
+  title
+  state
+  dueOn
+}
+comments(first: 50) {
+  totalCount
+  nodes {
+    id
     author {
+      __typename
       login
       avatarUrl
+      url
       ... on User {
+        databaseId
         name
         email
       }
@@ -351,6 +375,24 @@ def build_pull_requests_by_numbers_query(numbers: list[int]) -> str:
 query($owner: String!, $repo: String!) {{
   repository(owner: $owner, name: $repo) {{
     {pull_requests}
+  }}
+}}
+"""
+
+
+def build_issues_by_numbers_query(numbers: list[int]) -> str:
+    issues = "\n".join(
+        f"""
+        issue_{number}: issue(number: {number}) {{
+          {ISSUE_FIELDS}
+        }}
+        """
+        for number in numbers
+    )
+    return f"""
+query($owner: String!, $repo: String!) {{
+  repository(owner: $owner, name: $repo) {{
+    {issues}
   }}
 }}
 """
