@@ -104,7 +104,7 @@ def build_github_pr_v2_count_validation_query():
             FROM {KNOWLEDGE_STORE_TABLE_NAME}
             WHERE source = 'github'
               AND entity_type = 'pr'
-              AND COALESCE({KNOWLEDGE_STORE_METADATA_JSON_COLUMN}, '{{}}'::jsonb) != '{{}}'::jsonb
+              AND COALESCE({KNOWLEDGE_STORE_METADATA_JSON_COLUMN}::jsonb, '{{}}'::jsonb) != '{{}}'::jsonb
         )
         SELECT
             (SELECT count(*) FROM v1_pr) AS v1_count,
@@ -151,7 +151,7 @@ def build_github_pr_v2_sample_query():
         FROM {KNOWLEDGE_STORE_TABLE_NAME}
         WHERE source = 'github'
           AND entity_type = 'pr'
-          AND COALESCE({KNOWLEDGE_STORE_METADATA_JSON_COLUMN}, '{{}}'::jsonb) != '{{}}'::jsonb
+          AND COALESCE({KNOWLEDGE_STORE_METADATA_JSON_COLUMN}::jsonb, '{{}}'::jsonb) != '{{}}'::jsonb
         ORDER BY synced_at DESC, langchain_id ASC
         LIMIT :limit
         """
