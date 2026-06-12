@@ -12,7 +12,6 @@ from catchup.audit.metadata import FullSyncEventAuditMetadata
 from catchup.audit.metadata import IncrementalRecordAuditMetadata
 from catchup.audit.utils import audit_log
 from catchup.configs.config import settings
-from catchup.connectors.github.client import GitHubRateLimitError
 from catchup.sync.audit import SyncAuditContext
 from catchup.sync.common.exceptions import SyncInternalException
 from catchup.sync.common.schemas import FullSyncContext
@@ -26,8 +25,12 @@ from catchup.sync.ingestion.adapters.github import (
 from catchup.sync.ingestion.adapters.github import (
     GithubRepositoryIncrementalSyncExecutionRequest,
 )
-from catchup.sync.ingestion.adapters.github import GithubRepositorySyncAdapter
-from catchup.sync.ingestion.factories.github import create_github_ingestion_service
+from catchup.sync.ingestion.factories.github import (
+    create_github_repository_full_sync_adapter,
+)
+from catchup.sync.ingestion.factories.github import (
+    create_github_repository_incremental_sync_adapter,
+)
 from catchup.sync.ingestion.pipeline import run_sync_ingestion
 from catchup.sync.ingestion.schemas import SyncWindow
 
@@ -37,7 +40,7 @@ logger = structlog.get_logger(__name__)
 class GithubFullSyncHandler(BaseFullSyncHandler):
     connector = "github"
 
-    async def _get_service(self, scope_id: str, cache: dict[str, object]):
+    async def _get_adapter(self, scope_id: str, cache: dict[str, object]):
         normalized_scope_id = scope_id.strip()
         cache_key = self._cache_key(normalized_scope_id)
         cached = cache.get(cache_key)
@@ -52,9 +55,11 @@ class GithubFullSyncHandler(BaseFullSyncHandler):
         except (TypeError, ValueError) as exc:
             raise ValueError(f"invalid github installation_id: {scope_id}") from exc
 
-        service = await create_github_ingestion_service(installation_id=installation_id)
-        cache[cache_key] = service
-        return service
+        adapter = await create_github_repository_full_sync_adapter(
+            installation_id=installation_id
+        )
+        cache[cache_key] = adapter
+        return adapter
 
     @audit_log(
         FullSyncAction.EVENT,
@@ -67,21 +72,15 @@ class GithubFullSyncHandler(BaseFullSyncHandler):
         context: FullSyncContext,
         service_cache: dict[str, object],
     ) -> TargetSyncResult:
-        service = await self._get_service(context.scope_id, service_cache)
+        adapter = await self._get_adapter(context.scope_id, service_cache)
         sync_from_dt = (
             datetime.fromtimestamp(float(context.sync_from_ts), tz=timezone.utc)
             if context.sync_from_ts is not None
             else datetime.now(timezone.utc) - timedelta(days=settings.DEFAULT_SYNC_DAYS)
         )
 
-        normalized_target_id = context.target_id.strip()
-        if not normalized_target_id:
+        if not context.target_id.strip():
             raise ValueError("github repository_id(target_id) is empty")
-
-        try:
-            repo_id = int(normalized_target_id)
-        except (TypeError, ValueError) as exc:
-            raise ValueError(f"invalid github repository_id: {context.target_id}") from exc
 
         record_type = str(
             context.metadata.get("record_type")
@@ -130,38 +129,32 @@ class GithubFullSyncHandler(BaseFullSyncHandler):
             window_start=sync_from_dt,
             window_end=datetime.now(timezone.utc),
         )
-        adapter = GithubRepositorySyncAdapter(service=service)
         synced_count = 0
         error_count = 0
+        v2_failed_count = 0
+        v2_failed_ids: list[str] = []
         batch_index = 0
         after_cursor: str | None = None
         while True:
             execution = GithubRepositoryFullSyncExecutionRequest(
                 tenant_id=context.scope_id,
-                repo_id=repo_id,
-                repo_full_name=repo_full_name,
                 owner=owner,
                 repo=repo,
                 record_type=record_type,
                 batch_index=batch_index,
                 after_cursor=after_cursor,
-                sync_from_dt=sync_from_dt,
                 audit_context=audit_context,
             )
-            try:
-                result = await run_sync_ingestion(
-                    port=adapter,
-                    execution=execution,
-                    sync_window=sync_window,
-                )
-            except GitHubRateLimitError:
-                raise
-            except Exception as exc:
-                adapter.mark_full_sync_failed(execution=execution, exc=exc)
-                raise
+            result = await run_sync_ingestion(
+                port=adapter,
+                execution=execution,
+                sync_window=sync_window,
+            )
 
             synced_count += result.persisted_count + result.deleted_count
             error_count += result.failed_count
+            v2_failed_count += result.v2_failed_count
+            v2_failed_ids.extend(result.v2_failed_ids)
             if result.is_last:
                 break
             after_cursor = result.next_cursor
@@ -190,6 +183,8 @@ class GithubFullSyncHandler(BaseFullSyncHandler):
                 job_id=context.job_id,
                 event_id=context.event_id,
                 error_count=error_count,
+                v2_failed_count=v2_failed_count,
+                v2_failed_ids=v2_failed_ids,
             )
             raise RuntimeError("github_full_sync_failed")
         return TargetSyncResult(
@@ -201,7 +196,7 @@ class GithubFullSyncHandler(BaseFullSyncHandler):
 class GithubIncrementalHandler(BaseIncrementalHandler):
     connector = "github"
 
-    async def _get_service(self, scope_id: str, cache: dict[str, object]):
+    async def _get_adapter(self, scope_id: str, cache: dict[str, object]):
         normalized_scope_id = scope_id.strip()
         if not normalized_scope_id:
             raise ValueError("github installation_id(scope_id) is empty")
@@ -211,11 +206,11 @@ class GithubIncrementalHandler(BaseIncrementalHandler):
         if cached is not None:
             return cached
 
-        service = await create_github_ingestion_service(
+        adapter = await create_github_repository_incremental_sync_adapter(
             installation_id=int(normalized_scope_id),
         )
-        cache[cache_key] = service
-        return service
+        cache[cache_key] = adapter
+        return adapter
 
     @audit_log(
         IncrementalSyncAction.RECORD,
@@ -228,14 +223,14 @@ class GithubIncrementalHandler(BaseIncrementalHandler):
         context: IncrementalSyncContext,
         service_cache: dict[str, object],
     ) -> TargetSyncResult:
-        service = await self._get_service(context.scope_id, service_cache)
+        adapter = await self._get_adapter(context.scope_id, service_cache)
         parent_id = context.parent_id or context.target_id
         if not parent_id:
             raise ValueError("github repository id is empty")
 
         since = self._resolve_since(context)
         result = await run_sync_ingestion(
-            port=GithubRepositorySyncAdapter(service=service),
+            port=adapter,
             execution=GithubRepositoryIncrementalSyncExecutionRequest(
                 tenant_id=context.scope_id,
                 repo_id=int(parent_id),
@@ -260,7 +255,11 @@ class GithubIncrementalHandler(BaseIncrementalHandler):
         if result.failed_count > 0:
             raise SyncInternalException(
                 "github incremental sync failed",
-                metadata={"record_key": context.record_key},
+                metadata={
+                    "record_key": context.record_key,
+                    "v2_failed_count": result.v2_failed_count,
+                    "v2_failed_ids": list(result.v2_failed_ids),
+                },
             )
         return TargetSyncResult(
             synced_count=result.persisted_count + result.deleted_count,
