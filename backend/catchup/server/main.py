@@ -23,6 +23,7 @@ from catchup.audit.service import emit_audit_event
 from catchup.components.embedder.constants import EmbeddingProvider
 from catchup.components.embedder.factory import get_embedding_service
 from catchup.components.vector_db.factory import get_pgvector_repository
+from catchup.components.vector_db.factory import get_v2_vector_store
 from catchup.configs.config import settings
 from catchup.costs.handlers import chat_token_usage_handler
 from catchup.db.engine import SessionLocal
@@ -152,6 +153,9 @@ async def lifespan(app: FastAPI):
         embeddings = get_embedding_service(EmbeddingProvider.AWS_BEDROCK).get_embedder()
         pgvector_repo = get_pgvector_repository(embeddings)  # Ingestion
         await pgvector_repo.initialize(ensure_pg_indices)
+        if settings.VECTOR_STORE_V2_DUAL_WRITE_ENABLED:
+            v2_vector_store = get_v2_vector_store(embeddings)
+            await v2_vector_store.initialize()
         if settings.PGVECTOR_HNSW_INDEX_ENABLED:
             asyncio.create_task(ensure_vector_index())
         logger.info(
