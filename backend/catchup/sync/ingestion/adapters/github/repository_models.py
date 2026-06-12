@@ -78,6 +78,55 @@ class GithubRepositoryDualWriteResult:
     v2_failed_ids: tuple[str, ...] = ()
 
 
+class GithubPrV2BackfillSeed(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    langchain_id: str
+    record_id: str
+    content: str
+    embedding: list[float]
+
+    @field_validator("langchain_id", "record_id")
+    @classmethod
+    def _validate_required_text(cls, value: str, info: ValidationInfo) -> str:
+        return require_text(value, info.field_name or "field")
+
+    @field_validator("embedding")
+    @classmethod
+    def _validate_embedding(cls, value: list[float]) -> list[float]:
+        if not value:
+            raise ValueError("embedding must not be empty")
+        return value
+
+
+class GithubPrV2BackfillExecutionRequest(SyncExecutionRequest):
+    model_config = ConfigDict(extra="forbid")
+
+    connector: Literal[SyncConnector.GITHUB] = SyncConnector.GITHUB
+    target: Literal["repository_pr_v2_backfill"] = "repository_pr_v2_backfill"
+    owner: str
+    repo: str
+    seeds: tuple[GithubPrV2BackfillSeed, ...]
+    audit_context: SyncAuditContext | None = None
+
+    @field_validator("owner", "repo")
+    @classmethod
+    def _validate_required_text(cls, value: str, info: ValidationInfo) -> str:
+        return require_text(value, info.field_name or "field")
+
+    @computed_field
+    @property
+    def repo_full_name(self) -> str:
+        return f"{self.owner}/{self.repo}"
+
+    def log_context(self) -> dict[str, object]:
+        return {
+            "repo_full_name": self.repo_full_name,
+            "record_type": "pull_request",
+            "seed_count": len(self.seeds),
+        }
+
+
 class GithubRepositoryFullSyncExecutionRequest(SyncExecutionRequest):
     model_config = ConfigDict(extra="forbid")
 
@@ -221,7 +270,7 @@ class GithubRepositoryPersistResult(BaseModel):
 
 class GithubRepositorySyncExecutionResult(SyncExecutionResult):
     connector: Literal[SyncConnector.GITHUB] = SyncConnector.GITHUB
-    target: Literal["repository"] = "repository"
+    target: Literal["repository", "repository_pr_v2_backfill"] = "repository"
     persisted_count: int = 0
     deleted_count: int = 0
     failed_count: int = 0

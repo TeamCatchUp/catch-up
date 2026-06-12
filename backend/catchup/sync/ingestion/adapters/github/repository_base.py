@@ -39,6 +39,7 @@ from catchup.sync.ingestion.document_builders.github import GithubTransformer
 from catchup.sync.ingestion.vector_records import GithubPrV2RecordMapper
 
 logger = structlog.get_logger(__name__)
+PULL_REQUEST_GRAPHQL_BATCH_SIZE = 50
 
 
 class GithubRepositoryAdapterBase:
@@ -104,12 +105,73 @@ class GithubRepositoryAdapterBase:
         repo: str,
         pull_request_ids: list[str],
     ) -> tuple[list[tuple[str, dict[str, Any]]], list[str]]:
-        return await self._fetch_retry_nodes(
+        return await self._fetch_pull_request_nodes_batch(
             owner=owner,
             repo=repo,
-            record_ids=pull_request_ids,
-            record_type="pull_request",
+            pull_request_ids=pull_request_ids,
         )
+
+    async def _fetch_pull_request_nodes_batch(
+        self,
+        *,
+        owner: str,
+        repo: str,
+        pull_request_ids: list[str],
+    ) -> tuple[list[tuple[str, dict[str, Any]]], list[str]]:
+        if not pull_request_ids:
+            return [], []
+
+        valid_ids: list[str] = []
+        valid_numbers: list[int] = []
+        failed_ids: list[str] = []
+        for pull_request_id in pull_request_ids:
+            try:
+                number = int(pull_request_id)
+            except ValueError:
+                failed_ids.append(pull_request_id)
+                continue
+            valid_ids.append(pull_request_id)
+            valid_numbers.append(number)
+
+        if not valid_numbers:
+            return [], failed_ids
+
+        items: list[tuple[str, dict[str, Any]]] = []
+        for start in range(0, len(valid_ids), PULL_REQUEST_GRAPHQL_BATCH_SIZE):
+            id_batch = valid_ids[start : start + PULL_REQUEST_GRAPHQL_BATCH_SIZE]
+            number_batch = valid_numbers[start : start + PULL_REQUEST_GRAPHQL_BATCH_SIZE]
+            try:
+                data_by_number = await self.client.get_pull_requests_graphql(
+                    owner,
+                    repo,
+                    number_batch,
+                )
+            except GitHubRateLimitError:
+                raise
+            except Exception as exc:
+                logger.warning(
+                    "github_pr_batch_fetch_failed",
+                    connector="github",
+                    operation="repair",
+                    installation_id=self.installation_id,
+                    owner=owner,
+                    repo=repo,
+                    record_type="pull_request",
+                    record_count=len(id_batch),
+                    error=str(exc),
+                    exc_info=True,
+                )
+                failed_ids.extend(id_batch)
+                continue
+
+            for pull_request_id in id_batch:
+                data = data_by_number.get(pull_request_id)
+                if data is None:
+                    failed_ids.append(pull_request_id)
+                    continue
+                items.append((pull_request_id, data))
+
+        return items, failed_ids
 
     async def _fetch_retry_nodes(
         self,

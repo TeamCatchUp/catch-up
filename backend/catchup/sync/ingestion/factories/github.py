@@ -25,6 +25,7 @@ from catchup.db.github.installation_repository import (
 )
 from catchup.sync.common.exceptions import SyncConnectorException
 from catchup.sync.common.exceptions import SyncInternalException
+from catchup.sync.ingestion.adapters.github import GithubPrV2BackfillAdapter
 from catchup.sync.ingestion.adapters.github import GithubRepositoryFullSyncAdapter
 from catchup.sync.ingestion.adapters.github import (
     GithubRepositoryIncrementalSyncAdapter,
@@ -70,6 +71,8 @@ def _load_installation_sync(installation_id: int):
 async def _create_github_repository_adapter(
     installation_id: int,
     adapter_cls: type[GithubRepositoryAdapterT],
+    *,
+    force_v2_vector_store: bool = False,
 ) -> GithubRepositoryAdapterT:
     installation = await run_in_threadpool(_load_installation_sync, installation_id)
 
@@ -89,7 +92,7 @@ async def _create_github_repository_adapter(
         repository = get_pgvector_repository(embeddings=embeddings)
         repository.ensure_initialized()
         v2_vector_store = None
-        if settings.VECTOR_STORE_V2_DUAL_WRITE_ENABLED:
+        if settings.VECTOR_STORE_V2_DUAL_WRITE_ENABLED or force_v2_vector_store:
             v2_vector_store = get_v2_vector_store(embeddings)
             await v2_vector_store.initialize()
 
@@ -192,4 +195,14 @@ async def create_github_repository_repair_adapter(
     return await _create_github_repository_adapter(
         installation_id,
         GithubRepositoryRepairAdapter,
+    )
+
+
+async def create_github_pr_v2_backfill_adapter(
+    installation_id: int,
+) -> GithubPrV2BackfillAdapter:
+    return await _create_github_repository_adapter(
+        installation_id,
+        GithubPrV2BackfillAdapter,
+        force_v2_vector_store=True,
     )

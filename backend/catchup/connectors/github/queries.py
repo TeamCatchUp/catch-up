@@ -336,3 +336,21 @@ query($owner: String!, $repo: String!, $number: Int!) {{
   }}
 }}
 """
+
+
+def build_pull_requests_by_numbers_query(numbers: list[int]) -> str:
+    pull_requests = "\n".join(
+        f"""
+        pr_{number}: pullRequest(number: {number}) {{
+          {PULL_REQUEST_FIELDS}
+        }}
+        """
+        for number in numbers
+    )
+    return f"""
+query($owner: String!, $repo: String!) {{
+  repository(owner: $owner, name: $repo) {{
+    {pull_requests}
+  }}
+}}
+"""

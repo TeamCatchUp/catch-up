@@ -9,6 +9,12 @@ from catchup.sync.ingestion.adapters.github.repository_incremental import (
 from catchup.sync.ingestion.adapters.github.repository_models import (
     GithubPrDocumentBundle,
 )
+from catchup.sync.ingestion.adapters.github.repository_models import (
+    GithubPrV2BackfillExecutionRequest,
+)
+from catchup.sync.ingestion.adapters.github.repository_models import (
+    GithubPrV2BackfillSeed,
+)
 from catchup.sync.ingestion.adapters.github.repository_models import GithubRecordGapItem
 from catchup.sync.ingestion.adapters.github.repository_models import (
     GithubRecordGapReport,
@@ -42,12 +48,18 @@ from catchup.sync.ingestion.adapters.github.repository_models import (
 from catchup.sync.ingestion.adapters.github.repository_models import (
     GithubRepositoryTransformResult,
 )
+from catchup.sync.ingestion.adapters.github.repository_pr_v2_backfill import (
+    GithubPrV2BackfillAdapter,
+)
 from catchup.sync.ingestion.adapters.github.repository_repair import (
     GithubRepositoryRepairAdapter,
 )
 
 __all__ = [
     "GithubPrDocumentBundle",
+    "GithubPrV2BackfillAdapter",
+    "GithubPrV2BackfillExecutionRequest",
+    "GithubPrV2BackfillSeed",
     "GithubRecordGapItem",
     "GithubRecordGapReport",
     "GithubRecordRetryItem",
