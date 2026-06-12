@@ -343,7 +343,8 @@ def test_fetch_seeded_seed_chunk_query_reads_v2_seed_rows_by_empty_metadata() ->
     assert "scope_id = :scope_id" in query
     assert "target_id = :target_id" in query
     assert "COALESCE(metadata::jsonb, '{}'::jsonb) = '{}'::jsonb" in query
-    assert "document_id > :after_langchain_id" in query
+    assert "CAST(:after_langchain_id AS varchar) IS NULL" in query
+    assert "document_id > CAST(:after_langchain_id AS varchar)" in query
     assert "LIMIT :limit" in query
 
 
