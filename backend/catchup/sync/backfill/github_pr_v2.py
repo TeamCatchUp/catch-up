@@ -691,8 +691,8 @@ def build_fetch_seeded_seed_chunk_query():
           AND target_id = :target_id
           AND COALESCE({KNOWLEDGE_STORE_METADATA_JSON_COLUMN}::jsonb, '{{}}'::jsonb) = '{{}}'::jsonb
           AND (
-              :after_langchain_id IS NULL
-              OR {KNOWLEDGE_STORE_ID_COLUMN} > :after_langchain_id
+              CAST(:after_langchain_id AS varchar) IS NULL
+              OR {KNOWLEDGE_STORE_ID_COLUMN} > CAST(:after_langchain_id AS varchar)
           )
         ORDER BY {KNOWLEDGE_STORE_ID_COLUMN}
         LIMIT :limit
