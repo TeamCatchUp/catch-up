@@ -319,7 +319,7 @@ def init_scheduler():
     if settings.VECTOR_STORE_V2_BACKFILL_SCHEDULE_ENABLED:
         _scheduler.add_job(
             run_github_pr_v2_backfill_job,
-            trigger=CronTrigger(hour=3, minute=45, timezone=SEOUL_TZ),
+            trigger=CronTrigger(hour=3, minute=55, timezone=SEOUL_TZ),
             id="github_pr_v2_backfill",
             name="GitHub PR v2 Backfill",
             replace_existing=True,
