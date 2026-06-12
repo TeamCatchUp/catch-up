@@ -143,30 +143,32 @@ class GithubPrV2BackfillService:
                 adapter = await self._get_adapter_for_scope(target.scope_id, adapters)
                 failed_ids: list[str] = []
                 backfill_count = 0
-                after_langchain_id: str | None = None
+                after_record_id: int | None = None
                 chunk_index = 0
 
                 while True:
                     seed_chunk = await asyncio.to_thread(
                         self._fetch_seeded_seed_chunk_for_target_sync,
                         target,
-                        after_langchain_id,
+                        after_record_id,
                         HYDRATE_PIPELINE_BATCH_SIZE,
                     )
                     if not seed_chunk:
                         break
 
                     chunk_index += 1
+                    next_after_record_id = _record_id_to_int(seed_chunk[-1].record_id)
                     logger.info(
                         "github_pr_v2_backfill_seeded_chunk_started",
                         **_target_log_context(target),
                         chunk_index=chunk_index,
                         seed_count=len(seed_chunk),
                         hydrate_batch_size=HYDRATE_PIPELINE_BATCH_SIZE,
-                        after_langchain_id=after_langchain_id,
+                        after_record_id=after_record_id,
+                        last_record_id=seed_chunk[-1].record_id,
                         last_langchain_id=seed_chunk[-1].langchain_id,
                     )
-                    after_langchain_id = seed_chunk[-1].langchain_id
+                    after_record_id = next_after_record_id
                     result = await run_sync_ingestion(
                         port=adapter,
                         execution=_build_execution_request(target, seed_chunk),
@@ -316,7 +318,7 @@ class GithubPrV2BackfillService:
     def _fetch_seeded_seed_chunk_for_target_sync(
         self,
         target: GithubPrV1Target,
-        after_langchain_id: str | None,
+        after_record_id: int | None,
         limit: int,
     ) -> list[GithubPrV1Seed]:
         query = build_fetch_seeded_seed_chunk_query()
@@ -326,7 +328,7 @@ class GithubPrV2BackfillService:
                 {
                     "scope_id": target.scope_id,
                     "target_id": target.target_id,
-                    "after_langchain_id": after_langchain_id,
+                    "after_record_id": after_record_id,
                     "limit": limit,
                 },
             ).mappings()
@@ -453,6 +455,10 @@ def _embedding_to_list(value) -> list[float]:
             return []
         return [float(item.strip()) for item in raw.split(",")]
     return list(value)
+
+
+def _record_id_to_int(record_id: str) -> int:
+    return int(record_id)
 
 
 def build_github_pr_v1_target_query():
@@ -676,25 +682,43 @@ def build_upsert_seed_rows_statement():
 def build_fetch_seeded_seed_chunk_query():
     return text(
         f"""
+        WITH seeded_pr AS (
+            SELECT
+                {KNOWLEDGE_STORE_ID_COLUMN} AS langchain_id,
+                COALESCE(
+                    NULLIF(record_id, ''),
+                    substring({KNOWLEDGE_STORE_ID_COLUMN} from ':([^:]+)$')
+                ) AS record_id,
+                {KNOWLEDGE_STORE_CONTENT_COLUMN} AS content,
+                {KNOWLEDGE_STORE_EMBEDDING_COLUMN} AS embedding
+            FROM {KNOWLEDGE_STORE_TABLE_NAME}
+            WHERE source = 'github'
+              AND entity_type = 'pr'
+              AND scope_id = :scope_id
+              AND target_id = :target_id
+              AND COALESCE({KNOWLEDGE_STORE_METADATA_JSON_COLUMN}::jsonb, '{{}}'::jsonb) = '{{}}'::jsonb
+        ),
+        numbered_seeded_pr AS (
+            SELECT
+                langchain_id,
+                record_id,
+                content,
+                embedding,
+                record_id::integer AS record_number
+            FROM seeded_pr
+            WHERE record_id ~ '^[0-9]+$'
+        )
         SELECT
-            {KNOWLEDGE_STORE_ID_COLUMN} AS langchain_id,
-            COALESCE(
-                NULLIF(record_id, ''),
-                substring({KNOWLEDGE_STORE_ID_COLUMN} from ':([^:]+)$')
-            ) AS record_id,
-            {KNOWLEDGE_STORE_CONTENT_COLUMN} AS content,
-            {KNOWLEDGE_STORE_EMBEDDING_COLUMN} AS embedding
-        FROM {KNOWLEDGE_STORE_TABLE_NAME}
-        WHERE source = 'github'
-          AND entity_type = 'pr'
-          AND scope_id = :scope_id
-          AND target_id = :target_id
-          AND COALESCE({KNOWLEDGE_STORE_METADATA_JSON_COLUMN}::jsonb, '{{}}'::jsonb) = '{{}}'::jsonb
-          AND (
-              CAST(:after_langchain_id AS varchar) IS NULL
-              OR {KNOWLEDGE_STORE_ID_COLUMN} > CAST(:after_langchain_id AS varchar)
+            langchain_id,
+            record_id,
+            content,
+            embedding
+        FROM numbered_seeded_pr
+        WHERE (
+              CAST(:after_record_id AS integer) IS NULL
+              OR record_number > CAST(:after_record_id AS integer)
           )
-        ORDER BY {KNOWLEDGE_STORE_ID_COLUMN}
+        ORDER BY record_number
         LIMIT :limit
         """
     )

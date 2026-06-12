@@ -205,10 +205,12 @@ class GithubRepositoryFetchResult(BaseModel):
     stopped_by_since: bool = False
 
     def connector_log_summary(self) -> dict[str, object]:
+        record_count = len(self.records) if self.records else len(self.exact_items)
         return {
             "record_type": self.record_type,
             "batch_index": self.batch_index,
-            "record_count": len(self.records),
+            "record_count": record_count,
+            "exact_item_count": len(self.exact_items),
             "failed_record_count": len(self.failed_record_ids),
             "is_last": self.is_last,
             "next_cursor_present": self.next_cursor is not None,
@@ -225,6 +227,7 @@ class GithubRepositoryTransformResult(BaseModel):
     document_ids: tuple[str, ...] = ()
     error_count: int = 0
     failed_record_ids: tuple[str, ...] = ()
+    v2_failed_ids: tuple[str, ...] = ()
     owner: str | None = None
     repo: str | None = None
     repo_full_name: str | None = None
@@ -235,6 +238,7 @@ class GithubRepositoryTransformResult(BaseModel):
             "v2_document_count": len(self.v2_documents),
             "error_count": self.error_count,
             "failed_record_count": len(self.failed_record_ids),
+            "v2_failed_count": len(self.v2_failed_ids),
         }
 
 
