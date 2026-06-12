@@ -164,19 +164,21 @@ class MigratedSyncIngestionHandlerTests(IsolatedAsyncioTestCase):
 
     async def test_github_full_sync_uses_sync_ingestion_stream_target(self) -> None:
         handler = GithubFullSyncHandler()
-        service = SimpleNamespace()
+        adapter = SimpleNamespace()
         core_result = SimpleNamespace(
             persisted_count=1,
             deleted_count=0,
             failed_count=0,
+            v2_failed_count=0,
+            v2_failed_ids=(),
             skipped=False,
             is_last=True,
         )
 
         with (
             patch(
-                "catchup.sync.handlers.github.create_github_ingestion_service",
-                AsyncMock(return_value=service),
+                "catchup.sync.handlers.github.create_github_repository_full_sync_adapter",
+                AsyncMock(return_value=adapter),
             ),
             patch(
                 "catchup.sync.handlers.github.run_sync_ingestion",
@@ -196,11 +198,13 @@ class MigratedSyncIngestionHandlerTests(IsolatedAsyncioTestCase):
 
     async def test_github_full_sync_forwards_next_cursor_between_pages(self) -> None:
         handler = GithubFullSyncHandler()
-        service = SimpleNamespace()
+        adapter = SimpleNamespace()
         first_result = SimpleNamespace(
             persisted_count=1,
             deleted_count=0,
             failed_count=0,
+            v2_failed_count=0,
+            v2_failed_ids=(),
             skipped=False,
             is_last=False,
             next_cursor="cursor-2",
@@ -209,6 +213,8 @@ class MigratedSyncIngestionHandlerTests(IsolatedAsyncioTestCase):
             persisted_count=1,
             deleted_count=0,
             failed_count=0,
+            v2_failed_count=0,
+            v2_failed_ids=(),
             skipped=False,
             is_last=True,
             next_cursor=None,
@@ -216,8 +222,8 @@ class MigratedSyncIngestionHandlerTests(IsolatedAsyncioTestCase):
 
         with (
             patch(
-                "catchup.sync.handlers.github.create_github_ingestion_service",
-                AsyncMock(return_value=service),
+                "catchup.sync.handlers.github.create_github_repository_full_sync_adapter",
+                AsyncMock(return_value=adapter),
             ),
             patch(
                 "catchup.sync.handlers.github.run_sync_ingestion",
@@ -313,7 +319,7 @@ class MigratedSyncIngestionHandlerTests(IsolatedAsyncioTestCase):
 
         with (
             patch(
-                "catchup.sync.handlers.github.create_github_ingestion_service",
+                "catchup.sync.handlers.github.create_github_repository_incremental_sync_adapter",
                 AsyncMock(return_value=SimpleNamespace()),
             ),
             patch(
