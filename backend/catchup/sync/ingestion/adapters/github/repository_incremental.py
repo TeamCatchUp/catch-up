@@ -85,13 +85,30 @@ class GithubRepositoryIncrementalSyncAdapter(GithubRepositoryAdapterBase):
             )
 
         if execution.record_type == "issue":
-            documents, failed_ids = await run_in_threadpool(
-                self._build_issue_documents_sync,
-                fetched.owner or "",
-                fetched.repo or "",
-                list(fetched.exact_items),
-            )
-            v2_documents = []
+            if self.vector_store is not None:
+                issue_bundles, failed_ids = await run_in_threadpool(
+                    self._build_issue_document_bundles_sync,
+                    fetched.owner or "",
+                    fetched.repo or "",
+                    list(fetched.exact_items),
+                )
+                documents = [bundle.document for bundle in issue_bundles]
+                v2_build_result = self._build_v2_documents_from_issue_bundles(
+                    owner=fetched.owner or "",
+                    repo=fetched.repo or "",
+                    bundles=list(issue_bundles),
+                )
+                v2_documents = v2_build_result.documents
+                v2_failed_ids = v2_build_result.failed_ids
+            else:
+                documents, failed_ids = await run_in_threadpool(
+                    self._build_issue_documents_sync,
+                    fetched.owner or "",
+                    fetched.repo or "",
+                    list(fetched.exact_items),
+                )
+                v2_documents = []
+                v2_failed_ids = ()
         else:
             pr_bundles, failed_ids = await run_in_threadpool(
                 self._build_pull_request_document_bundles_sync,
@@ -100,14 +117,17 @@ class GithubRepositoryIncrementalSyncAdapter(GithubRepositoryAdapterBase):
                 list(fetched.exact_items),
             )
             documents = [bundle.document for bundle in pr_bundles]
-            if self.pr_v2_vector_store is not None:
-                v2_documents = self._build_v2_documents_from_pr_bundles(
+            if self.vector_store is not None:
+                v2_build_result = self._build_v2_documents_from_pr_bundles(
                     owner=fetched.owner or "",
                     repo=fetched.repo or "",
                     bundles=list(pr_bundles),
                 )
+                v2_documents = v2_build_result.documents
+                v2_failed_ids = v2_build_result.failed_ids
             else:
                 v2_documents = []
+                v2_failed_ids = ()
         document_ids = tuple(doc.id for doc in documents)
         failed_record_ids = tuple((*fetched.failed_record_ids, *failed_ids))
         return GithubRepositoryTransformResult(
@@ -117,6 +137,7 @@ class GithubRepositoryIncrementalSyncAdapter(GithubRepositoryAdapterBase):
             document_ids=document_ids,
             error_count=len(set(failed_record_ids)),
             failed_record_ids=failed_record_ids,
+            v2_failed_ids=v2_failed_ids,
             owner=fetched.owner,
             repo=fetched.repo,
             repo_full_name=fetched.repo_full_name,
@@ -141,6 +162,7 @@ class GithubRepositoryIncrementalSyncAdapter(GithubRepositoryAdapterBase):
         v2_documents = self._apply_v1_page_content_to_v2_content(
             v1_documents=v1_documents,
             v2_documents=list(transformed.v2_documents),
+            entity_type=execution.record_type,
         )
         return GithubRepositorySummaryResult(
             summary_applied=bool(self.summarizer and v1_documents),
@@ -166,12 +188,9 @@ class GithubRepositoryIncrementalSyncAdapter(GithubRepositoryAdapterBase):
             )
             await self.repository.delete_documents([doc_id])
             v2_failed_ids: tuple[str, ...] = ()
-            if (
-                execution.record_type == "pull_request"
-                and self.pr_v2_vector_store is not None
-            ):
+            if self.vector_store is not None:
                 try:
-                    await self.pr_v2_vector_store.delete([doc_id])
+                    await self.vector_store.delete([doc_id])
                 except Exception:
                     v2_failed_ids = (doc_id,)
             return GithubRepositoryPersistResult(
@@ -187,7 +206,7 @@ class GithubRepositoryIncrementalSyncAdapter(GithubRepositoryAdapterBase):
         if not v1_documents:
             return GithubRepositoryPersistResult(error_count=max(1, error_count))
 
-        v2_failed_ids: tuple[str, ...] = ()
+        v2_failed_ids: tuple[str, ...] = tuple(transformed.v2_failed_ids)
         context = (
             f"entity_type={execution.record_type},"
             f"repo={transformed.repo_full_name or execution.repo_id},"
@@ -202,7 +221,9 @@ class GithubRepositoryIncrementalSyncAdapter(GithubRepositoryAdapterBase):
                 audit_context=execution.audit_context,
                 context=context,
             )
-            v2_failed_ids = dual_write_result.v2_failed_ids
+            v2_failed_ids = tuple(
+                dict.fromkeys((*v2_failed_ids, *dual_write_result.vector_failed_ids))
+            )
         else:
             await self.repository.upsert_documents(
                 v1_documents,

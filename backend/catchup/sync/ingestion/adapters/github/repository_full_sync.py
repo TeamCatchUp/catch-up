@@ -74,13 +74,30 @@ class GithubRepositoryFullSyncAdapter(GithubRepositoryAdapterBase):
     ) -> GithubRepositoryTransformResult:
         _ = sync_window
         if execution.record_type == "issue":
-            documents, document_ids, error_count = await run_in_threadpool(
-                self._build_issue_batch_documents_sync,
-                execution.owner,
-                execution.repo,
-                list(fetched.records),
-            )
-            v2_documents = []
+            if self.vector_store is not None:
+                issue_bundles, document_ids, error_count = await run_in_threadpool(
+                    self._build_issue_batch_bundles_sync,
+                    execution.owner,
+                    execution.repo,
+                    list(fetched.records),
+                )
+                documents = [bundle.document for bundle in issue_bundles]
+                v2_build_result = self._build_v2_documents_from_issue_bundles(
+                    owner=execution.owner,
+                    repo=execution.repo,
+                    bundles=list(issue_bundles),
+                )
+                v2_documents = v2_build_result.documents
+                v2_failed_ids = v2_build_result.failed_ids
+            else:
+                documents, document_ids, error_count = await run_in_threadpool(
+                    self._build_issue_batch_documents_sync,
+                    execution.owner,
+                    execution.repo,
+                    list(fetched.records),
+                )
+                v2_documents = []
+                v2_failed_ids = ()
         else:
             pr_bundles, document_ids, error_count = await run_in_threadpool(
                 self._build_pull_request_batch_bundles_sync,
@@ -89,14 +106,17 @@ class GithubRepositoryFullSyncAdapter(GithubRepositoryAdapterBase):
                 list(fetched.records),
             )
             documents = [bundle.document for bundle in pr_bundles]
-            if self.pr_v2_vector_store is not None:
-                v2_documents = self._build_v2_documents_from_pr_bundles(
+            if self.vector_store is not None:
+                v2_build_result = self._build_v2_documents_from_pr_bundles(
                     owner=execution.owner,
                     repo=execution.repo,
                     bundles=list(pr_bundles),
                 )
+                v2_documents = v2_build_result.documents
+                v2_failed_ids = v2_build_result.failed_ids
             else:
                 v2_documents = []
+                v2_failed_ids = ()
         return GithubRepositoryTransformResult(
             requested_count=fetched.requested_count,
             v1_documents=tuple(documents),
@@ -104,6 +124,7 @@ class GithubRepositoryFullSyncAdapter(GithubRepositoryAdapterBase):
             document_ids=tuple(document_ids),
             error_count=error_count + len(fetched.failed_record_ids),
             failed_record_ids=fetched.failed_record_ids,
+            v2_failed_ids=v2_failed_ids,
             owner=execution.owner,
             repo=execution.repo,
             repo_full_name=execution.repo_full_name,
@@ -128,6 +149,7 @@ class GithubRepositoryFullSyncAdapter(GithubRepositoryAdapterBase):
         v2_documents = self._apply_v1_page_content_to_v2_content(
             v1_documents=v1_documents,
             v2_documents=list(transformed.v2_documents),
+            entity_type=execution.record_type,
         )
         return GithubRepositorySummaryResult(
             summary_applied=bool(self.summarizer and v1_documents),
@@ -152,7 +174,7 @@ class GithubRepositoryFullSyncAdapter(GithubRepositoryAdapterBase):
         if not v1_documents:
             return GithubRepositoryPersistResult(error_count=error_count)
 
-        v2_failed_ids: tuple[str, ...] = ()
+        v2_failed_ids: tuple[str, ...] = tuple(transformed.v2_failed_ids)
         context = (
             f"entity_type={execution.record_type},"
             f"repo={execution.repo_full_name},"
@@ -167,7 +189,9 @@ class GithubRepositoryFullSyncAdapter(GithubRepositoryAdapterBase):
                 audit_context=execution.audit_context,
                 context=context,
             )
-            v2_failed_ids = dual_write_result.v2_failed_ids
+            v2_failed_ids = tuple(
+                dict.fromkeys((*v2_failed_ids, *dual_write_result.vector_failed_ids))
+            )
         else:
             await self.repository.upsert_documents(
                 v1_documents,
