@@ -74,6 +74,8 @@ class GithubIssue(BaseModel):
     # 담당자
     author: GithubUser | None = None
     assignees: list[GithubUser] = Field(default_factory=list)
+    labels: list[GithubLabel] = Field(default_factory=list)
+    milestone: GithubMilestone | None = None
     # Note: GitHub GraphQL API의 Issue 타입에는 closedBy 필드가 없음 (PR만 지원)
 
     # 시간

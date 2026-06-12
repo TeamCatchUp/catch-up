@@ -91,13 +91,36 @@ class GithubTransformer:
             if user:
                 assignees.append(user)
 
+        labels = [
+            GithubLabel(
+                name=node.get("name", ""),
+                color=node.get("color"),
+                description=node.get("description"),
+            )
+            for node in (data.get("labels", {}).get("nodes") or [])
+            if node and node.get("name")
+        ]
+        milestone_data = data.get("milestone")
+        milestone = (
+            GithubMilestone(
+                number=milestone_data.get("number", 0),
+                title=milestone_data.get("title", ""),
+                state=milestone_data.get("state", ""),
+                due_on=self._parse_datetime(milestone_data.get("dueOn")),
+            )
+            if milestone_data
+            else None
+        )
+
         # Comments 파싱 (GraphQL 중첩 구조)
         comments = []
-        comments_nodes = (data.get("comments", {}).get("nodes") or [])
+        comments_data = data.get("comments", {}) or {}
+        comments_nodes = comments_data.get("nodes") or []
         for comment_node in comments_nodes:
             comment_author = self._parse_graphql_user(comment_node.get("author"))
 
             comments.append(GithubIssueComment(
+                id=comment_node.get("id") or comment_node.get("databaseId"),
                 author=comment_author,
                 body=comment_node.get("body", ""),
                 created_at=self._parse_datetime(comment_node.get("createdAt")),
@@ -117,10 +140,12 @@ class GithubTransformer:
             state_reason=data.get("stateReason"),
             author=author,
             assignees=assignees,
+            labels=labels,
+            milestone=milestone,
             created_at=self._parse_datetime(data.get("createdAt")),
             updated_at=self._parse_datetime(data.get("updatedAt")),
             closed_at=self._parse_datetime(data.get("closedAt")),
-            comments_count=len(comments),
+            comments_count=comments_data.get("totalCount", len(comments)),
             comments=comments,
         )
 

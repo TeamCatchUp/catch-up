@@ -21,16 +21,18 @@ from catchup.components.vector_db.v2.constants import (
 from catchup.components.vector_db.v2.constants import KNOWLEDGE_STORE_TABLE_NAME
 from catchup.configs.config import settings
 from catchup.db.engine import SessionLocal
-from catchup.sync.ingestion.adapters.github import GithubPrV2BackfillAdapter
-from catchup.sync.ingestion.adapters.github import GithubPrV2BackfillExecutionRequest
-from catchup.sync.ingestion.adapters.github import GithubPrV2BackfillSeed
-from catchup.sync.ingestion.factories.github import create_github_pr_v2_backfill_adapter
+from catchup.sync.ingestion.adapters.github import GithubIssueV2BackfillAdapter
+from catchup.sync.ingestion.adapters.github import GithubIssueV2BackfillExecutionRequest
+from catchup.sync.ingestion.adapters.github import GithubIssueV2BackfillSeed
+from catchup.sync.ingestion.factories.github import (
+    create_github_issue_v2_backfill_adapter,
+)
 from catchup.sync.ingestion.pipeline import run_sync_ingestion
 from catchup.sync.ingestion.schemas import SyncExecutionResult
 from catchup.sync.ingestion.schemas import SyncWindow
 
 SessionFactory = Callable[[], AbstractContextManager[Session]]
-BackfillAdapterFactory = Callable[[int], Awaitable[GithubPrV2BackfillAdapter]]
+BackfillAdapterFactory = Callable[[int], Awaitable[GithubIssueV2BackfillAdapter]]
 SEED_INSERT_BATCH_SIZE = 100
 HYDRATE_PIPELINE_BATCH_SIZE = 50
 
@@ -38,7 +40,7 @@ logger = structlog.get_logger(__name__)
 
 
 @dataclass(slots=True, frozen=True)
-class GithubPrV1Seed:
+class GithubIssueV1Seed:
     langchain_id: str
     record_id: str
     content: str
@@ -46,7 +48,7 @@ class GithubPrV1Seed:
 
 
 @dataclass(slots=True, frozen=True)
-class GithubPrV1Target:
+class GithubIssueV1Target:
     scope_id: str
     target_id: str
     expected_count: int
@@ -61,18 +63,18 @@ class GithubPrV1Target:
 
 
 @dataclass(slots=True, frozen=True)
-class GithubPrV2BackfillResult:
+class GithubIssueV2BackfillResult:
     scanned: int
     succeeded: int
     skipped: int
     failed: int
 
 
-class GithubPrV2BackfillService:
+class GithubIssueV2BackfillService:
     def __init__(
         self,
         *,
-        adapter_factory: BackfillAdapterFactory = create_github_pr_v2_backfill_adapter,
+        adapter_factory: BackfillAdapterFactory = create_github_issue_v2_backfill_adapter,
         session_factory: SessionFactory = SessionLocal,
         collection_name: str = settings.PGVECTOR_COLLECTION_NAME,
     ) -> None:
@@ -85,20 +87,20 @@ class GithubPrV2BackfillService:
         *,
         limit: int,
         locked_by: str | None = None,
-    ) -> GithubPrV2BackfillResult:
+    ) -> GithubIssueV2BackfillResult:
         del locked_by
         targets = await asyncio.to_thread(self._fetch_candidate_targets_sync, limit)
         logger.info(
-            "github_pr_v2_backfill_candidate_targets_fetched",
+            "github_issue_v2_backfill_candidate_targets_fetched",
             connector="github",
-            entity_type="pr",
+            entity_type="issue",
             limit=limit,
             target_count=len(targets),
         )
         succeeded = 0
         skipped = 0
         failed = 0
-        adapters: dict[str, GithubPrV2BackfillAdapter] = {}
+        adapters: dict[str, GithubIssueV2BackfillAdapter] = {}
 
         for target in targets:
             try:
@@ -108,14 +110,14 @@ class GithubPrV2BackfillService:
                 )
                 if not claimed:
                     logger.info(
-                        "github_pr_v2_backfill_target_claim_skipped",
+                        "github_issue_v2_backfill_target_claim_skipped",
                         **_target_log_context(target),
                         reason="already_processing",
                     )
                     skipped += 1
                     continue
                 logger.info(
-                    "github_pr_v2_backfill_target_claimed",
+                    "github_issue_v2_backfill_target_claimed",
                     **_target_log_context(target),
                 )
 
@@ -124,7 +126,7 @@ class GithubPrV2BackfillService:
                     target,
                 )
                 logger.info(
-                    "github_pr_v2_backfill_v1_seeds_fetched",
+                    "github_issue_v2_backfill_v1_seeds_fetched",
                     **_target_log_context(target),
                     seed_count=len(seeds),
                 )
@@ -134,7 +136,7 @@ class GithubPrV2BackfillService:
                     seeds,
                 )
                 logger.info(
-                    "github_pr_v2_backfill_seed_rows_upserted",
+                    "github_issue_v2_backfill_seed_rows_upserted",
                     **_target_log_context(target),
                     seed_count=len(seeds),
                     upserted_count=upserted_seed_count,
@@ -159,7 +161,7 @@ class GithubPrV2BackfillService:
                     chunk_index += 1
                     next_after_record_id = _record_id_to_int(seed_chunk[-1].record_id)
                     logger.info(
-                        "github_pr_v2_backfill_seeded_chunk_started",
+                        "github_issue_v2_backfill_seeded_chunk_started",
                         **_target_log_context(target),
                         chunk_index=chunk_index,
                         seed_count=len(seed_chunk),
@@ -178,7 +180,7 @@ class GithubPrV2BackfillService:
                     failed_ids.extend(chunk_failed_ids)
                     backfill_count += result.persisted_count
                     logger.info(
-                        "github_pr_v2_backfill_seeded_chunk_completed",
+                        "github_issue_v2_backfill_seeded_chunk_completed",
                         **_target_log_context(target),
                         chunk_index=chunk_index,
                         seed_count=len(seed_chunk),
@@ -194,7 +196,7 @@ class GithubPrV2BackfillService:
                     failed_ids,
                 )
                 logger.info(
-                    "github_pr_v2_backfill_target_finished",
+                    "github_issue_v2_backfill_target_finished",
                     **_target_log_context(target),
                     state="failed" if failed_ids else "succeeded",
                     backfill_count=backfill_count,
@@ -213,7 +215,7 @@ class GithubPrV2BackfillService:
                     force_failed=True,
                 )
                 logger.warning(
-                    "github_pr_v2_backfill_target_finished",
+                    "github_issue_v2_backfill_target_finished",
                     **_target_log_context(target),
                     state="failed",
                     backfill_count=0,
@@ -224,7 +226,7 @@ class GithubPrV2BackfillService:
                     exc_info=True,
                 )
 
-        return GithubPrV2BackfillResult(
+        return GithubIssueV2BackfillResult(
             scanned=len(targets),
             succeeded=succeeded,
             skipped=skipped,
@@ -234,14 +236,14 @@ class GithubPrV2BackfillService:
     async def _get_adapter_for_scope(
         self,
         scope_id: str,
-        adapters: dict[str, GithubPrV2BackfillAdapter],
-    ) -> GithubPrV2BackfillAdapter:
+        adapters: dict[str, GithubIssueV2BackfillAdapter],
+    ) -> GithubIssueV2BackfillAdapter:
         if scope_id not in adapters:
             adapters[scope_id] = await self._adapter_factory(int(scope_id))
         return adapters[scope_id]
 
-    def _fetch_candidate_targets_sync(self, limit: int) -> list[GithubPrV1Target]:
-        query = build_github_pr_v1_target_query()
+    def _fetch_candidate_targets_sync(self, limit: int) -> list[GithubIssueV1Target]:
+        query = build_github_issue_v1_target_query()
         with self._session_factory() as db:
             rows = db.execute(
                 query,
@@ -251,7 +253,7 @@ class GithubPrV2BackfillService:
                 },
             ).mappings()
             return [
-                GithubPrV1Target(
+                GithubIssueV1Target(
                     scope_id=str(row["scope_id"]),
                     target_id=str(row["target_id"]),
                     expected_count=int(row["expected_count"]),
@@ -261,9 +263,9 @@ class GithubPrV2BackfillService:
 
     def _fetch_candidate_seeds_for_target_sync(
         self,
-        target: GithubPrV1Target,
-    ) -> list[GithubPrV1Seed]:
-        query = build_github_pr_v1_target_seed_query()
+        target: GithubIssueV1Target,
+    ) -> list[GithubIssueV1Seed]:
+        query = build_github_issue_v1_target_seed_query()
         with self._session_factory() as db:
             rows = db.execute(
                 query,
@@ -274,7 +276,7 @@ class GithubPrV2BackfillService:
                 },
             ).mappings()
             return [
-                GithubPrV1Seed(
+                GithubIssueV1Seed(
                     langchain_id=row["langchain_id"],
                     record_id=row["record_id"],
                     content=row["content"],
@@ -285,8 +287,8 @@ class GithubPrV2BackfillService:
 
     def _upsert_seed_rows_sync(
         self,
-        target: GithubPrV1Target,
-        seeds: list[GithubPrV1Seed],
+        target: GithubIssueV1Target,
+        seeds: list[GithubIssueV1Seed],
     ) -> int:
         if not seeds:
             return 0
@@ -317,10 +319,10 @@ class GithubPrV2BackfillService:
 
     def _fetch_seeded_seed_chunk_for_target_sync(
         self,
-        target: GithubPrV1Target,
+        target: GithubIssueV1Target,
         after_record_id: int | None,
         limit: int,
-    ) -> list[GithubPrV1Seed]:
+    ) -> list[GithubIssueV1Seed]:
         query = build_fetch_seeded_seed_chunk_query()
         with self._session_factory() as db:
             rows = db.execute(
@@ -333,7 +335,7 @@ class GithubPrV2BackfillService:
                 },
             ).mappings()
             return [
-                GithubPrV1Seed(
+                GithubIssueV1Seed(
                     langchain_id=row["langchain_id"],
                     record_id=row["record_id"],
                     content=row["content"],
@@ -342,13 +344,13 @@ class GithubPrV2BackfillService:
                 for row in rows
             ]
 
-    def _mark_processing_sync(self, target: GithubPrV1Target) -> bool:
+    def _mark_processing_sync(self, target: GithubIssueV1Target) -> bool:
         with self._session_factory() as db:
             result = db.execute(
                 build_mark_processing_statement(),
                 {
                     "connector": "github",
-                    "entity_type": "pr",
+                    "entity_type": "issue",
                     "scope_id": target.scope_id,
                     "target_id": target.target_id,
                     "expected_count": target.expected_count,
@@ -360,7 +362,7 @@ class GithubPrV2BackfillService:
 
     def _mark_finished_sync(
         self,
-        target: GithubPrV1Target,
+        target: GithubIssueV1Target,
         backfill_count: int,
         failed_ids: list[str],
         *,
@@ -373,7 +375,7 @@ class GithubPrV2BackfillService:
                 build_mark_finished_statement(),
                 {
                     "connector": "github",
-                    "entity_type": "pr",
+                    "entity_type": "issue",
                     "scope_id": target.scope_id,
                     "target_id": target.target_id,
                     "state": state,
@@ -388,15 +390,15 @@ class GithubPrV2BackfillService:
 
 
 def _build_execution_request(
-    target: GithubPrV1Target,
-    seeds: list[GithubPrV1Seed],
-) -> GithubPrV2BackfillExecutionRequest:
-    return GithubPrV2BackfillExecutionRequest(
+    target: GithubIssueV1Target,
+    seeds: list[GithubIssueV1Seed],
+) -> GithubIssueV2BackfillExecutionRequest:
+    return GithubIssueV2BackfillExecutionRequest(
         tenant_id=target.scope_id,
         owner=target.owner,
         repo=target.repo,
         seeds=tuple(
-            GithubPrV2BackfillSeed(
+            GithubIssueV2BackfillSeed(
                 langchain_id=seed.langchain_id,
                 record_id=seed.record_id,
                 content=seed.content,
@@ -407,10 +409,10 @@ def _build_execution_request(
     )
 
 
-def _target_log_context(target: GithubPrV1Target) -> dict[str, object]:
+def _target_log_context(target: GithubIssueV1Target) -> dict[str, object]:
     return {
         "connector": "github",
-        "entity_type": "pr",
+        "entity_type": "issue",
         "scope_id": target.scope_id,
         "target_id": target.target_id,
         "expected_count": target.expected_count,
@@ -419,7 +421,7 @@ def _target_log_context(target: GithubPrV1Target) -> dict[str, object]:
 
 def _failed_ids_from_result(
     result: SyncExecutionResult,
-    seeds: list[GithubPrV1Seed],
+    seeds: list[GithubIssueV1Seed],
 ) -> list[str]:
     failed_ids = result.metadata.get("failed_ids")
     if isinstance(failed_ids, list):
@@ -438,9 +440,9 @@ def _build_sync_window() -> SyncWindow:
 
 
 def _chunked(
-    values: list[GithubPrV1Seed],
+    values: list[GithubIssueV1Seed],
     size: int,
-) -> list[list[GithubPrV1Seed]]:
+) -> list[list[GithubIssueV1Seed]]:
     return [values[index : index + size] for index in range(0, len(values), size)]
 
 
@@ -461,10 +463,10 @@ def _record_id_to_int(record_id: str) -> int:
     return int(record_id)
 
 
-def build_github_pr_v1_target_query():
+def build_github_issue_v1_target_query():
     return text(
         f"""
-        WITH v1_pr AS (
+        WITH v1_issue AS (
             SELECT
                 e.id AS langchain_id,
                 e.document AS content,
@@ -476,7 +478,7 @@ def build_github_pr_v1_target_query():
                         WHEN NULLIF(e.cmetadata ->> 'owner', '') IS NOT NULL
                          AND NULLIF(e.cmetadata ->> 'repo', '') IS NOT NULL
                         THEN (e.cmetadata ->> 'owner') || '/' || (e.cmetadata ->> 'repo')
-                        ELSE substring(e.id from '^github:pr:([^:]+):')
+                        ELSE substring(e.id from '^github:issue:([^:]+):')
                     END,
                     ''
                 ) AS target_id
@@ -485,29 +487,29 @@ def build_github_pr_v1_target_query():
               ON e.collection_id = c.uuid
             WHERE c.name = :collection_name
               AND e.cmetadata ->> 'source' = 'github'
-              AND e.cmetadata ->> 'entity_type' = 'pr'
+              AND e.cmetadata ->> 'entity_type' = 'issue'
         ),
         candidates AS (
             SELECT
-                v1_pr.scope_id,
-                v1_pr.target_id,
+                v1_issue.scope_id,
+                v1_issue.target_id,
                 (
                     COALESCE(v2.{KNOWLEDGE_STORE_METADATA_JSON_COLUMN}::jsonb, '{{}}'::jsonb) = '{{}}'::jsonb
                     OR v2.{KNOWLEDGE_STORE_ID_COLUMN} IS NULL
                     OR (
-                        v1_pr.source_updated_at IS NOT NULL
+                        v1_issue.source_updated_at IS NOT NULL
                         AND (
-                            v2.updated_at < v1_pr.source_updated_at
+                            v2.updated_at < v1_issue.source_updated_at
                             OR (
-                                v2.updated_at = v1_pr.source_updated_at
-                                AND v2.content IS DISTINCT FROM v1_pr.content
+                                v2.updated_at = v1_issue.source_updated_at
+                                AND v2.content IS DISTINCT FROM v1_issue.content
                             )
                         )
                     )
                 ) AS needs_backfill
-            FROM v1_pr
+            FROM v1_issue
             LEFT JOIN {KNOWLEDGE_STORE_TABLE_NAME} v2
-              ON v2.{KNOWLEDGE_STORE_ID_COLUMN} = v1_pr.langchain_id
+              ON v2.{KNOWLEDGE_STORE_ID_COLUMN} = v1_issue.langchain_id
         ),
         grouped AS (
             SELECT
@@ -525,7 +527,7 @@ def build_github_pr_v1_target_query():
         FROM grouped
         LEFT JOIN vector_store_v2_backfill_states state
           ON state.connector = 'github'
-         AND state.entity_type = 'pr'
+         AND state.entity_type = 'issue'
          AND state.scope_id = grouped.scope_id
          AND state.target_id = grouped.target_id
         WHERE grouped.pending_count > 0
@@ -539,10 +541,10 @@ def build_github_pr_v1_target_query():
     )
 
 
-def build_github_pr_v1_target_seed_query():
+def build_github_issue_v1_target_seed_query():
     return text(
         f"""
-        WITH v1_pr AS (
+        WITH v1_issue AS (
             SELECT
                 e.id AS langchain_id,
                 e.document AS content,
@@ -558,7 +560,7 @@ def build_github_pr_v1_target_seed_query():
                         WHEN NULLIF(e.cmetadata ->> 'owner', '') IS NOT NULL
                          AND NULLIF(e.cmetadata ->> 'repo', '') IS NOT NULL
                         THEN (e.cmetadata ->> 'owner') || '/' || (e.cmetadata ->> 'repo')
-                        ELSE substring(e.id from '^github:pr:([^:]+):')
+                        ELSE substring(e.id from '^github:issue:([^:]+):')
                     END,
                     ''
                 ) AS target_id
@@ -567,33 +569,33 @@ def build_github_pr_v1_target_seed_query():
               ON e.collection_id = c.uuid
             WHERE c.name = :collection_name
               AND e.cmetadata ->> 'source' = 'github'
-              AND e.cmetadata ->> 'entity_type' = 'pr'
+              AND e.cmetadata ->> 'entity_type' = 'issue'
         ),
         candidates AS (
             SELECT
-                v1_pr.langchain_id,
-                v1_pr.record_id,
-                v1_pr.content,
-                v1_pr.embedding,
-                v1_pr.scope_id,
-                v1_pr.target_id,
+                v1_issue.langchain_id,
+                v1_issue.record_id,
+                v1_issue.content,
+                v1_issue.embedding,
+                v1_issue.scope_id,
+                v1_issue.target_id,
                 (
                     COALESCE(v2.{KNOWLEDGE_STORE_METADATA_JSON_COLUMN}::jsonb, '{{}}'::jsonb) = '{{}}'::jsonb
                     OR v2.{KNOWLEDGE_STORE_ID_COLUMN} IS NULL
                     OR (
-                        v1_pr.source_updated_at IS NOT NULL
+                        v1_issue.source_updated_at IS NOT NULL
                         AND (
-                            v2.updated_at < v1_pr.source_updated_at
+                            v2.updated_at < v1_issue.source_updated_at
                             OR (
-                                v2.updated_at = v1_pr.source_updated_at
-                                AND v2.content IS DISTINCT FROM v1_pr.content
+                                v2.updated_at = v1_issue.source_updated_at
+                                AND v2.content IS DISTINCT FROM v1_issue.content
                             )
                         )
                     )
                 ) AS needs_backfill
-            FROM v1_pr
+            FROM v1_issue
             LEFT JOIN {KNOWLEDGE_STORE_TABLE_NAME} v2
-              ON v2.{KNOWLEDGE_STORE_ID_COLUMN} = v1_pr.langchain_id
+              ON v2.{KNOWLEDGE_STORE_ID_COLUMN} = v1_issue.langchain_id
         )
         SELECT
             candidates.langchain_id,
@@ -640,7 +642,7 @@ def build_upsert_seed_rows_statement():
             CAST(:embedding AS vector),
             '{{}}'::json,
             'github',
-            'pr',
+            'issue',
             :record_id,
             'installation',
             :scope_id,
@@ -682,7 +684,7 @@ def build_upsert_seed_rows_statement():
 def build_fetch_seeded_seed_chunk_query():
     return text(
         f"""
-        WITH seeded_pr AS (
+        WITH seeded_issue AS (
             SELECT
                 {KNOWLEDGE_STORE_ID_COLUMN} AS langchain_id,
                 COALESCE(
@@ -693,19 +695,19 @@ def build_fetch_seeded_seed_chunk_query():
                 {KNOWLEDGE_STORE_EMBEDDING_COLUMN} AS embedding
             FROM {KNOWLEDGE_STORE_TABLE_NAME}
             WHERE source = 'github'
-              AND entity_type = 'pr'
+              AND entity_type = 'issue'
               AND scope_id = :scope_id
               AND target_id = :target_id
               AND COALESCE({KNOWLEDGE_STORE_METADATA_JSON_COLUMN}::jsonb, '{{}}'::jsonb) = '{{}}'::jsonb
         ),
-        numbered_seeded_pr AS (
+        numbered_seeded_issue AS (
             SELECT
                 langchain_id,
                 record_id,
                 content,
                 embedding,
                 record_id::integer AS record_number
-            FROM seeded_pr
+            FROM seeded_issue
             WHERE record_id ~ '^[0-9]+$'
         )
         SELECT
@@ -713,7 +715,7 @@ def build_fetch_seeded_seed_chunk_query():
             record_id,
             content,
             embedding
-        FROM numbered_seeded_pr
+        FROM numbered_seeded_issue
         WHERE (
               CAST(:after_record_id AS integer) IS NULL
               OR record_number > CAST(:after_record_id AS integer)

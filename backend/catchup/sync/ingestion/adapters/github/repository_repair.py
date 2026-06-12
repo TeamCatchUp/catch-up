@@ -130,13 +130,29 @@ class GithubRepositoryRepairAdapter(GithubRepositoryAdapterBase):
                 repo=repo_ref.repo,
                 issue_ids=requested_ids,
             )
-            documents, build_failed_ids = await asyncio.to_thread(
-                self._build_issue_documents_sync,
-                repo_ref.owner,
-                repo_ref.repo,
-                nodes,
-            )
-            v2_documents = []
+            if self.vector_store is not None:
+                issue_bundles, build_failed_ids = await asyncio.to_thread(
+                    self._build_issue_document_bundles_sync,
+                    repo_ref.owner,
+                    repo_ref.repo,
+                    nodes,
+                )
+                documents = [bundle.document for bundle in issue_bundles]
+                v2_build_result = self._build_v2_documents_from_issue_bundles(
+                    owner=repo_ref.owner,
+                    repo=repo_ref.repo,
+                    bundles=list(issue_bundles),
+                )
+                v2_documents = v2_build_result.documents
+                failed_ids.extend(v2_build_result.failed_ids)
+            else:
+                documents, build_failed_ids = await asyncio.to_thread(
+                    self._build_issue_documents_sync,
+                    repo_ref.owner,
+                    repo_ref.repo,
+                    nodes,
+                )
+                v2_documents = []
         else:
             nodes, failed_ids = await self._fetch_pull_request_nodes(
                 owner=repo_ref.owner,
@@ -150,12 +166,14 @@ class GithubRepositoryRepairAdapter(GithubRepositoryAdapterBase):
                 nodes,
             )
             documents = [bundle.document for bundle in pr_bundles]
-            if self.pr_v2_vector_store is not None:
-                v2_documents = self._build_v2_documents_from_pr_bundles(
+            if self.vector_store is not None:
+                v2_build_result = self._build_v2_documents_from_pr_bundles(
                     owner=repo_ref.owner,
                     repo=repo_ref.repo,
                     bundles=list(pr_bundles),
                 )
+                v2_documents = v2_build_result.documents
+                failed_ids.extend(v2_build_result.failed_ids)
             else:
                 v2_documents = []
 
@@ -175,6 +193,7 @@ class GithubRepositoryRepairAdapter(GithubRepositoryAdapterBase):
                 v2_upsert_documents = self._apply_v1_page_content_to_v2_content(
                     v1_documents=upsert_documents,
                     v2_documents=v2_documents,
+                    entity_type=record_type,
                 )
 
                 context = (
@@ -191,7 +210,7 @@ class GithubRepositoryRepairAdapter(GithubRepositoryAdapterBase):
                         audit_context=None,
                         context=context,
                     )
-                    failed_ids.extend(dual_write_result.v2_failed_ids)
+                    failed_ids.extend(dual_write_result.vector_failed_ids)
                 else:
                     await self.repository.upsert_documents(
                         upsert_documents,

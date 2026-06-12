@@ -36,6 +36,7 @@ from catchup.db.engine import SessionLocal
 from catchup.db.incremental import recover_stale_processing_records
 from catchup.events.enums import EventType
 from catchup.events.enums import IntegrationEventAction
+from catchup.sync.backfill.github_issue_v2 import GithubIssueV2BackfillService
 from catchup.sync.backfill.github_pr_v2 import GithubPrV2BackfillService
 from catchup.sync.incremental import get_incremental_service
 from catchup.sync.incremental.dead_record_recovery import (
@@ -233,6 +234,21 @@ async def run_github_pr_v2_backfill_job():
     )
 
 
+async def run_github_issue_v2_backfill_job():
+    logger.info("[GITHUB][ISSUE_V2_BACKFILL][SCHEDULER] Starting backfill batch")
+    service = GithubIssueV2BackfillService()
+    result = await service.backfill_batch(
+        limit=settings.VECTOR_STORE_V2_BACKFILL_BATCH_SIZE,
+    )
+    logger.info(
+        "[GITHUB][ISSUE_V2_BACKFILL][SCHEDULER] Backfill batch completed: scanned=%s succeeded=%s skipped=%s failed=%s",
+        result.scanned,
+        result.succeeded,
+        result.skipped,
+        result.failed,
+    )
+
+
 
 def init_scheduler():
     global _scheduler
@@ -322,6 +338,14 @@ def init_scheduler():
             trigger=CronTrigger(hour=4, minute=15, timezone=SEOUL_TZ),
             id="github_pr_v2_backfill",
             name="GitHub PR v2 Backfill",
+            replace_existing=True,
+            misfire_grace_time=900,
+        )
+        _scheduler.add_job(
+            run_github_issue_v2_backfill_job,
+            trigger=CronTrigger(hour=6, minute=40, timezone=SEOUL_TZ),
+            id="github_issue_v2_backfill",
+            name="GitHub Issue v2 Backfill",
             replace_existing=True,
             misfire_grace_time=900,
         )

@@ -25,6 +25,7 @@ from catchup.db.github.installation_repository import (
 )
 from catchup.sync.common.exceptions import SyncConnectorException
 from catchup.sync.common.exceptions import SyncInternalException
+from catchup.sync.ingestion.adapters.github import GithubIssueV2BackfillAdapter
 from catchup.sync.ingestion.adapters.github import GithubPrV2BackfillAdapter
 from catchup.sync.ingestion.adapters.github import GithubRepositoryFullSyncAdapter
 from catchup.sync.ingestion.adapters.github import (
@@ -72,7 +73,7 @@ async def _create_github_repository_adapter(
     installation_id: int,
     adapter_cls: type[GithubRepositoryAdapterT],
     *,
-    force_v2_vector_store: bool = False,
+    force_vector_store: bool = False,
 ) -> GithubRepositoryAdapterT:
     installation = await run_in_threadpool(_load_installation_sync, installation_id)
 
@@ -91,10 +92,10 @@ async def _create_github_repository_adapter(
         embeddings = get_embedding_service(EmbeddingProvider.AWS_BEDROCK).get_embedder()
         repository = get_pgvector_repository(embeddings=embeddings)
         repository.ensure_initialized()
-        v2_vector_store = None
-        if settings.VECTOR_STORE_V2_DUAL_WRITE_ENABLED or force_v2_vector_store:
-            v2_vector_store = get_v2_vector_store(embeddings)
-            await v2_vector_store.initialize()
+        vector_store = None
+        if settings.VECTOR_STORE_V2_DUAL_WRITE_ENABLED or force_vector_store:
+            vector_store = get_v2_vector_store(embeddings)
+            await vector_store.initialize()
 
         return adapter_cls(
             installation_id=installation_id,
@@ -107,7 +108,7 @@ async def _create_github_repository_adapter(
             ),
             repository=repository,
             summarizer=get_summarizer_service(),
-            pr_v2_vector_store=v2_vector_store,
+            vector_store=vector_store,
         )
     except HTTPStatusError as exc:
         status_code = exc.response.status_code
@@ -204,5 +205,15 @@ async def create_github_pr_v2_backfill_adapter(
     return await _create_github_repository_adapter(
         installation_id,
         GithubPrV2BackfillAdapter,
-        force_v2_vector_store=True,
+        force_vector_store=True,
+    )
+
+
+async def create_github_issue_v2_backfill_adapter(
+    installation_id: int,
+) -> GithubIssueV2BackfillAdapter:
+    return await _create_github_repository_adapter(
+        installation_id,
+        GithubIssueV2BackfillAdapter,
+        force_vector_store=True,
     )

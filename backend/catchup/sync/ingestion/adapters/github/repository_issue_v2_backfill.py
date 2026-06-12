@@ -7,10 +7,10 @@ from catchup.sync.ingestion.adapters.github.repository_base import (
     GithubRepositoryAdapterBase,
 )
 from catchup.sync.ingestion.adapters.github.repository_models import (
-    GithubPrV2BackfillExecutionRequest,
+    GithubIssueV2BackfillExecutionRequest,
 )
 from catchup.sync.ingestion.adapters.github.repository_models import (
-    GithubPrV2BackfillSeed,
+    GithubIssueV2BackfillSeed,
 )
 from catchup.sync.ingestion.adapters.github.repository_models import (
     GithubRepositoryFetchResult,
@@ -30,26 +30,26 @@ from catchup.sync.ingestion.adapters.github.repository_models import (
 from catchup.sync.ingestion.schemas import SyncWindow
 
 
-class GithubPrV2BackfillAdapter(GithubRepositoryAdapterBase):
-    """Backfill GitHub PR v2 records by hydrating v1 seeds through GitHub API."""
+class GithubIssueV2BackfillAdapter(GithubRepositoryAdapterBase):
+    """Backfill GitHub Issue v2 records by hydrating v1 seeds through GitHub API."""
 
     async def fetch(
         self,
         *,
-        execution: GithubPrV2BackfillExecutionRequest,
+        execution: GithubIssueV2BackfillExecutionRequest,
         sync_window: SyncWindow,
     ) -> GithubRepositoryFetchResult:
         _ = sync_window
-        items, failed_ids = await self._fetch_pull_request_nodes(
+        items, failed_ids = await self._fetch_issue_nodes(
             owner=execution.owner,
             repo=execution.repo,
-            pull_request_ids=[seed.record_id for seed in execution.seeds],
+            issue_ids=[seed.record_id for seed in execution.seeds],
         )
         return GithubRepositoryFetchResult(
             requested_count=len(execution.seeds),
             exact_items=tuple(items),
             failed_record_ids=tuple(failed_ids),
-            record_type="pull_request",
+            record_type="issue",
             owner=execution.owner,
             repo=execution.repo,
             repo_full_name=execution.repo_full_name,
@@ -58,14 +58,17 @@ class GithubPrV2BackfillAdapter(GithubRepositoryAdapterBase):
     async def transform(
         self,
         *,
-        execution: GithubPrV2BackfillExecutionRequest,
+        execution: GithubIssueV2BackfillExecutionRequest,
         sync_window: SyncWindow,
         fetched: GithubRepositoryFetchResult,
     ) -> GithubRepositoryTransformResult:
         _ = sync_window
         seed_by_record_id = _seed_by_record_id(execution.seeds)
+        seed_langchain_id_by_record_id = {
+            seed.record_id: seed.langchain_id for seed in execution.seeds
+        }
         bundles, build_failed_ids = await run_in_threadpool(
-            self._build_pull_request_document_bundles_sync,
+            self._build_issue_document_bundles_sync,
             execution.owner,
             execution.repo,
             list(fetched.exact_items),
@@ -74,17 +77,19 @@ class GithubPrV2BackfillAdapter(GithubRepositoryAdapterBase):
         v2_documents: list[Document] = []
         document_ids: list[str] = []
         transform_failed_ids: list[str] = []
+        v2_failed_ids: list[str] = []
 
         for bundle in bundles:
-            record_id = str(bundle.pull_request.number)
+            record_id = str(bundle.issue.number)
             seed = seed_by_record_id.get(record_id)
             if seed is None:
                 transform_failed_ids.append(record_id)
+                v2_failed_ids.append(record_id)
                 continue
 
             try:
-                document = self.pr_v2_mapper.to_document(
-                    bundle.pull_request,
+                document = self.issue_v2_mapper.to_document(
+                    bundle.issue,
                     owner=execution.owner,
                     repo=execution.repo,
                     installation_id=self.installation_id,
@@ -93,6 +98,7 @@ class GithubPrV2BackfillAdapter(GithubRepositoryAdapterBase):
                 )
             except Exception:
                 transform_failed_ids.append(record_id)
+                v2_failed_ids.append(seed.langchain_id)
                 continue
 
             if document.id != seed.langchain_id:
@@ -111,12 +117,17 @@ class GithubPrV2BackfillAdapter(GithubRepositoryAdapterBase):
                 *transform_failed_ids,
             )
         )
+        v2_failed_ids.extend(
+            seed_langchain_id_by_record_id.get(record_id, record_id)
+            for record_id in (*fetched.failed_record_ids, *build_failed_ids)
+        )
         return GithubRepositoryTransformResult(
             requested_count=fetched.requested_count,
             v2_documents=tuple(v2_documents),
             document_ids=tuple(document_ids),
             error_count=len(failed_record_ids),
             failed_record_ids=failed_record_ids,
+            v2_failed_ids=_dedupe(tuple(v2_failed_ids)),
             owner=execution.owner,
             repo=execution.repo,
             repo_full_name=execution.repo_full_name,
@@ -125,7 +136,7 @@ class GithubPrV2BackfillAdapter(GithubRepositoryAdapterBase):
     async def summarize(
         self,
         *,
-        execution: GithubPrV2BackfillExecutionRequest,
+        execution: GithubIssueV2BackfillExecutionRequest,
         sync_window: SyncWindow,
         transformed: GithubRepositoryTransformResult,
     ) -> GithubRepositorySummaryResult:
@@ -140,7 +151,7 @@ class GithubPrV2BackfillAdapter(GithubRepositoryAdapterBase):
     async def persist(
         self,
         *,
-        execution: GithubPrV2BackfillExecutionRequest,
+        execution: GithubIssueV2BackfillExecutionRequest,
         sync_window: SyncWindow,
         transformed: GithubRepositoryTransformResult,
         summary: GithubRepositorySummaryResult,
@@ -150,15 +161,21 @@ class GithubPrV2BackfillAdapter(GithubRepositoryAdapterBase):
         document_ids = list(summary.document_ids)
         v2_documents = list(summary.v2_documents)
         upstream_error_count = len(set(transformed.failed_record_ids))
+        upstream_v2_failed_ids = tuple(transformed.v2_failed_ids)
 
         if not document_ids:
-            return GithubRepositoryPersistResult(error_count=upstream_error_count)
+            return GithubRepositoryPersistResult(
+                error_count=upstream_error_count,
+                v2_error_count=len(upstream_v2_failed_ids),
+                v2_failed_ids=upstream_v2_failed_ids,
+            )
 
         if self.vector_store is None:
+            v2_failed_ids = _dedupe((*upstream_v2_failed_ids, *document_ids))
             return GithubRepositoryPersistResult(
                 error_count=upstream_error_count + len(document_ids),
-                v2_error_count=len(document_ids),
-                v2_failed_ids=tuple(document_ids),
+                v2_error_count=len(v2_failed_ids),
+                v2_failed_ids=v2_failed_ids,
             )
 
         embeddings = [seed_by_langchain_id[doc_id].embedding for doc_id in document_ids]
@@ -170,27 +187,29 @@ class GithubPrV2BackfillAdapter(GithubRepositoryAdapterBase):
                 embeddings=embeddings,
             )
         except Exception:
+            v2_failed_ids = _dedupe((*upstream_v2_failed_ids, *document_ids))
             return GithubRepositoryPersistResult(
                 error_count=upstream_error_count + len(document_ids),
-                v2_error_count=len(document_ids),
-                v2_failed_ids=tuple(document_ids),
+                v2_error_count=len(v2_failed_ids),
+                v2_failed_ids=v2_failed_ids,
             )
 
         persisted_id_set = {str(persisted_id) for persisted_id in persisted_ids or []}
-        failed_ids = tuple(
+        write_failed_ids = tuple(
             doc_id for doc_id in document_ids if doc_id not in persisted_id_set
         )
+        v2_failed_ids = _dedupe((*upstream_v2_failed_ids, *write_failed_ids))
         return GithubRepositoryPersistResult(
-            persisted_count=len(document_ids) - len(failed_ids),
-            error_count=upstream_error_count + len(failed_ids),
-            v2_error_count=len(failed_ids),
-            v2_failed_ids=failed_ids,
+            persisted_count=len(document_ids) - len(write_failed_ids),
+            error_count=upstream_error_count + len(write_failed_ids),
+            v2_error_count=len(v2_failed_ids),
+            v2_failed_ids=v2_failed_ids,
         )
 
     def build_result(
         self,
         *,
-        execution: GithubPrV2BackfillExecutionRequest,
+        execution: GithubIssueV2BackfillExecutionRequest,
         sync_window: SyncWindow,
         fetched: GithubRepositoryFetchResult,
         transformed: GithubRepositoryTransformResult,
@@ -207,45 +226,46 @@ class GithubPrV2BackfillAdapter(GithubRepositoryAdapterBase):
                 *persisted.v2_failed_ids,
             )
         )
+        v2_failed_ids = _dedupe((*transformed.v2_failed_ids, *persisted.v2_failed_ids))
         return GithubRepositorySyncExecutionResult(
             tenant_id=execution.tenant_id,
-            target="repository_pr_v2_backfill",
+            target="repository_issue_v2_backfill",
             persisted_count=persisted.persisted_count,
             deleted_count=persisted.deleted_count,
             failed_count=len(failed_ids),
-            v2_failed_count=persisted.v2_error_count,
-            v2_failed_ids=persisted.v2_failed_ids,
+            v2_failed_count=len(v2_failed_ids),
+            v2_failed_ids=v2_failed_ids,
             skipped=persisted.skipped,
             fetched=fetched,
             transformed=transformed,
             summary=summary,
             persisted=persisted,
-            record_type="pull_request",
+            record_type="issue",
             metadata={
-                "record_type": "pull_request",
+                "record_type": "issue",
                 "repo_full_name": execution.repo_full_name,
                 "requested_count": len(execution.seeds),
                 "failed_ids": list(failed_ids),
                 "failed_record_ids": list(transformed.failed_record_ids),
-                "v2_failed_ids": list(persisted.v2_failed_ids),
+                "v2_failed_ids": list(v2_failed_ids),
             },
         )
 
 
 def _seed_by_record_id(
-    seeds: tuple[GithubPrV2BackfillSeed, ...],
-) -> dict[str, GithubPrV2BackfillSeed]:
+    seeds: tuple[GithubIssueV2BackfillSeed, ...],
+) -> dict[str, GithubIssueV2BackfillSeed]:
     return {seed.record_id: seed for seed in seeds}
 
 
 def _seed_by_langchain_id(
-    seeds: tuple[GithubPrV2BackfillSeed, ...],
-) -> dict[str, GithubPrV2BackfillSeed]:
+    seeds: tuple[GithubIssueV2BackfillSeed, ...],
+) -> dict[str, GithubIssueV2BackfillSeed]:
     return {seed.langchain_id: seed for seed in seeds}
 
 
 def _langchain_ids_for_record_ids(
-    seeds: tuple[GithubPrV2BackfillSeed, ...],
+    seeds: tuple[GithubIssueV2BackfillSeed, ...],
     record_ids: tuple[str, ...],
 ) -> tuple[str, ...]:
     seeds_by_record_id = _seed_by_record_id(seeds)

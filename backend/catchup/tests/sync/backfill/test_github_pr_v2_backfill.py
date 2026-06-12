@@ -27,6 +27,9 @@ from catchup.sync.ingestion.adapters.github import GithubPrV2BackfillSeed
 from catchup.sync.ingestion.adapters.github.repository_models import (
     GithubPrDocumentBundle,
 )
+from catchup.sync.ingestion.adapters.github.repository_models import (
+    GithubRepositoryFetchResult,
+)
 from catchup.sync.ingestion.pipeline import run_sync_ingestion
 from catchup.sync.ingestion.schemas import SyncWindow
 
@@ -116,7 +119,7 @@ async def test_backfill_adapter_fetch_uses_batch_pull_request_graphql() -> None:
         installation_id=118342815,
         client=client,
         repository=SimpleNamespace(),
-        pr_v2_vector_store=SimpleNamespace(),
+        vector_store=SimpleNamespace(),
     )
 
     fetched = await adapter.fetch(
@@ -168,7 +171,7 @@ async def test_backfill_adapter_fetch_splits_pull_request_graphql_batches_at_50(
         installation_id=118342815,
         client=client,
         repository=SimpleNamespace(),
-        pr_v2_vector_store=SimpleNamespace(),
+        vector_store=SimpleNamespace(),
     )
 
     fetched = await adapter.fetch(
@@ -207,14 +210,14 @@ async def test_backfill_adapter_fetch_splits_pull_request_graphql_batches_at_50(
 @pytest.mark.asyncio
 async def test_backfill_adapter_hydrates_pr_from_api_and_reuses_v1_seed_values() -> None:
     seed = _seed()
-    v2_vector_store = SimpleNamespace(
+    vector_store = SimpleNamespace(
         upsert_documents=AsyncMock(return_value=[seed.langchain_id])
     )
     adapter = GithubPrV2BackfillAdapter(
         installation_id=118342815,
         client=SimpleNamespace(),
         repository=SimpleNamespace(),
-        pr_v2_vector_store=v2_vector_store,
+        vector_store=vector_store,
     )
     api_items = [("724", {"number": 724})]
     api_document = Document(
@@ -276,8 +279,8 @@ async def test_backfill_adapter_hydrates_pr_from_api_and_reuses_v1_seed_values()
         "CatchUp",
         api_items,
     )
-    v2_vector_store.upsert_documents.assert_awaited_once()
-    upsert_call = v2_vector_store.upsert_documents.await_args
+    vector_store.upsert_documents.assert_awaited_once()
+    upsert_call = vector_store.upsert_documents.await_args
     document = upsert_call.args[0][0]
 
     assert result.persisted_count == 1
@@ -343,9 +346,23 @@ def test_fetch_seeded_seed_chunk_query_reads_v2_seed_rows_by_empty_metadata() ->
     assert "scope_id = :scope_id" in query
     assert "target_id = :target_id" in query
     assert "COALESCE(metadata::jsonb, '{}'::jsonb) = '{}'::jsonb" in query
-    assert "CAST(:after_langchain_id AS varchar) IS NULL" in query
-    assert "document_id > CAST(:after_langchain_id AS varchar)" in query
+    assert "record_id::integer AS record_number" in query
+    assert "CAST(:after_record_id AS integer) IS NULL" in query
+    assert "record_number > CAST(:after_record_id AS integer)" in query
+    assert "ORDER BY record_number" in query
     assert "LIMIT :limit" in query
+
+
+def test_github_fetch_result_log_summary_counts_exact_items() -> None:
+    result = GithubRepositoryFetchResult(
+        record_type="pull_request",
+        exact_items=(("724", {"number": 724}), ("725", {"number": 725})),
+    )
+
+    summary = result.connector_log_summary()
+
+    assert summary["record_count"] == 2
+    assert summary["exact_item_count"] == 2
 
 
 def test_mark_processing_statement_claims_scope_target_conditionally() -> None:
@@ -418,10 +435,10 @@ async def test_backfill_batch_records_scope_success_when_target_seeds_are_persis
     assert seed_insert_params[0]["embedding"] == "[0.0123,-0.0456,0.0789]"
     first_chunk_params = session.execute.call_args_list[4].args[1]
     assert first_chunk_params["limit"] == 50
-    assert first_chunk_params["after_langchain_id"] is None
+    assert first_chunk_params["after_record_id"] is None
     second_chunk_params = session.execute.call_args_list[5].args[1]
     assert second_chunk_params["limit"] == 50
-    assert second_chunk_params["after_langchain_id"] == seed.langchain_id
+    assert second_chunk_params["after_record_id"] == int(seed.record_id)
 
     finish_params = session.execute.call_args_list[-1].args[1]
     assert finish_params["state"] == "succeeded"
@@ -456,7 +473,8 @@ async def test_backfill_batch_records_scope_success_when_target_seeds_are_persis
     assert chunk_started_log.kwargs["chunk_index"] == 1
     assert chunk_started_log.kwargs["seed_count"] == 1
     assert chunk_started_log.kwargs["hydrate_batch_size"] == 50
-    assert chunk_started_log.kwargs["after_langchain_id"] is None
+    assert chunk_started_log.kwargs["after_record_id"] is None
+    assert chunk_started_log.kwargs["last_record_id"] == seed.record_id
     assert chunk_started_log.kwargs["last_langchain_id"] == seed.langchain_id
     chunk_completed_log = logger_mock.info.call_args_list[5]
     assert chunk_completed_log.kwargs["persisted_count"] == 1
