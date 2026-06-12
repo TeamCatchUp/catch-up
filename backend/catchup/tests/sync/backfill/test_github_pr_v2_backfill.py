@@ -301,7 +301,7 @@ def test_target_query_groups_v1_prs_by_scope_and_target() -> None:
 
     assert "LEFT JOIN knowledge_store v2" in query
     assert "v2.document_id = v1_pr.langchain_id" in query
-    assert "COALESCE(v2.metadata, '{}'::jsonb) = '{}'::jsonb" in query
+    assert "COALESCE(v2.metadata::jsonb, '{}'::jsonb) = '{}'::jsonb" in query
     assert "count(*) AS expected_count" in query
     assert "count(*) FILTER (WHERE needs_backfill) AS pending_count" in query
     assert "state.connector = 'github'" in query
@@ -316,7 +316,7 @@ def test_target_seed_query_returns_backfill_needed_rows_for_one_target() -> None
     assert "v1_pr.record_id" in query
     assert "candidates.record_id" in query
     assert "candidates.metadata" not in query
-    assert "COALESCE(v2.metadata, '{}'::jsonb) = '{}'::jsonb" in query
+    assert "COALESCE(v2.metadata::jsonb, '{}'::jsonb) = '{}'::jsonb" in query
     assert "WHERE candidates.scope_id = :scope_id" in query
     assert "AND candidates.target_id = :target_id" in query
     assert "AND candidates.needs_backfill" in query
@@ -331,7 +331,7 @@ def test_seed_rows_statement_marks_seed_with_empty_json_metadata() -> None:
     assert "CAST(:embedding AS vector)" in statement
     assert "'{}'::jsonb" in statement
     assert "ON CONFLICT (document_id) DO UPDATE SET" in statement
-    assert "metadata = '{}'::jsonb" in statement
+    assert "metadata = '{}'::json" in statement
 
 
 def test_fetch_seeded_seed_chunk_query_reads_v2_seed_rows_by_empty_metadata() -> None:
@@ -342,7 +342,7 @@ def test_fetch_seeded_seed_chunk_query_reads_v2_seed_rows_by_empty_metadata() ->
     assert "entity_type = 'pr'" in query
     assert "scope_id = :scope_id" in query
     assert "target_id = :target_id" in query
-    assert "COALESCE(metadata, '{}'::jsonb) = '{}'::jsonb" in query
+    assert "COALESCE(metadata::jsonb, '{}'::jsonb) = '{}'::jsonb" in query
     assert "document_id > :after_langchain_id" in query
     assert "LIMIT :limit" in query
 

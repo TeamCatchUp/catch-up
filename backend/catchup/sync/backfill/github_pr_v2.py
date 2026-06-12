@@ -486,7 +486,7 @@ def build_github_pr_v1_target_query():
                 v1_pr.scope_id,
                 v1_pr.target_id,
                 (
-                    COALESCE(v2.{KNOWLEDGE_STORE_METADATA_JSON_COLUMN}, '{{}}'::jsonb) = '{{}}'::jsonb
+                    COALESCE(v2.{KNOWLEDGE_STORE_METADATA_JSON_COLUMN}::jsonb, '{{}}'::jsonb) = '{{}}'::jsonb
                     OR v2.{KNOWLEDGE_STORE_ID_COLUMN} IS NULL
                     OR (
                         v1_pr.source_updated_at IS NOT NULL
@@ -572,7 +572,7 @@ def build_github_pr_v1_target_seed_query():
                 v1_pr.scope_id,
                 v1_pr.target_id,
                 (
-                    COALESCE(v2.{KNOWLEDGE_STORE_METADATA_JSON_COLUMN}, '{{}}'::jsonb) = '{{}}'::jsonb
+                    COALESCE(v2.{KNOWLEDGE_STORE_METADATA_JSON_COLUMN}::jsonb, '{{}}'::jsonb) = '{{}}'::jsonb
                     OR v2.{KNOWLEDGE_STORE_ID_COLUMN} IS NULL
                     OR (
                         v1_pr.source_updated_at IS NOT NULL
@@ -632,7 +632,7 @@ def build_upsert_seed_rows_statement():
             :langchain_id,
             :content,
             CAST(:embedding AS vector),
-            '{{}}'::jsonb,
+            '{{}}'::json,
             'github',
             'pr',
             :record_id,
@@ -653,7 +653,7 @@ def build_upsert_seed_rows_statement():
         ON CONFLICT ({KNOWLEDGE_STORE_ID_COLUMN}) DO UPDATE SET
             {KNOWLEDGE_STORE_CONTENT_COLUMN} = EXCLUDED.{KNOWLEDGE_STORE_CONTENT_COLUMN},
             {KNOWLEDGE_STORE_EMBEDDING_COLUMN} = EXCLUDED.{KNOWLEDGE_STORE_EMBEDDING_COLUMN},
-            {KNOWLEDGE_STORE_METADATA_JSON_COLUMN} = '{{}}'::jsonb,
+            {KNOWLEDGE_STORE_METADATA_JSON_COLUMN} = '{{}}'::json,
             source = EXCLUDED.source,
             entity_type = EXCLUDED.entity_type,
             record_id = EXCLUDED.record_id,
@@ -689,7 +689,7 @@ def build_fetch_seeded_seed_chunk_query():
           AND entity_type = 'pr'
           AND scope_id = :scope_id
           AND target_id = :target_id
-          AND COALESCE({KNOWLEDGE_STORE_METADATA_JSON_COLUMN}, '{{}}'::jsonb) = '{{}}'::jsonb
+          AND COALESCE({KNOWLEDGE_STORE_METADATA_JSON_COLUMN}::jsonb, '{{}}'::jsonb) = '{{}}'::jsonb
           AND (
               :after_langchain_id IS NULL
               OR {KNOWLEDGE_STORE_ID_COLUMN} > :after_langchain_id
