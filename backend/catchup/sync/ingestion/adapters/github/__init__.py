@@ -4,6 +4,15 @@ from catchup.sync.ingestion.adapters.github.repository_full_sync import (
 from catchup.sync.ingestion.adapters.github.repository_incremental import (
     GithubRepositoryIncrementalSyncAdapter,
 )
+from catchup.sync.ingestion.adapters.github.repository_issue_v2_backfill import (
+    GithubIssueV2BackfillAdapter,
+)
+from catchup.sync.ingestion.adapters.github.repository_models import (
+    GithubIssueV2BackfillExecutionRequest,
+)
+from catchup.sync.ingestion.adapters.github.repository_models import (
+    GithubIssueV2BackfillSeed,
+)
 from catchup.sync.ingestion.adapters.github.repository_models import (
     GithubPrV2BackfillExecutionRequest,
 )
@@ -27,6 +36,9 @@ from catchup.sync.ingestion.adapters.github.repository_repair import (
 )
 
 __all__ = [
+    "GithubIssueV2BackfillAdapter",
+    "GithubIssueV2BackfillExecutionRequest",
+    "GithubIssueV2BackfillSeed",
     "GithubPrV2BackfillAdapter",
     "GithubPrV2BackfillExecutionRequest",
     "GithubPrV2BackfillSeed",

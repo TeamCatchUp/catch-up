@@ -154,7 +154,7 @@ class GithubPrV2BackfillAdapter(GithubRepositoryAdapterBase):
         if not document_ids:
             return GithubRepositoryPersistResult(error_count=upstream_error_count)
 
-        if self.pr_v2_vector_store is None:
+        if self.vector_store is None:
             return GithubRepositoryPersistResult(
                 error_count=upstream_error_count + len(document_ids),
                 v2_error_count=len(document_ids),
@@ -164,7 +164,7 @@ class GithubPrV2BackfillAdapter(GithubRepositoryAdapterBase):
         embeddings = [seed_by_langchain_id[doc_id].embedding for doc_id in document_ids]
 
         try:
-            persisted_ids = await self.pr_v2_vector_store.upsert_documents(
+            persisted_ids = await self.vector_store.upsert_documents(
                 v2_documents,
                 ids=document_ids,
                 embeddings=embeddings,
