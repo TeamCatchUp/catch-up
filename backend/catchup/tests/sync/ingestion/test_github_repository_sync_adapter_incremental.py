@@ -10,6 +10,7 @@ from unittest.mock import patch
 
 from langchain_core.documents import Document
 
+from catchup.connectors.github.schemas import GithubIssue
 from catchup.connectors.github.schemas import GithubPullRequest
 from catchup.connectors.github.schemas import GithubUser
 from catchup.db.models import SyncConnector
@@ -19,6 +20,9 @@ from catchup.sync.ingestion.adapters.github import (
 )
 from catchup.sync.ingestion.adapters.github import (
     GithubRepositoryIncrementalSyncExecutionRequest,
+)
+from catchup.sync.ingestion.adapters.github.repository_models import (
+    GithubIssueDocumentBundle,
 )
 from catchup.sync.ingestion.adapters.github.repository_models import GithubRepoRef
 from catchup.sync.ingestion.adapters.github.repository_models import (
@@ -39,7 +43,7 @@ def _window() -> SyncWindow:
 
 
 def _make_adapter(
-    pr_v2_vector_store: SimpleNamespace | None = None,
+    vector_store: SimpleNamespace | None = None,
 ) -> tuple[GithubRepositoryIncrementalSyncAdapter, SimpleNamespace]:
     repository = SimpleNamespace(
         delete_documents=AsyncMock(),
@@ -54,7 +58,7 @@ def _make_adapter(
         installation_id=123,
         client=SimpleNamespace(),
         repository=repository,
-        pr_v2_vector_store=pr_v2_vector_store,
+        vector_store=vector_store,
     )
     return adapter, repository
 
@@ -83,6 +87,20 @@ def _make_pr_document(
     )
 
 
+def _make_issue_document(
+    *,
+    synced_at: str = "2026-06-10T03:00:00+00:00",
+) -> Document:
+    return Document(
+        id="github:issue:octo-org/octo-repo:123",
+        page_content="summarized issue",
+        metadata={
+            "entity_type": "issue",
+            "synced_at": synced_at,
+        },
+    )
+
+
 def _make_pull_request() -> GithubPullRequest:
     return GithubPullRequest(
         number=456,
@@ -98,6 +116,20 @@ def _make_pull_request() -> GithubPullRequest:
         created_at=datetime(2026, 6, 1, tzinfo=timezone.utc),
         updated_at=datetime(2026, 6, 2, tzinfo=timezone.utc),
         changed_files=2,
+    )
+
+
+def _make_issue() -> GithubIssue:
+    return GithubIssue(
+        number=123,
+        html_url="https://github.com/octo-org/octo-repo/issues/123",
+        title="Improve issue sync",
+        body="Sync issues into v2",
+        state="open",
+        author=GithubUser(id=1, login="octocat", name="Octo Cat"),
+        created_at=datetime(2026, 6, 1, tzinfo=timezone.utc),
+        updated_at=datetime(2026, 6, 2, tzinfo=timezone.utc),
+        comments_count=0,
     )
 
 
@@ -184,11 +216,11 @@ class GithubRepositoryIncrementalSyncAdapterTests(IsolatedAsyncioTestCase):
         self.assertEqual(result.error_count, 0)
 
     async def test_pull_request_dual_write_reuses_v1_embedding_for_v2_row(self) -> None:
-        pr_v2_vector_store = SimpleNamespace(
+        vector_store = SimpleNamespace(
             delete=AsyncMock(),
             upsert_documents=AsyncMock(),
         )
-        adapter, repository = _make_adapter(pr_v2_vector_store=pr_v2_vector_store)
+        adapter, repository = _make_adapter(vector_store=vector_store)
         v1_document = _make_pr_document()
         v2_document = adapter.pr_v2_mapper.to_document(
             _make_pull_request(),
@@ -208,7 +240,7 @@ class GithubRepositoryIncrementalSyncAdapterTests(IsolatedAsyncioTestCase):
         )
 
         self.assertEqual(result.persisted_ids, ["github:pr:octo-org/octo-repo:456"])
-        self.assertEqual(result.v2_failed_ids, ())
+        self.assertEqual(result.vector_failed_ids, ())
         repository.generate_embeddings.assert_awaited_once_with(
             [v1_document],
             audit_context=None,
@@ -223,9 +255,9 @@ class GithubRepositoryIncrementalSyncAdapterTests(IsolatedAsyncioTestCase):
             context="entity_type=pull_request,repo=octo-org/octo-repo",
         )
         repository.upsert_documents.assert_not_awaited()
-        pr_v2_vector_store.upsert_documents.assert_awaited_once()
+        vector_store.upsert_documents.assert_awaited_once()
 
-        upsert_call = pr_v2_vector_store.upsert_documents.await_args
+        upsert_call = vector_store.upsert_documents.await_args
         v2_document = upsert_call.args[0][0]
         self.assertEqual(v2_document.id, v1_document.id)
         self.assertEqual(v2_document.page_content, "summarized pull request")
@@ -242,11 +274,11 @@ class GithubRepositoryIncrementalSyncAdapterTests(IsolatedAsyncioTestCase):
         self.assertNotIn("merged", v2_document.metadata["github_pr"])
 
     async def test_pull_request_v2_upsert_failure_does_not_fail_v1_persist(self) -> None:
-        pr_v2_vector_store = SimpleNamespace(
+        vector_store = SimpleNamespace(
             delete=AsyncMock(),
             upsert_documents=AsyncMock(side_effect=RuntimeError("v2 down")),
         )
-        adapter, repository = _make_adapter(pr_v2_vector_store=pr_v2_vector_store)
+        adapter, repository = _make_adapter(vector_store=vector_store)
         v1_document = _make_pr_document()
         v2_document = adapter.pr_v2_mapper.to_document(
             _make_pull_request(),
@@ -266,16 +298,16 @@ class GithubRepositoryIncrementalSyncAdapterTests(IsolatedAsyncioTestCase):
         )
 
         self.assertEqual(result.persisted_ids, ["github:pr:octo-org/octo-repo:456"])
-        self.assertEqual(result.v2_failed_ids, (v1_document.id,))
+        self.assertEqual(result.vector_failed_ids, (v1_document.id,))
         repository.store_with_embeddings.assert_awaited_once()
-        pr_v2_vector_store.upsert_documents.assert_awaited_once()
+        vector_store.upsert_documents.assert_awaited_once()
 
     async def test_pull_request_missing_v2_document_does_not_fail_v1_persist(self) -> None:
-        pr_v2_vector_store = SimpleNamespace(
+        vector_store = SimpleNamespace(
             delete=AsyncMock(),
             upsert_documents=AsyncMock(),
         )
-        adapter, repository = _make_adapter(pr_v2_vector_store=pr_v2_vector_store)
+        adapter, repository = _make_adapter(vector_store=vector_store)
         document = _make_pr_document()
 
         result = await adapter._upsert_v1_v2_documents_dual_write(
@@ -287,7 +319,7 @@ class GithubRepositoryIncrementalSyncAdapterTests(IsolatedAsyncioTestCase):
         )
 
         self.assertEqual(result.persisted_ids, [])
-        self.assertEqual(result.v2_failed_ids, ())
+        self.assertEqual(result.vector_failed_ids, ())
         repository.upsert_documents.assert_awaited_once_with(
             [document],
             [document.id],
@@ -295,14 +327,14 @@ class GithubRepositoryIncrementalSyncAdapterTests(IsolatedAsyncioTestCase):
             context="entity_type=pull_request,repo=octo-org/octo-repo",
         )
         repository.store_with_embeddings.assert_not_awaited()
-        pr_v2_vector_store.upsert_documents.assert_not_awaited()
+        vector_store.upsert_documents.assert_not_awaited()
 
     async def test_pull_request_delete_removes_v1_and_v2_rows(self) -> None:
-        pr_v2_vector_store = SimpleNamespace(
+        vector_store = SimpleNamespace(
             delete=AsyncMock(),
             upsert_documents=AsyncMock(),
         )
-        adapter, repository = _make_adapter(pr_v2_vector_store=pr_v2_vector_store)
+        adapter, repository = _make_adapter(vector_store=vector_store)
         execution = GithubRepositoryIncrementalSyncExecutionRequest(
             tenant_id="123",
             repo_id=42,
@@ -325,18 +357,18 @@ class GithubRepositoryIncrementalSyncAdapterTests(IsolatedAsyncioTestCase):
 
         doc_id = "github:pr:octo-org/octo-repo:456"
         repository.delete_documents.assert_awaited_once_with([doc_id])
-        pr_v2_vector_store.delete.assert_awaited_once_with([doc_id])
+        vector_store.delete.assert_awaited_once_with([doc_id])
         self.assertEqual(result.deleted_count, 1)
         self.assertEqual(result.error_count, 0)
         self.assertEqual(result.v2_error_count, 0)
         self.assertEqual(result.v2_failed_ids, ())
 
     async def test_pull_request_v2_delete_failure_does_not_fail_v1_delete(self) -> None:
-        pr_v2_vector_store = SimpleNamespace(
+        vector_store = SimpleNamespace(
             delete=AsyncMock(side_effect=RuntimeError("v2 down")),
             upsert_documents=AsyncMock(),
         )
-        adapter, repository = _make_adapter(pr_v2_vector_store=pr_v2_vector_store)
+        adapter, repository = _make_adapter(vector_store=vector_store)
         execution = GithubRepositoryIncrementalSyncExecutionRequest(
             tenant_id="123",
             repo_id=42,
@@ -359,7 +391,7 @@ class GithubRepositoryIncrementalSyncAdapterTests(IsolatedAsyncioTestCase):
 
         doc_id = "github:pr:octo-org/octo-repo:456"
         repository.delete_documents.assert_awaited_once_with([doc_id])
-        pr_v2_vector_store.delete.assert_awaited_once_with([doc_id])
+        vector_store.delete.assert_awaited_once_with([doc_id])
         self.assertEqual(result.deleted_count, 1)
         self.assertEqual(result.error_count, 0)
         self.assertEqual(result.v2_error_count, 1)
@@ -465,11 +497,11 @@ class GithubRepositoryIncrementalSyncAdapterTests(IsolatedAsyncioTestCase):
         self.assertEqual(result.error_count, 0)
 
     async def test_pull_request_transform_builds_explicit_v1_and_v2_documents(self) -> None:
-        pr_v2_vector_store = SimpleNamespace(
+        vector_store = SimpleNamespace(
             delete=AsyncMock(),
             upsert_documents=AsyncMock(),
         )
-        adapter, _repository = _make_adapter(pr_v2_vector_store=pr_v2_vector_store)
+        adapter, _repository = _make_adapter(vector_store=vector_store)
         v1_document = _make_pr_document()
         pull_request = _make_pull_request()
         pull_request_nodes = [("456", {"number": 456})]
@@ -526,3 +558,297 @@ class GithubRepositoryIncrementalSyncAdapterTests(IsolatedAsyncioTestCase):
             v1_document.page_content,
         )
         self.assertEqual(transformed.v2_documents[0].metadata["scope_id"], "123")
+
+    async def test_issue_transform_builds_explicit_v1_and_v2_documents(self) -> None:
+        vector_store = SimpleNamespace(
+            delete=AsyncMock(),
+            upsert_documents=AsyncMock(),
+        )
+        adapter, _repository = _make_adapter(vector_store=vector_store)
+        v1_document = _make_issue_document()
+        issue = _make_issue()
+        issue_nodes = [("123", {"number": 123})]
+
+        with (
+            patch.object(
+                adapter,
+                "_get_repo_ref",
+                AsyncMock(
+                    return_value=GithubRepoRef(
+                        repo_id=42,
+                        full_name="octo-org/octo-repo",
+                        owner="octo-org",
+                        repo="octo-repo",
+                    )
+                ),
+            ),
+            patch.object(
+                adapter,
+                "_fetch_issue_nodes",
+                AsyncMock(return_value=(issue_nodes, [])),
+            ),
+            patch.object(
+                adapter,
+                "_build_issue_document_bundles_sync",
+                Mock(
+                    return_value=(
+                        [GithubIssueDocumentBundle(issue=issue, document=v1_document)],
+                        [],
+                    )
+                ),
+            ),
+        ):
+            execution = GithubRepositoryIncrementalSyncExecutionRequest(
+                tenant_id="123",
+                repo_id=42,
+                record_type="issue",
+                record_id="123",
+                event_kind="updated",
+            )
+            fetched = await adapter.fetch(execution=execution, sync_window=_window())
+            transformed = await adapter.transform(
+                execution=execution,
+                sync_window=_window(),
+                fetched=fetched,
+            )
+
+        self.assertEqual(transformed.v1_documents, (v1_document,))
+        self.assertEqual(transformed.document_ids, (v1_document.id,))
+        self.assertEqual(len(transformed.v2_documents), 1)
+        self.assertEqual(transformed.v2_documents[0].id, v1_document.id)
+        self.assertEqual(
+            transformed.v2_documents[0].page_content,
+            v1_document.page_content,
+        )
+        self.assertEqual(transformed.v2_documents[0].metadata["scope_id"], "123")
+        self.assertEqual(transformed.v2_documents[0].metadata["entity_type"], "issue")
+
+    async def test_issue_v2_mapper_failure_is_reported_as_v2_failure(self) -> None:
+        vector_store = SimpleNamespace(
+            delete=AsyncMock(),
+            upsert_documents=AsyncMock(),
+        )
+        adapter, repository = _make_adapter(vector_store=vector_store)
+        v1_document = _make_issue_document()
+        issue = _make_issue()
+        issue_nodes = [("123", {"number": 123})]
+        adapter.issue_v2_mapper.to_document = Mock(side_effect=ValueError("bad issue"))
+
+        with (
+            patch.object(
+                adapter,
+                "_get_repo_ref",
+                AsyncMock(
+                    return_value=GithubRepoRef(
+                        repo_id=42,
+                        full_name="octo-org/octo-repo",
+                        owner="octo-org",
+                        repo="octo-repo",
+                    )
+                ),
+            ),
+            patch.object(
+                adapter,
+                "_fetch_issue_nodes",
+                AsyncMock(return_value=(issue_nodes, [])),
+            ),
+            patch.object(
+                adapter,
+                "_build_issue_document_bundles_sync",
+                Mock(
+                    return_value=(
+                        [GithubIssueDocumentBundle(issue=issue, document=v1_document)],
+                        [],
+                    )
+                ),
+            ),
+        ):
+            execution = GithubRepositoryIncrementalSyncExecutionRequest(
+                tenant_id="123",
+                repo_id=42,
+                record_type="issue",
+                record_id="123",
+                event_kind="updated",
+            )
+            fetched = await adapter.fetch(execution=execution, sync_window=_window())
+            transformed = await adapter.transform(
+                execution=execution,
+                sync_window=_window(),
+                fetched=fetched,
+            )
+            summary = await adapter.summarize(
+                execution=execution,
+                sync_window=_window(),
+                transformed=transformed,
+            )
+            result = await adapter.persist(
+                execution=execution,
+                sync_window=_window(),
+                transformed=transformed,
+                summary=summary,
+            )
+
+        self.assertEqual(transformed.v1_documents, (v1_document,))
+        self.assertEqual(transformed.v2_documents, ())
+        self.assertEqual(transformed.v2_failed_ids, (v1_document.id,))
+        repository.upsert_documents.assert_awaited_once()
+        vector_store.upsert_documents.assert_not_awaited()
+        self.assertEqual(result.persisted_count, 1)
+        self.assertEqual(result.v2_error_count, 1)
+        self.assertEqual(result.v2_failed_ids, (v1_document.id,))
+
+    async def test_issue_v2_mapper_partial_failure_upserts_successful_v2_docs(self) -> None:
+        vector_store = SimpleNamespace(
+            delete=AsyncMock(),
+            upsert_documents=AsyncMock(
+                return_value=["github:issue:octo-org/octo-repo:123"]
+            ),
+        )
+        adapter, repository = _make_adapter(vector_store=vector_store)
+        repository.generate_embeddings = AsyncMock(
+            return_value=[
+                [0.0123, -0.0456, 0.0789],
+                [0.0223, -0.0556, 0.0889],
+            ]
+        )
+        v1_document = _make_issue_document()
+        failed_document = Document(
+            id="github:issue:octo-org/octo-repo:124",
+            page_content="summarized failed issue",
+            metadata={
+                "entity_type": "issue",
+                "synced_at": "2026-06-10T03:00:00+00:00",
+            },
+        )
+        issue = _make_issue()
+        failed_issue = issue.model_copy(
+            update={
+                "number": 124,
+                "html_url": "https://github.com/octo-org/octo-repo/issues/124",
+                "title": "Issue with bad metadata",
+            }
+        )
+        original_mapper = adapter.issue_v2_mapper.to_document
+
+        def _map_issue(*args, **kwargs):
+            issue_arg = args[0]
+            if issue_arg.number == 124:
+                raise ValueError("bad issue")
+            return original_mapper(*args, **kwargs)
+
+        adapter.issue_v2_mapper.to_document = Mock(side_effect=_map_issue)
+
+        with patch.object(
+            adapter,
+            "_build_issue_document_bundles_sync",
+            Mock(
+                return_value=(
+                    [
+                        GithubIssueDocumentBundle(issue=issue, document=v1_document),
+                        GithubIssueDocumentBundle(
+                            issue=failed_issue,
+                            document=failed_document,
+                        ),
+                    ],
+                    [],
+                )
+            ),
+        ):
+            execution = GithubRepositoryIncrementalSyncExecutionRequest(
+                tenant_id="123",
+                repo_id=42,
+                record_type="issue",
+                record_id="123",
+                event_kind="updated",
+            )
+            fetched = GithubRepositoryFetchResult(
+                requested_count=2,
+                exact_items=(
+                    ("123", {"number": 123}),
+                    ("124", {"number": 124}),
+                ),
+                record_type="issue",
+                owner="octo-org",
+                repo="octo-repo",
+                repo_full_name="octo-org/octo-repo",
+            )
+            transformed = await adapter.transform(
+                execution=execution,
+                sync_window=_window(),
+                fetched=fetched,
+            )
+            summary = await adapter.summarize(
+                execution=execution,
+                sync_window=_window(),
+                transformed=transformed,
+            )
+            result = await adapter.persist(
+                execution=execution,
+                sync_window=_window(),
+                transformed=transformed,
+                summary=summary,
+            )
+
+        self.assertEqual(transformed.v1_documents, (v1_document, failed_document))
+        self.assertEqual([doc.id for doc in transformed.v2_documents], [v1_document.id])
+        self.assertEqual(transformed.v2_failed_ids, (failed_document.id,))
+        vector_store.upsert_documents.assert_awaited_once()
+        upsert_kwargs = vector_store.upsert_documents.await_args.kwargs
+        self.assertEqual(upsert_kwargs["ids"], [v1_document.id])
+        self.assertEqual(upsert_kwargs["embeddings"], [[0.0123, -0.0456, 0.0789]])
+        self.assertEqual(result.persisted_count, 2)
+        self.assertEqual(result.v2_error_count, 1)
+        self.assertEqual(result.v2_failed_ids, (failed_document.id,))
+
+    async def test_issue_delete_event_removes_v1_and_v2_documents(self) -> None:
+        vector_store = SimpleNamespace(
+            delete=AsyncMock(),
+            upsert_documents=AsyncMock(),
+        )
+        adapter, repository = _make_adapter(vector_store=vector_store)
+
+        with patch.object(
+            adapter,
+            "_get_repo_ref",
+            AsyncMock(
+                return_value=GithubRepoRef(
+                    repo_id=42,
+                    full_name="octo-org/octo-repo",
+                    owner="octo-org",
+                    repo="octo-repo",
+                )
+            ),
+        ):
+            execution = GithubRepositoryIncrementalSyncExecutionRequest(
+                tenant_id="123",
+                repo_id=42,
+                record_type="issue",
+                record_id="123",
+                event_kind="deleted",
+            )
+            fetched = await adapter.fetch(execution=execution, sync_window=_window())
+            transformed = await adapter.transform(
+                execution=execution,
+                sync_window=_window(),
+                fetched=fetched,
+            )
+            summary = await adapter.summarize(
+                execution=execution,
+                sync_window=_window(),
+                transformed=transformed,
+            )
+            result = await adapter.persist(
+                execution=execution,
+                sync_window=_window(),
+                transformed=transformed,
+                summary=summary,
+            )
+
+        repository.delete_documents.assert_awaited_once_with(
+            ["github:issue:octo-org/octo-repo:123"]
+        )
+        vector_store.delete.assert_awaited_once_with(
+            ["github:issue:octo-org/octo-repo:123"]
+        )
+        self.assertEqual(result.deleted_count, 1)
+        self.assertEqual(result.v2_error_count, 0)
