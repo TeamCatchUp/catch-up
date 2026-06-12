@@ -20,6 +20,8 @@ class GithubUser(BaseModel):
     email: str | None = None
     avatar_url: str | None = None
     html_url: str | None = None
+    type: str | None = None
+    catchup_user_id: str | None = None
 
 
 # ============================================================
@@ -28,10 +30,28 @@ class GithubUser(BaseModel):
 
 class GithubIssueComment(BaseModel):
     """Issue 코멘트 (간소화)"""
+    id: int | str | None = None
     author: GithubUser | None = None
     body: str
     created_at: datetime
     updated_at: datetime | None = None
+
+
+class GithubLabel(BaseModel):
+    """GitHub label metadata."""
+
+    name: str
+    color: str | None = None
+    description: str | None = None
+
+
+class GithubMilestone(BaseModel):
+    """GitHub milestone metadata."""
+
+    number: int
+    title: str
+    state: str
+    due_on: datetime | None = None
 
 
 class GithubIssue(BaseModel):
@@ -101,6 +121,7 @@ class PRFileContext(BaseModel):
 
 class GithubPRReview(BaseModel):
     """PR 리뷰"""
+    id: int | str | None = None
     author: GithubUser | None = None
     state: str  # APPROVED/CHANGES_REQUESTED/COMMENTED/DISMISSED/PENDING
     body: str | None = None
@@ -109,12 +130,14 @@ class GithubPRReview(BaseModel):
 
 class GithubPRComment(BaseModel):
     """PR 리뷰 코멘트 (파일별 인라인 코멘트)"""
+    id: int | str | None = None
     author: GithubUser | None = None
     body: str
     path: str | None = None  # 파일 경로
     line: int | None = None  # 코멘트가 달린 라인
     original_line: int | None = None  # 코멘트 작성 시점의 라인 번호
     diff_hunk: str | None = None  # 대상 코드 (diff)
+    outdated: bool | None = None
     created_at: datetime
     updated_at: datetime | None = None
 
@@ -123,6 +146,7 @@ class GithubPRCommitInfo(BaseModel):
     """PR에 포함된 커밋 정보 (간소화)"""
     sha: str
     message: str
+    author: GithubUser | None = None
     author_name: str | None = None
     author_login: str | None = None
     committed_at: datetime | None = None
@@ -165,9 +189,18 @@ class GithubPullRequest(BaseModel):
     # 코드 변경 통계
     changed_files: int = 0
     commits_count: int = 0
+    additions: int | None = None
+    deletions: int | None = None
+    is_draft: bool | None = None
+    review_decision: str | None = None
+    labels: list[GithubLabel] = Field(default_factory=list)
+    milestone: GithubMilestone | None = None
 
     # 리뷰 정보
     reviews: list[GithubPRReview] = Field(default_factory=list)
+
+    # PR conversation comments
+    issue_comments: list[GithubIssueComment] = Field(default_factory=list)
 
     # 리뷰 코멘트 (파일별 인라인 코멘트)
     comments: list[GithubPRComment] = Field(default_factory=list)

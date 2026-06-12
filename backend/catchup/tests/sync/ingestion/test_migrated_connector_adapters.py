@@ -16,20 +16,23 @@ from catchup.sync.ingestion.adapters.confluence import (
     ConfluenceSpaceIncrementalSyncExecutionRequest,
 )
 from catchup.sync.ingestion.adapters.confluence import ConfluenceSpaceSyncAdapter
+from catchup.sync.ingestion.adapters.github import GithubRepositoryFullSyncAdapter
 from catchup.sync.ingestion.adapters.github import (
     GithubRepositoryFullSyncExecutionRequest,
 )
 from catchup.sync.ingestion.adapters.github import (
+    GithubRepositoryIncrementalSyncAdapter,
+)
+from catchup.sync.ingestion.adapters.github import (
     GithubRepositoryIncrementalSyncExecutionRequest,
 )
-from catchup.sync.ingestion.adapters.github import GithubRepositorySyncAdapter
-from catchup.sync.ingestion.adapters.github.repository_sync import (
+from catchup.sync.ingestion.adapters.github.repository_models import (
     GithubRepositoryPersistResult,
 )
-from catchup.sync.ingestion.adapters.github.repository_sync import (
+from catchup.sync.ingestion.adapters.github.repository_models import (
     GithubRepositorySummaryResult,
 )
-from catchup.sync.ingestion.adapters.github.repository_sync import (
+from catchup.sync.ingestion.adapters.github.repository_models import (
     GithubRepositoryTransformResult,
 )
 from catchup.sync.ingestion.adapters.slack import (
@@ -89,8 +92,12 @@ class MigratedConnectorDescriptorTests(IsolatedAsyncioTestCase):
         async def get_repo_ref(_repo_id):
             return SimpleNamespace(owner="org", repo="repo", full_name="org/repo")
 
-        service = SimpleNamespace(repository=repository, _get_repo_ref=get_repo_ref)
-        adapter = GithubRepositorySyncAdapter(service=service)
+        adapter = GithubRepositoryIncrementalSyncAdapter(
+            installation_id=123,
+            client=SimpleNamespace(),
+            repository=repository,
+        )
+        adapter._get_repo_ref = get_repo_ref
         execution = GithubRepositoryIncrementalSyncExecutionRequest(
             tenant_id="123",
             repo_id=456,
@@ -123,22 +130,32 @@ class MigratedConnectorDescriptorTests(IsolatedAsyncioTestCase):
 
     async def test_github_full_sync_batch_persists_transformed_documents(self) -> None:
         repository = SimpleNamespace(upsert_documents=AsyncMock())
-        service = SimpleNamespace(summarizer=None, repository=repository)
 
         def build_issue_batch_documents_sync(_owner, _repo, _records):
             document = Document(id="github:issue:org/repo:7", page_content="issue")
             return [document], [document.id], 0
 
-        service._build_issue_batch_documents_sync = build_issue_batch_documents_sync
-        adapter = GithubRepositorySyncAdapter(service=service)
+        client = SimpleNamespace(
+            fetch_issues_graphql_page=AsyncMock(
+                return_value=SimpleNamespace(
+                    nodes=({"number": 7},),
+                    next_cursor=None,
+                    is_last=True,
+                    stopped_by_since=False,
+                )
+            )
+        )
+        adapter = GithubRepositoryFullSyncAdapter(
+            installation_id=123,
+            client=client,
+            repository=repository,
+        )
+        adapter._build_issue_batch_documents_sync = build_issue_batch_documents_sync
         execution = GithubRepositoryFullSyncExecutionRequest(
             tenant_id="123",
-            repo_id=456,
-            repo_full_name="org/repo",
             owner="org",
             repo="repo",
             record_type="issue",
-            records=({"number": 7},),
         )
 
         fetched = await adapter.fetch(execution=execution, sync_window=_window())
@@ -174,24 +191,28 @@ class MigratedConnectorDescriptorTests(IsolatedAsyncioTestCase):
                 )
             )
         )
-        service = SimpleNamespace(client=client, _start_sync=lambda *_args: None)
-        adapter = GithubRepositorySyncAdapter(service=service)
+        adapter = GithubRepositoryFullSyncAdapter(
+            installation_id=123,
+            client=client,
+            repository=SimpleNamespace(),
+        )
         execution = GithubRepositoryFullSyncExecutionRequest(
             tenant_id="123",
-            repo_id=456,
-            repo_full_name="org/repo",
             owner="org",
             repo="repo",
             record_type="issue",
             batch_index=1,
             after_cursor="cursor-1",
-            sync_from_dt=datetime(2026, 5, 1, tzinfo=timezone.utc),
+        )
+        sync_window = SyncWindow(
+            window_start=datetime(2026, 5, 1, tzinfo=timezone.utc),
+            window_end=datetime(2026, 5, 16, tzinfo=timezone.utc),
         )
 
-        fetched = await adapter.fetch(execution=execution, sync_window=_window())
+        fetched = await adapter.fetch(execution=execution, sync_window=sync_window)
         result = adapter.build_result(
             execution=execution,
-            sync_window=_window(),
+            sync_window=sync_window,
             fetched=fetched,
             transformed=GithubRepositoryTransformResult(),
             summary=GithubRepositorySummaryResult(),

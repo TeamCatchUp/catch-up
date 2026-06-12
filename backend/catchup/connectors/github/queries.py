@@ -62,26 +62,35 @@ closedAt
 baseRefName
 headRefName
 author {
+  __typename
   login
   avatarUrl
+  url
   ... on User {
+    databaseId
     name
     email
   }
 }
 mergedBy {
+  __typename
   login
   avatarUrl
+  url
   ... on User {
+    databaseId
     name
     email
   }
 }
 assignees(first: 10) {
   nodes {
+    __typename
     login
     avatarUrl
+    url
     ... on User {
+      databaseId
       name
       email
     }
@@ -104,21 +113,50 @@ reviewRequests(first: 10) {
   nodes {
     requestedReviewer {
       ... on User {
+        __typename
+        databaseId
         login
         name
         email
         avatarUrl
+        url
       }
     }
+  }
+}
+isDraft
+reviewDecision
+additions
+deletions
+comments(first: 50) {
+  nodes {
+    databaseId
+    author {
+      __typename
+      login
+      avatarUrl
+      url
+      ... on User {
+        databaseId
+        name
+        email
+      }
+    }
+    body
+    createdAt
+    updatedAt
   }
 }
 reviews(first: 10) {
   nodes {
     databaseId
     author {
+      __typename
       login
       avatarUrl
+      url
       ... on User {
+        databaseId
         name
         email
       }
@@ -134,9 +172,12 @@ reviewThreads(first: 50) {
       nodes {
         databaseId
         author {
+          __typename
           login
           avatarUrl
+          url
           ... on User {
+            databaseId
             name
             email
           }
@@ -145,6 +186,7 @@ reviewThreads(first: 50) {
         path
         line
         originalLine
+        outdated
         diffHunk
         createdAt
         updatedAt
@@ -161,7 +203,13 @@ commits(first: 100) {
         name
         email
         user {
+          __typename
+          databaseId
           login
+          name
+          email
+          avatarUrl
+          url
         }
       }
       committedDate
@@ -285,6 +333,24 @@ query($owner: String!, $repo: String!, $number: Int!) {{
     pullRequest(number: $number) {{
       {PULL_REQUEST_FIELDS}
     }}
+  }}
+}}
+"""
+
+
+def build_pull_requests_by_numbers_query(numbers: list[int]) -> str:
+    pull_requests = "\n".join(
+        f"""
+        pr_{number}: pullRequest(number: {number}) {{
+          {PULL_REQUEST_FIELDS}
+        }}
+        """
+        for number in numbers
+    )
+    return f"""
+query($owner: String!, $repo: String!) {{
+  repository(owner: $owner, name: $repo) {{
+    {pull_requests}
   }}
 }}
 """

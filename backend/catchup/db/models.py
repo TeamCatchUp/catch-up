@@ -45,6 +45,69 @@ class Base(DeclarativeBase):
         return data
 
 
+class VectorStoreV2BackfillState(Base):
+    __tablename__ = "vector_store_v2_backfill_states"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    connector: Mapped[str] = mapped_column(String(50), nullable=False)
+    entity_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    scope_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    target_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    state: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+        server_default=text("'pending'"),
+    )
+    expected_count: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        server_default=text("0"),
+    )
+    backfill_count: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        server_default=text("0"),
+    )
+    failed_ids: Mapped[list[str]] = mapped_column(
+        JSONB,
+        nullable=False,
+        server_default=text("'[]'::jsonb"),
+    )
+    succeeded_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    failed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "state IN ('pending', 'processing', 'succeeded', 'failed')",
+            name="ck_vector_store_v2_backfill_states_state",
+        ),
+        UniqueConstraint(
+            "connector",
+            "entity_type",
+            "scope_id",
+            "target_id",
+            name="uq_vector_store_v2_backfill_states_scope_target",
+        ),
+        Index(
+            "ix_vector_store_v2_backfill_states_lookup",
+            "connector",
+            "entity_type",
+            "state",
+        ),
+    )
+
+
 class UserRole(StrEnum):
     USER = "user"
     ADMIN = "admin"
