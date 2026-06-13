@@ -511,7 +511,11 @@ def build_slack_message_v1_target_query():
             FROM candidates
             GROUP BY scope_id, target_id, target_name
         )
-        SELECT scope_id, target_id, target_name, expected_count
+        SELECT
+            grouped.scope_id,
+            grouped.target_id,
+            grouped.target_name,
+            grouped.expected_count
         FROM grouped
         LEFT JOIN vector_store_v2_backfill_states state
           ON state.connector = 'slack'
@@ -520,7 +524,7 @@ def build_slack_message_v1_target_query():
          AND state.target_id = grouped.target_id
         WHERE grouped.pending_count > 0
           AND (state.state IS NULL OR state.state != 'processing')
-        ORDER BY scope_id, target_id
+        ORDER BY grouped.scope_id, grouped.target_id
         LIMIT :limit
         """
     )

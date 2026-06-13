@@ -63,6 +63,8 @@ def test_slack_backfill_target_query_skips_finished_rows_and_stale_content() -> 
     assert "pending_count > 0" in query
     assert "v2.content IS DISTINCT FROM v1_message.content" in query
     assert "COALESCE(v2.metadata::jsonb, '{}'::jsonb) = '{}'::jsonb" in query
+    assert "SELECT\n            grouped.scope_id" in query
+    assert "ORDER BY grouped.scope_id, grouped.target_id" in query
 
 
 def test_slack_backfill_seed_query_skips_already_hydrated_rows() -> None:
