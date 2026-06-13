@@ -7,7 +7,6 @@ from fastapi.concurrency import run_in_threadpool
 from langchain_core.documents import Document
 from slack_sdk.errors import SlackApiError
 
-from catchup.components.summarizer import SummarizeRequest
 from catchup.components.summarizer import SummarizerService
 from catchup.components.vector_db.pgvector import PGVectorRepository
 from catchup.connectors.slack.client import SlackApiClientWrapper
@@ -17,6 +16,7 @@ from catchup.connectors.slack.schemas import SlackUser
 from catchup.db.engine import SessionLocal
 from catchup.db.slack import domain_repository
 from catchup.sync.audit import SyncAuditContext
+from catchup.sync.ingestion.adapters.base import BaseIngestionAdapter
 from catchup.sync.ingestion.document_builders.slack import SlackTransformer
 
 logger = structlog.get_logger(__name__)
@@ -24,8 +24,9 @@ logger = structlog.get_logger(__name__)
 CATCH_UP_ANSWER_PLACEHOLDER = "[CATCH_UP_ANSWER]"
 
 
-class SlackMessageAdapterBase:
-    """Shared Slack message adapter utilities."""
+class SlackMessageAdapterBase(
+    BaseIngestionAdapter[str, SlackApiClientWrapper, SlackTransformer]
+):
 
     _SKIP_SUBTYPES = frozenset(
         {
@@ -53,14 +54,18 @@ class SlackMessageAdapterBase:
         summarizer: SummarizerService | None = None,
         transformer: SlackTransformer | None = None,
     ) -> None:
-        self.team_id = team_id
-        self.client = client
-        self.repository = repository
-        self.bot_user_id = bot_user_id
-        self.summarizer = summarizer
         self.user_cache: dict[str, SlackUser] = {}
+        transformer = transformer or SlackTransformer(self.user_cache)
+        super().__init__(
+            scope_id=team_id,
+            client=client,
+            repository=repository,
+            summarizer=summarizer,
+            transformer=transformer,
+        )
+        self.team_id = team_id
+        self.bot_user_id = bot_user_id
         self.workspace_domain: str | None = None
-        self.transformer = transformer or SlackTransformer(self.user_cache)
 
     def _load_ingestion_context_from_db(self, db) -> None:
         users = domain_repository.get_users_by_team(
@@ -266,35 +271,21 @@ class SlackMessageAdapterBase:
         channel_name: str,
         audit_context: SyncAuditContext | None = None,
     ) -> list[Document]:
-        if not self.summarizer or not documents:
-            return documents
-
-        requests = []
-        for doc in documents:
-            content = doc.metadata.get("contextual_content", doc.page_content)
-            entity_type = doc.metadata.get("entity_type", "message")
-            source_type = f"slack_{entity_type}"
-            requests.append(SummarizeRequest(content=content, source_type=source_type))
-
-        summarized = await self.summarizer.summarize_batch(
-            requests,
+        return await self._summarize_documents_with_context(
+            documents,
+            source_type_prefix="slack",
+            default_entity_type="message",
             audit_context=audit_context,
             context=(
                 f"entity_type=message,channel={channel_name},"
                 f"doc_count={len(documents)}"
             ),
+            log_event="slack_documents_summarized",
+            log_fields={
+                "team_id": self.team_id,
+                "channel_name": channel_name,
+            },
         )
-
-        for doc, summary in zip(documents, summarized):
-            doc.page_content = summary
-
-        logger.debug(
-            "slack_documents_summarized",
-            team_id=self.team_id,
-            channel_name=channel_name,
-            doc_count=len(documents),
-        )
-        return documents
 
     async def _transform_messages(
         self,

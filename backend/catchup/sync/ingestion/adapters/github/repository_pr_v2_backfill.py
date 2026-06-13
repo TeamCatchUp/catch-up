@@ -87,7 +87,7 @@ class GithubPrV2BackfillAdapter(GithubRepositoryAdapterBase):
                     bundle.pull_request,
                     owner=execution.owner,
                     repo=execution.repo,
-                    installation_id=self.installation_id,
+                    installation_id=self.scope_id,
                     content=seed.content,
                     synced_at=self._document_synced_at(bundle.document),
                 )
