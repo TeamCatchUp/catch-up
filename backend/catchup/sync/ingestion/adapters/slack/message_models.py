@@ -11,6 +11,7 @@ from pydantic import ValidationInfo
 from pydantic import computed_field
 from pydantic import field_validator
 
+from catchup.connectors.slack.schemas import SlackMessage
 from catchup.connectors.slack.schemas import SlackThreadReply
 from catchup.db.models import SyncConnector
 from catchup.sync.audit import SyncAuditContext
@@ -19,6 +20,13 @@ from catchup.sync.ingestion.schemas import SyncExecutionResult
 from catchup.utils.validation import require_text
 
 SlackIncrementalEventKind = Literal["created", "updated", "deleted"]
+
+
+class ParsedSlackMessageDocument(BaseModel):
+    model_config = ConfigDict(extra="forbid", arbitrary_types_allowed=True)
+
+    message: SlackMessage
+    document: Document
 
 
 class SlackMessageFullSyncExecutionRequest(SyncExecutionRequest):
@@ -81,6 +89,7 @@ class SlackMessageFetchResult(BaseModel):
     parent_messages: tuple[dict[str, Any], ...] = ()
     reply_map: dict[str, tuple[SlackThreadReply, ...]] = Field(default_factory=dict)
     delete_document_ids: tuple[str, ...] = ()
+    failed_record_ids: tuple[str, ...] = ()
     channel_name: str | None = None
     fetch_error_count: int = 0
     batch_index: int = 0
@@ -110,10 +119,13 @@ class SlackMessageTransformResult(BaseModel):
 
     requested_count: int = 1
     documents: tuple[Document, ...] = ()
+    v2_documents: tuple[Document, ...] = ()
     document_ids: tuple[str, ...] = ()
     delete_document_ids: tuple[str, ...] = ()
     channel_name: str | None = None
     error_count: int = 0
+    failed_record_ids: tuple[str, ...] = ()
+    v2_failed_ids: tuple[str, ...] = ()
     latest_synced_ts: str | None = None
 
     @property
@@ -123,8 +135,10 @@ class SlackMessageTransformResult(BaseModel):
     def connector_log_summary(self) -> dict[str, object]:
         return {
             "document_count": self.document_count,
+            "v2_document_count": len(self.v2_documents),
             "delete_document_count": len(self.delete_document_ids),
             "error_count": self.error_count,
+            "v2_failed_count": len(self.v2_failed_ids),
             "latest_synced_ts_present": bool(self.latest_synced_ts),
         }
 
@@ -134,6 +148,7 @@ class SlackMessageSummaryResult(BaseModel):
 
     summary_applied: bool = False
     documents: tuple[Document, ...] = ()
+    v2_documents: tuple[Document, ...] = ()
     document_ids: tuple[str, ...] = ()
 
     def connector_log_summary(self) -> dict[str, object]:
@@ -149,6 +164,8 @@ class SlackMessagePersistResult(BaseModel):
     persisted_count: int = 0
     deleted_count: int = 0
     error_count: int = 0
+    v2_error_count: int = 0
+    v2_failed_ids: tuple[str, ...] = ()
     skipped: bool = False
 
     def connector_log_summary(self) -> dict[str, object]:
@@ -156,16 +173,19 @@ class SlackMessagePersistResult(BaseModel):
             "persisted_count": self.persisted_count,
             "deleted_count": self.deleted_count,
             "error_count": self.error_count,
+            "v2_error_count": self.v2_error_count,
             "skipped": self.skipped,
         }
 
 
 class SlackMessageSyncExecutionResult(SyncExecutionResult):
     connector: Literal[SyncConnector.SLACK] = SyncConnector.SLACK
-    target: Literal["message"] = "message"
+    target: Literal["message", "message_v2_backfill"] = "message"
     persisted_count: int = 0
     deleted_count: int = 0
     failed_count: int = 0
+    v2_failed_count: int = 0
+    v2_failed_ids: tuple[str, ...] = ()
     skipped: bool = False
     fetched: SlackMessageFetchResult
     transformed: SlackMessageTransformResult
@@ -181,8 +201,53 @@ class SlackMessageSyncExecutionResult(SyncExecutionResult):
             "persisted_count": self.persisted_count,
             "deleted_count": self.deleted_count,
             "failed_count": self.failed_count,
+            "v2_failed_count": self.v2_failed_count,
             "skipped": self.skipped,
             "is_last": self.is_last,
             "next_cursor_present": bool(self.next_cursor),
             "checkpoint_present": bool(self.checkpoint),
+        }
+
+
+class SlackMessageV2BackfillSeed(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    langchain_id: str
+    record_id: str
+    content: str
+    embedding: list[float]
+
+    @field_validator("langchain_id", "record_id", "content")
+    @classmethod
+    def _validate_required_text(cls, value: str, info: ValidationInfo) -> str:
+        return require_text(value, info.field_name or "field")
+
+    @field_validator("embedding")
+    @classmethod
+    def _validate_embedding(cls, value: list[float]) -> list[float]:
+        if not value:
+            raise ValueError("embedding must not be empty")
+        return value
+
+
+class SlackMessageV2BackfillExecutionRequest(SyncExecutionRequest):
+    model_config = ConfigDict(extra="forbid", arbitrary_types_allowed=True)
+
+    connector: Literal[SyncConnector.SLACK] = SyncConnector.SLACK
+    target: Literal["message_v2_backfill"] = "message_v2_backfill"
+    channel_id: str
+    channel_name: str
+    seeds: tuple[SlackMessageV2BackfillSeed, ...]
+    audit_context: SyncAuditContext | None = None
+
+    @field_validator("channel_id", "channel_name")
+    @classmethod
+    def _validate_required_text(cls, value: str, info: ValidationInfo) -> str:
+        return require_text(value, info.field_name or "field")
+
+    def log_context(self) -> dict[str, object]:
+        return {
+            "channel_id": self.channel_id,
+            "channel_name": self.channel_name,
+            "seed_count": len(self.seeds),
         }

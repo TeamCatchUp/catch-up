@@ -6,10 +6,16 @@ from catchup.sync.backfill.github_issue_v2_validation import (
 )
 from catchup.sync.backfill.github_pr_v2 import GithubPrV2BackfillService
 from catchup.sync.backfill.github_pr_v2_validation import GithubPrV2ValidationService
+from catchup.sync.backfill.slack_message_v2 import SlackMessageV2BackfillService
+from catchup.sync.backfill.slack_message_v2_validation import (
+    SlackMessageV2ValidationService,
+)
 
 __all__ = [
     "GithubIssueV2BackfillService",
     "GithubIssueV2ValidationService",
     "GithubPrV2BackfillService",
     "GithubPrV2ValidationService",
+    "SlackMessageV2BackfillService",
+    "SlackMessageV2ValidationService",
 ]

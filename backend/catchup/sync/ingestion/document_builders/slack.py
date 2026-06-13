@@ -69,6 +69,28 @@ class SlackTransformer:
             }
         )
 
+    @staticmethod
+    def _parse_file_ref(data: dict[str, Any]) -> SlackFileRef:
+        return SlackFileRef(
+            id=data.get("id", ""),
+            name=data.get("name", ""),
+            title=data.get("title"),
+            filetype=data.get("filetype"),
+            mimetype=data.get("mimetype"),
+            size=data.get("size"),
+            pretty_type=data.get("pretty_type"),
+            url_private=data.get("url_private"),
+            url_private_download=data.get("url_private_download"),
+            permalink=data.get("permalink"),
+            permalink_public=data.get("permalink_public"),
+            preview=data.get("preview"),
+            initial_comment=data.get("initial_comment"),
+            mode=data.get("mode"),
+            is_external=bool(data.get("is_external", False)),
+            external_type=data.get("external_type"),
+            file_access=data.get("file_access"),
+        )
+
     # ================================================================
     # Message 변환
     # ================================================================
@@ -120,7 +142,9 @@ class SlackTransformer:
             self._append_unique_text(parts, self._extract_block_text(block), part_keys)
 
         for attachment in data.get("attachments", []) or []:
-            self._append_unique_text(parts, self._extract_attachment_text(attachment), part_keys)
+            self._append_unique_text(
+                parts, self._extract_attachment_text(attachment), part_keys
+            )
 
         return "\n\n".join(parts).strip()
 
@@ -170,11 +194,17 @@ class SlackTransformer:
         parts.append(f"[{timestamp}]")
 
         # Author
-        author = message.user_real_name or message.user_name or message.bot_name or "Unknown"
+        author = (
+            message.user_real_name or message.user_name or message.bot_name or "Unknown"
+        )
         parts.append(f"Author: {author}")
 
         # Channel
-        channel_display = f"#{message.channel_name}" if message.channel_name else f"#{message.channel_id}"
+        channel_display = (
+            f"#{message.channel_name}"
+            if message.channel_name
+            else f"#{message.channel_id}"
+        )
         parts.append(f"Channel: {channel_display}")
 
         # Reacted (리액션한 사용자 - 중복 제거)
@@ -245,10 +275,16 @@ class SlackTransformer:
             for reply in message.replies:
                 reply_text = self._parse_slack_markdown(reply.text)
                 if reply_text and len(reply_text) > settings.SLACK_MIN_TEXT_LENGTH:
-                    reply_author = reply.user_real_name or reply.user_name or reply.user_id
+                    reply_author = (
+                        reply.user_real_name or reply.user_name or reply.user_id
+                    )
                     reply_ts = self._ts_to_datetime(reply.ts)
-                    reply_time = reply_ts.strftime("%Y-%m-%d %H:%M") if reply_ts else "Unknown"
-                    reply_parts.append(f"[{reply_author} at {reply_time}]: {reply_text}")
+                    reply_time = (
+                        reply_ts.strftime("%Y-%m-%d %H:%M") if reply_ts else "Unknown"
+                    )
+                    reply_parts.append(
+                        f"[{reply_author} at {reply_time}]: {reply_text}"
+                    )
             if reply_parts:
                 parts.append("")
                 parts.append(f"Replies ({len(reply_parts)}):")
@@ -266,11 +302,9 @@ class SlackTransformer:
         reply_user_ids = list({reply.user_id for reply in message.replies})
 
         # Reaction 사용자 user_id 목록 (중복 제거)
-        reacted_user_ids = list({
-            user_id
-            for reaction in message.reactions
-            for user_id in reaction.users
-        })
+        reacted_user_ids = list(
+            {user_id for reaction in message.reactions for user_id in reaction.users}
+        )
 
         # Mentioned 사용자 user_id 목록
         mentioned_user_ids = [u.id for u in message.mentioned_users]
@@ -290,37 +324,29 @@ class SlackTransformer:
             "entity_type": "message",
             "url": message.url,
             "summary": self._parse_slack_markdown(message.text),
-
             # === Slack 식별 ===
             "team_id": workspace_id,
             "channel_id": message.channel_id,
             "ts": message.ts,
             "thread_ts": message.thread_ts,
-
             # === 메시지 타입 ===
             "message_type": message.message_type,
             "subtype": message.subtype,
-
             # === 작성자 ===
             "author_id": message.user_id or message.bot_id,
             "author_name": author_name,
-
             # === 시간 ===
             "created_at": message.created_at.isoformat(),
             "edited_at": message.edited_ts,
             "synced_at": datetime.now(timezone.utc).isoformat(),
-
             # === Thread 정보 ===
             "reply_count": message.reply_count,
             "latest_reply_ts": message.latest_reply_ts,
             "reply_user_ids": reply_user_ids,
-
             # === Mentioned 사용자 ===
             "mentioned_user_ids": mentioned_user_ids,
-
             # === Reactions 사용자 ===
             "reacted_user_ids": reacted_user_ids,
-
             # === 첨부 파일 ===
             "files": [
                 {
@@ -335,7 +361,6 @@ class SlackTransformer:
                 }
                 for f in message.files
             ],
-
             # === Attachments (Bot 메시지 링크 등) ===
             "attachments": [
                 {
@@ -349,7 +374,6 @@ class SlackTransformer:
                 for a in message.attachments
                 if a.title_link or a.from_url  # 링크가 있는 attachment만
             ],
-
             # === 외부 참조 ===
             "jira_issues": message.jira_issues,
             "github_issues": message.github_issues,
@@ -421,14 +445,18 @@ class SlackTransformer:
             return self._extract_rich_text_elements(block.get("elements", []))
 
         for key in ("text", "label", "hint"):
-            self._append_unique_text(parts, self._extract_text_object(block.get(key)), part_keys)
+            self._append_unique_text(
+                parts, self._extract_text_object(block.get(key)), part_keys
+            )
 
         for field in block.get("fields", []) or []:
             self._append_unique_text(parts, self._extract_text_object(field), part_keys)
 
         for element in block.get("elements", []) or []:
             if isinstance(element, dict):
-                self._append_unique_text(parts, self._extract_text_object(element), part_keys)
+                self._append_unique_text(
+                    parts, self._extract_text_object(element), part_keys
+                )
 
         if block_type == "input":
             self._append_unique_text(
@@ -566,7 +594,11 @@ class SlackTransformer:
     def _extract_rich_text_date(element: dict[str, Any]) -> str:
         timestamp = element.get("timestamp")
         fallback = element.get("fallback", "")
-        return f"<!date^{timestamp}^{{date_short_pretty}}|{fallback}>" if timestamp else fallback
+        return (
+            f"<!date^{timestamp}^{{date_short_pretty}}|{fallback}>"
+            if timestamp
+            else fallback
+        )
 
     @staticmethod
     def _extract_rich_text_broadcast(element: dict[str, Any]) -> str:
@@ -653,19 +685,7 @@ class SlackTransformer:
         ]
 
         # Files 파싱
-        files = [
-            SlackFileRef(
-                id=f.get("id", ""),
-                name=f.get("name", ""),
-                title=f.get("title"),
-                filetype=f.get("filetype"),
-                mimetype=f.get("mimetype"),
-                size=f.get("size"),
-                url_private=f.get("url_private"),
-                permalink=f.get("permalink"),
-            )
-            for f in data.get("files", [])
-        ]
+        files = [self._parse_file_ref(f) for f in data.get("files", [])]
 
         # Attachments 파싱 (Bot 메시지, 링크 미리보기 등)
         attachments = [
@@ -682,8 +702,13 @@ class SlackTransformer:
                 from_url=a.get("from_url"),
                 footer=a.get("footer"),
                 color=a.get("color"),
+                image_url=a.get("image_url"),
+                thumb_url=a.get("thumb_url"),
+                app_id=a.get("app_id"),
+                app_unfurl_url=a.get("app_unfurl_url"),
                 fields=a.get("fields", []),
                 actions=a.get("actions", []),
+                blocks=a.get("blocks", []),
             )
             for a in data.get("attachments", [])
         ]
@@ -748,15 +773,7 @@ class SlackTransformer:
             for r in data.get("reactions", [])
         ]
 
-        files = [
-            SlackFileRef(
-                id=f.get("id", ""),
-                name=f.get("name", ""),
-                filetype=f.get("filetype"),
-                url_private=f.get("url_private"),
-            )
-            for f in data.get("files", [])
-        ]
+        files = [self._parse_file_ref(f) for f in data.get("files", [])]
 
         return SlackThreadReply(
             ts=data.get("ts", ""),
@@ -791,7 +808,11 @@ class SlackTransformer:
 
         # 시간 변환
         created_ts = data.get("created", 0)
-        created_at = datetime.fromtimestamp(created_ts, tz=timezone.utc) if created_ts else datetime.now(timezone.utc)
+        created_at = (
+            datetime.fromtimestamp(created_ts, tz=timezone.utc)
+            if created_ts
+            else datetime.now(timezone.utc)
+        )
 
         return SlackChannel(
             id=channel_id,
@@ -819,7 +840,9 @@ class SlackTransformer:
 
         # 시간 변환
         updated_ts = data.get("updated", 0)
-        updated_at = datetime.fromtimestamp(updated_ts, tz=timezone.utc) if updated_ts else None
+        updated_at = (
+            datetime.fromtimestamp(updated_ts, tz=timezone.utc) if updated_ts else None
+        )
 
         return SlackUserProfile(
             id=data.get("id", ""),
@@ -899,7 +922,9 @@ class SlackTransformer:
         def replace_date_format(match: re.Match) -> str:
             timestamp_str = match.group(1)
             # fallback이 있는 경우 group(2), 없으면 빈 문자열
-            fallback = match.group(2) if len(match.groups()) > 1 and match.group(2) else ""
+            fallback = (
+                match.group(2) if len(match.groups()) > 1 and match.group(2) else ""
+            )
             try:
                 timestamp = int(timestamp_str)
                 dt = datetime.fromtimestamp(timestamp, tz=timezone.utc)
@@ -910,11 +935,8 @@ class SlackTransformer:
                 return fallback.strip() if fallback else timestamp_str
 
         # <!date^1770011104^{format}|fallback> 패턴 (fallback 있는 경우)
-        result = re.sub(
-            r"<!date\^(\d+)\^[^|>]*\|([^>]*)>",
-            replace_date_format,
-            result
-        )
+        result = re.sub(r"<!date\^(\d+)\^[^|>]*\|([^>]*)>", replace_date_format, result)
+
         # <!date^timestamp^format> (fallback 없는 경우)
         def replace_date_no_fallback(match: re.Match) -> str:
             timestamp_str = match.group(1)
@@ -926,11 +948,7 @@ class SlackTransformer:
             except (ValueError, OSError):
                 return timestamp_str
 
-        result = re.sub(
-            r"<!date\^(\d+)\^[^>]*>",
-            replace_date_no_fallback,
-            result
-        )
+        result = re.sub(r"<!date\^(\d+)\^[^>]*>", replace_date_no_fallback, result)
 
         # URL 링크: <url|text> → text
         result = re.sub(r"<([^|>]+)\|([^>]+)>", r"\2", result)
@@ -992,18 +1010,17 @@ class SlackTransformer:
             return [], [], []
 
         # Jira 이슈: CAT-123, PROJ-456
-        jira_pattern = r'\b([A-Z]{2,10}-\d+)\b'
+        jira_pattern = r"\b([A-Z]{2,10}-\d+)\b"
         jira_issues = list(set(re.findall(jira_pattern, text)))
 
         # GitHub PR: owner/repo#123 또는 #123
         # GitHub Issue: owner/repo#123 또는 #123
         # 현재는 구분 불가, 둘 다 github_issues로 처리
-        github_pattern = r'(?:([a-zA-Z0-9_-]+/[a-zA-Z0-9_-]+))?#(\d+)'
+        github_pattern = r"(?:([a-zA-Z0-9_-]+/[a-zA-Z0-9_-]+))?#(\d+)"
         github_matches = re.findall(github_pattern, text)
-        github_issues = list(set([
-            f"{m[0]}#{m[1]}" if m[0] else f"#{m[1]}"
-            for m in github_matches
-        ]))
+        github_issues = list(
+            set([f"{m[0]}#{m[1]}" if m[0] else f"#{m[1]}" for m in github_matches])
+        )
 
         return jira_issues, [], github_issues
 
