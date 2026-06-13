@@ -82,6 +82,8 @@ class SlackFullSyncHandler(BaseFullSyncHandler):
         )
         synced_count = 0
         error_count = 0
+        v2_failed_count = 0
+        v2_failed_ids: list[str] = []
         batch_index = 0
         cursor: str | None = None
         while True:
@@ -100,6 +102,8 @@ class SlackFullSyncHandler(BaseFullSyncHandler):
             )
             synced_count += result.persisted_count + result.deleted_count
             error_count += result.failed_count
+            v2_failed_count += getattr(result, "v2_failed_count", 0)
+            v2_failed_ids.extend(getattr(result, "v2_failed_ids", ()))
             if result.is_last:
                 break
             cursor = result.next_cursor
@@ -115,8 +119,19 @@ class SlackFullSyncHandler(BaseFullSyncHandler):
                 job_id=context.job_id,
                 event_id=context.event_id,
                 error_count=error_count,
+                v2_failed_count=v2_failed_count,
+                v2_failed_ids=v2_failed_ids,
             )
-            raise RuntimeError("slack_full_sync_failed")
+            raise SyncInternalException(
+                "slack full sync failed",
+                metadata={
+                    "job_id": context.job_id,
+                    "scope_id": context.scope_id,
+                    "target_id": context.target_id,
+                    "v2_failed_count": v2_failed_count,
+                    "v2_failed_ids": v2_failed_ids,
+                },
+            )
         return TargetSyncResult(
             synced_count=synced_count,
             error_count=error_count,
@@ -181,7 +196,11 @@ class SlackIncrementalHandler(BaseIncrementalHandler):
         if result.failed_count > 0:
             raise SyncInternalException(
                 "slack incremental sync failed",
-                metadata={"record_key": context.record_key},
+                metadata={
+                    "record_key": context.record_key,
+                    "v2_failed_count": result.v2_failed_count,
+                    "v2_failed_ids": list(result.v2_failed_ids),
+                },
             )
         return TargetSyncResult(
             synced_count=result.persisted_count + result.deleted_count,

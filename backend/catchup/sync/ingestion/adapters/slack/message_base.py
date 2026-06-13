@@ -9,6 +9,7 @@ from slack_sdk.errors import SlackApiError
 
 from catchup.components.summarizer import SummarizerService
 from catchup.components.vector_db.pgvector import PGVectorRepository
+from catchup.components.vector_db.v2 import VectorStore
 from catchup.connectors.slack.client import SlackApiClientWrapper
 from catchup.connectors.slack.client import SlackConnectorApiError
 from catchup.connectors.slack.schemas import SlackThreadReply
@@ -17,7 +18,14 @@ from catchup.db.engine import SessionLocal
 from catchup.db.slack import domain_repository
 from catchup.sync.audit import SyncAuditContext
 from catchup.sync.ingestion.adapters.base import BaseIngestionAdapter
+from catchup.sync.ingestion.adapters.slack.message_models import (
+    ParsedSlackMessageDocument,
+)
+from catchup.sync.ingestion.adapters.slack.message_v2_document_builder import (
+    SlackMessageV2DocumentBuilder,
+)
 from catchup.sync.ingestion.document_builders.slack import SlackTransformer
+from catchup.sync.ingestion.dual_write import apply_page_content_to_vector_content
 
 logger = structlog.get_logger(__name__)
 
@@ -53,6 +61,8 @@ class SlackMessageAdapterBase(
         bot_user_id: str | None = None,
         summarizer: SummarizerService | None = None,
         transformer: SlackTransformer | None = None,
+        vector_store: VectorStore | None = None,
+        v2_document_builder: SlackMessageV2DocumentBuilder | None = None,
     ) -> None:
         self.user_cache: dict[str, SlackUser] = {}
         transformer = transformer or SlackTransformer(self.user_cache)
@@ -62,10 +72,14 @@ class SlackMessageAdapterBase(
             repository=repository,
             summarizer=summarizer,
             transformer=transformer,
+            vector_store=vector_store,
         )
         self.team_id = team_id
         self.bot_user_id = bot_user_id
         self.workspace_domain: str | None = None
+        self.message_v2_document_builder = (
+            v2_document_builder or SlackMessageV2DocumentBuilder()
+        )
 
     def _load_ingestion_context_from_db(self, db) -> None:
         users = domain_repository.get_users_by_team(
@@ -162,14 +176,14 @@ class SlackMessageAdapterBase(
         except (TypeError, ValueError):
             return current
 
-    def _transform_message_document_blocking(
+    def _transform_message_bundle_blocking(
         self,
         message_data: dict[str, Any],
         channel_id: str,
         channel_name: str,
         permalink: str | None,
         replies: list[SlackThreadReply],
-    ) -> Document:
+    ) -> ParsedSlackMessageDocument:
         message = self.transformer.parse_message(
             message_data,
             channel_id,
@@ -177,7 +191,8 @@ class SlackMessageAdapterBase(
             permalink,
             replies,
         )
-        return self.transformer.transform_message(message, self.team_id)
+        document = self.transformer.transform_message(message, self.team_id)
+        return ParsedSlackMessageDocument(message=message, document=document)
 
     def _transform_message_batch_blocking(
         self,
@@ -186,8 +201,41 @@ class SlackMessageAdapterBase(
         channel_name: str,
         reply_map: dict[str, tuple[SlackThreadReply, ...]],
     ) -> tuple[list[Document], list[str], int, str | None]:
-        batch_documents: list[Document] = []
+        (
+            parsed_documents,
+            document_ids,
+            errors,
+            latest_synced_ts,
+            _failed_record_ids,
+        ) = self._transform_message_bundle_batch_blocking(
+            messages,
+            channel_id,
+            channel_name,
+            reply_map,
+        )
+        return (
+            [parsed.document for parsed in parsed_documents],
+            document_ids,
+            errors,
+            latest_synced_ts,
+        )
+
+    def _transform_message_bundle_batch_blocking(
+        self,
+        messages: tuple[dict[str, Any], ...],
+        channel_id: str,
+        channel_name: str,
+        reply_map: dict[str, tuple[SlackThreadReply, ...]],
+    ) -> tuple[
+        list[ParsedSlackMessageDocument],
+        list[str],
+        int,
+        str | None,
+        tuple[str, ...],
+    ]:
+        parsed_documents: list[ParsedSlackMessageDocument] = []
         batch_doc_ids: list[str] = []
+        failed_record_ids: list[str] = []
         errors = 0
         batch_latest_synced_ts: str | None = None
 
@@ -204,15 +252,15 @@ class SlackMessageAdapterBase(
                     if message_ts
                     else None
                 )
-                doc = self._transform_message_document_blocking(
+                parsed = self._transform_message_bundle_blocking(
                     sanitized_msg_data,
                     channel_id,
                     channel_name,
                     permalink,
                     replies,
                 )
-                batch_documents.append(doc)
-                batch_doc_ids.append(doc.id)
+                parsed_documents.append(parsed)
+                batch_doc_ids.append(parsed.document.id)
 
                 if message_ts:
                     batch_latest_synced_ts = self._pick_latest_ts(
@@ -229,8 +277,28 @@ class SlackMessageAdapterBase(
                     exc_info=True,
                 )
                 errors += 1
+                message_ts = msg_data.get("ts")
+                if message_ts:
+                    failed_record_ids.append(str(message_ts))
 
-        return batch_documents, batch_doc_ids, errors, batch_latest_synced_ts
+        return (
+            parsed_documents,
+            batch_doc_ids,
+            errors,
+            batch_latest_synced_ts,
+            tuple(dict.fromkeys(failed_record_ids)),
+        )
+
+    def _build_v2_documents_from_bundles_blocking(
+        self,
+        parsed_documents: tuple[ParsedSlackMessageDocument, ...],
+    ) -> tuple[list[Document], tuple[str, ...]]:
+        if not self.vector_store:
+            return [], ()
+        return self.message_v2_document_builder.build_from_parsed_documents(
+            parsed_documents,
+            team_id=self.team_id,
+        )
 
     async def _fetch_thread_replies(
         self,
@@ -301,4 +369,50 @@ class SlackMessageAdapterBase(
             channel_id,
             channel_name,
             reply_map,
+        )
+
+    async def _transform_message_bundles(
+        self,
+        *,
+        messages: tuple[dict[str, Any], ...],
+        channel_id: str,
+        channel_name: str,
+        reply_map: dict[str, tuple[SlackThreadReply, ...]],
+    ) -> tuple[
+        list[ParsedSlackMessageDocument],
+        list[str],
+        int,
+        str | None,
+        tuple[str, ...],
+    ]:
+        return await run_in_threadpool(
+            self._transform_message_bundle_batch_blocking,
+            messages,
+            channel_id,
+            channel_name,
+            reply_map,
+        )
+
+    async def _build_v2_documents_from_bundles(
+        self,
+        parsed_documents: tuple[ParsedSlackMessageDocument, ...],
+    ) -> tuple[list[Document], tuple[str, ...]]:
+        return await run_in_threadpool(
+            self._build_v2_documents_from_bundles_blocking,
+            parsed_documents,
+        )
+
+    @staticmethod
+    def _align_v2_documents_to_v1_content(
+        *,
+        v1_documents: list[Document],
+        v2_documents: list[Document],
+        operation: str,
+    ) -> list[Document]:
+        return apply_page_content_to_vector_content(
+            source_documents=v1_documents,
+            vector_documents=v2_documents,
+            connector="slack",
+            entity_type="message",
+            operation=operation,
         )
