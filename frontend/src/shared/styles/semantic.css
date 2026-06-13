@@ -23,7 +23,7 @@
     --radius: 0.5rem;
 
     /* shadcn chart tokens */
-    --chart-1: var(--color-blue-30);
+    --chart-1: var(--data-chart-primary);
     --chart-2: var(--color-pink-40);
     --chart-3: var(--color-blue-50);
     --chart-4: var(--color-green-60);
@@ -86,6 +86,11 @@
     --background-normal-alternative: var(--color-neutral-1);
     --background-elevated-normal: var(--color-white);
     --background-elevated-alternative: var(--color-neutral-1);
+
+    /* Data/Static */
+    --data-chart-primary: var(--color-blue-30);
+    --static-white: var(--color-white);
+    --static-black: var(--color-gray-100);
 
     /* Accent */
     --accent-green: var(--color-green-60);
@@ -182,7 +187,7 @@
     --fill-primary-interaction-disable: var(--color-neutral-5);
     --fill-primary-interaction-hover-assistive: color-mix(in srgb, var(--color-blue-10) 20%, transparent);
     --fill-primary-normal-neutral: color-mix(in srgb, var(--color-blue-10) 12%, transparent);
-    --fill-normal-assistive-dark: #212225;
+    --fill-normal-assistive-dark: var(--color-neutral-83);
 
     /* Text */
     --text-strong: var(--color-gray-5);
@@ -193,7 +198,7 @@
     --text-inverse: var(--color-gray-95);
     --text-primary-strong: var(--color-blue-40);
     --text-primary-normal: var(--color-blue-30);
-    --text-primary-assistive: var(--color-blue-10);
+    --text-primary-assistive: var(--color-blue-20);
 
     /* Icon */
     --icon-strong: var(--color-gray-10);
@@ -204,13 +209,13 @@
     --icon-inverse: var(--color-gray-95);
     --icon-primary-strong: var(--color-blue-40);
     --icon-primary-normal: var(--color-blue-30);
-    --icon-primary-assistive: color-mix(in srgb, var(--color-blue-10) 84%, transparent);
+    --icon-primary-assistive: color-mix(in srgb, var(--color-blue-20) 84%, transparent);
 
     /* Line */
-    --line-strong: var(--color-neutral-60);
-    --line-normal: var(--color-neutral-70);
-    --line-neutral: var(--color-neutral-80);
-    --line-assistive: var(--color-neutral-85);
+    --line-strong: var(--color-neutral-50);
+    --line-normal: var(--color-neutral-75);
+    --line-neutral: var(--color-neutral-77);
+    --line-assistive: var(--color-neutral-78);
     --line-inverse: var(--color-gray-100);
     --line-primary-strong: var(--color-blue-30);
     --line-primary-normal: color-mix(in srgb, var(--color-blue-40) 64%, transparent);
@@ -220,7 +225,12 @@
     --background-normal-normal: var(--color-neutral-85);
     --background-normal-alternative: var(--color-neutral-95);
     --background-elevated-normal: var(--color-neutral-80);
-    --background-elevated-alternative: var(--color-neutral-95);
+    --background-elevated-alternative: var(--color-neutral-93);
+
+    /* Data/Static */
+    --data-chart-primary: var(--color-blue-20);
+    --static-white: var(--color-white);
+    --static-black: var(--color-gray-100);
 
     /* Accent */
     --accent-green: var(--color-green-40);

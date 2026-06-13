@@ -20,9 +20,13 @@
   /* Neutral */
   --color-neutral-100: #030303;
   --color-neutral-95: #0f0f10;
+  --color-neutral-93: #141415;
   --color-neutral-90: #171719;
   --color-neutral-85: #1b1c1e;
+  --color-neutral-83: #212225;
   --color-neutral-80: #292a2d;
+  --color-neutral-78: #2e2f33;
+  --color-neutral-77: #333438;
   --color-neutral-75: #37383c;
   --color-neutral-70: #46474c;
   --color-neutral-60: #5a5c63;
@@ -270,6 +274,24 @@
 /* === 시맨틱 컬러 (dark 자동 전환, inline으로 유틸리티에 직접 인라인) === */
 @theme inline {
   /* Fill */
+  --color-fill-normal-normal: var(--fill-normal);
+  --color-fill-normal-strong: var(--fill-strong);
+  --color-fill-normal-assistive-dark: var(--fill-normal-assistive-dark);
+  --color-fill-normal-interaction-hover: var(--fill-interaction-hover);
+  --color-fill-normal-interaction-pressed: var(--fill-interaction-pressed);
+  --color-fill-normal-interaction-pressed-hover: var(--fill-interaction-pressed-hover);
+  --color-fill-normal-interaction-inactive: var(--fill-interaction-inactive);
+  --color-fill-normal-interaction-disable: var(--fill-interaction-disable);
+  --color-fill-primary-normal-normal: var(--fill-primary);
+  --color-fill-primary-normal-neutral: var(--fill-primary-normal-neutral);
+  --color-fill-primary-normal-assistive: var(--fill-primary-assistive);
+  --color-fill-primary-normal-interaction-hover: var(--fill-primary-interaction-hover);
+  --color-fill-primary-normal-interaction-pressed: var(--fill-primary-interaction-pressed);
+  --color-fill-primary-normal-interaction-inactive: var(--fill-primary-interaction-inactive);
+  --color-fill-primary-normal-interaction-disable: var(--fill-primary-interaction-disable);
+  --color-fill-primary-normal-interaction-hover-assistive: var(--fill-primary-interaction-hover-assistive);
+
+  /* Fill compatibility aliases */
   --color-fill-normal: var(--fill-normal);
   --color-fill-strong: var(--fill-strong);
   --color-fill-primary: var(--fill-primary);
@@ -284,8 +306,6 @@
   --color-fill-primary-interaction-inactive: var(--fill-primary-interaction-inactive);
   --color-fill-primary-interaction-disable: var(--fill-primary-interaction-disable);
   --color-fill-primary-interaction-hover-assistive: var(--fill-primary-interaction-hover-assistive);
-  --color-fill-primary-normal-neutral: var(--fill-primary-normal-neutral);
-  --color-fill-normal-assistive-dark: var(--fill-normal-assistive-dark);
 
   /* Fill/Overlay */
   --color-fill-overlay-base: var(--fill-overlay-base);
@@ -295,7 +315,18 @@
   --color-fill-overlay-background: var(--fill-overlay-background);
   --color-fill-overlay-background-transparent: var(--fill-overlay-background-transparent);
 
-  /* Text → content (text-text-* 회피) */
+  /* Text */
+  --color-text-normal-strong: var(--text-strong);
+  --color-text-normal-normal: var(--text-normal);
+  --color-text-normal-neutral: var(--text-neutral);
+  --color-text-normal-alternative: var(--text-alternative);
+  --color-text-normal-assistive: var(--text-assistive);
+  --color-text-normal-inverse: var(--text-inverse);
+  --color-text-primary-strong: var(--text-primary-strong);
+  --color-text-primary-normal: var(--text-primary-normal);
+  --color-text-primary-assistive: var(--text-primary-assistive);
+
+  /* Text compatibility aliases */
   --color-content-strong: var(--text-strong);
   --color-content-normal: var(--text-normal);
   --color-content-neutral: var(--text-neutral);
@@ -307,17 +338,36 @@
   --color-content-primary-assistive: var(--text-primary-assistive);
 
   /* Icon */
+  --color-icon-normal-strong: var(--icon-strong);
+  --color-icon-normal-normal: var(--icon-normal);
+  --color-icon-normal-neutral: var(--icon-neutral);
+  --color-icon-normal-alternative: var(--icon-alternative);
+  --color-icon-normal-assistive: var(--icon-assistive);
+  --color-icon-normal-inverse: var(--icon-inverse);
+  --color-icon-primary-strong: var(--icon-primary-strong);
+  --color-icon-primary-normal: var(--icon-primary-normal);
+  --color-icon-primary-assistive: var(--icon-primary-assistive);
+
+  /* Icon compatibility aliases */
   --color-icon-strong: var(--icon-strong);
   --color-icon-normal: var(--icon-normal);
   --color-icon-neutral: var(--icon-neutral);
   --color-icon-alternative: var(--icon-alternative);
   --color-icon-assistive: var(--icon-assistive);
   --color-icon-inverse: var(--icon-inverse);
-  --color-icon-primary-strong: var(--icon-primary-strong);
   --color-icon-primary: var(--icon-primary-normal);
-  --color-icon-primary-assistive: var(--icon-primary-assistive);
 
-  /* Line → edge (border-line-* 회피) */
+  /* Line */
+  --color-line-normal-strong: var(--line-strong);
+  --color-line-normal-normal: var(--line-normal);
+  --color-line-normal-neutral: var(--line-neutral);
+  --color-line-normal-assistive: var(--line-assistive);
+  --color-line-normal-inverse: var(--line-inverse);
+  --color-line-primary-strong: var(--line-primary-strong);
+  --color-line-primary-normal: var(--line-primary-normal);
+  --color-line-primary-assistive: var(--line-primary-assistive);
+
+  /* Line compatibility aliases */
   --color-edge-strong: var(--line-strong);
   --color-edge-normal: var(--line-normal);
   --color-edge-neutral: var(--line-neutral);
@@ -334,25 +384,40 @@
   --color-background-elevated-alternative: var(--background-elevated-alternative);
 
   /* Accent */
-  --color-accent-green: var(--accent-green);
+  --color-accent-green-default: var(--accent-green);
   --color-accent-green-neutral: var(--accent-green-neutral);
   --color-accent-green-lighten: var(--accent-green-lighten);
-  --color-accent-red-orange: var(--accent-red-orange);
+  --color-accent-red-orange-default: var(--accent-red-orange);
   --color-accent-red-orange-neutral: var(--accent-red-orange-neutral);
   --color-accent-red-orange-lighten: var(--accent-red-orange-lighten);
-  --color-accent-violet: var(--accent-violet);
+  --color-accent-violet-default: var(--accent-violet);
   --color-accent-violet-neutral: var(--accent-violet-neutral);
   --color-accent-violet-lighten: var(--accent-violet-lighten);
-  --color-accent-light-blue: var(--accent-light-blue);
+  --color-accent-light-blue-default: var(--accent-light-blue);
   --color-accent-light-blue-lighten: var(--accent-light-blue-lighten);
-  --color-accent-pink: var(--accent-pink);
+  --color-accent-pink-default: var(--accent-pink);
   --color-accent-pink-lighten: var(--accent-pink-lighten);
-  --color-accent-red: var(--accent-red);
+  --color-accent-red-default: var(--accent-red);
   --color-accent-red-lighten: var(--accent-red-lighten);
-  --color-accent-information: var(--accent-information);
+  --color-accent-information-default: var(--accent-information);
   --color-accent-information-lighten: var(--accent-information-lighten);
-  --color-accent-black: var(--accent-black);
+  --color-accent-black-default: var(--accent-black);
   --color-accent-black-lighten: var(--accent-black-lighten);
+
+  /* Accent compatibility aliases */
+  --color-accent-green: var(--accent-green);
+  --color-accent-red-orange: var(--accent-red-orange);
+  --color-accent-violet: var(--accent-violet);
+  --color-accent-light-blue: var(--accent-light-blue);
+  --color-accent-pink: var(--accent-pink);
+  --color-accent-red: var(--accent-red);
+  --color-accent-information: var(--accent-information);
+  --color-accent-black: var(--accent-black);
+
+  /* Data/Static */
+  --color-data-chart-primary: var(--data-chart-primary);
+  --color-static-white: var(--static-white);
+  --color-static-black: var(--static-black);
 
   /* Status */
   --color-status-positive: var(--status-positive);
