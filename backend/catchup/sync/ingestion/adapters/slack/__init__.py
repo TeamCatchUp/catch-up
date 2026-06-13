@@ -23,6 +23,15 @@ from catchup.sync.ingestion.adapters.slack.message_models import (
 from catchup.sync.ingestion.adapters.slack.message_models import (
     SlackMessageTransformResult,
 )
+from catchup.sync.ingestion.adapters.slack.message_models import (
+    SlackMessageV2BackfillExecutionRequest,
+)
+from catchup.sync.ingestion.adapters.slack.message_models import (
+    SlackMessageV2BackfillSeed,
+)
+from catchup.sync.ingestion.adapters.slack.message_v2_backfill import (
+    SlackMessageV2BackfillAdapter,
+)
 
 __all__ = [
     "SlackMessageFetchResult",
@@ -34,4 +43,7 @@ __all__ = [
     "SlackMessageSummaryResult",
     "SlackMessageSyncExecutionResult",
     "SlackMessageTransformResult",
+    "SlackMessageV2BackfillAdapter",
+    "SlackMessageV2BackfillExecutionRequest",
+    "SlackMessageV2BackfillSeed",
 ]
