@@ -234,18 +234,18 @@
 
     /* Accent */
     --accent-green: var(--color-green-40);
-    --accent-green-neutral: var(--color-hc-green-90);
+    --accent-green-neutral: var(--color-high-contrast-green-90);
     --accent-green-lighten: var(--color-green-95);
     --accent-red-orange: var(--color-red-orange-40);
     --accent-red-orange-neutral: color-mix(in srgb, var(--color-red-orange-80) 80%, transparent);
     --accent-red-orange-lighten: color-mix(in srgb, var(--color-orange-90) 80%, transparent);
-    --accent-violet: var(--color-hc-violet-40);
-    --accent-violet-neutral: var(--color-hc-violet-80);
-    --accent-violet-lighten: var(--color-hc-violet-90);
+    --accent-violet: var(--color-high-contrast-violet-40);
+    --accent-violet-neutral: var(--color-high-contrast-violet-80);
+    --accent-violet-lighten: var(--color-high-contrast-violet-90);
     --accent-light-blue: var(--color-light-blue-40);
     --accent-light-blue-lighten: var(--color-light-blue-80);
-    --accent-pink: var(--color-hc-pink-50);
-    --accent-pink-lighten: var(--color-hc-pink-90);
+    --accent-pink: var(--color-high-contrast-pink-50);
+    --accent-pink-lighten: var(--color-high-contrast-pink-90);
     --accent-red: var(--color-red-30);
     --accent-red-lighten: var(--color-red-90);
     --accent-information: var(--color-information-40);
