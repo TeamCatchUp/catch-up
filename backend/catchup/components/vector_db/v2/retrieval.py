@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import time
+from collections.abc import Callable
 from datetime import timezone
 from typing import Any
 from typing import override
@@ -27,9 +28,9 @@ logger = structlog.get_logger(__name__)
 
 class PGBigmRetriever:
     """pg_bigm 기반 키워드 검색기.
-    
-    body와 title 필드에 각각 LIKE, fuzzy 유사도를 쿼리한다.
-    SQL 결과 순위를 RRF 방식으로 누적해 최종 키워드 검색 순위를 결정한다.
+
+    body(LIKE 전문)와 title(=% 퍼지)를 독립 메서드로 노출한다.
+    RetrievalService가 두 결과를 별도 버킷으로 받아 3-way RRF에 활용한다.
     """
 
     def __init__(
@@ -113,7 +114,6 @@ class PGBigmRetriever:
         token: str,
         token_condition: str,
         k: int,
-        offset: int,
         tool_filters: list[SourceType] | None,
         temporal_filters: list[TemporalFilter] | None,
         order_by: str = "bigm_similarity(e.title, :token) DESC, e.created_at DESC",
@@ -123,7 +123,7 @@ class PGBigmRetriever:
         token_condition과 order_by만 호출부에서 주입받아, body/title 쿼리가
         같은 골격을 재사용할 수 있도록 한다.
         """
-        params: dict[str, Any] = {"token": token, "k": k, "offset": offset}
+        params: dict[str, Any] = {"token": token, "k": k}
         filter_clauses = self._build_filter_clauses(
             tool_filters, temporal_filters, params
         )
@@ -138,7 +138,7 @@ class PGBigmRetriever:
             FROM {KNOWLEDGE_STORE_TABLE_NAME} e
             WHERE {" AND ".join(filter_clauses)}
             ORDER BY {order_by}
-            LIMIT :k OFFSET :offset
+            LIMIT :k
         """)
         return sql, params
 
@@ -146,7 +146,6 @@ class PGBigmRetriever:
         self,
         token: str,
         k: int,
-        offset: int,
         tool_filters: list[SourceType] | None,
         temporal_filters: list[TemporalFilter] | None,
     ) -> tuple[TextClause, dict[str, Any]]:
@@ -159,7 +158,6 @@ class PGBigmRetriever:
             token,
             "lower(e.body) LIKE lower(likequery(:token))",
             k,
-            offset,
             tool_filters,
             temporal_filters,
         )
@@ -168,7 +166,6 @@ class PGBigmRetriever:
         self,
         token: str,
         k: int,
-        offset: int,
         tool_filters: list[SourceType] | None,
         temporal_filters: list[TemporalFilter] | None,
     ) -> tuple[TextClause, dict[str, Any]]:
@@ -183,7 +180,6 @@ class PGBigmRetriever:
             token,
             "lower(e.title) =% lower(:token)",
             k,
-            offset,
             tool_filters,
             temporal_filters,
             order_by=(
@@ -222,38 +218,32 @@ class PGBigmRetriever:
         )
         return rows
 
-    async def search(
+    async def _search(
         self,
+        query_builder: Callable[
+            [str, int, list[SourceType] | None, list[TemporalFilter] | None],
+            tuple[TextClause, dict[str, Any]],
+        ],
         tokens: list[str],
         *,
         k: int,
-        offset: int = 0,
-        tool_filters: list[SourceType] | None = None,
-        temporal_filters: list[TemporalFilter] | None = None,
-        include_title: bool = False,
+        tool_filters: list[SourceType] | None,
+        temporal_filters: list[TemporalFilter] | None,
     ) -> list[Document]:
-        """토큰 목록으로 pg_bigm 키워드 검색을 수행한다.
+        """토큰별 쿼리를 단일 세션에서 순차 실행하고 RRF 점수로 병합한다.
 
-        각 토큰마다 body 쿼리(필수)와 title 쿼리(include_title=True일 때)를 실행하고,
-        SQL 결과 순위를 RRF 점수(1 / (60 + rank))로 변환해 문서별로 누적한다.
-        동일 문서가 여러 토큰이나 body/title 양쪽에서 히트하면 점수가 합산되어
-        상위로 올라온다. doc_map은 첫 히트 시점의 row를 보존하며(setdefault),
-        최종 정렬은 Python에서 누적 점수 기준으로 수행한다.
+        각 토큰의 SQL 결과 순위를 1/(60+rank)로 변환해 누적한다.
+        동일 문서가 여러 토큰에서 히트할수록 점수가 쌓여 상위로 올라온다.
+        query_builder로 body/title 쿼리를 주입받아 로직을 공유한다.
         """
         doc_map: dict[str, Any] = {}
         rank_scores: dict[str, float] = {}
 
         async with self._session_factory() as session:
             for token in tokens:
-                body_sql, body_params = self._build_body_query(
-                    token,
-                    k=k,
-                    offset=0,
-                    tool_filters=tool_filters,
-                    temporal_filters=temporal_filters,
-                )
+                sql, params = query_builder(token, k, tool_filters, temporal_filters)
                 for sql_rank, row in enumerate(
-                    await self._execute(session, body_sql, body_params)
+                    await self._execute(session, sql, params)
                 ):
                     doc_id = row.document_id
                     rank_scores[doc_id] = rank_scores.get(doc_id, 0.0) + 1.0 / (
@@ -261,38 +251,58 @@ class PGBigmRetriever:
                     )
                     doc_map.setdefault(doc_id, row)
 
-                if include_title:
-                    title_sql, title_params = self._build_title_query(
-                        token,
-                        k=k,
-                        offset=0,
-                        tool_filters=tool_filters,
-                        temporal_filters=temporal_filters,
-                    )
-                    for sql_rank, row in enumerate(
-                        await self._execute(session, title_sql, title_params)
-                    ):
-                        doc_id = row.document_id
-                        rank_scores[doc_id] = rank_scores.get(doc_id, 0.0) + 1.0 / (
-                            60 + sql_rank
-                        )
-                        doc_map.setdefault(doc_id, row)
-
         sorted_rows = sorted(
             doc_map.values(),
             key=lambda r: rank_scores[r.document_id],
             reverse=True,
         )
-        return self._to_documents(sorted_rows[offset : offset + k])
+        return self._to_documents(sorted_rows[:k])
+
+    async def search_body(
+        self,
+        tokens: list[str],
+        *,
+        k: int,
+        tool_filters: list[SourceType] | None = None,
+        temporal_filters: list[TemporalFilter] | None = None,
+    ) -> list[Document]:
+        """body 전문 검색(LIKE)을 수행한다."""
+        return await self._search(
+            self._build_body_query,
+            tokens,
+            k=k,
+            tool_filters=tool_filters,
+            temporal_filters=temporal_filters,
+        )
+
+    async def search_title(
+        self,
+        tokens: list[str],
+        *,
+        k: int,
+        tool_filters: list[SourceType] | None = None,
+        temporal_filters: list[TemporalFilter] | None = None,
+    ) -> list[Document]:
+        """title 퍼지 검색(=%)을 수행한다."""
+        return await self._search(
+            self._build_title_query,
+            tokens,
+            k=k,
+            tool_filters=tool_filters,
+            temporal_filters=temporal_filters,
+        )
 
 
 class RetrievalService(BaseVectorDbService):
     """벡터 검색과 키워드 검색을 병합하는 하이브리드 검색 서비스.
 
     vector: PGVectorStore cosine similarity (HNSW 인덱스)
-    keyword: PGBigmRetriever (pg_bigm GIN 인덱스)
-    병합: weighted_reciprocal_rank — 두 결과 리스트에 가중치를 적용한 RRF.
-          최종 doc.metadata["score"]가 downstream(RAG, search API)이 읽는 점수다.
+    body: PGBigmRetriever body LIKE (전문 검색)
+    title: PGBigmRetriever title =% (퍼지 검색)
+
+    세 결과를 weighted_reciprocal_rank로 3-way RRF한다.
+    weights = [vector, body, title] 순서로 명시적으로 지정한다.
+    최종 doc.metadata["score"]가 downstream(RAG, search API)이 읽는 점수다.
     """
 
     def __init__(
@@ -348,53 +358,66 @@ class RetrievalService(BaseVectorDbService):
         self,
         query: str,
         k: int = 10,
-        weights: list[float] = [0.6, 0.4],
+        weights: list[float] = [0.5, 0.3, 0.2],  # [vector, body, title]
         tool_filters: list[Any] | None = None,
         temporal_filters: list[Any] | None = None,
         keyword_tokens: list[str] | None = None,
         offset: int = 0,
-        score_threshold: float = 0.4,
+        score_threshold: float = 0.2,
     ) -> list[Document]:
-        """벡터 + 키워드 하이브리드 검색을 수행한다.
+        """벡터 + body + title 3-way 하이브리드 검색을 수행한다.
+
+        weights = [vector, body, title] 순서다.
+        RAG 기본값 [0.5, 0.3, 0.2]: body 신호 우선.
+        manual search 권장값 [0.4, 0.2, 0.4]: title 신호 강화.
 
         score_threshold: cosine distance가 (1 - threshold)를 초과하는 벡터 결과는
-            제거한다. 식별자 쿼리("CATDEV-134")처럼 임베딩 품질이 낮은 경우 약한
-            벡터 결과가 키워드 결과를 밀어내지 않도록 하기 위한 컷오프다.
+            제거한다. 식별자 쿼리처럼 임베딩 품질이 낮은 경우 약한 벡터 결과가
+            키워드 결과를 밀어내지 않도록 하기 위한 컷오프다.
 
-        similarity_score: 통과한 벡터 결과에만 부여(1 - distance). 높을수록 좋다.
-        score: weighted_reciprocal_rank가 최종적으로 부여하는 RRF 점수.
-            downstream이 랭킹 기준으로 읽는 값이다.
-
-        query와 keyword_tokens는 역할이 다르다:
-            query — 임베딩되어 벡터 유사도 검색에 사용. 시맨틱 문장이어야 한다.
-            keyword_tokens — pg_bigm LIKE/=% 검색에 사용. 식별자나 고유명사에 적합하다.
+        세 검색(vector, body, title)을 asyncio.gather로 병렬 실행한다.
         """
+        if len(weights) != 3:
+            raise ValueError("weights must have 3 elements: [vector, body, title]")
+
         vector_filter = self._build_vector_filter(tool_filters, temporal_filters)
         langchain_store = self._vector_store.get_langchain_vector_store()
 
-        # asimilarity_search_with_score는 (Document, cosine_distance) 튜플을 반환한다.
-        vector_results: list[
-            tuple[Document, float]
-        ] = await langchain_store.asimilarity_search_with_score(
+        vector_coro = langchain_store.asimilarity_search_with_score(
             query, k=k, filter=vector_filter
         )
+
+        if keyword_tokens and self._keyword_retriever:
+            body_coro = self._keyword_retriever.search_body(
+                keyword_tokens,
+                k=k,
+                tool_filters=tool_filters,
+                temporal_filters=temporal_filters,
+            )
+            title_coro = self._keyword_retriever.search_title(
+                keyword_tokens,
+                k=k,
+                tool_filters=tool_filters,
+                temporal_filters=temporal_filters,
+            )
+            vector_results, body_docs, title_docs = await asyncio.gather(
+                vector_coro, body_coro, title_coro
+            )
+        else:
+            vector_results = await vector_coro
+            body_docs = []
+            title_docs = []
+
+        # asimilarity_search_with_score는 (Document, cosine_distance) 튜플을 반환한다.
         vector_docs = []
         for doc, dist in vector_results:
             if dist <= 1.0 - score_threshold:
                 doc.metadata["similarity_score"] = round(1.0 - dist, 4)
                 vector_docs.append(doc)
 
-        keyword_results: list[Document] = []
-        if keyword_tokens and self._keyword_retriever:
-            keyword_results = await self._keyword_retriever.search(
-                keyword_tokens,
-                k=k,
-                tool_filters=tool_filters,
-                temporal_filters=temporal_filters,
-                include_title=True,
-            )
-
-        merged = weighted_reciprocal_rank([vector_docs, keyword_results], weights)
+        merged = weighted_reciprocal_rank(
+            [vector_docs, body_docs, title_docs], weights
+        )
         return merged[offset : offset + k]
 
     @override
@@ -402,7 +425,7 @@ class RetrievalService(BaseVectorDbService):
         self,
         queries: list[dict[str, Any]],
         k: int = 10,
-        weights: list[float] = [0.6, 0.4],
+        weights: list[float] = [0.5, 0.3, 0.2],  # [vector, body, title]
         tool_filters: list[Any] | None = None,
     ) -> list[list[Document]]:
         """여러 쿼리를 병렬로 hybrid_search한다.
@@ -454,4 +477,3 @@ class RetrievalService(BaseVectorDbService):
             return []
         langchain_store = self._vector_store.get_langchain_vector_store()
         return await langchain_store.aget_by_ids(ids)
-
