@@ -3,8 +3,8 @@ from __future__ import annotations
 from unittest import TestCase
 
 from catchup.connectors.slack.schemas import SlackUser
+from catchup.sync.ingestion.adapters.slack.message_base import SlackMessageAdapterBase
 from catchup.sync.ingestion.document_builders.slack import SlackTransformer
-from catchup.sync.ingestion.services.slack import SlackIngestionService
 
 
 class SlackTransformerBlockBodyTests(TestCase):
@@ -214,13 +214,13 @@ class SlackTransformerBlockBodyTests(TestCase):
 
 class SlackIngestionSkipTests(TestCase):
     def test_short_text_with_long_blocks_is_syncable(self) -> None:
-        service = SlackIngestionService(
+        adapter = SlackMessageAdapterBase(
+            client=object(),
             repository=object(),
             team_id="T123",
-            access_token="xoxb-test",
         )
 
-        should_skip = service._should_skip_message(
+        should_skip = adapter._should_skip_message(
             {
                 "ts": "1777018027.220269",
                 "text": "데모",
@@ -236,14 +236,14 @@ class SlackIngestionSkipTests(TestCase):
         self.assertFalse(should_skip)
 
     def test_join_leave_subtypes_are_still_skipped(self) -> None:
-        service = SlackIngestionService(
+        adapter = SlackMessageAdapterBase(
+            client=object(),
             repository=object(),
             team_id="T123",
-            access_token="xoxb-test",
         )
 
         self.assertTrue(
-            service._should_skip_message(
+            adapter._should_skip_message(
                 {
                     "subtype": "channel_join",
                     "text": "사용자가 채널에 참여했습니다. 충분히 긴 텍스트입니다.",

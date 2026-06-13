@@ -8,13 +8,13 @@ from typing import Any
 import structlog
 from langchain_core.documents import Document
 
-from catchup.components.summarizer import SummarizeRequest
 from catchup.components.summarizer import SummarizerService
 from catchup.components.vector_db.pgvector import PGVectorRepository
 from catchup.components.vector_db.v2 import VectorStore
 from catchup.connectors.github.client import GitHubApiClient
 from catchup.connectors.github.client import GitHubRateLimitError
 from catchup.sync.audit import SyncAuditContext
+from catchup.sync.ingestion.adapters.base import BaseIngestionAdapter
 from catchup.sync.ingestion.adapters.github.repository_document_builder import (
     GithubRepositoryDocumentBuilder,
 )
@@ -38,8 +38,6 @@ from catchup.sync.ingestion.adapters.github.repository_user_mapping import (
     GithubRepositoryUserMapper,
 )
 from catchup.sync.ingestion.document_builders.github import GithubTransformer
-from catchup.sync.ingestion.dual_write import DualWriter
-from catchup.sync.ingestion.dual_write import DualWriteResult
 from catchup.sync.ingestion.dual_write import apply_page_content_to_vector_content
 from catchup.sync.ingestion.vector_records import GithubIssueV2RecordMapper
 from catchup.sync.ingestion.vector_records import GithubPrV2RecordMapper
@@ -48,7 +46,9 @@ logger = structlog.get_logger(__name__)
 GITHUB_GRAPHQL_BATCH_SIZE = 50
 
 
-class GithubRepositoryAdapterBase:
+class GithubRepositoryAdapterBase(
+    BaseIngestionAdapter[int, GitHubApiClient, GithubTransformer]
+):
     """Shared GitHub repository adapter utilities."""
 
     def __init__(
@@ -61,18 +61,21 @@ class GithubRepositoryAdapterBase:
         vector_store: VectorStore | None = None,
         transformer: GithubTransformer | None = None,
     ) -> None:
-        self.installation_id = installation_id
-        self.client = client
-        self.repository = repository
-        self.summarizer = summarizer
-        self.vector_store = vector_store
-        self.transformer = transformer or GithubTransformer()
+        transformer = transformer or GithubTransformer()
+        super().__init__(
+            scope_id=installation_id,
+            client=client,
+            repository=repository,
+            summarizer=summarizer,
+            transformer=transformer,
+            vector_store=vector_store,
+        )
         self.issue_v2_mapper = GithubIssueV2RecordMapper()
         self.pr_v2_mapper = GithubPrV2RecordMapper()
-        self.repo_ref_resolver = GithubRepositoryRefResolver(installation_id)
+        self.repo_ref_resolver = GithubRepositoryRefResolver(self.scope_id)
         self.user_mapper = GithubRepositoryUserMapper()
         self.document_builder = GithubRepositoryDocumentBuilder(
-            installation_id=installation_id,
+            installation_id=self.scope_id,
             transformer=self.transformer,
             user_mapper=self.user_mapper,
             issue_v2_mapper=self.issue_v2_mapper,
@@ -184,7 +187,7 @@ class GithubRepositoryAdapterBase:
                     log_event,
                     connector="github",
                     operation="repair",
-                    installation_id=self.installation_id,
+                    installation_id=self.scope_id,
                     owner=owner,
                     repo=repo,
                     record_type=record_type,
@@ -325,55 +328,21 @@ class GithubRepositoryAdapterBase:
         entity_type: str,
         audit_context: SyncAuditContext | None = None,
     ) -> list[Document]:
-        if not self.summarizer or not documents:
-            return documents
-
-        requests = []
-        for doc in documents:
-            content = doc.metadata.get("contextual_content", doc.page_content)
-            doc_entity_type = doc.metadata.get("entity_type", entity_type)
-            source_type = f"github_{doc_entity_type}"
-            requests.append(SummarizeRequest(content=content, source_type=source_type))
-
-        summarized = await self.summarizer.summarize_batch(
-            requests,
+        return await self._summarize_documents_with_context(
+            documents,
+            source_type_prefix="github",
+            default_entity_type=entity_type,
             audit_context=audit_context,
             context=(
                 f"entity_type={entity_type},repo={repo_full_name},"
                 f"doc_count={len(documents)}"
             ),
-        )
-
-        for doc, summary in zip(documents, summarized):
-            doc.page_content = summary
-
-        logger.debug(
-            "github_documents_summarized",
-            connector="github",
-            repo_full_name=repo_full_name,
-            entity_type=entity_type,
-            doc_count=len(documents),
-        )
-        return documents
-
-    async def _upsert_v1_v2_documents_dual_write(
-        self,
-        *,
-        v1_documents: list[Document],
-        v2_documents: list[Document],
-        ids: list[str],
-        audit_context: SyncAuditContext | None,
-        context: str,
-    ) -> DualWriteResult:
-        return await DualWriter(
-            repository=self.repository,
-            vector_store=self.vector_store,
-        ).upsert_documents(
-            source_documents=v1_documents,
-            vector_documents=v2_documents,
-            ids=ids,
-            audit_context=audit_context,
-            context=context,
+            log_event="github_documents_summarized",
+            log_fields={
+                "connector": "github",
+                "repo_full_name": repo_full_name,
+                "entity_type": entity_type,
+            },
         )
 
     @staticmethod

@@ -223,7 +223,7 @@ class GithubRepositoryRepairAdapter(GithubRepositoryAdapterBase):
                 logger.error(
                     "[GITHUB][REPAIR] Failed to upsert %s docs: installation_id=%s, repo=%s, error=%s",
                     record_type,
-                    self.installation_id,
+                    self.scope_id,
                     repo_ref.full_name,
                     exc,
                     exc_info=True,

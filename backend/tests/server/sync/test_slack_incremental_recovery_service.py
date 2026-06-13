@@ -1,17 +1,19 @@
 from __future__ import annotations
 
-import catchup.sync.repair.slack_incremental_recovery_service as recovery_module
 from types import SimpleNamespace
 from unittest import IsolatedAsyncioTestCase
 from unittest.mock import AsyncMock
 from unittest.mock import patch
 
+import catchup.sync.repair.slack_incremental_recovery_service as recovery_module
 from catchup.connectors.slack.client import SlackRateLimitError
 from catchup.sync.repair.slack_incremental_recovery_service import (
-    SlackRecoveryCandidate,
-    SlackRecoveryPlan,
     SlackIncrementalRecoveryService,
 )
+from catchup.sync.repair.slack_incremental_recovery_service import (
+    SlackRecoveryCandidate,
+)
+from catchup.sync.repair.slack_incremental_recovery_service import SlackRecoveryPlan
 
 
 class SlackIncrementalRecoveryServiceTests(IsolatedAsyncioTestCase):
