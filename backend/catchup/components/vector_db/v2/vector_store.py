@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+import re
 
 import structlog
 from langchain.embeddings import Embeddings
@@ -169,3 +170,6 @@ class VectorStore:
         if any(document_id is None for document_id in resolved_ids):
             raise ValueError("document ids are required")
         return [str(document_id) for document_id in resolved_ids]
+
+    def get_langchain_vector_store(self) -> PGVectorStore:
+        return self._vector_store
