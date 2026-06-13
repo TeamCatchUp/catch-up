@@ -48,21 +48,21 @@ export default function RecentQuestionsModal({ onClose }: RecentQuestionsModalPr
   return (
     <div
       ref={modalRef}
-      className="shadow-modal border-edge-normal bg-fill-normal flex max-h-135 w-190 flex-col gap-4 rounded-3xl border px-3 py-4"
+      className="shadow-modal border-line-normal-normal bg-fill-normal-normal flex max-h-135 w-190 flex-col gap-4 rounded-3xl border px-3 py-4"
     >
       {/* 헤더 */}
       <div className="flex items-center justify-between">
         <div className="flex gap-2 px-1.5">
-          <AI className="text-icon-normal h-7 w-7" />
-          <span className="text-heading-large text-content-neutral">캐치스턴트 히스토리</span>
+          <AI className="text-icon-normal-normal h-7 w-7" />
+          <span className="text-heading-large text-text-normal-neutral">캐치스턴트 히스토리</span>
         </div>
         <div className="flex gap-1.5">
           <button
             onClick={handleNewQuestion}
             className="capsule-button-outline-blue flex cursor-pointer items-center gap-1.5 px-3 py-1.5"
           >
-            <Add className="text-icon-primary h-5 w-5" />
-            <span className="text-body-small text-content-primary relative top-px">새 업무 질문</span>
+            <Add className="text-icon-primary-normal h-5 w-5" />
+            <span className="text-body-small text-text-primary-normal relative top-px">새 업무 질문</span>
           </button>
           <button className="icon-button-only-gray cursor-pointer p-1.5">
             <Search className="h-6 w-6" />
@@ -74,11 +74,11 @@ export default function RecentQuestionsModal({ onClose }: RecentQuestionsModalPr
       </div>
 
       {/* divider */}
-      <div className="bg-edge-neutral relative right-3 h-px w-189.25" />
+      <div className="bg-line-normal-neutral relative right-3 h-px w-189.25" />
 
       {/* 질문 목록 */}
       {isLoading ? (
-        <div className="text-content-assistive p-5">데이터를 불러오는 중입니다...</div>
+        <div className="text-text-normal-assistive p-5">데이터를 불러오는 중입니다...</div>
       ) : (
         <div className="overflow-y-scroll">
           <SearchHistory querys={recentQueries} isModal={true} onItemClick={onClose} />

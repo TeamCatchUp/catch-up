@@ -57,14 +57,14 @@ const QueryBox = ({
   return (
     <div
       ref={containerRef}
-      className={`shadow-rag-bar border-edge-normal bg-fill-normal flex w-190 flex-col items-center border border-solid ${containerClassName}`}
+      className={`shadow-rag-bar border-line-normal-normal bg-fill-normal-normal flex w-190 flex-col items-center border border-solid ${containerClassName}`}
     >
       <QueryInput input={input} inputRef={inputRef} tipData={tipData} />
 
       {showPanel && (
         <div
           className={cn(
-            'animate-in fade-in-0 border-edge-normal flex min-h-0 w-full flex-1 flex-col gap-3 overflow-hidden border-t pt-3 duration-300',
+            'animate-in fade-in-0 border-line-normal-normal flex min-h-0 w-full flex-1 flex-col gap-3 overflow-hidden border-t pt-3 duration-300',
             !isNoHistory && 'slide-in-from-top-3 mt-1',
           )}
         >

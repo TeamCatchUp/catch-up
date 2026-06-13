@@ -44,7 +44,7 @@ export default function ChannelTalkManagementPanel({ detail }: ChannelTalkManage
   if (statusQuery.isError) {
     return (
       <div className="flex flex-col gap-6">
-        <div className="border-edge-assistive bg-fill-strong text-body-small text-status-destructive rounded-xl border px-4 py-3">
+        <div className="border-line-normal-assistive bg-fill-normal-strong text-body-small text-status-destructive rounded-xl border px-4 py-3">
           채널톡 연동 정보를 불러오지 못했습니다. 잠시 후 다시 시도해주세요.
         </div>
       </div>
@@ -115,22 +115,22 @@ interface ConnectionStatusSectionProps {
 function ConnectionStatusSection({ isConnected }: ConnectionStatusSectionProps) {
   return (
     <div className="flex flex-col gap-1.5">
-      <h3 className="text-heading-small text-content-normal">연동 상태 관리</h3>
+      <h3 className="text-heading-small text-text-normal-normal">연동 상태 관리</h3>
 
-      <div className="border-edge-assistive bg-fill-strong overflow-hidden rounded-xl border">
-        <div className="border-edge-neutral flex items-center justify-between gap-8 border-b px-4 py-3">
-          <span className="text-body-small text-content-normal">연동 상태</span>
+      <div className="border-line-normal-assistive bg-fill-normal-strong overflow-hidden rounded-xl border">
+        <div className="border-line-normal-neutral flex items-center justify-between gap-8 border-b px-4 py-3">
+          <span className="text-body-small text-text-normal-normal">연동 상태</span>
           {isConnected ? (
             <div className="flex items-center gap-1 px-1.5 py-1">
               <IconCloudCheckFilled className="text-icon-primary-assistive size-4.5 shrink-0" />
-              <span className="text-body-xsmall text-content-primary-assistive">연동됨</span>
+              <span className="text-body-xsmall text-text-primary-assistive">연동됨</span>
             </div>
           ) : (
-            <span className="text-body-xsmall text-content-alternative">연동 안됨</span>
+            <span className="text-body-xsmall text-text-normal-alternative">연동 안됨</span>
           )}
         </div>
         <div className="flex items-center justify-between gap-8 px-4 py-3">
-          <span className="text-body-small text-content-normal">보안 관련 설명</span>
+          <span className="text-body-small text-text-normal-normal">보안 관련 설명</span>
           <Button variant="text-secondary-mono" size="sm" className="h-7">
             원문 보기
             <IconOpenInNew className="size-5" />
@@ -150,11 +150,11 @@ interface DataRangeSectionProps {
 function DataRangeSection({ isConnected, dataRange }: DataRangeSectionProps) {
   return (
     <div className="flex flex-col gap-1.5">
-      <h3 className="text-heading-small text-content-neutral">연동된 데이터 범위</h3>
+      <h3 className="text-heading-small text-text-normal-neutral">연동된 데이터 범위</h3>
       <div
         className={cn(
-          'border-edge-assistive bg-fill-strong text-body-small flex items-center overflow-hidden rounded-xl border px-4 py-3',
-          isConnected ? 'text-content-normal justify-center' : 'text-content-assistive',
+          'border-line-normal-assistive bg-fill-normal-strong text-body-small flex items-center overflow-hidden rounded-xl border px-4 py-3',
+          isConnected ? 'text-text-normal-normal justify-center' : 'text-text-normal-assistive',
         )}
       >
         <span className="truncate">{isConnected ? dataRange : '연동되지 않았습니다.'}</span>
@@ -194,14 +194,14 @@ function CredentialSection({
 }: CredentialSectionProps) {
   return (
     <div className="flex flex-col gap-3">
-      <h3 className="text-heading-small text-content-neutral">Credential Key 입력 및 동기화 주기 설정</h3>
+      <h3 className="text-heading-small text-text-normal-neutral">Credential Key 입력 및 동기화 주기 설정</h3>
 
       {hasChannels ? (
         <>
           <AddChannelBox onClick={onAddChannel}>
-            <span className="text-body-small text-content-normal shrink-0">{channelCount}개 채널</span>
+            <span className="text-body-small text-text-normal-normal shrink-0">{channelCount}개 채널</span>
             <span className="bg-dim-black-25 size-1 shrink-0 rounded-full" aria-hidden />
-            <span className="text-body-small text-content-normal min-w-0 flex-1 truncate text-left">
+            <span className="text-body-small text-text-normal-normal min-w-0 flex-1 truncate text-left">
               {totalDocumentSpaces}개 도큐먼트 연결됨
             </span>
           </AddChannelBox>
@@ -224,7 +224,7 @@ function CredentialSection({
         </>
       ) : (
         <AddChannelBox onClick={onAddChannel} justify="between">
-          <span className="text-body-small text-content-assistive truncate">연동되지 않았습니다.</span>
+          <span className="text-body-small text-text-normal-assistive truncate">연동되지 않았습니다.</span>
         </AddChannelBox>
       )}
     </div>
@@ -244,13 +244,13 @@ function AddChannelBox({ onClick, justify = 'default', children }: AddChannelBox
       type="button"
       onClick={onClick}
       className={cn(
-        'border-edge-assistive bg-fill-strong hover:bg-fill-interaction-hover active:bg-fill-interaction-pressed flex w-full cursor-pointer flex-wrap items-center gap-1.5 rounded-xl border px-4 py-3 transition-colors',
+        'border-line-normal-assistive bg-fill-normal-strong hover:bg-fill-normal-interaction-hover active:bg-fill-normal-interaction-pressed flex w-full cursor-pointer flex-wrap items-center gap-1.5 rounded-xl border px-4 py-3 transition-colors',
         justify === 'between' && 'justify-between',
       )}
     >
       {children}
-      <span className="text-body-small text-content-primary flex shrink-0 items-center gap-2">
-        <IconAddSquare className="text-icon-primary size-6 shrink-0" />
+      <span className="text-body-small text-text-primary-normal flex shrink-0 items-center gap-2">
+        <IconAddSquare className="text-icon-primary-normal size-6 shrink-0" />
         채널 추가하기
       </span>
     </button>

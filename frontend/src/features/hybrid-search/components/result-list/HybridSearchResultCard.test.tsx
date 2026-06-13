@@ -109,17 +109,15 @@ describe('HybridSearchResultCard', () => {
   });
 
   it('isSelected에 따라 aria-pressed가 토글된다', () => {
-    const { rerender } = render(
-      <HybridSearchResultCard source={BASE_SOURCE} isSelected={false} onSelect={() => {}} />,
-    );
+    const { rerender } = render(<HybridSearchResultCard source={BASE_SOURCE} isSelected={false} onSelect={() => {}} />);
     expect(screen.getByRole('button')).toHaveAttribute('aria-pressed', 'false');
 
     rerender(<HybridSearchResultCard source={BASE_SOURCE} isSelected onSelect={() => {}} />);
     expect(screen.getByRole('button')).toHaveAttribute('aria-pressed', 'true');
   });
 
-  it('isSelected=true면 선택 배경(bg-fill-strong) 클래스를 가진다', () => {
+  it('isSelected=true면 선택 배경(bg-fill-normal-strong) 클래스를 가진다', () => {
     render(<HybridSearchResultCard source={BASE_SOURCE} isSelected onSelect={() => {}} />);
-    expect(screen.getByRole('button').className).toContain('bg-fill-strong');
+    expect(screen.getByRole('button').className).toContain('bg-fill-normal-strong');
   });
 });

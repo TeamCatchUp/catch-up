@@ -12,7 +12,7 @@ export default function OriginalPanelSkeleton() {
   return (
     <div className="flex h-full min-h-0 w-full flex-col gap-3 px-6 py-4">
       {/* 상담 정보 카드 — 담당자 / 상담 태그 / 상담 설명 3행 */}
-      <div className="bg-fill-strong border-edge-neutral flex flex-col gap-3 rounded-xl border px-5 py-4">
+      <div className="bg-fill-normal-strong border-line-normal-neutral flex flex-col gap-3 rounded-xl border px-5 py-4">
         <div className="flex items-center gap-10">
           <Skeleton className="h-5 w-25" />
           <Skeleton className="size-6.25 shrink-0 rounded-full" />
@@ -33,7 +33,7 @@ export default function OriginalPanelSkeleton() {
       </div>
 
       {/* 고객 정보 카드 — 헤더(아이콘+라벨+chevron) + 4행(이름/이메일/전화번호/유선번호) */}
-      <div className="bg-fill-strong border-edge-neutral flex flex-col rounded-xl border px-5">
+      <div className="bg-fill-normal-strong border-line-normal-neutral flex flex-col rounded-xl border px-5">
         <div className="flex items-center gap-4 py-4">
           <Skeleton className="size-5.5 shrink-0" />
           <Skeleton className="h-5 w-20" />

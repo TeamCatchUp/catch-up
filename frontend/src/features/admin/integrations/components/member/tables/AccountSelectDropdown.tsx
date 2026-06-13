@@ -47,8 +47,8 @@ export default function AccountSelectDropdown({
       <PopoverTrigger asChild>
         <button
           className={cn(
-            'border-edge-neutral hover:bg-fill-strong bg-fill-normal flex h-9 w-full min-w-0 cursor-pointer items-center justify-between rounded-lg border px-2.5 py-1.5',
-            open && 'bg-fill-interaction-pressed',
+            'border-line-normal-neutral hover:bg-fill-normal-strong bg-fill-normal-normal flex h-9 w-full min-w-0 cursor-pointer items-center justify-between rounded-lg border px-2.5 py-1.5',
+            open && 'bg-fill-normal-interaction-pressed',
           )}
         >
           {selectedAccount ? (
@@ -62,13 +62,16 @@ export default function AccountSelectDropdown({
                   className="size-5 shrink-0 rounded-full"
                 />
               ) : (
-                <DefaultProfile className="text-content-assistive size-5 shrink-0 rounded-full" />
+                <DefaultProfile className="text-text-normal-assistive size-5 shrink-0 rounded-full" />
               )}
-              <span className="text-body-small text-content-strong truncate">{selectedAccount.name}</span>
+              <span className="text-body-small text-text-normal-strong truncate">{selectedAccount.name}</span>
             </div>
           ) : (
             <span
-              className={cn('text-body-small truncate', isUnused ? 'text-content-strong' : 'text-content-assistive')}
+              className={cn(
+                'text-body-small truncate',
+                isUnused ? 'text-text-normal-strong' : 'text-text-normal-assistive',
+              )}
             >
               {isUnused ? '해당 협업 툴 미사용' : '계정 선택하기'}
             </span>
@@ -80,7 +83,7 @@ export default function AccountSelectDropdown({
       <PopoverContent
         align="start"
         sideOffset={2}
-        className="shadow-dropdown-menu border-edge-normal w-71 overflow-clip rounded-xl p-0 py-2.5"
+        className="shadow-dropdown-menu border-line-normal-normal w-71 overflow-clip rounded-xl p-0 py-2.5"
       >
         <Command shouldFilter>
           {/* 검색바 */}
@@ -90,8 +93,10 @@ export default function AccountSelectDropdown({
 
           {/* 미사용 토글 */}
           <div className="px-2.5 py-2">
-            <div className="border-edge-assistive bg-fill-strong flex items-center gap-2 rounded-lg border px-2.5 py-2">
-              <span className="text-body-small text-content-alternative flex-1">해당 협업 툴을 사용하지 않습니다.</span>
+            <div className="border-line-normal-assistive bg-fill-normal-strong flex items-center gap-2 rounded-lg border px-2.5 py-2">
+              <span className="text-body-small text-text-normal-alternative flex-1">
+                해당 협업 툴을 사용하지 않습니다.
+              </span>
               <Switch
                 checked={isUnused}
                 onCheckedChange={(checked) => {
@@ -113,7 +118,7 @@ export default function AccountSelectDropdown({
                   onSelect(account);
                   setOpen(false);
                 }}
-                className="border-edge-assistive gap-3 rounded-none border-b px-3 py-2"
+                className="border-line-normal-assistive gap-3 rounded-none border-b px-3 py-2"
               >
                 {account.picture ? (
                   <Image
@@ -124,11 +129,13 @@ export default function AccountSelectDropdown({
                     className="size-10 shrink-0 rounded-full"
                   />
                 ) : (
-                  <DefaultProfile className="text-content-assistive size-10 shrink-0 rounded-full" />
+                  <DefaultProfile className="text-text-normal-assistive size-10 shrink-0 rounded-full" />
                 )}
                 <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                  <span className="text-heading-small text-content-normal max-w-43.75 truncate">{account.name}</span>
-                  <span className="text-label-xsmall text-content-alternative truncate">{account.identifier}</span>
+                  <span className="text-heading-small text-text-normal-normal max-w-43.75 truncate">
+                    {account.name}
+                  </span>
+                  <span className="text-label-xsmall text-text-normal-alternative truncate">{account.identifier}</span>
                 </div>
               </CommandItem>
             ))}

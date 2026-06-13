@@ -15,9 +15,9 @@ export default function AdminOwnerInfoTag() {
     <Tooltip>
       <TooltipTrigger asChild>
         <span
-          className={`${TAG_BASE_CLASS} bg-fill-interaction-hover text-content-alternative inline-flex cursor-default items-center gap-1`}
+          className={`${TAG_BASE_CLASS} bg-fill-normal-interaction-hover text-text-normal-alternative inline-flex cursor-default items-center gap-1`}
         >
-          <IconInfo className="text-content-alternative size-4 shrink-0" />
+          <IconInfo className="text-text-normal-alternative size-4 shrink-0" />
           {ADMIN_OWNER_LABEL}
         </span>
       </TooltipTrigger>

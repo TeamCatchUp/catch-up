@@ -105,14 +105,14 @@ function GuideContent({
   onPrev: () => void;
 }) {
   return (
-    <div className="shadow-modal border-edge-strong bg-fill-normal flex h-135.75 w-108.75 flex-col overflow-clip rounded-2xl border p-6">
+    <div className="shadow-modal border-line-normal-strong bg-fill-normal-normal flex h-135.75 w-108.75 flex-col overflow-clip rounded-2xl border p-6">
       {/* 콘텐츠 영역 */}
       <div
         className={`flex min-h-0 flex-1 flex-col gap-5 overflow-hidden transition-opacity duration-200 ${isTransitioning ? 'opacity-0' : 'opacity-100'}`}
       >
         {/* Header: 제목 + X 닫기 */}
         <div className="flex items-start justify-between">
-          <h2 className="text-heading-large text-content-strong">
+          <h2 className="text-heading-large text-text-normal-strong">
             {currentStep.title.map((line, i) => (
               <span key={i}>
                 {i > 0 && <br />}
@@ -123,7 +123,7 @@ function GuideContent({
           <button
             type="button"
             onClick={onClose}
-            className="hover:bg-fill-interaction-hover text-content-alternative flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-full"
+            className="hover:bg-fill-normal-interaction-hover text-text-normal-alternative flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-full"
           >
             <CloseIcon className="size-5" />
           </button>
@@ -141,19 +141,19 @@ function GuideContent({
         </div>
 
         {/* 본문 텍스트 */}
-        <div className="text-body-small text-content-alternative">
+        <div className="text-body-small text-text-normal-alternative">
           {step === 2 ? <Step3Body /> : <p className="whitespace-pre-line">{currentStep.body}</p>}
         </div>
       </div>
 
       {/* Footer: 페이지네이션 + 버튼 */}
-      <div className="border-edge-normal flex shrink-0 items-center justify-between border-t pt-5">
+      <div className="border-line-normal-normal flex shrink-0 items-center justify-between border-t pt-5">
         {/* Pagination Dots */}
         <div className="flex gap-2.5 px-2">
           {Array.from({ length: TOTAL_STEPS }).map((_, i) => (
             <div
               key={i}
-              className={`size-2.5 rounded-full ${i === step ? 'bg-edge-primary' : 'bg-fill-interaction-hover'}`}
+              className={`size-2.5 rounded-full ${i === step ? 'bg-line-primary-normal' : 'bg-fill-normal-interaction-hover'}`}
             />
           ))}
         </div>
@@ -175,7 +175,7 @@ function GuideContent({
 /** 닫기 확인 모달 본문 */
 function CloseConfirmContent({ onDismiss, onNavigate }: { onDismiss: () => void; onNavigate: () => void }) {
   return (
-    <div className="shadow-modal border-edge-strong bg-fill-normal flex w-100 flex-col gap-3 overflow-clip rounded-2xl border p-5">
+    <div className="shadow-modal border-line-normal-strong bg-fill-normal-normal flex w-100 flex-col gap-3 overflow-clip rounded-2xl border p-5">
       {/* 텍스트 */}
       <div className="flex flex-col gap-3">
         <p className="text-heading-medium text-status-cautionary">
@@ -183,7 +183,7 @@ function CloseConfirmContent({ onDismiss, onNavigate }: { onDismiss: () => void;
           <br />
           최소 1개 이상의 협업 툴을 연동해야 해요.
         </p>
-        <p className="text-body-small text-content-neutral">
+        <p className="text-body-small text-text-normal-neutral">
           지금은 질문을 시작할 준비가 안 됐어요.
           <br />
           협업툴을 선택하고 진행해주세요.

@@ -25,10 +25,10 @@ export default function SettingDropdownRow({ label, description, options, value,
   const selectedLabel = options.find((o) => o.value === value)?.label ?? '';
 
   return (
-    <div className="border-edge-neutral flex w-full items-center gap-5 border-b py-3">
+    <div className="border-line-normal-neutral flex w-full items-center gap-5 border-b py-3">
       <div className="flex w-full flex-col gap-1.5">
-        <span className="text-heading-small text-content-normal">{label}</span>
-        <span className="text-label-small text-content-alternative">{description}</span>
+        <span className="text-heading-small text-text-normal-normal">{label}</span>
+        <span className="text-label-small text-text-normal-alternative">{description}</span>
       </div>
 
       <DropdownMenu open={open} onOpenChange={setOpen}>
@@ -37,11 +37,11 @@ export default function SettingDropdownRow({ label, description, options, value,
             type="button"
             className="flex max-w-37.5 min-w-9 shrink-0 cursor-pointer items-center gap-1 rounded-lg px-2 py-1"
           >
-            <span className="text-body-small text-content-neutral whitespace-nowrap">{selectedLabel}</span>
+            <span className="text-body-small text-text-normal-neutral whitespace-nowrap">{selectedLabel}</span>
             {open ? (
-              <DropdownUp className="text-icon-normal size-4.5 shrink-0" />
+              <DropdownUp className="text-icon-normal-normal size-4.5 shrink-0" />
             ) : (
-              <DropdownDown className="text-icon-normal size-4.5 shrink-0" />
+              <DropdownDown className="text-icon-normal-normal size-4.5 shrink-0" />
             )}
           </button>
         </DropdownMenuTrigger>
@@ -50,7 +50,7 @@ export default function SettingDropdownRow({ label, description, options, value,
             <DropdownMenuItem
               key={option.value}
               onClick={() => onChange(option.value)}
-              className={cn(value === option.value && 'bg-fill-strong')}
+              className={cn(value === option.value && 'bg-fill-normal-strong')}
             >
               {option.label}
             </DropdownMenuItem>

@@ -13,7 +13,7 @@ describe('SlackMessageItem', () => {
     render(<SlackMessageItem message={thread.messages[1]} />);
 
     expect(screen.getByText('CatchUpQA')).toBeInTheDocument();
-    expect(screen.getByText('CatchUpQA')).toHaveClass('text-content-primary');
+    expect(screen.getByText('CatchUpQA')).toHaveClass('text-text-primary-normal');
     expect(screen.getByText(/^\d{2}:\d{2}\s?(AM|PM)$/i)).toBeInTheDocument();
     expect(screen.getByText('편집됨')).toBeInTheDocument();
     expect(screen.getByText('Inline code')).toBeInTheDocument();
@@ -41,7 +41,7 @@ describe('SlackMessageItem', () => {
 
     render(<SlackMessageItem message={message} />);
 
-    expect(screen.getByText('팀원B / Catch Up')).toHaveClass('text-content-alternative');
-    expect(screen.getByText('팀원B / Catch Up')).not.toHaveClass('text-content-primary');
+    expect(screen.getByText('팀원B / Catch Up')).toHaveClass('text-text-normal-alternative');
+    expect(screen.getByText('팀원B / Catch Up')).not.toHaveClass('text-text-primary-normal');
   });
 });

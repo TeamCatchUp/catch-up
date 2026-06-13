@@ -16,13 +16,13 @@ export default function CheckboxIcon({ checked, className }: CheckboxIconProps) 
     <span
       className={cn(
         'inline-flex shrink-0 items-center justify-center rounded-full p-1 transition-colors',
-        checked ? 'hover:bg-fill-primary-interaction-hover-assistive' : 'hover:bg-fill-interaction-hover',
+        checked ? 'hover:bg-fill-primary-normal-interaction-hover-assistive' : 'hover:bg-fill-normal-interaction-hover',
       )}
     >
       {checked ? (
-        <CheckboxChecked className={cn('text-icon-primary shrink-0', className)} />
+        <CheckboxChecked className={cn('text-icon-primary-normal shrink-0', className)} />
       ) : (
-        <CheckboxUnchecked className={cn('text-content-assistive shrink-0', className)} />
+        <CheckboxUnchecked className={cn('text-text-normal-assistive shrink-0', className)} />
       )}
     </span>
   );

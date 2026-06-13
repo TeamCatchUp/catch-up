@@ -30,7 +30,7 @@ export default function AdminTokenUsagePage() {
     <section className="flex flex-col gap-8 px-16 pt-9 pb-30">
       {/* 헤더 */}
       <div className="flex flex-col gap-6">
-        <h1 className="text-heading-xlarge text-content-normal">토큰 사용량 관리</h1>
+        <h1 className="text-heading-xlarge text-text-normal-normal">토큰 사용량 관리</h1>
 
         {/* 밑줄 탭 */}
         <UnderlineTabs

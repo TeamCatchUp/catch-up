@@ -55,12 +55,12 @@
     height: 8px;
   }
   .thin-scrollbar::-webkit-scrollbar-track {
-    background: var(--color-background-alternative, #f7f7f8);
+    background: var(--color-background-normal-alternative, #f7f7f8);
     border-radius: 1000px;
     margin: 2px;
   }
   .thin-scrollbar::-webkit-scrollbar-thumb {
-    background: var(--color-fill-interaction-pressed, #dbdcdf);
+    background: var(--color-fill-normal-interaction-pressed, #dbdcdf);
     border-radius: 16px;
   }
 
@@ -72,7 +72,7 @@
     background: transparent;
   }
   .custom-scrollbar::-webkit-scrollbar-thumb {
-    background: var(--color-fill-interaction-pressed-hover, #dbdcdf);
+    background: var(--color-fill-normal-interaction-pressed-hover, #dbdcdf);
     border-radius: 16px;
   }
   .custom-scrollbar:hover::-webkit-scrollbar-thumb {
@@ -90,7 +90,7 @@
     border-radius: 16px;
   }
   .custom-scrollbar-hover-only:hover::-webkit-scrollbar-thumb {
-    background: var(--color-fill-interaction-pressed-hover, #dbdcdf);
+    background: var(--color-fill-normal-interaction-pressed-hover, #dbdcdf);
   }
 
   .bg-rag-github-pr-mcp {
@@ -126,19 +126,19 @@
   }
 
   .dark .thin-scrollbar::-webkit-scrollbar-track {
-    background: var(--color-background-alternative);
+    background: var(--color-background-normal-alternative);
   }
   .dark .thin-scrollbar::-webkit-scrollbar-thumb {
-    background: var(--color-fill-interaction-pressed);
+    background: var(--color-fill-normal-interaction-pressed);
   }
   .dark .custom-scrollbar::-webkit-scrollbar-thumb {
-    background: var(--color-fill-interaction-pressed-hover);
+    background: var(--color-fill-normal-interaction-pressed-hover);
   }
   .dark .custom-scrollbar:hover::-webkit-scrollbar-thumb {
     background: var(--dim-black-25);
   }
   .dark .custom-scrollbar-hover-only:hover::-webkit-scrollbar-thumb {
-    background: var(--color-fill-interaction-pressed-hover);
+    background: var(--color-fill-normal-interaction-pressed-hover);
   }
 }
 

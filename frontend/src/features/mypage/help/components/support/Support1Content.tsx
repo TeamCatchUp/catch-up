@@ -1,8 +1,8 @@
 const DotDivider = () => (
   <div className="flex items-center justify-center gap-1.5 py-4">
-    <span className="bg-content-assistive size-1 rounded-full" />
-    <span className="bg-content-assistive size-1 rounded-full" />
-    <span className="bg-content-assistive size-1 rounded-full" />
+    <span className="bg-text-normal-assistive size-1 rounded-full" />
+    <span className="bg-text-normal-assistive size-1 rounded-full" />
+    <span className="bg-text-normal-assistive size-1 rounded-full" />
   </div>
 );
 
@@ -14,13 +14,13 @@ export default function Support1Content() {
 
       {/* 1. 보안과 프라이버시 */}
       <section className="flex flex-col gap-6">
-        <h2 className="text-heading-xlarge text-content-strong">1. 보안과 프라이버시 (Security &amp; Privacy)</h2>
+        <h2 className="text-heading-xlarge text-text-normal-strong">1. 보안과 프라이버시 (Security &amp; Privacy)</h2>
 
         <div className="flex flex-col gap-1.5">
-          <h3 className="text-heading-medium text-content-normal">
+          <h3 className="text-heading-medium text-text-normal-normal">
             Q. 혹시 제가 볼 권한이 없는 대외비 문서도 검색되나요?
           </h3>
-          <div className="text-label-medium text-content-normal">
+          <div className="text-label-medium text-text-normal-normal">
             <p>
               <strong>A. 아니요, 비공개 정보는 가져오지 않습니다.</strong>
             </p>
@@ -39,8 +39,8 @@ export default function Support1Content() {
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <h3 className="text-heading-medium text-content-normal">Q. 개인적인 DM이나 비공개 채널은요?</h3>
-          <div className="text-label-medium text-content-normal">
+          <h3 className="text-heading-medium text-text-normal-normal">Q. 개인적인 DM이나 비공개 채널은요?</h3>
+          <div className="text-label-medium text-text-normal-normal">
             <p>
               <strong>A. 절대 수집하지 않습니다.</strong>
             </p>
@@ -59,8 +59,8 @@ export default function Support1Content() {
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <h3 className="text-heading-medium text-content-normal">Q. 우리 회사 데이터로 AI를 학습시키나요?</h3>
-          <div className="text-label-medium text-content-normal">
+          <h3 className="text-heading-medium text-text-normal-normal">Q. 우리 회사 데이터로 AI를 학습시키나요?</h3>
+          <div className="text-label-medium text-text-normal-normal">
             <p>
               <strong>A. 아니요, 여러분의 데이터는 AI 학습에 쓰이지 않습니다.</strong>
             </p>
@@ -77,25 +77,27 @@ export default function Support1Content() {
 
       {/* 2. 질문 잘하는 법 */}
       <section className="flex flex-col gap-6">
-        <h2 className="text-heading-xlarge text-content-strong">2. 질문 잘하는 법 (Smart Prompting)</h2>
+        <h2 className="text-heading-xlarge text-text-normal-strong">2. 질문 잘하는 법 (Smart Prompting)</h2>
 
-        <div className="text-label-medium text-content-normal">
+        <div className="text-label-medium text-text-normal-normal">
           <p>원하는 답을 한 번에 얻기 위한 핵심 요령입니다.</p>
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <h3 className="text-heading-medium text-content-normal">Q. 질문을 어떻게 해야 정확한 답이 나오나요?</h3>
-          <div className="text-label-medium text-content-normal">
+          <h3 className="text-heading-medium text-text-normal-normal">Q. 질문을 어떻게 해야 정확한 답이 나오나요?</h3>
+          <div className="text-label-medium text-text-normal-normal">
             <p>
               <strong>A.</strong> 길게 쓰지 않아도 됩니다. <strong>[단서 + 목적 + 기간]</strong> 이 3가지만 기억하세요.
             </p>
           </div>
         </div>
 
-        <div className="bg-fill-strong border-edge-assistive flex flex-col gap-3 rounded-xl border px-5 py-4">
-          <p className="text-label-medium text-content-normal">[예시]</p>
-          <p className="text-label-medium text-content-normal">- 나쁜 예: &quot;로그인 안 돼.&quot; (너무 막연함)</p>
-          <div className="text-label-medium text-content-normal">
+        <div className="bg-fill-normal-strong border-line-normal-assistive flex flex-col gap-3 rounded-xl border px-5 py-4">
+          <p className="text-label-medium text-text-normal-normal">[예시]</p>
+          <p className="text-label-medium text-text-normal-normal">
+            - 나쁜 예: &quot;로그인 안 돼.&quot; (너무 막연함)
+          </p>
+          <div className="text-label-medium text-text-normal-normal">
             <p>
               - 좋은 예: &quot;어제 배포 이후(기간) 소셜 로그인(단서)에서 발생하는 500 에러의 담당자가
               누구야?(목적)&quot;
@@ -106,8 +108,8 @@ export default function Support1Content() {
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <h3 className="text-heading-medium text-content-normal">Q. 매번 질문을 갖춰서 쓰기가 너무 번거로워요.</h3>
-          <div className="text-label-medium text-content-normal">
+          <h3 className="text-heading-medium text-text-normal-normal">Q. 매번 질문을 갖춰서 쓰기가 너무 번거로워요.</h3>
+          <div className="text-label-medium text-text-normal-normal">
             <p>
               <strong>A. 그래서 &apos;상황별 맞춤 프롬프트&apos;를 준비했습니다.</strong>
             </p>
@@ -124,10 +126,10 @@ export default function Support1Content() {
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <h3 className="text-heading-medium text-content-normal">
+          <h3 className="text-heading-medium text-text-normal-normal">
             Q. 질문에 오타가 있거나, 정확한 용어가 생각 안 나면요?
           </h3>
-          <div className="text-label-medium text-content-normal">
+          <div className="text-label-medium text-text-normal-normal">
             <p>
               <strong>A. 완벽한 단어가 아니어도 괜찮습니다.</strong>
             </p>
@@ -145,13 +147,13 @@ export default function Support1Content() {
 
       {/* 3. 검증과 확인 */}
       <section className="flex flex-col gap-6">
-        <h2 className="text-heading-xlarge text-content-strong">3. 검증과 확인 (Verification &amp; Citations)</h2>
+        <h2 className="text-heading-xlarge text-text-normal-strong">3. 검증과 확인 (Verification &amp; Citations)</h2>
 
         <div className="flex flex-col gap-1.5">
-          <h3 className="text-heading-medium text-content-normal">
+          <h3 className="text-heading-medium text-text-normal-normal">
             Q. 답변에 달린 출처가 너무 많은데, 이걸 다 읽어야 하나요?
           </h3>
-          <div className="text-label-medium text-content-normal">
+          <div className="text-label-medium text-text-normal-normal">
             <p>
               <strong>A. 아니요, 인용된 이유부터 살펴보시면 됩니다.</strong>
             </p>
@@ -171,10 +173,10 @@ export default function Support1Content() {
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <h3 className="text-heading-medium text-content-normal">
+          <h3 className="text-heading-medium text-text-normal-normal">
             Q. 그럼 &apos;원문 바로가기&apos;는 언제 누르면 되나요?
           </h3>
-          <div className="text-label-medium text-content-normal">
+          <div className="text-label-medium text-text-normal-normal">
             <p>
               A. &apos;결정적인 10초&apos;가 필요할 때만 누르세요. 대부분은 요약만으로 충분하지만,
               <br />
@@ -183,15 +185,15 @@ export default function Support1Content() {
           </div>
         </div>
 
-        <div className="bg-fill-strong border-edge-assistive flex flex-col gap-3 rounded-xl border px-5 py-4">
-          <p className="text-label-medium text-content-normal">[예시]</p>
-          <p className="text-label-medium text-content-normal">
+        <div className="bg-fill-normal-strong border-line-normal-assistive flex flex-col gap-3 rounded-xl border px-5 py-4">
+          <p className="text-label-medium text-text-normal-normal">[예시]</p>
+          <p className="text-label-medium text-text-normal-normal">
             1. <strong>숫자와 조건</strong>: 예산, 기간, 권한 설정 등 정확한 수치가 필요할 때.
           </p>
-          <p className="text-label-medium text-content-normal">
+          <p className="text-label-medium text-text-normal-normal">
             2. <strong>최종 결정</strong>: 팀의 정책이나 방향을 확정 짓고 승인해야 할 때.
           </p>
-          <p className="text-label-medium text-content-normal">
+          <p className="text-label-medium text-text-normal-normal">
             3. <strong>코드와 원인</strong>: 버그 재현 경로를 확인하거나, 실제 코드를 볼 때.
           </p>
         </div>
@@ -199,13 +201,13 @@ export default function Support1Content() {
 
       {/* 4. 데이터 연결 및 동기화 */}
       <section className="flex flex-col gap-6">
-        <h2 className="text-heading-xlarge text-content-strong">
+        <h2 className="text-heading-xlarge text-text-normal-strong">
           4. 데이터 연결 및 동기화 (Files &amp; Synchronization)
         </h2>
 
         <div className="flex flex-col gap-1.5">
-          <h3 className="text-heading-medium text-content-normal">Q. PDF나 엑셀 파일 내용도 검색되나요?</h3>
-          <div className="text-label-medium text-content-normal">
+          <h3 className="text-heading-medium text-text-normal-normal">Q. PDF나 엑셀 파일 내용도 검색되나요?</h3>
+          <div className="text-label-medium text-text-normal-normal">
             <p>
               <strong>A. 파일 속을 뜯어보는 게 아니라, 파일이 공유된 &apos;맥락&apos;을 찾아드립니다.</strong>
             </p>
@@ -228,8 +230,8 @@ export default function Support1Content() {
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <h3 className="text-heading-medium text-content-normal">Q. 캡처 이미지나 도표도 검색되나요?</h3>
-          <div className="text-label-medium text-content-normal">
+          <h3 className="text-heading-medium text-text-normal-normal">Q. 캡처 이미지나 도표도 검색되나요?</h3>
+          <div className="text-label-medium text-text-normal-normal">
             <p>
               <strong>A. 이미지가 포함된 &apos;대화&apos;를 찾아드려요.</strong>
             </p>
@@ -246,8 +248,10 @@ export default function Support1Content() {
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <h3 className="text-heading-medium text-content-normal">Q. 방금 올린 자료가 검색에 안 떠요. 고장인가요?</h3>
-          <div className="text-label-medium text-content-normal">
+          <h3 className="text-heading-medium text-text-normal-normal">
+            Q. 방금 올린 자료가 검색에 안 떠요. 고장인가요?
+          </h3>
+          <div className="text-label-medium text-text-normal-normal">
             <p>
               <strong>A.</strong> 잠깐 시간이 필요해요.
             </p>

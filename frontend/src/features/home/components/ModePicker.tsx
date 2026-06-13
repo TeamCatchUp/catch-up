@@ -48,7 +48,7 @@ export default function ModePicker({ mode }: ModePickerProps) {
     <div
       role="tablist"
       aria-label="모드 선택"
-      className="border-edge-normal bg-fill-strong rounded-rounded relative flex items-center justify-center border p-0.5"
+      className="border-line-normal-normal bg-fill-normal-strong rounded-rounded relative flex items-center justify-center border p-0.5"
     >
       {OPTIONS.map((opt) => {
         const isActive = opt.value === mode;
@@ -61,14 +61,14 @@ export default function ModePicker({ mode }: ModePickerProps) {
             onClick={() => handleSelect(opt.value)}
             className={cn(
               'rounded-rounded relative inline-flex w-36.25 cursor-pointer items-center justify-center gap-2 px-4 py-2 transition-colors duration-200',
-              isActive ? 'text-content-strong' : 'text-content-assistive',
+              isActive ? 'text-text-normal-strong' : 'text-text-normal-assistive',
             )}
           >
             {isActive && (
               <motion.span
                 layoutId="mode-picker-active"
                 aria-hidden
-                className="rounded-rounded bg-fill-normal border-edge-strong shadow-button absolute inset-0 border"
+                className="rounded-rounded bg-fill-normal-normal border-line-normal-strong shadow-button absolute inset-0 border"
                 transition={{ type: 'spring', stiffness: 500, damping: 38 }}
               />
             )}
@@ -77,7 +77,7 @@ export default function ModePicker({ mode }: ModePickerProps) {
             {opt.value === 'docs' && (
               <Badge
                 aria-label="신규"
-                className="bg-fill-interaction-pressed-hover text-accent-red relative z-10 size-4.5 justify-center p-0"
+                className="bg-fill-normal-interaction-pressed-hover text-accent-red-default relative z-10 size-4.5 justify-center p-0"
               >
                 N
               </Badge>

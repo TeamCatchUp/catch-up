@@ -47,7 +47,7 @@ function AiModeButton({ expanded, onClick }: { expanded: boolean; onClick: () =>
       type="button"
       onMouseDown={(e) => expanded && e.preventDefault()}
       onClick={onClick}
-      className="bg-fill-primary-normal-neutral text-content-primary flex h-10 shrink-0 cursor-pointer items-center gap-1.5 rounded-full px-2.5 py-1 transition-colors"
+      className="bg-fill-primary-normal-neutral text-text-primary-normal flex h-10 shrink-0 cursor-pointer items-center gap-1.5 rounded-full px-2.5 py-1 transition-colors"
     >
       <IconAi aria-hidden className="size-5" />
       <span className="text-body-small font-medium whitespace-nowrap">AI 모드</span>
@@ -110,7 +110,7 @@ export default function ResultSearchBar({
       <div className="relative h-14 w-225 shrink-0">
         <div
           className={cn(
-            'bg-fill-normal border-edge-normal absolute top-0 left-0 flex w-225 flex-col border',
+            'bg-fill-normal-normal border-line-normal-normal absolute top-0 left-0 flex w-225 flex-col border',
             expanded
               ? 'shadow-strong z-dropdown h-[636px] gap-3 rounded-[28px] pt-2 pr-2 pb-4 pl-3'
               : 'items-center gap-2 rounded-full p-2',
@@ -120,9 +120,9 @@ export default function ResultSearchBar({
             <div className={cn('flex w-full items-center', expanded ? 'gap-3 pl-0.5' : 'gap-2')}>
               <div className={cn('flex min-w-0 flex-1 items-center', expanded ? 'gap-3.5' : 'gap-2')}>
                 {expanded ? (
-                  <IconSearch className="text-icon-alternative h-7 w-7 shrink-0" />
+                  <IconSearch className="text-icon-normal-alternative h-7 w-7 shrink-0" />
                 ) : (
-                  <div className="text-icon-alternative flex h-10 w-10 shrink-0 items-center justify-center">
+                  <div className="text-icon-normal-alternative flex h-10 w-10 shrink-0 items-center justify-center">
                     <IconSearch className="h-7 w-7" />
                   </div>
                 )}
@@ -135,7 +135,7 @@ export default function ResultSearchBar({
                   onFocus={handleInputFocus}
                   onBlur={handleInputBlur}
                   onKeyDown={handleKeyDown}
-                  className="text-body-medium text-content-normal placeholder:text-content-assistive min-w-0 flex-1 bg-transparent outline-none"
+                  className="text-body-medium text-text-normal-normal placeholder:text-text-normal-assistive min-w-0 flex-1 bg-transparent outline-none"
                   placeholder="업무, 채널 또는 문서를 검색해보세요"
                 />
               </div>
@@ -146,12 +146,12 @@ export default function ResultSearchBar({
                     onMouseDown={(e) => expanded && e.preventDefault()}
                     onClick={onClear}
                     aria-label="검색어 지우기"
-                    className="text-icon-normal hover:bg-fill-interaction-hover active:bg-fill-interaction-pressed flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-full transition-colors"
+                    className="text-icon-normal-normal hover:bg-fill-normal-interaction-hover active:bg-fill-normal-interaction-pressed flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-full transition-colors"
                   >
                     <IconCancel className="h-7 w-7" />
                   </button>
                 )}
-                {hasText && <span aria-hidden className="bg-edge-normal h-6 w-px shrink-0" />}
+                {hasText && <span aria-hidden className="bg-line-normal-normal h-6 w-px shrink-0" />}
                 <button
                   type="button"
                   onMouseDown={(e) => expanded && e.preventDefault()}
@@ -161,22 +161,22 @@ export default function ResultSearchBar({
                     'flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-full transition-colors',
                     expanded
                       ? hasText
-                        ? 'bg-fill-primary'
-                        : 'bg-fill-interaction-inactive border-edge-assistive border'
-                      : 'text-icon-normal hover:bg-fill-interaction-hover active:bg-fill-interaction-pressed',
+                        ? 'bg-fill-primary-normal-normal'
+                        : 'bg-fill-normal-interaction-inactive border-line-normal-assistive border'
+                      : 'text-icon-normal-normal hover:bg-fill-normal-interaction-hover active:bg-fill-normal-interaction-pressed',
                   )}
                 >
                   <IconArrowSend
                     className={cn(
                       'h-6 w-6',
-                      expanded ? (hasText ? 'brightness-0 invert' : 'text-content-assistive') : 'h-7 w-7',
+                      expanded ? (hasText ? 'brightness-0 invert' : 'text-text-normal-assistive') : 'h-7 w-7',
                     )}
                   />
                 </button>
                 <AiModeButton expanded={expanded} onClick={onAiModeClick} />
               </div>
             </div>
-            {expanded && <span aria-hidden className="bg-edge-neutral h-px w-full" />}
+            {expanded && <span aria-hidden className="bg-line-normal-neutral h-px w-full" />}
           </div>
           {expanded && (
             <ResultSearchBarExpandedPanel

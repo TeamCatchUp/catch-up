@@ -37,7 +37,7 @@ export function FilterOptionList({ title, options, selected, onToggle, Icon }: F
       <div className="flex flex-col items-start self-stretch px-2.5">
         <div
           onClick={handleBoxClick}
-          className="bg-fill-strong focus-within:border-edge-primary flex max-h-60 min-h-10 w-full cursor-text items-start gap-1.5 overflow-hidden rounded-lg border-[1.5px] border-transparent px-3 py-2"
+          className="bg-fill-normal-strong focus-within:border-line-primary-normal flex max-h-60 min-h-10 w-full cursor-text items-start gap-1.5 overflow-hidden rounded-lg border-[1.5px] border-transparent px-3 py-2"
         >
           <div className="flex min-w-0 flex-1 flex-col gap-1.5 overflow-y-auto">
             {/* Selected chips */}
@@ -48,7 +48,7 @@ export function FilterOptionList({ title, options, selected, onToggle, Icon }: F
                   return (
                     <div
                       key={name}
-                      className="border-edge-strong bg-fill-normal flex h-9 shrink-0 items-center gap-1 rounded-full border px-1.5"
+                      className="border-line-normal-strong bg-fill-normal-normal flex h-9 shrink-0 items-center gap-1 rounded-full border px-1.5"
                     >
                       <div className="flex items-center gap-1.5 px-0.5">
                         {chipOption?.profile_image ? (
@@ -62,14 +62,14 @@ export function FilterOptionList({ title, options, selected, onToggle, Icon }: F
                         ) : (
                           <Icon className="size-6.25 shrink-0 rounded-full" />
                         )}
-                        <span className="text-body-small text-content-normal max-w-37.5 truncate">{name}</span>
+                        <span className="text-body-small text-text-normal-normal max-w-37.5 truncate">{name}</span>
                       </div>
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
                           onToggle(name);
                         }}
-                        className="text-icon-neutral hover:bg-fill-interaction-hover flex size-5 cursor-pointer items-center justify-center rounded-full"
+                        className="text-icon-normal-neutral hover:bg-fill-normal-interaction-hover flex size-5 cursor-pointer items-center justify-center rounded-full"
                         onMouseDown={(e) => e.preventDefault()}
                       >
                         <IconCloseSmall className="size-4.5" />
@@ -87,7 +87,7 @@ export function FilterOptionList({ title, options, selected, onToggle, Icon }: F
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder={searchPlaceholder}
-              className="text-body-small placeholder:text-content-assistive h-6 w-full bg-transparent outline-none"
+              className="text-body-small placeholder:text-text-normal-assistive h-6 w-full bg-transparent outline-none"
             />
           </div>
 
@@ -99,7 +99,7 @@ export function FilterOptionList({ title, options, selected, onToggle, Icon }: F
                 setSearchTerm('');
                 selected.forEach((name) => onToggle(name));
               }}
-              className="text-icon-neutral shrink-0 cursor-pointer"
+              className="text-icon-normal-neutral shrink-0 cursor-pointer"
               onMouseDown={(e) => e.preventDefault()}
             >
               <IconCloseCircle className="size-5" />
@@ -118,7 +118,7 @@ export function FilterOptionList({ title, options, selected, onToggle, Icon }: F
               return (
                 <li key={uniqueKey} className="w-full">
                   <button
-                    className="bg-fill-normal hover:bg-fill-interaction-hover flex h-10 w-full cursor-pointer items-center gap-2 rounded-xl px-2 py-1 transition-colors"
+                    className="bg-fill-normal-normal hover:bg-fill-normal-interaction-hover flex h-10 w-full cursor-pointer items-center gap-2 rounded-xl px-2 py-1 transition-colors"
                     onClick={() => onToggle(option.name)}
                   >
                     {option.profile_image ? (
@@ -133,9 +133,11 @@ export function FilterOptionList({ title, options, selected, onToggle, Icon }: F
                       <Icon className="size-7 shrink-0 rounded-full" />
                     )}
 
-                    <div className="text-body-small text-content-normal flex-1 truncate text-left">{option.name}</div>
+                    <div className="text-body-small text-text-normal-normal flex-1 truncate text-left">
+                      {option.name}
+                    </div>
                     {option.position && (
-                      <div className="text-body-xsmall text-content-assistive max-w-18 min-w-7.5 shrink-0 truncate">
+                      <div className="text-body-xsmall text-text-normal-assistive max-w-18 min-w-7.5 shrink-0 truncate">
                         {option.position}
                       </div>
                     )}

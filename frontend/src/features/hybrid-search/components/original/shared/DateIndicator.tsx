@@ -20,11 +20,11 @@ export default function DateIndicator({ date }: DateIndicatorProps) {
 
   return (
     <div className="flex w-full items-center">
-      <span aria-hidden className="bg-edge-neutral h-px flex-1" />
-      <span className="bg-fill-normal border-edge-neutral text-body-xsmall text-content-alternative shrink-0 rounded-full border px-5 py-1 font-medium">
+      <span aria-hidden className="bg-line-normal-neutral h-px flex-1" />
+      <span className="bg-fill-normal-normal border-line-normal-neutral text-body-xsmall text-text-normal-alternative shrink-0 rounded-full border px-5 py-1 font-medium">
         {label}
       </span>
-      <span aria-hidden className="bg-edge-neutral h-px flex-1" />
+      <span aria-hidden className="bg-line-normal-neutral h-px flex-1" />
     </div>
   );
 }

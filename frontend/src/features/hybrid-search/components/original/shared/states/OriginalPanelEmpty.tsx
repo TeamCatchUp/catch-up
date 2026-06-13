@@ -15,10 +15,8 @@ export default function OriginalPanelEmpty() {
       variants={panelStateFadeIn}
       className="flex flex-col items-center gap-1 px-5 py-50"
     >
-      <p className="text-heading-small text-content-alternative font-semibold">
-        표시할 원문이 없어요.
-      </p>
-      <p className="text-body-small text-content-assistive text-center">
+      <p className="text-heading-small text-text-normal-alternative font-semibold">표시할 원문이 없어요.</p>
+      <p className="text-body-small text-text-normal-assistive text-center">
         검색 결과에서 대화를 선택하면 원문을 볼 수 있어요.
       </p>
     </motion.div>

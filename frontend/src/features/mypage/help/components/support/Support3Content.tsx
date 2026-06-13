@@ -1,8 +1,8 @@
 const DotDivider = () => (
   <div className="flex items-center justify-center gap-1.5 py-4">
-    <span className="bg-content-assistive size-1 rounded-full" />
-    <span className="bg-content-assistive size-1 rounded-full" />
-    <span className="bg-content-assistive size-1 rounded-full" />
+    <span className="bg-text-normal-assistive size-1 rounded-full" />
+    <span className="bg-text-normal-assistive size-1 rounded-full" />
+    <span className="bg-text-normal-assistive size-1 rounded-full" />
   </div>
 );
 
@@ -11,7 +11,7 @@ export default function Support3Content() {
   return (
     <div className="flex w-full flex-col gap-16">
       {/* 도입부 */}
-      <div className="text-label-medium text-content-normal">
+      <div className="text-label-medium text-text-normal-normal">
         <p>캐치업은 우리 팀의 소중한 정보들이 안전하게 모이고 연결되는 곳이에요.</p>
         <br />
         <p>
@@ -25,8 +25,8 @@ export default function Support3Content() {
 
       {/* 1. 왜 비공개 문서는 검색되지 않나요? */}
       <section className="flex flex-col gap-5">
-        <h2 className="text-heading-xlarge text-content-strong">1. 왜 비공개 문서는 검색되지 않나요?</h2>
-        <div className="text-label-medium text-content-normal">
+        <h2 className="text-heading-xlarge text-text-normal-strong">1. 왜 비공개 문서는 검색되지 않나요?</h2>
+        <div className="text-label-medium text-text-normal-normal">
           <p>
             <strong>지금은 &apos;모두가 보는 정보&apos;만 담았습니다.</strong>
           </p>
@@ -48,8 +48,8 @@ export default function Support3Content() {
 
       {/* 2. 개인적인 업무나 비공개 프로젝트 */}
       <section className="flex flex-col gap-5">
-        <h2 className="text-heading-xlarge text-content-strong">2. 그럼 제 개인적인 업무나 비공개 프로젝트는요?</h2>
-        <div className="text-label-medium text-content-normal">
+        <h2 className="text-heading-xlarge text-text-normal-strong">2. 그럼 제 개인적인 업무나 비공개 프로젝트는요?</h2>
+        <div className="text-label-medium text-text-normal-normal">
           <p>
             <strong>안전하게 가려져 있습니다.</strong>
           </p>
@@ -66,8 +66,8 @@ export default function Support3Content() {
 
       {/* 3. 권한이 필요한 정보도 검색하고 싶어요 */}
       <section className="flex flex-col gap-5">
-        <h2 className="text-heading-xlarge text-content-strong">3. 권한이 필요한 정보도 검색하고 싶어요.</h2>
-        <div className="text-label-medium text-content-normal">
+        <h2 className="text-heading-xlarge text-text-normal-strong">3. 권한이 필요한 정보도 검색하고 싶어요.</h2>
+        <div className="text-label-medium text-text-normal-normal">
           <p>
             <strong>더 깊은 정보도 꼼꼼하게 준비하고 있습니다.</strong>
           </p>

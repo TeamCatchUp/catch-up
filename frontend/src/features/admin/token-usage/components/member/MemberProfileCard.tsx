@@ -25,7 +25,7 @@ export default function MemberProfileCard({ members, selectedMemberId, onSelectM
   );
 
   return (
-    <div className="border-edge-neutral bg-fill-normal flex flex-col gap-4 rounded-2xl border px-6 py-5">
+    <div className="border-line-normal-neutral bg-fill-normal-normal flex flex-col gap-4 rounded-2xl border px-6 py-5">
       {/* 드롭다운 */}
       <FilterDropdown options={memberOptions} value={selectedMemberId} onChange={onSelectMember} />
 
@@ -43,15 +43,15 @@ export default function MemberProfileCard({ members, selectedMemberId, onSelectM
                 className="size-17.5 shrink-0 rounded-full object-cover"
               />
             ) : (
-              <DefaultProfile className="text-content-assistive size-17.5 shrink-0 rounded-full" />
+              <DefaultProfile className="text-text-normal-assistive size-17.5 shrink-0 rounded-full" />
             )}
 
             {/* 이름 + 상태 태그 + 팀/직책 */}
             <div className="flex flex-col gap-1">
               <div className="flex items-center gap-2.5">
-                <span className="text-heading-large text-content-normal">{selectedMember.name}</span>
+                <span className="text-heading-large text-text-normal-normal">{selectedMember.name}</span>
               </div>
-              <span className="text-body-small text-content-alternative">
+              <span className="text-body-small text-text-normal-alternative">
                 {selectedMember.team} · {selectedMember.position}
               </span>
             </div>

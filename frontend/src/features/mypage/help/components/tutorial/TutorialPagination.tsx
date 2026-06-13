@@ -23,11 +23,11 @@ export default function TutorialPagination({ currentId }: TutorialPaginationProp
             href={`/mypage/help/tutorial/${TUTORIALS[currentIndex - 1].id}`}
             className="flex size-6 items-center justify-center"
           >
-            <ArrowLeft className="text-content-alternative h-6 w-6" />
+            <ArrowLeft className="text-text-normal-alternative h-6 w-6" />
           </Link>
         ) : (
           <span className="flex size-6 items-center justify-center">
-            <ArrowLeft className="text-content-assistive h-6 w-6" />
+            <ArrowLeft className="text-text-normal-assistive h-6 w-6" />
           </span>
         )}
 
@@ -38,8 +38,8 @@ export default function TutorialPagination({ currentId }: TutorialPaginationProp
             className={cn(
               'rounded-md2 text-body-small flex size-7.5 items-center justify-center',
               tutorial.id === currentId
-                ? 'bg-fill-interaction-hover text-content-normal'
-                : 'hover:bg-fill-interaction-hover text-content-alternative',
+                ? 'bg-fill-normal-interaction-hover text-text-normal-normal'
+                : 'hover:bg-fill-normal-interaction-hover text-text-normal-alternative',
             )}
           >
             {tutorial.id}
@@ -51,11 +51,11 @@ export default function TutorialPagination({ currentId }: TutorialPaginationProp
             href={`/mypage/help/tutorial/${TUTORIALS[currentIndex + 1].id}`}
             className="flex size-6 items-center justify-center"
           >
-            <ArrowRight className="text-content-alternative h-6 w-6" />
+            <ArrowRight className="text-text-normal-alternative h-6 w-6" />
           </Link>
         ) : (
           <span className="flex size-6 items-center justify-center">
-            <ArrowRight className="text-content-assistive h-6 w-6" />
+            <ArrowRight className="text-text-normal-assistive h-6 w-6" />
           </span>
         )}
       </nav>
@@ -63,9 +63,9 @@ export default function TutorialPagination({ currentId }: TutorialPaginationProp
       {/* 목록으로 버튼 */}
       <Link
         href="/mypage/help"
-        className="border-edge-neutral hover:bg-fill-interaction-hover bg-fill-normal flex h-10 items-center justify-center rounded-lg border px-4 py-1.5 transition-colors"
+        className="border-line-normal-neutral hover:bg-fill-normal-interaction-hover bg-fill-normal-normal flex h-10 items-center justify-center rounded-lg border px-4 py-1.5 transition-colors"
       >
-        <span className="text-body-medium text-content-alternative">목록으로</span>
+        <span className="text-body-medium text-text-normal-alternative">목록으로</span>
       </Link>
     </div>
   );

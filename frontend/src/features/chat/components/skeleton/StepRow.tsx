@@ -66,7 +66,7 @@ export default function StepRow({ row, isActive, isLast }: StepRowProps) {
             </motion.span>
           )}
         </AnimatePresence>
-        {!isLast && <span aria-hidden className="bg-edge-neutral mt-0 w-px flex-1" />}
+        {!isLast && <span aria-hidden className="bg-line-normal-neutral mt-0 w-px flex-1" />}
       </div>
 
       <div className="flex min-w-0 flex-1 flex-col items-start justify-center gap-2 pb-4">
@@ -74,7 +74,7 @@ export default function StepRow({ row, isActive, isLast }: StepRowProps) {
           (isActive ? (
             <ActiveReasoningText text={reasoning} />
           ) : (
-            <p className="text-body-small text-content-normal w-full break-words">{highlightDocCount(reasoning)}</p>
+            <p className="text-body-small text-text-normal-normal w-full break-words">{highlightDocCount(reasoning)}</p>
           ))}
         <AnimatePresence initial={true}>
           {hasDetail && expanded && (
@@ -136,7 +136,7 @@ function highlightDocCount(text: string): React.ReactNode {
       parts.push(text.slice(lastIdx, match.index));
     }
     parts.push(
-      <span key={`n-${key++}`} className="text-content-primary">
+      <span key={`n-${key++}`} className="text-text-primary-normal">
         {match[1]}
       </span>,
     );
@@ -163,7 +163,7 @@ function NormalMarker({
       height="12"
       viewBox="0 0 16 16"
       fill="none"
-      className={cn('text-content-neutral transition-transform duration-150', expanded ? 'rotate-0' : '-rotate-90')}
+      className={cn('text-text-normal-neutral transition-transform duration-150', expanded ? 'rotate-0' : '-rotate-90')}
       aria-hidden
     >
       <path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
@@ -172,7 +172,7 @@ function NormalMarker({
 
   if (!interactive) {
     return (
-      <span className="bg-fill-interaction-hover flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full p-0.5">
+      <span className="bg-fill-normal-interaction-hover flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full p-0.5">
         {Icon}
       </span>
     );
@@ -182,7 +182,7 @@ function NormalMarker({
       type="button"
       onClick={onToggle}
       aria-expanded={expanded}
-      className="bg-fill-interaction-hover hover:bg-fill-strong flex h-[22px] w-[22px] shrink-0 cursor-pointer items-center justify-center rounded-full p-0.5"
+      className="bg-fill-normal-interaction-hover hover:bg-fill-normal-strong flex h-[22px] w-[22px] shrink-0 cursor-pointer items-center justify-center rounded-full p-0.5"
     >
       {Icon}
     </button>
@@ -191,7 +191,7 @@ function NormalMarker({
 
 function ActiveMarker() {
   return (
-    <span className="bg-fill-primary flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full p-0.5">
+    <span className="bg-fill-primary-normal-normal flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full p-0.5">
       <span className="flex h-[14px] w-[14px] items-center justify-center rounded-full border border-solid border-white p-0.5">
         <span className="h-[7px] w-[7px] rounded-full border border-solid border-white" />
       </span>

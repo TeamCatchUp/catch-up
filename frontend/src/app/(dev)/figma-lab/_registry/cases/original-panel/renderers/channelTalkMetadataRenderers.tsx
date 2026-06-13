@@ -50,9 +50,9 @@ export const channelTalkMetadataRenderers = {
         <Collapsible
           open
           onOpenChange={() => {}}
-          header={<span className="text-body-small text-content-normal py-2 font-medium">펼쳐진 헤더</span>}
+          header={<span className="text-body-small text-text-normal-normal py-2 font-medium">펼쳐진 헤더</span>}
         >
-          <p className="text-body-small text-content-alternative pb-2">접히는 본문 영역입니다.</p>
+          <p className="text-body-small text-text-normal-alternative pb-2">접히는 본문 영역입니다.</p>
         </Collapsible>
       </PanelWidth>
     </Case>

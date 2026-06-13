@@ -92,8 +92,8 @@ export default function UserManagementSection() {
       {/* 헤더 행 */}
       <div className="flex items-start justify-between">
         <div className="flex flex-col gap-1.5">
-          <span className="text-heading-small text-content-alternative">조직 전체 사용 토큰량</span>
-          <span className="text-heading-xlarge text-content-normal">- $</span>
+          <span className="text-heading-small text-text-normal-alternative">조직 전체 사용 토큰량</span>
+          <span className="text-heading-xlarge text-text-normal-normal">- $</span>
         </div>
         <DateRangePicker value={dateRange} onChange={setDateRange} />
       </div>
@@ -102,13 +102,13 @@ export default function UserManagementSection() {
       <div className="flex items-center justify-between">
         <FilterDropdown options={sortOptions} value={sortKey} onChange={setSortKey} />
         <div className="relative w-70">
-          <IconSearch className="text-content-assistive pointer-events-none absolute top-1/2 left-2.5 size-5 -translate-y-1/2" />
+          <IconSearch className="text-text-normal-assistive pointer-events-none absolute top-1/2 left-2.5 size-5 -translate-y-1/2" />
           <Input
             inputSize="sm"
             placeholder="임직원의 이름을 검색해보세요."
             value={searchTerm}
             onChange={(e) => handleSearch(e.target.value)}
-            className="border-edge-assistive bg-fill-strong pl-9"
+            className="border-line-normal-assistive bg-fill-normal-strong pl-9"
           />
         </div>
       </div>

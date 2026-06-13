@@ -16,7 +16,7 @@ const Avatar = ({ src, size = 'sm' }: { src?: string | null; size?: 'sm' | 'xs' 
     /* eslint-disable-next-line @next/next/no-img-element */
     return <img src={src} alt="" className={`${cls} shrink-0 rounded-full object-cover`} />;
   }
-  return <DefaultProfile className={`text-content-assistive ${cls} shrink-0 rounded-full`} />;
+  return <DefaultProfile className={`text-text-normal-assistive ${cls} shrink-0 rounded-full`} />;
 };
 
 interface MemberDetailPanelProps {
@@ -61,8 +61,8 @@ const getAccountIdentifier = (service: IntegrationService, integrations: UserInt
 export default function MemberDetailPanel({ member, actionButtons }: MemberDetailPanelProps) {
   if (!member) {
     return (
-      <section className="bg-fill-normal overflow-clip pt-5 pb-5 pl-6">
-        <div className="text-body-small text-content-alternative flex h-full items-center justify-center text-center">
+      <section className="bg-fill-normal-normal overflow-clip pt-5 pb-5 pl-6">
+        <div className="text-body-small text-text-normal-alternative flex h-full items-center justify-center text-center">
           선택된 이용자 정보가 없습니다.
         </div>
       </section>
@@ -75,13 +75,13 @@ export default function MemberDetailPanel({ member, actionButtons }: MemberDetai
     : INTEGRATION_ACCOUNTS;
 
   return (
-    <section className="bg-fill-normal overflow-clip pt-5 pb-5 pl-6">
+    <section className="bg-fill-normal-normal overflow-clip pt-5 pb-5 pl-6">
       <div className="flex h-full flex-col gap-4">
         {/* 프로필 + 이름 + 액션 버튼 */}
         <div className="flex items-center justify-between pr-5">
           <div className="flex min-w-0 flex-1 items-center gap-3">
             <Avatar src={member.picture} />
-            <span className="text-heading-medium text-content-normal truncate">{member.name}</span>
+            <span className="text-heading-medium text-text-normal-normal truncate">{member.name}</span>
           </div>
           <div className="flex shrink-0 items-center gap-2.5">{actionButtons}</div>
         </div>
@@ -90,16 +90,16 @@ export default function MemberDetailPanel({ member, actionButtons }: MemberDetai
           {/* 기본 정보 */}
           <div className="text-body-small flex flex-col gap-2">
             <div className="flex w-full items-center gap-14">
-              <span className="text-content-alternative w-19.75 shrink-0">메일</span>
-              <span className="text-content-neutral min-w-0 flex-1 truncate">{member.email}</span>
+              <span className="text-text-normal-alternative w-19.75 shrink-0">메일</span>
+              <span className="text-text-normal-neutral min-w-0 flex-1 truncate">{member.email}</span>
             </div>
             <div className="flex w-full items-center gap-14">
-              <span className="text-content-alternative w-19.75 shrink-0">부서</span>
-              <span className="text-content-neutral min-w-0 flex-1 truncate">{member.department}</span>
+              <span className="text-text-normal-alternative w-19.75 shrink-0">부서</span>
+              <span className="text-text-normal-neutral min-w-0 flex-1 truncate">{member.department}</span>
             </div>
             <div className="flex w-full items-center gap-14">
-              <span className="text-content-alternative w-19.75 shrink-0">직급</span>
-              <span className="text-content-neutral min-w-0 flex-1 truncate">{member.rank}</span>
+              <span className="text-text-normal-alternative w-19.75 shrink-0">직급</span>
+              <span className="text-text-normal-neutral min-w-0 flex-1 truncate">{member.rank}</span>
             </div>
           </div>
 
@@ -107,11 +107,11 @@ export default function MemberDetailPanel({ member, actionButtons }: MemberDetai
           {visibleAccounts.length > 0 && (
             <div className="flex flex-col gap-2">
               <div className="flex items-center gap-2">
-                <IconCloudCheckFilled className="text-content-assistive size-5" />
-                <h3 className="text-heading-small text-content-neutral">연동된 계정 정보</h3>
+                <IconCloudCheckFilled className="text-text-normal-assistive size-5" />
+                <h3 className="text-heading-small text-text-normal-neutral">연동된 계정 정보</h3>
               </div>
 
-              <div className="border-edge-assistive flex w-119 flex-col overflow-clip rounded-xl border">
+              <div className="border-line-normal-assistive flex w-119 flex-col overflow-clip rounded-xl border">
                 {visibleAccounts.map((account, index) => {
                   // integrations 모드 vs legacy accountIds 모드
                   const accountId = member.integrations
@@ -131,32 +131,32 @@ export default function MemberDetailPanel({ member, actionButtons }: MemberDetai
                     <div
                       key={account.service}
                       className={cn(
-                        'border-edge-assistive flex h-15.75 w-119 shrink-0 items-center gap-5 overflow-clip px-4 py-2',
+                        'border-line-normal-assistive flex h-15.75 w-119 shrink-0 items-center gap-5 overflow-clip px-4 py-2',
                         index !== visibleAccounts.length - 1 && 'border-b',
                       )}
                     >
                       <div className="flex w-41.25 shrink-0 items-center gap-3">
                         <account.Icon className={iconClassName} />
-                        <span className="text-body-small text-content-normal truncate">{account.name}</span>
+                        <span className="text-body-small text-text-normal-normal truncate">{account.name}</span>
                       </div>
 
                       {isLinked ? (
                         <div className="flex shrink-0 flex-col items-start justify-center gap-0.5">
                           <div className="flex shrink-0 items-center gap-2.5">
                             <Avatar src={(integrationAccount as { avatarUrl?: string })?.avatarUrl} size="xs" />
-                            <span className="text-body-xsmall text-content-normal max-w-33.25 shrink-0 truncate">
+                            <span className="text-body-xsmall text-text-normal-normal max-w-33.25 shrink-0 truncate">
                               {accountName ?? member.name}
                             </span>
                           </div>
-                          <span className="text-body-xsmall text-content-alternative shrink-0 truncate">
+                          <span className="text-body-xsmall text-text-normal-alternative shrink-0 truncate">
                             {accountEmail ?? member.email}
                           </span>
                         </div>
                       ) : (
-                        <div className="bg-fill-strong flex w-64.75 shrink-0 items-center justify-center self-stretch rounded-lg">
+                        <div className="bg-fill-normal-strong flex w-64.75 shrink-0 items-center justify-center self-stretch rounded-lg">
                           <div className="flex items-center gap-1">
-                            <IconCloudOff className="text-content-assistive size-5" />
-                            <span className="text-body-xsmall text-content-alternative">연동 안됨</span>
+                            <IconCloudOff className="text-text-normal-assistive size-5" />
+                            <span className="text-body-xsmall text-text-normal-alternative">연동 안됨</span>
                           </div>
                         </div>
                       )}

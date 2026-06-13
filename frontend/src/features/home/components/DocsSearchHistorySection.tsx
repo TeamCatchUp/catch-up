@@ -41,9 +41,9 @@ export default function DocsSearchHistorySection({
 
   return (
     <section className="flex w-full justify-center px-16 pb-30">
-      <div className="custom-scrollbar bg-fill-normal max-h-120 w-full max-w-190 overflow-y-auto rounded-3xl p-5">
+      <div className="custom-scrollbar bg-fill-normal-normal max-h-120 w-full max-w-190 overflow-y-auto rounded-3xl p-5">
         {isEmpty ? (
-          <p className="text-body-xsmall text-content-alternative w-full text-center">최근 탐색이 없습니다.</p>
+          <p className="text-body-xsmall text-text-normal-alternative w-full text-center">최근 탐색이 없습니다.</p>
         ) : (
           <SearchHistoryList
             entries={entries}

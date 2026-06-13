@@ -51,7 +51,7 @@ export const documentSearchFilterRowDatePickerOpenFigmaCase: FigmaLabCase = {
     },
     {
       figma: 'Date picker surface',
-      code: 'shadow-modal bg-fill-normal',
+      code: 'shadow-modal bg-fill-normal-normal',
       decision: 'project-token',
     },
   ],

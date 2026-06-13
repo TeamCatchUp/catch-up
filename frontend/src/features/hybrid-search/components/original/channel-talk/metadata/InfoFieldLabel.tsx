@@ -11,8 +11,8 @@ interface InfoFieldLabelProps {
 export default function InfoFieldLabel({ icon: Icon, text }: InfoFieldLabelProps) {
   return (
     <span className="flex w-[138px] shrink-0 items-center gap-4">
-      <Icon className="text-icon-neutral h-5.5 w-5.5" />
-      <span className="text-body-small text-content-alternative">{text}</span>
+      <Icon className="text-icon-normal-neutral h-5.5 w-5.5" />
+      <span className="text-body-small text-text-normal-alternative">{text}</span>
     </span>
   );
 }

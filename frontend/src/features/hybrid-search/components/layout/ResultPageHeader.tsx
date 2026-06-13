@@ -104,7 +104,7 @@ export default function ResultPageHeader({
   const tabItems = buildTabItems(distribution, query.data !== undefined, query.data?.results.length ?? 0);
 
   return (
-    <header className="border-edge-normal flex w-full shrink-0 flex-col items-center border-b px-16 pt-5">
+    <header className="border-line-normal-normal flex w-full shrink-0 flex-col items-center border-b px-16 pt-5">
       <div className="flex w-full max-w-355 flex-col items-start gap-5">
         <ResultSearchBar
           value={draftKeyword}

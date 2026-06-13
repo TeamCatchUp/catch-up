@@ -51,16 +51,16 @@ export default function FileRow({ file, connector, documentId }: FileRowProps) {
   const fileKey = file.file_key;
 
   const baseClass =
-    'bg-fill-strong border-edge-neutral flex w-full items-center gap-2.5 rounded-lg border p-2 text-left';
+    'bg-fill-normal-strong border-line-normal-neutral flex w-full items-center gap-2.5 rounded-lg border p-2 text-left';
 
   const inner = (
     <>
-      <span className="bg-fill-normal flex shrink-0 items-center justify-center rounded-lg p-2">
+      <span className="bg-fill-normal-normal flex shrink-0 items-center justify-center rounded-lg p-2">
         <FileIcon className="text-icon-primary-assistive size-7" />
       </span>
       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <span className="text-body-small text-content-neutral truncate">{name}</span>
-        {meta && <span className="text-body-xsmall text-content-assistive truncate">{meta}</span>}
+        <span className="text-body-small text-text-normal-neutral truncate">{name}</span>
+        {meta && <span className="text-body-xsmall text-text-normal-assistive truncate">{meta}</span>}
       </span>
     </>
   );

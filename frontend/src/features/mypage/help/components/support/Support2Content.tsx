@@ -1,8 +1,8 @@
 const DotDivider = () => (
   <div className="flex items-center justify-center gap-1.5 py-4">
-    <span className="bg-content-assistive size-1 rounded-full" />
-    <span className="bg-content-assistive size-1 rounded-full" />
-    <span className="bg-content-assistive size-1 rounded-full" />
+    <span className="bg-text-normal-assistive size-1 rounded-full" />
+    <span className="bg-text-normal-assistive size-1 rounded-full" />
+    <span className="bg-text-normal-assistive size-1 rounded-full" />
   </div>
 );
 
@@ -12,8 +12,10 @@ export default function Support2Content() {
     <div className="flex w-full flex-col gap-16">
       {/* 도입부 */}
       <section className="flex flex-col gap-5">
-        <h2 className="text-heading-xlarge text-content-strong">나의 모든 이름을 하나로, Catch Up에게 알려주세요</h2>
-        <div className="text-label-medium text-content-normal">
+        <h2 className="text-heading-xlarge text-text-normal-strong">
+          나의 모든 이름을 하나로, Catch Up에게 알려주세요
+        </h2>
+        <div className="text-label-medium text-text-normal-normal">
           <p>
             우리는 업무 도구마다 조금씩 다른 이름을 씁니다.
             <br />
@@ -28,8 +30,8 @@ export default function Support2Content() {
 
       {/* 처음 오셨나요? */}
       <section className="flex flex-col gap-5">
-        <h2 className="text-heading-xlarge text-content-strong">처음 오셨나요? 가장 먼저 할 일이에요</h2>
-        <div className="text-label-medium text-content-normal">
+        <h2 className="text-heading-xlarge text-text-normal-strong">처음 오셨나요? 가장 먼저 할 일이에요</h2>
+        <div className="text-label-medium text-text-normal-normal">
           <p>새로운 도구를 본격적으로 쓰기 전에, 여기서 &apos;나의 이름표&apos;를 먼저 달아주세요.</p>
           <br />
           <p>
@@ -49,8 +51,8 @@ export default function Support2Content() {
 
       {/* 계정이 바뀌었거나 */}
       <section className="flex flex-col gap-5">
-        <h2 className="text-heading-xlarge text-content-strong">계정이 바뀌었거나, 새로 추가되었나요?</h2>
-        <div className="text-label-medium text-content-normal">
+        <h2 className="text-heading-xlarge text-text-normal-strong">계정이 바뀌었거나, 새로 추가되었나요?</h2>
+        <div className="text-label-medium text-text-normal-normal">
           <p>쓰던 아이디가 바뀌었거나, 새로운 툴 계정을 받으셨나요?</p>
           <br />
           <p>
@@ -67,10 +69,10 @@ export default function Support2Content() {
 
       {/* 정확한 연결 */}
       <section className="flex flex-col gap-5">
-        <h2 className="text-heading-xlarge text-content-strong">
+        <h2 className="text-heading-xlarge text-text-normal-strong">
           정확한 답은 &apos;정확한 연결(Mapping)&apos;에서 나와요
         </h2>
-        <div className="text-label-medium text-content-normal">
+        <div className="text-label-medium text-text-normal-normal">
           <p>
             이 과정은 단순한 등록 절차가 아니에요.
             <br />
@@ -80,12 +82,12 @@ export default function Support2Content() {
           </p>
         </div>
 
-        <div className="bg-fill-strong border-edge-assistive flex flex-col gap-3 rounded-xl border px-5 py-4">
-          <p className="text-label-medium text-content-normal">&quot;내가 지난주에 수정한 코드 보여줘&quot;</p>
-          <p className="text-label-medium text-content-normal">&quot;나한테 멘션된 이슈 찾아줘&quot;</p>
+        <div className="bg-fill-normal-strong border-line-normal-assistive flex flex-col gap-3 rounded-xl border px-5 py-4">
+          <p className="text-label-medium text-text-normal-normal">&quot;내가 지난주에 수정한 코드 보여줘&quot;</p>
+          <p className="text-label-medium text-text-normal-normal">&quot;나한테 멘션된 이슈 찾아줘&quot;</p>
         </div>
 
-        <div className="text-label-medium text-content-normal">
+        <div className="text-label-medium text-text-normal-normal">
           <p>
             Catch Up이 이런 질문에 헤매지 않고, 진짜 &apos;나&apos;를 위한 답을 내놓을 수 있도록 여러분의 모든 이름을
             알려주세요.

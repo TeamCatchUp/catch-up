@@ -28,12 +28,12 @@ function CaseNavSection({ title, cases, groupId }: CaseNavSectionProps) {
 
   return (
     <div className="flex flex-col gap-2">
-      <span className="text-body-xsmall text-content-assistive font-semibold">{title}</span>
+      <span className="text-body-xsmall text-text-normal-assistive font-semibold">{title}</span>
       <nav className="flex flex-wrap gap-2">
         {cases.map((item) => (
           <Link
             key={item.id}
-            className="border-edge-neutral bg-fill-strong text-body-small text-content-normal hover:bg-fill-interaction-hover rounded-md border px-3 py-2 transition-colors"
+            className="border-line-normal-neutral bg-fill-normal-strong text-body-small text-text-normal-normal hover:bg-fill-normal-interaction-hover rounded-md border px-3 py-2 transition-colors"
             href={groupId ? `/figma-lab/${groupId}?case=${item.id}` : `/figma-lab/${item.groupId}?case=${item.id}`}
           >
             {item.title}
@@ -55,12 +55,11 @@ export default function FigmaLabRenderer({ selectedCaseId, groupId }: FigmaLabRe
     return (
       <FigmaLabChrome activeCase={undefined}>
         <div className="flex min-h-80 flex-col items-center justify-center gap-3 text-center">
-          <h2 className="text-heading-medium text-content-normal font-semibold">
+          <h2 className="text-heading-medium text-text-normal-normal font-semibold">
             등록된 Figma Lab case가 없습니다
           </h2>
-          <p className="text-body-medium text-content-alternative max-w-xl">
-            feature-local fixture와 figma-case를 추가한 뒤
-            src/app/(dev)/figma-lab/_registry/cases.ts에 등록하세요.
+          <p className="text-body-medium text-text-normal-alternative max-w-xl">
+            feature-local fixture와 figma-case를 추가한 뒤 src/app/(dev)/figma-lab/_registry/cases.ts에 등록하세요.
           </p>
         </div>
       </FigmaLabChrome>
@@ -72,15 +71,15 @@ export default function FigmaLabRenderer({ selectedCaseId, groupId }: FigmaLabRe
       <div className="flex flex-col gap-4">
         <div className="flex flex-col gap-4">
           <Link
-            className="text-body-small text-content-alternative hover:text-content-normal w-fit transition-colors"
+            className="text-body-small text-text-normal-alternative hover:text-text-normal-normal w-fit transition-colors"
             href="/figma-lab"
           >
             ← Feature UI Lab
           </Link>
           {group && (
-            <div className="border-edge-neutral bg-fill-strong flex flex-col gap-1 rounded-lg border p-4">
-              <h2 className="text-heading-small text-content-normal font-semibold">{group.title}</h2>
-              <p className="text-body-small text-content-alternative">{group.description}</p>
+            <div className="border-line-normal-neutral bg-fill-normal-strong flex flex-col gap-1 rounded-lg border p-4">
+              <h2 className="text-heading-small text-text-normal-normal font-semibold">{group.title}</h2>
+              <p className="text-body-small text-text-normal-alternative">{group.description}</p>
             </div>
           )}
           <CaseNavSection title={group ? primaryCaseNavTitle : 'All cases'} cases={primaryCases} groupId={group?.id} />
@@ -88,7 +87,7 @@ export default function FigmaLabRenderer({ selectedCaseId, groupId }: FigmaLabRe
         </div>
 
         <div
-          className="border-edge-neutral bg-fill-normal overflow-auto rounded-lg border"
+          className="border-line-normal-neutral bg-fill-normal-normal overflow-auto rounded-lg border"
           style={{
             width: activeCase.viewport.width,
             minHeight: activeCase.viewport.height,

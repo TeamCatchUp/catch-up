@@ -27,18 +27,20 @@ export default function SlackMessageItem({ message, originalUrl }: SlackMessageI
             <span
               className={cn(
                 'text-heading-small min-w-0 flex-1 truncate font-semibold',
-                isPrimaryBot ? 'text-content-primary' : 'text-content-alternative',
+                isPrimaryBot ? 'text-text-primary-normal' : 'text-text-normal-alternative',
               )}
             >
               {message.author.name}
             </span>
             {message.timeLabel && (
-              <span className="text-body-xsmall text-content-assistive shrink-0 font-medium">{message.timeLabel}</span>
+              <span className="text-body-xsmall text-text-normal-assistive shrink-0 font-medium">
+                {message.timeLabel}
+              </span>
             )}
             {message.editedLabel && (
               <>
-                <span aria-hidden className="bg-edge-neutral h-2.5 w-px shrink-0" />
-                <span className="text-body-xsmall text-content-assistive shrink-0 font-medium">
+                <span aria-hidden className="bg-line-normal-neutral h-2.5 w-px shrink-0" />
+                <span className="text-body-xsmall text-text-normal-assistive shrink-0 font-medium">
                   {message.editedLabel}
                 </span>
               </>

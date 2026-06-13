@@ -3,7 +3,5 @@
 import type { ReactNode } from 'react';
 
 export default function PanelWidth({ children }: { children: ReactNode }) {
-  return (
-    <div className="bg-fill-strong border-edge-neutral w-90 rounded-xl border p-3">{children}</div>
-  );
+  return <div className="bg-fill-normal-strong border-line-normal-neutral w-90 rounded-xl border p-3">{children}</div>;
 }

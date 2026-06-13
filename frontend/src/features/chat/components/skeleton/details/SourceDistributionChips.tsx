@@ -47,7 +47,7 @@ export default function SourceDistributionChips({ distribution }: SourceDistribu
 
   return (
     <motion.div
-      className="bg-edge-primary-assistive border-edge-assistive flex w-full flex-wrap items-center gap-2.5 rounded-xl border border-solid px-4 py-3"
+      className="bg-line-primary-assistive border-line-normal-assistive flex w-full flex-wrap items-center gap-2.5 rounded-xl border border-solid px-4 py-3"
       initial={MotionState.Hidden}
       animate={MotionState.Visible}
       variants={staggerListContainer}
@@ -58,10 +58,10 @@ export default function SourceDistributionChips({ distribution }: SourceDistribu
           <motion.span key={entry.key} variants={fadeInUp} className="flex items-center">
             <span className="text-body-small flex items-center gap-1.5 whitespace-nowrap">
               <Icon className="h-6 w-6 shrink-0" aria-hidden />
-              <span className="text-content-primary">{entry.count}</span>
+              <span className="text-text-primary-normal">{entry.count}</span>
             </span>
             {idx < entries.length - 1 && (
-              <span aria-hidden className="border-edge-neutral ml-2.5 h-3.5 border-l border-solid" />
+              <span aria-hidden className="border-line-normal-neutral ml-2.5 h-3.5 border-l border-solid" />
             )}
           </motion.span>
         );

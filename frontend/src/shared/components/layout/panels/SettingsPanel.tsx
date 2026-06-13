@@ -90,11 +90,11 @@ export default function SettingsPanel() {
   };
 
   return (
-    <div className="border-edge-neutral bg-fill-normal flex h-screen w-60 shrink-0 flex-col gap-5 border-r px-2 py-5">
+    <div className="border-line-normal-neutral bg-fill-normal-normal flex h-screen w-60 shrink-0 flex-col gap-5 border-r px-2 py-5">
       {SETTINGS_SECTIONS_BY_ROLE[role].map((section) => (
         <div key={section.label} className="flex flex-col gap-1.5">
           <div className="px-2.5">
-            <span className="text-body-xsmall text-content-alternative font-medium">{section.label}</span>
+            <span className="text-body-xsmall text-text-normal-alternative font-medium">{section.label}</span>
           </div>
           <div className="flex flex-col gap-0">
             {section.items.map((item) => {
@@ -107,11 +107,16 @@ export default function SettingsPanel() {
                   className={cn(
                     'flex h-9 w-full cursor-pointer items-center gap-3 rounded-lg px-2.5 py-1.5 transition-colors',
                     isActive
-                      ? 'bg-fill-primary-normal-neutral text-content-primary'
-                      : 'text-content-normal hover:bg-fill-interaction-hover',
+                      ? 'bg-fill-primary-normal-neutral text-text-primary-normal'
+                      : 'text-text-normal-normal hover:bg-fill-normal-interaction-hover',
                   )}
                 >
-                  <item.Icon className={cn('h-6 w-6 shrink-0', isActive ? 'text-icon-primary' : 'text-icon-normal')} />
+                  <item.Icon
+                    className={cn(
+                      'h-6 w-6 shrink-0',
+                      isActive ? 'text-icon-primary-normal' : 'text-icon-normal-normal',
+                    )}
+                  />
                   <span className="text-body-small">{item.name}</span>
                 </button>
               );

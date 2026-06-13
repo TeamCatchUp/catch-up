@@ -52,11 +52,7 @@ const getIntegrationLabel = (source: RagSourceUiModel): string => {
   return suffix ? `${base} - ${suffix}` : base;
 };
 
-export default function HybridSearchResultCard({
-  source,
-  isSelected,
-  onSelect,
-}: HybridSearchResultCardProps) {
+export default function HybridSearchResultCard({ source, isSelected, onSelect }: HybridSearchResultCardProps) {
   const Logo = SOURCE_LOGO[source.source_type];
 
   const integrationLabel = getIntegrationLabel(source);
@@ -71,8 +67,8 @@ export default function HybridSearchResultCard({
   // 외부 링크 — javascript:/data: 등 차단 (defense-in-depth).
   const externalHref = isSafeUrl(source.html_url) ? source.html_url : null;
 
-  // selected: bg-fill-strong(#F7F7F8), hover: bg-fill-interaction-hover(#EAEBEC).
-  const stateClass = isSelected ? 'bg-fill-strong' : 'hover:bg-fill-interaction-hover';
+  // selected: bg-fill-normal-strong(#F7F7F8), hover: bg-fill-normal-interaction-hover(#EAEBEC).
+  const stateClass = isSelected ? 'bg-fill-normal-strong' : 'hover:bg-fill-normal-interaction-hover';
 
   const handleSelect = () => onSelect(source);
 
@@ -93,12 +89,10 @@ export default function HybridSearchResultCard({
       {/* 헤더 — [로고 + 커넥터명] / [채널·워크스페이스명 + 외부 링크 아이콘 (a tag, 카드 선택과 분리)] */}
       <div className="flex w-full items-center gap-2.5">
         {/* 로고 단독 (배경/border 없음). 채널톡 16, 나머지 20. */}
-        <Logo
-          className={`shrink-0 ${source.source_type === 'channel_talk' ? 'size-4' : 'size-5'}`}
-        />
+        <Logo className={`shrink-0 ${source.source_type === 'channel_talk' ? 'size-4' : 'size-5'}`} />
         <div className="flex min-w-0 flex-1 items-center gap-2">
-          <span className="text-body-xsmall text-content-alternative shrink-0">{integrationLabel}</span>
-          <span aria-hidden className="text-body-medium text-icon-alternative shrink-0">
+          <span className="text-body-xsmall text-text-normal-alternative shrink-0">{integrationLabel}</span>
+          <span aria-hidden className="text-body-medium text-icon-normal-alternative shrink-0">
             /
           </span>
           {/* 워크스페이스명 + 외부 링크 아이콘 — URL 안전하면 anchor, 아니면 비링크 div. anchor 클릭은 stopPropagation 으로 카드 onSelect 차단. */}
@@ -110,24 +104,22 @@ export default function HybridSearchResultCard({
               onClick={(e) => e.stopPropagation()}
               className="group/name flex min-w-0 items-center gap-0.5"
             >
-              <span className="text-body-xsmall text-content-alternative truncate group-hover/name:underline">
+              <span className="text-body-xsmall text-text-normal-alternative truncate group-hover/name:underline">
                 {contextLabel}
               </span>
-              <OpenInNew className="text-icon-assistive h-4.5 w-4.5 shrink-0" />
+              <OpenInNew className="text-icon-normal-assistive h-4.5 w-4.5 shrink-0" />
             </a>
           ) : (
             <div className="flex min-w-0 items-center gap-0.5">
-              <span className="text-body-xsmall text-content-alternative truncate">
-                {contextLabel}
-              </span>
-              <OpenInNew className="text-icon-assistive h-4.5 w-4.5 shrink-0" />
+              <span className="text-body-xsmall text-text-normal-alternative truncate">{contextLabel}</span>
+              <OpenInNew className="text-icon-normal-assistive h-4.5 w-4.5 shrink-0" />
             </div>
           )}
         </div>
       </div>
       <div className="flex w-full flex-col gap-2">
-        <p className="text-body-medium text-content-normal max-w-152.5 truncate">{displayTitle}</p>
-        <div className="text-body-small text-content-alternative flex items-center gap-1.5">
+        <p className="text-body-medium text-text-normal-normal max-w-152.5 truncate">{displayTitle}</p>
+        <div className="text-body-small text-text-normal-alternative flex items-center gap-1.5">
           <span className="whitespace-nowrap">{authorText}</span>
           <span aria-hidden className="bg-dim-black-10 h-1 w-1 shrink-0 rounded-full" />
           <span className="whitespace-nowrap">{dateText}</span>

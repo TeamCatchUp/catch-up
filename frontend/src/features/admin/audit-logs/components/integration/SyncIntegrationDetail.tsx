@@ -14,7 +14,7 @@ export default function SyncIntegrationDetail({ log }: { log: AuditIntegrationLo
       {/* 서비스 아이콘 + 이름 */}
       <div className="flex items-center gap-3">
         <ServiceIcon service={log.service} className={iconCls} />
-        <span className="text-heading-medium text-content-normal truncate">{SERVICE_NAMES[log.service]}</span>
+        <span className="text-heading-medium text-text-normal-normal truncate">{SERVICE_NAMES[log.service]}</span>
       </div>
 
       <div className="flex flex-col gap-9">
@@ -30,9 +30,9 @@ export default function SyncIntegrationDetail({ log }: { log: AuditIntegrationLo
           {/* 연동된 데이터 범위 */}
           {log.dataRange && (
             <div className="flex flex-col gap-2">
-              <h3 className="text-heading-small text-content-neutral">연동된 데이터 범위</h3>
-              <div className="bg-fill-strong border-edge-assistive rounded-xl border px-5 py-2.5">
-                <span className="text-body-small text-content-normal">{log.dataRange}</span>
+              <h3 className="text-heading-small text-text-normal-neutral">연동된 데이터 범위</h3>
+              <div className="bg-fill-normal-strong border-line-normal-assistive rounded-xl border px-5 py-2.5">
+                <span className="text-body-small text-text-normal-normal">{log.dataRange}</span>
               </div>
             </div>
           )}
@@ -40,20 +40,20 @@ export default function SyncIntegrationDetail({ log }: { log: AuditIntegrationLo
           {/* 연동된 리소스 목록 */}
           {log.resources && log.resources.length > 0 && (
             <div className="flex flex-col gap-2">
-              <h3 className="text-heading-small text-content-neutral">{RESOURCE_LABEL[log.service]}</h3>
-              <div className="bg-fill-strong border-edge-assistive flex max-h-80 flex-col overflow-y-auto rounded-xl border">
+              <h3 className="text-heading-small text-text-normal-neutral">{RESOURCE_LABEL[log.service]}</h3>
+              <div className="bg-fill-normal-strong border-line-normal-assistive flex max-h-80 flex-col overflow-y-auto rounded-xl border">
                 {log.resources.map((name, idx) => (
                   <div
                     key={name}
                     className={cn(
-                      'border-edge-assistive flex h-13 shrink-0 items-center gap-3 px-4',
+                      'border-line-normal-assistive flex h-13 shrink-0 items-center gap-3 px-4',
                       idx !== log.resources!.length - 1 && 'border-b',
                     )}
                   >
-                    <div className="border-edge-neutral bg-fill-normal/50 flex items-center justify-center overflow-clip rounded-full border p-1.5">
+                    <div className="border-line-normal-neutral bg-fill-normal-normal/50 flex items-center justify-center overflow-clip rounded-full border p-1.5">
                       <ResourceIcon service={log.service} />
                     </div>
-                    <span className="text-body-small text-content-normal min-w-0 flex-1 truncate">{name}</span>
+                    <span className="text-body-small text-text-normal-normal min-w-0 flex-1 truncate">{name}</span>
                   </div>
                 ))}
               </div>
