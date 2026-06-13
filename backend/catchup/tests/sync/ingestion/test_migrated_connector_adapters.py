@@ -127,6 +127,11 @@ class MigratedConnectorDescriptorTests(IsolatedAsyncioTestCase):
                 Mock(return_value=SimpleNamespace()),
             ),
             patch.object(
+                slack_factory.settings,
+                "VECTOR_STORE_V2_DUAL_WRITE_ENABLED",
+                False,
+            ),
+            patch.object(
                 slack_factory,
                 "get_summarizer_service",
                 Mock(return_value=SimpleNamespace()),

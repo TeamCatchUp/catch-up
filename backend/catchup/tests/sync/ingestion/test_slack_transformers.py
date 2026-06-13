@@ -36,7 +36,10 @@ class SlackTransformerBlockBodyTests(TestCase):
         document = self.transformer.transform_message(message, "T123")
 
         self.assertEqual(document.page_content, "일반 Slack GUI 메시지입니다")
-        self.assertIn("Message:\n일반 Slack GUI 메시지입니다", document.metadata["contextual_content"])
+        self.assertIn(
+            "Message:\n일반 Slack GUI 메시지입니다",
+            document.metadata["contextual_content"],
+        )
 
     def test_bot_message_uses_blocks_beyond_text_fallback(self) -> None:
         message = self.transformer.parse_message(
@@ -66,7 +69,10 @@ class SlackTransformerBlockBodyTests(TestCase):
                                         "type": "text",
                                         "text": "Agentic RAG 파이프라인 수정 완료했습니다.\n",
                                     },
-                                    {"type": "text", "text": "웹 UI와 슬랙봇 답변 생성 과정 스트리밍 참고 부탁드립니다.\n"},
+                                    {
+                                        "type": "text",
+                                        "text": "웹 UI와 슬랙봇 답변 생성 과정 스트리밍 참고 부탁드립니다.\n",
+                                    },
                                     {"type": "user", "user_id": "U123"},
                                 ],
                             }
@@ -74,12 +80,21 @@ class SlackTransformerBlockBodyTests(TestCase):
                     },
                     {
                         "type": "section",
-                        "text": {"type": "mrkdwn", "text": "*담당자* : <@U123>\n*기한* : 미정"},
+                        "text": {
+                            "type": "mrkdwn",
+                            "text": "*담당자* : <@U123>\n*기한* : 미정",
+                        },
                     },
                     {
                         "type": "actions",
                         "elements": [
-                            {"type": "button", "text": {"type": "plain_text", "text": "내 메시지 삭제"}}
+                            {
+                                "type": "button",
+                                "text": {
+                                    "type": "plain_text",
+                                    "text": "내 메시지 삭제",
+                                },
+                            }
                         ],
                     },
                 ],
@@ -91,9 +106,15 @@ class SlackTransformerBlockBodyTests(TestCase):
         document = self.transformer.transform_message(message, "T123")
         contextual_content = document.metadata["contextual_content"]
 
-        self.assertIn("위치 : https://example.atlassian.net/wiki/x/AQDbBQ", contextual_content)
+        self.assertIn(
+            "위치 : https://example.atlassian.net/wiki/x/AQDbBQ",
+            contextual_content,
+        )
         self.assertIn("Agentic RAG 파이프라인 수정 완료했습니다.", contextual_content)
-        self.assertIn("웹 UI와 슬랙봇 답변 생성 과정 스트리밍 참고 부탁드립니다.", contextual_content)
+        self.assertIn(
+            "웹 UI와 슬랙봇 답변 생성 과정 스트리밍 참고 부탁드립니다.",
+            contextual_content,
+        )
         self.assertIn("담당자 : @Team Member B", contextual_content)
         self.assertNotIn("내 메시지 삭제", contextual_content)
 
@@ -102,7 +123,10 @@ class SlackTransformerBlockBodyTests(TestCase):
             {
                 "text": "Keyword demo",
                 "blocks": [
-                    {"type": "header", "text": {"type": "plain_text", "text": "Keyword demo"}},
+                    {
+                        "type": "header",
+                        "text": {"type": "plain_text", "text": "Keyword demo"},
+                    },
                     {
                         "type": "section",
                         "fields": [
@@ -110,7 +134,10 @@ class SlackTransformerBlockBodyTests(TestCase):
                             {"type": "mrkdwn", "text": "*Due*\n미정"},
                         ],
                     },
-                    {"type": "context", "elements": [{"type": "mrkdwn", "text": "Swagger 이슈"}]},
+                    {
+                        "type": "context",
+                        "elements": [{"type": "mrkdwn", "text": "Swagger 이슈"}],
+                    },
                 ],
                 "attachments": [
                     {
@@ -144,7 +171,10 @@ class SlackTransformerBlockBodyTests(TestCase):
                                 "type": "rich_text_section",
                                 "elements": [
                                     {"type": "user", "user_id": "U123"},
-                                    {"type": "text", "text": " Swagger 이슈로 필터링은 하나만 됩니다~"},
+                                    {
+                                        "type": "text",
+                                        "text": " Swagger 이슈로 필터링은 하나만 됩니다~",
+                                    },
                                 ],
                             }
                         ],
@@ -154,6 +184,81 @@ class SlackTransformerBlockBodyTests(TestCase):
         )
 
         self.assertEqual(reply.text, "<@U123> Swagger 이슈로 필터링은 하나만 됩니다~")
+
+    def test_message_and_reply_preserve_slack_file_access_fields(self) -> None:
+        file_payload = {
+            "id": "F123",
+            "name": "migration-plan.pdf",
+            "title": "Migration plan",
+            "filetype": "pdf",
+            "mimetype": "application/pdf",
+            "pretty_type": "PDF",
+            "size": 184233,
+            "url_private": "https://files.slack.com/files-pri/T123-F123/migration-plan.pdf",
+            "url_private_download": (
+                "https://files.slack.com/files-pri/T123-F123/download/migration-plan.pdf"
+            ),
+            "permalink": "https://acme.slack.com/files/U123/F123/migration-plan.pdf",
+            "permalink_public": "https://slack-files.com/T123-F123",
+            "preview": "Migration plan preview",
+            "initial_comment": "Please review before backfill.",
+            "mode": "hosted",
+            "is_external": False,
+            "external_type": None,
+            "file_access": "visible",
+        }
+
+        message = self.transformer.parse_message(
+            {
+                "ts": "1777018130.055109",
+                "user": "U123",
+                "text": "Attached migration plan",
+                "files": [file_payload],
+                "attachments": [
+                    {
+                        "id": 1,
+                        "title": "Preview",
+                        "title_link": "https://example.test/preview",
+                        "image_url": "https://example.test/image.png",
+                        "thumb_url": "https://example.test/thumb.png",
+                        "app_id": "A123",
+                        "app_unfurl_url": "https://example.test/unfurl",
+                    }
+                ],
+            },
+            channel_id="C123",
+            channel_name="dev",
+        )
+        reply = self.transformer.parse_reply(
+            {
+                "ts": "1777018131.055109",
+                "user": "U123",
+                "text": "Reply file",
+                "files": [file_payload | {"file_access": "check_file_info"}],
+            }
+        )
+
+        message_file = message.files[0]
+        self.assertEqual(message_file.url_private, file_payload["url_private"])
+        self.assertEqual(
+            message_file.url_private_download,
+            file_payload["url_private_download"],
+        )
+        self.assertEqual(
+            message_file.permalink_public, file_payload["permalink_public"]
+        )
+        self.assertEqual(message_file.file_access, "visible")
+        self.assertEqual(message_file.preview, "Migration plan preview")
+        self.assertEqual(
+            message.attachments[0].image_url, "https://example.test/image.png"
+        )
+        self.assertEqual(
+            message.attachments[0].app_unfurl_url, "https://example.test/unfurl"
+        )
+        self.assertEqual(reply.files[0].file_access, "check_file_info")
+        self.assertEqual(
+            reply.files[0].url_private_download, file_payload["url_private_download"]
+        )
 
     def test_rich_text_list_dedupes_against_slack_text_fallback(self) -> None:
         body = self.transformer.extract_message_body(
@@ -184,11 +289,15 @@ class SlackTransformerBlockBodyTests(TestCase):
                                 "elements": [
                                     {
                                         "type": "rich_text_section",
-                                        "elements": [{"type": "text", "text": "단계별로 판단"}],
+                                        "elements": [
+                                            {"type": "text", "text": "단계별로 판단"}
+                                        ],
                                     },
                                     {
                                         "type": "rich_text_section",
-                                        "elements": [{"type": "text", "text": "판단별 동작 내용"}],
+                                        "elements": [
+                                            {"type": "text", "text": "판단별 동작 내용"}
+                                        ],
                                     },
                                 ],
                             },
@@ -227,7 +336,10 @@ class SlackIngestionSkipTests(TestCase):
                 "blocks": [
                     {
                         "type": "section",
-                        "text": {"type": "mrkdwn", "text": "키워드 넣고 검색 버튼 누르면 됩니다!"},
+                        "text": {
+                            "type": "mrkdwn",
+                            "text": "키워드 넣고 검색 버튼 누르면 됩니다!",
+                        },
                     }
                 ],
             }
