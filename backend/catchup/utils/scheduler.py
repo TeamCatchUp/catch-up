@@ -347,6 +347,7 @@ def init_scheduler():
         misfire_grace_time=120,
     )
 
+    # TODO : 시작 시점만 정하고 각 Job 종료 이후에 다음 Job이 시작되도록 변경 고려 (현재는 각 Job이 독립적으로 실행되어 동시에 여러 Job이 실행될 수 있음)
     if settings.VECTOR_STORE_V2_BACKFILL_SCHEDULE_ENABLED:
         _scheduler.add_job(
             run_github_pr_v2_backfill_job,
@@ -366,7 +367,7 @@ def init_scheduler():
         )
         _scheduler.add_job(
             run_slack_message_v2_backfill_job,
-            trigger=CronTrigger(hour=18, minute=20, timezone=SEOUL_TZ),
+            trigger=CronTrigger(hour=19, minute=05, timezone=SEOUL_TZ),
             id="slack_message_v2_backfill",
             name="Slack Message v2 Backfill",
             replace_existing=True,
