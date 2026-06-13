@@ -1,7 +1,5 @@
 import asyncio
 import logging
-from _collections_abc import AsyncGenerator
-from builtins import ExceptionGroup
 from dataclasses import dataclass
 from dataclasses import field
 from datetime import datetime
@@ -21,28 +19,17 @@ from catchup.components.vector_db.pgvector import PGVectorRepository
 from catchup.configs.config import settings
 from catchup.connectors.slack.client import SlackApiClientWrapper
 from catchup.connectors.slack.client import SlackConnectorApiError
-from catchup.connectors.slack.client import SlackRateLimitError
 from catchup.connectors.slack.schemas import SlackThreadReply
 from catchup.connectors.slack.schemas import SlackUser
 from catchup.db.engine import SessionLocal
 from catchup.db.slack import domain_repository
 from catchup.sync.audit import SyncAuditContext
-from catchup.sync.common.schemas import TargetSyncResult
 from catchup.sync.ingestion.document_builders.slack import SlackTransformer
 
 logger = logging.getLogger(__name__)
 
 
 CATCH_UP_ANSWER_PLACEHOLDER = "[CATCH_UP_ANSWER]"
-
-
-@dataclass(slots=True, frozen=True)
-class SlackSyncContext:
-    channel_id: str
-    channel_name: str
-    sync_from_ts: str | None
-    skip_delete: bool
-    audit_context: SyncAuditContext | None = None
 
 
 @dataclass(slots=True, frozen=True)
@@ -76,7 +63,7 @@ class SlackRecordRetryResult:
 
 class SlackIngestionService:
     """
-    Redis Event 단위 Slack 수집/요약/임베딩/저장 서비스.
+    Slack record repair/retry support service.
     """
 
     def __init__(
@@ -286,35 +273,6 @@ class SlackIngestionService:
 
         return None
 
-    def _handle_pipeline_exception_group(
-        self,
-        exc_group: ExceptionGroup,
-        *,
-        sync_ctx: SlackSyncContext,
-        skippable_errors: set[str],
-    ) -> TargetSyncResult:
-        for exc in exc_group.exceptions:
-            if isinstance(exc, SlackRateLimitError):
-                raise exc
-
-        for exc in exc_group.exceptions:
-            error_code = self._extract_slack_error_code(exc)
-            if error_code in skippable_errors:
-                logger.info(
-                    "[SLACK][INGESTION] Skipped channel: team_id=%s, channel=%s(%s), reason=%s",
-                    self.team_id,
-                    sync_ctx.channel_name,
-                    sync_ctx.channel_id,
-                    error_code,
-                )
-                return TargetSyncResult(skipped=True)
-
-        for exc in exc_group.exceptions:
-            if isinstance(exc, SlackConnectorApiError):
-                raise exc
-
-        raise exc_group.exceptions[0] from None
-
     def _transform_message_document_blocking(
         self,
         message_data: dict[str, Any],
@@ -379,10 +337,6 @@ class SlackIngestionService:
                 errors += 1
 
         return batch_documents, batch_doc_ids, errors, batch_latest_synced_ts
-
-    async def list_syncable_channels(self) -> list[dict[str, str]]:
-        self._ensure_initialized()
-        return await self._get_syncable_channels()
 
     async def build_record_gap_report(
         self,
@@ -480,290 +434,6 @@ class SlackIngestionService:
                 )
             ]
         )
-
-    async def sync_channel_messages(
-        self,
-        *,
-        channel_id: str,
-        channel_name: str,
-        sync_from_ts: str | None,
-        skip_delete: bool = False,
-        audit_context: SyncAuditContext | None = None,
-    ) -> TargetSyncResult:
-        self._ensure_initialized()
-        await run_in_threadpool(self._load_ingestion_context_db)
-        sync_ctx = SlackSyncContext(
-            channel_id=channel_id,
-            channel_name=channel_name,
-            sync_from_ts=sync_from_ts,
-            skip_delete=skip_delete,
-            audit_context=audit_context,
-        )
-        return await self._sync_channel_messages(
-            sync_ctx=sync_ctx,
-        )
-
-    async def _get_syncable_channels(self) -> list[dict[str, str]]:
-        channels: list[dict[str, str]] = []
-        cursor: str | None = None
-
-        while True:
-            response = await self.client.list_conversations(
-                types="public_channel,private_channel",
-                cursor=cursor,
-            )
-            for channel in response.get("channels", []):
-                channel_id = channel.get("id")
-                channels.append(
-                    {
-                        "id": channel_id,
-                        "name": channel.get("name", channel_id),
-                    }
-                )
-
-            cursor = response.get("response_metadata", {}).get("next_cursor")
-            if not cursor:
-                break
-
-        return channels
-
-    async def _sync_channel_messages(
-        self,
-        *,
-        sync_ctx: SlackSyncContext,
-    ) -> TargetSyncResult:
-        """단일 이벤트 단위: fetch -> summarize -> embed -> store."""
-        fetch_q: asyncio.Queue = asyncio.Queue(maxsize=2)
-        embed_q: asyncio.Queue = asyncio.Queue(maxsize=2)
-        store_q: asyncio.Queue = asyncio.Queue(maxsize=2)
-
-        async def _fetch_stage() -> None:
-            async for batch in self._fetch_channel_pages(
-                channel_id=sync_ctx.channel_id,
-                channel_name=sync_ctx.channel_name,
-                sync_from_ts=sync_ctx.sync_from_ts,
-            ):
-                await fetch_q.put(batch)
-            await fetch_q.put(None)
-
-        async def _summarize_stage() -> None:
-            while (batch := await fetch_q.get()) is not None:
-                batch_docs, batch_ids, batch_errors, batch_latest_synced_ts = batch
-                if self.summarizer:
-                    batch_docs = await self._summarize_documents(
-                        batch_docs,
-                        channel_name=sync_ctx.channel_name,
-                        audit_context=sync_ctx.audit_context,
-                    )
-                await embed_q.put(
-                    (batch_docs, batch_ids, batch_errors, batch_latest_synced_ts)
-                )
-            await embed_q.put(None)
-
-        async def _embed_stage() -> None:
-            while (batch := await embed_q.get()) is not None:
-                batch_docs, batch_ids, batch_errors, batch_latest_synced_ts = batch
-                embeddings = await self.repository.generate_embeddings(
-                    batch_docs,
-                    audit_context=sync_ctx.audit_context,
-                    context=(
-                        f"entity_type=message,channel={sync_ctx.channel_name},"
-                        f"doc_count={len(batch_docs)}"
-                    ),
-                )
-                await store_q.put(
-                    (
-                        batch_docs,
-                        batch_ids,
-                        batch_errors,
-                        embeddings,
-                        batch_latest_synced_ts,
-                    )
-                )
-            await store_q.put(None)
-
-        async def _store_stage() -> tuple[int, int, str | None]:
-            synced_count = 0
-            errors = 0
-            latest_synced_ts: str | None = None
-            while (batch := await store_q.get()) is not None:
-                (
-                    batch_docs,
-                    batch_ids,
-                    batch_errors,
-                    embeddings,
-                    batch_latest_synced_ts,
-                ) = batch
-
-                errors += batch_errors
-                if not sync_ctx.skip_delete:
-                    await self.repository.delete_documents(batch_ids)
-                await self.repository.store_with_embeddings(
-                    batch_docs,
-                    embeddings,
-                    batch_ids,
-                    audit_context=sync_ctx.audit_context,
-                    context=(
-                        f"entity_type=message,channel={sync_ctx.channel_name},"
-                        f"doc_count={len(batch_docs)}"
-                    ),
-                )
-
-                synced_count += len(batch_docs)
-                latest_synced_ts = self._pick_latest_ts(
-                    latest_synced_ts,
-                    batch_latest_synced_ts,
-                )
-
-            return synced_count, errors, latest_synced_ts
-
-        try:
-            async with asyncio.TaskGroup() as tg:
-                tg.create_task(_fetch_stage())
-                tg.create_task(_summarize_stage())
-                tg.create_task(_embed_stage())
-                store_task = tg.create_task(_store_stage())
-
-            synced_count, errors, _latest_synced_ts = store_task.result()
-
-        except ExceptionGroup as eg:
-            return self._handle_pipeline_exception_group(
-                eg,
-                sync_ctx=sync_ctx,
-                skippable_errors=set(self._SKIPPABLE_ERRORS),
-            )
-
-        logger.debug(
-            "[SLACK][INGESTION] Channel synced: team_id=%s, channel=%s(%s), synced=%s, errors=%s",
-            self.team_id,
-            sync_ctx.channel_name,
-            sync_ctx.channel_id,
-            synced_count,
-            errors,
-        )
-        return TargetSyncResult(
-            synced_count=synced_count,
-            error_count=errors,
-        )
-
-    async def incremental_sync(
-        self,
-        *,
-        channel_id: str,
-        record_id: str,
-        event_kind: str,
-        sync_from: str | None,
-        audit_context: SyncAuditContext | None = None,
-    ) -> TargetSyncResult:
-        normalized_event_kind = event_kind.strip().lower()
-        normalized_record_id = record_id.strip()
-        if not normalized_record_id:
-            raise ValueError("slack incremental record_id is empty")
-        doc_id = f"slack:message:{self.team_id}:{channel_id}:{normalized_record_id}"
-
-        if normalized_event_kind == "deleted":
-            await self.repository.delete_documents([doc_id])
-            return TargetSyncResult(synced_count=1)
-
-        channel_name = await run_in_threadpool(
-            self._load_channel_context_db,
-            channel_id,
-        )
-        try:
-            exact_refresh_result = await self._sync_single_message_document(
-                channel_id=channel_id,
-                channel_name=channel_name,
-                message_id=normalized_record_id,
-                audit_context=audit_context,
-            )
-        except Exception as exc:
-            error_code = self._extract_slack_error_code(exc)
-            if error_code in self._SKIPPABLE_ERRORS:
-                logger.info(
-                    "[SLACK][INGESTION] Removed exact message after skippable refresh error: team_id=%s, channel=%s(%s), ts=%s, reason=%s",
-                    self.team_id,
-                    channel_name,
-                    channel_id,
-                    normalized_record_id,
-                    error_code,
-                )
-                await self.repository.delete_documents([doc_id])
-                return TargetSyncResult(synced_count=1)
-            raise
-        if exact_refresh_result is not None:
-            return exact_refresh_result
-        logger.info(
-            "[SLACK][INGESTION] Removed exact message after refresh miss: team_id=%s, channel=%s(%s), ts=%s",
-            self.team_id,
-            channel_name,
-            channel_id,
-            normalized_record_id,
-        )
-        await self.repository.delete_documents([doc_id])
-        return TargetSyncResult(synced_count=1)
-
-    async def _fetch_channel_pages(
-        self,
-        *,
-        channel_id: str,
-        channel_name: str,
-        sync_from_ts: str | None,
-    ) -> AsyncGenerator[tuple[list[Document], list[str], int, str | None], None]:
-        cursor = None
-
-        while True:
-            response = await self.client.get_conversation_history(
-                channel=channel_id,
-                oldest=sync_from_ts,
-                cursor=cursor,
-                limit=settings.SLACK_MESSAGE_BATCH_SIZE,
-            )
-
-            messages = [
-                self._sanitize_message_payload(message)
-                for message in response.get("messages", [])
-            ]
-            thread_messages = [
-                msg
-                for msg in messages
-                if not self._should_skip_message(msg) and msg.get("reply_count", 0) > 0
-            ]
-
-            if thread_messages:
-                thread_replies_list = await asyncio.gather(
-                    *[
-                        self._fetch_thread_replies(channel_id=channel_id, thread_ts=msg.get("ts"))
-                        for msg in thread_messages
-                    ]
-                )
-                reply_map = {
-                    msg.get("ts"): replies
-                    for msg, replies in zip(thread_messages, thread_replies_list)
-                }
-            else:
-                reply_map = {}
-
-            (
-                batch_documents,
-                batch_doc_ids,
-                errors,
-                batch_latest_synced_ts,
-            ) = await run_in_threadpool(
-                self._transform_message_batch_blocking,
-                messages,
-                channel_id,
-                channel_name,
-                reply_map,
-            )
-
-            if batch_documents:
-                yield batch_documents, batch_doc_ids, errors, batch_latest_synced_ts
-
-            if not response.get("has_more"):
-                break
-            cursor = response.get("response_metadata", {}).get("next_cursor")
-            if not cursor:
-                break
 
     async def _collect_syncable_message_ids(
         self,
@@ -903,42 +573,6 @@ class SlackIngestionService:
                 break
 
         return replies
-
-    async def _sync_single_message_document(
-        self,
-        *,
-        channel_id: str,
-        channel_name: str,
-        message_id: str,
-        audit_context: SyncAuditContext | None = None,
-    ) -> TargetSyncResult | None:
-        document = await self._fetch_message_document(
-            channel_id=channel_id,
-            channel_name=channel_name,
-            message_id=message_id,
-        )
-        if document is None:
-            return None
-
-        upsert_documents = [document]
-        if self.summarizer:
-            upsert_documents = await self._summarize_documents(
-                upsert_documents,
-                channel_name=channel_name,
-                audit_context=audit_context,
-            )
-
-        upsert_ids = [doc.id for doc in upsert_documents]
-        await self.repository.upsert_documents(
-            upsert_documents,
-            upsert_ids,
-            audit_context=audit_context,
-            context=(
-                f"entity_type=message,channel={channel_name},"
-                f"mode=incremental_exact_refresh,doc_count={len(upsert_documents)}"
-            ),
-        )
-        return TargetSyncResult(synced_count=len(upsert_documents))
 
     async def _summarize_documents(
         self,

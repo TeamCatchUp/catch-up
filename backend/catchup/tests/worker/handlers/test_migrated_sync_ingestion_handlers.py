@@ -146,7 +146,7 @@ class MigratedSyncIngestionHandlerTests(IsolatedAsyncioTestCase):
 
         with (
             patch(
-                "catchup.sync.handlers.slack.create_slack_ingestion_service",
+                "catchup.sync.handlers.slack.create_slack_message_full_sync_adapter",
                 AsyncMock(return_value=service),
             ),
             patch(
@@ -158,8 +158,11 @@ class MigratedSyncIngestionHandlerTests(IsolatedAsyncioTestCase):
 
         run_sync_ingestion.assert_awaited_once()
         execution = run_sync_ingestion.await_args.kwargs["execution"]
+        sync_window = run_sync_ingestion.await_args.kwargs["sync_window"]
         self.assertEqual(execution.channel_id, "C123")
         self.assertEqual(execution.channel_name, "general")
+        self.assertFalse(hasattr(execution, "sync_from_ts"))
+        self.assertEqual(sync_window.window_start.timestamp(), 1778899200.0)
         self.assertEqual(result.synced_count, 3)
 
     async def test_github_full_sync_uses_sync_ingestion_stream_target(self) -> None:
@@ -288,7 +291,7 @@ class MigratedSyncIngestionHandlerTests(IsolatedAsyncioTestCase):
 
         with (
             patch(
-                "catchup.sync.handlers.slack.create_slack_ingestion_service",
+                "catchup.sync.handlers.slack.create_slack_message_incremental_sync_adapter",
                 AsyncMock(return_value=SimpleNamespace()),
             ),
             patch(
@@ -306,6 +309,7 @@ class MigratedSyncIngestionHandlerTests(IsolatedAsyncioTestCase):
         self.assertEqual(execution.channel_id, "C123")
         self.assertEqual(execution.record_id, "1700000000.000000")
         self.assertEqual(execution.event_kind, "updated")
+        self.assertFalse(hasattr(execution, "sync_from"))
         self.assertEqual(result.synced_count, 1)
 
     async def test_github_incremental_uses_sync_ingestion_exact_record(self) -> None:

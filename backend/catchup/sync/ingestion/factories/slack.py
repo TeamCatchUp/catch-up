@@ -12,14 +12,18 @@ from fastapi.concurrency import run_in_threadpool
 
 from catchup.components.embedder.constants import EmbeddingProvider
 from catchup.components.embedder.factory import get_embedding_service
+from catchup.components.summarizer import get_summarizer_service
 from catchup.components.vector_db.factory import get_pgvector_repository
 from catchup.connectors.slack.auth import get_slack_oauth_service
+from catchup.connectors.slack.client import SlackApiClientWrapper
 from catchup.connectors.slack.client import SlackConnectorApiError
 from catchup.connectors.slack.client import SlackRateLimitError
 from catchup.db.engine import SessionLocal
 from catchup.db.slack import oauth_repository as slack_crud
 from catchup.sync.common.exceptions import SyncConnectorException
 from catchup.sync.common.exceptions import SyncInternalException
+from catchup.sync.ingestion.adapters.slack import SlackMessageFullSyncAdapter
+from catchup.sync.ingestion.adapters.slack import SlackMessageIncrementalSyncAdapter
 from catchup.sync.ingestion.services.slack import SlackIngestionService
 
 logger = logging.getLogger(__name__)
@@ -80,26 +84,82 @@ async def _resolve_access_token(
             metadata={"team_id": team_id},
         ) from exc
 
-async def create_slack_ingestion_service(
-    team_id: str,
-) -> SlackIngestionService:
+def _build_repository():
+    repository = get_pgvector_repository(
+        embeddings=get_embedding_service(EmbeddingProvider.AWS_BEDROCK).get_embedder()
+    )
+    repository.ensure_initialized()
+    return repository
+
+
+async def _load_token_or_raise(team_id: str):
     token_record = await run_in_threadpool(_load_token_db, team_id)
     if not token_record:
         raise SyncConnectorException(
             f"Slack 연결을 찾을 수 없습니다: {team_id}",
             metadata={"team_id": team_id},
         )
+    return token_record
 
+
+async def _create_slack_message_adapter(
+    team_id: str,
+    adapter_cls,
+):
+    token_record = await _load_token_or_raise(team_id)
     access_token = await _resolve_access_token(team_id, token_record=token_record)
 
     try:
-        repository = get_pgvector_repository(
-            embeddings=get_embedding_service(
-                EmbeddingProvider.AWS_BEDROCK
-            ).get_embedder()
+        adapter = adapter_cls(
+            team_id=team_id,
+            client=SlackApiClientWrapper(access_token, team_id),
+            repository=_build_repository(),
+            bot_user_id=token_record.bot_user_id,
+            summarizer=get_summarizer_service(),
         )
+        await run_in_threadpool(adapter._load_ingestion_context)
+        return adapter
+    except Exception as exc:
+        logger.error(
+            "[SLACK][FACTORY] Failed to initialize message adapter: team_id=%s, adapter=%s, error=%s",
+            team_id,
+            getattr(adapter_cls, "__name__", str(adapter_cls)),
+            exc,
+            exc_info=True,
+        )
+        raise SyncInternalException(
+            "Slack message adapter 초기화에 실패했습니다",
+            metadata={"team_id": team_id},
+        ) from exc
+
+
+async def create_slack_message_full_sync_adapter(
+    team_id: str,
+) -> SlackMessageFullSyncAdapter:
+    return await _create_slack_message_adapter(
+        team_id,
+        SlackMessageFullSyncAdapter,
+    )
+
+
+async def create_slack_message_incremental_sync_adapter(
+    team_id: str,
+) -> SlackMessageIncrementalSyncAdapter:
+    return await _create_slack_message_adapter(
+        team_id,
+        SlackMessageIncrementalSyncAdapter,
+    )
+
+
+async def create_slack_ingestion_service(
+    team_id: str,
+) -> SlackIngestionService:
+    token_record = await _load_token_or_raise(team_id)
+    access_token = await _resolve_access_token(team_id, token_record=token_record)
+
+    try:
         service = SlackIngestionService(
-            repository=repository,
+            repository=_build_repository(),
             team_id=team_id,
             access_token=access_token,
             bot_user_id=token_record.bot_user_id,
