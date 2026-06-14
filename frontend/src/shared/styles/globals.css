@@ -2,10 +2,11 @@
 @custom-variant dark (&:is(.dark *));
 @import 'tw-animate-css';
 @import './font.css';
-@import './button.css';
 @import './color.css';
+@import './color-mode.css';
 @import './semantic.css';
 @import './radius.css';
+@import './button.css';
 @import './shadow.css';
 @import './z-index.css';
 @import './layout.css';
