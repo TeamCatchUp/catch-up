@@ -42,7 +42,6 @@ def _valid_row() -> dict:
             "slack_message": {
                 "team_id": "T123",
                 "channel_id": "C123",
-                "channel_name": "general",
                 "ts": "1712345678.000100",
                 "author": {"slack_user_id": "U123", "catchup_user_id": "42"},
                 "reactions": [],
@@ -110,6 +109,7 @@ def test_sample_validator_rejects_legacy_metadata_blobs() -> None:
     assert "forbidden:slack_message.files" in result.errors
     assert "forbidden:slack_message.attachments" in result.errors
     assert "forbidden:slack_message.author_name" in result.errors
+    assert "forbidden:slack_message.channel_name" in result.errors
     assert "forbidden:slack_message.thread_ts" in result.errors
     assert "forbidden:slack_message.is_thread_root" in result.errors
     assert "forbidden:slack_message.reply_count" in result.errors

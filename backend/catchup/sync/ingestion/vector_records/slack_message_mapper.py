@@ -57,7 +57,11 @@ class SlackMessageV2RecordMapper:
     ) -> SlackMessageVectorRecord:
         synced_at = synced_at or datetime.now(timezone.utc)
         mention_names_by_id = self._mention_names_by_id(message)
-        parts = self._parts(message, mention_names_by_id)
+        parts = self._parts(
+            message,
+            mention_names_by_id,
+            internal_author_id=internal_author_id,
+        )
         channel_name = (
             _normalize_display_text(message.channel_name) or message.channel_id
         )
@@ -92,7 +96,6 @@ class SlackMessageV2RecordMapper:
             slack_message=SlackMessageMetadata(
                 team_id=team_id,
                 channel_id=message.channel_id,
-                channel_name=channel_name,
                 ts=message.ts,
                 message_type=message.message_type,
                 subtype=message.subtype,
@@ -121,38 +124,36 @@ class SlackMessageV2RecordMapper:
         cls,
         message: SlackMessage,
         mention_names_by_id: dict[str, str],
+        *,
+        internal_author_id: str | None = None,
     ) -> list[SlackMessageDataPart]:
+        message_text = cls._message_part_text(message, mention_names_by_id)
         part_inputs: list[tuple[str, str | None, dict[str, Any]]] = [
             (
                 "message_body",
-                _resolve_slack_text(cls._message_text(message), mention_names_by_id),
-                _drop_none(
-                    {
-                        "message_type": message.message_type,
-                        "subtype": message.subtype,
-                    }
-                ),
+                message_text,
+                cls._message_metadata(message, internal_author_id),
             ),
         ]
         part_inputs.extend(
             (
                 "thread_reply",
-                _resolve_slack_text(cls._reply_text(reply), mention_names_by_id),
+                cls._reply_part_text(reply, mention_names_by_id),
                 cls._reply_metadata(reply),
             )
             for reply in message.replies
         )
-        part_inputs.extend(
-            (
-                "attachment",
-                _resolve_slack_text(
-                    cls._attachment_text(attachment), mention_names_by_id
-                ),
-                cls._attachment_metadata(attachment, parent_type="message"),
-            )
-            for attachment in message.attachments
-        )
         for attachment in message.attachments:
+            attachment_text = _resolve_slack_text(
+                cls._attachment_text(attachment), mention_names_by_id
+            )
+            part_inputs.append(
+                (
+                    "attachment",
+                    attachment_text,
+                    cls._attachment_metadata(attachment, parent_type="message"),
+                )
+            )
             part_inputs.extend(
                 cls._block_part_inputs(
                     attachment.blocks,
@@ -161,15 +162,9 @@ class SlackMessageV2RecordMapper:
                     attachment_id=str(attachment.id)
                     if attachment.id is not None
                     else None,
+                    skip_texts=(attachment_text,),
                 )
             )
-        part_inputs.extend(
-            cls._block_part_inputs(
-                message.blocks,
-                parent_type="message",
-                mention_names_by_id=mention_names_by_id,
-            )
-        )
         part_inputs.extend(
             cls._file_part_inputs(
                 message.files,
@@ -178,21 +173,21 @@ class SlackMessageV2RecordMapper:
             )
         )
         for reply in message.replies:
-            part_inputs.extend(
-                (
-                    "attachment",
-                    _resolve_slack_text(
-                        cls._attachment_text(attachment), mention_names_by_id
-                    ),
-                    cls._attachment_metadata(
-                        attachment,
-                        parent_type="thread_reply",
-                        reply_ts=reply.ts,
-                    ),
-                )
-                for attachment in reply.attachments
-            )
             for attachment in reply.attachments:
+                attachment_text = _resolve_slack_text(
+                    cls._attachment_text(attachment), mention_names_by_id
+                )
+                part_inputs.append(
+                    (
+                        "attachment",
+                        attachment_text,
+                        cls._attachment_metadata(
+                            attachment,
+                            parent_type="thread_reply",
+                            reply_ts=reply.ts,
+                        ),
+                    )
+                )
                 part_inputs.extend(
                     cls._block_part_inputs(
                         attachment.blocks,
@@ -202,6 +197,7 @@ class SlackMessageV2RecordMapper:
                         attachment_id=(
                             str(attachment.id) if attachment.id is not None else None
                         ),
+                        skip_texts=(attachment_text,),
                     )
                 )
             part_inputs.extend(
@@ -212,19 +208,50 @@ class SlackMessageV2RecordMapper:
                     mention_names_by_id=mention_names_by_id,
                 )
             )
-            part_inputs.extend(
-                cls._block_part_inputs(
-                    reply.blocks,
-                    parent_type="thread_reply",
-                    mention_names_by_id=mention_names_by_id,
-                    reply_ts=reply.ts,
-                )
-            )
         return [
             part
             for part_type, text, metadata in part_inputs
             if (part := cls._build_part(part_type, text, metadata)) is not None
         ]
+
+    @classmethod
+    def _message_part_text(
+        cls,
+        message: SlackMessage,
+        mention_names_by_id: dict[str, str],
+    ) -> str:
+        return cls._text_with_block_fallback(
+            cls._message_text(message),
+            message.blocks,
+            mention_names_by_id,
+        )
+
+    @classmethod
+    def _reply_part_text(
+        cls,
+        reply: SlackThreadReply,
+        mention_names_by_id: dict[str, str],
+    ) -> str:
+        return cls._text_with_block_fallback(
+            cls._reply_text(reply),
+            reply.blocks,
+            mention_names_by_id,
+        )
+
+    @classmethod
+    def _text_with_block_fallback(
+        cls,
+        text: str | None,
+        blocks: list[dict[str, Any]],
+        mention_names_by_id: dict[str, str],
+    ) -> str:
+        parts = [_resolve_slack_text(text, mention_names_by_id)]
+        parts.extend(
+            _resolve_slack_text(cls._block_text(block), mention_names_by_id)
+            for block in blocks
+            if isinstance(block, dict)
+        )
+        return _join_unique_text(*parts)
 
     @classmethod
     def _file_part_inputs(
@@ -264,14 +291,53 @@ class SlackMessageV2RecordMapper:
         )
 
     @staticmethod
+    def _message_metadata(
+        message: SlackMessage,
+        internal_author_id: str | None,
+    ) -> dict[str, Any]:
+        return _drop_none(
+            {
+                "ts": message.ts,
+                "message_type": message.message_type,
+                "subtype": message.subtype,
+                "author": _author_metadata(
+                    slack_user_id=message.user_id,
+                    slack_bot_id=message.bot_id,
+                    name=(
+                        message.user_real_name
+                        or message.user_name
+                        or message.bot_name
+                        or message.user_id
+                        or message.bot_id
+                    ),
+                    catchup_user_id=internal_author_id,
+                ),
+                "created_at": message.created_at.isoformat(),
+                "updated_at": SlackMessageV2RecordMapper._updated_at(
+                    message
+                ).isoformat(),
+                "edited_at": message.edited_ts,
+                "reaction_count": sum(
+                    reaction.count for reaction in message.reactions
+                ),
+                "file_count": len(message.files),
+                "attachment_count": len(message.attachments),
+            }
+        )
+
+    @staticmethod
     def _reply_metadata(reply: SlackThreadReply) -> dict[str, Any]:
         return _drop_none(
             {
                 "ts": reply.ts,
-                "user_id": reply.user_id,
-                "user_name": reply.user_real_name or reply.user_name,
+                "author": _author_metadata(
+                    slack_user_id=reply.user_id,
+                    name=reply.user_real_name or reply.user_name or reply.user_id,
+                ),
+                "created_at": _ts_to_isoformat(reply.ts),
                 "reaction_count": sum(reaction.count for reaction in reply.reactions),
                 "file_count": len(reply.files),
+                "attachment_count": len(reply.attachments),
             }
         )
 
@@ -313,6 +379,7 @@ class SlackMessageV2RecordMapper:
                 "thumb_url": attachment.thumb_url,
                 "app_id": attachment.app_id,
                 "app_unfurl_url": attachment.app_unfurl_url,
+                "actions": attachment.actions or None,
                 "parent_type": parent_type,
                 "reply_ts": reply_ts,
             }
@@ -365,11 +432,13 @@ class SlackMessageV2RecordMapper:
         mention_names_by_id: dict[str, str],
         reply_ts: str | None = None,
         attachment_id: str | None = None,
+        skip_texts: tuple[str | None, ...] = (),
     ) -> list[tuple[str, str | None, dict[str, Any]]]:
+        skip_keys = {_dedupe_key(value) for value in skip_texts if value}
         return [
             (
                 "block_text",
-                _resolve_slack_text(cls._block_text(block), mention_names_by_id),
+                text,
                 _drop_none(
                     {
                         "block_type": block.get("type"),
@@ -382,6 +451,12 @@ class SlackMessageV2RecordMapper:
             )
             for block in blocks
             if isinstance(block, dict)
+            if (
+                text := _resolve_slack_text(
+                    cls._block_text(block), mention_names_by_id
+                )
+            )
+            and _dedupe_key(text) not in skip_keys
         ]
 
     @classmethod
@@ -590,6 +665,39 @@ def _join_unique_text(*values: str | None) -> str:
         seen.add(key)
         parts.append(text)
     return "\n".join(parts)
+
+
+def _dedupe_key(value: str | None) -> str:
+    if not isinstance(value, str):
+        return ""
+    return " ".join(value.strip().split())
+
+
+def _author_metadata(
+    *,
+    slack_user_id: str | None = None,
+    slack_bot_id: str | None = None,
+    name: str | None = None,
+    catchup_user_id: str | None = None,
+) -> dict[str, Any] | None:
+    metadata = _drop_none(
+        {
+            "slack_user_id": slack_user_id,
+            "slack_bot_id": slack_bot_id,
+            "name": _normalize_display_text(name),
+            "catchup_user_id": catchup_user_id,
+        }
+    )
+    return metadata or None
+
+
+def _ts_to_isoformat(value: str | None) -> str | None:
+    if not value:
+        return None
+    try:
+        return datetime.fromtimestamp(float(value), tz=timezone.utc).isoformat()
+    except (TypeError, ValueError, OSError):
+        return None
 
 
 def _resolve_slack_text(value: str | None, mention_names_by_id: dict[str, str]) -> str:
