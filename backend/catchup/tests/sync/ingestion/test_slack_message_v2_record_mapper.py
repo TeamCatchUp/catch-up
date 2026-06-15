@@ -221,6 +221,7 @@ def test_slack_message_v2_mapper_builds_normalized_row_contract() -> None:
             ),
             "metadata": {
                 "ts": "1712345678.000100",
+                "message_ts": "1712345678.000100",
                 "message_type": "thread_parent",
                 "author": {
                     "slack_user_id": "U123",
@@ -240,6 +241,7 @@ def test_slack_message_v2_mapper_builds_normalized_row_contract() -> None:
             "text": "Looks good after validation, @Hxxukii.\nReply block detail for @Hxxukii",
             "metadata": {
                 "ts": "1712345699.000200",
+                "message_ts": "1712345699.000200",
                 "author": {
                     "slack_user_id": "U456",
                     "name": "Teammate",
@@ -269,6 +271,7 @@ def test_slack_message_v2_mapper_builds_normalized_row_contract() -> None:
                 "app_id": "A123",
                 "app_unfurl_url": "https://example.test/unfurl/backfill",
                 "parent_type": "message",
+                "message_ts": "1712345678.000100",
             },
         },
         {
@@ -278,6 +281,7 @@ def test_slack_message_v2_mapper_builds_normalized_row_contract() -> None:
                 "block_type": "section",
                 "block_id": "attachment-section",
                 "parent_type": "attachment",
+                "message_ts": "1712345678.000100",
                 "attachment_id": "1",
             },
         },
@@ -305,6 +309,7 @@ def test_slack_message_v2_mapper_builds_normalized_row_contract() -> None:
                 "url_private": "https://files.slack.com/files-pri/T123-F123/migration-plan.md",
                 "url_private_download": "https://files.slack.com/files-pri/T123-F123/download/migration-plan.md",
                 "parent_type": "message",
+                "message_ts": "1712345678.000100",
             },
         },
         {
@@ -313,6 +318,7 @@ def test_slack_message_v2_mapper_builds_normalized_row_contract() -> None:
             "metadata": {
                 "id": 2,
                 "parent_type": "thread_reply",
+                "message_ts": "1712345699.000200",
                 "reply_ts": "1712345699.000200",
             },
         },
@@ -333,6 +339,7 @@ def test_slack_message_v2_mapper_builds_normalized_row_contract() -> None:
                 "file_access": "check_file_info",
                 "permalink": "https://acme.slack.com/files/U456/F456/validation.png",
                 "parent_type": "thread_reply",
+                "message_ts": "1712345699.000200",
                 "reply_ts": "1712345699.000200",
             },
         },
