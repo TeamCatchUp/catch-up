@@ -367,7 +367,7 @@ def init_scheduler():
         )
         _scheduler.add_job(
             run_slack_message_v2_backfill_job,
-            trigger=CronTrigger(hour=11, minute=15, timezone=SEOUL_TZ),
+            trigger=CronTrigger(hour=11, minute=50, timezone=SEOUL_TZ),
             id="slack_message_v2_backfill",
             name="Slack Message v2 Backfill",
             replace_existing=True,
