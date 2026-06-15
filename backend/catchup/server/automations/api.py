@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import uuid
+from enum import StrEnum
 from typing import Annotated
 from typing import Any
 from typing import Literal
@@ -9,6 +10,7 @@ from typing import Literal
 from fastapi import APIRouter
 from fastapi import Depends
 from fastapi import HTTPException
+from fastapi import Query
 from fastapi import status
 from pydantic import BaseModel
 from pydantic import ConfigDict
@@ -31,10 +33,12 @@ from catchup.db.models import AgentStatus
 from catchup.db.models import SlackChannel
 from catchup.db.models import User
 from catchup.db.models import UserWorkspace
+from catchup.db.slack.domain_repository import get_channels_by_team
+from catchup.db.slack.oauth_repository import get_all_slack_tokens
 from catchup.db.slack.oauth_repository import get_slack_token_by_id
 
 router = APIRouter(
-    prefix="/api/v1/automations/inqueries",
+    prefix="/api/v1/automations",
     tags=["automations"],
 )
 
@@ -47,6 +51,44 @@ class SlackChannelSelection(BaseModel):
     credential_id: int = Field(gt=0)
     channel_id: str = Field(min_length=1)
     channel_name: str | None = Field(default=None, min_length=1)
+
+
+class AutomationConnector(StrEnum):
+    SLACK = "slack"
+    CHANNEL_TALK = "channel_talk"
+
+
+class AutomationCredentialItem(BaseModel):
+    connector: AutomationConnector
+    credential_id: int
+    display_name: str
+    external_id: str
+    external_name: str | None = None
+    is_configured: bool = True
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class AutomationCredentialsResponse(BaseModel):
+    connector: AutomationConnector
+    total_credentials: int
+    credentials: list[AutomationCredentialItem] = Field(default_factory=list)
+
+
+class AutomationTargetItem(BaseModel):
+    connector: AutomationConnector
+    credential_id: int | None = None
+    target_id: str
+    display_name: str
+    target_type: str
+    is_accessible: bool = True
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class AutomationTargetsResponse(BaseModel):
+    connector: AutomationConnector
+    credential_id: int | None = None
+    total_targets: int
+    targets: list[AutomationTargetItem] = Field(default_factory=list)
 
 
 class InquiryAutomationPublishRequest(BaseModel):
@@ -88,7 +130,74 @@ class InquiryAutomationPublishResponse(BaseModel):
 
 
 @router.get(
-    "",
+    "/credentials",
+    response_model=AutomationCredentialsResponse,
+    status_code=status.HTTP_200_OK,
+    summary="문의 자동화 Credential 선택 목록 조회",
+)
+def list_automation_credentials(
+    connector: Annotated[
+        AutomationConnector,
+        Query(description="automation connector: slack | channel_talk"),
+    ],
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> AutomationCredentialsResponse:
+    """문의 자동화 설정에 사용할 Credential 선택 목록을 반환한다."""
+    _ = current_user
+    if connector == AutomationConnector.SLACK:
+        credentials = [
+            _build_slack_credential_item(token) for token in get_all_slack_tokens(db)
+        ]
+    else:
+        credentials = [
+            _build_channel_talk_credential_item(record)
+            for record in ChannelTalkCredentialsRepository(db).list_connections()
+            if record.id is not None
+        ]
+
+    return AutomationCredentialsResponse(
+        connector=connector,
+        total_credentials=len(credentials),
+        credentials=credentials,
+    )
+
+
+@router.get(
+    "/targets",
+    response_model=AutomationTargetsResponse,
+    status_code=status.HTTP_200_OK,
+    summary="문의 자동화 Target 선택 목록 조회",
+)
+def list_automation_targets(
+    connector: Annotated[
+        AutomationConnector,
+        Query(description="automation connector: slack | channel_talk"),
+    ],
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+    credential_id: Annotated[
+        int | None,
+        Query(gt=0, description="optional credential row id"),
+    ] = None,
+) -> AutomationTargetsResponse:
+    """문의 자동화 설정에 사용할 Slack Channel 등 target 선택 목록을 반환한다."""
+    _ = current_user
+    if connector == AutomationConnector.SLACK:
+        targets = _list_slack_channel_targets(db, credential_id=credential_id)
+    else:
+        targets = _list_channel_talk_targets(db, credential_id=credential_id)
+
+    return AutomationTargetsResponse(
+        connector=connector,
+        credential_id=credential_id,
+        total_targets=len(targets),
+        targets=targets,
+    )
+
+
+@router.get(
+    "/inqueries",
     response_model=list[InquiryAutomationItem],
     status_code=status.HTTP_200_OK,
     summary="채널톡 문의 자동화 목록 조회",
@@ -133,7 +242,7 @@ def list_inquiry_automations(
 
 
 @router.patch(
-    "/{agent_spec_id}",
+    "/inqueries/{agent_spec_id}",
     status_code=status.HTTP_204_NO_CONTENT,
     summary="채널톡 문의 자동화 상태 변경",
 )
@@ -165,7 +274,7 @@ def update_inquiry_automation(
 
 
 @router.post(
-    "/publish",
+    "/inqueries/publish",
     response_model=InquiryAutomationPublishResponse,
     status_code=status.HTTP_200_OK,
     summary="채널톡 문의 자동화 설정 생성 및 활성화",
@@ -269,6 +378,148 @@ def publish_inquiry_automation(
         start_event_type="user_chat.created",
         reset_event_types=["user_chat.new_message"],
     )
+
+
+def _build_slack_credential_item(token: Any) -> AutomationCredentialItem:
+    team_name = _optional_text(token.team_name)
+    team_id = str(token.team_id)
+    return AutomationCredentialItem(
+        connector=AutomationConnector.SLACK,
+        credential_id=int(token.id),
+        display_name=team_name or team_id,
+        external_id=team_id,
+        external_name=team_name,
+        is_configured=bool(token.bot_access_token and token.team_id),
+        metadata={
+            "team_id": team_id,
+            "team_name": team_name,
+            "bot_user_id": _optional_text(token.bot_user_id),
+            "bot_scopes": _optional_text(token.bot_scopes),
+        },
+    )
+
+
+def _build_channel_talk_credential_item(record: Any) -> AutomationCredentialItem:
+    return AutomationCredentialItem(
+        connector=AutomationConnector.CHANNEL_TALK,
+        credential_id=int(record.id),
+        display_name=str(record.channel_name),
+        external_id=str(record.channel_id),
+        external_name=str(record.channel_name),
+        is_configured=bool(record.webhook_token_configured),
+        metadata={
+            "channel_id": str(record.channel_id),
+            "channel_name": str(record.channel_name),
+            "credential_last_verified_at": (
+                record.credential_last_verified_at.isoformat()
+                if record.credential_last_verified_at is not None
+                else None
+            ),
+            "webhook_token_configured": bool(record.webhook_token_configured),
+        },
+    )
+
+
+def _list_slack_channel_targets(
+    db: Session,
+    *,
+    credential_id: int | None,
+) -> list[AutomationTargetItem]:
+    if credential_id is None:
+        tokens = get_all_slack_tokens(db)
+    else:
+        token = get_slack_token_by_id(db, credential_id)
+        if token is None:
+            raise HTTPException(status_code=404, detail="Slack credentials not found")
+        tokens = [token]
+
+    targets: list[AutomationTargetItem] = []
+    for token in tokens:
+        channels = get_channels_by_team(db, str(token.team_id))
+        targets.extend(
+            _build_slack_channel_target_item(
+                channel,
+                credential_id=int(token.id),
+                team_name=_optional_text(token.team_name),
+            )
+            for channel in channels
+        )
+
+    targets.sort(key=lambda item: (item.display_name.casefold(), item.target_id))
+    return targets
+
+
+def _build_slack_channel_target_item(
+    channel: SlackChannel,
+    *,
+    credential_id: int,
+    team_name: str | None,
+) -> AutomationTargetItem:
+    channel_name = _optional_text(channel.name) or str(channel.id)
+    return AutomationTargetItem(
+        connector=AutomationConnector.SLACK,
+        credential_id=credential_id,
+        target_id=str(channel.id),
+        display_name=channel_name,
+        target_type="channel",
+        is_accessible=not bool(channel.is_archived),
+        metadata={
+            "team_id": str(channel.team_id),
+            "team_name": team_name,
+            "channel_name": channel_name,
+            "channel_kind": str(channel.channel_type),
+            "is_private": bool(channel.is_private),
+            "is_archived": bool(channel.is_archived),
+            "member_count": int(channel.member_count or 0),
+        },
+    )
+
+
+def _list_channel_talk_targets(
+    db: Session,
+    *,
+    credential_id: int | None,
+) -> list[AutomationTargetItem]:
+    repository = ChannelTalkCredentialsRepository(db)
+    if credential_id is None:
+        records = repository.list_connections()
+    else:
+        record = repository.get_connection_by_id(credential_id)
+        if record is None:
+            raise HTTPException(
+                status_code=404,
+                detail="Channel Talk credentials not found",
+            )
+        records = [record]
+
+    return [
+        _build_channel_talk_target_item(record)
+        for record in records
+        if record.id is not None
+    ]
+
+
+def _build_channel_talk_target_item(record: Any) -> AutomationTargetItem:
+    return AutomationTargetItem(
+        connector=AutomationConnector.CHANNEL_TALK,
+        credential_id=int(record.id),
+        target_id=str(record.channel_id),
+        display_name=str(record.channel_name),
+        target_type="channel",
+        is_accessible=bool(record.webhook_token_configured),
+        metadata={
+            "channel_id": str(record.channel_id),
+            "channel_name": str(record.channel_name),
+            "webhook_token_configured": bool(record.webhook_token_configured),
+        },
+    )
+
+
+def _optional_text(value: Any) -> str | None:
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None
 
 
 def _resolve_user_workspace_id(db: Session, user_id: int) -> int:
