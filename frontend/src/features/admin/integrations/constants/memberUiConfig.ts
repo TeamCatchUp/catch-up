@@ -11,7 +11,7 @@ export const MEMBER_LIST_STATUS_BADGE_BASE_CLASS =
 /** 이용자 연동 표 상태 칩 색상 */
 export const getMemberStatusBadgeClassName = (status: MemberIntegrationStatus) => {
   if (status === '완료') return 'bg-accent-green-neutral text-accent-green-default';
-  if (status === '미등록') return 'bg-violet-5 text-violet-50';
+  if (status === '미등록') return 'bg-accent-violet-neutral text-accent-violet-default';
   return 'bg-neutral-2 text-text-normal-alternative';
 };
 
