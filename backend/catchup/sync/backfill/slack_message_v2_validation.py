@@ -238,7 +238,7 @@ def _validate_slack_message_metadata(
     slack_message: dict[str, Any],
     errors: list[str],
 ) -> None:
-    for field_name in ("team_id", "channel_id", "channel_name", "ts"):
+    for field_name in ("team_id", "channel_id", "ts"):
         if slack_message.get(field_name) in (None, ""):
             errors.append(f"missing:slack_message.{field_name}")
 
@@ -258,6 +258,7 @@ def _validate_slack_message_metadata(
         "is_thread_root",
         "reply_count",
         "latest_reply_ts",
+        "channel_name",
     }
     for field_name in sorted(forbidden_fields & set(slack_message)):
         errors.append(f"forbidden:slack_message.{field_name}")

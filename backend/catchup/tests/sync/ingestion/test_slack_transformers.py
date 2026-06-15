@@ -322,27 +322,15 @@ class SlackTransformerBlockBodyTests(TestCase):
 
 
 class SlackIngestionSkipTests(TestCase):
-    def test_short_text_with_long_blocks_is_syncable(self) -> None:
+    def test_short_text_is_not_skipped_by_length(self) -> None:
         adapter = SlackMessageAdapterBase(
             client=object(),
             repository=object(),
             team_id="T123",
         )
 
-        should_skip = adapter._should_skip_message(
-            {
-                "ts": "1777018027.220269",
-                "text": "데모",
-                "blocks": [
-                    {
-                        "type": "section",
-                        "text": {
-                            "type": "mrkdwn",
-                            "text": "키워드 넣고 검색 버튼 누르면 됩니다!",
-                        },
-                    }
-                ],
-            }
+        should_skip = adapter._should_skip_message_subtype(
+            {"ts": "1777018027.220269", "text": "흠.."}
         )
 
         self.assertFalse(should_skip)
@@ -355,7 +343,7 @@ class SlackIngestionSkipTests(TestCase):
         )
 
         self.assertTrue(
-            adapter._should_skip_message(
+            adapter._should_skip_message_subtype(
                 {
                     "subtype": "channel_join",
                     "text": "사용자가 채널에 참여했습니다. 충분히 긴 텍스트입니다.",

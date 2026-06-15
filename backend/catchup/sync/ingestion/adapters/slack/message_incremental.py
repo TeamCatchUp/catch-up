@@ -61,7 +61,7 @@ class SlackMessageIncrementalSyncAdapter(SlackMessageAdapterBase):
             return SlackMessageFetchResult(delete_document_ids=(doc_id,))
 
         sanitized_message = self._sanitize_message_payload(message_data)
-        if self._should_skip_message(sanitized_message):
+        if self._should_skip_message_subtype(sanitized_message):
             return SlackMessageFetchResult(delete_document_ids=(doc_id,))
 
         if sanitized_message.get("reply_count", 0) > 0:

@@ -41,7 +41,6 @@ class SlackMessageMetadata(BaseModel):
 
     team_id: str
     channel_id: str
-    channel_name: str
     ts: str
     message_type: str | None = None
     subtype: str | None = None
@@ -49,7 +48,7 @@ class SlackMessageMetadata(BaseModel):
     reactions: list[SlackMessageReactionMetadata] = Field(default_factory=list)
     edited_at: str | None = None
 
-    @field_validator("team_id", "channel_id", "channel_name", "ts")
+    @field_validator("team_id", "channel_id", "ts")
     @classmethod
     def _validate_required_text(cls, value: str, info) -> str:
         return require_text(value, info.field_name)

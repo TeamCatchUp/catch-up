@@ -137,11 +137,8 @@ class SlackMessageAdapterBase(
 
         return None
 
-    def _should_skip_message(self, msg_data: dict[str, Any]) -> bool:
-        if msg_data.get("subtype") in self._SKIP_SUBTYPES:
-            return True
-        text = self.transformer.extract_message_body(msg_data)
-        return len(text) <= 10
+    def _should_skip_message_subtype(self, msg_data: dict[str, Any]) -> bool:
+        return msg_data.get("subtype") in self._SKIP_SUBTYPES
 
     def _sanitize_message_payload(
         self,
@@ -241,7 +238,7 @@ class SlackMessageAdapterBase(
 
         for msg_data in messages:
             sanitized_msg_data = self._sanitize_message_payload(msg_data)
-            if self._should_skip_message(sanitized_msg_data):
+            if self._should_skip_message_subtype(sanitized_msg_data):
                 continue
 
             try:
@@ -322,7 +319,7 @@ class SlackMessageAdapterBase(
 
             for msg in messages[1:]:
                 sanitized_reply = self._sanitize_message_payload(msg)
-                if self._should_skip_message(sanitized_reply):
+                if self._should_skip_message_subtype(sanitized_reply):
                     continue
                 replies.append(self.transformer.parse_reply(sanitized_reply))
 

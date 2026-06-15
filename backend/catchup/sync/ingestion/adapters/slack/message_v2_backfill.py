@@ -57,7 +57,7 @@ class SlackMessageV2BackfillAdapter(SlackMessageAdapterBase):
                     continue
 
                 sanitized_message = self._sanitize_message_payload(message_data)
-                if self._should_skip_message(sanitized_message):
+                if self._should_skip_message_subtype(sanitized_message):
                     failed_record_ids.append(seed.record_id)
                     continue
 

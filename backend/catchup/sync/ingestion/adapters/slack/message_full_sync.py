@@ -45,7 +45,8 @@ class SlackMessageFullSyncAdapter(SlackMessageAdapterBase):
         thread_messages = [
             msg
             for msg in parent_messages
-            if not self._should_skip_message(msg) and msg.get("reply_count", 0) > 0
+            if not self._should_skip_message_subtype(msg)
+            and msg.get("reply_count", 0) > 0
         ]
 
         if thread_messages:

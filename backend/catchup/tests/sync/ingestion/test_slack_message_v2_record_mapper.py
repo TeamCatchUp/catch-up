@@ -172,12 +172,12 @@ def test_slack_message_v2_mapper_builds_normalized_row_contract() -> None:
         "without preview truncation for @Teammate"
     )
     assert document.metadata["body"] == (
-        "Looks good after validation, @Hxxukii.\n\n"
+        "Looks good after validation, @Hxxukii.\n"
+        "Reply block detail for @Hxxukii\n\n"
         "Backfill dashboard\n"
         "Hydrate pending seed rows for @Teammate\n"
         "Owner: @Teammate\n\n"
         "Attachment block detail for @Teammate\n\n"
-        "Message block detail for @Teammate\n\n"
         "Migration plan\n"
         "migration-plan.md\n"
         "Migration plan plain preview for @Teammate\n"
@@ -188,15 +188,13 @@ def test_slack_message_v2_mapper_builds_normalized_row_contract() -> None:
         "Reply attachment detail for @Hxxukii\n\n"
         "Validation screenshot\n"
         "validation.png\n"
-        "Reply file plain text for @Hxxukii\n\n"
-        "Reply block detail for @Hxxukii"
+        "Reply file plain text for @Hxxukii"
     )
     assert "Ship Slack message v2 migration" not in document.metadata["body"]
     assert "Hydrate pending seed rows" in document.metadata["body"]
     assert set(document.metadata["slack_message"]) == {
         "team_id",
         "channel_id",
-        "channel_name",
         "ts",
         "message_type",
         "subtype",
@@ -218,19 +216,38 @@ def test_slack_message_v2_mapper_builds_normalized_row_contract() -> None:
             "type": "message_body",
             "text": (
                 "Ship Slack message v2 migration with the full parent message retained "
-                "without preview truncation for @Teammate"
+                "without preview truncation for @Teammate\n"
+                "Message block detail for @Teammate"
             ),
-            "metadata": {"message_type": "thread_parent"},
+            "metadata": {
+                "ts": "1712345678.000100",
+                "message_type": "thread_parent",
+                "author": {
+                    "slack_user_id": "U123",
+                    "name": "Hxxukii",
+                    "catchup_user_id": "42",
+                },
+                "created_at": "2024-04-05T12:34:38+00:00",
+                "updated_at": "2024-04-05T19:34:59.000200+00:00",
+                "edited_at": "1712345688.000150",
+                "reaction_count": 2,
+                "file_count": 1,
+                "attachment_count": 1,
+            },
         },
         {
             "type": "thread_reply",
-            "text": "Looks good after validation, @Hxxukii.",
+            "text": "Looks good after validation, @Hxxukii.\nReply block detail for @Hxxukii",
             "metadata": {
                 "ts": "1712345699.000200",
-                "user_id": "U456",
-                "user_name": "Teammate",
+                "author": {
+                    "slack_user_id": "U456",
+                    "name": "Teammate",
+                },
+                "created_at": "2024-04-05T19:34:59.000200+00:00",
                 "reaction_count": 0,
                 "file_count": 1,
+                "attachment_count": 1,
             },
         },
         {
@@ -262,15 +279,6 @@ def test_slack_message_v2_mapper_builds_normalized_row_contract() -> None:
                 "block_id": "attachment-section",
                 "parent_type": "attachment",
                 "attachment_id": "1",
-            },
-        },
-        {
-            "type": "block_text",
-            "text": "Message block detail for @Teammate",
-            "metadata": {
-                "block_type": "section",
-                "block_id": "message-section",
-                "parent_type": "message",
             },
         },
         {
@@ -328,16 +336,6 @@ def test_slack_message_v2_mapper_builds_normalized_row_contract() -> None:
                 "reply_ts": "1712345699.000200",
             },
         },
-        {
-            "type": "block_text",
-            "text": "Reply block detail for @Hxxukii",
-            "metadata": {
-                "block_type": "section",
-                "block_id": "reply-section",
-                "parent_type": "thread_reply",
-                "reply_ts": "1712345699.000200",
-            },
-        },
     ]
     file_parts = [
         part for part in document.metadata["data"]["parts"] if part["type"] == "file"
@@ -373,8 +371,9 @@ def test_slack_message_v2_mapper_decodes_literal_unicode_display_values() -> Non
     )
 
     assert document.metadata["target_name"] == "개발팀"
-    assert document.metadata["slack_message"]["channel_name"] == "개발팀"
     assert document.metadata["slack_message"]["author"]["name"] == "팀원A"
+    assert "\\u" not in document.metadata["target_name"]
+    assert "\\u" not in document.metadata["slack_message"]["author"]["name"]
 
 
 def test_slack_transformer_preserves_api_fields_for_v2_parts() -> None:
