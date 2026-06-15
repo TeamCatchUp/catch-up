@@ -145,8 +145,8 @@ const SourceList = ({
                 className={cn(
                   'text-body-small flex h-9 shrink-0 cursor-pointer items-center gap-1.5 rounded-full border px-3 py-1.5 whitespace-nowrap transition',
                   isActive
-                    ? 'border-accent-black-lighten bg-accent-black-lighten text-content-inverse'
-                    : 'border-edge-neutral text-content-neutral hover:bg-fill-interaction-hover bg-fill-normal',
+                    ? 'border-accent-black-lighten bg-accent-black-lighten text-text-normal-inverse'
+                    : 'border-line-normal-neutral text-text-normal-neutral hover:bg-fill-normal-interaction-hover bg-fill-normal-normal',
                 )}
               >
                 <span>{category.category}</span>
@@ -197,13 +197,13 @@ const SourceList = ({
             {recommendedSources.length > 0 && (
               <>
                 {/* 헤더: 7px 상단 border + 제목/카운트 + 설명 */}
-                <div className="border-edge-assistive mb-2 flex flex-col gap-1.5 border-t-[7px] px-6 pt-8 pb-2">
+                <div className="border-line-normal-assistive mb-2 flex flex-col gap-1.5 border-t-[7px] px-6 pt-8 pb-2">
                   <div className="flex items-center gap-2">
                     <AddCircle className="text-icon-primary-assistive h-6 w-6" />
-                    <span className="text-heading-medium text-content-neutral">참고하면 좋은 문서들</span>
-                    <span className="text-heading-medium text-content-primary">{recommendedSources.length}</span>
+                    <span className="text-heading-medium text-text-normal-neutral">참고하면 좋은 문서들</span>
+                    <span className="text-heading-medium text-text-primary-normal">{recommendedSources.length}</span>
                   </div>
-                  <p className="text-label-small text-content-alternative">
+                  <p className="text-label-small text-text-normal-alternative">
                     직접 인용되지는 않았지만 질문과 관련된 참고 문서입니다.
                   </p>
                 </div>

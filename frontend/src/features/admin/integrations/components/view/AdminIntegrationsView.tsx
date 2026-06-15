@@ -18,16 +18,14 @@ const TAB_ITEMS: UnderlineTabItem<AdminIntegrationTab>[] = [
 
 /** 관리자 협업툴 연동 화면 */
 export default function AdminIntegrationsView() {
-  const [activeTab, setActiveTab] = useTabRouting<AdminIntegrationTab>((raw) =>
-    isValidTab(raw) ? raw : DEFAULT_TAB,
-  );
+  const [activeTab, setActiveTab] = useTabRouting<AdminIntegrationTab>((raw) => (isValidTab(raw) ? raw : DEFAULT_TAB));
 
   const [selectedService, setSelectedService] = useState<IntegrationService>('jira');
   const { integrationMenu, getConnectorDetail } = useAdminIntegrationViewModel();
 
   return (
     <section className="mx-auto flex w-full flex-col gap-6 px-16 pt-9 pb-30 min-[1440px]:max-w-287">
-      <h1 className="text-heading-xlarge text-content-normal">협업툴 연동</h1>
+      <h1 className="text-heading-xlarge text-text-normal-normal">협업툴 연동</h1>
 
       <div className="flex flex-col gap-8">
         <UnderlineTabs
@@ -40,7 +38,7 @@ export default function AdminIntegrationsView() {
 
         {activeTab === 'my' ? (
           <section className="flex flex-col gap-2.5">
-            <h2 className="text-heading-large text-content-normal">협업툴 연동 관리</h2>
+            <h2 className="text-heading-large text-text-normal-normal">협업툴 연동 관리</h2>
             <IntegrationManagementSection
               integrationMenu={integrationMenu}
               selectedService={selectedService}

@@ -23,18 +23,14 @@ export default function ConsultationInfo({ metadata }: ConsultationInfoProps) {
   // 담당자 — 응답엔 assignee_id만 오므로 managers[]에서 이름·아바타를 조회.
   const assignment = metadata.assignment;
   const assigneeId = assignment?.assignee_id;
-  const assignee = assigneeId
-    ? assignment?.managers?.find((manager) => manager.manager_id === assigneeId)
-    : undefined;
+  const assignee = assigneeId ? assignment?.managers?.find((manager) => manager.manager_id === assigneeId) : undefined;
   const assigneeName = assignee?.name?.trim();
   const assigneeAvatar = assignee?.avatar_url?.trim() ? assignee.avatar_url : null;
   const description = metadata.description?.trim();
-  const tagNames = (metadata.tags ?? [])
-    .map((tag) => tag.name?.trim())
-    .filter((name): name is string => Boolean(name));
+  const tagNames = (metadata.tags ?? []).map((tag) => tag.name?.trim()).filter((name): name is string => Boolean(name));
 
   return (
-    <section className="bg-fill-strong border-edge-neutral flex w-full flex-col gap-3 rounded-xl border px-5 py-4">
+    <section className="bg-fill-normal-strong border-line-normal-neutral flex w-full flex-col gap-3 rounded-xl border px-5 py-4">
       <div className="flex items-center gap-10">
         <InfoFieldLabel icon={PersonFilledIcon} text="담당자" />
         <div className="flex min-w-0 flex-1 items-center gap-2">
@@ -51,12 +47,10 @@ export default function ConsultationInfo({ metadata }: ConsultationInfoProps) {
               ) : (
                 <DefaultProfileIcon aria-hidden className="size-6.25 shrink-0" />
               )}
-              <span className="text-body-small text-content-neutral truncate">
-                {assigneeName}
-              </span>
+              <span className="text-body-small text-text-normal-neutral truncate">{assigneeName}</span>
             </>
           ) : (
-            <span className="text-body-small text-content-assistive">없음</span>
+            <span className="text-body-small text-text-normal-assistive">없음</span>
           )}
         </div>
       </div>
@@ -80,7 +74,7 @@ export default function ConsultationInfo({ metadata }: ConsultationInfoProps) {
       ) : (
         <div className="flex items-center gap-10">
           <InfoFieldLabel icon={TagIcon} text="상담 태그" />
-          <span className="text-body-small text-content-assistive">없음</span>
+          <span className="text-body-small text-text-normal-assistive">없음</span>
         </div>
       )}
 
@@ -92,7 +86,7 @@ export default function ConsultationInfo({ metadata }: ConsultationInfoProps) {
       ) : (
         <div className="flex items-center gap-10">
           <InfoFieldLabel icon={FileIcon} text="상담 설명" />
-          <span className="text-body-small text-content-assistive">없음</span>
+          <span className="text-body-small text-text-normal-assistive">없음</span>
         </div>
       )}
     </section>

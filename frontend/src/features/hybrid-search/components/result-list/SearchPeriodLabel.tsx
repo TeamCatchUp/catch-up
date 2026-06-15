@@ -21,10 +21,10 @@ export default function SearchPeriodLabel({ dateRange }: SearchPeriodLabelProps)
   return (
     <div className="flex items-center gap-2.5">
       {/* 캘린더 아이콘 흰색 pill wrapper. */}
-      <span className="bg-fill-normal flex items-center justify-center rounded-full px-1 py-0.5">
-        <IconCalendarFilled className="text-icon-neutral size-4.5 shrink-0" />
+      <span className="bg-fill-normal-normal flex items-center justify-center rounded-full px-1 py-0.5">
+        <IconCalendarFilled className="text-icon-normal-neutral size-4.5 shrink-0" />
       </span>
-      <span className="text-body-xsmall text-content-neutral">{`${from} ~ ${to}`}</span>
+      <span className="text-body-xsmall text-text-normal-neutral">{`${from} ~ ${to}`}</span>
     </div>
   );
 }

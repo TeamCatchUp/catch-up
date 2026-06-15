@@ -67,8 +67,8 @@ export function UserMenuContent({ userName, userEmail }: UserMenuContentProps) {
       <DropdownMenuLabel className="flex h-12 items-center gap-4 px-1 py-0">
         <DefaultProfile className="h-10 w-10 shrink-0" />
         <div className="relative top-px flex min-w-0 flex-col">
-          <span className="text-heading-small text-content-normal truncate">{userName ?? '이름없음'}</span>
-          <span className="text-body-small text-content-alternative truncate">{userEmail ?? ''}</span>
+          <span className="text-heading-small text-text-normal-normal truncate">{userName ?? '이름없음'}</span>
+          <span className="text-body-small text-text-normal-alternative truncate">{userEmail ?? ''}</span>
         </div>
       </DropdownMenuLabel>
 
@@ -77,16 +77,16 @@ export function UserMenuContent({ userName, userEmail }: UserMenuContentProps) {
         {/* 상단 그룹 */}
         <div className="flex flex-col gap-0.5">
           <DropdownMenuItem onSelect={() => router.push('/mypage/profile')}>
-            <Person className="text-icon-normal size-6" />
+            <Person className="text-icon-normal-normal size-6" />
             <span>계정</span>
           </DropdownMenuItem>
           <DropdownMenuItem onSelect={() => router.push('/mypage/preferences')}>
-            <Filter2 className="text-icon-normal size-6" />
+            <Filter2 className="text-icon-normal-normal size-6" />
             <span>개인 맞춤 설정</span>
           </DropdownMenuItem>
           {userRole === 'admin' && (
             <DropdownMenuItem onSelect={() => router.push('/admin/permissions')}>
-              <Lock className="text-icon-normal size-6" />
+              <Lock className="text-icon-normal-normal size-6" />
               <span>권한 정보</span>
             </DropdownMenuItem>
           )}
@@ -94,34 +94,34 @@ export function UserMenuContent({ userName, userEmail }: UserMenuContentProps) {
           {/* 화면 모드 서브메뉴 */}
           <DropdownMenuSub>
             <DropdownMenuSubTrigger>
-              <Contrast className="text-icon-normal size-6" />
+              <Contrast className="text-icon-normal-normal size-6" />
               <span className="flex-1">화면 모드</span>
               <div className="flex items-center">
-                <span className="text-body-xsmall text-content-alternative">{THEME_LABELS[theme ?? 'system']}</span>
-                <ArrowRight className="text-icon-alternative relative -top-[0.5px] size-6" />
+                <span className="text-body-xsmall text-text-normal-alternative">{THEME_LABELS[theme ?? 'system']}</span>
+                <ArrowRight className="text-icon-normal-alternative relative -top-[0.5px] size-6" />
               </div>
             </DropdownMenuSubTrigger>
             <DropdownMenuSubContent>
               <DropdownMenuItem
                 onSelect={() => setTheme('system')}
-                className={cn(currentTheme === 'system' && 'bg-fill-interaction-hover')}
+                className={cn(currentTheme === 'system' && 'bg-fill-normal-interaction-hover')}
               >
                 <span className="flex-1">시스템</span>
-                {currentTheme === 'system' && <Check className="text-icon-normal size-6" />}
+                {currentTheme === 'system' && <Check className="text-icon-normal-normal size-6" />}
               </DropdownMenuItem>
               <DropdownMenuItem
                 onSelect={() => setTheme('light')}
-                className={cn(currentTheme === 'light' && 'bg-fill-interaction-hover')}
+                className={cn(currentTheme === 'light' && 'bg-fill-normal-interaction-hover')}
               >
                 <span className="flex-1">라이트 모드</span>
-                {currentTheme === 'light' && <Check className="text-icon-normal size-6" />}
+                {currentTheme === 'light' && <Check className="text-icon-normal-normal size-6" />}
               </DropdownMenuItem>
               <DropdownMenuItem
                 onSelect={() => setTheme('dark')}
-                className={cn(currentTheme === 'dark' && 'bg-fill-interaction-hover')}
+                className={cn(currentTheme === 'dark' && 'bg-fill-normal-interaction-hover')}
               >
                 <span className="flex-1">다크 모드</span>
-                {currentTheme === 'dark' && <Check className="text-icon-normal size-6" />}
+                {currentTheme === 'dark' && <Check className="text-icon-normal-normal size-6" />}
               </DropdownMenuItem>
             </DropdownMenuSubContent>
           </DropdownMenuSub>
@@ -132,11 +132,11 @@ export function UserMenuContent({ userName, userEmail }: UserMenuContentProps) {
         {/* 하단 그룹 */}
         <div className="flex flex-col gap-0.5">
           <DropdownMenuItem onSelect={() => router.push('/mypage/help')}>
-            <Help className="text-icon-normal size-6" />
+            <Help className="text-icon-normal-normal size-6" />
             <span>도움말</span>
           </DropdownMenuItem>
           <DropdownMenuItem onSelect={() => logoutMutation.mutate()}>
-            <Logout className="text-icon-normal size-6" />
+            <Logout className="text-icon-normal-normal size-6" />
             <span>로그아웃</span>
           </DropdownMenuItem>
         </div>

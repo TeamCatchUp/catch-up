@@ -16,7 +16,7 @@ interface ConsultationDescriptionProps {
 
 const MAX_LINES = 3;
 const SUFFIX = '… 더보기';
-const TEXT_CLASS = 'text-body-small text-content-neutral break-words';
+const TEXT_CLASS = 'text-body-small text-text-normal-neutral break-words';
 
 export default function ConsultationDescription({ description }: ConsultationDescriptionProps) {
   const [expanded, setExpanded] = useState(false);
@@ -76,11 +76,11 @@ export default function ConsultationDescription({ description }: ConsultationDes
         ) : (
           <p className={TEXT_CLASS}>
             {truncated}
-            <span className="text-content-neutral">… </span>
+            <span className="text-text-normal-neutral">… </span>
             <button
               type="button"
               onClick={() => setExpanded(true)}
-              className="text-content-primary cursor-pointer font-medium"
+              className="text-text-primary-normal cursor-pointer font-medium"
             >
               더보기
             </button>
@@ -91,7 +91,7 @@ export default function ConsultationDescription({ description }: ConsultationDes
         <button
           type="button"
           onClick={() => setExpanded(false)}
-          className="text-body-small text-content-assistive cursor-pointer self-start font-medium"
+          className="text-body-small text-text-normal-assistive cursor-pointer self-start font-medium"
         >
           접기
         </button>

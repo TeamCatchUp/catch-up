@@ -10,10 +10,10 @@ interface SelectedUserProfileProps {
 export default function SelectedUserProfile({ user }: SelectedUserProfileProps) {
   return (
     <div className="flex items-start gap-4">
-      <DefaultProfile className="text-content-assistive size-14 shrink-0 rounded-full" />
+      <DefaultProfile className="text-text-normal-assistive size-14 shrink-0 rounded-full" />
       <div className="flex min-w-0 flex-1 flex-col justify-center gap-1">
-        <h2 className="text-heading-large text-content-neutral">{user.name}</h2>
-        <p className="text-body-small text-content-alternative">
+        <h2 className="text-heading-large text-text-normal-neutral">{user.name}</h2>
+        <p className="text-body-small text-text-normal-alternative">
           {user.department} · {user.rank}
         </p>
       </div>

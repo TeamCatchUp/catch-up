@@ -23,8 +23,8 @@ interface ChatRoomQuery {
 
 // 질문 아이템 상태별 스타일
 const defaultClass =
-  'border border-transparent hover:bg-fill-interaction-hover hover:border-edge-assistive active:bg-fill-interaction-pressed active:border-edge-neutral';
-const selectedClass = 'bg-fill-primary-normal-neutral hover:bg-fill-primary-interaction-hover-assistive';
+  'border border-transparent hover:bg-fill-normal-interaction-hover hover:border-line-normal-assistive active:bg-fill-normal-interaction-pressed active:border-line-normal-neutral';
+const selectedClass = 'bg-fill-primary-normal-neutral hover:bg-fill-primary-normal-interaction-hover-assistive';
 
 export default function SideNavQuestions() {
   const pathname = usePathname();
@@ -71,10 +71,10 @@ export default function SideNavQuestions() {
     <div className="flex min-h-0 flex-1 flex-col gap-0.5">
       <button
         onClick={() => togglePanel('questionsHistory')}
-        className="hover:bg-fill-interaction-hover active:bg-fill-interaction-pressed flex h-9 w-full cursor-pointer items-center gap-0.5 rounded-lg px-2.5 py-1.5"
+        className="hover:bg-fill-normal-interaction-hover active:bg-fill-normal-interaction-pressed flex h-9 w-full cursor-pointer items-center gap-0.5 rounded-lg px-2.5 py-1.5"
       >
-        <span className="text-label-small text-content-normal">내 질문</span>
-        <ArrowRight2 className="text-icon-neutral relative -top-[0.5px] size-6 shrink-0" />
+        <span className="text-label-small text-text-normal-normal">내 질문</span>
+        <ArrowRight2 className="text-icon-normal-neutral relative -top-[0.5px] size-6 shrink-0" />
       </button>
       <div className="custom-scrollbar relative flex flex-1 overflow-y-auto">
         <div className="flex flex-1 flex-col">
@@ -92,13 +92,13 @@ export default function SideNavQuestions() {
               >
                 <span className="text-body-small flex-1 truncate">{chatroom.title}</span>
                 <span className="ml-auto flex size-5 items-center opacity-0 transition-opacity group-hover:opacity-100">
-                  <Kebeb className="text-icon-neutral h-4.5 w-4.5" />
+                  <Kebeb className="text-icon-normal-neutral h-4.5 w-4.5" />
                 </span>
               </Link>
             );
           })}
           {isFetchingNextPage && (
-            <div className="text-body-xsmall text-content-assistive py-2 text-center">불러오는 중...</div>
+            <div className="text-body-xsmall text-text-normal-assistive py-2 text-center">불러오는 중...</div>
           )}
           <div ref={sentinelRef} className="h-1" />
           <div className="to-fill-normal z-base pointer-events-none sticky bottom-0 h-12.5 w-full shrink-0 bg-linear-to-b from-transparent" />

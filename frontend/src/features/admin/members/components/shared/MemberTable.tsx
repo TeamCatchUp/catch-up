@@ -36,11 +36,11 @@ const MemberTable = ({
   const allSelected = isSelecting && rows.length > 0 && selectedKeys?.size === rows.length;
 
   return (
-    <section className="border-edge-neutral bg-fill-normal flex h-full min-h-0 flex-col overflow-clip border-r">
+    <section className="border-line-normal-neutral bg-fill-normal-normal flex h-full min-h-0 flex-col overflow-clip border-r">
       {/* 헤더 */}
       <div
         className={cn(
-          'border-edge-neutral bg-fill-strong flex h-9 shrink-0 items-center border-b px-5',
+          'border-line-normal-neutral bg-fill-normal-strong flex h-9 shrink-0 items-center border-b px-5',
           isSelecting && 'gap-3',
         )}
       >
@@ -50,16 +50,16 @@ const MemberTable = ({
           </button>
         )}
         <div className="grid flex-1 grid-cols-4 items-center">
-          <span className="text-body-xsmall text-content-alternative pl-7.5 text-left">이름</span>
-          <span className="text-body-xsmall text-content-alternative text-center">직급</span>
-          <span className="text-body-xsmall text-content-alternative text-center">부서</span>
-          <span className="text-body-xsmall text-content-alternative text-center">{lastColumnHeader}</span>
+          <span className="text-body-xsmall text-text-normal-alternative pl-7.5 text-left">이름</span>
+          <span className="text-body-xsmall text-text-normal-alternative text-center">직급</span>
+          <span className="text-body-xsmall text-text-normal-alternative text-center">부서</span>
+          <span className="text-body-xsmall text-text-normal-alternative text-center">{lastColumnHeader}</span>
         </div>
       </div>
 
       {/* 행 */}
       {rows.length === 0 ? (
-        <div className="text-body-small text-content-alternative flex h-full min-h-25 items-center justify-center px-4 text-center">
+        <div className="text-body-small text-text-normal-alternative flex h-full min-h-25 items-center justify-center px-4 text-center">
           {emptyMessage}
         </div>
       ) : (
@@ -74,17 +74,19 @@ const MemberTable = ({
                 type="button"
                 onClick={() => (isSelecting ? onToggleKey?.(row.key) : onSelectKey(row.key))}
                 className={cn(
-                  'border-edge-neutral flex h-12.5 shrink-0 cursor-pointer items-center border-b px-5 text-left',
+                  'border-line-normal-neutral flex h-12.5 shrink-0 cursor-pointer items-center border-b px-5 text-left',
                   isSelecting && 'gap-3',
-                  isActive || isChecked ? 'bg-fill-primary-assistive' : 'hover:bg-fill-strong bg-fill-normal',
+                  isActive || isChecked
+                    ? 'bg-fill-primary-normal-assistive'
+                    : 'hover:bg-fill-normal-strong bg-fill-normal-normal',
                 )}
               >
                 {isSelecting && <CheckboxIcon checked={!!isChecked} className="size-5" />}
                 <div className="grid flex-1 grid-cols-4 items-center">
                   {/* 이름 */}
                   <div className="flex items-center gap-4">
-                    <DefaultProfile className="text-content-assistive size-7.5 shrink-0 rounded-full" />
-                    <span className="text-body-small text-content-normal truncate">{row.name}</span>
+                    <DefaultProfile className="text-text-normal-assistive size-7.5 shrink-0 rounded-full" />
+                    <span className="text-body-small text-text-normal-normal truncate">{row.name}</span>
                   </div>
 
                   {/* 직급 */}
@@ -92,7 +94,7 @@ const MemberTable = ({
                     <span
                       className={cn(
                         TAG_BASE_CLASS,
-                        RANK_BADGE_CLASS[row.rank] ?? 'bg-fill-interaction-hover text-content-alternative',
+                        RANK_BADGE_CLASS[row.rank] ?? 'bg-fill-normal-interaction-hover text-text-normal-alternative',
                       )}
                     >
                       {row.rank}
@@ -101,7 +103,7 @@ const MemberTable = ({
 
                   {/* 부서 */}
                   <div className="flex items-center justify-center">
-                    <span className="text-body-xsmall text-content-normal truncate">{row.department}</span>
+                    <span className="text-body-xsmall text-text-normal-normal truncate">{row.department}</span>
                   </div>
 
                   {/* 4번째 컬럼 */}
@@ -109,7 +111,8 @@ const MemberTable = ({
                     <span
                       className={cn(
                         TAG_BASE_CLASS,
-                        lastColumnBadgeClass[row.lastColumn] ?? 'bg-fill-interaction-hover text-content-alternative',
+                        lastColumnBadgeClass[row.lastColumn] ??
+                          'bg-fill-normal-interaction-hover text-text-normal-alternative',
                       )}
                     >
                       {row.lastColumn}

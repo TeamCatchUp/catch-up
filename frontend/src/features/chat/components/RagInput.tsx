@@ -59,7 +59,7 @@ export default function RagInput({ filters, isLoading, onSendMessage, onStop, on
     <div className="px-16 pb-2.5 backdrop-blur-[10px]">
       <div className="mx-auto flex w-full max-w-203 flex-col items-center gap-2">
         {/* Text input 카드 */}
-        <div className="border-edge-normal bg-fill-normal flex w-full flex-col rounded-2xl border p-4">
+        <div className="border-line-normal-normal bg-fill-normal-normal flex w-full flex-col rounded-2xl border p-4">
           {/* Filter Bar (카드 내부 상단) */}
           <div
             className={cn(
@@ -93,7 +93,7 @@ export default function RagInput({ filters, isLoading, onSendMessage, onStop, on
             onChange={handleInputChange}
             onKeyDown={handleKeyDown}
             rows={1}
-            className="text-body-medium text-content-normal placeholder:text-content-assistive h-6.5 max-h-67.5 w-full resize-none overflow-y-auto outline-none"
+            className="text-body-medium text-text-normal-normal placeholder:text-text-normal-assistive h-6.5 max-h-67.5 w-full resize-none overflow-y-auto outline-none"
           />
 
           {/* 하단 컨트롤 바 */}
@@ -103,8 +103,8 @@ export default function RagInput({ filters, isLoading, onSendMessage, onStop, on
               type="button"
               onClick={filters.toggleFilter}
               className={cn(
-                'text-content-neutral flex h-7 cursor-pointer items-center gap-1 rounded-full px-1.5 py-1',
-                filters.isFilterOpen && 'bg-fill-interaction-pressed',
+                'text-text-normal-neutral flex h-7 cursor-pointer items-center gap-1 rounded-full px-1.5 py-1',
+                filters.isFilterOpen && 'bg-fill-normal-interaction-pressed',
               )}
             >
               <SearchFile className="h-5 w-5 shrink-0" />
@@ -115,9 +115,9 @@ export default function RagInput({ filters, isLoading, onSendMessage, onStop, on
             {isLoading ? (
               <button
                 onClick={onStop}
-                className="bg-fill-interaction-disable flex h-10 w-10 items-center justify-center rounded-full"
+                className="bg-fill-normal-interaction-disable flex h-10 w-10 items-center justify-center rounded-full"
               >
-                <Stop className="text-content-neutral relative left-px h-6 w-6 cursor-pointer" />
+                <Stop className="text-text-normal-neutral relative left-px h-6 w-6 cursor-pointer" />
               </button>
             ) : (
               <button
@@ -126,14 +126,14 @@ export default function RagInput({ filters, isLoading, onSendMessage, onStop, on
                 className={cn(
                   'cursor-pointer rounded-full p-2 transition-colors',
                   newInput.trim()
-                    ? 'bg-fill-primary'
-                    : 'bg-fill-interaction-inactive border-edge-assistive border',
+                    ? 'bg-fill-primary-normal-normal'
+                    : 'bg-fill-normal-interaction-inactive border-line-normal-assistive border',
                 )}
               >
                 <ArrowSend
                   className={cn(
                     'h-6 w-6 cursor-pointer',
-                    newInput.trim() ? 'text-white' : 'text-content-assistive',
+                    newInput.trim() ? 'text-white' : 'text-text-normal-assistive',
                   )}
                 />
               </button>
@@ -142,7 +142,7 @@ export default function RagInput({ filters, isLoading, onSendMessage, onStop, on
         </div>
 
         {/* Helper 텍스트 */}
-        <p className="text-label-xsmall text-content-alternative">
+        <p className="text-label-xsmall text-text-normal-alternative">
           출처를 기반으로 정보를 제공합니다. 자세한 내용은 원문을 확인해주세요.
         </p>
       </div>

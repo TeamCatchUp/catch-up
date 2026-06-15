@@ -20,13 +20,11 @@ export default function OriginalPanelComingSoon({ toolName }: OriginalPanelComin
       variants={panelStateFadeIn}
       className="flex flex-col items-center gap-1 px-5 py-50 text-center"
     >
-      <p className="text-heading-small text-content-alternative font-semibold">
-        곧 <strong className="text-content-normal font-semibold">{toolName}</strong>의 내용도 Catch
-        Up에서 만나볼 수 있어요.
+      <p className="text-heading-small text-text-normal-alternative font-semibold">
+        곧 <strong className="text-text-normal-normal font-semibold">{toolName}</strong>의 내용도 Catch Up에서 만나볼 수
+        있어요.
       </p>
-      <p className="text-body-small text-content-assistive">
-        열심히 준비중이니 조금만 기다려주세요:)
-      </p>
+      <p className="text-body-small text-text-normal-assistive">열심히 준비중이니 조금만 기다려주세요:)</p>
     </motion.div>
   );
 }

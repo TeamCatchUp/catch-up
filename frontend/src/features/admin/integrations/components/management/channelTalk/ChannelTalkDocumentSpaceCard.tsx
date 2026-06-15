@@ -37,7 +37,7 @@ export default function ChannelTalkDocumentSpaceCard({
 
   const leftColumn = (
     <div className="bg-fill-primary-normal-neutral flex size-8 shrink-0 items-center justify-center rounded-lg">
-      <IconBook className="text-icon-primary size-5" />
+      <IconBook className="text-icon-primary-normal size-5" />
     </div>
   );
 
@@ -59,15 +59,15 @@ export default function ChannelTalkDocumentSpaceCard({
       <div className="flex w-full gap-4 pt-5">
         {leftColumn}
 
-        <div className="border-edge-neutral flex min-w-0 flex-1 flex-col items-start border-b pb-5">
+        <div className="border-line-normal-neutral flex min-w-0 flex-1 flex-col items-start border-b pb-5">
           <div className="flex w-full flex-wrap items-center justify-between gap-2">
-            <h4 className="text-heading-small text-content-normal min-w-0 flex-1 truncate">{documentSpace.name}</h4>
+            <h4 className="text-heading-small text-text-normal-normal min-w-0 flex-1 truncate">{documentSpace.name}</h4>
             <div className="flex shrink-0 items-center gap-3">
               <div className="flex items-center gap-1">
-                <IconCheck className="text-icon-primary size-4.5 shrink-0" />
-                <span className="text-body-xsmall text-content-primary">테스트 완료</span>
+                <IconCheck className="text-icon-primary-normal size-4.5 shrink-0" />
+                <span className="text-body-xsmall text-text-primary-normal">테스트 완료</span>
               </div>
-              <div className="bg-edge-neutral h-4.5 w-px" aria-hidden />
+              <div className="bg-line-normal-neutral h-4.5 w-px" aria-hidden />
               <Button variant="box-outline-gray" size="sm" onClick={() => setDeleteDialogOpen(true)}>
                 삭제
               </Button>
@@ -85,10 +85,10 @@ export default function ChannelTalkDocumentSpaceCard({
     <div className="flex w-full gap-4 pt-5">
       {leftColumn}
 
-      <div className="border-edge-neutral flex min-w-0 flex-1 flex-col gap-4 border-b pb-5">
+      <div className="border-line-normal-neutral flex min-w-0 flex-1 flex-col gap-4 border-b pb-5">
         {/* Header — 이름 + 삭제 버튼 */}
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h4 className="text-heading-small text-content-normal min-w-0 flex-1 truncate">{documentSpace.name}</h4>
+          <h4 className="text-heading-small text-text-normal-normal min-w-0 flex-1 truncate">{documentSpace.name}</h4>
           <Button variant="box-outline-gray" size="sm" onClick={() => setDeleteDialogOpen(true)}>
             삭제
           </Button>
@@ -115,7 +115,7 @@ export default function ChannelTalkDocumentSpaceCard({
         {/* 동기화 주기 dropdown */}
         <div className="flex flex-col gap-1.5">
           <div className="flex items-center gap-1">
-            <span className="text-body-small text-content-neutral">동기화 주기 설정</span>
+            <span className="text-body-small text-text-normal-neutral">동기화 주기 설정</span>
             <span className="bg-status-destructive size-[5px] rounded-full" aria-label="필수 입력" />
           </div>
           <ChannelTalkSyncIntervalDropdown

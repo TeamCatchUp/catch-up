@@ -51,7 +51,7 @@ export const documentSearchFilterRowResultExpandedFigmaCase: FigmaLabCase = {
     },
     {
       figma: 'Fill/Normal/Strong',
-      code: 'bg-fill-strong',
+      code: 'bg-fill-normal-strong',
       decision: 'project-token',
     },
   ],

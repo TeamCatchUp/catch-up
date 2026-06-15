@@ -14,11 +14,11 @@ export function TeamSpaceMoreContent() {
       onCloseAutoFocus={(e) => e.preventDefault()}
     >
       <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
-        <GroupAdd className="text-icon-normal h-6 w-6" />
+        <GroupAdd className="text-icon-normal-normal h-6 w-6" />
         <span>팀원 추가</span>
       </DropdownMenuItem>
       <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
-        <Settings className="text-icon-normal h-6 w-6" />
+        <Settings className="text-icon-normal-normal h-6 w-6" />
         <span>팀스페이스 설정</span>
       </DropdownMenuItem>
     </DropdownMenuContent>

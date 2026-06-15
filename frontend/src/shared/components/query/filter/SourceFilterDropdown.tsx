@@ -77,7 +77,7 @@ export default function SourceFilterDropdown({
         data-document-search-filter-popover
         align="start"
         sideOffset={8}
-        className="border-edge-strong bg-fill-normal flex max-h-72 w-75 flex-col gap-3 rounded-2xl border px-0 py-2.5 shadow-[0px_4px_15px_rgba(0,0,0,0.16)]"
+        className="border-line-normal-strong bg-fill-normal-normal flex max-h-72 w-75 flex-col gap-3 rounded-2xl border px-0 py-2.5 shadow-[0px_4px_15px_rgba(0,0,0,0.16)]"
         onMouseDown={(event) => event.stopPropagation()}
         onOpenAutoFocus={(event) => {
           event.preventDefault();
@@ -89,7 +89,7 @@ export default function SourceFilterDropdown({
             role="button"
             tabIndex={-1}
             className={cn(
-              'bg-fill-strong focus-within:border-edge-primary flex w-full cursor-text items-start gap-1.5 overflow-hidden rounded-lg border-[1.5px] border-transparent px-3 py-2',
+              'bg-fill-normal-strong focus-within:border-line-primary-normal flex w-full cursor-text items-start gap-1.5 overflow-hidden rounded-lg border-[1.5px] border-transparent px-3 py-2',
               selectedSources.length > 0 ? 'max-h-60 min-h-10' : 'h-10',
             )}
             onClick={() => inputRef.current?.focus()}
@@ -103,18 +103,18 @@ export default function SourceFilterDropdown({
                     return (
                       <span
                         key={source}
-                        className="border-edge-strong bg-fill-normal flex h-[37px] items-center gap-1 rounded-full border px-1.5 py-1.5"
+                        className="border-line-normal-strong bg-fill-normal-normal flex h-[37px] items-center gap-1 rounded-full border px-1.5 py-1.5"
                       >
                         <span className="flex min-w-0 items-center gap-1.5 px-1">
                           <option.Icon className={cn(option.iconClassName ?? 'size-5', 'shrink-0')} />
-                          <span className="text-body-small text-content-normal max-w-[150px] truncate">
+                          <span className="text-body-small text-text-normal-normal max-w-[150px] truncate">
                             {option.label}
                           </span>
                         </span>
                         <button
                           type="button"
                           aria-label={`${option.label} 제거`}
-                          className="text-icon-neutral hover:bg-fill-interaction-hover flex size-[22px] cursor-pointer items-center justify-center rounded-full"
+                          className="text-icon-normal-neutral hover:bg-fill-normal-interaction-hover flex size-[22px] cursor-pointer items-center justify-center rounded-full"
                           onMouseDown={(event) => event.preventDefault()}
                           onClick={(event) => {
                             event.stopPropagation();
@@ -135,7 +135,7 @@ export default function SourceFilterDropdown({
                   value={searchTerm}
                   onChange={(event) => setSearchTerm(event.target.value)}
                   placeholder="협업툴 검색하기"
-                  className="text-body-small placeholder:text-content-assistive h-[23px] min-w-0 flex-1 bg-transparent outline-none"
+                  className="text-body-small placeholder:text-text-normal-assistive h-[23px] min-w-0 flex-1 bg-transparent outline-none"
                 />
               </div>
             </div>
@@ -143,7 +143,7 @@ export default function SourceFilterDropdown({
               <button
                 type="button"
                 aria-label="검색 범위 필터 초기화"
-                className="text-icon-neutral flex size-[23px] shrink-0 cursor-pointer items-center justify-center rounded-full"
+                className="text-icon-normal-neutral flex size-[23px] shrink-0 cursor-pointer items-center justify-center rounded-full"
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={(event) => {
                   event.stopPropagation();
@@ -167,21 +167,21 @@ export default function SourceFilterDropdown({
               <li key={option.value}>
                 <button
                   type="button"
-                  className="hover:bg-fill-interaction-hover flex h-10 w-full cursor-pointer items-center gap-2 rounded-xl px-2 py-1 transition-colors"
+                  className="hover:bg-fill-normal-interaction-hover flex h-10 w-full cursor-pointer items-center gap-2 rounded-xl px-2 py-1 transition-colors"
                   onMouseDown={(event) => event.preventDefault()}
                   onClick={() => toggleSource(option.value)}
                 >
-                  <span className="border-edge-neutral bg-fill-strong flex size-[34px] shrink-0 items-center justify-center rounded-full border p-1.5">
+                  <span className="border-line-normal-neutral bg-fill-normal-strong flex size-[34px] shrink-0 items-center justify-center rounded-full border p-1.5">
                     <option.Icon className={cn(option.iconClassName ?? 'size-5', 'shrink-0')} />
                   </span>
-                  <span className="text-body-small text-content-normal min-w-0 flex-1 truncate text-left">
+                  <span className="text-body-small text-text-normal-normal min-w-0 flex-1 truncate text-left">
                     {option.label}
                   </span>
                 </button>
               </li>
             ))
           ) : (
-            <li className="text-body-small text-content-alternative px-2 text-center">검색 결과가 없습니다.</li>
+            <li className="text-body-small text-text-normal-alternative px-2 text-center">검색 결과가 없습니다.</li>
           )}
         </ul>
       </PopoverContent>

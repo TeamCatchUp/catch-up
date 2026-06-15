@@ -10,7 +10,7 @@ export default function AnswerSkeletonLines() {
         <div
           key={i}
           aria-hidden
-          className="animate-line-drop bg-fill-strong h-4 max-w-full rounded-lg"
+          className="animate-line-drop bg-fill-normal-strong h-4 max-w-full rounded-lg"
           style={{
             width: `${w}px`,
             animationDelay: `${i * STAGGER_MS}ms`,

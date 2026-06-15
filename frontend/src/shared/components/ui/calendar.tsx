@@ -14,30 +14,30 @@ function Calendar({ className, classNames, ...props }: DayPickerProps) {
         months: 'relative flex gap-9',
         month: 'flex w-63 flex-col',
         month_caption: 'flex h-9 items-center justify-center pb-2',
-        caption_label: 'text-heading-small text-content-normal',
+        caption_label: 'text-heading-small text-text-normal-normal',
         nav: 'absolute inset-x-0 top-0 z-local flex items-center justify-between',
         button_previous:
-          'flex size-7 cursor-pointer items-center justify-center rounded-full text-icon-neutral hover:bg-fill-interaction-hover aria-disabled:cursor-not-allowed aria-disabled:text-icon-assistive aria-disabled:hover:bg-transparent',
+          'flex size-7 cursor-pointer items-center justify-center rounded-full text-icon-normal-neutral hover:bg-fill-normal-interaction-hover aria-disabled:cursor-not-allowed aria-disabled:text-icon-normal-assistive aria-disabled:hover:bg-transparent',
         button_next:
-          'flex size-7 cursor-pointer items-center justify-center rounded-full text-icon-neutral hover:bg-fill-interaction-hover aria-disabled:cursor-not-allowed aria-disabled:text-icon-assistive aria-disabled:hover:bg-transparent',
+          'flex size-7 cursor-pointer items-center justify-center rounded-full text-icon-normal-neutral hover:bg-fill-normal-interaction-hover aria-disabled:cursor-not-allowed aria-disabled:text-icon-normal-assistive aria-disabled:hover:bg-transparent',
         month_grid: 'flex flex-col gap-1',
         weekdays: 'flex',
-        weekday: 'flex h-6 flex-1 items-center justify-center text-body-small text-content-alternative',
+        weekday: 'flex h-6 flex-1 items-center justify-center text-body-small text-text-normal-alternative',
         weeks: 'flex flex-col gap-1',
         week: 'flex',
-        day: 'relative flex h-7 flex-1 items-center justify-center text-body-small text-content-neutral',
+        day: 'relative flex h-7 flex-1 items-center justify-center text-body-small text-text-normal-neutral',
         day_button:
-          'relative z-base flex size-7 cursor-pointer items-center justify-center rounded-full hover:bg-fill-interaction-hover',
-        today: '[&>button]:text-content-primary',
+          'relative z-base flex size-7 cursor-pointer items-center justify-center rounded-full hover:bg-fill-normal-interaction-hover',
+        today: '[&>button]:text-text-primary-normal',
         selected: '',
         // text-white!: react-day-picker 기본 day 색상 specificity를 이기기 위한 important.
         range_start:
-          "rdp-range_start [&>button]:bg-fill-primary [&>button]:text-white! [&>button]:hover:bg-fill-primary-interaction-hover before:absolute before:inset-y-0 before:right-0 before:w-1/2 before:bg-fill-interaction-pressed before:content-['']",
+          "rdp-range_start [&>button]:bg-fill-primary-normal-normal [&>button]:text-white! [&>button]:hover:bg-fill-primary-normal-interaction-hover before:absolute before:inset-y-0 before:right-0 before:w-1/2 before:bg-fill-normal-interaction-pressed before:content-['']",
         range_end:
-          "rdp-range_end [&>button]:bg-fill-primary [&>button]:text-white! [&>button]:hover:bg-fill-primary-interaction-hover before:absolute before:inset-y-0 before:left-0 before:w-1/2 before:bg-fill-interaction-pressed before:content-['']",
-        range_middle: 'bg-fill-interaction-pressed',
-        outside: '!text-content-assistive',
-        disabled: '[&>button]:text-content-assistive [&>button]:hover:bg-transparent [&>button]:cursor-not-allowed',
+          "rdp-range_end [&>button]:bg-fill-primary-normal-normal [&>button]:text-white! [&>button]:hover:bg-fill-primary-normal-interaction-hover before:absolute before:inset-y-0 before:left-0 before:w-1/2 before:bg-fill-normal-interaction-pressed before:content-['']",
+        range_middle: 'bg-fill-normal-interaction-pressed',
+        outside: '!text-text-normal-assistive',
+        disabled: '[&>button]:text-text-normal-assistive [&>button]:hover:bg-transparent [&>button]:cursor-not-allowed',
         hidden: 'invisible',
         ...classNames,
       }}

@@ -126,18 +126,18 @@ function DateRangePicker({
       ) : (
         <PopoverTrigger
           className={cn(
-            'border-edge-neutral bg-fill-normal flex h-9 cursor-pointer items-center gap-1.5 rounded-lg border px-2.5 py-2',
+            'border-line-normal-neutral bg-fill-normal-normal flex h-9 cursor-pointer items-center gap-1.5 rounded-lg border px-2.5 py-2',
             className,
           )}
         >
-          <IconCalendar className="text-icon-neutral size-5" />
+          <IconCalendar className="text-icon-normal-neutral size-5" />
           {displayFrom ? (
             <>
-              <span className="text-body-small text-content-neutral">{displayFrom}</span>
-              <span className="text-body-small text-content-neutral">-</span>
-              <span className="text-body-small text-content-neutral">{displayTo ?? displayFrom}</span>
+              <span className="text-body-small text-text-normal-neutral">{displayFrom}</span>
+              <span className="text-body-small text-text-normal-neutral">-</span>
+              <span className="text-body-small text-text-normal-neutral">{displayTo ?? displayFrom}</span>
               <IconDeleteCircle
-                className="text-icon-assistive size-5"
+                className="text-icon-normal-assistive size-5"
                 onClick={(e: React.MouseEvent) => {
                   e.stopPropagation();
                   handleClear();
@@ -145,7 +145,7 @@ function DateRangePicker({
               />
             </>
           ) : (
-            <span className="text-body-small text-content-assistive">{placeholder}</span>
+            <span className="text-body-small text-text-normal-assistive">{placeholder}</span>
           )}
         </PopoverTrigger>
       )}
@@ -169,7 +169,7 @@ function DateRangePicker({
         />
 
         {/* Divider */}
-        <div className="border-edge-normal border-t" />
+        <div className="border-line-normal-normal border-t" />
 
         {/* Action Bar */}
         <div className="flex items-center justify-between">
@@ -179,7 +179,10 @@ function DateRangePicker({
               variant="box-outline-gray"
               size="sm"
               onClick={handleSelectToday}
-              className={cn('w-22.5', isTodaySelected && 'border-edge-strong bg-fill-interaction-pressed')}
+              className={cn(
+                'w-22.5',
+                isTodaySelected && 'border-line-normal-strong bg-fill-normal-interaction-pressed',
+              )}
             >
               {isTodaySelected && <IconCheck className="size-5" />}
               오늘 선택

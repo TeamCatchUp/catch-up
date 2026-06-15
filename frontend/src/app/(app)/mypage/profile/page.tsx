@@ -40,8 +40,8 @@ export default function ProfilePage() {
 
   return (
     <section className="flex flex-col gap-6 px-16 pt-9 pb-30">
-      <h1 className="text-heading-xlarge text-content-normal">계정</h1>
-      <div className="border-edge-neutral h-px w-full border-b" />
+      <h1 className="text-heading-xlarge text-text-normal-normal">계정</h1>
+      <div className="border-line-normal-neutral h-px w-full border-b" />
 
       <div className="flex flex-col gap-8">
         <div className="flex items-end gap-4">
@@ -52,16 +52,16 @@ export default function ProfilePage() {
             <Profile className="h-14.5 w-14.5 rounded-2xl" />
           )}
           <div className="flex flex-col gap-1">
-            <span className="text-heading-xlarge text-content-normal">{profile?.name ?? user?.name ?? ''}</span>
-            <div className="text-content-alternative flex gap-1">
+            <span className="text-heading-xlarge text-text-normal-normal">{profile?.name ?? user?.name ?? ''}</span>
+            <div className="text-text-normal-alternative flex gap-1">
               <span className="text-body-small">{profile?.department ?? ''}</span>
             </div>
           </div>
         </div>
 
         <div className="flex flex-col gap-1">
-          <div className="bg-fill-strong rounded-md px-5 py-1.5">
-            <span className="text-heading-small text-content-neutral">기본 정보</span>
+          <div className="bg-fill-normal-strong rounded-md px-5 py-1.5">
+            <span className="text-heading-small text-text-normal-neutral">기본 정보</span>
           </div>
           <div className="text-body-small flex flex-col px-4">
             {basicInfoRows.map((row, index) => (
@@ -69,39 +69,39 @@ export default function ProfilePage() {
                 key={row.label}
                 className={cn(
                   'flex items-center gap-8 py-3',
-                  index !== basicInfoRows.length - 1 && 'border-edge-neutral border-b',
+                  index !== basicInfoRows.length - 1 && 'border-line-normal-neutral border-b',
                 )}
               >
-                <span className="text-icon-normal w-20">{row.label}</span>
-                <span className="text-content-normal">{row.value}</span>
+                <span className="text-icon-normal-normal w-20">{row.label}</span>
+                <span className="text-text-normal-normal">{row.value}</span>
               </div>
             ))}
           </div>
         </div>
 
         <div className="flex flex-col gap-1">
-          <div className="bg-fill-strong rounded-md px-5 py-1.5">
-            <span className="text-heading-small text-content-neutral">계정 관리</span>
+          <div className="bg-fill-normal-strong rounded-md px-5 py-1.5">
+            <span className="text-heading-small text-text-normal-neutral">계정 관리</span>
           </div>
           <div className="text-body-small flex flex-col px-4">
-            <div className="border-edge-neutral flex items-center justify-between gap-5 border-b py-3">
+            <div className="border-line-normal-neutral flex items-center justify-between gap-5 border-b py-3">
               <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-                <span className="text-heading-small text-content-normal">로그아웃 하기</span>
-                <span className="text-label-small text-content-alternative">현재 계정에서 로그아웃됩니다.</span>
+                <span className="text-heading-small text-text-normal-normal">로그아웃 하기</span>
+                <span className="text-label-small text-text-normal-alternative">현재 계정에서 로그아웃됩니다.</span>
               </div>
               <button
                 type="button"
                 onClick={() => logoutMutation.mutate()}
                 disabled={logoutMutation.isPending}
-                className="capsule-button-outline-mono text-body-small text-content-normal disabled:text-content-assistive h-9 cursor-pointer px-3 py-1.5 disabled:cursor-not-allowed"
+                className="capsule-button-outline-mono text-body-small text-text-normal-normal disabled:text-text-normal-assistive h-9 cursor-pointer px-3 py-1.5 disabled:cursor-not-allowed"
               >
                 로그아웃
               </button>
             </div>
             <div className="flex items-center justify-between gap-5 py-3">
               <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-                <span className="text-heading-small text-content-normal">계정 삭제하기</span>
-                <span className="text-label-small text-content-alternative">
+                <span className="text-heading-small text-text-normal-normal">계정 삭제하기</span>
+                <span className="text-label-small text-text-normal-alternative">
                   모든 데이터가 영구 삭제되며 복구할 수 없습니다.
                 </span>
               </div>
@@ -112,8 +112,8 @@ export default function ProfilePage() {
                 className={cn(
                   'text-body-small h-9 rounded-full border px-3 py-1.5',
                   isAdmin
-                    ? 'border-edge-neutral bg-fill-strong text-content-assistive cursor-not-allowed'
-                    : 'hover:bg-accent-red-lighten active:bg-accent-red-lighten bg-fill-normal border-status-destructive text-status-destructive cursor-pointer',
+                    ? 'border-line-normal-neutral bg-fill-normal-strong text-text-normal-assistive cursor-not-allowed'
+                    : 'hover:bg-accent-red-lighten active:bg-accent-red-lighten bg-fill-normal-normal border-status-destructive text-status-destructive cursor-pointer',
                 )}
               >
                 삭제

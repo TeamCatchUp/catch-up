@@ -20,7 +20,7 @@ const DropdownMenuContent = React.forwardRef<
       ref={ref}
       sideOffset={sideOffset}
       className={cn(
-        'border-edge-normal shadow-dropdown-menu data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 bg-background-elevated-normal z-dropdown min-w-50 overflow-hidden rounded-2xl border px-1.5 py-2',
+        'border-line-normal-normal shadow-dropdown-menu data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 bg-background-elevated-normal z-dropdown min-w-50 overflow-hidden rounded-2xl border px-1.5 py-2',
         className,
       )}
       {...props}
@@ -38,7 +38,7 @@ const DropdownMenuItem = React.forwardRef<
   <DropdownMenuPrimitive.Item
     ref={ref}
     className={cn(
-      'text-body-small text-content-normal data-[highlighted]:bg-fill-interaction-hover relative flex cursor-pointer items-center gap-2.5 rounded-lg px-2 py-2 transition-colors outline-none select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
+      'text-body-small text-text-normal-normal data-[highlighted]:bg-fill-normal-interaction-hover relative flex cursor-pointer items-center gap-2.5 rounded-lg px-2 py-2 transition-colors outline-none select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
       inset && 'pl-8',
       className,
     )}
@@ -55,7 +55,7 @@ const DropdownMenuLabel = React.forwardRef<
 >(({ className, inset, ...props }, ref) => (
   <DropdownMenuPrimitive.Label
     ref={ref}
-    className={cn('text-heading-small text-content-strong px-2 py-1.5', inset && 'pl-8', className)}
+    className={cn('text-heading-small text-text-normal-strong px-2 py-1.5', inset && 'pl-8', className)}
     {...props}
   />
 ));
@@ -65,7 +65,11 @@ const DropdownMenuSeparator = React.forwardRef<
   React.ComponentRef<typeof DropdownMenuPrimitive.Separator>,
   React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Separator>
 >(({ className, ...props }, ref) => (
-  <DropdownMenuPrimitive.Separator ref={ref} className={cn('bg-edge-neutral mx-1 my-1 h-px', className)} {...props} />
+  <DropdownMenuPrimitive.Separator
+    ref={ref}
+    className={cn('bg-line-normal-neutral mx-1 my-1 h-px', className)}
+    {...props}
+  />
 ));
 DropdownMenuSeparator.displayName = DropdownMenuPrimitive.Separator.displayName;
 
@@ -78,7 +82,7 @@ const DropdownMenuSubTrigger = React.forwardRef<
   <DropdownMenuPrimitive.SubTrigger
     ref={ref}
     className={cn(
-      'text-body-small text-content-normal data-[state=open]:bg-fill-interaction-hover data-[highlighted]:bg-fill-interaction-hover flex cursor-pointer items-center gap-2.5 rounded-lg px-2 py-2 outline-none select-none',
+      'text-body-small text-text-normal-normal data-[state=open]:bg-fill-normal-interaction-hover data-[highlighted]:bg-fill-normal-interaction-hover flex cursor-pointer items-center gap-2.5 rounded-lg px-2 py-2 outline-none select-none',
       inset && 'pl-8',
       className,
     )}
@@ -97,7 +101,7 @@ const DropdownMenuSubContent = React.forwardRef<
     <DropdownMenuPrimitive.SubContent
       ref={ref}
       className={cn(
-        'border-edge-normal shadow-dropdown-menu data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 bg-background-elevated-normal z-dropdown min-w-50 overflow-hidden rounded-2xl border px-1.5 py-2',
+        'border-line-normal-normal shadow-dropdown-menu data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 bg-background-elevated-normal z-dropdown min-w-50 overflow-hidden rounded-2xl border px-1.5 py-2',
         className,
       )}
       {...props}

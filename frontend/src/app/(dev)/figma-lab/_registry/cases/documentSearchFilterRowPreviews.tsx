@@ -8,7 +8,9 @@ import type { DocsSource } from '@/shared/types/source';
 
 import { documentSearchFilterRowFixture } from './documentSearchFilterRow.fixture';
 
-function useFilterFixture(fixture: (typeof documentSearchFilterRowFixture)[keyof typeof documentSearchFilterRowFixture]) {
+function useFilterFixture(
+  fixture: (typeof documentSearchFilterRowFixture)[keyof typeof documentSearchFilterRowFixture],
+) {
   const [selectedSources, setSelectedSources] = useState<DocsSource[]>([...fixture.selectedSources]);
   const [dateRange, setDateRange] = useState<DateRange | undefined>(fixture.dateRange);
   const [smartFilter, setSmartFilter] = useState(fixture.smartFilter);
@@ -28,7 +30,7 @@ export function EntryFilterRowPreview() {
   const selectedRow = useFilterFixture(documentSearchFilterRowFixture.entrySelected);
 
   return (
-    <div className="bg-fill-normal flex min-h-full flex-col justify-center gap-5 p-6">
+    <div className="bg-fill-normal-normal flex min-h-full flex-col justify-center gap-5 p-6">
       <DocumentSearchFilterRow
         selectedSources={defaultRow.selectedSources}
         onSourcesChange={defaultRow.setSelectedSources}
@@ -53,7 +55,7 @@ export function ResultExpandedFilterRowPreview() {
   const row = useFilterFixture(documentSearchFilterRowFixture.resultExpanded);
 
   return (
-    <div className="bg-fill-normal flex min-h-full items-center p-6">
+    <div className="bg-fill-normal-normal flex min-h-full items-center p-6">
       <div className="w-full" style={{ maxWidth: 900 }}>
         <DocumentSearchFilterRow
           variant="result-expanded"
@@ -74,7 +76,7 @@ export function SourceDropdownOpenPreview() {
   const row = useFilterFixture(documentSearchFilterRowFixture.sourceDropdownOpen);
 
   return (
-    <div className="bg-fill-normal flex min-h-full items-start p-6">
+    <div className="bg-fill-normal-normal flex min-h-full items-start p-6">
       <DocumentSearchFilterRow
         selectedSources={row.selectedSources}
         onSourcesChange={row.setSelectedSources}
@@ -92,7 +94,7 @@ export function DatePickerOpenPreview() {
   const row = useFilterFixture(documentSearchFilterRowFixture.datePickerOpen);
 
   return (
-    <div className="bg-fill-normal flex min-h-full items-start p-6">
+    <div className="bg-fill-normal-normal flex min-h-full items-start p-6">
       <DocumentSearchFilterRow
         selectedSources={row.selectedSources}
         onSourcesChange={row.setSelectedSources}

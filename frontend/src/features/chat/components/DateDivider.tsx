@@ -19,11 +19,11 @@ export default function DateDivider({ date, formatDate = defaultFormatDate, clas
 
   return (
     <div className={cn('flex items-center justify-center', className)}>
-      <div className="border-edge-neutral flex-1 border-t" />
-      <span className="bg-fill-normal border-edge-neutral text-body-xsmall text-content-alternative rounded-full border px-5 py-1">
+      <div className="border-line-normal-neutral flex-1 border-t" />
+      <span className="bg-fill-normal-normal border-line-normal-neutral text-body-xsmall text-text-normal-alternative rounded-full border px-5 py-1">
         {formattedDate}
       </span>
-      <div className="border-edge-neutral flex-1 border-t" />
+      <div className="border-line-normal-neutral flex-1 border-t" />
     </div>
   );
 }

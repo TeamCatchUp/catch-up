@@ -42,8 +42,8 @@ export default function UnderlineTabs<V extends string = string>({
             aria-controls={`tabpanel-${panelKey}-${item.value}`}
             className={cn(
               'text-heading-large cursor-pointer border-b-[3px] px-0.5 pb-1.25',
-              'data-[state=active]:text-content-normal data-[state=active]:border-edge-strong',
-              'data-[state=inactive]:text-content-assistive data-[state=inactive]:border-transparent',
+              'data-[state=active]:text-text-normal-normal data-[state=active]:border-line-normal-strong',
+              'data-[state=inactive]:text-text-normal-assistive data-[state=inactive]:border-transparent',
             )}
           >
             {item.label}

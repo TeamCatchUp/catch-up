@@ -12,7 +12,8 @@ function tokenClassName(token: Extract<SlackRichTextToken, { type: 'text' | 'lin
     token.style?.italic && 'italic',
     token.style?.strike && 'line-through',
     token.style?.underline && 'underline',
-    token.style?.code && 'text-status-cautionary bg-fill-strong border-edge-normal rounded-md border px-1.5 py-0.5',
+    token.style?.code &&
+      'text-status-cautionary bg-fill-normal-strong border-line-normal-normal rounded-md border px-1.5 py-0.5',
   );
 }
 
@@ -23,7 +24,7 @@ function renderTokens(tokens: SlackRichTextToken[]) {
         <span
           key={index}
           className={cn(
-            'bg-accent-light-blue-lighten text-content-primary inline-flex rounded-md px-1.5 py-0.5 font-medium',
+            'bg-accent-light-blue-lighten text-text-primary-normal inline-flex rounded-md px-1.5 py-0.5 font-medium',
             tokenClassName(token),
           )}
         >
@@ -47,7 +48,7 @@ function renderTokens(tokens: SlackRichTextToken[]) {
           href={token.href}
           target="_blank"
           rel="noopener noreferrer"
-          className={cn('text-content-primary wrap-break-word underline', tokenClassName(token))}
+          className={cn('text-text-primary-normal wrap-break-word underline', tokenClassName(token))}
         >
           {token.text}
         </a>
@@ -69,7 +70,7 @@ export default function SlackRichTextRenderer({ blocks }: SlackRichTextRendererP
   if (blocks.length === 0) return null;
 
   return (
-    <div className="text-body-small text-content-normal flex w-full min-w-0 flex-col items-start gap-2 font-medium">
+    <div className="text-body-small text-text-normal-normal flex w-full min-w-0 flex-col items-start gap-2 font-medium">
       {blocks.map((block, index) => {
         if (block.type === 'paragraph') {
           return (
@@ -105,7 +106,10 @@ export default function SlackRichTextRenderer({ blocks }: SlackRichTextRendererP
 
         if (block.type === 'quote') {
           return (
-            <blockquote key={index} className="border-edge-neutral flex w-full min-w-0 gap-4 border-l-4 pl-4 wrap-break-word">
+            <blockquote
+              key={index}
+              className="border-line-normal-neutral flex w-full min-w-0 gap-4 border-l-4 pl-4 wrap-break-word"
+            >
               {renderTokens(block.tokens)}
             </blockquote>
           );
@@ -114,7 +118,7 @@ export default function SlackRichTextRenderer({ blocks }: SlackRichTextRendererP
         return (
           <pre
             key={index}
-            className="custom-scrollbar bg-fill-strong border-edge-neutral text-content-neutral max-h-62.5 w-full overflow-auto rounded-xl border px-4 py-3 font-[inherit] whitespace-pre-wrap"
+            className="custom-scrollbar bg-fill-normal-strong border-line-normal-neutral text-text-normal-neutral max-h-62.5 w-full overflow-auto rounded-xl border px-4 py-3 font-[inherit] whitespace-pre-wrap"
           >
             {block.text}
           </pre>

@@ -33,7 +33,7 @@ export default function ChannelTalkEmbeddingModal({ open, onOpenChange, onJobSta
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         hideClose
-        className="shadow-modal bg-fill-normal flex h-200 w-200 max-w-200 flex-col gap-0 rounded-3xl p-0"
+        className="shadow-modal bg-fill-normal-normal flex h-200 w-200 max-w-200 flex-col gap-0 rounded-3xl p-0"
       >
         {open && <ModalBody onClose={() => onOpenChange(false)} onJobStart={onJobStart} />}
       </DialogContent>
@@ -185,10 +185,10 @@ function ModalBody({ onClose, onJobStart }: ModalBodyProps) {
     <>
       <header className="flex items-start gap-3 px-6 pt-6 pb-4">
         <div className="flex flex-1 flex-col gap-1">
-          <DialogTitle className="text-heading-large text-content-strong">
+          <DialogTitle className="text-heading-large text-text-normal-strong">
             임베딩 할 채널, 도큐먼트 스페이스 선택해주세요
           </DialogTitle>
-          <p className="text-body-small text-content-assistive">
+          <p className="text-body-small text-text-normal-assistive">
             AI 답변에 활용할 채널과 도큐먼트 스페이스를 선택하고 임베딩 기간을 지정하세요
           </p>
         </div>
@@ -196,13 +196,13 @@ function ModalBody({ onClose, onJobStart }: ModalBodyProps) {
           type="button"
           onClick={onClose}
           aria-label="닫기"
-          className="hover:bg-fill-strong flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-lg"
+          className="hover:bg-fill-normal-strong flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-lg"
         >
-          <IconCancel className="text-content-alternative size-6" />
+          <IconCancel className="text-text-normal-alternative size-6" />
         </button>
       </header>
 
-      <div className="border-edge-assistive flex flex-1 overflow-hidden border-t">
+      <div className="border-line-normal-assistive flex flex-1 overflow-hidden border-t">
         <ChannelList
           channels={channels}
           visibleChannelIds={visibleChannelIds}
@@ -237,13 +237,13 @@ function ModalBody({ onClose, onJobStart }: ModalBodyProps) {
       <footer className="mx-6 mt-4 mb-5 flex h-9 items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2.5">
-            <span className="text-body-small text-content-primary">{channelCount}</span>
-            <span className="text-body-small text-content-normal">채널</span>
+            <span className="text-body-small text-text-primary-normal">{channelCount}</span>
+            <span className="text-body-small text-text-normal-normal">채널</span>
           </div>
-          <span className="bg-edge-normal block h-3 w-px" />
+          <span className="bg-line-normal-normal block h-3 w-px" />
           <div className="flex items-center gap-2.5">
-            <span className="text-body-small text-content-primary">{spaceCount}</span>
-            <span className="text-body-small text-content-normal">도큐먼트 스페이스</span>
+            <span className="text-body-small text-text-primary-normal">{spaceCount}</span>
+            <span className="text-body-small text-text-normal-normal">도큐먼트 스페이스</span>
           </div>
         </div>
         <div className="flex items-center gap-3">

@@ -13,20 +13,20 @@ export default function TaskManagePart({ depart, manager }: TaskManagePartProps)
       <div className="flex flex-col gap-1.25">
         <div className="flex gap-4">
           <div className="flex items-center gap-1.5">
-            <Depart className="text-content-assistive h-4 w-4" />
-            <span className="text-body-small text-content-alternative">담당 부서</span>
+            <Depart className="text-text-normal-assistive h-4 w-4" />
+            <span className="text-body-small text-text-normal-alternative">담당 부서</span>
           </div>
-          <span className="text-body-small text-content-neutral">{depart} 팀</span>
+          <span className="text-body-small text-text-normal-neutral">{depart} 팀</span>
         </div>
 
         <div className="flex gap-7">
           <div className="flex items-center gap-1.5">
-            <Manager className="text-content-assistive h-4 w-4" />
-            <span className="text-body-small text-content-alternative">담당자</span>
+            <Manager className="text-text-normal-assistive h-4 w-4" />
+            <span className="text-body-small text-text-normal-alternative">담당자</span>
           </div>
           <div className="flex items-center gap-2">
             <LoadingProfile className="h-6.25 w-6.25" />
-            <span className="text-body-small text-content-neutral">{manager}</span>
+            <span className="text-body-small text-text-normal-neutral">{manager}</span>
           </div>
         </div>
       </div>

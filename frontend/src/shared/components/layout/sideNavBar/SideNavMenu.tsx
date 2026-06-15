@@ -79,8 +79,8 @@ function resolveActiveMatch(pathname: string, mode: string | null, activePanel: 
 
 // 메뉴 상태별 스타일
 const defaultClass =
-  'border border-transparent hover:bg-fill-interaction-hover hover:border-edge-assistive active:bg-fill-interaction-pressed active:border-edge-neutral';
-const selectedClass = 'bg-fill-primary-normal-neutral hover:bg-fill-primary-interaction-hover-assistive';
+  'border border-transparent hover:bg-fill-normal-interaction-hover hover:border-line-normal-assistive active:bg-fill-normal-interaction-pressed active:border-line-normal-neutral';
+const selectedClass = 'bg-fill-primary-normal-neutral hover:bg-fill-primary-normal-interaction-hover-assistive';
 
 interface SideNavMenuProps {
   isOpen: boolean;
@@ -126,21 +126,25 @@ export default function SideNavMenu({ isOpen }: SideNavMenuProps) {
                   <IconComponent
                     className={cn(
                       isOpen ? 'size-5.5' : 'size-6.5',
-                      isActive ? 'text-icon-primary group-hover:text-icon-primary' : 'text-icon-normal',
+                      isActive
+                        ? 'text-icon-primary-normal group-hover:text-icon-primary-normal'
+                        : 'text-icon-normal-normal',
                     )}
                   />
                   {isOpen && (
                     <span
                       className={cn(
                         'text-body-small relative flex-1 text-left',
-                        isActive ? 'text-content-primary group-hover:text-content-primary' : 'text-content-normal',
+                        isActive
+                          ? 'text-text-primary-normal group-hover:text-text-primary-normal'
+                          : 'text-text-normal-normal',
                       )}
                     >
                       {item.name}
                     </span>
                   )}
                   {isOpen && item.beta && (
-                    <span className="bg-fill-interaction-hover text-content-alternative inline-flex h-5 items-center justify-center gap-1 rounded-md px-1 py-0.5 text-[12px] leading-[1.5] font-medium">
+                    <span className="bg-fill-normal-interaction-hover text-text-normal-alternative inline-flex h-5 items-center justify-center gap-1 rounded-md px-1 py-0.5 text-[12px] leading-[1.5] font-medium">
                       베타
                     </span>
                   )}

@@ -51,17 +51,17 @@ export default function AccentTabs<V extends string = string>({
             aria-controls={`tabpanel-${panelKey}-${item.value}`}
             className={cn(
               'group text-heading-small inline-flex cursor-pointer items-center gap-1.5 border-b-2 px-1 pb-2',
-              'data-[state=active]:text-accent-violet data-[state=active]:border-accent-violet',
-              'data-[state=inactive]:text-content-alternative data-[state=inactive]:border-transparent',
+              'data-[state=active]:text-accent-violet-default data-[state=active]:border-accent-violet-default',
+              'data-[state=inactive]:text-text-normal-alternative data-[state=inactive]:border-transparent',
             )}
           >
             {item.label}
             {item.count !== undefined && (
               <span
                 className={cn(
-                  'text-body-xsmall inline-flex h-5 min-w-5 items-center justify-center rounded-md2 px-0.5',
-                  'group-data-[state=active]:bg-accent-violet group-data-[state=active]:text-content-inverse',
-                  'group-data-[state=inactive]:bg-fill-interaction-pressed group-data-[state=inactive]:text-content-alternative',
+                  'text-body-xsmall rounded-md2 inline-flex h-5 min-w-5 items-center justify-center px-0.5',
+                  'group-data-[state=active]:bg-accent-violet-default group-data-[state=active]:text-text-normal-inverse',
+                  'group-data-[state=inactive]:bg-fill-normal-interaction-pressed group-data-[state=inactive]:text-text-normal-alternative',
                 )}
                 data-tab-state-badge
               >

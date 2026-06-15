@@ -37,40 +37,50 @@ export default function ChannelTalkSyncIntervalDropdown({
           type="button"
           disabled={disabled}
           className={cn(
-            'border-edge-neutral flex h-11.5 w-full items-center gap-1.5 rounded-lg border p-3 transition-colors',
+            'border-line-normal-neutral flex h-11.5 w-full items-center gap-1.5 rounded-lg border p-3 transition-colors',
             disabled
-              ? 'bg-fill-interaction-disable cursor-not-allowed'
-              : 'bg-fill-strong hover:bg-fill-interaction-hover data-[state=open]:bg-fill-interaction-pressed cursor-pointer',
+              ? 'bg-fill-normal-interaction-disable cursor-not-allowed'
+              : 'bg-fill-normal-strong hover:bg-fill-normal-interaction-hover data-[state=open]:bg-fill-normal-interaction-pressed cursor-pointer',
           )}
         >
           <div className="flex min-w-0 flex-1 items-center gap-2">
-            <IconClock className={cn('size-5.5 shrink-0', disabled ? 'text-icon-alternative' : 'text-icon-normal')} />
+            <IconClock
+              className={cn('size-5.5 shrink-0', disabled ? 'text-icon-normal-alternative' : 'text-icon-normal-normal')}
+            />
             <span
-              className={cn('text-body-small truncate', disabled ? 'text-content-assistive' : 'text-content-neutral')}
+              className={cn(
+                'text-body-small truncate',
+                disabled ? 'text-text-normal-assistive' : 'text-text-normal-neutral',
+              )}
             >
               동기화 주기 설정
             </span>
           </div>
           <span
-            className={cn('text-body-small shrink-0', disabled ? 'text-content-assistive' : 'text-content-alternative')}
+            className={cn(
+              'text-body-small shrink-0',
+              disabled ? 'text-text-normal-assistive' : 'text-text-normal-alternative',
+            )}
           >
             {CHANNEL_TALK_SYNC_INTERVAL_LABELS[value]}
           </span>
-          <IconArrowDown className={cn('size-6 shrink-0', disabled ? 'text-icon-alternative' : 'text-icon-normal')} />
+          <IconArrowDown
+            className={cn('size-6 shrink-0', disabled ? 'text-icon-normal-alternative' : 'text-icon-normal-normal')}
+          />
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent
         sideOffset={2}
         align="start"
-        className="bg-fill-normal w-[var(--radix-dropdown-menu-trigger-width)] min-w-0 rounded-lg border-0 p-1"
+        className="bg-fill-normal-normal w-[var(--radix-dropdown-menu-trigger-width)] min-w-0 rounded-lg border-0 p-1"
       >
         {DOCUMENT_SPACE_SYNC_INTERVAL_OPTIONS.map((option) => (
           <DropdownMenuItem
             key={option}
             onSelect={() => onChange?.(option)}
             className={cn(
-              'text-body-small text-content-normal h-10 gap-2 px-2 py-2',
-              option === value && 'bg-fill-interaction-hover',
+              'text-body-small text-text-normal-normal h-10 gap-2 px-2 py-2',
+              option === value && 'bg-fill-normal-interaction-hover',
             )}
           >
             <span className="flex-1 truncate">

@@ -57,10 +57,10 @@ export default function SlackOriginalPanelContent({
         {parent?.dateKey && <DateIndicator date={parent.dateKey} />}
         {parent && <SlackMessageItem message={parent} originalUrl={thread.url} />}
         <div className="flex h-5 w-full items-center gap-3 px-3">
-          <span className="text-body-xsmall text-content-alternative shrink-0 font-medium">
+          <span className="text-body-xsmall text-text-normal-alternative shrink-0 font-medium">
             {thread.commentCount}개의 댓글
           </span>
-          <span aria-hidden className="bg-edge-neutral h-px min-w-0 flex-1" />
+          <span aria-hidden className="bg-line-normal-neutral h-px min-w-0 flex-1" />
         </div>
         {replies.map((message) => (
           <SlackMessageItem key={message.id} message={message} originalUrl={thread.url} />

@@ -5,7 +5,7 @@ import { DESIGN_SYSTEM_FILE_KEY } from './caseConstants';
 
 function SmartFilterStatusPillPreview() {
   return (
-    <div className="bg-fill-normal flex min-h-full items-center gap-5 p-6">
+    <div className="bg-fill-normal-normal flex min-h-full items-center gap-5 p-6">
       <SmartFilterStatusPill enabled />
       <SmartFilterStatusPill enabled={false} onApplyClick={() => undefined} />
     </div>
@@ -65,12 +65,12 @@ export const smartFilterStatusPillFigmaCase: FigmaLabCase = {
   tokens: [
     {
       figma: 'Fill/Normal/Strong',
-      code: 'bg-fill-strong',
+      code: 'bg-fill-normal-strong',
       decision: 'project-token',
     },
     {
       figma: 'Icon/Normal/Neutral',
-      code: 'text-icon-neutral',
+      code: 'text-icon-normal-neutral',
       decision: 'project-token',
     },
   ],

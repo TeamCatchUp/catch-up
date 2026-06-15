@@ -102,8 +102,8 @@ export default function StatusCardsSection({
   return (
     <section className="flex w-full flex-col gap-3">
       <div className="flex flex-col gap-0.5">
-        <h2 className="text-heading-large text-content-normal">계정 등록 상태</h2>
-        <p className="text-body-small text-content-alternative">팀의 매핑 등록 상태를 확인할 수 있어요.</p>
+        <h2 className="text-heading-large text-text-normal-normal">계정 등록 상태</h2>
+        <p className="text-body-small text-text-normal-alternative">팀의 매핑 등록 상태를 확인할 수 있어요.</p>
       </div>
 
       <div className="grid grid-cols-[repeat(auto-fill,minmax(320px,1fr))] gap-6">
@@ -114,21 +114,21 @@ export default function StatusCardsSection({
           return (
             <article
               key={service}
-              className="border-edge-neutral bg-fill-normal flex h-51 max-w-92.5 flex-col gap-4 rounded-xl border p-4"
+              className="border-line-normal-neutral bg-fill-normal-normal flex h-51 max-w-92.5 flex-col gap-4 rounded-xl border p-4"
             >
               <div className="flex items-center gap-2.5">
                 <Icon className={iconClassName} />
-                <span className="text-heading-medium text-content-normal">{name}</span>
+                <span className="text-heading-medium text-text-normal-normal">{name}</span>
               </div>
 
               <div className="flex flex-col gap-3">
-                <div className="border-edge-assistive bg-fill-strong relative flex flex-col gap-1.5 overflow-clip rounded-lg border px-3 py-3">
+                <div className="border-line-normal-assistive bg-fill-normal-strong relative flex flex-col gap-1.5 overflow-clip rounded-lg border px-3 py-3">
                   <div className="flex items-center gap-1">
-                    <span className="text-body-xsmall text-content-neutral">연동 완료율</span>
+                    <span className="text-body-xsmall text-text-normal-neutral">연동 완료율</span>
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <span className="inline-flex">
-                          <IconInfo className="text-content-assistive size-4.5" />
+                          <IconInfo className="text-text-normal-assistive size-4.5" />
                         </span>
                       </TooltipTrigger>
                       <TooltipContent side="bottom" align="start">
@@ -146,13 +146,13 @@ export default function StatusCardsSection({
                     </Tooltip>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="text-heading-medium text-content-neutral">{completionRate}%</span>
-                    <span className="rounded-md2 text-body-xsmall bg-fill-primary-normal-neutral text-content-primary px-1.5 py-0.5 leading-none">
+                    <span className="text-heading-medium text-text-normal-neutral">{completionRate}%</span>
+                    <span className="rounded-md2 text-body-xsmall bg-fill-primary-normal-neutral text-text-primary-normal px-1.5 py-0.5 leading-none">
                       {`${completedCount}/${totalCount}`}
                     </span>
                   </div>
                   <div
-                    className="bg-edge-primary absolute bottom-0 left-0 h-1.25 rounded-full"
+                    className="bg-line-primary-normal absolute bottom-0 left-0 h-1.25 rounded-full"
                     style={{ width: `${completionRate}%` }}
                   />
                 </div>

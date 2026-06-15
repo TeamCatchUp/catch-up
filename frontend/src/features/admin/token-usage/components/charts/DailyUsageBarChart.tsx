@@ -34,12 +34,12 @@ export default function DailyUsageBarChart({
   const ticks = useMemo(() => data.map((d) => d.date), [data]);
 
   return (
-    <div className="border-edge-neutral bg-fill-normal flex h-full flex-col rounded-xl border px-6 py-5">
+    <div className="border-line-normal-neutral bg-fill-normal-normal flex h-full flex-col rounded-xl border px-6 py-5">
       {/* 헤더 */}
       <div className="flex items-start justify-between">
         <div className="flex flex-col gap-1">
-          <span className="text-heading-small text-content-alternative">{title}</span>
-          <span className="text-heading-large text-content-normal">{totalCost.toFixed(2)} $</span>
+          <span className="text-heading-small text-text-normal-alternative">{title}</span>
+          <span className="text-heading-large text-text-normal-normal">{totalCost.toFixed(2)} $</span>
         </div>
       </div>
 
@@ -63,7 +63,7 @@ export default function DailyUsageBarChart({
                 const d = parseISO(v);
                 return `${format(d, 'M')}/${format(d, 'd')}`;
               }}
-              tick={{ fontSize: 13, fontWeight: 400, fill: 'var(--color-content-neutral)' }}
+              tick={{ fontSize: 13, fontWeight: 400, fill: 'var(--color-text-normal-neutral)' }}
               tickMargin={8}
             />
             <YAxis hide />

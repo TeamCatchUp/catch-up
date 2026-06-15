@@ -4,7 +4,7 @@ import type { ReactNode } from 'react';
 
 export default function PanelFrame({ children }: { children: ReactNode }) {
   return (
-    <div className="bg-fill-strong border-edge-neutral h-160 w-90 overflow-hidden rounded-xl border">
+    <div className="bg-fill-normal-strong border-line-normal-neutral h-160 w-90 overflow-hidden rounded-xl border">
       {children}
     </div>
   );

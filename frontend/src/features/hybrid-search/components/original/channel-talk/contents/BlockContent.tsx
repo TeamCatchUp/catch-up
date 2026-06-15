@@ -49,7 +49,7 @@ export default function BlockContent({ content }: BlockContentProps) {
       {groups.map((group, index) => {
         if (group.kind === 'bullets') {
           return (
-            <ul key={`bullets-${index}`} className="text-body-small text-content-normal flex flex-col gap-2 pl-5">
+            <ul key={`bullets-${index}`} className="text-body-small text-text-normal-normal flex flex-col gap-2 pl-5">
               {group.items.map((item, itemIndex) => (
                 <li key={`bullet-${index}-${itemIndex}`} className="list-disc break-words">
                   {item}

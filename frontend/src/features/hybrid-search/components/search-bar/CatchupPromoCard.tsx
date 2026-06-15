@@ -32,17 +32,17 @@ export default function CatchupPromoCard({ className }: CatchupPromoCardProps) {
   return (
     <div
       className={cn(
-        'bg-fill-strong border-edge-normal flex w-full flex-col gap-4 overflow-clip rounded-xl border p-5',
+        'bg-fill-normal-strong border-line-normal-normal flex w-full flex-col gap-4 overflow-clip rounded-xl border p-5',
         className,
       )}
     >
       <div className="flex flex-1 flex-col items-start gap-8">
         <div className="flex flex-col items-start gap-2.5">
-          <div className="bg-icon-strong text-content-inverse flex size-10.5 items-center justify-center overflow-clip rounded-xl">
+          <div className="bg-icon-strong text-text-normal-inverse flex size-10.5 items-center justify-center overflow-clip rounded-xl">
             <CatchupLogoWhite className="h-5 w-5.5" />
           </div>
-          <span className="text-body-xsmall text-content-alternative">캐치스턴트 AI에게 질문하기</span>
-          <h3 className="text-heading-large text-content-normal whitespace-pre-line">
+          <span className="text-body-xsmall text-text-normal-alternative">캐치스턴트 AI에게 질문하기</span>
+          <h3 className="text-heading-large text-text-normal-normal whitespace-pre-line">
             {`동료에게 묻기 전, \nCatch Up에게 물어보세요.`}
           </h3>
         </div>
@@ -52,7 +52,7 @@ export default function CatchupPromoCard({ className }: CatchupPromoCardProps) {
               <div
                 key={i}
                 className={cn(
-                  'bg-fill-normal border-edge-normal flex size-9 items-center justify-center overflow-clip rounded-full border-[0.5px] p-1',
+                  'bg-fill-normal-normal border-line-normal-normal flex size-9 items-center justify-center overflow-clip rounded-full border-[0.5px] p-1',
                   i < SOURCE_LOGOS.length - 1 && '-mr-1',
                 )}
               >
@@ -60,7 +60,7 @@ export default function CatchupPromoCard({ className }: CatchupPromoCardProps) {
               </div>
             ))}
           </div>
-          <p className="text-body-small text-content-neutral whitespace-pre-line">
+          <p className="text-body-small text-text-normal-neutral whitespace-pre-line">
             {`여러 문서에 흩어진 내용을 연결해 원인, 흐름, \n관련 히스토리까지 한 번에 정리해드립니다`}
           </p>
         </div>
@@ -70,7 +70,7 @@ export default function CatchupPromoCard({ className }: CatchupPromoCardProps) {
         size="sm"
         type="button"
         onClick={() => router.push('/search')}
-        className="text-content-normal w-full"
+        className="text-text-normal-normal w-full"
       >
         질문하기
       </Button>

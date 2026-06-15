@@ -14,13 +14,13 @@ export default function SlackFileAttachment({ file, originalUrl }: SlackFileAtta
   const meta = [formatFileSize(file.size), formatFileType(name, file.mimetype)].filter(Boolean).join(' · ');
   const href = originalUrl && isSafeUrl(originalUrl) ? originalUrl : null;
   const content = (
-    <span className="bg-fill-strong border-edge-neutral flex w-full items-center gap-2.5 rounded-lg border p-2 text-left">
-      <span className="bg-fill-normal flex shrink-0 items-center justify-center rounded-lg p-2">
+    <span className="bg-fill-normal-strong border-line-normal-neutral flex w-full items-center gap-2.5 rounded-lg border p-2 text-left">
+      <span className="bg-fill-normal-normal flex shrink-0 items-center justify-center rounded-lg p-2">
         <FileIcon className="text-icon-primary-assistive size-7" aria-hidden />
       </span>
       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <span className="text-body-small text-content-neutral max-w-62.5 truncate font-medium">{name}</span>
-        {meta && <span className="text-body-xsmall text-content-assistive truncate font-medium">{meta}</span>}
+        <span className="text-body-small text-text-normal-neutral max-w-62.5 truncate font-medium">{name}</span>
+        {meta && <span className="text-body-xsmall text-text-normal-assistive truncate font-medium">{meta}</span>}
       </span>
     </span>
   );

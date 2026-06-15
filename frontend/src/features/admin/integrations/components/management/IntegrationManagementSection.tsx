@@ -24,7 +24,7 @@ const RESOURCE_ICONS: Record<IntegrationService, React.ComponentType<React.SVGPr
   github: IconGithubLogo,
   slack: IconTag,
   confluence: IconSpace,
-  'channel_talk': IconTag,
+  channel_talk: IconTag,
 };
 
 /** 서비스별 연동 설치 핸들러 */
@@ -82,23 +82,25 @@ export default function IntegrationManagementSection({
               onClick={() => onSelectService(service)}
               className={cn(
                 'shadow-card flex h-16 w-full cursor-pointer items-center justify-between rounded-xl border p-4',
-                isSelected ? 'border-edge-primary bg-fill-normal' : 'border-edge-neutral bg-fill-normal',
+                isSelected
+                  ? 'border-line-primary-normal bg-fill-normal-normal'
+                  : 'border-line-normal-neutral bg-fill-normal-normal',
               )}
             >
               <div className="flex min-w-0 items-center gap-3">
                 <Icon className="size-7 shrink-0" />
-                <span className="text-heading-small text-content-normal truncate">{actionText}</span>
+                <span className="text-heading-small text-text-normal-normal truncate">{actionText}</span>
               </div>
               <div className="flex shrink-0 items-center gap-1">
                 {connected ? (
                   <>
                     <IconCloudCheckFilled className="text-icon-primary-assistive size-4.5" />
-                    <span className="text-body-xsmall text-content-primary-assistive">연동됨</span>
+                    <span className="text-body-xsmall text-text-primary-assistive">연동됨</span>
                   </>
                 ) : (
                   <>
-                    <IconCloudOff className="text-content-assistive size-4.5" />
-                    <span className="text-body-xsmall text-content-alternative">연동 안됨</span>
+                    <IconCloudOff className="text-text-normal-assistive size-4.5" />
+                    <span className="text-body-xsmall text-text-normal-alternative">연동 안됨</span>
                   </>
                 )}
               </div>
@@ -113,27 +115,27 @@ export default function IntegrationManagementSection({
         ) : (
           <>
             <div className="flex flex-col gap-1.5">
-              <h3 className="text-heading-small text-content-normal">연동 상태 관리</h3>
-              <div className="border-edge-assistive bg-fill-strong overflow-hidden rounded-xl border">
-                <div className="border-edge-neutral flex items-center justify-between gap-8 border-b px-4 py-3">
-                  <span className="text-body-small text-content-normal">연동 상태</span>
+              <h3 className="text-heading-small text-text-normal-normal">연동 상태 관리</h3>
+              <div className="border-line-normal-assistive bg-fill-normal-strong overflow-hidden rounded-xl border">
+                <div className="border-line-normal-neutral flex items-center justify-between gap-8 border-b px-4 py-3">
+                  <span className="text-body-small text-text-normal-normal">연동 상태</span>
                   <div className="flex items-center gap-1">
                     {detail.connected ? (
                       <div className="flex items-center gap-1 px-1.5 py-1">
                         <IconCloudCheckFilled className="text-icon-primary-assistive size-4.5 shrink-0" />
-                        <span className="text-body-xsmall text-content-primary-assistive">연동됨</span>
+                        <span className="text-body-xsmall text-text-primary-assistive">연동됨</span>
                       </div>
                     ) : (
                       <>
                         <div className="flex items-center gap-1 px-1.5 py-1">
-                          <IconCloudOff className="text-content-assistive size-5" />
-                          <span className="text-body-xsmall text-content-alternative">연동 안됨</span>
+                          <IconCloudOff className="text-text-normal-assistive size-5" />
+                          <span className="text-body-xsmall text-text-normal-alternative">연동 안됨</span>
                         </div>
                         {selectedService !== 'github' && (
                           <button
                             type="button"
                             onClick={() => handleInstall(selectedService)}
-                            className="text-body-xsmall text-content-primary-assistive cursor-pointer rounded-full px-1.5 py-1"
+                            className="text-body-xsmall text-text-primary-assistive cursor-pointer rounded-full px-1.5 py-1"
                           >
                             연동하기
                           </button>
@@ -143,24 +145,24 @@ export default function IntegrationManagementSection({
                   </div>
                 </div>
                 <div className="flex items-center justify-between gap-8 px-4 py-3">
-                  <span className="text-body-small text-content-normal">보안 관련 설명</span>
+                  <span className="text-body-small text-text-normal-normal">보안 관련 설명</span>
                   <button
                     type="button"
-                    className="text-body-xsmall text-content-neutral flex h-7 cursor-pointer items-center gap-1 rounded-full px-1.5 py-1"
+                    className="text-body-xsmall text-text-normal-neutral flex h-7 cursor-pointer items-center gap-1 rounded-full px-1.5 py-1"
                   >
                     원문 보기
-                    <IconOpenInNew className="text-icon-normal size-5" />
+                    <IconOpenInNew className="text-icon-normal-normal size-5" />
                   </button>
                 </div>
               </div>
             </div>
 
             <div className="flex flex-col gap-1.5">
-              <h3 className="text-heading-small text-content-neutral">연동된 데이터 범위</h3>
+              <h3 className="text-heading-small text-text-normal-neutral">연동된 데이터 범위</h3>
               <div
                 className={cn(
-                  'border-edge-assistive bg-fill-strong text-body-small flex items-center justify-center overflow-hidden rounded-xl border px-4 py-3',
-                  detail.connected ? 'text-content-normal' : 'text-content-assistive',
+                  'border-line-normal-assistive bg-fill-normal-strong text-body-small flex items-center justify-center overflow-hidden rounded-xl border px-4 py-3',
+                  detail.connected ? 'text-text-normal-normal' : 'text-text-normal-assistive',
                 )}
               >
                 <span className="truncate">{detail.connected ? detail.dataRange : '연동되지 않았습니다.'}</span>
@@ -168,8 +170,8 @@ export default function IntegrationManagementSection({
             </div>
 
             <div className="flex flex-col gap-1.5">
-              <h3 className="text-heading-small text-content-neutral">{detail.resourceLabel}</h3>
-              <div className="border-edge-assistive bg-fill-strong flex flex-col items-center gap-3 overflow-hidden rounded-xl border pt-2 pb-3">
+              <h3 className="text-heading-small text-text-normal-neutral">{detail.resourceLabel}</h3>
+              <div className="border-line-normal-assistive bg-fill-normal-strong flex flex-col items-center gap-3 overflow-hidden rounded-xl border pt-2 pb-3">
                 {detail.resources.length > 0 ? (
                   <>
                     <div className="flex w-full flex-col">
@@ -178,14 +180,14 @@ export default function IntegrationManagementSection({
                         return (
                           <div
                             key={`${row.name}-${index}`}
-                            className="text-body-small text-content-neutral flex h-13 items-center gap-3 px-4 py-3"
+                            className="text-body-small text-text-normal-neutral flex h-13 items-center gap-3 px-4 py-3"
                           >
-                            <div className="border-edge-neutral bg-fill-normal/75 flex shrink-0 items-center justify-center overflow-hidden rounded-full border p-1.5">
+                            <div className="border-line-normal-neutral bg-fill-normal-normal/75 flex shrink-0 items-center justify-center overflow-hidden rounded-full border p-1.5">
                               <ResourceIcon className="size-5" />
                             </div>
                             <span className="flex-1 truncate">{row.name}</span>
                             {row.dateRange && row.dateRange !== '-' && (
-                              <span className="text-label-xsmall text-content-neutral shrink-0 whitespace-nowrap">
+                              <span className="text-label-xsmall text-text-normal-neutral shrink-0 whitespace-nowrap">
                                 {row.dateRange}
                               </span>
                             )}
@@ -196,14 +198,14 @@ export default function IntegrationManagementSection({
                     {totalPages > 1 && (
                       <>
                         <div className="w-full px-4">
-                          <div className="border-edge-neutral border-t" />
+                          <div className="border-line-normal-neutral border-t" />
                         </div>
                         <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} />
                       </>
                     )}
                   </>
                 ) : (
-                  <div className="text-body-small text-content-assistive flex h-13 items-center px-4 py-3">
+                  <div className="text-body-small text-text-normal-assistive flex h-13 items-center px-4 py-3">
                     연동된 항목이 없습니다.
                   </div>
                 )}

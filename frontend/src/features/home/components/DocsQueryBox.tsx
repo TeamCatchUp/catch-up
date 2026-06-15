@@ -39,10 +39,10 @@ export default function DocsQueryBox({ selectedSources, dateRange, smartFilter }
   };
 
   return (
-    <div className="shadow-rag-bar border-edge-neutral bg-fill-normal rounded-rounded flex w-190 items-center justify-between border px-4 py-3">
+    <div className="shadow-rag-bar border-line-normal-neutral bg-fill-normal-normal rounded-rounded flex w-190 items-center justify-between border px-4 py-3">
       <div className="flex flex-1 items-center gap-2">
         <div className="flex h-10 w-10 shrink-0 items-center justify-center">
-          <IconSearch className="text-icon-alternative h-7 w-7" />
+          <IconSearch className="text-icon-normal-alternative h-7 w-7" />
         </div>
         <input
           type="text"
@@ -56,7 +56,7 @@ export default function DocsQueryBox({ selectedSources, dateRange, smartFilter }
             }
           }}
           placeholder="업무 흐름이나 인수인계 내용을 질문해보세요"
-          className="text-body-medium text-content-normal placeholder:text-content-assistive flex-1 bg-transparent outline-none"
+          className="text-body-medium text-text-normal-normal placeholder:text-text-normal-assistive flex-1 bg-transparent outline-none"
         />
       </div>
       <div className="flex items-center gap-2.5">
@@ -67,7 +67,7 @@ export default function DocsQueryBox({ selectedSources, dateRange, smartFilter }
             type="button"
             onClick={() => setValue('')}
             aria-label="검색어 지우기"
-            className="text-icon-normal rounded-full"
+            className="text-icon-normal-normal rounded-full"
           >
             <IconCancel className="size-6" />
           </Button>
@@ -77,10 +77,12 @@ export default function DocsQueryBox({ selectedSources, dateRange, smartFilter }
           onClick={handleSubmit}
           aria-label="보내기"
           className={`rounded-rounded flex shrink-0 cursor-pointer items-center border border-solid p-2 ${
-            hasText ? 'border-fill-primary bg-fill-primary' : 'bg-fill-strong border-edge-assistive'
+            hasText
+              ? 'border-fill-primary-normal-normal bg-fill-primary-normal-normal'
+              : 'bg-fill-normal-strong border-line-normal-assistive'
           }`}
         >
-          <IconArrowSend className={`h-6 w-6 ${hasText ? 'brightness-0 invert' : 'text-content-assistive'}`} />
+          <IconArrowSend className={`h-6 w-6 ${hasText ? 'brightness-0 invert' : 'text-text-normal-assistive'}`} />
         </button>
       </div>
     </div>

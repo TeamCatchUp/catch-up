@@ -14,7 +14,7 @@ interface AnswerOptionsStepProps {
 
 export default function AnswerOptionsStep({ selectedOptions, onToggleOption }: AnswerOptionsStepProps) {
   return (
-    <div className="border-edge-neutral flex flex-col gap-5 border-b py-5">
+    <div className="border-line-normal-neutral flex flex-col gap-5 border-b py-5">
       <StepHeader
         stepNumber={2}
         title="맞춤형 답변 옵션 선택"

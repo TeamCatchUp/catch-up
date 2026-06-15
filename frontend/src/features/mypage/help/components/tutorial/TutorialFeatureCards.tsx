@@ -69,9 +69,9 @@ export default function TutorialFeatureCards() {
         {TUTORIAL_1_FEATURE_CARDS.map((card) => (
           <li
             key={card.title}
-            className="border-edge-neutral shadow-card bg-fill-normal flex w-80 shrink-0 flex-col gap-4 rounded-2xl border p-4"
+            className="border-line-normal-neutral shadow-card bg-fill-normal-normal flex w-80 shrink-0 flex-col gap-4 rounded-2xl border p-4"
           >
-            <div className="border-edge-neutral relative aspect-1416/600 w-full overflow-hidden rounded-xl border-b">
+            <div className="border-line-normal-neutral relative aspect-1416/600 w-full overflow-hidden rounded-xl border-b">
               <Image src={card.image} alt={card.title} fill className="object-cover dark:hidden" />
               <Image
                 src={card.image.replace('/light/', '/dark/')}
@@ -80,8 +80,8 @@ export default function TutorialFeatureCards() {
                 className="hidden object-cover dark:block"
               />
             </div>
-            <h3 className="text-heading-medium text-content-normal">{card.title}</h3>
-            <p className="text-label-small text-content-alternative whitespace-pre-line">{card.description}</p>
+            <h3 className="text-heading-medium text-text-normal-normal">{card.title}</h3>
+            <p className="text-label-small text-text-normal-alternative whitespace-pre-line">{card.description}</p>
           </li>
         ))}
       </ul>
@@ -92,11 +92,11 @@ export default function TutorialFeatureCards() {
       {/* FAB: 오른쪽 스크롤 버튼 */}
       <button
         onClick={handleScrollRight}
-        className={`border-edge-neutral bg-fill-normal absolute top-1/2 right-0 flex size-10 translate-x-1/2 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full border shadow-md transition-opacity ${
+        className={`border-line-normal-neutral bg-fill-normal-normal absolute top-1/2 right-0 flex size-10 translate-x-1/2 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full border shadow-md transition-opacity ${
           isHovered && canScrollRight ? 'opacity-100' : 'pointer-events-none opacity-0'
         }`}
       >
-        <ArrowForward className="text-icon-normal h-5 w-5" />
+        <ArrowForward className="text-icon-normal-normal h-5 w-5" />
       </button>
     </div>
   );

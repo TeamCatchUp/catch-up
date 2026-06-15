@@ -48,38 +48,38 @@ export default function RoleChangeModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         hideClose
-        className="border-edge-neutral shadow-modal bg-fill-normal max-w-140 gap-4 rounded-3xl border px-0 py-5"
+        className="border-line-normal-neutral shadow-modal bg-fill-normal-normal max-w-140 gap-4 rounded-3xl border px-0 py-5"
       >
         {/* Header */}
         <div className="flex h-9 items-center justify-between px-6">
-          <DialogTitle className="text-heading-large text-content-normal">권한 변경하기</DialogTitle>
+          <DialogTitle className="text-heading-large text-text-normal-normal">권한 변경하기</DialogTitle>
           <button type="button" onClick={() => onOpenChange(false)} className="cursor-pointer" aria-label="닫기">
-            <Cancel className="text-content-alternative size-5" />
+            <Cancel className="text-text-normal-alternative size-5" />
           </button>
         </div>
 
         {/* Body */}
-        <div className="border-edge-assistive flex flex-col gap-6 overflow-y-auto border-t px-6 pt-6">
+        <div className="border-line-normal-assistive flex flex-col gap-6 overflow-y-auto border-t px-6 pt-6">
           {/* 권한 정보 */}
           <div className="flex flex-col gap-2">
-            <span className="text-body-medium text-content-normal">권한 정보</span>
-            <div className="border-edge-normal border-t">
-              <div className="border-edge-normal flex h-12 items-center border-b">
-                <div className="bg-fill-primary-assistive flex h-full w-36.25 items-center px-4">
-                  <span className="text-body-small text-content-neutral">권한 변경 대상</span>
+            <span className="text-body-medium text-text-normal-normal">권한 정보</span>
+            <div className="border-line-normal-normal border-t">
+              <div className="border-line-normal-normal flex h-12 items-center border-b">
+                <div className="bg-fill-primary-normal-assistive flex h-full w-36.25 items-center px-4">
+                  <span className="text-body-small text-text-normal-neutral">권한 변경 대상</span>
                 </div>
                 <div className="flex flex-1 items-center px-4">
-                  <span className="text-body-small text-content-neutral truncate">
+                  <span className="text-body-small text-text-normal-neutral truncate">
                     {member ? `${member.name}(${member.department})` : ''}
                   </span>
                 </div>
               </div>
-              <div className="border-edge-normal flex h-12 items-center border-b">
-                <div className="bg-fill-primary-assistive flex h-full w-36.25 items-center px-4">
-                  <span className="text-body-small text-content-neutral">기존 권한</span>
+              <div className="border-line-normal-normal flex h-12 items-center border-b">
+                <div className="bg-fill-primary-normal-assistive flex h-full w-36.25 items-center px-4">
+                  <span className="text-body-small text-text-normal-neutral">기존 권한</span>
                 </div>
                 <div className="flex flex-1 items-center px-4">
-                  <span className="text-body-small text-content-neutral">{currentRoleLabel}</span>
+                  <span className="text-body-small text-text-normal-neutral">{currentRoleLabel}</span>
                 </div>
               </div>
             </div>
@@ -88,7 +88,7 @@ export default function RoleChangeModal({
           {/* 새로운 권한 */}
           <div className="flex flex-col gap-2">
             <div className="flex items-center gap-1">
-              <span className="text-body-medium text-content-normal">새로운 권한</span>
+              <span className="text-body-medium text-text-normal-normal">새로운 권한</span>
               <span className="bg-status-destructive size-1.25 rounded-full" />
             </div>
             <Select value={newRole} onValueChange={(v) => setNewRole(v as PermissionRole)}>
@@ -108,11 +108,11 @@ export default function RoleChangeModal({
           {/* 사유 선택 */}
           <div className="flex flex-col gap-2">
             <div className="flex items-center gap-1">
-              <span className="text-body-medium text-content-strong">권한 조정 사유를 선택해주세요.</span>
+              <span className="text-body-medium text-text-normal-strong">권한 조정 사유를 선택해주세요.</span>
               <span className="bg-status-destructive size-1.25 rounded-full" />
             </div>
 
-            <div className="border-edge-assistive flex flex-col gap-4 rounded-xl border px-4 py-4">
+            <div className="border-line-normal-assistive flex flex-col gap-4 rounded-xl border px-4 py-4">
               {PERMISSION_ROLE_CHANGE_REASONS.map((reason) => {
                 const isSelected = selectedReason === reason;
                 const isCustom = reason === '직접 입력';
@@ -131,10 +131,10 @@ export default function RoleChangeModal({
                             <div className="bg-icon-primary absolute size-2.5 rounded-full" />
                           </>
                         ) : (
-                          <div className="border-edge-strong size-4.5 rounded-full border-[1.5px]" />
+                          <div className="border-line-normal-strong size-4.5 rounded-full border-[1.5px]" />
                         )}
                       </div>
-                      <span className="text-body-small text-content-alternative">{reason}</span>
+                      <span className="text-body-small text-text-normal-alternative">{reason}</span>
                     </button>
 
                     {isCustom && isSelected && (
@@ -153,7 +153,7 @@ export default function RoleChangeModal({
               })}
             </div>
 
-            <p className="text-label-xsmall text-content-assistive">
+            <p className="text-label-xsmall text-text-normal-assistive">
               워크스페이스 설정, 멤버 권한 제어 등 관리자 전용 기능에 더 이상 접근할 수 없습니다.
             </p>
           </div>

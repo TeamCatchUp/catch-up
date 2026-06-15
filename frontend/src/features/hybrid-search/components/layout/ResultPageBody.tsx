@@ -16,7 +16,7 @@ export default function ResultPageBody({ children, side }: PropsWithChildren<Res
         <div className="custom-scrollbar flex min-h-0 min-w-156.25 flex-1 flex-col items-center gap-10 overflow-x-clip overflow-y-auto pt-4 pr-2 pb-30">
           {children}
         </div>
-        <aside className="custom-scrollbar border-edge-normal flex min-h-0 min-w-105 w-105.75 shrink-0 flex-col overflow-y-auto overscroll-contain border-l">
+        <aside className="custom-scrollbar border-line-normal-normal flex min-h-0 w-105.75 min-w-105 shrink-0 flex-col overflow-y-auto overscroll-contain border-l">
           {side}
         </aside>
       </div>

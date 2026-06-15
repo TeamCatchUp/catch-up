@@ -33,7 +33,7 @@ export default function SideNavBar() {
     <>
       <nav
         className={cn(
-          'border-edge-neutral bg-background-normal-normal w-snb flex h-screen flex-col border-r',
+          'border-line-normal-neutral bg-background-normal-normal w-snb flex h-screen flex-col border-r',
           'transition-[width,padding] duration-300 ease-out will-change-[width,padding]',
           isOpen ? 'px-2 pb-2.5' : 'items-center gap-4 px-2 pt-2.5 pb-4',
         )}
@@ -52,8 +52,8 @@ export default function SideNavBar() {
                     isOpen
                       ? ''
                       : isSettingsRoute
-                        ? 'hover:bg-fill-interaction-hover active:bg-fill-interaction-pressed rounded-xl'
-                        : 'border-edge-neutral rounded-xl border',
+                        ? 'hover:bg-fill-normal-interaction-hover active:bg-fill-normal-interaction-pressed rounded-xl'
+                        : 'border-line-normal-neutral rounded-xl border',
                   )}
                   onClick={
                     !isOpen && isSettingsRoute
@@ -74,7 +74,7 @@ export default function SideNavBar() {
                         e.stopPropagation();
                         setSidebarOpen(true);
                       }}
-                      className="bg-fill-interaction-hover active:bg-fill-interaction-pressed border-edge-strong absolute inset-0 cursor-pointer rounded-xl border p-1.5 opacity-0 transition-opacity group-hover:opacity-100"
+                      className="bg-fill-normal-interaction-hover active:bg-fill-normal-interaction-pressed border-line-normal-strong absolute inset-0 cursor-pointer rounded-xl border p-1.5 opacity-0 transition-opacity group-hover:opacity-100"
                     >
                       <Open className="h-6 w-6" />
                     </button>

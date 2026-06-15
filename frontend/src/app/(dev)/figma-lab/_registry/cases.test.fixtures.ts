@@ -30,7 +30,7 @@ export const validCase: FigmaLabCase = {
   tokens: [
     {
       figma: 'Text/Normal',
-      code: 'text-content-normal',
+      code: 'text-text-normal-normal',
       decision: 'matched',
     },
   ],

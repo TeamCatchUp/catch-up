@@ -92,7 +92,7 @@ export default function EntryRequestSection({ searchTerm }: EntryRequestSectionP
         description="신규 회원의 가입 요청을 확인하고 승인하세요."
         actions={
           <>
-            <div className="border-edge-neutral bg-fill-normal flex items-center gap-0.5 rounded-lg border px-2 py-0.5">
+            <div className="border-line-normal-neutral bg-fill-normal-normal flex items-center gap-0.5 rounded-lg border px-2 py-0.5">
               <Button
                 variant="text-secondary-mono"
                 size="md"
@@ -139,7 +139,7 @@ export default function EntryRequestSection({ searchTerm }: EntryRequestSectionP
                   <DropdownMenuItem
                     key={option.key}
                     onClick={() => setSortKey(option.key)}
-                    className={cn(sortKey === option.key && 'bg-fill-strong')}
+                    className={cn(sortKey === option.key && 'bg-fill-normal-strong')}
                   >
                     {option.label}
                   </DropdownMenuItem>
@@ -150,7 +150,7 @@ export default function EntryRequestSection({ searchTerm }: EntryRequestSectionP
         }
       />
 
-      <div className="border-edge-neutral grid h-124 min-h-0 grid-cols-2 overflow-clip border-y">
+      <div className="border-line-normal-neutral grid h-124 min-h-0 grid-cols-2 overflow-clip border-y">
         <MemberTable
           rows={tableRows}
           activeKey={activeKey}

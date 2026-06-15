@@ -58,16 +58,20 @@ export default function UsersTable({
   const keycloakColumnClass = getKeycloakColumnClass(isSingleService);
 
   return (
-    <section className="bg-fill-normal flex h-full min-h-0 flex-col overflow-clip">
+    <section className="bg-fill-normal-normal flex h-full min-h-0 flex-col overflow-clip">
       {/* 헤더 */}
-      <div className={cn(TABLE_HEADER_ROW_CLASS, isEditMode ? 'bg-fill-primary-normal-neutral' : 'bg-fill-strong')}>
+      <div
+        className={cn(TABLE_HEADER_ROW_CLASS, isEditMode ? 'bg-fill-primary-normal-neutral' : 'bg-fill-normal-strong')}
+      >
         <div className={cn(FLEX_COLUMN_CELL_CLASS, !isSingleService && 'max-w-35')}>
-          <span className="text-body-xsmall text-content-neutral truncate">Keycloak 사용자</span>
+          <span className="text-body-xsmall text-text-normal-neutral truncate">Keycloak 사용자</span>
         </div>
         <div className={servicesGroupClass}>
           {services.map((service) => (
             <div key={service} className={FLEX_COLUMN_CELL_CLASS}>
-              <span className="text-body-xsmall text-content-neutral truncate">{SERVICE_HEADER_LABELS[service]}</span>
+              <span className="text-body-xsmall text-text-normal-neutral truncate">
+                {SERVICE_HEADER_LABELS[service]}
+              </span>
             </div>
           ))}
         </div>
@@ -77,16 +81,16 @@ export default function UsersTable({
         <div className="flex flex-1 flex-col">
           {Array.from({ length: skeletonCount }).map((_, idx) => (
             <div key={`skeleton-${idx}`} className={TABLE_BODY_ROW_CLASS}>
-              <div className="bg-fill-strong size-2 shrink-0 animate-pulse rounded-full" />
+              <div className="bg-fill-normal-strong size-2 shrink-0 animate-pulse rounded-full" />
               <div className={cn(keycloakColumnClass, KEYCLOAK_USER_CELL_CLASS)}>
-                <div className="bg-fill-strong size-5 shrink-0 animate-pulse rounded-full" />
-                <div className="bg-fill-strong h-4 w-20 animate-pulse rounded-md" />
+                <div className="bg-fill-normal-strong size-5 shrink-0 animate-pulse rounded-full" />
+                <div className="bg-fill-normal-strong h-4 w-20 animate-pulse rounded-md" />
               </div>
               <div className={servicesGroupClass}>
                 {services.map((service) => (
                   <div
                     key={`skeleton-${idx}-${service}`}
-                    className="bg-fill-strong h-10 flex-[1_0_0] animate-pulse rounded-md"
+                    className="bg-fill-normal-strong h-10 flex-[1_0_0] animate-pulse rounded-md"
                   />
                 ))}
               </div>
@@ -94,7 +98,7 @@ export default function UsersTable({
           ))}
         </div>
       ) : displayRows.length === 0 ? (
-        <div className="text-body-small text-content-alternative flex h-full min-h-25 items-center justify-center px-4 text-center">
+        <div className="text-body-small text-text-normal-alternative flex h-full min-h-25 items-center justify-center px-4 text-center">
           표시할 이용자 연동 데이터가 없습니다.
         </div>
       ) : (

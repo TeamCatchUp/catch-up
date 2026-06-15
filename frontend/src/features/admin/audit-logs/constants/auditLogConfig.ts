@@ -26,8 +26,8 @@ export const STATUS_LABEL: Record<AuditStatus, string> = {
 
 /** 상태 배지 스타일 */
 export const STATUS_BADGE_CLASS: Record<string, string> = {
-  성공: 'bg-accent-green-neutral text-accent-green',
-  실패: 'bg-neutral-2 text-content-alternative',
+  성공: 'bg-accent-green-neutral text-accent-green-default',
+  실패: 'bg-neutral-2 text-text-normal-alternative',
 };
 
 /** 연동 로그 구분 라벨 */
@@ -43,7 +43,7 @@ export const RESOURCE_LABEL: Record<IntegrationService, string> = {
   github: '연동된 Repository',
   slack: '연동된 채널',
   confluence: '연동된 스페이스',
-  'channel_talk': '연동된 채널톡 채널',
+  channel_talk: '연동된 채널톡 채널',
 };
 
 /** 탭 목록 */

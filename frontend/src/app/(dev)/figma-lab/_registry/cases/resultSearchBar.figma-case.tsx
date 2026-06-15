@@ -126,7 +126,7 @@ export const resultSearchBarExpandedFigmaCase: FigmaLabCase = {
         from: 'Action row',
         to: 'Expanded divider',
         figma: '10px action gap and full-width divider',
-        code: 'gap-2.5 and bg-edge-neutral h-px',
+        code: 'gap-2.5 and bg-line-normal-neutral h-px',
       },
       {
         from: 'Expanded panel',

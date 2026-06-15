@@ -83,29 +83,30 @@ export default function AccountLogSection() {
       />
 
       {/* 테이블 + 디테일 패널 */}
-      <div className="border-edge-neutral flex min-h-0 overflow-clip border-y" style={{ height: 558 }}>
+      <div className="border-line-normal-neutral flex min-h-0 overflow-clip border-y" style={{ height: 558 }}>
         {/* 좌측: 테이블 */}
-        <div className="border-edge-neutral bg-fill-normal flex min-w-0 flex-1 flex-col overflow-clip border-r">
+        <div className="border-line-normal-neutral bg-fill-normal-normal flex min-w-0 flex-1 flex-col overflow-clip border-r">
           {/* 헤더 */}
-          <div className="border-edge-neutral bg-fill-strong flex h-9 shrink-0 items-center border-b px-5">
+          <div className="border-line-normal-neutral bg-fill-normal-strong flex h-9 shrink-0 items-center border-b px-5">
             <div className="grid flex-1 grid-cols-4 items-center gap-1">
-              <span className="text-body-xsmall text-content-alternative pl-7.5 text-left">이름</span>
-              <span className="text-body-xsmall text-content-alternative text-center">실행 일자</span>
-              <span className="text-body-xsmall text-content-alternative text-center">구분</span>
-              <span className="text-body-xsmall text-content-alternative text-center">상태</span>
+              <span className="text-body-xsmall text-text-normal-alternative pl-7.5 text-left">이름</span>
+              <span className="text-body-xsmall text-text-normal-alternative text-center">실행 일자</span>
+              <span className="text-body-xsmall text-text-normal-alternative text-center">구분</span>
+              <span className="text-body-xsmall text-text-normal-alternative text-center">상태</span>
             </div>
           </div>
 
           {/* 행 */}
           {tableRows.length === 0 ? (
-            <div className="text-body-small text-content-alternative flex h-full min-h-25 items-center justify-center">
+            <div className="text-body-small text-text-normal-alternative flex h-full min-h-25 items-center justify-center">
               감사 로그가 없습니다.
             </div>
           ) : (
             <div className="flex min-h-0 flex-1 flex-col overflow-x-clip overflow-y-auto">
               {tableRows.map((row) => {
                 const isActive = activeKey === row.key;
-                const badgeCls = STATUS_BADGE_CLASS[row.status] ?? 'bg-fill-interaction-hover text-content-alternative';
+                const badgeCls =
+                  STATUS_BADGE_CLASS[row.status] ?? 'bg-fill-normal-interaction-hover text-text-normal-alternative';
                 const isSuccess = row.status === '성공';
 
                 return (
@@ -114,25 +115,27 @@ export default function AccountLogSection() {
                     type="button"
                     onClick={() => setActiveKey(row.key)}
                     className={cn(
-                      'border-edge-neutral flex h-12.5 shrink-0 cursor-pointer items-center border-b px-5 text-left',
-                      isActive ? 'bg-fill-primary-assistive' : 'hover:bg-fill-strong bg-fill-normal',
+                      'border-line-normal-neutral flex h-12.5 shrink-0 cursor-pointer items-center border-b px-5 text-left',
+                      isActive
+                        ? 'bg-fill-primary-normal-assistive'
+                        : 'hover:bg-fill-normal-strong bg-fill-normal-normal',
                     )}
                   >
                     <div className="grid flex-1 grid-cols-4 items-center gap-1">
                       {/* 이름 */}
                       <div className="flex items-center gap-4">
-                        <DefaultProfile className="text-content-assistive size-7 shrink-0 rounded-full" />
-                        <span className="text-body-small text-content-normal truncate">{row.name}</span>
+                        <DefaultProfile className="text-text-normal-assistive size-7 shrink-0 rounded-full" />
+                        <span className="text-body-small text-text-normal-normal truncate">{row.name}</span>
                       </div>
 
                       {/* 실행 일자 */}
                       <div className="flex items-center justify-center">
-                        <span className="text-body-xsmall text-content-normal truncate">{row.executedAt}</span>
+                        <span className="text-body-xsmall text-text-normal-normal truncate">{row.executedAt}</span>
                       </div>
 
                       {/* 구분 */}
                       <div className="flex items-center justify-center">
-                        <span className="text-body-xsmall text-content-normal truncate">{row.action}</span>
+                        <span className="text-body-xsmall text-text-normal-normal truncate">{row.action}</span>
                       </div>
 
                       {/* 상태 */}
@@ -156,9 +159,9 @@ export default function AccountLogSection() {
         </div>
 
         {/* 우측: 디테일 패널 */}
-        <div className="bg-fill-normal flex min-w-0 flex-1 flex-col overflow-clip py-5 pl-6">
+        <div className="bg-fill-normal-normal flex min-w-0 flex-1 flex-col overflow-clip py-5 pl-6">
           {!selectedLog ? (
-            <div className="text-body-small text-content-alternative flex h-full items-center justify-center">
+            <div className="text-body-small text-text-normal-alternative flex h-full items-center justify-center">
               선택된 로그 정보가 없습니다.
             </div>
           ) : (

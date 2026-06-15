@@ -14,7 +14,7 @@ interface UnusedTagCellProps {
 export default function UnusedTagCell({ status }: UnusedTagCellProps) {
   return (
     <div className={cn(BODY_SERVICE_COLUMN_CLASS, 'items-center')}>
-      <span className="bg-fill-interaction-hover text-body-xsmall text-content-alternative rounded-md2 inline-flex items-center justify-center px-1.5 py-0.5">
+      <span className="bg-fill-normal-interaction-hover text-body-xsmall text-text-normal-alternative rounded-md2 inline-flex items-center justify-center px-1.5 py-0.5">
         {status === '미사용' ? '미사용' : '-'}
       </span>
     </div>
