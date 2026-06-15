@@ -48,6 +48,8 @@ class SlackFileRef(BaseModel):
     permalink: str | None = None  # Slack 내 파일 페이지 URL
     permalink_public: str | None = None
     preview: str | None = None
+    preview_plain_text: str | None = None
+    plain_text: str | None = None
     initial_comment: str | None = None
     mode: str | None = None
     is_external: bool = False
@@ -101,8 +103,11 @@ class SlackThreadReply(BaseModel):
     user_name: str | None = None
     user_real_name: str | None = None
     text: str
+    raw_text: str | None = None
     reactions: list[SlackReaction] = Field(default_factory=list)
     files: list[SlackFileRef] = Field(default_factory=list)
+    attachments: list[SlackAttachment] = Field(default_factory=list)
+    blocks: list[dict[str, Any]] = Field(default_factory=list)
 
 
 # ============================================================
@@ -127,6 +132,7 @@ class SlackMessage(BaseModel):
     # 메시지 정보
     message_type: str = "standard"  # standard, thread_parent, file_share
     text: str
+    raw_text: str | None = None
     subtype: str | None = None  # channel_join, file_share, bot_message 등
 
     # 작성자
@@ -147,6 +153,7 @@ class SlackMessage(BaseModel):
     reactions: list[SlackReaction] = Field(default_factory=list)
     files: list[SlackFileRef] = Field(default_factory=list)
     attachments: list[SlackAttachment] = Field(default_factory=list)
+    blocks: list[dict[str, Any]] = Field(default_factory=list)
 
     # Mentioned Users (멘션된 사용자)
     mentioned_users: list[SlackUser] = Field(default_factory=list)
