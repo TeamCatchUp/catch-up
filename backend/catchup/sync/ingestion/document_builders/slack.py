@@ -84,6 +84,8 @@ class SlackTransformer:
             permalink=data.get("permalink"),
             permalink_public=data.get("permalink_public"),
             preview=data.get("preview"),
+            preview_plain_text=data.get("preview_plain_text"),
+            plain_text=data.get("plain_text"),
             initial_comment=data.get("initial_comment"),
             mode=data.get("mode"),
             is_external=bool(data.get("is_external", False)),
@@ -485,6 +487,30 @@ class SlackTransformer:
         return "\n".join(parts).strip()
 
     @staticmethod
+    def _parse_attachment(data: dict[str, Any]) -> SlackAttachment:
+        return SlackAttachment(
+            id=data.get("id"),
+            fallback=data.get("fallback"),
+            title=data.get("title"),
+            title_link=data.get("title_link"),
+            text=data.get("text"),
+            pretext=data.get("pretext"),
+            author_name=data.get("author_name"),
+            author_link=data.get("author_link"),
+            service_name=data.get("service_name"),
+            from_url=data.get("from_url"),
+            footer=data.get("footer"),
+            color=data.get("color"),
+            image_url=data.get("image_url"),
+            thumb_url=data.get("thumb_url"),
+            app_id=data.get("app_id"),
+            app_unfurl_url=data.get("app_unfurl_url"),
+            fields=data.get("fields", []),
+            actions=data.get("actions", []),
+            blocks=data.get("blocks", []),
+        )
+
+    @staticmethod
     def _extract_text_object(value: Any) -> str:
         if isinstance(value, str):
             return value
@@ -689,32 +715,23 @@ class SlackTransformer:
 
         # Attachments 파싱 (Bot 메시지, 링크 미리보기 등)
         attachments = [
-            SlackAttachment(
-                id=a.get("id"),
-                fallback=a.get("fallback"),
-                title=a.get("title"),
-                title_link=a.get("title_link"),
-                text=a.get("text"),
-                pretext=a.get("pretext"),
-                author_name=a.get("author_name"),
-                author_link=a.get("author_link"),
-                service_name=a.get("service_name"),
-                from_url=a.get("from_url"),
-                footer=a.get("footer"),
-                color=a.get("color"),
-                image_url=a.get("image_url"),
-                thumb_url=a.get("thumb_url"),
-                app_id=a.get("app_id"),
-                app_unfurl_url=a.get("app_unfurl_url"),
-                fields=a.get("fields", []),
-                actions=a.get("actions", []),
-                blocks=a.get("blocks", []),
-            )
-            for a in data.get("attachments", [])
+            self._parse_attachment(attachment)
+            for attachment in data.get("attachments", [])
         ]
 
         # Mentioned 사용자 추출
         mentioned_users = self._extract_mentioned_users(text)
+        if replies:
+            mentioned_users = self._dedupe_users(
+                [
+                    *mentioned_users,
+                    *[
+                        user
+                        for reply in replies
+                        for user in self._extract_mentioned_users(reply.text)
+                    ],
+                ]
+            )
 
         # 외부 참조 추출
         jira_issues, github_prs, github_issues = self._extract_external_refs(text)
@@ -729,6 +746,7 @@ class SlackTransformer:
             url=permalink,
             message_type=message_type,
             text=text,
+            raw_text=data.get("text") or "",
             subtype=subtype,
             user_id=user_id,
             user_name=user_info.name if user_info else None,
@@ -743,6 +761,7 @@ class SlackTransformer:
             reactions=reactions,
             files=files,
             attachments=attachments,
+            blocks=data.get("blocks", []),
             mentioned_users=mentioned_users,
             created_at=created_at,
             edited_ts=data.get("edited", {}).get("ts"),
@@ -774,6 +793,10 @@ class SlackTransformer:
         ]
 
         files = [self._parse_file_ref(f) for f in data.get("files", [])]
+        attachments = [
+            self._parse_attachment(attachment)
+            for attachment in data.get("attachments", [])
+        ]
 
         return SlackThreadReply(
             ts=data.get("ts", ""),
@@ -781,8 +804,11 @@ class SlackTransformer:
             user_name=user_info.name if user_info else None,
             user_real_name=user_info.real_name if user_info else None,
             text=self.extract_message_body(data),
+            raw_text=data.get("text") or "",
             reactions=reactions,
             files=files,
+            attachments=attachments,
+            blocks=data.get("blocks", []),
         )
 
     def parse_channel(self, data: dict[str, Any]) -> SlackChannel:
@@ -995,6 +1021,17 @@ class SlackTransformer:
                     mentioned_users.append(SlackUser(id=user_id))
 
         return mentioned_users
+
+    @staticmethod
+    def _dedupe_users(users: list[SlackUser]) -> list[SlackUser]:
+        seen: set[str] = set()
+        deduped: list[SlackUser] = []
+        for user in users:
+            if user.id in seen:
+                continue
+            seen.add(user.id)
+            deduped.append(user)
+        return deduped
 
     def _extract_external_refs(
         self,

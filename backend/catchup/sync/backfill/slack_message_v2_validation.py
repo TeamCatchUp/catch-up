@@ -49,7 +49,9 @@ class SlackMessageV2ValidationReport:
 
     @property
     def is_valid(self) -> bool:
-        return self.counts.is_balanced and all(sample.is_valid for sample in self.samples)
+        return self.counts.is_balanced and all(
+            sample.is_valid for sample in self.samples
+        )
 
 
 class SlackMessageV2ValidationService:
@@ -62,15 +64,21 @@ class SlackMessageV2ValidationService:
         self._session_factory = session_factory
         self._collection_name = collection_name
 
-    async def validate(self, *, sample_limit: int = 20) -> SlackMessageV2ValidationReport:
+    async def validate(
+        self, *, sample_limit: int = 20
+    ) -> SlackMessageV2ValidationReport:
         return await asyncio.to_thread(self._validate_sync, sample_limit)
 
     def _validate_sync(self, sample_limit: int) -> SlackMessageV2ValidationReport:
         with self._session_factory() as db:
-            count_row = db.execute(
-                build_slack_message_v2_count_validation_query(),
-                {"collection_name": self._collection_name},
-            ).mappings().one()
+            count_row = (
+                db.execute(
+                    build_slack_message_v2_count_validation_query(),
+                    {"collection_name": self._collection_name},
+                )
+                .mappings()
+                .one()
+            )
             sample_rows = db.execute(
                 build_slack_message_v2_sample_query(),
                 {"limit": sample_limit},
@@ -160,7 +168,9 @@ def build_slack_message_v2_sample_query():
     )
 
 
-def validate_slack_message_v2_sample_row(row: dict[str, Any]) -> SlackMessageV2SampleValidation:
+def validate_slack_message_v2_sample_row(
+    row: dict[str, Any],
+) -> SlackMessageV2SampleValidation:
     errors: list[str] = []
     langchain_id = str(row.get("langchain_id") or "")
 
@@ -244,6 +254,10 @@ def _validate_slack_message_metadata(
         "reply_user_ids",
         "reacted_user_ids",
         "mentioned_user_ids",
+        "thread_ts",
+        "is_thread_root",
+        "reply_count",
+        "latest_reply_ts",
     }
     for field_name in sorted(forbidden_fields & set(slack_message)):
         errors.append(f"forbidden:slack_message.{field_name}")

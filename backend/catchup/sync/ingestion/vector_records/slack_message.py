@@ -43,15 +43,11 @@ class SlackMessageMetadata(BaseModel):
     channel_id: str
     channel_name: str
     ts: str
-    thread_ts: str | None = None
-    is_thread_root: bool = False
     message_type: str | None = None
     subtype: str | None = None
     author: SlackMessageAuthorMetadata | None = None
-    reply_count: int = 0
     reactions: list[SlackMessageReactionMetadata] = Field(default_factory=list)
     edited_at: str | None = None
-    latest_reply_ts: str | None = None
 
     @field_validator("team_id", "channel_id", "channel_name", "ts")
     @classmethod

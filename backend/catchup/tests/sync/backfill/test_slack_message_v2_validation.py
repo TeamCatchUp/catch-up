@@ -44,10 +44,7 @@ def _valid_row() -> dict:
                 "channel_id": "C123",
                 "channel_name": "general",
                 "ts": "1712345678.000100",
-                "thread_ts": "1712345678.000100",
-                "is_thread_root": True,
                 "author": {"slack_user_id": "U123", "catchup_user_id": "42"},
-                "reply_count": 1,
                 "reactions": [],
                 "edited_at": None,
             }
@@ -93,6 +90,10 @@ def test_sample_validator_rejects_legacy_metadata_blobs() -> None:
             "channel_id": "C123",
             "channel_name": "general",
             "ts": "1712345678.000100",
+            "thread_ts": "1712345678.000100",
+            "is_thread_root": True,
+            "reply_count": 1,
+            "latest_reply_ts": "1712345699.000200",
             "files": [],
             "attachments": [],
             "author_name": "Hxxukii",
@@ -109,3 +110,7 @@ def test_sample_validator_rejects_legacy_metadata_blobs() -> None:
     assert "forbidden:slack_message.files" in result.errors
     assert "forbidden:slack_message.attachments" in result.errors
     assert "forbidden:slack_message.author_name" in result.errors
+    assert "forbidden:slack_message.thread_ts" in result.errors
+    assert "forbidden:slack_message.is_thread_root" in result.errors
+    assert "forbidden:slack_message.reply_count" in result.errors
+    assert "forbidden:slack_message.latest_reply_ts" in result.errors
