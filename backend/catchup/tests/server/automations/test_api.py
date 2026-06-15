@@ -1,19 +1,28 @@
+from datetime import datetime
+from datetime import timezone
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
+from fastapi import FastAPI
 from fastapi import HTTPException
+from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
+from catchup.auth.dependencies import get_current_user
 from catchup.automations.config import INQUIRY_AUTOMATION_PRESET_KEY
 from catchup.connectors.slack.client import SlackConnectorApiError
+from catchup.db.dependencies import get_db
 from catchup.db.models import AgentStatus
 from catchup.server.automations import api
 from catchup.server.automations.api import InquiryAutomationPublishRequest
 from catchup.server.automations.api import _build_agent_id
 from catchup.server.automations.api import _build_channel_talk_debounce_condition
 from catchup.server.automations.api import _validate_slack_channel_history_access
+from catchup.server.automations.api import list_automation_credentials
+from catchup.server.automations.api import list_automation_targets
 from catchup.server.automations.api import list_inquiry_automations
+from catchup.server.automations.api import router
 from catchup.server.automations.api import update_inquiry_automation
 
 
@@ -54,6 +63,203 @@ def test_publish_request_accepts_guide_instruction() -> None:
         }
     )
     assert req.guide_instruction == "결제 문의는 영수증을 요청하세요."
+
+
+def test_automation_credentials_endpoint_is_registered(monkeypatch) -> None:
+    app = FastAPI()
+    app.include_router(router)
+    app.dependency_overrides[get_db] = lambda: MagicMock()
+    app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(id=1)
+    monkeypatch.setattr(api, "get_all_slack_tokens", lambda _: [])
+
+    with TestClient(app) as client:
+        response = client.get(
+            "/api/v1/automations/credentials",
+            params={"connector": "slack"},
+        )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "connector": "slack",
+        "total_credentials": 0,
+        "credentials": [],
+    }
+
+
+def test_list_slack_credentials_returns_selectable_workspaces(monkeypatch) -> None:
+    token = SimpleNamespace(
+        id=42,
+        team_id="T123",
+        team_name="CatchUp",
+        bot_user_id="U999",
+        bot_access_token="xoxb-secret",
+        bot_scopes="channels:history,chat:write",
+    )
+    monkeypatch.setattr(api, "get_all_slack_tokens", lambda _: [token])
+
+    response = list_automation_credentials(
+        connector="slack",
+        db=MagicMock(),
+        current_user=SimpleNamespace(id=1),
+    )
+
+    assert response.model_dump(mode="json") == {
+        "connector": "slack",
+        "total_credentials": 1,
+        "credentials": [
+            {
+                "connector": "slack",
+                "credential_id": 42,
+                "display_name": "CatchUp",
+                "external_id": "T123",
+                "external_name": "CatchUp",
+                "is_configured": True,
+                "metadata": {
+                    "team_id": "T123",
+                    "team_name": "CatchUp",
+                    "bot_user_id": "U999",
+                    "bot_scopes": "channels:history,chat:write",
+                },
+            }
+        ],
+    }
+
+
+def test_list_channel_talk_credentials_returns_selectable_channels(monkeypatch) -> None:
+    repository = SimpleNamespace(
+        list_connections=lambda: [
+            SimpleNamespace(
+                id=7,
+                channel_id="ch-001",
+                channel_name="Support",
+                credential_last_verified_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+                webhook_token_configured=True,
+            )
+        ]
+    )
+    monkeypatch.setattr(
+        api,
+        "ChannelTalkCredentialsRepository",
+        lambda _: repository,
+    )
+
+    response = list_automation_credentials(
+        connector="channel_talk",
+        db=MagicMock(),
+        current_user=SimpleNamespace(id=1),
+    )
+
+    assert response.model_dump(mode="json") == {
+        "connector": "channel_talk",
+        "total_credentials": 1,
+        "credentials": [
+            {
+                "connector": "channel_talk",
+                "credential_id": 7,
+                "display_name": "Support",
+                "external_id": "ch-001",
+                "external_name": "Support",
+                "is_configured": True,
+                "metadata": {
+                    "channel_id": "ch-001",
+                    "channel_name": "Support",
+                    "credential_last_verified_at": "2026-01-01T00:00:00+00:00",
+                    "webhook_token_configured": True,
+                },
+            }
+        ],
+    }
+
+
+def test_list_slack_targets_returns_channels_for_selected_credential(monkeypatch) -> None:
+    token = SimpleNamespace(id=42, team_id="T123", team_name="CatchUp")
+    channel = SimpleNamespace(
+        id="C123",
+        team_id="T123",
+        name="cs-alerts",
+        channel_type="public",
+        is_private=False,
+        is_archived=False,
+        member_count=12,
+    )
+    monkeypatch.setattr(api, "get_slack_token_by_id", lambda *_: token)
+    monkeypatch.setattr(api, "get_channels_by_team", lambda *_: [channel])
+
+    response = list_automation_targets(
+        connector="slack",
+        db=MagicMock(),
+        current_user=SimpleNamespace(id=1),
+        credential_id=42,
+    )
+
+    assert response.model_dump(mode="json") == {
+        "connector": "slack",
+        "credential_id": 42,
+        "total_targets": 1,
+        "targets": [
+            {
+                "connector": "slack",
+                "credential_id": 42,
+                "target_id": "C123",
+                "display_name": "cs-alerts",
+                "target_type": "channel",
+                "is_accessible": True,
+                "metadata": {
+                    "team_id": "T123",
+                    "team_name": "CatchUp",
+                    "channel_name": "cs-alerts",
+                    "channel_kind": "public",
+                    "is_private": False,
+                    "is_archived": False,
+                    "member_count": 12,
+                },
+            }
+        ],
+    }
+
+
+def test_list_channel_talk_targets_returns_selected_channel(monkeypatch) -> None:
+    repository = SimpleNamespace(
+        get_connection_by_id=lambda credential_id: SimpleNamespace(
+            id=credential_id,
+            channel_id="ch-001",
+            channel_name="Support",
+            webhook_token_configured=True,
+        )
+    )
+    monkeypatch.setattr(
+        api,
+        "ChannelTalkCredentialsRepository",
+        lambda _: repository,
+    )
+
+    response = list_automation_targets(
+        connector="channel_talk",
+        db=MagicMock(),
+        current_user=SimpleNamespace(id=1),
+        credential_id=7,
+    )
+
+    assert response.model_dump(mode="json") == {
+        "connector": "channel_talk",
+        "credential_id": 7,
+        "total_targets": 1,
+        "targets": [
+            {
+                "connector": "channel_talk",
+                "credential_id": 7,
+                "target_id": "ch-001",
+                "display_name": "Support",
+                "target_type": "channel",
+                "is_accessible": True,
+                "metadata": {
+                    "channel_id": "ch-001",
+                    "channel_name": "Support",
+                    "webhook_token_configured": True,
+                },
+            }
+        ],
+    }
 
 
 def test_build_agent_id_is_stable_for_idempotency_key() -> None:
