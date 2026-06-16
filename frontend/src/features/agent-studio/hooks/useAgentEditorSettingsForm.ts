@@ -32,6 +32,9 @@ function mapTargetToSelectItem(target: AutomationTargetItem): AgentStudioSelectI
 export function useAgentEditorSettingsForm() {
   const router = useRouter();
   const [channelTalkTargetId, setChannelTalkTargetId] = useState('');
+  const [quietPeriodSeconds, setQuietPeriodSeconds] = useState(
+    AGENT_STUDIO_SETTINGS_FIXTURE.quietPeriodOptions[0]?.value ?? '60',
+  );
   const [slackCredentialId, setSlackCredentialId] = useState('');
   const [slackChannelId, setSlackChannelId] = useState('');
   const [instruction, setInstruction] = useState('');
@@ -87,13 +90,7 @@ export function useAgentEditorSettingsForm() {
     : selectedSlackCredentialId !== undefined && slackTargetsQuery.isSuccess && slackChannelItems.length === 0
       ? EMPTY_ITEM_PLACEHOLDER
       : AGENT_STUDIO_SETTINGS_FIXTURE.slackChannelLabel;
-  const canPublish =
-    selectedChannelTalkTarget?.credential_id !== null &&
-    selectedChannelTalkTarget?.credential_id !== undefined &&
-    selectedSlackCredentialId !== undefined &&
-    selectedSlackTarget !== undefined &&
-    trimmedInstruction.length > 0 &&
-    !publishMutation.isPending;
+  const canPublish = trimmedInstruction.length > 0 && !publishMutation.isPending;
 
   const handleSlackCredentialChange = (value: string) => {
     setSlackCredentialId(value);
@@ -113,7 +110,7 @@ export function useAgentEditorSettingsForm() {
 
     publishMutation.mutate({
       channel_talk_credential_id: selectedChannelTalkTarget.credential_id,
-      quiet_period_seconds: 60,
+      quiet_period_seconds: Number(quietPeriodSeconds),
       slack_channel: {
         credential_id: selectedSlackCredentialId,
         channel_id: selectedSlackTarget.target_id,
@@ -136,6 +133,11 @@ export function useAgentEditorSettingsForm() {
     handlePublish,
     instruction,
     isPublishError: publishMutation.isError,
+    quietPeriodSelect: {
+      items: AGENT_STUDIO_SETTINGS_FIXTURE.quietPeriodOptions,
+      onChange: setQuietPeriodSeconds,
+      value: quietPeriodSeconds,
+    },
     setInstruction,
     slackChannelSelect: {
       disabled:

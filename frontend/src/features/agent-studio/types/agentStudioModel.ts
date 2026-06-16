@@ -26,7 +26,7 @@ export interface AgentStudioSettingsFixture {
   title: string;
   descriptionLines: readonly string[];
   channelTalkChannelLabel: string;
-  quietPeriodLabel: string;
+  quietPeriodOptions: readonly AgentStudioSelectItem[];
   slackWorkspaceName: string;
   slackChannelLabel: string;
   instructionHintText: string;

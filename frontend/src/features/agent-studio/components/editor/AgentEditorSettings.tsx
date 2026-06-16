@@ -7,7 +7,6 @@ import ClockIcon from '@/public/icons/icon/clock.svg';
 import HelpIcon from '@/public/icons/icon/help.svg';
 import KebabHorizontalIcon from '@/public/icons/icon/kebab_horizontal.svg';
 import TagIcon from '@/public/icons/icon/tag.svg';
-import CatchupLogoIcon from '@/public/icons/logo/logo_catchup.svg';
 import { Button } from '@/shared/components/ui/button';
 
 import { AGENT_STUDIO_SETTINGS_FIXTURE } from '../../fixtures/agentStudioFixtures';
@@ -59,9 +58,10 @@ export default function AgentEditorSettings() {
           <AgentSelectField
             required
             label="고객의 마지막 문의 메시지가 들어온 후 몇 분 후에 Agent를 실행할까요?"
-            value="one-minute"
+            value={form.quietPeriodSelect.value}
             icon={<ClockIcon className="size-5.5" aria-hidden="true" />}
-            items={[{ value: 'one-minute', label: AGENT_STUDIO_SETTINGS_FIXTURE.quietPeriodLabel }]}
+            items={form.quietPeriodSelect.items}
+            onChange={form.quietPeriodSelect.onChange}
           />
           <div className="bg-fill-normal-strong flex w-full flex-col items-start justify-center gap-1.5 rounded-xl px-4 py-3">
             <div className="flex w-full items-start gap-1.5">
@@ -85,11 +85,6 @@ export default function AgentEditorSettings() {
             label="누구의 권한을 가지고 조회할까요?"
             value={form.slackCredentialSelect.value}
             placeholder={form.slackCredentialSelect.placeholder}
-            icon={
-              <span className="bg-fill-primary-normal-neutral flex size-8 items-center justify-center rounded-lg">
-                <CatchupLogoIcon className="h-4.25 w-5.5" aria-hidden="true" />
-              </span>
-            }
             items={form.slackCredentialSelect.items}
             disabled={form.slackCredentialSelect.disabled}
             onChange={form.slackCredentialSelect.onChange}

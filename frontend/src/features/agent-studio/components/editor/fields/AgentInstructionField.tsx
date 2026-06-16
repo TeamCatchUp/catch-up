@@ -35,12 +35,7 @@ export default function AgentInstructionField({ value, onChange, maxLength, hint
         className="bg-fill-normal-normal flex min-h-24.5 w-full items-center rounded-xl border border-solid p-4 transition-colors"
         style={{ borderColor, borderWidth }}
       >
-        <div
-          className={cn(
-            'flex min-w-0 flex-1 flex-col items-center justify-end px-0.5',
-            hasValue ? 'gap-2.5 overflow-hidden' : 'gap-4',
-          )}
-        >
+        <div className="flex min-w-0 flex-1 flex-col items-center justify-end gap-4 overflow-hidden px-0.5">
           <textarea
             aria-label="답변 초안, 어떤 규칙으로 쓸까요?"
             aria-invalid={isError}

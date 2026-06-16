@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   AGENT_STUDIO_FILTERS,
   AGENT_STUDIO_LIST_FIXTURE,
+  AGENT_STUDIO_MULTI_ACTIVE_LIST_FIXTURE,
   AGENT_STUDIO_SETTINGS_FIXTURE,
   getAgentCardsByStatus,
 } from './agentStudioFixtures';
@@ -20,8 +21,19 @@ describe('agentStudioFixtures', () => {
   });
 
   it('keeps the editor defaults aligned with the setup screen', () => {
-    expect(AGENT_STUDIO_SETTINGS_FIXTURE.quietPeriodLabel).toBe('1분');
+    expect(AGENT_STUDIO_SETTINGS_FIXTURE.quietPeriodOptions.map((item) => item.label)).toEqual([
+      '1분',
+      '3분',
+      '5분',
+      '10분',
+      '30분',
+    ]);
     expect(AGENT_STUDIO_SETTINGS_FIXTURE.slackWorkspaceName).toBe('Catch Up');
     expect(AGENT_STUDIO_LIST_FIXTURE[0]?.title).toBe('문의 대응 리포트 만들기');
+  });
+
+  it('provides a dedicated multi-active fixture for the list preview', () => {
+    expect(AGENT_STUDIO_MULTI_ACTIVE_LIST_FIXTURE).toHaveLength(3);
+    expect(AGENT_STUDIO_MULTI_ACTIVE_LIST_FIXTURE.every((item) => item.status === 'active')).toBe(true);
   });
 });

@@ -165,7 +165,7 @@ describe('AgentStudioEditorPage', () => {
     expect(screen.getByRole('heading', { name: '문의 대응 리포트 만들기' })).toBeInTheDocument();
   });
 
-  it('keeps deploy disabled until required fields are selected', () => {
+  it('keeps deploy disabled before an instruction is entered', () => {
     renderEditor();
 
     expect(screen.getByRole('button', { name: '배포하기' })).toBeDisabled();
@@ -180,6 +180,12 @@ describe('AgentStudioEditorPage', () => {
     expect(mockBack).toHaveBeenCalledTimes(1);
   });
 
+  it('renders the Agent Studio breadcrumb button as a link to the list page', () => {
+    renderEditor();
+
+    expect(screen.getByRole('link', { name: 'Agent Studio' })).toHaveAttribute('href', '/agent-studio');
+  });
+
   it('updates the instruction count while typing', async () => {
     const user = userEvent.setup();
     renderEditor();
@@ -187,6 +193,21 @@ describe('AgentStudioEditorPage', () => {
     await user.type(screen.getByLabelText('답변 초안, 어떤 규칙으로 쓸까요?'), '응답은 간결하게 작성');
 
     expect(screen.getByText('11/500')).toBeInTheDocument();
+  });
+
+  it('keeps the instruction field spacing stable before and after typing', async () => {
+    const user = userEvent.setup();
+    renderEditor();
+
+    const instructionField = screen.getByRole('textbox');
+    const instructionContainer = instructionField.parentElement;
+
+    expect(instructionContainer).toHaveClass('gap-4');
+
+    await user.type(instructionField, 'a');
+
+    expect(instructionContainer).toHaveClass('gap-4');
+    expect(instructionContainer).not.toHaveClass('gap-2.5');
   });
 
   it('marks the instruction field as invalid at the max length', () => {
@@ -219,11 +240,22 @@ describe('AgentStudioEditorPage', () => {
     expect(slackChannelSelect).toHaveTextContent('cs-response');
   });
 
-  it('enables deploy after an instruction is entered', async () => {
+  it('shows the available quiet period options', async () => {
     const user = userEvent.setup();
     renderEditor();
 
-    await selectRequiredAutomationFields(user);
+    await user.click(screen.getByRole('combobox', { name: /몇 분 후에 Agent를 실행할까요/ }));
+
+    expect(await screen.findByRole('option', { name: '1분' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: '3분' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: '5분' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: '10분' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: '30분' })).toBeInTheDocument();
+  });
+
+  it('enables deploy after an instruction is entered', async () => {
+    const user = userEvent.setup();
+    renderEditor();
 
     const publishButton = screen.getByRole('button', { name: '배포하기' });
 
@@ -263,6 +295,8 @@ describe('AgentStudioEditorPage', () => {
     renderEditor();
 
     await selectRequiredAutomationFields(user);
+    await user.click(screen.getByRole('combobox', { name: /몇 분 후에 Agent를 실행할까요/ }));
+    await user.click(await screen.findByRole('option', { name: '30분' }));
     await user.type(screen.getByLabelText('답변 초안, 어떤 규칙으로 쓸까요?'), '프로젝트 맥락 반영');
 
     const publishButton = screen.getByRole('button', { name: '배포하기' });
@@ -276,7 +310,7 @@ describe('AgentStudioEditorPage', () => {
     expect(publishRequests).toEqual([
       {
         channel_talk_credential_id: 10,
-        quiet_period_seconds: 60,
+        quiet_period_seconds: 1800,
         slack_channel: {
           credential_id: 20,
           channel_id: 'C123',
