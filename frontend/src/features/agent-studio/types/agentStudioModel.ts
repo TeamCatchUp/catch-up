@@ -6,6 +6,12 @@ export interface AgentStudioFilterItem {
   label: string;
 }
 
+export interface AgentStudioSelectItem {
+  value: string;
+  label: string;
+  disabled?: boolean;
+}
+
 export interface AgentStudioCardModel {
   id: string;
   agentSpecId?: number;

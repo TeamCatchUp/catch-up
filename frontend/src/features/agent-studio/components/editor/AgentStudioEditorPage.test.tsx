@@ -67,4 +67,11 @@ describe('AgentStudioEditorPage', () => {
     expect(screen.getByText('채널톡 내 채널을 선택해주세요')).toBeInTheDocument();
     expect(screen.getByText('Slack 내 채널을 선택해주세요')).toBeInTheDocument();
   });
+
+  it('keeps channel fields disabled while static data is not connected', () => {
+    render(<AgentStudioEditorPage />);
+
+    expect(screen.getByRole('combobox', { name: /어떤 채널로 들어오는 문의/ })).toBeDisabled();
+    expect(screen.getByRole('combobox', { name: /Slack 채널을 선택/ })).toBeDisabled();
+  });
 });

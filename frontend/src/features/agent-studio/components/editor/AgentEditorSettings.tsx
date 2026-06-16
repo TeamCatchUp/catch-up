@@ -49,6 +49,7 @@ export default function AgentEditorSettings() {
             placeholder={AGENT_STUDIO_SETTINGS_FIXTURE.channelTalkChannelLabel}
             icon={<TagIcon className="size-5.5" aria-hidden="true" />}
             items={[]}
+            disabled
           />
           <AgentSelectField
             required
@@ -95,6 +96,7 @@ export default function AgentEditorSettings() {
             placeholder={AGENT_STUDIO_SETTINGS_FIXTURE.slackChannelLabel}
             icon={<TagIcon className="size-5.5" aria-hidden="true" />}
             items={[]}
+            disabled
           />
           <AgentInstructionField
             value={instruction}

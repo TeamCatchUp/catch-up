@@ -2,13 +2,17 @@ import type { ReactNode } from 'react';
 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/components/ui/select';
 
+import type { AgentStudioSelectItem } from '../../../types/agentStudioModel';
+
 interface AgentSelectFieldProps {
   label: ReactNode;
   required?: boolean;
   value?: string;
   placeholder?: string;
   icon?: ReactNode;
-  items: readonly { value: string; label: string }[];
+  items: readonly AgentStudioSelectItem[];
+  disabled?: boolean;
+  onChange?: (value: string) => void;
 }
 
 export default function AgentSelectField({
@@ -18,6 +22,8 @@ export default function AgentSelectField({
   placeholder,
   icon,
   items,
+  disabled = false,
+  onChange,
 }: AgentSelectFieldProps) {
   return (
     <label className="flex w-full flex-col gap-3">
@@ -29,7 +35,7 @@ export default function AgentSelectField({
           </span>
         )}
       </span>
-      <Select value={value} onValueChange={() => undefined}>
+      <Select value={value} onValueChange={onChange} disabled={disabled}>
         <SelectTrigger className="h-11.5 p-3">
           <div className="flex min-w-0 flex-1 items-center gap-2">
             {icon && (
@@ -44,7 +50,7 @@ export default function AgentSelectField({
         </SelectTrigger>
         <SelectContent>
           {items.map((item) => (
-            <SelectItem key={item.value} value={item.value}>
+            <SelectItem key={item.value} value={item.value} disabled={item.disabled}>
               {item.label}
             </SelectItem>
           ))}
