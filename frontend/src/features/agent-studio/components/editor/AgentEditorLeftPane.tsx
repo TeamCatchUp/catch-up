@@ -1,5 +1,4 @@
 import ArrowRightIcon from '@/public/icons/icon/arrow_right2.svg';
-import KebabHorizontalIcon from '@/public/icons/icon/kebab_horizontal.svg';
 import AgentEditorPreviewIllustration from '@/public/image/agent-studio/agent-editor-preview.svg';
 import { Button } from '@/shared/components/ui/button';
 
@@ -18,9 +17,6 @@ export default function AgentEditorLeftPane() {
             {AGENT_STUDIO_SETTINGS_FIXTURE.title}
           </span>
         </div>
-        <Button variant="icon-only-gray" size="md" aria-label="좌측 더보기">
-          <KebabHorizontalIcon className="size-6" aria-hidden="true" />
-        </Button>
       </header>
 
       <div className="h-37.5 w-full shrink-0 overflow-hidden">
