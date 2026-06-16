@@ -151,7 +151,11 @@ class SlackMessageV2RecordMapper:
                 (
                     "attachment",
                     attachment_text,
-                    cls._attachment_metadata(attachment, parent_type="message"),
+                    cls._attachment_metadata(
+                        attachment,
+                        parent_type="message",
+                        message_ts=message.ts,
+                    ),
                 )
             )
             part_inputs.extend(
@@ -162,6 +166,7 @@ class SlackMessageV2RecordMapper:
                     attachment_id=str(attachment.id)
                     if attachment.id is not None
                     else None,
+                    message_ts=message.ts,
                     skip_texts=(attachment_text,),
                 )
             )
@@ -169,6 +174,7 @@ class SlackMessageV2RecordMapper:
             cls._file_part_inputs(
                 message.files,
                 parent_type="message",
+                message_ts=message.ts,
                 mention_names_by_id=mention_names_by_id,
             )
         )
@@ -184,6 +190,7 @@ class SlackMessageV2RecordMapper:
                         cls._attachment_metadata(
                             attachment,
                             parent_type="thread_reply",
+                            message_ts=reply.ts,
                             reply_ts=reply.ts,
                         ),
                     )
@@ -197,6 +204,7 @@ class SlackMessageV2RecordMapper:
                         attachment_id=(
                             str(attachment.id) if attachment.id is not None else None
                         ),
+                        message_ts=reply.ts,
                         skip_texts=(attachment_text,),
                     )
                 )
@@ -205,6 +213,7 @@ class SlackMessageV2RecordMapper:
                     reply.files,
                     parent_type="thread_reply",
                     reply_ts=reply.ts,
+                    message_ts=reply.ts,
                     mention_names_by_id=mention_names_by_id,
                 )
             )
@@ -260,6 +269,7 @@ class SlackMessageV2RecordMapper:
         *,
         parent_type: str,
         mention_names_by_id: dict[str, str],
+        message_ts: str,
         reply_ts: str | None = None,
     ) -> list[tuple[str, str | None, dict[str, Any]]]:
         return [
@@ -269,6 +279,7 @@ class SlackMessageV2RecordMapper:
                 cls._file_metadata(
                     file,
                     parent_type=parent_type,
+                    message_ts=message_ts,
                     reply_ts=reply_ts,
                 ),
             )
@@ -298,6 +309,7 @@ class SlackMessageV2RecordMapper:
         return _drop_none(
             {
                 "ts": message.ts,
+                "message_ts": message.ts,
                 "message_type": message.message_type,
                 "subtype": message.subtype,
                 "author": _author_metadata(
@@ -330,6 +342,7 @@ class SlackMessageV2RecordMapper:
         return _drop_none(
             {
                 "ts": reply.ts,
+                "message_ts": reply.ts,
                 "author": _author_metadata(
                     slack_user_id=reply.user_id,
                     name=reply.user_real_name or reply.user_name or reply.user_id,
@@ -363,6 +376,7 @@ class SlackMessageV2RecordMapper:
         attachment: SlackAttachment,
         *,
         parent_type: str,
+        message_ts: str,
         reply_ts: str | None = None,
     ) -> dict[str, Any]:
         return _drop_none(
@@ -381,6 +395,7 @@ class SlackMessageV2RecordMapper:
                 "app_unfurl_url": attachment.app_unfurl_url,
                 "actions": attachment.actions or None,
                 "parent_type": parent_type,
+                "message_ts": message_ts,
                 "reply_ts": reply_ts,
             }
         )
@@ -401,6 +416,7 @@ class SlackMessageV2RecordMapper:
         file: SlackFileRef,
         *,
         parent_type: str,
+        message_ts: str,
         reply_ts: str | None = None,
     ) -> dict[str, Any]:
         return _drop_none(
@@ -419,6 +435,7 @@ class SlackMessageV2RecordMapper:
                 "url_private": file.url_private,
                 "url_private_download": file.url_private_download,
                 "parent_type": parent_type,
+                "message_ts": message_ts,
                 "reply_ts": reply_ts,
             }
         )
@@ -430,6 +447,7 @@ class SlackMessageV2RecordMapper:
         *,
         parent_type: str,
         mention_names_by_id: dict[str, str],
+        message_ts: str,
         reply_ts: str | None = None,
         attachment_id: str | None = None,
         skip_texts: tuple[str | None, ...] = (),
@@ -444,6 +462,7 @@ class SlackMessageV2RecordMapper:
                         "block_type": block.get("type"),
                         "block_id": block.get("block_id"),
                         "parent_type": parent_type,
+                        "message_ts": message_ts,
                         "reply_ts": reply_ts,
                         "attachment_id": attachment_id,
                     }

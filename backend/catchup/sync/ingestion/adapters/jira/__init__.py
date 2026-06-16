@@ -13,8 +13,15 @@ from catchup.sync.ingestion.adapters.jira.issue_execution import (
 from catchup.sync.ingestion.adapters.jira.issue_execution import (
     JiraIssueSyncExecutionResult,
 )
+from catchup.sync.ingestion.adapters.jira.issue_execution import (
+    JiraIssueV2BackfillExecutionRequest,
+)
+from catchup.sync.ingestion.adapters.jira.issue_execution import JiraIssueV2BackfillSeed
 from catchup.sync.ingestion.adapters.jira.issue_factory import (
     create_jira_issue_ingestion_dependencies,
+)
+from catchup.sync.ingestion.adapters.jira.issue_factory import (
+    create_jira_issue_v2_backfill_adapter,
 )
 from catchup.sync.ingestion.adapters.jira.issue_full_sync import (
     JiraIssueFullSyncAdapter,
@@ -28,6 +35,12 @@ from catchup.sync.ingestion.adapters.jira.issue_incremental import (
 from catchup.sync.ingestion.adapters.jira.issue_incremental import (
     JiraIssueIncrementalIngestionAdapter,
 )
+from catchup.sync.ingestion.adapters.jira.issue_v2_backfill import (
+    JiraIssueV2BackfillAdapter,
+)
+from catchup.sync.ingestion.adapters.jira.issue_v2_backfill import (
+    JiraIssueV2BackfillIngestionAdapter,
+)
 
 __all__ = [
     "JiraIssueFullSyncAdapter",
@@ -38,6 +51,11 @@ __all__ = [
     "JiraIssueIncrementalSyncExecutionRequest",
     "JiraIssueIngestionDependencies",
     "JiraIssueSyncExecutionResult",
+    "JiraIssueV2BackfillAdapter",
+    "JiraIssueV2BackfillExecutionRequest",
+    "JiraIssueV2BackfillIngestionAdapter",
+    "JiraIssueV2BackfillSeed",
     "create_jira_issue_ingestion_dependencies",
+    "create_jira_issue_v2_backfill_adapter",
     "prepare_jira_issue_transform_context",
 ]

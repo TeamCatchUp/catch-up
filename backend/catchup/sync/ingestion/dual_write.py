@@ -26,13 +26,22 @@ def apply_page_content_to_vector_content(
     connector: str,
     entity_type: str,
     operation: str,
+    source_id_by_vector_id: dict[str, str] | None = None,
 ) -> list[Document]:
     if not vector_documents:
         return []
 
     source_by_id = {doc.id: doc for doc in source_documents}
+
+    def source_id_for(vector_document: Document) -> str:
+        if source_id_by_vector_id is None:
+            return vector_document.id
+        return source_id_by_vector_id.get(vector_document.id, vector_document.id)
+
     missing_source_ids = [
-        doc.id for doc in vector_documents if doc.id not in source_by_id
+        source_id_for(doc)
+        for doc in vector_documents
+        if source_id_for(doc) not in source_by_id
     ]
     if missing_source_ids:
         logger.error(
@@ -48,11 +57,11 @@ def apply_page_content_to_vector_content(
     return [
         Document(
             id=vector_document.id,
-            page_content=source_by_id[vector_document.id].page_content,
+            page_content=source_by_id[source_id_for(vector_document)].page_content,
             metadata=dict(vector_document.metadata),
         )
         for vector_document in vector_documents
-        if vector_document.id in source_by_id
+        if source_id_for(vector_document) in source_by_id
     ]
 
 
@@ -74,6 +83,7 @@ class DualWriter:
         source_documents: list[Document],
         vector_documents: list[Document],
         ids: list[str],
+        vector_source_ids: list[str] | None = None,
         audit_context: SyncAuditContext | None,
         context: str,
     ) -> DualWriteResult:
@@ -104,7 +114,8 @@ class DualWriter:
         try:
             embedding_by_id = dict(zip(ids, embeddings, strict=True))
             vector_ids = [doc.id for doc in vector_documents]
-            vector_embeddings = [embedding_by_id[doc_id] for doc_id in vector_ids]
+            source_ids = vector_source_ids or vector_ids
+            vector_embeddings = [embedding_by_id[doc_id] for doc_id in source_ids]
             await self._vector_store.upsert_documents(
                 vector_documents,
                 ids=vector_ids,

@@ -16,6 +16,14 @@ from catchup.sync.ingestion.vector_records.github_pr import GithubPrVectorRecord
 from catchup.sync.ingestion.vector_records.github_pr_mapper import (
     GithubPrV2RecordMapper,
 )
+from catchup.sync.ingestion.vector_records.jira_issue import JiraIssueData
+from catchup.sync.ingestion.vector_records.jira_issue import JiraIssueDataPart
+from catchup.sync.ingestion.vector_records.jira_issue import JiraIssueMetadata
+from catchup.sync.ingestion.vector_records.jira_issue import JiraIssueUserMetadata
+from catchup.sync.ingestion.vector_records.jira_issue import JiraIssueVectorRecord
+from catchup.sync.ingestion.vector_records.jira_issue_mapper import (
+    JiraIssueV2RecordMapper,
+)
 from catchup.sync.ingestion.vector_records.slack_message import SlackMessageData
 from catchup.sync.ingestion.vector_records.slack_message import SlackMessageDataPart
 from catchup.sync.ingestion.vector_records.slack_message import SlackMessageMetadata
@@ -37,6 +45,12 @@ __all__ = [
     "GithubPrUserMetadata",
     "GithubPrV2RecordMapper",
     "GithubPrVectorRecord",
+    "JiraIssueData",
+    "JiraIssueDataPart",
+    "JiraIssueMetadata",
+    "JiraIssueUserMetadata",
+    "JiraIssueV2RecordMapper",
+    "JiraIssueVectorRecord",
     "SlackMessageData",
     "SlackMessageDataPart",
     "SlackMessageMetadata",
