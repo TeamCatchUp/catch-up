@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import Add from '@/public/icons/icon/add_small.svg';
 import ArrowRight2 from '@/public/icons/icon/arrow_right2.svg';
 import Help from '@/public/icons/icon/help.svg';
-import Kebeb from '@/public/icons/icon/kebeb 2.svg';
+import KebabHorizontalIcon from '@/public/icons/icon/kebab_horizontal.svg';
 import { MoreButtonContent } from '@/shared/components/layout/topNavbar/MoreButtonModal';
 import { DropdownMenu, DropdownMenuTrigger } from '@/shared/components/ui/dropdown-menu';
 
@@ -44,7 +44,7 @@ export default function TutorialHeader({ prevLabel, prevHref, currentLabel }: Tu
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button className="border-line-normal-neutral hover:border-line-normal-normal hover:bg-fill-normal-interaction-hover active:border-line-normal-strong active:bg-fill-normal-interaction-pressed data-[state=open]:border-line-normal-normal data-[state=open]:bg-fill-normal-interaction-hover bg-fill-normal-normal cursor-pointer rounded-lg border px-1.5 py-1.5 transition-colors">
-              <Kebeb className="text-icon-normal-normal h-6 w-6" />
+              <KebabHorizontalIcon className="text-icon-normal-normal h-6 w-6" />
             </button>
           </DropdownMenuTrigger>
           <MoreButtonContent />

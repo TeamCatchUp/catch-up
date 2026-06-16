@@ -1,5 +1,5 @@
 import ArrowRightIcon from '@/public/icons/icon/arrow_right2.svg';
-import KebabIcon from '@/public/icons/icon/kebab.svg';
+import KebabHorizontalIcon from '@/public/icons/icon/kebab_horizontal.svg';
 import AgentEditorPreviewIllustration from '@/public/image/agent-studio/agent-editor-preview.svg';
 import { Button } from '@/shared/components/ui/button';
 
@@ -19,7 +19,7 @@ export default function AgentEditorLeftPane() {
           </span>
         </div>
         <Button variant="icon-only-gray" size="md" aria-label="좌측 더보기">
-          <KebabIcon className="size-6" aria-hidden="true" />
+          <KebabHorizontalIcon className="size-6" aria-hidden="true" />
         </Button>
       </header>
 

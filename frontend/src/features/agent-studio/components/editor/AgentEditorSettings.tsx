@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import ArrowLeftIcon from '@/public/icons/icon/arrow_left.svg';
 import ClockIcon from '@/public/icons/icon/clock.svg';
 import HelpIcon from '@/public/icons/icon/help.svg';
-import KebabIcon from '@/public/icons/icon/kebab.svg';
+import KebabHorizontalIcon from '@/public/icons/icon/kebab_horizontal.svg';
 import TagIcon from '@/public/icons/icon/tag.svg';
 import CatchupLogoIcon from '@/public/icons/logo/logo_catchup.svg';
 import { Button } from '@/shared/components/ui/button';
@@ -27,7 +27,7 @@ export default function AgentEditorSettings() {
           <ArrowLeftIcon className="size-6" aria-hidden="true" />
         </Button>
         <Button variant="icon-only-gray" size="md" aria-label="설정 더보기">
-          <KebabIcon className="size-6" aria-hidden="true" />
+          <KebabHorizontalIcon className="size-6" aria-hidden="true" />
         </Button>
       </header>
       <div className="flex min-w-0 flex-col items-start gap-8 px-9 pt-5 pb-9">

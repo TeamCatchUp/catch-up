@@ -11,7 +11,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
 import ArrowRight2 from '@/public/icons/icon/arrow_right2.svg';
-import Kebeb from '@/public/icons/icon/kebeb 2.svg';
+import KebabHorizontalIcon from '@/public/icons/icon/kebab_horizontal.svg';
 import { chatQueries } from '@/shared/queries/chatroom.queries';
 import { useSidebarStore } from '@/shared/store/sidebarStore';
 import { cn } from '@/shared/utils/cn';
@@ -92,7 +92,7 @@ export default function SideNavQuestions() {
               >
                 <span className="text-body-small flex-1 truncate">{chatroom.title}</span>
                 <span className="ml-auto flex size-5 items-center opacity-0 transition-opacity group-hover:opacity-100">
-                  <Kebeb className="text-icon-normal-neutral h-4.5 w-4.5" />
+                  <KebabHorizontalIcon className="text-icon-normal-neutral h-4.5 w-4.5" />
                 </span>
               </Link>
             );

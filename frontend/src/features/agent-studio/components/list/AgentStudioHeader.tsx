@@ -1,4 +1,4 @@
-import KebabIcon from '@/public/icons/icon/kebab.svg';
+import KebabHorizontalIcon from '@/public/icons/icon/kebab_horizontal.svg';
 import LightbulbIcon from '@/public/icons/icon/lightbulb.svg';
 import { Button } from '@/shared/components/ui/button';
 
@@ -10,7 +10,7 @@ export default function AgentStudioHeader() {
         <span className="text-heading-medium text-text-normal-normal">Agent Studio</span>
       </div>
       <Button variant="icon-only-gray" size="md" aria-label="Agent Studio 더보기">
-        <KebabIcon className="size-6" aria-hidden="true" />
+        <KebabHorizontalIcon className="size-6" aria-hidden="true" />
       </Button>
     </header>
   );

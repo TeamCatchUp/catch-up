@@ -6,7 +6,7 @@ import Settings from '@/public/icons/icon/admin_panel_settings.svg';
 import AI from '@/public/icons/icon/ai.svg';
 import DocumentSearch from '@/public/icons/icon/document_search.svg';
 import Home from '@/public/icons/icon/home.svg';
-import Kebab2 from '@/public/icons/icon/kebeb 2.svg';
+import KebabHorizontalIcon from '@/public/icons/icon/kebab_horizontal.svg';
 import MyPage from '@/public/icons/icon/person.svg';
 import { Button } from '@/shared/components/ui/button';
 import { DropdownMenu, DropdownMenuTrigger } from '@/shared/components/ui/dropdown-menu';
@@ -80,7 +80,7 @@ export default function TopNavbar({ pageType }: TopNavbarProps) {
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="icon-only-gray" size="md">
-                  <Kebab2 className="h-6 w-6" />
+                  <KebabHorizontalIcon className="h-6 w-6" />
                 </Button>
               </DropdownMenuTrigger>
               <MoreButtonContent />
