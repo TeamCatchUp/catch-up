@@ -46,9 +46,9 @@ export default function AgentEditorSettings() {
           <AgentSelectField
             required
             label="어떤 채널로 들어오는 문의를 감지할까요?"
-            value="channel-talk-empty"
+            placeholder={AGENT_STUDIO_SETTINGS_FIXTURE.channelTalkChannelLabel}
             icon={<TagIcon className="size-5.5" aria-hidden="true" />}
-            items={[{ value: 'channel-talk-empty', label: AGENT_STUDIO_SETTINGS_FIXTURE.channelTalkChannelLabel }]}
+            items={[]}
           />
           <AgentSelectField
             required
@@ -63,8 +63,8 @@ export default function AgentEditorSettings() {
               <p className="text-body-xsmall text-text-normal-neutral">왜 바로 만들지 않나요?</p>
             </div>
             <p className="text-body-xsmall text-text-normal-alternative w-full whitespace-pre-wrap">
-              문의가 들어오자마자 초안을 만들면 상담사가 직접 대응할 수 있는 문의까지 불필요하게 초안이 쌓여요.
-              고객이 문의를 보내는 동안 맥락이 충분히 모인 뒤에 초안을 만들어, 더 정확하게 도와드려요.
+              문의가 들어오자마자 초안을 만들면 상담사가 직접 대응할 수 있는 문의까지 불필요하게 초안이 쌓여요. 고객이
+              문의를 보내는 동안 맥락이 충분히 모인 뒤에 초안을 만들어, 더 정확하게 도와드려요.
             </p>
           </div>
         </AgentSettingSection>
@@ -92,9 +92,9 @@ export default function AgentEditorSettings() {
                 채널톡을 연동한 <span className="text-text-primary-normal">Slack</span> 채널을 선택해주세요.
               </span>
             }
-            value="slack-empty"
+            placeholder={AGENT_STUDIO_SETTINGS_FIXTURE.slackChannelLabel}
             icon={<TagIcon className="size-5.5" aria-hidden="true" />}
-            items={[{ value: 'slack-empty', label: AGENT_STUDIO_SETTINGS_FIXTURE.slackChannelLabel }]}
+            items={[]}
           />
           <AgentInstructionField
             value={instruction}

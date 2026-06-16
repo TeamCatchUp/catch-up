@@ -116,6 +116,12 @@ export const agentStudioListFigmaCase: FigmaLabCase = {
       code: 'gap-6',
       decision: 'scale-mapped',
     },
+    {
+      figma: 'use button icon and text',
+      value: 'static/white',
+      code: 'text-static-white',
+      decision: 'matched',
+    },
   ],
   render: () => <AgentStudioListPreview />,
 };
@@ -215,6 +221,12 @@ export const agentStudioEditorFigmaCase: FigmaLabCase = {
       value: '32px',
       code: 'gap-8',
       decision: 'scale-mapped',
+    },
+    {
+      figma: 'select placeholder text',
+      value: 'text/nomal/assistive',
+      code: 'data-placeholder:text-text-normal-assistive',
+      decision: 'matched',
     },
   ],
   render: () => <AgentStudioEditorPreview />,

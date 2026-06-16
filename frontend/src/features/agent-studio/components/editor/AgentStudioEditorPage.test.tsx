@@ -47,4 +47,13 @@ describe('AgentStudioEditorPage', () => {
 
     expect(screen.getByText('11/500')).toBeInTheDocument();
   });
+
+  it('renders unselected channel fields as select placeholders', () => {
+    render(<AgentStudioEditorPage />);
+
+    expect(screen.getByRole('combobox', { name: /어떤 채널로 들어오는 문의/ })).toHaveAttribute('data-placeholder');
+    expect(screen.getByRole('combobox', { name: /Slack 채널을 선택/ })).toHaveAttribute('data-placeholder');
+    expect(screen.getByText('채널톡 내 채널을 선택해주세요')).toBeInTheDocument();
+    expect(screen.getByText('Slack 내 채널을 선택해주세요')).toBeInTheDocument();
+  });
 });
