@@ -1,18 +1,52 @@
 import DefaultProfileIcon from '@/public/icons/icon/default_profile.svg';
 import SparkleIcon from '@/public/icons/icon/sparkle.svg';
 import { Button } from '@/shared/components/ui/button';
+import { cn } from '@/shared/utils/cn';
 
-import type { AgentStudioCardModel } from '../../types/agentStudioModel';
+import type { AgentStudioCardModel, AgentStudioStatus } from '../../types/agentStudioModel';
 
 interface AgentCardProps {
   agent: AgentStudioCardModel;
 }
 
+const STATUS_STYLE: Record<
+  AgentStudioStatus,
+  {
+    label: string;
+    outerClassName: string;
+    labelClassName: string;
+  }
+> = {
+  active: {
+    label: '운영중',
+    outerClassName: 'bg-fill-primary-normal-assistive',
+    labelClassName: 'bg-fill-primary-normal-neutral text-text-primary-normal',
+  },
+  draft: {
+    label: '제작중',
+    outerClassName: 'bg-fill-normal-strong',
+    labelClassName: 'bg-fill-normal-interaction-disable text-text-normal-alternative',
+  },
+  inactive: {
+    label: '사용 안함',
+    outerClassName: 'bg-fill-normal-strong',
+    labelClassName: 'bg-fill-normal-interaction-disable text-text-normal-alternative',
+  },
+};
+
 export default function AgentCard({ agent }: AgentCardProps) {
+  const statusStyle = STATUS_STYLE[agent.status];
+  const isInactive = agent.status === 'inactive';
+
   return (
-    <article className="bg-fill-primary-normal-assistive flex h-70.75 min-w-80 flex-1 flex-col items-start gap-3 rounded-xl p-3">
-      <span className="bg-fill-primary-normal-neutral text-heading-small text-text-primary-normal w-fit rounded-lg px-2.5 py-1">
-        운영중
+    <article
+      className={cn(
+        'flex h-70.75 min-w-80 flex-1 flex-col items-start gap-3 rounded-xl p-3',
+        statusStyle.outerClassName,
+      )}
+    >
+      <span className={cn('text-heading-small w-fit rounded-lg px-2.5 py-1', statusStyle.labelClassName)}>
+        {statusStyle.label}
       </span>
       <div className="border-line-normal-normal bg-fill-normal-assistive-dark flex w-full flex-1 flex-col items-end justify-between gap-4 overflow-hidden rounded-xl border p-5">
         <div className="flex min-h-0 w-full flex-1 flex-col items-start gap-3 overflow-hidden">
@@ -30,19 +64,25 @@ export default function AgentCard({ agent }: AgentCardProps) {
             <span className="truncate">{agent.updatedAtLabel}</span>
           </div>
         </div>
-        <div className="flex w-full items-center justify-between">
-          <Button variant="text-secondary-mono" size="sm" aria-label={`${agent.title} 사용 안함`}>
-            사용 안함
+        {isInactive ? (
+          <Button variant="capsule-outline-mono" size="sm" className="text-text-normal-normal h-9 w-full">
+            다시 운영하기
           </Button>
-          <Button
-            variant="capsule-solid-primary"
-            size="sm"
-            className="bg-agent-studio-use-button-gradient text-static-white h-9"
-          >
-            <SparkleIcon className="text-static-white size-5" aria-hidden="true" />
-            사용하기
-          </Button>
-        </div>
+        ) : (
+          <div className="flex w-full items-center justify-between">
+            <Button variant="text-secondary-mono" size="sm" aria-label={`${agent.title} 사용 안함`}>
+              사용 안함
+            </Button>
+            <Button
+              variant="capsule-solid-primary"
+              size="sm"
+              className="bg-agent-studio-use-button-gradient text-static-white h-9"
+            >
+              <SparkleIcon className="text-static-white size-5" aria-hidden="true" />
+              사용하기
+            </Button>
+          </div>
+        )}
       </div>
     </article>
   );

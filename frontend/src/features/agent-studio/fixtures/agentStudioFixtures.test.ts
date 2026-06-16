@@ -13,10 +13,10 @@ describe('agentStudioFixtures', () => {
   });
 
   it('groups the default cards by status', () => {
-    expect(getAgentCardsByStatus('all')).toHaveLength(1);
+    expect(getAgentCardsByStatus('all')).toHaveLength(2);
     expect(getAgentCardsByStatus('active')).toHaveLength(1);
     expect(getAgentCardsByStatus('draft')).toHaveLength(0);
-    expect(getAgentCardsByStatus('inactive')).toHaveLength(0);
+    expect(getAgentCardsByStatus('inactive')).toHaveLength(1);
   });
 
   it('keeps the editor defaults aligned with the setup screen', () => {

@@ -72,9 +72,10 @@ export const agentStudioListFigmaCase: FigmaLabCase = {
       {
         state: 'fixtureDefault',
         fixture: 'AGENT_STUDIO_LIST_FIXTURE',
-        expected: '운영 중 Agent 카드 1개와 제작중/사용 안함 빈 컬럼이 같은 행에 표시됩니다.',
+        expected: '운영 중 Agent 카드, 제작중 빈 컬럼, 사용 안함 Agent 카드가 같은 행에 표시됩니다.',
       },
     ],
+    notes: ['사용 안함 Agent 카드 본문은 node 14844:104963 기준으로 다시 운영하기 CTA를 표시합니다.'],
   },
   states: ['fixtureDefault'],
   reuse: [
@@ -95,6 +96,12 @@ export const agentStudioListFigmaCase: FigmaLabCase = {
       checked: 'src/features/agent-studio/components/list',
       decision: 'feature-local',
       reason: '목록 fixture와 상태별 카드 표시는 Agent Studio feature-local 조립입니다.',
+    },
+    {
+      figmaPart: 'Inactive agent card CTA',
+      checked: 'src/shared/components/ui/button.tsx',
+      decision: 'reuse',
+      reason: '사용 안함 카드의 다시 운영하기 CTA는 공통 capsule outline Button을 전체 폭으로 사용합니다.',
     },
   ],
   tokens: [
@@ -127,6 +134,12 @@ export const agentStudioListFigmaCase: FigmaLabCase = {
       value: 'radial-gradient(circle at 50% 3%, ...)',
       code: 'bg-agent-studio-use-button-gradient',
       decision: 'project-token',
+    },
+    {
+      figma: 'inactive card restart button',
+      value: '36px full width outline capsule',
+      code: 'capsule-outline-mono h-9 w-full',
+      decision: 'matched',
     },
   ],
   render: () => <AgentStudioListPreview />,

@@ -17,6 +17,12 @@ export default function AgentStudioPage() {
   const router = useRouter();
   const [selectedFilter, setSelectedFilter] = useState<AgentStudioFilter>('all');
   const visibleAgents = useMemo(() => getAgentCardsByStatus(selectedFilter), [selectedFilter]);
+  const activeAgents = visibleAgents.filter((agent) => agent.status === 'active');
+  const draftAgents = visibleAgents.filter((agent) => agent.status === 'draft');
+  const inactiveAgents = visibleAgents.filter((agent) => agent.status === 'inactive');
+  const shouldShowDraftEmpty = draftAgents.length === 0 && (selectedFilter === 'all' || selectedFilter === 'draft');
+  const shouldShowInactiveEmpty =
+    inactiveAgents.length === 0 && (selectedFilter === 'all' || selectedFilter === 'inactive');
 
   return (
     <div className="bg-background-normal-normal flex min-h-full flex-col">
@@ -36,19 +42,29 @@ export default function AgentStudioPage() {
           </Button>
         </div>
         <div className="flex h-70.75 w-full flex-wrap items-start gap-6">
-          {visibleAgents.map((agent) => (
+          {activeAgents.map((agent) => (
             <AgentCard key={agent.id} agent={agent} />
           ))}
-          <AgentEmptyColumn
-            label="제작중"
-            title="제작 중인 Agent가 없습니다."
-            description={'새로운 Agent를 만들어\n반복되는 문의 업무를 자동화해보세요.'}
-          />
-          <AgentEmptyColumn
-            label="사용 안함"
-            title="아직 비활성 Agent가 없습니다."
-            description="사용을 중지한 Agent는 이곳에 보관됩니다."
-          />
+          {draftAgents.map((agent) => (
+            <AgentCard key={agent.id} agent={agent} />
+          ))}
+          {shouldShowDraftEmpty && (
+            <AgentEmptyColumn
+              label="제작중"
+              title="제작 중인 Agent가 없습니다."
+              description={'새로운 Agent를 만들어\n반복되는 문의 업무를 자동화해보세요.'}
+            />
+          )}
+          {inactiveAgents.map((agent) => (
+            <AgentCard key={agent.id} agent={agent} />
+          ))}
+          {shouldShowInactiveEmpty && (
+            <AgentEmptyColumn
+              label="사용 안함"
+              title="아직 비활성 Agent가 없습니다."
+              description="사용을 중지한 Agent는 이곳에 보관됩니다."
+            />
+          )}
         </div>
       </section>
     </div>
