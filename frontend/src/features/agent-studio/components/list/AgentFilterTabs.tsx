@@ -12,7 +12,13 @@ export default function AgentFilterTabs({ filters, selected, onChange }: AgentFi
   return (
     <div className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto overflow-y-hidden">
       {filters.map((item) => (
-        <Chip key={item.value} variant="outline" selected={selected === item.value} onClick={() => onChange(item.value)}>
+        <Chip
+          key={item.value}
+          variant="outline"
+          selected={selected === item.value}
+          aria-pressed={selected === item.value}
+          onClick={() => onChange(item.value)}
+        >
           {item.label}
         </Chip>
       ))}

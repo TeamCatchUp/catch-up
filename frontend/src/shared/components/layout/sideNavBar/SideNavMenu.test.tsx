@@ -122,6 +122,17 @@ describe('SideNavMenu', () => {
     expect(screen.getByRole('button', { name: /에이전트 스튜디오/ })).toBeInTheDocument();
   });
 
+  it('에이전트 스튜디오는 문서 탐색 아래, 설정 위에 렌더한다', () => {
+    render(<SideNavMenu isOpen={true} />);
+
+    const docs = screen.getByRole('button', { name: /문서 탐색/ });
+    const agentStudio = screen.getByRole('button', { name: /에이전트 스튜디오/ });
+    const settings = screen.getByRole('button', { name: /설정/ });
+
+    expect(docs.compareDocumentPosition(agentStudio)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(agentStudio.compareDocumentPosition(settings)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+  });
+
   it('닫힘 상태에서 에이전트 스튜디오 텍스트를 숨긴다', () => {
     render(<SideNavMenu isOpen={false} />);
 

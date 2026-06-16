@@ -22,7 +22,7 @@ import { cn } from '@/shared/utils/cn';
 // TODO: 수신함 기능 활성화 시 UNREAD_COUNT 복원
 
 type NavMatch = 'home' | 'search' | 'docs' | 'settings' | 'agentStudio';
-type NavGroup = 'primary' | 'agent';
+type NavGroup = 'primary' | 'agent' | 'settings';
 
 interface NavItem {
   name: string;
@@ -78,7 +78,7 @@ const navItems: NavItem[] = [
     match: 'settings',
     tooltipOpen: '설정',
     tooltipClosed: '설정',
-    group: 'primary',
+    group: 'settings',
   },
   {
     name: '에이전트 스튜디오',
@@ -119,6 +119,7 @@ export default function SideNavMenu({ isOpen }: SideNavMenuProps) {
   const activeMatch = resolveActiveMatch(pathname, searchParams.get('mode'), activePanel);
   const primaryItems = navItems.filter((item) => item.group === 'primary');
   const agentItems = navItems.filter((item) => item.group === 'agent');
+  const settingsItems = navItems.filter((item) => item.group === 'settings');
 
   const renderNavItems = (items: NavItem[]) =>
     items.map((item) => {
@@ -195,6 +196,7 @@ export default function SideNavMenu({ isOpen }: SideNavMenuProps) {
         )}
         {renderNavItems(agentItems)}
       </div>
+      <div className={cn('flex flex-col', isOpen ? 'gap-0' : 'gap-1.5')}>{renderNavItems(settingsItems)}</div>
     </div>
   );
 }

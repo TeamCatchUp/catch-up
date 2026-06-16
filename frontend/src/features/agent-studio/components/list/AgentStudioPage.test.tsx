@@ -41,5 +41,6 @@ describe('AgentStudioPage', () => {
     await user.click(screen.getByRole('button', { name: '사용 안함' }));
 
     expect(screen.getByRole('button', { name: '사용 안함' })).toHaveAttribute('data-selected', 'true');
+    expect(screen.getByRole('button', { name: '사용 안함' })).toHaveAttribute('aria-pressed', 'true');
   });
 });
