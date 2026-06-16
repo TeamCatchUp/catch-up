@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useQuery } from '@tanstack/react-query';
 
 import ArrowLeftIcon from '@/public/icons/icon/arrow_left.svg';
 import ClockIcon from '@/public/icons/icon/clock.svg';
@@ -12,13 +13,80 @@ import CatchupLogoIcon from '@/public/icons/logo/logo_catchup.svg';
 import { Button } from '@/shared/components/ui/button';
 
 import { AGENT_STUDIO_SETTINGS_FIXTURE } from '../../fixtures/agentStudioFixtures';
+import { automationCredentialsQueries } from '../../queries/automationCredentials.queries';
+import type { AgentStudioSelectItem } from '../../types/agentStudioModel';
+import type { AutomationCredentialItem, AutomationTargetItem } from '../../types/automationApi';
 import AgentSettingSection from './AgentSettingSection';
 import AgentInstructionField from './fields/AgentInstructionField';
 import AgentSelectField from './fields/AgentSelectField';
 
+const EMPTY_SELECT_ITEMS: readonly AgentStudioSelectItem[] = [];
+const EMPTY_ITEM_PLACEHOLDER = '선택할 수 있는 항목이 없습니다';
+
+function mapCredentialToSelectItem(credential: AutomationCredentialItem): AgentStudioSelectItem {
+  return {
+    value: String(credential.credential_id),
+    label: credential.display_name,
+    disabled: !credential.is_configured,
+  };
+}
+
+function mapTargetToSelectItem(target: AutomationTargetItem): AgentStudioSelectItem {
+  return {
+    value: target.target_id,
+    label: target.display_name,
+    disabled: !target.is_accessible,
+  };
+}
+
 export default function AgentEditorSettings() {
   const router = useRouter();
+  const [channelTalkTargetId, setChannelTalkTargetId] = useState('');
+  const [slackCredentialId, setSlackCredentialId] = useState('');
+  const [slackChannelId, setSlackChannelId] = useState('');
   const [instruction, setInstruction] = useState('');
+  const selectedSlackCredentialId = slackCredentialId === '' ? undefined : Number(slackCredentialId);
+
+  const slackCredentialsQuery = useQuery(automationCredentialsQueries.credentials('slack'));
+  const channelTalkTargetsQuery = useQuery(automationCredentialsQueries.targets('channel_talk'));
+  const slackTargetsQuery = useQuery(automationCredentialsQueries.targets('slack', selectedSlackCredentialId));
+
+  const channelTalkTargetItems = useMemo(
+    () => channelTalkTargetsQuery.data?.targets.map(mapTargetToSelectItem) ?? EMPTY_SELECT_ITEMS,
+    [channelTalkTargetsQuery.data?.targets],
+  );
+  const slackCredentialItems = useMemo(
+    () => slackCredentialsQuery.data?.credentials.map(mapCredentialToSelectItem) ?? EMPTY_SELECT_ITEMS,
+    [slackCredentialsQuery.data?.credentials],
+  );
+  const slackChannelItems = useMemo(
+    () => slackTargetsQuery.data?.targets.map(mapTargetToSelectItem) ?? EMPTY_SELECT_ITEMS,
+    [slackTargetsQuery.data?.targets],
+  );
+
+  useEffect(() => {
+    if (slackCredentialId !== '' || slackCredentialItems.length !== 1) {
+      return;
+    }
+
+    setSlackCredentialId(slackCredentialItems[0].value);
+  }, [slackCredentialId, slackCredentialItems]);
+
+  const channelTalkPlaceholder = channelTalkTargetsQuery.isError
+    ? '채널톡 채널을 불러오지 못했습니다'
+    : channelTalkTargetsQuery.isSuccess && channelTalkTargetItems.length === 0
+      ? EMPTY_ITEM_PLACEHOLDER
+      : AGENT_STUDIO_SETTINGS_FIXTURE.channelTalkChannelLabel;
+  const slackCredentialPlaceholder = slackCredentialsQuery.isError
+    ? 'Slack 권한을 불러오지 못했습니다'
+    : slackCredentialsQuery.isSuccess && slackCredentialItems.length === 0
+      ? EMPTY_ITEM_PLACEHOLDER
+      : AGENT_STUDIO_SETTINGS_FIXTURE.slackWorkspaceName;
+  const slackChannelPlaceholder = slackTargetsQuery.isError
+    ? 'Slack 채널을 불러오지 못했습니다'
+    : selectedSlackCredentialId !== undefined && slackTargetsQuery.isSuccess && slackChannelItems.length === 0
+      ? EMPTY_ITEM_PLACEHOLDER
+      : AGENT_STUDIO_SETTINGS_FIXTURE.slackChannelLabel;
 
   return (
     <main className="bg-fill-normal-assistive-dark flex min-w-0 flex-1 flex-col">
@@ -46,10 +114,12 @@ export default function AgentEditorSettings() {
           <AgentSelectField
             required
             label="어떤 채널로 들어오는 문의를 감지할까요?"
-            placeholder={AGENT_STUDIO_SETTINGS_FIXTURE.channelTalkChannelLabel}
+            value={channelTalkTargetId}
+            placeholder={channelTalkPlaceholder}
             icon={<TagIcon className="size-5.5" aria-hidden="true" />}
-            items={[]}
-            disabled
+            items={channelTalkTargetItems}
+            disabled={channelTalkTargetsQuery.isLoading || channelTalkTargetsQuery.isError || channelTalkTargetItems.length === 0}
+            onChange={setChannelTalkTargetId}
           />
           <AgentSelectField
             required
@@ -78,13 +148,19 @@ export default function AgentEditorSettings() {
           <AgentSelectField
             required
             label="누구의 권한을 가지고 조회할까요?"
-            value="catch-up"
+            value={slackCredentialId}
+            placeholder={slackCredentialPlaceholder}
             icon={
               <span className="bg-fill-primary-normal-neutral flex size-8 items-center justify-center rounded-lg">
                 <CatchupLogoIcon className="h-4.25 w-5.5" aria-hidden="true" />
               </span>
             }
-            items={[{ value: 'catch-up', label: AGENT_STUDIO_SETTINGS_FIXTURE.slackWorkspaceName }]}
+            items={slackCredentialItems}
+            disabled={slackCredentialsQuery.isLoading || slackCredentialsQuery.isError || slackCredentialItems.length === 0}
+            onChange={(value) => {
+              setSlackCredentialId(value);
+              setSlackChannelId('');
+            }}
           />
           <AgentSelectField
             required
@@ -93,10 +169,17 @@ export default function AgentEditorSettings() {
                 채널톡을 연동한 <span className="text-text-primary-normal">Slack</span> 채널을 선택해주세요.
               </span>
             }
-            placeholder={AGENT_STUDIO_SETTINGS_FIXTURE.slackChannelLabel}
+            value={slackChannelId}
+            placeholder={slackChannelPlaceholder}
             icon={<TagIcon className="size-5.5" aria-hidden="true" />}
-            items={[]}
-            disabled
+            items={slackChannelItems}
+            disabled={
+              selectedSlackCredentialId === undefined ||
+              slackTargetsQuery.isLoading ||
+              slackTargetsQuery.isError ||
+              slackChannelItems.length === 0
+            }
+            onChange={setSlackChannelId}
           />
           <AgentInstructionField
             value={instruction}
