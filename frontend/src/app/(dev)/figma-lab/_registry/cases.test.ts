@@ -18,6 +18,7 @@ import {
   validPageLayout,
 } from './cases.test.fixtures';
 import { ORIGINAL_PANEL_FIGMA_LAB_CASES } from './cases/original-panel/originalPanelCases';
+import { AGENT_STUDIO_FIGMA_LAB_CASES } from './features/agent-studio';
 import { HOME_DOCS_FIGMA_LAB_CASES } from './features/home-docs';
 import { HYBRID_SEARCH_FIGMA_LAB_CASES } from './features/hybrid-search';
 import { ORIGINAL_PANEL_FIGMA_LAB_CASES_BY_FEATURE } from './features/original-panel';
@@ -29,6 +30,7 @@ describe('figma lab registry', () => {
     expect(FIGMA_LAB_CASES.map((item) => item.id)).toEqual([
       ...HYBRID_SEARCH_FIGMA_LAB_CASES.map((item) => item.id),
       ...HOME_DOCS_FIGMA_LAB_CASES.map((item) => item.id),
+      ...AGENT_STUDIO_FIGMA_LAB_CASES.map((item) => item.id),
       ...SHARED_QUERY_FILTER_FIGMA_LAB_CASES.map((item) => item.id),
       ...ORIGINAL_PANEL_FIGMA_LAB_CASES_BY_FEATURE.map((item) => item.id),
     ]);
@@ -45,6 +47,7 @@ describe('figma lab registry', () => {
 
   it('returns the group default case when a group is selected', () => {
     expect(getDefaultFigmaLabCaseId('hybrid-search')).toBe('result-search-bar-expanded');
+    expect(getDefaultFigmaLabCaseId('agent-studio')).toBe('agent-studio-list-page');
     expect(getDefaultFigmaLabCaseId('shared-query-filter')).toBe('document-search-filter-row-entry');
     expect(getDefaultFigmaLabCaseId('original-panel')).toBe('slack-panel-preview');
   });
