@@ -24,6 +24,9 @@ from catchup.sync.common.exceptions import SyncInternalException
 from catchup.sync.ingestion.adapters.jira.issue_dependencies import (
     JiraIssueIngestionDependencies,
 )
+from catchup.sync.ingestion.adapters.jira.issue_v2_backfill import (
+    JiraIssueV2BackfillAdapter,
+)
 from catchup.sync.ingestion.adapters.jira.issue_v2_document_builder import (
     JiraIssueV2DocumentBuilder,
 )
@@ -44,6 +47,7 @@ async def create_jira_issue_ingestion_dependencies(
     *,
     cloud_id: str,
     enable_summarization: bool = True,
+    force_vector_store: bool = False,
 ) -> JiraIssueIngestionDependencies:
     token_manager = AtlassianTokenManager(
         oauth_client=AtlassianOAuthClient(),
@@ -82,7 +86,7 @@ async def create_jira_issue_ingestion_dependencies(
         repository = get_pgvector_repository(embeddings=embeddings)
         repository.ensure_initialized()
         vector_store = None
-        if settings.VECTOR_STORE_V2_DUAL_WRITE_ENABLED:
+        if settings.VECTOR_STORE_V2_DUAL_WRITE_ENABLED or force_vector_store:
             vector_store = get_v2_vector_store(embeddings)
             await vector_store.initialize()
         summarizer = get_summarizer_service() if enable_summarization else None
@@ -109,3 +113,14 @@ async def create_jira_issue_ingestion_dependencies(
             "Jira issue ingestion dependencies 초기화에 실패했습니다",
             metadata={"cloud_id": cloud_id},
         ) from exc
+
+
+async def create_jira_issue_v2_backfill_adapter(
+    cloud_id: str,
+) -> JiraIssueV2BackfillAdapter:
+    dependencies = await create_jira_issue_ingestion_dependencies(
+        cloud_id=cloud_id,
+        enable_summarization=False,
+        force_vector_store=True,
+    )
+    return JiraIssueV2BackfillAdapter(dependencies=dependencies)

@@ -83,18 +83,56 @@ class JiraIssueIncrementalSyncExecutionRequest(SyncExecutionRequest):
         }
 
 
+class JiraIssueV2BackfillSeed(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    langchain_id: str
+    record_id: str
+    content: str
+    embedding: list[float]
+
+    @field_validator("langchain_id", "record_id", "content")
+    @classmethod
+    def _validate_required_text(cls, value: str, info: ValidationInfo) -> str:
+        return require_text(value, info.field_name or "field")
+
+
+class JiraIssueV2BackfillExecutionRequest(SyncExecutionRequest):
+    connector: Literal[SyncConnector.JIRA] = SyncConnector.JIRA
+    target: Literal["issue_v2_backfill"] = "issue_v2_backfill"
+    project_key: str
+    seeds: tuple[JiraIssueV2BackfillSeed, ...]
+    audit_context: SyncAuditContext | None = None
+
+    @field_validator("project_key")
+    @classmethod
+    def _validate_project_key(cls, value: str) -> str:
+        return require_text(value, "project_key")
+
+    def log_context(self) -> dict[str, object]:
+        return {
+            "project_key": self.project_key,
+            "seed_count": len(self.seeds),
+        }
+
+
 class JiraIssueFetchedIssuesResult(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     issues: tuple[dict, ...] = ()
     fetched_record_ids: tuple[str, ...] = ()
+    failed_record_ids: tuple[str, ...] = ()
+    fetch_error_count: int = 0
 
     @property
     def fetched_count(self) -> int:
         return len(self.issues)
 
     def connector_log_summary(self) -> dict[str, object]:
-        return {"fetched_count": self.fetched_count}
+        return {
+            "fetched_count": self.fetched_count,
+            "fetch_error_count": self.fetch_error_count,
+        }
 
 
 class JiraIssueFullSyncFetchResult(JiraIssueFetchedIssuesResult):
@@ -173,7 +211,7 @@ class JiraIssuePersistResult(BaseModel):
 
 class JiraIssueSyncExecutionResult(SyncExecutionResult):
     connector: Literal[SyncConnector.JIRA] = SyncConnector.JIRA
-    target: Literal["issue"] = "issue"
+    target: Literal["issue", "issue_v2_backfill"] = "issue"
     fetched_count: int = 0
     document_count: int = 0
     persisted_count: int = 0
