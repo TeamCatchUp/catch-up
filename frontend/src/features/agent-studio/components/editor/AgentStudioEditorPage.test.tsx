@@ -1,7 +1,7 @@
 import type { ReactElement } from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { MutationCache, QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { http, HttpResponse } from 'msw';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -60,7 +60,18 @@ const slackTarget: AutomationTargetItem = {
 };
 
 function renderWithQueryClient(ui: ReactElement) {
-  const queryClient = new QueryClient({
+  let queryClient!: QueryClient;
+  const mutationCache = new MutationCache({
+    onSuccess: (_data, _variables, _context, mutation) => {
+      const invalidates = mutation.meta?.invalidates as string[][] | undefined;
+      invalidates?.forEach((queryKey) => {
+        queryClient.invalidateQueries({ queryKey });
+      });
+    },
+  });
+
+  queryClient = new QueryClient({
+    mutationCache,
     defaultOptions: {
       queries: { retry: false },
       mutations: { retry: false },
@@ -116,6 +127,26 @@ function useEditorSuccessHandlers() {
 function renderEditor() {
   useEditorSuccessHandlers();
   return renderWithQueryClient(<AgentStudioEditorPage />);
+}
+
+async function selectRequiredAutomationFields(user: ReturnType<typeof userEvent.setup>) {
+  const channelTalkSelect = await screen.findByRole('combobox', { name: /어떤 채널로 들어오는 문의/ });
+
+  await waitFor(() => expect(channelTalkSelect).not.toBeDisabled());
+  await user.click(channelTalkSelect);
+  await user.click(await screen.findByRole('option', { name: '채널톡 기본 채널' }));
+
+  await waitFor(() =>
+    expect(screen.getByRole('combobox', { name: /누구의 권한을 가지고 조회/ })).toHaveTextContent('Catch Up'),
+  );
+
+  const slackChannelSelect = screen.getByRole('combobox', { name: /Slack 채널을 선택/ });
+
+  await waitFor(() => expect(slackChannelSelect).not.toBeDisabled());
+  await user.click(slackChannelSelect);
+  await user.click(await screen.findByRole('option', { name: 'cs-response' }));
+
+  return { channelTalkSelect, slackChannelSelect };
 }
 
 beforeEach(() => {
@@ -181,24 +212,66 @@ describe('AgentStudioEditorPage', () => {
     const user = userEvent.setup();
     renderEditor();
 
-    const channelTalkSelect = await screen.findByRole('combobox', { name: /어떤 채널로 들어오는 문의/ });
-
-    await waitFor(() => expect(channelTalkSelect).not.toBeDisabled());
-    await user.click(channelTalkSelect);
-    await user.click(await screen.findByRole('option', { name: '채널톡 기본 채널' }));
+    const { channelTalkSelect, slackChannelSelect } = await selectRequiredAutomationFields(user);
 
     expect(channelTalkSelect).toHaveTextContent('채널톡 기본 채널');
-
-    await waitFor(() =>
-      expect(screen.getByRole('combobox', { name: /누구의 권한을 가지고 조회/ })).toHaveTextContent('Catch Up'),
-    );
-
-    const slackChannelSelect = screen.getByRole('combobox', { name: /Slack 채널을 선택/ });
-
-    await waitFor(() => expect(slackChannelSelect).not.toBeDisabled());
-    await user.click(slackChannelSelect);
-    await user.click(await screen.findByRole('option', { name: 'cs-response' }));
-
     expect(slackChannelSelect).toHaveTextContent('cs-response');
+  });
+
+  it('publishes the selected automation settings and moves to the list after success', async () => {
+    const user = userEvent.setup();
+    const publishRequests: unknown[] = [];
+    let resolvePublish!: () => void;
+    const publishSettled = new Promise<void>((resolve) => {
+      resolvePublish = resolve;
+    });
+
+    server.use(
+      http.post('/api/v1/automations/inqueries/publish', async ({ request }) => {
+        publishRequests.push(await request.json());
+        await publishSettled;
+
+        return HttpResponse.json({
+          agent_spec_id: 1,
+          trigger_id: 2,
+          status: 'active',
+          channel_talk_channel_id: 'channel-talk-main',
+          channel_talk_channel_name: '채널톡 기본 채널',
+          quiet_period_seconds: 60,
+          slack_channel_id: 'C123',
+          start_event_type: 'message_created',
+          reset_event_types: ['message_created'],
+        });
+      }),
+    );
+    renderEditor();
+
+    await selectRequiredAutomationFields(user);
+    await user.type(screen.getByLabelText('답변 초안, 어떤 규칙으로 쓸까요?'), '프로젝트 맥락 반영');
+
+    const publishButton = screen.getByRole('button', { name: '배포하기' });
+
+    await waitFor(() => expect(publishButton).not.toBeDisabled());
+    await user.click(publishButton);
+
+    await waitFor(() => expect(publishRequests).toHaveLength(1));
+    expect(publishButton).toBeDisabled();
+    expect(publishButton).toHaveTextContent('배포하기');
+    expect(publishRequests).toEqual([
+      {
+        channel_talk_credential_id: 10,
+        quiet_period_seconds: 60,
+        slack_channel: {
+          credential_id: 20,
+          channel_id: 'C123',
+          channel_name: 'cs-response',
+        },
+        guide_instruction: '프로젝트 맥락 반영',
+      },
+    ]);
+
+    resolvePublish();
+
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/agent-studio'));
   });
 });

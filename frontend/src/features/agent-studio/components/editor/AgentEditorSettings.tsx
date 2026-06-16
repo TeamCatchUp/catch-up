@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 
 import ArrowLeftIcon from '@/public/icons/icon/arrow_left.svg';
 import ClockIcon from '@/public/icons/icon/clock.svg';
@@ -14,6 +14,7 @@ import { Button } from '@/shared/components/ui/button';
 
 import { AGENT_STUDIO_SETTINGS_FIXTURE } from '../../fixtures/agentStudioFixtures';
 import { automationCredentialsQueries } from '../../queries/automationCredentials.queries';
+import { inquiryAutomationsMutations } from '../../queries/inquiryAutomations.mutations';
 import type { AgentStudioSelectItem } from '../../types/agentStudioModel';
 import type { AutomationCredentialItem, AutomationTargetItem } from '../../types/automationApi';
 import AgentSettingSection from './AgentSettingSection';
@@ -50,6 +51,12 @@ export default function AgentEditorSettings() {
   const slackCredentialsQuery = useQuery(automationCredentialsQueries.credentials('slack'));
   const channelTalkTargetsQuery = useQuery(automationCredentialsQueries.targets('channel_talk'));
   const slackTargetsQuery = useQuery(automationCredentialsQueries.targets('slack', selectedSlackCredentialId));
+  const publishMutation = useMutation({
+    ...inquiryAutomationsMutations.publish(),
+    onSuccess: () => {
+      router.push('/agent-studio');
+    },
+  });
 
   const channelTalkTargetItems = useMemo(
     () => channelTalkTargetsQuery.data?.targets.map(mapTargetToSelectItem) ?? EMPTY_SELECT_ITEMS,
@@ -62,6 +69,14 @@ export default function AgentEditorSettings() {
   const slackChannelItems = useMemo(
     () => slackTargetsQuery.data?.targets.map(mapTargetToSelectItem) ?? EMPTY_SELECT_ITEMS,
     [slackTargetsQuery.data?.targets],
+  );
+  const selectedChannelTalkTarget = useMemo(
+    () => channelTalkTargetsQuery.data?.targets.find((target) => target.target_id === channelTalkTargetId),
+    [channelTalkTargetId, channelTalkTargetsQuery.data?.targets],
+  );
+  const selectedSlackTarget = useMemo(
+    () => slackTargetsQuery.data?.targets.find((target) => target.target_id === slackChannelId),
+    [slackChannelId, slackTargetsQuery.data?.targets],
   );
 
   useEffect(() => {
@@ -87,6 +102,34 @@ export default function AgentEditorSettings() {
     : selectedSlackCredentialId !== undefined && slackTargetsQuery.isSuccess && slackChannelItems.length === 0
       ? EMPTY_ITEM_PLACEHOLDER
       : AGENT_STUDIO_SETTINGS_FIXTURE.slackChannelLabel;
+  const canPublish =
+    selectedChannelTalkTarget?.credential_id !== null &&
+    selectedChannelTalkTarget?.credential_id !== undefined &&
+    selectedSlackCredentialId !== undefined &&
+    selectedSlackTarget !== undefined &&
+    !publishMutation.isPending;
+
+  const handlePublish = () => {
+    if (
+      selectedChannelTalkTarget?.credential_id === null ||
+      selectedChannelTalkTarget?.credential_id === undefined ||
+      selectedSlackCredentialId === undefined ||
+      selectedSlackTarget === undefined
+    ) {
+      return;
+    }
+
+    publishMutation.mutate({
+      channel_talk_credential_id: selectedChannelTalkTarget.credential_id,
+      quiet_period_seconds: 60,
+      slack_channel: {
+        credential_id: selectedSlackCredentialId,
+        channel_id: selectedSlackTarget.target_id,
+        channel_name: selectedSlackTarget.display_name,
+      },
+      guide_instruction: instruction || null,
+    });
+  };
 
   return (
     <main className="bg-fill-normal-assistive-dark flex min-w-0 flex-1 flex-col">
@@ -101,10 +144,13 @@ export default function AgentEditorSettings() {
       <div className="flex min-w-0 flex-col items-start gap-8 px-9 pt-5 pb-9">
         <div className="flex w-full items-center gap-3">
           <h1 className="text-heading-xlarge text-text-normal-strong min-w-0 flex-1 truncate">설정</h1>
-          <Button variant="box-outline-gray" size="lg" disabled>
+          <Button variant="box-outline-gray" size="lg" disabled={!canPublish} onClick={handlePublish}>
             배포하기
           </Button>
         </div>
+        {publishMutation.isError && (
+          <p className="text-body-small text-status-destructive w-full">배포에 실패했습니다. 입력값을 확인해주세요.</p>
+        )}
 
         <AgentSettingSection
           step={1}
