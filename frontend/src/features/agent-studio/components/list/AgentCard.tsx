@@ -12,6 +12,9 @@ interface AgentCardProps {
   actionDisabled?: boolean;
 }
 
+const AGENT_STUDIO_USE_BUTTON_GRADIENT =
+  'radial-gradient(circle at 50% 3%, #030303 0%, #090711 32.36%, #0e0a1e 64.72%, #1c133f 66.03%, #2e1f6d 71.55%, #411a9a 77.07%, #2d50cd 84.07%, #1a75ff 91.07%, #2d81ff 93.3%, #418dff 95.53%, #69a5ff 100%)';
+
 const STATUS_STYLE: Record<
   AgentStudioStatus,
   {
@@ -91,9 +94,10 @@ export default function AgentCard({ agent, onActivate, onDeactivate, actionDisab
             <Button
               variant="capsule-solid-primary"
               size="sm"
-              className="bg-agent-studio-use-button-gradient text-static-white h-9"
+              className="text-static-white h-9"
+              style={{ background: AGENT_STUDIO_USE_BUTTON_GRADIENT }}
             >
-              <SparkleIcon className="text-static-white size-5" aria-hidden="true" />
+              <SparkleIcon className="size-5" aria-hidden="true" />
               사용하기
             </Button>
           </div>
