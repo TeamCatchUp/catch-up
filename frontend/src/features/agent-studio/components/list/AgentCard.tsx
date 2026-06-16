@@ -37,7 +37,7 @@ export default function AgentCard({ agent }: AgentCardProps) {
           <Button
             variant="capsule-solid-primary"
             size="sm"
-            className="bg-[radial-gradient(circle_at_50%_3%,#030303_0%,#090711_32.36%,#0e0a1e_64.72%,#1c133f_66.03%,#2e1f6d_71.55%,#411a9a_77.07%,#2d50cd_84.07%,#1a75ff_91.07%,#2d81ff_93.3%,#418dff_95.53%,#69a5ff_100%)]"
+            className="text-static-white bg-[radial-gradient(circle_at_50%_3%,#030303_0%,#090711_32.36%,#0e0a1e_64.72%,#1c133f_66.03%,#2e1f6d_71.55%,#411a9a_77.07%,#2d50cd_84.07%,#1a75ff_91.07%,#2d81ff_93.3%,#418dff_95.53%,#69a5ff_100%)]"
           >
             <SparkleIcon className="text-static-white size-5" aria-hidden="true" />
             사용하기
