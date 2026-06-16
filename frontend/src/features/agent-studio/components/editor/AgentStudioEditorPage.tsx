@@ -3,7 +3,7 @@ import AgentEditorSettings from './AgentEditorSettings';
 
 export default function AgentStudioEditorPage() {
   return (
-    <div className="bg-background-normal-normal flex min-h-full">
+    <div className="bg-background-normal-normal flex h-full min-h-0 overflow-hidden">
       <AgentEditorLeftPane />
       <AgentEditorSettings />
     </div>

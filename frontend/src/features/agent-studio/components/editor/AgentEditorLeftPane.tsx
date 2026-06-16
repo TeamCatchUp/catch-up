@@ -7,8 +7,8 @@ import { AGENT_STUDIO_SETTINGS_FIXTURE } from '../../fixtures/agentStudioFixture
 
 export default function AgentEditorLeftPane() {
   return (
-    <aside className="border-line-normal-neutral flex w-105 shrink-0 flex-col items-start border-r">
-      <header className="border-line-normal-neutral sticky top-0 flex h-13 w-full items-center border-b px-6 py-2">
+    <aside className="border-line-normal-neutral bg-background-normal-normal flex h-full w-105 shrink-0 flex-col items-start overflow-hidden border-r">
+      <header className="border-line-normal-neutral flex h-13 w-full shrink-0 items-center border-b px-6 py-2">
         <div className="flex min-w-0 flex-1 items-center overflow-hidden">
           <Button variant="text-secondary-mono" size="sm" className="rounded-lg px-2 py-1">
             Agent Studio

@@ -21,7 +21,7 @@ export default function AgentEditorSettings() {
   const form = useAgentEditorSettingsForm();
 
   return (
-    <main className="bg-fill-normal-assistive-dark flex min-w-0 flex-1 flex-col">
+    <main className="bg-fill-normal-assistive-dark flex h-full min-w-0 flex-1 flex-col overflow-y-auto">
       <header className="flex h-13 shrink-0 items-center justify-between px-6 py-2">
         <Button variant="icon-only-gray" size="md" aria-label="Agent Studio로 돌아가기" onClick={() => router.back()}>
           <ArrowLeftIcon className="size-6" aria-hidden="true" />
