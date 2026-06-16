@@ -1,8 +1,15 @@
 from __future__ import annotations
 
+import json
+from unittest.mock import MagicMock
+
+from catchup.sync.backfill.jira_issue_v2 import JiraIssueV1Target
+from catchup.sync.backfill.jira_issue_v2 import JiraIssueV2BackfillService
+from catchup.sync.backfill.jira_issue_v2 import _embedding_to_list
 from catchup.sync.backfill.jira_issue_v2 import build_fetch_pending_seed_chunk_query
 from catchup.sync.backfill.jira_issue_v2 import build_jira_issue_v1_target_query
 from catchup.sync.backfill.jira_issue_v2 import build_jira_issue_v1_target_seed_query
+from catchup.sync.backfill.jira_issue_v2 import build_mark_finished_statement
 from catchup.sync.backfill.jira_issue_v2 import build_upsert_seed_rows_statement
 
 
@@ -45,11 +52,46 @@ def test_jira_issue_v2_seed_rows_preserve_content_embedding_and_empty_metadata()
     assert "'project'" in sql
 
 
+def test_jira_issue_v2_mark_finished_casts_failed_ids_to_jsonb() -> None:
+    sql = _sql(build_mark_finished_statement())
+
+    assert "failed_ids = CAST(:failed_ids AS jsonb)" in sql
+
+
+def test_jira_issue_v2_mark_finished_serializes_failed_ids() -> None:
+    session = MagicMock()
+    context = MagicMock()
+    context.__enter__.return_value = session
+    service = JiraIssueV2BackfillService(session_factory=lambda: context)
+
+    service._mark_finished_sync(
+        JiraIssueV1Target(
+            scope_id="cloud-123",
+            target_id="CAT",
+            target_name="CatchUp",
+            expected_count=1,
+        ),
+        backfill_count=0,
+        failed_ids=["jira:issue:cloud-123:CAT:CAT-1"],
+        force_failed=True,
+    )
+
+    params = session.execute.call_args.args[1]
+    assert json.loads(params["failed_ids"]) == ["jira:issue:cloud-123:CAT:CAT-1"]
+    assert isinstance(params["failed_ids"], str)
+
+
+def test_jira_issue_v2_embedding_to_list_treats_null_as_empty() -> None:
+    assert _embedding_to_list(None) == []
+
+
 def test_jira_issue_v2_seed_chunk_cursor_is_lexicographic() -> None:
     sql = _sql(build_fetch_pending_seed_chunk_query())
 
-    assert "record_id > :after_record_id" in sql
-    assert "AND document_id > COALESCE(:after_langchain_id, '')" in sql
+    assert "CAST(:after_record_id AS text) IS NULL" in sql
+    assert "record_id > CAST(:after_record_id AS text)" in sql
+    assert "record_id = CAST(:after_record_id AS text)" in sql
+    assert "AND document_id > COALESCE(CAST(:after_langchain_id AS text), '')" in sql
     assert "ORDER BY record_id, document_id" in sql
     assert "::integer" not in sql
     assert "::numeric" not in sql
