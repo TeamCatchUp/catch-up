@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import ArrowLeftIcon from '@/public/icons/icon/arrow_left.svg';
 import ClockIcon from '@/public/icons/icon/clock.svg';
 import HelpIcon from '@/public/icons/icon/help.svg';
-import KebabIcon from '@/public/icons/icon/kebeb 2.svg';
+import KebabIcon from '@/public/icons/icon/kebab.svg';
 import TagIcon from '@/public/icons/icon/tag.svg';
 import CatchupLogoIcon from '@/public/icons/logo/logo_catchup.svg';
 import { Button } from '@/shared/components/ui/button';

@@ -1,4 +1,4 @@
-import KebabIcon from '@/public/icons/icon/kebeb 2.svg';
+import KebabIcon from '@/public/icons/icon/kebab.svg';
 import LightbulbIcon from '@/public/icons/icon/lightbulb.svg';
 import { Button } from '@/shared/components/ui/button';
 

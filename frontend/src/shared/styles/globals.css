@@ -98,6 +98,23 @@
     background: linear-gradient(180deg, #fff 30.97%, #f7fbff 100%);
   }
 
+  .bg-agent-studio-use-button-gradient {
+    background: radial-gradient(
+      circle at 50% 3%,
+      #030303 0%,
+      #090711 32.36%,
+      #0e0a1e 64.72%,
+      #1c133f 66.03%,
+      #2e1f6d 71.55%,
+      #411a9a 77.07%,
+      #2d50cd 84.07%,
+      #1a75ff 91.07%,
+      #2d81ff 93.3%,
+      #418dff 95.53%,
+      #69a5ff 100%
+    );
+  }
+
   .dark .bg-home-gradient {
     background:
       linear-gradient(180deg, rgba(0, 0, 0, 0.7) 0%, rgba(0, 0, 0, 0) 55%, rgba(13, 13, 13, 0.5) 100%),

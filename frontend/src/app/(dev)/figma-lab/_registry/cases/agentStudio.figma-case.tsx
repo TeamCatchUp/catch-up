@@ -122,6 +122,12 @@ export const agentStudioListFigmaCase: FigmaLabCase = {
       code: 'text-static-white',
       decision: 'matched',
     },
+    {
+      figma: 'use button radial gradient',
+      value: 'radial-gradient(circle at 50% 3%, ...)',
+      code: 'bg-agent-studio-use-button-gradient',
+      decision: 'project-token',
+    },
   ],
   render: () => <AgentStudioListPreview />,
 };
