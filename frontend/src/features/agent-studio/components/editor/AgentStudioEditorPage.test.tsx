@@ -332,4 +332,50 @@ describe('AgentStudioEditorPage', () => {
 
     await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/agent-studio'));
   });
+
+  it('prevents duplicate publish requests while a publish is already in flight', async () => {
+    const user = userEvent.setup();
+    const publishRequests: unknown[] = [];
+    let resolvePublish!: () => void;
+    const publishSettled = new Promise<void>((resolve) => {
+      resolvePublish = resolve;
+    });
+
+    server.use(
+      http.post('/api/v1/automations/inqueries/publish', async ({ request }) => {
+        publishRequests.push(await request.json());
+        await publishSettled;
+
+        return HttpResponse.json({
+          agent_spec_id: 1,
+          trigger_id: 2,
+          status: 'active',
+          channel_talk_channel_id: 'channel-talk-main',
+          channel_talk_channel_name: '채널톡 기본 채널',
+          quiet_period_seconds: 60,
+          slack_channel_id: 'C123',
+          start_event_type: 'message_created',
+          reset_event_types: ['message_created'],
+        });
+      }),
+    );
+
+    renderEditor();
+
+    await selectRequiredAutomationFields(user);
+    await user.click(screen.getByRole('combobox', { name: /몇 분 후에 Agent를 실행할까요/ }));
+    await user.click(await screen.findByRole('option', { name: '30분' }));
+    await user.type(screen.getByLabelText('답변 초안, 어떤 규칙으로 쓸까요?'), '프로젝트 맥락 반영');
+
+    const publishButton = screen.getByRole('button', { name: '배포하기' });
+
+    await waitFor(() => expect(publishButton).not.toBeDisabled());
+
+    publishButton.click();
+    publishButton.click();
+
+    await waitFor(() => expect(publishRequests).toHaveLength(1));
+
+    resolvePublish();
+  });
 });

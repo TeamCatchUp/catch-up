@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 
@@ -31,6 +31,7 @@ function mapTargetToSelectItem(target: AutomationTargetItem): AgentStudioSelectI
 
 export function useAgentEditorSettingsForm() {
   const router = useRouter();
+  const isPublishInFlightRef = useRef(false);
   const [channelTalkTargetId, setChannelTalkTargetId] = useState('');
   const [quietPeriodSeconds, setQuietPeriodSeconds] = useState(
     AGENT_STUDIO_SETTINGS_FIXTURE.quietPeriodOptions[0]?.value ?? '60',
@@ -58,6 +59,9 @@ export function useAgentEditorSettingsForm() {
     ...inquiryAutomationsMutations.publish(),
     onSuccess: () => {
       router.push('/agent-studio');
+    },
+    onSettled: () => {
+      isPublishInFlightRef.current = false;
     },
   });
 
@@ -99,6 +103,8 @@ export function useAgentEditorSettingsForm() {
 
   const handlePublish = () => {
     if (
+      publishMutation.isPending ||
+      isPublishInFlightRef.current ||
       selectedChannelTalkTarget?.credential_id === null ||
       selectedChannelTalkTarget?.credential_id === undefined ||
       selectedSlackCredentialId === undefined ||
@@ -108,6 +114,7 @@ export function useAgentEditorSettingsForm() {
       return;
     }
 
+    isPublishInFlightRef.current = true;
     publishMutation.mutate({
       channel_talk_credential_id: selectedChannelTalkTarget.credential_id,
       quiet_period_seconds: Number(quietPeriodSeconds),

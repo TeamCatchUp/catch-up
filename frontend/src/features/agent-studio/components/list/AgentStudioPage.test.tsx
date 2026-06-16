@@ -3,6 +3,7 @@ import { MutationCache, QueryClient, QueryClientProvider } from '@tanstack/react
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
+import { toast } from 'sonner';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { server } from '@/test/msw/server';
@@ -11,6 +12,12 @@ import type { InquiryAutomationItem } from '../../types/automationApi';
 import AgentStudioPage from './AgentStudioPage';
 
 const mockPush = vi.fn();
+
+vi.mock('sonner', () => ({
+  toast: {
+    error: vi.fn(),
+  },
+}));
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: mockPush }),
@@ -124,6 +131,7 @@ const inactiveAutomation: InquiryAutomationItem = {
 
 beforeEach(() => {
   mockPush.mockClear();
+  vi.mocked(toast.error).mockClear();
 });
 
 describe('AgentStudioPage', () => {
@@ -345,6 +353,22 @@ describe('AgentStudioPage', () => {
     await user.click(await screen.findByRole('button', { name: '문의 대응 리포트 만들기 사용 안함' }));
 
     expect(patchRequests).toEqual([{ status: 'inactive' }]);
+  });
+
+  it('shows a toast when changing agent status fails', async () => {
+    const user = userEvent.setup();
+
+    mockVersion();
+    useInquiryAutomationList([activeAutomation]);
+    server.use(
+      http.patch('/api/v1/automations/inqueries/1', () => HttpResponse.json({ detail: 'failed' }, { status: 500 })),
+    );
+
+    renderWithQueryClient(<AgentStudioPage />);
+
+    await user.click(await screen.findByRole('button', { name: '문의 대응 리포트 만들기 사용 안함' }));
+
+    expect(toast.error).toHaveBeenCalledWith('에이전트 상태 변경에 실패했습니다. 다시 시도해주세요.');
   });
 
   it('opens the same more menu content used on the home header', async () => {

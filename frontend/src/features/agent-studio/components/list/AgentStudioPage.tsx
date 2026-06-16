@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
+import { toast } from 'sonner';
 
 import LabIcon from '@/public/icons/icon/lab.svg';
 import { Button } from '@/shared/components/ui/button';
@@ -43,7 +44,12 @@ export default function AgentStudioPage() {
   const router = useRouter();
   const [selectedFilter, setSelectedFilter] = useState<AgentStudioFilter>('all');
   const automationQuery = useQuery(inquiryAutomationsQueries.list());
-  const statusMutation = useMutation(inquiryAutomationsMutations.updateStatus());
+  const statusMutation = useMutation({
+    ...inquiryAutomationsMutations.updateStatus(),
+    onError: () => {
+      toast.error('에이전트 상태 변경에 실패했습니다. 다시 시도해주세요.');
+    },
+  });
   const agents = useMemo(() => mapInquiryAutomationsToAgentCards(automationQuery.data ?? []), [automationQuery.data]);
   const visibleAgents = useMemo(() => getVisibleAgents(agents, selectedFilter), [agents, selectedFilter]);
   const activeAgents = visibleAgents.filter((agent) => agent.status === 'active');

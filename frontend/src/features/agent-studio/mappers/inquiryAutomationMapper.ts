@@ -1,4 +1,4 @@
-import { format } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import { ko } from 'date-fns/locale';
 
 import type { AgentStudioCardModel } from '../types/agentStudioModel';
@@ -15,7 +15,7 @@ function formatNullableDate(value: string | null | undefined): string {
   const trimmed = value?.trim();
   if (!trimmed) return EMPTY_VALUE_LABEL;
 
-  const parsed = new Date(trimmed);
+  const parsed = parseISO(trimmed);
   if (Number.isNaN(parsed.getTime())) return trimmed;
 
   return format(parsed, 'yyyy.MM.dd(EEE)', { locale: ko });

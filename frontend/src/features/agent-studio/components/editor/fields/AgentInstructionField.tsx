@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { cn } from '@/shared/utils/cn';
 
@@ -15,6 +15,7 @@ interface AgentInstructionFieldProps {
 
 export default function AgentInstructionField({ value, onChange, maxLength, hintText }: AgentInstructionFieldProps) {
   const [isFocused, setIsFocused] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const hasValue = value.length > 0;
   const isError = value.length >= maxLength;
   const isActive = isFocused || hasValue;
@@ -24,6 +25,18 @@ export default function AgentInstructionField({ value, onChange, maxLength, hint
       ? 'var(--line-primary-normal)'
       : 'var(--line-neutral)';
   const borderWidth = isError || isActive ? 1.5 : 1;
+
+  const adjustHeight = useCallback(() => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+
+    textarea.style.height = 'auto';
+    textarea.style.height = `${textarea.scrollHeight}px`;
+  }, []);
+
+  useEffect(() => {
+    adjustHeight();
+  }, [adjustHeight, value]);
 
   return (
     <label className="flex w-full flex-col gap-3">
@@ -39,14 +52,18 @@ export default function AgentInstructionField({ value, onChange, maxLength, hint
           <textarea
             aria-label="답변 초안, 어떤 규칙으로 쓸까요?"
             aria-invalid={isError}
-            className="text-body-small text-text-normal-normal placeholder:text-text-normal-assistive [field-sizing:content] max-h-50 min-h-5.75 w-full resize-none overflow-y-auto bg-transparent p-0 leading-[1.5] outline-none"
+            ref={textareaRef}
+            className="text-body-small text-text-normal-normal placeholder:text-text-normal-assistive max-h-50 min-h-5.75 w-full resize-none overflow-y-auto bg-transparent p-0 leading-[1.5] outline-none"
             maxLength={maxLength}
             placeholder={hintText}
             rows={1}
             value={value}
             onBlur={() => setIsFocused(false)}
             onChange={(event) => onChange(event.target.value)}
-            onFocus={() => setIsFocused(true)}
+            onFocus={() => {
+              setIsFocused(true);
+              adjustHeight();
+            }}
           />
           <span
             className={cn(
