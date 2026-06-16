@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 
 import LabIcon from '@/public/icons/icon/lab.svg';
 import { Button } from '@/shared/components/ui/button';
+import { cn } from '@/shared/utils/cn';
 
 import { AGENT_STUDIO_FILTERS } from '../../fixtures/agentStudioFixtures';
 import { mapInquiryAutomationsToAgentCards } from '../../mappers/inquiryAutomationMapper';
@@ -16,6 +17,21 @@ import AgentCard from './AgentCard';
 import AgentEmptyColumn from './AgentEmptyColumn';
 import AgentFilterTabs from './AgentFilterTabs';
 import AgentStudioHeader from './AgentStudioHeader';
+
+const ACTIVE_EMPTY_STATE = {
+  title: '운영 중인 Agent가 없습니다.',
+  description: '새로운 Agent를 만들어\n반복되는 문의 업무를 자동화해보세요.',
+} as const;
+
+const DRAFT_EMPTY_STATE = {
+  title: '제작 중인 Agent가 없습니다.',
+  description: '새로운 Agent를 만들어\n반복되는 문의 업무를 자동화해보세요.',
+} as const;
+
+const INACTIVE_EMPTY_STATE = {
+  title: '아직 비활성 Agent가 없습니다.',
+  description: '사용을 중지한 Agent는 이곳에 보관됩니다.',
+} as const;
 
 function getVisibleAgents(agents: readonly AgentStudioCardModel[], filter: AgentStudioFilter) {
   if (filter === 'all') return agents;
@@ -32,6 +48,8 @@ export default function AgentStudioPage() {
   const activeAgents = visibleAgents.filter((agent) => agent.status === 'active');
   const draftAgents = visibleAgents.filter((agent) => agent.status === 'draft');
   const inactiveAgents = visibleAgents.filter((agent) => agent.status === 'inactive');
+  const isGroupedView = selectedFilter === 'all';
+  const shouldShowActiveEmpty = activeAgents.length === 0 && (selectedFilter === 'all' || selectedFilter === 'active');
   const shouldShowDraftEmpty = draftAgents.length === 0 && (selectedFilter === 'all' || selectedFilter === 'draft');
   const shouldShowInactiveEmpty =
     inactiveAgents.length === 0 && (selectedFilter === 'all' || selectedFilter === 'inactive');
@@ -53,24 +71,39 @@ export default function AgentStudioPage() {
             Agent 만들기
           </Button>
         </div>
-        <div className="flex h-70.75 w-full flex-wrap items-start gap-6">
+        <div className={cn('flex w-full flex-wrap items-start gap-6', isGroupedView ? 'h-70.75' : 'min-h-52.75')}>
           {automationQuery.isLoading && (
-            <AgentEmptyColumn label="운영중" title="Agent를 불러오고 있습니다." description="잠시만 기다려주세요." />
+            <AgentEmptyColumn
+              label="운영중"
+              title="Agent를 불러오고 있습니다."
+              description="잠시만 기다려주세요."
+              layout={isGroupedView ? 'grouped' : 'flat'}
+            />
           )}
           {automationQuery.isError && (
             <AgentEmptyColumn
               label="운영중"
               title="Agent 목록을 불러오지 못했습니다."
               description="잠시 후 다시 시도해주세요."
+              layout={isGroupedView ? 'grouped' : 'flat'}
             />
           )}
           {!automationQuery.isLoading && !automationQuery.isError && (
             <>
+              {shouldShowActiveEmpty && (
+                <AgentEmptyColumn
+                  label="운영중"
+                  title={ACTIVE_EMPTY_STATE.title}
+                  description={ACTIVE_EMPTY_STATE.description}
+                  layout={isGroupedView ? 'grouped' : 'flat'}
+                />
+              )}
               {activeAgents.map((agent) => (
                 <AgentCard
                   key={agent.id}
                   agent={agent}
                   actionDisabled={statusMutation.isPending}
+                  layout={isGroupedView ? 'grouped' : 'flat'}
                   onDeactivate={(target) => updateStatus(target, 'inactive')}
                 />
               ))}
@@ -79,14 +112,16 @@ export default function AgentStudioPage() {
                   key={agent.id}
                   agent={agent}
                   actionDisabled={statusMutation.isPending}
+                  layout={isGroupedView ? 'grouped' : 'flat'}
                   onDeactivate={(target) => updateStatus(target, 'inactive')}
                 />
               ))}
               {shouldShowDraftEmpty && (
                 <AgentEmptyColumn
                   label="제작중"
-                  title="제작 중인 Agent가 없습니다."
-                  description={'새로운 Agent를 만들어\n반복되는 문의 업무를 자동화해보세요.'}
+                  title={DRAFT_EMPTY_STATE.title}
+                  description={DRAFT_EMPTY_STATE.description}
+                  layout={isGroupedView ? 'grouped' : 'flat'}
                 />
               )}
               {inactiveAgents.map((agent) => (
@@ -94,14 +129,16 @@ export default function AgentStudioPage() {
                   key={agent.id}
                   agent={agent}
                   actionDisabled={statusMutation.isPending}
+                  layout={isGroupedView ? 'grouped' : 'flat'}
                   onActivate={(target) => updateStatus(target, 'active')}
                 />
               ))}
               {shouldShowInactiveEmpty && (
                 <AgentEmptyColumn
                   label="사용 안함"
-                  title="아직 비활성 Agent가 없습니다."
-                  description="사용을 중지한 Agent는 이곳에 보관됩니다."
+                  title={INACTIVE_EMPTY_STATE.title}
+                  description={INACTIVE_EMPTY_STATE.description}
+                  layout={isGroupedView ? 'grouped' : 'flat'}
                 />
               )}
             </>
