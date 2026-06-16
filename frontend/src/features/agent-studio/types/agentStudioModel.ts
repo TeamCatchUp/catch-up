@@ -8,6 +8,7 @@ export interface AgentStudioFilterItem {
 
 export interface AgentStudioCardModel {
   id: string;
+  agentSpecId?: number;
   status: AgentStudioStatus;
   title: string;
   description: string;
