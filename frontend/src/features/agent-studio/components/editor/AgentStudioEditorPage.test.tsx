@@ -219,6 +219,21 @@ describe('AgentStudioEditorPage', () => {
     expect(slackChannelSelect).toHaveTextContent('cs-response');
   });
 
+  it('enables deploy after an instruction is entered', async () => {
+    const user = userEvent.setup();
+    renderEditor();
+
+    await selectRequiredAutomationFields(user);
+
+    const publishButton = screen.getByRole('button', { name: '배포하기' });
+
+    expect(publishButton).toBeDisabled();
+
+    await user.type(screen.getByLabelText('답변 초안, 어떤 규칙으로 쓸까요?'), '가');
+
+    await waitFor(() => expect(publishButton).not.toBeDisabled());
+  });
+
   it('publishes the selected automation settings and moves to the list after success', async () => {
     const user = userEvent.setup();
     const publishRequests: unknown[] = [];

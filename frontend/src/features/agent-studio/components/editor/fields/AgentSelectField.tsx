@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/components/ui/select';
 
 import type { AgentStudioSelectItem } from '../../../types/agentStudioModel';
+import RequiredMarker from './RequiredMarker';
 
 interface AgentSelectFieldProps {
   label: ReactNode;
@@ -29,11 +30,7 @@ export default function AgentSelectField({
     <label className="flex w-full flex-col gap-3">
       <span className="text-heading-small text-text-normal-normal flex items-start gap-1">
         {label}
-        {required && (
-          <span className="text-status-destructive" aria-hidden="true">
-            *
-          </span>
-        )}
+        {required && <RequiredMarker />}
       </span>
       <Select value={value} onValueChange={onChange} disabled={disabled}>
         <SelectTrigger className="h-11.5 p-3">

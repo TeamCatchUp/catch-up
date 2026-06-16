@@ -70,6 +70,7 @@ export function useAgentEditorSettingsForm() {
     () => slackTargetsQuery.data?.targets.find((target) => target.target_id === slackChannelId),
     [slackChannelId, slackTargetsQuery.data?.targets],
   );
+  const trimmedInstruction = instruction.trim();
 
   const channelTalkPlaceholder = channelTalkTargetsQuery.isError
     ? '채널톡 채널을 불러오지 못했습니다'
@@ -91,6 +92,7 @@ export function useAgentEditorSettingsForm() {
     selectedChannelTalkTarget?.credential_id !== undefined &&
     selectedSlackCredentialId !== undefined &&
     selectedSlackTarget !== undefined &&
+    trimmedInstruction.length > 0 &&
     !publishMutation.isPending;
 
   const handleSlackCredentialChange = (value: string) => {
@@ -103,7 +105,8 @@ export function useAgentEditorSettingsForm() {
       selectedChannelTalkTarget?.credential_id === null ||
       selectedChannelTalkTarget?.credential_id === undefined ||
       selectedSlackCredentialId === undefined ||
-      selectedSlackTarget === undefined
+      selectedSlackTarget === undefined ||
+      trimmedInstruction.length === 0
     ) {
       return;
     }
@@ -116,7 +119,7 @@ export function useAgentEditorSettingsForm() {
         channel_id: selectedSlackTarget.target_id,
         channel_name: selectedSlackTarget.display_name,
       },
-      guide_instruction: instruction || null,
+      guide_instruction: trimmedInstruction,
     });
   };
 

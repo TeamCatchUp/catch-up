@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 
-import ArrowLeftIcon from '@/public/icons/icon/arrow_left.svg';
+import ArrowBackIcon from '@/public/icons/icon/arrow_back.svg';
 import ClockIcon from '@/public/icons/icon/clock.svg';
 import HelpIcon from '@/public/icons/icon/help.svg';
 import KebabHorizontalIcon from '@/public/icons/icon/kebab_horizontal.svg';
@@ -24,7 +24,7 @@ export default function AgentEditorSettings() {
     <main className="bg-fill-normal-assistive-dark flex h-full min-w-0 flex-1 flex-col overflow-y-auto">
       <header className="flex h-13 shrink-0 items-center justify-between px-6 py-2">
         <Button variant="icon-only-gray" size="md" aria-label="Agent Studio로 돌아가기" onClick={() => router.back()}>
-          <ArrowLeftIcon className="size-6" aria-hidden="true" />
+          <ArrowBackIcon className="size-6" aria-hidden="true" />
         </Button>
         <Button variant="icon-only-gray" size="md" aria-label="설정 더보기">
           <KebabHorizontalIcon className="size-6" aria-hidden="true" />
