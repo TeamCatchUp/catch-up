@@ -7,6 +7,9 @@ import type { AgentStudioCardModel, AgentStudioStatus } from '../../types/agentS
 
 interface AgentCardProps {
   agent: AgentStudioCardModel;
+  onActivate?: (agent: AgentStudioCardModel) => void;
+  onDeactivate?: (agent: AgentStudioCardModel) => void;
+  actionDisabled?: boolean;
 }
 
 const STATUS_STYLE: Record<
@@ -34,7 +37,7 @@ const STATUS_STYLE: Record<
   },
 };
 
-export default function AgentCard({ agent }: AgentCardProps) {
+export default function AgentCard({ agent, onActivate, onDeactivate, actionDisabled = false }: AgentCardProps) {
   const statusStyle = STATUS_STYLE[agent.status];
   const isInactive = agent.status === 'inactive';
 
@@ -65,12 +68,24 @@ export default function AgentCard({ agent }: AgentCardProps) {
           </div>
         </div>
         {isInactive ? (
-          <Button variant="capsule-outline-mono" size="sm" className="text-text-normal-normal h-9 w-full">
+          <Button
+            variant="capsule-outline-mono"
+            size="sm"
+            className="text-text-normal-normal h-9 w-full"
+            disabled={actionDisabled}
+            onClick={() => onActivate?.(agent)}
+          >
             다시 운영하기
           </Button>
         ) : (
           <div className="flex w-full items-center justify-between">
-            <Button variant="text-secondary-mono" size="sm" aria-label={`${agent.title} 사용 안함`}>
+            <Button
+              variant="text-secondary-mono"
+              size="sm"
+              aria-label={`${agent.title} 사용 안함`}
+              disabled={actionDisabled}
+              onClick={() => onDeactivate?.(agent)}
+            >
               사용 안함
             </Button>
             <Button
