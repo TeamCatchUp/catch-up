@@ -1,13 +1,132 @@
+import { useState } from 'react';
+
 import type { FigmaLabCase } from '@/app/(dev)/figma-lab/_registry/types';
+import LabIcon from '@/public/icons/icon/lab.svg';
+import { Button } from '@/shared/components/ui/button';
+import { cn } from '@/shared/utils/cn';
+import type { AgentStudioCardModel, AgentStudioFilter } from '@/features/agent-studio/types/agentStudioModel';
+import AgentCard from '@/features/agent-studio/components/list/AgentCard';
+import AgentEmptyColumn from '@/features/agent-studio/components/list/AgentEmptyColumn';
+import AgentFilterTabs from '@/features/agent-studio/components/list/AgentFilterTabs';
+import AgentStudioHeader from '@/features/agent-studio/components/list/AgentStudioHeader';
 import AgentStudioEditorPage from '@/features/agent-studio/components/editor/AgentStudioEditorPage';
-import AgentStudioPage from '@/features/agent-studio/components/list/AgentStudioPage';
+import {
+  AGENT_STUDIO_FILTERS,
+  AGENT_STUDIO_LIST_FIXTURE,
+  AGENT_STUDIO_MULTI_ACTIVE_LIST_FIXTURE,
+} from '@/features/agent-studio/fixtures/agentStudioFixtures';
 
 import { DESIGN_SYSTEM_FILE_KEY } from './caseConstants';
+
+const ACTIVE_EMPTY_STATE = {
+  title: '운영 중인 Agent가 없습니다.',
+  description: '새로운 Agent를 만들어\n반복되는 문의 업무를 자동화해보세요.',
+} as const;
+
+const DRAFT_EMPTY_STATE = {
+  title: '제작 중인 Agent가 없습니다.',
+  description: '새로운 Agent를 만들어\n반복되는 문의 업무를 자동화해보세요.',
+} as const;
+
+const INACTIVE_EMPTY_STATE = {
+  title: '아직 비활성 Agent가 없습니다.',
+  description: '사용을 중지한 Agent는 이곳에 보관됩니다.',
+} as const;
+
+function getVisibleAgents(agents: readonly AgentStudioCardModel[], filter: AgentStudioFilter) {
+  if (filter === 'all') return agents;
+  return agents.filter((item) => item.status === filter);
+}
+
+function AgentStudioListFixturePreview() {
+  const [selectedFilter, setSelectedFilter] = useState<AgentStudioFilter>('all');
+  const [agents, setAgents] = useState<readonly AgentStudioCardModel[]>(AGENT_STUDIO_MULTI_ACTIVE_LIST_FIXTURE);
+  const visibleAgents = getVisibleAgents(agents, selectedFilter);
+  const activeAgents = visibleAgents.filter((agent) => agent.status === 'active');
+  const draftAgents = visibleAgents.filter((agent) => agent.status === 'draft');
+  const inactiveAgents = visibleAgents.filter((agent) => agent.status === 'inactive');
+  const isGroupedView = selectedFilter === 'all';
+  const cardLayout = isGroupedView ? 'grouped' : 'flat';
+  const shouldShowActiveEmpty = activeAgents.length === 0 && (selectedFilter === 'all' || selectedFilter === 'active');
+  const shouldShowDraftEmpty = draftAgents.length === 0 && (selectedFilter === 'all' || selectedFilter === 'draft');
+  const shouldShowInactiveEmpty =
+    inactiveAgents.length === 0 && (selectedFilter === 'all' || selectedFilter === 'inactive');
+
+  const updateStatus = (agentId: string, status: AgentStudioCardModel['status']) => {
+    setAgents((current) => current.map((item) => (item.id === agentId ? { ...item, status } : item)));
+  };
+
+  return (
+    <div className="bg-background-normal-normal flex min-h-full flex-col">
+      <AgentStudioHeader />
+      <section className="flex flex-col items-center gap-3 px-16 pt-6 pb-30">
+        <h1 className="text-heading-large text-text-normal-normal w-full">우리 팀의 Agent</h1>
+        <div className="flex w-full items-center gap-5">
+          <AgentFilterTabs filters={AGENT_STUDIO_FILTERS} selected={selectedFilter} onChange={setSelectedFilter} />
+          <Button variant="box-solid-primary" size="md">
+            <LabIcon className="size-5" aria-hidden="true" />
+            Agent 만들기
+          </Button>
+        </div>
+        <div className={cn('flex w-full flex-wrap items-start gap-6', isGroupedView ? 'h-70.75' : 'min-h-52.75')}>
+          {shouldShowActiveEmpty && (
+            <AgentEmptyColumn
+              label="운영중"
+              title={ACTIVE_EMPTY_STATE.title}
+              description={ACTIVE_EMPTY_STATE.description}
+              layout={cardLayout}
+            />
+          )}
+          {activeAgents.map((agent) => (
+            <AgentCard
+              key={agent.id}
+              agent={agent}
+              layout={cardLayout}
+              onDeactivate={(target) => updateStatus(target.id, 'inactive')}
+            />
+          ))}
+          {draftAgents.map((agent) => (
+            <AgentCard
+              key={agent.id}
+              agent={agent}
+              layout={cardLayout}
+              onDeactivate={(target) => updateStatus(target.id, 'inactive')}
+            />
+          ))}
+          {shouldShowDraftEmpty && (
+            <AgentEmptyColumn
+              label="제작중"
+              title={DRAFT_EMPTY_STATE.title}
+              description={DRAFT_EMPTY_STATE.description}
+              layout={cardLayout}
+            />
+          )}
+          {inactiveAgents.map((agent) => (
+            <AgentCard
+              key={agent.id}
+              agent={agent}
+              layout={cardLayout}
+              onActivate={(target) => updateStatus(target.id, 'active')}
+            />
+          ))}
+          {shouldShowInactiveEmpty && (
+            <AgentEmptyColumn
+              label="사용 안함"
+              title={INACTIVE_EMPTY_STATE.title}
+              description={INACTIVE_EMPTY_STATE.description}
+              layout={cardLayout}
+            />
+          )}
+        </div>
+      </section>
+    </div>
+  );
+}
 
 function AgentStudioListPreview() {
   return (
     <div style={{ minHeight: 720 }}>
-      <AgentStudioPage />
+      <AgentStudioListFixturePreview />
     </div>
   );
 }
@@ -67,17 +186,30 @@ export const agentStudioListFigmaCase: FigmaLabCase = {
   },
   data: {
     source: 'fixture',
-    fixtures: ['AGENT_STUDIO_LIST_FIXTURE', 'AGENT_STUDIO_FILTERS'],
+    fixtures: ['AGENT_STUDIO_MULTI_ACTIVE_LIST_FIXTURE', 'AGENT_STUDIO_FILTERS', 'AGENT_STUDIO_LIST_FIXTURE'],
     states: [
       {
         state: 'fixtureDefault',
-        fixture: 'AGENT_STUDIO_LIST_FIXTURE',
-        expected: '운영 중 Agent 카드, 제작중 빈 컬럼, 사용 안함 Agent 카드가 같은 행에 표시됩니다.',
+        fixture: 'AGENT_STUDIO_MULTI_ACTIVE_LIST_FIXTURE',
+        expected: '운영중 Agent 카드 3개가 같은 행에 표시됩니다.',
+      },
+      {
+        state: 'activeEmptyAfterDeactivate',
+        fixture: 'AGENT_STUDIO_MULTI_ACTIVE_LIST_FIXTURE',
+        expected: '운영중 카드에서 사용 안함을 눌러 active가 비면, 운영중 빈 컬럼이 유지됩니다.',
+      },
+      {
+        state: 'filterTabs',
+        fixture: 'AGENT_STUDIO_MULTI_ACTIVE_LIST_FIXTURE',
+        expected: '운영중, 제작중, 사용 안함 탭을 클릭하면 해당 상태의 카드 또는 빈 컬럼만 표시됩니다.',
       },
     ],
-    notes: ['사용 안함 Agent 카드 본문은 node 14844:104963 기준으로 다시 운영하기 CTA를 표시합니다.'],
+    notes: [
+      '사용 안함 Agent 카드 본문은 node 14844:104963 기준으로 다시 운영하기 CTA를 표시합니다.',
+      '운영중 빈 컬럼은 node 14844:104803 구조를 기준으로 상태 색상과 문구를 맞춥니다.',
+    ],
   },
-  states: ['fixtureDefault'],
+  states: ['fixtureDefault', 'activeEmptyAfterDeactivate', 'filterTabs'],
   reuse: [
     {
       figmaPart: 'Create agent button',
