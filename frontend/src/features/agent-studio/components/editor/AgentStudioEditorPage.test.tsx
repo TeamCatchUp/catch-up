@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -46,6 +46,17 @@ describe('AgentStudioEditorPage', () => {
     await user.type(screen.getByLabelText('답변 초안, 어떤 규칙으로 쓸까요?'), '응답은 간결하게 작성');
 
     expect(screen.getByText('11/500')).toBeInTheDocument();
+  });
+
+  it('marks the instruction field as invalid at the max length', () => {
+    render(<AgentStudioEditorPage />);
+
+    const instructionField = screen.getByLabelText('답변 초안, 어떤 규칙으로 쓸까요?');
+
+    fireEvent.change(instructionField, { target: { value: '가'.repeat(500) } });
+
+    expect(instructionField).toHaveAttribute('aria-invalid', 'true');
+    expect(screen.getByText('500/500')).toHaveClass('text-status-destructive');
   });
 
   it('renders unselected channel fields as select placeholders', () => {
