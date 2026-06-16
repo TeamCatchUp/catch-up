@@ -91,6 +91,7 @@ class BaseIngestionAdapter(Generic[ScopeIdT, ClientT, TransformerT]):
         v1_documents: list[Document],
         v2_documents: list[Document],
         ids: list[str],
+        vector_source_ids: list[str] | None = None,
         audit_context: SyncAuditContext | None,
         context: str,
     ) -> DualWriteResult:
@@ -101,6 +102,7 @@ class BaseIngestionAdapter(Generic[ScopeIdT, ClientT, TransformerT]):
             source_documents=v1_documents,
             vector_documents=v2_documents,
             ids=ids,
+            vector_source_ids=vector_source_ids,
             audit_context=audit_context,
             context=context,
         )

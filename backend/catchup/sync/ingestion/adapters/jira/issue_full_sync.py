@@ -83,9 +83,10 @@ class JiraIssueFullSyncIngestionAdapter(JiraIssueIngestionAdapterBase):
     ) -> JiraIssuePersistResult:
         _ = sync_window
         _ = summary
-        return await self.persist_documents(
+        return await self.persist_summary_documents(
             project_key=execution.project_key,
             transformed=transformed,
+            summary=summary,
             audit_context=execution.audit_context,
         )
 

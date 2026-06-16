@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import structlog
+
 from catchup.sync.ingestion.adapters.jira.issue_common import (
     JiraIssueIngestionAdapterBase,
 )
@@ -18,6 +20,8 @@ from catchup.sync.ingestion.adapters.jira.issue_execution import (
     JiraIssueTransformResult,
 )
 from catchup.sync.ingestion.schemas import SyncWindow
+
+logger = structlog.get_logger(__name__)
 
 
 class JiraIssueIncrementalIngestionAdapter(JiraIssueIngestionAdapterBase):
@@ -79,13 +83,38 @@ class JiraIssueIncrementalIngestionAdapter(JiraIssueIngestionAdapterBase):
         _ = sync_window
         _ = summary
         if execution.is_delete_event:
-            doc_ids = [f"jira:issue:{execution.issue_key}"]
-            await self._dependencies.repository.delete_documents(doc_ids)
-            return JiraIssuePersistResult(deleted_count=len(doc_ids))
+            v1_doc_ids = [f"jira:issue:{execution.issue_key}"]
+            await self._dependencies.repository.delete_documents(v1_doc_ids)
+            v2_failed_ids: tuple[str, ...] = ()
+            if self._dependencies.vector_store is not None:
+                v2_doc_id = (
+                    "jira:issue:"
+                    f"{execution.tenant_id}:{execution.project_key}:"
+                    f"{execution.issue_key}"
+                )
+                try:
+                    await self._dependencies.vector_store.delete([v2_doc_id])
+                except Exception as exc:
+                    logger.warning(
+                        "jira_issue_v2_delete_failed",
+                        cloud_id=execution.tenant_id,
+                        project_key=execution.project_key,
+                        issue_key=execution.issue_key,
+                        document_id=v2_doc_id,
+                        error=str(exc),
+                        exc_info=True,
+                    )
+                    v2_failed_ids = (v2_doc_id,)
+            return JiraIssuePersistResult(
+                deleted_count=len(v1_doc_ids),
+                v2_error_count=len(v2_failed_ids),
+                v2_failed_ids=v2_failed_ids,
+            )
 
-        return await self.persist_documents(
+        return await self.persist_summary_documents(
             project_key=execution.project_key,
             transformed=transformed,
+            summary=summary,
             audit_context=execution.audit_context,
         )
 

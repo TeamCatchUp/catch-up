@@ -8,6 +8,8 @@ from catchup.components.embedder.constants import EmbeddingProvider
 from catchup.components.embedder.factory import get_embedding_service
 from catchup.components.summarizer import get_summarizer_service
 from catchup.components.vector_db.factory import get_pgvector_repository
+from catchup.components.vector_db.factory import get_v2_vector_store
+from catchup.configs.config import settings
 from catchup.connectors.atlassian.exceptions import AtlassianTokenExpiredError
 from catchup.connectors.atlassian.exceptions import AtlassianTokenNotFoundError
 from catchup.connectors.atlassian.oauth_client import AtlassianOAuthClient
@@ -21,6 +23,9 @@ from catchup.sync.common.exceptions import SyncConnectorException
 from catchup.sync.common.exceptions import SyncInternalException
 from catchup.sync.ingestion.adapters.jira.issue_dependencies import (
     JiraIssueIngestionDependencies,
+)
+from catchup.sync.ingestion.adapters.jira.issue_v2_document_builder import (
+    JiraIssueV2DocumentBuilder,
 )
 from catchup.sync.ingestion.document_builders.jira import JiraTransformer
 
@@ -73,12 +78,13 @@ async def create_jira_issue_ingestion_dependencies(
         client = JiraApiClient(cloud_id, token_provider)
         field_mapper = JiraFieldMapper(client)
         await field_mapper.initialize()
-        repository = get_pgvector_repository(
-            embeddings=get_embedding_service(
-                EmbeddingProvider.AWS_BEDROCK
-            ).get_embedder()
-        )
+        embeddings = get_embedding_service(EmbeddingProvider.AWS_BEDROCK).get_embedder()
+        repository = get_pgvector_repository(embeddings=embeddings)
         repository.ensure_initialized()
+        vector_store = None
+        if settings.VECTOR_STORE_V2_DUAL_WRITE_ENABLED:
+            vector_store = get_v2_vector_store(embeddings)
+            await vector_store.initialize()
         summarizer = get_summarizer_service() if enable_summarization else None
         return JiraIssueIngestionDependencies(
             cloud_id=cloud_id,
@@ -88,6 +94,10 @@ async def create_jira_issue_ingestion_dependencies(
             transformer=JiraTransformer(field_mapper),
             repository=repository,
             summarizer=summarizer,
+            vector_store=vector_store,
+            v2_document_builder=JiraIssueV2DocumentBuilder()
+            if vector_store is not None
+            else None,
         )
     except Exception as exc:
         logger.error(

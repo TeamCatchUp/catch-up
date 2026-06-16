@@ -7,6 +7,7 @@ from unittest import IsolatedAsyncioTestCase
 
 from langchain_core.documents import Document
 
+from catchup.connectors.jira.schemas import JiraIssue
 from catchup.sync.ingestion.adapters.jira import JiraIssueFullSyncAdapter
 from catchup.sync.ingestion.adapters.jira import JiraIssueFullSyncExecutionRequest
 from catchup.sync.ingestion.adapters.jira import JiraIssueIncrementalAdapter
@@ -52,11 +53,29 @@ class _FakeTransformer:
             },
         )
 
+    def parse_issue(self, issue_data, site_url):
+        issue_key = issue_data["key"]
+        return JiraIssue(
+            key=issue_key,
+            id=issue_data.get("id", "10001"),
+            url=f"{site_url}/browse/{issue_key}",
+            project_key="GRT",
+            project_name="Growth",
+            issue_type="Task",
+            status="To Do",
+            summary=f"Summary {issue_key}",
+            description=f"Description {issue_key}",
+            created_at=datetime(2026, 5, 8, 5, 0, tzinfo=timezone.utc),
+            updated_at=datetime(2026, 5, 8, 5, 1, tzinfo=timezone.utc),
+        )
+
 
 class _FakeRepository:
     def __init__(self) -> None:
         self.upsert_calls: list[dict] = []
         self.delete_calls: list[list[str]] = []
+        self.generate_calls: list[dict] = []
+        self.store_calls: list[dict] = []
 
     async def upsert_documents(self, documents, ids, audit_context=None, context=None):
         self.upsert_calls.append(
@@ -72,6 +91,49 @@ class _FakeRepository:
     async def delete_documents(self, ids):
         self.delete_calls.append(ids)
 
+    async def generate_embeddings(self, documents, audit_context=None, context=None):
+        self.generate_calls.append(
+            {
+                "documents": documents,
+                "audit_context": audit_context,
+                "context": context,
+            }
+        )
+        return [[float(index)] for index, _doc in enumerate(documents, start=1)]
+
+    async def store_with_embeddings(
+        self,
+        documents,
+        embeddings,
+        ids,
+        audit_context=None,
+        context=None,
+    ):
+        self.store_calls.append(
+            {
+                "documents": documents,
+                "embeddings": embeddings,
+                "ids": ids,
+                "audit_context": audit_context,
+                "context": context,
+            }
+        )
+        return ids
+
+
+class _FakeVectorStore:
+    def __init__(self) -> None:
+        self.upsert_calls: list[dict] = []
+        self.delete_calls: list[list[str]] = []
+
+    async def upsert_documents(self, documents, ids, embeddings):
+        self.upsert_calls.append(
+            {"documents": documents, "ids": ids, "embeddings": embeddings}
+        )
+
+    async def delete(self, ids):
+        self.delete_calls.append(ids)
+
 
 def _window() -> SyncWindow:
     return SyncWindow(
@@ -80,7 +142,19 @@ def _window() -> SyncWindow:
     )
 
 
-def _dependencies(client: _FakeClient, repository: _FakeRepository):
+def _dependencies(
+    client: _FakeClient,
+    repository: _FakeRepository,
+    *,
+    vector_store: _FakeVectorStore | None = None,
+):
+    v2_document_builder = None
+    if vector_store is not None:
+        from catchup.sync.ingestion.adapters.jira.issue_v2_document_builder import (
+            JiraIssueV2DocumentBuilder,
+        )
+
+        v2_document_builder = JiraIssueV2DocumentBuilder()
     return JiraIssueIngestionDependencies(
         cloud_id="cloud-1",
         site_url="https://example.atlassian.net",
@@ -89,6 +163,8 @@ def _dependencies(client: _FakeClient, repository: _FakeRepository):
         transformer=_FakeTransformer(),
         repository=repository,
         summarizer=None,
+        vector_store=vector_store,
+        v2_document_builder=v2_document_builder,
     )
 
 
@@ -182,3 +258,106 @@ class JiraIssueIngestionAdapterTests(IsolatedAsyncioTestCase):
         self.assertEqual(client.get_issue_calls, [])
         self.assertEqual(repository.delete_calls, [["jira:issue:GRT-1"]])
         self.assertEqual(persisted.deleted_count, 1)
+
+    async def test_full_sync_dual_writes_jira_v2_documents(self) -> None:
+        client = _FakeClient()
+        repository = _FakeRepository()
+        vector_store = _FakeVectorStore()
+        adapter = JiraIssueFullSyncAdapter(
+            dependencies=_dependencies(
+                client,
+                repository,
+                vector_store=vector_store,
+            ),
+        )
+        execution = JiraIssueFullSyncExecutionRequest(
+            tenant_id="cloud-1",
+            project_key="GRT",
+            batch_index=0,
+            max_results=50,
+        )
+
+        fetched = await adapter.fetch(execution=execution, sync_window=_window())
+        transformed = await adapter.transform(
+            execution=execution,
+            sync_window=_window(),
+            fetched=fetched,
+        )
+        summary = await adapter.summarize(
+            execution=execution,
+            sync_window=_window(),
+            transformed=transformed,
+        )
+        persisted = await adapter.persist(
+            execution=execution,
+            sync_window=_window(),
+            transformed=transformed,
+            summary=summary,
+        )
+
+        self.assertEqual(repository.generate_calls[0]["documents"][0].id, "jira:issue:GRT-1")
+        self.assertEqual(
+            repository.generate_calls[0]["documents"][0].metadata["cloud_id"],
+            "cloud-1",
+        )
+        self.assertEqual(
+            repository.generate_calls[0]["documents"][0].metadata["scope_id"],
+            "cloud-1",
+        )
+        self.assertEqual(repository.delete_calls, [["jira:issue:GRT-1"]])
+        self.assertEqual(repository.store_calls[0]["ids"], ["jira:issue:GRT-1"])
+        self.assertEqual(
+            vector_store.upsert_calls[0]["ids"],
+            ["jira:issue:cloud-1:GRT:GRT-1"],
+        )
+        self.assertEqual(vector_store.upsert_calls[0]["embeddings"], [[1.0]])
+        self.assertEqual(
+            vector_store.upsert_calls[0]["documents"][0].page_content,
+            "https://example.atlassian.net:GRT-1",
+        )
+        self.assertEqual(persisted.persisted_count, 1)
+        self.assertEqual(persisted.v2_error_count, 0)
+
+    async def test_incremental_delete_deletes_v2_document_when_configured(self) -> None:
+        client = _FakeClient()
+        repository = _FakeRepository()
+        vector_store = _FakeVectorStore()
+        adapter = JiraIssueIncrementalAdapter(
+            dependencies=_dependencies(
+                client,
+                repository,
+                vector_store=vector_store,
+            ),
+        )
+        execution = JiraIssueIncrementalSyncExecutionRequest(
+            tenant_id="cloud-1",
+            project_key="GRT",
+            issue_key="GRT-1",
+            event_kind="deleted",
+        )
+
+        fetched = await adapter.fetch(execution=execution, sync_window=_window())
+        transformed = await adapter.transform(
+            execution=execution,
+            sync_window=_window(),
+            fetched=fetched,
+        )
+        summary = await adapter.summarize(
+            execution=execution,
+            sync_window=_window(),
+            transformed=transformed,
+        )
+        persisted = await adapter.persist(
+            execution=execution,
+            sync_window=_window(),
+            transformed=transformed,
+            summary=summary,
+        )
+
+        self.assertEqual(repository.delete_calls, [["jira:issue:GRT-1"]])
+        self.assertEqual(
+            vector_store.delete_calls,
+            [["jira:issue:cloud-1:GRT:GRT-1"]],
+        )
+        self.assertEqual(persisted.deleted_count, 1)
+        self.assertEqual(persisted.v2_error_count, 0)

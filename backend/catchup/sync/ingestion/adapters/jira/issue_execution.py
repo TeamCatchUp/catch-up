@@ -10,6 +10,7 @@ from pydantic import ValidationInfo
 from pydantic import computed_field
 from pydantic import field_validator
 
+from catchup.connectors.jira.schemas import JiraIssue
 from catchup.db.models import SyncConnector
 from catchup.sync.audit import SyncAuditContext
 from catchup.sync.ingestion.schemas import SyncExecutionRequest
@@ -24,6 +25,13 @@ JiraIssueIncrementalEventKind = Literal[
     "comment_updated",
     "comment_deleted",
 ]
+
+
+class ParsedJiraIssueDocument(BaseModel):
+    model_config = ConfigDict(extra="forbid", arbitrary_types_allowed=True)
+
+    issue: JiraIssue
+    document: Document
 
 
 class JiraIssueFullSyncExecutionRequest(SyncExecutionRequest):
@@ -114,7 +122,10 @@ class JiraIssueTransformResult(BaseModel):
     model_config = ConfigDict(extra="forbid", arbitrary_types_allowed=True)
 
     documents: tuple[Document, ...] = ()
+    v2_documents: tuple[Document, ...] = ()
+    v2_source_ids: tuple[str, ...] = ()
     prepared_document_ids: tuple[str, ...] = ()
+    v2_failed_ids: tuple[str, ...] = ()
     issue_count: int = 0
     error_count: int = 0
 
@@ -125,16 +136,22 @@ class JiraIssueTransformResult(BaseModel):
     def connector_log_summary(self) -> dict[str, object]:
         return {
             "document_count": self.document_count,
+            "v2_document_count": len(self.v2_documents),
             "issue_count": self.issue_count,
             "error_count": self.error_count,
+            "v2_failed_count": len(self.v2_failed_ids),
         }
 
 
 class JiraIssueSummaryResult(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", arbitrary_types_allowed=True)
 
     summary_applied: bool = False
     document_count: int = 0
+    documents: tuple[Document, ...] = ()
+    v2_documents: tuple[Document, ...] = ()
+    document_ids: tuple[str, ...] = ()
+    v2_source_ids: tuple[str, ...] = ()
 
 
 class JiraIssuePersistResult(BaseModel):
@@ -143,11 +160,14 @@ class JiraIssuePersistResult(BaseModel):
     persisted_count: int = 0
     persisted_ids: tuple[str, ...] = ()
     deleted_count: int = 0
+    v2_error_count: int = 0
+    v2_failed_ids: tuple[str, ...] = ()
 
     def connector_log_summary(self) -> dict[str, object]:
         return {
             "persisted_count": self.persisted_count,
             "deleted_count": self.deleted_count,
+            "v2_error_count": self.v2_error_count,
         }
 
 
@@ -160,6 +180,8 @@ class JiraIssueSyncExecutionResult(SyncExecutionResult):
     issue_count: int = 0
     deleted_count: int = 0
     error_count: int = 0
+    v2_failed_count: int = 0
+    v2_failed_ids: tuple[str, ...] = ()
     skipped: bool = False
     batch_index: int = 0
     is_last: bool = True
@@ -181,6 +203,7 @@ class JiraIssueSyncExecutionResult(SyncExecutionResult):
             "issue_count": self.issue_count,
             "deleted_count": self.deleted_count,
             "error_count": self.error_count,
+            "v2_failed_count": self.v2_failed_count,
             "is_last": self.is_last,
             "response_next_page_token_present": self.next_page_token_present,
         }
