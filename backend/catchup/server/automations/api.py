@@ -109,6 +109,10 @@ class InquiryAutomationItem(BaseModel):
     guide_instruction: str | None
     quiet_period_seconds: int | None
     trigger_id: int | None
+    title: str
+    author_name: str
+    updated_at: str
+    author_profile_image_url: str | None
 
 
 class InquiryAutomationUpdateRequest(BaseModel):
@@ -208,8 +212,10 @@ def list_inquiry_automations(
 ) -> list[InquiryAutomationItem]:
     """워크스페이스에 등록된 문의 자동화 설정 목록을 반환한다."""
     workspace_id = _resolve_user_workspace_id(db, current_user.id)
-    rows = db.scalars(
-        select(AgentSpec).where(
+    rows = db.execute(
+        select(AgentSpec, User)
+        .join(User, AgentSpec.user_id == User.id)
+        .where(
             AgentSpec.workspace_id == workspace_id,
             AgentSpec.spec["preset_key"].as_string()
             == INQUIRY_AUTOMATION_PRESET_KEY,
@@ -217,7 +223,7 @@ def list_inquiry_automations(
     ).all()
 
     items = []
-    for row in rows:
+    for row, author in rows:
         try:
             config = InquiryAutomationConfig.model_validate(row.spec)
         except Exception:
@@ -226,6 +232,9 @@ def list_inquiry_automations(
         quiet_period_seconds = None
         if trigger is not None:
             quiet_period_seconds = trigger.condition.get("quiet_period_seconds")
+        title = row.spec.get("title") or row.spec.get("name")
+        if not isinstance(title, str) or not title.strip():
+            title = "채널톡 문의 자동화"
         items.append(
             InquiryAutomationItem(
                 agent_spec_id=row.id,
@@ -236,6 +245,10 @@ def list_inquiry_automations(
                 guide_instruction=config.guide_instruction,
                 quiet_period_seconds=quiet_period_seconds,
                 trigger_id=trigger.id if trigger is not None else None,
+                title=title.strip(),
+                author_name=author.name,
+                updated_at=row.updated_at.isoformat(),
+                author_profile_image_url=author.picture,
             )
         )
     return items

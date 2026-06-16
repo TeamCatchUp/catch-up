@@ -342,6 +342,7 @@ def _make_spec_row(
     slack_credential_id: int = 1,
     guide_instruction: str | None = None,
     quiet_period_seconds: int | None = 60,
+    title: str | None = None,
 ) -> MagicMock:
     trigger = SimpleNamespace(
         id=99,
@@ -359,14 +360,18 @@ def _make_spec_row(
         "slack_credential_id": slack_credential_id,
         "guide_instruction": guide_instruction,
     }
+    if title is not None:
+        row.spec["title"] = title
     row.triggers = [trigger]
+    row.updated_at = datetime(2026, 6, 16, 9, 30, tzinfo=timezone.utc)
     return row
 
 
 def test_list_inquiry_automations_returns_items(monkeypatch) -> None:
-    row = _make_spec_row(guide_instruction="환불은 영수증 먼저")
+    row = _make_spec_row(guide_instruction="환불은 영수증 먼저", title="문의 응대 자동화")
+    author = SimpleNamespace(name="팀원A", picture="https://example.com/profile.png")
     db = MagicMock()
-    db.scalars.return_value.all.return_value = [row]
+    db.execute.return_value.all.return_value = [(row, author)]
     user = SimpleNamespace(id=1)
 
     monkeypatch.setattr(api, "_resolve_user_workspace_id", lambda *_: 1)
@@ -380,14 +385,36 @@ def test_list_inquiry_automations_returns_items(monkeypatch) -> None:
     assert result[0].guide_instruction == "환불은 영수증 먼저"
     assert result[0].quiet_period_seconds == 60
     assert result[0].trigger_id == 99
+    assert result[0].title == "문의 응대 자동화"
+    assert result[0].author_name == "팀원A"
+    assert result[0].updated_at == "2026-06-16T09:30:00+00:00"
+    assert result[0].author_profile_image_url == "https://example.com/profile.png"
+
+
+def test_list_inquiry_automations_uses_default_title(monkeypatch) -> None:
+    row = _make_spec_row()
+    author = SimpleNamespace(name="작성자", picture=None)
+    db = MagicMock()
+    db.execute.return_value.all.return_value = [(row, author)]
+    user = SimpleNamespace(id=1)
+
+    monkeypatch.setattr(api, "_resolve_user_workspace_id", lambda *_: 1)
+
+    result = list_inquiry_automations(db=db, current_user=user)
+
+    assert result[0].title == "채널톡 문의 자동화"
+    assert result[0].author_name == "작성자"
+    assert result[0].author_profile_image_url is None
 
 
 def test_list_inquiry_automations_skips_invalid_spec(monkeypatch) -> None:
     bad_row = MagicMock()
     bad_row.spec = {"preset_key": INQUIRY_AUTOMATION_PRESET_KEY}
     bad_row.triggers = []
+    bad_row.updated_at = datetime(2026, 6, 16, 9, 30, tzinfo=timezone.utc)
+    author = SimpleNamespace(name="작성자", picture=None)
     db = MagicMock()
-    db.scalars.return_value.all.return_value = [bad_row]
+    db.execute.return_value.all.return_value = [(bad_row, author)]
     user = SimpleNamespace(id=1)
 
     monkeypatch.setattr(api, "_resolve_user_workspace_id", lambda *_: 1)
