@@ -26,6 +26,9 @@ class JiraUser(BaseModel):
     account_id: str | None = None
     display_name: str | None = None
     email_address: str | None = None
+    avatar_url: str | None = None
+    active: bool | None = None
+    catchup_user_id: str | None = None
 
 
 class JiraMention(BaseModel):
@@ -50,8 +53,11 @@ class JiraComment(BaseModel):
     id: str
     author: str  # display_name
     author_account_id: str | None = None  # 작성자 account_id (멘션 매칭용)
+    author_user: JiraUser | None = None
     body: str    # 텍스트로 변환된 본문
     created: datetime
+    updated: datetime | None = None
+    visibility: str | None = None
     # 코멘트 내 @멘션 목록
     mentions: list[JiraMention] = Field(default_factory=list)
     # 코멘트 본문에 포함된 인라인 미디어/첨부파일
@@ -61,17 +67,28 @@ class JiraComment(BaseModel):
 class JiraLinkedIssue(BaseModel):
     """연결된 이슈"""
     key: str
+    id: str | None = None
     summary: str | None = None
     status: str | None = None
+    issue_type: str | None = None
+    priority: str | None = None
     link_type: str  # "blocks", "is blocked by", "relates to" 등
+    direction: str | None = None
+    url: str | None = None
 
 
 class JiraAttachment(BaseModel):
     """첨부파일 메타데이터"""
     filename: str
     author: str | None = None
+    id: str | None = None
+    author_account_id: str | None = None
+    author_user: JiraUser | None = None
     mime_type: str | None = None
     url: str | None = None
+    thumbnail_url: str | None = None
+    created: datetime | None = None
+    size: int | None = None
 
 
 class JiraSprintInfo(BaseModel):
@@ -102,6 +119,7 @@ class JiraIssue(BaseModel):
     project_name: str
     issue_type: str                   # Task, Story, Bug, Subtask
     status: str
+    status_category: str | None = None
     priority: str | None = None
     resolution: str | None = None
 
@@ -307,4 +325,3 @@ class JiraComponent(BaseModel):
     # 통계
     total_issues: int = 0
     open_issues: int = 0
-

@@ -96,9 +96,17 @@ class JiraTransformer:
         Returns:
             LangChain Document with page_content and metadata
         """
-        issue = self._parse_issue(issue_data, site_url, comments)
+        issue = self.parse_issue(issue_data, site_url, comments)
 
         return self._issue_to_document(issue)
+
+    def parse_issue(
+        self,
+        issue_data: dict[str, Any],
+        site_url: str,
+        comments: list[dict] | None = None,
+    ) -> JiraIssue:
+        return self._parse_issue(issue_data, site_url, comments)
 
     def _parse_issue(
         self,
@@ -123,6 +131,11 @@ class JiraTransformer:
         issue_type_raw = fields.get("issuetype", {}).get("name", "")
         issue_type = normalize_issue_type(issue_type_raw)
         status = fields.get("status", {}).get("name", "")
+        status_category = (
+            fields.get("status", {}).get("statusCategory", {}).get("name")
+            if fields.get("status")
+            else None
+        )
         priority = fields.get("priority", {}).get("name") if fields.get("priority") else None
         resolution = fields.get("resolution", {}).get("name") if fields.get("resolution") else None
 
@@ -206,6 +219,7 @@ class JiraTransformer:
             project_name=project_name,
             issue_type=issue_type,
             status=status,
+            status_category=status_category,
             priority=priority,
             resolution=resolution,
             summary=fields.get("summary", ""),
@@ -438,6 +452,9 @@ class JiraTransformer:
             account_id=user_data.get("accountId"),
             display_name=user_data.get("displayName"),
             email_address=user_data.get("emailAddress"),
+            avatar_url=user_data.get("avatarUrls", {}).get("48x48")
+            or user_data.get("avatarUrl"),
+            active=user_data.get("active"),
         )
 
     def _parse_comments(
@@ -448,9 +465,15 @@ class JiraTransformer:
         for c in comments_data:
             author = c.get("author", {}).get("displayName", "Unknown")
             author_account_id = c.get("author", {}).get("accountId")
+            author_user = self._parse_user(c.get("author"))
             body_adf = c.get("body")
             body = extract_text(body_adf)
             created = parse_atlassian_datetime(c.get("created"))
+            updated = parse_atlassian_datetime(c.get("updated"))
+            visibility_data = c.get("visibility")
+            visibility = None
+            if isinstance(visibility_data, dict):
+                visibility = visibility_data.get("value") or visibility_data.get("type")
 
             # ADF에서 멘션 및 인라인 미디어 추출
             mentions: list[JiraMention] = []
@@ -481,8 +504,11 @@ class JiraTransformer:
                     id=c.get("id", ""),
                     author=author,
                     author_account_id=author_account_id,
+                    author_user=author_user,
                     body=body,
                     created=created,
+                    updated=updated,
+                    visibility=visibility,
                     mentions=mentions,
                     inline_attachments=inline_attachments,
                 ))
@@ -506,9 +532,21 @@ class JiraTransformer:
 
             result.append(JiraLinkedIssue(
                 key=issue.get("key", ""),
+                id=issue.get("id"),
                 summary=issue.get("fields", {}).get("summary"),
                 status=issue.get("fields", {}).get("status", {}).get("name"),
+                issue_type=normalize_issue_type(
+                    issue.get("fields", {}).get("issuetype", {}).get("name", "")
+                )
+                or None,
+                priority=(
+                    issue.get("fields", {}).get("priority", {}).get("name")
+                    if issue.get("fields", {}).get("priority")
+                    else None
+                ),
                 link_type=link_type_name,
+                direction="outward" if link.get("outwardIssue") else "inward",
+                url=f"/browse/{issue.get('key', '')}" if issue.get("key") else None,
             ))
         return result
 
@@ -516,11 +554,18 @@ class JiraTransformer:
         """첨부파일 파싱"""
         result = []
         for att in attachments_data:
+            author = self._parse_user(att.get("author"))
             result.append(JiraAttachment(
+                id=att.get("id"),
                 filename=att.get("filename", ""),
-                author=att.get("author", {}).get("displayName"),
+                author=author.display_name if author else None,
+                author_account_id=author.account_id if author else None,
+                author_user=author,
                 mime_type=att.get("mimeType"),
                 url=att.get("content"),
+                thumbnail_url=att.get("thumbnail"),
+                created=parse_atlassian_datetime(att.get("created")),
+                size=att.get("size"),
             ))
         return result
 
