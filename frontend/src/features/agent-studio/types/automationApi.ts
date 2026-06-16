@@ -38,12 +38,16 @@ export interface AutomationTargetsResponse {
 export interface InquiryAutomationItem {
   agent_spec_id: number;
   status: InquiryAutomationStatus;
+  title?: string | null;
   channel_talk_credential_id: number;
   slack_channel_id: string;
   slack_credential_id: number;
   guide_instruction: string | null;
   quiet_period_seconds: number | null;
   trigger_id: number | null;
+  author_name?: string | null;
+  updated_at?: string | null;
+  author_profile_image_url?: string | null;
 }
 
 export interface InquiryAutomationUpdateRequest {

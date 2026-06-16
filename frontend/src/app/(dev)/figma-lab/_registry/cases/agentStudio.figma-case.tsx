@@ -8,6 +8,7 @@ import type { AgentStudioCardModel, AgentStudioFilter } from '@/features/agent-s
 import AgentCard from '@/features/agent-studio/components/list/AgentCard';
 import AgentEmptyColumn from '@/features/agent-studio/components/list/AgentEmptyColumn';
 import AgentFilterTabs from '@/features/agent-studio/components/list/AgentFilterTabs';
+import AgentStatusSection from '@/features/agent-studio/components/list/AgentStatusSection';
 import AgentStudioHeader from '@/features/agent-studio/components/list/AgentStudioHeader';
 import AgentStudioEditorPage from '@/features/agent-studio/components/editor/AgentStudioEditorPage';
 import {
@@ -68,54 +69,121 @@ function AgentStudioListFixturePreview() {
             Agent 만들기
           </Button>
         </div>
-        <div className={cn('flex w-full flex-wrap items-start gap-6', isGroupedView ? 'h-70.75' : 'min-h-52.75')}>
-          {shouldShowActiveEmpty && (
-            <AgentEmptyColumn
-              label="운영중"
-              title={ACTIVE_EMPTY_STATE.title}
-              description={ACTIVE_EMPTY_STATE.description}
-              layout={cardLayout}
-            />
-          )}
-          {activeAgents.map((agent) => (
-            <AgentCard
-              key={agent.id}
-              agent={agent}
-              layout={cardLayout}
-              onDeactivate={(target) => updateStatus(target.id, 'inactive')}
-            />
-          ))}
-          {draftAgents.map((agent) => (
-            <AgentCard
-              key={agent.id}
-              agent={agent}
-              layout={cardLayout}
-              onDeactivate={(target) => updateStatus(target.id, 'inactive')}
-            />
-          ))}
-          {shouldShowDraftEmpty && (
-            <AgentEmptyColumn
-              label="제작중"
-              title={DRAFT_EMPTY_STATE.title}
-              description={DRAFT_EMPTY_STATE.description}
-              layout={cardLayout}
-            />
-          )}
-          {inactiveAgents.map((agent) => (
-            <AgentCard
-              key={agent.id}
-              agent={agent}
-              layout={cardLayout}
-              onActivate={(target) => updateStatus(target.id, 'active')}
-            />
-          ))}
-          {shouldShowInactiveEmpty && (
-            <AgentEmptyColumn
-              label="사용 안함"
-              title={INACTIVE_EMPTY_STATE.title}
-              description={INACTIVE_EMPTY_STATE.description}
-              layout={cardLayout}
-            />
+        <div className={cn('flex w-full flex-wrap items-start gap-6', !isGroupedView && 'min-h-52.75')}>
+          {isGroupedView ? (
+            <>
+              {activeAgents.length > 0 ? (
+                <AgentStatusSection label="운영중" className="min-h-70.75">
+                  <div className="flex w-full flex-col gap-3">
+                    {activeAgents.map((agent) => (
+                      <AgentCard
+                        key={agent.id}
+                        agent={agent}
+                        layout="grouped"
+                        onDeactivate={(target) => updateStatus(target.id, 'inactive')}
+                      />
+                    ))}
+                  </div>
+                </AgentStatusSection>
+              ) : (
+                <AgentEmptyColumn
+                  label="운영중"
+                  title={ACTIVE_EMPTY_STATE.title}
+                  description={ACTIVE_EMPTY_STATE.description}
+                />
+              )}
+              {draftAgents.length > 0 ? (
+                <AgentStatusSection label="제작중" className="min-h-70.75">
+                  <div className="flex w-full flex-col gap-3">
+                    {draftAgents.map((agent) => (
+                      <AgentCard
+                        key={agent.id}
+                        agent={agent}
+                        layout="grouped"
+                        onDeactivate={(target) => updateStatus(target.id, 'inactive')}
+                      />
+                    ))}
+                  </div>
+                </AgentStatusSection>
+              ) : (
+                <AgentEmptyColumn
+                  label="제작중"
+                  title={DRAFT_EMPTY_STATE.title}
+                  description={DRAFT_EMPTY_STATE.description}
+                />
+              )}
+              {inactiveAgents.length > 0 ? (
+                <AgentStatusSection label="사용 안함" className="min-h-70.75">
+                  <div className="flex w-full flex-col gap-3">
+                    {inactiveAgents.map((agent) => (
+                      <AgentCard
+                        key={agent.id}
+                        agent={agent}
+                        layout="grouped"
+                        onActivate={(target) => updateStatus(target.id, 'active')}
+                      />
+                    ))}
+                  </div>
+                </AgentStatusSection>
+              ) : (
+                <AgentEmptyColumn
+                  label="사용 안함"
+                  title={INACTIVE_EMPTY_STATE.title}
+                  description={INACTIVE_EMPTY_STATE.description}
+                />
+              )}
+            </>
+          ) : (
+            <>
+              {shouldShowActiveEmpty && (
+                <AgentEmptyColumn
+                  label="운영중"
+                  title={ACTIVE_EMPTY_STATE.title}
+                  description={ACTIVE_EMPTY_STATE.description}
+                  layout="flat"
+                />
+              )}
+              {activeAgents.map((agent) => (
+                <AgentCard
+                  key={agent.id}
+                  agent={agent}
+                  layout="flat"
+                  onDeactivate={(target) => updateStatus(target.id, 'inactive')}
+                />
+              ))}
+              {draftAgents.map((agent) => (
+                <AgentCard
+                  key={agent.id}
+                  agent={agent}
+                  layout="flat"
+                  onDeactivate={(target) => updateStatus(target.id, 'inactive')}
+                />
+              ))}
+              {shouldShowDraftEmpty && (
+                <AgentEmptyColumn
+                  label="제작중"
+                  title={DRAFT_EMPTY_STATE.title}
+                  description={DRAFT_EMPTY_STATE.description}
+                  layout="flat"
+                />
+              )}
+              {inactiveAgents.map((agent) => (
+                <AgentCard
+                  key={agent.id}
+                  agent={agent}
+                  layout="flat"
+                  onActivate={(target) => updateStatus(target.id, 'active')}
+                />
+              ))}
+              {shouldShowInactiveEmpty && (
+                <AgentEmptyColumn
+                  label="사용 안함"
+                  title={INACTIVE_EMPTY_STATE.title}
+                  description={INACTIVE_EMPTY_STATE.description}
+                  layout="flat"
+                />
+              )}
+            </>
           )}
         </div>
       </section>

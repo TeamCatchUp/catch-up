@@ -1,6 +1,6 @@
 import type { ReactElement } from 'react';
 import { MutationCache, QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -50,56 +50,76 @@ function mockVersion() {
 const activeAutomation: InquiryAutomationItem = {
   agent_spec_id: 1,
   status: 'active',
+  title: '문의 대응 리포트 만들기',
   channel_talk_credential_id: 10,
   slack_channel_id: 'C111',
   slack_credential_id: 20,
   guide_instruction: null,
   quiet_period_seconds: 60,
   trigger_id: 30,
+  author_name: '이진수',
+  updated_at: '2020-01-06T00:00:00.000Z',
+  author_profile_image_url: null,
 };
 
 const secondActiveAutomation: InquiryAutomationItem = {
   agent_spec_id: 3,
   status: 'active',
+  title: '문의 대응 리포트 만들기',
   channel_talk_credential_id: 12,
   slack_channel_id: 'C333',
   slack_credential_id: 22,
   guide_instruction: '상세하게 작성',
   quiet_period_seconds: 300,
   trigger_id: 32,
+  author_name: '이진수',
+  updated_at: '2020-01-06T00:00:00.000Z',
+  author_profile_image_url: null,
 };
 
 const thirdActiveAutomation: InquiryAutomationItem = {
   agent_spec_id: 4,
   status: 'active',
+  title: '문의 대응 리포트 만들기',
   channel_talk_credential_id: 13,
   slack_channel_id: 'C444',
   slack_credential_id: 23,
   guide_instruction: '짧고 명확하게 작성',
   quiet_period_seconds: 600,
   trigger_id: 33,
+  author_name: '이진수',
+  updated_at: '2020-01-06T00:00:00.000Z',
+  author_profile_image_url: null,
 };
 
 const draftAutomation: InquiryAutomationItem = {
   agent_spec_id: 5,
   status: 'draft',
+  title: '문의 대응 리포트 만들기',
   channel_talk_credential_id: 14,
   slack_channel_id: 'C555',
   slack_credential_id: 24,
   guide_instruction: '초안을 먼저 제안',
   quiet_period_seconds: 180,
   trigger_id: 34,
+  author_name: '이진수',
+  updated_at: '2020-01-06T00:00:00.000Z',
+  author_profile_image_url: null,
 };
 
 const inactiveAutomation: InquiryAutomationItem = {
   agent_spec_id: 2,
   status: 'inactive',
+  title: '문의 대응 리포트 만들기',
   channel_talk_credential_id: 11,
   slack_channel_id: 'C222',
   slack_credential_id: 21,
   guide_instruction: '짧게 작성',
   quiet_period_seconds: 60,
   trigger_id: 31,
+  author_name: '이진수',
+  updated_at: '2020-01-06T00:00:00.000Z',
+  author_profile_image_url: null,
 };
 
 beforeEach(() => {
@@ -118,6 +138,25 @@ describe('AgentStudioPage', () => {
     expect(await screen.findAllByText('문의 대응 리포트 만들기')).toHaveLength(2);
     expect(screen.getByText('제작 중인 Agent가 없습니다.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '다시 운영하기' })).toBeInTheDocument();
+  });
+
+  it('renders dash labels when backend display fields are null', async () => {
+    mockVersion();
+    useInquiryAutomationList([
+      {
+        ...activeAutomation,
+        title: null,
+        guide_instruction: null,
+        author_name: null,
+        updated_at: null,
+        author_profile_image_url: null,
+      },
+    ]);
+
+    renderWithQueryClient(<AgentStudioPage />);
+
+    expect(await screen.findByRole('heading', { name: '-' })).toBeInTheDocument();
+    expect(screen.getAllByText('-')).toHaveLength(4);
   });
 
   it('keeps the active column visible with an empty placeholder when there is no active automation', async () => {
@@ -251,6 +290,21 @@ describe('AgentStudioPage', () => {
     expect(await screen.findAllByText('문의 대응 리포트 만들기')).toHaveLength(2);
     expect(screen.queryByText('운영 중인 Agent가 없습니다.')).not.toBeInTheDocument();
     expect(screen.getByText('아직 비활성 Agent가 없습니다.')).toBeInTheDocument();
+  });
+
+  it('renders a single grouped active section that stacks multiple active cards in the all tab', async () => {
+    mockVersion();
+    useInquiryAutomationList([activeAutomation, secondActiveAutomation, inactiveAutomation]);
+
+    renderWithQueryClient(<AgentStudioPage />);
+
+    await screen.findAllByText('문의 대응 리포트 만들기');
+
+    const activeSection = screen.getByLabelText('운영중 섹션');
+
+    expect(screen.getAllByLabelText('운영중 섹션')).toHaveLength(1);
+    expect(within(activeSection).getAllByText('문의 대응 리포트 만들기')).toHaveLength(2);
+    expect(within(activeSection).queryByText('운영 중인 Agent가 없습니다.')).not.toBeInTheDocument();
   });
 
   it('updates inactive automation to active when 다시 운영하기 is clicked', async () => {

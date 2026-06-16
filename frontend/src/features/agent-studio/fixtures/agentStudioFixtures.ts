@@ -20,6 +20,7 @@ export const AGENT_STUDIO_LIST_FIXTURE: readonly AgentStudioCardModel[] = [
     description:
       '현재 리팩토링 진행 상황과 예정된 배포 일정을 중심으로 인수인계를 진행합니다. QA 일정과 운영 반영 시 유의사항을 함께 공유합니다.',
     authorName: '이진수',
+    authorProfileImageUrl: null,
     updatedAtLabel: '2020.00.00(월)',
   },
   {
@@ -29,6 +30,7 @@ export const AGENT_STUDIO_LIST_FIXTURE: readonly AgentStudioCardModel[] = [
     description:
       '현재 리팩토링 진행 상황과 예정된 배포 일정을 중심으로 인수인계를 진행합니다. QA 일정과 운영 반영 시 유의사항을 함께 공유합니다.',
     authorName: '이진수',
+    authorProfileImageUrl: null,
     updatedAtLabel: '2020.00.00(월)',
   },
 ];
@@ -41,6 +43,7 @@ export const AGENT_STUDIO_MULTI_ACTIVE_LIST_FIXTURE: readonly AgentStudioCardMod
     description:
       '현재 리팩토링 진행 상황과 예정된 배포 일정을 중심으로 인수인계를 진행합니다. QA 일정과 운영 반영 시 유의사항을 함께 공유합니다.',
     authorName: '이진수',
+    authorProfileImageUrl: null,
     updatedAtLabel: '2020.00.00(월)',
   },
   {
@@ -50,6 +53,7 @@ export const AGENT_STUDIO_MULTI_ACTIVE_LIST_FIXTURE: readonly AgentStudioCardMod
     description:
       '현재 리팩토링 진행 상황과 예정된 배포 일정을 중심으로 인수인계를 진행합니다. QA 일정과 운영 반영 시 유의사항을 함께 공유합니다.',
     authorName: '이진수',
+    authorProfileImageUrl: null,
     updatedAtLabel: '2020.00.00(월)',
   },
   {
@@ -59,6 +63,7 @@ export const AGENT_STUDIO_MULTI_ACTIVE_LIST_FIXTURE: readonly AgentStudioCardMod
     description:
       '현재 리팩토링 진행 상황과 예정된 배포 일정을 중심으로 인수인계를 진행합니다. QA 일정과 운영 반영 시 유의사항을 함께 공유합니다.',
     authorName: '이진수',
+    authorProfileImageUrl: null,
     updatedAtLabel: '2020.00.00(월)',
   },
 ];

@@ -19,6 +19,7 @@ export interface AgentStudioCardModel {
   title: string;
   description: string;
   authorName: string;
+  authorProfileImageUrl: string | null;
   updatedAtLabel: string;
 }
 
