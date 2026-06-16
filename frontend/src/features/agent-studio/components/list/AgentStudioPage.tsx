@@ -10,35 +10,14 @@ import { Button } from '@/shared/components/ui/button';
 import { cn } from '@/shared/utils/cn';
 
 import { AGENT_STUDIO_FILTERS } from '../../fixtures/agentStudioFixtures';
-import { mapInquiryAutomationsToAgentCards } from '../../mappers/inquiryAutomationMapper';
+import { mapInquiryAutomationsToAgentCards } from '../../utils/mapInquiryAutomation';
 import { inquiryAutomationsMutations } from '../../queries/inquiryAutomations.mutations';
 import { inquiryAutomationsQueries } from '../../queries/inquiryAutomations.queries';
 import type { AgentStudioCardModel, AgentStudioFilter } from '../../types/agentStudioModel';
-import AgentCard from './AgentCard';
 import AgentEmptyColumn from './AgentEmptyColumn';
 import AgentFilterTabs from './AgentFilterTabs';
-import AgentStatusSection from './AgentStatusSection';
 import AgentStudioHeader from './AgentStudioHeader';
-
-const ACTIVE_EMPTY_STATE = {
-  title: '운영 중인 Agent가 없습니다.',
-  description: '새로운 Agent를 만들어\n반복되는 문의 업무를 자동화해보세요.',
-} as const;
-
-const DRAFT_EMPTY_STATE = {
-  title: '제작 중인 Agent가 없습니다.',
-  description: '새로운 Agent를 만들어\n반복되는 문의 업무를 자동화해보세요.',
-} as const;
-
-const INACTIVE_EMPTY_STATE = {
-  title: '아직 비활성 Agent가 없습니다.',
-  description: '사용을 중지한 Agent는 이곳에 보관됩니다.',
-} as const;
-
-function getVisibleAgents(agents: readonly AgentStudioCardModel[], filter: AgentStudioFilter) {
-  if (filter === 'all') return agents;
-  return agents.filter((item) => item.status === filter);
-}
+import AgentStudioListContent from './AgentStudioListContent';
 
 export default function AgentStudioPage() {
   const router = useRouter();
@@ -51,15 +30,7 @@ export default function AgentStudioPage() {
     },
   });
   const agents = useMemo(() => mapInquiryAutomationsToAgentCards(automationQuery.data ?? []), [automationQuery.data]);
-  const visibleAgents = useMemo(() => getVisibleAgents(agents, selectedFilter), [agents, selectedFilter]);
-  const activeAgents = visibleAgents.filter((agent) => agent.status === 'active');
-  const draftAgents = visibleAgents.filter((agent) => agent.status === 'draft');
-  const inactiveAgents = visibleAgents.filter((agent) => agent.status === 'inactive');
   const isGroupedView = selectedFilter === 'all';
-  const shouldShowActiveEmpty = activeAgents.length === 0 && (selectedFilter === 'all' || selectedFilter === 'active');
-  const shouldShowDraftEmpty = draftAgents.length === 0 && (selectedFilter === 'all' || selectedFilter === 'draft');
-  const shouldShowInactiveEmpty =
-    inactiveAgents.length === 0 && (selectedFilter === 'all' || selectedFilter === 'inactive');
 
   const updateStatus = (agent: AgentStudioCardModel, status: 'active' | 'inactive') => {
     if (!agent.agentSpecId) return;
@@ -96,129 +67,13 @@ export default function AgentStudioPage() {
             />
           )}
           {!automationQuery.isLoading && !automationQuery.isError && (
-            <>
-              {isGroupedView ? (
-                <>
-                  {activeAgents.length > 0 ? (
-                    <AgentStatusSection label="운영중" className="min-h-70.75">
-                      <div className="flex w-full flex-col gap-3">
-                        {activeAgents.map((agent) => (
-                          <AgentCard
-                            key={agent.id}
-                            agent={agent}
-                            actionDisabled={statusMutation.isPending}
-                            layout="grouped"
-                            onDeactivate={(target) => updateStatus(target, 'inactive')}
-                          />
-                        ))}
-                      </div>
-                    </AgentStatusSection>
-                  ) : (
-                    <AgentEmptyColumn
-                      label="운영중"
-                      title={ACTIVE_EMPTY_STATE.title}
-                      description={ACTIVE_EMPTY_STATE.description}
-                    />
-                  )}
-                  {draftAgents.length > 0 ? (
-                    <AgentStatusSection label="제작중" className="min-h-70.75">
-                      <div className="flex w-full flex-col gap-3">
-                        {draftAgents.map((agent) => (
-                          <AgentCard
-                            key={agent.id}
-                            agent={agent}
-                            actionDisabled={statusMutation.isPending}
-                            layout="grouped"
-                            onDeactivate={(target) => updateStatus(target, 'inactive')}
-                          />
-                        ))}
-                      </div>
-                    </AgentStatusSection>
-                  ) : (
-                    <AgentEmptyColumn
-                      label="제작중"
-                      title={DRAFT_EMPTY_STATE.title}
-                      description={DRAFT_EMPTY_STATE.description}
-                    />
-                  )}
-                  {inactiveAgents.length > 0 ? (
-                    <AgentStatusSection label="사용 안함" className="min-h-70.75">
-                      <div className="flex w-full flex-col gap-3">
-                        {inactiveAgents.map((agent) => (
-                          <AgentCard
-                            key={agent.id}
-                            agent={agent}
-                            actionDisabled={statusMutation.isPending}
-                            layout="grouped"
-                            onActivate={(target) => updateStatus(target, 'active')}
-                          />
-                        ))}
-                      </div>
-                    </AgentStatusSection>
-                  ) : (
-                    <AgentEmptyColumn
-                      label="사용 안함"
-                      title={INACTIVE_EMPTY_STATE.title}
-                      description={INACTIVE_EMPTY_STATE.description}
-                    />
-                  )}
-                </>
-              ) : (
-                <>
-                  {shouldShowActiveEmpty && (
-                    <AgentEmptyColumn
-                      label="운영중"
-                      title={ACTIVE_EMPTY_STATE.title}
-                      description={ACTIVE_EMPTY_STATE.description}
-                      layout="flat"
-                    />
-                  )}
-                  {activeAgents.map((agent) => (
-                    <AgentCard
-                      key={agent.id}
-                      agent={agent}
-                      actionDisabled={statusMutation.isPending}
-                      layout="flat"
-                      onDeactivate={(target) => updateStatus(target, 'inactive')}
-                    />
-                  ))}
-                  {draftAgents.map((agent) => (
-                    <AgentCard
-                      key={agent.id}
-                      agent={agent}
-                      actionDisabled={statusMutation.isPending}
-                      layout="flat"
-                      onDeactivate={(target) => updateStatus(target, 'inactive')}
-                    />
-                  ))}
-                  {shouldShowDraftEmpty && (
-                    <AgentEmptyColumn
-                      label="제작중"
-                      title={DRAFT_EMPTY_STATE.title}
-                      description={DRAFT_EMPTY_STATE.description}
-                      layout="flat"
-                    />
-                  )}
-                  {inactiveAgents.map((agent) => (
-                    <AgentCard
-                      key={agent.id}
-                      agent={agent}
-                      actionDisabled={statusMutation.isPending}
-                      layout="flat"
-                      onActivate={(target) => updateStatus(target, 'active')}
-                    />
-                  ))}
-                  {shouldShowInactiveEmpty && (
-                    <AgentEmptyColumn
-                      label="사용 안함"
-                      title={INACTIVE_EMPTY_STATE.title}
-                      description={INACTIVE_EMPTY_STATE.description}
-                      layout="flat"
-                    />
-                  )}
-                </>
-              )}
-            </>
+            <AgentStudioListContent
+              agents={agents}
+              selectedFilter={selectedFilter}
+              actionDisabled={statusMutation.isPending}
+              onActivate={(target) => updateStatus(target, 'active')}
+              onDeactivate={(target) => updateStatus(target, 'inactive')}
+            />
           )}
         </div>
       </section>

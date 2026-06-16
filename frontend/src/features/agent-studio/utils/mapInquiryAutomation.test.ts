@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { InquiryAutomationItem } from '../types/automationApi';
-import { mapInquiryAutomationsToAgentCards, mapInquiryAutomationToAgentCard } from './inquiryAutomationMapper';
+import { mapInquiryAutomationsToAgentCards, mapInquiryAutomationToAgentCard } from './mapInquiryAutomation';
 
 const baseAutomation: InquiryAutomationItem = {
   agent_spec_id: 42,
@@ -14,7 +14,7 @@ const baseAutomation: InquiryAutomationItem = {
   trigger_id: 100,
 };
 
-describe('inquiryAutomationMapper', () => {
+describe('mapInquiryAutomation', () => {
   it('maps missing display fields to dash labels', () => {
     expect(mapInquiryAutomationToAgentCard(baseAutomation)).toEqual({
       id: 'inquiry-automation-42',
