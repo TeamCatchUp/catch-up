@@ -23,7 +23,7 @@ export default function AgentEditorLeftPane() {
         </Button>
       </header>
 
-      <div className="border-line-normal-neutral h-37.5 w-full shrink-0 overflow-hidden border-b">
+      <div className="h-37.5 w-full shrink-0 overflow-hidden">
         <AgentEditorPreviewIllustration className="size-full" aria-hidden="true" focusable="false" />
       </div>
 

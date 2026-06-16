@@ -37,7 +37,7 @@ export default function AgentCard({ agent }: AgentCardProps) {
           <Button
             variant="capsule-solid-primary"
             size="sm"
-            className="bg-agent-studio-use-button-gradient text-static-white"
+            className="bg-agent-studio-use-button-gradient text-static-white h-9"
           >
             <SparkleIcon className="text-static-white size-5" aria-hidden="true" />
             사용하기
