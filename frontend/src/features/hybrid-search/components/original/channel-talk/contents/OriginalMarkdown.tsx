@@ -26,12 +26,7 @@ const components: Components = {
       return <>{children}</>;
     }
     return (
-      <a
-        href={href}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="text-content-primary underline"
-      >
+      <a href={href} target="_blank" rel="noopener noreferrer" className="text-text-primary-normal underline">
         {children}
       </a>
     );
@@ -40,7 +35,7 @@ const components: Components = {
 
 export default function OriginalMarkdown({ text }: OriginalMarkdownProps) {
   return (
-    <div className="text-body-small text-content-normal flex flex-col gap-2">
+    <div className="text-body-small text-text-normal-normal flex flex-col gap-2">
       <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]} components={components}>
         {formatMarkdownString(text)}
       </ReactMarkdown>

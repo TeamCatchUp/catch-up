@@ -41,7 +41,7 @@ export default function ComplexPlanList({ items }: ComplexPlanListProps) {
   if (!entries.length) return null;
 
   return (
-    <div className="bg-fill-primary-assistive border-l-accent-light-blue-lighten w-full rounded-xl border-l-[3px] border-solid px-4 py-3">
+    <div className="bg-fill-primary-normal-assistive border-l-accent-light-blue-lighten w-full rounded-xl border-l-[3px] border-solid px-4 py-3">
       <motion.ol
         className="flex flex-col gap-3"
         initial={MotionState.Hidden}
@@ -54,12 +54,17 @@ export default function ComplexPlanList({ items }: ComplexPlanListProps) {
             <motion.li
               key={idx}
               variants={fadeInUp}
-              className={cn('flex items-center gap-4', !isLast && 'border-edge-neutral border-b border-solid pb-3')}
+              className={cn(
+                'flex items-center gap-4',
+                !isLast && 'border-line-normal-neutral border-b border-solid pb-3',
+              )}
             >
-              <span className="bg-accent-information-lighten text-content-alternative text-body-xsmall flex h-7 w-7 shrink-0 items-center justify-center rounded-lg">
+              <span className="bg-accent-information-lighten text-text-normal-alternative text-body-xsmall flex h-7 w-7 shrink-0 items-center justify-center rounded-lg">
                 {entry.step}
               </span>
-              <span className="text-body-xsmall text-content-normal min-w-0 flex-1 break-words">{entry.intent}</span>
+              <span className="text-body-xsmall text-text-normal-normal min-w-0 flex-1 break-words">
+                {entry.intent}
+              </span>
             </motion.li>
           );
         })}

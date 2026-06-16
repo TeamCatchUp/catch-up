@@ -14,7 +14,7 @@ describe('SlackMessageAvatar', () => {
     render(<SlackMessageAvatar name="CatchUpQA" avatarUrl={null} avatarSource="none" kind="bot" />);
 
     expect(screen.getByLabelText('CatchUpQA')).toBeInTheDocument();
-    expect(screen.getByLabelText('CatchUpQA').parentElement).toHaveClass('bg-fill-primary', 'size-9');
+    expect(screen.getByLabelText('CatchUpQA').parentElement).toHaveClass('bg-fill-primary-normal-normal', 'size-9');
   });
 
   it('keeps badge for bot_profile avatar URLs', () => {
@@ -30,7 +30,7 @@ describe('SlackMessageAvatar', () => {
     const avatarWrapper = container.firstElementChild;
 
     expect(avatarWrapper).toHaveClass('size-9');
-    expect(avatarWrapper).not.toHaveClass('bg-fill-primary');
+    expect(avatarWrapper).not.toHaveClass('bg-fill-primary-normal-normal');
     expect(container.querySelector('svg[aria-hidden="true"]')).toBeInTheDocument();
   });
 
@@ -45,7 +45,7 @@ describe('SlackMessageAvatar', () => {
     );
 
     expect(container.firstElementChild).toHaveClass('size-9');
-    expect(container.firstElementChild).not.toHaveClass('bg-fill-primary');
+    expect(container.firstElementChild).not.toHaveClass('bg-fill-primary-normal-normal');
     expect(container.querySelector('svg[aria-hidden="true"]')).not.toBeInTheDocument();
   });
 });

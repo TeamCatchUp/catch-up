@@ -13,6 +13,7 @@ from catchup.rag.nodes import merge_cache_node
 from catchup.rag.nodes import prepare_cache_node
 from catchup.rag.nodes import rerank_node
 from catchup.rag.nodes import rewrite_node
+from catchup.rag.nodes import select_final_docs_node
 from catchup.rag.state import AgentState
 
 
@@ -104,6 +105,10 @@ def build_complex_react_subgraph(
         partial(rerank_node, rerank_service=rerank_service),
         retry=BASE_RETRY_POLICY,
     )
+    graph.add_node(
+        "select_final_docs",
+        select_final_docs_node,
+    )
     graph.add_node("merge_cache", merge_cache_node)
     graph.add_node(
         "generate_final_answer",
@@ -133,7 +138,8 @@ def build_complex_react_subgraph(
     graph.add_edge("tool_executor", "complex_agent")
     graph.add_edge("extract_essential", "collect_docs")
     graph.add_edge("collect_docs", "rerank")
-    graph.add_edge("rerank", "merge_cache")
+    graph.add_edge("rerank", "select_final_docs")
+    graph.add_edge("select_final_docs", "merge_cache")
     graph.add_edge("merge_cache", "generate_final_answer")
     graph.add_edge("generate_final_answer", END)
 

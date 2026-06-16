@@ -102,7 +102,7 @@ export default function JobSelectionStep({
   const canSave = isCustom ? localJobText.trim().length > 0 : localJob !== null;
 
   return (
-    <div className="border-edge-neutral flex flex-col gap-5 border-b py-5">
+    <div className="border-line-normal-neutral flex flex-col gap-5 border-b py-5">
       <StepHeader stepNumber={1} title="직무 선택" description="어떤 일을 하고 계신가요? 그에 맞게 답해드릴게요." />
 
       {/* 칩 그리드 */}
@@ -125,33 +125,33 @@ export default function JobSelectionStep({
 
       {/* 직무 선택 후 표시되는 카드 */}
       {hasJob && (
-        <div className="border-edge-assistive bg-fill-strong flex flex-col gap-5 overflow-clip rounded-xl border p-5">
+        <div className="border-line-normal-assistive bg-fill-normal-strong flex flex-col gap-5 overflow-clip rounded-xl border p-5">
           {/* "직접 입력" 선택 시: 직무 입력 필드 */}
           {isCustom && (
             <>
               <div className="flex flex-col gap-2.5">
                 <div className="flex items-center gap-2.5">
-                  <IconAddCircleFilled className="text-icon-primary size-6 shrink-0" />
-                  <span className="text-heading-small text-content-normal">직무 직접 입력하기</span>
+                  <IconAddCircleFilled className="text-icon-primary-normal size-6 shrink-0" />
+                  <span className="text-heading-small text-text-normal-normal">직무 직접 입력하기</span>
                 </div>
                 <div
                   className={cn(
-                    'bg-fill-normal flex h-11.5 items-center gap-3 rounded-lg p-3',
+                    'bg-fill-normal-normal flex h-11.5 items-center gap-3 rounded-lg p-3',
                     isReadOnly
-                      ? 'border-edge-neutral border'
+                      ? 'border-line-normal-neutral border'
                       : isJobTextAtLimit
                         ? 'border-status-destructive border-[1.5px]'
                         : jobFieldFocused
-                          ? 'border-edge-primary border-[1.5px]'
-                          : 'border-edge-neutral border',
+                          ? 'border-line-primary-normal border-[1.5px]'
+                          : 'border-line-normal-neutral border',
                   )}
                 >
                   <input
                     className={cn(
                       'text-body-small flex-1 bg-transparent outline-none',
                       isReadOnly
-                        ? 'text-content-normal cursor-default'
-                        : 'text-content-normal placeholder:text-content-assistive',
+                        ? 'text-text-normal-normal cursor-default'
+                        : 'text-text-normal-normal placeholder:text-text-normal-assistive',
                     )}
                     placeholder="직무를 입력해주세요."
                     maxLength={MAX_JOB_TEXT_LENGTH}
@@ -162,7 +162,7 @@ export default function JobSelectionStep({
                     readOnly={isReadOnly}
                   />
                   {!isReadOnly && (
-                    <span className="text-body-small text-content-alternative shrink-0">
+                    <span className="text-body-small text-text-normal-alternative shrink-0">
                       {localJobText.length}/{MAX_JOB_TEXT_LENGTH}
                     </span>
                   )}
@@ -184,8 +184,8 @@ export default function JobSelectionStep({
           {/* 업무 설명 필드 */}
           <div className="flex flex-col gap-2.5">
             <div className="flex items-center gap-2.5">
-              <IconAddCircleFilled className="text-icon-primary size-6 shrink-0" />
-              <span className="text-heading-small text-content-normal flex-1">주로 어떤 업무를 맡고 있나요?</span>
+              <IconAddCircleFilled className="text-icon-primary-normal size-6 shrink-0" />
+              <span className="text-heading-small text-text-normal-normal flex-1">주로 어떤 업무를 맡고 있나요?</span>
               {isReadOnly ? (
                 <Button type="button" variant="box-soft-primary" size="md" onClick={handleEdit}>
                   수정
@@ -201,24 +201,24 @@ export default function JobSelectionStep({
                 className={cn(
                   'flex h-11.5 items-center gap-3 rounded-lg p-3',
                   isReadOnly
-                    ? 'bg-fill-normal border-edge-neutral border'
+                    ? 'bg-fill-normal-normal border-line-normal-neutral border'
                     : isDescDisabled
-                      ? 'bg-fill-interaction-disable border-edge-neutral border'
+                      ? 'bg-fill-normal-interaction-disable border-line-normal-neutral border'
                       : isDescAtLimit
-                        ? 'bg-fill-normal border-status-destructive border-[1.5px]'
+                        ? 'bg-fill-normal-normal border-status-destructive border-[1.5px]'
                         : descFieldFocused
-                          ? 'bg-fill-normal border-edge-primary border-[1.5px]'
-                          : 'bg-fill-normal border-edge-neutral border',
+                          ? 'bg-fill-normal-normal border-line-primary-normal border-[1.5px]'
+                          : 'bg-fill-normal-normal border-line-normal-neutral border',
                 )}
               >
                 <input
                   className={cn(
                     'text-body-small flex-1 bg-transparent outline-none',
                     isReadOnly
-                      ? 'text-content-normal cursor-default'
+                      ? 'text-text-normal-normal cursor-default'
                       : isDescDisabled
-                        ? 'text-content-assistive cursor-not-allowed'
-                        : 'text-content-normal placeholder:text-content-assistive',
+                        ? 'text-text-normal-assistive cursor-not-allowed'
+                        : 'text-text-normal-normal placeholder:text-text-normal-assistive',
                   )}
                   placeholder={isDescDisabled ? '직무를 먼저 입력해주세요.' : '주요 업무를 간단히 입력해주세요.'}
                   maxLength={MAX_JOB_DESCRIPTION_LENGTH}
@@ -230,7 +230,7 @@ export default function JobSelectionStep({
                   readOnly={isReadOnly}
                 />
                 {!isReadOnly && !isDescDisabled && (
-                  <span className="text-body-small text-content-alternative shrink-0">
+                  <span className="text-body-small text-text-normal-alternative shrink-0">
                     {localDesc.length}/{MAX_JOB_DESCRIPTION_LENGTH}
                   </span>
                 )}
@@ -244,7 +244,7 @@ export default function JobSelectionStep({
                 </div>
               )}
               {!isReadOnly && (
-                <div className="text-label-xsmall text-content-alternative flex flex-col">
+                <div className="text-label-xsmall text-text-normal-alternative flex flex-col">
                   <span>{` 예) iOS 앱 성능 최적화와 배포 파이프라인을 주로 담당해요`}</span>
                   <span>{` 예) B2B 영업 제안서 작성과 고객사 기술 미팅 대응이 많아요`}</span>
                 </div>

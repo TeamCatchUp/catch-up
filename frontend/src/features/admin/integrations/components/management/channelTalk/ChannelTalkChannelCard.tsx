@@ -57,16 +57,16 @@ export default function ChannelTalkChannelCard({
     <div className="flex flex-wrap items-center gap-2 px-4 py-5">
       <div className="flex min-w-0 flex-1 items-center gap-3">
         <div className="bg-fill-primary-normal-neutral flex size-8 shrink-0 items-center justify-center rounded-lg">
-          <IconTag className="text-icon-primary size-5" />
+          <IconTag className="text-icon-primary-normal size-5" />
         </div>
-        <h3 className="text-heading-small text-content-normal min-w-0 flex-1 truncate">{channel.name}</h3>
+        <h3 className="text-heading-small text-text-normal-normal min-w-0 flex-1 truncate">{channel.name}</h3>
       </div>
       <div className="flex shrink-0 items-center gap-3">
         <div className="flex items-center gap-1">
-          <IconCheck className="text-icon-primary size-4.5 shrink-0" />
-          <span className="text-body-xsmall text-content-primary">테스트 완료</span>
+          <IconCheck className="text-icon-primary-normal size-4.5 shrink-0" />
+          <span className="text-body-xsmall text-text-primary-normal">테스트 완료</span>
         </div>
-        <div className="bg-edge-neutral h-4.5 w-px" aria-hidden />
+        <div className="bg-line-normal-neutral h-4.5 w-px" aria-hidden />
         <Button variant="box-outline-gray" size="sm" onClick={() => setDeleteDialogOpen(true)}>
           삭제
         </Button>
@@ -79,9 +79,9 @@ export default function ChannelTalkChannelCard({
       <div className="flex flex-wrap items-center gap-2">
         <div className="flex min-w-0 flex-1 items-center gap-3">
           <div className="bg-fill-primary-normal-neutral flex size-8 shrink-0 items-center justify-center rounded-lg">
-            <IconTag className="text-icon-primary size-5" />
+            <IconTag className="text-icon-primary-normal size-5" />
           </div>
-          <h3 className="text-heading-small text-content-normal min-w-0 flex-1 truncate">{channel.name}</h3>
+          <h3 className="text-heading-small text-text-normal-normal min-w-0 flex-1 truncate">{channel.name}</h3>
         </div>
         <Button variant="box-outline-gray" size="sm" onClick={() => setDeleteDialogOpen(true)}>
           삭제
@@ -122,8 +122,8 @@ export default function ChannelTalkChannelCard({
 
       {/* Megaphone 안내 */}
       <div className="flex items-center gap-1.5">
-        <IconMegaphone className="text-icon-alternative size-4.5 shrink-0" />
-        <p className="text-body-xsmall text-content-assistive">{MEGAPHONE_NOTICE}</p>
+        <IconMegaphone className="text-icon-normal-alternative size-4.5 shrink-0" />
+        <p className="text-body-xsmall text-text-normal-assistive">{MEGAPHONE_NOTICE}</p>
       </div>
 
       {/* 연결 테스트 하기 버튼 — Send 아이콘 + 텍스트 */}
@@ -141,16 +141,16 @@ export default function ChannelTalkChannelCard({
   );
 
   return (
-    <div className="border-edge-neutral bg-fill-normal relative flex flex-col overflow-hidden rounded-xl border">
+    <div className="border-line-normal-neutral bg-fill-normal-normal relative flex flex-col overflow-hidden rounded-xl border">
       {/* 좌측 파란색 indicator strip */}
-      <div className="bg-edge-primary-strong z-base absolute top-4 left-0 h-8 w-1 rounded-full" aria-hidden />
+      <div className="bg-line-primary-strong z-base absolute top-4 left-0 h-8 w-1 rounded-full" aria-hidden />
 
       {headerSection}
 
       {/* 도큐먼트 wrapper + Add button */}
       <div className="flex flex-col gap-3 px-4 pb-4">
         {channel.documentSpaces.length > 0 ? (
-          <div className="border-edge-neutral flex flex-col border-t">
+          <div className="border-line-normal-neutral flex flex-col border-t">
             {channel.documentSpaces.map((ds) => (
               <ChannelTalkDocumentSpaceCard
                 key={ds.id}
@@ -166,9 +166,9 @@ export default function ChannelTalkChannelCard({
         <button
           type="button"
           onClick={onAddDocumentSpace}
-          className="text-heading-small text-content-primary flex cursor-pointer items-center gap-2 self-start px-1.5 py-1"
+          className="text-heading-small text-text-primary-normal flex cursor-pointer items-center gap-2 self-start px-1.5 py-1"
         >
-          <IconAddCircle className="text-icon-primary size-5.5 shrink-0" />
+          <IconAddCircle className="text-icon-primary-normal size-5.5 shrink-0" />
           <span>도큐먼트 스페이스 추가</span>
         </button>
       </div>

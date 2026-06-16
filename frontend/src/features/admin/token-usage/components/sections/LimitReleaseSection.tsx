@@ -87,10 +87,10 @@ export default function LimitReleaseSection() {
         {/* 제목 + 설명 */}
         <div className="flex flex-col gap-0.5">
           <div className="flex items-center gap-2.5">
-            <span className="text-heading-large text-content-normal">토큰 추가 요청 신청 목록</span>
-            <span className="text-heading-large text-content-primary">{pendingRequests.length}</span>
+            <span className="text-heading-large text-text-normal-normal">토큰 추가 요청 신청 목록</span>
+            <span className="text-heading-large text-text-primary-normal">{pendingRequests.length}</span>
           </div>
-          <span className="text-body-small text-content-alternative">
+          <span className="text-body-small text-text-normal-alternative">
             토큰 사용량을 초과한 임직원의 토큰 추가 신청을 확인하고 승인 여부를 결정해주세요.
           </span>
         </div>
@@ -98,7 +98,7 @@ export default function LimitReleaseSection() {
         {/* 도구모음 */}
         <div className="flex items-center gap-2.5">
           {/* 전체 반려/승인 버튼 그룹 */}
-          <div className="border-edge-neutral bg-fill-normal flex h-9 items-center gap-0.5 rounded-lg border px-2 py-0.5">
+          <div className="border-line-normal-neutral bg-fill-normal-normal flex h-9 items-center gap-0.5 rounded-lg border px-2 py-0.5">
             <Button
               variant="text-secondary-mono"
               size="md"
@@ -131,18 +131,18 @@ export default function LimitReleaseSection() {
       </div>
 
       {/* 테이블 + 디테일 패널 */}
-      <div className="border-edge-neutral flex min-h-0 overflow-clip border-y" style={{ height: 558 }}>
+      <div className="border-line-normal-neutral flex min-h-0 overflow-clip border-y" style={{ height: 558 }}>
         {/* 좌측: 테이블 */}
-        <div className="border-edge-neutral bg-fill-normal flex min-w-0 flex-1 flex-col overflow-clip border-r">
+        <div className="border-line-normal-neutral bg-fill-normal-normal flex min-w-0 flex-1 flex-col overflow-clip border-r">
           {/* 테이블 헤더 */}
-          <div className="border-edge-neutral bg-fill-strong flex h-9 shrink-0 items-center border-b px-5">
+          <div className="border-line-normal-neutral bg-fill-normal-strong flex h-9 shrink-0 items-center border-b px-5">
             <div className="grid flex-1 grid-cols-3 items-center gap-1">
-              <span className="text-body-xsmall text-content-alternative pl-7.5 text-left">이름</span>
-              <div className="text-body-xsmall text-content-alternative flex items-center gap-1 text-center">
+              <span className="text-body-xsmall text-text-normal-alternative pl-7.5 text-left">이름</span>
+              <div className="text-body-xsmall text-text-normal-alternative flex items-center gap-1 text-center">
                 <span className="flex-1">사용량</span>
                 <span className="flex-1">추가 신청량</span>
               </div>
-              <div className="text-body-xsmall text-content-alternative flex items-center gap-1 text-center">
+              <div className="text-body-xsmall text-text-normal-alternative flex items-center gap-1 text-center">
                 <span className="flex-1">직급</span>
                 <span className="flex-1">부서</span>
               </div>
@@ -151,7 +151,7 @@ export default function LimitReleaseSection() {
 
           {/* 테이블 행 */}
           {tableRows.length === 0 ? (
-            <div className="text-body-small text-content-alternative flex h-full min-h-25 items-center justify-center">
+            <div className="text-body-small text-text-normal-alternative flex h-full min-h-25 items-center justify-center">
               제한 해제 요청이 없습니다.
             </div>
           ) : (
@@ -165,21 +165,25 @@ export default function LimitReleaseSection() {
                     type="button"
                     onClick={() => setActiveKey(row.key)}
                     className={cn(
-                      'border-edge-neutral flex h-12.5 shrink-0 cursor-pointer items-center border-b px-5 text-left',
-                      isActive ? 'bg-fill-primary-assistive' : 'hover:bg-fill-strong bg-fill-normal',
+                      'border-line-normal-neutral flex h-12.5 shrink-0 cursor-pointer items-center border-b px-5 text-left',
+                      isActive
+                        ? 'bg-fill-primary-normal-assistive'
+                        : 'hover:bg-fill-normal-strong bg-fill-normal-normal',
                     )}
                   >
                     <div className="grid flex-1 grid-cols-3 items-center gap-1">
                       {/* 이름 */}
                       <div className="flex items-center gap-4">
-                        <DefaultProfile className="text-content-assistive size-7 shrink-0 rounded-full" />
-                        <span className="text-body-small text-content-normal truncate">{row.name}</span>
+                        <DefaultProfile className="text-text-normal-assistive size-7 shrink-0 rounded-full" />
+                        <span className="text-body-small text-text-normal-normal truncate">{row.name}</span>
                       </div>
 
                       {/* 사용량 + 추가 신청량 */}
                       <div className="flex items-center gap-1">
-                        <span className="text-body-small text-content-neutral flex-1 text-center">{row.cost} $</span>
-                        <span className="text-body-small text-content-neutral flex-1 text-center">
+                        <span className="text-body-small text-text-normal-neutral flex-1 text-center">
+                          {row.cost} $
+                        </span>
+                        <span className="text-body-small text-text-normal-neutral flex-1 text-center">
                           {row.requestedAmount} $
                         </span>
                       </div>
@@ -191,7 +195,7 @@ export default function LimitReleaseSection() {
                             className={cn(
                               'rounded-md2 text-body-xsmall truncate px-1.5 py-0.5',
                               POSITION_BADGE_CLASS[row.position] ??
-                                'bg-fill-interaction-hover text-content-alternative',
+                                'bg-fill-normal-interaction-hover text-text-normal-alternative',
                             )}
                           >
                             {row.position}
@@ -212,9 +216,9 @@ export default function LimitReleaseSection() {
         </div>
 
         {/* 우측: 디테일 패널 */}
-        <div className="bg-fill-normal flex min-w-0 flex-1 flex-col overflow-clip py-5 pl-6">
+        <div className="bg-fill-normal-normal flex min-w-0 flex-1 flex-col overflow-clip py-5 pl-6">
           {!selectedRequest ? (
-            <div className="text-body-small text-content-alternative flex h-full items-center justify-center">
+            <div className="text-body-small text-text-normal-alternative flex h-full items-center justify-center">
               선택된 요청 정보가 없습니다.
             </div>
           ) : (

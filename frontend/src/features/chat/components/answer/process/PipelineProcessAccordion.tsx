@@ -27,7 +27,7 @@ export default function PipelineProcessAccordion({ pipelineResult, sourceCount }
   const headerText = `질문과 연관된 ${sourceCount}개의 핵심 자료를 선별했어요.`;
 
   if (steps.length === 0) {
-    return <div className="text-body-small text-content-assistive">{headerText}</div>;
+    return <div className="text-body-small text-text-normal-assistive">{headerText}</div>;
   }
 
   return (
@@ -64,11 +64,11 @@ export default function PipelineProcessAccordion({ pipelineResult, sourceCount }
         aria-expanded={expanded}
         className="flex w-fit cursor-pointer items-center gap-2.5"
       >
-        <span className="text-body-small text-content-assistive">{headerText}</span>
+        <span className="text-body-small text-text-normal-assistive">{headerText}</span>
         <ArrowDown
           aria-hidden
           className={cn(
-            'text-icon-alternative h-5.5 w-5.5 transition-transform duration-200',
+            'text-icon-normal-alternative h-5.5 w-5.5 transition-transform duration-200',
             expanded && 'rotate-180',
           )}
         />

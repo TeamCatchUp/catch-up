@@ -14,12 +14,7 @@ interface SlackMessageAvatarProps {
   kind: 'user' | 'bot' | 'unknown';
 }
 
-export default function SlackMessageAvatar({
-  name,
-  avatarUrl,
-  avatarSource,
-  kind,
-}: SlackMessageAvatarProps) {
+export default function SlackMessageAvatar({ name, avatarUrl, avatarSource, kind }: SlackMessageAvatarProps) {
   const isBot = kind === 'bot';
   const safeAvatarUrl = avatarUrl && isSafeUrl(avatarUrl) ? avatarUrl : null;
   const showBotBadge = isBot && !(safeAvatarUrl && avatarSource === 'message_icons');
@@ -28,9 +23,7 @@ export default function SlackMessageAvatar({
     <span
       className={cn(
         'relative flex shrink-0 items-center justify-center rounded-lg',
-        isBot
-          ? cn('size-9 p-1', !safeAvatarUrl && 'bg-fill-primary')
-          : 'size-8 overflow-hidden',
+        isBot ? cn('size-9 p-1', !safeAvatarUrl && 'bg-fill-primary-normal-normal') : 'size-8 overflow-hidden',
       )}
     >
       {safeAvatarUrl ? (
@@ -48,7 +41,7 @@ export default function SlackMessageAvatar({
         <ProfileIcon aria-label={name} className="size-8 rounded-lg" />
       )}
       {showBotBadge && (
-        <span className="bg-fill-normal absolute -top-1 left-5.75 flex size-3.25 items-center justify-center rounded-full p-0.5">
+        <span className="bg-fill-normal-normal absolute -top-1 left-5.75 flex size-3.25 items-center justify-center rounded-full p-0.5">
           <SlackBotBadgeIcon aria-hidden className="size-2.75" />
         </span>
       )}

@@ -8,12 +8,12 @@ import { cn } from '@/shared/utils/cn';
 const badgeVariants = cva('inline-flex items-center rounded-full whitespace-nowrap transition-colors', {
   variants: {
     variant: {
-      default: 'bg-fill-primary-normal-neutral text-content-primary',
-      secondary: 'bg-fill-interaction-hover text-content-alternative',
-      success: 'bg-accent-green-neutral text-accent-green',
-      violet: 'bg-accent-violet-neutral text-accent-violet',
-      orange: 'bg-accent-red-orange-neutral text-accent-red-orange',
-      pink: 'bg-accent-pink-lighten text-accent-pink',
+      default: 'bg-fill-primary-normal-neutral text-text-primary-normal',
+      secondary: 'bg-fill-normal-interaction-hover text-text-normal-alternative',
+      success: 'bg-accent-green-neutral text-accent-green-default',
+      violet: 'bg-accent-violet-neutral text-accent-violet-default',
+      orange: 'bg-accent-red-orange-neutral text-accent-red-orange-default',
+      pink: 'bg-accent-pink-lighten text-accent-pink-default',
       red: 'bg-accent-red-lighten text-status-destructive',
     },
     size: {

@@ -36,7 +36,9 @@ export default function UsersTableRow({
 
   return (
     <div className={TABLE_BODY_ROW_CLASS}>
-      <div className={cn('size-2 shrink-0 rounded-full', isAllLinked ? 'bg-status-positive' : 'bg-accent-red')} />
+      <div
+        className={cn('size-2 shrink-0 rounded-full', isAllLinked ? 'bg-status-positive' : 'bg-accent-red-default')}
+      />
       <KeycloakUserCell userName={row.userName} isSingleService={isSingleService} />
       <div className={getServicesGroupClass(isSingleService)}>
         {services.map((service) => {

@@ -36,7 +36,7 @@ function SearchBarPreviewSurface({
   const state = useResultSearchBarFixture(fixture);
 
   return (
-    <div className="bg-fill-normal flex min-h-full items-start p-6">
+    <div className="bg-fill-normal-normal flex min-h-full items-start p-6">
       <ResultSearchBar
         value={state.value}
         onValueChange={state.setValue}

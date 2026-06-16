@@ -17,6 +17,10 @@ from catchup.agents.factory import get_execution_service
 from catchup.agents.schemas import AgentSpec as AgentSpecSchema
 from catchup.agents.tools.registry import ToolRegistry
 from catchup.agents.triggers.channel_talk_context import (
+    CHANNEL_TALK_USER_CHAT_CONTEXT_KEY,
+)
+from catchup.agents.triggers.channel_talk_context import CHANNEL_TALK_USER_CHAT_ID_KEY
+from catchup.agents.triggers.channel_talk_context import (
     build_channel_talk_user_chat_inputs,
 )
 from catchup.agents.triggers.events import AgentWebhookEvent
@@ -28,6 +32,9 @@ from catchup.agents.triggers.stream import AckDeleteResult
 from catchup.agents.triggers.stream import AgentRunRequest
 from catchup.agents.triggers.stream import AgentRunStreamMessage
 from catchup.agents.triggers.stream import decode_agent_run_stream_entries
+from catchup.automations.config import InquiryAutomationConfig
+from catchup.automations.runner import AutomationInput
+from catchup.automations.runner import run_inquiry_automation
 from catchup.db.agent_specs import build_agent_global_context
 from catchup.db.engine import SessionLocal
 from catchup.db.models import AgentSpec
@@ -58,7 +65,8 @@ class AgentRunExecutionContext:
     run_id: int
     message_id: str
     spec_id: int
-    spec: AgentSpecSchema
+    spec: AgentSpecSchema | None
+    raw_spec: dict[str, Any]
     user_input_values: dict[str, Any]
     event: AgentWebhookEvent
     global_context: Any
@@ -240,7 +248,10 @@ def run_agent_request(
 
     try:
         event = _event_from_run(run)
-        spec = AgentSpecSchema.model_validate(agent_spec_row.spec)
+        try:
+            spec = AgentSpecSchema.model_validate(agent_spec_row.spec)
+        except Exception:
+            spec = None
         global_context = build_agent_global_context(
             db=db,
             workspace_id=agent_spec_row.workspace_id,
@@ -258,6 +269,7 @@ def run_agent_request(
             message_id=message_id,
             spec_id=agent_spec_row.id,
             spec=spec,
+            raw_spec=agent_spec_row.spec or {},
             user_input_values=agent_spec_row.user_input_values or {},
             event=event,
             global_context=global_context,
@@ -269,6 +281,16 @@ async def _execute_agent_run(
     context: AgentRunExecutionContext,
 ) -> tuple[str | None, str | None]:
     """DB 트랜잭션 밖에서 실제 agent를 실행해 lock 보유 시간을 만들지 않는다."""
+    if _is_channeltalk_inquiry_event(context.event):
+        try:
+            automation_input = await _build_automation_input(context)
+            if automation_input is not None:
+                await run_inquiry_automation(automation_input)
+                return "", None
+        except Exception as exc:
+            return None, str(exc)
+        return "", None
+
     ToolRegistry.bind_execution_context(
         context.spec.tools,
         references=context.spec.references,
@@ -287,6 +309,44 @@ async def _execute_agent_run(
     except Exception as exc:
         return None, str(exc)
     return result, None
+
+
+def _is_channeltalk_inquiry_event(event: AgentWebhookEvent) -> bool:
+    """이벤트가 ChannelTalk 문의 대응 자동화 대상인지 확인한다."""
+    return (
+        event.source == "channel_talk"
+        and event.event_type in {"user_chat.created", "user_chat.new_message"}
+    )
+
+
+async def _build_automation_input(
+    context: AgentRunExecutionContext,
+) -> AutomationInput | None:
+    """AgentRunExecutionContext에서 AutomationInput을 구성한다."""
+    ct_inputs = await build_channel_talk_user_chat_inputs(context.event.payload)
+    if not ct_inputs:
+        return None
+
+    inquiry_text: str = ct_inputs.get(CHANNEL_TALK_USER_CHAT_CONTEXT_KEY, "")
+    user_chat_id: str = ct_inputs.get(CHANNEL_TALK_USER_CHAT_ID_KEY, "")
+
+    try:
+        config = InquiryAutomationConfig.model_validate(context.raw_spec)
+    except Exception:
+        logger.warning(
+            "automation_input_invalid_config",
+            user_chat_id=user_chat_id,
+        )
+        return None
+
+    return AutomationInput(
+        inquiry_text=inquiry_text,
+        user_chat_id=user_chat_id,
+        slack_channel_id=config.slack_channel_id,
+        slack_credential_id=config.slack_credential_id,
+        global_context=context.global_context,
+        guide_instruction=config.guide_instruction,
+    )
 
 
 async def _build_execution_user_inputs(

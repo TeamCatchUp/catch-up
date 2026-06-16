@@ -69,8 +69,8 @@ export default function CustomPromptStep({ customPrompt, onSave, isLoading = fal
     return (
       <div className="flex flex-col gap-5 py-5">
         <StepHeader stepNumber={3} title="커스텀 프롬프트 입력" description="원하는 답변 방식을 직접 입력해보세요." />
-        <div className="border-edge-neutral bg-fill-normal flex h-11.5 items-center justify-center rounded-xl border">
-          <span className="text-body-small text-content-assistive">불러오는 중...</span>
+        <div className="border-line-normal-neutral bg-fill-normal-normal flex h-11.5 items-center justify-center rounded-xl border">
+          <span className="text-body-small text-text-normal-assistive">불러오는 중...</span>
         </div>
       </div>
     );
@@ -103,13 +103,13 @@ export default function CustomPromptStep({ customPrompt, onSave, isLoading = fal
       {showInput && (
         <div
           className={cn(
-            'bg-fill-normal w-full rounded-xl border',
+            'bg-fill-normal-normal w-full rounded-xl border',
             !isActive && !isEditing && 'h-11.5',
             isActive || isEditing
               ? isAtLimit
                 ? 'border-status-destructive border-[1.5px]'
-                : 'border-edge-primary border-[1.5px]'
-              : 'border-edge-neutral',
+                : 'border-line-primary-normal border-[1.5px]'
+              : 'border-line-normal-neutral',
           )}
         >
           <div className={cn(isActive || isEditing ? 'px-4.5 py-2.5' : 'p-3')}>
@@ -126,7 +126,7 @@ export default function CustomPromptStep({ customPrompt, onSave, isLoading = fal
               rows={1}
               className={cn(
                 'text-body-small w-full resize-none bg-transparent outline-none',
-                'placeholder:text-content-assistive',
+                'placeholder:text-text-normal-assistive',
                 isActive || isEditing ? 'max-h-50 overflow-y-auto' : 'h-5.5 overflow-hidden',
               )}
             />
@@ -151,9 +151,11 @@ export default function CustomPromptStep({ customPrompt, onSave, isLoading = fal
 
       {/* 저장된 상태 */}
       {hasPrompt && !isEditing && (
-        <div className="border-edge-neutral bg-fill-normal flex flex-col items-end gap-4 rounded-xl border p-4">
+        <div className="border-line-normal-neutral bg-fill-normal-normal flex flex-col items-end gap-4 rounded-xl border p-4">
           <div className="max-h-50 w-full overflow-y-auto px-0.5">
-            <p className="text-body-small text-content-normal wrap-break-word whitespace-pre-wrap">{customPrompt}</p>
+            <p className="text-body-small text-text-normal-normal wrap-break-word whitespace-pre-wrap">
+              {customPrompt}
+            </p>
           </div>
           <Button type="button" variant="box-outline-gray" size="md" onClick={handleCopy}>
             복사하기

@@ -10,7 +10,7 @@ export default function SmartFilterInfoTooltip() {
           <button
             type="button"
             aria-label="스마트 필터 설명"
-            className="text-icon-neutral flex size-4.5 shrink-0 cursor-help items-center justify-center"
+            className="text-icon-normal-neutral flex size-4.5 shrink-0 cursor-help items-center justify-center"
           >
             <IconInfoFilled className="size-4.5" />
           </button>

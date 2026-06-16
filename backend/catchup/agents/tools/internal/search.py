@@ -271,11 +271,6 @@ class CatchUpKnowledgeBaseTool(BaseTool):
                 "retrieved_docs": deduped,
                 "rewritten_query": original_query,
                 "rerank_count": 0,
-                "pipeline_plan": None,
-                "max_pipeline_type": "simple",
-                "essential_doc_ids": [],
-                "agent_seen_doc_ids": [],
-                "agent_stop_reason": None,
             },
             rerank_service=rerank_service,
         )

@@ -37,22 +37,14 @@ export default function MessageItem({ item, connector, documentId }: MessageItem
   return (
     <div
       className={`flex w-full gap-2.25 pr-2.5 ${
-        isCustomer
-          ? 'bg-fill-primary-assistive'
-          : isInternal
-            ? 'bg-accent-red-orange-lighten'
-            : ''
+        isCustomer ? 'bg-fill-primary-normal-assistive' : isInternal ? 'bg-accent-red-orange-lighten' : ''
       }`}
     >
       {/* 좌측 stripe 공간은 항상 차지하고 색만 바꿔 메시지 좌측 정렬을 유지한다. */}
       <span
         aria-hidden
         className={`w-[3px] shrink-0 self-stretch rounded-full ${
-          isCustomer
-            ? 'bg-edge-primary-strong'
-            : isInternal
-              ? 'bg-accent-red-orange'
-              : 'bg-transparent'
+          isCustomer ? 'bg-line-primary-strong' : isInternal ? 'bg-accent-red-orange-default' : 'bg-transparent'
         }`}
       />
 
@@ -61,13 +53,13 @@ export default function MessageItem({ item, connector, documentId }: MessageItem
         {/* 아바타 — avatar_url 부재 시 author.type 별 기본 아이콘 */}
         <div
           className={`flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-lg ${
-            isCustomer ? 'bg-accent-light-blue' : 'bg-accent-red-orange'
+            isCustomer ? 'bg-accent-light-blue-default' : 'bg-accent-red-orange-default'
           }`}
         >
           {avatarUrl ? (
             <Image src={avatarUrl} alt="" width={32} height={32} className="size-8 object-cover" />
           ) : (
-            <AvatarIcon aria-hidden className="text-icon-inverse size-6" />
+            <AvatarIcon aria-hidden className="text-icon-normal-inverse size-6" />
           )}
         </div>
 
@@ -75,26 +67,18 @@ export default function MessageItem({ item, connector, documentId }: MessageItem
         <div className="flex min-w-0 flex-1 flex-col gap-1">
           {/* 작성자 행 — 이름 / 상담원 아이콘 / 내부 대화 태그 / 작성 시각 */}
           <div className="flex items-center gap-1.5">
-            <span className="text-body-small text-content-alternative truncate font-medium">
-              {authorName ?? <span className="text-content-assistive">없음</span>}
+            <span className="text-body-small text-text-normal-alternative truncate font-medium">
+              {authorName ?? <span className="text-text-normal-assistive">없음</span>}
             </span>
-            {isManager && (
-              <HeadphoneIcon aria-hidden className="text-accent-green size-4.5 shrink-0" />
-            )}
+            {isManager && <HeadphoneIcon aria-hidden className="text-accent-green-default size-4.5 shrink-0" />}
             {isInternal && (
-              <Badge
-                variant="secondary"
-                size="md"
-                className="rounded-md2 shrink-0 gap-1 px-1.5 py-0.5 font-medium"
-              >
+              <Badge variant="secondary" size="md" className="rounded-md2 shrink-0 gap-1 px-1.5 py-0.5 font-medium">
                 <LockIcon aria-hidden className="size-4.5" />
                 내부 대화
               </Badge>
             )}
             {timestamp && (
-              <span className="text-body-xsmall text-content-assistive ml-auto shrink-0">
-                {timestamp}
-              </span>
+              <span className="text-body-xsmall text-text-normal-assistive ml-auto shrink-0">{timestamp}</span>
             )}
           </div>
 

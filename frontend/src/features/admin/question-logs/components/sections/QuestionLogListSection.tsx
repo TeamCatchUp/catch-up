@@ -118,15 +118,17 @@ export default function QuestionLogListSection({ userId }: QuestionLogListSectio
             className={cn(
               'flex h-9 max-w-36.25 min-w-9 cursor-pointer items-center justify-center gap-1 rounded-lg border px-2 py-1.5',
               savedOnly
-                ? 'border-edge-primary bg-fill-primary-assistive'
-                : 'border-edge-neutral hover:bg-fill-interaction-hover active:bg-fill-interaction-pressed bg-fill-normal',
+                ? 'border-line-primary-normal bg-fill-primary-normal-assistive'
+                : 'border-line-normal-neutral hover:bg-fill-normal-interaction-hover active:bg-fill-normal-interaction-pressed bg-fill-normal-normal',
             )}
           >
-            <BookmarkIcon className={cn('size-5 shrink-0', savedOnly ? 'text-icon-primary' : 'text-content-neutral')} />
+            <BookmarkIcon
+              className={cn('size-5 shrink-0', savedOnly ? 'text-icon-primary-normal' : 'text-text-normal-neutral')}
+            />
             <span
               className={cn(
                 'text-body-small whitespace-nowrap',
-                savedOnly ? 'text-icon-primary' : 'text-content-normal',
+                savedOnly ? 'text-icon-primary-normal' : 'text-text-normal-normal',
               )}
             >
               저장한 답변
@@ -134,24 +136,24 @@ export default function QuestionLogListSection({ userId }: QuestionLogListSectio
           </button>
         </div>
 
-        <label className="border-edge-assistive bg-fill-strong focus-within:border-edge-neutral flex h-10 w-70 items-center gap-1.5 rounded-lg border-[1.5px] px-3 py-2">
-          <SearchIcon className="text-content-assistive size-5 shrink-0" />
+        <label className="border-line-normal-assistive bg-fill-normal-strong focus-within:border-line-normal-neutral flex h-10 w-70 items-center gap-1.5 rounded-lg border-[1.5px] px-3 py-2">
+          <SearchIcon className="text-text-normal-assistive size-5 shrink-0" />
           <input
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="질문, 키워드로 검색하세요."
-            className="text-body-small text-content-neutral placeholder:text-content-assistive w-full bg-transparent outline-none"
+            className="text-body-small text-text-normal-neutral placeholder:text-text-normal-assistive w-full bg-transparent outline-none"
           />
         </label>
       </div>
 
       {/* 로딩 */}
-      {isLoading && <div className="text-body-small text-content-assistive px-1 py-4">불러오는 중...</div>}
+      {isLoading && <div className="text-body-small text-text-normal-assistive px-1 py-4">불러오는 중...</div>}
 
       {/* 빈 결과 */}
       {!isLoading && groupedSections.length === 0 && (
-        <div className="text-body-small text-content-assistive px-1 py-4">조건에 맞는 질문 기록이 없습니다.</div>
+        <div className="text-body-small text-text-normal-assistive px-1 py-4">조건에 맞는 질문 기록이 없습니다.</div>
       )}
 
       {/* 그룹별 리스트 */}
@@ -161,7 +163,7 @@ export default function QuestionLogListSection({ userId }: QuestionLogListSectio
             <Fragment key={section.key}>
               <section className="flex flex-col gap-3">
                 <div className="px-2">
-                  <span className="text-body-xsmall text-content-alternative">{section.title}</span>
+                  <span className="text-body-xsmall text-text-normal-alternative">{section.title}</span>
                 </div>
                 <div className="flex flex-col gap-2">
                   {section.items.map((item) => (
@@ -178,7 +180,7 @@ export default function QuestionLogListSection({ userId }: QuestionLogListSectio
       {/* 무한 스크롤 sentinel + 로딩 표시 */}
       <div ref={sentinelRef} className="h-1" />
       {isFetchingNextPage && (
-        <div className="text-body-small text-content-assistive py-2 text-center">불러오는 중...</div>
+        <div className="text-body-small text-text-normal-assistive py-2 text-center">불러오는 중...</div>
       )}
     </div>
   );

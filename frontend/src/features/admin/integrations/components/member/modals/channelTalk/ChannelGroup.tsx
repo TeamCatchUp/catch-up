@@ -43,7 +43,7 @@ function ChannelGroup({
 
   return (
     <section className="flex flex-col">
-      <header className="bg-fill-strong border-edge-assistive flex h-17 items-center justify-between gap-8 border-b py-2.5 pr-5 pl-3">
+      <header className="bg-fill-normal-strong border-line-normal-assistive flex h-17 items-center justify-between gap-8 border-b py-2.5 pr-5 pl-3">
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
           <button
             type="button"
@@ -53,20 +53,20 @@ function ChannelGroup({
           >
             <CheckboxIcon checked={isChannelSelected} className="size-6" />
             <EntityChip icon={IconTag} />
-            <span className="text-body-small text-content-normal line-clamp-1 min-w-0 flex-1 text-left">
+            <span className="text-body-small text-text-normal-normal line-clamp-1 min-w-0 flex-1 text-left">
               {channel.display_name}
             </span>
           </button>
           {/* checkbox(36) + gap(6) = 42px 만큼 들여써서 채널명 텍스트 시작 위치와 정렬 */}
           <div className="flex items-center gap-3 pl-10.5">
-            <span className="text-body-xsmall text-content-assistive">전체 {totalCount}개</span>
-            <span className="bg-edge-normal block h-3 w-px" />
-            <span className="text-body-xsmall text-content-primary">{selectedCount}개 선택됨</span>
+            <span className="text-body-xsmall text-text-normal-assistive">전체 {totalCount}개</span>
+            <span className="bg-line-normal-normal block h-3 w-px" />
+            <span className="text-body-xsmall text-text-primary-normal">{selectedCount}개 선택됨</span>
           </div>
         </div>
 
         <div className="flex h-9 shrink-0 items-center gap-4">
-          <span className="text-body-xsmall text-content-alternative whitespace-nowrap">채널 기간:</span>
+          <span className="text-body-xsmall text-text-normal-alternative whitespace-nowrap">채널 기간:</span>
           <PeriodSelect
             value={channelPeriod}
             onChange={(period) => onChangeChannelPeriod(channel.channel_id, period)}
@@ -91,19 +91,21 @@ function ChannelGroup({
                 >
                   <CheckboxIcon checked={isSpaceSelected} className="size-6" />
                 </button>
-                <div className="border-edge-assistive flex min-w-0 flex-1 items-center gap-8 border-b py-2.5">
+                <div className="border-line-normal-assistive flex min-w-0 flex-1 items-center gap-8 border-b py-2.5">
                   <button
                     type="button"
                     onClick={() => onToggleSpace(space.space_id)}
                     className="flex min-w-0 flex-1 cursor-pointer items-center gap-1.5 text-left"
                   >
                     <EntityChip icon={IconBook} />
-                    <span className="text-body-small text-content-normal line-clamp-1 min-w-0 flex-1">
+                    <span className="text-body-small text-text-normal-normal line-clamp-1 min-w-0 flex-1">
                       {space.display_name}
                     </span>
                   </button>
                   <div className="flex h-9 shrink-0 items-center gap-3">
-                    <span className="text-body-xsmall text-content-alternative whitespace-nowrap">데이터 기간:</span>
+                    <span className="text-body-xsmall text-text-normal-alternative whitespace-nowrap">
+                      데이터 기간:
+                    </span>
                     <PeriodSelect
                       value={spacePeriod}
                       onChange={(period) => onChangeSpacePeriod(space.space_id, period)}

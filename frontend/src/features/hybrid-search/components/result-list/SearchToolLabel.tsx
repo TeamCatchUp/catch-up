@@ -40,10 +40,7 @@ export default function SearchToolLabel({ tools }: SearchToolLabelProps) {
         const sizeClass = tool === 'channel_talk' ? 'size-3.75' : 'size-4.5';
         // 각 로고 흰색 pill wrapper.
         return (
-          <span
-            key={tool}
-            className="bg-fill-normal flex items-center justify-center rounded-full px-1 py-0.5"
-          >
+          <span key={tool} className="bg-fill-normal-normal flex items-center justify-center rounded-full px-1 py-0.5">
             <Logo className={sizeClass} />
           </span>
         );

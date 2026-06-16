@@ -8,9 +8,9 @@ export default function MyTokenUsagePage() {
     <section className="flex flex-col gap-8 px-16 pt-9 pb-30">
       {/* 헤더 */}
       <div className="flex flex-col gap-6">
-        <h1 className="text-heading-xlarge text-content-normal">토큰 사용량 관리</h1>
+        <h1 className="text-heading-xlarge text-text-normal-normal">토큰 사용량 관리</h1>
         <div className="flex items-center gap-6">
-          <span className="text-heading-large border-content-normal text-content-normal border-b-2 pb-1.5">
+          <span className="text-heading-large border-text-normal-normal text-text-normal-normal border-b-2 pb-1.5">
             나의 토큰 사용량
           </span>
         </div>

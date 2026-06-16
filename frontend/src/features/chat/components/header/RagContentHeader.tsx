@@ -46,7 +46,7 @@ export default function RagHeader({ title, sessionId }: RagHeaderProps) {
 
   return (
     <>
-      <div className="border-b-edge-neutral bg-fill-normal z-base sticky top-0 flex h-13 justify-between border-b px-6 py-2">
+      <div className="border-b-line-normal-neutral bg-fill-normal-normal z-base sticky top-0 flex h-13 justify-between border-b px-6 py-2">
         {/* 좌측 메뉴 */}
         <div className="relative flex min-w-0 items-center">
           <button
@@ -55,18 +55,18 @@ export default function RagHeader({ title, sessionId }: RagHeaderProps) {
             }}
             className={cn(
               'icon-button-only-gray flex items-center rounded-xl px-2 py-1',
-              isQuestionsHistoryPanelOpen && 'bg-fill-interaction-pressed rounded-xl',
+              isQuestionsHistoryPanelOpen && 'bg-fill-normal-interaction-pressed rounded-xl',
             )}
           >
-            <AI className="text-content-alternative h-5 w-5 shrink-0" />
-            <span className="text-heading-small text-content-alternative ml-1.5 hidden shrink-0 cursor-pointer lg:inline">
+            <AI className="text-text-normal-alternative h-5 w-5 shrink-0" />
+            <span className="text-heading-small text-text-normal-alternative ml-1.5 hidden shrink-0 cursor-pointer lg:inline">
               캐치스턴트 AI
             </span>
           </button>
-          <ArrowRight2 className="text-content-alternative h-5 w-5" />
+          <ArrowRight2 className="text-text-normal-alternative h-5 w-5" />
           <button
             onClick={handleTitleClick}
-            className="text-heading-small text-content-normal! hover:bg-fill-interaction-hover max-w-50 cursor-pointer truncate rounded-lg px-2 py-1 transition-colors"
+            className="text-heading-small text-text-normal-normal! hover:bg-fill-normal-interaction-hover max-w-50 cursor-pointer truncate rounded-lg px-2 py-1 transition-colors"
           >
             {title}
           </button>
@@ -94,8 +94,8 @@ export default function RagHeader({ title, sessionId }: RagHeaderProps) {
             <MoreButtonContent />
           </DropdownMenu>
           <Button variant="box-outline-gray" size="md" onClick={handleNewQuestion}>
-            <Add className="text-content-neutral h-5 w-5" />
-            <span className="text-content-neutral whitespace-nowrap">새 업무 질문</span>
+            <Add className="text-text-normal-neutral h-5 w-5" />
+            <span className="text-text-normal-neutral whitespace-nowrap">새 업무 질문</span>
           </Button>
         </div>
       </div>

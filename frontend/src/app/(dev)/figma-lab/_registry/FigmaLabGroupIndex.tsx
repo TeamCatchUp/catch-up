@@ -9,9 +9,9 @@ export default function FigmaLabGroupIndex() {
   return (
     <div className="mx-auto flex max-w-7xl flex-col gap-6 px-8 py-8">
       <header className="flex flex-col gap-2">
-        <p className="text-body-xsmall text-content-assistive font-semibold tracking-wider uppercase">Figma Lab</p>
-        <h1 className="text-heading-large text-content-normal font-bold">Feature UI Lab</h1>
-        <p className="text-body-medium text-content-alternative">
+        <p className="text-body-xsmall text-text-normal-assistive font-semibold tracking-wider uppercase">Figma Lab</p>
+        <h1 className="text-heading-large text-text-normal-normal font-bold">Feature UI Lab</h1>
+        <p className="text-body-medium text-text-normal-alternative">
           Feature 단위로 page assembly와 관련 shared component를 함께 확인하는 dev preview surface입니다.
         </p>
       </header>
@@ -25,13 +25,13 @@ export default function FigmaLabGroupIndex() {
             <Link
               key={group.id}
               href={`/figma-lab/${group.id}`}
-              className="border-edge-neutral bg-fill-normal hover:bg-fill-interaction-hover flex min-h-44 flex-col justify-between gap-6 rounded-lg border p-5 transition-colors"
+              className="border-line-normal-neutral bg-fill-normal-normal hover:bg-fill-normal-interaction-hover flex min-h-44 flex-col justify-between gap-6 rounded-lg border p-5 transition-colors"
             >
               <div className="flex flex-col gap-2">
-                <h2 className="text-heading-small text-content-normal font-semibold">{group.title}</h2>
-                <p className="text-body-small text-content-alternative">{group.description}</p>
+                <h2 className="text-heading-small text-text-normal-normal font-semibold">{group.title}</h2>
+                <p className="text-body-small text-text-normal-alternative">{group.description}</p>
               </div>
-              <div className="text-body-small text-content-assistive flex items-center gap-2">
+              <div className="text-body-small text-text-normal-assistive flex items-center gap-2">
                 <span>{primaryCaseCount} cases</span>
                 {relatedCaseCount > 0 && (
                   <>
@@ -46,8 +46,8 @@ export default function FigmaLabGroupIndex() {
       </div>
 
       {FIGMA_LAB_CASES.length === 0 && (
-        <div className="border-edge-neutral bg-fill-strong flex min-h-48 items-center justify-center rounded-lg border">
-          <p className="text-body-medium text-content-alternative">등록된 Figma Lab case가 없습니다.</p>
+        <div className="border-line-normal-neutral bg-fill-normal-strong flex min-h-48 items-center justify-center rounded-lg border">
+          <p className="text-body-medium text-text-normal-alternative">등록된 Figma Lab case가 없습니다.</p>
         </div>
       )}
     </div>

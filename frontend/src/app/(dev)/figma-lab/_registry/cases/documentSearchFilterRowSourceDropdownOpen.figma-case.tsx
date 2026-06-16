@@ -39,13 +39,14 @@ export const documentSearchFilterRowSourceDropdownOpenFigmaCase: FigmaLabCase = 
       figmaPart: 'tool_filter dropdown',
       checked: 'src/shared/components/query/filter/SourceFilterDropdown.tsx',
       decision: 'reuse',
-      reason: '선택 chip, delete_circle icon, input 검색, option list empty state를 production dropdown으로 검증합니다.',
+      reason:
+        '선택 chip, delete_circle icon, input 검색, option list empty state를 production dropdown으로 검증합니다.',
     },
   ],
   tokens: [
     {
       figma: 'Dropdown surface',
-      code: 'bg-fill-normal border-edge-strong shadow dropdown token',
+      code: 'bg-fill-normal-normal border-line-normal-strong shadow dropdown token',
       decision: 'project-token',
     },
     {

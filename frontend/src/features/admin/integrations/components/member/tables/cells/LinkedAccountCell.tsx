@@ -27,17 +27,17 @@ export default function LinkedAccountCell({ info }: LinkedAccountCellProps) {
             alt=""
             width={20}
             height={20}
-            className="border-fill-strong size-5 shrink-0 rounded-full border"
+            className="border-fill-normal-strong size-5 shrink-0 rounded-full border"
           />
         ) : (
-          <DefaultProfile className="border-fill-strong text-content-assistive size-5 shrink-0 rounded-full border" />
+          <DefaultProfile className="border-fill-normal-strong text-text-normal-assistive size-5 shrink-0 rounded-full border" />
         )}
         <div className={FLEX_COLUMN_CELL_CLASS}>
-          <span className="text-body-xsmall text-content-normal truncate">{info?.name ?? '-'}</span>
+          <span className="text-body-xsmall text-text-normal-normal truncate">{info?.name ?? '-'}</span>
         </div>
       </div>
       <div className={SERVICE_ACCOUNT_IDENTIFIER_CLASS}>
-        <span className="text-body-xsmall text-content-alternative truncate">{info?.identifier ?? '-'}</span>
+        <span className="text-body-xsmall text-text-normal-alternative truncate">{info?.identifier ?? '-'}</span>
       </div>
     </div>
   );

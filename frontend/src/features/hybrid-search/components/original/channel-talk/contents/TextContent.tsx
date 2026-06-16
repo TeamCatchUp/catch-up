@@ -7,5 +7,5 @@ interface TextContentProps {
 }
 
 export default function TextContent({ content }: TextContentProps) {
-  return <p className="text-body-small text-content-normal break-words whitespace-pre-wrap">{content.text}</p>;
+  return <p className="text-body-small text-text-normal-normal break-words whitespace-pre-wrap">{content.text}</p>;
 }

@@ -164,8 +164,12 @@ export default function FieldChipComponent({ fieldKey, placeholder, nodeKey }: F
   return (
     <span
       className={cn(
-        'bg-fill-primary-assistive inline cursor-text rounded-lg border px-2 py-1',
-        hasError ? 'border-edge-error' : isAtMaxLength ? 'border-status-destructive' : 'border-edge-neutral',
+        'bg-fill-primary-normal-assistive inline cursor-text rounded-lg border px-2 py-1',
+        hasError
+          ? 'border-status-destructive'
+          : isAtMaxLength
+            ? 'border-status-destructive'
+            : 'border-line-normal-neutral',
       )}
       style={{ boxDecorationBreak: 'clone', WebkitBoxDecorationBreak: 'clone' }}
       onClick={() => spanRef.current?.focus()}
@@ -197,12 +201,12 @@ export default function FieldChipComponent({ fieldKey, placeholder, nodeKey }: F
           ctx.setFieldValue(fieldKey, text);
         }}
         className={cn(
-          'text-body-medium text-content-primary cursor-text align-baseline outline-none',
+          'text-body-medium text-text-primary-normal cursor-text align-baseline outline-none',
           useInlineMode ? 'inline' : 'inline-block',
         )}
         style={{ minWidth: !useInlineMode ? (value && minWidth > 0 ? minWidth : 1) : undefined }}
       />
-      {!value && <span className="text-content-assistive pointer-events-none select-none">{placeholder}</span>}
+      {!value && <span className="text-text-normal-assistive pointer-events-none select-none">{placeholder}</span>}
       {value && (
         <button
           type="button"
@@ -213,7 +217,7 @@ export default function FieldChipComponent({ fieldKey, placeholder, nodeKey }: F
           }}
           className="ml-1 inline-flex h-5 w-5 cursor-pointer items-center justify-center align-middle"
         >
-          <IconDelete className="text-icon-assistive h-5 w-5" />
+          <IconDelete className="text-icon-normal-assistive h-5 w-5" />
         </button>
       )}
     </span>

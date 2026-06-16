@@ -2,14 +2,14 @@ import Image from 'next/image';
 
 const DotDivider = () => (
   <div className="flex items-center justify-center gap-1.5 py-4">
-    <span className="bg-content-assistive size-1 rounded-full" />
-    <span className="bg-content-assistive size-1 rounded-full" />
-    <span className="bg-content-assistive size-1 rounded-full" />
+    <span className="bg-text-normal-assistive size-1 rounded-full" />
+    <span className="bg-text-normal-assistive size-1 rounded-full" />
+    <span className="bg-text-normal-assistive size-1 rounded-full" />
   </div>
 );
 
 const ExampleBox = ({ children }: { children: React.ReactNode }) => (
-  <div className="border-edge-assistive bg-fill-strong text-label-medium flex flex-col gap-3 rounded-xl border px-5 py-4">
+  <div className="border-line-normal-assistive bg-fill-normal-strong text-label-medium flex flex-col gap-3 rounded-xl border px-5 py-4">
     {children}
   </div>
 );
@@ -18,7 +18,7 @@ export default function Tutorial3Content() {
   return (
     <div className="flex w-full flex-col gap-16">
       {/* 도입부 */}
-      <div className="text-label-medium text-content-normal">
+      <div className="text-label-medium text-text-normal-normal">
         <p>
           좋은 답은 빠르기만 하면 끝이 아니에요.
           <br />
@@ -39,8 +39,8 @@ export default function Tutorial3Content() {
       {/* 섹션 1: 답변에 표시가 이미 되어 있어요 */}
       <section className="flex flex-col gap-6">
         <div className="flex flex-col gap-4">
-          <h2 className="text-heading-xlarge text-content-strong">답변에 표시가 이미 되어 있어요</h2>
-          <div className="text-label-medium text-content-normal">
+          <h2 className="text-heading-xlarge text-text-normal-strong">답변에 표시가 이미 되어 있어요</h2>
+          <div className="text-label-medium text-text-normal-normal">
             <p>
               출처를 확인하려고 원문부터 열 필요는 없어요.
               <br />
@@ -78,7 +78,9 @@ export default function Tutorial3Content() {
       {/* 섹션 2: 답변 생성에 사용한 '이유'까지 보여줘요 */}
       <section className="flex flex-col gap-6">
         <div className="flex flex-col gap-4">
-          <h2 className="text-heading-xlarge text-content-strong">답변 생성에 사용한 &apos;이유&apos;까지 보여줘요</h2>
+          <h2 className="text-heading-xlarge text-text-normal-strong">
+            답변 생성에 사용한 &apos;이유&apos;까지 보여줘요
+          </h2>
           <div className="px-16">
             <div className="relative aspect-[1416/600] w-full">
               <Image
@@ -97,7 +99,7 @@ export default function Tutorial3Content() {
           </div>
         </div>
 
-        <div className="text-label-medium text-content-normal">
+        <div className="text-label-medium text-text-normal-normal">
           <p>
             출처가 여러 개면 결국 이런 생각이 들어요.
             <br />
@@ -117,8 +119,8 @@ export default function Tutorial3Content() {
         </div>
 
         <ExampleBox>
-          <p className="text-content-normal">[예시]</p>
-          <ul className="text-content-alternative list-disc space-y-3 pl-6">
+          <p className="text-text-normal-normal">[예시]</p>
+          <ul className="text-text-normal-alternative list-disc space-y-3 pl-6">
             <li>
               그럴듯한 답을 빨리 걸러낼 수 있어요
               <br />
@@ -144,7 +146,7 @@ export default function Tutorial3Content() {
           </ul>
         </ExampleBox>
 
-        <p className="text-label-medium text-content-normal">
+        <p className="text-label-medium text-text-normal-normal">
           결국 인용 이유는 출처를 덜 보고도 정확히 판단하게 만들어주는 장치예요.
         </p>
       </section>
@@ -154,8 +156,8 @@ export default function Tutorial3Content() {
       {/* 섹션 3: 확인이 필요한 순간만 원문을 열면 돼요 */}
       <section className="flex flex-col gap-6">
         <div className="flex flex-col gap-4">
-          <h2 className="text-heading-xlarge text-content-strong">확인이 필요한 순간만 원문을 열면 돼요</h2>
-          <div className="text-label-medium text-content-normal">
+          <h2 className="text-heading-xlarge text-text-normal-strong">확인이 필요한 순간만 원문을 열면 돼요</h2>
+          <div className="text-label-medium text-text-normal-normal">
             <p>
               모든 출처를 다 열어볼 필요는 없어요.
               <br />
@@ -165,16 +167,18 @@ export default function Tutorial3Content() {
         </div>
 
         <ExampleBox>
-          <p className="text-label-medium text-content-normal">- 결정이 걸린 순간: 승인/정책/방향을 확정해야 할 때</p>
-          <p className="text-label-medium text-content-normal">
+          <p className="text-label-medium text-text-normal-normal">
+            - 결정이 걸린 순간: 승인/정책/방향을 확정해야 할 때
+          </p>
+          <p className="text-label-medium text-text-normal-normal">
             - 조건이 중요한 순간: 기간, 권한 범위, 수치가 포함될 때
           </p>
-          <p className="text-label-medium text-content-normal">
+          <p className="text-label-medium text-text-normal-normal">
             - 원인이 필요한 순간: 장애/버그처럼 재현과 근거가 필요할 때
           </p>
         </ExampleBox>
 
-        <div className="text-label-medium text-content-normal">
+        <div className="text-label-medium text-text-normal-normal">
           <p>
             이때도 &apos;어디로 가야 하는지&apos;가 명확해요.
             <br />
@@ -186,25 +190,25 @@ export default function Tutorial3Content() {
       {/* 섹션 4: 출처 확인은 이렇게 10초면 충분해요 */}
       <section className="flex flex-col gap-6">
         <div className="flex flex-col gap-4">
-          <h2 className="text-heading-xlarge text-content-strong">출처 확인은 이렇게 10초면 충분해요</h2>
-          <div className="text-label-medium text-content-normal">
+          <h2 className="text-heading-xlarge text-text-normal-strong">출처 확인은 이렇게 10초면 충분해요</h2>
+          <div className="text-label-medium text-text-normal-normal">
             <p>처음엔 복잡해 보이지만, 실제로는 딱 이 순서면 돼요.</p>
           </div>
         </div>
 
         <ExampleBox>
-          <p className="text-label-medium text-content-normal">
+          <p className="text-label-medium text-text-normal-normal">
             1. 답변에서 표시 확인: 이 문장이 근거가 있는 문장인지 보기
           </p>
-          <p className="text-label-medium text-content-normal">
+          <p className="text-label-medium text-text-normal-normal">
             2. 인용 이유 확인: 왜 이 출처가 답변 생성에 쓰였는지 확인하기
           </p>
-          <p className="text-label-medium text-content-normal">
+          <p className="text-label-medium text-text-normal-normal">
             3. 필요할 때만 원문 이동: 결정에 필요한 부분만 확인하기
           </p>
         </ExampleBox>
 
-        <div className="text-label-medium text-content-normal">
+        <div className="text-label-medium text-text-normal-normal">
           <p>
             이 순서대로만 보면,
             <br />
@@ -217,8 +221,8 @@ export default function Tutorial3Content() {
 
       {/* 섹션 5: 확인은 간편하게, 판단은 확실하게 */}
       <section className="flex flex-col gap-4">
-        <h2 className="text-heading-xlarge text-content-strong">확인은 간편하게, 판단은 확실하게</h2>
-        <div className="text-label-medium text-content-normal">
+        <h2 className="text-heading-xlarge text-text-normal-strong">확인은 간편하게, 판단은 확실하게</h2>
+        <div className="text-label-medium text-text-normal-normal">
           <p>출처를 많이 보는 게 목표는 아니에요.</p>
           <br />
           <p>

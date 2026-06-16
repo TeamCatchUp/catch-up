@@ -44,8 +44,8 @@ export default function EditMessageInput({ initialContent, onCancel, onSubmit }:
   return (
     <div
       className={cn(
-        'bg-fill-normal flex flex-col gap-2.5 rounded-2xl border-[1.5px] p-4',
-        isFocused ? 'border-edge-primary' : 'border-edge-neutral',
+        'bg-fill-normal-normal flex flex-col gap-2.5 rounded-2xl border-[1.5px] p-4',
+        isFocused ? 'border-line-primary-normal' : 'border-line-normal-neutral',
       )}
     >
       <textarea
@@ -63,14 +63,14 @@ export default function EditMessageInput({ initialContent, onCancel, onSubmit }:
             onCancel();
           }
         }}
-        className="text-body-small text-content-normal box-border w-full resize-none overflow-y-auto outline-none"
+        className="text-body-small text-text-normal-normal box-border w-full resize-none overflow-y-auto outline-none"
       />
       <div className="flex items-center justify-end gap-2.5">
         <button
           onClick={onCancel}
           className="capsule-button-outline-mono flex shrink-0 cursor-pointer items-center justify-center px-3 py-1.5"
         >
-          <span className="text-body-small text-content-normal">취소</span>
+          <span className="text-body-small text-text-normal-normal">취소</span>
         </button>
         <button
           onClick={handleSubmit}

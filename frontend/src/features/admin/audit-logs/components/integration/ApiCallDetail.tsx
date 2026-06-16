@@ -12,7 +12,7 @@ export default function ApiCallDetail({ log }: { log: AuditIntegrationLog }) {
       {/* 서비스 아이콘 + 이름 */}
       <div className="flex items-center gap-3">
         <ServiceIcon service={log.service} className={iconCls} />
-        <span className="text-heading-medium text-content-normal truncate">{SERVICE_NAMES[log.service]}</span>
+        <span className="text-heading-medium text-text-normal-normal truncate">{SERVICE_NAMES[log.service]}</span>
       </div>
 
       <div className="flex flex-col gap-9">
@@ -27,9 +27,9 @@ export default function ApiCallDetail({ log }: { log: AuditIntegrationLog }) {
           {/* API 호출 사유 */}
           {log.apiCallReason && (
             <div className="flex flex-col gap-2">
-              <h3 className="text-heading-small text-content-neutral">API 호출 사유</h3>
-              <div className="bg-fill-strong border-edge-assistive rounded-xl border px-5 py-2.5">
-                <span className="text-body-small text-content-normal">{log.apiCallReason}</span>
+              <h3 className="text-heading-small text-text-normal-neutral">API 호출 사유</h3>
+              <div className="bg-fill-normal-strong border-line-normal-assistive rounded-xl border px-5 py-2.5">
+                <span className="text-body-small text-text-normal-normal">{log.apiCallReason}</span>
               </div>
             </div>
           )}
@@ -37,9 +37,9 @@ export default function ApiCallDetail({ log }: { log: AuditIntegrationLog }) {
           {/* 수신 데이터 */}
           {log.receivedData && (
             <div className="flex flex-col gap-2">
-              <h3 className="text-heading-small text-content-neutral">수신 데이터</h3>
-              <div className="bg-fill-strong border-edge-assistive max-h-80 overflow-y-auto rounded-xl border px-5 py-4">
-                <pre className="text-label-small text-content-normal break-all whitespace-pre-wrap">
+              <h3 className="text-heading-small text-text-normal-neutral">수신 데이터</h3>
+              <div className="bg-fill-normal-strong border-line-normal-assistive max-h-80 overflow-y-auto rounded-xl border px-5 py-4">
+                <pre className="text-label-small text-text-normal-normal break-all whitespace-pre-wrap">
                   {log.receivedData}
                 </pre>
               </div>

@@ -16,22 +16,15 @@ const LABEL_BY_TYPE: Record<PipelineQueryType, string> = {
   clarify: 'Clarify',
 };
 
-export default function PipelineTypeBanner({
-  pipelineType,
-  pipelineReasoning,
-}: PipelineTypeBannerProps) {
+export default function PipelineTypeBanner({ pipelineType, pipelineReasoning }: PipelineTypeBannerProps) {
   if (!pipelineType) return null;
 
   const label = LABEL_BY_TYPE[pipelineType];
 
   return (
-    <div className="border-edge-neutral flex items-center gap-3 overflow-hidden rounded-xl border border-solid p-3">
-      <span className="text-body-xsmall text-content-primary-assistive shrink-0 truncate">
-        {label}
-      </span>
-      <span className="text-body-small text-content-normal min-w-0 flex-1 truncate">
-        {pipelineReasoning ?? ''}
-      </span>
+    <div className="border-line-normal-neutral flex items-center gap-3 overflow-hidden rounded-xl border border-solid p-3">
+      <span className="text-body-xsmall text-text-primary-assistive shrink-0 truncate">{label}</span>
+      <span className="text-body-small text-text-normal-normal min-w-0 flex-1 truncate">{pipelineReasoning ?? ''}</span>
     </div>
   );
 }

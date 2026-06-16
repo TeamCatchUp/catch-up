@@ -31,11 +31,6 @@ def get_node_completed_payload(node: str, output_data: dict) -> dict | None:
         count = len(output_data.get("retrieved_docs", []))
         return {"reasoning": f"{count}건의 문서를 찾았어요."}
 
-    if node == "rerank":
-        metadata = output_data.get("rerank_metadata") or {}
-        source_distribution = metadata.get("source_distribution")
-        return {"content": {"source_distribution": source_distribution}}
-
     return None
 
 

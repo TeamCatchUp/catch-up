@@ -127,7 +127,7 @@ export default function AdminPermissionsPage() {
   return (
     <section className="flex flex-col gap-6 px-16 pt-9 pb-25">
       <div className="flex items-center gap-2.5">
-        <h1 className="text-heading-xlarge text-content-normal">권한 정보</h1>
+        <h1 className="text-heading-xlarge text-text-normal-normal">권한 정보</h1>
         <AdminOwnerInfoTag />
       </div>
 

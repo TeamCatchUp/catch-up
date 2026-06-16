@@ -10,11 +10,9 @@ interface CodeBlockProps {
 
 export default function CodeBlock({ code }: CodeBlockProps) {
   return (
-    <div className="bg-fill-strong border-edge-neutral w-full overflow-hidden rounded-lg border">
+    <div className="bg-fill-normal-strong border-line-normal-neutral w-full overflow-hidden rounded-lg border">
       <pre className="custom-scrollbar m-0 max-h-62.5 overflow-auto px-4 py-3 font-[inherit]">
-        <code className="text-body-small text-content-neutral font-[inherit] whitespace-pre">
-          {code}
-        </code>
+        <code className="text-body-small text-text-normal-neutral font-[inherit] whitespace-pre">{code}</code>
       </pre>
     </div>
   );

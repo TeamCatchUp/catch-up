@@ -17,8 +17,8 @@ import type { LimitReleaseRequest } from '../../types/tokenUsageModel';
 /** 정보 행 (label w-28 = 112px, gap-14 = 56px) */
 const InfoRow = ({ label, value }: { label: string; value: string }) => (
   <div className="text-body-small flex w-full items-center gap-14">
-    <span className="text-content-alternative w-28 shrink-0">{label}</span>
-    <span className="text-content-neutral min-w-0 flex-1 truncate">{value}</span>
+    <span className="text-text-normal-alternative w-28 shrink-0">{label}</span>
+    <span className="text-text-normal-neutral min-w-0 flex-1 truncate">{value}</span>
   </div>
 );
 
@@ -48,8 +48,8 @@ export default function LimitReleaseDetailPanel({ request, onApprove, onReject }
       <div className="flex flex-col gap-4">
         <div className="flex items-center gap-5">
           <div className="flex flex-1 items-center gap-3">
-            <DefaultProfile className="text-content-assistive size-7 shrink-0 rounded-full" />
-            <span className="text-heading-medium text-content-normal truncate">{request.name}</span>
+            <DefaultProfile className="text-text-normal-assistive size-7 shrink-0 rounded-full" />
+            <span className="text-heading-medium text-text-normal-normal truncate">{request.name}</span>
           </div>
           <div className="flex shrink-0 items-center gap-2.5">
             <Button variant="box-outline-gray" size="md" onClick={() => setRejectDialogOpen(true)}>
@@ -80,7 +80,7 @@ export default function LimitReleaseDetailPanel({ request, onApprove, onReject }
 
       {/* 추가 토큰 부여량 입력 */}
       <div className="flex items-center gap-18">
-        <span className="text-body-small text-content-alternative shrink-0">추가 토큰 부여량</span>
+        <span className="text-body-small text-text-normal-alternative shrink-0">추가 토큰 부여량</span>
         <div className="flex min-w-0 flex-1 items-center gap-2.5">
           <Input
             inputSize="lg"
@@ -90,37 +90,37 @@ export default function LimitReleaseDetailPanel({ request, onApprove, onReject }
             onChange={(e) => setGrantAmount(e.target.value)}
             className="min-w-0 flex-1"
           />
-          <span className="text-body-small text-content-alternative shrink-0">$</span>
+          <span className="text-body-small text-text-normal-alternative shrink-0">$</span>
         </div>
       </div>
 
       {/* 설정 카드 영역 */}
       <div className="flex flex-col gap-3">
         {/* 개인 토큰 사용 제한 설정 카드 */}
-        <div className="bg-fill-strong border-edge-assistive flex flex-col gap-2.5 rounded-lg border px-3 py-2.5">
+        <div className="bg-fill-normal-strong border-line-normal-assistive flex flex-col gap-2.5 rounded-lg border px-3 py-2.5">
           <div className="flex items-center justify-between">
-            <span className="text-heading-small text-content-neutral">설정된 개인 토큰 사용 제한 설정</span>
+            <span className="text-heading-small text-text-normal-neutral">설정된 개인 토큰 사용 제한 설정</span>
             <Link
               href="/admin/token-usage?tab=user-management"
-              className="border-edge-neutral rounded-md2 bg-fill-normal flex h-7 items-center gap-1 border px-1.5 py-1"
+              className="border-line-normal-neutral rounded-md2 bg-fill-normal-normal flex h-7 items-center gap-1 border px-1.5 py-1"
             >
-              <IconArrowOutward className="text-content-alternative size-6" />
-              <span className="text-body-xsmall text-content-alternative">수정 페이지 바로가기</span>
+              <IconArrowOutward className="text-text-normal-alternative size-6" />
+              <span className="text-body-xsmall text-text-normal-alternative">수정 페이지 바로가기</span>
             </Link>
           </div>
           <Separator />
           <div className="text-body-small flex flex-col gap-1">
             <div className="flex items-center justify-between">
-              <span className="text-content-alternative">하루 최대 토큰 비용</span>
-              <span className="text-content-neutral">
+              <span className="text-text-normal-alternative">하루 최대 토큰 비용</span>
+              <span className="text-text-normal-neutral">
                 {request.dailyLimit === DEFAULT_DAILY_LIMIT
                   ? `${request.dailyLimit} $ (기본값)`
                   : `${request.dailyLimit} $`}
               </span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-content-alternative">월 최대 토큰 비용</span>
-              <span className="text-content-neutral">
+              <span className="text-text-normal-alternative">월 최대 토큰 비용</span>
+              <span className="text-text-normal-neutral">
                 {request.monthlyLimit === DEFAULT_MONTHLY_LIMIT
                   ? `${request.monthlyLimit} $ (기본값)`
                   : `${request.monthlyLimit} $`}
@@ -130,14 +130,14 @@ export default function LimitReleaseDetailPanel({ request, onApprove, onReject }
         </div>
 
         {/* 사용자 토큰 사용량 분석 카드 */}
-        <div className="bg-fill-strong border-edge-assistive flex items-center justify-between rounded-lg border px-3 py-2.5">
-          <span className="text-heading-small text-content-neutral">사용자 토큰 사용량 분석</span>
+        <div className="bg-fill-normal-strong border-line-normal-assistive flex items-center justify-between rounded-lg border px-3 py-2.5">
+          <span className="text-heading-small text-text-normal-neutral">사용자 토큰 사용량 분석</span>
           <Link
             href="/admin/token-usage?tab=org-usage"
-            className="border-edge-neutral rounded-md2 bg-fill-normal flex h-7 items-center gap-1 border px-1.5 py-1"
+            className="border-line-normal-neutral rounded-md2 bg-fill-normal-normal flex h-7 items-center gap-1 border px-1.5 py-1"
           >
-            <IconArrowOutward className="text-content-alternative size-6" />
-            <span className="text-body-xsmall text-content-alternative">페이지 바로가기</span>
+            <IconArrowOutward className="text-text-normal-alternative size-6" />
+            <span className="text-body-xsmall text-text-normal-alternative">페이지 바로가기</span>
           </Link>
         </div>
       </div>

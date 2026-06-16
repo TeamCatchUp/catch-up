@@ -17,9 +17,9 @@ function FormInputRow({ input }: { input: OriginalFormInput }) {
 
   return (
     <div className="flex flex-col gap-2">
-      <span className="text-heading-small text-content-normal">{label}</span>
-      <span className="text-body-small text-content-normal break-words">
-        {value ?? <span className="text-content-assistive">없음</span>}
+      <span className="text-heading-small text-text-normal-normal">{label}</span>
+      <span className="text-body-small text-text-normal-normal break-words">
+        {value ?? <span className="text-text-normal-assistive">없음</span>}
       </span>
     </div>
   );
@@ -30,21 +30,21 @@ export default function FormContent({ content }: FormContentProps) {
   const submittedAt = formatSubmittedAt(content.form.submitted_at);
 
   return (
-    <div className="bg-fill-normal-assistive-dark border-edge-normal flex w-full flex-col gap-3 rounded-xl border px-4 py-3">
+    <div className="bg-fill-normal-assistive-dark border-line-normal-normal flex w-full flex-col gap-3 rounded-xl border px-4 py-3">
       <div className="flex flex-col gap-3">
         {inputs.length > 0 ? (
           inputs.map((input, index) => (
             <FormInputRow key={`${input.binding_key ?? input.label ?? 'input'}-${index}`} input={input} />
           ))
         ) : (
-          <span className="text-body-small text-content-assistive">제출된 항목이 없어요.</span>
+          <span className="text-body-small text-text-normal-assistive">제출된 항목이 없어요.</span>
         )}
       </div>
 
       {submittedAt && (
-        <div className="border-edge-normal flex items-center gap-1.5 border-t pt-3">
-          <CheckCircleFilled className="text-icon-alternative h-5 w-5 shrink-0" />
-          <span className="text-body-xsmall text-content-assistive">{submittedAt}</span>
+        <div className="border-line-normal-normal flex items-center gap-1.5 border-t pt-3">
+          <CheckCircleFilled className="text-icon-normal-alternative h-5 w-5 shrink-0" />
+          <span className="text-body-xsmall text-text-normal-assistive">{submittedAt}</span>
         </div>
       )}
     </div>

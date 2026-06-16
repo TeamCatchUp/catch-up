@@ -55,19 +55,19 @@ export function ProfileStep({ isAdmin, defaultValues, onSubmit, onBack }: Profil
         {/* 헤더 영역: 스텝 인디케이터 + 타이틀 + 설명 */}
         <div className="flex flex-col gap-4">
           {isAdmin && <StepIndicator totalSteps={2} currentStep={1} />}
-          <h1 className="text-display-large text-content-normal">
+          <h1 className="text-display-large text-text-normal-normal">
             잠시만 시간을 내어
             <br />
             간단한 정보를 알려주세요.
           </h1>
-          <p className="text-body-large text-content-alternative">성함과 맡고 계신 역할만 알려주셔도 충분합니다.</p>
+          <p className="text-body-large text-text-normal-alternative">성함과 맡고 계신 역할만 알려주셔도 충분합니다.</p>
         </div>
 
         {/* 폼 영역 */}
         <div className="flex flex-col gap-6">
           {/* 이름 */}
           <div className="flex flex-col gap-1.5">
-            <label className="text-heading-medium text-content-normal flex items-center gap-1">
+            <label className="text-heading-medium text-text-normal-normal flex items-center gap-1">
               <span className="bg-status-destructive size-1.25 rounded-full" />
               이름을 적어주세요.
             </label>
@@ -86,7 +86,7 @@ export function ProfileStep({ isAdmin, defaultValues, onSubmit, onBack }: Profil
           {/* 직급 + 부서명 */}
           <div className="flex flex-col gap-6">
             <div className="flex flex-col gap-1.5">
-              <label className="text-heading-medium text-content-normal flex items-center gap-1">
+              <label className="text-heading-medium text-text-normal-normal flex items-center gap-1">
                 <span className="bg-status-destructive size-1.25 rounded-full" />
                 직급을 알려주세요.
               </label>
@@ -119,7 +119,7 @@ export function ProfileStep({ isAdmin, defaultValues, onSubmit, onBack }: Profil
             {/* 부서명 — MEMBER only */}
             {!isAdmin && (
               <div className="flex flex-col gap-1.5">
-                <label className="text-heading-medium text-content-normal flex items-center gap-1">
+                <label className="text-heading-medium text-text-normal-normal flex items-center gap-1">
                   <span className="bg-status-destructive size-1.25 rounded-full" />
                   부서명을 알려주세요.
                 </label>

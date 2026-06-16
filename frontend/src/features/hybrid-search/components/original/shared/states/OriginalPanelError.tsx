@@ -21,7 +21,7 @@ export default function OriginalPanelError({ message, onRetry }: OriginalPanelEr
       variants={panelStateFadeIn}
       className="flex flex-col items-center gap-2 px-5 py-50"
     >
-      <p className="text-body-small text-content-alternative text-center">{message}</p>
+      <p className="text-body-small text-text-normal-alternative text-center">{message}</p>
       <Button variant="text-primary-blue" size="md" onClick={onRetry}>
         다시 시도
       </Button>

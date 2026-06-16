@@ -38,13 +38,13 @@ export default function SortDropdown({ value, onChange }: SortDropdownProps) {
           type="button"
           className="flex h-8 max-w-37.5 min-w-9 cursor-pointer items-center gap-2 rounded-lg px-1 pb-2.5"
         >
-          <span className="text-heading-small text-content-alternative flex-1 truncate text-left">
+          <span className="text-heading-small text-text-normal-alternative flex-1 truncate text-left">
             {selectedLabel}
           </span>
           {open ? (
-            <IconDropdownUp className="text-icon-alternative size-4 shrink-0" />
+            <IconDropdownUp className="text-icon-normal-alternative size-4 shrink-0" />
           ) : (
-            <IconDropdownDown className="text-icon-alternative size-4 shrink-0" />
+            <IconDropdownDown className="text-icon-normal-alternative size-4 shrink-0" />
           )}
         </button>
       </DropdownMenuTrigger>
@@ -53,7 +53,7 @@ export default function SortDropdown({ value, onChange }: SortDropdownProps) {
           <DropdownMenuItem
             key={option.value}
             onClick={() => onChange(option.value)}
-            className={cn(option.value === value && 'bg-fill-strong')}
+            className={cn(option.value === value && 'bg-fill-normal-strong')}
           >
             {option.label}
           </DropdownMenuItem>

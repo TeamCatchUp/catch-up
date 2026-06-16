@@ -32,8 +32,8 @@ export default function TutorialPage({ params }: TutorialPageProps) {
         {/* Hero: 카테고리 + 제목 + 이미지 */}
         <div className="flex w-182 flex-col items-center gap-6">
           <div className="flex flex-col items-center gap-2.5 text-center">
-            <span className="text-label-medium text-content-alternative">[{tutorial.category}]</span>
-            <h1 className="text-display-large text-content-strong">{tutorial.title}</h1>
+            <span className="text-label-medium text-text-normal-alternative">[{tutorial.category}]</span>
+            <h1 className="text-display-large text-text-normal-strong">{tutorial.title}</h1>
           </div>
           {tutorial.heroImage && (
             <div className="relative aspect-1548/656 w-full overflow-hidden rounded-2xl">

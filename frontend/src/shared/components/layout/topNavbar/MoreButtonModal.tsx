@@ -22,11 +22,11 @@ export function MoreButtonContent() {
       onCloseAutoFocus={(e) => e.preventDefault()}
     >
       <DropdownMenuItem onSelect={() => router.push('/mypage/help')}>
-        <Error className="text-icon-neutral h-6 w-6 shrink-0" />
+        <Error className="text-icon-normal-neutral h-6 w-6 shrink-0" />
         <span>도움말</span>
       </DropdownMenuItem>
       <DropdownMenuSeparator />
-      <div className="text-label-xsmall text-content-alternative flex items-center gap-2.5 px-2">
+      <div className="text-label-xsmall text-text-normal-alternative flex items-center gap-2.5 px-2">
         <span>버전 기록</span>
         {version && <span>v{version}</span>}
       </div>

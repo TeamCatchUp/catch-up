@@ -149,7 +149,7 @@ export default function ResultListSection({
           >
             {/* bg Fill/Normal/Strong + 1000px pill 컨테이너. 카드 첫 번째와 mb-1.5 (6px) gap. */}
             {hasSearchFilterLabel && (
-              <div className="bg-fill-strong mb-1.5 flex w-full items-center justify-between rounded-full px-1.5 py-1">
+              <div className="bg-fill-normal-strong mb-1.5 flex w-full items-center justify-between rounded-full px-1.5 py-1">
                 <div className="flex items-center gap-2.5">
                   {dateRange?.from && <SearchPeriodLabel dateRange={dateRange} />}
                   {dateRange?.from && tools.length > 0 && (
@@ -157,7 +157,7 @@ export default function ResultListSection({
                   )}
                   {tools.length > 0 && <SearchToolLabel tools={tools} />}
                 </div>
-                <span className="text-body-xsmall text-content-assistive shrink-0 px-2.5">
+                <span className="text-body-xsmall text-text-normal-assistive shrink-0 px-2.5">
                   {resultsData.totalCount}건의 검색 결과
                 </span>
               </div>

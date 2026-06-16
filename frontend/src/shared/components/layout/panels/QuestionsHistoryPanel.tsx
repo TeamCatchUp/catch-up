@@ -72,23 +72,23 @@ export default function QuestionsHistoryPanel() {
   };
 
   return (
-    <div className="border-edge-neutral bg-fill-strong shadow-panel flex h-screen w-95 shrink-0 flex-col gap-3 border-r px-3 pt-4">
+    <div className="border-line-normal-neutral bg-fill-normal-strong shadow-panel flex h-screen w-95 shrink-0 flex-col gap-3 border-r px-3 pt-4">
       {/* 헤더: 타이틀 + 검색바 */}
       <div className="flex flex-col gap-2 px-2">
         <div className="flex items-center gap-1.5 pl-1">
-          <h2 className="text-heading-medium text-content-strong flex-1">내 질문 기록</h2>
+          <h2 className="text-heading-medium text-text-normal-strong flex-1">내 질문 기록</h2>
           <Button variant="icon-only-gray" size="md" onClick={handleClose} aria-label="패널 닫기">
             <Cancel className="h-6 w-6" />
           </Button>
         </div>
-        <div className="border-edge-neutral bg-fill-normal flex h-9 items-center gap-2 rounded-lg border px-2.5 py-1.5">
-          <Search className="text-icon-assistive h-5 w-5 shrink-0" />
+        <div className="border-line-normal-neutral bg-fill-normal-normal flex h-9 items-center gap-2 rounded-lg border px-2.5 py-1.5">
+          <Search className="text-icon-normal-assistive h-5 w-5 shrink-0" />
           <input
             type="text"
             value={searchValue}
             onChange={(e) => setSearchValue(e.target.value)}
             placeholder="지난 질문 검색"
-            className="text-body-small text-content-normal placeholder:text-content-assistive w-full bg-transparent outline-none"
+            className="text-body-small text-text-normal-normal placeholder:text-text-normal-assistive w-full bg-transparent outline-none"
           />
         </div>
       </div>
@@ -96,25 +96,25 @@ export default function QuestionsHistoryPanel() {
       {/* 새 질문하기 */}
       <button
         onClick={handleNewQuestion}
-        className="hover:bg-fill-interaction-hover flex cursor-pointer items-center gap-4 rounded-lg px-3 py-2.5 transition-colors"
+        className="hover:bg-fill-normal-interaction-hover flex cursor-pointer items-center gap-4 rounded-lg px-3 py-2.5 transition-colors"
       >
-        <AddSquare className="text-icon-normal size-5.5 shrink-0" />
-        <span className="text-body-small text-content-normal">새 질문하기</span>
+        <AddSquare className="text-icon-normal-normal size-5.5 shrink-0" />
+        <span className="text-body-small text-text-normal-normal">새 질문하기</span>
       </button>
 
       {/* 질문 리스트 */}
       <div className="custom-scrollbar flex min-h-0 flex-1 flex-col overflow-y-auto">
         {isLoading ? (
-          <div className="text-content-assistive flex items-center justify-center py-8">
+          <div className="text-text-normal-assistive flex items-center justify-center py-8">
             데이터를 불러오는 중입니다...
           </div>
         ) : searchValue.trim() && filteredQueries.length === 0 ? (
-          <div className="text-content-assistive flex items-center justify-center py-8">검색 결과가 없습니다.</div>
+          <div className="text-text-normal-assistive flex items-center justify-center py-8">검색 결과가 없습니다.</div>
         ) : (
           <SearchHistory querys={filteredQueries} isModal={false} onItemClick={handleItemClick} />
         )}
         {isFetchingNextPage && (
-          <div className="text-content-assistive flex items-center justify-center py-4">불러오는 중...</div>
+          <div className="text-text-normal-assistive flex items-center justify-center py-4">불러오는 중...</div>
         )}
         <div ref={sentinelRef} className="h-1" />
       </div>

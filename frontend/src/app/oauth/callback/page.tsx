@@ -28,7 +28,7 @@ function CallbackHandler() {
   return (
     <div className="flex h-screen flex-col items-center justify-center">
       <div className="text-xl font-semibold">로그인 중입니다...</div>
-      <p className="text-content-alternative">잠시만 기다려 주세요.</p>
+      <p className="text-text-normal-alternative">잠시만 기다려 주세요.</p>
     </div>
   );
 }

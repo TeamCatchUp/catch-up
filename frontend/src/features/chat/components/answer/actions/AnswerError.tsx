@@ -16,9 +16,9 @@ export default function AnswerError({
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-col gap-8">
-        <div className="bg-fill-strong flex items-center gap-4 rounded-2xl px-5 py-3">
-          <Error className="text-content-alternative h-6 w-6" />
-          <div className="text-label-small text-content-neutral whitespace-pre-line">{`일시적인 오류로 답변을 생성하지 못했습니다.\n잠시 후 다시 시도해주세요.`}</div>
+        <div className="bg-fill-normal-strong flex items-center gap-4 rounded-2xl px-5 py-3">
+          <Error className="text-text-normal-alternative h-6 w-6" />
+          <div className="text-label-small text-text-normal-neutral whitespace-pre-line">{`일시적인 오류로 답변을 생성하지 못했습니다.\n잠시 후 다시 시도해주세요.`}</div>
         </div>
         <AnswerActionButtons
           icons={icons}

@@ -78,6 +78,6 @@ import { notFound } from 'next/navigation';
 
 export default function DevLayout({ children }: { children: React.ReactNode }) {
   if (process.env.NODE_ENV === 'production') notFound();
-  return <div className="bg-fill-normal min-h-screen">{children}</div>;
+  return <div className="bg-fill-normal-normal min-h-screen">{children}</div>;
 }
 ```

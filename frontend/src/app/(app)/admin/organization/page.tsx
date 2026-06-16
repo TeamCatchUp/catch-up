@@ -3,9 +3,9 @@
  */
 export default function AdminOrganizationPage() {
   return (
-    <section className="border-edge-neutral bg-fill-normal mx-16 mt-6 mb-25 rounded-xl border p-6">
-      <h1 className="text-heading-large text-content-normal">조직도</h1>
-      <p className="text-body-small text-content-alternative mt-3">조직 구조와 구성원 정보를 확인할 수 있습니다.</p>
+    <section className="border-line-normal-neutral bg-fill-normal-normal mx-16 mt-6 mb-25 rounded-xl border p-6">
+      <h1 className="text-heading-large text-text-normal-normal">조직도</h1>
+      <p className="text-body-small text-text-normal-alternative mt-3">조직 구조와 구성원 정보를 확인할 수 있습니다.</p>
     </section>
   );
 }

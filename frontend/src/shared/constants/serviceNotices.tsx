@@ -18,7 +18,7 @@ export const SERVICE_NOTICES: Record<ServiceNoticeVariant, ServiceNoticeContent>
     body: (
       <>
         <p>
-          안녕하세요. <span className="text-content-primary">Catch Up</span> 입니다.
+          안녕하세요. <span className="text-text-primary-normal">Catch Up</span> 입니다.
         </p>
         <p>
           현재 AI 답변 생성에 문제가 발생했습니다.
@@ -41,7 +41,7 @@ export const SERVICE_NOTICES: Record<ServiceNoticeVariant, ServiceNoticeContent>
     body: (
       <>
         <p>
-          안녕하세요. <span className="text-content-primary">Catch Up</span> 입니다.
+          안녕하세요. <span className="text-text-primary-normal">Catch Up</span> 입니다.
         </p>
         <p>어제 발생한 AI 답변 생성 기능 장애가 복구되었습니다.</p>
         <p>

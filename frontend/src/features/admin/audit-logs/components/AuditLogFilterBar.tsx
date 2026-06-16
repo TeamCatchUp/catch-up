@@ -40,12 +40,12 @@ export default function AuditLogFilterBar({
           <DropdownMenuTrigger asChild>
             <button
               type="button"
-              className="border-edge-neutral bg-fill-normal flex h-9 cursor-pointer items-center gap-1.5 rounded-lg border px-2.5 py-2"
+              className="border-line-normal-neutral bg-fill-normal-normal flex h-9 cursor-pointer items-center gap-1.5 rounded-lg border px-2.5 py-2"
             >
-              <span className="text-body-small text-content-neutral">
+              <span className="text-body-small text-text-normal-neutral">
                 {SORT_OPTIONS.find((o) => o.key === sortKey)?.label}
               </span>
-              <IconDropdownDown className="text-content-alternative size-4.5" />
+              <IconDropdownDown className="text-text-normal-alternative size-4.5" />
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" sideOffset={2} className="w-30 min-w-0">
@@ -53,7 +53,7 @@ export default function AuditLogFilterBar({
               <DropdownMenuItem
                 key={option.key}
                 onClick={() => onSortChange(option.key)}
-                className={cn(sortKey === option.key && 'bg-fill-strong')}
+                className={cn(sortKey === option.key && 'bg-fill-normal-strong')}
               >
                 {option.label}
               </DropdownMenuItem>
@@ -66,14 +66,14 @@ export default function AuditLogFilterBar({
       </div>
 
       {/* 검색 */}
-      <label className="bg-fill-strong border-edge-assistive flex h-10 w-70 items-center gap-1.5 rounded-lg border px-3 py-2">
-        <IconSearch className="text-content-assistive size-5 shrink-0" />
+      <label className="bg-fill-normal-strong border-line-normal-assistive flex h-10 w-70 items-center gap-1.5 rounded-lg border px-3 py-2">
+        <IconSearch className="text-text-normal-assistive size-5 shrink-0" />
         <input
           type="text"
           value={searchTerm}
           onChange={(e) => onSearchTermChange(e.target.value)}
           placeholder="질문, 키워드로 검색하세요."
-          className="text-body-small text-content-neutral placeholder:text-content-assistive w-full bg-transparent outline-none"
+          className="text-body-small text-text-normal-neutral placeholder:text-text-normal-assistive w-full bg-transparent outline-none"
         />
       </label>
     </div>

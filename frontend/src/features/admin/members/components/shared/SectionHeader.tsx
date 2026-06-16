@@ -12,10 +12,10 @@ export default function SectionHeader({ title, count, description, actions }: Se
   return (
     <div className="flex items-end justify-between">
       <div className="flex flex-col gap-0.5">
-        <h2 className="text-heading-large text-content-normal">
-          {title} <span className="text-content-primary-assistive">{count}</span>
+        <h2 className="text-heading-large text-text-normal-normal">
+          {title} <span className="text-text-primary-assistive">{count}</span>
         </h2>
-        <p className="text-body-small text-content-alternative">{description}</p>
+        <p className="text-body-small text-text-normal-alternative">{description}</p>
       </div>
       <div className="flex items-center gap-2.5">{actions}</div>
     </div>

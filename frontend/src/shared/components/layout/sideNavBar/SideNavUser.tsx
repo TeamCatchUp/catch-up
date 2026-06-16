@@ -22,7 +22,7 @@ export default function SideNavUser({ isOpen }: SideNavUserProps) {
 
   return (
     <div className="mt-auto flex flex-col gap-1.5">
-      {isOpen && <div className="bg-edge-neutral relative right-2 h-px w-60" />}
+      {isOpen && <div className="bg-line-normal-neutral relative right-2 h-px w-60" />}
       <Tooltip>
         <DropdownMenu>
           <TooltipTrigger asChild>
@@ -31,21 +31,23 @@ export default function SideNavUser({ isOpen }: SideNavUserProps) {
                 className={cn(
                   'flex h-13.5 cursor-pointer items-center rounded-lg',
                   isOpen
-                    ? 'hover:bg-fill-interaction-hover data-[state=open]:bg-fill-interaction-hover w-56.25 justify-between px-1.5 py-1'
+                    ? 'hover:bg-fill-normal-interaction-hover data-[state=open]:bg-fill-normal-interaction-hover w-56.25 justify-between px-1.5 py-1'
                     : 'justify-center',
                 )}
               >
                 <div className="flex items-center gap-4">
                   <Profile
                     className={cn(
-                      'border-edge-neutral h-9 w-9 rounded-xl border',
+                      'border-line-normal-neutral h-9 w-9 rounded-xl border',
                       !isOpen && 'hover:shadow-[0_0_0_5px_var(--fill-interaction-hover)]',
                     )}
                   />
                   {isOpen && (
                     <div className="relative top-px max-w-31 text-left">
-                      <div className="text-heading-small text-content-normal truncate">{user?.name ?? '이름없음'}</div>
-                      <div className="text-body-small text-content-alternative truncate">{user?.email ?? ''}</div>
+                      <div className="text-heading-small text-text-normal-normal truncate">
+                        {user?.name ?? '이름없음'}
+                      </div>
+                      <div className="text-body-small text-text-normal-alternative truncate">{user?.email ?? ''}</div>
                     </div>
                   )}
                 </div>

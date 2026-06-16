@@ -31,13 +31,13 @@ export default function FilterTriggerButton({
       className={cn(
         'flex h-9 min-w-0 cursor-pointer items-center justify-center gap-2 rounded-lg border px-2.5 py-1.5 transition-colors',
         active
-          ? 'border-edge-primary bg-fill-primary-assistive text-content-primary'
-          : 'border-edge-neutral bg-fill-normal text-content-normal hover:bg-fill-interaction-hover active:bg-fill-interaction-pressed',
+          ? 'border-line-primary-normal bg-fill-primary-normal-assistive text-text-primary-normal'
+          : 'border-line-normal-neutral bg-fill-normal-normal text-text-normal-normal hover:bg-fill-normal-interaction-hover active:bg-fill-normal-interaction-pressed',
         className,
       )}
       {...props}
     >
-      <Icon className={cn('size-5 shrink-0', active ? 'text-icon-primary' : 'text-icon-normal')} />
+      <Icon className={cn('size-5 shrink-0', active ? 'text-icon-primary-normal' : 'text-icon-normal-normal')} />
       {active ? (
         <>
           <span className="text-body-small shrink-0 font-medium whitespace-nowrap">{label}:</span>
@@ -46,7 +46,9 @@ export default function FilterTriggerButton({
       ) : (
         <span className="text-body-small shrink-0 font-medium whitespace-nowrap">{label}</span>
       )}
-      <DropdownIcon className={cn('size-5 shrink-0', active ? 'text-icon-primary' : 'text-icon-normal')} />
+      <DropdownIcon
+        className={cn('size-5 shrink-0', active ? 'text-icon-primary-normal' : 'text-icon-normal-normal')}
+      />
     </button>
   );
 }

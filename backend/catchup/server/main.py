@@ -41,9 +41,9 @@ from catchup.rag.checkpoint import init_langgraph_checkpointer
 from catchup.rag.executors import rag_executors
 from catchup.rag.semaphores import rag_semaphores
 from catchup.server.admin.api import router as admin_router
-from catchup.server.agents.build import router as agent_build_router
 from catchup.server.audit.api import router as audit_router
 from catchup.server.auth.api import router as auth_router
+from catchup.server.automations.api import router as inquiry_automation_router
 from catchup.server.chat.api import router as chat_router
 from catchup.server.chat_room.api import router as chatroom_router
 from catchup.server.connector.atlassian.auth_api import router as atlassian_auth_router
@@ -524,7 +524,7 @@ app.include_router(chatroom_router)
 app.include_router(auth_router)
 app.include_router(integrations_router)
 app.include_router(admin_router)
-app.include_router(agent_build_router)
+app.include_router(inquiry_automation_router)
 app.include_router(channel_talk_admin_router)
 app.include_router(channel_talk_webhook_router)
 app.include_router(github_auth_router)

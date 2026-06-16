@@ -27,36 +27,36 @@ const chipVariants = cva(
         variant: 'square',
         selected: false,
         class:
-          'bg-fill-normal border-edge-neutral text-content-normal hover:bg-fill-interaction-hover active:bg-fill-interaction-pressed',
+          'bg-fill-normal-normal border-line-normal-neutral text-text-normal-normal hover:bg-fill-normal-interaction-hover active:bg-fill-normal-interaction-pressed',
       },
       {
         variant: 'square',
         selected: true,
-        class: 'bg-fill-primary-assistive border-edge-primary text-content-primary',
+        class: 'bg-fill-primary-normal-assistive border-line-primary-normal text-text-primary-normal',
       },
       /* capsule */
       {
         variant: 'capsule',
         selected: false,
         class:
-          'bg-fill-normal border-edge-neutral text-content-neutral hover:bg-fill-interaction-hover hover:border-edge-normal active:bg-fill-interaction-pressed active:border-edge-normal',
+          'bg-fill-normal-normal border-line-normal-neutral text-text-normal-neutral hover:bg-fill-normal-interaction-hover hover:border-line-normal-normal active:bg-fill-normal-interaction-pressed active:border-line-normal-normal',
       },
       {
         variant: 'capsule',
         selected: true,
-        class: 'bg-accent-green-lighten border-accent-green-neutral text-accent-green',
+        class: 'bg-accent-green-lighten border-accent-green-neutral text-accent-green-default',
       },
       /* outline — selected에 border + bg, unselected는 텍스트만 노출하는 toggle 패턴 */
       {
         variant: 'outline',
         selected: false,
         class:
-          'bg-transparent border-transparent text-content-alternative hover:bg-fill-interaction-hover hover:text-content-normal active:bg-fill-interaction-pressed',
+          'text-text-normal-alternative hover:bg-fill-normal-interaction-hover hover:text-text-normal-normal active:bg-fill-normal-interaction-pressed border-transparent bg-transparent',
       },
       {
         variant: 'outline',
         selected: true,
-        class: 'bg-fill-normal border-edge-strong text-content-normal',
+        class: 'bg-fill-normal-normal border-line-normal-strong text-text-normal-normal',
       },
     ],
     defaultVariants: {

@@ -10,9 +10,9 @@ export const MEMBER_LIST_STATUS_BADGE_BASE_CLASS =
 
 /** 이용자 연동 표 상태 칩 색상 */
 export const getMemberStatusBadgeClassName = (status: MemberIntegrationStatus) => {
-  if (status === '완료') return 'bg-accent-green-neutral text-accent-green';
-  if (status === '미등록') return 'bg-violet-5 text-violet-50';
-  return 'bg-neutral-2 text-content-alternative';
+  if (status === '완료') return 'bg-accent-green-neutral text-accent-green-default';
+  if (status === '미등록') return 'bg-accent-violet-neutral text-accent-violet-default';
+  return 'bg-neutral-2 text-text-normal-alternative';
 };
 
 /** 이용자 연동 표 정렬 옵션 */
@@ -29,13 +29,13 @@ export const SERVICE_HEADER_LABELS: Record<IntegrationService, string> = {
   jira: 'Atlassian',
   slack: 'Slack',
   confluence: 'Confluence',
-  'channel_talk': '채널톡',
+  channel_talk: '채널톡',
 };
 
 export const TABLE_HEADER_ROW_CLASS =
-  'border-edge-normal flex h-9 shrink-0 items-center gap-4 border-y py-1 pr-6 pl-12 transition-colors';
+  'border-line-normal-normal flex h-9 shrink-0 items-center gap-4 border-y py-1 pr-6 pl-12 transition-colors';
 export const TABLE_BODY_ROW_CLASS =
-  'border-edge-neutral bg-fill-normal flex h-16.5 items-center justify-center gap-4 border-b px-6 py-3 transition-colors';
+  'border-line-normal-neutral bg-fill-normal-normal flex h-16.5 items-center justify-center gap-4 border-b px-6 py-3 transition-colors';
 export const KEYCLOAK_COLUMN_CLASS = 'flex min-w-px flex-[1_0_0] items-center';
 export const SERVICES_GROUP_CLASS = 'flex min-w-px flex-[1_0_0] items-center';
 /** 헤더/계정 정보 셀 공통: 1열 column flex + truncate */
