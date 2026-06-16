@@ -391,7 +391,7 @@ def init_scheduler():
         )
         _scheduler.add_job(
             run_jira_issue_v2_backfill_job,
-            trigger=CronTrigger(hour=21, minute=5, timezone=SEOUL_TZ),
+            trigger=CronTrigger(hour=21, minute=15, timezone=SEOUL_TZ),
             id="jira_issue_v2_backfill",
             name="Jira Issue v2 Backfill",
             replace_existing=True,
