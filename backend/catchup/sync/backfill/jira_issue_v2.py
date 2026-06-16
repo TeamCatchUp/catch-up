@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from collections.abc import Awaitable
 from collections.abc import Callable
 from contextlib import AbstractContextManager
@@ -309,7 +310,7 @@ class JiraIssueV2BackfillService:
                     "state": state,
                     "expected_count": target.expected_count,
                     "backfill_count": backfill_count,
-                    "failed_ids": failed_ids,
+                    "failed_ids": json.dumps(failed_ids),
                     "succeeded_at": now if state == "succeeded" else None,
                     "failed_at": now if state == "failed" else None,
                 },
@@ -377,6 +378,8 @@ def _format_pgvector_embedding(embedding: list[float]) -> str:
 
 
 def _embedding_to_list(value) -> list[float]:
+    if value is None:
+        return []
     if isinstance(value, str):
         raw = value.strip().removeprefix("[").removesuffix("]")
         if not raw:
@@ -648,11 +651,11 @@ def build_fetch_pending_seed_chunk_query():
           AND target_id = :target_id
           AND COALESCE({KNOWLEDGE_STORE_METADATA_JSON_COLUMN}::jsonb, '{{}}'::jsonb) = '{{}}'::jsonb
           AND (
-              :after_record_id IS NULL
-              OR record_id > :after_record_id
+              CAST(:after_record_id AS text) IS NULL
+              OR record_id > CAST(:after_record_id AS text)
               OR (
-                  record_id = :after_record_id
-                  AND {KNOWLEDGE_STORE_ID_COLUMN} > COALESCE(:after_langchain_id, '')
+                  record_id = CAST(:after_record_id AS text)
+                  AND {KNOWLEDGE_STORE_ID_COLUMN} > COALESCE(CAST(:after_langchain_id AS text), '')
               )
           )
         ORDER BY record_id, {KNOWLEDGE_STORE_ID_COLUMN}
@@ -708,7 +711,7 @@ def build_mark_finished_statement():
         SET state = :state,
             expected_count = :expected_count,
             backfill_count = :backfill_count,
-            failed_ids = :failed_ids,
+            failed_ids = CAST(:failed_ids AS jsonb),
             succeeded_at = :succeeded_at,
             failed_at = :failed_at
         WHERE connector = :connector
