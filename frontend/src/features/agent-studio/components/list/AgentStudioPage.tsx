@@ -10,10 +10,10 @@ import { Button } from '@/shared/components/ui/button';
 import { cn } from '@/shared/utils/cn';
 
 import { AGENT_STUDIO_FILTERS } from '../../fixtures/agentStudioFixtures';
-import { mapInquiryAutomationsToAgentCards } from '../../utils/mapInquiryAutomation';
 import { inquiryAutomationsMutations } from '../../queries/inquiryAutomations.mutations';
 import { inquiryAutomationsQueries } from '../../queries/inquiryAutomations.queries';
 import type { AgentStudioCardModel, AgentStudioFilter } from '../../types/agentStudioModel';
+import { mapInquiryAutomationsToAgentCards } from '../../utils/mapInquiryAutomation';
 import AgentEmptyColumn from './AgentEmptyColumn';
 import AgentFilterTabs from './AgentFilterTabs';
 import AgentStudioHeader from './AgentStudioHeader';
