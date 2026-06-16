@@ -186,6 +186,14 @@ describe('AgentStudioEditorPage', () => {
     expect(screen.getByRole('link', { name: 'Agent Studio' })).toHaveAttribute('href', '/agent-studio');
   });
 
+  it('keeps the settings header sticky while the right pane scrolls', () => {
+    renderEditor();
+
+    const settingsHeader = screen.getByRole('button', { name: 'Agent Studio로 돌아가기' }).closest('header');
+
+    expect(settingsHeader).toHaveClass('sticky', 'top-0', 'z-10', 'bg-fill-normal-assistive-dark');
+  });
+
   it('updates the instruction count while typing', async () => {
     const user = userEvent.setup();
     renderEditor();
