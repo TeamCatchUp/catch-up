@@ -27,10 +27,7 @@ export default function AgentStudioPage() {
   const [selectedFilter, setSelectedFilter] = useState<AgentStudioFilter>('all');
   const automationQuery = useQuery(inquiryAutomationsQueries.list());
   const statusMutation = useMutation(inquiryAutomationsMutations.updateStatus());
-  const agents = useMemo(
-    () => mapInquiryAutomationsToAgentCards(automationQuery.data ?? []),
-    [automationQuery.data],
-  );
+  const agents = useMemo(() => mapInquiryAutomationsToAgentCards(automationQuery.data ?? []), [automationQuery.data]);
   const visibleAgents = useMemo(() => getVisibleAgents(agents, selectedFilter), [agents, selectedFilter]);
   const activeAgents = visibleAgents.filter((agent) => agent.status === 'active');
   const draftAgents = visibleAgents.filter((agent) => agent.status === 'draft');
@@ -51,12 +48,7 @@ export default function AgentStudioPage() {
         <h1 className="text-heading-large text-text-normal-normal w-full">우리 팀의 Agent</h1>
         <div className="flex w-full items-center gap-5">
           <AgentFilterTabs filters={AGENT_STUDIO_FILTERS} selected={selectedFilter} onChange={setSelectedFilter} />
-          <Button
-            variant="box-outline-gray"
-            size="md"
-            className="border-line-normal-normal bg-fill-normal-interaction-inactive text-text-normal-assistive hover:bg-fill-normal-interaction-inactive [&_svg]:text-icon-normal-assistive"
-            onClick={() => router.push('/agent-studio/new')}
-          >
+          <Button variant="box-solid-primary" size="md" onClick={() => router.push('/agent-studio/new')}>
             <LabIcon className="size-5" aria-hidden="true" />
             Agent 만들기
           </Button>

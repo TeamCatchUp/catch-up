@@ -22,7 +22,7 @@ import { cn } from '@/shared/utils/cn';
 // TODO: 수신함 기능 활성화 시 UNREAD_COUNT 복원
 
 type NavMatch = 'home' | 'search' | 'docs' | 'settings' | 'agentStudio';
-type NavGroup = 'primary' | 'agent' | 'settings';
+type NavGroup = 'primary' | 'agent';
 
 interface NavItem {
   name: string;
@@ -78,7 +78,7 @@ const navItems: NavItem[] = [
     match: 'settings',
     tooltipOpen: '설정',
     tooltipClosed: '설정',
-    group: 'settings',
+    group: 'primary',
   },
   {
     name: '에이전트 스튜디오',
@@ -119,7 +119,6 @@ export default function SideNavMenu({ isOpen }: SideNavMenuProps) {
   const activeMatch = resolveActiveMatch(pathname, searchParams.get('mode'), activePanel);
   const primaryItems = navItems.filter((item) => item.group === 'primary');
   const agentItems = navItems.filter((item) => item.group === 'agent');
-  const settingsItems = navItems.filter((item) => item.group === 'settings');
 
   const renderNavItems = (items: NavItem[]) =>
     items.map((item) => {
@@ -153,7 +152,9 @@ export default function SideNavMenu({ isOpen }: SideNavMenuProps) {
                 <IconComponent
                   className={cn(
                     isOpen ? 'size-5.5' : 'size-6.5',
-                    isActive ? 'text-icon-primary-normal group-hover:text-icon-primary-normal' : 'text-icon-normal-normal',
+                    isActive
+                      ? 'text-icon-primary-normal group-hover:text-icon-primary-normal'
+                      : 'text-icon-normal-normal',
                   )}
                 />
                 {isOpen && (
@@ -196,7 +197,6 @@ export default function SideNavMenu({ isOpen }: SideNavMenuProps) {
         )}
         {renderNavItems(agentItems)}
       </div>
-      <div className={cn('flex flex-col', isOpen ? 'gap-0' : 'gap-1.5')}>{renderNavItems(settingsItems)}</div>
     </div>
   );
 }
