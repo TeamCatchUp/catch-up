@@ -1,3 +1,4 @@
+import { AGENT_STUDIO_FIGMA_LAB_CASES } from './features/agent-studio';
 import { HOME_DOCS_FIGMA_LAB_CASES } from './features/home-docs';
 import { HYBRID_SEARCH_FIGMA_LAB_CASES } from './features/hybrid-search';
 import { ORIGINAL_PANEL_FIGMA_LAB_CASES_BY_FEATURE } from './features/original-panel';
@@ -13,6 +14,7 @@ interface FigmaLabRouteCaseOptions {
 export const FIGMA_LAB_CASES: readonly FigmaLabCase[] = [
   ...HYBRID_SEARCH_FIGMA_LAB_CASES,
   ...HOME_DOCS_FIGMA_LAB_CASES,
+  ...AGENT_STUDIO_FIGMA_LAB_CASES,
   ...SHARED_QUERY_FILTER_FIGMA_LAB_CASES,
   ...ORIGINAL_PANEL_FIGMA_LAB_CASES_BY_FEATURE,
 ];

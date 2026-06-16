@@ -15,6 +15,12 @@ export const FIGMA_LAB_GROUPS: readonly FigmaLabGroup[] = [
     relatedGroupIds: ['shared-query-filter'],
   },
   {
+    id: 'agent-studio',
+    title: 'Agent Studio',
+    description: '채널톡 문의 대응 자동화 Agent Studio 목록과 생성 화면을 검증합니다.',
+    defaultCaseId: 'agent-studio-list-page',
+  },
+  {
     id: 'shared-query-filter',
     title: 'Shared Query Filter',
     description: '문서 검색에 재사용되는 공통 filter, chip, status component를 검증합니다.',

@@ -20,12 +20,13 @@ export default function SideNavBar() {
   const router = useRouter();
   const isRagAnswerPage = pathname.startsWith('/chat');
   const isSettingsRoute = pathname.startsWith('/mypage') || pathname.startsWith('/admin');
+  const isAgentStudioEditorRoute = pathname.startsWith('/agent-studio/new');
   const { isSidebarOpen, setSidebarOpen } = useSidebarStore();
 
-  // 채팅·설정 페이지 진입 시 사이드바 자동 닫힘
+  // 채팅·설정·에이전트 편집 페이지 진입 시 사이드바 자동 닫힘
   useEffect(() => {
-    setSidebarOpen(!isRagAnswerPage && !isSettingsRoute);
-  }, [isRagAnswerPage, isSettingsRoute, setSidebarOpen]);
+    setSidebarOpen(!isRagAnswerPage && !isSettingsRoute && !isAgentStudioEditorRoute);
+  }, [isAgentStudioEditorRoute, isRagAnswerPage, isSettingsRoute, setSidebarOpen]);
 
   const isOpen = isSidebarOpen;
 
