@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { InquiryAutomationItem } from '../types/automationApi';
-import { mapInquiryAutomationToAgentCard, mapInquiryAutomationsToAgentCards } from './inquiryAutomationMapper';
+import { mapInquiryAutomationsToAgentCards,mapInquiryAutomationToAgentCard } from './inquiryAutomationMapper';
 
 const baseAutomation: InquiryAutomationItem = {
   agent_spec_id: 42,

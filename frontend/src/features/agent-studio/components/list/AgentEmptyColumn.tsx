@@ -1,5 +1,5 @@
 interface AgentEmptyColumnProps {
-  label: '제작중' | '사용 안함';
+  label: '운영중' | '제작중' | '사용 안함';
   title: string;
   description: string;
 }

@@ -1,7 +1,7 @@
 import type { ReactElement } from 'react';
+import { MutationCache, QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MutationCache, QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { http, HttpResponse } from 'msw';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -17,23 +17,24 @@ vi.mock('next/navigation', () => ({
 }));
 
 function renderWithQueryClient(ui: ReactElement) {
-  let queryClient!: QueryClient;
+  const queryClientRef: { current?: QueryClient } = {};
   const mutationCache = new MutationCache({
     onSuccess: (_data, _variables, _context, mutation) => {
       const invalidates = mutation.meta?.invalidates as string[][] | undefined;
       invalidates?.forEach((queryKey) => {
-        queryClient.invalidateQueries({ queryKey });
+        queryClientRef.current?.invalidateQueries({ queryKey });
       });
     },
   });
 
-  queryClient = new QueryClient({
+  const queryClient = new QueryClient({
     mutationCache,
     defaultOptions: {
       queries: { retry: false },
       mutations: { retry: false },
     },
   });
+  queryClientRef.current = queryClient;
 
   return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
 }

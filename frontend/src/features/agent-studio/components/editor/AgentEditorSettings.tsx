@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useMemo, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
+import { useRouter } from 'next/navigation';
 
 import ArrowLeftIcon from '@/public/icons/icon/arrow_left.svg';
 import ClockIcon from '@/public/icons/icon/clock.svg';
@@ -46,17 +46,9 @@ export default function AgentEditorSettings() {
   const [slackCredentialId, setSlackCredentialId] = useState('');
   const [slackChannelId, setSlackChannelId] = useState('');
   const [instruction, setInstruction] = useState('');
-  const selectedSlackCredentialId = slackCredentialId === '' ? undefined : Number(slackCredentialId);
 
   const slackCredentialsQuery = useQuery(automationCredentialsQueries.credentials('slack'));
   const channelTalkTargetsQuery = useQuery(automationCredentialsQueries.targets('channel_talk'));
-  const slackTargetsQuery = useQuery(automationCredentialsQueries.targets('slack', selectedSlackCredentialId));
-  const publishMutation = useMutation({
-    ...inquiryAutomationsMutations.publish(),
-    onSuccess: () => {
-      router.push('/agent-studio');
-    },
-  });
 
   const channelTalkTargetItems = useMemo(
     () => channelTalkTargetsQuery.data?.targets.map(mapTargetToSelectItem) ?? EMPTY_SELECT_ITEMS,
@@ -66,6 +58,16 @@ export default function AgentEditorSettings() {
     () => slackCredentialsQuery.data?.credentials.map(mapCredentialToSelectItem) ?? EMPTY_SELECT_ITEMS,
     [slackCredentialsQuery.data?.credentials],
   );
+  const autoSlackCredentialId = slackCredentialItems.length === 1 ? (slackCredentialItems[0]?.value ?? '') : '';
+  const slackCredentialValue = slackCredentialId || autoSlackCredentialId;
+  const selectedSlackCredentialId = slackCredentialValue === '' ? undefined : Number(slackCredentialValue);
+  const slackTargetsQuery = useQuery(automationCredentialsQueries.targets('slack', selectedSlackCredentialId));
+  const publishMutation = useMutation({
+    ...inquiryAutomationsMutations.publish(),
+    onSuccess: () => {
+      router.push('/agent-studio');
+    },
+  });
   const slackChannelItems = useMemo(
     () => slackTargetsQuery.data?.targets.map(mapTargetToSelectItem) ?? EMPTY_SELECT_ITEMS,
     [slackTargetsQuery.data?.targets],
@@ -78,14 +80,6 @@ export default function AgentEditorSettings() {
     () => slackTargetsQuery.data?.targets.find((target) => target.target_id === slackChannelId),
     [slackChannelId, slackTargetsQuery.data?.targets],
   );
-
-  useEffect(() => {
-    if (slackCredentialId !== '' || slackCredentialItems.length !== 1) {
-      return;
-    }
-
-    setSlackCredentialId(slackCredentialItems[0].value);
-  }, [slackCredentialId, slackCredentialItems]);
 
   const channelTalkPlaceholder = channelTalkTargetsQuery.isError
     ? '채널톡 채널을 불러오지 못했습니다'
@@ -194,7 +188,7 @@ export default function AgentEditorSettings() {
           <AgentSelectField
             required
             label="누구의 권한을 가지고 조회할까요?"
-            value={slackCredentialId}
+            value={slackCredentialValue}
             placeholder={slackCredentialPlaceholder}
             icon={
               <span className="bg-fill-primary-normal-neutral flex size-8 items-center justify-center rounded-lg">
