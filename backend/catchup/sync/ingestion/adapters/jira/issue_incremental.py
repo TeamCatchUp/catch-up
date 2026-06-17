@@ -83,30 +83,40 @@ class JiraIssueIncrementalIngestionAdapter(JiraIssueIngestionAdapterBase):
         _ = sync_window
         _ = summary
         if execution.is_delete_event:
-            v1_doc_ids = [f"jira:issue:{execution.issue_key}"]
+            v1_doc_ids = [
+                f"jira:issue:{execution.issue_key}",
+                f"jira:epic:{execution.issue_key}",
+            ]
             await self._dependencies.repository.delete_documents(v1_doc_ids)
             v2_failed_ids: tuple[str, ...] = ()
             if self._dependencies.vector_store is not None:
-                v2_doc_id = (
-                    "jira:issue:"
-                    f"{execution.tenant_id}:{execution.project_key}:"
-                    f"{execution.issue_key}"
-                )
+                v2_doc_ids = [
+                    (
+                        "jira:issue:"
+                        f"{execution.tenant_id}:{execution.project_key}:"
+                        f"{execution.issue_key}"
+                    ),
+                    (
+                        "jira:epic:"
+                        f"{execution.tenant_id}:{execution.project_key}:"
+                        f"{execution.issue_key}"
+                    ),
+                ]
                 try:
-                    await self._dependencies.vector_store.delete([v2_doc_id])
+                    await self._dependencies.vector_store.delete(v2_doc_ids)
                 except Exception as exc:
                     logger.warning(
                         "jira_issue_v2_delete_failed",
                         cloud_id=execution.tenant_id,
                         project_key=execution.project_key,
                         issue_key=execution.issue_key,
-                        document_id=v2_doc_id,
+                        document_ids=v2_doc_ids,
                         error=str(exc),
                         exc_info=True,
                     )
-                    v2_failed_ids = (v2_doc_id,)
+                    v2_failed_ids = tuple(v2_doc_ids)
             return JiraIssuePersistResult(
-                deleted_count=len(v1_doc_ids),
+                deleted_count=1,
                 v2_error_count=len(v2_failed_ids),
                 v2_failed_ids=v2_failed_ids,
             )

@@ -59,6 +59,11 @@ def normalize_issue_type(issue_type: str) -> str:
     return ISSUE_TYPE_MAPPING.get(issue_type, issue_type)
 
 
+def classify_jira_issue_record_type(issue: JiraIssue) -> str:
+    """Return the v1/v2 entity_type used for a parsed Jira issue-like record."""
+    return "epic" if (issue.issue_type or "").strip().lower() == "epic" else "issue"
+
+
 class JiraTransformer:
     """
     Jira 엔티티 → LangChain Document 변환기
@@ -250,6 +255,8 @@ class JiraTransformer:
     def _issue_to_document(self, issue: JiraIssue) -> Document:
         """JiraIssue → LangChain Document"""
 
+        record_type = classify_jira_issue_record_type(issue)
+
         # semantic_content: 임베딩용 (의미 중심 텍스트)
         semantic_content = self._build_issue_semantic_content(issue)
 
@@ -264,7 +271,7 @@ class JiraTransformer:
         return Document(
             page_content=semantic_content,
             metadata=metadata,
-            id=f"jira:issue:{issue.key}",
+            id=f"jira:{record_type}:{issue.key}",
         )
 
     def _build_issue_semantic_content(self, issue: JiraIssue) -> str:
@@ -398,7 +405,7 @@ class JiraTransformer:
                 contextual_content=contextual_content,
             ),
             issue=JiraIssueMetadata(
-                entity_type="issue",
+                entity_type=classify_jira_issue_record_type(issue),
                 issue_key=issue.key,
                 issue_id=issue.id,
                 title=issue.summary,
