@@ -5,7 +5,9 @@ from langchain_core.documents import Document
 from catchup.components.embedder.constants import EmbeddingProvider
 from catchup.components.embedder.factory import get_embedding_service
 from catchup.components.vector_db.factory import get_pgvector_repository
+from catchup.components.vector_db.factory import get_v2_vector_store
 from catchup.components.vector_db.pgvector.repository import PGVectorRepository
+from catchup.components.vector_db.v2 import VectorStore
 from catchup.connectors.channel_talk.document_space.article_full_sync_fetcher import (
     ChannelTalkArticleFullSyncFetcher,
 )
@@ -42,9 +44,13 @@ from catchup.sync.ingestion.adapters.channel_talk.article_models import (
 from catchup.sync.ingestion.adapters.channel_talk.article_models import (
     ChannelTalkFetchedArticlesResult,
 )
+from catchup.sync.ingestion.adapters.channel_talk.article_v2_document_builder import (
+    ChannelTalkArticleV2DocumentBuilder,
+)
 from catchup.sync.ingestion.document_builders.channel_talk_article import (
     ArticleTransformer,
 )
+from catchup.sync.ingestion.dual_write import DualWriter
 from catchup.sync.ingestion.schemas import SyncWindow
 
 CHANNEL_TALK_ARTICLE_LANGUAGE = "ko"
@@ -55,12 +61,21 @@ class ChannelTalkArticleFullSyncIngestionAdapter:
 
     def __init__(
         self,
+        *,
+        enable_v2_dual_write: bool = False,
+        vector_store: VectorStore | None = None,
+        v2_document_builder: ChannelTalkArticleV2DocumentBuilder | None = None,
     ) -> None:
         self._fetcher: ChannelTalkArticleFullSyncFetcher | None = None
         self._document_builder = ArticleTransformer(
             language=CHANNEL_TALK_ARTICLE_LANGUAGE
         )
+        self._v2_document_builder = (
+            v2_document_builder or ChannelTalkArticleV2DocumentBuilder()
+        )
+        self._enable_v2_dual_write = enable_v2_dual_write
         self._repository: PGVectorRepository | None = None
+        self._vector_store = vector_store
 
     async def fetch(
         self,
@@ -131,9 +146,20 @@ class ChannelTalkArticleFullSyncIngestionAdapter:
             )
             delete_prefixes.append(transformed_bundle.delete_prefix)
 
+        v2_documents = []
+        v2_failed_ids: tuple[str, ...] = ()
+        if self._enable_v2_dual_write:
+            v2_documents, v2_failed_ids = (
+                self._v2_document_builder.build_from_prepared_documents(
+                    prepared_documents=tuple(documents),
+                )
+            )
+
         return ChannelTalkArticleFullSyncTransformResult(
             documents=tuple(documents),
             delete_prefixes=tuple(dict.fromkeys(delete_prefixes)),
+            v2_documents=tuple(v2_documents),
+            v2_failed_ids=v2_failed_ids,
         )
 
     async def summarize(
@@ -151,6 +177,7 @@ class ChannelTalkArticleFullSyncIngestionAdapter:
         return ChannelTalkArticleFullSyncSummaryResult(
             summary_applied=False,
             document_count=len(transformed.documents),
+            v2_documents=transformed.v2_documents,
         )
 
     async def persist(
@@ -162,35 +189,73 @@ class ChannelTalkArticleFullSyncIngestionAdapter:
         summary: ChannelTalkArticleFullSyncSummaryResult,
     ) -> ChannelTalkArticleFullSyncPersistResult:
         # TODO : repository에서 Upsert의 원자성을 보장하는 메서드 생성 후 교체
-        _ = execution
         _ = sync_window
-        _ = summary
         repository = await self._get_repository()
+        v2_failed_ids = tuple(transformed.v2_failed_ids)
 
         for prefix in transformed.delete_prefixes:
             await repository.delete_by_id_prefix(prefix)
+        v2_failed_ids = await self._delete_v2_prefixes(
+            prefixes=transformed.delete_prefixes,
+            existing_failed_ids=v2_failed_ids,
+        )
 
         if not transformed.documents:
             return ChannelTalkArticleFullSyncPersistResult(
                 persisted_count=0,
                 persisted_ids=(),
                 deleted_prefixes=transformed.delete_prefixes,
+                v2_error_count=len(v2_failed_ids),
+                v2_failed_ids=v2_failed_ids,
             )
 
-        documents = [
-            Document(
-                id=document.document_id,
-                page_content=document.page_content,
-                metadata=document.storage_metadata,
-            )
-            for document in transformed.documents
-        ]
+        documents = self._to_langchain_documents(transformed.documents)
         document_ids = [document.document_id for document in transformed.documents]
-        persisted_ids = await repository.add_documents(documents, ids=document_ids)
+        if summary.v2_documents:
+            try:
+                vector_store = await self._get_vector_store()
+            except Exception:
+                persisted_ids = await repository.add_documents(
+                    documents,
+                    ids=document_ids,
+                )
+                v2_failed_ids = tuple(
+                    dict.fromkeys(
+                        (
+                            *v2_failed_ids,
+                            *(str(document.id) for document in summary.v2_documents),
+                        )
+                    )
+                )
+            else:
+                result = await DualWriter(
+                    repository=repository,
+                    vector_store=vector_store,
+                ).upsert_documents(
+                    source_documents=documents,
+                    vector_documents=list(summary.v2_documents),
+                    ids=document_ids,
+                    audit_context=execution.audit_context,
+                    context=(
+                        "entity_type=document_article,"
+                        f"channel_id={execution.channel_id},"
+                        f"space_id={execution.space_id},"
+                        f"doc_count={len(documents)}"
+                    ),
+                )
+                persisted_ids = result.persisted_ids
+                v2_failed_ids = tuple(
+                    dict.fromkeys((*v2_failed_ids, *result.vector_failed_ids))
+                )
+        else:
+            persisted_ids = await repository.add_documents(documents, ids=document_ids)
+
         return ChannelTalkArticleFullSyncPersistResult(
             persisted_count=len(persisted_ids),
             persisted_ids=tuple(persisted_ids),
             deleted_prefixes=transformed.delete_prefixes,
+            v2_error_count=len(v2_failed_ids),
+            v2_failed_ids=v2_failed_ids,
         )
 
     def build_result(
@@ -209,10 +274,18 @@ class ChannelTalkArticleFullSyncIngestionAdapter:
             tenant_id=execution.tenant_id,
             collected_count=len(fetched.fetched_article_ids),
             document_count=len(transformed.documents),
+            persisted_count=persisted.persisted_count,
+            failed_count=persisted.v2_error_count,
+            v2_failed_count=persisted.v2_error_count,
+            v2_failed_ids=persisted.v2_failed_ids,
             fetched=fetched,
             transformed=transformed,
             summary=summary,
             persisted=persisted,
+            metadata={
+                "v2_failed_count": persisted.v2_error_count,
+                "v2_failed_ids": list(persisted.v2_failed_ids),
+            },
         )
 
     @staticmethod
@@ -241,6 +314,42 @@ class ChannelTalkArticleFullSyncIngestionAdapter:
         self._repository = repository
         return repository
 
+    async def _get_vector_store(self) -> VectorStore | None:
+        if not self._enable_v2_dual_write:
+            return None
+        if self._vector_store is None:
+            embeddings = get_embedding_service(
+                EmbeddingProvider.AWS_BEDROCK
+            ).get_embedder()
+            vector_store = get_v2_vector_store(embeddings)
+            await vector_store.initialize()
+            self._vector_store = vector_store
+        return self._vector_store
+
+    async def _delete_v2_prefixes(
+        self,
+        *,
+        prefixes: tuple[str, ...],
+        existing_failed_ids: tuple[str, ...],
+    ) -> tuple[str, ...]:
+        if not prefixes or not self._enable_v2_dual_write:
+            return existing_failed_ids
+
+        try:
+            vector_store = await self._get_vector_store()
+        except Exception:
+            return tuple(dict.fromkeys((*existing_failed_ids, *prefixes)))
+        if vector_store is None:
+            return tuple(dict.fromkeys((*existing_failed_ids, *prefixes)))
+
+        failed_ids = list(existing_failed_ids)
+        for prefix in prefixes:
+            try:
+                await vector_store.delete_by_id_prefix(prefix)
+            except Exception:
+                failed_ids.append(prefix)
+        return tuple(dict.fromkeys(failed_ids))
+
     def _get_fetcher(self) -> ChannelTalkArticleFullSyncFetcher:
         if self._fetcher is None:
             self._fetcher = ChannelTalkArticleFullSyncFetcher()
@@ -252,6 +361,19 @@ class ChannelTalkArticleFullSyncIngestionAdapter:
         return get_pgvector_repository(
             embeddings=embedder
         )
+
+    @staticmethod
+    def _to_langchain_documents(
+        documents: tuple[ChannelTalkArticlePreparedDocument, ...],
+    ) -> list[Document]:
+        return [
+            Document(
+                id=document.document_id,
+                page_content=document.page_content,
+                metadata=document.storage_metadata,
+            )
+            for document in documents
+        ]
 
 
 ChannelTalkArticleFullSyncAdapter = ChannelTalkArticleFullSyncIngestionAdapter
