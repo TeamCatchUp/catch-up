@@ -14,17 +14,17 @@ from catchup.sync.backfill.channel_talk_user_chat_v2 import (
 from catchup.sync.backfill.channel_talk_user_chat_v2 import (
     build_upsert_seed_rows_statement,
 )
-from catchup.sync.ingestion.adapters.channel_talk import (
-    ChannelTalkUserChatV2BackfillAdapter,
-)
-from catchup.sync.ingestion.adapters.channel_talk import (
-    ChannelTalkUserChatV2BackfillExecutionRequest,
-)
-from catchup.sync.ingestion.adapters.channel_talk import (
-    ChannelTalkUserChatV2BackfillSeed,
-)
 from catchup.sync.ingestion.adapters.channel_talk.user_chat_models import (
     ChannelTalkUserChatFullSyncConnection,
+)
+from catchup.sync.ingestion.adapters.channel_talk.user_chat_models import (
+    ChannelTalkUserChatV2BackfillExecutionRequest,
+)
+from catchup.sync.ingestion.adapters.channel_talk.user_chat_models import (
+    ChannelTalkUserChatV2BackfillSeed,
+)
+from catchup.sync.ingestion.adapters.channel_talk.user_chat_v2_backfill import (
+    ChannelTalkUserChatV2BackfillAdapter,
 )
 from catchup.sync.ingestion.pipeline import run_sync_ingestion
 from catchup.tests.sync.ingestion.test_channel_talk_full_sync import _connection
@@ -51,6 +51,8 @@ def test_channel_talk_user_chat_backfill_queries_follow_v1_seed_pattern() -> Non
     assert "e.cmetadata ->> 'entity_type' = 'user_chat'" in target_query
     assert "LEFT JOIN knowledge_store v2" in target_query
     assert "needs_backfill" in target_query
+    assert "SELECT\n            grouped.scope_id," in target_query
+    assert "grouped.expected_count" in target_query
     assert "scope_id = :scope_id" in seed_query
     assert "target_id = :target_id" in seed_query
     assert "COALESCE(metadata::jsonb, '{}'::jsonb) = '{}'::jsonb" in seed_query

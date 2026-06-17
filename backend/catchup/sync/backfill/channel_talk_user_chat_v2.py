@@ -21,14 +21,14 @@ from catchup.components.vector_db.v2.constants import (
 from catchup.components.vector_db.v2.constants import KNOWLEDGE_STORE_TABLE_NAME
 from catchup.configs.config import settings
 from catchup.db.engine import SessionLocal
-from catchup.sync.ingestion.adapters.channel_talk import (
-    ChannelTalkUserChatV2BackfillAdapter,
-)
-from catchup.sync.ingestion.adapters.channel_talk import (
+from catchup.sync.ingestion.adapters.channel_talk.user_chat_models import (
     ChannelTalkUserChatV2BackfillExecutionRequest,
 )
-from catchup.sync.ingestion.adapters.channel_talk import (
+from catchup.sync.ingestion.adapters.channel_talk.user_chat_models import (
     ChannelTalkUserChatV2BackfillSeed,
+)
+from catchup.sync.ingestion.adapters.channel_talk.user_chat_v2_backfill import (
+    ChannelTalkUserChatV2BackfillAdapter,
 )
 from catchup.sync.ingestion.factories.channel_talk import (
     create_channel_talk_user_chat_v2_backfill_adapter,
@@ -487,7 +487,11 @@ def build_channel_talk_user_chat_v1_target_query():
             FROM candidates
             GROUP BY scope_id, target_id, target_name
         )
-        SELECT scope_id, target_id, target_name, expected_count
+        SELECT
+            grouped.scope_id,
+            grouped.target_id,
+            grouped.target_name,
+            grouped.expected_count
         FROM grouped
         LEFT JOIN vector_store_v2_backfill_states state
           ON state.connector = 'channel_talk'

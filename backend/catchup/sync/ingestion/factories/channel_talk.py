@@ -3,7 +3,7 @@ from __future__ import annotations
 from catchup.components.embedder.constants import EmbeddingProvider
 from catchup.components.embedder.factory import get_embedding_service
 from catchup.components.vector_db.factory import get_v2_vector_store
-from catchup.sync.ingestion.adapters.channel_talk import (
+from catchup.sync.ingestion.adapters.channel_talk.user_chat_v2_backfill import (
     ChannelTalkUserChatV2BackfillAdapter,
 )
 
