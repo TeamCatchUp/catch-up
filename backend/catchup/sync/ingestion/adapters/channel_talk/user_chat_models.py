@@ -116,6 +116,7 @@ class ChannelTalkUserChatFullSyncFetchResult(BaseModel):
     bundles: tuple[ChannelTalkFetchedUserChat, ...] = ()
     managers_by_id: dict[str, ChannelTalkManagerMetadata] = Field(default_factory=dict)
     fetched_record_ids: tuple[str, ...] = ()
+    failed_record_ids: tuple[str, ...] = ()
     next_checkpoint: ChannelTalkUserChatFullSyncCheckpoint | None = None
 
     @field_validator("states")
@@ -184,7 +185,9 @@ class ChannelTalkUserChatSyncExecutionResult(SyncExecutionResult):
     """Final typed result for a UserChat ingestion run."""
 
     connector: Literal[SyncConnector.CHANNEL_TALK] = SyncConnector.CHANNEL_TALK
-    target: Literal["user_chat"] = CHANNEL_TALK_USER_CHAT_RUNTIME_TARGET
+    target: Literal["user_chat", "user_chat_v2_backfill"] = (
+        CHANNEL_TALK_USER_CHAT_RUNTIME_TARGET
+    )
     collected_count: int = 0
     document_count: int = 0
     persisted_count: int = 0
@@ -205,6 +208,41 @@ class ChannelTalkUserChatIncrementalExecutionResult(
     ChannelTalkUserChatSyncExecutionResult
 ):
     """Final typed result for one UserChat exact-refresh run."""
+
+
+class ChannelTalkUserChatV2BackfillSeed(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    langchain_id: str
+    record_id: str
+    content: str
+    embedding: list[float]
+
+    @field_validator("langchain_id", "record_id")
+    @classmethod
+    def _validate_required_text(cls, value: str, info: ValidationInfo) -> str:
+        return require_text(value, info.field_name or "field")
+
+    @field_validator("embedding")
+    @classmethod
+    def _validate_embedding(cls, value: list[float]) -> list[float]:
+        if not value:
+            raise ValueError("embedding must not be empty")
+        return value
+
+
+class ChannelTalkUserChatV2BackfillExecutionRequest(
+    ChannelTalkUserChatSyncExecutionRequest
+):
+    target: Literal["user_chat_v2_backfill"] = "user_chat_v2_backfill"
+    seeds: tuple[ChannelTalkUserChatV2BackfillSeed, ...]
+
+    def log_context(self) -> dict[str, object]:
+        return {
+            "channel_id": self.channel_id,
+            "record_type": "user_chat",
+            "seed_count": len(self.seeds),
+        }
 
 
 ChannelTalkUserChatFullSyncExecutionRequest = ChannelTalkUserChatSyncExecutionRequest

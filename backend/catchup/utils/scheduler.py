@@ -36,6 +36,9 @@ from catchup.db.engine import SessionLocal
 from catchup.db.incremental import recover_stale_processing_records
 from catchup.events.enums import EventType
 from catchup.events.enums import IntegrationEventAction
+from catchup.sync.backfill.channel_talk_user_chat_v2 import (
+    ChannelTalkUserChatV2BackfillService,
+)
 from catchup.sync.backfill.github_issue_v2 import GithubIssueV2BackfillService
 from catchup.sync.backfill.github_pr_v2 import GithubPrV2BackfillService
 from catchup.sync.backfill.jira_issue_v2 import JiraIssueV2BackfillService
@@ -281,6 +284,23 @@ async def run_jira_issue_v2_backfill_job():
     )
 
 
+async def run_channel_talk_user_chat_v2_backfill_job():
+    logger.info(
+        "[CHANNEL_TALK][USER_CHAT_V2_BACKFILL][SCHEDULER] Starting backfill batch"
+    )
+    service = ChannelTalkUserChatV2BackfillService()
+    result = await service.backfill_batch(
+        limit=settings.VECTOR_STORE_V2_BACKFILL_BATCH_SIZE,
+    )
+    logger.info(
+        "[CHANNEL_TALK][USER_CHAT_V2_BACKFILL][SCHEDULER] Backfill batch completed: scanned=%s succeeded=%s skipped=%s failed=%s",
+        result.scanned,
+        result.succeeded,
+        result.skipped,
+        result.failed,
+    )
+
+
 def init_scheduler():
     global _scheduler
     if _scheduler is not None:
@@ -386,6 +406,14 @@ def init_scheduler():
             trigger=CronTrigger(hour=12, minute=50, timezone=SEOUL_TZ),
             id="slack_message_v2_backfill",
             name="Slack Message v2 Backfill",
+            replace_existing=True,
+            misfire_grace_time=900,
+        )
+        _scheduler.add_job(
+            run_channel_talk_user_chat_v2_backfill_job,
+            trigger=CronTrigger(hour=18, minute=50, timezone=SEOUL_TZ),
+            id="channel_talk_user_chat_v2_backfill",
+            name="Channel Talk UserChat v2 Backfill",
             replace_existing=True,
             misfire_grace_time=900,
         )
