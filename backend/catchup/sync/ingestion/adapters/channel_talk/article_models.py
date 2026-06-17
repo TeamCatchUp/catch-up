@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
+from langchain_core.documents import Document
 from pydantic import BaseModel
 from pydantic import ConfigDict
 from pydantic import ValidationInfo
@@ -134,6 +135,7 @@ class ChannelTalkArticleFullSyncFetchResult(BaseModel):
     bundles: tuple[ChannelTalkFetchedArticle, ...] = ()
     fetched_count: int = 0
     fetched_article_ids: tuple[str, ...] = ()
+    failed_article_ids: tuple[str, ...] = ()
     next_checkpoint: ChannelTalkArticleFullSyncCheckpoint | None = None
 
     @field_validator("channel_id", "space_id", "language")
@@ -201,6 +203,8 @@ class ChannelTalkArticleFullSyncTransformResult(BaseModel):
     documents: tuple[ChannelTalkArticlePreparedDocument, ...] = ()
     delete_prefixes: tuple[str, ...] = ()
     prepared_document_ids: tuple[str, ...] = ()
+    v2_documents: tuple[Document, ...] = ()
+    v2_failed_ids: tuple[str, ...] = ()
 
     @model_validator(mode="after")
     def _fill_prepared_document_ids(
@@ -220,6 +224,7 @@ class ChannelTalkArticleFullSyncSummaryResult(BaseModel):
 
     summary_applied: bool = False
     document_count: int = 0
+    v2_documents: tuple[Document, ...] = ()
 
 
 class ChannelTalkArticleFullSyncPersistResult(BaseModel):
@@ -230,6 +235,8 @@ class ChannelTalkArticleFullSyncPersistResult(BaseModel):
     persisted_count: int = 0
     persisted_ids: tuple[str, ...] = ()
     deleted_prefixes: tuple[str, ...] = ()
+    v2_error_count: int = 0
+    v2_failed_ids: tuple[str, ...] = ()
 
 
 class ChannelTalkArticleSyncExecutionResult(SyncExecutionResult):
@@ -243,6 +250,8 @@ class ChannelTalkArticleSyncExecutionResult(SyncExecutionResult):
     transformed: ChannelTalkArticleFullSyncTransformResult
     summary: ChannelTalkArticleFullSyncSummaryResult
     persisted: ChannelTalkArticleFullSyncPersistResult
+    v2_failed_count: int = 0
+    v2_failed_ids: tuple[str, ...] = ()
 
     @property
     def channel_id(self) -> str:
@@ -257,6 +266,37 @@ class ChannelTalkArticleIncrementalExecutionResult(
     ChannelTalkArticleSyncExecutionResult
 ):
     """Final typed result for one article exact-refresh run."""
+
+
+class ChannelTalkArticleV2BackfillSeed(BaseModel):
+    """v1 row values preserved while hydrating Channel Talk Article v2 metadata."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    langchain_id: str
+    record_id: str
+    content: str
+    embedding: list[float]
+
+    @field_validator("langchain_id", "record_id", "content")
+    @classmethod
+    def _validate_required_text(cls, value: str, info: ValidationInfo) -> str:
+        return require_text(value, info.field_name or "field")
+
+
+class ChannelTalkArticleV2BackfillExecutionRequest(
+    ChannelTalkArticleSyncExecutionRequest
+):
+    """Hydrate v1 Article rows into v2 without changing legacy storage."""
+
+    target: Literal["document_article_v2_backfill"] = "document_article_v2_backfill"
+    seeds: tuple[ChannelTalkArticleV2BackfillSeed, ...] = ()
+
+
+class ChannelTalkArticleV2BackfillExecutionResult(ChannelTalkArticleSyncExecutionResult):
+    """Final typed result for Article v2 backfill batches."""
+
+    target: Literal["document_article_v2_backfill"] = "document_article_v2_backfill"
 
 
 ChannelTalkArticleFullSyncExecutionRequest = ChannelTalkArticleSyncExecutionRequest

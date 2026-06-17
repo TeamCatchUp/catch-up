@@ -91,7 +91,9 @@ class ChannelTalkFullSyncHandler(BaseFullSyncHandler):
             ),
             user_chat_list_limit=CHANNEL_TALK_USER_CHAT_FULL_SYNC_BATCH_SIZE,
         )
-        self._article_adapter = ChannelTalkArticleFullSyncIngestionAdapter()
+        self._article_adapter = ChannelTalkArticleFullSyncIngestionAdapter(
+            enable_v2_dual_write=settings.VECTOR_STORE_V2_DUAL_WRITE_ENABLED,
+        )
         self._ingestion_ports = {
             CHANNEL_TALK_USER_CHAT_RUNTIME_TARGET: self._user_chat_adapter,
             CHANNEL_TALK_DOCUMENT_ARTICLE_RUNTIME_TARGET: self._article_adapter,
@@ -350,7 +352,9 @@ class ChannelTalkIncrementalHandler(BaseIncrementalHandler):
         self._user_chat_adapter = ChannelTalkUserChatIncrementalIngestionAdapter(
             enable_v2_dual_write=settings.VECTOR_STORE_V2_DUAL_WRITE_ENABLED,
         )
-        self._article_adapter = ChannelTalkArticleIncrementalIngestionAdapter()
+        self._article_adapter = ChannelTalkArticleIncrementalIngestionAdapter(
+            enable_v2_dual_write=settings.VECTOR_STORE_V2_DUAL_WRITE_ENABLED,
+        )
 
     @audit_log(
         IncrementalSyncAction.RECORD,

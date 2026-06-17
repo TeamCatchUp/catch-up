@@ -216,6 +216,8 @@ class ChannelTalkDocumentArticleArticleMetadata(BaseModel):
     state: str
     title: str | None = None
     subtitle: str | None = None
+    summary: str | None = None
+    body_text: str | None = None
     slug: str | None = None
     url: str | None = None
 
@@ -326,6 +328,10 @@ class ChannelTalkDocumentArticleLogicalMetadata(BaseModel):
         core_storage = self.document_article_core.model_dump(mode="json")
         core = self.document_article_core
         article = core.article
+        article_storage = core_storage.get("article")
+        if isinstance(article_storage, dict):
+            article_storage.pop("summary", None)
+            article_storage.pop("body_text", None)
 
         return {
             **base_storage,

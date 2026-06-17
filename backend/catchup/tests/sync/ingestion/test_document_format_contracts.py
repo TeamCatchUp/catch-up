@@ -345,6 +345,7 @@ class ChannelTalkDocumentArticleLogicalMetadataTests(TestCase):
                     language="ko",
                     state="draft",
                     title="Refund draft",
+                    body_text="Raw article body",
                     url="https://docs.example.com/refund",
                 ),
                 space=ChannelTalkDocumentArticleSpaceMetadata(
@@ -415,6 +416,7 @@ class ChannelTalkDocumentArticleLogicalMetadataTests(TestCase):
         self.assertEqual(article_core["chunk"]["chunk_index"], 0)
         self.assertEqual(article_core["chunk"]["chunk_count"], 2)
         self.assertNotIn("summary", article_core["article"])
+        self.assertNotIn("body_text", article_core["article"])
         self.assertEqual(
             article_core["publication"]["updated_at"],
             "2026-04-22T02:10:00Z",
