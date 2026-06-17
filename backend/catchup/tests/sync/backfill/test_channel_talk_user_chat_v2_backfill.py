@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import nullcontext
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -7,6 +8,9 @@ import pytest
 
 from catchup.sync.backfill.channel_talk_user_chat_v2 import (
     build_channel_talk_user_chat_v1_target_query,
+)
+from catchup.sync.backfill.channel_talk_user_chat_v2 import (
+    build_channel_talk_user_chat_v1_target_seed_query,
 )
 from catchup.sync.backfill.channel_talk_user_chat_v2 import (
     build_fetch_seeded_seed_chunk_query,
@@ -26,6 +30,9 @@ from catchup.sync.ingestion.adapters.channel_talk.user_chat_models import (
 from catchup.sync.ingestion.adapters.channel_talk.user_chat_v2_backfill import (
     ChannelTalkUserChatV2BackfillAdapter,
 )
+from catchup.sync.ingestion.adapters.channel_talk.user_chat_v2_document_builder import (
+    ChannelTalkUserChatV2DocumentBuilder,
+)
 from catchup.sync.ingestion.pipeline import run_sync_ingestion
 from catchup.tests.sync.ingestion.test_channel_talk_full_sync import _connection
 from catchup.tests.sync.ingestion.test_channel_talk_full_sync import _fetched_bundle
@@ -42,8 +49,29 @@ def _seed() -> ChannelTalkUserChatV2BackfillSeed:
     )
 
 
+class _FakeChannelTalkAuthorResolver:
+    def __init__(self, resolved_id: str | None = "42") -> None:
+        self.resolved_id = resolved_id
+        self.manager_ids: list[str | None] = []
+
+    def resolve_catchup_user_id(self, db, manager_id):
+        _ = db
+        self.manager_ids.append(manager_id)
+        return self.resolved_id
+
+
+def _v2_document_builder(
+    resolver: _FakeChannelTalkAuthorResolver | None = None,
+) -> ChannelTalkUserChatV2DocumentBuilder:
+    return ChannelTalkUserChatV2DocumentBuilder(
+        author_resolver=resolver or _FakeChannelTalkAuthorResolver(),
+        session_factory=lambda: nullcontext(object()),
+    )
+
+
 def test_channel_talk_user_chat_backfill_queries_follow_v1_seed_pattern() -> None:
     target_query = str(build_channel_talk_user_chat_v1_target_query())
+    target_seed_query = str(build_channel_talk_user_chat_v1_target_seed_query())
     seed_query = str(build_fetch_seeded_seed_chunk_query())
     upsert_statement = str(build_upsert_seed_rows_statement())
 
@@ -53,6 +81,9 @@ def test_channel_talk_user_chat_backfill_queries_follow_v1_seed_pattern() -> Non
     assert "needs_backfill" in target_query
     assert "SELECT\n            grouped.scope_id," in target_query
     assert "grouped.expected_count" in target_query
+    assert "v2.internal_author_id IS NULL" in target_query
+    assert "#>> '{channel_talk_user_chat,assignment,assignee_id}'" in target_query
+    assert "v2.internal_author_id IS NULL" in target_seed_query
     assert "scope_id = :scope_id" in seed_query
     assert "target_id = :target_id" in seed_query
     assert "COALESCE(metadata::jsonb, '{}'::jsonb) = '{}'::jsonb" in seed_query
@@ -72,9 +103,11 @@ async def test_backfill_adapter_hydrates_user_chat_and_reuses_v1_seed_values() -
     vector_store = SimpleNamespace(
         upsert_documents=AsyncMock(return_value=[seed.langchain_id])
     )
+    author_resolver = _FakeChannelTalkAuthorResolver()
     adapter = ChannelTalkUserChatV2BackfillAdapter(
         fetcher=fetcher,
         vector_store=vector_store,
+        v2_document_builder=_v2_document_builder(author_resolver),
     )
     adapter._load_connection = AsyncMock(
         return_value=ChannelTalkUserChatFullSyncConnection.from_credentials_record(
@@ -101,6 +134,8 @@ async def test_backfill_adapter_hydrates_user_chat_and_reuses_v1_seed_values() -
     assert document.id == seed.langchain_id
     assert document.page_content == seed.content
     assert document.metadata["body"]
+    assert author_resolver.manager_ids == ["manager-1"]
+    assert document.metadata["internal_author_id"] == "42"
     assert upsert_args.kwargs["ids"] == [seed.langchain_id]
     assert upsert_args.kwargs["embeddings"] == [seed.embedding]
 
@@ -116,6 +151,7 @@ async def test_backfill_adapter_reports_hydrate_failure_as_v2_failed_id() -> Non
     adapter = ChannelTalkUserChatV2BackfillAdapter(
         fetcher=fetcher,
         vector_store=vector_store,
+        v2_document_builder=_v2_document_builder(),
     )
     adapter._load_connection = AsyncMock(
         return_value=ChannelTalkUserChatFullSyncConnection.from_credentials_record(
