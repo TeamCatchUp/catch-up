@@ -463,6 +463,14 @@ def build_channel_talk_user_chat_v1_target_query():
                     COALESCE(v2.{KNOWLEDGE_STORE_METADATA_JSON_COLUMN}::jsonb, '{{}}'::jsonb) = '{{}}'::jsonb
                     OR v2.{KNOWLEDGE_STORE_ID_COLUMN} IS NULL
                     OR (
+                        v2.internal_author_id IS NULL
+                        AND NULLIF(
+                            v2.{KNOWLEDGE_STORE_METADATA_JSON_COLUMN}::jsonb
+                            #>> '{{channel_talk_user_chat,assignment,assignee_id}}',
+                            ''
+                        ) IS NOT NULL
+                    )
+                    OR (
                         v1_user_chat.source_updated_at IS NOT NULL
                         AND (
                             v2.updated_at < v1_user_chat.source_updated_at
@@ -521,6 +529,14 @@ def build_channel_talk_user_chat_v1_target_seed_query():
                 (
                     COALESCE(v2.{KNOWLEDGE_STORE_METADATA_JSON_COLUMN}::jsonb, '{{}}'::jsonb) = '{{}}'::jsonb
                     OR v2.{KNOWLEDGE_STORE_ID_COLUMN} IS NULL
+                    OR (
+                        v2.internal_author_id IS NULL
+                        AND NULLIF(
+                            v2.{KNOWLEDGE_STORE_METADATA_JSON_COLUMN}::jsonb
+                            #>> '{{channel_talk_user_chat,assignment,assignee_id}}',
+                            ''
+                        ) IS NOT NULL
+                    )
                     OR (
                         v1_user_chat.source_updated_at IS NOT NULL
                         AND (

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import nullcontext
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 from unittest.mock import patch
@@ -14,6 +15,9 @@ from catchup.sync.ingestion.adapters.channel_talk.user_chat_models import (
 )
 from catchup.sync.ingestion.adapters.channel_talk.user_chat_models import (
     ChannelTalkUserChatSyncExecutionRequest,
+)
+from catchup.sync.ingestion.adapters.channel_talk.user_chat_v2_document_builder import (
+    ChannelTalkUserChatV2DocumentBuilder,
 )
 from catchup.sync.ingestion.pipeline import run_sync_ingestion
 from catchup.sync.ingestion.vector_records import ChannelTalkUserChatV2RecordMapper
@@ -63,6 +67,17 @@ class _DualWriteRepository:
         self.stored_documents = list(documents)
         self.stored_embeddings = list(embeddings)
         return list(ids)
+
+
+class _FakeChannelTalkAuthorResolver:
+    def __init__(self, resolved_id: str | None = "42") -> None:
+        self.resolved_id = resolved_id
+        self.manager_ids: list[str | None] = []
+
+    def resolve_catchup_user_id(self, db, manager_id):
+        _ = db
+        self.manager_ids.append(manager_id)
+        return self.resolved_id
 
 
 def test_channel_talk_user_chat_v2_mapper_builds_contract_without_duplicates() -> None:
@@ -185,9 +200,15 @@ async def test_channel_talk_user_chat_full_sync_dual_writes_v2_document() -> Non
             return_value=["channel_talk:user_chat:channel-123:chat-123"]
         )
     )
+    author_resolver = _FakeChannelTalkAuthorResolver()
+    v2_document_builder = ChannelTalkUserChatV2DocumentBuilder(
+        author_resolver=author_resolver,
+        session_factory=lambda: nullcontext(object()),
+    )
     adapter = ChannelTalkUserChatFullSyncIngestionAdapter(
         enable_v2_dual_write=True,
         vector_store=vector_store,
+        v2_document_builder=v2_document_builder,
     )
     adapter._fetcher = fake_fetcher
     adapter._build_repository = lambda: repository
@@ -228,3 +249,5 @@ async def test_channel_talk_user_chat_full_sync_dual_writes_v2_document() -> Non
     assert upsert_kwargs["embeddings"] == [[0.25]]
     assert v2_document.page_content == "summarized support intent"
     assert "Hello from support" in v2_document.metadata["body"]
+    assert author_resolver.manager_ids == ["manager-1"]
+    assert v2_document.metadata["internal_author_id"] == "42"
