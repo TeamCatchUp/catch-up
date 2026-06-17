@@ -1,5 +1,8 @@
 """Backfill jobs for migration workflows."""
 
+from catchup.sync.backfill.channel_talk_document_article_v2 import (
+    ChannelTalkArticleV2BackfillService,
+)
 from catchup.sync.backfill.github_issue_v2 import GithubIssueV2BackfillService
 from catchup.sync.backfill.github_issue_v2_validation import (
     GithubIssueV2ValidationService,
@@ -12,6 +15,7 @@ from catchup.sync.backfill.slack_message_v2_validation import (
 )
 
 __all__ = [
+    "ChannelTalkArticleV2BackfillService",
     "GithubIssueV2BackfillService",
     "GithubIssueV2ValidationService",
     "GithubPrV2BackfillService",
