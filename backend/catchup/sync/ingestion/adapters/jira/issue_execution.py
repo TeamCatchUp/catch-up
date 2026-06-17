@@ -99,7 +99,7 @@ class JiraIssueV2BackfillSeed(BaseModel):
 
 class JiraIssueV2BackfillExecutionRequest(SyncExecutionRequest):
     connector: Literal[SyncConnector.JIRA] = SyncConnector.JIRA
-    target: Literal["issue_v2_backfill"] = "issue_v2_backfill"
+    target: Literal["issue_v2_backfill", "epic_v2_backfill"] = "issue_v2_backfill"
     project_key: str
     seeds: tuple[JiraIssueV2BackfillSeed, ...]
     audit_context: SyncAuditContext | None = None
@@ -211,7 +211,7 @@ class JiraIssuePersistResult(BaseModel):
 
 class JiraIssueSyncExecutionResult(SyncExecutionResult):
     connector: Literal[SyncConnector.JIRA] = SyncConnector.JIRA
-    target: Literal["issue", "issue_v2_backfill"] = "issue"
+    target: Literal["issue", "issue_v2_backfill", "epic_v2_backfill"] = "issue"
     fetched_count: int = 0
     document_count: int = 0
     persisted_count: int = 0
