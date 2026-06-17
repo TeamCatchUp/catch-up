@@ -1,8 +1,68 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
+from unittest.mock import patch
+
+import pytest
+
+from catchup.sync.ingestion.adapters.channel_talk.user_chat_full_sync import (
+    ChannelTalkUserChatFullSyncIngestionAdapter,
+)
+from catchup.sync.ingestion.adapters.channel_talk.user_chat_models import (
+    ChannelTalkFetchedUserChatsResult,
+)
+from catchup.sync.ingestion.adapters.channel_talk.user_chat_models import (
+    ChannelTalkUserChatSyncExecutionRequest,
+)
+from catchup.sync.ingestion.pipeline import run_sync_ingestion
 from catchup.sync.ingestion.vector_records import ChannelTalkUserChatV2RecordMapper
+from catchup.tests.sync.ingestion.test_channel_talk_full_sync import _FakeSummarizer
 from catchup.tests.sync.ingestion.test_channel_talk_full_sync import _fetched_bundle
 from catchup.tests.sync.ingestion.test_channel_talk_full_sync import _managers_by_id
+from catchup.tests.sync.ingestion.test_channel_talk_full_sync import _window
+
+
+class _DualWriteRepository:
+    def __init__(self) -> None:
+        self._initialized = False
+        self.added_documents = []
+        self.deleted_ids = []
+        self.stored_documents = []
+        self.stored_embeddings = []
+
+    def ensure_initialized(self) -> None:
+        if not self._initialized:
+            raise RuntimeError("not initialized")
+
+    async def initialize(self, _ensure_indices) -> None:
+        self._initialized = True
+
+    async def add_documents(self, documents, ids=None):
+        self.added_documents = list(documents)
+        return list(ids or [])
+
+    async def generate_embeddings(self, documents, audit_context=None, context=None):
+        _ = audit_context
+        _ = context
+        return [[0.25] for _document in documents]
+
+    async def delete_documents(self, ids):
+        self.deleted_ids = list(ids)
+
+    async def store_with_embeddings(
+        self,
+        documents,
+        embeddings,
+        ids,
+        audit_context=None,
+        context=None,
+    ):
+        _ = audit_context
+        _ = context
+        self.stored_documents = list(documents)
+        self.stored_embeddings = list(embeddings)
+        return list(ids)
 
 
 def test_channel_talk_user_chat_v2_mapper_builds_contract_without_duplicates() -> None:
@@ -110,3 +170,61 @@ def test_channel_talk_user_chat_v2_title_falls_back_to_customer_info() -> None:
     )
 
     assert document.metadata["title"] == "Customer Kim"
+
+
+@pytest.mark.asyncio
+async def test_channel_talk_user_chat_full_sync_dual_writes_v2_document() -> None:
+    fake_fetcher = AsyncMock()
+    fake_fetcher.fetch_user_chats = AsyncMock(
+        return_value=ChannelTalkFetchedUserChatsResult(bundles=(_fetched_bundle(),))
+    )
+    fake_fetcher.fetch_managers_by_id = AsyncMock(return_value=_managers_by_id())
+    repository = _DualWriteRepository()
+    vector_store = SimpleNamespace(
+        upsert_documents=AsyncMock(
+            return_value=["channel_talk:user_chat:channel-123:chat-123"]
+        )
+    )
+    adapter = ChannelTalkUserChatFullSyncIngestionAdapter(
+        enable_v2_dual_write=True,
+        vector_store=vector_store,
+    )
+    adapter._fetcher = fake_fetcher
+    adapter._build_repository = lambda: repository
+    adapter._load_connection = AsyncMock(
+        return_value=type(
+            "_Connection",
+            (),
+            {
+                "channel_id": "channel-123",
+                "channel_name": "Support",
+                "access_key": "access-key",
+                "access_secret": "access-secret",
+            },
+        )()
+    )
+
+    with patch(
+        "catchup.sync.ingestion.adapters.channel_talk.user_chat_full_sync.get_summarizer_service",
+        return_value=_FakeSummarizer(),
+    ):
+        result = await run_sync_ingestion(
+            port=adapter,
+            execution=ChannelTalkUserChatSyncExecutionRequest(
+                tenant_id="channel-123",
+            ),
+            sync_window=_window(),
+        )
+
+    assert result.persisted_count == 1
+    assert result.v2_failed_count == 0
+    assert repository.added_documents == []
+    assert repository.deleted_ids == ["channel_talk:user_chat:channel-123:chat-123"]
+    assert repository.stored_documents[0].page_content == "summarized support intent"
+    vector_store.upsert_documents.assert_awaited_once()
+    upsert_kwargs = vector_store.upsert_documents.await_args.kwargs
+    v2_document = vector_store.upsert_documents.await_args.args[0][0]
+    assert upsert_kwargs["ids"] == ["channel_talk:user_chat:channel-123:chat-123"]
+    assert upsert_kwargs["embeddings"] == [[0.25]]
+    assert v2_document.page_content == "summarized support intent"
+    assert "Hello from support" in v2_document.metadata["body"]

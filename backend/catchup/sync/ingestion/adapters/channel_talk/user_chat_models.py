@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Literal
 
+from langchain_core.documents import Document
 from pydantic import BaseModel
 from pydantic import ConfigDict
 from pydantic import Field
@@ -149,9 +150,11 @@ class ChannelTalkUserChatFullSyncFetchResult(BaseModel):
 class ChannelTalkUserChatFullSyncTransformResult(BaseModel):
     """Typed transform result for materialized UserChat documents."""
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", arbitrary_types_allowed=True)
 
     documents: tuple[ChannelTalkUserChatPreparedDocument, ...] = ()
+    v2_documents: tuple[Document, ...] = ()
+    v2_failed_ids: tuple[str, ...] = ()
 
 
 class ChannelTalkUserChatFullSyncSummaryResult(BaseModel):
@@ -163,6 +166,7 @@ class ChannelTalkUserChatFullSyncSummaryResult(BaseModel):
     document_count: int = 0
     included_message_count: int = 0
     excluded_message_count: int = 0
+    v2_documents: tuple[Document, ...] = ()
 
 
 class ChannelTalkUserChatFullSyncPersistResult(BaseModel):
@@ -172,6 +176,8 @@ class ChannelTalkUserChatFullSyncPersistResult(BaseModel):
 
     persisted_count: int = 0
     persisted_ids: tuple[str, ...] = ()
+    v2_error_count: int = 0
+    v2_failed_ids: tuple[str, ...] = ()
 
 
 class ChannelTalkUserChatSyncExecutionResult(SyncExecutionResult):
@@ -181,6 +187,10 @@ class ChannelTalkUserChatSyncExecutionResult(SyncExecutionResult):
     target: Literal["user_chat"] = CHANNEL_TALK_USER_CHAT_RUNTIME_TARGET
     collected_count: int = 0
     document_count: int = 0
+    persisted_count: int = 0
+    failed_count: int = 0
+    v2_failed_count: int = 0
+    v2_failed_ids: tuple[str, ...] = ()
     fetched: ChannelTalkUserChatFullSyncFetchResult
     transformed: ChannelTalkUserChatFullSyncTransformResult
     summary: ChannelTalkUserChatFullSyncSummaryResult
