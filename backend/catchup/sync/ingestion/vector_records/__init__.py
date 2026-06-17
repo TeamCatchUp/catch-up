@@ -1,5 +1,20 @@
 """Typed vector-store v2 ingestion records."""
 
+from catchup.sync.ingestion.vector_records.channel_talk_user_chat import (
+    ChannelTalkUserChatData,
+)
+from catchup.sync.ingestion.vector_records.channel_talk_user_chat import (
+    ChannelTalkUserChatDataPart,
+)
+from catchup.sync.ingestion.vector_records.channel_talk_user_chat import (
+    ChannelTalkUserChatMetadata,
+)
+from catchup.sync.ingestion.vector_records.channel_talk_user_chat import (
+    ChannelTalkUserChatVectorRecord,
+)
+from catchup.sync.ingestion.vector_records.channel_talk_user_chat_mapper import (
+    ChannelTalkUserChatV2RecordMapper,
+)
 from catchup.sync.ingestion.vector_records.github_issue import GithubIssueData
 from catchup.sync.ingestion.vector_records.github_issue import GithubIssueDataPart
 from catchup.sync.ingestion.vector_records.github_issue import GithubIssueMetadata
@@ -33,6 +48,11 @@ from catchup.sync.ingestion.vector_records.slack_message_mapper import (
 )
 
 __all__ = [
+    "ChannelTalkUserChatData",
+    "ChannelTalkUserChatDataPart",
+    "ChannelTalkUserChatMetadata",
+    "ChannelTalkUserChatV2RecordMapper",
+    "ChannelTalkUserChatVectorRecord",
     "GithubIssueData",
     "GithubIssueDataPart",
     "GithubIssueMetadata",
