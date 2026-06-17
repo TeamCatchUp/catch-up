@@ -41,12 +41,13 @@ class _FakeClient:
 class _FakeTransformer:
     def transform_issue(self, issue_data, site_url):
         issue_key = issue_data["key"]
+        record_type = "epic" if issue_data.get("issue_type") == "Epic" else "issue"
         return Document(
-            id=f"jira:issue:{issue_key}",
+            id=f"jira:{record_type}:{issue_key}",
             page_content=f"{site_url}:{issue_key}",
             metadata={
                 "source": "jira",
-                "entity_type": "issue",
+                "entity_type": record_type,
                 "issue_key": issue_key,
                 "project_key": "GRT",
                 "contextual_content": issue_key,
@@ -61,7 +62,7 @@ class _FakeTransformer:
             url=f"{site_url}/browse/{issue_key}",
             project_key="GRT",
             project_name="Growth",
-            issue_type="Task",
+            issue_type=issue_data.get("issue_type", "Task"),
             status="To Do",
             summary=f"Summary {issue_key}",
             description=f"Description {issue_key}",
@@ -256,7 +257,10 @@ class JiraIssueIngestionAdapterTests(IsolatedAsyncioTestCase):
         )
 
         self.assertEqual(client.get_issue_calls, [])
-        self.assertEqual(repository.delete_calls, [["jira:issue:GRT-1"]])
+        self.assertEqual(
+            repository.delete_calls,
+            [["jira:issue:GRT-1", "jira:epic:GRT-1"]],
+        )
         self.assertEqual(persisted.deleted_count, 1)
 
     async def test_full_sync_dual_writes_jira_v2_documents(self) -> None:
@@ -318,6 +322,68 @@ class JiraIssueIngestionAdapterTests(IsolatedAsyncioTestCase):
         self.assertEqual(persisted.persisted_count, 1)
         self.assertEqual(persisted.v2_error_count, 0)
 
+    async def test_full_sync_dual_writes_jira_epic_v2_documents(self) -> None:
+        client = _FakeClient()
+        repository = _FakeRepository()
+        vector_store = _FakeVectorStore()
+        adapter = JiraIssueFullSyncAdapter(
+            dependencies=_dependencies(
+                client,
+                repository,
+                vector_store=vector_store,
+            ),
+        )
+        fetched = SimpleNamespace(
+            issues=({"key": "GRT-EPIC", "id": "10002", "issue_type": "Epic"},)
+        )
+
+        transformed = await adapter.transform(
+            execution=JiraIssueFullSyncExecutionRequest(
+                tenant_id="cloud-1",
+                project_key="GRT",
+                batch_index=0,
+                max_results=50,
+            ),
+            sync_window=_window(),
+            fetched=fetched,
+        )
+        summary = await adapter.summarize(
+            execution=JiraIssueFullSyncExecutionRequest(
+                tenant_id="cloud-1",
+                project_key="GRT",
+                batch_index=0,
+                max_results=50,
+            ),
+            sync_window=_window(),
+            transformed=transformed,
+        )
+        persisted = await adapter.persist(
+            execution=JiraIssueFullSyncExecutionRequest(
+                tenant_id="cloud-1",
+                project_key="GRT",
+                batch_index=0,
+                max_results=50,
+            ),
+            sync_window=_window(),
+            transformed=transformed,
+            summary=summary,
+        )
+
+        self.assertEqual(repository.generate_calls[0]["documents"][0].id, "jira:epic:GRT-EPIC")
+        self.assertEqual(repository.delete_calls, [["jira:epic:GRT-EPIC"]])
+        self.assertEqual(repository.store_calls[0]["ids"], ["jira:epic:GRT-EPIC"])
+        self.assertEqual(
+            vector_store.upsert_calls[0]["ids"],
+            ["jira:epic:cloud-1:GRT:GRT-EPIC"],
+        )
+        self.assertEqual(
+            vector_store.upsert_calls[0]["documents"][0].metadata["entity_type"],
+            "epic",
+        )
+        self.assertIn("jira_epic", vector_store.upsert_calls[0]["documents"][0].metadata)
+        self.assertEqual(persisted.persisted_count, 1)
+        self.assertEqual(persisted.v2_error_count, 0)
+
     async def test_incremental_delete_deletes_v2_document_when_configured(self) -> None:
         client = _FakeClient()
         repository = _FakeRepository()
@@ -354,10 +420,16 @@ class JiraIssueIngestionAdapterTests(IsolatedAsyncioTestCase):
             summary=summary,
         )
 
-        self.assertEqual(repository.delete_calls, [["jira:issue:GRT-1"]])
+        self.assertEqual(
+            repository.delete_calls,
+            [["jira:issue:GRT-1", "jira:epic:GRT-1"]],
+        )
         self.assertEqual(
             vector_store.delete_calls,
-            [["jira:issue:cloud-1:GRT:GRT-1"]],
+            [[
+                "jira:issue:cloud-1:GRT:GRT-1",
+                "jira:epic:cloud-1:GRT:GRT-1",
+            ]],
         )
         self.assertEqual(persisted.deleted_count, 1)
         self.assertEqual(persisted.v2_error_count, 0)

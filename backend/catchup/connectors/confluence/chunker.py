@@ -66,6 +66,7 @@ class Chunk:
     estimated_tokens: int
     image_blocks: list[ContentBlock] = field(default_factory=list)
     inline_comment_refs: list[str] = field(default_factory=list)
+    body_text: str = ""
 
 
 class ConfluenceChunker:
@@ -614,6 +615,7 @@ class ConfluenceChunker:
                 estimated_tokens=len(content) // 4,
                 image_blocks=image_blocks,
                 inline_comment_refs=comment_refs,
+                body_text=body,
             ))
 
         return chunks

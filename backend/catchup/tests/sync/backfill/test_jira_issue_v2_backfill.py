@@ -3,10 +3,13 @@ from __future__ import annotations
 import json
 from unittest.mock import MagicMock
 
+from catchup.sync.backfill.jira_issue_v2 import JiraEpicV2BackfillService
 from catchup.sync.backfill.jira_issue_v2 import JiraIssueV1Target
 from catchup.sync.backfill.jira_issue_v2 import JiraIssueV2BackfillService
 from catchup.sync.backfill.jira_issue_v2 import _embedding_to_list
 from catchup.sync.backfill.jira_issue_v2 import build_fetch_pending_seed_chunk_query
+from catchup.sync.backfill.jira_issue_v2 import build_jira_epic_v1_target_query
+from catchup.sync.backfill.jira_issue_v2 import build_jira_epic_v1_target_seed_query
 from catchup.sync.backfill.jira_issue_v2 import build_jira_issue_v1_target_query
 from catchup.sync.backfill.jira_issue_v2 import build_jira_issue_v1_target_seed_query
 from catchup.sync.backfill.jira_issue_v2 import build_mark_finished_statement
@@ -39,6 +42,21 @@ def test_jira_issue_v2_backfill_seed_query_builds_v2_document_ids() -> None:
     assert "ORDER BY target_id, record_id, langchain_id" in sql
     assert "'jira:issue:' || jp.cloud_id" in sql
     assert "project_match_count = 1" in sql
+
+
+def test_jira_epic_v2_backfill_targets_epic_entity_type_and_ids() -> None:
+    target_sql = _sql(build_jira_epic_v1_target_query())
+    seed_sql = _sql(build_jira_epic_v1_target_seed_query())
+    upsert_sql = _sql(build_upsert_seed_rows_statement("epic"))
+    chunk_sql = _sql(build_fetch_pending_seed_chunk_query("epic"))
+
+    assert "e.cmetadata ->> 'entity_type' = 'epic'" in target_sql
+    assert "'jira:epic:' || jp.cloud_id" in target_sql
+    assert "state.entity_type = 'epic'" in target_sql
+    assert "e.cmetadata ->> 'entity_type' = 'epic'" in seed_sql
+    assert "'jira:epic:' || jp.cloud_id" in seed_sql
+    assert "'epic'" in upsert_sql
+    assert "AND entity_type = 'epic'" in chunk_sql
 
 
 def test_jira_issue_v2_seed_rows_preserve_content_embedding_and_empty_metadata() -> None:
@@ -79,6 +97,28 @@ def test_jira_issue_v2_mark_finished_serializes_failed_ids() -> None:
     params = session.execute.call_args.args[1]
     assert json.loads(params["failed_ids"]) == ["jira:issue:cloud-123:CAT:CAT-1"]
     assert isinstance(params["failed_ids"], str)
+
+
+def test_jira_epic_v2_mark_finished_uses_epic_state_key() -> None:
+    session = MagicMock()
+    context = MagicMock()
+    context.__enter__.return_value = session
+    service = JiraEpicV2BackfillService(session_factory=lambda: context)
+
+    service._mark_finished_sync(
+        JiraIssueV1Target(
+            scope_id="cloud-123",
+            target_id="CAT",
+            target_name="CatchUp",
+            expected_count=1,
+        ),
+        backfill_count=1,
+        failed_ids=[],
+    )
+
+    params = session.execute.call_args.args[1]
+    assert params["entity_type"] == "epic"
+    assert json.loads(params["failed_ids"]) == []
 
 
 def test_jira_issue_v2_embedding_to_list_treats_null_as_empty() -> None:

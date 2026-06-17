@@ -11,6 +11,7 @@ from catchup.connectors.jira.schemas import JiraLinkedIssue
 from catchup.connectors.jira.schemas import JiraMention
 from catchup.connectors.jira.schemas import JiraSprintInfo
 from catchup.connectors.jira.schemas import JiraUser
+from catchup.sync.ingestion.vector_records import JiraEpicV2RecordMapper
 from catchup.sync.ingestion.vector_records import JiraIssueV2RecordMapper
 
 
@@ -230,3 +231,53 @@ def test_jira_issue_v2_mapper_builds_record_from_parsed_issue() -> None:
     assert document.metadata["target_name"] == "CatchUp"
     assert document.metadata["internal_author_id"] == "usr_author"
     assert "issue_key" not in document.metadata["jira_issue"]
+
+
+def test_jira_epic_v2_mapper_builds_epic_contract_without_issue_duplicates() -> None:
+    epic = _issue().model_copy(
+        update={
+            "key": "CATCH-1",
+            "id": "100001",
+            "issue_type": "Epic",
+            "summary": "Migration epic",
+            "description": "Epic level migration plan.",
+            "parent_key": None,
+            "parent_name": None,
+        }
+    )
+
+    document = JiraEpicV2RecordMapper().to_document(
+        epic,
+        cloud_id="cloud-1",
+        content="summarized jira epic content",
+        synced_at=_dt("2026-06-10T03:00:00+00:00"),
+    )
+
+    assert document.id == "jira:epic:cloud-1:CATCH:CATCH-1"
+    assert document.page_content == "summarized jira epic content"
+    assert document.metadata["source"] == "jira"
+    assert document.metadata["entity_type"] == "epic"
+    assert document.metadata["record_id"] == "CATCH-1"
+    assert document.metadata["target_id"] == "CATCH"
+    assert document.metadata["target_name"] == "CatchUp"
+    assert document.metadata["title"] == "Migration epic"
+    assert "Migration epic" not in document.metadata["body"]
+    assert "Epic level migration plan." in document.metadata["body"]
+
+    epic_metadata = document.metadata["jira_epic"]
+    assert epic_metadata["epic_id"] == "100001"
+    assert epic_metadata["issue_type"] == "Epic"
+    for forbidden_field in (
+        "issue_key",
+        "project_key",
+        "project_name",
+        "source",
+        "entity_type",
+        "record_id",
+        "scope_id",
+        "target_id",
+        "target_name",
+        "custom_fields",
+    ):
+        assert forbidden_field not in epic_metadata
+    assert "jira_issue" not in document.metadata

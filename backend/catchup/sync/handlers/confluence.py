@@ -103,9 +103,14 @@ class ConfluenceFullSyncHandler(BaseFullSyncHandler):
             window_start=sync_from_dt,
             window_end=datetime.now(timezone.utc),
         )
-        adapter = ConfluenceSpaceSyncAdapter(service=service)
+        adapter = ConfluenceSpaceSyncAdapter(
+            service=service,
+            enable_v2_dual_write=settings.VECTOR_STORE_V2_DUAL_WRITE_ENABLED,
+        )
         synced_count = 0
         error_count = 0
+        v2_failed_count = 0
+        v2_failed_ids: list[str] = []
         batch_index = 0
         while True:
             result = await run_sync_ingestion(
@@ -123,6 +128,8 @@ class ConfluenceFullSyncHandler(BaseFullSyncHandler):
             )
             synced_count += result.persisted_count + result.deleted_count
             error_count += result.failed_count
+            v2_failed_count += result.v2_failed_count
+            v2_failed_ids.extend(result.v2_failed_ids)
             if result.is_last or result.transformed.stop_after_batch:
                 break
             batch_index += 1
@@ -137,6 +144,8 @@ class ConfluenceFullSyncHandler(BaseFullSyncHandler):
                 job_id=context.job_id,
                 event_id=context.event_id,
                 error_count=error_count,
+                v2_failed_count=v2_failed_count,
+                v2_failed_ids=v2_failed_ids,
             )
             raise RuntimeError("confluence_full_sync_failed")
         return TargetSyncResult(
@@ -180,7 +189,10 @@ class ConfluenceIncrementalHandler(BaseIncrementalHandler):
 
         since = self._resolve_since(context)
         result = await run_sync_ingestion(
-            port=ConfluenceSpaceSyncAdapter(service=service),
+            port=ConfluenceSpaceSyncAdapter(
+                service=service,
+                enable_v2_dual_write=settings.VECTOR_STORE_V2_DUAL_WRITE_ENABLED,
+            ),
             execution=ConfluenceSpaceIncrementalSyncExecutionRequest(
                 tenant_id=context.scope_id,
                 space_key=space_key,

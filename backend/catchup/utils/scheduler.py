@@ -42,8 +42,11 @@ from catchup.sync.backfill.channel_talk_document_article_v2 import (
 from catchup.sync.backfill.channel_talk_user_chat_v2 import (
     ChannelTalkUserChatV2BackfillService,
 )
+from catchup.sync.backfill.confluence_v2 import ConfluenceBlogpostV2BackfillService
+from catchup.sync.backfill.confluence_v2 import ConfluenceV2BackfillService
 from catchup.sync.backfill.github_issue_v2 import GithubIssueV2BackfillService
 from catchup.sync.backfill.github_pr_v2 import GithubPrV2BackfillService
+from catchup.sync.backfill.jira_issue_v2 import JiraEpicV2BackfillService
 from catchup.sync.backfill.jira_issue_v2 import JiraIssueV2BackfillService
 from catchup.sync.backfill.slack_message_v2 import SlackMessageV2BackfillService
 from catchup.sync.incremental import get_incremental_service
@@ -287,6 +290,21 @@ async def run_jira_issue_v2_backfill_job():
     )
 
 
+async def run_jira_epic_v2_backfill_job():
+    logger.info("[JIRA][EPIC_V2_BACKFILL][SCHEDULER] Starting backfill batch")
+    service = JiraEpicV2BackfillService()
+    result = await service.backfill_batch(
+        limit=settings.VECTOR_STORE_V2_BACKFILL_BATCH_SIZE,
+    )
+    logger.info(
+        "[JIRA][EPIC_V2_BACKFILL][SCHEDULER] Backfill batch completed: scanned=%s succeeded=%s skipped=%s failed=%s",
+        result.scanned,
+        result.succeeded,
+        result.skipped,
+        result.failed,
+    )
+
+
 async def run_channel_talk_user_chat_v2_backfill_job():
     logger.info(
         "[CHANNEL_TALK][USER_CHAT_V2_BACKFILL][SCHEDULER] Starting backfill batch"
@@ -314,6 +332,38 @@ async def run_channel_talk_document_article_v2_backfill_job():
     )
     logger.info(
         "[CHANNEL_TALK][DOCUMENT_ARTICLE_V2_BACKFILL][SCHEDULER] Backfill batch completed: scanned=%s succeeded=%s skipped=%s failed=%s",
+        result.scanned,
+        result.succeeded,
+        result.skipped,
+        result.failed,
+    )
+
+
+async def run_confluence_page_v2_backfill_job():
+    logger.info("[CONFLUENCE][PAGE_V2_BACKFILL][SCHEDULER] Starting backfill batch")
+    service = ConfluenceV2BackfillService()
+    result = await service.backfill_batch(
+        limit=settings.VECTOR_STORE_V2_BACKFILL_BATCH_SIZE,
+    )
+    logger.info(
+        "[CONFLUENCE][PAGE_V2_BACKFILL][SCHEDULER] Backfill batch completed: scanned=%s succeeded=%s skipped=%s failed=%s",
+        result.scanned,
+        result.succeeded,
+        result.skipped,
+        result.failed,
+    )
+
+
+async def run_confluence_blogpost_v2_backfill_job():
+    logger.info(
+        "[CONFLUENCE][BLOGPOST_V2_BACKFILL][SCHEDULER] Starting backfill batch"
+    )
+    service = ConfluenceBlogpostV2BackfillService()
+    result = await service.backfill_batch(
+        limit=settings.VECTOR_STORE_V2_BACKFILL_BATCH_SIZE,
+    )
+    logger.info(
+        "[CONFLUENCE][BLOGPOST_V2_BACKFILL][SCHEDULER] Backfill batch completed: scanned=%s succeeded=%s skipped=%s failed=%s",
         result.scanned,
         result.succeeded,
         result.skipped,
@@ -446,10 +496,34 @@ def init_scheduler():
             misfire_grace_time=900,
         )
         _scheduler.add_job(
+            run_confluence_page_v2_backfill_job,
+            trigger=CronTrigger(hour=2, minute=30, timezone=SEOUL_TZ),
+            id="confluence_page_v2_backfill",
+            name="Confluence Page v2 Backfill",
+            replace_existing=True,
+            misfire_grace_time=900,
+        )
+        _scheduler.add_job(
+            run_confluence_blogpost_v2_backfill_job,
+            trigger=CronTrigger(hour=2, minute=45, timezone=SEOUL_TZ),
+            id="confluence_blogpost_v2_backfill",
+            name="Confluence Blogpost v2 Backfill",
+            replace_existing=True,
+            misfire_grace_time=900,
+        )
+        _scheduler.add_job(
             run_jira_issue_v2_backfill_job,
             trigger=CronTrigger(hour=22, minute=0, timezone=SEOUL_TZ),
             id="jira_issue_v2_backfill",
             name="Jira Issue v2 Backfill",
+            replace_existing=True,
+            misfire_grace_time=900,
+        )
+        _scheduler.add_job(
+            run_jira_epic_v2_backfill_job,
+            trigger=CronTrigger(hour=22, minute=30, timezone=SEOUL_TZ),
+            id="jira_epic_v2_backfill",
+            name="Jira Epic v2 Backfill",
             replace_existing=True,
             misfire_grace_time=900,
         )

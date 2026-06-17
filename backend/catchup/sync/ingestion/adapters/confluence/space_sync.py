@@ -13,11 +13,18 @@ from pydantic import ValidationInfo
 from pydantic import computed_field
 from pydantic import field_validator
 
+from catchup.components.embedder.constants import EmbeddingProvider
+from catchup.components.embedder.factory import get_embedding_service
+from catchup.components.vector_db.factory import get_v2_vector_store
+from catchup.components.vector_db.v2 import VectorStore
 from catchup.connectors.atlassian.utils import parse_atlassian_datetime
 from catchup.connectors.confluence.schemas import ConfluenceBlogPostResponse
 from catchup.connectors.confluence.schemas import ConfluencePageResponse
 from catchup.db.models import SyncConnector
 from catchup.sync.audit import SyncAuditContext
+from catchup.sync.ingestion.adapters.confluence.v2_document_builder import (
+    ConfluenceV2DocumentBuilder,
+)
 from catchup.sync.ingestion.document_builders.confluence import (
     ConfluenceTransformResult,
 )
@@ -113,6 +120,7 @@ class ConfluenceSpaceFetchResult(BaseModel):
     batch_index: int = 0
     is_last: bool = True
     checkpoint: int | None = None
+    v2_failed_ids: tuple[str, ...] = ()
 
     def connector_log_summary(self) -> dict[str, object]:
         return {
@@ -120,6 +128,7 @@ class ConfluenceSpaceFetchResult(BaseModel):
             "batch_index": self.batch_index,
             "record_count": len(self.records),
             "is_last": self.is_last,
+            "v2_failed_count": len(self.v2_failed_ids),
         }
 
 
@@ -141,6 +150,8 @@ class ConfluenceSpaceTransformResult(BaseModel):
     stop_after_batch: bool = False
     space_key: str | None = None
     space_name: str | None = None
+    v2_documents: tuple[Any, ...] = ()
+    v2_failed_ids: tuple[str, ...] = ()
 
     def connector_log_summary(self) -> dict[str, object]:
         return {
@@ -148,6 +159,7 @@ class ConfluenceSpaceTransformResult(BaseModel):
             "item_count": len(self.items),
             "error_count": self.error_count,
             "stop_after_batch": self.stop_after_batch,
+            "v2_failed_count": len(self.v2_failed_ids),
         }
 
 
@@ -164,6 +176,8 @@ class ConfluenceSpacePersistResult(BaseModel):
     deleted_count: int = 0
     error_count: int = 0
     skipped: bool = False
+    v2_error_count: int = 0
+    v2_failed_ids: tuple[str, ...] = ()
 
     def connector_log_summary(self) -> dict[str, object]:
         return {
@@ -171,6 +185,7 @@ class ConfluenceSpacePersistResult(BaseModel):
             "deleted_count": self.deleted_count,
             "error_count": self.error_count,
             "skipped": self.skipped,
+            "v2_error_count": self.v2_error_count,
         }
 
 
@@ -180,6 +195,8 @@ class ConfluenceSpaceSyncExecutionResult(SyncExecutionResult):
     persisted_count: int = 0
     deleted_count: int = 0
     failed_count: int = 0
+    v2_failed_count: int = 0
+    v2_failed_ids: tuple[str, ...] = ()
     skipped: bool = False
     fetched: ConfluenceSpaceFetchResult
     transformed: ConfluenceSpaceTransformResult
@@ -202,11 +219,56 @@ class ConfluenceSpaceSyncExecutionResult(SyncExecutionResult):
         }
 
 
+class ConfluenceV2BackfillSeed(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    langchain_id: str
+    record_id: str
+    content: str
+    embedding: list[float]
+
+    @field_validator("langchain_id", "record_id")
+    @classmethod
+    def _validate_required_text(cls, value: str, info: ValidationInfo) -> str:
+        return require_text(value, info.field_name or "field")
+
+
+class ConfluenceV2BackfillExecutionRequest(SyncExecutionRequest):
+    model_config = ConfigDict(extra="forbid")
+
+    connector: Literal[SyncConnector.CONFLUENCE] = SyncConnector.CONFLUENCE
+    target: Literal["space"] = "space"
+    space_key: str
+    space_name: str | None = None
+    record_type: ConfluenceRecordType
+    seeds: tuple[ConfluenceV2BackfillSeed, ...] = ()
+    audit_context: SyncAuditContext | None = None
+
+    @field_validator("space_key")
+    @classmethod
+    def _validate_space_key(cls, value: str, info: ValidationInfo) -> str:
+        return require_text(value, info.field_name or "field")
+
+
+class ConfluenceV2BackfillExecutionResult(ConfluenceSpaceSyncExecutionResult):
+    seeds_count: int = 0
+
+
 class ConfluenceSpaceSyncAdapter:
     """Bounded Confluence space or exact content execution adapter."""
 
-    def __init__(self, *, service: ConfluenceIngestionService) -> None:
+    def __init__(
+        self,
+        *,
+        service: ConfluenceIngestionService,
+        enable_v2_dual_write: bool = False,
+        vector_store: VectorStore | None = None,
+        v2_document_builder: ConfluenceV2DocumentBuilder | None = None,
+    ) -> None:
         self._service = service
+        self._enable_v2_dual_write = enable_v2_dual_write
+        self._vector_store = vector_store
+        self._v2_document_builder = v2_document_builder or ConfluenceV2DocumentBuilder()
         self._space_context_by_key: dict[
             str,
             tuple[str, str | None, dict[str, str | None]],
@@ -325,6 +387,16 @@ class ConfluenceSpaceSyncAdapter:
                 )
                 error_count += 1
 
+        v2_documents = []
+        v2_failed_ids: tuple[str, ...] = ()
+        if self._enable_v2_dual_write:
+            v2_documents, v2_failed_ids = (
+                self._v2_document_builder.build_from_transform_results(
+                    cloud_id=self._service.cloud_id,
+                    transform_results=tuple(item.transform_result for item in items),
+                )
+            )
+
         return ConfluenceSpaceTransformResult(
             requested_count=fetched.requested_count,
             record_type=record_type,
@@ -333,6 +405,8 @@ class ConfluenceSpaceSyncAdapter:
             stop_after_batch=stop_after_batch,
             space_key=space_key,
             space_name=space_name,
+            v2_documents=tuple(v2_documents),
+            v2_failed_ids=v2_failed_ids,
         )
 
     async def summarize(
@@ -358,14 +432,41 @@ class ConfluenceSpaceSyncAdapter:
         _ = sync_window, summary
         if isinstance(execution, ConfluenceSpaceFullSyncExecutionRequest):
             error_count = transformed.error_count
+            v2_failed_ids = tuple(transformed.v2_failed_ids)
+            v2_failed_ids = await self._delete_v2_prefixes(
+                prefixes=tuple(
+                    f"confluence:{execution.record_type}:{item.content_id}:chunk:"
+                    for item in transformed.items
+                ),
+                existing_failed_ids=v2_failed_ids,
+            )
+            vector_store = await self._resolve_vector_store_for_write(
+                documents=transformed.v2_documents,
+            )
+            if vector_store is None and transformed.v2_documents:
+                v2_failed_ids = tuple(
+                    dict.fromkeys(
+                        (*v2_failed_ids, *self._document_ids(transformed.v2_documents))
+                    )
+                )
             for item in transformed.items:
                 try:
-                    await self._service._store_transform_result(
+                    item_v2_documents = self._v2_documents_for_item(
+                        transformed.v2_documents,
+                        record_type=execution.record_type,
+                        content_id=item.content_id,
+                    )
+                    item_v2_failed_ids = await self._service._store_transform_result(
                         entity_type=execution.record_type,
                         content_id=item.content_id,
                         space_key=transformed.space_key or execution.space_key,
                         transform_result=item.transform_result,
                         audit_context=execution.audit_context,
+                        vector_store=vector_store,
+                        v2_documents=item_v2_documents,
+                    )
+                    v2_failed_ids = tuple(
+                        dict.fromkeys((*v2_failed_ids, *(item_v2_failed_ids or ())))
                     )
                 except Exception as exc:
                     if self._service._is_retryable_connector_error(exc):
@@ -382,28 +483,65 @@ class ConfluenceSpaceSyncAdapter:
             return ConfluenceSpacePersistResult(
                 persisted_count=len(transformed.items),
                 error_count=error_count,
+                v2_error_count=len(v2_failed_ids),
+                v2_failed_ids=v2_failed_ids,
             )
 
         if transformed.delete_prefixes:
             for prefix in transformed.delete_prefixes:
                 await self._service.repository.delete_by_id_prefix(prefix)
+            v2_failed_ids = await self._delete_v2_prefixes(
+                prefixes=transformed.delete_prefixes,
+                existing_failed_ids=transformed.v2_failed_ids,
+            )
             return ConfluenceSpacePersistResult(
                 deleted_count=len(transformed.delete_prefixes),
+                v2_error_count=len(v2_failed_ids),
+                v2_failed_ids=v2_failed_ids,
             )
 
         error_count = transformed.error_count
+        v2_failed_ids = tuple(transformed.v2_failed_ids)
+        v2_failed_ids = await self._delete_v2_prefixes(
+            prefixes=tuple(
+                f"confluence:{execution.record_type}:{item.content_id}:chunk:"
+                for item in transformed.items
+            ),
+            existing_failed_ids=v2_failed_ids,
+        )
+        vector_store = await self._resolve_vector_store_for_write(
+            documents=transformed.v2_documents,
+        )
+        if vector_store is None and transformed.v2_documents:
+            v2_failed_ids = tuple(
+                dict.fromkeys(
+                    (*v2_failed_ids, *self._document_ids(transformed.v2_documents))
+                )
+            )
         for item in transformed.items:
-            await self._service._store_transform_result(
+            item_v2_documents = self._v2_documents_for_item(
+                transformed.v2_documents,
+                record_type=execution.record_type,
+                content_id=item.content_id,
+            )
+            item_v2_failed_ids = await self._service._store_transform_result(
                 entity_type=execution.record_type,
                 content_id=item.content_id,
                 space_key=transformed.space_key or execution.space_key,
                 transform_result=item.transform_result,
                 audit_context=execution.audit_context,
+                vector_store=vector_store,
+                v2_documents=item_v2_documents,
+            )
+            v2_failed_ids = tuple(
+                dict.fromkeys((*v2_failed_ids, *(item_v2_failed_ids or ())))
             )
         return ConfluenceSpacePersistResult(
             persisted_count=len(transformed.items),
             error_count=error_count,
             skipped=not transformed.items and error_count == 0,
+            v2_error_count=len(v2_failed_ids),
+            v2_failed_ids=v2_failed_ids,
         )
 
     def build_result(
@@ -423,6 +561,8 @@ class ConfluenceSpaceSyncAdapter:
             persisted_count=persisted.persisted_count,
             deleted_count=persisted.deleted_count,
             failed_count=persisted.error_count,
+            v2_failed_count=persisted.v2_error_count,
+            v2_failed_ids=persisted.v2_failed_ids,
             skipped=persisted.skipped,
             fetched=fetched,
             transformed=transformed,
@@ -437,8 +577,76 @@ class ConfluenceSpaceSyncAdapter:
                 "batch_index": fetched.batch_index,
                 "is_last": fetched.is_last,
                 "checkpoint": fetched.checkpoint,
+                "v2_failed_count": persisted.v2_error_count,
+                "v2_failed_ids": list(persisted.v2_failed_ids),
             },
         )
+
+    async def _resolve_vector_store_for_write(
+        self,
+        *,
+        documents: tuple[Any, ...],
+    ) -> VectorStore | None:
+        if not documents or not self._enable_v2_dual_write:
+            return None
+        try:
+            return await self._get_vector_store()
+        except Exception:
+            return None
+
+    async def _get_vector_store(self) -> VectorStore | None:
+        if not self._enable_v2_dual_write:
+            return None
+        if self._vector_store is None:
+            embeddings = get_embedding_service(
+                EmbeddingProvider.AWS_BEDROCK
+            ).get_embedder()
+            vector_store = get_v2_vector_store(embeddings)
+            await vector_store.initialize()
+            self._vector_store = vector_store
+        return self._vector_store
+
+    async def _delete_v2_prefixes(
+        self,
+        *,
+        prefixes: tuple[str, ...],
+        existing_failed_ids: tuple[str, ...],
+    ) -> tuple[str, ...]:
+        if not prefixes or not self._enable_v2_dual_write:
+            return existing_failed_ids
+
+        try:
+            vector_store = await self._get_vector_store()
+        except Exception:
+            return tuple(dict.fromkeys((*existing_failed_ids, *prefixes)))
+        if vector_store is None:
+            return tuple(dict.fromkeys((*existing_failed_ids, *prefixes)))
+
+        failed_ids = list(existing_failed_ids)
+        for prefix in prefixes:
+            try:
+                await vector_store.delete_by_id_prefix(prefix)
+            except Exception:
+                failed_ids.append(prefix)
+        return tuple(dict.fromkeys(failed_ids))
+
+    @staticmethod
+    def _v2_documents_for_item(
+        documents: tuple[Any, ...],
+        *,
+        record_type: ConfluenceRecordType,
+        content_id: str,
+    ) -> list[Any]:
+        prefix = f"confluence:{record_type}:{content_id}:chunk:"
+        return [
+            document
+            for document in documents
+            if str(getattr(document, "id", "")).startswith(prefix)
+        ]
+
+    @staticmethod
+    def _document_ids(documents: tuple[Any, ...]) -> tuple[str, ...]:
+        return tuple(str(getattr(document, "id", "")) for document in documents)
 
     async def _fetch_full_sync_page(
         self,

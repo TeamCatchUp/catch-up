@@ -67,10 +67,67 @@ class ConfluenceEmbedInput:
 
 
 @dataclass(frozen=True)
+class ConfluenceV2CommentPart:
+    type: str
+    text: str
+    comment_id: str | None = None
+    status: str | None = None
+    author_id: str | None = None
+    created_at: str | None = None
+    updated_at: str | None = None
+    resolution_status: str | None = None
+    parent_comment_id: str | None = None
+    selection: str | None = None
+
+
+@dataclass(frozen=True)
+class ConfluenceV2PreparedChunk:
+    document_id: str
+    content_id: str
+    entity_type: str
+    status: str
+    title: str
+    body_text: str
+    page_content: str
+    url: str | None
+    space_id: str | None
+    space_key: str | None
+    space_name: str | None
+    parent_page_id: str | None
+    parent_type: str | None
+    position: int | None
+    author_id: str | None
+    author_name: str | None
+    owner_id: str | None
+    created_at: str | None
+    updated_at: str | None
+    version_number: int | None
+    version_author_id: str | None
+    version_message: str | None
+    version_minor_edit: bool | None
+    labels: list[str] = field(default_factory=list)
+    chunk_index: int = 0
+    chunk_count: int = 0
+    section_hierarchy: list[str] = field(default_factory=list)
+    has_images: bool = False
+    image_urls: list[str] = field(default_factory=list)
+    comments: list[ConfluenceV2CommentPart] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class ConfluenceInlineCommentInjectionResult:
+    unmatched: list[ConfluenceCommentResponse] = field(default_factory=list)
+    matched_by_chunk_index: dict[int, list[ConfluenceV2CommentPart]] = field(
+        default_factory=dict
+    )
+
+
+@dataclass(frozen=True)
 class ConfluenceTransformResult:
     documents: list[Document]
     embed_inputs: list[ConfluenceEmbedInput]
     skipped_images: int = 0
+    v2_prepared_chunks: list[ConfluenceV2PreparedChunk] = field(default_factory=list)
 
 
 class ConfluenceTransformer:
@@ -102,7 +159,10 @@ class ConfluenceTransformer:
             space_key=space_key,
             space_name=space_name,
             parent_page_id=page.parent_id,
+            parent_type=page.parent_type,
+            position=page.position,
             author_id=page.author_id,
+            owner_id=page.owner_id,
             created_at=page.created_at,
             version=page.version,
             web_url=page.get_web_url(),
@@ -136,7 +196,10 @@ class ConfluenceTransformer:
             space_key=space_key,
             space_name=space_name,
             parent_page_id=None,
+            parent_type=None,
+            position=None,
             author_id=blogpost.author_id,
+            owner_id=None,
             created_at=blogpost.created_at,
             version=blogpost.version,
             web_url=blogpost.get_web_url(),
@@ -159,7 +222,10 @@ class ConfluenceTransformer:
         space_key: str | None,
         space_name: str | None,
         parent_page_id: str | None,
+        parent_type: str | None,
+        position: int | None,
         author_id: str | None,
+        owner_id: str | None,
         created_at: str | None,
         version,
         web_url: str | None,
@@ -204,15 +270,20 @@ class ConfluenceTransformer:
         # 4) Comment Injection
         #    - Inline: selection 매칭 성공 → 해당 chunk에 삽입
         #    - 매칭 실패 Inline + Footer → 별도 Discussion Chunk
-        unmatched_inline: list[ConfluenceCommentResponse] = []
+        inline_injection = ConfluenceInlineCommentInjectionResult()
         if inline_comments:
-            unmatched_inline = self._inject_inline_comments(chunks, inline_comments)
+            inline_injection = self._inject_inline_comments(chunks, inline_comments)
+
+        discussion_comment_parts = self._discussion_comment_parts(
+            footer_comments=footer_comments or [],
+            unmatched_inline=inline_injection.unmatched,
+        )
 
         discussion_chunk = self._build_discussion_chunk(
             chunks=chunks,
             page_title=title,
             footer_comments=footer_comments or [],
-            unmatched_inline=unmatched_inline,
+            unmatched_inline=inline_injection.unmatched,
         )
         if discussion_chunk:
             chunks.append(discussion_chunk)
@@ -220,6 +291,7 @@ class ConfluenceTransformer:
         # 5. Chunk → LangChain Document 변환
         documents: list[Document] = []
         embed_inputs: list[ConfluenceEmbedInput] = []
+        v2_prepared_chunks: list[ConfluenceV2PreparedChunk] = []
         skipped_images = 0
         total_chunks = len(chunks)
 
@@ -307,6 +379,45 @@ class ConfluenceTransformer:
                 metadata=metadata,
                 id=doc_id,
             ))
+            v2_comments = list(
+                inline_injection.matched_by_chunk_index.get(chunk.index, [])
+            )
+            if chunk.section_hierarchy == ["Discussion"]:
+                v2_comments.extend(discussion_comment_parts)
+            v2_prepared_chunks.append(
+                ConfluenceV2PreparedChunk(
+                    document_id=doc_id,
+                    content_id=content_id,
+                    entity_type=entity_type,
+                    status=status,
+                    title=title,
+                    body_text=chunk.body_text,
+                    page_content=semantic_content,
+                    url=web_url,
+                    space_id=space_id,
+                    space_key=space_key,
+                    space_name=space_name,
+                    parent_page_id=parent_page_id,
+                    parent_type=parent_type,
+                    position=position,
+                    author_id=author_id,
+                    author_name=author_name,
+                    owner_id=owner_id,
+                    created_at=created_at,
+                    updated_at=updated_at,
+                    version_number=version_number,
+                    version_author_id=version.author_id if version else None,
+                    version_message=version.message if version else None,
+                    version_minor_edit=version.minor_edit if version else None,
+                    labels=list(labels),
+                    chunk_index=chunk.index,
+                    chunk_count=total_chunks,
+                    section_hierarchy=list(chunk.section_hierarchy),
+                    has_images=has_images,
+                    image_urls=image_urls,
+                    comments=v2_comments,
+                )
+            )
 
         logger.info(
             f"[CONFLUENCE][TRANSFORM] {entity_type} '{title}' → {len(documents)} chunks"
@@ -316,6 +427,7 @@ class ConfluenceTransformer:
             documents=documents,
             embed_inputs=embed_inputs,
             skipped_images=skipped_images,
+            v2_prepared_chunks=v2_prepared_chunks,
         )
 
     def _build_embed_input(
@@ -354,12 +466,13 @@ class ConfluenceTransformer:
             self,
             chunks: list[Chunk],
             inline_comments: list[ConfluenceCommentResponse],
-    ) -> list[ConfluenceCommentResponse]:
+    ) -> ConfluenceInlineCommentInjectionResult:
         
         unmatched: list[ConfluenceCommentResponse] = []
+        matched_by_chunk_index: dict[int, list[ConfluenceV2CommentPart]] = {}
 
         if not chunks:
-            return inline_comments
+            return ConfluenceInlineCommentInjectionResult(unmatched=inline_comments)
         
         ref_to_chunk: dict[str, Chunk] = {}
         for chunk in chunks:
@@ -388,10 +501,21 @@ class ConfluenceTransformer:
                         
             if target_chunk is not None:
                 target_chunk.content = f"{target_chunk.content}\n{formatted}"
+                part = self._comment_part(
+                    part_type="inline_comment",
+                    comment=comment,
+                    text=comment_text,
+                    selection=self._extract_inline_selection(comment),
+                )
+                if part is not None:
+                    matched_by_chunk_index.setdefault(target_chunk.index, []).append(part)
             else:
                 unmatched.append(comment)
 
-        return unmatched
+        return ConfluenceInlineCommentInjectionResult(
+            unmatched=unmatched,
+            matched_by_chunk_index=matched_by_chunk_index,
+        )
 
 
     def _build_discussion_chunk(
@@ -439,6 +563,60 @@ class ConfluenceTransformer:
             char_count=len(content),
             estimated_tokens=len(content) // 4,
             image_blocks=[],
+            body_text="",
+        )
+
+    def _discussion_comment_parts(
+        self,
+        *,
+        footer_comments: list[ConfluenceCommentResponse],
+        unmatched_inline: list[ConfluenceCommentResponse],
+    ) -> list[ConfluenceV2CommentPart]:
+        parts: list[ConfluenceV2CommentPart] = []
+        for comment in unmatched_inline:
+            text = self._extract_comment_text(comment)
+            part = self._comment_part(
+                part_type="unmatched_inline_comment",
+                comment=comment,
+                text=text,
+                selection=self._extract_inline_selection(comment),
+            )
+            if part is not None:
+                parts.append(part)
+        for comment in footer_comments:
+            text = self._extract_comment_text(comment)
+            part = self._comment_part(
+                part_type="footer_comment",
+                comment=comment,
+                text=text,
+                selection=None,
+            )
+            if part is not None:
+                parts.append(part)
+        return parts
+
+    @staticmethod
+    def _comment_part(
+        *,
+        part_type: str,
+        comment: ConfluenceCommentResponse,
+        text: str,
+        selection: str | None,
+    ) -> ConfluenceV2CommentPart | None:
+        normalized = text.strip()
+        if not normalized:
+            return None
+        return ConfluenceV2CommentPart(
+            type=part_type,
+            text=normalized,
+            comment_id=comment.id,
+            status=comment.status,
+            author_id=comment.author_id,
+            created_at=comment.created_at,
+            updated_at=comment.version.created_at if comment.version else None,
+            resolution_status=comment.resolution_status,
+            parent_comment_id=comment.parent_comment_id,
+            selection=selection,
         )
 
     def _extract_comment_text(self, comment: ConfluenceCommentResponse) -> str:

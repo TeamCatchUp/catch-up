@@ -215,7 +215,7 @@ class JiraIssueV2BackfillAdapter(JiraIssueIngestionAdapterBase):
         )
         return JiraIssueSyncExecutionResult(
             tenant_id=execution.tenant_id,
-            target="issue_v2_backfill",
+            target=execution.target,
             persisted_count=persisted.persisted_count,
             deleted_count=persisted.deleted_count,
             failed_count=len(failed_ids),

@@ -9,7 +9,6 @@ from dataclasses import dataclass
 from datetime import datetime
 from datetime import timezone
 
-import structlog
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
@@ -22,30 +21,34 @@ from catchup.components.vector_db.v2.constants import (
 from catchup.components.vector_db.v2.constants import KNOWLEDGE_STORE_TABLE_NAME
 from catchup.configs.config import settings
 from catchup.db.engine import SessionLocal
-from catchup.sync.ingestion.adapters.jira import JiraIssueV2BackfillAdapter
-from catchup.sync.ingestion.adapters.jira import JiraIssueV2BackfillExecutionRequest
-from catchup.sync.ingestion.adapters.jira import JiraIssueV2BackfillSeed
-from catchup.sync.ingestion.adapters.jira import create_jira_issue_v2_backfill_adapter
+from catchup.sync.backfill.jira_issue_v2 import build_mark_finished_statement
+from catchup.sync.backfill.jira_issue_v2 import build_mark_processing_statement
+from catchup.sync.ingestion.adapters.confluence import ConfluenceV2BackfillAdapter
+from catchup.sync.ingestion.adapters.confluence import (
+    ConfluenceV2BackfillExecutionRequest,
+)
+from catchup.sync.ingestion.adapters.confluence import ConfluenceV2BackfillSeed
+from catchup.sync.ingestion.factories.confluence import (
+    create_confluence_v2_backfill_adapter,
+)
 from catchup.sync.ingestion.pipeline import run_sync_ingestion
 from catchup.sync.ingestion.schemas import SyncExecutionResult
 from catchup.sync.ingestion.schemas import SyncWindow
 
 SessionFactory = Callable[[], AbstractContextManager[Session]]
-BackfillAdapterFactory = Callable[[str], Awaitable[JiraIssueV2BackfillAdapter]]
+BackfillAdapterFactory = Callable[[str], Awaitable[ConfluenceV2BackfillAdapter]]
 SEED_INSERT_BATCH_SIZE = 100
 HYDRATE_PIPELINE_BATCH_SIZE = 50
 
-logger = structlog.get_logger(__name__)
 
-
-def _validate_jira_backfill_entity_type(entity_type: str) -> str:
-    if entity_type not in {"issue", "epic"}:
-        raise ValueError(f"unsupported jira backfill entity_type: {entity_type}")
+def _validate_confluence_backfill_entity_type(entity_type: str) -> str:
+    if entity_type not in {"page", "blogpost"}:
+        raise ValueError(f"unsupported confluence backfill entity_type: {entity_type}")
     return entity_type
 
 
 @dataclass(slots=True, frozen=True)
-class JiraIssueV1Seed:
+class ConfluenceV1Seed:
     langchain_id: str
     record_id: str
     content: str
@@ -53,7 +56,7 @@ class JiraIssueV1Seed:
 
 
 @dataclass(slots=True, frozen=True)
-class JiraIssueV1Target:
+class ConfluenceV1Target:
     scope_id: str
     target_id: str
     target_name: str
@@ -61,39 +64,39 @@ class JiraIssueV1Target:
 
 
 @dataclass(slots=True, frozen=True)
-class JiraIssueV2BackfillResult:
+class ConfluenceV2BackfillResult:
     scanned: int
     succeeded: int
     skipped: int
     failed: int
 
 
-class JiraIssueV2BackfillService:
+class ConfluenceV2BackfillService:
     def __init__(
         self,
         *,
-        adapter_factory: BackfillAdapterFactory = create_jira_issue_v2_backfill_adapter,
+        adapter_factory: BackfillAdapterFactory = create_confluence_v2_backfill_adapter,
         session_factory: SessionFactory = SessionLocal,
         collection_name: str = settings.PGVECTOR_COLLECTION_NAME,
-        entity_type: str = "issue",
+        entity_type: str = "page",
     ) -> None:
         self._adapter_factory = adapter_factory
         self._session_factory = session_factory
         self._collection_name = collection_name
-        self._entity_type = _validate_jira_backfill_entity_type(entity_type)
+        self._entity_type = _validate_confluence_backfill_entity_type(entity_type)
 
     async def backfill_batch(
         self,
         *,
         limit: int,
         locked_by: str | None = None,
-    ) -> JiraIssueV2BackfillResult:
+    ) -> ConfluenceV2BackfillResult:
         del locked_by
         targets = await asyncio.to_thread(self._fetch_candidate_targets_sync, limit)
         succeeded = 0
         skipped = 0
         failed = 0
-        adapters: dict[str, JiraIssueV2BackfillAdapter] = {}
+        adapters: dict[str, ConfluenceV2BackfillAdapter] = {}
 
         for target in targets:
             try:
@@ -108,7 +111,6 @@ class JiraIssueV2BackfillService:
                 )
                 await asyncio.to_thread(self._upsert_seed_rows_sync, target, seeds)
                 adapter = await self._get_adapter_for_scope(target.scope_id, adapters)
-
                 failed_ids: list[str] = []
                 backfill_count = 0
                 after_record_id: str | None = None
@@ -157,13 +159,8 @@ class JiraIssueV2BackfillService:
                     [],
                     force_failed=True,
                 )
-                logger.warning(
-                    "jira_issue_v2_backfill_target_failed",
-                    **_target_log_context(target, entity_type=self._entity_type),
-                    exc_info=True,
-                )
 
-        return JiraIssueV2BackfillResult(
+        return ConfluenceV2BackfillResult(
             scanned=len(targets),
             succeeded=succeeded,
             skipped=skipped,
@@ -173,23 +170,20 @@ class JiraIssueV2BackfillService:
     async def _get_adapter_for_scope(
         self,
         scope_id: str,
-        adapters: dict[str, JiraIssueV2BackfillAdapter],
-    ) -> JiraIssueV2BackfillAdapter:
+        adapters: dict[str, ConfluenceV2BackfillAdapter],
+    ) -> ConfluenceV2BackfillAdapter:
         if scope_id not in adapters:
             adapters[scope_id] = await self._adapter_factory(scope_id)
         return adapters[scope_id]
 
-    def _fetch_candidate_targets_sync(self, limit: int) -> list[JiraIssueV1Target]:
+    def _fetch_candidate_targets_sync(self, limit: int) -> list[ConfluenceV1Target]:
         with self._session_factory() as db:
             rows = db.execute(
-                build_jira_v1_target_query(self._entity_type),
-                {
-                    "collection_name": self._collection_name,
-                    "limit": limit,
-                },
+                build_confluence_v1_target_query(self._entity_type),
+                {"collection_name": self._collection_name, "limit": limit},
             ).mappings()
             return [
-                JiraIssueV1Target(
+                ConfluenceV1Target(
                     scope_id=str(row["scope_id"]),
                     target_id=str(row["target_id"]),
                     target_name=str(row["target_name"]),
@@ -201,24 +195,24 @@ class JiraIssueV2BackfillService:
 
     def _fetch_candidate_seeds_for_target_sync(
         self,
-        target: JiraIssueV1Target,
-    ) -> list[JiraIssueV1Seed]:
+        target: ConfluenceV1Target,
+    ) -> list[ConfluenceV1Seed]:
         with self._session_factory() as db:
             rows = db.execute(
-                build_jira_v1_target_seed_query(self._entity_type),
+                build_confluence_v1_target_seed_query(self._entity_type),
                 {
                     "collection_name": self._collection_name,
                     "scope_id": target.scope_id,
                     "target_id": target.target_id,
                 },
             ).mappings()
-            seeds: list[JiraIssueV1Seed] = []
+            seeds: list[ConfluenceV1Seed] = []
             for row in rows:
                 embedding = _embedding_to_list(row["embedding"])
                 if not embedding:
                     continue
                 seeds.append(
-                    JiraIssueV1Seed(
+                    ConfluenceV1Seed(
                         langchain_id=str(row["langchain_id"]),
                         record_id=str(row["record_id"]),
                         content=str(row["content"] or ""),
@@ -229,8 +223,8 @@ class JiraIssueV2BackfillService:
 
     def _upsert_seed_rows_sync(
         self,
-        target: JiraIssueV1Target,
-        seeds: list[JiraIssueV1Seed],
+        target: ConfluenceV1Target,
+        seeds: list[ConfluenceV1Seed],
     ) -> int:
         if not seeds:
             return 0
@@ -258,11 +252,11 @@ class JiraIssueV2BackfillService:
 
     def _fetch_seeded_seed_chunk_for_target_sync(
         self,
-        target: JiraIssueV1Target,
+        target: ConfluenceV1Target,
         after_record_id: str | None,
         after_langchain_id: str | None,
         limit: int,
-    ) -> list[JiraIssueV1Seed]:
+    ) -> list[ConfluenceV1Seed]:
         with self._session_factory() as db:
             rows = db.execute(
                 build_fetch_pending_seed_chunk_query(self._entity_type),
@@ -275,7 +269,7 @@ class JiraIssueV2BackfillService:
                 },
             ).mappings()
             return [
-                JiraIssueV1Seed(
+                ConfluenceV1Seed(
                     langchain_id=str(row["langchain_id"]),
                     record_id=str(row["record_id"]),
                     content=str(row["content"] or ""),
@@ -285,12 +279,12 @@ class JiraIssueV2BackfillService:
                 if _embedding_to_list(row["embedding"])
             ]
 
-    def _mark_processing_sync(self, target: JiraIssueV1Target) -> bool:
+    def _mark_processing_sync(self, target: ConfluenceV1Target) -> bool:
         with self._session_factory() as db:
             result = db.execute(
                 build_mark_processing_statement(),
                 {
-                    "connector": "jira",
+                    "connector": "confluence",
                     "entity_type": self._entity_type,
                     "scope_id": target.scope_id,
                     "target_id": target.target_id,
@@ -303,7 +297,7 @@ class JiraIssueV2BackfillService:
 
     def _mark_finished_sync(
         self,
-        target: JiraIssueV1Target,
+        target: ConfluenceV1Target,
         backfill_count: int,
         failed_ids: list[str],
         *,
@@ -315,7 +309,7 @@ class JiraIssueV2BackfillService:
             db.execute(
                 build_mark_finished_statement(),
                 {
-                    "connector": "jira",
+                    "connector": "confluence",
                     "entity_type": self._entity_type,
                     "scope_id": target.scope_id,
                     "target_id": target.target_id,
@@ -330,11 +324,11 @@ class JiraIssueV2BackfillService:
             db.commit()
 
 
-class JiraEpicV2BackfillService(JiraIssueV2BackfillService):
+class ConfluenceBlogpostV2BackfillService(ConfluenceV2BackfillService):
     def __init__(
         self,
         *,
-        adapter_factory: BackfillAdapterFactory = create_jira_issue_v2_backfill_adapter,
+        adapter_factory: BackfillAdapterFactory = create_confluence_v2_backfill_adapter,
         session_factory: SessionFactory = SessionLocal,
         collection_name: str = settings.PGVECTOR_COLLECTION_NAME,
     ) -> None:
@@ -342,23 +336,24 @@ class JiraEpicV2BackfillService(JiraIssueV2BackfillService):
             adapter_factory=adapter_factory,
             session_factory=session_factory,
             collection_name=collection_name,
-            entity_type="epic",
+            entity_type="blogpost",
         )
 
 
 def _build_execution_request(
-    target: JiraIssueV1Target,
-    seeds: list[JiraIssueV1Seed],
+    target: ConfluenceV1Target,
+    seeds: list[ConfluenceV1Seed],
     *,
-    entity_type: str = "issue",
-) -> JiraIssueV2BackfillExecutionRequest:
-    entity_type = _validate_jira_backfill_entity_type(entity_type)
-    return JiraIssueV2BackfillExecutionRequest(
+    entity_type: str,
+) -> ConfluenceV2BackfillExecutionRequest:
+    return ConfluenceV2BackfillExecutionRequest(
         tenant_id=target.scope_id,
-        target=f"{entity_type}_v2_backfill",
-        project_key=target.target_id,
+        target="space",
+        space_key=target.target_id,
+        space_name=target.target_name,
+        record_type=_validate_confluence_backfill_entity_type(entity_type),
         seeds=tuple(
-            JiraIssueV2BackfillSeed(
+            ConfluenceV2BackfillSeed(
                 langchain_id=seed.langchain_id,
                 record_id=seed.record_id,
                 content=seed.content,
@@ -369,32 +364,16 @@ def _build_execution_request(
     )
 
 
-def _target_log_context(
-    target: JiraIssueV1Target,
-    *,
-    entity_type: str = "issue",
-) -> dict[str, object]:
-    return {
-        "connector": "jira",
-        "entity_type": _validate_jira_backfill_entity_type(entity_type),
-        "scope_id": target.scope_id,
-        "target_id": target.target_id,
-        "target_name": target.target_name,
-        "expected_count": target.expected_count,
-    }
-
-
 def _failed_ids_from_result(
     result: SyncExecutionResult,
-    seeds: list[JiraIssueV1Seed],
+    seeds: list[ConfluenceV1Seed],
 ) -> list[str]:
-    failed_ids = result.metadata.get("failed_ids")
+    failed_ids = result.metadata.get("v2_failed_ids")
     if isinstance(failed_ids, list):
         return [str(failed_id) for failed_id in failed_ids]
     if result.failed_count <= 0:
         return []
-    seed_ids = [seed.langchain_id for seed in seeds]
-    return seed_ids[: result.failed_count]
+    return [seed.langchain_id for seed in seeds[: result.failed_count]]
 
 
 def _build_sync_window() -> SyncWindow:
@@ -402,10 +381,7 @@ def _build_sync_window() -> SyncWindow:
     return SyncWindow(window_start=now, window_end=now)
 
 
-def _chunked(
-    values: list[JiraIssueV1Seed],
-    size: int,
-) -> list[list[JiraIssueV1Seed]]:
+def _chunked(values: list[ConfluenceV1Seed], size: int) -> list[list[ConfluenceV1Seed]]:
     return [values[index : index + size] for index in range(0, len(values), size)]
 
 
@@ -424,124 +400,68 @@ def _embedding_to_list(value) -> list[float]:
     return list(value)
 
 
-def _jira_issue_v1_cte(entity_type: str = "issue") -> str:
-    entity_type = _validate_jira_backfill_entity_type(entity_type)
+def _confluence_v1_cte(entity_type: str) -> str:
+    entity_type = _validate_confluence_backfill_entity_type(entity_type)
     return f"""
-        WITH v1_{entity_type} AS (
+        WITH v1_confluence AS (
             SELECT
-                e.id AS v1_langchain_id,
+                e.id AS langchain_id,
                 e.document AS content,
                 e.embedding AS embedding,
                 COALESCE(
-                    NULLIF(e.cmetadata ->> 'issue_key', ''),
+                    NULLIF(e.cmetadata ->> 'id', ''),
                     NULLIF(e.cmetadata ->> 'record_id', ''),
-                    substring(e.id from '^jira:{entity_type}:(.+)$')
+                    substring(e.id from '^confluence:{entity_type}:([^:]+):chunk:')
                 ) AS record_id,
-                COALESCE(
-                    NULLIF(e.cmetadata ->> 'project_key', ''),
-                    split_part(
-                    COALESCE(
-                        NULLIF(e.cmetadata ->> 'issue_key', ''),
-                        NULLIF(e.cmetadata ->> 'record_id', ''),
-                        substring(e.id from '^jira:{entity_type}:(.+)$')
-                    ),
-                        '-',
-                        1
-                    )
-                ) AS target_id,
                 COALESCE(
                     NULLIF(e.cmetadata ->> 'cloud_id', ''),
                     NULLIF(e.cmetadata ->> 'scope_id', '')
-                ) AS source_scope_id,
-                NULLIF(e.cmetadata ->> 'url', '') AS issue_url,
-                NULLIF(e.cmetadata ->> 'updated_at', '')::timestamptz
-                    AS source_updated_at
+                ) AS scope_id,
+                COALESCE(
+                    NULLIF(e.cmetadata ->> 'space_key', ''),
+                    NULLIF(e.cmetadata ->> 'target_id', '')
+                ) AS target_id,
+                COALESCE(
+                    NULLIF(e.cmetadata ->> 'space_name', ''),
+                    NULLIF(e.cmetadata ->> 'target_name', ''),
+                    NULLIF(e.cmetadata ->> 'space_key', ''),
+                    NULLIF(e.cmetadata ->> 'target_id', '')
+                ) AS target_name,
+                NULLIF(e.cmetadata ->> 'updated_at', '')::timestamptz AS source_updated_at
             FROM langchain_pg_embedding e
             JOIN langchain_pg_collection c
               ON e.collection_id = c.uuid
             WHERE c.name = :collection_name
-              AND e.cmetadata ->> 'source' = 'jira'
+              AND e.cmetadata ->> 'source' = 'confluence'
               AND e.cmetadata ->> 'entity_type' = '{entity_type}'
-        ),
-        project_candidates AS (
-            SELECT
-                ('jira:{entity_type}:' || jp.cloud_id || ':' || v1_{entity_type}.target_id || ':'
-                    || v1_{entity_type}.record_id) AS langchain_id,
-                v1_{entity_type}.record_id,
-                v1_{entity_type}.content,
-                v1_{entity_type}.embedding,
-                v1_{entity_type}.target_id,
-                jp.cloud_id AS scope_id,
-                jp.project_name AS target_name,
-                v1_{entity_type}.source_updated_at,
-                count(*) OVER (
-                    PARTITION BY v1_{entity_type}.v1_langchain_id
-                ) AS project_match_count
-            FROM v1_{entity_type}
-            JOIN jira_projects jp
-              ON jp.project_key = v1_{entity_type}.target_id
-             AND (
-                    jp.cloud_id = v1_{entity_type}.source_scope_id
-                    OR (
-                        v1_{entity_type}.source_scope_id IS NULL
-                        AND substring(v1_{entity_type}.issue_url from '^https?://([^/]+)')
-                            = substring(jp.url from '^https?://([^/]+)')
-                    )
-             )
-            WHERE COALESCE(v1_{entity_type}.record_id, '') != ''
-              AND COALESCE(v1_{entity_type}.target_id, '') != ''
-        ),
-        v1_{entity_type}_with_target AS (
-            SELECT
-                langchain_id,
-                record_id,
-                content,
-                embedding,
-                target_id,
-                scope_id,
-                target_name,
-                source_updated_at
-            FROM project_candidates
-            WHERE project_match_count = 1
         )
     """
 
 
-def build_jira_issue_v1_target_query():
-    return build_jira_v1_target_query("issue")
-
-
-def build_jira_epic_v1_target_query():
-    return build_jira_v1_target_query("epic")
-
-
-def build_jira_v1_target_query(entity_type: str = "issue"):
-    entity_type = _validate_jira_backfill_entity_type(entity_type)
+def build_confluence_v1_target_query(entity_type: str = "page"):
+    entity_type = _validate_confluence_backfill_entity_type(entity_type)
     return text(
         f"""
-        {_jira_issue_v1_cte(entity_type)},
+        {_confluence_v1_cte(entity_type)},
         candidates AS (
             SELECT
-                v1_{entity_type}_with_target.scope_id,
-                v1_{entity_type}_with_target.target_id,
-                v1_{entity_type}_with_target.target_name,
+                v1_confluence.scope_id,
+                v1_confluence.target_id,
+                v1_confluence.target_name,
                 (
                     COALESCE(v2.{KNOWLEDGE_STORE_METADATA_JSON_COLUMN}::jsonb, '{{}}'::jsonb) = '{{}}'::jsonb
                     OR v2.{KNOWLEDGE_STORE_ID_COLUMN} IS NULL
                     OR (
-                        v1_{entity_type}_with_target.source_updated_at IS NOT NULL
-                        AND (
-                            v2.updated_at < v1_{entity_type}_with_target.source_updated_at
-                            OR (
-                                v2.updated_at = v1_{entity_type}_with_target.source_updated_at
-                                AND v2.content IS DISTINCT FROM v1_{entity_type}_with_target.content
-                            )
-                        )
+                        v1_confluence.source_updated_at IS NOT NULL
+                        AND v2.updated_at < v1_confluence.source_updated_at
                     )
                 ) AS needs_backfill
-            FROM v1_{entity_type}_with_target
+            FROM v1_confluence
             LEFT JOIN {KNOWLEDGE_STORE_TABLE_NAME} v2
-              ON v2.{KNOWLEDGE_STORE_ID_COLUMN} = v1_{entity_type}_with_target.langchain_id
+              ON v2.{KNOWLEDGE_STORE_ID_COLUMN} = v1_confluence.langchain_id
+            WHERE COALESCE(v1_confluence.scope_id, '') != ''
+              AND COALESCE(v1_confluence.target_id, '') != ''
+              AND COALESCE(v1_confluence.record_id, '') != ''
         ),
         grouped AS (
             SELECT
@@ -553,76 +473,58 @@ def build_jira_v1_target_query(entity_type: str = "issue"):
             FROM candidates
             GROUP BY scope_id, target_id, target_name
         )
-        SELECT
-            grouped.scope_id,
-            grouped.target_id,
-            grouped.target_name,
-            grouped.expected_count
+        SELECT scope_id, target_id, target_name, expected_count
         FROM grouped
         LEFT JOIN vector_store_v2_backfill_states state
-          ON state.connector = 'jira'
+          ON state.connector = 'confluence'
          AND state.entity_type = '{entity_type}'
          AND state.scope_id = grouped.scope_id
          AND state.target_id = grouped.target_id
         WHERE grouped.pending_count > 0
           AND (state.state IS NULL OR state.state != 'processing')
-        ORDER BY grouped.scope_id, grouped.target_id
+        ORDER BY scope_id, target_id
         LIMIT :limit
         """
     )
 
 
-def build_jira_issue_v1_target_seed_query():
-    return build_jira_v1_target_seed_query("issue")
-
-
-def build_jira_epic_v1_target_seed_query():
-    return build_jira_v1_target_seed_query("epic")
-
-
-def build_jira_v1_target_seed_query(entity_type: str = "issue"):
-    entity_type = _validate_jira_backfill_entity_type(entity_type)
+def build_confluence_v1_target_seed_query(entity_type: str = "page"):
+    entity_type = _validate_confluence_backfill_entity_type(entity_type)
     return text(
         f"""
-        {_jira_issue_v1_cte(entity_type)},
+        {_confluence_v1_cte(entity_type)},
         candidates AS (
             SELECT
-                v1_{entity_type}_with_target.langchain_id,
-                v1_{entity_type}_with_target.record_id,
-                v1_{entity_type}_with_target.content,
-                v1_{entity_type}_with_target.embedding,
-                v1_{entity_type}_with_target.scope_id,
-                v1_{entity_type}_with_target.target_id,
+                v1_confluence.langchain_id,
+                v1_confluence.record_id,
+                v1_confluence.content,
+                v1_confluence.embedding,
+                v1_confluence.scope_id,
+                v1_confluence.target_id,
                 (
                     COALESCE(v2.{KNOWLEDGE_STORE_METADATA_JSON_COLUMN}::jsonb, '{{}}'::jsonb) = '{{}}'::jsonb
                     OR v2.{KNOWLEDGE_STORE_ID_COLUMN} IS NULL
                     OR (
-                        v1_{entity_type}_with_target.source_updated_at IS NOT NULL
-                        AND (
-                            v2.updated_at < v1_{entity_type}_with_target.source_updated_at
-                            OR (
-                                v2.updated_at = v1_{entity_type}_with_target.source_updated_at
-                                AND v2.content IS DISTINCT FROM v1_{entity_type}_with_target.content
-                            )
-                        )
+                        v1_confluence.source_updated_at IS NOT NULL
+                        AND v2.updated_at < v1_confluence.source_updated_at
                     )
                 ) AS needs_backfill
-            FROM v1_{entity_type}_with_target
+            FROM v1_confluence
             LEFT JOIN {KNOWLEDGE_STORE_TABLE_NAME} v2
-              ON v2.{KNOWLEDGE_STORE_ID_COLUMN} = v1_{entity_type}_with_target.langchain_id
+              ON v2.{KNOWLEDGE_STORE_ID_COLUMN} = v1_confluence.langchain_id
         )
         SELECT langchain_id, record_id, content, embedding
         FROM candidates
         WHERE scope_id = :scope_id
           AND target_id = :target_id
           AND needs_backfill
-        ORDER BY target_id, record_id, langchain_id
+        ORDER BY record_id, langchain_id
         """
     )
 
 
-def build_upsert_seed_rows_statement(entity_type: str = "issue"):
-    entity_type = _validate_jira_backfill_entity_type(entity_type)
+def build_upsert_seed_rows_statement(entity_type: str = "page"):
+    entity_type = _validate_confluence_backfill_entity_type(entity_type)
     return text(
         f"""
         INSERT INTO {KNOWLEDGE_STORE_TABLE_NAME} (
@@ -652,12 +554,12 @@ def build_upsert_seed_rows_statement(entity_type: str = "issue"):
             :content,
             CAST(:embedding AS vector),
             '{{}}'::json,
-            'jira',
+            'confluence',
             '{entity_type}',
             :record_id,
             'cloud',
             :scope_id,
-            'project',
+            'space',
             :target_id,
             :target_name,
             NULL,
@@ -692,8 +594,8 @@ def build_upsert_seed_rows_statement(entity_type: str = "issue"):
     )
 
 
-def build_fetch_pending_seed_chunk_query(entity_type: str = "issue"):
-    entity_type = _validate_jira_backfill_entity_type(entity_type)
+def build_fetch_pending_seed_chunk_query(entity_type: str = "page"):
+    entity_type = _validate_confluence_backfill_entity_type(entity_type)
     return text(
         f"""
         SELECT
@@ -702,7 +604,7 @@ def build_fetch_pending_seed_chunk_query(entity_type: str = "issue"):
             {KNOWLEDGE_STORE_CONTENT_COLUMN} AS content,
             {KNOWLEDGE_STORE_EMBEDDING_COLUMN} AS embedding
         FROM {KNOWLEDGE_STORE_TABLE_NAME}
-        WHERE source = 'jira'
+        WHERE source = 'confluence'
           AND entity_type = '{entity_type}'
           AND scope_id = :scope_id
           AND target_id = :target_id
@@ -717,63 +619,5 @@ def build_fetch_pending_seed_chunk_query(entity_type: str = "issue"):
           )
         ORDER BY record_id, {KNOWLEDGE_STORE_ID_COLUMN}
         LIMIT :limit
-        """
-    )
-
-
-def build_mark_processing_statement():
-    return text(
-        """
-        INSERT INTO vector_store_v2_backfill_states (
-            connector,
-            entity_type,
-            scope_id,
-            target_id,
-            state,
-            expected_count,
-            backfill_count,
-            failed_ids,
-            succeeded_at,
-            failed_at
-        )
-        VALUES (
-            :connector,
-            :entity_type,
-            :scope_id,
-            :target_id,
-            'processing',
-            :expected_count,
-            0,
-            '[]'::jsonb,
-            NULL,
-            NULL
-        )
-        ON CONFLICT (connector, entity_type, scope_id, target_id) DO UPDATE SET
-            state = 'processing',
-            expected_count = EXCLUDED.expected_count,
-            backfill_count = 0,
-            failed_ids = '[]'::jsonb,
-            succeeded_at = NULL,
-            failed_at = NULL
-        WHERE vector_store_v2_backfill_states.state != 'processing'
-        RETURNING id
-        """
-    )
-
-
-def build_mark_finished_statement():
-    return text(
-        """
-        UPDATE vector_store_v2_backfill_states
-        SET state = :state,
-            expected_count = :expected_count,
-            backfill_count = :backfill_count,
-            failed_ids = CAST(:failed_ids AS jsonb),
-            succeeded_at = :succeeded_at,
-            failed_at = :failed_at
-        WHERE connector = :connector
-          AND entity_type = :entity_type
-          AND scope_id = :scope_id
-          AND target_id = :target_id
         """
     )

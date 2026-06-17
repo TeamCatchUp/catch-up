@@ -12,6 +12,7 @@ from fastapi.concurrency import run_in_threadpool
 from catchup.components.embedder.constants import EmbeddingProvider
 from catchup.components.embedder.factory import get_embedding_service
 from catchup.components.vector_db.factory import get_pgvector_repository
+from catchup.components.vector_db.factory import get_v2_vector_store
 from catchup.connectors.atlassian.exceptions import AtlassianTokenExpiredError
 from catchup.connectors.atlassian.exceptions import AtlassianTokenNotFoundError
 from catchup.connectors.atlassian.oauth_client import AtlassianOAuthClient
@@ -21,6 +22,7 @@ from catchup.db.atlassian import oauth_repository
 from catchup.db.engine import SessionLocal
 from catchup.sync.common.exceptions import SyncConnectorException
 from catchup.sync.common.exceptions import SyncInternalException
+from catchup.sync.ingestion.adapters.confluence import ConfluenceV2BackfillAdapter
 from catchup.sync.ingestion.services.confluence import ConfluenceIngestionService
 
 logger = logging.getLogger(__name__)
@@ -93,3 +95,16 @@ async def create_confluence_ingestion_service(
             "Confluence ingestion service 초기화에 실패했습니다",
             metadata={"cloud_id": cloud_id},
         ) from exc
+
+
+async def create_confluence_v2_backfill_adapter(
+    cloud_id: str,
+) -> ConfluenceV2BackfillAdapter:
+    service = await create_confluence_ingestion_service(cloud_id=cloud_id)
+    embeddings = get_embedding_service(EmbeddingProvider.AWS_BEDROCK).get_embedder()
+    vector_store = get_v2_vector_store(embeddings)
+    await vector_store.initialize()
+    return ConfluenceV2BackfillAdapter(
+        service=service,
+        vector_store=vector_store,
+    )

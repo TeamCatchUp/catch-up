@@ -46,11 +46,23 @@ from catchup.sync.ingestion.vector_records.github_pr import GithubPrVectorRecord
 from catchup.sync.ingestion.vector_records.github_pr_mapper import (
     GithubPrV2RecordMapper,
 )
+from catchup.sync.ingestion.vector_records.confluence import ConfluenceBlogpostVectorRecord
+from catchup.sync.ingestion.vector_records.confluence import ConfluenceChunkMetadata
+from catchup.sync.ingestion.vector_records.confluence import ConfluenceContentMetadata
+from catchup.sync.ingestion.vector_records.confluence import ConfluenceData
+from catchup.sync.ingestion.vector_records.confluence import ConfluenceDataPart
+from catchup.sync.ingestion.vector_records.confluence import ConfluencePageVectorRecord
+from catchup.sync.ingestion.vector_records.confluence_mapper import (
+    ConfluenceV2RecordMapper,
+)
 from catchup.sync.ingestion.vector_records.jira_issue import JiraIssueData
 from catchup.sync.ingestion.vector_records.jira_issue import JiraIssueDataPart
+from catchup.sync.ingestion.vector_records.jira_issue import JiraEpicMetadata
+from catchup.sync.ingestion.vector_records.jira_issue import JiraEpicVectorRecord
 from catchup.sync.ingestion.vector_records.jira_issue import JiraIssueMetadata
 from catchup.sync.ingestion.vector_records.jira_issue import JiraIssueUserMetadata
 from catchup.sync.ingestion.vector_records.jira_issue import JiraIssueVectorRecord
+from catchup.sync.ingestion.vector_records.jira_epic_mapper import JiraEpicV2RecordMapper
 from catchup.sync.ingestion.vector_records.jira_issue_mapper import (
     JiraIssueV2RecordMapper,
 )
@@ -85,8 +97,18 @@ __all__ = [
     "GithubPrUserMetadata",
     "GithubPrV2RecordMapper",
     "GithubPrVectorRecord",
+    "ConfluenceBlogpostVectorRecord",
+    "ConfluenceChunkMetadata",
+    "ConfluenceContentMetadata",
+    "ConfluenceData",
+    "ConfluenceDataPart",
+    "ConfluencePageVectorRecord",
+    "ConfluenceV2RecordMapper",
     "JiraIssueData",
     "JiraIssueDataPart",
+    "JiraEpicMetadata",
+    "JiraEpicV2RecordMapper",
+    "JiraEpicVectorRecord",
     "JiraIssueMetadata",
     "JiraIssueUserMetadata",
     "JiraIssueV2RecordMapper",
