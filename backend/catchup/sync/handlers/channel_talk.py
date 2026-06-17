@@ -11,6 +11,7 @@ from catchup.audit.actions import IncrementalSyncAction
 from catchup.audit.metadata import FullSyncEventAuditMetadata
 from catchup.audit.metadata import IncrementalRecordAuditMetadata
 from catchup.audit.utils import audit_log
+from catchup.configs.config import settings
 from catchup.connectors.channel_talk.credential_loader import (
     load_channel_talk_connection,
 )
@@ -84,6 +85,7 @@ class ChannelTalkFullSyncHandler(BaseFullSyncHandler):
 
     def __init__(self) -> None:
         self._user_chat_adapter = ChannelTalkUserChatFullSyncIngestionAdapter(
+            enable_v2_dual_write=settings.VECTOR_STORE_V2_DUAL_WRITE_ENABLED,
             max_user_chat_pages_per_run=(
                 CHANNEL_TALK_USER_CHAT_FULL_SYNC_MAX_PAGES_PER_BATCH
             ),
@@ -345,7 +347,9 @@ class ChannelTalkIncrementalHandler(BaseIncrementalHandler):
     connector = "channel_talk"
 
     def __init__(self) -> None:
-        self._user_chat_adapter = ChannelTalkUserChatIncrementalIngestionAdapter()
+        self._user_chat_adapter = ChannelTalkUserChatIncrementalIngestionAdapter(
+            enable_v2_dual_write=settings.VECTOR_STORE_V2_DUAL_WRITE_ENABLED,
+        )
         self._article_adapter = ChannelTalkArticleIncrementalIngestionAdapter()
 
     @audit_log(
