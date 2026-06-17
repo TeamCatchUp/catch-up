@@ -411,7 +411,7 @@ def init_scheduler():
         )
         _scheduler.add_job(
             run_channel_talk_user_chat_v2_backfill_job,
-            trigger=CronTrigger(hour=18, minute=50, timezone=SEOUL_TZ),
+            trigger=CronTrigger(hour=19, minute=20, timezone=SEOUL_TZ),
             id="channel_talk_user_chat_v2_backfill",
             name="Channel Talk UserChat v2 Backfill",
             replace_existing=True,
