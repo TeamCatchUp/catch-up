@@ -1,5 +1,20 @@
 """Typed vector-store v2 ingestion records."""
 
+from catchup.sync.ingestion.vector_records.channel_talk_document_article import (
+    ChannelTalkDocumentArticleData,
+)
+from catchup.sync.ingestion.vector_records.channel_talk_document_article import (
+    ChannelTalkDocumentArticleDataPart,
+)
+from catchup.sync.ingestion.vector_records.channel_talk_document_article import (
+    ChannelTalkDocumentArticleMetadata,
+)
+from catchup.sync.ingestion.vector_records.channel_talk_document_article import (
+    ChannelTalkDocumentArticleVectorRecord,
+)
+from catchup.sync.ingestion.vector_records.channel_talk_document_article_mapper import (
+    ChannelTalkDocumentArticleV2RecordMapper,
+)
 from catchup.sync.ingestion.vector_records.channel_talk_user_chat import (
     ChannelTalkUserChatData,
 )
@@ -53,6 +68,11 @@ __all__ = [
     "ChannelTalkUserChatMetadata",
     "ChannelTalkUserChatV2RecordMapper",
     "ChannelTalkUserChatVectorRecord",
+    "ChannelTalkDocumentArticleData",
+    "ChannelTalkDocumentArticleDataPart",
+    "ChannelTalkDocumentArticleMetadata",
+    "ChannelTalkDocumentArticleV2RecordMapper",
+    "ChannelTalkDocumentArticleVectorRecord",
     "GithubIssueData",
     "GithubIssueDataPart",
     "GithubIssueMetadata",
