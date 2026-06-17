@@ -9,10 +9,12 @@ from typing import Any
 from typing import Literal
 
 from fastapi.concurrency import run_in_threadpool
+from langchain_core.documents import Document
 from sqlalchemy.orm import Session
 
 from catchup.components.embedder.service import AwsBedrockEmbeddingService
 from catchup.components.vector_db.pgvector import PGVectorRepository
+from catchup.components.vector_db.v2 import VectorStore
 from catchup.configs.config import settings
 from catchup.connectors.atlassian.token_manager import AtlassianTokenProvider
 from catchup.connectors.atlassian.utils import parse_atlassian_datetime
@@ -243,13 +245,15 @@ class ConfluenceIngestionService:
         space_key: str,
         transform_result: ConfluenceTransformResult,
         audit_context: SyncAuditContext | None = None,
-    ) -> None:
+        vector_store: VectorStore | None = None,
+        v2_documents: list[Document] | None = None,
+    ) -> tuple[str, ...]:
         documents = transform_result.documents
         await self.repository.delete_by_id_prefix(
             f"confluence:{entity_type}:{content_id}:chunk:"
         )
         if not documents:
-            return
+            return ()
 
         doc_ids = [doc.id for doc in documents]
         embeddings = await self._generate_embeddings(
@@ -269,6 +273,32 @@ class ConfluenceIngestionService:
                 f"doc_count={len(documents)}"
             ),
         )
+        if vector_store is None or not v2_documents:
+            return ()
+
+        try:
+            embedding_by_id = dict(zip(doc_ids, embeddings, strict=True))
+            v2_document_ids = [str(document.id) for document in v2_documents]
+            v2_embeddings = [
+                embedding_by_id[document_id] for document_id in v2_document_ids
+            ]
+            await vector_store.upsert_documents(
+                v2_documents,
+                ids=v2_document_ids,
+                embeddings=v2_embeddings,
+            )
+        except Exception as exc:
+            logger.warning(
+                "[CONFLUENCE][V2] Failed to upsert v2 documents: "
+                "entity_type=%s, content_id=%s, doc_count=%s, error=%s",
+                entity_type,
+                content_id,
+                len(v2_documents),
+                exc,
+                exc_info=True,
+            )
+            return tuple(str(document.id) for document in v2_documents)
+        return ()
 
     # ================================================================
     # Full Sync
