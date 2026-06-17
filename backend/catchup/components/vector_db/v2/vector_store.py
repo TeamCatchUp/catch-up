@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import asyncio
+from collections.abc import Callable
 from collections.abc import Sequence
+from contextlib import AbstractContextManager
 
 import structlog
 from langchain.embeddings import Embeddings
@@ -8,6 +11,8 @@ from langchain_core.documents import Document
 from langchain_postgres import PGEngine
 from langchain_postgres import PGVectorStore
 from sqlalchemy import inspect
+from sqlalchemy import text
+from sqlalchemy.orm import Session
 
 from catchup.components.vector_db.v2.constants import KNOWLEDGE_STORE_CONTENT_COLUMN
 from catchup.components.vector_db.v2.constants import KNOWLEDGE_STORE_EMBEDDING_COLUMN
@@ -22,6 +27,7 @@ from catchup.components.vector_db.v2.constants import KNOWLEDGE_STORE_TABLE_NAME
 from catchup.components.vector_db.v2.constants import knowledge_store_id_column
 from catchup.components.vector_db.v2.constants import knowledge_store_metadata_columns
 from catchup.configs.config import settings
+from catchup.db.engine import SessionLocal
 from catchup.db.engine import engine as sqlalchemy_engine
 
 logger = structlog.get_logger(__name__)
@@ -37,11 +43,13 @@ class VectorStore:
         pg_engine: PGEngine | None = None,
         vector_store: PGVectorStore | None = None,
         table_name: str = KNOWLEDGE_STORE_TABLE_NAME,
+        session_factory: Callable[[], AbstractContextManager[Session]] = SessionLocal,
     ) -> None:
         self._embeddings = embeddings
         self._pg_engine = pg_engine
         self._vector_store = vector_store
         self._table_name = table_name
+        self._session_factory = session_factory
         self._initialized = vector_store is not None
 
     async def initialize(self) -> None:
@@ -145,6 +153,36 @@ class VectorStore:
             )
             raise
 
+    async def delete_by_id_prefix(self, prefix: str) -> int:
+        normalized_prefix = prefix.strip()
+        if not normalized_prefix:
+            return 0
+        return await asyncio.to_thread(self._delete_by_id_prefix_sync, normalized_prefix)
+
+    def _delete_by_id_prefix_sync(self, prefix: str) -> int:
+        statement = text(
+            f"""
+            DELETE FROM {self._table_name}
+            WHERE {KNOWLEDGE_STORE_ID_COLUMN} LIKE :id_prefix ESCAPE '\\'
+            """
+        )
+        try:
+            with self._session_factory() as db:
+                result = db.execute(
+                    statement,
+                    {"id_prefix": f"{_escape_like_prefix(prefix)}%"},
+                )
+                db.commit()
+                return int(result.rowcount or 0)
+        except Exception as exc:
+            logger.exception(
+                "v2_vector_store_delete_by_id_prefix_failed",
+                table_name=self._table_name,
+                prefix=prefix,
+                error=str(exc),
+            )
+            raise
+
     def _ensure_store(self) -> PGVectorStore:
         if not self._initialized or self._vector_store is None:
             raise RuntimeError(
@@ -169,3 +207,11 @@ class VectorStore:
         if any(document_id is None for document_id in resolved_ids):
             raise ValueError("document ids are required")
         return [str(document_id) for document_id in resolved_ids]
+
+
+def _escape_like_prefix(prefix: str) -> str:
+    return (
+        prefix.replace("\\", "\\\\")
+        .replace("%", "\\%")
+        .replace("_", "\\_")
+    )
