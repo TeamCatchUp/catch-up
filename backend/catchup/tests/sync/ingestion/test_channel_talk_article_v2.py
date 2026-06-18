@@ -252,7 +252,12 @@ async def test_channel_talk_article_v2_mapper_allows_empty_body_with_seed_conten
             fetched_article_ids=("article-1",),
         ),
     )
-    prepared = transformed.documents[0].model_copy(update={"page_content": "   "})
+    prepared = transformed.documents[0].model_copy(
+        update={
+            "page_content": "   ",
+            "chunk_body_text": "   ",
+        }
+    )
     logical = prepared.logical_metadata
     core = logical.document_article_core
     prepared = prepared.model_copy(
@@ -316,7 +321,8 @@ async def test_channel_talk_article_v2_mapper_uses_raw_text_fallbacks_only():
     core = logical.document_article_core
     prepared = prepared.model_copy(
         update={
-            "page_content": "Body first line.\nSecond line.",
+            "page_content": "Synthetic chunk heading\n\nSecond line.",
+            "chunk_body_text": "Body first line.\nSecond line.",
             "logical_metadata": logical.model_copy(
                 update={
                     "document_article_core": core.model_copy(
@@ -341,6 +347,7 @@ async def test_channel_talk_article_v2_mapper_uses_raw_text_fallbacks_only():
     document = ChannelTalkDocumentArticleV2RecordMapper().to_document(prepared)
 
     assert document.metadata["title"] == "Body first line."
+    assert document.metadata["body"] == "Body first line.\nSecond line."
     assert document.metadata["target_name"] == ""
     assert document.metadata["title"] != "article-1"
     assert document.metadata["target_name"] != "space-123"

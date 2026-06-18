@@ -139,7 +139,7 @@ class ArticleTransformer:
             title=published_source.title,
         )
         header = self._build_context_header(source=published_source)
-        chunks = self._chunker.chunk_article_content(
+        chunks = self._chunker.chunk_article_content_with_body(
             header=header,
             body=raw_content,
         )
@@ -148,7 +148,8 @@ class ArticleTransformer:
         # Document 조립 단계: chunk마다 동일한 logical metadata schema를 채우고,
         # deterministic id를 부여해 persist 단계의 replace-by-prefix 흐름과 맞춘다.
         prepared_documents: list[ArticlePreparedDocumentPayload] = []
-        for chunk_index, page_content in enumerate(chunks):
+        for chunk_index, chunk in enumerate(chunks):
+            page_content = chunk.contextual_content
             logical_metadata = self._build_logical_metadata(
                 execution=execution,
                 sync_window=sync_window,
@@ -176,6 +177,7 @@ class ArticleTransformer:
                     document_id=document_id,
                     article_id=current_article.article_id,
                     page_content=page_content,
+                    chunk_body_text=chunk.body_text,
                     logical_metadata=logical_metadata,
                     storage_metadata=logical_metadata.to_storage_metadata(),
                 )

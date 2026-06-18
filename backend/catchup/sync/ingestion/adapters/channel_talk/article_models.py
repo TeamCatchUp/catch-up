@@ -167,6 +167,7 @@ class ChannelTalkArticlePreparedDocument(BaseModel):
     document_id: str
     article_id: str
     page_content: str
+    chunk_body_text: str
     logical_metadata: ChannelTalkDocumentArticleLogicalMetadata
     storage_metadata: dict[str, object]
 
@@ -185,6 +186,7 @@ class ArticlePreparedDocumentPayload:
     document_id: str
     article_id: str
     page_content: str
+    chunk_body_text: str
     logical_metadata: ChannelTalkDocumentArticleLogicalMetadata
     storage_metadata: dict[str, object]
 

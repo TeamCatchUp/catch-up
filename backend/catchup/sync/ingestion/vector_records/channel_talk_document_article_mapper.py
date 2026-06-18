@@ -76,7 +76,8 @@ class ChannelTalkDocumentArticleV2RecordMapper:
         publication = core.publication
         chunk = core.chunk
 
-        body = _text_or_empty(article.body_text)
+        content_value = content if content is not None else prepared.page_content
+        body = _text_or_empty(prepared.chunk_body_text)
         record_id = article.article_id
         scope_id = space.channel_id
         target_id = space.space_id
@@ -95,7 +96,7 @@ class ChannelTalkDocumentArticleV2RecordMapper:
 
         return ChannelTalkDocumentArticleVectorRecord(
             langchain_id=document_id or prepared.document_id,
-            content=content if content is not None else prepared.page_content,
+            content=content_value,
             embedding=embedding,
             source="channel_talk",
             entity_type="document_article",

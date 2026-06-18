@@ -139,6 +139,7 @@ class ChannelTalkArticleFullSyncIngestionAdapter:
                     document_id=document.document_id,
                     article_id=document.article_id,
                     page_content=document.page_content,
+                    chunk_body_text=document.chunk_body_text,
                     logical_metadata=document.logical_metadata,
                     storage_metadata=document.storage_metadata,
                 )
