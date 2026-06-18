@@ -75,7 +75,7 @@ export default function AgentEditorSettings() {
               <HelpIcon className="text-icon-normal-neutral size-5 shrink-0" aria-hidden="true" />
               <p className="text-body-xsmall text-text-normal-neutral">왜 바로 만들지 않나요?</p>
             </div>
-            <p className="text-body-xsmall text-text-normal-alternative w-full whitespace-pre-wrap">
+            <p className="text-body-xsmall text-text-normal-alternative w-full">
               문의가 들어오자마자 초안을 만들면 상담사가 직접 대응할 수 있는 문의까지 불필요하게 초안이 쌓여요.
               <br />
               고객이 문의를 보내는 동안 맥락이 충분히 모인 뒤에 초안을 만들어, 더 정확하게 도와드려요.

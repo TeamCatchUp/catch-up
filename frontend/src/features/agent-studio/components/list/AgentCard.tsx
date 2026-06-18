@@ -45,7 +45,7 @@ export default function AgentCard({
             <DefaultProfileIcon className="size-full" aria-hidden="true" />
           )}
         </div>
-        <span className="max-w-24 overflow-hidden text-ellipsis whitespace-nowrap">{agent.authorName}</span>
+        <span className="max-w-24 truncate">{agent.authorName}</span>
       </div>
       <span className="bg-dim-black-10 size-1 shrink-0 rounded-full" aria-hidden="true" />
       <span className="shrink-0">수정일</span>
