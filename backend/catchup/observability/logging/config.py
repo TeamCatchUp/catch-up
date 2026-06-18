@@ -47,6 +47,7 @@ def _setup_third_party_loggers(log_level: int) -> None:
     logging.getLogger("langchain_aws").setLevel(logging.INFO)
     logging.getLogger("asyncio").setLevel(logging.WARNING)
     logging.getLogger("urllib3").setLevel(logging.WARNING)
+    logging.getLogger("slack_sdk").setLevel(logging.INFO)
     
     for name in ["uvicorn", "uvicorn.error", "fastapi"]:
         logger = logging.getLogger(name)
