@@ -41,7 +41,7 @@ def knowledge_store_metadata_columns() -> list[Column]:
         Column("internal_author_id", "VARCHAR(128)"),
         Column("title", "TEXT", nullable=False),
         Column("body", "TEXT", nullable=False),
-        Column("data", "JSONB", nullable=False),
+        Column("data", "JSONB"),
         Column("url", "TEXT", nullable=False),
         Column("created_at", "TIMESTAMPTZ", nullable=False),
         Column("updated_at", "TIMESTAMPTZ", nullable=False),

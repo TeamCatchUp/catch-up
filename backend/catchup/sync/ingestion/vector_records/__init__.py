@@ -1,12 +1,6 @@
 """Typed vector-store v2 ingestion records."""
 
 from catchup.sync.ingestion.vector_records.channel_talk_document_article import (
-    ChannelTalkDocumentArticleData,
-)
-from catchup.sync.ingestion.vector_records.channel_talk_document_article import (
-    ChannelTalkDocumentArticleDataPart,
-)
-from catchup.sync.ingestion.vector_records.channel_talk_document_article import (
     ChannelTalkDocumentArticleMetadata,
 )
 from catchup.sync.ingestion.vector_records.channel_talk_document_article import (
@@ -77,8 +71,6 @@ __all__ = [
     "ChannelTalkUserChatMetadata",
     "ChannelTalkUserChatV2RecordMapper",
     "ChannelTalkUserChatVectorRecord",
-    "ChannelTalkDocumentArticleData",
-    "ChannelTalkDocumentArticleDataPart",
     "ChannelTalkDocumentArticleMetadata",
     "ChannelTalkDocumentArticleV2RecordMapper",
     "ChannelTalkDocumentArticleVectorRecord",

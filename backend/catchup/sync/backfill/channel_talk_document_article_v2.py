@@ -708,7 +708,7 @@ def build_upsert_seed_rows_statement():
             NULL,
             '',
             '',
-            '{{}}'::jsonb,
+            NULL,
             '',
             :seeded_at,
             :seeded_at,
@@ -729,7 +729,7 @@ def build_upsert_seed_rows_statement():
             internal_author_id = NULL,
             title = '',
             body = '',
-            data = '{{}}'::jsonb,
+            data = NULL,
             url = '',
             updated_at = EXCLUDED.updated_at,
             synced_at = EXCLUDED.synced_at
