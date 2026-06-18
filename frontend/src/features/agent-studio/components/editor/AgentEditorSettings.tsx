@@ -7,7 +7,9 @@ import ClockIcon from '@/public/icons/icon/clock.svg';
 import HelpIcon from '@/public/icons/icon/help.svg';
 import KebabHorizontalIcon from '@/public/icons/icon/kebab_horizontal.svg';
 import TagIcon from '@/public/icons/icon/tag.svg';
+import { MoreButtonContent } from '@/shared/components/layout/topNavbar/MoreButtonModal';
 import { Button } from '@/shared/components/ui/button';
+import { DropdownMenu, DropdownMenuTrigger } from '@/shared/components/ui/dropdown-menu';
 
 import { AGENT_STUDIO_SETTINGS_FIXTURE } from '../../fixtures/agentStudioFixtures';
 import { useAgentEditorSettingsForm } from '../../hooks/useAgentEditorSettingsForm';
@@ -25,14 +27,19 @@ export default function AgentEditorSettings() {
         <Button variant="icon-only-gray" size="md" aria-label="Agent Studio로 돌아가기" onClick={() => router.back()}>
           <ArrowBackIcon className="size-6" aria-hidden="true" />
         </Button>
-        <Button variant="icon-only-gray" size="md" aria-label="설정 더보기">
-          <KebabHorizontalIcon className="size-6" aria-hidden="true" />
-        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="icon-only-gray" size="md" aria-label="설정 더보기">
+              <KebabHorizontalIcon className="size-6" aria-hidden="true" />
+            </Button>
+          </DropdownMenuTrigger>
+          <MoreButtonContent />
+        </DropdownMenu>
       </header>
       <div className="flex min-w-0 flex-col items-start gap-8 px-9 pt-5 pb-9">
         <div className="flex w-full items-center gap-3">
           <h1 className="text-heading-xlarge text-text-normal-strong min-w-0 flex-1 truncate">설정</h1>
-          <Button variant="box-outline-gray" size="lg" disabled={!form.canPublish} onClick={form.handlePublish}>
+          <Button variant="box-solid-primary" size="lg" disabled={!form.canPublish} onClick={form.handlePublish}>
             배포하기
           </Button>
         </div>
