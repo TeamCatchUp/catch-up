@@ -374,13 +374,21 @@ class JiraIssueIngestionAdapterTests(IsolatedAsyncioTestCase):
         self.assertEqual(repository.store_calls[0]["ids"], ["jira:epic:GRT-EPIC"])
         self.assertEqual(
             vector_store.upsert_calls[0]["ids"],
-            ["jira:epic:cloud-1:GRT:GRT-EPIC"],
+            ["jira:issue:cloud-1:GRT:GRT-EPIC"],
         )
         self.assertEqual(
             vector_store.upsert_calls[0]["documents"][0].metadata["entity_type"],
-            "epic",
+            "issue",
         )
-        self.assertIn("jira_epic", vector_store.upsert_calls[0]["documents"][0].metadata)
+        self.assertIn("jira_issue", vector_store.upsert_calls[0]["documents"][0].metadata)
+        self.assertNotIn(
+            "jira_epic",
+            vector_store.upsert_calls[0]["documents"][0].metadata,
+        )
+        self.assertEqual(
+            vector_store.upsert_calls[0]["documents"][0].metadata["jira_issue"]["type"],
+            "Epic",
+        )
         self.assertEqual(persisted.persisted_count, 1)
         self.assertEqual(persisted.v2_error_count, 0)
 

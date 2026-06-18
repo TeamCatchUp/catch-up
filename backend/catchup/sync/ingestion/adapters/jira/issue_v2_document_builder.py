@@ -7,9 +7,6 @@ from langchain_core.documents import Document
 
 from catchup.connectors.jira.schemas import JiraIssue
 from catchup.sync.ingestion.adapters.jira.issue_execution import ParsedJiraIssueDocument
-from catchup.sync.ingestion.vector_records.jira_epic_mapper import (
-    JiraEpicV2RecordMapper,
-)
 from catchup.sync.ingestion.vector_records.jira_issue_mapper import (
     JiraIssueV2RecordMapper,
 )
@@ -24,10 +21,8 @@ class JiraIssueV2DocumentBuilder:
         self,
         *,
         mapper: JiraIssueV2RecordMapper | None = None,
-        epic_mapper: JiraEpicV2RecordMapper | None = None,
     ) -> None:
         self.mapper = mapper or JiraIssueV2RecordMapper()
-        self.epic_mapper = epic_mapper or JiraEpicV2RecordMapper()
 
     def build_from_parsed_documents(
         self,
@@ -44,7 +39,7 @@ class JiraIssueV2DocumentBuilder:
                 continue
             try:
                 documents.append(
-                    self._mapper_for_issue(parsed.issue).to_document(
+                    self.mapper.to_document(
                         parsed.issue,
                         cloud_id=cloud_id,
                         content=parsed.document.page_content,
@@ -82,7 +77,7 @@ class JiraIssueV2DocumentBuilder:
                 failed_issue_keys.append(issue.key)
                 continue
             try:
-                document = self._mapper_for_issue(issue).to_document(
+                document = self.mapper.to_document(
                     issue,
                     cloud_id=cloud_id,
                     content=seed.content,
@@ -109,14 +104,6 @@ class JiraIssueV2DocumentBuilder:
             document_ids.append(seed.langchain_id)
 
         return documents, document_ids, tuple(dict.fromkeys(failed_issue_keys))
-
-    def _mapper_for_issue(
-        self,
-        issue: JiraIssue,
-    ) -> JiraIssueV2RecordMapper | JiraEpicV2RecordMapper:
-        if (issue.issue_type or "").strip().lower() == "epic":
-            return self.epic_mapper
-        return self.mapper
 
 
 class JiraIssueV2BackfillSeedLike(Protocol):

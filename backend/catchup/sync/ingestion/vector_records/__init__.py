@@ -57,12 +57,9 @@ from catchup.sync.ingestion.vector_records.confluence_mapper import (
 )
 from catchup.sync.ingestion.vector_records.jira_issue import JiraIssueData
 from catchup.sync.ingestion.vector_records.jira_issue import JiraIssueDataPart
-from catchup.sync.ingestion.vector_records.jira_issue import JiraEpicMetadata
-from catchup.sync.ingestion.vector_records.jira_issue import JiraEpicVectorRecord
 from catchup.sync.ingestion.vector_records.jira_issue import JiraIssueMetadata
 from catchup.sync.ingestion.vector_records.jira_issue import JiraIssueUserMetadata
 from catchup.sync.ingestion.vector_records.jira_issue import JiraIssueVectorRecord
-from catchup.sync.ingestion.vector_records.jira_epic_mapper import JiraEpicV2RecordMapper
 from catchup.sync.ingestion.vector_records.jira_issue_mapper import (
     JiraIssueV2RecordMapper,
 )
@@ -106,9 +103,6 @@ __all__ = [
     "ConfluenceV2RecordMapper",
     "JiraIssueData",
     "JiraIssueDataPart",
-    "JiraEpicMetadata",
-    "JiraEpicV2RecordMapper",
-    "JiraEpicVectorRecord",
     "JiraIssueMetadata",
     "JiraIssueUserMetadata",
     "JiraIssueV2RecordMapper",

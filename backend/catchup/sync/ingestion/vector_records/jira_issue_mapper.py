@@ -52,7 +52,6 @@ class JiraIssueV2RecordMapper:
         synced_at = synced_at or datetime.now(timezone.utc)
         parts = self._parts(issue)
         body = "\n\n".join(part.text for part in parts)
-
         return JiraIssueVectorRecord(
             langchain_id=f"jira:issue:{cloud_id}:{issue.project_key}:{issue.key}",
             content=content,
@@ -77,7 +76,7 @@ class JiraIssueV2RecordMapper:
             synced_at=synced_at,
             jira_issue=JiraIssueMetadata(
                 issue_id=issue.id,
-                issue_type=issue.issue_type,
+                type=issue.issue_type,
                 status=issue.status,
                 status_category=issue.status_category,
                 priority=issue.priority,
