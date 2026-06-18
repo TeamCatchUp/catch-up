@@ -47,6 +47,8 @@ from catchup.sync.backfill.confluence_v2 import ConfluenceV2BackfillService
 from catchup.sync.backfill.github_issue_v2 import GithubIssueV2BackfillService
 from catchup.sync.backfill.github_pr_v2 import GithubPrV2BackfillService
 from catchup.sync.backfill.jira_issue_v2 import JiraIssueV2BackfillService
+from catchup.sync.backfill.sequential_v2 import SequentialBackfillSpec
+from catchup.sync.backfill.sequential_v2 import run_sequential_v2_backfill
 from catchup.sync.backfill.slack_message_v2 import SlackMessageV2BackfillService
 from catchup.sync.incremental import get_incremental_service
 from catchup.sync.incremental.dead_record_recovery import (
@@ -57,6 +59,56 @@ logger = logging.getLogger(__name__)
 
 _scheduler: AsyncIOScheduler | None = None
 SEOUL_TZ = ZoneInfo("Asia/Seoul")
+VECTOR_STORE_V2_BACKFILL_SEQUENCE: tuple[SequentialBackfillSpec, ...] = (
+    SequentialBackfillSpec(
+        key="github/pr",
+        connector="github",
+        entity_type="pr",
+        service_factory=GithubPrV2BackfillService,
+    ),
+    SequentialBackfillSpec(
+        key="github/issue",
+        connector="github",
+        entity_type="issue",
+        service_factory=GithubIssueV2BackfillService,
+    ),
+    SequentialBackfillSpec(
+        key="slack/message",
+        connector="slack",
+        entity_type="message",
+        service_factory=SlackMessageV2BackfillService,
+    ),
+    SequentialBackfillSpec(
+        key="channel_talk/user_chat",
+        connector="channel_talk",
+        entity_type="user_chat",
+        service_factory=ChannelTalkUserChatV2BackfillService,
+    ),
+    SequentialBackfillSpec(
+        key="channel_talk/document_article",
+        connector="channel_talk",
+        entity_type="document_article",
+        service_factory=ChannelTalkArticleV2BackfillService,
+    ),
+    SequentialBackfillSpec(
+        key="confluence/page",
+        connector="confluence",
+        entity_type="page",
+        service_factory=ConfluenceV2BackfillService,
+    ),
+    SequentialBackfillSpec(
+        key="confluence/blogpost",
+        connector="confluence",
+        entity_type="blogpost",
+        service_factory=ConfluenceBlogpostV2BackfillService,
+    ),
+    SequentialBackfillSpec(
+        key="jira/issue",
+        connector="jira",
+        entity_type="issue",
+        service_factory=JiraIssueV2BackfillService,
+    ),
+)
 
 
 async def refresh_jira_dynamic_webhooks():
@@ -229,125 +281,21 @@ async def poll_channel_talk_document_incremental():
     )
 
 
-async def run_github_pr_v2_backfill_job():
-    logger.info("[GITHUB][PR_V2_BACKFILL][SCHEDULER] Starting backfill batch")
-    service = GithubPrV2BackfillService()
-    result = await service.backfill_batch(
-        limit=settings.VECTOR_STORE_V2_BACKFILL_BATCH_SIZE,
+async def run_vector_store_v2_sequential_backfill_job():
+    logger.info(
+        "[VECTOR_STORE_V2_BACKFILL][SCHEDULER] Starting sequential backfill run"
+    )
+    result = await run_sequential_v2_backfill(
+        VECTOR_STORE_V2_BACKFILL_SEQUENCE,
+        batch_size=settings.VECTOR_STORE_V2_BACKFILL_BATCH_SIZE,
+        locked_by="scheduler",
     )
     logger.info(
-        "[GITHUB][PR_V2_BACKFILL][SCHEDULER] Backfill batch completed: scanned=%s succeeded=%s skipped=%s failed=%s",
-        result.scanned,
-        result.succeeded,
-        result.skipped,
-        result.failed,
-    )
-
-
-async def run_github_issue_v2_backfill_job():
-    logger.info("[GITHUB][ISSUE_V2_BACKFILL][SCHEDULER] Starting backfill batch")
-    service = GithubIssueV2BackfillService()
-    result = await service.backfill_batch(
-        limit=settings.VECTOR_STORE_V2_BACKFILL_BATCH_SIZE,
-    )
-    logger.info(
-        "[GITHUB][ISSUE_V2_BACKFILL][SCHEDULER] Backfill batch completed: scanned=%s succeeded=%s skipped=%s failed=%s",
-        result.scanned,
-        result.succeeded,
-        result.skipped,
-        result.failed,
-    )
-
-
-async def run_slack_message_v2_backfill_job():
-    logger.info("[SLACK][MESSAGE_V2_BACKFILL][SCHEDULER] Starting backfill batch")
-    service = SlackMessageV2BackfillService()
-    result = await service.backfill_batch(
-        limit=settings.VECTOR_STORE_V2_BACKFILL_BATCH_SIZE,
-    )
-    logger.info(
-        "[SLACK][MESSAGE_V2_BACKFILL][SCHEDULER] Backfill batch completed: scanned=%s succeeded=%s skipped=%s failed=%s",
-        result.scanned,
-        result.succeeded,
-        result.skipped,
-        result.failed,
-    )
-
-
-async def run_jira_issue_v2_backfill_job():
-    logger.info("[JIRA][ISSUE_V2_BACKFILL][SCHEDULER] Starting backfill batch")
-    service = JiraIssueV2BackfillService()
-    result = await service.backfill_batch(
-        limit=settings.VECTOR_STORE_V2_BACKFILL_BATCH_SIZE,
-    )
-    logger.info(
-        "[JIRA][ISSUE_V2_BACKFILL][SCHEDULER] Backfill batch completed: scanned=%s succeeded=%s skipped=%s failed=%s",
-        result.scanned,
-        result.succeeded,
-        result.skipped,
-        result.failed,
-    )
-
-
-async def run_channel_talk_user_chat_v2_backfill_job():
-    logger.info(
-        "[CHANNEL_TALK][USER_CHAT_V2_BACKFILL][SCHEDULER] Starting backfill batch"
-    )
-    service = ChannelTalkUserChatV2BackfillService()
-    result = await service.backfill_batch(
-        limit=settings.VECTOR_STORE_V2_BACKFILL_BATCH_SIZE,
-    )
-    logger.info(
-        "[CHANNEL_TALK][USER_CHAT_V2_BACKFILL][SCHEDULER] Backfill batch completed: scanned=%s succeeded=%s skipped=%s failed=%s",
-        result.scanned,
-        result.succeeded,
-        result.skipped,
-        result.failed,
-    )
-
-
-async def run_channel_talk_document_article_v2_backfill_job():
-    logger.info(
-        "[CHANNEL_TALK][DOCUMENT_ARTICLE_V2_BACKFILL][SCHEDULER] Starting backfill batch"
-    )
-    service = ChannelTalkArticleV2BackfillService()
-    result = await service.backfill_batch(
-        limit=settings.VECTOR_STORE_V2_BACKFILL_BATCH_SIZE,
-    )
-    logger.info(
-        "[CHANNEL_TALK][DOCUMENT_ARTICLE_V2_BACKFILL][SCHEDULER] Backfill batch completed: scanned=%s succeeded=%s skipped=%s failed=%s",
-        result.scanned,
-        result.succeeded,
-        result.skipped,
-        result.failed,
-    )
-
-
-async def run_confluence_page_v2_backfill_job():
-    logger.info("[CONFLUENCE][PAGE_V2_BACKFILL][SCHEDULER] Starting backfill batch")
-    service = ConfluenceV2BackfillService()
-    result = await service.backfill_batch(
-        limit=settings.VECTOR_STORE_V2_BACKFILL_BATCH_SIZE,
-    )
-    logger.info(
-        "[CONFLUENCE][PAGE_V2_BACKFILL][SCHEDULER] Backfill batch completed: scanned=%s succeeded=%s skipped=%s failed=%s",
-        result.scanned,
-        result.succeeded,
-        result.skipped,
-        result.failed,
-    )
-
-
-async def run_confluence_blogpost_v2_backfill_job():
-    logger.info(
-        "[CONFLUENCE][BLOGPOST_V2_BACKFILL][SCHEDULER] Starting backfill batch"
-    )
-    service = ConfluenceBlogpostV2BackfillService()
-    result = await service.backfill_batch(
-        limit=settings.VECTOR_STORE_V2_BACKFILL_BATCH_SIZE,
-    )
-    logger.info(
-        "[CONFLUENCE][BLOGPOST_V2_BACKFILL][SCHEDULER] Backfill batch completed: scanned=%s succeeded=%s skipped=%s failed=%s",
+        "[VECTOR_STORE_V2_BACKFILL][SCHEDULER] Sequential backfill run completed: status=%s stop_reason=%s entity_count=%s completed_entities=%s scanned=%s succeeded=%s skipped=%s failed=%s",
+        result.status,
+        result.stop_reason,
+        len(result.entities),
+        result.completed_entities,
         result.scanned,
         result.succeeded,
         result.skipped,
@@ -437,71 +385,19 @@ def init_scheduler():
         misfire_grace_time=120,
     )
 
-    # TODO : 시작 시점만 정하고 각 Job 종료 이후에 다음 Job이 시작되도록 변경 고려 (현재는 각 Job이 독립적으로 실행되어 동시에 여러 Job이 실행될 수 있음)
     if settings.VECTOR_STORE_V2_BACKFILL_SCHEDULE_ENABLED:
         _scheduler.add_job(
-            run_github_pr_v2_backfill_job,
-            trigger=CronTrigger(hour=4, minute=15, timezone=SEOUL_TZ),
-            id="github_pr_v2_backfill",
-            name="GitHub PR v2 Backfill",
+            run_vector_store_v2_sequential_backfill_job,
+            trigger=CronTrigger(
+                hour=settings.VECTOR_STORE_V2_BACKFILL_CRON_HOUR,
+                minute=settings.VECTOR_STORE_V2_BACKFILL_CRON_MINUTE,
+                timezone=SEOUL_TZ,
+            ),
+            id="vector_store_v2_sequential_backfill",
+            name="Vector Store v2 Sequential Backfill",
             replace_existing=True,
             misfire_grace_time=900,
-        )
-        _scheduler.add_job(
-            run_github_issue_v2_backfill_job,
-            trigger=CronTrigger(hour=6, minute=40, timezone=SEOUL_TZ),
-            id="github_issue_v2_backfill",
-            name="GitHub Issue v2 Backfill",
-            replace_existing=True,
-            misfire_grace_time=900,
-        )
-        _scheduler.add_job(
-            run_slack_message_v2_backfill_job,
-            trigger=CronTrigger(hour=12, minute=50, timezone=SEOUL_TZ),
-            id="slack_message_v2_backfill",
-            name="Slack Message v2 Backfill",
-            replace_existing=True,
-            misfire_grace_time=900,
-        )
-        _scheduler.add_job(
-            run_channel_talk_user_chat_v2_backfill_job,
-            trigger=CronTrigger(hour=22, minute=55, timezone=SEOUL_TZ),
-            id="channel_talk_user_chat_v2_backfill",
-            name="Channel Talk UserChat v2 Backfill",
-            replace_existing=True,
-            misfire_grace_time=900,
-        )
-        _scheduler.add_job(
-            run_channel_talk_document_article_v2_backfill_job,
-            trigger=CronTrigger(hour=1, minute=10, timezone=SEOUL_TZ),
-            id="channel_talk_document_article_v2_backfill",
-            name="Channel Talk Document Article v2 Backfill",
-            replace_existing=True,
-            misfire_grace_time=900,
-        )
-        _scheduler.add_job(
-            run_confluence_page_v2_backfill_job,
-            trigger=CronTrigger(hour=2, minute=30, timezone=SEOUL_TZ),
-            id="confluence_page_v2_backfill",
-            name="Confluence Page v2 Backfill",
-            replace_existing=True,
-            misfire_grace_time=900,
-        )
-        _scheduler.add_job(
-            run_confluence_blogpost_v2_backfill_job,
-            trigger=CronTrigger(hour=2, minute=45, timezone=SEOUL_TZ),
-            id="confluence_blogpost_v2_backfill",
-            name="Confluence Blogpost v2 Backfill",
-            replace_existing=True,
-            misfire_grace_time=900,
-        )
-        _scheduler.add_job(
-            run_jira_issue_v2_backfill_job,
-            trigger=CronTrigger(hour=22, minute=0, timezone=SEOUL_TZ),
-            id="jira_issue_v2_backfill",
-            name="Jira Issue v2 Backfill",
-            replace_existing=True,
-            misfire_grace_time=900,
+            max_instances=1,
         )
     
     _scheduler.start()
