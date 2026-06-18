@@ -31,6 +31,8 @@ def test_jira_issue_v2_backfill_targets_join_jira_projects_for_cloud_scope() -> 
     assert "substring(v1_issue_source.issue_url from '^https?://([^/]+)')" in sql
     assert "project_match_count = 1" in sql
     assert "canonical_rank = 1" in sql
+    assert "v2.internal_author_id IS NULL" in sql
+    assert "#>> '{jira_issue,assignee,account_id}'" in sql
     assert "state.connector = 'jira'" in sql
     assert "state.entity_type = 'issue'" in sql
 
@@ -44,6 +46,8 @@ def test_jira_issue_v2_backfill_seed_query_builds_v2_document_ids() -> None:
     assert "'jira:issue:' || jp.cloud_id" in sql
     assert "'jira:epic:' || jp.cloud_id" not in sql
     assert "project_match_count = 1" in sql
+    assert "v2.internal_author_id IS NULL" in sql
+    assert "#>> '{jira_issue,assignee,account_id}'" in sql
 
 
 def test_jira_issue_v2_backfill_reads_epic_sources_into_issue_rows() -> None:

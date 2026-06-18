@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import nullcontext
 from datetime import datetime
 from datetime import timezone
 from types import SimpleNamespace
@@ -8,14 +9,21 @@ from unittest import IsolatedAsyncioTestCase
 from langchain_core.documents import Document
 
 from catchup.connectors.jira.schemas import JiraIssue
+from catchup.connectors.jira.schemas import JiraUser
 from catchup.sync.ingestion.adapters.jira import JiraIssueFullSyncAdapter
 from catchup.sync.ingestion.adapters.jira import JiraIssueFullSyncExecutionRequest
 from catchup.sync.ingestion.adapters.jira import JiraIssueIncrementalAdapter
 from catchup.sync.ingestion.adapters.jira import (
     JiraIssueIncrementalSyncExecutionRequest,
 )
+from catchup.sync.ingestion.adapters.jira import JiraIssueV2BackfillAdapter
+from catchup.sync.ingestion.adapters.jira import JiraIssueV2BackfillExecutionRequest
+from catchup.sync.ingestion.adapters.jira import JiraIssueV2BackfillSeed
 from catchup.sync.ingestion.adapters.jira.issue_dependencies import (
     JiraIssueIngestionDependencies,
+)
+from catchup.sync.ingestion.adapters.jira.issue_v2_document_builder import (
+    JiraIssueV2DocumentBuilder,
 )
 from catchup.sync.ingestion.schemas import SyncWindow
 
@@ -28,7 +36,14 @@ class _FakeClient:
     async def search_issues(self, **kwargs):
         self.search_calls.append(kwargs)
         return {
-            "issues": [{"key": "GRT-1", "id": "10001", "fields": {}}],
+            "issues": [
+                {
+                    "key": "GRT-1",
+                    "id": "10001",
+                    "assignee_account_id": "acc-assignee",
+                    "fields": {},
+                }
+            ],
             "isLast": False,
             "nextPageToken": "next-token",
         }
@@ -66,6 +81,14 @@ class _FakeTransformer:
             status="To Do",
             summary=f"Summary {issue_key}",
             description=f"Description {issue_key}",
+            assignee=(
+                JiraUser(
+                    account_id=issue_data.get("assignee_account_id"),
+                    display_name="Assignee",
+                )
+                if issue_data.get("assignee_account_id")
+                else None
+            ),
             created_at=datetime(2026, 5, 8, 5, 0, tzinfo=timezone.utc),
             updated_at=datetime(2026, 5, 8, 5, 1, tzinfo=timezone.utc),
         )
@@ -131,9 +154,28 @@ class _FakeVectorStore:
         self.upsert_calls.append(
             {"documents": documents, "ids": ids, "embeddings": embeddings}
         )
+        return ids
 
     async def delete(self, ids):
         self.delete_calls.append(ids)
+
+
+class _FakeJiraAssigneeResolver:
+    def __init__(
+        self,
+        mapping: dict[str, str | None] | None = None,
+    ) -> None:
+        self.mapping = mapping or {
+            "acc-assignee": "42",
+            "acc-epic": "84",
+            "acc-backfill": "126",
+        }
+        self.account_ids: list[str | None] = []
+
+    def resolve_catchup_user_id(self, db, account_id):
+        _ = db
+        self.account_ids.append(account_id)
+        return self.mapping.get(account_id)
 
 
 def _window() -> SyncWindow:
@@ -148,14 +190,14 @@ def _dependencies(
     repository: _FakeRepository,
     *,
     vector_store: _FakeVectorStore | None = None,
+    assignee_resolver: _FakeJiraAssigneeResolver | None = None,
 ):
     v2_document_builder = None
     if vector_store is not None:
-        from catchup.sync.ingestion.adapters.jira.issue_v2_document_builder import (
-            JiraIssueV2DocumentBuilder,
+        v2_document_builder = JiraIssueV2DocumentBuilder(
+            assignee_resolver=assignee_resolver or _FakeJiraAssigneeResolver(),
+            session_factory=lambda: nullcontext(object()),
         )
-
-        v2_document_builder = JiraIssueV2DocumentBuilder()
     return JiraIssueIngestionDependencies(
         cloud_id="cloud-1",
         site_url="https://example.atlassian.net",
@@ -267,11 +309,13 @@ class JiraIssueIngestionAdapterTests(IsolatedAsyncioTestCase):
         client = _FakeClient()
         repository = _FakeRepository()
         vector_store = _FakeVectorStore()
+        assignee_resolver = _FakeJiraAssigneeResolver()
         adapter = JiraIssueFullSyncAdapter(
             dependencies=_dependencies(
                 client,
                 repository,
                 vector_store=vector_store,
+                assignee_resolver=assignee_resolver,
             ),
         )
         execution = JiraIssueFullSyncExecutionRequest(
@@ -319,6 +363,16 @@ class JiraIssueIngestionAdapterTests(IsolatedAsyncioTestCase):
             vector_store.upsert_calls[0]["documents"][0].page_content,
             "https://example.atlassian.net:GRT-1",
         )
+        self.assertEqual(
+            vector_store.upsert_calls[0]["documents"][0].metadata["internal_author_id"],
+            "42",
+        )
+        self.assertEqual(
+            vector_store.upsert_calls[0]["documents"][0]
+            .metadata["jira_issue"]["assignee"]["catchup_user_id"],
+            "42",
+        )
+        self.assertEqual(assignee_resolver.account_ids, ["acc-assignee"])
         self.assertEqual(persisted.persisted_count, 1)
         self.assertEqual(persisted.v2_error_count, 0)
 
@@ -334,7 +388,14 @@ class JiraIssueIngestionAdapterTests(IsolatedAsyncioTestCase):
             ),
         )
         fetched = SimpleNamespace(
-            issues=({"key": "GRT-EPIC", "id": "10002", "issue_type": "Epic"},)
+            issues=(
+                {
+                    "key": "GRT-EPIC",
+                    "id": "10002",
+                    "issue_type": "Epic",
+                    "assignee_account_id": "acc-epic",
+                },
+            )
         )
 
         transformed = await adapter.transform(
@@ -389,6 +450,76 @@ class JiraIssueIngestionAdapterTests(IsolatedAsyncioTestCase):
             vector_store.upsert_calls[0]["documents"][0].metadata["jira_issue"]["type"],
             "Epic",
         )
+        self.assertEqual(
+            vector_store.upsert_calls[0]["documents"][0].metadata["internal_author_id"],
+            "84",
+        )
+        self.assertEqual(persisted.persisted_count, 1)
+        self.assertEqual(persisted.v2_error_count, 0)
+
+    async def test_backfill_builds_v2_document_with_assignee_internal_user_id(self) -> None:
+        seed = JiraIssueV2BackfillSeed(
+            langchain_id="jira:issue:cloud-1:GRT:GRT-2",
+            record_id="GRT-2",
+            content="seeded v1 content",
+            embedding=[0.1, 0.2, 0.3],
+        )
+        repository = _FakeRepository()
+        vector_store = _FakeVectorStore()
+        assignee_resolver = _FakeJiraAssigneeResolver()
+        adapter = JiraIssueV2BackfillAdapter(
+            dependencies=_dependencies(
+                _FakeClient(),
+                repository,
+                vector_store=vector_store,
+                assignee_resolver=assignee_resolver,
+            ),
+        )
+        execution = JiraIssueV2BackfillExecutionRequest(
+            tenant_id="cloud-1",
+            project_key="GRT",
+            seeds=(seed,),
+        )
+
+        fetched = SimpleNamespace(
+            issues=(
+                {
+                    "key": "GRT-2",
+                    "id": "10003",
+                    "assignee_account_id": "acc-backfill",
+                },
+            ),
+            failed_record_ids=(),
+        )
+        transformed = await adapter.transform(
+            execution=execution,
+            sync_window=_window(),
+            fetched=fetched,
+        )
+        summary = await adapter.summarize(
+            execution=execution,
+            sync_window=_window(),
+            transformed=transformed,
+        )
+        persisted = await adapter.persist(
+            execution=execution,
+            sync_window=_window(),
+            transformed=transformed,
+            summary=summary,
+        )
+
+        self.assertEqual(summary.document_ids, (seed.langchain_id,))
+        document = vector_store.upsert_calls[0]["documents"][0]
+        self.assertEqual(document.id, seed.langchain_id)
+        self.assertEqual(document.page_content, seed.content)
+        self.assertEqual(document.metadata["internal_author_id"], "126")
+        self.assertEqual(
+            document.metadata["jira_issue"]["assignee"]["catchup_user_id"],
+            "126",
+        )
+        self.assertEqual(assignee_resolver.account_ids, ["acc-backfill"])
+        self.assertEqual(vector_store.upsert_calls[0]["ids"], [seed.langchain_id])
+        self.assertEqual(vector_store.upsert_calls[0]["embeddings"], [seed.embedding])
         self.assertEqual(persisted.persisted_count, 1)
         self.assertEqual(persisted.v2_error_count, 0)
 

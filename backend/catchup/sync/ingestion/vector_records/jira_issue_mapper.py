@@ -52,6 +52,10 @@ class JiraIssueV2RecordMapper:
         synced_at = synced_at or datetime.now(timezone.utc)
         parts = self._parts(issue)
         body = "\n\n".join(part.text for part in parts)
+        internal_author_id = (
+            issue.assignee.catchup_user_id if issue.assignee else None
+        )
+
         return JiraIssueVectorRecord(
             langchain_id=f"jira:issue:{cloud_id}:{issue.project_key}:{issue.key}",
             content=content,
@@ -64,9 +68,7 @@ class JiraIssueV2RecordMapper:
             target_type="project",
             target_id=issue.project_key,
             target_name=issue.project_name or issue.project_key,
-            internal_author_id=(
-                issue.reporter.catchup_user_id if issue.reporter else None
-            ),
+            internal_author_id=internal_author_id,
             title=issue.summary,
             body=body,
             data=JiraIssueData(parts=parts),

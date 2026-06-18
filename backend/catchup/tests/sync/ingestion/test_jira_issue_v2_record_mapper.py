@@ -27,6 +27,11 @@ def _issue() -> JiraIssue:
         active=True,
         catchup_user_id="usr_author",
     )
+    assignee = JiraUser(
+        account_id="acc-assignee",
+        display_name="Assignee",
+        catchup_user_id="usr_assignee",
+    )
     return JiraIssue(
         key="CATCH-145",
         id="100145",
@@ -40,7 +45,7 @@ def _issue() -> JiraIssue:
         resolution=None,
         summary="Implement Jira v2 records",
         description="Description from ADF as plain text.",
-        assignee=JiraUser(account_id="acc-assignee", display_name="Assignee"),
+        assignee=assignee,
         reporter=author,
         creator=author,
         created_at=_dt("2026-06-01T09:00:00+00:00"),
@@ -139,7 +144,7 @@ def test_jira_issue_v2_mapper_builds_record_from_parsed_issue() -> None:
     assert values["target_type"] == "project"
     assert values["target_id"] == "CATCH"
     assert values["target_name"] == "CatchUp"
-    assert values["internal_author_id"] == "usr_author"
+    assert values["internal_author_id"] == "usr_assignee"
     assert values["title"] == "Implement Jira v2 records"
     assert "Implement Jira v2 records" not in values["body"]
     assert "Description from ADF as plain text." in values["body"]
@@ -190,6 +195,7 @@ def test_jira_issue_v2_mapper_builds_record_from_parsed_issue() -> None:
     assert "project_name" not in jira_issue
     assert jira_issue["type"] == "Task"
     assert "issue_type" not in jira_issue
+    assert jira_issue["assignee"]["catchup_user_id"] == "usr_assignee"
     assert jira_issue["reporter"]["catchup_user_id"] == "usr_author"
     assert set(jira_issue["reporter"]) == {
         "account_id",
@@ -231,7 +237,7 @@ def test_jira_issue_v2_mapper_builds_record_from_parsed_issue() -> None:
     assert document.metadata["record_id"] == "CATCH-145"
     assert document.metadata["target_id"] == "CATCH"
     assert document.metadata["target_name"] == "CatchUp"
-    assert document.metadata["internal_author_id"] == "usr_author"
+    assert document.metadata["internal_author_id"] == "usr_assignee"
     assert "issue_key" not in document.metadata["jira_issue"]
 
 

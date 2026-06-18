@@ -513,6 +513,14 @@ def build_jira_v1_target_query():
                     COALESCE(v2.{KNOWLEDGE_STORE_METADATA_JSON_COLUMN}::jsonb, '{{}}'::jsonb) = '{{}}'::jsonb
                     OR v2.{KNOWLEDGE_STORE_ID_COLUMN} IS NULL
                     OR (
+                        v2.internal_author_id IS NULL
+                        AND COALESCE(
+                            v2.{KNOWLEDGE_STORE_METADATA_JSON_COLUMN}::jsonb
+                                #>> '{{jira_issue,assignee,account_id}}',
+                            ''
+                        ) != ''
+                    )
+                    OR (
                         v1_issue_with_target.source_updated_at IS NOT NULL
                         AND (
                             v2.updated_at < v1_issue_with_target.source_updated_at
@@ -575,6 +583,14 @@ def build_jira_v1_target_seed_query():
                 (
                     COALESCE(v2.{KNOWLEDGE_STORE_METADATA_JSON_COLUMN}::jsonb, '{{}}'::jsonb) = '{{}}'::jsonb
                     OR v2.{KNOWLEDGE_STORE_ID_COLUMN} IS NULL
+                    OR (
+                        v2.internal_author_id IS NULL
+                        AND COALESCE(
+                            v2.{KNOWLEDGE_STORE_METADATA_JSON_COLUMN}::jsonb
+                                #>> '{{jira_issue,assignee,account_id}}',
+                            ''
+                        ) != ''
+                    )
                     OR (
                         v1_issue_with_target.source_updated_at IS NOT NULL
                         AND (
