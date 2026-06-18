@@ -166,17 +166,13 @@ async def test_channel_talk_article_v2_mapper_builds_contract_without_duplicates
     )
     prepared = transformed.documents[0]
 
-    document = ChannelTalkDocumentArticleV2RecordMapper().to_document(
-        prepared,
-        content="v1 article chunk content",
-    )
+    document = ChannelTalkDocumentArticleV2RecordMapper().to_document(prepared)
 
     metadata = document.metadata
     domain_metadata = metadata["channel_talk_document_article"]
-    parts = metadata["data"]["parts"]
 
     assert document.id == prepared.document_id
-    assert document.page_content == "v1 article chunk content"
+    assert document.page_content == prepared.page_content
     assert metadata["source"] == "channel_talk"
     assert metadata["entity_type"] == "document_article"
     assert metadata["record_id"] == "article-1"
@@ -188,34 +184,18 @@ async def test_channel_talk_article_v2_mapper_builds_contract_without_duplicates
     assert metadata["internal_author_id"] is None
     assert metadata["title"] == "Published refund policy"
     assert metadata["body"] == "# Refunds\n\nPublished body text."
+    assert metadata["data"] is None
+    assert prepared.chunk_body_text == metadata["body"]
     assert "Published refund policy" not in metadata["body"]
     assert "channel-123" not in metadata["body"]
     assert "space-123" not in metadata["body"]
     assert "article-1" not in metadata["body"]
 
-    assert {part["type"] for part in parts} >= {
-        "title",
-        "subtitle",
-        "summary",
-        "body_chunk",
-    }
-    body_part = next(part for part in parts if part["type"] == "body_chunk")
-    assert body_part["metadata"] == {"chunk_index": 0, "chunk_count": 1}
-    for part in parts:
-        for duplicated_field in ("article_id", "channel_id", "space_id", "space_name"):
-            assert duplicated_field not in part["metadata"]
-
     assert set(domain_metadata) == {
         "schema_version",
-        "state",
-        "language",
-        "slug",
-        "subtitle",
-        "summary",
         "author",
         "taxonomy",
         "publication",
-        "chunk",
     }
     for duplicated_field in (
         "article_id",
@@ -228,11 +208,18 @@ async def test_channel_talk_article_v2_mapper_builds_contract_without_duplicates
         "scope_id",
         "target_id",
         "target_name",
+        "state",
+        "language",
+        "slug",
+        "subtitle",
+        "summary",
+        "chunk",
     ):
         assert duplicated_field not in domain_metadata
-    assert domain_metadata["schema_version"] == 1
-    assert domain_metadata["summary"] == "Published refund summary"
+    assert domain_metadata["schema_version"] == 2
     assert domain_metadata["author"]["author_id"] == "author-1"
+    assert domain_metadata["author"]["author_name"] == "Writer Kim"
+    assert set(domain_metadata["author"]) == {"author_id", "author_name"}
     assert "raw_payload" not in str(metadata)
     assert "signed" not in str(metadata)
 
@@ -252,7 +239,12 @@ async def test_channel_talk_article_v2_mapper_allows_empty_body_with_seed_conten
             fetched_article_ids=("article-1",),
         ),
     )
-    prepared = transformed.documents[0].model_copy(update={"page_content": "   "})
+    prepared = transformed.documents[0].model_copy(
+        update={
+            "page_content": "   ",
+            "chunk_body_text": "   ",
+        }
+    )
     logical = prepared.logical_metadata
     core = logical.document_article_core
     prepared = prepared.model_copy(
@@ -278,6 +270,7 @@ async def test_channel_talk_article_v2_mapper_allows_empty_body_with_seed_conten
 
     assert document.page_content == "preserved v1 seed content"
     assert document.metadata["body"] == ""
+    assert document.metadata["data"] is None
 
 
 @pytest.mark.asyncio
@@ -316,7 +309,8 @@ async def test_channel_talk_article_v2_mapper_uses_raw_text_fallbacks_only():
     core = logical.document_article_core
     prepared = prepared.model_copy(
         update={
-            "page_content": "Body first line.\nSecond line.",
+            "page_content": "Synthetic chunk heading\n\nSecond line.",
+            "chunk_body_text": "Body first line.\nSecond line.",
             "logical_metadata": logical.model_copy(
                 update={
                     "document_article_core": core.model_copy(
@@ -340,7 +334,8 @@ async def test_channel_talk_article_v2_mapper_uses_raw_text_fallbacks_only():
 
     document = ChannelTalkDocumentArticleV2RecordMapper().to_document(prepared)
 
-    assert document.metadata["title"] == "Body first line."
+    assert document.metadata["title"] == ""
+    assert document.metadata["body"] == "Body first line.\nSecond line."
     assert document.metadata["target_name"] == ""
     assert document.metadata["title"] != "article-1"
     assert document.metadata["target_name"] != "space-123"
@@ -406,7 +401,12 @@ async def test_channel_talk_article_full_sync_dual_writes_v2_document():
     ]
     assert upsert_kwargs["embeddings"] == [[0.75]]
     assert v2_document.page_content.startswith("Published refund policy")
-    assert "Published body text." in v2_document.metadata["body"]
+    assert v2_document.metadata["body"] == "# Refunds\n\nPublished body text."
+    assert v2_document.metadata["data"] is None
+    assert v2_document.metadata["channel_talk_document_article"]["author"] == {
+        "author_id": "author-1",
+        "author_name": "Writer Kim",
+    }
     assert author_resolver.author_ids == ["author-1"]
     assert v2_document.metadata["internal_author_id"] == "42"
 
@@ -554,7 +554,8 @@ async def test_backfill_adapter_hydrates_article_and_reuses_v1_seed_values():
     document = upsert_args.args[0][0]
     assert document.id == seed.langchain_id
     assert document.page_content == seed.content
-    assert "Published body text." in document.metadata["body"]
+    assert document.metadata["body"] == "# Refunds\n\nPublished body text."
+    assert document.metadata["data"] is None
     assert author_resolver.author_ids == ["author-1"]
     assert document.metadata["internal_author_id"] == "42"
     assert upsert_args.kwargs["ids"] == [seed.langchain_id]

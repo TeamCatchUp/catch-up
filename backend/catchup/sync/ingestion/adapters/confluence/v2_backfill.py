@@ -64,6 +64,9 @@ class ConfluenceV2BackfillAdapter(ConfluenceSpaceSyncAdapter):
         sync_window: SyncWindow,
     ) -> ConfluenceSpaceFetchResult:
         _ = sync_window
+        space_id, space_name, user_name_map = await self._space_context(
+            execution.space_key
+        )
         records = []
         failed_ids: list[str] = []
         for record_id in _dedupe(tuple(seed.record_id for seed in execution.seeds)):
@@ -92,8 +95,10 @@ class ConfluenceV2BackfillAdapter(ConfluenceSpaceSyncAdapter):
             requested_count=len(execution.seeds),
             records=tuple(records),
             record_type=execution.record_type,
+            space_id=space_id,
             space_key=execution.space_key,
-            space_name=execution.space_name,
+            space_name=execution.space_name or space_name,
+            user_name_map=user_name_map,
             is_last=True,
             checkpoint=None,
             v2_failed_ids=_dedupe(tuple(failed_ids)),
@@ -109,22 +114,25 @@ class ConfluenceV2BackfillAdapter(ConfluenceSpaceSyncAdapter):
         _ = sync_window
         items: list[ConfluenceSpaceTransformItem] = []
         failed_ids = tuple(fetched.v2_failed_ids)
+        space_key = fetched.space_key or execution.space_key
+        space_name = fetched.space_name or execution.space_name
+        user_name_map = fetched.user_name_map
         for raw_content in fetched.records:
             if execution.record_type == "page":
                 content = ConfluencePageResponse.model_validate(raw_content)
                 transform_result = await self._service._process_page(
                     content,
-                    space_key=execution.space_key,
-                    space_name=execution.space_name,
-                    user_name_map={},
+                    space_key=space_key,
+                    space_name=space_name,
+                    user_name_map=user_name_map,
                 )
             else:
                 content = ConfluenceBlogPostResponse.model_validate(raw_content)
                 transform_result = await self._service._process_blogpost(
                     content,
-                    space_key=execution.space_key,
-                    space_name=execution.space_name,
-                    user_name_map={},
+                    space_key=space_key,
+                    space_name=space_name,
+                    user_name_map=user_name_map,
                 )
             items.append(
                 ConfluenceSpaceTransformItem(
@@ -157,8 +165,8 @@ class ConfluenceV2BackfillAdapter(ConfluenceSpaceSyncAdapter):
             requested_count=len(execution.seeds),
             record_type=execution.record_type,
             items=tuple(items),
-            space_key=execution.space_key,
-            space_name=execution.space_name,
+            space_key=space_key,
+            space_name=space_name,
             v2_documents=tuple(v2_documents),
             v2_failed_ids=_dedupe((*failed_ids, *build_failed_ids)),
         )

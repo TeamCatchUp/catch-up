@@ -102,10 +102,11 @@ def _jira_issue_v1_id_cte() -> str:
         WITH v1_issue_source AS (
             SELECT
                 e.id AS v1_langchain_id,
+                e.cmetadata ->> 'entity_type' AS source_entity_type,
                 COALESCE(
                     NULLIF(e.cmetadata ->> 'issue_key', ''),
                     NULLIF(e.cmetadata ->> 'record_id', ''),
-                    substring(e.id from '^jira:issue:(.+)$')
+                    substring(e.id from '^jira:(?:issue|epic):(.+)$')
                 ) AS record_id,
                 COALESCE(
                     NULLIF(e.cmetadata ->> 'project_key', ''),
@@ -113,7 +114,7 @@ def _jira_issue_v1_id_cte() -> str:
                         COALESCE(
                             NULLIF(e.cmetadata ->> 'issue_key', ''),
                             NULLIF(e.cmetadata ->> 'record_id', ''),
-                            substring(e.id from '^jira:issue:(.+)$')
+                            substring(e.id from '^jira:(?:issue|epic):(.+)$')
                         ),
                         '-',
                         1
@@ -129,12 +130,14 @@ def _jira_issue_v1_id_cte() -> str:
               ON e.collection_id = c.uuid
             WHERE c.name = :collection_name
               AND e.cmetadata ->> 'source' = 'jira'
-              AND e.cmetadata ->> 'entity_type' = 'issue'
+              AND e.cmetadata ->> 'entity_type' IN ('issue', 'epic')
         ),
         project_candidates AS (
             SELECT
                 ('jira:issue:' || jp.cloud_id || ':' || v1_issue_source.target_id || ':'
                     || v1_issue_source.record_id) AS langchain_id,
+                v1_issue_source.v1_langchain_id,
+                v1_issue_source.source_entity_type,
                 count(*) OVER (
                     PARTITION BY v1_issue_source.v1_langchain_id
                 ) AS project_match_count
@@ -152,10 +155,26 @@ def _jira_issue_v1_id_cte() -> str:
             WHERE COALESCE(v1_issue_source.record_id, '') != ''
               AND COALESCE(v1_issue_source.target_id, '') != ''
         ),
-        v1_issue AS (
-            SELECT langchain_id
+        single_project_candidates AS (
+            SELECT *
             FROM project_candidates
             WHERE project_match_count = 1
+        ),
+        ranked_project_candidates AS (
+            SELECT
+                *,
+                row_number() OVER (
+                    PARTITION BY langchain_id
+                    ORDER BY
+                        CASE source_entity_type WHEN 'issue' THEN 0 ELSE 1 END,
+                        v1_langchain_id
+                ) AS canonical_rank
+            FROM single_project_candidates
+        ),
+        v1_issue AS (
+            SELECT langchain_id
+            FROM ranked_project_candidates
+            WHERE canonical_rank = 1
         )
     """
 
@@ -218,6 +237,26 @@ def build_jira_issue_v2_sample_query():
           AND COALESCE({KNOWLEDGE_STORE_METADATA_JSON_COLUMN}::jsonb, '{{}}'::jsonb) != '{{}}'::jsonb
         ORDER BY synced_at DESC, langchain_id ASC
         LIMIT :limit
+        """
+    )
+
+
+def build_jira_issue_v2_legacy_epic_shape_query():
+    return text(
+        f"""
+        SELECT
+            {KNOWLEDGE_STORE_ID_COLUMN} AS langchain_id,
+            entity_type,
+            {KNOWLEDGE_STORE_METADATA_JSON_COLUMN} AS langchain_metadata
+        FROM {KNOWLEDGE_STORE_TABLE_NAME}
+        WHERE source = 'jira'
+          AND (
+              entity_type = 'epic'
+              OR {KNOWLEDGE_STORE_ID_COLUMN} LIKE 'jira:epic:%'
+              OR COALESCE({KNOWLEDGE_STORE_METADATA_JSON_COLUMN}::jsonb, '{{}}'::jsonb)
+                    ? 'jira_epic'
+          )
+        ORDER BY langchain_id ASC
         """
     )
 
@@ -306,13 +345,14 @@ def _validate_jira_issue_metadata(
     jira_issue: dict[str, Any],
     errors: list[str],
 ) -> None:
-    for field_name in ("issue_id",):
+    for field_name in ("issue_id", "type"):
         if not jira_issue.get(field_name):
             errors.append(f"missing:jira_issue.{field_name}")
     for forbidden_field in (
         "raw",
         "fields",
         "adf",
+        "issue_type",
         "contextual_content",
         "custom_fields",
         "attachments",

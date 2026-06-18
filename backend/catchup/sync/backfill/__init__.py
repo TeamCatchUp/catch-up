@@ -15,7 +15,6 @@ from catchup.sync.backfill.github_issue_v2_validation import (
 )
 from catchup.sync.backfill.github_pr_v2 import GithubPrV2BackfillService
 from catchup.sync.backfill.github_pr_v2_validation import GithubPrV2ValidationService
-from catchup.sync.backfill.jira_issue_v2 import JiraEpicV2BackfillService
 from catchup.sync.backfill.jira_issue_v2 import JiraIssueV2BackfillService
 from catchup.sync.backfill.slack_message_v2 import SlackMessageV2BackfillService
 from catchup.sync.backfill.slack_message_v2_validation import (
@@ -32,7 +31,6 @@ __all__ = [
     "GithubIssueV2ValidationService",
     "GithubPrV2BackfillService",
     "GithubPrV2ValidationService",
-    "JiraEpicV2BackfillService",
     "JiraIssueV2BackfillService",
     "SlackMessageV2BackfillService",
     "SlackMessageV2ValidationService",

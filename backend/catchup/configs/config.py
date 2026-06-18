@@ -207,6 +207,8 @@ class Settings(BaseSettings):
     VECTOR_STORE_V2_DUAL_WRITE_ENABLED: bool = True
     VECTOR_STORE_V2_BACKFILL_SCHEDULE_ENABLED: bool = True
     VECTOR_STORE_V2_BACKFILL_BATCH_SIZE: int = 500
+    VECTOR_STORE_V2_BACKFILL_CRON_HOUR: int = 0
+    VECTOR_STORE_V2_BACKFILL_CRON_MINUTE: int = 0
 
     # Embedding Settings (Bedrock Codere Embed 4)
     EMBEDDING_MAX_CONCURRENCY: int = 5  # 동시 Embedding API 호출 수
