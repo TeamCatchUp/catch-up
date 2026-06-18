@@ -5,8 +5,6 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 
-import LabIcon from '@/public/icons/icon/lab.svg';
-import { Button } from '@/shared/components/ui/button';
 import { cn } from '@/shared/utils/cn';
 
 import { AGENT_STUDIO_FILTERS } from '../../fixtures/agentStudioFixtures';
@@ -14,6 +12,7 @@ import { inquiryAutomationsMutations } from '../../queries/inquiryAutomations.mu
 import { inquiryAutomationsQueries } from '../../queries/inquiryAutomations.queries';
 import type { AgentStudioCardModel, AgentStudioFilter } from '../../types/agentStudioModel';
 import { mapInquiryAutomationsToAgentCards } from '../../utils/mapInquiryAutomation';
+import AgentCreateButton from './AgentCreateButton';
 import AgentEmptyColumn from './AgentEmptyColumn';
 import AgentFilterTabs from './AgentFilterTabs';
 import AgentStudioHeader from './AgentStudioHeader';
@@ -44,10 +43,7 @@ export default function AgentStudioPage() {
         <h1 className="text-heading-large text-text-normal-normal w-full">우리 팀의 Agent</h1>
         <div className="flex w-full items-center gap-5">
           <AgentFilterTabs filters={AGENT_STUDIO_FILTERS} selected={selectedFilter} onChange={setSelectedFilter} />
-          <Button variant="box-solid-primary" size="md" onClick={() => router.push('/agent-studio/new')}>
-            <LabIcon className="size-5" aria-hidden="true" />
-            Agent 만들기
-          </Button>
+          <AgentCreateButton onClick={() => router.push('/agent-studio/new')} />
         </div>
         <div className={cn('flex w-full flex-wrap items-start gap-6', !isGroupedView && 'min-h-52.75')}>
           {automationQuery.isLoading && (

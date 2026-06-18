@@ -122,6 +122,7 @@ function mockEditorSuccessHandlers() {
 
       return new HttpResponse(null, { status: 500 });
     }),
+    http.get('/api/v1/version', () => HttpResponse.json('1.2.3')),
   );
 }
 
@@ -192,6 +193,17 @@ describe('AgentStudioEditorPage', () => {
     const settingsHeader = screen.getByRole('button', { name: 'Agent Studio로 돌아가기' }).closest('header');
 
     expect(settingsHeader).toHaveClass('sticky', 'top-0', 'z-10', 'bg-fill-normal-assistive-dark');
+  });
+
+  it('opens the same more menu as the home header from the settings header', async () => {
+    const user = userEvent.setup();
+    renderEditor();
+
+    await user.click(screen.getByRole('button', { name: '설정 더보기' }));
+
+    expect(await screen.findByRole('menuitem', { name: '도움말' })).toBeInTheDocument();
+    expect(screen.getByText('버전 기록')).toBeInTheDocument();
+    expect(await screen.findByText('v1.2.3')).toBeInTheDocument();
   });
 
   it('updates the instruction count while typing', async () => {
