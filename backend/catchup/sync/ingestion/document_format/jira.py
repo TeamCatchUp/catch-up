@@ -28,7 +28,7 @@ class JiraIssueMetadata(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    entity_type: Literal["issue"] = "issue"
+    entity_type: Literal["issue", "epic"] = "issue"
     issue_key: str
     issue_id: str | None = None
     title: str

@@ -264,6 +264,36 @@ class JiraIssueLogicalMetadataTests(TestCase):
         self.assertNotIn("issue", storage)
         self.assertNotIn("jira_issue_core", storage)
 
+    def test_storage_projection_allows_legacy_jira_epic_shape(self) -> None:
+        now = datetime(2026, 5, 8, 1, 0, tzinfo=timezone.utc)
+        contract = JiraIssueLogicalMetadata(
+            base=DocumentBaseMetadata(
+                source="jira",
+                record_id="GRT-EPIC",
+                url="https://example.atlassian.net/browse/GRT-EPIC",
+                created_at=now,
+                updated_at=now,
+                synced_at=now,
+                contextual_content="[GRT-EPIC] Migration epic",
+            ),
+            issue=JiraIssueMetadata(
+                entity_type="epic",
+                issue_key="GRT-EPIC",
+                issue_id="10002",
+                title="Migration epic",
+                project_key="GRT",
+                issue_type="Epic",
+                status="To Do",
+            ),
+        )
+
+        storage = contract.to_storage_metadata()
+
+        self.assertEqual(storage["entity_type"], "epic")
+        self.assertEqual(storage["issue_key"], "GRT-EPIC")
+        self.assertEqual(storage["issue_type"], "Epic")
+        self.assertEqual(storage["record_id"], "GRT-EPIC")
+
     def test_storage_projection_keeps_none_base_keys(self) -> None:
         now = datetime(2026, 5, 8, 1, 0, tzinfo=timezone.utc)
         contract = JiraIssueLogicalMetadata(
