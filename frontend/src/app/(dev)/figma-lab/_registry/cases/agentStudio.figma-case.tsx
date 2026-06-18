@@ -1,10 +1,9 @@
 import { useState } from 'react';
 
 import type { FigmaLabCase } from '@/app/(dev)/figma-lab/_registry/types';
-import LabIcon from '@/public/icons/icon/lab.svg';
-import { Button } from '@/shared/components/ui/button';
 import { cn } from '@/shared/utils/cn';
 import type { AgentStudioCardModel, AgentStudioFilter } from '@/features/agent-studio/types/agentStudioModel';
+import AgentCreateButton from '@/features/agent-studio/components/list/AgentCreateButton';
 import AgentFilterTabs from '@/features/agent-studio/components/list/AgentFilterTabs';
 import AgentStudioHeader from '@/features/agent-studio/components/list/AgentStudioHeader';
 import AgentStudioListContent from '@/features/agent-studio/components/list/AgentStudioListContent';
@@ -33,10 +32,7 @@ function AgentStudioListFixturePreview() {
         <h1 className="text-heading-large text-text-normal-normal w-full">우리 팀의 Agent</h1>
         <div className="flex w-full items-center gap-5">
           <AgentFilterTabs filters={AGENT_STUDIO_FILTERS} selected={selectedFilter} onChange={setSelectedFilter} />
-          <Button variant="box-solid-primary" size="md">
-            <LabIcon className="size-5" aria-hidden="true" />
-            Agent 만들기
-          </Button>
+          <AgentCreateButton />
         </div>
         <div className={cn('flex w-full flex-wrap items-start gap-6', !isGroupedView && 'min-h-52.75')}>
           <AgentStudioListContent

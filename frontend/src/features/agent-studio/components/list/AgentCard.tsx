@@ -40,16 +40,25 @@ export default function AgentCard({
         <h3 className="text-heading-medium text-text-normal-normal w-full shrink-0 truncate">{agent.title}</h3>
         <p className="text-body-small text-text-normal-alternative line-clamp-2 w-full shrink-0">{agent.description}</p>
         <div className="text-body-xsmall text-text-normal-alternative flex h-6 shrink-0 items-center gap-2">
-          <div className="border-fill-normal-strong flex size-5 shrink-0 items-center justify-center overflow-hidden rounded-full border">
-            {safeAuthorProfileImageUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={safeAuthorProfileImageUrl} alt="" className="size-full object-cover" />
-            ) : (
-              <DefaultProfileIcon className="size-full" aria-hidden="true" />
-            )}
+          <div className="flex shrink-0 items-center gap-1.5">
+            <div className="border-fill-normal-strong flex size-5 shrink-0 items-center justify-center overflow-hidden rounded-full border">
+              {safeAuthorProfileImageUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={safeAuthorProfileImageUrl} alt="" className="size-full object-cover" />
+              ) : (
+                <DefaultProfileIcon className="size-full" aria-hidden="true" />
+              )}
+            </div>
+            <span className="max-w-24 overflow-hidden text-ellipsis whitespace-nowrap">{agent.authorName}</span>
           </div>
-          <span className="truncate">{agent.authorName}</span>
-          <span className="bg-dim-alpha-black10 size-1 shrink-0 rounded-full" aria-hidden="true" />
+          <span
+            className="size-1 shrink-0"
+            style={{
+              borderRadius: 'var(--radius-rounded, 1000px)',
+              background: 'var(--Dim-Alpha-black10, rgba(0, 0, 0, 0.10))',
+            }}
+            aria-hidden="true"
+          />
           <span className="shrink-0">수정일</span>
           <span className="truncate">{agent.updatedAtLabel}</span>
         </div>
