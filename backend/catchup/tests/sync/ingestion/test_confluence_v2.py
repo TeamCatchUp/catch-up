@@ -1,13 +1,31 @@
 from __future__ import annotations
 
+from datetime import datetime
+from datetime import timezone
+
+import pytest
+
 from catchup.connectors.confluence.schemas import ConfluenceCommentResponse
 from catchup.connectors.confluence.schemas import ConfluencePageResponse
 from catchup.sync.backfill.confluence_v2 import build_fetch_pending_seed_chunk_query
 from catchup.sync.backfill.confluence_v2 import build_upsert_seed_rows_statement
+from catchup.sync.ingestion.adapters.confluence.space_sync import (
+    ConfluenceV2BackfillExecutionRequest,
+)
+from catchup.sync.ingestion.adapters.confluence.space_sync import (
+    ConfluenceV2BackfillSeed,
+)
+from catchup.sync.ingestion.adapters.confluence.v2_backfill import (
+    ConfluenceV2BackfillAdapter,
+)
 from catchup.sync.ingestion.adapters.confluence.v2_document_builder import (
     ConfluenceV2DocumentBuilder,
 )
 from catchup.sync.ingestion.document_builders.confluence import ConfluenceTransformer
+from catchup.sync.ingestion.document_builders.confluence import (
+    ConfluenceTransformResult,
+)
+from catchup.sync.ingestion.schemas import SyncWindow
 from catchup.sync.ingestion.vector_records import ConfluenceV2RecordMapper
 
 
@@ -175,6 +193,84 @@ def test_confluence_v2_builder_reports_validation_failures_without_raising():
 
     assert documents == []
     assert failed_ids == ("confluence:page:1001:chunk:0",)
+
+
+@pytest.mark.asyncio
+async def test_confluence_v2_backfill_reuses_space_user_name_map_for_transform():
+    class FakeConfluenceClient:
+        async def get_page_by_id(
+            self,
+            record_id: str,
+            *,
+            body_format: str,
+        ) -> dict:
+            assert record_id == "1001"
+            assert body_format == "storage"
+            return _page().model_dump(mode="json", by_alias=True)
+
+    class FakeConfluenceService:
+        cloud_id = "cloud-123"
+
+        def __init__(self) -> None:
+            self.client = FakeConfluenceClient()
+            self.seen_user_name_map: dict[str, str | None] | None = None
+
+        async def _load_space_sync_context(
+            self,
+            space_keys: list[str],
+        ) -> tuple[dict[str, str], dict[str, str], dict[str, str | None]]:
+            assert space_keys == ["ENG"]
+            return (
+                {"ENG": "space-1"},
+                {"ENG": "Engineering"},
+                {"author-1": "Alice"},
+            )
+
+        async def _process_page(
+            self,
+            content: ConfluencePageResponse,
+            *,
+            space_key: str | None = None,
+            space_name: str | None = None,
+            user_name_map: dict[str, str | None] | None = None,
+        ) -> ConfluenceTransformResult:
+            assert content.id == "1001"
+            assert space_key == "ENG"
+            assert space_name == "Engineering"
+            self.seen_user_name_map = user_name_map
+            return ConfluenceTransformResult(documents=[], embed_inputs=[])
+
+    service = FakeConfluenceService()
+    adapter = ConfluenceV2BackfillAdapter(service=service)
+    execution = ConfluenceV2BackfillExecutionRequest(
+        tenant_id="tenant-1",
+        space_key="ENG",
+        record_type="page",
+        seeds=(
+            ConfluenceV2BackfillSeed(
+                langchain_id="confluence:page:1001:chunk:0",
+                record_id="1001",
+                content="v1 contextual chunk",
+                embedding=[0.1, 0.2],
+            ),
+        ),
+    )
+    sync_window = SyncWindow(
+        window_start=datetime(2026, 5, 1, tzinfo=timezone.utc),
+        window_end=datetime(2026, 5, 2, tzinfo=timezone.utc),
+    )
+
+    fetched = await adapter.fetch(execution=execution, sync_window=sync_window)
+    await adapter.transform(
+        execution=execution,
+        sync_window=sync_window,
+        fetched=fetched,
+    )
+
+    assert fetched.space_id == "space-1"
+    assert fetched.space_name == "Engineering"
+    assert fetched.user_name_map == {"author-1": "Alice"}
+    assert service.seen_user_name_map == {"author-1": "Alice"}
 
 
 def test_confluence_v2_backfill_sql_casts_nullable_cursor_parameters():
