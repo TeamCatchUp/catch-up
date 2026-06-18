@@ -224,7 +224,7 @@ describe('AgentStudioPage', () => {
 
     await user.click(screen.getByRole('button', { name: '운영중' }));
 
-    expect(await screen.findAllByRole('button', { name: '사용하기' })).toHaveLength(3);
+    expect(await screen.findAllByRole('button', { name: '문의 대응 리포트 만들기 카드 메뉴' })).toHaveLength(3);
     expect(screen.getAllByText('운영중')).toHaveLength(1);
     expect(screen.queryByRole('button', { name: '다시 운영하기' })).not.toBeInTheDocument();
     expect(screen.queryByText('운영 중인 Agent가 없습니다.')).not.toBeInTheDocument();
@@ -253,7 +253,7 @@ describe('AgentStudioPage', () => {
 
     await user.click(screen.getByRole('button', { name: '제작중' }));
 
-    expect(await screen.findAllByRole('button', { name: '사용하기' })).toHaveLength(1);
+    expect(await screen.findAllByRole('button', { name: '문의 대응 리포트 만들기 카드 메뉴' })).toHaveLength(1);
     expect(screen.getAllByText('제작중')).toHaveLength(1);
     expect(screen.queryByRole('button', { name: '다시 운영하기' })).not.toBeInTheDocument();
     expect(screen.queryByText('운영 중인 Agent가 없습니다.')).not.toBeInTheDocument();
@@ -283,7 +283,7 @@ describe('AgentStudioPage', () => {
     await user.click(screen.getByRole('button', { name: '사용 안함' }));
 
     expect(await screen.findByRole('button', { name: '다시 운영하기' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: '사용하기' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /카드 메뉴/ })).not.toBeInTheDocument();
     expect(screen.queryByText('운영 중인 Agent가 없습니다.')).not.toBeInTheDocument();
     expect(screen.queryByText('제작 중인 Agent가 없습니다.')).not.toBeInTheDocument();
     expect(screen.queryByText('아직 비활성 Agent가 없습니다.')).not.toBeInTheDocument();
@@ -350,7 +350,8 @@ describe('AgentStudioPage', () => {
 
     renderWithQueryClient(<AgentStudioPage />);
 
-    await user.click(await screen.findByRole('button', { name: '문의 대응 리포트 만들기 사용 안함' }));
+    await user.click(await screen.findByRole('button', { name: '문의 대응 리포트 만들기 카드 메뉴' }));
+    await user.click(await screen.findByRole('menuitem', { name: '사용 안함' }));
 
     expect(patchRequests).toEqual([{ status: 'inactive' }]);
   });
@@ -366,7 +367,8 @@ describe('AgentStudioPage', () => {
 
     renderWithQueryClient(<AgentStudioPage />);
 
-    await user.click(await screen.findByRole('button', { name: '문의 대응 리포트 만들기 사용 안함' }));
+    await user.click(await screen.findByRole('button', { name: '문의 대응 리포트 만들기 카드 메뉴' }));
+    await user.click(await screen.findByRole('menuitem', { name: '사용 안함' }));
 
     expect(toast.error).toHaveBeenCalledWith('에이전트 상태 변경에 실패했습니다. 다시 시도해주세요.');
   });
