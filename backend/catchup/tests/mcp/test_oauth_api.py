@@ -47,15 +47,19 @@ def mock_redis():
         yield store
 
 
+_WELL_KNOWN = "/api/v1/mcp/.well-known/oauth-authorization-server"
+
+
 class TestOAuthAuthorizationServerMetadata:
     def test_returns_metadata_when_enabled(self):
-        response = client.get("/.well-known/oauth-authorization-server")
+        response = client.get(_WELL_KNOWN)
 
         assert response.status_code == 200
         data = response.json()
         assert "/api/v1/mcp/oauth/token" in data["token_endpoint"]
         assert "/api/v1/mcp/oauth/authorize" in data["authorization_endpoint"]
         assert "/api/v1/mcp/oauth/register" in data["registration_endpoint"]
+        assert "/api/v1/mcp" in data["issuer"]
         assert "S256" in data["code_challenge_methods_supported"]
         assert "none" in data["token_endpoint_auth_methods_supported"]
 
@@ -63,7 +67,7 @@ class TestOAuthAuthorizationServerMetadata:
         from catchup.configs.config import settings
 
         monkeypatch.setattr(settings, "MCP_OAUTH_ENABLED", False)
-        response = client.get("/.well-known/oauth-authorization-server")
+        response = client.get(_WELL_KNOWN)
 
         assert response.status_code == 404
 

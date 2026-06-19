@@ -28,10 +28,6 @@ from catchup.utils.redis import get_redis_client
 
 logger = structlog.get_logger()
 
-# RFC 8414: /.well-known 경로는 루트에 고정
-well_known_router = APIRouter(tags=["MCP OAuth"])
-
-# MCP 전용 OAuth 엔드포인트
 router = APIRouter(prefix="/api/v1/mcp", tags=["MCP OAuth"])
 
 _MCP_CLIENT_PREFIX = "mcp:client:"
@@ -59,7 +55,7 @@ def _mcp_callback_uri(request: Request) -> str:
     return f"{_server_base(request)}/api/v1/mcp/oauth/callback"
 
 
-@well_known_router.get(
+@router.get(
     path="/.well-known/oauth-authorization-server",
     response_model=OAuthAuthorizationServerMetadata,
     description="RFC 8414 Authorization Server 메타데이터를 반환한다.",
@@ -72,8 +68,9 @@ async def oauth_authorization_server_metadata(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
 
     base = _server_base(request)
+    issuer = f"{base}/api/v1/mcp"
     return OAuthAuthorizationServerMetadata(
-        issuer=base,
+        issuer=issuer,
         authorization_endpoint=f"{base}/api/v1/mcp/oauth/authorize",
         token_endpoint=f"{base}/api/v1/mcp/oauth/token",
         registration_endpoint=f"{base}/api/v1/mcp/oauth/register",
