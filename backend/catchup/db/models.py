@@ -92,6 +92,10 @@ class VectorStoreV2BackfillState(Base):
         DateTime(timezone=True),
         nullable=True,
     )
+    processing_started_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -122,6 +126,13 @@ class VectorStoreV2BackfillState(Base):
             "entity_type",
             "state",
             "next_retry_at",
+        ),
+        Index(
+            "ix_vector_store_v2_backfill_states_processing_lookup",
+            "connector",
+            "entity_type",
+            "state",
+            "processing_started_at",
         ),
     )
 

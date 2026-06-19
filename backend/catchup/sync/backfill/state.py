@@ -53,6 +53,20 @@ def build_failure_metadata(
     )
 
 
+def _processing_stale_after_minutes() -> int:
+    return max(settings.VECTOR_STORE_V2_BACKFILL_PROCESSING_STALE_AFTER_MINUTES, 1)
+
+
+def backfill_stale_processing_predicate(alias: str = "state") -> str:
+    minutes = _processing_stale_after_minutes()
+    return f"""
+                  (
+                      {alias}.processing_started_at IS NULL
+                      OR {alias}.processing_started_at <= now() - make_interval(mins => {minutes})
+                  )
+    """
+
+
 def backfill_candidate_state_predicate(alias: str = "state") -> str:
     return f"""
           AND (
@@ -60,7 +74,33 @@ def backfill_candidate_state_predicate(alias: str = "state") -> str:
               OR {alias}.state IN ('pending', 'succeeded')
               OR (
                   {alias}.state = 'failed'
-                  AND {alias}.next_retry_at <= now()
+                  AND (
+                      {alias}.next_retry_at IS NULL
+                      OR {alias}.next_retry_at <= now()
+                  )
+              )
+              OR (
+                  {alias}.state = 'processing'
+                  AND {backfill_stale_processing_predicate(alias).strip()}
               )
           )
+    """
+
+
+def backfill_claimable_state_predicate(
+    table_name: str = "vector_store_v2_backfill_states",
+) -> str:
+    return f"""
+            {table_name}.state IN ('pending', 'succeeded')
+            OR (
+                {table_name}.state = 'failed'
+                AND (
+                    {table_name}.next_retry_at IS NULL
+                    OR {table_name}.next_retry_at <= now()
+                )
+            )
+            OR (
+                {table_name}.state = 'processing'
+                AND {backfill_stale_processing_predicate(table_name).strip()}
+            )
     """

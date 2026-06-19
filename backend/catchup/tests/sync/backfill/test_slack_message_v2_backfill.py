@@ -9,6 +9,7 @@ from unittest.mock import Mock
 import pytest
 
 from catchup.sync.backfill.slack_message_v2 import SlackMessageV1Seed
+from catchup.sync.backfill.slack_message_v2 import _embedding_to_list
 from catchup.sync.backfill.slack_message_v2 import build_fetch_pending_seed_chunk_query
 from catchup.sync.backfill.slack_message_v2 import build_slack_message_v1_target_query
 from catchup.sync.backfill.slack_message_v2 import (
@@ -63,6 +64,9 @@ def test_slack_backfill_target_query_skips_finished_rows_and_stale_content() -> 
     assert "pending_count > 0" in query
     assert "v2.content IS DISTINCT FROM v1_message.content" in query
     assert "COALESCE(v2.metadata::jsonb, '{}'::jsonb) = '{}'::jsonb" in query
+    assert "state.next_retry_at IS NULL" in query
+    assert "state.state = 'processing'" in query
+    assert "state.processing_started_at" in query
     assert "SELECT\n            grouped.scope_id" in query
     assert "ORDER BY grouped.scope_id, grouped.target_id" in query
 
@@ -84,6 +88,10 @@ def test_slack_timestamp_cursor_uses_decimal_ts_and_tiebreaker() -> None:
     assert "record_ts = CAST(:after_record_ts AS numeric(20,6))" in query
     assert "langchain_id > COALESCE(:after_langchain_id, '')" in query
     assert "ORDER BY record_ts, langchain_id" in query
+
+
+def test_slack_message_v2_embedding_to_list_treats_null_as_empty() -> None:
+    assert _embedding_to_list(None) == []
 
 
 def test_slack_backfill_seed_rejects_empty_embedding() -> None:

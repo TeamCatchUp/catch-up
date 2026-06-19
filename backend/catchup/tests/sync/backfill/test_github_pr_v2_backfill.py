@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from datetime import datetime
 from datetime import timezone
 from types import SimpleNamespace
@@ -16,6 +17,7 @@ from catchup.connectors.github.schemas import GithubPullRequest
 from catchup.connectors.github.schemas import GithubUser
 from catchup.sync.backfill.github_pr_v2 import GithubPrV1Seed
 from catchup.sync.backfill.github_pr_v2 import GithubPrV2BackfillService
+from catchup.sync.backfill.github_pr_v2 import _embedding_to_list
 from catchup.sync.backfill.github_pr_v2 import build_fetch_seeded_seed_chunk_query
 from catchup.sync.backfill.github_pr_v2 import build_github_pr_v1_target_query
 from catchup.sync.backfill.github_pr_v2 import build_github_pr_v1_target_seed_query
@@ -311,7 +313,10 @@ def test_target_query_groups_v1_prs_by_scope_and_target() -> None:
     assert "state.entity_type = 'pr'" in query
     assert "state.state IN ('pending', 'succeeded')" in query
     assert "state.state = 'failed'" in query
+    assert "state.next_retry_at IS NULL" in query
     assert "state.next_retry_at <= now()" in query
+    assert "state.state = 'processing'" in query
+    assert "state.processing_started_at" in query
     assert "GROUP BY scope_id, target_id" in query
 
 
@@ -355,6 +360,10 @@ def test_fetch_seeded_seed_chunk_query_reads_v2_seed_rows_by_empty_metadata() ->
     assert "LIMIT :limit" in query
 
 
+def test_github_pr_v2_embedding_to_list_treats_null_as_empty() -> None:
+    assert _embedding_to_list(None) == []
+
+
 def test_github_fetch_result_log_summary_counts_exact_items() -> None:
     result = GithubRepositoryFetchResult(
         record_type="pull_request",
@@ -374,8 +383,15 @@ def test_mark_processing_statement_claims_scope_target_conditionally() -> None:
     assert "state = 'processing'" in statement
     assert "expected_count = EXCLUDED.expected_count" in statement
     assert "failed_ids = '[]'::jsonb" in statement
-    assert "WHERE vector_store_v2_backfill_states.state != 'processing'" in statement
-    assert "RETURNING id" in statement
+    assert "processing_started_at = now()" in statement
+    assert "failure_count = 0" not in statement.split(
+        "ON CONFLICT (connector, entity_type, scope_id, target_id) DO UPDATE SET"
+    )[1]
+    assert "vector_store_v2_backfill_states.state IN ('pending', 'succeeded')" in statement
+    assert "vector_store_v2_backfill_states.next_retry_at IS NULL" in statement
+    assert "vector_store_v2_backfill_states.next_retry_at <= now()" in statement
+    assert "vector_store_v2_backfill_states.processing_started_at IS NULL" in statement
+    assert "RETURNING processing_started_at" in statement
 
 
 @pytest.mark.asyncio
@@ -446,7 +462,8 @@ async def test_backfill_batch_records_scope_success_when_target_seeds_are_persis
     assert finish_params["state"] == "succeeded"
     assert finish_params["expected_count"] == 1
     assert finish_params["backfill_count"] == 1
-    assert finish_params["failed_ids"] == []
+    assert json.loads(finish_params["failed_ids"]) == []
+    assert finish_params["processing_started_at"] == 1
     assert finish_params["succeeded_at"] is not None
     assert finish_params["failed_at"] is None
 
@@ -574,7 +591,8 @@ async def test_backfill_batch_records_failed_ids_when_pipeline_reports_failure()
     fail_params = session.execute.call_args_list[-1].args[1]
     assert fail_params["state"] == "failed"
     assert fail_params["backfill_count"] == 0
-    assert fail_params["failed_ids"] == [seed.langchain_id]
+    assert json.loads(fail_params["failed_ids"]) == [seed.langchain_id]
+    assert fail_params["processing_started_at"] == 1
     assert fail_params["succeeded_at"] is None
     assert fail_params["failed_at"] is not None
     target_finished_log = logger_mock.info.call_args_list[-1]
@@ -583,3 +601,39 @@ async def test_backfill_batch_records_failed_ids_when_pipeline_reports_failure()
     assert target_finished_log.kwargs["backfill_count"] == 0
     assert target_finished_log.kwargs["failed_count"] == 1
     assert target_finished_log.kwargs["failed_ids"] == [seed.langchain_id]
+
+
+@pytest.mark.asyncio
+async def test_backfill_batch_does_not_escape_when_failure_state_update_fails() -> None:
+    claim_result = MagicMock()
+    claim_result.first.return_value = (1,)
+    session = MagicMock()
+    session.execute.side_effect = [
+        _RowsResult([_target_row(expected_count=3)]),
+        claim_result,
+        RuntimeError("seed fetch failed"),
+        RuntimeError("state update failed"),
+    ]
+    session_factory = MagicMock()
+    session_factory.return_value.__enter__.return_value = session
+    service = GithubPrV2BackfillService(
+        adapter_factory=AsyncMock(),
+        session_factory=session_factory,
+        collection_name="vectorstore",
+    )
+
+    with patch("catchup.sync.backfill.github_pr_v2.logger") as logger_mock:
+        result = await service.backfill_batch(limit=10, locked_by="test-runner")
+
+    assert result.scanned == 1
+    assert result.succeeded == 0
+    assert result.skipped == 0
+    assert result.failed == 3
+    warning_events = [call.args[0] for call in logger_mock.warning.call_args_list]
+    assert warning_events == [
+        "github_pr_v2_backfill_target_state_update_failed",
+        "github_pr_v2_backfill_target_finished",
+    ]
+    state_update_log = logger_mock.warning.call_args_list[0]
+    assert state_update_log.kwargs["original_error_type"] == "RuntimeError"
+    assert state_update_log.kwargs["state_error_type"] == "RuntimeError"

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from collections.abc import Awaitable
 from collections.abc import Callable
 from contextlib import AbstractContextManager
@@ -22,6 +23,8 @@ from catchup.components.vector_db.v2.constants import KNOWLEDGE_STORE_TABLE_NAME
 from catchup.configs.config import settings
 from catchup.db.engine import SessionLocal
 from catchup.sync.backfill.concurrency import run_bounded_targets
+from catchup.sync.backfill.state import backfill_candidate_state_predicate
+from catchup.sync.backfill.state import backfill_claimable_state_predicate
 from catchup.sync.backfill.state import build_failure_metadata
 from catchup.sync.ingestion.adapters.github import GithubPrV2BackfillAdapter
 from catchup.sync.ingestion.adapters.github import GithubPrV2BackfillExecutionRequest
@@ -104,12 +107,13 @@ class GithubPrV2BackfillService:
         async def _process_target(target) -> None:
             nonlocal succeeded, skipped, failed
             adapters: dict[str, GithubPrV2BackfillAdapter] = {}
+            processing_started_at: datetime | None = None
             try:
-                claimed = await asyncio.to_thread(
+                processing_started_at = await asyncio.to_thread(
                     self._mark_processing_sync,
                     target,
                 )
-                if not claimed:
+                if processing_started_at is None:
                     logger.info(
                         "github_pr_v2_backfill_target_claim_skipped",
                         **_target_log_context(target),
@@ -195,6 +199,7 @@ class GithubPrV2BackfillService:
                     target,
                     backfill_count,
                     failed_ids,
+                    processing_started_at,
                 )
                 logger.info(
                     "github_pr_v2_backfill_target_finished",
@@ -208,15 +213,27 @@ class GithubPrV2BackfillService:
                 failed += len(failed_ids)
             except Exception as exc:
                 failed += target.expected_count
-                await asyncio.to_thread(
-                    self._mark_finished_sync,
-                    target,
-                    0,
-                    [],
-                    force_failed=True,
-                    error_type=type(exc).__name__,
-                    error_message=str(exc),
-                )
+                try:
+                    await asyncio.to_thread(
+                        self._mark_finished_sync,
+                        target,
+                        0,
+                        [],
+                        processing_started_at,
+                        force_failed=True,
+                        error_type=type(exc).__name__,
+                        error_message=str(exc),
+                    )
+                except Exception as state_exc:
+                    logger.warning(
+                        "github_pr_v2_backfill_target_state_update_failed",
+                        **_target_log_context(target),
+                        original_error_type=type(exc).__name__,
+                        original_error_message=str(exc),
+                        state_error_type=type(state_exc).__name__,
+                        state_error_message=str(state_exc),
+                        exc_info=(type(state_exc), state_exc, state_exc.__traceback__),
+                    )
                 logger.warning(
                     "github_pr_v2_backfill_target_finished",
                     **_target_log_context(target),
@@ -226,7 +243,7 @@ class GithubPrV2BackfillService:
                     failed_ids=[],
                     error_type=type(exc).__name__,
                     error_message=str(exc),
-                    exc_info=True,
+                    exc_info=(type(exc), exc, exc.__traceback__),
                 )
 
 
@@ -353,7 +370,7 @@ class GithubPrV2BackfillService:
                 for row in rows
             ]
 
-    def _mark_processing_sync(self, target: GithubPrV1Target) -> bool:
+    def _mark_processing_sync(self, target: GithubPrV1Target) -> datetime | None:
         with self._session_factory() as db:
             result = db.execute(
                 build_mark_processing_statement(),
@@ -365,15 +382,18 @@ class GithubPrV2BackfillService:
                     "expected_count": target.expected_count,
                 },
             )
-            claimed = result.first() is not None
+            row = result.first()
             db.commit()
-            return claimed
+            if row is None:
+                return None
+            return row[0]
 
     def _mark_finished_sync(
         self,
         target: GithubPrV1Target,
         backfill_count: int,
         failed_ids: list[str],
+        processing_started_at: datetime | None = None,
         *,
         force_failed: bool = False,
         error_type: str | None = None,
@@ -398,12 +418,13 @@ class GithubPrV2BackfillService:
                     "state": state,
                     "expected_count": target.expected_count,
                     "backfill_count": backfill_count,
-                    "failed_ids": failed_ids,
+                    "failed_ids": json.dumps(failed_ids),
                     "succeeded_at": now if state == "succeeded" else None,
                     "failed_at": now if state == "failed" else None,
                     "last_error_type": failure_metadata.last_error_type if state == "failed" else None,
                     "last_error_message": failure_metadata.last_error_message if state == "failed" else None,
                     "next_retry_at": failure_metadata.next_retry_at if state == "failed" else None,
+                    "processing_started_at": processing_started_at,
                 },
             )
             db.commit()
@@ -471,6 +492,8 @@ def _format_pgvector_embedding(embedding: list[float]) -> str:
 
 
 def _embedding_to_list(value) -> list[float]:
+    if value is None:
+        return []
     if isinstance(value, str):
         raw = value.strip().removeprefix("[").removesuffix("]")
         if not raw:
@@ -551,16 +574,7 @@ def build_github_pr_v1_target_query():
          AND state.scope_id = grouped.scope_id
          AND state.target_id = grouped.target_id
         WHERE grouped.pending_count > 0
-          AND (
-              state.state IS NULL
-              OR (
-                  state.state IN ('pending', 'succeeded')
-                  OR (
-                      state.state = 'failed'
-                      AND state.next_retry_at <= now()
-                  )
-              )
-          )
+        {backfill_candidate_state_predicate("state")}
         ORDER BY grouped.scope_id, grouped.target_id
         LIMIT :limit
         """
@@ -754,7 +768,7 @@ def build_fetch_seeded_seed_chunk_query():
 
 def build_mark_processing_statement():
     return text(
-        """
+        f"""
         INSERT INTO vector_store_v2_backfill_states (
             connector,
             entity_type,
@@ -769,7 +783,8 @@ def build_mark_processing_statement():
             failure_count,
             last_error_type,
             last_error_message,
-            next_retry_at
+            next_retry_at,
+            processing_started_at
         )
         VALUES (
             :connector,
@@ -785,7 +800,8 @@ def build_mark_processing_statement():
             0,
             NULL,
             NULL,
-            NULL
+            NULL,
+            now()
         )
         ON CONFLICT (connector, entity_type, scope_id, target_id) DO UPDATE SET
             state = 'processing',
@@ -794,12 +810,12 @@ def build_mark_processing_statement():
             failed_ids = '[]'::jsonb,
             succeeded_at = NULL,
             failed_at = NULL,
-            failure_count = 0,
             last_error_type = NULL,
             last_error_message = NULL,
-            next_retry_at = NULL
-        WHERE vector_store_v2_backfill_states.state != 'processing'
-        RETURNING id
+            next_retry_at = NULL,
+            processing_started_at = now()
+        WHERE {backfill_claimable_state_predicate("vector_store_v2_backfill_states").strip()}
+        RETURNING processing_started_at
         """
     )
 
@@ -808,22 +824,24 @@ def build_mark_finished_statement():
     return text(
         """
         UPDATE vector_store_v2_backfill_states
-        SET state = :state,
+        SET state = CAST(:state AS varchar(32)),
             expected_count = :expected_count,
             backfill_count = :backfill_count,
-            failed_ids = :failed_ids,
+            failed_ids = CAST(:failed_ids AS jsonb),
             succeeded_at = :succeeded_at,
             failed_at = :failed_at,
             failure_count = CASE
-                WHEN :state = 'failed' THEN failure_count + 1
+                WHEN CAST(:state AS varchar(32)) = 'failed' THEN failure_count + 1
                 ELSE 0
             END,
             last_error_type = :last_error_type,
             last_error_message = :last_error_message,
-            next_retry_at = :next_retry_at
+            next_retry_at = :next_retry_at,
+            processing_started_at = NULL
         WHERE connector = :connector
           AND entity_type = :entity_type
           AND scope_id = :scope_id
           AND target_id = :target_id
+          AND processing_started_at = :processing_started_at
         """
     )

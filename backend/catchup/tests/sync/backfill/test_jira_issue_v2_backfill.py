@@ -35,6 +35,9 @@ def test_jira_issue_v2_backfill_targets_join_jira_projects_for_cloud_scope() -> 
     assert "#>> '{jira_issue,assignee,account_id}'" in sql
     assert "state.connector = 'jira'" in sql
     assert "state.entity_type = 'issue'" in sql
+    assert "state.next_retry_at IS NULL" in sql
+    assert "state.state = 'processing'" in sql
+    assert "state.processing_started_at" in sql
 
 
 def test_jira_issue_v2_backfill_seed_query_builds_v2_document_ids() -> None:

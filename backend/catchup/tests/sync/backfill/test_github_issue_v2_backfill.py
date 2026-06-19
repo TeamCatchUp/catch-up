@@ -14,6 +14,7 @@ from catchup.connectors.github.queries import build_issues_by_numbers_query
 from catchup.connectors.github.schemas import GithubIssue
 from catchup.connectors.github.schemas import GithubUser
 from catchup.sync.backfill.github_issue_v2 import GithubIssueV1Seed
+from catchup.sync.backfill.github_issue_v2 import _embedding_to_list
 from catchup.sync.backfill.github_issue_v2 import build_fetch_seeded_seed_chunk_query
 from catchup.sync.backfill.github_issue_v2 import build_github_issue_v1_target_query
 from catchup.sync.backfill.github_issue_v2 import (
@@ -296,7 +297,10 @@ def test_target_query_groups_v1_issues_by_scope_and_target() -> None:
     assert "state.entity_type = 'issue'" in query
     assert "state.state IN ('pending', 'succeeded')" in query
     assert "state.state = 'failed'" in query
+    assert "state.next_retry_at IS NULL" in query
     assert "state.next_retry_at <= now()" in query
+    assert "state.state = 'processing'" in query
+    assert "state.processing_started_at" in query
     assert "GROUP BY scope_id, target_id" in query
 
 
@@ -340,3 +344,7 @@ def test_fetch_seeded_seed_chunk_query_uses_numeric_issue_cursor() -> None:
     assert "record_number > CAST(:after_record_id AS integer)" in query
     assert "ORDER BY record_number" in query
     assert "LIMIT :limit" in query
+
+
+def test_github_issue_v2_embedding_to_list_treats_null_as_empty() -> None:
+    assert _embedding_to_list(None) == []
