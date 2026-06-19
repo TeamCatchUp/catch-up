@@ -37,7 +37,11 @@ _STATE_TTL = 60 * 10  # 10분
 
 
 def _server_base(request: Request) -> str:
-    """요청에서 scheme+host origin을 반환한다."""
+    """X-Forwarded-Proto를 우선 참조해 public origin URL을 반환한다."""
+    proto = request.headers.get("x-forwarded-proto", "")
+    host = request.headers.get("host", request.url.netloc)
+    if proto:
+        return f"{proto}://{host}"
     return str(request.base_url).rstrip("/")
 
 
