@@ -28,6 +28,9 @@ from catchup.utils.redis import get_redis_client
 
 logger = structlog.get_logger()
 
+# RFC 8414 + RFC 9728: 루트 well-known 엔드포인트 (nginx에서 백엔드로 라우팅됨)
+well_known_router = APIRouter(tags=["MCP OAuth"])
+
 router = APIRouter(prefix="/api/v1/mcp", tags=["MCP OAuth"])
 
 _MCP_CLIENT_PREFIX = "mcp:client:"
@@ -84,6 +87,44 @@ async def oauth_authorization_server_metadata(
         code_challenge_methods_supported=["S256"],
         token_endpoint_auth_methods_supported=["none"],
     )
+
+
+@well_known_router.get(
+    path="/.well-known/oauth-authorization-server",
+    response_model=OAuthAuthorizationServerMetadata,
+    description="RFC 8414 root AS 메타데이터 — Claude fallback 탐색 경로.",
+)
+async def root_oauth_authorization_server_metadata(
+    request: Request,
+) -> OAuthAuthorizationServerMetadata:
+    """루트 경로 AS 메타데이터를 반환한다. Claude의 fallback 탐색 경로."""
+    return await oauth_authorization_server_metadata(request)
+
+
+@well_known_router.get(
+    path="/.well-known/oauth-protected-resource",
+    description="RFC 9728 Protected Resource 메타데이터를 반환한다.",
+)
+@well_known_router.get(
+    path="/.well-known/oauth-protected-resource/{path:path}",
+    description="RFC 9728 Protected Resource 메타데이터 (경로 기반 변형).",
+)
+async def oauth_protected_resource_metadata(request: Request) -> dict:
+    """RFC 9728 Protected Resource 메타데이터를 반환한다.
+
+    Claude가 authorization_servers 필드로 AS 메타데이터를 탐색한다.
+    """
+    if not settings.MCP_OAUTH_ENABLED:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+
+    base = _server_base(request)
+    resource = f"{base}/api/v1/mcp"
+    return {
+        "resource": resource,
+        "authorization_servers": [resource],
+        "scopes_supported": ["openid", "email", "profile"],
+        "bearer_methods_supported": ["header"],
+    }
 
 
 @router.post(
