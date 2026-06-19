@@ -98,6 +98,9 @@ async def oauth_authorization_server_metadata(
         grant_types_supported=["authorization_code", "refresh_token"],
         code_challenge_methods_supported=["S256"],
         token_endpoint_auth_methods_supported=["none"],
+        jwks_uri=f"{base}/api/v1/mcp/oauth/jwks",
+        subject_types_supported=["public"],
+        id_token_signing_alg_values_supported=["RS256"],
     )
 
 
@@ -137,6 +140,17 @@ async def oauth_protected_resource_metadata(request: Request) -> dict:
         "scopes_supported": ["openid", "email", "profile"],
         "bearer_methods_supported": ["header"],
     }
+
+
+@router.get(
+    path="/oauth/jwks",
+    description="JWKS 엔드포인트. mcp-remote Zod 검증 호환용 더미 응답을 반환한다.",
+)
+async def jwks() -> dict:
+    """JSON Web Key Set을 반환한다. CatchUp은 HS256 대칭키를 사용하므로 keys는 비어있다."""
+    if not settings.MCP_OAUTH_ENABLED:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    return {"keys": []}
 
 
 @router.post(

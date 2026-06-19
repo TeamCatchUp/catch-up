@@ -13,6 +13,9 @@ class OAuthAuthorizationServerMetadata(BaseModel):
     grant_types_supported: list[str]
     code_challenge_methods_supported: list[str]
     token_endpoint_auth_methods_supported: list[str]
+    jwks_uri: str | None = None
+    subject_types_supported: list[str] | None = None
+    id_token_signing_alg_values_supported: list[str] | None = None
 
 
 class TokenResponse(BaseModel):
