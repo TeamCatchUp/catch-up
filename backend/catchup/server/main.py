@@ -65,7 +65,7 @@ from catchup.server.integrations.api import router as integrations_router
 from catchup.server.mapping.api import router as github_mapping_csv_router
 from catchup.server.mcp.oauth_api import router as mcp_oauth_router
 from catchup.server.mcp.oauth_api import well_known_router as mcp_well_known_router
-from catchup.server.middleware.request_context import request_context_middleware
+from catchup.server.middleware.request_context import RequestContextMiddleware
 from catchup.server.onboarding.api import router as onboarding_router
 from catchup.server.search.api import router as search_router
 from catchup.server.settings.api import router as settings_router
@@ -577,7 +577,7 @@ if settings.PYINSTRUMENT_ENABLED:
     from catchup.server.middleware.pyinstrument import profile_middleware
 
     app.middleware("http")(profile_middleware)
-app.middleware("http")(request_context_middleware)
+app.add_middleware(RequestContextMiddleware)
 
 
 # 헬스 체크
