@@ -48,15 +48,21 @@ def test_valid_token_passes_through():
     assert response.text == "ok"
 
 
-def test_well_known_discovery_redirects_to_root():
-    """Claude가 MCP 경로 아래에서 AS 메타데이터를 탐색할 때 루트로 리다이렉트한다."""
+def test_well_known_discovery_returns_metadata_directly(monkeypatch):
+    """Claude가 MCP 경로 아래에서 AS 메타데이터를 탐색할 때 미들웨어가 직접 응답한다."""
+    from catchup.configs.config import settings
+
+    monkeypatch.setattr(settings, "MCP_OAUTH_ENABLED", True)
+
     response = client.get(
         "/api/mcp/sse/.well-known/oauth-authorization-server",
-        follow_redirects=False,
     )
 
-    assert response.status_code == 302
-    assert response.headers["location"] == "/.well-known/oauth-authorization-server"
+    assert response.status_code == 200
+    data = response.json()
+    assert "authorization_endpoint" in data
+    assert "registration_endpoint" in data
+    assert "S256" in data["code_challenge_methods_supported"]
 
 
 def test_non_http_scope_passes_through():
