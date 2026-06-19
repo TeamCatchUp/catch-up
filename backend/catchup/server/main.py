@@ -554,8 +554,9 @@ app.include_router(mcp_oauth_router)
 
 if settings.MCP_SERVER_ENABLED:
     from catchup.mcp.server import mcp as mcp_server
+    from catchup.server.middleware.mcp_auth import MCPAuthMiddleware
 
-    app.mount("/api/mcp", mcp_server.sse_app())
+    app.mount("/api/mcp", MCPAuthMiddleware(mcp_server.sse_app()))
 
 
 app.add_middleware(
