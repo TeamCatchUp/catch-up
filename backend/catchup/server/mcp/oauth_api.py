@@ -63,6 +63,18 @@ def _mcp_callback_uri(request: Request) -> str:
 
 
 @router.get(
+    path="/.well-known/openid-configuration",
+    response_model=OAuthAuthorizationServerMetadata,
+    description="OpenID Connect 디스커버리 문서를 반환한다. AS 메타데이터와 동일하다.",
+)
+async def openid_configuration(
+    request: Request,
+) -> OAuthAuthorizationServerMetadata:
+    """OpenID Connect 디스커버리 엔드포인트. oauth-authorization-server와 동일하다."""
+    return await oauth_authorization_server_metadata(request)
+
+
+@router.get(
     path="/.well-known/oauth-authorization-server",
     response_model=OAuthAuthorizationServerMetadata,
     description="RFC 8414 Authorization Server 메타데이터를 반환한다.",
