@@ -120,41 +120,43 @@ class SlackMessageV2BackfillService:
                     skipped += 1
                     return
 
-                seeds = await asyncio.to_thread(
-                    self._fetch_candidate_seeds_for_target_sync,
-                    target,
-                )
-                await asyncio.to_thread(self._upsert_seed_rows_sync, target, seeds)
                 adapter = await self._get_adapter_for_scope(target.scope_id, adapters)
                 failed_langchain_ids: list[str] = []
                 backfill_count = 0
                 cursor: SlackMessageV2Cursor | None = None
 
                 while True:
-                    seed_chunk = await asyncio.to_thread(
-                        self._fetch_pending_seed_chunk_for_target_sync,
+                    seed_page = await asyncio.to_thread(
+                        self._fetch_candidate_seed_page_for_target_sync,
                         target,
                         cursor,
-                        HYDRATE_PIPELINE_BATCH_SIZE,
+                        settings.VECTOR_STORE_V2_BACKFILL_SEED_PAGE_SIZE,
                     )
-                    if not seed_chunk:
+                    if not seed_page:
                         break
 
+                    await asyncio.to_thread(
+                        self._upsert_seed_rows_sync,
+                        target,
+                        seed_page,
+                    )
                     cursor = await asyncio.to_thread(
                         self._cursor_for_last_seed_sync,
-                        seed_chunk[-1],
+                        seed_page[-1],
                     )
-                    result = await run_sync_ingestion(
-                        port=adapter,
-                        execution=_build_execution_request(target, seed_chunk),
-                        sync_window=_build_sync_window(),
-                    )
-                    chunk_failed_langchain_ids = _failed_langchain_ids_from_result(
-                        result,
-                        seed_chunk,
-                    )
-                    failed_langchain_ids.extend(chunk_failed_langchain_ids)
-                    backfill_count += result.persisted_count
+
+                    for seed_chunk in _chunked(seed_page, HYDRATE_PIPELINE_BATCH_SIZE):
+                        result = await run_sync_ingestion(
+                            port=adapter,
+                            execution=_build_execution_request(target, seed_chunk),
+                            sync_window=_build_sync_window(),
+                        )
+                        chunk_failed_langchain_ids = _failed_langchain_ids_from_result(
+                            result,
+                            seed_chunk,
+                        )
+                        failed_langchain_ids.extend(chunk_failed_langchain_ids)
+                        backfill_count += result.persisted_count
 
                 await asyncio.to_thread(
                     self._mark_finished_sync,
@@ -241,9 +243,11 @@ class SlackMessageV2BackfillService:
                 for row in rows
             ]
 
-    def _fetch_candidate_seeds_for_target_sync(
+    def _fetch_candidate_seed_page_for_target_sync(
         self,
         target: SlackMessageV1Target,
+        cursor: SlackMessageV2Cursor | None,
+        limit: int,
     ) -> list[SlackMessageV1Seed]:
         query = build_slack_message_v1_target_seed_query()
         with self._session_factory() as db:
@@ -253,6 +257,9 @@ class SlackMessageV2BackfillService:
                     "collection_name": self._collection_name,
                     "scope_id": target.scope_id,
                     "target_id": target.target_id,
+                    "after_record_ts": cursor.record_ts if cursor else None,
+                    "after_langchain_id": cursor.langchain_id if cursor else None,
+                    "limit": limit,
                 },
             ).mappings()
             return [
@@ -608,13 +615,32 @@ def build_slack_message_v1_target_seed_query():
             FROM v1_message
             LEFT JOIN {KNOWLEDGE_STORE_TABLE_NAME} v2
               ON v2.{KNOWLEDGE_STORE_ID_COLUMN} = v1_message.langchain_id
+        ),
+        typed_candidates AS (
+            SELECT
+                langchain_id,
+                record_id,
+                content,
+                embedding,
+                record_id::numeric(20,6) AS record_ts
+            FROM candidates
+            WHERE scope_id = :scope_id
+              AND target_id = :target_id
+              AND needs_backfill
+              AND record_id ~ '^[0-9]+\\.[0-9]+$'
         )
         SELECT langchain_id, record_id, content, embedding
-        FROM candidates
-        WHERE scope_id = :scope_id
-          AND target_id = :target_id
-          AND needs_backfill
-        ORDER BY record_id, langchain_id
+        FROM typed_candidates
+        WHERE (
+              CAST(:after_record_ts AS numeric(20,6)) IS NULL
+              OR record_ts > CAST(:after_record_ts AS numeric(20,6))
+              OR (
+                  record_ts = CAST(:after_record_ts AS numeric(20,6))
+                  AND langchain_id > COALESCE(:after_langchain_id, '')
+              )
+          )
+        ORDER BY record_ts, langchain_id
+        LIMIT :limit
         """
     )
 

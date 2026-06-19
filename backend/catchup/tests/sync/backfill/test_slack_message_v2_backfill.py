@@ -79,6 +79,13 @@ def test_slack_backfill_seed_query_skips_already_hydrated_rows() -> None:
     assert "needs_backfill" in query
     assert "COALESCE(v2.metadata::jsonb, '{}'::jsonb) = '{}'::jsonb" in query
     assert "v2.content IS DISTINCT FROM v1_message.content" in query
+    assert "record_id::numeric(20,6) AS record_ts" in query
+    assert "record_ts > CAST(:after_record_ts AS numeric(20,6))" in query
+    assert "record_ts = CAST(:after_record_ts AS numeric(20,6))" in query
+    assert "langchain_id > COALESCE(:after_langchain_id, '')" in query
+    assert "ORDER BY record_ts, langchain_id" in query
+    assert "LIMIT :limit" in query
+    assert "OFFSET" not in query
 
 
 def test_slack_timestamp_cursor_uses_decimal_ts_and_tiebreaker() -> None:

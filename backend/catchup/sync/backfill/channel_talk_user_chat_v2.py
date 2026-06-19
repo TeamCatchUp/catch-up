@@ -127,41 +127,43 @@ class ChannelTalkUserChatV2BackfillService:
                     skipped += 1
                     return
 
-                seeds = await asyncio.to_thread(
-                    self._fetch_candidate_seeds_for_target_sync,
-                    target,
-                )
-                await asyncio.to_thread(self._upsert_seed_rows_sync, target, seeds)
                 adapter = await self._get_adapter_for_scope(target.scope_id, adapters)
                 failed_langchain_ids: list[str] = []
                 backfill_count = 0
                 cursor: ChannelTalkUserChatV2Cursor | None = None
 
                 while True:
-                    seed_chunk = await asyncio.to_thread(
-                        self._fetch_pending_seed_chunk_for_target_sync,
+                    seed_page = await asyncio.to_thread(
+                        self._fetch_candidate_seed_page_for_target_sync,
                         target,
                         cursor,
-                        HYDRATE_PIPELINE_BATCH_SIZE,
+                        settings.VECTOR_STORE_V2_BACKFILL_SEED_PAGE_SIZE,
                     )
-                    if not seed_chunk:
+                    if not seed_page:
                         break
 
+                    await asyncio.to_thread(
+                        self._upsert_seed_rows_sync,
+                        target,
+                        seed_page,
+                    )
                     cursor = ChannelTalkUserChatV2Cursor(
-                        record_id=seed_chunk[-1].record_id,
-                        langchain_id=seed_chunk[-1].langchain_id,
+                        record_id=seed_page[-1].record_id,
+                        langchain_id=seed_page[-1].langchain_id,
                     )
-                    result = await run_sync_ingestion(
-                        port=adapter,
-                        execution=_build_execution_request(target, seed_chunk),
-                        sync_window=_build_sync_window(),
-                    )
-                    chunk_failed_ids = _failed_langchain_ids_from_result(
-                        result,
-                        seed_chunk,
-                    )
-                    failed_langchain_ids.extend(chunk_failed_ids)
-                    backfill_count += result.persisted_count
+
+                    for seed_chunk in _chunked(seed_page, HYDRATE_PIPELINE_BATCH_SIZE):
+                        result = await run_sync_ingestion(
+                            port=adapter,
+                            execution=_build_execution_request(target, seed_chunk),
+                            sync_window=_build_sync_window(),
+                        )
+                        chunk_failed_ids = _failed_langchain_ids_from_result(
+                            result,
+                            seed_chunk,
+                        )
+                        failed_langchain_ids.extend(chunk_failed_ids)
+                        backfill_count += result.persisted_count
 
                 await asyncio.to_thread(
                     self._mark_finished_sync,
@@ -248,9 +250,11 @@ class ChannelTalkUserChatV2BackfillService:
                 for row in rows
             ]
 
-    def _fetch_candidate_seeds_for_target_sync(
+    def _fetch_candidate_seed_page_for_target_sync(
         self,
         target: ChannelTalkUserChatV1Target,
+        cursor: ChannelTalkUserChatV2Cursor | None,
+        limit: int,
     ) -> list[ChannelTalkUserChatV1Seed]:
         query = build_channel_talk_user_chat_v1_target_seed_query()
         with self._session_factory() as db:
@@ -260,6 +264,9 @@ class ChannelTalkUserChatV2BackfillService:
                     "collection_name": self._collection_name,
                     "scope_id": target.scope_id,
                     "target_id": target.target_id,
+                    "after_record_id": cursor.record_id if cursor else None,
+                    "after_langchain_id": cursor.langchain_id if cursor else None,
+                    "limit": limit,
                 },
             ).mappings()
             return [
@@ -604,7 +611,15 @@ def build_channel_talk_user_chat_v1_target_seed_query():
         WHERE scope_id = :scope_id
           AND target_id = :target_id
           AND needs_backfill
+          AND (
+              CAST(:after_record_id AS text) IS NULL
+              OR (record_id, langchain_id) > (
+                  CAST(:after_record_id AS text),
+                  CAST(:after_langchain_id AS text)
+              )
+          )
         ORDER BY record_id, langchain_id
+        LIMIT :limit
         """
     )
 

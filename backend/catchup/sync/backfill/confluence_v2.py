@@ -72,6 +72,12 @@ class ConfluenceV1Target:
 
 
 @dataclass(slots=True, frozen=True)
+class ConfluenceV1SeedCursor:
+    record_id: str
+    langchain_id: str
+
+
+@dataclass(slots=True, frozen=True)
 class ConfluenceV2BackfillResult:
     scanned: int
     succeeded: int
@@ -118,42 +124,44 @@ class ConfluenceV2BackfillService:
                     skipped += 1
                     return
 
-                seeds = await asyncio.to_thread(
-                    self._fetch_candidate_seeds_for_target_sync,
-                    target,
-                )
-                await asyncio.to_thread(self._upsert_seed_rows_sync, target, seeds)
                 adapter = await self._get_adapter_for_scope(target.scope_id, adapters)
                 failed_ids: list[str] = []
                 backfill_count = 0
-                after_record_id: str | None = None
-                after_langchain_id: str | None = None
+                cursor: ConfluenceV1SeedCursor | None = None
 
                 while True:
-                    seed_chunk = await asyncio.to_thread(
-                        self._fetch_seeded_seed_chunk_for_target_sync,
+                    seed_page = await asyncio.to_thread(
+                        self._fetch_candidate_seed_page_for_target_sync,
                         target,
-                        after_record_id,
-                        after_langchain_id,
-                        HYDRATE_PIPELINE_BATCH_SIZE,
+                        cursor,
+                        settings.VECTOR_STORE_V2_BACKFILL_SEED_PAGE_SIZE,
                     )
-                    if not seed_chunk:
+                    if not seed_page:
                         break
 
-                    after_record_id = seed_chunk[-1].record_id
-                    after_langchain_id = seed_chunk[-1].langchain_id
-                    result = await run_sync_ingestion(
-                        port=adapter,
-                        execution=_build_execution_request(
-                            target,
-                            seed_chunk,
-                            entity_type=self._entity_type,
-                        ),
-                        sync_window=_build_sync_window(),
+                    await asyncio.to_thread(
+                        self._upsert_seed_rows_sync,
+                        target,
+                        seed_page,
                     )
-                    chunk_failed_ids = _failed_ids_from_result(result, seed_chunk)
-                    failed_ids.extend(chunk_failed_ids)
-                    backfill_count += result.persisted_count
+                    cursor = ConfluenceV1SeedCursor(
+                        record_id=seed_page[-1].record_id,
+                        langchain_id=seed_page[-1].langchain_id,
+                    )
+
+                    for seed_chunk in _chunked(seed_page, HYDRATE_PIPELINE_BATCH_SIZE):
+                        result = await run_sync_ingestion(
+                            port=adapter,
+                            execution=_build_execution_request(
+                                target,
+                                seed_chunk,
+                                entity_type=self._entity_type,
+                            ),
+                            sync_window=_build_sync_window(),
+                        )
+                        chunk_failed_ids = _failed_ids_from_result(result, seed_chunk)
+                        failed_ids.extend(chunk_failed_ids)
+                        backfill_count += result.persisted_count
 
                 await asyncio.to_thread(
                     self._mark_finished_sync,
@@ -232,9 +240,11 @@ class ConfluenceV2BackfillService:
                 if row["scope_id"] and row["target_id"]
             ]
 
-    def _fetch_candidate_seeds_for_target_sync(
+    def _fetch_candidate_seed_page_for_target_sync(
         self,
         target: ConfluenceV1Target,
+        cursor: ConfluenceV1SeedCursor | None,
+        limit: int,
     ) -> list[ConfluenceV1Seed]:
         with self._session_factory() as db:
             rows = db.execute(
@@ -243,6 +253,9 @@ class ConfluenceV2BackfillService:
                     "collection_name": self._collection_name,
                     "scope_id": target.scope_id,
                     "target_id": target.target_id,
+                    "after_record_id": cursor.record_id if cursor else None,
+                    "after_langchain_id": cursor.langchain_id if cursor else None,
+                    "limit": limit,
                 },
             ).mappings()
             seeds: list[ConfluenceV1Seed] = []
@@ -595,7 +608,17 @@ def build_confluence_v1_target_seed_query(entity_type: str = "page"):
         WHERE scope_id = :scope_id
           AND target_id = :target_id
           AND needs_backfill
+          AND embedding IS NOT NULL
+          AND (
+              CAST(:after_record_id AS text) IS NULL
+              OR record_id > CAST(:after_record_id AS text)
+              OR (
+                  record_id = CAST(:after_record_id AS text)
+                  AND langchain_id > COALESCE(CAST(:after_langchain_id AS text), '')
+              )
+          )
         ORDER BY record_id, langchain_id
+        LIMIT :limit
         """
     )
 

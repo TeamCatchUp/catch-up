@@ -45,7 +45,14 @@ def test_jira_issue_v2_backfill_seed_query_builds_v2_document_ids() -> None:
 
     assert "SELECT langchain_id, record_id, content, embedding" in sql
     assert "AND target_id = :target_id" in sql
-    assert "ORDER BY target_id, record_id, langchain_id" in sql
+    assert "AND embedding IS NOT NULL" in sql
+    assert "CAST(:after_record_id AS text) IS NULL" in sql
+    assert "record_id > CAST(:after_record_id AS text)" in sql
+    assert "record_id = CAST(:after_record_id AS text)" in sql
+    assert "langchain_id > COALESCE(CAST(:after_langchain_id AS text), '')" in sql
+    assert "ORDER BY record_id, langchain_id" in sql
+    assert "LIMIT :limit" in sql
+    assert "OFFSET" not in sql
     assert "'jira:issue:' || jp.cloud_id" in sql
     assert "'jira:epic:' || jp.cloud_id" not in sql
     assert "project_match_count = 1" in sql
