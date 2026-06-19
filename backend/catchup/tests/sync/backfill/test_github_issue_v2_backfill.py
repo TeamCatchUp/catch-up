@@ -314,8 +314,9 @@ def test_target_seed_query_returns_issue_rows_for_one_target() -> None:
     assert "WHERE candidates.scope_id = :scope_id" in query
     assert "AND candidates.target_id = :target_id" in query
     assert "AND candidates.needs_backfill" in query
-    assert "v2.updated_at < v1_issue.source_updated_at" in query
-    assert "v2.content IS DISTINCT FROM v1_issue.content" in query
+    assert "v1_issue.source_updated_at" not in query
+    assert "v2.updated_at <" not in query
+    assert "v2.content IS DISTINCT FROM" not in query
 
 
 def test_seed_rows_statement_marks_issue_seed_with_empty_json_metadata() -> None:
