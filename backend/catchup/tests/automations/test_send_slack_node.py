@@ -41,15 +41,13 @@ async def test_send_slack_node_posts_thread_reply():
 
     with (
         patch(
-            "catchup.automations.nodes.send_slack.get_slack_token_by_id",
+            "catchup.automations.nodes.send_slack.asyncio.to_thread",
+            new_callable=AsyncMock,
             return_value=mock_token,
         ),
         patch(
             "catchup.automations.nodes.send_slack.SlackApiClientWrapper",
             return_value=mock_client,
-        ),
-        patch(
-            "catchup.automations.nodes.send_slack.SessionLocal",
         ),
     ):
         result = await send_slack_node(state)
@@ -67,8 +65,12 @@ async def test_send_slack_node_no_guide_text_skips():
     """guide_text가 없으면 발송을 건너뛴다."""
     state = _make_state(guide_text="")
 
-    with patch("catchup.automations.nodes.send_slack.SlackApiClientWrapper") as mock_cls:
+    with (
+        patch("catchup.automations.nodes.send_slack.asyncio.to_thread") as mock_to_thread,
+        patch("catchup.automations.nodes.send_slack.SlackApiClientWrapper") as mock_cls,
+    ):
         result = await send_slack_node(state)
 
+    mock_to_thread.assert_not_called()
     mock_cls.assert_not_called()
     assert result == {}

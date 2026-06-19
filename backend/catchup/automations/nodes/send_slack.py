@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import re
 from datetime import datetime
 from datetime import timedelta
@@ -76,8 +77,11 @@ async def send_slack_node(state: dict[str, Any]) -> dict[str, Any]:
     channel_id: str = state["slack_channel_id"]
     credential_id: int = state["slack_credential_id"]
 
-    with SessionLocal() as db:
-        token = get_slack_token_by_id(db, credential_id)
+    def _get_token_sync() -> Any:
+        with SessionLocal() as db:
+            return get_slack_token_by_id(db, credential_id)
+
+    token = await asyncio.to_thread(_get_token_sync)
     if token is None or not token.bot_access_token or not token.team_id:
         raise RuntimeError(
             f"Slack credentials not found for credential_id={credential_id}"
