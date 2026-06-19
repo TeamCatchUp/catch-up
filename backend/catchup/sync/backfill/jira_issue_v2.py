@@ -24,8 +24,9 @@ from catchup.configs.config import settings
 from catchup.db.engine import SessionLocal
 from catchup.sync.backfill.concurrency import run_bounded_targets
 from catchup.sync.backfill.state import backfill_candidate_state_predicate
-from catchup.sync.backfill.state import backfill_claimable_state_predicate
 from catchup.sync.backfill.state import build_failure_metadata
+from catchup.sync.backfill.state import build_mark_finished_statement
+from catchup.sync.backfill.state import build_mark_processing_statement
 from catchup.sync.ingestion.adapters.jira import JiraIssueV2BackfillAdapter
 from catchup.sync.ingestion.adapters.jira import JiraIssueV2BackfillExecutionRequest
 from catchup.sync.ingestion.adapters.jira import JiraIssueV2BackfillSeed
@@ -56,6 +57,12 @@ class JiraIssueV1Target:
     target_id: str
     target_name: str
     expected_count: int
+
+
+@dataclass(slots=True, frozen=True)
+class JiraIssueV1SeedCursor:
+    record_id: str
+    langchain_id: str
 
 
 @dataclass(slots=True, frozen=True)
@@ -103,42 +110,44 @@ class JiraIssueV2BackfillService:
                     skipped += 1
                     return
 
-                seeds = await asyncio.to_thread(
-                    self._fetch_candidate_seeds_for_target_sync,
-                    target,
-                )
-                await asyncio.to_thread(self._upsert_seed_rows_sync, target, seeds)
                 adapter = await self._get_adapter_for_scope(target.scope_id, adapters)
 
                 failed_ids: list[str] = []
                 backfill_count = 0
-                after_record_id: str | None = None
-                after_langchain_id: str | None = None
+                cursor: JiraIssueV1SeedCursor | None = None
 
                 while True:
-                    seed_chunk = await asyncio.to_thread(
-                        self._fetch_seeded_seed_chunk_for_target_sync,
+                    seed_page = await asyncio.to_thread(
+                        self._fetch_candidate_seed_page_for_target_sync,
                         target,
-                        after_record_id,
-                        after_langchain_id,
-                        HYDRATE_PIPELINE_BATCH_SIZE,
+                        cursor,
+                        settings.VECTOR_STORE_V2_BACKFILL_SEED_PAGE_SIZE,
                     )
-                    if not seed_chunk:
+                    if not seed_page:
                         break
 
-                    after_record_id = seed_chunk[-1].record_id
-                    after_langchain_id = seed_chunk[-1].langchain_id
-                    result = await run_sync_ingestion(
-                        port=adapter,
-                        execution=_build_execution_request(
-                            target,
-                            seed_chunk,
-                        ),
-                        sync_window=_build_sync_window(),
+                    await asyncio.to_thread(
+                        self._upsert_seed_rows_sync,
+                        target,
+                        seed_page,
                     )
-                    chunk_failed_ids = _failed_ids_from_result(result, seed_chunk)
-                    failed_ids.extend(chunk_failed_ids)
-                    backfill_count += result.persisted_count
+                    cursor = JiraIssueV1SeedCursor(
+                        record_id=seed_page[-1].record_id,
+                        langchain_id=seed_page[-1].langchain_id,
+                    )
+
+                    for seed_chunk in _chunked(seed_page, HYDRATE_PIPELINE_BATCH_SIZE):
+                        result = await run_sync_ingestion(
+                            port=adapter,
+                            execution=_build_execution_request(
+                                target,
+                                seed_chunk,
+                            ),
+                            sync_window=_build_sync_window(),
+                        )
+                        chunk_failed_ids = _failed_ids_from_result(result, seed_chunk)
+                        failed_ids.extend(chunk_failed_ids)
+                        backfill_count += result.persisted_count
 
                 await asyncio.to_thread(
                     self._mark_finished_sync,
@@ -220,9 +229,11 @@ class JiraIssueV2BackfillService:
                 if row["scope_id"] and row["target_id"]
             ]
 
-    def _fetch_candidate_seeds_for_target_sync(
+    def _fetch_candidate_seed_page_for_target_sync(
         self,
         target: JiraIssueV1Target,
+        cursor: JiraIssueV1SeedCursor | None,
+        limit: int,
     ) -> list[JiraIssueV1Seed]:
         with self._session_factory() as db:
             rows = db.execute(
@@ -231,6 +242,9 @@ class JiraIssueV2BackfillService:
                     "collection_name": self._collection_name,
                     "scope_id": target.scope_id,
                     "target_id": target.target_id,
+                    "after_record_id": cursor.record_id if cursor else None,
+                    "after_langchain_id": cursor.langchain_id if cursor else None,
+                    "limit": limit,
                 },
             ).mappings()
             seeds: list[JiraIssueV1Seed] = []
@@ -555,6 +569,33 @@ def build_jira_issue_v1_target_query():
     return build_jira_v1_target_query()
 
 
+def _jira_issue_needs_backfill_expr() -> str:
+    return f"""
+                    (
+                        COALESCE(v2.{KNOWLEDGE_STORE_METADATA_JSON_COLUMN}::jsonb, '{{}}'::jsonb) = '{{}}'::jsonb
+                        OR v2.{KNOWLEDGE_STORE_ID_COLUMN} IS NULL
+                        OR (
+                            v2.internal_author_id IS NULL
+                            AND COALESCE(
+                                v2.{KNOWLEDGE_STORE_METADATA_JSON_COLUMN}::jsonb
+                                    #>> '{{jira_issue,assignee,account_id}}',
+                                ''
+                            ) != ''
+                        )
+                        OR (
+                            v1_issue_with_target.source_updated_at IS NOT NULL
+                            AND (
+                                v2.updated_at < v1_issue_with_target.source_updated_at
+                                OR (
+                                    v2.updated_at = v1_issue_with_target.source_updated_at
+                                    AND v2.content IS DISTINCT FROM v1_issue_with_target.content
+                                )
+                            )
+                        )
+                    )
+    """
+
+
 def build_jira_v1_target_query():
     return text(
         f"""
@@ -564,28 +605,7 @@ def build_jira_v1_target_query():
                 v1_issue_with_target.scope_id,
                 v1_issue_with_target.target_id,
                 v1_issue_with_target.target_name,
-                (
-                    COALESCE(v2.{KNOWLEDGE_STORE_METADATA_JSON_COLUMN}::jsonb, '{{}}'::jsonb) = '{{}}'::jsonb
-                    OR v2.{KNOWLEDGE_STORE_ID_COLUMN} IS NULL
-                    OR (
-                        v2.internal_author_id IS NULL
-                        AND COALESCE(
-                            v2.{KNOWLEDGE_STORE_METADATA_JSON_COLUMN}::jsonb
-                                #>> '{{jira_issue,assignee,account_id}}',
-                            ''
-                        ) != ''
-                    )
-                    OR (
-                        v1_issue_with_target.source_updated_at IS NOT NULL
-                        AND (
-                            v2.updated_at < v1_issue_with_target.source_updated_at
-                            OR (
-                                v2.updated_at = v1_issue_with_target.source_updated_at
-                                AND v2.content IS DISTINCT FROM v1_issue_with_target.content
-                            )
-                        )
-                    )
-                ) AS needs_backfill
+                {_jira_issue_needs_backfill_expr()} AS needs_backfill
             FROM v1_issue_with_target
             LEFT JOIN {KNOWLEDGE_STORE_TABLE_NAME} v2
               ON v2.{KNOWLEDGE_STORE_ID_COLUMN} = v1_issue_with_target.langchain_id
@@ -635,28 +655,7 @@ def build_jira_v1_target_seed_query():
                 v1_issue_with_target.embedding,
                 v1_issue_with_target.scope_id,
                 v1_issue_with_target.target_id,
-                (
-                    COALESCE(v2.{KNOWLEDGE_STORE_METADATA_JSON_COLUMN}::jsonb, '{{}}'::jsonb) = '{{}}'::jsonb
-                    OR v2.{KNOWLEDGE_STORE_ID_COLUMN} IS NULL
-                    OR (
-                        v2.internal_author_id IS NULL
-                        AND COALESCE(
-                            v2.{KNOWLEDGE_STORE_METADATA_JSON_COLUMN}::jsonb
-                                #>> '{{jira_issue,assignee,account_id}}',
-                            ''
-                        ) != ''
-                    )
-                    OR (
-                        v1_issue_with_target.source_updated_at IS NOT NULL
-                        AND (
-                            v2.updated_at < v1_issue_with_target.source_updated_at
-                            OR (
-                                v2.updated_at = v1_issue_with_target.source_updated_at
-                                AND v2.content IS DISTINCT FROM v1_issue_with_target.content
-                            )
-                        )
-                    )
-                ) AS needs_backfill
+                {_jira_issue_needs_backfill_expr()} AS needs_backfill
             FROM v1_issue_with_target
             LEFT JOIN {KNOWLEDGE_STORE_TABLE_NAME} v2
               ON v2.{KNOWLEDGE_STORE_ID_COLUMN} = v1_issue_with_target.langchain_id
@@ -666,7 +665,17 @@ def build_jira_v1_target_seed_query():
         WHERE scope_id = :scope_id
           AND target_id = :target_id
           AND needs_backfill
-        ORDER BY target_id, record_id, langchain_id
+          AND embedding IS NOT NULL
+          AND (
+              CAST(:after_record_id AS text) IS NULL
+              OR record_id > CAST(:after_record_id AS text)
+              OR (
+                  record_id = CAST(:after_record_id AS text)
+                  AND langchain_id > COALESCE(CAST(:after_langchain_id AS text), '')
+              )
+          )
+        ORDER BY record_id, langchain_id
+        LIMIT :limit
         """
     )
 
@@ -757,86 +766,5 @@ def build_fetch_pending_seed_chunk_query():
           )
         ORDER BY record_id, {KNOWLEDGE_STORE_ID_COLUMN}
         LIMIT :limit
-        """
-    )
-
-
-def build_mark_processing_statement():
-    return text(
-        f"""
-        INSERT INTO vector_store_v2_backfill_states (
-            connector,
-            entity_type,
-            scope_id,
-            target_id,
-            state,
-            expected_count,
-            backfill_count,
-            failed_ids,
-            succeeded_at,
-            failed_at,
-            failure_count,
-            last_error_type,
-            last_error_message,
-            next_retry_at,
-            processing_started_at
-        )
-        VALUES (
-            :connector,
-            :entity_type,
-            :scope_id,
-            :target_id,
-            'processing',
-            :expected_count,
-            0,
-            '[]'::jsonb,
-            NULL,
-            NULL,
-            0,
-            NULL,
-            NULL,
-            NULL,
-            now()
-        )
-        ON CONFLICT (connector, entity_type, scope_id, target_id) DO UPDATE SET
-            state = 'processing',
-            expected_count = EXCLUDED.expected_count,
-            backfill_count = 0,
-            failed_ids = '[]'::jsonb,
-            succeeded_at = NULL,
-            failed_at = NULL,
-            last_error_type = NULL,
-            last_error_message = NULL,
-            next_retry_at = NULL,
-            processing_started_at = now()
-        WHERE {backfill_claimable_state_predicate("vector_store_v2_backfill_states").strip()}
-        RETURNING processing_started_at
-        """
-    )
-
-
-def build_mark_finished_statement():
-    return text(
-        """
-        UPDATE vector_store_v2_backfill_states
-        SET state = CAST(:state AS varchar(32)),
-            expected_count = :expected_count,
-            backfill_count = :backfill_count,
-            failed_ids = CAST(:failed_ids AS jsonb),
-            succeeded_at = :succeeded_at,
-            failed_at = :failed_at,
-            failure_count = CASE
-                WHEN CAST(:state AS varchar(32)) = 'failed' THEN failure_count + 1
-                ELSE 0
-            END,
-            last_error_type = :last_error_type,
-            last_error_message = :last_error_message,
-            next_retry_at = :next_retry_at,
-            processing_started_at = NULL
-        WHERE connector = :connector
-          AND entity_type = :entity_type
-          AND scope_id = :scope_id
-          AND target_id = :target_id
-          AND processing_started_at = :processing_started_at
         """
     )

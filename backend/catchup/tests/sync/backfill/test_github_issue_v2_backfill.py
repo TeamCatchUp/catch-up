@@ -391,6 +391,13 @@ def test_target_seed_query_returns_issue_rows_for_one_target() -> None:
     assert "WHERE candidates.scope_id = :scope_id" in query
     assert "AND candidates.target_id = :target_id" in query
     assert "AND candidates.needs_backfill" in query
+    assert "CAST(:after_record_number AS integer) IS NULL" in query
+    assert "record_number > CAST(:after_record_number AS integer)" in query
+    assert "record_number = CAST(:after_record_number AS integer)" in query
+    assert "langchain_id > COALESCE(CAST(:after_langchain_id AS text), '')" in query
+    assert "ORDER BY record_number, langchain_id" in query
+    assert "LIMIT :limit" in query
+    assert "OFFSET" not in query
     assert "v1_issue.source_updated_at" not in query
     assert "v2.updated_at <" not in query
     assert "v2.content IS DISTINCT FROM" not in query
@@ -424,7 +431,9 @@ def test_fetch_seeded_seed_chunk_query_uses_numeric_issue_cursor() -> None:
     assert "record_id::integer AS record_number" in query
     assert "CAST(:after_record_id AS integer) IS NULL" in query
     assert "record_number > CAST(:after_record_id AS integer)" in query
-    assert "ORDER BY record_number" in query
+    assert "record_number = CAST(:after_record_id AS integer)" in query
+    assert "langchain_id > COALESCE(CAST(:after_langchain_id AS text), '')" in query
+    assert "ORDER BY record_number, langchain_id" in query
     assert "LIMIT :limit" in query
 
 

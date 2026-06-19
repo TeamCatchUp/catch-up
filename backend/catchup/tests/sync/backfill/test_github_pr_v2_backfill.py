@@ -12,6 +12,7 @@ from unittest.mock import patch
 import pytest
 from langchain_core.documents import Document
 
+from catchup.configs.config import settings
 from catchup.connectors.github.queries import build_pull_requests_by_numbers_query
 from catchup.connectors.github.schemas import GithubPullRequest
 from catchup.connectors.github.schemas import GithubUser
@@ -23,6 +24,9 @@ from catchup.sync.backfill.github_pr_v2 import build_github_pr_v1_target_query
 from catchup.sync.backfill.github_pr_v2 import build_github_pr_v1_target_seed_query
 from catchup.sync.backfill.github_pr_v2 import build_mark_processing_statement
 from catchup.sync.backfill.github_pr_v2 import build_upsert_seed_rows_statement
+from catchup.sync.backfill.state import (
+    build_mark_processing_statement as build_shared_mark_processing_statement,
+)
 from catchup.sync.ingestion.adapters.github import GithubPrV2BackfillAdapter
 from catchup.sync.ingestion.adapters.github import GithubPrV2BackfillExecutionRequest
 from catchup.sync.ingestion.adapters.github import GithubPrV2BackfillSeed
@@ -407,6 +411,13 @@ def test_target_seed_query_returns_backfill_needed_rows_for_one_target() -> None
     assert "WHERE candidates.scope_id = :scope_id" in query
     assert "AND candidates.target_id = :target_id" in query
     assert "AND candidates.needs_backfill" in query
+    assert "CAST(:after_record_number AS integer) IS NULL" in query
+    assert "record_number > CAST(:after_record_number AS integer)" in query
+    assert "record_number = CAST(:after_record_number AS integer)" in query
+    assert "langchain_id > COALESCE(CAST(:after_langchain_id AS text), '')" in query
+    assert "ORDER BY record_number, langchain_id" in query
+    assert "LIMIT :limit" in query
+    assert "OFFSET" not in query
     assert "v1_pr.source_updated_at" not in query
     assert "v2.updated_at <" not in query
     assert "v2.content IS DISTINCT FROM" not in query
@@ -438,7 +449,9 @@ def test_fetch_seeded_seed_chunk_query_reads_v2_seed_rows_by_empty_metadata() ->
     assert "record_id::integer AS record_number" in query
     assert "CAST(:after_record_id AS integer) IS NULL" in query
     assert "record_number > CAST(:after_record_id AS integer)" in query
-    assert "ORDER BY record_number" in query
+    assert "record_number = CAST(:after_record_id AS integer)" in query
+    assert "langchain_id > COALESCE(CAST(:after_langchain_id AS text), '')" in query
+    assert "ORDER BY record_number, langchain_id" in query
     assert "LIMIT :limit" in query
 
 
@@ -459,21 +472,7 @@ def test_github_fetch_result_log_summary_counts_exact_items() -> None:
 
 
 def test_mark_processing_statement_claims_scope_target_conditionally() -> None:
-    statement = str(build_mark_processing_statement())
-
-    assert "ON CONFLICT (connector, entity_type, scope_id, target_id)" in statement
-    assert "state = 'processing'" in statement
-    assert "expected_count = EXCLUDED.expected_count" in statement
-    assert "failed_ids = '[]'::jsonb" in statement
-    assert "processing_started_at = now()" in statement
-    assert "failure_count = 0" not in statement.split(
-        "ON CONFLICT (connector, entity_type, scope_id, target_id) DO UPDATE SET"
-    )[1]
-    assert "vector_store_v2_backfill_states.state IN ('pending', 'succeeded')" in statement
-    assert "vector_store_v2_backfill_states.next_retry_at IS NULL" in statement
-    assert "vector_store_v2_backfill_states.next_retry_at <= now()" in statement
-    assert "vector_store_v2_backfill_states.processing_started_at IS NULL" in statement
-    assert "RETURNING processing_started_at" in statement
+    assert build_mark_processing_statement is build_shared_mark_processing_statement
 
 
 @pytest.mark.asyncio
@@ -487,7 +486,6 @@ async def test_backfill_batch_records_scope_success_when_target_seeds_are_persis
         claim_result,
         _RowsResult([_seed_row(seed)]),
         MagicMock(),
-        _RowsResult([_seed_row(seed)]),
         _RowsResult([]),
         MagicMock(),
     ]
@@ -533,12 +531,10 @@ async def test_backfill_batch_records_scope_success_when_target_seeds_are_persis
     seed_insert_params = session.execute.call_args_list[3].args[1]
     assert seed_insert_params[0]["langchain_id"] == seed.langchain_id
     assert seed_insert_params[0]["embedding"] == "[0.0123,-0.0456,0.0789]"
-    first_chunk_params = session.execute.call_args_list[4].args[1]
-    assert first_chunk_params["limit"] == 50
-    assert first_chunk_params["after_record_id"] is None
-    second_chunk_params = session.execute.call_args_list[5].args[1]
-    assert second_chunk_params["limit"] == 50
-    assert second_chunk_params["after_record_id"] == int(seed.record_id)
+    next_seed_page_params = session.execute.call_args_list[4].args[1]
+    assert next_seed_page_params["limit"] == settings.VECTOR_STORE_V2_BACKFILL_SEED_PAGE_SIZE
+    assert next_seed_page_params["after_record_number"] == int(seed.record_id)
+    assert next_seed_page_params["after_langchain_id"] == seed.langchain_id
 
     finish_params = session.execute.call_args_list[-1].args[1]
     assert finish_params["state"] == "succeeded"
@@ -553,7 +549,7 @@ async def test_backfill_batch_records_scope_success_when_target_seeds_are_persis
     assert info_events == [
         "github_pr_v2_backfill_candidate_targets_fetched",
         "github_pr_v2_backfill_target_claimed",
-        "github_pr_v2_backfill_v1_seeds_fetched",
+        "github_pr_v2_backfill_v1_seed_page_fetched",
         "github_pr_v2_backfill_seed_rows_upserted",
         "github_pr_v2_backfill_seeded_chunk_started",
         "github_pr_v2_backfill_seeded_chunk_completed",
@@ -566,15 +562,20 @@ async def test_backfill_batch_records_scope_success_when_target_seeds_are_persis
     assert seed_log.kwargs["scope_id"] == "118342815"
     assert seed_log.kwargs["target_id"] == "TeamCatchUp/CatchUp"
     assert seed_log.kwargs["expected_count"] == 1
+    assert seed_log.kwargs["seed_page_index"] == 1
     assert seed_log.kwargs["seed_count"] == 1
+    assert seed_log.kwargs["seed_page_size"] == settings.VECTOR_STORE_V2_BACKFILL_SEED_PAGE_SIZE
+    assert seed_log.kwargs["after_record_number"] is None
+    assert seed_log.kwargs["after_langchain_id"] is None
     upsert_log = logger_mock.info.call_args_list[3]
+    assert upsert_log.kwargs["seed_page_index"] == 1
     assert upsert_log.kwargs["upserted_count"] == 1
     assert upsert_log.kwargs["seed_insert_batch_size"] == 100
     chunk_started_log = logger_mock.info.call_args_list[4]
+    assert chunk_started_log.kwargs["seed_page_index"] == 1
     assert chunk_started_log.kwargs["chunk_index"] == 1
     assert chunk_started_log.kwargs["seed_count"] == 1
     assert chunk_started_log.kwargs["hydrate_batch_size"] == 50
-    assert chunk_started_log.kwargs["after_record_id"] is None
     assert chunk_started_log.kwargs["last_record_id"] == seed.record_id
     assert chunk_started_log.kwargs["last_langchain_id"] == seed.langchain_id
     chunk_completed_log = logger_mock.info.call_args_list[5]
@@ -637,7 +638,6 @@ async def test_backfill_batch_records_failed_ids_when_pipeline_reports_failure()
         claim_result,
         _RowsResult([_seed_row(seed)]),
         MagicMock(),
-        _RowsResult([_seed_row(seed)]),
         _RowsResult([]),
         MagicMock(),
     ]

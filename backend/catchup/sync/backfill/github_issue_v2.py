@@ -24,8 +24,9 @@ from catchup.configs.config import settings
 from catchup.db.engine import SessionLocal
 from catchup.sync.backfill.concurrency import run_bounded_targets
 from catchup.sync.backfill.state import backfill_candidate_state_predicate
-from catchup.sync.backfill.state import backfill_claimable_state_predicate
 from catchup.sync.backfill.state import build_failure_metadata
+from catchup.sync.backfill.state import build_mark_finished_statement
+from catchup.sync.backfill.state import build_mark_processing_statement
 from catchup.sync.ingestion.adapters.github import GithubIssueV2BackfillAdapter
 from catchup.sync.ingestion.adapters.github import GithubIssueV2BackfillExecutionRequest
 from catchup.sync.ingestion.adapters.github import GithubIssueV2BackfillSeed
@@ -65,6 +66,12 @@ class GithubIssueV1Target:
     @property
     def repo(self) -> str:
         return self.target_id.split("/", 1)[1]
+
+
+@dataclass(slots=True, frozen=True)
+class GithubIssueV1SeedCursor:
+    record_number: int
+    langchain_id: str
 
 
 @dataclass(slots=True, frozen=True)
@@ -128,73 +135,87 @@ class GithubIssueV2BackfillService:
                     **_target_log_context(target),
                 )
 
-                seeds = await asyncio.to_thread(
-                    self._fetch_candidate_seeds_for_target_sync,
-                    target,
-                )
-                logger.info(
-                    "github_issue_v2_backfill_v1_seeds_fetched",
-                    **_target_log_context(target),
-                    seed_count=len(seeds),
-                )
-                upserted_seed_count = await asyncio.to_thread(
-                    self._upsert_seed_rows_sync,
-                    target,
-                    seeds,
-                )
-                logger.info(
-                    "github_issue_v2_backfill_seed_rows_upserted",
-                    **_target_log_context(target),
-                    seed_count=len(seeds),
-                    upserted_count=upserted_seed_count,
-                    seed_insert_batch_size=SEED_INSERT_BATCH_SIZE,
-                )
                 adapter = await self._get_adapter_for_scope(target.scope_id, adapters)
                 failed_ids: list[str] = []
                 backfill_count = 0
-                after_record_id: int | None = None
+                seed_cursor: GithubIssueV1SeedCursor | None = None
+                seed_page_index = 0
                 chunk_index = 0
 
                 while True:
-                    seed_chunk = await asyncio.to_thread(
-                        self._fetch_seeded_seed_chunk_for_target_sync,
+                    seed_page = await asyncio.to_thread(
+                        self._fetch_candidate_seed_page_for_target_sync,
                         target,
-                        after_record_id,
-                        HYDRATE_PIPELINE_BATCH_SIZE,
+                        seed_cursor,
+                        settings.VECTOR_STORE_V2_BACKFILL_SEED_PAGE_SIZE,
                     )
-                    if not seed_chunk:
+                    if not seed_page:
                         break
 
-                    chunk_index += 1
-                    next_after_record_id = _record_id_to_int(seed_chunk[-1].record_id)
+                    seed_page_index += 1
                     logger.info(
-                        "github_issue_v2_backfill_seeded_chunk_started",
+                        "github_issue_v2_backfill_v1_seed_page_fetched",
                         **_target_log_context(target),
-                        chunk_index=chunk_index,
-                        seed_count=len(seed_chunk),
-                        hydrate_batch_size=HYDRATE_PIPELINE_BATCH_SIZE,
-                        after_record_id=after_record_id,
-                        last_record_id=seed_chunk[-1].record_id,
-                        last_langchain_id=seed_chunk[-1].langchain_id,
+                        seed_page_index=seed_page_index,
+                        seed_count=len(seed_page),
+                        seed_page_size=settings.VECTOR_STORE_V2_BACKFILL_SEED_PAGE_SIZE,
+                        after_record_number=(
+                            seed_cursor.record_number if seed_cursor else None
+                        ),
+                        after_langchain_id=(
+                            seed_cursor.langchain_id if seed_cursor else None
+                        ),
+                        last_record_id=seed_page[-1].record_id,
+                        last_langchain_id=seed_page[-1].langchain_id,
                     )
-                    after_record_id = next_after_record_id
-                    result = await run_sync_ingestion(
-                        port=adapter,
-                        execution=_build_execution_request(target, seed_chunk),
-                        sync_window=_build_sync_window(),
+                    upserted_seed_count = await asyncio.to_thread(
+                        self._upsert_seed_rows_sync,
+                        target,
+                        seed_page,
                     )
-                    chunk_failed_ids = _failed_ids_from_result(result, seed_chunk)
-                    failed_ids.extend(chunk_failed_ids)
-                    backfill_count += result.persisted_count
                     logger.info(
-                        "github_issue_v2_backfill_seeded_chunk_completed",
+                        "github_issue_v2_backfill_seed_rows_upserted",
                         **_target_log_context(target),
-                        chunk_index=chunk_index,
-                        seed_count=len(seed_chunk),
-                        persisted_count=result.persisted_count,
-                        failed_count=len(chunk_failed_ids),
-                        failed_ids=chunk_failed_ids,
+                        seed_page_index=seed_page_index,
+                        seed_count=len(seed_page),
+                        upserted_count=upserted_seed_count,
+                        seed_insert_batch_size=SEED_INSERT_BATCH_SIZE,
                     )
+                    seed_cursor = GithubIssueV1SeedCursor(
+                        record_number=_record_id_to_int(seed_page[-1].record_id),
+                        langchain_id=seed_page[-1].langchain_id,
+                    )
+
+                    for seed_chunk in _chunked(seed_page, HYDRATE_PIPELINE_BATCH_SIZE):
+                        chunk_index += 1
+                        logger.info(
+                            "github_issue_v2_backfill_seeded_chunk_started",
+                            **_target_log_context(target),
+                            seed_page_index=seed_page_index,
+                            chunk_index=chunk_index,
+                            seed_count=len(seed_chunk),
+                            hydrate_batch_size=HYDRATE_PIPELINE_BATCH_SIZE,
+                            last_record_id=seed_chunk[-1].record_id,
+                            last_langchain_id=seed_chunk[-1].langchain_id,
+                        )
+                        result = await run_sync_ingestion(
+                            port=adapter,
+                            execution=_build_execution_request(target, seed_chunk),
+                            sync_window=_build_sync_window(),
+                        )
+                        chunk_failed_ids = _failed_ids_from_result(result, seed_chunk)
+                        failed_ids.extend(chunk_failed_ids)
+                        backfill_count += result.persisted_count
+                        logger.info(
+                            "github_issue_v2_backfill_seeded_chunk_completed",
+                            **_target_log_context(target),
+                            seed_page_index=seed_page_index,
+                            chunk_index=chunk_index,
+                            seed_count=len(seed_chunk),
+                            persisted_count=result.persisted_count,
+                            failed_count=len(chunk_failed_ids),
+                            failed_ids=chunk_failed_ids,
+                        )
 
                 await asyncio.to_thread(
                     self._mark_finished_sync,
@@ -289,9 +310,11 @@ class GithubIssueV2BackfillService:
                 for row in rows
             ]
 
-    def _fetch_candidate_seeds_for_target_sync(
+    def _fetch_candidate_seed_page_for_target_sync(
         self,
         target: GithubIssueV1Target,
+        cursor: GithubIssueV1SeedCursor | None,
+        limit: int,
     ) -> list[GithubIssueV1Seed]:
         query = build_github_issue_v1_target_seed_query()
         with self._session_factory() as db:
@@ -301,6 +324,11 @@ class GithubIssueV2BackfillService:
                     "collection_name": self._collection_name,
                     "scope_id": target.scope_id,
                     "target_id": target.target_id,
+                    "after_record_number": (
+                        cursor.record_number if cursor else None
+                    ),
+                    "after_langchain_id": cursor.langchain_id if cursor else None,
+                    "limit": limit,
                 },
             ).mappings()
             return [
@@ -349,6 +377,7 @@ class GithubIssueV2BackfillService:
         self,
         target: GithubIssueV1Target,
         after_record_id: int | None,
+        after_langchain_id: str | None,
         limit: int,
     ) -> list[GithubIssueV1Seed]:
         query = build_fetch_seeded_seed_chunk_query()
@@ -359,6 +388,7 @@ class GithubIssueV2BackfillService:
                     "scope_id": target.scope_id,
                     "target_id": target.target_id,
                     "after_record_id": after_record_id,
+                    "after_langchain_id": after_langchain_id,
                     "limit": limit,
                 },
             ).mappings()
@@ -518,6 +548,15 @@ def _record_id_to_int(record_id: str) -> int:
     return int(record_id)
 
 
+def _github_issue_needs_backfill_expr() -> str:
+    return f"""
+                    (
+                        COALESCE(v2.{KNOWLEDGE_STORE_METADATA_JSON_COLUMN}::jsonb, '{{}}'::jsonb) = '{{}}'::jsonb
+                        OR v2.{KNOWLEDGE_STORE_ID_COLUMN} IS NULL
+                    )
+    """
+
+
 def build_github_issue_v1_target_query():
     return text(
         f"""
@@ -547,10 +586,7 @@ def build_github_issue_v1_target_query():
             SELECT
                 v1_issue.scope_id,
                 v1_issue.target_id,
-                (
-                    COALESCE(v2.{KNOWLEDGE_STORE_METADATA_JSON_COLUMN}::jsonb, '{{}}'::jsonb) = '{{}}'::jsonb
-                    OR v2.{KNOWLEDGE_STORE_ID_COLUMN} IS NULL
-                ) AS needs_backfill
+                {_github_issue_needs_backfill_expr()} AS needs_backfill
             FROM v1_issue
             LEFT JOIN {KNOWLEDGE_STORE_TABLE_NAME} v2
               ON v2.{KNOWLEDGE_STORE_ID_COLUMN} = v1_issue.langchain_id
@@ -619,24 +655,40 @@ def build_github_issue_v1_target_seed_query():
                 v1_issue.embedding,
                 v1_issue.scope_id,
                 v1_issue.target_id,
-                (
-                    COALESCE(v2.{KNOWLEDGE_STORE_METADATA_JSON_COLUMN}::jsonb, '{{}}'::jsonb) = '{{}}'::jsonb
-                    OR v2.{KNOWLEDGE_STORE_ID_COLUMN} IS NULL
-                ) AS needs_backfill
+                {_github_issue_needs_backfill_expr()} AS needs_backfill
             FROM v1_issue
             LEFT JOIN {KNOWLEDGE_STORE_TABLE_NAME} v2
               ON v2.{KNOWLEDGE_STORE_ID_COLUMN} = v1_issue.langchain_id
+        ),
+        numbered_candidates AS (
+            SELECT
+                candidates.langchain_id,
+                candidates.record_id,
+                candidates.content,
+                candidates.embedding,
+                candidates.record_id::integer AS record_number
+            FROM candidates
+            WHERE candidates.scope_id = :scope_id
+              AND candidates.target_id = :target_id
+              AND candidates.needs_backfill
+              AND candidates.record_id ~ '^[0-9]+$'
         )
         SELECT
-            candidates.langchain_id,
-            candidates.record_id,
-            candidates.content,
-            candidates.embedding
-        FROM candidates
-        WHERE candidates.scope_id = :scope_id
-          AND candidates.target_id = :target_id
-          AND candidates.needs_backfill
-        ORDER BY candidates.langchain_id
+            langchain_id,
+            record_id,
+            content,
+            embedding
+        FROM numbered_candidates
+        WHERE (
+              CAST(:after_record_number AS integer) IS NULL
+              OR record_number > CAST(:after_record_number AS integer)
+              OR (
+                  record_number = CAST(:after_record_number AS integer)
+                  AND langchain_id > COALESCE(CAST(:after_langchain_id AS text), '')
+              )
+          )
+        ORDER BY record_number, langchain_id
+        LIMIT :limit
         """
     )
 
@@ -741,89 +793,12 @@ def build_fetch_seeded_seed_chunk_query():
         WHERE (
               CAST(:after_record_id AS integer) IS NULL
               OR record_number > CAST(:after_record_id AS integer)
+              OR (
+                  record_number = CAST(:after_record_id AS integer)
+                  AND langchain_id > COALESCE(CAST(:after_langchain_id AS text), '')
+              )
           )
-        ORDER BY record_number
+        ORDER BY record_number, langchain_id
         LIMIT :limit
-        """
-    )
-
-
-def build_mark_processing_statement():
-    return text(
-        f"""
-        INSERT INTO vector_store_v2_backfill_states (
-            connector,
-            entity_type,
-            scope_id,
-            target_id,
-            state,
-            expected_count,
-            backfill_count,
-            failed_ids,
-            succeeded_at,
-            failed_at,
-            failure_count,
-            last_error_type,
-            last_error_message,
-            next_retry_at,
-            processing_started_at
-        )
-        VALUES (
-            :connector,
-            :entity_type,
-            :scope_id,
-            :target_id,
-            'processing',
-            :expected_count,
-            0,
-            '[]'::jsonb,
-            NULL,
-            NULL,
-            0,
-            NULL,
-            NULL,
-            NULL,
-            now()
-        )
-        ON CONFLICT (connector, entity_type, scope_id, target_id) DO UPDATE SET
-            state = 'processing',
-            expected_count = EXCLUDED.expected_count,
-            backfill_count = 0,
-            failed_ids = '[]'::jsonb,
-            succeeded_at = NULL,
-            failed_at = NULL,
-            last_error_type = NULL,
-            last_error_message = NULL,
-            next_retry_at = NULL,
-            processing_started_at = now()
-        WHERE {backfill_claimable_state_predicate("vector_store_v2_backfill_states").strip()}
-        RETURNING processing_started_at
-        """
-    )
-
-
-def build_mark_finished_statement():
-    return text(
-        """
-        UPDATE vector_store_v2_backfill_states
-        SET state = CAST(:state AS varchar(32)),
-            expected_count = :expected_count,
-            backfill_count = :backfill_count,
-            failed_ids = CAST(:failed_ids AS jsonb),
-            succeeded_at = :succeeded_at,
-            failed_at = :failed_at,
-            failure_count = CASE
-                WHEN CAST(:state AS varchar(32)) = 'failed' THEN failure_count + 1
-                ELSE 0
-            END,
-            last_error_type = :last_error_type,
-            last_error_message = :last_error_message,
-            next_retry_at = :next_retry_at,
-            processing_started_at = NULL
-        WHERE connector = :connector
-          AND entity_type = :entity_type
-          AND scope_id = :scope_id
-          AND target_id = :target_id
-          AND processing_started_at = :processing_started_at
         """
     )

@@ -88,6 +88,12 @@ def test_channel_talk_user_chat_backfill_queries_follow_v1_seed_pattern() -> Non
     assert "v2.internal_author_id IS NULL" in target_query
     assert "#>> '{channel_talk_user_chat,assignment,assignee_id}'" in target_query
     assert "v2.internal_author_id IS NULL" in target_seed_query
+    assert "(record_id, langchain_id) >" in target_seed_query
+    assert "CAST(:after_record_id AS text)" in target_seed_query
+    assert "CAST(:after_langchain_id AS text)" in target_seed_query
+    assert "ORDER BY record_id, langchain_id" in target_seed_query
+    assert "LIMIT :limit" in target_seed_query
+    assert "OFFSET" not in target_seed_query
     assert "scope_id = :scope_id" in seed_query
     assert "target_id = :target_id" in seed_query
     assert "COALESCE(metadata::jsonb, '{}'::jsonb) = '{}'::jsonb" in seed_query
