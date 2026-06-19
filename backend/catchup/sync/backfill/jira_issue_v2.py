@@ -798,14 +798,14 @@ def build_mark_finished_statement():
     return text(
         """
         UPDATE vector_store_v2_backfill_states
-        SET state = :state,
+        SET state = CAST(:state AS varchar(32)),
             expected_count = :expected_count,
             backfill_count = :backfill_count,
             failed_ids = CAST(:failed_ids AS jsonb),
             succeeded_at = :succeeded_at,
             failed_at = :failed_at,
             failure_count = CASE
-                WHEN :state = 'failed' THEN failure_count + 1
+                WHEN CAST(:state AS varchar(32)) = 'failed' THEN failure_count + 1
                 ELSE 0
             END,
             last_error_type = :last_error_type,
