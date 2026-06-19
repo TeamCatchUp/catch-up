@@ -159,6 +159,75 @@ class VectorStore:
             return 0
         return await asyncio.to_thread(self._delete_by_id_prefix_sync, normalized_prefix)
 
+    async def find_missing_metadata_namespace_ids(
+        self,
+        ids: Sequence[str],
+        *,
+        namespace: str,
+    ) -> tuple[str, ...]:
+        document_ids = [str(document_id) for document_id in ids]
+        if not document_ids:
+            return ()
+        if not namespace.strip():
+            raise ValueError("metadata namespace is required")
+
+        return await asyncio.to_thread(
+            self._find_missing_metadata_namespace_ids_sync,
+            document_ids,
+            namespace,
+        )
+
+    def _find_missing_metadata_namespace_ids_sync(
+        self,
+        ids: list[str],
+        namespace: str,
+    ) -> tuple[str, ...]:
+        params = {
+            f"id_{index}": document_id for index, document_id in enumerate(ids)
+        }
+        placeholders = ", ".join(
+            f"(CAST(:id_{index} AS varchar))" for index in range(len(ids))
+        )
+        statement = text(
+            f"""
+            WITH requested(document_id) AS (
+                VALUES {placeholders}
+            )
+            SELECT requested.document_id
+            FROM requested
+            LEFT JOIN {self._table_name} store
+              ON store.{KNOWLEDGE_STORE_ID_COLUMN} = requested.document_id
+            WHERE store.{KNOWLEDGE_STORE_ID_COLUMN} IS NULL
+               OR COALESCE(
+                    store.{KNOWLEDGE_STORE_METADATA_JSON_COLUMN}::jsonb,
+                    '{{}}'::jsonb
+                  ) = '{{}}'::jsonb
+               OR NOT jsonb_exists(
+                    COALESCE(
+                        store.{KNOWLEDGE_STORE_METADATA_JSON_COLUMN}::jsonb,
+                        '{{}}'::jsonb
+                    ),
+                    :namespace
+                  )
+            """
+        )
+        try:
+            with self._session_factory() as db:
+                rows = db.execute(
+                    statement,
+                    {**params, "namespace": namespace},
+                )
+                return tuple(str(row[0]) for row in rows)
+        except Exception as exc:
+            logger.exception(
+                "v2_vector_store_metadata_namespace_check_failed",
+                table_name=self._table_name,
+                id_count=len(ids),
+                namespace=namespace,
+                error=str(exc),
+            )
+            raise
+
     def _delete_by_id_prefix_sync(self, prefix: str) -> int:
         statement = text(
             f"""

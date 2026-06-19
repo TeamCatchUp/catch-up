@@ -213,7 +213,8 @@ async def test_backfill_adapter_fetch_splits_pull_request_graphql_batches_at_50(
 async def test_backfill_adapter_hydrates_pr_from_api_and_reuses_v1_seed_values() -> None:
     seed = _seed()
     vector_store = SimpleNamespace(
-        upsert_documents=AsyncMock(return_value=[seed.langchain_id])
+        upsert_documents=AsyncMock(return_value=[seed.langchain_id]),
+        find_missing_metadata_namespace_ids=AsyncMock(return_value=()),
     )
     adapter = GithubPrV2BackfillAdapter(
         installation_id=118342815,
@@ -299,6 +300,82 @@ async def test_backfill_adapter_hydrates_pr_from_api_and_reuses_v1_seed_values()
     ]
     assert upsert_call.kwargs["ids"] == [seed.langchain_id]
     assert upsert_call.kwargs["embeddings"] == [seed.embedding]
+    vector_store.find_missing_metadata_namespace_ids.assert_awaited_once_with(
+        [seed.langchain_id],
+        namespace="github_pr",
+    )
+
+
+@pytest.mark.asyncio
+async def test_backfill_adapter_treats_missing_pr_metadata_as_failed() -> None:
+    seed = _seed()
+    vector_store = SimpleNamespace(
+        upsert_documents=AsyncMock(return_value=[seed.langchain_id]),
+        find_missing_metadata_namespace_ids=AsyncMock(
+            return_value=(seed.langchain_id,)
+        ),
+    )
+    adapter = GithubPrV2BackfillAdapter(
+        installation_id=118342815,
+        client=SimpleNamespace(),
+        repository=SimpleNamespace(),
+        vector_store=vector_store,
+    )
+    api_items = [("724", {"number": 724})]
+    api_document = Document(
+        id=seed.langchain_id,
+        page_content="fresh semantic content from API",
+        metadata={
+            "entity_type": "pr",
+            "synced_at": "2026-06-10T03:00:00+00:00",
+        },
+    )
+
+    with (
+        patch.object(
+            adapter,
+            "_fetch_pull_request_nodes",
+            AsyncMock(return_value=(api_items, [])),
+        ),
+        patch.object(
+            adapter,
+            "_build_pull_request_document_bundles_sync",
+            Mock(
+                return_value=(
+                    [
+                        GithubPrDocumentBundle(
+                            pull_request=_make_pull_request(),
+                            document=api_document,
+                        )
+                    ],
+                    [],
+                )
+            ),
+        ),
+    ):
+        result = await run_sync_ingestion(
+            port=adapter,
+            execution=GithubPrV2BackfillExecutionRequest(
+                tenant_id="118342815",
+                owner="TeamCatchUp",
+                repo="CatchUp",
+                seeds=(
+                    GithubPrV2BackfillSeed(
+                        langchain_id=seed.langchain_id,
+                        record_id=seed.record_id,
+                        content=seed.content,
+                        embedding=seed.embedding,
+                    ),
+                ),
+            ),
+            sync_window=_window(),
+        )
+
+    assert result.persisted_count == 0
+    assert result.failed_count == 1
+    assert result.v2_failed_count == 1
+    assert result.metadata["failed_ids"] == [seed.langchain_id]
+    assert result.metadata["v2_failed_ids"] == [seed.langchain_id]
 
 
 def test_target_query_groups_v1_prs_by_scope_and_target() -> None:
@@ -342,7 +419,11 @@ def test_seed_rows_statement_marks_seed_with_empty_json_metadata() -> None:
     assert "CAST(:embedding AS vector)" in statement
     assert "'{}'::jsonb" in statement
     assert "ON CONFLICT (document_id) DO UPDATE SET" in statement
-    assert "metadata = '{}'::json" in statement
+    assert "metadata = '{}'::json" not in statement
+    assert "title = ''" not in statement
+    assert "body = ''" not in statement
+    assert "data = '{}'::jsonb" not in statement
+    assert "url = ''" not in statement
 
 
 def test_fetch_seeded_seed_chunk_query_reads_v2_seed_rows_by_empty_metadata() -> None:

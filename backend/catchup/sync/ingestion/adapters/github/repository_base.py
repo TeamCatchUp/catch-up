@@ -143,6 +143,48 @@ class GithubRepositoryAdapterBase(
             fetch_nodes=self.client.get_pull_requests_graphql,
         )
 
+    async def _find_missing_v2_metadata_namespace_ids(
+        self,
+        *,
+        document_ids: list[str],
+        namespace: str,
+        repo_full_name: str,
+        log_event: str,
+    ) -> tuple[str, ...]:
+        if not document_ids:
+            return ()
+        if self.vector_store is None:
+            return tuple(document_ids)
+
+        try:
+            missing_ids = await self.vector_store.find_missing_metadata_namespace_ids(
+                document_ids,
+                namespace=namespace,
+            )
+        except Exception as exc:
+            logger.exception(
+                "github_v2_backfill_metadata_verification_failed",
+                connector="github",
+                installation_id=self.scope_id,
+                repo_full_name=repo_full_name,
+                metadata_namespace=namespace,
+                document_count=len(document_ids),
+                error=str(exc),
+            )
+            return tuple(document_ids)
+
+        if missing_ids:
+            logger.warning(
+                log_event,
+                connector="github",
+                installation_id=self.scope_id,
+                repo_full_name=repo_full_name,
+                metadata_namespace=namespace,
+                missing_count=len(missing_ids),
+                document_ids=list(missing_ids),
+            )
+        return missing_ids
+
     async def _fetch_numbered_nodes_batch(
         self,
         *,

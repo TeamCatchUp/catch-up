@@ -127,7 +127,8 @@ async def test_backfill_adapter_fetch_uses_batch_issue_graphql() -> None:
 async def test_backfill_adapter_hydrates_issue_and_reuses_v1_seed_values() -> None:
     seed = _seed()
     vector_store = SimpleNamespace(
-        upsert_documents=AsyncMock(return_value=[seed.langchain_id])
+        upsert_documents=AsyncMock(return_value=[seed.langchain_id]),
+        find_missing_metadata_namespace_ids=AsyncMock(return_value=()),
     )
     adapter = GithubIssueV2BackfillAdapter(
         installation_id=118342815,
@@ -213,6 +214,82 @@ async def test_backfill_adapter_hydrates_issue_and_reuses_v1_seed_values() -> No
     ]
     assert upsert_call.kwargs["ids"] == [seed.langchain_id]
     assert upsert_call.kwargs["embeddings"] == [seed.embedding]
+    vector_store.find_missing_metadata_namespace_ids.assert_awaited_once_with(
+        [seed.langchain_id],
+        namespace="github_issue",
+    )
+
+
+@pytest.mark.asyncio
+async def test_backfill_adapter_treats_missing_issue_metadata_as_failed() -> None:
+    seed = _seed()
+    vector_store = SimpleNamespace(
+        upsert_documents=AsyncMock(return_value=[seed.langchain_id]),
+        find_missing_metadata_namespace_ids=AsyncMock(
+            return_value=(seed.langchain_id,)
+        ),
+    )
+    adapter = GithubIssueV2BackfillAdapter(
+        installation_id=118342815,
+        client=SimpleNamespace(),
+        repository=SimpleNamespace(),
+        vector_store=vector_store,
+    )
+    api_items = [("812", {"number": 812})]
+    api_document = Document(
+        id=seed.langchain_id,
+        page_content="fresh semantic content from API",
+        metadata={
+            "entity_type": "issue",
+            "synced_at": "2026-06-10T03:00:00+00:00",
+        },
+    )
+
+    with (
+        patch.object(
+            adapter,
+            "_fetch_issue_nodes",
+            AsyncMock(return_value=(api_items, [])),
+        ),
+        patch.object(
+            adapter,
+            "_build_issue_document_bundles_sync",
+            Mock(
+                return_value=(
+                    [
+                        GithubIssueDocumentBundle(
+                            issue=_make_issue(),
+                            document=api_document,
+                        )
+                    ],
+                    [],
+                )
+            ),
+        ),
+    ):
+        result = await run_sync_ingestion(
+            port=adapter,
+            execution=GithubIssueV2BackfillExecutionRequest(
+                tenant_id="118342815",
+                owner="TeamCatchUp",
+                repo="CatchUp",
+                seeds=(
+                    GithubIssueV2BackfillSeed(
+                        langchain_id=seed.langchain_id,
+                        record_id=seed.record_id,
+                        content=seed.content,
+                        embedding=seed.embedding,
+                    ),
+                ),
+            ),
+            sync_window=_window(),
+        )
+
+    assert result.persisted_count == 0
+    assert result.failed_count == 1
+    assert result.v2_failed_count == 1
+    assert result.metadata["failed_ids"] == [seed.langchain_id]
+    assert result.metadata["v2_failed_ids"] == [seed.langchain_id]
 
 
 @pytest.mark.asyncio
@@ -328,7 +405,11 @@ def test_seed_rows_statement_marks_issue_seed_with_empty_json_metadata() -> None
     assert "'issue'" in statement
     assert "'{}'::jsonb" in statement
     assert "ON CONFLICT (document_id) DO UPDATE SET" in statement
-    assert "metadata = '{}'::json" in statement
+    assert "metadata = '{}'::json" not in statement
+    assert "title = ''" not in statement
+    assert "body = ''" not in statement
+    assert "data = '{}'::jsonb" not in statement
+    assert "url = ''" not in statement
 
 
 def test_fetch_seeded_seed_chunk_query_uses_numeric_issue_cursor() -> None:

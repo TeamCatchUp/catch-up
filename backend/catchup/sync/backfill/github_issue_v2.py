@@ -681,7 +681,6 @@ def build_upsert_seed_rows_statement():
         ON CONFLICT ({KNOWLEDGE_STORE_ID_COLUMN}) DO UPDATE SET
             {KNOWLEDGE_STORE_CONTENT_COLUMN} = EXCLUDED.{KNOWLEDGE_STORE_CONTENT_COLUMN},
             {KNOWLEDGE_STORE_EMBEDDING_COLUMN} = EXCLUDED.{KNOWLEDGE_STORE_EMBEDDING_COLUMN},
-            {KNOWLEDGE_STORE_METADATA_JSON_COLUMN} = '{{}}'::json,
             source = EXCLUDED.source,
             entity_type = EXCLUDED.entity_type,
             record_id = EXCLUDED.record_id,
@@ -689,14 +688,7 @@ def build_upsert_seed_rows_statement():
             scope_id = EXCLUDED.scope_id,
             target_type = EXCLUDED.target_type,
             target_id = EXCLUDED.target_id,
-            target_name = EXCLUDED.target_name,
-            internal_author_id = NULL,
-            title = '',
-            body = '',
-            data = '{{}}'::jsonb,
-            url = '',
-            updated_at = EXCLUDED.updated_at,
-            synced_at = EXCLUDED.synced_at
+            target_name = EXCLUDED.target_name
         """
     )
 

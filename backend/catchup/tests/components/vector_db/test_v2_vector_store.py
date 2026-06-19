@@ -273,6 +273,35 @@ async def test_delete_by_id_prefix_escapes_like_wildcards() -> None:
 
 
 @pytest.mark.asyncio
+async def test_find_missing_metadata_namespace_ids_checks_json_namespace() -> None:
+    db = MagicMock()
+    db.execute.return_value = [("doc-2",), ("doc-3",)]
+    store = VectorStore(
+        embeddings=MagicMock(),
+        session_factory=lambda: nullcontext(db),
+    )
+
+    missing_ids = await store.find_missing_metadata_namespace_ids(
+        ["doc-1", "doc-2", "doc-3"],
+        namespace="github_issue",
+    )
+
+    assert missing_ids == ("doc-2", "doc-3")
+    db.execute.assert_called_once()
+    statement, params = db.execute.call_args.args
+    statement_text = str(statement)
+    assert "WITH requested(document_id) AS" in statement_text
+    assert "LEFT JOIN knowledge_store store" in statement_text
+    assert "jsonb_exists" in statement_text
+    assert params == {
+        "id_0": "doc-1",
+        "id_1": "doc-2",
+        "id_2": "doc-3",
+        "namespace": "github_issue",
+    }
+
+
+@pytest.mark.asyncio
 async def test_delete_reraises_langchain_store_error() -> None:
     vector_store = MagicMock()
     vector_store.adelete = AsyncMock(side_effect=RuntimeError("pgvector down"))
