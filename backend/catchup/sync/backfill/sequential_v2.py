@@ -94,7 +94,11 @@ class SequentialBackfillRunSummary:
 
     @property
     def completed_entities(self) -> int:
-        return sum(1 for entity in self.entities if entity.status == "completed")
+        return sum(
+            1
+            for entity in self.entities
+            if entity.status in {"completed", "completed_with_failures"}
+        )
 
     def to_log_fields(self) -> dict[str, object]:
         return {
@@ -131,7 +135,7 @@ async def run_sequential_v2_backfill(
         )
         summaries.append(summary)
 
-        if summary.status != "completed":
+        if summary.status in {"failed", "blocked"}:
             run_summary = SequentialBackfillRunSummary(
                 entities=tuple(summaries),
                 status="stopped",
@@ -143,9 +147,12 @@ async def run_sequential_v2_backfill(
             )
             return run_summary
 
+    run_status = "completed_with_failures" if any(
+        summary.failed > 0 for summary in summaries
+    ) else "completed"
     run_summary = SequentialBackfillRunSummary(
         entities=tuple(summaries),
-        status="completed",
+        status=run_status,
     )
     logger.info(
         "vector_store_v2_sequential_backfill_completed",
@@ -166,6 +173,7 @@ async def _run_entity_until_done(
     succeeded = 0
     skipped = 0
     failed = 0
+    no_progress_batches = 0
 
     logger.info(
         "vector_store_v2_sequential_backfill_entity_started",
@@ -231,7 +239,7 @@ async def _run_entity_until_done(
                 succeeded=succeeded,
                 skipped=skipped,
                 failed=failed,
-                status="completed",
+                status="completed_with_failures" if failed > 0 else "completed",
             )
             logger.info(
                 "vector_store_v2_sequential_backfill_entity_completed",
@@ -239,26 +247,19 @@ async def _run_entity_until_done(
             )
             return summary
 
-        if result.failed > 0:
-            summary = SequentialBackfillEntitySummary(
-                key=spec.key,
-                connector=spec.connector,
-                entity_type=spec.entity_type,
-                batches=batches,
-                scanned=scanned,
-                succeeded=succeeded,
-                skipped=skipped,
-                failed=failed,
-                status="failed",
-                stop_reason="failed_batch",
-            )
-            logger.info(
-                "vector_store_v2_sequential_backfill_entity_stopped",
-                **summary.to_log_fields(),
-            )
-            return summary
+        if result.succeeded == 0 and result.failed == 0 and result.skipped > 0:
+            no_progress_batches += 1
+            if no_progress_batches <= 1:
+                logger.info(
+                    "vector_store_v2_sequential_backfill_batch_retried_after_no_progress",
+                    key=spec.key,
+                    connector=spec.connector,
+                    entity_type=spec.entity_type,
+                    batch_index=batches,
+                    no_progress_batches=no_progress_batches,
+                )
+                continue
 
-        if result.succeeded <= 0:
             summary = SequentialBackfillEntitySummary(
                 key=spec.key,
                 connector=spec.connector,
@@ -276,3 +277,5 @@ async def _run_entity_until_done(
                 **summary.to_log_fields(),
             )
             return summary
+
+        no_progress_batches = 0
