@@ -410,7 +410,7 @@ class GithubIssueV2BackfillService:
             or (f"{len(failed_ids)} v2 documents failed during hydration" if failed_ids else None),
         )
         with self._session_factory() as db:
-            db.execute(
+            update_result = db.execute(
                 build_mark_finished_statement(),
                 {
                     "connector": "github",
@@ -429,7 +429,17 @@ class GithubIssueV2BackfillService:
                     "processing_started_at": processing_started_at,
                 },
             )
+            rowcount = update_result.rowcount
             db.commit()
+        if rowcount == 0:
+            logger.warning(
+                "github_issue_v2_backfill_target_finish_update_missed",
+                **_target_log_context(target),
+                state=state,
+                backfill_count=backfill_count,
+                failed_count=len(failed_ids),
+                processing_started_at=processing_started_at,
+            )
 
 
 def _build_execution_request(

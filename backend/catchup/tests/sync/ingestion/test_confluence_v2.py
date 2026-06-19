@@ -2,8 +2,10 @@ from __future__ import annotations
 
 from datetime import datetime
 from datetime import timezone
+from types import SimpleNamespace
 
 import pytest
+from langchain_core.documents import Document
 
 from catchup.connectors.confluence.schemas import ConfluenceCommentResponse
 from catchup.connectors.confluence.schemas import ConfluencePageResponse
@@ -288,3 +290,63 @@ def test_confluence_v2_seed_sql_uses_empty_metadata_json_for_seed_rows():
     assert "'blogpost'" in statement
     assert "'{}'::json" in statement
     assert "'{}'::jsonb" in statement
+    assert "metadata = '{}'::json" not in statement
+    assert "title = ''" not in statement
+    assert "body = ''" not in statement
+    assert "data = '{}'::jsonb" not in statement
+    assert "url = ''" not in statement
+
+
+@pytest.mark.asyncio
+async def test_confluence_v2_backfill_treats_missing_metadata_as_failed():
+    class FakeVectorStore:
+        def __init__(self) -> None:
+            self.namespace_checks = []
+
+        async def upsert_documents(self, documents, ids, embeddings):
+            _ = documents, embeddings
+            return ids
+
+        async def find_missing_metadata_namespace_ids(self, ids, *, namespace):
+            self.namespace_checks.append({"ids": list(ids), "namespace": namespace})
+            return tuple(ids)
+
+    seed = ConfluenceV2BackfillSeed(
+        langchain_id="confluence:page:1001:chunk:0",
+        record_id="1001",
+        content="v1 contextual chunk",
+        embedding=[0.1, 0.2],
+    )
+    vector_store = FakeVectorStore()
+    adapter = ConfluenceV2BackfillAdapter(
+        service=SimpleNamespace(cloud_id="cloud-123"),
+        vector_store=vector_store,
+    )
+    execution = ConfluenceV2BackfillExecutionRequest(
+        tenant_id="cloud-123",
+        space_key="ENG",
+        record_type="page",
+        seeds=(seed,),
+    )
+    document = Document(
+        id=seed.langchain_id,
+        page_content=seed.content,
+        metadata={"confluence_page": {"content_type": "page"}},
+    )
+
+    persisted = await adapter.persist(
+        execution=execution,
+        sync_window=SyncWindow(
+            window_start=datetime(2026, 5, 1, tzinfo=timezone.utc),
+            window_end=datetime(2026, 5, 2, tzinfo=timezone.utc),
+        ),
+        transformed=SimpleNamespace(v2_failed_ids=(), v2_documents=(document,)),
+        summary=SimpleNamespace(),
+    )
+
+    assert persisted.persisted_count == 0
+    assert persisted.error_count == 1
+    assert persisted.v2_failed_ids == (seed.langchain_id,)
+    assert vector_store.namespace_checks == [
+        {"ids": [seed.langchain_id], "namespace": "confluence_page"}
+    ]

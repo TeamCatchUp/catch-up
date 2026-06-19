@@ -79,6 +79,11 @@ def test_jira_issue_v2_seed_rows_preserve_content_embedding_and_empty_metadata()
     assert "'jira'" in sql
     assert "'cloud'" in sql
     assert "'project'" in sql
+    assert "metadata = '{}'::json" not in sql
+    assert "title = ''" not in sql
+    assert "body = ''" not in sql
+    assert "data = '{}'::jsonb" not in sql
+    assert "url = ''" not in sql
 
 
 def test_jira_issue_v2_mark_finished_casts_failed_ids_to_jsonb() -> None:
@@ -130,6 +135,35 @@ def test_jira_issue_v2_mark_finished_always_uses_issue_state_key() -> None:
     params = session.execute.call_args.args[1]
     assert params["entity_type"] == "issue"
     assert json.loads(params["failed_ids"]) == []
+
+
+def test_jira_issue_v2_mark_finished_warns_when_state_update_misses(monkeypatch) -> None:
+    session = MagicMock()
+    session.execute.return_value.rowcount = 0
+    context = MagicMock()
+    context.__enter__.return_value = session
+    warning = MagicMock()
+    monkeypatch.setattr("catchup.sync.backfill.jira_issue_v2.logger.warning", warning)
+    service = JiraIssueV2BackfillService(session_factory=lambda: context)
+
+    service._mark_finished_sync(
+        JiraIssueV1Target(
+            scope_id="cloud-123",
+            target_id="CAT",
+            target_name="CatchUp",
+            expected_count=1,
+        ),
+        backfill_count=1,
+        failed_ids=[],
+    )
+
+    warning.assert_called_once()
+    assert warning.call_args.args == ("jira_issue_v2_backfill_target_finish_update_missed",)
+    assert warning.call_args.kwargs["connector"] == "jira"
+    assert warning.call_args.kwargs["entity_type"] == "issue"
+    assert warning.call_args.kwargs["target_id"] == "CAT"
+    assert warning.call_args.kwargs["state"] == "succeeded"
+    assert warning.call_args.kwargs["backfill_count"] == 1
 
 
 def test_jira_issue_v2_embedding_to_list_treats_null_as_empty() -> None:

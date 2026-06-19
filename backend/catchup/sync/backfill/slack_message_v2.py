@@ -372,7 +372,7 @@ class SlackMessageV2BackfillService:
             or (f"{len(failed_langchain_ids)} v2 documents failed during hydration" if failed_langchain_ids else None),
         )
         with self._session_factory() as db:
-            db.execute(
+            update_result = db.execute(
                 build_mark_finished_statement(),
                 {
                     "connector": "slack",
@@ -391,7 +391,17 @@ class SlackMessageV2BackfillService:
                     "processing_started_at": processing_started_at,
                 },
             )
+            rowcount = update_result.rowcount
             db.commit()
+        if rowcount == 0:
+            logger.warning(
+                "slack_message_v2_backfill_target_finish_update_missed",
+                **_target_log_context(target),
+                state=state,
+                backfill_count=backfill_count,
+                failed_count=len(failed_langchain_ids),
+                processing_started_at=processing_started_at,
+            )
 
 
 def _build_execution_request(
@@ -666,7 +676,6 @@ def build_upsert_seed_rows_statement():
         ON CONFLICT ({KNOWLEDGE_STORE_ID_COLUMN}) DO UPDATE SET
             {KNOWLEDGE_STORE_CONTENT_COLUMN} = EXCLUDED.{KNOWLEDGE_STORE_CONTENT_COLUMN},
             {KNOWLEDGE_STORE_EMBEDDING_COLUMN} = EXCLUDED.{KNOWLEDGE_STORE_EMBEDDING_COLUMN},
-            {KNOWLEDGE_STORE_METADATA_JSON_COLUMN} = '{{}}'::json,
             source = EXCLUDED.source,
             entity_type = EXCLUDED.entity_type,
             record_id = EXCLUDED.record_id,
@@ -674,14 +683,7 @@ def build_upsert_seed_rows_statement():
             scope_id = EXCLUDED.scope_id,
             target_type = EXCLUDED.target_type,
             target_id = EXCLUDED.target_id,
-            target_name = EXCLUDED.target_name,
-            internal_author_id = NULL,
-            title = '',
-            body = '',
-            data = '{{}}'::jsonb,
-            url = '',
-            updated_at = EXCLUDED.updated_at,
-            synced_at = EXCLUDED.synced_at
+            target_name = EXCLUDED.target_name
         """
     )
 

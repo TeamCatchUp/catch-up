@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import structlog
+
 from catchup.components.embedder.constants import EmbeddingProvider
 from catchup.components.embedder.factory import get_embedding_service
 from catchup.components.vector_db.factory import get_v2_vector_store
@@ -44,6 +46,8 @@ from catchup.sync.ingestion.adapters.channel_talk.article_v2_document_builder im
     ChannelTalkArticleV2DocumentBuilder,
 )
 from catchup.sync.ingestion.schemas import SyncWindow
+
+logger = structlog.get_logger(__name__)
 
 
 class ChannelTalkArticleV2BackfillAdapter(ChannelTalkArticleFullSyncIngestionAdapter):
@@ -214,13 +218,35 @@ class ChannelTalkArticleV2BackfillAdapter(ChannelTalkArticleFullSyncIngestionAda
             for document_id in document_ids
             if document_id not in persisted_id_set
         )
-        v2_failed_ids = _dedupe((*v2_failed_ids, *write_failed_ids))
+        metadata_check_ids = [
+            document_id
+            for document_id in document_ids
+            if document_id in persisted_id_set
+        ]
+        metadata_failed_ids = await vector_store.find_missing_metadata_namespace_ids(
+            metadata_check_ids,
+            namespace="channel_talk_document_article",
+        )
+        if metadata_failed_ids:
+            logger.warning(
+                "channel_talk_document_article_v2_backfill_metadata_missing_after_persist",
+                connector="channel_talk",
+                entity_type="document_article",
+                scope_id=execution.channel_id,
+                target_id=execution.space_id,
+                namespace="channel_talk_document_article",
+                missing_metadata_ids=list(metadata_failed_ids),
+                persisted_id_count=len(metadata_check_ids),
+                missing_count=len(metadata_failed_ids),
+            )
+        failed_document_ids = _dedupe((*write_failed_ids, *metadata_failed_ids))
+        v2_failed_ids = _dedupe((*v2_failed_ids, *failed_document_ids))
         return ChannelTalkArticleFullSyncPersistResult(
-            persisted_count=len(document_ids) - len(write_failed_ids),
+            persisted_count=len(document_ids) - len(failed_document_ids),
             persisted_ids=tuple(
                 document_id
                 for document_id in document_ids
-                if document_id not in write_failed_ids
+                if document_id not in failed_document_ids
             ),
             v2_error_count=len(v2_failed_ids),
             v2_failed_ids=v2_failed_ids,

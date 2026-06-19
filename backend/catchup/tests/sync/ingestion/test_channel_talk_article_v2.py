@@ -473,6 +473,11 @@ def test_channel_talk_article_backfill_queries_follow_v1_seed_pattern():
     assert "'channel_talk'" in upsert_statement
     assert "'document_article'" in upsert_statement
     assert "'document_space'" in upsert_statement
+    assert "metadata = '{}'::json" not in upsert_statement
+    assert "title = ''" not in upsert_statement
+    assert "body = ''" not in upsert_statement
+    assert "data = NULL" not in upsert_statement
+    assert "url = ''" not in upsert_statement
 
 
 def test_channel_talk_article_backfill_mark_finished_casts_failed_ids_to_jsonb():
@@ -525,6 +530,7 @@ async def test_backfill_adapter_hydrates_article_and_reuses_v1_seed_values():
     vector_store = SimpleNamespace(
         delete_by_id_prefix=AsyncMock(return_value=1),
         upsert_documents=AsyncMock(return_value=[seed.langchain_id]),
+        find_missing_metadata_namespace_ids=AsyncMock(return_value=()),
     )
     author_resolver = _FakeChannelTalkArticleAuthorResolver()
     adapter = ChannelTalkArticleV2BackfillAdapter(
@@ -561,6 +567,55 @@ async def test_backfill_adapter_hydrates_article_and_reuses_v1_seed_values():
     assert upsert_args.kwargs["ids"] == [seed.langchain_id]
     assert upsert_args.kwargs["embeddings"] == [seed.embedding]
     vector_store.delete_by_id_prefix.assert_not_awaited()
+    vector_store.find_missing_metadata_namespace_ids.assert_awaited_once_with(
+        [seed.langchain_id],
+        namespace="channel_talk_document_article",
+    )
+
+
+@pytest.mark.asyncio
+async def test_backfill_adapter_treats_missing_article_metadata_as_failed():
+    seed = ChannelTalkArticleV2BackfillSeed(
+        langchain_id=(
+            "channel_talk:document_article:"
+            "channel-123:space-123:ko:article-1:chunk:0"
+        ),
+        record_id="article-1",
+        content="v1 article chunk content",
+        embedding=[0.1, 0.2, 0.3],
+    )
+    fetcher = SimpleNamespace(
+        fetch_article_bundle_by_id=AsyncMock(return_value=_published_bundle())
+    )
+    vector_store = SimpleNamespace(
+        delete_by_id_prefix=AsyncMock(return_value=1),
+        upsert_documents=AsyncMock(return_value=[seed.langchain_id]),
+        find_missing_metadata_namespace_ids=AsyncMock(
+            return_value=(seed.langchain_id,)
+        ),
+    )
+    adapter = ChannelTalkArticleV2BackfillAdapter(
+        fetcher=fetcher,
+        vector_store=vector_store,
+        v2_document_builder=_v2_document_builder(),
+    )
+    execution = _execution()
+
+    result = await run_sync_ingestion(
+        port=adapter,
+        execution=ChannelTalkArticleV2BackfillExecutionRequest(
+            tenant_id="channel-123",
+            channel_connection=execution.channel_connection,
+            document_connection=execution.document_connection,
+            seeds=(seed,),
+        ),
+        sync_window=_window(),
+    )
+
+    assert result.persisted_count == 0
+    assert result.v2_failed_count == 1
+    assert result.v2_failed_ids == (seed.langchain_id,)
+    assert result.metadata["failed_ids"] == [seed.langchain_id]
 
 
 @pytest.mark.asyncio

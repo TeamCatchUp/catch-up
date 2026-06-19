@@ -217,10 +217,30 @@ class SlackMessageV2BackfillAdapter(SlackMessageAdapterBase):
         write_failed_ids = tuple(
             doc_id for doc_id in document_ids if doc_id not in persisted_id_set
         )
-        v2_failed_ids = _dedupe((*upstream_v2_failed_ids, *write_failed_ids))
+        metadata_check_ids = [
+            doc_id for doc_id in document_ids if doc_id in persisted_id_set
+        ]
+        metadata_failed_ids = await self.vector_store.find_missing_metadata_namespace_ids(
+            metadata_check_ids,
+            namespace="slack_message",
+        )
+        if metadata_failed_ids:
+            logger.warning(
+                "slack_message_v2_backfill_metadata_missing_after_persist",
+                connector="slack",
+                entity_type="message",
+                scope_id=self.team_id,
+                target_id=execution.channel_id,
+                namespace="slack_message",
+                missing_metadata_ids=list(metadata_failed_ids),
+                persisted_id_count=len(metadata_check_ids),
+                missing_count=len(metadata_failed_ids),
+            )
+        failed_document_ids = _dedupe((*write_failed_ids, *metadata_failed_ids))
+        v2_failed_ids = _dedupe((*upstream_v2_failed_ids, *failed_document_ids))
         return SlackMessagePersistResult(
-            persisted_count=len(document_ids) - len(write_failed_ids),
-            error_count=len(transformed.failed_record_ids) + len(write_failed_ids),
+            persisted_count=len(document_ids) - len(failed_document_ids),
+            error_count=len(transformed.failed_record_ids) + len(failed_document_ids),
             v2_error_count=len(v2_failed_ids),
             v2_failed_ids=v2_failed_ids,
         )
