@@ -15,6 +15,7 @@ from catchup.sync.backfill.slack_message_v2 import build_slack_message_v1_target
 from catchup.sync.backfill.slack_message_v2 import (
     build_slack_message_v1_target_seed_query,
 )
+from catchup.sync.backfill.slack_message_v2 import build_upsert_seed_rows_statement
 from catchup.sync.ingestion.adapters.slack import SlackMessageV2BackfillAdapter
 from catchup.sync.ingestion.adapters.slack import SlackMessageV2BackfillExecutionRequest
 from catchup.sync.ingestion.adapters.slack import SlackMessageV2BackfillSeed
@@ -108,7 +109,8 @@ def test_slack_backfill_seed_rejects_empty_embedding() -> None:
 async def test_backfill_adapter_hydrates_message_and_reuses_v1_seed_values() -> None:
     seed = _seed()
     vector_store = SimpleNamespace(
-        upsert_documents=AsyncMock(return_value=[seed.langchain_id])
+        upsert_documents=AsyncMock(return_value=[seed.langchain_id]),
+        find_missing_metadata_namespace_ids=AsyncMock(return_value=()),
     )
     session_factory = Mock()
     session_factory.return_value.__enter__ = Mock(return_value=SimpleNamespace())
@@ -155,6 +157,67 @@ async def test_backfill_adapter_hydrates_message_and_reuses_v1_seed_values() -> 
     assert document.metadata["slack_message"]["author"]["catchup_user_id"] == "42"
     assert upsert_call.kwargs["ids"] == [seed.langchain_id]
     assert upsert_call.kwargs["embeddings"] == [seed.embedding]
+    vector_store.find_missing_metadata_namespace_ids.assert_awaited_once_with(
+        [seed.langchain_id],
+        namespace="slack_message",
+    )
+
+
+@pytest.mark.asyncio
+async def test_backfill_adapter_treats_missing_slack_metadata_as_failed() -> None:
+    seed = _seed()
+    vector_store = SimpleNamespace(
+        upsert_documents=AsyncMock(return_value=[seed.langchain_id]),
+        find_missing_metadata_namespace_ids=AsyncMock(
+            return_value=(seed.langchain_id,)
+        ),
+    )
+    session_factory = Mock()
+    session_factory.return_value.__enter__ = Mock(return_value=SimpleNamespace())
+    session_factory.return_value.__exit__ = Mock(return_value=False)
+
+    adapter = SlackMessageV2BackfillAdapter(
+        team_id="T123",
+        client=SimpleNamespace(
+            get_message=AsyncMock(
+                return_value={
+                    "ts": seed.record_id,
+                    "text": "Ship Slack message v2 migration safely",
+                    "user": "U123",
+                    "reply_count": 0,
+                }
+            )
+        ),
+        repository=SimpleNamespace(),
+        vector_store=vector_store,
+        v2_document_builder=SlackMessageV2DocumentBuilder(
+            session_factory=session_factory,
+        ),
+    )
+
+    result = await run_sync_ingestion(
+        port=adapter,
+        execution=_execution(seed),
+        sync_window=_window(),
+    )
+
+    assert result.persisted_count == 0
+    assert result.failed_count == 1
+    assert result.v2_failed_count == 1
+    assert result.v2_failed_ids == (seed.langchain_id,)
+    assert result.metadata["failed_ids"] == [seed.langchain_id]
+    assert result.metadata["v2_failed_ids"] == [seed.langchain_id]
+
+
+def test_slack_seed_upsert_does_not_clear_hydrated_fields_on_conflict() -> None:
+    statement = str(build_upsert_seed_rows_statement())
+
+    assert "ON CONFLICT (document_id) DO UPDATE SET" in statement
+    assert "metadata = '{}'::json" not in statement
+    assert "title = ''" not in statement
+    assert "body = ''" not in statement
+    assert "data = '{}'::jsonb" not in statement
+    assert "url = ''" not in statement
 
 
 @pytest.mark.asyncio

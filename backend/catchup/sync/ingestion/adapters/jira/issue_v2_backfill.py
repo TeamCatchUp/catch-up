@@ -186,12 +186,40 @@ class JiraIssueV2BackfillAdapter(JiraIssueIngestionAdapterBase):
         write_failed_ids = tuple(
             doc_id for doc_id in document_ids if doc_id not in persisted_id_set
         )
+        metadata_check_ids = [
+            doc_id for doc_id in document_ids if doc_id in persisted_id_set
+        ]
+        metadata_failed_ids = (
+            await self._dependencies.vector_store.find_missing_metadata_namespace_ids(
+                metadata_check_ids,
+                namespace="jira_issue",
+            )
+        )
+        if metadata_failed_ids:
+            logger.warning(
+                "jira_issue_v2_backfill_metadata_missing_after_persist",
+                connector="jira",
+                entity_type="issue",
+                scope_id=execution.tenant_id,
+                target_id=execution.project_key,
+                namespace="jira_issue",
+                missing_metadata_ids=list(metadata_failed_ids),
+                persisted_id_count=len(metadata_check_ids),
+                missing_count=len(metadata_failed_ids),
+            )
+        failed_document_ids = tuple(
+            dict.fromkeys((*write_failed_ids, *metadata_failed_ids))
+        )
         v2_failed_ids = tuple(
-            dict.fromkeys((*upstream_v2_failed_ids, *write_failed_ids))
+            dict.fromkeys((*upstream_v2_failed_ids, *failed_document_ids))
         )
         return JiraIssuePersistResult(
-            persisted_count=len(document_ids) - len(write_failed_ids),
-            persisted_ids=tuple(document_ids),
+            persisted_count=len(document_ids) - len(failed_document_ids),
+            persisted_ids=tuple(
+                document_id
+                for document_id in document_ids
+                if document_id not in failed_document_ids
+            ),
             v2_error_count=len(v2_failed_ids),
             v2_failed_ids=v2_failed_ids,
         )

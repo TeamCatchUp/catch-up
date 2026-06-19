@@ -146,15 +146,23 @@ class _FakeRepository:
 
 
 class _FakeVectorStore:
-    def __init__(self) -> None:
+    def __init__(self, missing_metadata_ids: tuple[str, ...] = ()) -> None:
         self.upsert_calls: list[dict] = []
         self.delete_calls: list[list[str]] = []
+        self.missing_metadata_ids = missing_metadata_ids
+        self.metadata_namespace_checks: list[dict] = []
 
     async def upsert_documents(self, documents, ids, embeddings):
         self.upsert_calls.append(
             {"documents": documents, "ids": ids, "embeddings": embeddings}
         )
         return ids
+
+    async def find_missing_metadata_namespace_ids(self, ids, *, namespace):
+        self.metadata_namespace_checks.append(
+            {"ids": list(ids), "namespace": namespace}
+        )
+        return self.missing_metadata_ids
 
     async def delete(self, ids):
         self.delete_calls.append(ids)
@@ -520,8 +528,64 @@ class JiraIssueIngestionAdapterTests(IsolatedAsyncioTestCase):
         self.assertEqual(assignee_resolver.account_ids, ["acc-backfill"])
         self.assertEqual(vector_store.upsert_calls[0]["ids"], [seed.langchain_id])
         self.assertEqual(vector_store.upsert_calls[0]["embeddings"], [seed.embedding])
+        self.assertEqual(
+            vector_store.metadata_namespace_checks,
+            [{"ids": [seed.langchain_id], "namespace": "jira_issue"}],
+        )
         self.assertEqual(persisted.persisted_count, 1)
         self.assertEqual(persisted.v2_error_count, 0)
+
+    async def test_backfill_treats_missing_jira_metadata_as_failed(self) -> None:
+        seed = JiraIssueV2BackfillSeed(
+            langchain_id="jira:issue:cloud-1:GRT:GRT-2",
+            record_id="GRT-2",
+            content="seeded v1 content",
+            embedding=[0.1, 0.2, 0.3],
+        )
+        vector_store = _FakeVectorStore(missing_metadata_ids=(seed.langchain_id,))
+        adapter = JiraIssueV2BackfillAdapter(
+            dependencies=_dependencies(
+                _FakeClient(),
+                _FakeRepository(),
+                vector_store=vector_store,
+            ),
+        )
+        execution = JiraIssueV2BackfillExecutionRequest(
+            tenant_id="cloud-1",
+            project_key="GRT",
+            seeds=(seed,),
+        )
+        fetched = SimpleNamespace(
+            issues=(
+                {
+                    "key": "GRT-2",
+                    "id": "10003",
+                    "assignee_account_id": "acc-backfill",
+                },
+            ),
+            failed_record_ids=(),
+        )
+        transformed = await adapter.transform(
+            execution=execution,
+            sync_window=_window(),
+            fetched=fetched,
+        )
+        summary = await adapter.summarize(
+            execution=execution,
+            sync_window=_window(),
+            transformed=transformed,
+        )
+        persisted = await adapter.persist(
+            execution=execution,
+            sync_window=_window(),
+            transformed=transformed,
+            summary=summary,
+        )
+
+        self.assertEqual(persisted.persisted_count, 0)
+        self.assertEqual(persisted.persisted_ids, ())
+        self.assertEqual(persisted.v2_error_count, 1)
+        self.assertEqual(persisted.v2_failed_ids, (seed.langchain_id,))
 
     async def test_incremental_delete_deletes_v2_document_when_configured(self) -> None:
         client = _FakeClient()

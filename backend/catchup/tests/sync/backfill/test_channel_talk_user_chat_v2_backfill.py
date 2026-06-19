@@ -95,6 +95,11 @@ def test_channel_talk_user_chat_backfill_queries_follow_v1_seed_pattern() -> Non
     assert "'channel_talk'" in upsert_statement
     assert "'user_chat'" in upsert_statement
     assert "'channel'" in upsert_statement
+    assert "metadata = '{}'::json" not in upsert_statement
+    assert "title = ''" not in upsert_statement
+    assert "body = ''" not in upsert_statement
+    assert "data = '{}'::jsonb" not in upsert_statement
+    assert "url = ''" not in upsert_statement
 
 
 def test_channel_talk_user_chat_v2_embedding_to_list_treats_null_as_empty() -> None:
@@ -109,7 +114,8 @@ async def test_backfill_adapter_hydrates_user_chat_and_reuses_v1_seed_values() -
         fetch_user_chat_bundle_by_id=AsyncMock(return_value=_fetched_bundle()),
     )
     vector_store = SimpleNamespace(
-        upsert_documents=AsyncMock(return_value=[seed.langchain_id])
+        upsert_documents=AsyncMock(return_value=[seed.langchain_id]),
+        find_missing_metadata_namespace_ids=AsyncMock(return_value=()),
     )
     author_resolver = _FakeChannelTalkAuthorResolver()
     adapter = ChannelTalkUserChatV2BackfillAdapter(
@@ -146,6 +152,49 @@ async def test_backfill_adapter_hydrates_user_chat_and_reuses_v1_seed_values() -
     assert document.metadata["internal_author_id"] == "42"
     assert upsert_args.kwargs["ids"] == [seed.langchain_id]
     assert upsert_args.kwargs["embeddings"] == [seed.embedding]
+    vector_store.find_missing_metadata_namespace_ids.assert_awaited_once_with(
+        [seed.langchain_id],
+        namespace="channel_talk_user_chat",
+    )
+
+
+@pytest.mark.asyncio
+async def test_backfill_adapter_treats_missing_user_chat_metadata_as_failed() -> None:
+    seed = _seed()
+    fetcher = SimpleNamespace(
+        fetch_managers_by_id=AsyncMock(return_value=_managers_by_id()),
+        fetch_user_chat_bundle_by_id=AsyncMock(return_value=_fetched_bundle()),
+    )
+    vector_store = SimpleNamespace(
+        upsert_documents=AsyncMock(return_value=[seed.langchain_id]),
+        find_missing_metadata_namespace_ids=AsyncMock(
+            return_value=(seed.langchain_id,)
+        ),
+    )
+    adapter = ChannelTalkUserChatV2BackfillAdapter(
+        fetcher=fetcher,
+        vector_store=vector_store,
+        v2_document_builder=_v2_document_builder(),
+    )
+    adapter._load_connection = AsyncMock(
+        return_value=ChannelTalkUserChatFullSyncConnection.from_credentials_record(
+            _connection()
+        )
+    )
+
+    result = await run_sync_ingestion(
+        port=adapter,
+        execution=ChannelTalkUserChatV2BackfillExecutionRequest(
+            tenant_id="channel-123",
+            seeds=(seed,),
+        ),
+        sync_window=_window(),
+    )
+
+    assert result.persisted_count == 0
+    assert result.v2_failed_count == 1
+    assert result.v2_failed_ids == (seed.langchain_id,)
+    assert result.metadata["failed_ids"] == [seed.langchain_id]
 
 
 @pytest.mark.asyncio

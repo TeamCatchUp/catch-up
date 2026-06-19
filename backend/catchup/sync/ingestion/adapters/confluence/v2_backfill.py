@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import structlog
+
 from catchup.components.vector_db.v2 import VectorStore
 from catchup.connectors.confluence.schemas import ConfluenceBlogPostResponse
 from catchup.connectors.confluence.schemas import ConfluencePageResponse
@@ -38,6 +40,8 @@ from catchup.sync.ingestion.adapters.confluence.v2_document_builder import (
 )
 from catchup.sync.ingestion.schemas import SyncWindow
 from catchup.sync.ingestion.services.confluence import ConfluenceIngestionService
+
+logger = structlog.get_logger(__name__)
 
 
 class ConfluenceV2BackfillAdapter(ConfluenceSpaceSyncAdapter):
@@ -216,9 +220,33 @@ class ConfluenceV2BackfillAdapter(ConfluenceSpaceSyncAdapter):
         write_failed_ids = tuple(
             document_id for document_id in document_ids if document_id not in persisted_set
         )
-        v2_failed_ids = _dedupe((*v2_failed_ids, *write_failed_ids))
+        metadata_check_ids = [
+            document_id
+            for document_id in document_ids
+            if document_id in persisted_set
+        ]
+        namespace = f"confluence_{execution.record_type}"
+        metadata_failed_ids = await vector_store.find_missing_metadata_namespace_ids(
+            metadata_check_ids,
+            namespace=namespace,
+        )
+        if metadata_failed_ids:
+            logger.warning(
+                "confluence_v2_backfill_metadata_missing_after_persist",
+                connector="confluence",
+                entity_type=execution.record_type,
+                scope_id=execution.tenant_id,
+                target_id=execution.space_key,
+                namespace=namespace,
+                missing_metadata_ids=list(metadata_failed_ids),
+                persisted_id_count=len(metadata_check_ids),
+                missing_count=len(metadata_failed_ids),
+            )
+        failed_document_ids = _dedupe((*write_failed_ids, *metadata_failed_ids))
+        v2_failed_ids = _dedupe((*v2_failed_ids, *failed_document_ids))
         return ConfluenceSpacePersistResult(
-            persisted_count=len(document_ids) - len(write_failed_ids),
+            persisted_count=len(document_ids) - len(failed_document_ids),
+            error_count=len(failed_document_ids),
             v2_error_count=len(v2_failed_ids),
             v2_failed_ids=v2_failed_ids,
         )
