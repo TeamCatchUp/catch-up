@@ -8,7 +8,9 @@ from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from datetime import datetime
 from datetime import timezone
+from typing import cast
 
+import structlog
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
@@ -24,12 +26,14 @@ from catchup.db.engine import SessionLocal
 from catchup.sync.backfill.concurrency import run_bounded_targets
 from catchup.sync.backfill.jira_issue_v2 import build_mark_finished_statement
 from catchup.sync.backfill.jira_issue_v2 import build_mark_processing_statement
+from catchup.sync.backfill.state import backfill_candidate_state_predicate
 from catchup.sync.backfill.state import build_failure_metadata
 from catchup.sync.ingestion.adapters.confluence import ConfluenceV2BackfillAdapter
 from catchup.sync.ingestion.adapters.confluence import (
     ConfluenceV2BackfillExecutionRequest,
 )
 from catchup.sync.ingestion.adapters.confluence import ConfluenceV2BackfillSeed
+from catchup.sync.ingestion.adapters.confluence.space_sync import ConfluenceRecordType
 from catchup.sync.ingestion.factories.confluence import (
     create_confluence_v2_backfill_adapter,
 )
@@ -42,11 +46,13 @@ BackfillAdapterFactory = Callable[[str], Awaitable[ConfluenceV2BackfillAdapter]]
 SEED_INSERT_BATCH_SIZE = 100
 HYDRATE_PIPELINE_BATCH_SIZE = 50
 
+logger = structlog.get_logger(__name__)
 
-def _validate_confluence_backfill_entity_type(entity_type: str) -> str:
+
+def _validate_confluence_backfill_entity_type(entity_type: str) -> ConfluenceRecordType:
     if entity_type not in {"page", "blogpost"}:
         raise ValueError(f"unsupported confluence backfill entity_type: {entity_type}")
-    return entity_type
+    return cast(ConfluenceRecordType, entity_type)
 
 
 @dataclass(slots=True, frozen=True)
@@ -102,9 +108,13 @@ class ConfluenceV2BackfillService:
         async def _process_target(target) -> None:
             nonlocal succeeded, skipped, failed
             adapters: dict[str, ConfluenceV2BackfillAdapter] = {}
+            processing_started_at: datetime | None = None
             try:
-                claimed = await asyncio.to_thread(self._mark_processing_sync, target)
-                if not claimed:
+                processing_started_at = await asyncio.to_thread(
+                    self._mark_processing_sync,
+                    target,
+                )
+                if processing_started_at is None:
                     skipped += 1
                     return
 
@@ -150,19 +160,37 @@ class ConfluenceV2BackfillService:
                     target,
                     backfill_count,
                     failed_ids,
+                    processing_started_at,
                 )
                 succeeded += backfill_count
                 failed += len(failed_ids)
-            except Exception:
+            except Exception as exc:
                 failed += target.expected_count
-                await asyncio.to_thread(
-                    self._mark_finished_sync,
-                    target,
-                    0,
-                    [],
-                    force_failed=True,
-                    error_type=type(exc).__name__,
-                    error_message=str(exc),
+                try:
+                    await asyncio.to_thread(
+                        self._mark_finished_sync,
+                        target,
+                        0,
+                        [],
+                        processing_started_at,
+                        force_failed=True,
+                        error_type=type(exc).__name__,
+                        error_message=str(exc),
+                    )
+                except Exception as state_exc:
+                    logger.warning(
+                        "confluence_v2_backfill_target_state_update_failed",
+                        **_target_log_context(target, self._entity_type),
+                        original_error_type=type(exc).__name__,
+                        original_error_message=str(exc),
+                        state_error_type=type(state_exc).__name__,
+                        state_error_message=str(state_exc),
+                        exc_info=(type(state_exc), state_exc, state_exc.__traceback__),
+                    )
+                logger.warning(
+                    "confluence_v2_backfill_target_failed",
+                    **_target_log_context(target, self._entity_type),
+                    exc_info=(type(exc), exc, exc.__traceback__),
                 )
 
 
@@ -290,7 +318,7 @@ class ConfluenceV2BackfillService:
                 if _embedding_to_list(row["embedding"])
             ]
 
-    def _mark_processing_sync(self, target: ConfluenceV1Target) -> bool:
+    def _mark_processing_sync(self, target: ConfluenceV1Target) -> datetime | None:
         with self._session_factory() as db:
             result = db.execute(
                 build_mark_processing_statement(),
@@ -302,15 +330,18 @@ class ConfluenceV2BackfillService:
                     "expected_count": target.expected_count,
                 },
             )
-            claimed = result.first() is not None
+            row = result.first()
             db.commit()
-            return claimed
+            if row is None:
+                return None
+            return row[0]
 
     def _mark_finished_sync(
         self,
         target: ConfluenceV1Target,
         backfill_count: int,
         failed_ids: list[str],
+        processing_started_at: datetime | None = None,
         *,
         force_failed: bool = False,
         error_type: str | None = None,
@@ -341,6 +372,7 @@ class ConfluenceV2BackfillService:
                     "last_error_type": failure_metadata.last_error_type if state == "failed" else None,
                     "last_error_message": failure_metadata.last_error_message if state == "failed" else None,
                     "next_retry_at": failure_metadata.next_retry_at if state == "failed" else None,
+                    "processing_started_at": processing_started_at,
                 },
             )
             db.commit()
@@ -396,6 +428,20 @@ def _failed_ids_from_result(
     if result.failed_count <= 0:
         return []
     return [seed.langchain_id for seed in seeds[: result.failed_count]]
+
+
+def _target_log_context(
+    target: ConfluenceV1Target,
+    entity_type: str,
+) -> dict[str, object]:
+    return {
+        "connector": "confluence",
+        "entity_type": entity_type,
+        "scope_id": target.scope_id,
+        "target_id": target.target_id,
+        "target_name": target.target_name,
+        "expected_count": target.expected_count,
+    }
 
 
 def _build_sync_window() -> SyncWindow:
@@ -503,13 +549,7 @@ def build_confluence_v1_target_query(entity_type: str = "page"):
          AND state.scope_id = grouped.scope_id
          AND state.target_id = grouped.target_id
         WHERE grouped.pending_count > 0
-          AND (state.state IS NULL OR (
-                  state.state IN ('pending', 'succeeded')
-                  OR (
-                      state.state = 'failed'
-                      AND state.next_retry_at <= now()
-                  )
-              ))
+        {backfill_candidate_state_predicate("state")}
         ORDER BY scope_id, target_id
         LIMIT :limit
         """

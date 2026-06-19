@@ -38,3 +38,6 @@ def test_mark_finished_statement_casts_reused_state_parameter(statement_builder)
 
     assert "state = CAST(:state AS varchar(32))" in sql
     assert "WHEN CAST(:state AS varchar(32)) = 'failed'" in sql
+    assert "failed_ids = CAST(:failed_ids AS jsonb)" in sql
+    assert "processing_started_at = NULL" in sql
+    assert "AND processing_started_at = :processing_started_at" in sql

@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
+from catchup.sync.backfill.channel_talk_user_chat_v2 import _embedding_to_list
 from catchup.sync.backfill.channel_talk_user_chat_v2 import (
     build_channel_talk_user_chat_v1_target_query,
 )
@@ -81,6 +82,9 @@ def test_channel_talk_user_chat_backfill_queries_follow_v1_seed_pattern() -> Non
     assert "needs_backfill" in target_query
     assert "SELECT\n            grouped.scope_id," in target_query
     assert "grouped.expected_count" in target_query
+    assert "state.next_retry_at IS NULL" in target_query
+    assert "state.state = 'processing'" in target_query
+    assert "state.processing_started_at" in target_query
     assert "v2.internal_author_id IS NULL" in target_query
     assert "#>> '{channel_talk_user_chat,assignment,assignee_id}'" in target_query
     assert "v2.internal_author_id IS NULL" in target_seed_query
@@ -91,6 +95,10 @@ def test_channel_talk_user_chat_backfill_queries_follow_v1_seed_pattern() -> Non
     assert "'channel_talk'" in upsert_statement
     assert "'user_chat'" in upsert_statement
     assert "'channel'" in upsert_statement
+
+
+def test_channel_talk_user_chat_v2_embedding_to_list_treats_null_as_empty() -> None:
+    assert _embedding_to_list(None) == []
 
 
 @pytest.mark.asyncio
