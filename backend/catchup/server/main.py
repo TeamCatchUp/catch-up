@@ -64,6 +64,7 @@ from catchup.server.initialization import ensure_vector_index
 from catchup.server.integrations.api import router as integrations_router
 from catchup.server.mapping.api import router as github_mapping_csv_router
 from catchup.server.mcp.oauth_api import router as mcp_oauth_router
+from catchup.server.mcp.oauth_api import well_known_router as mcp_well_known_router
 from catchup.server.middleware.request_context import request_context_middleware
 from catchup.server.onboarding.api import router as onboarding_router
 from catchup.server.search.api import router as search_router
@@ -550,6 +551,7 @@ if settings.DEBUG_API_ENABLED:
     app.include_router(agent_simulate_router)
     logger.warning("debug_api_enabled", note="disable DEBUG_API_ENABLED in production")
 
+app.include_router(mcp_well_known_router)
 app.include_router(mcp_oauth_router)
 
 if settings.MCP_SERVER_ENABLED:

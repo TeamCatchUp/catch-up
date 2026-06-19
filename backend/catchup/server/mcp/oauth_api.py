@@ -1,3 +1,7 @@
+import json
+import uuid
+from urllib.parse import urlencode
+
 import httpx
 import structlog
 from fastapi import APIRouter
@@ -5,6 +9,8 @@ from fastapi import Form
 from fastapi import HTTPException
 from fastapi import Request
 from fastapi import status
+from fastapi.responses import RedirectResponse
+from starlette.responses import Response
 
 from catchup.auth.endpoints import KeycloakOAuthEndpoint
 from catchup.auth.jwt import create_access_token
@@ -14,47 +20,181 @@ from catchup.components.auth.constants import OAuthIdentityProviderType
 from catchup.components.auth.provider import OAuthIdentityProvider
 from catchup.configs.config import auth_settings
 from catchup.configs.config import settings
+from catchup.server.mcp.schemas import DCRRequest
+from catchup.server.mcp.schemas import DCRResponse
 from catchup.server.mcp.schemas import OAuthAuthorizationServerMetadata
 from catchup.server.mcp.schemas import TokenResponse
+from catchup.utils.redis import get_redis_client
 
 logger = structlog.get_logger()
 
-router = APIRouter(tags=["MCP OAuth"])
+# RFC 8414: /.well-known 경로는 루트에 고정
+well_known_router = APIRouter(tags=["MCP OAuth"])
+
+# MCP 전용 OAuth 엔드포인트
+router = APIRouter(prefix="/api/v1/mcp", tags=["MCP OAuth"])
+
+_MCP_CLIENT_PREFIX = "mcp:client:"
+_MCP_STATE_PREFIX = "mcp:state:"
+_CLIENT_TTL = 60 * 60 * 24 * 30  # 30일
+_STATE_TTL = 60 * 10  # 10분
 
 
-@router.get(
+def _server_base(request: Request) -> str:
+    """요청에서 scheme+host origin을 반환한다."""
+    return str(request.base_url).rstrip("/")
+
+
+def _kc_auth_base() -> str:
+    """Keycloak realm 인증 base URL을 반환한다."""
+    return (
+        f"{auth_settings.KC_PUBLIC_URL}"
+        f"/realms/{auth_settings.KC_REALM}"
+        f"/protocol/openid-connect"
+    )
+
+
+def _mcp_callback_uri(request: Request) -> str:
+    """MCP OAuth 콜백 URI를 반환한다."""
+    return f"{_server_base(request)}/api/v1/mcp/oauth/callback"
+
+
+@well_known_router.get(
     path="/.well-known/oauth-authorization-server",
     response_model=OAuthAuthorizationServerMetadata,
-    description="MCP OAuth 2.1 Authorization Server 메타데이터를 반환한다.",
+    description="RFC 8414 Authorization Server 메타데이터를 반환한다.",
 )
 async def oauth_authorization_server_metadata(
     request: Request,
 ) -> OAuthAuthorizationServerMetadata:
-    """RFC 8414 Authorization Server Metadata를 반환한다."""
+    """MCP OAuth 2.1 AS 메타데이터를 반환한다."""
     if not settings.MCP_OAUTH_ENABLED:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
 
-    kc_base = (
-        f"{auth_settings.KC_PUBLIC_URL}"
-        f"/realms/{auth_settings.KC_REALM}"
-    )
-    server_base = str(request.base_url).rstrip("/")
-
+    base = _server_base(request)
     return OAuthAuthorizationServerMetadata(
-        issuer=server_base,
-        authorization_endpoint=(
-            f"{kc_base}/protocol/openid-connect/auth"
-        ),
-        token_endpoint=f"{server_base}/oauth/token",
+        issuer=base,
+        authorization_endpoint=f"{base}/api/v1/mcp/oauth/authorize",
+        token_endpoint=f"{base}/api/v1/mcp/oauth/token",
+        registration_endpoint=f"{base}/api/v1/mcp/oauth/register",
         scopes_supported=["openid", "email", "profile"],
         response_types_supported=["code"],
         grant_types_supported=["authorization_code", "refresh_token"],
         code_challenge_methods_supported=["S256"],
-        token_endpoint_auth_methods_supported=[
-            "client_secret_post",
-            "none",
-        ],
+        token_endpoint_auth_methods_supported=["none"],
     )
+
+
+@router.post(
+    path="/oauth/register",
+    response_model=DCRResponse,
+    status_code=status.HTTP_201_CREATED,
+    description="RFC 7591 Dynamic Client Registration. CatchUp 자체 client_id를 발급한다.",
+)
+async def register_client(body: DCRRequest) -> DCRResponse:
+    """MCP 클라이언트를 등록하고 CatchUp 자체 client_id를 발급한다."""
+    if not settings.MCP_OAUTH_ENABLED:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+
+    client_id = f"mcp-{uuid.uuid4().hex[:16]}"
+    payload = {
+        "client_id": client_id,
+        "redirect_uris": body.redirect_uris,
+        "client_name": body.client_name or "MCP Client",
+    }
+    redis = await get_redis_client()
+    await redis.setex(
+        f"{_MCP_CLIENT_PREFIX}{client_id}",
+        _CLIENT_TTL,
+        json.dumps(payload),
+    )
+    logger.info("mcp_client_registered", client_id=client_id)
+    return DCRResponse(
+        client_id=client_id,
+        client_name=payload["client_name"],
+        redirect_uris=body.redirect_uris,
+        token_endpoint_auth_method="none",
+        grant_types=["authorization_code", "refresh_token"],
+        response_types=["code"],
+    )
+
+
+@router.get(
+    path="/oauth/authorize",
+    description="OAuth 2.1 인증 엔드포인트. KC 로그인 화면으로 프록시한다.",
+)
+async def authorize(
+    request: Request,
+    client_id: str,
+    redirect_uri: str,
+    state: str,
+    code_challenge: str,
+    code_challenge_method: str = "S256",
+    response_type: str = "code",
+    scope: str = "openid email profile",
+) -> Response:
+    """client_id를 검증하고 KC 인증 화면으로 리다이렉트한다."""
+    if not settings.MCP_OAUTH_ENABLED:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+
+    redis = await get_redis_client()
+    raw = await redis.get(f"{_MCP_CLIENT_PREFIX}{client_id}")
+    if not raw:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="등록되지 않은 client_id입니다.",
+        )
+
+    internal_state = uuid.uuid4().hex
+    await redis.setex(
+        f"{_MCP_STATE_PREFIX}{internal_state}",
+        _STATE_TTL,
+        json.dumps({
+            "original_redirect_uri": redirect_uri,
+            "original_state": state,
+        }),
+    )
+
+    kc_auth_url = (
+        f"{_kc_auth_base()}/auth"
+        f"?{urlencode({
+            'client_id': auth_settings.KC_CLIENT_ID,
+            'redirect_uri': _mcp_callback_uri(request),
+            'response_type': 'code',
+            'scope': scope,
+            'state': internal_state,
+            'code_challenge': code_challenge,
+            'code_challenge_method': code_challenge_method,
+        })}"
+    )
+    logger.info("mcp_authorize_redirect", client_id=client_id)
+    return RedirectResponse(url=kc_auth_url, status_code=302)
+
+
+@router.get(
+    path="/oauth/callback",
+    description="KC 인증 콜백. code를 원래 redirect_uri로 중계한다.",
+)
+async def oauth_callback(code: str, state: str) -> Response:
+    """KC 콜백을 수신해 원래 Claude redirect_uri로 code를 전달한다."""
+    redis = await get_redis_client()
+    raw = await redis.getdel(f"{_MCP_STATE_PREFIX}{state}")
+    if not raw:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="유효하지 않거나 만료된 state입니다.",
+        )
+
+    if isinstance(raw, bytes):
+        raw = raw.decode("utf-8")
+    payload = json.loads(raw)
+
+    target_url = (
+        f"{payload['original_redirect_uri']}"
+        f"?{urlencode({'code': code, 'state': payload['original_state']})}"
+    )
+    logger.info("mcp_callback_relayed")
+    return RedirectResponse(url=target_url, status_code=302)
 
 
 @router.post(
@@ -63,20 +203,21 @@ async def oauth_authorization_server_metadata(
     description="OAuth 2.1 토큰 엔드포인트. authorization_code·refresh_token grant를 처리한다.",
 )
 async def token_endpoint(
+    request: Request,
     grant_type: str = Form(...),
     code: str | None = Form(default=None),
     redirect_uri: str | None = Form(default=None),
     code_verifier: str | None = Form(default=None),
     refresh_token: str | None = Form(default=None),
 ) -> TokenResponse:
-    """Keycloak code를 교환하거나 refresh token으로 CatchUp JWT를 발급한다."""
+    """KC code를 교환하거나 refresh token으로 CatchUp JWT를 발급한다."""
     if not settings.MCP_OAUTH_ENABLED:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
 
     if grant_type == "authorization_code":
         return await _handle_authorization_code(
             code=code,
-            redirect_uri=redirect_uri,
+            redirect_uri=_mcp_callback_uri(request),
             code_verifier=code_verifier,
         )
 
@@ -91,14 +232,14 @@ async def token_endpoint(
 
 async def _handle_authorization_code(
     code: str | None,
-    redirect_uri: str | None,
+    redirect_uri: str,
     code_verifier: str | None,
 ) -> TokenResponse:
-    """Keycloak code를 교환해 CatchUp JWT를 발급한다."""
-    if not code or not redirect_uri:
+    """KC code를 교환해 CatchUp JWT를 발급한다."""
+    if not code:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="code와 redirect_uri는 필수입니다.",
+            detail="code는 필수입니다.",
         )
     if not code_verifier:
         raise HTTPException(
