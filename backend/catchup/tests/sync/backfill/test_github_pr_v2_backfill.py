@@ -309,7 +309,9 @@ def test_target_query_groups_v1_prs_by_scope_and_target() -> None:
     assert "count(*) FILTER (WHERE needs_backfill) AS pending_count" in query
     assert "state.connector = 'github'" in query
     assert "state.entity_type = 'pr'" in query
-    assert "state.state != 'processing'" in query
+    assert "state.state IN ('pending', 'succeeded')" in query
+    assert "state.state = 'failed'" in query
+    assert "state.next_retry_at <= now()" in query
     assert "GROUP BY scope_id, target_id" in query
 
 

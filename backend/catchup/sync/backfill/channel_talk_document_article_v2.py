@@ -40,6 +40,8 @@ from catchup.db.engine import SessionLocal
 from catchup.sync.backfill.channel_talk_user_chat_v2 import (
     build_mark_processing_statement,
 )
+from catchup.sync.backfill.concurrency import run_bounded_targets
+from catchup.sync.backfill.state import build_failure_metadata
 from catchup.sync.ingestion.adapters.channel_talk.article_models import (
     ChannelTalkArticleV2BackfillExecutionRequest,
 )
@@ -138,14 +140,15 @@ class ChannelTalkArticleV2BackfillService:
         succeeded = 0
         skipped = 0
         failed = 0
-        adapters: dict[tuple[str, str], ChannelTalkArticleV2BackfillAdapter] = {}
 
-        for target in targets:
+        async def _process_target(target) -> None:
+            nonlocal succeeded, skipped, failed
+            adapters: dict[tuple[str, str], ChannelTalkArticleV2BackfillAdapter] = {}
             try:
                 claimed = await asyncio.to_thread(self._mark_processing_sync, target)
                 if not claimed:
                     skipped += 1
-                    continue
+                    return
 
                 seeds = await asyncio.to_thread(
                     self._fetch_candidate_seeds_for_target_sync,
@@ -207,6 +210,8 @@ class ChannelTalkArticleV2BackfillService:
                     0,
                     [],
                     force_failed=True,
+                    error_type=type(exc).__name__,
+                    error_message=str(exc),
                 )
                 logger.warning(
                     "channel_talk_document_article_v2_backfill_target_finished",
@@ -219,6 +224,12 @@ class ChannelTalkArticleV2BackfillService:
                     exc_info=True,
                 )
 
+
+        await run_bounded_targets(
+            targets,
+            concurrency=settings.VECTOR_STORE_V2_BACKFILL_TARGET_CONCURRENCY,
+            process_target=_process_target,
+        )
         return ChannelTalkArticleV2BackfillResult(
             scanned=len(targets),
             succeeded=succeeded,
@@ -393,9 +404,17 @@ class ChannelTalkArticleV2BackfillService:
         failed_langchain_ids: list[str],
         *,
         force_failed: bool = False,
+        error_type: str | None = None,
+        error_message: str | None = None,
     ) -> None:
         now = datetime.now(timezone.utc)
         state = "failed" if force_failed or failed_langchain_ids else "succeeded"
+        failure_metadata = build_failure_metadata(
+            now,
+            error_type=error_type or ("PartialBackfillFailure" if failed_langchain_ids else None),
+            error_message=error_message
+            or (f"{len(failed_langchain_ids)} v2 documents failed during hydration" if failed_langchain_ids else None),
+        )
         with self._session_factory() as db:
             db.execute(
                 build_channel_talk_document_article_mark_finished_statement(),
@@ -410,6 +429,9 @@ class ChannelTalkArticleV2BackfillService:
                     "failed_ids": json.dumps(failed_langchain_ids),
                     "succeeded_at": now if state == "succeeded" else None,
                     "failed_at": now if state == "failed" else None,
+                    "last_error_type": failure_metadata.last_error_type if state == "failed" else None,
+                    "last_error_message": failure_metadata.last_error_message if state == "failed" else None,
+                    "next_retry_at": failure_metadata.next_retry_at if state == "failed" else None,
                 },
             )
             db.commit()
@@ -589,7 +611,13 @@ def build_channel_talk_document_article_v1_target_query():
          AND state.scope_id = grouped.scope_id
          AND state.target_id = grouped.target_id
         WHERE grouped.pending_count > 0
-          AND (state.state IS NULL OR state.state != 'processing')
+          AND (state.state IS NULL OR (
+                  state.state IN ('pending', 'succeeded')
+                  OR (
+                      state.state = 'failed'
+                      AND state.next_retry_at <= now()
+                  )
+              ))
         ORDER BY grouped.scope_id, grouped.target_id
         LIMIT :limit
         """
@@ -658,7 +686,14 @@ def build_channel_talk_document_article_mark_finished_statement():
             backfill_count = :backfill_count,
             failed_ids = CAST(:failed_ids AS jsonb),
             succeeded_at = :succeeded_at,
-            failed_at = :failed_at
+            failed_at = :failed_at,
+            failure_count = CASE
+                WHEN :state = 'failed' THEN failure_count + 1
+                ELSE 0
+            END,
+            last_error_type = :last_error_type,
+            last_error_message = :last_error_message,
+            next_retry_at = :next_retry_at
         WHERE connector = :connector
           AND entity_type = :entity_type
           AND scope_id = :scope_id
