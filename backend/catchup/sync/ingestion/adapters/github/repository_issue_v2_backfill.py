@@ -198,10 +198,20 @@ class GithubIssueV2BackfillAdapter(GithubRepositoryAdapterBase):
         write_failed_ids = tuple(
             doc_id for doc_id in document_ids if doc_id not in persisted_id_set
         )
-        v2_failed_ids = _dedupe((*upstream_v2_failed_ids, *write_failed_ids))
+        metadata_check_ids = [
+            doc_id for doc_id in document_ids if doc_id in persisted_id_set
+        ]
+        metadata_failed_ids = await self._find_missing_v2_metadata_namespace_ids(
+            document_ids=metadata_check_ids,
+            namespace="github_issue",
+            repo_full_name=execution.repo_full_name,
+            log_event="github_issue_v2_backfill_metadata_missing_after_persist",
+        )
+        failed_document_ids = _dedupe((*write_failed_ids, *metadata_failed_ids))
+        v2_failed_ids = _dedupe((*upstream_v2_failed_ids, *failed_document_ids))
         return GithubRepositoryPersistResult(
-            persisted_count=len(document_ids) - len(write_failed_ids),
-            error_count=upstream_error_count + len(write_failed_ids),
+            persisted_count=len(document_ids) - len(failed_document_ids),
+            error_count=upstream_error_count + len(failed_document_ids),
             v2_error_count=len(v2_failed_ids),
             v2_failed_ids=v2_failed_ids,
         )

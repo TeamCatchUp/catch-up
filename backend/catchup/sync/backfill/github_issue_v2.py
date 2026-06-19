@@ -516,7 +516,6 @@ def build_github_issue_v1_target_query():
                 e.id AS langchain_id,
                 e.document AS content,
                 e.cmetadata AS metadata,
-                NULLIF(e.cmetadata ->> 'updated_at', '')::timestamptz AS source_updated_at,
                 COALESCE(NULLIF(e.cmetadata ->> 'installation_id', ''), '') AS scope_id,
                 COALESCE(
                     CASE
@@ -541,16 +540,6 @@ def build_github_issue_v1_target_query():
                 (
                     COALESCE(v2.{KNOWLEDGE_STORE_METADATA_JSON_COLUMN}::jsonb, '{{}}'::jsonb) = '{{}}'::jsonb
                     OR v2.{KNOWLEDGE_STORE_ID_COLUMN} IS NULL
-                    OR (
-                        v1_issue.source_updated_at IS NOT NULL
-                        AND (
-                            v2.updated_at < v1_issue.source_updated_at
-                            OR (
-                                v2.updated_at = v1_issue.source_updated_at
-                                AND v2.content IS DISTINCT FROM v1_issue.content
-                            )
-                        )
-                    )
                 ) AS needs_backfill
             FROM v1_issue
             LEFT JOIN {KNOWLEDGE_STORE_TABLE_NAME} v2
@@ -595,7 +584,6 @@ def build_github_issue_v1_target_seed_query():
                     NULLIF(e.cmetadata ->> 'number', ''),
                     substring(e.id from ':([^:]+)$')
                 ) AS record_id,
-                NULLIF(e.cmetadata ->> 'updated_at', '')::timestamptz AS source_updated_at,
                 COALESCE(NULLIF(e.cmetadata ->> 'installation_id', ''), '') AS scope_id,
                 COALESCE(
                     CASE
@@ -624,16 +612,6 @@ def build_github_issue_v1_target_seed_query():
                 (
                     COALESCE(v2.{KNOWLEDGE_STORE_METADATA_JSON_COLUMN}::jsonb, '{{}}'::jsonb) = '{{}}'::jsonb
                     OR v2.{KNOWLEDGE_STORE_ID_COLUMN} IS NULL
-                    OR (
-                        v1_issue.source_updated_at IS NOT NULL
-                        AND (
-                            v2.updated_at < v1_issue.source_updated_at
-                            OR (
-                                v2.updated_at = v1_issue.source_updated_at
-                                AND v2.content IS DISTINCT FROM v1_issue.content
-                            )
-                        )
-                    )
                 ) AS needs_backfill
             FROM v1_issue
             LEFT JOIN {KNOWLEDGE_STORE_TABLE_NAME} v2
@@ -703,7 +681,6 @@ def build_upsert_seed_rows_statement():
         ON CONFLICT ({KNOWLEDGE_STORE_ID_COLUMN}) DO UPDATE SET
             {KNOWLEDGE_STORE_CONTENT_COLUMN} = EXCLUDED.{KNOWLEDGE_STORE_CONTENT_COLUMN},
             {KNOWLEDGE_STORE_EMBEDDING_COLUMN} = EXCLUDED.{KNOWLEDGE_STORE_EMBEDDING_COLUMN},
-            {KNOWLEDGE_STORE_METADATA_JSON_COLUMN} = '{{}}'::json,
             source = EXCLUDED.source,
             entity_type = EXCLUDED.entity_type,
             record_id = EXCLUDED.record_id,
@@ -711,14 +688,7 @@ def build_upsert_seed_rows_statement():
             scope_id = EXCLUDED.scope_id,
             target_type = EXCLUDED.target_type,
             target_id = EXCLUDED.target_id,
-            target_name = EXCLUDED.target_name,
-            internal_author_id = NULL,
-            title = '',
-            body = '',
-            data = '{{}}'::jsonb,
-            url = '',
-            updated_at = EXCLUDED.updated_at,
-            synced_at = EXCLUDED.synced_at
+            target_name = EXCLUDED.target_name
         """
     )
 
