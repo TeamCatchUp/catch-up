@@ -22,6 +22,8 @@ from catchup.components.vector_db.v2.constants import (
 from catchup.components.vector_db.v2.constants import KNOWLEDGE_STORE_TABLE_NAME
 from catchup.configs.config import settings
 from catchup.db.engine import SessionLocal
+from catchup.sync.backfill.concurrency import run_bounded_targets
+from catchup.sync.backfill.state import build_failure_metadata
 from catchup.sync.ingestion.adapters.jira import JiraIssueV2BackfillAdapter
 from catchup.sync.ingestion.adapters.jira import JiraIssueV2BackfillExecutionRequest
 from catchup.sync.ingestion.adapters.jira import JiraIssueV2BackfillSeed
@@ -85,14 +87,15 @@ class JiraIssueV2BackfillService:
         succeeded = 0
         skipped = 0
         failed = 0
-        adapters: dict[str, JiraIssueV2BackfillAdapter] = {}
 
-        for target in targets:
+        async def _process_target(target) -> None:
+            nonlocal succeeded, skipped, failed
+            adapters: dict[str, JiraIssueV2BackfillAdapter] = {}
             try:
                 claimed = await asyncio.to_thread(self._mark_processing_sync, target)
                 if not claimed:
                     skipped += 1
-                    continue
+                    return
 
                 seeds = await asyncio.to_thread(
                     self._fetch_candidate_seeds_for_target_sync,
@@ -147,6 +150,8 @@ class JiraIssueV2BackfillService:
                     0,
                     [],
                     force_failed=True,
+                    error_type=type(exc).__name__,
+                    error_message=str(exc),
                 )
                 logger.warning(
                     "jira_issue_v2_backfill_target_failed",
@@ -154,6 +159,12 @@ class JiraIssueV2BackfillService:
                     exc_info=True,
                 )
 
+
+        await run_bounded_targets(
+            targets,
+            concurrency=settings.VECTOR_STORE_V2_BACKFILL_TARGET_CONCURRENCY,
+            process_target=_process_target,
+        )
         return JiraIssueV2BackfillResult(
             scanned=len(targets),
             succeeded=succeeded,
@@ -299,9 +310,17 @@ class JiraIssueV2BackfillService:
         failed_ids: list[str],
         *,
         force_failed: bool = False,
+        error_type: str | None = None,
+        error_message: str | None = None,
     ) -> None:
         now = datetime.now(timezone.utc)
         state = "failed" if force_failed or failed_ids else "succeeded"
+        failure_metadata = build_failure_metadata(
+            now,
+            error_type=error_type or ("PartialBackfillFailure" if failed_ids else None),
+            error_message=error_message
+            or (f"{len(failed_ids)} v2 documents failed during hydration" if failed_ids else None),
+        )
         with self._session_factory() as db:
             db.execute(
                 build_mark_finished_statement(),
@@ -316,6 +335,9 @@ class JiraIssueV2BackfillService:
                     "failed_ids": json.dumps(failed_ids),
                     "succeeded_at": now if state == "succeeded" else None,
                     "failed_at": now if state == "failed" else None,
+                    "last_error_type": failure_metadata.last_error_type if state == "failed" else None,
+                    "last_error_message": failure_metadata.last_error_message if state == "failed" else None,
+                    "next_retry_at": failure_metadata.next_retry_at if state == "failed" else None,
                 },
             )
             db.commit()
@@ -557,7 +579,13 @@ def build_jira_v1_target_query():
          AND state.scope_id = grouped.scope_id
          AND state.target_id = grouped.target_id
         WHERE grouped.pending_count > 0
-          AND (state.state IS NULL OR state.state != 'processing')
+          AND (state.state IS NULL OR (
+                  state.state IN ('pending', 'succeeded')
+                  OR (
+                      state.state = 'failed'
+                      AND state.next_retry_at <= now()
+                  )
+              ))
         ORDER BY grouped.scope_id, grouped.target_id
         LIMIT :limit
         """
@@ -727,7 +755,11 @@ def build_mark_processing_statement():
             backfill_count,
             failed_ids,
             succeeded_at,
-            failed_at
+            failed_at,
+            failure_count,
+            last_error_type,
+            last_error_message,
+            next_retry_at
         )
         VALUES (
             :connector,
@@ -739,6 +771,10 @@ def build_mark_processing_statement():
             0,
             '[]'::jsonb,
             NULL,
+            NULL,
+            0,
+            NULL,
+            NULL,
             NULL
         )
         ON CONFLICT (connector, entity_type, scope_id, target_id) DO UPDATE SET
@@ -747,7 +783,11 @@ def build_mark_processing_statement():
             backfill_count = 0,
             failed_ids = '[]'::jsonb,
             succeeded_at = NULL,
-            failed_at = NULL
+            failed_at = NULL,
+            failure_count = 0,
+            last_error_type = NULL,
+            last_error_message = NULL,
+            next_retry_at = NULL
         WHERE vector_store_v2_backfill_states.state != 'processing'
         RETURNING id
         """
@@ -763,7 +803,14 @@ def build_mark_finished_statement():
             backfill_count = :backfill_count,
             failed_ids = CAST(:failed_ids AS jsonb),
             succeeded_at = :succeeded_at,
-            failed_at = :failed_at
+            failed_at = :failed_at,
+            failure_count = CASE
+                WHEN :state = 'failed' THEN failure_count + 1
+                ELSE 0
+            END,
+            last_error_type = :last_error_type,
+            last_error_message = :last_error_message,
+            next_retry_at = :next_retry_at
         WHERE connector = :connector
           AND entity_type = :entity_type
           AND scope_id = :scope_id

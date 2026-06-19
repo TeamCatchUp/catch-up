@@ -18,7 +18,12 @@ def test_vector_store_v2_backfill_state_model_declares_retry_state_columns() -> 
         "failed_ids",
         "succeeded_at",
         "failed_at",
+        "failure_count",
+        "last_error_type",
+        "last_error_message",
+        "next_retry_at",
     }.issubset(set(table.c.keys()))
 
     index_names = {index.name for index in table.indexes}
     assert "ix_vector_store_v2_backfill_states_lookup" in index_names
+    assert "ix_vector_store_v2_backfill_states_retry_lookup" in index_names

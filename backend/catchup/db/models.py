@@ -81,6 +81,17 @@ class VectorStoreV2BackfillState(Base):
         DateTime(timezone=True),
         nullable=True,
     )
+    failure_count: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        server_default=text("0"),
+    )
+    last_error_type: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    last_error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    next_retry_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -104,6 +115,13 @@ class VectorStoreV2BackfillState(Base):
             "connector",
             "entity_type",
             "state",
+        ),
+        Index(
+            "ix_vector_store_v2_backfill_states_retry_lookup",
+            "connector",
+            "entity_type",
+            "state",
+            "next_retry_at",
         ),
     )
 

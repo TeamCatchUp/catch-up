@@ -21,8 +21,10 @@ from catchup.components.vector_db.v2.constants import (
 from catchup.components.vector_db.v2.constants import KNOWLEDGE_STORE_TABLE_NAME
 from catchup.configs.config import settings
 from catchup.db.engine import SessionLocal
+from catchup.sync.backfill.concurrency import run_bounded_targets
 from catchup.sync.backfill.jira_issue_v2 import build_mark_finished_statement
 from catchup.sync.backfill.jira_issue_v2 import build_mark_processing_statement
+from catchup.sync.backfill.state import build_failure_metadata
 from catchup.sync.ingestion.adapters.confluence import ConfluenceV2BackfillAdapter
 from catchup.sync.ingestion.adapters.confluence import (
     ConfluenceV2BackfillExecutionRequest,
@@ -96,14 +98,15 @@ class ConfluenceV2BackfillService:
         succeeded = 0
         skipped = 0
         failed = 0
-        adapters: dict[str, ConfluenceV2BackfillAdapter] = {}
 
-        for target in targets:
+        async def _process_target(target) -> None:
+            nonlocal succeeded, skipped, failed
+            adapters: dict[str, ConfluenceV2BackfillAdapter] = {}
             try:
                 claimed = await asyncio.to_thread(self._mark_processing_sync, target)
                 if not claimed:
                     skipped += 1
-                    continue
+                    return
 
                 seeds = await asyncio.to_thread(
                     self._fetch_candidate_seeds_for_target_sync,
@@ -158,8 +161,16 @@ class ConfluenceV2BackfillService:
                     0,
                     [],
                     force_failed=True,
+                    error_type=type(exc).__name__,
+                    error_message=str(exc),
                 )
 
+
+        await run_bounded_targets(
+            targets,
+            concurrency=settings.VECTOR_STORE_V2_BACKFILL_TARGET_CONCURRENCY,
+            process_target=_process_target,
+        )
         return ConfluenceV2BackfillResult(
             scanned=len(targets),
             succeeded=succeeded,
@@ -302,9 +313,17 @@ class ConfluenceV2BackfillService:
         failed_ids: list[str],
         *,
         force_failed: bool = False,
+        error_type: str | None = None,
+        error_message: str | None = None,
     ) -> None:
         now = datetime.now(timezone.utc)
         state = "failed" if force_failed or failed_ids else "succeeded"
+        failure_metadata = build_failure_metadata(
+            now,
+            error_type=error_type or ("PartialBackfillFailure" if failed_ids else None),
+            error_message=error_message
+            or (f"{len(failed_ids)} v2 documents failed during hydration" if failed_ids else None),
+        )
         with self._session_factory() as db:
             db.execute(
                 build_mark_finished_statement(),
@@ -319,6 +338,9 @@ class ConfluenceV2BackfillService:
                     "failed_ids": json.dumps(failed_ids),
                     "succeeded_at": now if state == "succeeded" else None,
                     "failed_at": now if state == "failed" else None,
+                    "last_error_type": failure_metadata.last_error_type if state == "failed" else None,
+                    "last_error_message": failure_metadata.last_error_message if state == "failed" else None,
+                    "next_retry_at": failure_metadata.next_retry_at if state == "failed" else None,
                 },
             )
             db.commit()
@@ -481,7 +503,13 @@ def build_confluence_v1_target_query(entity_type: str = "page"):
          AND state.scope_id = grouped.scope_id
          AND state.target_id = grouped.target_id
         WHERE grouped.pending_count > 0
-          AND (state.state IS NULL OR state.state != 'processing')
+          AND (state.state IS NULL OR (
+                  state.state IN ('pending', 'succeeded')
+                  OR (
+                      state.state = 'failed'
+                      AND state.next_retry_at <= now()
+                  )
+              ))
         ORDER BY scope_id, target_id
         LIMIT :limit
         """
