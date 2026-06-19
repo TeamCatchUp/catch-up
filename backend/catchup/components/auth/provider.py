@@ -1,5 +1,6 @@
 import logging
 from urllib.parse import urlencode
+
 from httpx import AsyncClient
 
 from catchup.auth.endpoints import BaseOAuthEndpoint
@@ -46,19 +47,28 @@ class OAuthIdentityProvider:
 
         return f"{self.endpoint.authentication_url}?{urlencode(params)}"
 
-    async def _get_access_token(self, code: str) -> str:
+    async def _get_access_token(
+        self,
+        code: str,
+        redirect_uri: str | None = None,
+        code_verifier: str | None = None,
+    ) -> str:
         """[공통] access token 획득"""
+
+        data: dict = {
+            "grant_type": "authorization_code",
+            "client_id": self.client_id,
+            "client_secret": self.client_secret,
+            "code": code,
+            "redirect_uri": redirect_uri or self.redirect_uri,
+            "scope": self.scope,
+        }
+        if code_verifier:
+            data["code_verifier"] = code_verifier
 
         response = await self.client.post(
             self.endpoint.token_url,
-            data={
-                "grant_type": "authorization_code",
-                "client_id": self.client_id,
-                "client_secret": self.client_secret,
-                "code": code,
-                "redirect_uri": self.redirect_uri,
-                "scope": self.scope,
-            },
+            data=data,
         )
 
         if response.status_code != 200:
@@ -91,11 +101,17 @@ class OAuthIdentityProvider:
 
     async def get_oauth_user_info(
         self,
-        code: str
+        code: str,
+        redirect_uri: str | None = None,
+        code_verifier: str | None = None,
     ) -> BaseOAuthUserInfoResponse:
         """가공된 유저 정보 반환"""
-        
-        token = await self._get_access_token(code)
+
+        token = await self._get_access_token(
+            code,
+            redirect_uri=redirect_uri,
+            code_verifier=code_verifier,
+        )
         raw_user_data = await self._fetch_raw_user_info(token)
         
         required_fields = ["email", "name"]
