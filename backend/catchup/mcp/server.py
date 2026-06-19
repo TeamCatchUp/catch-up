@@ -3,6 +3,9 @@ from urllib.parse import urlparse
 from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
 
+from catchup.components.embedder.constants import EmbeddingProvider
+from catchup.components.embedder.factory import get_embedding_service
+from catchup.components.vector_db.factory import get_vector_db_service
 from catchup.components.vector_db.pgvector.constants import VectorDbProvider
 from catchup.configs.config import auth_settings
 from catchup.configs.config import settings
@@ -49,10 +52,6 @@ async def search_knowledge_base(
         date_from: 검색 시작일 (ISO8601, UTC, 예: "2025-01-01")
         date_to: 검색 종료일 (ISO8601, UTC, 예: "2025-12-31")
     """
-    from catchup.components.embedder.constants import EmbeddingProvider
-    from catchup.components.embedder.factory import get_embedding_service
-    from catchup.components.vector_db.factory import get_vector_db_service
-
     embeddings = get_embedding_service(EmbeddingProvider.AWS_BEDROCK).get_embedder()
     vector_db_service = get_vector_db_service(VectorDbProvider.PGVECTOR, embeddings)
     results = await run_search(query, k, sources, date_from, date_to, vector_db_service)
