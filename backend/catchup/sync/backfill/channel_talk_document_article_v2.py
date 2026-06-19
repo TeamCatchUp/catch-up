@@ -37,12 +37,13 @@ from catchup.connectors.channel_talk.schemas.document_connection import (
     ChannelTalkDocumentCredentialsRecord,
 )
 from catchup.db.engine import SessionLocal
-from catchup.sync.backfill.channel_talk_user_chat_v2 import (
-    build_mark_processing_statement,
-)
 from catchup.sync.backfill.concurrency import run_bounded_targets
 from catchup.sync.backfill.state import backfill_candidate_state_predicate
 from catchup.sync.backfill.state import build_failure_metadata
+from catchup.sync.backfill.state import (
+    build_mark_finished_statement as build_channel_talk_document_article_mark_finished_statement,
+)
+from catchup.sync.backfill.state import build_mark_processing_statement
 from catchup.sync.ingestion.adapters.channel_talk.article_models import (
     ChannelTalkArticleV2BackfillExecutionRequest,
 )
@@ -584,6 +585,38 @@ def _channel_talk_document_article_v1_cte() -> str:
     """
 
 
+def _channel_talk_document_article_needs_backfill_expr() -> str:
+    return f"""
+                    (
+                        COALESCE(v2.{KNOWLEDGE_STORE_METADATA_JSON_COLUMN}::jsonb, '{{}}'::jsonb) = '{{}}'::jsonb
+                        OR v2.{KNOWLEDGE_STORE_ID_COLUMN} IS NULL
+                        OR COALESCE(
+                            v2.{KNOWLEDGE_STORE_METADATA_JSON_COLUMN}::jsonb
+                            #>> '{{channel_talk_document_article,schema_version}}',
+                            ''
+                        ) != '{CHANNEL_TALK_DOCUMENT_ARTICLE_V2_SCHEMA_VERSION}'
+                        OR (
+                            v2.internal_author_id IS NULL
+                            AND NULLIF(
+                                v2.{KNOWLEDGE_STORE_METADATA_JSON_COLUMN}::jsonb
+                                #>> '{{channel_talk_document_article,author,author_id}}',
+                                ''
+                            ) IS NOT NULL
+                        )
+                        OR (
+                            v1_article.source_updated_at IS NOT NULL
+                            AND (
+                                v2.updated_at < v1_article.source_updated_at
+                                OR (
+                                    v2.updated_at = v1_article.source_updated_at
+                                    AND v2.content IS DISTINCT FROM v1_article.content
+                                )
+                            )
+                        )
+                    )
+    """
+
+
 def build_channel_talk_document_article_v1_target_query():
     return text(
         f"""
@@ -593,33 +626,7 @@ def build_channel_talk_document_article_v1_target_query():
                 v1_article.scope_id,
                 v1_article.target_id,
                 v1_article.target_name,
-                (
-                    COALESCE(v2.{KNOWLEDGE_STORE_METADATA_JSON_COLUMN}::jsonb, '{{}}'::jsonb) = '{{}}'::jsonb
-                    OR v2.{KNOWLEDGE_STORE_ID_COLUMN} IS NULL
-                    OR COALESCE(
-                        v2.{KNOWLEDGE_STORE_METADATA_JSON_COLUMN}::jsonb
-                        #>> '{{channel_talk_document_article,schema_version}}',
-                        ''
-                    ) != '{CHANNEL_TALK_DOCUMENT_ARTICLE_V2_SCHEMA_VERSION}'
-                    OR (
-                        v2.internal_author_id IS NULL
-                        AND NULLIF(
-                            v2.{KNOWLEDGE_STORE_METADATA_JSON_COLUMN}::jsonb
-                            #>> '{{channel_talk_document_article,author,author_id}}',
-                            ''
-                        ) IS NOT NULL
-                    )
-                    OR (
-                        v1_article.source_updated_at IS NOT NULL
-                        AND (
-                            v2.updated_at < v1_article.source_updated_at
-                            OR (
-                                v2.updated_at = v1_article.source_updated_at
-                                AND v2.content IS DISTINCT FROM v1_article.content
-                            )
-                        )
-                    )
-                ) AS needs_backfill
+                {_channel_talk_document_article_needs_backfill_expr()} AS needs_backfill
             FROM v1_article
             LEFT JOIN {KNOWLEDGE_STORE_TABLE_NAME} v2
               ON v2.{KNOWLEDGE_STORE_ID_COLUMN} = v1_article.langchain_id
@@ -665,33 +672,7 @@ def build_channel_talk_document_article_v1_target_seed_query():
                 v1_article.embedding,
                 v1_article.scope_id,
                 v1_article.target_id,
-                (
-                    COALESCE(v2.{KNOWLEDGE_STORE_METADATA_JSON_COLUMN}::jsonb, '{{}}'::jsonb) = '{{}}'::jsonb
-                    OR v2.{KNOWLEDGE_STORE_ID_COLUMN} IS NULL
-                    OR COALESCE(
-                        v2.{KNOWLEDGE_STORE_METADATA_JSON_COLUMN}::jsonb
-                        #>> '{{channel_talk_document_article,schema_version}}',
-                        ''
-                    ) != '{CHANNEL_TALK_DOCUMENT_ARTICLE_V2_SCHEMA_VERSION}'
-                    OR (
-                        v2.internal_author_id IS NULL
-                        AND NULLIF(
-                            v2.{KNOWLEDGE_STORE_METADATA_JSON_COLUMN}::jsonb
-                            #>> '{{channel_talk_document_article,author,author_id}}',
-                            ''
-                        ) IS NOT NULL
-                    )
-                    OR (
-                        v1_article.source_updated_at IS NOT NULL
-                        AND (
-                            v2.updated_at < v1_article.source_updated_at
-                            OR (
-                                v2.updated_at = v1_article.source_updated_at
-                                AND v2.content IS DISTINCT FROM v1_article.content
-                            )
-                        )
-                    )
-                ) AS needs_backfill
+                {_channel_talk_document_article_needs_backfill_expr()} AS needs_backfill
             FROM v1_article
             LEFT JOIN {KNOWLEDGE_STORE_TABLE_NAME} v2
               ON v2.{KNOWLEDGE_STORE_ID_COLUMN} = v1_article.langchain_id
@@ -702,33 +683,6 @@ def build_channel_talk_document_article_v1_target_seed_query():
           AND target_id = :target_id
           AND needs_backfill
         ORDER BY record_id, langchain_id
-        """
-    )
-
-
-def build_channel_talk_document_article_mark_finished_statement():
-    return text(
-        """
-        UPDATE vector_store_v2_backfill_states
-        SET state = CAST(:state AS varchar(32)),
-            expected_count = :expected_count,
-            backfill_count = :backfill_count,
-            failed_ids = CAST(:failed_ids AS jsonb),
-            succeeded_at = :succeeded_at,
-            failed_at = :failed_at,
-            failure_count = CASE
-                WHEN CAST(:state AS varchar(32)) = 'failed' THEN failure_count + 1
-                ELSE 0
-            END,
-            last_error_type = :last_error_type,
-            last_error_message = :last_error_message,
-            next_retry_at = :next_retry_at,
-            processing_started_at = NULL
-        WHERE connector = :connector
-          AND entity_type = :entity_type
-          AND scope_id = :scope_id
-          AND target_id = :target_id
-          AND processing_started_at = :processing_started_at
         """
     )
 

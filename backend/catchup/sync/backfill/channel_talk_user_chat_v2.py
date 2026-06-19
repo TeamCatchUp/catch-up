@@ -24,8 +24,9 @@ from catchup.configs.config import settings
 from catchup.db.engine import SessionLocal
 from catchup.sync.backfill.concurrency import run_bounded_targets
 from catchup.sync.backfill.state import backfill_candidate_state_predicate
-from catchup.sync.backfill.state import backfill_claimable_state_predicate
 from catchup.sync.backfill.state import build_failure_metadata
+from catchup.sync.backfill.state import build_mark_finished_statement
+from catchup.sync.backfill.state import build_mark_processing_statement
 from catchup.sync.ingestion.adapters.channel_talk.user_chat_models import (
     ChannelTalkUserChatV2BackfillExecutionRequest,
 )
@@ -511,6 +512,33 @@ def _channel_talk_user_chat_v1_cte() -> str:
     """
 
 
+def _channel_talk_user_chat_needs_backfill_expr() -> str:
+    return f"""
+                    (
+                        COALESCE(v2.{KNOWLEDGE_STORE_METADATA_JSON_COLUMN}::jsonb, '{{}}'::jsonb) = '{{}}'::jsonb
+                        OR v2.{KNOWLEDGE_STORE_ID_COLUMN} IS NULL
+                        OR (
+                            v2.internal_author_id IS NULL
+                            AND NULLIF(
+                                v2.{KNOWLEDGE_STORE_METADATA_JSON_COLUMN}::jsonb
+                                #>> '{{channel_talk_user_chat,assignment,assignee_id}}',
+                                ''
+                            ) IS NOT NULL
+                        )
+                        OR (
+                            v1_user_chat.source_updated_at IS NOT NULL
+                            AND (
+                                v2.updated_at < v1_user_chat.source_updated_at
+                                OR (
+                                    v2.updated_at = v1_user_chat.source_updated_at
+                                    AND v2.content IS DISTINCT FROM v1_user_chat.content
+                                )
+                            )
+                        )
+                    )
+    """
+
+
 def build_channel_talk_user_chat_v1_target_query():
     return text(
         f"""
@@ -520,28 +548,7 @@ def build_channel_talk_user_chat_v1_target_query():
                 v1_user_chat.scope_id,
                 v1_user_chat.target_id,
                 v1_user_chat.target_name,
-                (
-                    COALESCE(v2.{KNOWLEDGE_STORE_METADATA_JSON_COLUMN}::jsonb, '{{}}'::jsonb) = '{{}}'::jsonb
-                    OR v2.{KNOWLEDGE_STORE_ID_COLUMN} IS NULL
-                    OR (
-                        v2.internal_author_id IS NULL
-                        AND NULLIF(
-                            v2.{KNOWLEDGE_STORE_METADATA_JSON_COLUMN}::jsonb
-                            #>> '{{channel_talk_user_chat,assignment,assignee_id}}',
-                            ''
-                        ) IS NOT NULL
-                    )
-                    OR (
-                        v1_user_chat.source_updated_at IS NOT NULL
-                        AND (
-                            v2.updated_at < v1_user_chat.source_updated_at
-                            OR (
-                                v2.updated_at = v1_user_chat.source_updated_at
-                                AND v2.content IS DISTINCT FROM v1_user_chat.content
-                            )
-                        )
-                    )
-                ) AS needs_backfill
+                {_channel_talk_user_chat_needs_backfill_expr()} AS needs_backfill
             FROM v1_user_chat
             LEFT JOIN {KNOWLEDGE_STORE_TABLE_NAME} v2
               ON v2.{KNOWLEDGE_STORE_ID_COLUMN} = v1_user_chat.langchain_id
@@ -587,28 +594,7 @@ def build_channel_talk_user_chat_v1_target_seed_query():
                 v1_user_chat.embedding,
                 v1_user_chat.scope_id,
                 v1_user_chat.target_id,
-                (
-                    COALESCE(v2.{KNOWLEDGE_STORE_METADATA_JSON_COLUMN}::jsonb, '{{}}'::jsonb) = '{{}}'::jsonb
-                    OR v2.{KNOWLEDGE_STORE_ID_COLUMN} IS NULL
-                    OR (
-                        v2.internal_author_id IS NULL
-                        AND NULLIF(
-                            v2.{KNOWLEDGE_STORE_METADATA_JSON_COLUMN}::jsonb
-                            #>> '{{channel_talk_user_chat,assignment,assignee_id}}',
-                            ''
-                        ) IS NOT NULL
-                    )
-                    OR (
-                        v1_user_chat.source_updated_at IS NOT NULL
-                        AND (
-                            v2.updated_at < v1_user_chat.source_updated_at
-                            OR (
-                                v2.updated_at = v1_user_chat.source_updated_at
-                                AND v2.content IS DISTINCT FROM v1_user_chat.content
-                            )
-                        )
-                    )
-                ) AS needs_backfill
+                {_channel_talk_user_chat_needs_backfill_expr()} AS needs_backfill
             FROM v1_user_chat
             LEFT JOIN {KNOWLEDGE_STORE_TABLE_NAME} v2
               ON v2.{KNOWLEDGE_STORE_ID_COLUMN} = v1_user_chat.langchain_id
@@ -715,86 +701,5 @@ def build_fetch_seeded_seed_chunk_query():
           )
         ORDER BY record_id, langchain_id
         LIMIT :limit
-        """
-    )
-
-
-def build_mark_processing_statement():
-    return text(
-        f"""
-        INSERT INTO vector_store_v2_backfill_states (
-            connector,
-            entity_type,
-            scope_id,
-            target_id,
-            state,
-            expected_count,
-            backfill_count,
-            failed_ids,
-            succeeded_at,
-            failed_at,
-            failure_count,
-            last_error_type,
-            last_error_message,
-            next_retry_at,
-            processing_started_at
-        )
-        VALUES (
-            :connector,
-            :entity_type,
-            :scope_id,
-            :target_id,
-            'processing',
-            :expected_count,
-            0,
-            '[]'::jsonb,
-            NULL,
-            NULL,
-            0,
-            NULL,
-            NULL,
-            NULL,
-            now()
-        )
-        ON CONFLICT (connector, entity_type, scope_id, target_id) DO UPDATE SET
-            state = 'processing',
-            expected_count = EXCLUDED.expected_count,
-            backfill_count = 0,
-            failed_ids = '[]'::jsonb,
-            succeeded_at = NULL,
-            failed_at = NULL,
-            last_error_type = NULL,
-            last_error_message = NULL,
-            next_retry_at = NULL,
-            processing_started_at = now()
-        WHERE {backfill_claimable_state_predicate("vector_store_v2_backfill_states").strip()}
-        RETURNING processing_started_at
-        """
-    )
-
-
-def build_mark_finished_statement():
-    return text(
-        """
-        UPDATE vector_store_v2_backfill_states
-        SET state = CAST(:state AS varchar(32)),
-            expected_count = :expected_count,
-            backfill_count = :backfill_count,
-            failed_ids = CAST(:failed_ids AS jsonb),
-            succeeded_at = :succeeded_at,
-            failed_at = :failed_at,
-            failure_count = CASE
-                WHEN CAST(:state AS varchar(32)) = 'failed' THEN failure_count + 1
-                ELSE 0
-            END,
-            last_error_type = :last_error_type,
-            last_error_message = :last_error_message,
-            next_retry_at = :next_retry_at,
-            processing_started_at = NULL
-        WHERE connector = :connector
-          AND entity_type = :entity_type
-          AND scope_id = :scope_id
-          AND target_id = :target_id
-          AND processing_started_at = :processing_started_at
         """
     )

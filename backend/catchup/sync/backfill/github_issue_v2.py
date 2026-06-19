@@ -24,8 +24,9 @@ from catchup.configs.config import settings
 from catchup.db.engine import SessionLocal
 from catchup.sync.backfill.concurrency import run_bounded_targets
 from catchup.sync.backfill.state import backfill_candidate_state_predicate
-from catchup.sync.backfill.state import backfill_claimable_state_predicate
 from catchup.sync.backfill.state import build_failure_metadata
+from catchup.sync.backfill.state import build_mark_finished_statement
+from catchup.sync.backfill.state import build_mark_processing_statement
 from catchup.sync.ingestion.adapters.github import GithubIssueV2BackfillAdapter
 from catchup.sync.ingestion.adapters.github import GithubIssueV2BackfillExecutionRequest
 from catchup.sync.ingestion.adapters.github import GithubIssueV2BackfillSeed
@@ -518,6 +519,15 @@ def _record_id_to_int(record_id: str) -> int:
     return int(record_id)
 
 
+def _github_issue_needs_backfill_expr() -> str:
+    return f"""
+                    (
+                        COALESCE(v2.{KNOWLEDGE_STORE_METADATA_JSON_COLUMN}::jsonb, '{{}}'::jsonb) = '{{}}'::jsonb
+                        OR v2.{KNOWLEDGE_STORE_ID_COLUMN} IS NULL
+                    )
+    """
+
+
 def build_github_issue_v1_target_query():
     return text(
         f"""
@@ -547,10 +557,7 @@ def build_github_issue_v1_target_query():
             SELECT
                 v1_issue.scope_id,
                 v1_issue.target_id,
-                (
-                    COALESCE(v2.{KNOWLEDGE_STORE_METADATA_JSON_COLUMN}::jsonb, '{{}}'::jsonb) = '{{}}'::jsonb
-                    OR v2.{KNOWLEDGE_STORE_ID_COLUMN} IS NULL
-                ) AS needs_backfill
+                {_github_issue_needs_backfill_expr()} AS needs_backfill
             FROM v1_issue
             LEFT JOIN {KNOWLEDGE_STORE_TABLE_NAME} v2
               ON v2.{KNOWLEDGE_STORE_ID_COLUMN} = v1_issue.langchain_id
@@ -619,10 +626,7 @@ def build_github_issue_v1_target_seed_query():
                 v1_issue.embedding,
                 v1_issue.scope_id,
                 v1_issue.target_id,
-                (
-                    COALESCE(v2.{KNOWLEDGE_STORE_METADATA_JSON_COLUMN}::jsonb, '{{}}'::jsonb) = '{{}}'::jsonb
-                    OR v2.{KNOWLEDGE_STORE_ID_COLUMN} IS NULL
-                ) AS needs_backfill
+                {_github_issue_needs_backfill_expr()} AS needs_backfill
             FROM v1_issue
             LEFT JOIN {KNOWLEDGE_STORE_TABLE_NAME} v2
               ON v2.{KNOWLEDGE_STORE_ID_COLUMN} = v1_issue.langchain_id
@@ -744,86 +748,5 @@ def build_fetch_seeded_seed_chunk_query():
           )
         ORDER BY record_number
         LIMIT :limit
-        """
-    )
-
-
-def build_mark_processing_statement():
-    return text(
-        f"""
-        INSERT INTO vector_store_v2_backfill_states (
-            connector,
-            entity_type,
-            scope_id,
-            target_id,
-            state,
-            expected_count,
-            backfill_count,
-            failed_ids,
-            succeeded_at,
-            failed_at,
-            failure_count,
-            last_error_type,
-            last_error_message,
-            next_retry_at,
-            processing_started_at
-        )
-        VALUES (
-            :connector,
-            :entity_type,
-            :scope_id,
-            :target_id,
-            'processing',
-            :expected_count,
-            0,
-            '[]'::jsonb,
-            NULL,
-            NULL,
-            0,
-            NULL,
-            NULL,
-            NULL,
-            now()
-        )
-        ON CONFLICT (connector, entity_type, scope_id, target_id) DO UPDATE SET
-            state = 'processing',
-            expected_count = EXCLUDED.expected_count,
-            backfill_count = 0,
-            failed_ids = '[]'::jsonb,
-            succeeded_at = NULL,
-            failed_at = NULL,
-            last_error_type = NULL,
-            last_error_message = NULL,
-            next_retry_at = NULL,
-            processing_started_at = now()
-        WHERE {backfill_claimable_state_predicate("vector_store_v2_backfill_states").strip()}
-        RETURNING processing_started_at
-        """
-    )
-
-
-def build_mark_finished_statement():
-    return text(
-        """
-        UPDATE vector_store_v2_backfill_states
-        SET state = CAST(:state AS varchar(32)),
-            expected_count = :expected_count,
-            backfill_count = :backfill_count,
-            failed_ids = CAST(:failed_ids AS jsonb),
-            succeeded_at = :succeeded_at,
-            failed_at = :failed_at,
-            failure_count = CASE
-                WHEN CAST(:state AS varchar(32)) = 'failed' THEN failure_count + 1
-                ELSE 0
-            END,
-            last_error_type = :last_error_type,
-            last_error_message = :last_error_message,
-            next_retry_at = :next_retry_at,
-            processing_started_at = NULL
-        WHERE connector = :connector
-          AND entity_type = :entity_type
-          AND scope_id = :scope_id
-          AND target_id = :target_id
-          AND processing_started_at = :processing_started_at
         """
     )

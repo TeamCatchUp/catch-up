@@ -24,10 +24,10 @@ from catchup.components.vector_db.v2.constants import KNOWLEDGE_STORE_TABLE_NAME
 from catchup.configs.config import settings
 from catchup.db.engine import SessionLocal
 from catchup.sync.backfill.concurrency import run_bounded_targets
-from catchup.sync.backfill.jira_issue_v2 import build_mark_finished_statement
-from catchup.sync.backfill.jira_issue_v2 import build_mark_processing_statement
 from catchup.sync.backfill.state import backfill_candidate_state_predicate
 from catchup.sync.backfill.state import build_failure_metadata
+from catchup.sync.backfill.state import build_mark_finished_statement
+from catchup.sync.backfill.state import build_mark_processing_statement
 from catchup.sync.ingestion.adapters.confluence import ConfluenceV2BackfillAdapter
 from catchup.sync.ingestion.adapters.confluence import (
     ConfluenceV2BackfillExecutionRequest,
@@ -516,6 +516,19 @@ def _confluence_v1_cte(entity_type: str) -> str:
     """
 
 
+def _confluence_needs_backfill_expr() -> str:
+    return f"""
+                    (
+                        COALESCE(v2.{KNOWLEDGE_STORE_METADATA_JSON_COLUMN}::jsonb, '{{}}'::jsonb) = '{{}}'::jsonb
+                        OR v2.{KNOWLEDGE_STORE_ID_COLUMN} IS NULL
+                        OR (
+                            v1_confluence.source_updated_at IS NOT NULL
+                            AND v2.updated_at < v1_confluence.source_updated_at
+                        )
+                    )
+    """
+
+
 def build_confluence_v1_target_query(entity_type: str = "page"):
     entity_type = _validate_confluence_backfill_entity_type(entity_type)
     return text(
@@ -526,14 +539,7 @@ def build_confluence_v1_target_query(entity_type: str = "page"):
                 v1_confluence.scope_id,
                 v1_confluence.target_id,
                 v1_confluence.target_name,
-                (
-                    COALESCE(v2.{KNOWLEDGE_STORE_METADATA_JSON_COLUMN}::jsonb, '{{}}'::jsonb) = '{{}}'::jsonb
-                    OR v2.{KNOWLEDGE_STORE_ID_COLUMN} IS NULL
-                    OR (
-                        v1_confluence.source_updated_at IS NOT NULL
-                        AND v2.updated_at < v1_confluence.source_updated_at
-                    )
-                ) AS needs_backfill
+                {_confluence_needs_backfill_expr()} AS needs_backfill
             FROM v1_confluence
             LEFT JOIN {KNOWLEDGE_STORE_TABLE_NAME} v2
               ON v2.{KNOWLEDGE_STORE_ID_COLUMN} = v1_confluence.langchain_id
@@ -579,14 +585,7 @@ def build_confluence_v1_target_seed_query(entity_type: str = "page"):
                 v1_confluence.embedding,
                 v1_confluence.scope_id,
                 v1_confluence.target_id,
-                (
-                    COALESCE(v2.{KNOWLEDGE_STORE_METADATA_JSON_COLUMN}::jsonb, '{{}}'::jsonb) = '{{}}'::jsonb
-                    OR v2.{KNOWLEDGE_STORE_ID_COLUMN} IS NULL
-                    OR (
-                        v1_confluence.source_updated_at IS NOT NULL
-                        AND v2.updated_at < v1_confluence.source_updated_at
-                    )
-                ) AS needs_backfill
+                {_confluence_needs_backfill_expr()} AS needs_backfill
             FROM v1_confluence
             LEFT JOIN {KNOWLEDGE_STORE_TABLE_NAME} v2
               ON v2.{KNOWLEDGE_STORE_ID_COLUMN} = v1_confluence.langchain_id

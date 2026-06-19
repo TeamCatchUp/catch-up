@@ -4,6 +4,9 @@ from dataclasses import dataclass
 from datetime import datetime
 from datetime import timedelta
 
+from sqlalchemy import text
+from sqlalchemy.sql.elements import TextClause
+
 from catchup.configs.config import settings
 
 MAX_ERROR_MESSAGE_LENGTH = 2000
@@ -104,3 +107,84 @@ def backfill_claimable_state_predicate(
                 AND {backfill_stale_processing_predicate(table_name).strip()}
             )
     """
+
+
+def build_mark_processing_statement() -> TextClause:
+    return text(
+        f"""
+        INSERT INTO vector_store_v2_backfill_states (
+            connector,
+            entity_type,
+            scope_id,
+            target_id,
+            state,
+            expected_count,
+            backfill_count,
+            failed_ids,
+            succeeded_at,
+            failed_at,
+            failure_count,
+            last_error_type,
+            last_error_message,
+            next_retry_at,
+            processing_started_at
+        )
+        VALUES (
+            :connector,
+            :entity_type,
+            :scope_id,
+            :target_id,
+            'processing',
+            :expected_count,
+            0,
+            '[]'::jsonb,
+            NULL,
+            NULL,
+            0,
+            NULL,
+            NULL,
+            NULL,
+            now()
+        )
+        ON CONFLICT (connector, entity_type, scope_id, target_id) DO UPDATE SET
+            state = 'processing',
+            expected_count = EXCLUDED.expected_count,
+            backfill_count = 0,
+            failed_ids = '[]'::jsonb,
+            succeeded_at = NULL,
+            failed_at = NULL,
+            last_error_type = NULL,
+            last_error_message = NULL,
+            next_retry_at = NULL,
+            processing_started_at = now()
+        WHERE {backfill_claimable_state_predicate("vector_store_v2_backfill_states").strip()}
+        RETURNING processing_started_at
+        """
+    )
+
+
+def build_mark_finished_statement() -> TextClause:
+    return text(
+        """
+        UPDATE vector_store_v2_backfill_states
+        SET state = CAST(:state AS varchar(32)),
+            expected_count = :expected_count,
+            backfill_count = :backfill_count,
+            failed_ids = CAST(:failed_ids AS jsonb),
+            succeeded_at = :succeeded_at,
+            failed_at = :failed_at,
+            failure_count = CASE
+                WHEN CAST(:state AS varchar(32)) = 'failed' THEN failure_count + 1
+                ELSE 0
+            END,
+            last_error_type = :last_error_type,
+            last_error_message = :last_error_message,
+            next_retry_at = :next_retry_at,
+            processing_started_at = NULL
+        WHERE connector = :connector
+          AND entity_type = :entity_type
+          AND scope_id = :scope_id
+          AND target_id = :target_id
+          AND processing_started_at = :processing_started_at
+        """
+    )

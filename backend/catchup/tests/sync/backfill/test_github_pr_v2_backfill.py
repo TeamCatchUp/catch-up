@@ -23,6 +23,9 @@ from catchup.sync.backfill.github_pr_v2 import build_github_pr_v1_target_query
 from catchup.sync.backfill.github_pr_v2 import build_github_pr_v1_target_seed_query
 from catchup.sync.backfill.github_pr_v2 import build_mark_processing_statement
 from catchup.sync.backfill.github_pr_v2 import build_upsert_seed_rows_statement
+from catchup.sync.backfill.state import (
+    build_mark_processing_statement as build_shared_mark_processing_statement,
+)
 from catchup.sync.ingestion.adapters.github import GithubPrV2BackfillAdapter
 from catchup.sync.ingestion.adapters.github import GithubPrV2BackfillExecutionRequest
 from catchup.sync.ingestion.adapters.github import GithubPrV2BackfillSeed
@@ -459,21 +462,7 @@ def test_github_fetch_result_log_summary_counts_exact_items() -> None:
 
 
 def test_mark_processing_statement_claims_scope_target_conditionally() -> None:
-    statement = str(build_mark_processing_statement())
-
-    assert "ON CONFLICT (connector, entity_type, scope_id, target_id)" in statement
-    assert "state = 'processing'" in statement
-    assert "expected_count = EXCLUDED.expected_count" in statement
-    assert "failed_ids = '[]'::jsonb" in statement
-    assert "processing_started_at = now()" in statement
-    assert "failure_count = 0" not in statement.split(
-        "ON CONFLICT (connector, entity_type, scope_id, target_id) DO UPDATE SET"
-    )[1]
-    assert "vector_store_v2_backfill_states.state IN ('pending', 'succeeded')" in statement
-    assert "vector_store_v2_backfill_states.next_retry_at IS NULL" in statement
-    assert "vector_store_v2_backfill_states.next_retry_at <= now()" in statement
-    assert "vector_store_v2_backfill_states.processing_started_at IS NULL" in statement
-    assert "RETURNING processing_started_at" in statement
+    assert build_mark_processing_statement is build_shared_mark_processing_statement
 
 
 @pytest.mark.asyncio
