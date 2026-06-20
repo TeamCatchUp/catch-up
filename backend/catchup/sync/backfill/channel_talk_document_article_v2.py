@@ -630,14 +630,6 @@ def _channel_talk_document_article_needs_backfill_expr() -> str:
                             ''
                         ) != '{CHANNEL_TALK_DOCUMENT_ARTICLE_V2_SCHEMA_VERSION}'
                         OR (
-                            v2.internal_author_id IS NULL
-                            AND NULLIF(
-                                v2.{KNOWLEDGE_STORE_METADATA_JSON_COLUMN}::jsonb
-                                #>> '{{channel_talk_document_article,author,author_id}}',
-                                ''
-                            ) IS NOT NULL
-                        )
-                        OR (
                             v1_article.source_updated_at IS NOT NULL
                             AND (
                                 v2.updated_at < v1_article.source_updated_at

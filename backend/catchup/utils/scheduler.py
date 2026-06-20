@@ -61,34 +61,10 @@ _scheduler: AsyncIOScheduler | None = None
 SEOUL_TZ = ZoneInfo("Asia/Seoul")
 VECTOR_STORE_V2_BACKFILL_SEQUENCE: tuple[SequentialBackfillSpec, ...] = (
     SequentialBackfillSpec(
-        key="github/pr",
-        connector="github",
-        entity_type="pr",
-        service_factory=GithubPrV2BackfillService,
-    ),
-    SequentialBackfillSpec(
-        key="github/issue",
-        connector="github",
+        key="jira/issue",
+        connector="jira",
         entity_type="issue",
-        service_factory=GithubIssueV2BackfillService,
-    ),
-    SequentialBackfillSpec(
-        key="slack/message",
-        connector="slack",
-        entity_type="message",
-        service_factory=SlackMessageV2BackfillService,
-    ),
-    SequentialBackfillSpec(
-        key="channel_talk/user_chat",
-        connector="channel_talk",
-        entity_type="user_chat",
-        service_factory=ChannelTalkUserChatV2BackfillService,
-    ),
-    SequentialBackfillSpec(
-        key="channel_talk/document_article",
-        connector="channel_talk",
-        entity_type="document_article",
-        service_factory=ChannelTalkArticleV2BackfillService,
+        service_factory=JiraIssueV2BackfillService,
     ),
     SequentialBackfillSpec(
         key="confluence/page",
@@ -103,10 +79,34 @@ VECTOR_STORE_V2_BACKFILL_SEQUENCE: tuple[SequentialBackfillSpec, ...] = (
         service_factory=ConfluenceBlogpostV2BackfillService,
     ),
     SequentialBackfillSpec(
-        key="jira/issue",
-        connector="jira",
+        key="github/pr",
+        connector="github",
+        entity_type="pr",
+        service_factory=GithubPrV2BackfillService,
+    ),
+    SequentialBackfillSpec(
+        key="github/issue",
+        connector="github",
         entity_type="issue",
-        service_factory=JiraIssueV2BackfillService,
+        service_factory=GithubIssueV2BackfillService,
+    ),
+    SequentialBackfillSpec(
+        key="channel_talk/user_chat",
+        connector="channel_talk",
+        entity_type="user_chat",
+        service_factory=ChannelTalkUserChatV2BackfillService,
+    ),
+    SequentialBackfillSpec(
+        key="channel_talk/document_article",
+        connector="channel_talk",
+        entity_type="document_article",
+        service_factory=ChannelTalkArticleV2BackfillService,
+    ),
+    SequentialBackfillSpec(
+        key="slack/message",
+        connector="slack",
+        entity_type="message",
+        service_factory=SlackMessageV2BackfillService,
     ),
 )
 
