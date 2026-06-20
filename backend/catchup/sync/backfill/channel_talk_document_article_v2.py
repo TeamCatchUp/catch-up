@@ -771,7 +771,7 @@ def build_upsert_seed_rows_statement():
             NULL,
             '',
             '',
-            NULL,
+            jsonb_build_object('parts', '[]'::jsonb),
             '',
             :seeded_at,
             :seeded_at,

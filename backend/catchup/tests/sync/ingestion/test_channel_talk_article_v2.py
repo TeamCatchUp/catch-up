@@ -184,7 +184,7 @@ async def test_channel_talk_article_v2_mapper_builds_contract_without_duplicates
     assert metadata["internal_author_id"] is None
     assert metadata["title"] == "Published refund policy"
     assert metadata["body"] == "# Refunds\n\nPublished body text."
-    assert metadata["data"] is None
+    assert metadata["data"] == {"parts": []}
     assert prepared.chunk_body_text == metadata["body"]
     assert "Published refund policy" not in metadata["body"]
     assert "channel-123" not in metadata["body"]
@@ -270,7 +270,7 @@ async def test_channel_talk_article_v2_mapper_allows_empty_body_with_seed_conten
 
     assert document.page_content == "preserved v1 seed content"
     assert document.metadata["body"] == ""
-    assert document.metadata["data"] is None
+    assert document.metadata["data"] == {"parts": []}
 
 
 @pytest.mark.asyncio
@@ -402,7 +402,7 @@ async def test_channel_talk_article_full_sync_dual_writes_v2_document():
     assert upsert_kwargs["embeddings"] == [[0.75]]
     assert v2_document.page_content.startswith("Published refund policy")
     assert v2_document.metadata["body"] == "# Refunds\n\nPublished body text."
-    assert v2_document.metadata["data"] is None
+    assert v2_document.metadata["data"] == {"parts": []}
     assert v2_document.metadata["channel_talk_document_article"]["author"] == {
         "author_id": "author-1",
         "author_name": "Writer Kim",
@@ -477,6 +477,15 @@ def test_channel_talk_article_backfill_queries_follow_v1_seed_pattern():
     assert "title = ''" not in upsert_statement
     assert "body = ''" not in upsert_statement
     assert "data = NULL" not in upsert_statement
+    assert "jsonb_build_object('parts', '[]'::jsonb)" in upsert_statement
+    assert (
+        ":target_name,\n"
+        "            NULL,\n"
+        "            '',\n"
+        "            '',\n"
+        "            jsonb_build_object('parts', '[]'::jsonb),\n"
+        "            '',"
+    ) in upsert_statement
     assert "url = ''" not in upsert_statement
 
 
@@ -562,7 +571,7 @@ async def test_backfill_adapter_hydrates_article_and_reuses_v1_seed_values():
     assert document.id == seed.langchain_id
     assert document.page_content == seed.content
     assert document.metadata["body"] == "# Refunds\n\nPublished body text."
-    assert document.metadata["data"] is None
+    assert document.metadata["data"] == {"parts": []}
     assert author_resolver.author_ids == ["author-1"]
     assert document.metadata["internal_author_id"] == "42"
     assert upsert_args.kwargs["ids"] == [seed.langchain_id]
