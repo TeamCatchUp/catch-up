@@ -18,6 +18,16 @@ from catchup.configs.config import settings
 from catchup.db.engine import SessionLocal
 
 SessionFactory = Callable[[], AbstractContextManager[Session]]
+
+
+def _metadata_namespace_predicate(namespace: str) -> str:
+    metadata = f"COALESCE({KNOWLEDGE_STORE_METADATA_JSON_COLUMN}::jsonb, '{{}}'::jsonb)"
+    return (
+        f"{metadata} ? '{namespace}'\n"
+        f"              AND {metadata} - '{namespace}' = '{{}}'::jsonb"
+    )
+
+
 ALLOWED_JIRA_PART_TYPES = frozenset(
     {
         "issue_description",
@@ -188,7 +198,7 @@ def build_jira_issue_v2_count_validation_query():
             FROM {KNOWLEDGE_STORE_TABLE_NAME}
             WHERE source = 'jira'
               AND entity_type = 'issue'
-              AND COALESCE({KNOWLEDGE_STORE_METADATA_JSON_COLUMN}::jsonb, '{{}}'::jsonb) != '{{}}'::jsonb
+              AND {_metadata_namespace_predicate("jira_issue")}
         )
         SELECT
             (SELECT count(*) FROM v1_issue) AS v1_count,
@@ -234,7 +244,7 @@ def build_jira_issue_v2_sample_query():
         FROM {KNOWLEDGE_STORE_TABLE_NAME}
         WHERE source = 'jira'
           AND entity_type = 'issue'
-          AND COALESCE({KNOWLEDGE_STORE_METADATA_JSON_COLUMN}::jsonb, '{{}}'::jsonb) != '{{}}'::jsonb
+          AND {_metadata_namespace_predicate("jira_issue")}
         ORDER BY synced_at DESC, langchain_id ASC
         LIMIT :limit
         """

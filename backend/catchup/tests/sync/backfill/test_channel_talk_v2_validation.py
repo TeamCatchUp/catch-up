@@ -139,6 +139,10 @@ def test_user_chat_count_validation_query_uses_hydrated_namespace_rows() -> None
     assert "missing_in_v2" in query
     assert "extra_in_v2" in query
     assert "? 'channel_talk_user_chat'" in query
+    assert (
+        "COALESCE(metadata::jsonb, '{}'::jsonb) - 'channel_talk_user_chat' = '{}'::jsonb"
+        in query
+    )
 
 
 def test_document_article_count_validation_query_requires_current_schema() -> None:
@@ -148,6 +152,10 @@ def test_document_article_count_validation_query_requires_current_schema() -> No
     assert "WHERE source = 'channel_talk'" in query
     assert "entity_type = 'document_article'" in query
     assert "? 'channel_talk_document_article'" in query
+    assert (
+        "COALESCE(metadata::jsonb, '{}'::jsonb) - 'channel_talk_document_article' = '{}'::jsonb"
+        in query
+    )
     assert "#>> '{channel_talk_document_article,schema_version}'" in query
     assert ") = '2'" in query
 
@@ -160,6 +168,10 @@ def test_user_chat_sample_query_returns_hydrated_rows_only() -> None:
     assert "WHERE source = 'channel_talk'" in query
     assert "entity_type = 'user_chat'" in query
     assert "? 'channel_talk_user_chat'" in query
+    assert (
+        "COALESCE(metadata::jsonb, '{}'::jsonb) - 'channel_talk_user_chat' = '{}'::jsonb"
+        in query
+    )
 
 
 def test_document_article_sample_query_returns_current_schema_rows_only() -> None:
@@ -170,6 +182,10 @@ def test_document_article_sample_query_returns_current_schema_rows_only() -> Non
     assert "WHERE source = 'channel_talk'" in query
     assert "entity_type = 'document_article'" in query
     assert "? 'channel_talk_document_article'" in query
+    assert (
+        "COALESCE(metadata::jsonb, '{}'::jsonb) - 'channel_talk_document_article' = '{}'::jsonb"
+        in query
+    )
     assert "#>> '{channel_talk_document_article,schema_version}'" in query
     assert ") = '2'" in query
 

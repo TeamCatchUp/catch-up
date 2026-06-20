@@ -29,6 +29,14 @@ from catchup.sync.ingestion.vector_records.channel_talk_document_article import 
 SessionFactory = Callable[[], AbstractContextManager[Session]]
 
 
+def _metadata_namespace_predicate(namespace: str) -> str:
+    metadata = f"COALESCE({KNOWLEDGE_STORE_METADATA_JSON_COLUMN}::jsonb, '{{}}'::jsonb)"
+    return (
+        f"{metadata} ? '{namespace}'\n"
+        f"              AND {metadata} - '{namespace}' = '{{}}'::jsonb"
+    )
+
+
 @dataclass(slots=True, frozen=True)
 class ChannelTalkV2CountValidation:
     v1_count: int
@@ -145,8 +153,7 @@ def build_channel_talk_user_chat_v2_count_validation_query():
             FROM {KNOWLEDGE_STORE_TABLE_NAME}
             WHERE source = 'channel_talk'
               AND entity_type = 'user_chat'
-              AND COALESCE({KNOWLEDGE_STORE_METADATA_JSON_COLUMN}::jsonb, '{{}}'::jsonb)
-                    ? 'channel_talk_user_chat'
+              AND {_metadata_namespace_predicate("channel_talk_user_chat")}
         )
         {_count_validation_select_sql()}
         """
@@ -169,8 +176,7 @@ def build_channel_talk_document_article_v2_count_validation_query():
             FROM {KNOWLEDGE_STORE_TABLE_NAME}
             WHERE source = 'channel_talk'
               AND entity_type = 'document_article'
-              AND COALESCE({KNOWLEDGE_STORE_METADATA_JSON_COLUMN}::jsonb, '{{}}'::jsonb)
-                    ? 'channel_talk_document_article'
+              AND {_metadata_namespace_predicate("channel_talk_document_article")}
               AND COALESCE(
                     {KNOWLEDGE_STORE_METADATA_JSON_COLUMN}::jsonb
                     #>> '{{channel_talk_document_article,schema_version}}',
@@ -314,8 +320,7 @@ def _sample_query(*, entity_type: str, namespace: str, extra_predicate: str):
         FROM {KNOWLEDGE_STORE_TABLE_NAME}
         WHERE source = 'channel_talk'
           AND entity_type = '{entity_type}'
-          AND COALESCE({KNOWLEDGE_STORE_METADATA_JSON_COLUMN}::jsonb, '{{}}'::jsonb)
-                ? '{namespace}'
+          AND {_metadata_namespace_predicate(namespace)}
           {extra_predicate}
         ORDER BY synced_at DESC, langchain_id ASC
         LIMIT :limit

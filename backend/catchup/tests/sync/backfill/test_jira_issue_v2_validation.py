@@ -10,6 +10,9 @@ from catchup.sync.backfill.jira_issue_v2_validation import (
     build_jira_issue_v2_legacy_epic_shape_query,
 )
 from catchup.sync.backfill.jira_issue_v2_validation import (
+    build_jira_issue_v2_sample_query,
+)
+from catchup.sync.backfill.jira_issue_v2_validation import (
     validate_jira_issue_v2_sample_row,
 )
 
@@ -28,9 +31,20 @@ def test_jira_issue_v2_count_validation_uses_unambiguous_cloud_resolution() -> N
     assert "substring(v1_issue_source.issue_url from '^https?://([^/]+)')" in sql
     assert "project_match_count = 1" in sql
     assert "canonical_rank = 1" in sql
+    assert "COALESCE(metadata::jsonb, '{}'::jsonb) ? 'jira_issue'" in sql
+    assert "COALESCE(metadata::jsonb, '{}'::jsonb) - 'jira_issue' = '{}'::jsonb" in sql
     assert "v1_issue.target_id" not in sql
     assert "v1_issue.record_id" not in sql
     assert "v1_issue.v1_langchain_id" not in sql
+
+
+def test_jira_issue_v2_sample_query_uses_exact_metadata_namespace() -> None:
+    sql = str(build_jira_issue_v2_sample_query())
+
+    assert "WHERE source = 'jira'" in sql
+    assert "entity_type = 'issue'" in sql
+    assert "COALESCE(metadata::jsonb, '{}'::jsonb) ? 'jira_issue'" in sql
+    assert "COALESCE(metadata::jsonb, '{}'::jsonb) - 'jira_issue' = '{}'::jsonb" in sql
 
 
 def test_jira_issue_v2_validation_query_does_not_parse_regex_as_bind_param() -> None:

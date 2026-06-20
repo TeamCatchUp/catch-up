@@ -20,6 +20,14 @@ from catchup.db.engine import SessionLocal
 SessionFactory = Callable[[], AbstractContextManager[Session]]
 
 
+def _metadata_namespace_predicate(namespace: str) -> str:
+    metadata = f"COALESCE({KNOWLEDGE_STORE_METADATA_JSON_COLUMN}::jsonb, '{{}}'::jsonb)"
+    return (
+        f"{metadata} ? '{namespace}'\n"
+        f"              AND {metadata} - '{namespace}' = '{{}}'::jsonb"
+    )
+
+
 @dataclass(slots=True, frozen=True)
 class GithubPrV2CountValidation:
     v1_count: int
@@ -104,7 +112,7 @@ def build_github_pr_v2_count_validation_query():
             FROM {KNOWLEDGE_STORE_TABLE_NAME}
             WHERE source = 'github'
               AND entity_type = 'pr'
-              AND COALESCE({KNOWLEDGE_STORE_METADATA_JSON_COLUMN}::jsonb, '{{}}'::jsonb) != '{{}}'::jsonb
+              AND {_metadata_namespace_predicate("github_pr")}
         )
         SELECT
             (SELECT count(*) FROM v1_pr) AS v1_count,
@@ -151,7 +159,7 @@ def build_github_pr_v2_sample_query():
         FROM {KNOWLEDGE_STORE_TABLE_NAME}
         WHERE source = 'github'
           AND entity_type = 'pr'
-          AND COALESCE({KNOWLEDGE_STORE_METADATA_JSON_COLUMN}::jsonb, '{{}}'::jsonb) != '{{}}'::jsonb
+          AND {_metadata_namespace_predicate("github_pr")}
         ORDER BY synced_at DESC, langchain_id ASC
         LIMIT :limit
         """

@@ -389,6 +389,7 @@ def test_target_query_groups_v1_prs_by_scope_and_target() -> None:
     assert "LEFT JOIN knowledge_store v2" in query
     assert "v2.document_id = v1_pr.langchain_id" in query
     assert "COALESCE(v2.metadata::jsonb, '{}'::jsonb) = '{}'::jsonb" in query
+    assert "AND e.embedding IS NOT NULL" in query
     assert "count(*) AS expected_count" in query
     assert "count(*) FILTER (WHERE needs_backfill) AS pending_count" in query
     assert "state.connector = 'github'" in query
@@ -409,6 +410,7 @@ def test_target_seed_query_returns_backfill_needed_rows_for_one_target() -> None
     assert "candidates.record_id" in query
     assert "candidates.metadata" not in query
     assert "COALESCE(v2.metadata::jsonb, '{}'::jsonb) = '{}'::jsonb" in query
+    assert "AND e.embedding IS NOT NULL" in query
     assert "WHERE candidates.scope_id = :scope_id" in query
     assert "AND candidates.target_id = :target_id" in query
     assert "AND candidates.needs_backfill" in query

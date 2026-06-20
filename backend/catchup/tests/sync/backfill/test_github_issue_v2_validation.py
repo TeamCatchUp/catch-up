@@ -66,7 +66,11 @@ def test_count_validation_query_compares_v1_and_v2_issue_sets() -> None:
     assert "missing_in_v2" in query
     assert "extra_in_v2" in query
     assert "e.cmetadata ->> 'entity_type' = 'issue'" in query
-    assert "COALESCE(metadata::jsonb, '{}'::jsonb) != '{}'::jsonb" in query
+    assert "COALESCE(metadata::jsonb, '{}'::jsonb) ? 'github_issue'" in query
+    assert (
+        "COALESCE(metadata::jsonb, '{}'::jsonb) - 'github_issue' = '{}'::jsonb"
+        in query
+    )
 
 
 def test_sample_query_returns_required_issue_v2_projection() -> None:
@@ -79,7 +83,11 @@ def test_sample_query_returns_required_issue_v2_projection() -> None:
     assert "AS langchain_metadata" in query
     assert "WHERE source = 'github'" in query
     assert "entity_type = 'issue'" in query
-    assert "COALESCE(metadata::jsonb, '{}'::jsonb) != '{}'::jsonb" in query
+    assert "COALESCE(metadata::jsonb, '{}'::jsonb) ? 'github_issue'" in query
+    assert (
+        "COALESCE(metadata::jsonb, '{}'::jsonb) - 'github_issue' = '{}'::jsonb"
+        in query
+    )
 
 
 def test_sample_validator_accepts_valid_github_issue_v2_row_with_empty_body() -> None:
