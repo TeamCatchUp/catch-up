@@ -57,11 +57,12 @@ def _seed() -> GithubPrV1Seed:
     )
 
 
-def _target_row(expected_count: int = 1) -> dict:
+def _target_row(expected_count: int = 1, pending_count: int | None = None) -> dict:
     return {
         "scope_id": "118342815",
         "target_id": "TeamCatchUp/CatchUp",
         "expected_count": expected_count,
+        "pending_count": expected_count if pending_count is None else pending_count,
     }
 
 
@@ -590,6 +591,68 @@ async def test_backfill_batch_records_scope_success_when_target_seeds_are_persis
 
 
 @pytest.mark.asyncio
+async def test_backfill_batch_marks_target_failed_when_pending_rows_are_missing() -> None:
+    seed = _seed()
+    claim_result = MagicMock()
+    claim_result.first.return_value = (1,)
+    session = MagicMock()
+    session.execute.side_effect = [
+        _RowsResult([_target_row(expected_count=2, pending_count=2)]),
+        claim_result,
+        _RowsResult([_seed_row(seed)]),
+        MagicMock(),
+        _RowsResult([]),
+        MagicMock(),
+    ]
+    session_factory = MagicMock()
+    session_factory.return_value.__enter__.return_value = session
+    adapter_factory = AsyncMock(return_value=SimpleNamespace())
+    pipeline_result = SimpleNamespace(
+        persisted_count=1,
+        failed_count=0,
+        metadata={"failed_ids": []},
+    )
+    service = GithubPrV2BackfillService(
+        adapter_factory=adapter_factory,
+        session_factory=session_factory,
+        collection_name="vectorstore",
+    )
+
+    with (
+        patch("catchup.sync.backfill.github_pr_v2.logger") as logger_mock,
+        patch(
+            "catchup.sync.backfill.github_pr_v2.run_sync_ingestion",
+            AsyncMock(return_value=pipeline_result),
+        ),
+    ):
+        result = await service.backfill_batch(limit=10, locked_by="test-runner")
+
+    assert result.scanned == 1
+    assert result.succeeded == 1
+    assert result.skipped == 0
+    assert result.failed == 1
+
+    finish_params = session.execute.call_args_list[-1].args[1]
+    assert finish_params["state"] == "failed"
+    assert finish_params["expected_count"] == 2
+    assert finish_params["backfill_count"] == 1
+    assert json.loads(finish_params["failed_ids"]) == []
+    assert finish_params["last_error_type"] == "IncompleteBackfillTarget"
+    assert "pending_count=2" in finish_params["last_error_message"]
+    assert finish_params["succeeded_at"] is None
+    assert finish_params["failed_at"] is not None
+    assert finish_params["next_retry_at"] is not None
+
+    target_finished_log = logger_mock.info.call_args_list[-1]
+    assert target_finished_log.args[0] == "github_pr_v2_backfill_target_finished"
+    assert target_finished_log.kwargs["state"] == "failed"
+    assert target_finished_log.kwargs["pending_count"] == 2
+    assert target_finished_log.kwargs["backfill_count"] == 1
+    assert target_finished_log.kwargs["failed_count"] == 0
+    assert target_finished_log.kwargs["failed_ids"] == []
+
+
+@pytest.mark.asyncio
 async def test_backfill_batch_skips_when_scope_target_claim_is_not_acquired() -> None:
     claim_result = MagicMock()
     claim_result.first.return_value = None
@@ -691,7 +754,7 @@ async def test_backfill_batch_does_not_escape_when_failure_state_update_fails() 
     claim_result.first.return_value = (1,)
     session = MagicMock()
     session.execute.side_effect = [
-        _RowsResult([_target_row(expected_count=3)]),
+        _RowsResult([_target_row(expected_count=3, pending_count=1)]),
         claim_result,
         RuntimeError("seed fetch failed"),
         RuntimeError("state update failed"),
@@ -710,7 +773,7 @@ async def test_backfill_batch_does_not_escape_when_failure_state_update_fails() 
     assert result.scanned == 1
     assert result.succeeded == 0
     assert result.skipped == 0
-    assert result.failed == 3
+    assert result.failed == 1
     warning_events = [call.args[0] for call in logger_mock.warning.call_args_list]
     assert warning_events == [
         "github_pr_v2_backfill_target_state_update_failed",

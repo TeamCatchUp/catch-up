@@ -56,6 +56,20 @@ class ChannelTalkDocumentArticleMetadata(BaseModel):
     )
 
 
+class ChannelTalkDocumentArticleDataPart(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    type: str
+    text: str
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class ChannelTalkDocumentArticleData(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    parts: list[ChannelTalkDocumentArticleDataPart] = Field(default_factory=list)
+
+
 class ChannelTalkDocumentArticleVectorRecord(BaseModel):
     """v2 vector-store row contract for a Channel Talk document article chunk."""
 
@@ -75,7 +89,9 @@ class ChannelTalkDocumentArticleVectorRecord(BaseModel):
     internal_author_id: str | None = None
     title: str
     body: str
-    data: None = None
+    data: ChannelTalkDocumentArticleData = Field(
+        default_factory=ChannelTalkDocumentArticleData
+    )
     url: str
     created_at: datetime
     updated_at: datetime

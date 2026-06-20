@@ -23,10 +23,13 @@ from catchup.components.vector_db.v2.constants import KNOWLEDGE_STORE_TABLE_NAME
 from catchup.configs.config import settings
 from catchup.db.engine import SessionLocal
 from catchup.sync.backfill.concurrency import run_bounded_targets
+from catchup.sync.backfill.state import BackfillCompletionDecision
 from catchup.sync.backfill.state import backfill_candidate_state_predicate
 from catchup.sync.backfill.state import build_failure_metadata
 from catchup.sync.backfill.state import build_mark_finished_statement
 from catchup.sync.backfill.state import build_mark_processing_statement
+from catchup.sync.backfill.state import count_backfill_completion_failures
+from catchup.sync.backfill.state import decide_backfill_completion
 from catchup.sync.ingestion.adapters.channel_talk.user_chat_models import (
     ChannelTalkUserChatV2BackfillExecutionRequest,
 )
@@ -44,7 +47,9 @@ from catchup.sync.ingestion.schemas import SyncExecutionResult
 from catchup.sync.ingestion.schemas import SyncWindow
 
 SessionFactory = Callable[[], AbstractContextManager[Session]]
-BackfillAdapterFactory = Callable[[str], Awaitable[ChannelTalkUserChatV2BackfillAdapter]]
+BackfillAdapterFactory = Callable[
+    [str], Awaitable[ChannelTalkUserChatV2BackfillAdapter]
+]
 SEED_INSERT_BATCH_SIZE = 100
 HYDRATE_PIPELINE_BATCH_SIZE = 50
 
@@ -65,6 +70,7 @@ class ChannelTalkUserChatV1Target:
     target_id: str
     target_name: str
     expected_count: int
+    pending_count: int
 
 
 @dataclass(slots=True, frozen=True)
@@ -165,7 +171,7 @@ class ChannelTalkUserChatV2BackfillService:
                         failed_langchain_ids.extend(chunk_failed_ids)
                         backfill_count += result.persisted_count
 
-                await asyncio.to_thread(
+                decision = await asyncio.to_thread(
                     self._mark_finished_sync,
                     target,
                     backfill_count,
@@ -173,9 +179,14 @@ class ChannelTalkUserChatV2BackfillService:
                     processing_started_at,
                 )
                 succeeded += backfill_count
-                failed += len(failed_langchain_ids)
+                failed += count_backfill_completion_failures(
+                    pending_count=target.pending_count,
+                    backfill_count=backfill_count,
+                    failed_ids=failed_langchain_ids,
+                    state=decision.state,
+                )
             except Exception as exc:
-                failed += target.expected_count
+                failed += target.pending_count
                 try:
                     await asyncio.to_thread(
                         self._mark_finished_sync,
@@ -202,12 +213,11 @@ class ChannelTalkUserChatV2BackfillService:
                     **_target_log_context(target),
                     state="failed",
                     backfill_count=0,
-                    failed_count=target.expected_count,
+                    failed_count=target.pending_count,
                     error_type=type(exc).__name__,
                     error_message=str(exc),
                     exc_info=(type(exc), exc, exc.__traceback__),
                 )
-
 
         await run_bounded_targets(
             targets,
@@ -246,6 +256,7 @@ class ChannelTalkUserChatV2BackfillService:
                     target_id=str(row["target_id"]),
                     target_name=str(row["target_name"]),
                     expected_count=int(row["expected_count"]),
+                    pending_count=int(row["pending_count"]),
                 )
                 for row in rows
             ]
@@ -371,14 +382,21 @@ class ChannelTalkUserChatV2BackfillService:
         force_failed: bool = False,
         error_type: str | None = None,
         error_message: str | None = None,
-    ) -> None:
+    ) -> BackfillCompletionDecision:
         now = datetime.now(timezone.utc)
-        state = "failed" if force_failed or failed_langchain_ids else "succeeded"
+        decision = decide_backfill_completion(
+            pending_count=target.pending_count,
+            backfill_count=backfill_count,
+            failed_ids=failed_langchain_ids,
+            force_failed=force_failed,
+            error_type=error_type,
+            error_message=error_message,
+        )
+        state = decision.state
         failure_metadata = build_failure_metadata(
             now,
-            error_type=error_type or ("PartialBackfillFailure" if failed_langchain_ids else None),
-            error_message=error_message
-            or (f"{len(failed_langchain_ids)} v2 documents failed during hydration" if failed_langchain_ids else None),
+            error_type=decision.error_type if state == "failed" else None,
+            error_message=decision.error_message if state == "failed" else None,
         )
         with self._session_factory() as db:
             update_result = db.execute(
@@ -394,9 +412,15 @@ class ChannelTalkUserChatV2BackfillService:
                     "failed_ids": json.dumps(failed_langchain_ids),
                     "succeeded_at": now if state == "succeeded" else None,
                     "failed_at": now if state == "failed" else None,
-                    "last_error_type": failure_metadata.last_error_type if state == "failed" else None,
-                    "last_error_message": failure_metadata.last_error_message if state == "failed" else None,
-                    "next_retry_at": failure_metadata.next_retry_at if state == "failed" else None,
+                    "last_error_type": failure_metadata.last_error_type
+                    if state == "failed"
+                    else None,
+                    "last_error_message": failure_metadata.last_error_message
+                    if state == "failed"
+                    else None,
+                    "next_retry_at": failure_metadata.next_retry_at
+                    if state == "failed"
+                    else None,
                     "processing_started_at": processing_started_at,
                 },
             )
@@ -411,6 +435,7 @@ class ChannelTalkUserChatV2BackfillService:
                 failed_count=len(failed_langchain_ids),
                 processing_started_at=processing_started_at,
             )
+        return decision
 
 
 def _build_execution_request(
@@ -439,6 +464,7 @@ def _target_log_context(target: ChannelTalkUserChatV1Target) -> dict[str, object
         "target_id": target.target_id,
         "target_name": target.target_name,
         "expected_count": target.expected_count,
+        "pending_count": target.pending_count,
     }
 
 
@@ -574,7 +600,8 @@ def build_channel_talk_user_chat_v1_target_query():
             grouped.scope_id,
             grouped.target_id,
             grouped.target_name,
-            grouped.expected_count
+            grouped.expected_count,
+            grouped.pending_count
         FROM grouped
         LEFT JOIN vector_store_v2_backfill_states state
           ON state.connector = 'channel_talk'

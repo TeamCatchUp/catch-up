@@ -26,6 +26,7 @@ from catchup.sync.backfill.state import (
 from catchup.sync.backfill.state import (
     build_mark_processing_statement as build_shared_mark_processing_statement,
 )
+from catchup.sync.backfill.state import decide_backfill_completion
 
 
 @pytest.mark.parametrize(
@@ -66,3 +67,36 @@ def test_mark_processing_statement_claims_scope_target_conditionally() -> None:
     assert "vector_store_v2_backfill_states.next_retry_at <= now()" in statement
     assert "vector_store_v2_backfill_states.processing_started_at IS NULL" in statement
     assert "RETURNING processing_started_at" in statement
+
+
+def test_completion_decision_fails_when_processed_count_is_less_than_pending() -> None:
+    decision = decide_backfill_completion(
+        pending_count=2,
+        backfill_count=1,
+        failed_ids=[],
+    )
+
+    assert decision.state == "failed"
+    assert decision.error_type == "IncompleteBackfillTarget"
+
+
+def test_completion_decision_succeeds_when_processed_count_matches_pending() -> None:
+    decision = decide_backfill_completion(
+        pending_count=2,
+        backfill_count=2,
+        failed_ids=[],
+    )
+
+    assert decision.state == "succeeded"
+    assert decision.error_type is None
+
+
+def test_completion_decision_fails_when_failed_ids_exist() -> None:
+    decision = decide_backfill_completion(
+        pending_count=2,
+        backfill_count=1,
+        failed_ids=["github:pr:TeamCatchUp/CatchUp:724"],
+    )
+
+    assert decision.state == "failed"
+    assert decision.error_type == "PartialBackfillFailure"

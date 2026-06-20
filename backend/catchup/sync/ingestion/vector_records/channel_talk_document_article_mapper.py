@@ -12,6 +12,9 @@ from catchup.sync.ingestion.vector_records.channel_talk_document_article import 
     ChannelTalkDocumentArticleAuthorMetadata,
 )
 from catchup.sync.ingestion.vector_records.channel_talk_document_article import (
+    ChannelTalkDocumentArticleData,
+)
+from catchup.sync.ingestion.vector_records.channel_talk_document_article import (
     ChannelTalkDocumentArticleMetadata,
 )
 from catchup.sync.ingestion.vector_records.channel_talk_document_article import (
@@ -98,7 +101,7 @@ class ChannelTalkDocumentArticleV2RecordMapper:
             internal_author_id=internal_author_id,
             title=title,
             body=body,
-            data=None,
+            data=ChannelTalkDocumentArticleData(),
             url=url,
             created_at=created_at,
             updated_at=updated_at,
