@@ -461,11 +461,12 @@ def test_channel_talk_article_backfill_queries_follow_v1_seed_pattern():
     assert "needs_backfill" in target_query
     assert "GROUP BY scope_id, target_id\n" in target_query
     assert "GROUP BY scope_id, target_id, target_name" not in target_query
-    assert "v2.internal_author_id IS NULL" in target_query
     assert "#>> '{channel_talk_document_article,schema_version}'" in target_query
-    assert "#>> '{channel_talk_document_article,author,author_id}'" in target_query
-    assert "v2.internal_author_id IS NULL" in target_seed_query
     assert "#>> '{channel_talk_document_article,schema_version}'" in target_seed_query
+    assert "v2.internal_author_id IS NULL" not in target_query
+    assert "#>> '{channel_talk_document_article,author,author_id}'" not in target_query
+    assert "v2.internal_author_id IS NULL" not in target_seed_query
+    assert "#>> '{channel_talk_document_article,author,author_id}'" not in target_seed_query
     assert "scope_id = :scope_id" in seed_query
     assert "target_id = :target_id" in seed_query
     assert "COALESCE(metadata::jsonb, '{}'::jsonb) = '{}'::jsonb" in seed_query
