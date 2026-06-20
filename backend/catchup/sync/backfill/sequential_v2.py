@@ -147,9 +147,11 @@ async def run_sequential_v2_backfill(
             )
             return run_summary
 
-    run_status = "completed_with_failures" if any(
-        summary.failed > 0 for summary in summaries
-    ) else "completed"
+    run_status = (
+        "completed_with_failures"
+        if any(summary.failed > 0 for summary in summaries)
+        else "completed"
+    )
     run_summary = SequentialBackfillRunSummary(
         entities=tuple(summaries),
         status=run_status,
@@ -247,7 +249,7 @@ async def _run_entity_until_done(
             )
             return summary
 
-        if result.succeeded == 0 and result.failed == 0 and result.skipped > 0:
+        if result.scanned > 0 and result.succeeded == 0 and result.failed == 0:
             no_progress_batches += 1
             if no_progress_batches <= 1:
                 logger.info(

@@ -498,6 +498,7 @@ def test_channel_talk_article_backfill_mark_finished_serializes_failed_ids():
             target_id="space-123",
             target_name="Help Center",
             expected_count=1,
+            pending_count=1,
         ),
         backfill_count=0,
         failed_langchain_ids=[

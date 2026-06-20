@@ -94,7 +94,12 @@ async def test_sequential_backfill_continues_after_target_failure() -> None:
 
 @pytest.mark.asyncio
 async def test_sequential_backfill_stops_before_next_entity_on_no_progress() -> None:
-    first = _Service([_Result(scanned=3, succeeded=0, skipped=3, failed=0), _Result(scanned=3, succeeded=0, skipped=3, failed=0)])
+    first = _Service(
+        [
+            _Result(scanned=3, succeeded=0, skipped=3, failed=0),
+            _Result(scanned=3, succeeded=0, skipped=3, failed=0),
+        ]
+    )
     second = _Service([_Result(scanned=0, succeeded=0, skipped=0, failed=0)])
 
     result = await run_sequential_v2_backfill(
@@ -106,6 +111,32 @@ async def test_sequential_backfill_stops_before_next_entity_on_no_progress() -> 
     assert result.stop_reason == "no_progress"
     assert result.skipped == 6
     assert result.entities[0].status == "blocked"
+    assert second.calls == []
+
+
+@pytest.mark.asyncio
+async def test_sequential_backfill_stops_when_scanned_batches_make_no_progress() -> None:
+    first = _Service(
+        [
+            _Result(scanned=1, succeeded=0, skipped=0, failed=0),
+            _Result(scanned=1, succeeded=0, skipped=0, failed=0),
+        ]
+    )
+    second = _Service([_Result(scanned=0, succeeded=0, skipped=0, failed=0)])
+
+    result = await run_sequential_v2_backfill(
+        [_spec("github/pr", first), _spec("slack/message", second)],
+        batch_size=5,
+    )
+
+    assert result.status == "stopped"
+    assert result.stop_reason == "no_progress"
+    assert result.scanned == 2
+    assert result.succeeded == 0
+    assert result.failed == 0
+    assert result.skipped == 0
+    assert result.entities[0].status == "blocked"
+    assert first.calls == [(5, None), (5, None)]
     assert second.calls == []
 
 

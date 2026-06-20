@@ -19,6 +19,13 @@ class BackfillFailureMetadata:
     next_retry_at: datetime | None
 
 
+@dataclass(slots=True, frozen=True)
+class BackfillCompletionDecision:
+    state: str
+    error_type: str | None = None
+    error_message: str | None = None
+
+
 def truncate_error_message(
     message: str | None,
     *,
@@ -33,6 +40,60 @@ def truncate_error_message(
 
 def compute_next_retry_at(now: datetime, retry_delay_minutes: int) -> datetime:
     return now + timedelta(minutes=retry_delay_minutes)
+
+
+def decide_backfill_completion(
+    *,
+    pending_count: int,
+    backfill_count: int,
+    failed_ids: list[str],
+    force_failed: bool = False,
+    error_type: str | None = None,
+    error_message: str | None = None,
+) -> BackfillCompletionDecision:
+    if force_failed:
+        return BackfillCompletionDecision(
+            state="failed",
+            error_type=error_type or "BackfillTargetFailure",
+            error_message=error_message,
+        )
+
+    if failed_ids:
+        return BackfillCompletionDecision(
+            state="failed",
+            error_type=error_type or "PartialBackfillFailure",
+            error_message=error_message
+            or f"{len(failed_ids)} v2 documents failed during hydration",
+        )
+
+    accounted_count = backfill_count + len(failed_ids)
+    if accounted_count < pending_count:
+        return BackfillCompletionDecision(
+            state="failed",
+            error_type=error_type or "IncompleteBackfillTarget",
+            error_message=error_message
+            or (
+                "Backfill target completed fewer rows than pending: "
+                f"pending_count={pending_count}, "
+                f"backfill_count={backfill_count}, "
+                f"failed_count={len(failed_ids)}"
+            ),
+        )
+
+    return BackfillCompletionDecision(state="succeeded")
+
+
+def count_backfill_completion_failures(
+    *,
+    pending_count: int,
+    backfill_count: int,
+    failed_ids: list[str],
+    state: str,
+) -> int:
+    if state != "failed":
+        return 0
+    missing_count = max(pending_count - backfill_count, 0)
+    return max(len(failed_ids), missing_count)
 
 
 def build_failure_metadata(
