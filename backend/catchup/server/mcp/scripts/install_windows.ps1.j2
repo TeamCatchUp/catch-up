@@ -1,0 +1,94 @@
+$ErrorActionPreference = "Stop"
+$MCP_URL = "{{ mcp_url }}"
+$ConfigDir = "$env:APPDATA\Claude"
+$ConfigFile = "$ConfigDir\claude_desktop_config.json"
+
+Write-Host "=== CatchUp MCP 설치 시작 ===" -ForegroundColor Cyan
+
+# 1. Node.js 확인 및 설치
+if (Get-Command node -ErrorAction SilentlyContinue) {
+    $nodeVer = node --version
+    Write-Host "✓ Node.js 이미 설치됨: $nodeVer" -ForegroundColor Green
+} else {
+    Write-Host "Node.js가 설치되어 있지 않습니다. 설치를 시작합니다..."
+    if (Get-Command winget -ErrorAction SilentlyContinue) {
+        winget install --id OpenJS.NodeJS.LTS --accept-source-agreements --accept-package-agreements
+        # PATH 갱신
+        $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH", "Machine") + ";" +
+                    [System.Environment]::GetEnvironmentVariable("PATH", "User")
+    } elseif (Get-Command choco -ErrorAction SilentlyContinue) {
+        choco install nodejs-lts -y
+        $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH", "Machine") + ";" +
+                    [System.Environment]::GetEnvironmentVariable("PATH", "User")
+    } else {
+        Write-Host "Chocolatey 패키지 관리자를 설치합니다..."
+        Set-ExecutionPolicy Bypass -Scope Process -Force
+        [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
+        Invoke-Expression ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
+        $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH", "Machine") + ";" +
+                    [System.Environment]::GetEnvironmentVariable("PATH", "User")
+        choco install nodejs-lts -y
+        $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH", "Machine") + ";" +
+                    [System.Environment]::GetEnvironmentVariable("PATH", "User")
+    }
+    if (!(Get-Command node -ErrorAction SilentlyContinue)) {
+        Write-Host "❌ Node.js 설치에 실패했습니다." -ForegroundColor Red
+        Write-Host "   수동으로 설치해 주세요: https://nodejs.org/ko/download"
+        exit 1
+    }
+    Write-Host "✓ Node.js 설치 완료: $(node --version)" -ForegroundColor Green
+}
+
+# 2. Claude Desktop 확인
+if (!(Test-Path $ConfigDir)) {
+    Write-Host "❌ Claude Desktop이 설치되어 있지 않습니다." -ForegroundColor Red
+    Write-Host "   https://claude.ai/download 에서 설치 후 다시 실행해 주세요."
+    exit 1
+}
+Write-Host "✓ Claude Desktop 확인됨" -ForegroundColor Green
+
+# 3. claude_desktop_config.json 처리
+$isNewFile = $false
+if (!(Test-Path $ConfigFile)) {
+    '{}' | Set-Content -Path $ConfigFile -Encoding UTF8
+    Write-Host "✓ 새 설정 파일을 생성했습니다." -ForegroundColor Green
+    $isNewFile = $true
+}
+
+$config = Get-Content -Path $ConfigFile -Raw -Encoding UTF8 | ConvertFrom-Json
+
+# 기존 항목 확인
+if ($config.mcpServers -and $config.mcpServers.PSObject.Properties["Catch Up"]) {
+    $answer = Read-Host "이미 'Catch Up' MCP 설정이 있습니다. 덮어쓰시겠습니까? (y/N)"
+    if ($answer -notmatch '^[Yy]$') {
+        Write-Host "설치를 취소했습니다."
+        exit 0
+    }
+}
+
+# 기존 파일 백업 (신규 생성 파일은 백업 불필요)
+if ($isNewFile -ne $true) {
+    Copy-Item -Path $ConfigFile -Destination "$ConfigFile.bak" -Force
+    Write-Host "✓ 기존 설정 파일을 백업했습니다: $ConfigFile.bak" -ForegroundColor Green
+}
+
+# mcpServers."Catch Up" 항목 추가/업데이트
+if (!$config.mcpServers) {
+    $config | Add-Member -NotePropertyName mcpServers -NotePropertyValue ([PSCustomObject]@{}) -Force
+}
+$catchupEntry = [PSCustomObject]@{
+    command = "npx"
+    args    = @("-y", "mcp-remote", $MCP_URL, "--transport", "http-only")
+}
+$config.mcpServers | Add-Member -NotePropertyName "Catch Up" -NotePropertyValue $catchupEntry -Force
+
+# 원자적 파일 쓰기 (temp file + 교체)
+$tempFile = [System.IO.Path]::GetTempFileName()
+$config | ConvertTo-Json -Depth 10 | Set-Content -Path $tempFile -Encoding UTF8
+Move-Item -Path $tempFile -Destination $ConfigFile -Force
+Write-Host "✓ 설정 파일을 업데이트했습니다." -ForegroundColor Green
+
+Write-Host ""
+Write-Host "=== 설치 완료 ===" -ForegroundColor Cyan
+Write-Host "Claude Desktop을 완전히 종료한 후 다시 실행하면 Catch Up MCP가 활성화됩니다."
+Write-Host "시스템 트레이에서 Claude 아이콘 우클릭 → Quit 후 재시작해 주세요."
