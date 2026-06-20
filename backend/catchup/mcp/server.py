@@ -26,6 +26,8 @@ if _extra_host:
 
 mcp = FastMCP(
     "catchup-knowledge-base",
+    streamable_http_path="/sse",
+    stateless_http=True,
     transport_security=TransportSecuritySettings(
         enable_dns_rebinding_protection=True,
         allowed_hosts=_allowed_hosts,

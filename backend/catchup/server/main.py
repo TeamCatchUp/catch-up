@@ -558,7 +558,7 @@ if settings.MCP_SERVER_ENABLED:
     from catchup.mcp.server import mcp as mcp_server
     from catchup.server.middleware.mcp_auth import MCPAuthMiddleware
 
-    app.mount("/api/v1/mcp", MCPAuthMiddleware(mcp_server.sse_app()))
+    app.mount("/api/v1/mcp", MCPAuthMiddleware(mcp_server.streamable_http_app()))
 
 
 app.add_middleware(

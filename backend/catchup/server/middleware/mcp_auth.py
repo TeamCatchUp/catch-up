@@ -50,7 +50,7 @@ def _extract_bearer_token(scope: Scope) -> str | None:
 
 
 class MCPAuthMiddleware:
-    """MCP SSE 앱에 인증 게이트를 추가하는 ASGI 미들웨어."""
+    """MCP Streamable HTTP 앱에 인증 게이트를 추가하는 ASGI 미들웨어."""
 
     def __init__(self, app: ASGIApp) -> None:
         self.app = app
