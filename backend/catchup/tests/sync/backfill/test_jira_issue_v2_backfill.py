@@ -25,7 +25,7 @@ def test_jira_issue_v2_backfill_targets_join_jira_projects_for_cloud_scope() -> 
     assert "jp.project_name AS target_name" in sql
     assert "'jira:issue:' || jp.cloud_id" in sql
     assert "e.cmetadata ->> 'entity_type' IN ('issue', 'epic')" in sql
-    assert "substring(e.id from '^jira:(?:issue|epic):(.+)$')" in sql
+    assert "substring(e.id from '^jira:[^:]+:(.+)$')" in sql
     assert "NULLIF(e.cmetadata ->> 'cloud_id', '')" in sql
     assert "NULLIF(e.cmetadata ->> 'scope_id', '')" in sql
     assert "substring(v1_issue_source.issue_url from '^https?://([^/]+)')" in sql
@@ -38,6 +38,14 @@ def test_jira_issue_v2_backfill_targets_join_jira_projects_for_cloud_scope() -> 
     assert "state.next_retry_at IS NULL" in sql
     assert "state.state = 'processing'" in sql
     assert "state.processing_started_at" in sql
+
+
+def test_jira_issue_v2_backfill_queries_do_not_parse_regex_as_bind_param() -> None:
+    target_params = build_jira_issue_v1_target_query().compile().params
+    seed_params = build_jira_issue_v1_target_seed_query().compile().params
+
+    assert "issue" not in target_params
+    assert "issue" not in seed_params
 
 
 def test_jira_issue_v2_backfill_seed_query_builds_v2_document_ids() -> None:

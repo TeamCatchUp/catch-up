@@ -498,7 +498,7 @@ def _jira_issue_v1_cte() -> str:
                 COALESCE(
                     NULLIF(e.cmetadata ->> 'issue_key', ''),
                     NULLIF(e.cmetadata ->> 'record_id', ''),
-                    substring(e.id from '^jira:(?:issue|epic):(.+)$')
+                    substring(e.id from '^jira:[^:]+:(.+)$')
                 ) AS record_id,
                 COALESCE(
                     NULLIF(e.cmetadata ->> 'project_key', ''),
@@ -506,7 +506,7 @@ def _jira_issue_v1_cte() -> str:
                     COALESCE(
                         NULLIF(e.cmetadata ->> 'issue_key', ''),
                         NULLIF(e.cmetadata ->> 'record_id', ''),
-                        substring(e.id from '^jira:(?:issue|epic):(.+)$')
+                        substring(e.id from '^jira:[^:]+:(.+)$')
                     ),
                         '-',
                         1
