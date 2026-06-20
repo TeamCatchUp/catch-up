@@ -559,6 +559,9 @@ if settings.DEBUG_API_ENABLED:
 
 app.include_router(mcp_well_known_router)
 app.include_router(mcp_oauth_router)
+# mcp_install_router는 반드시 app.mount("/api/v1/mcp", ...) 보다 먼저 등록해야 한다.
+# Starlette는 삽입 순서로 라우트를 평가하므로 순서가 바뀌면 install 엔드포인트가
+# MCPAuthMiddleware mount에 흡수되어 403을 반환한다.
 app.include_router(mcp_install_router)
 
 if settings.MCP_SERVER_ENABLED:
