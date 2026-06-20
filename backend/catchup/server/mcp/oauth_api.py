@@ -37,6 +37,7 @@ _MCP_CLIENT_PREFIX = "mcp:client:"
 _MCP_STATE_PREFIX = "mcp:state:"
 _CLIENT_TTL = 60 * 60 * 24 * 30  # 30일
 _STATE_TTL = 60 * 10  # 10분
+_MCP_SCOPES = ["openid", "email", "profile"]
 
 
 def _server_base(request: Request) -> str:
@@ -62,27 +63,10 @@ def _mcp_callback_uri(request: Request) -> str:
     return f"{_server_base(request)}/api/v1/mcp/oauth/callback"
 
 
-@router.get(
-    path="/.well-known/openid-configuration",
-    response_model=OAuthAuthorizationServerMetadata,
-    description="OpenID Connect 디스커버리 문서를 반환한다. AS 메타데이터와 동일하다.",
-)
-async def openid_configuration(
+async def _build_as_metadata(
     request: Request,
 ) -> OAuthAuthorizationServerMetadata:
-    """OpenID Connect 디스커버리 엔드포인트. oauth-authorization-server와 동일하다."""
-    return await oauth_authorization_server_metadata(request)
-
-
-@router.get(
-    path="/.well-known/oauth-authorization-server",
-    response_model=OAuthAuthorizationServerMetadata,
-    description="RFC 8414 Authorization Server 메타데이터를 반환한다.",
-)
-async def oauth_authorization_server_metadata(
-    request: Request,
-) -> OAuthAuthorizationServerMetadata:
-    """MCP OAuth 2.1 AS 메타데이터를 반환한다."""
+    """AS 메타데이터를 구성한다."""
     if not settings.MCP_OAUTH_ENABLED:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
 
@@ -93,7 +77,7 @@ async def oauth_authorization_server_metadata(
         authorization_endpoint=f"{base}/api/v1/mcp/oauth/authorize",
         token_endpoint=f"{base}/api/v1/mcp/oauth/token",
         registration_endpoint=f"{base}/api/v1/mcp/oauth/register",
-        scopes_supported=["openid", "email", "profile"],
+        scopes_supported=_MCP_SCOPES,
         response_types_supported=["code"],
         grant_types_supported=["authorization_code", "refresh_token"],
         code_challenge_methods_supported=["S256"],
@@ -102,6 +86,23 @@ async def oauth_authorization_server_metadata(
         subject_types_supported=["public"],
         id_token_signing_alg_values_supported=["RS256"],
     )
+
+
+@router.get(
+    path="/.well-known/openid-configuration",
+    response_model=OAuthAuthorizationServerMetadata,
+    description="OpenID Connect 디스커버리 문서를 반환한다. AS 메타데이터와 동일하다.",
+)
+@router.get(
+    path="/.well-known/oauth-authorization-server",
+    response_model=OAuthAuthorizationServerMetadata,
+    description="RFC 8414 Authorization Server 메타데이터를 반환한다.",
+)
+async def oauth_authorization_server_metadata(
+    request: Request,
+) -> OAuthAuthorizationServerMetadata:
+    """MCP OAuth 2.1 AS 메타데이터를 반환한다."""
+    return await _build_as_metadata(request)
 
 
 @well_known_router.get(
@@ -113,7 +114,7 @@ async def root_oauth_authorization_server_metadata(
     request: Request,
 ) -> OAuthAuthorizationServerMetadata:
     """루트 경로 AS 메타데이터를 반환한다. Claude의 fallback 탐색 경로."""
-    return await oauth_authorization_server_metadata(request)
+    return await _build_as_metadata(request)
 
 
 @well_known_router.get(
@@ -137,7 +138,7 @@ async def oauth_protected_resource_metadata(request: Request) -> dict:
     return {
         "resource": resource,
         "authorization_servers": [resource],
-        "scopes_supported": ["openid", "email", "profile"],
+        "scopes_supported": _MCP_SCOPES,
         "bearer_methods_supported": ["header"],
     }
 
@@ -253,8 +254,6 @@ async def oauth_callback(code: str, state: str) -> Response:
             detail="유효하지 않거나 만료된 state입니다.",
         )
 
-    if isinstance(raw, bytes):
-        raw = raw.decode("utf-8")
     payload = json.loads(raw)
 
     target_url = (
@@ -329,7 +328,7 @@ async def _handle_authorization_code(
                 client_id=auth_settings.KC_CLIENT_ID,
                 client_secret=auth_settings.KC_CLIENT_SECRET,
                 redirect_uri=redirect_uri,
-                scope=["openid", "email", "profile"],
+                scope=_MCP_SCOPES,
                 state="",
             )
             oauth_user = await provider.get_oauth_user_info(
