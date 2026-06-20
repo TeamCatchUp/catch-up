@@ -52,7 +52,9 @@ fi
 # 4. claude_desktop_config.json 처리
 _is_new_file=false
 if [[ ! -f "$CONFIG_FILE" ]]; then
-    echo "{}" > "$CONFIG_FILE"
+    TMP_NEW=$(mktemp "${CONFIG_DIR}/.claude_desktop_config.XXXXXX")
+    printf '{}\n' > "$TMP_NEW"
+    mv "$TMP_NEW" "$CONFIG_FILE"
     echo "✓ 새 설정 파일을 생성했습니다."
     _is_new_file=true
 fi
@@ -81,7 +83,7 @@ UPDATED=$(jq --arg url "$MCP_URL" '
         "args": ["-y", "mcp-remote", $url, "--transport", "http-only"]
     }
 ' "$CONFIG_FILE")
-TMP_FILE=$(mktemp)
+TMP_FILE=$(mktemp "${CONFIG_DIR}/.claude_desktop_config.XXXXXX")
 printf '%s\n' "$UPDATED" > "$TMP_FILE"
 mv "$TMP_FILE" "$CONFIG_FILE"
 echo "✓ 설정 파일을 업데이트했습니다."

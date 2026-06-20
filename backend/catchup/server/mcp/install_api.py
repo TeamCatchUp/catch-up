@@ -72,6 +72,7 @@ _SCRIPT_CONTENT_TYPES = {
 
 async def _verify_and_consume_install_token(token: str) -> None:
     """install token을 검증하고 소비한다. 유효하지 않으면 401을 발생시킨다."""
+    # get_redis_client()는 싱글턴을 반환한다. 호출자와 중복 호출해도 연결 비용이 없다.
     redis = await get_redis_client()
     result = await redis.getdel(f"{_INSTALL_TOKEN_PREFIX}{token}")
     if result is None:
@@ -87,6 +88,8 @@ async def serve_install_script(
     token: str = Query(...),
 ) -> Response:
     """platform별 설치 스크립트를 렌더링해 반환한다."""
+    # 플랫폼 검증을 토큰 소비보다 먼저 수행한다.
+    # 순서가 바뀌면 유효하지 않은 플랫폼 요청에도 토큰이 소비된다.
     if platform not in _SCRIPT_TEMPLATES:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
