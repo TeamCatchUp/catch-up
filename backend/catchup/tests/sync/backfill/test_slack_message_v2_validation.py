@@ -59,7 +59,11 @@ def test_count_validation_query_ignores_empty_seed_metadata_rows() -> None:
     assert "entity_type = 'message'" in query
     assert "missing_in_v2" in query
     assert "extra_in_v2" in query
-    assert "COALESCE(metadata::jsonb, '{}'::jsonb) != '{}'::jsonb" in query
+    assert "COALESCE(metadata::jsonb, '{}'::jsonb) ? 'slack_message'" in query
+    assert (
+        "COALESCE(metadata::jsonb, '{}'::jsonb) - 'slack_message' = '{}'::jsonb"
+        in query
+    )
 
 
 def test_sample_query_returns_hydrated_slack_message_rows_only() -> None:
@@ -69,7 +73,11 @@ def test_sample_query_returns_hydrated_slack_message_rows_only() -> None:
     assert "AS langchain_metadata" in query
     assert "WHERE source = 'slack'" in query
     assert "entity_type = 'message'" in query
-    assert "COALESCE(metadata::jsonb, '{}'::jsonb) != '{}'::jsonb" in query
+    assert "COALESCE(metadata::jsonb, '{}'::jsonb) ? 'slack_message'" in query
+    assert (
+        "COALESCE(metadata::jsonb, '{}'::jsonb) - 'slack_message' = '{}'::jsonb"
+        in query
+    )
 
 
 def test_sample_validator_accepts_valid_slack_message_v2_row() -> None:

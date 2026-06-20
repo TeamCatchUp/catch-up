@@ -24,6 +24,18 @@ from catchup.sync.backfill.confluence_v2 import (
 SessionFactory = Callable[[], AbstractContextManager[Session]]
 
 
+def _domain_metadata_key(entity_type: str) -> str:
+    return "confluence_page" if entity_type == "page" else "confluence_blogpost"
+
+
+def _metadata_namespace_predicate(namespace: str) -> str:
+    metadata = f"COALESCE({KNOWLEDGE_STORE_METADATA_JSON_COLUMN}::jsonb, '{{}}'::jsonb)"
+    return (
+        f"{metadata} ? '{namespace}'\n"
+        f"              AND {metadata} - '{namespace}' = '{{}}'::jsonb"
+    )
+
+
 @dataclass(slots=True, frozen=True)
 class ConfluenceV2CountValidation:
     v1_count: int
@@ -113,6 +125,7 @@ class ConfluenceBlogpostV2ValidationService(ConfluenceV2ValidationService):
 
 def build_confluence_v2_count_validation_query(entity_type: str = "page"):
     entity_type = _validate_confluence_backfill_entity_type(entity_type)
+    domain_key = _domain_metadata_key(entity_type)
     return text(
         f"""
         {_confluence_v1_cte(entity_type)},
@@ -128,7 +141,7 @@ def build_confluence_v2_count_validation_query(entity_type: str = "page"):
             FROM {KNOWLEDGE_STORE_TABLE_NAME}
             WHERE source = 'confluence'
               AND entity_type = '{entity_type}'
-              AND COALESCE({KNOWLEDGE_STORE_METADATA_JSON_COLUMN}::jsonb, '{{}}'::jsonb) != '{{}}'::jsonb
+              AND {_metadata_namespace_predicate(domain_key)}
         )
         SELECT
             (SELECT count(*) FROM v1_ids) AS v1_count,
@@ -151,6 +164,7 @@ def build_confluence_v2_count_validation_query(entity_type: str = "page"):
 
 def build_confluence_v2_sample_query(entity_type: str = "page"):
     entity_type = _validate_confluence_backfill_entity_type(entity_type)
+    domain_key = _domain_metadata_key(entity_type)
     return text(
         f"""
         SELECT
@@ -175,7 +189,7 @@ def build_confluence_v2_sample_query(entity_type: str = "page"):
         FROM {KNOWLEDGE_STORE_TABLE_NAME}
         WHERE source = 'confluence'
           AND entity_type = '{entity_type}'
-          AND COALESCE({KNOWLEDGE_STORE_METADATA_JSON_COLUMN}::jsonb, '{{}}'::jsonb) != '{{}}'::jsonb
+          AND {_metadata_namespace_predicate(domain_key)}
         ORDER BY synced_at DESC, langchain_id ASC
         LIMIT :limit
         """
@@ -188,7 +202,7 @@ def validate_confluence_v2_sample_row(
     entity_type: str = "page",
 ) -> ConfluenceV2SampleValidation:
     entity_type = _validate_confluence_backfill_entity_type(entity_type)
-    domain_key = "confluence_page" if entity_type == "page" else "confluence_blogpost"
+    domain_key = _domain_metadata_key(entity_type)
     errors: list[str] = []
     langchain_id = str(row.get("langchain_id") or "")
 

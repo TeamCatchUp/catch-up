@@ -601,6 +601,7 @@ def build_github_pr_v1_target_query():
             WHERE c.name = :collection_name
               AND e.cmetadata ->> 'source' = 'github'
               AND e.cmetadata ->> 'entity_type' = 'pr'
+              AND e.embedding IS NOT NULL
         ),
         candidates AS (
             SELECT
@@ -667,6 +668,7 @@ def build_github_pr_v1_target_seed_query():
             WHERE c.name = :collection_name
               AND e.cmetadata ->> 'source' = 'github'
               AND e.cmetadata ->> 'entity_type' = 'pr'
+              AND e.embedding IS NOT NULL
         ),
         candidates AS (
             SELECT

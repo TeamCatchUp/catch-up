@@ -594,7 +594,12 @@ def build_confluence_v1_target_query(entity_type: str = "page"):
             FROM candidates
             GROUP BY scope_id, target_id, target_name
         )
-        SELECT scope_id, target_id, target_name, expected_count, pending_count
+        SELECT
+            grouped.scope_id,
+            grouped.target_id,
+            grouped.target_name,
+            grouped.expected_count,
+            grouped.pending_count
         FROM grouped
         LEFT JOIN vector_store_v2_backfill_states state
           ON state.connector = 'confluence'
@@ -603,7 +608,7 @@ def build_confluence_v1_target_query(entity_type: str = "page"):
          AND state.target_id = grouped.target_id
         WHERE grouped.pending_count > 0
         {backfill_candidate_state_predicate("state")}
-        ORDER BY scope_id, target_id
+        ORDER BY grouped.scope_id, grouped.target_id
         LIMIT :limit
         """
     )
@@ -631,6 +636,7 @@ def build_confluence_v1_target_seed_query(entity_type: str = "page"):
         FROM candidates
         WHERE scope_id = :scope_id
           AND target_id = :target_id
+          AND COALESCE(record_id, '') != ''
           AND needs_backfill
           AND embedding IS NOT NULL
           AND (

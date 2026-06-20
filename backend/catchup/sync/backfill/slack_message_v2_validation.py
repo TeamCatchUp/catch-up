@@ -20,6 +20,14 @@ from catchup.db.engine import SessionLocal
 SessionFactory = Callable[[], AbstractContextManager[Session]]
 
 
+def _metadata_namespace_predicate(namespace: str) -> str:
+    metadata = f"COALESCE({KNOWLEDGE_STORE_METADATA_JSON_COLUMN}::jsonb, '{{}}'::jsonb)"
+    return (
+        f"{metadata} ? '{namespace}'\n"
+        f"              AND {metadata} - '{namespace}' = '{{}}'::jsonb"
+    )
+
+
 @dataclass(slots=True, frozen=True)
 class SlackMessageV2CountValidation:
     v1_count: int
@@ -114,7 +122,7 @@ def build_slack_message_v2_count_validation_query():
             FROM {KNOWLEDGE_STORE_TABLE_NAME}
             WHERE source = 'slack'
               AND entity_type = 'message'
-              AND COALESCE({KNOWLEDGE_STORE_METADATA_JSON_COLUMN}::jsonb, '{{}}'::jsonb) != '{{}}'::jsonb
+              AND {_metadata_namespace_predicate("slack_message")}
         )
         SELECT
             (SELECT count(*) FROM v1_message) AS v1_count,
@@ -161,7 +169,7 @@ def build_slack_message_v2_sample_query():
         FROM {KNOWLEDGE_STORE_TABLE_NAME}
         WHERE source = 'slack'
           AND entity_type = 'message'
-          AND COALESCE({KNOWLEDGE_STORE_METADATA_JSON_COLUMN}::jsonb, '{{}}'::jsonb) != '{{}}'::jsonb
+          AND {_metadata_namespace_predicate("slack_message")}
         ORDER BY synced_at DESC, langchain_id ASC
         LIMIT :limit
         """

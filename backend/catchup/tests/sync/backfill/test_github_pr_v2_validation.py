@@ -80,7 +80,8 @@ def test_count_validation_query_compares_v1_and_v2_pr_sets() -> None:
     assert "missing_in_v2" in query
     assert "extra_in_v2" in query
     assert "e.cmetadata ->> 'entity_type' = 'pr'" in query
-    assert "COALESCE(metadata::jsonb, '{}'::jsonb) != '{}'::jsonb" in query
+    assert "COALESCE(metadata::jsonb, '{}'::jsonb) ? 'github_pr'" in query
+    assert "COALESCE(metadata::jsonb, '{}'::jsonb) - 'github_pr' = '{}'::jsonb" in query
 
 
 def test_sample_query_returns_required_v2_projection() -> None:
@@ -93,7 +94,8 @@ def test_sample_query_returns_required_v2_projection() -> None:
     assert "AS langchain_metadata" in query
     assert "WHERE source = 'github'" in query
     assert "entity_type = 'pr'" in query
-    assert "COALESCE(metadata::jsonb, '{}'::jsonb) != '{}'::jsonb" in query
+    assert "COALESCE(metadata::jsonb, '{}'::jsonb) ? 'github_pr'" in query
+    assert "COALESCE(metadata::jsonb, '{}'::jsonb) - 'github_pr' = '{}'::jsonb" in query
 
 
 def test_sample_validator_accepts_valid_github_pr_v2_row() -> None:
