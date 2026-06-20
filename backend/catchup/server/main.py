@@ -361,7 +361,12 @@ async def lifespan(app: FastAPI):
             error=str(e),
         )
 
-    yield
+    if settings.MCP_SERVER_ENABLED:
+        from catchup.mcp.server import mcp as _mcp_server
+        async with _mcp_server.session_manager.run():
+            yield
+    else:
+        yield
 
     # 서버 종료 전 감사로그 파일 S3 업로드
     if uploader_task:
