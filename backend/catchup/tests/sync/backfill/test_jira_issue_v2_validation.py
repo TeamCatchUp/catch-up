@@ -24,13 +24,19 @@ def test_jira_issue_v2_count_validation_uses_unambiguous_cloud_resolution() -> N
     assert "NULLIF(e.cmetadata ->> 'cloud_id', '')" in sql
     assert "NULLIF(e.cmetadata ->> 'scope_id', '')" in sql
     assert "e.cmetadata ->> 'entity_type' IN ('issue', 'epic')" in sql
-    assert "substring(e.id from '^jira:(?:issue|epic):(.+)$')" in sql
+    assert "substring(e.id from '^jira:[^:]+:(.+)$')" in sql
     assert "substring(v1_issue_source.issue_url from '^https?://([^/]+)')" in sql
     assert "project_match_count = 1" in sql
     assert "canonical_rank = 1" in sql
     assert "v1_issue.target_id" not in sql
     assert "v1_issue.record_id" not in sql
     assert "v1_issue.v1_langchain_id" not in sql
+
+
+def test_jira_issue_v2_validation_query_does_not_parse_regex_as_bind_param() -> None:
+    params = build_jira_issue_v2_count_validation_query().compile().params
+
+    assert "issue" not in params
 
 
 def test_validate_jira_issue_v2_sample_row_accepts_hydrated_row() -> None:
