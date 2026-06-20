@@ -50,9 +50,11 @@ if ! command -v jq &>/dev/null; then
 fi
 
 # 4. claude_desktop_config.json 처리
+_is_new_file=false
 if [[ ! -f "$CONFIG_FILE" ]]; then
     echo "{}" > "$CONFIG_FILE"
     echo "✓ 새 설정 파일을 생성했습니다."
+    _is_new_file=true
 fi
 
 # 기존 항목 확인
@@ -65,9 +67,11 @@ if jq -e '.mcpServers["Catch Up"]' "$CONFIG_FILE" &>/dev/null; then
     fi
 fi
 
-# 기존 파일 백업
-cp "$CONFIG_FILE" "${CONFIG_FILE}.bak"
-echo "✓ 기존 설정 파일을 백업했습니다: ${CONFIG_FILE}.bak"
+# 기존 파일 백업 (신규 생성 파일은 백업 불필요)
+if [[ "$_is_new_file" != "true" ]]; then
+    cp "$CONFIG_FILE" "${CONFIG_FILE}.bak"
+    echo "✓ 기존 설정 파일을 백업했습니다: ${CONFIG_FILE}.bak"
+fi
 
 # mcpServers."Catch Up" 항목 추가/업데이트
 UPDATED=$(jq --arg url "$MCP_URL" '
@@ -77,7 +81,9 @@ UPDATED=$(jq --arg url "$MCP_URL" '
         "args": ["-y", "mcp-remote", $url, "--transport", "http-only"]
     }
 ' "$CONFIG_FILE")
-echo "$UPDATED" > "$CONFIG_FILE"
+TMP_FILE=$(mktemp)
+printf '%s\n' "$UPDATED" > "$TMP_FILE"
+mv "$TMP_FILE" "$CONFIG_FILE"
 echo "✓ 설정 파일을 업데이트했습니다."
 
 echo ""
