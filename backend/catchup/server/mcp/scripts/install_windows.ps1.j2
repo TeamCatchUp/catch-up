@@ -3,17 +3,24 @@ $MCP_URL = "{{ mcp_url }}"
 $ConfigDir = "$env:APPDATA\Claude"
 $ConfigFile = "$ConfigDir\claude_desktop_config.json"
 
-Write-Host "=== CatchUp MCP 설치 시작 ===" -ForegroundColor Cyan
+function Exit-Script {
+    param([int]$Code = 0)
+    Write-Host ""
+    Write-Host "아무 키나 누르면 창이 닫힙니다."
+    $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+    exit $Code
+}
 
-# 1. Node.js 확인 및 설치
+Write-Host "CatchUp MCP 설치"
+Write-Host ""
+
+# Node.js
 if (Get-Command node -ErrorAction SilentlyContinue) {
-    $nodeVer = node --version
-    Write-Host "✓ Node.js 이미 설치됨: $nodeVer" -ForegroundColor Green
+    Write-Host "Node.js $(node --version)"
 } else {
-    Write-Host "Node.js가 설치되어 있지 않습니다. 설치를 시작합니다..."
+    Write-Host "Node.js 설치 중..."
     if (Get-Command winget -ErrorAction SilentlyContinue) {
         winget install --id OpenJS.NodeJS.LTS --accept-source-agreements --accept-package-agreements
-        # PATH 갱신
         $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH", "Machine") + ";" +
                     [System.Environment]::GetEnvironmentVariable("PATH", "User")
     } elseif (Get-Command choco -ErrorAction SilentlyContinue) {
@@ -21,7 +28,6 @@ if (Get-Command node -ErrorAction SilentlyContinue) {
         $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH", "Machine") + ";" +
                     [System.Environment]::GetEnvironmentVariable("PATH", "User")
     } else {
-        Write-Host "Chocolatey 패키지 관리자를 설치합니다..."
         Set-ExecutionPolicy Bypass -Scope Process -Force
         [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
         Invoke-Expression ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
@@ -32,63 +38,66 @@ if (Get-Command node -ErrorAction SilentlyContinue) {
                     [System.Environment]::GetEnvironmentVariable("PATH", "User")
     }
     if (!(Get-Command node -ErrorAction SilentlyContinue)) {
-        Write-Host "❌ Node.js 설치에 실패했습니다." -ForegroundColor Red
-        Write-Host "   수동으로 설치해 주세요: https://nodejs.org/ko/download"
-        exit 1
+        Write-Host "Node.js 설치 실패. 직접 설치 후 다시 실행하세요: https://nodejs.org/ko/download" -ForegroundColor Red
+        Exit-Script 1
     }
-    Write-Host "✓ Node.js 설치 완료: $(node --version)" -ForegroundColor Green
+    Write-Host "Node.js $(node --version) 설치됨"
 }
 
-# 2. Claude Desktop 확인
+# Claude Desktop
 if (!(Test-Path $ConfigDir)) {
-    Write-Host "❌ Claude Desktop이 설치되어 있지 않습니다." -ForegroundColor Red
-    Write-Host "   https://claude.ai/download 에서 설치 후 다시 실행해 주세요."
-    exit 1
+    Write-Host "Claude Desktop을 찾을 수 없습니다. 설치 후 다시 실행하세요: https://claude.ai/download" -ForegroundColor Red
+    Exit-Script 1
 }
-Write-Host "✓ Claude Desktop 확인됨" -ForegroundColor Green
 
-# 3. claude_desktop_config.json 처리
+# jq
+if (!(Get-Command jq -ErrorAction SilentlyContinue)) {
+    Write-Host "jq 설치 중..."
+    winget install --id stedolan.jq --accept-source-agreements --accept-package-agreements
+    $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH", "Machine") + ";" +
+                [System.Environment]::GetEnvironmentVariable("PATH", "User")
+    if (!(Get-Command jq -ErrorAction SilentlyContinue)) {
+        Write-Host "jq 설치 실패." -ForegroundColor Red
+        Exit-Script 1
+    }
+}
+
+# config 파일
 $isNewFile = $false
 if (!(Test-Path $ConfigFile)) {
-    '{}' | Set-Content -Path $ConfigFile -Encoding UTF8
-    Write-Host "✓ 새 설정 파일을 생성했습니다." -ForegroundColor Green
+    [System.IO.File]::WriteAllText($ConfigFile, '{}', [System.Text.UTF8Encoding]::new($false))
     $isNewFile = $true
 }
 
-$config = Get-Content -Path $ConfigFile -Raw -Encoding UTF8 | ConvertFrom-Json
-
 # 기존 항목 확인
-if ($config.mcpServers -and $config.mcpServers.PSObject.Properties["Catch Up"]) {
-    $answer = Read-Host "이미 'Catch Up' MCP 설정이 있습니다. 덮어쓰시겠습니까? (y/N)"
+$existingEntry = Get-Content $ConfigFile -Raw | jq -r --arg key "Catch Up" '.mcpServers[$key] // empty'
+if ($existingEntry) {
+    $answer = Read-Host "'Catch Up' 설정이 이미 있습니다. 덮어쓰겠습니까? (y/N)"
     if ($answer -notmatch '^[Yy]$') {
-        Write-Host "설치를 취소했습니다."
-        exit 0
+        Write-Host "취소됨."
+        Exit-Script 0
     }
 }
 
-# 기존 파일 백업 (신규 생성 파일은 백업 불필요)
+# 백업
 if ($isNewFile -ne $true) {
     Copy-Item -Path $ConfigFile -Destination "$ConfigFile.bak" -Force
-    Write-Host "✓ 기존 설정 파일을 백업했습니다: $ConfigFile.bak" -ForegroundColor Green
+    Write-Host "기존 설정 백업: $ConfigFile.bak"
 }
 
-# mcpServers."Catch Up" 항목 추가/업데이트
-if (!$config.mcpServers) {
-    $config | Add-Member -NotePropertyName mcpServers -NotePropertyValue ([PSCustomObject]@{}) -Force
+# 설정 업데이트
+$filterFile = [System.IO.Path]::GetTempFileName()
+[System.IO.File]::WriteAllText($filterFile, '.mcpServers[$key] = {"command":"npx","args":["-y","mcp-remote",$url,"--transport","http-only"]}', [System.Text.UTF8Encoding]::new($false))
+$json = (Get-Content $ConfigFile -Raw |
+    jq --arg url $MCP_URL --arg key "Catch Up" -f $filterFile) -join "`n"
+Remove-Item $filterFile -ErrorAction SilentlyContinue
+if ($LASTEXITCODE -ne 0 -or !$json) {
+    Write-Host "설정 파일 업데이트 실패." -ForegroundColor Red
+    Exit-Script 1
 }
-$catchupEntry = [PSCustomObject]@{
-    command = "npx"
-    args    = @("-y", "mcp-remote", $MCP_URL, "--transport", "http-only")
-}
-$config.mcpServers | Add-Member -NotePropertyName "Catch Up" -NotePropertyValue $catchupEntry -Force
-
-# 원자적 파일 쓰기 (temp file + 교체)
-$tempFile = [System.IO.Path]::GetTempFileName()
-$config | ConvertTo-Json -Depth 10 | Set-Content -Path $tempFile -Encoding UTF8
-Move-Item -Path $tempFile -Destination $ConfigFile -Force
-Write-Host "✓ 설정 파일을 업데이트했습니다." -ForegroundColor Green
+[System.IO.File]::WriteAllText($ConfigFile, $json, [System.Text.UTF8Encoding]::new($false))
 
 Write-Host ""
-Write-Host "=== 설치 완료 ===" -ForegroundColor Cyan
-Write-Host "Claude Desktop을 완전히 종료한 후 다시 실행하면 Catch Up MCP가 활성화됩니다."
-Write-Host "시스템 트레이에서 Claude 아이콘 우클릭 → Quit 후 재시작해 주세요."
+Write-Host "설치 완료." -ForegroundColor Green
+Write-Host "Claude Desktop을 재시작하면 Catch Up MCP가 활성화됩니다."
+Exit-Script 0
