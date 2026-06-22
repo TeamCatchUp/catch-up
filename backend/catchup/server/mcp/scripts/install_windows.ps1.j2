@@ -10,23 +10,48 @@ function Refresh-Path {
     $env:PATH = "$m;$u"
 }
 
-# Claude Desktop이 JSONC(주석/trailing comma 허용) 형식으로 config를 쓰므로 전처리가 필요하다.
-$jsoncParser = @'
+# JS를 임시 파일로 써서 실행 - node -e는 PowerShell이 따옴표를 제거해 파싱 오류 발생.
+$jsScript = @'
+var fs = require("fs");
+var action = process.argv[2];
+var file = process.argv[3];
+var url = process.argv[4];
+
 function stripJsonc(text) {
-  var out = '', inStr = false, i = 0;
+  var out = "", inStr = false, i = 0;
   while (i < text.length) {
     if (inStr) {
-      if (text[i] === '\\') { out += text[i] + text[i+1]; i += 2; }
-      else if (text[i] === '"') { out += text[i++]; inStr = false; }
+      if (text[i] === "\\") { out += text[i] + text[i+1]; i += 2; }
+      else if (text[i] === "\"") { out += text[i++]; inStr = false; }
       else { out += text[i++]; }
     } else {
-      if (text[i] === '"') { out += text[i++]; inStr = true; }
-      else if (text[i]==='/' && text[i+1]==='/') { while (i<text.length && text[i]!=='\n') i++; }
-      else if (text[i]==='/' && text[i+1]==='*') { i+=2; while (i<text.length && !(text[i]==='*' && text[i+1]==='/')) i++; i+=2; }
+      if (text[i] === "\"") { out += text[i++]; inStr = true; }
+      else if (text[i]==="/" && text[i+1]==="/") { while (i<text.length && text[i]!=="\n") i++; }
+      else if (text[i]==="/" && text[i+1]==="*") { i+=2; while (i<text.length && !(text[i]==="*" && text[i+1]==="/")) i++; i+=2; }
       else { out += text[i++]; }
     }
   }
-  return out.replace(/,(\s*[}\]])/g, '$1');
+  return out.replace(/,(\s*[}\]])/g, "$1");
+}
+
+function readConfig(f) {
+  var raw = fs.readFileSync(f, "utf8").replace(/^﻿/, "");
+  return JSON.parse(stripJsonc(raw));
+}
+
+if (action === "check") {
+  try {
+    var c = readConfig(file);
+    process.stdout.write(c.mcpServers && c.mcpServers["Catch Up"] ? "exists" : "");
+  } catch(e) { process.stdout.write(""); }
+} else if (action === "update") {
+  var config = readConfig(file);
+  if (!config.mcpServers) config.mcpServers = {};
+  config.mcpServers["Catch Up"] = {
+    command: "npx",
+    args: ["-y", "mcp-remote", url, "--transport", "http-only"]
+  };
+  fs.writeFileSync(file, JSON.stringify(config, null, 2), "utf8");
 }
 '@
 
@@ -65,56 +90,43 @@ function _Main {
         return
     }
 
-    # config 파일
-    $isNewFile = $false
-    if (!(Test-Path $ConfigFile)) {
-        [System.IO.File]::WriteAllText($ConfigFile, '{}', [System.Text.UTF8Encoding]::new($false))
-        $isNewFile = $true
-    }
+    # JS 임시 파일 생성
+    $jsFile = [System.IO.Path]::GetTempFileName() + ".js"
+    [System.IO.File]::WriteAllText($jsFile, $jsScript, [System.Text.UTF8Encoding]::new($false))
 
-    # 기존 항목 확인
-    $checkScript = $jsoncParser + @'
+    try {
+        # config 파일
+        $isNewFile = $false
+        if (!(Test-Path $ConfigFile)) {
+            [System.IO.File]::WriteAllText($ConfigFile, '{}', [System.Text.UTF8Encoding]::new($false))
+            $isNewFile = $true
+        }
 
-try {
-  var raw = require('fs').readFileSync(process.argv[1], 'utf8').replace(/^﻿/, '');
-  var c = JSON.parse(stripJsonc(raw));
-  process.stdout.write(c.mcpServers && c.mcpServers['Catch Up'] ? 'exists' : '');
-} catch(e) { process.stdout.write(''); }
-'@
-    $existingEntry = node -e $checkScript $ConfigFile
+        # 기존 항목 확인
+        $existingEntry = node $jsFile check $ConfigFile
+        if ($existingEntry -eq 'exists') {
+            $answer = Read-Host "'Catch Up' 설정이 이미 있습니다. 덮어쓰겠습니까? (y/N)"
+            if ($answer -notmatch '^[Yy]$') {
+                Write-Host "취소됨."
+                return
+            }
+        }
 
-    if ($existingEntry -eq 'exists') {
-        $answer = Read-Host "'Catch Up' 설정이 이미 있습니다. 덮어쓰겠습니까? (y/N)"
-        if ($answer -notmatch '^[Yy]$') {
-            Write-Host "취소됨."
+        # 백업
+        if ($isNewFile -ne $true) {
+            Copy-Item -Path $ConfigFile -Destination "$ConfigFile.bak" -Force
+            Write-Host "기존 설정 백업: $ConfigFile.bak"
+        }
+
+        # 설정 업데이트
+        node $jsFile update $ConfigFile $MCP_URL
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "설정 파일 업데이트 실패." -ForegroundColor Red
+            Read-Host "Enter를 누르면 종료됩니다"
             return
         }
-    }
-
-    # 백업
-    if ($isNewFile -ne $true) {
-        Copy-Item -Path $ConfigFile -Destination "$ConfigFile.bak" -Force
-        Write-Host "기존 설정 백업: $ConfigFile.bak"
-    }
-
-    # 설정 업데이트
-    $updateScript = $jsoncParser + @'
-
-var fs = require('fs');
-var file = process.argv[1];
-var url = process.argv[2];
-var raw = fs.readFileSync(file, 'utf8').replace(/^﻿/, '');
-var config = JSON.parse(stripJsonc(raw));
-if (!config.mcpServers) config.mcpServers = {};
-config.mcpServers['Catch Up'] = {command:'npx',args:['-y','mcp-remote',url,'--transport','http-only']};
-fs.writeFileSync(file, JSON.stringify(config, null, 2), 'utf8');
-'@
-    node -e $updateScript $ConfigFile $MCP_URL
-
-    if ($LASTEXITCODE -ne 0) {
-        Write-Host "설정 파일 업데이트 실패." -ForegroundColor Red
-        Read-Host "Enter를 누르면 종료됩니다"
-        return
+    } finally {
+        Remove-Item $jsFile -ErrorAction SilentlyContinue
     }
 
     Write-Host ""
