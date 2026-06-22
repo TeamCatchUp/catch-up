@@ -62,7 +62,7 @@ async def serve_install_script(
             detail=f"지원하지 않는 플랫폼입니다: {platform}",
         )
 
-    mcp_url = f"{auth_settings.FRONTEND_BASE_URL}/api/v1/mcp"
+    mcp_url = f"{auth_settings.FRONTEND_BASE_URL}/api/v1/mcp/"
     content = _jinja_env.get_template(config.template).render(mcp_url=mcp_url)
 
     logger.info(
