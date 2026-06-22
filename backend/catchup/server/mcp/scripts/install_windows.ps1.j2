@@ -43,15 +43,23 @@ if (action === "check") {
   try {
     var c = readConfig(file);
     process.stdout.write(c.mcpServers && c.mcpServers["Catch Up"] ? "exists" : "");
-  } catch(e) { process.stdout.write(""); }
+  } catch(e) {
+    process.stderr.write("설정 파일을 파싱할 수 없습니다: " + e.message + "\n");
+    process.exit(1);
+  }
 } else if (action === "update") {
-  var config = readConfig(file);
-  if (!config.mcpServers) config.mcpServers = {};
-  config.mcpServers["Catch Up"] = {
-    command: "npx",
-    args: ["-y", "mcp-remote", url, "--transport", "http-only"]
-  };
-  fs.writeFileSync(file, JSON.stringify(config, null, 2), "utf8");
+  try {
+    var config = readConfig(file);
+    if (!config.mcpServers) config.mcpServers = {};
+    config.mcpServers["Catch Up"] = {
+      command: "npx",
+      args: ["-y", "mcp-remote", url, "--transport", "http-only"]
+    };
+    fs.writeFileSync(file, JSON.stringify(config, null, 2), "utf8");
+  } catch(e) {
+    process.stderr.write("설정 파일을 파싱할 수 없습니다: " + e.message + "\n");
+    process.exit(1);
+  }
 }
 '@
 
