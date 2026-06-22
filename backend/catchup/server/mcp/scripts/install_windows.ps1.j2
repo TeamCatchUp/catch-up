@@ -1,13 +1,19 @@
 $ErrorActionPreference = "Stop"
+
+trap {
+    Write-Host ""
+    Write-Host "오류 발생: $_" -ForegroundColor Red
+    Read-Host "Enter를 누르면 종료됩니다"
+    exit 1
+}
+
 $MCP_URL = "{{ mcp_url }}"
 $ConfigDir = "$env:APPDATA\Claude"
 $ConfigFile = "$ConfigDir\claude_desktop_config.json"
 
 function Exit-Script {
     param([int]$Code = 0)
-    Write-Host ""
-    Write-Host "아무 키나 누르면 창이 닫힙니다."
-    $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+    Read-Host "Enter를 누르면 종료됩니다"
     exit $Code
 }
 

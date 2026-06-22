@@ -5,12 +5,12 @@ MCP_URL="{{ mcp_url }}"
 CONFIG_DIR="$HOME/Library/Application Support/Claude"
 CONFIG_FILE="$CONFIG_DIR/claude_desktop_config.json"
 
-exit_script() {
-    local code="${1:-0}"
-    echo ""
-    echo "아무 키나 누르면 창이 닫힙니다."
-    read -r -s -n 1
-    exit "$code"
+_ensure_brew_path() {
+    if [[ -f /opt/homebrew/bin/brew ]]; then
+        eval "$(/opt/homebrew/bin/brew shellenv)"
+    elif [[ -f /usr/local/bin/brew ]]; then
+        eval "$(/usr/local/bin/brew shellenv)"
+    fi
 }
 
 echo "CatchUp MCP 설치"
@@ -24,15 +24,13 @@ else
     if ! command -v brew &>/dev/null; then
         /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" || {
             echo "Homebrew 설치 실패. 직접 설치 후 다시 실행하세요: https://nodejs.org/ko/download"
-            exit_script 1
+            exit 1
         }
-        if [[ -f /opt/homebrew/bin/brew ]]; then
-            eval "$(/opt/homebrew/bin/brew shellenv)"
-        fi
+        _ensure_brew_path
     fi
     brew install node || {
         echo "Node.js 설치 실패. 직접 설치 후 다시 실행하세요: https://nodejs.org/ko/download"
-        exit_script 1
+        exit 1
     }
     echo "Node.js $(node --version) 설치됨"
 fi
@@ -40,16 +38,14 @@ fi
 # Claude Desktop
 if [[ ! -d "$CONFIG_DIR" ]]; then
     echo "Claude Desktop을 찾을 수 없습니다. 설치 후 다시 실행하세요: https://claude.ai/download"
-    exit_script 1
+    exit 1
 fi
 
 # jq
 if ! command -v jq &>/dev/null; then
+    _ensure_brew_path
     echo "jq 설치 중..."
-    brew install jq || {
-        echo "jq 설치 실패."
-        exit_script 1
-    }
+    brew install jq || { echo "jq 설치 실패."; exit 1; }
 fi
 
 # config 파일
@@ -62,10 +58,11 @@ fi
 # 기존 항목 확인
 if jq -e '.mcpServers["Catch Up"]' "$CONFIG_FILE" &>/dev/null; then
     echo ""
-    read -r -p "'Catch Up' 설정이 이미 있습니다. 덮어쓰겠습니까? (y/N): " answer
+    printf "'Catch Up' 설정이 이미 있습니까? 덮어쓰겠습니까? (y/N): "
+    read -r answer || answer="N"
     if [[ ! "$answer" =~ ^[Yy]$ ]]; then
         echo "취소됨."
-        exit_script 0
+        exit 0
     fi
 fi
 
@@ -82,11 +79,12 @@ UPDATED=$(jq --arg url "$MCP_URL" --arg key "Catch Up" -f "$FILTER_FILE" "$CONFI
 rm -f "$FILTER_FILE"
 if [[ $JQ_EXIT -ne 0 ]] || [[ -z "$UPDATED" ]]; then
     echo "설정 파일 업데이트 실패."
-    exit_script 1
+    exit 1
 fi
 printf '%s' "$UPDATED" > "$CONFIG_FILE"
 
 echo ""
 echo "설치 완료."
 echo "Claude Desktop을 재시작하면 Catch Up MCP가 활성화됩니다."
-exit_script 0
+echo ""
+read -r -p "Enter를 누르면 종료됩니다." _
