@@ -99,7 +99,7 @@ class MCPAuthMiddleware:
                 user = get_user_by_sub(db, sub)
                 if not user:
                     return False, None
-                return user.status == UserStatus.ACTIVE, user.status.value
+                return user.status == UserStatus.ACTIVE, str(user.status)
 
         is_active, user_status = await run_in_threadpool(_check_user_active)
 
