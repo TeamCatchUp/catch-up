@@ -32,6 +32,21 @@ async def test_get_windows_script_success():
 
 
 @pytest.mark.asyncio
+async def test_get_install_platforms():
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        resp = await client.get("/api/v1/mcp/install/platforms")
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "mac" in data
+    assert "windows" in data
+    assert "curl" in data["mac"]
+    assert "irm" in data["windows"]
+
+
+@pytest.mark.asyncio
 async def test_get_script_unsupported_platform():
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
