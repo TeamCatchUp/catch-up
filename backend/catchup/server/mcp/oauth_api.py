@@ -214,6 +214,13 @@ async def authorize(
             detail="등록되지 않은 client_id입니다.",
         )
 
+    client_data = json.loads(raw)
+    if redirect_uri not in client_data.get("redirect_uris", []):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="등록되지 않은 redirect_uri입니다.",
+        )
+
     internal_state = uuid.uuid4().hex
     await redis.setex(
         f"{_MCP_STATE_PREFIX}{internal_state}",
