@@ -565,8 +565,14 @@ app.include_router(mcp_oauth_router)
 app.include_router(mcp_install_router)
 
 if settings.MCP_SERVER_ENABLED:
+    from fastapi.responses import RedirectResponse
+
     from catchup.mcp.server import mcp as mcp_server
     from catchup.server.middleware.mcp_auth import MCPAuthMiddleware
+
+    @app.api_route("/api/v1/mcp", methods=["GET", "POST", "DELETE"])
+    async def _mcp_slash_redirect():
+        return RedirectResponse(url="/api/v1/mcp/", status_code=307)
 
     app.mount("/api/v1/mcp", MCPAuthMiddleware(mcp_server.streamable_http_app()))
 
