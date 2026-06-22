@@ -57,24 +57,31 @@ if (!(Test-Path $ConfigDir)) {
 }
 
 # jq
+$jq = "jq"
 if (!(Get-Command jq -ErrorAction SilentlyContinue)) {
     Write-Host "jq 설치 중..."
     $jqInstalled = $false
-    if (Get-Command winget -ErrorAction SilentlyContinue) {
-        winget install --id jqlang.jq --accept-source-agreements --accept-package-agreements
+    if (!$jqInstalled -and (Get-Command winget -ErrorAction SilentlyContinue)) {
+        winget install jqlang.jq --accept-source-agreements --accept-package-agreements 2>$null
         $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH", "Machine") + ";" +
                     [System.Environment]::GetEnvironmentVariable("PATH", "User")
         if (Get-Command jq -ErrorAction SilentlyContinue) { $jqInstalled = $true }
     }
-    if (-not $jqInstalled -and (Get-Command choco -ErrorAction SilentlyContinue)) {
-        choco install jq -y
+    if (!$jqInstalled -and (Get-Command scoop -ErrorAction SilentlyContinue)) {
+        scoop install jq 2>$null
+        if (Get-Command jq -ErrorAction SilentlyContinue) { $jqInstalled = $true }
+    }
+    if (!$jqInstalled -and (Get-Command choco -ErrorAction SilentlyContinue)) {
+        choco install jq -y 2>$null
         $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH", "Machine") + ";" +
                     [System.Environment]::GetEnvironmentVariable("PATH", "User")
         if (Get-Command jq -ErrorAction SilentlyContinue) { $jqInstalled = $true }
     }
-    if (-not $jqInstalled) {
-        Write-Host "jq 설치 실패. 직접 설치 후 다시 실행하세요: https://jqlang.org/download/" -ForegroundColor Red
-        Exit-Script 1
+    if (!$jqInstalled) {
+        Write-Host "GitHub에서 jq 다운로드 중..."
+        $jqExe = "$env:TEMP\jq.exe"
+        Invoke-WebRequest -Uri "https://github.com/jqlang/jq/releases/latest/download/jq-windows-amd64.exe" -OutFile $jqExe -UseBasicParsing
+        $jq = $jqExe
     }
 }
 
@@ -86,7 +93,7 @@ if (!(Test-Path $ConfigFile)) {
 }
 
 # 기존 항목 확인
-$existingEntry = Get-Content $ConfigFile -Raw | jq -r --arg key "Catch Up" '.mcpServers[$key] // empty'
+$existingEntry = Get-Content $ConfigFile -Raw | & $jq -r --arg key "Catch Up" '.mcpServers[$key] // empty'
 if ($existingEntry) {
     $answer = Read-Host "'Catch Up' 설정이 이미 있습니다. 덮어쓰겠습니까? (y/N)"
     if ($answer -notmatch '^[Yy]$') {
@@ -105,7 +112,7 @@ if ($isNewFile -ne $true) {
 $filterFile = [System.IO.Path]::GetTempFileName()
 [System.IO.File]::WriteAllText($filterFile, '.mcpServers[$key] = {"command":"npx","args":["-y","mcp-remote",$url,"--transport","http-only"]}', [System.Text.UTF8Encoding]::new($false))
 $json = (Get-Content $ConfigFile -Raw |
-    jq --arg url $MCP_URL --arg key "Catch Up" -f $filterFile) -join "`n"
+    & $jq --arg url $MCP_URL --arg key "Catch Up" -f $filterFile) -join "`n"
 Remove-Item $filterFile -ErrorAction SilentlyContinue
 if ($LASTEXITCODE -ne 0 -or !$json) {
     Write-Host "설정 파일 업데이트 실패." -ForegroundColor Red
