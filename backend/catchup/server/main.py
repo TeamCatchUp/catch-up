@@ -63,7 +63,10 @@ from catchup.server.initialization import ensure_pg_indices
 from catchup.server.initialization import ensure_vector_index
 from catchup.server.integrations.api import router as integrations_router
 from catchup.server.mapping.api import router as github_mapping_csv_router
-from catchup.server.middleware.request_context import request_context_middleware
+from catchup.server.mcp.install_api import router as mcp_install_router
+from catchup.server.mcp.oauth_api import router as mcp_oauth_router
+from catchup.server.mcp.oauth_api import well_known_router as mcp_well_known_router
+from catchup.server.middleware.request_context import RequestContextMiddleware
 from catchup.server.onboarding.api import router as onboarding_router
 from catchup.server.search.api import router as search_router
 from catchup.server.settings.api import router as settings_router
@@ -359,7 +362,12 @@ async def lifespan(app: FastAPI):
             error=str(e),
         )
 
-    yield
+    if settings.MCP_SERVER_ENABLED:
+        from catchup.mcp.server import mcp as _mcp_server
+        async with _mcp_server.session_manager.run():
+            yield
+    else:
+        yield
 
     # 서버 종료 전 감사로그 파일 S3 업로드
     if uploader_task:
@@ -549,10 +557,24 @@ if settings.DEBUG_API_ENABLED:
     app.include_router(agent_simulate_router)
     logger.warning("debug_api_enabled", note="disable DEBUG_API_ENABLED in production")
 
-if settings.MCP_SERVER_ENABLED:
-    from catchup.mcp.server import mcp as mcp_server
+app.include_router(mcp_well_known_router)
+app.include_router(mcp_oauth_router)
+# mcp_install_router는 반드시 app.mount("/api/v1/mcp", ...) 보다 먼저 등록해야 한다.
+# Starlette는 삽입 순서로 라우트를 평가하므로 순서가 바뀌면 install 엔드포인트가
+# MCPAuthMiddleware mount에 흡수되어 403을 반환한다.
+app.include_router(mcp_install_router)
 
-    app.mount("/api/mcp", mcp_server.sse_app())
+if settings.MCP_SERVER_ENABLED:
+    from fastapi.responses import RedirectResponse
+
+    from catchup.mcp.server import mcp as mcp_server
+    from catchup.server.middleware.mcp_auth import MCPAuthMiddleware
+
+    @app.api_route("/api/v1/mcp", methods=["GET", "POST", "DELETE"])
+    async def _mcp_slash_redirect():
+        return RedirectResponse(url="/api/v1/mcp/", status_code=307)
+
+    app.mount("/api/v1/mcp", MCPAuthMiddleware(mcp_server.streamable_http_app()))
 
 
 app.add_middleware(
@@ -571,7 +593,7 @@ if settings.PYINSTRUMENT_ENABLED:
     from catchup.server.middleware.pyinstrument import profile_middleware
 
     app.middleware("http")(profile_middleware)
-app.middleware("http")(request_context_middleware)
+app.add_middleware(RequestContextMiddleware)
 
 
 # 헬스 체크

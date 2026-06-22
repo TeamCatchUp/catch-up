@@ -3,6 +3,9 @@ from urllib.parse import urlparse
 from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
 
+from catchup.components.embedder.constants import EmbeddingProvider
+from catchup.components.embedder.factory import get_embedding_service
+from catchup.components.vector_db.factory import get_vector_db_service
 from catchup.components.vector_db.pgvector.constants import VectorDbProvider
 from catchup.configs.config import auth_settings
 from catchup.configs.config import settings
@@ -12,22 +15,29 @@ from catchup.mcp.tools.v2_sampling import get_v2_backfill_status
 from catchup.mcp.tools.v2_sampling import sample_v2_knowledge_rows
 from catchup.mcp.tools.v2_sampling import serialize_sampling_result
 
-_extra_host = urlparse(auth_settings.FRONTEND_BASE_URL, "").netloc or None
-_allowed_hosts = ["127.0.0.1:*", "localhost:*", "localhost", "[::1]:*"]
-_allowed_origins = [
-    "http://127.0.0.1:*", "http://localhost:*", "http://localhost", "http://[::1]:*",
-]
-if _extra_host:
-    _allowed_hosts.append(_extra_host)
-    _allowed_origins.append(f"https://{_extra_host}")
+
+def _build_transport_security() -> TransportSecuritySettings:
+    """DNS rebinding 보호용 TransportSecuritySettings를 구성한다."""
+    extra_host = urlparse(auth_settings.FRONTEND_BASE_URL, "").netloc or None
+    allowed_hosts = ["127.0.0.1:*", "localhost:*", "localhost", "[::1]:*"]
+    allowed_origins = [
+        "http://127.0.0.1:*", "http://localhost:*", "http://localhost", "http://[::1]:*",
+    ]
+    if extra_host:
+        allowed_hosts.append(extra_host)
+        allowed_origins.append(f"https://{extra_host}")
+    return TransportSecuritySettings(
+        enable_dns_rebinding_protection=True,
+        allowed_hosts=allowed_hosts,
+        allowed_origins=allowed_origins,
+    )
+
 
 mcp = FastMCP(
     "catchup-knowledge-base",
-    transport_security=TransportSecuritySettings(
-        enable_dns_rebinding_protection=True,
-        allowed_hosts=_allowed_hosts,
-        allowed_origins=_allowed_origins,
-    ),
+    streamable_http_path="/",
+    stateless_http=True,
+    transport_security=_build_transport_security(),
 )
 
 @mcp.tool()
@@ -49,10 +59,6 @@ async def search_knowledge_base(
         date_from: 검색 시작일 (ISO8601, UTC, 예: "2025-01-01")
         date_to: 검색 종료일 (ISO8601, UTC, 예: "2025-12-31")
     """
-    from catchup.components.embedder.constants import EmbeddingProvider
-    from catchup.components.embedder.factory import get_embedding_service
-    from catchup.components.vector_db.factory import get_vector_db_service
-
     embeddings = get_embedding_service(EmbeddingProvider.AWS_BEDROCK).get_embedder()
     vector_db_service = get_vector_db_service(VectorDbProvider.PGVECTOR, embeddings)
     results = await run_search(query, k, sources, date_from, date_to, vector_db_service)
