@@ -51,8 +51,11 @@ async def get_install_script(platform: str) -> Response:
 
     template_name, content_type = config
     mcp_url = f"{auth_settings.FRONTEND_BASE_URL}/api/v1/mcp/"
-    # UTF-8 BOM을 추가해 Windows PowerShell -File 실행 시 인코딩을 올바르게 인식한다.
-    content = "﻿" + _jinja_env.get_template(template_name).render(mcp_url=mcp_url)
+    content = _jinja_env.get_template(template_name).render(mcp_url=mcp_url)
+    if platform == "windows":
+        # UTF-8 BOM을 추가해 PowerShell -File 실행 시 인코딩을 올바르게 인식한다.
+        # macOS Bash는 BOM이 있으면 shebang을 인식하지 못하므로 Windows 전용으로 적용한다.
+        content = "﻿" + content
 
     logger.info("mcp_install_script_served", platform=platform)
 
