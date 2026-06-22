@@ -37,7 +37,7 @@ _MCP_CLIENT_PREFIX = "mcp:client:"
 _MCP_STATE_PREFIX = "mcp:state:"
 _CLIENT_TTL = 60 * 60 * 24 * 30  # 30일
 _STATE_TTL = 60 * 10  # 10분
-_MCP_SCOPES = ["openid", "email", "profile"]
+_MCP_SCOPES: list[str] = ["openid", "email", "profile"]
 
 
 def _server_base(request: Request) -> str:
