@@ -59,11 +59,21 @@ if (!(Test-Path $ConfigDir)) {
 # jq
 if (!(Get-Command jq -ErrorAction SilentlyContinue)) {
     Write-Host "jq 설치 중..."
-    winget install --id stedolan.jq --accept-source-agreements --accept-package-agreements
-    $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH", "Machine") + ";" +
-                [System.Environment]::GetEnvironmentVariable("PATH", "User")
-    if (!(Get-Command jq -ErrorAction SilentlyContinue)) {
-        Write-Host "jq 설치 실패." -ForegroundColor Red
+    $jqInstalled = $false
+    if (Get-Command winget -ErrorAction SilentlyContinue) {
+        winget install --id jqlang.jq --accept-source-agreements --accept-package-agreements
+        $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH", "Machine") + ";" +
+                    [System.Environment]::GetEnvironmentVariable("PATH", "User")
+        if (Get-Command jq -ErrorAction SilentlyContinue) { $jqInstalled = $true }
+    }
+    if (-not $jqInstalled -and (Get-Command choco -ErrorAction SilentlyContinue)) {
+        choco install jq -y
+        $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH", "Machine") + ";" +
+                    [System.Environment]::GetEnvironmentVariable("PATH", "User")
+        if (Get-Command jq -ErrorAction SilentlyContinue) { $jqInstalled = $true }
+    }
+    if (-not $jqInstalled) {
+        Write-Host "jq 설치 실패. 직접 설치 후 다시 실행하세요: https://jqlang.org/download/" -ForegroundColor Red
         Exit-Script 1
     }
 }
