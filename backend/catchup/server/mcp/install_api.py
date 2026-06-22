@@ -29,18 +29,18 @@ _SCRIPT_CONFIGS = {
 }
 
 
-@router.get("/install/platforms")
-async def get_install_platforms() -> dict[str, str]:
+@router.get("/scripts")
+async def list_install_scripts() -> dict[str, str]:
     """플랫폼별 MCP 설치 명령어를 반환한다."""
     base = auth_settings.FRONTEND_BASE_URL
     return {
-        "mac": f"curl -fsSL '{base}/api/v1/mcp/script/mac' | bash",
-        "windows": f"irm '{base}/api/v1/mcp/script/windows' | iex",
+        "mac": f"curl -fsSL '{base}/api/v1/mcp/scripts/mac' | bash",
+        "windows": f"irm '{base}/api/v1/mcp/scripts/windows' | iex",
     }
 
 
-@router.get("/script/{platform}", include_in_schema=False)
-async def serve_install_script(platform: str) -> Response:
+@router.get("/scripts/{platform}", include_in_schema=False)
+async def get_install_script(platform: str) -> Response:
     """curl/irm으로 직접 실행하는 설치 스크립트를 반환한다."""
     config = _SCRIPT_CONFIGS.get(platform)
     if not config:
