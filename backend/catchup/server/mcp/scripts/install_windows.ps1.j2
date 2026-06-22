@@ -1,12 +1,5 @@
 $ErrorActionPreference = "Stop"
 
-trap {
-    Write-Host ""
-    Write-Host "오류 발생: $_" -ForegroundColor Red
-    Read-Host "Enter를 누르면 종료됩니다"
-    exit 1
-}
-
 $MCP_URL = "{{ mcp_url }}"
 $ConfigDir = "$env:APPDATA\Claude"
 $ConfigFile = "$ConfigDir\claude_desktop_config.json"
@@ -16,6 +9,8 @@ function Exit-Script {
     Read-Host "Enter를 누르면 종료됩니다"
     exit $Code
 }
+
+try {
 
 Write-Host "CatchUp MCP 설치"
 Write-Host ""
@@ -61,22 +56,34 @@ $jq = "jq"
 if (!(Get-Command jq -ErrorAction SilentlyContinue)) {
     Write-Host "jq 설치 중..."
     $jqInstalled = $false
+
     if (!$jqInstalled -and (Get-Command winget -ErrorAction SilentlyContinue)) {
-        winget install jqlang.jq --accept-source-agreements --accept-package-agreements 2>$null
-        $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH", "Machine") + ";" +
-                    [System.Environment]::GetEnvironmentVariable("PATH", "User")
-        if (Get-Command jq -ErrorAction SilentlyContinue) { $jqInstalled = $true }
+        winget install jqlang.jq --accept-source-agreements --accept-package-agreements
+        # winget은 %LOCALAPPDATA%\Microsoft\WinGet\Links\에 설치하므로 직접 경로 확인
+        $wingetJq = "$env:LOCALAPPDATA\Microsoft\WinGet\Links\jq.exe"
+        if (Test-Path $wingetJq) {
+            $jq = $wingetJq
+            $jqInstalled = $true
+        } else {
+            $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH", "Machine") + ";" +
+                        [System.Environment]::GetEnvironmentVariable("PATH", "User") + ";" +
+                        "$env:LOCALAPPDATA\Microsoft\WinGet\Links"
+            if (Get-Command jq -ErrorAction SilentlyContinue) { $jqInstalled = $true }
+        }
     }
+
     if (!$jqInstalled -and (Get-Command scoop -ErrorAction SilentlyContinue)) {
-        scoop install jq 2>$null
+        scoop install jq
         if (Get-Command jq -ErrorAction SilentlyContinue) { $jqInstalled = $true }
     }
+
     if (!$jqInstalled -and (Get-Command choco -ErrorAction SilentlyContinue)) {
-        choco install jq -y 2>$null
+        choco install jq -y
         $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH", "Machine") + ";" +
                     [System.Environment]::GetEnvironmentVariable("PATH", "User")
         if (Get-Command jq -ErrorAction SilentlyContinue) { $jqInstalled = $true }
     }
+
     if (!$jqInstalled) {
         Write-Host "GitHub에서 jq 다운로드 중..."
         $jqExe = "$env:TEMP\jq.exe"
@@ -124,3 +131,9 @@ Write-Host ""
 Write-Host "설치 완료." -ForegroundColor Green
 Write-Host "Claude Desktop을 재시작하면 Catch Up MCP가 활성화됩니다."
 Exit-Script 0
+
+} catch {
+    Write-Host ""
+    Write-Host "오류 발생: $_" -ForegroundColor Red
+    Exit-Script 1
+}

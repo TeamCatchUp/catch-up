@@ -1,4 +1,5 @@
 import structlog
+from fastapi.concurrency import run_in_threadpool
 from starlette.responses import JSONResponse
 from starlette.responses import RedirectResponse
 from starlette.types import ASGIApp
@@ -90,15 +91,24 @@ class MCPAuthMiddleware:
             return
 
         sub: str | None = payload.get("sub")
-        with SessionLocal() as db:
-            user = get_user_by_sub(db, sub) if sub else None
 
-        if not user or user.status != UserStatus.ACTIVE:
+        def _check_user_active() -> tuple[bool, str | None]:
+            if not sub:
+                return False, None
+            with SessionLocal() as db:
+                user = get_user_by_sub(db, sub)
+                if not user:
+                    return False, None
+                return user.status == UserStatus.ACTIVE, str(user.status)
+
+        is_active, user_status = await run_in_threadpool(_check_user_active)
+
+        if not is_active:
             logger.warning(
                 "mcp_auth_failed",
                 reason="user_not_active",
                 sub=sub,
-                status=user.status if user else None,
+                status=user_status,
             )
             await _make_unauthorized(resource_base)(scope, receive, send)
             return
