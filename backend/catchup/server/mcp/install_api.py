@@ -35,7 +35,7 @@ async def list_install_scripts() -> dict[str, str]:
     base = auth_settings.FRONTEND_BASE_URL
     return {
         "mac": f"curl -fsSL '{base}/api/v1/mcp/scripts/mac' | bash",
-        "windows": f"irm '{base}/api/v1/mcp/scripts/windows' | iex",
+        "windows": f"irm '{base}/api/v1/mcp/scripts/windows' -OutFile \"$env:TEMP\\catchup_install.ps1\"; powershell -ExecutionPolicy Bypass -File \"$env:TEMP\\catchup_install.ps1\"",
     }
 
 
