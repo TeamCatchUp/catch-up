@@ -4,6 +4,12 @@ $MCP_URL = "{{ mcp_url }}"
 $ConfigDir = "$env:APPDATA\Claude"
 $ConfigFile = "$ConfigDir\claude_desktop_config.json"
 
+function Refresh-Path {
+    $m = [System.Environment]::GetEnvironmentVariable("PATH", "Machine")
+    $u = [System.Environment]::GetEnvironmentVariable("PATH", "User")
+    $env:PATH = "$m;$u"
+}
+
 function _Main {
     # Node.js
     if (Get-Command node -ErrorAction SilentlyContinue) {
@@ -12,21 +18,17 @@ function _Main {
         Write-Host "Node.js 설치 중..."
         if (Get-Command winget -ErrorAction SilentlyContinue) {
             winget install --id OpenJS.NodeJS.LTS --accept-source-agreements --accept-package-agreements
-            $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH", "Machine") + ";" +
-                        [System.Environment]::GetEnvironmentVariable("PATH", "User")
+            Refresh-Path
         } elseif (Get-Command choco -ErrorAction SilentlyContinue) {
             choco install nodejs-lts -y
-            $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH", "Machine") + ";" +
-                        [System.Environment]::GetEnvironmentVariable("PATH", "User")
+            Refresh-Path
         } else {
             Set-ExecutionPolicy Bypass -Scope Process -Force
             [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
             Invoke-Expression ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
-            $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH", "Machine") + ";" +
-                        [System.Environment]::GetEnvironmentVariable("PATH", "User")
+            Refresh-Path
             choco install nodejs-lts -y
-            $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH", "Machine") + ";" +
-                        [System.Environment]::GetEnvironmentVariable("PATH", "User")
+            Refresh-Path
         }
         if (!(Get-Command node -ErrorAction SilentlyContinue)) {
             Write-Host "Node.js 설치 실패. 직접 설치 후 다시 실행하세요: https://nodejs.org/ko/download" -ForegroundColor Red
@@ -56,9 +58,9 @@ function _Main {
                 $jq = $wingetJq
                 $jqInstalled = $true
             } else {
-                $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH", "Machine") + ";" +
-                            [System.Environment]::GetEnvironmentVariable("PATH", "User") + ";" +
-                            "$env:LOCALAPPDATA\Microsoft\WinGet\Links"
+                $m = [System.Environment]::GetEnvironmentVariable("PATH", "Machine")
+                $u = [System.Environment]::GetEnvironmentVariable("PATH", "User")
+                $env:PATH = "$m;$u;$env:LOCALAPPDATA\Microsoft\WinGet\Links"
                 if (Get-Command jq -ErrorAction SilentlyContinue) { $jqInstalled = $true }
             }
         }
@@ -70,8 +72,7 @@ function _Main {
 
         if (!$jqInstalled -and (Get-Command choco -ErrorAction SilentlyContinue)) {
             choco install jq -y
-            $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH", "Machine") + ";" +
-                        [System.Environment]::GetEnvironmentVariable("PATH", "User")
+            Refresh-Path
             if (Get-Command jq -ErrorAction SilentlyContinue) { $jqInstalled = $true }
         }
 
@@ -109,8 +110,7 @@ function _Main {
     # 설정 업데이트
     $filterFile = [System.IO.Path]::GetTempFileName()
     [System.IO.File]::WriteAllText($filterFile, '.mcpServers[$key] = {"command":"npx","args":["-y","mcp-remote",$url,"--transport","http-only"]}', [System.Text.UTF8Encoding]::new($false))
-    $json = (Get-Content $ConfigFile -Raw |
-        & $jq --arg url $MCP_URL --arg key "Catch Up" -f $filterFile) -join "`n"
+    $json = (Get-Content $ConfigFile -Raw | & $jq --arg url $MCP_URL --arg key "Catch Up" -f $filterFile) -join "`n"
     Remove-Item $filterFile -ErrorAction SilentlyContinue
     if ($LASTEXITCODE -ne 0 -or !$json) {
         Write-Host "설정 파일 업데이트 실패." -ForegroundColor Red
