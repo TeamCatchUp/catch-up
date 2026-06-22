@@ -7,6 +7,9 @@ from starlette.types import Scope
 from starlette.types import Send
 
 from catchup.auth.jwt import verify_token
+from catchup.db.engine import SessionLocal
+from catchup.db.models import UserStatus
+from catchup.db.users import get_user_by_sub
 
 logger = structlog.get_logger()
 
@@ -80,9 +83,23 @@ class MCPAuthMiddleware:
             return
 
         try:
-            verify_token(token, "access")
+            payload = verify_token(token, "access")
         except Exception:
             logger.warning("mcp_auth_failed", reason="invalid_token")
+            await _make_unauthorized(resource_base)(scope, receive, send)
+            return
+
+        sub: str | None = payload.get("sub")
+        with SessionLocal() as db:
+            user = get_user_by_sub(db, sub) if sub else None
+
+        if not user or user.status != UserStatus.ACTIVE:
+            logger.warning(
+                "mcp_auth_failed",
+                reason="user_not_active",
+                sub=sub,
+                status=user.status if user else None,
+            )
             await _make_unauthorized(resource_base)(scope, receive, send)
             return
 
