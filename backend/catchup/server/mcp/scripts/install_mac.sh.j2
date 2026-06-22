@@ -5,90 +5,88 @@ MCP_URL="{{ mcp_url }}"
 CONFIG_DIR="$HOME/Library/Application Support/Claude"
 CONFIG_FILE="$CONFIG_DIR/claude_desktop_config.json"
 
-echo "=== CatchUp MCP 설치 시작 ==="
+exit_script() {
+    local code="${1:-0}"
+    echo ""
+    echo "아무 키나 누르면 창이 닫힙니다."
+    read -r -s -n 1
+    exit "$code"
+}
 
-# 1. Node.js 확인 및 설치
+echo "CatchUp MCP 설치"
+echo ""
+
+# Node.js
 if command -v node &>/dev/null; then
-    echo "✓ Node.js 이미 설치됨: $(node --version)"
+    echo "Node.js $(node --version)"
 else
-    echo "Node.js가 설치되어 있지 않습니다. 설치를 시작합니다..."
+    echo "Node.js 설치 중..."
     if ! command -v brew &>/dev/null; then
-        echo "Homebrew를 설치합니다 (관리자 비밀번호가 필요할 수 있습니다)..."
         /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" || {
-            echo "❌ Homebrew 설치에 실패했습니다."
-            echo "   수동으로 Node.js를 설치해 주세요: https://nodejs.org/ko/download"
-            exit 1
+            echo "Homebrew 설치 실패. 직접 설치 후 다시 실행하세요: https://nodejs.org/ko/download"
+            exit_script 1
         }
-        # Apple Silicon의 경우 brew PATH 추가
         if [[ -f /opt/homebrew/bin/brew ]]; then
             eval "$(/opt/homebrew/bin/brew shellenv)"
         fi
     fi
     brew install node || {
-        echo "❌ Node.js 설치에 실패했습니다."
-        echo "   수동으로 설치해 주세요: https://nodejs.org/ko/download"
-        exit 1
+        echo "Node.js 설치 실패. 직접 설치 후 다시 실행하세요: https://nodejs.org/ko/download"
+        exit_script 1
     }
-    echo "✓ Node.js 설치 완료: $(node --version)"
+    echo "Node.js $(node --version) 설치됨"
 fi
 
-# 2. Claude Desktop 확인
+# Claude Desktop
 if [[ ! -d "$CONFIG_DIR" ]]; then
-    echo "❌ Claude Desktop이 설치되어 있지 않습니다."
-    echo "   https://claude.ai/download 에서 설치 후 다시 실행해 주세요."
-    exit 1
+    echo "Claude Desktop을 찾을 수 없습니다. 설치 후 다시 실행하세요: https://claude.ai/download"
+    exit_script 1
 fi
-echo "✓ Claude Desktop 확인됨"
 
-# 3. jq 확인 및 설치
+# jq
 if ! command -v jq &>/dev/null; then
-    echo "jq를 설치합니다..."
+    echo "jq 설치 중..."
     brew install jq || {
-        echo "❌ jq 설치에 실패했습니다. 'brew install jq' 를 직접 실행해 주세요."
-        exit 1
+        echo "jq 설치 실패."
+        exit_script 1
     }
 fi
 
-# 4. claude_desktop_config.json 처리
+# config 파일
 _is_new_file=false
 if [[ ! -f "$CONFIG_FILE" ]]; then
-    TMP_NEW=$(mktemp "${CONFIG_DIR}/.claude_desktop_config.XXXXXX")
-    printf '{}\n' > "$TMP_NEW"
-    mv "$TMP_NEW" "$CONFIG_FILE"
-    echo "✓ 새 설정 파일을 생성했습니다."
+    printf '{}' > "$CONFIG_FILE"
     _is_new_file=true
 fi
 
 # 기존 항목 확인
 if jq -e '.mcpServers["Catch Up"]' "$CONFIG_FILE" &>/dev/null; then
     echo ""
-    read -r -p "이미 'Catch Up' MCP 설정이 있습니다. 덮어쓰시겠습니까? (y/N): " answer
+    read -r -p "'Catch Up' 설정이 이미 있습니다. 덮어쓰겠습니까? (y/N): " answer
     if [[ ! "$answer" =~ ^[Yy]$ ]]; then
-        echo "설치를 취소했습니다."
-        exit 0
+        echo "취소됨."
+        exit_script 0
     fi
 fi
 
-# 기존 파일 백업 (신규 생성 파일은 백업 불필요)
+# 백업
 if [[ "$_is_new_file" != "true" ]]; then
     cp "$CONFIG_FILE" "${CONFIG_FILE}.bak"
-    echo "✓ 기존 설정 파일을 백업했습니다: ${CONFIG_FILE}.bak"
+    echo "기존 설정 백업: ${CONFIG_FILE}.bak"
 fi
 
-# mcpServers."Catch Up" 항목 추가/업데이트
-UPDATED=$(jq --arg url "$MCP_URL" '
-    .mcpServers //= {} |
-    .mcpServers["Catch Up"] = {
-        "command": "npx",
-        "args": ["-y", "mcp-remote", $url, "--transport", "http-only"]
-    }
-' "$CONFIG_FILE")
-TMP_FILE=$(mktemp "${CONFIG_DIR}/.claude_desktop_config.XXXXXX")
-printf '%s\n' "$UPDATED" > "$TMP_FILE"
-mv "$TMP_FILE" "$CONFIG_FILE"
-echo "✓ 설정 파일을 업데이트했습니다."
+# 설정 업데이트
+FILTER_FILE=$(mktemp)
+printf '.mcpServers[$key] = {"command":"npx","args":["-y","mcp-remote",$url,"--transport","http-only"]}' > "$FILTER_FILE"
+UPDATED=$(jq --arg url "$MCP_URL" --arg key "Catch Up" -f "$FILTER_FILE" "$CONFIG_FILE"); JQ_EXIT=$?
+rm -f "$FILTER_FILE"
+if [[ $JQ_EXIT -ne 0 ]] || [[ -z "$UPDATED" ]]; then
+    echo "설정 파일 업데이트 실패."
+    exit_script 1
+fi
+printf '%s' "$UPDATED" > "$CONFIG_FILE"
 
 echo ""
-echo "=== 설치 완료 ==="
-echo "Claude Desktop을 완전히 종료한 후 다시 실행하면 Catch Up MCP가 활성화됩니다."
-echo "Claude Desktop 앱 메뉴 → Quit Claude 후 재시작해 주세요."
+echo "설치 완료."
+echo "Claude Desktop을 재시작하면 Catch Up MCP가 활성화됩니다."
+exit_script 0
