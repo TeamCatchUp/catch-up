@@ -10,6 +10,26 @@ function Refresh-Path {
     $env:PATH = "$m;$u"
 }
 
+# Claude Desktop이 JSONC(주석/trailing comma 허용) 형식으로 config를 쓰므로 전처리가 필요하다.
+$jsoncParser = @'
+function stripJsonc(text) {
+  var out = '', inStr = false, i = 0;
+  while (i < text.length) {
+    if (inStr) {
+      if (text[i] === '\\') { out += text[i] + text[i+1]; i += 2; }
+      else if (text[i] === '"') { out += text[i++]; inStr = false; }
+      else { out += text[i++]; }
+    } else {
+      if (text[i] === '"') { out += text[i++]; inStr = true; }
+      else if (text[i]==='/' && text[i+1]==='/') { while (i<text.length && text[i]!=='\n') i++; }
+      else if (text[i]==='/' && text[i+1]==='*') { i+=2; while (i<text.length && !(text[i]==='*' && text[i+1]==='/')) i++; i+=2; }
+      else { out += text[i++]; }
+    }
+  }
+  return out.replace(/,(\s*[}\]])/g, '$1');
+}
+'@
+
 function _Main {
     # Node.js
     if (Get-Command node -ErrorAction SilentlyContinue) {
@@ -45,45 +65,6 @@ function _Main {
         return
     }
 
-    # jq
-    $jq = "jq"
-    if (!(Get-Command jq -ErrorAction SilentlyContinue)) {
-        Write-Host "jq 설치 중..."
-        $jqInstalled = $false
-
-        if (!$jqInstalled -and (Get-Command winget -ErrorAction SilentlyContinue)) {
-            winget install jqlang.jq --accept-source-agreements --accept-package-agreements
-            $wingetJq = "$env:LOCALAPPDATA\Microsoft\WinGet\Links\jq.exe"
-            if (Test-Path $wingetJq) {
-                $jq = $wingetJq
-                $jqInstalled = $true
-            } else {
-                $m = [System.Environment]::GetEnvironmentVariable("PATH", "Machine")
-                $u = [System.Environment]::GetEnvironmentVariable("PATH", "User")
-                $env:PATH = "$m;$u;$env:LOCALAPPDATA\Microsoft\WinGet\Links"
-                if (Get-Command jq -ErrorAction SilentlyContinue) { $jqInstalled = $true }
-            }
-        }
-
-        if (!$jqInstalled -and (Get-Command scoop -ErrorAction SilentlyContinue)) {
-            scoop install jq
-            if (Get-Command jq -ErrorAction SilentlyContinue) { $jqInstalled = $true }
-        }
-
-        if (!$jqInstalled -and (Get-Command choco -ErrorAction SilentlyContinue)) {
-            choco install jq -y
-            Refresh-Path
-            if (Get-Command jq -ErrorAction SilentlyContinue) { $jqInstalled = $true }
-        }
-
-        if (!$jqInstalled) {
-            Write-Host "GitHub에서 jq 다운로드 중..."
-            $jqExe = "$env:TEMP\jq.exe"
-            Invoke-WebRequest -Uri "https://github.com/jqlang/jq/releases/latest/download/jq-windows-amd64.exe" -OutFile $jqExe -UseBasicParsing
-            $jq = $jqExe
-        }
-    }
-
     # config 파일
     $isNewFile = $false
     if (!(Test-Path $ConfigFile)) {
@@ -92,8 +73,17 @@ function _Main {
     }
 
     # 기존 항목 확인
-    $existingEntry = Get-Content $ConfigFile -Raw | & $jq -r --arg key "Catch Up" '.mcpServers[$key] // empty'
-    if ($existingEntry) {
+    $checkScript = $jsoncParser + @'
+
+try {
+  var raw = require('fs').readFileSync(process.argv[1], 'utf8').replace(/^﻿/, '');
+  var c = JSON.parse(stripJsonc(raw));
+  process.stdout.write(c.mcpServers && c.mcpServers['Catch Up'] ? 'exists' : '');
+} catch(e) { process.stdout.write(''); }
+'@
+    $existingEntry = node -e $checkScript $ConfigFile
+
+    if ($existingEntry -eq 'exists') {
         $answer = Read-Host "'Catch Up' 설정이 이미 있습니다. 덮어쓰겠습니까? (y/N)"
         if ($answer -notmatch '^[Yy]$') {
             Write-Host "취소됨."
@@ -108,16 +98,24 @@ function _Main {
     }
 
     # 설정 업데이트
-    $filterFile = [System.IO.Path]::GetTempFileName()
-    [System.IO.File]::WriteAllText($filterFile, '.mcpServers[$key] = {"command":"npx","args":["-y","mcp-remote",$url,"--transport","http-only"]}', [System.Text.UTF8Encoding]::new($false))
-    $json = (Get-Content $ConfigFile -Raw | & $jq --arg url $MCP_URL --arg key "Catch Up" -f $filterFile) -join "`n"
-    Remove-Item $filterFile -ErrorAction SilentlyContinue
-    if ($LASTEXITCODE -ne 0 -or !$json) {
+    $updateScript = $jsoncParser + @'
+
+var fs = require('fs');
+var file = process.argv[1];
+var url = process.argv[2];
+var raw = fs.readFileSync(file, 'utf8').replace(/^﻿/, '');
+var config = JSON.parse(stripJsonc(raw));
+if (!config.mcpServers) config.mcpServers = {};
+config.mcpServers['Catch Up'] = {command:'npx',args:['-y','mcp-remote',url,'--transport','http-only']};
+fs.writeFileSync(file, JSON.stringify(config, null, 2), 'utf8');
+'@
+    node -e $updateScript $ConfigFile $MCP_URL
+
+    if ($LASTEXITCODE -ne 0) {
         Write-Host "설정 파일 업데이트 실패." -ForegroundColor Red
         Read-Host "Enter를 누르면 종료됩니다"
         return
     }
-    [System.IO.File]::WriteAllText($ConfigFile, $json, [System.Text.UTF8Encoding]::new($false))
 
     Write-Host ""
     Write-Host "설치 완료." -ForegroundColor Green
