@@ -1,6 +1,7 @@
 import structlog
 from starlette.responses import JSONResponse
 from starlette.responses import RedirectResponse
+from starlette.responses import Response
 from starlette.types import ASGIApp
 from starlette.types import Receive
 from starlette.types import Scope
@@ -66,6 +67,13 @@ class MCPAuthMiddleware:
             return
 
         path: str = scope.get("path", "")
+        method: str = scope.get("method", "")
+
+        # stateless_http=True 모드에서 GET(SSE) 요청은 지원하지 않는다.
+        # mcp-remote는 405를 받으면 POST-only 모드로 전환한다.
+        if method == "GET" and path.rstrip("/") == "/api/v1/mcp":
+            await Response(status_code=405)(scope, receive, send)
+            return
 
         # Claude가 MCP URL에 well-known suffix를 붙여 탐색하면 정규 경로로 리다이렉트한다.
         # /api/v1/mcp/.well-known/... 은 FastAPI router가 직접 처리하므로 여기엔 도달하지 않는다.
