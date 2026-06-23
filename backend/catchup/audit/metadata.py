@@ -634,6 +634,26 @@ class MCPAuditMetadata(BaseAuditMetadata):
     date_to: str | None = None
     result_count: int | None = None
 
+    @classmethod
+    def from_audit(cls, data: "AuditLogMetadataInput") -> "MCPAuditMetadata":
+        import json
+
+        args = data.arguments
+        result_count = None
+        if data.status == AuditStatus.SUCCESS and data.result:
+            try:
+                result_count = len(json.loads(data.result))
+            except Exception:
+                pass
+        return cls(
+            query=args["query"],
+            k=args.get("k", 10),
+            sources=args.get("sources"),
+            date_from=args.get("date_from"),
+            date_to=args.get("date_to"),
+            result_count=result_count,
+        )
+
 
 class ManualSearchAuditMetadata(BaseAuditMetadata):
     user_id: int
