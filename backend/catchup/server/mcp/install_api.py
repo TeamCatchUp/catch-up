@@ -30,13 +30,28 @@ _SCRIPT_CONFIGS = {
 
 
 @router.get("/scripts")
-async def list_install_scripts() -> dict[str, str]:
+async def list_install_scripts() -> dict[str, str | dict]:
     """플랫폼별 MCP 설치 명령어를 반환한다."""
     base = auth_settings.FRONTEND_BASE_URL
+    mcp_url = f"{base}/api/v1/mcp/"
     return {
         "mac": f"curl -fsSL '{base}/api/v1/mcp/scripts/mac' | bash",
         "windows": f"irm '{base}/api/v1/mcp/scripts/windows' -OutFile (Join-Path $env:TEMP catchup_install.ps1); powershell -ExecutionPolicy Bypass -File (Join-Path $env:TEMP catchup_install.ps1)",
-        "claude-code": f"claude mcp add --transport http catch-up '{base}/api/v1/mcp/'",
+        "claude-code": f"claude mcp add --transport http catch-up '{mcp_url}'",
+        "mcp_config": {
+            "mcpServers": {
+                "Catch Up": {
+                    "command": "npx",
+                    "args": [
+                        "-y",
+                        "mcp-remote",
+                        mcp_url,
+                        "--transport",
+                        "http-only",
+                    ],
+                }
+            }
+        },
     }
 
 
