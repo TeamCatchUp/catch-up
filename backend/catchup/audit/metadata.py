@@ -646,7 +646,7 @@ class McpAuditMetadata(BaseAuditMetadata):
             except Exception:
                 pass
         return cls(
-            query=args["query"],
+            query=args.get("query", ""),
             k=args.get("k", 10),
             sources=args.get("sources"),
             date_from=args.get("date_from"),
