@@ -626,7 +626,7 @@ class UserOnboardingAuditMetadata(BaseAuditMetadata):
     role: UserRole
 
 
-class MCPAuditMetadata(BaseAuditMetadata):
+class McpAuditMetadata(BaseAuditMetadata):
     query: str
     k: int
     sources: list[str] | None = None
@@ -635,7 +635,7 @@ class MCPAuditMetadata(BaseAuditMetadata):
     result_count: int | None = None
 
     @classmethod
-    def from_audit(cls, data: "AuditLogMetadataInput") -> "MCPAuditMetadata":
+    def from_audit(cls, data: "AuditLogMetadataInput") -> "McpAuditMetadata":
         import json
 
         args = data.arguments

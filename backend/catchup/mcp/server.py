@@ -3,8 +3,8 @@ from urllib.parse import urlparse
 from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
 
-from catchup.audit.actions import MCPAction
-from catchup.audit.metadata import MCPAuditMetadata
+from catchup.audit.actions import McpAction
+from catchup.audit.metadata import McpAuditMetadata
 from catchup.audit.utils import audit_log
 from catchup.components.embedder.constants import EmbeddingProvider
 from catchup.components.embedder.factory import get_embedding_service
@@ -47,9 +47,9 @@ mcp = FastMCP(
 @mcp.tool()
 @observe(name="mcp-search-knowledge-base")
 @audit_log(
-    MCPAction.SEARCH_KNOWLEDGE_BASE,
+    McpAction.SEARCH_KNOWLEDGE_BASE,
     emit_attempt=True,
-    metadata_factory=MCPAuditMetadata.from_audit,
+    metadata_factory=McpAuditMetadata.from_audit,
 )
 async def search_knowledge_base(
     query: str,

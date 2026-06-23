@@ -114,5 +114,5 @@ class ManualSearchAction(BaseAuditAction):
     SEND_QUERY = "send_query"
 
 
-class MCPAction(BaseAuditAction):
+class McpAction(BaseAuditAction):
     SEARCH_KNOWLEDGE_BASE = "search_knowledge_base"
