@@ -306,9 +306,9 @@ class Settings(BaseSettings):
     #=======================================#
     #               MCP Server              #
     #=======================================#
-    MCP_SERVER_ENABLED: bool = False
+    MCP_SERVER_ENABLED: bool = True
+    MCP_OAUTH_ENABLED: bool = True
     MCP_V2_SAMPLING_ENABLED: bool = False
-    MCP_OAUTH_ENABLED: bool = False
 
     model_config = SettingsConfigDict(
         env_file=".env",
