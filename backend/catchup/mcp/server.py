@@ -59,15 +59,23 @@ async def search_knowledge_base(
     date_to: str | None = None,
 ) -> str:
     """
-    Catch Up 지식베이스에서 관련 문서를 하이브리드 검색(벡터+키워드)으로 조회합니다.
-    하이브리드 검색에 최적화된 쿼리를 생성하세요.
+    Search the company knowledge base using hybrid search (vector + keyword).
+
+    Indexes content from Slack, Jira, Confluence, GitHub, and ChannelTalk — all in one
+    query. Useful for questions about decisions, ongoing projects, team discussions,
+    issue history, or any company-specific context that spans multiple platforms.
+
+    Craft a descriptive, natural-language query that captures the user's intent.
+    Richer queries yield better results than short keyword strings.
 
     Args:
-        query: 검색 쿼리
-        k: 반환할 문서 수 (기본값: 10)
-        sources: 검색할 소스 목록 (slack, jira, confluence, github). 미지정 시 전체 검색.
-        date_from: 검색 시작일 (ISO8601, UTC, 예: "2025-01-01")
-        date_to: 검색 종료일 (ISO8601, UTC, 예: "2025-12-31")
+        query: Natural-language search query describing what you are looking for.
+        k: Number of documents to return (default: 10).
+        sources: Restrict search to specific sources. Omit or leave empty to search
+            across all sources. Valid values:
+            slack, jira, confluence, github, channel_talk.
+        date_from: Start date filter in ISO8601 format (e.g. "2025-01-01"). Optional.
+        date_to: End date filter in ISO8601 format (e.g. "2025-12-31"). Optional.
     """
     embeddings = get_embedding_service(EmbeddingProvider.AWS_BEDROCK).get_embedder()
     vector_db_service = get_vector_db_service(VectorDbProvider.PGVECTOR, embeddings)
