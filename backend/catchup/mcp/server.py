@@ -74,6 +74,7 @@ async def search_knowledge_base(
             k: str(v)
             for k, v in {
                 "email": actor.get("email"),
+                "name": actor.get("name"),
                 "department": actor.get("department"),
             }.items()
             if v is not None

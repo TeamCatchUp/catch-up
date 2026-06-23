@@ -23,6 +23,7 @@ SENSITIVE_KEYS = {
     "api_key",
     "secret",
     "private_key",
+    "name",
 }
 
 
