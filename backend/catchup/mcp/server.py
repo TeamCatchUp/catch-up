@@ -11,9 +11,6 @@ from catchup.configs.config import auth_settings
 from catchup.configs.config import settings
 from catchup.mcp.tools.search import run_search
 from catchup.mcp.tools.search import serialize_results
-from catchup.mcp.tools.v2_sampling import get_v2_backfill_status
-from catchup.mcp.tools.v2_sampling import sample_v2_knowledge_rows
-from catchup.mcp.tools.v2_sampling import serialize_sampling_result
 
 
 def _build_transport_security() -> TransportSecuritySettings:
@@ -66,6 +63,10 @@ async def search_knowledge_base(
 
 
 if settings.MCP_V2_SAMPLING_ENABLED:
+    from catchup.mcp.tools.v2_sampling import get_v2_backfill_status
+    from catchup.mcp.tools.v2_sampling import sample_v2_knowledge_rows
+    from catchup.mcp.tools.v2_sampling import serialize_sampling_result
+
     @mcp.tool()
     async def sample_v2_knowledge_store(
         source: str,
