@@ -3,6 +3,11 @@ from urllib.parse import urlparse
 from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
 
+from catchup.audit.actions import MCPAction
+from catchup.audit.base import AuditLevel
+from catchup.audit.base import AuditStatus
+from catchup.audit.emitters import emit_audit_event
+from catchup.audit.metadata import MCPAuditMetadata
 from catchup.components.embedder.constants import EmbeddingProvider
 from catchup.components.embedder.factory import get_embedding_service
 from catchup.components.vector_db.factory import get_vector_db_service
@@ -64,39 +69,81 @@ async def search_knowledge_base(
     embeddings = get_embedding_service(EmbeddingProvider.AWS_BEDROCK).get_embedder()
     vector_db_service = get_vector_db_service(VectorDbProvider.PGVECTOR, embeddings)
 
-    if settings.ENABLE_LANGFUSE:
-        from langfuse import get_client
-        from langfuse import propagate_attributes
+    emit_audit_event(
+        action=MCPAction.SEARCH_KNOWLEDGE_BASE,
+        status=AuditStatus.ATTEMPT,
+        level=AuditLevel.INFO,
+        metadata=MCPAuditMetadata(
+            query=query,
+            k=k,
+            sources=sources,
+            date_from=date_from,
+            date_to=date_to,
+        ),
+    )
 
-        actor: dict = get_request_context().get("actor") or {}
-        user_id = str(actor["user_id"]) if actor.get("user_id") else None
-        metadata = {
-            k: str(v)
-            for k, v in {
-                "email": actor.get("email"),
-                "name": actor.get("name"),
-                "department": actor.get("department"),
-            }.items()
-            if v is not None
-        }
-        with propagate_attributes(user_id=user_id, metadata=metadata):
+    try:
+        if settings.ENABLE_LANGFUSE:
+            from langfuse import get_client
+            from langfuse import propagate_attributes
+
+            actor: dict = get_request_context().get("actor") or {}
+            user_id = str(actor["user_id"]) if actor.get("user_id") else None
+            lf_metadata = {
+                k: str(v)
+                for k, v in {
+                    "email": actor.get("email"),
+                    "name": actor.get("name"),
+                    "department": actor.get("department"),
+                }.items()
+                if v is not None
+            }
+            with propagate_attributes(user_id=user_id, metadata=lf_metadata):
+                results = await run_search(
+                    query, k, sources, date_from, date_to, vector_db_service
+                )
+            get_client().update_current_span(
+                input={
+                    "query": query,
+                    "k": k,
+                    "sources": sources,
+                    "date_from": date_from,
+                    "date_to": date_to,
+                },
+                output=results,
+            )
+        else:
             results = await run_search(
                 query, k, sources, date_from, date_to, vector_db_service
             )
-        get_client().update_current_span(
-            input={
-                "query": query,
-                "k": k,
-                "sources": sources,
-                "date_from": date_from,
-                "date_to": date_to,
-            },
-            output=results,
+    except Exception:
+        emit_audit_event(
+            action=MCPAction.SEARCH_KNOWLEDGE_BASE,
+            status=AuditStatus.FAILURE,
+            level=AuditLevel.WARNING,
+            metadata=MCPAuditMetadata(
+                query=query,
+                k=k,
+                sources=sources,
+                date_from=date_from,
+                date_to=date_to,
+            ),
         )
-    else:
-        results = await run_search(
-            query, k, sources, date_from, date_to, vector_db_service
-        )
+        raise
+
+    emit_audit_event(
+        action=MCPAction.SEARCH_KNOWLEDGE_BASE,
+        status=AuditStatus.SUCCESS,
+        level=AuditLevel.INFO,
+        metadata=MCPAuditMetadata(
+            query=query,
+            k=k,
+            sources=sources,
+            date_from=date_from,
+            date_to=date_to,
+            result_count=len(results),
+        ),
+    )
 
     return serialize_results(results)
 

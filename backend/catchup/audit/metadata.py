@@ -626,6 +626,15 @@ class UserOnboardingAuditMetadata(BaseAuditMetadata):
     role: UserRole
 
 
+class MCPAuditMetadata(BaseAuditMetadata):
+    query: str
+    k: int
+    sources: list[str] | None = None
+    date_from: str | None = None
+    date_to: str | None = None
+    result_count: int | None = None
+
+
 class ManualSearchAuditMetadata(BaseAuditMetadata):
     user_id: int
     query: str
