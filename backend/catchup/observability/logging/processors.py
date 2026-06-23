@@ -23,6 +23,7 @@ SENSITIVE_KEYS = {
     "api_key",
     "secret",
     "private_key",
+    "name",
 }
 
 
@@ -57,9 +58,10 @@ def process_audit_payload(
     로그 메타데이터에서 민감 정보를 삭제하고 길이 제한을 적용하는 프로세서.
     """
 
-    metadata = event_dict.get("metadata")
-    if metadata and isinstance(metadata, dict):
-        event_dict["metadata"] = _sanitize_and_truncate(metadata)
+    for key in ("metadata", "actor", "actor_"):
+        value = event_dict.get(key)
+        if value and isinstance(value, dict):
+            event_dict[key] = _sanitize_and_truncate(value)
 
     return event_dict
 

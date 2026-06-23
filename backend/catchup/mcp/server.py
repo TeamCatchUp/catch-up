@@ -3,6 +3,9 @@ from urllib.parse import urlparse
 from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
 
+from catchup.audit.actions import McpAction
+from catchup.audit.metadata import McpAuditMetadata
+from catchup.audit.utils import audit_log
 from catchup.components.embedder.constants import EmbeddingProvider
 from catchup.components.embedder.factory import get_embedding_service
 from catchup.components.vector_db.factory import get_vector_db_service
@@ -11,6 +14,10 @@ from catchup.configs.config import auth_settings
 from catchup.configs.config import settings
 from catchup.mcp.tools.search import run_search
 from catchup.mcp.tools.search import serialize_results
+from catchup.observability.langfuse.configs import get_observe
+from catchup.observability.logging.context import get_request_context
+
+observe = get_observe()
 
 
 def _build_transport_security() -> TransportSecuritySettings:
@@ -38,6 +45,12 @@ mcp = FastMCP(
 )
 
 @mcp.tool()
+@observe(name="mcp-search-knowledge-base")
+@audit_log(
+    McpAction.SEARCH_KNOWLEDGE_BASE,
+    emit_attempt=True,
+    metadata_factory=McpAuditMetadata.from_audit,
+)
 async def search_knowledge_base(
     query: str,
     k: int = 10,
@@ -58,7 +71,41 @@ async def search_knowledge_base(
     """
     embeddings = get_embedding_service(EmbeddingProvider.AWS_BEDROCK).get_embedder()
     vector_db_service = get_vector_db_service(VectorDbProvider.PGVECTOR, embeddings)
-    results = await run_search(query, k, sources, date_from, date_to, vector_db_service)
+
+    if settings.ENABLE_LANGFUSE:
+        from langfuse import get_client
+        from langfuse import propagate_attributes
+
+        actor: dict = get_request_context().get("actor") or {}
+        user_id = str(actor["user_id"]) if actor.get("user_id") else None
+        lf_metadata = {
+            k: str(v)
+            for k, v in {
+                "email": actor.get("email"),
+                "name": actor.get("name"),
+                "department": actor.get("department"),
+            }.items()
+            if v is not None
+        }
+        with propagate_attributes(user_id=user_id, metadata=lf_metadata):
+            results = await run_search(
+                query, k, sources, date_from, date_to, vector_db_service
+            )
+        get_client().update_current_span(
+            input={
+                "query": query,
+                "k": k,
+                "sources": sources,
+                "date_from": date_from,
+                "date_to": date_to,
+            },
+            output=results,
+        )
+    else:
+        results = await run_search(
+            query, k, sources, date_from, date_to, vector_db_service
+        )
+
     return serialize_results(results)
 
 
