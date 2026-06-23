@@ -37,8 +37,8 @@ async def list_install_scripts() -> dict[str, str | dict]:
     return {
         "mac": f"curl -fsSL '{base}/api/v1/mcp/scripts/mac' | bash",
         "windows": f"irm '{base}/api/v1/mcp/scripts/windows' -OutFile (Join-Path $env:TEMP catchup_install.ps1); powershell -ExecutionPolicy Bypass -File (Join-Path $env:TEMP catchup_install.ps1)",
-        "claude-code": f"claude mcp add --transport http catch-up '{mcp_url}'",
-        "mcp_config": {
+        "claude_code": f"claude mcp add --transport http catch-up '{mcp_url}'",
+        "claude_desktop_config": {
             "mcpServers": {
                 "Catch Up": {
                     "command": "npx",
