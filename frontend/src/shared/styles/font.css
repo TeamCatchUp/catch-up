@@ -80,4 +80,50 @@
   --text-label-xsmall--line-height: 1.5;
   --text-label-xsmall--font-weight: 400;
   --text-label-xsmall--letter-spacing: 0em;
+
+  /* reading */
+  --text-reading-heading-sb-large: 19px;
+  --text-reading-heading-sb-large--line-height: 1.7;
+  --text-reading-heading-sb-large--font-weight: 600;
+  --text-reading-heading-sb-large--letter-spacing: -0.0075em;
+
+  --text-reading-heading-sb-medium: 17px;
+  --text-reading-heading-sb-medium--line-height: 1.75;
+  --text-reading-heading-sb-medium--font-weight: 600;
+  --text-reading-heading-sb-medium--letter-spacing: -0.005em;
+
+  --text-reading-heading-sb-small: 15px;
+  --text-reading-heading-sb-small--line-height: 1.75;
+  --text-reading-heading-sb-small--font-weight: 600;
+  --text-reading-heading-sb-small--letter-spacing: -0.005em;
+
+  --text-reading-body-md-large: 19px;
+  --text-reading-body-md-large--line-height: 1.7;
+  --text-reading-body-md-large--font-weight: 500;
+  --text-reading-body-md-large--letter-spacing: -0.0075em;
+
+  --text-reading-body-md-medium: 17px;
+  --text-reading-body-md-medium--line-height: 1.75;
+  --text-reading-body-md-medium--font-weight: 500;
+  --text-reading-body-md-medium--letter-spacing: -0.005em;
+
+  --text-reading-body-md-small: 15px;
+  --text-reading-body-md-small--line-height: 1.75;
+  --text-reading-body-md-small--font-weight: 500;
+  --text-reading-body-md-small--letter-spacing: -0.005em;
+
+  --text-reading-label-rg-large: 19px;
+  --text-reading-label-rg-large--line-height: 1.7;
+  --text-reading-label-rg-large--font-weight: 400;
+  --text-reading-label-rg-large--letter-spacing: -0.0075em;
+
+  --text-reading-label-rg-medium: 17px;
+  --text-reading-label-rg-medium--line-height: 1.75;
+  --text-reading-label-rg-medium--font-weight: 400;
+  --text-reading-label-rg-medium--letter-spacing: -0.005em;
+
+  --text-reading-label-rg-small: 15px;
+  --text-reading-label-rg-small--line-height: 1.75;
+  --text-reading-label-rg-small--font-weight: 400;
+  --text-reading-label-rg-small--letter-spacing: -0.005em;
 }
