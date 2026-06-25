@@ -16,7 +16,7 @@ export default function AccountSupportSection() {
         {SUPPORT_CARDS.map((card) => (
           <li
             key={card.title}
-            className="border-line-normal-neutral bg-fill-normal-normal hover:bg-fill-normal-strong flex max-w-100 min-w-[190px] flex-[1_0_0] flex-col overflow-hidden rounded-xl border transition-colors"
+            className="border-line-normal-neutral bg-fill-normal-normal hover:bg-fill-normal-strong flex max-w-100 min-w-47.5 flex-1 flex-col overflow-hidden rounded-xl border transition-colors"
           >
             <Link href={`/mypage/help/support/${card.id}`}>
               <div className="border-line-normal-neutral relative aspect-292/128 w-full border-b">

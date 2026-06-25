@@ -77,10 +77,15 @@ export function HelpArticleSubsection({
 export function HelpArticleStep({ order, title, children }: HelpArticleStepProps) {
   return (
     <div className="flex flex-col gap-3">
-      <h3 className="text-reading-heading-sb-large text-text-normal-normal">
-        {order ? `${order}. ` : ''}
-        {title}
-      </h3>
+      {order ? (
+        <ol className="text-reading-heading-sb-large text-text-normal-normal pl-7.125 list-decimal" start={order}>
+          <li>
+            <span>{title}</span>
+          </li>
+        </ol>
+      ) : (
+        <h3 className="text-reading-heading-sb-large text-text-normal-normal">{title}</h3>
+      )}
       {children}
     </div>
   );

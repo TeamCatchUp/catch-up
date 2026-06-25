@@ -31,14 +31,14 @@ function ClaudeDownloadCard() {
       href="https://claude.com/download"
       target="_blank"
       rel="noreferrer"
-      className="border-line-normal-neutral bg-fill-normal-normal flex w-full max-w-[520px] items-center gap-4 rounded-xl border p-3"
+      className="border-line-normal-neutral bg-fill-normal-normal flex w-full max-w-130 items-center gap-4 rounded-xl border p-3"
     >
       <ClaudeIcon aria-hidden className="size-10 shrink-0" />
       <span className="flex min-w-0 flex-1 flex-col">
         <span className="flex items-center gap-2.5">
           <span className="text-reading-body-md-small text-text-normal-normal">Claude</span>
-          <span className="bg-fill-normal-interaction-hover rounded-md2 flex size-[22px] items-center justify-center">
-            <ArrowOutwardIcon className="text-icon-normal-normal size-[18px]" />
+          <span className="bg-fill-normal-interaction-hover rounded-md2 flex size-5.5 items-center justify-center">
+            <ArrowOutwardIcon className="text-icon-normal-normal size-4.5" />
           </span>
         </span>
         <span className="text-label-xsmall text-text-normal-alternative truncate">https://claude.com/download</span>

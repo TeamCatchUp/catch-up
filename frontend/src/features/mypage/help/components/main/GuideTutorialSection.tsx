@@ -11,11 +11,11 @@ export default function GuideTutorialSection() {
         <p className="text-body-small text-text-normal-alternative">주요 기능부터 활용 팁까지 단계별로 안내합니다.</p>
       </div>
 
-      <ul className="grid grid-cols-[repeat(auto-fill,minmax(247px,1fr))] gap-6">
+      <ul className="flex flex-wrap gap-6">
         {GUIDE_CARDS.map((card) => (
           <li
             key={card.id}
-            className="border-line-normal-neutral bg-fill-normal-normal hover:bg-fill-normal-strong flex max-w-134.25 flex-col overflow-hidden rounded-xl border transition-colors"
+            className="border-line-normal-neutral bg-fill-normal-normal hover:bg-fill-normal-strong flex max-w-134.25 min-w-61.75 flex-1 flex-col overflow-hidden rounded-xl border transition-colors"
           >
             <Link href={`/mypage/help/tutorial/${card.id}`}>
               <div className="border-line-normal-neutral relative aspect-59/25 w-full border-b">

@@ -118,11 +118,11 @@ export default function HelpArticleSideNav({ items }: HelpArticleSideNavProps) {
                   className={cn(
                     'text-heading-small flex py-2.5 pr-3 pl-4',
                     isActive
-                      ? 'border-line-primary-strong bg-fill-primary-normal-neutral text-text-primary-normal w-[210px] border-l-2'
-                      : 'border-line-normal-normal text-text-normal-alternative hover:bg-fill-normal-interaction-hover w-[209px] border-l transition-colors',
+                      ? 'border-line-primary-strong bg-fill-primary-normal-neutral text-text-primary-normal w-52.5 border-l-2'
+                      : 'border-line-normal-normal text-text-normal-alternative hover:bg-fill-normal-interaction-hover w-52.25 border-l transition-colors',
                   )}
                 >
-                  <span className="block w-[180px] truncate">{item.title}</span>
+                  <span className="block w-45 truncate">{item.title}</span>
                 </a>
               </li>
             );
