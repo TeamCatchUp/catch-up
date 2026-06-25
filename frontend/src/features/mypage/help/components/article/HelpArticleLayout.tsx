@@ -18,7 +18,7 @@ export default function HelpArticleLayout({
   children,
 }: HelpArticleLayoutProps) {
   return (
-    <div className="bg-background-normal-normal flex flex-1 overflow-y-auto">
+    <div className="bg-background-normal-normal flex flex-1">
       <main className="flex w-full flex-col px-6 pt-9 pb-30 lg:px-16">
         <div className="mx-auto flex w-full max-w-[1040px] flex-col gap-3">
           <Button

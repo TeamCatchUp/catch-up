@@ -10,7 +10,7 @@ export default function HelpArticleSideNav({ items }: HelpArticleSideNavProps) {
   if (items.length === 0) return null;
 
   return (
-    <aside className="sticky top-9 hidden max-h-[calc(100vh-72px)] shrink-0 self-start overflow-x-hidden overflow-y-auto rounded-2xl p-4 lg:block">
+    <aside className="sticky top-9 hidden h-fit max-h-[calc(100vh-72px)] shrink-0 self-start overflow-x-hidden overflow-y-auto rounded-2xl p-4 lg:block">
       <nav aria-label="본문 목차">
         <ul className="flex flex-col">
           {items.map((item, index) => (
