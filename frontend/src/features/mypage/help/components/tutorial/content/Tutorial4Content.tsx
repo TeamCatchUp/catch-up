@@ -3,6 +3,7 @@ import {
   HelpArticleQuote,
   HelpArticleSection,
   HelpArticleStep,
+  HelpArticleSubsection,
   HelpArticleText,
 } from '@/features/mypage/help/components/article/HelpArticleBlocks';
 import HelpCommandBlock from '@/features/mypage/help/components/article/HelpCommandBlock';
@@ -17,8 +18,10 @@ export const TUTORIAL_4_SECTIONS = [
   { id: 'before-use', title: '사용 전 꼭 확인해주세요' },
   { id: 'claude-desktop', title: 'Claude Desktop에 설치하기' },
   { id: 'claude-code', title: 'Claude Code에 설치하기' },
+  { id: 'delete-mcp', title: '삭제하기' },
+  { id: 'disable-claude-code', title: 'Claude Code에서 비활성화하기' },
+  { id: 'manual-install', title: '수동 설치 방법' },
   { id: 'troubleshooting', title: '문제가 생겼나요?' },
-  { id: 'manual-install', title: '수동 설치 방법(추가)' },
 ] as const satisfies readonly HelpArticleNavItem[];
 
 const NODE_WINDOWS_INSTALL_COMMAND = 'winget install -e --id OpenJS.NodeJS';
@@ -170,62 +173,98 @@ export default function Tutorial4Content() {
       </HelpArticleSection>
 
       <HelpArticleSection {...TUTORIAL_4_SECTIONS[4]}>
-        <div className="flex flex-col gap-8">
-          <HelpArticleStep order={1} title="Claude Code에 설치하기">
-            <HelpArticleText>
-              <p>Claude Code가 아직 없다면 먼저 설치해주세요.</p>
-            </HelpArticleText>
-          </HelpArticleStep>
-
-          <HelpArticleStep order={2} title="설치 명령어 복사하기">
-            <HelpArticleText>
-              <p>Catch Up 서비스에 접속한 뒤 아래 경로로 이동합니다.</p>
-              <p>
-                <HelpArticleEmphasis>우측 상단 프로필 → MCP 설치</HelpArticleEmphasis>
-              </p>
-              <p>Claude Code 명령어를 복사해주세요.</p>
-            </HelpArticleText>
-            <McpScriptCommands scriptKeys={['claude_code']} showHeader={false} />
-          </HelpArticleStep>
-
-          <HelpArticleStep order={3} title="연결 확인하기">
-            <HelpArticleText>
-              <p>Claude Code에서 /mcp를 입력하고 catch-up이 표시되는지 확인해주세요.</p>
-            </HelpArticleText>
-          </HelpArticleStep>
+        <div className="flex flex-col gap-3">
+          <HelpArticleText>
+            <p>터미널에서 아래 명령어를 실행합니다.</p>
+          </HelpArticleText>
+          <McpScriptCommands scriptKeys={['claude_code']} showHeader={false} />
+          <HelpArticleText>
+            <p>설치 후 Claude Code에서 아래 순서로 인증을 진행합니다.</p>
+          </HelpArticleText>
         </div>
+        <HelpArticleText>
+          <ol className="list-decimal pl-6">
+            <li>/mcp 입력</li>
+            <li>catch-up 선택</li>
+            <li>Authenticate 선택</li>
+            <li>인증 URL 접속</li>
+            <li>회사 계정으로 SSO 로그인</li>
+            <li>인증 완료</li>
+          </ol>
+          <p>인증이 끝나면 Claude Code에서 Catch Up MCP를 사용할 수 있습니다.</p>
+        </HelpArticleText>
       </HelpArticleSection>
 
       <HelpArticleSection {...TUTORIAL_4_SECTIONS[5]}>
+        <HelpArticleSubsection title="Claude Desktop에서 삭제하기" titleVariant="reading-large" className="gap-4">
+          <HelpArticleText>
+            <p>
+              Claude Desktop에서 아래 경로로 이동합니다.
+              <br />
+              설정 → 커넥터 → 데스크탑 → Catch Up → 제거
+            </p>
+          </HelpArticleText>
+        </HelpArticleSubsection>
+      </HelpArticleSection>
+
+      <HelpArticleSection {...TUTORIAL_4_SECTIONS[6]}>
+        <HelpArticleText>
+          <p>Claude Code에서 아래 순서로 진행합니다.</p>
+        </HelpArticleText>
+        <HelpArticleText>
+          <ol className="list-decimal pl-6">
+            <li>/mcp 입력</li>
+            <li>catch-up 선택</li>
+            <li>Disable 선택</li>
+          </ol>
+        </HelpArticleText>
+      </HelpArticleSection>
+
+      <HelpArticleSection {...TUTORIAL_4_SECTIONS[7]}>
+        <div className="flex flex-col gap-4">
+          <h3 className="text-heading-xlarge text-text-normal-normal">Claude Desktop</h3>
+          <HelpArticleText>
+            <ol className="list-decimal pl-6">
+              <li>Node.js를 설치합니다.</li>
+            </ol>
+          </HelpArticleText>
+
+          <HelpArticleStep title="Window">
+            <HelpCommandBlock value={NODE_WINDOWS_INSTALL_COMMAND} ariaLabel="Windows Node.js 설치 명령어 복사" />
+          </HelpArticleStep>
+
+          <HelpArticleStep title="Mac">
+            <HelpCommandBlock value={NODE_MAC_INSTALL_COMMAND} ariaLabel="Mac Node.js 설치 명령어 복사" />
+          </HelpArticleStep>
+
+          <HelpArticleStep title="설치 상태 확인">
+            <HelpCommandBlock value={NODE_VERSION_COMMAND} ariaLabel="Node.js 설치 상태 확인 명령어 복사" />
+          </HelpArticleStep>
+
+          <HelpArticleText>
+            <ol className="list-decimal pl-6" start={2}>
+              <li>Claude Desktop을 실행합니다.</li>
+              <li>설정 &gt; 개발자 탭을 선택합니다.</li>
+              <li>‘구성 편집’ 버튼을 선택합니다.</li>
+              <li>파일 탐색기가 열리면 claude_desktop_config.json 파일을 안전한 장소에 백업합니다.</li>
+              <li>해당 파일을 열어 아래와 같이 편집합니다.</li>
+            </ol>
+          </HelpArticleText>
+
+          <McpScriptCommands scriptKeys={['claude_desktop_config']} showHeader={false} />
+
+          <HelpArticleText>
+            <ol className="list-decimal pl-6" start={6}>
+              <li>Claude Desktop을 완전히 종료하고 재시작합니다.</li>
+              <li>잠시 뒤 SSO 인증 화면이 팝업되며 로그인을 진행합니다.</li>
+              <li>커넥터 목록 또는 Claude를 통해 Catch Up MCP 사용 가능 여부를 확인합니다.</li>
+            </ol>
+          </HelpArticleText>
+        </div>
+      </HelpArticleSection>
+
+      <HelpArticleSection {...TUTORIAL_4_SECTIONS[8]}>
         <div className="flex flex-col gap-8">
-          <HelpArticleStep title="Windows에서 PowerShell 실행이 막혀요">
-            <HelpArticleText>
-              <p>
-                PowerShell을 사용하고 있는지 먼저 확인해주세요.
-                <br />
-                명령 프롬프트(cmd)가 아니라 PowerShell에서 실행해야 합니다.
-              </p>
-              <p>
-                보안 정책 때문에 실행이 제한될 수 있습니다.
-                <br />
-                제공된 설치 명령어에는 일회성 실행 권한 설정이 포함되어 있지만, 회사 보안 정책에 따라 추가 제한이 있을
-                수 있습니다.
-              </p>
-              <p>이 경우 사내 관리자에게 PowerShell 오류 메시지를 전달해주세요.</p>
-            </HelpArticleText>
-          </HelpArticleStep>
-
-          <HelpArticleStep title="Claude Code에서 catch-up이 보이지 않아요">
-            <HelpArticleText>
-              <p>설치 명령어가 정상적으로 등록되지 않았을 수 있습니다.</p>
-              <p>아래 명령어를 다시 실행해주세요.</p>
-            </HelpArticleText>
-            <McpScriptCommands scriptKeys={['claude_code']} showHeader={false} />
-            <HelpArticleText>
-              <p>그다음 Claude Code에서 /mcp를 입력하고 catch-up이 표시되는지 확인해주세요.</p>
-            </HelpArticleText>
-          </HelpArticleStep>
-
           <HelpArticleStep title="Claude.ai에서 Catch Up이 로드되지 않아요.">
             <HelpArticleText>
               <p>
@@ -270,49 +309,6 @@ export default function Tutorial4Content() {
               <p>이 정보를 함께 보내주시면 원인을 더 빠르게 확인할 수 있습니다.</p>
             </HelpArticleText>
           </div>
-        </div>
-      </HelpArticleSection>
-
-      <HelpArticleSection {...TUTORIAL_4_SECTIONS[6]}>
-        <div className="flex flex-col gap-4">
-          <h3 className="text-heading-xlarge text-text-normal-normal">Claude Desktop</h3>
-          <HelpArticleText>
-            <ol className="list-decimal pl-6">
-              <li>Node.js를 설치합니다.</li>
-            </ol>
-          </HelpArticleText>
-
-          <HelpArticleStep title="Window">
-            <HelpCommandBlock value={NODE_WINDOWS_INSTALL_COMMAND} ariaLabel="Windows Node.js 설치 명령어 복사" />
-          </HelpArticleStep>
-
-          <HelpArticleStep title="Mac">
-            <HelpCommandBlock value={NODE_MAC_INSTALL_COMMAND} ariaLabel="Mac Node.js 설치 명령어 복사" />
-          </HelpArticleStep>
-
-          <HelpArticleStep title="설치 상태 확인">
-            <HelpCommandBlock value={NODE_VERSION_COMMAND} ariaLabel="Node.js 설치 상태 확인 명령어 복사" />
-          </HelpArticleStep>
-
-          <HelpArticleText>
-            <ol className="list-decimal pl-6" start={2}>
-              <li>Claude Desktop을 실행합니다.</li>
-              <li>설정 &gt; 개발자 탭을 선택합니다.</li>
-              <li>‘구성 편집’ 버튼을 선택합니다.</li>
-              <li>파일 탐색기가 열리면 claude_desktop_config.json 파일을 안전한 장소에 백업합니다.</li>
-              <li>해당 파일을 열어 아래와 같이 편집합니다.</li>
-            </ol>
-          </HelpArticleText>
-
-          <McpScriptCommands scriptKeys={['claude_desktop_config']} showHeader={false} />
-
-          <HelpArticleText>
-            <ol className="list-decimal pl-6" start={6}>
-              <li>Claude Desktop을 완전히 종료하고 재시작합니다.</li>
-              <li>잠시 뒤 SSO 인증 화면이 팝업되며 로그인을 진행합니다.</li>
-              <li>커넥터 목록 또는 Claude를 통해 Catch Up MCP 사용 가능 여부를 확인합니다.</li>
-            </ol>
-          </HelpArticleText>
         </div>
       </HelpArticleSection>
     </>
