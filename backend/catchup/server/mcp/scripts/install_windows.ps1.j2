@@ -1,8 +1,22 @@
 $ErrorActionPreference = "Stop"
 
 $MCP_URL = "{{ mcp_url }}"
-$ConfigDir = "$env:APPDATA\Claude"
-$ConfigFile = "$ConfigDir\claude_desktop_config.json"
+
+# Claude Desktop 설정 디렉터리 탐색: 일반 설치 → Microsoft Store 설치 순으로 확인한다.
+$ConfigDir = $null
+$standardDir = "$env:APPDATA\Claude"
+if (Test-Path $standardDir) {
+    $ConfigDir = $standardDir
+} else {
+    $storeDir = Get-ChildItem "$env:LOCALAPPDATA\Packages" -Filter "Claude_*" -ErrorAction SilentlyContinue |
+        Select-Object -First 1 |
+        ForEach-Object { "$($_.FullName)\LocalCache\Roaming\Claude" }
+    if ($storeDir -and (Test-Path $storeDir)) {
+        $ConfigDir = $storeDir
+    }
+}
+
+$ConfigFile = if ($ConfigDir) { "$ConfigDir\claude_desktop_config.json" } else { $null }
 
 function Refresh-Path {
     $m = [System.Environment]::GetEnvironmentVariable("PATH", "Machine")
@@ -92,7 +106,7 @@ function _Main {
     }
 
     # Claude Desktop
-    if (!(Test-Path $ConfigDir)) {
+    if (!$ConfigDir) {
         Write-Host "Claude Desktop을 찾을 수 없습니다. 설치 후 다시 실행하세요: https://claude.ai/download" -ForegroundColor Red
         Read-Host "Enter를 누르면 종료됩니다"
         return
