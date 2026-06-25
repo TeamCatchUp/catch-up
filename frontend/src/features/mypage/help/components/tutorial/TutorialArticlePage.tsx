@@ -9,13 +9,13 @@ import { getAdjacentHelpArticleLinks } from '@/features/mypage/help/utils/helpAr
 import Tutorial1Content, { TUTORIAL_1_SECTIONS } from './content/Tutorial1Content';
 import Tutorial2Content, { TUTORIAL_2_SECTIONS } from './content/Tutorial2Content';
 import Tutorial3Content, { TUTORIAL_3_SECTIONS } from './content/Tutorial3Content';
-import Tutorial4Content, { TUTORIAL_4_SECTIONS } from './content/Tutorial4Content';
+import Tutorial4Content, { TUTORIAL_4_NAV_ITEMS } from './content/Tutorial4Content';
 
 const TUTORIAL_NAV_ITEMS = {
   1: TUTORIAL_1_SECTIONS,
   2: TUTORIAL_2_SECTIONS,
   3: TUTORIAL_3_SECTIONS,
-  4: TUTORIAL_4_SECTIONS,
+  4: TUTORIAL_4_NAV_ITEMS,
 } as const;
 
 const TUTORIAL_CONTENT = {

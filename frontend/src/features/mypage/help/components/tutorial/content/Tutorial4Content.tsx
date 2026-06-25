@@ -29,6 +29,16 @@ export const TUTORIAL_4_SECTIONS = [
   { id: 'troubleshooting', title: '문제가 생겼나요?' },
 ] as const satisfies readonly HelpArticleNavItem[];
 
+export const TUTORIAL_4_NAV_ITEMS = [
+  TUTORIAL_4_SECTIONS[0],
+  TUTORIAL_4_SECTIONS[1],
+  TUTORIAL_4_SECTIONS[2],
+  TUTORIAL_4_SECTIONS[3],
+  TUTORIAL_4_SECTIONS[4],
+  TUTORIAL_4_SECTIONS[7],
+  TUTORIAL_4_SECTIONS[8],
+] as const satisfies readonly HelpArticleNavItem[];
+
 const NODE_WINDOWS_INSTALL_COMMAND = 'winget install -e --id OpenJS.NodeJS';
 const NODE_MAC_INSTALL_COMMAND = 'brew install node@24';
 const NODE_VERSION_COMMAND = 'node --version  # 예) v24.17.0';
