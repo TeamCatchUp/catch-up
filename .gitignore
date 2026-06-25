@@ -23,9 +23,12 @@ Obsidian
 .agents/
 docs/
 .omx/
+.codegraph/
 .claude/
 conductor/
 GEMINI.md
 .gemini/
 CLAUDE.md
 /AGENTS.md
+.headroom
+.serena

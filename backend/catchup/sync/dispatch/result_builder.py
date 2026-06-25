@@ -5,6 +5,7 @@ from catchup.sync.common.schemas import SyncDispatchResult
 from catchup.sync.common.schemas import SyncDispatchStatus
 from catchup.sync.dispatch.types import DispatchContext
 
+
 def build_no_events_response(
     *,
     connector: SyncConnector,

@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import type { DateRange } from 'react-day-picker';
 import { format, isSameDay, startOfToday, subMonths } from 'date-fns';
 import { ko } from 'date-fns/locale';
@@ -13,6 +13,10 @@ import { cn } from '@/shared/utils/cn';
 import { Button } from './button';
 import { Calendar } from './calendar';
 import { Popover, PopoverContent, PopoverTrigger } from './popover';
+
+type DateRangePickerContentProps = React.ComponentPropsWithoutRef<typeof PopoverContent> & {
+  [key: `data-${string}`]: string | number | boolean | undefined;
+};
 
 interface DateRangePickerProps {
   /** 선택된 날짜 범위 */
@@ -31,6 +35,9 @@ interface DateRangePickerProps {
   trigger?: React.ReactNode;
   // PopoverContent 정렬 (기본: 'end')
   align?: 'start' | 'end';
+  defaultOpen?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  contentProps?: DateRangePickerContentProps;
 }
 
 function DateRangePicker({
@@ -42,16 +49,30 @@ function DateRangePicker({
   numberOfMonths = 2,
   trigger,
   align = 'end',
+  defaultOpen = false,
+  onOpenChange,
+  contentProps,
 }: DateRangePickerProps) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
   const [tempRange, setTempRange] = useState<DateRange | undefined>(value);
+  const resetPendingRef = useRef(false);
+  const { className: contentClassName, ...contentPropsRest } = contentProps ?? {};
 
   const handleOpenChange = useCallback(
     (next: boolean) => {
-      if (next) setTempRange(value);
+      if (next) {
+        setTempRange(value);
+        resetPendingRef.current = false;
+      } else {
+        if (resetPendingRef.current && value?.from) {
+          onChange?.(undefined);
+        }
+        resetPendingRef.current = false;
+      }
       setOpen(next);
+      onOpenChange?.(next);
     },
-    [value],
+    [onChange, onOpenChange, value],
   );
 
   const isTodaySelected =
@@ -63,14 +84,22 @@ function DateRangePicker({
   const handleSelectToday = useCallback(() => {
     if (isTodaySelected) {
       setTempRange(undefined);
+      resetPendingRef.current = true;
     } else {
       const today = startOfToday();
       setTempRange({ from: today, to: today });
+      resetPendingRef.current = false;
     }
   }, [isTodaySelected]);
 
+  const handleRangeSelect = useCallback((next: DateRange | undefined) => {
+    setTempRange(next);
+    resetPendingRef.current = false;
+  }, []);
+
   const handleReset = useCallback(() => {
     setTempRange(undefined);
+    resetPendingRef.current = true;
   }, []);
 
   const handleClear = useCallback(() => {
@@ -78,13 +107,14 @@ function DateRangePicker({
   }, [onChange]);
 
   const handleClose = useCallback(() => {
-    setOpen(false);
-  }, []);
+    handleOpenChange(false);
+  }, [handleOpenChange]);
 
   const handleApply = useCallback(() => {
+    resetPendingRef.current = false;
     onChange?.(tempRange);
-    setOpen(false);
-  }, [onChange, tempRange]);
+    handleOpenChange(false);
+  }, [handleOpenChange, onChange, tempRange]);
 
   const displayFrom = value?.from ? format(value.from, dateFormat) : undefined;
   const displayTo = value?.to ? format(value.to, dateFormat) : undefined;
@@ -96,18 +126,18 @@ function DateRangePicker({
       ) : (
         <PopoverTrigger
           className={cn(
-            'border-edge-neutral bg-fill-normal flex h-9 cursor-pointer items-center gap-1.5 rounded-lg border px-2.5 py-2',
+            'border-line-normal-neutral bg-fill-normal-normal flex h-9 cursor-pointer items-center gap-1.5 rounded-lg border px-2.5 py-2',
             className,
           )}
         >
-          <IconCalendar className="text-icon-neutral size-5" />
+          <IconCalendar className="text-icon-normal-neutral size-5" />
           {displayFrom ? (
             <>
-              <span className="text-body-small text-content-neutral">{displayFrom}</span>
-              <span className="text-body-small text-content-neutral">-</span>
-              <span className="text-body-small text-content-neutral">{displayTo ?? displayFrom}</span>
+              <span className="text-body-small text-text-normal-neutral">{displayFrom}</span>
+              <span className="text-body-small text-text-normal-neutral">-</span>
+              <span className="text-body-small text-text-normal-neutral">{displayTo ?? displayFrom}</span>
               <IconDeleteCircle
-                className="text-icon-assistive size-5"
+                className="text-icon-normal-assistive size-5"
                 onClick={(e: React.MouseEvent) => {
                   e.stopPropagation();
                   handleClear();
@@ -115,7 +145,7 @@ function DateRangePicker({
               />
             </>
           ) : (
-            <span className="text-body-small text-content-assistive">{placeholder}</span>
+            <span className="text-body-small text-text-normal-assistive">{placeholder}</span>
           )}
         </PopoverTrigger>
       )}
@@ -123,12 +153,13 @@ function DateRangePicker({
       <PopoverContent
         align={align}
         sideOffset={4}
-        className="shadow-modal flex w-auto flex-col gap-4 rounded-2xl p-5"
+        className={cn('shadow-modal flex w-auto flex-col gap-4 rounded-2xl p-5', contentClassName)}
+        {...contentPropsRest}
       >
         <Calendar
           mode="range"
           selected={tempRange}
-          onSelect={setTempRange}
+          onSelect={handleRangeSelect}
           numberOfMonths={numberOfMonths}
           locale={ko}
           disabled={{ after: startOfToday() }}
@@ -138,7 +169,7 @@ function DateRangePicker({
         />
 
         {/* Divider */}
-        <div className="border-edge-normal border-t" />
+        <div className="border-line-normal-normal border-t" />
 
         {/* Action Bar */}
         <div className="flex items-center justify-between">
@@ -148,7 +179,10 @@ function DateRangePicker({
               variant="box-outline-gray"
               size="sm"
               onClick={handleSelectToday}
-              className={cn('w-22.5', isTodaySelected && 'border-edge-strong bg-fill-interaction-pressed')}
+              className={cn(
+                'w-22.5',
+                isTodaySelected && 'border-line-normal-strong bg-fill-normal-interaction-pressed',
+              )}
             >
               {isTodaySelected && <IconCheck className="size-5" />}
               오늘 선택

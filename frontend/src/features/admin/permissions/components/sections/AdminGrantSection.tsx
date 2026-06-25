@@ -28,9 +28,9 @@ const AdminGrantSection = ({
   const isSubmitDisabled = disabled || !selectedMemberId || !reason.trim();
 
   return (
-    <section className="border-edge-neutral bg-fill-normal flex w-250 flex-col gap-2">
+    <section className="border-line-normal-neutral bg-fill-normal-normal flex w-250 flex-col gap-2">
       <div className="flex h-9 items-center justify-between">
-        <h2 className="text-heading-large text-content-normal">Admin 권한 부여하기</h2>
+        <h2 className="text-heading-large text-text-normal-normal">Admin 권한 부여하기</h2>
         <Button
           variant="box-solid-primary"
           size="md"
@@ -43,9 +43,9 @@ const AdminGrantSection = ({
         </Button>
       </div>
 
-      <div className="border-edge-neutral flex items-start gap-5 rounded-xl border px-5 py-5">
+      <div className="border-line-normal-neutral flex items-start gap-5 rounded-xl border px-5 py-5">
         <div className="flex w-117.5 flex-col gap-1.5">
-          <span className="text-body-small text-content-normal">멤버</span>
+          <span className="text-body-small text-text-normal-normal">멤버</span>
           <Select
             value={selectedMemberId != null ? String(selectedMemberId) : ''}
             onValueChange={(v) => onMemberChange(Number(v))}
@@ -65,7 +65,7 @@ const AdminGrantSection = ({
         </div>
 
         <div className="flex w-117.5 flex-col gap-1.5">
-          <span className="text-body-small text-content-normal">부여 사유</span>
+          <span className="text-body-small text-text-normal-normal">부여 사유</span>
           <Input
             value={reason}
             onChange={(event) => onReasonChange(event.target.value)}

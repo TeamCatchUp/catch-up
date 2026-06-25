@@ -25,7 +25,7 @@ export default function ChannelTalkFieldRow({
   return (
     <div className="flex min-w-0 flex-1 flex-col gap-1.5">
       <div className="flex items-center gap-1">
-        <span className="text-body-small text-content-neutral">{label}</span>
+        <span className="text-body-small text-text-normal-neutral">{label}</span>
         <span className="bg-status-destructive size-[5px] rounded-full" aria-label="필수 입력" />
       </div>
       <ChannelTalkTextField

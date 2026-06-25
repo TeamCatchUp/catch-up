@@ -12,7 +12,7 @@ const Command = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <CommandPrimitive
     ref={ref}
-    className={cn('bg-fill-normal flex size-full flex-col overflow-hidden rounded-2xl', className)}
+    className={cn('bg-fill-normal-normal flex size-full flex-col overflow-hidden rounded-2xl', className)}
     {...props}
   />
 ));
@@ -38,7 +38,7 @@ const CommandInput = React.forwardRef<
 
   return (
     <div
-      className="bg-fill-strong focus-within:border-edge-primary flex min-h-10 items-center gap-1.5 rounded-lg border-[1.5px] border-transparent px-3 py-2"
+      className="bg-fill-normal-strong focus-within:border-line-primary-normal flex min-h-10 items-center gap-1.5 rounded-lg border-[1.5px] border-transparent px-3 py-2"
       cmdk-input-wrapper=""
     >
       <CommandPrimitive.Input
@@ -46,7 +46,7 @@ const CommandInput = React.forwardRef<
         value={value}
         onValueChange={handleValueChange}
         className={cn(
-          'text-body-small text-content-normal placeholder:text-content-assistive flex w-full bg-transparent outline-none disabled:cursor-not-allowed disabled:opacity-50',
+          'text-body-small text-text-normal-normal placeholder:text-text-normal-assistive flex w-full bg-transparent outline-none disabled:cursor-not-allowed disabled:opacity-50',
           className,
         )}
         {...props}
@@ -56,7 +56,7 @@ const CommandInput = React.forwardRef<
           type="button"
           onMouseDown={(e) => e.preventDefault()}
           onClick={handleClear}
-          className="text-icon-neutral shrink-0 cursor-pointer"
+          className="text-icon-normal-neutral shrink-0 cursor-pointer"
         >
           <TextfieldDelete className="size-5" />
         </button>
@@ -82,7 +82,11 @@ const CommandEmpty = React.forwardRef<
   React.ComponentRef<typeof CommandPrimitive.Empty>,
   React.ComponentPropsWithoutRef<typeof CommandPrimitive.Empty>
 >((props, ref) => (
-  <CommandPrimitive.Empty ref={ref} className="text-body-small text-content-alternative py-6 text-center" {...props} />
+  <CommandPrimitive.Empty
+    ref={ref}
+    className="text-body-small text-text-normal-alternative py-6 text-center"
+    {...props}
+  />
 ));
 CommandEmpty.displayName = CommandPrimitive.Empty.displayName;
 
@@ -93,7 +97,7 @@ const CommandGroup = React.forwardRef<
   <CommandPrimitive.Group
     ref={ref}
     className={cn(
-      '[&_[cmdk-group-heading]]:text-label-xsmall [&_[cmdk-group-heading]]:text-content-alternative overflow-hidden [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5',
+      '[&_[cmdk-group-heading]]:text-label-xsmall [&_[cmdk-group-heading]]:text-text-normal-alternative overflow-hidden [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5',
       className,
     )}
     {...props}
@@ -105,7 +109,7 @@ const CommandSeparator = React.forwardRef<
   React.ComponentRef<typeof CommandPrimitive.Separator>,
   React.ComponentPropsWithoutRef<typeof CommandPrimitive.Separator>
 >(({ className, ...props }, ref) => (
-  <CommandPrimitive.Separator ref={ref} className={cn('bg-edge-neutral mx-1 my-1 h-px', className)} {...props} />
+  <CommandPrimitive.Separator ref={ref} className={cn('bg-line-normal-neutral mx-1 my-1 h-px', className)} {...props} />
 ));
 CommandSeparator.displayName = CommandPrimitive.Separator.displayName;
 
@@ -116,7 +120,7 @@ const CommandItem = React.forwardRef<
   <CommandPrimitive.Item
     ref={ref}
     className={cn(
-      'text-body-small text-content-normal data-[selected=true]:bg-fill-interaction-hover relative flex cursor-pointer items-center gap-2.5 rounded-lg px-2 py-2 outline-none select-none data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-50',
+      'text-body-small text-text-normal-normal data-[selected=true]:bg-fill-normal-interaction-hover relative flex cursor-pointer items-center gap-2.5 rounded-lg px-2 py-2 outline-none select-none data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-50',
       className,
     )}
     {...props}

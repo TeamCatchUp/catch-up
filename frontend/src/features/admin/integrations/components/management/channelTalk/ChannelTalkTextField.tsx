@@ -51,8 +51,8 @@ export default function ChannelTalkTextField({
       className={cn(
         // ring으로 테두리 — 상태 전환 시 layout shift 0
         'flex h-11.5 max-h-45 min-h-11.5 w-full items-center gap-3 rounded-lg p-3 ring-[1.5px] ring-inset',
-        disabled ? 'bg-fill-interaction-disable ring-edge-neutral' : 'bg-fill-normal',
-        !disabled && state === 'idle' && 'ring-edge-neutral focus-within:ring-edge-primary',
+        disabled ? 'bg-fill-normal-interaction-disable ring-line-normal-neutral' : 'bg-fill-normal-normal',
+        !disabled && state === 'idle' && 'ring-line-normal-neutral focus-within:ring-line-primary-normal',
         !disabled && state === 'error' && 'ring-status-destructive',
       )}
     >
@@ -65,8 +65,8 @@ export default function ChannelTalkTextField({
         readOnly={readOnly || disabled}
         aria-label={ariaLabel}
         className={cn(
-          'text-body-small placeholder:text-content-assistive min-w-0 flex-1 truncate bg-transparent outline-none',
-          disabled ? 'text-content-assistive cursor-not-allowed' : 'text-content-normal',
+          'text-body-small placeholder:text-text-normal-assistive min-w-0 flex-1 truncate bg-transparent outline-none',
+          disabled ? 'text-text-normal-assistive cursor-not-allowed' : 'text-text-normal-normal',
         )}
       />
       {showMaskToggle && (
@@ -75,7 +75,7 @@ export default function ChannelTalkTextField({
           data-mask-toggle="true"
           aria-label={masked ? '값 표시' : '값 숨기기'}
           onClick={() => setUserMasked((prev) => !prev)}
-          className="text-icon-alternative hover:text-icon-normal flex size-4.5 shrink-0 cursor-pointer items-center justify-center transition-colors"
+          className="text-icon-normal-alternative hover:text-icon-normal-normal flex size-4.5 shrink-0 cursor-pointer items-center justify-center transition-colors"
         >
           {masked ? <IconVisibilityOff className="size-4.5" /> : <IconVisibility className="size-4.5" />}
         </button>

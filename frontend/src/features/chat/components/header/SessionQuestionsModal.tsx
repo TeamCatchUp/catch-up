@@ -48,36 +48,36 @@ export default function SessionQuestionsModal({ sessionId, onClose, onSelect }: 
   return (
     <div
       ref={modalRef}
-      className="shadow-dropdown-menu border-edge-strong bg-fill-normal flex max-h-125 w-95 flex-col gap-1.5 overflow-hidden rounded-xl border py-4"
+      className="shadow-dropdown-menu border-line-normal-strong bg-fill-normal-normal flex max-h-125 w-95 flex-col gap-1.5 overflow-hidden rounded-xl border py-4"
     >
       {/* 헤더 */}
       <div className="px-5">
-        <span className="text-body-small text-content-alternative">대화 내 질문 목록</span>
+        <span className="text-body-small text-text-normal-alternative">대화 내 질문 목록</span>
       </div>
 
       {/* 질문 목록 */}
       <div className="max-h-109.75 w-full overflow-y-auto px-3 py-1.5">
         <div className="flex flex-col gap-1.5">
           {isLoading ? (
-            <div className="text-body-small text-content-assistive py-10 text-center">질문을 불러오는 중...</div>
+            <div className="text-body-small text-text-normal-assistive py-10 text-center">질문을 불러오는 중...</div>
           ) : allQueries.length > 0 ? (
             allQueries.map((item, idx) => (
               <button
                 key={idx}
-                className="hover:bg-fill-interaction-hover flex h-10 w-full cursor-pointer items-center rounded-xl px-2 py-1 transition-colors"
+                className="hover:bg-fill-normal-interaction-hover flex h-10 w-full cursor-pointer items-center rounded-xl px-2 py-1 transition-colors"
                 onClick={() => {
                   onSelect(item.id);
                   onClose();
                 }}
               >
-                <span className="text-body-small text-content-normal truncate text-left">{item.content}</span>
+                <span className="text-body-small text-text-normal-normal truncate text-left">{item.content}</span>
               </button>
             ))
           ) : (
-            <div className="text-body-small text-content-assistive py-10 text-center">질문 내역이 없습니다.</div>
+            <div className="text-body-small text-text-normal-assistive py-10 text-center">질문 내역이 없습니다.</div>
           )}
           {isFetchingNextPage && (
-            <div className="text-body-small text-content-assistive py-2 text-center">불러오는 중...</div>
+            <div className="text-body-small text-text-normal-assistive py-2 text-center">불러오는 중...</div>
           )}
           <div ref={sentinelRef} className="h-1" />
         </div>

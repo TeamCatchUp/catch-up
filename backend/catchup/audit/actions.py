@@ -112,3 +112,7 @@ class UserMappingAction(BaseAuditAction):
 
 class ManualSearchAction(BaseAuditAction):
     SEND_QUERY = "send_query"
+
+
+class McpAction(BaseAuditAction):
+    SEARCH_KNOWLEDGE_BASE = "search_knowledge_base"

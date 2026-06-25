@@ -11,9 +11,6 @@ from pydantic import Field
 from pydantic import ValidationInfo
 from pydantic import field_validator
 
-from catchup.connector_core.domain.structure import ConnectorKey
-from catchup.connector_core.ports.metadata_sync import MetadataSyncRequest
-from catchup.connector_core.ports.metadata_sync import MetadataSyncResult
 from catchup.connectors.channel_talk.schemas._parsing import _parse_manager_ids
 from catchup.connectors.channel_talk.schemas._parsing import _parse_metadata_page
 from catchup.connectors.channel_talk.schemas._parsing import _PayloadReader
@@ -120,33 +117,6 @@ class ChannelTalkCurrentChannel(BaseModel):
     @property
     def channel_name(self) -> str:
         return self.channel.channel_name
-
-
-
-
-
-
-
-
-
-
-class ChannelTalkMetadataSyncRequest(BaseModel):
-    channel_id: str
-
-    @field_validator("channel_id")
-    @classmethod
-    def validate_channel_id(cls, value: str) -> str:
-        return require_text(value, "channel_id")
-
-    def to_core_request(self) -> MetadataSyncRequest:
-        # outer/domain layer의 channel_id를
-        # generic core request의 tenant_id로 바꿔 넘긴다.
-        return MetadataSyncRequest(
-            connector=ConnectorKey.CHANNEL_TALK,
-            tenant_id=self.channel_id,
-        )
-
-
 class ChannelTalkGroupManagerMembership(BaseModel):
     channel_id: str
     group_id: str
@@ -156,37 +126,6 @@ class ChannelTalkGroupManagerMembership(BaseModel):
     @classmethod
     def validate_membership_required_text(cls, value: str, info: ValidationInfo) -> str:
         return require_text(value, _validation_field_name(info))
-
-
-class ChannelTalkMetadataSyncResult(BaseModel):
-    connector: ConnectorKey
-    channel_id: str
-    channel_synced: bool = False
-    managers_synced: int = 0
-    groups_synced: int = 0
-    group_manager_links_synced: int = 0
-
-    @classmethod
-    def from_core_result(cls, result: MetadataSyncResult) -> "ChannelTalkMetadataSyncResult":
-        # core result는 generic step map만 알기 때문에,
-        # Channel Talk에서 읽기 좋은 요약값으로 여기서 다시 조립한다.
-        channel_step = result.step_result("channel")
-        managers_step = result.step_result("managers")
-        groups_step = result.step_result("groups")
-        group_memberships_step = result.step_result("group_memberships")
-
-        return cls(
-            connector=result.connector,
-            channel_id=result.tenant_id,
-            channel_synced=(channel_step.synced_count > 0) if channel_step else False,
-            managers_synced=managers_step.synced_count if managers_step else 0,
-            groups_synced=groups_step.synced_count if groups_step else 0,
-            group_manager_links_synced=(
-                group_memberships_step.synced_count if group_memberships_step else 0
-            ),
-        )
-
-
 ChannelTalkChannelMetadata = ChannelTalkChannel
 
 

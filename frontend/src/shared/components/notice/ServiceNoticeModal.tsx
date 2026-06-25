@@ -32,27 +32,27 @@ export default function ServiceNoticeModal({ open, onOpenChange, notice, onDismi
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent hideClose className="border-edge-normal w-120 max-w-none gap-5 border p-6">
+      <DialogContent hideClose className="border-line-normal-normal w-120 max-w-none gap-5 border p-6">
         <div className="flex flex-col gap-3">
           <div className="flex items-center justify-between">
             <span className="bg-fill-primary-normal-neutral rounded-md2 flex items-center gap-1 px-1.5 py-0.5">
-              <Megaphone className="text-content-primary size-4.5" aria-hidden="true" />
-              <span className="text-body-xsmall text-content-primary">공지</span>
+              <Megaphone className="text-text-primary-normal size-4.5" aria-hidden="true" />
+              <span className="text-body-xsmall text-text-primary-normal">공지</span>
             </span>
             <button
               type="button"
               aria-label="닫기"
               onClick={handleClose}
-              className="border-edge-neutral bg-fill-normal flex size-9 cursor-pointer items-center justify-center rounded-lg border p-1.5"
+              className="border-line-normal-neutral bg-fill-normal-normal flex size-9 cursor-pointer items-center justify-center rounded-lg border p-1.5"
             >
-              <Cancel className="text-icon-normal size-6" aria-hidden="true" />
+              <Cancel className="text-icon-normal-normal size-6" aria-hidden="true" />
             </button>
           </div>
 
           <DialogTitle>{notice.title}</DialogTitle>
           <DialogDescription className="sr-only">서비스 장애 또는 정상화에 대한 공지 내용입니다.</DialogDescription>
 
-          <section className="bg-fill-primary-assistive text-body-small text-content-normal space-y-5.5 rounded-xl p-5">
+          <section className="bg-fill-primary-normal-assistive text-body-small text-text-normal-normal space-y-5.5 rounded-xl p-5">
             {notice.body}
           </section>
         </div>
@@ -68,12 +68,12 @@ export default function ServiceNoticeModal({ open, onOpenChange, notice, onDismi
               checked={dontShowAgain}
               onChange={(e) => setDontShowAgain(e.target.checked)}
             />
-            <span className="text-body-small text-content-alternative">다시 보지 않기</span>
+            <span className="text-body-small text-text-normal-alternative">다시 보지 않기</span>
           </label>
           <button
             type="button"
             onClick={handleClose}
-            className="border-edge-neutral bg-fill-normal text-body-medium text-content-neutral hover:bg-fill-interaction-hover flex h-11.5 w-full cursor-pointer items-center justify-center rounded-lg border px-4 py-1.5"
+            className="border-line-normal-neutral bg-fill-normal-normal text-body-medium text-text-normal-neutral hover:bg-fill-normal-interaction-hover flex h-11.5 w-full cursor-pointer items-center justify-center rounded-lg border px-4 py-1.5"
           >
             닫기
           </button>

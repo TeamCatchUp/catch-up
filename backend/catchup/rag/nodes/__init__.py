@@ -6,6 +6,7 @@ from .generate_final_answer import generate_final_answer_node
 from .generate_final_answer_fast import generate_final_answer_fast_node
 from .generate_vector_queries import generate_vector_queries_node
 from .rerank import rerank_node
+from .rerank import select_final_docs_node
 from .rewrite import rewrite_node
 from .search_vector_db import search_vector_db_node
 from .supervisor import supervisor_node
@@ -18,6 +19,7 @@ __all__ = [
     "generate_vector_queries_node",
     "search_vector_db_node",
     "rerank_node",
+    "select_final_docs_node",
     "generate_final_answer_node",
     "generate_final_answer_fast_node",
     "merge_cache_node",

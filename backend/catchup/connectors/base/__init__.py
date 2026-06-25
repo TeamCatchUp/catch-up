@@ -14,18 +14,14 @@ Utils:
     - make_document_id: Document ID 생성
 """
 
-from catchup.connectors.base.exceptions import (
-    AuthenticationError,
-    ConnectorApiError,
-    ForbiddenError,
-    NotFoundError,
-    RateLimitError,
-)
-from catchup.connectors.base.utils import (
-    clean_markdown,
-    format_file_size,
-    make_document_id,
-)
+from catchup.connectors.base.exceptions import AuthenticationError
+from catchup.connectors.base.exceptions import ConnectorApiError
+from catchup.connectors.base.exceptions import ForbiddenError
+from catchup.connectors.base.exceptions import NotFoundError
+from catchup.connectors.base.exceptions import RateLimitError
+from catchup.connectors.base.utils import clean_markdown
+from catchup.connectors.base.utils import format_file_size
+from catchup.connectors.base.utils import make_document_id
 
 __all__ = [
     # Exceptions

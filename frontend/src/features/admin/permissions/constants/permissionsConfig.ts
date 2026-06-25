@@ -23,8 +23,8 @@ export const ROLE_LABEL: Record<PermissionRole, 'Admin' | 'Member'> = {
 };
 
 export const ROLE_BADGE_CLASS: Record<'Admin' | 'Member', string> = {
-  Admin: 'bg-fill-primary-normal-neutral text-content-primary',
-  Member: 'bg-fill-interaction-hover text-content-alternative',
+  Admin: 'bg-fill-primary-normal-neutral text-text-primary-normal',
+  Member: 'bg-fill-normal-interaction-hover text-text-normal-alternative',
 };
 
 export const ROLE_FILTER_OPTIONS = [

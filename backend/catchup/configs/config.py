@@ -33,7 +33,7 @@ class Settings(BaseSettings):
     DEBUGGER_ENABLED: bool = False
     DEBUGGER_PORT: int = 5678
     PYINSTRUMENT_ENABLED: bool = False
-    DEBUG_PROD_MODE: bool = True
+    DEBUG_API_ENABLED: bool = False
     
     #=============================#
     #     System Base Settings    #
@@ -142,8 +142,7 @@ class Settings(BaseSettings):
     #     RAG Parameters    #
     #=======================#
     # Custom Rerank Parameters
-    RERANK_TOP_N: int
-    RERANK_TOTAL_K: int
+    RERANK_TOP_N: int = 50
 
     #=======================================#
     #     Knowledge Source Integrations     #
@@ -205,6 +204,15 @@ class Settings(BaseSettings):
     PGVECTOR_COLLECTION_NAME: str = "vectorstore"  # 통합 Collection (Jira, Slack, GitHub 등)
     PGVECTOR_EMBEDDING_DIMENSIONS: int = 1536  # Cohere embed-v4.0
     PGVECTOR_HNSW_INDEX_ENABLED: bool = False  # HNSW 인덱스 활성화 여부 (메모리 비용 및 고객사 RDS 호환성 협의 전까지 비활성화)
+    VECTOR_STORE_V2_DUAL_WRITE_ENABLED: bool = False
+    VECTOR_STORE_V2_BACKFILL_SCHEDULE_ENABLED: bool = False
+    VECTOR_STORE_V2_BACKFILL_BATCH_SIZE: int = 500
+    VECTOR_STORE_V2_BACKFILL_SEED_PAGE_SIZE: int = 500
+    VECTOR_STORE_V2_BACKFILL_CRON_HOUR: int = 16
+    VECTOR_STORE_V2_BACKFILL_CRON_MINUTE: int = 55
+    VECTOR_STORE_V2_BACKFILL_TARGET_CONCURRENCY: int = 3
+    VECTOR_STORE_V2_BACKFILL_FAILED_RETRY_DELAY_MINUTES: int = 60
+    VECTOR_STORE_V2_BACKFILL_PROCESSING_STALE_AFTER_MINUTES: int = 360
 
     # Embedding Settings (Bedrock Codere Embed 4)
     EMBEDDING_MAX_CONCURRENCY: int = 5  # 동시 Embedding API 호출 수
@@ -252,6 +260,8 @@ class Settings(BaseSettings):
     GITHUB_SYNC_COMMENTS_LIMIT: int = 10  # Issue/PR에 포함할 최근 코멘트 수
     # api_server 시작 시 Sync Worker 자동 기동 여부
     SYNC_WORKER_AUTOSTART: bool = True
+    # api_server 시작 시 Agent Trigger stream/TTL listener 자동 기동 여부
+    AGENT_TRIGGER_WORKER_AUTOSTART: bool = True
     # 큐가 비었을 때 worker 루프 대기 시간(초)
     SYNC_WORKER_IDLE_SLEEP_SECONDS: float = 0.5
     # Redis blocking pop timeout(초)
@@ -296,7 +306,9 @@ class Settings(BaseSettings):
     #=======================================#
     #               MCP Server              #
     #=======================================#
-    MCP_SERVER_ENABLED: bool = False
+    MCP_SERVER_ENABLED: bool = True
+    MCP_OAUTH_ENABLED: bool = True
+    MCP_V2_SAMPLING_ENABLED: bool = False
 
     model_config = SettingsConfigDict(
         env_file=".env",

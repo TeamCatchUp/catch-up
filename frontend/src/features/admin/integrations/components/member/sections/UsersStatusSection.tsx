@@ -277,10 +277,10 @@ export default function UsersStatusSection({
     <section className="flex w-full flex-col gap-3">
       {/* 헤더: 제목 + 설명 */}
       <div className="flex flex-col gap-0.5">
-        <h2 className="text-heading-large text-content-normal">
-          이용자 계정 등록 상태 <span className="text-content-primary-assistive">{total}</span>
+        <h2 className="text-heading-large text-text-normal-normal">
+          이용자 계정 등록 상태 <span className="text-text-primary-assistive">{total}</span>
         </h2>
-        <p className="text-body-small text-content-alternative">
+        <p className="text-body-small text-text-normal-alternative">
           Catch Up 사용자의 협업 툴 계정 등록 상태를 확인할 수 있어요.
         </p>
       </div>
@@ -300,8 +300,8 @@ export default function UsersStatusSection({
                 onClick={() => onFilterChange(key)}
                 className={cn(
                   isSelected
-                    ? 'bg-fill-normal border-edge-strong text-content-normal'
-                    : 'text-content-alternative border-transparent bg-transparent',
+                    ? 'bg-fill-normal-normal border-line-normal-strong text-text-normal-normal'
+                    : 'text-text-normal-alternative border-transparent bg-transparent',
                 )}
               >
                 {label}
@@ -332,7 +332,7 @@ export default function UsersStatusSection({
             이용자 DB 동기화
           </Button>
 
-          <IconDivider className="text-edge-strong h-6 w-6 shrink-0" />
+          <IconDivider className="text-line-normal-strong h-6 w-6 shrink-0" />
 
           <Button
             variant="box-outline-gray"
@@ -390,11 +390,11 @@ export default function UsersStatusSection({
         <div className="flex flex-1 items-center justify-end gap-6">
           <div className="flex items-center gap-2">
             <div className="bg-status-positive h-2 w-2 rounded-full" />
-            <p className="text-body-small text-content-alternative">모두 연동된 이용자</p>
+            <p className="text-body-small text-text-normal-alternative">모두 연동된 이용자</p>
           </div>
           <div className="flex items-center gap-2">
-            <div className="bg-accent-red h-2 w-2 rounded-full" />
-            <p className="text-body-small text-content-alternative">연동되지 않은 이용자</p>
+            <div className="bg-accent-red-default h-2 w-2 rounded-full" />
+            <p className="text-body-small text-text-normal-alternative">연동되지 않은 이용자</p>
           </div>
         </div>
       </div>

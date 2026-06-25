@@ -43,6 +43,8 @@ from catchup.connectors.github.queries import ORG_MEMBERS_QUERY
 from catchup.connectors.github.queries import PULL_REQUEST_BY_NUMBER_QUERY
 from catchup.connectors.github.queries import PULL_REQUEST_NUMBERS_QUERY
 from catchup.connectors.github.queries import PULL_REQUESTS_QUERY
+from catchup.connectors.github.queries import build_issues_by_numbers_query
+from catchup.connectors.github.queries import build_pull_requests_by_numbers_query
 
 logger = logging.getLogger(__name__)
 
@@ -1094,3 +1096,51 @@ class GitHubApiClient:
             },
         )
         return response.get("repository", {}).get("pullRequest")
+
+    async def get_issues_graphql(
+        self,
+        owner: str,
+        repo: str,
+        numbers: list[int],
+    ) -> dict[str, dict[str, Any]]:
+        unique_numbers = list(dict.fromkeys(numbers))
+        if not unique_numbers:
+            return {}
+
+        response = await self._graphql(
+            build_issues_by_numbers_query(unique_numbers),
+            {
+                "owner": owner,
+                "repo": repo,
+            },
+        )
+        repository = response.get("repository", {}) or {}
+        return {
+            str(number): node
+            for number in unique_numbers
+            if (node := repository.get(f"issue_{number}")) is not None
+        }
+
+    async def get_pull_requests_graphql(
+        self,
+        owner: str,
+        repo: str,
+        numbers: list[int],
+    ) -> dict[str, dict[str, Any]]:
+        unique_numbers = list(dict.fromkeys(numbers))
+        if not unique_numbers:
+            return {}
+
+        response = await self._graphql(
+            build_pull_requests_by_numbers_query(unique_numbers),
+            {
+                "owner": owner,
+                "repo": repo,
+            },
+        )
+        repository = response.get("repository", {}) or {}
+        return {
+            str(number): node
+            for number in unique_numbers
+            if (node := repository.get(f"pr_{number}")) is not None
+        }

@@ -2,7 +2,7 @@
 import pytest
 from langchain_core.documents import Document
 
-from catchup.rag.nodes.rerank.rerank import _apply_two_pool_selection
+from catchup.rag.nodes.rerank.final_doc_selection import _apply_two_pool_selection
 from catchup.rag.nodes.utils import get_document_id
 
 

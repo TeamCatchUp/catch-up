@@ -19,7 +19,6 @@ from catchup.chat.integrations.slack_app_mention import (
 )
 from catchup.chat.integrations.slack_app_mention import parse_app_mention_event
 from catchup.connectors.slack.client import SlackApiClientWrapper
-from catchup.connectors.slack.transformers import SlackTransformer
 from catchup.db.engine import SessionLocal
 from catchup.db.models import SourceType
 from catchup.db.slack.oauth_repository import get_slack_token_by_team_id
@@ -27,6 +26,7 @@ from catchup.db.user_source_mapping import find_user_names_by_source_mappings
 from catchup.server.connector.slack.feedback_actions import build_signup_prompt_blocks
 from catchup.server.connector.slack.plan_stream import SlackPlanResponder
 from catchup.server.connector.slack.schemas import SlackWebhookRequest
+from catchup.sync.ingestion.document_builders.slack import SlackTransformer
 
 logger = structlog.get_logger(__name__)
 

@@ -13,23 +13,46 @@ class _ArticleContentBlock:
     text: str
 
 
+@dataclass(frozen=True)
+class ArticleContentChunk:
+    contextual_content: str
+    body_text: str
+
+
 @dataclass
 class _ArticleLeafSection:
     hierarchy: list[str]
     content_blocks: list[_ArticleContentBlock]
     parent_key: str
+    heading_text: str | None = None
 
 
 class ArticleChunker:
     """정규화된 article text를 heading hierarchy를 보존하는 chunk로 분할한다."""
 
     def chunk_article_content(self, *, header: str, body: str) -> tuple[str, ...]:
+        chunks = self.chunk_article_content_with_body(header=header, body=body)
+        return tuple(chunk.contextual_content for chunk in chunks) or (header,)
+
+    def chunk_article_content_with_body(
+        self,
+        *,
+        header: str,
+        body: str,
+    ) -> tuple[ArticleContentChunk, ...]:
         # Chunking 전체 흐름: section 구성 -> 작은 section 병합 -> 큰 section 분할 -> 최종 chunk text 생성.
         # header 길이를 budget에서 제외해 title/context가 붙어도 max size를 넘지 않게 한다.
         budget = self._article_chunk_budget(header)
         leaves = self._build_article_leaf_sections(body)
         if not leaves:
-            return (header,)
+            fallback_body = body.strip()
+            fallback_context = header.strip() or fallback_body
+            return (
+                ArticleContentChunk(
+                    contextual_content=fallback_context,
+                    body_text=fallback_body,
+                ),
+            )
 
         merged = self._merge_small_article_sections(leaves, max_chars=budget["max"])
         split = self._split_large_article_sections(
@@ -45,7 +68,7 @@ class ArticleChunker:
             header=header,
             leaves=post_merged,
         )
-        return tuple(chunks) or (header,)
+        return tuple(chunks)
 
     @staticmethod
     def _article_chunk_budget(header: str) -> dict[str, int]:
@@ -67,9 +90,10 @@ class ArticleChunker:
         leaves: list[_ArticleLeafSection] = []
         hierarchy: list[str] = []
         blocks: list[_ArticleContentBlock] = []
+        current_heading_text: str | None = None
 
         def flush() -> None:
-            nonlocal blocks
+            nonlocal blocks, current_heading_text
             if not blocks:
                 return
             leaves.append(
@@ -77,9 +101,11 @@ class ArticleChunker:
                     hierarchy=list(hierarchy),
                     content_blocks=blocks,
                     parent_key=" > ".join(hierarchy[:-1]),
+                    heading_text=current_heading_text,
                 )
             )
             blocks = []
+            current_heading_text = None
 
         for paragraph in paragraphs:
             heading = self._parse_article_heading(paragraph)
@@ -90,6 +116,7 @@ class ArticleChunker:
                     hierarchy = [text]
                 else:
                     hierarchy = hierarchy[: max(level - 1, 0)] + [text]
+                current_heading_text = paragraph
                 continue
 
             blocks.append(
@@ -176,6 +203,7 @@ class ArticleChunker:
                             appended=next_leaf,
                         ),
                         parent_key=current.parent_key,
+                        heading_text=current.heading_text,
                     )
                     i += 1
                     continue
@@ -218,9 +246,10 @@ class ArticleChunker:
         split_result: list[_ArticleLeafSection] = []
         current_blocks: list[_ArticleContentBlock] = []
         current_len = 0
+        heading_text = leaf.heading_text
 
         def emit_current() -> None:
-            nonlocal current_blocks, current_len
+            nonlocal current_blocks, current_len, heading_text
             if not current_blocks:
                 return
             split_result.append(
@@ -228,10 +257,12 @@ class ArticleChunker:
                     hierarchy=list(leaf.hierarchy),
                     content_blocks=current_blocks,
                     parent_key=leaf.parent_key,
+                    heading_text=heading_text,
                 )
             )
             current_blocks = []
             current_len = 0
+            heading_text = None
 
         for block in leaf.content_blocks:
             block_len = len(block.text)
@@ -246,8 +277,10 @@ class ArticleChunker:
                             hierarchy=list(leaf.hierarchy),
                             content_blocks=[sub_block],
                             parent_key=leaf.parent_key,
+                            heading_text=heading_text,
                         )
                     )
+                    heading_text = None
                 continue
 
             if current_blocks and current_len + block_len > target_chars:
@@ -447,6 +480,7 @@ class ArticleChunker:
                         appended=current,
                     ),
                     parent_key=prev.parent_key,
+                    heading_text=prev.heading_text,
                 )
                 result.pop(i)
                 continue
@@ -459,6 +493,7 @@ class ArticleChunker:
                         appended=next_leaf,
                     ),
                     parent_key=next_leaf.parent_key,
+                    heading_text=current.heading_text,
                 )
                 result.pop(i + 1)
                 continue
@@ -551,22 +586,36 @@ class ArticleChunker:
         *,
         header: str,
         leaves: list[_ArticleLeafSection],
-    ) -> list[str]:
+    ) -> list[ArticleContentChunk]:
         # 최종 chunk 생성 단계: article title과 section path를 heading으로 붙여
         # 개별 chunk만 봐도 원문 내 위치를 알 수 있게 한다.
-        chunks: list[str] = []
+        chunks: list[ArticleContentChunk] = []
         for leaf in leaves:
-            body = "\n\n".join(
+            context_body = "\n\n".join(
                 block.text for block in leaf.content_blocks if block.text
             ).strip()
+            body = self._build_article_chunk_body_text(leaf)
             content_parts = []
             chunk_heading = self._build_article_chunk_heading(header, leaf.hierarchy)
             if chunk_heading:
                 content_parts.append(chunk_heading)
-            if body:
-                content_parts.append(body)
-            chunks.append("\n\n".join(content_parts).strip())
+            if context_body:
+                content_parts.append(context_body)
+            chunks.append(
+                ArticleContentChunk(
+                    contextual_content="\n\n".join(content_parts).strip(),
+                    body_text=body,
+                )
+            )
         return chunks
+
+    @staticmethod
+    def _build_article_chunk_body_text(leaf: _ArticleLeafSection) -> str:
+        body_parts = []
+        if leaf.heading_text:
+            body_parts.append(leaf.heading_text)
+        body_parts.extend(block.text for block in leaf.content_blocks if block.text)
+        return "\n\n".join(body_parts).strip()
 
     @staticmethod
     def _build_article_chunk_heading(article_title: str, hierarchy: list[str]) -> str:

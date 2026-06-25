@@ -7,16 +7,14 @@ from fastapi import Query
 from fastapi import status
 
 from catchup.auth.dependencies import require_admin_user
-from catchup.connector_core.adapters.connection_status import ConnectionStatusAdapter
-from catchup.connector_core.application.connection_status import (
-    ConnectionStatusApplication,
-)
-from catchup.connector_core.ports.connection_status import ConnectionStatus
 from catchup.mapping.user_source_mapping_models import MappingStatusResponse
 from catchup.mapping.user_source_mapping_models import UserSourceMappingRefreshResponse
 from catchup.mapping.user_source_mapping_models import UserSourceMappingResponse
 from catchup.mapping.user_source_mapping_models import UserSourceMappingStatus
 from catchup.mapping.user_source_mapping_service import UserSourceMappingApplication
+from catchup.server.integrations.connection_status import ConnectionStatus
+from catchup.server.integrations.connection_status import ConnectionStatusAdapter
+from catchup.server.integrations.connection_status import ConnectionStatusApplication
 
 connection_status_application = ConnectionStatusApplication(
     provider=ConnectionStatusAdapter(),

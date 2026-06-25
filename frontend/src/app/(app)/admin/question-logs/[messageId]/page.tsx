@@ -71,7 +71,7 @@ export default function QuestionLogDetailPage() {
       <DetailHeader userId={userId} userName={user?.name ?? ''} userDepartment={user?.department ?? ''} from={from} />
 
       {detailQuery.isLoading && (
-        <div className="text-body-small text-content-assistive py-4">데이터를 불러오는 중입니다...</div>
+        <div className="text-body-small text-text-normal-assistive py-4">데이터를 불러오는 중입니다...</div>
       )}
 
       {detailQuery.isError && (
@@ -107,13 +107,13 @@ export default function QuestionLogDetailPage() {
                   </ReactMarkdown>
                 </div>
               ) : (
-                <div className="text-body-small text-content-assistive">답변이 없습니다.</div>
+                <div className="text-body-small text-text-normal-assistive">답변이 없습니다.</div>
               )}
             </div>
           </div>
 
           {/* 사이드바 */}
-          <div className="border-edge-neutral bg-fill-normal hidden w-100 shrink-0 flex-col rounded-xl border lg:flex">
+          <div className="border-line-normal-neutral bg-fill-normal-normal hidden w-100 shrink-0 flex-col rounded-xl border lg:flex">
             <SidebarHeader sourceCount={sourceCount} />
             <div className="min-h-0 flex-1 overflow-y-auto">
               <SourceList sources={sources} answerContent={answer?.content ?? ''} />

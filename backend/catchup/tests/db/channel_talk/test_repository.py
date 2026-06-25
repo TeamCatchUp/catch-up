@@ -330,6 +330,11 @@ class ChannelTalkRepositoryTests(TestCase):
         )
 
         self.assertEqual(record.channel_id, "channel-123")
+        self.assertIsNotNone(record.id)
+        self.assertEqual(
+            self.credentials_repo.get_connection_by_id(record.id).channel_id,
+            "channel-123",
+        )
         self.assertEqual(self.credentials_repo.get_connection().channel_name, "Support")
         self.assertEqual(
             [item.channel_id for item in self.credentials_repo.list_connections()],

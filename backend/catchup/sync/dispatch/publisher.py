@@ -4,6 +4,7 @@ from typing import Sequence
 
 from fastapi.concurrency import run_in_threadpool
 
+from catchup.db.engine import SessionLocal
 from catchup.db.sync import SyncEventPublishResultInput
 from catchup.db.sync import claim_events_for_publish
 from catchup.db.sync import record_event_publish_outcomes
@@ -14,7 +15,6 @@ from catchup.sync.common.schemas import PublishTasksResult
 from catchup.sync.common.schemas import SyncStreamTask
 from catchup.sync.dispatch.types import DispatchContext
 from catchup.sync.dispatch.types import PublishDispatchInput
-from catchup.db.engine import SessionLocal
 
 
 class DispatchPublisher:

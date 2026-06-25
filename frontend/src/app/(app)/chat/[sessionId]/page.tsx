@@ -43,6 +43,7 @@ export default function RagAnswerPage() {
     scrollToMessageId,
     toolFilters: filters.selectedSources,
   });
+  const { hasOlderMessages, isLoadingOlderMessages, loadPreviousMessages } = chat;
 
   // 스크롤 완료 후 URL에서 scrollTo 파라미터 제거 (React 리렌더링 없이 URL만 변경)
   const handleScrollToComplete = useCallback(() => {
@@ -89,13 +90,13 @@ export default function RagAnswerPage() {
 
     const observer = new IntersectionObserver(
       ([entry]) => {
-        if (entry.isIntersecting && chat.hasOlderMessages && !chat.isLoadingOlderMessages) {
+        if (entry.isIntersecting && hasOlderMessages && !isLoadingOlderMessages) {
           // 스크롤 위치 보정을 위해 로드 전 상태 저장
           const container = scrollContainerForPaginationRef.current;
           const prevScrollHeight = container?.scrollHeight ?? 0;
           const prevScrollTop = container?.scrollTop ?? 0;
 
-          chat.loadPreviousMessages().then((prependedPairs) => {
+          loadPreviousMessages().then((prependedPairs) => {
             // prepend된 user 페어 수만큼 activePairIndex 보정 (동일 인덱스가 다른 페어를 가리키지 않게)
             if (prependedPairs > 0) shiftActivePairIndex(prependedPairs);
             // 이전 메시지가 위에 삽입된 후 스크롤 위치 보정
@@ -111,7 +112,7 @@ export default function RagAnswerPage() {
     );
     observer.observe(el);
     return () => observer.disconnect();
-  }, [chat.hasOlderMessages, chat.isLoadingOlderMessages, chat.loadPreviousMessages, shiftActivePairIndex]);
+  }, [hasOlderMessages, isLoadingOlderMessages, loadPreviousMessages, shiftActivePairIndex]);
 
   return (
     <div className="flex h-screen w-full flex-col">
@@ -120,7 +121,7 @@ export default function RagAnswerPage() {
         {/* 메인 영역 */}
         <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
           {/* 스크롤 가능한 콘텐츠 영역 */}
-          <div className="border-edge-neutral relative flex flex-1 flex-col overflow-hidden border-r-0">
+          <div className="border-line-normal-neutral relative flex flex-1 flex-col overflow-hidden border-r-0">
             <div
               ref={combinedScrollContainerRef}
               className="custom-scrollbar flex flex-1 flex-col items-center overflow-y-auto scroll-smooth px-16 pt-3 pb-9"
@@ -128,17 +129,14 @@ export default function RagAnswerPage() {
               {/* 역방향 무한 스크롤 sentinel (위쪽) */}
               <div ref={topSentinelRef} className="h-1 w-full" />
               {chat.isLoadingOlderMessages && (
-                <div className="text-body-small text-content-assistive w-full py-4 text-center">
+                <div className="text-body-small text-text-normal-assistive w-full py-4 text-center">
                   이전 메시지를 불러오는 중...
                 </div>
               )}
 
               {/* 날짜 구분선 — 세션 첫 메시지의 생성 시각 기준 (messages는 created_at 오름차순 정렬 — sessionDataLoader 참고) */}
               {chat.chatData?.messages[0]?.timestamp && (
-                <DateDivider
-                  className="mb-8 w-full max-w-203"
-                  date={new Date(chat.chatData.messages[0].timestamp)}
-                />
+                <DateDivider className="mb-8 w-full max-w-203" date={new Date(chat.chatData.messages[0].timestamp)} />
               )}
 
               {/* 모든 Q&A 쌍을 순서대로 렌더링 */}
@@ -209,9 +207,7 @@ export default function RagAnswerPage() {
             로딩 후에는 activePairIndex 추종. mount 직후처럼 인덱스가 비어있으면 마지막 페어로 fallback. */}
         <RagSidebar
           currentQA={
-            chat.isLoading
-              ? qaPairs[qaPairs.length - 1]
-              : (qaPairs[activePairIndex] ?? qaPairs[qaPairs.length - 1])
+            chat.isLoading ? qaPairs[qaPairs.length - 1] : (qaPairs[activePairIndex] ?? qaPairs[qaPairs.length - 1])
           }
           isLoading={chat.isLoading}
           isError={chat.isError}

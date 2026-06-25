@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from pydantic import ConfigDict
 
 from catchup.connectors.channel_talk.core.client import ChannelTalkCoreApiClient
-from catchup.connectors.channel_talk.core.user_chat_full_sync_models import (
+from catchup.connectors.channel_talk.core.user_chat_fetch_models import (
     ChannelTalkUserChatFullSyncConnection,
 )
 from catchup.connectors.channel_talk.schemas.user_chat import ChannelTalkUserChatDetail

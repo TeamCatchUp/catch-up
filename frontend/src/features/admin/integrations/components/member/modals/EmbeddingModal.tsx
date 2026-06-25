@@ -157,11 +157,11 @@ export default function EmbeddingModal({ open, onOpenChange, service, serviceNam
     <Dialog open={open} onOpenChange={handleDialogOpenChange}>
       <DialogContent
         hideClose
-        className="border-edge-normal shadow-modal bg-fill-normal w-140 gap-4 rounded-3xl border p-0 py-5"
+        className="border-line-normal-normal shadow-modal bg-fill-normal-normal w-140 gap-4 rounded-3xl border p-0 py-5"
       >
         {/* 헤더 */}
         <div className="flex h-9 items-center gap-3 px-6">
-          <DialogTitle className="text-heading-large text-content-normal min-w-0 flex-1">
+          <DialogTitle className="text-heading-large text-text-normal-normal min-w-0 flex-1">
             임베딩 할 {serviceName} {itemLabel} 선택하기
           </DialogTitle>
           <button
@@ -170,15 +170,15 @@ export default function EmbeddingModal({ open, onOpenChange, service, serviceNam
             className="flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-lg"
             aria-label="닫기"
           >
-            <Cancel className="text-content-alternative size-6" />
+            <Cancel className="text-text-normal-alternative size-6" />
           </button>
         </div>
 
         {/* 바디 */}
-        <div className="border-edge-assistive flex max-h-152 min-h-102 flex-col gap-6 overflow-x-clip overflow-y-auto border-t px-6 pt-6">
+        <div className="border-line-normal-assistive flex max-h-152 min-h-102 flex-col gap-6 overflow-x-clip overflow-y-auto border-t px-6 pt-6">
           {noScope ? (
             <div className="flex flex-1 items-center justify-center">
-              <span className="text-body-small text-content-assistive">
+              <span className="text-body-small text-text-normal-assistive">
                 연동된 {serviceName}이(가) 없습니다. 먼저 연동을 완료해주세요.
               </span>
             </div>
@@ -187,8 +187,10 @@ export default function EmbeddingModal({ open, onOpenChange, service, serviceNam
               {/* 기간 선택 */}
               <div className="flex flex-col gap-2.5">
                 <div className="flex items-center gap-1">
-                  <span className="text-body-medium text-content-strong">임베딩 할 데이터의 기간을 선택해 주세요.</span>
-                  <span className="bg-accent-red-orange block size-1.25 shrink-0 rounded-full" />
+                  <span className="text-body-medium text-text-normal-strong">
+                    임베딩 할 데이터의 기간을 선택해 주세요.
+                  </span>
+                  <span className="bg-accent-red-orange-default block size-1.25 shrink-0 rounded-full" />
                 </div>
                 <div className="flex gap-2">
                   {PERIOD_OPTIONS.map((period) => (
@@ -199,8 +201,8 @@ export default function EmbeddingModal({ open, onOpenChange, service, serviceNam
                       className={cn(
                         'text-body-small h-9 cursor-pointer rounded-full px-3',
                         selectedPeriod === period
-                          ? 'bg-accent-black-lighten text-content-inverse'
-                          : 'border-edge-neutral bg-fill-normal text-content-neutral border',
+                          ? 'bg-accent-black-lighten text-text-normal-inverse'
+                          : 'border-line-normal-neutral bg-fill-normal-normal text-text-normal-neutral border',
                       )}
                     >
                       {period}
@@ -213,37 +215,37 @@ export default function EmbeddingModal({ open, onOpenChange, service, serviceNam
               <div className="flex flex-col gap-2.5">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1">
-                    <span className="text-body-medium text-content-strong">{itemLabel}를 선택해주세요.</span>
-                    <span className="bg-accent-red-orange block size-1.25 shrink-0 rounded-full" />
+                    <span className="text-body-medium text-text-normal-strong">{itemLabel}를 선택해주세요.</span>
+                    <span className="bg-accent-red-orange-default block size-1.25 shrink-0 rounded-full" />
                   </div>
                   <div className="flex items-center gap-3">
                     {selectedItems.size > 0 && (
-                      <span className="text-body-small text-content-primary">{selectedItems.size}개 선택됨</span>
+                      <span className="text-body-small text-text-primary-normal">{selectedItems.size}개 선택됨</span>
                     )}
                     <button type="button" onClick={toggleAll} className="flex cursor-pointer items-center gap-0.5">
                       <CheckboxIcon checked={isAllSelected} className="size-5" />
-                      <span className="text-body-small text-content-normal whitespace-nowrap">전체 선택하기</span>
+                      <span className="text-body-small text-text-normal-normal whitespace-nowrap">전체 선택하기</span>
                     </button>
                   </div>
                 </div>
-                <div className="bg-fill-strong border-edge-assistive flex items-center gap-1.5 rounded-lg border px-3 py-2">
-                  <IconSearch className="text-content-assistive size-5 shrink-0" />
+                <div className="bg-fill-normal-strong border-line-normal-assistive flex items-center gap-1.5 rounded-lg border px-3 py-2">
+                  <IconSearch className="text-text-normal-assistive size-5 shrink-0" />
                   <input
                     type="text"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder="검색어를 입력하세요."
-                    className="text-body-small text-content-normal placeholder:text-content-assistive min-w-0 flex-1 bg-transparent outline-none"
+                    className="text-body-small text-text-normal-normal placeholder:text-text-normal-assistive min-w-0 flex-1 bg-transparent outline-none"
                   />
                 </div>
 
                 {isScopeLoading || isTargetsLoading ? (
-                  <div className="border-edge-assistive overflow-clip rounded-xl border">
+                  <div className="border-line-normal-assistive overflow-clip rounded-xl border">
                     <div className="flex flex-col">
                       {Array.from({ length: 5 }).map((_, i) => (
                         <div
                           key={i}
-                          className="border-edge-assistive flex items-center gap-5 border-b px-5 py-3 last:border-b-0"
+                          className="border-line-normal-assistive flex items-center gap-5 border-b px-5 py-3 last:border-b-0"
                         >
                           <Skeleton className="h-4 flex-1" />
                           <Skeleton className="size-6 shrink-0 rounded" />

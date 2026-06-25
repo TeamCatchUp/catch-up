@@ -23,8 +23,8 @@ export default function VectorKeywordCodeBox({ queries }: VectorKeywordCodeBoxPr
   const isMulti = entries.length > 1;
 
   return (
-    <div className="bg-fill-normal border-edge-neutral w-full overflow-hidden rounded-xl border border-solid px-4 py-3">
-      <div className="text-body-xsmall text-content-alternative max-h-[226px] overflow-x-clip overflow-y-auto break-words whitespace-pre-wrap">
+    <div className="bg-fill-normal-normal border-line-normal-neutral w-full overflow-hidden rounded-xl border border-solid px-4 py-3">
+      <div className="text-body-xsmall text-text-normal-alternative max-h-[226px] overflow-x-clip overflow-y-auto break-words whitespace-pre-wrap">
         {entries.map((entry, idx) => (
           <div key={idx}>
             <span>vector{isMulti ? `[${idx}]` : ''}: </span>

@@ -1,4 +1,5 @@
 from collections import Counter
+from dataclasses import dataclass
 from datetime import datetime
 from datetime import timedelta
 from datetime import timezone
@@ -19,6 +20,36 @@ from catchup.search.planner.graph import get_search_planner_graph
 from catchup.search.planner.state import CachedSearch
 
 logger = structlog.get_logger()
+
+
+def resolve(
+    smart_filter: bool,
+    explicit: list | None,
+    inferred: list | None,
+) -> list | None:
+    """협업 툴 필터 resolve 함수. explicit가 falsy면 inferred 허용 여부를 판단한다."""
+    if explicit:
+        return explicit
+    if not smart_filter:
+        return None
+    if inferred:
+        return inferred
+    return None
+
+
+@dataclass
+class SearchResult:
+    """manual search 결과를 담는 데이터클래스."""
+
+    results: list[BaseSource]
+    total: int
+    source_distribution: dict[str, int]
+    effective_tool_filters: list[SourceType] | None
+    effective_start_date: datetime | None
+    effective_end_date: datetime | None
+    is_tool_filter_inferred: bool
+    is_date_filter_inferred: bool
+
 
 observe = get_observe()
 
@@ -57,9 +88,10 @@ class ManualSearchService:
         keyword: str,
         tool_filters: list[SourceType] | None,
         vector_db_service: PGVectorService,
+        smart_filter: bool = False,
         start_date: datetime | None = None,
         end_date: datetime | None = None,
-    ) -> tuple[list[BaseSource], int, dict[str, int]]:
+    ) -> SearchResult:
         planner = self._get_planner()
         _, invoke_config = self._setup_config(user.id)
 
@@ -83,16 +115,41 @@ class ManualSearchService:
 
         planned = state["query_cache"][keyword].planned
 
+        resolved_tool_filters = resolve(
+            smart_filter, tool_filters, planned.inferred_tool_filters
+        )
+
+        # 날짜는 start/end pair 단위로 resolve한다 — 독립 resolve 금지
+        # UI에서 start 또는 end 중 하나라도 지정했으면 UI pair 우선
+        explicit_date = start_date or end_date
+        if explicit_date:
+            resolved_start, resolved_end = start_date, end_date
+        elif not smart_filter:
+            resolved_start, resolved_end = None, None
+        else:
+            resolved_start, resolved_end = planned.start_date, planned.end_date
+
+        is_tool_filter_inferred = (
+            smart_filter
+            and not tool_filters
+            and planned.inferred_tool_filters is not None
+        )
+        is_date_filter_inferred = (
+            smart_filter
+            and not explicit_date
+            and (planned.start_date is not None or planned.end_date is not None)
+        )
+
         temporal_filters = build_manual_search_temporal_filters(
-            tool_filters=tool_filters,
-            start_date=start_date,
-            end_date=end_date,
+            tool_filters=resolved_tool_filters,
+            start_date=resolved_start,
+            end_date=resolved_end,
         ) or None
 
         all_docs = await vector_db_service.hybrid_search(
             query=planned.query,
             k=_MANUAL_SEARCH_POOL_SIZE,
-            tool_filters=tool_filters,
+            tool_filters=resolved_tool_filters,
             keyword_tokens=planned.keyword_tokens or None,
             offset=0,
             temporal_filters=temporal_filters,
@@ -117,6 +174,9 @@ class ManualSearchService:
             raw_count=len(all_docs),
             deduped_count=total,
             source_distribution=source_distribution,
+            effective_tool_filters=resolved_tool_filters,
+            is_tool_filter_inferred=is_tool_filter_inferred,
+            is_date_filter_inferred=is_date_filter_inferred,
         )
 
         results = [
@@ -128,14 +188,23 @@ class ManualSearchService:
             for i, doc in enumerate(deduped_docs)
         ]
 
-        return results, total, source_distribution
+        return SearchResult(
+            results=results,
+            total=total,
+            source_distribution=source_distribution,
+            effective_tool_filters=resolved_tool_filters,
+            effective_start_date=resolved_start,
+            effective_end_date=resolved_end,
+            is_tool_filter_inferred=is_tool_filter_inferred,
+            is_date_filter_inferred=is_date_filter_inferred,
+        )
 
     async def get_search_history(
         self,
         user: User,
         period: str,
     ) -> list[tuple[str, datetime]]:
-        """query_cache에서 period 기준으로 필터링한 최근 검색어를 최신순으로 반환."""
+        """query_cache에서 period 기준으로 필터링한 최근 검색어를 최신순으로 반환한다."""
         planner = self._get_planner()
         base_config, _ = self._setup_config(user.id)
         snapshot = await planner.aget_state(base_config)

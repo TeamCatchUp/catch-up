@@ -8,7 +8,7 @@ export const GUIDE_CARDS = [
   {
     id: 2,
     title: '원하는 답을 한 번에 얻는 비결',
-    description: '질문이 구체적일수록 AI가 더 정확하게 대답해요.\n어떻게 질문을 작성하면 좋은지 알려드려요.',
+    description: '질문이 구체적일수록 답변이 정확해요.\n질문 작성 방법을 확인해보세요.',
     image: '/image/help/light/accurate-answers.jpg',
   },
   {

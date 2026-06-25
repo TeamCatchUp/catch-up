@@ -15,6 +15,21 @@ class ManualSearchResponse(BaseModel):
     source_distribution: dict[str, int] = Field(
         ..., description="전체 결과의 출처별 문서 수"
     )
+    effective_tool_filters: list[str] | None = Field(
+        default=None, description="실제 적용된 협업 툴 필터"
+    )
+    effective_start_date: datetime | None = Field(
+        default=None, description="실제 적용된 검색 시작 날짜 (UTC)"
+    )
+    effective_end_date: datetime | None = Field(
+        default=None, description="실제 적용된 검색 종료 날짜 (UTC)"
+    )
+    is_tool_filter_inferred: bool = Field(
+        default=False, description="협업 툴 필터가 LLM 추론으로 결정됐는지 여부"
+    )
+    is_date_filter_inferred: bool = Field(
+        default=False, description="날짜 필터가 LLM 추론으로 결정됐는지 여부"
+    )
 
 
 class ManualSearchHistoryResponse(BaseModel):

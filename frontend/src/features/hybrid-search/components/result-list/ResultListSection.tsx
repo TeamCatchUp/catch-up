@@ -54,6 +54,7 @@ interface ResultListSectionProps {
   // scope 는 빈 배열일 때 5종 fallback 이 적용된 값이라 라벨 표시용으로 부적절.
   tools?: ToolFilter[];
   dateRange: DateRange | undefined;
+  smartFilter: boolean;
   sortOrder: SortOrder;
   active: ActiveTab;
   page: number;
@@ -69,6 +70,7 @@ export default function ResultListSection({
   scope,
   tools = [],
   dateRange,
+  smartFilter,
   sortOrder,
   active,
   page,
@@ -77,7 +79,7 @@ export default function ResultListSection({
   onSelectSource,
 }: ResultListSectionProps) {
   const { start, end } = dateRangeToUrlParams(dateRange);
-  const query = useHybridSearch({ keyword, scope, start, end });
+  const query = useHybridSearch({ keyword, toolFilters: tools, start, end, smartFilter });
   const hasSearchFilterLabel = Boolean(dateRange?.from) || tools.length > 0;
 
   // active가 scope 밖이면 결과 없음 (사용자가 보지 못한 source 탭 클릭한 경우).
@@ -147,7 +149,7 @@ export default function ResultListSection({
           >
             {/* bg Fill/Normal/Strong + 1000px pill 컨테이너. 카드 첫 번째와 mb-1.5 (6px) gap. */}
             {hasSearchFilterLabel && (
-              <div className="bg-fill-strong mb-1.5 flex w-full items-center justify-between rounded-full px-1.5 py-1">
+              <div className="bg-fill-normal-strong mb-1.5 flex w-full items-center justify-between rounded-full px-1.5 py-1">
                 <div className="flex items-center gap-2.5">
                   {dateRange?.from && <SearchPeriodLabel dateRange={dateRange} />}
                   {dateRange?.from && tools.length > 0 && (
@@ -155,7 +157,7 @@ export default function ResultListSection({
                   )}
                   {tools.length > 0 && <SearchToolLabel tools={tools} />}
                 </div>
-                <span className="text-body-xsmall text-content-assistive shrink-0 px-2.5">
+                <span className="text-body-xsmall text-text-normal-assistive shrink-0 px-2.5">
                   {resultsData.totalCount}건의 검색 결과
                 </span>
               </div>

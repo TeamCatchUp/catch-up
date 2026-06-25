@@ -5,6 +5,7 @@ class AuditActor(BaseModel):
     sub: str | None = None
     user_id: int | None = None
     email: str | None = None
+    name: str | None = None
     role: str | None = None
     department: str | None = None
     
@@ -27,6 +28,7 @@ class AuditActor(BaseModel):
                 sub=sub,
                 user_id=user_id,
                 email=data.get("email"),
+                name=data.get("name"),
                 role=data.get("role"),
                 department=data.get("department")
             )

@@ -56,18 +56,26 @@ const ConnectorStatusIcon = ({ status, isSelected }: { status: ConnectorEmbeddin
   switch (status) {
     case 'in_progress':
       return (
-        <IconRotate className={cn('size-4.5', isSelected ? 'text-edge-primary-strong' : 'text-content-assistive')} />
+        <IconRotate
+          className={cn('size-4.5', isSelected ? 'text-line-primary-strong' : 'text-text-normal-assistive')}
+        />
       );
     case 'completed':
       return (
-        <IconCheckCircle className={cn('size-4.5', isSelected ? 'text-accent-green' : 'text-content-assistive')} />
+        <IconCheckCircle
+          className={cn('size-4.5', isSelected ? 'text-accent-green-default' : 'text-text-normal-assistive')}
+        />
       );
     case 'failed':
       return (
-        <IconDelete2 className={cn('size-4.5', isSelected ? 'text-status-destructive' : 'text-content-assistive')} />
+        <IconDelete2
+          className={cn('size-4.5', isSelected ? 'text-status-destructive' : 'text-text-normal-assistive')}
+        />
       );
     case 'idle':
-      return <IconClock className={cn('size-4.5', isSelected ? 'text-status-cautionary' : 'text-content-assistive')} />;
+      return (
+        <IconClock className={cn('size-4.5', isSelected ? 'text-status-cautionary' : 'text-text-normal-assistive')} />
+      );
   }
 };
 
@@ -112,11 +120,11 @@ export default function EmbeddingProgressPanel({
     return (
       <button
         onClick={() => setIsOpen(true)}
-        className="border-edge-assistive bg-fill-strong flex w-full cursor-pointer items-center gap-4 rounded-xl border px-4 py-2.5"
+        className="border-line-normal-assistive bg-fill-normal-strong flex w-full cursor-pointer items-center gap-4 rounded-xl border px-4 py-2.5"
       >
-        <IconProgress className="text-content-normal size-5" />
-        <span className="text-body-small text-content-normal flex-1 text-left">임베딩 진행 현황 보기</span>
-        <IconArrowDown className="text-content-assistive size-6" />
+        <IconProgress className="text-text-normal-normal size-5" />
+        <span className="text-body-small text-text-normal-normal flex-1 text-left">임베딩 진행 현황 보기</span>
+        <IconArrowDown className="text-text-normal-assistive size-6" />
       </button>
     );
   }
@@ -124,16 +132,16 @@ export default function EmbeddingProgressPanel({
   // 펼친 상태: 말풍선 삼각형 + 패널 본체
   return (
     <div className="flex animate-[panel-slide-down_250ms_ease-out] flex-col items-center">
-      <IconTriangleUp className="text-fill-interaction-hover h-3.75 w-7 shrink-0" />
-      <div className="bg-fill-interaction-hover flex w-full flex-col gap-4 rounded-2xl p-5">
+      <IconTriangleUp className="text-fill-normal-interaction-hover h-3.75 w-7 shrink-0" />
+      <div className="bg-fill-normal-interaction-hover flex w-full flex-col gap-4 rounded-2xl p-5">
         {/* 헤더 */}
         <button onClick={() => setIsOpen(false)} className="flex w-full cursor-pointer items-center justify-between">
           <div className="flex items-center gap-1.5 px-1.5">
-            <h3 className="text-heading-small text-content-normal">임베딩 진행 현황</h3>
-            <IconInfo className="text-content-assistive size-4.5" />
+            <h3 className="text-heading-small text-text-normal-normal">임베딩 진행 현황</h3>
+            <IconInfo className="text-text-normal-assistive size-4.5" />
           </div>
           <div className="p-1">
-            <IconArrowDown className="text-content-assistive size-6 rotate-180" />
+            <IconArrowDown className="text-text-normal-assistive size-6 rotate-180" />
           </div>
         </button>
 
@@ -153,21 +161,24 @@ export default function EmbeddingProgressPanel({
                   className={cn(
                     'flex h-12 w-58.5 cursor-pointer items-center gap-6 overflow-hidden rounded-full border px-5 py-2.5',
                     isSelected
-                      ? 'border-edge-primary bg-fill-primary-normal-neutral'
-                      : 'border-edge-neutral bg-fill-normal',
+                      ? 'border-line-primary-normal bg-fill-primary-normal-neutral'
+                      : 'border-line-normal-neutral bg-fill-normal-normal',
                   )}
                 >
                   <span
                     className={cn(
                       'text-body-small flex-1 text-left',
-                      isSelected ? 'text-content-primary' : 'text-content-neutral',
+                      isSelected ? 'text-text-primary-normal' : 'text-text-normal-neutral',
                     )}
                   >
                     {account?.name ?? connector}
                   </span>
                   <div className="flex items-center gap-1">
                     <span
-                      className={cn('text-body-xsmall', isSelected ? 'text-content-primary' : 'text-content-assistive')}
+                      className={cn(
+                        'text-body-xsmall',
+                        isSelected ? 'text-text-primary-normal' : 'text-text-normal-assistive',
+                      )}
                     >
                       {getConnectorStatusLabel(status)}
                     </span>

@@ -49,7 +49,7 @@ export default function FeatureUpdateNoticeModal({
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent
         hideClose
-        className="border-edge-strong flex w-175 max-w-none flex-col gap-2 rounded-3xl border p-8"
+        className="border-line-normal-strong flex w-175 max-w-none flex-col gap-2 rounded-3xl border p-8"
       >
         {/* 컬럼 1: 헤더 + 미디어 + 본문 + 불릿 + 팁 */}
         <div className="flex flex-col gap-6">
@@ -57,11 +57,11 @@ export default function FeatureUpdateNoticeModal({
           <div className="flex items-start gap-6">
             <div className="flex flex-1 flex-col gap-3">
               <span className="bg-fill-primary-normal-neutral rounded-md2 inline-flex w-fit items-center gap-1 px-1.5 py-0.5">
-                <Megaphone className="text-icon-primary size-4.5" aria-hidden="true" />
-                <span className="text-body-xsmall text-content-primary">{notice.tagLabel}</span>
+                <Megaphone className="text-icon-primary-normal size-4.5" aria-hidden="true" />
+                <span className="text-body-xsmall text-text-primary-normal">{notice.tagLabel}</span>
               </span>
-              <DialogTitle className="text-heading-xlarge text-content-strong">{notice.title}</DialogTitle>
-              <p className="text-body-medium text-content-normal">{notice.subtitle}</p>
+              <DialogTitle className="text-heading-xlarge text-text-normal-strong">{notice.title}</DialogTitle>
+              <p className="text-body-medium text-text-normal-normal">{notice.subtitle}</p>
             </div>
             <Button
               variant="icon-outline-gray"
@@ -76,45 +76,28 @@ export default function FeatureUpdateNoticeModal({
 
           {/* 미디어 */}
           <div className="relative h-50 w-full overflow-hidden rounded-xl">
-            <Image src={notice.imageSrc} alt={notice.imageAlt} fill className="object-cover" priority />
+            <Image src={notice.imageSrc} alt={notice.imageAlt} fill className="object-cover dark:hidden" priority />
+            <Image src={notice.imageDarkSrc} alt={notice.imageAlt} fill className="hidden object-cover dark:block" />
           </div>
 
           {/* 본문 */}
           <DialogDescription asChild>
-            <p className="text-body-small text-content-normal">
-              캐치업의 검색은 원래 <span className="text-content-primary">&quot;질문에 대한 답&quot;</span> 을
-              만들어주는 데 최적화돼 있었어요. 그런데 고객분들과 이야기하면서 발견한 게 있어요 — 항상 명확한 질문이 있는
-              건 아니라는 점이에요. 때로는{' '}
-              <span className="text-content-primary">&quot;그 채용 자동화 관련 문서들 어디 있더라&quot;</span>
-              처럼 둘러보고 싶을 때가 있죠.
+            <p className="text-body-small text-text-normal-normal">
+              이제 Claude에서도 <span className="text-text-primary-normal">Catch Up</span>의 검색 경험을 사용할 수
+              있습니다.
               <br />
-              그래서 검색을 두 가지 모드로 나눴어요
+              회사에 흩어진 Slack, Jira, Confluence, GitHub, ChannelTalk 데이터를 기반으로 필요한 정보를 찾아보세요.
             </p>
           </DialogDescription>
 
-          {/* 불릿 */}
-          <ul className="flex flex-col gap-2.5">
-            <li className="text-body-small text-content-normal flex items-center gap-3">
-              <span className="bg-fill-interaction-pressed-hover size-2 shrink-0 rounded-full" aria-hidden="true" />
-              <span>답변 모드 (기존): 구체적인 질문에 정리된 답을 받고 싶을 때</span>
-            </li>
-            <li className="text-body-small text-content-normal flex items-center gap-3">
-              <span className="bg-fill-interaction-pressed-hover size-2 shrink-0 rounded-full" aria-hidden="true" />
-              <span>
-                <span className="text-content-primary">탐색 모드 (신규):</span> 관련된 Jira 티켓, Confluence 페이지,
-                Slack 스레드를 한 번에 훑어보고 싶을 때
-              </span>
-            </li>
-          </ul>
-
           {/* 팁 박스 */}
-          <div className="bg-fill-normal border-edge-normal flex items-center gap-4 rounded-xl border px-4 py-3">
+          <div className="bg-fill-normal-normal border-line-normal-normal flex items-center gap-4 rounded-xl border px-4 py-3">
             <div className="bg-fill-primary-normal-neutral flex size-9.5 shrink-0 items-center justify-center rounded-lg">
               <LightbulbFilled className="text-icon-primary-assistive size-5.5" aria-hidden="true" />
             </div>
-            <p className="text-body-small text-content-normal">
-              한 단어로 검색해도 되지만, &quot;신입 개발자 온보딩 첫 주&quot;처럼 구체적으로 입력하면 의미가 비슷한
-              문서까지 더 정확히 찾아드려요.
+            <p className="text-body-small text-text-normal-normal">
+              Catch Up MCP 하나만 연결하면 됩니다. Slack, Jira, Confluence, GitHub, ChannelTalk를 각각 연결할 필요 없이
+              여러 업무 도구를 한 번에 탐색할 수 있습니다.
             </p>
           </div>
         </div>
@@ -131,13 +114,13 @@ export default function FeatureUpdateNoticeModal({
               checked={dontShowAgain}
               onChange={(e) => setDontShowAgain(e.target.checked)}
             />
-            <span className="text-body-small text-content-alternative">다시 보지 않기</span>
+            <span className="text-body-small text-text-normal-alternative">다시 보지 않기</span>
           </label>
           <Button
             variant="box-solid-primary"
             size="lg"
             onClick={handleCTA}
-            className="border-edge-neutral text-body-medium h-11.5 w-full border"
+            className="border-line-normal-neutral text-body-medium h-11.5 w-full border"
           >
             {notice.ctaLabel}
           </Button>

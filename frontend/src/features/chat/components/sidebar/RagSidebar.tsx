@@ -13,11 +13,7 @@ import SourceList from './source/SourceList';
 const SIDEBAR_FADE_MS = 160;
 const SIDEBAR_SHIFT_PX = 8;
 
-const SHOWING_PIPELINE_TYPES: ReadonlySet<PipelineQueryType> = new Set([
-  'simple',
-  'standard',
-  'complex',
-]);
+const SHOWING_PIPELINE_TYPES: ReadonlySet<PipelineQueryType> = new Set(['simple', 'standard', 'complex']);
 
 interface RagSidebarProps {
   currentQA: QAPair | undefined;
@@ -36,7 +32,6 @@ export default function RagSidebar({
   stepRows,
   topic,
   pipelineQueryType,
-  pipelineReasoning,
 }: RagSidebarProps) {
   const [displayQA, setDisplayQA] = useState<QAPair | undefined>(currentQA);
   const [isVisible, setIsVisible] = useState(true);
@@ -99,15 +94,11 @@ export default function RagSidebar({
     : { transform: `translateY(${isVisible ? 0 : SIDEBAR_SHIFT_PX}px)` };
 
   // 답변 생성 중엔 step history, 종료 시점부터 SourceList. 검색 파이프라인 분류일 때만 step 노출.
-  const showStepSkeleton =
-    isLoading && pipelineQueryType !== null && SHOWING_PIPELINE_TYPES.has(pipelineQueryType);
+  const showStepSkeleton = isLoading && pipelineQueryType !== null && SHOWING_PIPELINE_TYPES.has(pipelineQueryType);
 
   return (
-    <div className="border-edge-neutral bg-fill-normal hidden w-108.75 flex-none flex-col border-l lg:flex">
-      <div
-        className={cn('flex min-h-0 flex-1 flex-col overflow-hidden', transitionClass)}
-        style={transitionStyle}
-      >
+    <div className="border-line-normal-neutral bg-fill-normal-normal hidden w-108.75 flex-none flex-col border-l lg:flex">
+      <div className={cn('flex min-h-0 flex-1 flex-col overflow-hidden', transitionClass)} style={transitionStyle}>
         {showStepSkeleton ? (
           <StepHistoryScroller stepRows={stepRows} topic={topic} />
         ) : (

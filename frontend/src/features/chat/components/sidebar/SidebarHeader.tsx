@@ -11,11 +11,11 @@ export default function SidebarHeader({ sourceCount, className }: Props) {
   return (
     <div
       className={cn(
-        'border-b-edge-neutral bg-fill-normal flex h-13 items-center justify-between border-b px-4 py-1.5',
+        'border-b-line-normal-neutral bg-fill-normal-normal flex h-13 items-center justify-between border-b px-4 py-1.5',
         className,
       )}
     >
-      <div className="text-heading-medium text-content-neutral flex items-center gap-1.5 whitespace-nowrap">
+      <div className="text-heading-medium text-text-normal-neutral flex items-center gap-1.5 whitespace-nowrap">
         <span>출처</span>
         <span>{sourceCount}개</span>
       </div>
@@ -23,9 +23,9 @@ export default function SidebarHeader({ sourceCount, className }: Props) {
       <TooltipProvider delayDuration={200}>
         <Tooltip>
           <TooltipTrigger asChild>
-            <div className="bg-fill-interaction-hover rounded-md2 flex cursor-help items-center gap-1 px-1.5 py-0.5">
-              <Help className="text-content-alternative h-4 w-4" />
-              <div className="text-body-xsmall text-content-alternative truncate whitespace-nowrap">
+            <div className="bg-fill-normal-interaction-hover rounded-md2 flex cursor-help items-center gap-1 px-1.5 py-0.5">
+              <Help className="text-text-normal-alternative h-4 w-4" />
+              <div className="text-body-xsmall text-text-normal-alternative truncate whitespace-nowrap">
                 AI 답변 근거 자료
               </div>
             </div>

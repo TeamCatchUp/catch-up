@@ -1,7 +1,7 @@
 """
 Slack app_mention 채팅 orchestration.
 
-webhook_api -> webhook_dispatcher -> app_mention_adapter
+webhook_api -> sync.ingress.slack -> app_mention_adapter
 -> SlackAppMentionOrchestrator -> chat_service.chat_stream
 -> SlackPlanResponder / SlackApiClientWrapper -> interaction_handler.
 

@@ -31,18 +31,25 @@ export default function HistoryDetailPage() {
   const query = searchParams.get('q');
 
   // 세션 메시지 로드 — 무한 스크롤로 전체 페이지 자동 로드
-  const messagesQuery = useInfiniteQuery(chatQueries.sessionMessagesInfinite(sessionId));
+  const {
+    data: messagesData,
+    fetchNextPage,
+    hasNextPage,
+    isError,
+    isFetchingNextPage,
+    isLoading,
+  } = useInfiniteQuery(chatQueries.sessionMessagesInfinite(sessionId));
 
   // 모든 페이지가 로드될 때까지 자동으로 다음 페이지 fetch
   useEffect(() => {
-    if (messagesQuery.hasNextPage && !messagesQuery.isFetchingNextPage) {
-      messagesQuery.fetchNextPage();
+    if (hasNextPage && !isFetchingNextPage) {
+      fetchNextPage();
     }
-  }, [messagesQuery.hasNextPage, messagesQuery.isFetchingNextPage, messagesQuery.fetchNextPage]);
+  }, [fetchNextPage, hasNextPage, isFetchingNextPage]);
 
   // 메시지 → QA pair 변환 + 세션 내 이전/다음 계산
   const { currentQA, prevQuery, nextQuery, sources, sourceCount } = useMemo(() => {
-    const pages = messagesQuery.data?.pages;
+    const pages = messagesData?.pages;
     if (!pages || pages.length === 0) {
       return { currentQA: undefined, prevQuery: null, nextQuery: null, sources: [], sourceCount: 0 };
     }
@@ -67,7 +74,7 @@ export default function HistoryDetailPage() {
       sources: qaSources,
       sourceCount: qaSources.filter((s) => s.is_cited).length,
     };
-  }, [messagesQuery.data?.pages, query]);
+  }, [messagesData?.pages, query]);
 
   // 마크다운 렌더링 준비
   const formattedAnswer = useMemo(
@@ -78,17 +85,17 @@ export default function HistoryDetailPage() {
 
   return (
     <section className="flex flex-col gap-6 px-16 pt-9 pb-30">
-      <h1 className="text-heading-xlarge text-content-normal">질문 히스토리</h1>
+      <h1 className="text-heading-xlarge text-text-normal-normal">질문 히스토리</h1>
 
       <Separator />
 
       <DetailHeader sessionId={sessionId} prevQuery={prevQuery} nextQuery={nextQuery} />
 
-      {messagesQuery.isLoading && (
-        <div className="text-body-small text-content-assistive py-4">데이터를 불러오는 중입니다...</div>
+      {isLoading && (
+        <div className="text-body-small text-text-normal-assistive py-4">데이터를 불러오는 중입니다...</div>
       )}
 
-      {messagesQuery.isError && (
+      {isError && (
         <div className="text-body-small text-status-destructive py-4">
           질문 내용을 불러오지 못했습니다. 잠시 후 다시 시도해주세요.
         </div>
@@ -121,13 +128,13 @@ export default function HistoryDetailPage() {
                   </ReactMarkdown>
                 </div>
               ) : (
-                <div className="text-body-small text-content-assistive">답변이 없습니다.</div>
+                <div className="text-body-small text-text-normal-assistive">답변이 없습니다.</div>
               )}
             </div>
           </div>
 
           {/* 사이드바 */}
-          <div className="border-edge-neutral bg-fill-normal hidden w-100 shrink-0 flex-col rounded-xl border lg:flex">
+          <div className="border-line-normal-neutral bg-fill-normal-normal hidden w-100 shrink-0 flex-col rounded-xl border lg:flex">
             <SidebarHeader sourceCount={sourceCount} />
             <div className="min-h-0 flex-1 overflow-y-auto">
               <SourceList sources={sources} answerContent={currentQA.answer?.content ?? ''} />

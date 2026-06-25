@@ -6,6 +6,7 @@ from catchup.components.vector_db.pgvector.pgvector import PGVectorService
 from catchup.db.models import SourceType
 from catchup.search.original.registry import OriginalResolverRegistry
 from catchup.search.original.resolvers.channel_talk import ChannelTalkOriginalResolver
+from catchup.search.original.resolvers.confluence import ConfluenceOriginalResolver
 from catchup.search.original.resolvers.slack import SlackOriginalResolver
 from catchup.search.original.service import OriginalSearchService
 from catchup.search.service import ManualSearchService
@@ -42,6 +43,16 @@ def get_original_resolver_registry() -> OriginalResolverRegistry:
             connector=SourceType.SLACK,
             entity_type="message",
             resolver=SlackOriginalResolver(),
+        )
+        registry.register(
+            connector=SourceType.CONFLUENCE,
+            entity_type="page",
+            resolver=ConfluenceOriginalResolver(vector_db_service_factory=get_search_service),
+        )
+        registry.register(
+            connector=SourceType.CONFLUENCE,
+            entity_type="blogpost",
+            resolver=ConfluenceOriginalResolver(vector_db_service_factory=get_search_service),
         )
         _original_resolver_registry = registry
     return _original_resolver_registry

@@ -1,0 +1,59 @@
+<role>
+<< role >>
+</role>
+
+<background>
+<< background >>
+</background>
+
+<tools>
+{% for tool in tools %}
+<tool name="<< tool.name >>" type="<< tool.type >>">
+  <description><< tool.description >></description>
+  <input>
+{% for field_name, field_info in tool.input_fields.items() %}
+    <field name="<< field_name >>" type="<< field_info.type >>">
+      <description><< field_info.description >></description>
+{% if field_info.allowed_values %}
+      <allowed_values kind="<< field_info.reference_kind >>">
+{% for value in field_info.allowed_values %}
+        <value><< value >></value>
+{% endfor %}
+      </allowed_values>
+{% endif %}
+    </field>
+{% endfor %}
+  </input>
+  <output>
+{% for field_name, field_info in tool.output_fields.items() %}
+    <field name="<< field_name >>" type="<< field_info.type >>"><< field_info.description >></field>
+{% endfor %}
+  </output>
+</tool>
+{% endfor %}
+</tools>
+
+<execution_guidelines>
+<< execution_guidelines >>
+</execution_guidelines>
+
+<context>
+<user_inputs>
+{% for key, value in user_inputs.items() %}
+  <field name="<< key >>"><< value >></field>
+{% endfor %}
+</user_inputs>
+<trigger_event>
+{% for key, value in trigger_event.items() %}
+  <field name="<< key >>"><< value >></field>
+{% endfor %}
+</trigger_event>
+<trigger_payload>
+<< trigger_payload_json >>
+</trigger_payload>
+</context>
+
+<harness_rules>
+<rule>You are allowed to only use the tools listed in the tools section.</rule>
+<rule>If a tool execution fails, do not retry on your own. Reflect the failure in your response.</rule>
+</harness_rules>

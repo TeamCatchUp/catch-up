@@ -65,7 +65,7 @@ class _FakeSlackRepositories:
 
     def users_lookup(self, db, team_id, user_ids):
         self.users_calls.append((db, team_id, user_ids))
-        return {
+        users_by_id = {
             "U1": SimpleNamespace(
                 user_id="U1",
                 name="parent",
@@ -78,6 +78,29 @@ class _FakeSlackRepositories:
                 display_name="Reply User",
                 avatar_url=None,
             ),
+            "U3": SimpleNamespace(
+                user_id="U3",
+                name="mentioned",
+                display_name="Mentioned User",
+                avatar_url="https://example.com/u3.png",
+            ),
+            "U4": SimpleNamespace(
+                user_id="U4",
+                name="rich-mentioned",
+                display_name="Rich Mentioned User",
+                avatar_url=None,
+            ),
+            "U5": SimpleNamespace(
+                user_id="U5",
+                name="field-mentioned",
+                display_name="Field Mentioned User",
+                avatar_url=None,
+            ),
+        }
+        return {
+            user_id: user
+            for user_id, user in users_by_id.items()
+            if user_id in set(user_ids)
         }
 
 
@@ -235,6 +258,80 @@ async def test_slack_resolver_loads_token_and_only_message_users_from_db() -> No
         "workspace_domain": "catchup--hq",
     }
     assert "cache_misses" not in response.metadata
+
+
+@pytest.mark.asyncio
+async def test_slack_resolver_loads_mentioned_users_for_metadata() -> None:
+    slack_payload = {
+        "ok": True,
+        "messages": [
+            {
+                "type": "message",
+                "user": "U1",
+                "text": "parent text <@U3>",
+                "ts": "1716400000.000100",
+                "blocks": [
+                    {
+                        "type": "rich_text",
+                        "elements": [
+                            {
+                                "type": "rich_text_section",
+                                "elements": [
+                                    {"type": "text", "text": "cc "},
+                                    {"type": "user", "user_id": "U4"},
+                                ],
+                            }
+                        ],
+                    },
+                    {
+                        "type": "section",
+                        "fields": [
+                            {
+                                "type": "mrkdwn",
+                                "text": "field mention <@U5|fallback>",
+                            }
+                        ],
+                    },
+                ],
+            },
+        ],
+    }
+    fake_client = _FakeSlackClient(slack_payload)
+    fake_repositories = _FakeSlackRepositories()
+    db = object()
+    resolver = SlackOriginalResolver(
+        bot_access_token="xoxb-test",
+        client_factory=lambda access_token, team_id: fake_client,
+        workspace_lookup=fake_repositories.workspace_lookup,
+        channel_lookup=fake_repositories.channel_lookup,
+        users_lookup=fake_repositories.users_lookup,
+        clock=lambda: datetime(2026, 5, 24, tzinfo=timezone.utc),
+    )
+    request = OriginalContentRequest(
+        connector=SourceType.SLACK,
+        document_id="slack:message:T1:C1:1716400000.000100",
+    )
+    ref = OriginalDocumentRef(
+        connector=SourceType.SLACK,
+        entity_type="message",
+        document_id=request.document_id,
+        identifiers={
+            "team_id": "T1",
+            "channel_id": "C1",
+            "ts": "1716400000.000100",
+        },
+    )
+
+    response = await resolver.resolve(request=request, ref=ref, db=db)
+
+    assert fake_repositories.users_calls == [(db, "T1", ["U1", "U3", "U4", "U5"])]
+    assert response.metadata["users_by_id"]["U3"]["display_name"] == "Mentioned User"
+    assert response.metadata["users_by_id"]["U4"]["display_name"] == (
+        "Rich Mentioned User"
+    )
+    assert response.metadata["users_by_id"]["U5"]["display_name"] == (
+        "Field Mentioned User"
+    )
 
 
 @pytest.mark.parametrize(

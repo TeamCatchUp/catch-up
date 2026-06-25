@@ -2,6 +2,7 @@
 APScheduler for Hourly Sync
 """
 
+import asyncio
 import logging
 from datetime import datetime
 from datetime import timedelta
@@ -11,6 +12,9 @@ from zoneinfo import ZoneInfo
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
+from catchup.agents.triggers.publisher import publish_pending_agent_trigger_outbox
+from catchup.agents.triggers.recovery import recover_stale_agent_trigger_executions
+from catchup.agents.triggers.recovery import scan_and_dispatch_due_debounce_runs
 from catchup.audit.enums import AuditEventStatus
 from catchup.audit.enums import AuditLevel
 from catchup.audit.metadata import IntegrationAuditMetadata
@@ -32,6 +36,20 @@ from catchup.db.engine import SessionLocal
 from catchup.db.incremental import recover_stale_processing_records
 from catchup.events.enums import EventType
 from catchup.events.enums import IntegrationEventAction
+from catchup.sync.backfill.channel_talk_document_article_v2 import (
+    ChannelTalkArticleV2BackfillService,
+)
+from catchup.sync.backfill.channel_talk_user_chat_v2 import (
+    ChannelTalkUserChatV2BackfillService,
+)
+from catchup.sync.backfill.confluence_v2 import ConfluenceBlogpostV2BackfillService
+from catchup.sync.backfill.confluence_v2 import ConfluenceV2BackfillService
+from catchup.sync.backfill.github_issue_v2 import GithubIssueV2BackfillService
+from catchup.sync.backfill.github_pr_v2 import GithubPrV2BackfillService
+from catchup.sync.backfill.jira_issue_v2 import JiraIssueV2BackfillService
+from catchup.sync.backfill.sequential_v2 import SequentialBackfillSpec
+from catchup.sync.backfill.sequential_v2 import run_sequential_v2_backfill
+from catchup.sync.backfill.slack_message_v2 import SlackMessageV2BackfillService
 from catchup.sync.incremental import get_incremental_service
 from catchup.sync.incremental.dead_record_recovery import (
     recover_incremental_dead_records,
@@ -41,6 +59,56 @@ logger = logging.getLogger(__name__)
 
 _scheduler: AsyncIOScheduler | None = None
 SEOUL_TZ = ZoneInfo("Asia/Seoul")
+VECTOR_STORE_V2_BACKFILL_SEQUENCE: tuple[SequentialBackfillSpec, ...] = (
+    SequentialBackfillSpec(
+        key="jira/issue",
+        connector="jira",
+        entity_type="issue",
+        service_factory=JiraIssueV2BackfillService,
+    ),
+    SequentialBackfillSpec(
+        key="confluence/page",
+        connector="confluence",
+        entity_type="page",
+        service_factory=ConfluenceV2BackfillService,
+    ),
+    SequentialBackfillSpec(
+        key="confluence/blogpost",
+        connector="confluence",
+        entity_type="blogpost",
+        service_factory=ConfluenceBlogpostV2BackfillService,
+    ),
+    SequentialBackfillSpec(
+        key="github/pr",
+        connector="github",
+        entity_type="pr",
+        service_factory=GithubPrV2BackfillService,
+    ),
+    SequentialBackfillSpec(
+        key="github/issue",
+        connector="github",
+        entity_type="issue",
+        service_factory=GithubIssueV2BackfillService,
+    ),
+    SequentialBackfillSpec(
+        key="channel_talk/user_chat",
+        connector="channel_talk",
+        entity_type="user_chat",
+        service_factory=ChannelTalkUserChatV2BackfillService,
+    ),
+    SequentialBackfillSpec(
+        key="channel_talk/document_article",
+        connector="channel_talk",
+        entity_type="document_article",
+        service_factory=ChannelTalkArticleV2BackfillService,
+    ),
+    SequentialBackfillSpec(
+        key="slack/message",
+        connector="slack",
+        entity_type="message",
+        service_factory=SlackMessageV2BackfillService,
+    ),
+)
 
 
 async def refresh_jira_dynamic_webhooks():
@@ -176,6 +244,28 @@ async def recover_incremental_dead_records_job():
     )
 
 
+async def run_agent_trigger_recovery_jobs():
+    logger.info("[AGENT_TRIGGER][SCHEDULER] Starting recovery cycle")
+    due_count, outbox_count, stale_execution_count = await asyncio.to_thread(
+        _run_agent_trigger_recovery_jobs_sync
+    )
+    logger.info(
+        "[AGENT_TRIGGER][SCHEDULER] Recovery cycle completed: due=%s outbox=%s stale_execution=%s",
+        due_count,
+        outbox_count,
+        stale_execution_count,
+    )
+
+
+def _run_agent_trigger_recovery_jobs_sync() -> tuple[int, int, int]:
+    """스케줄러 thread 안에서 Trigger recovery용 DB 세션을 짧게 소유한다."""
+    with SessionLocal() as db:
+        due_count = scan_and_dispatch_due_debounce_runs(db=db)
+        outbox_count = publish_pending_agent_trigger_outbox(db=db)
+        stale_execution_count = recover_stale_agent_trigger_executions(db=db)
+        return due_count, outbox_count, stale_execution_count
+
+
 async def poll_confluence_incremental():
     logger.info("[CONFLUENCE][POLL] Starting incremental poll")
     result = await get_incremental_service().poll_confluence_changes()
@@ -190,6 +280,28 @@ async def poll_channel_talk_document_incremental():
         result,
     )
 
+
+async def run_vector_store_v2_sequential_backfill_job():
+    logger.info(
+        "[VECTOR_STORE_V2_BACKFILL][SCHEDULER] Starting sequential backfill run"
+    )
+    result = await run_sequential_v2_backfill(
+        VECTOR_STORE_V2_BACKFILL_SEQUENCE,
+        batch_size=settings.VECTOR_STORE_V2_BACKFILL_BATCH_SIZE,
+        locked_by="scheduler",
+    )
+    log_method = logger.warning if result.status in {"completed_with_failures", "stopped"} else logger.info
+    log_method(
+        "[VECTOR_STORE_V2_BACKFILL][SCHEDULER] Sequential backfill run completed: status=%s stop_reason=%s entity_count=%s completed_entities=%s scanned=%s succeeded=%s skipped=%s failed=%s",
+        result.status,
+        result.stop_reason,
+        len(result.entities),
+        result.completed_entities,
+        result.scanned,
+        result.succeeded,
+        result.skipped,
+        result.failed,
+    )
 
 
 def init_scheduler():
@@ -241,6 +353,15 @@ def init_scheduler():
         misfire_grace_time=300,
     )
 
+    _scheduler.add_job(
+        run_agent_trigger_recovery_jobs,
+        trigger=CronTrigger(minute="*/1", timezone=SEOUL_TZ),
+        id="agent_trigger_recovery",
+        name="Agent Trigger Recovery",
+        replace_existing=True,
+        misfire_grace_time=60,
+    )
+
     confluence_poll_interval_minutes = settings.CONFLUENCE_INCREMENTAL_POLL_INTERVAL_MINUTES
     _scheduler.add_job(
         poll_confluence_incremental,
@@ -264,6 +385,21 @@ def init_scheduler():
         replace_existing=True,
         misfire_grace_time=120,
     )
+
+    if settings.VECTOR_STORE_V2_BACKFILL_SCHEDULE_ENABLED:
+        _scheduler.add_job(
+            run_vector_store_v2_sequential_backfill_job,
+            trigger=CronTrigger(
+                hour=settings.VECTOR_STORE_V2_BACKFILL_CRON_HOUR,
+                minute=settings.VECTOR_STORE_V2_BACKFILL_CRON_MINUTE,
+                timezone=SEOUL_TZ,
+            ),
+            id="vector_store_v2_sequential_backfill",
+            name="Vector Store v2 Sequential Backfill",
+            replace_existing=True,
+            misfire_grace_time=900,
+            max_instances=1,
+        )
     
     _scheduler.start()
     logger.info(

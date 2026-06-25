@@ -85,20 +85,20 @@ const VendorFileUploader = ({
     <div className="flex flex-col gap-1">
       {/* 라벨 + 필수 표시 — gap-4(4px), 필수 dot 5px */}
       <div className="flex items-center gap-1">
-        <span className="text-body-small text-content-normal font-medium">{label}</span>
-        <span className="bg-accent-red size-1.25 rounded-full" />
+        <span className="text-body-small text-text-normal-normal font-medium">{label}</span>
+        <span className="bg-accent-red-default size-1.25 rounded-full" />
       </div>
 
       <input ref={inputRef} type="file" accept={ACCEPTED_EXTENSIONS} hidden onChange={handleChange} />
 
       {file ? (
         /* 파일 선택됨: 링크 아이콘 + 파일명 + X */
-        <div className="border-edge-neutral flex items-center gap-2 rounded-lg border px-3 py-2">
-          <IconLink className="text-content-alternative size-4 shrink-0" />
-          <span className="text-body-xsmall text-content-neutral flex-1 truncate">{file.name}</span>
+        <div className="border-line-normal-neutral flex items-center gap-2 rounded-lg border px-3 py-2">
+          <IconLink className="text-text-normal-alternative size-4 shrink-0" />
+          <span className="text-body-xsmall text-text-normal-neutral flex-1 truncate">{file.name}</span>
           <button
             onClick={onFileRemove}
-            className="text-content-assistive hover:text-content-alternative shrink-0 cursor-pointer"
+            className="text-text-normal-assistive hover:text-text-normal-alternative shrink-0 cursor-pointer"
           >
             <IconCancelSmall className="size-5" />
           </button>
@@ -108,18 +108,18 @@ const VendorFileUploader = ({
         <>
           <button
             onClick={() => inputRef.current?.click()}
-            className="border-edge-neutral bg-fill-strong hover:bg-fill-interaction-hover flex size-30 cursor-pointer items-center justify-center rounded-xl border transition-colors"
+            className="border-line-normal-neutral bg-fill-normal-strong hover:bg-fill-normal-interaction-hover flex size-30 cursor-pointer items-center justify-center rounded-xl border transition-colors"
           >
-            <IconAdd className="text-content-assistive size-6" />
+            <IconAdd className="text-text-normal-assistive size-6" />
           </button>
 
           {error ? (
             <div className="flex items-center gap-0.5">
-              <IconError className="text-accent-red size-4 shrink-0" />
-              <span className="text-label-xsmall text-accent-red">{error}</span>
+              <IconError className="text-accent-red-default size-4 shrink-0" />
+              <span className="text-label-xsmall text-accent-red-default">{error}</span>
             </div>
           ) : (
-            <p className="text-label-xsmall text-content-alternative">{helperText}</p>
+            <p className="text-label-xsmall text-text-normal-alternative">{helperText}</p>
           )}
         </>
       )}
@@ -220,24 +220,24 @@ export default function CsvUploadModal({ open, onOpenChange }: CsvUploadModalPro
           <div className="flex max-h-94.5 flex-col gap-1.5 overflow-clip">
             {/* 헤더: 제목 + 닫기 */}
             <div className="flex h-9 shrink-0 items-center justify-between">
-              <DialogTitle className="text-heading-medium text-content-normal">CSV 파일 업로드하기</DialogTitle>
+              <DialogTitle className="text-heading-medium text-text-normal-normal">CSV 파일 업로드하기</DialogTitle>
               <button
                 onClick={() => handleClose(false)}
-                className="hover:text-content-neutral text-content-alternative flex size-7 cursor-pointer items-center justify-center rounded-full"
+                className="hover:text-text-normal-neutral text-text-normal-alternative flex size-7 cursor-pointer items-center justify-center rounded-full"
               >
                 <IconCancelSmall className="size-6" />
               </button>
             </div>
 
             {/* 콘텐츠 */}
-            <div className="border-edge-neutral flex flex-col gap-3 overflow-y-auto border-t pt-4">
+            <div className="border-line-normal-neutral flex flex-col gap-3 overflow-y-auto border-t pt-4">
               {/* CSV 가이드 버튼 */}
               <a
                 href="/docs/user_mapping_guide.pdf"
                 download="[Catch Up] 유저 맵핑 가이드.pdf"
-                className="border-edge-neutral text-body-xsmall text-content-normal hover:bg-fill-strong bg-fill-normal flex h-7.5 w-fit cursor-pointer items-center gap-1 rounded-lg border px-2 py-1"
+                className="border-line-normal-neutral text-body-xsmall text-text-normal-normal hover:bg-fill-normal-strong bg-fill-normal-normal flex h-7.5 w-fit cursor-pointer items-center gap-1 rounded-lg border px-2 py-1"
               >
-                <IconFile className="text-icon-normal size-5 shrink-0" />
+                <IconFile className="text-icon-normal-normal size-5 shrink-0" />
                 CSV 업로드 가이드(PDF) 보기
               </a>
 

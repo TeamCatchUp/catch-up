@@ -140,7 +140,7 @@ export default function FeedbackSection({
   if (!section.mounted) return null;
 
   const rootClass = cn(
-    'border-edge-neutral mx-auto flex w-193.25 flex-col gap-4 rounded-xl border p-4',
+    'border-line-normal-neutral mx-auto flex w-193.25 flex-col gap-4 rounded-xl border p-4',
     'transition-all duration-200 ease-out will-change-[transform,opacity]',
     section.entered ? 'translate-y-0 opacity-100' : '-translate-y-2 opacity-0',
   );
@@ -148,12 +148,12 @@ export default function FeedbackSection({
   return (
     <div ref={feedbackRef} className={rootClass}>
       <div className="flex justify-between">
-        <span className="text-body-small text-content-alternative">답변이 마음에 들지 않은 이유가 무엇인가요?</span>
+        <span className="text-body-small text-text-normal-alternative">답변이 마음에 들지 않은 이유가 무엇인가요?</span>
         <div
           onClick={closeSection}
           className="icon-button-only-gray flex cursor-pointer items-center rounded-full p-0.5"
         >
-          <Cancel className="text-content-alternative h-4.5 w-4.5" />
+          <Cancel className="text-text-normal-alternative h-4.5 w-4.5" />
         </div>
       </div>
       <div className="flex flex-wrap gap-x-2.5 gap-y-1.5">
@@ -173,9 +173,9 @@ export default function FeedbackSection({
               submitFeedback(chip.reason);
             }}
             className={cn(
-              'text-xsmall text-content-normal cursor-pointer rounded-lg px-2 py-1',
+              'text-xsmall text-text-normal-normal cursor-pointer rounded-lg px-2 py-1',
               (chip.id === DETAIL_ID && isDetailOpen) || chip.id === selectedChipId
-                ? 'bg-fill-interaction-pressed border-edge-strong'
+                ? 'bg-fill-normal-interaction-pressed border-line-normal-strong'
                 : 'box-button-outline-gray',
             )}
           >

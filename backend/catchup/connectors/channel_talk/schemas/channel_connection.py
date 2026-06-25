@@ -24,6 +24,7 @@ class ChannelTalkConnectRequest(BaseModel):
         return require_text(value, _validation_field_name(info))
 
 class ChannelTalkCredentialsRecord(BaseModel):
+    id: int | None = None
     channel_id: str
     channel_name: str
     access_key: str | None = None

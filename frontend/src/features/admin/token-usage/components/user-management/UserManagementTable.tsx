@@ -34,7 +34,7 @@ export default function UserManagementTable({ data, onToggleToken }: UserManagem
   return (
     <div className="overflow-hidden">
       {/* 헤더 */}
-      <div className="text-body-xsmall border-edge-neutral bg-fill-strong text-content-alternative grid grid-cols-[2fr_1fr_1fr_1fr_1fr] items-center border-b px-5 py-1.5">
+      <div className="text-body-xsmall border-line-normal-neutral bg-fill-normal-strong text-text-normal-alternative grid grid-cols-[2fr_1fr_1fr_1fr_1fr] items-center border-b px-5 py-1.5">
         <span>이름</span>
         <span>사용량</span>
         <span>직급</span>
@@ -46,7 +46,7 @@ export default function UserManagementTable({ data, onToggleToken }: UserManagem
       {data.map((member) => (
         <div
           key={member.id}
-          className="border-edge-neutral grid grid-cols-[2fr_1fr_1fr_1fr_1fr] items-center border-t px-5 py-3"
+          className="border-line-normal-neutral grid grid-cols-[2fr_1fr_1fr_1fr_1fr] items-center border-t px-5 py-3"
         >
           {/* 이름 */}
           <div className="flex items-center gap-2.5">
@@ -59,24 +59,24 @@ export default function UserManagementTable({ data, onToggleToken }: UserManagem
                 className="size-7.5 shrink-0 rounded-full object-cover"
               />
             ) : (
-              <DefaultProfile className="text-content-assistive size-7.5 shrink-0 rounded-full" />
+              <DefaultProfile className="text-text-normal-assistive size-7.5 shrink-0 rounded-full" />
             )}
-            <span className="text-body-small text-content-normal truncate">{member.name}</span>
+            <span className="text-body-small text-text-normal-normal truncate">{member.name}</span>
             {!member.tokenEnabled && (
               <div className="rounded-md2 bg-accent-pink-lighten flex shrink-0 items-center gap-0.5 px-1.5 py-0.5">
-                <IconError className="text-accent-pink size-3.5" />
-                <span className="text-body-xsmall text-accent-pink">이용 중지</span>
+                <IconError className="text-accent-pink-default size-3.5" />
+                <span className="text-body-xsmall text-accent-pink-default">이용 중지</span>
               </div>
             )}
           </div>
 
           {/* 사용량 */}
-          <span className="text-body-small text-content-normal">- $</span>
+          <span className="text-body-small text-text-normal-normal">- $</span>
 
           {/* 직급 */}
           <div>
             <span
-              className={`${TAG_BASE} ${POSITION_BADGE_CLASS[member.position] ?? 'bg-fill-interaction-hover text-content-alternative'}`}
+              className={`${TAG_BASE} ${POSITION_BADGE_CLASS[member.position] ?? 'bg-fill-normal-interaction-hover text-text-normal-alternative'}`}
             >
               {member.position}
             </span>
@@ -98,11 +98,11 @@ export default function UserManagementTable({ data, onToggleToken }: UserManagem
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" sideOffset={4} className="min-w-65">
                 <DropdownMenuItem>
-                  <IconGraph className="text-content-alternative size-6" />
+                  <IconGraph className="text-text-normal-alternative size-6" />
                   토큰 이용 대시보드 바로가기
                 </DropdownMenuItem>
                 <DropdownMenuItem>
-                  <IconChip className="text-content-alternative size-6" />
+                  <IconChip className="text-text-normal-alternative size-6" />
                   개인 토큰 사용 제한 설정 바로가기
                 </DropdownMenuItem>
               </DropdownMenuContent>

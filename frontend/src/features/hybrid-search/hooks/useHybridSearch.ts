@@ -13,9 +13,10 @@ import type { ToolFilter } from '../types/hybridSearchApi';
 
 interface UseHybridSearchParams {
   keyword: string;
-  scope: ToolFilter[];
+  toolFilters: ToolFilter[];
   start?: string;
   end?: string;
+  smartFilter: boolean;
 }
 
 export function useHybridSearch(params: UseHybridSearchParams) {

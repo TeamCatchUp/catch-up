@@ -9,9 +9,6 @@ from pydantic import Field
 from pydantic import ValidationInfo
 from pydantic import field_validator
 
-from catchup.connector_core.domain.structure import ConnectorKey
-from catchup.connector_core.ports.metadata_sync import MetadataSyncRequest
-from catchup.connector_core.ports.metadata_sync import MetadataSyncResult
 from catchup.connectors.channel_talk.schemas._parsing import _first_localized_text
 from catchup.connectors.channel_talk.schemas._parsing import _mapping_copy
 from catchup.connectors.channel_talk.schemas._parsing import _parse_page
@@ -172,49 +169,3 @@ class ChannelTalkDocumentNavNodePage(BaseModel):
             parse_item=ChannelTalkDocumentNavNodeMetadata.from_api_payload,
         )
         return cls(nav_nodes=items, next_page_token=next_page_token)
-
-class ChannelTalkDocumentMetadataSyncRequest(BaseModel):
-    channel_id: str
-    space_id: str | None = None
-
-    @field_validator("channel_id")
-    @classmethod
-    def validate_channel_id(cls, value: str) -> str:
-        return require_text(value, "channel_id")
-
-    @field_validator("space_id")
-    @classmethod
-    def validate_space_id(cls, value: str | None) -> str | None:
-        if value is None:
-            return None
-        return require_text(value, "space_id")
-
-    def to_core_request(self) -> MetadataSyncRequest:
-        return MetadataSyncRequest(
-            connector=ConnectorKey.CHANNEL_TALK,
-            tenant_id=self.channel_id,
-            target_id=self.space_id,
-        )
-
-
-class ChannelTalkDocumentMetadataSyncResult(BaseModel):
-    connector: ConnectorKey
-    channel_id: str
-    space_id: str | None = None
-    space_synced: bool = False
-    authors_synced: int = 0
-    nav_nodes_synced: int = 0
-
-    @classmethod
-    def from_core_result(cls, result: MetadataSyncResult) -> "ChannelTalkDocumentMetadataSyncResult":
-        space_step = result.step_result("document_space")
-        authors_step = result.step_result("document_authors")
-        nav_step = result.step_result("document_nav_nodes")
-        return cls(
-            connector=result.connector,
-            channel_id=result.tenant_id,
-            space_id=result.target_id,
-            space_synced=(space_step.synced_count > 0) if space_step else False,
-            authors_synced=authors_step.synced_count if authors_step else 0,
-            nav_nodes_synced=nav_step.synced_count if nav_step else 0,
-        )

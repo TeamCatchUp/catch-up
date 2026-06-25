@@ -32,12 +32,12 @@ export default function PromptChips({ onChipClick, selectedIndex }: PromptChipsP
     <section className="flex w-190 flex-col gap-4">
       {/* 빠르게 시작하기 디바이더 */}
       <div className="flex items-center gap-8">
-        <div className="bg-edge-neutral h-px flex-1" />
+        <div className="bg-line-normal-neutral h-px flex-1" />
         <div className="flex items-center gap-2">
-          <span className="text-body-small text-content-neutral">빠르게 시작하기</span>
-          <IconArrowOutward className="text-icon-neutral h-5 w-5" />
+          <span className="text-body-small text-text-normal-neutral">빠르게 시작하기</span>
+          <IconArrowOutward className="text-icon-normal-neutral h-5 w-5" />
         </div>
-        <div className="bg-edge-neutral h-px flex-1" />
+        <div className="bg-line-normal-neutral h-px flex-1" />
       </div>
 
       {/* 칩 스크롤 컨테이너 */}
@@ -58,8 +58,8 @@ export default function PromptChips({ onChipClick, selectedIndex }: PromptChipsP
               className={cn(
                 'rounded-rounded text-body-small h-9 shrink-0 cursor-pointer px-3 py-1.5 whitespace-nowrap transition-colors',
                 selectedIndex === idx
-                  ? 'bg-accent-black-lighten text-content-inverse'
-                  : 'border-edge-neutral bg-fill-normal text-content-neutral border',
+                  ? 'bg-accent-black-lighten text-text-normal-inverse'
+                  : 'border-line-normal-neutral bg-fill-normal-normal text-text-normal-neutral border',
               )}
             >
               {tip.chipLabel}
@@ -73,9 +73,9 @@ export default function PromptChips({ onChipClick, selectedIndex }: PromptChipsP
             <button
               type="button"
               onClick={scrollLeftBy}
-              className="rounded-rounded border-edge-normal bg-fill-normal shadow-button absolute top-1/2 left-0 flex -translate-y-1/2 cursor-pointer items-center justify-center border p-1.5"
+              className="rounded-rounded border-line-normal-normal bg-fill-normal-normal shadow-button absolute top-1/2 left-0 flex -translate-y-1/2 cursor-pointer items-center justify-center border p-1.5"
             >
-              <IconArrowLeft className="text-icon-neutral h-6 w-6" />
+              <IconArrowLeft className="text-icon-normal-neutral h-6 w-6" />
             </button>
           </>
         )}
@@ -86,9 +86,9 @@ export default function PromptChips({ onChipClick, selectedIndex }: PromptChipsP
             <button
               type="button"
               onClick={scrollRightBy}
-              className="rounded-rounded border-edge-normal bg-fill-normal shadow-button absolute top-1/2 right-0 flex -translate-y-1/2 cursor-pointer items-center justify-center border p-1.5"
+              className="rounded-rounded border-line-normal-normal bg-fill-normal-normal shadow-button absolute top-1/2 right-0 flex -translate-y-1/2 cursor-pointer items-center justify-center border p-1.5"
             >
-              <IconArrowRight className="text-icon-neutral h-6 w-6" />
+              <IconArrowRight className="text-icon-normal-neutral h-6 w-6" />
             </button>
           </>
         )}

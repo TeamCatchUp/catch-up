@@ -13,9 +13,11 @@ Confluence Section Tree -> Semantic Chunk
 """
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
+from dataclasses import field
 
-from catchup.connectors.confluence.storage_parser import ContentBlock, Section
+from catchup.connectors.confluence.storage_parser import ContentBlock
+from catchup.connectors.confluence.storage_parser import Section
 
 logger = logging.getLogger(__name__)
 
@@ -64,6 +66,7 @@ class Chunk:
     estimated_tokens: int
     image_blocks: list[ContentBlock] = field(default_factory=list)
     inline_comment_refs: list[str] = field(default_factory=list)
+    body_text: str = ""
 
 
 class ConfluenceChunker:
@@ -612,6 +615,7 @@ class ConfluenceChunker:
                 estimated_tokens=len(content) // 4,
                 image_blocks=image_blocks,
                 inline_comment_refs=comment_refs,
+                body_text=body,
             ))
 
         return chunks

@@ -53,8 +53,7 @@ export default function SourceCard({ source, showCount = true, count }: Props) {
   };
 
   const isSlack = source.source_type === 'slack';
-  const isChannelTalkArticle =
-    source.source_type === 'channel_talk' && source.entity_type === 'document_article';
+  const isChannelTalkArticle = source.source_type === 'channel_talk' && source.entity_type === 'document_article';
   const integrationLabel = getIntegrationLabel(source);
 
   const repoText = source.repo?.trim() ? source.repo : '-';
@@ -72,36 +71,38 @@ export default function SourceCard({ source, showCount = true, count }: Props) {
     >
       {/* Row 1: 로고+카운트 pill · integration 이름 · open_in_new 버튼 */}
       <div className="flex w-full items-center gap-2.5">
-        <div className="bg-fill-strong border-edge-assistive flex h-7 min-w-6.5 items-center justify-center gap-1 rounded-full border px-1.5 py-1">
+        <div className="bg-fill-normal-strong border-line-normal-assistive flex h-7 min-w-6.5 items-center justify-center gap-1 rounded-full border px-1.5 py-1">
           {renderSourceLogo(source.source_type)}
-          {showCount && <span className="text-body-xsmall text-content-strong whitespace-nowrap">{count ?? 0}</span>}
+          {showCount && (
+            <span className="text-body-xsmall text-text-normal-strong whitespace-nowrap">{count ?? 0}</span>
+          )}
         </div>
-        <span className="text-label-xsmall text-content-alternative truncate">{integrationLabel}</span>
+        <span className="text-label-xsmall text-text-normal-alternative truncate">{integrationLabel}</span>
         <span
           aria-hidden="true"
-          className="bg-fill-strong border-edge-neutral flex size-6.5 shrink-0 items-center justify-center rounded-lg border p-0.5"
+          className="bg-fill-normal-strong border-line-normal-neutral flex size-6.5 shrink-0 items-center justify-center rounded-lg border p-0.5"
         >
-          <OpenInNew className="text-icon-neutral size-4.5" />
+          <OpenInNew className="text-icon-normal-neutral size-4.5" />
         </span>
       </div>
 
       {/* Row 2: meta pill · 채널/워크스페이스/repo (article은 book 아이콘) */}
       <div className="flex w-full items-center gap-2">
-        <span className="bg-fill-normal border-edge-normal rounded-md2 flex size-5 shrink-0 items-center border-2 p-0.5">
+        <span className="bg-fill-normal-normal border-line-normal-normal rounded-md2 flex size-5 shrink-0 items-center border-2 p-0.5">
           {isChannelTalkArticle ? (
-            <Book className="text-icon-neutral size-4" />
+            <Book className="text-icon-normal-neutral size-4" />
           ) : (
-            <Tag className="text-icon-neutral size-4" />
+            <Tag className="text-icon-normal-neutral size-4" />
           )}
         </span>
-        <span className="text-body-xsmall text-content-alternative min-w-0 flex-1 truncate">{repoText}</span>
+        <span className="text-body-xsmall text-text-normal-alternative min-w-0 flex-1 truncate">{repoText}</span>
       </div>
 
       {/* Row 3: Title */}
-      <div className="text-body-small text-content-normal line-clamp-2 w-full wrap-break-word">{displayTitle}</div>
+      <div className="text-body-small text-text-normal-normal line-clamp-2 w-full wrap-break-word">{displayTitle}</div>
 
       {/* Row 4: 작성자 · 날짜 · [이슈키] / #번호 (jira/github only) */}
-      <div className="text-body-xsmall text-content-assistive flex w-full items-center gap-1.5">
+      <div className="text-body-xsmall text-text-normal-assistive flex w-full items-center gap-1.5">
         <span className="whitespace-nowrap">{authorText}</span>
         <span className="bg-dim-black-10 size-1 shrink-0 rounded-full" />
         <span className="whitespace-nowrap">{dateText}</span>

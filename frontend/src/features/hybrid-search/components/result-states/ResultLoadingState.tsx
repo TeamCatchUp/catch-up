@@ -26,8 +26,8 @@ export default function ResultLoadingState() {
     >
       <Lottie animationData={ragSourceLoading} loop className="h-23 w-28.75" />
       <div className="flex flex-col items-center gap-2">
-        <p className="text-heading-medium text-content-neutral font-semibold">문서를 찾고 있어요</p>
-        <p className="text-body-small text-content-alternative font-medium">필요한 문서를 불러오고 있어요</p>
+        <p className="text-heading-medium text-text-normal-neutral font-semibold">문서를 찾고 있어요</p>
+        <p className="text-body-small text-text-normal-alternative font-medium">필요한 문서를 불러오고 있어요</p>
       </div>
     </motion.div>
   );

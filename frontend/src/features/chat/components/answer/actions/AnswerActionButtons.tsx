@@ -138,17 +138,17 @@ export default function AnswerActionButtons({
             className={cn(
               'rounded-lg p-1.5',
               isFeedbackDisabled ? 'cursor-default' : 'icon-button-only-gray cursor-pointer',
-              isThumbsDownPanelOpen && 'bg-fill-interaction-pressed border-edge-strong',
+              isThumbsDownPanelOpen && 'bg-fill-normal-interaction-pressed border-line-normal-strong',
             )}
           >
             <Icon
               className={cn(
                 'h-6 w-6',
                 isFeedbackDisabled && !isLikedActive && !isDislikedActive
-                  ? 'text-content-assistive'
+                  ? 'text-text-normal-assistive'
                   : isThumbsDownPanelOpen || bookmarked || isLikedActive || isDislikedActive
-                    ? 'text-content-neutral'
-                    : 'active:text-content-neutral text-content-alternative',
+                    ? 'text-text-normal-neutral'
+                    : 'active:text-text-normal-neutral text-text-normal-alternative',
               )}
             />
           </button>

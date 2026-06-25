@@ -79,17 +79,17 @@ export default function QuestionLogSection() {
       <div className="flex flex-col gap-14">
         <div className="flex flex-col overflow-clip">
           {/* 헤더 */}
-          <div className="border-edge-neutral bg-fill-strong flex h-9 shrink-0 items-center border-y px-5">
+          <div className="border-line-normal-neutral bg-fill-normal-strong flex h-9 shrink-0 items-center border-y px-5">
             <div className="grid flex-1 grid-cols-3 items-center gap-1">
-              <span className="text-body-xsmall text-content-alternative pl-7.5 text-left">이름</span>
-              <span className="text-body-xsmall text-content-alternative text-center">실행 일자</span>
-              <span className="text-body-xsmall text-content-alternative text-center">질문</span>
+              <span className="text-body-xsmall text-text-normal-alternative pl-7.5 text-left">이름</span>
+              <span className="text-body-xsmall text-text-normal-alternative text-center">실행 일자</span>
+              <span className="text-body-xsmall text-text-normal-alternative text-center">질문</span>
             </div>
           </div>
 
           {/* 행 */}
           {pageItems.length === 0 ? (
-            <div className="text-body-small text-content-alternative flex h-80 items-center justify-center">
+            <div className="text-body-small text-text-normal-alternative flex h-80 items-center justify-center">
               질문 로그가 없습니다.
             </div>
           ) : (
@@ -98,25 +98,25 @@ export default function QuestionLogSection() {
                 <Link
                   key={log.logId}
                   href={`/admin/question-logs/${log.messageId}?userId=${log.userId}&from=audit-logs`}
-                  className="border-edge-neutral hover:bg-fill-strong flex h-12.5 shrink-0 items-center border-b px-5 transition-colors"
+                  className="border-line-normal-neutral hover:bg-fill-normal-strong flex h-12.5 shrink-0 items-center border-b px-5 transition-colors"
                 >
                   <div className="grid flex-1 grid-cols-3 items-center gap-1">
                     {/* 이름 */}
                     <div className="flex items-center gap-4">
-                      <DefaultProfile className="text-content-assistive size-7 shrink-0 rounded-full" />
-                      <span className="text-body-small text-content-normal truncate">{log.name}</span>
+                      <DefaultProfile className="text-text-normal-assistive size-7 shrink-0 rounded-full" />
+                      <span className="text-body-small text-text-normal-normal truncate">{log.name}</span>
                     </div>
 
                     {/* 실행 일자 */}
                     <div className="flex items-center justify-center">
-                      <span className="text-body-xsmall text-content-normal truncate">
+                      <span className="text-body-xsmall text-text-normal-normal truncate">
                         {formatDate(log.executedAt)}
                       </span>
                     </div>
 
                     {/* 질문 */}
                     <div className="flex items-center justify-center">
-                      <span className="text-body-xsmall text-content-normal truncate">{log.query}</span>
+                      <span className="text-body-xsmall text-text-normal-normal truncate">{log.query}</span>
                     </div>
                   </div>
                 </Link>

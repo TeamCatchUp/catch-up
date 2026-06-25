@@ -79,8 +79,8 @@ export default function OrgTokenUsageSection() {
       {/* 헤더 행 */}
       <div className="flex items-end justify-between">
         <div className="flex flex-col gap-1">
-          <span className="text-heading-large text-content-normal">토큰 이용 대시보드</span>
-          <span className="text-body-small text-content-alternative">
+          <span className="text-heading-large text-text-normal-normal">토큰 이용 대시보드</span>
+          <span className="text-body-small text-text-normal-alternative">
             조직의 토큰 이용 현황을 확인하고 관리할 수 있습니다.
           </span>
         </div>

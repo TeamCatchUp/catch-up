@@ -117,6 +117,10 @@ export const API = {
     prompts: `${API_PREFIX}/settings/prompts`, // GET & PATCH 커스텀 프롬프트 지침
   },
 
+  mcp: {
+    scripts: `${API_PREFIX}/mcp/scripts`,
+  },
+
   // 하이브리드(Vector + Weighted Keyword) 수동 검색 + 사용자별 검색 기록
   search: {
     hybrid: `${API_PREFIX}/search/hybrid`, // GET 하이브리드 검색 (keyword, limit, offset, tool_filters)
@@ -128,6 +132,14 @@ export const API = {
   onboarding: {
     signup: `${API_PREFIX}/onboarding`, // POST 일반 유저 온보딩 가입
     adminSignup: `${API_PREFIX}/onboarding/admin`, // POST 루트 어드민 온보딩 가입
+  },
+
+  automations: {
+    credentials: `${API_PREFIX}/automations/credentials`, // GET 문의 자동화 Credential 선택 목록
+    targets: `${API_PREFIX}/automations/targets`, // GET 문의 자동화 Target 선택 목록
+    inqueries: `${API_PREFIX}/automations/inqueries`, // GET 채널톡 문의 자동화 목록
+    inquiry: (agentSpecId: number) => `${API_PREFIX}/automations/inqueries/${agentSpecId}`, // PATCH 문의 자동화 상태
+    publishInquiry: `${API_PREFIX}/automations/inqueries/publish`, // POST 문의 자동화 설정 생성 및 활성화
   },
   version: `${API_PREFIX}/version`, // GET 현재 앱 버전
 } as const;

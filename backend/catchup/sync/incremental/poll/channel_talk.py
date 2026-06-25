@@ -8,9 +8,6 @@ from datetime import timezone
 from fastapi.concurrency import run_in_threadpool
 
 from catchup.configs.config import settings
-from catchup.connectors.channel_talk.document_space.article_full_sync_models import (
-    DEFAULT_ARTICLE_FULL_SYNC_STATES,
-)
 from catchup.connectors.channel_talk.document_space.client import (
     ChannelTalkDocumentsApiClient,
 )
@@ -28,6 +25,9 @@ from catchup.db.engine import SessionLocal
 from catchup.sync.incremental.resolve import build_channel_talk_document_article_change
 from catchup.sync.incremental.schemas import RecordChange
 from catchup.sync.incremental.service import get_incremental_service
+from catchup.sync.ingestion.adapters.channel_talk.article_models import (
+    DEFAULT_ARTICLE_FULL_SYNC_STATES,
+)
 
 logger = logging.getLogger(__name__)
 

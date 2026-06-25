@@ -77,10 +77,10 @@ export default function EmbeddingHistoryCard({
 
   return (
     <>
-      <div className="border-edge-assistive bg-fill-normal flex flex-col gap-4 overflow-clip rounded-2xl border py-4">
+      <div className="border-line-normal-assistive bg-fill-normal-normal flex flex-col gap-4 overflow-clip rounded-2xl border py-4">
         {/* 헤더: 타이틀 + 필터 칩 */}
         <div className="flex items-center justify-between px-4">
-          <span className="text-body-small text-content-normal">임베딩 히스토리</span>
+          <span className="text-body-small text-text-normal-normal">임베딩 히스토리</span>
           <div className="flex items-center gap-0.5">
             {filterOptions.map(({ value, label, count, hasRedTag }) => (
               <div key={value} className="relative">
@@ -99,7 +99,7 @@ export default function EmbeddingHistoryCard({
         {/* 빈 상태 */}
         {isEmpty && (
           <div className="flex h-14 items-center justify-center px-4">
-            <span className="text-body-small text-content-assistive">
+            <span className="text-body-small text-text-normal-assistive">
               {isInitialLoading
                 ? '임베딩 상태를 불러오는 중...'
                 : filter === 'success'
@@ -120,7 +120,7 @@ export default function EmbeddingHistoryCard({
                 <span className="text-body-xsmall text-status-destructive">임베딩 실패</span>
                 <IconErrorFilled className="text-status-destructive size-4.5" />
               </div>
-              <div className="border-edge-assistive flex-1 border-t" />
+              <div className="border-line-normal-assistive flex-1 border-t" />
             </div>
 
             {/* 실패 아이템 리스트 */}
@@ -130,19 +130,19 @@ export default function EmbeddingHistoryCard({
                 return (
                   <div
                     key={`${item.scope_id}-${item.target_id}`}
-                    className="border-edge-assistive flex h-14 shrink-0 items-center gap-4 border-b px-4 last:border-b-0"
+                    className="border-line-normal-assistive flex h-14 shrink-0 items-center gap-4 border-b px-4 last:border-b-0"
                   >
-                    <div className="border-edge-normal bg-fill-normal/75 flex shrink-0 items-center justify-center overflow-hidden rounded-full border p-1.5">
+                    <div className="border-line-normal-normal bg-fill-normal-normal/75 flex shrink-0 items-center justify-center overflow-hidden rounded-full border p-1.5">
                       <ResourceIcon className="size-5" />
                     </div>
-                    <span className="text-body-small text-content-normal flex-1 truncate">{item.target_name}</span>
+                    <span className="text-body-small text-text-normal-normal flex-1 truncate">{item.target_name}</span>
                     <div className="flex shrink-0 items-center gap-4">
                       <div className="flex items-center gap-1.5">
-                        <span className="text-label-xsmall text-content-alternative whitespace-nowrap">
+                        <span className="text-label-xsmall text-text-normal-alternative whitespace-nowrap">
                           {formatHistoryDate(item.last_failed_at ?? '')}
                         </span>
-                        <div className="border-edge-neutral h-3.75 border-r" />
-                        <span className="text-label-xsmall text-content-alternative whitespace-nowrap">
+                        <div className="border-line-normal-neutral h-3.75 border-r" />
+                        <span className="text-label-xsmall text-text-normal-alternative whitespace-nowrap">
                           {gap ? `${gap.totalMissing}건 실패` : '-'}
                         </span>
                       </div>
@@ -150,7 +150,7 @@ export default function EmbeddingHistoryCard({
                         type="button"
                         onClick={() => setRetryTarget(item)}
                         disabled={!gap}
-                        className="border-edge-neutral bg-fill-normal text-body-xsmall text-content-normal flex h-7.5 cursor-pointer items-center justify-center rounded-lg border px-2 disabled:cursor-not-allowed disabled:opacity-50"
+                        className="border-line-normal-neutral bg-fill-normal-normal text-body-xsmall text-text-normal-normal flex h-7.5 cursor-pointer items-center justify-center rounded-lg border px-2 disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         재시도
                       </button>
@@ -171,7 +171,7 @@ export default function EmbeddingHistoryCard({
                 <span className="text-body-xsmall text-status-positive">임베딩 성공</span>
                 <IconCheckCircleFilled className="text-status-positive size-4.5" />
               </div>
-              <div className="border-edge-assistive flex-1 border-t" />
+              <div className="border-line-normal-assistive flex-1 border-t" />
             </div>
 
             {/* 성공 아이템 리스트 */}
@@ -179,14 +179,14 @@ export default function EmbeddingHistoryCard({
               {filteredSuccess.map((item) => (
                 <div
                   key={`${item.scope_id}-${item.target_id}`}
-                  className="border-edge-assistive flex h-14 shrink-0 items-center gap-4 px-4"
+                  className="border-line-normal-assistive flex h-14 shrink-0 items-center gap-4 px-4"
                 >
-                  <div className="border-edge-normal bg-fill-normal/75 flex shrink-0 items-center justify-center overflow-hidden rounded-full border p-1.5">
+                  <div className="border-line-normal-normal bg-fill-normal-normal/75 flex shrink-0 items-center justify-center overflow-hidden rounded-full border p-1.5">
                     <ResourceIcon className="size-5" />
                   </div>
-                  <div className="border-edge-assistive flex flex-1 items-center gap-5 border-b py-4">
-                    <span className="text-body-small text-content-normal flex-1 truncate">{item.target_name}</span>
-                    <span className="text-label-xsmall text-content-alternative shrink-0 whitespace-nowrap">
+                  <div className="border-line-normal-assistive flex flex-1 items-center gap-5 border-b py-4">
+                    <span className="text-body-small text-text-normal-normal flex-1 truncate">{item.target_name}</span>
+                    <span className="text-label-xsmall text-text-normal-alternative shrink-0 whitespace-nowrap">
                       {formatHistoryDate(item.last_succeeded_at ?? '')}
                     </span>
                   </div>

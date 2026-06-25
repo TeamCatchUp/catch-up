@@ -12,10 +12,8 @@ from fastapi.encoders import jsonable_encoder
 from catchup.configs.config import settings
 from catchup.connectors.slack.schemas import SlackEventWrapper
 from catchup.server.connector.slack.schemas import SlackWebhookRequest
-from catchup.server.connector.slack.webhook_dispatcher import (
-    handle_slack_webhook as dispatch_slack_webhook,
-)
 from catchup.server.connector.webhook_verifier import WebhookVerifierProvider
+from catchup.sync.ingress.slack import handle_slack_webhook as dispatch_slack_webhook
 
 logger = structlog.get_logger(__name__)
 

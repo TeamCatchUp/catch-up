@@ -38,7 +38,7 @@ export default function QueryInput({ input, inputRef, tipData }: QueryInputProps
   return (
     <div className="flex w-full items-center justify-between">
       <div className="text-button-secondary-mono mr-2 flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center self-end p-1.5">
-        <IconAdd className="text-icon-normal h-7 w-7" />
+        <IconAdd className="text-icon-normal-normal h-7 w-7" />
       </div>
       <div className="relative flex flex-1">
         {isTemplateMode ? (
@@ -53,7 +53,7 @@ export default function QueryInput({ input, inputRef, tipData }: QueryInputProps
             ref={inputRef}
             rows={1}
             className={cn(
-              'text-body-medium placeholder:text-content-assistive w-full resize-none outline-none',
+              'text-body-medium placeholder:text-text-normal-assistive w-full resize-none outline-none',
               input.isFromTemplate && 'leading-[1.7]',
             )}
             placeholder="업무와 관련해 궁금한 무엇이든 물어보세요!"
@@ -78,10 +78,12 @@ export default function QueryInput({ input, inputRef, tipData }: QueryInputProps
         ref={submitButtonRef}
         onClick={handleSubmitClick}
         className={`rounded-rounded ml-2 flex shrink-0 items-center self-end border border-solid p-2 ${
-          input.hasText ? 'border-fill-primary bg-fill-primary cursor-pointer' : 'bg-fill-strong border-edge-assistive'
+          input.hasText
+            ? 'border-fill-primary-normal-normal bg-fill-primary-normal-normal cursor-pointer'
+            : 'bg-fill-normal-strong border-line-normal-assistive'
         }`}
       >
-        <IconArrowSend className={`${input.hasText ? 'brightness-0 invert' : 'text-content-assistive'} h-6 w-6`} />
+        <IconArrowSend className={`${input.hasText ? 'brightness-0 invert' : 'text-text-normal-assistive'} h-6 w-6`} />
       </button>
     </div>
   );

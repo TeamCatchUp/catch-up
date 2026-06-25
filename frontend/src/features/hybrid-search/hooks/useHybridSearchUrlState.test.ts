@@ -24,6 +24,17 @@ describe('useHybridSearchUrlState', () => {
     expect(result.current.tools).toEqual([]);
   });
 
+  it('smart_filter 파라미터가 없으면 기본 ON으로 파싱한다', () => {
+    const { result } = renderHook(() => useHybridSearchUrlState());
+    expect(result.current.smartFilter).toBe(true);
+  });
+
+  it('?smart_filter=false 는 OFF로 파싱한다', () => {
+    mockSearchParams.set('smart_filter', 'false');
+    const { result } = renderHook(() => useHybridSearchUrlState());
+    expect(result.current.smartFilter).toBe(false);
+  });
+
   it('?q=foo&tools=jira,slack 파싱', () => {
     mockSearchParams.set('q', 'foo');
     mockSearchParams.set('tools', 'jira,slack');
@@ -56,10 +67,15 @@ describe('useHybridSearchUrlState', () => {
     mockSearchParams.set('tools', 'jira');
     const { result } = renderHook(() => useHybridSearchUrlState());
     act(() =>
-      result.current.commitSearch('new', ['slack', 'github'], {
-        from: new Date(2026, 4, 1),
-        to: new Date(2026, 4, 19),
-      }),
+      result.current.commitSearch(
+        'new',
+        ['slack', 'github'],
+        {
+          from: new Date(2026, 4, 1),
+          to: new Date(2026, 4, 19),
+        },
+        true,
+      ),
     );
     expect(mockReplace).toHaveBeenCalledTimes(1);
     const url = mockReplace.mock.calls[0]![0] as string;
@@ -67,6 +83,7 @@ describe('useHybridSearchUrlState', () => {
     expect(url).toContain('tools=slack%2Cgithub');
     expect(url).toContain('start=2026-05-01');
     expect(url).toContain('end=2026-05-19');
+    expect(url).toContain('smart_filter=true');
   });
 
   it('commitSearch("", [], undefined) → q·tools·start·end 모두 제거', () => {
@@ -75,11 +92,28 @@ describe('useHybridSearchUrlState', () => {
     mockSearchParams.set('start', '2026-05-01');
     mockSearchParams.set('end', '2026-05-19');
     const { result } = renderHook(() => useHybridSearchUrlState());
-    act(() => result.current.commitSearch('', [], undefined));
+    act(() => result.current.commitSearch('', [], undefined, false));
     const url = mockReplace.mock.calls[0]![0] as string;
     expect(url).not.toContain('q=');
     expect(url).not.toContain('tools=');
     expect(url).not.toContain('start=');
     expect(url).not.toContain('end=');
+    expect(url).toContain('smart_filter=false');
+  });
+
+  it('commitSearch는 smart_filter=true를 항상 명시한다', () => {
+    const { result } = renderHook(() => useHybridSearchUrlState());
+    act(() => result.current.commitSearch('new', [], undefined, true));
+    const url = mockReplace.mock.calls[0]![0] as string;
+    expect(url).toContain('q=new');
+    expect(url).toContain('smart_filter=true');
+  });
+
+  it('commitSearch는 smart_filter=false를 항상 명시한다', () => {
+    const { result } = renderHook(() => useHybridSearchUrlState());
+    act(() => result.current.commitSearch('new', [], undefined, false));
+    const url = mockReplace.mock.calls[0]![0] as string;
+    expect(url).toContain('q=new');
+    expect(url).toContain('smart_filter=false');
   });
 });

@@ -27,7 +27,7 @@ export default function SearchHistoryList({
   if (!isLoading && entries.length === 0) {
     return (
       <div className="flex w-full items-center justify-center py-4">
-        <span className="text-body-small text-content-assistive">최근 검색 기록이 없습니다</span>
+        <span className="text-body-small text-text-normal-assistive">최근 검색 기록이 없습니다</span>
       </div>
     );
   }
@@ -43,7 +43,7 @@ export default function SearchHistoryList({
         return (
           <div key={section.key} className="flex w-full flex-col gap-2.5">
             <div className="flex items-center px-2">
-              <span className="text-body-xsmall text-content-alternative">{DATE_SECTION_LABELS[section.key]}</span>
+              <span className="text-body-xsmall text-text-normal-alternative">{DATE_SECTION_LABELS[section.key]}</span>
             </div>
             <div className="flex w-full flex-col gap-1">
               {items.map((entry) => (

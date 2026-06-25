@@ -11,16 +11,16 @@ from catchup.db.models import SyncType
 from catchup.db.sync import find_active_full_sync_job
 from catchup.db.sync import try_acquire_full_sync_scope_lock
 from catchup.sync.common.exceptions import SyncInternalException
+from catchup.sync.dispatch.result_builder import build_conflict_response
+from catchup.sync.dispatch.types import DispatchContext
+from catchup.sync.dispatch.types import PreparedDispatchState
+from catchup.sync.dispatch.types import PrepareDispatchInput
 from catchup.sync.event_publisher.event_record_persistence import (
     persist_sync_job_and_events,
 )
 from catchup.sync.event_publisher.stream_task_builder import (
     build_stream_tasks_from_persisted_events,
 )
-from catchup.sync.dispatch.result_builder import build_conflict_response
-from catchup.sync.dispatch.types import DispatchContext
-from catchup.sync.dispatch.types import PreparedDispatchState
-from catchup.sync.dispatch.types import PrepareDispatchInput
 from catchup.sync.services.dispatch_observer import resolve_sync_dispatch_observer
 
 logger = structlog.get_logger(__name__)

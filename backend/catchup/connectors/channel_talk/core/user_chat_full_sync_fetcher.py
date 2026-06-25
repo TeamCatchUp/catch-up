@@ -1,16 +1,17 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import datetime
+from typing import Protocol
 
-from catchup.connector_core.ports.sync_ingestion import SyncWindow
 from catchup.connectors.channel_talk.core.client import ChannelTalkCoreApiClient
-from catchup.connectors.channel_talk.core.user_chat_full_sync_models import (
+from catchup.connectors.channel_talk.core.user_chat_fetch_models import (
     ChannelTalkFetchedUserChat,
 )
-from catchup.connectors.channel_talk.core.user_chat_full_sync_models import (
+from catchup.connectors.channel_talk.core.user_chat_fetch_models import (
     ChannelTalkFetchedUserChatsResult,
 )
-from catchup.connectors.channel_talk.core.user_chat_full_sync_models import (
+from catchup.connectors.channel_talk.core.user_chat_fetch_models import (
     ChannelTalkUserChatFullSyncConnection,
 )
 from catchup.connectors.channel_talk.schemas.channel_metadata import (
@@ -23,6 +24,11 @@ from catchup.connectors.channel_talk.schemas.user_chat import ChannelTalkUserCha
 from catchup.connectors.channel_talk.schemas.user_chat_message import (
     ChannelTalkUserChatMessage,
 )
+
+
+class ChannelTalkUserChatSyncWindow(Protocol):
+    window_start: datetime
+    window_end: datetime
 
 
 class ChannelTalkUserChatFullSyncFetcher:
@@ -50,7 +56,7 @@ class ChannelTalkUserChatFullSyncFetcher:
         *,
         connection: ChannelTalkUserChatFullSyncConnection,
         states: tuple[ChannelTalkUserChatState, ...],
-        sync_window: SyncWindow,
+        sync_window: ChannelTalkUserChatSyncWindow,
         checkpoint_state: ChannelTalkUserChatState | None = None,
         checkpoint_cursor: str | None = None,
     ) -> ChannelTalkFetchedUserChatsResult:

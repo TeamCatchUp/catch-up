@@ -12,6 +12,9 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from catchup.agents.tools import init_agent_tool_registry
+from catchup.agents.triggers.listener import run_agent_trigger_listener_forever
+from catchup.agents.triggers.recovery import run_debounce_ttl_listener_forever
 from catchup.audit.enums import AuditEventStatus
 from catchup.audit.enums import AuditLevel
 from catchup.audit.handlers import audit_event_handler
@@ -20,6 +23,7 @@ from catchup.audit.service import emit_audit_event
 from catchup.components.embedder.constants import EmbeddingProvider
 from catchup.components.embedder.factory import get_embedding_service
 from catchup.components.vector_db.factory import get_pgvector_repository
+from catchup.components.vector_db.factory import get_v2_vector_store
 from catchup.configs.config import settings
 from catchup.costs.handlers import chat_token_usage_handler
 from catchup.db.engine import SessionLocal
@@ -39,6 +43,7 @@ from catchup.rag.semaphores import rag_semaphores
 from catchup.server.admin.api import router as admin_router
 from catchup.server.audit.api import router as audit_router
 from catchup.server.auth.api import router as auth_router
+from catchup.server.automations.api import router as inquiry_automation_router
 from catchup.server.chat.api import router as chat_router
 from catchup.server.chat_room.api import router as chatroom_router
 from catchup.server.connector.atlassian.auth_api import router as atlassian_auth_router
@@ -58,7 +63,10 @@ from catchup.server.initialization import ensure_pg_indices
 from catchup.server.initialization import ensure_vector_index
 from catchup.server.integrations.api import router as integrations_router
 from catchup.server.mapping.api import router as github_mapping_csv_router
-from catchup.server.middleware.request_context import request_context_middleware
+from catchup.server.mcp.install_api import router as mcp_install_router
+from catchup.server.mcp.oauth_api import router as mcp_oauth_router
+from catchup.server.mcp.oauth_api import well_known_router as mcp_well_known_router
+from catchup.server.middleware.request_context import RequestContextMiddleware
 from catchup.server.onboarding.api import router as onboarding_router
 from catchup.server.search.api import router as search_router
 from catchup.server.settings.api import router as settings_router
@@ -123,6 +131,10 @@ async def lifespan(app: FastAPI):
 
     sync_worker_stop_event: asyncio.Event | None = None
     sync_worker_task: asyncio.Task | None = None
+    agent_trigger_listener_stop_event: asyncio.Event | None = None
+    agent_trigger_listener_task: asyncio.Task | None = None
+    debounce_ttl_listener_stop_event: asyncio.Event | None = None
+    debounce_ttl_listener_task: asyncio.Task | None = None
     uploader_task: asyncio.Task | None = None  # S3 감사로그 업로드
 
     if settings.LOG_AUDIT_FILE_ENABLED:
@@ -144,6 +156,9 @@ async def lifespan(app: FastAPI):
         embeddings = get_embedding_service(EmbeddingProvider.AWS_BEDROCK).get_embedder()
         pgvector_repo = get_pgvector_repository(embeddings)  # Ingestion
         await pgvector_repo.initialize(ensure_pg_indices)
+        if settings.VECTOR_STORE_V2_DUAL_WRITE_ENABLED:
+            v2_vector_store = get_v2_vector_store(embeddings)
+            await v2_vector_store.initialize()
         if settings.PGVECTOR_HNSW_INDEX_ENABLED:
             asyncio.create_task(ensure_vector_index())
         logger.info(
@@ -215,6 +230,16 @@ async def lifespan(app: FastAPI):
             error=str(e),
         )
 
+    try:
+        init_agent_tool_registry()
+        logger.info("agent_tool_registry_initialized", context="server_startup")
+    except Exception as e:
+        logger.warning(
+            "agent_tool_registry_init_failed",
+            context="server_startup",
+            error=str(e),
+        )
+
     # Scheduler 초기화
     try:
         init_scheduler()
@@ -280,6 +305,19 @@ async def lifespan(app: FastAPI):
             "in_process_worker_started",
             context="sync_worker",
         )
+    if settings.AGENT_TRIGGER_WORKER_AUTOSTART:
+        agent_trigger_listener_stop_event = asyncio.Event()
+        agent_trigger_listener_task = asyncio.create_task(
+            run_agent_trigger_listener_forever(agent_trigger_listener_stop_event)
+        )
+        debounce_ttl_listener_stop_event = asyncio.Event()
+        debounce_ttl_listener_task = asyncio.create_task(
+            run_debounce_ttl_listener_forever(debounce_ttl_listener_stop_event)
+        )
+        logger.info(
+            "in_process_worker_started",
+            context="agent_trigger_worker",
+        )
 
     try:
         with SessionLocal() as db:
@@ -324,7 +362,12 @@ async def lifespan(app: FastAPI):
             error=str(e),
         )
 
-    yield
+    if settings.MCP_SERVER_ENABLED:
+        from catchup.mcp.server import mcp as _mcp_server
+        async with _mcp_server.session_manager.run():
+            yield
+    else:
+        yield
 
     # 서버 종료 전 감사로그 파일 S3 업로드
     if uploader_task:
@@ -351,6 +394,10 @@ async def lifespan(app: FastAPI):
 
     if sync_worker_stop_event is not None:
         sync_worker_stop_event.set()
+    if agent_trigger_listener_stop_event is not None:
+        agent_trigger_listener_stop_event.set()
+    if debounce_ttl_listener_stop_event is not None:
+        debounce_ttl_listener_stop_event.set()
 
     if sync_worker_task is not None:
         try:
@@ -360,6 +407,30 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.error(
                 "worker_shutdown_failed",
+                context="server_shutdown",
+                error=str(e),
+                exc_info=True,
+            )
+    if agent_trigger_listener_task is not None:
+        try:
+            await agent_trigger_listener_task
+        except asyncio.CancelledError:
+            pass
+        except Exception as e:
+            logger.error(
+                "agent_trigger_listener_shutdown_failed",
+                context="server_shutdown",
+                error=str(e),
+                exc_info=True,
+            )
+    if debounce_ttl_listener_task is not None:
+        try:
+            await debounce_ttl_listener_task
+        except asyncio.CancelledError:
+            pass
+        except Exception as e:
+            logger.error(
+                "agent_trigger_debounce_ttl_listener_shutdown_failed",
                 context="server_shutdown",
                 error=str(e),
                 exc_info=True,
@@ -461,6 +532,7 @@ app.include_router(chatroom_router)
 app.include_router(auth_router)
 app.include_router(integrations_router)
 app.include_router(admin_router)
+app.include_router(inquiry_automation_router)
 app.include_router(channel_talk_admin_router)
 app.include_router(channel_talk_webhook_router)
 app.include_router(github_auth_router)
@@ -478,15 +550,31 @@ app.include_router(search_router)
 app.include_router(audit_router)
 app.include_router(workflow_credentials_router)
 
-if settings.DEBUG_PROD_MODE:
-    from catchup.server.debug.api import router as debug_router
-    app.include_router(debug_router)
-    logger.warning("debug_prod_mode_enabled", note="disable DEBUG_PROD_MODE after testing")
+if settings.DEBUG_API_ENABLED:
+    from catchup.server.debug.agent_simulate import router as agent_simulate_router
+    from catchup.server.debug.search_probe import router as search_probe_router
+    app.include_router(search_probe_router)
+    app.include_router(agent_simulate_router)
+    logger.warning("debug_api_enabled", note="disable DEBUG_API_ENABLED in production")
+
+app.include_router(mcp_well_known_router)
+app.include_router(mcp_oauth_router)
+# mcp_install_router는 반드시 app.mount("/api/v1/mcp", ...) 보다 먼저 등록해야 한다.
+# Starlette는 삽입 순서로 라우트를 평가하므로 순서가 바뀌면 install 엔드포인트가
+# MCPAuthMiddleware mount에 흡수되어 403을 반환한다.
+app.include_router(mcp_install_router)
 
 if settings.MCP_SERVER_ENABLED:
-    from catchup.mcp.server import mcp as mcp_server
+    from fastapi.responses import RedirectResponse
 
-    app.mount("/api/mcp", mcp_server.sse_app())
+    from catchup.mcp.server import mcp as mcp_server
+    from catchup.server.middleware.mcp_auth import MCPAuthMiddleware
+
+    @app.api_route("/api/v1/mcp", methods=["GET", "POST", "DELETE"])
+    async def _mcp_slash_redirect():
+        return RedirectResponse(url="/api/v1/mcp/", status_code=307)
+
+    app.mount("/api/v1/mcp", MCPAuthMiddleware(mcp_server.streamable_http_app()))
 
 
 app.add_middleware(
@@ -505,7 +593,7 @@ if settings.PYINSTRUMENT_ENABLED:
     from catchup.server.middleware.pyinstrument import profile_middleware
 
     app.middleware("http")(profile_middleware)
-app.middleware("http")(request_context_middleware)
+app.add_middleware(RequestContextMiddleware)
 
 
 # 헬스 체크

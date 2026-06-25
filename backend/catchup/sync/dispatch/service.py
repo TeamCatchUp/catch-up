@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from fastapi.concurrency import run_in_threadpool
 import structlog
+from fastapi.concurrency import run_in_threadpool
 
 from catchup.sync.common.exceptions import SyncInternalException
 from catchup.sync.common.protocols import EventPublisherProtocol

@@ -18,9 +18,9 @@ export default function SourceBadge({ n, sourceType }: { n: string; sourceType: 
   const Logo = SOURCE_LOGO[sourceType];
 
   return (
-    <span className="bg-fill-strong border-edge-assistive inline-flex items-center justify-center gap-1 rounded-full border px-1.5 py-1 align-middle whitespace-nowrap">
+    <span className="bg-fill-normal-strong border-line-normal-assistive inline-flex items-center justify-center gap-1 rounded-full border px-1.5 py-1 align-middle whitespace-nowrap">
       <Logo className={`${sourceType === 'channel_talk' ? 'h-4 w-4' : 'h-5 w-5'} shrink-0`} />
-      <span className="text-body-xsmall text-content-strong">{n}</span>
+      <span className="text-body-xsmall text-text-normal-strong">{n}</span>
     </span>
   );
 }

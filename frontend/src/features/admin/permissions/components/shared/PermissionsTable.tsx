@@ -21,19 +21,19 @@ interface PermissionsTableProps {
 /** 권한 목록 테이블 */
 export default function PermissionsTable({ rows, onChangeRoleClick, onRoleChangeClick }: PermissionsTableProps) {
   return (
-    <section className="border-edge-neutral bg-fill-normal flex min-h-0 flex-1 flex-col overflow-hidden border-y">
-      <div className="border-edge-neutral bg-fill-strong flex h-9 shrink-0 items-center border-b px-6 lg:px-9">
+    <section className="border-line-normal-neutral bg-fill-normal-normal flex min-h-0 flex-1 flex-col overflow-hidden border-y">
+      <div className="border-line-normal-neutral bg-fill-normal-strong flex h-9 shrink-0 items-center border-b px-6 lg:px-9">
         <div className="grid flex-1 grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto] items-center gap-6 lg:gap-9">
-          <span className="text-body-xsmall text-content-alternative pl-1.5 text-left">이름</span>
-          <span className="text-body-xsmall text-content-alternative text-center">직급</span>
-          <span className="text-body-xsmall text-content-alternative text-center">부서</span>
-          <span className="text-body-xsmall text-content-alternative text-center">권한</span>
+          <span className="text-body-xsmall text-text-normal-alternative pl-1.5 text-left">이름</span>
+          <span className="text-body-xsmall text-text-normal-alternative text-center">직급</span>
+          <span className="text-body-xsmall text-text-normal-alternative text-center">부서</span>
+          <span className="text-body-xsmall text-text-normal-alternative text-center">권한</span>
           <span aria-hidden className="block w-27.5" />
         </div>
       </div>
 
       {rows.length === 0 ? (
-        <div className="text-body-small text-content-alternative flex h-full min-h-25 items-center justify-center">
+        <div className="text-body-small text-text-normal-alternative flex h-full min-h-25 items-center justify-center">
           조회된 권한 정보가 없습니다.
         </div>
       ) : (
@@ -44,12 +44,12 @@ export default function PermissionsTable({ rows, onChangeRoleClick, onRoleChange
             return (
               <div
                 key={member.id}
-                className="border-edge-neutral flex h-12.5 shrink-0 items-center border-b px-6 lg:px-9"
+                className="border-line-normal-neutral flex h-12.5 shrink-0 items-center border-b px-6 lg:px-9"
               >
                 <div className="grid flex-1 grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto] items-center gap-6 lg:gap-9">
                   <div className="flex items-center gap-4">
-                    <DefaultProfile className="text-content-assistive size-7.5 shrink-0 rounded-full" />
-                    <span className="text-body-small text-content-normal truncate">{member.name}</span>
+                    <DefaultProfile className="text-text-normal-assistive size-7.5 shrink-0 rounded-full" />
+                    <span className="text-body-small text-text-normal-normal truncate">{member.name}</span>
                   </div>
 
                   <div className="flex items-center justify-center">
@@ -57,7 +57,7 @@ export default function PermissionsTable({ rows, onChangeRoleClick, onRoleChange
                       className={cn(
                         TAG_BASE_CLASS,
                         RANK_BADGE_CLASS[JOB_LEVEL_LABEL[member.jobLevel]] ??
-                          'bg-fill-interaction-hover text-content-alternative',
+                          'bg-fill-normal-interaction-hover text-text-normal-alternative',
                       )}
                     >
                       {JOB_LEVEL_LABEL[member.jobLevel]}
@@ -69,7 +69,7 @@ export default function PermissionsTable({ rows, onChangeRoleClick, onRoleChange
                       <PopoverTrigger asChild>
                         <button
                           type="button"
-                          className="text-body-xsmall text-content-normal max-w-full cursor-pointer truncate"
+                          className="text-body-xsmall text-text-normal-normal max-w-full cursor-pointer truncate"
                         >
                           {member.department}
                         </button>
@@ -77,7 +77,7 @@ export default function PermissionsTable({ rows, onChangeRoleClick, onRoleChange
                       <PopoverContent
                         side="top"
                         align="center"
-                        className="text-body-xsmall text-icon-normal w-auto px-3 py-2"
+                        className="text-body-xsmall text-icon-normal-normal w-auto px-3 py-2"
                       >
                         {member.department}
                       </PopoverContent>

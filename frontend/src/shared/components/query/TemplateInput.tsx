@@ -233,7 +233,7 @@ export default function TemplateInput({ tip, input, submitButtonRef, onSubmitRea
       <LexicalComposer initialConfig={initialConfig}>
         <TemplateFieldContext.Provider value={contextWithSubmit}>
           <PlainTextPlugin
-            contentEditable={<ContentEditable className="text-content-neutral outline-none" />}
+            contentEditable={<ContentEditable className="text-text-normal-neutral outline-none" />}
             ErrorBoundary={LexicalErrorBoundary}
           />
           <InitPlugin tip={tip} onReady={handleInitReady} />

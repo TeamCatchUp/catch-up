@@ -1,23 +1,24 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
+from dataclasses import field
 from functools import lru_cache
 
 from fastapi.concurrency import run_in_threadpool
 
-from catchup.connectors.github.factory import create_github_ingestion_service
 from catchup.db.engine import SessionLocal
 from catchup.db.github import domain_repository as github_entities
 from catchup.db.models import SyncConnector
-from catchup.server.sync.schemas import (
-    SyncRecordGapItem,
-    SyncRecordGapResponse,
-    SyncRecordRetryItemRequest,
-    SyncRecordRetryItemResponse,
-    SyncRecordRetryRequest,
-    SyncRecordRetryResponse,
-)
+from catchup.server.sync.schemas import SyncRecordGapItem
+from catchup.server.sync.schemas import SyncRecordGapResponse
+from catchup.server.sync.schemas import SyncRecordRetryItemRequest
+from catchup.server.sync.schemas import SyncRecordRetryItemResponse
+from catchup.server.sync.schemas import SyncRecordRetryRequest
+from catchup.server.sync.schemas import SyncRecordRetryResponse
 from catchup.sync.common.exceptions import SyncRequestException
+from catchup.sync.ingestion.factories.github import (
+    create_github_repository_repair_adapter,
+)
 from catchup.sync.repair.context import RecordRepairContext
 
 
@@ -125,12 +126,14 @@ class GithubRecordRepairService:
             target_id,
         )
 
-    async def _get_github_service(
+    async def _get_github_repair_adapter(
         self,
         *,
         installation_id: int,
     ):
-        return await create_github_ingestion_service(installation_id=installation_id)
+        return await create_github_repository_repair_adapter(
+            installation_id=installation_id
+        )
 
     async def get_record_gaps(
         self,
@@ -141,11 +144,11 @@ class GithubRecordRepairService:
             scope_id=repair_context.scope_id,
             target_id=repair_context.target_id,
         )
-        service = await self._get_github_service(
+        adapter = await self._get_github_repair_adapter(
             installation_id=target.installation_id,
         )
 
-        gap_report = await service.build_record_gap_report(
+        gap_report = await adapter.build_record_gap_report(
             repo_id=target.repo_id,
             sync_from_dt=repair_context.sync_from_dt,
         )
@@ -177,12 +180,12 @@ class GithubRecordRepairService:
             scope_id=repair_context.scope_id,
             target_id=repair_context.target_id,
         )
-        service = await self._get_github_service(
+        adapter = await self._get_github_repair_adapter(
             installation_id=target.installation_id,
         )
         retry_records = _index_retry_records(request.records)
 
-        retry_result = await service.retry_missing_records(
+        retry_result = await adapter.retry_missing_records(
             repo_id=target.repo_id,
             issue_ids=retry_records.issue_ids,
             pull_request_ids=retry_records.pull_request_ids,

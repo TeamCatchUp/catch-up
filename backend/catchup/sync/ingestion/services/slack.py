@@ -1,0 +1,607 @@
+import asyncio
+import logging
+from dataclasses import dataclass
+from dataclasses import field
+from datetime import datetime
+from datetime import timedelta
+from datetime import timezone
+from typing import Any
+
+from fastapi.concurrency import run_in_threadpool
+from langchain_core.documents import Document
+from slack_sdk.errors import SlackApiError
+from sqlalchemy.orm import Session
+
+from catchup.components.summarizer import SummarizeRequest
+from catchup.components.summarizer import SummarizerService
+from catchup.components.summarizer import get_summarizer_service
+from catchup.components.vector_db.pgvector import PGVectorRepository
+from catchup.configs.config import settings
+from catchup.connectors.slack.client import SlackApiClientWrapper
+from catchup.connectors.slack.client import SlackConnectorApiError
+from catchup.connectors.slack.schemas import SlackThreadReply
+from catchup.connectors.slack.schemas import SlackUser
+from catchup.db.engine import SessionLocal
+from catchup.db.slack import domain_repository
+from catchup.sync.audit import SyncAuditContext
+from catchup.sync.ingestion.document_builders.slack import SlackTransformer
+
+logger = logging.getLogger(__name__)
+
+
+CATCH_UP_ANSWER_PLACEHOLDER = "[CATCH_UP_ANSWER]"
+
+
+@dataclass(slots=True, frozen=True)
+class SlackRecordGapItem:
+    record_type: str
+    expected_count: int = 0
+    stored_count: int = 0
+    missing_count: int = 0
+    missing_ids: list[str] = field(default_factory=list)
+
+
+@dataclass(slots=True, frozen=True)
+class SlackRecordGapReport:
+    records: list[SlackRecordGapItem] = field(default_factory=list)
+
+
+@dataclass(slots=True, frozen=True)
+class SlackRecordRetryItem:
+    record_type: str
+    requested_ids: list[str] = field(default_factory=list)
+    retried_count: int = 0
+    succeeded_count: int = 0
+    failed_ids: list[str] = field(default_factory=list)
+    remaining_missing_ids: list[str] = field(default_factory=list)
+
+
+@dataclass(slots=True, frozen=True)
+class SlackRecordRetryResult:
+    records: list[SlackRecordRetryItem] = field(default_factory=list)
+
+
+class SlackIngestionService:
+    """
+    Slack record repair/retry support service.
+    """
+
+    def __init__(
+        self,
+        repository: PGVectorRepository,
+        team_id: str,
+        access_token: str,
+        bot_user_id: str | None = None,
+        enable_summarization: bool = True,
+    ):
+        self.team_id = team_id
+        self.bot_user_id = bot_user_id
+        self.enable_summarization = enable_summarization
+        self.client = SlackApiClientWrapper(access_token, team_id)
+        self.transformer: SlackTransformer | None = None
+        self.repository = repository
+        self.summarizer: SummarizerService | None = None
+        self.user_cache: dict[str, SlackUser] = {}
+        self.workspace_domain: str | None = None
+        self._initialized = False
+
+    async def initialize(self) -> None:
+        if self._initialized:
+            return
+
+        logger.info("[SLACK][INGESTION] Initializing service: team_id=%s", self.team_id)
+
+        self.transformer = SlackTransformer(self.user_cache)
+        if self.enable_summarization:
+            self.summarizer = get_summarizer_service()
+            logger.info("[SLACK][INGESTION] Summarization enabled")
+
+        self.repository.ensure_initialized()
+
+        self._initialized = True
+        logger.info("[SLACK][INGESTION] Service initialized: team_id=%s", self.team_id)
+
+    def _ensure_initialized(self) -> None:
+        if not self._initialized or self.transformer is None:
+            raise RuntimeError(
+                "SlackIngestionService not initialized. "
+                "Call await service.initialize() first."
+            )
+
+    def _load_ingestion_context(self, db: Session) -> None:
+        """메시지 변환에 필요한 user cache/workspace domain을 DB에서 로드한다."""
+        try:
+            users = domain_repository.get_users_by_team(db, self.team_id, include_deleted=True)
+            self.user_cache.clear()
+            self.user_cache.update(
+                {
+                    user.user_id: SlackUser(
+                        id=user.user_id,
+                        name=user.name,
+                        real_name=user.real_name,
+                        display_name=user.display_name,
+                    )
+                    for user in users
+                }
+            )
+
+            if not self.workspace_domain:
+                workspace = domain_repository.get_workspace(db, self.team_id)
+                if workspace:
+                    self.workspace_domain = workspace.domain
+
+            logger.info(
+                "[SLACK][INGESTION] Context loaded: team_id=%s, users=%s, domain=%s",
+                self.team_id,
+                len(self.user_cache),
+                self.workspace_domain,
+            )
+        except Exception as exc:
+            logger.error(
+                "[SLACK][INGESTION] Failed to load context: team_id=%s, error=%s",
+                self.team_id,
+                exc,
+                exc_info=True,
+            )
+
+    _SKIP_SUBTYPES = frozenset(
+        {
+            "channel_join",
+            "channel_leave",
+            "group_join",
+            "group_leave",
+        }
+    )
+    _SKIPPABLE_ERRORS = frozenset(
+        {
+            "not_in_channel",
+            "channel_not_found",
+            "missing_scope",
+        }
+    )
+
+    def _should_skip_message(self, msg_data: dict[str, Any]) -> bool:
+        return msg_data.get("subtype") in self._SKIP_SUBTYPES
+
+    def _sanitize_message_payload(
+        self,
+        msg_data: dict[str, Any],
+    ) -> dict[str, Any]:
+        if not self.bot_user_id or msg_data.get("user") != self.bot_user_id:
+            return msg_data
+
+        sanitized = dict(msg_data)
+        sanitized["text"] = CATCH_UP_ANSWER_PLACEHOLDER
+        sanitized["blocks"] = []
+        sanitized["attachments"] = []
+        sanitized["files"] = []
+        return sanitized
+
+    def _build_permalink(self, channel_id: str, ts: str) -> str | None:
+        if not self.workspace_domain:
+            return None
+        return f"https://{self.workspace_domain}.slack.com/archives/{channel_id}/p{ts.replace('.', '')}"
+
+    def _pick_latest_ts(self, current: str | None, candidate: str | None) -> str | None:
+        if not candidate:
+            return current
+        if not current:
+            return candidate
+        try:
+            return candidate if float(candidate) > float(current) else current
+        except (TypeError, ValueError):
+            return current
+
+    def _resolve_sync_from_ts(
+        self,
+        sync_days: int | None,
+    ) -> str:
+        days = sync_days if sync_days is not None else settings.DEFAULT_SYNC_DAYS
+        return f"{(datetime.now(timezone.utc) - timedelta(days=days)).timestamp():.6f}"
+
+    @staticmethod
+    def _sync_ts_to_datetime(sync_from_ts: str | None) -> datetime | None:
+        if not sync_from_ts:
+            return None
+
+        try:
+            return datetime.fromtimestamp(float(sync_from_ts), tz=timezone.utc)
+        except (TypeError, ValueError):
+            return None
+
+    @staticmethod
+    def _extract_record_ids_from_doc_ids(doc_ids: list[str]) -> list[str]:
+        record_ids: list[str] = []
+        for doc_id in doc_ids:
+            if not doc_id or ":" not in doc_id:
+                continue
+            record_ids.append(doc_id.rsplit(":", 1)[-1])
+        return record_ids
+
+    @staticmethod
+    def _sort_record_ids(record_ids: set[str]) -> list[str]:
+        def _key(value: str) -> tuple[int, float | str]:
+            try:
+                return (0, float(value))
+            except ValueError:
+                return (1, value)
+
+        return sorted(record_ids, key=_key)
+
+    def _build_gap_item(
+        self,
+        *,
+        expected_ids: list[str],
+        stored_ids: list[str],
+        stored_count: int,
+    ) -> SlackRecordGapItem:
+        missing_ids = self._sort_record_ids(set(expected_ids) - set(stored_ids))
+        return SlackRecordGapItem(
+            record_type="message",
+            expected_count=len(expected_ids),
+            stored_count=stored_count,
+            missing_count=len(missing_ids),
+            missing_ids=missing_ids,
+        )
+
+    def _load_ingestion_context_db(self) -> None:
+        with SessionLocal() as db:
+            self._load_ingestion_context(db)
+
+    def _load_channel_context_db(
+        self,
+        channel_id: str,
+    ) -> str:
+        with SessionLocal() as db:
+            self._load_ingestion_context(db)
+            channel = domain_repository.get_channel(db, channel_id)
+            return channel.name if channel is not None else channel_id
+
+    @staticmethod
+    def _extract_slack_error_code(exc: Exception) -> str | None:
+        if isinstance(exc, SlackConnectorApiError):
+            error_code = exc.metadata.get("error")
+            return str(error_code) if error_code else None
+
+        if isinstance(exc, SlackApiError):
+            error_code = exc.response.get("error")
+            return str(error_code) if error_code else None
+
+        return None
+
+    def _transform_message_document_blocking(
+        self,
+        message_data: dict[str, Any],
+        channel_id: str,
+        channel_name: str,
+        permalink: str | None,
+        replies: list[SlackThreadReply],
+    ) -> Document:
+        message = self.transformer.parse_message(
+            message_data,
+            channel_id,
+            channel_name,
+            permalink,
+            replies,
+        )
+        return self.transformer.transform_message(message, self.team_id)
+
+    def _transform_message_batch_blocking(
+        self,
+        messages: list[dict[str, Any]],
+        channel_id: str,
+        channel_name: str,
+        reply_map: dict[str, list[SlackThreadReply]],
+    ) -> tuple[list[Document], list[str], int, str | None]:
+        batch_documents: list[Document] = []
+        batch_doc_ids: list[str] = []
+        errors = 0
+        batch_latest_synced_ts: str | None = None
+
+        for msg_data in messages:
+            sanitized_msg_data = self._sanitize_message_payload(msg_data)
+            if self._should_skip_message(sanitized_msg_data):
+                continue
+
+            try:
+                message_ts = sanitized_msg_data.get("ts")
+                replies = reply_map.get(sanitized_msg_data.get("ts"), [])
+                permalink = self._build_permalink(channel_id, sanitized_msg_data.get("ts"))
+                doc = self._transform_message_document_blocking(
+                    sanitized_msg_data,
+                    channel_id,
+                    channel_name,
+                    permalink,
+                    replies,
+                )
+                batch_documents.append(doc)
+                batch_doc_ids.append(doc.id)
+
+                if message_ts:
+                    batch_latest_synced_ts = self._pick_latest_ts(
+                        batch_latest_synced_ts,
+                        message_ts,
+                    )
+            except Exception as exc:
+                logger.warning(
+                    "[SLACK][INGESTION] Failed to transform message: team_id=%s, channel_id=%s, ts=%s, error=%s",
+                    self.team_id,
+                    channel_id,
+                    msg_data.get("ts"),
+                    exc,
+                )
+                errors += 1
+
+        return batch_documents, batch_doc_ids, errors, batch_latest_synced_ts
+
+    async def build_record_gap_report(
+        self,
+        *,
+        channel_id: str,
+        channel_name: str,
+        sync_from_ts: str | None = None,
+        sync_days: int | None = None,
+    ) -> SlackRecordGapReport:
+        self._ensure_initialized()
+        resolved_sync_from_ts = sync_from_ts or self._resolve_sync_from_ts(sync_days)
+        since = self._sync_ts_to_datetime(resolved_sync_from_ts)
+
+        expected_ids, stored_doc_ids = await asyncio.gather(
+            self._collect_syncable_message_ids(
+                channel_id=channel_id,
+                sync_from_ts=resolved_sync_from_ts,
+            ),
+            self.repository.list_slack_record_ids(
+                team_id=self.team_id,
+                channel_id=channel_id,
+                entity_type="message",
+                since=since,
+            ),
+        )
+
+        return SlackRecordGapReport(
+            records=[
+                self._build_gap_item(
+                    expected_ids=expected_ids,
+                    stored_ids=self._extract_record_ids_from_doc_ids(stored_doc_ids),
+                    stored_count=len(stored_doc_ids),
+                )
+            ]
+        )
+
+    async def retry_missing_records(
+        self,
+        *,
+        channel_id: str,
+        channel_name: str,
+        sync_from_ts: str | None = None,
+        sync_days: int | None = None,
+        message_ids: list[str] | None = None,
+    ) -> SlackRecordRetryResult:
+        self._ensure_initialized()
+        requested_ids = list(message_ids or [])
+        if not requested_ids:
+            return SlackRecordRetryResult(records=[])
+
+        await run_in_threadpool(self._load_ingestion_context_db)
+        documents, failed_ids = await self._fetch_message_documents(
+            channel_id=channel_id,
+            channel_name=channel_name,
+            message_ids=requested_ids,
+        )
+
+        succeeded_count = 0
+        if documents:
+            try:
+                upsert_documents = documents
+                if self.summarizer:
+                    upsert_documents = await self._summarize_documents(
+                        documents,
+                        channel_name=channel_name,
+                        audit_context=None,
+                    )
+                await self.repository.upsert_documents(
+                    upsert_documents,
+                    [doc.id for doc in upsert_documents],
+                    audit_context=None,
+                    context=f"entity_type=message,channel={channel_name},mode=partial_retry,doc_count={len(upsert_documents)}",
+                )
+                succeeded_count = len(upsert_documents)
+            except Exception as exc:
+                logger.error(
+                    "[SLACK][REPAIR] Failed to upsert message docs: team_id=%s, channel_id=%s, error=%s",
+                    self.team_id,
+                    channel_id,
+                    exc,
+                    exc_info=True,
+                )
+                failed_ids.extend(
+                    self._extract_record_ids_from_doc_ids([doc.id for doc in documents])
+                )
+
+        return SlackRecordRetryResult(
+            records=[
+                SlackRecordRetryItem(
+                    record_type="message",
+                    requested_ids=requested_ids,
+                    retried_count=len(requested_ids),
+                    succeeded_count=succeeded_count,
+                    failed_ids=self._sort_record_ids(set(failed_ids)),
+                )
+            ]
+        )
+
+    async def _collect_syncable_message_ids(
+        self,
+        *,
+        channel_id: str,
+        sync_from_ts: str | None,
+    ) -> list[str]:
+        message_ids: list[str] = []
+        cursor: str | None = None
+
+        while True:
+            response = await self.client.get_conversation_history(
+                channel=channel_id,
+                oldest=sync_from_ts,
+                cursor=cursor,
+                limit=settings.SLACK_MESSAGE_BATCH_SIZE,
+            )
+
+            for message in response.get("messages", []):
+                sanitized_message = self._sanitize_message_payload(message)
+                if self._should_skip_message(sanitized_message):
+                    continue
+                message_ts = sanitized_message.get("ts")
+                if message_ts:
+                    message_ids.append(message_ts)
+
+            if not response.get("has_more"):
+                break
+
+            cursor = response.get("response_metadata", {}).get("next_cursor")
+            if not cursor:
+                break
+
+        return message_ids
+
+    async def _fetch_message_documents(
+        self,
+        *,
+        channel_id: str,
+        channel_name: str,
+        message_ids: list[str],
+    ) -> tuple[list[Document], list[str]]:
+        documents: list[Document] = []
+        failed_ids: list[str] = []
+
+        async def _fetch_one(message_id: str) -> tuple[str, Document | None, bool]:
+            try:
+                document = await self._fetch_message_document(
+                    channel_id=channel_id,
+                    channel_name=channel_name,
+                    message_id=message_id,
+                )
+                return message_id, document, document is None
+            except Exception as exc:
+                logger.warning(
+                    "[SLACK][REPAIR] Failed to fetch message: team_id=%s, channel_id=%s, ts=%s, error=%s",
+                    self.team_id,
+                    channel_id,
+                    message_id,
+                    exc,
+                )
+                return message_id, None, True
+
+        batch_size = max(1, settings.SLACK_SYNC_MAX_CONCURRENT_REQUESTS)
+        for start in range(0, len(message_ids), batch_size):
+            batch_ids = message_ids[start : start + batch_size]
+            results = await asyncio.gather(*[_fetch_one(message_id) for message_id in batch_ids])
+
+            for message_id, document, failed in results:
+                if failed or document is None:
+                    failed_ids.append(message_id)
+                    continue
+                documents.append(document)
+
+        return documents, failed_ids
+
+    async def _fetch_message_document(
+        self,
+        *,
+        channel_id: str,
+        channel_name: str,
+        message_id: str,
+    ) -> Document | None:
+        message_data = await self.client.get_message(
+            channel=channel_id,
+            ts=message_id,
+        )
+        if not message_data:
+            return None
+
+        sanitized_message_data = self._sanitize_message_payload(message_data)
+        if self._should_skip_message(sanitized_message_data):
+            return None
+
+        replies: list[SlackThreadReply] = []
+        if sanitized_message_data.get("reply_count", 0) > 0:
+            replies = await self._fetch_thread_replies(
+                channel_id=channel_id,
+                thread_ts=message_id,
+            )
+
+        return await run_in_threadpool(
+            self._transform_message_document_blocking,
+            sanitized_message_data,
+            channel_id,
+            channel_name,
+            self._build_permalink(channel_id, message_id),
+            replies,
+        )
+
+    async def _fetch_thread_replies(
+        self,
+        *,
+        channel_id: str,
+        thread_ts: str,
+    ) -> list[SlackThreadReply]:
+        replies: list[SlackThreadReply] = []
+        cursor = None
+
+        while True:
+            response = await self.client.get_conversation_replies(
+                channel=channel_id,
+                ts=thread_ts,
+                cursor=cursor,
+            )
+            messages = response.get("messages", [])
+
+            # 첫 번째 메시지는 parent이므로 skip
+            for msg in messages[1:]:
+                sanitized_reply = self._sanitize_message_payload(msg)
+                if self._should_skip_message(sanitized_reply):
+                    continue
+                replies.append(self.transformer.parse_reply(sanitized_reply))
+
+            cursor = response.get("response_metadata", {}).get("next_cursor")
+            if not cursor:
+                break
+
+        return replies
+
+    async def _summarize_documents(
+        self,
+        documents: list[Document],
+        *,
+        channel_name: str,
+        audit_context: SyncAuditContext | None = None,
+    ) -> list[Document]:
+        if not self.summarizer or not documents:
+            return documents
+
+        requests = []
+        for doc in documents:
+            content = doc.metadata.get("contextual_content", doc.page_content)
+            entity_type = doc.metadata.get("entity_type", "message")
+            source_type = f"slack_{entity_type}"
+            requests.append(SummarizeRequest(content=content, source_type=source_type))
+
+        summarized = await self.summarizer.summarize_batch(
+            requests,
+            audit_context=audit_context,
+            context=(
+                f"entity_type=message,channel={channel_name},"
+                f"doc_count={len(documents)}"
+            ),
+        )
+
+        for doc, summary in zip(documents, summarized):
+            doc.page_content = summary
+
+        logger.debug(
+            "[SLACK][INGESTION] Summarized docs: team_id=%s, count=%s",
+            self.team_id,
+            len(documents),
+        )
+        return documents
