@@ -204,7 +204,7 @@ class Settings(BaseSettings):
     PGVECTOR_COLLECTION_NAME: str = "vectorstore"  # 통합 Collection (Jira, Slack, GitHub 등)
     PGVECTOR_EMBEDDING_DIMENSIONS: int = 1536  # Cohere embed-v4.0
     PGVECTOR_HNSW_INDEX_ENABLED: bool = False  # HNSW 인덱스 활성화 여부 (메모리 비용 및 고객사 RDS 호환성 협의 전까지 비활성화)
-    VECTOR_STORE_V2_DUAL_WRITE_ENABLED: bool = True
+    VECTOR_STORE_V2_DUAL_WRITE_ENABLED: bool = False
     VECTOR_STORE_V2_BACKFILL_SCHEDULE_ENABLED: bool = False
     VECTOR_STORE_V2_BACKFILL_BATCH_SIZE: int = 500
     VECTOR_STORE_V2_BACKFILL_SEED_PAGE_SIZE: int = 500
