@@ -32,7 +32,6 @@ export default function RagSidebar({
   stepRows,
   topic,
   pipelineQueryType,
-  pipelineReasoning,
 }: RagSidebarProps) {
   const [displayQA, setDisplayQA] = useState<QAPair | undefined>(currentQA);
   const [isVisible, setIsVisible] = useState(true);

@@ -43,6 +43,7 @@ export default function RagAnswerPage() {
     scrollToMessageId,
     toolFilters: filters.selectedSources,
   });
+  const { hasOlderMessages, isLoadingOlderMessages, loadPreviousMessages } = chat;
 
   // 스크롤 완료 후 URL에서 scrollTo 파라미터 제거 (React 리렌더링 없이 URL만 변경)
   const handleScrollToComplete = useCallback(() => {
@@ -89,13 +90,13 @@ export default function RagAnswerPage() {
 
     const observer = new IntersectionObserver(
       ([entry]) => {
-        if (entry.isIntersecting && chat.hasOlderMessages && !chat.isLoadingOlderMessages) {
+        if (entry.isIntersecting && hasOlderMessages && !isLoadingOlderMessages) {
           // 스크롤 위치 보정을 위해 로드 전 상태 저장
           const container = scrollContainerForPaginationRef.current;
           const prevScrollHeight = container?.scrollHeight ?? 0;
           const prevScrollTop = container?.scrollTop ?? 0;
 
-          chat.loadPreviousMessages().then((prependedPairs) => {
+          loadPreviousMessages().then((prependedPairs) => {
             // prepend된 user 페어 수만큼 activePairIndex 보정 (동일 인덱스가 다른 페어를 가리키지 않게)
             if (prependedPairs > 0) shiftActivePairIndex(prependedPairs);
             // 이전 메시지가 위에 삽입된 후 스크롤 위치 보정
@@ -111,7 +112,7 @@ export default function RagAnswerPage() {
     );
     observer.observe(el);
     return () => observer.disconnect();
-  }, [chat.hasOlderMessages, chat.isLoadingOlderMessages, chat.loadPreviousMessages, shiftActivePairIndex]);
+  }, [hasOlderMessages, isLoadingOlderMessages, loadPreviousMessages, shiftActivePairIndex]);
 
   return (
     <div className="flex h-screen w-full flex-col">

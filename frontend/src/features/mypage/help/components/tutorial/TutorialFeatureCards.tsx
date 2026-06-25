@@ -5,6 +5,7 @@ import Image from 'next/image';
 
 import { TUTORIAL_1_FEATURE_CARDS } from '@/features/mypage/help/constants/tutorialData';
 import ArrowForward from '@/public/icons/icon/arrow_forward.svg';
+import { cn } from '@/shared/utils/cn';
 
 const CARD_SCROLL_AMOUNT = 340; // card width (320) + gap (20)
 
@@ -60,7 +61,10 @@ export default function TutorialFeatureCards() {
     <div className="relative w-full" onMouseEnter={() => setIsHovered(true)} onMouseLeave={() => setIsHovered(false)}>
       <ul
         ref={scrollRef}
-        className={`no-scrollbar flex gap-5 overflow-x-auto select-none ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
+        className={cn(
+          'no-scrollbar flex gap-5 overflow-x-auto select-none',
+          isDragging ? 'cursor-grabbing' : 'cursor-grab',
+        )}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
@@ -81,20 +85,18 @@ export default function TutorialFeatureCards() {
               />
             </div>
             <h3 className="text-heading-medium text-text-normal-normal">{card.title}</h3>
-            <p className="text-label-small text-text-normal-alternative whitespace-pre-line">{card.description}</p>
+            <p className="text-label-small text-text-normal-neutral whitespace-pre-line">{card.description}</p>
           </li>
         ))}
       </ul>
-
-      {/* 우측 그라데이션 페이드 */}
       <div className="to-fill-normal pointer-events-none absolute top-0 right-0 h-full w-15.5 bg-linear-to-r from-transparent" />
 
-      {/* FAB: 오른쪽 스크롤 버튼 */}
       <button
         onClick={handleScrollRight}
-        className={`border-line-normal-neutral bg-fill-normal-normal absolute top-1/2 right-0 flex size-10 translate-x-1/2 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full border shadow-md transition-opacity ${
-          isHovered && canScrollRight ? 'opacity-100' : 'pointer-events-none opacity-0'
-        }`}
+        className={cn(
+          'border-line-normal-neutral bg-fill-normal-normal absolute top-1/2 right-0 flex size-10 translate-x-1/2 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full border shadow-md transition-opacity',
+          isHovered && canScrollRight ? 'opacity-100' : 'pointer-events-none opacity-0',
+        )}
       >
         <ArrowForward className="text-icon-normal-normal h-5 w-5" />
       </button>

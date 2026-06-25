@@ -1,0 +1,96 @@
+import {
+  HelpArticleEmphasis,
+  HelpArticleSection,
+  HelpArticleText,
+} from '@/features/mypage/help/components/article/HelpArticleBlocks';
+import HelpExampleBox from '@/features/mypage/help/components/article/HelpExampleBox';
+import type { HelpArticleNavItem } from '@/features/mypage/help/types/helpArticle';
+
+export const SUPPORT_2_SECTIONS = [
+  { id: 'identity', title: '나의 모든 이름을 하나로, Catch Up에게 알려주세요' },
+  { id: 'first-step', title: '처음 오셨나요? 가장 먼저 할 일이에요' },
+  { id: 'account-change', title: '계정이 바뀌었거나, 새로 추가되었나요?' },
+  { id: 'mapping', title: "정확한 답은 '정확한 연결(Mapping)'에서 나와요" },
+] as const satisfies readonly HelpArticleNavItem[];
+
+export default function Support2Content() {
+  return (
+    <>
+      <HelpArticleSection {...SUPPORT_2_SECTIONS[0]}>
+        <HelpArticleText>
+          <p>
+            우리는 업무 도구마다 조금씩 다른 이름을 씁니다.
+            <br />
+            Jira에서는 김철수, Slack에서는 Charles, GitHub에서는 charles_k…
+            <br />
+            사람은 눈치껏 알지만, 시스템에게는 완전히 다른 사람으로 보일 수 있어요.
+          </p>
+        </HelpArticleText>
+      </HelpArticleSection>
+      <HelpArticleSection {...SUPPORT_2_SECTIONS[1]}>
+        <HelpArticleText>
+          <p>새로운 도구를 본격적으로 쓰기 전에, 여기서 &apos;나의 이름표&apos;를 먼저 달아주세요.</p>
+          <br />
+          <p>
+            신규 입사자라면 회사에서 발급받은 계정들을{' '}
+            <HelpArticleEmphasis>Catch Up에 가장 먼저 등록</HelpArticleEmphasis>해두는 게 좋습니다.
+            <br />
+            등록하지 않은 상태로 다른 협업 툴을 이용한다면, 해당 기간 동안의 데이터는 Catch Up이 찾기 어려울 수 있어요.
+          </p>
+          <br />
+          <p>
+            Catch Up에 협업 툴에서 사용하는 닉네임, 이메일 등을 꼼꼼히 입력해주세요.
+            <br />
+            그래야 앞으로 쌓일 여러분의 기록들이 흩어지지 않고, 처음부터 &apos;나의 업무 맥락&apos;으로 차곡차곡
+            정리되거든요.
+          </p>
+        </HelpArticleText>
+      </HelpArticleSection>
+
+      <HelpArticleSection {...SUPPORT_2_SECTIONS[2]}>
+        <HelpArticleText>
+          <p>쓰던 아이디가 바뀌었거나, 새로운 툴 계정을 받으셨나요?</p>
+          <br />
+          <p>
+            <HelpArticleEmphasis>
+              꼭 &apos;협업 툴 연동 관리&apos; 페이지에서 수정하고 추가해주세요!
+            </HelpArticleEmphasis>
+          </p>
+          <br />
+          <p>
+            바뀐 이름표를 다시 달아주시면, 끊길 뻔한 맥락은 다시 매끄럽게 이어드려요.
+            <br />
+            수정되지 않은 기간 동안의 데이터는 Catch Up이 찾기 어려울 수 있어요.
+          </p>
+        </HelpArticleText>
+      </HelpArticleSection>
+
+      <HelpArticleSection {...SUPPORT_2_SECTIONS[3]}>
+        <HelpArticleText>
+          <p>
+            이 과정은 단순한 등록 절차가 아니에요.
+            <br />
+            도구마다 흩어진 &apos;나&apos;를 하나로 묶어, AI가 &apos;이 모든 게 한 사람의 일&apos;임을 이해하게 만드는
+            과정입니다.
+            <br />이 연결이 정확할수록 데이터의 맥락을 읽는 <HelpArticleEmphasis>
+              임베딩(Embedding)
+            </HelpArticleEmphasis>{' '}
+            품질이 좋아집니다.
+          </p>
+        </HelpArticleText>
+
+        <HelpExampleBox>
+          <p>&quot;내가 지난주에 수정한 코드 보여줘&quot;</p>
+          <p>&quot;나한테 멘션된 이슈 찾아줘&quot;</p>
+        </HelpExampleBox>
+
+        <HelpArticleText>
+          <p>
+            Catch Up이 이런 질문에 헤매지 않고, 진짜 &apos;나&apos;를 위한 답을 내놓을 수 있도록 여러분의 모든 이름을
+            알려주세요.
+          </p>
+        </HelpArticleText>
+      </HelpArticleSection>
+    </>
+  );
+}
