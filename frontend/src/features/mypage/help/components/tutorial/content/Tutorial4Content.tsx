@@ -273,7 +273,7 @@ export default function Tutorial4Content() {
         </div>
       </HelpArticleSection>
 
-      <HelpArticleSection {...TUTORIAL_4_SECTIONS[6]} titleClassName="text-display-large text-text-normal-normal">
+      <HelpArticleSection {...TUTORIAL_4_SECTIONS[6]}>
         <div className="flex flex-col gap-4">
           <h3 className="text-heading-xlarge text-text-normal-normal">Claude Desktop</h3>
           <HelpArticleText>

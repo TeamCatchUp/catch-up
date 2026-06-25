@@ -39,7 +39,7 @@ export default function Tutorial2Content() {
         />
 
         <div className="flex flex-col gap-8">
-          <HelpArticleSubsection title="1. 기능명 같은 '단서'를 하나 주세요">
+          <HelpArticleSubsection title="1. 기능명 같은 '단서'를 하나 주세요" titleVariant="heading-large">
             <HelpArticleText>
               <p>무엇에 대한 질문인지가 먼저 잡히면, 찾는 범위가 흔들리지 않아요.</p>
               <br />
@@ -47,7 +47,7 @@ export default function Tutorial2Content() {
             </HelpArticleText>
           </HelpArticleSubsection>
 
-          <HelpArticleSubsection title="2. 목적을 한 줄로 알려주세요">
+          <HelpArticleSubsection title="2. 목적을 한 줄로 알려주세요" titleVariant="heading-large">
             <HelpArticleText>
               <p>
                 원하는 답의 방향을 먼저 정해주면 좋아요.
@@ -64,7 +64,7 @@ export default function Tutorial2Content() {
             </HelpExampleBox>
           </HelpArticleSubsection>
 
-          <HelpArticleSubsection title="3. 기간을 말해주면 더 좋아요">
+          <HelpArticleSubsection title="3. 기간을 말해주면 더 좋아요" titleVariant="heading-large">
             <HelpArticleText>
               <p>언제부터의 기록을 봐야 하는지 알면, 최신/관련 정보를 더 잘 좁힐 수 있어요.</p>
             </HelpArticleText>

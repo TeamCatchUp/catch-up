@@ -85,7 +85,7 @@ export default function TutorialFeatureCards() {
               />
             </div>
             <h3 className="text-heading-medium text-text-normal-normal">{card.title}</h3>
-            <p className="text-label-small text-text-normal-alternative whitespace-pre-line">{card.description}</p>
+            <p className="text-label-small text-text-normal-neutral whitespace-pre-line">{card.description}</p>
           </li>
         ))}
       </ul>

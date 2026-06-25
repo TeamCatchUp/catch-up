@@ -20,7 +20,7 @@ export default function Support1Content() {
       <HelpArticleSection {...SUPPORT_1_SECTIONS[0]} className="gap-10">
         <HelpArticleSubsection
           className="gap-1"
-          titleClassName="text-reading-heading-sb-large"
+          titleVariant="reading-large"
           title="Q. 혹시 제가 볼 권한이 없는 대외비 문서도 검색되나요?"
         >
           <HelpArticleText className="text-text-normal-alternative">
@@ -43,7 +43,7 @@ export default function Support1Content() {
 
         <HelpArticleSubsection
           className="gap-1"
-          titleClassName="text-reading-heading-sb-large"
+          titleVariant="reading-large"
           title="Q. 개인적인 DM이나 비공개 채널은요?"
         >
           <HelpArticleText className="text-text-normal-alternative">
@@ -66,7 +66,7 @@ export default function Support1Content() {
 
         <HelpArticleSubsection
           className="gap-1"
-          titleClassName="text-reading-heading-sb-large"
+          titleVariant="reading-large"
           title="Q. 우리 회사 데이터로 AI를 학습시키나요?"
         >
           <HelpArticleText className="text-text-normal-alternative">
@@ -91,7 +91,7 @@ export default function Support1Content() {
 
         <HelpArticleSubsection
           className="gap-1"
-          titleClassName="text-reading-heading-sb-large"
+          titleVariant="reading-large"
           title="Q. 질문을 어떻게 해야 정확한 답이 나오나요?"
         >
           <HelpArticleText className="text-text-normal-alternative">
@@ -116,7 +116,7 @@ export default function Support1Content() {
 
         <HelpArticleSubsection
           className="gap-1"
-          titleClassName="text-reading-heading-sb-large"
+          titleVariant="reading-large"
           title="Q. 매번 질문을 갖춰서 쓰기가 너무 번거로워요."
         >
           <HelpArticleText className="text-text-normal-alternative">
@@ -137,7 +137,7 @@ export default function Support1Content() {
 
         <HelpArticleSubsection
           className="gap-1"
-          titleClassName="text-reading-heading-sb-large"
+          titleVariant="reading-large"
           title="Q. 질문에 오타가 있거나, 정확한 용어가 생각 안 나면요?"
         >
           <HelpArticleText className="text-text-normal-alternative">
@@ -159,7 +159,7 @@ export default function Support1Content() {
       <HelpArticleSection {...SUPPORT_1_SECTIONS[2]} className="gap-10">
         <HelpArticleSubsection
           className="gap-1"
-          titleClassName="text-reading-heading-sb-large"
+          titleVariant="reading-large"
           title="Q. 답변에 달린 출처가 너무 많은데, 이걸 다 읽어야 하나요?"
         >
           <HelpArticleText className="text-text-normal-alternative">
@@ -182,7 +182,7 @@ export default function Support1Content() {
 
         <HelpArticleSubsection
           className="gap-1"
-          titleClassName="text-reading-heading-sb-large"
+          titleVariant="reading-large"
           title="Q. 그럼 '원문 바로가기'는 언제 누르면 되나요?"
         >
           <HelpArticleText className="text-text-normal-alternative">
@@ -209,7 +209,7 @@ export default function Support1Content() {
       <HelpArticleSection {...SUPPORT_1_SECTIONS[3]} className="gap-10">
         <HelpArticleSubsection
           className="gap-1"
-          titleClassName="text-reading-heading-sb-large"
+          titleVariant="reading-large"
           title="Q. PDF나 엑셀 파일 내용도 검색되나요?"
         >
           <HelpArticleText className="text-text-normal-alternative">
@@ -234,7 +234,7 @@ export default function Support1Content() {
 
         <HelpArticleSubsection
           className="gap-1"
-          titleClassName="text-reading-heading-sb-large"
+          titleVariant="reading-large"
           title="Q. 캡처 이미지나 도표도 검색되나요?"
         >
           <HelpArticleText className="text-text-normal-alternative">
@@ -248,7 +248,7 @@ export default function Support1Content() {
 
         <HelpArticleSubsection
           className="gap-1"
-          titleClassName="text-reading-heading-sb-large"
+          titleVariant="reading-large"
           title="Q. 방금 올린 자료가 검색에 안 떠요. 고장인가요?"
         >
           <HelpArticleText className="text-text-normal-alternative">

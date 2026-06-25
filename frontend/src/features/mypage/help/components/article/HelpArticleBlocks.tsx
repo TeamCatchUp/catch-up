@@ -14,6 +14,7 @@ interface HelpArticleSubsectionProps {
   title: string;
   className?: string;
   titleClassName?: string;
+  titleVariant?: 'heading-large' | 'reading-large' | 'reading-medium';
   children: ReactNode;
 }
 
@@ -50,10 +51,24 @@ export function HelpArticleSection({ id, title, className, titleClassName, child
   );
 }
 
-export function HelpArticleSubsection({ title, className, titleClassName, children }: HelpArticleSubsectionProps) {
+const helpArticleSubsectionTitleVariants = {
+  'heading-large': 'text-heading-large',
+  'reading-large': 'text-reading-heading-sb-large',
+  'reading-medium': 'text-reading-heading-sb-medium',
+} as const;
+
+export function HelpArticleSubsection({
+  title,
+  className,
+  titleClassName,
+  titleVariant = 'reading-medium',
+  children,
+}: HelpArticleSubsectionProps) {
   return (
     <div className={cn('flex flex-col gap-1.5', className)}>
-      <h3 className={cn('text-reading-heading-sb-medium text-text-normal-normal', titleClassName)}>{title}</h3>
+      <h3 className={cn(helpArticleSubsectionTitleVariants[titleVariant], 'text-text-normal-normal', titleClassName)}>
+        {title}
+      </h3>
       {children}
     </div>
   );
