@@ -256,6 +256,10 @@ export default function Tutorial4Content() {
 
       <HelpArticleSection {...TUTORIAL_4_SECTIONS[7]}>
         <div className="flex flex-col gap-4">
+          <HelpArticleText>
+            <p>자동 설치가 정상적으로 동작하지 않을 때만 수동 설치를 진행해주세요.</p>
+          </HelpArticleText>
+
           <h3 className="text-heading-xlarge text-text-normal-normal">Claude Desktop</h3>
           <HelpArticleText>
             <ol className="list-decimal pl-6">
