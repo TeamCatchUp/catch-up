@@ -2,7 +2,6 @@ import {
   HelpArticleSection,
   HelpArticleSubsection,
   HelpArticleText,
-  HelpDotDivider,
 } from '@/features/mypage/help/components/article/HelpArticleBlocks';
 import HelpArticleImage from '@/features/mypage/help/components/article/HelpArticleImage';
 import HelpExampleBox from '@/features/mypage/help/components/article/HelpExampleBox';
@@ -26,9 +25,6 @@ export default function Tutorial2Content() {
         <br />
         <p>그래서 오늘은 질문 한 번에 원하는 답을 얻는 비결을 소개해드릴게요.</p>
       </HelpArticleText>
-
-      <HelpDotDivider />
-
       <HelpArticleSection {...TUTORIAL_2_SECTIONS[0]}>
         <HelpArticleText>
           <p>길게 설명하지 않아도 괜찮아요. 필요한 정보만 있으면 충분해요.</p>
@@ -80,18 +76,12 @@ export default function Tutorial2Content() {
           </HelpArticleSubsection>
         </div>
       </HelpArticleSection>
-
-      <HelpDotDivider />
-
       <HelpArticleSection {...TUTORIAL_2_SECTIONS[1]}>
         <HelpArticleText>
           <p>질문을 잘 쓰는 게 은근 어렵잖아요. 특히 바쁠 때는 더 그렇고요.</p>
           <br />
           <p>그래서 Catch Up은 &quot;상황별 맞춤 프롬프트&quot;를 카드로 준비해뒀어요.</p>
-          <p>
-            홈 질문창 하단에서 지금 상황에 맞는 카드를 고르면, 질문창에{' '}
-            <strong>추천 문장이 자동으로 채워집니다.</strong>
-          </p>
+          <p>홈 질문창 하단에서 지금 상황에 맞는 카드를 고르면, 질문창에 추천 문장이 자동으로 채워집니다.</p>
           <br />
           <p>사용자는 빈칸만 내 상황에 맞게 바꾸면 돼요.</p>
         </HelpArticleText>
@@ -134,9 +124,6 @@ export default function Tutorial2Content() {
           </p>
         </HelpArticleText>
       </HelpArticleSection>
-
-      <HelpDotDivider />
-
       <HelpArticleSection {...TUTORIAL_2_SECTIONS[2]}>
         <HelpArticleText>
           <p>기억나는 단서 하나, 원하는 답 한 줄, 기간만 적어주시면 됩니다.</p>

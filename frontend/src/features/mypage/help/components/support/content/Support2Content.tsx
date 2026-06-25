@@ -1,7 +1,7 @@
 import {
+  HelpArticleEmphasis,
   HelpArticleSection,
   HelpArticleText,
-  HelpDotDivider,
 } from '@/features/mypage/help/components/article/HelpArticleBlocks';
 import HelpExampleBox from '@/features/mypage/help/components/article/HelpExampleBox';
 import type { HelpArticleNavItem } from '@/features/mypage/help/types/helpArticle';
@@ -23,19 +23,17 @@ export default function Support2Content() {
             <br />
             Jira에서는 김철수, Slack에서는 Charles, GitHub에서는 charles_k…
             <br />
-            사람은 눈치껏 알지만, <strong>시스템에게는 완전히 다른 사람으로 보일 수 있어요.</strong>
+            사람은 눈치껏 알지만, 시스템에게는 완전히 다른 사람으로 보일 수 있어요.
           </p>
         </HelpArticleText>
       </HelpArticleSection>
-
-      <HelpDotDivider />
-
       <HelpArticleSection {...SUPPORT_2_SECTIONS[1]}>
         <HelpArticleText>
           <p>새로운 도구를 본격적으로 쓰기 전에, 여기서 &apos;나의 이름표&apos;를 먼저 달아주세요.</p>
           <br />
           <p>
-            신규 입사자라면 회사에서 발급받은 계정들을 <strong>Catch Up에 가장 먼저 등록</strong>해두는 게 좋습니다.
+            신규 입사자라면 회사에서 발급받은 계정들을{' '}
+            <HelpArticleEmphasis>Catch Up에 가장 먼저 등록</HelpArticleEmphasis>해두는 게 좋습니다.
             <br />
             등록하지 않은 상태로 다른 협업 툴을 이용한다면, 해당 기간 동안의 데이터는 Catch Up이 찾기 어려울 수 있어요.
           </p>
@@ -54,7 +52,9 @@ export default function Support2Content() {
           <p>쓰던 아이디가 바뀌었거나, 새로운 툴 계정을 받으셨나요?</p>
           <br />
           <p>
-            <strong>꼭 &apos;협업 툴 연동 관리&apos; 페이지에서 수정하고 추가해주세요!</strong>
+            <HelpArticleEmphasis>
+              꼭 &apos;협업 툴 연동 관리&apos; 페이지에서 수정하고 추가해주세요!
+            </HelpArticleEmphasis>
           </p>
           <br />
           <p>
@@ -72,7 +72,10 @@ export default function Support2Content() {
             <br />
             도구마다 흩어진 &apos;나&apos;를 하나로 묶어, AI가 &apos;이 모든 게 한 사람의 일&apos;임을 이해하게 만드는
             과정입니다.
-            <br />이 연결이 정확할수록 데이터의 맥락을 읽는 <strong>임베딩(Embedding)</strong> 품질이 좋아집니다.
+            <br />이 연결이 정확할수록 데이터의 맥락을 읽는 <HelpArticleEmphasis>
+              임베딩(Embedding)
+            </HelpArticleEmphasis>{' '}
+            품질이 좋아집니다.
           </p>
         </HelpArticleText>
 

@@ -1,7 +1,7 @@
 import {
+  HelpArticleEmphasis,
   HelpArticleSection,
   HelpArticleText,
-  HelpDotDivider,
 } from '@/features/mypage/help/components/article/HelpArticleBlocks';
 import type { HelpArticleNavItem } from '@/features/mypage/help/types/helpArticle';
 
@@ -23,18 +23,15 @@ export default function Support3Content() {
           어떤 정보들을 찾아볼 수 있는지 친절하게 안내해 드릴게요.
         </p>
       </HelpArticleText>
-
-      <HelpDotDivider />
-
       <HelpArticleSection {...SUPPORT_3_SECTIONS[0]}>
         <HelpArticleText>
           <p>
-            <strong>지금은 &apos;모두가 보는 정보&apos;만 담았습니다.</strong>
+            <HelpArticleEmphasis>지금은 &apos;모두가 보는 정보&apos;만 담았습니다.</HelpArticleEmphasis>
           </p>
           <br />
           <p>
-            Catch Up은 현재 <strong>&apos;전사 공개(Public)&apos;</strong> 설정된 데이터만 수집하는 것을 원칙으로
-            합니다.
+            Catch Up은 현재 <HelpArticleEmphasis>&apos;전사 공개(Public)&apos;</HelpArticleEmphasis> 설정된 데이터만
+            수집하는 것을 원칙으로 합니다.
             <br />
             슬랙의 공개 채널이나 누구나 볼 수 있는 문서들처럼요.
           </p>
@@ -50,7 +47,7 @@ export default function Support3Content() {
       <HelpArticleSection {...SUPPORT_3_SECTIONS[1]}>
         <HelpArticleText>
           <p>
-            <strong>안전하게 가려져 있습니다.</strong>
+            <HelpArticleEmphasis>안전하게 가려져 있습니다.</HelpArticleEmphasis>
           </p>
           <br />
           <p>현재 버전에서는 개인적인 DM, 비공개 채널, 특정 멤버만 볼 수 있는 문서는 기술적으로 수집하지 않아요.</p>
@@ -66,7 +63,7 @@ export default function Support3Content() {
       <HelpArticleSection {...SUPPORT_3_SECTIONS[2]}>
         <HelpArticleText>
           <p>
-            <strong>더 깊은 정보도 꼼꼼하게 준비하고 있습니다.</strong>
+            <HelpArticleEmphasis>더 깊은 정보도 꼼꼼하게 준비하고 있습니다.</HelpArticleEmphasis>
           </p>
           <br />
           <p>

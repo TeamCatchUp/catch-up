@@ -1,8 +1,8 @@
 import {
+  HelpArticleEmphasis,
   HelpArticleSection,
   HelpArticleSubsection,
   HelpArticleText,
-  HelpDotDivider,
 } from '@/features/mypage/help/components/article/HelpArticleBlocks';
 import HelpExampleBox from '@/features/mypage/help/components/article/HelpExampleBox';
 import type { HelpArticleNavItem } from '@/features/mypage/help/types/helpArticle';
@@ -26,15 +26,12 @@ export default function Support4Content() {
         <br />
         <p>당황하지 마세요. 대부분은 금방 해결되는 자연스러운 과정이니까요.</p>
       </HelpArticleText>
-
-      <HelpDotDivider />
-
       <HelpArticleSection {...SUPPORT_4_SECTIONS[0]}>
         <HelpArticleSubsection title="혹시 방금 작성하신 글인가요?">
           <HelpArticleText>
             <p>
-              Catch Up이 Slack이나 Jira 등 원본 도구의 새로운 기록을 읽고, 전체 맥락 속에서 고르게 정리하는 데는{' '}
-              <strong>잠깐의 시간이 필요합니다.</strong>
+              Catch Up이 Slack이나 Jira 등 원본 도구의 새로운 기록을 읽고, 전체 맥락 속에서 고르게 정리하는 데는 잠깐의
+              시간이 필요합니다.
             </p>
             <br />
             <p>조금의 여유를 두고 다시 검색해 보시면, 필요한 지식이 정리되어 있을 거예요.</p>
@@ -71,7 +68,7 @@ export default function Support4Content() {
 
         <HelpExampleBox>
           <p>
-            <strong>[단서(기능명) + 목적(원인/현황) + 기간]</strong>을 더해보세요.
+            <HelpArticleEmphasis>[단서(기능명) + 목적(원인/현황) + 기간]</HelpArticleEmphasis>을 더해보세요.
           </p>
           <div>
             <p>&quot;로그인 안 돼&quot; (X)</p>
@@ -131,7 +128,7 @@ export default function Support4Content() {
 
         <HelpArticleText>
           <p>
-            <strong>▶ [Catch Up 공식 지원 채널 바로가기]</strong>
+            <HelpArticleEmphasis className="font-bold">▶ [Catch Up 공식 지원 채널 바로가기]</HelpArticleEmphasis>
           </p>
         </HelpArticleText>
 

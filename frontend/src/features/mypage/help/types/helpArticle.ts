@@ -14,6 +14,7 @@ export interface HelpArticleLayoutProps {
   category: string;
   title: string;
   heroImage?: string;
+  heroDarkImage?: string;
   navItems: readonly HelpArticleNavItem[];
   prevItem?: HelpArticleLinkItem;
   nextItem?: HelpArticleLinkItem;

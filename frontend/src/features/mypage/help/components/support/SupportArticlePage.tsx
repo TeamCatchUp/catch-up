@@ -44,6 +44,7 @@ export default function SupportArticlePage({ supportId }: SupportArticlePageProp
       category={support.category}
       title={support.title}
       heroImage={support.heroImage}
+      heroDarkImage={'heroDarkImage' in support ? support.heroDarkImage : undefined}
       navItems={SUPPORT_NAV_ITEMS[supportId as keyof typeof SUPPORT_NAV_ITEMS]}
       prevItem={prevItem}
       nextItem={nextItem}

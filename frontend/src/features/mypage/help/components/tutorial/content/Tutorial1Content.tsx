@@ -1,8 +1,4 @@
-import {
-  HelpArticleSection,
-  HelpArticleText,
-  HelpDotDivider,
-} from '@/features/mypage/help/components/article/HelpArticleBlocks';
+import { HelpArticleSection, HelpArticleText } from '@/features/mypage/help/components/article/HelpArticleBlocks';
 import type { HelpArticleNavItem } from '@/features/mypage/help/types/helpArticle';
 
 import TutorialFeatureCards from '../TutorialFeatureCards';
@@ -21,7 +17,7 @@ export default function Tutorial1Content() {
         <p>
           필요한 정보는 사실 회사 안에 다 있어요.
           <br />
-          없어서 막히는 게 아니라, <strong>여기저기 흩어져 있어서 찾다가 시간이 새는 거죠.</strong>
+          없어서 막히는 게 아니라, 여기저기 흩어져 있어서 찾다가 시간이 새는 거죠.
         </p>
         <br />
         <p>
@@ -32,26 +28,18 @@ export default function Tutorial1Content() {
         <br />
         <p>질문하는 쪽도, 답하는 쪽도 일을 멈추게 되죠.</p>
         <br />
-        <p>
-          결국 <strong>서로가 서로를 방해하는 구조</strong>가 되고, 이건 <strong>팀 전체의 시간 낭비</strong>
-          예요.
-        </p>
+        <p>결국 서로가 서로를 방해하는 구조가 되고, 이건 팀 전체의 시간 낭비 예요.</p>
         <br />
         <p>
           그래서 Catch Up은 이런 끊김을 줄이려고 시작됐어요.
           <br />
-          <strong>검색 한 번으로 흩어진 기록을 모아, 필요한 답을 근거와 함께 정리해드립니다.</strong>
+          검색 한 번으로 흩어진 기록을 모아, 필요한 답을 근거와 함께 정리해드립니다.
         </p>
       </HelpArticleText>
-
-      <HelpDotDivider />
-
       <HelpArticleSection {...TUTORIAL_1_SECTIONS[0]}>
         <HelpArticleText>
           <p>그냥 몇 분 아끼는 얘기가 아니에요.</p>
-          <p>
-            <strong>찾는 과정이 짧아질수록, 집중은 오래 가고 실행은 빨라져요.</strong>
-          </p>
+          <p>찾는 과정이 짧아질수록, 집중은 오래 가고 실행은 빨라져요.</p>
           <br />
           <p>
             그래서 저희는 생각했어요.
@@ -68,14 +56,12 @@ export default function Tutorial1Content() {
       <HelpArticleSection {...TUTORIAL_1_SECTIONS[1]}>
         <HelpArticleText>
           <p>
-            <strong>그럴듯한 답이 제일 위험해요</strong>
+            그럴듯한 답이 제일 위험해요
             <br />
             맞는 말 같은데, 근거가 안 보이면 팀에서는 결국 다시 확인하게 되잖아요.
           </p>
           <br />
-          <p>
-            <strong>그래서 Catch Up은 출처랑 핵심 발췌, 왜 선택됐는지까지 같이 보여줘요.</strong>
-          </p>
+          <p>그래서 Catch Up은 출처랑 핵심 발췌, 왜 선택됐는지까지 같이 보여줘요.</p>
           <br />
           <p>
             답이 빠른 것도 중요하지만,
@@ -92,7 +78,7 @@ export default function Tutorial1Content() {
           <p>
             출처마다 &quot;왜 인용됐는지&quot;를 같이 보여주니까
             <br />
-            <strong>어떤 걸 먼저 보면 될지 감이 잡히고, 확인도 훨씬 빨라집니다.</strong>
+            어떤 걸 먼저 보면 될지 감이 잡히고, 확인도 훨씬 빨라집니다.
           </p>
           <br />
           <p>덕분에 팀은 같은 맥락 위에서 더 쉽게 합의하고, 다음 일을 바로 이어갈 수 있어요.</p>
@@ -119,14 +105,9 @@ export default function Tutorial1Content() {
             사람이 남긴 기록이 다음에도 바로 쓰일 수 있도록, &apos;다시 찾을 수 있는 지식&apos;으로 정리해두는 일입니다.
           </p>
           <br />
-          <p>
-            <strong>사람은 바뀌어도, 팀이 쌓아온 맥락은 남아야 하니까요.</strong>
-          </p>
+          <p>사람은 바뀌어도, 팀이 쌓아온 맥락은 남아야 하니까요.</p>
         </HelpArticleText>
       </HelpArticleSection>
-
-      <HelpDotDivider />
-
       <HelpArticleSection {...TUTORIAL_1_SECTIONS[3]}>
         <HelpArticleText>
           <p>

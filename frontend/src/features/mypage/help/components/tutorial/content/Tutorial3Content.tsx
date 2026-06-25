@@ -1,8 +1,4 @@
-import {
-  HelpArticleSection,
-  HelpArticleText,
-  HelpDotDivider,
-} from '@/features/mypage/help/components/article/HelpArticleBlocks';
+import { HelpArticleSection, HelpArticleText } from '@/features/mypage/help/components/article/HelpArticleBlocks';
 import HelpArticleImage from '@/features/mypage/help/components/article/HelpArticleImage';
 import HelpExampleBox from '@/features/mypage/help/components/article/HelpExampleBox';
 import type { HelpArticleNavItem } from '@/features/mypage/help/types/helpArticle';
@@ -33,9 +29,6 @@ export default function Tutorial3Content() {
         <br />
         <p>Catch Up은 그 과정을 한 화면에서 끝내도록 만들었어요.</p>
       </HelpArticleText>
-
-      <HelpDotDivider />
-
       <HelpArticleSection {...TUTORIAL_3_SECTIONS[0]}>
         <HelpArticleText>
           <p>
@@ -57,9 +50,6 @@ export default function Tutorial3Content() {
           alt="답변에 표시가 이미 되어 있어요"
         />
       </HelpArticleSection>
-
-      <HelpDotDivider />
-
       <HelpArticleSection {...TUTORIAL_3_SECTIONS[1]}>
         <HelpArticleImage
           lightSrc="/image/tutorial/light/tutorial-3-section-2.png"
@@ -110,9 +100,6 @@ export default function Tutorial3Content() {
           <p>결국 인용 이유는 출처를 덜 보고도 정확히 판단하게 만들어주는 장치예요.</p>
         </HelpArticleText>
       </HelpArticleSection>
-
-      <HelpDotDivider />
-
       <HelpArticleSection {...TUTORIAL_3_SECTIONS[2]}>
         <HelpArticleText>
           <p>

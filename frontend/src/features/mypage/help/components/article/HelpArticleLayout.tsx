@@ -12,6 +12,7 @@ export default function HelpArticleLayout({
   category,
   title,
   heroImage,
+  heroDarkImage,
   navItems,
   prevItem,
   nextItem,
@@ -41,13 +42,15 @@ export default function HelpArticleLayout({
               </header>
               {heroImage && (
                 <div className="relative aspect-[1416/600] w-full max-w-[520px] overflow-hidden rounded-2xl">
-                  <Image src={heroImage} alt={title} fill className="object-cover dark:hidden" />
                   <Image
-                    src={heroImage.replace('/light/', '/dark/')}
+                    src={heroImage}
                     alt={title}
                     fill
-                    className="hidden object-cover dark:block"
+                    className={heroDarkImage ? 'object-cover dark:hidden' : 'object-cover'}
                   />
+                  {heroDarkImage && (
+                    <Image src={heroDarkImage} alt={title} fill className="hidden object-cover dark:block" />
+                  )}
                 </div>
               )}
 

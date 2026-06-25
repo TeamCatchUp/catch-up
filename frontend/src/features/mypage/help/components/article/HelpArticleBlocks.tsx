@@ -5,16 +5,24 @@ import { cn } from '@/shared/utils/cn';
 interface HelpArticleSectionProps {
   id: string;
   title: string;
+  className?: string;
   titleClassName?: string;
   children: ReactNode;
 }
 
 interface HelpArticleSubsectionProps {
   title: string;
+  className?: string;
+  titleClassName?: string;
   children: ReactNode;
 }
 
 interface HelpArticleTextProps {
+  children: ReactNode;
+  className?: string;
+}
+
+interface HelpArticleEmphasisProps {
   children: ReactNode;
   className?: string;
 }
@@ -25,33 +33,27 @@ interface HelpArticleStepProps {
   children?: ReactNode;
 }
 
-export function HelpDotDivider() {
-  return (
-    <div className="flex items-center justify-center gap-1.5 py-2">
-      <span className="bg-text-normal-assistive size-1 rounded-full" />
-      <span className="bg-text-normal-assistive size-1 rounded-full" />
-      <span className="bg-text-normal-assistive size-1 rounded-full" />
-    </div>
-  );
-}
-
 export function HelpArticleText({ children, className }: HelpArticleTextProps) {
   return <div className={cn('text-reading-label-rg-medium text-text-normal-normal', className)}>{children}</div>;
 }
 
-export function HelpArticleSection({ id, title, titleClassName, children }: HelpArticleSectionProps) {
+export function HelpArticleEmphasis({ children, className }: HelpArticleEmphasisProps) {
+  return <span className={cn('text-reading-heading-sb-medium', className)}>{children}</span>;
+}
+
+export function HelpArticleSection({ id, title, className, titleClassName, children }: HelpArticleSectionProps) {
   return (
-    <section id={id} className="flex scroll-mt-10 flex-col gap-4">
+    <section id={id} className={cn('flex scroll-mt-10 flex-col gap-4', className)}>
       <h2 className={cn('text-heading-xlarge text-text-normal-strong', titleClassName)}>{title}</h2>
       {children}
     </section>
   );
 }
 
-export function HelpArticleSubsection({ title, children }: HelpArticleSubsectionProps) {
+export function HelpArticleSubsection({ title, className, titleClassName, children }: HelpArticleSubsectionProps) {
   return (
-    <div className="flex flex-col gap-1.5">
-      <h3 className="text-reading-heading-sb-medium text-text-normal-normal">{title}</h3>
+    <div className={cn('flex flex-col gap-1.5', className)}>
+      <h3 className={cn('text-reading-heading-sb-medium text-text-normal-normal', titleClassName)}>{title}</h3>
       {children}
     </div>
   );

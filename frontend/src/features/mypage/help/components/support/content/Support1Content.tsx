@@ -1,8 +1,8 @@
 import {
+  HelpArticleEmphasis,
   HelpArticleSection,
   HelpArticleSubsection,
   HelpArticleText,
-  HelpDotDivider,
 } from '@/features/mypage/help/components/article/HelpArticleBlocks';
 import HelpExampleBox from '@/features/mypage/help/components/article/HelpExampleBox';
 import type { HelpArticleNavItem } from '@/features/mypage/help/types/helpArticle';
@@ -17,17 +17,19 @@ export const SUPPORT_1_SECTIONS = [
 export default function Support1Content() {
   return (
     <>
-      <HelpDotDivider />
-
-      <HelpArticleSection {...SUPPORT_1_SECTIONS[0]}>
-        <HelpArticleSubsection title="Q. 혹시 제가 볼 권한이 없는 대외비 문서도 검색되나요?">
-          <HelpArticleText>
+      <HelpArticleSection {...SUPPORT_1_SECTIONS[0]} className="gap-10">
+        <HelpArticleSubsection
+          className="gap-1"
+          titleClassName="text-reading-heading-sb-large"
+          title="Q. 혹시 제가 볼 권한이 없는 대외비 문서도 검색되나요?"
+        >
+          <HelpArticleText className="text-text-normal-alternative">
             <p>
-              <strong>A. 아니요, 비공개 정보는 가져오지 않습니다.</strong>
+              <HelpArticleEmphasis>A. 아니요, 비공개 정보는 가져오지 않습니다.</HelpArticleEmphasis>
             </p>
             <br />
             <p>
-              Catch Up은 <strong>&apos;전사 공개&apos;</strong> 설정된 정보만 수집합니다.
+              Catch Up은 <HelpArticleEmphasis>&apos;전사 공개&apos;</HelpArticleEmphasis> 설정된 정보만 수집합니다.
             </p>
             <br />
             <p>
@@ -39,10 +41,14 @@ export default function Support1Content() {
           </HelpArticleText>
         </HelpArticleSubsection>
 
-        <HelpArticleSubsection title="Q. 개인적인 DM이나 비공개 채널은요?">
-          <HelpArticleText>
+        <HelpArticleSubsection
+          className="gap-1"
+          titleClassName="text-reading-heading-sb-large"
+          title="Q. 개인적인 DM이나 비공개 채널은요?"
+        >
+          <HelpArticleText className="text-text-normal-alternative">
             <p>
-              <strong>A. 절대 수집하지 않습니다.</strong>
+              <HelpArticleEmphasis>A. 절대 수집하지 않습니다.</HelpArticleEmphasis>
             </p>
             <br />
             <p>
@@ -58,10 +64,14 @@ export default function Support1Content() {
           </HelpArticleText>
         </HelpArticleSubsection>
 
-        <HelpArticleSubsection title="Q. 우리 회사 데이터로 AI를 학습시키나요?">
-          <HelpArticleText>
+        <HelpArticleSubsection
+          className="gap-1"
+          titleClassName="text-reading-heading-sb-large"
+          title="Q. 우리 회사 데이터로 AI를 학습시키나요?"
+        >
+          <HelpArticleText className="text-text-normal-alternative">
             <p>
-              <strong>A. 아니요, 여러분의 데이터는 AI 학습에 쓰이지 않습니다.</strong>
+              <HelpArticleEmphasis>A. 아니요, 여러분의 데이터는 AI 학습에 쓰이지 않습니다.</HelpArticleEmphasis>
             </p>
             <br />
             <p>
@@ -74,15 +84,20 @@ export default function Support1Content() {
         </HelpArticleSubsection>
       </HelpArticleSection>
 
-      <HelpArticleSection {...SUPPORT_1_SECTIONS[1]}>
+      <HelpArticleSection {...SUPPORT_1_SECTIONS[1]} className="gap-10">
         <HelpArticleText>
           <p>원하는 답을 한 번에 얻기 위한 핵심 요령입니다.</p>
         </HelpArticleText>
 
-        <HelpArticleSubsection title="Q. 질문을 어떻게 해야 정확한 답이 나오나요?">
-          <HelpArticleText>
+        <HelpArticleSubsection
+          className="gap-1"
+          titleClassName="text-reading-heading-sb-large"
+          title="Q. 질문을 어떻게 해야 정확한 답이 나오나요?"
+        >
+          <HelpArticleText className="text-text-normal-alternative">
             <p>
-              <strong>A.</strong> 길게 쓰지 않아도 됩니다. <strong>[단서 + 목적 + 기간]</strong> 이 3가지만 기억하세요.
+              <HelpArticleEmphasis>A.</HelpArticleEmphasis> 길게 쓰지 않아도 됩니다. [단서 + 목적 + 기간] 이 3가지만
+              기억하세요.
             </p>
           </HelpArticleText>
         </HelpArticleSubsection>
@@ -99,10 +114,14 @@ export default function Support1Content() {
           </div>
         </HelpExampleBox>
 
-        <HelpArticleSubsection title="Q. 매번 질문을 갖춰서 쓰기가 너무 번거로워요.">
-          <HelpArticleText>
+        <HelpArticleSubsection
+          className="gap-1"
+          titleClassName="text-reading-heading-sb-large"
+          title="Q. 매번 질문을 갖춰서 쓰기가 너무 번거로워요."
+        >
+          <HelpArticleText className="text-text-normal-alternative">
             <p>
-              <strong>A. 그래서 &apos;상황별 맞춤 프롬프트&apos;를 준비했습니다.</strong>
+              <HelpArticleEmphasis>A. 그래서 &apos;상황별 맞춤 프롬프트&apos;를 준비했습니다.</HelpArticleEmphasis>
             </p>
             <br />
             <p>홈 화면 하단에 있는 카드들을 눌러보세요.</p>
@@ -116,10 +135,14 @@ export default function Support1Content() {
           </HelpArticleText>
         </HelpArticleSubsection>
 
-        <HelpArticleSubsection title="Q. 질문에 오타가 있거나, 정확한 용어가 생각 안 나면요?">
-          <HelpArticleText>
+        <HelpArticleSubsection
+          className="gap-1"
+          titleClassName="text-reading-heading-sb-large"
+          title="Q. 질문에 오타가 있거나, 정확한 용어가 생각 안 나면요?"
+        >
+          <HelpArticleText className="text-text-normal-alternative">
             <p>
-              <strong>A. 완벽한 단어가 아니어도 괜찮습니다.</strong>
+              <HelpArticleEmphasis>A. 완벽한 단어가 아니어도 괜찮습니다.</HelpArticleEmphasis>
             </p>
             <br />
             <p>Catch Up은 단순 키워드 매칭을 넘어 문장의 의미를 이해합니다.</p>
@@ -133,11 +156,15 @@ export default function Support1Content() {
         </HelpArticleSubsection>
       </HelpArticleSection>
 
-      <HelpArticleSection {...SUPPORT_1_SECTIONS[2]}>
-        <HelpArticleSubsection title="Q. 답변에 달린 출처가 너무 많은데, 이걸 다 읽어야 하나요?">
-          <HelpArticleText>
+      <HelpArticleSection {...SUPPORT_1_SECTIONS[2]} className="gap-10">
+        <HelpArticleSubsection
+          className="gap-1"
+          titleClassName="text-reading-heading-sb-large"
+          title="Q. 답변에 달린 출처가 너무 많은데, 이걸 다 읽어야 하나요?"
+        >
+          <HelpArticleText className="text-text-normal-alternative">
             <p>
-              <strong>A. 아니요, 인용된 이유부터 살펴보시면 됩니다.</strong>
+              <HelpArticleEmphasis>A. 아니요, 인용된 이유부터 살펴보시면 됩니다.</HelpArticleEmphasis>
             </p>
             <br />
             <p>
@@ -153,8 +180,12 @@ export default function Support1Content() {
           </HelpArticleText>
         </HelpArticleSubsection>
 
-        <HelpArticleSubsection title="Q. 그럼 '원문 바로가기'는 언제 누르면 되나요?">
-          <HelpArticleText>
+        <HelpArticleSubsection
+          className="gap-1"
+          titleClassName="text-reading-heading-sb-large"
+          title="Q. 그럼 '원문 바로가기'는 언제 누르면 되나요?"
+        >
+          <HelpArticleText className="text-text-normal-alternative">
             <p>
               A. &apos;결정적인 10초&apos;가 필요할 때만 누르세요. 대부분은 요약만으로 충분하지만, 아래 세 가지 경우에는
               꼭 원문을 확인하는 게 좋습니다.
@@ -164,50 +195,65 @@ export default function Support1Content() {
 
         <HelpExampleBox>
           <p>
-            1. <strong>숫자와 조건</strong>: 예산, 기간, 권한 설정 등 정확한 수치가 필요할 때.
+            1. <HelpArticleEmphasis>숫자와 조건</HelpArticleEmphasis>: 예산, 기간, 권한 설정 등 정확한 수치가 필요할 때.
           </p>
           <p>
-            2. <strong>최종 결정</strong>: 팀의 정책이나 방향을 확정 짓고 승인해야 할 때.
+            2. <HelpArticleEmphasis>최종 결정</HelpArticleEmphasis>: 팀의 정책이나 방향을 확정 짓고 승인해야 할 때.
           </p>
           <p>
-            3. <strong>코드와 원인</strong>: 버그 재현 경로를 확인하거나, 실제 코드를 볼 때.
+            3. <HelpArticleEmphasis>코드와 원인</HelpArticleEmphasis>: 버그 재현 경로를 확인하거나, 실제 코드를 볼 때.
           </p>
         </HelpExampleBox>
       </HelpArticleSection>
 
-      <HelpArticleSection {...SUPPORT_1_SECTIONS[3]}>
-        <HelpArticleSubsection title="Q. PDF나 엑셀 파일 내용도 검색되나요?">
-          <HelpArticleText>
+      <HelpArticleSection {...SUPPORT_1_SECTIONS[3]} className="gap-10">
+        <HelpArticleSubsection
+          className="gap-1"
+          titleClassName="text-reading-heading-sb-large"
+          title="Q. PDF나 엑셀 파일 내용도 검색되나요?"
+        >
+          <HelpArticleText className="text-text-normal-alternative">
             <p>
-              <strong>A. 파일 속을 뜯어보는 게 아니라, 파일이 공유된 &apos;맥락&apos;을 찾아드립니다.</strong>
+              <HelpArticleEmphasis>
+                A. 파일 속을 뜯어보는 게 아니라, 파일이 공유된 &apos;맥락&apos;을 찾아드립니다.
+              </HelpArticleEmphasis>
             </p>
             <br />
             <p>아직 파일 내용을 직접 인덱싱하지는 않아요.</p>
             <p>
-              대신 그 파일이 <strong>어떤 대화 흐름에서, 어떤 이슈와 함께 공유되었는지</strong>를 찾습니다.
+              대신 그 파일이{' '}
+              <HelpArticleEmphasis>어떤 대화 흐름에서, 어떤 이슈와 함께 공유되었는지</HelpArticleEmphasis>를 찾습니다.
             </p>
             <br />
             <p>
               예를 들어, Slack에서 &quot;이번 달 정산 내역서(xlsx) 공유합니다&quot;라고 올렸다면, Catch Up은 그 메시지를
-              찾아 <strong>파일 원본으로 가는 링크</strong>를 제공해요.
+              찾아 <HelpArticleEmphasis>파일 원본으로 가는 링크</HelpArticleEmphasis>를 제공해요.
             </p>
           </HelpArticleText>
         </HelpArticleSubsection>
 
-        <HelpArticleSubsection title="Q. 캡처 이미지나 도표도 검색되나요?">
-          <HelpArticleText>
+        <HelpArticleSubsection
+          className="gap-1"
+          titleClassName="text-reading-heading-sb-large"
+          title="Q. 캡처 이미지나 도표도 검색되나요?"
+        >
+          <HelpArticleText className="text-text-normal-alternative">
             <p>
-              <strong>A. 이미지가 포함된 &apos;대화&apos;를 찾아드려요.</strong>
+              <HelpArticleEmphasis>A. 이미지가 포함된 &apos;대화&apos;를 찾아드려요.</HelpArticleEmphasis>
             </p>
             <br />
             <p>이미지 자체를 분석하는 게 아니라, 그 이미지를 올릴 때 나눴던 대화나 이슈 내용을 바탕으로 찾습니다.</p>
           </HelpArticleText>
         </HelpArticleSubsection>
 
-        <HelpArticleSubsection title="Q. 방금 올린 자료가 검색에 안 떠요. 고장인가요?">
-          <HelpArticleText>
+        <HelpArticleSubsection
+          className="gap-1"
+          titleClassName="text-reading-heading-sb-large"
+          title="Q. 방금 올린 자료가 검색에 안 떠요. 고장인가요?"
+        >
+          <HelpArticleText className="text-text-normal-alternative">
             <p>
-              <strong>A.</strong> 잠깐 시간이 필요해요.
+              <HelpArticleEmphasis>A.</HelpArticleEmphasis> 잠깐 시간이 필요해요.
             </p>
             <br />
             <p>여러분이 올린 소중한 자료를 안전하게 가져와서, 검색하기 좋게 정리하는 데는 약간의 시간이 걸립니다.</p>
