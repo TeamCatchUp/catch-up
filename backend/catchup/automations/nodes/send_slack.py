@@ -20,7 +20,8 @@ logger = structlog.get_logger(__name__)
 _USER_CHAT_URL_RE = re.compile(
     r"https?://[^\s<|>]+/(?:user-chats|user_chats)/(?P<user_chat_id>[^\s<|>/?#]+)"
 )
-_SEARCH_WINDOW = timedelta(minutes=30)
+_SEARCH_WINDOW_MINIMUM = timedelta(minutes=30)
+_SEARCH_WINDOW_BUFFER = timedelta(minutes=10)
 _SLACK_MARKDOWN_BLOCK_TEXT_LIMIT = 12_000
 
 
@@ -89,8 +90,16 @@ async def send_slack_node(state: dict[str, Any]) -> dict[str, Any]:
 
     client = SlackApiClientWrapper(token.bot_access_token, token.team_id)
 
+    quiet_period_seconds: int | None = state.get("quiet_period_seconds")
+    search_window = max(
+        _SEARCH_WINDOW_MINIMUM,
+        timedelta(seconds=quiet_period_seconds) + _SEARCH_WINDOW_BUFFER
+        if quiet_period_seconds
+        else _SEARCH_WINDOW_MINIMUM,
+    )
+
     now = datetime.now(timezone.utc)
-    oldest_at = now - _SEARCH_WINDOW
+    oldest_at = now - search_window
 
     cursor: str | None = None
     newest_match: dict[str, Any] | None = None

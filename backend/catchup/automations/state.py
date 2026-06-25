@@ -30,5 +30,6 @@ class AutomationState(TypedDict):
 
     # automation 전용
     guide_instruction: str | None
+    quiet_period_seconds: int | None
     grade_result: GradeResult | None
     guide_text: str | None
