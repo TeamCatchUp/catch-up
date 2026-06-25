@@ -8,7 +8,7 @@ export default function TermsPolicySection() {
     <section className="flex flex-col gap-3">
       <div className="flex flex-col gap-0.5">
         <h2 className="text-heading-large text-text-normal-normal">약관 및 정책</h2>
-        <p className="text-body-small text-text-normal-alternative">서비스 이용을 위한 약관과 정책을 확인하세요.</p>
+        <p className="text-body-small text-text-normal-alternative">서비스 이용에 필요한 약관과 정책을 확인하세요.</p>
       </div>
 
       <div className="flex gap-5">

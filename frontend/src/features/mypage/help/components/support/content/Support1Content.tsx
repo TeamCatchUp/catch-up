@@ -1,0 +1,219 @@
+import {
+  HelpArticleSection,
+  HelpArticleSubsection,
+  HelpArticleText,
+  HelpDotDivider,
+} from '@/features/mypage/help/components/article/HelpArticleBlocks';
+import HelpExampleBox from '@/features/mypage/help/components/article/HelpExampleBox';
+import type { HelpArticleNavItem } from '@/features/mypage/help/types/helpArticle';
+
+export const SUPPORT_1_SECTIONS = [
+  { id: 'security', title: '1. 보안과 프라이버시 (Security & Privacy)' },
+  { id: 'prompting', title: '2. 질문 잘하는 법 (Smart Prompting)' },
+  { id: 'verification', title: '3. 검증과 확인 (Verification & Citations)' },
+  { id: 'sync', title: '4. 데이터 연결 및 동기화 (Files & Synchronization)' },
+] as const satisfies readonly HelpArticleNavItem[];
+
+export default function Support1Content() {
+  return (
+    <>
+      <HelpDotDivider />
+
+      <HelpArticleSection {...SUPPORT_1_SECTIONS[0]}>
+        <HelpArticleSubsection title="Q. 혹시 제가 볼 권한이 없는 대외비 문서도 검색되나요?">
+          <HelpArticleText>
+            <p>
+              <strong>A. 아니요, 비공개 정보는 가져오지 않습니다.</strong>
+            </p>
+            <br />
+            <p>
+              Catch Up은 <strong>&apos;전사 공개&apos;</strong> 설정된 정보만 수집합니다.
+            </p>
+            <br />
+            <p>
+              누구나 볼 수 있는 Slack 퍼블릭 채널, 전체 공개된 Jira 이슈, 공용 문서만 검색 대상입니다.
+              <br />
+              복잡하게 권한을 따질 필요 없이, &quot;여기서 검색된다면, 우리 팀 누구나 봐도 되는 정보&quot;라고
+              생각하시면 됩니다.
+            </p>
+          </HelpArticleText>
+        </HelpArticleSubsection>
+
+        <HelpArticleSubsection title="Q. 개인적인 DM이나 비공개 채널은요?">
+          <HelpArticleText>
+            <p>
+              <strong>A. 절대 수집하지 않습니다.</strong>
+            </p>
+            <br />
+            <p>
+              &apos;전사 공개&apos;가 아닌 개인적인 영역(DM, 비공개 채널, 잠금 설정된 문서)은 아예 연동 대상에서
+              제외됩니다.
+            </p>
+            <br />
+            <p>
+              Catch Up은 팀 전체가 공유해야 할 지식만 다룹니다.
+              <br />
+              개인의 사적인 영역은 건드리지 않으니 안심하세요.
+            </p>
+          </HelpArticleText>
+        </HelpArticleSubsection>
+
+        <HelpArticleSubsection title="Q. 우리 회사 데이터로 AI를 학습시키나요?">
+          <HelpArticleText>
+            <p>
+              <strong>A. 아니요, 여러분의 데이터는 AI 학습에 쓰이지 않습니다.</strong>
+            </p>
+            <br />
+            <p>
+              Catch Up은 검색과 답변 생성을 위해 데이터를 &apos;참조&apos;할 뿐, 이를 외부 모델의 학습 데이터로 넘기지
+              않습니다.
+              <br />
+              모든 데이터 처리는 보안 가이드라인 안에서 안전하게 이루어집니다.
+            </p>
+          </HelpArticleText>
+        </HelpArticleSubsection>
+      </HelpArticleSection>
+
+      <HelpArticleSection {...SUPPORT_1_SECTIONS[1]}>
+        <HelpArticleText>
+          <p>원하는 답을 한 번에 얻기 위한 핵심 요령입니다.</p>
+        </HelpArticleText>
+
+        <HelpArticleSubsection title="Q. 질문을 어떻게 해야 정확한 답이 나오나요?">
+          <HelpArticleText>
+            <p>
+              <strong>A.</strong> 길게 쓰지 않아도 됩니다. <strong>[단서 + 목적 + 기간]</strong> 이 3가지만 기억하세요.
+            </p>
+          </HelpArticleText>
+        </HelpArticleSubsection>
+
+        <HelpExampleBox>
+          <p>- 나쁜 예: &quot;로그인 안 돼.&quot; (너무 막연함)</p>
+          <div>
+            <p>
+              - 좋은 예: &quot;어제 배포 이후(기간) 소셜 로그인(단서)에서 발생하는 500 에러의 담당자가
+              누구야?(목적)&quot;
+            </p>
+            <br />
+            <p>이렇게 구체적인 맥락을 주면, AI가 수많은 문서 중 정확히 필요한 것만 정리할 수 있습니다.</p>
+          </div>
+        </HelpExampleBox>
+
+        <HelpArticleSubsection title="Q. 매번 질문을 갖춰서 쓰기가 너무 번거로워요.">
+          <HelpArticleText>
+            <p>
+              <strong>A. 그래서 &apos;상황별 맞춤 프롬프트&apos;를 준비했습니다.</strong>
+            </p>
+            <br />
+            <p>홈 화면 하단에 있는 카드들을 눌러보세요.</p>
+            <br />
+            <p>
+              &quot;유사 사례 찾기&quot;, &quot;배포 후 원인 좁히기&quot;, &quot;히스토리 파악&quot; 등 자주 쓰는 질문
+              템플릿이 자동으로 입력됩니다.
+              <br />
+              빈칸만 내 상황에 맞게 톡톡 바꿔주시면 질문 완성입니다.
+            </p>
+          </HelpArticleText>
+        </HelpArticleSubsection>
+
+        <HelpArticleSubsection title="Q. 질문에 오타가 있거나, 정확한 용어가 생각 안 나면요?">
+          <HelpArticleText>
+            <p>
+              <strong>A. 완벽한 단어가 아니어도 괜찮습니다.</strong>
+            </p>
+            <br />
+            <p>Catch Up은 단순 키워드 매칭을 넘어 문장의 의미를 이해합니다.</p>
+            <br />
+            <p>
+              &apos;결제창 오류&apos;나 &apos;결제 에러&apos;처럼 생각나는 대로 물어보세요.
+              <br />
+              AI가 사내 문서와 대화의 맥락을 분석해 가장 연관성 높은 기록을 찾아 연결합니다.
+            </p>
+          </HelpArticleText>
+        </HelpArticleSubsection>
+      </HelpArticleSection>
+
+      <HelpArticleSection {...SUPPORT_1_SECTIONS[2]}>
+        <HelpArticleSubsection title="Q. 답변에 달린 출처가 너무 많은데, 이걸 다 읽어야 하나요?">
+          <HelpArticleText>
+            <p>
+              <strong>A. 아니요, 인용된 이유부터 살펴보시면 됩니다.</strong>
+            </p>
+            <br />
+            <p>
+              다 읽으면 시간이 아깝잖아요.
+              <br />
+              Catch Up은 출처 리스트에 &apos;인용 이유(Reasoning)&apos;를 같이 달아둡니다.
+            </p>
+            <br />
+            <p>
+              &quot;최신 변경 사항이 포함됨&quot;, &quot;오류 원인 코드가 있음&quot;, &quot;최종 합의된 스레드&quot;
+              같은 이유를 먼저 훑어보세요.
+            </p>
+          </HelpArticleText>
+        </HelpArticleSubsection>
+
+        <HelpArticleSubsection title="Q. 그럼 '원문 바로가기'는 언제 누르면 되나요?">
+          <HelpArticleText>
+            <p>
+              A. &apos;결정적인 10초&apos;가 필요할 때만 누르세요. 대부분은 요약만으로 충분하지만, 아래 세 가지 경우에는
+              꼭 원문을 확인하는 게 좋습니다.
+            </p>
+          </HelpArticleText>
+        </HelpArticleSubsection>
+
+        <HelpExampleBox>
+          <p>
+            1. <strong>숫자와 조건</strong>: 예산, 기간, 권한 설정 등 정확한 수치가 필요할 때.
+          </p>
+          <p>
+            2. <strong>최종 결정</strong>: 팀의 정책이나 방향을 확정 짓고 승인해야 할 때.
+          </p>
+          <p>
+            3. <strong>코드와 원인</strong>: 버그 재현 경로를 확인하거나, 실제 코드를 볼 때.
+          </p>
+        </HelpExampleBox>
+      </HelpArticleSection>
+
+      <HelpArticleSection {...SUPPORT_1_SECTIONS[3]}>
+        <HelpArticleSubsection title="Q. PDF나 엑셀 파일 내용도 검색되나요?">
+          <HelpArticleText>
+            <p>
+              <strong>A. 파일 속을 뜯어보는 게 아니라, 파일이 공유된 &apos;맥락&apos;을 찾아드립니다.</strong>
+            </p>
+            <br />
+            <p>아직 파일 내용을 직접 인덱싱하지는 않아요.</p>
+            <p>
+              대신 그 파일이 <strong>어떤 대화 흐름에서, 어떤 이슈와 함께 공유되었는지</strong>를 찾습니다.
+            </p>
+            <br />
+            <p>
+              예를 들어, Slack에서 &quot;이번 달 정산 내역서(xlsx) 공유합니다&quot;라고 올렸다면, Catch Up은 그 메시지를
+              찾아 <strong>파일 원본으로 가는 링크</strong>를 제공해요.
+            </p>
+          </HelpArticleText>
+        </HelpArticleSubsection>
+
+        <HelpArticleSubsection title="Q. 캡처 이미지나 도표도 검색되나요?">
+          <HelpArticleText>
+            <p>
+              <strong>A. 이미지가 포함된 &apos;대화&apos;를 찾아드려요.</strong>
+            </p>
+            <br />
+            <p>이미지 자체를 분석하는 게 아니라, 그 이미지를 올릴 때 나눴던 대화나 이슈 내용을 바탕으로 찾습니다.</p>
+          </HelpArticleText>
+        </HelpArticleSubsection>
+
+        <HelpArticleSubsection title="Q. 방금 올린 자료가 검색에 안 떠요. 고장인가요?">
+          <HelpArticleText>
+            <p>
+              <strong>A.</strong> 잠깐 시간이 필요해요.
+            </p>
+            <br />
+            <p>여러분이 올린 소중한 자료를 안전하게 가져와서, 검색하기 좋게 정리하는 데는 약간의 시간이 걸립니다.</p>
+          </HelpArticleText>
+        </HelpArticleSubsection>
+      </HelpArticleSection>
+    </>
+  );
+}

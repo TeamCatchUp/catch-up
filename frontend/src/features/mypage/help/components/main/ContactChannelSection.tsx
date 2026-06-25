@@ -11,10 +11,10 @@ export default function ContactChannelSection() {
         <div className="flex flex-col gap-0.5">
           <h2 className="text-heading-large text-text-normal-normal">Catch Up 문의 채널</h2>
           <div className="flex items-center gap-1">
-            <p className="text-body-small text-text-normal-alternative">운영팀과 Slack으로 바로 연결됩니다.</p>
+            <p className="text-body-small text-text-normal-alternative">운영팀과 Slack으로 바로 연결합니다.</p>
             <Button variant="text-primary-blue" size="md" className="text-text-primary-normal gap-1" asChild>
               <a href={SLACK_CONNECT_URL} target="_blank" rel="noopener noreferrer">
-                Slack 으로 문의하기
+                Slack으로 문의하기
                 <ArrowForward className="h-5 w-5 shrink-0" />
               </a>
             </Button>

@@ -1,21 +1,26 @@
 export const TUTORIALS = [
   {
     id: 1,
-    category: '튜토리얼',
+    category: '검색 안내 튜토리얼',
     title: '검색 한 번으로 찾는 업무 정보',
     heroImage: '/image/tutorial/light/tutorial-1-hero.jpg',
   },
   {
     id: 2,
-    category: '튜토리얼',
+    category: '검색 안내 튜토리얼',
     title: '원하는 답을 한 번에 얻는 비결',
     heroImage: '/image/tutorial/light/tutorial-2-hero.jpg',
   },
   {
     id: 3,
-    category: '튜토리얼',
+    category: '계정 및 지원 안내',
     title: '정확도를 올리는 출처 확인 방법',
     heroImage: '/image/tutorial/light/tutorial-3-hero.jpg',
+  },
+  {
+    id: 4,
+    category: '가이드 ∙ 튜토리얼 보기',
+    title: 'Catch Up MCP 설치하기',
   },
 ] as const;
 

@@ -1,18 +1,23 @@
-import TutorialFeatureCards from '@/features/mypage/help/components/tutorial/TutorialFeatureCards';
+import {
+  HelpArticleSection,
+  HelpArticleText,
+  HelpDotDivider,
+} from '@/features/mypage/help/components/article/HelpArticleBlocks';
+import type { HelpArticleNavItem } from '@/features/mypage/help/types/helpArticle';
 
-const DotDivider = () => (
-  <div className="flex items-center justify-center gap-1.5 py-4">
-    <span className="bg-text-normal-assistive size-1 rounded-full" />
-    <span className="bg-text-normal-assistive size-1 rounded-full" />
-    <span className="bg-text-normal-assistive size-1 rounded-full" />
-  </div>
-);
+import TutorialFeatureCards from '../TutorialFeatureCards';
+
+export const TUTORIAL_1_SECTIONS = [
+  { id: 'work-time', title: '정보를 찾는 시간이 줄면, 일하는 시간이 늘어납니다.' },
+  { id: 'sources', title: '출처를 같이 보여주는 이유' },
+  { id: 'team-scale', title: '팀이 커질수록 효과가 커지는 이유' },
+  { id: 'wrap-up', title: '마무리' },
+] as const satisfies readonly HelpArticleNavItem[];
 
 export default function Tutorial1Content() {
   return (
-    <div className="flex w-full flex-col gap-16">
-      {/* 도입부 */}
-      <div className="text-label-medium text-text-normal-normal">
+    <>
+      <HelpArticleText>
         <p>
           필요한 정보는 사실 회사 안에 다 있어요.
           <br />
@@ -28,7 +33,8 @@ export default function Tutorial1Content() {
         <p>질문하는 쪽도, 답하는 쪽도 일을 멈추게 되죠.</p>
         <br />
         <p>
-          결국 <strong>서로가 서로를 방해하는 구조</strong>가 되고, 이건 <strong>팀 전체의 시간 낭비</strong>예요.
+          결국 <strong>서로가 서로를 방해하는 구조</strong>가 되고, 이건 <strong>팀 전체의 시간 낭비</strong>
+          예요.
         </p>
         <br />
         <p>
@@ -36,39 +42,31 @@ export default function Tutorial1Content() {
           <br />
           <strong>검색 한 번으로 흩어진 기록을 모아, 필요한 답을 근거와 함께 정리해드립니다.</strong>
         </p>
-      </div>
+      </HelpArticleText>
 
-      <DotDivider />
+      <HelpDotDivider />
 
-      {/* 섹션 1: 정보를 찾는 시간이 줄면 */}
-      <section className="flex flex-col gap-8">
-        <div className="flex flex-col gap-4">
-          <h2 className="text-heading-xlarge text-text-normal-strong">
-            정보를 찾는 시간이 줄면, 일하는 시간이 늘어납니다.
-          </h2>
-          <div className="text-label-medium text-text-normal-normal">
-            <p>그냥 몇 분 아끼는 얘기가 아니에요.</p>
-            <p>
-              <strong>찾는 과정이 짧아질수록, 집중은 오래 가고 실행은 빨라져요.</strong>
-            </p>
+      <HelpArticleSection {...TUTORIAL_1_SECTIONS[0]}>
+        <HelpArticleText>
+          <p>그냥 몇 분 아끼는 얘기가 아니에요.</p>
+          <p>
+            <strong>찾는 과정이 짧아질수록, 집중은 오래 가고 실행은 빨라져요.</strong>
+          </p>
+          <br />
+          <p>
+            그래서 저희는 생각했어요.
             <br />
-            <p>
-              그래서 저희는 생각했어요.
-              <br />
-              찾는 걸 빨리 해주는 것만으론 부족하고, 바로 납득하고 확인까지 갈 수 있어야 한다고요.
-            </p>
-            <br />
-            <p>아래 기능들이 그 흐름을 만들어줍니다.</p>
-          </div>
-        </div>
+            찾는 걸 빨리 해주는 것만으론 부족하고, 바로 납득하고 확인까지 갈 수 있어야 한다고요.
+          </p>
+          <br />
+          <p>아래 기능들이 그 흐름을 만들어줍니다.</p>
+        </HelpArticleText>
 
         <TutorialFeatureCards />
-      </section>
+      </HelpArticleSection>
 
-      {/* 섹션 2: 출처를 같이 보여주는 이유 */}
-      <section className="flex flex-col gap-4">
-        <h2 className="text-heading-xlarge text-text-normal-strong">출처를 같이 보여주는 이유</h2>
-        <div className="text-label-medium text-text-normal-normal">
+      <HelpArticleSection {...TUTORIAL_1_SECTIONS[1]}>
+        <HelpArticleText>
           <p>
             <strong>그럴듯한 답이 제일 위험해요</strong>
             <br />
@@ -98,13 +96,11 @@ export default function Tutorial1Content() {
           </p>
           <br />
           <p>덕분에 팀은 같은 맥락 위에서 더 쉽게 합의하고, 다음 일을 바로 이어갈 수 있어요.</p>
-        </div>
-      </section>
+        </HelpArticleText>
+      </HelpArticleSection>
 
-      {/* 섹션 3: 팀이 커질수록 효과가 커지는 이유 */}
-      <section className="flex flex-col gap-4">
-        <h2 className="text-heading-xlarge text-text-normal-strong">팀이 커질수록 효과가 커지는 이유</h2>
-        <div className="text-label-medium text-text-normal-normal">
+      <HelpArticleSection {...TUTORIAL_1_SECTIONS[2]}>
+        <HelpArticleText>
           <p>
             팀이 작을 때는 기억으로도 꽤 잘 굴러가요.
             <br />
@@ -126,15 +122,13 @@ export default function Tutorial1Content() {
           <p>
             <strong>사람은 바뀌어도, 팀이 쌓아온 맥락은 남아야 하니까요.</strong>
           </p>
-        </div>
-      </section>
+        </HelpArticleText>
+      </HelpArticleSection>
 
-      <DotDivider />
+      <HelpDotDivider />
 
-      {/* 섹션 4: 마무리 */}
-      <section className="flex flex-col gap-4">
-        <h2 className="text-heading-xlarge text-text-normal-strong">마무리</h2>
-        <div className="text-label-medium text-text-normal-normal">
+      <HelpArticleSection {...TUTORIAL_1_SECTIONS[3]}>
+        <HelpArticleText>
           <p>
             업무 정보는 원래 계속 쌓이고 있었어요.
             <br />
@@ -152,8 +146,8 @@ export default function Tutorial1Content() {
             <br />
             이제 일하는 데 쓰세요.
           </p>
-        </div>
-      </section>
-    </div>
+        </HelpArticleText>
+      </HelpArticleSection>
+    </>
   );
 }

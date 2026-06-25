@@ -15,7 +15,7 @@ export default function GuideTutorialSection() {
         {GUIDE_CARDS.map((card) => (
           <li
             key={card.id}
-            className="border-line-normal-neutral flex max-w-134.25 flex-col overflow-hidden rounded-xl border"
+            className="border-line-normal-neutral bg-fill-normal-normal hover:bg-fill-normal-strong flex max-w-134.25 flex-col overflow-hidden rounded-xl border transition-colors"
           >
             <Link href={`/mypage/help/tutorial/${card.id}`}>
               <div className="border-line-normal-neutral relative aspect-59/25 w-full border-b">
@@ -23,7 +23,7 @@ export default function GuideTutorialSection() {
               </div>
               <div className="flex flex-col gap-2 p-5">
                 <h3 className="text-heading-small text-text-normal-normal">{card.title}</h3>
-                <p className="text-body-xsmall text-text-normal-alternative whitespace-pre-line">{card.description}</p>
+                <p className="text-body-small text-text-normal-alternative whitespace-pre-line">{card.description}</p>
               </div>
             </Link>
           </li>

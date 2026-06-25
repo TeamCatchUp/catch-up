@@ -2,11 +2,11 @@ import { QueryClient } from '@tanstack/react-query';
 import { http, HttpResponse } from 'msw';
 import { describe, expect, it } from 'vitest';
 
-import { server } from '@/test/msw/server';
 import { API } from '@/shared/api/endpoints';
+import { server } from '@/test/msw/server';
 
-import { mcpScriptQueries } from './mcpScript.queries';
 import { formatMcpInstallScriptValue } from '../utils/mcpScripts';
+import { mcpScriptQueries } from './mcpScript.queries';
 
 describe('mcpScriptQueries', () => {
   it('uses the shared MCP scripts endpoint', () => {
