@@ -11,3 +11,4 @@ class InquiryAutomationConfig(BaseModel):
     slack_channel_id: str
     slack_credential_id: int
     guide_instruction: str | None = None
+    quiet_period_seconds: int | None = None

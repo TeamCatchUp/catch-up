@@ -328,6 +328,7 @@ def publish_inquiry_automation(
         slack_channel_id=str(slack_reference["channel_id"]),
         slack_credential_id=slack_reference["credential_id"],
         guide_instruction=body.guide_instruction,
+        quiet_period_seconds=body.quiet_period_seconds,
     )
     agent_spec = db.scalar(
         select(AgentSpec)
