@@ -78,7 +78,7 @@ export function HelpArticleStep({ order, title, children }: HelpArticleStepProps
   return (
     <div className="flex flex-col gap-3">
       {order ? (
-        <ol className="text-reading-heading-sb-large text-text-normal-normal pl-7.125 list-decimal" start={order}>
+        <ol className="text-reading-heading-sb-large text-text-normal-normal list-inside list-decimal" start={order}>
           <li>
             <span>{title}</span>
           </li>
