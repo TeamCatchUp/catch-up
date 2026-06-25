@@ -96,10 +96,10 @@ const eslintConfig = defineConfig([
         {
           default: 'disallow',
           rules: [
-            { from: 'app', allow: ['features', 'shared'] },
-            { from: 'features', allow: ['shared'] },
-            { from: 'shared', allow: ['shared'] },
-            { from: 'test', allow: ['shared', 'features', 'test'] },
+            { from: { type: 'app' }, allow: { to: { type: ['features', 'shared'] } } },
+            { from: { type: 'features' }, allow: { to: { type: 'shared' } } },
+            { from: { type: 'shared' }, allow: { to: { type: 'shared' } } },
+            { from: { type: 'test' }, allow: { to: { type: ['shared', 'features', 'test'] } } },
           ],
         },
       ],
