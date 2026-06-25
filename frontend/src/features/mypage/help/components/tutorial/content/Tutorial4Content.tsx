@@ -1,6 +1,5 @@
-import Image from 'next/image';
-
 import {
+  HelpArticleEmphasis,
   HelpArticleQuote,
   HelpArticleSection,
   HelpArticleStep,
@@ -10,6 +9,7 @@ import HelpCommandBlock from '@/features/mypage/help/components/article/HelpComm
 import McpScriptCommands from '@/features/mypage/help/components/article/McpScriptCommands';
 import type { HelpArticleNavItem } from '@/features/mypage/help/types/helpArticle';
 import ArrowOutwardIcon from '@/public/icons/icon/arrow_outward.svg';
+import ClaudeIcon from '@/public/icons/logo/claude.svg';
 
 export const TUTORIAL_4_SECTIONS = [
   { id: 'what-is-mcp', title: 'Catch Up MCP가 뭔가요?' },
@@ -33,7 +33,7 @@ function ClaudeDownloadCard() {
       rel="noreferrer"
       className="border-line-normal-neutral bg-fill-normal-normal flex w-full max-w-[520px] items-center gap-4 rounded-xl border p-3"
     >
-      <Image src="/image/help/claude-symbol.png" alt="" width={40} height={40} className="size-10 shrink-0" />
+      <ClaudeIcon aria-hidden className="size-10 shrink-0" />
       <span className="flex min-w-0 flex-1 flex-col">
         <span className="flex items-center gap-2.5">
           <span className="text-reading-body-md-small text-text-normal-normal">Claude</span>
@@ -60,7 +60,8 @@ export default function Tutorial4Content() {
           <p>
             여러 서비스를 각각 연결할 필요는 없습니다.
             <br />
-            <strong>Catch Up MCP</strong> 하나만 설치하면, 여러 업무 도구의 정보를 한 번에 탐색할 수 있습니다.
+            <HelpArticleEmphasis>Catch Up MCP</HelpArticleEmphasis> 하나만 설치하면, 여러 업무 도구의 정보를 한 번에
+            탐색할 수 있습니다.
           </p>
           <p>
             Catch Up은 사전에 인덱싱된 데이터를 기반으로 검색하기 때문에, 정확한 키워드를 몰라도 괜찮습니다.
@@ -79,7 +80,8 @@ export default function Tutorial4Content() {
             <li>Catch Up에 회원가입된 사용자만 이용할 수 있습니다.</li>
             <li>회사 SSO 계정으로 로그인할 수 있어야 합니다.</li>
             <li>
-              Catch Up MCP는 <strong>Claude Desktop</strong> 또는 <strong>Claude Code</strong>에서 사용할 수 있습니다.
+              Catch Up MCP는 <HelpArticleEmphasis>Claude Desktop</HelpArticleEmphasis> 또는{' '}
+              <HelpArticleEmphasis>Claude Code</HelpArticleEmphasis>에서 사용할 수 있습니다.
             </li>
           </ul>
         </HelpArticleText>
@@ -88,10 +90,11 @@ export default function Tutorial4Content() {
       <HelpArticleSection {...TUTORIAL_4_SECTIONS[2]}>
         <HelpArticleText className="flex flex-col gap-4">
           <p>
-            Catch Up MCP는 <strong>Claude Desktop</strong>과 <strong>Claude Code</strong>에서 사용할 수 있습니다.
+            Catch Up MCP는 <HelpArticleEmphasis>Claude Desktop</HelpArticleEmphasis>과{' '}
+            <HelpArticleEmphasis>Claude Code</HelpArticleEmphasis>에서 사용할 수 있습니다.
           </p>
           <p>
-            <strong>웹 브라우저 화면에서는 사용할 수 없습니다.</strong>
+            <HelpArticleEmphasis>웹 브라우저 화면에서는 사용할 수 없습니다.</HelpArticleEmphasis>
             <br />
             보안 정책으로 인해 VPN 환경에서만 동작하기 때문에 웹에서는 사용할 수 없습니다.
             <br />
@@ -114,7 +117,7 @@ export default function Tutorial4Content() {
             <HelpArticleText>
               <p>Catch Up 서비스에 접속한 뒤 아래 경로로 이동합니다.</p>
               <p>
-                <strong>우측 상단 프로필 → MCP 설치</strong>
+                <HelpArticleEmphasis>우측 상단 프로필 → MCP 설치</HelpArticleEmphasis>
               </p>
               <p>사용 중인 운영체제에 맞는 명령어를 복사해주세요.</p>
             </HelpArticleText>
@@ -178,7 +181,7 @@ export default function Tutorial4Content() {
             <HelpArticleText>
               <p>Catch Up 서비스에 접속한 뒤 아래 경로로 이동합니다.</p>
               <p>
-                <strong>우측 상단 프로필 → MCP 설치</strong>
+                <HelpArticleEmphasis>우측 상단 프로필 → MCP 설치</HelpArticleEmphasis>
               </p>
               <p>Claude Code 명령어를 복사해주세요.</p>
             </HelpArticleText>
