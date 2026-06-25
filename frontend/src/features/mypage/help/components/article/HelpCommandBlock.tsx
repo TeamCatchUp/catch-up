@@ -32,7 +32,7 @@ export default function HelpCommandBlock({ value, ariaLabel, isLoading, isError 
 
   return (
     <section className="border-line-normal-neutral bg-fill-normal-strong flex w-full items-start gap-4 rounded-2xl border px-4 py-3">
-      <pre className="text-body-small text-text-normal-normal min-w-0 flex-1 break-words whitespace-pre-wrap">
+      <pre className="text-body-small text-text-normal-neutral min-w-0 flex-1 break-words whitespace-pre-wrap">
         <code>{displayValue}</code>
       </pre>
       <Button

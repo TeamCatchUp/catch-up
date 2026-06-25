@@ -3,17 +3,17 @@ import type { McpInstallScriptDisplayItem } from '../types/mcpScripts';
 export const MCP_INSTALL_SCRIPT_ITEMS = [
   {
     key: 'mac',
-    label: 'Mac 설치',
-    description: '터미널에서 실행해 Claude Desktop 설정을 자동으로 추가합니다.',
+    label: 'Mac',
+    description: '터미널에서 실행할 Claude Desktop 설치 명령어입니다.',
   },
   {
     key: 'windows',
-    label: 'Windows 설치',
-    description: 'PowerShell에서 실행해 Claude Desktop 설정을 자동으로 추가합니다.',
+    label: 'Windows',
+    description: 'PowerShell에서 실행할 Claude Desktop 설치 명령어입니다.',
   },
   {
     key: 'claude_code',
-    label: 'Claude Code 등록',
+    label: 'Claude Code',
     description: 'Claude Code CLI에 Catch Up MCP 서버를 등록합니다.',
   },
   {
