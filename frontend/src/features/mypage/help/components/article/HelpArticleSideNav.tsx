@@ -35,16 +35,8 @@ function getScrollTarget(element: HTMLElement): ScrollTarget {
   return window;
 }
 
-function getInitialActiveId(items: readonly HelpArticleNavItem[]) {
-  if (items.length === 0) return '';
-  if (typeof window === 'undefined') return items[0].id;
-
-  const hashId = window.location.hash.slice(1);
-  return items.some((item) => item.id === hashId) ? hashId : items[0].id;
-}
-
 export default function HelpArticleSideNav({ items }: HelpArticleSideNavProps) {
-  const [activeId, setActiveId] = useState(() => getInitialActiveId(items));
+  const [activeId, setActiveId] = useState(() => items[0]?.id ?? '');
 
   useEffect(() => {
     const sectionElements = items
@@ -55,9 +47,21 @@ export default function HelpArticleSideNav({ items }: HelpArticleSideNavProps) {
 
     const scrollTarget = getScrollTarget(sectionElements[0]);
     let animationFrameId = 0;
+    let shouldUseInitialHash = true;
 
     const updateActiveId = () => {
       animationFrameId = 0;
+
+      if (shouldUseInitialHash) {
+        shouldUseInitialHash = false;
+
+        const hashId = window.location.hash.slice(1);
+
+        if (items.some((item) => item.id === hashId)) {
+          setActiveId(hashId);
+          return;
+        }
+      }
 
       const rootTop = isWindowScrollTarget(scrollTarget) ? 0 : scrollTarget.getBoundingClientRect().top;
       const activationLine = rootTop + ACTIVE_OFFSET;

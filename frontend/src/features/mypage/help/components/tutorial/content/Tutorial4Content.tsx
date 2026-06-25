@@ -41,7 +41,7 @@ export const TUTORIAL_4_NAV_ITEMS = [
 
 const NODE_WINDOWS_INSTALL_COMMAND = 'winget install -e --id OpenJS.NodeJS';
 const NODE_MAC_INSTALL_COMMAND = 'brew install node@24';
-const NODE_VERSION_COMMAND = 'node --version  # 예) v24.17.0';
+const NODE_VERSION_COMMAND = 'node --version';
 
 function ClaudeDownloadCard() {
   return (
@@ -277,6 +277,9 @@ export default function Tutorial4Content() {
 
           <HelpArticleStep title="설치 상태 확인">
             <HelpCommandBlock value={NODE_VERSION_COMMAND} ariaLabel="Node.js 설치 상태 확인 명령어 복사" />
+            <HelpArticleText>
+              <p>예: v24.17.0처럼 버전이 출력되면 설치가 완료된 상태입니다.</p>
+            </HelpArticleText>
           </HelpArticleStep>
 
           <HelpArticleText>
