@@ -267,7 +267,7 @@ export default function Tutorial4Content() {
             </ol>
           </HelpArticleText>
 
-          <HelpArticleStep title="Window">
+          <HelpArticleStep title="Windows">
             <HelpCommandBlock value={NODE_WINDOWS_INSTALL_COMMAND} ariaLabel="Windows Node.js 설치 명령어 복사" />
           </HelpArticleStep>
 
@@ -447,8 +447,8 @@ export default function Tutorial4Content() {
               <p>
                 Catch Up MCP는 현재 Claude Desktop과 Claude Code에서만 사용할 수 있습니다.
                 <br />
-                <a href="http://claude.ai/" target="_blank" rel="noreferrer" className="underline">
-                  http://claude.ai
+                <a href="https://claude.ai/" target="_blank" rel="noreferrer" className="underline">
+                  https://claude.ai
                 </a>{' '}
                 웹 브라우저에서는 MCP 서버의 도구가 로드되지 않습니다.
               </p>
