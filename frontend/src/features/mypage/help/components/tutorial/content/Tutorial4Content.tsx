@@ -67,7 +67,7 @@ function ClaudeDownloadCard() {
 
 function SlackInquiryButton() {
   return (
-    <Button variant="text-primary-blue" size="md" className="text-text-primary-normal gap-1" asChild>
+    <Button variant="text-primary-blue" size="md" className="text-text-primary-normal gap-1 self-start" asChild>
       <a href={SLACK_CONNECT_URL} target="_blank" rel="noopener noreferrer">
         Slack으로 문의하기
         <ArrowForwardIcon className="size-5 shrink-0" />
