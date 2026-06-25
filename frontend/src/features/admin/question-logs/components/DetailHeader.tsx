@@ -16,7 +16,7 @@ interface DetailHeaderProps {
 }
 
 /** 질문 로그 상세 — 헤더 (타이틀 + 유저 정보 + 목록 복귀) */
-export default function DetailHeader({ userId, userName, userDepartment, from }: DetailHeaderProps) {
+export default function DetailHeader({ userName, userDepartment, from }: DetailHeaderProps) {
   const backHref = from === 'audit-logs' ? '/admin/audit-logs?tab=question' : '/admin/question-logs';
 
   return (

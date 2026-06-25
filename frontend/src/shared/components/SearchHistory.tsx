@@ -14,7 +14,7 @@ interface RecentlySearchProps {
   onItemClick?: () => void;
 }
 
-export function SearchHistory({ querys, isModal = false, onItemClick }: RecentlySearchProps) {
+export function SearchHistory({ querys, onItemClick }: RecentlySearchProps) {
   if (!querys || querys.length === 0) {
     return (
       <div className="flex w-full items-center justify-center rounded-xl py-4">

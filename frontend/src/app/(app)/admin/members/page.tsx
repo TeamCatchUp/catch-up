@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 
-import EntryRequestSection from '@/features/admin/members/components/sections/EntryRequestSection';
 import UserListSection from '@/features/admin/members/components/sections/UserListSection';
 import IconSearch from '@/public/icons/icon/search.svg';
 

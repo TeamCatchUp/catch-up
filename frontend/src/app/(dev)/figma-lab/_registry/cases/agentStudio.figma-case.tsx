@@ -1,18 +1,17 @@
 import { useState } from 'react';
 
 import type { FigmaLabCase } from '@/app/(dev)/figma-lab/_registry/types';
-import { cn } from '@/shared/utils/cn';
-import type { AgentStudioCardModel, AgentStudioFilter } from '@/features/agent-studio/types/agentStudioModel';
+import AgentStudioEditorPage from '@/features/agent-studio/components/editor/AgentStudioEditorPage';
 import AgentCreateButton from '@/features/agent-studio/components/list/AgentCreateButton';
 import AgentFilterTabs from '@/features/agent-studio/components/list/AgentFilterTabs';
 import AgentStudioHeader from '@/features/agent-studio/components/list/AgentStudioHeader';
 import AgentStudioListContent from '@/features/agent-studio/components/list/AgentStudioListContent';
-import AgentStudioEditorPage from '@/features/agent-studio/components/editor/AgentStudioEditorPage';
 import {
   AGENT_STUDIO_FILTERS,
-  AGENT_STUDIO_LIST_FIXTURE,
   AGENT_STUDIO_MULTI_ACTIVE_LIST_FIXTURE,
 } from '@/features/agent-studio/fixtures/agentStudioFixtures';
+import type { AgentStudioCardModel, AgentStudioFilter } from '@/features/agent-studio/types/agentStudioModel';
+import { cn } from '@/shared/utils/cn';
 
 import { DESIGN_SYSTEM_FILE_KEY } from './caseConstants';
 

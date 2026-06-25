@@ -19,6 +19,8 @@ const eslintConfig = defineConfig([
     'e2e/**',
     'playwright-report/**',
     'test-results/**',
+    // Local agent/tooling artifacts
+    '.codex/**',
   ]),
   // import 정렬 자동화 플러그인
   {
