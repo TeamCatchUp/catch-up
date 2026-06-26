@@ -10,15 +10,17 @@ from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
 from catchup.auth.dependencies import get_current_user
+from catchup.automations import service as automations_service
 from catchup.automations.config import INQUIRY_AUTOMATION_PRESET_KEY
+from catchup.automations.service import AutomationPublishError
+from catchup.automations.service import build_agent_id
+from catchup.automations.service import build_channel_talk_debounce_condition
+from catchup.automations.service import validate_slack_channel_access
 from catchup.connectors.slack.client import SlackConnectorApiError
 from catchup.db.dependencies import get_db
 from catchup.db.models import AgentStatus
 from catchup.server.automations import api
 from catchup.server.automations.api import InquiryAutomationPublishRequest
-from catchup.server.automations.api import _build_agent_id
-from catchup.server.automations.api import _build_channel_talk_debounce_condition
-from catchup.server.automations.api import _validate_slack_channel_history_access
 from catchup.server.automations.api import list_automation_credentials
 from catchup.server.automations.api import list_automation_targets
 from catchup.server.automations.api import list_inquiry_automations
@@ -182,8 +184,8 @@ def test_list_slack_targets_returns_channels_for_selected_credential(monkeypatch
         is_archived=False,
         member_count=12,
     )
-    monkeypatch.setattr(api, "get_slack_token_by_id", lambda *_: token)
-    monkeypatch.setattr(api, "get_channels_by_team", lambda *_: [channel])
+    monkeypatch.setattr(automations_service, "get_slack_token_by_id", lambda *_: token)
+    monkeypatch.setattr(automations_service, "get_channels_by_team", lambda *_: [channel])
 
     response = list_automation_targets(
         connector="slack",
@@ -228,7 +230,7 @@ def test_list_channel_talk_targets_returns_selected_channel(monkeypatch) -> None
         )
     )
     monkeypatch.setattr(
-        api,
+        automations_service,
         "ChannelTalkCredentialsRepository",
         lambda _: repository,
     )
@@ -263,13 +265,13 @@ def test_list_channel_talk_targets_returns_selected_channel(monkeypatch) -> None
 
 
 def test_build_agent_id_is_stable_for_idempotency_key() -> None:
-    first = _build_agent_id(
+    first = build_agent_id(
         workspace_id=1,
         preset_key=INQUIRY_AUTOMATION_PRESET_KEY,
         channel_talk_channel_id="229395",
         slack_channel_id="C123",
     )
-    second = _build_agent_id(
+    second = build_agent_id(
         workspace_id=1,
         preset_key=INQUIRY_AUTOMATION_PRESET_KEY,
         channel_talk_channel_id="229395",
@@ -279,13 +281,13 @@ def test_build_agent_id_is_stable_for_idempotency_key() -> None:
 
 
 def test_build_agent_id_differs_for_different_slack_channels() -> None:
-    a = _build_agent_id(
+    a = build_agent_id(
         workspace_id=1,
         preset_key=INQUIRY_AUTOMATION_PRESET_KEY,
         channel_talk_channel_id="229395",
         slack_channel_id="C123",
     )
-    b = _build_agent_id(
+    b = build_agent_id(
         workspace_id=1,
         preset_key=INQUIRY_AUTOMATION_PRESET_KEY,
         channel_talk_channel_id="229395",
@@ -295,7 +297,7 @@ def test_build_agent_id_differs_for_different_slack_channels() -> None:
 
 
 def test_build_channel_talk_debounce_condition_resets_only_user_messages() -> None:
-    condition = _build_channel_talk_debounce_condition(
+    condition = build_channel_talk_debounce_condition(
         channel_id="229395",
         quiet_period_seconds=60,
     )
@@ -374,7 +376,7 @@ def test_list_inquiry_automations_returns_items(monkeypatch) -> None:
     db.execute.return_value.all.return_value = [(row, author)]
     user = SimpleNamespace(id=1)
 
-    monkeypatch.setattr(api, "_resolve_user_workspace_id", lambda *_: 1)
+    monkeypatch.setattr(api, "get_workspace_id_for_user", lambda *_: 1)
 
     result = list_inquiry_automations(db=db, current_user=user)
 
@@ -398,7 +400,7 @@ def test_list_inquiry_automations_uses_default_title(monkeypatch) -> None:
     db.execute.return_value.all.return_value = [(row, author)]
     user = SimpleNamespace(id=1)
 
-    monkeypatch.setattr(api, "_resolve_user_workspace_id", lambda *_: 1)
+    monkeypatch.setattr(api, "get_workspace_id_for_user", lambda *_: 1)
 
     result = list_inquiry_automations(db=db, current_user=user)
 
@@ -417,7 +419,7 @@ def test_list_inquiry_automations_skips_invalid_spec(monkeypatch) -> None:
     db.execute.return_value.all.return_value = [(bad_row, author)]
     user = SimpleNamespace(id=1)
 
-    monkeypatch.setattr(api, "_resolve_user_workspace_id", lambda *_: 1)
+    monkeypatch.setattr(api, "get_workspace_id_for_user", lambda *_: 1)
 
     result = list_inquiry_automations(db=db, current_user=user)
 
@@ -432,7 +434,7 @@ def test_update_inquiry_automation_sets_inactive(monkeypatch) -> None:
     db.scalar.return_value = row
     user = SimpleNamespace(id=1)
 
-    monkeypatch.setattr(api, "_resolve_user_workspace_id", lambda *_: 1)
+    monkeypatch.setattr(api, "get_workspace_id_for_user", lambda *_: 1)
 
     update_inquiry_automation(
         agent_spec_id=1,
@@ -452,7 +454,7 @@ def test_update_inquiry_automation_raises_404_when_not_found(monkeypatch) -> Non
     db.scalar.return_value = None
     user = SimpleNamespace(id=1)
 
-    monkeypatch.setattr(api, "_resolve_user_workspace_id", lambda *_: 1)
+    monkeypatch.setattr(api, "get_workspace_id_for_user", lambda *_: 1)
 
     with pytest.raises(HTTPException) as exc_info:
         update_inquiry_automation(
@@ -478,9 +480,9 @@ def test_validate_slack_channel_history_access_probes_latest_message(
             calls.append(("history", channel, limit))
             return {"messages": []}
 
-    monkeypatch.setattr(api, "SlackApiClientWrapper", FakeSlackClient)
+    monkeypatch.setattr(automations_service, "SlackApiClientWrapper", FakeSlackClient)
 
-    _validate_slack_channel_history_access(
+    validate_slack_channel_access(
         bot_access_token="xoxb-token",
         team_id="T123",
         channel_id="C123",
@@ -508,14 +510,13 @@ def test_validate_slack_channel_history_access_rejects_slack_api_error(
                 metadata={"error": "not_in_channel"},
             )
 
-    monkeypatch.setattr(api, "SlackApiClientWrapper", FakeSlackClient)
+    monkeypatch.setattr(automations_service, "SlackApiClientWrapper", FakeSlackClient)
 
-    with pytest.raises(HTTPException) as exc_info:
-        _validate_slack_channel_history_access(
+    with pytest.raises(AutomationPublishError) as exc_info:
+        validate_slack_channel_access(
             bot_access_token="xoxb-token",
             team_id="T123",
             channel_id="C123",
         )
 
-    assert exc_info.value.status_code == 400
-    assert "not_in_channel" in exc_info.value.detail
+    assert "not_in_channel" in str(exc_info.value)
