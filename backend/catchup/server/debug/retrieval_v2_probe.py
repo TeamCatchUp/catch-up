@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Literal
+
 import structlog
 from fastapi import APIRouter
 from fastapi import HTTPException
@@ -54,6 +56,7 @@ class DocResult(BaseModel):
 
 
 class RetrievalV2ProbeResponse(BaseModel):
+    search_mode: Literal["vector_only", "hybrid"]
     vector_hits: list[DocResult]
     body_hits: list[DocResult]
     title_hits: list[DocResult]
@@ -145,9 +148,15 @@ async def retrieval_v2_probe(
         score_threshold=body.score_threshold,
     )
     merged_results = [_doc_result(d) for d in merged]
+    search_mode: Literal["vector_only", "hybrid"] = (
+        "hybrid"
+        if any(d.metadata.get("score") is not None for d in merged)
+        else "vector_only"
+    )
 
     logger.info(
         "retrieval_v2_probe_completed",
+        search_mode=search_mode,
         vector_count=len(vector_hits),
         body_count=len(body_hits),
         title_count=len(title_hits),
@@ -155,6 +164,7 @@ async def retrieval_v2_probe(
     )
 
     return RetrievalV2ProbeResponse(
+        search_mode=search_mode,
         vector_hits=vector_hits,
         body_hits=body_hits,
         title_hits=title_hits,
