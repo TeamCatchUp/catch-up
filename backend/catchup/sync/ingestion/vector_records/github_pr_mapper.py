@@ -199,14 +199,11 @@ class GithubPrV2RecordMapper:
     ) -> GithubPrUserMetadata | dict[str, Any] | None:
         if commit.author:
             return cls._user_metadata(commit.author)
-        if not commit.author_login and not commit.author_name:
+        if not commit.author_login:
             return None
-        return _drop_none(
-            {
-                "login": commit.author_login or commit.author_name,
-                "name": commit.author_name,
-                "catchup_user_id": None,
-            }
+        return GithubPrUserMetadata(
+            external_user_id=commit.author_login,
+            internal_user_id=None,
         )
 
     @staticmethod
@@ -214,13 +211,8 @@ class GithubPrV2RecordMapper:
         if user is None:
             return None
         return GithubPrUserMetadata(
-            login=user.login,
-            name=user.name,
-            email=user.email,
-            avatar_url=user.avatar_url,
-            type=user.type,
-            url=user.html_url,
-            catchup_user_id=user.catchup_user_id,
+            external_user_id=user.login,
+            internal_user_id=user.catchup_user_id,
         )
 
     @classmethod
@@ -240,9 +232,9 @@ class GithubPrV2RecordMapper:
         )
         for user in users:
             metadata = cls._user_metadata(user)
-            if metadata is None or metadata.login in seen:
+            if metadata is None or metadata.external_user_id in seen:
                 continue
-            seen.add(metadata.login)
+            seen.add(metadata.external_user_id)
             authors.append(metadata)
         return authors
 

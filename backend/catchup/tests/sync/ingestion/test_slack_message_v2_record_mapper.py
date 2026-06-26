@@ -203,10 +203,8 @@ def test_slack_message_v2_mapper_builds_normalized_row_contract() -> None:
         "edited_at",
     }
     assert document.metadata["slack_message"]["author"] == {
-        "slack_user_id": "U123",
-        "slack_bot_id": None,
-        "name": "Hxxukii",
-        "catchup_user_id": "42",
+        "external_user_id": "U123",
+        "internal_user_id": "42",
     }
     assert document.metadata["slack_message"]["reactions"] == [
         {"name": "eyes", "count": 2}
@@ -224,9 +222,8 @@ def test_slack_message_v2_mapper_builds_normalized_row_contract() -> None:
                 "message_ts": "1712345678.000100",
                 "message_type": "thread_parent",
                 "author": {
-                    "slack_user_id": "U123",
-                    "name": "Hxxukii",
-                    "catchup_user_id": "42",
+                    "external_user_id": "U123",
+                    "internal_user_id": "42",
                 },
                 "created_at": "2024-04-05T12:34:38+00:00",
                 "updated_at": "2024-04-05T19:34:59.000200+00:00",
@@ -243,8 +240,7 @@ def test_slack_message_v2_mapper_builds_normalized_row_contract() -> None:
                 "ts": "1712345699.000200",
                 "message_ts": "1712345699.000200",
                 "author": {
-                    "slack_user_id": "U456",
-                    "name": "Teammate",
+                    "external_user_id": "U456",
                 },
                 "created_at": "2024-04-05T19:34:59.000200+00:00",
                 "reaction_count": 0,
@@ -378,9 +374,8 @@ def test_slack_message_v2_mapper_decodes_literal_unicode_display_values() -> Non
     )
 
     assert document.metadata["target_name"] == "개발팀"
-    assert document.metadata["slack_message"]["author"]["name"] == "팀원A"
+    assert document.metadata["slack_message"]["author"]["external_user_id"] == "U123"
     assert "\\u" not in document.metadata["target_name"]
-    assert "\\u" not in document.metadata["slack_message"]["author"]["name"]
 
 
 def test_slack_transformer_preserves_api_fields_for_v2_parts() -> None:

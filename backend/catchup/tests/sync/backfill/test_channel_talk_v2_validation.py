@@ -64,7 +64,7 @@ def _valid_user_chat_row() -> dict:
                 "priority": None,
                 "goal_state": None,
                 "customer": None,
-                "assignment": {"manager_ids": [], "manager_names": []},
+                "assignment": {"manager_ids": []},
                 "messages": {
                     "count": 1,
                     "included_part_count": 1,
@@ -107,7 +107,10 @@ def _valid_document_article_row() -> dict:
         "langchain_metadata": {
             "channel_talk_document_article": {
                 "schema_version": 2,
-                "author": {"author_id": "manager-1", "author_name": "Jane"},
+                "author": {
+                    "external_user_id": "manager-1",
+                    "internal_user_id": "usr_manager_1",
+                },
                 "taxonomy": {
                     "topic_ids": [],
                     "topic_names": [],

@@ -141,13 +141,8 @@ class GithubIssueV2RecordMapper:
         if user is None:
             return None
         return GithubIssueUserMetadata(
-            login=user.login,
-            name=user.name,
-            email=user.email,
-            avatar_url=user.avatar_url,
-            type=user.type,
-            url=user.html_url,
-            catchup_user_id=user.catchup_user_id,
+            external_user_id=user.login,
+            internal_user_id=user.catchup_user_id,
         )
 
     @classmethod

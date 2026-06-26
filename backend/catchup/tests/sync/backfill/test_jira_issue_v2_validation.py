@@ -126,7 +126,7 @@ def test_validate_jira_issue_v2_sample_row_rejects_raw_metadata_and_parts() -> N
                     "issue_key": "CATCH-145",
                     "project_key": "CATCH",
                     "project_name": "CatchUp",
-                    "reporter": {"catchup_user_id": "usr_author"},
+                    "reporter": {"internal_user_id": "usr_author"},
                     "custom_fields": {"raw": True},
                     "comments_count": 1,
                     "attachments_count": 1,

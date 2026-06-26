@@ -66,9 +66,6 @@ class SlackMessageV2RecordMapper:
             _normalize_display_text(message.channel_name) or message.channel_id
         )
         author_id = message.user_id or message.bot_id
-        author_name = (
-            message.user_real_name or message.user_name or message.bot_name or author_id
-        )
         title = self._title(message, channel_name, mention_names_by_id)
         body = self._body_from_parts(parts)
 
@@ -100,12 +97,10 @@ class SlackMessageV2RecordMapper:
                 message_type=message.message_type,
                 subtype=message.subtype,
                 author=SlackMessageAuthorMetadata(
-                    slack_user_id=message.user_id,
-                    slack_bot_id=message.bot_id,
-                    name=_normalize_display_text(author_name),
-                    catchup_user_id=internal_author_id,
+                    external_user_id=author_id,
+                    internal_user_id=internal_author_id,
                 )
-                if author_id or author_name or internal_author_id
+                if author_id or internal_author_id
                 else None,
                 reactions=[
                     SlackMessageReactionMetadata(
@@ -313,16 +308,8 @@ class SlackMessageV2RecordMapper:
                 "message_type": message.message_type,
                 "subtype": message.subtype,
                 "author": _author_metadata(
-                    slack_user_id=message.user_id,
-                    slack_bot_id=message.bot_id,
-                    name=(
-                        message.user_real_name
-                        or message.user_name
-                        or message.bot_name
-                        or message.user_id
-                        or message.bot_id
-                    ),
-                    catchup_user_id=internal_author_id,
+                    external_user_id=message.user_id or message.bot_id,
+                    internal_user_id=internal_author_id,
                 ),
                 "created_at": message.created_at.isoformat(),
                 "updated_at": SlackMessageV2RecordMapper._updated_at(
@@ -344,8 +331,7 @@ class SlackMessageV2RecordMapper:
                 "ts": reply.ts,
                 "message_ts": reply.ts,
                 "author": _author_metadata(
-                    slack_user_id=reply.user_id,
-                    name=reply.user_real_name or reply.user_name or reply.user_id,
+                    external_user_id=reply.user_id,
                 ),
                 "created_at": _ts_to_isoformat(reply.ts),
                 "reaction_count": sum(reaction.count for reaction in reply.reactions),
@@ -694,17 +680,13 @@ def _dedupe_key(value: str | None) -> str:
 
 def _author_metadata(
     *,
-    slack_user_id: str | None = None,
-    slack_bot_id: str | None = None,
-    name: str | None = None,
-    catchup_user_id: str | None = None,
+    external_user_id: str | None = None,
+    internal_user_id: str | None = None,
 ) -> dict[str, Any] | None:
     metadata = _drop_none(
         {
-            "slack_user_id": slack_user_id,
-            "slack_bot_id": slack_bot_id,
-            "name": _normalize_display_text(name),
-            "catchup_user_id": catchup_user_id,
+            "external_user_id": external_user_id,
+            "internal_user_id": internal_user_id,
         }
     )
     return metadata or None

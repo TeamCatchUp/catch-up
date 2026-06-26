@@ -18,18 +18,13 @@ from catchup.utils.validation import require_text
 class GithubIssueUserMetadata(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    login: str
-    name: str | None = None
-    email: str | None = None
-    avatar_url: str | None = None
-    type: str | None = None
-    url: str | None = None
-    catchup_user_id: str | None = None
+    external_user_id: str
+    internal_user_id: str | None = None
 
-    @field_validator("login")
+    @field_validator("external_user_id")
     @classmethod
-    def _validate_login(cls, value: str) -> str:
-        return require_text(value, "login")
+    def _validate_external_user_id(cls, value: str) -> str:
+        return require_text(value, "external_user_id")
 
 
 class GithubIssueLabelMetadata(BaseModel):

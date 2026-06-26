@@ -217,9 +217,10 @@ async def test_channel_talk_article_v2_mapper_builds_contract_without_duplicates
     ):
         assert duplicated_field not in domain_metadata
     assert domain_metadata["schema_version"] == 2
-    assert domain_metadata["author"]["author_id"] == "author-1"
-    assert domain_metadata["author"]["author_name"] == "Writer Kim"
-    assert set(domain_metadata["author"]) == {"author_id", "author_name"}
+    assert domain_metadata["author"] == {
+        "external_user_id": "author-1",
+        "internal_user_id": None,
+    }
     assert "raw_payload" not in str(metadata)
     assert "signed" not in str(metadata)
 
@@ -411,8 +412,8 @@ async def test_channel_talk_article_full_sync_dual_writes_v2_document():
     assert v2_document.metadata["body"] == "# Refunds\n\nPublished body text."
     assert v2_document.metadata["data"] == {"parts": []}
     assert v2_document.metadata["channel_talk_document_article"]["author"] == {
-        "author_id": "author-1",
-        "author_name": "Writer Kim",
+        "external_user_id": "author-1",
+        "internal_user_id": "42",
     }
     assert author_resolver.author_ids == ["author-1"]
     assert v2_document.metadata["internal_author_id"] == "42"

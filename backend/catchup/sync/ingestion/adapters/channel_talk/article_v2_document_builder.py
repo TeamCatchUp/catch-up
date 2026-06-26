@@ -134,6 +134,15 @@ class ChannelTalkArticleV2DocumentBuilder:
 
         metadata = dict(document.metadata)
         metadata["internal_author_id"] = internal_author_id
+        domain_metadata = metadata.get("channel_talk_document_article")
+        if isinstance(domain_metadata, dict):
+            domain_metadata = dict(domain_metadata)
+            author = domain_metadata.get("author")
+            if isinstance(author, dict):
+                author = dict(author)
+                author["internal_user_id"] = internal_author_id
+                domain_metadata["author"] = author
+                metadata["channel_talk_document_article"] = domain_metadata
         return Document(
             id=document.id,
             page_content=document.page_content,
@@ -146,7 +155,7 @@ class ChannelTalkArticleV2DocumentBuilder:
         if isinstance(domain_metadata, dict):
             author = domain_metadata.get("author")
             if isinstance(author, dict):
-                author_id = author.get("author_id")
+                author_id = author.get("external_user_id")
                 if isinstance(author_id, str) and author_id.strip():
                     return author_id.strip()
         return None

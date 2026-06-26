@@ -67,7 +67,7 @@ class ConfluenceV2RecordMapper:
             status=prepared.status,
             space=ConfluenceSpaceMetadata(space_id=prepared.space_id),
             hierarchy=self._hierarchy_metadata(prepared),
-            author=self._user_metadata(prepared.author_id, prepared.author_name),
+            author=self._user_metadata(prepared.author_id, internal_author_id),
             owner_id=prepared.owner_id,
             version=ConfluenceVersionMetadata(
                 number=prepared.version_number,
@@ -138,14 +138,14 @@ class ConfluenceV2RecordMapper:
 
     @staticmethod
     def _user_metadata(
-        account_id: str | None,
-        display_name: str | None,
+        external_user_id: str | None,
+        internal_user_id: str | None,
     ) -> ConfluenceUserMetadata | None:
-        if account_id is None and display_name is None:
+        if external_user_id is None and internal_user_id is None:
             return None
         return ConfluenceUserMetadata(
-            account_id=account_id,
-            display_name=display_name,
+            external_user_id=external_user_id,
+            internal_user_id=internal_user_id,
         )
 
     @classmethod

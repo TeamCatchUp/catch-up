@@ -326,10 +326,10 @@ def test_github_pr_v2_mapper_builds_record_from_parsed_pr() -> None:
     ]
     commit_metadata = values["data"]["parts"][1]["metadata"]
     assert commit_metadata["oid"] == "abcdef123456"
-    assert commit_metadata["author"]["catchup_user_id"] == "usr_github_ba2slk"
+    assert commit_metadata["author"]["internal_user_id"] == "usr_github_ba2slk"
     issue_comment_metadata = values["data"]["parts"][2]["metadata"]
     assert issue_comment_metadata["id"] == 200
-    assert issue_comment_metadata["author"]["catchup_user_id"] is None
+    assert issue_comment_metadata["author"]["internal_user_id"] is None
     review_metadata = values["data"]["parts"][3]["metadata"]
     assert review_metadata["id"] == 300
     assert review_metadata["state"] == "APPROVED"
@@ -352,20 +352,15 @@ def test_github_pr_v2_mapper_builds_record_from_parsed_pr() -> None:
     assert github_pr["additions"] == 120
     assert github_pr["deletions"] == 50
     assert github_pr["author"] == {
-        "login": "ba2slk",
-        "name": "팀원C",
-        "email": "ba2slk@example.com",
-        "avatar_url": "https://github.com/ba2slk.png",
-        "type": "User",
-        "url": "https://github.com/ba2slk",
-        "catchup_user_id": "usr_github_ba2slk",
+        "external_user_id": "ba2slk",
+        "internal_user_id": "usr_github_ba2slk",
     }
-    assert github_pr["assignees"][0]["catchup_user_id"] == "usr_github_maintainer"
-    assert github_pr["requested_reviewers"][0]["catchup_user_id"] is None
+    assert github_pr["assignees"][0]["internal_user_id"] == "usr_github_maintainer"
+    assert github_pr["requested_reviewers"][0]["internal_user_id"] is None
     assert len(github_pr["review_authors"]) == 1
-    assert github_pr["review_authors"][0]["login"] == "reviewer"
-    assert github_pr["review_authors"][0]["catchup_user_id"] is None
-    assert github_pr["merged_by"]["catchup_user_id"] == "usr_github_ba2slk"
+    assert github_pr["review_authors"][0]["external_user_id"] == "reviewer"
+    assert github_pr["review_authors"][0]["internal_user_id"] is None
+    assert github_pr["merged_by"]["internal_user_id"] == "usr_github_ba2slk"
     assert github_pr["labels"] == [
         {"name": "refactor", "color": "a2eeef", "description": None}
     ]

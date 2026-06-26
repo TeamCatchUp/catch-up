@@ -121,11 +121,6 @@ class ChannelTalkUserChatV2RecordMapper:
             or created_at
         )
         target_name = _normalize_text(bundle.channel_name) or channel_id
-        assignee_name, assignee_email = self._assignee_display(
-            detail,
-            managers_by_id=managers_by_id,
-        )
-
         return ChannelTalkUserChatVectorRecord(
             langchain_id=document_id
             or build_user_chat_document_id(
@@ -162,15 +157,8 @@ class ChannelTalkUserChatV2RecordMapper:
                 assignment=ChannelTalkUserChatAssignmentMetadata(
                     manager_ids=list(detail.assignment.manager_ids),
                     assignee_id=detail.assignment.assignee_id,
-                    assignee_name=assignee_name,
-                    assignee_email=assignee_email,
                     first_assignee_id_after_open=(
                         detail.assignment.first_assignee_id_after_open
-                    ),
-                    manager_names=self._renderer.resolve_manager_names(
-                        manager_ids=detail.assignment.manager_ids,
-                        managers_by_id=managers_by_id,
-                        fallback_managers=detail.assignment.managers,
                     ),
                     manager_role_ids=self._renderer.resolve_manager_role_ids(
                         manager_ids=detail.assignment.manager_ids,
@@ -396,21 +384,6 @@ class ChannelTalkUserChatV2RecordMapper:
             )
         )
 
-    def _assignee_display(
-        self,
-        detail: ChannelTalkUserChatDetail,
-        *,
-        managers_by_id: dict[str, ChannelTalkManagerMetadata],
-    ) -> tuple[str | None, str | None]:
-        assignee_id = detail.assignment.assignee_id
-        assignee_manager = managers_by_id.get(assignee_id) if assignee_id else None
-        return (
-            detail.assignment.assignee_name
-            or (assignee_manager.name if assignee_manager is not None else None),
-            detail.assignment.assignee_email
-            or (assignee_manager.email if assignee_manager is not None else None),
-        )
-
     @staticmethod
     def _author_metadata(
         message: ChannelTalkUserChatMessage,
@@ -424,15 +397,13 @@ class ChannelTalkUserChatV2RecordMapper:
         return _drop_none(
             {
                 "author_type": author.author_type,
-                "bot_id": author.bot_id,
-                "user_id": author.user_id,
-                "member_id": author.member_id,
-                "manager_id": author.manager_id,
-                "name": author.name or (manager.name if manager else None),
-                "email": author.email or (manager.email if manager else None),
-                "avatar_url": author.avatar_url,
+                "external_user_id": (
+                    author.manager_id
+                    or author.user_id
+                    or author.member_id
+                    or author.bot_id
+                ),
                 "role_id": author.role_id or (manager.role_id if manager else None),
-                "bot_name": author.bot_name,
                 "is_bot": author.is_bot,
             }
         )

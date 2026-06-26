@@ -383,7 +383,7 @@ class JiraIssueIngestionAdapterTests(IsolatedAsyncioTestCase):
         )
         self.assertEqual(
             vector_store.upsert_calls[0]["documents"][0]
-            .metadata["jira_issue"]["assignee"]["catchup_user_id"],
+            .metadata["jira_issue"]["assignee"]["internal_user_id"],
             "42",
         )
         self.assertEqual(assignee_resolver.account_ids, ["acc-assignee"])
@@ -530,7 +530,7 @@ class JiraIssueIngestionAdapterTests(IsolatedAsyncioTestCase):
         self.assertEqual(document.page_content, seed.content)
         self.assertEqual(document.metadata["internal_author_id"], "126")
         self.assertEqual(
-            document.metadata["jira_issue"]["assignee"]["catchup_user_id"],
+            document.metadata["jira_issue"]["assignee"]["internal_user_id"],
             "126",
         )
         self.assertEqual(assignee_resolver.account_ids, ["acc-backfill"])

@@ -37,10 +37,7 @@ class ChannelTalkUserChatAssignmentMetadata(BaseModel):
 
     manager_ids: list[str] = Field(default_factory=list)
     assignee_id: str | None = None
-    assignee_name: str | None = None
-    assignee_email: str | None = None
     first_assignee_id_after_open: str | None = None
-    manager_names: list[str] = Field(default_factory=list)
     manager_role_ids: list[str] = Field(default_factory=list)
 
 

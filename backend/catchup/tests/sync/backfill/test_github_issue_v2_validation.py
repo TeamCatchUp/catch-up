@@ -47,7 +47,10 @@ def _valid_row() -> dict:
                 "state": "open",
                 "state_reason": None,
                 "closed_at": None,
-                "author": {"login": "ba2slk", "catchup_user_id": "usr_github_ba2slk"},
+                "author": {
+                    "external_user_id": "ba2slk",
+                    "internal_user_id": "usr_github_ba2slk",
+                },
                 "assignees": [],
                 "labels": [],
                 "milestone": None,

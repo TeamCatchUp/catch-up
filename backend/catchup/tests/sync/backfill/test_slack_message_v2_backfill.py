@@ -164,7 +164,7 @@ async def test_backfill_adapter_hydrates_message_and_reuses_v1_seed_values() -> 
     assert document.page_content == seed.content
     assert document.metadata["scope_id"] == "T123"
     assert document.metadata["target_id"] == "C123"
-    assert document.metadata["slack_message"]["author"]["catchup_user_id"] == "42"
+    assert document.metadata["slack_message"]["author"]["internal_user_id"] == "42"
     assert upsert_call.kwargs["ids"] == [seed.langchain_id]
     assert upsert_call.kwargs["embeddings"] == [seed.embedding]
     v2_knowledge_repository.find_missing_metadata_namespace_ids.assert_awaited_once_with(
