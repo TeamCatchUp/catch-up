@@ -376,6 +376,8 @@ class RetrievalService(BaseVectorDbService):
             )
         return {"$or": or_conditions} if len(or_conditions) > 1 else or_conditions[0]
 
+    _CANDIDATE_MULTIPLIER = 3
+
     @override
     async def hybrid_search(
         self,
@@ -399,27 +401,32 @@ class RetrievalService(BaseVectorDbService):
 
         keyword_tokens가 없으면 RRF를 건너뛰고 vector 결과를 직접 반환한다.
         세 검색(vector, body, title)은 asyncio.gather로 병렬 실행한다.
+
+        RRF candidate pool: 각 버킷에서 candidate_k개를 수집한 뒤 RRF로 병합하고
+        최종 k개를 반환한다. candidate_k = max(k * _CANDIDATE_MULTIPLIER, k + offset).
         """
         if len(weights) != 3:
             raise ValueError("weights must have 3 elements: [vector, body, title]")
+
+        candidate_k = max(k * self._CANDIDATE_MULTIPLIER, k + offset)
 
         vector_filter = self._build_vector_filter(tool_filters, temporal_filters)
         langchain_store = self._vector_store.get_langchain_vector_store()
 
         vector_coro = langchain_store.asimilarity_search_with_score(
-            query, k=k, filter=vector_filter
+            query, k=candidate_k, filter=vector_filter
         )
 
         if keyword_tokens and self._keyword_retriever:
             body_coro = self._keyword_retriever.search_body(
                 keyword_tokens,
-                k=k,
+                k=candidate_k,
                 tool_filters=tool_filters,
                 temporal_filters=temporal_filters,
             )
             title_coro = self._keyword_retriever.search_title(
                 keyword_tokens,
-                k=k,
+                k=candidate_k,
                 tool_filters=tool_filters,
                 temporal_filters=temporal_filters,
             )
