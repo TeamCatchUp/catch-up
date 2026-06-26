@@ -60,6 +60,7 @@ def _valid_user_chat_row() -> dict:
         "langchain_metadata": {
             "channel_talk_user_chat": {
                 "state": "opened",
+                "description": "VIP renewal help",
                 "managed": True,
                 "priority": None,
                 "goal_state": None,

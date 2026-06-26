@@ -139,6 +139,7 @@ def test_channel_talk_user_chat_v2_mapper_builds_contract_without_duplicates() -
 
     assert set(domain_metadata) == {
         "state",
+        "description",
         "managed",
         "priority",
         "goal_state",
@@ -146,6 +147,7 @@ def test_channel_talk_user_chat_v2_mapper_builds_contract_without_duplicates() -
         "assignment",
         "tags",
     }
+    assert domain_metadata["description"] == "VIP renewal help"
     for duplicated_field in (
         "channel_id",
         "channel_name",

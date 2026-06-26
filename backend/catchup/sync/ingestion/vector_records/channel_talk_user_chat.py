@@ -52,6 +52,7 @@ class ChannelTalkUserChatMetadata(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     state: str
+    description: str | None = None
     managed: bool | None = None
     priority: str | None = None
     goal_state: str | None = None

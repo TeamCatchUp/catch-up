@@ -138,6 +138,7 @@ class ChannelTalkUserChatV2RecordMapper:
             synced_at=synced_at,
             channel_talk_user_chat=ChannelTalkUserChatMetadata(
                 state=detail.state.value,
+                description=detail.description,
                 managed=detail.managed,
                 priority=detail.priority,
                 goal_state=detail.goal_state,
