@@ -192,7 +192,7 @@ describe('AgentStudioEditorPage', () => {
     const user = userEvent.setup();
     renderEditor();
 
-    await user.click(screen.getByRole('button', { name: 'Agent Studio로 돌아가기' }));
+    await user.click(screen.getByRole('button', { name: '돌아가기' }));
 
     expect(mockBack).toHaveBeenCalledTimes(1);
   });
@@ -206,9 +206,9 @@ describe('AgentStudioEditorPage', () => {
   it('keeps the settings header sticky while the right pane scrolls', () => {
     renderEditor();
 
-    const settingsHeader = screen.getByRole('button', { name: 'Agent Studio로 돌아가기' }).closest('header');
+    const settingsHeader = screen.getByRole('button', { name: '돌아가기' }).closest('header');
 
-    expect(settingsHeader).toHaveClass('sticky', 'top-0', 'z-10', 'bg-fill-normal-assistive-dark');
+    expect(settingsHeader).toHaveClass('sticky', 'top-0', 'z-base', 'bg-fill-normal-assistive-dark');
   });
 
   it('opens the same more menu as the home header from the settings header', async () => {
@@ -425,9 +425,7 @@ describe('AgentStudioEditorPage', () => {
     const submitButton = await screen.findByRole('button', { name: '수정하기' });
 
     await waitFor(() =>
-      expect(screen.getByRole('combobox', { name: /어떤 채널로 들어오는 문의/ })).toHaveTextContent(
-        '채널톡 기본 채널',
-      ),
+      expect(screen.getByRole('combobox', { name: /어떤 채널로 들어오는 문의/ })).toHaveTextContent('채널톡 기본 채널'),
     );
     expect(screen.getByRole('combobox', { name: /몇 분 후에 Agent를 실행할까요/ })).toHaveTextContent('5분');
     expect(screen.getByRole('combobox', { name: /누구의 권한을 가지고 조회/ })).toHaveTextContent('Catch Up');

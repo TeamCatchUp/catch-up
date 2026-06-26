@@ -10,6 +10,7 @@ import TagIcon from '@/public/icons/icon/tag.svg';
 import { MoreButtonContent } from '@/shared/components/layout/topNavbar/MoreButtonModal';
 import { Button } from '@/shared/components/ui/button';
 import { DropdownMenu, DropdownMenuTrigger } from '@/shared/components/ui/dropdown-menu';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/shared/components/ui/tooltip';
 
 import { AGENT_STUDIO_SETTINGS_FIXTURE } from '../../fixtures/agentStudioFixtures';
 import { useAgentEditorSettingsForm } from '../../hooks/useAgentEditorSettingsForm';
@@ -29,10 +30,17 @@ export default function AgentEditorSettings({ mode = 'create', agentSpecId }: Ag
 
   return (
     <main className="bg-fill-normal-assistive-dark flex h-full min-w-0 flex-1 flex-col overflow-y-auto">
-      <header className="bg-fill-normal-assistive-dark sticky top-0 z-10 flex h-13 shrink-0 items-center justify-between px-6 py-2">
-        <Button variant="icon-only-gray" size="md" aria-label="Agent Studio로 돌아가기" onClick={() => router.back()}>
-          <ArrowBackIcon className="size-6" aria-hidden="true" />
-        </Button>
+      <header className="bg-fill-normal-assistive-dark z-base sticky top-0 flex h-13 shrink-0 items-center justify-between px-6 py-2">
+        <TooltipProvider delayDuration={200}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="icon-only-gray" size="md" aria-label="돌아가기" onClick={() => router.back()}>
+                <ArrowBackIcon className="size-6" aria-hidden="true" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">돌아가기</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="icon-only-gray" size="md" aria-label="설정 더보기">
