@@ -10,9 +10,6 @@ from typing import Protocol
 import structlog
 from fastapi.concurrency import run_in_threadpool
 
-from catchup.components.embedder.constants import EmbeddingProvider
-from catchup.components.embedder.factory import get_embedding_service
-from catchup.components.vector_db.factory import get_pgvector_repository
 from catchup.components.vector_db.pgvector.repository import PGVectorRepository
 from catchup.connectors.channel_talk.core.user_chat_full_sync_fetcher import (
     ChannelTalkUserChatFullSyncFetcher,
@@ -70,6 +67,9 @@ from catchup.sync.ingestion.adapters.channel_talk.user_chat_models import (
 )
 from catchup.sync.ingestion.adapters.channel_talk.user_chat_models import (
     ChannelTalkUserChatSyncExecutionRequest,
+)
+from catchup.sync.ingestion.factories.knowledge_store import (
+    create_knowledge_store_dependencies,
 )
 from catchup.sync.ingestion.schemas import SyncWindow
 from catchup.sync.repair.context import RecordRepairContext
@@ -579,11 +579,15 @@ class ChannelTalkRecordRepairService:
     async def _get_repository(self) -> ChannelTalkRecordRepository:
         if self._repository is None:
             repository = self._build_repository()
-            try:
-                repository.ensure_initialized()
-            except RuntimeError:
-                await repository.initialize(None)
-            self._repository = repository
+            if repository is not None:
+                try:
+                    repository.ensure_initialized()
+                except RuntimeError:
+                    await repository.initialize(None)
+                self._repository = repository
+            else:
+                knowledge_store = await create_knowledge_store_dependencies()
+                self._repository = knowledge_store.repository
         return self._repository
 
     def _get_user_chat_fetcher(self) -> ChannelTalkUserChatFullSyncFetcher:
@@ -634,12 +638,8 @@ class ChannelTalkRecordRepairService:
         )
 
     @staticmethod
-    def _build_repository() -> PGVectorRepository:
-        return get_pgvector_repository(
-            embeddings=get_embedding_service(
-                EmbeddingProvider.AWS_BEDROCK
-            ).get_embedder()
-        )
+    def _build_repository() -> PGVectorRepository | None:
+        return None
 
 
 @lru_cache(maxsize=1)

@@ -2,9 +2,6 @@ from __future__ import annotations
 
 import structlog
 
-from catchup.components.embedder.constants import EmbeddingProvider
-from catchup.components.embedder.factory import get_embedding_service
-from catchup.components.vector_db.factory import get_v2_vector_store
 from catchup.components.vector_db.v2 import V2KnowledgeRepository
 from catchup.components.vector_db.v2 import VectorStore
 from catchup.connectors.channel_talk.core.user_chat_full_sync_fetcher import (
@@ -36,6 +33,9 @@ from catchup.sync.ingestion.adapters.channel_talk.user_chat_models import (
 )
 from catchup.sync.ingestion.adapters.channel_talk.user_chat_v2_document_builder import (
     ChannelTalkUserChatV2DocumentBuilder,
+)
+from catchup.sync.ingestion.factories.knowledge_store import (
+    create_knowledge_store_dependencies,
 )
 from catchup.sync.ingestion.schemas import SyncWindow
 
@@ -268,12 +268,12 @@ class ChannelTalkUserChatV2BackfillAdapter(ChannelTalkUserChatFullSyncIngestionA
 
     async def _get_vector_store(self) -> VectorStore | None:
         if self._vector_store is None:
-            embeddings = get_embedding_service(
-                EmbeddingProvider.AWS_BEDROCK
-            ).get_embedder()
-            vector_store = get_v2_vector_store(embeddings)
-            await vector_store.initialize()
-            self._vector_store = vector_store
+            knowledge_store = await create_knowledge_store_dependencies(
+                require_vector_store=True,
+            )
+            self._vector_store = knowledge_store.vector_store
+            if self._v2_knowledge_repository is None:
+                self._v2_knowledge_repository = knowledge_store.v2_knowledge_repository
         return self._vector_store
 
 

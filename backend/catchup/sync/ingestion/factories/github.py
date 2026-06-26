@@ -15,16 +15,24 @@ from catchup.components.summarizer import get_summarizer_service
 from catchup.connectors.github.auth import get_github_app_service
 from catchup.connectors.github.client import GitHubApiClient
 from catchup.db.engine import SessionLocal
-from catchup.db.github.installation_repository import get_installation_by_installation_id
+from catchup.db.github.installation_repository import (
+    get_installation_by_installation_id,
+)
 from catchup.sync.common.exceptions import SyncConnectorException
 from catchup.sync.common.exceptions import SyncInternalException
 from catchup.sync.ingestion.adapters.github import GithubIssueV2BackfillAdapter
 from catchup.sync.ingestion.adapters.github import GithubPrV2BackfillAdapter
 from catchup.sync.ingestion.adapters.github import GithubRepositoryFullSyncAdapter
-from catchup.sync.ingestion.adapters.github import GithubRepositoryIncrementalSyncAdapter
+from catchup.sync.ingestion.adapters.github import (
+    GithubRepositoryIncrementalSyncAdapter,
+)
 from catchup.sync.ingestion.adapters.github import GithubRepositoryRepairAdapter
-from catchup.sync.ingestion.adapters.github.repository_base import GithubRepositoryAdapterBase
-from catchup.sync.ingestion.factories.knowledge_store import create_knowledge_store_dependencies
+from catchup.sync.ingestion.adapters.github.repository_base import (
+    GithubRepositoryAdapterBase,
+)
+from catchup.sync.ingestion.factories.knowledge_store import (
+    create_knowledge_store_dependencies,
+)
 
 logger = logging.getLogger(__name__)
 
