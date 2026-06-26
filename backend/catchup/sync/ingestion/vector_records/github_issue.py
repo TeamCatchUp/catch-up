@@ -69,7 +69,6 @@ class GithubIssueMetadata(BaseModel):
     assignees: list[GithubIssueUserMetadata] = Field(default_factory=list)
     labels: list[GithubIssueLabelMetadata] = Field(default_factory=list)
     milestone: GithubIssueMilestoneMetadata | None = None
-    comments_count: int = 0
 
     @field_validator("state")
     @classmethod

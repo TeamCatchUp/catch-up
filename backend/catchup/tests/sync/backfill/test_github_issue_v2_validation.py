@@ -51,7 +51,6 @@ def _valid_row() -> dict:
                 "assignees": [],
                 "labels": [],
                 "milestone": None,
-                "comments_count": 1,
             }
         },
     }

@@ -92,7 +92,6 @@ class GithubIssueV2RecordMapper:
                 assignees=self._user_metadata_list(issue.assignees),
                 labels=[self._label_metadata(label) for label in issue.labels],
                 milestone=self._milestone_metadata(issue.milestone),
-                comments_count=issue.comments_count,
             ),
         )
 

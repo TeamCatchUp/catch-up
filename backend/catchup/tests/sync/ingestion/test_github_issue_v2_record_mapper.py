@@ -181,7 +181,7 @@ def test_github_issue_v2_mapper_builds_record_from_parsed_issue() -> None:
         {"name": "migration", "color": "0e8a16", "description": None}
     ]
     assert github_issue["milestone"]["title"] == "GitHub v2"
-    assert github_issue["comments_count"] == 1
+    assert "comments_count" not in github_issue
     for forbidden_field in (
         "raw",
         "pagination",
