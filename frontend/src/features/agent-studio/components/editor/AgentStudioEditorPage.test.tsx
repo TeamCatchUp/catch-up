@@ -7,7 +7,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { server } from '@/test/msw/server';
 
-import type { AutomationCredentialItem, AutomationTargetItem } from '../../types/automationApi';
+import type { AutomationCredentialItem, AutomationTargetItem, InquiryAutomationItem } from '../../types/automationApi';
 import AgentStudioEditorPage from './AgentStudioEditorPage';
 
 const mockBack = vi.fn();
@@ -57,6 +57,21 @@ const slackTarget: AutomationTargetItem = {
   target_type: 'channel',
   is_accessible: true,
   metadata: {},
+};
+
+const existingAutomation: InquiryAutomationItem = {
+  agent_spec_id: 42,
+  status: 'active',
+  title: '문의 대응 리포트 만들기',
+  channel_talk_credential_id: 10,
+  slack_channel_id: 'C123',
+  slack_credential_id: 20,
+  guide_instruction: '기존 문의 대응 규칙',
+  quiet_period_seconds: 300,
+  trigger_id: 30,
+  author_name: '이진수',
+  updated_at: '2026-06-26T09:00:00.000Z',
+  author_profile_image_url: null,
 };
 
 function renderWithQueryClient(ui: ReactElement) {
@@ -126,9 +141,9 @@ function mockEditorSuccessHandlers() {
   );
 }
 
-function renderEditor() {
+function renderEditor(props?: { mode?: 'create' | 'edit'; agentSpecId?: number }) {
   mockEditorSuccessHandlers();
-  return renderWithQueryClient(<AgentStudioEditorPage />);
+  return renderWithQueryClient(<AgentStudioEditorPage {...props} />);
 }
 
 async function selectRequiredAutomationFields(user: ReturnType<typeof userEvent.setup>) {
@@ -389,5 +404,85 @@ describe('AgentStudioEditorPage', () => {
     await waitFor(() => expect(publishRequests).toHaveLength(1));
 
     resolvePublish();
+  });
+
+  it('loads an existing automation and patches settings in edit mode', async () => {
+    const user = userEvent.setup();
+    const patchRequests: unknown[] = [];
+
+    mockEditorSuccessHandlers();
+    server.use(
+      http.get('/api/v1/automations/inquiries/42', () => HttpResponse.json(existingAutomation)),
+      http.patch('/api/v1/automations/inquiries/42/settings', async ({ request }) => {
+        patchRequests.push(await request.json());
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+
+    renderWithQueryClient(<AgentStudioEditorPage mode="edit" agentSpecId={42} />);
+
+    const submitButton = await screen.findByRole('button', { name: '수정하기' });
+
+    await waitFor(() =>
+      expect(screen.getByRole('combobox', { name: /어떤 채널로 들어오는 문의/ })).toHaveTextContent(
+        '채널톡 기본 채널',
+      ),
+    );
+    expect(screen.getByRole('combobox', { name: /몇 분 후에 Agent를 실행할까요/ })).toHaveTextContent('5분');
+    expect(screen.getByRole('combobox', { name: /누구의 권한을 가지고 조회/ })).toHaveTextContent('Catch Up');
+    await waitFor(() =>
+      expect(screen.getByRole('combobox', { name: /Slack 채널을 선택/ })).toHaveTextContent('cs-response'),
+    );
+    expect(screen.getByLabelText('답변 초안, 어떤 규칙으로 쓸까요?')).toHaveValue('기존 문의 대응 규칙');
+    expect(submitButton).not.toBeDisabled();
+
+    await user.clear(screen.getByLabelText('답변 초안, 어떤 규칙으로 쓸까요?'));
+    await user.type(screen.getByLabelText('답변 초안, 어떤 규칙으로 쓸까요?'), '수정된 문의 대응 규칙');
+    await user.click(submitButton);
+
+    await waitFor(() => expect(patchRequests).toHaveLength(1));
+    expect(patchRequests).toEqual([
+      {
+        channel_talk_credential_id: 10,
+        quiet_period_seconds: 300,
+        slack_channel: {
+          credential_id: 20,
+          channel_id: 'C123',
+          channel_name: 'cs-response',
+        },
+        guide_instruction: '수정된 문의 대응 규칙',
+      },
+    ]);
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/agent-studio'));
+  });
+
+  it('prevents duplicate edit requests while a settings patch is already in flight', async () => {
+    const patchRequests: unknown[] = [];
+    let resolvePatch!: () => void;
+    const patchSettled = new Promise<void>((resolve) => {
+      resolvePatch = resolve;
+    });
+
+    mockEditorSuccessHandlers();
+    server.use(
+      http.get('/api/v1/automations/inquiries/42', () => HttpResponse.json(existingAutomation)),
+      http.patch('/api/v1/automations/inquiries/42/settings', async ({ request }) => {
+        patchRequests.push(await request.json());
+        await patchSettled;
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+
+    renderWithQueryClient(<AgentStudioEditorPage mode="edit" agentSpecId={42} />);
+
+    const submitButton = await screen.findByRole('button', { name: '수정하기' });
+    await waitFor(() => expect(submitButton).not.toBeDisabled());
+
+    submitButton.click();
+    submitButton.click();
+
+    await waitFor(() => expect(patchRequests).toHaveLength(1));
+
+    resolvePatch();
   });
 });

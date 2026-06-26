@@ -17,9 +17,15 @@ import AgentSettingSection from './AgentSettingSection';
 import AgentInstructionField from './fields/AgentInstructionField';
 import AgentSelectField from './fields/AgentSelectField';
 
-export default function AgentEditorSettings() {
+interface AgentEditorSettingsProps {
+  mode?: 'create' | 'edit';
+  agentSpecId?: number;
+}
+
+export default function AgentEditorSettings({ mode = 'create', agentSpecId }: AgentEditorSettingsProps) {
   const router = useRouter();
-  const form = useAgentEditorSettingsForm();
+  const form = useAgentEditorSettingsForm({ mode, agentSpecId });
+  const submitLabel = mode === 'edit' ? '수정하기' : '배포하기';
 
   return (
     <main className="bg-fill-normal-assistive-dark flex h-full min-w-0 flex-1 flex-col overflow-y-auto">
@@ -42,15 +48,18 @@ export default function AgentEditorSettings() {
           <Button
             variant="box-solid-primary"
             size="lg"
-            disabled={!form.canPublish}
-            onClick={form.handlePublish}
+            disabled={!form.canSubmit}
+            onClick={form.handleSubmit}
             className="h-10"
           >
-            배포하기
+            {submitLabel}
           </Button>
         </div>
-        {form.isPublishError && (
-          <p className="text-body-small text-status-destructive w-full">배포에 실패했습니다. 입력값을 확인해주세요.</p>
+        {form.submitErrorMessage && (
+          <p className="text-body-small text-status-destructive w-full">{form.submitErrorMessage}</p>
+        )}
+        {form.loadErrorMessage && (
+          <p className="text-body-small text-status-destructive w-full">{form.loadErrorMessage}</p>
         )}
 
         <AgentSettingSection

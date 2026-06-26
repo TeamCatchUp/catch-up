@@ -65,6 +65,17 @@ export interface InquiryAutomationPublishRequest {
   guide_instruction?: string | null;
 }
 
+export interface InquiryAutomationPatchRequest {
+  channel_talk_credential_id?: number | null;
+  quiet_period_seconds?: number | null;
+  slack_channel?: {
+    credential_id: number;
+    channel_id: string;
+    channel_name?: string;
+  } | null;
+  guide_instruction?: string | null;
+}
+
 export interface InquiryAutomationPublishResponse {
   agent_spec_id: number;
   trigger_id: number;

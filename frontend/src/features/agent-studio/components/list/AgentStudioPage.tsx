@@ -36,6 +36,11 @@ export default function AgentStudioPage() {
     statusMutation.mutate({ agentSpecId: agent.agentSpecId, body: { status } });
   };
 
+  const editAgent = (agent: AgentStudioCardModel) => {
+    if (!agent.agentSpecId) return;
+    router.push(`/agent-studio/${agent.agentSpecId}/edit`);
+  };
+
   return (
     <div className="bg-background-normal-normal flex min-h-full flex-col">
       <AgentStudioHeader />
@@ -69,6 +74,7 @@ export default function AgentStudioPage() {
               actionDisabled={statusMutation.isPending}
               onActivate={(target) => updateStatus(target, 'active')}
               onDeactivate={(target) => updateStatus(target, 'inactive')}
+              onEdit={editAgent}
             />
           )}
         </div>

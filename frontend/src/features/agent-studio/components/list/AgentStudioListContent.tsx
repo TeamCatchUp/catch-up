@@ -35,6 +35,7 @@ interface AgentStudioListContentProps {
   actionDisabled?: boolean;
   onActivate?: (agent: AgentStudioCardModel) => void;
   onDeactivate?: (agent: AgentStudioCardModel) => void;
+  onEdit?: (agent: AgentStudioCardModel) => void;
 }
 
 interface StatusGroupProps {
@@ -44,9 +45,10 @@ interface StatusGroupProps {
   actionDisabled: boolean;
   onActivate?: (agent: AgentStudioCardModel) => void;
   onDeactivate?: (agent: AgentStudioCardModel) => void;
+  onEdit?: (agent: AgentStudioCardModel) => void;
 }
 
-function StatusGroup({ agents, label, layout, actionDisabled, onActivate, onDeactivate }: StatusGroupProps) {
+function StatusGroup({ agents, label, layout, actionDisabled, onActivate, onDeactivate, onEdit }: StatusGroupProps) {
   if (agents.length === 0) {
     return (
       <AgentEmptyColumn
@@ -67,6 +69,7 @@ function StatusGroup({ agents, label, layout, actionDisabled, onActivate, onDeac
         layout="flat"
         onActivate={onActivate}
         onDeactivate={onDeactivate}
+        onEdit={onEdit}
       />
     ));
   }
@@ -82,6 +85,7 @@ function StatusGroup({ agents, label, layout, actionDisabled, onActivate, onDeac
             layout="grouped"
             onActivate={onActivate}
             onDeactivate={onDeactivate}
+            onEdit={onEdit}
           />
         ))}
       </div>
@@ -95,6 +99,7 @@ export default function AgentStudioListContent({
   actionDisabled = false,
   onActivate,
   onDeactivate,
+  onEdit,
 }: AgentStudioListContentProps) {
   const visibleAgents = getVisibleAgents(agents, selectedFilter);
   const activeAgents = visibleAgents.filter((agent) => agent.status === 'active');
@@ -113,6 +118,7 @@ export default function AgentStudioListContent({
           actionDisabled={actionDisabled}
           onActivate={onActivate}
           onDeactivate={onDeactivate}
+          onEdit={onEdit}
         />
       )}
       {(isGroupedView || selectedFilter === 'draft') && (
@@ -123,6 +129,7 @@ export default function AgentStudioListContent({
           actionDisabled={actionDisabled}
           onActivate={onActivate}
           onDeactivate={onDeactivate}
+          onEdit={onEdit}
         />
       )}
       {(isGroupedView || selectedFilter === 'inactive') && (
@@ -133,6 +140,7 @@ export default function AgentStudioListContent({
           actionDisabled={actionDisabled}
           onActivate={onActivate}
           onDeactivate={onDeactivate}
+          onEdit={onEdit}
         />
       )}
     </>

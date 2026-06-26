@@ -15,6 +15,7 @@ interface AgentCardProps {
   agent: AgentStudioCardModel;
   onActivate?: (agent: AgentStudioCardModel) => void;
   onDeactivate?: (agent: AgentStudioCardModel) => void;
+  onEdit?: (agent: AgentStudioCardModel) => void;
   actionDisabled?: boolean;
   layout?: 'grouped' | 'flat';
 }
@@ -23,6 +24,7 @@ export default function AgentCard({
   agent,
   onActivate,
   onDeactivate,
+  onEdit,
   actionDisabled = false,
   layout = 'grouped',
 }: AgentCardProps) {
@@ -104,6 +106,9 @@ export default function AgentCard({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" sideOffset={4} className="min-w-24">
+                <DropdownMenuItem disabled={actionDisabled || !agent.agentSpecId} onSelect={() => onEdit?.(agent)}>
+                  수정하기
+                </DropdownMenuItem>
                 <DropdownMenuItem disabled={actionDisabled} onSelect={() => onDeactivate?.(agent)}>
                   사용 안함
                 </DropdownMenuItem>

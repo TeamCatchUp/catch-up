@@ -1,17 +1,24 @@
 'use client';
 
 import { useMemo, useRef, useState } from 'react';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 
 import { AGENT_STUDIO_SETTINGS_FIXTURE } from '../fixtures/agentStudioFixtures';
 import { automationCredentialsQueries } from '../queries/automationCredentials.queries';
 import { inquiryAutomationsMutations } from '../queries/inquiryAutomations.mutations';
+import { inquiryAutomationsQueries } from '../queries/inquiryAutomations.queries';
 import type { AgentStudioSelectItem } from '../types/agentStudioModel';
 import type { AutomationCredentialItem, AutomationTargetItem } from '../types/automationApi';
 
 const EMPTY_SELECT_ITEMS: readonly AgentStudioSelectItem[] = [];
 const EMPTY_ITEM_PLACEHOLDER = '선택할 수 있는 항목이 없습니다';
+const DEFAULT_QUIET_PERIOD_SECONDS = AGENT_STUDIO_SETTINGS_FIXTURE.quietPeriodOptions[0]?.value ?? '60';
+
+interface UseAgentEditorSettingsFormOptions {
+  mode?: 'create' | 'edit';
+  agentSpecId?: number;
+}
 
 function mapCredentialToSelectItem(credential: AutomationCredentialItem): AgentStudioSelectItem {
   return {
@@ -29,19 +36,25 @@ function mapTargetToSelectItem(target: AutomationTargetItem): AgentStudioSelectI
   };
 }
 
-export function useAgentEditorSettingsForm() {
+export function useAgentEditorSettingsForm({ mode = 'create', agentSpecId }: UseAgentEditorSettingsFormOptions = {}) {
   const router = useRouter();
-  const isPublishInFlightRef = useRef(false);
+  const queryClient = useQueryClient();
+  const isEditMode = mode === 'edit';
+  const resolvedAgentSpecId = isEditMode ? agentSpecId : undefined;
+  const isSubmitInFlightRef = useRef(false);
   const [channelTalkTargetId, setChannelTalkTargetId] = useState('');
-  const [quietPeriodSeconds, setQuietPeriodSeconds] = useState(
-    AGENT_STUDIO_SETTINGS_FIXTURE.quietPeriodOptions[0]?.value ?? '60',
-  );
+  const [quietPeriodSeconds, setQuietPeriodSeconds] = useState('');
   const [slackCredentialId, setSlackCredentialId] = useState('');
   const [slackChannelId, setSlackChannelId] = useState('');
-  const [instruction, setInstruction] = useState('');
+  const [instructionOverride, setInstructionOverride] = useState<string | null>(null);
 
   const slackCredentialsQuery = useQuery(automationCredentialsQueries.credentials('slack'));
   const channelTalkTargetsQuery = useQuery(automationCredentialsQueries.targets('channel_talk'));
+  const automationDetailQuery = useQuery({
+    ...inquiryAutomationsQueries.detail(resolvedAgentSpecId ?? 0),
+    enabled: isEditMode && resolvedAgentSpecId !== undefined,
+  });
+  const automationDetail = automationDetailQuery.data;
 
   const channelTalkTargetItems = useMemo(
     () => channelTalkTargetsQuery.data?.targets.map(mapTargetToSelectItem) ?? EMPTY_SELECT_ITEMS,
@@ -51,17 +64,50 @@ export function useAgentEditorSettingsForm() {
     () => slackCredentialsQuery.data?.credentials.map(mapCredentialToSelectItem) ?? EMPTY_SELECT_ITEMS,
     [slackCredentialsQuery.data?.credentials],
   );
+  const editChannelTalkTarget = useMemo(
+    () =>
+      isEditMode && automationDetail !== undefined
+        ? channelTalkTargetsQuery.data?.targets.find(
+            (target) => target.credential_id === automationDetail.channel_talk_credential_id,
+          )
+        : undefined,
+    [automationDetail, channelTalkTargetsQuery.data?.targets, isEditMode],
+  );
+  const channelTalkTargetValue = channelTalkTargetId || editChannelTalkTarget?.target_id || '';
+  const quietPeriodValue =
+    quietPeriodSeconds ||
+    (isEditMode && automationDetail !== undefined
+      ? String(automationDetail.quiet_period_seconds ?? DEFAULT_QUIET_PERIOD_SECONDS)
+      : DEFAULT_QUIET_PERIOD_SECONDS);
   const autoSlackCredentialId = slackCredentialItems.length === 1 ? (slackCredentialItems[0]?.value ?? '') : '';
-  const slackCredentialValue = slackCredentialId || autoSlackCredentialId;
+  const editSlackCredentialId =
+    isEditMode && automationDetail !== undefined ? String(automationDetail.slack_credential_id) : '';
+  const slackCredentialValue = slackCredentialId || editSlackCredentialId || autoSlackCredentialId;
   const selectedSlackCredentialId = slackCredentialValue === '' ? undefined : Number(slackCredentialValue);
   const slackTargetsQuery = useQuery(automationCredentialsQueries.targets('slack', selectedSlackCredentialId));
+  const slackChannelValue =
+    slackChannelId || (isEditMode && automationDetail !== undefined ? automationDetail.slack_channel_id : '');
+  const instruction =
+    instructionOverride ?? (isEditMode && automationDetail !== undefined ? (automationDetail.guide_instruction ?? '') : '');
+
   const publishMutation = useMutation({
     ...inquiryAutomationsMutations.publish(),
     onSuccess: () => {
       router.push('/agent-studio');
     },
     onSettled: () => {
-      isPublishInFlightRef.current = false;
+      isSubmitInFlightRef.current = false;
+    },
+  });
+
+  const patchSettingsMutation = useMutation({
+    ...inquiryAutomationsMutations.patchSettings(),
+    onSuccess: async (_data, variables) => {
+      await queryClient.invalidateQueries({ queryKey: inquiryAutomationsQueries.detailKey(variables.agentSpecId) });
+      router.push('/agent-studio');
+    },
+    onSettled: () => {
+      isSubmitInFlightRef.current = false;
     },
   });
 
@@ -70,12 +116,12 @@ export function useAgentEditorSettingsForm() {
     [slackTargetsQuery.data?.targets],
   );
   const selectedChannelTalkTarget = useMemo(
-    () => channelTalkTargetsQuery.data?.targets.find((target) => target.target_id === channelTalkTargetId),
-    [channelTalkTargetId, channelTalkTargetsQuery.data?.targets],
+    () => channelTalkTargetsQuery.data?.targets.find((target) => target.target_id === channelTalkTargetValue),
+    [channelTalkTargetValue, channelTalkTargetsQuery.data?.targets],
   );
   const selectedSlackTarget = useMemo(
-    () => slackTargetsQuery.data?.targets.find((target) => target.target_id === slackChannelId),
-    [slackChannelId, slackTargetsQuery.data?.targets],
+    () => slackTargetsQuery.data?.targets.find((target) => target.target_id === slackChannelValue),
+    [slackChannelValue, slackTargetsQuery.data?.targets],
   );
   const trimmedInstruction = instruction.trim();
 
@@ -94,58 +140,99 @@ export function useAgentEditorSettingsForm() {
     : selectedSlackCredentialId !== undefined && slackTargetsQuery.isSuccess && slackChannelItems.length === 0
       ? EMPTY_ITEM_PLACEHOLDER
       : AGENT_STUDIO_SETTINGS_FIXTURE.slackChannelLabel;
-  const canPublish = trimmedInstruction.length > 0 && !publishMutation.isPending;
+  const canSubmit = isEditMode
+    ? !patchSettingsMutation.isPending &&
+      automationDetailQuery.isSuccess &&
+      editChannelTalkTarget !== undefined &&
+      selectedChannelTalkTarget?.credential_id !== null &&
+      selectedChannelTalkTarget?.credential_id !== undefined &&
+      selectedSlackCredentialId !== undefined &&
+      selectedSlackTarget !== undefined
+    : trimmedInstruction.length > 0 && !publishMutation.isPending;
 
   const handleSlackCredentialChange = (value: string) => {
     setSlackCredentialId(value);
     setSlackChannelId('');
   };
 
-  const handlePublish = () => {
+  const buildSettingsPayload = () => {
     if (
-      publishMutation.isPending ||
-      isPublishInFlightRef.current ||
       selectedChannelTalkTarget?.credential_id === null ||
       selectedChannelTalkTarget?.credential_id === undefined ||
       selectedSlackCredentialId === undefined ||
-      selectedSlackTarget === undefined ||
-      trimmedInstruction.length === 0
+      selectedSlackTarget === undefined
     ) {
-      return;
+      return null;
     }
 
-    isPublishInFlightRef.current = true;
-    publishMutation.mutate({
+    return {
       channel_talk_credential_id: selectedChannelTalkTarget.credential_id,
-      quiet_period_seconds: Number(quietPeriodSeconds),
+      quiet_period_seconds: Number(quietPeriodValue),
       slack_channel: {
         credential_id: selectedSlackCredentialId,
         channel_id: selectedSlackTarget.target_id,
         channel_name: selectedSlackTarget.display_name,
       },
-      guide_instruction: trimmedInstruction,
-    });
+      guide_instruction: trimmedInstruction.length > 0 ? trimmedInstruction : null,
+    };
   };
 
+  const handleSubmit = () => {
+    if (
+      publishMutation.isPending ||
+      patchSettingsMutation.isPending ||
+      isSubmitInFlightRef.current ||
+      !canSubmit
+    ) {
+      return;
+    }
+
+    const payload = buildSettingsPayload();
+    if (payload === null) return;
+
+    isSubmitInFlightRef.current = true;
+
+    if (isEditMode) {
+      if (resolvedAgentSpecId === undefined) {
+        isSubmitInFlightRef.current = false;
+        return;
+      }
+      patchSettingsMutation.mutate({ agentSpecId: resolvedAgentSpecId, body: payload });
+      return;
+    }
+
+    if (trimmedInstruction.length === 0) {
+      isSubmitInFlightRef.current = false;
+      return;
+    }
+
+    publishMutation.mutate(payload);
+  };
+
+  const activeMutation = isEditMode ? patchSettingsMutation : publishMutation;
+
   return {
-    canPublish,
+    canSubmit,
     channelTalkSelect: {
       disabled:
         channelTalkTargetsQuery.isLoading || channelTalkTargetsQuery.isError || channelTalkTargetItems.length === 0,
       items: channelTalkTargetItems,
       onChange: setChannelTalkTargetId,
       placeholder: channelTalkPlaceholder,
-      value: channelTalkTargetId,
+      value: channelTalkTargetValue,
     },
-    handlePublish,
+    handleSubmit,
     instruction,
-    isPublishError: publishMutation.isError,
+    loadErrorMessage:
+      isEditMode && automationDetailQuery.isError
+        ? '문의 자동화 설정을 불러오지 못했습니다. 잠시 후 다시 시도해주세요.'
+        : null,
     quietPeriodSelect: {
       items: AGENT_STUDIO_SETTINGS_FIXTURE.quietPeriodOptions,
       onChange: setQuietPeriodSeconds,
-      value: quietPeriodSeconds,
+      value: quietPeriodValue,
     },
-    setInstruction,
+    setInstruction: setInstructionOverride,
     slackChannelSelect: {
       disabled:
         selectedSlackCredentialId === undefined ||
@@ -155,7 +242,7 @@ export function useAgentEditorSettingsForm() {
       items: slackChannelItems,
       onChange: setSlackChannelId,
       placeholder: slackChannelPlaceholder,
-      value: slackChannelId,
+      value: slackChannelValue,
     },
     slackCredentialSelect: {
       disabled: slackCredentialsQuery.isLoading || slackCredentialsQuery.isError || slackCredentialItems.length === 0,
@@ -164,5 +251,10 @@ export function useAgentEditorSettingsForm() {
       placeholder: slackCredentialPlaceholder,
       value: slackCredentialValue,
     },
+    submitErrorMessage: activeMutation.isError
+      ? isEditMode
+        ? '수정에 실패했습니다. 입력값을 확인해주세요.'
+        : '배포에 실패했습니다. 입력값을 확인해주세요.'
+      : null,
   };
 }

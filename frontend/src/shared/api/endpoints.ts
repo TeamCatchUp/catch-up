@@ -138,7 +138,8 @@ export const API = {
     credentials: `${API_PREFIX}/automations/credentials`, // GET 문의 자동화 Credential 선택 목록
     targets: `${API_PREFIX}/automations/targets`, // GET 문의 자동화 Target 선택 목록
     inquiries: `${API_PREFIX}/automations/inquiries`, // GET 채널톡 문의 자동화 목록
-    inquiry: (agentSpecId: number) => `${API_PREFIX}/automations/inquiries/${agentSpecId}`, // PATCH 문의 자동화 상태
+    inquiry: (agentSpecId: number) => `${API_PREFIX}/automations/inquiries/${agentSpecId}`, // GET/PATCH 문의 자동화 단건 및 상태
+    inquirySettings: (agentSpecId: number) => `${API_PREFIX}/automations/inquiries/${agentSpecId}/settings`, // PATCH 문의 자동화 설정
     publishInquiry: `${API_PREFIX}/automations/inquiries/publish`, // POST 문의 자동화 설정 생성 및 활성화
   },
   version: `${API_PREFIX}/version`, // GET 현재 앱 버전

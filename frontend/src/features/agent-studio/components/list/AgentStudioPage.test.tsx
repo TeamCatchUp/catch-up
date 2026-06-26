@@ -335,6 +335,19 @@ describe('AgentStudioPage', () => {
     expect(patchRequests).toEqual([{ status: 'active' }]);
   });
 
+  it('moves to the edit route when 수정하기 is clicked from an active card menu', async () => {
+    const user = userEvent.setup();
+
+    mockVersion();
+    useInquiryAutomationList([activeAutomation]);
+    renderWithQueryClient(<AgentStudioPage />);
+
+    await user.click(await screen.findByRole('button', { name: '문의 대응 리포트 만들기 카드 메뉴' }));
+    await user.click(await screen.findByRole('menuitem', { name: '수정하기' }));
+
+    expect(mockPush).toHaveBeenCalledWith('/agent-studio/1/edit');
+  });
+
   it('updates active automation to inactive when 사용 안함 is clicked', async () => {
     const user = userEvent.setup();
     const patchRequests: unknown[] = [];
