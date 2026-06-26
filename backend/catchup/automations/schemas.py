@@ -41,6 +41,7 @@ class InquiryAutomationItem(BaseModel):
     author_name: str
     updated_at: str
     author_profile_image_url: str | None
+    is_editable: bool
 
 
 @dataclass

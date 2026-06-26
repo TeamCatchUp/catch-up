@@ -36,6 +36,10 @@ class AutomationNotFoundError(ValueError):
     """요청한 Automation이 존재하지 않는다."""
 
 
+class AutomationForbiddenError(ValueError):
+    """수정 권한이 없는 사용자가 변경을 시도한다."""
+
+
 class AutomationPublishError(ValueError):
     """publish 유효성 검증 실패."""
 
@@ -129,6 +133,7 @@ class InquiryAutomationService:
         *,
         agent_spec_id: int,
         workspace_id: int,
+        current_user_id: int,
     ) -> InquiryAutomationItem:
         """단일 문의 자동화를 조회한다. 존재하지 않으면 AutomationNotFoundError를 발생시킨다."""
         row = get_inquiry_agent_spec_with_user(db, agent_spec_id, workspace_id)
@@ -161,12 +166,14 @@ class InquiryAutomationService:
             author_name=author.name,
             updated_at=spec_row.updated_at.isoformat(),
             author_profile_image_url=author.picture,
+            is_editable=spec_row.user_id == current_user_id,
         )
 
     def list_automations(
         self,
         db: Session,
         workspace_id: int,
+        current_user_id: int,
     ) -> list[InquiryAutomationItem]:
         """워크스페이스에 등록된 문의 자동화 목록을 반환한다."""
         rows = list_inquiry_agent_specs(db, workspace_id)
@@ -199,6 +206,7 @@ class InquiryAutomationService:
                     author_name=author.name,
                     updated_at=row.updated_at.isoformat(),
                     author_profile_image_url=author.picture,
+                    is_editable=row.user_id == current_user_id,
                 )
             )
         return items
@@ -209,12 +217,15 @@ class InquiryAutomationService:
         *,
         agent_spec_id: int,
         workspace_id: int,
+        requesting_user_id: int,
         new_status: AgentStatus,
     ) -> None:
         """문의 자동화 상태를 변경한다. 존재하지 않으면 AutomationNotFoundError를 발생시킨다."""
         agent_spec = get_inquiry_agent_spec_for_update(db, agent_spec_id, workspace_id)
         if agent_spec is None:
             raise AutomationNotFoundError("Automation not found")
+        if agent_spec.user_id != requesting_user_id:
+            raise AutomationForbiddenError("Only the author can modify this automation")
         agent_spec.status = new_status
         db.commit()
 
@@ -231,6 +242,8 @@ class InquiryAutomationService:
         agent_spec = get_inquiry_agent_spec_for_update(db, agent_spec_id, workspace_id)
         if agent_spec is None:
             raise AutomationNotFoundError("Automation not found")
+        if agent_spec.user_id != user_id:
+            raise AutomationForbiddenError("Only the author can modify this automation")
 
         config = InquiryAutomationConfig.model_validate(agent_spec.spec)
         trigger = agent_spec.triggers[0] if agent_spec.triggers else None

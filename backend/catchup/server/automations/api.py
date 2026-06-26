@@ -19,6 +19,7 @@ from catchup.auth.dependencies import get_current_user
 from catchup.automations.schemas import InquiryAutomationItem
 from catchup.automations.schemas import InquiryAutomationPatch
 from catchup.automations.schemas import SlackChannelSelection
+from catchup.automations.service import AutomationForbiddenError
 from catchup.automations.service import AutomationNotFoundError
 from catchup.automations.service import AutomationPublishError
 from catchup.automations.service import InquiryAutomationService
@@ -214,7 +215,9 @@ def list_inquiry_automations(
 ) -> list[InquiryAutomationItem]:
     """워크스페이스에 등록된 문의 자동화 설정 목록을 반환한다."""
     workspace_id = _require_workspace_id(db, current_user.id)
-    return InquiryAutomationService().list_automations(db, workspace_id)
+    return InquiryAutomationService().list_automations(
+        db, workspace_id, current_user.id
+    )
 
 
 @router.get(
@@ -235,6 +238,7 @@ def get_inquiry_automation(
             db,
             agent_spec_id=agent_spec_id,
             workspace_id=workspace_id,
+            current_user_id=current_user.id,
         )
     except AutomationNotFoundError as exc:
         raise HTTPException(
@@ -261,8 +265,14 @@ def update_inquiry_automation(
             db,
             agent_spec_id=agent_spec_id,
             workspace_id=workspace_id,
+            requesting_user_id=current_user.id,
             new_status=body.status,
         )
+    except AutomationForbiddenError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=str(exc),
+        ) from exc
     except AutomationNotFoundError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -291,6 +301,11 @@ def patch_inquiry_automation_settings(
             user_id=current_user.id,
             patch=body,
         )
+    except AutomationForbiddenError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=str(exc),
+        ) from exc
     except AutomationNotFoundError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
