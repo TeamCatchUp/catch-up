@@ -9,6 +9,7 @@ from slack_sdk.errors import SlackApiError
 
 from catchup.components.summarizer import SummarizerService
 from catchup.components.vector_db.pgvector import PGVectorRepository
+from catchup.components.vector_db.v2 import V2KnowledgeRepository
 from catchup.components.vector_db.v2 import VectorStore
 from catchup.connectors.slack.client import SlackApiClientWrapper
 from catchup.connectors.slack.client import SlackConnectorApiError
@@ -62,6 +63,7 @@ class SlackMessageAdapterBase(
         summarizer: SummarizerService | None = None,
         transformer: SlackTransformer | None = None,
         vector_store: VectorStore | None = None,
+        v2_knowledge_repository: V2KnowledgeRepository | None = None,
         v2_document_builder: SlackMessageV2DocumentBuilder | None = None,
     ) -> None:
         self.user_cache: dict[str, SlackUser] = {}
@@ -73,6 +75,7 @@ class SlackMessageAdapterBase(
             summarizer=summarizer,
             transformer=transformer,
             vector_store=vector_store,
+            v2_knowledge_repository=v2_knowledge_repository,
         )
         self.team_id = team_id
         self.bot_user_id = bot_user_id

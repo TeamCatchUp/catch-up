@@ -10,6 +10,7 @@ from langchain_core.documents import Document
 
 from catchup.components.summarizer import SummarizerService
 from catchup.components.vector_db.pgvector import PGVectorRepository
+from catchup.components.vector_db.v2 import V2KnowledgeRepository
 from catchup.components.vector_db.v2 import VectorStore
 from catchup.connectors.github.client import GitHubApiClient
 from catchup.connectors.github.client import GitHubRateLimitError
@@ -59,6 +60,7 @@ class GithubRepositoryAdapterBase(
         repository: PGVectorRepository,
         summarizer: SummarizerService | None = None,
         vector_store: VectorStore | None = None,
+        v2_knowledge_repository: V2KnowledgeRepository | None = None,
         transformer: GithubTransformer | None = None,
     ) -> None:
         transformer = transformer or GithubTransformer()
@@ -69,6 +71,7 @@ class GithubRepositoryAdapterBase(
             summarizer=summarizer,
             transformer=transformer,
             vector_store=vector_store,
+            v2_knowledge_repository=v2_knowledge_repository,
         )
         self.issue_v2_mapper = GithubIssueV2RecordMapper()
         self.pr_v2_mapper = GithubPrV2RecordMapper()
@@ -153,13 +156,15 @@ class GithubRepositoryAdapterBase(
     ) -> tuple[str, ...]:
         if not document_ids:
             return ()
-        if self.vector_store is None:
+        if self.v2_knowledge_repository is None:
             return tuple(document_ids)
 
         try:
-            missing_ids = await self.vector_store.find_missing_metadata_namespace_ids(
-                document_ids,
-                namespace=namespace,
+            missing_ids = (
+                await self.v2_knowledge_repository.find_missing_metadata_namespace_ids(
+                    document_ids,
+                    namespace=namespace,
+                )
             )
         except Exception as exc:
             logger.exception(

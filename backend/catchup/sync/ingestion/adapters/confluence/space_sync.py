@@ -15,7 +15,9 @@ from pydantic import field_validator
 
 from catchup.components.embedder.constants import EmbeddingProvider
 from catchup.components.embedder.factory import get_embedding_service
+from catchup.components.vector_db.factory import get_v2_knowledge_repository
 from catchup.components.vector_db.factory import get_v2_vector_store
+from catchup.components.vector_db.v2 import V2KnowledgeRepository
 from catchup.components.vector_db.v2 import VectorStore
 from catchup.connectors.atlassian.utils import parse_atlassian_datetime
 from catchup.connectors.confluence.schemas import ConfluenceBlogPostResponse
@@ -263,11 +265,13 @@ class ConfluenceSpaceSyncAdapter:
         service: ConfluenceIngestionService,
         enable_v2_dual_write: bool = False,
         vector_store: VectorStore | None = None,
+        v2_knowledge_repository: V2KnowledgeRepository | None = None,
         v2_document_builder: ConfluenceV2DocumentBuilder | None = None,
     ) -> None:
         self._service = service
         self._enable_v2_dual_write = enable_v2_dual_write
         self._vector_store = vector_store
+        self._v2_knowledge_repository = v2_knowledge_repository
         self._v2_document_builder = v2_document_builder or ConfluenceV2DocumentBuilder()
         self._space_context_by_key: dict[
             str,
@@ -433,11 +437,10 @@ class ConfluenceSpaceSyncAdapter:
         if isinstance(execution, ConfluenceSpaceFullSyncExecutionRequest):
             error_count = transformed.error_count
             v2_failed_ids = tuple(transformed.v2_failed_ids)
-            v2_failed_ids = await self._delete_v2_prefixes(
-                prefixes=tuple(
-                    f"confluence:{execution.record_type}:{item.content_id}:chunk:"
-                    for item in transformed.items
-                ),
+            v2_failed_ids = await self._delete_v2_chunk_records(
+                record_type=execution.record_type,
+                target_id=transformed.space_key or execution.space_key,
+                record_ids=tuple(item.content_id for item in transformed.items),
                 existing_failed_ids=v2_failed_ids,
             )
             vector_store = await self._resolve_vector_store_for_write(
@@ -490,8 +493,10 @@ class ConfluenceSpaceSyncAdapter:
         if transformed.delete_prefixes:
             for prefix in transformed.delete_prefixes:
                 await self._service.repository.delete_by_id_prefix(prefix)
-            v2_failed_ids = await self._delete_v2_prefixes(
-                prefixes=transformed.delete_prefixes,
+            v2_failed_ids = await self._delete_v2_chunk_records(
+                record_type=execution.record_type,
+                target_id=transformed.space_key or execution.space_key,
+                record_ids=(execution.record_id,),
                 existing_failed_ids=transformed.v2_failed_ids,
             )
             return ConfluenceSpacePersistResult(
@@ -502,11 +507,10 @@ class ConfluenceSpaceSyncAdapter:
 
         error_count = transformed.error_count
         v2_failed_ids = tuple(transformed.v2_failed_ids)
-        v2_failed_ids = await self._delete_v2_prefixes(
-            prefixes=tuple(
-                f"confluence:{execution.record_type}:{item.content_id}:chunk:"
-                for item in transformed.items
-            ),
+        v2_failed_ids = await self._delete_v2_chunk_records(
+            record_type=execution.record_type,
+            target_id=transformed.space_key or execution.space_key,
+            record_ids=tuple(item.content_id for item in transformed.items),
             existing_failed_ids=v2_failed_ids,
         )
         vector_store = await self._resolve_vector_store_for_write(
@@ -606,28 +610,50 @@ class ConfluenceSpaceSyncAdapter:
             self._vector_store = vector_store
         return self._vector_store
 
-    async def _delete_v2_prefixes(
+    def _get_v2_knowledge_repository(self) -> V2KnowledgeRepository | None:
+        if not self._enable_v2_dual_write:
+            return None
+        if self._v2_knowledge_repository is None:
+            self._v2_knowledge_repository = get_v2_knowledge_repository()
+        return self._v2_knowledge_repository
+
+    async def _delete_v2_chunk_records(
         self,
         *,
-        prefixes: tuple[str, ...],
+        record_type: ConfluenceRecordType,
+        target_id: str,
+        record_ids: tuple[str, ...],
         existing_failed_ids: tuple[str, ...],
     ) -> tuple[str, ...]:
-        if not prefixes or not self._enable_v2_dual_write:
+        if not record_ids or not self._enable_v2_dual_write:
             return existing_failed_ids
 
-        try:
-            vector_store = await self._get_vector_store()
-        except Exception:
-            return tuple(dict.fromkeys((*existing_failed_ids, *prefixes)))
-        if vector_store is None:
-            return tuple(dict.fromkeys((*existing_failed_ids, *prefixes)))
+        v2_knowledge_repository = self._get_v2_knowledge_repository()
+        if v2_knowledge_repository is None:
+            return tuple(
+                dict.fromkeys(
+                    (
+                        *existing_failed_ids,
+                        *(
+                            _confluence_chunk_prefix(record_type, record_id)
+                            for record_id in record_ids
+                        ),
+                    )
+                )
+            )
 
         failed_ids = list(existing_failed_ids)
-        for prefix in prefixes:
+        for record_id in record_ids:
             try:
-                await vector_store.delete_by_id_prefix(prefix)
+                await v2_knowledge_repository.delete_multiple_chunks_by_id(
+                    source="confluence",
+                    entity_type=record_type,
+                    scope_id=self._service.cloud_id,
+                    target_id=target_id,
+                    record_id=record_id,
+                )
             except Exception:
-                failed_ids.append(prefix)
+                failed_ids.append(_confluence_chunk_prefix(record_type, record_id))
         return tuple(dict.fromkeys(failed_ids))
 
     @staticmethod
@@ -766,3 +792,10 @@ class ConfluenceSpaceSyncAdapter:
         result = (space_id, space_name_map.get(space_key), user_name_map)
         self._space_context_by_key[space_key] = result
         return result
+
+
+def _confluence_chunk_prefix(
+    record_type: ConfluenceRecordType,
+    record_id: str,
+) -> str:
+    return f"confluence:{record_type}:{record_id}:chunk:"

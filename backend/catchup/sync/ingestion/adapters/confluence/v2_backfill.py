@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import structlog
 
+from catchup.components.vector_db.v2 import V2KnowledgeRepository
 from catchup.components.vector_db.v2 import VectorStore
 from catchup.connectors.confluence.schemas import ConfluenceBlogPostResponse
 from catchup.connectors.confluence.schemas import ConfluencePageResponse
@@ -52,12 +53,14 @@ class ConfluenceV2BackfillAdapter(ConfluenceSpaceSyncAdapter):
         *,
         service: ConfluenceIngestionService,
         vector_store: VectorStore | None = None,
+        v2_knowledge_repository: V2KnowledgeRepository | None = None,
         v2_document_builder: ConfluenceV2DocumentBuilder | None = None,
     ) -> None:
         super().__init__(
             service=service,
             enable_v2_dual_write=True,
             vector_store=vector_store,
+            v2_knowledge_repository=v2_knowledge_repository,
             v2_document_builder=v2_document_builder,
         )
 
@@ -226,10 +229,16 @@ class ConfluenceV2BackfillAdapter(ConfluenceSpaceSyncAdapter):
             if document_id in persisted_set
         ]
         namespace = f"confluence_{execution.record_type}"
-        metadata_failed_ids = await vector_store.find_missing_metadata_namespace_ids(
-            metadata_check_ids,
-            namespace=namespace,
-        )
+        v2_knowledge_repository = self._get_v2_knowledge_repository()
+        if v2_knowledge_repository is None:
+            metadata_failed_ids = tuple(metadata_check_ids)
+        else:
+            metadata_failed_ids = (
+                await v2_knowledge_repository.find_missing_metadata_namespace_ids(
+                    metadata_check_ids,
+                    namespace=namespace,
+                )
+            )
         if metadata_failed_ids:
             logger.warning(
                 "confluence_v2_backfill_metadata_missing_after_persist",

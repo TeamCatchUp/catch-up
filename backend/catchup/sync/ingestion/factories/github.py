@@ -15,6 +15,7 @@ from catchup.components.embedder.constants import EmbeddingProvider
 from catchup.components.embedder.factory import get_embedding_service
 from catchup.components.summarizer import get_summarizer_service
 from catchup.components.vector_db.factory import get_pgvector_repository
+from catchup.components.vector_db.factory import get_v2_knowledge_repository
 from catchup.components.vector_db.factory import get_v2_vector_store
 from catchup.configs.config import settings
 from catchup.connectors.github.auth import get_github_app_service
@@ -93,9 +94,11 @@ async def _create_github_repository_adapter(
         repository = get_pgvector_repository(embeddings=embeddings)
         repository.ensure_initialized()
         vector_store = None
+        v2_knowledge_repository = None
         if settings.VECTOR_STORE_V2_DUAL_WRITE_ENABLED or force_vector_store:
             vector_store = get_v2_vector_store(embeddings)
             await vector_store.initialize()
+            v2_knowledge_repository = get_v2_knowledge_repository()
 
         return adapter_cls(
             installation_id=installation_id,
@@ -109,6 +112,7 @@ async def _create_github_repository_adapter(
             repository=repository,
             summarizer=get_summarizer_service(),
             vector_store=vector_store,
+            v2_knowledge_repository=v2_knowledge_repository,
         )
     except HTTPStatusError as exc:
         status_code = exc.response.status_code

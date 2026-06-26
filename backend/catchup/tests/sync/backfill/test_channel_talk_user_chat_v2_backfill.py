@@ -121,12 +121,15 @@ async def test_backfill_adapter_hydrates_user_chat_and_reuses_v1_seed_values() -
     )
     vector_store = SimpleNamespace(
         upsert_documents=AsyncMock(return_value=[seed.langchain_id]),
+    )
+    v2_knowledge_repository = SimpleNamespace(
         find_missing_metadata_namespace_ids=AsyncMock(return_value=()),
     )
     author_resolver = _FakeChannelTalkAuthorResolver()
     adapter = ChannelTalkUserChatV2BackfillAdapter(
         fetcher=fetcher,
         vector_store=vector_store,
+        v2_knowledge_repository=v2_knowledge_repository,
         v2_document_builder=_v2_document_builder(author_resolver),
     )
     adapter._load_connection = AsyncMock(
@@ -158,7 +161,7 @@ async def test_backfill_adapter_hydrates_user_chat_and_reuses_v1_seed_values() -
     assert document.metadata["internal_author_id"] == "42"
     assert upsert_args.kwargs["ids"] == [seed.langchain_id]
     assert upsert_args.kwargs["embeddings"] == [seed.embedding]
-    vector_store.find_missing_metadata_namespace_ids.assert_awaited_once_with(
+    v2_knowledge_repository.find_missing_metadata_namespace_ids.assert_awaited_once_with(
         [seed.langchain_id],
         namespace="channel_talk_user_chat",
     )
@@ -173,6 +176,8 @@ async def test_backfill_adapter_treats_missing_user_chat_metadata_as_failed() ->
     )
     vector_store = SimpleNamespace(
         upsert_documents=AsyncMock(return_value=[seed.langchain_id]),
+    )
+    v2_knowledge_repository = SimpleNamespace(
         find_missing_metadata_namespace_ids=AsyncMock(
             return_value=(seed.langchain_id,)
         ),
@@ -180,6 +185,7 @@ async def test_backfill_adapter_treats_missing_user_chat_metadata_as_failed() ->
     adapter = ChannelTalkUserChatV2BackfillAdapter(
         fetcher=fetcher,
         vector_store=vector_store,
+        v2_knowledge_repository=v2_knowledge_repository,
         v2_document_builder=_v2_document_builder(),
     )
     adapter._load_connection = AsyncMock(

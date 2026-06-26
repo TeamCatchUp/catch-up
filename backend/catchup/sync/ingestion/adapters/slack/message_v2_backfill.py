@@ -220,10 +220,15 @@ class SlackMessageV2BackfillAdapter(SlackMessageAdapterBase):
         metadata_check_ids = [
             doc_id for doc_id in document_ids if doc_id in persisted_id_set
         ]
-        metadata_failed_ids = await self.vector_store.find_missing_metadata_namespace_ids(
-            metadata_check_ids,
-            namespace="slack_message",
-        )
+        if self.v2_knowledge_repository is None:
+            metadata_failed_ids = tuple(metadata_check_ids)
+        else:
+            metadata_failed_ids = (
+                await self.v2_knowledge_repository.find_missing_metadata_namespace_ids(
+                    metadata_check_ids,
+                    namespace="slack_message",
+                )
+            )
         if metadata_failed_ids:
             logger.warning(
                 "slack_message_v2_backfill_metadata_missing_after_persist",

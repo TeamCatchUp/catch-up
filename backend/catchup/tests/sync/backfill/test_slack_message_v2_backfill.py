@@ -117,6 +117,8 @@ async def test_backfill_adapter_hydrates_message_and_reuses_v1_seed_values() -> 
     seed = _seed()
     vector_store = SimpleNamespace(
         upsert_documents=AsyncMock(return_value=[seed.langchain_id]),
+    )
+    v2_knowledge_repository = SimpleNamespace(
         find_missing_metadata_namespace_ids=AsyncMock(return_value=()),
     )
     session_factory = Mock()
@@ -137,6 +139,7 @@ async def test_backfill_adapter_hydrates_message_and_reuses_v1_seed_values() -> 
         ),
         repository=SimpleNamespace(),
         vector_store=vector_store,
+        v2_knowledge_repository=v2_knowledge_repository,
         v2_document_builder=SlackMessageV2DocumentBuilder(
             session_factory=session_factory,
         ),
@@ -164,7 +167,7 @@ async def test_backfill_adapter_hydrates_message_and_reuses_v1_seed_values() -> 
     assert document.metadata["slack_message"]["author"]["catchup_user_id"] == "42"
     assert upsert_call.kwargs["ids"] == [seed.langchain_id]
     assert upsert_call.kwargs["embeddings"] == [seed.embedding]
-    vector_store.find_missing_metadata_namespace_ids.assert_awaited_once_with(
+    v2_knowledge_repository.find_missing_metadata_namespace_ids.assert_awaited_once_with(
         [seed.langchain_id],
         namespace="slack_message",
     )
@@ -175,6 +178,8 @@ async def test_backfill_adapter_treats_missing_slack_metadata_as_failed() -> Non
     seed = _seed()
     vector_store = SimpleNamespace(
         upsert_documents=AsyncMock(return_value=[seed.langchain_id]),
+    )
+    v2_knowledge_repository = SimpleNamespace(
         find_missing_metadata_namespace_ids=AsyncMock(
             return_value=(seed.langchain_id,)
         ),
@@ -197,6 +202,7 @@ async def test_backfill_adapter_treats_missing_slack_metadata_as_failed() -> Non
         ),
         repository=SimpleNamespace(),
         vector_store=vector_store,
+        v2_knowledge_repository=v2_knowledge_repository,
         v2_document_builder=SlackMessageV2DocumentBuilder(
             session_factory=session_factory,
         ),

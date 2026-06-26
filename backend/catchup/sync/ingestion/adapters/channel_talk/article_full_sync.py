@@ -5,8 +5,10 @@ from langchain_core.documents import Document
 from catchup.components.embedder.constants import EmbeddingProvider
 from catchup.components.embedder.factory import get_embedding_service
 from catchup.components.vector_db.factory import get_pgvector_repository
+from catchup.components.vector_db.factory import get_v2_knowledge_repository
 from catchup.components.vector_db.factory import get_v2_vector_store
 from catchup.components.vector_db.pgvector.repository import PGVectorRepository
+from catchup.components.vector_db.v2 import V2KnowledgeRepository
 from catchup.components.vector_db.v2 import VectorStore
 from catchup.connectors.channel_talk.document_space.article_full_sync_fetcher import (
     ChannelTalkArticleFullSyncFetcher,
@@ -64,6 +66,7 @@ class ChannelTalkArticleFullSyncIngestionAdapter:
         *,
         enable_v2_dual_write: bool = False,
         vector_store: VectorStore | None = None,
+        v2_knowledge_repository: V2KnowledgeRepository | None = None,
         v2_document_builder: ChannelTalkArticleV2DocumentBuilder | None = None,
     ) -> None:
         self._fetcher: ChannelTalkArticleFullSyncFetcher | None = None
@@ -76,6 +79,7 @@ class ChannelTalkArticleFullSyncIngestionAdapter:
         self._enable_v2_dual_write = enable_v2_dual_write
         self._repository: PGVectorRepository | None = None
         self._vector_store = vector_store
+        self._v2_knowledge_repository = v2_knowledge_repository
 
     async def fetch(
         self,
@@ -123,6 +127,7 @@ class ChannelTalkArticleFullSyncIngestionAdapter:
         # 중복 제거된 article만 adapter에 남기고, content/metadata/id 조립은 ArticleTransformer가 수행한다.
         documents: list[ChannelTalkArticlePreparedDocument] = []
         delete_prefixes: list[str] = []
+        delete_record_ids: list[str] = []
         seen_article_ids: set[str] = set()
 
         for bundle in fetched.bundles:
@@ -146,6 +151,7 @@ class ChannelTalkArticleFullSyncIngestionAdapter:
                 for document in transformed_bundle.documents
             )
             delete_prefixes.append(transformed_bundle.delete_prefix)
+            delete_record_ids.append(bundle.article_id)
 
         v2_documents = []
         v2_failed_ids: tuple[str, ...] = ()
@@ -159,6 +165,7 @@ class ChannelTalkArticleFullSyncIngestionAdapter:
         return ChannelTalkArticleFullSyncTransformResult(
             documents=tuple(documents),
             delete_prefixes=tuple(dict.fromkeys(delete_prefixes)),
+            delete_record_ids=tuple(dict.fromkeys(delete_record_ids)),
             v2_documents=tuple(v2_documents),
             v2_failed_ids=v2_failed_ids,
         )
@@ -196,9 +203,11 @@ class ChannelTalkArticleFullSyncIngestionAdapter:
 
         for prefix in transformed.delete_prefixes:
             await repository.delete_by_id_prefix(prefix)
-        v2_failed_ids = await self._delete_v2_prefixes(
-            prefixes=transformed.delete_prefixes,
+        v2_failed_ids = await self._delete_v2_chunk_records(
+            record_ids=transformed.delete_record_ids,
             existing_failed_ids=v2_failed_ids,
+            channel_id=execution.channel_id,
+            space_id=execution.space_id,
         )
 
         if not transformed.documents:
@@ -327,28 +336,50 @@ class ChannelTalkArticleFullSyncIngestionAdapter:
             self._vector_store = vector_store
         return self._vector_store
 
-    async def _delete_v2_prefixes(
+    def _get_v2_knowledge_repository(self) -> V2KnowledgeRepository | None:
+        if not self._enable_v2_dual_write:
+            return None
+        if self._v2_knowledge_repository is None:
+            self._v2_knowledge_repository = get_v2_knowledge_repository()
+        return self._v2_knowledge_repository
+
+    async def _delete_v2_chunk_records(
         self,
         *,
-        prefixes: tuple[str, ...],
+        record_ids: tuple[str, ...],
         existing_failed_ids: tuple[str, ...],
+        channel_id: str,
+        space_id: str,
     ) -> tuple[str, ...]:
-        if not prefixes or not self._enable_v2_dual_write:
+        if not record_ids or not self._enable_v2_dual_write:
             return existing_failed_ids
 
-        try:
-            vector_store = await self._get_vector_store()
-        except Exception:
-            return tuple(dict.fromkeys((*existing_failed_ids, *prefixes)))
-        if vector_store is None:
-            return tuple(dict.fromkeys((*existing_failed_ids, *prefixes)))
+        v2_knowledge_repository = self._get_v2_knowledge_repository()
+        if v2_knowledge_repository is None:
+            return tuple(
+                dict.fromkeys(
+                    (
+                        *existing_failed_ids,
+                        *(
+                            _article_chunk_prefix(channel_id, space_id, record_id)
+                            for record_id in record_ids
+                        ),
+                    )
+                )
+            )
 
         failed_ids = list(existing_failed_ids)
-        for prefix in prefixes:
+        for record_id in record_ids:
             try:
-                await vector_store.delete_by_id_prefix(prefix)
+                await v2_knowledge_repository.delete_multiple_chunks_by_id(
+                    source="channel_talk",
+                    entity_type="document_article",
+                    scope_id=channel_id,
+                    target_id=space_id,
+                    record_id=record_id,
+                )
             except Exception:
-                failed_ids.append(prefix)
+                failed_ids.append(_article_chunk_prefix(channel_id, space_id, record_id))
         return tuple(dict.fromkeys(failed_ids))
 
     def _get_fetcher(self) -> ChannelTalkArticleFullSyncFetcher:
@@ -375,6 +406,17 @@ class ChannelTalkArticleFullSyncIngestionAdapter:
             )
             for document in documents
         ]
+
+
+def _article_chunk_prefix(
+    channel_id: str,
+    space_id: str,
+    article_id: str,
+) -> str:
+    return (
+        "channel_talk:document_article:"
+        f"{channel_id}:{space_id}:{CHANNEL_TALK_ARTICLE_LANGUAGE}:{article_id}:chunk:"
+    )
 
 
 ChannelTalkArticleFullSyncAdapter = ChannelTalkArticleFullSyncIngestionAdapter

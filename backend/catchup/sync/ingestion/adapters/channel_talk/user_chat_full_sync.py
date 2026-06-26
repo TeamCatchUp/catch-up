@@ -9,8 +9,10 @@ from catchup.components.summarizer import SummarizeRequest
 from catchup.components.summarizer import SummarizerService
 from catchup.components.summarizer import get_summarizer_service
 from catchup.components.vector_db.factory import get_pgvector_repository
+from catchup.components.vector_db.factory import get_v2_knowledge_repository
 from catchup.components.vector_db.factory import get_v2_vector_store
 from catchup.components.vector_db.pgvector.repository import PGVectorRepository
+from catchup.components.vector_db.v2 import V2KnowledgeRepository
 from catchup.components.vector_db.v2 import VectorStore
 from catchup.connectors.channel_talk.core.user_chat_full_sync_fetcher import (
     ChannelTalkUserChatFullSyncFetcher,
@@ -68,6 +70,7 @@ class ChannelTalkUserChatFullSyncIngestionAdapter:
         max_user_chat_pages_per_run: int | None = None,
         user_chat_list_limit: int | None = None,
         vector_store: VectorStore | None = None,
+        v2_knowledge_repository: V2KnowledgeRepository | None = None,
         v2_document_builder: ChannelTalkUserChatV2DocumentBuilder | None = None,
     ) -> None:
         self._fetcher: ChannelTalkUserChatFullSyncFetcher | None = None
@@ -82,6 +85,7 @@ class ChannelTalkUserChatFullSyncIngestionAdapter:
         self._summarizer: SummarizerService | None = None
         self._repository: PGVectorRepository | None = None
         self._vector_store = vector_store
+        self._v2_knowledge_repository = v2_knowledge_repository
 
     async def fetch(
         self,
@@ -367,6 +371,13 @@ class ChannelTalkUserChatFullSyncIngestionAdapter:
             await vector_store.initialize()
             self._vector_store = vector_store
         return self._vector_store
+
+    def _get_v2_knowledge_repository(self) -> V2KnowledgeRepository | None:
+        if not self._enable_v2_dual_write:
+            return None
+        if self._v2_knowledge_repository is None:
+            self._v2_knowledge_repository = get_v2_knowledge_repository()
+        return self._v2_knowledge_repository
 
     def _get_fetcher(self) -> ChannelTalkUserChatFullSyncFetcher:
         if self._fetcher is None:

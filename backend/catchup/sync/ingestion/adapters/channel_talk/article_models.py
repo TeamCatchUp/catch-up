@@ -204,6 +204,7 @@ class ChannelTalkArticleFullSyncTransformResult(BaseModel):
 
     documents: tuple[ChannelTalkArticlePreparedDocument, ...] = ()
     delete_prefixes: tuple[str, ...] = ()
+    delete_record_ids: tuple[str, ...] = ()
     prepared_document_ids: tuple[str, ...] = ()
     v2_documents: tuple[Document, ...] = ()
     v2_failed_ids: tuple[str, ...] = ()

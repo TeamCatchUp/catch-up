@@ -480,6 +480,9 @@ class MigratedConnectorDescriptorTests(IsolatedAsyncioTestCase):
 
     async def test_confluence_deleted_incremental_result_reports_deleted_count(self) -> None:
         repository = SimpleNamespace(delete_by_id_prefix=AsyncMock())
+        v2_knowledge_repository = SimpleNamespace(
+            delete_multiple_chunks_by_id=AsyncMock(return_value=1),
+        )
 
         async def load_space_context(_space_keys):
             return {"ENG": "space-1"}, {"ENG": "Engineering"}, {}
@@ -489,7 +492,11 @@ class MigratedConnectorDescriptorTests(IsolatedAsyncioTestCase):
             repository=repository,
             _load_space_sync_context=load_space_context,
         )
-        adapter = ConfluenceSpaceSyncAdapter(service=service)
+        adapter = ConfluenceSpaceSyncAdapter(
+            service=service,
+            enable_v2_dual_write=True,
+            v2_knowledge_repository=v2_knowledge_repository,
+        )
         execution = ConfluenceSpaceIncrementalSyncExecutionRequest(
             tenant_id="cloud-123",
             space_key="ENG",
@@ -520,6 +527,13 @@ class MigratedConnectorDescriptorTests(IsolatedAsyncioTestCase):
         self.assertEqual(persisted.deleted_count, 1)
         repository.delete_by_id_prefix.assert_awaited_once_with(
             "confluence:page:1001:chunk:"
+        )
+        v2_knowledge_repository.delete_multiple_chunks_by_id.assert_awaited_once_with(
+            source="confluence",
+            entity_type="page",
+            scope_id="cloud-123",
+            target_id="ENG",
+            record_id="1001",
         )
 
     async def test_confluence_full_sync_batch_persists_transformed_items(self) -> None:
