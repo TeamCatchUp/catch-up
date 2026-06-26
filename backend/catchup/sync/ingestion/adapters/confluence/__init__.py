@@ -8,6 +8,9 @@ from catchup.sync.ingestion.adapters.confluence.space_sync import (
     ConfluenceSpaceSyncAdapter,
 )
 from catchup.sync.ingestion.adapters.confluence.space_sync import (
+    ConfluenceSpaceSyncDependencies,
+)
+from catchup.sync.ingestion.adapters.confluence.space_sync import (
     ConfluenceSpaceSyncExecutionResult,
 )
 from catchup.sync.ingestion.adapters.confluence.space_sync import (
@@ -30,6 +33,7 @@ __all__ = [
     "ConfluenceSpaceFullSyncExecutionRequest",
     "ConfluenceSpaceIncrementalSyncExecutionRequest",
     "ConfluenceSpaceSyncAdapter",
+    "ConfluenceSpaceSyncDependencies",
     "ConfluenceSpaceSyncExecutionResult",
     "ConfluenceV2BackfillAdapter",
     "ConfluenceV2BackfillExecutionRequest",

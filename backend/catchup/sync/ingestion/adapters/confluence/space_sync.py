@@ -1,11 +1,15 @@
 from __future__ import annotations
 
-import logging
+import asyncio
 from collections.abc import AsyncIterator
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 from typing import Literal
 
+import structlog
+from fastapi.concurrency import run_in_threadpool
+from langchain_core.documents import Document
 from pydantic import BaseModel
 from pydantic import ConfigDict
 from pydantic import Field
@@ -17,28 +21,45 @@ from catchup.components.embedder.constants import EmbeddingProvider
 from catchup.components.embedder.factory import get_embedding_service
 from catchup.components.vector_db.factory import get_v2_knowledge_repository
 from catchup.components.vector_db.factory import get_v2_vector_store
+from catchup.components.vector_db.pgvector import PGVectorRepository
 from catchup.components.vector_db.v2 import V2KnowledgeRepository
 from catchup.components.vector_db.v2 import VectorStore
 from catchup.connectors.atlassian.utils import parse_atlassian_datetime
+from catchup.connectors.confluence.client import ConfluenceApiClient
+from catchup.connectors.confluence.client import ConfluenceApiError
+from catchup.connectors.confluence.client import ConfluenceRateLimitError
 from catchup.connectors.confluence.schemas import ConfluenceBlogPostResponse
+from catchup.connectors.confluence.schemas import ConfluenceCommentResponse
+from catchup.connectors.confluence.schemas import ConfluenceLabelResponse
 from catchup.connectors.confluence.schemas import ConfluencePageResponse
+from catchup.db.confluence import domain_repository
+from catchup.db.engine import SessionLocal
 from catchup.db.models import SyncConnector
 from catchup.sync.audit import SyncAuditContext
 from catchup.sync.ingestion.adapters.confluence.v2_document_builder import (
     ConfluenceV2DocumentBuilder,
 )
+from catchup.sync.ingestion.document_builders.confluence import ConfluenceTransformer
 from catchup.sync.ingestion.document_builders.confluence import (
     ConfluenceTransformResult,
 )
 from catchup.sync.ingestion.schemas import SyncExecutionRequest
 from catchup.sync.ingestion.schemas import SyncExecutionResult
 from catchup.sync.ingestion.schemas import SyncWindow
-from catchup.sync.ingestion.services.confluence import ConfluenceIngestionService
 from catchup.utils.validation import require_text
 
 ConfluenceRecordType = Literal["page", "blogpost"]
 ConfluenceIncrementalEventKind = Literal["created", "updated", "deleted"]
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
+
+
+@dataclass(slots=True, frozen=True)
+class ConfluenceSpaceSyncDependencies:
+    cloud_id: str
+    site_url: str
+    client: ConfluenceApiClient
+    repository: PGVectorRepository
+    transformer: ConfluenceTransformer
 
 
 class ConfluenceSpaceFullSyncExecutionRequest(SyncExecutionRequest):
@@ -262,13 +283,17 @@ class ConfluenceSpaceSyncAdapter:
     def __init__(
         self,
         *,
-        service: ConfluenceIngestionService,
+        dependencies: ConfluenceSpaceSyncDependencies,
         enable_v2_dual_write: bool = False,
         vector_store: VectorStore | None = None,
         v2_knowledge_repository: V2KnowledgeRepository | None = None,
         v2_document_builder: ConfluenceV2DocumentBuilder | None = None,
     ) -> None:
-        self._service = service
+        self._cloud_id = dependencies.cloud_id
+        self._site_url = dependencies.site_url
+        self._client = dependencies.client
+        self._repository = dependencies.repository
+        self._transformer = dependencies.transformer
         self._enable_v2_dual_write = enable_v2_dual_write
         self._vector_store = vector_store
         self._v2_knowledge_repository = v2_knowledge_repository
@@ -346,7 +371,7 @@ class ConfluenceSpaceSyncAdapter:
                     if sync_from_dt and modified_at and modified_at < sync_from_dt:
                         stop_after_batch = True
                         continue
-                    transform_result = await self._service._process_page(
+                    transform_result = await self._process_page(
                         content,
                         space_key=space_key,
                         space_name=space_name,
@@ -365,7 +390,7 @@ class ConfluenceSpaceSyncAdapter:
                     if sync_from_dt and modified_at and modified_at < sync_from_dt:
                         stop_after_batch = True
                         continue
-                    transform_result = await self._service._process_blogpost(
+                    transform_result = await self._process_blogpost(
                         content,
                         space_key=space_key,
                         space_name=space_name,
@@ -379,15 +404,23 @@ class ConfluenceSpaceSyncAdapter:
                     )
                 )
             except Exception as exc:
-                if self._service._is_retryable_connector_error(exc):
+                if self._is_retryable_connector_error(exc):
                     raise
                 logger.warning(
-                    "[CONFLUENCE][FULL SYNC] Failed to transform %s batch item: cloud_id=%s, space_key=%s, content_id=%s, error=%s",
-                    record_type,
-                    self._service.cloud_id,
-                    space_key,
-                    raw_content.get("id"),
-                    exc,
+                    "confluence_space_transform_item_failed",
+                    connector="confluence",
+                    sync_type=(
+                        "full"
+                        if isinstance(execution, ConfluenceSpaceFullSyncExecutionRequest)
+                        else "incremental"
+                    ),
+                    entity_type=record_type,
+                    scope_id=self._cloud_id,
+                    target_id=space_key,
+                    content_id=raw_content.get("id"),
+                    exception_type=type(exc).__name__,
+                    error=str(exc),
+                    exc_info=True,
                 )
                 error_count += 1
 
@@ -396,7 +429,7 @@ class ConfluenceSpaceSyncAdapter:
         if self._enable_v2_dual_write:
             v2_documents, v2_failed_ids = (
                 self._v2_document_builder.build_from_transform_results(
-                    cloud_id=self._service.cloud_id,
+                    cloud_id=self._cloud_id,
                     transform_results=tuple(item.transform_result for item in items),
                 )
             )
@@ -459,7 +492,7 @@ class ConfluenceSpaceSyncAdapter:
                         record_type=execution.record_type,
                         content_id=item.content_id,
                     )
-                    item_v2_failed_ids = await self._service._store_transform_result(
+                    item_v2_failed_ids = await self._store_transform_result(
                         entity_type=execution.record_type,
                         content_id=item.content_id,
                         space_key=transformed.space_key or execution.space_key,
@@ -472,15 +505,19 @@ class ConfluenceSpaceSyncAdapter:
                         dict.fromkeys((*v2_failed_ids, *(item_v2_failed_ids or ())))
                     )
                 except Exception as exc:
-                    if self._service._is_retryable_connector_error(exc):
+                    if self._is_retryable_connector_error(exc):
                         raise
                     logger.warning(
-                        "[CONFLUENCE][FULL SYNC] Failed to persist %s item: cloud_id=%s, space_key=%s, content_id=%s, error=%s",
-                        execution.record_type,
-                        self._service.cloud_id,
-                        execution.space_key,
-                        item.content_id,
-                        exc,
+                        "confluence_space_persist_item_failed",
+                        connector="confluence",
+                        sync_type="full",
+                        entity_type=execution.record_type,
+                        scope_id=self._cloud_id,
+                        target_id=execution.space_key,
+                        content_id=item.content_id,
+                        exception_type=type(exc).__name__,
+                        error=str(exc),
+                        exc_info=True,
                     )
                     error_count += 1
             return ConfluenceSpacePersistResult(
@@ -492,7 +529,7 @@ class ConfluenceSpaceSyncAdapter:
 
         if transformed.delete_prefixes:
             for prefix in transformed.delete_prefixes:
-                await self._service.repository.delete_by_id_prefix(prefix)
+                await self._repository.delete_by_id_prefix(prefix)
             v2_failed_ids = await self._delete_v2_chunk_records(
                 record_type=execution.record_type,
                 target_id=transformed.space_key or execution.space_key,
@@ -528,7 +565,7 @@ class ConfluenceSpaceSyncAdapter:
                 record_type=execution.record_type,
                 content_id=item.content_id,
             )
-            item_v2_failed_ids = await self._service._store_transform_result(
+            item_v2_failed_ids = await self._store_transform_result(
                 entity_type=execution.record_type,
                 content_id=item.content_id,
                 space_key=transformed.space_key or execution.space_key,
@@ -595,7 +632,16 @@ class ConfluenceSpaceSyncAdapter:
             return None
         try:
             return await self._get_vector_store()
-        except Exception:
+        except Exception as exc:
+            logger.warning(
+                "confluence_vector_store_resolve_failed",
+                connector="confluence",
+                scope_id=self._cloud_id,
+                document_count=len(documents),
+                exception_type=type(exc).__name__,
+                error=str(exc),
+                exc_info=True,
+            )
             return None
 
     async def _get_vector_store(self) -> VectorStore | None:
@@ -648,11 +694,20 @@ class ConfluenceSpaceSyncAdapter:
                 await v2_knowledge_repository.delete_multiple_chunks_by_id(
                     source="confluence",
                     entity_type=record_type,
-                    scope_id=self._service.cloud_id,
+                    scope_id=self._cloud_id,
                     target_id=target_id,
                     record_id=record_id,
                 )
             except Exception:
+                logger.warning(
+                    "confluence_v2_delete_chunks_failed",
+                    connector="confluence",
+                    entity_type=record_type,
+                    scope_id=self._cloud_id,
+                    target_id=target_id,
+                    record_id=record_id,
+                    exc_info=True,
+                )
                 failed_ids.append(_confluence_chunk_prefix(record_type, record_id))
         return tuple(dict.fromkeys(failed_ids))
 
@@ -697,12 +752,12 @@ class ConfluenceSpaceSyncAdapter:
         iterator = self._full_iterators.get(key)
         if iterator is None:
             if execution.record_type == "page":
-                iterator = self._service.client.iter_pages(
+                iterator = self._client.iter_pages(
                     space_id=space_id,
                     body_format="storage",
                 )
             else:
-                iterator = self._service.client.iter_blogposts(
+                iterator = self._client.iter_blogposts(
                     space_id=space_id,
                     body_format="storage",
                 )
@@ -754,12 +809,12 @@ class ConfluenceSpaceSyncAdapter:
             )
 
         if execution.record_type == "page":
-            raw_content = await self._service.client.get_page_by_id(
+            raw_content = await self._client.get_page_by_id(
                 execution.record_id,
                 body_format="storage",
             )
         else:
-            raw_content = await self._service.client.get_blogpost_by_id(
+            raw_content = await self._client.get_blogpost_by_id(
                 execution.record_id,
                 body_format="storage",
             )
@@ -780,18 +835,311 @@ class ConfluenceSpaceSyncAdapter:
         if cached is not None:
             return cached
 
-        space_id_map, space_name_map, user_name_map = await self._service._load_space_sync_context(
+        space_id_map, space_name_map, user_name_map = await self._load_space_sync_context(
             [space_key],
         )
         space_id = space_id_map.get(space_key)
         if not space_id:
             raise RuntimeError(
-                "[CONFLUENCE][CONNECTOR CORE] Space not found in metadata snapshot: "
-                f"cloud_id={self._service.cloud_id}, space_key={space_key}"
+                "Confluence space not found in metadata snapshot: "
+                f"cloud_id={self._cloud_id}, space_key={space_key}"
             )
         result = (space_id, space_name_map.get(space_key), user_name_map)
         self._space_context_by_key[space_key] = result
         return result
+
+    @staticmethod
+    def _is_retryable_connector_error(exc: Exception) -> bool:
+        return isinstance(exc, ConfluenceRateLimitError) or (
+            isinstance(exc, ConfluenceApiError) and exc.retry_after is not None
+        )
+
+    def _load_space_sync_context_db(
+        self,
+        space_keys: list[str],
+    ) -> tuple[dict[str, str], dict[str, str | None], dict[str, str | None]]:
+        with SessionLocal() as db:
+            return (
+                domain_repository.get_space_id_map(db, self._cloud_id, space_keys),
+                domain_repository.get_space_name_map(db, self._cloud_id, space_keys),
+                {
+                    user.account_id: (user.display_name or user.public_name)
+                    for user in domain_repository.get_users_by_cloud_id(
+                        db,
+                        self._cloud_id,
+                    )
+                    if user.account_type == "atlassian"
+                },
+            )
+
+    async def _load_space_sync_context(
+        self,
+        space_keys: list[str],
+    ) -> tuple[dict[str, str], dict[str, str | None], dict[str, str | None]]:
+        return await asyncio.to_thread(self._load_space_sync_context_db, space_keys)
+
+    async def _fetch_supplementary(
+        self,
+        *,
+        api_content_type: str,
+        content_id: str,
+    ) -> tuple[
+        list[ConfluenceCommentResponse],
+        list[ConfluenceCommentResponse],
+        list[str],
+    ]:
+        entity_type = "page" if api_content_type == "pages" else "blogpost"
+        tasks = [
+            self._client.get_content_footer_comments(api_content_type, content_id),
+            self._client.get_content_labels(api_content_type, content_id),
+        ]
+        if api_content_type == "pages":
+            tasks.append(
+                self._client.get_content_inline_comments(api_content_type, content_id)
+            )
+
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        for result in results:
+            if isinstance(result, Exception) and self._is_retryable_connector_error(result):
+                raise result
+
+        for result in results:
+            if isinstance(result, Exception):
+                logger.warning(
+                    "confluence_supplementary_fetch_failed",
+                    connector="confluence",
+                    scope_id=self._cloud_id,
+                    entity_type=entity_type,
+                    api_content_type=api_content_type,
+                    content_id=content_id,
+                    exception_type=type(result).__name__,
+                    error=str(result),
+                )
+
+        footer_comments = []
+        if isinstance(results[0], list):
+            footer_comments = [
+                ConfluenceCommentResponse.model_validate(raw)
+                for raw in results[0]
+            ]
+
+        labels = []
+        if isinstance(results[1], list):
+            labels = [
+                ConfluenceLabelResponse.model_validate(raw).name
+                for raw in results[1]
+            ]
+
+        inline_comments = []
+        if (
+            api_content_type == "pages"
+            and len(results) > 2
+            and isinstance(results[2], list)
+        ):
+            inline_comments = [
+                ConfluenceCommentResponse.model_validate(raw)
+                for raw in results[2]
+            ]
+
+        return footer_comments, inline_comments, labels
+
+    def _transform_page_blocking(
+        self,
+        page: ConfluencePageResponse,
+        *,
+        space_key: str,
+        space_name: str | None = None,
+        labels: list[str] | None = None,
+        footer_comments: list[ConfluenceCommentResponse] | None = None,
+        inline_comments: list[ConfluenceCommentResponse] | None = None,
+        user_name_map: dict[str, str | None] | None = None,
+    ) -> ConfluenceTransformResult:
+        return self._transformer.transform_page(
+            page,
+            space_key=space_key,
+            space_name=space_name,
+            labels=labels,
+            footer_comments=footer_comments,
+            inline_comments=inline_comments,
+            site_url=self._site_url,
+            user_name_map=user_name_map,
+        )
+
+    def _transform_blogpost_blocking(
+        self,
+        blogpost: ConfluenceBlogPostResponse,
+        *,
+        space_key: str,
+        space_name: str | None = None,
+        labels: list[str] | None = None,
+        footer_comments: list[ConfluenceCommentResponse] | None = None,
+        user_name_map: dict[str, str | None] | None = None,
+    ) -> ConfluenceTransformResult:
+        return self._transformer.transform_blogpost(
+            blogpost,
+            space_key=space_key,
+            space_name=space_name,
+            labels=labels,
+            footer_comments=footer_comments,
+            site_url=self._site_url,
+            user_name_map=user_name_map,
+        )
+
+    async def _process_page(
+        self,
+        page: ConfluencePageResponse,
+        *,
+        space_key: str,
+        space_name: str | None = None,
+        user_name_map: dict[str, str | None] | None = None,
+    ) -> ConfluenceTransformResult:
+        footer_comments, inline_comments, labels = await self._fetch_supplementary(
+            api_content_type="pages",
+            content_id=page.id,
+        )
+        return await run_in_threadpool(
+            self._transform_page_blocking,
+            page,
+            space_key=space_key,
+            space_name=space_name,
+            labels=labels,
+            footer_comments=footer_comments,
+            inline_comments=inline_comments,
+            user_name_map=user_name_map,
+        )
+
+    async def _process_blogpost(
+        self,
+        blogpost: ConfluenceBlogPostResponse,
+        *,
+        space_key: str,
+        space_name: str | None = None,
+        user_name_map: dict[str, str | None] | None = None,
+    ) -> ConfluenceTransformResult:
+        footer_comments, _inline_comments, labels = await self._fetch_supplementary(
+            api_content_type="blogposts",
+            content_id=blogpost.id,
+        )
+        return await run_in_threadpool(
+            self._transform_blogpost_blocking,
+            blogpost,
+            space_key=space_key,
+            space_name=space_name,
+            labels=labels,
+            footer_comments=footer_comments,
+            user_name_map=user_name_map,
+        )
+
+    async def _generate_embeddings(
+        self,
+        documents: list[Document],
+        *,
+        entity_type: str,
+        content_id: str,
+        space_key: str,
+        audit_context: SyncAuditContext | None = None,
+    ) -> list[list[float]]:
+        if not documents:
+            return []
+
+        embeddings = await self._repository.generate_embeddings(
+            documents,
+            audit_context=audit_context,
+            context=(
+                f"entity_type={entity_type},space_key={space_key},"
+                f"doc_count={len(documents)},embed_mode=text_only"
+            ),
+        )
+        image_document_count = sum(
+            1 for document in documents if document.metadata.get("has_images")
+        )
+        logger.info(
+            "confluence_embeddings_generated",
+            connector="confluence",
+            entity_type=entity_type,
+            scope_id=self._cloud_id,
+            target_id=space_key,
+            content_id=content_id,
+            document_count=len(documents),
+            embed_mode="text_only",
+            image_document_count=image_document_count,
+        )
+
+        missing_embeddings = [
+            index for index, embedding in enumerate(embeddings) if embedding is None
+        ]
+        if missing_embeddings:
+            raise RuntimeError(
+                "Missing confluence embeddings after text-only processing: "
+                f"content_id={content_id}, indices={missing_embeddings}"
+            )
+        return embeddings
+
+    async def _store_transform_result(
+        self,
+        *,
+        entity_type: str,
+        content_id: str,
+        space_key: str,
+        transform_result: ConfluenceTransformResult,
+        audit_context: SyncAuditContext | None = None,
+        vector_store: VectorStore | None = None,
+        v2_documents: list[Document] | None = None,
+    ) -> tuple[str, ...]:
+        documents = transform_result.documents
+        await self._repository.delete_by_id_prefix(
+            f"confluence:{entity_type}:{content_id}:chunk:"
+        )
+        if not documents:
+            return ()
+
+        doc_ids = [doc.id for doc in documents]
+        embeddings = await self._generate_embeddings(
+            documents,
+            entity_type=entity_type,
+            content_id=content_id,
+            space_key=space_key,
+            audit_context=audit_context,
+        )
+        await self._repository.store_with_embeddings(
+            documents,
+            embeddings,
+            doc_ids,
+            audit_context=audit_context,
+            context=(
+                f"entity_type={entity_type},space_key={space_key},"
+                f"doc_count={len(documents)}"
+            ),
+        )
+        if vector_store is None or not v2_documents:
+            return ()
+
+        try:
+            embedding_by_id = dict(zip(doc_ids, embeddings, strict=True))
+            v2_document_ids = [str(document.id) for document in v2_documents]
+            v2_embeddings = [
+                embedding_by_id[document_id] for document_id in v2_document_ids
+            ]
+            await vector_store.upsert_documents(
+                v2_documents,
+                ids=v2_document_ids,
+                embeddings=v2_embeddings,
+            )
+        except Exception as exc:
+            logger.warning(
+                "confluence_v2_upsert_failed",
+                connector="confluence",
+                entity_type=entity_type,
+                scope_id=self._cloud_id,
+                target_id=space_key,
+                content_id=content_id,
+                document_count=len(v2_documents),
+                exception_type=type(exc).__name__,
+                error=str(exc),
+                exc_info=True,
+            )
+            return tuple(str(document.id) for document in v2_documents)
+        return ()
 
 
 def _confluence_chunk_prefix(

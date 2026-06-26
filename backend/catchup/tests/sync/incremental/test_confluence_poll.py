@@ -7,6 +7,9 @@ from unittest import IsolatedAsyncioTestCase
 from unittest.mock import AsyncMock
 from unittest.mock import patch
 
+from langchain_core.documents import Document
+
+from catchup.connectors.confluence.client import ConfluenceApiError
 from catchup.db.models import SyncConnector
 from catchup.sync.incremental.poll.confluence import _collect_deleted_blogpost_changes
 from catchup.sync.incremental.poll.confluence import _collect_deleted_page_changes
@@ -15,10 +18,39 @@ from catchup.sync.incremental.poll.confluence import (
 )
 from catchup.sync.incremental.poll.confluence import _filter_repeated_deleted_changes
 from catchup.sync.incremental.resolve.confluence import build_confluence_record_change
+from catchup.sync.ingestion.adapters.confluence import (
+    ConfluenceSpaceIncrementalSyncExecutionRequest,
+)
+from catchup.sync.ingestion.adapters.confluence import ConfluenceSpaceSyncAdapter
+from catchup.sync.ingestion.adapters.confluence import ConfluenceSpaceSyncDependencies
+from catchup.sync.ingestion.adapters.confluence.space_sync import (
+    ConfluenceSpaceFetchResult,
+)
 from catchup.sync.ingestion.document_builders.confluence import (
     ConfluenceTransformResult,
 )
-from catchup.sync.ingestion.services.confluence import ConfluenceIngestionService
+from catchup.sync.ingestion.schemas import SyncWindow
+
+
+def _window() -> SyncWindow:
+    now = datetime(2026, 5, 15, 8, 30, tzinfo=timezone.utc)
+    return SyncWindow(window_start=now, window_end=now)
+
+
+def _build_adapter(
+    *,
+    client: object | None = None,
+    repository: object | None = None,
+) -> ConfluenceSpaceSyncAdapter:
+    return ConfluenceSpaceSyncAdapter(
+        dependencies=ConfluenceSpaceSyncDependencies(
+            cloud_id="cloud-1",
+            site_url="https://example.atlassian.net/wiki",
+            client=client or SimpleNamespace(),
+            repository=repository or SimpleNamespace(),
+            transformer=SimpleNamespace(),
+        ),
+    )
 
 
 class _FakeConfluenceClient:
@@ -218,15 +250,12 @@ class ConfluenceIncrementalDeletedDedupeTests(IsolatedAsyncioTestCase):
 class ConfluenceIncrementalDeleteApplyTests(IsolatedAsyncioTestCase):
     async def test_incremental_sync_deletes_chunks_for_deleted_events(self) -> None:
         repository = _FakeRepository()
-        service = ConfluenceIngestionService(
-            cloud_id="cloud-1",
-            token_provider=SimpleNamespace(),
-            site_url="https://example.atlassian.net/wiki",
-            repository=repository,
-            embedding_service=SimpleNamespace(),
+        adapter = _build_adapter(repository=repository)
+        adapter._load_space_sync_context = AsyncMock(  # noqa: SLF001
+            return_value=({"DOC": "space-1"}, {"DOC": "Docs"}, {})
         )
-
-        result = await service.incremental_sync(
+        execution = ConfluenceSpaceIncrementalSyncExecutionRequest(
+            tenant_id="cloud-1",
             space_key="DOC",
             record_type="page",
             record_id="123",
@@ -234,18 +263,161 @@ class ConfluenceIncrementalDeleteApplyTests(IsolatedAsyncioTestCase):
             since=None,
         )
 
+        fetched = await adapter.fetch(execution=execution, sync_window=_window())
+        transformed = await adapter.transform(
+            execution=execution,
+            sync_window=_window(),
+            fetched=fetched,
+        )
+        summary = await adapter.summarize(
+            execution=execution,
+            sync_window=_window(),
+            transformed=transformed,
+        )
+        persisted = await adapter.persist(
+            execution=execution,
+            sync_window=_window(),
+            transformed=transformed,
+            summary=summary,
+        )
+
         self.assertEqual(repository.deleted_prefixes, ["confluence:page:123:chunk:"])
-        self.assertEqual(result, {"synced": 1, "errors": 0, "skipped": False})
+        self.assertEqual(persisted.deleted_count, 1)
+        self.assertEqual(persisted.error_count, 0)
 
 
-class ConfluenceIncrementalExactRecordServiceTests(IsolatedAsyncioTestCase):
-    def _build_service(self) -> ConfluenceIngestionService:
-        return ConfluenceIngestionService(
-            cloud_id="cloud-1",
-            token_provider=SimpleNamespace(),
-            site_url="https://example.atlassian.net/wiki",
-            repository=SimpleNamespace(),
-            embedding_service=SimpleNamespace(),
+class ConfluenceIncrementalExactRecordAdapterTests(IsolatedAsyncioTestCase):
+    async def test_transform_logs_structured_failure_for_non_retryable_errors(
+        self,
+    ) -> None:
+        adapter = _build_adapter()
+        adapter._process_page = AsyncMock(  # noqa: SLF001
+            side_effect=ValueError("broken transform")
+        )
+        execution = ConfluenceSpaceIncrementalSyncExecutionRequest(
+            tenant_id="cloud-1",
+            space_key="DOC",
+            record_type="page",
+            record_id="123",
+            event_kind="updated",
+            since=None,
+        )
+        fetched = ConfluenceSpaceFetchResult(
+            requested_count=1,
+            records=(_raw_confluence_page("123"),),
+            record_type="page",
+            space_key="DOC",
+            space_name="Docs",
+        )
+
+        with patch(
+            "catchup.sync.ingestion.adapters.confluence.space_sync.logger"
+        ) as logger:
+            transformed = await adapter.transform(
+                execution=execution,
+                sync_window=_window(),
+                fetched=fetched,
+            )
+
+        self.assertEqual(transformed.error_count, 1)
+        self.assertEqual(transformed.items, ())
+        logger.warning.assert_called_once_with(
+            "confluence_space_transform_item_failed",
+            connector="confluence",
+            sync_type="incremental",
+            entity_type="page",
+            scope_id="cloud-1",
+            target_id="DOC",
+            content_id="123",
+            exception_type="ValueError",
+            error="broken transform",
+            exc_info=True,
+        )
+
+    async def test_fetch_supplementary_logs_structured_non_retryable_failures(
+        self,
+    ) -> None:
+        client = SimpleNamespace(
+            get_content_footer_comments=AsyncMock(
+                side_effect=ValueError("comments down")
+            ),
+            get_content_labels=AsyncMock(return_value=[]),
+            get_content_inline_comments=AsyncMock(return_value=[]),
+        )
+        adapter = _build_adapter(client=client)
+
+        with patch(
+            "catchup.sync.ingestion.adapters.confluence.space_sync.logger"
+        ) as logger:
+            footer_comments, inline_comments, labels = await adapter._fetch_supplementary(  # noqa: SLF001
+                api_content_type="pages",
+                content_id="123",
+            )
+
+        self.assertEqual(footer_comments, [])
+        self.assertEqual(inline_comments, [])
+        self.assertEqual(labels, [])
+        logger.warning.assert_called_once_with(
+            "confluence_supplementary_fetch_failed",
+            connector="confluence",
+            scope_id="cloud-1",
+            entity_type="page",
+            api_content_type="pages",
+            content_id="123",
+            exception_type="ValueError",
+            error="comments down",
+        )
+
+    async def test_fetch_supplementary_reraises_retryable_failures(self) -> None:
+        client = SimpleNamespace(
+            get_content_footer_comments=AsyncMock(
+                side_effect=ConfluenceApiError(
+                    "retry comments",
+                    status_code=503,
+                    retry_after=30,
+                )
+            ),
+            get_content_labels=AsyncMock(return_value=[]),
+            get_content_inline_comments=AsyncMock(return_value=[]),
+        )
+        adapter = _build_adapter(client=client)
+
+        with self.assertRaisesRegex(ConfluenceApiError, "retry comments"):
+            await adapter._fetch_supplementary(  # noqa: SLF001
+                api_content_type="pages",
+                content_id="123",
+            )
+
+    async def test_resolve_vector_store_logs_structured_initialization_failure(
+        self,
+    ) -> None:
+        document = Document(
+            id="confluence:page:123:chunk:0",
+            page_content="page",
+            metadata={},
+        )
+        adapter = _build_adapter()
+        adapter._enable_v2_dual_write = True  # noqa: SLF001
+        adapter._get_vector_store = AsyncMock(  # noqa: SLF001
+            side_effect=RuntimeError("pool down")
+        )
+
+        with patch(
+            "catchup.sync.ingestion.adapters.confluence.space_sync.logger"
+        ) as logger:
+            vector_store = await adapter._resolve_vector_store_for_write(  # noqa: SLF001
+                documents=(document,),
+            )
+
+        self.assertIsNone(vector_store)
+        logger.warning.assert_called_once_with(
+            "confluence_vector_store_resolve_failed",
+            connector="confluence",
+            scope_id="cloud-1",
+            document_count=1,
+            exception_type="RuntimeError",
+            error="pool down",
+            exc_info=True,
         )
 
     async def test_store_transform_result_deletes_existing_chunks_for_empty_documents(self) -> None:
@@ -253,49 +425,136 @@ class ConfluenceIncrementalExactRecordServiceTests(IsolatedAsyncioTestCase):
             delete_by_id_prefix=AsyncMock(),
             store_with_embeddings=AsyncMock(),
         )
-        service = ConfluenceIngestionService(
-            cloud_id="cloud-1",
-            token_provider=SimpleNamespace(),
-            site_url="https://example.atlassian.net/wiki",
-            repository=repository,
-            embedding_service=SimpleNamespace(),
-        )
-        service._generate_embeddings = AsyncMock()
+        adapter = _build_adapter(repository=repository)
+        adapter._generate_embeddings = AsyncMock()  # noqa: SLF001
 
-        await service._store_transform_result(
+        await adapter._store_transform_result(  # noqa: SLF001
             entity_type="page",
             content_id="123",
             space_key="DOC",
-            transform_result=ConfluenceTransformResult(documents=[], embed_inputs=[]),
+            transform_result=ConfluenceTransformResult(documents=[]),
             audit_context=None,
         )
 
         repository.delete_by_id_prefix.assert_awaited_once_with(
             "confluence:page:123:chunk:"
         )
-        service._generate_embeddings.assert_not_awaited()
+        adapter._generate_embeddings.assert_not_awaited()  # noqa: SLF001
         repository.store_with_embeddings.assert_not_awaited()
 
+    async def test_generate_embeddings_uses_text_embedding_for_image_backed_chunks(
+        self,
+    ) -> None:
+        documents = [
+            Document(id="doc-1", page_content="text only", metadata={}),
+            Document(
+                id="doc-2",
+                page_content="text with image",
+                metadata={"has_images": True},
+            ),
+        ]
+        repository = SimpleNamespace(
+            generate_embeddings=AsyncMock(
+                return_value=[
+                    [0.1, 0.2],
+                    [0.3, 0.4],
+                ]
+            )
+        )
+        adapter = _build_adapter(repository=repository)
+
+        with patch(
+            "catchup.sync.ingestion.adapters.confluence.space_sync.logger"
+        ) as logger:
+            embeddings = await adapter._generate_embeddings(  # noqa: SLF001
+                documents,
+                entity_type="page",
+                content_id="123",
+                space_key="DOC",
+                audit_context=None,
+            )
+
+        self.assertEqual(embeddings, [[0.1, 0.2], [0.3, 0.4]])
+        repository.generate_embeddings.assert_awaited_once_with(
+            documents,
+            audit_context=None,
+            context="entity_type=page,space_key=DOC,doc_count=2,embed_mode=text_only",
+        )
+        logger.info.assert_called_once_with(
+            "confluence_embeddings_generated",
+            connector="confluence",
+            entity_type="page",
+            scope_id="cloud-1",
+            target_id="DOC",
+            content_id="123",
+            document_count=2,
+            embed_mode="text_only",
+            image_document_count=1,
+        )
+
+    async def test_store_transform_result_logs_structured_v2_upsert_failure(
+        self,
+    ) -> None:
+        documents = [
+            Document(
+                id="confluence:page:123:chunk:0",
+                page_content="page",
+                metadata={},
+            )
+        ]
+        repository = SimpleNamespace(
+            delete_by_id_prefix=AsyncMock(),
+            generate_embeddings=AsyncMock(return_value=[[0.1, 0.2]]),
+            store_with_embeddings=AsyncMock(),
+        )
+        vector_store = SimpleNamespace(
+            upsert_documents=AsyncMock(side_effect=RuntimeError("v2 down"))
+        )
+        adapter = _build_adapter(repository=repository)
+
+        with patch(
+            "catchup.sync.ingestion.adapters.confluence.space_sync.logger"
+        ) as logger:
+            failed_ids = await adapter._store_transform_result(  # noqa: SLF001
+                entity_type="page",
+                content_id="123",
+                space_key="DOC",
+                transform_result=ConfluenceTransformResult(documents=documents),
+                audit_context=None,
+                vector_store=vector_store,
+                v2_documents=documents,
+            )
+
+        self.assertEqual(failed_ids, ("confluence:page:123:chunk:0",))
+        logger.warning.assert_called_once_with(
+            "confluence_v2_upsert_failed",
+            connector="confluence",
+            entity_type="page",
+            scope_id="cloud-1",
+            target_id="DOC",
+            content_id="123",
+            document_count=1,
+            exception_type="RuntimeError",
+            error="v2 down",
+            exc_info=True,
+        )
+
     async def test_incremental_sync_page_fetches_and_stores_only_claimed_record(self) -> None:
-        service = self._build_service()
-        transform_result = SimpleNamespace(documents=[SimpleNamespace(id="doc-page-123")])
-        service.client = SimpleNamespace(
+        transform_result = ConfluenceTransformResult(
+            documents=[Document(id="doc-page-123", page_content="page")]
+        )
+        client = SimpleNamespace(
             get_page_by_id=AsyncMock(return_value=_raw_confluence_page("123")),
             get_blogpost_by_id=AsyncMock(),
         )
-        service._load_space_context = AsyncMock(
+        adapter = _build_adapter(client=client)
+        adapter._space_context = AsyncMock(  # noqa: SLF001
             return_value=("space-1", "Docs", {"author-1": "Author One"})
         )
-        service._process_page = AsyncMock(return_value=transform_result)
-        service._store_transform_result = AsyncMock()
-        service._sync_space_pages = AsyncMock(
-            side_effect=AssertionError("incremental page sync must not call broad page sync")
-        )
-        service._sync_space_blogposts = AsyncMock(
-            side_effect=AssertionError("incremental page sync must not call broad blogpost sync")
-        )
-
-        result = await service.incremental_sync(
+        adapter._process_page = AsyncMock(return_value=transform_result)  # noqa: SLF001
+        adapter._store_transform_result = AsyncMock(return_value=())  # noqa: SLF001
+        execution = ConfluenceSpaceIncrementalSyncExecutionRequest(
+            tenant_id="cloud-1",
             space_key="DOC",
             record_type="page",
             record_id="123",
@@ -303,40 +562,54 @@ class ConfluenceIncrementalExactRecordServiceTests(IsolatedAsyncioTestCase):
             since=datetime(2026, 5, 15, 8, 0, tzinfo=timezone.utc),
         )
 
-        self.assertEqual(result, {"synced": 1, "errors": 0, "skipped": False})
-        service.client.get_page_by_id.assert_awaited_once_with("123", body_format="storage")
-        service.client.get_blogpost_by_id.assert_not_awaited()
-        service._sync_space_pages.assert_not_awaited()
-        service._sync_space_blogposts.assert_not_awaited()
-        service._process_page.assert_awaited_once()
-        service._store_transform_result.assert_awaited_once_with(
+        fetched = await adapter.fetch(execution=execution, sync_window=_window())
+        transformed = await adapter.transform(
+            execution=execution,
+            sync_window=_window(),
+            fetched=fetched,
+        )
+        summary = await adapter.summarize(
+            execution=execution,
+            sync_window=_window(),
+            transformed=transformed,
+        )
+        persisted = await adapter.persist(
+            execution=execution,
+            sync_window=_window(),
+            transformed=transformed,
+            summary=summary,
+        )
+
+        self.assertEqual(persisted.persisted_count, 1)
+        client.get_page_by_id.assert_awaited_once_with("123", body_format="storage")
+        client.get_blogpost_by_id.assert_not_awaited()
+        adapter._process_page.assert_awaited_once()  # noqa: SLF001
+        adapter._store_transform_result.assert_awaited_once_with(  # noqa: SLF001
             entity_type="page",
             content_id="123",
             space_key="DOC",
             transform_result=transform_result,
             audit_context=None,
+            vector_store=None,
+            v2_documents=[],
         )
 
     async def test_incremental_sync_blogpost_fetches_and_stores_only_claimed_record(self) -> None:
-        service = self._build_service()
-        transform_result = SimpleNamespace(documents=[SimpleNamespace(id="doc-blogpost-456")])
-        service.client = SimpleNamespace(
+        transform_result = ConfluenceTransformResult(
+            documents=[Document(id="doc-blogpost-456", page_content="blogpost")]
+        )
+        client = SimpleNamespace(
             get_page_by_id=AsyncMock(),
             get_blogpost_by_id=AsyncMock(return_value=_raw_confluence_blogpost("456")),
         )
-        service._load_space_context = AsyncMock(
+        adapter = _build_adapter(client=client)
+        adapter._space_context = AsyncMock(  # noqa: SLF001
             return_value=("space-1", "Docs", {"author-1": "Author One"})
         )
-        service._process_blogpost = AsyncMock(return_value=transform_result)
-        service._store_transform_result = AsyncMock()
-        service._sync_space_pages = AsyncMock(
-            side_effect=AssertionError("incremental blogpost sync must not call broad page sync")
-        )
-        service._sync_space_blogposts = AsyncMock(
-            side_effect=AssertionError("incremental blogpost sync must not call broad blogpost sync")
-        )
-
-        result = await service.incremental_sync(
+        adapter._process_blogpost = AsyncMock(return_value=transform_result)  # noqa: SLF001
+        adapter._store_transform_result = AsyncMock(return_value=())  # noqa: SLF001
+        execution = ConfluenceSpaceIncrementalSyncExecutionRequest(
+            tenant_id="cloud-1",
             space_key="DOC",
             record_type="blogpost",
             record_id="456",
@@ -344,19 +617,37 @@ class ConfluenceIncrementalExactRecordServiceTests(IsolatedAsyncioTestCase):
             since=datetime(2026, 5, 15, 8, 0, tzinfo=timezone.utc),
         )
 
-        self.assertEqual(result, {"synced": 1, "errors": 0, "skipped": False})
-        service.client.get_page_by_id.assert_not_awaited()
-        service.client.get_blogpost_by_id.assert_awaited_once_with(
+        fetched = await adapter.fetch(execution=execution, sync_window=_window())
+        transformed = await adapter.transform(
+            execution=execution,
+            sync_window=_window(),
+            fetched=fetched,
+        )
+        summary = await adapter.summarize(
+            execution=execution,
+            sync_window=_window(),
+            transformed=transformed,
+        )
+        persisted = await adapter.persist(
+            execution=execution,
+            sync_window=_window(),
+            transformed=transformed,
+            summary=summary,
+        )
+
+        self.assertEqual(persisted.persisted_count, 1)
+        client.get_page_by_id.assert_not_awaited()
+        client.get_blogpost_by_id.assert_awaited_once_with(
             "456",
             body_format="storage",
         )
-        service._sync_space_pages.assert_not_awaited()
-        service._sync_space_blogposts.assert_not_awaited()
-        service._process_blogpost.assert_awaited_once()
-        service._store_transform_result.assert_awaited_once_with(
+        adapter._process_blogpost.assert_awaited_once()  # noqa: SLF001
+        adapter._store_transform_result.assert_awaited_once_with(  # noqa: SLF001
             entity_type="blogpost",
             content_id="456",
             space_key="DOC",
             transform_result=transform_result,
             audit_context=None,
+            vector_store=None,
+            v2_documents=[],
         )

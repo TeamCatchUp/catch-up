@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from datetime import timedelta
 from datetime import timezone
+from typing import cast
 
 import structlog
 
@@ -26,8 +27,9 @@ from catchup.sync.ingestion.adapters.confluence import (
     ConfluenceSpaceIncrementalSyncExecutionRequest,
 )
 from catchup.sync.ingestion.adapters.confluence import ConfluenceSpaceSyncAdapter
+from catchup.sync.ingestion.adapters.confluence import ConfluenceSpaceSyncDependencies
 from catchup.sync.ingestion.factories.confluence import (
-    create_confluence_ingestion_service,
+    create_confluence_space_sync_dependencies,
 )
 from catchup.sync.ingestion.pipeline import run_sync_ingestion
 from catchup.sync.ingestion.schemas import SyncWindow
@@ -38,19 +40,23 @@ logger = structlog.get_logger(__name__)
 class ConfluenceFullSyncHandler(BaseFullSyncHandler):
     connector = "confluence"
 
-    async def _get_service(self, scope_id: str, cache: dict[str, object]):
+    async def _get_dependencies(
+        self,
+        scope_id: str,
+        cache: dict[str, object],
+    ) -> ConfluenceSpaceSyncDependencies:
         cloud_id = scope_id.strip()
         cache_key = self._cache_key(cloud_id)
         cached = cache.get(cache_key)
         if cached is not None:
-            return cached
+            return cast(ConfluenceSpaceSyncDependencies, cached)
 
         if not cloud_id:
             raise ValueError("confluence cloud_id(scope_id) is empty")
 
-        service = await create_confluence_ingestion_service(cloud_id=cloud_id)
-        cache[cache_key] = service
-        return service
+        dependencies = await create_confluence_space_sync_dependencies(cloud_id=cloud_id)
+        cache[cache_key] = dependencies
+        return dependencies
 
     @audit_log(
         FullSyncAction.EVENT,
@@ -63,7 +69,7 @@ class ConfluenceFullSyncHandler(BaseFullSyncHandler):
         context: FullSyncContext,
         service_cache: dict[str, object],
     ) -> TargetSyncResult:
-        service = await self._get_service(context.scope_id, service_cache)
+        dependencies = await self._get_dependencies(context.scope_id, service_cache)
         sync_from_dt = (
             datetime.fromtimestamp(float(context.sync_from_ts), tz=timezone.utc)
             if context.sync_from_ts is not None
@@ -104,7 +110,7 @@ class ConfluenceFullSyncHandler(BaseFullSyncHandler):
             window_end=datetime.now(timezone.utc),
         )
         adapter = ConfluenceSpaceSyncAdapter(
-            service=service,
+            dependencies=dependencies,
             enable_v2_dual_write=settings.VECTOR_STORE_V2_DUAL_WRITE_ENABLED,
         )
         synced_count = 0
@@ -157,7 +163,11 @@ class ConfluenceFullSyncHandler(BaseFullSyncHandler):
 class ConfluenceIncrementalHandler(BaseIncrementalHandler):
     connector = "confluence"
 
-    async def _get_service(self, scope_id: str, cache: dict[str, object]):
+    async def _get_dependencies(
+        self,
+        scope_id: str,
+        cache: dict[str, object],
+    ) -> ConfluenceSpaceSyncDependencies:
         cloud_id = scope_id.strip()
         if not cloud_id:
             raise ValueError("confluence cloud_id(scope_id) is empty")
@@ -165,11 +175,11 @@ class ConfluenceIncrementalHandler(BaseIncrementalHandler):
         cache_key = self._cache_key(cloud_id)
         cached = cache.get(cache_key)
         if cached is not None:
-            return cached
+            return cast(ConfluenceSpaceSyncDependencies, cached)
 
-        service = await create_confluence_ingestion_service(cloud_id=cloud_id)
-        cache[cache_key] = service
-        return service
+        dependencies = await create_confluence_space_sync_dependencies(cloud_id=cloud_id)
+        cache[cache_key] = dependencies
+        return dependencies
 
     @audit_log(
         IncrementalSyncAction.RECORD,
@@ -182,7 +192,7 @@ class ConfluenceIncrementalHandler(BaseIncrementalHandler):
         context: IncrementalSyncContext,
         service_cache: dict[str, object],
     ) -> TargetSyncResult:
-        service = await self._get_service(context.scope_id, service_cache)
+        dependencies = await self._get_dependencies(context.scope_id, service_cache)
         space_key = context.parent_id or context.target_id
         if not space_key:
             raise ValueError("confluence space key is empty")
@@ -190,7 +200,7 @@ class ConfluenceIncrementalHandler(BaseIncrementalHandler):
         since = self._resolve_since(context)
         result = await run_sync_ingestion(
             port=ConfluenceSpaceSyncAdapter(
-                service=service,
+                dependencies=dependencies,
                 enable_v2_dual_write=settings.VECTOR_STORE_V2_DUAL_WRITE_ENABLED,
             ),
             execution=ConfluenceSpaceIncrementalSyncExecutionRequest(
