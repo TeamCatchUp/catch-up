@@ -39,6 +39,17 @@ class RetrievalV2ProbeRequest(BaseModel):
         return v
 
 
+class BucketDocResult(BaseModel):
+    """버킷 단독 결과 (비교용 raw). 해당 버킷의 스코어만 포함한다."""
+
+    doc_id: str
+    title: str
+    body: str
+    source: str
+    created_at: str | None
+    score: float | None
+
+
 class DocMetrics(BaseModel):
     rrf_score: float | None
     similarity_score: float | None
@@ -46,7 +57,9 @@ class DocMetrics(BaseModel):
     hit_types: list[str]
 
 
-class DocResult(BaseModel):
+class MergedDocResult(BaseModel):
+    """hybrid_search merged 결과. RRF 및 전체 메타데이터를 포함한다."""
+
     doc_id: str
     title: str
     body: str
@@ -57,26 +70,45 @@ class DocResult(BaseModel):
 
 class RetrievalV2ProbeResponse(BaseModel):
     search_mode: Literal["vector_only", "hybrid"]
-    vector_hits: list[DocResult]
-    body_hits: list[DocResult]
-    title_hits: list[DocResult]
-    merged: list[DocResult]
+    vector_hits: list[BucketDocResult]
+    body_hits: list[BucketDocResult]
+    title_hits: list[BucketDocResult]
+    merged: list[MergedDocResult]
     vector_count: int
     body_count: int
     title_count: int
     merged_count: int
 
 
-def _doc_result(doc: Document) -> DocResult:
+def _bucket_doc_result(doc: Document, score_key: str | None) -> BucketDocResult:
     md = doc.metadata
-    return DocResult(
+    score = (
+        round(float(md[score_key]), 4)
+        if score_key and md.get(score_key) is not None
+        else None
+    )
+    return BucketDocResult(
+        doc_id=doc.id or "",
+        title=md.get("title") or "",
+        body=(md.get("body") or "")[:500],
+        source=md.get("source") or "",
+        created_at=str(md["created_at"]) if md.get("created_at") else None,
+        score=score,
+    )
+
+
+def _merged_doc_result(doc: Document) -> MergedDocResult:
+    md = doc.metadata
+    return MergedDocResult(
         doc_id=doc.id or "",
         title=md.get("title") or "",
         body=(md.get("body") or "")[:500],
         source=md.get("source") or "",
         created_at=str(md["created_at"]) if md.get("created_at") else None,
         metrics=DocMetrics(
-            rrf_score=round(float(md["score"]), 6) if md.get("score") is not None else None,
+            rrf_score=(
+                round(float(md["score"]), 6) if md.get("score") is not None else None
+            ),
             similarity_score=(
                 round(float(md["similarity_score"]), 4)
                 if md.get("similarity_score") is not None
@@ -118,10 +150,10 @@ async def retrieval_v2_probe(
     raw_vector = await langchain_store.asimilarity_search_with_score(
         body.query, k=body.k, filter=vector_filter
     )
-    vector_hits: list[DocResult] = []
+    vector_hits: list[BucketDocResult] = []
     for doc, dist in raw_vector:
         doc.metadata["similarity_score"] = round(1.0 - dist, 4)
-        vector_hits.append(_doc_result(doc))
+        vector_hits.append(_bucket_doc_result(doc, "similarity_score"))
 
     # body / title 단독 결과
     if body.keyword_tokens:
@@ -135,8 +167,8 @@ async def retrieval_v2_probe(
         body_docs = []
         title_docs = []
 
-    body_hits = [_doc_result(d) for d in body_docs]
-    title_hits = [_doc_result(d) for d in title_docs]
+    body_hits = [_bucket_doc_result(d, None) for d in body_docs]
+    title_hits = [_bucket_doc_result(d, "keyword_score") for d in title_docs]
 
     # 3-way merged
     merged = await service.hybrid_search(
@@ -147,7 +179,7 @@ async def retrieval_v2_probe(
         keyword_tokens=body.keyword_tokens or None,
         score_threshold=body.score_threshold,
     )
-    merged_results = [_doc_result(d) for d in merged]
+    merged_results = [_merged_doc_result(d) for d in merged]
     search_mode: Literal["vector_only", "hybrid"] = (
         "hybrid"
         if any(d.metadata.get("score") is not None for d in merged)
