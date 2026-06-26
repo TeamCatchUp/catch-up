@@ -1,32 +1,32 @@
 from __future__ import annotations
 
-import asyncio
 from collections.abc import Callable
 from collections.abc import Sequence
-from contextlib import AbstractContextManager
+from contextlib import AbstractAsyncContextManager
 
 import structlog
 from sqlalchemy import text
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from catchup.components.vector_db.v2.constants import KNOWLEDGE_STORE_ID_COLUMN
-from catchup.components.vector_db.v2.constants import (
-    KNOWLEDGE_STORE_METADATA_JSON_COLUMN,
-)
+from catchup.components.vector_db.v2.constants import KNOWLEDGE_STORE_METADATA_JSON_COLUMN
 from catchup.components.vector_db.v2.constants import KNOWLEDGE_STORE_TABLE_NAME
-from catchup.db.engine import SessionLocal
+from catchup.db.async_engine import AsyncSessionLocal
 
 logger = structlog.get_logger(__name__)
 
 
 class V2KnowledgeRepository:
-    """PostgreSQL operations that target the v2 knowledge_store table."""
+    """LangChain PGVectorStore 추상화에서 벗어난, knowledge_store 접근 Repository"""
 
     def __init__(
         self,
         *,
         table_name: str = KNOWLEDGE_STORE_TABLE_NAME,
-        session_factory: Callable[[], AbstractContextManager[Session]] = SessionLocal,
+        session_factory: Callable[
+            [],
+            AbstractAsyncContextManager[AsyncSession],
+        ] = AsyncSessionLocal,
     ) -> None:
         self._table_name = table_name
         self._session_factory = session_factory
@@ -41,7 +41,7 @@ class V2KnowledgeRepository:
         record_id: str,
     ) -> int:
         """
-        Incremnetal 경로의 삭제 이벤트가 있을 때 record에 대해서 여러 Chunk가 존재하는 경우 
+        Incremental 경로의 삭제 이벤트가 있을 때 record에 대해서 여러 Chunk가 존재하는 경우
         (source, entity_type, scope_id, target_id, record_id) 조합으로 모든 Chunk를 일괄 삭제
         """
         identity = {
@@ -57,7 +57,30 @@ class V2KnowledgeRepository:
                 "chunk delete identity fields are required: "
                 + ", ".join(missing_fields)
             )
-        return await asyncio.to_thread(self._delete_multiple_chunks_by_id_sync, identity)
+
+        statement = text(
+            f"""
+            DELETE FROM {self._table_name}
+            WHERE source = :source
+              AND entity_type = :entity_type
+              AND scope_id = :scope_id
+              AND target_id = :target_id
+              AND record_id = :record_id
+            """
+        )
+        try:
+            async with self._session_factory() as session:
+                result = await session.execute(statement, identity)
+                await session.commit()
+                return int(result.rowcount or 0)
+        except Exception as exc:
+            logger.exception(
+                "delete_multiple_chunks_by_id_failed",
+                table_name=self._table_name,
+                **identity,
+                error=str(exc),
+            )
+            raise
 
     async def find_missing_metadata_namespace_ids(
         self,
@@ -87,23 +110,13 @@ class V2KnowledgeRepository:
         if not namespace.strip():
             raise ValueError("metadata namespace is required")
 
-        return await asyncio.to_thread(
-            self._find_missing_metadata_namespace_ids_sync,
-            document_ids,
-            namespace,
-        )
-
-    def _find_missing_metadata_namespace_ids_sync(
-        self,
-        ids: list[str],
-        namespace: str,
-    ) -> tuple[str, ...]:
-
         params = {
-            f"id_{index}": document_id for index, document_id in enumerate(ids)
+            f"id_{index}": document_id
+            for index, document_id in enumerate(document_ids)
         }
         placeholders = ", ".join(
-            f"(CAST(:id_{index} AS varchar))" for index in range(len(ids))
+            f"(CAST(:id_{index} AS varchar))"
+            for index in range(len(document_ids))
         )
         statement = text(
             f"""
@@ -129,48 +142,18 @@ class V2KnowledgeRepository:
             """
         )
         try:
-            with self._session_factory() as db:
-                rows = db.execute(
+            async with self._session_factory() as session:
+                result = await session.execute(
                     statement,
                     {**params, "namespace": namespace},
                 )
-                return tuple(str(row[0]) for row in rows)
+                return tuple(str(row[0]) for row in result)
         except Exception as exc:
             logger.exception(
                 "metadata_namespace_check_failed",
                 table_name=self._table_name,
-                id_count=len(ids),
+                id_count=len(document_ids),
                 namespace=namespace,
                 error=str(exc),
             )
             raise
-
-    def _delete_multiple_chunks_by_id_sync(
-        self,
-        identity: dict[str, str],
-    ) -> int:
-        
-        statement = text(
-            f"""
-            DELETE FROM {self._table_name}
-            WHERE source = :source
-              AND entity_type = :entity_type
-              AND scope_id = :scope_id
-              AND target_id = :target_id
-              AND record_id = :record_id
-            """
-        )
-        try:
-            with self._session_factory() as db:
-                result = db.execute(statement, identity)
-                db.commit()
-                return int(result.rowcount or 0)
-        except Exception as exc:
-            logger.exception(
-                "delete_multiple_chunks_by_id_failed",
-                table_name=self._table_name,
-                **identity,
-                error=str(exc),
-            )
-            raise
-

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from contextlib import nullcontext
+from unittest.mock import AsyncMock
 from unittest.mock import MagicMock
 
 import pytest
@@ -10,11 +10,27 @@ from catchup.components.vector_db.v2.constants import KNOWLEDGE_STORE_TABLE_NAME
 from catchup.components.vector_db.v2.knowledge_repository import V2KnowledgeRepository
 
 
+class _AsyncSessionContext:
+    def __init__(self, session) -> None:
+        self.session = session
+
+    async def __aenter__(self):
+        return self.session
+
+    async def __aexit__(self, exc_type, exc, tb) -> bool:
+        return False
+
+
+def _session_factory(session):
+    return lambda: _AsyncSessionContext(session)
+
+
 @pytest.mark.asyncio
 async def test_delete_multiple_chunks_by_id_uses_record_identity_columns() -> None:
     db = MagicMock()
-    db.execute.return_value = MagicMock(rowcount=2)
-    repository = V2KnowledgeRepository(session_factory=lambda: nullcontext(db))
+    db.execute = AsyncMock(return_value=MagicMock(rowcount=2))
+    db.commit = AsyncMock()
+    repository = V2KnowledgeRepository(session_factory=_session_factory(db))
 
     deleted = await repository.delete_multiple_chunks_by_id(
         source="channel_talk",
@@ -25,7 +41,7 @@ async def test_delete_multiple_chunks_by_id_uses_record_identity_columns() -> No
     )
 
     assert deleted == 2
-    db.execute.assert_called_once()
+    db.execute.assert_awaited_once()
     statement, params = db.execute.call_args.args
     assert f"DELETE FROM {KNOWLEDGE_STORE_TABLE_NAME}" in str(statement)
     statement_text = str(statement)
@@ -43,7 +59,7 @@ async def test_delete_multiple_chunks_by_id_uses_record_identity_columns() -> No
         "target_id": "space-123",
         "record_id": "article-1",
     }
-    db.commit.assert_called_once()
+    db.commit.assert_awaited_once()
 
 
 @pytest.mark.asyncio
@@ -63,8 +79,8 @@ async def test_delete_multiple_chunks_by_id_rejects_incomplete_identity() -> Non
 @pytest.mark.asyncio
 async def test_find_missing_metadata_namespace_ids_checks_json_namespace() -> None:
     db = MagicMock()
-    db.execute.return_value = [("doc-2",), ("doc-3",)]
-    repository = V2KnowledgeRepository(session_factory=lambda: nullcontext(db))
+    db.execute = AsyncMock(return_value=[("doc-2",), ("doc-3",)])
+    repository = V2KnowledgeRepository(session_factory=_session_factory(db))
 
     missing_ids = await repository.find_missing_metadata_namespace_ids(
         ["doc-1", "doc-2", "doc-3"],
@@ -72,7 +88,7 @@ async def test_find_missing_metadata_namespace_ids_checks_json_namespace() -> No
     )
 
     assert missing_ids == ("doc-2", "doc-3")
-    db.execute.assert_called_once()
+    db.execute.assert_awaited_once()
     statement, params = db.execute.call_args.args
     statement_text = str(statement)
     assert "WITH requested(document_id) AS" in statement_text
@@ -89,7 +105,8 @@ async def test_find_missing_metadata_namespace_ids_checks_json_namespace() -> No
 @pytest.mark.asyncio
 async def test_find_missing_metadata_namespace_ids_returns_empty_for_empty_ids() -> None:
     db = MagicMock()
-    repository = V2KnowledgeRepository(session_factory=lambda: nullcontext(db))
+    db.execute = AsyncMock()
+    repository = V2KnowledgeRepository(session_factory=_session_factory(db))
 
     missing_ids = await repository.find_missing_metadata_namespace_ids(
         [],
@@ -97,7 +114,7 @@ async def test_find_missing_metadata_namespace_ids_returns_empty_for_empty_ids()
     )
 
     assert missing_ids == ()
-    db.execute.assert_not_called()
+    db.execute.assert_not_awaited()
 
 
 @pytest.mark.asyncio
