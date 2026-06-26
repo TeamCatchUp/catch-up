@@ -249,11 +249,19 @@ class MigratedSyncIngestionHandlerTests(IsolatedAsyncioTestCase):
 
     async def test_confluence_full_sync_uses_sync_ingestion_content_target(self) -> None:
         handler = ConfluenceFullSyncHandler()
-        service = SimpleNamespace()
+        dependencies = SimpleNamespace(
+            cloud_id="cloud-123",
+            site_url="",
+            client=SimpleNamespace(),
+            repository=SimpleNamespace(),
+            transformer=SimpleNamespace(),
+        )
         core_result = SimpleNamespace(
             persisted_count=1,
             deleted_count=0,
             failed_count=0,
+            v2_failed_count=0,
+            v2_failed_ids=(),
             skipped=False,
             transformed=SimpleNamespace(stop_after_batch=False),
             is_last=True,
@@ -261,8 +269,8 @@ class MigratedSyncIngestionHandlerTests(IsolatedAsyncioTestCase):
 
         with (
             patch(
-                "catchup.sync.handlers.confluence.create_confluence_ingestion_service",
-                AsyncMock(return_value=service),
+                "catchup.sync.handlers.confluence.create_confluence_space_sync_dependencies",
+                AsyncMock(return_value=dependencies),
             ),
             patch(
                 "catchup.sync.handlers.confluence.run_sync_ingestion",
@@ -346,6 +354,13 @@ class MigratedSyncIngestionHandlerTests(IsolatedAsyncioTestCase):
 
     async def test_confluence_incremental_uses_sync_ingestion_deleted_record(self) -> None:
         handler = ConfluenceIncrementalHandler()
+        dependencies = SimpleNamespace(
+            cloud_id="cloud-123",
+            site_url="",
+            client=SimpleNamespace(),
+            repository=SimpleNamespace(),
+            transformer=SimpleNamespace(),
+        )
         core_result = SimpleNamespace(
             persisted_count=0,
             deleted_count=1,
@@ -355,8 +370,8 @@ class MigratedSyncIngestionHandlerTests(IsolatedAsyncioTestCase):
 
         with (
             patch(
-                "catchup.sync.handlers.confluence.create_confluence_ingestion_service",
-                AsyncMock(return_value=SimpleNamespace()),
+                "catchup.sync.handlers.confluence.create_confluence_space_sync_dependencies",
+                AsyncMock(return_value=dependencies),
             ),
             patch(
                 "catchup.sync.handlers.confluence.run_sync_ingestion",

@@ -19,6 +19,7 @@ from catchup.sync.ingestion.adapters.confluence import (
     ConfluenceSpaceIncrementalSyncExecutionRequest,
 )
 from catchup.sync.ingestion.adapters.confluence import ConfluenceSpaceSyncAdapter
+from catchup.sync.ingestion.adapters.confluence import ConfluenceSpaceSyncDependencies
 from catchup.sync.ingestion.adapters.github import GithubRepositoryFullSyncAdapter
 from catchup.sync.ingestion.adapters.github import (
     GithubRepositoryFullSyncExecutionRequest,
@@ -487,16 +488,19 @@ class MigratedConnectorDescriptorTests(IsolatedAsyncioTestCase):
         async def load_space_context(_space_keys):
             return {"ENG": "space-1"}, {"ENG": "Engineering"}, {}
 
-        service = SimpleNamespace(
+        dependencies = ConfluenceSpaceSyncDependencies(
             cloud_id="cloud-123",
+            site_url="",
+            client=SimpleNamespace(),
             repository=repository,
-            _load_space_sync_context=load_space_context,
+            transformer=SimpleNamespace(),
         )
         adapter = ConfluenceSpaceSyncAdapter(
-            service=service,
+            dependencies=dependencies,
             enable_v2_dual_write=True,
             v2_knowledge_repository=v2_knowledge_repository,
         )
+        adapter._load_space_sync_context = load_space_context  # noqa: SLF001
         execution = ConfluenceSpaceIncrementalSyncExecutionRequest(
             tenant_id="cloud-123",
             space_key="ENG",
@@ -547,19 +551,21 @@ class MigratedConnectorDescriptorTests(IsolatedAsyncioTestCase):
                         page_content="page",
                     )
                 ],
-                embed_inputs=[],
             )
 
         async def store_transform_result(**kwargs):
             stored.append(kwargs)
 
-        service = SimpleNamespace(
+        dependencies = ConfluenceSpaceSyncDependencies(
             cloud_id="cloud-123",
-            _process_page=process_page,
-            _store_transform_result=store_transform_result,
-            _is_retryable_connector_error=lambda _exc: False,
+            site_url="",
+            client=SimpleNamespace(),
+            repository=SimpleNamespace(),
+            transformer=SimpleNamespace(),
         )
-        adapter = ConfluenceSpaceSyncAdapter(service=service)
+        adapter = ConfluenceSpaceSyncAdapter(dependencies=dependencies)
+        adapter._process_page = process_page  # noqa: SLF001
+        adapter._store_transform_result = store_transform_result  # noqa: SLF001
         execution = ConfluenceSpaceFullSyncExecutionRequest(
             tenant_id="cloud-123",
             space_key="ENG",

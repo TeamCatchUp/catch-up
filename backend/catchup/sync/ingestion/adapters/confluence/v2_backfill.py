@@ -19,6 +19,9 @@ from catchup.sync.ingestion.adapters.confluence.space_sync import (
     ConfluenceSpaceSyncAdapter,
 )
 from catchup.sync.ingestion.adapters.confluence.space_sync import (
+    ConfluenceSpaceSyncDependencies,
+)
+from catchup.sync.ingestion.adapters.confluence.space_sync import (
     ConfluenceSpaceTransformItem,
 )
 from catchup.sync.ingestion.adapters.confluence.space_sync import (
@@ -40,7 +43,6 @@ from catchup.sync.ingestion.adapters.confluence.v2_document_builder import (
     ConfluenceV2DocumentBuilder,
 )
 from catchup.sync.ingestion.schemas import SyncWindow
-from catchup.sync.ingestion.services.confluence import ConfluenceIngestionService
 
 logger = structlog.get_logger(__name__)
 
@@ -51,13 +53,13 @@ class ConfluenceV2BackfillAdapter(ConfluenceSpaceSyncAdapter):
     def __init__(
         self,
         *,
-        service: ConfluenceIngestionService,
+        dependencies: ConfluenceSpaceSyncDependencies,
         vector_store: VectorStore | None = None,
         v2_knowledge_repository: V2KnowledgeRepository | None = None,
         v2_document_builder: ConfluenceV2DocumentBuilder | None = None,
     ) -> None:
         super().__init__(
-            service=service,
+            dependencies=dependencies,
             enable_v2_dual_write=True,
             vector_store=vector_store,
             v2_knowledge_repository=v2_knowledge_repository,
@@ -80,24 +82,35 @@ class ConfluenceV2BackfillAdapter(ConfluenceSpaceSyncAdapter):
             try:
                 if execution.record_type == "page":
                     records.append(
-                        await self._service.client.get_page_by_id(
+                        await self._client.get_page_by_id(
                             record_id,
                             body_format="storage",
                         )
                     )
                 else:
                     records.append(
-                        await self._service.client.get_blogpost_by_id(
+                        await self._client.get_blogpost_by_id(
                             record_id,
                             body_format="storage",
                         )
                     )
-            except Exception:
-                failed_ids.extend(
-                    seed.langchain_id
-                    for seed in execution.seeds
-                    if seed.record_id == record_id
+            except Exception as exc:
+                if self._is_retryable_connector_error(exc):
+                    raise
+                affected_ids = _seed_ids_for_record(execution.seeds, record_id)
+                logger.warning(
+                    "confluence_v2_backfill_record_fetch_failed",
+                    connector="confluence",
+                    entity_type=execution.record_type,
+                    scope_id=execution.tenant_id,
+                    target_id=execution.space_key,
+                    record_id=record_id,
+                    failed_id_count=len(affected_ids),
+                    exception_type=type(exc).__name__,
+                    error=str(exc),
+                    exc_info=True,
                 )
+                failed_ids.extend(affected_ids)
         return ConfluenceSpaceFetchResult(
             requested_count=len(execution.seeds),
             records=tuple(records),
@@ -125,28 +138,49 @@ class ConfluenceV2BackfillAdapter(ConfluenceSpaceSyncAdapter):
         space_name = fetched.space_name or execution.space_name
         user_name_map = fetched.user_name_map
         for raw_content in fetched.records:
-            if execution.record_type == "page":
-                content = ConfluencePageResponse.model_validate(raw_content)
-                transform_result = await self._service._process_page(
-                    content,
-                    space_key=space_key,
-                    space_name=space_name,
-                    user_name_map=user_name_map,
+            content_id = _raw_content_record_id(raw_content)
+            try:
+                if execution.record_type == "page":
+                    content = ConfluencePageResponse.model_validate(raw_content)
+                    content_id = content.id
+                    transform_result = await self._process_page(
+                        content,
+                        space_key=space_key,
+                        space_name=space_name,
+                        user_name_map=user_name_map,
+                    )
+                else:
+                    content = ConfluenceBlogPostResponse.model_validate(raw_content)
+                    content_id = content.id
+                    transform_result = await self._process_blogpost(
+                        content,
+                        space_key=space_key,
+                        space_name=space_name,
+                        user_name_map=user_name_map,
+                    )
+                items.append(
+                    ConfluenceSpaceTransformItem(
+                        content_id=content.id,
+                        transform_result=transform_result,
+                    )
                 )
-            else:
-                content = ConfluenceBlogPostResponse.model_validate(raw_content)
-                transform_result = await self._service._process_blogpost(
-                    content,
-                    space_key=space_key,
-                    space_name=space_name,
-                    user_name_map=user_name_map,
+            except Exception as exc:
+                if self._is_retryable_connector_error(exc):
+                    raise
+                affected_ids = _seed_ids_for_record(execution.seeds, content_id)
+                logger.warning(
+                    "confluence_v2_backfill_record_transform_failed",
+                    connector="confluence",
+                    entity_type=execution.record_type,
+                    scope_id=execution.tenant_id,
+                    target_id=execution.space_key,
+                    record_id=content_id,
+                    failed_id_count=len(affected_ids),
+                    exception_type=type(exc).__name__,
+                    error=str(exc),
+                    exc_info=True,
                 )
-            items.append(
-                ConfluenceSpaceTransformItem(
-                    content_id=content.id,
-                    transform_result=transform_result,
-                )
-            )
+                failed_ids = _dedupe((*failed_ids, *affected_ids))
 
         seed_by_langchain_id = _seed_by_langchain_id(execution.seeds)
         prepared_chunks = tuple(
@@ -156,7 +190,7 @@ class ConfluenceV2BackfillAdapter(ConfluenceSpaceSyncAdapter):
         )
         v2_documents, _document_ids, build_failed_ids = (
             self._v2_document_builder.build_from_backfill_seeds(
-                cloud_id=self._service.cloud_id,
+                cloud_id=self._cloud_id,
                 prepared_chunks=prepared_chunks,
                 seed_by_langchain_id={
                     langchain_id: BuilderBackfillSeed(
@@ -296,6 +330,25 @@ def _seed_by_langchain_id(
     seeds: tuple[ConfluenceV2BackfillSeed, ...],
 ) -> dict[str, ConfluenceV2BackfillSeed]:
     return {seed.langchain_id: seed for seed in seeds}
+
+
+def _seed_ids_for_record(
+    seeds: tuple[ConfluenceV2BackfillSeed, ...],
+    record_id: str | None,
+) -> tuple[str, ...]:
+    if not record_id:
+        return ()
+    return tuple(seed.langchain_id for seed in seeds if seed.record_id == record_id)
+
+
+def _raw_content_record_id(raw_content: object) -> str | None:
+    if isinstance(raw_content, dict):
+        value = raw_content.get("id")
+    else:
+        value = getattr(raw_content, "id", None)
+    if value is None:
+        return None
+    return str(value)
 
 
 def _dedupe(values: tuple[str, ...]) -> tuple[str, ...]:
