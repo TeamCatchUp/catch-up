@@ -111,6 +111,36 @@ async def test_initialize_creates_langchain_table_when_missing(monkeypatch) -> N
 
 
 @pytest.mark.asyncio
+async def test_initialize_reuses_existing_async_engine(monkeypatch) -> None:
+    async_engine = object()
+    pg_engine = MagicMock()
+    pg_engine.ainit_vectorstore_table = AsyncMock()
+    from_engine = MagicMock(return_value=pg_engine)
+    vector_store = MagicMock()
+    create = AsyncMock(return_value=vector_store)
+    monkeypatch.setattr(
+        "catchup.components.vector_db.v2.vector_store.sqlalchemy_async_engine",
+        async_engine,
+    )
+    monkeypatch.setattr(
+        "catchup.components.vector_db.v2.vector_store.PGEngine.from_engine",
+        from_engine,
+    )
+    monkeypatch.setattr(
+        "catchup.components.vector_db.v2.vector_store.PGVectorStore.create",
+        create,
+    )
+    store = VectorStore(embeddings=MagicMock())
+    monkeypatch.setattr(store, "_table_exists", lambda: True)
+
+    await store.initialize()
+
+    from_engine.assert_called_once_with(async_engine)
+    pg_engine.ainit_vectorstore_table.assert_not_awaited()
+    assert create.await_args.kwargs["engine"] is pg_engine
+
+
+@pytest.mark.asyncio
 async def test_upsert_documents_uses_langchain_add_embeddings_when_embeddings_are_given() -> None:
     vector_store = MagicMock()
     vector_store.aadd_embeddings = AsyncMock(

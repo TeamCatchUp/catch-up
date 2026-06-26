@@ -12,19 +12,24 @@ from sqlalchemy import inspect
 from catchup.components.vector_db.v2.constants import KNOWLEDGE_STORE_CONTENT_COLUMN
 from catchup.components.vector_db.v2.constants import KNOWLEDGE_STORE_EMBEDDING_COLUMN
 from catchup.components.vector_db.v2.constants import KNOWLEDGE_STORE_ID_COLUMN
-from catchup.components.vector_db.v2.constants import KNOWLEDGE_STORE_METADATA_COLUMN_NAMES
-from catchup.components.vector_db.v2.constants import KNOWLEDGE_STORE_METADATA_JSON_COLUMN
+from catchup.components.vector_db.v2.constants import (
+    KNOWLEDGE_STORE_METADATA_COLUMN_NAMES,
+)
+from catchup.components.vector_db.v2.constants import (
+    KNOWLEDGE_STORE_METADATA_JSON_COLUMN,
+)
 from catchup.components.vector_db.v2.constants import KNOWLEDGE_STORE_TABLE_NAME
 from catchup.components.vector_db.v2.constants import knowledge_store_id_column
 from catchup.components.vector_db.v2.constants import knowledge_store_metadata_columns
 from catchup.configs.config import settings
+from catchup.db.async_engine import async_engine as sqlalchemy_async_engine
 from catchup.db.engine import engine as sqlalchemy_engine
 
 logger = structlog.get_logger(__name__)
 
 
 class VectorStore:
-    """Thin LangChain PGVectorStore adapter for the v2 knowledge store."""
+    """(v2 schema)LangChain PGVectorStore Adapter"""
 
     def __init__(
         self,
@@ -44,12 +49,8 @@ class VectorStore:
         if self._initialized:
             return
 
-        pg_engine = self._pg_engine or PGEngine.from_connection_string(
-            settings.sqlalchemy_database_url,
-            pool_size=settings.DB_ASYNC_POOL_SIZE,
-            max_overflow=settings.DB_ASYNC_MAX_OVERFLOW,
-            pool_pre_ping=settings.DB_POOL_PRE_PING,
-        )
+        # Bind Existing Async Engine to Vector Store PGEngine
+        pg_engine = self._pg_engine or PGEngine.from_engine(sqlalchemy_async_engine)
         self._pg_engine = pg_engine
 
         if not self._table_exists():
@@ -81,7 +82,7 @@ class VectorStore:
         )
         self._initialized = True
         logger.info(
-            "vector_store_initialized",
+            "v2_vector_store_initialized",
             table_name=self._table_name,
         )
 
@@ -109,6 +110,7 @@ class VectorStore:
             if len(embedding_rows) != len(documents):
                 raise ValueError("document and embedding counts must match")
 
+            # 임베딩이 제공된 경우 임베딩을 그대로 사용하여 content와 함께 knowledge store에 upsert
             return await store.aadd_embeddings(
                 texts=[document.page_content for document in documents],
                 embeddings=embedding_rows,
@@ -138,7 +140,7 @@ class VectorStore:
             return len(document_ids) if deleted else 0
         except Exception as exc:
             logger.exception(
-                "delete_failed",
+                "v2_document_delete_failed",
                 table_name=self._table_name,
                 id_count=len(document_ids),
                 error=str(exc),
