@@ -12,7 +12,9 @@ export default function AgentEditorLeftPane() {
       <header className="border-line-normal-neutral flex h-13 w-full shrink-0 items-center border-b px-6 py-2">
         <div className="flex min-w-0 flex-1 items-center overflow-hidden">
           <Button variant="text-secondary-mono" size="sm" className="rounded-lg px-2 py-1" asChild>
-            <Link href="/agent-studio">Agent Studio</Link>
+            <Link href="/agent-studio" className="text-text-normal-alternative text-heading-small">
+              Agent Studio
+            </Link>
           </Button>
           <ArrowRightIcon className="text-icon-normal-assistive size-5 shrink-0" aria-hidden="true" />
           <span className="text-heading-small text-text-normal-normal max-w-50 truncate px-2 py-1">
