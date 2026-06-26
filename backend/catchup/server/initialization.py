@@ -38,10 +38,10 @@ HEAVY_INDICES = [
 # idx_cmetadata_contextual_bigm — lower() 없는 버전, ILIKE는 gin_bigm_ops를 타지 않아 v2로 교체
 OBSOLETE_INDICES = ["idx_fts_korean_bigm", "idx_embedding_hnsw", "idx_cmetadata_title_bigm", "idx_cmetadata_contextual_bigm"]
 
-KS_LIGHT_INDICES = [
-    "CREATE INDEX IF NOT EXISTS idx_ks_source ON knowledge_store (source)",
-    "CREATE INDEX IF NOT EXISTS idx_ks_created_at ON knowledge_store (created_at)",
-    "CREATE INDEX IF NOT EXISTS idx_ks_updated_at ON knowledge_store (updated_at)",
+KS_LIGHT_INDICES: list[tuple[str, str]] = [
+    ("idx_ks_source", "CREATE INDEX IF NOT EXISTS idx_ks_source ON knowledge_store (source)"),
+    ("idx_ks_created_at", "CREATE INDEX IF NOT EXISTS idx_ks_created_at ON knowledge_store (created_at)"),
+    ("idx_ks_updated_at", "CREATE INDEX IF NOT EXISTS idx_ks_updated_at ON knowledge_store (updated_at)"),
 ]
 
 KS_HEAVY_INDICES = [
@@ -80,8 +80,13 @@ async def ensure_ks_indices() -> None:
         if not await _ks_table_exists(conn):
             logger.info("ks_indices_skipped", reason="knowledge_store table not found")
             return
-        for sql in KS_LIGHT_INDICES:
+        for index_name, sql in KS_LIGHT_INDICES:
             await conn.execute(sql)
+            logger.info(
+                "ks_light_index_created",
+                context="server_startup",
+                index_name=index_name,
+            )
 
     async with await psycopg.AsyncConnection.connect(conn_string, autocommit=True) as conn:
         for index_name, sql in zip(KS_HEAVY_INDEX_NAMES, KS_HEAVY_INDICES):
