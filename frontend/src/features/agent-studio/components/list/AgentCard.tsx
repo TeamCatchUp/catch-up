@@ -86,7 +86,7 @@ export default function AgentCard({
     <article className={containerClassName}>
       <div
         className={
-          layout === 'flat' ? 'flex min-h-0 w-full flex-1 flex-col gap-9 overflow-hidden' : 'flex w-full flex-col gap-9'
+          layout === 'flat' ? 'flex min-h-0 w-full flex-1 flex-col gap-8 overflow-hidden' : 'flex w-full flex-col gap-8'
         }
       >
         <div className="flex w-full flex-col gap-3">
