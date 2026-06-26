@@ -7,20 +7,17 @@ page.body.value (Storage Format HTML)
 → Comment Injection
     - Inline Comment → selection 텍스트 매칭으로 해당 Chunk에 삽입
     - 매칭 실패한 Inline + Footer Comment → 별도 Discussion Chunk
-→ 이미지 base64 변환 (Cohere Embed v4용)
 → LangChain Document 리스트
 
 - confluence:page:{page_id}:chunk:{chunk_index}
 - confluence:blogpost:{page_id}:chunk:{chunk_index}
 """
-import base64
 import json
-import logging
 from dataclasses import dataclass
 from dataclasses import field
 from datetime import datetime
-from typing import Any
 
+import structlog
 from bs4 import BeautifulSoup
 from langchain_core.documents import Document
 
@@ -30,40 +27,8 @@ from catchup.connectors.confluence.schemas import ConfluenceBlogPostResponse
 from catchup.connectors.confluence.schemas import ConfluenceCommentResponse
 from catchup.connectors.confluence.schemas import ConfluencePageResponse
 from catchup.connectors.confluence.storage_parser import ConfluenceStorageParser
-from catchup.connectors.confluence.storage_parser import ContentBlock
 
-logger = logging.getLogger(__name__)
-
-
-@dataclass(frozen=True)
-class ConfluenceAttachmentAsset:
-    data: bytes
-    media_type: str
-
-
-@dataclass(frozen=True)
-class ConfluenceEmbedInput:
-    text: str
-    image_data_uris: list[str] = field(default_factory=list)
-    skipped_images: int = 0
-
-    @property
-    def is_multimodal(self) -> bool:
-        return bool(self.image_data_uris)
-
-    def to_bedrock_input(self) -> dict[str, Any]:
-        content: list[dict[str, Any]] = [{"type": "text", "text": self.text}]
-        content.extend(
-            {
-                "type": "image_url",
-                "image_url": {"url": image_data_uri},
-            }
-            for image_data_uri in self.image_data_uris
-        )
-        return {"content": content}
-
-    def payload_bytes(self) -> int:
-        return len(json.dumps(self.to_bedrock_input()).encode("utf-8"))
+logger = structlog.get_logger(__name__)
 
 
 @dataclass(frozen=True)
@@ -125,8 +90,6 @@ class ConfluenceInlineCommentInjectionResult:
 @dataclass(frozen=True)
 class ConfluenceTransformResult:
     documents: list[Document]
-    embed_inputs: list[ConfluenceEmbedInput]
-    skipped_images: int = 0
     v2_prepared_chunks: list[ConfluenceV2PreparedChunk] = field(default_factory=list)
 
 
@@ -145,7 +108,6 @@ class ConfluenceTransformer:
             labels: list[str] | None = None,
             footer_comments: list[ConfluenceCommentResponse] | None = None,
             inline_comments: list[ConfluenceCommentResponse] | None = None,
-            attachment_images: dict[str, ConfluenceAttachmentAsset] | None = None,
             site_url: str | None = None,
             user_name_map: dict[str, str | None] | None = None,
     ) -> ConfluenceTransformResult:
@@ -169,7 +131,6 @@ class ConfluenceTransformer:
             labels=labels,
             footer_comments=footer_comments,
             inline_comments=inline_comments,
-            attachment_images=attachment_images,
             site_url=site_url,
             user_name_map=user_name_map,
         )
@@ -182,7 +143,6 @@ class ConfluenceTransformer:
         space_name: str | None = None,
         labels: list[str] | None = None,
         footer_comments: list[ConfluenceCommentResponse] | None = None,
-        attachment_images: dict[str, ConfluenceAttachmentAsset] | None = None,
         site_url: str | None = None,
         user_name_map: dict[str, str | None] | None = None,
     ) -> ConfluenceTransformResult:
@@ -206,7 +166,6 @@ class ConfluenceTransformer:
             labels=labels,
             footer_comments=footer_comments,
             inline_comments=None,
-            attachment_images=attachment_images,
             site_url=site_url,
             user_name_map=user_name_map,
         )
@@ -232,21 +191,23 @@ class ConfluenceTransformer:
         labels: list[str] | None,
         footer_comments: list[ConfluenceCommentResponse] | None,
         inline_comments: list[ConfluenceCommentResponse] | None,
-        attachment_images: dict[str, ConfluenceAttachmentAsset] | None,
         site_url: str | None = None,
         user_name_map: dict[str, str | None] | None = None,
     ) -> ConfluenceTransformResult:
-        
+
         labels = labels or []
-        attachment_images = attachment_images or {}
 
         # 1) Storage HTML 추출
         storage_html = body.value if body else ""
         if not storage_html:
             logger.info(
-                f"[CONFLUENCE[TRANSFORMER] Empty Body for {entity_type} {content_id}"
+                "confluence_transform_empty_body",
+                connector="confluence",
+                entity_type=entity_type,
+                content_id=content_id,
+                target_id=space_key,
             )
-            return ConfluenceTransformResult(documents=[], embed_inputs=[])
+            return ConfluenceTransformResult(documents=[])
         
         web_url = self._absolutize_web_url(web_url, site_url)
 
@@ -258,14 +219,18 @@ class ConfluenceTransformer:
         sections = self.parser.parse(storage_html)
         if not sections:
             logger.info(
-                f"[CONFLUENCE][TRANSFORM] No sections parsed for {entity_type} {content_id}"
+                "confluence_transform_no_sections",
+                connector="confluence",
+                entity_type=entity_type,
+                content_id=content_id,
+                target_id=space_key,
             )
-            return ConfluenceTransformResult(documents=[], embed_inputs=[])
+            return ConfluenceTransformResult(documents=[])
         
         # 3) Section 트리 → Chunk 리스트
         chunks = self.chunker.chunk(sections, page_title=title)
         if not chunks:
-            return ConfluenceTransformResult(documents=[], embed_inputs=[])
+            return ConfluenceTransformResult(documents=[])
 
         # 4) Comment Injection
         #    - Inline: selection 매칭 성공 → 해당 chunk에 삽입
@@ -290,9 +255,7 @@ class ConfluenceTransformer:
 
         # 5. Chunk → LangChain Document 변환
         documents: list[Document] = []
-        embed_inputs: list[ConfluenceEmbedInput] = []
         v2_prepared_chunks: list[ConfluenceV2PreparedChunk] = []
-        skipped_images = 0
         total_chunks = len(chunks)
 
         # 버전 정보 추출
@@ -302,13 +265,6 @@ class ConfluenceTransformer:
         for chunk in chunks:
             # semantic_content: 임베딩용 (chunk content 그대로)
             semantic_content = chunk.content
-            embed_input = self._build_embed_input(
-                text=semantic_content,
-                image_blocks=chunk.image_blocks,
-                attachment_images=attachment_images,
-            )
-            embed_inputs.append(embed_input)
-            skipped_images += embed_input.skipped_images
 
             # contextual_content: LLM 답변 생성용 (chunk별 section 반영)
             contextual_content = self._build_contextual_content(
@@ -419,48 +375,26 @@ class ConfluenceTransformer:
                 )
             )
 
+        image_chunk_count = sum(1 for chunk in chunks if chunk.image_blocks)
         logger.info(
-            f"[CONFLUENCE][TRANSFORM] {entity_type} '{title}' → {len(documents)} chunks"
+            "confluence_transform_completed",
+            connector="confluence",
+            entity_type=entity_type,
+            content_id=content_id,
+            target_id=space_key,
+            document_count=len(documents),
+            chunk_count=len(chunks),
+            v2_prepared_chunk_count=len(v2_prepared_chunks),
+            image_chunk_count=image_chunk_count,
+            footer_comment_count=len(footer_comments or []),
+            inline_comment_count=len(inline_comments or []),
+            discussion_chunk_added=discussion_chunk is not None,
         )
 
         return ConfluenceTransformResult(
             documents=documents,
-            embed_inputs=embed_inputs,
-            skipped_images=skipped_images,
             v2_prepared_chunks=v2_prepared_chunks,
         )
-
-    def _build_embed_input(
-        self,
-        *,
-        text: str,
-        image_blocks: list[ContentBlock],
-        attachment_images: dict[str, ConfluenceAttachmentAsset],
-    ) -> ConfluenceEmbedInput:
-        image_data_uris: list[str] = []
-        skipped_images = 0
-
-        for block in image_blocks:
-            filename = block.image_filename
-            if not filename:
-                continue
-
-            asset = attachment_images.get(filename)
-            if asset is None:
-                skipped_images += 1
-                continue
-
-            image_data_uris.append(self._build_data_uri(asset))
-
-        return ConfluenceEmbedInput(
-            text=text,
-            image_data_uris=image_data_uris,
-            skipped_images=skipped_images,
-        )
-
-    def _build_data_uri(self, asset: ConfluenceAttachmentAsset) -> str:
-        encoded = base64.b64encode(asset.data).decode("ascii")
-        return f"data:{asset.media_type};base64,{encoded}"
     
     def _inject_inline_comments(
             self,
@@ -644,10 +578,14 @@ class ConfluenceTransformer:
                     extracted = self._extract_text_from_adf(adf)
                     if extracted:
                         return extracted.strip()
-            except Exception:
+            except Exception as exc:
                 # 파싱 실패 시 아래 HTML 처리로 fallback
                 logger.debug(
-                    "[CONFLUENCE][TRANSFORM] Failed to parse ADF comment body; falling back to HTML strip"
+                    "confluence_comment_adf_parse_failed",
+                    connector="confluence",
+                    comment_id=comment.id,
+                    representation=comment.body.representation,
+                    exception_type=type(exc).__name__,
                 )
 
         # Storage Format → 텍스트 추출 (태그 제거)
