@@ -14,6 +14,7 @@ from catchup.automations import service as automations_service
 from catchup.automations.config import INQUIRY_AUTOMATION_PRESET_KEY
 from catchup.automations.schemas import InquiryAutomationPatch
 from catchup.automations.schemas import SlackChannelSelection
+from catchup.automations.service import AutomationForbiddenError
 from catchup.automations.service import AutomationNotFoundError
 from catchup.automations.service import AutomationPublishError
 from catchup.automations.service import InquiryAutomationService
@@ -343,6 +344,7 @@ def test_build_channel_talk_debounce_condition_resets_only_user_messages() -> No
 def _make_spec_row(
     *,
     spec_id: int = 1,
+    author_user_id: int = 99,
     status: AgentStatus = AgentStatus.ACTIVE,
     channel_talk_credential_id: int = 7,
     slack_channel_id: str = "C123",
@@ -359,6 +361,7 @@ def _make_spec_row(
     )
     row = MagicMock()
     row.id = spec_id
+    row.user_id = author_user_id
     row.status = status
     row.spec = {
         "preset_key": INQUIRY_AUTOMATION_PRESET_KEY,
@@ -375,7 +378,11 @@ def _make_spec_row(
 
 
 def test_list_inquiry_automations_returns_items(monkeypatch) -> None:
-    row = _make_spec_row(guide_instruction="환불은 영수증 먼저", title="문의 응대 자동화")
+    row = _make_spec_row(
+        guide_instruction="환불은 영수증 먼저",
+        title="문의 응대 자동화",
+        author_user_id=1,
+    )
     author = SimpleNamespace(name="팀원A", picture="https://example.com/profile.png")
     db = MagicMock()
     db.execute.return_value.all.return_value = [(row, author)]
@@ -396,6 +403,21 @@ def test_list_inquiry_automations_returns_items(monkeypatch) -> None:
     assert result[0].author_name == "팀원A"
     assert result[0].updated_at == "2026-06-16T09:30:00+00:00"
     assert result[0].author_profile_image_url == "https://example.com/profile.png"
+    assert result[0].is_editable is True
+
+
+def test_list_inquiry_automations_is_editable_false_for_non_author(monkeypatch) -> None:
+    row = _make_spec_row(author_user_id=99)
+    author = SimpleNamespace(name="작성자", picture=None)
+    db = MagicMock()
+    db.execute.return_value.all.return_value = [(row, author)]
+    user = SimpleNamespace(id=1)
+
+    monkeypatch.setattr(api, "get_workspace_id_for_user", lambda *_: 1)
+
+    result = list_inquiry_automations(db=db, current_user=user)
+
+    assert result[0].is_editable is False
 
 
 def test_list_inquiry_automations_uses_default_title(monkeypatch) -> None:
@@ -434,7 +456,7 @@ def test_list_inquiry_automations_skips_invalid_spec(monkeypatch) -> None:
 def test_update_inquiry_automation_sets_inactive(monkeypatch) -> None:
     from catchup.server.automations.api import InquiryAutomationUpdateRequest
 
-    row = _make_spec_row()
+    row = _make_spec_row(author_user_id=1)
     db = MagicMock()
     db.scalar.return_value = row
     user = SimpleNamespace(id=1)
@@ -470,6 +492,27 @@ def test_update_inquiry_automation_raises_404_when_not_found(monkeypatch) -> Non
         )
 
     assert exc_info.value.status_code == 404
+
+
+def test_update_inquiry_automation_raises_403_when_not_author(monkeypatch) -> None:
+    from catchup.server.automations.api import InquiryAutomationUpdateRequest
+
+    row = _make_spec_row(author_user_id=99)
+    db = MagicMock()
+    db.scalar.return_value = row
+    user = SimpleNamespace(id=1)
+
+    monkeypatch.setattr(api, "get_workspace_id_for_user", lambda *_: 1)
+
+    with pytest.raises(HTTPException) as exc_info:
+        update_inquiry_automation(
+            agent_spec_id=1,
+            body=InquiryAutomationUpdateRequest(status=AgentStatus.INACTIVE),
+            db=db,
+            current_user=user,
+        )
+
+    assert exc_info.value.status_code == 403
 
 
 def test_validate_slack_channel_history_access_probes_latest_message(
@@ -601,6 +644,27 @@ def test_patch_settings_raises_404_when_not_found(monkeypatch) -> None:
     assert exc_info.value.status_code == 404
 
 
+def test_patch_settings_raises_403_when_not_author(monkeypatch) -> None:
+    monkeypatch.setattr(api, "get_workspace_id_for_user", lambda *_: 1)
+    monkeypatch.setattr(
+        InquiryAutomationService,
+        "patch_settings",
+        lambda *_, **__: (_ for _ in ()).throw(
+            AutomationForbiddenError("Only the author can modify this automation")
+        ),
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        patch_inquiry_automation_settings(
+            agent_spec_id=1,
+            body=InquiryAutomationPatch(),
+            db=MagicMock(),
+            current_user=SimpleNamespace(id=2),
+        )
+
+    assert exc_info.value.status_code == 403
+
+
 def test_patch_settings_raises_400_on_channel_conflict(monkeypatch) -> None:
     monkeypatch.setattr(api, "get_workspace_id_for_user", lambda *_: 1)
     monkeypatch.setattr(
@@ -645,7 +709,7 @@ def _make_patch_env(
     spec_row.id = 1
     spec_row.workspace_id = 10
     spec_row.agent_id = agent_id
-    spec_row.user_id = 99
+    spec_row.user_id = 5  # matches user_id=5 used in patch_settings calls below
     spec_row.spec = {
         "preset_key": INQUIRY_AUTOMATION_PRESET_KEY,
         "channel_talk_credential_id": ct_credential_id,
@@ -785,6 +849,25 @@ def test_patch_settings_raises_not_found_when_spec_missing(monkeypatch) -> None:
         InquiryAutomationService().patch_settings(
             MagicMock(),
             agent_spec_id=999,
+            workspace_id=10,
+            user_id=5,
+            patch=InquiryAutomationPatch(),
+        )
+
+
+def test_patch_settings_raises_forbidden_when_not_author(monkeypatch) -> None:
+    spec_row, _ct_repo, db = _make_patch_env()
+    spec_row.user_id = 99
+    monkeypatch.setattr(
+        automations_service,
+        "get_inquiry_agent_spec_for_update",
+        lambda *_: spec_row,
+    )
+
+    with pytest.raises(AutomationForbiddenError):
+        InquiryAutomationService().patch_settings(
+            db,
+            agent_spec_id=1,
             workspace_id=10,
             user_id=5,
             patch=InquiryAutomationPatch(),
