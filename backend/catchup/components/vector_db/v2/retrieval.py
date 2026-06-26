@@ -260,6 +260,8 @@ class PGBigmRetriever:
                     await self._execute(session, sql, params)
                 ):
                     doc_id = row.document_id
+                    # 여러 토큰에서 동시에 히트한 문서일수록 더 관련성이 높다는 전제 하에,
+                    # 토큰이 여러 개일 때의 검색 결과를 합치기 위해 토큰 단위로 RRF를 적용한다.
                     rank_scores[doc_id] = rank_scores.get(doc_id, 0.0) + 1.0 / (
                         60 + sql_rank
                     )
@@ -413,10 +415,12 @@ class RetrievalService(BaseVectorDbService):
         vector_filter = self._build_vector_filter(tool_filters, temporal_filters)
         langchain_store = self._vector_store.get_langchain_vector_store()
 
+        # semantic search는 항상 수행
         vector_coro = langchain_store.asimilarity_search_with_score(
             query, k=candidate_k, filter=vector_filter
         )
 
+        # keyword가 존재하는 경우에만 3-Way 병렬 검색 수행
         if keyword_tokens and self._keyword_retriever:
             body_coro = self._keyword_retriever.search_body(
                 keyword_tokens,
@@ -439,7 +443,7 @@ class RetrievalService(BaseVectorDbService):
             body_docs = []
             title_docs = []
 
-        # asimilarity_search_with_score는 (Document, cosine_distance) 튜플을 반환한다.
+        # asimilarity_search_with_score는 (Document, cosine_distance) 튜플 반환.
         vector_docs = []
         for doc, dist in vector_results:
             if dist <= 1.0 - score_threshold:
@@ -453,9 +457,14 @@ class RetrievalService(BaseVectorDbService):
                 doc.metadata["hit_types"] = ["vector"]
             return vector_docs[offset : offset + k]
 
+        # [메타데이터 유실 방지]
         # weighted_reciprocal_rank는 버킷 중 가장 먼저 등장한 doc 객체를 보존한다.
-        # vector_docs가 항상 첫 번째 버킷이므로 similarity_score는 merged 객체에
-        # 이미 있다. keyword_score(title 전용)와 hit_types만 별도 수집한다.
+        # vector_docs가 항상 첫 번째 버킷이므로, vector & body 동시 히트 문서는
+        # merged 후에도 vector의 doc 객체가 채택된다.
+        # 이때 title 버킷에만 존재하던 keyword_score가 객체에서 사라지므로,
+        # RRF 실행 전에 미리 확보하고 병합 후 다시 부착한다.
+        # hit_types도 같은 이유로 — 어느 버킷 객체가 채택됐든 관계없이
+        # 모든 버킷 히트 정보를 보존하기 위해 사전 수집한다.
         hit_types: dict[str, list[str]] = {}
         keyword_scores: dict[str, float] = {}
         for label, docs, score_key in [
@@ -468,13 +477,18 @@ class RetrievalService(BaseVectorDbService):
                 if score_key and (s := doc.metadata.get(score_key)) is not None:
                     keyword_scores[doc.id] = s
 
+        # 3-Way RRF 수행
         merged = weighted_reciprocal_rank(
             [vector_docs, body_docs, title_docs], weights
         )
+        
+        # [메타데이터 유실 방지]
+        # RRF 실행 후 미리 모아둔 메타데이터 부착.
         for doc in merged:
             doc.metadata["hit_types"] = hit_types.get(doc.id, [])
             if doc.id in keyword_scores:
                 doc.metadata["keyword_score"] = keyword_scores[doc.id]
+
         return merged[offset : offset + k]
 
     @override
