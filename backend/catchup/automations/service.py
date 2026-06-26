@@ -6,6 +6,9 @@ from dataclasses import dataclass
 from typing import Any
 
 from pydantic import BaseModel
+from pydantic import ConfigDict
+from pydantic import Field
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from catchup.automations.config import INQUIRY_AUTOMATION_PRESET_KEY
@@ -19,6 +22,7 @@ from catchup.db.automations import get_inquiry_agent_spec_for_update
 from catchup.db.automations import list_inquiry_agent_specs
 from catchup.db.automations import upsert_inquiry_agent_spec
 from catchup.db.channel_talk.repository import ChannelTalkCredentialsRepository
+from catchup.db.models import AgentSpec
 from catchup.db.models import AgentStatus
 from catchup.db.models import SlackChannel
 from catchup.db.slack.domain_repository import get_channels_by_team
@@ -38,6 +42,25 @@ class AutomationPublishError(ValueError):
     def __init__(self, message: str, *, http_status: int = 400) -> None:
         super().__init__(message)
         self.http_status = http_status
+
+
+class SlackChannelSelection(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    credential_id: int = Field(gt=0)
+    channel_id: str = Field(min_length=1)
+    channel_name: str | None = Field(default=None, min_length=1)
+
+
+class InquiryAutomationPatch(BaseModel):
+    """문의 자동화 부분 수정 요청. 포함된 필드만 반영된다."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    channel_talk_credential_id: int | None = Field(default=None, gt=0)
+    quiet_period_seconds: int | None = Field(default=None, ge=1, le=86_400)
+    slack_channel: SlackChannelSelection | None = None
+    guide_instruction: str | None = None
 
 
 class InquiryAutomationItem(BaseModel):
@@ -198,6 +221,125 @@ class InquiryAutomationService:
             raise AutomationNotFoundError("Automation not found")
         agent_spec.status = new_status
         db.commit()
+
+    def patch_settings(
+        self,
+        db: Session,
+        *,
+        agent_spec_id: int,
+        workspace_id: int,
+        user_id: int,
+        patch: InquiryAutomationPatch,
+    ) -> None:
+        """문의 자동화 설정을 부분 수정한다. 제공된 필드만 반영하며 status는 변경하지 않는다."""
+        agent_spec = get_inquiry_agent_spec_for_update(db, agent_spec_id, workspace_id)
+        if agent_spec is None:
+            raise AutomationNotFoundError("Automation not found")
+
+        config = InquiryAutomationConfig.model_validate(agent_spec.spec)
+        trigger = agent_spec.triggers[0] if agent_spec.triggers else None
+
+        new_ct_credential_id = (
+            patch.channel_talk_credential_id or config.channel_talk_credential_id
+        )
+        new_slack_credential_id = config.slack_credential_id
+        new_slack_channel_id = config.slack_channel_id
+        if patch.slack_channel is not None:
+            new_slack_credential_id = patch.slack_channel.credential_id
+            new_slack_channel_id = patch.slack_channel.channel_id
+
+        if patch.quiet_period_seconds is not None:
+            new_quiet_period_seconds = patch.quiet_period_seconds
+        elif trigger is not None:
+            new_quiet_period_seconds = int(
+                trigger.condition.get("quiet_period_seconds", 60)
+            )
+        else:
+            new_quiet_period_seconds = 60
+
+        new_guide_instruction = (
+            patch.guide_instruction
+            if "guide_instruction" in patch.model_fields_set
+            else config.guide_instruction
+        )
+
+        ct_credential = ChannelTalkCredentialsRepository(db).get_connection_by_id(
+            new_ct_credential_id
+        )
+        if ct_credential is None:
+            raise AutomationPublishError(
+                "Channel Talk credentials not found", http_status=404
+            )
+        if not ct_credential.webhook_token_configured:
+            raise AutomationPublishError(
+                "Channel Talk webhook token is not configured"
+            )
+
+        slack_changed = (
+            new_slack_channel_id != config.slack_channel_id
+            or new_slack_credential_id != config.slack_credential_id
+        )
+        if slack_changed:
+            self._resolve_slack_channel(
+                db,
+                slack_credential_id=new_slack_credential_id,
+                slack_channel_id=new_slack_channel_id,
+            )
+
+        new_agent_id = build_agent_id(
+            workspace_id=workspace_id,
+            preset_key=INQUIRY_AUTOMATION_PRESET_KEY,
+            channel_talk_channel_id=ct_credential.channel_id,
+            slack_channel_id=new_slack_channel_id,
+        )
+        if new_agent_id != agent_spec.agent_id:
+            conflict = db.scalar(
+                select(AgentSpec).where(AgentSpec.agent_id == new_agent_id)
+            )
+            if conflict is not None:
+                raise AutomationPublishError(
+                    "An automation for this channel combination already exists"
+                )
+            agent_spec.agent_id = new_agent_id
+
+        agent_spec.spec = InquiryAutomationConfig(
+            preset_key=INQUIRY_AUTOMATION_PRESET_KEY,
+            channel_talk_credential_id=new_ct_credential_id,
+            slack_channel_id=new_slack_channel_id,
+            slack_credential_id=new_slack_credential_id,
+            guide_instruction=new_guide_instruction,
+            quiet_period_seconds=new_quiet_period_seconds,
+        ).model_dump(mode="json")
+        agent_spec.user_id = user_id
+
+        condition = build_channel_talk_debounce_condition(
+            channel_id=ct_credential.channel_id,
+            quiet_period_seconds=new_quiet_period_seconds,
+        )
+        try:
+            create_or_update_agent_trigger_from_definition(
+                db,
+                AgentTriggerDefinition(
+                    agent_spec_id=agent_spec.id,
+                    workspace_id=agent_spec.workspace_id,
+                    name=(
+                        f"Channel Talk debounce - {ct_credential.channel_name}"
+                    ),
+                    source="channel_talk",
+                    event_type="user_chat.created",
+                    condition=condition,
+                    concurrency_key=(
+                        f"channel_talk:{ct_credential.channel_id}:user_chat"
+                    ),
+                ),
+            )
+            db.commit()
+        except AgentTriggerDefinitionError as exc:
+            db.rollback()
+            raise AutomationPublishError(str(exc)) from exc
+        except Exception:
+            db.rollback()
+            raise
 
     def publish(
         self,

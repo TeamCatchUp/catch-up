@@ -19,7 +19,9 @@ from catchup.auth.dependencies import get_current_user
 from catchup.automations.service import AutomationNotFoundError
 from catchup.automations.service import AutomationPublishError
 from catchup.automations.service import InquiryAutomationItem
+from catchup.automations.service import InquiryAutomationPatch
 from catchup.automations.service import InquiryAutomationService
+from catchup.automations.service import SlackChannelSelection
 from catchup.db.automations import get_workspace_id_for_user
 from catchup.db.channel_talk.repository import ChannelTalkCredentialsRepository
 from catchup.db.dependencies import get_db
@@ -31,14 +33,6 @@ router = APIRouter(
     prefix="/api/v1/automations",
     tags=["automations"],
 )
-
-
-class SlackChannelSelection(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    credential_id: int = Field(gt=0)
-    channel_id: str = Field(min_length=1)
-    channel_name: str | None = Field(default=None, min_length=1)
 
 
 class AutomationConnector(StrEnum):
@@ -246,6 +240,39 @@ def update_inquiry_automation(
     except AutomationNotFoundError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+
+
+@router.patch(
+    "/inquiries/{agent_spec_id}/settings",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="채널톡 문의 자동화 설정 부분 수정",
+)
+def patch_inquiry_automation_settings(
+    agent_spec_id: int,
+    body: InquiryAutomationPatch,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> None:
+    """문의 자동화 설정을 부분 수정한다. 포함된 필드만 반영하며 활성화 상태는 변경하지 않는다."""
+    workspace_id = _require_workspace_id(db, current_user.id)
+    try:
+        InquiryAutomationService().patch_settings(
+            db,
+            agent_spec_id=agent_spec_id,
+            workspace_id=workspace_id,
+            user_id=current_user.id,
+            patch=body,
+        )
+    except AutomationNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+    except AutomationPublishError as exc:
+        raise HTTPException(
+            status_code=exc.http_status,
             detail=str(exc),
         ) from exc
 
