@@ -59,8 +59,7 @@ from catchup.server.connector.jira.webhook_api import router as jira_webhook_rou
 from catchup.server.connector.slack.auth_api import router as slack_auth_router
 from catchup.server.connector.slack.webhook_api import router as slack_webhook_router
 from catchup.server.error_handlers import register_exception_handlers
-from catchup.server.initialization import ensure_ks_indices
-from catchup.server.initialization import ensure_ks_vector_index
+from catchup.server.initialization import ensure_ks_all_indices
 from catchup.server.initialization import ensure_pg_indices
 from catchup.server.initialization import ensure_vector_index
 from catchup.server.integrations.api import router as integrations_router
@@ -160,8 +159,7 @@ async def lifespan(app: FastAPI):
             await v2_vector_store.initialize()
         if settings.PGVECTOR_HNSW_INDEX_ENABLED:
             asyncio.create_task(ensure_vector_index())
-        asyncio.create_task(ensure_ks_indices())
-        asyncio.create_task(ensure_ks_vector_index())
+        asyncio.create_task(ensure_ks_all_indices())
         logger.info(
             "pgvector_repository_initialized",
             result="success",

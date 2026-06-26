@@ -262,6 +262,17 @@ async def ensure_ks_vector_index() -> None:
         )
 
 
+async def ensure_ks_all_indices() -> None:
+    """knowledge_store 인덱스를 순차 실행한다.
+
+    GIN과 HNSW 모두 CREATE INDEX CONCURRENTLY를 사용하므로
+    동시에 실행하면 같은 테이블에서 ShareUpdateExclusiveLock 경합으로 deadlock이 발생한다.
+    GIN(bigm) → HNSW 순서로 직렬 실행해 이를 방지한다.
+    """
+    await ensure_ks_indices()
+    await ensure_ks_vector_index()
+
+
 async def ensure_pg_indices() -> None:
     conn_string = settings.sqlalchemy_database_url.replace("+psycopg", "")
     
