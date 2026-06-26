@@ -16,12 +16,12 @@ from pydantic import Field
 from sqlalchemy.orm import Session
 
 from catchup.auth.dependencies import get_current_user
+from catchup.automations.schemas import InquiryAutomationItem
+from catchup.automations.schemas import InquiryAutomationPatch
+from catchup.automations.schemas import SlackChannelSelection
 from catchup.automations.service import AutomationNotFoundError
 from catchup.automations.service import AutomationPublishError
-from catchup.automations.service import InquiryAutomationItem
-from catchup.automations.service import InquiryAutomationPatch
 from catchup.automations.service import InquiryAutomationService
-from catchup.automations.service import SlackChannelSelection
 from catchup.db.automations import get_workspace_id_for_user
 from catchup.db.channel_talk.repository import ChannelTalkCredentialsRepository
 from catchup.db.dependencies import get_db

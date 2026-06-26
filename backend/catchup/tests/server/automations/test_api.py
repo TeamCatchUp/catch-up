@@ -12,11 +12,11 @@ from pydantic import ValidationError
 from catchup.auth.dependencies import get_current_user
 from catchup.automations import service as automations_service
 from catchup.automations.config import INQUIRY_AUTOMATION_PRESET_KEY
+from catchup.automations.schemas import InquiryAutomationPatch
+from catchup.automations.schemas import SlackChannelSelection
 from catchup.automations.service import AutomationNotFoundError
 from catchup.automations.service import AutomationPublishError
-from catchup.automations.service import InquiryAutomationPatch
 from catchup.automations.service import InquiryAutomationService
-from catchup.automations.service import SlackChannelSelection
 from catchup.automations.service import build_agent_id
 from catchup.automations.service import build_channel_talk_debounce_condition
 from catchup.automations.service import validate_slack_channel_access
