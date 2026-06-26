@@ -53,6 +53,7 @@ function StatusGroup({ agents, label, layout, actionDisabled, onActivate, onDeac
     return (
       <AgentEmptyColumn
         label={label}
+        count={agents.length}
         title={EMPTY_STATE_BY_STATUS[label].title}
         description={EMPTY_STATE_BY_STATUS[label].description}
         layout={layout}
@@ -75,7 +76,7 @@ function StatusGroup({ agents, label, layout, actionDisabled, onActivate, onDeac
   }
 
   return (
-    <AgentStatusSection label={label} className="min-h-70.75">
+    <AgentStatusSection label={label} count={agents.length} className="min-h-70.75">
       <div className="flex w-full flex-col gap-3">
         {agents.map((agent) => (
           <AgentCard

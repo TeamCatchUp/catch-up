@@ -151,6 +151,9 @@ describe('AgentStudioPage', () => {
     expect(await screen.findAllByText('문의 대응 리포트 만들기')).toHaveLength(2);
     expect(screen.getByText('제작 중인 Agent가 없습니다.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '다시 운영하기' })).toBeInTheDocument();
+    expect(within(screen.getByLabelText('운영중 섹션')).getByText('1')).toBeInTheDocument();
+    expect(within(screen.getByLabelText('제작중 섹션')).getByText('0')).toBeInTheDocument();
+    expect(within(screen.getByLabelText('사용 안함 섹션')).getByText('1')).toBeInTheDocument();
   });
 
   it('renders dash labels when backend display fields are null', async () => {
@@ -179,6 +182,7 @@ describe('AgentStudioPage', () => {
     renderWithQueryClient(<AgentStudioPage />);
 
     expect(await screen.findByText('운영 중인 Agent가 없습니다.')).toBeInTheDocument();
+    expect(within(screen.getByLabelText('운영중 섹션')).getByText('0')).toBeInTheDocument();
     expect(screen.queryByText('아직 비활성 Agent가 없습니다.')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: '다시 운영하기' })).toBeInTheDocument();
   });
@@ -316,6 +320,7 @@ describe('AgentStudioPage', () => {
     const activeSection = screen.getByLabelText('운영중 섹션');
 
     expect(screen.getAllByLabelText('운영중 섹션')).toHaveLength(1);
+    expect(within(activeSection).getByText('2')).toBeInTheDocument();
     expect(within(activeSection).getAllByText('문의 대응 리포트 만들기')).toHaveLength(2);
     expect(within(activeSection).queryByText('운영 중인 Agent가 없습니다.')).not.toBeInTheDocument();
   });
