@@ -205,10 +205,8 @@ class InquiryAutomationService:
 
         if patch.quiet_period_seconds is not None:
             new_quiet_period_seconds = patch.quiet_period_seconds
-        elif trigger is not None:
-            new_quiet_period_seconds = int(
-                trigger.condition.get("quiet_period_seconds", 60)
-            )
+        elif trigger is not None and trigger.condition.get("quiet_period_seconds") is not None:
+            new_quiet_period_seconds = int(trigger.condition["quiet_period_seconds"])
         else:
             new_quiet_period_seconds = 60
 
