@@ -2,11 +2,6 @@ from __future__ import annotations
 
 from langchain_core.documents import Document
 
-from catchup.components.embedder.constants import EmbeddingProvider
-from catchup.components.embedder.factory import get_embedding_service
-from catchup.components.vector_db.factory import get_pgvector_repository
-from catchup.components.vector_db.factory import get_v2_knowledge_repository
-from catchup.components.vector_db.factory import get_v2_vector_store
 from catchup.components.vector_db.pgvector.repository import PGVectorRepository
 from catchup.components.vector_db.v2 import V2KnowledgeRepository
 from catchup.components.vector_db.v2 import VectorStore
@@ -47,6 +42,9 @@ from catchup.sync.ingestion.document_builders.channel_talk_article import (
     ArticleTransformer,
 )
 from catchup.sync.ingestion.dual_write import DualWriter
+from catchup.sync.ingestion.factories.knowledge_store import (
+    create_knowledge_store_dependencies,
+)
 from catchup.sync.ingestion.pipeline import run_sync_ingestion
 from catchup.sync.ingestion.schemas import SyncWindow
 
@@ -60,6 +58,7 @@ class ChannelTalkArticleIncrementalIngestionAdapter:
         self,
         *,
         enable_v2_dual_write: bool = False,
+        repository: PGVectorRepository | None = None,
         vector_store: VectorStore | None = None,
         v2_knowledge_repository: V2KnowledgeRepository | None = None,
         v2_document_builder: ChannelTalkArticleV2DocumentBuilder | None = None,
@@ -72,7 +71,7 @@ class ChannelTalkArticleIncrementalIngestionAdapter:
             v2_document_builder or ChannelTalkArticleV2DocumentBuilder()
         )
         self._enable_v2_dual_write = enable_v2_dual_write
-        self._repository: PGVectorRepository | None = None
+        self._repository = repository
         self._vector_store = vector_store
         self._v2_knowledge_repository = v2_knowledge_repository
 
@@ -303,27 +302,38 @@ class ChannelTalkArticleIncrementalIngestionAdapter:
             return self._repository
 
         repository = self._build_repository()
-        await repository.initialize(None)
-        self._repository = repository
-        return repository
+        if repository is not None:
+            await repository.initialize(None)
+            self._repository = repository
+            return repository
+
+        knowledge_store = await create_knowledge_store_dependencies(
+            require_vector_store=self._enable_v2_dual_write,
+        )
+        self._repository = knowledge_store.repository
+        if self._vector_store is None:
+            self._vector_store = knowledge_store.vector_store
+        if self._v2_knowledge_repository is None:
+            self._v2_knowledge_repository = knowledge_store.v2_knowledge_repository
+        return self._repository
 
     async def _get_vector_store(self) -> VectorStore | None:
         if not self._enable_v2_dual_write:
             return None
         if self._vector_store is None:
-            embeddings = get_embedding_service(
-                EmbeddingProvider.AWS_BEDROCK
-            ).get_embedder()
-            vector_store = get_v2_vector_store(embeddings)
-            await vector_store.initialize()
-            self._vector_store = vector_store
+            knowledge_store = await create_knowledge_store_dependencies(
+                require_vector_store=True,
+            )
+            if self._repository is None:
+                self._repository = knowledge_store.repository
+            self._vector_store = knowledge_store.vector_store
+            if self._v2_knowledge_repository is None:
+                self._v2_knowledge_repository = knowledge_store.v2_knowledge_repository
         return self._vector_store
 
     def _get_v2_knowledge_repository(self) -> V2KnowledgeRepository | None:
         if not self._enable_v2_dual_write:
             return None
-        if self._v2_knowledge_repository is None:
-            self._v2_knowledge_repository = get_v2_knowledge_repository()
         return self._v2_knowledge_repository
 
     async def _delete_v2_chunk_records(
@@ -371,9 +381,8 @@ class ChannelTalkArticleIncrementalIngestionAdapter:
         return self._fetcher
 
     @staticmethod
-    def _build_repository() -> PGVectorRepository:
-        embedder = get_embedding_service(EmbeddingProvider.AWS_BEDROCK).get_embedder()
-        return get_pgvector_repository(embeddings=embedder)
+    def _build_repository() -> PGVectorRepository | None:
+        return None
 
     @staticmethod
     def _to_langchain_documents(

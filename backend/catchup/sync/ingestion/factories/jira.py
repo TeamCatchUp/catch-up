@@ -9,9 +9,6 @@ import logging
 
 from fastapi.concurrency import run_in_threadpool
 
-from catchup.components.embedder.constants import EmbeddingProvider
-from catchup.components.embedder.factory import get_embedding_service
-from catchup.components.vector_db.factory import get_pgvector_repository
 from catchup.connectors.atlassian.exceptions import AtlassianTokenExpiredError
 from catchup.connectors.atlassian.exceptions import AtlassianTokenNotFoundError
 from catchup.connectors.atlassian.oauth_client import AtlassianOAuthClient
@@ -21,6 +18,9 @@ from catchup.db.atlassian import oauth_repository
 from catchup.db.engine import SessionLocal
 from catchup.sync.common.exceptions import SyncConnectorException
 from catchup.sync.common.exceptions import SyncInternalException
+from catchup.sync.ingestion.factories.knowledge_store import (
+    create_knowledge_store_dependencies,
+)
 from catchup.sync.ingestion.services.jira import JiraIngestionService
 
 logger = logging.getLogger(__name__)
@@ -71,13 +71,9 @@ async def create_jira_ingestion_service(
         ) from exc
 
     try:
-        repository = get_pgvector_repository(
-            embeddings=get_embedding_service(
-                EmbeddingProvider.AWS_BEDROCK
-            ).get_embedder()
-        )
+        knowledge_store = await create_knowledge_store_dependencies()
         service = JiraIngestionService(
-            repository=repository,
+            repository=knowledge_store.repository,
             cloud_id=cloud_id,
             token_provider=token_provider,
             site_url=site_url or "",

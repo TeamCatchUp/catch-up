@@ -9,11 +9,6 @@ import structlog
 from fastapi.concurrency import run_in_threadpool
 from langchain.embeddings import Embeddings
 
-from catchup.components.embedder.constants import EmbeddingProvider
-from catchup.components.embedder.factory import get_embedding_service
-from catchup.components.vector_db.factory import get_pgvector_repository
-from catchup.components.vector_db.factory import get_v2_knowledge_repository
-from catchup.components.vector_db.factory import get_v2_vector_store
 from catchup.connectors.atlassian.exceptions import AtlassianTokenExpiredError
 from catchup.connectors.atlassian.exceptions import AtlassianTokenNotFoundError
 from catchup.connectors.atlassian.oauth_client import AtlassianOAuthClient
@@ -27,6 +22,9 @@ from catchup.sync.common.exceptions import SyncInternalException
 from catchup.sync.ingestion.adapters.confluence import ConfluenceSpaceSyncDependencies
 from catchup.sync.ingestion.adapters.confluence import ConfluenceV2BackfillAdapter
 from catchup.sync.ingestion.document_builders.confluence import ConfluenceTransformer
+from catchup.sync.ingestion.factories.knowledge_store import (
+    create_knowledge_store_dependencies,
+)
 from catchup.sync.ingestion.services.confluence import ConfluenceIngestionService
 
 logger = structlog.get_logger(__name__)
@@ -79,27 +77,27 @@ async def _resolve_token_provider_and_site_url(
     return token_provider, site_url or ""
 
 
-def _get_confluence_embeddings() -> Embeddings:
-    return get_embedding_service(EmbeddingProvider.AWS_BEDROCK).get_embedder()
-
-
 async def create_confluence_space_sync_dependencies(
     cloud_id: str,
     *,
     embeddings: Embeddings | None = None,
+    require_vector_store: bool = False,
 ) -> ConfluenceSpaceSyncDependencies:
     token_provider, site_url = await _resolve_token_provider_and_site_url(cloud_id)
-    embeddings = embeddings or _get_confluence_embeddings()
 
     try:
-        repository = get_pgvector_repository(embeddings=embeddings)
-        repository.ensure_initialized()
+        knowledge_store = await create_knowledge_store_dependencies(
+            embeddings=embeddings,
+            require_vector_store=require_vector_store,
+        )
         return ConfluenceSpaceSyncDependencies(
             cloud_id=cloud_id,
             site_url=site_url,
             client=ConfluenceApiClient(cloud_id, token_provider),
-            repository=repository,
+            repository=knowledge_store.repository,
             transformer=ConfluenceTransformer(),
+            vector_store=knowledge_store.vector_store,
+            v2_knowledge_repository=knowledge_store.v2_knowledge_repository,
         )
     except Exception as exc:
         logger.error(
@@ -121,14 +119,12 @@ async def create_confluence_ingestion_service(
 ) -> ConfluenceIngestionService:
     token_provider, site_url = await _resolve_token_provider_and_site_url(cloud_id)
     try:
-        repository = get_pgvector_repository(
-            embeddings=_get_confluence_embeddings(),
-        )
+        knowledge_store = await create_knowledge_store_dependencies()
         service = ConfluenceIngestionService(
             cloud_id=cloud_id,
             token_provider=token_provider,
             site_url=site_url,
-            repository=repository,
+            repository=knowledge_store.repository,
         )
         await service.initialize()
         return service
@@ -150,15 +146,12 @@ async def create_confluence_ingestion_service(
 async def create_confluence_v2_backfill_adapter(
     cloud_id: str,
 ) -> ConfluenceV2BackfillAdapter:
-    embeddings = _get_confluence_embeddings()
     dependencies = await create_confluence_space_sync_dependencies(
         cloud_id=cloud_id,
-        embeddings=embeddings,
+        require_vector_store=True,
     )
-    vector_store = get_v2_vector_store(embeddings)
-    await vector_store.initialize()
     return ConfluenceV2BackfillAdapter(
         dependencies=dependencies,
-        vector_store=vector_store,
-        v2_knowledge_repository=get_v2_knowledge_repository(),
+        vector_store=dependencies.vector_store,
+        v2_knowledge_repository=dependencies.v2_knowledge_repository,
     )

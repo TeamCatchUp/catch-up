@@ -124,13 +124,14 @@ class MigratedConnectorDescriptorTests(IsolatedAsyncioTestCase):
             ),
             patch.object(
                 slack_factory,
-                "_build_repository",
-                Mock(return_value=SimpleNamespace()),
-            ),
-            patch.object(
-                slack_factory.settings,
-                "VECTOR_STORE_V2_DUAL_WRITE_ENABLED",
-                False,
+                "create_knowledge_store_dependencies",
+                AsyncMock(
+                    return_value=SimpleNamespace(
+                        repository=SimpleNamespace(),
+                        vector_store=None,
+                        v2_knowledge_repository=None,
+                    )
+                ),
             ),
             patch.object(
                 slack_factory,

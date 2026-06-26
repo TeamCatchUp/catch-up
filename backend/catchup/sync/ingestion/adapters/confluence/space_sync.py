@@ -17,10 +17,6 @@ from pydantic import ValidationInfo
 from pydantic import computed_field
 from pydantic import field_validator
 
-from catchup.components.embedder.constants import EmbeddingProvider
-from catchup.components.embedder.factory import get_embedding_service
-from catchup.components.vector_db.factory import get_v2_knowledge_repository
-from catchup.components.vector_db.factory import get_v2_vector_store
 from catchup.components.vector_db.pgvector import PGVectorRepository
 from catchup.components.vector_db.v2 import V2KnowledgeRepository
 from catchup.components.vector_db.v2 import VectorStore
@@ -60,6 +56,8 @@ class ConfluenceSpaceSyncDependencies:
     client: ConfluenceApiClient
     repository: PGVectorRepository
     transformer: ConfluenceTransformer
+    vector_store: VectorStore | None = None
+    v2_knowledge_repository: V2KnowledgeRepository | None = None
 
 
 class ConfluenceSpaceFullSyncExecutionRequest(SyncExecutionRequest):
@@ -295,8 +293,11 @@ class ConfluenceSpaceSyncAdapter:
         self._repository = dependencies.repository
         self._transformer = dependencies.transformer
         self._enable_v2_dual_write = enable_v2_dual_write
-        self._vector_store = vector_store
-        self._v2_knowledge_repository = v2_knowledge_repository
+        self._vector_store = vector_store or getattr(dependencies, "vector_store", None)
+        self._v2_knowledge_repository = (
+            v2_knowledge_repository
+            or getattr(dependencies, "v2_knowledge_repository", None)
+        )
         self._v2_document_builder = v2_document_builder or ConfluenceV2DocumentBuilder()
         self._space_context_by_key: dict[
             str,
@@ -647,20 +648,11 @@ class ConfluenceSpaceSyncAdapter:
     async def _get_vector_store(self) -> VectorStore | None:
         if not self._enable_v2_dual_write:
             return None
-        if self._vector_store is None:
-            embeddings = get_embedding_service(
-                EmbeddingProvider.AWS_BEDROCK
-            ).get_embedder()
-            vector_store = get_v2_vector_store(embeddings)
-            await vector_store.initialize()
-            self._vector_store = vector_store
         return self._vector_store
 
     def _get_v2_knowledge_repository(self) -> V2KnowledgeRepository | None:
         if not self._enable_v2_dual_write:
             return None
-        if self._v2_knowledge_repository is None:
-            self._v2_knowledge_repository = get_v2_knowledge_repository()
         return self._v2_knowledge_repository
 
     async def _delete_v2_chunk_records(

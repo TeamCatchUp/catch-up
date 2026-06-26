@@ -4,13 +4,7 @@ import logging
 
 from fastapi.concurrency import run_in_threadpool
 
-from catchup.components.embedder.constants import EmbeddingProvider
-from catchup.components.embedder.factory import get_embedding_service
 from catchup.components.summarizer import get_summarizer_service
-from catchup.components.vector_db.factory import get_pgvector_repository
-from catchup.components.vector_db.factory import get_v2_knowledge_repository
-from catchup.components.vector_db.factory import get_v2_vector_store
-from catchup.configs.config import settings
 from catchup.connectors.atlassian.exceptions import AtlassianTokenExpiredError
 from catchup.connectors.atlassian.exceptions import AtlassianTokenNotFoundError
 from catchup.connectors.atlassian.oauth_client import AtlassianOAuthClient
@@ -32,6 +26,9 @@ from catchup.sync.ingestion.adapters.jira.issue_v2_document_builder import (
     JiraIssueV2DocumentBuilder,
 )
 from catchup.sync.ingestion.document_builders.jira import JiraTransformer
+from catchup.sync.ingestion.factories.knowledge_store import (
+    create_knowledge_store_dependencies,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -83,15 +80,9 @@ async def create_jira_issue_ingestion_dependencies(
         client = JiraApiClient(cloud_id, token_provider)
         field_mapper = JiraFieldMapper(client)
         await field_mapper.initialize()
-        embeddings = get_embedding_service(EmbeddingProvider.AWS_BEDROCK).get_embedder()
-        repository = get_pgvector_repository(embeddings=embeddings)
-        repository.ensure_initialized()
-        vector_store = None
-        v2_knowledge_repository = None
-        if settings.VECTOR_STORE_V2_DUAL_WRITE_ENABLED or force_vector_store:
-            vector_store = get_v2_vector_store(embeddings)
-            await vector_store.initialize()
-            v2_knowledge_repository = get_v2_knowledge_repository()
+        knowledge_store = await create_knowledge_store_dependencies(
+            require_vector_store=force_vector_store,
+        )
         summarizer = get_summarizer_service() if enable_summarization else None
         return JiraIssueIngestionDependencies(
             cloud_id=cloud_id,
@@ -99,12 +90,12 @@ async def create_jira_issue_ingestion_dependencies(
             client=client,
             field_mapper=field_mapper,
             transformer=JiraTransformer(field_mapper),
-            repository=repository,
+            repository=knowledge_store.repository,
             summarizer=summarizer,
-            vector_store=vector_store,
-            v2_knowledge_repository=v2_knowledge_repository,
+            vector_store=knowledge_store.vector_store,
+            v2_knowledge_repository=knowledge_store.v2_knowledge_repository,
             v2_document_builder=JiraIssueV2DocumentBuilder()
-            if vector_store is not None
+            if knowledge_store.vector_store is not None
             else None,
         )
     except Exception as exc:

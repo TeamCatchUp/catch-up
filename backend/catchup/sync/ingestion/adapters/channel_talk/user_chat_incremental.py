@@ -3,13 +3,9 @@ from __future__ import annotations
 from fastapi.concurrency import run_in_threadpool
 from langchain_core.documents import Document
 
-from catchup.components.embedder.constants import EmbeddingProvider
-from catchup.components.embedder.factory import get_embedding_service
 from catchup.components.summarizer import SummarizeRequest
 from catchup.components.summarizer import SummarizerService
 from catchup.components.summarizer import get_summarizer_service
-from catchup.components.vector_db.factory import get_pgvector_repository
-from catchup.components.vector_db.factory import get_v2_vector_store
 from catchup.components.vector_db.pgvector.repository import PGVectorRepository
 from catchup.components.vector_db.v2 import VectorStore
 from catchup.connectors.channel_talk.core.user_chat_full_sync_fetcher import (
@@ -50,6 +46,9 @@ from catchup.sync.ingestion.document_builders.channel_talk_user_chat import (
 )
 from catchup.sync.ingestion.dual_write import DualWriter
 from catchup.sync.ingestion.dual_write import apply_page_content_to_vector_content
+from catchup.sync.ingestion.factories.knowledge_store import (
+    create_knowledge_store_dependencies,
+)
 from catchup.sync.ingestion.pipeline import run_sync_ingestion
 from catchup.sync.ingestion.schemas import SyncWindow
 
@@ -62,6 +61,7 @@ class ChannelTalkUserChatIncrementalIngestionAdapter:
         *,
         enable_summarization: bool = True,
         enable_v2_dual_write: bool = False,
+        repository: PGVectorRepository | None = None,
         vector_store: VectorStore | None = None,
         v2_document_builder: ChannelTalkUserChatV2DocumentBuilder | None = None,
     ) -> None:
@@ -73,7 +73,7 @@ class ChannelTalkUserChatIncrementalIngestionAdapter:
         self._enable_summarization = enable_summarization
         self._enable_v2_dual_write = enable_v2_dual_write
         self._summarizer: SummarizerService | None = None
-        self._repository: PGVectorRepository | None = None
+        self._repository = repository
         self._vector_store = vector_store
 
     async def fetch(
@@ -302,11 +302,19 @@ class ChannelTalkUserChatIncrementalIngestionAdapter:
     async def _get_repository(self) -> PGVectorRepository:
         if self._repository is None:
             repository = self._build_repository()
-            try:
-                repository.ensure_initialized()
-            except RuntimeError:
-                await repository.initialize(None)
-            self._repository = repository
+            if repository is not None:
+                try:
+                    repository.ensure_initialized()
+                except RuntimeError:
+                    await repository.initialize(None)
+                self._repository = repository
+            else:
+                knowledge_store = await create_knowledge_store_dependencies(
+                    require_vector_store=self._enable_v2_dual_write,
+                )
+                self._repository = knowledge_store.repository
+                if self._vector_store is None:
+                    self._vector_store = knowledge_store.vector_store
         assert self._repository is not None
         return self._repository
 
@@ -314,12 +322,12 @@ class ChannelTalkUserChatIncrementalIngestionAdapter:
         if not self._enable_v2_dual_write:
             return None
         if self._vector_store is None:
-            embeddings = get_embedding_service(
-                EmbeddingProvider.AWS_BEDROCK
-            ).get_embedder()
-            vector_store = get_v2_vector_store(embeddings)
-            await vector_store.initialize()
-            self._vector_store = vector_store
+            knowledge_store = await create_knowledge_store_dependencies(
+                require_vector_store=True,
+            )
+            if self._repository is None:
+                self._repository = knowledge_store.repository
+            self._vector_store = knowledge_store.vector_store
         return self._vector_store
 
     def _get_fetcher(self) -> ChannelTalkUserChatFullSyncFetcher:
@@ -333,12 +341,8 @@ class ChannelTalkUserChatIncrementalIngestionAdapter:
         return self._summarizer
 
     @staticmethod
-    def _build_repository() -> PGVectorRepository:
-        return get_pgvector_repository(
-            embeddings=get_embedding_service(
-                EmbeddingProvider.AWS_BEDROCK
-            ).get_embedder()
-        )
+    def _build_repository() -> PGVectorRepository | None:
+        return None
 
     @staticmethod
     def _to_langchain_documents(

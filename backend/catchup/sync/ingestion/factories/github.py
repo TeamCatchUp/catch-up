@@ -11,13 +11,7 @@ from fastapi.concurrency import run_in_threadpool
 from httpx import HTTPStatusError
 from httpx import RequestError
 
-from catchup.components.embedder.constants import EmbeddingProvider
-from catchup.components.embedder.factory import get_embedding_service
 from catchup.components.summarizer import get_summarizer_service
-from catchup.components.vector_db.factory import get_pgvector_repository
-from catchup.components.vector_db.factory import get_v2_knowledge_repository
-from catchup.components.vector_db.factory import get_v2_vector_store
-from catchup.configs.config import settings
 from catchup.connectors.github.auth import get_github_app_service
 from catchup.connectors.github.client import GitHubApiClient
 from catchup.db.engine import SessionLocal
@@ -35,6 +29,9 @@ from catchup.sync.ingestion.adapters.github import (
 from catchup.sync.ingestion.adapters.github import GithubRepositoryRepairAdapter
 from catchup.sync.ingestion.adapters.github.repository_base import (
     GithubRepositoryAdapterBase,
+)
+from catchup.sync.ingestion.factories.knowledge_store import (
+    create_knowledge_store_dependencies,
 )
 
 logger = logging.getLogger(__name__)
@@ -90,15 +87,9 @@ async def _create_github_repository_adapter(
             installation_id
         )
 
-        embeddings = get_embedding_service(EmbeddingProvider.AWS_BEDROCK).get_embedder()
-        repository = get_pgvector_repository(embeddings=embeddings)
-        repository.ensure_initialized()
-        vector_store = None
-        v2_knowledge_repository = None
-        if settings.VECTOR_STORE_V2_DUAL_WRITE_ENABLED or force_vector_store:
-            vector_store = get_v2_vector_store(embeddings)
-            await vector_store.initialize()
-            v2_knowledge_repository = get_v2_knowledge_repository()
+        knowledge_store = await create_knowledge_store_dependencies(
+            require_vector_store=force_vector_store,
+        )
 
         return adapter_cls(
             installation_id=installation_id,
@@ -109,10 +100,10 @@ async def _create_github_repository_adapter(
                     force_refresh=True,
                 ),
             ),
-            repository=repository,
+            repository=knowledge_store.repository,
             summarizer=get_summarizer_service(),
-            vector_store=vector_store,
-            v2_knowledge_repository=v2_knowledge_repository,
+            vector_store=knowledge_store.vector_store,
+            v2_knowledge_repository=knowledge_store.v2_knowledge_repository,
         )
     except HTTPStatusError as exc:
         status_code = exc.response.status_code
