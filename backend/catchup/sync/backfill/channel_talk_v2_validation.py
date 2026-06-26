@@ -232,9 +232,12 @@ def validate_channel_talk_user_chat_v2_sample_row(
     if isinstance(metadata, dict):
         if metadata.get("state") in (None, ""):
             errors.append("missing:channel_talk_user_chat.state")
-        for field_name in ("assignment", "messages", "timing", "metrics", "anchors"):
+        for field_name in ("assignment",):
             if field_name in metadata and not isinstance(metadata[field_name], dict):
                 errors.append(f"invalid:channel_talk_user_chat.{field_name}")
+        for field_name in ("messages", "timing", "metrics", "anchors"):
+            if field_name in metadata:
+                errors.append(f"forbidden:channel_talk_user_chat.{field_name}")
     return ChannelTalkV2SampleValidation(langchain_id=langchain_id, errors=tuple(errors))
 
 

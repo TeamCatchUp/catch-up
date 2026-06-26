@@ -65,15 +65,6 @@ def _valid_user_chat_row() -> dict:
                 "goal_state": None,
                 "customer": None,
                 "assignment": {"manager_ids": []},
-                "messages": {
-                    "count": 1,
-                    "included_part_count": 1,
-                    "excluded_message_count": 0,
-                    "author_types": ["manager"],
-                },
-                "timing": {},
-                "metrics": {},
-                "anchors": {},
                 "tags": [],
             }
         },

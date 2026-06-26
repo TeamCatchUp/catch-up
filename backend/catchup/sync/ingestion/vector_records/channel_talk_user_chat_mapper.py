@@ -25,9 +25,6 @@ from catchup.sync.ingestion.adapters.channel_talk.user_chat_models import (
     ChannelTalkFetchedUserChat,
 )
 from catchup.sync.ingestion.vector_records.channel_talk_user_chat import (
-    ChannelTalkUserChatAnchorsMetadata,
-)
-from catchup.sync.ingestion.vector_records.channel_talk_user_chat import (
     ChannelTalkUserChatAssignmentMetadata,
 )
 from catchup.sync.ingestion.vector_records.channel_talk_user_chat import (
@@ -40,19 +37,10 @@ from catchup.sync.ingestion.vector_records.channel_talk_user_chat import (
     ChannelTalkUserChatDataPart,
 )
 from catchup.sync.ingestion.vector_records.channel_talk_user_chat import (
-    ChannelTalkUserChatMessagesMetadata,
-)
-from catchup.sync.ingestion.vector_records.channel_talk_user_chat import (
     ChannelTalkUserChatMetadata,
 )
 from catchup.sync.ingestion.vector_records.channel_talk_user_chat import (
-    ChannelTalkUserChatMetricsMetadata,
-)
-from catchup.sync.ingestion.vector_records.channel_talk_user_chat import (
     ChannelTalkUserChatTagMetadata,
-)
-from catchup.sync.ingestion.vector_records.channel_talk_user_chat import (
-    ChannelTalkUserChatTimingMetadata,
 )
 from catchup.sync.ingestion.vector_records.channel_talk_user_chat import (
     ChannelTalkUserChatVectorRecord,
@@ -165,44 +153,6 @@ class ChannelTalkUserChatV2RecordMapper:
                         managers_by_id=managers_by_id,
                         fallback_managers=detail.assignment.managers,
                     ),
-                ),
-                messages=ChannelTalkUserChatMessagesMetadata(
-                    count=len(bundle.messages),
-                    included_part_count=len(parts),
-                    excluded_message_count=max(len(bundle.messages) - len(parts), 0),
-                    last_message_at=last_message_at,
-                    author_types=self._author_types(bundle.messages),
-                ),
-                timing=ChannelTalkUserChatTimingMetadata(
-                    first_opened_at=detail.timing.first_opened_at,
-                    opened_at=detail.timing.opened_at,
-                    first_asked_at=detail.timing.first_asked_at,
-                    first_replied_at=detail.timing.first_replied_at,
-                    first_replied_at_after_open=(
-                        detail.timing.first_replied_at_after_open
-                    ),
-                    front_updated_at=detail.timing.front_updated_at,
-                    desk_updated_at=detail.timing.desk_updated_at,
-                    follow_up_triggered_at=detail.timing.follow_up_triggered_at,
-                    closed_at=detail.timing.closed_at,
-                    snoozed_at=detail.timing.snoozed_at,
-                ),
-                metrics=ChannelTalkUserChatMetricsMetadata(
-                    waiting_time=detail.metrics.waiting_time,
-                    avg_reply_time=detail.metrics.avg_reply_time,
-                    total_reply_time=detail.metrics.total_reply_time,
-                    reply_count=detail.metrics.reply_count,
-                    operation_waiting_time=detail.metrics.operation_waiting_time,
-                    operation_avg_reply_time=detail.metrics.operation_avg_reply_time,
-                    operation_total_reply_time=(
-                        detail.metrics.operation_total_reply_time
-                    ),
-                    operation_reply_count=detail.metrics.operation_reply_count,
-                ),
-                anchors=ChannelTalkUserChatAnchorsMetadata(
-                    front_message_id=detail.anchors.front_message_id,
-                    desk_message_id=detail.anchors.desk_message_id,
-                    user_last_message_id=detail.anchors.user_last_message_id,
                 ),
                 tags=[
                     ChannelTalkUserChatTagMetadata(key=tag.key, name=tag.name)
@@ -364,24 +314,6 @@ class ChannelTalkUserChatV2RecordMapper:
             language=customer.language if customer is not None else None,
             country=customer.country if customer is not None else None,
             city=customer.city if customer is not None else None,
-        )
-
-    @staticmethod
-    def _author_types(
-        messages: tuple[ChannelTalkUserChatMessage, ...],
-    ) -> list[str]:
-        return list(
-            dict.fromkeys(
-                author_type
-                for message in messages
-                if (
-                    author_type := (
-                        message.author.author_type
-                        if message.author is not None
-                        else message.person_type
-                    )
-                )
-            )
         )
 
     @staticmethod

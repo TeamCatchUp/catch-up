@@ -144,10 +144,6 @@ def test_channel_talk_user_chat_v2_mapper_builds_contract_without_duplicates() -
         "goal_state",
         "customer",
         "assignment",
-        "messages",
-        "timing",
-        "metrics",
-        "anchors",
         "tags",
     }
     for duplicated_field in (
@@ -162,14 +158,8 @@ def test_channel_talk_user_chat_v2_mapper_builds_contract_without_duplicates() -
         "target_name",
     ):
         assert duplicated_field not in domain_metadata
-    for derived_flag in (
-        "has_internal_notes",
-        "has_form_messages",
-        "has_bot_messages",
-        "has_system_events",
-        "contains_private_events",
-    ):
-        assert derived_flag not in domain_metadata["messages"]
+    for removed_field in ("messages", "timing", "metrics", "anchors"):
+        assert removed_field not in domain_metadata
     assert "raw_payload" not in str(metadata)
 
 
