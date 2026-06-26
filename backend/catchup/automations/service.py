@@ -18,6 +18,7 @@ from catchup.db.agent_triggers import AgentTriggerDefinition
 from catchup.db.agent_triggers import AgentTriggerDefinitionError
 from catchup.db.agent_triggers import create_or_update_agent_trigger_from_definition
 from catchup.db.automations import get_inquiry_agent_spec_for_update
+from catchup.db.automations import get_inquiry_agent_spec_with_user
 from catchup.db.automations import list_inquiry_agent_specs
 from catchup.db.automations import upsert_inquiry_agent_spec
 from catchup.db.channel_talk.repository import ChannelTalkCredentialsRepository
@@ -121,6 +122,46 @@ def validate_slack_channel_access(
 
 
 class InquiryAutomationService:
+
+    def get_automation(
+        self,
+        db: Session,
+        *,
+        agent_spec_id: int,
+        workspace_id: int,
+    ) -> InquiryAutomationItem:
+        """단일 문의 자동화를 조회한다. 존재하지 않으면 AutomationNotFoundError를 발생시킨다."""
+        row = get_inquiry_agent_spec_with_user(db, agent_spec_id, workspace_id)
+        if row is None:
+            raise AutomationNotFoundError("Automation not found")
+        spec_row, author = row
+        try:
+            config = InquiryAutomationConfig.model_validate(spec_row.spec)
+        except Exception as exc:
+            raise AutomationNotFoundError("Automation spec is invalid") from exc
+        trigger = spec_row.triggers[0] if spec_row.triggers else None
+        quiet_period_seconds = (
+            trigger.condition.get("quiet_period_seconds")
+            if trigger is not None
+            else None
+        )
+        title = spec_row.spec.get("title") or spec_row.spec.get("name")
+        if not isinstance(title, str) or not title.strip():
+            title = "채널톡 문의 자동화"
+        return InquiryAutomationItem(
+            agent_spec_id=spec_row.id,
+            status=spec_row.status,
+            channel_talk_credential_id=config.channel_talk_credential_id,
+            slack_channel_id=config.slack_channel_id,
+            slack_credential_id=config.slack_credential_id,
+            guide_instruction=config.guide_instruction,
+            quiet_period_seconds=quiet_period_seconds,
+            trigger_id=trigger.id if trigger is not None else None,
+            title=title.strip(),
+            author_name=author.name,
+            updated_at=spec_row.updated_at.isoformat(),
+            author_profile_image_url=author.picture,
+        )
 
     def list_automations(
         self,
