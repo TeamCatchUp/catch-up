@@ -39,7 +39,7 @@ export default function AgentCard({
   const metadataRow = (
     <div className="text-body-xsmall text-text-normal-alternative flex h-6 shrink-0 items-center gap-2">
       <div className="flex shrink-0 items-center gap-1.5">
-        <div className="border-fill-normal-strong flex size-5 shrink-0 items-center justify-center overflow-hidden rounded-full border">
+        <div className="border-fill-normal-strong flex size-6.25 shrink-0 items-center justify-center overflow-hidden rounded-full border">
           {safeAuthorProfileImageUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={safeAuthorProfileImageUrl} alt="" className="size-full object-cover" />
