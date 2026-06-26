@@ -37,57 +37,8 @@ class ChannelTalkUserChatAssignmentMetadata(BaseModel):
 
     manager_ids: list[str] = Field(default_factory=list)
     assignee_id: str | None = None
-    assignee_name: str | None = None
-    assignee_email: str | None = None
     first_assignee_id_after_open: str | None = None
-    manager_names: list[str] = Field(default_factory=list)
     manager_role_ids: list[str] = Field(default_factory=list)
-
-
-class ChannelTalkUserChatMessagesMetadata(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    count: int = 0
-    included_part_count: int = 0
-    excluded_message_count: int = 0
-    last_message_at: datetime | None = None
-    author_types: list[str] = Field(default_factory=list)
-
-
-class ChannelTalkUserChatTimingMetadata(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    first_opened_at: datetime | None = None
-    opened_at: datetime | None = None
-    first_asked_at: datetime | None = None
-    first_replied_at: datetime | None = None
-    first_replied_at_after_open: datetime | None = None
-    front_updated_at: datetime | None = None
-    desk_updated_at: datetime | None = None
-    follow_up_triggered_at: datetime | None = None
-    closed_at: datetime | None = None
-    snoozed_at: datetime | None = None
-
-
-class ChannelTalkUserChatMetricsMetadata(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    waiting_time: int | None = None
-    avg_reply_time: int | None = None
-    total_reply_time: int | None = None
-    reply_count: int | None = None
-    operation_waiting_time: int | None = None
-    operation_avg_reply_time: int | None = None
-    operation_total_reply_time: int | None = None
-    operation_reply_count: int | None = None
-
-
-class ChannelTalkUserChatAnchorsMetadata(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    front_message_id: str | None = None
-    desk_message_id: str | None = None
-    user_last_message_id: str | None = None
 
 
 class ChannelTalkUserChatTagMetadata(BaseModel):
@@ -101,24 +52,13 @@ class ChannelTalkUserChatMetadata(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     state: str
+    description: str | None = None
     managed: bool | None = None
     priority: str | None = None
     goal_state: str | None = None
     customer: ChannelTalkUserChatCustomerMetadata | None = None
     assignment: ChannelTalkUserChatAssignmentMetadata = Field(
         default_factory=ChannelTalkUserChatAssignmentMetadata
-    )
-    messages: ChannelTalkUserChatMessagesMetadata = Field(
-        default_factory=ChannelTalkUserChatMessagesMetadata
-    )
-    timing: ChannelTalkUserChatTimingMetadata = Field(
-        default_factory=ChannelTalkUserChatTimingMetadata
-    )
-    metrics: ChannelTalkUserChatMetricsMetadata = Field(
-        default_factory=ChannelTalkUserChatMetricsMetadata
-    )
-    anchors: ChannelTalkUserChatAnchorsMetadata = Field(
-        default_factory=ChannelTalkUserChatAnchorsMetadata
     )
     tags: list[ChannelTalkUserChatTagMetadata] = Field(default_factory=list)
 

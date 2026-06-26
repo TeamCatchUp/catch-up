@@ -20,8 +20,8 @@ CHANNEL_TALK_DOCUMENT_ARTICLE_V2_SCHEMA_VERSION = 2
 class ChannelTalkDocumentArticleAuthorMetadata(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    author_id: str | None = None
-    author_name: str | None = None
+    external_user_id: str | None = None
+    internal_user_id: str | None = None
 
 
 class ChannelTalkDocumentArticleTaxonomyMetadata(BaseModel):

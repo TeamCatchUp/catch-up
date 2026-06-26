@@ -25,9 +25,6 @@ from catchup.sync.ingestion.adapters.channel_talk.user_chat_models import (
     ChannelTalkFetchedUserChat,
 )
 from catchup.sync.ingestion.vector_records.channel_talk_user_chat import (
-    ChannelTalkUserChatAnchorsMetadata,
-)
-from catchup.sync.ingestion.vector_records.channel_talk_user_chat import (
     ChannelTalkUserChatAssignmentMetadata,
 )
 from catchup.sync.ingestion.vector_records.channel_talk_user_chat import (
@@ -40,19 +37,10 @@ from catchup.sync.ingestion.vector_records.channel_talk_user_chat import (
     ChannelTalkUserChatDataPart,
 )
 from catchup.sync.ingestion.vector_records.channel_talk_user_chat import (
-    ChannelTalkUserChatMessagesMetadata,
-)
-from catchup.sync.ingestion.vector_records.channel_talk_user_chat import (
     ChannelTalkUserChatMetadata,
 )
 from catchup.sync.ingestion.vector_records.channel_talk_user_chat import (
-    ChannelTalkUserChatMetricsMetadata,
-)
-from catchup.sync.ingestion.vector_records.channel_talk_user_chat import (
     ChannelTalkUserChatTagMetadata,
-)
-from catchup.sync.ingestion.vector_records.channel_talk_user_chat import (
-    ChannelTalkUserChatTimingMetadata,
 )
 from catchup.sync.ingestion.vector_records.channel_talk_user_chat import (
     ChannelTalkUserChatVectorRecord,
@@ -121,11 +109,6 @@ class ChannelTalkUserChatV2RecordMapper:
             or created_at
         )
         target_name = _normalize_text(bundle.channel_name) or channel_id
-        assignee_name, assignee_email = self._assignee_display(
-            detail,
-            managers_by_id=managers_by_id,
-        )
-
         return ChannelTalkUserChatVectorRecord(
             langchain_id=document_id
             or build_user_chat_document_id(
@@ -155,6 +138,7 @@ class ChannelTalkUserChatV2RecordMapper:
             synced_at=synced_at,
             channel_talk_user_chat=ChannelTalkUserChatMetadata(
                 state=detail.state.value,
+                description=detail.description,
                 managed=detail.managed,
                 priority=detail.priority,
                 goal_state=detail.goal_state,
@@ -162,59 +146,14 @@ class ChannelTalkUserChatV2RecordMapper:
                 assignment=ChannelTalkUserChatAssignmentMetadata(
                     manager_ids=list(detail.assignment.manager_ids),
                     assignee_id=detail.assignment.assignee_id,
-                    assignee_name=assignee_name,
-                    assignee_email=assignee_email,
                     first_assignee_id_after_open=(
                         detail.assignment.first_assignee_id_after_open
-                    ),
-                    manager_names=self._renderer.resolve_manager_names(
-                        manager_ids=detail.assignment.manager_ids,
-                        managers_by_id=managers_by_id,
-                        fallback_managers=detail.assignment.managers,
                     ),
                     manager_role_ids=self._renderer.resolve_manager_role_ids(
                         manager_ids=detail.assignment.manager_ids,
                         managers_by_id=managers_by_id,
                         fallback_managers=detail.assignment.managers,
                     ),
-                ),
-                messages=ChannelTalkUserChatMessagesMetadata(
-                    count=len(bundle.messages),
-                    included_part_count=len(parts),
-                    excluded_message_count=max(len(bundle.messages) - len(parts), 0),
-                    last_message_at=last_message_at,
-                    author_types=self._author_types(bundle.messages),
-                ),
-                timing=ChannelTalkUserChatTimingMetadata(
-                    first_opened_at=detail.timing.first_opened_at,
-                    opened_at=detail.timing.opened_at,
-                    first_asked_at=detail.timing.first_asked_at,
-                    first_replied_at=detail.timing.first_replied_at,
-                    first_replied_at_after_open=(
-                        detail.timing.first_replied_at_after_open
-                    ),
-                    front_updated_at=detail.timing.front_updated_at,
-                    desk_updated_at=detail.timing.desk_updated_at,
-                    follow_up_triggered_at=detail.timing.follow_up_triggered_at,
-                    closed_at=detail.timing.closed_at,
-                    snoozed_at=detail.timing.snoozed_at,
-                ),
-                metrics=ChannelTalkUserChatMetricsMetadata(
-                    waiting_time=detail.metrics.waiting_time,
-                    avg_reply_time=detail.metrics.avg_reply_time,
-                    total_reply_time=detail.metrics.total_reply_time,
-                    reply_count=detail.metrics.reply_count,
-                    operation_waiting_time=detail.metrics.operation_waiting_time,
-                    operation_avg_reply_time=detail.metrics.operation_avg_reply_time,
-                    operation_total_reply_time=(
-                        detail.metrics.operation_total_reply_time
-                    ),
-                    operation_reply_count=detail.metrics.operation_reply_count,
-                ),
-                anchors=ChannelTalkUserChatAnchorsMetadata(
-                    front_message_id=detail.anchors.front_message_id,
-                    desk_message_id=detail.anchors.desk_message_id,
-                    user_last_message_id=detail.anchors.user_last_message_id,
                 ),
                 tags=[
                     ChannelTalkUserChatTagMetadata(key=tag.key, name=tag.name)
@@ -379,39 +318,6 @@ class ChannelTalkUserChatV2RecordMapper:
         )
 
     @staticmethod
-    def _author_types(
-        messages: tuple[ChannelTalkUserChatMessage, ...],
-    ) -> list[str]:
-        return list(
-            dict.fromkeys(
-                author_type
-                for message in messages
-                if (
-                    author_type := (
-                        message.author.author_type
-                        if message.author is not None
-                        else message.person_type
-                    )
-                )
-            )
-        )
-
-    def _assignee_display(
-        self,
-        detail: ChannelTalkUserChatDetail,
-        *,
-        managers_by_id: dict[str, ChannelTalkManagerMetadata],
-    ) -> tuple[str | None, str | None]:
-        assignee_id = detail.assignment.assignee_id
-        assignee_manager = managers_by_id.get(assignee_id) if assignee_id else None
-        return (
-            detail.assignment.assignee_name
-            or (assignee_manager.name if assignee_manager is not None else None),
-            detail.assignment.assignee_email
-            or (assignee_manager.email if assignee_manager is not None else None),
-        )
-
-    @staticmethod
     def _author_metadata(
         message: ChannelTalkUserChatMessage,
         *,
@@ -424,15 +330,13 @@ class ChannelTalkUserChatV2RecordMapper:
         return _drop_none(
             {
                 "author_type": author.author_type,
-                "bot_id": author.bot_id,
-                "user_id": author.user_id,
-                "member_id": author.member_id,
-                "manager_id": author.manager_id,
-                "name": author.name or (manager.name if manager else None),
-                "email": author.email or (manager.email if manager else None),
-                "avatar_url": author.avatar_url,
+                "external_user_id": (
+                    author.manager_id
+                    or author.user_id
+                    or author.member_id
+                    or author.bot_id
+                ),
                 "role_id": author.role_id or (manager.role_id if manager else None),
-                "bot_name": author.bot_name,
                 "is_bot": author.is_bot,
             }
         )

@@ -43,7 +43,7 @@ def _valid_row() -> dict:
                 "team_id": "T123",
                 "channel_id": "C123",
                 "ts": "1712345678.000100",
-                "author": {"slack_user_id": "U123", "catchup_user_id": "42"},
+                "author": {"external_user_id": "U123", "internal_user_id": "42"},
                 "reactions": [],
                 "edited_at": None,
             }

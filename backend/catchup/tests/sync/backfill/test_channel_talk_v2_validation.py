@@ -60,20 +60,12 @@ def _valid_user_chat_row() -> dict:
         "langchain_metadata": {
             "channel_talk_user_chat": {
                 "state": "opened",
+                "description": "VIP renewal help",
                 "managed": True,
                 "priority": None,
                 "goal_state": None,
                 "customer": None,
-                "assignment": {"manager_ids": [], "manager_names": []},
-                "messages": {
-                    "count": 1,
-                    "included_part_count": 1,
-                    "excluded_message_count": 0,
-                    "author_types": ["manager"],
-                },
-                "timing": {},
-                "metrics": {},
-                "anchors": {},
+                "assignment": {"manager_ids": []},
                 "tags": [],
             }
         },
@@ -107,7 +99,10 @@ def _valid_document_article_row() -> dict:
         "langchain_metadata": {
             "channel_talk_document_article": {
                 "schema_version": 2,
-                "author": {"author_id": "manager-1", "author_name": "Jane"},
+                "author": {
+                    "external_user_id": "manager-1",
+                    "internal_user_id": "usr_manager_1",
+                },
                 "taxonomy": {
                     "topic_ids": [],
                     "topic_names": [],

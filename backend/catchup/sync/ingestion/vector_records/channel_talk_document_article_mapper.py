@@ -108,8 +108,8 @@ class ChannelTalkDocumentArticleV2RecordMapper:
             synced_at=synced_at or base.synced_at,
             channel_talk_document_article=ChannelTalkDocumentArticleMetadata(
                 author=ChannelTalkDocumentArticleAuthorMetadata(
-                    author_id=author.author_id,
-                    author_name=author.author_name,
+                    external_user_id=author.author_id,
+                    internal_user_id=internal_author_id,
                 ),
                 taxonomy=ChannelTalkDocumentArticleTaxonomyMetadata(
                     topic_ids=list(taxonomy.topic_ids),

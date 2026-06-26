@@ -178,7 +178,6 @@ class JiraIssueV2RecordMapper:
                 "author": cls._user_metadata(comment.author_user)
                 or cls._user_metadata_from_values(
                     account_id=comment.author_account_id,
-                    display_name=comment.author,
                 ),
                 "created_at": cls._isoformat(comment.created),
                 "updated_at": cls._isoformat(comment.updated),
@@ -186,8 +185,7 @@ class JiraIssueV2RecordMapper:
                 "mentions": [
                     _drop_none(
                         {
-                            "account_id": mention.account_id,
-                            "display_name": mention.display_name,
+                            "external_user_id": mention.account_id,
                             "text": mention.text,
                         }
                     )
@@ -238,7 +236,6 @@ class JiraIssueV2RecordMapper:
                 "author": cls._user_metadata(attachment.author_user)
                 or cls._user_metadata_from_values(
                     account_id=attachment.author_account_id,
-                    display_name=attachment.author,
                 ),
                 "mime_type": attachment.mime_type,
                 "url": attachment.url,
@@ -277,7 +274,6 @@ class JiraIssueV2RecordMapper:
                 "comment_author": cls._user_metadata(comment.author_user)
                 or cls._user_metadata_from_values(
                     account_id=comment.author_account_id,
-                    display_name=comment.author,
                 ),
             }
         )
@@ -289,32 +285,24 @@ class JiraIssueV2RecordMapper:
         if not any(
             (
                 user.account_id,
-                user.display_name,
-                user.email_address,
-                user.avatar_url,
                 user.catchup_user_id,
             )
         ):
             return None
         return JiraIssueUserMetadata(
-            account_id=user.account_id,
-            display_name=user.display_name,
-            email_address=user.email_address,
-            avatar_url=user.avatar_url,
-            catchup_user_id=user.catchup_user_id,
+            external_user_id=user.account_id,
+            internal_user_id=user.catchup_user_id,
         )
 
     @staticmethod
     def _user_metadata_from_values(
         *,
         account_id: str | None,
-        display_name: str | None,
     ) -> JiraIssueUserMetadata | None:
-        if not any((account_id, display_name)):
+        if not account_id:
             return None
         return JiraIssueUserMetadata(
-            account_id=account_id,
-            display_name=display_name,
+            external_user_id=account_id,
         )
 
     @staticmethod

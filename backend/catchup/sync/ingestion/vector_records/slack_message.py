@@ -18,10 +18,8 @@ from catchup.utils.validation import require_text
 class SlackMessageAuthorMetadata(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    slack_user_id: str | None = None
-    slack_bot_id: str | None = None
-    name: str | None = None
-    catchup_user_id: str | None = None
+    external_user_id: str | None = None
+    internal_user_id: str | None = None
 
 
 class SlackMessageReactionMetadata(BaseModel):

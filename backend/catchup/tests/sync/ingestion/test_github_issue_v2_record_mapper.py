@@ -167,7 +167,10 @@ def test_github_issue_v2_mapper_builds_record_from_parsed_issue() -> None:
         "issue_comment",
     ]
     assert values["data"]["parts"][1]["metadata"]["id"] == "IC_kwDOIssueComment"
-    assert values["data"]["parts"][1]["metadata"]["author"]["login"] == "commenter"
+    assert (
+        values["data"]["parts"][1]["metadata"]["author"]["external_user_id"]
+        == "commenter"
+    )
 
     metadata = values["langchain_metadata"]
     assert set(metadata) == {"github_issue"}
@@ -175,13 +178,19 @@ def test_github_issue_v2_mapper_builds_record_from_parsed_issue() -> None:
 
     github_issue = metadata["github_issue"]
     assert github_issue["state"] == "open"
-    assert github_issue["author"]["catchup_user_id"] == "usr_github_ba2slk"
-    assert github_issue["assignees"][0]["catchup_user_id"] == "usr_github_maintainer"
+    assert github_issue["author"] == {
+        "external_user_id": "ba2slk",
+        "internal_user_id": "usr_github_ba2slk",
+    }
+    assert github_issue["assignees"][0] == {
+        "external_user_id": "maintainer",
+        "internal_user_id": "usr_github_maintainer",
+    }
     assert github_issue["labels"] == [
         {"name": "migration", "color": "0e8a16", "description": None}
     ]
     assert github_issue["milestone"]["title"] == "GitHub v2"
-    assert github_issue["comments_count"] == 1
+    assert "comments_count" not in github_issue
     for forbidden_field in (
         "raw",
         "pagination",

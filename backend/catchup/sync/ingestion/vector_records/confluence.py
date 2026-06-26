@@ -18,8 +18,8 @@ from catchup.utils.validation import require_text
 class ConfluenceUserMetadata(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    account_id: str | None = None
-    display_name: str | None = None
+    external_user_id: str | None = None
+    internal_user_id: str | None = None
 
 
 class ConfluenceSpaceMetadata(BaseModel):
