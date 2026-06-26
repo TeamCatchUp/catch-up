@@ -38,6 +38,7 @@ export function mapInquiryAutomationToAgentCard(item: InquiryAutomationItem): Ag
     authorName: formatNullableText(item.author_name),
     authorProfileImageUrl: normalizeNullableUrl(item.author_profile_image_url),
     updatedAtLabel: formatNullableDate(item.updated_at),
+    isEditable: item.is_editable,
   };
 }
 

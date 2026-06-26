@@ -83,6 +83,7 @@ export default function AgentEditorSettings({ mode = 'create', agentSpecId }: Ag
             value={form.quietPeriodSelect.value}
             icon={<ClockIcon className="size-5.5" aria-hidden="true" />}
             items={form.quietPeriodSelect.items}
+            disabled={form.quietPeriodSelect.disabled}
             onChange={form.quietPeriodSelect.onChange}
           />
           <div className="bg-fill-normal-strong flex w-full flex-col items-start justify-center gap-1.5 rounded-xl px-4 py-3">
@@ -131,6 +132,7 @@ export default function AgentEditorSettings({ mode = 'create', agentSpecId }: Ag
             onChange={form.setInstruction}
             maxLength={AGENT_STUDIO_SETTINGS_FIXTURE.instructionMaxLength}
             hintText={AGENT_STUDIO_SETTINGS_FIXTURE.instructionHintText}
+            disabled={form.isReadOnly}
           />
         </AgentSettingSection>
       </div>

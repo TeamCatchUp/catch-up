@@ -89,6 +89,7 @@ export function useAgentEditorSettingsForm({ mode = 'create', agentSpecId }: Use
     slackChannelId || (isEditMode && automationDetail !== undefined ? automationDetail.slack_channel_id : '');
   const instruction =
     instructionOverride ?? (isEditMode && automationDetail !== undefined ? (automationDetail.guide_instruction ?? '') : '');
+  const isEditReadOnly = isEditMode && automationDetail?.is_editable === false;
 
   const publishMutation = useMutation({
     ...inquiryAutomationsMutations.publish(),
@@ -143,6 +144,7 @@ export function useAgentEditorSettingsForm({ mode = 'create', agentSpecId }: Use
   const canSubmit = isEditMode
     ? !patchSettingsMutation.isPending &&
       automationDetailQuery.isSuccess &&
+      automationDetail?.is_editable === true &&
       editChannelTalkTarget !== undefined &&
       selectedChannelTalkTarget?.credential_id !== null &&
       selectedChannelTalkTarget?.credential_id !== undefined &&
@@ -215,6 +217,7 @@ export function useAgentEditorSettingsForm({ mode = 'create', agentSpecId }: Use
     canSubmit,
     channelTalkSelect: {
       disabled:
+        isEditReadOnly ||
         channelTalkTargetsQuery.isLoading || channelTalkTargetsQuery.isError || channelTalkTargetItems.length === 0,
       items: channelTalkTargetItems,
       onChange: setChannelTalkTargetId,
@@ -223,11 +226,13 @@ export function useAgentEditorSettingsForm({ mode = 'create', agentSpecId }: Use
     },
     handleSubmit,
     instruction,
+    isReadOnly: isEditReadOnly,
     loadErrorMessage:
       isEditMode && automationDetailQuery.isError
         ? '문의 자동화 설정을 불러오지 못했습니다. 잠시 후 다시 시도해주세요.'
         : null,
     quietPeriodSelect: {
+      disabled: isEditReadOnly,
       items: AGENT_STUDIO_SETTINGS_FIXTURE.quietPeriodOptions,
       onChange: setQuietPeriodSeconds,
       value: quietPeriodValue,
@@ -235,6 +240,7 @@ export function useAgentEditorSettingsForm({ mode = 'create', agentSpecId }: Use
     setInstruction: setInstructionOverride,
     slackChannelSelect: {
       disabled:
+        isEditReadOnly ||
         selectedSlackCredentialId === undefined ||
         slackTargetsQuery.isLoading ||
         slackTargetsQuery.isError ||
@@ -245,7 +251,8 @@ export function useAgentEditorSettingsForm({ mode = 'create', agentSpecId }: Use
       value: slackChannelValue,
     },
     slackCredentialSelect: {
-      disabled: slackCredentialsQuery.isLoading || slackCredentialsQuery.isError || slackCredentialItems.length === 0,
+      disabled:
+        isEditReadOnly || slackCredentialsQuery.isLoading || slackCredentialsQuery.isError || slackCredentialItems.length === 0,
       items: slackCredentialItems,
       onChange: handleSlackCredentialChange,
       placeholder: slackCredentialPlaceholder,

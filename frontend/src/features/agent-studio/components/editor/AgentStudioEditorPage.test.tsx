@@ -72,6 +72,7 @@ const existingAutomation: InquiryAutomationItem = {
   author_name: '이진수',
   updated_at: '2026-06-26T09:00:00.000Z',
   author_profile_image_url: null,
+  is_editable: true,
 };
 
 function renderWithQueryClient(ui: ReactElement) {
@@ -454,6 +455,24 @@ describe('AgentStudioEditorPage', () => {
       },
     ]);
     await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/agent-studio'));
+  });
+
+  it('keeps edit submit disabled when an existing automation is not editable', async () => {
+    mockEditorSuccessHandlers();
+    server.use(
+      http.get('/api/v1/automations/inquiries/42', () =>
+        HttpResponse.json({ ...existingAutomation, is_editable: false }),
+      ),
+    );
+
+    renderWithQueryClient(<AgentStudioEditorPage mode="edit" agentSpecId={42} />);
+
+    const submitButton = await screen.findByRole('button', { name: '수정하기' });
+
+    await waitFor(() =>
+      expect(screen.getByLabelText('답변 초안, 어떤 규칙으로 쓸까요?')).toHaveValue('기존 문의 대응 규칙'),
+    );
+    expect(submitButton).toBeDisabled();
   });
 
   it('prevents duplicate edit requests while a settings patch is already in flight', async () => {

@@ -32,12 +32,12 @@ export default function AgentStudioPage() {
   const isGroupedView = selectedFilter === 'all';
 
   const updateStatus = (agent: AgentStudioCardModel, status: 'active' | 'inactive') => {
-    if (!agent.agentSpecId) return;
+    if (!agent.agentSpecId || !agent.isEditable) return;
     statusMutation.mutate({ agentSpecId: agent.agentSpecId, body: { status } });
   };
 
   const editAgent = (agent: AgentStudioCardModel) => {
-    if (!agent.agentSpecId) return;
+    if (!agent.agentSpecId || !agent.isEditable) return;
     router.push(`/agent-studio/${agent.agentSpecId}/edit`);
   };
 

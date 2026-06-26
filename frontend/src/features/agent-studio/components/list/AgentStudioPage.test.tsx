@@ -67,6 +67,7 @@ const activeAutomation: InquiryAutomationItem = {
   author_name: '이진수',
   updated_at: '2020-01-06T00:00:00.000Z',
   author_profile_image_url: null,
+  is_editable: true,
 };
 
 const secondActiveAutomation: InquiryAutomationItem = {
@@ -82,6 +83,7 @@ const secondActiveAutomation: InquiryAutomationItem = {
   author_name: '이진수',
   updated_at: '2020-01-06T00:00:00.000Z',
   author_profile_image_url: null,
+  is_editable: true,
 };
 
 const thirdActiveAutomation: InquiryAutomationItem = {
@@ -97,6 +99,7 @@ const thirdActiveAutomation: InquiryAutomationItem = {
   author_name: '이진수',
   updated_at: '2020-01-06T00:00:00.000Z',
   author_profile_image_url: null,
+  is_editable: true,
 };
 
 const draftAutomation: InquiryAutomationItem = {
@@ -112,6 +115,7 @@ const draftAutomation: InquiryAutomationItem = {
   author_name: '이진수',
   updated_at: '2020-01-06T00:00:00.000Z',
   author_profile_image_url: null,
+  is_editable: true,
 };
 
 const inactiveAutomation: InquiryAutomationItem = {
@@ -127,6 +131,7 @@ const inactiveAutomation: InquiryAutomationItem = {
   author_name: '이진수',
   updated_at: '2020-01-06T00:00:00.000Z',
   author_profile_image_url: null,
+  is_editable: true,
 };
 
 beforeEach(() => {

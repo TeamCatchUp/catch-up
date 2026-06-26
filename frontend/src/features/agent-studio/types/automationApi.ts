@@ -48,6 +48,7 @@ export interface InquiryAutomationItem {
   author_name?: string | null;
   updated_at?: string | null;
   author_profile_image_url?: string | null;
+  is_editable: boolean;
 }
 
 export interface InquiryAutomationUpdateRequest {

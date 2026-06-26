@@ -12,6 +12,7 @@ const baseAutomation: InquiryAutomationItem = {
   guide_instruction: '짧게 답변',
   quiet_period_seconds: 60,
   trigger_id: 100,
+  is_editable: true,
 };
 
 describe('mapInquiryAutomation', () => {
@@ -25,6 +26,7 @@ describe('mapInquiryAutomation', () => {
       authorName: '-',
       authorProfileImageUrl: null,
       updatedAtLabel: '-',
+      isEditable: true,
     });
   });
 
