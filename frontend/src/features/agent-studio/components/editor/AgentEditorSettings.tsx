@@ -39,7 +39,13 @@ export default function AgentEditorSettings() {
       <div className="flex min-w-0 flex-col items-start gap-8 px-9 pt-5 pb-9">
         <div className="flex w-full items-center gap-3">
           <h1 className="text-heading-xlarge text-text-normal-strong min-w-0 flex-1 truncate">설정</h1>
-          <Button variant="box-solid-primary" size="lg" disabled={!form.canPublish} onClick={form.handlePublish}>
+          <Button
+            variant="box-solid-primary"
+            size="lg"
+            disabled={!form.canPublish}
+            onClick={form.handlePublish}
+            className="h-10"
+          >
             배포하기
           </Button>
         </div>
