@@ -328,6 +328,8 @@ class RetrievalService(BaseVectorDbService):
     최종 doc.metadata["score"]가 downstream(RAG, search API)이 읽는 점수다.
     """
 
+    _CANDIDATE_MULTIPLIER = 3
+
     def __init__(
         self,
         *,
@@ -375,8 +377,6 @@ class RetrievalService(BaseVectorDbService):
                 }
             )
         return {"$or": or_conditions} if len(or_conditions) > 1 else or_conditions[0]
-
-    _CANDIDATE_MULTIPLIER = 3
 
     @override
     async def hybrid_search(
