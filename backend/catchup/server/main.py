@@ -544,9 +544,13 @@ app.include_router(workflow_credentials_router)
 
 if settings.DEBUG_API_ENABLED:
     from catchup.server.debug.agent_simulate import router as agent_simulate_router
+    from catchup.server.debug.retrieval_v2_probe import (
+        router as retrieval_v2_probe_router,
+    )
     from catchup.server.debug.search_probe import router as search_probe_router
     app.include_router(search_probe_router)
     app.include_router(agent_simulate_router)
+    app.include_router(retrieval_v2_probe_router)
     logger.warning("debug_api_enabled", note="disable DEBUG_API_ENABLED in production")
 
 if settings.MCP_SERVER_ENABLED:

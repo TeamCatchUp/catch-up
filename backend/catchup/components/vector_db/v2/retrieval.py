@@ -116,12 +116,16 @@ class PGBigmRetriever:
         k: int,
         tool_filters: list[SourceType] | None,
         temporal_filters: list[TemporalFilter] | None,
-        order_by: str = "bigm_similarity(e.title, :token) DESC, e.created_at DESC",
+        order_by: str = "e.created_at DESC",
+        extra_select: str = "",
     ) -> tuple[TextClause, dict[str, Any]]:
         """공통 SELECT/WHERE/ORDER BY 골격을 조립한다.
 
-        token_condition과 order_by만 호출부에서 주입받아, body/title 쿼리가
-        같은 골격을 재사용할 수 있도록 한다.
+        token_condition, order_by, extra_select을 호출부에서 주입받아,
+        body/title 쿼리가 같은 골격을 재사용할 수 있도록 한다.
+        extra_select는 쉼표를 포함한 추가 컬럼 문자열이다 (예: ", col AS alias").
+        extra_select 안에 바인딩 파라미터(:name)를 쓸 경우 해당 키가 params에
+        이미 존재해야 한다 — _build_base_sql은 params를 추가로 확장하지 않는다.
         """
         params: dict[str, Any] = {"token": token, "k": k}
         filter_clauses = self._build_filter_clauses(
@@ -134,7 +138,7 @@ class PGBigmRetriever:
                 e.record_id, e.scope_type, e.scope_id,
                 e.target_type, e.target_id, e.target_name,
                 e.internal_author_id, e.title, e.body, e.data,
-                e.metadata, e.url, e.created_at, e.updated_at, e.synced_at
+                e.metadata, e.url, e.created_at, e.updated_at, e.synced_at{extra_select}
             FROM {KNOWLEDGE_STORE_TABLE_NAME} e
             WHERE {" AND ".join(filter_clauses)}
             ORDER BY {order_by}
@@ -160,6 +164,7 @@ class PGBigmRetriever:
             k,
             tool_filters,
             temporal_filters,
+            order_by="e.created_at DESC",
         )
 
     def _build_title_query(
@@ -171,10 +176,13 @@ class PGBigmRetriever:
     ) -> tuple[TextClause, dict[str, Any]]:
         """title 퍼지 검색 쿼리를 생성한다.
 
-        =% 연산자는 pg_bigm의 유사도 임계값(pg_bigm.similarity_limit, 기본 0.1)
+        =% 연산자는 pg_bigm의 유사도 임계값(pg_bigm.similarity_limit, 현재 0.17)
         이상인 title을 매칭한다. ORDER BY는 LIKE 완전 일치를 1순위 tie-breaker로
         두어, "CATDEV-134"처럼 토큰이 title에 그대로 포함된 문서가 퍼지 유사도만
         높은 다른 문서보다 앞에 오도록 보장한다.
+        bigm_score를 SELECT에 포함해 관측성 목적으로 keyword_score 메타데이터에 부착한다.
+        노이즈 컷오프는 DB 레벨 pg_bigm.similarity_limit(0.17)에서 처리하므로
+        Python 레벨 추가 필터링은 수행하지 않는다.
         """
         return self._build_base_sql(
             token,
@@ -183,10 +191,12 @@ class PGBigmRetriever:
             tool_filters,
             temporal_filters,
             order_by=(
-                # LIKE 완전 일치(1) vs 퍼지만 일치(0) → DESC로 완전 일치 우선
                 "(lower(e.title) LIKE lower(likequery(:token))) DESC,"
-                " bigm_similarity(e.title, :token) DESC,"
+                " bigm_score DESC,"
                 " e.created_at DESC"
+            ),
+            extra_select=(
+                ", bigm_similarity(lower(e.title), lower(:token)) AS bigm_score"
             ),
         )
 
@@ -229,15 +239,19 @@ class PGBigmRetriever:
         k: int,
         tool_filters: list[SourceType] | None,
         temporal_filters: list[TemporalFilter] | None,
-    ) -> list[Document]:
+    ) -> tuple[list[Document], dict[str, float]]:
         """토큰별 쿼리를 단일 세션에서 순차 실행하고 RRF 점수로 병합한다.
 
         각 토큰의 SQL 결과 순위를 1/(60+rank)로 변환해 누적한다.
         동일 문서가 여러 토큰에서 히트할수록 점수가 쌓여 상위로 올라온다.
         query_builder로 body/title 쿼리를 주입받아 로직을 공유한다.
+
+        extra_scores: SQL 결과 행에 bigm_score 같은 추가 컬럼이 있으면
+        doc_id별 max값을 수집해 두 번째 반환값으로 돌려준다. 없으면 빈 dict.
         """
         doc_map: dict[str, Any] = {}
         rank_scores: dict[str, float] = {}
+        extra_scores: dict[str, float] = {}
 
         async with self._session_factory() as session:
             for token in tokens:
@@ -250,13 +264,17 @@ class PGBigmRetriever:
                         60 + sql_rank
                     )
                     doc_map.setdefault(doc_id, row)
+                    if (score := getattr(row, "bigm_score", None)) is not None:
+                        extra_scores[doc_id] = max(
+                            extra_scores.get(doc_id, 0.0), float(score)
+                        )
 
         sorted_rows = sorted(
             doc_map.values(),
             key=lambda r: rank_scores[r.document_id],
             reverse=True,
         )
-        return self._to_documents(sorted_rows[:k])
+        return self._to_documents(sorted_rows[:k]), extra_scores
 
     async def search_body(
         self,
@@ -267,13 +285,14 @@ class PGBigmRetriever:
         temporal_filters: list[TemporalFilter] | None = None,
     ) -> list[Document]:
         """body 전문 검색(LIKE)을 수행한다."""
-        return await self._search(
+        docs, _ = await self._search(
             self._build_body_query,
             tokens,
             k=k,
             tool_filters=tool_filters,
             temporal_filters=temporal_filters,
         )
+        return docs
 
     async def search_title(
         self,
@@ -284,13 +303,17 @@ class PGBigmRetriever:
         temporal_filters: list[TemporalFilter] | None = None,
     ) -> list[Document]:
         """title 퍼지 검색(=%)을 수행한다."""
-        return await self._search(
+        docs, keyword_scores = await self._search(
             self._build_title_query,
             tokens,
             k=k,
             tool_filters=tool_filters,
             temporal_filters=temporal_filters,
         )
+        for doc in docs:
+            if (ks := keyword_scores.get(doc.id)) is not None:
+                doc.metadata["keyword_score"] = round(ks, 4)
+        return docs
 
 
 class RetrievalService(BaseVectorDbService):
@@ -371,11 +394,11 @@ class RetrievalService(BaseVectorDbService):
         RAG 기본값 [0.5, 0.3, 0.2]: body 신호 우선.
         manual search 권장값 [0.4, 0.2, 0.4]: title 신호 강화.
 
-        score_threshold: cosine distance가 (1 - threshold)를 초과하는 벡터 결과는
-            제거한다. 식별자 쿼리처럼 임베딩 품질이 낮은 경우 약한 벡터 결과가
-            키워드 결과를 밀어내지 않도록 하기 위한 컷오프다.
+        score_threshold: cosine distance 컷오프 (1 - threshold 초과 시 vector 결과 제거).
+        title의 노이즈 컷오프는 DB 레벨 pg_bigm.similarity_limit(0.17)에서 처리한다.
 
-        세 검색(vector, body, title)을 asyncio.gather로 병렬 실행한다.
+        keyword_tokens가 없으면 RRF를 건너뛰고 vector 결과를 직접 반환한다.
+        세 검색(vector, body, title)은 asyncio.gather로 병렬 실행한다.
         """
         if len(weights) != 3:
             raise ValueError("weights must have 3 elements: [vector, body, title]")
@@ -404,6 +427,7 @@ class RetrievalService(BaseVectorDbService):
                 vector_coro, body_coro, title_coro
             )
         else:
+            # keyword 없으면 RRF 불필요 — vector 결과를 score_threshold만 적용해 반환
             vector_results = await vector_coro
             body_docs = []
             title_docs = []
@@ -415,9 +439,35 @@ class RetrievalService(BaseVectorDbService):
                 doc.metadata["similarity_score"] = round(1.0 - dist, 4)
                 vector_docs.append(doc)
 
+        # keyword 결과가 없으면(토큰 미제공 또는 bigm 히트 0건) RRF 불필요.
+        # cosine similarity 순서를 그대로 보존해 반환한다.
+        if not body_docs and not title_docs:
+            for doc in vector_docs:
+                doc.metadata["hit_types"] = ["vector"]
+            return vector_docs[offset : offset + k]
+
+        # weighted_reciprocal_rank는 버킷 중 가장 먼저 등장한 doc 객체를 보존한다.
+        # vector_docs가 항상 첫 번째 버킷이므로 similarity_score는 merged 객체에
+        # 이미 있다. keyword_score(title 전용)와 hit_types만 별도 수집한다.
+        hit_types: dict[str, list[str]] = {}
+        keyword_scores: dict[str, float] = {}
+        for label, docs, score_key in [
+            ("vector", vector_docs, None),
+            ("body", body_docs, None),
+            ("title", title_docs, "keyword_score"),
+        ]:
+            for doc in docs:
+                hit_types.setdefault(doc.id, []).append(label)
+                if score_key and (s := doc.metadata.get(score_key)) is not None:
+                    keyword_scores[doc.id] = s
+
         merged = weighted_reciprocal_rank(
             [vector_docs, body_docs, title_docs], weights
         )
+        for doc in merged:
+            doc.metadata["hit_types"] = hit_types.get(doc.id, [])
+            if doc.id in keyword_scores:
+                doc.metadata["keyword_score"] = keyword_scores[doc.id]
         return merged[offset : offset + k]
 
     @override
@@ -432,8 +482,11 @@ class RetrievalService(BaseVectorDbService):
 
         RAG 에이전트가 multi-query 전략을 쓸 때 호출된다. 쿼리 간 keyword_tokens
         중복을 제거해 동일 토큰이 여러 쿼리에서 반복 검색되지 않도록 한다.
-        (쿼리 A가 "토큰"을 소진하면 쿼리 B는 해당 토큰 없이 실행된다.)
         asyncio.gather로 모든 쿼리를 동시에 실행한다.
+
+        토큰 dedup은 queries 순서에 의존한다 — 앞선 쿼리가 소진한 토큰은
+        뒤 쿼리에서 제거되므로, 중요도가 높은 쿼리를 앞에 배치해야 recall 손실을
+        최소화할 수 있다. 호출부(RAG 에이전트)가 쿼리 순서를 결정할 책임을 가진다.
         """
         # 앞선 쿼리가 사용한 토큰은 뒤 쿼리에서 제거해 pg_bigm 중복 히트를 줄인다.
         used_keywords: set[str] = set()
