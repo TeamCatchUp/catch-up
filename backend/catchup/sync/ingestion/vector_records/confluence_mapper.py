@@ -177,6 +177,10 @@ class ConfluenceV2RecordMapper:
                     "resolution_status": comment.resolution_status,
                     "parent_comment_id": comment.parent_comment_id,
                     "selection": comment.selection,
+                    "inline_marker_ref": comment.inline_marker_ref,
+                    "selection_start": comment.selection_start,
+                    "selection_end": comment.selection_end,
+                    "match_method": comment.match_method,
                 }
             ),
         )

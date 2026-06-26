@@ -177,9 +177,18 @@ def test_confluence_v2_mapper_builds_clean_chunk_contract_without_duplicates():
     assert parts[0]["text"] == "Clarify token rotation."
     assert parts[0]["metadata"]["comment_id"] == "inline-1"
     assert parts[0]["metadata"]["selection"] == "tokens"
+    assert parts[0]["metadata"]["inline_marker_ref"] == "ref-1"
+    assert parts[0]["metadata"]["selection_start"] == 10
+    assert parts[0]["metadata"]["selection_end"] == 16
+    assert metadata["body"][10:16] == "tokens"
+    assert parts[0]["metadata"]["match_method"] == "inline_marker_ref"
     assert parts[1]["type"] == "footer_comment"
     assert parts[1]["text"] == "Footer discussion."
     assert parts[1]["metadata"]["comment_id"] == "footer-1"
+    assert "inline_marker_ref" not in parts[1]["metadata"]
+    assert "selection_start" not in parts[1]["metadata"]
+    assert "selection_end" not in parts[1]["metadata"]
+    assert "match_method" not in parts[1]["metadata"]
     for part in parts:
         for duplicated_field in (
             "record_id",
@@ -227,6 +236,43 @@ def test_confluence_inline_comment_falls_back_to_first_chunk_when_location_is_mi
     assert parts[0]["text"] == "Location metadata was lost."
     assert parts[0]["metadata"]["comment_id"] == "inline-missing-location"
     assert parts[0]["metadata"]["selection"] == "text not present in body"
+    assert parts[0]["metadata"]["inline_marker_ref"] == "missing-ref"
+    assert parts[0]["metadata"]["match_method"] == "fallback_first_chunk"
+    assert "selection_start" not in parts[0]["metadata"]
+    assert "selection_end" not in parts[0]["metadata"]
+
+
+def test_confluence_inline_comment_uses_selection_when_marker_ref_is_missing():
+    transform_result = ConfluenceTransformer().transform_page(
+        _page(),
+        space_key="ENG",
+        space_name="Engineering",
+        inline_comments=(
+            _comment(
+                comment_id="inline-selection-match",
+                text="Marker ref was stale.",
+                properties={
+                    "inline-marker-ref": "stale-ref",
+                    "inline-original-selection": "tokens",
+                },
+            ),
+        ),
+        site_url="https://example.atlassian.net/wiki",
+    )
+
+    document = ConfluenceV2RecordMapper().to_document(
+        transform_result.v2_prepared_chunks[0],
+        cloud_id="cloud-123",
+    )
+    metadata = document.metadata
+    parts = metadata["data"]["parts"]
+
+    assert [part["type"] for part in parts] == ["inline_comment"]
+    assert parts[0]["metadata"]["inline_marker_ref"] == "stale-ref"
+    assert parts[0]["metadata"]["match_method"] == "selection"
+    assert parts[0]["metadata"]["selection_start"] == 10
+    assert parts[0]["metadata"]["selection_end"] == 16
+    assert metadata["body"][10:16] == "tokens"
 
 
 def test_confluence_v2_builder_reports_validation_failures_without_raising():

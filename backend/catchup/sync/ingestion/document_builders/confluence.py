@@ -44,6 +44,10 @@ class ConfluenceV2CommentPart:
     resolution_status: str | None = None
     parent_comment_id: str | None = None
     selection: str | None = None
+    inline_marker_ref: str | None = None
+    selection_start: int | None = None
+    selection_end: int | None = None
+    match_method: str | None = None
 
 
 @dataclass(frozen=True)
@@ -411,32 +415,43 @@ class ConfluenceTransformer:
             
             # 1) marker-ref 기반 Injection
             marker_ref = self._extract_inline_marker_ref(comment)
+            selection = self._extract_inline_selection(comment)
             target_chunk = ref_to_chunk.get(marker_ref) if marker_ref else None
+            match_method = "inline_marker_ref" if target_chunk is not None else None
 
             # 2) selection 텍스트 매칭
-            if target_chunk is None:
-                selection = self._extract_inline_selection(comment)
-                if selection:
-                    target_chunk = self._find_chunk_by_selection(chunks, selection)
+            if target_chunk is None and selection:
+                target_chunk = self._find_chunk_by_selection(chunks, selection)
+                if target_chunk is not None:
+                    match_method = "selection"
 
             # 3) 위치 정보가 깨진 inline comment도 검색 가능한 기존 chunk에 보존한다.
             if target_chunk is None:
                 target_chunk = chunks[0]
+                match_method = "fallback_first_chunk"
                 logger.info(
                     "confluence_inline_comment_fallback_to_first_chunk",
                     connector="confluence",
                     comment_id=comment.id,
                     marker_ref=marker_ref,
-                    selection=self._extract_inline_selection(comment),
+                    selection=selection,
                     chunk_index=target_chunk.index,
                 )
 
+            selection_start, selection_end = self._find_selection_span(
+                target_chunk.body_text,
+                selection,
+            )
             target_chunk.content = f"{target_chunk.content}\n{formatted}"
             part = self._comment_part(
                 part_type="inline_comment",
                 comment=comment,
                 text=comment_text,
-                selection=self._extract_inline_selection(comment),
+                selection=selection,
+                inline_marker_ref=marker_ref,
+                selection_start=selection_start,
+                selection_end=selection_end,
+                match_method=match_method,
             )
             if part is not None:
                 matched_by_chunk_index.setdefault(target_chunk.index, []).append(part)
@@ -482,6 +497,19 @@ class ConfluenceTransformer:
         return None
 
     @staticmethod
+    def _find_selection_span(
+        text: str,
+        selection: str | None,
+    ) -> tuple[int | None, int | None]:
+        if not selection:
+            return None, None
+
+        start = text.find(selection)
+        if start < 0:
+            return None, None
+        return start, start + len(selection)
+
+    @staticmethod
     def _normalize_for_comment_match(value: str) -> str:
         return " ".join(value.split())
 
@@ -492,6 +520,10 @@ class ConfluenceTransformer:
         comment: ConfluenceCommentResponse,
         text: str,
         selection: str | None,
+        inline_marker_ref: str | None = None,
+        selection_start: int | None = None,
+        selection_end: int | None = None,
+        match_method: str | None = None,
     ) -> ConfluenceV2CommentPart | None:
         normalized = text.strip()
         if not normalized:
@@ -507,6 +539,10 @@ class ConfluenceTransformer:
             resolution_status=comment.resolution_status,
             parent_comment_id=comment.parent_comment_id,
             selection=selection,
+            inline_marker_ref=inline_marker_ref,
+            selection_start=selection_start,
+            selection_end=selection_end,
+            match_method=match_method,
         )
 
     def _extract_comment_text(self, comment: ConfluenceCommentResponse) -> str:
