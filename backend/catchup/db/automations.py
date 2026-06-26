@@ -42,6 +42,25 @@ def list_inquiry_agent_specs(
     )
 
 
+def get_inquiry_agent_spec_with_user(
+    db: Session,
+    agent_spec_id: int,
+    workspace_id: int,
+) -> tuple[AgentSpec, User] | None:
+    """inquiry automation AgentSpec과 작성자 User를 함께 조회한다."""
+    row = db.execute(
+        select(AgentSpec, User)
+        .join(User, AgentSpec.user_id == User.id)
+        .where(
+            AgentSpec.id == agent_spec_id,
+            AgentSpec.workspace_id == workspace_id,
+            AgentSpec.spec["preset_key"].as_string()
+            == INQUIRY_AUTOMATION_PRESET_KEY,
+        )
+    ).first()
+    return row if row is not None else None
+
+
 def get_inquiry_agent_spec_for_update(
     db: Session,
     agent_spec_id: int,

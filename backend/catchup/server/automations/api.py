@@ -217,6 +217,32 @@ def list_inquiry_automations(
     return InquiryAutomationService().list_automations(db, workspace_id)
 
 
+@router.get(
+    "/inquiries/{agent_spec_id}",
+    response_model=InquiryAutomationItem,
+    status_code=status.HTTP_200_OK,
+    summary="채널톡 문의 자동화 단건 조회",
+)
+def get_inquiry_automation(
+    agent_spec_id: int,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> InquiryAutomationItem:
+    """agent_spec_id로 단일 문의 자동화 설정을 반환한다."""
+    workspace_id = _require_workspace_id(db, current_user.id)
+    try:
+        return InquiryAutomationService().get_automation(
+            db,
+            agent_spec_id=agent_spec_id,
+            workspace_id=workspace_id,
+        )
+    except AutomationNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+
+
 @router.patch(
     "/inquiries/{agent_spec_id}",
     status_code=status.HTTP_204_NO_CONTENT,
