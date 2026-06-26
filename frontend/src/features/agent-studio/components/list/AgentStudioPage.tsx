@@ -21,6 +21,7 @@ import AgentStudioListContent from './AgentStudioListContent';
 export default function AgentStudioPage() {
   const router = useRouter();
   const [selectedFilter, setSelectedFilter] = useState<AgentStudioFilter>('all');
+  const [showMineOnly, setShowMineOnly] = useState(false);
   const automationQuery = useQuery(inquiryAutomationsQueries.list());
   const statusMutation = useMutation({
     ...inquiryAutomationsMutations.updateStatus(),
@@ -29,6 +30,10 @@ export default function AgentStudioPage() {
     },
   });
   const agents = useMemo(() => mapInquiryAutomationsToAgentCards(automationQuery.data ?? []), [automationQuery.data]);
+  const visibleAgents = useMemo(
+    () => (showMineOnly ? agents.filter((agent) => agent.isEditable) : agents),
+    [agents, showMineOnly],
+  );
   const isGroupedView = selectedFilter === 'all';
 
   const updateStatus = (agent: AgentStudioCardModel, status: 'active' | 'inactive') => {
@@ -47,7 +52,13 @@ export default function AgentStudioPage() {
       <section className="flex flex-col items-center gap-3 px-16 pt-6 pb-30">
         <h1 className="text-heading-large text-text-normal-normal w-full">우리 팀의 Agent</h1>
         <div className="flex w-full items-center gap-5">
-          <AgentFilterTabs filters={AGENT_STUDIO_FILTERS} selected={selectedFilter} onChange={setSelectedFilter} />
+          <AgentFilterTabs
+            filters={AGENT_STUDIO_FILTERS}
+            selected={selectedFilter}
+            showMineOnly={showMineOnly}
+            onChange={setSelectedFilter}
+            onShowMineOnlyChange={setShowMineOnly}
+          />
           <AgentCreateButton onClick={() => router.push('/agent-studio/new')} />
         </div>
         <div className={cn('flex w-full flex-wrap items-start gap-6', !isGroupedView && 'min-h-52.75')}>
@@ -69,7 +80,7 @@ export default function AgentStudioPage() {
           )}
           {!automationQuery.isLoading && !automationQuery.isError && (
             <AgentStudioListContent
-              agents={agents}
+              agents={visibleAgents}
               selectedFilter={selectedFilter}
               actionDisabled={statusMutation.isPending}
               onActivate={(target) => updateStatus(target, 'active')}

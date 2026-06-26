@@ -212,6 +212,29 @@ describe('AgentStudioPage', () => {
     expect(screen.queryByText('제작 중인 Agent가 없습니다.')).not.toBeInTheDocument();
   });
 
+  it('shows only editable automations when 내 에이전트만 is enabled', async () => {
+    const user = userEvent.setup();
+    mockVersion();
+    useInquiryAutomationList([
+      activeAutomation,
+      {
+        ...secondActiveAutomation,
+        title: '다른 사람이 만든 Agent',
+        is_editable: false,
+      },
+      inactiveAutomation,
+    ]);
+    renderWithQueryClient(<AgentStudioPage />);
+
+    expect(await screen.findByText('다른 사람이 만든 Agent')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('switch', { name: '내 에이전트만' }));
+
+    expect(screen.queryByText('다른 사람이 만든 Agent')).not.toBeInTheDocument();
+    expect(within(screen.getByLabelText('운영중 섹션')).getByText('1')).toBeInTheDocument();
+    expect(within(screen.getByLabelText('사용 안함 섹션')).getByText('1')).toBeInTheDocument();
+  });
+
   it('shows the active empty placeholder when the active tab is selected without active automations', async () => {
     const user = userEvent.setup();
     mockVersion();

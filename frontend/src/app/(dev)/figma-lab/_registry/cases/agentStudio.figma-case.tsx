@@ -17,7 +17,9 @@ import { DESIGN_SYSTEM_FILE_KEY } from './caseConstants';
 
 function AgentStudioListFixturePreview() {
   const [selectedFilter, setSelectedFilter] = useState<AgentStudioFilter>('all');
+  const [showMineOnly, setShowMineOnly] = useState(false);
   const [agents, setAgents] = useState<readonly AgentStudioCardModel[]>(AGENT_STUDIO_MULTI_ACTIVE_LIST_FIXTURE);
+  const visibleAgents = showMineOnly ? agents.filter((agent) => agent.isEditable) : agents;
   const isGroupedView = selectedFilter === 'all';
 
   const updateStatus = (agentId: string, status: AgentStudioCardModel['status']) => {
@@ -30,12 +32,18 @@ function AgentStudioListFixturePreview() {
       <section className="flex flex-col items-center gap-3 px-16 pt-6 pb-30">
         <h1 className="text-heading-large text-text-normal-normal w-full">우리 팀의 Agent</h1>
         <div className="flex w-full items-center gap-5">
-          <AgentFilterTabs filters={AGENT_STUDIO_FILTERS} selected={selectedFilter} onChange={setSelectedFilter} />
+          <AgentFilterTabs
+            filters={AGENT_STUDIO_FILTERS}
+            selected={selectedFilter}
+            showMineOnly={showMineOnly}
+            onChange={setSelectedFilter}
+            onShowMineOnlyChange={setShowMineOnly}
+          />
           <AgentCreateButton />
         </div>
         <div className={cn('flex w-full flex-wrap items-start gap-6', !isGroupedView && 'min-h-52.75')}>
           <AgentStudioListContent
-            agents={agents}
+            agents={visibleAgents}
             selectedFilter={selectedFilter}
             onActivate={(target) => updateStatus(target.id, 'active')}
             onDeactivate={(target) => updateStatus(target.id, 'inactive')}
