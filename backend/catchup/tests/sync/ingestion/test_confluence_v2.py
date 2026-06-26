@@ -121,9 +121,11 @@ def test_confluence_v2_mapper_builds_clean_chunk_contract_without_duplicates():
         user_name_map={"author-1": "Alice"},
     )
 
-    assert len(transform_result.v2_prepared_chunks) == 2
+    assert len(transform_result.v2_prepared_chunks) == 1
 
     first_chunk = transform_result.v2_prepared_chunks[0]
+    assert first_chunk.chunk_count == 1
+    assert first_chunk.section_hierarchy == ["Authentication"]
     document = ConfluenceV2RecordMapper().to_document(
         first_chunk,
         cloud_id="cloud-123",
@@ -170,11 +172,14 @@ def test_confluence_v2_mapper_builds_clean_chunk_contract_without_duplicates():
     }
     assert domain_metadata["chunk"]["section_hierarchy"] == ["Authentication"]
 
-    assert len(parts) == 1
+    assert len(parts) == 2
     assert parts[0]["type"] == "inline_comment"
     assert parts[0]["text"] == "Clarify token rotation."
     assert parts[0]["metadata"]["comment_id"] == "inline-1"
     assert parts[0]["metadata"]["selection"] == "tokens"
+    assert parts[1]["type"] == "footer_comment"
+    assert parts[1]["text"] == "Footer discussion."
+    assert parts[1]["metadata"]["comment_id"] == "footer-1"
     for part in parts:
         for duplicated_field in (
             "record_id",
@@ -185,6 +190,43 @@ def test_confluence_v2_mapper_builds_clean_chunk_contract_without_duplicates():
             "title",
         ):
             assert duplicated_field not in part["metadata"]
+
+
+def test_confluence_inline_comment_falls_back_to_first_chunk_when_location_is_missing():
+    transform_result = ConfluenceTransformer().transform_page(
+        _page(),
+        space_key="ENG",
+        space_name="Engineering",
+        inline_comments=(
+            _comment(
+                comment_id="inline-missing-location",
+                text="Location metadata was lost.",
+                properties={
+                    "inline-marker-ref": "missing-ref",
+                    "inline-original-selection": "text not present in body",
+                },
+            ),
+        ),
+        site_url="https://example.atlassian.net/wiki",
+    )
+
+    assert len(transform_result.documents) == 1
+    assert len(transform_result.v2_prepared_chunks) == 1
+    assert "Discussion" not in transform_result.documents[0].metadata[
+        "section_hierarchy"
+    ]
+    assert "Location metadata was lost." in transform_result.documents[0].page_content
+
+    document = ConfluenceV2RecordMapper().to_document(
+        transform_result.v2_prepared_chunks[0],
+        cloud_id="cloud-123",
+    )
+    parts = document.metadata["data"]["parts"]
+
+    assert [part["type"] for part in parts] == ["inline_comment"]
+    assert parts[0]["text"] == "Location metadata was lost."
+    assert parts[0]["metadata"]["comment_id"] == "inline-missing-location"
+    assert parts[0]["metadata"]["selection"] == "text not present in body"
 
 
 def test_confluence_v2_builder_reports_validation_failures_without_raising():
