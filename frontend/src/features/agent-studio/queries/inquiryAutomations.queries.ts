@@ -12,7 +12,7 @@ export const inquiryAutomationsQueries = {
     queryOptions({
       queryKey: [...inquiryAutomationsQueries.all(), 'list'] as const,
       queryFn: async (): Promise<InquiryAutomationItem[]> => {
-        const res = await api.get<InquiryAutomationItem[]>(API.automations.inqueries);
+        const res = await api.get<InquiryAutomationItem[]>(API.automations.inquiries);
         return res.data;
       },
     }),

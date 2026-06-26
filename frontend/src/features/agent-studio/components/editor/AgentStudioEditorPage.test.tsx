@@ -295,7 +295,7 @@ describe('AgentStudioEditorPage', () => {
     });
 
     server.use(
-      http.post('/api/v1/automations/inqueries/publish', async ({ request }) => {
+      http.post('/api/v1/automations/inquiries/publish', async ({ request }) => {
         publishRequests.push(await request.json());
         await publishSettled;
 
@@ -354,7 +354,7 @@ describe('AgentStudioEditorPage', () => {
     });
 
     server.use(
-      http.post('/api/v1/automations/inqueries/publish', async ({ request }) => {
+      http.post('/api/v1/automations/inquiries/publish', async ({ request }) => {
         publishRequests.push(await request.json());
         await publishSettled;
 

@@ -137,9 +137,9 @@ export const API = {
   automations: {
     credentials: `${API_PREFIX}/automations/credentials`, // GET 문의 자동화 Credential 선택 목록
     targets: `${API_PREFIX}/automations/targets`, // GET 문의 자동화 Target 선택 목록
-    inqueries: `${API_PREFIX}/automations/inqueries`, // GET 채널톡 문의 자동화 목록
-    inquiry: (agentSpecId: number) => `${API_PREFIX}/automations/inqueries/${agentSpecId}`, // PATCH 문의 자동화 상태
-    publishInquiry: `${API_PREFIX}/automations/inqueries/publish`, // POST 문의 자동화 설정 생성 및 활성화
+    inquiries: `${API_PREFIX}/automations/inquiries`, // GET 채널톡 문의 자동화 목록
+    inquiry: (agentSpecId: number) => `${API_PREFIX}/automations/inquiries/${agentSpecId}`, // PATCH 문의 자동화 상태
+    publishInquiry: `${API_PREFIX}/automations/inquiries/publish`, // POST 문의 자동화 설정 생성 및 활성화
   },
   version: `${API_PREFIX}/version`, // GET 현재 앱 버전
 } as const;

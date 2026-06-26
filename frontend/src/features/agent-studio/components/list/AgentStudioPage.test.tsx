@@ -47,7 +47,7 @@ function renderWithQueryClient(ui: ReactElement) {
 }
 
 function useInquiryAutomationList(items: InquiryAutomationItem[]) {
-  server.use(http.get('/api/v1/automations/inqueries', () => HttpResponse.json(items)));
+  server.use(http.get('/api/v1/automations/inquiries', () => HttpResponse.json(items)));
 }
 
 function mockVersion() {
@@ -322,7 +322,7 @@ describe('AgentStudioPage', () => {
     mockVersion();
     useInquiryAutomationList([inactiveAutomation]);
     server.use(
-      http.patch('/api/v1/automations/inqueries/2', async ({ request }) => {
+      http.patch('/api/v1/automations/inquiries/2', async ({ request }) => {
         patchRequests.push(await request.json());
         return new HttpResponse(null, { status: 204 });
       }),
@@ -342,7 +342,7 @@ describe('AgentStudioPage', () => {
     mockVersion();
     useInquiryAutomationList([activeAutomation]);
     server.use(
-      http.patch('/api/v1/automations/inqueries/1', async ({ request }) => {
+      http.patch('/api/v1/automations/inquiries/1', async ({ request }) => {
         patchRequests.push(await request.json());
         return new HttpResponse(null, { status: 204 });
       }),
@@ -362,7 +362,7 @@ describe('AgentStudioPage', () => {
     mockVersion();
     useInquiryAutomationList([activeAutomation]);
     server.use(
-      http.patch('/api/v1/automations/inqueries/1', () => HttpResponse.json({ detail: 'failed' }, { status: 500 })),
+      http.patch('/api/v1/automations/inquiries/1', () => HttpResponse.json({ detail: 'failed' }, { status: 500 })),
     );
 
     renderWithQueryClient(<AgentStudioPage />);
