@@ -8,6 +8,7 @@ from catchup.components.embedder.constants import EmbeddingProvider
 from catchup.components.embedder.factory import get_embedding_service
 from catchup.components.summarizer import get_summarizer_service
 from catchup.components.vector_db.factory import get_pgvector_repository
+from catchup.components.vector_db.factory import get_v2_knowledge_repository
 from catchup.components.vector_db.factory import get_v2_vector_store
 from catchup.configs.config import settings
 from catchup.connectors.atlassian.exceptions import AtlassianTokenExpiredError
@@ -86,9 +87,11 @@ async def create_jira_issue_ingestion_dependencies(
         repository = get_pgvector_repository(embeddings=embeddings)
         repository.ensure_initialized()
         vector_store = None
+        v2_knowledge_repository = None
         if settings.VECTOR_STORE_V2_DUAL_WRITE_ENABLED or force_vector_store:
             vector_store = get_v2_vector_store(embeddings)
             await vector_store.initialize()
+            v2_knowledge_repository = get_v2_knowledge_repository()
         summarizer = get_summarizer_service() if enable_summarization else None
         return JiraIssueIngestionDependencies(
             cloud_id=cloud_id,
@@ -99,6 +102,7 @@ async def create_jira_issue_ingestion_dependencies(
             repository=repository,
             summarizer=summarizer,
             vector_store=vector_store,
+            v2_knowledge_repository=v2_knowledge_repository,
             v2_document_builder=JiraIssueV2DocumentBuilder()
             if vector_store is not None
             else None,

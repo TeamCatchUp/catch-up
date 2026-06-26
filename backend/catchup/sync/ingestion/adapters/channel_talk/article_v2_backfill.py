@@ -5,6 +5,7 @@ import structlog
 from catchup.components.embedder.constants import EmbeddingProvider
 from catchup.components.embedder.factory import get_embedding_service
 from catchup.components.vector_db.factory import get_v2_vector_store
+from catchup.components.vector_db.v2 import V2KnowledgeRepository
 from catchup.components.vector_db.v2 import VectorStore
 from catchup.connectors.channel_talk.document_space.article_full_sync_fetcher import (
     ChannelTalkArticleFullSyncFetcher,
@@ -58,11 +59,13 @@ class ChannelTalkArticleV2BackfillAdapter(ChannelTalkArticleFullSyncIngestionAda
         *,
         fetcher: ChannelTalkArticleFullSyncFetcher | None = None,
         vector_store: VectorStore | None = None,
+        v2_knowledge_repository: V2KnowledgeRepository | None = None,
         v2_document_builder: ChannelTalkArticleV2DocumentBuilder | None = None,
     ) -> None:
         super().__init__(
             enable_v2_dual_write=True,
             vector_store=vector_store,
+            v2_knowledge_repository=v2_knowledge_repository,
             v2_document_builder=v2_document_builder,
         )
         self._fetcher = fetcher
@@ -112,6 +115,7 @@ class ChannelTalkArticleV2BackfillAdapter(ChannelTalkArticleFullSyncIngestionAda
     ) -> ChannelTalkArticleFullSyncTransformResult:
         documents: list[ChannelTalkArticlePreparedDocument] = []
         delete_prefixes: list[str] = []
+        delete_record_ids: list[str] = []
 
         for bundle in fetched.bundles:
             transformed_bundle = self._document_builder.transform(
@@ -131,6 +135,7 @@ class ChannelTalkArticleV2BackfillAdapter(ChannelTalkArticleFullSyncIngestionAda
                 for document in transformed_bundle.documents
             )
             delete_prefixes.append(transformed_bundle.delete_prefix)
+            delete_record_ids.append(bundle.article_id)
 
         seed_by_document_id = _seed_by_langchain_id(execution.seeds)
         v2_documents, _document_ids, build_failed_ids = (
@@ -151,6 +156,7 @@ class ChannelTalkArticleV2BackfillAdapter(ChannelTalkArticleFullSyncIngestionAda
         return ChannelTalkArticleFullSyncTransformResult(
             documents=(),
             delete_prefixes=tuple(dict.fromkeys(delete_prefixes)),
+            delete_record_ids=tuple(dict.fromkeys(delete_record_ids)),
             v2_documents=tuple(v2_documents),
             v2_failed_ids=failed_ids,
         )
@@ -180,6 +186,12 @@ class ChannelTalkArticleV2BackfillAdapter(ChannelTalkArticleFullSyncIngestionAda
     ) -> ChannelTalkArticleFullSyncPersistResult:
         _ = sync_window
         v2_failed_ids = transformed.v2_failed_ids
+        v2_failed_ids = await self._delete_v2_chunk_records(
+            record_ids=transformed.delete_record_ids,
+            existing_failed_ids=v2_failed_ids,
+            channel_id=execution.channel_id,
+            space_id=execution.space_id,
+        )
         document_ids = [str(document.id) for document in summary.v2_documents]
         if not document_ids:
             return ChannelTalkArticleFullSyncPersistResult(
@@ -223,10 +235,16 @@ class ChannelTalkArticleV2BackfillAdapter(ChannelTalkArticleFullSyncIngestionAda
             for document_id in document_ids
             if document_id in persisted_id_set
         ]
-        metadata_failed_ids = await vector_store.find_missing_metadata_namespace_ids(
-            metadata_check_ids,
-            namespace="channel_talk_document_article",
-        )
+        v2_knowledge_repository = self._get_v2_knowledge_repository()
+        if v2_knowledge_repository is None:
+            metadata_failed_ids = tuple(metadata_check_ids)
+        else:
+            metadata_failed_ids = (
+                await v2_knowledge_repository.find_missing_metadata_namespace_ids(
+                    metadata_check_ids,
+                    namespace="channel_talk_document_article",
+                )
+            )
         if metadata_failed_ids:
             logger.warning(
                 "channel_talk_document_article_v2_backfill_metadata_missing_after_persist",

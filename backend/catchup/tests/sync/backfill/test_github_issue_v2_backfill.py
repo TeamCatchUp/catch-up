@@ -128,6 +128,8 @@ async def test_backfill_adapter_hydrates_issue_and_reuses_v1_seed_values() -> No
     seed = _seed()
     vector_store = SimpleNamespace(
         upsert_documents=AsyncMock(return_value=[seed.langchain_id]),
+    )
+    v2_knowledge_repository = SimpleNamespace(
         find_missing_metadata_namespace_ids=AsyncMock(return_value=()),
     )
     adapter = GithubIssueV2BackfillAdapter(
@@ -135,6 +137,7 @@ async def test_backfill_adapter_hydrates_issue_and_reuses_v1_seed_values() -> No
         client=SimpleNamespace(),
         repository=SimpleNamespace(),
         vector_store=vector_store,
+        v2_knowledge_repository=v2_knowledge_repository,
     )
     api_items = [("812", {"number": 812})]
     api_document = Document(
@@ -214,7 +217,7 @@ async def test_backfill_adapter_hydrates_issue_and_reuses_v1_seed_values() -> No
     ]
     assert upsert_call.kwargs["ids"] == [seed.langchain_id]
     assert upsert_call.kwargs["embeddings"] == [seed.embedding]
-    vector_store.find_missing_metadata_namespace_ids.assert_awaited_once_with(
+    v2_knowledge_repository.find_missing_metadata_namespace_ids.assert_awaited_once_with(
         [seed.langchain_id],
         namespace="github_issue",
     )
@@ -225,6 +228,8 @@ async def test_backfill_adapter_treats_missing_issue_metadata_as_failed() -> Non
     seed = _seed()
     vector_store = SimpleNamespace(
         upsert_documents=AsyncMock(return_value=[seed.langchain_id]),
+    )
+    v2_knowledge_repository = SimpleNamespace(
         find_missing_metadata_namespace_ids=AsyncMock(
             return_value=(seed.langchain_id,)
         ),
@@ -234,6 +239,7 @@ async def test_backfill_adapter_treats_missing_issue_metadata_as_failed() -> Non
         client=SimpleNamespace(),
         repository=SimpleNamespace(),
         vector_store=vector_store,
+        v2_knowledge_repository=v2_knowledge_repository,
     )
     api_items = [("812", {"number": 812})]
     api_document = Document(

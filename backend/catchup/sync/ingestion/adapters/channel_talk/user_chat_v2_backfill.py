@@ -5,6 +5,7 @@ import structlog
 from catchup.components.embedder.constants import EmbeddingProvider
 from catchup.components.embedder.factory import get_embedding_service
 from catchup.components.vector_db.factory import get_v2_vector_store
+from catchup.components.vector_db.v2 import V2KnowledgeRepository
 from catchup.components.vector_db.v2 import VectorStore
 from catchup.connectors.channel_talk.core.user_chat_full_sync_fetcher import (
     ChannelTalkUserChatFullSyncFetcher,
@@ -49,12 +50,14 @@ class ChannelTalkUserChatV2BackfillAdapter(ChannelTalkUserChatFullSyncIngestionA
         *,
         fetcher: ChannelTalkUserChatFullSyncFetcher | None = None,
         vector_store: VectorStore | None = None,
+        v2_knowledge_repository: V2KnowledgeRepository | None = None,
         v2_document_builder: ChannelTalkUserChatV2DocumentBuilder | None = None,
     ) -> None:
         super().__init__(
             enable_summarization=False,
             enable_v2_dual_write=True,
             vector_store=vector_store,
+            v2_knowledge_repository=v2_knowledge_repository,
             v2_document_builder=v2_document_builder,
         )
         self._fetcher = fetcher
@@ -193,10 +196,16 @@ class ChannelTalkUserChatV2BackfillAdapter(ChannelTalkUserChatFullSyncIngestionA
             for document_id in document_ids
             if document_id in persisted_id_set
         ]
-        metadata_failed_ids = await vector_store.find_missing_metadata_namespace_ids(
-            metadata_check_ids,
-            namespace="channel_talk_user_chat",
-        )
+        v2_knowledge_repository = self._get_v2_knowledge_repository()
+        if v2_knowledge_repository is None:
+            metadata_failed_ids = tuple(metadata_check_ids)
+        else:
+            metadata_failed_ids = (
+                await v2_knowledge_repository.find_missing_metadata_namespace_ids(
+                    metadata_check_ids,
+                    namespace="channel_talk_user_chat",
+                )
+            )
         if metadata_failed_ids:
             logger.warning(
                 "channel_talk_user_chat_v2_backfill_metadata_missing_after_persist",

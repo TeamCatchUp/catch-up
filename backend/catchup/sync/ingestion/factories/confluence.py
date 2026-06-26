@@ -12,6 +12,7 @@ from fastapi.concurrency import run_in_threadpool
 from catchup.components.embedder.constants import EmbeddingProvider
 from catchup.components.embedder.factory import get_embedding_service
 from catchup.components.vector_db.factory import get_pgvector_repository
+from catchup.components.vector_db.factory import get_v2_knowledge_repository
 from catchup.components.vector_db.factory import get_v2_vector_store
 from catchup.connectors.atlassian.exceptions import AtlassianTokenExpiredError
 from catchup.connectors.atlassian.exceptions import AtlassianTokenNotFoundError
@@ -107,4 +108,5 @@ async def create_confluence_v2_backfill_adapter(
     return ConfluenceV2BackfillAdapter(
         service=service,
         vector_store=vector_store,
+        v2_knowledge_repository=get_v2_knowledge_repository(),
     )

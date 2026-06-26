@@ -300,12 +300,13 @@ def test_confluence_v2_seed_sql_uses_empty_metadata_json_for_seed_rows():
 @pytest.mark.asyncio
 async def test_confluence_v2_backfill_treats_missing_metadata_as_failed():
     class FakeVectorStore:
-        def __init__(self) -> None:
-            self.namespace_checks = []
-
         async def upsert_documents(self, documents, ids, embeddings):
             _ = documents, embeddings
             return ids
+
+    class FakeV2KnowledgeRepository:
+        def __init__(self) -> None:
+            self.namespace_checks = []
 
         async def find_missing_metadata_namespace_ids(self, ids, *, namespace):
             self.namespace_checks.append({"ids": list(ids), "namespace": namespace})
@@ -318,9 +319,11 @@ async def test_confluence_v2_backfill_treats_missing_metadata_as_failed():
         embedding=[0.1, 0.2],
     )
     vector_store = FakeVectorStore()
+    v2_knowledge_repository = FakeV2KnowledgeRepository()
     adapter = ConfluenceV2BackfillAdapter(
         service=SimpleNamespace(cloud_id="cloud-123"),
         vector_store=vector_store,
+        v2_knowledge_repository=v2_knowledge_repository,
     )
     execution = ConfluenceV2BackfillExecutionRequest(
         tenant_id="cloud-123",
@@ -347,6 +350,6 @@ async def test_confluence_v2_backfill_treats_missing_metadata_as_failed():
     assert persisted.persisted_count == 0
     assert persisted.error_count == 1
     assert persisted.v2_failed_ids == (seed.langchain_id,)
-    assert vector_store.namespace_checks == [
+    assert v2_knowledge_repository.namespace_checks == [
         {"ids": [seed.langchain_id], "namespace": "confluence_page"}
     ]
