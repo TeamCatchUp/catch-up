@@ -29,6 +29,7 @@ export default function AgentCard({
   layout = 'grouped',
 }: AgentCardProps) {
   const isInactive = agent.status === 'inactive';
+  const canRunAutomationActions = agent.isEditable && Boolean(agent.agentSpecId);
   const safeAuthorProfileImageUrl =
     agent.authorProfileImageUrl && isSafeUrl(agent.authorProfileImageUrl) ? agent.authorProfileImageUrl : null;
   const containerClassName =
@@ -75,7 +76,7 @@ export default function AgentCard({
           variant="capsule-outline-mono"
           size="sm"
           className="text-text-normal-normal mt-4 h-9 w-full"
-          disabled={actionDisabled}
+          disabled={actionDisabled || !canRunAutomationActions}
           onClick={() => onActivate?.(agent)}
         >
           다시 운영하기
@@ -88,32 +89,35 @@ export default function AgentCard({
     <article className={containerClassName}>
       <div
         className={
-          layout === 'flat' ? 'flex min-h-0 w-full flex-1 flex-col gap-8 overflow-hidden' : 'flex w-full flex-col gap-8'
+          layout === 'flat' ? 'flex min-h-0 w-full flex-1 flex-col gap-5 overflow-hidden' : 'flex w-full flex-col gap-5'
         }
       >
         <div className="flex w-full flex-col gap-3">
-          <div className="flex w-full items-center gap-3">
+          <div className="flex h-7 w-full items-center gap-3">
             <h3 className="text-heading-medium text-text-normal-normal min-w-0 flex-1 truncate">{agent.title}</h3>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="icon-only-gray"
-                  size="md"
-                  aria-label={`${agent.title} 카드 메뉴`}
-                  disabled={actionDisabled}
-                >
-                  <KebabIcon className="size-6" aria-hidden="true" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" sideOffset={4} className="min-w-24">
-                <DropdownMenuItem disabled={actionDisabled || !agent.agentSpecId} onSelect={() => onEdit?.(agent)}>
-                  수정하기
-                </DropdownMenuItem>
-                <DropdownMenuItem disabled={actionDisabled} onSelect={() => onDeactivate?.(agent)}>
-                  사용 안함
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            {canRunAutomationActions && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="icon-only-gray"
+                    size="sm"
+                    className="size-7"
+                    aria-label={`${agent.title} 카드 메뉴`}
+                    disabled={actionDisabled}
+                  >
+                    <KebabIcon className="size-5" aria-hidden="true" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" sideOffset={4} className="min-w-24">
+                  <DropdownMenuItem disabled={actionDisabled} onSelect={() => onEdit?.(agent)}>
+                    수정하기
+                  </DropdownMenuItem>
+                  <DropdownMenuItem disabled={actionDisabled} onSelect={() => onDeactivate?.(agent)}>
+                    사용 안함
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
           </div>
           <p className="text-body-small text-text-normal-alternative line-clamp-2 w-full shrink-0">
             {agent.description}

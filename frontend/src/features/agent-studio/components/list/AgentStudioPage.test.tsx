@@ -353,6 +353,17 @@ describe('AgentStudioPage', () => {
     expect(mockPush).toHaveBeenCalledWith('/agent-studio/1/edit');
   });
 
+  it('hides the card menu when the backend marks an automation as not editable', async () => {
+    mockVersion();
+    useInquiryAutomationList([{ ...activeAutomation, is_editable: false }]);
+
+    renderWithQueryClient(<AgentStudioPage />);
+
+    await screen.findByRole('heading', { name: '문의 대응 리포트 만들기' });
+
+    expect(screen.queryByRole('button', { name: '문의 대응 리포트 만들기 카드 메뉴' })).not.toBeInTheDocument();
+  });
+
   it('updates active automation to inactive when 사용 안함 is clicked', async () => {
     const user = userEvent.setup();
     const patchRequests: unknown[] = [];
