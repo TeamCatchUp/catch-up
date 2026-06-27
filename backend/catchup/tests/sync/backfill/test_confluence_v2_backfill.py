@@ -30,6 +30,15 @@ def test_confluence_page_seed_query_uses_bounded_keyset_pages() -> None:
     assert "OFFSET" not in sql
 
 
+def test_confluence_queries_recover_cloud_scope_from_space_metadata() -> None:
+    sql = _sql(build_confluence_v1_target_query("page"))
+
+    assert "LEFT JOIN confluence_spaces s" in sql
+    assert "s.space_id = e.cmetadata ->> 'space_id'" in sql
+    assert "s.space_key = e.cmetadata ->> 'space_key'" in sql
+    assert "s.cloud_id" in sql
+
+
 @pytest.mark.parametrize("entity_type", ["page", "blogpost"])
 def test_confluence_target_query_qualifies_grouped_columns_after_state_join(
     entity_type: str,
