@@ -211,15 +211,18 @@ def _confluence_v1_cte(entity_type: str) -> str:
                 ) AS record_id,
                 COALESCE(
                     NULLIF(e.cmetadata ->> 'cloud_id', ''),
-                    NULLIF(e.cmetadata ->> 'scope_id', '')
+                    NULLIF(e.cmetadata ->> 'scope_id', ''),
+                    s.cloud_id
                 ) AS scope_id,
                 COALESCE(
                     NULLIF(e.cmetadata ->> 'space_key', ''),
-                    NULLIF(e.cmetadata ->> 'target_id', '')
+                    NULLIF(e.cmetadata ->> 'target_id', ''),
+                    s.space_key
                 ) AS target_id,
                 COALESCE(
                     NULLIF(e.cmetadata ->> 'space_name', ''),
                     NULLIF(e.cmetadata ->> 'target_name', ''),
+                    s.space_name,
                     NULLIF(e.cmetadata ->> 'space_key', ''),
                     NULLIF(e.cmetadata ->> 'target_id', '')
                 ) AS target_name,
@@ -227,6 +230,9 @@ def _confluence_v1_cte(entity_type: str) -> str:
             FROM langchain_pg_embedding e
             JOIN langchain_pg_collection c
               ON e.collection_id = c.uuid
+            LEFT JOIN confluence_spaces s
+              ON s.space_id = e.cmetadata ->> 'space_id'
+             AND s.space_key = e.cmetadata ->> 'space_key'
             WHERE c.name = :collection_name
               AND e.cmetadata ->> 'source' = 'confluence'
               AND e.cmetadata ->> 'entity_type' = '{entity_type}'
