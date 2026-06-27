@@ -77,6 +77,13 @@ class TargetBackfillResult(NamedTuple):
     failed: int
 
 
+class HydrateTargetResult(NamedTuple):
+    backfill_count: int
+    failed_ids: list[str]
+    error_type: str | None
+    error_message: str | None
+
+
 class FinishResult(NamedTuple):
     decision: BackfillCompletionDecision
     persisted: bool
@@ -156,7 +163,7 @@ class BaseBackfillService(Generic[AdapterT, ExecutionT, CursorT, TargetContextT]
                 target,
             )
             adapter = await self._create_adapter_for_target(target)
-            backfill_count, failed_ids = await self._hydrate_target_seed_pages(
+            hydrate_result = await self._hydrate_target_seed_pages(
                 target,
                 adapter,
                 target_context,
@@ -165,17 +172,21 @@ class BaseBackfillService(Generic[AdapterT, ExecutionT, CursorT, TargetContextT]
             finish_result = await asyncio.to_thread(
                 self._mark_finished_sync,
                 target,
-                backfill_count,
-                failed_ids,
+                hydrate_result.backfill_count,
+                hydrate_result.failed_ids,
                 processing_started_at,
+                error_type=hydrate_result.error_type,
+                error_message=hydrate_result.error_message,
             )
             self._logger.info(
                 f"{self.log_event_prefix}_target_finished",
                 **self._target_log_context(target),
                 state=finish_result.decision.state,
-                backfill_count=backfill_count,
-                failed_count=len(failed_ids),
-                failed_ids=failed_ids,
+                backfill_count=hydrate_result.backfill_count,
+                failed_count=len(hydrate_result.failed_ids),
+                failed_ids=hydrate_result.failed_ids,
+                error_type=finish_result.decision.error_type,
+                error_message=finish_result.decision.error_message,
                 finish_persisted=finish_result.persisted,
             )
             if not finish_result.persisted:
@@ -185,12 +196,12 @@ class BaseBackfillService(Generic[AdapterT, ExecutionT, CursorT, TargetContextT]
                     failed=target.pending_count,
                 )
             return TargetBackfillResult(
-                succeeded=backfill_count,
+                succeeded=hydrate_result.backfill_count,
                 skipped=0,
                 failed=count_backfill_completion_failures(
                     pending_count=target.pending_count,
-                    backfill_count=backfill_count,
-                    failed_ids=failed_ids,
+                    backfill_count=hydrate_result.backfill_count,
+                    failed_ids=hydrate_result.failed_ids,
                     state=finish_result.decision.state,
                 ),
             )
@@ -238,8 +249,10 @@ class BaseBackfillService(Generic[AdapterT, ExecutionT, CursorT, TargetContextT]
         target: BackfillTarget,
         adapter: AdapterT,
         target_context: TargetContextT,
-    ) -> tuple[int, list[str]]:
+    ) -> HydrateTargetResult:
         failed_ids: list[str] = []
+        error_types: list[str] = []
+        error_messages: list[str] = []
         backfill_count = 0
         cursor: CursorT | None = None
         seed_page_index = 0
@@ -308,6 +321,12 @@ class BaseBackfillService(Generic[AdapterT, ExecutionT, CursorT, TargetContextT]
                     result,
                     seed_chunk,
                 )
+                chunk_error_type = failure_error_type_from_result(result)
+                if chunk_failed_ids and chunk_error_type:
+                    error_types.append(chunk_error_type)
+                chunk_error_message = failure_error_message_from_result(result)
+                if chunk_failed_ids and chunk_error_message:
+                    error_messages.append(chunk_error_message)
                 failed_ids.extend(chunk_failed_ids)
                 backfill_count += result.persisted_count
                 self._logger.info(
@@ -319,9 +338,16 @@ class BaseBackfillService(Generic[AdapterT, ExecutionT, CursorT, TargetContextT]
                     persisted_count=result.persisted_count,
                     failed_count=len(chunk_failed_ids),
                     failed_ids=chunk_failed_ids,
+                    error_type=chunk_error_type,
+                    error_message=chunk_error_message,
                 )
 
-        return backfill_count, failed_ids
+        return HydrateTargetResult(
+            backfill_count=backfill_count,
+            failed_ids=failed_ids,
+            error_type=combine_failure_error_types(error_types),
+            error_message=combine_failure_error_messages(error_messages),
+        )
 
     async def _create_adapter_for_target(self, target: BackfillTarget) -> AdapterT:
         return await self._adapter_factory(target.scope_id)
@@ -490,6 +516,31 @@ def failed_ids_from_result(
         return []
     seed_ids = [seed.langchain_id for seed in seeds]
     return seed_ids[: result.failed_count]
+
+
+def failure_error_type_from_result(result: SyncExecutionResult) -> str | None:
+    """Return connector-owned failure code for backfill state, when provided."""
+    error_type = result.metadata.get("error_type") or result.metadata.get("error_code")
+    return str(error_type) if error_type else None
+
+
+def failure_error_message_from_result(result: SyncExecutionResult) -> str | None:
+    error_message = result.metadata.get("error_message")
+    return str(error_message) if error_message else None
+
+
+def combine_failure_error_types(error_types: Sequence[str]) -> str | None:
+    distinct_error_types = list(dict.fromkeys(error_types))
+    if not distinct_error_types:
+        return None
+    return ",".join(distinct_error_types)
+
+
+def combine_failure_error_messages(error_messages: Sequence[str]) -> str | None:
+    distinct_error_messages = list(dict.fromkeys(error_messages))
+    if not distinct_error_messages:
+        return None
+    return " | ".join(distinct_error_messages)
 
 
 def chunked(values: Sequence[Any], size: int) -> list[list[Any]]:

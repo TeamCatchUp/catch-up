@@ -746,7 +746,11 @@ async def test_backfill_batch_records_failed_ids_when_pipeline_reports_failure()
     pipeline_result = SimpleNamespace(
         persisted_count=0,
         failed_count=1,
-        metadata={"failed_ids": [seed.langchain_id]},
+        metadata={
+            "failed_ids": [seed.langchain_id],
+            "error_type": "github_pr_batch_fetch_failed",
+            "error_message": "HTTPError: 403 Forbidden",
+        },
     )
     service = GithubPrV2BackfillService(
         adapter_factory=adapter_factory,
@@ -774,6 +778,8 @@ async def test_backfill_batch_records_failed_ids_when_pipeline_reports_failure()
     assert fail_params["state"] == "failed"
     assert fail_params["backfill_count"] == 0
     assert json.loads(fail_params["failed_ids"]) == [seed.langchain_id]
+    assert fail_params["last_error_type"] == "github_pr_batch_fetch_failed"
+    assert fail_params["last_error_message"] == "HTTPError: 403 Forbidden"
     assert fail_params["processing_started_at"] == 1
     assert fail_params["succeeded_at"] is None
     assert fail_params["failed_at"] is not None

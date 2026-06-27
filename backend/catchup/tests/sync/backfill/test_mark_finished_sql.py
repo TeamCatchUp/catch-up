@@ -7,6 +7,7 @@ from catchup.sync.backfill.state import (
     build_mark_processing_statement as build_shared_mark_processing_statement,
 )
 from catchup.sync.backfill.state import decide_backfill_completion
+from catchup.sync.backfill.state import truncate_error_type
 
 
 def test_mark_finished_statement_casts_reused_state_parameter() -> None:
@@ -68,3 +69,7 @@ def test_completion_decision_fails_when_failed_ids_exist() -> None:
 
     assert decision.state == "failed"
     assert decision.error_type == "PartialBackfillFailure"
+
+
+def test_truncate_error_type_matches_state_column_length() -> None:
+    assert truncate_error_type("x" * 300) == "x" * 255

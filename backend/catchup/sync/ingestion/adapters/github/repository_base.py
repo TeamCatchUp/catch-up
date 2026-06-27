@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import traceback
 from collections.abc import Awaitable
 from collections.abc import Callable
 from datetime import datetime
@@ -84,6 +85,7 @@ class GithubRepositoryAdapterBase(
             issue_v2_mapper=self.issue_v2_mapper,
             pr_v2_mapper=self.pr_v2_mapper,
         )
+        self._last_numbered_nodes_error_message: str | None = None
 
     async def _get_repo_ref(self, repo_id: int) -> GithubRepoRef:
         return await self.repo_ref_resolver.get_repo_ref(repo_id)
@@ -203,6 +205,7 @@ class GithubRepositoryAdapterBase(
             Awaitable[dict[str, dict[str, Any]]],
         ],
     ) -> tuple[list[tuple[str, dict[str, Any]]], list[str]]:
+        self._last_numbered_nodes_error_message = None
         if not record_ids:
             return [], []
 
@@ -230,6 +233,7 @@ class GithubRepositoryAdapterBase(
             except GitHubRateLimitError:
                 raise
             except Exception as exc:
+                self._last_numbered_nodes_error_message = _format_exception_trace(exc)
                 logger.warning(
                     log_event,
                     connector="github",
@@ -399,3 +403,7 @@ class GithubRepositoryAdapterBase(
 
 def _github_dual_write_log_token(entity_type: str) -> str:
     return "pr" if entity_type == "pull_request" else entity_type
+
+
+def _format_exception_trace(exc: Exception) -> str:
+    return "".join(traceback.format_exception(type(exc), exc, exc.__traceback__, limit=3))
