@@ -1,4 +1,5 @@
 import json
+from contextlib import nullcontext
 from datetime import datetime
 
 from langchain_core.documents import Document
@@ -151,10 +152,16 @@ async def search_knowledge_base(
             }.items()
             if v is not None
         }
-        with propagate_attributes(user_id=user_id, metadata=lf_metadata):
-            results = await _run_search(
-                query, limit, sources, date_from, date_to, vector_db_service, offset
-            )
+        lf_ctx = propagate_attributes(user_id=user_id, metadata=lf_metadata)
+    else:
+        lf_ctx = nullcontext()
+
+    with lf_ctx:
+        results = await _run_search(
+            query, limit, sources, date_from, date_to, vector_db_service, offset
+        )
+
+    if settings.ENABLE_LANGFUSE:
         get_client().update_current_span(
             input={
                 "query": query,
@@ -165,10 +172,6 @@ async def search_knowledge_base(
                 "date_to": date_to,
             },
             output=results,
-        )
-    else:
-        results = await _run_search(
-            query, limit, sources, date_from, date_to, vector_db_service, offset
         )
 
     return _serialize_results(results)
