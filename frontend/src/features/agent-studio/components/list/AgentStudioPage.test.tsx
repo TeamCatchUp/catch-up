@@ -140,6 +140,32 @@ beforeEach(() => {
 });
 
 describe('AgentStudioPage', () => {
+  it('renders status section skeletons while automations are loading', () => {
+    mockVersion();
+    server.use(http.get('/api/v1/automations/inquiries', () => new Promise(() => {})));
+
+    renderWithQueryClient(<AgentStudioPage />);
+
+    expect(screen.getByLabelText('운영중 로딩 섹션')).toBeInTheDocument();
+    expect(screen.getByLabelText('제작중 로딩 섹션')).toBeInTheDocument();
+    expect(screen.getByLabelText('사용 안함 로딩 섹션')).toBeInTheDocument();
+    expect(screen.getAllByLabelText('Agent 카드 로딩')).toHaveLength(3);
+    expect(screen.queryByText('Agent를 불러오고 있습니다.')).not.toBeInTheDocument();
+  });
+
+  it('renders grid card skeletons when a status filter is selected while loading', async () => {
+    const user = userEvent.setup();
+    mockVersion();
+    server.use(http.get('/api/v1/automations/inquiries', () => new Promise(() => {})));
+
+    renderWithQueryClient(<AgentStudioPage />);
+
+    await user.click(screen.getByRole('button', { name: '운영중' }));
+
+    expect(screen.queryByLabelText('운영중 로딩 섹션')).not.toBeInTheDocument();
+    expect(screen.getAllByLabelText('Agent 카드 로딩')).toHaveLength(3);
+  });
+
   it('renders the Agent Studio list from automations API', async () => {
     mockVersion();
     useInquiryAutomationList([activeAutomation, inactiveAutomation]);

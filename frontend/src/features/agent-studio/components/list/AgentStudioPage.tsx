@@ -15,6 +15,7 @@ import AgentEmptyColumn from './AgentEmptyColumn';
 import AgentFilterTabs from './AgentFilterTabs';
 import AgentStudioHeader from './AgentStudioHeader';
 import AgentStudioListContent from './AgentStudioListContent';
+import AgentStudioListSkeleton from './AgentStudioListSkeleton';
 
 export default function AgentStudioPage() {
   const router = useRouter();
@@ -59,13 +60,7 @@ export default function AgentStudioPage() {
           <AgentCreateButton onClick={() => router.push('/agent-studio/new')} />
         </div>
         <div className="flex w-full flex-wrap items-start gap-6">
-          {automationQuery.isLoading && (
-            <AgentEmptyColumn
-              label="운영중"
-              title="Agent를 불러오고 있습니다."
-              description="잠시만 기다려주세요."
-            />
-          )}
+          {automationQuery.isLoading && <AgentStudioListSkeleton selectedFilter={selectedFilter} />}
           {automationQuery.isError && (
             <AgentEmptyColumn
               label="운영중"
