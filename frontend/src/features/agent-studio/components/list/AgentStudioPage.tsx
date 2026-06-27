@@ -3,7 +3,8 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
-import { toast } from 'sonner';
+
+import { toast } from '@/shared/components/ui/toast';
 
 import { AGENT_STUDIO_FILTERS } from '../../fixtures/agentStudioFixtures';
 import { inquiryAutomationsMutations } from '../../queries/inquiryAutomations.mutations';

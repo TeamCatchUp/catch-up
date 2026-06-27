@@ -67,13 +67,13 @@ export interface InquiryAutomationPublishRequest {
 }
 
 export interface InquiryAutomationPatchRequest {
-  channel_talk_credential_id?: number | null;
-  quiet_period_seconds?: number | null;
+  channel_talk_credential_id?: number;
+  quiet_period_seconds?: number;
   slack_channel?: {
     credential_id: number;
     channel_id: string;
     channel_name?: string;
-  } | null;
+  };
   guide_instruction?: string | null;
 }
 

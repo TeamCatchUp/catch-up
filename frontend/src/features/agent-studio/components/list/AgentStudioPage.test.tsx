@@ -3,9 +3,9 @@ import { MutationCache, QueryClient, QueryClientProvider } from '@tanstack/react
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
-import { toast } from 'sonner';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { toast } from '@/shared/components/ui/toast';
 import { server } from '@/test/msw/server';
 
 import type { InquiryAutomationItem } from '../../types/automationApi';
@@ -13,7 +13,7 @@ import AgentStudioPage from './AgentStudioPage';
 
 const mockPush = vi.fn();
 
-vi.mock('sonner', () => ({
+vi.mock('@/shared/components/ui/toast', () => ({
   toast: {
     error: vi.fn(),
   },

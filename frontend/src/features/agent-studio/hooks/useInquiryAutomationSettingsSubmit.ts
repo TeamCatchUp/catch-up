@@ -3,7 +3,8 @@
 import { useEffect, useRef } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
-import { toast } from 'sonner';
+
+import { toast } from '@/shared/components/ui/toast';
 
 import { AGENT_EDITOR_SETTINGS_MESSAGES } from '../constants/agentEditorSettingsMessages';
 import { inquiryAutomationsMutations } from '../queries/inquiryAutomations.mutations';

@@ -3,9 +3,9 @@ import { MutationCache, QueryClient, QueryClientProvider } from '@tanstack/react
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
-import { toast } from 'sonner';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { toast } from '@/shared/components/ui/toast';
 import { server } from '@/test/msw/server';
 
 import type { AutomationCredentialItem, AutomationTargetItem, InquiryAutomationItem } from '../../types/automationApi';
@@ -18,7 +18,7 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ({ back: mockBack, push: mockPush }),
 }));
 
-vi.mock('sonner', () => ({
+vi.mock('@/shared/components/ui/toast', () => ({
   toast: {
     error: vi.fn(),
   },
@@ -42,6 +42,16 @@ const slackCredential: AutomationCredentialItem = {
   display_name: 'Catch Up',
   external_id: 'T0123',
   external_name: 'Catch Up',
+  is_configured: true,
+  metadata: {},
+};
+
+const alternateSlackCredential: AutomationCredentialItem = {
+  connector: 'slack',
+  credential_id: 21,
+  display_name: 'Ops Workspace',
+  external_id: 'T0456',
+  external_name: 'Ops Workspace',
   is_configured: true,
   metadata: {},
 };
@@ -81,6 +91,26 @@ const secondarySlackTarget: AutomationTargetItem = {
   credential_id: 20,
   target_id: 'C999',
   display_name: 'cs-alerts',
+  target_type: 'channel',
+  is_accessible: true,
+  metadata: {},
+};
+
+const alternateSlackTargetWithSameId: AutomationTargetItem = {
+  connector: 'slack',
+  credential_id: 21,
+  target_id: 'C123',
+  display_name: 'ops-response',
+  target_type: 'channel',
+  is_accessible: true,
+  metadata: {},
+};
+
+const alternateSlackTarget: AutomationTargetItem = {
+  connector: 'slack',
+  credential_id: 21,
+  target_id: 'C777',
+  display_name: 'ops-alerts',
   target_type: 'channel',
   is_accessible: true,
   metadata: {},
@@ -484,6 +514,101 @@ describe('AgentStudioEditorPage', () => {
           credential_id: 20,
           channel_id: 'C999',
           channel_name: 'cs-alerts',
+        },
+      },
+    ]);
+  });
+
+  it('requires selecting a Slack channel again after changing Slack credentials in edit mode', async () => {
+    const user = userEvent.setup();
+    const patchRequests: unknown[] = [];
+
+    server.use(
+      http.get('/api/v1/automations/credentials', ({ request }) => {
+        const url = new URL(request.url);
+
+        if (url.searchParams.get('connector') !== 'slack') {
+          return new HttpResponse(null, { status: 500 });
+        }
+
+        return HttpResponse.json({
+          connector: 'slack',
+          total_credentials: 2,
+          credentials: [slackCredential, alternateSlackCredential],
+        });
+      }),
+      http.get('/api/v1/automations/targets', ({ request }) => {
+        const url = new URL(request.url);
+        const connector = url.searchParams.get('connector');
+        const credentialId = url.searchParams.get('credential_id');
+
+        if (connector === 'channel_talk' && credentialId === null) {
+          return HttpResponse.json({
+            connector: 'channel_talk',
+            credential_id: null,
+            total_targets: 2,
+            targets: [channelTalkTarget, secondaryChannelTalkTarget],
+          });
+        }
+
+        if (connector === 'slack' && credentialId === '20') {
+          return HttpResponse.json({
+            connector: 'slack',
+            credential_id: 20,
+            total_targets: 2,
+            targets: [slackTarget, secondarySlackTarget],
+          });
+        }
+
+        if (connector === 'slack' && credentialId === '21') {
+          return HttpResponse.json({
+            connector: 'slack',
+            credential_id: 21,
+            total_targets: 2,
+            targets: [alternateSlackTargetWithSameId, alternateSlackTarget],
+          });
+        }
+
+        return new HttpResponse(null, { status: 500 });
+      }),
+      http.get('/api/v1/automations/inquiries/42', () => HttpResponse.json(existingAutomation)),
+      http.patch('/api/v1/automations/inquiries/42/settings', async ({ request }) => {
+        patchRequests.push(await request.json());
+        return new HttpResponse(null, { status: 204 });
+      }),
+      http.get('/api/v1/version', () => HttpResponse.json('1.2.3')),
+    );
+
+    renderWithQueryClient(<AgentStudioEditorPage mode="edit" agentSpecId={42} />);
+
+    const submitButton = await screen.findByRole('button', { name: '수정하기' });
+    const slackCredentialSelect = screen.getByRole('combobox', { name: /누구의 권한을 가지고 조회/ });
+    const slackChannelSelect = screen.getByRole('combobox', { name: /Slack 채널을 선택/ });
+
+    await waitFor(() => expect(slackChannelSelect).toHaveTextContent('cs-response'));
+    expect(submitButton).not.toBeDisabled();
+
+    await user.click(slackCredentialSelect);
+    await user.click(await screen.findByRole('option', { name: 'Ops Workspace' }));
+
+    await waitFor(() => expect(slackCredentialSelect).toHaveTextContent('Ops Workspace'));
+    await waitFor(() => expect(slackChannelSelect).not.toHaveTextContent('cs-response'));
+    await waitFor(() => expect(slackChannelSelect).not.toBeDisabled());
+    expect(submitButton).toBeDisabled();
+
+    await user.click(slackChannelSelect);
+    await user.click(await screen.findByRole('option', { name: 'ops-alerts' }));
+
+    await waitFor(() => expect(submitButton).not.toBeDisabled());
+    await user.click(submitButton);
+
+    await waitFor(() => expect(patchRequests).toHaveLength(1));
+    expect(patchRequests).toEqual([
+      {
+        slack_channel: {
+          credential_id: 21,
+          channel_id: 'C777',
+          channel_name: 'ops-alerts',
         },
       },
     ]);

@@ -65,11 +65,13 @@ export function useAgentEditorSettingsSelects({
       : '';
   const editSlackCredentialId =
     isEditMode && automationDetail !== undefined ? String(automationDetail.slack_credential_id) : '';
-  const slackCredentialValue = slackCredentialId || editSlackCredentialId || autoSlackCredentialId;
+  const hasManualSlackCredential = slackCredentialId !== '';
+  const slackCredentialValue = hasManualSlackCredential ? slackCredentialId : editSlackCredentialId || autoSlackCredentialId;
   const selectedSlackCredentialId = slackCredentialValue === '' ? undefined : Number(slackCredentialValue);
   const slackTargetsQuery = useQuery(automationCredentialsQueries.targets('slack', selectedSlackCredentialId));
+  const shouldUseEditSlackChannel = isEditMode && automationDetail !== undefined && !hasManualSlackCredential;
   const slackChannelValue =
-    slackChannelId || (isEditMode && automationDetail !== undefined ? automationDetail.slack_channel_id : '');
+    slackChannelId || (shouldUseEditSlackChannel ? automationDetail.slack_channel_id : '');
   const isEditReadOnly = isEditMode && automationDetail?.is_editable === false;
 
   const slackChannelItems = useMemo(
