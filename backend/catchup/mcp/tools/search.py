@@ -118,7 +118,10 @@ async def search_knowledge_base(
     Craft a descriptive, natural-language query that captures the user's intent.
     Richer queries yield better results than short keyword strings.
 
-    To page through results, keep the same query and increment page (page=1, page=2, ...).
+    When the initial results are insufficient, prefer issuing a new call with a
+    different angle or perspective on the query rather than repeating the same one.
+    To retrieve more results for the exact same query, use pagination instead
+    (page=1, page=2, ...).
 
     Args:
         query: Natural-language search query describing what you are looking for.
