@@ -97,10 +97,10 @@ _MAX_K = 10
 
 @mcp_tool(
     action=McpAction.SEARCH_KNOWLEDGE_BASE,
-    observe_name="mcp-search-knowledge-base",
+    observe_name="mcp-search-documents",
     emit_attempt=True,
 )
-async def search_knowledge_base(
+async def search_documents(
     query: str,
     limit: int = 10,
     page: int = 1,
@@ -114,6 +114,10 @@ async def search_knowledge_base(
     Indexes content from Slack, Jira, Confluence, GitHub, and ChannelTalk — all in one
     query. Useful for questions about decisions, ongoing projects, team discussions,
     issue history, or any company-specific context that spans multiple platforms.
+
+    Each result contains a summarized or contextual representation of the document,
+    not the full original text. Use 'read_documents' to retrieve the original content
+    for specific documents when needed.
 
     Craft a descriptive, natural-language query that captures the user's intent.
     Richer queries yield better results than short keyword strings.
@@ -176,5 +180,39 @@ async def search_knowledge_base(
             },
             output=results,
         )
+
+    return _serialize_results(results)
+
+
+@mcp_tool(
+    action=McpAction.READ_DOCUMENTS,
+    observe_name="mcp-read-documents",
+    emit_attempt=True,
+)
+async def read_documents(ids: list[str]) -> str:
+    """
+    Retrieve the original full text of specific documents by their IDs.
+
+    Use this after 'search_documents' when you need the complete original content
+    of a document, not just the summary. Fetch only the documents you actually
+    need — original text is significantly longer than search result summaries.
+
+    Document IDs are returned in the "id" field of 'search_documents' results.
+
+    Args:
+        ids: List of document IDs to retrieve.
+    """
+    embeddings = get_embedding_service(EmbeddingProvider.AWS_BEDROCK).get_embedder()
+    vector_db_service = get_vector_db_service(VectorDbProvider.PGVECTOR, embeddings)
+
+    docs: list[Document] = await vector_db_service.fetch_by_ids(ids)
+
+    results = []
+    for doc in docs:
+        meta = doc.metadata or {}
+        results.append({
+            "id": doc.id,
+            "content": meta.get("contextual_content") or doc.page_content,
+        })
 
     return _serialize_results(results)

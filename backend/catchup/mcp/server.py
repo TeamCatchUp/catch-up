@@ -5,7 +5,8 @@ from mcp.server.transport_security import TransportSecuritySettings
 
 from catchup.configs.config import auth_settings
 from catchup.configs.config import settings
-from catchup.mcp.tools.search import search_knowledge_base
+from catchup.mcp.tools.search import read_documents
+from catchup.mcp.tools.search import search_documents
 from catchup.mcp.tools.v2_sampling import get_v2_backfill_state
 from catchup.mcp.tools.v2_sampling import sample_v2_knowledge_store
 
@@ -36,7 +37,8 @@ mcp = FastMCP(
 
 def _register_tools(mcp: FastMCP) -> None:
     """MCP 인스턴스에 모든 툴을 등록한다."""
-    mcp.add_tool(search_knowledge_base)
+    mcp.add_tool(search_documents)
+    mcp.add_tool(read_documents)
     if settings.MCP_V2_SAMPLING_ENABLED:
         mcp.add_tool(sample_v2_knowledge_store)
         mcp.add_tool(get_v2_backfill_state)
