@@ -1,8 +1,8 @@
 import { Skeleton } from '@/shared/components/ui/skeleton';
 import { cn } from '@/shared/utils/cn';
 
-import type { AgentStudioFilter } from '../../types/agentStudioModel';
-import type { AgentStatusSectionLabel } from './AgentStatusSection';
+import type { AgentStudioFilter } from '../../../types/agentStudioModel';
+import type { AgentStatusSectionLabel } from '../content/AgentStatusSection';
 
 const STATUS_SECTION_SKELETON_STYLE: Record<
   AgentStatusSectionLabel,

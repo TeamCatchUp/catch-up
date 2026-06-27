@@ -4,8 +4,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { cn } from '@/shared/utils/cn';
 
-import RequiredMarker from './RequiredMarker';
-
 interface AgentInstructionFieldProps {
   value: string;
   onChange: (value: string) => void;
@@ -49,7 +47,6 @@ export default function AgentInstructionField({
     <label className="flex w-full flex-col gap-3">
       <span className="text-heading-small text-text-normal-normal flex items-start gap-1">
         답변 초안, 어떤 규칙으로 쓸까요?
-        <RequiredMarker />
       </span>
       <div
         className="bg-fill-normal-normal flex min-h-24.5 w-full items-center rounded-xl border border-solid p-4 transition-colors"

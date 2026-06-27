@@ -182,7 +182,7 @@ describe('AgentStudioPage', () => {
     expect(within(screen.getByLabelText('사용 안함 섹션')).getByText('1')).toBeInTheDocument();
   });
 
-  it('renders dash labels when backend display fields are null', async () => {
+  it('renders dash labels except omitted guide instruction when backend display fields are null', async () => {
     mockVersion();
     useInquiryAutomationList([
       {
@@ -198,7 +198,7 @@ describe('AgentStudioPage', () => {
     renderWithQueryClient(<AgentStudioPage />);
 
     expect(await screen.findByRole('heading', { name: '-' })).toBeInTheDocument();
-    expect(screen.getAllByText('-')).toHaveLength(4);
+    expect(screen.getAllByText('-')).toHaveLength(3);
   });
 
   it('keeps the active column visible with an empty placeholder when there is no active automation', async () => {

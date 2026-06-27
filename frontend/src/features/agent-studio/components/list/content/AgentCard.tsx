@@ -9,7 +9,7 @@ import {
 } from '@/shared/components/ui/dropdown-menu';
 import { isSafeUrl } from '@/shared/utils/isSafeUrl';
 
-import type { AgentStudioCardModel } from '../../types/agentStudioModel';
+import type { AgentStudioCardModel } from '../../../types/agentStudioModel';
 
 interface AgentCardProps {
   agent: AgentStudioCardModel;
@@ -67,9 +67,11 @@ export default function AgentCard({
           }
         >
           <h3 className="text-heading-medium text-text-normal-normal w-full shrink-0 truncate">{agent.title}</h3>
-          <p className="text-body-small text-text-normal-alternative line-clamp-2 w-full shrink-0">
-            {agent.description}
-          </p>
+          {agent.description && (
+            <p className="text-body-small text-text-normal-alternative line-clamp-2 w-full shrink-0">
+              {agent.description}
+            </p>
+          )}
           {metadataRow}
         </div>
         <Button
@@ -119,9 +121,11 @@ export default function AgentCard({
               </DropdownMenu>
             )}
           </div>
-          <p className="text-body-small text-text-normal-alternative line-clamp-2 w-full shrink-0">
-            {agent.description}
-          </p>
+          {agent.description && (
+            <p className="text-body-small text-text-normal-alternative line-clamp-2 w-full shrink-0">
+              {agent.description}
+            </p>
+          )}
         </div>
         {metadataRow}
       </div>

@@ -1,4 +1,4 @@
-import AgentStatusSection, { type AgentStatusSectionLabel } from './AgentStatusSection';
+import AgentStatusSection, { type AgentStatusSectionLabel } from '../content/AgentStatusSection';
 
 interface AgentEmptyColumnProps {
   label: AgentStatusSectionLabel;

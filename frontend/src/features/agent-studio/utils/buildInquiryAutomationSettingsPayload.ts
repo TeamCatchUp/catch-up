@@ -9,6 +9,7 @@ import { areInquiryAutomationSettingsSelected } from './validateInquiryAutomatio
 
 interface BuildInquiryAutomationSettingsPayloadOptions {
   channelTalkTarget?: AutomationTargetItem;
+  guideInstruction: string;
   quietPeriodValue: string;
   slackCredential?: AutomationCredentialItem;
   slackCredentialId?: number;
@@ -21,8 +22,15 @@ interface BuildInquiryAutomationSettingsPatchPayloadOptions {
   settingsPayload: InquiryAutomationPublishRequest;
 }
 
+function normalizeGuideInstruction(value: string | null | undefined): string | null {
+  const trimmedValue = value?.trim() ?? '';
+
+  return trimmedValue.length > 0 ? trimmedValue : null;
+}
+
 export function buildInquiryAutomationSettingsPayload({
   channelTalkTarget,
+  guideInstruction,
   quietPeriodValue,
   slackCredential,
   slackCredentialId,
@@ -42,6 +50,7 @@ export function buildInquiryAutomationSettingsPayload({
 
   return {
     channel_talk_credential_id: channelTalkCredentialId,
+    guide_instruction: normalizeGuideInstruction(guideInstruction),
     quiet_period_seconds: Number(quietPeriodValue),
     slack_channel: {
       credential_id: slackCredentialId,
@@ -73,6 +82,10 @@ export function buildInquiryAutomationSettingsPatchPayload({
     settingsPayload.slack_channel.channel_id !== automationDetail.slack_channel_id
   ) {
     patchPayload.slack_channel = settingsPayload.slack_channel;
+  }
+
+  if (settingsPayload.guide_instruction !== normalizeGuideInstruction(automationDetail.guide_instruction)) {
+    patchPayload.guide_instruction = settingsPayload.guide_instruction ?? null;
   }
 
   return patchPayload;

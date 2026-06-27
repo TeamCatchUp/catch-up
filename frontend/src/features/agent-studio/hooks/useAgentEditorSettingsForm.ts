@@ -1,5 +1,7 @@
 'use client';
 
+import { useState } from 'react';
+
 import { useAgentEditorSettingsSelects } from './useAgentEditorSettingsSelects';
 import { useInquiryAutomationSettingsSubmit } from './useInquiryAutomationSettingsSubmit';
 
@@ -11,15 +13,22 @@ interface UseAgentEditorSettingsFormOptions {
 export function useAgentEditorSettingsForm({ mode = 'create', agentSpecId }: UseAgentEditorSettingsFormOptions = {}) {
   const isEditMode = mode === 'edit';
   const resolvedAgentSpecId = isEditMode ? agentSpecId : undefined;
+  const [instructionOverride, setInstructionOverride] = useState<string | null>(null);
 
   const settingsSelects = useAgentEditorSettingsSelects({
     isEditMode,
     resolvedAgentSpecId,
   });
+  const instruction =
+    instructionOverride ??
+    (isEditMode && settingsSelects.automationDetail !== undefined
+      ? (settingsSelects.automationDetail.guide_instruction ?? '')
+      : '');
 
   const { canSubmit, handleSubmit } = useInquiryAutomationSettingsSubmit({
     automationDetail: settingsSelects.automationDetail,
     defaultQuietPeriodSeconds: settingsSelects.defaultQuietPeriodSeconds,
+    guideInstruction: instruction,
     hasAutomationDetailLoadError: settingsSelects.hasAutomationDetailLoadError,
     hasEditChannelTalkTarget: settingsSelects.hasEditChannelTalkTarget,
     hasSelectedAutomationSettings: settingsSelects.hasSelectedAutomationSettings,
@@ -38,8 +47,10 @@ export function useAgentEditorSettingsForm({ mode = 'create', agentSpecId }: Use
     canSubmit,
     channelTalkSelect: settingsSelects.channelTalkSelect,
     handleSubmit,
+    instruction,
     isReadOnly: settingsSelects.isEditReadOnly,
     quietPeriodSelect: settingsSelects.quietPeriodSelect,
+    setInstruction: setInstructionOverride,
     slackChannelSelect: settingsSelects.slackChannelSelect,
     slackCredentialSelect: settingsSelects.slackCredentialSelect,
   };

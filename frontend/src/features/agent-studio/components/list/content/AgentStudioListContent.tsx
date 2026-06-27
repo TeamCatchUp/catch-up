@@ -1,6 +1,6 @@
-import type { AgentStudioCardModel, AgentStudioFilter } from '../../types/agentStudioModel';
+import type { AgentStudioCardModel, AgentStudioFilter } from '../../../types/agentStudioModel';
+import AgentEmptyColumn from '../states/AgentEmptyColumn';
 import AgentCard from './AgentCard';
-import AgentEmptyColumn from './AgentEmptyColumn';
 import AgentStatusSection, { type AgentStatusSectionLabel } from './AgentStatusSection';
 
 const EMPTY_STATE_BY_STATUS: Record<

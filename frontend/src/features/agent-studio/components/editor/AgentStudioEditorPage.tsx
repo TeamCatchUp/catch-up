@@ -8,7 +8,7 @@ import { STATUS_IMAGES } from '@/shared/components/status/statusImages';
 
 import { inquiryAutomationsQueries } from '../../queries/inquiryAutomations.queries';
 import AgentEditorLeftPane from './AgentEditorLeftPane';
-import AgentEditorSettings from './AgentEditorSettings';
+import AgentEditorSettings from './settings/AgentEditorSettings';
 
 export interface AgentStudioEditorPageProps {
   mode?: 'create' | 'edit';

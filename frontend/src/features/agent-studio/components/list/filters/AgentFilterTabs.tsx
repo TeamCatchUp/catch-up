@@ -1,7 +1,7 @@
 import { Chip } from '@/shared/components/ui/chips';
 import { Switch } from '@/shared/components/ui/switch';
 
-import type { AgentStudioFilter, AgentStudioFilterItem } from '../../types/agentStudioModel';
+import type { AgentStudioFilter, AgentStudioFilterItem } from '../../../types/agentStudioModel';
 
 interface AgentFilterTabsProps {
   filters: readonly AgentStudioFilterItem[];

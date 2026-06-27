@@ -12,8 +12,10 @@ import { Button } from '@/shared/components/ui/button';
 import { DropdownMenu, DropdownMenuTrigger } from '@/shared/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/shared/components/ui/tooltip';
 
-import { useAgentEditorSettingsForm } from '../../hooks/useAgentEditorSettingsForm';
+import { AGENT_STUDIO_SETTINGS_FIXTURE } from '../../../fixtures/agentStudioFixtures';
+import { useAgentEditorSettingsForm } from '../../../hooks/useAgentEditorSettingsForm';
 import AgentSettingSection from './AgentSettingSection';
+import AgentInstructionField from './fields/AgentInstructionField';
 import AgentSelectField from './fields/AgentSelectField';
 
 interface AgentEditorSettingsProps {
@@ -126,6 +128,13 @@ export default function AgentEditorSettings({ mode = 'create', agentSpecId }: Ag
             items={form.slackChannelSelect.items}
             disabled={form.slackChannelSelect.disabled}
             onChange={form.slackChannelSelect.onChange}
+          />
+          <AgentInstructionField
+            value={form.instruction}
+            onChange={form.setInstruction}
+            maxLength={AGENT_STUDIO_SETTINGS_FIXTURE.instructionMaxLength}
+            hintText={AGENT_STUDIO_SETTINGS_FIXTURE.instructionHintText}
+            disabled={form.isReadOnly}
           />
         </AgentSettingSection>
       </div>

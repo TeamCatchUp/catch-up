@@ -48,8 +48,8 @@ describe('mapInquiryAutomation', () => {
     });
   });
 
-  it('maps missing guide instruction to a dash description', () => {
-    expect(mapInquiryAutomationToAgentCard({ ...baseAutomation, guide_instruction: null })?.description).toBe('-');
+  it('maps missing guide instruction to an empty description', () => {
+    expect(mapInquiryAutomationToAgentCard({ ...baseAutomation, guide_instruction: null })?.description).toBe('');
   });
 
   it('maps inactive status without changing the fixed copy', () => {

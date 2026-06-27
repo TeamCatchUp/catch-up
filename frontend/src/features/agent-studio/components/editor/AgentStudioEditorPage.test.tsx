@@ -250,10 +250,10 @@ describe('AgentStudioEditorPage', () => {
     expect(await screen.findByText('v1.2.3')).toBeInTheDocument();
   });
 
-  it('does not render the guide instruction field', () => {
+  it('renders the guide instruction field', () => {
     renderEditor();
 
-    expect(screen.queryByLabelText('답변 초안, 어떤 규칙으로 쓸까요?')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('답변 초안, 어떤 규칙으로 쓸까요?')).toBeInTheDocument();
   });
 
   it('renders unselected channel fields as select placeholders', () => {
@@ -332,6 +332,7 @@ describe('AgentStudioEditorPage', () => {
     await selectRequiredAutomationFields(user);
     await user.click(screen.getByRole('combobox', { name: /몇 분 후에 Agent를 실행할까요/ }));
     await user.click(await screen.findByRole('option', { name: '30분' }));
+    await user.type(screen.getByLabelText('답변 초안, 어떤 규칙으로 쓸까요?'), '프로젝트 맥락 반영');
 
     const publishButton = screen.getByRole('button', { name: '배포하기' });
 
@@ -350,6 +351,7 @@ describe('AgentStudioEditorPage', () => {
           channel_id: 'C123',
           channel_name: 'cs-response',
         },
+        guide_instruction: '프로젝트 맥락 반영',
       },
     ]);
 
@@ -436,7 +438,7 @@ describe('AgentStudioEditorPage', () => {
     await waitFor(() =>
       expect(screen.getByRole('combobox', { name: /Slack 채널을 선택/ })).toHaveTextContent('cs-response'),
     );
-    expect(screen.queryByLabelText('답변 초안, 어떤 규칙으로 쓸까요?')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('답변 초안, 어떤 규칙으로 쓸까요?')).toHaveValue('기존 문의 대응 규칙');
     expect(submitButton).not.toBeDisabled();
   });
 

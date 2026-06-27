@@ -2,11 +2,11 @@ import { useState } from 'react';
 
 import type { FigmaLabCase } from '@/app/(dev)/figma-lab/_registry/types';
 import AgentStudioEditorPage from '@/features/agent-studio/components/editor/AgentStudioEditorPage';
-import AgentCreateButton from '@/features/agent-studio/components/list/AgentCreateButton';
-import AgentFilterTabs from '@/features/agent-studio/components/list/AgentFilterTabs';
+import AgentCreateButton from '@/features/agent-studio/components/list/actions/AgentCreateButton';
 import AgentStudioHeader from '@/features/agent-studio/components/list/AgentStudioHeader';
-import AgentStudioListContent from '@/features/agent-studio/components/list/AgentStudioListContent';
-import AgentStudioListSkeleton from '@/features/agent-studio/components/list/AgentStudioListSkeleton';
+import AgentStudioListContent from '@/features/agent-studio/components/list/content/AgentStudioListContent';
+import AgentFilterTabs from '@/features/agent-studio/components/list/filters/AgentFilterTabs';
+import AgentStudioListSkeleton from '@/features/agent-studio/components/list/states/AgentStudioListSkeleton';
 import {
   AGENT_STUDIO_FILTERS,
   AGENT_STUDIO_MULTI_ACTIVE_LIST_FIXTURE,
@@ -284,7 +284,7 @@ export const agentStudioListLoadingFigmaCase: FigmaLabCase = {
   reuse: [
     {
       figmaPart: 'Status sections',
-      checked: 'src/features/agent-studio/components/list/AgentStatusSection.tsx',
+      checked: 'src/features/agent-studio/components/list/content/AgentStatusSection.tsx',
       decision: 'feature-local',
       reason: '상태별 섹션 색상과 간격을 로딩 상태에서도 유지합니다.',
     },

@@ -10,12 +10,12 @@ import { inquiryAutomationsMutations } from '../../queries/inquiryAutomations.mu
 import { inquiryAutomationsQueries } from '../../queries/inquiryAutomations.queries';
 import type { AgentStudioCardModel, AgentStudioFilter } from '../../types/agentStudioModel';
 import { mapInquiryAutomationsToAgentCards } from '../../utils/mapInquiryAutomation';
-import AgentCreateButton from './AgentCreateButton';
-import AgentEmptyColumn from './AgentEmptyColumn';
-import AgentFilterTabs from './AgentFilterTabs';
+import AgentCreateButton from './actions/AgentCreateButton';
 import AgentStudioHeader from './AgentStudioHeader';
-import AgentStudioListContent from './AgentStudioListContent';
-import AgentStudioListSkeleton from './AgentStudioListSkeleton';
+import AgentStudioListContent from './content/AgentStudioListContent';
+import AgentFilterTabs from './filters/AgentFilterTabs';
+import AgentEmptyColumn from './states/AgentEmptyColumn';
+import AgentStudioListSkeleton from './states/AgentStudioListSkeleton';
 
 export default function AgentStudioPage() {
   const router = useRouter();

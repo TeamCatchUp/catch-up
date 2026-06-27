@@ -18,6 +18,7 @@ import { canSubmitInquiryAutomationSettings } from '../utils/validateInquiryAuto
 interface UseInquiryAutomationSettingsSubmitOptions {
   automationDetail?: InquiryAutomationItem;
   defaultQuietPeriodSeconds: number;
+  guideInstruction: string;
   hasAutomationDetailLoadError: boolean;
   hasEditChannelTalkTarget: boolean;
   hasSelectedAutomationSettings: boolean;
@@ -35,6 +36,7 @@ interface UseInquiryAutomationSettingsSubmitOptions {
 export function useInquiryAutomationSettingsSubmit({
   automationDetail,
   defaultQuietPeriodSeconds,
+  guideInstruction,
   hasAutomationDetailLoadError,
   hasEditChannelTalkTarget,
   hasSelectedAutomationSettings,
@@ -100,6 +102,7 @@ export function useInquiryAutomationSettingsSubmit({
 
     const payload = buildInquiryAutomationSettingsPayload({
       channelTalkTarget: selectedChannelTalkTarget,
+      guideInstruction,
       quietPeriodValue,
       slackCredential: selectedSlackCredential,
       slackCredentialId: selectedSlackCredentialId,
