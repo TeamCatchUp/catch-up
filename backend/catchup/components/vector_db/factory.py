@@ -14,6 +14,7 @@ _pgvector_repository : PGVectorRepository | None = None  #Ingestion
 _v2_vector_store: VectorStore | None = None
 _v2_knowledge_repository: V2KnowledgeRepository | None = None
 _pgvector_service: PGVectorService | None = None  # Retrieval
+_pgvector_embeddings: Embeddings | None = None  # TTL 갱신 감지용
 
 
 # Ingestion
@@ -46,15 +47,16 @@ def get_v2_knowledge_repository() -> V2KnowledgeRepository:
 # Retrieval
 def get_vector_db_service(
     provider: VectorDbProvider,
-    embeddings: Embeddings = None
-)-> BaseVectorDbService:
+    embeddings: Embeddings = None,
+) -> BaseVectorDbService:
     if provider == VectorDbProvider.PGVECTOR:
-        global _pgvector_service
-        if _pgvector_service is None:
+        global _pgvector_service, _pgvector_embeddings
+        if _pgvector_service is None or _pgvector_embeddings is not embeddings:
             _pgvector_service = PGVectorService(
                 collection_name=settings.PGVECTOR_COLLECTION_NAME,
                 postgresql_engine=engine,
-                embeddings=embeddings
+                embeddings=embeddings,
             )
+            _pgvector_embeddings = embeddings
         return _pgvector_service
     raise ValueError(f"Unknown provider: {provider}")
