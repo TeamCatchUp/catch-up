@@ -541,7 +541,7 @@ describe('AgentStudioEditorPage', () => {
     expect(patchRequests).toEqual([{ guide_instruction: null }]);
   });
 
-  it('keeps edit submit disabled when an existing automation is not editable', async () => {
+  it('renders forbidden status when an existing automation is not editable', async () => {
     mockEditorSuccessHandlers();
     server.use(
       http.get('/api/v1/automations/inquiries/42', () =>
@@ -551,12 +551,33 @@ describe('AgentStudioEditorPage', () => {
 
     renderWithQueryClient(<AgentStudioEditorPage mode="edit" agentSpecId={42} />);
 
-    const submitButton = await screen.findByRole('button', { name: '수정하기' });
+    expect(await screen.findByRole('heading', { name: '이 Agent는 만든 사람만 수정할 수 있어요' })).toBeInTheDocument();
+    expect(screen.getByText('다른 구성원이 만든 Agent 설정은 수정할 수 없어요')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Agent Studio로 돌아가기' })).toHaveAttribute('href', '/agent-studio');
+    expect(screen.queryByRole('button', { name: '수정하기' })).not.toBeInTheDocument();
+  });
 
-    await waitFor(() =>
-      expect(screen.getByLabelText('답변 초안, 어떤 규칙으로 쓸까요?')).toHaveValue('기존 문의 대응 규칙'),
-    );
-    expect(submitButton).toBeDisabled();
+  it('renders forbidden status when the automation detail API returns 403', async () => {
+    mockEditorSuccessHandlers();
+    server.use(http.get('/api/v1/automations/inquiries/42', () => new HttpResponse(null, { status: 403 })));
+
+    renderWithQueryClient(<AgentStudioEditorPage mode="edit" agentSpecId={42} />);
+
+    expect(await screen.findByRole('heading', { name: '이 Agent는 만든 사람만 수정할 수 있어요' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '수정하기' })).not.toBeInTheDocument();
+  });
+
+  it('renders not-found status when the automation detail API returns 404', async () => {
+    mockEditorSuccessHandlers();
+    server.use(http.get('/api/v1/automations/inquiries/42', () => new HttpResponse(null, { status: 404 })));
+
+    renderWithQueryClient(<AgentStudioEditorPage mode="edit" agentSpecId={42} />);
+
+    expect(await screen.findByRole('heading', { name: '찾으시는 페이지가 없어요' })).toBeInTheDocument();
+    expect(screen.getByText('주소가 잘못되었거나, 페이지가 이동했을 수 있어요')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '이전 페이지' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '홈으로 돌아가기' })).toHaveAttribute('href', '/');
+    expect(screen.queryByRole('button', { name: '수정하기' })).not.toBeInTheDocument();
   });
 
   it('prevents duplicate edit requests while a settings patch is already in flight', async () => {
