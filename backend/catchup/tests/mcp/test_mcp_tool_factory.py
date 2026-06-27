@@ -2,6 +2,8 @@ from unittest.mock import patch
 
 import pytest
 
+from catchup.audit.actions import McpAction
+from catchup.audit.base import AuditStatus
 from catchup.mcp.tools.decorators import mcp_tool
 
 
@@ -32,9 +34,6 @@ async def test_mcp_tool_preserves_name_with_observe():
 @pytest.mark.asyncio
 async def test_mcp_tool_audit_log_called_on_success():
     """action 지정 시 audit_log 래핑이 적용된다 — SUCCESS emit 확인."""
-    from catchup.audit.actions import McpAction
-    from catchup.audit.base import AuditStatus
-
     @mcp_tool(action=McpAction.SEARCH_KNOWLEDGE_BASE, emit_attempt=False)
     async def fn() -> str:
         return "ok"
@@ -52,9 +51,6 @@ async def test_mcp_tool_audit_log_called_on_success():
 @pytest.mark.asyncio
 async def test_mcp_tool_emit_attempt_flag():
     """emit_attempt=True 이면 ATTEMPT + SUCCESS 총 2회 emit 된다."""
-    from catchup.audit.actions import McpAction
-    from catchup.audit.base import AuditStatus
-
     @mcp_tool(action=McpAction.SEARCH_KNOWLEDGE_BASE, emit_attempt=True)
     async def fn() -> str:
         return "ok"
