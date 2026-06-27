@@ -9,7 +9,12 @@ import { automationCredentialsQueries } from '../queries/automationCredentials.q
 import { inquiryAutomationsMutations } from '../queries/inquiryAutomations.mutations';
 import { inquiryAutomationsQueries } from '../queries/inquiryAutomations.queries';
 import type { AgentStudioSelectItem } from '../types/agentStudioModel';
-import type { AutomationCredentialItem, AutomationTargetItem } from '../types/automationApi';
+import type {
+  AutomationCredentialItem,
+  AutomationTargetItem,
+  InquiryAutomationPatchRequest,
+  InquiryAutomationPublishRequest,
+} from '../types/automationApi';
 
 const EMPTY_SELECT_ITEMS: readonly AgentStudioSelectItem[] = [];
 const EMPTY_ITEM_PLACEHOLDER = '선택할 수 있는 항목이 없습니다';
@@ -34,6 +39,12 @@ function mapTargetToSelectItem(target: AutomationTargetItem): AgentStudioSelectI
     label: target.display_name,
     disabled: !target.is_accessible,
   };
+}
+
+function normalizeGuideInstruction(value: string | null | undefined): string | null {
+  const trimmedValue = value?.trim() ?? '';
+
+  return trimmedValue.length > 0 ? trimmedValue : null;
 }
 
 export function useAgentEditorSettingsForm({ mode = 'create', agentSpecId }: UseAgentEditorSettingsFormOptions = {}) {
@@ -157,7 +168,7 @@ export function useAgentEditorSettingsForm({ mode = 'create', agentSpecId }: Use
     setSlackChannelId('');
   };
 
-  const buildSettingsPayload = () => {
+  const buildSettingsPayload = (): InquiryAutomationPublishRequest | null => {
     if (
       selectedChannelTalkTarget?.credential_id === null ||
       selectedChannelTalkTarget?.credential_id === undefined ||
@@ -175,8 +186,40 @@ export function useAgentEditorSettingsForm({ mode = 'create', agentSpecId }: Use
         channel_id: selectedSlackTarget.target_id,
         channel_name: selectedSlackTarget.display_name,
       },
-      guide_instruction: trimmedInstruction.length > 0 ? trimmedInstruction : null,
+      guide_instruction: normalizeGuideInstruction(instruction),
     };
+  };
+
+  const buildPatchSettingsPayload = (
+    settingsPayload: InquiryAutomationPublishRequest,
+  ): InquiryAutomationPatchRequest | null => {
+    if (automationDetail === undefined) return null;
+
+    const patchPayload: InquiryAutomationPatchRequest = {};
+
+    if (settingsPayload.channel_talk_credential_id !== automationDetail.channel_talk_credential_id) {
+      patchPayload.channel_talk_credential_id = settingsPayload.channel_talk_credential_id;
+    }
+
+    if (
+      settingsPayload.quiet_period_seconds !==
+      (automationDetail.quiet_period_seconds ?? Number(DEFAULT_QUIET_PERIOD_SECONDS))
+    ) {
+      patchPayload.quiet_period_seconds = settingsPayload.quiet_period_seconds;
+    }
+
+    if (
+      settingsPayload.slack_channel.credential_id !== automationDetail.slack_credential_id ||
+      settingsPayload.slack_channel.channel_id !== automationDetail.slack_channel_id
+    ) {
+      patchPayload.slack_channel = settingsPayload.slack_channel;
+    }
+
+    if (settingsPayload.guide_instruction !== normalizeGuideInstruction(automationDetail.guide_instruction)) {
+      patchPayload.guide_instruction = settingsPayload.guide_instruction ?? null;
+    }
+
+    return patchPayload;
   };
 
   const handleSubmit = () => {
@@ -199,7 +242,13 @@ export function useAgentEditorSettingsForm({ mode = 'create', agentSpecId }: Use
         isSubmitInFlightRef.current = false;
         return;
       }
-      patchSettingsMutation.mutate({ agentSpecId: resolvedAgentSpecId, body: payload });
+      const patchPayload = buildPatchSettingsPayload(payload);
+      if (patchPayload === null) {
+        isSubmitInFlightRef.current = false;
+        return;
+      }
+
+      patchSettingsMutation.mutate({ agentSpecId: resolvedAgentSpecId, body: patchPayload });
       return;
     }
 
