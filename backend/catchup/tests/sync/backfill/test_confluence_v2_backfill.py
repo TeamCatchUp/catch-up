@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import pytest
 
-from catchup.sync.backfill.confluence_v2 import build_fetch_pending_seed_chunk_query
+from catchup.sync.backfill.base import BackfillSeed
+from catchup.sync.backfill.base import failed_ids_from_result
 from catchup.sync.backfill.confluence_v2 import build_confluence_v1_target_query
 from catchup.sync.backfill.confluence_v2 import build_confluence_v1_target_seed_query
 from catchup.sync.backfill.confluence_v2 import build_upsert_seed_rows_statement
+from catchup.sync.ingestion.schemas import SyncExecutionResult
 
 
 def _sql(statement) -> str:
@@ -56,9 +58,25 @@ def test_confluence_seed_upsert_and_fetch_queries_use_entity_type(
 ) -> None:
     target_seed_sql = _sql(build_confluence_v1_target_seed_query(entity_type))
     upsert_sql = _sql(build_upsert_seed_rows_statement(entity_type))
-    fetch_sql = _sql(build_fetch_pending_seed_chunk_query(entity_type))
 
     assert f"e.cmetadata ->> 'entity_type' = '{entity_type}'" in target_seed_sql
     assert "AND COALESCE(record_id, '') != ''" in target_seed_sql
     assert f"'{entity_type}'" in upsert_sql
-    assert f"entity_type = '{entity_type}'" in fetch_sql
+
+
+def test_failed_ids_from_result_uses_v2_failed_ids_metadata() -> None:
+    seed = BackfillSeed(
+        langchain_id="confluence:page:cloud-1:record-1",
+        record_id="record-1",
+        content="content",
+        embedding=[0.1],
+    )
+    result = SyncExecutionResult(
+        connector="confluence",
+        tenant_id="cloud-1",
+        target="space",
+        failed_count=1,
+        metadata={"v2_failed_ids": [seed.langchain_id]},
+    )
+
+    assert failed_ids_from_result(result, [seed]) == [seed.langchain_id]

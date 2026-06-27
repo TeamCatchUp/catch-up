@@ -6,15 +6,12 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from catchup.sync.backfill.channel_talk_user_chat_v2 import _embedding_to_list
+from catchup.sync.backfill.base import embedding_to_list
 from catchup.sync.backfill.channel_talk_user_chat_v2 import (
     build_channel_talk_user_chat_v1_target_query,
 )
 from catchup.sync.backfill.channel_talk_user_chat_v2 import (
     build_channel_talk_user_chat_v1_target_seed_query,
-)
-from catchup.sync.backfill.channel_talk_user_chat_v2 import (
-    build_fetch_seeded_seed_chunk_query,
 )
 from catchup.sync.backfill.channel_talk_user_chat_v2 import (
     build_upsert_seed_rows_statement,
@@ -73,7 +70,6 @@ def _v2_document_builder(
 def test_channel_talk_user_chat_backfill_queries_follow_v1_seed_pattern() -> None:
     target_query = str(build_channel_talk_user_chat_v1_target_query())
     target_seed_query = str(build_channel_talk_user_chat_v1_target_seed_query())
-    seed_query = str(build_fetch_seeded_seed_chunk_query())
     upsert_statement = str(build_upsert_seed_rows_statement())
 
     assert "e.cmetadata ->> 'source' = 'channel_talk'" in target_query
@@ -94,9 +90,6 @@ def test_channel_talk_user_chat_backfill_queries_follow_v1_seed_pattern() -> Non
     assert "ORDER BY record_id, langchain_id" in target_seed_query
     assert "LIMIT :limit" in target_seed_query
     assert "OFFSET" not in target_seed_query
-    assert "scope_id = :scope_id" in seed_query
-    assert "target_id = :target_id" in seed_query
-    assert "COALESCE(metadata::jsonb, '{}'::jsonb) = '{}'::jsonb" in seed_query
     assert "INSERT INTO knowledge_store" in upsert_statement
     assert "'channel_talk'" in upsert_statement
     assert "'user_chat'" in upsert_statement
@@ -109,7 +102,7 @@ def test_channel_talk_user_chat_backfill_queries_follow_v1_seed_pattern() -> Non
 
 
 def test_channel_talk_user_chat_v2_embedding_to_list_treats_null_as_empty() -> None:
-    assert _embedding_to_list(None) == []
+    assert embedding_to_list(None) == []
 
 
 @pytest.mark.asyncio

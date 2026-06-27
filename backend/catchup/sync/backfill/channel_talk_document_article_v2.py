@@ -1,15 +1,13 @@
 from __future__ import annotations
 
-import asyncio
-import json
 from collections.abc import Awaitable
 from collections.abc import Callable
+from collections.abc import Sequence
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from datetime import datetime
 from datetime import timezone
 
-import structlog
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
@@ -37,16 +35,15 @@ from catchup.connectors.channel_talk.schemas.document_connection import (
     ChannelTalkDocumentCredentialsRecord,
 )
 from catchup.db.engine import SessionLocal
-from catchup.sync.backfill.concurrency import run_bounded_targets
-from catchup.sync.backfill.state import BackfillCompletionDecision
+from catchup.sync.backfill.base import SEED_INSERT_BATCH_SIZE
+from catchup.sync.backfill.base import BackfillSeed
+from catchup.sync.backfill.base import BackfillSeedCursor
+from catchup.sync.backfill.base import BackfillTarget
+from catchup.sync.backfill.base import BaseBackfillService
+from catchup.sync.backfill.base import chunked
+from catchup.sync.backfill.base import embedding_to_list
+from catchup.sync.backfill.base import format_pgvector_embedding
 from catchup.sync.backfill.state import backfill_candidate_state_predicate
-from catchup.sync.backfill.state import build_failure_metadata
-from catchup.sync.backfill.state import (
-    build_mark_finished_statement as build_channel_talk_document_article_mark_finished_statement,
-)
-from catchup.sync.backfill.state import build_mark_processing_statement
-from catchup.sync.backfill.state import count_backfill_completion_failures
-from catchup.sync.backfill.state import decide_backfill_completion
 from catchup.sync.ingestion.adapters.channel_talk.article_models import (
     ChannelTalkArticleV2BackfillExecutionRequest,
 )
@@ -59,9 +56,6 @@ from catchup.sync.ingestion.adapters.channel_talk.article_v2_backfill import (
 from catchup.sync.ingestion.factories.channel_talk import (
     create_channel_talk_article_v2_backfill_adapter,
 )
-from catchup.sync.ingestion.pipeline import run_sync_ingestion
-from catchup.sync.ingestion.schemas import SyncExecutionResult
-from catchup.sync.ingestion.schemas import SyncWindow
 from catchup.sync.ingestion.vector_records.channel_talk_document_article import (
     CHANNEL_TALK_DOCUMENT_ARTICLE_V2_SCHEMA_VERSION,
 )
@@ -71,42 +65,6 @@ BackfillAdapterFactory = Callable[
     [str, str],
     Awaitable[ChannelTalkArticleV2BackfillAdapter],
 ]
-SEED_INSERT_BATCH_SIZE = 100
-HYDRATE_PIPELINE_BATCH_SIZE = 50
-
-logger = structlog.get_logger(__name__)
-
-
-@dataclass(slots=True, frozen=True)
-class ChannelTalkArticleV1Seed:
-    langchain_id: str
-    record_id: str
-    content: str
-    embedding: list[float]
-
-
-@dataclass(slots=True, frozen=True)
-class ChannelTalkArticleV1Target:
-    scope_id: str
-    target_id: str
-    target_name: str
-    expected_count: int
-    pending_count: int
-
-
-@dataclass(slots=True, frozen=True)
-class ChannelTalkArticleV2BackfillResult:
-    scanned: int
-    succeeded: int
-    skipped: int
-    failed: int
-
-
-@dataclass(slots=True, frozen=True)
-class ChannelTalkArticleV2Cursor:
-    record_id: str
-    langchain_id: str
-
 
 @dataclass(slots=True, frozen=True)
 class ChannelTalkArticleBackfillConnections:
@@ -114,7 +72,18 @@ class ChannelTalkArticleBackfillConnections:
     document_connection: ChannelTalkDocumentCredentialsRecord
 
 
-class ChannelTalkArticleV2BackfillService:
+class ChannelTalkArticleV2BackfillService(
+    BaseBackfillService[
+        ChannelTalkArticleV2BackfillAdapter,
+        ChannelTalkArticleV2BackfillExecutionRequest,
+        BackfillSeedCursor,
+        ChannelTalkArticleBackfillConnections,
+    ]
+):
+    connector = "channel_talk"
+    entity_type = "document_article"
+    log_event_prefix = "channel_talk_document_article_v2_backfill"
+
     def __init__(
         self,
         *,
@@ -124,165 +93,22 @@ class ChannelTalkArticleV2BackfillService:
         session_factory: SessionFactory = SessionLocal,
         collection_name: str = settings.PGVECTOR_COLLECTION_NAME,
     ) -> None:
-        self._adapter_factory = adapter_factory
-        self._session_factory = session_factory
-        self._collection_name = collection_name
+        super().__init__(
+            adapter_factory=adapter_factory,
+            session_factory=session_factory,
+            collection_name=collection_name,
+        )
 
-    async def backfill_batch(
+    async def _create_adapter_for_target(
         self,
-        *,
-        limit: int,
-        locked_by: str | None = None,
-    ) -> ChannelTalkArticleV2BackfillResult:
-        del locked_by
-        targets = await asyncio.to_thread(self._fetch_candidate_targets_sync, limit)
-        logger.info(
-            "channel_talk_document_article_v2_backfill_candidate_targets_fetched",
-            connector="channel_talk",
-            entity_type="document_article",
-            limit=limit,
-            target_count=len(targets),
-        )
-        succeeded = 0
-        skipped = 0
-        failed = 0
-
-        async def _process_target(target) -> None:
-            nonlocal succeeded, skipped, failed
-            adapters: dict[tuple[str, str], ChannelTalkArticleV2BackfillAdapter] = {}
-            processing_started_at: datetime | None = None
-            try:
-                processing_started_at = await asyncio.to_thread(
-                    self._mark_processing_sync,
-                    target,
-                )
-                if processing_started_at is None:
-                    skipped += 1
-                    return
-
-                connections = await asyncio.to_thread(
-                    self._load_connections_for_target_sync,
-                    target,
-                )
-                adapter = await self._get_adapter_for_target(target, adapters)
-                failed_langchain_ids: list[str] = []
-                backfill_count = 0
-                cursor: ChannelTalkArticleV2Cursor | None = None
-
-                while True:
-                    seed_page = await asyncio.to_thread(
-                        self._fetch_candidate_seed_page_for_target_sync,
-                        target,
-                        cursor,
-                        settings.VECTOR_STORE_V2_BACKFILL_SEED_PAGE_SIZE,
-                    )
-                    if not seed_page:
-                        break
-
-                    await asyncio.to_thread(
-                        self._upsert_seed_rows_sync,
-                        target,
-                        seed_page,
-                    )
-                    cursor = ChannelTalkArticleV2Cursor(
-                        record_id=seed_page[-1].record_id,
-                        langchain_id=seed_page[-1].langchain_id,
-                    )
-
-                    for seed_chunk in _chunked(seed_page, HYDRATE_PIPELINE_BATCH_SIZE):
-                        result = await run_sync_ingestion(
-                            port=adapter,
-                            execution=_build_execution_request(
-                                target,
-                                seed_chunk,
-                                connections,
-                            ),
-                            sync_window=_build_sync_window(),
-                        )
-                        chunk_failed_ids = _failed_langchain_ids_from_result(
-                            result,
-                            seed_chunk,
-                        )
-                        failed_langchain_ids.extend(chunk_failed_ids)
-                        backfill_count += result.persisted_count
-
-                decision = await asyncio.to_thread(
-                    self._mark_finished_sync,
-                    target,
-                    backfill_count,
-                    failed_langchain_ids,
-                    processing_started_at,
-                )
-                succeeded += backfill_count
-                failed += count_backfill_completion_failures(
-                    pending_count=target.pending_count,
-                    backfill_count=backfill_count,
-                    failed_ids=failed_langchain_ids,
-                    state=decision.state,
-                )
-            except Exception as exc:
-                failed += target.pending_count
-                try:
-                    await asyncio.to_thread(
-                        self._mark_finished_sync,
-                        target,
-                        0,
-                        [],
-                        processing_started_at,
-                        force_failed=True,
-                        error_type=type(exc).__name__,
-                        error_message=str(exc),
-                    )
-                except Exception as state_exc:
-                    logger.warning(
-                        "channel_talk_document_article_v2_backfill_target_state_update_failed",
-                        **_target_log_context(target),
-                        original_error_type=type(exc).__name__,
-                        original_error_message=str(exc),
-                        state_error_type=type(state_exc).__name__,
-                        state_error_message=str(state_exc),
-                        exc_info=(type(state_exc), state_exc, state_exc.__traceback__),
-                    )
-                logger.warning(
-                    "channel_talk_document_article_v2_backfill_target_finished",
-                    **_target_log_context(target),
-                    state="failed",
-                    backfill_count=0,
-                    failed_count=target.pending_count,
-                    error_type=type(exc).__name__,
-                    error_message=str(exc),
-                    exc_info=(type(exc), exc, exc.__traceback__),
-                )
-
-        await run_bounded_targets(
-            targets,
-            concurrency=settings.VECTOR_STORE_V2_BACKFILL_TARGET_CONCURRENCY,
-            process_target=_process_target,
-        )
-        return ChannelTalkArticleV2BackfillResult(
-            scanned=len(targets),
-            succeeded=succeeded,
-            skipped=skipped,
-            failed=failed,
-        )
-
-    async def _get_adapter_for_target(
-        self,
-        target: ChannelTalkArticleV1Target,
-        adapters: dict[tuple[str, str], ChannelTalkArticleV2BackfillAdapter],
+        target: BackfillTarget,
     ) -> ChannelTalkArticleV2BackfillAdapter:
-        key = (target.scope_id, target.target_id)
-        if key not in adapters:
-            adapters[key] = await self._adapter_factory(
-                target.scope_id,
-                target.target_id,
-            )
-        return adapters[key]
+        return await self._adapter_factory(target.scope_id, target.target_id)
 
     def _fetch_candidate_targets_sync(
         self,
         limit: int,
-    ) -> list[ChannelTalkArticleV1Target]:
+    ) -> list[BackfillTarget]:
         query = build_channel_talk_document_article_v1_target_query()
         with self._session_factory() as db:
             rows = db.execute(
@@ -290,22 +116,22 @@ class ChannelTalkArticleV2BackfillService:
                 {"collection_name": self._collection_name, "limit": limit},
             ).mappings()
             return [
-                ChannelTalkArticleV1Target(
+                BackfillTarget(
                     scope_id=str(row["scope_id"]),
                     target_id=str(row["target_id"]),
-                    target_name=str(row["target_name"]),
                     expected_count=int(row["expected_count"]),
                     pending_count=int(row["pending_count"]),
+                    target_name=str(row["target_name"]),
                 )
                 for row in rows
             ]
 
     def _fetch_candidate_seed_page_for_target_sync(
         self,
-        target: ChannelTalkArticleV1Target,
-        cursor: ChannelTalkArticleV2Cursor | None,
+        target: BackfillTarget,
+        cursor: BackfillSeedCursor | None,
         limit: int,
-    ) -> list[ChannelTalkArticleV1Seed]:
+    ) -> list[BackfillSeed]:
         query = build_channel_talk_document_article_v1_target_seed_query()
         with self._session_factory() as db:
             rows = db.execute(
@@ -320,19 +146,19 @@ class ChannelTalkArticleV2BackfillService:
                 },
             ).mappings()
             return [
-                ChannelTalkArticleV1Seed(
+                BackfillSeed(
                     langchain_id=row["langchain_id"],
                     record_id=row["record_id"],
                     content=row["content"],
-                    embedding=_embedding_to_list(row["embedding"]),
+                    embedding=embedding_to_list(row["embedding"]),
                 )
                 for row in rows
             ]
 
     def _upsert_seed_rows_sync(
         self,
-        target: ChannelTalkArticleV1Target,
-        seeds: list[ChannelTalkArticleV1Seed],
+        target: BackfillTarget,
+        seeds: Sequence[BackfillSeed],
     ) -> int:
         if not seeds:
             return 0
@@ -341,14 +167,14 @@ class ChannelTalkArticleV2BackfillService:
         seeded_at = datetime.now(timezone.utc)
         affected = 0
         with self._session_factory() as db:
-            for batch in _chunked(seeds, SEED_INSERT_BATCH_SIZE):
+            for batch in chunked(seeds, SEED_INSERT_BATCH_SIZE):
                 db.execute(
                     statement,
                     [
                         {
                             "langchain_id": seed.langchain_id,
                             "content": seed.content,
-                            "embedding": _format_pgvector_embedding(seed.embedding),
+                            "embedding": format_pgvector_embedding(seed.embedding),
                             "record_id": seed.record_id,
                             "scope_id": target.scope_id,
                             "target_id": target.target_id,
@@ -362,37 +188,9 @@ class ChannelTalkArticleV2BackfillService:
             db.commit()
         return affected
 
-    def _fetch_pending_seed_chunk_for_target_sync(
+    def _load_target_context_sync(
         self,
-        target: ChannelTalkArticleV1Target,
-        cursor: ChannelTalkArticleV2Cursor | None,
-        limit: int,
-    ) -> list[ChannelTalkArticleV1Seed]:
-        query = build_fetch_seeded_seed_chunk_query()
-        with self._session_factory() as db:
-            rows = db.execute(
-                query,
-                {
-                    "scope_id": target.scope_id,
-                    "target_id": target.target_id,
-                    "after_record_id": cursor.record_id if cursor else None,
-                    "after_langchain_id": cursor.langchain_id if cursor else None,
-                    "limit": limit,
-                },
-            ).mappings()
-            return [
-                ChannelTalkArticleV1Seed(
-                    langchain_id=row["langchain_id"],
-                    record_id=row["record_id"],
-                    content=row["content"],
-                    embedding=_embedding_to_list(row["embedding"]),
-                )
-                for row in rows
-            ]
-
-    def _load_connections_for_target_sync(
-        self,
-        target: ChannelTalkArticleV1Target,
+        target: BackfillTarget,
     ) -> ChannelTalkArticleBackfillConnections:
         channel_connection = load_channel_talk_connection(target.scope_id)
         if (
@@ -419,164 +217,26 @@ class ChannelTalkArticleV2BackfillService:
             document_connection=document_connection,
         )
 
-    def _mark_processing_sync(
+    def _build_execution_request(
         self,
-        target: ChannelTalkArticleV1Target,
-    ) -> datetime | None:
-        with self._session_factory() as db:
-            result = db.execute(
-                build_mark_processing_statement(),
-                {
-                    "connector": "channel_talk",
-                    "entity_type": "document_article",
-                    "scope_id": target.scope_id,
-                    "target_id": target.target_id,
-                    "expected_count": target.expected_count,
-                },
-            )
-            row = result.first()
-            db.commit()
-            if row is None:
-                return None
-            return row[0]
-
-    def _mark_finished_sync(
-        self,
-        target: ChannelTalkArticleV1Target,
-        backfill_count: int,
-        failed_langchain_ids: list[str],
-        processing_started_at: datetime | None = None,
-        *,
-        force_failed: bool = False,
-        error_type: str | None = None,
-        error_message: str | None = None,
-    ) -> BackfillCompletionDecision:
-        now = datetime.now(timezone.utc)
-        decision = decide_backfill_completion(
-            pending_count=target.pending_count,
-            backfill_count=backfill_count,
-            failed_ids=failed_langchain_ids,
-            force_failed=force_failed,
-            error_type=error_type,
-            error_message=error_message,
+        target: BackfillTarget,
+        seeds: Sequence[BackfillSeed],
+        target_context: ChannelTalkArticleBackfillConnections,
+    ) -> ChannelTalkArticleV2BackfillExecutionRequest:
+        return ChannelTalkArticleV2BackfillExecutionRequest(
+            tenant_id=target.scope_id,
+            channel_connection=target_context.channel_connection,
+            document_connection=target_context.document_connection,
+            seeds=tuple(
+                ChannelTalkArticleV2BackfillSeed(
+                    langchain_id=seed.langchain_id,
+                    record_id=seed.record_id,
+                    content=seed.content,
+                    embedding=seed.embedding,
+                )
+                for seed in seeds
+            ),
         )
-        state = decision.state
-        failure_metadata = build_failure_metadata(
-            now,
-            error_type=decision.error_type if state == "failed" else None,
-            error_message=decision.error_message if state == "failed" else None,
-        )
-        with self._session_factory() as db:
-            update_result = db.execute(
-                build_channel_talk_document_article_mark_finished_statement(),
-                {
-                    "connector": "channel_talk",
-                    "entity_type": "document_article",
-                    "scope_id": target.scope_id,
-                    "target_id": target.target_id,
-                    "state": state,
-                    "expected_count": target.expected_count,
-                    "backfill_count": backfill_count,
-                    "failed_ids": json.dumps(failed_langchain_ids),
-                    "succeeded_at": now if state == "succeeded" else None,
-                    "failed_at": now if state == "failed" else None,
-                    "last_error_type": failure_metadata.last_error_type
-                    if state == "failed"
-                    else None,
-                    "last_error_message": failure_metadata.last_error_message
-                    if state == "failed"
-                    else None,
-                    "next_retry_at": failure_metadata.next_retry_at
-                    if state == "failed"
-                    else None,
-                    "processing_started_at": processing_started_at,
-                },
-            )
-            rowcount = update_result.rowcount
-            db.commit()
-        if rowcount == 0:
-            logger.warning(
-                "channel_talk_document_article_v2_backfill_target_finish_update_missed",
-                **_target_log_context(target),
-                state=state,
-                backfill_count=backfill_count,
-                failed_count=len(failed_langchain_ids),
-                processing_started_at=processing_started_at,
-            )
-        return decision
-
-
-def _build_execution_request(
-    target: ChannelTalkArticleV1Target,
-    seeds: list[ChannelTalkArticleV1Seed],
-    connections: ChannelTalkArticleBackfillConnections,
-) -> ChannelTalkArticleV2BackfillExecutionRequest:
-    return ChannelTalkArticleV2BackfillExecutionRequest(
-        tenant_id=target.scope_id,
-        channel_connection=connections.channel_connection,
-        document_connection=connections.document_connection,
-        seeds=tuple(
-            ChannelTalkArticleV2BackfillSeed(
-                langchain_id=seed.langchain_id,
-                record_id=seed.record_id,
-                content=seed.content,
-                embedding=seed.embedding,
-            )
-            for seed in seeds
-        ),
-    )
-
-
-def _target_log_context(target: ChannelTalkArticleV1Target) -> dict[str, object]:
-    return {
-        "connector": "channel_talk",
-        "entity_type": "document_article",
-        "scope_id": target.scope_id,
-        "target_id": target.target_id,
-        "target_name": target.target_name,
-        "expected_count": target.expected_count,
-        "pending_count": target.pending_count,
-    }
-
-
-def _failed_langchain_ids_from_result(
-    result: SyncExecutionResult,
-    seeds: list[ChannelTalkArticleV1Seed],
-) -> list[str]:
-    failed_ids = result.metadata.get("failed_ids")
-    if isinstance(failed_ids, list):
-        return [str(failed_id) for failed_id in failed_ids]
-    if result.failed_count <= 0:
-        return []
-    seed_ids = [seed.langchain_id for seed in seeds]
-    return seed_ids[: result.failed_count]
-
-
-def _build_sync_window() -> SyncWindow:
-    now = datetime.now(timezone.utc)
-    return SyncWindow(window_start=now, window_end=now)
-
-
-def _chunked(
-    values: list[ChannelTalkArticleV1Seed],
-    size: int,
-) -> list[list[ChannelTalkArticleV1Seed]]:
-    return [values[index : index + size] for index in range(0, len(values), size)]
-
-
-def _format_pgvector_embedding(embedding: list[float]) -> str:
-    return f"[{','.join(format(float(value), '.12g') for value in embedding)}]"
-
-
-def _embedding_to_list(value) -> list[float]:
-    if value is None:
-        return []
-    if isinstance(value, str):
-        raw = value.strip().removeprefix("[").removesuffix("]")
-        if not raw:
-            return []
-        return [float(item.strip()) for item in raw.split(",")]
-    return list(value)
 
 
 def _channel_talk_document_article_v1_cte() -> str:
@@ -780,39 +440,5 @@ def build_upsert_seed_rows_statement():
             target_type = EXCLUDED.target_type,
             target_id = EXCLUDED.target_id,
             target_name = EXCLUDED.target_name
-        """
-    )
-
-
-def build_fetch_seeded_seed_chunk_query():
-    return text(
-        f"""
-        WITH seeded_article AS (
-            SELECT
-                {KNOWLEDGE_STORE_ID_COLUMN} AS langchain_id,
-                COALESCE(
-                    NULLIF(record_id, ''),
-                    substring({KNOWLEDGE_STORE_ID_COLUMN} from '^channel_talk:document_article:[^:]+:[^:]+:[^:]+:([^:]+):chunk:')
-                ) AS record_id,
-                {KNOWLEDGE_STORE_CONTENT_COLUMN} AS content,
-                {KNOWLEDGE_STORE_EMBEDDING_COLUMN} AS embedding
-            FROM {KNOWLEDGE_STORE_TABLE_NAME}
-            WHERE source = 'channel_talk'
-              AND entity_type = 'document_article'
-              AND scope_id = :scope_id
-              AND target_id = :target_id
-              AND COALESCE({KNOWLEDGE_STORE_METADATA_JSON_COLUMN}::jsonb, '{{}}'::jsonb) = '{{}}'::jsonb
-        )
-        SELECT langchain_id, record_id, content, embedding
-        FROM seeded_article
-        WHERE (
-              CAST(:after_record_id AS text) IS NULL
-              OR (record_id, langchain_id) > (
-                  CAST(:after_record_id AS text),
-                  CAST(:after_langchain_id AS text)
-              )
-          )
-        ORDER BY record_id, langchain_id
-        LIMIT :limit
         """
     )

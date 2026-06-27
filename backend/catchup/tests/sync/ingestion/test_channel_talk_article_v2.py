@@ -8,67 +8,26 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from catchup.connectors.channel_talk.schemas.document_article import (
-    ChannelTalkDocumentArticleState,
-)
-from catchup.sync.backfill.channel_talk_document_article_v2 import (
-    ChannelTalkArticleV1Target,
-)
-from catchup.sync.backfill.channel_talk_document_article_v2 import (
-    ChannelTalkArticleV2BackfillService,
-)
-from catchup.sync.backfill.channel_talk_document_article_v2 import (
-    build_channel_talk_document_article_mark_finished_statement,
-)
-from catchup.sync.backfill.channel_talk_document_article_v2 import (
-    build_channel_talk_document_article_v1_target_query,
-)
-from catchup.sync.backfill.channel_talk_document_article_v2 import (
-    build_channel_talk_document_article_v1_target_seed_query,
-)
-from catchup.sync.backfill.channel_talk_document_article_v2 import (
-    build_fetch_seeded_seed_chunk_query,
-)
-from catchup.sync.backfill.channel_talk_document_article_v2 import (
-    build_upsert_seed_rows_statement,
-)
-from catchup.sync.ingestion.adapters.channel_talk.article_full_sync import (
-    ChannelTalkArticleFullSyncIngestionAdapter,
-)
-from catchup.sync.ingestion.adapters.channel_talk.article_models import (
-    ChannelTalkArticleFullSyncFetchResult,
-)
-from catchup.sync.ingestion.adapters.channel_talk.article_models import (
-    ChannelTalkArticleV2BackfillExecutionRequest,
-)
-from catchup.sync.ingestion.adapters.channel_talk.article_models import (
-    ChannelTalkArticleV2BackfillSeed,
-)
-from catchup.sync.ingestion.adapters.channel_talk.article_v2_backfill import (
-    ChannelTalkArticleV2BackfillAdapter,
-)
-from catchup.sync.ingestion.adapters.channel_talk.article_v2_document_builder import (
-    ChannelTalkArticleV2DocumentBuilder,
-)
+from catchup.connectors.channel_talk.schemas.document_article import ChannelTalkDocumentArticleState
+from catchup.sync.backfill.base import BackfillTarget
+from catchup.sync.backfill.channel_talk_document_article_v2 import ChannelTalkArticleV2BackfillService
+from catchup.sync.backfill.channel_talk_document_article_v2 import build_channel_talk_document_article_v1_target_query
+from catchup.sync.backfill.channel_talk_document_article_v2 import build_channel_talk_document_article_v1_target_seed_query
+from catchup.sync.backfill.channel_talk_document_article_v2 import build_upsert_seed_rows_statement
+from catchup.sync.backfill.state import build_mark_finished_statement
+from catchup.sync.ingestion.adapters.channel_talk.article_full_sync import ChannelTalkArticleFullSyncIngestionAdapter
+from catchup.sync.ingestion.adapters.channel_talk.article_models import ChannelTalkArticleFullSyncFetchResult
+from catchup.sync.ingestion.adapters.channel_talk.article_models import ChannelTalkArticleV2BackfillExecutionRequest
+from catchup.sync.ingestion.adapters.channel_talk.article_models import ChannelTalkArticleV2BackfillSeed
+from catchup.sync.ingestion.adapters.channel_talk.article_v2_backfill import ChannelTalkArticleV2BackfillAdapter
+from catchup.sync.ingestion.adapters.channel_talk.article_v2_document_builder import ChannelTalkArticleV2DocumentBuilder
 from catchup.sync.ingestion.pipeline import run_sync_ingestion
-from catchup.sync.ingestion.vector_records import (
-    ChannelTalkDocumentArticleV2RecordMapper,
-)
-from catchup.tests.sync.ingestion.test_channel_talk_article_full_sync_adapter import (
-    _article_view,
-)
-from catchup.tests.sync.ingestion.test_channel_talk_article_full_sync_adapter import (
-    _bundle,
-)
-from catchup.tests.sync.ingestion.test_channel_talk_article_full_sync_adapter import (
-    _execution,
-)
-from catchup.tests.sync.ingestion.test_channel_talk_article_full_sync_adapter import (
-    _revision_view,
-)
-from catchup.tests.sync.ingestion.test_channel_talk_article_full_sync_adapter import (
-    _window,
-)
+from catchup.sync.ingestion.vector_records import ChannelTalkDocumentArticleV2RecordMapper
+from catchup.tests.sync.ingestion.test_channel_talk_article_full_sync_adapter import _article_view
+from catchup.tests.sync.ingestion.test_channel_talk_article_full_sync_adapter import _bundle
+from catchup.tests.sync.ingestion.test_channel_talk_article_full_sync_adapter import _execution
+from catchup.tests.sync.ingestion.test_channel_talk_article_full_sync_adapter import _revision_view
+from catchup.tests.sync.ingestion.test_channel_talk_article_full_sync_adapter import _window
 
 
 class _DualWriteArticleRepository:
@@ -460,7 +419,6 @@ async def test_channel_talk_article_v2_store_failure_keeps_legacy_persist_succes
 def test_channel_talk_article_backfill_queries_follow_v1_seed_pattern():
     target_query = str(build_channel_talk_document_article_v1_target_query())
     target_seed_query = str(build_channel_talk_document_article_v1_target_seed_query())
-    seed_query = str(build_fetch_seeded_seed_chunk_query())
     upsert_statement = str(build_upsert_seed_rows_statement())
 
     assert "e.cmetadata ->> 'source' = 'channel_talk'" in target_query
@@ -475,9 +433,6 @@ def test_channel_talk_article_backfill_queries_follow_v1_seed_pattern():
     assert "#>> '{channel_talk_document_article,author,author_id}'" not in target_query
     assert "v2.internal_author_id IS NULL" not in target_seed_query
     assert "#>> '{channel_talk_document_article,author,author_id}'" not in target_seed_query
-    assert "scope_id = :scope_id" in seed_query
-    assert "target_id = :target_id" in seed_query
-    assert "COALESCE(metadata::jsonb, '{}'::jsonb) = '{}'::jsonb" in seed_query
     assert "INSERT INTO knowledge_store" in upsert_statement
     assert "'channel_talk'" in upsert_statement
     assert "'document_article'" in upsert_statement
@@ -499,7 +454,7 @@ def test_channel_talk_article_backfill_queries_follow_v1_seed_pattern():
 
 
 def test_channel_talk_article_backfill_mark_finished_casts_failed_ids_to_jsonb():
-    statement = str(build_channel_talk_document_article_mark_finished_statement())
+    statement = str(build_mark_finished_statement())
 
     assert "failed_ids = CAST(:failed_ids AS jsonb)" in statement
 
@@ -511,7 +466,7 @@ def test_channel_talk_article_backfill_mark_finished_serializes_failed_ids():
     service = ChannelTalkArticleV2BackfillService(session_factory=lambda: context)
 
     service._mark_finished_sync(
-        ChannelTalkArticleV1Target(
+        BackfillTarget(
             scope_id="channel-123",
             target_id="space-123",
             target_name="Help Center",
@@ -519,7 +474,7 @@ def test_channel_talk_article_backfill_mark_finished_serializes_failed_ids():
             pending_count=1,
         ),
         backfill_count=0,
-        failed_langchain_ids=[
+        failed_ids=[
             "channel_talk:document_article:channel-123:space-123:ko:article-1:chunk:0"
         ],
         force_failed=True,
