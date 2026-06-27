@@ -16,17 +16,12 @@ from catchup.configs.config import settings
 from catchup.connectors.github.queries import build_pull_requests_by_numbers_query
 from catchup.connectors.github.schemas import GithubPullRequest
 from catchup.connectors.github.schemas import GithubUser
-from catchup.sync.backfill.github_pr_v2 import GithubPrV1Seed
+from catchup.sync.backfill.base import BackfillSeed
+from catchup.sync.backfill.base import embedding_to_list
 from catchup.sync.backfill.github_pr_v2 import GithubPrV2BackfillService
-from catchup.sync.backfill.github_pr_v2 import _embedding_to_list
-from catchup.sync.backfill.github_pr_v2 import build_fetch_seeded_seed_chunk_query
 from catchup.sync.backfill.github_pr_v2 import build_github_pr_v1_target_query
 from catchup.sync.backfill.github_pr_v2 import build_github_pr_v1_target_seed_query
-from catchup.sync.backfill.github_pr_v2 import build_mark_processing_statement
 from catchup.sync.backfill.github_pr_v2 import build_upsert_seed_rows_statement
-from catchup.sync.backfill.state import (
-    build_mark_processing_statement as build_shared_mark_processing_statement,
-)
 from catchup.sync.ingestion.adapters.github import GithubPrV2BackfillAdapter
 from catchup.sync.ingestion.adapters.github import GithubPrV2BackfillExecutionRequest
 from catchup.sync.ingestion.adapters.github import GithubPrV2BackfillSeed
@@ -48,8 +43,8 @@ class _RowsResult:
         return self._rows
 
 
-def _seed() -> GithubPrV1Seed:
-    return GithubPrV1Seed(
+def _seed() -> BackfillSeed:
+    return BackfillSeed(
         langchain_id="github:pr:TeamCatchUp/CatchUp:724",
         record_id="724",
         content="summarized v1 content",
@@ -66,7 +61,7 @@ def _target_row(expected_count: int = 1, pending_count: int | None = None) -> di
     }
 
 
-def _seed_row(seed: GithubPrV1Seed) -> dict:
+def _seed_row(seed: BackfillSeed) -> dict:
     return {
         "langchain_id": seed.langchain_id,
         "record_id": seed.record_id,
@@ -446,26 +441,8 @@ def test_seed_rows_statement_marks_seed_with_empty_json_metadata() -> None:
     assert "url = ''" not in statement
 
 
-def test_fetch_seeded_seed_chunk_query_reads_v2_seed_rows_by_empty_metadata() -> None:
-    query = str(build_fetch_seeded_seed_chunk_query())
-
-    assert "FROM knowledge_store" in query
-    assert "source = 'github'" in query
-    assert "entity_type = 'pr'" in query
-    assert "scope_id = :scope_id" in query
-    assert "target_id = :target_id" in query
-    assert "COALESCE(metadata::jsonb, '{}'::jsonb) = '{}'::jsonb" in query
-    assert "record_id::integer AS record_number" in query
-    assert "CAST(:after_record_id AS integer) IS NULL" in query
-    assert "record_number > CAST(:after_record_id AS integer)" in query
-    assert "record_number = CAST(:after_record_id AS integer)" in query
-    assert "langchain_id > COALESCE(CAST(:after_langchain_id AS text), '')" in query
-    assert "ORDER BY record_number, langchain_id" in query
-    assert "LIMIT :limit" in query
-
-
 def test_github_pr_v2_embedding_to_list_treats_null_as_empty() -> None:
-    assert _embedding_to_list(None) == []
+    assert embedding_to_list(None) == []
 
 
 def test_github_fetch_result_log_summary_counts_exact_items() -> None:
@@ -478,10 +455,6 @@ def test_github_fetch_result_log_summary_counts_exact_items() -> None:
 
     assert summary["record_count"] == 2
     assert summary["exact_item_count"] == 2
-
-
-def test_mark_processing_statement_claims_scope_target_conditionally() -> None:
-    assert build_mark_processing_statement is build_shared_mark_processing_statement
 
 
 @pytest.mark.asyncio
@@ -514,18 +487,20 @@ async def test_backfill_batch_records_scope_success_when_target_seeds_are_persis
     )
 
     with (
-        patch("catchup.sync.backfill.github_pr_v2.logger") as logger_mock,
+        patch("catchup.sync.backfill.base.structlog.get_logger") as get_logger,
         patch(
-            "catchup.sync.backfill.github_pr_v2.run_sync_ingestion",
+            "catchup.sync.backfill.base.run_sync_ingestion",
             AsyncMock(return_value=pipeline_result),
         ) as run_pipeline,
     ):
-        result = await service.backfill_batch(limit=10, locked_by="test-runner")
+        logger_mock = get_logger.return_value
+        result = await service.backfill_batch(limit=10)
 
     assert result.scanned == 1
     assert result.succeeded == 1
     assert result.skipped == 0
     assert result.failed == 0
+    get_logger.assert_any_call("catchup.sync.backfill.github_pr_v2")
     adapter_factory.assert_awaited_once_with(118342815)
     run_pipeline.assert_awaited_once()
     pipeline_kwargs = run_pipeline.await_args.kwargs
@@ -627,13 +602,14 @@ async def test_backfill_batch_marks_target_failed_when_pending_rows_are_missing(
     )
 
     with (
-        patch("catchup.sync.backfill.github_pr_v2.logger") as logger_mock,
+        patch("catchup.sync.backfill.base.structlog.get_logger") as get_logger,
         patch(
-            "catchup.sync.backfill.github_pr_v2.run_sync_ingestion",
+            "catchup.sync.backfill.base.run_sync_ingestion",
             AsyncMock(return_value=pipeline_result),
         ),
     ):
-        result = await service.backfill_batch(limit=10, locked_by="test-runner")
+        logger_mock = get_logger.return_value
+        result = await service.backfill_batch(limit=10)
 
     assert result.scanned == 1
     assert result.succeeded == 1
@@ -661,6 +637,57 @@ async def test_backfill_batch_marks_target_failed_when_pending_rows_are_missing(
 
 
 @pytest.mark.asyncio
+async def test_backfill_batch_counts_finish_update_miss_as_failed() -> None:
+    seed = _seed()
+    claim_result = MagicMock()
+    claim_result.first.return_value = (1,)
+    finish_result = MagicMock()
+    finish_result.rowcount = 0
+    session = MagicMock()
+    session.execute.side_effect = [
+        _RowsResult([_target_row(expected_count=1)]),
+        claim_result,
+        _RowsResult([_seed_row(seed)]),
+        MagicMock(),
+        _RowsResult([]),
+        finish_result,
+    ]
+    session_factory = MagicMock()
+    session_factory.return_value.__enter__.return_value = session
+    adapter_factory = AsyncMock(return_value=SimpleNamespace())
+    pipeline_result = SimpleNamespace(
+        persisted_count=1,
+        failed_count=0,
+        metadata={"failed_ids": []},
+    )
+    service = GithubPrV2BackfillService(
+        adapter_factory=adapter_factory,
+        session_factory=session_factory,
+        collection_name="vectorstore",
+    )
+
+    with (
+        patch("catchup.sync.backfill.base.structlog.get_logger") as get_logger,
+        patch(
+            "catchup.sync.backfill.base.run_sync_ingestion",
+            AsyncMock(return_value=pipeline_result),
+        ),
+    ):
+        logger_mock = get_logger.return_value
+        result = await service.backfill_batch(limit=10)
+
+    assert result.scanned == 1
+    assert result.succeeded == 0
+    assert result.skipped == 0
+    assert result.failed == 1
+    warning_events = [call.args[0] for call in logger_mock.warning.call_args_list]
+    assert warning_events == ["github_pr_v2_backfill_target_finish_update_missed"]
+    target_finished_log = logger_mock.info.call_args_list[-1]
+    assert target_finished_log.args[0] == "github_pr_v2_backfill_target_finished"
+    assert target_finished_log.kwargs["finish_persisted"] is False
+
+
+@pytest.mark.asyncio
 async def test_backfill_batch_skips_when_scope_target_claim_is_not_acquired() -> None:
     claim_result = MagicMock()
     claim_result.first.return_value = None
@@ -678,8 +705,9 @@ async def test_backfill_batch_skips_when_scope_target_claim_is_not_acquired() ->
         collection_name="vectorstore",
     )
 
-    with patch("catchup.sync.backfill.github_pr_v2.logger") as logger_mock:
-        result = await service.backfill_batch(limit=10, locked_by="test-runner")
+    with patch("catchup.sync.backfill.base.structlog.get_logger") as get_logger:
+        logger_mock = get_logger.return_value
+        result = await service.backfill_batch(limit=10)
 
     assert result.scanned == 1
     assert result.succeeded == 0
@@ -718,7 +746,11 @@ async def test_backfill_batch_records_failed_ids_when_pipeline_reports_failure()
     pipeline_result = SimpleNamespace(
         persisted_count=0,
         failed_count=1,
-        metadata={"failed_ids": [seed.langchain_id]},
+        metadata={
+            "failed_ids": [seed.langchain_id],
+            "error_type": "github_pr_batch_fetch_failed",
+            "error_message": "HTTPError: 403 Forbidden",
+        },
     )
     service = GithubPrV2BackfillService(
         adapter_factory=adapter_factory,
@@ -727,13 +759,14 @@ async def test_backfill_batch_records_failed_ids_when_pipeline_reports_failure()
     )
 
     with (
-        patch("catchup.sync.backfill.github_pr_v2.logger") as logger_mock,
+        patch("catchup.sync.backfill.base.structlog.get_logger") as get_logger,
         patch(
-            "catchup.sync.backfill.github_pr_v2.run_sync_ingestion",
+            "catchup.sync.backfill.base.run_sync_ingestion",
             AsyncMock(return_value=pipeline_result),
         ) as run_pipeline,
     ):
-        result = await service.backfill_batch(limit=10, locked_by="test-runner")
+        logger_mock = get_logger.return_value
+        result = await service.backfill_batch(limit=10)
 
     assert result.scanned == 1
     assert result.succeeded == 0
@@ -745,6 +778,8 @@ async def test_backfill_batch_records_failed_ids_when_pipeline_reports_failure()
     assert fail_params["state"] == "failed"
     assert fail_params["backfill_count"] == 0
     assert json.loads(fail_params["failed_ids"]) == [seed.langchain_id]
+    assert fail_params["last_error_type"] == "github_pr_batch_fetch_failed"
+    assert fail_params["last_error_message"] == "HTTPError: 403 Forbidden"
     assert fail_params["processing_started_at"] == 1
     assert fail_params["succeeded_at"] is None
     assert fail_params["failed_at"] is not None
@@ -775,8 +810,9 @@ async def test_backfill_batch_does_not_escape_when_failure_state_update_fails() 
         collection_name="vectorstore",
     )
 
-    with patch("catchup.sync.backfill.github_pr_v2.logger") as logger_mock:
-        result = await service.backfill_batch(limit=10, locked_by="test-runner")
+    with patch("catchup.sync.backfill.base.structlog.get_logger") as get_logger:
+        logger_mock = get_logger.return_value
+        result = await service.backfill_batch(limit=10)
 
     assert result.scanned == 1
     assert result.succeeded == 0

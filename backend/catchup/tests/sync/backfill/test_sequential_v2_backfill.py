@@ -19,15 +19,14 @@ class _Result:
 class _Service:
     def __init__(self, results: list[_Result]) -> None:
         self._results = results
-        self.calls: list[tuple[int, str | None]] = []
+        self.calls: list[int] = []
 
     async def backfill_batch(
         self,
         *,
         limit: int,
-        locked_by: str | None = None,
     ) -> _Result:
-        self.calls.append((limit, locked_by))
+        self.calls.append(limit)
         if not self._results:
             raise AssertionError("unexpected extra backfill_batch call")
         return self._results.pop(0)
@@ -56,7 +55,6 @@ async def test_sequential_backfill_completes_entity_before_next_entity() -> None
     result = await run_sequential_v2_backfill(
         [_spec("github/pr", first), _spec("slack/message", second)],
         batch_size=10,
-        locked_by="test-runner",
     )
 
     assert result.status == "completed"
@@ -64,8 +62,8 @@ async def test_sequential_backfill_completes_entity_before_next_entity() -> None
     assert result.completed_entities == 2
     assert result.scanned == 2
     assert result.succeeded == 2
-    assert first.calls == [(10, "test-runner"), (10, "test-runner")]
-    assert second.calls == [(10, "test-runner")]
+    assert first.calls == [10, 10]
+    assert second.calls == [10]
 
 
 @pytest.mark.asyncio
@@ -88,8 +86,8 @@ async def test_sequential_backfill_continues_after_target_failure() -> None:
     assert result.failed == 1
     assert len(result.entities) == 2
     assert result.entities[0].status == "completed_with_failures"
-    assert first.calls == [(5, None), (5, None)]
-    assert second.calls == [(5, None)]
+    assert first.calls == [5, 5]
+    assert second.calls == [5]
 
 
 @pytest.mark.asyncio
@@ -136,7 +134,7 @@ async def test_sequential_backfill_stops_when_scanned_batches_make_no_progress()
     assert result.failed == 0
     assert result.skipped == 0
     assert result.entities[0].status == "blocked"
-    assert first.calls == [(5, None), (5, None)]
+    assert first.calls == [5, 5]
     assert second.calls == []
 
 
@@ -171,9 +169,8 @@ class _ExplodingService:
         self,
         *,
         limit: int,
-        locked_by: str | None = None,
     ) -> _Result:
-        del limit, locked_by
+        del limit
         self.calls += 1
         raise RuntimeError("database unavailable")
 

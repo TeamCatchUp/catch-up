@@ -30,7 +30,6 @@ class BackfillService(Protocol):
         self,
         *,
         limit: int,
-        locked_by: str | None = None,
     ) -> Awaitable[BackfillBatchResult]: ...
 
 
@@ -117,21 +116,18 @@ async def run_sequential_v2_backfill(
     specs: Sequence[SequentialBackfillSpec],
     *,
     batch_size: int,
-    locked_by: str | None = None,
 ) -> SequentialBackfillRunSummary:
     summaries: list[SequentialBackfillEntitySummary] = []
     logger.info(
         "vector_store_v2_sequential_backfill_started",
         entity_count=len(specs),
         batch_size=batch_size,
-        locked_by=locked_by,
     )
 
     for spec in specs:
         summary = await _run_entity_until_done(
             spec,
             batch_size=batch_size,
-            locked_by=locked_by,
         )
         summaries.append(summary)
 
@@ -167,7 +163,6 @@ async def _run_entity_until_done(
     spec: SequentialBackfillSpec,
     *,
     batch_size: int,
-    locked_by: str | None,
 ) -> SequentialBackfillEntitySummary:
     service = spec.service_factory()
     batches = 0
@@ -189,7 +184,6 @@ async def _run_entity_until_done(
         try:
             result = await service.backfill_batch(
                 limit=batch_size,
-                locked_by=locked_by,
             )
         except Exception as exc:
             summary = SequentialBackfillEntitySummary(

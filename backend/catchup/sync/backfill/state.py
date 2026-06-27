@@ -9,6 +9,7 @@ from sqlalchemy.sql.elements import TextClause
 
 from catchup.configs.config import settings
 
+MAX_ERROR_TYPE_LENGTH = 255
 MAX_ERROR_MESSAGE_LENGTH = 2000
 
 
@@ -36,6 +37,18 @@ def truncate_error_message(
     if len(message) <= max_length:
         return message
     return message[:max_length]
+
+
+def truncate_error_type(
+    error_type: str | None,
+    *,
+    max_length: int = MAX_ERROR_TYPE_LENGTH,
+) -> str | None:
+    if error_type is None:
+        return None
+    if len(error_type) <= max_length:
+        return error_type
+    return error_type[:max_length]
 
 
 def compute_next_retry_at(now: datetime, retry_delay_minutes: int) -> datetime:
@@ -111,7 +124,7 @@ def build_failure_metadata(
         else retry_delay_minutes
     )
     return BackfillFailureMetadata(
-        last_error_type=error_type,
+        last_error_type=truncate_error_type(error_type),
         last_error_message=truncate_error_message(error_message),
         next_retry_at=compute_next_retry_at(now, delay),
     )

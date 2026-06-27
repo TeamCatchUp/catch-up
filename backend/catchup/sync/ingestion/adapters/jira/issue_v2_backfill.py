@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import traceback
+
 import structlog
 from fastapi.concurrency import run_in_threadpool
 
@@ -38,11 +40,13 @@ class JiraIssueV2BackfillAdapter(JiraIssueIngestionAdapterBase):
         _ = sync_window
         issues: list[dict] = []
         failed_record_ids: list[str] = []
+        error_messages: list[str] = []
 
         for seed in execution.seeds:
             try:
                 issues.append(await self._dependencies.client.get_issue(seed.record_id))
             except Exception as exc:
+                error_messages.append(_format_exception_trace(exc))
                 logger.warning(
                     "jira_issue_v2_backfill_hydrate_failed",
                     cloud_id=execution.tenant_id,
@@ -61,6 +65,10 @@ class JiraIssueV2BackfillAdapter(JiraIssueIngestionAdapterBase):
             ),
             failed_record_ids=tuple(dict.fromkeys(failed_record_ids)),
             fetch_error_count=len(set(failed_record_ids)),
+            error_type="jira_issue_v2_backfill_hydrate_failed"
+            if failed_record_ids
+            else None,
+            error_message=_combine_error_messages(error_messages),
         )
 
     async def transform(
@@ -76,7 +84,7 @@ class JiraIssueV2BackfillAdapter(JiraIssueIngestionAdapterBase):
             seed.record_id: seed.langchain_id for seed in execution.seeds
         }
 
-        parsed_issues, parse_failed_ids = await run_in_threadpool(
+        parsed_issues, parse_failed_ids, parse_error_message = await run_in_threadpool(
             self._parse_fetched_issues,
             tuple(fetched.issues),
         )
@@ -86,6 +94,8 @@ class JiraIssueV2BackfillAdapter(JiraIssueIngestionAdapterBase):
             return JiraIssueTransformResult(
                 v2_failed_ids=v2_failed_ids,
                 error_count=len(v2_failed_ids),
+                error_type="jira_issue_v2_backfill_document_builder_missing",
+                error_message="Jira v2 document builder is missing",
             )
 
         v2_documents, document_ids, build_failed_ids = (
@@ -116,6 +126,15 @@ class JiraIssueV2BackfillAdapter(JiraIssueIngestionAdapterBase):
             error_count=len(failed_record_ids),
             v2_failed_ids=v2_failed_ids,
             issue_count=len(parsed_issues),
+            error_type=_transform_error_type(
+                parse_failed_ids=parse_failed_ids,
+                build_failed_ids=build_failed_ids,
+            ),
+            error_message=_first_error_type(
+                parse_error_message,
+                _document_build_error_message(build_failed_ids),
+                fetched.error_message,
+            ),
         )
 
     async def summarize(
@@ -151,6 +170,8 @@ class JiraIssueV2BackfillAdapter(JiraIssueIngestionAdapterBase):
             return JiraIssuePersistResult(
                 v2_error_count=len(upstream_v2_failed_ids),
                 v2_failed_ids=upstream_v2_failed_ids,
+                error_type=transformed.error_type,
+                error_message=transformed.error_message,
             )
 
         if self._dependencies.vector_store is None:
@@ -158,6 +179,8 @@ class JiraIssueV2BackfillAdapter(JiraIssueIngestionAdapterBase):
             return JiraIssuePersistResult(
                 v2_error_count=len(v2_failed_ids),
                 v2_failed_ids=v2_failed_ids,
+                error_type="jira_issue_v2_backfill_vector_store_missing",
+                error_message="Jira v2 vector store is missing",
             )
 
         embeddings = [seed_by_langchain_id[doc_id].embedding for doc_id in document_ids]
@@ -168,6 +191,7 @@ class JiraIssueV2BackfillAdapter(JiraIssueIngestionAdapterBase):
                 embeddings=embeddings,
             )
         except Exception as exc:
+            error_message = _format_exception_trace(exc)
             logger.warning(
                 "jira_issue_v2_backfill_upsert_failed",
                 cloud_id=execution.tenant_id,
@@ -180,6 +204,8 @@ class JiraIssueV2BackfillAdapter(JiraIssueIngestionAdapterBase):
             return JiraIssuePersistResult(
                 v2_error_count=len(v2_failed_ids),
                 v2_failed_ids=v2_failed_ids,
+                error_type="jira_issue_v2_backfill_upsert_failed",
+                error_message=error_message,
             )
 
         persisted_id_set = {str(persisted_id) for persisted_id in persisted_ids or []}
@@ -225,6 +251,11 @@ class JiraIssueV2BackfillAdapter(JiraIssueIngestionAdapterBase):
             ),
             v2_error_count=len(v2_failed_ids),
             v2_failed_ids=v2_failed_ids,
+            error_type="jira_issue_v2_backfill_metadata_missing_after_persist"
+            if metadata_failed_ids
+            else transformed.error_type,
+            error_message=_metadata_missing_error_message(metadata_failed_ids)
+            or transformed.error_message,
         )
 
     def build_result(
@@ -262,6 +293,16 @@ class JiraIssueV2BackfillAdapter(JiraIssueIngestionAdapterBase):
             metadata={
                 "project_key": execution.project_key,
                 "requested_count": len(execution.seeds),
+                "error_type": _first_error_type(
+                    fetched.error_type,
+                    transformed.error_type,
+                    persisted.error_type,
+                ),
+                "error_message": _first_error_type(
+                    fetched.error_message,
+                    transformed.error_message,
+                    persisted.error_message,
+                ),
                 "failed_ids": list(failed_ids),
                 "failed_record_ids": list(transformed.v2_failed_ids),
                 "v2_failed_ids": list(v2_failed_ids),
@@ -274,6 +315,7 @@ class JiraIssueV2BackfillAdapter(JiraIssueIngestionAdapterBase):
     ):
         parsed_issues = []
         failed_issue_keys: list[str] = []
+        error_messages: list[str] = []
         for issue_data in issues:
             issue_key = str(issue_data.get("key") or "")
             try:
@@ -284,6 +326,7 @@ class JiraIssueV2BackfillAdapter(JiraIssueIngestionAdapterBase):
                     )
                 )
             except Exception as exc:
+                error_messages.append(_format_exception_trace(exc))
                 logger.warning(
                     "jira_issue_v2_backfill_parse_failed",
                     cloud_id=self._dependencies.cloud_id,
@@ -293,12 +336,58 @@ class JiraIssueV2BackfillAdapter(JiraIssueIngestionAdapterBase):
                 )
                 if issue_key:
                     failed_issue_keys.append(issue_key)
-        return parsed_issues, tuple(dict.fromkeys(failed_issue_keys))
+        return (
+            parsed_issues,
+            tuple(dict.fromkeys(failed_issue_keys)),
+            _combine_error_messages(error_messages),
+        )
 
 
 def _seed_by_langchain_id(
     seeds: tuple[JiraIssueV2BackfillSeed, ...],
 ) -> dict[str, JiraIssueV2BackfillSeed]:
     return {seed.langchain_id: seed for seed in seeds}
+
+
+def _transform_error_type(
+    *,
+    parse_failed_ids: tuple[str, ...],
+    build_failed_ids: tuple[str, ...],
+) -> str | None:
+    if parse_failed_ids:
+        return "jira_issue_v2_backfill_parse_failed"
+    if build_failed_ids:
+        return "jira_issue_v2_backfill_document_build_failed"
+    return None
+
+
+def _first_error_type(*error_types: str | None) -> str | None:
+    return next((error_type for error_type in error_types if error_type), None)
+
+
+def _format_exception_trace(exc: Exception) -> str:
+    return "".join(traceback.format_exception(type(exc), exc, exc.__traceback__, limit=3))
+
+
+def _combine_error_messages(error_messages: list[str]) -> str | None:
+    if not error_messages:
+        return None
+    return " | ".join(dict.fromkeys(error_messages))
+
+
+def _document_build_error_message(build_failed_ids: tuple[str, ...]) -> str | None:
+    if not build_failed_ids:
+        return None
+    return f"Jira v2 document build failed for record_ids={list(build_failed_ids)}"
+
+
+def _metadata_missing_error_message(metadata_failed_ids: tuple[str, ...]) -> str | None:
+    if not metadata_failed_ids:
+        return None
+    return (
+        "Jira v2 metadata namespace missing after persist: "
+        f"document_ids={list(metadata_failed_ids)}"
+    )
+
 
 JiraIssueV2BackfillIngestionAdapter = JiraIssueV2BackfillAdapter

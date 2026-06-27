@@ -13,9 +13,8 @@ from langchain_core.documents import Document
 from catchup.connectors.github.queries import build_issues_by_numbers_query
 from catchup.connectors.github.schemas import GithubIssue
 from catchup.connectors.github.schemas import GithubUser
-from catchup.sync.backfill.github_issue_v2 import GithubIssueV1Seed
-from catchup.sync.backfill.github_issue_v2 import _embedding_to_list
-from catchup.sync.backfill.github_issue_v2 import build_fetch_seeded_seed_chunk_query
+from catchup.sync.backfill.base import BackfillSeed
+from catchup.sync.backfill.base import embedding_to_list
 from catchup.sync.backfill.github_issue_v2 import build_github_issue_v1_target_query
 from catchup.sync.backfill.github_issue_v2 import (
     build_github_issue_v1_target_seed_query,
@@ -31,8 +30,8 @@ from catchup.sync.ingestion.pipeline import run_sync_ingestion
 from catchup.sync.ingestion.schemas import SyncWindow
 
 
-def _seed() -> GithubIssueV1Seed:
-    return GithubIssueV1Seed(
+def _seed() -> BackfillSeed:
+    return BackfillSeed(
         langchain_id="github:issue:TeamCatchUp/CatchUp:812",
         record_id="812",
         content="summarized v1 issue content",
@@ -427,23 +426,5 @@ def test_seed_rows_statement_marks_issue_seed_with_empty_json_metadata() -> None
     assert "url = ''" not in statement
 
 
-def test_fetch_seeded_seed_chunk_query_uses_numeric_issue_cursor() -> None:
-    query = str(build_fetch_seeded_seed_chunk_query())
-
-    assert "FROM knowledge_store" in query
-    assert "source = 'github'" in query
-    assert "entity_type = 'issue'" in query
-    assert "scope_id = :scope_id" in query
-    assert "target_id = :target_id" in query
-    assert "COALESCE(metadata::jsonb, '{}'::jsonb) = '{}'::jsonb" in query
-    assert "record_id::integer AS record_number" in query
-    assert "CAST(:after_record_id AS integer) IS NULL" in query
-    assert "record_number > CAST(:after_record_id AS integer)" in query
-    assert "record_number = CAST(:after_record_id AS integer)" in query
-    assert "langchain_id > COALESCE(CAST(:after_langchain_id AS text), '')" in query
-    assert "ORDER BY record_number, langchain_id" in query
-    assert "LIMIT :limit" in query
-
-
 def test_github_issue_v2_embedding_to_list_treats_null_as_empty() -> None:
-    assert _embedding_to_list(None) == []
+    assert embedding_to_list(None) == []

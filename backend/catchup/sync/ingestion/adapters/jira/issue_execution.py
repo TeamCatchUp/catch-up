@@ -123,6 +123,8 @@ class JiraIssueFetchedIssuesResult(BaseModel):
     fetched_record_ids: tuple[str, ...] = ()
     failed_record_ids: tuple[str, ...] = ()
     fetch_error_count: int = 0
+    error_type: str | None = None
+    error_message: str | None = None
 
     @property
     def fetched_count(self) -> int:
@@ -166,6 +168,8 @@ class JiraIssueTransformResult(BaseModel):
     v2_failed_ids: tuple[str, ...] = ()
     issue_count: int = 0
     error_count: int = 0
+    error_type: str | None = None
+    error_message: str | None = None
 
     @property
     def document_count(self) -> int:
@@ -200,6 +204,8 @@ class JiraIssuePersistResult(BaseModel):
     deleted_count: int = 0
     v2_error_count: int = 0
     v2_failed_ids: tuple[str, ...] = ()
+    error_type: str | None = None
+    error_message: str | None = None
 
     def connector_log_summary(self) -> dict[str, object]:
         return {

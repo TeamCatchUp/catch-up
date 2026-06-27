@@ -12,27 +12,15 @@ from langchain_core.documents import Document
 from catchup.connectors.confluence.client import ConfluenceApiError
 from catchup.connectors.confluence.schemas import ConfluenceCommentResponse
 from catchup.connectors.confluence.schemas import ConfluencePageResponse
-from catchup.sync.backfill.confluence_v2 import build_fetch_pending_seed_chunk_query
+from catchup.sync.backfill.confluence_v2 import build_confluence_v1_target_seed_query
 from catchup.sync.backfill.confluence_v2 import build_upsert_seed_rows_statement
-from catchup.sync.ingestion.adapters.confluence.space_sync import (
-    ConfluenceSpaceSyncDependencies,
-)
-from catchup.sync.ingestion.adapters.confluence.space_sync import (
-    ConfluenceV2BackfillExecutionRequest,
-)
-from catchup.sync.ingestion.adapters.confluence.space_sync import (
-    ConfluenceV2BackfillSeed,
-)
-from catchup.sync.ingestion.adapters.confluence.v2_backfill import (
-    ConfluenceV2BackfillAdapter,
-)
-from catchup.sync.ingestion.adapters.confluence.v2_document_builder import (
-    ConfluenceV2DocumentBuilder,
-)
+from catchup.sync.ingestion.adapters.confluence.space_sync import ConfluenceSpaceSyncDependencies
+from catchup.sync.ingestion.adapters.confluence.space_sync import ConfluenceV2BackfillExecutionRequest
+from catchup.sync.ingestion.adapters.confluence.space_sync import ConfluenceV2BackfillSeed
+from catchup.sync.ingestion.adapters.confluence.v2_backfill import ConfluenceV2BackfillAdapter
+from catchup.sync.ingestion.adapters.confluence.v2_document_builder import ConfluenceV2DocumentBuilder
 from catchup.sync.ingestion.document_builders.confluence import ConfluenceTransformer
-from catchup.sync.ingestion.document_builders.confluence import (
-    ConfluenceTransformResult,
-)
+from catchup.sync.ingestion.document_builders.confluence import ConfluenceTransformResult
 from catchup.sync.ingestion.schemas import SyncWindow
 from catchup.sync.ingestion.vector_records import ConfluenceV2RecordMapper
 
@@ -558,7 +546,7 @@ async def test_confluence_v2_backfill_transform_logs_non_retryable_record_failur
 
 
 def test_confluence_v2_backfill_sql_casts_nullable_cursor_parameters():
-    query = str(build_fetch_pending_seed_chunk_query("page"))
+    query = str(build_confluence_v1_target_seed_query("page"))
 
     assert "CAST(:after_record_id AS text) IS NULL" in query
     assert "record_id > CAST(:after_record_id AS text)" in query

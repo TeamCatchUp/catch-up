@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import traceback
+
 from fastapi.concurrency import run_in_threadpool
 from langchain_core.documents import Document
 
@@ -53,6 +55,8 @@ class GithubPrV2BackfillAdapter(GithubRepositoryAdapterBase):
             owner=execution.owner,
             repo=execution.repo,
             repo_full_name=execution.repo_full_name,
+            error_type="github_pr_batch_fetch_failed" if failed_ids else None,
+            error_message=self._last_numbered_nodes_error_message,
         )
 
     async def transform(
@@ -74,6 +78,7 @@ class GithubPrV2BackfillAdapter(GithubRepositoryAdapterBase):
         v2_documents: list[Document] = []
         document_ids: list[str] = []
         transform_failed_ids: list[str] = []
+        error_messages: list[str] = []
 
         for bundle in bundles:
             record_id = str(bundle.pull_request.number)
@@ -91,7 +96,8 @@ class GithubPrV2BackfillAdapter(GithubRepositoryAdapterBase):
                     content=seed.content,
                     synced_at=self._document_synced_at(bundle.document),
                 )
-            except Exception:
+            except Exception as exc:
+                error_messages.append(_format_exception_trace(exc))
                 transform_failed_ids.append(record_id)
                 continue
 
@@ -120,6 +126,14 @@ class GithubPrV2BackfillAdapter(GithubRepositoryAdapterBase):
             owner=execution.owner,
             repo=execution.repo,
             repo_full_name=execution.repo_full_name,
+            error_type="github_pr_v2_backfill_document_build_failed"
+            if build_failed_ids or transform_failed_ids
+            else fetched.error_type,
+            error_message=_first_error_type(
+                _document_build_error_message(build_failed_ids),
+                _combine_error_messages(error_messages),
+                fetched.error_message,
+            ),
         )
 
     async def summarize(
@@ -152,13 +166,19 @@ class GithubPrV2BackfillAdapter(GithubRepositoryAdapterBase):
         upstream_error_count = len(set(transformed.failed_record_ids))
 
         if not document_ids:
-            return GithubRepositoryPersistResult(error_count=upstream_error_count)
+            return GithubRepositoryPersistResult(
+                error_count=upstream_error_count,
+                error_type=transformed.error_type,
+                error_message=transformed.error_message,
+            )
 
         if self.vector_store is None:
             return GithubRepositoryPersistResult(
                 error_count=upstream_error_count + len(document_ids),
                 v2_error_count=len(document_ids),
                 v2_failed_ids=tuple(document_ids),
+                error_type="github_pr_v2_backfill_vector_store_missing",
+                error_message="GitHub PR v2 vector store is missing",
             )
 
         embeddings = [seed_by_langchain_id[doc_id].embedding for doc_id in document_ids]
@@ -169,11 +189,13 @@ class GithubPrV2BackfillAdapter(GithubRepositoryAdapterBase):
                 ids=document_ids,
                 embeddings=embeddings,
             )
-        except Exception:
+        except Exception as exc:
             return GithubRepositoryPersistResult(
                 error_count=upstream_error_count + len(document_ids),
                 v2_error_count=len(document_ids),
                 v2_failed_ids=tuple(document_ids),
+                error_type="github_pr_v2_backfill_upsert_failed",
+                error_message=_format_exception_trace(exc),
             )
 
         persisted_id_set = {str(persisted_id) for persisted_id in persisted_ids or []}
@@ -195,6 +217,11 @@ class GithubPrV2BackfillAdapter(GithubRepositoryAdapterBase):
             error_count=upstream_error_count + len(failed_ids),
             v2_error_count=len(failed_ids),
             v2_failed_ids=failed_ids,
+            error_type="github_pr_v2_backfill_metadata_missing_after_persist"
+            if metadata_failed_ids
+            else transformed.error_type,
+            error_message=_metadata_missing_error_message(metadata_failed_ids)
+            or transformed.error_message,
         )
 
     def build_result(
@@ -235,6 +262,16 @@ class GithubPrV2BackfillAdapter(GithubRepositoryAdapterBase):
                 "record_type": "pull_request",
                 "repo_full_name": execution.repo_full_name,
                 "requested_count": len(execution.seeds),
+                "error_type": _first_error_type(
+                    fetched.error_type,
+                    transformed.error_type,
+                    persisted.error_type,
+                ),
+                "error_message": _first_error_type(
+                    fetched.error_message,
+                    transformed.error_message,
+                    persisted.error_message,
+                ),
                 "failed_ids": list(failed_ids),
                 "failed_record_ids": list(transformed.failed_record_ids),
                 "v2_failed_ids": list(persisted.v2_failed_ids),
@@ -269,3 +306,32 @@ def _langchain_ids_for_record_ids(
 
 def _dedupe(values: tuple[str, ...]) -> tuple[str, ...]:
     return tuple(dict.fromkeys(values))
+
+
+def _first_error_type(*error_types: str | None) -> str | None:
+    return next((error_type for error_type in error_types if error_type), None)
+
+
+def _format_exception_trace(exc: Exception) -> str:
+    return "".join(traceback.format_exception(type(exc), exc, exc.__traceback__, limit=3))
+
+
+def _combine_error_messages(error_messages: list[str]) -> str | None:
+    if not error_messages:
+        return None
+    return " | ".join(dict.fromkeys(error_messages))
+
+
+def _document_build_error_message(build_failed_ids: list[str]) -> str | None:
+    if not build_failed_ids:
+        return None
+    return f"GitHub PR v2 document build failed for record_ids={build_failed_ids}"
+
+
+def _metadata_missing_error_message(metadata_failed_ids: tuple[str, ...]) -> str | None:
+    if not metadata_failed_ids:
+        return None
+    return (
+        "GitHub PR v2 metadata namespace missing after persist: "
+        f"document_ids={list(metadata_failed_ids)}"
+    )

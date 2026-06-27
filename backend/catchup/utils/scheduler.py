@@ -288,7 +288,6 @@ async def run_vector_store_v2_sequential_backfill_job():
     result = await run_sequential_v2_backfill(
         VECTOR_STORE_V2_BACKFILL_SEQUENCE,
         batch_size=settings.VECTOR_STORE_V2_BACKFILL_BATCH_SIZE,
-        locked_by="scheduler",
     )
     log_method = logger.warning if result.status in {"completed_with_failures", "stopped"} else logger.info
     log_method(
