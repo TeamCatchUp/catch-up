@@ -75,7 +75,6 @@ export default function StatusErrorPage({
           width={image.light.width}
           height={image.light.height}
           alt=""
-          priority
           className="block dark:hidden"
         />
         <Image
@@ -83,7 +82,6 @@ export default function StatusErrorPage({
           width={image.dark.width}
           height={image.dark.height}
           alt=""
-          priority
           className="hidden dark:block"
         />
       </div>
