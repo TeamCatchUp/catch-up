@@ -1,8 +1,9 @@
 import type { ReactElement } from 'react';
 import { MutationCache, QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
+import { toast } from 'sonner';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { server } from '@/test/msw/server';
@@ -15,6 +16,12 @@ const mockPush = vi.fn();
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ back: mockBack, push: mockPush }),
+}));
+
+vi.mock('sonner', () => ({
+  toast: {
+    error: vi.fn(),
+  },
 }));
 
 if (!HTMLElement.prototype.hasPointerCapture) {
@@ -190,6 +197,7 @@ async function selectRequiredAutomationFields(user: ReturnType<typeof userEvent.
 beforeEach(() => {
   mockBack.mockClear();
   mockPush.mockClear();
+  vi.mocked(toast.error).mockClear();
 });
 
 describe('AgentStudioEditorPage', () => {
@@ -202,7 +210,7 @@ describe('AgentStudioEditorPage', () => {
     expect(screen.getByRole('heading', { name: '문의 대응 리포트 만들기' })).toBeInTheDocument();
   });
 
-  it('keeps deploy disabled before an instruction is entered', () => {
+  it('keeps deploy disabled before required fields are selected', () => {
     renderEditor();
 
     expect(screen.getByRole('button', { name: '배포하기' })).toBeDisabled();
@@ -242,39 +250,10 @@ describe('AgentStudioEditorPage', () => {
     expect(await screen.findByText('v1.2.3')).toBeInTheDocument();
   });
 
-  it('updates the instruction count while typing', async () => {
-    const user = userEvent.setup();
+  it('does not render the guide instruction field', () => {
     renderEditor();
 
-    await user.type(screen.getByLabelText('답변 초안, 어떤 규칙으로 쓸까요?'), '응답은 간결하게 작성');
-
-    expect(screen.getByText('11/500')).toBeInTheDocument();
-  });
-
-  it('keeps the instruction field spacing stable before and after typing', async () => {
-    const user = userEvent.setup();
-    renderEditor();
-
-    const instructionField = screen.getByRole('textbox');
-    const instructionContainer = instructionField.parentElement;
-
-    expect(instructionContainer).toHaveClass('gap-4');
-
-    await user.type(instructionField, 'a');
-
-    expect(instructionContainer).toHaveClass('gap-4');
-    expect(instructionContainer).not.toHaveClass('gap-2.5');
-  });
-
-  it('marks the instruction field as invalid at the max length', () => {
-    renderEditor();
-
-    const instructionField = screen.getByLabelText('답변 초안, 어떤 규칙으로 쓸까요?');
-
-    fireEvent.change(instructionField, { target: { value: '가'.repeat(500) } });
-
-    expect(instructionField).toHaveAttribute('aria-invalid', 'true');
-    expect(screen.getByText('500/500')).toHaveClass('text-status-destructive');
+    expect(screen.queryByLabelText('답변 초안, 어떤 규칙으로 쓸까요?')).not.toBeInTheDocument();
   });
 
   it('renders unselected channel fields as select placeholders', () => {
@@ -309,7 +288,7 @@ describe('AgentStudioEditorPage', () => {
     expect(screen.getByRole('option', { name: '30분' })).toBeInTheDocument();
   });
 
-  it('enables deploy after an instruction is entered', async () => {
+  it('enables deploy after all required fields are selected', async () => {
     const user = userEvent.setup();
     renderEditor();
 
@@ -317,7 +296,7 @@ describe('AgentStudioEditorPage', () => {
 
     expect(publishButton).toBeDisabled();
 
-    await user.type(screen.getByLabelText('답변 초안, 어떤 규칙으로 쓸까요?'), '가');
+    await selectRequiredAutomationFields(user);
 
     await waitFor(() => expect(publishButton).not.toBeDisabled());
   });
@@ -353,7 +332,6 @@ describe('AgentStudioEditorPage', () => {
     await selectRequiredAutomationFields(user);
     await user.click(screen.getByRole('combobox', { name: /몇 분 후에 Agent를 실행할까요/ }));
     await user.click(await screen.findByRole('option', { name: '30분' }));
-    await user.type(screen.getByLabelText('답변 초안, 어떤 규칙으로 쓸까요?'), '프로젝트 맥락 반영');
 
     const publishButton = screen.getByRole('button', { name: '배포하기' });
 
@@ -372,13 +350,29 @@ describe('AgentStudioEditorPage', () => {
           channel_id: 'C123',
           channel_name: 'cs-response',
         },
-        guide_instruction: '프로젝트 맥락 반영',
       },
     ]);
 
     resolvePublish();
 
     await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/agent-studio'));
+  });
+
+  it('shows a toast instead of inline text when publishing fails', async () => {
+    const user = userEvent.setup();
+
+    server.use(http.post('/api/v1/automations/inquiries/publish', () => new HttpResponse(null, { status: 500 })));
+    renderEditor();
+
+    await selectRequiredAutomationFields(user);
+
+    const publishButton = screen.getByRole('button', { name: '배포하기' });
+
+    await waitFor(() => expect(publishButton).not.toBeDisabled());
+    await user.click(publishButton);
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('배포에 실패했습니다. 입력값을 확인해주세요.'));
+    expect(screen.queryByText('배포에 실패했습니다. 입력값을 확인해주세요.')).not.toBeInTheDocument();
   });
 
   it('prevents duplicate publish requests while a publish is already in flight', async () => {
@@ -413,7 +407,6 @@ describe('AgentStudioEditorPage', () => {
     await selectRequiredAutomationFields(user);
     await user.click(screen.getByRole('combobox', { name: /몇 분 후에 Agent를 실행할까요/ }));
     await user.click(await screen.findByRole('option', { name: '30분' }));
-    await user.type(screen.getByLabelText('답변 초안, 어떤 규칙으로 쓸까요?'), '프로젝트 맥락 반영');
 
     const publishButton = screen.getByRole('button', { name: '배포하기' });
 
@@ -427,18 +420,9 @@ describe('AgentStudioEditorPage', () => {
     resolvePublish();
   });
 
-  it('loads an existing automation and patches settings in edit mode', async () => {
-    const user = userEvent.setup();
-    const patchRequests: unknown[] = [];
-
+  it('loads an existing automation in edit mode', async () => {
     mockEditorSuccessHandlers();
-    server.use(
-      http.get('/api/v1/automations/inquiries/42', () => HttpResponse.json(existingAutomation)),
-      http.patch('/api/v1/automations/inquiries/42/settings', async ({ request }) => {
-        patchRequests.push(await request.json());
-        return new HttpResponse(null, { status: 204 });
-      }),
-    );
+    server.use(http.get('/api/v1/automations/inquiries/42', () => HttpResponse.json(existingAutomation)));
 
     renderWithQueryClient(<AgentStudioEditorPage mode="edit" agentSpecId={42} />);
 
@@ -452,20 +436,8 @@ describe('AgentStudioEditorPage', () => {
     await waitFor(() =>
       expect(screen.getByRole('combobox', { name: /Slack 채널을 선택/ })).toHaveTextContent('cs-response'),
     );
-    expect(screen.getByLabelText('답변 초안, 어떤 규칙으로 쓸까요?')).toHaveValue('기존 문의 대응 규칙');
+    expect(screen.queryByLabelText('답변 초안, 어떤 규칙으로 쓸까요?')).not.toBeInTheDocument();
     expect(submitButton).not.toBeDisabled();
-
-    await user.clear(screen.getByLabelText('답변 초안, 어떤 규칙으로 쓸까요?'));
-    await user.type(screen.getByLabelText('답변 초안, 어떤 규칙으로 쓸까요?'), '수정된 문의 대응 규칙');
-    await user.click(submitButton);
-
-    await waitFor(() => expect(patchRequests).toHaveLength(1));
-    expect(patchRequests).toEqual([
-      {
-        guide_instruction: '수정된 문의 대응 규칙',
-      },
-    ]);
-    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/agent-studio'));
   });
 
   it('patches only changed select settings in edit mode', async () => {
@@ -515,30 +487,22 @@ describe('AgentStudioEditorPage', () => {
     ]);
   });
 
-  it('patches guide instruction as null when the existing instruction is cleared', async () => {
-    const user = userEvent.setup();
-    const patchRequests: unknown[] = [];
-
+  it('shows a toast instead of inline text when patching settings fails', async () => {
     mockEditorSuccessHandlers();
     server.use(
       http.get('/api/v1/automations/inquiries/42', () => HttpResponse.json(existingAutomation)),
-      http.patch('/api/v1/automations/inquiries/42/settings', async ({ request }) => {
-        patchRequests.push(await request.json());
-        return new HttpResponse(null, { status: 204 });
-      }),
+      http.patch('/api/v1/automations/inquiries/42/settings', () => new HttpResponse(null, { status: 500 })),
     );
 
     renderWithQueryClient(<AgentStudioEditorPage mode="edit" agentSpecId={42} />);
 
     const submitButton = await screen.findByRole('button', { name: '수정하기' });
-    const instructionField = screen.getByLabelText('답변 초안, 어떤 규칙으로 쓸까요?');
 
-    await waitFor(() => expect(instructionField).toHaveValue('기존 문의 대응 규칙'));
-    await user.clear(instructionField);
-    await user.click(submitButton);
+    await waitFor(() => expect(submitButton).not.toBeDisabled());
+    submitButton.click();
 
-    await waitFor(() => expect(patchRequests).toHaveLength(1));
-    expect(patchRequests).toEqual([{ guide_instruction: null }]);
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('수정에 실패했습니다. 입력값을 확인해주세요.'));
+    expect(screen.queryByText('수정에 실패했습니다. 입력값을 확인해주세요.')).not.toBeInTheDocument();
   });
 
   it('renders forbidden status when an existing automation is not editable', async () => {
@@ -578,6 +542,22 @@ describe('AgentStudioEditorPage', () => {
     expect(screen.getByRole('button', { name: '이전 페이지' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: '홈으로 돌아가기' })).toHaveAttribute('href', '/');
     expect(screen.queryByRole('button', { name: '수정하기' })).not.toBeInTheDocument();
+  });
+
+  it('shows a toast instead of inline text when loading automation detail fails', async () => {
+    mockEditorSuccessHandlers();
+    server.use(http.get('/api/v1/automations/inquiries/42', () => new HttpResponse(null, { status: 500 })));
+
+    renderWithQueryClient(<AgentStudioEditorPage mode="edit" agentSpecId={42} />);
+
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith(
+        '문의 자동화 설정을 불러오지 못했습니다. 잠시 후 다시 시도해주세요.',
+      ),
+    );
+    expect(
+      screen.queryByText('문의 자동화 설정을 불러오지 못했습니다. 잠시 후 다시 시도해주세요.'),
+    ).not.toBeInTheDocument();
   });
 
   it('prevents duplicate edit requests while a settings patch is already in flight', async () => {
