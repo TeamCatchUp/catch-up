@@ -37,6 +37,8 @@ def build_temporal_filters(
     start_date: datetime | None = None,
     end_date: datetime | None = None,
 ) -> list[TemporalFilter]:
+    # TODO: 단방향 날짜 필터 지원 — start_date만 있으면 end_date=now(),
+    #       end_date만 있으면 start_date=EPOCH로 resolve (search/filters.py 참고)
     if not (start_date and end_date):
         return []
 

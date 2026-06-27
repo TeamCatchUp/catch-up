@@ -116,3 +116,4 @@ class ManualSearchAction(BaseAuditAction):
 
 class McpAction(BaseAuditAction):
     SEARCH_KNOWLEDGE_BASE = "search_knowledge_base"
+    READ_DOCUMENTS = "read_documents"
