@@ -18,31 +18,6 @@ from catchup.rag.schemas.filters import build_temporal_filters
 _VALID_SOURCES = {s.value for s in SourceType}
 
 
-async def run_search(
-    query: str,
-    k: int,
-    sources: list[str] | None,
-    date_from: str | None,
-    date_to: str | None,
-    vector_db_service: BaseVectorDbService,
-) -> list[dict]:
-    tool_filters = _parse_sources(sources)
-    temporal_filters = build_temporal_filters(
-        tool_filters,
-        _parse_date(date_from, "date_from"),
-        _parse_date(date_to, "date_to"),
-    )
-
-    docs: list[Document] = await vector_db_service.hybrid_search(
-        query=query,
-        k=k,
-        weights=[0.6, 0.4],  # [vector, contextual_content]
-        tool_filters=tool_filters,
-        temporal_filters=temporal_filters or None,
-    )
-    return _format_docs(docs)
-
-
 def _parse_sources(sources: list[str] | None) -> list[SourceType] | None:
     if not sources:
         return None
@@ -82,8 +57,33 @@ def _format_docs(docs: list[Document]) -> list[dict]:
     return results
 
 
-def serialize_results(results: list[dict]) -> str:
+def _serialize_results(results: list[dict]) -> str:
     return json.dumps(results, ensure_ascii=False, indent=2)
+
+
+async def _run_search(
+    query: str,
+    k: int,
+    sources: list[str] | None,
+    date_from: str | None,
+    date_to: str | None,
+    vector_db_service: BaseVectorDbService,
+) -> list[dict]:
+    tool_filters = _parse_sources(sources)
+    temporal_filters = build_temporal_filters(
+        tool_filters,
+        _parse_date(date_from, "date_from"),
+        _parse_date(date_to, "date_to"),
+    )
+
+    docs: list[Document] = await vector_db_service.hybrid_search(
+        query=query,
+        k=k,
+        weights=[0.6, 0.4],  # [vector, contextual_content]
+        tool_filters=tool_filters,
+        temporal_filters=temporal_filters or None,
+    )
+    return _format_docs(docs)
 
 
 @mcp_tool(
@@ -136,7 +136,7 @@ async def search_knowledge_base(
             if v is not None
         }
         with propagate_attributes(user_id=user_id, metadata=lf_metadata):
-            results = await run_search(
+            results = await _run_search(
                 query, k, sources, date_from, date_to, vector_db_service
             )
         get_client().update_current_span(
@@ -150,8 +150,8 @@ async def search_knowledge_base(
             output=results,
         )
     else:
-        results = await run_search(
+        results = await _run_search(
             query, k, sources, date_from, date_to, vector_db_service
         )
 
-    return serialize_results(results)
+    return _serialize_results(results)
