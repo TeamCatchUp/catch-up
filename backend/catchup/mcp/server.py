@@ -32,11 +32,11 @@ mcp = FastMCP(
     transport_security=_build_transport_security(),
 )
 
-mcp.tool()(search_knowledge_base)
+mcp.add_tool(search_knowledge_base)
 
 if settings.MCP_V2_SAMPLING_ENABLED:
     from catchup.mcp.tools.v2_sampling import get_v2_backfill_state
     from catchup.mcp.tools.v2_sampling import sample_v2_knowledge_store
 
-    mcp.tool()(sample_v2_knowledge_store)
-    mcp.tool()(get_v2_backfill_state)
+    mcp.add_tool(sample_v2_knowledge_store)
+    mcp.add_tool(get_v2_backfill_state)
