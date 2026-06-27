@@ -27,6 +27,12 @@ export const FIGMA_LAB_GROUPS: readonly FigmaLabGroup[] = [
     defaultCaseId: 'document-search-filter-row-entry',
   },
   {
+    id: 'shared-status',
+    title: 'Shared Status Pages',
+    description: '403, 404 같은 공통 상태 페이지와 테마별 이미지를 검증합니다.',
+    defaultCaseId: 'status-not-found-light',
+  },
+  {
     id: 'original-panel',
     title: 'Original Panel',
     description: '원문 패널의 Slack Figma-backed case와 ChannelTalk dev-preview case를 검증합니다.',
