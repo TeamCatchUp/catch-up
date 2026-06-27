@@ -1,50 +1,32 @@
 'use client';
 
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
+import { toast } from 'sonner';
 
+import { AGENT_EDITOR_SETTINGS_MESSAGES } from '../constants/agentEditorSettingsMessages';
 import { AGENT_STUDIO_SETTINGS_FIXTURE } from '../fixtures/agentStudioFixtures';
 import { automationCredentialsQueries } from '../queries/automationCredentials.queries';
 import { inquiryAutomationsMutations } from '../queries/inquiryAutomations.mutations';
 import { inquiryAutomationsQueries } from '../queries/inquiryAutomations.queries';
 import type { AgentStudioSelectItem } from '../types/agentStudioModel';
-import type {
-  AutomationCredentialItem,
-  AutomationTargetItem,
-  InquiryAutomationPatchRequest,
-  InquiryAutomationPublishRequest,
-} from '../types/automationApi';
+import {
+  buildInquiryAutomationSettingsPatchPayload,
+  buildInquiryAutomationSettingsPayload,
+} from '../utils/buildInquiryAutomationSettingsPayload';
+import { mapAutomationCredentialToSelectItem, mapAutomationTargetToSelectItem } from '../utils/mapAutomationSelectItems';
+import {
+  areInquiryAutomationSettingsSelected,
+  canSubmitInquiryAutomationSettings,
+} from '../utils/validateInquiryAutomationSettings';
 
 const EMPTY_SELECT_ITEMS: readonly AgentStudioSelectItem[] = [];
-const EMPTY_ITEM_PLACEHOLDER = '선택할 수 있는 항목이 없습니다';
 const DEFAULT_QUIET_PERIOD_SECONDS = AGENT_STUDIO_SETTINGS_FIXTURE.quietPeriodOptions[0]?.value ?? '60';
 
 interface UseAgentEditorSettingsFormOptions {
   mode?: 'create' | 'edit';
   agentSpecId?: number;
-}
-
-function mapCredentialToSelectItem(credential: AutomationCredentialItem): AgentStudioSelectItem {
-  return {
-    value: String(credential.credential_id),
-    label: credential.display_name,
-    disabled: !credential.is_configured,
-  };
-}
-
-function mapTargetToSelectItem(target: AutomationTargetItem): AgentStudioSelectItem {
-  return {
-    value: target.target_id,
-    label: target.display_name,
-    disabled: !target.is_accessible,
-  };
-}
-
-function normalizeGuideInstruction(value: string | null | undefined): string | null {
-  const trimmedValue = value?.trim() ?? '';
-
-  return trimmedValue.length > 0 ? trimmedValue : null;
 }
 
 export function useAgentEditorSettingsForm({ mode = 'create', agentSpecId }: UseAgentEditorSettingsFormOptions = {}) {
@@ -57,7 +39,6 @@ export function useAgentEditorSettingsForm({ mode = 'create', agentSpecId }: Use
   const [quietPeriodSeconds, setQuietPeriodSeconds] = useState('');
   const [slackCredentialId, setSlackCredentialId] = useState('');
   const [slackChannelId, setSlackChannelId] = useState('');
-  const [instructionOverride, setInstructionOverride] = useState<string | null>(null);
 
   const slackCredentialsQuery = useQuery(automationCredentialsQueries.credentials('slack'));
   const channelTalkTargetsQuery = useQuery(automationCredentialsQueries.targets('channel_talk'));
@@ -68,11 +49,11 @@ export function useAgentEditorSettingsForm({ mode = 'create', agentSpecId }: Use
   const automationDetail = automationDetailQuery.data;
 
   const channelTalkTargetItems = useMemo(
-    () => channelTalkTargetsQuery.data?.targets.map(mapTargetToSelectItem) ?? EMPTY_SELECT_ITEMS,
+    () => channelTalkTargetsQuery.data?.targets.map(mapAutomationTargetToSelectItem) ?? EMPTY_SELECT_ITEMS,
     [channelTalkTargetsQuery.data?.targets],
   );
   const slackCredentialItems = useMemo(
-    () => slackCredentialsQuery.data?.credentials.map(mapCredentialToSelectItem) ?? EMPTY_SELECT_ITEMS,
+    () => slackCredentialsQuery.data?.credentials.map(mapAutomationCredentialToSelectItem) ?? EMPTY_SELECT_ITEMS,
     [slackCredentialsQuery.data?.credentials],
   );
   const editChannelTalkTarget = useMemo(
@@ -90,7 +71,10 @@ export function useAgentEditorSettingsForm({ mode = 'create', agentSpecId }: Use
     (isEditMode && automationDetail !== undefined
       ? String(automationDetail.quiet_period_seconds ?? DEFAULT_QUIET_PERIOD_SECONDS)
       : DEFAULT_QUIET_PERIOD_SECONDS);
-  const autoSlackCredentialId = slackCredentialItems.length === 1 ? (slackCredentialItems[0]?.value ?? '') : '';
+  const autoSlackCredentialId =
+    slackCredentialItems.length === 1 && slackCredentialItems[0]?.disabled !== true
+      ? (slackCredentialItems[0]?.value ?? '')
+      : '';
   const editSlackCredentialId =
     isEditMode && automationDetail !== undefined ? String(automationDetail.slack_credential_id) : '';
   const slackCredentialValue = slackCredentialId || editSlackCredentialId || autoSlackCredentialId;
@@ -98,14 +82,15 @@ export function useAgentEditorSettingsForm({ mode = 'create', agentSpecId }: Use
   const slackTargetsQuery = useQuery(automationCredentialsQueries.targets('slack', selectedSlackCredentialId));
   const slackChannelValue =
     slackChannelId || (isEditMode && automationDetail !== undefined ? automationDetail.slack_channel_id : '');
-  const instruction =
-    instructionOverride ?? (isEditMode && automationDetail !== undefined ? (automationDetail.guide_instruction ?? '') : '');
   const isEditReadOnly = isEditMode && automationDetail?.is_editable === false;
 
   const publishMutation = useMutation({
     ...inquiryAutomationsMutations.publish(),
     onSuccess: () => {
       router.push('/agent-studio');
+    },
+    onError: () => {
+      toast.error(AGENT_EDITOR_SETTINGS_MESSAGES.publishError);
     },
     onSettled: () => {
       isSubmitInFlightRef.current = false;
@@ -118,108 +103,68 @@ export function useAgentEditorSettingsForm({ mode = 'create', agentSpecId }: Use
       await queryClient.invalidateQueries({ queryKey: inquiryAutomationsQueries.detailKey(variables.agentSpecId) });
       router.push('/agent-studio');
     },
+    onError: () => {
+      toast.error(AGENT_EDITOR_SETTINGS_MESSAGES.patchError);
+    },
     onSettled: () => {
       isSubmitInFlightRef.current = false;
     },
   });
 
   const slackChannelItems = useMemo(
-    () => slackTargetsQuery.data?.targets.map(mapTargetToSelectItem) ?? EMPTY_SELECT_ITEMS,
+    () => slackTargetsQuery.data?.targets.map(mapAutomationTargetToSelectItem) ?? EMPTY_SELECT_ITEMS,
     [slackTargetsQuery.data?.targets],
   );
   const selectedChannelTalkTarget = useMemo(
     () => channelTalkTargetsQuery.data?.targets.find((target) => target.target_id === channelTalkTargetValue),
     [channelTalkTargetValue, channelTalkTargetsQuery.data?.targets],
   );
+  const selectedSlackCredential = useMemo(
+    () =>
+      selectedSlackCredentialId === undefined
+        ? undefined
+        : slackCredentialsQuery.data?.credentials.find(
+            (credential) => credential.credential_id === selectedSlackCredentialId,
+          ),
+    [selectedSlackCredentialId, slackCredentialsQuery.data?.credentials],
+  );
   const selectedSlackTarget = useMemo(
     () => slackTargetsQuery.data?.targets.find((target) => target.target_id === slackChannelValue),
     [slackChannelValue, slackTargetsQuery.data?.targets],
   );
-  const trimmedInstruction = instruction.trim();
 
   const channelTalkPlaceholder = channelTalkTargetsQuery.isError
-    ? '채널톡 채널을 불러오지 못했습니다'
+    ? AGENT_EDITOR_SETTINGS_MESSAGES.channelTalkTargetsLoadError
     : channelTalkTargetsQuery.isSuccess && channelTalkTargetItems.length === 0
-      ? EMPTY_ITEM_PLACEHOLDER
+      ? AGENT_EDITOR_SETTINGS_MESSAGES.emptySelectItems
       : AGENT_STUDIO_SETTINGS_FIXTURE.channelTalkChannelLabel;
   const slackCredentialPlaceholder = slackCredentialsQuery.isError
-    ? 'Slack 권한을 불러오지 못했습니다'
+    ? AGENT_EDITOR_SETTINGS_MESSAGES.slackCredentialsLoadError
     : slackCredentialsQuery.isSuccess && slackCredentialItems.length === 0
-      ? EMPTY_ITEM_PLACEHOLDER
+      ? AGENT_EDITOR_SETTINGS_MESSAGES.emptySelectItems
       : AGENT_STUDIO_SETTINGS_FIXTURE.slackWorkspaceName;
   const slackChannelPlaceholder = slackTargetsQuery.isError
-    ? 'Slack 채널을 불러오지 못했습니다'
+    ? AGENT_EDITOR_SETTINGS_MESSAGES.slackTargetsLoadError
     : selectedSlackCredentialId !== undefined && slackTargetsQuery.isSuccess && slackChannelItems.length === 0
-      ? EMPTY_ITEM_PLACEHOLDER
+      ? AGENT_EDITOR_SETTINGS_MESSAGES.emptySelectItems
       : AGENT_STUDIO_SETTINGS_FIXTURE.slackChannelLabel;
-  const canSubmit = isEditMode
-    ? !patchSettingsMutation.isPending &&
-      automationDetailQuery.isSuccess &&
-      automationDetail?.is_editable === true &&
-      editChannelTalkTarget !== undefined &&
-      selectedChannelTalkTarget?.credential_id !== null &&
-      selectedChannelTalkTarget?.credential_id !== undefined &&
-      selectedSlackCredentialId !== undefined &&
-      selectedSlackTarget !== undefined
-    : trimmedInstruction.length > 0 && !publishMutation.isPending;
+  const hasSelectedAutomationSettings = areInquiryAutomationSettingsSelected({
+    channelTalkTarget: selectedChannelTalkTarget,
+    slackCredential: selectedSlackCredential,
+    slackTarget: selectedSlackTarget,
+  });
+  const canSubmit = canSubmitInquiryAutomationSettings({
+    hasEditChannelTalkTarget: editChannelTalkTarget !== undefined,
+    hasSelectedAutomationSettings,
+    isDetailLoaded: automationDetailQuery.isSuccess,
+    isEditable: automationDetail?.is_editable === true,
+    isEditMode,
+    isPending: isEditMode ? patchSettingsMutation.isPending : publishMutation.isPending,
+  });
 
   const handleSlackCredentialChange = (value: string) => {
     setSlackCredentialId(value);
     setSlackChannelId('');
-  };
-
-  const buildSettingsPayload = (): InquiryAutomationPublishRequest | null => {
-    if (
-      selectedChannelTalkTarget?.credential_id === null ||
-      selectedChannelTalkTarget?.credential_id === undefined ||
-      selectedSlackCredentialId === undefined ||
-      selectedSlackTarget === undefined
-    ) {
-      return null;
-    }
-
-    return {
-      channel_talk_credential_id: selectedChannelTalkTarget.credential_id,
-      quiet_period_seconds: Number(quietPeriodValue),
-      slack_channel: {
-        credential_id: selectedSlackCredentialId,
-        channel_id: selectedSlackTarget.target_id,
-        channel_name: selectedSlackTarget.display_name,
-      },
-      guide_instruction: normalizeGuideInstruction(instruction),
-    };
-  };
-
-  const buildPatchSettingsPayload = (
-    settingsPayload: InquiryAutomationPublishRequest,
-  ): InquiryAutomationPatchRequest | null => {
-    if (automationDetail === undefined) return null;
-
-    const patchPayload: InquiryAutomationPatchRequest = {};
-
-    if (settingsPayload.channel_talk_credential_id !== automationDetail.channel_talk_credential_id) {
-      patchPayload.channel_talk_credential_id = settingsPayload.channel_talk_credential_id;
-    }
-
-    if (
-      settingsPayload.quiet_period_seconds !==
-      (automationDetail.quiet_period_seconds ?? Number(DEFAULT_QUIET_PERIOD_SECONDS))
-    ) {
-      patchPayload.quiet_period_seconds = settingsPayload.quiet_period_seconds;
-    }
-
-    if (
-      settingsPayload.slack_channel.credential_id !== automationDetail.slack_credential_id ||
-      settingsPayload.slack_channel.channel_id !== automationDetail.slack_channel_id
-    ) {
-      patchPayload.slack_channel = settingsPayload.slack_channel;
-    }
-
-    if (settingsPayload.guide_instruction !== normalizeGuideInstruction(automationDetail.guide_instruction)) {
-      patchPayload.guide_instruction = settingsPayload.guide_instruction ?? null;
-    }
-
-    return patchPayload;
   };
 
   const handleSubmit = () => {
@@ -232,7 +177,13 @@ export function useAgentEditorSettingsForm({ mode = 'create', agentSpecId }: Use
       return;
     }
 
-    const payload = buildSettingsPayload();
+    const payload = buildInquiryAutomationSettingsPayload({
+      channelTalkTarget: selectedChannelTalkTarget,
+      quietPeriodValue,
+      slackCredential: selectedSlackCredential,
+      slackCredentialId: selectedSlackCredentialId,
+      slackTarget: selectedSlackTarget,
+    });
     if (payload === null) return;
 
     isSubmitInFlightRef.current = true;
@@ -242,7 +193,11 @@ export function useAgentEditorSettingsForm({ mode = 'create', agentSpecId }: Use
         isSubmitInFlightRef.current = false;
         return;
       }
-      const patchPayload = buildPatchSettingsPayload(payload);
+      const patchPayload = buildInquiryAutomationSettingsPatchPayload({
+        automationDetail,
+        defaultQuietPeriodSeconds: Number(DEFAULT_QUIET_PERIOD_SECONDS),
+        settingsPayload: payload,
+      });
       if (patchPayload === null) {
         isSubmitInFlightRef.current = false;
         return;
@@ -252,15 +207,16 @@ export function useAgentEditorSettingsForm({ mode = 'create', agentSpecId }: Use
       return;
     }
 
-    if (trimmedInstruction.length === 0) {
-      isSubmitInFlightRef.current = false;
-      return;
-    }
-
     publishMutation.mutate(payload);
   };
 
-  const activeMutation = isEditMode ? patchSettingsMutation : publishMutation;
+  const loadErrorMessage = isEditMode && automationDetailQuery.isError ? AGENT_EDITOR_SETTINGS_MESSAGES.loadError : null;
+
+  useEffect(() => {
+    if (loadErrorMessage) {
+      toast.error(loadErrorMessage);
+    }
+  }, [loadErrorMessage]);
 
   return {
     canSubmit,
@@ -274,19 +230,13 @@ export function useAgentEditorSettingsForm({ mode = 'create', agentSpecId }: Use
       value: channelTalkTargetValue,
     },
     handleSubmit,
-    instruction,
     isReadOnly: isEditReadOnly,
-    loadErrorMessage:
-      isEditMode && automationDetailQuery.isError
-        ? '문의 자동화 설정을 불러오지 못했습니다. 잠시 후 다시 시도해주세요.'
-        : null,
     quietPeriodSelect: {
       disabled: isEditReadOnly,
       items: AGENT_STUDIO_SETTINGS_FIXTURE.quietPeriodOptions,
       onChange: setQuietPeriodSeconds,
       value: quietPeriodValue,
     },
-    setInstruction: setInstructionOverride,
     slackChannelSelect: {
       disabled:
         isEditReadOnly ||
@@ -307,10 +257,5 @@ export function useAgentEditorSettingsForm({ mode = 'create', agentSpecId }: Use
       placeholder: slackCredentialPlaceholder,
       value: slackCredentialValue,
     },
-    submitErrorMessage: activeMutation.isError
-      ? isEditMode
-        ? '수정에 실패했습니다. 입력값을 확인해주세요.'
-        : '배포에 실패했습니다. 입력값을 확인해주세요.'
-      : null,
   };
 }
