@@ -161,8 +161,9 @@ def phase1():
     print(f"\n[4/6] 브랜치 생성  {branch}")
     run(f"git switch -c {branch}")
     update_version_in_pyproject(new_version)
-    run(f"git add {PYPROJECT_PATH}")
-    run(f'git commit -m "release(common): {new_version} 버전 덤프"')
+    run("uv lock")
+    run(f"git add {PYPROJECT_PATH} uv.lock")
+    run(f'git commit -m "release(common): {new_version} 버전 범프"')
 
     print(f"\n[5/6] {ORIGIN_REMOTE} 푸시")
     run(f"git push {ORIGIN_REMOTE} {branch}")
