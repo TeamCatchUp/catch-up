@@ -41,14 +41,22 @@ interface AgentStudioListContentProps {
 interface StatusGroupProps {
   agents: readonly AgentStudioCardModel[];
   label: AgentStatusSectionLabel;
-  layout: 'grouped' | 'flat';
   actionDisabled: boolean;
   onActivate?: (agent: AgentStudioCardModel) => void;
   onDeactivate?: (agent: AgentStudioCardModel) => void;
   onEdit?: (agent: AgentStudioCardModel) => void;
 }
 
-function StatusGroup({ agents, label, layout, actionDisabled, onActivate, onDeactivate, onEdit }: StatusGroupProps) {
+function FilterEmptyMessage({ title, description }: { title: string; description: string }) {
+  return (
+    <div className="text-body-xsmall flex min-h-52.75 w-full flex-col items-center justify-center gap-2.5 px-2.5 py-12 text-center">
+      <p className="text-text-normal-alternative">{title}</p>
+      <p className="text-text-normal-assistive whitespace-pre-line">{description}</p>
+    </div>
+  );
+}
+
+function StatusGroup({ agents, label, actionDisabled, onActivate, onDeactivate, onEdit }: StatusGroupProps) {
   if (agents.length === 0) {
     return (
       <AgentEmptyColumn
@@ -56,23 +64,8 @@ function StatusGroup({ agents, label, layout, actionDisabled, onActivate, onDeac
         count={agents.length}
         title={EMPTY_STATE_BY_STATUS[label].title}
         description={EMPTY_STATE_BY_STATUS[label].description}
-        layout={layout}
       />
     );
-  }
-
-  if (layout === 'flat') {
-    return agents.map((agent) => (
-      <AgentCard
-        key={agent.id}
-        agent={agent}
-        actionDisabled={actionDisabled}
-        layout="flat"
-        onActivate={onActivate}
-        onDeactivate={onDeactivate}
-        onEdit={onEdit}
-      />
-    ));
   }
 
   return (
@@ -83,7 +76,6 @@ function StatusGroup({ agents, label, layout, actionDisabled, onActivate, onDeac
             key={agent.id}
             agent={agent}
             actionDisabled={actionDisabled}
-            layout="grouped"
             onActivate={onActivate}
             onDeactivate={onDeactivate}
             onEdit={onEdit}
@@ -107,37 +99,61 @@ export default function AgentStudioListContent({
   const draftAgents = visibleAgents.filter((agent) => agent.status === 'draft');
   const inactiveAgents = visibleAgents.filter((agent) => agent.status === 'inactive');
   const isGroupedView = selectedFilter === 'all';
-  const layout = isGroupedView ? 'grouped' : 'flat';
+  const selectedStatusGroup =
+    selectedFilter === 'active'
+      ? { label: '운영중' as const, agents: activeAgents }
+      : selectedFilter === 'draft'
+        ? { label: '제작중' as const, agents: draftAgents }
+        : selectedFilter === 'inactive'
+          ? { label: '사용 안함' as const, agents: inactiveAgents }
+          : null;
+
+  if (selectedStatusGroup) {
+    const emptyState = EMPTY_STATE_BY_STATUS[selectedStatusGroup.label];
+
+    if (selectedStatusGroup.agents.length === 0) {
+      return <FilterEmptyMessage title={emptyState.title} description={emptyState.description} />;
+    }
+
+    return selectedStatusGroup.agents.map((agent) => (
+      <AgentCard
+        key={agent.id}
+        agent={agent}
+        actionDisabled={actionDisabled}
+        layout="grid"
+        onActivate={onActivate}
+        onDeactivate={onDeactivate}
+        onEdit={onEdit}
+      />
+    ));
+  }
 
   return (
     <>
-      {(isGroupedView || selectedFilter === 'active') && (
+      {isGroupedView && (
         <StatusGroup
           agents={activeAgents}
           label="운영중"
-          layout={layout}
           actionDisabled={actionDisabled}
           onActivate={onActivate}
           onDeactivate={onDeactivate}
           onEdit={onEdit}
         />
       )}
-      {(isGroupedView || selectedFilter === 'draft') && (
+      {isGroupedView && (
         <StatusGroup
           agents={draftAgents}
           label="제작중"
-          layout={layout}
           actionDisabled={actionDisabled}
           onActivate={onActivate}
           onDeactivate={onDeactivate}
           onEdit={onEdit}
         />
       )}
-      {(isGroupedView || selectedFilter === 'inactive') && (
+      {isGroupedView && (
         <StatusGroup
           agents={inactiveAgents}
           label="사용 안함"
-          layout={layout}
           actionDisabled={actionDisabled}
           onActivate={onActivate}
           onDeactivate={onDeactivate}

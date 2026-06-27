@@ -11,7 +11,6 @@ import {
   AGENT_STUDIO_MULTI_ACTIVE_LIST_FIXTURE,
 } from '@/features/agent-studio/fixtures/agentStudioFixtures';
 import type { AgentStudioCardModel, AgentStudioFilter } from '@/features/agent-studio/types/agentStudioModel';
-import { cn } from '@/shared/utils/cn';
 
 import { DESIGN_SYSTEM_FILE_KEY } from './caseConstants';
 
@@ -20,7 +19,6 @@ function AgentStudioListFixturePreview() {
   const [showMineOnly, setShowMineOnly] = useState(false);
   const [agents, setAgents] = useState<readonly AgentStudioCardModel[]>(AGENT_STUDIO_MULTI_ACTIVE_LIST_FIXTURE);
   const visibleAgents = showMineOnly ? agents.filter((agent) => agent.isEditable) : agents;
-  const isGroupedView = selectedFilter === 'all';
 
   const updateStatus = (agentId: string, status: AgentStudioCardModel['status']) => {
     setAgents((current) => current.map((item) => (item.id === agentId ? { ...item, status } : item)));
@@ -41,7 +39,7 @@ function AgentStudioListFixturePreview() {
           />
           <AgentCreateButton />
         </div>
-        <div className={cn('flex w-full flex-wrap items-start gap-6', !isGroupedView && 'min-h-52.75')}>
+        <div className="flex w-full flex-wrap items-start gap-6">
           <AgentStudioListContent
             agents={visibleAgents}
             selectedFilter={selectedFilter}
@@ -132,12 +130,13 @@ export const agentStudioListFigmaCase: FigmaLabCase = {
       {
         state: 'filterTabs',
         fixture: 'AGENT_STUDIO_MULTI_ACTIVE_LIST_FIXTURE',
-        expected: '운영중, 제작중, 사용 안함 탭을 클릭하면 해당 상태의 카드 또는 빈 컬럼만 표시됩니다.',
+        expected: '운영중, 제작중, 사용 안함 탭을 클릭하면 해당 상태의 3열 카드 그리드가 표시되고, 비어 있으면 텍스트 안내만 표시됩니다.',
       },
     ],
     notes: [
       '사용 안함 Agent 카드 본문은 node 14844:104963 기준으로 다시 운영하기 CTA를 표시합니다.',
       '운영중 빈 컬럼은 node 14844:104803 구조를 기준으로 상태 색상과 문구를 맞춥니다.',
+      '개별 필터 선택 시 카드 그리드는 node 14865:59839와 node 14865:60005의 3열 카드 배치를 기준으로 합니다.',
     ],
   },
   states: ['fixtureDefault', 'activeEmptyAfterDeactivate', 'filterTabs'],

@@ -5,8 +5,6 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 
-import { cn } from '@/shared/utils/cn';
-
 import { AGENT_STUDIO_FILTERS } from '../../fixtures/agentStudioFixtures';
 import { inquiryAutomationsMutations } from '../../queries/inquiryAutomations.mutations';
 import { inquiryAutomationsQueries } from '../../queries/inquiryAutomations.queries';
@@ -34,7 +32,6 @@ export default function AgentStudioPage() {
     () => (showMineOnly ? agents.filter((agent) => agent.isEditable) : agents),
     [agents, showMineOnly],
   );
-  const isGroupedView = selectedFilter === 'all';
 
   const updateStatus = (agent: AgentStudioCardModel, status: 'active' | 'inactive') => {
     if (!agent.agentSpecId || !agent.isEditable) return;
@@ -61,13 +58,12 @@ export default function AgentStudioPage() {
           />
           <AgentCreateButton onClick={() => router.push('/agent-studio/new')} />
         </div>
-        <div className={cn('flex w-full flex-wrap items-start gap-6', !isGroupedView && 'min-h-52.75')}>
+        <div className="flex w-full flex-wrap items-start gap-6">
           {automationQuery.isLoading && (
             <AgentEmptyColumn
               label="운영중"
               title="Agent를 불러오고 있습니다."
               description="잠시만 기다려주세요."
-              layout={isGroupedView ? 'grouped' : 'flat'}
             />
           )}
           {automationQuery.isError && (
@@ -75,7 +71,6 @@ export default function AgentStudioPage() {
               label="운영중"
               title="Agent 목록을 불러오지 못했습니다."
               description="잠시 후 다시 시도해주세요."
-              layout={isGroupedView ? 'grouped' : 'flat'}
             />
           )}
           {!automationQuery.isLoading && !automationQuery.isError && (

@@ -17,7 +17,7 @@ interface AgentCardProps {
   onDeactivate?: (agent: AgentStudioCardModel) => void;
   onEdit?: (agent: AgentStudioCardModel) => void;
   actionDisabled?: boolean;
-  layout?: 'grouped' | 'flat';
+  layout?: 'section' | 'grid';
 }
 
 export default function AgentCard({
@@ -26,14 +26,14 @@ export default function AgentCard({
   onDeactivate,
   onEdit,
   actionDisabled = false,
-  layout = 'grouped',
+  layout = 'section',
 }: AgentCardProps) {
   const isInactive = agent.status === 'inactive';
   const canRunAutomationActions = agent.isEditable && Boolean(agent.agentSpecId);
   const safeAuthorProfileImageUrl =
     agent.authorProfileImageUrl && isSafeUrl(agent.authorProfileImageUrl) ? agent.authorProfileImageUrl : null;
   const containerClassName =
-    layout === 'flat'
+    layout === 'grid'
       ? 'border-line-normal-normal bg-fill-normal-assistive-dark flex min-w-80 flex-none basis-[calc((100%_-_48px)/3)] flex-col overflow-hidden rounded-xl border p-5'
       : 'border-line-normal-normal bg-fill-normal-assistive-dark flex w-full flex-col overflow-hidden rounded-xl border p-5';
 
@@ -61,7 +61,7 @@ export default function AgentCard({
       <article className={containerClassName}>
         <div
           className={
-            layout === 'flat'
+            layout === 'grid'
               ? 'flex min-h-0 w-full flex-1 flex-col gap-3 overflow-hidden'
               : 'flex w-full flex-col gap-3'
           }
@@ -89,7 +89,7 @@ export default function AgentCard({
     <article className={containerClassName}>
       <div
         className={
-          layout === 'flat' ? 'flex min-h-0 w-full flex-1 flex-col gap-5 overflow-hidden' : 'flex w-full flex-col gap-5'
+          layout === 'grid' ? 'flex min-h-0 w-full flex-1 flex-col gap-5 overflow-hidden' : 'flex w-full flex-col gap-5'
         }
       >
         <div className="flex w-full flex-col gap-3">
