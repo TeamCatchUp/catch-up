@@ -81,14 +81,8 @@ def test_scheduler_registers_one_sequential_v2_backfill_job(monkeypatch) -> None
 
 def test_vector_store_v2_backfill_sequence_orders_providers() -> None:
     assert [spec.key for spec in scheduler.VECTOR_STORE_V2_BACKFILL_SEQUENCE] == [
-        "jira/issue",
         "confluence/page",
         "confluence/blogpost",
-        "github/pr",
-        "github/issue",
-        "channel_talk/user_chat",
-        "channel_talk/document_article",
-        "slack/message",
     ]
 
 
