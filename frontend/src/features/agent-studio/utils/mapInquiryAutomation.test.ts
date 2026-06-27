@@ -12,6 +12,7 @@ const baseAutomation: InquiryAutomationItem = {
   guide_instruction: '짧게 답변',
   quiet_period_seconds: 60,
   trigger_id: 100,
+  is_editable: true,
 };
 
 describe('mapInquiryAutomation', () => {
@@ -25,6 +26,7 @@ describe('mapInquiryAutomation', () => {
       authorName: '-',
       authorProfileImageUrl: null,
       updatedAtLabel: '-',
+      isEditable: true,
     });
   });
 
@@ -46,8 +48,8 @@ describe('mapInquiryAutomation', () => {
     });
   });
 
-  it('maps missing guide instruction to a dash description', () => {
-    expect(mapInquiryAutomationToAgentCard({ ...baseAutomation, guide_instruction: null })?.description).toBe('-');
+  it('maps missing guide instruction to an empty description', () => {
+    expect(mapInquiryAutomationToAgentCard({ ...baseAutomation, guide_instruction: null })?.description).toBe('');
   });
 
   it('maps inactive status without changing the fixed copy', () => {

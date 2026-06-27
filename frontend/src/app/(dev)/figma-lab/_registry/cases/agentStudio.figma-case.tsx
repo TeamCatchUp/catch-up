@@ -2,23 +2,24 @@ import { useState } from 'react';
 
 import type { FigmaLabCase } from '@/app/(dev)/figma-lab/_registry/types';
 import AgentStudioEditorPage from '@/features/agent-studio/components/editor/AgentStudioEditorPage';
-import AgentCreateButton from '@/features/agent-studio/components/list/AgentCreateButton';
-import AgentFilterTabs from '@/features/agent-studio/components/list/AgentFilterTabs';
+import AgentCreateButton from '@/features/agent-studio/components/list/actions/AgentCreateButton';
 import AgentStudioHeader from '@/features/agent-studio/components/list/AgentStudioHeader';
-import AgentStudioListContent from '@/features/agent-studio/components/list/AgentStudioListContent';
+import AgentStudioListContent from '@/features/agent-studio/components/list/content/AgentStudioListContent';
+import AgentFilterTabs from '@/features/agent-studio/components/list/filters/AgentFilterTabs';
+import AgentStudioListSkeleton from '@/features/agent-studio/components/list/states/AgentStudioListSkeleton';
 import {
   AGENT_STUDIO_FILTERS,
   AGENT_STUDIO_MULTI_ACTIVE_LIST_FIXTURE,
 } from '@/features/agent-studio/fixtures/agentStudioFixtures';
 import type { AgentStudioCardModel, AgentStudioFilter } from '@/features/agent-studio/types/agentStudioModel';
-import { cn } from '@/shared/utils/cn';
 
 import { DESIGN_SYSTEM_FILE_KEY } from './caseConstants';
 
 function AgentStudioListFixturePreview() {
   const [selectedFilter, setSelectedFilter] = useState<AgentStudioFilter>('all');
+  const [showMineOnly, setShowMineOnly] = useState(false);
   const [agents, setAgents] = useState<readonly AgentStudioCardModel[]>(AGENT_STUDIO_MULTI_ACTIVE_LIST_FIXTURE);
-  const isGroupedView = selectedFilter === 'all';
+  const visibleAgents = showMineOnly ? agents.filter((agent) => agent.isEditable) : agents;
 
   const updateStatus = (agentId: string, status: AgentStudioCardModel['status']) => {
     setAgents((current) => current.map((item) => (item.id === agentId ? { ...item, status } : item)));
@@ -30,12 +31,18 @@ function AgentStudioListFixturePreview() {
       <section className="flex flex-col items-center gap-3 px-16 pt-6 pb-30">
         <h1 className="text-heading-large text-text-normal-normal w-full">우리 팀의 Agent</h1>
         <div className="flex w-full items-center gap-5">
-          <AgentFilterTabs filters={AGENT_STUDIO_FILTERS} selected={selectedFilter} onChange={setSelectedFilter} />
+          <AgentFilterTabs
+            filters={AGENT_STUDIO_FILTERS}
+            selected={selectedFilter}
+            showMineOnly={showMineOnly}
+            onChange={setSelectedFilter}
+            onShowMineOnlyChange={setShowMineOnly}
+          />
           <AgentCreateButton />
         </div>
-        <div className={cn('flex w-full flex-wrap items-start gap-6', !isGroupedView && 'min-h-52.75')}>
+        <div className="flex w-full flex-wrap items-start gap-6">
           <AgentStudioListContent
-            agents={agents}
+            agents={visibleAgents}
             selectedFilter={selectedFilter}
             onActivate={(target) => updateStatus(target.id, 'active')}
             onDeactivate={(target) => updateStatus(target.id, 'inactive')}
@@ -50,6 +57,32 @@ function AgentStudioListPreview() {
   return (
     <div style={{ minHeight: 720 }}>
       <AgentStudioListFixturePreview />
+    </div>
+  );
+}
+
+function AgentStudioListLoadingPreview() {
+  return (
+    <div style={{ minHeight: 720 }}>
+      <div className="bg-background-normal-normal flex min-h-full flex-col">
+        <AgentStudioHeader />
+        <section className="flex flex-col items-center gap-3 px-16 pt-6 pb-30">
+          <h1 className="text-heading-large text-text-normal-normal w-full">우리 팀의 Agent</h1>
+          <div className="flex w-full items-center gap-5">
+            <AgentFilterTabs
+              filters={AGENT_STUDIO_FILTERS}
+              selected="all"
+              showMineOnly={false}
+              onChange={() => undefined}
+              onShowMineOnlyChange={() => undefined}
+            />
+            <AgentCreateButton />
+          </div>
+          <div className="flex w-full flex-wrap items-start gap-6">
+            <AgentStudioListSkeleton selectedFilter="all" />
+          </div>
+        </section>
+      </div>
     </div>
   );
 }
@@ -124,12 +157,13 @@ export const agentStudioListFigmaCase: FigmaLabCase = {
       {
         state: 'filterTabs',
         fixture: 'AGENT_STUDIO_MULTI_ACTIVE_LIST_FIXTURE',
-        expected: '운영중, 제작중, 사용 안함 탭을 클릭하면 해당 상태의 카드 또는 빈 컬럼만 표시됩니다.',
+        expected: '운영중, 제작중, 사용 안함 탭을 클릭하면 해당 상태의 3열 카드 그리드가 표시되고, 비어 있으면 텍스트 안내만 표시됩니다.',
       },
     ],
     notes: [
       '사용 안함 Agent 카드 본문은 node 14844:104963 기준으로 다시 운영하기 CTA를 표시합니다.',
       '운영중 빈 컬럼은 node 14844:104803 구조를 기준으로 상태 색상과 문구를 맞춥니다.',
+      '개별 필터 선택 시 카드 그리드는 node 14865:59839와 node 14865:60005의 3열 카드 배치를 기준으로 합니다.',
     ],
   },
   states: ['fixtureDefault', 'activeEmptyAfterDeactivate', 'filterTabs'],
@@ -198,6 +232,85 @@ export const agentStudioListFigmaCase: FigmaLabCase = {
     },
   ],
   render: () => <AgentStudioListPreview />,
+};
+
+export const agentStudioListLoadingFigmaCase: FigmaLabCase = {
+  id: 'agent-studio-list-loading',
+  groupId: 'agent-studio',
+  owner: 'feature',
+  designSource: 'dev-preview',
+  component: 'AgentStudioListSkeleton',
+  state: 'loading',
+  kind: 'page',
+  title: 'Agent Studio / List Loading',
+  description: 'Agent Studio 목록 데이터 초기 로딩 스켈레톤을 확인합니다.',
+  targetRoute: '/agent-studio',
+  viewport: {
+    width: 1184,
+    height: 720,
+  },
+  layout: {
+    shell: 'App shell content without SNB',
+    container: 'Header -> team agent section -> status section skeletons',
+    stack: 'Page header -> title -> filter row -> skeleton columns',
+    responsive: ['desktop source frame for this pass'],
+    relationships: [
+      {
+        from: 'Filter row',
+        to: 'Loading skeleton sections',
+        figma: '12px vertical gap',
+        code: 'gap-3',
+      },
+      {
+        from: 'Skeleton columns',
+        to: 'Skeleton columns',
+        figma: '24px horizontal gap',
+        code: 'gap-6',
+      },
+    ],
+  },
+  data: {
+    source: 'static',
+    fixtures: ['AgentStudioListSkeleton', 'AGENT_STUDIO_FILTERS'],
+    states: [
+      {
+        state: 'loading',
+        fixture: 'selectedFilter=all',
+        expected: '초기 목록 로딩 중 상태별 섹션 형태의 카드 스켈레톤 3개를 표시합니다.',
+      },
+    ],
+  },
+  states: ['loading'],
+  reuse: [
+    {
+      figmaPart: 'Status sections',
+      checked: 'src/features/agent-studio/components/list/content/AgentStatusSection.tsx',
+      decision: 'feature-local',
+      reason: '상태별 섹션 색상과 간격을 로딩 상태에서도 유지합니다.',
+    },
+    {
+      figmaPart: 'Skeleton primitives',
+      checked: 'src/shared/components/ui/skeleton.tsx',
+      decision: 'reuse',
+      reason: '공통 Skeleton의 semantic fill과 pulse animation을 사용합니다.',
+    },
+  ],
+  tokens: [
+    {
+      figma: 'card row gap',
+      value: '24px',
+      code: 'gap-6',
+      decision: 'scale-mapped',
+    },
+    {
+      figma: 'skeleton fill',
+      value: 'fill/normal/interaction/disable',
+      code: 'bg-fill-normal-interaction-disable',
+      decision: 'matched',
+    },
+  ],
+  notes: ['Figma 원본 프레임이 아닌 Agent Studio 초기 로딩 UX를 검증하는 dev-preview 케이스입니다.'],
+  render: () => <AgentStudioListLoadingPreview />,
 };
 
 export const agentStudioEditorFigmaCase: FigmaLabCase = {

@@ -3,6 +3,7 @@ import { HOME_DOCS_FIGMA_LAB_CASES } from './features/home-docs';
 import { HYBRID_SEARCH_FIGMA_LAB_CASES } from './features/hybrid-search';
 import { ORIGINAL_PANEL_FIGMA_LAB_CASES_BY_FEATURE } from './features/original-panel';
 import { SHARED_QUERY_FILTER_FIGMA_LAB_CASES } from './features/shared-query-filter';
+import { SHARED_STATUS_FIGMA_LAB_CASES } from './features/shared-status';
 import { FIGMA_LAB_GROUPS, findFigmaLabGroup, isFigmaLabGroupId } from './groups';
 import type { FigmaLabCase, FigmaLabGroupId } from './types';
 
@@ -16,6 +17,7 @@ export const FIGMA_LAB_CASES: readonly FigmaLabCase[] = [
   ...HOME_DOCS_FIGMA_LAB_CASES,
   ...AGENT_STUDIO_FIGMA_LAB_CASES,
   ...SHARED_QUERY_FILTER_FIGMA_LAB_CASES,
+  ...SHARED_STATUS_FIGMA_LAB_CASES,
   ...ORIGINAL_PANEL_FIGMA_LAB_CASES_BY_FEATURE,
 ];
 

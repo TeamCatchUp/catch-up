@@ -22,6 +22,7 @@ export const AGENT_STUDIO_LIST_FIXTURE: readonly AgentStudioCardModel[] = [
     authorName: '이진수',
     authorProfileImageUrl: null,
     updatedAtLabel: '2020.00.00(월)',
+    isEditable: true,
   },
   {
     id: 'inactive-inquiry-report-agent',
@@ -32,6 +33,7 @@ export const AGENT_STUDIO_LIST_FIXTURE: readonly AgentStudioCardModel[] = [
     authorName: '이진수',
     authorProfileImageUrl: null,
     updatedAtLabel: '2020.00.00(월)',
+    isEditable: true,
   },
 ];
 
@@ -45,6 +47,7 @@ export const AGENT_STUDIO_MULTI_ACTIVE_LIST_FIXTURE: readonly AgentStudioCardMod
     authorName: '이진수',
     authorProfileImageUrl: null,
     updatedAtLabel: '2020.00.00(월)',
+    isEditable: true,
   },
   {
     id: 'inquiry-report-agent-secondary',
@@ -55,6 +58,7 @@ export const AGENT_STUDIO_MULTI_ACTIVE_LIST_FIXTURE: readonly AgentStudioCardMod
     authorName: '이진수',
     authorProfileImageUrl: null,
     updatedAtLabel: '2020.00.00(월)',
+    isEditable: true,
   },
   {
     id: 'inquiry-report-agent-tertiary',
@@ -65,6 +69,7 @@ export const AGENT_STUDIO_MULTI_ACTIVE_LIST_FIXTURE: readonly AgentStudioCardMod
     authorName: '이진수',
     authorProfileImageUrl: null,
     updatedAtLabel: '2020.00.00(월)',
+    isEditable: true,
   },
 ];
 

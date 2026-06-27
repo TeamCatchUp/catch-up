@@ -3,24 +3,25 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
-import { toast } from 'sonner';
 
-import { cn } from '@/shared/utils/cn';
+import { toast } from '@/shared/components/ui/toast';
 
 import { AGENT_STUDIO_FILTERS } from '../../fixtures/agentStudioFixtures';
 import { inquiryAutomationsMutations } from '../../queries/inquiryAutomations.mutations';
 import { inquiryAutomationsQueries } from '../../queries/inquiryAutomations.queries';
 import type { AgentStudioCardModel, AgentStudioFilter } from '../../types/agentStudioModel';
 import { mapInquiryAutomationsToAgentCards } from '../../utils/mapInquiryAutomation';
-import AgentCreateButton from './AgentCreateButton';
-import AgentEmptyColumn from './AgentEmptyColumn';
-import AgentFilterTabs from './AgentFilterTabs';
+import AgentCreateButton from './actions/AgentCreateButton';
 import AgentStudioHeader from './AgentStudioHeader';
-import AgentStudioListContent from './AgentStudioListContent';
+import AgentStudioListContent from './content/AgentStudioListContent';
+import AgentFilterTabs from './filters/AgentFilterTabs';
+import AgentEmptyColumn from './states/AgentEmptyColumn';
+import AgentStudioListSkeleton from './states/AgentStudioListSkeleton';
 
 export default function AgentStudioPage() {
   const router = useRouter();
   const [selectedFilter, setSelectedFilter] = useState<AgentStudioFilter>('all');
+  const [showMineOnly, setShowMineOnly] = useState(false);
   const automationQuery = useQuery(inquiryAutomationsQueries.list());
   const statusMutation = useMutation({
     ...inquiryAutomationsMutations.updateStatus(),
@@ -29,11 +30,19 @@ export default function AgentStudioPage() {
     },
   });
   const agents = useMemo(() => mapInquiryAutomationsToAgentCards(automationQuery.data ?? []), [automationQuery.data]);
-  const isGroupedView = selectedFilter === 'all';
+  const visibleAgents = useMemo(
+    () => (showMineOnly ? agents.filter((agent) => agent.isEditable) : agents),
+    [agents, showMineOnly],
+  );
 
   const updateStatus = (agent: AgentStudioCardModel, status: 'active' | 'inactive') => {
-    if (!agent.agentSpecId) return;
+    if (!agent.agentSpecId || !agent.isEditable) return;
     statusMutation.mutate({ agentSpecId: agent.agentSpecId, body: { status } });
+  };
+
+  const editAgent = (agent: AgentStudioCardModel) => {
+    if (!agent.agentSpecId || !agent.isEditable) return;
+    router.push(`/agent-studio/${agent.agentSpecId}/edit`);
   };
 
   return (
@@ -42,33 +51,32 @@ export default function AgentStudioPage() {
       <section className="flex flex-col items-center gap-3 px-16 pt-6 pb-30">
         <h1 className="text-heading-large text-text-normal-normal w-full">우리 팀의 Agent</h1>
         <div className="flex w-full items-center gap-5">
-          <AgentFilterTabs filters={AGENT_STUDIO_FILTERS} selected={selectedFilter} onChange={setSelectedFilter} />
+          <AgentFilterTabs
+            filters={AGENT_STUDIO_FILTERS}
+            selected={selectedFilter}
+            showMineOnly={showMineOnly}
+            onChange={setSelectedFilter}
+            onShowMineOnlyChange={setShowMineOnly}
+          />
           <AgentCreateButton onClick={() => router.push('/agent-studio/new')} />
         </div>
-        <div className={cn('flex w-full flex-wrap items-start gap-6', !isGroupedView && 'min-h-52.75')}>
-          {automationQuery.isLoading && (
-            <AgentEmptyColumn
-              label="운영중"
-              title="Agent를 불러오고 있습니다."
-              description="잠시만 기다려주세요."
-              layout={isGroupedView ? 'grouped' : 'flat'}
-            />
-          )}
+        <div className="flex w-full flex-wrap items-start gap-6">
+          {automationQuery.isLoading && <AgentStudioListSkeleton selectedFilter={selectedFilter} />}
           {automationQuery.isError && (
             <AgentEmptyColumn
               label="운영중"
               title="Agent 목록을 불러오지 못했습니다."
               description="잠시 후 다시 시도해주세요."
-              layout={isGroupedView ? 'grouped' : 'flat'}
             />
           )}
           {!automationQuery.isLoading && !automationQuery.isError && (
             <AgentStudioListContent
-              agents={agents}
+              agents={visibleAgents}
               selectedFilter={selectedFilter}
               actionDisabled={statusMutation.isPending}
               onActivate={(target) => updateStatus(target, 'active')}
               onDeactivate={(target) => updateStatus(target, 'inactive')}
+              onEdit={editAgent}
             />
           )}
         </div>

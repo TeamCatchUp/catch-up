@@ -4,16 +4,21 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { cn } from '@/shared/utils/cn';
 
-import RequiredMarker from './RequiredMarker';
-
 interface AgentInstructionFieldProps {
   value: string;
   onChange: (value: string) => void;
   maxLength: number;
   hintText: string;
+  disabled?: boolean;
 }
 
-export default function AgentInstructionField({ value, onChange, maxLength, hintText }: AgentInstructionFieldProps) {
+export default function AgentInstructionField({
+  value,
+  onChange,
+  maxLength,
+  hintText,
+  disabled = false,
+}: AgentInstructionFieldProps) {
   const [isFocused, setIsFocused] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const hasValue = value.length > 0;
@@ -42,7 +47,6 @@ export default function AgentInstructionField({ value, onChange, maxLength, hint
     <label className="flex w-full flex-col gap-3">
       <span className="text-heading-small text-text-normal-normal flex items-start gap-1">
         답변 초안, 어떤 규칙으로 쓸까요?
-        <RequiredMarker />
       </span>
       <div
         className="bg-fill-normal-normal flex min-h-24.5 w-full items-center rounded-xl border border-solid p-4 transition-colors"
@@ -54,6 +58,7 @@ export default function AgentInstructionField({ value, onChange, maxLength, hint
             aria-invalid={isError}
             ref={textareaRef}
             className="text-body-small text-text-normal-normal placeholder:text-text-normal-assistive max-h-50 min-h-5.75 w-full resize-none overflow-y-auto bg-transparent p-0 leading-[1.5] outline-none"
+            disabled={disabled}
             maxLength={maxLength}
             placeholder={hintText}
             rows={1}

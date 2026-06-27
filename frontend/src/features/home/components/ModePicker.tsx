@@ -72,12 +72,12 @@ export default function ModePicker({ mode }: ModePickerProps) {
                 transition={{ type: 'spring', stiffness: 500, damping: 38 }}
               />
             )}
-            <opt.Icon className="relative z-10 h-6 w-6 shrink-0" />
-            <span className="text-heading-small relative z-10 whitespace-nowrap">{opt.label}</span>
+            <opt.Icon className="z-base relative h-6 w-6 shrink-0" />
+            <span className="text-heading-small z-base relative whitespace-nowrap">{opt.label}</span>
             {opt.value === 'docs' && (
               <Badge
                 aria-label="신규"
-                className="bg-fill-normal-interaction-pressed-hover text-accent-red-default relative z-10 size-4.5 justify-center p-0"
+                className="bg-fill-normal-interaction-pressed-hover text-accent-red-default z-base relative size-4.5 justify-center p-0"
               >
                 N
               </Badge>

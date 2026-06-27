@@ -12,7 +12,13 @@ export interface FigmaLabViewport {
 }
 
 export type FigmaLabCaseKind = 'component' | 'section' | 'page';
-export type FigmaLabGroupId = 'hybrid-search' | 'home-docs' | 'agent-studio' | 'shared-query-filter' | 'original-panel';
+export type FigmaLabGroupId =
+  | 'hybrid-search'
+  | 'home-docs'
+  | 'agent-studio'
+  | 'shared-query-filter'
+  | 'shared-status'
+  | 'original-panel';
 export type FigmaLabCaseOwner = 'feature' | 'shared';
 export type FigmaLabDesignSource = 'figma' | 'dev-preview';
 
