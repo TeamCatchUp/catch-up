@@ -528,7 +528,7 @@ class ChatService:
         session_id: uuid.UUID,
         event_store: ChatEventStore,
         tool_filters: list[SourceType] | None = None,
-        query: str = None,
+        query: str | None = None,
         additional_context: str | None = None,
         mode: Literal["fast", "standard"] = "standard",
         is_slack: bool = False,
