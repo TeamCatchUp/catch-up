@@ -2,6 +2,7 @@ from urllib.parse import urlparse
 
 from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
+from mcp.types import ToolAnnotations
 
 from catchup.configs.config import auth_settings
 from catchup.configs.config import settings
@@ -35,13 +36,18 @@ mcp = FastMCP(
     transport_security=_build_transport_security(),
 )
 
+_READ_ONLY = ToolAnnotations(readOnlyHint=True)
+_WRITE_ADDITIVE = ToolAnnotations(readOnlyHint=False, destructiveHint=False)
+_WRITE_DESTRUCTIVE = ToolAnnotations(readOnlyHint=False, destructiveHint=True)
+
+
 def _register_tools(mcp: FastMCP) -> None:
     """MCP 인스턴스에 모든 툴을 등록한다."""
-    mcp.add_tool(search_documents)
-    mcp.add_tool(read_documents)
+    mcp.add_tool(search_documents, annotations=_READ_ONLY)
+    mcp.add_tool(read_documents, annotations=_READ_ONLY)
     if settings.MCP_V2_SAMPLING_ENABLED:
-        mcp.add_tool(sample_v2_knowledge_store)
-        mcp.add_tool(get_v2_backfill_state)
+        mcp.add_tool(sample_v2_knowledge_store, annotations=_READ_ONLY)
+        mcp.add_tool(get_v2_backfill_state, annotations=_READ_ONLY)
 
 
 _register_tools(mcp)
