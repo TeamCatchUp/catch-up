@@ -98,6 +98,7 @@ class ChatStreamProcessor:
             token = event["data"].get("token", "")
             if token:
                 self.context.has_streamed = True
+                # clarify 토큰은 accumulated_content에 누적되지 않는다 — partial save 미적용.
                 yield ChatStreamingTokenResponse(session_id=self.session_id, token=token)
 
         # 4. process 스트리밍 (supervisor 등에서 adispatch_custom_event로 발송)

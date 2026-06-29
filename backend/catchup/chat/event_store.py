@@ -14,6 +14,7 @@ CHAT_STREAM_TTL = 3600
 _DONE_SENTINEL = {"type": "DONE"}
 _XREAD_BLOCK_MS = 30_000
 _XREAD_COUNT = 50
+_XREAD_MAX_RETRIES = 120  # 120 × 30s = 1시간
 
 
 class ChatEventStore:
@@ -44,13 +45,23 @@ class ChatEventStore:
         redis = await get_stream_redis_client()
         key = self._key(session_id)
         last_id = "0"
+        retries = 0
 
         while True:
             results = await redis.xread(
                 {key: last_id}, count=_XREAD_COUNT, block=_XREAD_BLOCK_MS
             )
             if not results:
+                retries += 1
+                if retries >= _XREAD_MAX_RETRIES:
+                    logger.warning(
+                        "subscribe_timeout",
+                        session_id=session_id,
+                        retries=retries,
+                    )
+                    return
                 continue
+            retries = 0  # reset on successful read
 
             for _stream_key, messages in results:
                 for msg_id, fields in messages:

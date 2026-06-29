@@ -10,6 +10,9 @@ import structlog
 
 logger = structlog.get_logger()
 
+# _tasks는 프로세스 내 메모리에만 존재한다. 멀티워커 환경에서는 세션 요청이
+# 다른 워커로 라우팅되면 중복 태스크가 생성될 수 있다. 현재 배포는 단일
+# uvicorn 프로세스 기준이다. 멀티워커 전환 시 Redis SETNX 기반 분산 락 필요.
 _tasks: dict[str, asyncio.Task] = {}
 
 

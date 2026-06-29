@@ -2,6 +2,7 @@ import asyncio
 import time
 import uuid
 from datetime import datetime
+from datetime import timezone
 from typing import Any
 from typing import AsyncGenerator
 from typing import Literal
@@ -499,7 +500,7 @@ class ChatService:
             return
 
         pipeline_result: list[dict] = [
-            {"partial": True, "cancelled_at": datetime.utcnow().isoformat()}
+            {"partial": True, "cancelled_at": datetime.now(timezone.utc).isoformat()}
         ]
         if processor.context.pipeline_events:
             pipeline_result.extend(processor.context.pipeline_events)
@@ -605,7 +606,13 @@ class ChatService:
                 else None,
             )
             if room_id is not None:
-                await self._save_partial_if_any(processor, room_id, trace_id)
+                try:
+                    await self._save_partial_if_any(processor, room_id, trace_id)
+                except Exception:
+                    logger.exception(
+                        "partial_save_failed_on_cancel",
+                        session_id=str(session_id),
+                    )
             emit_audit_event(
                 action=ChatAction.GENERATE_RESPONSE,
                 status=AuditStatus.FAILURE,
@@ -647,7 +654,13 @@ class ChatService:
             )
 
         finally:
-            await event_store.publish_done(str(session_id))
+            try:
+                await event_store.publish_done(str(session_id))
+            except Exception:
+                logger.exception(
+                    "publish_done_failed",
+                    session_id=str(session_id),
+                )
 
             elapsed = time.perf_counter() - start
             logger.info(
