@@ -1,6 +1,7 @@
 import asyncio
 import time
 import uuid
+from datetime import datetime
 from typing import Any
 from typing import AsyncGenerator
 from typing import Literal
@@ -17,6 +18,7 @@ from catchup.audit.base import AuditStatus
 from catchup.audit.emitters import emit_audit_event
 from catchup.audit.metadata import ChatAuditMetadata
 from catchup.chat.chat_room import generate_chat_room_title
+from catchup.chat.event_store import ChatEventStore
 from catchup.chat.schemas import ChatResponse
 from catchup.chat.schemas import StreamEvent
 from catchup.chat.stream_processor import ChatStreamProcessor
@@ -482,6 +484,201 @@ class ChatService:
             logger.info("langgraph_checkpointer_flushed", session_id=str(session_id))
 
         return deleted_query
+
+    async def _save_partial_if_any(
+        self,
+        processor: ChatStreamProcessor | None,
+        room_id: int,
+        trace_id: str | None,
+    ) -> None:
+        """취소 시점까지 누적된 내용이 있으면 partial로 저장한다."""
+        if processor is None:
+            return
+        content = processor.context.accumulated_content.strip()
+        if not content:
+            return
+
+        pipeline_result: list[dict] = [
+            {"partial": True, "cancelled_at": datetime.utcnow().isoformat()}
+        ]
+        if processor.context.pipeline_events:
+            pipeline_result.extend(processor.context.pipeline_events)
+
+        sources = processor.context.accumulated_sources or None
+
+        await self._save_message_content(
+            room_id=room_id,
+            role="assistant",
+            content=content,
+            sources=sources,
+            trace_id=trace_id,
+            pipeline_result=pipeline_result,
+        )
+        logger.info(
+            "partial_content_saved",
+            room_id=room_id,
+            content_length=len(content),
+        )
+
+    @observe(name="chat-run-background")
+    async def run_background(
+        self,
+        global_context: GlobalContext,
+        prompt_settings: PromptSettings,
+        session_id: uuid.UUID,
+        event_store: ChatEventStore,
+        tool_filters: list[SourceType] | None = None,
+        query: str = None,
+        additional_context: str | None = None,
+        mode: Literal["fast", "standard"] = "standard",
+        is_slack: bool = False,
+    ) -> None:
+        """SSE와 독립된 백그라운드 태스크로 그래프를 실행하고 이벤트를 Redis에 발행한다."""
+        start = time.perf_counter()
+        ChatTokenUsageContext.init()
+
+        base_config = None
+        processor = None
+        values = None
+        saved_message_id: int | None = None
+        trace_id: str | None = None
+        room_id: int | None = None
+
+        try:
+            room_id = await self._ensure_chat_room(
+                global_context, session_id, query, is_slack=is_slack
+            )
+
+            app = self._get_app()
+            base_config, invoke_config, trace_id = self._setup_config(session_id)
+            lg_current_state = await app.aget_state(base_config)
+
+            input_messages = await run_in_threadpool(
+                self._resolve_input_messages,
+                session_id,
+                query,
+                lg_current_state,
+                additional_context,
+            )
+
+            saved_message_id = await self._save_message_content(
+                room_id, "user", query, user_id=global_context.user.id
+            )
+
+            inputs = {
+                "messages": input_messages,
+                "original_query": query,
+                "global_context": global_context,
+                "tool_filters": tool_filters,
+                "prompt_settings": prompt_settings,
+                "max_pipeline_type": _MODE_CEILING.get(mode, "complex"),
+                "vector_search_queries": [],
+                "agent_iteration": 0,
+                "accumulated_docs": [],
+                "agent_seen_doc_ids": [],
+                "confirmed_essential_doc_ids": [],
+                "agent_stop_reason": None,
+                "token_breakdown": {},
+                "rerank_count": 0,
+                "slack_thread_context": additional_context,
+            }
+
+            processor = ChatStreamProcessor(
+                session_id=session_id,
+                room_id=room_id,
+                save_message=self._save_message_content,
+                langfuse_trace_id=trace_id,
+            )
+
+            async for event in app.astream_events(inputs, invoke_config, version="v2"):
+                async for parsed_event in processor.process(event):
+                    await event_store.publish(str(session_id), parsed_event)
+
+        except asyncio.CancelledError:
+            elapsed = time.perf_counter() - start
+            logger.warning(
+                "background_task_cancelled",
+                session_id=str(session_id),
+                elapsed_seconds=round(elapsed, 2),
+                cancelled_at_node=processor.context.current_node
+                if processor is not None
+                else None,
+            )
+            if room_id is not None:
+                await self._save_partial_if_any(processor, room_id, trace_id)
+            emit_audit_event(
+                action=ChatAction.GENERATE_RESPONSE,
+                status=AuditStatus.FAILURE,
+                level=AuditLevel.WARNING,
+                metadata=ChatAuditMetadata(
+                    context="background_task_cancelled",
+                    session_id=session_id,
+                ),
+            )
+
+        except Exception:
+            logger.exception("background_streaming_error", session_id=str(session_id))
+
+            if saved_message_id is not None and room_id is not None:
+                partial_saved = (
+                    processor is not None
+                    and bool(processor.context.accumulated_content.strip())
+                )
+                if partial_saved:
+                    await self._save_partial_if_any(processor, room_id, trace_id)
+                else:
+                    await self.reset_last_turn(room_id=room_id, session_id=session_id)
+
+            emit_audit_event(
+                action=ChatAction.GENERATE_RESPONSE,
+                status=AuditStatus.FAILURE,
+                level=AuditLevel.ERROR,
+                metadata=ChatAuditMetadata(
+                    session_id=session_id, context="background_streaming_error"
+                ),
+            )
+
+        else:
+            emit_audit_event(
+                action=ChatAction.GENERATE_RESPONSE,
+                status=AuditStatus.SUCCESS,
+                level=AuditLevel.INFO,
+                metadata=ChatAuditMetadata(session_id=session_id),
+            )
+
+        finally:
+            await event_store.publish_done(str(session_id))
+
+            elapsed = time.perf_counter() - start
+            logger.info(
+                "background_task_finished",
+                session_id=str(session_id),
+                duration=round(elapsed, 4),
+            )
+
+            if base_config is not None:
+                try:
+                    lg_current_state = await self._app.aget_state(base_config)
+                    values = lg_current_state.values
+                    self._process_token_usage_stats(base_config, values, global_context)
+
+                    if settings.ENABLE_LANGFUSE:
+                        client = get_langfuse_client()
+                        if client:
+                            await self._update_langfuse_rerank_metadata(
+                                client, trace_id, values
+                            )
+                except Exception as stats_err:
+                    logger.warning(
+                        "failed_to_process_post_stream_stats",
+                        error=str(stats_err),
+                        session_id=str(session_id),
+                    )
+
+            if settings.ENABLE_LANGFUSE:
+                client = get_langfuse_client()
+                if client:
+                    await run_in_threadpool(client.flush)
 
     def _setup_config(
         self,
