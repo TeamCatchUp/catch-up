@@ -9,6 +9,7 @@ from langchain_core.language_models import BaseChatModel
 from catchup.automations.state import AutomationState
 from catchup.prompts.loader import prompt_loader
 from catchup.rag.nodes.utils import build_docs_summary
+from catchup.rag.retryable import RETRYABLE_ERRORS
 
 logger = structlog.get_logger(__name__)
 
@@ -38,7 +39,10 @@ async def generate_guide_node(state: AutomationState, llm: BaseChatModel) -> dic
         **global_context,
     )
 
-    response = await llm.ainvoke(prompt)
+    try:
+        response = await llm.ainvoke(prompt)
+    except RETRYABLE_ERRORS:
+        raise
     guide_text: str = response.content
 
     logger.info("generate_guide_node_completed", guide_length=len(guide_text))
