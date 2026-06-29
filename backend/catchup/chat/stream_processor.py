@@ -41,6 +41,8 @@ class StreamContext:
     has_streamed: bool = False
     current_node: str | None = None
     pipeline_events: list[dict] = field(default_factory=list)
+    accumulated_content: str = field(default="")
+    accumulated_sources: list[dict] = field(default_factory=list)
 
 
 class ChatStreamProcessor:
@@ -161,6 +163,9 @@ class ChatStreamProcessor:
                 BaseSource.from_document(index=g.display_index, doc=g.representative)
                 for g in doc_groups
             ]
+            self.context.accumulated_sources = [
+                src.model_dump(mode="json") for src in sources
+            ]
             emit_audit_event(
                 action=ChatAction.PROVIDE_SOURCES,
                 status=AuditStatus.SUCCESS,
@@ -253,6 +258,7 @@ class ChatStreamProcessor:
         burst 없이 자연스러운 스트리밍이 되도록 throttle한다.
         chunk_size 이하이면 즉시 단일 emit한다.
         """
+        self.context.accumulated_content += token
         if len(token) <= chunk_size:
             yield ChatStreamingTokenResponse(session_id=self.session_id, token=token)
             return
