@@ -10,6 +10,7 @@ from catchup.automations.state import AutomationState
 from catchup.automations.structures import GradeResult
 from catchup.prompts.loader import prompt_loader
 from catchup.rag.nodes.utils import build_docs_summary
+from catchup.rag.retryable import RETRYABLE_ERRORS
 
 logger = structlog.get_logger(__name__)
 
@@ -32,7 +33,10 @@ async def grade_node(state: AutomationState, llm: BaseChatModel) -> dict[str, An
     )
 
     structured_llm = llm.with_structured_output(GradeResult)
-    output = await structured_llm.ainvoke(prompt)
+    try:
+        output = await structured_llm.ainvoke(prompt)
+    except RETRYABLE_ERRORS:
+        raise
 
     if isinstance(output, dict):
         grade_result = GradeResult(
