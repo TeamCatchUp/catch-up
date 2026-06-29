@@ -12,6 +12,11 @@ from catchup.mcp.tools.v2_sampling import get_v2_backfill_state
 from catchup.mcp.tools.v2_sampling import sample_v2_knowledge_store
 
 
+_READ_ONLY = ToolAnnotations(readOnlyHint=True)
+_WRITE_ADDITIVE = ToolAnnotations(readOnlyHint=False, destructiveHint=False)
+_WRITE_DESTRUCTIVE = ToolAnnotations(readOnlyHint=False, destructiveHint=True)
+
+
 def _build_transport_security() -> TransportSecuritySettings:
     """DNS rebinding 보호용 TransportSecuritySettings를 구성한다."""
     extra_host = urlparse(auth_settings.FRONTEND_BASE_URL, "").netloc or None
@@ -35,10 +40,6 @@ mcp = FastMCP(
     stateless_http=True,
     transport_security=_build_transport_security(),
 )
-
-_READ_ONLY = ToolAnnotations(readOnlyHint=True)
-_WRITE_ADDITIVE = ToolAnnotations(readOnlyHint=False, destructiveHint=False)
-_WRITE_DESTRUCTIVE = ToolAnnotations(readOnlyHint=False, destructiveHint=True)
 
 
 def _register_tools(mcp: FastMCP) -> None:
