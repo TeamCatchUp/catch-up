@@ -17,7 +17,7 @@ from langgraph.graph.message import add_messages
 from catchup.langgraph.utils import ainvoke_llm_with_token_usage
 from catchup.langgraph.utils import log_node
 from catchup.prompts.loader import prompt_loader
-from catchup.rag.policies import FALLBACK_ANSWER
+from catchup.rag.constants import FALLBACK_ANSWER
 from catchup.schemas.sources import BaseSource
 from catchup.schemas.structures import SearchTurnMeta
 from catchup.utils.documents import DocGroup

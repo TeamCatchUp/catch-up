@@ -8,11 +8,11 @@ from langchain_core.messages import HumanMessage
 from catchup.costs.utils import token_usage
 from catchup.langgraph.retry import RETRYABLE_ERRORS
 from catchup.prompts.loader import prompt_loader
+from catchup.rag.constants import FALLBACK_ANSWER
 from catchup.rag.nodes.utils import ainvoke_llm_with_token_usage
 from catchup.rag.nodes.utils import build_system_message
 from catchup.rag.nodes.utils import get_conversation_history
 from catchup.rag.nodes.utils import log_node
-from catchup.rag.policies import FALLBACK_ANSWER
 from catchup.rag.state import AgentState
 from catchup.schemas.sources import SOURCE_METADATA
 from catchup.utils.semaphores import service_semaphores

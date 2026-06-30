@@ -9,6 +9,9 @@ from langchain_core.messages import HumanMessage
 from catchup.costs.utils import token_usage
 from catchup.langgraph.retry import RETRYABLE_ERRORS
 from catchup.prompts.loader import prompt_loader
+from catchup.rag.constants import CITATION_POLICY_MESSAGE
+from catchup.rag.constants import FALLBACK_ANSWER
+from catchup.rag.constants import NO_DOCUMENTS_ANSWER
 from catchup.rag.nodes.utils import ainvoke_llm_with_token_usage
 from catchup.rag.nodes.utils import build_confirmed_priority_prompt
 from catchup.rag.nodes.utils import build_doc_groups
@@ -20,9 +23,6 @@ from catchup.rag.nodes.utils import parse_citations
 from catchup.rag.nodes.utils import render_grouped_context_text
 from catchup.rag.nodes.utils import sanitize_agent_reasoning
 from catchup.rag.nodes.utils import scrub_orphan_indices
-from catchup.rag.policies import CITATION_POLICY_MESSAGE
-from catchup.rag.policies import FALLBACK_ANSWER
-from catchup.rag.policies import NO_DOCUMENTS_ANSWER
 from catchup.rag.state import AgentState
 from catchup.schemas.sources import SOURCE_METADATA
 from catchup.schemas.sources import BaseSource
