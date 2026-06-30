@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 from catchup.components.summarizer import SummarizerService
 from catchup.components.vector_db.pgvector.repository import PGVectorRepository
+from catchup.components.vector_db.v2 import V2KnowledgeRepository
 from catchup.components.vector_db.v2 import VectorStore
 from catchup.connectors.jira.client import JiraApiClient
 from catchup.connectors.jira.field_mapper import JiraFieldMapper
@@ -23,4 +24,5 @@ class JiraIssueIngestionDependencies:
     repository: PGVectorRepository
     summarizer: SummarizerService | None
     vector_store: VectorStore | None = None
+    v2_knowledge_repository: V2KnowledgeRepository | None = None
     v2_document_builder: JiraIssueV2DocumentBuilder | None = None

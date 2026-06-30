@@ -3,30 +3,24 @@ from __future__ import annotations
 from datetime import datetime
 from datetime import timezone
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
+from unittest.mock import patch
 
 import pytest
 from langchain_core.documents import Document
 
+from catchup.connectors.confluence.client import ConfluenceApiError
 from catchup.connectors.confluence.schemas import ConfluenceCommentResponse
 from catchup.connectors.confluence.schemas import ConfluencePageResponse
-from catchup.sync.backfill.confluence_v2 import build_fetch_pending_seed_chunk_query
+from catchup.sync.backfill.confluence_v2 import build_confluence_v1_target_seed_query
 from catchup.sync.backfill.confluence_v2 import build_upsert_seed_rows_statement
-from catchup.sync.ingestion.adapters.confluence.space_sync import (
-    ConfluenceV2BackfillExecutionRequest,
-)
-from catchup.sync.ingestion.adapters.confluence.space_sync import (
-    ConfluenceV2BackfillSeed,
-)
-from catchup.sync.ingestion.adapters.confluence.v2_backfill import (
-    ConfluenceV2BackfillAdapter,
-)
-from catchup.sync.ingestion.adapters.confluence.v2_document_builder import (
-    ConfluenceV2DocumentBuilder,
-)
+from catchup.sync.ingestion.adapters.confluence.space_sync import ConfluenceSpaceSyncDependencies
+from catchup.sync.ingestion.adapters.confluence.space_sync import ConfluenceV2BackfillExecutionRequest
+from catchup.sync.ingestion.adapters.confluence.space_sync import ConfluenceV2BackfillSeed
+from catchup.sync.ingestion.adapters.confluence.v2_backfill import ConfluenceV2BackfillAdapter
+from catchup.sync.ingestion.adapters.confluence.v2_document_builder import ConfluenceV2DocumentBuilder
 from catchup.sync.ingestion.document_builders.confluence import ConfluenceTransformer
-from catchup.sync.ingestion.document_builders.confluence import (
-    ConfluenceTransformResult,
-)
+from catchup.sync.ingestion.document_builders.confluence import ConfluenceTransformResult
 from catchup.sync.ingestion.schemas import SyncWindow
 from catchup.sync.ingestion.vector_records import ConfluenceV2RecordMapper
 
@@ -115,9 +109,11 @@ def test_confluence_v2_mapper_builds_clean_chunk_contract_without_duplicates():
         user_name_map={"author-1": "Alice"},
     )
 
-    assert len(transform_result.v2_prepared_chunks) == 2
+    assert len(transform_result.v2_prepared_chunks) == 1
 
     first_chunk = transform_result.v2_prepared_chunks[0]
+    assert first_chunk.chunk_count == 1
+    assert first_chunk.section_hierarchy == ["Authentication"]
     document = ConfluenceV2RecordMapper().to_document(
         first_chunk,
         cloud_id="cloud-123",
@@ -164,11 +160,23 @@ def test_confluence_v2_mapper_builds_clean_chunk_contract_without_duplicates():
     }
     assert domain_metadata["chunk"]["section_hierarchy"] == ["Authentication"]
 
-    assert len(parts) == 1
+    assert len(parts) == 2
     assert parts[0]["type"] == "inline_comment"
     assert parts[0]["text"] == "Clarify token rotation."
     assert parts[0]["metadata"]["comment_id"] == "inline-1"
     assert parts[0]["metadata"]["selection"] == "tokens"
+    assert parts[0]["metadata"]["inline_marker_ref"] == "ref-1"
+    assert parts[0]["metadata"]["selection_start"] == 10
+    assert parts[0]["metadata"]["selection_end"] == 16
+    assert metadata["body"][10:16] == "tokens"
+    assert parts[0]["metadata"]["match_method"] == "inline_marker_ref"
+    assert parts[1]["type"] == "footer_comment"
+    assert parts[1]["text"] == "Footer discussion."
+    assert parts[1]["metadata"]["comment_id"] == "footer-1"
+    assert "inline_marker_ref" not in parts[1]["metadata"]
+    assert "selection_start" not in parts[1]["metadata"]
+    assert "selection_end" not in parts[1]["metadata"]
+    assert "match_method" not in parts[1]["metadata"]
     for part in parts:
         for duplicated_field in (
             "record_id",
@@ -179,6 +187,80 @@ def test_confluence_v2_mapper_builds_clean_chunk_contract_without_duplicates():
             "title",
         ):
             assert duplicated_field not in part["metadata"]
+
+
+def test_confluence_inline_comment_falls_back_to_first_chunk_when_location_is_missing():
+    transform_result = ConfluenceTransformer().transform_page(
+        _page(),
+        space_key="ENG",
+        space_name="Engineering",
+        inline_comments=(
+            _comment(
+                comment_id="inline-missing-location",
+                text="Location metadata was lost.",
+                properties={
+                    "inline-marker-ref": "missing-ref",
+                    "inline-original-selection": "text not present in body",
+                },
+            ),
+        ),
+        site_url="https://example.atlassian.net/wiki",
+    )
+
+    assert len(transform_result.documents) == 1
+    assert len(transform_result.v2_prepared_chunks) == 1
+    assert "Discussion" not in transform_result.documents[0].metadata[
+        "section_hierarchy"
+    ]
+    assert "Location metadata was lost." in transform_result.documents[0].page_content
+
+    document = ConfluenceV2RecordMapper().to_document(
+        transform_result.v2_prepared_chunks[0],
+        cloud_id="cloud-123",
+    )
+    parts = document.metadata["data"]["parts"]
+
+    assert [part["type"] for part in parts] == ["inline_comment"]
+    assert parts[0]["text"] == "Location metadata was lost."
+    assert parts[0]["metadata"]["comment_id"] == "inline-missing-location"
+    assert parts[0]["metadata"]["selection"] == "text not present in body"
+    assert parts[0]["metadata"]["inline_marker_ref"] == "missing-ref"
+    assert parts[0]["metadata"]["match_method"] == "fallback_first_chunk"
+    assert "selection_start" not in parts[0]["metadata"]
+    assert "selection_end" not in parts[0]["metadata"]
+
+
+def test_confluence_inline_comment_uses_selection_when_marker_ref_is_missing():
+    transform_result = ConfluenceTransformer().transform_page(
+        _page(),
+        space_key="ENG",
+        space_name="Engineering",
+        inline_comments=(
+            _comment(
+                comment_id="inline-selection-match",
+                text="Marker ref was stale.",
+                properties={
+                    "inline-marker-ref": "stale-ref",
+                    "inline-original-selection": "tokens",
+                },
+            ),
+        ),
+        site_url="https://example.atlassian.net/wiki",
+    )
+
+    document = ConfluenceV2RecordMapper().to_document(
+        transform_result.v2_prepared_chunks[0],
+        cloud_id="cloud-123",
+    )
+    metadata = document.metadata
+    parts = metadata["data"]["parts"]
+
+    assert [part["type"] for part in parts] == ["inline_comment"]
+    assert parts[0]["metadata"]["inline_marker_ref"] == "stale-ref"
+    assert parts[0]["metadata"]["match_method"] == "selection"
+    assert parts[0]["metadata"]["selection_start"] == 10
+    assert parts[0]["metadata"]["selection_end"] == 16
+    assert metadata["body"][10:16] == "tokens"
 
 
 def test_confluence_v2_builder_reports_validation_failures_without_raising():
@@ -197,6 +279,26 @@ def test_confluence_v2_builder_reports_validation_failures_without_raising():
     assert failed_ids == ("confluence:page:1001:chunk:0",)
 
 
+def test_confluence_transform_logs_image_chunk_count():
+    with patch("catchup.sync.ingestion.document_builders.confluence.logger") as logger:
+        ConfluenceTransformer().transform_page(
+            _page(),
+            space_key="ENG",
+            space_name="Engineering",
+            site_url="https://example.atlassian.net/wiki",
+        )
+
+    matching_calls = [
+        call
+        for call in logger.info.call_args_list
+        if call.args and call.args[0] == "confluence_transform_completed"
+    ]
+    assert matching_calls
+    kwargs = matching_calls[-1].kwargs
+    assert kwargs["image_chunk_count"] == 0
+    assert "image_backed_count" not in kwargs
+
+
 @pytest.mark.asyncio
 async def test_confluence_v2_backfill_reuses_space_user_name_map_for_transform():
     class FakeConfluenceClient:
@@ -210,40 +312,38 @@ async def test_confluence_v2_backfill_reuses_space_user_name_map_for_transform()
             assert body_format == "storage"
             return _page().model_dump(mode="json", by_alias=True)
 
-    class FakeConfluenceService:
-        cloud_id = "cloud-123"
+    seen_user_name_map: dict[str, str | None] | None = None
+    dependencies = ConfluenceSpaceSyncDependencies(
+        cloud_id="cloud-123",
+        site_url="",
+        client=FakeConfluenceClient(),
+        repository=SimpleNamespace(),
+        transformer=SimpleNamespace(),
+    )
+    adapter = ConfluenceV2BackfillAdapter(dependencies=dependencies)
+    adapter._load_space_sync_context = AsyncMock(  # noqa: SLF001
+        return_value=(
+            {"ENG": "space-1"},
+            {"ENG": "Engineering"},
+            {"author-1": "Alice"},
+        )
+    )
 
-        def __init__(self) -> None:
-            self.client = FakeConfluenceClient()
-            self.seen_user_name_map: dict[str, str | None] | None = None
+    async def process_page(
+        content: ConfluencePageResponse,
+        *,
+        space_key: str | None = None,
+        space_name: str | None = None,
+        user_name_map: dict[str, str | None] | None = None,
+    ) -> ConfluenceTransformResult:
+        nonlocal seen_user_name_map
+        assert content.id == "1001"
+        assert space_key == "ENG"
+        assert space_name == "Engineering"
+        seen_user_name_map = user_name_map
+        return ConfluenceTransformResult(documents=[])
 
-        async def _load_space_sync_context(
-            self,
-            space_keys: list[str],
-        ) -> tuple[dict[str, str], dict[str, str], dict[str, str | None]]:
-            assert space_keys == ["ENG"]
-            return (
-                {"ENG": "space-1"},
-                {"ENG": "Engineering"},
-                {"author-1": "Alice"},
-            )
-
-        async def _process_page(
-            self,
-            content: ConfluencePageResponse,
-            *,
-            space_key: str | None = None,
-            space_name: str | None = None,
-            user_name_map: dict[str, str | None] | None = None,
-        ) -> ConfluenceTransformResult:
-            assert content.id == "1001"
-            assert space_key == "ENG"
-            assert space_name == "Engineering"
-            self.seen_user_name_map = user_name_map
-            return ConfluenceTransformResult(documents=[], embed_inputs=[])
-
-    service = FakeConfluenceService()
-    adapter = ConfluenceV2BackfillAdapter(service=service)
+    adapter._process_page = process_page  # noqa: SLF001
     execution = ConfluenceV2BackfillExecutionRequest(
         tenant_id="tenant-1",
         space_key="ENG",
@@ -272,11 +372,181 @@ async def test_confluence_v2_backfill_reuses_space_user_name_map_for_transform()
     assert fetched.space_id == "space-1"
     assert fetched.space_name == "Engineering"
     assert fetched.user_name_map == {"author-1": "Alice"}
-    assert service.seen_user_name_map == {"author-1": "Alice"}
+    assert seen_user_name_map == {"author-1": "Alice"}
+
+
+@pytest.mark.asyncio
+async def test_confluence_v2_backfill_fetch_reraises_retryable_connector_errors():
+    class FakeConfluenceClient:
+        async def get_page_by_id(
+            self,
+            record_id: str,
+            *,
+            body_format: str,
+        ) -> dict:
+            _ = record_id, body_format
+            raise ConfluenceApiError("retry later", status_code=503, retry_after=30)
+
+    seed = ConfluenceV2BackfillSeed(
+        langchain_id="confluence:page:1001:chunk:0",
+        record_id="1001",
+        content="v1 contextual chunk",
+        embedding=[0.1, 0.2],
+    )
+    adapter = ConfluenceV2BackfillAdapter(
+        dependencies=ConfluenceSpaceSyncDependencies(
+            cloud_id="cloud-123",
+            site_url="",
+            client=FakeConfluenceClient(),
+            repository=SimpleNamespace(),
+            transformer=SimpleNamespace(),
+        )
+    )
+    adapter._load_space_sync_context = AsyncMock(  # noqa: SLF001
+        return_value=({"ENG": "space-1"}, {"ENG": "Engineering"}, {})
+    )
+    execution = ConfluenceV2BackfillExecutionRequest(
+        tenant_id="cloud-123",
+        space_key="ENG",
+        record_type="page",
+        seeds=(seed,),
+    )
+    sync_window = SyncWindow(
+        window_start=datetime(2026, 5, 1, tzinfo=timezone.utc),
+        window_end=datetime(2026, 5, 2, tzinfo=timezone.utc),
+    )
+
+    with pytest.raises(ConfluenceApiError, match="retry later"):
+        await adapter.fetch(execution=execution, sync_window=sync_window)
+
+
+@pytest.mark.asyncio
+async def test_confluence_v2_backfill_fetch_logs_non_retryable_record_failures():
+    class FakeConfluenceClient:
+        async def get_page_by_id(
+            self,
+            record_id: str,
+            *,
+            body_format: str,
+        ) -> dict:
+            _ = record_id, body_format
+            raise ValueError("page payload broken")
+
+    seed = ConfluenceV2BackfillSeed(
+        langchain_id="confluence:page:1001:chunk:0",
+        record_id="1001",
+        content="v1 contextual chunk",
+        embedding=[0.1, 0.2],
+    )
+    adapter = ConfluenceV2BackfillAdapter(
+        dependencies=ConfluenceSpaceSyncDependencies(
+            cloud_id="cloud-123",
+            site_url="",
+            client=FakeConfluenceClient(),
+            repository=SimpleNamespace(),
+            transformer=SimpleNamespace(),
+        )
+    )
+    adapter._load_space_sync_context = AsyncMock(  # noqa: SLF001
+        return_value=({"ENG": "space-1"}, {"ENG": "Engineering"}, {})
+    )
+    execution = ConfluenceV2BackfillExecutionRequest(
+        tenant_id="cloud-123",
+        space_key="ENG",
+        record_type="page",
+        seeds=(seed,),
+    )
+    sync_window = SyncWindow(
+        window_start=datetime(2026, 5, 1, tzinfo=timezone.utc),
+        window_end=datetime(2026, 5, 2, tzinfo=timezone.utc),
+    )
+
+    with patch(
+        "catchup.sync.ingestion.adapters.confluence.v2_backfill.logger"
+    ) as logger:
+        fetched = await adapter.fetch(execution=execution, sync_window=sync_window)
+
+    assert fetched.records == ()
+    assert fetched.v2_failed_ids == (seed.langchain_id,)
+    logger.warning.assert_called_once_with(
+        "confluence_v2_backfill_record_fetch_failed",
+        connector="confluence",
+        entity_type="page",
+        scope_id="cloud-123",
+        target_id="ENG",
+        record_id="1001",
+        failed_id_count=1,
+        exception_type="ValueError",
+        error="page payload broken",
+        exc_info=True,
+    )
+
+
+@pytest.mark.asyncio
+async def test_confluence_v2_backfill_transform_logs_non_retryable_record_failures():
+    seed = ConfluenceV2BackfillSeed(
+        langchain_id="confluence:page:1001:chunk:0",
+        record_id="1001",
+        content="v1 contextual chunk",
+        embedding=[0.1, 0.2],
+    )
+    adapter = ConfluenceV2BackfillAdapter(
+        dependencies=ConfluenceSpaceSyncDependencies(
+            cloud_id="cloud-123",
+            site_url="",
+            client=SimpleNamespace(),
+            repository=SimpleNamespace(),
+            transformer=SimpleNamespace(),
+        )
+    )
+    adapter._process_page = AsyncMock(  # noqa: SLF001
+        side_effect=ValueError("transform broken")
+    )
+    execution = ConfluenceV2BackfillExecutionRequest(
+        tenant_id="cloud-123",
+        space_key="ENG",
+        record_type="page",
+        seeds=(seed,),
+    )
+    sync_window = SyncWindow(
+        window_start=datetime(2026, 5, 1, tzinfo=timezone.utc),
+        window_end=datetime(2026, 5, 2, tzinfo=timezone.utc),
+    )
+    fetched = SimpleNamespace(
+        records=(_page().model_dump(mode="json", by_alias=True),),
+        v2_failed_ids=(),
+        space_key="ENG",
+        space_name="Engineering",
+        user_name_map={},
+    )
+
+    with patch(
+        "catchup.sync.ingestion.adapters.confluence.v2_backfill.logger"
+    ) as logger:
+        transformed = await adapter.transform(
+            execution=execution,
+            sync_window=sync_window,
+            fetched=fetched,
+        )
+
+    assert transformed.items == ()
+    assert transformed.v2_failed_ids == (seed.langchain_id,)
+    logger.warning.assert_called_once_with(
+        "confluence_v2_backfill_record_transform_failed",
+        connector="confluence",
+        entity_type="page",
+        scope_id="cloud-123",
+        target_id="ENG",
+        record_id="1001",
+        failed_id_count=1,
+        exception_type="ValueError",
+        error="transform broken",
+        exc_info=True,
+    )
 
 
 def test_confluence_v2_backfill_sql_casts_nullable_cursor_parameters():
-    query = str(build_fetch_pending_seed_chunk_query("page"))
+    query = str(build_confluence_v1_target_seed_query("page"))
 
     assert "CAST(:after_record_id AS text) IS NULL" in query
     assert "record_id > CAST(:after_record_id AS text)" in query
@@ -300,12 +570,13 @@ def test_confluence_v2_seed_sql_uses_empty_metadata_json_for_seed_rows():
 @pytest.mark.asyncio
 async def test_confluence_v2_backfill_treats_missing_metadata_as_failed():
     class FakeVectorStore:
-        def __init__(self) -> None:
-            self.namespace_checks = []
-
         async def upsert_documents(self, documents, ids, embeddings):
             _ = documents, embeddings
             return ids
+
+    class FakeV2KnowledgeRepository:
+        def __init__(self) -> None:
+            self.namespace_checks = []
 
         async def find_missing_metadata_namespace_ids(self, ids, *, namespace):
             self.namespace_checks.append({"ids": list(ids), "namespace": namespace})
@@ -318,9 +589,17 @@ async def test_confluence_v2_backfill_treats_missing_metadata_as_failed():
         embedding=[0.1, 0.2],
     )
     vector_store = FakeVectorStore()
+    v2_knowledge_repository = FakeV2KnowledgeRepository()
     adapter = ConfluenceV2BackfillAdapter(
-        service=SimpleNamespace(cloud_id="cloud-123"),
+        dependencies=ConfluenceSpaceSyncDependencies(
+            cloud_id="cloud-123",
+            site_url="",
+            client=SimpleNamespace(),
+            repository=SimpleNamespace(),
+            transformer=SimpleNamespace(),
+        ),
         vector_store=vector_store,
+        v2_knowledge_repository=v2_knowledge_repository,
     )
     execution = ConfluenceV2BackfillExecutionRequest(
         tenant_id="cloud-123",
@@ -347,6 +626,6 @@ async def test_confluence_v2_backfill_treats_missing_metadata_as_failed():
     assert persisted.persisted_count == 0
     assert persisted.error_count == 1
     assert persisted.v2_failed_ids == (seed.langchain_id,)
-    assert vector_store.namespace_checks == [
+    assert v2_knowledge_repository.namespace_checks == [
         {"ids": [seed.langchain_id], "namespace": "confluence_page"}
     ]

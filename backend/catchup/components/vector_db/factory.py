@@ -4,6 +4,7 @@ from catchup.components.vector_db.base import BaseVectorDbService
 from catchup.components.vector_db.pgvector.constants import VectorDbProvider
 from catchup.components.vector_db.pgvector.pgvector import PGVectorService
 from catchup.components.vector_db.pgvector.repository import PGVectorRepository
+from catchup.components.vector_db.v2 import V2KnowledgeRepository
 from catchup.components.vector_db.v2 import VectorStore
 from catchup.configs.config import settings
 from catchup.db.engine import engine
@@ -11,7 +12,9 @@ from catchup.db.engine import engine
 # TODO: Embedding 모델을 다변화 하고 싶은 경우 dict로 싱글톤 관리하기 및 Repository & Service 통합
 _pgvector_repository : PGVectorRepository | None = None  #Ingestion
 _v2_vector_store: VectorStore | None = None
+_v2_knowledge_repository: V2KnowledgeRepository | None = None
 _pgvector_service: PGVectorService | None = None  # Retrieval
+_pgvector_embeddings: Embeddings | None = None  # TTL 갱신 감지용
 
 
 # Ingestion
@@ -34,18 +37,26 @@ def get_v2_vector_store(embeddings: Embeddings) -> VectorStore:
     return _v2_vector_store
 
 
+def get_v2_knowledge_repository() -> V2KnowledgeRepository:
+    global _v2_knowledge_repository
+    if _v2_knowledge_repository is None:
+        _v2_knowledge_repository = V2KnowledgeRepository()
+    return _v2_knowledge_repository
+
+
 # Retrieval
 def get_vector_db_service(
     provider: VectorDbProvider,
-    embeddings: Embeddings = None
-)-> BaseVectorDbService:
+    embeddings: Embeddings = None,
+) -> BaseVectorDbService:
     if provider == VectorDbProvider.PGVECTOR:
-        global _pgvector_service
-        if _pgvector_service is None:
+        global _pgvector_service, _pgvector_embeddings
+        if _pgvector_service is None or _pgvector_embeddings is not embeddings:
             _pgvector_service = PGVectorService(
                 collection_name=settings.PGVECTOR_COLLECTION_NAME,
                 postgresql_engine=engine,
-                embeddings=embeddings
+                embeddings=embeddings,
             )
+            _pgvector_embeddings = embeddings
         return _pgvector_service
     raise ValueError(f"Unknown provider: {provider}")

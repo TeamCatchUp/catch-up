@@ -158,33 +158,26 @@ def test_jira_issue_v2_mapper_builds_record_from_parsed_issue() -> None:
     ]
     comment_part = values["data"]["parts"][1]
     assert comment_part["metadata"]["id"] == "comment-1"
-    assert comment_part["metadata"]["author"]["account_id"] == "acc-commenter"
+    assert comment_part["metadata"]["author"]["external_user_id"] == "acc-commenter"
     assert set(comment_part["metadata"]["author"]) == {
-        "account_id",
-        "display_name",
-        "email_address",
-        "avatar_url",
-        "catchup_user_id",
+        "external_user_id",
+        "internal_user_id",
     }
     assert comment_part["metadata"]["mentions"][0]["text"] == "@Author User"
+    assert comment_part["metadata"]["mentions"][0]["external_user_id"] == "acc-author"
+    assert "display_name" not in comment_part["metadata"]["mentions"][0]
     attachment_part = values["data"]["parts"][3]
     assert attachment_part["metadata"]["comment_id"] is None
     assert set(attachment_part["metadata"]["author"]) == {
-        "account_id",
-        "display_name",
-        "email_address",
-        "avatar_url",
-        "catchup_user_id",
+        "external_user_id",
+        "internal_user_id",
     }
     assert "active" not in attachment_part["metadata"]["author"]
     inline_attachment_part = values["data"]["parts"][4]
     assert inline_attachment_part["metadata"]["comment_id"] == "comment-1"
     assert set(inline_attachment_part["metadata"]["comment_author"]) == {
-        "account_id",
-        "display_name",
-        "email_address",
-        "avatar_url",
-        "catchup_user_id",
+        "external_user_id",
+        "internal_user_id",
     }
 
     metadata = values["langchain_metadata"]
@@ -195,14 +188,11 @@ def test_jira_issue_v2_mapper_builds_record_from_parsed_issue() -> None:
     assert "project_name" not in jira_issue
     assert jira_issue["type"] == "Task"
     assert "issue_type" not in jira_issue
-    assert jira_issue["assignee"]["catchup_user_id"] == "usr_assignee"
-    assert jira_issue["reporter"]["catchup_user_id"] == "usr_author"
+    assert jira_issue["assignee"]["internal_user_id"] == "usr_assignee"
+    assert jira_issue["reporter"]["internal_user_id"] == "usr_author"
     assert set(jira_issue["reporter"]) == {
-        "account_id",
-        "display_name",
-        "email_address",
-        "avatar_url",
-        "catchup_user_id",
+        "external_user_id",
+        "internal_user_id",
     }
     assert "active" not in jira_issue["reporter"]
     assert jira_issue["sprint"] == {"id": 7, "name": "Sprint 7", "state": "active"}

@@ -1,31 +1,33 @@
 """
 Confluence Connector Factory
 
-ConfluenceIngestionService 인스턴스를 생성하는 팩토리.
+Confluence ingestion dependencies and legacy service instances are assembled here.
 AtlassianTokenManager로 OAuth Token을 조회하여 서비스 인스턴스를 생성.
 """
 
-import logging
-
+import structlog
 from fastapi.concurrency import run_in_threadpool
+from langchain.embeddings import Embeddings
 
-from catchup.components.embedder.constants import EmbeddingProvider
-from catchup.components.embedder.factory import get_embedding_service
-from catchup.components.vector_db.factory import get_pgvector_repository
-from catchup.components.vector_db.factory import get_v2_vector_store
 from catchup.connectors.atlassian.exceptions import AtlassianTokenExpiredError
 from catchup.connectors.atlassian.exceptions import AtlassianTokenNotFoundError
 from catchup.connectors.atlassian.oauth_client import AtlassianOAuthClient
 from catchup.connectors.atlassian.token_manager import AtlassianTokenManager
 from catchup.connectors.atlassian.token_manager import AtlassianTokenProvider
+from catchup.connectors.confluence.client import ConfluenceApiClient
 from catchup.db.atlassian import oauth_repository
 from catchup.db.engine import SessionLocal
 from catchup.sync.common.exceptions import SyncConnectorException
 from catchup.sync.common.exceptions import SyncInternalException
+from catchup.sync.ingestion.adapters.confluence import ConfluenceSpaceSyncDependencies
 from catchup.sync.ingestion.adapters.confluence import ConfluenceV2BackfillAdapter
+from catchup.sync.ingestion.document_builders.confluence import ConfluenceTransformer
+from catchup.sync.ingestion.factories.knowledge_store import (
+    create_knowledge_store_dependencies,
+)
 from catchup.sync.ingestion.services.confluence import ConfluenceIngestionService
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 def _load_token_record_db(cloud_id: str):
@@ -36,9 +38,9 @@ def _load_token_record_db(cloud_id: str):
         return token_record
 
 
-async def create_confluence_ingestion_service(
+async def _resolve_token_provider_and_site_url(
     cloud_id: str,
-) -> ConfluenceIngestionService:
+) -> tuple[AtlassianTokenProvider, str]:
     token_manager = AtlassianTokenManager(
         oauth_client=AtlassianOAuthClient(),
         oauth_repository=oauth_repository,
@@ -59,9 +61,11 @@ async def create_confluence_ingestion_service(
         ) from exc
     except Exception as exc:
         logger.error(
-            "[CONFLUENCE][FACTORY] Failed to resolve access token: cloud_id=%s, error=%s",
-            cloud_id,
-            exc,
+            "confluence_factory_token_resolve_failed",
+            connector="confluence",
+            scope_id=cloud_id,
+            exception_type=type(exc).__name__,
+            error=str(exc),
             exc_info=True,
         )
         raise SyncInternalException(
@@ -69,26 +73,68 @@ async def create_confluence_ingestion_service(
             metadata={"cloud_id": cloud_id},
         ) from exc
 
+    site_url = token_record.site_url if token_record else ""
+    return token_provider, site_url or ""
+
+
+async def create_confluence_space_sync_dependencies(
+    cloud_id: str,
+    *,
+    embeddings: Embeddings | None = None,
+    require_vector_store: bool = False,
+) -> ConfluenceSpaceSyncDependencies:
+    token_provider, site_url = await _resolve_token_provider_and_site_url(cloud_id)
+
     try:
-        site_url = token_record.site_url if token_record else ""
-        embedding_service = get_embedding_service(EmbeddingProvider.AWS_BEDROCK)
-        repository = get_pgvector_repository(
-            embeddings=embedding_service.get_embedder()
+        knowledge_store = await create_knowledge_store_dependencies(
+            embeddings=embeddings,
+            require_vector_store=require_vector_store,
         )
+        return ConfluenceSpaceSyncDependencies(
+            cloud_id=cloud_id,
+            site_url=site_url,
+            client=ConfluenceApiClient(cloud_id, token_provider),
+            repository=knowledge_store.repository,
+            transformer=ConfluenceTransformer(),
+            vector_store=knowledge_store.vector_store,
+            v2_knowledge_repository=knowledge_store.v2_knowledge_repository,
+        )
+    except Exception as exc:
+        logger.error(
+            "confluence_factory_space_sync_dependencies_init_failed",
+            connector="confluence",
+            scope_id=cloud_id,
+            exception_type=type(exc).__name__,
+            error=str(exc),
+            exc_info=True,
+        )
+        raise SyncInternalException(
+            "Confluence sync dependency 초기화에 실패했습니다",
+            metadata={"cloud_id": cloud_id},
+        ) from exc
+
+
+async def create_confluence_ingestion_service(
+    cloud_id: str,
+) -> ConfluenceIngestionService:
+    token_provider, site_url = await _resolve_token_provider_and_site_url(cloud_id)
+    try:
+        knowledge_store = await create_knowledge_store_dependencies()
         service = ConfluenceIngestionService(
             cloud_id=cloud_id,
             token_provider=token_provider,
-            site_url=site_url or "",
-            repository=repository,
-            embedding_service=embedding_service,
+            site_url=site_url,
+            repository=knowledge_store.repository,
         )
         await service.initialize()
         return service
     except Exception as exc:
         logger.error(
-            "[CONFLUENCE][FACTORY] Failed to initialize ingestion service: cloud_id=%s, error=%s",
-            cloud_id,
-            exc,
+            "confluence_factory_ingestion_service_init_failed",
+            connector="confluence",
+            scope_id=cloud_id,
+            exception_type=type(exc).__name__,
+            error=str(exc),
             exc_info=True,
         )
         raise SyncInternalException(
@@ -100,11 +146,12 @@ async def create_confluence_ingestion_service(
 async def create_confluence_v2_backfill_adapter(
     cloud_id: str,
 ) -> ConfluenceV2BackfillAdapter:
-    service = await create_confluence_ingestion_service(cloud_id=cloud_id)
-    embeddings = get_embedding_service(EmbeddingProvider.AWS_BEDROCK).get_embedder()
-    vector_store = get_v2_vector_store(embeddings)
-    await vector_store.initialize()
+    dependencies = await create_confluence_space_sync_dependencies(
+        cloud_id=cloud_id,
+        require_vector_store=True,
+    )
     return ConfluenceV2BackfillAdapter(
-        service=service,
-        vector_store=vector_store,
+        dependencies=dependencies,
+        vector_store=dependencies.vector_store,
+        v2_knowledge_repository=dependencies.v2_knowledge_repository,
     )

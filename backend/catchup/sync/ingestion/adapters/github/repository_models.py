@@ -263,6 +263,8 @@ class GithubRepositoryFetchResult(BaseModel):
     checkpoint: int | None = None
     next_cursor: str | None = None
     stopped_by_since: bool = False
+    error_type: str | None = None
+    error_message: str | None = None
 
     def connector_log_summary(self) -> dict[str, object]:
         record_count = len(self.records) if self.records else len(self.exact_items)
@@ -291,6 +293,8 @@ class GithubRepositoryTransformResult(BaseModel):
     owner: str | None = None
     repo: str | None = None
     repo_full_name: str | None = None
+    error_type: str | None = None
+    error_message: str | None = None
 
     def connector_log_summary(self) -> dict[str, object]:
         return {
@@ -320,6 +324,8 @@ class GithubRepositoryPersistResult(BaseModel):
     v2_error_count: int = 0
     v2_failed_ids: tuple[str, ...] = ()
     skipped: bool = False
+    error_type: str | None = None
+    error_message: str | None = None
 
     def connector_log_summary(self) -> dict[str, object]:
         return {

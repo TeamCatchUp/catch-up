@@ -61,12 +61,6 @@ _scheduler: AsyncIOScheduler | None = None
 SEOUL_TZ = ZoneInfo("Asia/Seoul")
 VECTOR_STORE_V2_BACKFILL_SEQUENCE: tuple[SequentialBackfillSpec, ...] = (
     SequentialBackfillSpec(
-        key="jira/issue",
-        connector="jira",
-        entity_type="issue",
-        service_factory=JiraIssueV2BackfillService,
-    ),
-    SequentialBackfillSpec(
         key="confluence/page",
         connector="confluence",
         entity_type="page",
@@ -77,6 +71,18 @@ VECTOR_STORE_V2_BACKFILL_SEQUENCE: tuple[SequentialBackfillSpec, ...] = (
         connector="confluence",
         entity_type="blogpost",
         service_factory=ConfluenceBlogpostV2BackfillService,
+    ),
+)
+
+# TEMP : For Confluence Backfill Test Purposes
+_VECTOR_STORE_V2_BACKFILL_SEQUENCE_DISABLED_FOR_CONFLUENCE_TEST: tuple[
+    SequentialBackfillSpec, ...
+] = (
+    SequentialBackfillSpec(
+        key="jira/issue",
+        connector="jira",
+        entity_type="issue",
+        service_factory=JiraIssueV2BackfillService,
     ),
     SequentialBackfillSpec(
         key="github/pr",
@@ -288,7 +294,6 @@ async def run_vector_store_v2_sequential_backfill_job():
     result = await run_sequential_v2_backfill(
         VECTOR_STORE_V2_BACKFILL_SEQUENCE,
         batch_size=settings.VECTOR_STORE_V2_BACKFILL_BATCH_SIZE,
-        locked_by="scheduler",
     )
     log_method = logger.warning if result.status in {"completed_with_failures", "stopped"} else logger.info
     log_method(

@@ -5,6 +5,7 @@ import api from '@/shared/api/client';
 import { API } from '@/shared/api/endpoints';
 
 import type {
+  InquiryAutomationPatchRequest,
   InquiryAutomationPublishRequest,
   InquiryAutomationPublishResponse,
   InquiryAutomationUpdateRequest,
@@ -22,6 +23,18 @@ export const inquiryAutomationsMutations = {
       AxiosResponse<InquiryAutomationPublishResponse>,
       Error,
       InquiryAutomationPublishRequest
+    >,
+
+  patchSettings: () =>
+    ({
+      mutationKey: ['agent-studio', 'inquiry-automations', 'patch-settings'] as const,
+      mutationFn: ({ agentSpecId, body }: { agentSpecId: number; body: InquiryAutomationPatchRequest }) =>
+        api.patch<void>(API.automations.inquirySettings(agentSpecId), body),
+      meta: { invalidates: [[...inquiryAutomationsQueries.all(), 'list']] },
+    }) satisfies UseMutationOptions<
+      AxiosResponse<void>,
+      Error,
+      { agentSpecId: number; body: InquiryAutomationPatchRequest }
     >,
 
   updateStatus: () =>

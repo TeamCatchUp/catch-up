@@ -24,6 +24,7 @@ from catchup.components.reranker.service import BaseRerankService
 from catchup.components.vector_db.base import BaseVectorDbService
 from catchup.components.vector_db.factory import get_vector_db_service
 from catchup.components.vector_db.pgvector.constants import VectorDbProvider
+from catchup.rag.graph import BASE_RETRY_POLICY
 from catchup.rag.nodes import generate_vector_queries_node
 from catchup.rag.nodes import rerank_node
 from catchup.rag.nodes import search_vector_db_node
@@ -59,14 +60,17 @@ def build_inquiry_automation_graph(
     graph.add_node(
         "generate_vector_queries",
         partial(generate_vector_queries_node, llm=llm_small, timeout=15.0),
+        retry=BASE_RETRY_POLICY,
     )
     graph.add_node(
         "search_channel_talk",
         partial(search_vector_db_node, vector_db_service=vector_db_service),
+        retry=BASE_RETRY_POLICY,
     )
     graph.add_node(
         "grade",
         partial(grade_node, llm=llm_grade),
+        retry=BASE_RETRY_POLICY,
     )
     graph.add_node(
         "prepare_hybrid_search",
@@ -75,14 +79,17 @@ def build_inquiry_automation_graph(
     graph.add_node(
         "search_hybrid",
         partial(search_vector_db_node, vector_db_service=vector_db_service),
+        retry=BASE_RETRY_POLICY,
     )
     graph.add_node(
         "rerank",
         partial(rerank_node, rerank_service=rerank_service),
+        retry=BASE_RETRY_POLICY,
     )
     graph.add_node(
         "generate_guide",
         partial(generate_guide_node, llm=llm_large),
+        retry=BASE_RETRY_POLICY,
     )
     graph.add_node("send_slack", send_slack_node)
 

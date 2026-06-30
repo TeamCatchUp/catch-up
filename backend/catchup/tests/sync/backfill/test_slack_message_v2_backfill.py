@@ -8,9 +8,8 @@ from unittest.mock import Mock
 
 import pytest
 
-from catchup.sync.backfill.slack_message_v2 import SlackMessageV1Seed
-from catchup.sync.backfill.slack_message_v2 import _embedding_to_list
-from catchup.sync.backfill.slack_message_v2 import build_fetch_pending_seed_chunk_query
+from catchup.sync.backfill.base import BackfillSeed
+from catchup.sync.backfill.base import embedding_to_list
 from catchup.sync.backfill.slack_message_v2 import build_slack_message_v1_target_query
 from catchup.sync.backfill.slack_message_v2 import (
     build_slack_message_v1_target_seed_query,
@@ -26,8 +25,8 @@ from catchup.sync.ingestion.pipeline import run_sync_ingestion
 from catchup.sync.ingestion.schemas import SyncWindow
 
 
-def _seed() -> SlackMessageV1Seed:
-    return SlackMessageV1Seed(
+def _seed() -> BackfillSeed:
+    return BackfillSeed(
         langchain_id="slack:message:T123:C123:1712345678.000100",
         record_id="1712345678.000100",
         content="summarized v1 slack message content",
@@ -40,7 +39,7 @@ def _window() -> SyncWindow:
     return SyncWindow(window_start=now, window_end=now)
 
 
-def _execution(seed: SlackMessageV1Seed) -> SlackMessageV2BackfillExecutionRequest:
+def _execution(seed: BackfillSeed) -> SlackMessageV2BackfillExecutionRequest:
     return SlackMessageV2BackfillExecutionRequest(
         tenant_id="T123",
         channel_id="C123",
@@ -88,18 +87,8 @@ def test_slack_backfill_seed_query_skips_already_hydrated_rows() -> None:
     assert "OFFSET" not in query
 
 
-def test_slack_timestamp_cursor_uses_decimal_ts_and_tiebreaker() -> None:
-    query = str(build_fetch_pending_seed_chunk_query())
-
-    assert "record_id::numeric(20,6) AS record_ts" in query
-    assert "record_ts > CAST(:after_record_ts AS numeric(20,6))" in query
-    assert "record_ts = CAST(:after_record_ts AS numeric(20,6))" in query
-    assert "langchain_id > COALESCE(:after_langchain_id, '')" in query
-    assert "ORDER BY record_ts, langchain_id" in query
-
-
 def test_slack_message_v2_embedding_to_list_treats_null_as_empty() -> None:
-    assert _embedding_to_list(None) == []
+    assert embedding_to_list(None) == []
 
 
 def test_slack_backfill_seed_rejects_empty_embedding() -> None:
@@ -117,6 +106,8 @@ async def test_backfill_adapter_hydrates_message_and_reuses_v1_seed_values() -> 
     seed = _seed()
     vector_store = SimpleNamespace(
         upsert_documents=AsyncMock(return_value=[seed.langchain_id]),
+    )
+    v2_knowledge_repository = SimpleNamespace(
         find_missing_metadata_namespace_ids=AsyncMock(return_value=()),
     )
     session_factory = Mock()
@@ -137,6 +128,7 @@ async def test_backfill_adapter_hydrates_message_and_reuses_v1_seed_values() -> 
         ),
         repository=SimpleNamespace(),
         vector_store=vector_store,
+        v2_knowledge_repository=v2_knowledge_repository,
         v2_document_builder=SlackMessageV2DocumentBuilder(
             session_factory=session_factory,
         ),
@@ -161,10 +153,10 @@ async def test_backfill_adapter_hydrates_message_and_reuses_v1_seed_values() -> 
     assert document.page_content == seed.content
     assert document.metadata["scope_id"] == "T123"
     assert document.metadata["target_id"] == "C123"
-    assert document.metadata["slack_message"]["author"]["catchup_user_id"] == "42"
+    assert document.metadata["slack_message"]["author"]["internal_user_id"] == "42"
     assert upsert_call.kwargs["ids"] == [seed.langchain_id]
     assert upsert_call.kwargs["embeddings"] == [seed.embedding]
-    vector_store.find_missing_metadata_namespace_ids.assert_awaited_once_with(
+    v2_knowledge_repository.find_missing_metadata_namespace_ids.assert_awaited_once_with(
         [seed.langchain_id],
         namespace="slack_message",
     )
@@ -175,6 +167,8 @@ async def test_backfill_adapter_treats_missing_slack_metadata_as_failed() -> Non
     seed = _seed()
     vector_store = SimpleNamespace(
         upsert_documents=AsyncMock(return_value=[seed.langchain_id]),
+    )
+    v2_knowledge_repository = SimpleNamespace(
         find_missing_metadata_namespace_ids=AsyncMock(
             return_value=(seed.langchain_id,)
         ),
@@ -197,6 +191,7 @@ async def test_backfill_adapter_treats_missing_slack_metadata_as_failed() -> Non
         ),
         repository=SimpleNamespace(),
         vector_store=vector_store,
+        v2_knowledge_repository=v2_knowledge_repository,
         v2_document_builder=SlackMessageV2DocumentBuilder(
             session_factory=session_factory,
         ),

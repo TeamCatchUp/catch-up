@@ -50,9 +50,8 @@ def test_github_pr_v2_record_serializes_contract_without_contextual_content() ->
                     metadata={
                         "oid": "abcdef123456",
                         "author": {
-                            "login": "ba2slk",
-                            "name": "팀원C",
-                            "catchup_user_id": "usr_github_ba2slk",
+                            "external_user_id": "ba2slk",
+                            "internal_user_id": "usr_github_ba2slk",
                         },
                     },
                 ),
@@ -63,9 +62,8 @@ def test_github_pr_v2_record_serializes_contract_without_contextual_content() ->
                         "id": 100,
                         "state": "COMMENTED",
                         "author": {
-                            "login": "reviewer",
-                            "name": "Reviewer",
-                            "catchup_user_id": None,
+                            "external_user_id": "reviewer",
+                            "internal_user_id": None,
                         },
                         "submitted_at": _dt("2026-05-19T20:15:00+00:00"),
                     },
@@ -76,9 +74,8 @@ def test_github_pr_v2_record_serializes_contract_without_contextual_content() ->
                     metadata={
                         "id": 101,
                         "author": {
-                            "login": "reviewer",
-                            "name": "Reviewer",
-                            "catchup_user_id": None,
+                            "external_user_id": "reviewer",
+                            "internal_user_id": None,
                         },
                         "path": "backend/catchup/prompts/rag/agent_limit_extraction.j2",
                         "line": 9,
@@ -101,29 +98,20 @@ def test_github_pr_v2_record_serializes_contract_without_contextual_content() ->
             review_decision="COMMENTED",
             changed_files=38,
             author=GithubPrUserMetadata(
-                login="ba2slk",
-                name="팀원C",
-                email="",
-                avatar_url="https://github.com/ba2slk.png",
-                type="User",
-                url="https://github.com/ba2slk",
-                catchup_user_id="usr_github_ba2slk",
+                external_user_id="ba2slk",
+                internal_user_id="usr_github_ba2slk",
             ),
             assignees=[],
             requested_reviewers=[],
             review_authors=[
                 GithubPrUserMetadata(
-                    login="reviewer",
-                    name="Reviewer",
-                    catchup_user_id=None,
+                    external_user_id="reviewer",
+                    internal_user_id=None,
                 )
             ],
             merged_by=GithubPrUserMetadata(
-                login="ba2slk",
-                name="팀원C",
-                email="",
-                avatar_url="https://github.com/ba2slk.png",
-                catchup_user_id="usr_github_ba2slk",
+                external_user_id="ba2slk",
+                internal_user_id="usr_github_ba2slk",
             ),
             labels=[
                 GithubPrLabelMetadata(
@@ -188,10 +176,11 @@ def test_github_pr_v2_record_serializes_contract_without_contextual_content() ->
 
     github_pr = metadata["github_pr"]
     assert github_pr["state"] == "merged"
-    assert github_pr["author"]["login"] == "ba2slk"
-    assert github_pr["author"]["avatar_url"] == "https://github.com/ba2slk.png"
-    assert github_pr["author"]["catchup_user_id"] == "usr_github_ba2slk"
-    assert github_pr["review_authors"][0]["catchup_user_id"] is None
+    assert github_pr["author"] == {
+        "external_user_id": "ba2slk",
+        "internal_user_id": "usr_github_ba2slk",
+    }
+    assert github_pr["review_authors"][0]["internal_user_id"] is None
     assert github_pr["labels"] == [
         {
             "name": "refactor",

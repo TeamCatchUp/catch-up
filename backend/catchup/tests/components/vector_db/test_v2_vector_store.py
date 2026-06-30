@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from contextlib import nullcontext
 from datetime import datetime
 from datetime import timezone
 from unittest.mock import AsyncMock
@@ -109,6 +108,36 @@ async def test_initialize_creates_langchain_table_when_missing(monkeypatch) -> N
     assert create_kwargs["id_column"] == KNOWLEDGE_STORE_ID_COLUMN
     assert create_kwargs["metadata_json_column"] == KNOWLEDGE_STORE_METADATA_JSON_COLUMN
     assert create_kwargs["metadata_columns"] == KNOWLEDGE_STORE_METADATA_COLUMN_NAMES
+
+
+@pytest.mark.asyncio
+async def test_initialize_reuses_existing_async_engine(monkeypatch) -> None:
+    async_engine = object()
+    pg_engine = MagicMock()
+    pg_engine.ainit_vectorstore_table = AsyncMock()
+    from_engine = MagicMock(return_value=pg_engine)
+    vector_store = MagicMock()
+    create = AsyncMock(return_value=vector_store)
+    monkeypatch.setattr(
+        "catchup.components.vector_db.v2.vector_store.sqlalchemy_async_engine",
+        async_engine,
+    )
+    monkeypatch.setattr(
+        "catchup.components.vector_db.v2.vector_store.PGEngine.from_engine",
+        from_engine,
+    )
+    monkeypatch.setattr(
+        "catchup.components.vector_db.v2.vector_store.PGVectorStore.create",
+        create,
+    )
+    store = VectorStore(embeddings=MagicMock())
+    monkeypatch.setattr(store, "_table_exists", lambda: True)
+
+    await store.initialize()
+
+    from_engine.assert_called_once_with(async_engine)
+    pg_engine.ainit_vectorstore_table.assert_not_awaited()
+    assert create.await_args.kwargs["engine"] is pg_engine
 
 
 @pytest.mark.asyncio
@@ -231,74 +260,6 @@ async def test_delete_delegates_to_langchain_store() -> None:
             "github:pr:TeamCatchUp/CatchUp:725",
         ]
     )
-
-
-@pytest.mark.asyncio
-async def test_delete_by_id_prefix_uses_table_delete_with_like_predicate() -> None:
-    db = MagicMock()
-    db.execute.return_value = MagicMock(rowcount=2)
-    store = VectorStore(
-        embeddings=MagicMock(),
-        session_factory=lambda: nullcontext(db),
-    )
-
-    deleted = await store.delete_by_id_prefix("channel_talk:document_article:")
-
-    assert deleted == 2
-    db.execute.assert_called_once()
-    statement, params = db.execute.call_args.args
-    assert f"DELETE FROM {KNOWLEDGE_STORE_TABLE_NAME}" in str(statement)
-    assert (
-        f"WHERE {KNOWLEDGE_STORE_ID_COLUMN} LIKE :id_prefix ESCAPE '\\'"
-        in str(statement)
-    )
-    assert params == {"id_prefix": r"channel\_talk:document\_article:%"}
-    db.commit.assert_called_once()
-
-
-@pytest.mark.asyncio
-async def test_delete_by_id_prefix_escapes_like_wildcards() -> None:
-    db = MagicMock()
-    db.execute.return_value = MagicMock(rowcount=1)
-    store = VectorStore(
-        embeddings=MagicMock(),
-        session_factory=lambda: nullcontext(db),
-    )
-
-    deleted = await store.delete_by_id_prefix("doc_%\\")
-
-    assert deleted == 1
-    _statement, params = db.execute.call_args.args
-    assert params == {"id_prefix": r"doc\_\%\\%"}
-
-
-@pytest.mark.asyncio
-async def test_find_missing_metadata_namespace_ids_checks_json_namespace() -> None:
-    db = MagicMock()
-    db.execute.return_value = [("doc-2",), ("doc-3",)]
-    store = VectorStore(
-        embeddings=MagicMock(),
-        session_factory=lambda: nullcontext(db),
-    )
-
-    missing_ids = await store.find_missing_metadata_namespace_ids(
-        ["doc-1", "doc-2", "doc-3"],
-        namespace="github_issue",
-    )
-
-    assert missing_ids == ("doc-2", "doc-3")
-    db.execute.assert_called_once()
-    statement, params = db.execute.call_args.args
-    statement_text = str(statement)
-    assert "WITH requested(document_id) AS" in statement_text
-    assert "LEFT JOIN knowledge_store store" in statement_text
-    assert "jsonb_exists" in statement_text
-    assert params == {
-        "id_0": "doc-1",
-        "id_1": "doc-2",
-        "id_2": "doc-3",
-        "namespace": "github_issue",
-    }
 
 
 @pytest.mark.asyncio

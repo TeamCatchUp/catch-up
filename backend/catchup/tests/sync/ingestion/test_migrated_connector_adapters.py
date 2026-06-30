@@ -19,6 +19,7 @@ from catchup.sync.ingestion.adapters.confluence import (
     ConfluenceSpaceIncrementalSyncExecutionRequest,
 )
 from catchup.sync.ingestion.adapters.confluence import ConfluenceSpaceSyncAdapter
+from catchup.sync.ingestion.adapters.confluence import ConfluenceSpaceSyncDependencies
 from catchup.sync.ingestion.adapters.github import GithubRepositoryFullSyncAdapter
 from catchup.sync.ingestion.adapters.github import (
     GithubRepositoryFullSyncExecutionRequest,
@@ -123,13 +124,14 @@ class MigratedConnectorDescriptorTests(IsolatedAsyncioTestCase):
             ),
             patch.object(
                 slack_factory,
-                "_build_repository",
-                Mock(return_value=SimpleNamespace()),
-            ),
-            patch.object(
-                slack_factory.settings,
-                "VECTOR_STORE_V2_DUAL_WRITE_ENABLED",
-                False,
+                "create_knowledge_store_dependencies",
+                AsyncMock(
+                    return_value=SimpleNamespace(
+                        repository=SimpleNamespace(),
+                        vector_store=None,
+                        v2_knowledge_repository=None,
+                    )
+                ),
             ),
             patch.object(
                 slack_factory,
@@ -480,16 +482,26 @@ class MigratedConnectorDescriptorTests(IsolatedAsyncioTestCase):
 
     async def test_confluence_deleted_incremental_result_reports_deleted_count(self) -> None:
         repository = SimpleNamespace(delete_by_id_prefix=AsyncMock())
+        v2_knowledge_repository = SimpleNamespace(
+            delete_multiple_chunks_by_id=AsyncMock(return_value=1),
+        )
 
         async def load_space_context(_space_keys):
             return {"ENG": "space-1"}, {"ENG": "Engineering"}, {}
 
-        service = SimpleNamespace(
+        dependencies = ConfluenceSpaceSyncDependencies(
             cloud_id="cloud-123",
+            site_url="",
+            client=SimpleNamespace(),
             repository=repository,
-            _load_space_sync_context=load_space_context,
+            transformer=SimpleNamespace(),
         )
-        adapter = ConfluenceSpaceSyncAdapter(service=service)
+        adapter = ConfluenceSpaceSyncAdapter(
+            dependencies=dependencies,
+            enable_v2_dual_write=True,
+            v2_knowledge_repository=v2_knowledge_repository,
+        )
+        adapter._load_space_sync_context = load_space_context  # noqa: SLF001
         execution = ConfluenceSpaceIncrementalSyncExecutionRequest(
             tenant_id="cloud-123",
             space_key="ENG",
@@ -521,6 +533,13 @@ class MigratedConnectorDescriptorTests(IsolatedAsyncioTestCase):
         repository.delete_by_id_prefix.assert_awaited_once_with(
             "confluence:page:1001:chunk:"
         )
+        v2_knowledge_repository.delete_multiple_chunks_by_id.assert_awaited_once_with(
+            source="confluence",
+            entity_type="page",
+            scope_id="cloud-123",
+            target_id="ENG",
+            record_id="1001",
+        )
 
     async def test_confluence_full_sync_batch_persists_transformed_items(self) -> None:
         stored: list[dict[str, object]] = []
@@ -533,19 +552,21 @@ class MigratedConnectorDescriptorTests(IsolatedAsyncioTestCase):
                         page_content="page",
                     )
                 ],
-                embed_inputs=[],
             )
 
         async def store_transform_result(**kwargs):
             stored.append(kwargs)
 
-        service = SimpleNamespace(
+        dependencies = ConfluenceSpaceSyncDependencies(
             cloud_id="cloud-123",
-            _process_page=process_page,
-            _store_transform_result=store_transform_result,
-            _is_retryable_connector_error=lambda _exc: False,
+            site_url="",
+            client=SimpleNamespace(),
+            repository=SimpleNamespace(),
+            transformer=SimpleNamespace(),
         )
-        adapter = ConfluenceSpaceSyncAdapter(service=service)
+        adapter = ConfluenceSpaceSyncAdapter(dependencies=dependencies)
+        adapter._process_page = process_page  # noqa: SLF001
+        adapter._store_transform_result = store_transform_result  # noqa: SLF001
         execution = ConfluenceSpaceFullSyncExecutionRequest(
             tenant_id="cloud-123",
             space_key="ENG",

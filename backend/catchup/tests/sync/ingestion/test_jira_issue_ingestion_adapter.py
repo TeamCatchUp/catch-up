@@ -146,11 +146,9 @@ class _FakeRepository:
 
 
 class _FakeVectorStore:
-    def __init__(self, missing_metadata_ids: tuple[str, ...] = ()) -> None:
+    def __init__(self) -> None:
         self.upsert_calls: list[dict] = []
         self.delete_calls: list[list[str]] = []
-        self.missing_metadata_ids = missing_metadata_ids
-        self.metadata_namespace_checks: list[dict] = []
 
     async def upsert_documents(self, documents, ids, embeddings):
         self.upsert_calls.append(
@@ -158,14 +156,20 @@ class _FakeVectorStore:
         )
         return ids
 
+    async def delete(self, ids):
+        self.delete_calls.append(ids)
+
+
+class _FakeV2KnowledgeRepository:
+    def __init__(self, missing_metadata_ids: tuple[str, ...] = ()) -> None:
+        self.missing_metadata_ids = missing_metadata_ids
+        self.metadata_namespace_checks: list[dict] = []
+
     async def find_missing_metadata_namespace_ids(self, ids, *, namespace):
         self.metadata_namespace_checks.append(
             {"ids": list(ids), "namespace": namespace}
         )
         return self.missing_metadata_ids
-
-    async def delete(self, ids):
-        self.delete_calls.append(ids)
 
 
 class _FakeJiraAssigneeResolver:
@@ -198,6 +202,7 @@ def _dependencies(
     repository: _FakeRepository,
     *,
     vector_store: _FakeVectorStore | None = None,
+    v2_knowledge_repository: _FakeV2KnowledgeRepository | None = None,
     assignee_resolver: _FakeJiraAssigneeResolver | None = None,
 ):
     v2_document_builder = None
@@ -215,6 +220,7 @@ def _dependencies(
         repository=repository,
         summarizer=None,
         vector_store=vector_store,
+        v2_knowledge_repository=v2_knowledge_repository,
         v2_document_builder=v2_document_builder,
     )
 
@@ -377,7 +383,7 @@ class JiraIssueIngestionAdapterTests(IsolatedAsyncioTestCase):
         )
         self.assertEqual(
             vector_store.upsert_calls[0]["documents"][0]
-            .metadata["jira_issue"]["assignee"]["catchup_user_id"],
+            .metadata["jira_issue"]["assignee"]["internal_user_id"],
             "42",
         )
         self.assertEqual(assignee_resolver.account_ids, ["acc-assignee"])
@@ -474,12 +480,14 @@ class JiraIssueIngestionAdapterTests(IsolatedAsyncioTestCase):
         )
         repository = _FakeRepository()
         vector_store = _FakeVectorStore()
+        v2_knowledge_repository = _FakeV2KnowledgeRepository()
         assignee_resolver = _FakeJiraAssigneeResolver()
         adapter = JiraIssueV2BackfillAdapter(
             dependencies=_dependencies(
                 _FakeClient(),
                 repository,
                 vector_store=vector_store,
+                v2_knowledge_repository=v2_knowledge_repository,
                 assignee_resolver=assignee_resolver,
             ),
         )
@@ -522,14 +530,14 @@ class JiraIssueIngestionAdapterTests(IsolatedAsyncioTestCase):
         self.assertEqual(document.page_content, seed.content)
         self.assertEqual(document.metadata["internal_author_id"], "126")
         self.assertEqual(
-            document.metadata["jira_issue"]["assignee"]["catchup_user_id"],
+            document.metadata["jira_issue"]["assignee"]["internal_user_id"],
             "126",
         )
         self.assertEqual(assignee_resolver.account_ids, ["acc-backfill"])
         self.assertEqual(vector_store.upsert_calls[0]["ids"], [seed.langchain_id])
         self.assertEqual(vector_store.upsert_calls[0]["embeddings"], [seed.embedding])
         self.assertEqual(
-            vector_store.metadata_namespace_checks,
+            v2_knowledge_repository.metadata_namespace_checks,
             [{"ids": [seed.langchain_id], "namespace": "jira_issue"}],
         )
         self.assertEqual(persisted.persisted_count, 1)
@@ -542,12 +550,16 @@ class JiraIssueIngestionAdapterTests(IsolatedAsyncioTestCase):
             content="seeded v1 content",
             embedding=[0.1, 0.2, 0.3],
         )
-        vector_store = _FakeVectorStore(missing_metadata_ids=(seed.langchain_id,))
+        vector_store = _FakeVectorStore()
+        v2_knowledge_repository = _FakeV2KnowledgeRepository(
+            missing_metadata_ids=(seed.langchain_id,)
+        )
         adapter = JiraIssueV2BackfillAdapter(
             dependencies=_dependencies(
                 _FakeClient(),
                 _FakeRepository(),
                 vector_store=vector_store,
+                v2_knowledge_repository=v2_knowledge_repository,
             ),
         )
         execution = JiraIssueV2BackfillExecutionRequest(

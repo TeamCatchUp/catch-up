@@ -1,27 +1,22 @@
 import asyncio
-import logging
 from dataclasses import dataclass
 from dataclasses import field
 from datetime import datetime
 from datetime import timedelta
 from datetime import timezone
-from typing import Any
 from typing import Literal
 
+import structlog
 from fastapi.concurrency import run_in_threadpool
-from langchain_core.documents import Document
 from sqlalchemy.orm import Session
 
-from catchup.components.embedder.service import AwsBedrockEmbeddingService
 from catchup.components.vector_db.pgvector import PGVectorRepository
-from catchup.components.vector_db.v2 import VectorStore
 from catchup.configs.config import settings
 from catchup.connectors.atlassian.token_manager import AtlassianTokenProvider
 from catchup.connectors.atlassian.utils import parse_atlassian_datetime
 from catchup.connectors.confluence.client import ConfluenceApiClient
 from catchup.connectors.confluence.client import ConfluenceApiError
 from catchup.connectors.confluence.client import ConfluenceRateLimitError
-from catchup.connectors.confluence.schemas import ConfluenceAttachmentResponse
 from catchup.connectors.confluence.schemas import ConfluenceBlogPostResponse
 from catchup.connectors.confluence.schemas import ConfluenceCommentResponse
 from catchup.connectors.confluence.schemas import ConfluenceLabelResponse
@@ -29,19 +24,12 @@ from catchup.connectors.confluence.schemas import ConfluencePageResponse
 from catchup.db.confluence import domain_repository
 from catchup.db.engine import SessionLocal
 from catchup.sync.audit import SyncAuditContext
-from catchup.sync.common.schemas import TargetSyncResult
-from catchup.sync.ingestion.document_builders.confluence import (
-    ConfluenceAttachmentAsset,
-)
 from catchup.sync.ingestion.document_builders.confluence import ConfluenceTransformer
 from catchup.sync.ingestion.document_builders.confluence import (
     ConfluenceTransformResult,
 )
 
-logger = logging.getLogger(__name__)
-
-SUPPORTED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/gif", "image/webp"}
-
+logger = structlog.get_logger(__name__)
 
 @dataclass(slots=True, frozen=True)
 class ConfluenceRecordGapItem:
@@ -78,7 +66,6 @@ class ConfluenceIngestionService:
         token_provider: AtlassianTokenProvider,
         site_url: str,
         repository: PGVectorRepository,
-        embedding_service: AwsBedrockEmbeddingService,
     ):
         self.cloud_id = cloud_id
         self.site_url = site_url.rstrip("/")
@@ -86,7 +73,6 @@ class ConfluenceIngestionService:
         self.client = ConfluenceApiClient(cloud_id, token_provider)
         self.transformer = ConfluenceTransformer()
         self.repository = repository
-        self.embedding_service = embedding_service
 
     @staticmethod
     def _is_retryable_connector_error(exc: Exception) -> bool:
@@ -95,9 +81,17 @@ class ConfluenceIngestionService:
         )
 
     async def initialize(self) -> None:
-        logger.info(f"[CONFLUENCE][SERVICE] Ensuring initialization: cloud_id={self.cloud_id}")
+        logger.info(
+            "confluence_ingestion_service_initialize_started",
+            connector="confluence",
+            scope_id=self.cloud_id,
+        )
         self.repository.ensure_initialized()
-        logger.info(f"[CONFLUENCE][SERVICE] Initialized Successfully: cloud_id={self.cloud_id}")
+        logger.info(
+            "confluence_ingestion_service_initialized",
+            connector="confluence",
+            scope_id=self.cloud_id,
+        )
 
     def _resolve_sync_from_dt(
         self,
@@ -153,35 +147,6 @@ class ConfluenceIngestionService:
         space_key: str,
     ) -> tuple[str, str | None, dict[str, str | None]]:
         return await asyncio.to_thread(self._load_space_context_db, space_key)
-
-    def _load_space_keys_db(self) -> list[str]:
-        with SessionLocal() as db:
-            spaces = domain_repository.get_spaces_by_cloud_id(db, self.cloud_id)
-            return [
-                (space.space_key or "").strip()
-                for space in spaces
-                if (space.space_key or "").strip()
-            ]
-
-    async def _load_space_keys(self) -> list[str]:
-        return await asyncio.to_thread(self._load_space_keys_db)
-
-    def _load_space_sync_context_db(
-        self,
-        space_keys: list[str],
-    ) -> tuple[dict[str, str], dict[str, str | None], dict[str, str | None]]:
-        with SessionLocal() as db:
-            return (
-                domain_repository.get_space_id_map(db, self.cloud_id, space_keys),
-                domain_repository.get_space_name_map(db, self.cloud_id, space_keys),
-                self._load_user_name_map(db),
-            )
-
-    async def _load_space_sync_context(
-        self,
-        space_keys: list[str],
-    ) -> tuple[dict[str, str], dict[str, str | None], dict[str, str | None]]:
-        return await asyncio.to_thread(self._load_space_sync_context_db, space_keys)
 
     async def _collect_page_ids(
         self,
@@ -245,8 +210,6 @@ class ConfluenceIngestionService:
         space_key: str,
         transform_result: ConfluenceTransformResult,
         audit_context: SyncAuditContext | None = None,
-        vector_store: VectorStore | None = None,
-        v2_documents: list[Document] | None = None,
     ) -> tuple[str, ...]:
         documents = transform_result.documents
         await self.repository.delete_by_id_prefix(
@@ -273,269 +236,8 @@ class ConfluenceIngestionService:
                 f"doc_count={len(documents)}"
             ),
         )
-        if vector_store is None or not v2_documents:
-            return ()
-
-        try:
-            embedding_by_id = dict(zip(doc_ids, embeddings, strict=True))
-            v2_document_ids = [str(document.id) for document in v2_documents]
-            v2_embeddings = [
-                embedding_by_id[document_id] for document_id in v2_document_ids
-            ]
-            await vector_store.upsert_documents(
-                v2_documents,
-                ids=v2_document_ids,
-                embeddings=v2_embeddings,
-            )
-        except Exception as exc:
-            logger.warning(
-                "[CONFLUENCE][V2] Failed to upsert v2 documents: "
-                "entity_type=%s, content_id=%s, doc_count=%s, error=%s",
-                entity_type,
-                content_id,
-                len(v2_documents),
-                exc,
-                exc_info=True,
-            )
-            return tuple(str(document.id) for document in v2_documents)
         return ()
 
-    # ================================================================
-    # Full Sync
-    # ================================================================
-    async def full_sync(
-            self,
-            space_keys: list[str] | None = None,
-            sync_from_dt: datetime | None = None,
-            audit_context: SyncAuditContext | None = None,
-    ) -> TargetSyncResult:
-        sync_from = sync_from_dt or (
-            datetime.now(timezone.utc) - timedelta(days=settings.DEFAULT_SYNC_DAYS)
-        )
-
-        if space_keys is None:
-            normalized_space_keys = await self._load_space_keys()
-        else:
-            normalized_space_keys = [
-                key.strip()
-                for key in space_keys
-                if key and key.strip()
-            ]
-            normalized_space_keys = list(dict.fromkeys(normalized_space_keys))
-
-        logger.info(
-            f"[CONFLUENCE][FULL SYNC] Started: "
-            f"cloud_id={self.cloud_id}, spaces={normalized_space_keys or 'all'} since={sync_from.isoformat()}"
-        )
-
-        results: dict[str, Any] = {
-            "pages": {"synced": 0, "errors": 0},
-            "blogposts": {"synced": 0, "errors": 0},
-        }
-
-        try:
-            if not normalized_space_keys:
-                logger.warning(f"[CONFLUENCE][FULL SYNC] No spaces to sync: cloud_id={self.cloud_id}")
-                return TargetSyncResult(skipped=True)
-
-            space_id_map, space_name_map, user_name_map = await self._load_space_sync_context(
-                normalized_space_keys,
-            )
-            if not space_id_map:
-                logger.error(
-                    "[CONFLUENCE][FULL SYNC] No spaces found from requested keys: cloud_id=%s, requested_space_keys=%s",
-                    self.cloud_id,
-                    normalized_space_keys,
-                )
-                results["pages"]["errors"] += max(1, len(normalized_space_keys))
-                results["blogposts"]["errors"] += max(1, len(normalized_space_keys))
-                return TargetSyncResult(
-                    error_count=(
-                        int(results["pages"]["errors"]) + int(results["blogposts"]["errors"])
-                    )
-                )
-
-            missing_space_keys = [
-                space_key
-                for space_key in normalized_space_keys
-                if space_key not in space_id_map
-            ]
-            if missing_space_keys:
-                logger.error(
-                    "[CONFLUENCE][FULL SYNC] Some spaces are missing from metadata snapshot: cloud_id=%s, missing_space_keys=%s",
-                    self.cloud_id,
-                    missing_space_keys,
-                )
-                results["pages"]["errors"] += len(missing_space_keys)
-                results["blogposts"]["errors"] += len(missing_space_keys)
-
-            for space_key, space_id in space_id_map.items():
-                page_result = await self._sync_space_pages(
-                    space_id=space_id, space_key=space_key, since=sync_from,
-                    user_name_map=user_name_map, space_name=space_name_map.get(space_key),
-                    audit_context=audit_context,
-                )
-                results["pages"]["synced"] += page_result["synced"]
-                results["pages"]["errors"] += page_result["errors"]
-
-                blog_result = await self._sync_space_blogposts(
-                    space_id=space_id, space_key=space_key, since=sync_from,
-                    user_name_map=user_name_map, space_name=space_name_map.get(space_key),
-                    audit_context=audit_context,
-                )
-                results["blogposts"]["synced"] += blog_result["synced"]
-                results["blogposts"]["errors"] += blog_result["errors"]
-
-            logger.info(
-                f"[CONFLUENCE][FULL SYNC] Completed : cloud_id = {self.cloud_id}, results = {results}"
-            )
-            return TargetSyncResult(
-                synced_count=(
-                    int(results["pages"]["synced"]) + int(results["blogposts"]["synced"])
-                ),
-                error_count=(
-                    int(results["pages"]["errors"]) + int(results["blogposts"]["errors"])
-                ),
-            )
-
-        except Exception as e:
-            logger.error(f"[CONFLUENCE][FULL SYNC] Failed: cloud_id={self.cloud_id}, error={e}")
-            raise
-        
-    async def _sync_space_pages(
-            self,
-            space_id: str,
-            space_key: str,
-            since: datetime | None = None,
-            user_name_map: dict[str, str | None] | None = None,
-            space_name: str | None = None,
-            audit_context: SyncAuditContext | None = None,
-    ) -> dict[str, int]:
-
-        results = {"synced": 0, "errors": 0}
-
-        try:
-            should_stop = False
-            async for batch in self.client.iter_pages(
-                space_id=space_id, body_format="storage",
-            ):
-                for raw_page in batch:
-                    try:
-                        page = ConfluencePageResponse.model_validate(raw_page)
-
-                        modified_at = parse_atlassian_datetime(
-                            page.version.created_at if page.version else None
-                        )
-                        if since and modified_at and modified_at < since:
-                            should_stop = True
-                            continue
-
-                        transform_result = await self._process_page(
-                            page, space_key=space_key, space_name=space_name, user_name_map=user_name_map,
-                        )
-                        await self._store_transform_result(
-                            entity_type="page",
-                            content_id=page.id,
-                            space_key=space_key,
-                            transform_result=transform_result,
-                            audit_context=audit_context,
-                        )
-
-                        results["synced"] += 1
-
-                    except Exception as e:
-                        if self._is_retryable_connector_error(e):
-                            raise
-                        logger.error(
-                            f"[CONFLUENCE][SYNC] Failed to process page: "
-                            f"space_key={space_key}, page_id={raw_page.get('id')}, error={e}"
-                        )
-                        results["errors"] += 1
-                if should_stop:
-                    break
-
-            logger.info(
-                f"[CONFLUENCE][SYNC] Pages completed: "
-                f"space_key={space_key}, synced={results['synced']}, errors={results['errors']}"
-            )
-
-        except Exception as e:
-            if self._is_retryable_connector_error(e):
-                raise
-            logger.error(
-                f"[CONFLUENCE][SYNC] Page sync failed: space_key={space_key}, error={e}"
-            )
-            results["errors"] += 1
-
-        return results
-    
-    async def _sync_space_blogposts(
-            self,
-            space_id: str,
-            space_key: str,
-            since: datetime | None = None,
-            user_name_map: dict[str, str | None] | None = None,
-            space_name: str | None = None,
-            audit_context: SyncAuditContext | None = None,
-    ) -> dict[str, int]:
-        
-        results = {"synced": 0, "errors": 0}
-
-        try:
-            should_stop = False
-            async for batch in self.client.iter_blogposts(
-                space_id = space_id, body_format="storage",
-            ):
-                for raw_blogpost in batch:
-                    try:
-                        blogpost = ConfluenceBlogPostResponse.model_validate(raw_blogpost)
-
-                        modified_at = parse_atlassian_datetime(
-                            blogpost.version.created_at if blogpost.version else None
-                        )
-                        if since and modified_at and modified_at < since:
-                            should_stop = True
-                            continue
-
-                        transform_result = await self._process_blogpost(
-                            blogpost, space_key = space_key, space_name=space_name, user_name_map=user_name_map,
-                        )
-                        await self._store_transform_result(
-                            entity_type="blogpost",
-                            content_id=blogpost.id,
-                            space_key=space_key,
-                            transform_result=transform_result,
-                            audit_context=audit_context,
-                        )
-                        
-                        results["synced"] += 1
-
-                    except Exception as e:
-                        if self._is_retryable_connector_error(e):
-                            raise
-                        logger.error(
-                            f"[CONFLUENCE][SYNC] Failed to process blogpost: "
-                            f"space_key = {space_key}, blogpost_id = {raw_blogpost.get('id')}, error = {e}"
-                        )
-                        results["errors"] += 1
-                if should_stop:
-                    break
-
-            logger.info(
-                f"[CONFLUENCE][SYNC] Blogposts completed: "
-                f"space_key={space_key}, synced={results['synced']}, errors={results['errors']}"
-            )
-
-        except Exception as e:
-            if self._is_retryable_connector_error(e):
-                raise
-            logger.error(
-                f"[CONFLUENCE][SYNC] Blogpost sync failed: space_key={space_key}, error={e}"
-            )
-            results["errors"] += 1
-        
-        return results
-           
     def _transform_page_blocking(
         self,
         page: ConfluencePageResponse,
@@ -545,7 +247,6 @@ class ConfluenceIngestionService:
         labels: list[str] | None = None,
         footer_comments: list[ConfluenceCommentResponse] | None = None,
         inline_comments: list[ConfluenceCommentResponse] | None = None,
-        attachment_images: dict[str, ConfluenceAttachmentAsset] | None = None,
         user_name_map: dict[str, str | None] | None = None,
     ) -> ConfluenceTransformResult:
         return self.transformer.transform_page(
@@ -555,7 +256,6 @@ class ConfluenceIngestionService:
             labels=labels,
             footer_comments=footer_comments,
             inline_comments=inline_comments,
-            attachment_images=attachment_images,
             site_url=self.site_url,
             user_name_map=user_name_map,
         )
@@ -568,7 +268,6 @@ class ConfluenceIngestionService:
         space_name: str | None = None,
         labels: list[str] | None = None,
         footer_comments: list[ConfluenceCommentResponse] | None = None,
-        attachment_images: dict[str, ConfluenceAttachmentAsset] | None = None,
         user_name_map: dict[str, str | None] | None = None,
     ) -> ConfluenceTransformResult:
         return self.transformer.transform_blogpost(
@@ -577,7 +276,6 @@ class ConfluenceIngestionService:
             space_name=space_name,
             labels=labels,
             footer_comments=footer_comments,
-            attachment_images=attachment_images,
             site_url=self.site_url,
             user_name_map=user_name_map,
         )
@@ -591,11 +289,10 @@ class ConfluenceIngestionService:
             user_name_map: dict[str, str | None] | None = None,
     ) -> ConfluenceTransformResult:
         
-        footer_comments, inline_comments, labels, attachments = await self._fetch_supplementary(
-            content_type="pages", content_id = page.id,
+        footer_comments, inline_comments, labels = await self._fetch_supplementary(
+            api_content_type="pages",
+            content_id=page.id,
         )
-
-        attachment_images = await self._download_images(page.id, attachments)
 
         return await run_in_threadpool(
             self._transform_page_blocking,
@@ -605,7 +302,6 @@ class ConfluenceIngestionService:
             labels=labels,
             footer_comments=footer_comments,
             inline_comments=inline_comments,
-            attachment_images=attachment_images,
             user_name_map=user_name_map,
         )
     
@@ -617,11 +313,10 @@ class ConfluenceIngestionService:
         user_name_map: dict[str, str | None] | None = None,
     ) -> ConfluenceTransformResult:
 
-        footer_comments, _, labels, attachments = await self._fetch_supplementary(
-            content_type="blogposts", content_id=blogpost.id,
+        footer_comments, _, labels = await self._fetch_supplementary(
+            api_content_type="blogposts",
+            content_id=blogpost.id,
         )
-
-        attachment_images = await self._download_images(blogpost.id, attachments)
 
         return await run_in_threadpool(
             self._transform_blogpost_blocking,
@@ -630,7 +325,6 @@ class ConfluenceIngestionService:
             space_name=space_name,
             labels=labels,
             footer_comments=footer_comments,
-            attachment_images=attachment_images,
             user_name_map=user_name_map,
         )
 
@@ -672,11 +366,12 @@ class ConfluenceIngestionService:
 
                 if not transform_result.documents:
                     logger.info(
-                        "[CONFLUENCE][REPAIR] %s retry produced no documents: cloud_id=%s, space_key=%s, content_id=%s",
-                        record_type,
-                        self.cloud_id,
-                        space_key,
-                        content_id,
+                        "confluence_repair_retry_no_documents",
+                        connector="confluence",
+                        entity_type=record_type,
+                        scope_id=self.cloud_id,
+                        target_id=space_key,
+                        content_id=content_id,
                     )
                     return content_id, True
 
@@ -692,12 +387,15 @@ class ConfluenceIngestionService:
                 if self._is_retryable_connector_error(exc):
                     raise
                 logger.warning(
-                    "[CONFLUENCE][REPAIR] Failed to retry %s: cloud_id=%s, space_key=%s, content_id=%s, error=%s",
-                    record_type,
-                    self.cloud_id,
-                    space_key,
-                    content_id,
-                    exc,
+                    "confluence_repair_retry_failed",
+                    connector="confluence",
+                    entity_type=record_type,
+                    scope_id=self.cloud_id,
+                    target_id=space_key,
+                    content_id=content_id,
+                    exception_type=type(exc).__name__,
+                    error=str(exc),
+                    exc_info=True,
                 )
                 return content_id, False
 
@@ -815,113 +513,6 @@ class ConfluenceIngestionService:
 
         return ConfluenceRecordRetryResult(records=result_items)
 
-    async def _sync_exact_record(
-        self,
-        *,
-        record_type: Literal["page", "blogpost"],
-        record_id: str,
-        space_key: str,
-        space_name: str | None,
-        user_name_map: dict[str, str | None],
-        audit_context: SyncAuditContext | None,
-    ) -> dict[str, int]:
-        try:
-            if record_type == "page":
-                raw_content = await self.client.get_page_by_id(
-                    record_id,
-                    body_format="storage",
-                )
-                content = ConfluencePageResponse.model_validate(raw_content)
-                transform_result = await self._process_page(
-                    content,
-                    space_key=space_key,
-                    space_name=space_name,
-                    user_name_map=user_name_map,
-                )
-            else:
-                raw_content = await self.client.get_blogpost_by_id(
-                    record_id,
-                    body_format="storage",
-                )
-                content = ConfluenceBlogPostResponse.model_validate(raw_content)
-                transform_result = await self._process_blogpost(
-                    content,
-                    space_key=space_key,
-                    space_name=space_name,
-                    user_name_map=user_name_map,
-                )
-
-            await self._store_transform_result(
-                entity_type=record_type,
-                content_id=content.id,
-                space_key=space_key,
-                transform_result=transform_result,
-                audit_context=audit_context,
-            )
-            return {"synced": 1, "errors": 0}
-        except Exception as exc:
-            if self._is_retryable_connector_error(exc):
-                raise
-            logger.error(
-                "[CONFLUENCE][INCREMENTAL] Failed to sync exact %s: cloud_id=%s, space_key=%s, content_id=%s, error=%s",
-                record_type,
-                self.cloud_id,
-                space_key,
-                record_id,
-                exc,
-            )
-            return {"synced": 0, "errors": 1}
-
-    async def incremental_sync(
-        self,
-        *,
-        space_key: str,
-        record_type: str,
-        record_id: str,
-        event_kind: str,
-        since: datetime | None,
-        audit_context: SyncAuditContext | None = None,
-    ) -> dict[str, int | bool]:
-        normalized_record_type = record_type.strip().lower()
-        normalized_event_kind = event_kind.strip().lower()
-
-        if normalized_event_kind == "deleted":
-            prefix = f"confluence:{normalized_record_type}:{record_id}:chunk:"
-            await self.repository.delete_by_id_prefix(prefix)
-            return {
-                "synced": 1,
-                "errors": 0,
-                "skipped": False,
-            }
-
-        _space_id, space_name, user_name_map = await self._load_space_context(space_key)
-        if normalized_record_type == "page":
-            result = await self._sync_exact_record(
-                record_type="page",
-                record_id=record_id,
-                space_key=space_key,
-                space_name=space_name,
-                user_name_map=user_name_map,
-                audit_context=audit_context,
-            )
-        elif normalized_record_type == "blogpost":
-            result = await self._sync_exact_record(
-                record_type="blogpost",
-                record_id=record_id,
-                space_key=space_key,
-                space_name=space_name,
-                user_name_map=user_name_map,
-                audit_context=audit_context,
-            )
-        else:
-            raise ValueError(f"unsupported confluence record_type: {record_type}")
-
-        return {
-            "synced": int(result.get("synced", 0)),
-            "errors": int(result.get("errors", 0)),
-            "skipped": False,
-        }
-    
     def _load_user_name_map(self, db: Session) -> dict[str, str | None]:
         """
         ConfluenceUsers 테이블에서 account_type이 'atlassian'인 사용자만 로드해
@@ -934,28 +525,32 @@ class ConfluenceIngestionService:
             if user.account_type == "atlassian"
         }
         logger.info(
-            f"[CONFLUENCE][USER CACHE] Loaded {len(mapping)} atlassian users for cloud_id={self.cloud_id}"
+            "confluence_user_cache_loaded",
+            connector="confluence",
+            scope_id=self.cloud_id,
+            user_count=len(mapping),
         )
         return mapping
 
     async def _fetch_supplementary(
             self,
-            content_type: str,
+            api_content_type: str,
             content_id: str,
     ) -> tuple[
         list[ConfluenceCommentResponse],        # footer_comments
         list[ConfluenceCommentResponse],        # inline_comments
         list[str],                              # labels
-        list[ConfluenceAttachmentResponse],     # attachments
     ]:
+        entity_type = "page" if api_content_type == "pages" else "blogpost"
         tasks = [
-            self.client.get_content_footer_comments(content_type, content_id),
-            self.client.get_content_attachments(content_type, content_id),
-            self.client.get_content_labels(content_type, content_id),
+            self.client.get_content_footer_comments(api_content_type, content_id),
+            self.client.get_content_labels(api_content_type, content_id),
         ]
 
-        if content_type == "pages":
-            tasks.append(self.client.get_content_inline_comments(content_type, content_id))
+        if api_content_type == "pages":
+            tasks.append(
+                self.client.get_content_inline_comments(api_content_type, content_id)
+            )
         
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
@@ -966,30 +561,33 @@ class ConfluenceIngestionService:
         for result in results:
             if isinstance(result, Exception):
                 logger.warning(
-                    "[CONFLUENCE][SUPPLEMENTARY] Failed to fetch supplementary data: cloud_id=%s, content_type=%s, content_id=%s, error=%s",
-                    self.cloud_id,
-                    content_type,
-                    content_id,
-                    result,
+                    "confluence_supplementary_fetch_failed",
+                    connector="confluence",
+                    scope_id=self.cloud_id,
+                    entity_type=entity_type,
+                    api_content_type=api_content_type,
+                    content_id=content_id,
+                    exception_type=type(result).__name__,
+                    error=str(result),
                 )
 
         footer_comments = []
         if isinstance(results[0], list):
             footer_comments = [ConfluenceCommentResponse.model_validate(r) for r in results[0]]
 
-        attachments = []
-        if isinstance(results[1], list):
-            attachments = [ConfluenceAttachmentResponse.model_validate(r) for r in results[1]]
-
         labels = []
-        if isinstance(results[2], list):
-            labels = [ConfluenceLabelResponse.model_validate(r).name for r in results[2]]
+        if isinstance(results[1], list):
+            labels = [ConfluenceLabelResponse.model_validate(r).name for r in results[1]]
 
         inline_comments = []
-        if content_type == "pages" and len(results) > 3 and isinstance(results[3], list):
-            inline_comments = [ConfluenceCommentResponse.model_validate(r) for r in results[3]]
+        if (
+            api_content_type == "pages"
+            and len(results) > 2
+            and isinstance(results[2], list)
+        ):
+            inline_comments = [ConfluenceCommentResponse.model_validate(r) for r in results[2]]
         
-        return footer_comments, inline_comments, labels, attachments
+        return footer_comments, inline_comments, labels
     
     async def _generate_embeddings(
         self,
@@ -1004,81 +602,28 @@ class ConfluenceIngestionService:
         if not documents:
             return []
 
-        embed_inputs = transform_result.embed_inputs
-        embeddings: list[list[float] | None] = [None] * len(documents)
-
-        text_indices = [
-            index for index, embed_input in enumerate(embed_inputs)
-            if not embed_input.is_multimodal
-        ]
-        multimodal_pairs = [
-            (index, embed_inputs[index])
-            for index in range(len(embed_inputs))
-            if embed_inputs[index].is_multimodal
-        ]
-
-        if text_indices:
-            text_docs = [documents[index] for index in text_indices]
-            text_embeddings = await self.repository.generate_embeddings(
-                text_docs,
-                audit_context=audit_context,
-                context=(
-                    f"entity_type={entity_type},space_key={space_key},"
-                    f"doc_count={len(text_docs)},embed_mode=text_only"
-                ),
-            )
-            for index, embedding in zip(text_indices, text_embeddings, strict=True):
-                embeddings[index] = embedding
-
-        multimodal_fallback_indices: list[int] = []
-        if multimodal_pairs:
-            multimodal_inputs = [embed_input for _, embed_input in multimodal_pairs]
-            try:
-                multimodal_embeddings = await self.embedding_service.embed_confluence_documents(
-                    multimodal_inputs
-                )
-            except Exception as exc:
-                logger.warning(
-                    "[CONFLUENCE][EMBED] Multimodal embedding failed, fallback to text: "
-                    "entity_type=%s, content_id=%s, error=%s",
-                    entity_type,
-                    content_id,
-                    exc,
-                )
-                multimodal_embeddings = [None] * len(multimodal_pairs)
-
-            for (doc_index, _), embedding in zip(
-                multimodal_pairs, multimodal_embeddings, strict=True
-            ):
-                if embedding is None:
-                    multimodal_fallback_indices.append(doc_index)
-                    continue
-                embeddings[doc_index] = embedding
-
-        if multimodal_fallback_indices:
-            fallback_docs = [documents[index] for index in multimodal_fallback_indices]
-            fallback_embeddings = await self.repository.generate_embeddings(
-                fallback_docs,
-                audit_context=audit_context,
-                context=(
-                    f"entity_type={entity_type},space_key={space_key},"
-                    f"doc_count={len(fallback_docs)},embed_mode=multimodal_fallback"
-                ),
-            )
-            for index, embedding in zip(
-                multimodal_fallback_indices, fallback_embeddings, strict=True
-            ):
-                embeddings[index] = embedding
+        embeddings = await self.repository.generate_embeddings(
+            documents,
+            audit_context=audit_context,
+            context=(
+                f"entity_type={entity_type},space_key={space_key},"
+                f"doc_count={len(documents)},embed_mode=text_only"
+            ),
+        )
+        image_document_count = sum(
+            1 for document in documents if document.metadata.get("has_images")
+        )
 
         logger.info(
-            "[CONFLUENCE][EMBED] entity_type=%s, content_id=%s, multimodal_chunks=%s, "
-            "text_only_chunks=%s, skipped_images=%s, multimodal_fallback_chunks=%s",
-            entity_type,
-            content_id,
-            len(multimodal_pairs),
-            len(text_indices),
-            transform_result.skipped_images,
-            len(multimodal_fallback_indices),
+            "confluence_embeddings_generated",
+            connector="confluence",
+            entity_type=entity_type,
+            scope_id=self.cloud_id,
+            target_id=space_key,
+            content_id=content_id,
+            document_count=len(documents),
+            embed_mode="text_only",
+            image_document_count=image_document_count,
         )
 
         missing_embeddings = [
@@ -1086,33 +631,8 @@ class ConfluenceIngestionService:
         ]
         if missing_embeddings:
             raise RuntimeError(
-                "Missing confluence embeddings after multimodal processing: "
+                "Missing confluence embeddings after text-only processing: "
                 f"content_id={content_id}, indices={missing_embeddings}"
             )
 
-        return [embedding for embedding in embeddings if embedding is not None]
-
-    async def _download_images(
-            self,
-            content_id: str,
-            attachments: list[ConfluenceAttachmentResponse]
-    ) -> dict[str, ConfluenceAttachmentAsset]:
-        image_attachments = [
-            att for att in attachments
-            if att.media_type in SUPPORTED_IMAGE_TYPES
-        ]
-
-        if not image_attachments:
-            return {}
-        
-        results: dict[str, ConfluenceAttachmentAsset] = {}
-
-        for att in image_attachments:
-            data = await self.client.download_attachment(content_id, att.id)
-            if data:
-                results[att.title] = ConfluenceAttachmentAsset(
-                    data=data,
-                    media_type=att.media_type or "application/octet-stream",
-                )
-        
-        return results
+        return embeddings

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import traceback
 from collections.abc import Awaitable
 from collections.abc import Callable
 from datetime import datetime
@@ -10,6 +11,7 @@ from langchain_core.documents import Document
 
 from catchup.components.summarizer import SummarizerService
 from catchup.components.vector_db.pgvector import PGVectorRepository
+from catchup.components.vector_db.v2 import V2KnowledgeRepository
 from catchup.components.vector_db.v2 import VectorStore
 from catchup.connectors.github.client import GitHubApiClient
 from catchup.connectors.github.client import GitHubRateLimitError
@@ -59,6 +61,7 @@ class GithubRepositoryAdapterBase(
         repository: PGVectorRepository,
         summarizer: SummarizerService | None = None,
         vector_store: VectorStore | None = None,
+        v2_knowledge_repository: V2KnowledgeRepository | None = None,
         transformer: GithubTransformer | None = None,
     ) -> None:
         transformer = transformer or GithubTransformer()
@@ -69,6 +72,7 @@ class GithubRepositoryAdapterBase(
             summarizer=summarizer,
             transformer=transformer,
             vector_store=vector_store,
+            v2_knowledge_repository=v2_knowledge_repository,
         )
         self.issue_v2_mapper = GithubIssueV2RecordMapper()
         self.pr_v2_mapper = GithubPrV2RecordMapper()
@@ -81,6 +85,7 @@ class GithubRepositoryAdapterBase(
             issue_v2_mapper=self.issue_v2_mapper,
             pr_v2_mapper=self.pr_v2_mapper,
         )
+        self._last_numbered_nodes_error_message: str | None = None
 
     async def _get_repo_ref(self, repo_id: int) -> GithubRepoRef:
         return await self.repo_ref_resolver.get_repo_ref(repo_id)
@@ -153,13 +158,15 @@ class GithubRepositoryAdapterBase(
     ) -> tuple[str, ...]:
         if not document_ids:
             return ()
-        if self.vector_store is None:
+        if self.v2_knowledge_repository is None:
             return tuple(document_ids)
 
         try:
-            missing_ids = await self.vector_store.find_missing_metadata_namespace_ids(
-                document_ids,
-                namespace=namespace,
+            missing_ids = (
+                await self.v2_knowledge_repository.find_missing_metadata_namespace_ids(
+                    document_ids,
+                    namespace=namespace,
+                )
             )
         except Exception as exc:
             logger.exception(
@@ -198,6 +205,7 @@ class GithubRepositoryAdapterBase(
             Awaitable[dict[str, dict[str, Any]]],
         ],
     ) -> tuple[list[tuple[str, dict[str, Any]]], list[str]]:
+        self._last_numbered_nodes_error_message = None
         if not record_ids:
             return [], []
 
@@ -225,6 +233,7 @@ class GithubRepositoryAdapterBase(
             except GitHubRateLimitError:
                 raise
             except Exception as exc:
+                self._last_numbered_nodes_error_message = _format_exception_trace(exc)
                 logger.warning(
                     log_event,
                     connector="github",
@@ -394,3 +403,7 @@ class GithubRepositoryAdapterBase(
 
 def _github_dual_write_log_token(entity_type: str) -> str:
     return "pr" if entity_type == "pull_request" else entity_type
+
+
+def _format_exception_trace(exc: Exception) -> str:
+    return "".join(traceback.format_exception(type(exc), exc, exc.__traceback__, limit=3))

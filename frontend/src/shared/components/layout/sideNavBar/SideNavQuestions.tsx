@@ -68,7 +68,7 @@ export default function SideNavQuestions() {
   }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-0.5">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-0.5">
       <button
         onClick={() => togglePanel('questionsHistory')}
         className="hover:bg-fill-normal-interaction-hover active:bg-fill-normal-interaction-pressed flex h-9 w-full cursor-pointer items-center gap-0.5 rounded-lg px-2.5 py-1.5"
@@ -76,8 +76,8 @@ export default function SideNavQuestions() {
         <span className="text-label-small text-text-normal-normal">내 질문</span>
         <ArrowRight2 className="text-icon-normal-neutral relative -top-[0.5px] size-6 shrink-0" />
       </button>
-      <div className="custom-scrollbar relative flex flex-1 overflow-y-auto">
-        <div className="flex flex-1 flex-col">
+      <div className="custom-scrollbar relative flex min-w-0 flex-1 overflow-x-hidden overflow-y-auto">
+        <div className="flex min-w-0 flex-1 flex-col">
           {recentChatrooms.map((chatroom) => {
             const isActive = pathname === `/chat/${chatroom.session_id}`;
 
@@ -86,12 +86,12 @@ export default function SideNavQuestions() {
                 href={`/chat/${chatroom.session_id}`}
                 key={chatroom.session_id}
                 className={cn(
-                  'group flex h-9 cursor-pointer items-center rounded-lg px-2.5 py-1.5',
+                  'group flex h-9 w-full min-w-0 cursor-pointer items-center rounded-lg px-2.5 py-1.5',
                   isActive ? selectedClass : defaultClass,
                 )}
               >
-                <span className="text-body-small flex-1 truncate">{chatroom.title}</span>
-                <span className="ml-auto flex size-5 items-center opacity-0 transition-opacity group-hover:opacity-100">
+                <span className="text-body-small min-w-0 flex-1 truncate">{chatroom.title}</span>
+                <span className="ml-auto flex size-5 shrink-0 items-center opacity-0 transition-opacity group-hover:opacity-100">
                   <KebabHorizontalIcon className="text-icon-normal-neutral h-4.5 w-4.5" />
                 </span>
               </Link>

@@ -48,6 +48,7 @@ export interface InquiryAutomationItem {
   author_name?: string | null;
   updated_at?: string | null;
   author_profile_image_url?: string | null;
+  is_editable: boolean;
 }
 
 export interface InquiryAutomationUpdateRequest {
@@ -58,6 +59,17 @@ export interface InquiryAutomationPublishRequest {
   channel_talk_credential_id: number;
   quiet_period_seconds: number;
   slack_channel: {
+    credential_id: number;
+    channel_id: string;
+    channel_name?: string;
+  };
+  guide_instruction?: string | null;
+}
+
+export interface InquiryAutomationPatchRequest {
+  channel_talk_credential_id?: number;
+  quiet_period_seconds?: number;
+  slack_channel?: {
     credential_id: number;
     channel_id: string;
     channel_name?: string;

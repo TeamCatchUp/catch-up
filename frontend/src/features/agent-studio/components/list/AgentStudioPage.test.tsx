@@ -3,9 +3,9 @@ import { MutationCache, QueryClient, QueryClientProvider } from '@tanstack/react
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
-import { toast } from 'sonner';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { toast } from '@/shared/components/ui/toast';
 import { server } from '@/test/msw/server';
 
 import type { InquiryAutomationItem } from '../../types/automationApi';
@@ -13,7 +13,7 @@ import AgentStudioPage from './AgentStudioPage';
 
 const mockPush = vi.fn();
 
-vi.mock('sonner', () => ({
+vi.mock('@/shared/components/ui/toast', () => ({
   toast: {
     error: vi.fn(),
   },
@@ -47,7 +47,7 @@ function renderWithQueryClient(ui: ReactElement) {
 }
 
 function useInquiryAutomationList(items: InquiryAutomationItem[]) {
-  server.use(http.get('/api/v1/automations/inqueries', () => HttpResponse.json(items)));
+  server.use(http.get('/api/v1/automations/inquiries', () => HttpResponse.json(items)));
 }
 
 function mockVersion() {
@@ -67,6 +67,7 @@ const activeAutomation: InquiryAutomationItem = {
   author_name: '이진수',
   updated_at: '2020-01-06T00:00:00.000Z',
   author_profile_image_url: null,
+  is_editable: true,
 };
 
 const secondActiveAutomation: InquiryAutomationItem = {
@@ -82,6 +83,7 @@ const secondActiveAutomation: InquiryAutomationItem = {
   author_name: '이진수',
   updated_at: '2020-01-06T00:00:00.000Z',
   author_profile_image_url: null,
+  is_editable: true,
 };
 
 const thirdActiveAutomation: InquiryAutomationItem = {
@@ -97,6 +99,7 @@ const thirdActiveAutomation: InquiryAutomationItem = {
   author_name: '이진수',
   updated_at: '2020-01-06T00:00:00.000Z',
   author_profile_image_url: null,
+  is_editable: true,
 };
 
 const draftAutomation: InquiryAutomationItem = {
@@ -112,6 +115,7 @@ const draftAutomation: InquiryAutomationItem = {
   author_name: '이진수',
   updated_at: '2020-01-06T00:00:00.000Z',
   author_profile_image_url: null,
+  is_editable: true,
 };
 
 const inactiveAutomation: InquiryAutomationItem = {
@@ -127,6 +131,7 @@ const inactiveAutomation: InquiryAutomationItem = {
   author_name: '이진수',
   updated_at: '2020-01-06T00:00:00.000Z',
   author_profile_image_url: null,
+  is_editable: true,
 };
 
 beforeEach(() => {
@@ -135,6 +140,32 @@ beforeEach(() => {
 });
 
 describe('AgentStudioPage', () => {
+  it('renders status section skeletons while automations are loading', () => {
+    mockVersion();
+    server.use(http.get('/api/v1/automations/inquiries', () => new Promise(() => {})));
+
+    renderWithQueryClient(<AgentStudioPage />);
+
+    expect(screen.getByLabelText('운영중 로딩 섹션')).toBeInTheDocument();
+    expect(screen.getByLabelText('제작중 로딩 섹션')).toBeInTheDocument();
+    expect(screen.getByLabelText('사용 안함 로딩 섹션')).toBeInTheDocument();
+    expect(screen.getAllByLabelText('Agent 카드 로딩')).toHaveLength(3);
+    expect(screen.queryByText('Agent를 불러오고 있습니다.')).not.toBeInTheDocument();
+  });
+
+  it('renders grid card skeletons when a status filter is selected while loading', async () => {
+    const user = userEvent.setup();
+    mockVersion();
+    server.use(http.get('/api/v1/automations/inquiries', () => new Promise(() => {})));
+
+    renderWithQueryClient(<AgentStudioPage />);
+
+    await user.click(screen.getByRole('button', { name: '운영중' }));
+
+    expect(screen.queryByLabelText('운영중 로딩 섹션')).not.toBeInTheDocument();
+    expect(screen.getAllByLabelText('Agent 카드 로딩')).toHaveLength(3);
+  });
+
   it('renders the Agent Studio list from automations API', async () => {
     mockVersion();
     useInquiryAutomationList([activeAutomation, inactiveAutomation]);
@@ -146,9 +177,12 @@ describe('AgentStudioPage', () => {
     expect(await screen.findAllByText('문의 대응 리포트 만들기')).toHaveLength(2);
     expect(screen.getByText('제작 중인 Agent가 없습니다.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '다시 운영하기' })).toBeInTheDocument();
+    expect(within(screen.getByLabelText('운영중 섹션')).getByText('1')).toBeInTheDocument();
+    expect(within(screen.getByLabelText('제작중 섹션')).getByText('0')).toBeInTheDocument();
+    expect(within(screen.getByLabelText('사용 안함 섹션')).getByText('1')).toBeInTheDocument();
   });
 
-  it('renders dash labels when backend display fields are null', async () => {
+  it('renders dash labels except omitted guide instruction when backend display fields are null', async () => {
     mockVersion();
     useInquiryAutomationList([
       {
@@ -164,7 +198,7 @@ describe('AgentStudioPage', () => {
     renderWithQueryClient(<AgentStudioPage />);
 
     expect(await screen.findByRole('heading', { name: '-' })).toBeInTheDocument();
-    expect(screen.getAllByText('-')).toHaveLength(4);
+    expect(screen.getAllByText('-')).toHaveLength(3);
   });
 
   it('keeps the active column visible with an empty placeholder when there is no active automation', async () => {
@@ -174,6 +208,7 @@ describe('AgentStudioPage', () => {
     renderWithQueryClient(<AgentStudioPage />);
 
     expect(await screen.findByText('운영 중인 Agent가 없습니다.')).toBeInTheDocument();
+    expect(within(screen.getByLabelText('운영중 섹션')).getByText('0')).toBeInTheDocument();
     expect(screen.queryByText('아직 비활성 Agent가 없습니다.')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: '다시 운영하기' })).toBeInTheDocument();
   });
@@ -203,6 +238,29 @@ describe('AgentStudioPage', () => {
     expect(screen.queryByText('제작 중인 Agent가 없습니다.')).not.toBeInTheDocument();
   });
 
+  it('shows only editable automations when 내 에이전트만 is enabled', async () => {
+    const user = userEvent.setup();
+    mockVersion();
+    useInquiryAutomationList([
+      activeAutomation,
+      {
+        ...secondActiveAutomation,
+        title: '다른 사람이 만든 Agent',
+        is_editable: false,
+      },
+      inactiveAutomation,
+    ]);
+    renderWithQueryClient(<AgentStudioPage />);
+
+    expect(await screen.findByText('다른 사람이 만든 Agent')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('switch', { name: '내 에이전트만' }));
+
+    expect(screen.queryByText('다른 사람이 만든 Agent')).not.toBeInTheDocument();
+    expect(within(screen.getByLabelText('운영중 섹션')).getByText('1')).toBeInTheDocument();
+    expect(within(screen.getByLabelText('사용 안함 섹션')).getByText('1')).toBeInTheDocument();
+  });
+
   it('shows the active empty placeholder when the active tab is selected without active automations', async () => {
     const user = userEvent.setup();
     mockVersion();
@@ -212,6 +270,7 @@ describe('AgentStudioPage', () => {
     await user.click(screen.getByRole('button', { name: '운영중' }));
 
     expect(await screen.findByText('운영 중인 Agent가 없습니다.')).toBeInTheDocument();
+    expect(screen.queryByLabelText('운영중 섹션')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '다시 운영하기' })).not.toBeInTheDocument();
     expect(screen.queryByText('제작 중인 Agent가 없습니다.')).not.toBeInTheDocument();
   });
@@ -226,6 +285,7 @@ describe('AgentStudioPage', () => {
 
     expect(await screen.findAllByRole('button', { name: '문의 대응 리포트 만들기 카드 메뉴' })).toHaveLength(3);
     expect(screen.getAllByText('운영중')).toHaveLength(1);
+    expect(screen.queryByLabelText('운영중 섹션')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '다시 운영하기' })).not.toBeInTheDocument();
     expect(screen.queryByText('운영 중인 Agent가 없습니다.')).not.toBeInTheDocument();
     expect(screen.queryByText('제작 중인 Agent가 없습니다.')).not.toBeInTheDocument();
@@ -241,6 +301,7 @@ describe('AgentStudioPage', () => {
     await user.click(screen.getByRole('button', { name: '제작중' }));
 
     expect(await screen.findByText('제작 중인 Agent가 없습니다.')).toBeInTheDocument();
+    expect(screen.queryByLabelText('제작중 섹션')).not.toBeInTheDocument();
     expect(screen.queryByText('운영 중인 Agent가 없습니다.')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '문의 대응 리포트 만들기 사용 안함' })).not.toBeInTheDocument();
   });
@@ -255,6 +316,7 @@ describe('AgentStudioPage', () => {
 
     expect(await screen.findAllByRole('button', { name: '문의 대응 리포트 만들기 카드 메뉴' })).toHaveLength(1);
     expect(screen.getAllByText('제작중')).toHaveLength(1);
+    expect(screen.queryByLabelText('제작중 섹션')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '다시 운영하기' })).not.toBeInTheDocument();
     expect(screen.queryByText('운영 중인 Agent가 없습니다.')).not.toBeInTheDocument();
     expect(screen.queryByText('제작 중인 Agent가 없습니다.')).not.toBeInTheDocument();
@@ -270,6 +332,7 @@ describe('AgentStudioPage', () => {
     await user.click(screen.getByRole('button', { name: '사용 안함' }));
 
     expect(await screen.findByText('아직 비활성 Agent가 없습니다.')).toBeInTheDocument();
+    expect(screen.queryByLabelText('사용 안함 섹션')).not.toBeInTheDocument();
     expect(screen.queryByText('운영 중인 Agent가 없습니다.')).not.toBeInTheDocument();
     expect(screen.queryByText('제작 중인 Agent가 없습니다.')).not.toBeInTheDocument();
   });
@@ -283,6 +346,7 @@ describe('AgentStudioPage', () => {
     await user.click(screen.getByRole('button', { name: '사용 안함' }));
 
     expect(await screen.findByRole('button', { name: '다시 운영하기' })).toBeInTheDocument();
+    expect(screen.queryByLabelText('사용 안함 섹션')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /카드 메뉴/ })).not.toBeInTheDocument();
     expect(screen.queryByText('운영 중인 Agent가 없습니다.')).not.toBeInTheDocument();
     expect(screen.queryByText('제작 중인 Agent가 없습니다.')).not.toBeInTheDocument();
@@ -311,6 +375,7 @@ describe('AgentStudioPage', () => {
     const activeSection = screen.getByLabelText('운영중 섹션');
 
     expect(screen.getAllByLabelText('운영중 섹션')).toHaveLength(1);
+    expect(within(activeSection).getByText('2')).toBeInTheDocument();
     expect(within(activeSection).getAllByText('문의 대응 리포트 만들기')).toHaveLength(2);
     expect(within(activeSection).queryByText('운영 중인 Agent가 없습니다.')).not.toBeInTheDocument();
   });
@@ -322,7 +387,7 @@ describe('AgentStudioPage', () => {
     mockVersion();
     useInquiryAutomationList([inactiveAutomation]);
     server.use(
-      http.patch('/api/v1/automations/inqueries/2', async ({ request }) => {
+      http.patch('/api/v1/automations/inquiries/2', async ({ request }) => {
         patchRequests.push(await request.json());
         return new HttpResponse(null, { status: 204 });
       }),
@@ -335,6 +400,30 @@ describe('AgentStudioPage', () => {
     expect(patchRequests).toEqual([{ status: 'active' }]);
   });
 
+  it('moves to the edit route when 수정하기 is clicked from an active card menu', async () => {
+    const user = userEvent.setup();
+
+    mockVersion();
+    useInquiryAutomationList([activeAutomation]);
+    renderWithQueryClient(<AgentStudioPage />);
+
+    await user.click(await screen.findByRole('button', { name: '문의 대응 리포트 만들기 카드 메뉴' }));
+    await user.click(await screen.findByRole('menuitem', { name: '수정하기' }));
+
+    expect(mockPush).toHaveBeenCalledWith('/agent-studio/1/edit');
+  });
+
+  it('hides the card menu when the backend marks an automation as not editable', async () => {
+    mockVersion();
+    useInquiryAutomationList([{ ...activeAutomation, is_editable: false }]);
+
+    renderWithQueryClient(<AgentStudioPage />);
+
+    await screen.findByRole('heading', { name: '문의 대응 리포트 만들기' });
+
+    expect(screen.queryByRole('button', { name: '문의 대응 리포트 만들기 카드 메뉴' })).not.toBeInTheDocument();
+  });
+
   it('updates active automation to inactive when 사용 안함 is clicked', async () => {
     const user = userEvent.setup();
     const patchRequests: unknown[] = [];
@@ -342,7 +431,7 @@ describe('AgentStudioPage', () => {
     mockVersion();
     useInquiryAutomationList([activeAutomation]);
     server.use(
-      http.patch('/api/v1/automations/inqueries/1', async ({ request }) => {
+      http.patch('/api/v1/automations/inquiries/1', async ({ request }) => {
         patchRequests.push(await request.json());
         return new HttpResponse(null, { status: 204 });
       }),
@@ -362,7 +451,7 @@ describe('AgentStudioPage', () => {
     mockVersion();
     useInquiryAutomationList([activeAutomation]);
     server.use(
-      http.patch('/api/v1/automations/inqueries/1', () => HttpResponse.json({ detail: 'failed' }, { status: 500 })),
+      http.patch('/api/v1/automations/inquiries/1', () => HttpResponse.json({ detail: 'failed' }, { status: 500 })),
     );
 
     renderWithQueryClient(<AgentStudioPage />);

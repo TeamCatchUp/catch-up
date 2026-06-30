@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/components/ui/select';
 
-import type { AgentStudioSelectItem } from '../../../types/agentStudioModel';
+import type { AgentStudioSelectItem } from '../../../../types/agentStudioModel';
 import RequiredMarker from './RequiredMarker';
 
 interface AgentSelectFieldProps {

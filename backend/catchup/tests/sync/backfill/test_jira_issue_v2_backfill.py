@@ -3,14 +3,13 @@ from __future__ import annotations
 import json
 from unittest.mock import MagicMock
 
-from catchup.sync.backfill.jira_issue_v2 import JiraIssueV1Target
+from catchup.sync.backfill.base import BackfillTarget
+from catchup.sync.backfill.base import embedding_to_list
 from catchup.sync.backfill.jira_issue_v2 import JiraIssueV2BackfillService
-from catchup.sync.backfill.jira_issue_v2 import _embedding_to_list
-from catchup.sync.backfill.jira_issue_v2 import build_fetch_pending_seed_chunk_query
 from catchup.sync.backfill.jira_issue_v2 import build_jira_issue_v1_target_query
 from catchup.sync.backfill.jira_issue_v2 import build_jira_issue_v1_target_seed_query
-from catchup.sync.backfill.jira_issue_v2 import build_mark_finished_statement
 from catchup.sync.backfill.jira_issue_v2 import build_upsert_seed_rows_statement
+from catchup.sync.backfill.state import build_mark_finished_statement
 
 
 def _sql(statement) -> str:
@@ -72,7 +71,6 @@ def test_jira_issue_v2_backfill_reads_epic_sources_into_issue_rows() -> None:
     target_sql = _sql(build_jira_issue_v1_target_query())
     seed_sql = _sql(build_jira_issue_v1_target_seed_query())
     upsert_sql = _sql(build_upsert_seed_rows_statement())
-    chunk_sql = _sql(build_fetch_pending_seed_chunk_query())
 
     assert "e.cmetadata ->> 'entity_type' IN ('issue', 'epic')" in target_sql
     assert "'jira:issue:' || jp.cloud_id" in target_sql
@@ -82,7 +80,6 @@ def test_jira_issue_v2_backfill_reads_epic_sources_into_issue_rows() -> None:
     assert "'jira:issue:' || jp.cloud_id" in seed_sql
     assert "'jira:epic:' || jp.cloud_id" not in seed_sql
     assert "'issue'" in upsert_sql
-    assert "AND entity_type = 'issue'" in chunk_sql
 
 
 def test_jira_issue_v2_seed_rows_preserve_content_embedding_and_empty_metadata() -> None:
@@ -114,7 +111,7 @@ def test_jira_issue_v2_mark_finished_serializes_failed_ids() -> None:
     service = JiraIssueV2BackfillService(session_factory=lambda: context)
 
     service._mark_finished_sync(
-        JiraIssueV1Target(
+        BackfillTarget(
             scope_id="cloud-123",
             target_id="CAT",
             target_name="CatchUp",
@@ -138,7 +135,7 @@ def test_jira_issue_v2_mark_finished_always_uses_issue_state_key() -> None:
     service = JiraIssueV2BackfillService(session_factory=lambda: context)
 
     service._mark_finished_sync(
-        JiraIssueV1Target(
+        BackfillTarget(
             scope_id="cloud-123",
             target_id="CAT",
             target_name="CatchUp",
@@ -159,12 +156,12 @@ def test_jira_issue_v2_mark_finished_warns_when_state_update_misses(monkeypatch)
     session.execute.return_value.rowcount = 0
     context = MagicMock()
     context.__enter__.return_value = session
-    warning = MagicMock()
-    monkeypatch.setattr("catchup.sync.backfill.jira_issue_v2.logger.warning", warning)
+    get_logger = MagicMock()
+    monkeypatch.setattr("catchup.sync.backfill.base.structlog.get_logger", get_logger)
     service = JiraIssueV2BackfillService(session_factory=lambda: context)
 
     service._mark_finished_sync(
-        JiraIssueV1Target(
+        BackfillTarget(
             scope_id="cloud-123",
             target_id="CAT",
             target_name="CatchUp",
@@ -175,6 +172,8 @@ def test_jira_issue_v2_mark_finished_warns_when_state_update_misses(monkeypatch)
         failed_ids=[],
     )
 
+    get_logger.assert_called_once_with("catchup.sync.backfill.jira_issue_v2")
+    warning = get_logger.return_value.warning
     warning.assert_called_once()
     assert warning.call_args.args == ("jira_issue_v2_backfill_target_finish_update_missed",)
     assert warning.call_args.kwargs["connector"] == "jira"
@@ -185,16 +184,4 @@ def test_jira_issue_v2_mark_finished_warns_when_state_update_misses(monkeypatch)
 
 
 def test_jira_issue_v2_embedding_to_list_treats_null_as_empty() -> None:
-    assert _embedding_to_list(None) == []
-
-
-def test_jira_issue_v2_seed_chunk_cursor_is_lexicographic() -> None:
-    sql = _sql(build_fetch_pending_seed_chunk_query())
-
-    assert "CAST(:after_record_id AS text) IS NULL" in sql
-    assert "record_id > CAST(:after_record_id AS text)" in sql
-    assert "record_id = CAST(:after_record_id AS text)" in sql
-    assert "AND document_id > COALESCE(CAST(:after_langchain_id AS text), '')" in sql
-    assert "ORDER BY record_id, document_id" in sql
-    assert "::integer" not in sql
-    assert "::numeric" not in sql
+    assert embedding_to_list(None) == []

@@ -10,18 +10,26 @@ from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
 from catchup.auth.dependencies import get_current_user
+from catchup.automations import service as automations_service
 from catchup.automations.config import INQUIRY_AUTOMATION_PRESET_KEY
+from catchup.automations.schemas import InquiryAutomationPatch
+from catchup.automations.schemas import SlackChannelSelection
+from catchup.automations.service import AutomationForbiddenError
+from catchup.automations.service import AutomationNotFoundError
+from catchup.automations.service import AutomationPublishError
+from catchup.automations.service import InquiryAutomationService
+from catchup.automations.service import build_agent_id
+from catchup.automations.service import build_channel_talk_debounce_condition
+from catchup.automations.service import validate_slack_channel_access
 from catchup.connectors.slack.client import SlackConnectorApiError
 from catchup.db.dependencies import get_db
 from catchup.db.models import AgentStatus
 from catchup.server.automations import api
 from catchup.server.automations.api import InquiryAutomationPublishRequest
-from catchup.server.automations.api import _build_agent_id
-from catchup.server.automations.api import _build_channel_talk_debounce_condition
-from catchup.server.automations.api import _validate_slack_channel_history_access
 from catchup.server.automations.api import list_automation_credentials
 from catchup.server.automations.api import list_automation_targets
 from catchup.server.automations.api import list_inquiry_automations
+from catchup.server.automations.api import patch_inquiry_automation_settings
 from catchup.server.automations.api import router
 from catchup.server.automations.api import update_inquiry_automation
 
@@ -182,8 +190,8 @@ def test_list_slack_targets_returns_channels_for_selected_credential(monkeypatch
         is_archived=False,
         member_count=12,
     )
-    monkeypatch.setattr(api, "get_slack_token_by_id", lambda *_: token)
-    monkeypatch.setattr(api, "get_channels_by_team", lambda *_: [channel])
+    monkeypatch.setattr(automations_service, "get_slack_token_by_id", lambda *_: token)
+    monkeypatch.setattr(automations_service, "get_channels_by_team", lambda *_: [channel])
 
     response = list_automation_targets(
         connector="slack",
@@ -228,7 +236,7 @@ def test_list_channel_talk_targets_returns_selected_channel(monkeypatch) -> None
         )
     )
     monkeypatch.setattr(
-        api,
+        automations_service,
         "ChannelTalkCredentialsRepository",
         lambda _: repository,
     )
@@ -263,13 +271,13 @@ def test_list_channel_talk_targets_returns_selected_channel(monkeypatch) -> None
 
 
 def test_build_agent_id_is_stable_for_idempotency_key() -> None:
-    first = _build_agent_id(
+    first = build_agent_id(
         workspace_id=1,
         preset_key=INQUIRY_AUTOMATION_PRESET_KEY,
         channel_talk_channel_id="229395",
         slack_channel_id="C123",
     )
-    second = _build_agent_id(
+    second = build_agent_id(
         workspace_id=1,
         preset_key=INQUIRY_AUTOMATION_PRESET_KEY,
         channel_talk_channel_id="229395",
@@ -279,13 +287,13 @@ def test_build_agent_id_is_stable_for_idempotency_key() -> None:
 
 
 def test_build_agent_id_differs_for_different_slack_channels() -> None:
-    a = _build_agent_id(
+    a = build_agent_id(
         workspace_id=1,
         preset_key=INQUIRY_AUTOMATION_PRESET_KEY,
         channel_talk_channel_id="229395",
         slack_channel_id="C123",
     )
-    b = _build_agent_id(
+    b = build_agent_id(
         workspace_id=1,
         preset_key=INQUIRY_AUTOMATION_PRESET_KEY,
         channel_talk_channel_id="229395",
@@ -295,7 +303,7 @@ def test_build_agent_id_differs_for_different_slack_channels() -> None:
 
 
 def test_build_channel_talk_debounce_condition_resets_only_user_messages() -> None:
-    condition = _build_channel_talk_debounce_condition(
+    condition = build_channel_talk_debounce_condition(
         channel_id="229395",
         quiet_period_seconds=60,
     )
@@ -336,6 +344,7 @@ def test_build_channel_talk_debounce_condition_resets_only_user_messages() -> No
 def _make_spec_row(
     *,
     spec_id: int = 1,
+    author_user_id: int = 99,
     status: AgentStatus = AgentStatus.ACTIVE,
     channel_talk_credential_id: int = 7,
     slack_channel_id: str = "C123",
@@ -352,6 +361,7 @@ def _make_spec_row(
     )
     row = MagicMock()
     row.id = spec_id
+    row.user_id = author_user_id
     row.status = status
     row.spec = {
         "preset_key": INQUIRY_AUTOMATION_PRESET_KEY,
@@ -368,13 +378,17 @@ def _make_spec_row(
 
 
 def test_list_inquiry_automations_returns_items(monkeypatch) -> None:
-    row = _make_spec_row(guide_instruction="환불은 영수증 먼저", title="문의 응대 자동화")
+    row = _make_spec_row(
+        guide_instruction="환불은 영수증 먼저",
+        title="문의 응대 자동화",
+        author_user_id=1,
+    )
     author = SimpleNamespace(name="팀원A", picture="https://example.com/profile.png")
     db = MagicMock()
     db.execute.return_value.all.return_value = [(row, author)]
     user = SimpleNamespace(id=1)
 
-    monkeypatch.setattr(api, "_resolve_user_workspace_id", lambda *_: 1)
+    monkeypatch.setattr(api, "get_workspace_id_for_user", lambda *_: 1)
 
     result = list_inquiry_automations(db=db, current_user=user)
 
@@ -389,6 +403,21 @@ def test_list_inquiry_automations_returns_items(monkeypatch) -> None:
     assert result[0].author_name == "팀원A"
     assert result[0].updated_at == "2026-06-16T09:30:00+00:00"
     assert result[0].author_profile_image_url == "https://example.com/profile.png"
+    assert result[0].is_editable is True
+
+
+def test_list_inquiry_automations_is_editable_false_for_non_author(monkeypatch) -> None:
+    row = _make_spec_row(author_user_id=99)
+    author = SimpleNamespace(name="작성자", picture=None)
+    db = MagicMock()
+    db.execute.return_value.all.return_value = [(row, author)]
+    user = SimpleNamespace(id=1)
+
+    monkeypatch.setattr(api, "get_workspace_id_for_user", lambda *_: 1)
+
+    result = list_inquiry_automations(db=db, current_user=user)
+
+    assert result[0].is_editable is False
 
 
 def test_list_inquiry_automations_uses_default_title(monkeypatch) -> None:
@@ -398,7 +427,7 @@ def test_list_inquiry_automations_uses_default_title(monkeypatch) -> None:
     db.execute.return_value.all.return_value = [(row, author)]
     user = SimpleNamespace(id=1)
 
-    monkeypatch.setattr(api, "_resolve_user_workspace_id", lambda *_: 1)
+    monkeypatch.setattr(api, "get_workspace_id_for_user", lambda *_: 1)
 
     result = list_inquiry_automations(db=db, current_user=user)
 
@@ -417,7 +446,7 @@ def test_list_inquiry_automations_skips_invalid_spec(monkeypatch) -> None:
     db.execute.return_value.all.return_value = [(bad_row, author)]
     user = SimpleNamespace(id=1)
 
-    monkeypatch.setattr(api, "_resolve_user_workspace_id", lambda *_: 1)
+    monkeypatch.setattr(api, "get_workspace_id_for_user", lambda *_: 1)
 
     result = list_inquiry_automations(db=db, current_user=user)
 
@@ -427,12 +456,12 @@ def test_list_inquiry_automations_skips_invalid_spec(monkeypatch) -> None:
 def test_update_inquiry_automation_sets_inactive(monkeypatch) -> None:
     from catchup.server.automations.api import InquiryAutomationUpdateRequest
 
-    row = _make_spec_row()
+    row = _make_spec_row(author_user_id=1)
     db = MagicMock()
     db.scalar.return_value = row
     user = SimpleNamespace(id=1)
 
-    monkeypatch.setattr(api, "_resolve_user_workspace_id", lambda *_: 1)
+    monkeypatch.setattr(api, "get_workspace_id_for_user", lambda *_: 1)
 
     update_inquiry_automation(
         agent_spec_id=1,
@@ -452,7 +481,7 @@ def test_update_inquiry_automation_raises_404_when_not_found(monkeypatch) -> Non
     db.scalar.return_value = None
     user = SimpleNamespace(id=1)
 
-    monkeypatch.setattr(api, "_resolve_user_workspace_id", lambda *_: 1)
+    monkeypatch.setattr(api, "get_workspace_id_for_user", lambda *_: 1)
 
     with pytest.raises(HTTPException) as exc_info:
         update_inquiry_automation(
@@ -463,6 +492,27 @@ def test_update_inquiry_automation_raises_404_when_not_found(monkeypatch) -> Non
         )
 
     assert exc_info.value.status_code == 404
+
+
+def test_update_inquiry_automation_raises_403_when_not_author(monkeypatch) -> None:
+    from catchup.server.automations.api import InquiryAutomationUpdateRequest
+
+    row = _make_spec_row(author_user_id=99)
+    db = MagicMock()
+    db.scalar.return_value = row
+    user = SimpleNamespace(id=1)
+
+    monkeypatch.setattr(api, "get_workspace_id_for_user", lambda *_: 1)
+
+    with pytest.raises(HTTPException) as exc_info:
+        update_inquiry_automation(
+            agent_spec_id=1,
+            body=InquiryAutomationUpdateRequest(status=AgentStatus.INACTIVE),
+            db=db,
+            current_user=user,
+        )
+
+    assert exc_info.value.status_code == 403
 
 
 def test_validate_slack_channel_history_access_probes_latest_message(
@@ -478,9 +528,9 @@ def test_validate_slack_channel_history_access_probes_latest_message(
             calls.append(("history", channel, limit))
             return {"messages": []}
 
-    monkeypatch.setattr(api, "SlackApiClientWrapper", FakeSlackClient)
+    monkeypatch.setattr(automations_service, "SlackApiClientWrapper", FakeSlackClient)
 
-    _validate_slack_channel_history_access(
+    validate_slack_channel_access(
         bot_access_token="xoxb-token",
         team_id="T123",
         channel_id="C123",
@@ -508,14 +558,317 @@ def test_validate_slack_channel_history_access_rejects_slack_api_error(
                 metadata={"error": "not_in_channel"},
             )
 
-    monkeypatch.setattr(api, "SlackApiClientWrapper", FakeSlackClient)
+    monkeypatch.setattr(automations_service, "SlackApiClientWrapper", FakeSlackClient)
 
-    with pytest.raises(HTTPException) as exc_info:
-        _validate_slack_channel_history_access(
+    with pytest.raises(AutomationPublishError) as exc_info:
+        validate_slack_channel_access(
             bot_access_token="xoxb-token",
             team_id="T123",
             channel_id="C123",
         )
 
+    assert "not_in_channel" in str(exc_info.value)
+
+
+# ---------------------------------------------------------------------------
+# InquiryAutomationPatch schema
+# ---------------------------------------------------------------------------
+
+
+def test_patch_request_accepts_empty_body() -> None:
+    patch = InquiryAutomationPatch.model_validate({})
+    assert patch.channel_talk_credential_id is None
+    assert patch.quiet_period_seconds is None
+    assert patch.slack_channel is None
+    assert patch.guide_instruction is None
+
+
+def test_patch_request_rejects_zero_credential_id() -> None:
+    with pytest.raises(ValidationError):
+        InquiryAutomationPatch.model_validate({"channel_talk_credential_id": 0})
+
+
+def test_patch_request_rejects_quiet_period_below_minimum() -> None:
+    with pytest.raises(ValidationError):
+        InquiryAutomationPatch.model_validate({"quiet_period_seconds": 0})
+
+
+def test_patch_request_rejects_quiet_period_above_maximum() -> None:
+    with pytest.raises(ValidationError):
+        InquiryAutomationPatch.model_validate({"quiet_period_seconds": 86_401})
+
+
+def test_patch_request_guide_instruction_not_in_fields_set_when_omitted() -> None:
+    patch = InquiryAutomationPatch.model_validate({})
+    assert "guide_instruction" not in patch.model_fields_set
+
+
+def test_patch_request_guide_instruction_in_fields_set_when_explicitly_null() -> None:
+    patch = InquiryAutomationPatch.model_validate({"guide_instruction": None})
+    assert "guide_instruction" in patch.model_fields_set
+
+
+# ---------------------------------------------------------------------------
+# patch_inquiry_automation_settings router handler
+# ---------------------------------------------------------------------------
+
+
+def test_patch_settings_returns_204_on_success(monkeypatch) -> None:
+    monkeypatch.setattr(api, "get_workspace_id_for_user", lambda *_: 1)
+    monkeypatch.setattr(InquiryAutomationService, "patch_settings", lambda *_, **__: None)
+
+    patch_inquiry_automation_settings(
+        agent_spec_id=1,
+        body=InquiryAutomationPatch(),
+        db=MagicMock(),
+        current_user=SimpleNamespace(id=1),
+    )
+
+
+def test_patch_settings_raises_404_when_not_found(monkeypatch) -> None:
+    monkeypatch.setattr(api, "get_workspace_id_for_user", lambda *_: 1)
+    monkeypatch.setattr(
+        InquiryAutomationService,
+        "patch_settings",
+        lambda *_, **__: (_ for _ in ()).throw(AutomationNotFoundError("not found")),
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        patch_inquiry_automation_settings(
+            agent_spec_id=999,
+            body=InquiryAutomationPatch(),
+            db=MagicMock(),
+            current_user=SimpleNamespace(id=1),
+        )
+
+    assert exc_info.value.status_code == 404
+
+
+def test_patch_settings_raises_403_when_not_author(monkeypatch) -> None:
+    monkeypatch.setattr(api, "get_workspace_id_for_user", lambda *_: 1)
+    monkeypatch.setattr(
+        InquiryAutomationService,
+        "patch_settings",
+        lambda *_, **__: (_ for _ in ()).throw(
+            AutomationForbiddenError("Only the author can modify this automation")
+        ),
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        patch_inquiry_automation_settings(
+            agent_spec_id=1,
+            body=InquiryAutomationPatch(),
+            db=MagicMock(),
+            current_user=SimpleNamespace(id=2),
+        )
+
+    assert exc_info.value.status_code == 403
+
+
+def test_patch_settings_raises_400_on_channel_conflict(monkeypatch) -> None:
+    monkeypatch.setattr(api, "get_workspace_id_for_user", lambda *_: 1)
+    monkeypatch.setattr(
+        InquiryAutomationService,
+        "patch_settings",
+        lambda *_, **__: (_ for _ in ()).throw(
+            AutomationPublishError("An automation for this channel combination already exists")
+        ),
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        patch_inquiry_automation_settings(
+            agent_spec_id=1,
+            body=InquiryAutomationPatch(
+                slack_channel=SlackChannelSelection(credential_id=2, channel_id="C999")
+            ),
+            db=MagicMock(),
+            current_user=SimpleNamespace(id=1),
+        )
+
     assert exc_info.value.status_code == 400
-    assert "not_in_channel" in exc_info.value.detail
+    assert "channel combination" in exc_info.value.detail
+
+
+# ---------------------------------------------------------------------------
+# InquiryAutomationService.patch_settings logic
+# ---------------------------------------------------------------------------
+
+
+def _make_patch_env(
+    *,
+    guide_instruction: str | None = "기존 가이드",
+    quiet_period_seconds: int = 60,
+    ct_credential_id: int = 7,
+    slack_credential_id: int = 1,
+    slack_channel_id: str = "C123",
+    ct_channel_id: str = "229395",
+    agent_id: object = object(),
+):
+    """patch_settings 호출에 필요한 mock 환경을 구성한다."""
+    spec_row = MagicMock()
+    spec_row.id = 1
+    spec_row.workspace_id = 10
+    spec_row.agent_id = agent_id
+    spec_row.user_id = 5  # matches user_id=5 used in patch_settings calls below
+    spec_row.spec = {
+        "preset_key": INQUIRY_AUTOMATION_PRESET_KEY,
+        "channel_talk_credential_id": ct_credential_id,
+        "slack_channel_id": slack_channel_id,
+        "slack_credential_id": slack_credential_id,
+        "guide_instruction": guide_instruction,
+        "quiet_period_seconds": quiet_period_seconds,
+    }
+    spec_row.triggers = [
+        SimpleNamespace(
+            id=99,
+            condition={"quiet_period_seconds": quiet_period_seconds},
+        )
+    ]
+
+    ct_credential = SimpleNamespace(
+        id=ct_credential_id,
+        channel_id=ct_channel_id,
+        channel_name="Support",
+        webhook_token_configured=True,
+    )
+    ct_repo = SimpleNamespace(get_connection_by_id=lambda _: ct_credential)
+
+    db = MagicMock()
+    db.scalar.return_value = None  # no agent_id conflict
+
+    return spec_row, ct_repo, db
+
+
+def test_patch_settings_preserves_guide_instruction_when_not_provided(
+    monkeypatch,
+) -> None:
+    spec_row, ct_repo, db = _make_patch_env(guide_instruction="보존되어야 함")
+    monkeypatch.setattr(
+        automations_service,
+        "get_inquiry_agent_spec_for_update",
+        lambda *_: spec_row,
+    )
+    monkeypatch.setattr(
+        automations_service,
+        "ChannelTalkCredentialsRepository",
+        lambda _: ct_repo,
+    )
+    monkeypatch.setattr(
+        automations_service,
+        "create_or_update_agent_trigger_from_definition",
+        lambda *_: SimpleNamespace(id=99),
+    )
+
+    InquiryAutomationService().patch_settings(
+        db,
+        agent_spec_id=1,
+        workspace_id=10,
+        user_id=5,
+        patch=InquiryAutomationPatch(),
+    )
+
+    saved_spec = spec_row.spec
+    assert saved_spec["guide_instruction"] == "보존되어야 함"
+
+
+def test_patch_settings_clears_guide_instruction_when_explicitly_null(
+    monkeypatch,
+) -> None:
+    spec_row, ct_repo, db = _make_patch_env(guide_instruction="삭제되어야 함")
+    monkeypatch.setattr(
+        automations_service,
+        "get_inquiry_agent_spec_for_update",
+        lambda *_: spec_row,
+    )
+    monkeypatch.setattr(
+        automations_service,
+        "ChannelTalkCredentialsRepository",
+        lambda _: ct_repo,
+    )
+    monkeypatch.setattr(
+        automations_service,
+        "create_or_update_agent_trigger_from_definition",
+        lambda *_: SimpleNamespace(id=99),
+    )
+
+    InquiryAutomationService().patch_settings(
+        db,
+        agent_spec_id=1,
+        workspace_id=10,
+        user_id=5,
+        patch=InquiryAutomationPatch(guide_instruction=None),
+    )
+
+    saved_spec = spec_row.spec
+    assert saved_spec["guide_instruction"] is None
+
+
+def test_patch_settings_uses_trigger_quiet_period_as_fallback(monkeypatch) -> None:
+    spec_row, ct_repo, db = _make_patch_env(quiet_period_seconds=120)
+    captured: list[dict] = []
+    monkeypatch.setattr(
+        automations_service,
+        "get_inquiry_agent_spec_for_update",
+        lambda *_: spec_row,
+    )
+    monkeypatch.setattr(
+        automations_service,
+        "ChannelTalkCredentialsRepository",
+        lambda _: ct_repo,
+    )
+
+    def _capture_trigger(db, definition):
+        captured.append(definition.condition)
+        return SimpleNamespace(id=99)
+
+    monkeypatch.setattr(
+        automations_service,
+        "create_or_update_agent_trigger_from_definition",
+        _capture_trigger,
+    )
+
+    InquiryAutomationService().patch_settings(
+        db,
+        agent_spec_id=1,
+        workspace_id=10,
+        user_id=5,
+        patch=InquiryAutomationPatch(),
+    )
+
+    assert captured[0]["quiet_period_seconds"] == 120
+
+
+def test_patch_settings_raises_not_found_when_spec_missing(monkeypatch) -> None:
+    monkeypatch.setattr(
+        automations_service,
+        "get_inquiry_agent_spec_for_update",
+        lambda *_: None,
+    )
+
+    with pytest.raises(AutomationNotFoundError):
+        InquiryAutomationService().patch_settings(
+            MagicMock(),
+            agent_spec_id=999,
+            workspace_id=10,
+            user_id=5,
+            patch=InquiryAutomationPatch(),
+        )
+
+
+def test_patch_settings_raises_forbidden_when_not_author(monkeypatch) -> None:
+    spec_row, _ct_repo, db = _make_patch_env()
+    spec_row.user_id = 99
+    monkeypatch.setattr(
+        automations_service,
+        "get_inquiry_agent_spec_for_update",
+        lambda *_: spec_row,
+    )
+
+    with pytest.raises(AutomationForbiddenError):
+        InquiryAutomationService().patch_settings(
+            db,
+            agent_spec_id=1,
+            workspace_id=10,
+            user_id=5,
+            patch=InquiryAutomationPatch(),
+        )

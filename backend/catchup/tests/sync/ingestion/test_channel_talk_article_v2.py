@@ -8,67 +8,26 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from catchup.connectors.channel_talk.schemas.document_article import (
-    ChannelTalkDocumentArticleState,
-)
-from catchup.sync.backfill.channel_talk_document_article_v2 import (
-    ChannelTalkArticleV1Target,
-)
-from catchup.sync.backfill.channel_talk_document_article_v2 import (
-    ChannelTalkArticleV2BackfillService,
-)
-from catchup.sync.backfill.channel_talk_document_article_v2 import (
-    build_channel_talk_document_article_mark_finished_statement,
-)
-from catchup.sync.backfill.channel_talk_document_article_v2 import (
-    build_channel_talk_document_article_v1_target_query,
-)
-from catchup.sync.backfill.channel_talk_document_article_v2 import (
-    build_channel_talk_document_article_v1_target_seed_query,
-)
-from catchup.sync.backfill.channel_talk_document_article_v2 import (
-    build_fetch_seeded_seed_chunk_query,
-)
-from catchup.sync.backfill.channel_talk_document_article_v2 import (
-    build_upsert_seed_rows_statement,
-)
-from catchup.sync.ingestion.adapters.channel_talk.article_full_sync import (
-    ChannelTalkArticleFullSyncIngestionAdapter,
-)
-from catchup.sync.ingestion.adapters.channel_talk.article_models import (
-    ChannelTalkArticleFullSyncFetchResult,
-)
-from catchup.sync.ingestion.adapters.channel_talk.article_models import (
-    ChannelTalkArticleV2BackfillExecutionRequest,
-)
-from catchup.sync.ingestion.adapters.channel_talk.article_models import (
-    ChannelTalkArticleV2BackfillSeed,
-)
-from catchup.sync.ingestion.adapters.channel_talk.article_v2_backfill import (
-    ChannelTalkArticleV2BackfillAdapter,
-)
-from catchup.sync.ingestion.adapters.channel_talk.article_v2_document_builder import (
-    ChannelTalkArticleV2DocumentBuilder,
-)
+from catchup.connectors.channel_talk.schemas.document_article import ChannelTalkDocumentArticleState
+from catchup.sync.backfill.base import BackfillTarget
+from catchup.sync.backfill.channel_talk_document_article_v2 import ChannelTalkArticleV2BackfillService
+from catchup.sync.backfill.channel_talk_document_article_v2 import build_channel_talk_document_article_v1_target_query
+from catchup.sync.backfill.channel_talk_document_article_v2 import build_channel_talk_document_article_v1_target_seed_query
+from catchup.sync.backfill.channel_talk_document_article_v2 import build_upsert_seed_rows_statement
+from catchup.sync.backfill.state import build_mark_finished_statement
+from catchup.sync.ingestion.adapters.channel_talk.article_full_sync import ChannelTalkArticleFullSyncIngestionAdapter
+from catchup.sync.ingestion.adapters.channel_talk.article_models import ChannelTalkArticleFullSyncFetchResult
+from catchup.sync.ingestion.adapters.channel_talk.article_models import ChannelTalkArticleV2BackfillExecutionRequest
+from catchup.sync.ingestion.adapters.channel_talk.article_models import ChannelTalkArticleV2BackfillSeed
+from catchup.sync.ingestion.adapters.channel_talk.article_v2_backfill import ChannelTalkArticleV2BackfillAdapter
+from catchup.sync.ingestion.adapters.channel_talk.article_v2_document_builder import ChannelTalkArticleV2DocumentBuilder
 from catchup.sync.ingestion.pipeline import run_sync_ingestion
-from catchup.sync.ingestion.vector_records import (
-    ChannelTalkDocumentArticleV2RecordMapper,
-)
-from catchup.tests.sync.ingestion.test_channel_talk_article_full_sync_adapter import (
-    _article_view,
-)
-from catchup.tests.sync.ingestion.test_channel_talk_article_full_sync_adapter import (
-    _bundle,
-)
-from catchup.tests.sync.ingestion.test_channel_talk_article_full_sync_adapter import (
-    _execution,
-)
-from catchup.tests.sync.ingestion.test_channel_talk_article_full_sync_adapter import (
-    _revision_view,
-)
-from catchup.tests.sync.ingestion.test_channel_talk_article_full_sync_adapter import (
-    _window,
-)
+from catchup.sync.ingestion.vector_records import ChannelTalkDocumentArticleV2RecordMapper
+from catchup.tests.sync.ingestion.test_channel_talk_article_full_sync_adapter import _article_view
+from catchup.tests.sync.ingestion.test_channel_talk_article_full_sync_adapter import _bundle
+from catchup.tests.sync.ingestion.test_channel_talk_article_full_sync_adapter import _execution
+from catchup.tests.sync.ingestion.test_channel_talk_article_full_sync_adapter import _revision_view
+from catchup.tests.sync.ingestion.test_channel_talk_article_full_sync_adapter import _window
 
 
 class _DualWriteArticleRepository:
@@ -217,9 +176,10 @@ async def test_channel_talk_article_v2_mapper_builds_contract_without_duplicates
     ):
         assert duplicated_field not in domain_metadata
     assert domain_metadata["schema_version"] == 2
-    assert domain_metadata["author"]["author_id"] == "author-1"
-    assert domain_metadata["author"]["author_name"] == "Writer Kim"
-    assert set(domain_metadata["author"]) == {"author_id", "author_name"}
+    assert domain_metadata["author"] == {
+        "external_user_id": "author-1",
+        "internal_user_id": None,
+    }
     assert "raw_payload" not in str(metadata)
     assert "signed" not in str(metadata)
 
@@ -356,17 +316,20 @@ async def test_channel_talk_article_full_sync_dual_writes_v2_document():
     )
     repository = _DualWriteArticleRepository()
     vector_store = SimpleNamespace(
-        delete_by_id_prefix=AsyncMock(return_value=1),
         upsert_documents=AsyncMock(
             return_value=[
                 "channel_talk:document_article:channel-123:space-123:ko:article-1:chunk:0"
             ]
         ),
     )
+    v2_knowledge_repository = SimpleNamespace(
+        delete_multiple_chunks_by_id=AsyncMock(return_value=1),
+    )
     author_resolver = _FakeChannelTalkArticleAuthorResolver()
     adapter = ChannelTalkArticleFullSyncIngestionAdapter(
         enable_v2_dual_write=True,
         vector_store=vector_store,
+        v2_knowledge_repository=v2_knowledge_repository,
         v2_document_builder=_v2_document_builder(author_resolver),
     )
     adapter._fetcher = fake_fetcher
@@ -390,8 +353,12 @@ async def test_channel_talk_article_full_sync_dual_writes_v2_document():
     assert repository.stored_documents[0].page_content.startswith(
         "Published refund policy"
     )
-    vector_store.delete_by_id_prefix.assert_awaited_once_with(
-        "channel_talk:document_article:channel-123:space-123:ko:article-1:chunk:"
+    v2_knowledge_repository.delete_multiple_chunks_by_id.assert_awaited_once_with(
+        source="channel_talk",
+        entity_type="document_article",
+        scope_id="channel-123",
+        target_id="space-123",
+        record_id="article-1",
     )
     vector_store.upsert_documents.assert_awaited_once()
     upsert_kwargs = vector_store.upsert_documents.await_args.kwargs
@@ -404,8 +371,8 @@ async def test_channel_talk_article_full_sync_dual_writes_v2_document():
     assert v2_document.metadata["body"] == "# Refunds\n\nPublished body text."
     assert v2_document.metadata["data"] == {"parts": []}
     assert v2_document.metadata["channel_talk_document_article"]["author"] == {
-        "author_id": "author-1",
-        "author_name": "Writer Kim",
+        "external_user_id": "author-1",
+        "internal_user_id": "42",
     }
     assert author_resolver.author_ids == ["author-1"]
     assert v2_document.metadata["internal_author_id"] == "42"
@@ -452,7 +419,6 @@ async def test_channel_talk_article_v2_store_failure_keeps_legacy_persist_succes
 def test_channel_talk_article_backfill_queries_follow_v1_seed_pattern():
     target_query = str(build_channel_talk_document_article_v1_target_query())
     target_seed_query = str(build_channel_talk_document_article_v1_target_seed_query())
-    seed_query = str(build_fetch_seeded_seed_chunk_query())
     upsert_statement = str(build_upsert_seed_rows_statement())
 
     assert "e.cmetadata ->> 'source' = 'channel_talk'" in target_query
@@ -467,9 +433,6 @@ def test_channel_talk_article_backfill_queries_follow_v1_seed_pattern():
     assert "#>> '{channel_talk_document_article,author,author_id}'" not in target_query
     assert "v2.internal_author_id IS NULL" not in target_seed_query
     assert "#>> '{channel_talk_document_article,author,author_id}'" not in target_seed_query
-    assert "scope_id = :scope_id" in seed_query
-    assert "target_id = :target_id" in seed_query
-    assert "COALESCE(metadata::jsonb, '{}'::jsonb) = '{}'::jsonb" in seed_query
     assert "INSERT INTO knowledge_store" in upsert_statement
     assert "'channel_talk'" in upsert_statement
     assert "'document_article'" in upsert_statement
@@ -491,7 +454,7 @@ def test_channel_talk_article_backfill_queries_follow_v1_seed_pattern():
 
 
 def test_channel_talk_article_backfill_mark_finished_casts_failed_ids_to_jsonb():
-    statement = str(build_channel_talk_document_article_mark_finished_statement())
+    statement = str(build_mark_finished_statement())
 
     assert "failed_ids = CAST(:failed_ids AS jsonb)" in statement
 
@@ -503,7 +466,7 @@ def test_channel_talk_article_backfill_mark_finished_serializes_failed_ids():
     service = ChannelTalkArticleV2BackfillService(session_factory=lambda: context)
 
     service._mark_finished_sync(
-        ChannelTalkArticleV1Target(
+        BackfillTarget(
             scope_id="channel-123",
             target_id="space-123",
             target_name="Help Center",
@@ -511,7 +474,7 @@ def test_channel_talk_article_backfill_mark_finished_serializes_failed_ids():
             pending_count=1,
         ),
         backfill_count=0,
-        failed_langchain_ids=[
+        failed_ids=[
             "channel_talk:document_article:channel-123:space-123:ko:article-1:chunk:0"
         ],
         force_failed=True,
@@ -539,14 +502,17 @@ async def test_backfill_adapter_hydrates_article_and_reuses_v1_seed_values():
         fetch_article_bundle_by_id=AsyncMock(return_value=_published_bundle())
     )
     vector_store = SimpleNamespace(
-        delete_by_id_prefix=AsyncMock(return_value=1),
         upsert_documents=AsyncMock(return_value=[seed.langchain_id]),
+    )
+    v2_knowledge_repository = SimpleNamespace(
+        delete_multiple_chunks_by_id=AsyncMock(return_value=1),
         find_missing_metadata_namespace_ids=AsyncMock(return_value=()),
     )
     author_resolver = _FakeChannelTalkArticleAuthorResolver()
     adapter = ChannelTalkArticleV2BackfillAdapter(
         fetcher=fetcher,
         vector_store=vector_store,
+        v2_knowledge_repository=v2_knowledge_repository,
         v2_document_builder=_v2_document_builder(author_resolver),
     )
     execution = _execution()
@@ -577,8 +543,14 @@ async def test_backfill_adapter_hydrates_article_and_reuses_v1_seed_values():
     assert document.metadata["internal_author_id"] == "42"
     assert upsert_args.kwargs["ids"] == [seed.langchain_id]
     assert upsert_args.kwargs["embeddings"] == [seed.embedding]
-    vector_store.delete_by_id_prefix.assert_not_awaited()
-    vector_store.find_missing_metadata_namespace_ids.assert_awaited_once_with(
+    v2_knowledge_repository.delete_multiple_chunks_by_id.assert_awaited_once_with(
+        source="channel_talk",
+        entity_type="document_article",
+        scope_id="channel-123",
+        target_id="space-123",
+        record_id="article-1",
+    )
+    v2_knowledge_repository.find_missing_metadata_namespace_ids.assert_awaited_once_with(
         [seed.langchain_id],
         namespace="channel_talk_document_article",
     )
@@ -599,8 +571,10 @@ async def test_backfill_adapter_treats_missing_article_metadata_as_failed():
         fetch_article_bundle_by_id=AsyncMock(return_value=_published_bundle())
     )
     vector_store = SimpleNamespace(
-        delete_by_id_prefix=AsyncMock(return_value=1),
         upsert_documents=AsyncMock(return_value=[seed.langchain_id]),
+    )
+    v2_knowledge_repository = SimpleNamespace(
+        delete_multiple_chunks_by_id=AsyncMock(return_value=1),
         find_missing_metadata_namespace_ids=AsyncMock(
             return_value=(seed.langchain_id,)
         ),
@@ -608,6 +582,7 @@ async def test_backfill_adapter_treats_missing_article_metadata_as_failed():
     adapter = ChannelTalkArticleV2BackfillAdapter(
         fetcher=fetcher,
         vector_store=vector_store,
+        v2_knowledge_repository=v2_knowledge_repository,
         v2_document_builder=_v2_document_builder(),
     )
     execution = _execution()
@@ -644,12 +619,15 @@ async def test_backfill_adapter_does_not_delete_seed_rows_when_upsert_fails():
         fetch_article_bundle_by_id=AsyncMock(return_value=_published_bundle())
     )
     vector_store = SimpleNamespace(
-        delete_by_id_prefix=AsyncMock(return_value=1),
         upsert_documents=AsyncMock(side_effect=RuntimeError("v2 write failed")),
+    )
+    v2_knowledge_repository = SimpleNamespace(
+        delete_multiple_chunks_by_id=AsyncMock(return_value=1),
     )
     adapter = ChannelTalkArticleV2BackfillAdapter(
         fetcher=fetcher,
         vector_store=vector_store,
+        v2_knowledge_repository=v2_knowledge_repository,
         v2_document_builder=_v2_document_builder(),
     )
     execution = _execution()
@@ -668,4 +646,10 @@ async def test_backfill_adapter_does_not_delete_seed_rows_when_upsert_fails():
     assert result.persisted_count == 0
     assert result.v2_failed_ids == (seed.langchain_id,)
     vector_store.upsert_documents.assert_awaited_once()
-    vector_store.delete_by_id_prefix.assert_not_awaited()
+    v2_knowledge_repository.delete_multiple_chunks_by_id.assert_awaited_once_with(
+        source="channel_talk",
+        entity_type="document_article",
+        scope_id="channel-123",
+        target_id="space-123",
+        record_id="article-1",
+    )

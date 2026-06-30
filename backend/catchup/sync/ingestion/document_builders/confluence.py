@@ -5,22 +5,20 @@ page.body.value (Storage Format HTML)
 → ConfluenceStorageParser.parse() → Section 트리
 → ConfluenceChunker.chunk() → Chunk 리스트
 → Comment Injection
-    - Inline Comment → selection 텍스트 매칭으로 해당 Chunk에 삽입
-    - 매칭 실패한 Inline + Footer Comment → 별도 Discussion Chunk
-→ 이미지 base64 변환 (Cohere Embed v4용)
+    - Inline Comment → marker/selection 매칭으로 해당 Chunk에 삽입
+    - 매칭 실패한 Inline Comment → 첫 Chunk에 삽입
+    - Footer Comment → 첫 Chunk의 data.parts에 삽입
 → LangChain Document 리스트
 
 - confluence:page:{page_id}:chunk:{chunk_index}
 - confluence:blogpost:{page_id}:chunk:{chunk_index}
 """
-import base64
 import json
-import logging
 from dataclasses import dataclass
 from dataclasses import field
 from datetime import datetime
-from typing import Any
 
+import structlog
 from bs4 import BeautifulSoup
 from langchain_core.documents import Document
 
@@ -30,40 +28,8 @@ from catchup.connectors.confluence.schemas import ConfluenceBlogPostResponse
 from catchup.connectors.confluence.schemas import ConfluenceCommentResponse
 from catchup.connectors.confluence.schemas import ConfluencePageResponse
 from catchup.connectors.confluence.storage_parser import ConfluenceStorageParser
-from catchup.connectors.confluence.storage_parser import ContentBlock
 
-logger = logging.getLogger(__name__)
-
-
-@dataclass(frozen=True)
-class ConfluenceAttachmentAsset:
-    data: bytes
-    media_type: str
-
-
-@dataclass(frozen=True)
-class ConfluenceEmbedInput:
-    text: str
-    image_data_uris: list[str] = field(default_factory=list)
-    skipped_images: int = 0
-
-    @property
-    def is_multimodal(self) -> bool:
-        return bool(self.image_data_uris)
-
-    def to_bedrock_input(self) -> dict[str, Any]:
-        content: list[dict[str, Any]] = [{"type": "text", "text": self.text}]
-        content.extend(
-            {
-                "type": "image_url",
-                "image_url": {"url": image_data_uri},
-            }
-            for image_data_uri in self.image_data_uris
-        )
-        return {"content": content}
-
-    def payload_bytes(self) -> int:
-        return len(json.dumps(self.to_bedrock_input()).encode("utf-8"))
+logger = structlog.get_logger(__name__)
 
 
 @dataclass(frozen=True)
@@ -78,6 +44,10 @@ class ConfluenceV2CommentPart:
     resolution_status: str | None = None
     parent_comment_id: str | None = None
     selection: str | None = None
+    inline_marker_ref: str | None = None
+    selection_start: int | None = None
+    selection_end: int | None = None
+    match_method: str | None = None
 
 
 @dataclass(frozen=True)
@@ -125,8 +95,6 @@ class ConfluenceInlineCommentInjectionResult:
 @dataclass(frozen=True)
 class ConfluenceTransformResult:
     documents: list[Document]
-    embed_inputs: list[ConfluenceEmbedInput]
-    skipped_images: int = 0
     v2_prepared_chunks: list[ConfluenceV2PreparedChunk] = field(default_factory=list)
 
 
@@ -145,7 +113,6 @@ class ConfluenceTransformer:
             labels: list[str] | None = None,
             footer_comments: list[ConfluenceCommentResponse] | None = None,
             inline_comments: list[ConfluenceCommentResponse] | None = None,
-            attachment_images: dict[str, ConfluenceAttachmentAsset] | None = None,
             site_url: str | None = None,
             user_name_map: dict[str, str | None] | None = None,
     ) -> ConfluenceTransformResult:
@@ -169,7 +136,6 @@ class ConfluenceTransformer:
             labels=labels,
             footer_comments=footer_comments,
             inline_comments=inline_comments,
-            attachment_images=attachment_images,
             site_url=site_url,
             user_name_map=user_name_map,
         )
@@ -182,7 +148,6 @@ class ConfluenceTransformer:
         space_name: str | None = None,
         labels: list[str] | None = None,
         footer_comments: list[ConfluenceCommentResponse] | None = None,
-        attachment_images: dict[str, ConfluenceAttachmentAsset] | None = None,
         site_url: str | None = None,
         user_name_map: dict[str, str | None] | None = None,
     ) -> ConfluenceTransformResult:
@@ -206,7 +171,6 @@ class ConfluenceTransformer:
             labels=labels,
             footer_comments=footer_comments,
             inline_comments=None,
-            attachment_images=attachment_images,
             site_url=site_url,
             user_name_map=user_name_map,
         )
@@ -232,21 +196,23 @@ class ConfluenceTransformer:
         labels: list[str] | None,
         footer_comments: list[ConfluenceCommentResponse] | None,
         inline_comments: list[ConfluenceCommentResponse] | None,
-        attachment_images: dict[str, ConfluenceAttachmentAsset] | None,
         site_url: str | None = None,
         user_name_map: dict[str, str | None] | None = None,
     ) -> ConfluenceTransformResult:
-        
+
         labels = labels or []
-        attachment_images = attachment_images or {}
 
         # 1) Storage HTML 추출
         storage_html = body.value if body else ""
         if not storage_html:
             logger.info(
-                f"[CONFLUENCE[TRANSFORMER] Empty Body for {entity_type} {content_id}"
+                "confluence_transform_empty_body",
+                connector="confluence",
+                entity_type=entity_type,
+                content_id=content_id,
+                target_id=space_key,
             )
-            return ConfluenceTransformResult(documents=[], embed_inputs=[])
+            return ConfluenceTransformResult(documents=[])
         
         web_url = self._absolutize_web_url(web_url, site_url)
 
@@ -258,41 +224,32 @@ class ConfluenceTransformer:
         sections = self.parser.parse(storage_html)
         if not sections:
             logger.info(
-                f"[CONFLUENCE][TRANSFORM] No sections parsed for {entity_type} {content_id}"
+                "confluence_transform_no_sections",
+                connector="confluence",
+                entity_type=entity_type,
+                content_id=content_id,
+                target_id=space_key,
             )
-            return ConfluenceTransformResult(documents=[], embed_inputs=[])
+            return ConfluenceTransformResult(documents=[])
         
         # 3) Section 트리 → Chunk 리스트
         chunks = self.chunker.chunk(sections, page_title=title)
         if not chunks:
-            return ConfluenceTransformResult(documents=[], embed_inputs=[])
+            return ConfluenceTransformResult(documents=[])
 
         # 4) Comment Injection
-        #    - Inline: selection 매칭 성공 → 해당 chunk에 삽입
-        #    - 매칭 실패 Inline + Footer → 별도 Discussion Chunk
+        #    - Inline: marker/selection 매칭 성공 → 해당 chunk에 삽입
+        #    - 매칭 실패 Inline → 첫 chunk에 fallback 삽입
+        #    - Footer → 첫 chunk의 data.parts에 삽입
         inline_injection = ConfluenceInlineCommentInjectionResult()
         if inline_comments:
             inline_injection = self._inject_inline_comments(chunks, inline_comments)
 
-        discussion_comment_parts = self._discussion_comment_parts(
-            footer_comments=footer_comments or [],
-            unmatched_inline=inline_injection.unmatched,
-        )
-
-        discussion_chunk = self._build_discussion_chunk(
-            chunks=chunks,
-            page_title=title,
-            footer_comments=footer_comments or [],
-            unmatched_inline=inline_injection.unmatched,
-        )
-        if discussion_chunk:
-            chunks.append(discussion_chunk)
+        footer_comment_parts = self._footer_comment_parts(footer_comments or [])
 
         # 5. Chunk → LangChain Document 변환
         documents: list[Document] = []
-        embed_inputs: list[ConfluenceEmbedInput] = []
         v2_prepared_chunks: list[ConfluenceV2PreparedChunk] = []
-        skipped_images = 0
         total_chunks = len(chunks)
 
         # 버전 정보 추출
@@ -302,13 +259,6 @@ class ConfluenceTransformer:
         for chunk in chunks:
             # semantic_content: 임베딩용 (chunk content 그대로)
             semantic_content = chunk.content
-            embed_input = self._build_embed_input(
-                text=semantic_content,
-                image_blocks=chunk.image_blocks,
-                attachment_images=attachment_images,
-            )
-            embed_inputs.append(embed_input)
-            skipped_images += embed_input.skipped_images
 
             # contextual_content: LLM 답변 생성용 (chunk별 section 반영)
             contextual_content = self._build_contextual_content(
@@ -382,8 +332,8 @@ class ConfluenceTransformer:
             v2_comments = list(
                 inline_injection.matched_by_chunk_index.get(chunk.index, [])
             )
-            if chunk.section_hierarchy == ["Discussion"]:
-                v2_comments.extend(discussion_comment_parts)
+            if chunk.index == 0:
+                v2_comments.extend(footer_comment_parts)
             v2_prepared_chunks.append(
                 ConfluenceV2PreparedChunk(
                     document_id=doc_id,
@@ -419,48 +369,26 @@ class ConfluenceTransformer:
                 )
             )
 
+        image_chunk_count = sum(1 for chunk in chunks if chunk.image_blocks)
         logger.info(
-            f"[CONFLUENCE][TRANSFORM] {entity_type} '{title}' → {len(documents)} chunks"
+            "confluence_transform_completed",
+            connector="confluence",
+            entity_type=entity_type,
+            content_id=content_id,
+            target_id=space_key,
+            document_count=len(documents),
+            chunk_count=len(chunks),
+            v2_prepared_chunk_count=len(v2_prepared_chunks),
+            image_chunk_count=image_chunk_count,
+            footer_comment_count=len(footer_comments or []),
+            inline_comment_count=len(inline_comments or []),
+            discussion_chunk_added=False,
         )
 
         return ConfluenceTransformResult(
             documents=documents,
-            embed_inputs=embed_inputs,
-            skipped_images=skipped_images,
             v2_prepared_chunks=v2_prepared_chunks,
         )
-
-    def _build_embed_input(
-        self,
-        *,
-        text: str,
-        image_blocks: list[ContentBlock],
-        attachment_images: dict[str, ConfluenceAttachmentAsset],
-    ) -> ConfluenceEmbedInput:
-        image_data_uris: list[str] = []
-        skipped_images = 0
-
-        for block in image_blocks:
-            filename = block.image_filename
-            if not filename:
-                continue
-
-            asset = attachment_images.get(filename)
-            if asset is None:
-                skipped_images += 1
-                continue
-
-            image_data_uris.append(self._build_data_uri(asset))
-
-        return ConfluenceEmbedInput(
-            text=text,
-            image_data_uris=image_data_uris,
-            skipped_images=skipped_images,
-        )
-
-    def _build_data_uri(self, asset: ConfluenceAttachmentAsset) -> str:
-        encoded = base64.b64encode(asset.data).decode("ascii")
-        return f"data:{asset.media_type};base64,{encoded}"
     
     def _inject_inline_comments(
             self,
@@ -468,11 +396,10 @@ class ConfluenceTransformer:
             inline_comments: list[ConfluenceCommentResponse],
     ) -> ConfluenceInlineCommentInjectionResult:
         
-        unmatched: list[ConfluenceCommentResponse] = []
         matched_by_chunk_index: dict[int, list[ConfluenceV2CommentPart]] = {}
 
         if not chunks:
-            return ConfluenceInlineCommentInjectionResult(unmatched=inline_comments)
+            return ConfluenceInlineCommentInjectionResult()
         
         ref_to_chunk: dict[str, Chunk] = {}
         for chunk in chunks:
@@ -488,101 +415,56 @@ class ConfluenceTransformer:
             
             # 1) marker-ref 기반 Injection
             marker_ref = self._extract_inline_marker_ref(comment)
+            selection = self._extract_inline_selection(comment)
             target_chunk = ref_to_chunk.get(marker_ref) if marker_ref else None
+            match_method = "inline_marker_ref" if target_chunk is not None else None
 
             # 2) selection 텍스트 매칭
+            if target_chunk is None and selection:
+                target_chunk = self._find_chunk_by_selection(chunks, selection)
+                if target_chunk is not None:
+                    match_method = "selection"
+
+            # 3) 위치 정보가 깨진 inline comment도 검색 가능한 기존 chunk에 보존한다.
             if target_chunk is None:
-                selection = self._extract_inline_selection(comment)
-                if selection:
-                    for chunk in chunks:
-                        if selection in chunk.content:
-                            target_chunk = chunk
-                            break
-                        
-            if target_chunk is not None:
-                target_chunk.content = f"{target_chunk.content}\n{formatted}"
-                part = self._comment_part(
-                    part_type="inline_comment",
-                    comment=comment,
-                    text=comment_text,
-                    selection=self._extract_inline_selection(comment),
+                target_chunk = chunks[0]
+                match_method = "fallback_first_chunk"
+                logger.info(
+                    "confluence_inline_comment_fallback_to_first_chunk",
+                    connector="confluence",
+                    comment_id=comment.id,
+                    marker_ref=marker_ref,
+                    selection=selection,
+                    chunk_index=target_chunk.index,
                 )
-                if part is not None:
-                    matched_by_chunk_index.setdefault(target_chunk.index, []).append(part)
-            else:
-                unmatched.append(comment)
+
+            selection_start, selection_end = self._find_selection_span(
+                target_chunk.body_text,
+                selection,
+            )
+            target_chunk.content = f"{target_chunk.content}\n{formatted}"
+            part = self._comment_part(
+                part_type="inline_comment",
+                comment=comment,
+                text=comment_text,
+                selection=selection,
+                inline_marker_ref=marker_ref,
+                selection_start=selection_start,
+                selection_end=selection_end,
+                match_method=match_method,
+            )
+            if part is not None:
+                matched_by_chunk_index.setdefault(target_chunk.index, []).append(part)
 
         return ConfluenceInlineCommentInjectionResult(
-            unmatched=unmatched,
             matched_by_chunk_index=matched_by_chunk_index,
         )
 
-
-    def _build_discussion_chunk(
+    def _footer_comment_parts(
         self,
-        chunks: list[Chunk],
-        page_title: str,
         footer_comments: list[ConfluenceCommentResponse],
-        unmatched_inline: list[ConfluenceCommentResponse],
-    ) -> Chunk | None:
-        """
-        Footer Comment + 매칭 실패 Inline Comment → 별도 Discussion Chunk 생성
-
-        Returns:
-            Discussion Chunk 또는 None (댓글이 없을 때)
-        """
-        comment_lines: list[str] = []
-
-        # 1) 매칭 실패 Inline Comments
-        for comment in (unmatched_inline or []):
-            comment_text = self._extract_comment_text(comment)
-            if comment_text:
-                comment_lines.append(f"Comment: {comment_text}")
-
-        # 2) Footer Comments
-        for comment in (footer_comments or []):
-            comment_text = self._extract_comment_text(comment)
-            if comment_text:
-                comment_lines.append(f"Commented: {comment_text}")
-
-        if not comment_lines:
-            return None
-
-        # Discussion Chunk의 index = 기존 chunks의 다음 번호
-        next_index = chunks[-1].index + 1 if chunks else 0
-
-        # Context Prefix + Discussion 본문
-        prefix = f"[Page: {page_title}]\n[Section: Discussion]"
-        body = "\n".join(comment_lines)
-        content = f"{prefix}\n\n{body}"
-
-        return Chunk(
-            index=next_index,
-            content=content,
-            section_hierarchy=["Discussion"],
-            char_count=len(content),
-            estimated_tokens=len(content) // 4,
-            image_blocks=[],
-            body_text="",
-        )
-
-    def _discussion_comment_parts(
-        self,
-        *,
-        footer_comments: list[ConfluenceCommentResponse],
-        unmatched_inline: list[ConfluenceCommentResponse],
     ) -> list[ConfluenceV2CommentPart]:
         parts: list[ConfluenceV2CommentPart] = []
-        for comment in unmatched_inline:
-            text = self._extract_comment_text(comment)
-            part = self._comment_part(
-                part_type="unmatched_inline_comment",
-                comment=comment,
-                text=text,
-                selection=self._extract_inline_selection(comment),
-            )
-            if part is not None:
-                parts.append(part)
         for comment in footer_comments:
             text = self._extract_comment_text(comment)
             part = self._comment_part(
@@ -595,6 +477,42 @@ class ConfluenceTransformer:
                 parts.append(part)
         return parts
 
+    @classmethod
+    def _find_chunk_by_selection(
+        cls,
+        chunks: list[Chunk],
+        selection: str,
+    ) -> Chunk | None:
+        normalized_selection = cls._normalize_for_comment_match(selection)
+        for chunk in chunks:
+            if selection in chunk.content or selection in chunk.body_text:
+                return chunk
+            normalized_content = cls._normalize_for_comment_match(chunk.content)
+            normalized_body = cls._normalize_for_comment_match(chunk.body_text)
+            if normalized_selection and (
+                normalized_selection in normalized_content
+                or normalized_selection in normalized_body
+            ):
+                return chunk
+        return None
+
+    @staticmethod
+    def _find_selection_span(
+        text: str,
+        selection: str | None,
+    ) -> tuple[int | None, int | None]:
+        if not selection:
+            return None, None
+
+        start = text.find(selection)
+        if start < 0:
+            return None, None
+        return start, start + len(selection)
+
+    @staticmethod
+    def _normalize_for_comment_match(value: str) -> str:
+        return " ".join(value.split())
+
     @staticmethod
     def _comment_part(
         *,
@@ -602,6 +520,10 @@ class ConfluenceTransformer:
         comment: ConfluenceCommentResponse,
         text: str,
         selection: str | None,
+        inline_marker_ref: str | None = None,
+        selection_start: int | None = None,
+        selection_end: int | None = None,
+        match_method: str | None = None,
     ) -> ConfluenceV2CommentPart | None:
         normalized = text.strip()
         if not normalized:
@@ -617,6 +539,10 @@ class ConfluenceTransformer:
             resolution_status=comment.resolution_status,
             parent_comment_id=comment.parent_comment_id,
             selection=selection,
+            inline_marker_ref=inline_marker_ref,
+            selection_start=selection_start,
+            selection_end=selection_end,
+            match_method=match_method,
         )
 
     def _extract_comment_text(self, comment: ConfluenceCommentResponse) -> str:
@@ -644,10 +570,14 @@ class ConfluenceTransformer:
                     extracted = self._extract_text_from_adf(adf)
                     if extracted:
                         return extracted.strip()
-            except Exception:
+            except Exception as exc:
                 # 파싱 실패 시 아래 HTML 처리로 fallback
                 logger.debug(
-                    "[CONFLUENCE][TRANSFORM] Failed to parse ADF comment body; falling back to HTML strip"
+                    "confluence_comment_adf_parse_failed",
+                    connector="confluence",
+                    comment_id=comment.id,
+                    representation=comment.body.representation,
+                    exception_type=type(exc).__name__,
                 )
 
         # Storage Format → 텍스트 추출 (태그 제거)

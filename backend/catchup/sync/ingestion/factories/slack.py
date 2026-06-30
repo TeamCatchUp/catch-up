@@ -10,14 +10,7 @@ import logging
 from fastapi import HTTPException
 from fastapi.concurrency import run_in_threadpool
 
-from catchup.components.embedder.constants import EmbeddingProvider
-from catchup.components.embedder.factory import get_embedding_service
 from catchup.components.summarizer import get_summarizer_service
-from catchup.components.vector_db.factory import get_pgvector_repository
-from catchup.components.vector_db.factory import get_v2_vector_store
-from catchup.components.vector_db.pgvector.repository import PGVectorRepository
-from catchup.components.vector_db.v2 import VectorStore
-from catchup.configs.config import settings
 from catchup.connectors.slack.auth import get_slack_oauth_service
 from catchup.connectors.slack.client import SlackApiClientWrapper
 from catchup.connectors.slack.client import SlackConnectorApiError
@@ -29,6 +22,9 @@ from catchup.sync.common.exceptions import SyncInternalException
 from catchup.sync.ingestion.adapters.slack import SlackMessageFullSyncAdapter
 from catchup.sync.ingestion.adapters.slack import SlackMessageIncrementalSyncAdapter
 from catchup.sync.ingestion.adapters.slack import SlackMessageV2BackfillAdapter
+from catchup.sync.ingestion.factories.knowledge_store import (
+    create_knowledge_store_dependencies,
+)
 from catchup.sync.ingestion.services.slack import SlackIngestionService
 
 logger = logging.getLogger(__name__)
@@ -89,29 +85,6 @@ async def _resolve_access_token(
             metadata={"team_id": team_id},
         ) from exc
 
-def _build_repository(
-    embeddings=None,
-) -> PGVectorRepository:
-    embeddings = embeddings or get_embedding_service(
-        EmbeddingProvider.AWS_BEDROCK
-    ).get_embedder()
-    repository = get_pgvector_repository(embeddings=embeddings)
-    repository.ensure_initialized()
-    return repository
-
-
-async def _build_vector_dependencies(
-    *,
-    require_vector_store: bool = False,
-) -> tuple[PGVectorRepository, VectorStore | None]:
-    embeddings = get_embedding_service(EmbeddingProvider.AWS_BEDROCK).get_embedder()
-    repository = _build_repository(embeddings)
-    vector_store = None
-    if settings.VECTOR_STORE_V2_DUAL_WRITE_ENABLED or require_vector_store:
-        vector_store = get_v2_vector_store(embeddings)
-        await vector_store.initialize()
-    return repository, vector_store
-
 
 async def _load_token_or_raise(team_id: str):
     token_record = await run_in_threadpool(_load_token_db, team_id)
@@ -133,16 +106,17 @@ async def _create_slack_message_adapter(
     access_token = await _resolve_access_token(team_id, token_record=token_record)
 
     try:
-        repository, vector_store = await _build_vector_dependencies(
+        knowledge_store = await create_knowledge_store_dependencies(
             require_vector_store=require_vector_store,
         )
         adapter = adapter_cls(
             team_id=team_id,
             client=SlackApiClientWrapper(access_token, team_id),
-            repository=repository,
+            repository=knowledge_store.repository,
             bot_user_id=token_record.bot_user_id,
             summarizer=get_summarizer_service(),
-            vector_store=vector_store,
+            vector_store=knowledge_store.vector_store,
+            v2_knowledge_repository=knowledge_store.v2_knowledge_repository,
         )
         await run_in_threadpool(adapter._load_ingestion_context)
         return adapter
@@ -195,9 +169,9 @@ async def create_slack_ingestion_service(
     access_token = await _resolve_access_token(team_id, token_record=token_record)
 
     try:
-        repository, _ = await _build_vector_dependencies()
+        knowledge_store = await create_knowledge_store_dependencies()
         service = SlackIngestionService(
-            repository=repository,
+            repository=knowledge_store.repository,
             team_id=team_id,
             access_token=access_token,
             bot_user_id=token_record.bot_user_id,

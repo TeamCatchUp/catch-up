@@ -10,23 +10,37 @@ import TagIcon from '@/public/icons/icon/tag.svg';
 import { MoreButtonContent } from '@/shared/components/layout/topNavbar/MoreButtonModal';
 import { Button } from '@/shared/components/ui/button';
 import { DropdownMenu, DropdownMenuTrigger } from '@/shared/components/ui/dropdown-menu';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/shared/components/ui/tooltip';
 
-import { AGENT_STUDIO_SETTINGS_FIXTURE } from '../../fixtures/agentStudioFixtures';
-import { useAgentEditorSettingsForm } from '../../hooks/useAgentEditorSettingsForm';
+import { AGENT_STUDIO_SETTINGS_FIXTURE } from '../../../fixtures/agentStudioFixtures';
+import { useAgentEditorSettingsForm } from '../../../hooks/useAgentEditorSettingsForm';
 import AgentSettingSection from './AgentSettingSection';
 import AgentInstructionField from './fields/AgentInstructionField';
 import AgentSelectField from './fields/AgentSelectField';
 
-export default function AgentEditorSettings() {
+interface AgentEditorSettingsProps {
+  mode?: 'create' | 'edit';
+  agentSpecId?: number;
+}
+
+export default function AgentEditorSettings({ mode = 'create', agentSpecId }: AgentEditorSettingsProps) {
   const router = useRouter();
-  const form = useAgentEditorSettingsForm();
+  const form = useAgentEditorSettingsForm({ mode, agentSpecId });
+  const submitLabel = mode === 'edit' ? '수정하기' : '배포하기';
 
   return (
     <main className="bg-fill-normal-assistive-dark flex h-full min-w-0 flex-1 flex-col overflow-y-auto">
-      <header className="bg-fill-normal-assistive-dark sticky top-0 z-10 flex h-13 shrink-0 items-center justify-between px-6 py-2">
-        <Button variant="icon-only-gray" size="md" aria-label="Agent Studio로 돌아가기" onClick={() => router.back()}>
-          <ArrowBackIcon className="size-6" aria-hidden="true" />
-        </Button>
+      <header className="bg-fill-normal-assistive-dark z-base sticky top-0 flex h-13 shrink-0 items-center justify-between px-6 py-2">
+        <TooltipProvider delayDuration={200}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="icon-only-gray" size="md" aria-label="돌아가기" onClick={() => router.back()}>
+                <ArrowBackIcon className="size-6" aria-hidden="true" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">돌아가기</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="icon-only-gray" size="md" aria-label="설정 더보기">
@@ -39,13 +53,16 @@ export default function AgentEditorSettings() {
       <div className="flex min-w-0 flex-col items-start gap-8 px-9 pt-5 pb-9">
         <div className="flex w-full items-center gap-3">
           <h1 className="text-heading-xlarge text-text-normal-strong min-w-0 flex-1 truncate">설정</h1>
-          <Button variant="box-solid-primary" size="lg" disabled={!form.canPublish} onClick={form.handlePublish}>
-            배포하기
+          <Button
+            variant="box-solid-primary"
+            size="lg"
+            disabled={!form.canSubmit}
+            onClick={form.handleSubmit}
+            className="h-10"
+          >
+            {submitLabel}
           </Button>
         </div>
-        {form.isPublishError && (
-          <p className="text-body-small text-status-destructive w-full">배포에 실패했습니다. 입력값을 확인해주세요.</p>
-        )}
 
         <AgentSettingSection
           step={1}
@@ -68,6 +85,7 @@ export default function AgentEditorSettings() {
             value={form.quietPeriodSelect.value}
             icon={<ClockIcon className="size-5.5" aria-hidden="true" />}
             items={form.quietPeriodSelect.items}
+            disabled={form.quietPeriodSelect.disabled}
             onChange={form.quietPeriodSelect.onChange}
           />
           <div className="bg-fill-normal-strong flex w-full flex-col items-start justify-center gap-1.5 rounded-xl px-4 py-3">
@@ -116,6 +134,7 @@ export default function AgentEditorSettings() {
             onChange={form.setInstruction}
             maxLength={AGENT_STUDIO_SETTINGS_FIXTURE.instructionMaxLength}
             hintText={AGENT_STUDIO_SETTINGS_FIXTURE.instructionHintText}
+            disabled={form.isReadOnly}
           />
         </AgentSettingSection>
       </div>

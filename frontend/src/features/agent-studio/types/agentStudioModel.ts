@@ -21,6 +21,7 @@ export interface AgentStudioCardModel {
   authorName: string;
   authorProfileImageUrl: string | null;
   updatedAtLabel: string;
+  isEditable: boolean;
 }
 
 export interface AgentStudioSettingsFixture {

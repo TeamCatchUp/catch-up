@@ -59,6 +59,7 @@ from catchup.server.connector.jira.webhook_api import router as jira_webhook_rou
 from catchup.server.connector.slack.auth_api import router as slack_auth_router
 from catchup.server.connector.slack.webhook_api import router as slack_webhook_router
 from catchup.server.error_handlers import register_exception_handlers
+from catchup.server.initialization import ensure_ks_all_indices
 from catchup.server.initialization import ensure_pg_indices
 from catchup.server.initialization import ensure_vector_index
 from catchup.server.integrations.api import router as integrations_router
@@ -161,6 +162,7 @@ async def lifespan(app: FastAPI):
             await v2_vector_store.initialize()
         if settings.PGVECTOR_HNSW_INDEX_ENABLED:
             asyncio.create_task(ensure_vector_index())
+        asyncio.create_task(ensure_ks_all_indices())
         logger.info(
             "pgvector_repository_initialized",
             result="success",
@@ -552,9 +554,13 @@ app.include_router(workflow_credentials_router)
 
 if settings.DEBUG_API_ENABLED:
     from catchup.server.debug.agent_simulate import router as agent_simulate_router
+    from catchup.server.debug.retrieval_v2_probe import (
+        router as retrieval_v2_probe_router,
+    )
     from catchup.server.debug.search_probe import router as search_probe_router
     app.include_router(search_probe_router)
     app.include_router(agent_simulate_router)
+    app.include_router(retrieval_v2_probe_router)
     logger.warning("debug_api_enabled", note="disable DEBUG_API_ENABLED in production")
 
 app.include_router(mcp_well_known_router)

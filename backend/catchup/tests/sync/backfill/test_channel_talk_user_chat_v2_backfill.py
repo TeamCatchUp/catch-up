@@ -6,15 +6,12 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from catchup.sync.backfill.channel_talk_user_chat_v2 import _embedding_to_list
+from catchup.sync.backfill.base import embedding_to_list
 from catchup.sync.backfill.channel_talk_user_chat_v2 import (
     build_channel_talk_user_chat_v1_target_query,
 )
 from catchup.sync.backfill.channel_talk_user_chat_v2 import (
     build_channel_talk_user_chat_v1_target_seed_query,
-)
-from catchup.sync.backfill.channel_talk_user_chat_v2 import (
-    build_fetch_seeded_seed_chunk_query,
 )
 from catchup.sync.backfill.channel_talk_user_chat_v2 import (
     build_upsert_seed_rows_statement,
@@ -73,7 +70,6 @@ def _v2_document_builder(
 def test_channel_talk_user_chat_backfill_queries_follow_v1_seed_pattern() -> None:
     target_query = str(build_channel_talk_user_chat_v1_target_query())
     target_seed_query = str(build_channel_talk_user_chat_v1_target_seed_query())
-    seed_query = str(build_fetch_seeded_seed_chunk_query())
     upsert_statement = str(build_upsert_seed_rows_statement())
 
     assert "e.cmetadata ->> 'source' = 'channel_talk'" in target_query
@@ -94,9 +90,6 @@ def test_channel_talk_user_chat_backfill_queries_follow_v1_seed_pattern() -> Non
     assert "ORDER BY record_id, langchain_id" in target_seed_query
     assert "LIMIT :limit" in target_seed_query
     assert "OFFSET" not in target_seed_query
-    assert "scope_id = :scope_id" in seed_query
-    assert "target_id = :target_id" in seed_query
-    assert "COALESCE(metadata::jsonb, '{}'::jsonb) = '{}'::jsonb" in seed_query
     assert "INSERT INTO knowledge_store" in upsert_statement
     assert "'channel_talk'" in upsert_statement
     assert "'user_chat'" in upsert_statement
@@ -109,7 +102,7 @@ def test_channel_talk_user_chat_backfill_queries_follow_v1_seed_pattern() -> Non
 
 
 def test_channel_talk_user_chat_v2_embedding_to_list_treats_null_as_empty() -> None:
-    assert _embedding_to_list(None) == []
+    assert embedding_to_list(None) == []
 
 
 @pytest.mark.asyncio
@@ -121,12 +114,15 @@ async def test_backfill_adapter_hydrates_user_chat_and_reuses_v1_seed_values() -
     )
     vector_store = SimpleNamespace(
         upsert_documents=AsyncMock(return_value=[seed.langchain_id]),
+    )
+    v2_knowledge_repository = SimpleNamespace(
         find_missing_metadata_namespace_ids=AsyncMock(return_value=()),
     )
     author_resolver = _FakeChannelTalkAuthorResolver()
     adapter = ChannelTalkUserChatV2BackfillAdapter(
         fetcher=fetcher,
         vector_store=vector_store,
+        v2_knowledge_repository=v2_knowledge_repository,
         v2_document_builder=_v2_document_builder(author_resolver),
     )
     adapter._load_connection = AsyncMock(
@@ -158,7 +154,7 @@ async def test_backfill_adapter_hydrates_user_chat_and_reuses_v1_seed_values() -
     assert document.metadata["internal_author_id"] == "42"
     assert upsert_args.kwargs["ids"] == [seed.langchain_id]
     assert upsert_args.kwargs["embeddings"] == [seed.embedding]
-    vector_store.find_missing_metadata_namespace_ids.assert_awaited_once_with(
+    v2_knowledge_repository.find_missing_metadata_namespace_ids.assert_awaited_once_with(
         [seed.langchain_id],
         namespace="channel_talk_user_chat",
     )
@@ -173,6 +169,8 @@ async def test_backfill_adapter_treats_missing_user_chat_metadata_as_failed() ->
     )
     vector_store = SimpleNamespace(
         upsert_documents=AsyncMock(return_value=[seed.langchain_id]),
+    )
+    v2_knowledge_repository = SimpleNamespace(
         find_missing_metadata_namespace_ids=AsyncMock(
             return_value=(seed.langchain_id,)
         ),
@@ -180,6 +178,7 @@ async def test_backfill_adapter_treats_missing_user_chat_metadata_as_failed() ->
     adapter = ChannelTalkUserChatV2BackfillAdapter(
         fetcher=fetcher,
         vector_store=vector_store,
+        v2_knowledge_repository=v2_knowledge_repository,
         v2_document_builder=_v2_document_builder(),
     )
     adapter._load_connection = AsyncMock(

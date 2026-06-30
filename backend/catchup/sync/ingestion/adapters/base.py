@@ -11,6 +11,7 @@ from langchain_core.documents import Document
 from catchup.components.summarizer import SummarizeRequest
 from catchup.components.summarizer import SummarizerService
 from catchup.components.vector_db.pgvector import PGVectorRepository
+from catchup.components.vector_db.v2 import V2KnowledgeRepository
 from catchup.components.vector_db.v2 import VectorStore
 from catchup.sync.audit import SyncAuditContext
 from catchup.sync.ingestion.dual_write import DualWriter
@@ -40,6 +41,7 @@ class BaseIngestionAdapter(Generic[ScopeIdT, ClientT, TransformerT]):
         summarizer: SummarizerService | None = None,
         transformer: TransformerT,
         vector_store: VectorStore | None = None,
+        v2_knowledge_repository: V2KnowledgeRepository | None = None,
     ) -> None:
         self.scope_id = scope_id
         self.client = client
@@ -47,6 +49,7 @@ class BaseIngestionAdapter(Generic[ScopeIdT, ClientT, TransformerT]):
         self.summarizer = summarizer
         self.transformer = transformer
         self.vector_store = vector_store
+        self.v2_knowledge_repository = v2_knowledge_repository
 
     async def _summarize_documents_with_context(
         self,

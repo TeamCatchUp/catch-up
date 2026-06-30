@@ -255,6 +255,7 @@ def _validate_github_issue_metadata(
         "reviewer_displays",
         "merged_by_display",
         "review_state",
+        "comments_count",
     }
     for field_name in sorted(forbidden_fields & set(github_issue)):
         errors.append(f"forbidden:github_issue.{field_name}")

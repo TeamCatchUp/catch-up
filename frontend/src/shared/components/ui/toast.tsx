@@ -1,6 +1,8 @@
 'use client';
 
-import { Toaster } from 'sonner';
+import { toast, Toaster } from 'sonner';
+
+export { toast };
 
 export default function Toast() {
   return (

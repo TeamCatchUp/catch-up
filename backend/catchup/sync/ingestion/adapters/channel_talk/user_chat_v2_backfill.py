@@ -2,9 +2,7 @@ from __future__ import annotations
 
 import structlog
 
-from catchup.components.embedder.constants import EmbeddingProvider
-from catchup.components.embedder.factory import get_embedding_service
-from catchup.components.vector_db.factory import get_v2_vector_store
+from catchup.components.vector_db.v2 import V2KnowledgeRepository
 from catchup.components.vector_db.v2 import VectorStore
 from catchup.connectors.channel_talk.core.user_chat_full_sync_fetcher import (
     ChannelTalkUserChatFullSyncFetcher,
@@ -36,6 +34,9 @@ from catchup.sync.ingestion.adapters.channel_talk.user_chat_models import (
 from catchup.sync.ingestion.adapters.channel_talk.user_chat_v2_document_builder import (
     ChannelTalkUserChatV2DocumentBuilder,
 )
+from catchup.sync.ingestion.factories.knowledge_store import (
+    create_knowledge_store_dependencies,
+)
 from catchup.sync.ingestion.schemas import SyncWindow
 
 logger = structlog.get_logger(__name__)
@@ -49,12 +50,14 @@ class ChannelTalkUserChatV2BackfillAdapter(ChannelTalkUserChatFullSyncIngestionA
         *,
         fetcher: ChannelTalkUserChatFullSyncFetcher | None = None,
         vector_store: VectorStore | None = None,
+        v2_knowledge_repository: V2KnowledgeRepository | None = None,
         v2_document_builder: ChannelTalkUserChatV2DocumentBuilder | None = None,
     ) -> None:
         super().__init__(
             enable_summarization=False,
             enable_v2_dual_write=True,
             vector_store=vector_store,
+            v2_knowledge_repository=v2_knowledge_repository,
             v2_document_builder=v2_document_builder,
         )
         self._fetcher = fetcher
@@ -193,10 +196,16 @@ class ChannelTalkUserChatV2BackfillAdapter(ChannelTalkUserChatFullSyncIngestionA
             for document_id in document_ids
             if document_id in persisted_id_set
         ]
-        metadata_failed_ids = await vector_store.find_missing_metadata_namespace_ids(
-            metadata_check_ids,
-            namespace="channel_talk_user_chat",
-        )
+        v2_knowledge_repository = self._get_v2_knowledge_repository()
+        if v2_knowledge_repository is None:
+            metadata_failed_ids = tuple(metadata_check_ids)
+        else:
+            metadata_failed_ids = (
+                await v2_knowledge_repository.find_missing_metadata_namespace_ids(
+                    metadata_check_ids,
+                    namespace="channel_talk_user_chat",
+                )
+            )
         if metadata_failed_ids:
             logger.warning(
                 "channel_talk_user_chat_v2_backfill_metadata_missing_after_persist",
@@ -259,12 +268,12 @@ class ChannelTalkUserChatV2BackfillAdapter(ChannelTalkUserChatFullSyncIngestionA
 
     async def _get_vector_store(self) -> VectorStore | None:
         if self._vector_store is None:
-            embeddings = get_embedding_service(
-                EmbeddingProvider.AWS_BEDROCK
-            ).get_embedder()
-            vector_store = get_v2_vector_store(embeddings)
-            await vector_store.initialize()
-            self._vector_store = vector_store
+            knowledge_store = await create_knowledge_store_dependencies(
+                require_vector_store=True,
+            )
+            self._vector_store = knowledge_store.vector_store
+            if self._v2_knowledge_repository is None:
+                self._v2_knowledge_repository = knowledge_store.v2_knowledge_repository
         return self._vector_store
 
 

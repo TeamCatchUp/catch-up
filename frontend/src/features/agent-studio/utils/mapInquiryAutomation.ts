@@ -11,6 +11,10 @@ function formatNullableText(value: string | null | undefined): string {
   return trimmed ? trimmed : EMPTY_VALUE_LABEL;
 }
 
+function formatOptionalText(value: string | null | undefined): string {
+  return value?.trim() ?? '';
+}
+
 function formatNullableDate(value: string | null | undefined): string {
   const trimmed = value?.trim();
   if (!trimmed) return EMPTY_VALUE_LABEL;
@@ -34,10 +38,11 @@ export function mapInquiryAutomationToAgentCard(item: InquiryAutomationItem): Ag
     agentSpecId: item.agent_spec_id,
     status: item.status,
     title: formatNullableText(item.title),
-    description: formatNullableText(item.guide_instruction),
+    description: formatOptionalText(item.guide_instruction),
     authorName: formatNullableText(item.author_name),
     authorProfileImageUrl: normalizeNullableUrl(item.author_profile_image_url),
     updatedAtLabel: formatNullableDate(item.updated_at),
+    isEditable: item.is_editable,
   };
 }
 

@@ -55,10 +55,8 @@ def _valid_row() -> dict:
                 "additions": 120,
                 "deletions": 50,
                 "author": {
-                    "login": "ba2slk",
-                    "name": "팀원C",
-                    "email": "ba2slk@example.com",
-                    "catchup_user_id": "usr_github_ba2slk",
+                    "external_user_id": "ba2slk",
+                    "internal_user_id": "usr_github_ba2slk",
                 },
                 "assignees": [],
                 "requested_reviewers": [],
