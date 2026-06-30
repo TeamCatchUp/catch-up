@@ -1,6 +1,7 @@
 import pytest
 from pydantic import ValidationError
-from catchup.rag.schemas.structures import PipelinePlan
+
+from catchup.schemas.structures import PipelinePlan
 
 
 def test_reuse_pipeline_type_rejected():

@@ -20,8 +20,8 @@ from catchup.components.vector_db.v2.constants import KNOWLEDGE_STORE_TABLE_NAME
 from catchup.components.vector_db.v2.vector_store import VectorStore
 from catchup.configs.config import settings
 from catchup.db.models import SourceType
-from catchup.rag.schemas.filters import TemporalFilter
-from catchup.rag.schemas.filters import build_temporal_filters
+from catchup.schemas.filters import TemporalFilter
+from catchup.schemas.filters import build_temporal_filters
 
 logger = structlog.get_logger(__name__)
 

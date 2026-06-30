@@ -15,9 +15,9 @@ from catchup.rag.nodes.utils import drop_orphaned_tool_calls
 from catchup.rag.nodes.utils import log_node
 from catchup.rag.nodes.utils import map_indices_to_doc_ids
 from catchup.rag.retryable import RETRYABLE_ERRORS
-from catchup.rag.schemas.sources import SOURCE_METADATA
 from catchup.rag.semaphores import rag_semaphores
 from catchup.rag.state import AgentState
+from catchup.schemas.sources import SOURCE_METADATA
 
 logger = structlog.get_logger()
 

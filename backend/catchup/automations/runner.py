@@ -8,7 +8,7 @@ from langchain_core.messages import HumanMessage
 from catchup.automations.graph import get_inquiry_automation_graph
 from catchup.automations.state import AutomationState
 from catchup.db.models import SourceType
-from catchup.rag.schemas.context import GlobalContext
+from catchup.schemas.context import GlobalContext
 
 logger = structlog.get_logger(__name__)
 

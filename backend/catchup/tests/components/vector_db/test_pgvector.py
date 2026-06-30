@@ -135,7 +135,7 @@ class TestPGBigmRetriever(unittest.TestCase):
         import datetime
 
         from catchup.db.models import SourceType
-        from catchup.rag.schemas.filters import TemporalFilter
+        from catchup.schemas.filters import TemporalFilter
 
         tf = TemporalFilter(
             tools=[SourceType.SLACK],

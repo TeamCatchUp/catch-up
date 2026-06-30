@@ -13,9 +13,9 @@ from catchup.rag.nodes.utils import get_conversation_history
 from catchup.rag.nodes.utils import log_node
 from catchup.rag.policies import FALLBACK_ANSWER
 from catchup.rag.retryable import RETRYABLE_ERRORS
-from catchup.rag.schemas.sources import SOURCE_METADATA
 from catchup.rag.semaphores import rag_semaphores
 from catchup.rag.state import AgentState
+from catchup.schemas.sources import SOURCE_METADATA
 
 logger = structlog.get_logger()
 

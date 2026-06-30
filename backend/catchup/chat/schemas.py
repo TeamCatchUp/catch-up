@@ -15,7 +15,7 @@ from catchup.db.models import FeedbackLiteral
 from catchup.db.models import SenderType
 from catchup.db.models import SourceType
 from catchup.db.models import UserRole
-from catchup.rag.schemas.sources import SourceResponse
+from catchup.schemas.sources import SourceResponse
 
 # stream processor가 on_chain_start 시점에 in_progress 이벤트를 발행할 노드 목록.
 # 이 목록에 없는 노드는 자신이 직접 adispatch_custom_event로 lifecycle을 관리한다.

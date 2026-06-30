@@ -5,13 +5,14 @@ Chat LLM과 Reranker가 전용 executor를 사용하는지 검증한다.
 from __future__ import annotations
 
 import asyncio
-from unittest import IsolatedAsyncioTestCase
-from unittest.mock import MagicMock, patch
 from concurrent.futures import ThreadPoolExecutor
+from unittest import IsolatedAsyncioTestCase
+from unittest.mock import MagicMock
+from unittest.mock import patch
 
-from catchup.rag.executors import rag_executors
 from catchup.components.llm.isolated_chat_bedrock import IsolatedChatBedrock
 from catchup.components.reranker.service import AwsBedrockRerankService
+from catchup.rag.executors import rag_executors
 
 
 class TestExecutorIsolationDiagnostic(IsolatedAsyncioTestCase):

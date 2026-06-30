@@ -5,8 +5,8 @@ from catchup.components.vector_db.base import BaseVectorDbService
 from catchup.rag.nodes.utils import deduplicate_documents
 from catchup.rag.nodes.utils import log_node
 from catchup.rag.retryable import RETRYABLE_ERRORS
-from catchup.rag.schemas.structures import VectorDbSearchQuery
 from catchup.rag.state import AgentState
+from catchup.schemas.structures import VectorDbSearchQuery
 
 logger = structlog.get_logger()
 

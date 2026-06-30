@@ -1,11 +1,10 @@
-import os
-import sys
-import json
 import asyncio
+import json
+import os
 import random
+import sys
 from pathlib import Path
 
-import pandas as pd
 from tqdm.asyncio import tqdm
 
 current_dir = Path(__file__).resolve().parent
@@ -19,15 +18,18 @@ os.environ["OPENAI_API_KEY"] = settings.OPENAI_API_KEY
 os.environ["COHERE_API_KEY"] = settings.COHERE_API_KEY
 os.environ["ENABLE_LANGFUSE"] = "False"  # 평가 시 tracing 비활성화
 
-from ragas import EvaluationDataset, evaluate
-from ragas.metrics.collections import Faithfulness, AnswerRelevancy
-from ragas.llms import LangchainLLMWrapper
+from langchain_openai import ChatOpenAI
+from langchain_openai import OpenAIEmbeddings
+from ragas import EvaluationDataset
+from ragas import evaluate
 from ragas.embeddings import LangchainEmbeddingsWrapper
-
-from langchain_openai import ChatOpenAI, OpenAIEmbeddings
+from ragas.llms import LangchainLLMWrapper
+from ragas.metrics.collections import AnswerRelevancy
+from ragas.metrics.collections import Faithfulness
 
 from catchup.chat.factory import get_chat_service
-from catchup.rag.schemas.context import GlobalContext, GlobalUserContext
+from catchup.schemas.context import GlobalContext
+from catchup.schemas.context import GlobalUserContext
 from catchup.utils.redis import init_langgraph_checkpointer
 
 SAMPLE_SIZE = 30

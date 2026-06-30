@@ -6,7 +6,7 @@ from pydantic import ConfigDict
 from pydantic import Field
 
 from catchup.db.models import SourceType
-from catchup.rag.schemas.sources import SourceResponse
+from catchup.schemas.sources import SourceResponse
 
 
 class ManualSearchResponse(BaseModel):

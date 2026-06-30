@@ -24,9 +24,9 @@ from catchup.costs.contexts.chat import ChatTokenUsageContext
 from catchup.rag.nodes.utils import build_doc_groups
 from catchup.rag.policies import get_node_completed_payload
 from catchup.rag.policies import get_node_inprogress_payload
-from catchup.rag.schemas.sources import BaseSource
 from catchup.rag.static_reasoning import STATIC_REASONING_NODES
 from catchup.rag.static_reasoning import get_static_reasoning
+from catchup.schemas.sources import BaseSource
 
 logger = structlog.get_logger()
 

@@ -21,8 +21,8 @@ from catchup.db.engine import SessionLocal
 from catchup.db.engine import parse_plan
 from catchup.db.models import SourceType
 from catchup.rag.executors import rag_executors
-from catchup.rag.schemas.filters import TemporalFilter
-from catchup.rag.schemas.filters import build_temporal_filters
+from catchup.schemas.filters import TemporalFilter
+from catchup.schemas.filters import build_temporal_filters
 
 logger = structlog.get_logger(__name__)
 

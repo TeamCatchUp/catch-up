@@ -1,7 +1,7 @@
 # backend/catchup/tests/rag/test_supervisor_prompt.py
 from catchup.prompts.loader import prompt_loader
-from catchup.rag.schemas.sources import SOURCE_METADATA
-from catchup.rag.schemas.structures import SearchTurnMeta
+from catchup.schemas.sources import SOURCE_METADATA
+from catchup.schemas.structures import SearchTurnMeta
 
 SOURCES = list(SOURCE_METADATA.values())
 

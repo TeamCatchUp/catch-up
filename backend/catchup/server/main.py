@@ -62,6 +62,7 @@ from catchup.server.error_handlers import register_exception_handlers
 from catchup.server.initialization import ensure_ks_all_indices
 from catchup.server.initialization import ensure_pg_indices
 from catchup.server.initialization import ensure_vector_index
+from catchup.server.initialization import truncate_langgraph_checkpoints_once
 from catchup.server.integrations.api import router as integrations_router
 from catchup.server.mapping.api import router as github_mapping_csv_router
 from catchup.server.mcp.install_api import router as mcp_install_router
@@ -156,6 +157,7 @@ async def lifespan(app: FastAPI):
     try:
         embeddings = get_embedding_service(EmbeddingProvider.AWS_BEDROCK).get_embedder()
         pgvector_repo = get_pgvector_repository(embeddings)  # Ingestion
+        await truncate_langgraph_checkpoints_once()
         await pgvector_repo.initialize(ensure_pg_indices)
         if settings.VECTOR_STORE_V2_DUAL_WRITE_ENABLED:
             v2_vector_store = get_v2_vector_store(embeddings)

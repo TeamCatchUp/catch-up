@@ -14,7 +14,7 @@ from catchup.configs.config import settings
 from catchup.db.models import SourceType
 from catchup.mcp.tools.decorators import mcp_tool
 from catchup.observability.logging.context import get_request_context
-from catchup.rag.schemas.filters import build_temporal_filters
+from catchup.schemas.filters import build_temporal_filters
 
 _VALID_SOURCES = {s.value for s in SourceType}
 

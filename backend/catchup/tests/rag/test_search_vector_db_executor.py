@@ -12,10 +12,11 @@ from __future__ import annotations
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from unittest import IsolatedAsyncioTestCase
-from unittest.mock import MagicMock, AsyncMock
+from unittest.mock import MagicMock
 from unittest.mock import patch
 
 from catchup.rag.executors import rag_executors
+
 
 class TestSearchVectorDbExecutor(IsolatedAsyncioTestCase):
 

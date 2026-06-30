@@ -8,8 +8,8 @@ from langgraph.graph.message import add_messages
 
 from catchup.automations.structures import GradeResult
 from catchup.db.models import SourceType
-from catchup.rag.schemas.context import GlobalContext
-from catchup.rag.schemas.structures import VectorDbSearchQuery
+from catchup.schemas.context import GlobalContext
+from catchup.schemas.structures import VectorDbSearchQuery
 
 
 class AutomationState(TypedDict):

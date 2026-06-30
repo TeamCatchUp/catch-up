@@ -35,8 +35,8 @@ from catchup.observability.langfuse.configs import get_langfuse_client
 from catchup.observability.langfuse.configs import get_observe
 from catchup.rag.checkpoint import get_langgraph_checkpointer
 from catchup.rag.graph import get_compiled_graph
-from catchup.rag.schemas.context import GlobalContext
-from catchup.rag.schemas.prompt_settings import PromptSettings
+from catchup.schemas.context import GlobalContext
+from catchup.schemas.prompt_settings import PromptSettings
 
 logger = structlog.get_logger()
 

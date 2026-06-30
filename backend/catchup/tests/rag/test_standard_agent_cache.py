@@ -6,7 +6,7 @@ import pytest
 from langchain_core.documents import Document
 
 from catchup.rag.agents.standard_agent import standard_agent_node
-from catchup.rag.schemas.structures import PipelinePlan
+from catchup.schemas.structures import PipelinePlan
 
 
 def _make_state(agent_iteration: int, retrieved_docs: list) -> dict:

@@ -17,8 +17,8 @@ from catchup.chat.schemas import ChatResponse
 from catchup.db.models import ChatRoom
 from catchup.rag.dependencies import get_prompt_settings
 from catchup.rag.dependencies import get_rag_global_context
-from catchup.rag.schemas.context import GlobalContext
-from catchup.rag.schemas.prompt_settings import PromptSettings
+from catchup.schemas.context import GlobalContext
+from catchup.schemas.prompt_settings import PromptSettings
 
 router = APIRouter(
     prefix="/api/v1/chat",

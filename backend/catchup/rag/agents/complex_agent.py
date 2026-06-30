@@ -16,12 +16,12 @@ from catchup.rag.nodes.utils import extract_reason_for_stopping
 from catchup.rag.nodes.utils import log_node
 from catchup.rag.nodes.utils import map_indices_to_doc_ids
 from catchup.rag.retryable import RETRYABLE_ERRORS
-from catchup.rag.schemas.sources import SOURCE_METADATA
-from catchup.rag.schemas.structures import SearchPlan
-from catchup.rag.schemas.structures import SearchStep
 from catchup.rag.semaphores import rag_semaphores
 from catchup.rag.state import AgentState
 from catchup.rag.static_reasoning import get_static_reasoning
+from catchup.schemas.sources import SOURCE_METADATA
+from catchup.schemas.structures import SearchPlan
+from catchup.schemas.structures import SearchStep
 
 logger = structlog.get_logger()
 

@@ -10,10 +10,10 @@ from catchup.rag.nodes.utils import build_system_message
 from catchup.rag.nodes.utils import get_conversation_history
 from catchup.rag.nodes.utils import log_node
 from catchup.rag.retryable import RETRYABLE_ERRORS
-from catchup.rag.schemas.sources import SOURCE_METADATA
-from catchup.rag.schemas.structures import PipelinePlan
 from catchup.rag.semaphores import rag_semaphores
 from catchup.rag.state import AgentState
+from catchup.schemas.sources import SOURCE_METADATA
+from catchup.schemas.structures import PipelinePlan
 
 logger = structlog.get_logger()
 

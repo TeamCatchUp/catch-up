@@ -4,7 +4,7 @@ from datetime import datetime
 from datetime import timezone
 
 from catchup.db.models import SourceType
-from catchup.rag.schemas.filters import TemporalFilter
+from catchup.schemas.filters import TemporalFilter
 
 EPOCH = datetime(1970, 1, 1, tzinfo=timezone.utc)
 

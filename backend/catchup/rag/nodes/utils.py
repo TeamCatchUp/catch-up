@@ -24,8 +24,8 @@ from langgraph.graph.message import add_messages
 from catchup.costs.utils import extract_token_usages
 from catchup.prompts.loader import prompt_loader
 from catchup.rag.policies import FALLBACK_ANSWER
-from catchup.rag.schemas.sources import BaseSource
-from catchup.rag.schemas.structures import SearchTurnMeta
+from catchup.schemas.sources import BaseSource
+from catchup.schemas.structures import SearchTurnMeta
 
 # node 로깅 데코레이터
 logger = structlog.get_logger("catchup.graph")

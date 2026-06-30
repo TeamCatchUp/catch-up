@@ -7,11 +7,11 @@ from langchain_core.documents import Document
 from langchain_core.messages import AIMessage
 
 from catchup.automations.nodes.generate_guide import generate_guide_node
-from catchup.rag.schemas.context import GlobalCompanyContext
-from catchup.rag.schemas.context import GlobalContext
-from catchup.rag.schemas.context import GlobalCurrentTimeContext
-from catchup.rag.schemas.context import GlobalUserContext
-from catchup.rag.schemas.context import GlobalWorkspaceContext
+from catchup.schemas.context import GlobalCompanyContext
+from catchup.schemas.context import GlobalContext
+from catchup.schemas.context import GlobalCurrentTimeContext
+from catchup.schemas.context import GlobalUserContext
+from catchup.schemas.context import GlobalWorkspaceContext
 
 
 def _make_global_context() -> GlobalContext:

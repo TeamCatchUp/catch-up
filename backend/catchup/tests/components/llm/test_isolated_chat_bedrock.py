@@ -8,7 +8,6 @@ IsolatedChatBedrock이 rag_executors.llm_executor를 사용하는지 검증한�
 
 from __future__ import annotations
 
-import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from unittest import IsolatedAsyncioTestCase
 from unittest.mock import MagicMock

@@ -5,7 +5,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from catchup.db.models import User
-from catchup.rag.schemas.structures import ManualSearchQuery
+from catchup.schemas.structures import ManualSearchQuery
 from catchup.search.planner.state import CachedSearch
 from catchup.search.service import resolve
 
