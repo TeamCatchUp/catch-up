@@ -3,6 +3,8 @@ from functools import partial
 from langgraph.graph import END
 from langgraph.graph import StateGraph
 
+from catchup.langgraph.nodes import rerank_node
+from catchup.langgraph.nodes import select_final_docs_node
 from catchup.langgraph.retry import AGENT_RETRY_POLICY
 from catchup.langgraph.retry import BASE_RETRY_POLICY
 from catchup.rag.agents.complex_agent import complex_agent_node
@@ -13,9 +15,7 @@ from catchup.rag.agents.tools.search_tools import search_tool_executor_node
 from catchup.rag.nodes import generate_final_answer_node
 from catchup.rag.nodes import merge_cache_node
 from catchup.rag.nodes import prepare_cache_node
-from catchup.rag.nodes import rerank_node
 from catchup.rag.nodes import rewrite_node
-from catchup.rag.nodes import select_final_docs_node
 from catchup.rag.state import AgentState
 
 

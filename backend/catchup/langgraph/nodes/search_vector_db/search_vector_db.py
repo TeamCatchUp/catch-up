@@ -3,10 +3,10 @@ from langchain_core.documents import Document
 
 from catchup.components.vector_db.base import BaseVectorDbService
 from catchup.langgraph.retry import RETRYABLE_ERRORS
-from catchup.rag.nodes.utils import deduplicate_documents
-from catchup.rag.nodes.utils import log_node
+from catchup.langgraph.utils import log_node
 from catchup.rag.state import AgentState
 from catchup.schemas.structures import VectorDbSearchQuery
+from catchup.utils.documents import deduplicate_documents
 
 logger = structlog.get_logger()
 

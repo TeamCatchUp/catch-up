@@ -4,11 +4,11 @@ from langchain_core.callbacks import adispatch_custom_event
 
 from catchup.costs.utils import token_usage
 from catchup.langgraph.retry import RETRYABLE_ERRORS
+from catchup.langgraph.utils import ainvoke_llm_with_token_usage
+from catchup.langgraph.utils import log_node
 from catchup.prompts.loader import prompt_loader
-from catchup.rag.nodes.utils import ainvoke_llm_with_token_usage
 from catchup.rag.nodes.utils import get_conversation_history
 from catchup.rag.nodes.utils import get_formatted_history_text
-from catchup.rag.nodes.utils import log_node
 from catchup.rag.state import AgentState
 from catchup.schemas.structures import VectorDbSearchPlan
 from catchup.schemas.structures import VectorDbSearchQuery

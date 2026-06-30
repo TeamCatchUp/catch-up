@@ -4,7 +4,7 @@ from unittest.mock import patch
 import pytest
 from langchain_core.documents import Document
 
-from catchup.rag.nodes.rerank.final_doc_selection import select_final_docs_node
+from catchup.langgraph.nodes.rerank.final_doc_selection import select_final_docs_node
 from catchup.rag.nodes.utils import get_document_id
 
 
@@ -35,7 +35,7 @@ async def test_select_final_docs_node_slices_to_simple_k():
     }
 
     with patch(
-        "catchup.rag.nodes.rerank.final_doc_selection.adispatch_custom_event",
+        "catchup.langgraph.nodes.rerank.final_doc_selection.adispatch_custom_event",
         new_callable=AsyncMock,
     ):
         result = await select_final_docs_node(state)
@@ -62,7 +62,7 @@ async def test_select_final_docs_node_essential_bypass():
     }
 
     with patch(
-        "catchup.rag.nodes.rerank.final_doc_selection.adispatch_custom_event",
+        "catchup.langgraph.nodes.rerank.final_doc_selection.adispatch_custom_event",
         new_callable=AsyncMock,
     ):
         result = await select_final_docs_node(state)
@@ -87,7 +87,7 @@ async def test_select_final_docs_node_empty_docs():
     }
 
     with patch(
-        "catchup.rag.nodes.rerank.final_doc_selection.adispatch_custom_event",
+        "catchup.langgraph.nodes.rerank.final_doc_selection.adispatch_custom_event",
         new_callable=AsyncMock,
     ):
         result = await select_final_docs_node(state)
@@ -114,7 +114,7 @@ async def test_select_final_docs_node_confirmed_essential_tracking():
     }
 
     with patch(
-        "catchup.rag.nodes.rerank.final_doc_selection.adispatch_custom_event",
+        "catchup.langgraph.nodes.rerank.final_doc_selection.adispatch_custom_event",
         new_callable=AsyncMock,
     ):
         result = await select_final_docs_node(state)
