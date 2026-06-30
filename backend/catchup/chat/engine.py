@@ -31,9 +31,9 @@ from catchup.db.chat_room import get_chat_room_by_session_id
 from catchup.db.chat_room import soft_delete_last_conversation_turn
 from catchup.db.engine import SessionLocal
 from catchup.db.models import SourceType
+from catchup.langgraph.checkpoint import get_langgraph_checkpointer
 from catchup.observability.langfuse.configs import get_langfuse_client
 from catchup.observability.langfuse.configs import get_observe
-from catchup.rag.checkpoint import get_langgraph_checkpointer
 from catchup.rag.graph import get_compiled_graph
 from catchup.schemas.context import GlobalContext
 from catchup.schemas.prompt_settings import PromptSettings

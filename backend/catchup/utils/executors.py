@@ -1,7 +1,7 @@
 from concurrent.futures import ThreadPoolExecutor
 
 
-class RagExecutors:
+class ServiceExecutors:
     vector_search_executor: ThreadPoolExecutor | None = None
     rerank_executor: ThreadPoolExecutor | None = None
     llm_executor: ThreadPoolExecutor | None = None
@@ -36,4 +36,4 @@ class RagExecutors:
 
 
 # Singleton
-rag_executors = RagExecutors()
+service_executors = ServiceExecutors()

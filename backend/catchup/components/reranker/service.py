@@ -13,7 +13,7 @@ from langchain_core.documents import BaseDocumentCompressor
 from langchain_core.documents import Document
 
 from catchup.configs.config import settings
-from catchup.rag.executors import rag_executors
+from catchup.utils.executors import service_executors
 
 logger = structlog.get_logger(__name__)
 
@@ -110,7 +110,7 @@ class AwsBedrockRerankService(BaseRerankService):
         reranker.top_n = top_n
         
                 
-        executor = rag_executors.rerank_executor
+        executor = service_executors.rerank_executor
         logger.info(
             "rerank_executor_state",
             queue_size=executor._work_queue.qsize(),

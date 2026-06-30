@@ -18,8 +18,8 @@ from catchup.configs.config import settings
 from catchup.db.models import SourceType
 from catchup.observability.langfuse.configs import get_observe
 from catchup.rag.nodes.rerank.rerank import _validate_retrieved_docs
-from catchup.rag.nodes.utils import deduplicate_documents
-from catchup.rag.nodes.utils import get_document_id
+from catchup.utils.documents import deduplicate_documents
+from catchup.utils.documents import get_document_id
 
 logger = structlog.get_logger()
 observe = get_observe()

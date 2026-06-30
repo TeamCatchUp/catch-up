@@ -21,12 +21,12 @@ from catchup.chat.schemas import ChatStreamingSourceResponse
 from catchup.chat.schemas import ChatStreamingTokenResponse
 from catchup.chat.schemas import StreamEvent
 from catchup.costs.contexts.chat import ChatTokenUsageContext
-from catchup.rag.nodes.utils import build_doc_groups
 from catchup.rag.policies import get_node_completed_payload
 from catchup.rag.policies import get_node_inprogress_payload
 from catchup.rag.static_reasoning import STATIC_REASONING_NODES
 from catchup.rag.static_reasoning import get_static_reasoning
 from catchup.schemas.sources import BaseSource
+from catchup.utils.documents import build_doc_groups
 
 logger = structlog.get_logger()
 

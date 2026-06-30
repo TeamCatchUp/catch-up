@@ -6,10 +6,10 @@ from langchain_core.documents import Document
 
 from catchup.components.reranker.service import BaseRerankService
 from catchup.configs.config import settings
+from catchup.langgraph.retry import RETRYABLE_ERRORS
 from catchup.rag.nodes.utils import log_node
-from catchup.rag.retryable import RETRYABLE_ERRORS
-from catchup.rag.semaphores import rag_semaphores
 from catchup.rag.state import AgentState
+from catchup.utils.semaphores import service_semaphores
 
 logger = structlog.get_logger()
 
@@ -42,7 +42,7 @@ async def rerank_node(
             semaphore="reranker",
             doc_count=len(retrieved_docs),
         )
-        async with rag_semaphores.reranker:
+        async with service_semaphores.reranker:
             t_rerank = time.perf_counter()
             logger.debug(
                 "rerank_invoke_start",

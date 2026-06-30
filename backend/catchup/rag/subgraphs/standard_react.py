@@ -3,6 +3,8 @@ from functools import partial
 from langgraph.graph import END
 from langgraph.graph import StateGraph
 
+from catchup.langgraph.retry import AGENT_RETRY_POLICY
+from catchup.langgraph.retry import BASE_RETRY_POLICY
 from catchup.rag.agents.limit_extraction import extract_essential_node
 from catchup.rag.agents.standard_agent import collect_docs_node
 from catchup.rag.agents.standard_agent import standard_agent_node
@@ -46,9 +48,6 @@ def build_standard_react_subgraph(
     rewrite → agent loop (SMALL, max_iter=3) ↔ tool executor
             → collect_docs → rerank (1회) → generate_final_answer → END
     """
-    from catchup.rag.graph import AGENT_RETRY_POLICY
-    from catchup.rag.graph import BASE_RETRY_POLICY
-
     graph = StateGraph(AgentState)
 
     graph.add_node(

@@ -3,16 +3,16 @@ from langchain.chat_models import BaseChatModel
 from langchain_core.callbacks import adispatch_custom_event
 
 from catchup.costs.utils import token_usage
+from catchup.langgraph.retry import RETRYABLE_ERRORS
 from catchup.prompts.loader import prompt_loader
 from catchup.rag.nodes.utils import ainvoke_llm_with_token_usage
 from catchup.rag.nodes.utils import get_conversation_history
 from catchup.rag.nodes.utils import get_formatted_history_text
 from catchup.rag.nodes.utils import log_node
-from catchup.rag.retryable import RETRYABLE_ERRORS
-from catchup.rag.semaphores import rag_semaphores
 from catchup.rag.state import AgentState
 from catchup.schemas.structures import VectorDbSearchPlan
 from catchup.schemas.structures import VectorDbSearchQuery
+from catchup.utils.semaphores import service_semaphores
 
 logger = structlog.get_logger()
 
@@ -53,7 +53,7 @@ async def generate_vector_queries_node(
         response, token_usages = await ainvoke_llm_with_token_usage(
             llm=structured_llm,
             messages=prompt,
-            semaphore=rag_semaphores.llm_small,
+            semaphore=service_semaphores.llm_small,
             timeout=timeout,
         )
         plan: VectorDbSearchPlan = response.get("parsed")

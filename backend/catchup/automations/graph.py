@@ -24,7 +24,7 @@ from catchup.components.reranker.service import BaseRerankService
 from catchup.components.vector_db.base import BaseVectorDbService
 from catchup.components.vector_db.factory import get_vector_db_service
 from catchup.components.vector_db.pgvector.constants import VectorDbProvider
-from catchup.rag.graph import BASE_RETRY_POLICY
+from catchup.langgraph.retry import BASE_RETRY_POLICY
 from catchup.rag.nodes import generate_vector_queries_node
 from catchup.rag.nodes import rerank_node
 from catchup.rag.nodes import search_vector_db_node

@@ -6,16 +6,16 @@ from langchain_core.messages import AIMessage
 from langchain_core.messages import HumanMessage
 
 from catchup.costs.utils import token_usage
+from catchup.langgraph.retry import RETRYABLE_ERRORS
 from catchup.prompts.loader import prompt_loader
 from catchup.rag.nodes.utils import ainvoke_llm_with_token_usage
 from catchup.rag.nodes.utils import build_system_message
 from catchup.rag.nodes.utils import get_conversation_history
 from catchup.rag.nodes.utils import log_node
 from catchup.rag.policies import FALLBACK_ANSWER
-from catchup.rag.retryable import RETRYABLE_ERRORS
-from catchup.rag.semaphores import rag_semaphores
 from catchup.rag.state import AgentState
 from catchup.schemas.sources import SOURCE_METADATA
+from catchup.utils.semaphores import service_semaphores
 
 logger = structlog.get_logger()
 
@@ -56,7 +56,7 @@ async def direct_answer_node(
         raw_response, token_usages = await ainvoke_llm_with_token_usage(
             llm=llm,
             messages=messages,
-            semaphore=rag_semaphores.llm_small,
+            semaphore=service_semaphores.llm_small,
             timeout=timeout,
         )
         logger.debug(

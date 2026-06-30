@@ -173,7 +173,7 @@ async def test_graph_not_reusable_path():
             ".prompt_loader.get_prompt",
             return_value=[MagicMock()],
         ),
-        patch("catchup.rag.nodes.rerank.rerank.rag_semaphores"),
+        patch("catchup.rag.nodes.rerank.rerank.service_semaphores"),
     ):
         graph = build_inquiry_automation_graph(
             llm_small=mock_llm_small,

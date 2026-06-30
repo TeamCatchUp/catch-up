@@ -8,7 +8,7 @@ from langchain_core.outputs import ChatGenerationChunk
 from langchain_core.outputs import ChatResult
 from langchain_core.runnables.config import run_in_executor
 
-from catchup.rag.executors import rag_executors
+from catchup.utils.executors import service_executors
 
 
 class IsolatedChatBedrock(ChatBedrock):
@@ -16,7 +16,7 @@ class IsolatedChatBedrock(ChatBedrock):
 
     BaseChatModel._agenerate / _astream은 run_in_executor(None, ...)로 폴백하여
     asyncio default pool을 사용한다 — ingestion blocking call과 같은 pool을 공유하게 됨.
-    이 서브클래스는 두 메서드를 override하여 rag_executors.llm_executor를 명시적으로 사용,
+    이 서브클래스는 두 메서드를 override하여 service_executors.llm_executor를 명시적으로 사용,
     ingestion이 LLM 호출 slot을 점유하지 못하도록 격리한다.
 
     langchain_core.run_in_executor를 그대로 사용하므로 kwargs 전달 및
@@ -31,7 +31,7 @@ class IsolatedChatBedrock(ChatBedrock):
         **kwargs: Any,
     ) -> ChatResult:
         return await run_in_executor(
-            rag_executors.llm_executor,
+            service_executors.llm_executor,
             self._generate,
             messages,
             stop,
@@ -47,7 +47,7 @@ class IsolatedChatBedrock(ChatBedrock):
         **kwargs: Any,
     ) -> AsyncIterator[ChatGenerationChunk]:
         iterator = await run_in_executor(
-            rag_executors.llm_executor,
+            service_executors.llm_executor,
             self._stream,
             messages,
             stop,
@@ -57,7 +57,7 @@ class IsolatedChatBedrock(ChatBedrock):
         done = object()
         while True:
             item = await run_in_executor(
-                rag_executors.llm_executor,
+                service_executors.llm_executor,
                 next,
                 iterator,
                 done,

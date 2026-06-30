@@ -20,9 +20,9 @@ from catchup.db.async_engine import AsyncSessionLocal
 from catchup.db.engine import SessionLocal
 from catchup.db.engine import parse_plan
 from catchup.db.models import SourceType
-from catchup.rag.executors import rag_executors
 from catchup.schemas.filters import TemporalFilter
 from catchup.schemas.filters import build_temporal_filters
+from catchup.utils.executors import service_executors
 
 logger = structlog.get_logger(__name__)
 
@@ -470,7 +470,7 @@ class PGVectorService(BaseVectorDbService):
             return []
 
         loop = asyncio.get_running_loop()
-        executor = rag_executors.vector_search_executor
+        executor = service_executors.vector_search_executor
 
         # langchain PGVector는 sync API이므로 vector 검색은 thread pool 유지
         def _vector_search(x):
@@ -719,7 +719,7 @@ class PGVectorService(BaseVectorDbService):
             return []
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(
-            rag_executors.vector_search_executor,
+            service_executors.vector_search_executor,
             self.vector_store.get_by_ids,
             ids,
         )

@@ -33,10 +33,10 @@ from catchup.db.models import SourceType
 from catchup.rag.nodes import generate_vector_queries_node
 from catchup.rag.nodes import rerank_node
 from catchup.rag.nodes import search_vector_db_node
-from catchup.rag.nodes.utils import build_docs_summary
-from catchup.rag.nodes.utils import deduplicate_documents
 from catchup.rag.state import AgentState
 from catchup.schemas.context import GlobalContext
+from catchup.utils.documents import build_docs_summary
+from catchup.utils.documents import deduplicate_documents
 
 logger = structlog.get_logger(__name__)
 

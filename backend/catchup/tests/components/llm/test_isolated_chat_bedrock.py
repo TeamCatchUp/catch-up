@@ -1,9 +1,9 @@
 """
-IsolatedChatBedrock이 rag_executors.llm_executor를 사용하는지 검증한다.
+IsolatedChatBedrock이 service_executors.llm_executor를 사용하는지 검증한다.
 
 목적:
   - _agenerate / _astream 호출이 asyncio 기본 executor가 아닌
-    rag_executors.llm_executor으로 실행됨을 보장한다.
+    service_executors.llm_executor으로 실행됨을 보장한다.
 """
 
 from __future__ import annotations
@@ -14,24 +14,24 @@ from unittest.mock import MagicMock
 from unittest.mock import patch
 
 from catchup.components.llm.isolated_chat_bedrock import IsolatedChatBedrock
-from catchup.rag.executors import rag_executors
+from catchup.utils.executors import service_executors
 
 
 class TestIsolatedChatBedrockExecutor(IsolatedAsyncioTestCase):
 
     def setUp(self):
-        self._original_llm = rag_executors.llm_executor
+        self._original_llm = service_executors.llm_executor
         self._test_executor = ThreadPoolExecutor(
             max_workers=2, thread_name_prefix="llm-isolation-test"
         )
-        rag_executors.llm_executor = self._test_executor
+        service_executors.llm_executor = self._test_executor
 
     def tearDown(self):
         self._test_executor.shutdown(wait=False)
-        rag_executors.llm_executor = self._original_llm
+        service_executors.llm_executor = self._original_llm
 
     async def test_agenerate_uses_llm_executor(self):
-        """_agenerate가 rag_executors.llm_executor으로 run_in_executor를 호출하는지 확인"""
+        """_agenerate가 service_executors.llm_executor으로 run_in_executor를 호출하는지 확인"""
         captured_executors: list = []
 
         async def fake_run_in_executor(executor, func, *args, **kwargs):
@@ -50,14 +50,14 @@ class TestIsolatedChatBedrockExecutor(IsolatedAsyncioTestCase):
             await llm._agenerate(messages=[MagicMock()])
 
         self.assertIn(
-            rag_executors.llm_executor,
+            service_executors.llm_executor,
             captured_executors,
-            "rag_executors.llm_executor가 사용되어야 합니다.",
+            "service_executors.llm_executor가 사용되어야 합니다.",
         )
 
     async def test_astream_uses_llm_executor(self):
         """_astream의 모든 run_in_executor 호출(iterator 생성 + chunk 순회)이
-        rag_executors.llm_executor을 사용하는지 확인"""
+        service_executors.llm_executor을 사용하는지 확인"""
         captured_executors: list = []
     
         async def fake_run_in_executor(executor, func, *args, **kwargs):
@@ -86,4 +86,4 @@ class TestIsolatedChatBedrockExecutor(IsolatedAsyncioTestCase):
 
         self.assertGreater(len(captured_executors), 0)
         for executor in captured_executors:
-            self.assertIs(executor, rag_executors.llm_executor)
+            self.assertIs(executor, service_executors.llm_executor)
