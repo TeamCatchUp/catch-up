@@ -58,6 +58,42 @@ KS_HEAVY_INDICES = [
 ]
 KS_HEAVY_INDEX_NAMES = ["idx_ks_body_bigm", "idx_ks_title_bigm"]
 
+_ALL_CONCURRENTLY_MANAGED_INDICES = [
+    "idx_cmetadata_contextual_bigm_v2",
+    "idx_cmetadata_title_bigm_v2",
+    "idx_embedding_hnsw_v2",
+    "idx_ks_body_bigm",
+    "idx_ks_title_bigm",
+    "idx_ks_embedding_hnsw",
+]
+
+
+async def _terminate_orphaned_index_builds(conn: psycopg.AsyncConnection) -> None:
+    """고아 인덱스 빌드 세션을 종료한다.
+
+    컨테이너 재배포 시 이전 컨테이너의 CREATE INDEX CONCURRENTLY가
+    PostgreSQL에 잔류해 후속 DDL을 무한 대기시킨다.
+    startup 진입 시점에 타 세션의 빌드를 정리해 이를 방지한다.
+    """
+    for index_name in _ALL_CONCURRENTLY_MANAGED_INDICES:
+        rows = await (await conn.execute(
+            "SELECT pid FROM pg_stat_activity"
+            " WHERE query ILIKE %(pattern)s"
+            "   AND state = 'active'"
+            "   AND pid != pg_backend_pid()",
+            {"pattern": f"%{index_name}%"},
+        )).fetchall()
+        for (pid,) in rows:
+            await conn.execute(
+                "SELECT pg_terminate_backend(%(pid)s)", {"pid": pid}
+            )
+            logger.warning(
+                "orphaned_index_build_terminated",
+                context="server_startup",
+                index_name=index_name,
+                pid=pid,
+            )
+
 
 async def _ks_table_exists(conn) -> bool:
     """knowledge_store 테이블 존재 여부를 확인한다."""
@@ -77,6 +113,9 @@ async def ensure_ks_indices() -> None:
     테이블이 존재하지 않으면 아무 작업도 수행하지 않는다.
     """
     conn_string = settings.sqlalchemy_database_url.replace("+psycopg", "")
+
+    async with await psycopg.AsyncConnection.connect(conn_string, autocommit=True) as conn:
+        await _terminate_orphaned_index_builds(conn)
 
     async with await psycopg.AsyncConnection.connect(conn_string) as conn:
         if not await _ks_table_exists(conn):
@@ -277,7 +316,10 @@ async def ensure_ks_all_indices() -> None:
 
 async def ensure_pg_indices() -> None:
     conn_string = settings.sqlalchemy_database_url.replace("+psycopg", "")
-    
+
+    async with await psycopg.AsyncConnection.connect(conn_string, autocommit=True) as conn:
+        await _terminate_orphaned_index_builds(conn)
+
     # B-tree는 일반 트랜잭션에서 빠르게 처리
     async with await psycopg.AsyncConnection.connect(conn_string) as conn:
         # pg_bigm 익스텐션 활성화 (이미 활성화되어 있으면 no-op)
