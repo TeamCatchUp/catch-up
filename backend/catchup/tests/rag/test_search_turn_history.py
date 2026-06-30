@@ -7,9 +7,8 @@ from langchain_core.documents import Document
 from catchup.rag.nodes.doc_cache import merge_cache_node
 from catchup.rag.nodes.doc_cache import prepare_cache_node
 from catchup.rag.nodes.utils import build_search_history_summary
-from catchup.rag.schemas.structures import PipelinePlan
-from catchup.rag.schemas.structures import SearchTurnMeta
-
+from catchup.schemas.structures import PipelinePlan
+from catchup.schemas.structures import SearchTurnMeta
 
 # ---------------------------------------------------------------------------
 # build_search_history_summary

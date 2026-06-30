@@ -5,6 +5,8 @@ from catchup.configs.config import settings
 
 logger = structlog.get_logger(__name__)
 
+_langgraph_checkpoints_truncated: bool = False
+
 LIGHT_INDICES = [
     """
     CREATE INDEX IF NOT EXISTS idx_cmetadata_source
@@ -475,5 +477,40 @@ async def ensure_vector_index() -> None:
             "vector_index_creation_failed",
             context="server_startup",
             index_name=index_name,
+            error=str(e),
+        )
+
+
+async def truncate_langgraph_checkpoints_once() -> None:
+    """LangGraph 체크포인트 테이블을 1회 truncate한다.
+
+    0.8.2 배포 시 catchup.rag.schemas.* → catchup.schemas.* 경로 변경으로
+    기존 직렬화 데이터가 역직렬화 불가하므로 초기화가 필요하다.
+    TRUNCATE_LANGGRAPH_CHECKPOINTS=true 환경변수와 프로세스 내 global 가드로
+    중복 실행을 방지한다. 배포 완료 후 환경변수를 제거한다.
+    """
+    global _langgraph_checkpoints_truncated
+
+    if _langgraph_checkpoints_truncated:
+        return
+
+    if not settings.TRUNCATE_LANGGRAPH_CHECKPOINTS:
+        return
+
+    conn_string = settings.sqlalchemy_database_url.replace("+psycopg", "")
+    try:
+        async with await psycopg.AsyncConnection.connect(conn_string) as conn:
+            await conn.execute(
+                "TRUNCATE TABLE checkpoints, checkpoint_blobs, checkpoint_writes"
+            )
+        _langgraph_checkpoints_truncated = True
+        logger.info(
+            "langgraph_checkpoints_truncated",
+            context="server_startup",
+        )
+    except Exception as e:
+        logger.error(
+            "langgraph_checkpoints_truncate_failed",
+            context="server_startup",
             error=str(e),
         )

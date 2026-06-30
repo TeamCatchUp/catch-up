@@ -5,8 +5,8 @@ import structlog
 from catchup.components.vector_db.base import BaseVectorDbService
 from catchup.rag.nodes.utils import deduplicate_documents
 from catchup.rag.nodes.utils import get_document_id
-from catchup.rag.schemas.structures import SearchTurnMeta
 from catchup.rag.state import AgentState
+from catchup.schemas.structures import SearchTurnMeta
 
 logger = structlog.get_logger()
 

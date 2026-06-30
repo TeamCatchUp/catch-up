@@ -34,12 +34,10 @@ from catchup.events.bus import bus
 from catchup.events.enums import EventTopic
 from catchup.events.enums import EventType
 from catchup.events.enums import SystemEventAction
+from catchup.langgraph.checkpoint import close_langgraph_checkpointer
+from catchup.langgraph.checkpoint import init_langgraph_checkpointer
 from catchup.observability.logging.s3_uploader import audit_log_uploader_task
 from catchup.observability.logging.s3_uploader import graceful_shutdown
-from catchup.rag.checkpoint import close_langgraph_checkpointer
-from catchup.rag.checkpoint import init_langgraph_checkpointer
-from catchup.rag.executors import rag_executors
-from catchup.rag.semaphores import rag_semaphores
 from catchup.server.admin.api import router as admin_router
 from catchup.server.audit.api import router as audit_router
 from catchup.server.auth.api import router as auth_router
@@ -62,6 +60,7 @@ from catchup.server.error_handlers import register_exception_handlers
 from catchup.server.initialization import ensure_ks_all_indices
 from catchup.server.initialization import ensure_pg_indices
 from catchup.server.initialization import ensure_vector_index
+from catchup.server.initialization import truncate_langgraph_checkpoints_once
 from catchup.server.integrations.api import router as integrations_router
 from catchup.server.mapping.api import router as github_mapping_csv_router
 from catchup.server.mcp.install_api import router as mcp_install_router
@@ -78,11 +77,13 @@ from catchup.server.workflow_credentials.api import (
     router as workflow_credentials_router,
 )
 from catchup.utils.client import _shared_client
+from catchup.utils.executors import service_executors
 from catchup.utils.redis import check_all_redis_health
 from catchup.utils.redis import get_redis_client
 from catchup.utils.redis import get_stream_redis_client
 from catchup.utils.scheduler import init_scheduler
 from catchup.utils.scheduler import shutdown_scheduler
+from catchup.utils.semaphores import service_semaphores
 from catchup.worker.worker_event_processor import run_forever as run_sync_worker
 from catchup.workflows import init_workflow_node_registry
 
@@ -156,6 +157,7 @@ async def lifespan(app: FastAPI):
     try:
         embeddings = get_embedding_service(EmbeddingProvider.AWS_BEDROCK).get_embedder()
         pgvector_repo = get_pgvector_repository(embeddings)  # Ingestion
+        await truncate_langgraph_checkpoints_once()
         await pgvector_repo.initialize(ensure_pg_indices)
         if settings.VECTOR_STORE_V2_DUAL_WRITE_ENABLED:
             v2_vector_store = get_v2_vector_store(embeddings)
@@ -207,12 +209,12 @@ async def lifespan(app: FastAPI):
         )
 
     try:
-        rag_semaphores.init(
+        service_semaphores.init(
             small_llm_value=settings.AWS_BEDROCK_SMALL_MODEL_SEMA_VALUE,
             large_llm_value=settings.AWS_BEDROCK_LARGE_MODEL_SEMA_VALUE,
             reranker_value=settings.AWS_BEDROCK_RERANK_SEMA_VALUE,
         )
-        rag_executors.init(
+        service_executors.init(
             vector_search_size=settings.RAG_VECTOR_SEARCH_THREAD_POOL_SIZE,
             rerank_size=settings.RAG_BEDROCK_RERANK_THREAD_POOL_SIZE,
             llm_size=settings.RAG_LLM_THREAD_POOL_SIZE,
@@ -439,11 +441,11 @@ async def lifespan(app: FastAPI):
             )
 
     try:
-        rag_executors.shutdown(cancel_futures=True)
-        logger.info("rag_executors_shutdown", context="server_shutdown")
+        service_executors.shutdown(cancel_futures=True)
+        logger.info("service_executors_shutdown", context="server_shutdown")
     except Exception as e:
         logger.error(
-            "rag_executors_shutdown_failed",
+            "service_executors_shutdown_failed",
             context="server_shutdown",
             error=str(e),
             exc_info=True,

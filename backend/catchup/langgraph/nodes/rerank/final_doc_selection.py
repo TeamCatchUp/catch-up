@@ -5,10 +5,10 @@ import structlog
 from langchain_core.callbacks import adispatch_custom_event
 from langchain_core.documents import Document
 
-from catchup.rag.nodes.utils import build_doc_groups
-from catchup.rag.nodes.utils import get_document_id
-from catchup.rag.nodes.utils import log_node
+from catchup.langgraph.utils import log_node
 from catchup.rag.state import AgentState
+from catchup.utils.documents import build_doc_groups
+from catchup.utils.documents import get_document_id
 
 logger = structlog.get_logger()
 

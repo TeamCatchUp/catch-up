@@ -3,13 +3,14 @@ from functools import partial
 from langgraph.graph import END
 from langgraph.graph import StateGraph
 
+from catchup.langgraph.nodes import generate_vector_queries_node
+from catchup.langgraph.nodes import rerank_node
+from catchup.langgraph.nodes import search_vector_db_node
+from catchup.langgraph.nodes import select_final_docs_node
+from catchup.langgraph.retry import BASE_RETRY_POLICY
 from catchup.rag.nodes import generate_final_answer_fast_node
-from catchup.rag.nodes import generate_vector_queries_node
 from catchup.rag.nodes import merge_cache_node
-from catchup.rag.nodes import rerank_node
 from catchup.rag.nodes import rewrite_node
-from catchup.rag.nodes import search_vector_db_node
-from catchup.rag.nodes import select_final_docs_node
 from catchup.rag.state import AgentState
 
 
@@ -22,7 +23,6 @@ def build_simple_subgraph(
     pipeline_plan.pipeline_type == "simple"이면 generate_vector_queries_node가
     자동으로 쿼리 수를 1개로 제한한다.
     """
-    from catchup.rag.graph import BASE_RETRY_POLICY
 
     graph = StateGraph(AgentState)
 

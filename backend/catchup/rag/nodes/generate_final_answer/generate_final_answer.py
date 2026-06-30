@@ -7,7 +7,11 @@ from langchain_core.messages import AIMessage
 from langchain_core.messages import HumanMessage
 
 from catchup.costs.utils import token_usage
+from catchup.langgraph.retry import RETRYABLE_ERRORS
 from catchup.prompts.loader import prompt_loader
+from catchup.rag.constants import CITATION_POLICY_MESSAGE
+from catchup.rag.constants import FALLBACK_ANSWER
+from catchup.rag.constants import NO_DOCUMENTS_ANSWER
 from catchup.rag.nodes.utils import ainvoke_llm_with_token_usage
 from catchup.rag.nodes.utils import build_confirmed_priority_prompt
 from catchup.rag.nodes.utils import build_doc_groups
@@ -19,14 +23,10 @@ from catchup.rag.nodes.utils import parse_citations
 from catchup.rag.nodes.utils import render_grouped_context_text
 from catchup.rag.nodes.utils import sanitize_agent_reasoning
 from catchup.rag.nodes.utils import scrub_orphan_indices
-from catchup.rag.policies import CITATION_POLICY_MESSAGE
-from catchup.rag.policies import FALLBACK_ANSWER
-from catchup.rag.policies import NO_DOCUMENTS_ANSWER
-from catchup.rag.retryable import RETRYABLE_ERRORS
-from catchup.rag.schemas.sources import SOURCE_METADATA
-from catchup.rag.schemas.sources import BaseSource
-from catchup.rag.semaphores import rag_semaphores
 from catchup.rag.state import AgentState
+from catchup.schemas.sources import SOURCE_METADATA
+from catchup.schemas.sources import BaseSource
+from catchup.utils.semaphores import service_semaphores
 
 logger = structlog.get_logger()
 
@@ -132,7 +132,7 @@ async def generate_final_answer_node(
         raw_response, token_usages = await ainvoke_llm_with_token_usage(
             llm=active_llm,
             messages=messages,
-            semaphore=rag_semaphores.llm_large,
+            semaphore=service_semaphores.llm_large,
         )
         content = raw_response.content
         if isinstance(content, list):

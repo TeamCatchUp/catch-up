@@ -9,11 +9,11 @@ from langchain_core.messages import HumanMessage
 from catchup.automations.graph import build_inquiry_automation_graph
 from catchup.automations.state import AutomationState
 from catchup.db.models import SourceType
-from catchup.rag.schemas.context import GlobalCompanyContext
-from catchup.rag.schemas.context import GlobalContext
-from catchup.rag.schemas.context import GlobalCurrentTimeContext
-from catchup.rag.schemas.context import GlobalUserContext
-from catchup.rag.schemas.context import GlobalWorkspaceContext
+from catchup.schemas.context import GlobalCompanyContext
+from catchup.schemas.context import GlobalContext
+from catchup.schemas.context import GlobalCurrentTimeContext
+from catchup.schemas.context import GlobalUserContext
+from catchup.schemas.context import GlobalWorkspaceContext
 
 
 def _make_global_context() -> GlobalContext:
@@ -173,7 +173,7 @@ async def test_graph_not_reusable_path():
             ".prompt_loader.get_prompt",
             return_value=[MagicMock()],
         ),
-        patch("catchup.rag.nodes.rerank.rerank.rag_semaphores"),
+        patch("catchup.rag.nodes.rerank.rerank.service_semaphores"),
     ):
         graph = build_inquiry_automation_graph(
             llm_small=mock_llm_small,

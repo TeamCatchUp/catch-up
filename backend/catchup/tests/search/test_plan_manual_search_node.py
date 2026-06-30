@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 import pytest
 
-from catchup.rag.schemas.structures import ManualSearchQuery
+from catchup.schemas.structures import ManualSearchQuery
 from catchup.search.planner.state import _QUERY_CACHE_MAX_SIZE
 from catchup.search.planner.state import CachedSearch
 
@@ -197,7 +197,7 @@ async def test_structured_output_uses_manual_search_query_schema():
 @pytest.mark.asyncio
 async def test_prompt_loader_receives_current_time():
     """prompt_loader가 query와 current_time 인자로 호출되는지 검증."""
-    from catchup.rag.schemas.context import GlobalCurrentTimeContext
+    from catchup.schemas.context import GlobalCurrentTimeContext
     from catchup.search.planner.plan_manual_search import plan_manual_search_node
 
     planned = _make_planned_search()

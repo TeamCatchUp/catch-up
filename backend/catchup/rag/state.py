@@ -7,13 +7,13 @@ from langchain_core.documents import Document
 from langgraph.graph.message import add_messages
 
 from catchup.db.models import SourceType
-from catchup.rag.schemas.context import GlobalContext
-from catchup.rag.schemas.prompt_settings import PromptSettings
-from catchup.rag.schemas.sources import BaseSource
-from catchup.rag.schemas.structures import PipelinePlan
-from catchup.rag.schemas.structures import SearchStep
-from catchup.rag.schemas.structures import SearchTurnMeta
-from catchup.rag.schemas.structures import VectorDbSearchQuery
+from catchup.schemas.context import GlobalContext
+from catchup.schemas.prompt_settings import PromptSettings
+from catchup.schemas.sources import BaseSource
+from catchup.schemas.structures import PipelinePlan
+from catchup.schemas.structures import SearchStep
+from catchup.schemas.structures import SearchTurnMeta
+from catchup.schemas.structures import VectorDbSearchQuery
 
 
 class AgentState(TypedDict):

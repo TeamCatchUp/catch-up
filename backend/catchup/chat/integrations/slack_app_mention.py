@@ -35,11 +35,11 @@ from catchup.db.slack import bot_repository
 from catchup.db.user_prompt_settings import get_user_prompt_settings
 from catchup.db.user_source_mapping import find_user_id_by_source_mapping
 from catchup.db.users import get_user_with_full_context
-from catchup.rag.schemas.context import GlobalCompanyContext
-from catchup.rag.schemas.context import GlobalContext
-from catchup.rag.schemas.context import GlobalUserContext
-from catchup.rag.schemas.context import GlobalWorkspaceContext
-from catchup.rag.schemas.prompt_settings import PromptSettings
+from catchup.schemas.context import GlobalCompanyContext
+from catchup.schemas.context import GlobalContext
+from catchup.schemas.context import GlobalUserContext
+from catchup.schemas.context import GlobalWorkspaceContext
+from catchup.schemas.prompt_settings import PromptSettings
 
 logger = structlog.get_logger(__name__)
 

@@ -12,8 +12,8 @@ from catchup.rag.nodes.utils import ainvoke_llm_with_token_usage
 from catchup.rag.nodes.utils import build_system_message
 from catchup.rag.nodes.utils import log_node
 from catchup.rag.nodes.utils import map_indices_to_doc_ids
-from catchup.rag.semaphores import rag_semaphores
 from catchup.rag.state import AgentState
+from catchup.utils.semaphores import service_semaphores
 
 logger = structlog.get_logger()
 
@@ -67,7 +67,7 @@ async def extract_essential_node(
         response, token_usages = await ainvoke_llm_with_token_usage(
             llm=structured_llm,
             messages=[system_message, user_message],
-            semaphore=rag_semaphores.llm_small,
+            semaphore=service_semaphores.llm_small,
             timeout=10.0,
         )
 

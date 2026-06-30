@@ -4,16 +4,16 @@ from langchain_core.callbacks import adispatch_custom_event
 from langchain_core.messages import HumanMessage
 
 from catchup.costs.utils import token_usage
+from catchup.langgraph.retry import RETRYABLE_ERRORS
 from catchup.prompts.loader import prompt_loader
 from catchup.rag.nodes.utils import ainvoke_llm_with_token_usage
 from catchup.rag.nodes.utils import build_system_message
 from catchup.rag.nodes.utils import get_conversation_history
 from catchup.rag.nodes.utils import log_node
-from catchup.rag.retryable import RETRYABLE_ERRORS
-from catchup.rag.schemas.sources import SOURCE_METADATA
-from catchup.rag.schemas.structures import PipelinePlan
-from catchup.rag.semaphores import rag_semaphores
 from catchup.rag.state import AgentState
+from catchup.schemas.sources import SOURCE_METADATA
+from catchup.schemas.structures import PipelinePlan
+from catchup.utils.semaphores import service_semaphores
 
 logger = structlog.get_logger()
 
@@ -81,7 +81,7 @@ async def supervisor_node(
         response, token_usages = await ainvoke_llm_with_token_usage(
             llm=structured_llm,
             messages=input_messages,
-            semaphore=rag_semaphores.llm_large,
+            semaphore=service_semaphores.llm_large,
             timeout=timeout,
         )
         pipeline_plan: PipelinePlan = response.get("parsed")

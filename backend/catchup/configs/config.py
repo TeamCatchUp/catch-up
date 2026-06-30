@@ -34,6 +34,12 @@ class Settings(BaseSettings):
     DEBUGGER_PORT: int = 5678
     PYINSTRUMENT_ENABLED: bool = False
     DEBUG_API_ENABLED: bool = False
+
+    #===============================#
+    #     One-time Migration Flags  #
+    #===============================#
+    # 0.8.2 배포 시 1회 실행 후 제거한다.
+    TRUNCATE_LANGGRAPH_CHECKPOINTS: bool = True
     
     #=============================#
     #     System Base Settings    #

@@ -4,6 +4,7 @@ from langchain_core.callbacks import adispatch_custom_event
 from langchain_core.messages import HumanMessage
 
 from catchup.costs.utils import token_usage
+from catchup.langgraph.retry import RETRYABLE_ERRORS
 from catchup.prompts.loader import prompt_loader
 from catchup.rag.agents.tools.search_tools import REACT_TOOLS
 from catchup.rag.nodes.utils import ainvoke_llm_with_token_usage
@@ -14,10 +15,9 @@ from catchup.rag.nodes.utils import dispatch_search_reason
 from catchup.rag.nodes.utils import drop_orphaned_tool_calls
 from catchup.rag.nodes.utils import log_node
 from catchup.rag.nodes.utils import map_indices_to_doc_ids
-from catchup.rag.retryable import RETRYABLE_ERRORS
-from catchup.rag.schemas.sources import SOURCE_METADATA
-from catchup.rag.semaphores import rag_semaphores
 from catchup.rag.state import AgentState
+from catchup.schemas.sources import SOURCE_METADATA
+from catchup.utils.semaphores import service_semaphores
 
 logger = structlog.get_logger()
 
@@ -68,7 +68,7 @@ async def standard_agent_node(
         response, token_usages = await ainvoke_llm_with_token_usage(
             llm=llm_with_tools,
             messages=[system_message, HumanMessage(content=query)] + existing_messages,
-            semaphore=rag_semaphores.llm_small,
+            semaphore=service_semaphores.llm_small,
             timeout=timeout,
         )
     except RETRYABLE_ERRORS as e:

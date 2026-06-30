@@ -57,7 +57,7 @@ from unittest.mock import patch
 import pytest
 
 from catchup.rag.agents.standard_agent import standard_agent_node
-from catchup.rag.schemas.structures import PipelinePlan
+from catchup.schemas.structures import PipelinePlan
 
 
 def _make_state(agent_iteration: int = 0, accumulated_docs=None, agent_seen_ids=None) -> dict:
@@ -143,8 +143,8 @@ async def test_submit_result_does_not_add_messages():
     assert result["agent_stop_reason"] == "by_choice"
 
 
-from catchup.rag.schemas.structures import PipelinePlan as _PipelinePlan
 from catchup.rag.subgraphs.standard_react import _route_after_agent
+from catchup.schemas.structures import PipelinePlan as _PipelinePlan
 
 
 def _route_state(agent_stop_reason=None, tool_calls=None, agent_iteration=0, max_iterations=4):
