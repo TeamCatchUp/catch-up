@@ -5,6 +5,7 @@ from catchup.observability.logging import configure_logging
 configure_logging()
 
 import asyncio
+import datetime
 from contextlib import asynccontextmanager
 
 import structlog
@@ -154,17 +155,23 @@ async def lifespan(app: FastAPI):
 
     # TODO: depenendcy-injector 기반으로 생명 주기 관리 검토
     # Ingestion용 pgvector_repo 생성
+    # orphan 인덱스 빌드 판정 기준 시각. 동시 실행되는 ensure_vector_index()와
+    # ensure_ks_all_indices()가 이 시각 이후에 맺는 커넥션은 서로를 이전 컨테이너의
+    # 고아 빌드로 오판해 pg_terminate_backend()로 죽이지 않도록 한다.
+    index_init_started_at = datetime.datetime.now(datetime.timezone.utc)
     try:
         embeddings = get_embedding_service(EmbeddingProvider.AWS_BEDROCK).get_embedder()
         pgvector_repo = get_pgvector_repository(embeddings)  # Ingestion
         await truncate_langgraph_checkpoints_once()
-        await pgvector_repo.initialize(ensure_pg_indices)
+        await pgvector_repo.initialize(
+            lambda: ensure_pg_indices(index_init_started_at)
+        )
         if settings.VECTOR_STORE_V2_DUAL_WRITE_ENABLED:
             v2_vector_store = get_v2_vector_store(embeddings)
             await v2_vector_store.initialize()
         if settings.PGVECTOR_HNSW_INDEX_ENABLED:
             asyncio.create_task(ensure_vector_index())
-        asyncio.create_task(ensure_ks_all_indices())
+        asyncio.create_task(ensure_ks_all_indices(index_init_started_at))
         logger.info(
             "pgvector_repository_initialized",
             result="success",

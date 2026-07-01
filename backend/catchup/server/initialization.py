@@ -1,3 +1,5 @@
+import datetime
+
 import psycopg
 import structlog
 
@@ -68,20 +70,30 @@ _ALL_CONCURRENTLY_MANAGED_INDICES = [
 ]
 
 
-async def _terminate_orphaned_index_builds(conn: psycopg.AsyncConnection) -> None:
+async def _terminate_orphaned_index_builds(
+    conn: psycopg.AsyncConnection,
+    orphan_cutoff: datetime.datetime,
+) -> None:
     """고아 인덱스 빌드 세션을 종료한다.
 
     컨테이너 재배포 시 이전 컨테이너의 CREATE INDEX CONCURRENTLY가
     PostgreSQL에 잔류해 후속 DDL을 무한 대기시킨다.
     startup 진입 시점에 타 세션의 빌드를 정리해 이를 방지한다.
+
+    이 서버 프로세스가 시작한 커넥션까지 orphan으로 오판하지 않도록
+    backend_start가 orphan_cutoff(이 프로세스의 시작 시각)보다 이전인
+    커넥션만 종료 대상으로 삼는다. 같은 프로세스 내에서 서로 다른
+    asyncio 태스크로 동시 실행되는 다른 인덱스 빌드는 항상
+    orphan_cutoff 이후에 커넥션을 맺으므로 이 조건에서 제외된다.
     """
     for index_name in _ALL_CONCURRENTLY_MANAGED_INDICES:
         rows = await (await conn.execute(
             "SELECT pid FROM pg_stat_activity"
             " WHERE query ILIKE %(pattern)s"
             "   AND state = 'active'"
-            "   AND pid != pg_backend_pid()",
-            {"pattern": f"%{index_name}%"},
+            "   AND pid != pg_backend_pid()"
+            "   AND backend_start < %(cutoff)s",
+            {"pattern": f"%{index_name}%", "cutoff": orphan_cutoff},
         )).fetchall()
         for (pid,) in rows:
             await conn.execute(
@@ -107,7 +119,7 @@ async def _ks_table_exists(conn) -> bool:
     return bool(row and row[0])
 
 
-async def ensure_ks_indices() -> None:
+async def ensure_ks_indices(orphan_cutoff: datetime.datetime) -> None:
     """knowledge_store 테이블의 B-tree 및 GIN bigm 인덱스를 생성한다.
 
     테이블이 존재하지 않으면 아무 작업도 수행하지 않는다.
@@ -115,7 +127,7 @@ async def ensure_ks_indices() -> None:
     conn_string = settings.sqlalchemy_database_url.replace("+psycopg", "")
 
     async with await psycopg.AsyncConnection.connect(conn_string, autocommit=True) as conn:
-        await _terminate_orphaned_index_builds(conn)
+        await _terminate_orphaned_index_builds(conn, orphan_cutoff)
 
     async with await psycopg.AsyncConnection.connect(conn_string) as conn:
         if not await _ks_table_exists(conn):
@@ -303,22 +315,22 @@ async def ensure_ks_vector_index() -> None:
         )
 
 
-async def ensure_ks_all_indices() -> None:
+async def ensure_ks_all_indices(orphan_cutoff: datetime.datetime) -> None:
     """knowledge_store 인덱스를 순차 실행한다.
 
     GIN과 HNSW 모두 CREATE INDEX CONCURRENTLY를 사용하므로
     동시에 실행하면 같은 테이블에서 ShareUpdateExclusiveLock 경합으로 deadlock이 발생한다.
     GIN(bigm) → HNSW 순서로 직렬 실행해 이를 방지한다.
     """
-    await ensure_ks_indices()
+    await ensure_ks_indices(orphan_cutoff)
     await ensure_ks_vector_index()
 
 
-async def ensure_pg_indices() -> None:
+async def ensure_pg_indices(orphan_cutoff: datetime.datetime) -> None:
     conn_string = settings.sqlalchemy_database_url.replace("+psycopg", "")
 
     async with await psycopg.AsyncConnection.connect(conn_string, autocommit=True) as conn:
-        await _terminate_orphaned_index_builds(conn)
+        await _terminate_orphaned_index_builds(conn, orphan_cutoff)
 
     # B-tree는 일반 트랜잭션에서 빠르게 처리
     async with await psycopg.AsyncConnection.connect(conn_string) as conn:
