@@ -99,6 +99,23 @@ async def chat_response_stream(
 
 
 @router.post(
+    path="/{session_id}/cancel",
+    description="진행 중인 백그라운드 답변 생성을 취소한다 (그때까지 생성된 내용은 partial로 저장됨)"
+)
+async def cancel_chat_generation(
+    session_id: uuid.UUID,
+    room: ChatRoom = Depends(get_valid_chat_room),
+    runner: ChatBackgroundRunner = Depends(get_background_runner),
+):
+    was_running = runner.is_running(session_id)
+    await runner.cancel(session_id)
+
+    return {
+        "status": "cancelled" if was_running else "not_running",
+    }
+
+
+@router.post(
     path="/{session_id}/reset-last",
     description="가장 마지막 대화 턴(사용자 질문 + 답변)을 삭제하고, 삭제된 사용자 질문 반환"
 )
