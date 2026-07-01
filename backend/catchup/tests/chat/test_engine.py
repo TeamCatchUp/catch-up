@@ -482,3 +482,59 @@ def test_run_profiles_preserve_recovery_matrix():
     assert SLACK_RUN_PROFILE.reraise_on_cancel is True
     assert BACKGROUND_RUN_PROFILE.save_partial is True
     assert BACKGROUND_RUN_PROFILE.reraise_on_cancel is False
+
+
+@pytest.mark.asyncio
+async def test_run_background_delegates_to_run_with_background_profile():
+    """run_background는 event_store.publish를 sink로 하는 run()을 호출해야 한다."""
+    service = ChatService()
+    session_id = uuid.uuid4()
+    global_context = MagicMock()
+    prompt_settings = MagicMock()
+    event_store = MagicMock()
+    event_store.publish = AsyncMock()
+    event_store.publish_done = AsyncMock()
+
+    with patch.object(service, "run", AsyncMock()) as mock_run:
+        await service.run_background(
+            global_context=global_context,
+            prompt_settings=prompt_settings,
+            session_id=session_id,
+            event_store=event_store,
+            query="q",
+        )
+
+    mock_run.assert_called_once()
+    call_kwargs = mock_run.call_args.kwargs
+    assert call_kwargs["profile"] is BACKGROUND_RUN_PROFILE
+    event_store.publish_done.assert_awaited_once_with(str(session_id))
+
+    # run()의 4번째 위치 인자로 넘어간 sink가 event_store.publish로 위임되는지 확인
+    sink_fn = mock_run.call_args.args[3]
+    fake_event = MagicMock()
+    await sink_fn(fake_event)
+    event_store.publish.assert_awaited_once_with(str(session_id), fake_event)
+
+
+@pytest.mark.asyncio
+async def test_run_background_publishes_done_even_if_run_raises():
+    """run()이 예외를 던져도 publish_done은 반드시 호출돼야 한다."""
+    service = ChatService()
+    session_id = uuid.uuid4()
+    global_context = MagicMock()
+    prompt_settings = MagicMock()
+    event_store = MagicMock()
+    event_store.publish = AsyncMock()
+    event_store.publish_done = AsyncMock()
+
+    with patch.object(service, "run", AsyncMock(side_effect=RuntimeError("unexpected"))):
+        with pytest.raises(RuntimeError):
+            await service.run_background(
+                global_context=global_context,
+                prompt_settings=prompt_settings,
+                session_id=session_id,
+                event_store=event_store,
+                query="q",
+            )
+
+    event_store.publish_done.assert_awaited_once_with(str(session_id))
