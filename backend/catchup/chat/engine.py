@@ -56,7 +56,7 @@ _MODE_CEILING: dict[str, str] = {
 
 @dataclass(frozen=True, slots=True)
 class RunProfile:
-    """chat_stream(Slack)과 run_background(SSE) 경로의 취소/에러 복구 차이를 데이터로 표현한다."""
+    """Slack 통합과 run_background()가 공유하는 run()의 취소/에러 복구 차이를 데이터로 표현한다."""
 
     save_partial: bool
     reraise_on_cancel: bool
@@ -119,8 +119,8 @@ class ChatService:
     ) -> None:
         """LangGraph를 실행하고 이벤트를 sink로 전달한다.
 
-        chat_stream()과 run_background()의 공통 실행 로직을 통합한 것으로,
-        두 경로의 취소/에러 복구 차이는 profile로 표현한다.
+        Slack 통합(SLACK_RUN_PROFILE)과 run_background()(BACKGROUND_RUN_PROFILE)가
+        공유하는 실행 로직으로, 두 경로의 취소/에러 복구 차이는 profile로 표현한다.
         """
         start = time.perf_counter()
         ChatTokenUsageContext.init()
