@@ -23,6 +23,16 @@ class ChatEventStore:
     def _key(self, session_id: str) -> str:
         return f"{CHAT_STREAM_KEY_PREFIX}{session_id}"
 
+    async def clear(self, session_id: str) -> None:
+        """세션의 스트림 키를 삭제한다.
+
+        스트림 키가 session_id에만 묶여 있어 턴마다 누적되므로, 지우지 않으면
+        다음 턴의 subscribe()가 이전 턴의 이벤트와 DONE 센티넬을 리플레이하다
+        그 DONE에서 즉시 종료돼 새 턴의 실시간 이벤트를 받지 못한다.
+        """
+        redis = await get_stream_redis_client()
+        await redis.delete(self._key(session_id))
+
     async def publish(self, session_id: str, event: StreamEvent) -> None:
         """이벤트를 Redis Stream에 추가하고 TTL을 갱신한다."""
         redis = await get_stream_redis_client()

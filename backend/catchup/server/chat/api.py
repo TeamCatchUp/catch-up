@@ -73,6 +73,11 @@ async def chat_response_stream(
         ),
     )
 
+    # 새 턴이 시작되는 경우에만 스트림을 비운다. 이미 실행 중인 턴에 재연결하는
+    # 경우(같은 턴 안에서 새로고침)까지 비우면 진행 중인 이벤트가 유실된다.
+    if not runner.is_running(session_id):
+        await event_store.clear(str(session_id))
+
     await runner.ensure_running(
         session_id,
         coro_factory=lambda: service.run_background(
