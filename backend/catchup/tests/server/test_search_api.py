@@ -54,7 +54,7 @@ def test_hybrid_search_endpoint(
 ):
     from langchain_core.documents import Document
 
-    from catchup.rag.schemas.sources import BaseSource
+    from catchup.schemas.sources import BaseSource
 
     doc = Document(
         page_content="Hybrid Content",

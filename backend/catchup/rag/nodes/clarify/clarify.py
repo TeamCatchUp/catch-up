@@ -4,8 +4,8 @@ import structlog
 from langchain_core.callbacks.manager import adispatch_custom_event
 from langchain_core.messages import AIMessage
 
+from catchup.rag.constants import FALLBACK_ANSWER
 from catchup.rag.nodes.utils import log_node
-from catchup.rag.policies import FALLBACK_ANSWER
 from catchup.rag.state import AgentState
 
 logger = structlog.get_logger()

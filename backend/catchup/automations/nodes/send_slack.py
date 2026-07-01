@@ -23,6 +23,10 @@ _USER_CHAT_URL_RE = re.compile(
 _SEARCH_WINDOW_MINIMUM = timedelta(minutes=30)
 _SEARCH_WINDOW_BUFFER = timedelta(minutes=10)
 _SLACK_MARKDOWN_BLOCK_TEXT_LIMIT = 12_000
+_LINK_SEARCH_MAX_ATTEMPTS = 5
+_LINK_SEARCH_INITIAL_DELAY_SECONDS = 5.0
+_LINK_SEARCH_BACKOFF_FACTOR = 2.0
+_LINK_SEARCH_MAX_DELAY_SECONDS = 25.0
 
 
 def _message_contains_user_chat_id(message: dict[str, Any], user_chat_id: str) -> bool:
@@ -67,6 +71,49 @@ def _build_thread_reply_blocks(message: str) -> list[dict[str, str]] | None:
     return [{"type": "markdown", "text": message}]
 
 
+async def _find_linked_message(
+    client: SlackApiClientWrapper,
+    *,
+    channel_id: str,
+    user_chat_id: str,
+    oldest_at: datetime,
+) -> dict[str, Any] | None:
+    """채널 히스토리에서 user_chat_id가 링크된 최신 봇 메시지를 찾는다.
+
+    Channel Talk의 자체 Slack 연동이 메시지를 올리는 시점은 이 파이프라인이
+    통제할 수 없으므로, latest 경계를 매 호출 시점의 now로 새로 잡아야
+    호출 사이에 새로 올라온 메시지를 포착할 수 있다.
+    """
+    now = datetime.now(timezone.utc)
+    cursor: str | None = None
+    newest_match: dict[str, Any] | None = None
+
+    while True:
+        response = await client.get_conversation_history(
+            channel=channel_id,
+            oldest=_slack_ts(oldest_at),
+            latest=_slack_ts(now),
+            cursor=cursor,
+            limit=15,
+            inclusive=True,
+        )
+        for message in response.get("messages", []):
+            if not isinstance(message, dict):
+                continue
+            if not _is_bot_message(message):
+                continue
+            if not _message_contains_user_chat_id(message, user_chat_id):
+                continue
+            msg_ts = str(message.get("ts", ""))
+            if newest_match is None or msg_ts > str(newest_match.get("ts", "")):
+                newest_match = message
+        cursor = response.get("response_metadata", {}).get("next_cursor")
+        if not response.get("has_more") or not cursor:
+            break
+
+    return newest_match
+
+
 async def send_slack_node(state: dict[str, Any]) -> dict[str, Any]:
     """Channel Talk 연동 Slack 스레드에 대응 가이드를 발송한다."""
     guide_text: str = state.get("guide_text") or ""
@@ -98,36 +145,39 @@ async def send_slack_node(state: dict[str, Any]) -> dict[str, Any]:
         else _SEARCH_WINDOW_MINIMUM,
     )
 
-    now = datetime.now(timezone.utc)
-    oldest_at = now - search_window
+    oldest_at = datetime.now(timezone.utc) - search_window
 
-    cursor: str | None = None
     newest_match: dict[str, Any] | None = None
-
-    while True:
-        response = await client.get_conversation_history(
-            channel=channel_id,
-            oldest=_slack_ts(oldest_at),
-            latest=_slack_ts(now),
-            cursor=cursor,
-            limit=15,
-            inclusive=True,
+    delay_seconds = _LINK_SEARCH_INITIAL_DELAY_SECONDS
+    for attempt in range(1, _LINK_SEARCH_MAX_ATTEMPTS + 1):
+        newest_match = await _find_linked_message(
+            client,
+            channel_id=channel_id,
+            user_chat_id=user_chat_id,
+            oldest_at=oldest_at,
         )
-        for message in response.get("messages", []):
-            if not isinstance(message, dict):
-                continue
-            if not _is_bot_message(message):
-                continue
-            if not _message_contains_user_chat_id(message, user_chat_id):
-                continue
-            msg_ts = str(message.get("ts", ""))
-            if newest_match is None or msg_ts > str(newest_match.get("ts", "")):
-                newest_match = message
-        cursor = response.get("response_metadata", {}).get("next_cursor")
-        if not response.get("has_more") or not cursor:
+        if newest_match is not None:
             break
+        if attempt == _LINK_SEARCH_MAX_ATTEMPTS:
+            break
+        logger.warning(
+            "send_slack_node_link_not_found_retrying",
+            user_chat_id=user_chat_id,
+            attempt=attempt,
+            next_delay_seconds=delay_seconds,
+        )
+        await asyncio.sleep(delay_seconds)
+        delay_seconds = min(
+            delay_seconds * _LINK_SEARCH_BACKOFF_FACTOR, _LINK_SEARCH_MAX_DELAY_SECONDS
+        )
 
     if newest_match is None:
+        logger.error(
+            "send_slack_node_link_not_found",
+            user_chat_id=user_chat_id,
+            channel_id=channel_id,
+            attempts=_LINK_SEARCH_MAX_ATTEMPTS,
+        )
         raise RuntimeError(
             f"Channel Talk linked Slack message not found for user_chat_id={user_chat_id}"
         )

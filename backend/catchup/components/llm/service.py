@@ -90,7 +90,7 @@ class AwsBedrockLlmService(BaseLlmService):
         Args:
             model_capacity: 모델 용량 (SMALL/LARGE)
             streaming: 스트리밍 여부
-            isolated: True면 rag_executors.llm_executor 전용 pool 사용 (chat 파이프라인용).
+            isolated: True면 service_executors.llm_executor 전용 pool 사용 (chat 파이프라인용).
                      False면 default pool 사용 (ingestion 등 일반 용도).
             extended_thinking: Claude 3.7+ thinking 기능 활성화 여부
             thinking_budget_tokens: thinking 예산 토큰

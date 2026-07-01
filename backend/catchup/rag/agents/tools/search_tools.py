@@ -14,8 +14,8 @@ from catchup.rag.nodes.utils import build_docs_summary
 from catchup.rag.nodes.utils import deduplicate_documents
 from catchup.rag.nodes.utils import get_document_id
 from catchup.rag.nodes.utils import log_node
-from catchup.rag.schemas.structures import MultiSearchRequest
 from catchup.rag.state import AgentState
+from catchup.schemas.structures import MultiSearchRequest
 
 logger = structlog.get_logger()
 

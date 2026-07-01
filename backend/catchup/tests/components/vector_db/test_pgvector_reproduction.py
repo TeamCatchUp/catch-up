@@ -1,8 +1,10 @@
 import unittest
 from unittest.mock import MagicMock
-from unittest.mock import patch
-from catchup.components.vector_db.pgvector.pgvector import PGBigmRetriever
+
 from langchain_core.callbacks import CallbackManagerForRetrieverRun
+
+from catchup.components.vector_db.pgvector.pgvector import PGBigmRetriever
+
 
 class TestPGVectorReproduction(unittest.TestCase):
     def setUp(self):

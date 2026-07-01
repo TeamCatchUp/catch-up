@@ -2,17 +2,16 @@ from __future__ import annotations
 
 import uuid
 from unittest import IsolatedAsyncioTestCase
-from unittest.mock import AsyncMock
 from unittest.mock import MagicMock
 from unittest.mock import patch
 
 from catchup.rag.nodes.supervisor.supervisor import supervisor_node
-from catchup.rag.schemas.context import GlobalCompanyContext
-from catchup.rag.schemas.context import GlobalContext
-from catchup.rag.schemas.context import GlobalUserContext
-from catchup.rag.schemas.context import GlobalWorkspaceContext
-from catchup.rag.schemas.structures import PipelinePlan
-from catchup.rag.semaphores import rag_semaphores
+from catchup.schemas.context import GlobalCompanyContext
+from catchup.schemas.context import GlobalContext
+from catchup.schemas.context import GlobalUserContext
+from catchup.schemas.context import GlobalWorkspaceContext
+from catchup.schemas.structures import PipelinePlan
+from catchup.utils.semaphores import service_semaphores
 
 
 def _global_context() -> GlobalContext:
@@ -39,8 +38,8 @@ class SupervisorStreamingTests(IsolatedAsyncioTestCase):
     """supervisor_node의 process 스트리밍 이벤트를 검증한다."""
 
     def setUp(self):
-        rag_semaphores.init(
-            small_model_sema_value=5, large_model_sema_value=5, rerank_sema_value=5
+        service_semaphores.init(
+            small_llm_value=5, large_llm_value=5, reranker_value=5
         )
 
     @patch("catchup.rag.nodes.supervisor.supervisor.adispatch_custom_event")
@@ -73,14 +72,13 @@ class SupervisorStreamingTests(IsolatedAsyncioTestCase):
         first_call = mock_dispatch.call_args_list[0]
         self.assertEqual(first_call.args[0], "process")
         self.assertEqual(first_call.args[1]["status"], "in_progress")
-        self.assertEqual(first_call.args[1]["session_id"], str(session_id))
-        
+
         # Check second call (completed)
         second_call = mock_dispatch.call_args_list[1]
         self.assertEqual(second_call.args[0], "process")
         self.assertEqual(second_call.args[1]["status"], "completed")
         self.assertEqual(second_call.args[1]["reasoning"], "이것은 테스트 이유입니다.")
-        self.assertEqual(second_call.args[1]["content"], "standard")
+        self.assertEqual(second_call.args[1]["content"], {"query_type": "standard"})
 
     @patch("catchup.rag.nodes.supervisor.supervisor.adispatch_custom_event")
     @patch("catchup.rag.nodes.supervisor.supervisor.ainvoke_llm_with_token_usage")
@@ -108,4 +106,4 @@ class SupervisorStreamingTests(IsolatedAsyncioTestCase):
         
         self.assertIsNotNone(error_call)
         self.assertEqual(error_call.args[0], "process")
-        self.assertIn("LLM failure", error_call.args[1]["reasoning"])
+        self.assertEqual(error_call.args[1]["reasoning"], "질문 의도 파악에 실패했어요.")

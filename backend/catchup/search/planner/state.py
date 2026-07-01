@@ -4,7 +4,7 @@ from datetime import datetime
 from datetime import timezone
 from typing import TypedDict
 
-from catchup.rag.schemas.structures import ManualSearchQuery
+from catchup.schemas.structures import ManualSearchQuery
 
 _QUERY_CACHE_MAX_SIZE = 20
 

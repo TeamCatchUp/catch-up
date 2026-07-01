@@ -7,7 +7,7 @@ class NamedSemaphore(Semaphore):
         self.name = name
 
 
-class RagSemaphores:
+class ServiceSemaphores:
     llm_small: Semaphore | None = None
     llm_large: Semaphore | None = None
     reranker: Semaphore | None = None
@@ -24,4 +24,4 @@ class RagSemaphores:
 
 
 # Singleton
-rag_semaphores = RagSemaphores()
+service_semaphores = ServiceSemaphores()

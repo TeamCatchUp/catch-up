@@ -16,7 +16,7 @@ from sqlalchemy.orm import joinedload
 from catchup.db.models import ChatHistory
 from catchup.db.models import ChatRoom
 from catchup.db.models import SenderType
-from catchup.rag.schemas.sources import BaseSource
+from catchup.schemas.sources import BaseSource
 
 
 def get_chat_room(db: Session, session_id: uuid.UUID, user_id: int) -> ChatRoom | None:

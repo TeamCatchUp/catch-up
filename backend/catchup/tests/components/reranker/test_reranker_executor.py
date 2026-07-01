@@ -1,9 +1,9 @@
 """
-AwsBedrockRerankService가 rag_executors.rerank_executor를 사용하는지 검증한다.
+AwsBedrockRerankService가 service_executors.rerank_executor를 사용하는지 검증한다.
 
 목적:
   - rerank() 호출이 asyncio 기본 executor가 아닌
-    rag_executors.rerank_executor로 실행됨을 보장한다.
+    service_executors.rerank_executor로 실행됨을 보장한다.
 """
 
 from __future__ import annotations
@@ -15,22 +15,22 @@ from unittest.mock import MagicMock
 from unittest.mock import patch
 
 from catchup.components.reranker.service import AwsBedrockRerankService
-from catchup.rag.executors import rag_executors
+from catchup.utils.executors import service_executors
 
 
 class TestRerankerExecutor(IsolatedAsyncioTestCase):
 
     def setUp(self):
-        self._original_bedrock_rerank = rag_executors.rerank_executor
+        self._original_bedrock_rerank = service_executors.rerank_executor
         self._test_executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="bedrock-rerank-test")
-        rag_executors.rerank_executor = self._test_executor
+        service_executors.rerank_executor = self._test_executor
 
     def tearDown(self):
         self._test_executor.shutdown(wait=False)
-        rag_executors.rerank_executor = self._original_bedrock_rerank
+        service_executors.rerank_executor = self._original_bedrock_rerank
 
     async def test_uses_bedrock_rerank_executor(self):
-        """rerank()가 rag_executors.rerank_executor로 run_in_executor를 호출하는지 확인"""
+        """rerank()가 service_executors.rerank_executor로 run_in_executor를 호출하는지 확인"""
         captured_executors: list = []
         loop = asyncio.get_running_loop()
 
@@ -47,8 +47,8 @@ class TestRerankerExecutor(IsolatedAsyncioTestCase):
         self.assertEqual(len(captured_executors), 1)
         self.assertIs(
             captured_executors[0],
-            rag_executors.rerank_executor,
-            "rag_executors.rerank_executor가 사용되어야 합니다.",
+            service_executors.rerank_executor,
+            "service_executors.rerank_executor가 사용되어야 합니다.",
         )
 
     async def test_not_using_executor_on_empty_docs(self):
@@ -69,12 +69,12 @@ class TestRerankerExecutor(IsolatedAsyncioTestCase):
         self.assertFalse(run_in_executor_called, "빈 문서 목록에서 executor가 호출되면 안 됩니다.")
 
 
-class TestRagExecutorsLifecycle(IsolatedAsyncioTestCase):
-    """RagExecutors의 초기화 및 해제 라이프사이클을 테스트한다."""
+class TestServiceExecutorsLifecycle(IsolatedAsyncioTestCase):
+    """ServiceExecutors의 초기화 및 해제 라이프사이클을 테스트한다."""
 
     def test_init_creates_executors(self):
-        from catchup.rag.executors import RagExecutors
-        executors = RagExecutors()
+        from catchup.utils.executors import ServiceExecutors
+        executors = ServiceExecutors()
         executors.init()
         
         self.assertIsInstance(executors.vector_search_executor, ThreadPoolExecutor)
@@ -84,8 +84,8 @@ class TestRagExecutorsLifecycle(IsolatedAsyncioTestCase):
         executors.shutdown()
 
     def test_shutdown_cleans_up(self):
-        from catchup.rag.executors import RagExecutors
-        executors = RagExecutors()
+        from catchup.utils.executors import ServiceExecutors
+        executors = ServiceExecutors()
         executors.init()
         executors.shutdown()
         

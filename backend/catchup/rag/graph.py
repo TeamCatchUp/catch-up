@@ -5,7 +5,6 @@ from typing import Optional
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph import END
 from langgraph.graph import StateGraph
-from langgraph.types import RetryPolicy
 
 from catchup.components.embedder.constants import EmbeddingProvider
 from catchup.components.embedder.factory import get_embedding_service
@@ -16,34 +15,17 @@ from catchup.components.reranker.constants import RerankerProvider
 from catchup.components.reranker.factory import get_rerank_service
 from catchup.components.vector_db.factory import get_vector_db_service
 from catchup.components.vector_db.pgvector.constants import VectorDbProvider
+from catchup.langgraph.retry import BASE_RETRY_POLICY
 from catchup.rag.conditional_edges import route_after_supervisor
 from catchup.rag.nodes import clarify_node
 from catchup.rag.nodes import direct_answer_node
 from catchup.rag.nodes import supervisor_node
-from catchup.rag.retryable import RETRYABLE_ERRORS
 from catchup.rag.state import AgentState
 from catchup.rag.subgraphs import build_complex_react_subgraph
 from catchup.rag.subgraphs import build_simple_subgraph
 from catchup.rag.subgraphs import build_standard_react_subgraph
 
 logger = logging.getLogger(__name__)
-
-# 기본 재시도 정책
-# max_attempt는 최초 시도 횟수를 포함.
-BASE_RETRY_POLICY = RetryPolicy(
-    retry_on=RETRYABLE_ERRORS,
-    max_attempts=3,
-    initial_interval=1.0,
-    backoff_factor=2.0,
-)
-
-# Agent는 내부 루프가 길어 재시도 횟수를 제한
-AGENT_RETRY_POLICY = RetryPolicy(
-    retry_on=RETRYABLE_ERRORS,
-    max_attempts=2,
-    initial_interval=1.0,
-    backoff_factor=2.0,
-)
 
 
 def get_compiled_graph(

@@ -6,10 +6,10 @@ from langchain_core.documents import Document
 
 from catchup.components.reranker.service import BaseRerankService
 from catchup.configs.config import settings
-from catchup.rag.nodes.utils import log_node
-from catchup.rag.retryable import RETRYABLE_ERRORS
-from catchup.rag.semaphores import rag_semaphores
+from catchup.langgraph.retry import RETRYABLE_ERRORS
+from catchup.langgraph.utils import log_node
 from catchup.rag.state import AgentState
+from catchup.utils.semaphores import service_semaphores
 
 logger = structlog.get_logger()
 
@@ -33,7 +33,7 @@ async def rerank_node(
     rerank_count: int = state.get("rerank_count", 0)
     query = state["rewritten_query"]
 
-    retrieved_docs = _validate_retrieved_docs(retrieved_docs)
+    retrieved_docs = validate_retrieved_docs(retrieved_docs)
 
     try:
         t_sem = time.perf_counter()
@@ -42,7 +42,7 @@ async def rerank_node(
             semaphore="reranker",
             doc_count=len(retrieved_docs),
         )
-        async with rag_semaphores.reranker:
+        async with service_semaphores.reranker:
             t_rerank = time.perf_counter()
             logger.debug(
                 "rerank_invoke_start",
@@ -78,7 +78,7 @@ async def rerank_node(
     }
 
 
-def _validate_retrieved_docs(
+def validate_retrieved_docs(
     retrieved_docs: list[Document],
 ) -> list[Document]:
     """AWS Bedrock Cohere Rerank 3.5의 본문 길이 제한에 맞게 문서를 검증한다."""

@@ -1,6 +1,5 @@
 import random
 
-
 _STATIC_REASONING_TEMPLATE = {
     "rewrite": [
         "어떤 의도이신지 짚어보고 있어요.",

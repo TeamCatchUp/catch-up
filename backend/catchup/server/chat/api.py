@@ -9,16 +9,16 @@ from catchup.audit.base import AuditLevel
 from catchup.audit.base import AuditStatus
 from catchup.audit.emitters import emit_audit_event
 from catchup.audit.metadata import ChatAuditMetadata
+from catchup.chat.dependencies import get_prompt_settings
+from catchup.chat.dependencies import get_rag_global_context
 from catchup.chat.dependencies import get_valid_chat_room
 from catchup.chat.engine import ChatService
 from catchup.chat.factory import get_chat_service
 from catchup.chat.schemas import ChatRequest
 from catchup.chat.schemas import ChatResponse
 from catchup.db.models import ChatRoom
-from catchup.rag.dependencies import get_prompt_settings
-from catchup.rag.dependencies import get_rag_global_context
-from catchup.rag.schemas.context import GlobalContext
-from catchup.rag.schemas.prompt_settings import PromptSettings
+from catchup.schemas.context import GlobalContext
+from catchup.schemas.prompt_settings import PromptSettings
 
 router = APIRouter(
     prefix="/api/v1/chat",

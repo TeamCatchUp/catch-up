@@ -10,14 +10,14 @@ from catchup.components.vector_db.pgvector.pgvector import PGVectorService
 from catchup.configs.config import settings
 from catchup.db.models import SourceType
 from catchup.db.models import User
+from catchup.langgraph.checkpoint import get_langgraph_checkpointer
 from catchup.observability.langfuse.configs import get_langfuse_client
 from catchup.observability.langfuse.configs import get_observe
-from catchup.rag.checkpoint import get_langgraph_checkpointer
-from catchup.rag.nodes.utils import build_doc_groups
-from catchup.rag.schemas.sources import BaseSource
+from catchup.schemas.sources import BaseSource
 from catchup.search.filters import build_manual_search_temporal_filters
 from catchup.search.planner.graph import get_search_planner_graph
 from catchup.search.planner.state import CachedSearch
+from catchup.utils.documents import build_doc_groups
 
 logger = structlog.get_logger()
 

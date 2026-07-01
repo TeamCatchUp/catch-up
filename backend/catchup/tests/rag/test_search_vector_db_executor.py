@@ -3,7 +3,7 @@ search_vector_db가 vector_search 전용 executor를 사용하는지 검증한�
 
 목적:
   - hybrid_search 호출이 asyncio 기본 executor(sync worker와 공유)가 아닌
-    rag_executors.vector_search_executor로 실행됨을 보장한다.
+    service_executors.vector_search_executor로 실행됨을 보장한다.
   - 이 테스트가 통과하면 sync worker full sync 중 chat 타임아웃이 발생하지 않는다.
 """
 
@@ -12,24 +12,25 @@ from __future__ import annotations
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from unittest import IsolatedAsyncioTestCase
-from unittest.mock import MagicMock, AsyncMock
+from unittest.mock import MagicMock
 from unittest.mock import patch
 
-from catchup.rag.executors import rag_executors
+from catchup.utils.executors import service_executors
+
 
 class TestSearchVectorDbExecutor(IsolatedAsyncioTestCase):
 
     def setUp(self):
-        self._original_executor = rag_executors.vector_search_executor
+        self._original_executor = service_executors.vector_search_executor
         self._test_executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="rag-vector-search-test")
-        rag_executors.vector_search_executor = self._test_executor
+        service_executors.vector_search_executor = self._test_executor
 
     def tearDown(self):
         self._test_executor.shutdown(wait=False)
-        rag_executors.vector_search_executor = self._original_executor
+        service_executors.vector_search_executor = self._original_executor
 
     async def test_uses_vector_search_executor_via_batch(self):
-        """hybrid_search_batch 호출 시 내부 hybrid_search가 rag_executors.vector_search_executor를 사용하는지 확인"""
+        """hybrid_search_batch 호출 시 내부 hybrid_search가 service_executors.vector_search_executor를 사용하는지 확인"""
         captured_executors: list = []
         loop = asyncio.get_running_loop()
 
@@ -66,6 +67,6 @@ class TestSearchVectorDbExecutor(IsolatedAsyncioTestCase):
         for executor in captured_executors:
             self.assertIs(
                 executor,
-                rag_executors.vector_search_executor,
-                "asyncio 기본 executor가 아닌 rag_executors.vector_search_executor가 사용되어야 합니다.",
+                service_executors.vector_search_executor,
+                "asyncio 기본 executor가 아닌 service_executors.vector_search_executor가 사용되어야 합니다.",
             )

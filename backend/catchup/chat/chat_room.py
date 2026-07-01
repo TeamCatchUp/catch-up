@@ -16,7 +16,7 @@ from catchup.db.models import TokenPurpose
 from catchup.events.bus import bus
 from catchup.events.enums import EventTopic
 from catchup.prompts.loader import prompt_loader
-from catchup.rag.schemas.context import GlobalContext
+from catchup.schemas.context import GlobalContext
 
 logger = structlog.get_logger()
 
