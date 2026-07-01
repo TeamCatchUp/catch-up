@@ -44,9 +44,15 @@ async def test_search_tool_executor_node_merge_strategy():
     ]
 
     # _run_search를 모킹하여 새 문서를 반환하도록 설정
-    with patch(
-        "catchup.rag.agents.tools.search_tools._run_search", new_callable=AsyncMock
-    ) as mock_run_search:
+    with (
+        patch(
+            "catchup.rag.agents.tools.search_tools._run_search", new_callable=AsyncMock
+        ) as mock_run_search,
+        patch(
+            "catchup.rag.agents.tools.search_tools.adispatch_custom_event",
+            new_callable=AsyncMock,
+        ),
+    ):
         mock_run_search.return_value = (new_docs, "summary")
 
         result = await search_tool_executor_node(state, mock_vector_db)

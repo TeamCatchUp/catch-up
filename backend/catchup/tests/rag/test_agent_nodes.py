@@ -14,12 +14,12 @@ from langchain_core.messages import ToolMessage
 
 from catchup.rag.agents.complex_agent import complex_agent_node
 from catchup.rag.agents.standard_agent import standard_agent_node
-from catchup.rag.schemas.context import GlobalCompanyContext
-from catchup.rag.schemas.context import GlobalContext
-from catchup.rag.schemas.context import GlobalUserContext
-from catchup.rag.schemas.context import GlobalWorkspaceContext
-from catchup.rag.schemas.prompt_settings import PromptSettings
-from catchup.rag.semaphores import rag_semaphores
+from catchup.schemas.context import GlobalCompanyContext
+from catchup.schemas.context import GlobalContext
+from catchup.schemas.context import GlobalUserContext
+from catchup.schemas.context import GlobalWorkspaceContext
+from catchup.schemas.prompt_settings import PromptSettings
+from catchup.utils.semaphores import service_semaphores
 
 
 def _global_context() -> GlobalContext:
@@ -61,15 +61,16 @@ class StandardAgentMessageHistoryTests(IsolatedAsyncioTestCase):
     """standard_agent_node가 LLM에 올바른 메시지 시퀀스를 전달하는지 검증한다."""
 
     def setUp(self):
-        rag_semaphores.init(small_llm_value=5, large_llm_value=5, reranker_value=5)
+        service_semaphores.init(small_llm_value=5, large_llm_value=5, reranker_value=5)
 
+    @patch("catchup.rag.agents.standard_agent.adispatch_custom_event")
     @patch(
         "catchup.rag.agents.standard_agent.prompt_loader.get_prompt",
         return_value="시스템 프롬프트",
     )
-    @patch("catchup.rag.nodes.utils.extract_token_usages", return_value={})
+    @patch("catchup.langgraph.utils.extract_token_usages", return_value={})
     async def test_1차_반복에서는_시스템과_휴먼_메시지만_전달된다(
-        self, _mock_tokens, _mock_prompt
+        self, _mock_tokens, _mock_prompt, _mock_dispatch
     ):
         """1차 반복: state["messages"] == [] → LLM은 [system, human] 2개만 받아야 한다."""
         llm = _make_llm()
@@ -83,13 +84,14 @@ class StandardAgentMessageHistoryTests(IsolatedAsyncioTestCase):
         self.assertIsInstance(sent_messages[0], SystemMessage)
         self.assertIsInstance(sent_messages[1], HumanMessage)
 
+    @patch("catchup.rag.agents.standard_agent.adispatch_custom_event")
     @patch(
         "catchup.rag.agents.standard_agent.prompt_loader.get_prompt",
         return_value="시스템 프롬프트",
     )
-    @patch("catchup.rag.nodes.utils.extract_token_usages", return_value={})
+    @patch("catchup.langgraph.utils.extract_token_usages", return_value={})
     async def test_2차_반복에서는_이전_이력이_포함된다(
-        self, _mock_tokens, _mock_prompt
+        self, _mock_tokens, _mock_prompt, _mock_dispatch
     ):
         """2차 반복: state["messages"] == [AIMessage, ToolMessage] → LLM은 4개 메시지를 받아야 한다."""
         prev_ai = AIMessage(
@@ -117,13 +119,14 @@ class StandardAgentMessageHistoryTests(IsolatedAsyncioTestCase):
         self.assertIsInstance(sent_messages[2], AIMessage)
         self.assertIsInstance(sent_messages[3], ToolMessage)
 
+    @patch("catchup.rag.agents.standard_agent.adispatch_custom_event")
     @patch(
         "catchup.rag.agents.standard_agent.prompt_loader.get_prompt",
         return_value="시스템 프롬프트",
     )
-    @patch("catchup.rag.nodes.utils.extract_token_usages", return_value={})
+    @patch("catchup.langgraph.utils.extract_token_usages", return_value={})
     async def test_3차_반복에서는_전체_이력이_포함된다(
-        self, _mock_tokens, _mock_prompt
+        self, _mock_tokens, _mock_prompt, _mock_dispatch
     ):
         """3차 반복: 두 쌍의 AIMessage+ToolMessage → LLM은 6개 메시지를 받아야 한다."""
         prev_ai_1 = AIMessage(
@@ -168,15 +171,16 @@ class ComplexAgentMessageHistoryTests(IsolatedAsyncioTestCase):
     """complex_agent_node가 LLM에 올바른 메시지 시퀀스를 전달하는지 검증한다."""
 
     def setUp(self):
-        rag_semaphores.init(small_llm_value=5, large_llm_value=5, reranker_value=5)
+        service_semaphores.init(small_llm_value=5, large_llm_value=5, reranker_value=5)
 
+    @patch("catchup.rag.agents.complex_agent.adispatch_custom_event")
     @patch(
         "catchup.rag.agents.complex_agent.prompt_loader.get_prompt",
         return_value="시스템 프롬프트",
     )
-    @patch("catchup.rag.nodes.utils.extract_token_usages", return_value={})
+    @patch("catchup.langgraph.utils.extract_token_usages", return_value={})
     async def test_1차_반복에서는_시스템과_휴먼_메시지만_전달된다(
-        self, _mock_tokens, _mock_prompt
+        self, _mock_tokens, _mock_prompt, _mock_dispatch
     ):
         """1차 반복: state["messages"] == [] → LLM은 [system, human] 2개만 받아야 한다."""
         llm = _make_llm()

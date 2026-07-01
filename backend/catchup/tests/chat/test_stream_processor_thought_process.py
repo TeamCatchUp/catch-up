@@ -2,8 +2,8 @@ import uuid
 from unittest import IsolatedAsyncioTestCase
 from unittest.mock import AsyncMock
 
-from catchup.chat.stream_processor import ChatStreamProcessor
 from catchup.chat.schemas import ChatStreamingProcessResponse
+from catchup.chat.stream_processor import ChatStreamProcessor
 
 
 class ChatStreamProcessorThoughtProcessTests(IsolatedAsyncioTestCase):
@@ -23,7 +23,7 @@ class ChatStreamProcessorThoughtProcessTests(IsolatedAsyncioTestCase):
                 "status": "completed",
                 "node": "supervisor",
                 "reasoning": "테스트 이유",
-                "content": "standard",
+                "content": {"query_type": "standard"},
             },
         }
 
@@ -41,4 +41,4 @@ class ChatStreamProcessorThoughtProcessTests(IsolatedAsyncioTestCase):
         self.assertEqual(res.status, "completed")
         self.assertEqual(res.node, "supervisor")
         self.assertEqual(res.reasoning, "테스트 이유")
-        self.assertEqual(res.content, "standard")
+        self.assertEqual(res.content, {"query_type": "standard"})
