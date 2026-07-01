@@ -23,9 +23,10 @@ _USER_CHAT_URL_RE = re.compile(
 _SEARCH_WINDOW_MINIMUM = timedelta(minutes=30)
 _SEARCH_WINDOW_BUFFER = timedelta(minutes=10)
 _SLACK_MARKDOWN_BLOCK_TEXT_LIMIT = 12_000
-_LINK_SEARCH_MAX_ATTEMPTS = 5
+_LINK_SEARCH_MAX_ATTEMPTS = 10
 _LINK_SEARCH_INITIAL_DELAY_SECONDS = 5.0
 _LINK_SEARCH_BACKOFF_FACTOR = 2.0
+_LINK_SEARCH_MAX_DELAY_SECONDS = 60.0
 
 
 def _message_contains_user_chat_id(message: dict[str, Any], user_chat_id: str) -> bool:
@@ -166,7 +167,9 @@ async def send_slack_node(state: dict[str, Any]) -> dict[str, Any]:
             next_delay_seconds=delay_seconds,
         )
         await asyncio.sleep(delay_seconds)
-        delay_seconds *= _LINK_SEARCH_BACKOFF_FACTOR
+        delay_seconds = min(
+            delay_seconds * _LINK_SEARCH_BACKOFF_FACTOR, _LINK_SEARCH_MAX_DELAY_SECONDS
+        )
 
     if newest_match is None:
         raise RuntimeError(
