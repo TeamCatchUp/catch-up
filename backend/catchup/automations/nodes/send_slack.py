@@ -23,10 +23,10 @@ _USER_CHAT_URL_RE = re.compile(
 _SEARCH_WINDOW_MINIMUM = timedelta(minutes=30)
 _SEARCH_WINDOW_BUFFER = timedelta(minutes=10)
 _SLACK_MARKDOWN_BLOCK_TEXT_LIMIT = 12_000
-_LINK_SEARCH_MAX_ATTEMPTS = 10
+_LINK_SEARCH_MAX_ATTEMPTS = 5
 _LINK_SEARCH_INITIAL_DELAY_SECONDS = 5.0
 _LINK_SEARCH_BACKOFF_FACTOR = 2.0
-_LINK_SEARCH_MAX_DELAY_SECONDS = 60.0
+_LINK_SEARCH_MAX_DELAY_SECONDS = 25.0
 
 
 def _message_contains_user_chat_id(message: dict[str, Any], user_chat_id: str) -> bool:
@@ -172,6 +172,12 @@ async def send_slack_node(state: dict[str, Any]) -> dict[str, Any]:
         )
 
     if newest_match is None:
+        logger.error(
+            "send_slack_node_link_not_found",
+            user_chat_id=user_chat_id,
+            channel_id=channel_id,
+            attempts=_LINK_SEARCH_MAX_ATTEMPTS,
+        )
         raise RuntimeError(
             f"Channel Talk linked Slack message not found for user_chat_id={user_chat_id}"
         )
