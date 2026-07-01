@@ -1,6 +1,7 @@
 import asyncio
 import time
 import uuid
+from dataclasses import dataclass
 from datetime import datetime
 from datetime import timezone
 from typing import Any
@@ -50,6 +51,40 @@ _MODE_CEILING: dict[str, str] = {
     "fast": "standard",
     "standard": "complex",
 }
+
+
+@dataclass(frozen=True, slots=True)
+class RunProfile:
+    """chat_stream(Slack)과 run_background(SSE) 경로의 취소/에러 복구 차이를 데이터로 표현한다."""
+
+    save_partial: bool
+    reraise_on_cancel: bool
+    cancelled_log_event: str
+    cancelled_audit_context: str
+    error_log_event: str
+    error_audit_context: str
+    finished_log_event: str
+
+
+SLACK_RUN_PROFILE = RunProfile(
+    save_partial=False,
+    reraise_on_cancel=True,
+    cancelled_log_event="stream_cancelled",
+    cancelled_audit_context="connection_cancelled",
+    error_log_event="streaming_error",
+    error_audit_context="streaming_error",
+    finished_log_event="streaming_finished",
+)
+
+BACKGROUND_RUN_PROFILE = RunProfile(
+    save_partial=True,
+    reraise_on_cancel=False,
+    cancelled_log_event="background_task_cancelled",
+    cancelled_audit_context="background_task_cancelled",
+    error_log_event="background_streaming_error",
+    error_audit_context="background_streaming_error",
+    finished_log_event="background_task_finished",
+)
 
 
 class ChatService:
@@ -336,6 +371,38 @@ class ChatService:
             logger.warning(
                 "failed_to_update_langfuse_metadata", trace_id=trace_id, error=str(e)
             )
+
+    async def _finalize_stats(
+        self,
+        base_config: dict | None,
+        global_context: GlobalContext,
+        trace_id: str | None,
+        session_id: uuid.UUID,
+    ) -> None:
+        """스트리밍 종료 후 토큰 사용량 통계와 langfuse 메타데이터를 처리한다."""
+        if base_config is not None:
+            try:
+                lg_current_state = await self._app.aget_state(base_config)
+                values = lg_current_state.values
+                self._process_token_usage_stats(base_config, values, global_context)
+
+                if settings.ENABLE_LANGFUSE:
+                    client = get_langfuse_client()
+                    if client:
+                        await self._update_langfuse_rerank_metadata(
+                            client, trace_id, values
+                        )
+            except Exception as stats_err:
+                logger.warning(
+                    "failed_to_process_post_stream_stats",
+                    error=str(stats_err),
+                    session_id=str(session_id),
+                )
+
+        if settings.ENABLE_LANGFUSE:
+            client = get_langfuse_client()
+            if client:
+                await run_in_threadpool(client.flush)
 
     def _resolve_input_messages(
         self,

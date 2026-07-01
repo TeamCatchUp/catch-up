@@ -7,7 +7,9 @@ import pytest
 from langchain_core.messages import AIMessage
 from langchain_core.messages import HumanMessage
 
+from catchup.chat.engine import BACKGROUND_RUN_PROFILE
 from catchup.chat.engine import ChatService
+from catchup.chat.engine import SLACK_RUN_PROFILE
 
 
 def test_resolve_input_messages_first_turn_no_duplication():
@@ -171,3 +173,37 @@ async def test_chat_stream_calls_reset_when_save_succeeded():
                                     pass
 
     mock_reset.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_finalize_stats_processes_token_usage_and_flushes_langfuse():
+    """base_config가 있으면 토큰 통계 처리와 langfuse rerank 갱신이 호출돼야 한다."""
+    service = ChatService()
+    session_id = uuid.uuid4()
+    global_context = MagicMock()
+    base_config = {"configurable": {"thread_id": session_id}}
+
+    app = MagicMock()
+    app.aget_state = AsyncMock(
+        return_value=MagicMock(values={"rerank_count": 2, "rerank_metadata": None})
+    )
+    service._app = app
+
+    with patch.object(
+        service, "_process_token_usage_stats"
+    ) as mock_process_stats:
+        with patch("catchup.chat.engine.settings") as mock_settings:
+            mock_settings.ENABLE_LANGFUSE = False
+            await service._finalize_stats(
+                base_config, global_context, "trace-1", session_id
+            )
+
+    mock_process_stats.assert_called_once()
+
+
+def test_run_profiles_preserve_recovery_matrix():
+    """SLACK/BACKGROUND 프로파일이 설계에서 합의한 4개 조합을 정확히 인코딩해야 한다."""
+    assert SLACK_RUN_PROFILE.save_partial is False
+    assert SLACK_RUN_PROFILE.reraise_on_cancel is True
+    assert BACKGROUND_RUN_PROFILE.save_partial is True
+    assert BACKGROUND_RUN_PROFILE.reraise_on_cancel is False
