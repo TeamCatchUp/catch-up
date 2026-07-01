@@ -6,6 +6,8 @@ from datetime import datetime
 from datetime import timezone
 from typing import Any
 from typing import AsyncGenerator
+from typing import Awaitable
+from typing import Callable
 from typing import Literal
 
 import structlog
@@ -101,6 +103,159 @@ class ChatService:
             checkpointer = get_langgraph_checkpointer()
             self._app = get_compiled_graph(checkpointer)
         return self._app
+
+    async def run(
+        self,
+        global_context: GlobalContext,
+        prompt_settings: PromptSettings,
+        session_id: uuid.UUID,
+        sink: Callable[[StreamEvent], Awaitable[None]],
+        *,
+        profile: RunProfile,
+        tool_filters: list[SourceType] | None = None,
+        query: str | None = None,
+        additional_context: str | None = None,
+        mode: Literal["fast", "standard"] = "standard",
+        is_slack: bool = False,
+    ) -> None:
+        """LangGraph를 실행하고 이벤트를 sink로 전달한다.
+
+        chat_stream()과 run_background()의 공통 실행 로직을 통합한 것으로,
+        두 경로의 취소/에러 복구 차이는 profile로 표현한다.
+        """
+        start = time.perf_counter()
+        ChatTokenUsageContext.init()
+
+        base_config = None
+        processor = None
+        saved_message_id: int | None = None
+        trace_id: str | None = None
+        room_id: int | None = None
+
+        try:
+            room_id = await self._ensure_chat_room(
+                global_context, session_id, query, is_slack=is_slack
+            )
+
+            app = self._get_app()
+            base_config, invoke_config, trace_id = self._setup_config(session_id)
+            lg_current_state = await app.aget_state(base_config)
+
+            input_messages = await run_in_threadpool(
+                self._resolve_input_messages,
+                session_id,
+                query,
+                lg_current_state,
+                additional_context,
+            )
+
+            saved_message_id = await self._save_message_content(
+                room_id,
+                "user",
+                query,
+                user_id=global_context.user.id,
+            )
+
+            inputs = {
+                "messages": input_messages,
+                "original_query": query,
+                "global_context": global_context,
+                "tool_filters": tool_filters,
+                "prompt_settings": prompt_settings,
+                "max_pipeline_type": _MODE_CEILING.get(mode, "complex"),
+                "vector_search_queries": [],
+                "agent_iteration": 0,
+                "accumulated_docs": [],
+                "agent_seen_doc_ids": [],
+                "confirmed_essential_doc_ids": [],
+                "agent_stop_reason": None,
+                "token_breakdown": {},
+                "rerank_count": 0,
+                "slack_thread_context": additional_context,
+            }
+
+            processor = ChatStreamProcessor(
+                session_id=session_id,
+                room_id=room_id,
+                save_message=self._save_message_content,
+                langfuse_trace_id=trace_id,
+            )
+
+            async for event in app.astream_events(inputs, invoke_config, version="v2"):
+                async for parsed_event in processor.process(event):
+                    await sink(parsed_event)
+
+        except asyncio.CancelledError:
+            elapsed = time.perf_counter() - start
+            logger.warning(
+                profile.cancelled_log_event,
+                session_id=str(session_id),
+                elapsed_seconds=round(elapsed, 2),
+                cancelled_at_node=processor.context.current_node
+                if processor is not None
+                else None,
+            )
+            if profile.save_partial and room_id is not None:
+                try:
+                    await self._save_partial_if_any(processor, room_id, trace_id)
+                except Exception:
+                    logger.exception(
+                        "partial_save_failed_on_cancel",
+                        session_id=str(session_id),
+                    )
+            emit_audit_event(
+                action=ChatAction.GENERATE_RESPONSE,
+                status=AuditStatus.FAILURE,
+                level=AuditLevel.WARNING,
+                metadata=ChatAuditMetadata(
+                    context=profile.cancelled_audit_context,
+                    session_id=session_id,
+                ),
+            )
+            if profile.reraise_on_cancel:
+                raise
+
+        except Exception:
+            logger.exception(profile.error_log_event)
+
+            if saved_message_id is not None and room_id is not None:
+                saved_partial = False
+                if profile.save_partial:
+                    saved_partial = bool(
+                        processor is not None
+                        and processor.context.accumulated_content.strip()
+                    )
+                    if saved_partial:
+                        await self._save_partial_if_any(processor, room_id, trace_id)
+                if not saved_partial:
+                    await self.reset_last_turn(room_id=room_id, session_id=session_id)
+
+            emit_audit_event(
+                action=ChatAction.GENERATE_RESPONSE,
+                status=AuditStatus.FAILURE,
+                level=AuditLevel.ERROR,
+                metadata=ChatAuditMetadata(
+                    session_id=session_id,
+                    context=profile.error_audit_context,
+                ),
+            )
+
+        else:
+            emit_audit_event(
+                action=ChatAction.GENERATE_RESPONSE,
+                status=AuditStatus.SUCCESS,
+                level=AuditLevel.INFO,
+                metadata=ChatAuditMetadata(session_id=session_id),
+            )
+
+        finally:
+            elapsed = time.perf_counter() - start
+            logger.info(
+                profile.finished_log_event,
+                session_id=str(session_id),
+                duration=round(elapsed, 4),
+            )
+            await self._finalize_stats(base_config, global_context, trace_id, session_id)
 
     @observe(name="chat-stream")
     async def chat_stream(

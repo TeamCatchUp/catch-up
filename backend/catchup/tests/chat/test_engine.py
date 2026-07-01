@@ -1,3 +1,4 @@
+import asyncio
 import uuid
 from unittest.mock import AsyncMock
 from unittest.mock import MagicMock
@@ -8,8 +9,8 @@ from langchain_core.messages import AIMessage
 from langchain_core.messages import HumanMessage
 
 from catchup.chat.engine import BACKGROUND_RUN_PROFILE
-from catchup.chat.engine import ChatService
 from catchup.chat.engine import SLACK_RUN_PROFILE
+from catchup.chat.engine import ChatService
 
 
 def test_resolve_input_messages_first_turn_no_duplication():
@@ -173,6 +174,280 @@ async def test_chat_stream_calls_reset_when_save_succeeded():
                                     pass
 
     mock_reset.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_run_slack_profile_skips_reset_when_save_not_reached():
+    """SLACK_RUN_PROFILE: 저장 이전 실패 시 reset을 호출하지 않는다."""
+    service = ChatService()
+    session_id = uuid.uuid4()
+    global_context = MagicMock()
+    global_context.user.id = 1
+    prompt_settings = MagicMock()
+    sink = AsyncMock()
+
+    with patch.object(service, "_ensure_chat_room", AsyncMock(return_value=42)):
+        with patch.object(service, "_get_app") as mock_get_app:
+            app = MagicMock()
+            app.aget_state = AsyncMock(return_value=MagicMock(values={}))
+            mock_get_app.return_value = app
+            with patch.object(service, "_setup_config", return_value=({}, {}, None)):
+                with patch.object(
+                    service, "_resolve_input_messages", side_effect=RuntimeError("boom")
+                ):
+                    with patch.object(
+                        service, "_save_message_content", AsyncMock()
+                    ) as mock_save:
+                        with patch.object(
+                            service, "reset_last_turn", AsyncMock()
+                        ) as mock_reset:
+                            with patch.object(service, "_finalize_stats", AsyncMock()):
+                                with patch("catchup.chat.engine.emit_audit_event"):
+                                    await service.run(
+                                        global_context,
+                                        prompt_settings,
+                                        session_id,
+                                        sink,
+                                        profile=SLACK_RUN_PROFILE,
+                                        query="q",
+                                    )
+
+    mock_save.assert_not_called()
+    mock_reset.assert_not_called()
+    sink.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_run_slack_profile_resets_on_error_without_partial_save():
+    """SLACK_RUN_PROFILE: 저장 후 스트리밍 실패 시 partial 저장 없이 항상 reset한다."""
+    service = ChatService()
+    session_id = uuid.uuid4()
+    global_context = MagicMock()
+    global_context.user.id = 1
+    prompt_settings = MagicMock()
+    sink = AsyncMock()
+
+    app = MagicMock()
+    app.aget_state = AsyncMock(
+        return_value=MagicMock(values={"messages": [HumanMessage(content="x")]})
+    )
+    app.astream_events = MagicMock(side_effect=RuntimeError("stream boom"))
+
+    with patch.object(service, "_ensure_chat_room", AsyncMock(return_value=42)):
+        with patch.object(service, "_get_app", return_value=app):
+            with patch.object(service, "_setup_config", return_value=({}, {}, None)):
+                with patch.object(
+                    service, "_save_message_content", AsyncMock(return_value=999)
+                ):
+                    with patch.object(
+                        service, "_save_partial_if_any", AsyncMock()
+                    ) as mock_partial_save:
+                        with patch.object(
+                            service, "reset_last_turn", AsyncMock()
+                        ) as mock_reset:
+                            with patch.object(service, "_finalize_stats", AsyncMock()):
+                                with patch("catchup.chat.engine.emit_audit_event"):
+                                    await service.run(
+                                        global_context,
+                                        prompt_settings,
+                                        session_id,
+                                        sink,
+                                        profile=SLACK_RUN_PROFILE,
+                                        query="q",
+                                    )
+
+    mock_partial_save.assert_not_called()
+    mock_reset.assert_called_once_with(room_id=42, session_id=session_id)
+
+
+@pytest.mark.asyncio
+async def test_run_slack_profile_reraises_cancelled_error():
+    """SLACK_RUN_PROFILE: CancelledError는 반드시 재전파돼야 한다 (Slack 소비자에게 전달)."""
+    service = ChatService()
+    session_id = uuid.uuid4()
+    global_context = MagicMock()
+    global_context.user.id = 1
+    prompt_settings = MagicMock()
+    sink = AsyncMock()
+
+    app = MagicMock()
+    app.aget_state = AsyncMock(
+        return_value=MagicMock(values={"messages": [HumanMessage(content="x")]})
+    )
+    app.astream_events = MagicMock(side_effect=asyncio.CancelledError())
+
+    with patch.object(service, "_ensure_chat_room", AsyncMock(return_value=42)):
+        with patch.object(service, "_get_app", return_value=app):
+            with patch.object(service, "_setup_config", return_value=({}, {}, None)):
+                with patch.object(
+                    service, "_save_message_content", AsyncMock(return_value=999)
+                ):
+                    with patch.object(
+                        service, "_save_partial_if_any", AsyncMock()
+                    ) as mock_partial_save:
+                        with patch.object(service, "_finalize_stats", AsyncMock()):
+                            with patch("catchup.chat.engine.emit_audit_event"):
+                                with pytest.raises(asyncio.CancelledError):
+                                    await service.run(
+                                        global_context,
+                                        prompt_settings,
+                                        session_id,
+                                        sink,
+                                        profile=SLACK_RUN_PROFILE,
+                                        query="q",
+                                    )
+
+    mock_partial_save.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_run_background_profile_saves_partial_on_error_without_reset():
+    """BACKGROUND_RUN_PROFILE: partial content가 있으면 저장하고 reset은 하지 않는다."""
+    service = ChatService()
+    session_id = uuid.uuid4()
+    global_context = MagicMock()
+    global_context.user.id = 1
+    prompt_settings = MagicMock()
+    sink = AsyncMock()
+
+    app = MagicMock()
+    app.aget_state = AsyncMock(
+        return_value=MagicMock(values={"messages": [HumanMessage(content="x")]})
+    )
+    app.astream_events = MagicMock(side_effect=RuntimeError("stream boom"))
+
+    fake_processor = MagicMock()
+    fake_processor.context.accumulated_content = "이미 생성된 답변 일부"
+    fake_processor.context.current_node = "generate_final_answer"
+
+    with patch.object(service, "_ensure_chat_room", AsyncMock(return_value=42)):
+        with patch.object(service, "_get_app", return_value=app):
+            with patch.object(service, "_setup_config", return_value=({}, {}, None)):
+                with patch.object(
+                    service, "_save_message_content", AsyncMock(return_value=999)
+                ):
+                    with patch(
+                        "catchup.chat.engine.ChatStreamProcessor",
+                        return_value=fake_processor,
+                    ):
+                        with patch.object(
+                            service, "_save_partial_if_any", AsyncMock()
+                        ) as mock_partial_save:
+                            with patch.object(
+                                service, "reset_last_turn", AsyncMock()
+                            ) as mock_reset:
+                                with patch.object(service, "_finalize_stats", AsyncMock()):
+                                    with patch("catchup.chat.engine.emit_audit_event"):
+                                        await service.run(
+                                            global_context,
+                                            prompt_settings,
+                                            session_id,
+                                            sink,
+                                            profile=BACKGROUND_RUN_PROFILE,
+                                            query="q",
+                                        )
+
+    mock_partial_save.assert_called_once_with(fake_processor, 42, None)
+    mock_reset.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_run_background_profile_resets_when_no_partial_content_on_error():
+    """BACKGROUND_RUN_PROFILE: partial content가 없으면 reset으로 폴백한다."""
+    service = ChatService()
+    session_id = uuid.uuid4()
+    global_context = MagicMock()
+    global_context.user.id = 1
+    prompt_settings = MagicMock()
+    sink = AsyncMock()
+
+    app = MagicMock()
+    app.aget_state = AsyncMock(
+        return_value=MagicMock(values={"messages": [HumanMessage(content="x")]})
+    )
+    app.astream_events = MagicMock(side_effect=RuntimeError("stream boom"))
+
+    fake_processor = MagicMock()
+    fake_processor.context.accumulated_content = ""
+    fake_processor.context.current_node = "supervisor"
+
+    with patch.object(service, "_ensure_chat_room", AsyncMock(return_value=42)):
+        with patch.object(service, "_get_app", return_value=app):
+            with patch.object(service, "_setup_config", return_value=({}, {}, None)):
+                with patch.object(
+                    service, "_save_message_content", AsyncMock(return_value=999)
+                ):
+                    with patch(
+                        "catchup.chat.engine.ChatStreamProcessor",
+                        return_value=fake_processor,
+                    ):
+                        with patch.object(
+                            service, "_save_partial_if_any", AsyncMock()
+                        ) as mock_partial_save:
+                            with patch.object(
+                                service, "reset_last_turn", AsyncMock()
+                            ) as mock_reset:
+                                with patch.object(service, "_finalize_stats", AsyncMock()):
+                                    with patch("catchup.chat.engine.emit_audit_event"):
+                                        await service.run(
+                                            global_context,
+                                            prompt_settings,
+                                            session_id,
+                                            sink,
+                                            profile=BACKGROUND_RUN_PROFILE,
+                                            query="q",
+                                        )
+
+    mock_partial_save.assert_not_called()
+    mock_reset.assert_called_once_with(room_id=42, session_id=session_id)
+
+
+@pytest.mark.asyncio
+async def test_run_background_profile_swallows_cancelled_error_and_saves_partial():
+    """BACKGROUND_RUN_PROFILE: CancelledError는 재전파하지 않고 partial 저장만 시도한다."""
+    service = ChatService()
+    session_id = uuid.uuid4()
+    global_context = MagicMock()
+    global_context.user.id = 1
+    prompt_settings = MagicMock()
+    sink = AsyncMock()
+
+    app = MagicMock()
+    app.aget_state = AsyncMock(
+        return_value=MagicMock(values={"messages": [HumanMessage(content="x")]})
+    )
+    app.astream_events = MagicMock(side_effect=asyncio.CancelledError())
+
+    fake_processor = MagicMock()
+    fake_processor.context.accumulated_content = "취소 직전까지의 답변"
+    fake_processor.context.current_node = "generate_final_answer"
+
+    with patch.object(service, "_ensure_chat_room", AsyncMock(return_value=42)):
+        with patch.object(service, "_get_app", return_value=app):
+            with patch.object(service, "_setup_config", return_value=({}, {}, None)):
+                with patch.object(
+                    service, "_save_message_content", AsyncMock(return_value=999)
+                ):
+                    with patch(
+                        "catchup.chat.engine.ChatStreamProcessor",
+                        return_value=fake_processor,
+                    ):
+                        with patch.object(
+                            service, "_save_partial_if_any", AsyncMock()
+                        ) as mock_partial_save:
+                            with patch.object(service, "_finalize_stats", AsyncMock()):
+                                with patch("catchup.chat.engine.emit_audit_event"):
+                                    # CancelledError가 전파되지 않아야 한다
+                                    await service.run(
+                                        global_context,
+                                        prompt_settings,
+                                        session_id,
+                                        sink,
+                                        profile=BACKGROUND_RUN_PROFILE,
+                                        query="q",
+                                    )
+
+    mock_partial_save.assert_called_once_with(fake_processor, 42, None)
 
 
 @pytest.mark.asyncio
