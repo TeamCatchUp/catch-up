@@ -133,14 +133,19 @@ class ChatService:
         room_id: int | None = None
 
         try:
+            # 채팅방만 보장 (user 메시지 저장은 input_messages 결정 후로 미룸)
             room_id = await self._ensure_chat_room(
                 global_context, session_id, query, is_slack=is_slack
             )
 
             app = self._get_app()
             base_config, invoke_config, trace_id = self._setup_config(session_id)
+
+            # 단순 state 조회는 langfuse에 빈 trace를 남길 필요가 없으므로 base_config 주입
             lg_current_state = await app.aget_state(base_config)
 
+            # DB 복원 시점에 현재 turn의 user 쿼리가 아직 저장되지 않은 상태여야
+            # past_messages + [HumanMessage(query)] 조합에서 중복이 발생하지 않는다.
             input_messages = await run_in_threadpool(
                 self._resolve_input_messages,
                 session_id,
@@ -149,6 +154,8 @@ class ChatService:
                 additional_context,
             )
 
+            # 입력 메시지 결정 후 user 쿼리를 DB에 저장 (실제 요청자 귀속)
+            # saved_message_id를 추적해 복구 단계에서 이번 턴 저장 여부를 가드한다.
             saved_message_id = await self._save_message_content(
                 room_id,
                 "user",
@@ -164,6 +171,9 @@ class ChatService:
                 "prompt_settings": prompt_settings,
                 "max_pipeline_type": _MODE_CEILING.get(mode, "complex"),
                 "vector_search_queries": [],
+                # retrieved_docs는 의도적으로 초기화하지 않음.
+                # reuse 파이프라인이 이전 턴의 retrieved_docs를 재사용해야 하므로
+                # 각 서브그래프(simple/standard/complex)에서 직접 덮어쓴다.
                 "agent_iteration": 0,
                 "accumulated_docs": [],
                 "agent_seen_doc_ids": [],
@@ -171,6 +181,7 @@ class ChatService:
                 "agent_stop_reason": None,
                 "token_breakdown": {},
                 "rerank_count": 0,
+                # Slack 스레드 맥락 (매 턴 갱신, Slack Bot 요청이 아니면 None으로 이전 값 덮어씀)
                 "slack_thread_context": additional_context,
             }
 
