@@ -111,6 +111,7 @@ class ChatService:
         sink: Callable[[StreamEvent], Awaitable[None]],
         *,
         profile: RunProfile,
+        on_complete: Callable[[], Awaitable[None]] | None = None,
         tool_filters: list[SourceType] | None = None,
         query: str | None = None,
         additional_context: str | None = None,
@@ -248,6 +249,8 @@ class ChatService:
             )
 
         finally:
+            if on_complete is not None:
+                await on_complete()
             elapsed = time.perf_counter() - start
             logger.info(
                 profile.finished_log_event,
@@ -549,20 +552,7 @@ class ChatService:
         async def sink(event: StreamEvent) -> None:
             await event_store.publish(str(session_id), event)
 
-        try:
-            await self.run(
-                global_context,
-                prompt_settings,
-                session_id,
-                sink,
-                profile=BACKGROUND_RUN_PROFILE,
-                tool_filters=tool_filters,
-                query=query,
-                additional_context=additional_context,
-                mode=mode,
-                is_slack=is_slack,
-            )
-        finally:
+        async def on_complete() -> None:
             try:
                 await event_store.publish_done(str(session_id))
             except Exception:
@@ -570,6 +560,20 @@ class ChatService:
                     "publish_done_failed",
                     session_id=str(session_id),
                 )
+
+        await self.run(
+            global_context,
+            prompt_settings,
+            session_id,
+            sink,
+            profile=BACKGROUND_RUN_PROFILE,
+            on_complete=on_complete,
+            tool_filters=tool_filters,
+            query=query,
+            additional_context=additional_context,
+            mode=mode,
+            is_slack=is_slack,
+        )
 
     def _setup_config(
         self,

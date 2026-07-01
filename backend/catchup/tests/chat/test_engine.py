@@ -368,6 +368,46 @@ async def test_run_background_profile_swallows_cancelled_error_and_saves_partial
 
 
 @pytest.mark.asyncio
+async def test_run_calls_on_complete_from_finally_even_if_graph_execution_raises():
+    """run()의 finally는 그래프 실행이 실패해도 on_complete을 반드시 호출해야 한다."""
+    service = ChatService()
+    session_id = uuid.uuid4()
+    global_context = MagicMock()
+    global_context.user.id = 1
+    prompt_settings = MagicMock()
+    sink = AsyncMock()
+    on_complete = AsyncMock()
+
+    app = MagicMock()
+    app.aget_state = AsyncMock(
+        return_value=MagicMock(values={"messages": [HumanMessage(content="x")]})
+    )
+    app.astream_events = MagicMock(side_effect=RuntimeError("stream boom"))
+
+    with patch.object(service, "_ensure_chat_room", AsyncMock(return_value=42)):
+        with patch.object(service, "_get_app", return_value=app):
+            with patch.object(service, "_setup_config", return_value=({}, {}, None)):
+                with patch.object(
+                    service, "_save_message_content", AsyncMock(return_value=999)
+                ):
+                    with patch.object(service, "_save_partial_if_any", AsyncMock()):
+                        with patch.object(service, "reset_last_turn", AsyncMock()):
+                            with patch.object(service, "_finalize_stats", AsyncMock()):
+                                with patch("catchup.chat.engine.emit_audit_event"):
+                                    await service.run(
+                                        global_context,
+                                        prompt_settings,
+                                        session_id,
+                                        sink,
+                                        profile=BACKGROUND_RUN_PROFILE,
+                                        query="q",
+                                        on_complete=on_complete,
+                                    )
+
+    on_complete.assert_awaited_once()
+
+
+@pytest.mark.asyncio
 async def test_finalize_stats_processes_token_usage_and_flushes_langfuse():
     """base_config가 있으면 토큰 통계 처리와 langfuse rerank 갱신이 호출돼야 한다."""
     service = ChatService()
@@ -424,7 +464,6 @@ async def test_run_background_delegates_to_run_with_background_profile():
     mock_run.assert_called_once()
     call_kwargs = mock_run.call_args.kwargs
     assert call_kwargs["profile"] is BACKGROUND_RUN_PROFILE
-    event_store.publish_done.assert_awaited_once_with(str(session_id))
 
     # run()의 4번째 위치 인자로 넘어간 sink가 event_store.publish로 위임되는지 확인
     sink_fn = mock_run.call_args.args[3]
@@ -432,26 +471,7 @@ async def test_run_background_delegates_to_run_with_background_profile():
     await sink_fn(fake_event)
     event_store.publish.assert_awaited_once_with(str(session_id), fake_event)
 
-
-@pytest.mark.asyncio
-async def test_run_background_publishes_done_even_if_run_raises():
-    """run()이 예외를 던져도 publish_done은 반드시 호출돼야 한다."""
-    service = ChatService()
-    session_id = uuid.uuid4()
-    global_context = MagicMock()
-    prompt_settings = MagicMock()
-    event_store = MagicMock()
-    event_store.publish = AsyncMock()
-    event_store.publish_done = AsyncMock()
-
-    with patch.object(service, "run", AsyncMock(side_effect=RuntimeError("unexpected"))):
-        with pytest.raises(RuntimeError):
-            await service.run_background(
-                global_context=global_context,
-                prompt_settings=prompt_settings,
-                session_id=session_id,
-                event_store=event_store,
-                query="q",
-            )
-
+    # run()에 넘겨진 on_complete가 event_store.publish_done으로 위임되는지 확인
+    on_complete_fn = call_kwargs["on_complete"]
+    await on_complete_fn()
     event_store.publish_done.assert_awaited_once_with(str(session_id))

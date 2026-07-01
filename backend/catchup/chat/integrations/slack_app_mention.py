@@ -37,6 +37,7 @@ from catchup.db.slack import bot_repository
 from catchup.db.user_prompt_settings import get_user_prompt_settings
 from catchup.db.user_source_mapping import find_user_id_by_source_mapping
 from catchup.db.users import get_user_with_full_context
+from catchup.observability.langfuse.configs import get_observe
 from catchup.schemas.context import GlobalCompanyContext
 from catchup.schemas.context import GlobalContext
 from catchup.schemas.context import GlobalUserContext
@@ -44,6 +45,9 @@ from catchup.schemas.context import GlobalWorkspaceContext
 from catchup.schemas.prompt_settings import PromptSettings
 
 logger = structlog.get_logger(__name__)
+
+# Langfuse
+observe = get_observe()
 
 SLACK_USER_MENTION_PATTERN = re.compile(r"<@([A-Z0-9]+)(?:\|[^>]+)?>")
 
@@ -224,6 +228,7 @@ class SlackAppMentionOrchestrator:
                     session_id=str(session_id),
                 )
 
+    @observe(name="chat-stream")
     async def _run_chat_stream(
         self,
         *,
