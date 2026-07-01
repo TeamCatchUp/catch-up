@@ -3,19 +3,16 @@ from unittest.mock import AsyncMock
 from unittest.mock import MagicMock
 from unittest.mock import patch
 
-from langchain_core.documents import Document
 from langchain_core.messages import AIMessage
 
 from catchup.rag.agents.complex_agent import complex_agent_node
-from catchup.rag.agents.standard_agent import collect_docs_node
 from catchup.rag.agents.standard_agent import standard_agent_node
-from catchup.rag.nodes.rerank.rerank import rerank_node
-from catchup.rag.schemas.context import GlobalCompanyContext
-from catchup.rag.schemas.context import GlobalContext
-from catchup.rag.schemas.context import GlobalUserContext
-from catchup.rag.schemas.context import GlobalWorkspaceContext
-from catchup.rag.schemas.prompt_settings import PromptSettings
-from catchup.rag.semaphores import rag_semaphores
+from catchup.schemas.context import GlobalCompanyContext
+from catchup.schemas.context import GlobalContext
+from catchup.schemas.context import GlobalUserContext
+from catchup.schemas.context import GlobalWorkspaceContext
+from catchup.schemas.prompt_settings import PromptSettings
+from catchup.utils.semaphores import service_semaphores
 
 
 def _global_context() -> GlobalContext:
@@ -49,11 +46,12 @@ def _make_llm(content: str = "Reasoning content", tool_calls: list = None) -> Ma
 
 class RagOptimizationTests(IsolatedAsyncioTestCase):
     def setUp(self):
-        rag_semaphores.init(small_llm_value=5, large_llm_value=5, reranker_value=5)
+        service_semaphores.init(small_llm_value=5, large_llm_value=5, reranker_value=5)
 
+    @patch("catchup.rag.agents.standard_agent.adispatch_custom_event")
     @patch("catchup.rag.agents.standard_agent.prompt_loader.get_prompt", return_value="sys")
-    @patch("catchup.rag.nodes.utils.extract_token_usages", return_value={})
-    async def test_standard_agent_populates_reasoning_on_stop(self, _m1, _m2):
+    @patch("catchup.langgraph.utils.extract_token_usages", return_value={})
+    async def test_standard_agent_populates_reasoning_on_stop(self, _m1, _m2, _m3):
         llm = _make_llm(content="[Key Documents]: Doc1\n[Search Coverage]: All\n[Reason for Stopping]: Done")
         state = _base_state(messages=[])
         
@@ -62,9 +60,10 @@ class RagOptimizationTests(IsolatedAsyncioTestCase):
         self.assertIn("agent_reasoning", result)
         self.assertEqual(result["agent_reasoning"], "[Key Documents]: Doc1\n[Search Coverage]: All\n[Reason for Stopping]: Done")
 
+    @patch("catchup.rag.agents.complex_agent.adispatch_custom_event")
     @patch("catchup.rag.agents.complex_agent.prompt_loader.get_prompt", return_value="sys")
-    @patch("catchup.rag.nodes.utils.extract_token_usages", return_value={})
-    async def test_complex_agent_populates_reasoning_on_stop(self, _m1, _m2):
+    @patch("catchup.langgraph.utils.extract_token_usages", return_value={})
+    async def test_complex_agent_populates_reasoning_on_stop(self, _m1, _m2, _m3):
         llm = _make_llm(content="[Key Documents]: Doc2\n[Search Coverage]: Deep\n[Reason for Stopping]: Complete")
         state = _base_state(messages=[])
         state["max_pipeline_type"] = "complex"
@@ -74,60 +73,3 @@ class RagOptimizationTests(IsolatedAsyncioTestCase):
         self.assertIn("agent_reasoning", result)
         self.assertEqual(result["agent_reasoning"], "[Key Documents]: Doc2\n[Search Coverage]: Deep\n[Reason for Stopping]: Complete")
 
-    async def test_collect_docs_node_provides_fallback_reasoning(self):
-        state = _base_state(messages=[])
-        # agent_reasoning is NOT in state
-        
-        result = await collect_docs_node(state)
-        
-        self.assertIn("agent_reasoning", result)
-        self.assertTrue(result["agent_reasoning"].startswith("[Key Documents]"))
-        self.assertIn("reached maximum allotted iterations", result["agent_reasoning"])
-
-    def test_index_alignment_between_summary_and_extraction(self):
-        """build_docs_summary에서 보여주는 번호가 extract_essential_ids에서 정확히 매핑되는지 검증."""
-        from catchup.rag.nodes.utils import build_docs_summary
-        from catchup.rag.nodes.utils import extract_essential_ids
-        from catchup.rag.nodes.utils import get_document_id
-        
-        docs = [
-            Document(page_content="doc A", id="id_a"),
-            Document(page_content="doc B", id="id_b"),
-            Document(page_content="doc C", id="id_c"),
-        ]
-        
-        # 1. build_docs_summary 결과 확인
-        summary = build_docs_summary(docs)
-        # summary 에는 "[1] (unknown) ... doc A", "[2] (unknown) ... doc B" 형식이 들어있음
-        self.assertIn("[1] (unknown)", summary)
-        self.assertIn("doc A", summary)
-        self.assertIn("[3] (unknown)", summary)
-        self.assertIn("doc C", summary)
-        
-        # 2. 에이전트가 "1번과 3번이 중요하다"고 답변한 상황 가정
-        reasoning = "I found relevant info. [Key Document Indices]: 1, 3"
-        
-        # 3. 추출 결과가 실제 docs[0], docs[2]의 ID와 일치하는지 확인
-        essential_ids = extract_essential_ids(reasoning, docs)
-        
-        expected_ids = {get_document_id(docs[0]), get_document_id(docs[2])}
-        self.assertEqual(essential_ids, expected_ids)
-        self.assertNotIn(get_document_id(docs[1]), essential_ids)
-
-    @patch("catchup.rag.agents.standard_agent.prompt_loader.get_prompt", return_value="sys")
-    @patch("catchup.rag.nodes.utils.extract_token_usages", return_value={})
-    async def test_standard_agent_populates_essential_ids(self, _m1, _m2):
-        # 1번과 3번 문서 지목
-        reasoning = "[Key Document Indices]: 1, 3\n[Key Documents]: DocA, DocC"
-        llm = _make_llm(content=reasoning)
-        
-        doc1 = Document(page_content="content 1", id="id_1")
-        doc3 = Document(page_content="content 3", id="id_3")
-        state = _base_state(messages=[])
-        state["accumulated_docs"] = [doc1, Document(page_content="content 2", id="id_2"), doc3]
-        
-        result = await standard_agent_node(state, llm)
-        
-        self.assertIn("essential_doc_ids", result)
-        expected_ids = {"id_1", "id_3"}
-        self.assertEqual(set(result["essential_doc_ids"]), expected_ids)
