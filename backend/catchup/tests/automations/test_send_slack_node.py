@@ -158,8 +158,14 @@ async def test_send_slack_node_raises_after_retries_exhausted():
             "catchup.automations.nodes.send_slack.asyncio.sleep",
             new_callable=AsyncMock,
         ),
+        patch("catchup.automations.nodes.send_slack.logger") as mock_logger,
         pytest.raises(RuntimeError, match="not found for user_chat_id=abc123"),
     ):
         await send_slack_node(state)
+
+    mock_logger.error.assert_called_once()
+    error_call_kwargs = mock_logger.error.call_args.kwargs
+    assert error_call_kwargs["user_chat_id"] == "abc123"
+    assert error_call_kwargs["channel_id"] == "C123456"
 
     mock_client.post_message.assert_not_awaited()
