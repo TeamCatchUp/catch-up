@@ -9,10 +9,10 @@ from catchup.audit.base import AuditLevel
 from catchup.audit.base import AuditStatus
 from catchup.audit.emitters import emit_audit_event
 from catchup.audit.metadata import ChatAuditMetadata
-from catchup.chat.dependencies import get_prompt_settings
-from catchup.chat.dependencies import get_rag_global_context
 from catchup.chat.background_runner import ChatBackgroundRunner
 from catchup.chat.background_runner import get_background_runner
+from catchup.chat.dependencies import get_prompt_settings
+from catchup.chat.dependencies import get_rag_global_context
 from catchup.chat.dependencies import get_valid_chat_room
 from catchup.chat.engine import ChatService
 from catchup.chat.event_store import ChatEventStore
