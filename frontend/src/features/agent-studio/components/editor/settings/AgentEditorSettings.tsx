@@ -132,7 +132,6 @@ export default function AgentEditorSettings({ mode = 'create', agentSpecId }: Ag
           <AgentInstructionField
             value={form.instruction}
             onChange={form.setInstruction}
-            maxLength={AGENT_STUDIO_SETTINGS_FIXTURE.instructionMaxLength}
             hintText={AGENT_STUDIO_SETTINGS_FIXTURE.instructionHintText}
             disabled={form.isReadOnly}
           />
