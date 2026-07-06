@@ -32,5 +32,4 @@ export interface AgentStudioSettingsFixture {
   slackWorkspaceName: string;
   slackChannelLabel: string;
   instructionHintText: string;
-  instructionMaxLength: number;
 }

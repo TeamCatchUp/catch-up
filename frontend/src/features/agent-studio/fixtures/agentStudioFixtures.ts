@@ -90,7 +90,6 @@ export const AGENT_STUDIO_SETTINGS_FIXTURE: AgentStudioSettingsFixture = {
   slackWorkspaceName: 'Catch Up',
   slackChannelLabel: 'Slack 내 채널을 선택해주세요',
   instructionHintText: '프로젝트 맥락과 업무 스타일을 반영할 수 있어요.',
-  instructionMaxLength: 500,
 };
 
 export function getAgentCardsByStatus(filter: AgentStudioFilter): readonly AgentStudioCardModel[] {
