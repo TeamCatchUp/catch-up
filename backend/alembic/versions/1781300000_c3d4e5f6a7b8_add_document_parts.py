@@ -1,7 +1,7 @@
 """add document parts
 
 Revision ID: c3d4e5f6a7b8
-Revises: b2c3d4e5f6a7
+Revises: c2d3e4f5a6b7
 Create Date: 2026-07-06 00:00:00.000000
 """
 
@@ -15,7 +15,7 @@ from sqlalchemy.dialects import postgresql
 from alembic import op
 
 revision: str = "c3d4e5f6a7b8"
-down_revision: str | None = "b2c3d4e5f6a7"
+down_revision: str | None = "c2d3e4f5a6b7"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

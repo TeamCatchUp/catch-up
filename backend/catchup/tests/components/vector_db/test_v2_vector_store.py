@@ -17,7 +17,7 @@ from catchup.components.vector_db.v2.vector_store import VectorStore
 
 
 @pytest.mark.asyncio
-async def test_initialize_creates_langchain_table_when_missing(monkeypatch) -> None:
+async def test_initialize_binds_existing_alembic_table(monkeypatch) -> None:
     pg_engine = MagicMock()
     pg_engine.ainit_vectorstore_table = AsyncMock()
     vector_store = MagicMock()
@@ -30,35 +30,19 @@ async def test_initialize_creates_langchain_table_when_missing(monkeypatch) -> N
         embeddings=MagicMock(),
         pg_engine=pg_engine,
     )
-    ensure_constraints = AsyncMock()
-    monkeypatch.setattr(store, "_table_exists", lambda: False)
-    monkeypatch.setattr(store, "_ensure_constraints", ensure_constraints)
 
     await store.initialize()
 
-    pg_engine.ainit_vectorstore_table.assert_awaited_once()
-    init_kwargs = pg_engine.ainit_vectorstore_table.await_args.kwargs
-    assert init_kwargs["table_name"] == KNOWLEDGE_STORE_TABLE_NAME
-    assert init_kwargs["id_column"].name == KNOWLEDGE_STORE_ID_COLUMN
-    assert init_kwargs["content_column"] == KNOWLEDGE_STORE_CONTENT_COLUMN
-    assert init_kwargs["embedding_column"] == KNOWLEDGE_STORE_EMBEDDING_COLUMN
-    assert "metadata_json_column" not in init_kwargs
-    assert init_kwargs["store_metadata"] is False
-    assert [column.name for column in init_kwargs["metadata_columns"]] == (
-        KNOWLEDGE_STORE_METADATA_COLUMN_NAMES
-    )
-    metadata_columns = {
-        column.name: column for column in init_kwargs["metadata_columns"]
-    }
-    assert metadata_columns["chunk_identifier"].data_type == "INTEGER DEFAULT 0"
-
+    pg_engine.ainit_vectorstore_table.assert_not_awaited()
     create.assert_awaited_once()
     create_kwargs = create.await_args.kwargs
+    assert create_kwargs["engine"] is pg_engine
     assert create_kwargs["table_name"] == KNOWLEDGE_STORE_TABLE_NAME
     assert create_kwargs["id_column"] == KNOWLEDGE_STORE_ID_COLUMN
+    assert create_kwargs["content_column"] == KNOWLEDGE_STORE_CONTENT_COLUMN
+    assert create_kwargs["embedding_column"] == KNOWLEDGE_STORE_EMBEDDING_COLUMN
     assert create_kwargs["metadata_json_column"] is None
     assert create_kwargs["metadata_columns"] == KNOWLEDGE_STORE_METADATA_COLUMN_NAMES
-    ensure_constraints.assert_awaited_once()
 
 
 @pytest.mark.asyncio
@@ -82,16 +66,12 @@ async def test_initialize_reuses_existing_async_engine(monkeypatch) -> None:
         create,
     )
     store = VectorStore(embeddings=MagicMock())
-    ensure_constraints = AsyncMock()
-    monkeypatch.setattr(store, "_table_exists", lambda: True)
-    monkeypatch.setattr(store, "_ensure_constraints", ensure_constraints)
 
     await store.initialize()
 
     from_engine.assert_called_once_with(async_engine)
     pg_engine.ainit_vectorstore_table.assert_not_awaited()
     assert create.await_args.kwargs["engine"] is pg_engine
-    ensure_constraints.assert_awaited_once()
 
 
 @pytest.mark.asyncio
