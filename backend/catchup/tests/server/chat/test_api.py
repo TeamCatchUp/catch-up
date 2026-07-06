@@ -60,7 +60,7 @@ def test_status_race_done_seen_overrides_to_not_generating() -> None:
     runner = MagicMock()
     runner.is_running = MagicMock(return_value=True)
     event_store = MagicMock()
-    event_store.get_tail_id = AsyncMock(return_value=(None, True))
+    event_store.get_tail_id = AsyncMock(return_value=("10-0", True))
 
     app = _build_app(runner=runner, event_store=event_store)
     session_id = uuid.uuid4()
