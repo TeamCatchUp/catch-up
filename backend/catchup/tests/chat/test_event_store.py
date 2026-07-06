@@ -94,8 +94,9 @@ async def test_subscribe_yields_events_and_stops_on_done():
     ):
         store = ChatEventStore()
         results = []
-        async for raw in store.subscribe(session_id):
-            results.append(raw)
+        async for event_id, raw in store.subscribe(session_id):
+            results.append((event_id, raw))
 
     assert len(results) == 1
-    assert '"token"' in results[0]
+    assert results[0][0] == "1-0"
+    assert '"token"' in results[0][1]

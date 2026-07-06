@@ -56,8 +56,10 @@ class ChatEventStore:
         await redis.xadd(key, _DONE_SENTINEL)
         await redis.expire(key, CHAT_STREAM_TTL)
 
-    async def subscribe(self, session_id: str) -> AsyncGenerator[str, None]:
-        """Redis Stream에서 이벤트를 읽어 raw JSON 문자열로 yield한다.
+    async def subscribe(
+        self, session_id: str
+    ) -> AsyncGenerator[tuple[str, str], None]:
+        """Redis Stream에서 이벤트를 읽어 (이벤트 ID, raw JSON 문자열) 튜플로 yield한다.
 
         DONE 센티넬 수신 시 종료한다. 30초 동안 메시지가 없으면 재시도한다.
         """
@@ -94,7 +96,7 @@ class ChatEventStore:
 
                     raw = fields.get(b"data") or fields.get("data")
                     if raw:
-                        yield raw.decode() if isinstance(raw, bytes) else raw
+                        yield last_id, raw.decode() if isinstance(raw, bytes) else raw
 
 
 _event_store = ChatEventStore()

@@ -92,8 +92,8 @@ async def chat_response_stream(
     )
 
     async def event_generator():
-        async for raw_json in event_store.subscribe(str(session_id)):
-            yield f"data: {raw_json}\n\n"
+        async for event_id, raw_json in event_store.subscribe(str(session_id)):
+            yield f"id: {event_id}\ndata: {raw_json}\n\n"
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
 
