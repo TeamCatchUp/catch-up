@@ -2,6 +2,7 @@ import uuid
 
 from fastapi import APIRouter
 from fastapi import Depends
+from fastapi import Response
 from fastapi.responses import StreamingResponse
 
 from catchup.audit.actions import ChatAction
@@ -18,6 +19,7 @@ from catchup.chat.engine import ChatService
 from catchup.chat.event_store import ChatEventStore
 from catchup.chat.event_store import get_event_store
 from catchup.chat.factory import get_chat_service
+from catchup.chat.schemas import ChatGenerationStatusResponse
 from catchup.chat.schemas import ChatRequest
 from catchup.chat.schemas import ChatResponse
 from catchup.db.models import ChatRoom
@@ -96,6 +98,32 @@ async def chat_response_stream(
             yield f"id: {event_id}\ndata: {raw_json}\n\n"
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
+
+
+@router.get(
+    path="/{session_id}/status",
+    response_model=ChatGenerationStatusResponse,
+    description="답변 생성 진행 여부와 재연결 시 배치/실시간 렌더링 경계(cutoff_id)를 반환한다"
+)
+async def get_chat_generation_status(
+    session_id: uuid.UUID,
+    response: Response,
+    room: ChatRoom = Depends(get_valid_chat_room),
+    runner: ChatBackgroundRunner = Depends(get_background_runner),
+    event_store: ChatEventStore = Depends(get_event_store),
+) -> ChatGenerationStatusResponse:
+    response.headers["Cache-Control"] = "no-store"
+
+    if not runner.is_running(session_id):
+        return ChatGenerationStatusResponse(is_generating=False, cutoff_id=None)
+
+    cutoff_id, done_seen = await event_store.get_tail_id(str(session_id))
+    is_generating = not done_seen
+
+    return ChatGenerationStatusResponse(
+        is_generating=is_generating,
+        cutoff_id=cutoff_id if is_generating else None,
+    )
 
 
 @router.post(
