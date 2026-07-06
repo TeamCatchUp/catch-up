@@ -5,6 +5,7 @@ from collections.abc import AsyncGenerator
 import structlog
 
 from catchup.chat.schemas import StreamEvent
+from catchup.utils.redis import get_chat_stream_redis_client
 from catchup.utils.redis import get_stream_redis_client
 
 logger = structlog.get_logger()
@@ -15,6 +16,14 @@ _DONE_SENTINEL = {"type": "DONE"}
 _XREAD_BLOCK_MS = 30_000
 _XREAD_COUNT = 50
 _XREAD_MAX_RETRIES = 120  # 120 × 30s = 1시간
+# XREAD BLOCK 대기 중에는 서버가 최대 _XREAD_BLOCK_MS까지 정상적으로 블로킹
+# 하므로, 클라이언트 소켓 타임아웃이 이보다 짧으면 서버가 응답하기 전에
+# 클라이언트가 먼저 TimeoutError를 던진다. 여유 마진을 더해 소켓 타임아웃을
+# 계산한다.
+_XREAD_SOCKET_TIMEOUT_MARGIN_SECONDS = 10.0
+_XREAD_SOCKET_TIMEOUT_SECONDS = (
+    _XREAD_BLOCK_MS / 1000 + _XREAD_SOCKET_TIMEOUT_MARGIN_SECONDS
+)
 
 
 class ChatEventStore:
@@ -52,7 +61,9 @@ class ChatEventStore:
 
         DONE 센티넬 수신 시 종료한다. 30초 동안 메시지가 없으면 재시도한다.
         """
-        redis = await get_stream_redis_client()
+        redis = await get_chat_stream_redis_client(
+            socket_timeout=_XREAD_SOCKET_TIMEOUT_SECONDS
+        )
         key = self._key(session_id)
         last_id = "0"
         retries = 0

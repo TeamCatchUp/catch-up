@@ -89,7 +89,7 @@ async def test_subscribe_yields_events_and_stops_on_done():
     )
 
     with patch(
-        "catchup.chat.event_store.get_stream_redis_client",
+        "catchup.chat.event_store.get_chat_stream_redis_client",
         new=AsyncMock(return_value=mock_redis),
     ):
         store = ChatEventStore()
