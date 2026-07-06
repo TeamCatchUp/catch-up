@@ -70,3 +70,32 @@ def test_status_race_done_seen_overrides_to_not_generating() -> None:
 
     assert response.status_code == 200
     assert response.json() == {"is_generating": False, "cutoff_id": None}
+
+
+def _fake_subscribe(events):
+    async def subscribe(session_id):
+        subscribe.called_with = session_id
+        for event_id, raw in events:
+            yield event_id, raw
+
+    subscribe.called_with = None
+    return subscribe
+
+
+def test_reconnect_stream_emits_id_and_data_lines() -> None:
+    runner = MagicMock()
+    event_store = MagicMock()
+    fake_subscribe = _fake_subscribe([("6-0", '{"type":"token","token":"hi"}')])
+    event_store.subscribe = fake_subscribe
+
+    app = _build_app(runner=runner, event_store=event_store)
+    session_id = uuid.uuid4()
+
+    with TestClient(app) as client:
+        response = client.get(f"/api/v1/chat/{session_id}/stream")
+
+    assert response.status_code == 200
+    assert response.headers["cache-control"] == "no-store"
+    assert "id: 6-0" in response.text
+    assert 'data: {"type":"token","token":"hi"}' in response.text
+    assert fake_subscribe.called_with == str(session_id)

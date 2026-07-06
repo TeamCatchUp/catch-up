@@ -126,6 +126,29 @@ async def get_chat_generation_status(
     )
 
 
+@router.get(
+    path="/{session_id}/stream",
+    description=(
+        "진행 중이거나 방금 종료된 답변 생성에 재연결해 이벤트를 SSE로 구독한다. "
+        "ensure_running을 호출하지 않으며 항상 스트림 처음부터 읽는다."
+    )
+)
+async def chat_response_stream_reconnect(
+    session_id: uuid.UUID,
+    room: ChatRoom = Depends(get_valid_chat_room),
+    event_store: ChatEventStore = Depends(get_event_store),
+):
+    async def event_generator():
+        async for event_id, raw_json in event_store.subscribe(str(session_id)):
+            yield f"id: {event_id}\ndata: {raw_json}\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-store"},
+    )
+
+
 @router.post(
     path="/{session_id}/cancel",
     description="진행 중인 백그라운드 답변 생성을 취소한다 (그때까지 생성된 내용은 partial로 저장됨)"
