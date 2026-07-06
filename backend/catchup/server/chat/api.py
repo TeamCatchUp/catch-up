@@ -2,7 +2,9 @@ import uuid
 
 from fastapi import APIRouter
 from fastapi import Depends
+from fastapi import HTTPException
 from fastapi import Response
+from fastapi import status
 from fastapi.responses import StreamingResponse
 
 from catchup.audit.actions import ChatAction
@@ -49,7 +51,10 @@ async def chat_response(
 
 @router.post(
     path="/stream",
-    description="스트리밍 기반 채팅 — 페이지 이탈 후 재연결 시 처음부터 replay됨"
+    description=(
+        "스트리밍 기반 채팅 — 새 턴 시작 전용. 이미 실행 중인 턴이 있으면 409를 반환하며, "
+        "재연결은 GET /{session_id}/status + GET /{session_id}/stream을 사용한다."
+    )
 )
 async def chat_response_stream(
     request: ChatRequest,
@@ -75,10 +80,13 @@ async def chat_response_stream(
         ),
     )
 
-    # 새 턴이 시작되는 경우에만 스트림을 비운다. 이미 실행 중인 턴에 재연결하는
-    # 경우(같은 턴 안에서 새로고침)까지 비우면 진행 중인 이벤트가 유실된다.
-    if not runner.is_running(session_id):
-        await event_store.clear(str(session_id))
+    if runner.is_running(session_id):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="이미 생성 중인 턴이 있습니다. GET /{session_id}/stream으로 재연결하세요.",
+        )
+
+    await event_store.clear(str(session_id))
 
     await runner.ensure_running(
         session_id,

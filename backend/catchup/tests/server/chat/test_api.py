@@ -7,8 +7,11 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from catchup.chat.background_runner import get_background_runner
+from catchup.chat.dependencies import get_prompt_settings
+from catchup.chat.dependencies import get_rag_global_context
 from catchup.chat.dependencies import get_valid_chat_room
 from catchup.chat.event_store import get_event_store
+from catchup.chat.factory import get_chat_service
 from catchup.server.chat.api import router
 
 
@@ -99,3 +102,51 @@ def test_reconnect_stream_emits_id_and_data_lines() -> None:
     assert "id: 6-0" in response.text
     assert 'data: {"type":"token","token":"hi"}' in response.text
     assert fake_subscribe.called_with == str(session_id)
+
+
+def test_post_stream_returns_409_when_already_running() -> None:
+    runner = MagicMock()
+    runner.is_running = MagicMock(return_value=True)
+    event_store = MagicMock()
+
+    app = _build_app(runner=runner, event_store=event_store)
+    app.dependency_overrides[get_chat_service] = lambda: MagicMock()
+    app.dependency_overrides[get_rag_global_context] = lambda: MagicMock()
+    app.dependency_overrides[get_prompt_settings] = lambda: MagicMock()
+
+    session_id = uuid.uuid4()
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/v1/chat/stream",
+            json={"query": "hello", "session_id": str(session_id)},
+        )
+
+    assert response.status_code == 409
+    event_store.clear.assert_not_called()
+
+
+def test_post_stream_clears_and_starts_when_not_running() -> None:
+    runner = MagicMock()
+    runner.is_running = MagicMock(return_value=False)
+    runner.ensure_running = AsyncMock()
+    event_store = MagicMock()
+    event_store.clear = AsyncMock()
+    event_store.subscribe = _fake_subscribe([])
+
+    app = _build_app(runner=runner, event_store=event_store)
+    app.dependency_overrides[get_chat_service] = lambda: MagicMock()
+    app.dependency_overrides[get_rag_global_context] = lambda: MagicMock()
+    app.dependency_overrides[get_prompt_settings] = lambda: MagicMock()
+
+    session_id = uuid.uuid4()
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/v1/chat/stream",
+            json={"query": "hello", "session_id": str(session_id)},
+        )
+
+    assert response.status_code == 200
+    event_store.clear.assert_called_once_with(str(session_id))
+    runner.ensure_running.assert_called_once()
