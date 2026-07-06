@@ -100,3 +100,55 @@ async def test_subscribe_yields_events_and_stops_on_done():
     assert len(results) == 1
     assert results[0][0] == "1-0"
     assert '"token"' in results[0][1]
+
+
+@pytest.mark.asyncio
+async def test_get_tail_id_returns_none_for_empty_stream():
+    mock_redis = AsyncMock()
+    mock_redis.xrevrange = AsyncMock(return_value=[])
+
+    with patch(
+        "catchup.chat.event_store.get_stream_redis_client",
+        new=AsyncMock(return_value=mock_redis),
+    ):
+        store = ChatEventStore()
+        entry_id, done_seen = await store.get_tail_id("empty-session")
+
+    assert entry_id is None
+    assert done_seen is False
+
+
+@pytest.mark.asyncio
+async def test_get_tail_id_returns_last_real_event_id():
+    mock_redis = AsyncMock()
+    mock_redis.xrevrange = AsyncMock(
+        return_value=[
+            (b"5-0", {b"data": b'{"type":"token","session_id":"00000000-0000-0000-0000-000000000000","token":"world"}'}),
+        ]
+    )
+
+    with patch(
+        "catchup.chat.event_store.get_stream_redis_client",
+        new=AsyncMock(return_value=mock_redis),
+    ):
+        store = ChatEventStore()
+        entry_id, done_seen = await store.get_tail_id("in-progress-session")
+
+    assert entry_id == "5-0"
+    assert done_seen is False
+
+
+@pytest.mark.asyncio
+async def test_get_tail_id_detects_done_as_last_entry():
+    mock_redis = AsyncMock()
+    mock_redis.xrevrange = AsyncMock(return_value=[(b"6-0", {b"type": b"DONE"})])
+
+    with patch(
+        "catchup.chat.event_store.get_stream_redis_client",
+        new=AsyncMock(return_value=mock_redis),
+    ):
+        store = ChatEventStore()
+        entry_id, done_seen = await store.get_tail_id("finished-session")
+
+    assert entry_id is None
+    assert done_seen is True

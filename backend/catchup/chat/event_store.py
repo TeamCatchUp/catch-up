@@ -98,6 +98,28 @@ class ChatEventStore:
                     if raw:
                         yield last_id, raw.decode() if isinstance(raw, bytes) else raw
 
+    async def get_tail_id(self, session_id: str) -> tuple[str | None, bool]:
+        """스트림의 마지막 엔트리를 non-blocking으로 조회해 배치/실시간 렌더링 경계를 계산한다.
+
+        반환: (마지막 실이벤트 ID 또는 None, DONE 센티넬로 끝났는지 여부).
+        스트림이 비어 있으면 (None, False)를 반환한다.
+        """
+        redis = await get_stream_redis_client()
+        key = self._key(session_id)
+        entries = await redis.xrevrange(key, max="+", min="-", count=1)
+
+        if not entries:
+            return None, False
+
+        msg_id, fields = entries[0]
+        entry_id = msg_id.decode() if isinstance(msg_id, bytes) else msg_id
+
+        msg_type = fields.get(b"type") or fields.get("type")
+        if msg_type in (b"DONE", "DONE"):
+            return None, True
+
+        return entry_id, False
+
 
 _event_store = ChatEventStore()
 
