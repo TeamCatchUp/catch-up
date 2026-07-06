@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-import re
 
 import structlog
 from langchain.embeddings import Embeddings
@@ -9,15 +8,13 @@ from langchain_core.documents import Document
 from langchain_postgres import PGEngine
 from langchain_postgres import PGVectorStore
 from sqlalchemy import inspect
+from sqlalchemy import text
 
 from catchup.components.vector_db.v2.constants import KNOWLEDGE_STORE_CONTENT_COLUMN
 from catchup.components.vector_db.v2.constants import KNOWLEDGE_STORE_EMBEDDING_COLUMN
 from catchup.components.vector_db.v2.constants import KNOWLEDGE_STORE_ID_COLUMN
 from catchup.components.vector_db.v2.constants import (
     KNOWLEDGE_STORE_METADATA_COLUMN_NAMES,
-)
-from catchup.components.vector_db.v2.constants import (
-    KNOWLEDGE_STORE_METADATA_JSON_COLUMN,
 )
 from catchup.components.vector_db.v2.constants import KNOWLEDGE_STORE_TABLE_NAME
 from catchup.components.vector_db.v2.constants import knowledge_store_id_column
@@ -62,14 +59,15 @@ class VectorStore:
                 content_column=KNOWLEDGE_STORE_CONTENT_COLUMN,
                 embedding_column=KNOWLEDGE_STORE_EMBEDDING_COLUMN,
                 metadata_columns=knowledge_store_metadata_columns(),
-                metadata_json_column=KNOWLEDGE_STORE_METADATA_JSON_COLUMN,
-                store_metadata=True,
+                store_metadata=False,
                 overwrite_existing=False,
             )
             logger.info(
                 "pgvector_v2_table_created",
                 table_name=self._table_name,
             )
+
+        await self._ensure_constraints()
 
         self._vector_store = await PGVectorStore.create(
             engine=pg_engine,
@@ -79,7 +77,7 @@ class VectorStore:
             content_column=KNOWLEDGE_STORE_CONTENT_COLUMN,
             embedding_column=KNOWLEDGE_STORE_EMBEDDING_COLUMN,
             metadata_columns=KNOWLEDGE_STORE_METADATA_COLUMN_NAMES,
-            metadata_json_column=KNOWLEDGE_STORE_METADATA_JSON_COLUMN,
+            metadata_json_column=None,
         )
         self._initialized = True
         logger.info(
@@ -157,6 +155,50 @@ class VectorStore:
 
     def _table_exists(self) -> bool:
         return inspect(sqlalchemy_engine).has_table(self._table_name)
+
+    async def _ensure_constraints(self) -> None:
+        async with sqlalchemy_async_engine.begin() as conn:
+            await conn.execute(
+                text(
+                    f"""
+                    DO $$
+                    BEGIN
+                        IF NOT EXISTS (
+                            SELECT 1 FROM pg_constraint
+                            WHERE conname = 'ck_vector_store_source'
+                        ) THEN
+                            ALTER TABLE {self._table_name}
+                            ADD CONSTRAINT ck_vector_store_source
+                            CHECK (source IN (
+                                'slack', 'jira', 'confluence', 'github', 'channel_talk'
+                            ));
+                        END IF;
+                    END $$;
+                    """
+                )
+            )
+            await conn.execute(
+                text(
+                    f"""
+                    DO $$
+                    BEGIN
+                        IF NOT EXISTS (
+                            SELECT 1 FROM pg_constraint
+                            WHERE conname = 'ck_vector_store_entity_type'
+                        ) THEN
+                            ALTER TABLE {self._table_name}
+                            ADD CONSTRAINT ck_vector_store_entity_type
+                            CHECK (
+                                entity_type IN (
+                                    'message', 'issue', 'page', 'pr',
+                                    'commit', 'comment', 'user_chat', 'document_article'
+                                )
+                            );
+                        END IF;
+                    END $$;
+                    """
+                )
+            )
 
     @staticmethod
     def _resolve_ids(

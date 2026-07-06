@@ -4,6 +4,7 @@ from enum import StrEnum
 from typing import Any
 from typing import Optional
 
+from pgvector.sqlalchemy import Vector
 from sqlalchemy import CheckConstraint
 from sqlalchemy import ForeignKey
 from sqlalchemy import Index
@@ -11,6 +12,7 @@ from sqlalchemy import UniqueConstraint
 from sqlalchemy import func
 from sqlalchemy import inspect
 from sqlalchemy import text
+from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.ext.associationproxy import association_proxy
@@ -43,6 +45,134 @@ class Base(DeclarativeBase):
                     data[rel.key] = value.to_snapshot()
                     
         return data
+
+
+class SourceType(StrEnum):
+    CONFLUENCE = "confluence"
+    JIRA = "jira"
+    GITHUB = "github"
+    SLACK = "slack"
+    CHANNEL_TALK = "channel_talk"
+
+
+class VectorStoreEntityType(StrEnum):
+    MESSAGE = "message"
+    ISSUE = "issue"
+    PAGE = "page"
+    PR = "pr"
+    COMMIT = "commit"
+    COMMENT = "comment"
+    USER_CHAT = "user_chat"
+    DOCUMENT_ARTICLE = "document_article"
+
+
+class DocumentPartType(StrEnum):
+    TITLE = "title"
+    BODY = "body"
+    COMMENT = "comment"
+    REVIEW_COMMENT = "review_comment"
+    DIFF_HUNK = "diff_hunk"
+    COMMIT_MESSAGE = "commit_message"
+
+
+class VectorStoreRow(Base):
+    __tablename__ = "vector_store"
+
+    id: Mapped[str] = mapped_column(String(255), primary_key=True)
+    source: Mapped[SourceType] = mapped_column(String(50), nullable=False)
+    entity_type: Mapped[VectorStoreEntityType] = mapped_column(
+        String(64),
+        nullable=False,
+    )
+    scope_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    target_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    external_document_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    chunk_identifier: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+        server_default=text("0"),
+    )
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    embedding: Mapped[list[float] | None] = mapped_column(Vector(1536), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+    __table_args__ = (
+        CheckConstraint(
+            "source IN ('slack', 'jira', 'confluence', 'github', 'channel_talk')",
+            name="ck_vector_store_source",
+        ),
+        CheckConstraint(
+            "entity_type IN ("
+            "'message', 'issue', 'page', 'pr', "
+            "'commit', 'comment', 'user_chat', 'document_article'"
+            ")",
+            name="ck_vector_store_entity_type",
+        ),
+        UniqueConstraint(
+            "source",
+            "entity_type",
+            "scope_id",
+            "target_id",
+            "external_document_id",
+            "chunk_identifier",
+            name="uq_vector_store_logical_chunk",
+        ),
+        Index(
+            "ix_vector_store_logical_document",
+            "source",
+            "entity_type",
+            "scope_id",
+            "target_id",
+            "external_document_id",
+        ),
+        Index(
+            "ix_vector_store_search_filter",
+            "scope_id",
+            "source",
+            "target_id",
+        ),
+    )
+
+
+class DocumentPart(Base):
+    __tablename__ = "document_parts"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+    )
+    vector_store_id: Mapped[str] = mapped_column(
+        String(255),
+        ForeignKey("vector_store.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    part_type: Mapped[DocumentPartType] = mapped_column(String(64), nullable=False)
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+    anchor_part_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("document_parts.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "part_type IN ("
+            "'title', 'body', 'comment', 'review_comment', "
+            "'diff_hunk', 'commit_message'"
+            ")",
+            name="ck_document_parts_part_type",
+        ),
+        Index("ix_document_parts_vector_store_id", "vector_store_id"),
+        Index("ix_document_parts_anchor_part_id", "anchor_part_id"),
+    )
 
 
 class VectorStoreV2BackfillState(Base):
@@ -338,14 +468,6 @@ class UserWorkspace(Base):
     
     user: Mapped["User"] = relationship(back_populates="workspace_links")
     workspace: Mapped["Workspace"] = relationship(back_populates="user_links")
-
-
-class SourceType(StrEnum):
-    CONFLUENCE = "confluence"
-    JIRA = "jira"
-    GITHUB = "github"
-    SLACK = "slack"
-    CHANNEL_TALK = "channel_talk"
 
 
 class KnowledgeSource(Base):
@@ -2163,6 +2285,324 @@ class GithubRepository(Base):
     )
     synced_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
+class GitHubPRMetadata(Base):
+    __tablename__ = "github_pr_metadata"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+    )
+    document_part_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("document_parts.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    installation_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    repository_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("github_repositories.repo_id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    number: Mapped[int] = mapped_column(Integer, nullable=False)
+    url: Mapped[str] = mapped_column(Text, nullable=False)
+    state: Mapped[str] = mapped_column(String(32), nullable=False)
+    title: Mapped[str] = mapped_column(Text, nullable=False)
+    body: Mapped[str | None] = mapped_column(Text, nullable=True)
+    author_database_id: Mapped[int | None] = mapped_column(
+        Integer,
+        ForeignKey("github_users.database_id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    assignee_database_ids: Mapped[list[int] | None] = mapped_column(
+        ARRAY(Integer),
+        nullable=True,
+    )
+    requested_reviewer_database_ids: Mapped[list[int] | None] = mapped_column(
+        ARRAY(Integer),
+        nullable=True,
+    )
+    label_names: Mapped[list[str] | None] = mapped_column(
+        ARRAY(String(255)),
+        nullable=True,
+    )
+    milestone_title: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    base_ref: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    head_ref: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    draft: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        server_default=text("false"),
+    )
+    merged: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        server_default=text("false"),
+    )
+    review_decision: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    additions: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    deletions: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    source_created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+    )
+    source_updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+    )
+    closed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    merged_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    synced_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "state IN ('open', 'closed', 'merged')",
+            name="ck_github_pr_metadata_state",
+        ),
+        CheckConstraint(
+            "review_decision IS NULL OR review_decision IN ("
+            "'APPROVED', 'CHANGES_REQUESTED', 'REVIEW_REQUIRED', 'UNKNOWN'"
+            ")",
+            name="ck_github_pr_metadata_review_decision",
+        ),
+        UniqueConstraint(
+            "document_part_id",
+            name="uq_github_pr_metadata_document_part_id",
+        ),
+        Index("ix_github_pr_metadata_document_part_id", "document_part_id"),
+        Index(
+            "ix_github_pr_metadata_repository_number",
+            "repository_id",
+            "number",
+        ),
+        Index("ix_github_pr_metadata_author_database_id", "author_database_id"),
+    )
+
+
+class GitHubIssueMetadata(Base):
+    __tablename__ = "github_issue_metadata"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+    )
+    document_part_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("document_parts.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    installation_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    repository_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("github_repositories.repo_id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    number: Mapped[int] = mapped_column(Integer, nullable=False)
+    url: Mapped[str] = mapped_column(Text, nullable=False)
+    state: Mapped[str] = mapped_column(String(32), nullable=False)
+    title: Mapped[str] = mapped_column(Text, nullable=False)
+    body: Mapped[str | None] = mapped_column(Text, nullable=True)
+    author_database_id: Mapped[int | None] = mapped_column(
+        Integer,
+        ForeignKey("github_users.database_id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    assignee_database_ids: Mapped[list[int] | None] = mapped_column(
+        ARRAY(Integer),
+        nullable=True,
+    )
+    label_names: Mapped[list[str] | None] = mapped_column(
+        ARRAY(String(255)),
+        nullable=True,
+    )
+    milestone_title: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    source_created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+    )
+    source_updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+    )
+    closed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    synced_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "state IN ('open', 'closed')",
+            name="ck_github_issue_metadata_state",
+        ),
+        UniqueConstraint(
+            "document_part_id",
+            name="uq_github_issue_metadata_document_part_id",
+        ),
+        Index("ix_github_issue_metadata_document_part_id", "document_part_id"),
+        Index(
+            "ix_github_issue_metadata_repository_number",
+            "repository_id",
+            "number",
+        ),
+        Index("ix_github_issue_metadata_author_database_id", "author_database_id"),
+    )
+
+
+class GitHubCommitMetadata(Base):
+    __tablename__ = "github_commit_metadata"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+    )
+    document_part_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("document_parts.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    installation_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    repository_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("github_repositories.repo_id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    sha: Mapped[str] = mapped_column(String(64), nullable=False)
+    url: Mapped[str] = mapped_column(Text, nullable=False)
+    message: Mapped[str] = mapped_column(Text, nullable=False)
+    author_database_id: Mapped[int | None] = mapped_column(
+        Integer,
+        ForeignKey("github_users.database_id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    committer_database_id: Mapped[int | None] = mapped_column(
+        Integer,
+        ForeignKey("github_users.database_id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    authored_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    committed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    additions: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    deletions: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    synced_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "document_part_id",
+            name="uq_github_commit_metadata_document_part_id",
+        ),
+        Index("ix_github_commit_metadata_document_part_id", "document_part_id"),
+        Index("ix_github_commit_metadata_repository_sha", "repository_id", "sha"),
+        Index("ix_github_commit_metadata_author_database_id", "author_database_id"),
+    )
+
+
+class GitHubCommentMetadata(Base):
+    __tablename__ = "github_comment_metadata"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+    )
+    document_part_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("document_parts.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    installation_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    repository_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("github_repositories.repo_id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    comment_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    comment_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    url: Mapped[str] = mapped_column(Text, nullable=False)
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    author_database_id: Mapped[int | None] = mapped_column(
+        Integer,
+        ForeignKey("github_users.database_id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    issue_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    pull_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    commit_sha: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    path: Mapped[str | None] = mapped_column(Text, nullable=True)
+    line: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    start_line: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    original_line: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    in_reply_to_comment_id: Mapped[int | None] = mapped_column(
+        BigInteger,
+        nullable=True,
+    )
+    source_created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+    )
+    source_updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+    )
+    synced_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "comment_type IN ('issue_comment', 'pr_review_comment', 'commit_comment')",
+            name="ck_github_comment_metadata_comment_type",
+        ),
+        UniqueConstraint(
+            "document_part_id",
+            name="uq_github_comment_metadata_document_part_id",
+        ),
+        UniqueConstraint(
+            "installation_id",
+            "repository_id",
+            "comment_type",
+            "comment_id",
+            name="uq_github_comment_metadata_identity",
+        ),
+        Index("ix_github_comment_metadata_document_part_id", "document_part_id"),
+        Index(
+            "ix_github_comment_metadata_issue",
+            "repository_id",
+            "issue_number",
+        ),
+        Index("ix_github_comment_metadata_pull", "repository_id", "pull_number"),
+        Index("ix_github_comment_metadata_author_database_id", "author_database_id"),
     )
 # ===========
 # Common Full Sync Job/Event
