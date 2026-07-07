@@ -14,6 +14,7 @@ const eslintConfig = defineConfig([
     '.next/**',
     'out/**',
     'build/**',
+    'storybook-static/**',
     'next-env.d.ts',
     // E2E and test artifacts
     'e2e/**',
@@ -21,6 +22,7 @@ const eslintConfig = defineConfig([
     'playwright-report/**',
     'storybook-static/**',
     'test-results/**',
+    'public/mockServiceWorker.js',
     // Local agent/tooling artifacts
     '.codex/**',
   ]),

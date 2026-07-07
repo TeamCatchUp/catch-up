@@ -1,5 +1,4 @@
 @import 'tailwindcss';
-@custom-variant dark (&:is(.dark *));
 @import 'tw-animate-css';
 @import './font.css';
 @import './color.css';
@@ -12,6 +11,8 @@
 @import './layout.css';
 @import './animation.css';
 @import './markdown.css';
+
+@custom-variant dark (&:is(.dark *));
 
 @layer base {
   ::-webkit-scrollbar {

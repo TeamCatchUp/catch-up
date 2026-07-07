@@ -13,7 +13,9 @@
     "test:watch": "vitest --passWithNoTests",
     "test:ui": "vitest --ui --passWithNoTests",
     "verify:tailwind": "tailwindcss -i src/shared/styles/globals.css -o output/tailwind.css --minify",
-    "verify:figma-lab": "node scripts/verify-figma-lab.mjs",
+    "storybook": "storybook dev -p 6006",
+    "build:storybook": "storybook build",
+    "verify:ui": "node scripts/verify-ui.mjs",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui"
   },
@@ -57,6 +59,8 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.49.1",
+    "@storybook/addon-docs": "^10.4.6",
+    "@storybook/nextjs-vite": "^10.4.6",
     "@svgr/webpack": "^8.1.0",
     "@tailwindcss/cli": "^4.3.2",
     "@tailwindcss/postcss": "^4",
@@ -80,14 +84,21 @@
     "eslint-plugin-simple-import-sort": "^12.1.1",
     "jsdom": "^25.0.1",
     "msw": "^2.6.6",
+    "msw-storybook-addon": "^2.0.7",
     "null-loader": "^4.0.1",
     "prettier": "^3.6.2",
     "prettier-plugin-tailwindcss": "^0.7.1",
     "react-grab": "^0.1.26",
+    "storybook": "^10.4.6",
     "tailwindcss": "^4",
     "typescript": "^5",
     "vite": "^8.0.13",
     "vite-plugin-svgr": "^5.2.0",
     "vitest": "^4.1.6"
+  },
+  "msw": {
+    "workerDirectory": [
+      "public"
+    ]
   }
 }
