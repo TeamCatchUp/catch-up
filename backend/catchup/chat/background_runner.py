@@ -37,7 +37,9 @@ class ChatBackgroundRunner:
         key = str(session_id)
         task = asyncio.create_task(coro_factory(), name=f"chat-{key}")
         _tasks[key] = task
-        task.add_done_callback(lambda _: _tasks.pop(key, None))
+        task.add_done_callback(
+            lambda t: _tasks.pop(key, None) if _tasks.get(key) is t else None
+        )
         logger.info("background_task_started", session_id=key)
         await asyncio.sleep(0)
 
