@@ -2,7 +2,10 @@
 
 import { useState } from 'react';
 import type { Meta, StoryObj } from '@storybook/nextjs-vite';
+import { http, HttpResponse } from 'msw';
 import { expect, fn, within } from 'storybook/test';
+
+import { API } from '@/shared/api/endpoints';
 
 import { catchupParameters } from '../../../../../.storybook/catchupStoryParameters';
 import {
@@ -29,6 +32,7 @@ interface AgentStudioListStoryArgs {
 }
 
 const filterOptions: readonly AgentStudioFilter[] = ['all', 'active', 'draft', 'inactive'];
+const agentStudioListHandlers = [http.get(API.version, () => HttpResponse.json('1.2.3'))];
 
 function AgentStudioListSurface({ children }: { children: React.ReactNode }) {
   return (
@@ -143,6 +147,9 @@ const meta = {
     onEdit: { control: false },
   },
   parameters: {
+    msw: {
+      handlers: agentStudioListHandlers,
+    },
     ...catchupParameters({
       level: 'screen',
       domain: 'agent-studio',

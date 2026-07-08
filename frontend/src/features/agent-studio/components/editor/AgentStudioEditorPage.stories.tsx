@@ -10,6 +10,7 @@ import { catchupParameters } from '../../../../../.storybook/catchupStoryParamet
 import AgentStudioEditorPage from './AgentStudioEditorPage';
 
 const agentStudioEditorHandlers = [
+  http.get(API.version, () => HttpResponse.json('1.2.3')),
   http.get(API.automations.credentials, ({ request }) => {
     const connector = new URL(request.url).searchParams.get('connector');
 
