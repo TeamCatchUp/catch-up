@@ -237,7 +237,16 @@ class ChatService:
                         and processor.context.accumulated_content.strip()
                     )
                     if saved_partial:
-                        await self._save_partial_if_any(processor, room_id, trace_id)
+                        try:
+                            await self._save_partial_if_any(
+                                processor, room_id, trace_id
+                            )
+                        except Exception:
+                            logger.exception(
+                                "partial_save_failed_on_error",
+                                session_id=str(session_id),
+                            )
+                            saved_partial = False
                 if not saved_partial:
                     await self.reset_last_turn(room_id=room_id, session_id=session_id)
 
