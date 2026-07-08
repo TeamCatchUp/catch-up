@@ -1,8 +1,12 @@
 import asyncio
 import time
 import uuid
+from dataclasses import dataclass
+from datetime import datetime
+from datetime import timezone
 from typing import Any
-from typing import AsyncGenerator
+from typing import Awaitable
+from typing import Callable
 from typing import Literal
 
 import structlog
@@ -17,6 +21,7 @@ from catchup.audit.base import AuditStatus
 from catchup.audit.emitters import emit_audit_event
 from catchup.audit.metadata import ChatAuditMetadata
 from catchup.chat.chat_room import generate_chat_room_title
+from catchup.chat.event_store import ChatEventStore
 from catchup.chat.schemas import ChatResponse
 from catchup.chat.schemas import StreamEvent
 from catchup.chat.stream_processor import ChatStreamProcessor
@@ -49,6 +54,40 @@ _MODE_CEILING: dict[str, str] = {
 }
 
 
+@dataclass(frozen=True, slots=True)
+class RunProfile:
+    """Slack 통합과 run_background()가 공유하는 run()의 취소/에러 복구 차이를 데이터로 표현한다."""
+
+    save_partial: bool
+    reraise_on_cancel: bool
+    cancelled_log_event: str
+    cancelled_audit_context: str
+    error_log_event: str
+    error_audit_context: str
+    finished_log_event: str
+
+
+SLACK_RUN_PROFILE = RunProfile(
+    save_partial=False,
+    reraise_on_cancel=True,
+    cancelled_log_event="stream_cancelled",
+    cancelled_audit_context="connection_cancelled",
+    error_log_event="streaming_error",
+    error_audit_context="streaming_error",
+    finished_log_event="streaming_finished",
+)
+
+BACKGROUND_RUN_PROFILE = RunProfile(
+    save_partial=True,
+    reraise_on_cancel=False,
+    cancelled_log_event="background_task_cancelled",
+    cancelled_audit_context="background_task_cancelled",
+    error_log_event="background_streaming_error",
+    error_audit_context="background_streaming_error",
+    finished_log_event="background_task_finished",
+)
+
+
 class ChatService:
     def __init__(self):
         self._app = None
@@ -64,43 +103,42 @@ class ChatService:
             self._app = get_compiled_graph(checkpointer)
         return self._app
 
-    @observe(name="chat-stream")
-    async def chat_stream(
+    async def run(
         self,
         global_context: GlobalContext,
         prompt_settings: PromptSettings,
         session_id: uuid.UUID,
+        sink: Callable[[StreamEvent], Awaitable[None]],
+        *,
+        profile: RunProfile,
+        on_complete: Callable[[], Awaitable[None]] | None = None,
         tool_filters: list[SourceType] | None = None,
-        query: str = None,
+        query: str | None = None,
         additional_context: str | None = None,
         mode: Literal["fast", "standard"] = "standard",
         is_slack: bool = False,
-    ) -> AsyncGenerator[StreamEvent, None]:
+    ) -> None:
+        """LangGraph를 실행하고 이벤트를 sink로 전달한다.
 
-        # 실행 시간 측정 시작
+        Slack 통합(SLACK_RUN_PROFILE)과 run_background()(BACKGROUND_RUN_PROFILE)가
+        공유하는 실행 로직으로, 두 경로의 취소/에러 복구 차이는 profile로 표현한다.
+        """
         start = time.perf_counter()
-
-        # 채팅 토큰 사용량 컨텍스트 초기화
         ChatTokenUsageContext.init()
 
         base_config = None
         processor = None
-        values = None
         saved_message_id: int | None = None
+        trace_id: str | None = None
+        room_id: int | None = None
 
         try:
             # 채팅방만 보장 (user 메시지 저장은 input_messages 결정 후로 미룸)
-            room_id: int = await self._ensure_chat_room(
-                global_context,
-                session_id,
-                query,
-                is_slack=is_slack,
+            room_id = await self._ensure_chat_room(
+                global_context, session_id, query, is_slack=is_slack
             )
 
-            # Compiled Graph
             app = self._get_app()
-
-            # Checkpointer 설정
             base_config, invoke_config, trace_id = self._setup_config(session_id)
 
             # 단순 state 조회는 langfuse에 빈 trace를 남길 필요가 없으므로 base_config 주입
@@ -125,27 +163,22 @@ class ChatService:
                 user_id=global_context.user.id,
             )
 
-            # 초기 AgentState
             inputs = {
-                # 사용자 변수
                 "messages": input_messages,
                 "original_query": query,
                 "global_context": global_context,
                 "tool_filters": tool_filters,
                 "prompt_settings": prompt_settings,
                 "max_pipeline_type": _MODE_CEILING.get(mode, "complex"),
-                # RAG 파이프라인 상태 변수
                 "vector_search_queries": [],
                 # retrieved_docs는 의도적으로 초기화하지 않음.
                 # reuse 파이프라인이 이전 턴의 retrieved_docs를 재사용해야 하므로
                 # 각 서브그래프(simple/standard/complex)에서 직접 덮어쓴다.
-                # Agentic RAG 상태 변수
                 "agent_iteration": 0,
                 "accumulated_docs": [],
                 "agent_seen_doc_ids": [],
                 "confirmed_essential_doc_ids": [],
                 "agent_stop_reason": None,
-                # 비용 변수
                 "token_breakdown": {},
                 "rerank_count": 0,
                 # Slack 스레드 맥락 (매 턴 갱신, Slack Bot 요청이 아니면 None으로 이전 값 덮어씀)
@@ -161,63 +194,52 @@ class ChatService:
 
             async for event in app.astream_events(inputs, invoke_config, version="v2"):
                 async for parsed_event in processor.process(event):
-                    yield parsed_event
+                    await sink(parsed_event)
 
         except asyncio.CancelledError:
             elapsed = time.perf_counter() - start
             logger.warning(
-                "stream_cancelled",
+                profile.cancelled_log_event,
                 session_id=str(session_id),
                 elapsed_seconds=round(elapsed, 2),
                 cancelled_at_node=processor.context.current_node
                 if processor is not None
                 else None,
             )
+            if profile.save_partial and room_id is not None:
+                try:
+                    await self._save_partial_if_any(processor, room_id, trace_id)
+                except Exception:
+                    logger.exception(
+                        "partial_save_failed_on_cancel",
+                        session_id=str(session_id),
+                    )
             emit_audit_event(
                 action=ChatAction.GENERATE_RESPONSE,
                 status=AuditStatus.FAILURE,
                 level=AuditLevel.WARNING,
                 metadata=ChatAuditMetadata(
-                    context="connection_cancelled",
+                    context=profile.cancelled_audit_context,
                     session_id=session_id,
                 ),
             )
-            raise
+            if profile.reraise_on_cancel:
+                raise
 
-        except Exception as e:
-            logger.exception("streaming_error")
+        except Exception:
+            logger.exception(profile.error_log_event)
 
-            # 이번 턴의 user 메시지가 실제로 저장된 경우에만 복구를 수행한다.
-            if saved_message_id is not None:
-
-                def _get_chat_room_sync():
-                    with SessionLocal() as db:
-                        if is_slack:
-                            room = get_chat_room_by_session_id(
-                                db=db, session_id=session_id
-                            )
-                        else:
-                            room = get_chat_room(
-                                db=db,
-                                session_id=session_id,
-                                user_id=global_context.user.id,
-                            )
-                        return room.id if room else None
-
-                room_id = await run_in_threadpool(_get_chat_room_sync)
-
-                if room_id:
-                    await self.reset_last_turn(
-                        room_id=room_id,
-                        session_id=session_id,
+            if saved_message_id is not None and room_id is not None:
+                saved_partial = False
+                if profile.save_partial:
+                    saved_partial = bool(
+                        processor is not None
+                        and processor.context.accumulated_content.strip()
                     )
-                else:
-                    logger.warning(
-                        "chatroom_not_found",
-                        context="post_streaming_error",
-                        msg="스트리밍 에러 이후 세션 복구 실패",
-                        session_id=str(session_id),
-                    )
+                    if saved_partial:
+                        await self._save_partial_if_any(processor, room_id, trace_id)
+                if not saved_partial:
+                    await self.reset_last_turn(room_id=room_id, session_id=session_id)
 
             emit_audit_event(
                 action=ChatAction.GENERATE_RESPONSE,
@@ -225,7 +247,7 @@ class ChatService:
                 level=AuditLevel.ERROR,
                 metadata=ChatAuditMetadata(
                     session_id=session_id,
-                    context="streaming_error",
+                    context=profile.error_audit_context,
                 ),
             )
 
@@ -238,42 +260,15 @@ class ChatService:
             )
 
         finally:
+            if on_complete is not None:
+                await on_complete()
             elapsed = time.perf_counter() - start
             logger.info(
-                "streaming_finished",
+                profile.finished_log_event,
                 session_id=str(session_id),
                 duration=round(elapsed, 4),
             )
-
-            # base_config가 생성된 경우에만(즉, Graph 호출 시도 후) 후속 처리 진행
-            if base_config is not None:
-                try:
-                    # langgraph state 추출
-                    lg_current_state = await self._app.aget_state(base_config)
-                    values = lg_current_state.values
-
-                    # 토큰 사용량 처리
-                    self._process_token_usage_stats(base_config, values, global_context)
-
-                    # Langfuse 관측 데이터 통합 처리
-                    if settings.ENABLE_LANGFUSE:
-                        client = get_langfuse_client()
-                        if client:
-                            await self._update_langfuse_rerank_metadata(
-                                client, trace_id, values
-                            )
-                except Exception as stats_err:
-                    # 통계 수집 중 에러가 메인 스트림 에러 처리를 방해하지 않도록 격리 로깅
-                    logger.warning(
-                        "failed_to_process_post_stream_stats",
-                        error=str(stats_err),
-                        session_id=str(session_id),
-                    )
-
-            if settings.ENABLE_LANGFUSE:
-                client = get_langfuse_client()
-                if client:
-                    await run_in_threadpool(client.flush)
+            await self._finalize_stats(base_config, global_context, trace_id, session_id)
 
     def _process_token_usage_stats(
         self,
@@ -333,6 +328,38 @@ class ChatService:
             logger.warning(
                 "failed_to_update_langfuse_metadata", trace_id=trace_id, error=str(e)
             )
+
+    async def _finalize_stats(
+        self,
+        base_config: dict | None,
+        global_context: GlobalContext,
+        trace_id: str | None,
+        session_id: uuid.UUID,
+    ) -> None:
+        """스트리밍 종료 후 토큰 사용량 통계와 langfuse 메타데이터를 처리한다."""
+        if base_config is not None:
+            try:
+                lg_current_state = await self._app.aget_state(base_config)
+                values = lg_current_state.values
+                self._process_token_usage_stats(base_config, values, global_context)
+
+                if settings.ENABLE_LANGFUSE:
+                    client = get_langfuse_client()
+                    if client:
+                        await self._update_langfuse_rerank_metadata(
+                            client, trace_id, values
+                        )
+            except Exception as stats_err:
+                logger.warning(
+                    "failed_to_process_post_stream_stats",
+                    error=str(stats_err),
+                    session_id=str(session_id),
+                )
+
+        if settings.ENABLE_LANGFUSE:
+            client = get_langfuse_client()
+            if client:
+                await run_in_threadpool(client.flush)
 
     def _resolve_input_messages(
         self,
@@ -482,6 +509,82 @@ class ChatService:
             logger.info("langgraph_checkpointer_flushed", session_id=str(session_id))
 
         return deleted_query
+
+    async def _save_partial_if_any(
+        self,
+        processor: ChatStreamProcessor | None,
+        room_id: int,
+        trace_id: str | None,
+    ) -> None:
+        """취소 시점까지 누적된 내용이 있으면 partial로 저장한다."""
+        if processor is None:
+            return
+        content = processor.context.accumulated_content.strip()
+        if not content:
+            return
+
+        pipeline_result: list[dict] = [
+            {"partial": True, "cancelled_at": datetime.now(timezone.utc).isoformat()}
+        ]
+        if processor.context.pipeline_events:
+            pipeline_result.extend(processor.context.pipeline_events)
+
+        sources = processor.context.accumulated_sources or None
+
+        await self._save_message_content(
+            room_id=room_id,
+            role="assistant",
+            content=content,
+            sources=sources,
+            trace_id=trace_id,
+            pipeline_result=pipeline_result,
+        )
+        logger.info(
+            "partial_content_saved",
+            room_id=room_id,
+            content_length=len(content),
+        )
+
+    @observe(name="chat-run-background")
+    async def run_background(
+        self,
+        global_context: GlobalContext,
+        prompt_settings: PromptSettings,
+        session_id: uuid.UUID,
+        event_store: ChatEventStore,
+        tool_filters: list[SourceType] | None = None,
+        query: str | None = None,
+        additional_context: str | None = None,
+        mode: Literal["fast", "standard"] = "standard",
+        is_slack: bool = False,
+    ) -> None:
+        """SSE와 독립된 백그라운드 태스크로 그래프를 실행하고 이벤트를 Redis에 발행한다."""
+
+        async def sink(event: StreamEvent) -> None:
+            await event_store.publish(str(session_id), event)
+
+        async def on_complete() -> None:
+            try:
+                await event_store.publish_done(str(session_id))
+            except Exception:
+                logger.exception(
+                    "publish_done_failed",
+                    session_id=str(session_id),
+                )
+
+        await self.run(
+            global_context,
+            prompt_settings,
+            session_id,
+            sink,
+            profile=BACKGROUND_RUN_PROFILE,
+            on_complete=on_complete,
+            tool_filters=tool_filters,
+            query=query,
+            additional_context=additional_context,
+            mode=mode,
+            is_slack=is_slack,
+        )
 
     def _setup_config(
         self,
