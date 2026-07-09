@@ -17,7 +17,9 @@ const eslintConfig = defineConfig([
     'next-env.d.ts',
     // E2E and test artifacts
     'e2e/**',
+    'output/**',
     'playwright-report/**',
+    'storybook-static/**',
     'test-results/**',
     // Local agent/tooling artifacts
     '.codex/**',
