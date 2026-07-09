@@ -12,6 +12,7 @@
     "test": "vitest run --passWithNoTests",
     "test:watch": "vitest --passWithNoTests",
     "test:ui": "vitest --ui --passWithNoTests",
+    "verify:tailwind": "tailwindcss -i src/shared/styles/globals.css -o output/tailwind.css --minify",
     "verify:figma-lab": "node scripts/verify-figma-lab.mjs",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui"
@@ -57,6 +58,7 @@
   "devDependencies": {
     "@playwright/test": "^1.49.1",
     "@svgr/webpack": "^8.1.0",
+    "@tailwindcss/cli": "^4.3.2",
     "@tailwindcss/postcss": "^4",
     "@tailwindcss/typography": "^0.5.19",
     "@tanstack/eslint-plugin-query": "^5.91.2",
