@@ -1,5 +1,5 @@
 import type { SseRenderMode, SseStreamEventEnvelopeApi, StreamEvent } from '@/features/chat/types';
-import { isRedisStreamIdAtOrBefore } from '@/features/chat/utils/stream/redisStreamId';
+import { isRedisStreamIdAtOrBefore } from '@/features/chat/utils/stream/isRedisStreamId';
 
 interface ApplyReconnectStreamWithCutoffParams {
   sessionId: string;

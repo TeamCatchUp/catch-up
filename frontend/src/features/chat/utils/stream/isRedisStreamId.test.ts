@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { compareRedisStreamIds, isRedisStreamIdAtOrBefore } from './redisStreamId';
+import { compareRedisStreamIds, isRedisStreamIdAtOrBefore } from './isRedisStreamId';
 
 describe('compareRedisStreamIds', () => {
   it('orders by millisecond part first', () => {
