@@ -1,7 +1,13 @@
 import type { NextConfig } from 'next';
 
+const shouldRemoveNonErrorConsole = process.env.NODE_ENV === 'production';
+
 const nextConfig = {
   reactStrictMode: true,
+
+  compiler: {
+    removeConsole: shouldRemoveNonErrorConsole ? { exclude: ['error'] } : false,
+  },
 
   images: {
     unoptimized: true,
