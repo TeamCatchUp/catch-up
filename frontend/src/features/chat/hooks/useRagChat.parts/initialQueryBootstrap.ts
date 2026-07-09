@@ -31,6 +31,7 @@ interface UseInitialQueryBootstrapParams {
   // 상태 세터 + ref
   setIsError: Dispatch<SetStateAction<boolean>>;
   setIsLoading: Dispatch<SetStateAction<boolean>>;
+  setIsGenerating: Dispatch<SetStateAction<boolean>>;
   streamRefs: StreamRuntimeRefs;
 }
 
@@ -53,6 +54,7 @@ export const useInitialQueryBootstrap = ({
   ensureInitialUserMessage,
   setIsError,
   setIsLoading,
+  setIsGenerating,
   streamRefs,
 }: UseInitialQueryBootstrapParams) => {
   // ---------------------------------------------------------------------------
@@ -141,6 +143,7 @@ export const useInitialQueryBootstrap = ({
         console.error('[useRagChat] fetchFirstAnswer error:', err);
         setIsError(true);
         setIsLoading(false);
+        setIsGenerating(false);
         activeQuestionRef.current = null;
         streamInFlightRef.current = false;
       }
@@ -163,6 +166,7 @@ export const useInitialQueryBootstrap = ({
     reconnectChatStream,
     resolvedSessionId,
     setIsError,
+    setIsGenerating,
     setIsLoading,
     streamChat,
     streamInFlightRef,

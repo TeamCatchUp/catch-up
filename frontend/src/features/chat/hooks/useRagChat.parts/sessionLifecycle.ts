@@ -78,8 +78,16 @@ export const useSessionLifecycle = ({
   // ---------------------------------------------------------------------------
   // Shared setters/refs
   // ---------------------------------------------------------------------------
-  const { setChatData, setIsLoading, setIsError, setStepRows, setPipelineQueryType, setTopic, setPipelineReasoning } =
-    stateSetters;
+  const {
+    setChatData,
+    setIsLoading,
+    setIsGenerating,
+    setIsError,
+    setStepRows,
+    setPipelineQueryType,
+    setTopic,
+    setPipelineReasoning,
+  } = stateSetters;
   const {
     syncedSessionRef,
     sessionSyncGuardRef,
@@ -131,6 +139,7 @@ export const useSessionLifecycle = ({
     resetStreamStateRefs();
     abortStream();
 
+    setIsGenerating(false);
     setIsError(false);
     setStepRows([]);
     setPipelineQueryType(null);
@@ -197,6 +206,7 @@ export const useSessionLifecycle = ({
           console.error('[useRagChat] reconnectChatStream error:', err);
           streamInFlightRef.current = false;
           setIsLoading(false);
+          setIsGenerating(false);
           setIsError(true);
         }
       } catch (err) {
@@ -210,6 +220,7 @@ export const useSessionLifecycle = ({
           setIsError(true);
           setChatData(buildEmptyChatData(sessionId));
         }
+        setIsGenerating(false);
       } finally {
         settled = true;
         if (!cancelled) {
@@ -247,6 +258,7 @@ export const useSessionLifecycle = ({
     sessionSyncGuardRef,
     setChatData,
     setIsError,
+    setIsGenerating,
     setIsLoading,
     setPipelineQueryType,
     setPipelineReasoning,

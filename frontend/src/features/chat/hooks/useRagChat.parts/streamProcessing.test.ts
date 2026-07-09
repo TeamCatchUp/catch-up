@@ -55,6 +55,7 @@ const createState = <T,>(initialValue: T) => {
 const renderStreamProcessing = () => {
   const chatData = createState<ChatData | null>(buildChatData());
   const isLoading = createState(false);
+  const isGenerating = createState(false);
   const isError = createState(false);
   const stepRows = createState<StepRow[]>([]);
   const pipelineQueryType = createState<PipelineQueryType | null>(null);
@@ -93,6 +94,7 @@ const renderStreamProcessing = () => {
       stateSetters: {
         setChatData: chatData.setter,
         setIsLoading: isLoading.setter,
+        setIsGenerating: isGenerating.setter,
         setIsError: isError.setter,
         setStepRows: stepRows.setter,
         setPipelineQueryType: pipelineQueryType.setter,

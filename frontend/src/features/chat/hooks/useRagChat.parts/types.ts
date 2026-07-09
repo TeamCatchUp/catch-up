@@ -31,6 +31,7 @@ export interface UseRagChatReturn {
   chatData: ChatData | null;
   resolvedSessionId: string | undefined;
   isLoading: boolean;
+  isGenerating: boolean;
   isError: boolean;
   stepRows: StepRow[];
   pipelineQueryType: PipelineQueryType | null;
@@ -104,6 +105,7 @@ export interface StreamRuntimeRefs {
 export interface ChatStateSetters {
   setChatData: Dispatch<SetStateAction<ChatData | null>>;
   setIsLoading: Dispatch<SetStateAction<boolean>>;
+  setIsGenerating: Dispatch<SetStateAction<boolean>>;
   setIsError: Dispatch<SetStateAction<boolean>>;
   setStepRows: Dispatch<SetStateAction<StepRow[]>>;
   setPipelineQueryType: Dispatch<SetStateAction<PipelineQueryType | null>>;

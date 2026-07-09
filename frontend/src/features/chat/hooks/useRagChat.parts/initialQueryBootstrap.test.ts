@@ -75,6 +75,7 @@ describe('useInitialQueryBootstrap', () => {
         ensureInitialUserMessage: vi.fn(),
         setIsError: vi.fn() as Dispatch<SetStateAction<boolean>>,
         setIsLoading: vi.fn() as Dispatch<SetStateAction<boolean>>,
+        setIsGenerating: vi.fn() as Dispatch<SetStateAction<boolean>>,
         streamRefs: buildStreamRefs(),
       }),
     );

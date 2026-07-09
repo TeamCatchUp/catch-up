@@ -84,6 +84,7 @@ describe('useMessageActions', () => {
         markStopped: vi.fn(),
         setChatData: vi.fn() as Dispatch<SetStateAction<ChatData | null>>,
         setIsLoading: vi.fn() as Dispatch<SetStateAction<boolean>>,
+        setIsGenerating: vi.fn() as Dispatch<SetStateAction<boolean>>,
         setIsError: vi.fn() as Dispatch<SetStateAction<boolean>>,
         setStepRows: vi.fn() as Dispatch<SetStateAction<StepRow[]>>,
         setPipelineQueryType: vi.fn() as Dispatch<SetStateAction<PipelineQueryType | null>>,

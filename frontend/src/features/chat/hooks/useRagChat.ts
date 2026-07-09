@@ -94,6 +94,7 @@ export const useRagChat = ({
   // 화면 렌더링에 직접 사용되는 핵심 state
   const [chatData, setChatData] = useState<ChatData | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(isValidSessionId(sessionId));
+  const [isGenerating, setIsGenerating] = useState(false);
   const [isError, setIsError] = useState(false);
   const [stepRows, setStepRows] = useState<StepRow[]>([]);
   const [pipelineQueryType, setPipelineQueryType] = useState<PipelineQueryType | null>(null);
@@ -248,6 +249,7 @@ export const useRagChat = ({
     stateSetters: {
       setChatData,
       setIsLoading,
+      setIsGenerating,
       setIsError,
       setStepRows,
       setPipelineQueryType,
@@ -279,6 +281,7 @@ export const useRagChat = ({
     stateSetters: {
       setChatData,
       setIsLoading,
+      setIsGenerating,
       setIsError,
       setStepRows,
       setPipelineQueryType,
@@ -307,6 +310,7 @@ export const useRagChat = ({
     markStopped,
     setChatData,
     setIsLoading,
+    setIsGenerating,
     setIsError,
     setStepRows,
     setPipelineQueryType,
@@ -332,6 +336,7 @@ export const useRagChat = ({
     ensureInitialUserMessage,
     setIsError,
     setIsLoading,
+    setIsGenerating,
     streamRefs,
   });
 
@@ -389,6 +394,7 @@ export const useRagChat = ({
     chatData,
     resolvedSessionId,
     isLoading,
+    isGenerating,
     isError,
     stepRows,
     pipelineQueryType,

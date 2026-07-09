@@ -37,6 +37,7 @@ interface UseMessageActionsParams {
   markStopped: () => void;
   setChatData: Dispatch<SetStateAction<ChatData | null>>;
   setIsLoading: Dispatch<SetStateAction<boolean>>;
+  setIsGenerating: Dispatch<SetStateAction<boolean>>;
   setIsError: Dispatch<SetStateAction<boolean>>;
   setStepRows: Dispatch<SetStateAction<StepRow[]>>;
   setPipelineQueryType: Dispatch<SetStateAction<PipelineQueryType | null>>;
@@ -72,6 +73,7 @@ export const useMessageActions = ({
   markStopped,
   setChatData,
   setIsLoading,
+  setIsGenerating,
   setIsError,
   setStepRows,
   setPipelineQueryType,
@@ -185,6 +187,7 @@ export const useMessageActions = ({
         console.error('[useRagChat] sendMessage error:', errorToHandle);
         setIsError(true);
         setIsLoading(false);
+        setIsGenerating(false);
         activeQuestionRef.current = null;
         streamInFlightRef.current = false;
       }
@@ -202,6 +205,7 @@ export const useMessageActions = ({
       resolvedSessionId,
       setChatData,
       setIsError,
+      setIsGenerating,
       setIsLoading,
       streamChat,
       streamInFlightRef,
@@ -271,6 +275,7 @@ export const useMessageActions = ({
         console.error('[useRagChat] submitEdit error:', errorToHandle);
         setIsError(true);
         setIsLoading(false);
+        setIsGenerating(false);
         activeQuestionRef.current = null;
         streamInFlightRef.current = false;
       }
@@ -287,6 +292,7 @@ export const useMessageActions = ({
       resolvedSessionId,
       setChatData,
       setIsError,
+      setIsGenerating,
       setIsLoading,
       streamChat,
       streamInFlightRef,
@@ -311,6 +317,7 @@ export const useMessageActions = ({
     abortStream();
 
     setIsLoading(false);
+    setIsGenerating(false);
     setIsError(false);
     setStepRows([]);
     setPipelineQueryType(null);
@@ -333,6 +340,7 @@ export const useMessageActions = ({
     markStopped,
     resolvedSessionId,
     setIsError,
+    setIsGenerating,
     setIsLoading,
     setPipelineQueryType,
     setPipelineReasoning,

@@ -74,8 +74,16 @@ export const useStreamProcessing = ({
   // ---------------------------------------------------------------------------
   // Shared setters/refs
   // ---------------------------------------------------------------------------
-  const { setChatData, setIsLoading, setIsError, setStepRows, setPipelineQueryType, setTopic, setPipelineReasoning } =
-    stateSetters;
+  const {
+    setChatData,
+    setIsLoading,
+    setIsGenerating,
+    setIsError,
+    setStepRows,
+    setPipelineQueryType,
+    setTopic,
+    setPipelineReasoning,
+  } = stateSetters;
   const { canReplacePlaceholderRef } = sessionRefs;
   const {
     streamingMessageIdRef,
@@ -105,6 +113,7 @@ export const useStreamProcessing = ({
     streamInFlightRef.current = true;
     canReplacePlaceholderRef.current = false;
     setIsLoading(true);
+    setIsGenerating(true);
     setIsError(false);
     setStepRows([]);
     setPipelineQueryType(null);
@@ -116,6 +125,7 @@ export const useStreamProcessing = ({
     resetStopped,
     resetStreamStateRefs,
     setIsError,
+    setIsGenerating,
     setIsLoading,
     setPipelineQueryType,
     setPipelineReasoning,
@@ -160,11 +170,12 @@ export const useStreamProcessing = ({
   const handleAbortError = useCallback(() => {
     streamInFlightRef.current = false;
     activeQuestionRef.current = null;
+    setIsGenerating(false);
 
     if (isStopped()) return;
 
     setIsLoading(false);
-  }, [activeQuestionRef, isStopped, setIsLoading, streamInFlightRef]);
+  }, [activeQuestionRef, isStopped, setIsGenerating, setIsLoading, streamInFlightRef]);
 
   /**
    * result 이벤트를 assistant 메시지에 반영
@@ -307,6 +318,7 @@ export const useStreamProcessing = ({
     if (isStopped()) {
       streamInFlightRef.current = false;
       activeQuestionRef.current = null;
+      setIsGenerating(false);
       return;
     }
     canReplacePlaceholderRef.current = true;
@@ -328,6 +340,7 @@ export const useStreamProcessing = ({
     attachPipelineResultToMessage(streamedMessageId);
 
     setIsLoading(false);
+    setIsGenerating(false);
     streamingMessageIdRef.current = null;
     streamInFlightRef.current = false;
 
@@ -355,6 +368,7 @@ export const useStreamProcessing = ({
     resolvedSessionIdRef,
     setChatData,
     setIsError,
+    setIsGenerating,
     setIsLoading,
     streamInFlightRef,
     streamingMessageIdRef,
