@@ -18,6 +18,7 @@ interface UseRagScrollOptions {
   messages: Message[];
   /** 특정 메시지로 스크롤하기 위한 메시지 ID (RecentQueryResponse.id) */
   scrollToMessageId?: string | null;
+  scrollToLatestOnGeneration?: boolean;
   /** 스크롤 완료 후 호출되는 콜백 (URL 파라미터 정리 등) */
   onScrollToComplete?: () => void;
 }
@@ -42,6 +43,7 @@ const HYSTERESIS_PX = 48;
 export const useRagScroll = ({
   messages,
   scrollToMessageId,
+  scrollToLatestOnGeneration = false,
   onScrollToComplete,
 }: UseRagScrollOptions): UseRagScrollReturn => {
   const qaPairs = useMemo(() => extractQAPairs(messages), [messages]);
@@ -140,11 +142,18 @@ export const useRagScroll = ({
 
   // scrollToMessageId가 지정된 경우 해당 Q&A pair로 스크롤
   const scrollToHandledRef = useRef(false);
+  const generationScrollHandledRef = useRef(false);
 
   // scrollToMessageId 변경 시 handled 플래그 초기화 (같은 세션 내 재스크롤 지원)
   useEffect(() => {
     scrollToHandledRef.current = false;
   }, [scrollToMessageId]);
+
+  useEffect(() => {
+    if (!scrollToLatestOnGeneration) {
+      generationScrollHandledRef.current = false;
+    }
+  }, [scrollToLatestOnGeneration]);
 
   useEffect(() => {
     if (!scrollToMessageId || scrollToHandledRef.current || qaPairs.length === 0) return;
@@ -161,6 +170,20 @@ export const useRagScroll = ({
       onScrollToComplete?.();
     });
   }, [scrollToMessageId, qaPairs, onScrollToComplete]);
+
+  useEffect(() => {
+    if (!scrollToLatestOnGeneration || scrollToMessageId || generationScrollHandledRef.current || qaPairs.length === 0) {
+      return;
+    }
+
+    const targetIndex = qaPairs.length - 1;
+    generationScrollHandledRef.current = true;
+
+    requestAnimationFrame(() => {
+      const element = qaRefs.current.get(targetIndex);
+      element?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  }, [scrollToLatestOnGeneration, scrollToMessageId, qaPairKey, qaPairs.length]);
 
   useEffect(() => {
     if (!pendingScrollRef.current) return;

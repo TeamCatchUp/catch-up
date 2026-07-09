@@ -1,12 +1,13 @@
 import type { Dispatch, RefObject, SetStateAction } from 'react';
 
-import type {
-  ChatData,
-  ChatSource,
-  PipelineQueryType,
-  SourceResponse,
-  StepRow,
-} from '@/features/chat/types';
+import type { ChatData, ChatSource, PipelineQueryType, SourceResponse, StepRow } from '@/features/chat/types';
+
+export interface ActiveStreamQuestion {
+  content: string;
+  createdAt: string;
+  tempId: number;
+  recentCacheSessionId?: string;
+}
 
 /**
  * useRagChat 입력 파라미터
@@ -30,6 +31,7 @@ export interface UseRagChatReturn {
   chatData: ChatData | null;
   resolvedSessionId: string | undefined;
   isLoading: boolean;
+  isGenerating: boolean;
   isError: boolean;
   stepRows: StepRow[];
   pipelineQueryType: PipelineQueryType | null;
@@ -93,6 +95,7 @@ export interface StreamRuntimeRefs {
   hasAttemptedInitialStreamRef: RefObject<boolean>;
   // finalize 시점에 참조할 최신 resolvedSessionId
   resolvedSessionIdRef: RefObject<string | undefined>;
+  activeQuestionRef: RefObject<ActiveStreamQuestion | null>;
 }
 
 /**
@@ -102,6 +105,7 @@ export interface StreamRuntimeRefs {
 export interface ChatStateSetters {
   setChatData: Dispatch<SetStateAction<ChatData | null>>;
   setIsLoading: Dispatch<SetStateAction<boolean>>;
+  setIsGenerating: Dispatch<SetStateAction<boolean>>;
   setIsError: Dispatch<SetStateAction<boolean>>;
   setStepRows: Dispatch<SetStateAction<StepRow[]>>;
   setPipelineQueryType: Dispatch<SetStateAction<PipelineQueryType | null>>;

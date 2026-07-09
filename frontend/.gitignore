@@ -15,6 +15,7 @@
 playwright-report
 test-results
 .vitest-cache
+output
 
 # next.js
 /.next/
@@ -25,6 +26,7 @@ test-results
 
 # production
 /build
+/storybook-static
 
 # misc
 .DS_Store
@@ -57,4 +59,4 @@ AGENTS.md
 /src/shared/mocks/
 
 # local chat streaming
-/src/app/api/v1/chat/stream
+/src/app/api/v1/chat

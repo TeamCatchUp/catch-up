@@ -2,12 +2,16 @@ import type { Dispatch, SetStateAction } from 'react';
 import { useCallback } from 'react';
 
 import chatService from '@/features/chat/services/chatService';
+import { ChatStreamHttpError } from '@/features/chat/services/realChatService';
 import type {
   ChatData,
   PipelineQueryType,
+  SseRenderMode,
+  SseStreamEventEnvelopeApi,
   StepRow,
   StreamEvent,
 } from '@/features/chat/types';
+import { applyReconnectStreamWithCutoff } from '@/features/chat/utils/stream/buildReconnectStreamHandler';
 
 import type { StreamRuntimeRefs } from './types';
 
@@ -20,17 +24,20 @@ interface UseMessageActionsParams {
   // 스트림 실행/후처리
   streamChat: (query: string, sessionId: string | undefined, onEvent: (event: StreamEvent) => void) => Promise<void>;
   handleStreamEvent: (event: StreamEvent) => void;
+  handleStreamEvents: (events: readonly StreamEvent[], options?: { renderMode?: SseRenderMode }) => void;
   finalizeAfterStreamClose: () => Promise<void>;
   handleAbortError: () => void;
   beginAnswerLoading: () => void;
   appendAssistantAnswer: (answer?: string) => void;
 
   // 부수효과/외부 제어
-  refreshRecentChatsNow: () => void;
+  cancelGeneration: (sessionId: string) => Promise<void>;
+  reconnectChatStream: (sessionId: string, onEnvelope: (envelope: SseStreamEventEnvelopeApi) => void) => Promise<void>;
   abortStream: () => void;
   markStopped: () => void;
   setChatData: Dispatch<SetStateAction<ChatData | null>>;
   setIsLoading: Dispatch<SetStateAction<boolean>>;
+  setIsGenerating: Dispatch<SetStateAction<boolean>>;
   setIsError: Dispatch<SetStateAction<boolean>>;
   setStepRows: Dispatch<SetStateAction<StepRow[]>>;
   setPipelineQueryType: Dispatch<SetStateAction<PipelineQueryType | null>>;
@@ -55,15 +62,18 @@ export const useMessageActions = ({
   resolvedSessionId,
   streamChat,
   handleStreamEvent,
+  handleStreamEvents,
   finalizeAfterStreamClose,
   handleAbortError,
   beginAnswerLoading,
   appendAssistantAnswer,
-  refreshRecentChatsNow,
+  cancelGeneration,
+  reconnectChatStream,
   abortStream,
   markStopped,
   setChatData,
   setIsLoading,
+  setIsGenerating,
   setIsError,
   setStepRows,
   setPipelineQueryType,
@@ -74,7 +84,52 @@ export const useMessageActions = ({
   // ---------------------------------------------------------------------------
   // Shared refs
   // ---------------------------------------------------------------------------
-  const { streamInFlightRef, streamingMessageIdRef } = streamRefs;
+  const { activeQuestionRef, streamInFlightRef, streamingMessageIdRef } = streamRefs;
+
+  const isAbortError = useCallback(
+    (err: unknown): boolean =>
+      err instanceof DOMException ? err.name === 'AbortError' : err instanceof Error && err.name === 'AbortError',
+    [],
+  );
+
+  const reconnectActiveStream = useCallback(
+    async (chatDataSnapshot: ChatData | null): Promise<boolean> => {
+      if (!resolvedSessionId) return false;
+
+      setChatData(chatDataSnapshot);
+      streamInFlightRef.current = true;
+
+      try {
+        const status = await chatService.getGenerationStatus(resolvedSessionId);
+        if (!status.is_generating) return false;
+
+        await applyReconnectStreamWithCutoff({
+          sessionId: resolvedSessionId,
+          cutoffId: status.cutoff_id,
+          reconnectChatStream,
+          handleStreamEvents,
+        });
+        await finalizeAfterStreamClose();
+        return true;
+      } catch (err) {
+        if (isAbortError(err)) {
+          handleAbortError();
+          return true;
+        }
+        throw err;
+      }
+    },
+    [
+      finalizeAfterStreamClose,
+      handleAbortError,
+      handleStreamEvents,
+      isAbortError,
+      reconnectChatStream,
+      resolvedSessionId,
+      setChatData,
+      streamInFlightRef,
+    ],
+  );
 
   // ---------------------------------------------------------------------------
   // Actions
@@ -90,6 +145,7 @@ export const useMessageActions = ({
       // 중복 요청/빈 입력 방지
       if (!message.trim() || isLoading || !chatData || streamInFlightRef.current) return;
 
+      const createdAt = new Date().toISOString();
       const updated: ChatData = {
         ...chatData,
         messages: [
@@ -98,12 +154,12 @@ export const useMessageActions = ({
             id: crypto.randomUUID(),
             role: 'user',
             content: message,
-            timestamp: new Date().toISOString(),
+            timestamp: createdAt,
           },
         ],
       };
       setChatData(updated);
-      refreshRecentChatsNow();
+      activeQuestionRef.current = { content: message, createdAt, tempId: -Date.now() };
 
       beginAnswerLoading();
 
@@ -111,27 +167,45 @@ export const useMessageActions = ({
         await streamChat(message, resolvedSessionId, handleStreamEvent);
         await finalizeAfterStreamClose();
       } catch (err) {
-        if ((err as Error).name === 'AbortError') {
+        let errorToHandle = err;
+
+        if (err instanceof ChatStreamHttpError && err.status === 409) {
+          try {
+            if (await reconnectActiveStream(chatData)) {
+              activeQuestionRef.current = null;
+              return;
+            }
+          } catch (reconnectErr) {
+            errorToHandle = reconnectErr;
+          }
+        }
+
+        if (isAbortError(errorToHandle)) {
           handleAbortError();
           return;
         }
-        console.error('[useRagChat] sendMessage error:', err);
+        console.error('[useRagChat] sendMessage error:', errorToHandle);
         setIsError(true);
         setIsLoading(false);
+        setIsGenerating(false);
+        activeQuestionRef.current = null;
         streamInFlightRef.current = false;
       }
     },
     [
+      activeQuestionRef,
       beginAnswerLoading,
       chatData,
       finalizeAfterStreamClose,
       handleAbortError,
       handleStreamEvent,
       isLoading,
-      refreshRecentChatsNow,
+      isAbortError,
+      reconnectActiveStream,
       resolvedSessionId,
       setChatData,
       setIsError,
+      setIsGenerating,
       setIsLoading,
       streamChat,
       streamInFlightRef,
@@ -150,6 +224,7 @@ export const useMessageActions = ({
       const targetIndex = chatData.messages.findIndex((message) => message.id === messageId);
       if (targetIndex === -1) return;
 
+      const createdAt = new Date().toISOString();
       const updated: ChatData = {
         ...chatData,
         messages: [
@@ -158,11 +233,12 @@ export const useMessageActions = ({
             id: crypto.randomUUID(),
             role: 'user',
             content: newContent,
-            timestamp: new Date().toISOString(),
+            timestamp: createdAt,
           },
         ],
       };
       setChatData(updated);
+      activeQuestionRef.current = { content: newContent, createdAt, tempId: -Date.now() };
 
       beginAnswerLoading();
 
@@ -179,25 +255,44 @@ export const useMessageActions = ({
         await streamChat(newContent, resolvedSessionId, handleStreamEvent);
         await finalizeAfterStreamClose();
       } catch (err) {
-        if ((err as Error).name === 'AbortError') {
+        let errorToHandle = err;
+
+        if (err instanceof ChatStreamHttpError && err.status === 409) {
+          try {
+            if (await reconnectActiveStream(chatData)) {
+              activeQuestionRef.current = null;
+              return;
+            }
+          } catch (reconnectErr) {
+            errorToHandle = reconnectErr;
+          }
+        }
+
+        if (isAbortError(errorToHandle)) {
           handleAbortError();
           return;
         }
-        console.error('[useRagChat] submitEdit error:', err);
+        console.error('[useRagChat] submitEdit error:', errorToHandle);
         setIsError(true);
         setIsLoading(false);
+        setIsGenerating(false);
+        activeQuestionRef.current = null;
         streamInFlightRef.current = false;
       }
     },
     [
+      activeQuestionRef,
       beginAnswerLoading,
       chatData,
       finalizeAfterStreamClose,
       handleAbortError,
       handleStreamEvent,
+      isAbortError,
+      reconnectActiveStream,
       resolvedSessionId,
       setChatData,
       setIsError,
+      setIsGenerating,
       setIsLoading,
       streamChat,
       streamInFlightRef,
@@ -213,9 +308,16 @@ export const useMessageActions = ({
     if (!isLoading) return;
 
     markStopped();
+    activeQuestionRef.current = null;
+    if (resolvedSessionId) {
+      void cancelGeneration(resolvedSessionId).catch((err) => {
+        console.warn('[useRagChat] cancelGeneration failed:', err);
+      });
+    }
     abortStream();
 
     setIsLoading(false);
+    setIsGenerating(false);
     setIsError(false);
     setStepRows([]);
     setPipelineQueryType(null);
@@ -231,10 +333,14 @@ export const useMessageActions = ({
     streamInFlightRef.current = false;
   }, [
     abortStream,
+    activeQuestionRef,
     appendAssistantAnswer,
+    cancelGeneration,
     isLoading,
     markStopped,
+    resolvedSessionId,
     setIsError,
+    setIsGenerating,
     setIsLoading,
     setPipelineQueryType,
     setPipelineReasoning,

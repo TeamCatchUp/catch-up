@@ -63,6 +63,7 @@ export default function RagAnswerPage() {
   } = useRagScroll({
     messages: chat.chatData?.messages ?? [],
     scrollToMessageId,
+    scrollToLatestOnGeneration: chat.isGenerating,
     onScrollToComplete: handleScrollToComplete,
   });
 

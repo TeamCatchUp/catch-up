@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef } from 'react';
 
 import chatService from '@/features/chat/services/chatService';
-import type { StreamEvent } from '@/features/chat/types';
+import type { SseStreamEventEnvelopeApi, StreamEvent } from '@/features/chat/types';
 
 interface UseRagStreamReturn {
   streamChat: (
@@ -12,6 +12,8 @@ interface UseRagStreamReturn {
     onEvent: (event: StreamEvent) => void,
     toolFilters?: string[],
   ) => Promise<void>;
+  reconnectChatStream: (sessionId: string, onEnvelope: (envelope: SseStreamEventEnvelopeApi) => void) => Promise<void>;
+  cancelGeneration: (sessionId: string) => Promise<void>;
   abortStream: () => void;
   markStopped: () => void;
   resetStopped: () => void;
@@ -59,6 +61,27 @@ export const useRagStream = (): UseRagStreamReturn => {
     [],
   );
 
+  const reconnectChatStream = useCallback(
+    async (sessionId: string, onEnvelope: (envelope: SseStreamEventEnvelopeApi) => void) => {
+      const activeController = abortRef.current;
+      if (activeController && !activeController.signal.aborted) return;
+      const controller = new AbortController();
+      abortRef.current = controller;
+      try {
+        await chatService.reconnectChatStream(sessionId, onEnvelope, controller.signal);
+      } finally {
+        if (abortRef.current === controller) {
+          abortRef.current = null;
+        }
+      }
+    },
+    [],
+  );
+
+  const cancelGeneration = useCallback(async (sessionId: string) => {
+    await chatService.cancelGeneration(sessionId);
+  }, []);
+
   const markStopped = useCallback(() => {
     stoppedRef.current = true;
   }, []);
@@ -75,5 +98,5 @@ export const useRagStream = (): UseRagStreamReturn => {
     };
   }, [abortStream]);
 
-  return { streamChat, abortStream, markStopped, resetStopped, isStopped };
+  return { streamChat, reconnectChatStream, cancelGeneration, abortStream, markStopped, resetStopped, isStopped };
 };
