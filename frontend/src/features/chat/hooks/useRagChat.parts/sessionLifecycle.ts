@@ -164,10 +164,10 @@ export const useSessionLifecycle = ({
       setChatData(null);
 
       try {
-        const status = await chatService.getGenerationStatus(sessionId);
-        if (cancelled) return;
-
-        const nextData = await loadSessionChatDataWithContext(sessionId);
+        const [status, nextData] = await Promise.all([
+          chatService.getGenerationStatus(sessionId),
+          loadSessionChatDataWithContext(sessionId),
+        ]);
         if (cancelled) return;
         setChatData(nextData);
 
