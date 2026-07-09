@@ -77,16 +77,24 @@ const upsertRecentQueryInfiniteData = (
   const hadItem = old.pages.some((page) => page.items.some((item) => item.id === input.tempId));
   const nextItem = createRecentQueryItem(input);
   const totalDelta = hadItem ? 0 : 1;
+  const nextItems = [
+    nextItem,
+    ...old.pages.flatMap((page) => page.items).filter((item) => item.id !== input.tempId),
+  ];
+  let cursor = 0;
 
   return {
     ...old,
     pages: old.pages.map((page, index) => {
-      const itemsWithoutTemp = page.items.filter((item) => item.id !== input.tempId);
+      const pageSize = page.size || HISTORY_PAGE_SIZE;
+      const items =
+        index === old.pages.length - 1 ? nextItems.slice(cursor) : nextItems.slice(cursor, cursor + pageSize);
+      cursor += items.length;
+
       return {
         ...page,
         total: page.total + totalDelta,
-        items:
-          index === 0 ? [nextItem, ...itemsWithoutTemp].slice(0, page.size || HISTORY_PAGE_SIZE) : itemsWithoutTemp,
+        items,
       };
     }),
   };
@@ -132,18 +140,24 @@ const upsertChatroomInfiniteData = (
   const existing = old.pages.flatMap((page) => page.items).find((item) => item.session_id === input.sessionId);
   const nextItem = existing ? { ...existing, updated_at: input.createdAt } : createChatroomItem(input);
   const totalDelta = existing ? 0 : 1;
+  const nextItems = [
+    nextItem,
+    ...old.pages.flatMap((page) => page.items).filter((item) => item.session_id !== input.sessionId),
+  ];
+  let cursor = 0;
 
   return {
     ...old,
     pages: old.pages.map((page, index) => {
-      const itemsWithoutSession = page.items.filter((item) => item.session_id !== input.sessionId);
+      const pageSize = page.size || HISTORY_PAGE_SIZE;
+      const items =
+        index === old.pages.length - 1 ? nextItems.slice(cursor) : nextItems.slice(cursor, cursor + pageSize);
+      cursor += items.length;
+
       return {
         ...page,
         total: page.total + totalDelta,
-        items:
-          index === 0
-            ? [nextItem, ...itemsWithoutSession].slice(0, page.size || HISTORY_PAGE_SIZE)
-            : itemsWithoutSession,
+        items,
       };
     }),
   };

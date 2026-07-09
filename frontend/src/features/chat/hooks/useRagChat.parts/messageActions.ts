@@ -6,10 +6,12 @@ import { ChatStreamHttpError } from '@/features/chat/services/realChatService';
 import type {
   ChatData,
   PipelineQueryType,
+  SseRenderMode,
   SseStreamEventEnvelopeApi,
   StepRow,
   StreamEvent,
 } from '@/features/chat/types';
+import { applyReconnectStreamWithCutoff } from '@/features/chat/utils/stream/buildReconnectStreamHandler';
 
 import type { StreamRuntimeRefs } from './types';
 
@@ -22,6 +24,7 @@ interface UseMessageActionsParams {
   // 스트림 실행/후처리
   streamChat: (query: string, sessionId: string | undefined, onEvent: (event: StreamEvent) => void) => Promise<void>;
   handleStreamEvent: (event: StreamEvent) => void;
+  handleStreamEvents: (events: readonly StreamEvent[], options?: { renderMode?: SseRenderMode }) => void;
   finalizeAfterStreamClose: () => Promise<void>;
   handleAbortError: () => void;
   beginAnswerLoading: () => void;
@@ -58,6 +61,7 @@ export const useMessageActions = ({
   resolvedSessionId,
   streamChat,
   handleStreamEvent,
+  handleStreamEvents,
   finalizeAfterStreamClose,
   handleAbortError,
   beginAnswerLoading,
@@ -94,7 +98,15 @@ export const useMessageActions = ({
       streamInFlightRef.current = true;
 
       try {
-        await reconnectChatStream(resolvedSessionId, ({ event }) => handleStreamEvent(event));
+        const status = await chatService.getGenerationStatus(resolvedSessionId);
+        if (!status.is_generating) return false;
+
+        await applyReconnectStreamWithCutoff({
+          sessionId: resolvedSessionId,
+          cutoffId: status.cutoff_id,
+          reconnectChatStream,
+          handleStreamEvents,
+        });
         await finalizeAfterStreamClose();
         return true;
       } catch (err) {
@@ -108,7 +120,7 @@ export const useMessageActions = ({
     [
       finalizeAfterStreamClose,
       handleAbortError,
-      handleStreamEvent,
+      handleStreamEvents,
       isAbortError,
       reconnectChatStream,
       resolvedSessionId,

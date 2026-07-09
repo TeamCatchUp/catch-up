@@ -3,7 +3,7 @@ import type { QueryClient } from '@tanstack/react-query';
 
 import chatService from '@/features/chat/services/chatService';
 import type { ChatData, SseRenderMode, SseStreamEventEnvelopeApi, StreamEvent } from '@/features/chat/types';
-import { isRedisStreamIdAtOrBefore } from '@/features/chat/utils/stream/redisStreamId';
+import { applyReconnectStreamWithCutoff } from '@/features/chat/utils/stream/buildReconnectStreamHandler';
 import { chatQueries } from '@/shared/queries/chatroom.queries';
 import { isValidSessionId } from '@/shared/utils/sessionId';
 
@@ -176,44 +176,15 @@ export const useSessionLifecycle = ({
         beginAnswerLoading();
 
         try {
-          const replayBuffer: StreamEvent[] = [];
-          let hasLiveEvent = false;
-          let replayFlushQueued = false;
-
-          const flushReplayBuffer = () => {
-            replayFlushQueued = false;
-            if (cancelled) return;
-            if (replayBuffer.length === 0) return;
-            handleStreamEvents(replayBuffer, { renderMode: 'instant' });
-            replayBuffer.length = 0;
-          };
-
-          const queueReplayFlush = () => {
-            if (replayFlushQueued || hasLiveEvent) return;
-            replayFlushQueued = true;
-            queueMicrotask(flushReplayBuffer);
-          };
-
-          await reconnectChatStream(sessionId, (envelope) => {
-            if (cancelled) return;
-            if (isRedisStreamIdAtOrBefore(envelope.id, status.cutoff_id)) {
-              replayBuffer.push(envelope.event);
-              queueReplayFlush();
-              return;
-            }
-
-            if (!hasLiveEvent) {
-              flushReplayBuffer();
-              hasLiveEvent = true;
-            }
-
-            handleStreamEvents([envelope.event], { renderMode: 'realtime' });
+          await applyReconnectStreamWithCutoff({
+            sessionId,
+            cutoffId: status.cutoff_id,
+            reconnectChatStream,
+            handleStreamEvents,
+            isCancelled: () => cancelled,
           });
 
           if (cancelled) return;
-          if (!hasLiveEvent) {
-            flushReplayBuffer();
-          }
           await finalizeAfterStreamClose();
         } catch (err) {
           if (cancelled) return;

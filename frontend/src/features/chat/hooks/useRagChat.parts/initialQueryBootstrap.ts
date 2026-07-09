@@ -1,7 +1,10 @@
 import type { Dispatch, SetStateAction } from 'react';
 import { useEffect } from 'react';
 
-import type { ChatData, StreamEvent } from '@/features/chat/types';
+import chatService from '@/features/chat/services/chatService';
+import { ChatStreamHttpError } from '@/features/chat/services/realChatService';
+import type { ChatData, SseRenderMode, SseStreamEventEnvelopeApi, StreamEvent } from '@/features/chat/types';
+import { applyReconnectStreamWithCutoff } from '@/features/chat/utils/stream/buildReconnectStreamHandler';
 
 import type { StreamRuntimeRefs } from './types';
 
@@ -14,7 +17,9 @@ interface UseInitialQueryBootstrapParams {
 
   // 스트림 제어
   streamChat: (query: string, sessionId: string | undefined, onEvent: (event: StreamEvent) => void) => Promise<void>;
+  reconnectChatStream: (sessionId: string, onEnvelope: (envelope: SseStreamEventEnvelopeApi) => void) => Promise<void>;
   handleStreamEvent: (event: StreamEvent) => void;
+  handleStreamEvents: (events: readonly StreamEvent[], options?: { renderMode?: SseRenderMode }) => void;
   finalizeAfterStreamClose: () => Promise<void>;
   handleAbortError: () => void;
   beginAnswerLoading: () => void;
@@ -38,7 +43,9 @@ export const useInitialQueryBootstrap = ({
   isLoading,
   resolvedSessionId,
   streamChat,
+  reconnectChatStream,
   handleStreamEvent,
+  handleStreamEvents,
   finalizeAfterStreamClose,
   handleAbortError,
   beginAnswerLoading,
@@ -109,6 +116,24 @@ export const useInitialQueryBootstrap = ({
         await streamChat(effectiveInitialQuery, resolvedSessionId, handleStreamEvent);
         await finalizeAfterStreamClose();
       } catch (err) {
+        if (err instanceof ChatStreamHttpError && err.status === 409 && resolvedSessionId) {
+          try {
+            const status = await chatService.getGenerationStatus(resolvedSessionId);
+            if (status.is_generating) {
+              await applyReconnectStreamWithCutoff({
+                sessionId: resolvedSessionId,
+                cutoffId: status.cutoff_id,
+                reconnectChatStream,
+                handleStreamEvents,
+              });
+              await finalizeAfterStreamClose();
+              return;
+            }
+          } catch (reconnectErr) {
+            err = reconnectErr;
+          }
+        }
+
         if ((err as Error).name === 'AbortError') {
           handleAbortError();
           return;
@@ -132,8 +157,10 @@ export const useInitialQueryBootstrap = ({
     finalizeAfterStreamClose,
     handleAbortError,
     handleStreamEvent,
+    handleStreamEvents,
     hasAttemptedInitialStreamRef,
     isLoading,
+    reconnectChatStream,
     resolvedSessionId,
     setIsError,
     setIsLoading,
