@@ -1,12 +1,13 @@
 import type { Dispatch, RefObject, SetStateAction } from 'react';
 
-import type {
-  ChatData,
-  ChatSource,
-  PipelineQueryType,
-  SourceResponse,
-  StepRow,
-} from '@/features/chat/types';
+import type { ChatData, ChatSource, PipelineQueryType, SourceResponse, StepRow } from '@/features/chat/types';
+
+export interface ActiveStreamQuestion {
+  content: string;
+  createdAt: string;
+  tempId: number;
+  recentCacheSessionId?: string;
+}
 
 /**
  * useRagChat 입력 파라미터
@@ -93,6 +94,7 @@ export interface StreamRuntimeRefs {
   hasAttemptedInitialStreamRef: RefObject<boolean>;
   // finalize 시점에 참조할 최신 resolvedSessionId
   resolvedSessionIdRef: RefObject<string | undefined>;
+  activeQuestionRef: RefObject<ActiveStreamQuestion | null>;
 }
 
 /**

@@ -51,7 +51,7 @@ export const useInitialQueryBootstrap = ({
   // ---------------------------------------------------------------------------
   // Shared refs
   // ---------------------------------------------------------------------------
-  const { streamInFlightRef, hasAttemptedInitialStreamRef } = streamRefs;
+  const { activeQuestionRef, streamInFlightRef, hasAttemptedInitialStreamRef } = streamRefs;
 
   // ---------------------------------------------------------------------------
   // Bootstrap effects
@@ -98,6 +98,8 @@ export const useInitialQueryBootstrap = ({
 
     const runStream = async () => {
       // 자동 스트림 시작 전에 q를 제거해 effect 재진입 루프를 막는다.
+      const createdAt = new Date().toISOString();
+      activeQuestionRef.current = { content: effectiveInitialQuery, createdAt, tempId: -Date.now() };
       ensureInitialUserMessage(effectiveInitialQuery);
       hasAttemptedInitialStreamRef.current = true;
       clearInitialQueryParam();
@@ -114,12 +116,14 @@ export const useInitialQueryBootstrap = ({
         console.error('[useRagChat] fetchFirstAnswer error:', err);
         setIsError(true);
         setIsLoading(false);
+        activeQuestionRef.current = null;
         streamInFlightRef.current = false;
       }
     };
 
     void runStream();
   }, [
+    activeQuestionRef,
     beginAnswerLoading,
     chatData,
     clearInitialQueryParam,

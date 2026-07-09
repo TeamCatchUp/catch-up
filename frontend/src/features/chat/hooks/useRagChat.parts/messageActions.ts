@@ -2,9 +2,11 @@ import type { Dispatch, SetStateAction } from 'react';
 import { useCallback } from 'react';
 
 import chatService from '@/features/chat/services/chatService';
+import { ChatStreamHttpError } from '@/features/chat/services/realChatService';
 import type {
   ChatData,
   PipelineQueryType,
+  SseStreamEventEnvelopeApi,
   StepRow,
   StreamEvent,
 } from '@/features/chat/types';
@@ -26,7 +28,8 @@ interface UseMessageActionsParams {
   appendAssistantAnswer: (answer?: string) => void;
 
   // 부수효과/외부 제어
-  refreshRecentChatsNow: () => void;
+  cancelGeneration: (sessionId: string) => Promise<void>;
+  reconnectChatStream: (sessionId: string, onEnvelope: (envelope: SseStreamEventEnvelopeApi) => void) => Promise<void>;
   abortStream: () => void;
   markStopped: () => void;
   setChatData: Dispatch<SetStateAction<ChatData | null>>;
@@ -59,7 +62,8 @@ export const useMessageActions = ({
   handleAbortError,
   beginAnswerLoading,
   appendAssistantAnswer,
-  refreshRecentChatsNow,
+  cancelGeneration,
+  reconnectChatStream,
   abortStream,
   markStopped,
   setChatData,
@@ -74,7 +78,44 @@ export const useMessageActions = ({
   // ---------------------------------------------------------------------------
   // Shared refs
   // ---------------------------------------------------------------------------
-  const { streamInFlightRef, streamingMessageIdRef } = streamRefs;
+  const { activeQuestionRef, streamInFlightRef, streamingMessageIdRef } = streamRefs;
+
+  const isAbortError = useCallback(
+    (err: unknown): boolean =>
+      err instanceof DOMException ? err.name === 'AbortError' : err instanceof Error && err.name === 'AbortError',
+    [],
+  );
+
+  const reconnectActiveStream = useCallback(
+    async (chatDataSnapshot: ChatData | null): Promise<boolean> => {
+      if (!resolvedSessionId) return false;
+
+      setChatData(chatDataSnapshot);
+      streamInFlightRef.current = true;
+
+      try {
+        await reconnectChatStream(resolvedSessionId, ({ event }) => handleStreamEvent(event));
+        await finalizeAfterStreamClose();
+        return true;
+      } catch (err) {
+        if (isAbortError(err)) {
+          handleAbortError();
+          return true;
+        }
+        throw err;
+      }
+    },
+    [
+      finalizeAfterStreamClose,
+      handleAbortError,
+      handleStreamEvent,
+      isAbortError,
+      reconnectChatStream,
+      resolvedSessionId,
+      setChatData,
+      streamInFlightRef,
+    ],
+  );
 
   // ---------------------------------------------------------------------------
   // Actions
@@ -90,6 +131,7 @@ export const useMessageActions = ({
       // 중복 요청/빈 입력 방지
       if (!message.trim() || isLoading || !chatData || streamInFlightRef.current) return;
 
+      const createdAt = new Date().toISOString();
       const updated: ChatData = {
         ...chatData,
         messages: [
@@ -98,12 +140,12 @@ export const useMessageActions = ({
             id: crypto.randomUUID(),
             role: 'user',
             content: message,
-            timestamp: new Date().toISOString(),
+            timestamp: createdAt,
           },
         ],
       };
       setChatData(updated);
-      refreshRecentChatsNow();
+      activeQuestionRef.current = { content: message, createdAt, tempId: -Date.now() };
 
       beginAnswerLoading();
 
@@ -111,24 +153,40 @@ export const useMessageActions = ({
         await streamChat(message, resolvedSessionId, handleStreamEvent);
         await finalizeAfterStreamClose();
       } catch (err) {
-        if ((err as Error).name === 'AbortError') {
+        let errorToHandle = err;
+
+        if (err instanceof ChatStreamHttpError && err.status === 409) {
+          try {
+            if (await reconnectActiveStream(chatData)) {
+              activeQuestionRef.current = null;
+              return;
+            }
+          } catch (reconnectErr) {
+            errorToHandle = reconnectErr;
+          }
+        }
+
+        if (isAbortError(errorToHandle)) {
           handleAbortError();
           return;
         }
-        console.error('[useRagChat] sendMessage error:', err);
+        console.error('[useRagChat] sendMessage error:', errorToHandle);
         setIsError(true);
         setIsLoading(false);
+        activeQuestionRef.current = null;
         streamInFlightRef.current = false;
       }
     },
     [
+      activeQuestionRef,
       beginAnswerLoading,
       chatData,
       finalizeAfterStreamClose,
       handleAbortError,
       handleStreamEvent,
       isLoading,
-      refreshRecentChatsNow,
+      isAbortError,
+      reconnectActiveStream,
       resolvedSessionId,
       setChatData,
       setIsError,
@@ -150,6 +208,7 @@ export const useMessageActions = ({
       const targetIndex = chatData.messages.findIndex((message) => message.id === messageId);
       if (targetIndex === -1) return;
 
+      const createdAt = new Date().toISOString();
       const updated: ChatData = {
         ...chatData,
         messages: [
@@ -158,11 +217,12 @@ export const useMessageActions = ({
             id: crypto.randomUUID(),
             role: 'user',
             content: newContent,
-            timestamp: new Date().toISOString(),
+            timestamp: createdAt,
           },
         ],
       };
       setChatData(updated);
+      activeQuestionRef.current = { content: newContent, createdAt, tempId: -Date.now() };
 
       beginAnswerLoading();
 
@@ -179,22 +239,39 @@ export const useMessageActions = ({
         await streamChat(newContent, resolvedSessionId, handleStreamEvent);
         await finalizeAfterStreamClose();
       } catch (err) {
-        if ((err as Error).name === 'AbortError') {
+        let errorToHandle = err;
+
+        if (err instanceof ChatStreamHttpError && err.status === 409) {
+          try {
+            if (await reconnectActiveStream(chatData)) {
+              activeQuestionRef.current = null;
+              return;
+            }
+          } catch (reconnectErr) {
+            errorToHandle = reconnectErr;
+          }
+        }
+
+        if (isAbortError(errorToHandle)) {
           handleAbortError();
           return;
         }
-        console.error('[useRagChat] submitEdit error:', err);
+        console.error('[useRagChat] submitEdit error:', errorToHandle);
         setIsError(true);
         setIsLoading(false);
+        activeQuestionRef.current = null;
         streamInFlightRef.current = false;
       }
     },
     [
+      activeQuestionRef,
       beginAnswerLoading,
       chatData,
       finalizeAfterStreamClose,
       handleAbortError,
       handleStreamEvent,
+      isAbortError,
+      reconnectActiveStream,
       resolvedSessionId,
       setChatData,
       setIsError,
@@ -213,6 +290,12 @@ export const useMessageActions = ({
     if (!isLoading) return;
 
     markStopped();
+    activeQuestionRef.current = null;
+    if (resolvedSessionId) {
+      void cancelGeneration(resolvedSessionId).catch((err) => {
+        console.warn('[useRagChat] cancelGeneration failed:', err);
+      });
+    }
     abortStream();
 
     setIsLoading(false);
@@ -231,9 +314,12 @@ export const useMessageActions = ({
     streamInFlightRef.current = false;
   }, [
     abortStream,
+    activeQuestionRef,
     appendAssistantAnswer,
+    cancelGeneration,
     isLoading,
     markStopped,
+    resolvedSessionId,
     setIsError,
     setIsLoading,
     setPipelineQueryType,

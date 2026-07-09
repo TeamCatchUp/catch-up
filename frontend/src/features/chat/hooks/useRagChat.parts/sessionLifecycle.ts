@@ -1,8 +1,9 @@
-import type { Dispatch, SetStateAction } from 'react';
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import type { QueryClient } from '@tanstack/react-query';
 
-import type { ChatData } from '@/features/chat/types';
+import chatService from '@/features/chat/services/chatService';
+import type { ChatData, SseRenderMode, SseStreamEventEnvelopeApi, StreamEvent } from '@/features/chat/types';
+import { isRedisStreamIdAtOrBefore } from '@/features/chat/utils/stream/redisStreamId';
 import { chatQueries } from '@/shared/queries/chatroom.queries';
 import { isValidSessionId } from '@/shared/utils/sessionId';
 
@@ -13,11 +14,7 @@ interface UseSessionLifecycleParams {
   // 현재 URL 기준 세션 상태
   sessionId: string;
   isPlaceholderSession: boolean;
-  isLoading: boolean;
-  chatData: ChatData | null;
   provisionalSessionId: string | undefined;
-  setProvisionalSessionId: Dispatch<SetStateAction<string | undefined>>;
-  resolvedSessionId: string | undefined;
 
   // URL 질의 파라미터 기반 첫 질문
   initialQueryFromUrl: string | null;
@@ -27,6 +24,11 @@ interface UseSessionLifecycleParams {
   queryClient: QueryClient;
   router: { replace: (href: string) => void };
   abortStream: () => void;
+  reconnectChatStream: (sessionId: string, onEnvelope: (envelope: SseStreamEventEnvelopeApi) => void) => Promise<void>;
+  handleStreamEvents: (events: readonly StreamEvent[], options?: { renderMode?: SseRenderMode }) => void;
+  finalizeAfterStreamClose: () => Promise<void>;
+  beginAnswerLoading: () => void;
+  handleAbortError: () => void;
   resetStreamStateRefs: () => void;
 
   // 데이터 로더/상태 세터
@@ -40,9 +42,11 @@ interface UseSessionLifecycleParams {
 }
 
 interface UseSessionLifecycleReturn {
-  resolveSessionIdFromStream: (streamSessionId?: string) => void;
   clearInitialQueryParam: () => void;
 }
+
+const isAbortError = (err: unknown): boolean =>
+  err instanceof DOMException ? err.name === 'AbortError' : err instanceof Error && err.name === 'AbortError';
 
 /**
  * 세션 경로 전환 관련 lifecycle을 한 곳에서 관리한다.
@@ -53,16 +57,17 @@ interface UseSessionLifecycleReturn {
 export const useSessionLifecycle = ({
   sessionId,
   isPlaceholderSession,
-  isLoading,
-  chatData,
   provisionalSessionId,
-  setProvisionalSessionId,
-  resolvedSessionId,
   initialQueryFromUrl,
   effectiveInitialQuery,
   queryClient,
   router,
   abortStream,
+  reconnectChatStream,
+  handleStreamEvents,
+  finalizeAfterStreamClose,
+  beginAnswerLoading,
+  handleAbortError,
   resetStreamStateRefs,
   buildEmptyChatData,
   loadSessionChatDataWithContext,
@@ -73,15 +78,8 @@ export const useSessionLifecycle = ({
   // ---------------------------------------------------------------------------
   // Shared setters/refs
   // ---------------------------------------------------------------------------
-  const {
-    setChatData,
-    setIsLoading,
-    setIsError,
-    setStepRows,
-    setPipelineQueryType,
-    setTopic,
-    setPipelineReasoning,
-  } = stateSetters;
+  const { setChatData, setIsLoading, setIsError, setStepRows, setPipelineQueryType, setTopic, setPipelineReasoning } =
+    stateSetters;
   const {
     syncedSessionRef,
     sessionSyncGuardRef,
@@ -90,26 +88,7 @@ export const useSessionLifecycle = ({
     canReplacePlaceholderRef,
   } = sessionRefs;
   const { streamInFlightRef, hasAttemptedInitialStreamRef } = streamRefs;
-
-  /**
-   * SSE 이벤트에 `session_id`가 포함되어 들어오면 세션을 확정한다.
-   *
-   * 중요:
-   * - placeholder(`/chat/new`)일 때만 pending replace를 설정
-   * - 이미 같은 session이면 무시
-   */
-  const resolveSessionIdFromStream = useCallback(
-    (streamSessionId?: string) => {
-      if (!streamSessionId) return;
-      if (resolvedSessionId === streamSessionId) return;
-
-      setProvisionalSessionId(streamSessionId);
-
-      if (!isPlaceholderSession) return;
-      pendingReplaceSessionIdRef.current = streamSessionId;
-    },
-    [isPlaceholderSession, pendingReplaceSessionIdRef, resolvedSessionId, setProvisionalSessionId],
-  );
+  const shouldRetryHydrationRef = useRef(false);
 
   // ---------------------------------------------------------------------------
   // Session hydration effect
@@ -128,9 +107,8 @@ export const useSessionLifecycle = ({
     if (previousSessionId === sessionId) {
       // Dev StrictMode에서는 mount effect가 "실행 -> cleanup -> 재실행"된다.
       // 첫 실행에서 hydrate가 cleanup으로 취소되면, 같은 sessionId라도 1회 재시도해야 로딩 고착을 막을 수 있다.
-      // 따라서 "아직 hydrate 결과가 없는 상태(chatData=null && isLoading=true)"일 때만 계속 진행한다.
-      const needsStrictModeHydrationRetry = chatData === null && isLoading;
-      if (!needsStrictModeHydrationRetry) return;
+      if (!shouldRetryHydrationRef.current) return;
+      shouldRetryHydrationRef.current = false;
     }
 
     // replace 직후 "한 번만 허용"해야 하는 경로 전환은 guard로 통과시킨다.
@@ -179,15 +157,77 @@ export const useSessionLifecycle = ({
 
     // 여기부터는 "실제 서버 히스토리 hydrate" 경로
     let cancelled = false;
+    let settled = false;
 
     const hydrateSession = async () => {
       setIsLoading(true);
       setChatData(null);
 
       try {
+        const status = await chatService.getGenerationStatus(sessionId);
+        if (cancelled) return;
+
         const nextData = await loadSessionChatDataWithContext(sessionId);
         if (cancelled) return;
         setChatData(nextData);
+
+        if (!status.is_generating) return;
+
+        beginAnswerLoading();
+
+        try {
+          const replayBuffer: StreamEvent[] = [];
+          let hasLiveEvent = false;
+          let replayFlushQueued = false;
+
+          const flushReplayBuffer = () => {
+            replayFlushQueued = false;
+            if (cancelled) return;
+            if (replayBuffer.length === 0) return;
+            handleStreamEvents(replayBuffer, { renderMode: 'instant' });
+            replayBuffer.length = 0;
+          };
+
+          const queueReplayFlush = () => {
+            if (replayFlushQueued || hasLiveEvent) return;
+            replayFlushQueued = true;
+            queueMicrotask(flushReplayBuffer);
+          };
+
+          await reconnectChatStream(sessionId, (envelope) => {
+            if (cancelled) return;
+            if (isRedisStreamIdAtOrBefore(envelope.id, status.cutoff_id)) {
+              replayBuffer.push(envelope.event);
+              queueReplayFlush();
+              return;
+            }
+
+            if (!hasLiveEvent) {
+              flushReplayBuffer();
+              hasLiveEvent = true;
+            }
+
+            handleStreamEvents([envelope.event], { renderMode: 'realtime' });
+          });
+
+          if (cancelled) return;
+          if (!hasLiveEvent) {
+            flushReplayBuffer();
+          }
+          await finalizeAfterStreamClose();
+        } catch (err) {
+          if (cancelled) return;
+
+          if (isAbortError(err)) {
+            handleAbortError();
+            return;
+          }
+
+          console.error('[useRagChat] reconnectChatStream error:', err);
+          streamInFlightRef.current = false;
+          setIsLoading(false);
+          setIsError(true);
+        }
       } catch (err) {
         if (cancelled) return;
         if (effectiveInitialQuery && isSessionMessagesNotFoundError(err)) {
@@ -195,12 +235,14 @@ export const useSessionLifecycle = ({
           setIsError(false);
           setChatData(buildEmptyChatData(sessionId));
         } else {
-          console.error('[useRagChat] loadSessionChatData error:', err);
+          console.error('[useRagChat] hydrateSession error:', err);
           setIsError(true);
           setChatData(buildEmptyChatData(sessionId));
         }
       } finally {
+        settled = true;
         if (!cancelled) {
+          shouldRetryHydrationRef.current = false;
           setIsLoading(false);
         }
       }
@@ -210,19 +252,25 @@ export const useSessionLifecycle = ({
 
     return () => {
       cancelled = true;
+      if (!settled) {
+        shouldRetryHydrationRef.current = true;
+      }
     };
   }, [
     abortStream,
+    beginAnswerLoading,
     buildEmptyChatData,
     canReplacePlaceholderRef,
-    chatData,
     effectiveInitialQuery,
+    finalizeAfterStreamClose,
+    handleAbortError,
+    handleStreamEvents,
     hasAttemptedInitialStreamRef,
     hasPlaceholderReplacedRef,
-    isLoading,
     loadSessionChatDataWithContext,
     pendingReplaceSessionIdRef,
     queryClient,
+    reconnectChatStream,
     resetStreamStateRefs,
     sessionId,
     sessionSyncGuardRef,
@@ -242,14 +290,15 @@ export const useSessionLifecycle = ({
   // ---------------------------------------------------------------------------
   /**
    * placeholder 세션 URL 치환:
-   * - 스트림이 정상 종료되어 `canReplacePlaceholderRef`가 true인 경우에만 수행
+   * - 첫 SSE event에서 서버 session_id가 확정되면 즉시 수행
    * - `/chat/new` -> `/chat/{resolvedId}` 1회 replace
+   *
+   * 첫 질문 생성 중 사용자가 다른 화면으로 이동해도 브라우저/사이드바가
+   * 확정된 세션 URL을 알 수 있어야 reconnect GET으로 복귀할 수 있다.
    */
   useEffect(() => {
     if (!isPlaceholderSession) return;
     if (!provisionalSessionId) return;
-    if (isLoading) return;
-    if (!canReplacePlaceholderRef.current) return;
     if (hasPlaceholderReplacedRef.current) return;
 
     hasPlaceholderReplacedRef.current = true;
@@ -268,9 +317,7 @@ export const useSessionLifecycle = ({
 
     router.replace(nextUrl);
   }, [
-    canReplacePlaceholderRef,
     hasPlaceholderReplacedRef,
-    isLoading,
     isPlaceholderSession,
     pendingReplaceSessionIdRef,
     provisionalSessionId,
@@ -301,7 +348,6 @@ export const useSessionLifecycle = ({
   }, [initialQueryFromUrl, router, sessionId]);
 
   return {
-    resolveSessionIdFromStream,
     clearInitialQueryParam,
   };
 };
