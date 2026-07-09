@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useRef } from 'react';
 import type { QueryClient } from '@tanstack/react-query';
 
-import chatService from '@/features/chat/services/chatService';
 import type { ChatData, SseRenderMode, SseStreamEventEnvelopeApi, StreamEvent } from '@/features/chat/types';
 import { applyReconnectStreamWithCutoff } from '@/features/chat/utils/stream/buildReconnectStreamHandler';
 import { chatQueries } from '@/shared/queries/chatroom.queries';
 import { isValidSessionId } from '@/shared/utils/sessionId';
 
+import { getGenerationStatusOrIdle } from './generationStatus';
 import { isSessionMessagesNotFoundError, MESSAGE_PAGE_SIZE } from './sessionDataLoader';
 import type { ChatStateSetters, SessionGuardRefs, StreamRuntimeRefs } from './types';
 
@@ -174,7 +174,7 @@ export const useSessionLifecycle = ({
 
       try {
         const [status, nextData] = await Promise.all([
-          chatService.getGenerationStatus(sessionId),
+          getGenerationStatusOrIdle(sessionId),
           loadSessionChatDataWithContext(sessionId),
         ]);
         if (cancelled) return;
