@@ -69,7 +69,6 @@ export default function SourceCard({ source, showCount = true, count }: Props) {
       onClick={handleClick}
       className="flex w-full cursor-pointer flex-col items-start gap-2.5 text-left"
     >
-      {/* Row 1: 로고+카운트 pill · integration 이름 · open_in_new 버튼 */}
       <div className="flex w-full items-center gap-2.5">
         <div className="bg-fill-normal-strong border-line-normal-assistive flex h-7 min-w-6.5 items-center justify-center gap-1 rounded-full border px-1.5 py-1">
           {renderSourceLogo(source.source_type)}
@@ -86,7 +85,6 @@ export default function SourceCard({ source, showCount = true, count }: Props) {
         </span>
       </div>
 
-      {/* Row 2: meta pill · 채널/워크스페이스/repo (article은 book 아이콘) */}
       <div className="flex w-full items-center gap-2">
         <span className="bg-fill-normal-normal border-line-normal-normal rounded-md2 flex size-5 shrink-0 items-center border-2 p-0.5">
           {isChannelTalkArticle ? (
@@ -98,10 +96,10 @@ export default function SourceCard({ source, showCount = true, count }: Props) {
         <span className="text-body-xsmall text-text-normal-alternative min-w-0 flex-1 truncate">{repoText}</span>
       </div>
 
-      {/* Row 3: Title */}
-      <div className="text-body-small text-text-normal-normal line-clamp-2 w-full wrap-break-word">{displayTitle}</div>
+      <div className="text-body-small text-text-normal-normal line-clamp-2 w-full break-keep wrap-break-word">
+        {displayTitle}
+      </div>
 
-      {/* Row 4: 작성자 · 날짜 · [이슈키] / #번호 (jira/github only) */}
       <div className="text-body-xsmall text-text-normal-assistive flex w-full items-center gap-1.5">
         <span className="whitespace-nowrap">{authorText}</span>
         <span className="bg-dim-black-10 size-1 shrink-0 rounded-full" />
