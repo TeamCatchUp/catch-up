@@ -20,6 +20,8 @@ export const SearchOptionButton = forwardRef<HTMLButtonElement, SearchOptionButt
     return (
       <button
         ref={ref}
+        type="button"
+        aria-pressed={selected}
         onClick={onClick}
         {...props}
         className={cn(

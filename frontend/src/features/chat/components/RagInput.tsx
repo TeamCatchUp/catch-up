@@ -102,6 +102,7 @@ export default function RagInput({ filters, isLoading, onSendMessage, onStop, on
             <button
               type="button"
               onClick={filters.toggleFilter}
+              aria-expanded={filters.isFilterOpen}
               className={cn(
                 'text-text-normal-neutral flex h-7 cursor-pointer items-center gap-1 rounded-full px-1.5 py-1',
                 filters.isFilterOpen && 'bg-fill-normal-interaction-pressed',
@@ -114,6 +115,8 @@ export default function RagInput({ filters, isLoading, onSendMessage, onStop, on
             {/* 전송 / 중지 버튼 */}
             {isLoading ? (
               <button
+                type="button"
+                aria-label="답변 생성 중지"
                 onClick={onStop}
                 className="bg-fill-normal-interaction-disable flex h-10 w-10 items-center justify-center rounded-full"
               >
@@ -121,6 +124,8 @@ export default function RagInput({ filters, isLoading, onSendMessage, onStop, on
               </button>
             ) : (
               <button
+                type="button"
+                aria-label="질문 보내기"
                 onClick={handleSendMessage}
                 disabled={isLoading || !newInput.trim()}
                 className={cn(

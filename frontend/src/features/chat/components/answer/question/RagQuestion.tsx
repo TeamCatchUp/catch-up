@@ -39,7 +39,7 @@ export default function RagQuestion({ currentQA, isLastPage, onSubmitEdit }: Rag
 
   return (
     <div className="group flex items-end justify-end gap-2.5">
-      <div className="hidden group-hover:flex">
+      <div className="pointer-events-none flex opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 focus-within:pointer-events-auto focus-within:opacity-100">
         <QuestionActions
           content={questionContent}
           onEdit={isLastPage ? () => setEditingMessageId(questionId) : undefined}

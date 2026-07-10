@@ -67,12 +67,14 @@ export default function EditMessageInput({ initialContent, onCancel, onSubmit }:
       />
       <div className="flex items-center justify-end gap-2.5">
         <button
+          type="button"
           onClick={onCancel}
           className="capsule-button-outline-mono flex shrink-0 cursor-pointer items-center justify-center px-3 py-1.5"
         >
           <span className="text-body-small text-text-normal-normal">취소</span>
         </button>
         <button
+          type="button"
           onClick={handleSubmit}
           disabled={!editText.trim()}
           className="capsule-button-solid-primary flex shrink-0 cursor-pointer items-center justify-center px-3 py-1.5"
