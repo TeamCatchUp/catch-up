@@ -156,7 +156,7 @@ const meta = {
       fsdLayer: 'features',
       owner: 'feature',
       dataProfile: 'realistic-fixture',
-      designSource: 'figma',
+      designSource: 'dev-preview',
       states: ['fixture-default', 'filter-tabs', 'loading'],
       dataNotes: ['Uses AGENT_STUDIO_MULTI_ACTIVE_LIST_FIXTURE and AGENT_STUDIO_FILTERS.'],
       reuseNotes: [

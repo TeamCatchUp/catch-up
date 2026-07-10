@@ -180,7 +180,7 @@ const meta = {
       fsdLayer: 'features',
       owner: 'feature',
       dataProfile: 'realistic-fixture',
-      designSource: 'figma',
+      designSource: 'dev-preview',
       states: ['collapsed-applied', 'expanded-draft'],
       reuseNotes: [
         'Expanded state reuses shared DocumentSearchFilterRow.',

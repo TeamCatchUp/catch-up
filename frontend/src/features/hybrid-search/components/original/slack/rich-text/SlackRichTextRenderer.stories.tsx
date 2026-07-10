@@ -26,7 +26,7 @@ const meta = {
         caseId: 'slack-rich-message',
         groupId: 'original-panel',
       },
-      designSource: 'figma',
+      designSource: 'dev-preview',
       states: ['inline-code', 'bold', 'strike', 'link', 'bullet-list', 'ordered-list', 'quote', 'code-block'],
       viewport: {
         width: 520,

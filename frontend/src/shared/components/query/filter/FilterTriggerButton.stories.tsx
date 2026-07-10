@@ -50,7 +50,7 @@ const meta = {
       fsdLayer: 'shared',
       owner: 'shared',
       dataProfile: 'static',
-      designSource: 'figma',
+      designSource: 'dev-preview',
       states: ['inactive', 'active', 'open'],
       interactionNotes: ['Actions log trigger clicks through storybook/test fn spies.'],
       usedBy: ['home-docs', 'hybrid-search'],

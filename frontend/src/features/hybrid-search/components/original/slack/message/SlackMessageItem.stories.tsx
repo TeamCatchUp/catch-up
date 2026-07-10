@@ -62,7 +62,7 @@ const meta = {
         caseId: 'slack-message-item',
         groupId: 'original-panel',
       },
-      designSource: 'figma',
+      designSource: 'dev-preview',
       states: ['user-message', 'bot-rich-message', 'edited-label', 'file-attachment', 'link-preview'],
       viewport: {
         width: 520,

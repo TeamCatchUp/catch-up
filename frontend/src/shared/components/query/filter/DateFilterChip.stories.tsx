@@ -93,7 +93,7 @@ const meta = {
       fsdLayer: 'shared',
       owner: 'shared',
       dataProfile: 'realistic-fixture',
-      designSource: 'figma',
+      designSource: 'dev-preview',
       states: ['empty', 'range-selected', 'single-day'],
       interactionNotes: ['The play function opens the date popover, selects today, and applies the range.'],
       usedBy: ['home-docs', 'hybrid-search'],

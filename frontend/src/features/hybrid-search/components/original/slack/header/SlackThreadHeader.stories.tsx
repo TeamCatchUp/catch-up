@@ -34,7 +34,7 @@ const meta = {
         caseId: 'slack-thread-header',
         groupId: 'original-panel',
       },
-      designSource: 'figma',
+      designSource: 'dev-preview',
       states: ['channel-name', 'participants', 'empty-participants', 'long-text-truncation'],
       viewport: {
         width: 520,

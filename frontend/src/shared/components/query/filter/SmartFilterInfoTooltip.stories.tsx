@@ -17,7 +17,7 @@ const meta = {
       fsdLayer: 'shared',
       owner: 'shared',
       dataProfile: 'static',
-      designSource: 'figma',
+      designSource: 'dev-preview',
       states: ['default', 'tooltip-open'],
       interactionNotes: ['The play function hovers the info icon and verifies tooltip copy.'],
       usedBy: ['home-docs', 'hybrid-search'],

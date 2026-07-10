@@ -72,7 +72,7 @@ const meta = {
       fsdLayer: 'features',
       owner: 'feature',
       dataProfile: 'static',
-      designSource: 'figma',
+      designSource: 'dev-preview',
       states: ['all', 'active', 'draft', 'inactive', 'mine-only'],
       reuseNotes: ['Feature-specific filter rail composed from shared Chip and Switch primitives.'],
       interactionNotes: ['The play function selects a status chip and toggles the mine-only switch.'],

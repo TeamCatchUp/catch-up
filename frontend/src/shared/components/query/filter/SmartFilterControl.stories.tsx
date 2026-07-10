@@ -68,7 +68,7 @@ const meta = {
       fsdLayer: 'shared',
       owner: 'shared',
       dataProfile: 'static',
-      designSource: 'figma',
+      designSource: 'dev-preview',
       states: ['checked', 'unchecked', 'primary-tone', 'neutral-tone'],
       interactionNotes: ['The play function toggles the underlying switch and logs the state change.'],
       usedBy: ['home-docs', 'hybrid-search'],

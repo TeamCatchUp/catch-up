@@ -88,7 +88,7 @@ const meta = {
       fsdLayer: 'shared',
       owner: 'shared',
       dataProfile: 'realistic-fixture',
-      designSource: 'figma',
+      designSource: 'dev-preview',
       states: ['empty', 'selected', 'all-selected', 'search-empty'],
       interactionNotes: ['The play function opens the dropdown and selects Github.'],
       usedBy: ['home-docs', 'hybrid-search'],

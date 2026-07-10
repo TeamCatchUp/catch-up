@@ -15,7 +15,7 @@ const meta = {
       fsdLayer: 'features',
       owner: 'feature',
       dataProfile: 'realistic-fixture',
-      designSource: 'figma',
+      designSource: 'dev-preview',
       states: ['fixture-default'],
       reuseNotes: ['Left pane is the editor preview and breadcrumb composition used by the editor screen.'],
     }),

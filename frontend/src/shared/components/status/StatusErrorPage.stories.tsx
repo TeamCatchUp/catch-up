@@ -86,7 +86,7 @@ const meta = {
       fsdLayer: 'shared',
       owner: 'shared',
       dataProfile: 'static',
-      designSource: 'figma',
+      designSource: 'dev-preview',
       states: ['not-found-light', 'not-found-dark', 'forbidden-light', 'forbidden-dark'],
       reuseNotes: [
         'Status actions reuse shared Button variants.',
