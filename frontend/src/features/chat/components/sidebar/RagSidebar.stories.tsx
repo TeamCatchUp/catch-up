@@ -2,12 +2,12 @@
 
 import type { Meta, StoryObj } from '@storybook/nextjs-vite';
 
+import { chatAnswerWithCitations, chatSourceListFixture } from '@/features/chat/__fixtures__/chatStory.fixtures';
 import type { Message, PipelineQueryType, StepRow } from '@/features/chat/types';
 import type { QAPair } from '@/features/chat/utils/render/chat';
 
 import { catchupParameters } from '../../../../../.storybook/catchupStoryParameters';
 import RagSidebar from './RagSidebar';
-import { chatAnswerWithCitations, chatSourceListFixture } from './source/__fixtures__/sourceStory.fixtures';
 
 type RagSidebarState = 'resolved' | 'loading' | 'error' | 'empty';
 

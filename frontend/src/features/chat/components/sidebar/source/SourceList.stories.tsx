@@ -3,8 +3,9 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite';
 import { expect, userEvent, within } from 'storybook/test';
 
+import { chatAnswerWithCitations, chatSourceListFixture } from '@/features/chat/__fixtures__/chatStory.fixtures';
+
 import { catchupParameters } from '../../../../../../.storybook/catchupStoryParameters';
-import { chatAnswerWithCitations, chatSourceListFixture } from './__fixtures__/sourceStory.fixtures';
 import SourceList from './SourceList';
 
 type SourceListState = 'resolved' | 'loading' | 'error' | 'empty';

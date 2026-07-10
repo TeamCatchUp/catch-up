@@ -1,11 +1,12 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite';
 
-import { catchupParameters } from '../../../../../../.storybook/catchupStoryParameters';
 import {
   chatSourceFixtures,
   type ChatSourcePreset,
   chatSourcePresetOptions,
-} from './__fixtures__/sourceStory.fixtures';
+} from '@/features/chat/__fixtures__/chatStory.fixtures';
+
+import { catchupParameters } from '../../../../../../.storybook/catchupStoryParameters';
 import SourceCard from './SourceCard';
 
 interface SourceCardStoryArgs {

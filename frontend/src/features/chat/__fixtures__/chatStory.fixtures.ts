@@ -1,6 +1,11 @@
-import type { ChatSource } from '@/features/chat/types';
+import type { ChatSource, Message, PipelineEvent } from '@/features/chat/types';
+import type { QAPair } from '@/features/chat/utils/render/chat';
 
 export type ChatSourcePreset = 'jira' | 'github' | 'slack' | 'confluence' | 'channel-talk-chat' | 'channel-talk-doc';
+
+export const chatStorySessionId = 'storybook-chat-session';
+export const chatStoryMessageId = 'storybook-answer-message';
+export const chatStoryHistoryId = '4242';
 
 export const chatSourcePresetOptions: readonly ChatSourcePreset[] = [
   'jira',
@@ -96,5 +101,51 @@ export const chatSourceFixtures = {
 
 export const chatSourceListFixture: ChatSource[] = chatSourcePresetOptions.map((preset) => chatSourceFixtures[preset]);
 
-export const chatAnswerWithCitations =
-  '일시적인 승인 실패는 운영 정책에 따라 재시도할 수 있습니다.[3] 팀 합의에서는 일시 오류 코드만 재시도 대상으로 제한했습니다.[1] 장애 대응 순서는 런북을 함께 확인하세요.[5]';
+export const chatAnswerWithCitations = `### 재시도 기준
+
+일시적인 승인 실패는 운영 정책에 따라 재시도할 수 있습니다.[3] 팀 합의에서는 일시 오류 코드만 재시도 대상으로 제한했습니다.[1]
+
+| 실패 유형 | 처리 방식 |
+| --- | --- |
+| 일시 오류 | 지수 백오프로 최대 3회 재시도 |
+| 영구 오류 | 즉시 고객 안내 후 재시도 중단 |
+
+장애 대응 순서는 런북을 함께 확인하세요.[5]`;
+
+export const complexPipelineEvents: PipelineEvent[] = [
+  { node: 'supervisor', status: 'completed', reasoning: '복합 분석이 필요한 질문으로 분류했습니다.' },
+  { node: 'rewrite', status: 'completed', content: { query: '결제 승인 실패 재시도 정책과 장애 대응 절차' } },
+  { node: 'complex_planner', status: 'in_progress', reasoning: '정책과 운영 대응 순서로 나누어 찾았습니다.' },
+  { node: 'complex_planner', status: 'completed', content: { step: 1, intent: '재시도 허용 조건 확인' } },
+  { node: 'complex_planner', status: 'completed', content: { step: 2, intent: '장애 대응 런북 확인' } },
+  { node: 'tool_executor', status: 'completed', reasoning: '18건의 문서를 찾았습니다.' },
+  { node: 'tool_executor', status: 'completed', reasoning: '7건의 대화를 찾았습니다.' },
+  { node: 'generate_final_answer', status: 'completed', reasoning: null, content: null },
+];
+
+export const chatQuestionFixture: Message = {
+  id: 'storybook-question-message',
+  role: 'user',
+  content: '결제 승인 실패가 발생했을 때 어떤 조건으로 재시도해야 하나요?',
+  timestamp: '2026-07-10T09:00:00.000Z',
+};
+
+export const chatAnswerFixture: Message = {
+  id: chatStoryMessageId,
+  chat_history_id: chatStoryHistoryId,
+  role: 'assistant',
+  content: chatAnswerWithCitations,
+  sources: chatSourceListFixture,
+  timestamp: '2026-07-10T09:00:08.000Z',
+  has_feedback: false,
+  is_saved: false,
+  pipeline_result: complexPipelineEvents,
+};
+
+export function makeChatQAPair(answerOverrides: Partial<Message> = {}): QAPair {
+  return {
+    question: chatQuestionFixture,
+    answer: { ...chatAnswerFixture, ...answerOverrides },
+    index: 0,
+  };
+}
