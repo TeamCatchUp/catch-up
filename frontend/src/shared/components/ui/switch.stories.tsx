@@ -22,7 +22,6 @@ function StatefulSwitch({ initialChecked, disabled, label, onCheckedChange }: Sw
       <Switch
         checked={checked}
         disabled={disabled}
-        aria-label={label}
         onCheckedChange={(next) => {
           setChecked(next);
           onCheckedChange(next);
