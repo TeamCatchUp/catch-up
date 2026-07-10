@@ -6,7 +6,6 @@ interface SearchOptionButtonProps extends React.ButtonHTMLAttributes<HTMLButtonE
   Icon: React.FC<React.SVGProps<SVGSVGElement>>;
   label: string;
   selected?: boolean;
-  // 아이콘 사이즈 등을 override할 때 사용 (기본 h-5 w-5)
   iconClassName?: string;
 }
 
