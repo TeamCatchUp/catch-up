@@ -1,6 +1,6 @@
 export interface CatchupStoryParameters {
   level: 'primitive' | 'composition' | 'screen';
-  domain: 'shared' | 'home' | 'hybrid-search' | 'agent-studio' | 'admin' | 'onboarding';
+  domain: 'shared' | 'home' | 'hybrid-search' | 'chat' | 'agent-studio' | 'admin' | 'onboarding';
   fsdLayer: 'shared' | 'entities' | 'features' | 'widgets' | 'app';
   owner: 'shared' | 'feature' | 'widget' | 'app';
   dataProfile: 'static' | 'realistic-fixture' | 'msw' | 'empty' | 'loading' | 'error';
@@ -19,7 +19,7 @@ export interface CatchupStoryParameters {
     height?: number;
   };
   states: readonly string[];
-  usedBy?: readonly ('home-docs' | 'hybrid-search' | 'agent-studio')[];
+  usedBy?: readonly ('home-docs' | 'hybrid-search' | 'chat' | 'agent-studio')[];
   layoutNotes?: readonly string[];
   dataNotes?: readonly string[];
   reuseNotes?: readonly string[];
