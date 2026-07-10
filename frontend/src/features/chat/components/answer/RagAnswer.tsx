@@ -87,7 +87,7 @@ export default function RagAnswer({
       {showSkeleton && <RagAnswerSkeleton pipelineType={pipelineQueryType} pipelineReasoning={pipelineReasoning} />}
 
       {showAnswerMarkdown && (
-        <div className="markdown-body max-w-192.75 wrap-break-word">
+        <div className="markdown-body max-w-192.75 break-keep wrap-break-word">
           <ReactMarkdown
             remarkPlugins={[remarkGfm, remarkBreaks]}
             components={MarkDownComponents(answer?.sources, citationOrderMap)}

@@ -58,9 +58,7 @@ export default function RagInput({ filters, isLoading, onSendMessage, onStop, on
   return (
     <div className="px-16 pb-2.5 backdrop-blur-[10px]">
       <div className="mx-auto flex w-full max-w-203 flex-col items-center gap-2">
-        {/* Text input 카드 */}
         <div className="border-line-normal-normal bg-fill-normal-normal flex w-full flex-col rounded-2xl border p-4">
-          {/* Filter Bar (카드 내부 상단) */}
           <div
             className={cn(
               'overflow-hidden transition-all duration-300 ease-in-out',
@@ -85,7 +83,6 @@ export default function RagInput({ filters, isLoading, onSendMessage, onStop, on
             </div>
           </div>
 
-          {/* Textarea */}
           <textarea
             ref={textAreaRef}
             placeholder="답은 이미 사내에 있어요. 바로 찾아드릴게요."
@@ -96,12 +93,11 @@ export default function RagInput({ filters, isLoading, onSendMessage, onStop, on
             className="text-body-medium text-text-normal-normal placeholder:text-text-normal-assistive h-6.5 max-h-67.5 w-full resize-none overflow-y-auto outline-none"
           />
 
-          {/* 하단 컨트롤 바 */}
           <div className="mt-3 flex h-8 items-center justify-between">
-            {/* 상세 검색 토글 */}
             <button
               type="button"
               onClick={filters.toggleFilter}
+              aria-expanded={filters.isFilterOpen}
               className={cn(
                 'text-text-normal-neutral flex h-7 cursor-pointer items-center gap-1 rounded-full px-1.5 py-1',
                 filters.isFilterOpen && 'bg-fill-normal-interaction-pressed',
@@ -111,9 +107,10 @@ export default function RagInput({ filters, isLoading, onSendMessage, onStop, on
               <span className="text-body-xsmall">상세 검색</span>
             </button>
 
-            {/* 전송 / 중지 버튼 */}
             {isLoading ? (
               <button
+                type="button"
+                aria-label="답변 생성 중지"
                 onClick={onStop}
                 className="bg-fill-normal-interaction-disable flex h-10 w-10 items-center justify-center rounded-full"
               >
@@ -121,6 +118,8 @@ export default function RagInput({ filters, isLoading, onSendMessage, onStop, on
               </button>
             ) : (
               <button
+                type="button"
+                aria-label="질문 보내기"
                 onClick={handleSendMessage}
                 disabled={isLoading || !newInput.trim()}
                 className={cn(
@@ -141,7 +140,6 @@ export default function RagInput({ filters, isLoading, onSendMessage, onStop, on
           </div>
         </div>
 
-        {/* Helper 텍스트 */}
         <p className="text-label-xsmall text-text-normal-alternative">
           출처를 기반으로 정보를 제공합니다. 자세한 내용은 원문을 확인해주세요.
         </p>

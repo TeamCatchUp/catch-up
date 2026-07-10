@@ -1,4 +1,3 @@
-// dev preview 갤러리(app/(dev)/original-panel) 전용 목 데이터 진입점.
 // 1.3 케이스 매트릭스를 content / message / metadata / response 파일로 분할해 재노출한다.
 // 모든 fixture는 originalApi.ts 타입으로 검증됨.
 

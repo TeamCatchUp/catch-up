@@ -21,6 +21,7 @@ const eslintConfig = defineConfig([
     'playwright-report/**',
     'storybook-static/**',
     'test-results/**',
+    'public/mockServiceWorker.js',
     // Local agent/tooling artifacts
     '.codex/**',
   ]),
