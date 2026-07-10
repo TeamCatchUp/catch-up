@@ -4,6 +4,7 @@ import type { Decorator, Preview } from '@storybook/nextjs-vite';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { initialize, mswLoader } from 'msw-storybook-addon';
 
+import Toast from '../src/shared/components/ui/toast';
 import { TooltipProvider } from '../src/shared/components/ui/tooltip';
 import { ThemeProvider } from '../src/shared/providers/ThemeProvider';
 
@@ -37,6 +38,7 @@ function StorybookProviders({ children }: { children: ReactNode }) {
       <QueryClientProvider client={queryClient}>
         <TooltipProvider delayDuration={200}>
           <div className="bg-fill-normal-normal text-text-normal-normal min-h-screen">{children}</div>
+          <Toast />
         </TooltipProvider>
       </QueryClientProvider>
     </ThemeProvider>

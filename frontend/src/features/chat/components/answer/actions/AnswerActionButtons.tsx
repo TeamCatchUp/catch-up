@@ -112,6 +112,17 @@ export default function AnswerActionButtons({
         const button = (
           <button
             key={i}
+            type="button"
+            aria-label={tooltipLabel}
+            aria-pressed={
+              isBookmark
+                ? bookmarked
+                : isThumbsUp
+                  ? isLikedActive
+                  : isThumbsDown
+                    ? Boolean(isThumbsDownPanelOpen || isDislikedActive)
+                    : undefined
+            }
             disabled={isFeedbackDisabled || (isThumbsUp && likeMutation.isPending)}
             onClick={() => {
               if (item.name === 'Copy') {
