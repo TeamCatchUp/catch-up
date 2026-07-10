@@ -14,4 +14,9 @@ export const chatActionHandlers = [
   http.patch(saveUrl, () => HttpResponse.json({ status: 'success', message_id: Number(chatStoryHistoryId) })),
 ];
 
+export const chatScreenHandlers = [
+  ...chatActionHandlers,
+  http.get(API.version, () => HttpResponse.text('storybook')),
+];
+
 export const chatFeedbackErrorHandler = http.patch(feedbackUrl, () => new HttpResponse(null, { status: 500 }));
