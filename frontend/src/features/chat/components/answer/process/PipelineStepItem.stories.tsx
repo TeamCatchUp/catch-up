@@ -33,7 +33,7 @@ function PipelineStepItemSurface(args: PipelineStepItemStoryArgs) {
 
 const meta = {
   title: 'Primitives/Chat/Answers/PipelineStepItem',
-  component: PipelineStepItem,
+  component: PipelineStepItemSurface,
   tags: ['autodocs'],
   args: {
     preset: 'complex_planner',

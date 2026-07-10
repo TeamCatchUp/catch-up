@@ -40,7 +40,7 @@ function FeedbackSectionSurface(args: FeedbackSectionStoryArgs) {
 
 const meta = {
   title: 'Compositions/Chat/Feedback/FeedbackSection',
-  component: FeedbackSection,
+  component: FeedbackSectionSurface,
   tags: ['autodocs'],
   args: {
     visible: true,

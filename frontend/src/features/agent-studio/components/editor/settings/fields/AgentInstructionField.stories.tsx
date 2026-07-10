@@ -48,6 +48,7 @@ function StatefulAgentInstructionField(args: AgentInstructionFieldStoryArgs) {
 const meta = {
   title: 'Compositions/Agent Studio/Editor/AgentInstructionField',
   tags: ['autodocs'],
+  render: (args) => <StatefulAgentInstructionField key={`${args.preset}:${args.disabled}`} {...args} />,
   args: {
     preset: 'short-rule',
     disabled: false,
@@ -72,7 +73,7 @@ const meta = {
       fsdLayer: 'features',
       owner: 'feature',
       dataProfile: 'realistic-fixture',
-      designSource: 'figma',
+      designSource: 'dev-preview',
       states: ['empty', 'filled', 'multiline', 'disabled', 'focused'],
       reuseNotes: ['Feature-specific textarea field for Agent guide instructions.'],
       interactionNotes: ['The play function types into the textarea and verifies callback wiring.'],
@@ -85,7 +86,6 @@ export default meta;
 type Story = StoryObj<AgentInstructionFieldStoryArgs>;
 
 export const Playground: Story = {
-  render: (args) => <StatefulAgentInstructionField key={`${args.preset}:${args.disabled}`} {...args} />,
   play: async ({ args, canvasElement, userEvent }) => {
     if (args.disabled) return;
 

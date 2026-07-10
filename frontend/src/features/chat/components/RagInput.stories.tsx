@@ -48,7 +48,7 @@ const sourceOptions: readonly DocsSource[] = ['confluence', 'jira', 'slack', 'gi
 
 const meta = {
   title: 'Compositions/Chat/Input/RagInput',
-  component: RagInput,
+  component: RagInputSurface,
   tags: ['autodocs'],
   args: {
     initialFilterOpen: false,

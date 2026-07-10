@@ -67,7 +67,7 @@ function AnswerActionButtonsSurface(args: AnswerActionButtonsStoryArgs) {
 
 const meta = {
   title: 'Compositions/Chat/Answers/AnswerActionButtons',
-  component: AnswerActionButtons,
+  component: AnswerActionButtonsSurface,
   tags: ['autodocs'],
   args: {
     feedbackState: 'unrated',

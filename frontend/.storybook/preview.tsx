@@ -11,7 +11,11 @@ import { ThemeProvider } from '../src/shared/providers/ThemeProvider';
 import '../src/shared/styles/globals.css';
 
 initialize({
-  onUnhandledRequest: 'bypass',
+  onUnhandledRequest(request, print) {
+    if (new URL(request.url).pathname.startsWith('/api/')) {
+      print.error();
+    }
+  },
 });
 
 function makeStorybookQueryClient() {

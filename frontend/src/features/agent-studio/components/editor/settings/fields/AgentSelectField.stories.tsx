@@ -46,7 +46,11 @@ function StatefulAgentSelectField(args: AgentSelectFieldStoryArgs) {
       <div className="w-full max-w-160">
         <AgentSelectField
           required={args.required}
-          label={isQuietPeriod ? '고객의 마지막 문의 메시지가 들어온 후 몇 분 후에 Agent를 실행할까요?' : '어떤 채널로 들어오는 문의를 감지할까요?'}
+          label={
+            isQuietPeriod
+              ? '고객의 마지막 문의 메시지가 들어온 후 몇 분 후에 Agent를 실행할까요?'
+              : '어떤 채널로 들어오는 문의를 감지할까요?'
+          }
           value={value}
           placeholder={args.placeholder}
           icon={
@@ -73,6 +77,7 @@ function StatefulAgentSelectField(args: AgentSelectFieldStoryArgs) {
 const meta = {
   title: 'Compositions/Agent Studio/Editor/AgentSelectField',
   tags: ['autodocs'],
+  render: (args) => <StatefulAgentSelectField key={`${args.optionSet}:${args.value}:${args.disabled}`} {...args} />,
   args: {
     value: '',
     placeholder: '채널을 선택해주세요',
@@ -110,7 +115,7 @@ const meta = {
       fsdLayer: 'features',
       owner: 'feature',
       dataProfile: 'realistic-fixture',
-      designSource: 'figma',
+      designSource: 'dev-preview',
       states: ['placeholder', 'selected', 'disabled', 'required'],
       reuseNotes: ['Feature-specific field wrapper around shared Select primitives.'],
       interactionNotes: ['The play function opens the select and chooses a channel option.'],
@@ -123,7 +128,6 @@ export default meta;
 type Story = StoryObj<AgentSelectFieldStoryArgs>;
 
 export const Playground: Story = {
-  render: (args) => <StatefulAgentSelectField key={`${args.optionSet}:${args.value}:${args.disabled}`} {...args} />,
   play: async ({ args, canvasElement, step, userEvent }) => {
     if (args.disabled) return;
 

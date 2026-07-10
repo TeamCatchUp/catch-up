@@ -27,7 +27,7 @@ function SourceCardSurface(args: SourceCardStoryArgs) {
 
 const meta = {
   title: 'Compositions/Chat/Sources/SourceCard',
-  component: SourceCard,
+  component: SourceCardSurface,
   tags: ['autodocs'],
   args: {
     sourcePreset: 'jira',

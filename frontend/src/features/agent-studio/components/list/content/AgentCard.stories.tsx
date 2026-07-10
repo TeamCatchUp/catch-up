@@ -44,7 +44,6 @@ function AgentCardFrame({ children }: { children: ReactNode }) {
 
 const meta = {
   title: 'Compositions/Agent Studio/List/AgentCard',
-  component: AgentCard,
   tags: ['autodocs'],
   args: {
     status: 'active',
@@ -87,7 +86,7 @@ const meta = {
       fsdLayer: 'features',
       owner: 'feature',
       dataProfile: 'realistic-fixture',
-      designSource: 'figma',
+      designSource: 'dev-preview',
       states: ['active', 'draft', 'inactive', 'readonly', 'action-disabled'],
       reuseNotes: ['AgentCard is the entity-like visual unit inside the Agent Studio list workflow.'],
       interactionNotes: ['Editable active cards expose menu actions; inactive cards expose restore action.'],
@@ -142,7 +141,7 @@ export const StateSet: Story = {
       fsdLayer: 'features',
       owner: 'feature',
       dataProfile: 'realistic-fixture',
-      designSource: 'figma',
+      designSource: 'dev-preview',
       states: ['active', 'draft', 'inactive', 'readonly'],
     }),
   },

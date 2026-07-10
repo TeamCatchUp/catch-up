@@ -1,7 +1,7 @@
 'use client';
 
 import type { Meta, StoryObj } from '@storybook/nextjs-vite';
-import { expect, userEvent, within } from 'storybook/test';
+import { expect, userEvent, waitFor, within } from 'storybook/test';
 
 import { chatAnswerWithCitations, chatSourceListFixture } from '@/features/chat/__fixtures__/chatStory.fixtures';
 
@@ -36,7 +36,7 @@ function SourceListSurface(args: SourceListStoryArgs) {
 
 const meta = {
   title: 'Compositions/Chat/Sources/SourceList',
-  component: SourceList,
+  component: SourceListSurface,
   tags: ['autodocs'],
   args: {
     state: 'resolved',
@@ -86,9 +86,9 @@ export const FilterInteraction: Story = {
 
     await userEvent.click(canvas.getByRole('button', { name: /^Slack 1$/ }));
 
-    await expect(
-      canvas.getByText('"재시도는 승인 실패 코드가 일시 오류인 경우에만 허용하기로 했습니다."'),
-    ).toBeVisible();
+    await waitFor(() =>
+      expect(canvas.getByText('"재시도는 승인 실패 코드가 일시 오류인 경우에만 허용하기로 했습니다."')).toBeVisible(),
+    );
     await expect(canvas.queryByText('결제 승인 실패 시 재시도 정책 정리')).not.toBeInTheDocument();
   },
 };

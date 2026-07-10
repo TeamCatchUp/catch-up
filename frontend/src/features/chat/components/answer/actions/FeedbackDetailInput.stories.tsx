@@ -36,7 +36,7 @@ function FeedbackDetailInputSurface(args: FeedbackDetailInputStoryArgs) {
 
 const meta = {
   title: 'Primitives/Chat/Feedback/FeedbackDetailInput',
-  component: FeedbackDetailInput,
+  component: FeedbackDetailInputSurface,
   tags: ['autodocs'],
   args: {
     detailText: '',

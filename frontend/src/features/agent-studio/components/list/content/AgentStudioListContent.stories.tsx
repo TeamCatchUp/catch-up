@@ -74,7 +74,6 @@ function getAgents(dataset: AgentStudioListContentStoryArgs['dataset']) {
 
 const meta = {
   title: 'Compositions/Agent Studio/List/AgentStudioListContent',
-  component: AgentStudioListContent,
   tags: ['autodocs'],
   args: {
     selectedFilter: 'all',
@@ -113,7 +112,7 @@ const meta = {
       fsdLayer: 'features',
       owner: 'feature',
       dataProfile: 'realistic-fixture',
-      designSource: 'figma',
+      designSource: 'dev-preview',
       states: ['mixed-grouped', 'filtered-grid', 'empty-filter', 'readonly-card'],
       dataNotes: ['Uses story-local fixture data that includes active, draft, inactive, and readonly agents.'],
       reuseNotes: ['This is the assembled list body below AgentFilterTabs and above the screen shell.'],
@@ -161,7 +160,7 @@ export const DraftEmpty: Story = {
       fsdLayer: 'features',
       owner: 'feature',
       dataProfile: 'empty',
-      designSource: 'figma',
+      designSource: 'dev-preview',
       states: ['empty-filter'],
     }),
   },

@@ -55,7 +55,7 @@ function RagAnswerSurface(args: RagAnswerStoryArgs) {
 
 const meta = {
   title: 'Compositions/Chat/Answers/RagAnswer',
-  component: RagAnswer,
+  component: RagAnswerSurface,
   tags: ['autodocs'],
   args: {
     state: 'resolved',

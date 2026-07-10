@@ -20,7 +20,6 @@ interface AgentSettingSectionStoryArgs {
 
 const meta = {
   title: 'Compositions/Agent Studio/Editor/AgentSettingSection',
-  component: AgentSettingSection,
   tags: ['autodocs'],
   args: {
     step: 2,
@@ -52,7 +51,7 @@ const meta = {
       fsdLayer: 'features',
       owner: 'feature',
       dataProfile: 'realistic-fixture',
-      designSource: 'figma',
+      designSource: 'dev-preview',
       states: ['step-one', 'step-two', 'disabled-fields'],
       reuseNotes: ['Section composes editor field controls while owning step title and bordered body layout.'],
     }),

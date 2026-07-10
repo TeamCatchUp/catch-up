@@ -43,7 +43,7 @@ function RagSidebarSurface(args: RagSidebarStoryArgs) {
 
 const meta = {
   title: 'Screens/Chat/RagSidebar',
-  component: RagSidebar,
+  component: RagSidebarSurface,
   tags: ['autodocs'],
   args: {
     state: 'resolved',

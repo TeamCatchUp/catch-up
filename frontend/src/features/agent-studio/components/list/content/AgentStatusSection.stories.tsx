@@ -35,7 +35,6 @@ function makeAgent(label: AgentStatusSectionLabel): AgentStudioCardModel {
 
 const meta = {
   title: 'Compositions/Agent Studio/List/AgentStatusSection',
-  component: AgentStatusSection,
   tags: ['autodocs'],
   args: {
     label: '운영중',
@@ -61,7 +60,7 @@ const meta = {
       fsdLayer: 'features',
       owner: 'feature',
       dataProfile: 'realistic-fixture',
-      designSource: 'figma',
+      designSource: 'dev-preview',
       states: ['active-section', 'draft-section', 'inactive-section', 'empty-content'],
       reuseNotes: ['AgentStatusSection owns the status-column header and count treatment.'],
     }),
@@ -96,7 +95,7 @@ export const StateSet: Story = {
       fsdLayer: 'features',
       owner: 'feature',
       dataProfile: 'realistic-fixture',
-      designSource: 'figma',
+      designSource: 'dev-preview',
       states: ['active-section', 'draft-section', 'inactive-section'],
     }),
   },

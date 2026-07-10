@@ -39,7 +39,7 @@ function StatefulSelect({ value: initialValue, placeholder, disabled, onValueCha
           </SelectTrigger>
           <SelectContent>
             {selectOptions.map((option) => (
-              <SelectItem key={option.value} value={option.value} disabled={option.disabled}>
+              <SelectItem key={option.value} value={option.value} disabled={'disabled' in option && option.disabled}>
                 {option.label}
               </SelectItem>
             ))}

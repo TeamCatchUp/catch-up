@@ -26,7 +26,7 @@ function PipelineProcessAccordionSurface(args: PipelineProcessAccordionStoryArgs
 
 const meta = {
   title: 'Compositions/Chat/Answers/PipelineProcessAccordion',
-  component: PipelineProcessAccordion,
+  component: PipelineProcessAccordionSurface,
   tags: ['autodocs'],
   args: {
     sourceCount: 6,
