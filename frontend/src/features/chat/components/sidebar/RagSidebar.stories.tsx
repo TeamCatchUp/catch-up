@@ -2,9 +2,8 @@
 
 import type { Meta, StoryObj } from '@storybook/nextjs-vite';
 
-import { chatAnswerWithCitations, chatSourceListFixture } from '@/features/chat/__fixtures__/chatStory.fixtures';
-import type { Message, PipelineQueryType, StepRow } from '@/features/chat/types';
-import type { QAPair } from '@/features/chat/utils/render/chat';
+import { chatLoadingStepRows, makeChatQAPair } from '@/features/chat/__fixtures__/chatStory.fixtures';
+import type { PipelineQueryType } from '@/features/chat/types';
 
 import { catchupParameters } from '../../../../../.storybook/catchupStoryParameters';
 import RagSidebar from './RagSidebar';
@@ -20,47 +19,8 @@ interface RagSidebarStoryArgs {
 const stateOptions: readonly RagSidebarState[] = ['resolved', 'loading', 'error', 'empty'];
 const pipelineOptions: readonly PipelineQueryType[] = ['simple', 'standard', 'complex'];
 
-const question: Message = {
-  id: 'chat-story-question',
-  role: 'user',
-  content: '결제 승인 실패가 발생했을 때 어떤 조건으로 재시도해야 하나요?',
-  timestamp: '2026-07-10T09:00:00.000Z',
-};
-
-const answer: Message = {
-  id: 'chat-story-answer',
-  role: 'assistant',
-  content: chatAnswerWithCitations,
-  sources: chatSourceListFixture,
-  timestamp: '2026-07-10T09:00:08.000Z',
-};
-
-const resolvedPair: QAPair = {
-  question,
-  answer,
-  index: 0,
-};
-
-const emptyPair: QAPair = {
-  question,
-  answer: { ...answer, id: 'chat-story-empty-answer', content: '', sources: [] },
-  index: 0,
-};
-
-const loadingRows: StepRow[] = [
-  {
-    id: 'rewrite-query',
-    node: 'query_rewriter',
-    inProgress: null,
-    completedItems: [{ reasoning: '질문의 핵심 조건을 검색어로 정리했습니다.', content: '결제 승인 실패 재시도 정책' }],
-  },
-  {
-    id: 'search-sources',
-    node: 'hybrid_search',
-    inProgress: { reasoning: '관련 정책과 최근 팀 논의를 찾고 있습니다.', content: null },
-    completedItems: [],
-  },
-];
+const resolvedPair = makeChatQAPair();
+const emptyPair = makeChatQAPair({ id: 'chat-story-empty-answer', content: '', sources: [] });
 
 function RagSidebarSurface(args: RagSidebarStoryArgs) {
   const isLoading = args.state === 'loading';
@@ -72,7 +32,7 @@ function RagSidebarSurface(args: RagSidebarStoryArgs) {
         currentQA={currentQA}
         isLoading={isLoading}
         isError={args.state === 'error'}
-        stepRows={isLoading ? loadingRows : []}
+        stepRows={isLoading ? chatLoadingStepRows : []}
         topic={isLoading ? args.topic : null}
         pipelineQueryType={isLoading ? args.pipelineQueryType : null}
         pipelineReasoning={isLoading ? '질문을 분석하고 관련 자료를 탐색합니다.' : null}

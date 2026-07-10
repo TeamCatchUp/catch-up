@@ -1,4 +1,4 @@
-import type { ChatSource, Message, PipelineEvent } from '@/features/chat/types';
+import type { ChatSource, Message, PipelineEvent, StepRow } from '@/features/chat/types';
 import type { QAPair } from '@/features/chat/utils/render/chat';
 
 export type ChatSourcePreset = 'jira' | 'github' | 'slack' | 'confluence' | 'channel-talk-chat' | 'channel-talk-doc';
@@ -141,6 +141,64 @@ export const chatAnswerFixture: Message = {
   is_saved: false,
   pipeline_result: complexPipelineEvents,
 };
+
+export const chatPreviousQuestionFixture: Message = {
+  id: 'storybook-previous-question-message',
+  role: 'user',
+  content: '지난주 결제 장애에서 고객 안내와 운영 대응은 어떤 순서로 진행했나요?',
+  timestamp: '2026-07-09T06:00:00.000Z',
+};
+
+export const chatPreviousAnswerFixture: Message = {
+  id: 'storybook-previous-answer-message',
+  chat_history_id: '4241',
+  role: 'assistant',
+  content:
+    '장애 감지 후 운영 채널에 상황을 공유하고, 영향 범위를 확인한 뒤 고객 공지를 게시했습니다.[5] 복구 후에는 실패한 결제를 재처리했습니다.',
+  sources: [chatSourceFixtures.confluence],
+  timestamp: '2026-07-09T06:00:07.000Z',
+  has_feedback: true,
+  is_liked: true,
+  is_saved: false,
+  pipeline_result: complexPipelineEvents,
+};
+
+export const chatConversationMessagesFixture: Message[] = [
+  chatPreviousQuestionFixture,
+  chatPreviousAnswerFixture,
+  chatQuestionFixture,
+  chatAnswerFixture,
+];
+
+export const chatStreamingAnswerFixture: Message = {
+  ...chatAnswerFixture,
+  id: 'storybook-streaming-answer-message',
+  content: '',
+  sources: [],
+  pipeline_result: null,
+};
+
+export const chatConversationStreamingMessagesFixture: Message[] = [
+  chatPreviousQuestionFixture,
+  chatPreviousAnswerFixture,
+  chatQuestionFixture,
+  chatStreamingAnswerFixture,
+];
+
+export const chatLoadingStepRows: StepRow[] = [
+  {
+    id: 'rewrite-query',
+    node: 'query_rewriter',
+    inProgress: null,
+    completedItems: [{ reasoning: '질문의 핵심 조건을 검색어로 정리했습니다.', content: '결제 승인 실패 재시도 정책' }],
+  },
+  {
+    id: 'search-sources',
+    node: 'hybrid_search',
+    inProgress: { reasoning: '관련 정책과 최근 팀 논의를 찾고 있습니다.', content: null },
+    completedItems: [],
+  },
+];
 
 export function makeChatQAPair(answerOverrides: Partial<Message> = {}): QAPair {
   return {
