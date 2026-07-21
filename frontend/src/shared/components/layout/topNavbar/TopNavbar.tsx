@@ -79,7 +79,7 @@ export default function TopNavbar({ pageType }: TopNavbarProps) {
           <li>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="icon-only-gray" size="md">
+                <Button variant="icon-only-gray" size="md" aria-label="더보기 메뉴">
                   <KebabHorizontalIcon className="h-6 w-6" />
                 </Button>
               </DropdownMenuTrigger>

@@ -226,6 +226,24 @@ class UserSourceMappingApiTests(TestCase):
         self.assertEqual(payload["total"], 1)
         self.assertIsNone(payload["items"][0]["channel_talk"])
 
+    def test_list_includes_user_without_any_source_mapping(self) -> None:
+        user = self._add_user()
+        self.db.commit()
+
+        payload = (
+            integrations_api.user_source_mapping_application.list_user_source_mappings(
+                page=1,
+                size=50,
+            )
+        )
+
+        self.assertEqual(payload.total, 1)
+        self.assertEqual(payload.items[0].user_id, user.id)
+        self.assertIsNone(payload.items[0].slack)
+        self.assertIsNone(payload.items[0].github)
+        self.assertIsNone(payload.items[0].atlassian)
+        self.assertIsNone(payload.items[0].channel_talk)
+
     def test_refresh_inserts_missing_channel_talk_mapping_and_preserves_it(self) -> None:
         user = self._add_user()
         self._add_channel_talk_manager()

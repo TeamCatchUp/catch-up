@@ -12,3 +12,19 @@ export type StreamEventApi =
   | { type: 'sources'; session_id?: string; sources?: SourceResponseApi[] }
   | { type: 'token'; session_id?: string; token: string }
   | ({ type: 'process'; session_id?: string } & PipelineEventApi);
+
+export interface ChatGenerationStatusResponseApi {
+  is_generating: boolean;
+  cutoff_id: string | null;
+}
+
+export interface ChatCancelGenerationResponseApi {
+  status: 'cancelled' | 'not_running';
+}
+
+export interface SseStreamEventEnvelopeApi {
+  id?: string;
+  event: StreamEventApi;
+}
+
+export type SseRenderMode = 'instant' | 'realtime';

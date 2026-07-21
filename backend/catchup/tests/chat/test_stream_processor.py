@@ -12,6 +12,7 @@ from unittest.mock import AsyncMock
 from unittest.mock import MagicMock
 from unittest.mock import patch
 
+
 # 헬퍼
 def _make_processor(save_message: AsyncMock | None = None):
     """테스트용 ChatStreamProcessor 인스턴스를 반환한다."""
@@ -82,14 +83,13 @@ class TestTokenStreamCitationBuffer(IsolatedAsyncioTestCase):
         self.processor = _make_processor()
 
     async def test_plain_text_is_yielded_immediately(self):
-        """일반 텍스트는 즉시 전송되고 버퍼는 비워진다."""
+        """일반 텍스트는 즉시 전송되고(청크 분할 가능) 버퍼는 비워진다."""
         from catchup.chat.schemas import ChatStreamingTokenResponse
 
         results = await _collect(self.processor, _make_token_event("Hello world"))
 
-        self.assertEqual(len(results), 1)
-        self.assertIsInstance(results[0], ChatStreamingTokenResponse)
-        self.assertEqual(results[0].token, "Hello world")
+        self.assertTrue(all(isinstance(r, ChatStreamingTokenResponse) for r in results))
+        self.assertEqual("".join(r.token for r in results), "Hello world")
         self.assertEqual(self.processor.context.buffer, "")
 
     async def test_suspicious_prefix_is_buffered(self):
@@ -106,14 +106,13 @@ class TestTokenStreamCitationBuffer(IsolatedAsyncioTestCase):
                 self.assertEqual(processor.context.buffer, prefix)
 
     async def test_citations_tag_triggers_cutoff(self):
-        """<citations 태그가 나타나면 그 앞 텍스트만 전송하고 스트리밍을 차단한다."""
+        """<citations 태그가 나타나면 그 앞 텍스트만 전송하고(청크 분할 가능) 스트리밍을 차단한다."""
         from catchup.chat.schemas import ChatStreamingTokenResponse
 
         results = await _collect(self.processor, _make_token_event("답변 내용<citations>..."))
 
-        self.assertEqual(len(results), 1)
-        self.assertIsInstance(results[0], ChatStreamingTokenResponse)
-        self.assertEqual(results[0].token, "답변 내용")
+        self.assertTrue(all(isinstance(r, ChatStreamingTokenResponse) for r in results))
+        self.assertEqual("".join(r.token for r in results), "답변 내용")
         self.assertTrue(self.processor.context.is_citation_reached)
 
     async def test_citation_tag_at_start_yields_nothing(self):

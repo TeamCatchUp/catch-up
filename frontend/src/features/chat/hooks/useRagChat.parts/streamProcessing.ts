@@ -6,10 +6,17 @@ import {
   updateStreamingSources,
 } from '@/features/chat/hooks/useRagChat.parts/streamMessageUpdater';
 import { upsertStepRow } from '@/features/chat/hooks/useRagChat.parts/upsertStepRow';
-import type { PipelineEvent, PipelineQueryType, SourceResponse, StreamEvent } from '@/features/chat/types';
+import type {
+  PipelineEvent,
+  PipelineQueryType,
+  SourceResponse,
+  SseRenderMode,
+  StreamEvent,
+} from '@/features/chat/types';
 import { normalizeStreamSources } from '@/shared/utils/normalize/normalizeRagSources';
 
-import type { ChatStateSetters, SessionGuardRefs, StreamRuntimeRefs } from './types';
+import { normalizeStreamEventsForRenderMode } from './streamRenderMode';
+import type { ActiveStreamQuestion, ChatStateSetters, SessionGuardRefs, StreamRuntimeRefs } from './types';
 
 interface UseStreamProcessingParams {
   // 첫 질문(q) 컨텍스트
@@ -23,6 +30,7 @@ interface UseStreamProcessingParams {
   // 종료 후 동기화/부수효과
   syncChatDataFromServer: (sessionId: string) => Promise<void>;
   refreshRecentChatsNow: () => void;
+  upsertOptimisticRecentChatNow: (sessionId: string, question: ActiveStreamQuestion) => void;
   resolveSessionIdFromStream: (streamSessionId?: string) => void;
 
   // 상태 세터 + ref
@@ -43,6 +51,7 @@ interface UseStreamProcessingReturn {
   ) => void;
   finalizeAfterStreamClose: () => Promise<void>;
   handleStreamEvent: (event: StreamEvent) => void;
+  handleStreamEvents: (events: readonly StreamEvent[], options?: { renderMode?: SseRenderMode }) => void;
 }
 
 /**
@@ -56,6 +65,7 @@ export const useStreamProcessing = ({
   resetStreamStateRefs,
   syncChatDataFromServer,
   refreshRecentChatsNow,
+  upsertOptimisticRecentChatNow,
   resolveSessionIdFromStream,
   stateSetters,
   sessionRefs,
@@ -64,8 +74,16 @@ export const useStreamProcessing = ({
   // ---------------------------------------------------------------------------
   // Shared setters/refs
   // ---------------------------------------------------------------------------
-  const { setChatData, setIsLoading, setIsError, setStepRows, setPipelineQueryType, setTopic, setPipelineReasoning } =
-    stateSetters;
+  const {
+    setChatData,
+    setIsLoading,
+    setIsGenerating,
+    setIsError,
+    setStepRows,
+    setPipelineQueryType,
+    setTopic,
+    setPipelineReasoning,
+  } = stateSetters;
   const { canReplacePlaceholderRef } = sessionRefs;
   const {
     streamingMessageIdRef,
@@ -74,6 +92,7 @@ export const useStreamProcessing = ({
     latestUiSourcesRef,
     streamInFlightRef,
     resolvedSessionIdRef,
+    activeQuestionRef,
   } = streamRefs;
 
   // 스트리밍 중 수신한 process 이벤트 raw 누적 — 스트림 종료 시 방금 끝난 메시지에 attach
@@ -94,6 +113,7 @@ export const useStreamProcessing = ({
     streamInFlightRef.current = true;
     canReplacePlaceholderRef.current = false;
     setIsLoading(true);
+    setIsGenerating(true);
     setIsError(false);
     setStepRows([]);
     setPipelineQueryType(null);
@@ -105,6 +125,7 @@ export const useStreamProcessing = ({
     resetStopped,
     resetStreamStateRefs,
     setIsError,
+    setIsGenerating,
     setIsLoading,
     setPipelineQueryType,
     setPipelineReasoning,
@@ -148,11 +169,13 @@ export const useStreamProcessing = ({
 
   const handleAbortError = useCallback(() => {
     streamInFlightRef.current = false;
+    activeQuestionRef.current = null;
+    setIsGenerating(false);
 
     if (isStopped()) return;
 
     setIsLoading(false);
-  }, [isStopped, setIsLoading, streamInFlightRef]);
+  }, [activeQuestionRef, isStopped, setIsGenerating, setIsLoading, streamInFlightRef]);
 
   /**
    * result 이벤트를 assistant 메시지에 반영
@@ -294,6 +317,8 @@ export const useStreamProcessing = ({
   const finalizeAfterStreamClose = useCallback(async () => {
     if (isStopped()) {
       streamInFlightRef.current = false;
+      activeQuestionRef.current = null;
+      setIsGenerating(false);
       return;
     }
     canReplacePlaceholderRef.current = true;
@@ -315,6 +340,7 @@ export const useStreamProcessing = ({
     attachPipelineResultToMessage(streamedMessageId);
 
     setIsLoading(false);
+    setIsGenerating(false);
     streamingMessageIdRef.current = null;
     streamInFlightRef.current = false;
 
@@ -324,12 +350,16 @@ export const useStreamProcessing = ({
         syncChatDataFromServer(targetSessionId);
         refreshRecentChatsNow();
       }
+      activeQuestionRef.current = null;
       return;
     }
 
     // status만 수신한 뒤 종료된 경우(예: 백엔드 예외 후 스트림 종료) → 에러 노출
     setIsError(true);
+    refreshRecentChatsNow();
+    activeQuestionRef.current = null;
   }, [
+    activeQuestionRef,
     attachPipelineResultToMessage,
     canReplacePlaceholderRef,
     hasStreamedTokenRef,
@@ -338,6 +368,7 @@ export const useStreamProcessing = ({
     resolvedSessionIdRef,
     setChatData,
     setIsError,
+    setIsGenerating,
     setIsLoading,
     streamInFlightRef,
     streamingMessageIdRef,
@@ -347,8 +378,15 @@ export const useStreamProcessing = ({
   const handleStreamEvent = useCallback(
     (event: StreamEvent) => {
       // 가능한 가장 이른 시점에 session_id를 흡수해 stale session 문제를 줄인다.
-      if ('session_id' in event) {
+      if ('session_id' in event && event.session_id) {
+        resolvedSessionIdRef.current = event.session_id;
         resolveSessionIdFromStream(event.session_id);
+
+        const activeQuestion = activeQuestionRef.current;
+        if (activeQuestion && activeQuestion.recentCacheSessionId !== event.session_id) {
+          activeQuestion.recentCacheSessionId = event.session_id;
+          upsertOptimisticRecentChatNow(event.session_id, activeQuestion);
+        }
       }
       if (isStopped()) return;
 
@@ -399,12 +437,25 @@ export const useStreamProcessing = ({
       hasStreamedTokenRef,
       isStopped,
       resolveSessionIdFromStream,
+      resolvedSessionIdRef,
       setIsLoading,
       setPipelineQueryType,
       setPipelineReasoning,
       setStepRows,
       setTopic,
+      activeQuestionRef,
+      upsertOptimisticRecentChatNow,
     ],
+  );
+
+  const handleStreamEvents = useCallback(
+    (events: readonly StreamEvent[], options: { renderMode?: SseRenderMode } = {}) => {
+      const renderMode = options.renderMode ?? 'realtime';
+      for (const event of normalizeStreamEventsForRenderMode(events, renderMode)) {
+        handleStreamEvent(event);
+      }
+    },
+    [handleStreamEvent],
   );
 
   return {
@@ -414,5 +465,6 @@ export const useStreamProcessing = ({
     appendAssistantAnswer,
     finalizeAfterStreamClose,
     handleStreamEvent,
+    handleStreamEvents,
   };
 };

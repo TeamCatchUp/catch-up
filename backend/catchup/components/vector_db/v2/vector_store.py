@@ -1,14 +1,12 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-import re
 
 import structlog
 from langchain.embeddings import Embeddings
 from langchain_core.documents import Document
 from langchain_postgres import PGEngine
 from langchain_postgres import PGVectorStore
-from sqlalchemy import inspect
 
 from catchup.components.vector_db.v2.constants import KNOWLEDGE_STORE_CONTENT_COLUMN
 from catchup.components.vector_db.v2.constants import KNOWLEDGE_STORE_EMBEDDING_COLUMN
@@ -16,15 +14,8 @@ from catchup.components.vector_db.v2.constants import KNOWLEDGE_STORE_ID_COLUMN
 from catchup.components.vector_db.v2.constants import (
     KNOWLEDGE_STORE_METADATA_COLUMN_NAMES,
 )
-from catchup.components.vector_db.v2.constants import (
-    KNOWLEDGE_STORE_METADATA_JSON_COLUMN,
-)
 from catchup.components.vector_db.v2.constants import KNOWLEDGE_STORE_TABLE_NAME
-from catchup.components.vector_db.v2.constants import knowledge_store_id_column
-from catchup.components.vector_db.v2.constants import knowledge_store_metadata_columns
-from catchup.configs.config import settings
 from catchup.db.async_engine import async_engine as sqlalchemy_async_engine
-from catchup.db.engine import engine as sqlalchemy_engine
 
 logger = structlog.get_logger(__name__)
 
@@ -54,23 +45,6 @@ class VectorStore:
         pg_engine = self._pg_engine or PGEngine.from_engine(sqlalchemy_async_engine)
         self._pg_engine = pg_engine
 
-        if not self._table_exists():
-            await pg_engine.ainit_vectorstore_table(
-                table_name=self._table_name,
-                vector_size=settings.PGVECTOR_EMBEDDING_DIMENSIONS,
-                id_column=knowledge_store_id_column(),
-                content_column=KNOWLEDGE_STORE_CONTENT_COLUMN,
-                embedding_column=KNOWLEDGE_STORE_EMBEDDING_COLUMN,
-                metadata_columns=knowledge_store_metadata_columns(),
-                metadata_json_column=KNOWLEDGE_STORE_METADATA_JSON_COLUMN,
-                store_metadata=True,
-                overwrite_existing=False,
-            )
-            logger.info(
-                "pgvector_v2_table_created",
-                table_name=self._table_name,
-            )
-
         self._vector_store = await PGVectorStore.create(
             engine=pg_engine,
             table_name=self._table_name,
@@ -79,7 +53,7 @@ class VectorStore:
             content_column=KNOWLEDGE_STORE_CONTENT_COLUMN,
             embedding_column=KNOWLEDGE_STORE_EMBEDDING_COLUMN,
             metadata_columns=KNOWLEDGE_STORE_METADATA_COLUMN_NAMES,
-            metadata_json_column=KNOWLEDGE_STORE_METADATA_JSON_COLUMN,
+            metadata_json_column=None,
         )
         self._initialized = True
         logger.info(
@@ -154,9 +128,6 @@ class VectorStore:
                 "VectorStore not initialized. Call await vector_store.initialize() first."
             )
         return self._vector_store
-
-    def _table_exists(self) -> bool:
-        return inspect(sqlalchemy_engine).has_table(self._table_name)
 
     @staticmethod
     def _resolve_ids(

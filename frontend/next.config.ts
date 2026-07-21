@@ -1,7 +1,13 @@
 import type { NextConfig } from 'next';
 
+const shouldRemoveNonErrorConsole = process.env.NODE_ENV === 'production';
+
 const nextConfig = {
   reactStrictMode: true,
+
+  compiler: {
+    removeConsole: shouldRemoveNonErrorConsole ? { exclude: ['error'] } : false,
+  },
 
   images: {
     unoptimized: true,
@@ -34,12 +40,14 @@ const nextConfig = {
     const apiUrl = process.env.NEXT_PUBLIC_API_URL;
     if (!apiUrl || !apiUrl.startsWith('http')) return [];
 
-    return [
-      {
-        source: '/api/:path*',
-        destination: `${apiUrl}/api/:path*`,
-      },
-    ];
+    return {
+      fallback: [
+        {
+          source: '/api/:path*',
+          destination: `${apiUrl}/api/:path*`,
+        },
+      ],
+    };
   },
 
   // Webpack fallback (--webpack 모드 실행 시 동작)

@@ -104,6 +104,16 @@ describe('buildInlineSteps', () => {
     expect(buildInlineSteps(directAnswer)).toEqual([]);
   });
 
+  it('ignores partial marker entries before pipeline events', () => {
+    const steps = buildInlineSteps([
+      { partial: true, cancelled_at: '2026-07-09T00:00:00.000Z' } as never,
+      { node: 'supervisor', status: 'completed', reasoning: '분석 완료', content: null },
+      { node: 'search_vector_db', status: 'completed', reasoning: '3건의 문서를 찾았어요.', content: null },
+    ]);
+
+    expect(steps.map((step) => step.kind)).toEqual(['supervisor', 'search']);
+  });
+
   it('빈 배열 / null / undefined → 빈 배열 (graceful)', () => {
     expect(buildInlineSteps([])).toEqual([]);
     expect(buildInlineSteps(null)).toEqual([]);

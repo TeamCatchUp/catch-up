@@ -1,4 +1,6 @@
 import structlog
+from fastapi import HTTPException
+from fastapi import status
 from fastapi.concurrency import run_in_threadpool
 from sqlalchemy.orm import Session
 
@@ -8,6 +10,7 @@ from catchup.auth.schemas import BaseOAuthUserInfoResponse
 from catchup.auth.utils import reformat_name
 from catchup.components.auth.constants import OAuthIdentityProviderType
 from catchup.components.auth.provider import OAuthIdentityProvider
+from catchup.db.global_state import has_admin_ever_onboarded
 from catchup.db.models import OAuthUser
 from catchup.db.models import UserStatus
 from catchup.db.users import get_oauth_user_with_sub
@@ -42,7 +45,16 @@ class OAuthService:
         if oauth_user_record:
             return oauth_user_record
 
-        # 존재하지 않으면 OAuthUser 레코드 생성 (어드민 최초 온보딩 시점 한정)
+        # 최초 관리자 온보딩 전에는 루트 관리자 후보를 만들 수 있어야 한다.
+        # 그 이후 일반 사용자는 관리자가 Keycloak 사용자 목록을 동기화해
+        # oauth_users에 미리 등록한 경우에만 로그인을 허용한다.
+        if has_admin_ever_onboarded(self.db):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="관리자에 의해 등록되지 않은 사용자입니다.",
+            )
+
+        # 존재하지 않으면 OAuthUser 레코드 생성 (최초 관리자 온보딩 시점 한정)
         # 아래 OAuthUser.status는 어드민 온보딩 이후 사용자 목록 연동 과정에서 실제 값으로 대체됨.
         # 따라서 아래 UserStatus.NEW는 not null 조건을 만족하기 위한 임시 데이터임.
         new_oauth_user = OAuthUser(

@@ -149,12 +149,14 @@ export default function FeedbackSection({
     <div ref={feedbackRef} className={rootClass}>
       <div className="flex justify-between">
         <span className="text-body-small text-text-normal-alternative">답변이 마음에 들지 않은 이유가 무엇인가요?</span>
-        <div
+        <button
+          type="button"
+          aria-label="피드백 닫기"
           onClick={closeSection}
           className="icon-button-only-gray flex cursor-pointer items-center rounded-full p-0.5"
         >
           <Cancel className="text-text-normal-alternative h-4.5 w-4.5" />
-        </div>
+        </button>
       </div>
       <div className="flex flex-wrap gap-x-2.5 gap-y-1.5">
         {FEEDBACK_CHIPS.map((chip) => (

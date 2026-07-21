@@ -15,22 +15,30 @@ from catchup.server.connector.slack.app_mention_adapter import SlackAppMentionAd
 
 
 class _FakeChatService:
-    async def chat_stream(self, **kwargs):
-        del kwargs
-        yield ChatStreamingProcessResponse(
-            session_id=uuid.uuid4(),
-            status="completed",
-            node="supervisor",
-            reasoning="문서를 찾아볼게요.",
+    async def run(self, *args, **kwargs):
+        del args
+        sink = kwargs["sink"]
+        session_id = uuid.uuid4()
+        await sink(
+            ChatStreamingProcessResponse(
+                session_id=session_id,
+                status="completed",
+                node="supervisor",
+                reasoning="문서를 찾아볼게요.",
+            )
         )
-        yield ChatStreamingProcessResponse(
-            session_id=uuid.uuid4(),
-            status="in_progress",
-            node="generate_final_answer",
+        await sink(
+            ChatStreamingProcessResponse(
+                session_id=session_id,
+                status="in_progress",
+                node="generate_final_answer",
+            )
         )
-        yield ChatStreamingTokenResponse(
-            session_id=uuid.uuid4(),
-            token="답변",
+        await sink(
+            ChatStreamingTokenResponse(
+                session_id=session_id,
+                token="답변",
+            )
         )
 
 

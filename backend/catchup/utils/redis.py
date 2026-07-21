@@ -21,8 +21,10 @@ logger = logging.getLogger(__name__)
 
 _redis_client: RedisCluster | Redis | None = None
 _stream_redis_client: RedisCluster | Redis | None = None
+_chat_stream_redis_client: Redis | None = None
 _redis_client_lock = asyncio.Lock()
 _stream_redis_client_lock = asyncio.Lock()
+_chat_stream_redis_client_lock = asyncio.Lock()
 
 OAUTH_STATE_PREFIX = "oauth:state:"
 OAUTH_STATE_TTL = 600  # 10분
@@ -314,6 +316,31 @@ async def get_stream_redis_client() -> Redis:
     return _stream_redis_client
 
 
+async def get_chat_stream_redis_client(*, socket_timeout: float) -> Redis:
+    """채팅 SSE 구독 전용 Redis 클라이언트를 반환한다.
+
+    XREAD BLOCK 대기 시간이 클라이언트 소켓 타임아웃보다 길면 서버는 정상
+    블로킹 중인데도 소켓이 먼저 응답을 포기해 TimeoutError가 발생한다. 다른
+    스트림 소비자(sync 큐, agent trigger)와 BLOCK 요구사항이 달라 공용
+    stream 클라이언트(get_stream_redis_client)의 타임아웃을 공유하지 않고,
+    호출부가 자신의 BLOCK 값에 맞춰 계산한 socket_timeout을 주입받는다.
+    """
+    global _chat_stream_redis_client
+
+    if _chat_stream_redis_client is not None:
+        return _chat_stream_redis_client
+
+    async with _chat_stream_redis_client_lock:
+        if _chat_stream_redis_client is not None:
+            return _chat_stream_redis_client
+
+        _chat_stream_redis_client = await _create_stream_redis_client(
+            client_type="chat_stream",
+            socket_timeout=socket_timeout,
+        )
+    return _chat_stream_redis_client
+
+
 async def reset_stream_redis_client(
     client: RedisCluster | Redis | None = None,
 ) -> None:
@@ -340,16 +367,21 @@ async def reset_stream_redis_client(
 
 
 async def check_all_redis_health() -> bool:
-    """공용/stream Redis 클라이언트 상태를 모두 확인합니다."""
+    """공용/stream Redis 클라이언트 상태를 모두 확인합니다.
+
+    chat_stream 클라이언트는 socket_timeout을 호출부(채팅 SSE 구독)가 주입해야
+    생성되므로, 아직 생성되지 않았다면(첫 채팅 요청 이전) 헬스체크 대상에서
+    제외한다. 이미 생성된 뒤에는 다른 클라이언트와 동일하게 ping으로 확인한다.
+    """
     try:
         default_client, stream_client = await asyncio.gather(
             get_redis_client(),
             get_stream_redis_client(),
         )
-        await asyncio.gather(
-            default_client.ping(),
-            stream_client.ping(),
-        )
+        ping_targets = [default_client.ping(), stream_client.ping()]
+        if _chat_stream_redis_client is not None:
+            ping_targets.append(_chat_stream_redis_client.ping())
+        await asyncio.gather(*ping_targets)
         return True
     except Exception as e:
         logger.error(f"[REDIS][HEALTH] Health check failed: {e}")

@@ -87,6 +87,20 @@ StreamEvent = Annotated[
     Field(discriminator="type"),
 ]
 
+
+class ChatGenerationStatusResponse(BaseModel):
+    """답변 생성 진행 여부와 재연결 시 배치/실시간 렌더링 경계를 담는다."""
+
+    is_generating: bool = Field(..., description="현재 답변 생성이 진행 중인지 여부")
+    cutoff_id: str | None = Field(
+        default=None,
+        description=(
+            "생성 중일 때만 값이 있음. 이 ID 이하의 이벤트는 재연결 이전에 이미 생성된 "
+            "것이므로 프론트는 애니메이션 없이 일괄 렌더링하고, 이 ID 초과 이벤트만 "
+            "실시간 애니메이션을 적용해야 한다."
+        ),
+    )
+
 # --- [Human In The Loop] ---
 # class ChatStreamingResumeRequest(BaseModel):
 #     session_id: str = Field(..., description="PR 수동 선택 후 재개할 세션 ID")

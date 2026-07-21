@@ -2,7 +2,7 @@
 Slack app_mention 채팅 orchestration.
 
 webhook_api -> sync.ingress.slack -> app_mention_adapter
--> SlackAppMentionOrchestrator -> chat_service.chat_stream
+-> SlackAppMentionOrchestrator -> chat_service.run
 -> SlackPlanResponder / SlackApiClientWrapper -> interaction_handler.
 
 이 모듈은 Slack bot 채팅 흐름에서 비즈니스 규칙 중심을 맡는다.
@@ -23,10 +23,12 @@ from typing import Protocol
 import structlog
 from fastapi.concurrency import run_in_threadpool
 
+from catchup.chat.engine import SLACK_RUN_PROFILE
 from catchup.chat.factory import get_chat_service
 from catchup.chat.schemas import ChatStreamingProcessResponse
 from catchup.chat.schemas import ChatStreamingSourceResponse
 from catchup.chat.schemas import ChatStreamingTokenResponse
+from catchup.chat.schemas import StreamEvent
 from catchup.db.chat_room import get_chat_room_by_session_id
 from catchup.db.chat_room import get_latest_assistant_message
 from catchup.db.engine import SessionLocal
@@ -35,6 +37,7 @@ from catchup.db.slack import bot_repository
 from catchup.db.user_prompt_settings import get_user_prompt_settings
 from catchup.db.user_source_mapping import find_user_id_by_source_mapping
 from catchup.db.users import get_user_with_full_context
+from catchup.observability.langfuse.configs import get_observe
 from catchup.schemas.context import GlobalCompanyContext
 from catchup.schemas.context import GlobalContext
 from catchup.schemas.context import GlobalUserContext
@@ -42,6 +45,9 @@ from catchup.schemas.context import GlobalWorkspaceContext
 from catchup.schemas.prompt_settings import PromptSettings
 
 logger = structlog.get_logger(__name__)
+
+# Langfuse
+observe = get_observe()
 
 SLACK_USER_MENTION_PATTERN = re.compile(r"<@([A-Z0-9]+)(?:\|[^>]+)?>")
 
@@ -222,6 +228,7 @@ class SlackAppMentionOrchestrator:
                     session_id=str(session_id),
                 )
 
+    @observe(name="chat-stream")
     async def _run_chat_stream(
         self,
         *,
@@ -237,31 +244,40 @@ class SlackAppMentionOrchestrator:
         chat_service = get_chat_service()
         markdown_enabled = False
 
-        async for chunk in chat_service.chat_stream(
-            global_context=global_context,
-            session_id=session_id,
-            query=query,
-            tool_filters=[],
-            additional_context=additional_context,
-            prompt_settings=prompt_settings,
-            mode=APP_MENTION_CHAT_MODE,
-            is_slack=True,
-        ):
+        async def sink(chunk: StreamEvent) -> None:
+            nonlocal markdown_enabled, sources
             if isinstance(chunk, ChatStreamingProcessResponse):
                 await responder.on_process(chunk)
-                if chunk.node in {"generate_final_answer_fast", "generate_final_answer", "direct_answer"}:
+                if chunk.node in {
+                    "generate_final_answer_fast",
+                    "generate_final_answer",
+                    "direct_answer",
+                }:
                     markdown_enabled = True
-                continue
+                return
 
             if isinstance(chunk, ChatStreamingTokenResponse):
                 answer_parts.append(chunk.token)
                 if markdown_enabled:
                     await responder.append_answer_markdown(chunk.token)
-                continue
+                return
 
             if isinstance(chunk, ChatStreamingSourceResponse) and chunk.sources:
                 sources = chunk.sources
                 await responder.on_sources(sources)
+
+        await chat_service.run(
+            global_context=global_context,
+            prompt_settings=prompt_settings,
+            session_id=session_id,
+            sink=sink,
+            profile=SLACK_RUN_PROFILE,
+            query=query,
+            tool_filters=[],
+            additional_context=additional_context,
+            mode=APP_MENTION_CHAT_MODE,
+            is_slack=True,
+        )
 
         answer = "".join(answer_parts).strip() or EMPTY_ANSWER_MESSAGE
         return answer, sources

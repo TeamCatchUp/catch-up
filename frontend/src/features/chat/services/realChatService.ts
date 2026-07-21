@@ -1,69 +1,19 @@
-import type { StreamEvent } from '@/features/chat/types';
+import { parseSSEStream } from '@/features/chat/services/streamSseParser';
+import type {
+  ChatCancelGenerationResponseApi,
+  ChatGenerationStatusResponseApi,
+  SseStreamEventEnvelopeApi,
+  StreamEvent,
+} from '@/features/chat/types';
 import { API } from '@/shared/api/endpoints';
 
-/**
- * SSE 스트림 파싱 공통 로직
- *
- * ReadableStream을 읽어 SSE 형식의 이벤트를 파싱
- * - SSE 형식: "data: {json}\n\n" 블록 단위로 이벤트 전송
- * - 블록은 "\n\n"으로 구분
- * - 각 블록 내에서 "data:" 접두사를 가진 라인들을 추출하여 JSON 파싱
- * - 파싱 실패 시 무시 (malformed payload)
- *
- * @param res - fetch 응답 객체 (Response.body 필수)
- * @param onEvent - 파싱된 이벤트를 처리할 콜백
- * @throws HTTP 에러 또는 빈 응답 body
- */
-async function parseSSEStream(res: Response, onEvent: (event: StreamEvent) => void) {
-  if (!res.ok) throw new Error(`Stream error: ${res.status}`);
-
-  if (!res.body) {
-    throw new Error('Stream error: empty response body');
-  }
-
-  const reader = res.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = '';
-
-  /**
-   * SSE 블록 파싱
-   * "data:" 접두사를 가진 라인들을 추출하여 JSON으로 파싱
-   */
-  const parseBlock = (block: string) => {
-    const dataLines = block
-      .split('\n')
-      .filter((line) => line.startsWith('data:'))
-      .map((line) => line.slice(5).trimStart());
-
-    if (dataLines.length === 0) return;
-
-    const raw = dataLines.join('\n');
-
-    try {
-      const event = JSON.parse(raw) as StreamEvent;
-      onEvent(event);
-    } catch {
-      // 잘못된 형식의 payload는 무시
-    }
-  };
-
-  while (true) {
-    const { done, value } = await reader.read();
-    buffer += decoder.decode(value, { stream: !done });
-
-    const blocks = buffer.split('\n\n');
-    buffer = blocks.pop() || '';
-
-    for (const block of blocks) {
-      parseBlock(block);
-    }
-
-    if (done) break;
-  }
-
-  const tail = buffer.trim();
-  if (tail) {
-    parseBlock(tail);
+export class ChatStreamHttpError extends Error {
+  constructor(
+    message: string,
+    public readonly status: number,
+  ) {
+    super(message);
+    this.name = 'ChatStreamHttpError';
   }
 }
 
@@ -106,7 +56,57 @@ const realChatService = {
       signal,
     });
 
-    await parseSSEStream(res, onEvent);
+    if (!res.ok) {
+      throw new ChatStreamHttpError(`Stream error: ${res.status}`, res.status);
+    }
+
+    await parseSSEStream(res, ({ event }) => onEvent(event));
+  },
+
+  getGenerationStatus: async (sessionId: string): Promise<ChatGenerationStatusResponseApi> => {
+    const res = await fetch(API.chat.status(sessionId), {
+      method: 'GET',
+      credentials: 'include',
+      cache: 'no-store',
+    });
+
+    if (!res.ok) {
+      throw new ChatStreamHttpError(`Generation status error: ${res.status}`, res.status);
+    }
+
+    return res.json();
+  },
+
+  reconnectChatStream: async (
+    sessionId: string,
+    onEnvelope: (envelope: SseStreamEventEnvelopeApi) => void,
+    signal?: AbortSignal,
+  ): Promise<void> => {
+    const res = await fetch(API.chat.reconnectStream(sessionId), {
+      method: 'GET',
+      credentials: 'include',
+      signal,
+    });
+
+    if (!res.ok) {
+      throw new ChatStreamHttpError(`Reconnect stream error: ${res.status}`, res.status);
+    }
+
+    await parseSSEStream(res, onEnvelope);
+  },
+
+  cancelGeneration: async (sessionId: string): Promise<ChatCancelGenerationResponseApi> => {
+    const res = await fetch(API.chat.cancel(sessionId), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+    });
+
+    if (!res.ok) {
+      throw new ChatStreamHttpError(`Cancel generation error: ${res.status}`, res.status);
+    }
+
+    return res.json();
   },
 
   /**

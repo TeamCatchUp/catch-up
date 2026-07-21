@@ -11,6 +11,9 @@ export const API = {
   // SSE 스트리밍 채팅 + 피드백 + 마지막 턴 삭제
   chat: {
     stream: `${API_PREFIX}/chat/stream`, // POST SSE 스트리밍 질의 (text/event-stream)
+    status: (sessionId: string) => `${API_PREFIX}/chat/${sessionId}/status`, // GET 생성 상태 + cutoff_id
+    reconnectStream: (sessionId: string) => `${API_PREFIX}/chat/${sessionId}/stream`, // GET 재연결 SSE
+    cancel: (sessionId: string) => `${API_PREFIX}/chat/${sessionId}/cancel`, // POST 생성 취소
     feedback: (sessionId: string, messageId: string | number) =>
       `${API_PREFIX}/rooms/${sessionId}/messages/${messageId}/feedback`, // PATCH 답변 피드백 (is_liked, reasons, comment)
     resetLast: (sessionId: string) => `${API_PREFIX}/chat/${sessionId}/reset-last`, // POST 마지막 턴 soft-delete

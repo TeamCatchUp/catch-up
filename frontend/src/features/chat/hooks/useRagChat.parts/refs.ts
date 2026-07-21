@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef } from 'react';
 
 import type { ChatSource, SourceResponse } from '@/features/chat/types';
 
-import type { SessionGuardRefs, StreamRuntimeRefs } from './types';
+import type { ActiveStreamQuestion, SessionGuardRefs, StreamRuntimeRefs } from './types';
 
 interface UseRagChatRefsReturn {
   // 세션 전환 제어 ref 묶음
@@ -43,6 +43,7 @@ export const useRagChatRefs = (resolvedSessionId: string | undefined): UseRagCha
   const streamInFlightRef = useRef(false);
   const hasAttemptedInitialStreamRef = useRef(false);
   const resolvedSessionIdRef = useRef<string | undefined>(resolvedSessionId);
+  const activeQuestionRef = useRef<ActiveStreamQuestion | null>(null);
 
   // finalize 시점에 stale closure로 예전 sessionId를 보는 문제를 막기 위해
   // 항상 최신 resolvedSessionId를 ref에 동기화한다.
@@ -82,6 +83,7 @@ export const useRagChatRefs = (resolvedSessionId: string | undefined): UseRagCha
       streamInFlightRef,
       hasAttemptedInitialStreamRef,
       resolvedSessionIdRef,
+      activeQuestionRef,
     }),
     [],
   );

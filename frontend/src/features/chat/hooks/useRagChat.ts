@@ -7,7 +7,10 @@ import { useRouter } from 'next/navigation';
 import { useInitialQueryBootstrap } from '@/features/chat/hooks/useRagChat.parts/initialQueryBootstrap';
 import { mergeServerChatData } from '@/features/chat/hooks/useRagChat.parts/mergeServerChatData';
 import { useMessageActions } from '@/features/chat/hooks/useRagChat.parts/messageActions';
-import { refreshRecentChats } from '@/features/chat/hooks/useRagChat.parts/refreshRecentChats';
+import {
+  refreshRecentChats,
+  upsertOptimisticRecentChat,
+} from '@/features/chat/hooks/useRagChat.parts/refreshRecentChats';
 import { useRagChatRefs } from '@/features/chat/hooks/useRagChat.parts/refs';
 import {
   createEmptyChatData,
@@ -17,14 +20,13 @@ import {
 } from '@/features/chat/hooks/useRagChat.parts/sessionDataLoader';
 import { useSessionLifecycle } from '@/features/chat/hooks/useRagChat.parts/sessionLifecycle';
 import { useStreamProcessing } from '@/features/chat/hooks/useRagChat.parts/streamProcessing';
-import type { UseRagChatOptions, UseRagChatReturn } from '@/features/chat/hooks/useRagChat.parts/types';
-import { useRagStream } from '@/features/chat/hooks/useRagStream';
 import type {
-  ChatData,
-  PipelineQueryType,
-  StepRow,
-  StreamEvent,
-} from '@/features/chat/types';
+  ActiveStreamQuestion,
+  UseRagChatOptions,
+  UseRagChatReturn,
+} from '@/features/chat/hooks/useRagChat.parts/types';
+import { useRagStream } from '@/features/chat/hooks/useRagStream';
+import type { ChatData, PipelineQueryType, StepRow, StreamEvent } from '@/features/chat/types';
 import { isValidSessionId } from '@/shared/utils/sessionId';
 
 /**
@@ -53,7 +55,15 @@ export const useRagChat = ({
   // ---------------------------------------------------------------------------
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { streamChat: rawStreamChat, abortStream, markStopped, resetStopped, isStopped } = useRagStream();
+  const {
+    streamChat: rawStreamChat,
+    reconnectChatStream,
+    cancelGeneration,
+    abortStream,
+    markStopped,
+    resetStopped,
+    isStopped,
+  } = useRagStream();
 
   // toolFilters를 ref에 보관하여 wrapper의 useCallback deps를 안정적으로 유지
   const toolFiltersRef = useRef(toolFilters);
@@ -84,6 +94,7 @@ export const useRagChat = ({
   // 화면 렌더링에 직접 사용되는 핵심 state
   const [chatData, setChatData] = useState<ChatData | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(isValidSessionId(sessionId));
+  const [isGenerating, setIsGenerating] = useState(false);
   const [isError, setIsError] = useState(false);
   const [stepRows, setStepRows] = useState<StepRow[]>([]);
   const [pipelineQueryType, setPipelineQueryType] = useState<PipelineQueryType | null>(null);
@@ -104,6 +115,13 @@ export const useRagChat = ({
   const refreshRecentChatsNow = useCallback(() => {
     refreshRecentChats(queryClient);
   }, [queryClient]);
+
+  const upsertOptimisticRecentChatNow = useCallback(
+    (sessionId: string, question: ActiveStreamQuestion) => {
+      upsertOptimisticRecentChat(queryClient, { ...question, sessionId });
+    },
+    [queryClient],
+  );
 
   // 비어 있는 ChatData를 만드는 helper (신규 세션/에러 fallback에서 사용)
   const buildEmptyChatData = useCallback(
@@ -197,29 +215,41 @@ export const useRagChat = ({
     [effectiveInitialQuery, queryClient, repo],
   );
 
-  // ---------------------------------------------------------------------------
-  // Part hooks composition
-  // ---------------------------------------------------------------------------
-  // 세션 전환 hydrate, placeholder replace, q 파라미터 정리 책임
-  const { resolveSessionIdFromStream, clearInitialQueryParam } = useSessionLifecycle({
-    sessionId,
-    isPlaceholderSession,
-    isLoading,
-    chatData,
-    provisionalSessionId,
-    setProvisionalSessionId,
-    resolvedSessionId,
-    initialQueryFromUrl,
+  const resolveSessionIdFromStream = useCallback(
+    (streamSessionId?: string) => {
+      if (!streamSessionId) return;
+      if (resolvedSessionId === streamSessionId) return;
+
+      setProvisionalSessionId(streamSessionId);
+
+      if (!isPlaceholderSession) return;
+      sessionRefs.pendingReplaceSessionIdRef.current = streamSessionId;
+    },
+    [isPlaceholderSession, resolvedSessionId, sessionRefs.pendingReplaceSessionIdRef],
+  );
+
+  // SSE 이벤트(status/token/result/sources) -> UI 상태 반영 책임
+  const {
+    beginAnswerLoading,
+    ensureInitialUserMessage,
+    handleAbortError,
+    appendAssistantAnswer,
+    finalizeAfterStreamClose,
+    handleStreamEvent,
+    handleStreamEvents,
+  } = useStreamProcessing({
     effectiveInitialQuery,
-    queryClient,
-    router,
-    abortStream,
+    resetStopped,
+    isStopped,
     resetStreamStateRefs,
-    buildEmptyChatData,
-    loadSessionChatDataWithContext,
+    syncChatDataFromServer,
+    refreshRecentChatsNow,
+    upsertOptimisticRecentChatNow,
+    resolveSessionIdFromStream,
     stateSetters: {
       setChatData,
       setIsLoading,
+      setIsGenerating,
       setIsError,
       setStepRows,
       setPipelineQueryType,
@@ -230,25 +260,28 @@ export const useRagChat = ({
     streamRefs,
   });
 
-  // SSE 이벤트(status/token/result/sources) -> UI 상태 반영 책임
-  const {
-    beginAnswerLoading,
-    ensureInitialUserMessage,
-    handleAbortError,
-    appendAssistantAnswer,
-    finalizeAfterStreamClose,
-    handleStreamEvent,
-  } = useStreamProcessing({
+  // 세션 전환 hydrate, placeholder replace, q 파라미터 정리 책임
+  const { clearInitialQueryParam } = useSessionLifecycle({
+    sessionId,
+    isPlaceholderSession,
+    provisionalSessionId,
+    initialQueryFromUrl,
     effectiveInitialQuery,
-    resetStopped,
-    isStopped,
+    queryClient,
+    router,
+    abortStream,
+    reconnectChatStream,
+    handleStreamEvents,
+    finalizeAfterStreamClose,
+    beginAnswerLoading,
+    handleAbortError,
     resetStreamStateRefs,
-    syncChatDataFromServer,
-    refreshRecentChatsNow,
-    resolveSessionIdFromStream,
+    buildEmptyChatData,
+    loadSessionChatDataWithContext,
     stateSetters: {
       setChatData,
       setIsLoading,
+      setIsGenerating,
       setIsError,
       setStepRows,
       setPipelineQueryType,
@@ -266,15 +299,18 @@ export const useRagChat = ({
     resolvedSessionId,
     streamChat,
     handleStreamEvent,
+    handleStreamEvents,
     finalizeAfterStreamClose,
     handleAbortError,
     beginAnswerLoading,
     appendAssistantAnswer,
-    refreshRecentChatsNow,
+    cancelGeneration,
+    reconnectChatStream,
     abortStream,
     markStopped,
     setChatData,
     setIsLoading,
+    setIsGenerating,
     setIsError,
     setStepRows,
     setPipelineQueryType,
@@ -290,7 +326,9 @@ export const useRagChat = ({
     isLoading,
     resolvedSessionId,
     streamChat,
+    reconnectChatStream,
     handleStreamEvent,
+    handleStreamEvents,
     finalizeAfterStreamClose,
     handleAbortError,
     beginAnswerLoading,
@@ -298,6 +336,7 @@ export const useRagChat = ({
     ensureInitialUserMessage,
     setIsError,
     setIsLoading,
+    setIsGenerating,
     streamRefs,
   });
 
@@ -355,6 +394,7 @@ export const useRagChat = ({
     chatData,
     resolvedSessionId,
     isLoading,
+    isGenerating,
     isError,
     stepRows,
     pipelineQueryType,

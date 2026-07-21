@@ -28,6 +28,8 @@ export default function SideNavUser({ isOpen }: SideNavUserProps) {
           <TooltipTrigger asChild>
             <DropdownMenuTrigger asChild>
               <button
+                type="button"
+                aria-label={isOpen ? undefined : '사용자 메뉴'}
                 className={cn(
                   'flex h-13.5 cursor-pointer items-center rounded-lg',
                   isOpen

@@ -1,7 +1,10 @@
 import type { Dispatch, SetStateAction } from 'react';
 import { useEffect } from 'react';
 
-import type { ChatData, StreamEvent } from '@/features/chat/types';
+import chatService from '@/features/chat/services/chatService';
+import { ChatStreamHttpError } from '@/features/chat/services/realChatService';
+import type { ChatData, SseRenderMode, SseStreamEventEnvelopeApi, StreamEvent } from '@/features/chat/types';
+import { applyReconnectStreamWithCutoff } from '@/features/chat/utils/stream/buildReconnectStreamHandler';
 
 import type { StreamRuntimeRefs } from './types';
 
@@ -14,7 +17,9 @@ interface UseInitialQueryBootstrapParams {
 
   // 스트림 제어
   streamChat: (query: string, sessionId: string | undefined, onEvent: (event: StreamEvent) => void) => Promise<void>;
+  reconnectChatStream: (sessionId: string, onEnvelope: (envelope: SseStreamEventEnvelopeApi) => void) => Promise<void>;
   handleStreamEvent: (event: StreamEvent) => void;
+  handleStreamEvents: (events: readonly StreamEvent[], options?: { renderMode?: SseRenderMode }) => void;
   finalizeAfterStreamClose: () => Promise<void>;
   handleAbortError: () => void;
   beginAnswerLoading: () => void;
@@ -26,6 +31,7 @@ interface UseInitialQueryBootstrapParams {
   // 상태 세터 + ref
   setIsError: Dispatch<SetStateAction<boolean>>;
   setIsLoading: Dispatch<SetStateAction<boolean>>;
+  setIsGenerating: Dispatch<SetStateAction<boolean>>;
   streamRefs: StreamRuntimeRefs;
 }
 
@@ -38,7 +44,9 @@ export const useInitialQueryBootstrap = ({
   isLoading,
   resolvedSessionId,
   streamChat,
+  reconnectChatStream,
   handleStreamEvent,
+  handleStreamEvents,
   finalizeAfterStreamClose,
   handleAbortError,
   beginAnswerLoading,
@@ -46,12 +54,13 @@ export const useInitialQueryBootstrap = ({
   ensureInitialUserMessage,
   setIsError,
   setIsLoading,
+  setIsGenerating,
   streamRefs,
 }: UseInitialQueryBootstrapParams) => {
   // ---------------------------------------------------------------------------
   // Shared refs
   // ---------------------------------------------------------------------------
-  const { streamInFlightRef, hasAttemptedInitialStreamRef } = streamRefs;
+  const { activeQuestionRef, streamInFlightRef, hasAttemptedInitialStreamRef } = streamRefs;
 
   // ---------------------------------------------------------------------------
   // Bootstrap effects
@@ -98,6 +107,8 @@ export const useInitialQueryBootstrap = ({
 
     const runStream = async () => {
       // 자동 스트림 시작 전에 q를 제거해 effect 재진입 루프를 막는다.
+      const createdAt = new Date().toISOString();
+      activeQuestionRef.current = { content: effectiveInitialQuery, createdAt, tempId: -Date.now() };
       ensureInitialUserMessage(effectiveInitialQuery);
       hasAttemptedInitialStreamRef.current = true;
       clearInitialQueryParam();
@@ -107,6 +118,24 @@ export const useInitialQueryBootstrap = ({
         await streamChat(effectiveInitialQuery, resolvedSessionId, handleStreamEvent);
         await finalizeAfterStreamClose();
       } catch (err) {
+        if (err instanceof ChatStreamHttpError && err.status === 409 && resolvedSessionId) {
+          try {
+            const status = await chatService.getGenerationStatus(resolvedSessionId);
+            if (status.is_generating) {
+              await applyReconnectStreamWithCutoff({
+                sessionId: resolvedSessionId,
+                cutoffId: status.cutoff_id,
+                reconnectChatStream,
+                handleStreamEvents,
+              });
+              await finalizeAfterStreamClose();
+              return;
+            }
+          } catch (reconnectErr) {
+            err = reconnectErr;
+          }
+        }
+
         if ((err as Error).name === 'AbortError') {
           handleAbortError();
           return;
@@ -114,12 +143,15 @@ export const useInitialQueryBootstrap = ({
         console.error('[useRagChat] fetchFirstAnswer error:', err);
         setIsError(true);
         setIsLoading(false);
+        setIsGenerating(false);
+        activeQuestionRef.current = null;
         streamInFlightRef.current = false;
       }
     };
 
     void runStream();
   }, [
+    activeQuestionRef,
     beginAnswerLoading,
     chatData,
     clearInitialQueryParam,
@@ -128,10 +160,13 @@ export const useInitialQueryBootstrap = ({
     finalizeAfterStreamClose,
     handleAbortError,
     handleStreamEvent,
+    handleStreamEvents,
     hasAttemptedInitialStreamRef,
     isLoading,
+    reconnectChatStream,
     resolvedSessionId,
     setIsError,
+    setIsGenerating,
     setIsLoading,
     streamChat,
     streamInFlightRef,
