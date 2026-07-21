@@ -121,6 +121,35 @@ def insert_user_source_mapping_if_absent(
     return result.rowcount > 0
 
 
+def create_missing_user_source_mappings_by_email(
+    db: Session,
+    *,
+    user_id: int,
+    email: str,
+) -> dict[SourceType, str]:
+    """가입 사용자의 이메일로 모든 협업툴 계정을 찾아 누락 매핑을 만든다."""
+    created: dict[SourceType, str] = {}
+
+    for source_type in SOURCE_MAP:
+        external_user_identifier = find_external_user_id_by_email_case_insensitive(
+            db,
+            source_type,
+            email,
+        )
+        if not external_user_identifier:
+            continue
+
+        if insert_user_source_mapping_if_absent(
+            db,
+            user_id=user_id,
+            source_type=source_type,
+            external_user_identifier=external_user_identifier,
+        ):
+            created[source_type] = external_user_identifier
+
+    return created
+
+
 def update_tool_user_email(
     db: Session,
     source_type: SourceType,

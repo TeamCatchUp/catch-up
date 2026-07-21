@@ -2,12 +2,12 @@ import asyncio
 import logging
 
 from catchup.components.auth.keycloak_admin import KeycloakAdminClient
-from catchup.db.engine import SessionLocal
-from catchup.db.user_source_mapping import delete_deactivated_oauth_users, upsert_oauth_users
-from catchup.mapping.schemas import OAuthUserSchema
 from catchup.configs.config import auth_settings
+from catchup.db.engine import SessionLocal
+from catchup.db.user_source_mapping import delete_deactivated_oauth_users
+from catchup.db.user_source_mapping import upsert_oauth_users
+from catchup.mapping.schemas import OAuthUserSchema
 from catchup.utils.client import get_global_async_client
-
 
 logger = logging.getLogger(__name__)
 
@@ -50,3 +50,4 @@ async def sync_initial_keycloak_users():
 
     except Exception as e:
         logger.error(f"Failed to sync OAuth users: {e}", exc_info=True)
+        raise
