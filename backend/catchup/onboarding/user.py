@@ -1,10 +1,14 @@
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
-from catchup.db.models import User, UserSourceMapping, UserStatus
+from catchup.db.models import User
+from catchup.db.models import UserSourceMapping
+from catchup.db.models import UserStatus
+from catchup.db.user_source_mapping import create_missing_user_source_mappings_by_email
 from catchup.db.user_source_mapping import get_pending_source_premappings
 from catchup.db.users import get_oauth_user_with_sub
-from catchup.db.workspaces import add_user_to_workspace, get_workspace_by_id
+from catchup.db.workspaces import add_user_to_workspace
+from catchup.db.workspaces import get_workspace_by_id
 from catchup.onboarding.schemas import UserSignUpRequest
 
 
@@ -38,6 +42,14 @@ def register_user_from_oauth(
     add_user_to_workspace(db, new_user, workspace)
     
     resolve_pending_source_mappings(db, new_user)
+
+    # 사전 매핑 버퍼가 없더라도 이미 수집된 협업툴 사용자 테이블을 이메일로
+    # 대조해 Slack/Jira/Confluence/GitHub/Channel Talk 매핑을 즉시 만든다.
+    create_missing_user_source_mappings_by_email(
+        db,
+        user_id=new_user.id,
+        email=new_user.email,
+    )
         
     db.commit()
     db.refresh(new_user)

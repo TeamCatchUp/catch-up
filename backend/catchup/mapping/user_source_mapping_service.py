@@ -117,13 +117,8 @@ class UserSourceMappingApplication:
         size: int = 50,
     ) -> UserSourceMappingResponse:
         with self._session() as db:
-            mapped_users_stmt = select(
-                distinct(UserSourceMapping.user_id).label("user_id")
-            ).where(UserSourceMapping.source_type.in_(TRACKED_USER_MAPPING_SOURCES))
-            mapped_users = mapped_users_stmt.subquery()
             base_stmt = (
                 select(User, OAuthUser.sub.label("sub"))
-                .join(mapped_users, mapped_users.c.user_id == User.id)
                 .outerjoin(OAuthUser, OAuthUser.user_id == User.id)
             )
             full_mapping_condition = self._full_mapping_condition()
