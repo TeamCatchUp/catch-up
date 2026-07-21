@@ -42,6 +42,7 @@ def register_user_from_oauth(
     add_user_to_workspace(db, new_user, workspace)
     
     resolve_pending_source_mappings(db, new_user)
+    db.flush()
 
     # 사전 매핑 버퍼가 없더라도 이미 수집된 협업툴 사용자 테이블을 이메일로
     # 대조해 Slack/Jira/Confluence/GitHub/Channel Talk 매핑을 즉시 만든다.
