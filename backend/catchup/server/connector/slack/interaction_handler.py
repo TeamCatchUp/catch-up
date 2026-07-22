@@ -199,14 +199,14 @@ async def _open_channel_talk_send_modal(
     slack_channel_id = _read_nested_str(request.event, "channel", "id")
     slack_user_id = _read_nested_str(request.event, "user", "id")
     blocks = request.event.get("message", {}).get("blocks", [])
-    draft = next(
+    draft = _read_nested_str(request.event, "message", "text") or next(
         (
             str(block.get("text") or "").strip()
             for block in blocks
             if isinstance(block, dict) and block.get("type") == "markdown"
         ),
         "",
-    ) or _read_nested_str(request.event, "message", "text")
+    )
     if not all(
         (action_payload, trigger_id, slack_channel_id, slack_user_id, draft)
     ):

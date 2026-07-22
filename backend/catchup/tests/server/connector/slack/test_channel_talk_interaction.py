@@ -37,10 +37,10 @@ async def test_channel_talk_button_opens_prefilled_modal():
             "user": {"id": "U123"},
             "channel": {"id": "C123"},
             "message": {
-                "text": "첫 문단 둘째 문단",
+                "text": "첫 문단\n\n둘째 문단",
                 "thread_ts": "1700.1",
                 "blocks": [
-                    {"type": "markdown", "text": "첫 문단\n\n둘째 문단"},
+                    {"type": "markdown", "text": "첫 문단 둘째 문단"},
                     {"type": "actions", "elements": []},
                 ],
             },

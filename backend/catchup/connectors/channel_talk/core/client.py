@@ -297,6 +297,11 @@ class ChannelTalkCoreApiClient:
     ) -> ChannelTalkUserChatMessage:
         resolved_user_chat_id = _require_user_chat_id(user_chat_id)
         resolved_message = escape(_require_user_chat_message(message))
+        message_blocks = [
+            {"type": "text", "value": line}
+            for line in resolved_message.splitlines()
+            if line.strip()
+        ]
         payload = await self._transport.request_json(
             method="POST",
             path=f"/open/v5/user-chats/{resolved_user_chat_id}/messages",
@@ -305,12 +310,7 @@ class ChannelTalkCoreApiClient:
                 access_secret=access_secret,
             ),
             json_body={
-                "blocks": [
-                    {
-                        "type": "text",
-                        "value": resolved_message,
-                    }
-                ],
+                "blocks": message_blocks,
                 "options": [option],
             },
             channel_id=channel_id,
