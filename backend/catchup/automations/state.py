@@ -9,6 +9,7 @@ from langgraph.graph.message import add_messages
 from catchup.automations.structures import GradeResult
 from catchup.db.models import SourceType
 from catchup.schemas.context import GlobalContext
+from catchup.schemas.sources import BaseSource
 from catchup.schemas.structures import VectorDbSearchQuery
 
 
@@ -33,3 +34,5 @@ class AutomationState(TypedDict):
     quiet_period_seconds: int | None
     grade_result: GradeResult | None
     guide_text: str | None
+    guide_explanation: str | None
+    citations: list[BaseSource] | None

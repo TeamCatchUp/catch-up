@@ -7,26 +7,36 @@ from langchain_core.documents import Document
 from langchain_core.language_models import BaseChatModel
 
 from catchup.automations.state import AutomationState
+from catchup.automations.structures import GuideDraft
 from catchup.langgraph.retry import RETRYABLE_ERRORS
 from catchup.prompts.loader import prompt_loader
-from catchup.utils.documents import build_docs_summary
+from catchup.schemas.sources import BaseSource
+from catchup.utils.documents import build_doc_groups
+from catchup.utils.documents import render_grouped_context_text
 
 logger = structlog.get_logger(__name__)
 
-_NO_DOCS_GUIDE = (
-    "관련 참고 자료를 찾을 수 없습니다. "
-    "담당자에게 직접 확인이 필요한 문의입니다."
-)
+_MAX_CITATION_ITEMS = 5
+
+_NO_DOCS_RESULT: dict[str, Any] = {
+    "guide_text": "",
+    "guide_explanation": (
+        "관련 참고 자료를 찾을 수 없습니다. "
+        "담당자에게 직접 확인이 필요한 문의입니다."
+    ),
+    "citations": [],
+}
 
 
 async def generate_guide_node(state: AutomationState, llm: BaseChatModel) -> dict[str, Any]:
-    """검색된 문서를 바탕으로 Slack 대응 가이드를 생성한다."""
+    """검색된 문서를 바탕으로 응대 가이드(초안/설명/근거)를 생성한다."""
     docs: list[Document] = state.get("retrieved_docs", [])
     if not docs:
         logger.warning("generate_guide_node_no_docs")
-        return {"guide_text": _NO_DOCS_GUIDE}
+        return _NO_DOCS_RESULT
 
-    docs_summary = build_docs_summary(docs)
+    doc_groups = build_doc_groups(docs)
+    docs_summary = render_grouped_context_text(doc_groups)
     inquiry_text = state["inquiry_text"]
     guide_instruction = state.get("guide_instruction")
     global_context = state["global_context"].model_dump()
@@ -39,11 +49,40 @@ async def generate_guide_node(state: AutomationState, llm: BaseChatModel) -> dic
         **global_context,
     )
 
+    structured_llm = llm.with_structured_output(GuideDraft)
     try:
-        response = await llm.ainvoke(prompt)
+        output = await structured_llm.ainvoke(prompt)
     except RETRYABLE_ERRORS:
         raise
-    guide_text: str = response.content
 
-    logger.info("generate_guide_node_completed", guide_length=len(guide_text))
-    return {"guide_text": guide_text}
+    if isinstance(output, dict):
+        guide_draft = GuideDraft(
+            draft=output["draft"],
+            explanation=output["explanation"],
+            cited_indices=output.get("cited_indices", []),
+        )
+    else:
+        guide_draft = GuideDraft(
+            draft=output.draft,
+            explanation=output.explanation,
+            cited_indices=output.cited_indices,
+        )
+
+    cited_groups = [
+        group for group in doc_groups if group.display_index in guide_draft.cited_indices
+    ] or doc_groups[:_MAX_CITATION_ITEMS]
+    citations: list[BaseSource] = [
+        BaseSource.from_document(group.display_index, group.representative, is_cited=True)
+        for group in cited_groups
+    ]
+
+    logger.info(
+        "generate_guide_node_completed",
+        draft_length=len(guide_draft.draft),
+        citation_count=len(citations),
+    )
+    return {
+        "guide_text": guide_draft.draft,
+        "guide_explanation": guide_draft.explanation,
+        "citations": citations,
+    }
