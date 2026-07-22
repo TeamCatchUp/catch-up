@@ -279,17 +279,17 @@ def run_agent_request(
 
 async def _execute_agent_run(
     context: AgentRunExecutionContext,
-) -> tuple[str | None, str | None]:
+) -> tuple[Any | None, str | None]:
     """DB 트랜잭션 밖에서 실제 agent를 실행해 lock 보유 시간을 만들지 않는다."""
     if _is_channeltalk_inquiry_event(context.event):
         try:
             automation_input = await _build_automation_input(context)
             if automation_input is not None:
-                await run_inquiry_automation(automation_input)
-                return "", None
+                guide_result = await run_inquiry_automation(automation_input)
+                return guide_result, None
         except Exception as exc:
             return None, str(exc)
-        return "", None
+        return None, None
 
     ToolRegistry.bind_execution_context(
         context.spec.tools,
@@ -368,7 +368,7 @@ async def _build_execution_user_inputs(
 def _record_agent_run_terminal_state(
     *,
     run_id: int,
-    result: str | None,
+    result: Any | None,
     error: str | None,
 ) -> bool:
     """실행 결과를 run ledger에 닫고 ACK 가능 여부를 결정한다."""

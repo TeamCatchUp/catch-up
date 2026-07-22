@@ -4,9 +4,9 @@ from unittest.mock import patch
 
 import pytest
 from langchain_core.documents import Document
-from langchain_core.messages import AIMessage
 
 from catchup.automations.nodes.generate_guide import generate_guide_node
+from catchup.automations.structures import GuideDraft
 from catchup.schemas.context import GlobalCompanyContext
 from catchup.schemas.context import GlobalContext
 from catchup.schemas.context import GlobalCurrentTimeContext
@@ -32,16 +32,30 @@ def _make_state(docs: list[Document]) -> dict:
     }
 
 
+def _make_structured_llm(guide_draft: GuideDraft) -> MagicMock:
+    mock_llm = MagicMock()
+    mock_llm.with_structured_output.return_value.ainvoke = AsyncMock(return_value=guide_draft)
+    return mock_llm
+
+
 @pytest.mark.asyncio
-async def test_generate_guide_node_returns_guide_text():
-    """LLM 응답이 guide_text로 state에 저장된다."""
-    docs = [Document(page_content="환불은 마이페이지 > 주문내역에서 신청 가능합니다.", id="d1")]
+async def test_generate_guide_node_returns_structured_fields():
+    """LLM structured output이 guide_text/guide_explanation/citations로 state에 분리 저장된다."""
+    docs = [
+        Document(
+            page_content="환불은 마이페이지 > 주문내역에서 신청 가능합니다.",
+            id="d1",
+            metadata={"source": "channel_talk"},
+        )
+    ]
     state = _make_state(docs)
 
-    mock_llm = MagicMock()
-    mock_llm.ainvoke = AsyncMock(
-        return_value=AIMessage(content="마이페이지 > 주문내역에서 환불 신청 버튼을 안내하세요.")
+    guide_draft = GuideDraft(
+        draft="마이페이지 > 주문내역에서 환불 신청 버튼을 눌러주세요.",
+        explanation="환불 절차를 안내하는 표준 답변입니다.",
+        cited_indices=[1],
     )
+    mock_llm = _make_structured_llm(guide_draft)
 
     with patch(
         "catchup.automations.nodes.generate_guide.prompt_loader.get_prompt",
@@ -49,20 +63,45 @@ async def test_generate_guide_node_returns_guide_text():
     ):
         result = await generate_guide_node(state, llm=mock_llm)
 
-    assert result["guide_text"] == "마이페이지 > 주문내역에서 환불 신청 버튼을 안내하세요."
+    assert result["guide_text"] == guide_draft.draft
+    assert result["guide_explanation"] == guide_draft.explanation
+    assert len(result["citations"]) == 1
+    assert result["citations"][0].is_cited is True
+
+
+@pytest.mark.asyncio
+async def test_generate_guide_node_falls_back_when_no_indices_cited():
+    """cited_indices가 비어 있으면 앞에서부터 최대 개수만큼 citations로 폴백한다."""
+    docs = [
+        Document(page_content=f"문서 {i}", id=f"d{i}", metadata={"source": "channel_talk"})
+        for i in range(3)
+    ]
+    state = _make_state(docs)
+
+    guide_draft = GuideDraft(draft="답변", explanation="설명", cited_indices=[])
+    mock_llm = _make_structured_llm(guide_draft)
+
+    with patch(
+        "catchup.automations.nodes.generate_guide.prompt_loader.get_prompt",
+        return_value=[MagicMock()],
+    ):
+        result = await generate_guide_node(state, llm=mock_llm)
+
+    assert len(result["citations"]) == 3
 
 
 @pytest.mark.asyncio
 async def test_generate_guide_node_passes_guide_instruction_to_prompt():
     """guide_instruction이 있으면 prompt_loader에 전달된다."""
-    docs = [Document(page_content="환불 정책 내용", id="d1")]
+    docs = [Document(page_content="환불 정책 내용", id="d1", metadata={"source": "channel_talk"})]
     state = {
         **_make_state(docs),
         "guide_instruction": "결제 문의는 영수증을 먼저 요청하세요.",
     }
 
-    mock_llm = MagicMock()
-    mock_llm.ainvoke = AsyncMock(return_value=AIMessage(content="가이드"))
+    mock_llm = _make_structured_llm(
+        GuideDraft(draft="가이드", explanation="설명", cited_indices=[])
+    )
 
     with patch(
         "catchup.automations.nodes.generate_guide.prompt_loader.get_prompt",
@@ -76,13 +115,14 @@ async def test_generate_guide_node_passes_guide_instruction_to_prompt():
 
 @pytest.mark.asyncio
 async def test_generate_guide_node_no_docs_returns_fallback():
-    """문서가 없으면 fallback 가이드를 반환한다."""
+    """문서가 없으면 draft는 비우고 explanation에 에스컬레이션 안내를 담아 반환한다."""
     state = _make_state([])
 
     mock_llm = MagicMock()
 
     result = await generate_guide_node(state, llm=mock_llm)
 
-    mock_llm.ainvoke.assert_not_called()
-    assert result["guide_text"] is not None
-    assert len(result["guide_text"]) > 0
+    mock_llm.with_structured_output.assert_not_called()
+    assert result["guide_text"] == ""
+    assert len(result["guide_explanation"]) > 0
+    assert result["citations"] == []

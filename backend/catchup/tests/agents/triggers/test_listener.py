@@ -179,7 +179,7 @@ async def test_execute_agent_run_skips_execution_for_channeltalk_with_invalid_co
 
     result, error = await listener._execute_agent_run(context)
 
-    assert result == ""
+    assert result is None
     assert error is None
 
 
