@@ -36,7 +36,14 @@ async def test_channel_talk_button_opens_prefilled_modal():
             "trigger_id": "trigger-1",
             "user": {"id": "U123"},
             "channel": {"id": "C123"},
-            "message": {"text": "초안 답변", "thread_ts": "1700.1"},
+            "message": {
+                "text": "첫 문단 둘째 문단",
+                "thread_ts": "1700.1",
+                "blocks": [
+                    {"type": "markdown", "text": "첫 문단\n\n둘째 문단"},
+                    {"type": "actions", "elements": []},
+                ],
+            },
             "actions": [
                 {
                     "action_id": CHANNEL_TALK_SEND_ACTION_ID,
@@ -62,7 +69,7 @@ async def test_channel_talk_button_opens_prefilled_modal():
     view = slack_client.open_view.await_args.kwargs["view"]
     assert view["callback_id"] == CHANNEL_TALK_SEND_MODAL_CALLBACK_ID
     assert view["submit"]["text"] == "전송하기"
-    assert view["blocks"][1]["element"]["initial_value"] == "초안 답변"
+    assert view["blocks"][1]["element"]["initial_value"] == "첫 문단\n\n둘째 문단"
     assert [
         option["value"] for option in view["blocks"][0]["element"]["options"]
     ] == ["private", "actAsManager"]
