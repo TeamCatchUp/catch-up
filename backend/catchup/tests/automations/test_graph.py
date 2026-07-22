@@ -29,6 +29,7 @@ def _make_global_context() -> GlobalContext:
 def _initial_state(inquiry: str = "환불 방법") -> AutomationState:
     return AutomationState(
         inquiry_text=inquiry,
+        channel_talk_channel_id="channel-001",
         user_chat_id="chat-001",
         slack_channel_id="C123",
         slack_credential_id=1,

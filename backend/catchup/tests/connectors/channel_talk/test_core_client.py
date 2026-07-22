@@ -45,6 +45,45 @@ def _make_client(
 
 
 class ChannelTalkCoreApiClientTests(IsolatedAsyncioTestCase):
+    async def test_send_user_chat_message_as_manager_posts_customer_message(self) -> None:
+        async def handler(request: httpx.Request) -> httpx.Response:
+            self.assertEqual(request.method, "POST")
+            self.assertEqual(request.url.path, "/open/v5/user-chats/chat-1/messages")
+            self.assertEqual(
+                json.loads(request.content),
+                {
+                    "blocks": [{"type": "text", "value": "Customer response"}],
+                    "options": ["actAsManager"],
+                },
+            )
+            return httpx.Response(
+                200,
+                json={
+                    "message": {
+                        "id": "message-1",
+                        "chatId": "chat-1",
+                        "plainText": "Customer response",
+                        "options": ["actAsManager"],
+                    }
+                },
+            )
+
+        async with httpx.AsyncClient(
+            transport=httpx.MockTransport(handler),
+            base_url="https://api.channel.io",
+        ) as http_client:
+            client = _make_client(http_client=http_client)
+            message = await client.send_user_chat_message_as_manager(
+                access_key="access-key",
+                access_secret="access-secret",
+                channel_id="channel-123",
+                user_chat_id="chat-1",
+                message="Customer response",
+            )
+
+        self.assertEqual(message.message_id, "message-1")
+        self.assertFalse(message.is_private)
+
     async def test_send_internal_user_chat_message_posts_private_message(self) -> None:
         async def handler(request: httpx.Request) -> httpx.Response:
             self.assertEqual(request.method, "POST")
@@ -57,7 +96,7 @@ class ChannelTalkCoreApiClientTests(IsolatedAsyncioTestCase):
                     "blocks": [
                         {
                             "type": "text",
-                            "value": "Agent result",
+                            "value": "&lt;customer&gt; &amp; Agent result",
                         }
                     ],
                     "options": ["private"],
@@ -85,7 +124,7 @@ class ChannelTalkCoreApiClientTests(IsolatedAsyncioTestCase):
                 access_secret="access-secret",
                 channel_id="channel-123",
                 user_chat_id="chat-1",
-                message="Agent result",
+                message="<customer> & Agent result",
             )
 
         self.assertEqual(message.message_id, "message-1")
