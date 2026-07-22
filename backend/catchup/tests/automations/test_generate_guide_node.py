@@ -143,4 +143,21 @@ def test_generate_guide_prompt_forbids_citation_markers_in_explanation():
     assert "참고 문서" in rendered
     assert "Bad" in rendered
     assert "Good" in rendered
-    assert "markdown" in rendered.lower()
+
+
+def test_generate_guide_prompt_requires_structured_markdown_sections():
+    """explanation이 마크다운으로 구조화된 5개 섹션을 갖추도록 지시하는지 검증한다."""
+    rendered = prompt_loader.get_prompt(
+        "automations/generate_guide",
+        inquiry_text="환불 신청은 어떻게 하나요?",
+        docs_summary='<document index="1">환불 정책 안내</document>',
+        guide_instruction=None,
+        **_make_global_context().model_dump(),
+    )
+
+    assert "문의 요약" in rendered
+    assert "핵심 답변" in rendered
+    assert "근거 설명" in rendered
+    assert "추가 확인 사항" in rendered
+    assert "에스컬레이션 필요 여부" in rendered
+    assert "Markdown syntax is allowed" in rendered
