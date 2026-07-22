@@ -191,8 +191,6 @@ async def _find_linked_message(
         for message in response.get("messages", []):
             if not isinstance(message, dict):
                 continue
-            if not _is_bot_message(message):
-                continue
             if not _message_contains_user_chat_id(message, user_chat_id):
                 continue
             msg_ts = str(message.get("ts", ""))
@@ -207,12 +205,6 @@ async def _find_linked_message(
 
 def _slack_ts(value: datetime) -> str:
     return f"{value.timestamp():.6f}"
-
-
-def _is_bot_message(message: dict[str, Any]) -> bool:
-    if message.get("bot_id"):
-        return True
-    return message.get("subtype") == "bot_message"
 
 
 def _message_contains_user_chat_id(message: dict[str, Any], user_chat_id: str) -> bool:

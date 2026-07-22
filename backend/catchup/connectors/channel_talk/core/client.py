@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from html import escape
 from typing import Any
 
 import structlog
@@ -295,7 +296,7 @@ class ChannelTalkCoreApiClient:
         option: str,
     ) -> ChannelTalkUserChatMessage:
         resolved_user_chat_id = _require_user_chat_id(user_chat_id)
-        resolved_message = _require_user_chat_message(message)
+        resolved_message = escape(_require_user_chat_message(message))
         payload = await self._transport.request_json(
             method="POST",
             path=f"/open/v5/user-chats/{resolved_user_chat_id}/messages",

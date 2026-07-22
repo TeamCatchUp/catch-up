@@ -96,7 +96,7 @@ class ChannelTalkCoreApiClientTests(IsolatedAsyncioTestCase):
                     "blocks": [
                         {
                             "type": "text",
-                            "value": "Agent result",
+                            "value": "&lt;customer&gt; &amp; Agent result",
                         }
                     ],
                     "options": ["private"],
@@ -124,7 +124,7 @@ class ChannelTalkCoreApiClientTests(IsolatedAsyncioTestCase):
                 access_secret="access-secret",
                 channel_id="channel-123",
                 user_chat_id="chat-1",
-                message="Agent result",
+                message="<customer> & Agent result",
             )
 
         self.assertEqual(message.message_id, "message-1")
