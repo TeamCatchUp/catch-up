@@ -31,8 +31,10 @@ async def test_send_slack_node_posts_thread_reply():
         "messages": [
             {
                 "ts": "1700000000.000000",
-                "bot_id": "B123",
-                "text": "https://example.com/user-chats/abc123",
+                "text": (
+                    "https://channel.works/zxq46/user-chats/"
+                    "%EC%97%98%EB%A6%AC+708-abc123"
+                ),
             }
         ],
         "has_more": False,
