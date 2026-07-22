@@ -17,6 +17,7 @@ from catchup.schemas.sources import UnknownSource
 def _make_automation_input() -> AutomationInput:
     return AutomationInput(
         inquiry_text="환불 방법 문의",
+        channel_talk_channel_id="channel-001",
         user_chat_id="chat-001",
         slack_channel_id="C123456",
         slack_credential_id=1,
@@ -62,6 +63,8 @@ async def test_run_inquiry_automation_without_langfuse_skips_tracing():
         await run_inquiry_automation(_make_automation_input())
 
     mock_graph.ainvoke.assert_awaited_once()
+    state = mock_graph.ainvoke.await_args.args[0]
+    assert state["channel_talk_channel_id"] == "channel-001"
     _, kwargs = mock_graph.ainvoke.await_args
     assert kwargs["config"] == {}
     mock_handler.assert_not_called()
