@@ -11,6 +11,7 @@ from urllib.parse import unquote_plus
 
 import structlog
 
+from catchup.automations.channel_talk_actions import build_guide_blocks
 from catchup.connectors.slack.client import SlackApiClientWrapper
 from catchup.db.engine import SessionLocal
 from catchup.db.slack.oauth_repository import get_slack_token_by_id
@@ -27,100 +28,22 @@ _LINK_SEARCH_MAX_ATTEMPTS = 5
 _LINK_SEARCH_INITIAL_DELAY_SECONDS = 5.0
 _LINK_SEARCH_BACKOFF_FACTOR = 2.0
 _LINK_SEARCH_MAX_DELAY_SECONDS = 25.0
-
-
-def _message_contains_user_chat_id(message: dict[str, Any], user_chat_id: str) -> bool:
-    """메시지 내 Channel Talk user_chat_id URL 포함 여부를 확인한다."""
-    texts: list[str] = []
-    _collect_strings(message, texts)
-    for text in texts:
-        for match in _USER_CHAT_URL_RE.finditer(text):
-            segment = match.group("user_chat_id")
-            candidates = {segment, unquote(segment), unquote_plus(segment)}
-            if any(
-                c == user_chat_id or c.endswith(f"-{user_chat_id}") for c in candidates
-            ):
-                return True
-    return False
-
-
-def _collect_strings(value: Any, result: list[str]) -> None:
-    if isinstance(value, str):
-        result.append(value)
-    elif isinstance(value, dict):
-        for v in value.values():
-            _collect_strings(v, result)
-    elif isinstance(value, list):
-        for item in value:
-            _collect_strings(item, result)
-
-
-def _is_bot_message(message: dict[str, Any]) -> bool:
-    if message.get("bot_id"):
-        return True
-    return message.get("subtype") == "bot_message"
-
-
-def _slack_ts(value: datetime) -> str:
-    return f"{value.timestamp():.6f}"
-
-
-def _build_thread_reply_blocks(message: str) -> list[dict[str, str]] | None:
-    if len(message) > _SLACK_MARKDOWN_BLOCK_TEXT_LIMIT:
-        return None
-    return [{"type": "markdown", "text": message}]
-
-
-async def _find_linked_message(
-    client: SlackApiClientWrapper,
-    *,
-    channel_id: str,
-    user_chat_id: str,
-    oldest_at: datetime,
-) -> dict[str, Any] | None:
-    """채널 히스토리에서 user_chat_id가 링크된 최신 봇 메시지를 찾는다.
-
-    Channel Talk의 자체 Slack 연동이 메시지를 올리는 시점은 이 파이프라인이
-    통제할 수 없으므로, latest 경계를 매 호출 시점의 now로 새로 잡아야
-    호출 사이에 새로 올라온 메시지를 포착할 수 있다.
-    """
-    now = datetime.now(timezone.utc)
-    cursor: str | None = None
-    newest_match: dict[str, Any] | None = None
-
-    while True:
-        response = await client.get_conversation_history(
-            channel=channel_id,
-            oldest=_slack_ts(oldest_at),
-            latest=_slack_ts(now),
-            cursor=cursor,
-            limit=15,
-            inclusive=True,
-        )
-        for message in response.get("messages", []):
-            if not isinstance(message, dict):
-                continue
-            if not _is_bot_message(message):
-                continue
-            if not _message_contains_user_chat_id(message, user_chat_id):
-                continue
-            msg_ts = str(message.get("ts", ""))
-            if newest_match is None or msg_ts > str(newest_match.get("ts", "")):
-                newest_match = message
-        cursor = response.get("response_metadata", {}).get("next_cursor")
-        if not response.get("has_more") or not cursor:
-            break
-
-    return newest_match
+_MESSAGE_POST_MAX_ATTEMPTS = 3
+_MESSAGE_POST_INITIAL_DELAY_SECONDS = 1.0
 
 
 async def send_slack_node(state: dict[str, Any]) -> dict[str, Any]:
     """Channel Talk 연동 Slack 스레드에 대응 가이드를 발송한다."""
     guide_text: str = state.get("guide_text") or ""
-    if not guide_text:
-        logger.warning("send_slack_node_skipped", reason="empty_guide_text")
+    explanation_message = _build_explanation_message(
+        state.get("guide_explanation") or "",
+        state.get("citations") or [],
+    )
+    if not guide_text and not explanation_message:
+        logger.warning("send_slack_node_skipped", reason="empty_guide")
         return {}
 
+    channel_talk_channel_id: str = state["channel_talk_channel_id"]
     user_chat_id: str = state["user_chat_id"]
     channel_id: str = state["slack_channel_id"]
     credential_id: int = state["slack_credential_id"]
@@ -186,12 +109,26 @@ async def send_slack_node(state: dict[str, Any]) -> dict[str, Any]:
     if not message_ts:
         raise RuntimeError("Matched Slack message is missing ts")
 
-    await client.post_message(
-        channel=channel_id,
-        text=guide_text,
-        thread_ts=message_ts,
-        blocks=_build_thread_reply_blocks(guide_text),
-    )
+    if explanation_message:
+        await _post_message_with_retry(
+            client,
+            channel=channel_id,
+            text=explanation_message,
+            thread_ts=message_ts,
+            blocks=_build_thread_reply_blocks(explanation_message),
+        )
+
+    if guide_text:
+        await client.post_message(
+            channel=channel_id,
+            text=guide_text,
+            thread_ts=message_ts,
+            blocks=build_guide_blocks(
+                guide_text,
+                channel_id=channel_talk_channel_id,
+                user_chat_id=user_chat_id,
+            ),
+        )
 
     logger.info(
         "send_slack_node_completed",
@@ -200,3 +137,142 @@ async def send_slack_node(state: dict[str, Any]) -> dict[str, Any]:
         user_chat_id=user_chat_id,
     )
     return {}
+
+
+def _build_explanation_message(explanation: str, citations: list[Any]) -> str:
+    parts = [explanation.strip()] if explanation.strip() else []
+    citation_lines = [
+        line for citation in citations if (line := _format_citation(citation))
+    ]
+    if citation_lines:
+        parts.append("*출처*\n" + "\n".join(citation_lines))
+    return "\n\n".join(parts)
+
+
+def _format_citation(citation: Any) -> str:
+    getter = (
+        citation.get
+        if isinstance(citation, dict)
+        else lambda key: getattr(citation, key, None)
+    )
+    title = str(getter("title") or "출처").strip()
+    url = str(getter("url") or "").strip()
+    index = getter("index")
+    label = f"[{index}] {title}" if index is not None else title
+    return f"- <{url}|{label}>" if url else f"- {label}"
+
+
+async def _find_linked_message(
+    client: SlackApiClientWrapper,
+    *,
+    channel_id: str,
+    user_chat_id: str,
+    oldest_at: datetime,
+) -> dict[str, Any] | None:
+    """채널 히스토리에서 user_chat_id가 링크된 최신 봇 메시지를 찾는다.
+
+    Channel Talk의 자체 Slack 연동이 메시지를 올리는 시점은 이 파이프라인이
+    통제할 수 없으므로, latest 경계를 매 호출 시점의 now로 새로 잡아야
+    호출 사이에 새로 올라온 메시지를 포착할 수 있다.
+    """
+    now = datetime.now(timezone.utc)
+    cursor: str | None = None
+    newest_match: dict[str, Any] | None = None
+
+    while True:
+        response = await client.get_conversation_history(
+            channel=channel_id,
+            oldest=_slack_ts(oldest_at),
+            latest=_slack_ts(now),
+            cursor=cursor,
+            limit=15,
+            inclusive=True,
+        )
+        for message in response.get("messages", []):
+            if not isinstance(message, dict):
+                continue
+            if not _is_bot_message(message):
+                continue
+            if not _message_contains_user_chat_id(message, user_chat_id):
+                continue
+            msg_ts = str(message.get("ts", ""))
+            if newest_match is None or msg_ts > str(newest_match.get("ts", "")):
+                newest_match = message
+        cursor = response.get("response_metadata", {}).get("next_cursor")
+        if not response.get("has_more") or not cursor:
+            break
+
+    return newest_match
+
+
+def _slack_ts(value: datetime) -> str:
+    return f"{value.timestamp():.6f}"
+
+
+def _is_bot_message(message: dict[str, Any]) -> bool:
+    if message.get("bot_id"):
+        return True
+    return message.get("subtype") == "bot_message"
+
+
+def _message_contains_user_chat_id(message: dict[str, Any], user_chat_id: str) -> bool:
+    """메시지 내 Channel Talk user_chat_id URL 포함 여부를 확인한다."""
+    texts: list[str] = []
+    _collect_strings(message, texts)
+    for text in texts:
+        for match in _USER_CHAT_URL_RE.finditer(text):
+            segment = match.group("user_chat_id")
+            candidates = {segment, unquote(segment), unquote_plus(segment)}
+            if any(
+                c == user_chat_id or c.endswith(f"-{user_chat_id}") for c in candidates
+            ):
+                return True
+    return False
+
+
+def _collect_strings(value: Any, result: list[str]) -> None:
+    if isinstance(value, str):
+        result.append(value)
+    elif isinstance(value, dict):
+        for v in value.values():
+            _collect_strings(v, result)
+    elif isinstance(value, list):
+        for item in value:
+            _collect_strings(item, result)
+
+
+def _build_thread_reply_blocks(message: str) -> list[dict[str, str]] | None:
+    if len(message) > _SLACK_MARKDOWN_BLOCK_TEXT_LIMIT:
+        return None
+    return [{"type": "markdown", "text": message}]
+
+
+async def _post_message_with_retry(
+    client: SlackApiClientWrapper,
+    *,
+    channel: str,
+    text: str,
+    thread_ts: str,
+    blocks: list[dict[str, str]] | None,
+) -> None:
+    delay_seconds = _MESSAGE_POST_INITIAL_DELAY_SECONDS
+    for attempt in range(1, _MESSAGE_POST_MAX_ATTEMPTS + 1):
+        try:
+            await client.post_message(
+                channel=channel,
+                text=text,
+                thread_ts=thread_ts,
+                blocks=blocks,
+            )
+            return
+        except Exception:
+            if attempt == _MESSAGE_POST_MAX_ATTEMPTS:
+                raise
+            logger.warning(
+                "send_slack_explanation_retrying",
+                attempt=attempt,
+                next_delay_seconds=delay_seconds,
+                exc_info=True,
+            )
+            await asyncio.sleep(delay_seconds)
+            delay_seconds *= 2

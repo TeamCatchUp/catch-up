@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 from catchup.agents.factory import get_execution_service
 from catchup.agents.schemas import AgentSpec as AgentSpecSchema
 from catchup.agents.tools.registry import ToolRegistry
+from catchup.agents.triggers.channel_talk_context import CHANNEL_TALK_CHANNEL_ID_KEY
 from catchup.agents.triggers.channel_talk_context import (
     CHANNEL_TALK_USER_CHAT_CONTEXT_KEY,
 )
@@ -328,6 +329,7 @@ async def _build_automation_input(
         return None
 
     inquiry_text: str = ct_inputs.get(CHANNEL_TALK_USER_CHAT_CONTEXT_KEY, "")
+    channel_talk_channel_id: str = ct_inputs.get(CHANNEL_TALK_CHANNEL_ID_KEY, "")
     user_chat_id: str = ct_inputs.get(CHANNEL_TALK_USER_CHAT_ID_KEY, "")
 
     try:
@@ -341,6 +343,7 @@ async def _build_automation_input(
 
     return AutomationInput(
         inquiry_text=inquiry_text,
+        channel_talk_channel_id=channel_talk_channel_id,
         user_chat_id=user_chat_id,
         slack_channel_id=config.slack_channel_id,
         slack_credential_id=config.slack_credential_id,

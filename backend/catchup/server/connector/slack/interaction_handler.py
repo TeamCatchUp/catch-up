@@ -8,11 +8,27 @@ from typing import Any
 import structlog
 from fastapi.concurrency import run_in_threadpool
 
+from catchup.automations.channel_talk_actions import CHANNEL_TALK_MESSAGE_BLOCK_ID
+from catchup.automations.channel_talk_actions import CHANNEL_TALK_MESSAGE_MODE_BLOCK_ID
+from catchup.automations.channel_talk_actions import CHANNEL_TALK_SEND_ACTION_ID
+from catchup.automations.channel_talk_actions import CHANNEL_TALK_SEND_MODAL_CALLBACK_ID
+from catchup.automations.channel_talk_actions import ChannelTalkMessageMode
+from catchup.automations.channel_talk_actions import ChannelTalkModalContext
+from catchup.automations.channel_talk_actions import ChannelTalkSubmission
+from catchup.automations.channel_talk_actions import build_send_modal
+from catchup.automations.channel_talk_actions import parse_action_payload
+from catchup.automations.channel_talk_actions import parse_modal_context
+from catchup.automations.channel_talk_actions import parse_submission
 from catchup.chat.exceptions import LikedWithNegativeFeedbackError
 from catchup.chat.integrations.slack_app_mention import UNMAPPED_USER_MESSAGE
 from catchup.chat.schemas import FeedbackRequest
 from catchup.configs.config import settings
+from catchup.connectors.channel_talk.core.client import ChannelTalkCoreApiClient
+from catchup.connectors.channel_talk.schemas.channel_connection import (
+    ChannelTalkCredentialsRecord,
+)
 from catchup.connectors.slack.client import SlackApiClientWrapper
+from catchup.db.channel_talk.repository import ChannelTalkCredentialsRepository
 from catchup.db.chat_room import get_chat_room_by_session_id
 from catchup.db.chat_room import get_message
 from catchup.db.engine import SessionLocal
@@ -93,6 +109,10 @@ async def handle_block_actions(
         return {}
 
     action_id = str(action.get("action_id") or "").strip()
+    if action_id == CHANNEL_TALK_SEND_ACTION_ID:
+        await _open_channel_talk_send_modal(request, action)
+        return {}
+
     if action_id == REASON_ACTION_ID and _is_not_helpful_modal_interaction(request.event):
         await _refresh_not_helpful_modal(request)
         return {}
@@ -145,6 +165,9 @@ async def handle_view_submission(
     request: SlackWebhookRequest,
 ) -> dict[str, Any]:
     payload = request.event
+    if _read_nested_str(payload, "view", "callback_id") == CHANNEL_TALK_SEND_MODAL_CALLBACK_ID:
+        return _handle_channel_talk_view_submission(request)
+
     modal_context = parse_feedback_modal_context(
         _read_nested_str(payload, "view", "private_metadata")
     )
@@ -165,6 +188,165 @@ async def handle_view_submission(
         submission=submission,
     )
     return {"response_action": "clear"}
+
+
+async def _open_channel_talk_send_modal(
+    request: SlackWebhookRequest,
+    action: dict[str, Any],
+) -> None:
+    action_payload = parse_action_payload(action.get("value"))
+    trigger_id = _read_nested_str(request.event, "trigger_id")
+    slack_channel_id = _read_nested_str(request.event, "channel", "id")
+    slack_user_id = _read_nested_str(request.event, "user", "id")
+    draft = _read_nested_str(request.event, "message", "text")
+    if not all(
+        (action_payload, trigger_id, slack_channel_id, slack_user_id, draft)
+    ):
+        logger.warning("channel_talk_send_modal_invalid_action")
+        return
+
+    client = await run_in_threadpool(_build_slack_client_sync, request.team_id)
+    if client is None:
+        logger.warning("channel_talk_send_modal_slack_credentials_not_found")
+        return
+
+    thread_ts = (
+        _read_nested_str(request.event, "message", "thread_ts")
+        or _read_nested_str(request.event, "container", "thread_ts")
+        or None
+    )
+    await client.open_view(
+        trigger_id=trigger_id,
+        view=build_send_modal(
+            ChannelTalkModalContext(
+                channel_id=action_payload.channel_id,
+                user_chat_id=action_payload.user_chat_id,
+                slack_channel_id=slack_channel_id,
+                slack_user_id=slack_user_id,
+                thread_ts=thread_ts,
+            ),
+            draft=draft,
+        ),
+    )
+
+
+def _handle_channel_talk_view_submission(
+    request: SlackWebhookRequest,
+) -> dict[str, Any]:
+    context = parse_modal_context(
+        _read_nested_str(request.event, "view", "private_metadata")
+    )
+    submission = parse_submission(request.event)
+    if context is None:
+        return {"response_action": "clear"}
+    if submission is None:
+        return {
+            "response_action": "errors",
+            "errors": {
+                CHANNEL_TALK_MESSAGE_MODE_BLOCK_ID: "전송 방식을 선택해 주세요.",
+                CHANNEL_TALK_MESSAGE_BLOCK_ID: "전송할 내용을 입력해 주세요.",
+            },
+        }
+
+    task = asyncio.create_task(
+        _complete_channel_talk_submission(
+            request=request,
+            context=context,
+            submission=submission,
+        )
+    )
+    task.add_done_callback(_log_channel_talk_submission_failure)
+    return {"response_action": "clear"}
+
+
+async def _complete_channel_talk_submission(
+    *,
+    request: SlackWebhookRequest,
+    context: ChannelTalkModalContext,
+    submission: ChannelTalkSubmission,
+) -> None:
+    try:
+        credential = await run_in_threadpool(
+            _load_channel_talk_credential_sync,
+            context.channel_id,
+        )
+        if (
+            credential is None
+            or not credential.access_key
+            or not credential.access_secret
+        ):
+            raise RuntimeError("Channel Talk credentials not found")
+
+        client = ChannelTalkCoreApiClient()
+        if submission.mode is ChannelTalkMessageMode.PRIVATE:
+            await client.send_internal_user_chat_message(
+                credential.access_key,
+                credential.access_secret,
+                channel_id=context.channel_id,
+                user_chat_id=context.user_chat_id,
+                message=submission.message,
+            )
+        else:
+            await client.send_user_chat_message_as_manager(
+                credential.access_key,
+                credential.access_secret,
+                channel_id=context.channel_id,
+                user_chat_id=context.user_chat_id,
+                message=submission.message,
+            )
+    except Exception:
+        logger.exception(
+            "channel_talk_message_send_failed",
+            channel_id=context.channel_id,
+            user_chat_id=context.user_chat_id,
+        )
+        await _post_channel_talk_submission_notice(
+            request,
+            context,
+            "채널톡 전송에 실패했습니다.",
+        )
+        return
+
+    await _post_channel_talk_submission_notice(
+        request,
+        context,
+        "채널톡으로 전송했습니다.",
+    )
+
+
+def _load_channel_talk_credential_sync(
+    channel_id: str,
+) -> ChannelTalkCredentialsRecord | None:
+    with SessionLocal() as db:
+        return ChannelTalkCredentialsRepository(db).get_connection(
+            channel_id=channel_id
+        )
+
+
+async def _post_channel_talk_submission_notice(
+    request: SlackWebhookRequest,
+    context: ChannelTalkModalContext,
+    text: str,
+) -> None:
+    client = await run_in_threadpool(_build_slack_client_sync, request.team_id)
+    if client is None:
+        return
+    try:
+        await client.post_ephemeral(
+            channel=context.slack_channel_id,
+            user=context.slack_user_id,
+            thread_ts=context.thread_ts,
+            text=text,
+        )
+    except Exception:
+        logger.warning("channel_talk_submission_notice_failed", exc_info=True)
+
+
+def _log_channel_talk_submission_failure(task: asyncio.Task[None]) -> None:
+    try:
+        task.result()
+    except Exception:
+        logger.exception("channel_talk_submission_follow_up_failed")
 
 
 def _process_feedback_sync(

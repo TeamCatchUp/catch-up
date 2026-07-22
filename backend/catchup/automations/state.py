@@ -16,6 +16,7 @@ from catchup.schemas.structures import VectorDbSearchQuery
 class AutomationState(TypedDict):
     # 트리거 레이어에서 주입
     inquiry_text: str
+    channel_talk_channel_id: str
     user_chat_id: str
     slack_channel_id: str
     slack_credential_id: int

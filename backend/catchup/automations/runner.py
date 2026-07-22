@@ -24,6 +24,7 @@ observe = get_observe()
 @dataclass(frozen=True)
 class AutomationInput:
     inquiry_text: str
+    channel_talk_channel_id: str
     user_chat_id: str
     slack_channel_id: str
     slack_credential_id: int
@@ -71,6 +72,7 @@ async def run_inquiry_automation(
 
     state = AutomationState(
         inquiry_text=automation_input.inquiry_text,
+        channel_talk_channel_id=automation_input.channel_talk_channel_id,
         user_chat_id=automation_input.user_chat_id,
         slack_channel_id=automation_input.slack_channel_id,
         slack_credential_id=automation_input.slack_credential_id,
