@@ -7,6 +7,7 @@ from langchain_core.documents import Document
 
 from catchup.automations.nodes.generate_guide import generate_guide_node
 from catchup.automations.structures import GuideDraft
+from catchup.prompts.loader import prompt_loader
 from catchup.schemas.context import GlobalCompanyContext
 from catchup.schemas.context import GlobalContext
 from catchup.schemas.context import GlobalCurrentTimeContext
@@ -126,3 +127,20 @@ async def test_generate_guide_node_no_docs_returns_fallback():
     assert result["guide_text"] == ""
     assert len(result["guide_explanation"]) > 0
     assert result["citations"] == []
+
+
+def test_generate_guide_prompt_forbids_citation_markers_in_explanation():
+    """explanation에 출처 나열/인용 마커를 금지하는 지침과 예시가 실제 렌더링에 포함되는지 검증한다."""
+    rendered = prompt_loader.get_prompt(
+        "automations/generate_guide",
+        inquiry_text="환불 신청은 어떻게 하나요?",
+        docs_summary='<document index="1">환불 정책 안내</document>',
+        guide_instruction=None,
+        **_make_global_context().model_dump(),
+    )
+
+    assert "출처" in rendered
+    assert "참고 문서" in rendered
+    assert "Bad" in rendered
+    assert "Good" in rendered
+    assert "markdown" in rendered.lower()
