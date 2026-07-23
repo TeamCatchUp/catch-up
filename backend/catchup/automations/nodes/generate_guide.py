@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import html
 from typing import Any
 
 import structlog
@@ -37,7 +38,9 @@ async def generate_guide_node(state: AutomationState, llm: BaseChatModel) -> dic
 
     doc_groups = build_doc_groups(docs)
     docs_summary = render_grouped_context_text(doc_groups)
-    inquiry_text = state["inquiry_text"]
+    # HTML-entity-escape하여 <, >를 무력화한다 — 고객 문의에 가짜 닫는 태그를 심어
+    # customer_inquiry 블록을 탈출하려는 프롬프트 인젝션을 막는다.
+    inquiry_text = html.escape(state["inquiry_text"], quote=False)
     guide_instruction = state.get("guide_instruction")
     global_context = state["global_context"].model_dump()
 
