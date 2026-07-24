@@ -47,6 +47,7 @@ dependencies = [
     "langgraph-checkpoint-postgres>=3.0.4",
     "mcp[cli]>=1.27.0",
     "cachetools>=7.1.1",
+    "graphiti-core>=0.29.2",
 ]
 
 # 개발 전용 의존성
