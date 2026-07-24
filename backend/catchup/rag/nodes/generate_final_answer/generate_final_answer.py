@@ -210,12 +210,14 @@ def _load_prompts(
             prompt_settings=prompt_settings,
             sources=sources,
             slack_thread_context=slack_thread_context,
+            company=global_context["company"],
         )
     else:
         system = prompt_loader.get_prompt(
             "rag/generate_final_answer",
             sources=sources,
             slack_thread_context=slack_thread_context,
+            company=global_context["company"],
         )
 
     return {

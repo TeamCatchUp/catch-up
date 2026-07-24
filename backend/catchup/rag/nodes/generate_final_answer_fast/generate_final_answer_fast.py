@@ -195,6 +195,7 @@ def _load_prompts(
             prompt_settings=prompt_settings,
             sources=list(SOURCE_METADATA.values()),
             slack_thread_context=slack_thread_context,
+            company=global_context["company"],
         ),
         "global_context": prompt_loader.get_prompt(
             "common/global_context",
