@@ -66,6 +66,7 @@ from catchup.knowledge_maintenance.domain.pipeline_event import next_attempt_at
 from catchup.knowledge_maintenance.domain.pipeline_event import resolve_failure
 from catchup.knowledge_maintenance.domain.source_version import SourceIdentity
 from catchup.knowledge_maintenance.domain.source_version import SourceVersion
+from catchup.knowledge_maintenance.ports.ontology import OntologySnapshotConflict
 
 
 def _identity_matches(
@@ -542,6 +543,15 @@ class SqlAlchemyOntologyRepository:
             version=vocabulary.snapshot_id,
         )
         if found is not None:
+            if (
+                found.predicates != vocabulary.predicates
+                or found.relation_types != vocabulary.relation_types
+            ):
+                raise OntologySnapshotConflict(
+                    f"{ontology_id} {vocabulary.snapshot_id}에 다른 어휘를 "
+                    f"담으려 했다. 저장된 predicate {len(found.predicates)}종, "
+                    f"넣으려는 것 {len(vocabulary.predicates)}종"
+                )
             return found
 
         row = KnowledgeOntologySnapshotRow(

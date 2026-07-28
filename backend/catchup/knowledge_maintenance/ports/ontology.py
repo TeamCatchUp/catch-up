@@ -5,6 +5,14 @@ from typing import Protocol
 from catchup.knowledge_maintenance.contracts.extraction import ExtractionVocabulary
 
 
+class OntologySnapshotConflict(ValueError):
+    """같은 버전 이름에 다른 어휘를 담으려 했음을 알린다.
+
+    조용히 기존 값을 돌려주면 실행이 가리키는 스냅샷과 실제로 LLM에 넣은
+    어휘가 달라진다. 스냅샷을 남긴 목적이 감사인데 그 기록이 거짓이 된다.
+    """
+
+
 class OntologyRepository(Protocol):
     """추출이 따른 어휘 목록의 영속성을 정의한다.
 
@@ -31,8 +39,9 @@ class OntologyRepository(Protocol):
     ) -> ExtractionVocabulary:
         """스냅샷을 남기거나 이미 있는 것을 돌려준다.
 
-        같은 버전을 두 번 저장하려 하면 기존 것을 그대로 쓴다. 어휘는 그
-        버전에서 확정된 값이므로 덮어쓰지 않는다.
+        어휘는 그 버전에서 확정된 값이므로 덮어쓰지 않는다. 다만 같은 이름에
+        다른 내용을 넣으려 하면 `OntologySnapshotConflict`를 던진다. 덮어쓰지
+        않는 것과 충돌을 삼키는 것은 다르다.
         """
         ...
 

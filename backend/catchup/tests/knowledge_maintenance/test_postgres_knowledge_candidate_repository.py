@@ -47,6 +47,7 @@ from catchup.knowledge_maintenance.domain.observation import content_hash
 from catchup.knowledge_maintenance.domain.source_version import ChangeKind
 from catchup.knowledge_maintenance.domain.source_version import SourceIdentity
 from catchup.knowledge_maintenance.domain.source_version import SourceVersion
+from catchup.knowledge_maintenance.ports.ontology import OntologySnapshotConflict
 from catchup.knowledge_maintenance.services.store_knowledge_candidates import (
     ObservationNodeMissing,
 )
@@ -660,34 +661,63 @@ def test_the_vocabulary_snapshot_is_stored_with_the_run(
     assert found.relation_types == ("depends_on", "asked_about")
 
 
-def test_an_existing_snapshot_is_not_overwritten(
+def test_the_same_snapshot_can_be_written_twice(
     workspace_id: int,
     session_factory: Callable[[], Session],
 ) -> None:
-    """어휘는 그 버전에서 확정된 값이므로 나중에 바꾸지 않는다."""
-    first = ExtractionVocabulary(
+    """같은 내용이면 두 번 적어도 문제가 없다. 재실행이 안전해야 한다."""
+    vocabulary = ExtractionVocabulary(
         snapshot_id="frozen-1",
         predicates=("release_month",),
-    )
-    second = ExtractionVocabulary(
-        snapshot_id="frozen-1",
-        predicates=("release_month", "owner_team"),
     )
 
     with KnowledgeMaintenanceUnitOfWork(session_factory) as uow:
         uow.ontology.ensure(
             workspace_id=workspace_id,
             ontology_id="test.ontology",
-            vocabulary=first,
+            vocabulary=vocabulary,
         )
-        kept = uow.ontology.ensure(
+        again = uow.ontology.ensure(
             workspace_id=workspace_id,
             ontology_id="test.ontology",
-            vocabulary=second,
+            vocabulary=vocabulary,
         )
         uow.commit()
 
-    assert kept.predicates == ("release_month",)
+    assert again.predicates == ("release_month",)
+
+
+def test_a_different_vocabulary_under_the_same_version_is_rejected(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+) -> None:
+    """같은 이름에 다른 어휘를 담으면 감사 기록이 거짓이 된다.
+
+    조용히 기존 값을 돌려주면 실행이 가리키는 스냅샷과 실제로 LLM에 넣은
+    어휘가 달라진다. 덮어쓰지 않는 것과 충돌을 삼키는 것은 다르다.
+    """
+    with KnowledgeMaintenanceUnitOfWork(session_factory) as uow:
+        uow.ontology.ensure(
+            workspace_id=workspace_id,
+            ontology_id="test.ontology",
+            vocabulary=ExtractionVocabulary(
+                snapshot_id="frozen-2",
+                predicates=("release_month",),
+            ),
+        )
+        uow.commit()
+
+    with pytest.raises(OntologySnapshotConflict, match="frozen-2"):
+        with KnowledgeMaintenanceUnitOfWork(session_factory) as uow:
+            uow.ontology.ensure(
+                workspace_id=workspace_id,
+                ontology_id="test.ontology",
+                vocabulary=ExtractionVocabulary(
+                    snapshot_id="frozen-2",
+                    predicates=("launch_month",),
+                ),
+            )
+            uow.commit()
 
 
 def test_a_run_cannot_point_at_a_missing_snapshot(
