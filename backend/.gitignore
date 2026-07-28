@@ -14,3 +14,7 @@ Claude.md
 
 # 실험 산출물 — 코드는 커밋하되 결과 파일은 제외한다
 catchup/experiments/**/output/
+
+# 평가 데이터셋은 코드와 함께 관리한다
+!catchup/evaluation/data/
+!catchup/evaluation/data/**
