@@ -8,6 +8,7 @@ from catchup.knowledge_maintenance.contracts.extraction import KnowledgeCandidat
 from catchup.knowledge_maintenance.contracts.extraction import (
     KnowledgeExtractionRequest,
 )
+from catchup.knowledge_maintenance.contracts.extraction import metadata_local_key
 from catchup.knowledge_maintenance.domain.observation import MetadataEntity
 from catchup.prompts.loader import prompt_loader
 
@@ -61,11 +62,12 @@ class StructuredKnowledgeExtractor:
         계약이 아직 확정되지 않은 동안에는 무엇이 왜 거부됐는지가
         성공한 결과만큼 중요하다.
         """
+        known_entities = _with_local_keys(request.metadata_entities)
         rendered = prompt_loader.get_prompt(
             TEMPLATE_PATH,
             content=request.content,
             source_type=request.source_type,
-            metadata_entities=_with_local_keys(request.metadata_entities),
+            metadata_entities=known_entities,
             vocabulary=request.vocabulary,
         )
 
@@ -74,6 +76,16 @@ class StructuredKnowledgeExtractor:
 
         parsed = response.get("parsed")
         if parsed is not None:
+            known_keys = frozenset(
+                entity["local_key"] for entity in known_entities
+            )
+            try:
+                parsed.validate_metadata_references(known_keys)
+            except ValueError as error:
+                return None, ExtractionDiagnostics(
+                    raw_output=_dump(raw),
+                    parse_error=str(error),
+                )
             return parsed, ExtractionDiagnostics(raw_output=_dump(raw))
 
         error = response.get("parsing_error")
@@ -93,7 +105,7 @@ def _with_local_keys(
     """
     return [
         {
-            "local_key": f"m{index}",
+            "local_key": metadata_local_key(index),
             "display_name": entity.display_name,
             "entity_type": entity.entity_type,
         }

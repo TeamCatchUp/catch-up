@@ -12,6 +12,7 @@ LLM 출력이며, resolution과 승인 경계를 지나야 확정 지식이 된�
 
 from __future__ import annotations
 
+import re
 from datetime import datetime
 from typing import Self
 
@@ -23,6 +24,22 @@ from pydantic import model_validator
 
 from catchup.knowledge_maintenance.domain.observation import MetadataEntity
 from catchup.knowledge_maintenance.domain.source_version import JsonValue
+
+# 레이어 1이 이미 확정한 Entity를 가리키는 참조 키다. Extractor가 만든 것이
+# 아니라 요청에 실려 들어온 것이므로 `m1`, `m2`처럼 따로 표기하고, batch의
+# `entities`에는 담기지 않는다. 고객이 무엇을 물었는지 같은 관계는 이 키를
+# 한쪽 끝으로 삼아야만 표현할 수 있다.
+METADATA_LOCAL_KEY_PATTERN = re.compile(r"^m\d+$")
+
+
+def metadata_local_key(index: int) -> str:
+    """metadata Entity가 이번 추출에서 쓸 참조 키를 만든다."""
+    return f"m{index}"
+
+
+def is_metadata_local_key(value: str) -> bool:
+    """이미 확정된 Entity를 가리키는 키인지 본다."""
+    return METADATA_LOCAL_KEY_PATTERN.match(value) is not None
 
 
 def _require_text(value: str, field_name: str) -> str:
@@ -115,7 +132,13 @@ class KnowledgeCandidateBatch(BaseModel):
 
     @model_validator(mode="after")
     def validate_local_key_graph(self) -> Self:
-        """local_key가 유일하고 모든 참조가 해소되는지 검사한다."""
+        """local_key가 유일하고 모든 참조가 해소되는지 검사한다.
+
+        `m1` 같은 metadata 참조는 이 batch 안에 없어도 통과시킨다. 그 Entity는
+        레이어 1이 이미 확정했고 요청에 실려 들어오므로, batch만 보고는 존재
+        여부를 알 수 없다. 실제로 요청에 있었는지는
+        `validate_metadata_references`가 확인한다.
+        """
         keys = [
             *(entity.local_key for entity in self.entities),
             *(claim.local_key for claim in self.claims),
@@ -125,10 +148,21 @@ class KnowledgeCandidateBatch(BaseModel):
         if duplicated:
             raise ValueError(f"local_key가 중복됐다: {sorted(duplicated)}")
 
+        reserved = [
+            entity.local_key
+            for entity in self.entities
+            if is_metadata_local_key(entity.local_key)
+        ]
+        if reserved:
+            raise ValueError(
+                f"metadata 참조로 예약된 local_key를 새 Entity에 쓸 수 없다: "
+                f"{sorted(reserved)}"
+            )
+
         entity_keys = {entity.local_key for entity in self.entities}
 
         for claim in self.claims:
-            if claim.subject_local_key not in entity_keys:
+            if not _resolves(claim.subject_local_key, entity_keys):
                 raise ValueError(
                     f"claim {claim.local_key}의 subject를 찾을 수 없다: "
                     f"{claim.subject_local_key}"
@@ -139,13 +173,46 @@ class KnowledgeCandidateBatch(BaseModel):
                 relation.source_local_key,
                 relation.target_local_key,
             ):
-                if endpoint not in entity_keys:
+                if not _resolves(endpoint, entity_keys):
                     raise ValueError(
                         f"relation {relation.local_key}의 endpoint를 찾을 수 "
                         f"없다: {endpoint}"
                     )
 
         return self
+
+    def metadata_references(self) -> frozenset[str]:
+        """이 batch가 가리킨 metadata Entity의 참조 키를 모은다."""
+        referenced = {
+            claim.subject_local_key
+            for claim in self.claims
+            if is_metadata_local_key(claim.subject_local_key)
+        }
+        for relation in self.relation_assertions:
+            for endpoint in (
+                relation.source_local_key,
+                relation.target_local_key,
+            ):
+                if is_metadata_local_key(endpoint):
+                    referenced.add(endpoint)
+        return frozenset(referenced)
+
+    def validate_metadata_references(self, known_keys: frozenset[str]) -> None:
+        """가리킨 metadata Entity가 실제로 요청에 있었는지 확인한다.
+
+        모델 검증에서 분리한 이유는 요청을 알아야 판단할 수 있기 때문이다.
+        Extractor가 결과를 받은 직후에 부른다.
+        """
+        unknown = self.metadata_references() - known_keys
+        if unknown:
+            raise ValueError(
+                f"요청에 없는 metadata Entity를 가리켰다: {sorted(unknown)}"
+            )
+
+
+def _resolves(local_key: str, entity_keys: set[str]) -> bool:
+    """참조가 이 batch의 Entity나 metadata Entity를 가리키는지 본다."""
+    return local_key in entity_keys or is_metadata_local_key(local_key)
 
 
 class ExtractionVocabulary(BaseModel):

@@ -31,19 +31,26 @@ Relation types (for relation assertions):
 {% if metadata_entities %}
 ## Already known entities
 
-These come from the source system's own fields, not from the text. Reuse them
-as subjects when the document talks about them. Do not rename them.
+These come from the source system's own fields, not from the text. They are
+already confirmed, so do **not** list them again in `entities` and do not
+rename them. Point at them by their `local_key` when the document talks about
+them — as a claim's subject, or as one end of a relation.
 
 {% for entity in metadata_entities %}
 - local_key `<< entity.local_key >>` — << entity.display_name >> (<< entity.entity_type >>)
 {% endfor %}
+
+The speakers in the document are these people. Prefer a relation between a
+known entity and something the document talks about over a relation between
+two things you invented.
 {% endif %}
 
 ## What to extract
 
 **Entity** — something with a name and an identity that the document talks
 about. A feature, a system, a team, a person, a customer. Give each one a
-`local_key` such as `e1`, `e2`.
+`local_key` such as `e1`, `e2`. Never use a key that starts with `m` followed
+by a number; those are reserved for the already-known entities above.
 
 **Claim** — a statement about the *value* of some property of one entity.
 
@@ -93,7 +100,8 @@ the document.
 ## Rules
 
 - Every claim's `subject_local_key` and every relation's endpoints must refer
-  to an entity you also return. Never point at something you did not list.
+  either to an entity you return in `entities`, or to one of the already-known
+  entities listed above. Never point at anything else.
 - Reuse one predicate for one property. If you write `release_month` once, do
   not write `launch_month` for the same idea later.
 - `statement` must quote the exact span of the document that supports the
