@@ -22,6 +22,7 @@ from catchup.db.models import KnowledgeEntityCandidate as KnowledgeEntityCandida
 from catchup.db.models import KnowledgeExtractionRun as KnowledgeExtractionRunRow
 from catchup.db.models import KnowledgeNode as KnowledgeNodeRow
 from catchup.db.models import KnowledgeOntologySnapshot as KnowledgeOntologySnapshotRow
+from catchup.db.models import KnowledgePipelineOutbox as PipelineOutboxRow
 from catchup.db.models import (
     KnowledgeRelationAssertionCandidate as KnowledgeRelationCandidateRow,
 )
@@ -58,6 +59,13 @@ from catchup.knowledge_maintenance.domain.knowledge_node import NodeKind
 from catchup.knowledge_maintenance.domain.knowledge_node import resource_ref_for
 from catchup.knowledge_maintenance.domain.observation import NormalizedObservation
 from catchup.knowledge_maintenance.domain.observation import StoredObservation
+from catchup.knowledge_maintenance.domain.pipeline_event import FailureKind
+from catchup.knowledge_maintenance.domain.pipeline_event import PipelineAggregateType
+from catchup.knowledge_maintenance.domain.pipeline_event import PipelineEvent
+from catchup.knowledge_maintenance.domain.pipeline_event import PipelineEventStatus
+from catchup.knowledge_maintenance.domain.pipeline_event import PipelineEventType
+from catchup.knowledge_maintenance.domain.pipeline_event import next_attempt_at
+from catchup.knowledge_maintenance.domain.pipeline_event import resolve_failure
 from catchup.knowledge_maintenance.domain.source_version import SourceIdentity
 from catchup.knowledge_maintenance.domain.source_version import SourceVersion
 
@@ -609,3 +617,161 @@ class SqlAlchemyOntologyRepository:
             )
         )
         return tuple(rows)
+
+
+class SqlAlchemyPipelineEventRepository:
+    """파이프라인 큐의 영속성을 PostgreSQL로 구현한다."""
+
+    def __init__(self, session: Session) -> None:
+        self._session = session
+
+    def enqueue(
+        self,
+        *,
+        workspace_id: int,
+        event_type: PipelineEventType,
+        aggregate_type: PipelineAggregateType,
+        aggregate_id: uuid.UUID,
+        payload: dict | None = None,
+    ) -> PipelineEvent | None:
+        """할 일을 큐에 적는다. 이미 있으면 새로 적지 않는다."""
+        existing = self._session.scalar(
+            select(PipelineOutboxRow).where(
+                PipelineOutboxRow.event_type == event_type.value,
+                PipelineOutboxRow.aggregate_type == aggregate_type.value,
+                PipelineOutboxRow.aggregate_id == aggregate_id,
+            )
+        )
+        if existing is not None:
+            return None
+
+        row = PipelineOutboxRow(
+            workspace_id=workspace_id,
+            event_type=event_type.value,
+            aggregate_type=aggregate_type.value,
+            aggregate_id=aggregate_id,
+            payload=payload or {},
+            status=PipelineEventStatus.PENDING.value,
+        )
+        self._session.add(row)
+        self._session.flush()
+        return _pipeline_event_to_domain(row)
+
+    def claim_pending(
+        self,
+        *,
+        workspace_id: int,
+        event_type: PipelineEventType,
+        now: datetime,
+        limit: int | None = None,
+    ) -> tuple[PipelineEvent, ...]:
+        """지금 처리할 수 있는 일을 집는다."""
+        statement = (
+            select(PipelineOutboxRow)
+            .where(
+                PipelineOutboxRow.workspace_id == workspace_id,
+                PipelineOutboxRow.event_type == event_type.value,
+                PipelineOutboxRow.status == PipelineEventStatus.PENDING.value,
+                PipelineOutboxRow.available_at <= now,
+            )
+            .order_by(PipelineOutboxRow.available_at, PipelineOutboxRow.id)
+        )
+        if limit is not None:
+            statement = statement.limit(limit)
+
+        return tuple(
+            _pipeline_event_to_domain(row)
+            for row in self._session.scalars(statement)
+        )
+
+    def mark_processed(self, *, event_id: int, now: datetime) -> None:
+        """처리를 마쳤음을 남긴다."""
+        self._session.execute(
+            update(PipelineOutboxRow)
+            .where(PipelineOutboxRow.id == event_id)
+            .values(
+                status=PipelineEventStatus.PROCESSED.value,
+                processed_at=now,
+                last_error=None,
+            )
+        )
+
+    def mark_failed(
+        self,
+        *,
+        event_id: int,
+        kind: FailureKind,
+        error: str,
+        now: datetime,
+    ) -> PipelineEvent:
+        """실패를 기록하고 다시 시도할지 정한다."""
+        row = self._session.get(PipelineOutboxRow, event_id)
+        if row is None:
+            raise ValueError(f"pipeline event를 찾을 수 없다: {event_id}")
+
+        attempts = row.attempts + 1
+        status = resolve_failure(kind, attempts)
+        row.attempts = attempts
+        row.status = status.value
+        row.last_error = error
+        if status is PipelineEventStatus.PENDING:
+            row.available_at = next_attempt_at(attempts, now=now)
+        else:
+            row.processed_at = now
+        self._session.flush()
+        return _pipeline_event_to_domain(row)
+
+    def backfill_missing(
+        self,
+        *,
+        workspace_id: int,
+        event_type: PipelineEventType,
+        limit: int | None = None,
+    ) -> int:
+        """큐에 없는 기존 Observation을 채운다."""
+        if event_type is not PipelineEventType.OBSERVATION_READY:
+            raise ValueError(f"backfill을 모르는 event_type이다: {event_type}")
+
+        queued = (
+            select(PipelineOutboxRow.id)
+            .where(
+                PipelineOutboxRow.event_type == event_type.value,
+                PipelineOutboxRow.aggregate_id == ObservationRow.id,
+            )
+            .exists()
+        )
+        statement = (
+            select(ObservationRow.id)
+            .where(ObservationRow.workspace_id == workspace_id, ~queued)
+            .order_by(ObservationRow.created_at, ObservationRow.id)
+        )
+        if limit is not None:
+            statement = statement.limit(limit)
+
+        added = 0
+        for observation_id in self._session.scalars(statement).all():
+            created = self.enqueue(
+                workspace_id=workspace_id,
+                event_type=event_type,
+                aggregate_type=PipelineAggregateType.OBSERVATION,
+                aggregate_id=observation_id,
+            )
+            if created is not None:
+                added += 1
+        return added
+
+
+def _pipeline_event_to_domain(row: PipelineOutboxRow) -> PipelineEvent:
+    """저장된 row를 도메인 타입으로 되돌린다."""
+    return PipelineEvent(
+        id=row.id,
+        workspace_id=row.workspace_id,
+        event_type=PipelineEventType(row.event_type),
+        aggregate_type=PipelineAggregateType(row.aggregate_type),
+        aggregate_id=row.aggregate_id,
+        status=PipelineEventStatus(row.status),
+        attempts=row.attempts,
+        available_at=row.available_at,
+        payload=row.payload,
+        last_error=row.last_error,
+    )

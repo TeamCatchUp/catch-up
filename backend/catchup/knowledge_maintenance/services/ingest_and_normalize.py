@@ -27,11 +27,14 @@ from typing import Protocol
 from typing import Self
 
 from catchup.knowledge_maintenance.contracts.source_change import SourceChangeEnvelope
+from catchup.knowledge_maintenance.domain.pipeline_event import PipelineAggregateType
+from catchup.knowledge_maintenance.domain.pipeline_event import PipelineEventType
 from catchup.knowledge_maintenance.ports.knowledge_nodes import KnowledgeNodeRepository
 from catchup.knowledge_maintenance.ports.observation_normalizer import (
     ObservationNormalizer,
 )
 from catchup.knowledge_maintenance.ports.observations import ObservationRepository
+from catchup.knowledge_maintenance.ports.pipeline_events import PipelineEventRepository
 from catchup.knowledge_maintenance.ports.source_versions import SourceVersionRepository
 from catchup.knowledge_maintenance.services.ingest_source_version import IngestionResult
 from catchup.knowledge_maintenance.services.ingest_source_version import (
@@ -54,6 +57,7 @@ class SourceIntakeUnitOfWork(Protocol):
     source_versions: SourceVersionRepository
     observations: ObservationRepository
     knowledge_nodes: KnowledgeNodeRepository
+    pipeline_events: PipelineEventRepository
 
     def __enter__(self) -> Self: ...
 
@@ -105,6 +109,14 @@ def ingest_and_normalize(
             normalizer=normalizer,
             uow=uow,
         )
+        # 같은 transaction에서 다음 단계 지시를 적는다. 원문이 확정됐는데
+        # 처리하라는 지시만 유실되는 경우를 없앤다.
+        queued = uow.pipeline_events.enqueue(
+            workspace_id=envelope.workspace_id,
+            event_type=PipelineEventType.OBSERVATION_READY,
+            aggregate_type=PipelineAggregateType.OBSERVATION,
+            aggregate_id=normalized.observation.id,
+        )
         uow.commit()
 
     logger.info(
@@ -115,6 +127,7 @@ def ingest_and_normalize(
         observation_id=str(normalized.observation.id),
         ingestion=ingested.result.value,
         normalization=normalized.result.value,
+        queued=queued is not None,
     )
     return SourceIntakeResult(
         source_version_id=ingested.source_version.id,

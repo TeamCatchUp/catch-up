@@ -19,6 +19,9 @@ from catchup.knowledge_maintenance.adapters.postgres.repositories import (
     SqlAlchemyOntologyRepository,
 )
 from catchup.knowledge_maintenance.adapters.postgres.repositories import (
+    SqlAlchemyPipelineEventRepository,
+)
+from catchup.knowledge_maintenance.adapters.postgres.repositories import (
     SqlAlchemySourceVersionRepository,
 )
 
@@ -37,6 +40,7 @@ class KnowledgeMaintenanceUnitOfWork:
     knowledge_nodes: SqlAlchemyKnowledgeNodeRepository
     knowledge_candidates: SqlAlchemyKnowledgeCandidateRepository
     ontology: SqlAlchemyOntologyRepository
+    pipeline_events: SqlAlchemyPipelineEventRepository
 
     def __init__(self, session_factory: Callable[[], Session]) -> None:
         self._session_factory = session_factory
@@ -50,6 +54,7 @@ class KnowledgeMaintenanceUnitOfWork:
         self.knowledge_nodes = SqlAlchemyKnowledgeNodeRepository(session)
         self.knowledge_candidates = SqlAlchemyKnowledgeCandidateRepository(session)
         self.ontology = SqlAlchemyOntologyRepository(session)
+        self.pipeline_events = SqlAlchemyPipelineEventRepository(session)
         return self
 
     def __exit__(
