@@ -1,0 +1,111 @@
+You extract structured knowledge candidates from a single source document.
+
+The document below came from `<< source_type >>`. Read it and report the
+entities, claims, and relation assertions it contains.
+
+<# 관찰 단계에서는 vocabulary가 비어 있다. 그때는 predicate를 자유롭게 짓되
+   같은 문서 안에서는 일관되게 쓰도록 유도한다. #>
+{% if vocabulary and not vocabulary.is_empty() %}
+## Vocabulary already in use
+
+Earlier documents produced these terms. **Reuse them whenever they fit** —
+that is what makes two documents comparable. Coin a new term only when
+nothing here expresses what the document says, and keep it in the same
+naming style.
+
+{% if vocabulary.predicates %}
+Predicates (for claims):
+{% for predicate in vocabulary.predicates %}
+- << predicate >>
+{% endfor %}
+{% endif %}
+
+{% if vocabulary.relation_types %}
+Relation types (for relation assertions):
+{% for relation_type in vocabulary.relation_types %}
+- << relation_type >>
+{% endfor %}
+{% endif %}
+{% endif %}
+
+{% if metadata_entities %}
+## Already known entities
+
+These come from the source system's own fields, not from the text. Reuse them
+as subjects when the document talks about them. Do not rename them.
+
+{% for entity in metadata_entities %}
+- local_key `<< entity.local_key >>` — << entity.display_name >> (<< entity.entity_type >>)
+{% endfor %}
+{% endif %}
+
+## What to extract
+
+**Entity** — something with a name and an identity that the document talks
+about. A feature, a system, a team, a person, a customer. Give each one a
+`local_key` such as `e1`, `e2`.
+
+**Claim** — a statement about the *value* of some property of one entity.
+
+    subject   the entity's local_key
+    predicate the property being described, in snake_case
+    value     a single literal
+
+**RelationAssertion** — a statement connecting *two entities*.
+
+    payment_feature --depends_on--> auth_system
+
+## The value must be a literal
+
+This is the rule that decides whether something is a claim at all.
+
+A value is one date, one number, one boolean, one short label. If what you
+want to write is a sentence, it is not a claim.
+
+    good   payment_feature · release_month · "2026-05"
+    good   slack_ingestion · min_title_length · 10
+    bad    payment_feature · has_bug · "Sync가 안되는 버그"
+    bad    slack_ingestion · embedding_policy · "제목이 10글자 이하면 임베딩 안 함"
+
+When you catch yourself writing a sentence into `value`, do one of these
+instead.
+
+1. Find the literal hiding inside it. "제목이 10글자 이하면 임베딩 안 함"
+   carries the number 10, so report `min_title_length · 10`.
+2. If it describes how two things relate, make it a RelationAssertion.
+3. If neither works, leave it out. A missing claim costs less than a claim
+   that cannot be compared with anything.
+
+`value_type` must be one of `date`, `number`, `boolean`, `enum`, `text`.
+Reach for `text` last, and keep it under about 40 characters.
+
+## What not to extract
+
+The document may display the source system's own record fields — ticket
+status, priority, type, assignee, sprint, issue key, URL, branch names,
+commit counts, review dates. **Do not turn these into claims.** They are
+structured data that the system already holds outside the text, and
+recording them here only creates duplicates that drift.
+
+Extract what the document *says*, not what the source system *stores about*
+the document.
+
+## Rules
+
+- Every claim's `subject_local_key` and every relation's endpoints must refer
+  to an entity you also return. Never point at something you did not list.
+- Reuse one predicate for one property. If you write `release_month` once, do
+  not write `launch_month` for the same idea later.
+- `statement` must quote the exact span of the document that supports the
+  claim. Do not paraphrase it; the server locates this text in the source.
+- Extract only what this document states. Do not add what you know from
+  elsewhere, and do not resolve contradictions you find.
+- If the document states a time bound for a claim, set `valid_from` or
+  `valid_to`. Leave them empty otherwise.
+- Skip pleasantries, greetings, and routine status noise.
+- Returning nothing is a valid answer when the document holds no knowledge
+  worth keeping.
+
+## Document
+
+<< content >>
