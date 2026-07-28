@@ -59,6 +59,9 @@ from catchup.knowledge_maintenance.domain.pipeline_event import PipelineEvent
 from catchup.knowledge_maintenance.domain.pipeline_event import PipelineEventStatus
 from catchup.knowledge_maintenance.domain.pipeline_event import PipelineEventType
 from catchup.knowledge_maintenance.services.store_knowledge_candidates import (
+    record_failed_extraction,
+)
+from catchup.knowledge_maintenance.services.store_knowledge_candidates import (
     store_knowledge_candidates,
 )
 
@@ -107,6 +110,7 @@ async def _extract_one(
             "event_id": event_id,
             "status": "contract_violation",
             "error": diagnostics.parse_error,
+            "raw_output": diagnostics.raw_output,
         }
 
     return {
@@ -114,6 +118,7 @@ async def _extract_one(
         "event_id": event_id,
         "status": "ok",
         "batch": batch,
+        "raw_output": diagnostics.raw_output,
     }
 
 
@@ -146,6 +151,15 @@ def _store(
     """추출 결과를 candidate로 남긴다."""
     observation: StoredObservation = result["observation"]
     if result["status"] != "ok":
+        # 실패도 실행 기록으로 남긴다. 남기지 않으면 어느 Observation이 왜
+        # 실패했는지 DB에 흔적이 없다.
+        record_failed_extraction(
+            observation,
+            spec=spec,
+            error=result.get("error") or result["status"],
+            raw_output=result.get("raw_output"),
+            uow=KnowledgeMaintenanceUnitOfWork(session_factory),
+        )
         return {
             "key": str(observation.id)[:8],
             "event_id": result["event_id"],
@@ -157,6 +171,7 @@ def _store(
         observation,
         result["batch"],
         spec=spec,
+        raw_output=result.get("raw_output"),
         uow=KnowledgeMaintenanceUnitOfWork(session_factory),
     )
     return {

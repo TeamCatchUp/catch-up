@@ -3887,7 +3887,14 @@ class KnowledgeExtractionRun(Base):
 
     status: Mapped[str] = mapped_column(String(16), nullable=False)
     # 계약을 어긴 출력도 남긴다. 무엇이 왜 거부됐는지가 성공만큼 중요하다.
-    raw_output: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    #
+    # none_as_null을 켜지 않으면 Python None이 SQL NULL이 아니라 JSON null로
+    # 저장된다. 그러면 `raw_output IS NOT NULL`이 참이 되어 "원본 출력이 있다"고
+    # 거짓을 말한다.
+    raw_output: Mapped[dict[str, Any] | None] = mapped_column(
+        JSONB(none_as_null=True),
+        nullable=True,
+    )
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     started_at: Mapped[datetime] = mapped_column(

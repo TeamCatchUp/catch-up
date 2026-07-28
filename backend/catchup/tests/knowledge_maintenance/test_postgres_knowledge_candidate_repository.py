@@ -52,6 +52,9 @@ from catchup.knowledge_maintenance.services.store_knowledge_candidates import (
     ObservationNodeMissing,
 )
 from catchup.knowledge_maintenance.services.store_knowledge_candidates import (
+    record_failed_extraction,
+)
+from catchup.knowledge_maintenance.services.store_knowledge_candidates import (
     store_knowledge_candidates,
 )
 
@@ -746,3 +749,198 @@ def test_a_run_cannot_point_at_a_missing_snapshot(
                 started_at=NOW,
             )
             uow.commit()
+
+
+def _spec(**overrides: object) -> ExtractionRunSpec:
+    values: dict[str, object] = {
+        "provider": SPEC.provider,
+        "extractor_version": SPEC.extractor_version,
+        "ontology_id": SPEC.ontology_id,
+        "vocabulary": SPEC.vocabulary,
+        "model": SPEC.model,
+        "prompt_version": SPEC.prompt_version,
+    }
+    values.update(overrides)
+    return ExtractionRunSpec(**values)  # type: ignore[arg-type]
+
+
+def test_a_new_prompt_version_triggers_re_extraction(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+) -> None:
+    """prompt를 고치면 다시 추출한다.
+
+    입력만 보고 판정하면 프롬프트 버그를 고쳐도 같은 Observation이 영영
+    다시 추출되지 않는다. 중복 방지가 아니라 영구 동결이 된다.
+    """
+    observation = _stored_observation(workspace_id, session_factory)
+
+    first = store_knowledge_candidates(
+        observation, _batch(), spec=SPEC, uow=uow_factory()
+    )
+    second = store_knowledge_candidates(
+        observation,
+        _batch(),
+        spec=_spec(prompt_version="extract_knowledge_candidates/2"),
+        uow=uow_factory(),
+    )
+
+    assert not first.reused
+    assert not second.reused
+    assert second.batch.run_id != first.batch.run_id
+
+
+def test_a_new_ontology_version_triggers_re_extraction(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+) -> None:
+    """어휘를 올리면 다시 추출한다."""
+    observation = _stored_observation(workspace_id, session_factory)
+
+    store_knowledge_candidates(observation, _batch(), spec=SPEC, uow=uow_factory())
+    second = store_knowledge_candidates(
+        observation,
+        _batch(),
+        spec=_spec(
+            vocabulary=ExtractionVocabulary(
+                snapshot_id="test-round-2",
+                predicates=("release_month", "owner_team"),
+                relation_types=("depends_on", "asked_about"),
+            )
+        ),
+        uow=uow_factory(),
+    )
+
+    assert not second.reused
+
+
+def test_the_same_contract_still_reuses(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+) -> None:
+    """계약이 같으면 그대로 건너뛴다. 재실행이 안전해야 한다."""
+    observation = _stored_observation(workspace_id, session_factory)
+
+    first = store_knowledge_candidates(
+        observation, _batch(), spec=SPEC, uow=uow_factory()
+    )
+    second = store_knowledge_candidates(
+        observation, _batch(), spec=SPEC, uow=uow_factory()
+    )
+
+    assert second.reused
+    # 건너뛰더라도 어느 실행을 재사용했는지 알려준다.
+    assert second.batch.run_id == first.batch.run_id
+
+
+def test_a_failed_extraction_leaves_a_run(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+) -> None:
+    """실패도 기록으로 남는다.
+
+    남기지 않으면 어느 Observation이 왜 실패했는지 DB에 흔적이 없다. 수천
+    건에서 몇 %가 조용히 빠져도 아무도 모른다.
+    """
+    observation = _stored_observation(workspace_id, session_factory)
+
+    run_id = record_failed_extraction(
+        observation,
+        spec=SPEC,
+        error="subject를 찾을 수 없다",
+        raw_output={"parsed": None, "note": "스키마에서 어긋남"},
+        uow=uow_factory(),
+    )
+
+    with KnowledgeMaintenanceUnitOfWork(session_factory) as uow:
+        session = uow.knowledge_candidates._session  # noqa: SLF001
+        row = session.get(ExtractionRunRow, run_id)
+        found = {
+            "status": row.status,
+            "error": row.error,
+            "raw_output": row.raw_output,
+        }
+
+    assert found["status"] == "failed"
+    assert "subject" in found["error"]
+    assert found["raw_output"]["note"] == "스키마에서 어긋남"
+
+
+def test_a_failed_run_does_not_block_a_retry(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+) -> None:
+    """실패 기록이 재시도를 막으면 안 된다.
+
+    재추출 판정이 성공한 실행만 보므로 같은 계약으로 다시 시도할 수 있다.
+    """
+    observation = _stored_observation(workspace_id, session_factory)
+
+    record_failed_extraction(
+        observation,
+        spec=SPEC,
+        error="일시적 오류",
+        uow=uow_factory(),
+    )
+    retried = store_knowledge_candidates(
+        observation, _batch(), spec=SPEC, uow=uow_factory()
+    )
+
+    assert not retried.reused
+    assert retried.batch.candidate_count == 7
+
+
+def test_a_successful_run_keeps_the_raw_output(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+) -> None:
+    """성공한 실행도 원본 출력을 남겨 나중에 재현할 수 있다."""
+    observation = _stored_observation(workspace_id, session_factory)
+
+    result = store_knowledge_candidates(
+        observation,
+        _batch(),
+        spec=SPEC,
+        raw_output={"content": [{"type": "tool_use"}]},
+        uow=uow_factory(),
+    )
+
+    with KnowledgeMaintenanceUnitOfWork(session_factory) as uow:
+        session = uow.knowledge_candidates._session  # noqa: SLF001
+        raw = session.get(ExtractionRunRow, result.batch.run_id).raw_output
+
+    assert raw["content"][0]["type"] == "tool_use"
+
+
+def test_a_run_without_raw_output_stores_sql_null(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+) -> None:
+    """원본 출력이 없으면 SQL NULL이어야 한다.
+
+    JSONB에 Python None을 그대로 넣으면 JSON null로 저장되어
+    `raw_output IS NOT NULL`이 참이 된다. "원본 출력이 있다"고 거짓을 말하며,
+    나중에 실패 원인을 찾으려 조회하면 전부 걸리는데 열어 보면 비어 있다.
+    """
+    observation = _stored_observation(workspace_id, session_factory)
+
+    result = store_knowledge_candidates(
+        observation, _batch(), spec=SPEC, uow=uow_factory()
+    )
+
+    with KnowledgeMaintenanceUnitOfWork(session_factory) as uow:
+        session = uow.knowledge_candidates._session  # noqa: SLF001
+        has_value = session.scalar(
+            select(ExtractionRunRow.raw_output.is_not(None)).where(
+                ExtractionRunRow.id == result.batch.run_id
+            )
+        )
+
+    assert has_value is False
