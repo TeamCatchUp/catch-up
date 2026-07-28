@@ -7,8 +7,15 @@ from sqlalchemy import func
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from catchup.db.models import KnowledgeNode as KnowledgeNodeRow
 from catchup.db.models import Observation as ObservationRow
 from catchup.db.models import SourceVersion as SourceVersionRow
+from catchup.knowledge_maintenance.adapters.postgres.mappers import (
+    knowledge_node_to_domain,
+)
+from catchup.knowledge_maintenance.adapters.postgres.mappers import (
+    knowledge_node_to_row,
+)
 from catchup.knowledge_maintenance.adapters.postgres.mappers import (
     observation_to_domain,
 )
@@ -19,6 +26,9 @@ from catchup.knowledge_maintenance.adapters.postgres.mappers import (
 from catchup.knowledge_maintenance.adapters.postgres.mappers import (
     source_version_to_row,
 )
+from catchup.knowledge_maintenance.domain.knowledge_node import KnowledgeNode
+from catchup.knowledge_maintenance.domain.knowledge_node import NodeKind
+from catchup.knowledge_maintenance.domain.knowledge_node import resource_ref_for
 from catchup.knowledge_maintenance.domain.observation import NormalizedObservation
 from catchup.knowledge_maintenance.domain.observation import StoredObservation
 from catchup.knowledge_maintenance.domain.source_version import SourceIdentity
@@ -182,3 +192,57 @@ class SqlAlchemyObservationRepository:
         self._session.add(row)
         self._session.flush()
         return observation_to_domain(row)
+
+
+class SqlAlchemyKnowledgeNodeRepository:
+    """graph node identity의 영속성을 PostgreSQL로 구현한다."""
+
+    def __init__(self, session: Session) -> None:
+        self._session = session
+
+    def get_for_resource(
+        self,
+        *,
+        workspace_id: int,
+        node_kind: NodeKind,
+        resource_id: uuid.UUID,
+    ) -> KnowledgeNode | None:
+        """record 하나에 대응하는 node를 찾는다."""
+        row = self._session.scalar(
+            select(KnowledgeNodeRow).where(
+                KnowledgeNodeRow.workspace_id == workspace_id,
+                KnowledgeNodeRow.resource_type == node_kind.value,
+                KnowledgeNodeRow.resource_id == str(resource_id),
+            )
+        )
+        return knowledge_node_to_domain(row) if row is not None else None
+
+    def ensure_for_resource(
+        self,
+        *,
+        workspace_id: int,
+        node_kind: NodeKind,
+        resource_id: uuid.UUID,
+        display_name: str | None = None,
+    ) -> KnowledgeNode:
+        """record 하나에 대응하는 node를 만들거나 이미 있는 것을 돌려준다."""
+        found = self.get_for_resource(
+            workspace_id=workspace_id,
+            node_kind=node_kind,
+            resource_id=resource_id,
+        )
+        if found is not None:
+            return found
+
+        row = knowledge_node_to_row(
+            KnowledgeNode(
+                id=uuid.uuid4(),
+                workspace_id=workspace_id,
+                node_kind=node_kind,
+                resource=resource_ref_for(node_kind, resource_id),
+                display_name=display_name,
+            )
+        )
+        self._session.add(row)
+        self._session.flush()
+        return knowledge_node_to_domain(row)
