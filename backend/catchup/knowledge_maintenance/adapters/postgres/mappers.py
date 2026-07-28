@@ -1,24 +1,9 @@
 from __future__ import annotations
 
-import hashlib
-
-from catchup.db.models import SourceVersionRow
+from catchup.db.models import SourceVersion as SourceVersionRow
 from catchup.knowledge_maintenance.domain.source_version import ChangeKind
 from catchup.knowledge_maintenance.domain.source_version import SourceIdentity
 from catchup.knowledge_maintenance.domain.source_version import SourceVersion
-
-
-def source_identity_hash(source_identity: SourceIdentity) -> str:
-    """복합 identity를 UNIQUE index가 쓸 고정 길이 키로 만든다."""
-    parts = "\x1f".join(
-        (
-            source_identity.entity_type,
-            source_identity.scope_id,
-            source_identity.target_id,
-            source_identity.external_document_id,
-        )
-    )
-    return hashlib.sha256(parts.encode("utf-8")).hexdigest()
 
 
 def to_row(source_version: SourceVersion) -> SourceVersionRow:
@@ -27,15 +12,12 @@ def to_row(source_version: SourceVersion) -> SourceVersionRow:
         id=source_version.id,
         workspace_id=source_version.workspace_id,
         source_type=source_version.source_type,
-        source_entity_type=source_version.source_identity.entity_type,
-        source_scope_id=source_version.source_identity.scope_id,
-        source_target_id=source_version.source_identity.target_id,
-        source_external_document_id=(
-            source_version.source_identity.external_document_id
-        ),
-        source_identity_hash=source_identity_hash(source_version.source_identity),
-        source_version_key=source_version.source_version_key,
+        entity_type=source_version.source_identity.entity_type,
+        scope_id=source_version.source_identity.scope_id,
+        target_id=source_version.source_identity.target_id,
+        external_document_id=source_version.source_identity.external_document_id,
         change_kind=source_version.change_kind.value,
+        source_version_key=source_version.source_version_key,
         title=source_version.title,
         canonical_url=source_version.canonical_url,
         content=source_version.content,
@@ -57,10 +39,10 @@ def to_domain(row: SourceVersionRow) -> SourceVersion:
         workspace_id=row.workspace_id,
         source_type=row.source_type,
         source_identity=SourceIdentity(
-            entity_type=row.source_entity_type,
-            scope_id=row.source_scope_id,
-            target_id=row.source_target_id,
-            external_document_id=row.source_external_document_id,
+            entity_type=row.entity_type,
+            scope_id=row.scope_id,
+            target_id=row.target_id,
+            external_document_id=row.external_document_id,
         ),
         change_kind=ChangeKind(row.change_kind),
         source_version_key=row.source_version_key,

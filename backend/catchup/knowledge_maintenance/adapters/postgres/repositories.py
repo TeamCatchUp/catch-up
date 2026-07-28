@@ -1,15 +1,28 @@
 from __future__ import annotations
 
+from sqlalchemy import ColumnElement
 from sqlalchemy import func
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from catchup.db.models import SourceVersionRow
-from catchup.knowledge_maintenance.adapters.postgres.mappers import source_identity_hash
+from catchup.db.models import SourceVersion as SourceVersionRow
 from catchup.knowledge_maintenance.adapters.postgres.mappers import to_domain
 from catchup.knowledge_maintenance.adapters.postgres.mappers import to_row
 from catchup.knowledge_maintenance.domain.source_version import SourceIdentity
 from catchup.knowledge_maintenance.domain.source_version import SourceVersion
+
+
+def _identity_matches(
+    source_identity: SourceIdentity,
+) -> list[ColumnElement[bool]]:
+    """복합 identity를 컬럼 비교 조건으로 편다."""
+    return [
+        SourceVersionRow.entity_type == source_identity.entity_type,
+        SourceVersionRow.scope_id == source_identity.scope_id,
+        SourceVersionRow.target_id == source_identity.target_id,
+        SourceVersionRow.external_document_id
+        == source_identity.external_document_id,
+    ]
 
 
 class SqlAlchemySourceVersionRepository:
@@ -46,8 +59,7 @@ class SqlAlchemySourceVersionRepository:
             select(SourceVersionRow).where(
                 SourceVersionRow.workspace_id == workspace_id,
                 SourceVersionRow.source_type == source_type,
-                SourceVersionRow.source_identity_hash
-                == source_identity_hash(source_identity),
+                *_identity_matches(source_identity),
                 SourceVersionRow.source_version_key == source_version_key,
             )
         )
@@ -66,8 +78,7 @@ class SqlAlchemySourceVersionRepository:
             .where(
                 SourceVersionRow.workspace_id == workspace_id,
                 SourceVersionRow.source_type == source_type,
-                SourceVersionRow.source_identity_hash
-                == source_identity_hash(source_identity),
+                *_identity_matches(source_identity),
             )
             .order_by(
                 func.coalesce(
