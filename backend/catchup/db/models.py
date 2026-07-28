@@ -4499,3 +4499,104 @@ class KnowledgeOntologySnapshot(Base):
             name="uq_knowledge_ontology_snapshots_version",
         ),
     )
+
+
+class KnowledgePipelineOutbox(Base):
+    """다음 단계가 처리할 일을 transaction 안에서 함께 적어 둔다.
+
+    Observation을 저장하는 transaction에서 이 행도 함께 만든다. 그래야 원문이
+    확정됐는데 그것을 처리하라는 지시가 유실되는 경우가 없다.
+
+    상태를 매번 계산하는 대신 큐로 두는 이유는 재시도 때문이다. 추출이 실패하면
+    왜 실패했는지와 몇 번 시도했는지를 남겨야 하고, 다시 시도할 시각을 미룰 수
+    있어야 한다. 그것이 없으면 결정론적으로 실패하는 문서에 매 주기마다 LLM
+    비용이 나간다.
+    """
+
+    __tablename__ = "knowledge_pipeline_outbox"
+
+    id: Mapped[int] = mapped_column(
+        BigInteger,
+        primary_key=True,
+        autoincrement=True,
+    )
+    workspace_id: Mapped[int] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    event_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    aggregate_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    # polymorphic 참조라 PostgreSQL이 강제하지 못한다. 만드는 쪽이 같은
+    # transaction에서 대상 record의 존재를 보장한다.
+    aggregate_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=False,
+    )
+    payload: Mapped[dict[str, Any]] = mapped_column(
+        JSONB,
+        nullable=False,
+        default=dict,
+        server_default=text("'{}'::jsonb"),
+    )
+
+    status: Mapped[str] = mapped_column(
+        String(16),
+        nullable=False,
+        default="pending",
+        server_default=text("'pending'"),
+    )
+    # 실패를 미뤄 두는 자리다. 백오프가 여기로 표현된다.
+    available_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+    attempts: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+        server_default=text("0"),
+    )
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    processed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    __table_args__ = (
+        # 같은 대상에 같은 지시를 두 번 적지 않는다.
+        UniqueConstraint(
+            "event_type",
+            "aggregate_type",
+            "aggregate_id",
+            name="uq_knowledge_pipeline_outbox_event",
+        ),
+        CheckConstraint(
+            "event_type IN ('observation.ready')",
+            name="ck_knowledge_pipeline_outbox_event_type",
+        ),
+        CheckConstraint(
+            "aggregate_type IN ('observation')",
+            name="ck_knowledge_pipeline_outbox_aggregate_type",
+        ),
+        CheckConstraint(
+            "status IN ('pending', 'processing', 'processed', 'failed')",
+            name="ck_knowledge_pipeline_outbox_status",
+        ),
+        CheckConstraint(
+            "attempts >= 0",
+            name="ck_knowledge_pipeline_outbox_attempts",
+        ),
+        Index(
+            "ix_knowledge_pipeline_outbox_claim",
+            "status",
+            "available_at",
+            "id",
+        ),
+    )
