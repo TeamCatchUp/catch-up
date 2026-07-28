@@ -54,8 +54,16 @@ from catchup.knowledge_maintenance.services.store_knowledge_candidates import (
     store_knowledge_candidates,
 )
 
-# 어휘를 만들기 전 단계에서는 스냅샷이 없다. 그 사실을 값으로 남긴다.
+# 어휘를 만들기 전 단계에서는 스냅샷 이름이 없다. 비워 두는 대신 그 사실을
+# 값으로 남겨야 실행이 어휘를 가리킬 수 있다.
 UNVERSIONED_ONTOLOGY = "unversioned"
+
+
+def _named(vocabulary: ExtractionVocabulary) -> ExtractionVocabulary:
+    """이름 없는 어휘에 스냅샷 이름을 붙인다."""
+    if vocabulary.snapshot_id:
+        return vocabulary
+    return vocabulary.model_copy(update={"snapshot_id": UNVERSIONED_ONTOLOGY})
 
 
 async def _extract_one(
@@ -195,12 +203,13 @@ async def main() -> None:
             )
         )
 
-        # 어휘 스냅샷은 이 라운드가 무엇을 보고 뽑았는지를 가리킨다.
+        # 어휘 스냅샷은 이 라운드가 무엇을 보고 뽑았는지를 가리킨다. 저장
+        # 서비스가 이 목록을 행으로 남기므로 나중에 되짚을 수 있다.
         spec = ExtractionRunSpec(
             provider=LlmProvider.AWS_BEDROCK.value,
             extractor_version=f"{CONTRACT_ID}/{CONTRACT_VERSION}",
             ontology_id=CONTRACT_ID,
-            ontology_version=vocabulary.snapshot_id or UNVERSIONED_ONTOLOGY,
+            vocabulary=_named(vocabulary),
             model=args.capacity,
             prompt_version=TEMPLATE_PATH,
         )

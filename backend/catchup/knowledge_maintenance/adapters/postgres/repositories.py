@@ -21,6 +21,7 @@ from catchup.db.models import KnowledgeClaimCandidate as KnowledgeClaimCandidate
 from catchup.db.models import KnowledgeEntityCandidate as KnowledgeEntityCandidateRow
 from catchup.db.models import KnowledgeExtractionRun as KnowledgeExtractionRunRow
 from catchup.db.models import KnowledgeNode as KnowledgeNodeRow
+from catchup.db.models import KnowledgeOntologySnapshot as KnowledgeOntologySnapshotRow
 from catchup.db.models import (
     KnowledgeRelationAssertionCandidate as KnowledgeRelationCandidateRow,
 )
@@ -44,6 +45,7 @@ from catchup.knowledge_maintenance.adapters.postgres.mappers import (
 )
 from catchup.knowledge_maintenance.contracts.extraction import ClaimCandidateDraft
 from catchup.knowledge_maintenance.contracts.extraction import EntityCandidateDraft
+from catchup.knowledge_maintenance.contracts.extraction import ExtractionVocabulary
 from catchup.knowledge_maintenance.contracts.extraction import (
     RelationAssertionCandidateDraft,
 )
@@ -520,3 +522,84 @@ def _json_hash(value: object) -> str:
         sort_keys=True,
     ).encode("utf-8")
     return hashlib.sha256(encoded).hexdigest()
+
+
+class SqlAlchemyOntologyRepository:
+    """어휘 스냅샷의 영속성을 PostgreSQL로 구현한다."""
+
+    def __init__(self, session: Session) -> None:
+        self._session = session
+
+    def get(
+        self,
+        *,
+        workspace_id: int,
+        ontology_id: str,
+        version: str,
+    ) -> ExtractionVocabulary | None:
+        """어느 버전이 어떤 어휘였는지 찾는다."""
+        row = self._session.scalar(
+            select(KnowledgeOntologySnapshotRow).where(
+                KnowledgeOntologySnapshotRow.workspace_id == workspace_id,
+                KnowledgeOntologySnapshotRow.ontology_id == ontology_id,
+                KnowledgeOntologySnapshotRow.version == version,
+            )
+        )
+        if row is None:
+            return None
+        return ExtractionVocabulary(
+            snapshot_id=row.version,
+            predicates=tuple(row.predicates),
+            relation_types=tuple(row.relation_types),
+        )
+
+    def ensure(
+        self,
+        *,
+        workspace_id: int,
+        ontology_id: str,
+        vocabulary: ExtractionVocabulary,
+    ) -> ExtractionVocabulary:
+        """스냅샷을 남기거나 이미 있는 것을 돌려준다.
+
+        어휘는 그 버전에서 확정된 값이므로 덮어쓰지 않는다.
+        """
+        found = self.get(
+            workspace_id=workspace_id,
+            ontology_id=ontology_id,
+            version=vocabulary.snapshot_id,
+        )
+        if found is not None:
+            return found
+
+        row = KnowledgeOntologySnapshotRow(
+            id=uuid.uuid4(),
+            workspace_id=workspace_id,
+            ontology_id=ontology_id,
+            version=vocabulary.snapshot_id,
+            predicates=list(vocabulary.predicates),
+            relation_types=list(vocabulary.relation_types),
+        )
+        self._session.add(row)
+        self._session.flush()
+        return vocabulary
+
+    def list_versions(
+        self,
+        *,
+        workspace_id: int,
+        ontology_id: str,
+    ) -> tuple[str, ...]:
+        """저장된 어휘 버전을 만든 순서대로 돌려준다."""
+        rows = self._session.scalars(
+            select(KnowledgeOntologySnapshotRow.version)
+            .where(
+                KnowledgeOntologySnapshotRow.workspace_id == workspace_id,
+                KnowledgeOntologySnapshotRow.ontology_id == ontology_id,
+            )
+            .order_by(
+                KnowledgeOntologySnapshotRow.created_at,
+                KnowledgeOntologySnapshotRow.version,
+            )
+        )
+        return tuple(rows)

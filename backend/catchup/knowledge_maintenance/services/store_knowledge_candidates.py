@@ -96,6 +96,12 @@ def store_knowledge_candidates(
                 reused=True,
             )
 
+        # 실행이 어휘 스냅샷을 FK로 가리키므로 그 행이 먼저 있어야 한다.
+        uow.ontology.ensure(
+            workspace_id=observation.workspace_id,
+            ontology_id=spec.ontology_id,
+            vocabulary=spec.vocabulary,
+        )
         run = uow.knowledge_candidates.start_run(
             workspace_id=observation.workspace_id,
             input_node_id=node.id,

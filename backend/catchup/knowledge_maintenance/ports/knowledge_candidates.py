@@ -17,6 +17,7 @@ from catchup.knowledge_maintenance.domain.knowledge_candidate import ExtractionR
 from catchup.knowledge_maintenance.domain.knowledge_candidate import ExtractionRunSpec
 from catchup.knowledge_maintenance.domain.knowledge_candidate import ExtractionRunStatus
 from catchup.knowledge_maintenance.ports.knowledge_nodes import KnowledgeNodeRepository
+from catchup.knowledge_maintenance.ports.ontology import OntologyRepository
 
 
 class KnowledgeCandidateRepository(Protocol):
@@ -113,6 +114,7 @@ class KnowledgeCandidateUnitOfWork(Protocol):
 
     knowledge_candidates: KnowledgeCandidateRepository
     knowledge_nodes: KnowledgeNodeRepository
+    ontology: OntologyRepository
 
     def __enter__(self) -> Self: ...
 

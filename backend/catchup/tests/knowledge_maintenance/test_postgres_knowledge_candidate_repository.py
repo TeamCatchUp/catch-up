@@ -31,6 +31,7 @@ from catchup.knowledge_maintenance.adapters.postgres.unit_of_work import (
 )
 from catchup.knowledge_maintenance.contracts.extraction import ClaimCandidateDraft
 from catchup.knowledge_maintenance.contracts.extraction import EntityCandidateDraft
+from catchup.knowledge_maintenance.contracts.extraction import ExtractionVocabulary
 from catchup.knowledge_maintenance.contracts.extraction import KnowledgeCandidateBatch
 from catchup.knowledge_maintenance.contracts.extraction import (
     RelationAssertionCandidateDraft,
@@ -61,7 +62,11 @@ SPEC = ExtractionRunSpec(
     provider="aws_bedrock",
     extractor_version="catchup.knowledge_candidates/0",
     ontology_id="catchup.knowledge_candidates",
-    ontology_version="unversioned",
+    vocabulary=ExtractionVocabulary(
+        snapshot_id="test-round-1",
+        predicates=("release_month",),
+        relation_types=("depends_on", "asked_about"),
+    ),
     model="claude-test",
     prompt_version="extract_knowledge_candidates/1",
 )
@@ -681,3 +686,83 @@ def test_an_observation_without_a_node_is_not_pending(
         }
 
     assert orphan.id not in pending
+
+
+def test_the_vocabulary_snapshot_is_stored_with_the_run(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+) -> None:
+    """버전만 남기면 그 어휘가 무엇이었는지 되짚지 못한다."""
+    observation = _stored_observation(workspace_id, session_factory)
+
+    store_knowledge_candidates(observation, _batch(), spec=SPEC, uow=uow_factory())
+
+    with KnowledgeMaintenanceUnitOfWork(session_factory) as reader:
+        found = reader.ontology.get(
+            workspace_id=workspace_id,
+            ontology_id=SPEC.ontology_id,
+            version=SPEC.ontology_version,
+        )
+
+    assert found is not None
+    assert found.predicates == ("release_month",)
+    assert found.relation_types == ("depends_on", "asked_about")
+
+
+def test_an_existing_snapshot_is_not_overwritten(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+) -> None:
+    """어휘는 그 버전에서 확정된 값이므로 나중에 바꾸지 않는다."""
+    first = ExtractionVocabulary(
+        snapshot_id="frozen-1",
+        predicates=("release_month",),
+    )
+    second = ExtractionVocabulary(
+        snapshot_id="frozen-1",
+        predicates=("release_month", "owner_team"),
+    )
+
+    with KnowledgeMaintenanceUnitOfWork(session_factory) as uow:
+        uow.ontology.ensure(
+            workspace_id=workspace_id,
+            ontology_id="test.ontology",
+            vocabulary=first,
+        )
+        kept = uow.ontology.ensure(
+            workspace_id=workspace_id,
+            ontology_id="test.ontology",
+            vocabulary=second,
+        )
+        uow.commit()
+
+    assert kept.predicates == ("release_month",)
+
+
+def test_a_run_cannot_point_at_a_missing_snapshot(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+) -> None:
+    """기록되지 않은 어휘를 가리키는 실행은 만들어질 수 없다."""
+    observation = _stored_observation(workspace_id, session_factory)
+
+    with pytest.raises(IntegrityError):
+        with KnowledgeMaintenanceUnitOfWork(session_factory) as uow:
+            node = uow.knowledge_nodes.get_for_resource(
+                workspace_id=workspace_id,
+                node_kind=NodeKind.OBSERVATION,
+                resource_id=observation.id,
+            )
+            uow.knowledge_candidates.start_run(
+                workspace_id=workspace_id,
+                input_node_id=node.id,
+                spec=ExtractionRunSpec(
+                    provider="aws_bedrock",
+                    extractor_version="x/0",
+                    ontology_id="never.recorded",
+                    vocabulary=ExtractionVocabulary(snapshot_id="ghost"),
+                ),
+                started_at=NOW,
+            )
+            uow.commit()
