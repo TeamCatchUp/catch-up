@@ -28,6 +28,8 @@ from pathlib import Path
 from catchup.components.llm.constants import LlmProvider
 from catchup.components.llm.constants import ModelCapacity
 from catchup.components.llm.factory import get_llm_service
+from catchup.evaluation.channel_talk_extraction_dataset import ChannelTalkDatasetMode
+from catchup.evaluation.channel_talk_extraction_dataset import load_channel_talk_sources
 from catchup.evaluation.llm_wiki_extraction_dataset import ExtractionSource
 from catchup.evaluation.llm_wiki_extraction_dataset import load_extraction_sources
 from catchup.knowledge_maintenance.adapters.llm.structured_extractor import (
@@ -42,6 +44,112 @@ CONTRACT_VERSION = "0"
 DEFAULT_OUTPUT_DIR = (
     Path(__file__).parent.parent / "experiments" / "llm_wiki_extraction" / "output"
 )
+
+LLM_WIKI_DATASET = "llm_wiki"
+CHANNEL_TALK_RAW_DATASET = "channel_talk_raw"
+CHANNEL_TALK_NORMALIZED_DATASET = "channel_talk_normalized"
+
+# 이 값들은 원문에 구조로 이미 적혀 있으므로 추출이 지식으로 만들면 안 된다.
+# `source_attributes`에서 걷어 정답으로 쓴다.
+_SOURCE_FIELD_KEYS = ("title", "state", "priority")
+_SOURCE_FIELD_LIST_KEYS = ("tags", "buttons")
+
+
+def _load_sources(dataset: str) -> tuple[ExtractionSource, ...]:
+    """고른 데이터셋을 읽는다."""
+    if dataset == LLM_WIKI_DATASET:
+        return load_extraction_sources()
+    if dataset == CHANNEL_TALK_RAW_DATASET:
+        return load_channel_talk_sources(ChannelTalkDatasetMode.RAW)
+    return load_channel_talk_sources(ChannelTalkDatasetMode.NORMALIZED)
+
+
+def _source_field_values(source: ExtractionSource) -> set[str]:
+    """원문이 구조로 들고 있던 값을 모은다.
+
+    레이어 1을 통과하지 않은 데이터셋에는 `source_attributes`가 비어 있으므로,
+    같은 key의 정규화 결과에서 정답을 가져와야 두 형태를 같은 잣대로 잰다.
+    """
+    attributes = source.observation.source_attributes
+    values: set[str] = set()
+
+    for key in _SOURCE_FIELD_KEYS:
+        value = attributes.get(key)
+        if isinstance(value, str) and value.strip():
+            values.add(_fold(value))
+
+    for key in _SOURCE_FIELD_LIST_KEYS:
+        for item in attributes.get(key) or ():
+            if isinstance(item, str) and item.strip():
+                values.add(_fold(item))
+
+    for entry in attributes.get("lifecycle") or ():
+        if isinstance(entry, dict) and isinstance(entry.get("action"), str):
+            values.add(_fold(entry["action"]))
+
+    for entry in attributes.get("attachments") or ():
+        if isinstance(entry, dict) and isinstance(entry.get("name"), str):
+            values.add(_fold(entry["name"]))
+
+    for entity in source.observation.metadata_entities:
+        values.add(_fold(entity.display_name))
+
+    return values
+
+
+def _fold(value: str) -> str:
+    """비교할 수 있게 공백과 대소문자를 고른다."""
+    return " ".join(value.split()).casefold()
+
+
+def _build_source_field_index(dataset: str) -> dict[str, set[str]]:
+    """원문 key마다 걷어냈어야 할 값의 집합을 만든다.
+
+    정답은 언제나 정규화된 쪽에서 가져온다. raw 형태는 그 값들이 본문 텍스트에
+    섞여 있을 뿐 구조로는 없기 때문에, 스스로는 정답을 댈 수 없다.
+    """
+    if dataset == LLM_WIKI_DATASET:
+        return {}
+    return {
+        source.key: _source_field_values(source)
+        for source in load_channel_talk_sources(ChannelTalkDatasetMode.NORMALIZED)
+    }
+
+
+def _report_source_field_leakage(
+    results: list[dict],
+    field_index: dict[str, set[str]],
+) -> None:
+    """추출이 원문 구조를 지식으로 착각한 정도를 잰다."""
+    if not field_index:
+        return
+
+    total = 0
+    leaked = 0
+    leaked_predicates: Counter[str] = Counter()
+
+    for result in results:
+        if result["status"] != "ok":
+            continue
+        expected = field_index.get(result["key"])
+        if expected is None:
+            continue
+        for claim in result["batch"]["claims"]:
+            total += 1
+            value = claim["value"]
+            if not isinstance(value, str):
+                continue
+            if _fold(value) in expected:
+                leaked += 1
+                leaked_predicates[claim["predicate"]] += 1
+
+    print("\n=== 소스 필드 누출 ===")
+    if total == 0:
+        print("  claim이 없다")
+        return
+    print(f"  {leaked}/{total} ({leaked / total:.1%})")
+    for predicate, count in leaked_predicates.most_common(10):
+        print(f"    {count:3d}  {predicate}")
 
 
 async def _extract_one(
@@ -191,6 +299,16 @@ def _summarize(results: list[dict]) -> None:
 
 async def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--dataset",
+        choices=[
+            LLM_WIKI_DATASET,
+            CHANNEL_TALK_RAW_DATASET,
+            CHANNEL_TALK_NORMALIZED_DATASET,
+        ],
+        default=LLM_WIKI_DATASET,
+        help="raw와 normalized를 비교하면 레이어 1의 효과가 보인다",
+    )
     parser.add_argument("--limit", type=int, default=None, help="처리할 원문 수")
     parser.add_argument("--concurrency", type=int, default=4)
     parser.add_argument(
@@ -207,7 +325,7 @@ async def main() -> None:
     )
     args = parser.parse_args()
 
-    sources = load_extraction_sources()
+    sources = _load_sources(args.dataset)
     if args.limit is not None:
         sources = sources[: args.limit]
 
@@ -219,7 +337,8 @@ async def main() -> None:
     extractor = StructuredKnowledgeExtractor(service.get_llm())
 
     print(
-        f"원문 {len(sources)}건, 라운드 {args.round_size}건씩, "
+        f"데이터셋 {args.dataset}, 원문 {len(sources)}건, "
+        f"라운드 {args.round_size}건씩, "
         f"동시 {args.concurrency}건, 모델 {args.capacity}"
     )
 
@@ -245,13 +364,17 @@ async def main() -> None:
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    out_path = args.output_dir / f"extraction_{stamp}.json"
+    out_path = args.output_dir / f"extraction_{args.dataset}_{stamp}.json"
     out_path.write_text(
         json.dumps(list(results), ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
 
     _summarize(list(results))
+    _report_source_field_leakage(
+        list(results),
+        _build_source_field_index(args.dataset),
+    )
     print(f"\n결과: {out_path}")
 
 
