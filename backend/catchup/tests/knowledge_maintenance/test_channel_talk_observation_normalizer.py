@@ -8,10 +8,10 @@ from pathlib import Path
 
 import pytest
 
-from catchup.knowledge_maintenance.adapters.channel_talk.observation_normalizer import (
+from catchup.knowledge_maintenance.adapters.connectors.channel_talk.observation_normalizer import (
     CHANNEL_TALK_USER_CHAT_MEDIA_TYPE,
 )
-from catchup.knowledge_maintenance.adapters.channel_talk.observation_normalizer import (
+from catchup.knowledge_maintenance.adapters.connectors.channel_talk.observation_normalizer import (
     ChannelTalkUserChatNormalizer,
 )
 from catchup.knowledge_maintenance.domain.observation import ObservationKind
