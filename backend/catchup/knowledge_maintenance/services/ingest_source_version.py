@@ -175,11 +175,17 @@ def _to_source_identity(envelope: SourceChangeEnvelope) -> SourceIdentity:
 
 
 def _payload_hash(envelope: SourceChangeEnvelope) -> str:
-    # 전달 식별자는 원천 데이터가 아니므로 hash에서 제외한다.
+    # 전달에 딸린 값은 원천 데이터가 아니므로 hash에서 제외한다.
     # 서로 다른 전달도 같은 논리적 SourceVersion으로 식별할 수 있게 한다.
+    #
+    # `observed_at`이 여기 드는 이유는 그것이 원문의 성질이 아니라 우리가
+    # 언제 봤는지이기 때문이다. Poller는 바뀌지 않은 문서를 주기마다 다시
+    # 보는데, 이 값이 hash에 들어가면 같은 원문을 다시 본 것만으로
+    # SourceVersionPayloadConflict가 난다. 원문이 언제 바뀌었는지는
+    # `source_updated_at`이 말하며 그것은 hash에 남는다.
     payload = envelope.model_dump(
         mode="json",
-        exclude={"event_id", "idempotency_key"},
+        exclude={"event_id", "idempotency_key", "observed_at"},
     )
     return _stable_hash(payload)
 
