@@ -592,3 +592,42 @@ def test_local_key_is_unique_within_a_run(
                     extraction_method=ExtractionMethod.LLM,
                 )
             uow.commit()
+
+
+def test_run_records_the_vocabulary_snapshot(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+) -> None:
+    """한 번의 실행은 하나의 어휘로 도므로 실행에 한 번 남긴다.
+
+    predicate와 relation_type이 같은 어휘 스냅샷에서 나오는데 claim에만
+    적으면 관계 어휘가 어디서 왔는지 알 수 없다.
+    """
+    observation = _stored_observation(workspace_id, session_factory)
+
+    result = store_knowledge_candidates(
+        observation,
+        _batch(),
+        spec=SPEC,
+        uow=uow_factory(),
+    )
+
+    with KnowledgeMaintenanceUnitOfWork(session_factory) as uow:
+        session = uow.knowledge_candidates._session  # noqa: SLF001
+        row = session.get(ExtractionRunRow, result.batch.run_id)
+        run = {
+            "ontology_id": row.ontology_id,
+            "ontology_version": row.ontology_version,
+        }
+        claim = session.scalar(
+            select(ClaimCandidateRow).where(
+                ClaimCandidateRow.extraction_run_id == result.batch.run_id
+            )
+        )
+        claim_ontology = (claim.ontology_id, claim.ontology_version)
+
+    assert run["ontology_id"] == SPEC.ontology_id
+    assert run["ontology_version"] == SPEC.ontology_version
+    # claim의 컬럼은 조인 없이 필터하려고 둔 사본이므로 실행과 어긋나면 안 된다.
+    assert claim_ontology == (run["ontology_id"], run["ontology_version"])

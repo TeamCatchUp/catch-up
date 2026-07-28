@@ -29,6 +29,8 @@ def upgrade() -> None:
     sa.Column('model', sa.String(length=128), nullable=True),
     sa.Column('extractor_version', sa.String(length=128), nullable=False),
     sa.Column('prompt_version', sa.String(length=128), nullable=True),
+    sa.Column('ontology_id', sa.String(length=128), nullable=False),
+    sa.Column('ontology_version', sa.String(length=64), nullable=False),
     sa.Column('status', sa.String(length=16), nullable=False),
     sa.Column('raw_output', postgresql.JSONB(astext_type=sa.Text()), nullable=True),
     sa.Column('error', sa.Text(), nullable=True),

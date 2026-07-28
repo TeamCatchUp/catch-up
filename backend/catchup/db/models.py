@@ -3879,6 +3879,12 @@ class KnowledgeExtractionRun(Base):
     extractor_version: Mapped[str] = mapped_column(String(128), nullable=False)
     prompt_version: Mapped[str | None] = mapped_column(String(128), nullable=True)
 
+    # 이 실행이 따른 어휘 스냅샷이다. 한 번의 실행은 하나의 어휘로 돌므로
+    # candidate마다 적지 않고 여기 한 번만 남긴다. 나중에 어휘를 통합할 때
+    # 어떤 규칙 아래 만들어진 후보인지 되짚는 근거가 된다.
+    ontology_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    ontology_version: Mapped[str] = mapped_column(String(64), nullable=False)
+
     status: Mapped[str] = mapped_column(String(16), nullable=False)
     # 계약을 어긴 출력도 남긴다. 무엇이 왜 거부됐는지가 성공만큼 중요하다.
     raw_output: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)

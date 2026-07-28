@@ -294,6 +294,8 @@ class SqlAlchemyKnowledgeCandidateRepository:
             model=spec.model,
             extractor_version=spec.extractor_version,
             prompt_version=spec.prompt_version,
+            ontology_id=spec.ontology_id,
+            ontology_version=spec.ontology_version,
             status=ExtractionRunStatus.RUNNING.value,
             started_at=started_at,
         )
