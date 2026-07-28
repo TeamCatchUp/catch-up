@@ -32,6 +32,7 @@ from catchup.components.llm.constants import LlmProvider
 from catchup.components.llm.constants import ModelCapacity
 from catchup.components.llm.factory import get_llm_service
 from catchup.configs.config import settings
+from catchup.db.models import Observation as ObservationRow
 from catchup.evaluation.eval_llm_wiki_extraction import CONTRACT_VERSION
 from catchup.evaluation.eval_llm_wiki_extraction import _grow_vocabulary
 from catchup.knowledge_maintenance.adapters.llm.structured_extractor import CONTRACT_ID
@@ -40,6 +41,9 @@ from catchup.knowledge_maintenance.adapters.llm.structured_extractor import (
 )
 from catchup.knowledge_maintenance.adapters.llm.structured_extractor import (
     StructuredKnowledgeExtractor,
+)
+from catchup.knowledge_maintenance.adapters.postgres.mappers import (
+    observation_to_domain,
 )
 from catchup.knowledge_maintenance.adapters.postgres.unit_of_work import (
     KnowledgeMaintenanceUnitOfWork,
@@ -50,6 +54,10 @@ from catchup.knowledge_maintenance.contracts.extraction import (
 )
 from catchup.knowledge_maintenance.domain.knowledge_candidate import ExtractionRunSpec
 from catchup.knowledge_maintenance.domain.observation import StoredObservation
+from catchup.knowledge_maintenance.domain.pipeline_event import FailureKind
+from catchup.knowledge_maintenance.domain.pipeline_event import PipelineEvent
+from catchup.knowledge_maintenance.domain.pipeline_event import PipelineEventStatus
+from catchup.knowledge_maintenance.domain.pipeline_event import PipelineEventType
 from catchup.knowledge_maintenance.services.store_knowledge_candidates import (
     store_knowledge_candidates,
 )
@@ -68,11 +76,12 @@ def _named(vocabulary: ExtractionVocabulary) -> ExtractionVocabulary:
 
 async def _extract_one(
     extractor: StructuredKnowledgeExtractor,
-    observation: StoredObservation,
+    entry: tuple[int, StoredObservation],
     semaphore: asyncio.Semaphore,
     vocabulary: ExtractionVocabulary,
 ) -> dict:
     """Observation 하나를 추출한다. 실패해도 멈추지 않는다."""
+    event_id, observation = entry
     request = KnowledgeExtractionRequest(
         content=observation.observation.content,
         source_type="channel_talk",
@@ -87,6 +96,7 @@ async def _extract_one(
         except Exception as error:
             return {
                 "observation": observation,
+                "event_id": event_id,
                 "status": "error",
                 "error": f"{type(error).__name__}: {error}",
             }
@@ -94,11 +104,17 @@ async def _extract_one(
     if batch is None:
         return {
             "observation": observation,
+            "event_id": event_id,
             "status": "contract_violation",
             "error": diagnostics.parse_error,
         }
 
-    return {"observation": observation, "status": "ok", "batch": batch}
+    return {
+        "observation": observation,
+        "event_id": event_id,
+        "status": "ok",
+        "batch": batch,
+    }
 
 
 def _harvest_shape(results: list[dict]) -> list[dict]:
@@ -130,7 +146,12 @@ def _store(
     """추출 결과를 candidate로 남긴다."""
     observation: StoredObservation = result["observation"]
     if result["status"] != "ok":
-        return {"key": str(observation.id)[:8], "status": result["status"]}
+        return {
+            "key": str(observation.id)[:8],
+            "event_id": result["event_id"],
+            "status": result["status"],
+            "error": result.get("error") or "",
+        }
 
     stored = store_knowledge_candidates(
         observation,
@@ -140,6 +161,7 @@ def _store(
     )
     return {
         "key": str(observation.id)[:8],
+        "event_id": result["event_id"],
         "status": "reused" if stored.reused else "stored",
         "entities": len(stored.batch.entity_ids),
         "claims": len(stored.batch.claim_ids),
@@ -163,14 +185,37 @@ async def main() -> None:
     engine = create_engine(settings.sqlalchemy_database_url)
     session_factory = sessionmaker(bind=engine, expire_on_commit=False)
 
-    with KnowledgeMaintenanceUnitOfWork(session_factory) as reader:
-        pending = reader.observations.list_without_extraction_run(
+    with KnowledgeMaintenanceUnitOfWork(session_factory) as uow:
+        # 큐를 도입하기 전에 저장된 Observation에는 지시가 없다. 채워 둔다.
+        backfilled = uow.pipeline_events.backfill_missing(
             workspace_id=args.workspace_id,
+            event_type=PipelineEventType.OBSERVATION_READY,
+        )
+        uow.commit()
+    if backfilled:
+        print(f"큐에 없던 Observation {backfilled}건을 채웠다.")
+
+    # 시각은 백필 뒤에 읽는다. 먼저 읽으면 방금 넣은 일의 available_at이
+    # 그보다 뒤라 아직 오지 않은 것으로 보인다.
+    now = datetime.now(timezone.utc)
+    with KnowledgeMaintenanceUnitOfWork(session_factory) as reader:
+        events = reader.pipeline_events.claim_pending(
+            workspace_id=args.workspace_id,
+            event_type=PipelineEventType.OBSERVATION_READY,
+            now=now,
             limit=args.limit,
         )
+        pending = [
+            item
+            for item in (
+                _observation_of(event, reader, args.workspace_id)
+                for event in events
+            )
+            if item is not None
+        ]
 
     if not pending:
-        print("추출할 Observation이 없다.")
+        print("처리할 일이 없다.")
         engine.dispose()
         return
 
@@ -198,8 +243,8 @@ async def main() -> None:
 
         results = await asyncio.gather(
             *(
-                _extract_one(extractor, observation, semaphore, vocabulary)
-                for observation in chunk
+                _extract_one(extractor, entry, semaphore, vocabulary)
+                for entry in chunk
             )
         )
 
@@ -220,6 +265,7 @@ async def main() -> None:
                 spec=spec,
                 session_factory=session_factory,
             )
+            _settle(record, session_factory=session_factory)
             summary[record["status"]] = summary.get(record["status"], 0) + 1
             for key in totals:
                 totals[key] += record.get(key, 0)
@@ -250,6 +296,56 @@ async def main() -> None:
     print(f"  끝난 시각 {datetime.now(timezone.utc).isoformat()}")
 
     engine.dispose()
+
+
+def _observation_of(
+    event: PipelineEvent,
+    uow: KnowledgeMaintenanceUnitOfWork,
+    workspace_id: int,
+) -> tuple[int, StoredObservation] | None:
+    """큐의 일이 가리키는 Observation을 읽는다."""
+    session = uow.observations._session  # noqa: SLF001
+    row = session.get(ObservationRow, event.aggregate_id)
+    if row is None:
+        return None
+    return event.id, observation_to_domain(row)
+
+
+def _settle(
+    record: dict,
+    *,
+    session_factory: Callable[[], Session],
+) -> None:
+    """처리 결과를 큐에 되돌린다.
+
+    계약 위반은 같은 입력에 같은 계약이면 다시 해도 같으므로 접는다.
+    API 오류는 시간이 지나면 풀리므로 물러났다가 다시 나타난다.
+    """
+    now = datetime.now(timezone.utc)
+    with KnowledgeMaintenanceUnitOfWork(session_factory) as uow:
+        if record["status"] in ("stored", "reused"):
+            uow.pipeline_events.mark_processed(
+                event_id=record["event_id"],
+                now=now,
+            )
+        else:
+            kind = (
+                FailureKind.PERMANENT
+                if record["status"] == "contract_violation"
+                else FailureKind.TRANSIENT
+            )
+            settled = uow.pipeline_events.mark_failed(
+                event_id=record["event_id"],
+                kind=kind,
+                error=record.get("error") or record["status"],
+                now=now,
+            )
+            record["retry_at"] = (
+                settled.available_at
+                if settled.status is PipelineEventStatus.PENDING
+                else None
+            )
+        uow.commit()
 
 
 if __name__ == "__main__":
