@@ -8,6 +8,8 @@ from datetime import datetime
 from datetime import timezone
 from enum import StrEnum
 
+from catchup.knowledge_maintenance.contracts.extraction import ExtractionVocabulary
+
 
 class ExtractionMethod(StrEnum):
     """후보가 어디서 나왔는지 나타낸다.
@@ -51,33 +53,42 @@ class AssertionResolutionStatus(StrEnum):
 class ExtractionRunSpec:
     """추출을 한 번 돌릴 때 남길 실행 정보를 정의한다.
 
+    어휘 버전을 문자열로 받지 않고 어휘 자체를 들고 있다. 실행을 기록할 때
+    스냅샷도 함께 남겨야 하며, 버전만 알면 그 어휘가 무엇이었는지 되짚을 수
+    없기 때문이다.
+
     Attributes:
         provider: 어느 LLM 제공자를 썼는지 나타낸다.
-        model: 구체적인 모델 이름을 나타낸다.
         extractor_version: 추출 계약의 버전을 나타낸다.
-        prompt_version: 프롬프트 템플릿의 버전을 나타낸다.
         ontology_id: 어느 어휘 체계를 따랐는지 나타낸다.
-        ontology_version: 그 어휘의 스냅샷을 식별한다.
+        vocabulary: 이 실행이 따른 어휘 스냅샷을 담는다.
+        model: 구체적인 모델 이름을 나타낸다.
+        prompt_version: 프롬프트 템플릿의 버전을 나타낸다.
     """
 
     provider: str
     extractor_version: str
     ontology_id: str
-    ontology_version: str
+    vocabulary: ExtractionVocabulary
     model: str | None = None
     prompt_version: str | None = None
 
     def __post_init__(self) -> None:
-        for field_name in (
-            "provider",
-            "extractor_version",
-            "ontology_id",
-            "ontology_version",
-        ):
+        for field_name in ("provider", "extractor_version", "ontology_id"):
             value = getattr(self, field_name).strip()
             if not value:
                 raise ValueError(f"{field_name} must not be blank")
             object.__setattr__(self, field_name, value)
+
+        if not self.vocabulary.snapshot_id.strip():
+            raise ValueError(
+                "vocabulary must carry a snapshot_id so the run can point at it"
+            )
+
+    @property
+    def ontology_version(self) -> str:
+        """실행이 가리킬 어휘 스냅샷의 버전을 나타낸다."""
+        return self.vocabulary.snapshot_id
 
 
 @dataclass(frozen=True, slots=True)
