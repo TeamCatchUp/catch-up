@@ -14,6 +14,9 @@ from catchup.knowledge_maintenance.domain.knowledge_node import NodeKind
 from catchup.knowledge_maintenance.domain.source_version import SourceIdentity
 from catchup.knowledge_maintenance.domain.source_version import SourceVersion
 from catchup.knowledge_maintenance.ports.source_versions import SourceVersionUnitOfWork
+from catchup.observability.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 class IngestionResult(StrEnum):
@@ -84,6 +87,16 @@ def ingest_source_change(
         uow.source_versions.add(source_version)
         _ensure_node(source_version.workspace_id, source_version.id, uow)
         uow.commit()
+        logger.info(
+            "source_version_ingested",
+            workspace_id=envelope.workspace_id,
+            source_type=envelope.source_type,
+            source_version_id=str(source_version.id),
+            change_kind=envelope.change_kind.value,
+            external_document_id=source_identity.external_document_id,
+            source_version_key=envelope.source_version_key,
+            stale=_is_stale(envelope, latest),
+        )
         return SourceVersionIngestionResult(
             source_version_id=source_version.id,
             result=(
@@ -128,6 +141,13 @@ def _resolve_existing(
     existing: SourceVersion,
 ) -> SourceVersionIngestionResult:
     if existing.payload_hash != payload_hash:
+        logger.warning(
+            "source_version_payload_conflict",
+            workspace_id=existing.workspace_id,
+            source_type=existing.source_type,
+            source_version_id=str(existing.id),
+            idempotency_key=existing.idempotency_key,
+        )
         raise SourceVersionPayloadConflict(
             "the idempotency key or source version was reused with a different payload"
         )

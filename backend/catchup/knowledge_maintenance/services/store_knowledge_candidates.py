@@ -37,6 +37,9 @@ from catchup.knowledge_maintenance.domain.observation import StoredObservation
 from catchup.knowledge_maintenance.ports.knowledge_candidates import (
     KnowledgeCandidateUnitOfWork,
 )
+from catchup.observability.logging import get_logger
+
+logger = get_logger(__name__)
 
 # 결정론적 레이어의 산출물은 추론이 아니라 원문 구조에 적혀 있던 사실이다.
 DETERMINISTIC_CONFIDENCE = Decimal("1.0")
@@ -91,6 +94,13 @@ def store_knowledge_candidates(
             input_node_id=node.id,
         )
         if existing:
+            logger.info(
+                "knowledge_candidates_reused",
+                workspace_id=observation.workspace_id,
+                observation_id=str(observation.id),
+                input_node_id=str(node.id),
+                existing_runs=existing,
+            )
             return CandidateStorageResult(
                 batch=StoredCandidateBatch(run_id=uuid.UUID(int=0)),
                 reused=True,
@@ -147,6 +157,21 @@ def store_knowledge_candidates(
             completed_at=clock(),
         )
         uow.commit()
+        logger.info(
+            "knowledge_candidates_stored",
+            workspace_id=observation.workspace_id,
+            observation_id=str(observation.id),
+            run_id=str(run.id),
+            ontology_id=spec.ontology_id,
+            ontology_version=spec.ontology_version,
+            entity_count=len(entity_ids),
+            deterministic_entity_count=len(
+                observation.observation.metadata_entities
+            ),
+            claim_count=len(claim_ids),
+            relation_count=len(relation_ids),
+            evidence_link_count=evidence_count,
+        )
 
         return CandidateStorageResult(
             batch=StoredCandidateBatch(

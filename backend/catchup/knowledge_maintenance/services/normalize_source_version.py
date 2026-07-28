@@ -10,6 +10,9 @@ from catchup.knowledge_maintenance.ports.observation_normalizer import (
     ObservationNormalizer,
 )
 from catchup.knowledge_maintenance.ports.observations import ObservationUnitOfWork
+from catchup.observability.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 class NormalizationResult(StrEnum):
@@ -68,6 +71,17 @@ def normalize_source_version(
         )
         _ensure_node(stored, uow)
         uow.commit()
+        logger.info(
+            "observation_normalized",
+            workspace_id=source_version.workspace_id,
+            source_version_id=str(source_version.id),
+            observation_id=str(stored.id),
+            normalizer_id=normalizer.normalizer_id,
+            normalizer_version=normalizer.normalizer_version,
+            observation_kind=observation.observation_kind.value,
+            content_length=len(observation.content or ""),
+            metadata_entity_count=len(observation.metadata_entities),
+        )
         return SourceVersionNormalizationResult(
             observation=stored,
             result=NormalizationResult.CREATED,
