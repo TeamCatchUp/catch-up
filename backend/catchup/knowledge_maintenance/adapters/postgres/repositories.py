@@ -141,7 +141,13 @@ class SqlAlchemySourceVersionRepository:
         return source_version_to_domain(row) if row is not None else None
 
     def add(self, source_version: SourceVersion) -> None:
-        """SourceVersion을 현재 transaction에 추가한다."""
+        """SourceVersion을 현재 transaction에 추가한다.
+
+        여기서 flush하지 않는다. 같은 transaction에서 Observation을 이어
+        넣어도 SQLAlchemy가 메타데이터의 ForeignKeyConstraint를 읽어 삽입
+        순서를 정렬하므로, ORM relationship을 선언하지 않아도 원문이 먼저
+        나간다. autoflush가 조회 직전에도 flush한다.
+        """
         self._session.add(source_version_to_row(source_version))
 
 

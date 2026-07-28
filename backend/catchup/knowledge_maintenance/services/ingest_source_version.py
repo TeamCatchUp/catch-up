@@ -30,12 +30,17 @@ class SourceVersionIngestionResult:
     """SourceChangeEnvelope 수집 결과를 표현한다.
 
     Attributes:
-        source_version_id: 생성됐거나 기존인 SourceVersion을 식별한다.
+        source_version: 생성됐거나 기존인 SourceVersion을 담는다.
         result: 수집 결과가 created, duplicate, stale 중 무엇인지 나타낸다.
     """
 
-    source_version_id: uuid.UUID
+    source_version: SourceVersion
     result: IngestionResult
+
+    @property
+    def source_version_id(self) -> uuid.UUID:
+        """생성됐거나 기존인 SourceVersion을 식별한다."""
+        return self.source_version.id
 
 
 class SourceVersionPayloadConflict(ValueError):
@@ -49,62 +54,85 @@ def ingest_source_change(
     id_factory: Callable[[], uuid.UUID] = uuid.uuid4,
     clock: Callable[[], datetime] | None = None,
 ) -> SourceVersionIngestionResult:
-    """Envelope 하나를 검증하고 불변 SourceVersion을 최대 하나 저장한다."""
+    """Envelope 하나를 검증하고 불변 SourceVersion을 최대 하나 저장한다.
 
+    transaction을 스스로 연다. 정규화까지 한 경계로 묶어야 하면
+    `ingest_and_normalize`를 쓴다.
+    """
+    with uow:
+        result = ingest_within_transaction(
+            envelope,
+            uow=uow,
+            id_factory=id_factory,
+            clock=clock,
+        )
+        # 중복 전달은 아무것도 쓰지 않았으므로 commit하지 않는다. 폴링은
+        # 대부분 중복이라 빈 transaction을 확정하는 왕복이 그대로 비용이 된다.
+        if result.result is not IngestionResult.DUPLICATE:
+            uow.commit()
+        return result
+
+
+def ingest_within_transaction(
+    envelope: SourceChangeEnvelope,
+    *,
+    uow: SourceVersionUnitOfWork,
+    id_factory: Callable[[], uuid.UUID] = uuid.uuid4,
+    clock: Callable[[], datetime] | None = None,
+) -> SourceVersionIngestionResult:
+    """이미 열린 transaction 안에서 수집한다."""
     clock = clock or _utcnow
     source_identity = _to_source_identity(envelope)
     payload_hash = _payload_hash(envelope)
 
-    with uow:
-        existing = uow.source_versions.get_by_idempotency_key(
-            workspace_id=envelope.workspace_id,
-            idempotency_key=envelope.idempotency_key,
-        )
-        if existing is not None:
-            return _resolve_existing(payload_hash, existing)
+    existing = uow.source_versions.get_by_idempotency_key(
+        workspace_id=envelope.workspace_id,
+        idempotency_key=envelope.idempotency_key,
+    )
+    if existing is not None:
+        return _resolve_existing(payload_hash, existing)
 
-        existing_version = uow.source_versions.get_by_source_version(
-            workspace_id=envelope.workspace_id,
-            source_type=envelope.source_type,
-            source_identity=source_identity,
-            source_version_key=envelope.source_version_key,
-        )
-        if existing_version is not None:
-            return _resolve_existing(payload_hash, existing_version)
+    existing_version = uow.source_versions.get_by_source_version(
+        workspace_id=envelope.workspace_id,
+        source_type=envelope.source_type,
+        source_identity=source_identity,
+        source_version_key=envelope.source_version_key,
+    )
+    if existing_version is not None:
+        return _resolve_existing(payload_hash, existing_version)
 
-        latest = uow.source_versions.get_latest_for_source(
-            workspace_id=envelope.workspace_id,
-            source_type=envelope.source_type,
-            source_identity=source_identity,
-        )
-        source_version = _build_source_version(
-            envelope,
-            source_identity=source_identity,
-            payload_hash=payload_hash,
-            source_version_id=id_factory(),
-            created_at=clock(),
-        )
-        uow.source_versions.add(source_version)
-        _ensure_node(source_version.workspace_id, source_version.id, uow)
-        uow.commit()
-        logger.info(
-            "source_version_ingested",
-            workspace_id=envelope.workspace_id,
-            source_type=envelope.source_type,
-            source_version_id=str(source_version.id),
-            change_kind=envelope.change_kind.value,
-            external_document_id=source_identity.external_document_id,
-            source_version_key=envelope.source_version_key,
-            stale=_is_stale(envelope, latest),
-        )
-        return SourceVersionIngestionResult(
-            source_version_id=source_version.id,
-            result=(
-                IngestionResult.STALE
-                if _is_stale(envelope, latest)
-                else IngestionResult.CREATED
-            ),
-        )
+    latest = uow.source_versions.get_latest_for_source(
+        workspace_id=envelope.workspace_id,
+        source_type=envelope.source_type,
+        source_identity=source_identity,
+    )
+    source_version = _build_source_version(
+        envelope,
+        source_identity=source_identity,
+        payload_hash=payload_hash,
+        source_version_id=id_factory(),
+        created_at=clock(),
+    )
+    uow.source_versions.add(source_version)
+    _ensure_node(source_version.workspace_id, source_version.id, uow)
+    logger.info(
+        "source_version_ingested",
+        workspace_id=envelope.workspace_id,
+        source_type=envelope.source_type,
+        source_version_id=str(source_version.id),
+        change_kind=envelope.change_kind.value,
+        external_document_id=source_identity.external_document_id,
+        source_version_key=envelope.source_version_key,
+        stale=_is_stale(envelope, latest),
+    )
+    return SourceVersionIngestionResult(
+        source_version=source_version,
+        result=(
+            IngestionResult.STALE
+            if _is_stale(envelope, latest)
+            else IngestionResult.CREATED
+        ),
+    )
 
 
 def _build_source_version(
@@ -154,7 +182,7 @@ def _resolve_existing(
     # 중복 전달은 아무것도 쓰지 않는다. node는 SourceVersion과 같은
     # transaction에서 만들어지므로, 원문이 있으면 node도 반드시 있다.
     return SourceVersionIngestionResult(
-        source_version_id=existing.id,
+        source_version=existing,
         result=IngestionResult.DUPLICATE,
     )
 
