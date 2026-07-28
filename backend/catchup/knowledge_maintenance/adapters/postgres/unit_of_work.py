@@ -7,6 +7,9 @@ from typing import Self
 from sqlalchemy.orm import Session
 
 from catchup.knowledge_maintenance.adapters.postgres.repositories import (
+    SqlAlchemyKnowledgeCandidateRepository,
+)
+from catchup.knowledge_maintenance.adapters.postgres.repositories import (
     SqlAlchemyKnowledgeNodeRepository,
 )
 from catchup.knowledge_maintenance.adapters.postgres.repositories import (
@@ -29,6 +32,7 @@ class KnowledgeMaintenanceUnitOfWork:
     source_versions: SqlAlchemySourceVersionRepository
     observations: SqlAlchemyObservationRepository
     knowledge_nodes: SqlAlchemyKnowledgeNodeRepository
+    knowledge_candidates: SqlAlchemyKnowledgeCandidateRepository
 
     def __init__(self, session_factory: Callable[[], Session]) -> None:
         self._session_factory = session_factory
@@ -40,6 +44,7 @@ class KnowledgeMaintenanceUnitOfWork:
         self.source_versions = SqlAlchemySourceVersionRepository(session)
         self.observations = SqlAlchemyObservationRepository(session)
         self.knowledge_nodes = SqlAlchemyKnowledgeNodeRepository(session)
+        self.knowledge_candidates = SqlAlchemyKnowledgeCandidateRepository(session)
         return self
 
     def __exit__(

@@ -1,13 +1,27 @@
 from __future__ import annotations
 
+import hashlib
+import json
 import uuid
+from datetime import datetime
+from decimal import Decimal
 
 from sqlalchemy import ColumnElement
 from sqlalchemy import func
 from sqlalchemy import select
+from sqlalchemy import update
 from sqlalchemy.orm import Session
 
+from catchup.db.models import (
+    KnowledgeCandidateEvidenceLink as KnowledgeCandidateEvidenceLinkRow,
+)
+from catchup.db.models import KnowledgeClaimCandidate as KnowledgeClaimCandidateRow
+from catchup.db.models import KnowledgeEntityCandidate as KnowledgeEntityCandidateRow
+from catchup.db.models import KnowledgeExtractionRun as KnowledgeExtractionRunRow
 from catchup.db.models import KnowledgeNode as KnowledgeNodeRow
+from catchup.db.models import (
+    KnowledgeRelationAssertionCandidate as KnowledgeRelationCandidateRow,
+)
 from catchup.db.models import Observation as ObservationRow
 from catchup.db.models import SourceVersion as SourceVersionRow
 from catchup.knowledge_maintenance.adapters.postgres.mappers import (
@@ -26,6 +40,15 @@ from catchup.knowledge_maintenance.adapters.postgres.mappers import (
 from catchup.knowledge_maintenance.adapters.postgres.mappers import (
     source_version_to_row,
 )
+from catchup.knowledge_maintenance.contracts.extraction import ClaimCandidateDraft
+from catchup.knowledge_maintenance.contracts.extraction import EntityCandidateDraft
+from catchup.knowledge_maintenance.contracts.extraction import (
+    RelationAssertionCandidateDraft,
+)
+from catchup.knowledge_maintenance.domain.knowledge_candidate import ExtractionMethod
+from catchup.knowledge_maintenance.domain.knowledge_candidate import ExtractionRun
+from catchup.knowledge_maintenance.domain.knowledge_candidate import ExtractionRunSpec
+from catchup.knowledge_maintenance.domain.knowledge_candidate import ExtractionRunStatus
 from catchup.knowledge_maintenance.domain.knowledge_node import KnowledgeNode
 from catchup.knowledge_maintenance.domain.knowledge_node import NodeKind
 from catchup.knowledge_maintenance.domain.knowledge_node import resource_ref_for
@@ -246,3 +269,210 @@ class SqlAlchemyKnowledgeNodeRepository:
         self._session.add(row)
         self._session.flush()
         return knowledge_node_to_domain(row)
+
+
+class SqlAlchemyKnowledgeCandidateRepository:
+    """추출 결과의 영속성을 PostgreSQL로 구현한다."""
+
+    def __init__(self, session: Session) -> None:
+        self._session = session
+
+    def start_run(
+        self,
+        *,
+        workspace_id: int,
+        input_node_id: uuid.UUID,
+        spec: ExtractionRunSpec,
+        started_at: datetime,
+    ) -> ExtractionRun:
+        """LLM을 부르기 전에 실행 기록을 먼저 확보한다."""
+        row = KnowledgeExtractionRunRow(
+            id=uuid.uuid4(),
+            workspace_id=workspace_id,
+            input_node_id=input_node_id,
+            provider=spec.provider,
+            model=spec.model,
+            extractor_version=spec.extractor_version,
+            prompt_version=spec.prompt_version,
+            status=ExtractionRunStatus.RUNNING.value,
+            started_at=started_at,
+        )
+        self._session.add(row)
+        self._session.flush()
+        return ExtractionRun(
+            id=row.id,
+            workspace_id=row.workspace_id,
+            input_node_id=row.input_node_id,
+            status=ExtractionRunStatus(row.status),
+            started_at=row.started_at,
+        )
+
+    def complete_run(
+        self,
+        *,
+        run_id: uuid.UUID,
+        status: ExtractionRunStatus,
+        completed_at: datetime,
+        raw_output: dict | None = None,
+        error: str | None = None,
+    ) -> None:
+        """실행을 끝맺는다. 실패한 출력도 남긴다."""
+        self._session.execute(
+            update(KnowledgeExtractionRunRow)
+            .where(KnowledgeExtractionRunRow.id == run_id)
+            .values(
+                status=status.value,
+                completed_at=completed_at,
+                raw_output=raw_output,
+                error=error,
+            )
+        )
+
+    def count_runs_for_input(
+        self,
+        *,
+        workspace_id: int,
+        input_node_id: uuid.UUID,
+    ) -> int:
+        """같은 입력으로 이미 돌린 실행이 몇 번인지 센다."""
+        return self._session.scalar(
+            select(func.count())
+            .select_from(KnowledgeExtractionRunRow)
+            .where(
+                KnowledgeExtractionRunRow.workspace_id == workspace_id,
+                KnowledgeExtractionRunRow.input_node_id == input_node_id,
+            )
+        )
+
+    def add_entity_candidate(
+        self,
+        *,
+        workspace_id: int,
+        run_id: uuid.UUID,
+        draft: EntityCandidateDraft,
+        extraction_method: ExtractionMethod,
+        confidence: Decimal | None = None,
+    ) -> uuid.UUID:
+        """Entity 후보를 남기고 발급한 식별자를 돌려준다."""
+        row = KnowledgeEntityCandidateRow(
+            id=uuid.uuid4(),
+            workspace_id=workspace_id,
+            extraction_run_id=run_id,
+            local_key=draft.local_key,
+            proposed_type=draft.proposed_type,
+            proposed_name=draft.proposed_name,
+            extraction_method=extraction_method.value,
+            confidence=confidence,
+            raw_payload=draft.model_dump(mode="json"),
+        )
+        self._session.add(row)
+        self._session.flush()
+        return row.id
+
+    def add_claim_candidate(
+        self,
+        *,
+        workspace_id: int,
+        run_id: uuid.UUID,
+        draft: ClaimCandidateDraft,
+        subject_candidate_id: uuid.UUID,
+        spec: ExtractionRunSpec,
+        extraction_method: ExtractionMethod,
+        confidence: Decimal | None = None,
+    ) -> uuid.UUID:
+        """Claim 후보를 남긴다. subject는 이미 저장된 Entity 후보를 가리킨다."""
+        payload = draft.model_dump(mode="json")
+        row = KnowledgeClaimCandidateRow(
+            id=uuid.uuid4(),
+            workspace_id=workspace_id,
+            extraction_run_id=run_id,
+            local_key=draft.local_key,
+            subject_entity_candidate_id=subject_candidate_id,
+            subject_node_id=None,
+            predicate=draft.predicate,
+            value_type=draft.value_type,
+            value=payload["value"],
+            value_hash=_json_hash(payload["value"]),
+            statement=draft.statement,
+            valid_from=draft.valid_from,
+            valid_to=draft.valid_to,
+            ontology_id=spec.ontology_id,
+            ontology_version=spec.ontology_version,
+            extraction_method=extraction_method.value,
+            confidence=confidence,
+            raw_payload=payload,
+        )
+        self._session.add(row)
+        self._session.flush()
+        return row.id
+
+    def add_relation_candidate(
+        self,
+        *,
+        workspace_id: int,
+        run_id: uuid.UUID,
+        draft: RelationAssertionCandidateDraft,
+        source_candidate_id: uuid.UUID,
+        target_candidate_id: uuid.UUID,
+        extraction_method: ExtractionMethod,
+        confidence: Decimal | None = None,
+    ) -> uuid.UUID:
+        """관계 후보를 남긴다. 양 끝은 이미 저장된 Entity 후보를 가리킨다."""
+        row = KnowledgeRelationCandidateRow(
+            id=uuid.uuid4(),
+            workspace_id=workspace_id,
+            extraction_run_id=run_id,
+            local_key=draft.local_key,
+            source_entity_candidate_id=source_candidate_id,
+            source_node_id=None,
+            target_entity_candidate_id=target_candidate_id,
+            target_node_id=None,
+            relation_type=draft.relation_type,
+            assertion_text=draft.assertion_text,
+            valid_from=draft.valid_from,
+            valid_to=draft.valid_to,
+            extraction_method=extraction_method.value,
+            confidence=confidence,
+            raw_payload=draft.model_dump(mode="json"),
+        )
+        self._session.add(row)
+        self._session.flush()
+        return row.id
+
+    def add_evidence_link(
+        self,
+        *,
+        workspace_id: int,
+        run_id: uuid.UUID,
+        evidence_node_id: uuid.UUID,
+        entity_candidate_id: uuid.UUID | None = None,
+        claim_candidate_id: uuid.UUID | None = None,
+        relation_candidate_id: uuid.UUID | None = None,
+        excerpt: str | None = None,
+    ) -> uuid.UUID:
+        """후보가 어떤 Observation에서 나왔는지 잇는다."""
+        row = KnowledgeCandidateEvidenceLinkRow(
+            id=uuid.uuid4(),
+            workspace_id=workspace_id,
+            extraction_run_id=run_id,
+            entity_candidate_id=entity_candidate_id,
+            claim_candidate_id=claim_candidate_id,
+            relation_assertion_candidate_id=relation_candidate_id,
+            evidence_node_id=evidence_node_id,
+            evidence_role="supports",
+            excerpt=excerpt,
+        )
+        self._session.add(row)
+        self._session.flush()
+        return row.id
+
+
+def _json_hash(value: object) -> str:
+    """JSON 표현의 사소한 차이를 무시하고 같은 값인지 비교할 hash를 만든다."""
+    encoded = json.dumps(
+        value,
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
