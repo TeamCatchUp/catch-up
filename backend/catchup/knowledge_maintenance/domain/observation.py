@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import uuid
 from collections.abc import Mapping
 from dataclasses import dataclass
 from dataclasses import field
@@ -111,6 +112,41 @@ class NormalizedObservation:
             self,
             "metadata_entities",
             tuple(self.metadata_entities),
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class StoredObservation:
+    """저장된 Observation 한 건을 표현한다.
+
+    `NormalizedObservation`이 의도적으로 담지 않는 것을 담는다. normalizer는
+    무엇이 어디에 저장되는지 몰라야 하지만, 저장된 뒤에는 그 행을 가리킬
+    식별자가 필요하다. 나중에 candidate의 근거 링크가 이 `id`를 참조한다.
+
+    Attributes:
+        id: 저장된 Observation 한 건을 식별한다.
+        workspace_id: Observation이 속한 CatchUp workspace를 식별한다.
+        source_version_id: 정규화의 대상이 된 원문 버전을 가리킨다.
+        observation: 정규화 결과 자체를 담는다.
+        created_at: CatchUp이 record를 만든 시각을 나타낸다.
+    """
+
+    id: uuid.UUID
+    workspace_id: int
+    source_version_id: uuid.UUID
+    observation: NormalizedObservation
+    created_at: datetime
+
+    def __post_init__(self) -> None:
+        if self.workspace_id <= 0:
+            raise ValueError("workspace_id must be greater than 0")
+
+        if self.created_at.tzinfo is None:
+            raise ValueError("created_at must include timezone information")
+        object.__setattr__(
+            self,
+            "created_at",
+            self.created_at.astimezone(timezone.utc),
         )
 
 
