@@ -34,19 +34,6 @@ class ObservationRepository(Protocol):
         source_version_id: uuid.UUID,
     ) -> tuple[StoredObservation, ...]: ...
 
-    def list_without_extraction_run(
-        self,
-        *,
-        workspace_id: int,
-        limit: int | None = None,
-    ) -> tuple[StoredObservation, ...]:
-        """아직 추출을 돌리지 않은 Observation을 찾는다.
-
-        graph node가 있고 그 node를 입력으로 삼은 실행이 없는 것들이다.
-        추출을 중간에 멈췄다 다시 돌려도 한 일을 되풀이하지 않게 한다.
-        """
-        ...
-
     def add(
         self,
         *,

@@ -318,8 +318,8 @@ def _settle(
 ) -> None:
     """처리 결과를 큐에 되돌린다.
 
-    계약 위반은 같은 입력에 같은 계약이면 다시 해도 같으므로 접는다.
-    API 오류는 시간이 지나면 풀리므로 물러났다가 다시 나타난다.
+    실패 종류마다 봐주는 횟수가 다르다. 계약 위반은 흔들림일 수 있어 몇 번
+    더 해보되 적게, API 오류는 오래 갈 수 있어 더 많이 봐준다.
     """
     now = datetime.now(timezone.utc)
     with KnowledgeMaintenanceUnitOfWork(session_factory) as uow:
@@ -330,9 +330,9 @@ def _settle(
             )
         else:
             kind = (
-                FailureKind.PERMANENT
+                FailureKind.CONTRACT_VIOLATION
                 if record["status"] == "contract_violation"
-                else FailureKind.TRANSIENT
+                else FailureKind.API_ERROR
             )
             settled = uow.pipeline_events.mark_failed(
                 event_id=record["event_id"],

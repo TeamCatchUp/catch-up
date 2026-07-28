@@ -638,56 +638,6 @@ def test_run_records_the_vocabulary_snapshot(
     assert claim_ontology == (run["ontology_id"], run["ontology_version"])
 
 
-def test_pending_observations_exclude_the_ones_already_run(
-    workspace_id: int,
-    session_factory: Callable[[], Session],
-    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
-) -> None:
-    """추출을 중간에 멈췄다 다시 돌려도 한 일을 되풀이하지 않는다."""
-    first = _stored_observation(workspace_id, session_factory)
-    second = _stored_observation(workspace_id, session_factory)
-
-    with KnowledgeMaintenanceUnitOfWork(session_factory) as reader:
-        before = {
-            item.id
-            for item in reader.observations.list_without_extraction_run(
-                workspace_id=workspace_id
-            )
-        }
-    assert {first.id, second.id} <= before
-
-    store_knowledge_candidates(first, _batch(), spec=SPEC, uow=uow_factory())
-
-    with KnowledgeMaintenanceUnitOfWork(session_factory) as reader:
-        after = {
-            item.id
-            for item in reader.observations.list_without_extraction_run(
-                workspace_id=workspace_id
-            )
-        }
-
-    assert first.id not in after
-    assert second.id in after
-
-
-def test_an_observation_without_a_node_is_not_pending(
-    workspace_id: int,
-    session_factory: Callable[[], Session],
-) -> None:
-    """graph에 없는 Observation은 추출의 입력이 될 수 없다."""
-    orphan = _stored_observation(workspace_id, session_factory, with_node=False)
-
-    with KnowledgeMaintenanceUnitOfWork(session_factory) as reader:
-        pending = {
-            item.id
-            for item in reader.observations.list_without_extraction_run(
-                workspace_id=workspace_id
-            )
-        }
-
-    assert orphan.id not in pending
-
-
 def test_the_vocabulary_snapshot_is_stored_with_the_run(
     workspace_id: int,
     session_factory: Callable[[], Session],

@@ -28,24 +28,34 @@ class PipelineEventStatus(StrEnum):
 
 
 class FailureKind(StrEnum):
-    """실패가 다시 시도할 만한 것인지 가른다.
+    """실패가 무엇 때문이었는지 나타낸다.
 
-    이 구분이 재시도 정책의 전부다. 둘을 섞으면 결정론적으로 실패하는 문서에
-    매 주기마다 LLM 비용이 나가거나, 반대로 일시적인 오류 한 번으로 문서를
-    영영 포기하게 된다.
+    처음에는 `permanent`와 `transient`로 나눠 "다시 시도할 것인가"를 이름에
+    담았다. 실측이 그 전제를 부정했다. 계약 위반을 영구 실패로 두었는데 같은
+    입력에 같은 프롬프트로 다시 돌리자 성공했다. `temperature`가 0이어도 LLM은
+    완전히 결정론적이지 않고, 계약 위반은 대부분 출력이 스키마에서 살짝
+    어긋나는 것이라 정확히 그 흔들림 구간에 있다.
+
+    그래서 재시도 여부가 아니라 **몇 번까지 봐줄지**를 종류마다 다르게 둔다.
     """
 
-    # 같은 입력에 같은 계약이면 다시 해도 같은 결과다. 프롬프트나 계약을
-    # 고쳐야 풀리므로 자동 재시도가 의미 없다.
-    PERMANENT = "permanent"
-    # throttling이나 timeout처럼 시간이 지나면 풀린다.
-    TRANSIENT = "transient"
+    # 스키마에서 어긋난 출력이다. 흔들림이면 곧 성공하고, 프롬프트가 잘못됐다면
+    # 곧 포기하는 편이 낫다.
+    CONTRACT_VIOLATION = "contract_violation"
+    # throttling이나 timeout이다. 오래 갈 수 있으므로 더 봐준다.
+    API_ERROR = "api_error"
 
 
-# 일시적 실패를 다시 시도하기까지 기다리는 시간이다. 시도가 거듭될수록
-# 배로 늘려 같은 대상에 몰리지 않게 한다.
+# 실패를 다시 시도하기까지 기다리는 시간이다. 시도가 거듭될수록 배로 늘려
+# 같은 대상에 몰리지 않게 한다.
 BACKOFF_BASE = timedelta(minutes=1)
-MAX_ATTEMPTS = 5
+
+# 종류마다 봐주는 횟수가 다르다. 넘으면 접는다. 무한히 재시도하면 고쳐지지
+# 않는 대상에 비용이 나가고, 진짜 문제가 실패 목록에 드러나지 않는다.
+RETRY_LIMITS = {
+    FailureKind.CONTRACT_VIOLATION: 2,
+    FailureKind.API_ERROR: 5,
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -99,14 +109,7 @@ def resolve_failure(
     kind: FailureKind,
     attempts: int,
 ) -> PipelineEventStatus:
-    """실패한 일을 다시 큐에 둘지 접을지 정한다.
-
-    영구 실패는 한 번으로 접는다. 일시적 실패도 정해진 횟수를 넘으면 접는다.
-    무한히 재시도하면 고쳐지지 않는 대상에 비용이 계속 나가고, 진짜 문제가
-    실패 목록에 드러나지 않는다.
-    """
-    if kind is FailureKind.PERMANENT:
-        return PipelineEventStatus.FAILED
-    if attempts >= MAX_ATTEMPTS:
+    """실패한 일을 다시 큐에 둘지 접을지 정한다."""
+    if attempts >= RETRY_LIMITS[kind]:
         return PipelineEventStatus.FAILED
     return PipelineEventStatus.PENDING

@@ -27,7 +27,7 @@ from catchup.knowledge_maintenance.contracts.source_change import SourceChangeEn
 from catchup.knowledge_maintenance.domain.observation import NormalizedObservation
 from catchup.knowledge_maintenance.domain.observation import ObservationKind
 from catchup.knowledge_maintenance.domain.observation import content_hash
-from catchup.knowledge_maintenance.domain.pipeline_event import MAX_ATTEMPTS
+from catchup.knowledge_maintenance.domain.pipeline_event import RETRY_LIMITS
 from catchup.knowledge_maintenance.domain.pipeline_event import FailureKind
 from catchup.knowledge_maintenance.domain.pipeline_event import PipelineAggregateType
 from catchup.knowledge_maintenance.domain.pipeline_event import PipelineEventStatus
@@ -192,14 +192,15 @@ def test_the_same_target_is_queued_once(
     assert len(matching) == 1
 
 
-def test_a_permanent_failure_is_not_retried(
+def test_a_contract_violation_gets_a_few_more_tries(
     workspace_id: int,
     session_factory: Callable[[], Session],
     uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
 ) -> None:
-    """계약 위반은 다시 해도 같으므로 큐에서 접는다.
+    """계약 위반은 흔들림일 수 있으므로 곧바로 접지 않는다.
 
-    접지 않으면 고쳐지지 않는 문서에 매 주기마다 LLM 비용이 나간다.
+    같은 입력에 같은 프롬프트로 다시 돌려 성공한 사례가 실측으로 있다.
+    한 번에 접으면 멀쩡한 문서를 영영 버린다.
     """
     result = ingest_and_normalize(
         _envelope(workspace_id),
@@ -215,14 +216,27 @@ def test_a_permanent_failure_is_not_retried(
     with KnowledgeMaintenanceUnitOfWork(session_factory) as uow:
         settled = uow.pipeline_events.mark_failed(
             event_id=event.id,
-            kind=FailureKind.PERMANENT,
+            kind=FailureKind.CONTRACT_VIOLATION,
             error="계약 위반",
             now=NOW,
         )
         uow.commit()
 
-    assert settled.status is PipelineEventStatus.FAILED
+    assert settled.status is PipelineEventStatus.PENDING
     assert settled.attempts == 1
+
+    # 다만 API 오류보다 적게 봐준다. 프롬프트가 잘못됐다면 곧 포기해야 한다.
+    with KnowledgeMaintenanceUnitOfWork(session_factory) as uow:
+        settled = uow.pipeline_events.mark_failed(
+            event_id=event.id,
+            kind=FailureKind.CONTRACT_VIOLATION,
+            error="계약 위반",
+            now=NOW,
+        )
+        uow.commit()
+
+    assert settled.attempts == RETRY_LIMITS[FailureKind.CONTRACT_VIOLATION]
+    assert settled.status is PipelineEventStatus.FAILED
 
     remaining = {
         item.aggregate_id
@@ -251,7 +265,7 @@ def test_a_transient_failure_comes_back_after_a_backoff(
     with KnowledgeMaintenanceUnitOfWork(session_factory) as uow:
         settled = uow.pipeline_events.mark_failed(
             event_id=event.id,
-            kind=FailureKind.TRANSIENT,
+            kind=FailureKind.API_ERROR,
             error="ThrottlingException",
             now=NOW,
         )
@@ -292,17 +306,17 @@ def test_a_transient_failure_gives_up_eventually(
     )
 
     settled = None
-    for _ in range(MAX_ATTEMPTS):
+    for _ in range(RETRY_LIMITS[FailureKind.API_ERROR]):
         with KnowledgeMaintenanceUnitOfWork(session_factory) as uow:
             settled = uow.pipeline_events.mark_failed(
                 event_id=event.id,
-                kind=FailureKind.TRANSIENT,
+                kind=FailureKind.API_ERROR,
                 error="ThrottlingException",
                 now=NOW,
             )
             uow.commit()
 
-    assert settled.attempts == MAX_ATTEMPTS
+    assert settled.attempts == RETRY_LIMITS[FailureKind.API_ERROR]
     assert settled.status is PipelineEventStatus.FAILED
 
 
@@ -381,13 +395,16 @@ def test_backoff_grows_with_attempts() -> None:
     assert third == second * 2
 
 
-def test_failure_kind_decides_whether_to_retry() -> None:
-    assert resolve_failure(FailureKind.PERMANENT, 1) is PipelineEventStatus.FAILED
-    assert resolve_failure(FailureKind.TRANSIENT, 1) is PipelineEventStatus.PENDING
+def test_each_failure_kind_has_its_own_limit() -> None:
+    """계약 위반은 적게, API 오류는 많이 봐준다."""
     assert (
-        resolve_failure(FailureKind.TRANSIENT, MAX_ATTEMPTS)
-        is PipelineEventStatus.FAILED
+        RETRY_LIMITS[FailureKind.CONTRACT_VIOLATION]
+        < RETRY_LIMITS[FailureKind.API_ERROR]
     )
+
+    for kind, limit in RETRY_LIMITS.items():
+        assert resolve_failure(kind, limit - 1) is PipelineEventStatus.PENDING
+        assert resolve_failure(kind, limit) is PipelineEventStatus.FAILED
 
 
 def test_enqueue_is_idempotent_at_the_repository(

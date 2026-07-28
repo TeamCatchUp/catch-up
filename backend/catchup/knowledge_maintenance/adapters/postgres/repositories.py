@@ -7,8 +7,6 @@ from datetime import datetime
 from decimal import Decimal
 
 from sqlalchemy import ColumnElement
-from sqlalchemy import String
-from sqlalchemy import cast
 from sqlalchemy import func
 from sqlalchemy import select
 from sqlalchemy import update
@@ -211,46 +209,6 @@ class SqlAlchemyObservationRepository:
             )
         )
         return tuple(observation_to_domain(row) for row in rows)
-
-    def list_without_extraction_run(
-        self,
-        *,
-        workspace_id: int,
-        limit: int | None = None,
-    ) -> tuple[StoredObservation, ...]:
-        """아직 추출을 돌리지 않은 Observation을 찾는다.
-
-        node가 없는 Observation은 애초에 추출의 입력이 될 수 없으므로 여기서도
-        빠진다. `resource_id`가 문자열 컬럼이라 uuid를 캐스팅해 맞춘다.
-        """
-        node_join = (
-            (KnowledgeNodeRow.workspace_id == ObservationRow.workspace_id)
-            & (KnowledgeNodeRow.resource_type == NodeKind.OBSERVATION.value)
-            & (KnowledgeNodeRow.resource_id == cast(ObservationRow.id, String))
-        )
-        already_run = (
-            select(KnowledgeExtractionRunRow.id)
-            .where(
-                KnowledgeExtractionRunRow.workspace_id == workspace_id,
-                KnowledgeExtractionRunRow.input_node_id == KnowledgeNodeRow.id,
-            )
-            .exists()
-        )
-        statement = (
-            select(ObservationRow)
-            .join(KnowledgeNodeRow, node_join)
-            .where(
-                ObservationRow.workspace_id == workspace_id,
-                ~already_run,
-            )
-            .order_by(ObservationRow.created_at, ObservationRow.id)
-        )
-        if limit is not None:
-            statement = statement.limit(limit)
-
-        return tuple(
-            observation_to_domain(row) for row in self._session.scalars(statement)
-        )
 
     def add(
         self,
