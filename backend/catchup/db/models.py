@@ -7,6 +7,7 @@ from typing import Optional
 from pgvector.sqlalchemy import Vector
 from sqlalchemy import CheckConstraint
 from sqlalchemy import ForeignKey
+from sqlalchemy import ForeignKeyConstraint
 from sqlalchemy import Index
 from sqlalchemy import UniqueConstraint
 from sqlalchemy import func
@@ -3611,5 +3612,117 @@ class SourceVersion(Base):
             "source_updated_at",
             "observed_at",
             "created_at",
+        ),
+        # Observation이 (workspace_id, source_version_id)로 참조할 대상이다.
+        # workspace를 함께 묶어야 다른 workspace의 원문을 가리키는 행이
+        # 생기지 않는다.
+        UniqueConstraint(
+            "workspace_id",
+            "id",
+            name="uq_source_versions_workspace_id_id",
+        ),
+    )
+
+
+class Observation(Base):
+    """SourceVersion을 Extractor가 읽을 형태로 정규화한 결과를 보존한다.
+
+    SourceVersion과 1:1이 아니라 1:N이다. 정규화 규칙이 바뀌면 같은 원문에서
+    새 Observation을 만들 수 있어야 재추출 실험이 성립하기 때문이다. 어느
+    규칙으로 만들었는지는 normalizer_id와 normalizer_version이 밝힌다.
+    """
+
+    __tablename__ = "observations"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+    )
+    workspace_id: Mapped[int] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    source_version_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=False,
+    )
+
+    observation_kind: Mapped[str] = mapped_column(String(32), nullable=False)
+    normalized_content: Mapped[str | None] = mapped_column(Text, nullable=True)
+    normalized_content_hash: Mapped[str | None] = mapped_column(
+        String(64),
+        nullable=True,
+    )
+
+    normalizer_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    normalizer_version: Mapped[str] = mapped_column(String(64), nullable=False)
+
+    # 원문의 상태값이다. state·priority·tags처럼 대화 내용이 아닌 것을 담는다.
+    source_attributes: Mapped[dict[str, Any]] = mapped_column(
+        JSONB,
+        nullable=False,
+        default=dict,
+        server_default=text("'{}'::jsonb"),
+    )
+    # 결정론적 레이어가 source metadata에서 뽑은 Entity 후보다.
+    observation_metadata_entities: Mapped[list[Any]] = mapped_column(
+        "metadata_entities",
+        JSONB,
+        nullable=False,
+        default=list,
+        server_default=text("'[]'::jsonb"),
+    )
+    observation_metadata: Mapped[dict[str, Any]] = mapped_column(
+        "metadata",
+        JSONB,
+        nullable=False,
+        default=dict,
+        server_default=text("'{}'::jsonb"),
+    )
+
+    # 원문에서 일이 일어난 시각이다. Claim의 valid_from이 여기서 나온다.
+    occurred_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["workspace_id", "source_version_id"],
+            ["source_versions.workspace_id", "source_versions.id"],
+            name="fk_observations_source_version",
+            ondelete="CASCADE",
+        ),
+        UniqueConstraint(
+            "source_version_id",
+            "normalizer_id",
+            "normalizer_version",
+            name="uq_observations_source_version_normalizer",
+        ),
+        CheckConstraint(
+            "observation_kind IN ('document', 'tombstone')",
+            name="ck_observations_observation_kind",
+        ),
+        CheckConstraint(
+            "("
+            "observation_kind = 'tombstone' "
+            "AND normalized_content IS NULL "
+            "AND normalized_content_hash IS NULL"
+            ") OR ("
+            "observation_kind = 'document' "
+            "AND normalized_content IS NOT NULL "
+            "AND normalized_content_hash IS NOT NULL"
+            ")",
+            name="ck_observations_content_by_kind",
+        ),
+        CheckConstraint(
+            "normalized_content_hash IS NULL "
+            "OR char_length(normalized_content_hash) = 64",
+            name="ck_observations_content_hash_length",
         ),
     )
