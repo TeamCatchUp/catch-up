@@ -1,10 +1,10 @@
 """평가 원문으로 Extraction을 한 번 돌려 관찰한다.
 
-이것은 평가가 아니라 **관찰**이다. 정답과 대조하지 않고, 어휘 제약 없이
-자유 추출해서 무엇이 나오는지 본다. 보려는 것은 셋이다.
+평가가 아니라 관찰이 목적이다. 정답과 대조하지 않고, 어휘 제약 없이
+자유 추출해서 무엇이 나오는지 본다. 보려는 것은 세 가지이다.
 
-1. Claim이 `subject + predicate + value`로 떨어지는가
-2. 어떤 predicate가 실제로 나오는가 (어휘 v1의 재료)
+1. Claim이 'subject + predicate + value'로 떨어지는가
+2. 어떤 predicate가 실제로 나오는가
 3. 계약을 위반하는 출력이 얼마나 되는가
 
 원문은 jira·slack·github·confluence의 트러블슈팅 기록이라 ChannelTalk
