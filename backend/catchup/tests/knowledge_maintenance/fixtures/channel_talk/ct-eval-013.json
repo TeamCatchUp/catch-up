@@ -1,0 +1,373 @@
+{
+  "schema_version": 1,
+  "detail": {
+    "channel_id": "ch-catchup-eval",
+    "user_chat_id": "ct-eval-013",
+    "state": "closed",
+    "managed": true,
+    "name": "GitHub에서 일부 저장소만 연결하고 싶어요",
+    "customer": {
+      "channel_id": "ch-catchup-eval",
+      "external_user_id": "user-8aab07625433",
+      "user_type": "user",
+      "name": "사용자 013"
+    },
+    "assignment": {
+      "manager_ids": [
+        "manager-b6421e72a20c"
+      ],
+      "managers": [
+        {
+          "manager_id": "manager-b6421e72a20c",
+          "name": "캐치업 팀",
+          "email": "manager-b6421e72a20c@example.com"
+        }
+      ]
+    },
+    "timing": {
+      "created_at": "2026-06-14T09:00:00Z",
+      "updated_at": "2026-06-14T09:32:00Z",
+      "first_opened_at": "2026-06-14T09:00:00Z",
+      "opened_at": "2026-06-14T09:00:00Z",
+      "first_asked_at": "2026-06-14T09:04:00Z",
+      "first_replied_at": "2026-06-14T09:06:00Z",
+      "first_replied_at_after_open": "2026-06-14T09:06:00Z",
+      "front_updated_at": "2026-06-14T09:32:00Z",
+      "closed_at": "2026-06-14T09:32:00Z"
+    },
+    "metrics": {
+      "waiting_time": 120000,
+      "avg_reply_time": 120000,
+      "total_reply_time": 720000,
+      "reply_count": 7
+    },
+    "anchors": {
+      "front_message_id": "ct-eval-013-m16",
+      "user_last_message_id": "ct-eval-013-m15"
+    },
+    "tags": [
+      {
+        "key": "GitHub",
+        "name": "GitHub"
+      },
+      {
+        "key": "연동 문의",
+        "name": "연동 문의"
+      }
+    ]
+  },
+  "messages": [
+    {
+      "message_id": "ct-eval-013-m01",
+      "user_chat_id": "ct-eval-013",
+      "message_type": "log",
+      "person_type": "customer",
+      "author": {
+        "author_type": "customer",
+        "user_id": "user-8aab07625433",
+        "name": "사용자 013",
+        "is_bot": false
+      },
+      "plain_text": "open",
+      "created_at": "2026-06-14T09:02:00Z",
+      "updated_at": "2026-06-14T09:02:00Z",
+      "is_private": false,
+      "attachments": [],
+      "buttons": [],
+      "blocks": [],
+      "log": {
+        "action": "open",
+        "log_type": "userChat"
+      }
+    },
+    {
+      "message_id": "ct-eval-013-m02",
+      "user_chat_id": "ct-eval-013",
+      "message_type": "default",
+      "person_type": "customer",
+      "author": {
+        "author_type": "customer",
+        "user_id": "user-8aab07625433",
+        "name": "사용자 013",
+        "is_bot": false
+      },
+      "plain_text": "GitHub 조직 전체 말고 특정 저장소 세 개만 연결할 수 있나요?",
+      "created_at": "2026-06-14T09:04:00Z",
+      "updated_at": "2026-06-14T09:04:00Z",
+      "is_private": false,
+      "attachments": [],
+      "buttons": [],
+      "blocks": []
+    },
+    {
+      "message_id": "ct-eval-013-m03",
+      "user_chat_id": "ct-eval-013",
+      "message_type": "default",
+      "person_type": "manager",
+      "author": {
+        "author_type": "manager",
+        "manager_id": "manager-b6421e72a20c",
+        "name": "캐치업 팀",
+        "is_bot": false
+      },
+      "plain_text": "네, 연결 권한을 줄 때 허용할 저장소를 선택할 수 있습니다.",
+      "created_at": "2026-06-14T09:06:00Z",
+      "updated_at": "2026-06-14T09:06:00Z",
+      "is_private": false,
+      "attachments": [],
+      "buttons": [],
+      "blocks": []
+    },
+    {
+      "message_id": "ct-eval-013-m04",
+      "user_chat_id": "ct-eval-013",
+      "message_type": "default",
+      "person_type": "customer",
+      "author": {
+        "author_type": "customer",
+        "user_id": "user-8aab07625433",
+        "name": "사용자 013",
+        "is_bot": false
+      },
+      "plain_text": "처음에 전체 저장소로 연결했는데 지금 일부만 남기고 싶습니다.",
+      "created_at": "2026-06-14T09:08:00Z",
+      "updated_at": "2026-06-14T09:08:00Z",
+      "is_private": false,
+      "attachments": [],
+      "buttons": [],
+      "blocks": []
+    },
+    {
+      "message_id": "ct-eval-013-m05",
+      "user_chat_id": "ct-eval-013",
+      "message_type": "default",
+      "person_type": "manager",
+      "author": {
+        "author_type": "manager",
+        "manager_id": "manager-b6421e72a20c",
+        "name": "캐치업 팀",
+        "is_bot": false
+      },
+      "plain_text": "GitHub의 설치 설정에서 접근 가능한 저장소를 변경한 뒤 캐치업에서 동기화 상태를 확인해주세요.",
+      "created_at": "2026-06-14T09:10:00Z",
+      "updated_at": "2026-06-14T09:10:00Z",
+      "is_private": false,
+      "attachments": [],
+      "buttons": [],
+      "blocks": []
+    },
+    {
+      "message_id": "ct-eval-013-m06",
+      "user_chat_id": "ct-eval-013",
+      "message_type": "default",
+      "person_type": "customer",
+      "author": {
+        "author_type": "customer",
+        "user_id": "user-8aab07625433",
+        "name": "사용자 013",
+        "is_bot": false
+      },
+      "plain_text": "설정은 바꿨는데 기존에 검색되던 다른 저장소 내용이 아직 나옵니다.",
+      "created_at": "2026-06-14T09:12:00Z",
+      "updated_at": "2026-06-14T09:12:00Z",
+      "is_private": false,
+      "attachments": [],
+      "buttons": [],
+      "blocks": []
+    },
+    {
+      "message_id": "ct-eval-013-m07",
+      "user_chat_id": "ct-eval-013",
+      "message_type": "default",
+      "person_type": "manager",
+      "author": {
+        "author_type": "manager",
+        "manager_id": "manager-b6421e72a20c",
+        "name": "캐치업 팀",
+        "is_bot": false
+      },
+      "plain_text": "권한 변경과 기존 색인 정리가 바로 같은 시점에 끝나지 않을 수 있습니다. 변경한 시간이 언제인가요?",
+      "created_at": "2026-06-14T09:14:00Z",
+      "updated_at": "2026-06-14T09:14:00Z",
+      "is_private": false,
+      "attachments": [],
+      "buttons": [],
+      "blocks": []
+    },
+    {
+      "message_id": "ct-eval-013-m08",
+      "user_chat_id": "ct-eval-013",
+      "message_type": "default",
+      "person_type": "customer",
+      "author": {
+        "author_type": "customer",
+        "user_id": "user-8aab07625433",
+        "name": "사용자 013",
+        "is_bot": false
+      },
+      "plain_text": "10분 전입니다.",
+      "created_at": "2026-06-14T09:16:00Z",
+      "updated_at": "2026-06-14T09:16:00Z",
+      "is_private": false,
+      "attachments": [],
+      "buttons": [],
+      "blocks": []
+    },
+    {
+      "message_id": "ct-eval-013-m09",
+      "user_chat_id": "ct-eval-013",
+      "message_type": "default",
+      "person_type": "manager",
+      "author": {
+        "author_type": "manager",
+        "manager_id": "manager-b6421e72a20c",
+        "name": "캐치업 팀",
+        "is_bot": false
+      },
+      "plain_text": "잠시 뒤 다시 확인해주시고, 계속 노출되면 조직 이름과 문제가 되는 저장소 이름을 알려주세요.",
+      "created_at": "2026-06-14T09:18:00Z",
+      "updated_at": "2026-06-14T09:18:00Z",
+      "is_private": false,
+      "attachments": [],
+      "buttons": [],
+      "blocks": []
+    },
+    {
+      "message_id": "ct-eval-013-m10",
+      "user_chat_id": "ct-eval-013",
+      "message_type": "default",
+      "person_type": "customer",
+      "author": {
+        "author_type": "customer",
+        "user_id": "user-8aab07625433",
+        "name": "사용자 013",
+        "is_bot": false
+      },
+      "plain_text": "삭제된 저장소 내용이 새 답변에 인용되면 보안 문제가 될 수 있어서요.",
+      "created_at": "2026-06-14T09:20:00Z",
+      "updated_at": "2026-06-14T09:20:00Z",
+      "is_private": false,
+      "attachments": [],
+      "buttons": [],
+      "blocks": []
+    },
+    {
+      "message_id": "ct-eval-013-m11",
+      "user_chat_id": "ct-eval-013",
+      "message_type": "default",
+      "person_type": "manager",
+      "author": {
+        "author_type": "manager",
+        "manager_id": "manager-b6421e72a20c",
+        "name": "캐치업 팀",
+        "is_bot": false
+      },
+      "plain_text": "맞습니다. 우선 해당 공간의 사용을 잠시 멈추고, 저희가 색인 제거 상태를 확인하겠습니다.",
+      "created_at": "2026-06-14T09:22:00Z",
+      "updated_at": "2026-06-14T09:22:00Z",
+      "is_private": false,
+      "attachments": [],
+      "buttons": [],
+      "blocks": []
+    },
+    {
+      "message_id": "ct-eval-013-m12",
+      "user_chat_id": "ct-eval-013",
+      "message_type": "default",
+      "person_type": "customer",
+      "author": {
+        "author_type": "customer",
+        "user_id": "user-8aab07625433",
+        "name": "사용자 013",
+        "is_bot": false
+      },
+      "plain_text": "조직명과 저장소명은 내부 메시지로 보냈습니다.",
+      "created_at": "2026-06-14T09:24:00Z",
+      "updated_at": "2026-06-14T09:24:00Z",
+      "is_private": false,
+      "attachments": [],
+      "buttons": [],
+      "blocks": []
+    },
+    {
+      "message_id": "ct-eval-013-m13",
+      "user_chat_id": "ct-eval-013",
+      "message_type": "default",
+      "person_type": "manager",
+      "author": {
+        "author_type": "manager",
+        "manager_id": "manager-b6421e72a20c",
+        "name": "캐치업 팀",
+        "is_bot": false
+      },
+      "plain_text": "권한 축소 후 기존 색인 제거 상태 확인 요청",
+      "created_at": "2026-06-14T09:26:00Z",
+      "updated_at": "2026-06-14T09:26:00Z",
+      "is_private": true,
+      "attachments": [],
+      "buttons": [],
+      "blocks": []
+    },
+    {
+      "message_id": "ct-eval-013-m14",
+      "user_chat_id": "ct-eval-013",
+      "message_type": "default",
+      "person_type": "manager",
+      "author": {
+        "author_type": "manager",
+        "manager_id": "manager-b6421e72a20c",
+        "name": "캐치업 팀",
+        "is_bot": false
+      },
+      "plain_text": "정보 확인했습니다. 처리 상태를 점검한 뒤 이 대화로 안내드리겠습니다.",
+      "created_at": "2026-06-14T09:28:00Z",
+      "updated_at": "2026-06-14T09:28:00Z",
+      "is_private": false,
+      "attachments": [],
+      "buttons": [],
+      "blocks": []
+    },
+    {
+      "message_id": "ct-eval-013-m15",
+      "user_chat_id": "ct-eval-013",
+      "message_type": "default",
+      "person_type": "customer",
+      "author": {
+        "author_type": "customer",
+        "user_id": "user-8aab07625433",
+        "name": "사용자 013",
+        "is_bot": false
+      },
+      "plain_text": "네.",
+      "created_at": "2026-06-14T09:30:00Z",
+      "updated_at": "2026-06-14T09:30:00Z",
+      "is_private": false,
+      "attachments": [],
+      "buttons": [],
+      "blocks": []
+    },
+    {
+      "message_id": "ct-eval-013-m16",
+      "user_chat_id": "ct-eval-013",
+      "message_type": "log",
+      "person_type": "manager",
+      "author": {
+        "author_type": "manager",
+        "manager_id": "manager-b6421e72a20c",
+        "name": "캐치업 팀",
+        "is_bot": false
+      },
+      "plain_text": "close",
+      "created_at": "2026-06-14T09:32:00Z",
+      "updated_at": "2026-06-14T09:32:00Z",
+      "is_private": false,
+      "attachments": [],
+      "buttons": [],
+      "blocks": [],
+      "log": {
+        "action": "close",
+        "log_type": "userChat"
+      }
+    }
+  ]
+}
