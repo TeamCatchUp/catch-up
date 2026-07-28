@@ -431,3 +431,49 @@ def test_enqueue_is_idempotent_at_the_repository(
 
     assert first is not None
     assert second is None
+
+
+def test_a_tombstone_does_not_enter_the_extraction_queue(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+) -> None:
+    """삭제 표식은 추출 대상이 아니다.
+
+    본문이 없어 Extractor가 계약 위반을 내고, 재시도 끝에 실패로 남을 뿐
+    아무 일도 일어나지 않는다. 삭제는 빈 문서에서 지식을 뽑는 일이 아니라
+    기존 근거가 사라졌다는 사건이며, 무효화는 Resolution의 몫이다.
+    """
+
+    class _TombstoneNormalizer:
+        normalizer_id = "test.tombstone"
+        normalizer_version = "1"
+
+        def normalize(
+            self,
+            source_version: SourceVersion,
+        ) -> NormalizedObservation:
+            return NormalizedObservation(
+                normalizer_id=self.normalizer_id,
+                normalizer_version=self.normalizer_version,
+                observation_kind=ObservationKind.TOMBSTONE,
+                content=None,
+                content_hash=None,
+            )
+
+    # model_copy는 검증을 하지 않아 enum이 문자열로 남는다. 다시 만든다.
+    base = _envelope(workspace_id).model_dump(mode="json")
+    base.update(change_kind="deleted", content=None, content_type=None)
+    envelope = SourceChangeEnvelope.model_validate(base)
+
+    result = ingest_and_normalize(
+        envelope,
+        normalizer=_TombstoneNormalizer(),
+        uow=uow_factory(),
+    )
+
+    # Observation 자체는 남는다. 무효화의 근거가 되어야 하기 때문이다.
+    assert result.observation_id is not None
+
+    queued = {item.aggregate_id for item in _claim(session_factory, workspace_id)}
+    assert result.observation_id not in queued

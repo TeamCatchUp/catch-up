@@ -27,6 +27,7 @@ from typing import Protocol
 from typing import Self
 
 from catchup.knowledge_maintenance.contracts.source_change import SourceChangeEnvelope
+from catchup.knowledge_maintenance.domain.observation import ObservationKind
 from catchup.knowledge_maintenance.domain.pipeline_event import PipelineAggregateType
 from catchup.knowledge_maintenance.domain.pipeline_event import PipelineEventType
 from catchup.knowledge_maintenance.ports.knowledge_nodes import KnowledgeNodeRepository
@@ -111,12 +112,21 @@ def ingest_and_normalize(
         )
         # 같은 transaction에서 다음 단계 지시를 적는다. 원문이 확정됐는데
         # 처리하라는 지시만 유실되는 경우를 없앤다.
-        queued = uow.pipeline_events.enqueue(
-            workspace_id=envelope.workspace_id,
-            event_type=PipelineEventType.OBSERVATION_READY,
-            aggregate_type=PipelineAggregateType.OBSERVATION,
-            aggregate_id=normalized.observation.id,
-        )
+        #
+        # 삭제 표식은 추출 대상이 아니다. 본문이 없어 Extractor가 계약 위반을
+        # 내고, 재시도 끝에 실패로 남을 뿐 아무 일도 일어나지 않는다. 삭제는
+        # 빈 문서에서 지식을 뽑는 일이 아니라 기존 근거가 사라졌다는 사건이며,
+        # 그 무효화는 Resolution이 tombstone Observation을 보고 처리한다.
+        queued = None
+        if normalized.observation.observation.observation_kind is not (
+            ObservationKind.TOMBSTONE
+        ):
+            queued = uow.pipeline_events.enqueue(
+                workspace_id=envelope.workspace_id,
+                event_type=PipelineEventType.OBSERVATION_READY,
+                aggregate_type=PipelineAggregateType.OBSERVATION,
+                aggregate_id=normalized.observation.id,
+            )
         uow.commit()
 
     logger.info(
