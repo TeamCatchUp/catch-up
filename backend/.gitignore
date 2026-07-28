@@ -11,3 +11,6 @@ Claude.md
 *.csv
 
 **/data/
+
+# 실험 산출물 — 코드는 커밋하되 결과 파일은 제외한다
+catchup/experiments/**/output/
