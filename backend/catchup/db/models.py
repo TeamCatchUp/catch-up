@@ -1,5 +1,6 @@
 import uuid
 from datetime import datetime
+from decimal import Decimal
 from enum import StrEnum
 from typing import Any
 from typing import Optional
@@ -25,6 +26,7 @@ from sqlalchemy.types import BigInteger
 from sqlalchemy.types import Boolean
 from sqlalchemy.types import DateTime
 from sqlalchemy.types import Integer
+from sqlalchemy.types import Numeric
 from sqlalchemy.types import String
 from sqlalchemy.types import Text
 
@@ -3845,5 +3847,586 @@ class KnowledgeNode(Base):
             "workspace_id",
             "node_kind",
             "lifecycle_state",
+        ),
+    )
+
+
+class KnowledgeExtractionRun(Base):
+    """Extractor를 한 번 돌린 기록을 남긴다.
+
+    LLM 호출 전에 이 row를 먼저 확보한다. 중복 실행을 막고 재시도의 기준점이
+    되기 때문이다. 무엇을 입력으로 삼았는지는 `input_node_id`가 가리키는
+    Observation node가 말한다.
+    """
+
+    __tablename__ = "knowledge_extraction_runs"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+    )
+    workspace_id: Mapped[int] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    input_node_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=False,
+    )
+
+    provider: Mapped[str] = mapped_column(String(64), nullable=False)
+    model: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    extractor_version: Mapped[str] = mapped_column(String(128), nullable=False)
+    prompt_version: Mapped[str | None] = mapped_column(String(128), nullable=True)
+
+    status: Mapped[str] = mapped_column(String(16), nullable=False)
+    # 계약을 어긴 출력도 남긴다. 무엇이 왜 거부됐는지가 성공만큼 중요하다.
+    raw_output: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    started_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+    )
+    completed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "workspace_id",
+            "id",
+            name="uq_knowledge_extraction_runs_workspace_id_id",
+        ),
+        ForeignKeyConstraint(
+            ["workspace_id", "input_node_id"],
+            ["knowledge_nodes.workspace_id", "knowledge_nodes.id"],
+            name="fk_knowledge_extraction_runs_input_node",
+        ),
+        CheckConstraint(
+            "status IN ('running', 'succeeded', 'failed')",
+            name="ck_knowledge_extraction_runs_status",
+        ),
+        Index(
+            "ix_knowledge_extraction_runs_input_node",
+            "workspace_id",
+            "input_node_id",
+            "started_at",
+        ),
+    )
+
+
+class KnowledgeEntityCandidate(Base):
+    """이름과 type을 가진 대상 identity 후보를 보존한다.
+
+    아직 canonical Entity가 아니다. resolution과 승인을 지나야 node가 된다.
+    `extraction_method`가 결정론적 레이어의 산출물과 LLM 추출을 가른다.
+    """
+
+    __tablename__ = "knowledge_entity_candidates"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+    )
+    workspace_id: Mapped[int] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    extraction_run_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=False,
+    )
+    # 한 번의 추출 안에서만 유효한 참조 키다. Extractor가 지은 이름을 보존해
+    # 나중에 원본 출력과 대조할 수 있게 한다.
+    local_key: Mapped[str] = mapped_column(String(255), nullable=False)
+
+    proposed_type: Mapped[str] = mapped_column(String(128), nullable=False)
+    proposed_name: Mapped[str] = mapped_column(Text, nullable=False)
+
+    extraction_method: Mapped[str] = mapped_column(String(16), nullable=False)
+    confidence: Mapped[Decimal | None] = mapped_column(Numeric, nullable=True)
+    raw_payload: Mapped[dict[str, Any]] = mapped_column(
+        JSONB,
+        nullable=False,
+        default=dict,
+        server_default=text("'{}'::jsonb"),
+    )
+
+    resolution_status: Mapped[str] = mapped_column(
+        String(16),
+        nullable=False,
+        default="pending",
+        server_default=text("'pending'"),
+    )
+    resolved_node_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "workspace_id",
+            "id",
+            name="uq_knowledge_entity_candidates_workspace_id_id",
+        ),
+        ForeignKeyConstraint(
+            ["workspace_id", "extraction_run_id"],
+            [
+                "knowledge_extraction_runs.workspace_id",
+                "knowledge_extraction_runs.id",
+            ],
+            name="fk_knowledge_entity_candidates_run",
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["workspace_id", "resolved_node_id"],
+            ["knowledge_nodes.workspace_id", "knowledge_nodes.id"],
+            name="fk_knowledge_entity_candidates_resolved_node",
+        ),
+        UniqueConstraint(
+            "extraction_run_id",
+            "local_key",
+            name="uq_knowledge_entity_candidates_run_local_key",
+        ),
+        CheckConstraint(
+            "extraction_method IN ('deterministic', 'llm')",
+            name="ck_knowledge_entity_candidates_extraction_method",
+        ),
+        CheckConstraint(
+            "resolution_status IN ('pending', 'accepted', 'merged', 'rejected')",
+            name="ck_knowledge_entity_candidates_resolution_status",
+        ),
+    )
+
+
+class KnowledgeClaimCandidate(Base):
+    """Entity가 가진 값에 대한 주장 후보를 보존한다.
+
+    자유 텍스트가 아니라 `subject + predicate + value` 구조로 둔다. 승인 전에도
+    검색과 중복·충돌 판정을 해야 하고, 그 판정이 subject와 predicate의 일치로
+    정의되기 때문이다.
+
+    subject는 같은 run에서 나온 entity candidate이거나 이미 존재하는 canonical
+    node다. 둘 중 정확히 하나만 값을 갖는다.
+    """
+
+    __tablename__ = "knowledge_claim_candidates"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+    )
+    workspace_id: Mapped[int] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    extraction_run_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=False,
+    )
+    local_key: Mapped[str] = mapped_column(String(255), nullable=False)
+
+    subject_entity_candidate_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=True,
+    )
+    subject_node_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=True,
+    )
+
+    predicate: Mapped[str] = mapped_column(String(128), nullable=False)
+    value_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    value: Mapped[Any] = mapped_column(JSONB, nullable=False)
+    # 같은 주장인지 비교할 때 JSON 표현의 사소한 차이를 무시하려고 둔다.
+    value_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    statement: Mapped[str] = mapped_column(Text, nullable=False)
+
+    valid_from: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    valid_to: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    # 어느 어휘 스냅샷으로 뽑았는지를 남긴다. 나중에 어휘가 바뀌어도 과거
+    # candidate가 어떤 규칙 아래 만들어졌는지 되짚을 수 있다.
+    ontology_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    ontology_version: Mapped[str] = mapped_column(String(64), nullable=False)
+
+    extraction_method: Mapped[str] = mapped_column(String(16), nullable=False)
+    confidence: Mapped[Decimal | None] = mapped_column(Numeric, nullable=True)
+    raw_payload: Mapped[dict[str, Any]] = mapped_column(
+        JSONB,
+        nullable=False,
+        default=dict,
+        server_default=text("'{}'::jsonb"),
+    )
+
+    resolution_status: Mapped[str] = mapped_column(
+        String(16),
+        nullable=False,
+        default="pending",
+        server_default=text("'pending'"),
+    )
+    resolved_claim_node_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "workspace_id",
+            "id",
+            name="uq_knowledge_claim_candidates_workspace_id_id",
+        ),
+        ForeignKeyConstraint(
+            ["workspace_id", "extraction_run_id"],
+            [
+                "knowledge_extraction_runs.workspace_id",
+                "knowledge_extraction_runs.id",
+            ],
+            name="fk_knowledge_claim_candidates_run",
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["workspace_id", "subject_entity_candidate_id"],
+            [
+                "knowledge_entity_candidates.workspace_id",
+                "knowledge_entity_candidates.id",
+            ],
+            name="fk_knowledge_claim_candidates_subject_candidate",
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["workspace_id", "subject_node_id"],
+            ["knowledge_nodes.workspace_id", "knowledge_nodes.id"],
+            name="fk_knowledge_claim_candidates_subject_node",
+        ),
+        ForeignKeyConstraint(
+            ["workspace_id", "resolved_claim_node_id"],
+            ["knowledge_nodes.workspace_id", "knowledge_nodes.id"],
+            name="fk_knowledge_claim_candidates_resolved_node",
+        ),
+        UniqueConstraint(
+            "extraction_run_id",
+            "local_key",
+            name="uq_knowledge_claim_candidates_run_local_key",
+        ),
+        CheckConstraint(
+            "(subject_entity_candidate_id IS NULL) "
+            "<> (subject_node_id IS NULL)",
+            name="ck_knowledge_claim_candidates_subject_exactly_one",
+        ),
+        CheckConstraint(
+            "extraction_method IN ('deterministic', 'llm')",
+            name="ck_knowledge_claim_candidates_extraction_method",
+        ),
+        CheckConstraint(
+            "resolution_status IN ('pending', 'accepted', 'duplicate', 'rejected')",
+            name="ck_knowledge_claim_candidates_resolution_status",
+        ),
+        CheckConstraint(
+            "valid_to IS NULL OR valid_from IS NULL OR valid_to > valid_from",
+            name="ck_knowledge_claim_candidates_valid_range",
+        ),
+        Index(
+            "ix_knowledge_claim_candidates_lookup",
+            "workspace_id",
+            "predicate",
+            "value_hash",
+        ),
+    )
+
+
+class KnowledgeRelationAssertionCandidate(Base):
+    """두 Entity 사이의 관계 주장 후보를 보존한다.
+
+    양 끝은 같은 run에서 나온 entity candidate이거나 이미 존재하는 canonical
+    node다. 각 끝에서 둘 중 정확히 하나만 값을 갖는다.
+
+    Extractor가 만드는 관계는 Entity 사이로 제한한다. Claim 사이의 모순이나
+    lineage는 canonical identity가 생긴 뒤 system operation으로 만든다.
+    """
+
+    __tablename__ = "knowledge_relation_assertion_candidates"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+    )
+    workspace_id: Mapped[int] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    extraction_run_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=False,
+    )
+    local_key: Mapped[str] = mapped_column(String(255), nullable=False)
+
+    source_entity_candidate_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=True,
+    )
+    source_node_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=True,
+    )
+    target_entity_candidate_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=True,
+    )
+    target_node_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=True,
+    )
+
+    relation_type: Mapped[str] = mapped_column(String(128), nullable=False)
+    assertion_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    valid_from: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    valid_to: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    extraction_method: Mapped[str] = mapped_column(String(16), nullable=False)
+    confidence: Mapped[Decimal | None] = mapped_column(Numeric, nullable=True)
+    raw_payload: Mapped[dict[str, Any]] = mapped_column(
+        JSONB,
+        nullable=False,
+        default=dict,
+        server_default=text("'{}'::jsonb"),
+    )
+
+    resolution_status: Mapped[str] = mapped_column(
+        String(16),
+        nullable=False,
+        default="pending",
+        server_default=text("'pending'"),
+    )
+    resolved_relation_node_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "workspace_id",
+            "id",
+            name="uq_knowledge_relation_candidates_workspace_id_id",
+        ),
+        ForeignKeyConstraint(
+            ["workspace_id", "extraction_run_id"],
+            [
+                "knowledge_extraction_runs.workspace_id",
+                "knowledge_extraction_runs.id",
+            ],
+            name="fk_knowledge_relation_candidates_run",
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["workspace_id", "source_entity_candidate_id"],
+            [
+                "knowledge_entity_candidates.workspace_id",
+                "knowledge_entity_candidates.id",
+            ],
+            name="fk_knowledge_relation_candidates_source_candidate",
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["workspace_id", "target_entity_candidate_id"],
+            [
+                "knowledge_entity_candidates.workspace_id",
+                "knowledge_entity_candidates.id",
+            ],
+            name="fk_knowledge_relation_candidates_target_candidate",
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["workspace_id", "source_node_id"],
+            ["knowledge_nodes.workspace_id", "knowledge_nodes.id"],
+            name="fk_knowledge_relation_candidates_source_node",
+        ),
+        ForeignKeyConstraint(
+            ["workspace_id", "target_node_id"],
+            ["knowledge_nodes.workspace_id", "knowledge_nodes.id"],
+            name="fk_knowledge_relation_candidates_target_node",
+        ),
+        ForeignKeyConstraint(
+            ["workspace_id", "resolved_relation_node_id"],
+            ["knowledge_nodes.workspace_id", "knowledge_nodes.id"],
+            name="fk_knowledge_relation_candidates_resolved_node",
+        ),
+        UniqueConstraint(
+            "extraction_run_id",
+            "local_key",
+            name="uq_knowledge_relation_candidates_run_local_key",
+        ),
+        CheckConstraint(
+            "(source_entity_candidate_id IS NULL) <> (source_node_id IS NULL)",
+            name="ck_knowledge_relation_candidates_source_exactly_one",
+        ),
+        CheckConstraint(
+            "(target_entity_candidate_id IS NULL) <> (target_node_id IS NULL)",
+            name="ck_knowledge_relation_candidates_target_exactly_one",
+        ),
+        CheckConstraint(
+            "extraction_method IN ('deterministic', 'llm')",
+            name="ck_knowledge_relation_candidates_extraction_method",
+        ),
+        CheckConstraint(
+            "resolution_status IN ('pending', 'accepted', 'duplicate', 'rejected')",
+            name="ck_knowledge_relation_candidates_resolution_status",
+        ),
+        CheckConstraint(
+            "valid_to IS NULL OR valid_from IS NULL OR valid_to > valid_from",
+            name="ck_knowledge_relation_candidates_valid_range",
+        ),
+    )
+
+
+class KnowledgeCandidateEvidenceLink(Base):
+    """Candidate가 어떤 Observation에서 나왔는지 잇는다.
+
+    네 번째 Candidate 유형이 아니라 보조 record다. 세 종류의 candidate 중
+    정확히 하나만 가리킨다.
+
+    `excerpt`와 `locator`는 비워도 된다. Entity와 RelationAssertion은 문서
+    단위 근거로 충분하고, Claim은 서버가 근거 문구를 본문에서 다시 찾아
+    위치를 계산한다. 찾지 못하면 문서 단위로 낮춘다.
+    """
+
+    __tablename__ = "knowledge_candidate_evidence_links"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+    )
+    workspace_id: Mapped[int] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    extraction_run_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=False,
+    )
+
+    entity_candidate_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=True,
+    )
+    claim_candidate_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=True,
+    )
+    relation_assertion_candidate_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=True,
+    )
+
+    evidence_node_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=False,
+    )
+    evidence_role: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+        default="supports",
+        server_default=text("'supports'"),
+    )
+    excerpt: Mapped[str | None] = mapped_column(Text, nullable=True)
+    locator: Mapped[dict[str, Any]] = mapped_column(
+        JSONB,
+        nullable=False,
+        default=dict,
+        server_default=text("'{}'::jsonb"),
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["workspace_id", "extraction_run_id"],
+            [
+                "knowledge_extraction_runs.workspace_id",
+                "knowledge_extraction_runs.id",
+            ],
+            name="fk_knowledge_candidate_evidence_links_run",
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["workspace_id", "entity_candidate_id"],
+            [
+                "knowledge_entity_candidates.workspace_id",
+                "knowledge_entity_candidates.id",
+            ],
+            name="fk_knowledge_candidate_evidence_links_entity",
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["workspace_id", "claim_candidate_id"],
+            [
+                "knowledge_claim_candidates.workspace_id",
+                "knowledge_claim_candidates.id",
+            ],
+            name="fk_knowledge_candidate_evidence_links_claim",
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["workspace_id", "relation_assertion_candidate_id"],
+            [
+                "knowledge_relation_assertion_candidates.workspace_id",
+                "knowledge_relation_assertion_candidates.id",
+            ],
+            name="fk_knowledge_candidate_evidence_links_relation",
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["workspace_id", "evidence_node_id"],
+            ["knowledge_nodes.workspace_id", "knowledge_nodes.id"],
+            name="fk_knowledge_candidate_evidence_links_evidence_node",
+        ),
+        CheckConstraint(
+            "num_nonnulls("
+            "entity_candidate_id, "
+            "claim_candidate_id, "
+            "relation_assertion_candidate_id"
+            ") = 1",
+            name="ck_knowledge_candidate_evidence_links_exactly_one_target",
+        ),
+        CheckConstraint(
+            "evidence_role IN ('supports', 'contradicts')",
+            name="ck_knowledge_candidate_evidence_links_role",
+        ),
+        Index(
+            "ix_knowledge_candidate_evidence_links_evidence_node",
+            "workspace_id",
+            "evidence_node_id",
         ),
     )
