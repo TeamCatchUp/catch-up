@@ -3910,6 +3910,16 @@ class KnowledgeExtractionRun(Base):
             ["knowledge_nodes.workspace_id", "knowledge_nodes.id"],
             name="fk_knowledge_extraction_runs_input_node",
         ),
+        # 존재하지 않는 어휘를 가리키는 실행이 생기지 않게 한다.
+        ForeignKeyConstraint(
+            ["workspace_id", "ontology_id", "ontology_version"],
+            [
+                "knowledge_ontology_snapshots.workspace_id",
+                "knowledge_ontology_snapshots.ontology_id",
+                "knowledge_ontology_snapshots.version",
+            ],
+            name="fk_knowledge_extraction_runs_ontology",
+        ),
         CheckConstraint(
             "status IN ('running', 'succeeded', 'failed')",
             name="ck_knowledge_extraction_runs_status",
@@ -4434,5 +4444,58 @@ class KnowledgeCandidateEvidenceLink(Base):
             "ix_knowledge_candidate_evidence_links_evidence_node",
             "workspace_id",
             "evidence_node_id",
+        ),
+    )
+
+
+class KnowledgeOntologySnapshot(Base):
+    """추출이 따른 어휘 목록을 그 시점 그대로 보존한다.
+
+    `extraction_runs.ontology_version`이 이 행을 가리킨다. 스냅샷을 남기지
+    않으면 버전 문자열만 있고 그것이 어떤 어휘였는지 알 수 없어, 나중에 어휘를
+    통합할 때 과거 후보가 어떤 규칙 아래 만들어졌는지 되짚지 못한다.
+
+    부트스트랩 초기처럼 어휘가 없던 시점도 빈 목록 행으로 남긴다. 값을 비우는
+    대신 "그때는 어휘가 없었다"를 기록으로 만든다.
+    """
+
+    __tablename__ = "knowledge_ontology_snapshots"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+    )
+    workspace_id: Mapped[int] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    ontology_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    version: Mapped[str] = mapped_column(String(64), nullable=False)
+
+    predicates: Mapped[list[Any]] = mapped_column(
+        JSONB,
+        nullable=False,
+        default=list,
+        server_default=text("'[]'::jsonb"),
+    )
+    relation_types: Mapped[list[Any]] = mapped_column(
+        JSONB,
+        nullable=False,
+        default=list,
+        server_default=text("'[]'::jsonb"),
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    __table_args__ = (
+        # extraction run이 (workspace_id, ontology_id, version)으로 참조한다.
+        UniqueConstraint(
+            "workspace_id",
+            "ontology_id",
+            "version",
+            name="uq_knowledge_ontology_snapshots_version",
         ),
     )
