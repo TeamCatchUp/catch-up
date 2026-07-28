@@ -347,20 +347,42 @@ class SqlAlchemyKnowledgeCandidateRepository:
             )
         )
 
-    def count_runs_for_input(
+    def find_succeeded_run(
         self,
         *,
         workspace_id: int,
         input_node_id: uuid.UUID,
-    ) -> int:
-        """같은 입력으로 이미 돌린 실행이 몇 번인지 센다."""
-        return self._session.scalar(
-            select(func.count())
-            .select_from(KnowledgeExtractionRunRow)
-            .where(
+        spec: ExtractionRunSpec,
+    ) -> ExtractionRun | None:
+        """같은 입력을 같은 계약으로 이미 성공시킨 실행을 찾는다.
+
+        계약을 이루는 것은 추출기 버전·프롬프트·모델·어휘 스냅샷이다. 하나라도
+        달라지면 다른 결과가 나올 수 있으므로 다시 추출해야 한다.
+        """
+        row = self._session.scalar(
+            select(KnowledgeExtractionRunRow).where(
                 KnowledgeExtractionRunRow.workspace_id == workspace_id,
                 KnowledgeExtractionRunRow.input_node_id == input_node_id,
+                KnowledgeExtractionRunRow.status
+                == ExtractionRunStatus.SUCCEEDED.value,
+                KnowledgeExtractionRunRow.extractor_version
+                == spec.extractor_version,
+                KnowledgeExtractionRunRow.prompt_version == spec.prompt_version,
+                KnowledgeExtractionRunRow.model == spec.model,
+                KnowledgeExtractionRunRow.ontology_id == spec.ontology_id,
+                KnowledgeExtractionRunRow.ontology_version
+                == spec.ontology_version,
             )
+        )
+        if row is None:
+            return None
+        return ExtractionRun(
+            id=row.id,
+            workspace_id=row.workspace_id,
+            input_node_id=row.input_node_id,
+            status=ExtractionRunStatus(row.status),
+            started_at=row.started_at,
+            completed_at=row.completed_at,
         )
 
     def add_entity_candidate(

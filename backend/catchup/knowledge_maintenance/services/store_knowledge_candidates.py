@@ -68,6 +68,7 @@ def store_knowledge_candidates(
     *,
     spec: ExtractionRunSpec,
     uow: KnowledgeCandidateUnitOfWork,
+    raw_output: dict | None = None,
     clock: Callable[[], datetime] | None = None,
 ) -> CandidateStorageResult:
     """추출 결과 한 벌을 후보로 저장한다.
@@ -89,20 +90,24 @@ def store_knowledge_candidates(
                 f"observation {observation.id} has no graph node"
             )
 
-        existing = uow.knowledge_candidates.count_runs_for_input(
+        # 같은 계약으로 이미 성공한 실행이 있을 때만 건너뛴다. 입력만 보고
+        # 판정하면 prompt를 고치거나 어휘를 올려도 다시 추출되지 않는다.
+        existing = uow.knowledge_candidates.find_succeeded_run(
             workspace_id=observation.workspace_id,
             input_node_id=node.id,
+            spec=spec,
         )
-        if existing:
+        if existing is not None:
             logger.info(
                 "knowledge_candidates_reused",
                 workspace_id=observation.workspace_id,
                 observation_id=str(observation.id),
                 input_node_id=str(node.id),
-                existing_runs=existing,
+                run_id=str(existing.id),
+                ontology_version=spec.ontology_version,
             )
             return CandidateStorageResult(
-                batch=StoredCandidateBatch(run_id=uuid.UUID(int=0)),
+                batch=StoredCandidateBatch(run_id=existing.id),
                 reused=True,
             )
 
@@ -155,6 +160,7 @@ def store_knowledge_candidates(
             run_id=run.id,
             status=ExtractionRunStatus.SUCCEEDED,
             completed_at=clock(),
+            raw_output=raw_output,
         )
         uow.commit()
         logger.info(
@@ -366,3 +372,64 @@ def _store_evidence(
 
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def record_failed_extraction(
+    observation: StoredObservation,
+    *,
+    spec: ExtractionRunSpec,
+    error: str,
+    uow: KnowledgeCandidateUnitOfWork,
+    raw_output: dict | None = None,
+    clock: Callable[[], datetime] | None = None,
+) -> uuid.UUID:
+    """실패한 추출을 실행 기록으로 남긴다.
+
+    남기지 않으면 어느 Observation이 왜 실패했는지 DB에 흔적이 없다. 수천
+    건에서 몇 %가 조용히 빠져도 아무도 모른다.
+
+    재추출 판정이 성공한 실행만 보므로 이 기록이 재시도를 막지는 않는다.
+    """
+    clock = clock or _utcnow
+    now = clock()
+
+    with uow:
+        node = uow.knowledge_nodes.get_for_resource(
+            workspace_id=observation.workspace_id,
+            node_kind=NodeKind.OBSERVATION,
+            resource_id=observation.id,
+        )
+        if node is None:
+            raise ObservationNodeMissing(
+                f"observation {observation.id} has no graph node"
+            )
+
+        uow.ontology.ensure(
+            workspace_id=observation.workspace_id,
+            ontology_id=spec.ontology_id,
+            vocabulary=spec.vocabulary,
+        )
+        run = uow.knowledge_candidates.start_run(
+            workspace_id=observation.workspace_id,
+            input_node_id=node.id,
+            spec=spec,
+            started_at=now,
+        )
+        uow.knowledge_candidates.complete_run(
+            run_id=run.id,
+            status=ExtractionRunStatus.FAILED,
+            completed_at=clock(),
+            raw_output=raw_output,
+            error=error,
+        )
+        uow.commit()
+
+    logger.info(
+        "knowledge_extraction_run_failed",
+        workspace_id=observation.workspace_id,
+        observation_id=str(observation.id),
+        run_id=str(run.id),
+        ontology_version=spec.ontology_version,
+        error=error[:200],
+    )
+    return run.id

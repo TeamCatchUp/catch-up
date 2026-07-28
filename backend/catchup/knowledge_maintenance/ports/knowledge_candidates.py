@@ -97,12 +97,21 @@ class KnowledgeCandidateRepository(Protocol):
         excerpt: str | None = None,
     ) -> uuid.UUID: ...
 
-    def count_runs_for_input(
+    def find_succeeded_run(
         self,
         *,
         workspace_id: int,
         input_node_id: uuid.UUID,
-    ) -> int: ...
+        spec: ExtractionRunSpec,
+    ) -> ExtractionRun | None:
+        """같은 입력을 같은 계약으로 이미 성공시킨 실행을 찾는다.
+
+        입력만 보고 판정하면 prompt를 고치거나 어휘를 올려도 다시 추출되지
+        않는다. 그것은 중복 방지가 아니라 Observation을 영구히 얼리는 일이다.
+
+        실패한 실행은 세지 않는다. 재시도를 막으면 안 되기 때문이다.
+        """
+        ...
 
 
 class KnowledgeCandidateUnitOfWork(Protocol):
