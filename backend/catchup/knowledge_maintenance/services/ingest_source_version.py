@@ -10,6 +10,7 @@ from datetime import timezone
 from enum import StrEnum
 
 from catchup.knowledge_maintenance.contracts.source_change import SourceChangeEnvelope
+from catchup.knowledge_maintenance.domain.knowledge_node import NodeKind
 from catchup.knowledge_maintenance.domain.source_version import SourceIdentity
 from catchup.knowledge_maintenance.domain.source_version import SourceVersion
 from catchup.knowledge_maintenance.ports.source_versions import SourceVersionUnitOfWork
@@ -81,6 +82,7 @@ def ingest_source_change(
             created_at=clock(),
         )
         uow.source_versions.add(source_version)
+        _ensure_node(source_version.workspace_id, source_version.id, uow)
         uow.commit()
         return SourceVersionIngestionResult(
             source_version_id=source_version.id,
@@ -129,9 +131,24 @@ def _resolve_existing(
         raise SourceVersionPayloadConflict(
             "the idempotency key or source version was reused with a different payload"
         )
+    # 중복 전달은 아무것도 쓰지 않는다. node는 SourceVersion과 같은
+    # transaction에서 만들어지므로, 원문이 있으면 node도 반드시 있다.
     return SourceVersionIngestionResult(
         source_version_id=existing.id,
         result=IngestionResult.DUPLICATE,
+    )
+
+
+def _ensure_node(
+    workspace_id: int,
+    source_version_id: uuid.UUID,
+    uow: SourceVersionUnitOfWork,
+) -> None:
+    """원문을 graph에서 가리킬 수 있게 node identity를 붙인다."""
+    uow.knowledge_nodes.ensure_for_resource(
+        workspace_id=workspace_id,
+        node_kind=NodeKind.SOURCE_VERSION,
+        resource_id=source_version_id,
     )
 
 

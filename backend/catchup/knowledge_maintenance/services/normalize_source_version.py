@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum
 
+from catchup.knowledge_maintenance.domain.knowledge_node import NodeKind
 from catchup.knowledge_maintenance.domain.observation import StoredObservation
 from catchup.knowledge_maintenance.domain.source_version import SourceVersion
 from catchup.knowledge_maintenance.ports.observation_normalizer import (
@@ -50,6 +51,8 @@ def normalize_source_version(
             normalizer_version=normalizer.normalizer_version,
         )
         if existing is not None:
+            # 이미 있으면 아무것도 쓰지 않는다. node는 Observation과 같은
+            # transaction에서 만들어지므로 함께 있거나 함께 없다.
             return SourceVersionNormalizationResult(
                 observation=existing,
                 result=NormalizationResult.REUSED,
@@ -63,8 +66,25 @@ def normalize_source_version(
             source_version_id=source_version.id,
             observation=observation,
         )
+        _ensure_node(stored, uow)
         uow.commit()
         return SourceVersionNormalizationResult(
             observation=stored,
             result=NormalizationResult.CREATED,
         )
+
+
+def _ensure_node(
+    stored: StoredObservation,
+    uow: ObservationUnitOfWork,
+) -> None:
+    """Observation을 graph에서 가리킬 수 있게 node identity를 붙인다.
+
+    ExtractionRun의 `input_node_id`와 근거 링크의 `evidence_node_id`가 이
+    node를 가리킨다. 없으면 추출 결과를 저장할 수 없다.
+    """
+    uow.knowledge_nodes.ensure_for_resource(
+        workspace_id=stored.workspace_id,
+        node_kind=NodeKind.OBSERVATION,
+        resource_id=stored.id,
+    )

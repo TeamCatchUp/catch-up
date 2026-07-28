@@ -11,8 +11,12 @@ import pytest
 from pydantic import ValidationError
 
 from catchup.knowledge_maintenance.contracts.source_change import SourceChangeEnvelope
+from catchup.knowledge_maintenance.domain.knowledge_node import KnowledgeNode
+from catchup.knowledge_maintenance.domain.knowledge_node import NodeKind
+from catchup.knowledge_maintenance.domain.knowledge_node import resource_ref_for
 from catchup.knowledge_maintenance.domain.source_version import SourceIdentity
 from catchup.knowledge_maintenance.domain.source_version import SourceVersion
+from catchup.knowledge_maintenance.ports.knowledge_nodes import KnowledgeNodeRepository
 from catchup.knowledge_maintenance.ports.source_versions import SourceVersionRepository
 from catchup.knowledge_maintenance.services.ingest_source_version import IngestionResult
 from catchup.knowledge_maintenance.services.ingest_source_version import (
@@ -90,9 +94,60 @@ class FakeSourceVersionRepository(SourceVersionRepository):
         self.items.append(source_version)
 
 
+class FakeKnowledgeNodeRepository(KnowledgeNodeRepository):
+    def __init__(self) -> None:
+        self.items: list[KnowledgeNode] = []
+
+    def get_for_resource(
+        self,
+        *,
+        workspace_id: int,
+        node_kind: NodeKind,
+        resource_id: uuid.UUID,
+    ) -> KnowledgeNode | None:
+        return next(
+            (
+                item
+                for item in self.items
+                if item.workspace_id == workspace_id
+                and item.node_kind == node_kind
+                and item.resource is not None
+                and item.resource.resource_id == str(resource_id)
+            ),
+            None,
+        )
+
+    def ensure_for_resource(
+        self,
+        *,
+        workspace_id: int,
+        node_kind: NodeKind,
+        resource_id: uuid.UUID,
+        display_name: str | None = None,
+    ) -> KnowledgeNode:
+        found = self.get_for_resource(
+            workspace_id=workspace_id,
+            node_kind=node_kind,
+            resource_id=resource_id,
+        )
+        if found is not None:
+            return found
+
+        node = KnowledgeNode(
+            id=uuid.uuid4(),
+            workspace_id=workspace_id,
+            node_kind=node_kind,
+            resource=resource_ref_for(node_kind, resource_id),
+            display_name=display_name,
+        )
+        self.items.append(node)
+        return node
+
+
 class FakeSourceVersionUnitOfWork:
     def __init__(self) -> None:
         self.source_versions = FakeSourceVersionRepository()
+        self.knowledge_nodes = FakeKnowledgeNodeRepository()
         self.committed = False
 
     def __enter__(self) -> Self:

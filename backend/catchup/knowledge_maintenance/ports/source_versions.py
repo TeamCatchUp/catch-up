@@ -6,6 +6,7 @@ from typing import Self
 
 from catchup.knowledge_maintenance.domain.source_version import SourceIdentity
 from catchup.knowledge_maintenance.domain.source_version import SourceVersion
+from catchup.knowledge_maintenance.ports.knowledge_nodes import KnowledgeNodeRepository
 
 
 class SourceVersionRepository(Protocol):
@@ -39,9 +40,15 @@ class SourceVersionRepository(Protocol):
 
 
 class SourceVersionUnitOfWork(Protocol):
-    """SourceVersion 수집에 필요한 transaction 경계를 정의한다."""
+    """SourceVersion 수집에 필요한 transaction 경계를 정의한다.
+
+    node identity를 같이 요구한다. 원문을 저장하는 일과 그것을 graph에 올리는
+    일이 나뉘면, 원문은 있는데 무엇도 그것을 근거로 가리킬 수 없는 상태가
+    남는다.
+    """
 
     source_versions: SourceVersionRepository
+    knowledge_nodes: KnowledgeNodeRepository
 
     def __enter__(self) -> Self: ...
 
