@@ -3726,3 +3726,124 @@ class Observation(Base):
             name="ck_observations_content_hash_length",
         ),
     )
+
+
+class KnowledgeNode(Base):
+    """graph에서 주소를 가질 수 있는 모든 대상의 identity registry다.
+
+    본문을 담는 테이블이 아니다. SourceVersion이나 Observation처럼 이미 자기
+    테이블을 가진 record는 `resource_type`·`resource_id`로 연결하고, 원문에서
+    나온 Entity처럼 자기 테이블이 없는 대상은 `canonical_key`로 식별한다.
+
+    PostgreSQL은 polymorphic foreign key를 강제하지 못하므로, 가리키는 record가
+    실재하는지는 application service가 같은 transaction에서 확인한다.
+    """
+
+    __tablename__ = "knowledge_nodes"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+    )
+    workspace_id: Mapped[int] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    node_kind: Mapped[str] = mapped_column(String(32), nullable=False)
+
+    # 자기 테이블을 이미 가진 record와 연결할 때 쓴다.
+    resource_type: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    resource_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    # 자기 테이블이 없는 Entity identity에 쓴다.
+    entity_type: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    canonical_key: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    display_name: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    lifecycle_state: Mapped[str] = mapped_column(
+        String(16),
+        nullable=False,
+        default="active",
+        server_default=text("'active'"),
+    )
+    merged_into_node_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=True,
+    )
+    attributes: Mapped[dict[str, Any]] = mapped_column(
+        JSONB,
+        nullable=False,
+        default=dict,
+        server_default=text("'{}'::jsonb"),
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+    retired_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "workspace_id",
+            "id",
+            name="uq_knowledge_nodes_workspace_id_id",
+        ),
+        ForeignKeyConstraint(
+            ["workspace_id", "merged_into_node_id"],
+            ["knowledge_nodes.workspace_id", "knowledge_nodes.id"],
+            name="fk_knowledge_nodes_merged_into",
+        ),
+        CheckConstraint(
+            "node_kind IN ("
+            "'source_version', 'observation', 'entity', 'claim', "
+            "'relation_assertion', 'artifact', 'artifact_revision', "
+            "'review_decision', 'editorial_override'"
+            ")",
+            name="ck_knowledge_nodes_node_kind",
+        ),
+        CheckConstraint(
+            "lifecycle_state IN ('active', 'merged', 'retired')",
+            name="ck_knowledge_nodes_lifecycle_state",
+        ),
+        CheckConstraint(
+            "("
+            "lifecycle_state = 'merged' AND merged_into_node_id IS NOT NULL"
+            ") OR ("
+            "lifecycle_state <> 'merged' AND merged_into_node_id IS NULL"
+            ")",
+            name="ck_knowledge_nodes_merged_target",
+        ),
+        # 같은 record에 node가 둘 생기지 않게 한다. "insert 또는 reuse"가
+        # 성립하는 근거다.
+        Index(
+            "uq_knowledge_nodes_resource",
+            "workspace_id",
+            "resource_type",
+            "resource_id",
+            unique=True,
+            postgresql_where=text(
+                "resource_type IS NOT NULL AND resource_id IS NOT NULL"
+            ),
+        ),
+        Index(
+            "uq_knowledge_nodes_canonical_entity",
+            "workspace_id",
+            "entity_type",
+            "canonical_key",
+            unique=True,
+            postgresql_where=text(
+                "node_kind = 'entity' AND canonical_key IS NOT NULL"
+            ),
+        ),
+        Index(
+            "ix_knowledge_nodes_workspace_kind",
+            "workspace_id",
+            "node_kind",
+            "lifecycle_state",
+        ),
+    )
