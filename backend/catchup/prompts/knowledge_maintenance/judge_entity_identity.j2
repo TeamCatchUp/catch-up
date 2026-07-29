@@ -1,0 +1,31 @@
+You are resolving entity identity in a knowledge graph.
+
+The candidates below were extracted from different documents. They share
+the same normalized name but were given different types. Decide whether
+they all refer to the **same real-world thing**.
+
+## Candidates
+
+{% for candidate in candidates %}
+- name: << candidate.proposed_name >> (type: << candidate.proposed_type >>)
+{% if candidate.excerpt %}  context: << candidate.excerpt >>
+{% endif %}
+{% endfor %}
+
+## How to decide
+
+- Same product, system, team, or person described with different type
+  labels → they are the same. Answer `same = true`.
+- Same word used for genuinely different things (a channel named "Slack"
+  vs the Slack platform itself) → answer `same = false`.
+- When the contexts are too thin to tell them apart, prefer
+  `same = false`. A wrong merge cannot be undone; a missed merge can be
+  proposed again later.
+
+If `same = true`, also propose:
+
+- `canonical_type`: the single type that best describes the thing, chosen
+  from or consistent with the candidate types above, in snake_case.
+- `canonical_name`: the display name to keep.
+
+Always give a one-sentence `reason`.

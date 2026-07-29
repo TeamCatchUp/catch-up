@@ -18,6 +18,38 @@ class KnowledgeNodeRepository(Protocol):
         resource_id: uuid.UUID,
     ) -> KnowledgeNode | None: ...
 
+    def get_entity_by_canonical_key(
+        self,
+        *,
+        workspace_id: int,
+        canonical_key: str,
+    ) -> KnowledgeNode | None:
+        """canonical key로 entity 노드를 찾는다."""
+        ...
+
+    def create_entity_node(
+        self,
+        *,
+        workspace_id: int,
+        entity_type: str,
+        canonical_key: str,
+        display_name: str,
+    ) -> KnowledgeNode:
+        """canonical entity 노드를 발급한다."""
+        ...
+
+    def add_alias(
+        self,
+        *,
+        workspace_id: int,
+        node_id: uuid.UUID,
+        alias: str,
+        normalized_alias: str,
+        source: str,
+    ) -> None:
+        """노드에 이름 단서를 남긴다. 같은 정규화 alias면 넘어간다."""
+        ...
+
     def ensure_for_resource(
         self,
         *,

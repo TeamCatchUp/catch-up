@@ -3,14 +3,17 @@ from __future__ import annotations
 import hashlib
 import json
 import uuid
+from collections.abc import Mapping
 from dataclasses import asdict
 from datetime import datetime
 from decimal import Decimal
 
 from sqlalchemy import ColumnElement
+from sqlalchemy import cast
 from sqlalchemy import func
 from sqlalchemy import select
 from sqlalchemy import update
+from sqlalchemy.dialects.postgresql import UUID as PgUUID
 from sqlalchemy.orm import Session
 
 from catchup.db.models import (
@@ -19,7 +22,12 @@ from catchup.db.models import (
 from catchup.db.models import KnowledgeClaimCandidate as KnowledgeClaimCandidateRow
 from catchup.db.models import KnowledgeEntityCandidate as KnowledgeEntityCandidateRow
 from catchup.db.models import KnowledgeExtractionRun as KnowledgeExtractionRunRow
+from catchup.db.models import (
+    KnowledgeMutationOperation as KnowledgeMutationOperationRow,
+)
+from catchup.db.models import KnowledgeMutationProposal as KnowledgeMutationProposalRow
 from catchup.db.models import KnowledgeNode as KnowledgeNodeRow
+from catchup.db.models import KnowledgeNodeAlias as KnowledgeNodeAliasRow
 from catchup.db.models import KnowledgeOntologySnapshot as KnowledgeOntologySnapshotRow
 from catchup.db.models import KnowledgePipelineOutbox as PipelineOutboxRow
 from catchup.db.models import (
@@ -50,10 +58,19 @@ from catchup.knowledge_maintenance.contracts.extraction import (
     RelationAssertionCandidateDraft,
 )
 from catchup.knowledge_maintenance.domain.evidence import Locator
+from catchup.knowledge_maintenance.domain.knowledge_candidate import (
+    EntityResolutionStatus,
+)
 from catchup.knowledge_maintenance.domain.knowledge_candidate import ExtractionMethod
 from catchup.knowledge_maintenance.domain.knowledge_candidate import ExtractionRun
 from catchup.knowledge_maintenance.domain.knowledge_candidate import ExtractionRunSpec
 from catchup.knowledge_maintenance.domain.knowledge_candidate import ExtractionRunStatus
+from catchup.knowledge_maintenance.domain.knowledge_candidate import (
+    StoredEntityCandidate,
+)
+from catchup.knowledge_maintenance.domain.knowledge_candidate import (
+    StoredMutationProposal,
+)
 from catchup.knowledge_maintenance.domain.knowledge_node import KnowledgeNode
 from catchup.knowledge_maintenance.domain.knowledge_node import NodeKind
 from catchup.knowledge_maintenance.domain.knowledge_node import resource_ref_for
@@ -289,6 +306,76 @@ class SqlAlchemyKnowledgeNodeRepository:
         self._session.flush()
         return knowledge_node_to_domain(row)
 
+    def get_entity_by_canonical_key(
+        self,
+        *,
+        workspace_id: int,
+        canonical_key: str,
+    ) -> KnowledgeNode | None:
+        """canonical key로 entity 노드를 찾는다."""
+        row = self._session.scalar(
+            select(KnowledgeNodeRow).where(
+                KnowledgeNodeRow.workspace_id == workspace_id,
+                KnowledgeNodeRow.node_kind == NodeKind.ENTITY.value,
+                KnowledgeNodeRow.canonical_key == canonical_key,
+            )
+        )
+        return knowledge_node_to_domain(row) if row is not None else None
+
+    def create_entity_node(
+        self,
+        *,
+        workspace_id: int,
+        entity_type: str,
+        canonical_key: str,
+        display_name: str,
+    ) -> KnowledgeNode:
+        """canonical entity 노드를 발급한다."""
+        row = knowledge_node_to_row(
+            KnowledgeNode(
+                id=uuid.uuid4(),
+                workspace_id=workspace_id,
+                node_kind=NodeKind.ENTITY,
+                entity_type=entity_type,
+                canonical_key=canonical_key,
+                display_name=display_name,
+            )
+        )
+        self._session.add(row)
+        self._session.flush()
+        return knowledge_node_to_domain(row)
+
+    def add_alias(
+        self,
+        *,
+        workspace_id: int,
+        node_id: uuid.UUID,
+        alias: str,
+        normalized_alias: str,
+        source: str,
+    ) -> None:
+        """노드에 이름 단서를 남긴다. 같은 정규화 alias면 넘어간다."""
+        exists = self._session.scalar(
+            select(KnowledgeNodeAliasRow.id).where(
+                KnowledgeNodeAliasRow.workspace_id == workspace_id,
+                KnowledgeNodeAliasRow.node_id == node_id,
+                KnowledgeNodeAliasRow.normalized_alias == normalized_alias,
+            )
+        )
+        if exists is not None:
+            return
+        self._session.add(
+            KnowledgeNodeAliasRow(
+                id=uuid.uuid4(),
+                workspace_id=workspace_id,
+                node_id=node_id,
+                alias=alias,
+                normalized_alias=normalized_alias,
+                source=source,
+            )
+        )
+        self._session.flush()
+
 
 class SqlAlchemyKnowledgeCandidateRepository:
     """추출 결과의 영속성을 PostgreSQL로 구현한다."""
@@ -510,6 +597,219 @@ class SqlAlchemyKnowledgeCandidateRepository:
         self._session.add(row)
         self._session.flush()
         return row.id
+
+    def find_pending_entity_candidates(
+        self,
+        *,
+        workspace_id: int,
+    ) -> tuple[StoredEntityCandidate, ...]:
+        """아직 해소되지 않은 entity 후보를 source_type과 함께 읽는다.
+
+        source_type은 후보 → 실행 → 입력 Observation 노드 → Observation →
+        SourceVersion 경로로 얻는다. 결정론 canonical key가 source를
+        접두로 요구하기 때문이다.
+        """
+        statement = (
+            select(
+                KnowledgeEntityCandidateRow,
+                SourceVersionRow.source_type,
+                func.left(ObservationRow.normalized_content, 300),
+            )
+            .join(
+                KnowledgeExtractionRunRow,
+                KnowledgeEntityCandidateRow.extraction_run_id
+                == KnowledgeExtractionRunRow.id,
+            )
+            .join(
+                KnowledgeNodeRow,
+                KnowledgeExtractionRunRow.input_node_id == KnowledgeNodeRow.id,
+            )
+            .join(
+                ObservationRow,
+                ObservationRow.id
+                == cast(KnowledgeNodeRow.resource_id, PgUUID),
+            )
+            .join(
+                SourceVersionRow,
+                ObservationRow.source_version_id == SourceVersionRow.id,
+            )
+            .where(
+                KnowledgeEntityCandidateRow.workspace_id == workspace_id,
+                KnowledgeEntityCandidateRow.resolution_status
+                == EntityResolutionStatus.PENDING.value,
+            )
+            .order_by(
+                KnowledgeEntityCandidateRow.created_at,
+                KnowledgeEntityCandidateRow.id,
+            )
+        )
+        return tuple(
+            StoredEntityCandidate(
+                id=row.id,
+                run_id=row.extraction_run_id,
+                local_key=row.local_key,
+                proposed_type=row.proposed_type,
+                proposed_name=row.proposed_name,
+                extraction_method=ExtractionMethod(row.extraction_method),
+                raw_payload=row.raw_payload,
+                source_type=source_type,
+                created_at=row.created_at,
+                observation_excerpt=excerpt,
+            )
+            for row, source_type, excerpt in (
+                self._session.execute(statement).all()
+            )
+        )
+
+    def mark_entity_resolved(
+        self,
+        *,
+        candidate_id: uuid.UUID,
+        status: EntityResolutionStatus,
+        resolved_node_id: uuid.UUID,
+    ) -> None:
+        """후보가 어느 canonical 노드로 해소됐는지 기록한다."""
+        self._session.execute(
+            update(KnowledgeEntityCandidateRow)
+            .where(KnowledgeEntityCandidateRow.id == candidate_id)
+            .values(
+                resolution_status=status.value,
+                resolved_node_id=resolved_node_id,
+            )
+        )
+        self._session.flush()
+
+
+class SqlAlchemyMutationProposalRepository:
+    """mutation proposal의 영속성을 PostgreSQL로 구현한다."""
+
+    def __init__(self, session: Session) -> None:
+        self._session = session
+
+    def find_pending_by_idempotency_key(
+        self,
+        *,
+        workspace_id: int,
+        idempotency_key: str,
+    ) -> StoredMutationProposal | None:
+        """같은 검토 단위로 이미 열려 있는 proposal을 찾는다."""
+        row = self._session.scalar(
+            select(KnowledgeMutationProposalRow).where(
+                KnowledgeMutationProposalRow.workspace_id == workspace_id,
+                KnowledgeMutationProposalRow.idempotency_key
+                == idempotency_key,
+                KnowledgeMutationProposalRow.status == "pending",
+            )
+        )
+        if row is None:
+            return None
+        return StoredMutationProposal(
+            id=row.id,
+            idempotency_key=row.idempotency_key,
+            status=row.status,
+            resolver_metadata=row.resolver_metadata,
+        )
+
+    def abandon(self, *, proposal_id: uuid.UUID) -> None:
+        """proposal을 접는다."""
+        self._session.execute(
+            update(KnowledgeMutationProposalRow)
+            .where(KnowledgeMutationProposalRow.id == proposal_id)
+            .values(status="abandoned")
+        )
+        self._session.flush()
+
+    def add_duplicate_proposal(
+        self,
+        *,
+        workspace_id: int,
+        idempotency_key: str,
+        trigger_entity_candidate_id: uuid.UUID,
+        detector: str,
+        detector_version: str,
+        summary: str,
+        resolver_metadata: Mapping[str, JsonValue],
+        representative_candidate_id: uuid.UUID,
+        merge_candidate_ids: tuple[uuid.UUID, ...],
+        proposed_type: str,
+        proposed_name: str,
+    ) -> uuid.UUID:
+        """같은 대상 후보들을 하나로 합치는 계획서를 쓴다.
+
+        같은 key의 행이 이미 있으면 상태와 무관하게 그 행을 되살려
+        내용을 갈아끼운다. `(workspace_id, idempotency_key)` UNIQUE가
+        상태를 구분하지 않아 abandoned 행도 key를 차지하기 때문이다.
+        새 INSERT를 시도하면 충돌이 나고 같은 트랜잭션의 결정론 병합까지
+        되돌아간다.
+        """
+        existing = self._session.scalar(
+            select(KnowledgeMutationProposalRow).where(
+                KnowledgeMutationProposalRow.workspace_id == workspace_id,
+                KnowledgeMutationProposalRow.idempotency_key
+                == idempotency_key,
+            )
+        )
+        if existing is not None:
+            proposal_id = existing.id
+            existing.status = "pending"
+            existing.trigger_entity_candidate_id = trigger_entity_candidate_id
+            existing.detector = detector
+            existing.detector_version = detector_version
+            existing.summary = summary
+            existing.resolver_metadata = dict(resolver_metadata)
+            self._session.execute(
+                KnowledgeMutationOperationRow.__table__.delete().where(
+                    KnowledgeMutationOperationRow.proposal_id == proposal_id
+                )
+            )
+            self._session.flush()
+        else:
+            proposal_id = uuid.uuid4()
+            self._session.add(
+                KnowledgeMutationProposalRow(
+                    id=proposal_id,
+                    workspace_id=workspace_id,
+                    trigger_entity_candidate_id=trigger_entity_candidate_id,
+                    proposal_kind="duplicate",
+                    detector=detector,
+                    detector_version=detector_version,
+                    summary=summary,
+                    idempotency_key=idempotency_key,
+                    resolver_metadata=dict(resolver_metadata),
+                )
+            )
+            # relationship이 없어 flush 순서가 보장되지 않으므로 proposal을
+            # 먼저 확정한다.
+            self._session.flush()
+
+        self._session.add(
+            KnowledgeMutationOperationRow(
+                id=uuid.uuid4(),
+                workspace_id=workspace_id,
+                proposal_id=proposal_id,
+                sequence=1,
+                operation_type="create_entity",
+                entity_candidate_id=representative_candidate_id,
+                operation_data={
+                    "proposed_type": proposed_type,
+                    "proposed_name": proposed_name,
+                },
+            )
+        )
+        for offset, candidate_id in enumerate(merge_candidate_ids, start=2):
+            self._session.add(
+                KnowledgeMutationOperationRow(
+                    id=uuid.uuid4(),
+                    workspace_id=workspace_id,
+                    proposal_id=proposal_id,
+                    sequence=offset,
+                    operation_type="merge_entity",
+                    entity_candidate_id=candidate_id,
+                    operation_data={"merge_into_sequence": 1},
+                )
+            )
+        self._session.flush()
+        return proposal_id
 
 
 def _json_hash(value: object) -> str:

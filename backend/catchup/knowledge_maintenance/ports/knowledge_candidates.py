@@ -13,10 +13,16 @@ from catchup.knowledge_maintenance.contracts.extraction import (
     RelationAssertionCandidateDraft,
 )
 from catchup.knowledge_maintenance.domain.evidence import Locator
+from catchup.knowledge_maintenance.domain.knowledge_candidate import (
+    EntityResolutionStatus,
+)
 from catchup.knowledge_maintenance.domain.knowledge_candidate import ExtractionMethod
 from catchup.knowledge_maintenance.domain.knowledge_candidate import ExtractionRun
 from catchup.knowledge_maintenance.domain.knowledge_candidate import ExtractionRunSpec
 from catchup.knowledge_maintenance.domain.knowledge_candidate import ExtractionRunStatus
+from catchup.knowledge_maintenance.domain.knowledge_candidate import (
+    StoredEntityCandidate,
+)
 from catchup.knowledge_maintenance.ports.knowledge_nodes import KnowledgeNodeRepository
 from catchup.knowledge_maintenance.ports.ontology import OntologyRepository
 
@@ -98,6 +104,24 @@ class KnowledgeCandidateRepository(Protocol):
         excerpt: str | None = None,
         locator: Locator | None = None,
     ) -> uuid.UUID: ...
+
+    def find_pending_entity_candidates(
+        self,
+        *,
+        workspace_id: int,
+    ) -> tuple[StoredEntityCandidate, ...]:
+        """아직 해소되지 않은 entity 후보를 source_type과 함께 읽는다."""
+        ...
+
+    def mark_entity_resolved(
+        self,
+        *,
+        candidate_id: uuid.UUID,
+        status: EntityResolutionStatus,
+        resolved_node_id: uuid.UUID,
+    ) -> None:
+        """후보가 어느 canonical 노드로 해소됐는지 기록한다."""
+        ...
 
     def find_succeeded_run(
         self,
