@@ -1,12 +1,21 @@
 from __future__ import annotations
 
+import uuid
+from collections.abc import Mapping
+from typing import Any
+
+from catchup.db.models import Observation as ObservationRow
 from catchup.db.models import SourceVersion as SourceVersionRow
+from catchup.knowledge_maintenance.domain.observation import MetadataEntity
+from catchup.knowledge_maintenance.domain.observation import NormalizedObservation
+from catchup.knowledge_maintenance.domain.observation import ObservationKind
+from catchup.knowledge_maintenance.domain.observation import StoredObservation
 from catchup.knowledge_maintenance.domain.source_version import ChangeKind
 from catchup.knowledge_maintenance.domain.source_version import SourceIdentity
 from catchup.knowledge_maintenance.domain.source_version import SourceVersion
 
 
-def to_row(source_version: SourceVersion) -> SourceVersionRow:
+def source_version_to_row(source_version: SourceVersion) -> SourceVersionRow:
     """도메인 SourceVersion을 저장할 row로 바꾼다."""
     return SourceVersionRow(
         id=source_version.id,
@@ -32,7 +41,7 @@ def to_row(source_version: SourceVersion) -> SourceVersionRow:
     )
 
 
-def to_domain(row: SourceVersionRow) -> SourceVersion:
+def source_version_to_domain(row: SourceVersionRow) -> SourceVersion:
     """저장된 row를 도메인 SourceVersion으로 되돌린다."""
     return SourceVersion(
         id=row.id,
@@ -57,4 +66,77 @@ def to_domain(row: SourceVersionRow) -> SourceVersion:
         payload_hash=row.payload_hash,
         metadata=row.source_metadata,
         created_at=row.created_at,
+    )
+
+
+def observation_to_row(
+    *,
+    observation_id: uuid.UUID,
+    workspace_id: int,
+    source_version_id: uuid.UUID,
+    observation: NormalizedObservation,
+) -> ObservationRow:
+    """정규화 결과를 저장할 row로 바꾼다.
+
+    `NormalizedObservation`은 저장 식별자를 담지 않으므로 여기서 붙인다.
+    """
+    return ObservationRow(
+        id=observation_id,
+        workspace_id=workspace_id,
+        source_version_id=source_version_id,
+        observation_kind=observation.observation_kind.value,
+        normalized_content=observation.content,
+        normalized_content_hash=observation.content_hash,
+        normalizer_id=observation.normalizer_id,
+        normalizer_version=observation.normalizer_version,
+        source_attributes=dict(observation.source_attributes),
+        observation_metadata_entities=[
+            _metadata_entity_to_json(entity)
+            for entity in observation.metadata_entities
+        ],
+        observation_metadata={},
+        occurred_at=observation.occurred_at,
+    )
+
+
+def observation_to_domain(row: ObservationRow) -> StoredObservation:
+    """저장된 row를 도메인 Observation으로 되돌린다."""
+    return StoredObservation(
+        id=row.id,
+        workspace_id=row.workspace_id,
+        source_version_id=row.source_version_id,
+        observation=NormalizedObservation(
+            normalizer_id=row.normalizer_id,
+            normalizer_version=row.normalizer_version,
+            observation_kind=ObservationKind(row.observation_kind),
+            content=row.normalized_content,
+            content_hash=row.normalized_content_hash,
+            source_attributes=row.source_attributes,
+            metadata_entities=tuple(
+                _metadata_entity_to_domain(item)
+                for item in row.observation_metadata_entities
+            ),
+            occurred_at=row.occurred_at,
+        ),
+        created_at=row.created_at,
+    )
+
+
+def _metadata_entity_to_json(entity: MetadataEntity) -> dict[str, Any]:
+    """MetadataEntity를 JSONB에 담을 형태로 바꾼다."""
+    return {
+        "entity_type": entity.entity_type,
+        "external_key": entity.external_key,
+        "display_name": entity.display_name,
+        "attributes": dict(entity.attributes),
+    }
+
+
+def _metadata_entity_to_domain(payload: Mapping[str, Any]) -> MetadataEntity:
+    """JSONB에 담긴 항목을 MetadataEntity로 되돌린다."""
+    return MetadataEntity(
+        entity_type=payload["entity_type"],
+        external_key=payload.get("external_key"),
+        display_name=payload["display_name"],
+        attributes=payload.get("attributes") or {},
     )

@@ -7,14 +7,23 @@ from typing import Self
 from sqlalchemy.orm import Session
 
 from catchup.knowledge_maintenance.adapters.postgres.repositories import (
+    SqlAlchemyObservationRepository,
+)
+from catchup.knowledge_maintenance.adapters.postgres.repositories import (
     SqlAlchemySourceVersionRepository,
 )
 
 
-class SqlAlchemySourceVersionUnitOfWork:
-    """SourceVersion 수집의 transaction 경계를 SQLAlchemy session으로 구현한다."""
+class KnowledgeMaintenanceUnitOfWork:
+    """Knowledge Maintenance의 transaction 경계를 SQLAlchemy session으로 구현한다.
+
+    SourceVersion과 Observation을 같은 session에 둔다. 원문을 저장한 뒤 그것을
+    정규화해 남기는 일은 하나의 transaction이어야 하며, 나뉘면 원문만 있고
+    Observation이 없는 상태가 남을 수 있기 때문이다.
+    """
 
     source_versions: SqlAlchemySourceVersionRepository
+    observations: SqlAlchemyObservationRepository
 
     def __init__(self, session_factory: Callable[[], Session]) -> None:
         self._session_factory = session_factory
@@ -24,6 +33,7 @@ class SqlAlchemySourceVersionUnitOfWork:
         session = self._session_factory()
         self._session = session
         self.source_versions = SqlAlchemySourceVersionRepository(session)
+        self.observations = SqlAlchemyObservationRepository(session)
         return self
 
     def __exit__(

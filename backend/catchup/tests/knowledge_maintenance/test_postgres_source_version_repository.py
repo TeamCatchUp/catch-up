@@ -21,7 +21,7 @@ from catchup.configs.config import settings
 from catchup.db.models import SourceVersion as SourceVersionRow
 from catchup.db.models import Workspace
 from catchup.knowledge_maintenance.adapters.postgres.unit_of_work import (
-    SqlAlchemySourceVersionUnitOfWork,
+    KnowledgeMaintenanceUnitOfWork,
 )
 from catchup.knowledge_maintenance.contracts.source_change import SourceChangeEnvelope
 from catchup.knowledge_maintenance.domain.source_version import ChangeKind
@@ -102,9 +102,9 @@ def session_factory(engine: Engine) -> Iterator[Callable[[], Session]]:
 @pytest.fixture
 def uow_factory(
     session_factory: Callable[[], Session],
-) -> Callable[[], SqlAlchemySourceVersionUnitOfWork]:
+) -> Callable[[], KnowledgeMaintenanceUnitOfWork]:
     """같은 transaction을 공유하는 UnitOfWork 팩토리를 만든다."""
-    return lambda: SqlAlchemySourceVersionUnitOfWork(session_factory)
+    return lambda: KnowledgeMaintenanceUnitOfWork(session_factory)
 
 
 def _source_version(workspace_id: int, **overrides: object) -> SourceVersion:
@@ -164,7 +164,7 @@ def _envelope(workspace_id: int, **overrides: object) -> SourceChangeEnvelope:
 
 
 def _store(
-    uow_factory: Callable[[], SqlAlchemySourceVersionUnitOfWork],
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
     source_version: SourceVersion,
 ) -> None:
     """SourceVersion 한 건을 커밋한다."""
@@ -191,7 +191,7 @@ def _stored_row_count(
 
 
 def test_stored_source_version_is_read_back_unchanged(
-    uow_factory: Callable[[], SqlAlchemySourceVersionUnitOfWork],
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
     workspace_id: int,
 ) -> None:
     source_version = _source_version(workspace_id)
@@ -208,7 +208,7 @@ def test_stored_source_version_is_read_back_unchanged(
 
 
 def test_same_source_version_is_found_by_another_delivery_key(
-    uow_factory: Callable[[], SqlAlchemySourceVersionUnitOfWork],
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
     workspace_id: int,
 ) -> None:
     source_version = _source_version(workspace_id)
@@ -226,7 +226,7 @@ def test_same_source_version_is_found_by_another_delivery_key(
 
 
 def test_latest_for_source_returns_the_newest_source_update(
-    uow_factory: Callable[[], SqlAlchemySourceVersionUnitOfWork],
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
     workspace_id: int,
 ) -> None:
     older = _source_version(
@@ -257,7 +257,7 @@ def test_latest_for_source_returns_the_newest_source_update(
 
 
 def test_source_version_lookup_is_scoped_by_workspace(
-    uow_factory: Callable[[], SqlAlchemySourceVersionUnitOfWork],
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
     workspace_id: int,
 ) -> None:
     source_version = _source_version(workspace_id)
@@ -275,7 +275,7 @@ def test_source_version_lookup_is_scoped_by_workspace(
 
 
 def test_ingested_envelope_is_stored_in_postgres(
-    uow_factory: Callable[[], SqlAlchemySourceVersionUnitOfWork],
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
     workspace_id: int,
 ) -> None:
     result = ingest_source_change(_envelope(workspace_id), uow=uow_factory())
@@ -292,7 +292,7 @@ def test_ingested_envelope_is_stored_in_postgres(
 
 
 def test_redelivered_envelope_does_not_store_a_second_row(
-    uow_factory: Callable[[], SqlAlchemySourceVersionUnitOfWork],
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
     session_factory: Callable[[], Session],
     workspace_id: int,
 ) -> None:
@@ -307,7 +307,7 @@ def test_redelivered_envelope_does_not_store_a_second_row(
 
 
 def test_reused_delivery_key_with_another_payload_is_rejected(
-    uow_factory: Callable[[], SqlAlchemySourceVersionUnitOfWork],
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
     session_factory: Callable[[], Session],
     workspace_id: int,
 ) -> None:
