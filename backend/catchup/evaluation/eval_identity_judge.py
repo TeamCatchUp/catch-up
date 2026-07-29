@@ -549,6 +549,56 @@ HELD_OUT_CASES: tuple[EvalCase, ...] = (
             ),
         ),
     ),
+    EvalCase(
+        key="Jira(tenant instance)",
+        kind="tenant-instance-boundary",
+        expected=ExpectedIdentity.DIFFERENT,
+        seen_during_tuning=False,
+        rationale=(
+            "같은 Jira Cloud 제품을 쓰지만 서로 다른 고객사에 귀속된 "
+            "별도 tenant instance다."
+        ),
+        members=(
+            (
+                "workspace",
+                "Jira",
+                "고객: 한빛물류의 Jira는 hanbit-logistics.atlassian.net에 "
+                "있는 전용 Cloud instance예요. 물류운영 프로젝트와 계정은 "
+                "그 tenant 안에서만 관리합니다.",
+            ),
+            (
+                "workspace",
+                "Jira",
+                "고객: 세종에듀의 Jira는 sejong-edu.atlassian.net tenant를 "
+                "씁니다. 한빛물류 쪽과 계정이나 프로젝트를 공유하지 않아요.",
+            ),
+        ),
+    ),
+    EvalCase(
+        key="아르고(successor)",
+        kind="successor-boundary",
+        expected=ExpectedIdentity.DIFFERENT,
+        seen_during_tuning=False,
+        rationale=(
+            "구형 시스템의 이름을 후속 플랫폼이 이어받았지만 교체 전후의 "
+            "서로 다른 실세계 시스템이다."
+        ),
+        members=(
+            (
+                "system",
+                "아르고",
+                "고객: 구형 주문관리 시스템 아르고는 2019년에 구축했고 "
+                "서버 ID가 OMS-LEGACY-01입니다. 올해 말 완전히 폐기합니다.",
+            ),
+            (
+                "system",
+                "아르고",
+                "고객: 새 아르고는 구형 시스템을 대체하는 별도 Cloud "
+                "플랫폼이고 서비스 ID는 OMS-NEXT-01입니다. 이름만 이어받아 "
+                "데이터를 이관하는 중입니다.",
+            ),
+        ),
+    ),
 )
 
 
