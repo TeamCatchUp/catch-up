@@ -59,8 +59,12 @@ such sentences out mentally and judge from what remains.
   Read each context on its own. You are not told whether two contexts
   share a document or a customer, so matching topic, tone, speaker role,
   or an exchange that reads as adjacent is not an organization clue.
-  If only some members of the group are of an anchored kind, the rule
-  still governs the whole group — a group is one thing.
+  Apply this rule only when the group as a whole refers to an anchored
+  kind of thing. Type labels come from different extractions and can
+  disagree; a stray anchored label in a group whose name plainly refers
+  to a standalone thing (a product, a platform) does not put the group
+  under this rule. When every member's type is anchored, the rule
+  governs the whole group.
   The rule adds one requirement, the organization, and nothing else. Once
   the organizations match, answer `same = true` unless another rule above
   says the name refers to different things. Keep `same` and `reason`
