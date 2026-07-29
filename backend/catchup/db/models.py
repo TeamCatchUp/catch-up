@@ -4340,6 +4340,13 @@ class KnowledgeCandidateEvidenceLink(Base):
     `excerpt`와 `locator`는 비워도 된다. Entity와 RelationAssertion은 문서
     단위 근거로 충분하고, Claim은 서버가 근거 문구를 본문에서 다시 찾아
     위치를 계산한다. 찾지 못하면 문서 단위로 낮춘다.
+
+    Claim evidence를 읽을 때의 계약: `locator`가 채워져 있어야 원문 대조를
+    통과한 인용이다. `excerpt`가 있는데 `locator`가 빈 것은 인용이
+    본문에 없거나(환각 의심) 여러 번 나온 경우이며, 그 `excerpt`는 LLM의
+    주장 원문을 감사용으로 보존한 것이지 검증된 인용이 아니다. locator의
+    offset은 Unicode code point 단위다(UTF-16 아님). 통과 여부는
+    content와 excerpt로 언제든 재계산할 수 있다.
     """
 
     __tablename__ = "knowledge_candidate_evidence_links"

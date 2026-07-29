@@ -181,6 +181,9 @@ def _store(
         "entities": len(stored.batch.entity_ids),
         "claims": len(stored.batch.claim_ids),
         "relations": len(stored.batch.relation_ids),
+        "located": stored.batch.located_claim_count,
+        "not_found": stored.batch.demoted_not_found_count,
+        "ambiguous": stored.batch.demoted_ambiguous_count,
     }
 
 
@@ -237,7 +240,14 @@ async def main() -> None:
     )
 
     summary = {"stored": 0, "reused": 0, "error": 0, "contract_violation": 0}
-    totals = {"entities": 0, "claims": 0, "relations": 0}
+    totals = {
+        "entities": 0,
+        "claims": 0,
+        "relations": 0,
+        "located": 0,
+        "not_found": 0,
+        "ambiguous": 0,
+    }
 
     for offset in range(0, len(pending), args.round_size):
         chunk = pending[offset : offset + args.round_size]
@@ -296,6 +306,20 @@ async def main() -> None:
         f"  claim {totals['claims']}"
         f"  relation {totals['relations']}"
     )
+    # 인용 검증 결과다. reused 실행은 집계에 없으므로 이 수치는 이번에
+    # 새로 저장한 run만의 것이다. not_found가 높으면 환각이나 프롬프트
+    # 문제, ambiguous가 높으면 본문 중복이 원인이다.
+    demoted = totals["not_found"] + totals["ambiguous"]
+    checked = totals["located"] + demoted
+    if checked:
+        rate = demoted / checked * 100
+        print(
+            f"  claim 인용 (새로 저장한 run 기준) — "
+            f"위치 확정 {totals['located']}"
+            f"  강등 {demoted} ({rate:.1f}%"
+            f" · 본문에 없음 {totals['not_found']}"
+            f" · 여러 번 나옴 {totals['ambiguous']})"
+        )
     print(f"  끝난 시각 {datetime.now(timezone.utc).isoformat()}")
 
     engine.dispose()

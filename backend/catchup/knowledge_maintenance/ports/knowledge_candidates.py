@@ -12,6 +12,7 @@ from catchup.knowledge_maintenance.contracts.extraction import EntityCandidateDr
 from catchup.knowledge_maintenance.contracts.extraction import (
     RelationAssertionCandidateDraft,
 )
+from catchup.knowledge_maintenance.domain.evidence import Locator
 from catchup.knowledge_maintenance.domain.knowledge_candidate import ExtractionMethod
 from catchup.knowledge_maintenance.domain.knowledge_candidate import ExtractionRun
 from catchup.knowledge_maintenance.domain.knowledge_candidate import ExtractionRunSpec
@@ -95,6 +96,7 @@ class KnowledgeCandidateRepository(Protocol):
         claim_candidate_id: uuid.UUID | None = None,
         relation_candidate_id: uuid.UUID | None = None,
         excerpt: str | None = None,
+        locator: Locator | None = None,
     ) -> uuid.UUID: ...
 
     def find_succeeded_run(

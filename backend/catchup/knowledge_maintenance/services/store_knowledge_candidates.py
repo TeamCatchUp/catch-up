@@ -2,11 +2,11 @@
 
 여기서 두 가지가 일어난다.
 
-**`local_key`가 실제 식별자가 된다.** Extractor는 `e1`, `c1`처럼 그 실행
+`local_key`가 실제 식별자가 된다. Extractor는 `e1`, `c1`처럼 그 실행
 안에서만 유효한 이름으로 서로를 가리킨다. 저장 시점에 entity를 먼저 넣어
 식별자를 받고, 그것으로 claim과 relation의 참조를 FK로 바꾼다.
 
-**레이어 1이 뽑은 Entity가 행이 된다.** 프롬프트가 고객과 상담원을 `m1`,
+레이어 1이 뽑은 Entity가 행이 된다. 프롬프트가 고객과 상담원을 `m1`,
 `m2`로 보여주고 Extractor가 그것을 관계의 끝점으로 쓰므로, 그 Entity가
 `deterministic` candidate로 먼저 저장되어야 관계의 FK가 걸린다. 이것이
 설계 문서 §7이 말한 "레이어 1 산출물의 통로"다.
@@ -25,6 +25,7 @@ from catchup.knowledge_maintenance.contracts.extraction import EntityCandidateDr
 from catchup.knowledge_maintenance.contracts.extraction import KnowledgeCandidateBatch
 from catchup.knowledge_maintenance.contracts.extraction import is_metadata_local_key
 from catchup.knowledge_maintenance.contracts.extraction import metadata_local_key
+from catchup.knowledge_maintenance.domain.evidence import locate_excerpt
 from catchup.knowledge_maintenance.domain.knowledge_candidate import ExtractionMethod
 from catchup.knowledge_maintenance.domain.knowledge_candidate import ExtractionRunSpec
 from catchup.knowledge_maintenance.domain.knowledge_candidate import ExtractionRunStatus
@@ -145,7 +146,7 @@ def store_knowledge_candidates(
             entity_ids=entity_ids,
             uow=uow,
         )
-        evidence_count = _store_evidence(
+        evidence = _store_evidence(
             observation,
             batch,
             run_id=run.id,
@@ -176,7 +177,10 @@ def store_knowledge_candidates(
             ),
             claim_count=len(claim_ids),
             relation_count=len(relation_ids),
-            evidence_link_count=evidence_count,
+            evidence_link_count=evidence.total,
+            located_claim_count=evidence.located_claims,
+            demoted_not_found_count=evidence.not_found_claims,
+            demoted_ambiguous_count=evidence.ambiguous_claims,
         )
 
         return CandidateStorageResult(
@@ -185,7 +189,10 @@ def store_knowledge_candidates(
                 entity_ids=entity_ids,
                 claim_ids=claim_ids,
                 relation_ids=relation_ids,
-                evidence_link_count=evidence_count,
+                evidence_link_count=evidence.total,
+                located_claim_count=evidence.located_claims,
+                demoted_not_found_count=evidence.not_found_claims,
+                demoted_ambiguous_count=evidence.ambiguous_claims,
             )
         )
 
@@ -319,6 +326,23 @@ def _resolve(
     return found
 
 
+@dataclass(frozen=True, slots=True)
+class EvidenceStorageCounts:
+    """근거 링크 저장의 집계를 표현한다.
+
+    Attributes:
+        total: 남긴 근거 링크 전체 수를 나타낸다.
+        located_claims: 인용을 본문에서 다시 찾은 claim 수를 나타낸다.
+        not_found_claims: 인용이 본문에 없어 낮춘 claim 수를 나타낸다.
+        ambiguous_claims: 인용이 여러 번 나와 낮춘 claim 수를 나타낸다.
+    """
+
+    total: int = 0
+    located_claims: int = 0
+    not_found_claims: int = 0
+    ambiguous_claims: int = 0
+
+
 def _store_evidence(
     observation: StoredObservation,
     batch: KnowledgeCandidateBatch,
@@ -329,13 +353,18 @@ def _store_evidence(
     claim_ids: dict[str, uuid.UUID],
     relation_ids: dict[str, uuid.UUID],
     uow: KnowledgeCandidateUnitOfWork,
-) -> int:
+) -> EvidenceStorageCounts:
     """모든 후보를 그것이 나온 Observation에 잇는다.
 
-    Claim은 근거 문구를 함께 남긴다. Extractor가 원문에서 그대로 인용하도록
-    계약이 요구하므로, 나중에 서버가 본문에서 위치를 다시 찾을 수 있다.
+    Claim은 근거 문구를 함께 남기고, 서버가 그 문구를 본문에서 다시 찾아
+    위치를 확정한다. LLM의 인용 주장은 검증 없이 믿지 않는다. 정확히 한 번
+    나오면 locator에 문자 offset을 적고, 없거나 여러 번이면 위치 없이 문서
+    단위 근거로 낮춘다.
     """
     count = 0
+    located = 0
+    not_found = 0
+    ambiguous = 0
     for local_key, candidate_id in entity_ids.items():
         del local_key
         uow.knowledge_candidates.add_evidence_link(
@@ -348,12 +377,33 @@ def _store_evidence(
 
     statements = {draft.local_key: draft.statement for draft in batch.claims}
     for local_key, candidate_id in claim_ids.items():
+        statement = statements.get(local_key)
+        locator = locate_excerpt(observation.observation.content, statement)
+        if locator is None:
+            content = observation.observation.content or ""
+            if statement in content:
+                ambiguous += 1
+                reason = "ambiguous"
+            else:
+                not_found += 1
+                reason = "not_found"
+            logger.info(
+                "claim_evidence_demoted",
+                workspace_id=observation.workspace_id,
+                observation_id=str(observation.id),
+                run_id=str(run_id),
+                claim_local_key=local_key,
+                reason=reason,
+            )
+        else:
+            located += 1
         uow.knowledge_candidates.add_evidence_link(
             workspace_id=observation.workspace_id,
             run_id=run_id,
             evidence_node_id=evidence_node_id,
             claim_candidate_id=candidate_id,
-            excerpt=statements.get(local_key),
+            excerpt=statement,
+            locator=locator,
         )
         count += 1
 
@@ -367,7 +417,12 @@ def _store_evidence(
         )
         count += 1
 
-    return count
+    return EvidenceStorageCounts(
+        total=count,
+        located_claims=located,
+        not_found_claims=not_found,
+        ambiguous_claims=ambiguous,
+    )
 
 
 def _utcnow() -> datetime:
