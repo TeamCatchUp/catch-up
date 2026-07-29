@@ -377,7 +377,7 @@ def test_find_pending_contradiction_proposals_lists_open_rows(
             detector="catchup.claim_value_conflict",
             detector_version="1",
             summary="값이 둘이다",
-            resolver_metadata={},
+            resolver_metadata={"predicate": "release_month"},
         )
         uow.mutation_proposals.add_duplicate_proposal(
             workspace_id=workspace_id,
@@ -398,9 +398,11 @@ def test_find_pending_contradiction_proposals_lists_open_rows(
         found = uow.mutation_proposals.find_pending_contradiction_proposals(
             workspace_id=workspace_id,
         )
-    assert (conflict_id, conflict_key) in found
+    # predicate를 함께 돌려줘야 사전이 아직 그 속성을 비교하는지 보고
+    # 회수 여부를 정할 수 있다.
+    assert (conflict_id, conflict_key, "release_month") in found
     # 병합 계획서는 다른 종류라 회수 대상이 아니다.
-    assert duplicate_key not in {key for _, key in found}
+    assert duplicate_key not in {key for _, key, _ in found}
 
     with uow_factory() as uow:
         uow.mutation_proposals.abandon(proposal_id=conflict_id)
@@ -410,7 +412,7 @@ def test_find_pending_contradiction_proposals_lists_open_rows(
         found = uow.mutation_proposals.find_pending_contradiction_proposals(
             workspace_id=workspace_id,
         )
-    assert conflict_key not in {key for _, key in found}
+    assert conflict_key not in {key for _, key, _ in found}
 
 
 def _rewrite_claim(

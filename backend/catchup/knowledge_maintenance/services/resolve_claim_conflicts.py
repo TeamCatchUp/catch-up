@@ -115,12 +115,14 @@ def resolve_claim_conflicts(
         )
 
         groups: dict[tuple[str, str], list[StoredClaimCandidate]] = {}
+        value_types: dict[str, str] = {}
         without_key = 0
         for claim in claims:
             entry = vocabulary.predicate_entry(claim.predicate)
             if entry is None or entry.value_type == "text":
                 # 사전 미등재와 text 치역은 비교하지 않는다.
                 continue
+            value_types[claim.predicate] = entry.value_type
             subject_key = _subject_key(claim, duplicate_groups)
             if subject_key is None:
                 without_key += 1
@@ -137,14 +139,12 @@ def resolve_claim_conflicts(
         duplicates = 0
         active_keys: set[str] = set()
         for (subject_key, predicate), members in sorted(groups.items()):
-            entry = vocabulary.predicate_entry(predicate)
-            if entry is None:  # 그룹을 만든 뒤로 사전이 바뀔 일은 없다.
-                continue
+            value_type = value_types[predicate]
             parsed: list[tuple[StoredClaimCandidate, str]] = []
             for claim in members:
                 # 치역은 사전이 정한다. LLM이 신고한 value_type을 믿으면
                 # 잘못 신고된 claim이 비교에서 조용히 빠진다.
-                normalized = normalize_value(entry.value_type, claim.value)
+                normalized = normalize_value(value_type, claim.value)
                 if normalized is None:
                     unparseable += 1
                     continue
@@ -216,23 +216,12 @@ def resolve_claim_conflicts(
                 claim_count=len(parsed),
             )
 
-        # 이번 실행이 확인하지 못한 모순 계획서는 회수한다. 값이
-        # 수렴하거나 근거 claim이 사라지거나 subject가 다른 키로
-        # 이주하면 옛 계획서는 더 이상 사실이 아니기 때문이다.
-        stale = uow.mutation_proposals.find_pending_contradiction_proposals(
+        abandoned += _recall_stale_proposals(
             workspace_id=workspace_id,
+            vocabulary=vocabulary,
+            active_keys=active_keys,
+            uow=uow,
         )
-        for proposal_id, idempotency_key in stale:
-            if idempotency_key in active_keys:
-                continue
-            uow.mutation_proposals.abandon(proposal_id=proposal_id)
-            abandoned += 1
-            logger.info(
-                "claim_conflict_recalled",
-                workspace_id=workspace_id,
-                proposal_id=str(proposal_id),
-                idempotency_key=idempotency_key,
-            )
 
         uow.commit()
 
@@ -259,6 +248,63 @@ def resolve_claim_conflicts(
         duplicates_observed=result.duplicates_observed,
     )
     return result
+
+
+def _recall_stale_proposals(
+    *,
+    workspace_id: int,
+    vocabulary: ExtractionVocabulary,
+    active_keys: set[str],
+    uow: ClaimConflictUnitOfWork,
+) -> int:
+    """이번 실행이 확인하지 못한 모순 계획서를 접고 그 수를 돌려준다.
+
+    회수 범위를 "지금도 비교 대상인 predicate"로 좁힌다. 사전에서 빠진
+    predicate의 claim은 애초에 그룹이 되지 못해 확인된 key도 남지
+    않는다. 그것을 모순 소멸로 읽으면 어휘를 되돌리는 한 번의 실행이
+    검토 큐를 통째로 비운다. 회수하지 않고 남기는 쪽이 안전하다.
+    사람이 접는 것은 언제든 되지만 접힌 큐를 되살릴 수는 없다.
+    """
+    if not vocabulary.predicate_entries:
+        # v1 스냅샷은 이름 목록만 있어 치역을 모른다. 모든 claim이 비교
+        # 대상에서 빠지므로 회수 판정의 근거가 통째로 사라진다.
+        logger.warning(
+            "claim_conflict_recall_skipped",
+            workspace_id=workspace_id,
+            reason="vocabulary_without_predicate_entries",
+            snapshot_id=vocabulary.snapshot_id,
+        )
+        return 0
+
+    stale = uow.mutation_proposals.find_pending_contradiction_proposals(
+        workspace_id=workspace_id,
+    )
+    abandoned = 0
+    for proposal_id, idempotency_key, predicate in stale:
+        if idempotency_key in active_keys:
+            continue
+        entry = (
+            vocabulary.predicate_entry(predicate)
+            if predicate is not None
+            else None
+        )
+        if entry is None or entry.value_type == "text":
+            logger.info(
+                "claim_conflict_recall_deferred",
+                workspace_id=workspace_id,
+                proposal_id=str(proposal_id),
+                predicate=predicate,
+            )
+            continue
+        uow.mutation_proposals.abandon(proposal_id=proposal_id)
+        abandoned += 1
+        logger.info(
+            "claim_conflict_recalled",
+            workspace_id=workspace_id,
+            proposal_id=str(proposal_id),
+            predicate=predicate,
+        )
+    return abandoned
 
 
 def _subject_key(

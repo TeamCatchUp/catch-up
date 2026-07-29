@@ -122,7 +122,11 @@ class FakeProposalRepository:
     def find_pending_contradiction_proposals(self, *, workspace_id):
         del workspace_id
         return tuple(
-            (record["id"], key)
+            (
+                record["id"],
+                key,
+                record["resolver_metadata"].get("predicate"),
+            )
             for key, record in self.rows.items()
             if record["status"] == "pending"
             and record["kind"] == "contradiction"
@@ -508,6 +512,102 @@ def test_subject_key_migration_abandons_old_key() -> None:
     assert uow.mutation_proposals.abandoned == [old_id]
     assert uow.mutation_proposals.rows[old_key]["status"] == "abandoned"
     assert uow.mutation_proposals.rows[new_key]["status"] == "pending"
+
+
+def _conflicted_uow(node_id: uuid.UUID) -> FakeUnitOfWork:
+    """모순 proposal이 하나 열려 있는 상태를 만든다."""
+    uow = FakeUnitOfWork(
+        [
+            _claim(value=60, node_id=node_id, minutes=0),
+            _claim(value=120, node_id=node_id, minutes=5),
+        ]
+    )
+    resolve_claim_conflicts(
+        workspace_id=WORKSPACE,
+        vocabulary=VOCABULARY,
+        uow=uow,
+    )
+    return uow
+
+
+def test_predicate_removed_from_dictionary_keeps_proposal() -> None:
+    """사전에서 빠진 predicate의 proposal은 회수하지 않는다."""
+    node_id = uuid.uuid4()
+    uow = _conflicted_uow(node_id)
+    key = conflict_idempotency_key(f"node:{node_id}", "rate_limit")
+    shrunk = ExtractionVocabulary(
+        snapshot_id="v2",
+        predicate_entries=(
+            PredicateEntry(
+                name="release_date",
+                definition="배포일을 나타낸다.",
+                value_type="date",
+            ),
+        ),
+    )
+
+    result = resolve_claim_conflicts(
+        workspace_id=WORKSPACE,
+        vocabulary=shrunk,
+        uow=uow,
+    )
+
+    assert result.proposals_abandoned == 0
+    assert uow.mutation_proposals.abandoned == []
+    assert uow.mutation_proposals.rows[key]["status"] == "pending"
+
+
+def test_predicate_turned_text_keeps_proposal() -> None:
+    """치역이 text로 바뀐 predicate의 proposal도 남긴다."""
+    node_id = uuid.uuid4()
+    uow = _conflicted_uow(node_id)
+    key = conflict_idempotency_key(f"node:{node_id}", "rate_limit")
+    loosened = ExtractionVocabulary(
+        snapshot_id="v2",
+        predicate_entries=(
+            PredicateEntry(
+                name="rate_limit",
+                definition="분당 허용 호출 수를 서술한다.",
+                value_type="text",
+            ),
+        ),
+    )
+
+    result = resolve_claim_conflicts(
+        workspace_id=WORKSPACE,
+        vocabulary=loosened,
+        uow=uow,
+    )
+
+    assert result.proposals_abandoned == 0
+    assert uow.mutation_proposals.rows[key]["status"] == "pending"
+
+
+def test_legacy_vocabulary_skips_recall_with_warning() -> None:
+    """사전 항목이 없는 v1 스냅샷은 회수를 통째로 건너뛴다."""
+    node_id = uuid.uuid4()
+    uow = _conflicted_uow(node_id)
+    key = conflict_idempotency_key(f"node:{node_id}", "rate_limit")
+    legacy = ExtractionVocabulary(
+        snapshot_id="v1",
+        predicates=("rate_limit", "release_date"),
+    )
+
+    with capture_logs() as logs:
+        result = resolve_claim_conflicts(
+            workspace_id=WORKSPACE,
+            vocabulary=legacy,
+            uow=uow,
+        )
+
+    assert result.proposals_abandoned == 0
+    assert uow.mutation_proposals.rows[key]["status"] == "pending"
+    skipped = [
+        entry
+        for entry in logs
+        if entry["event"] == "claim_conflict_recall_skipped"
+    ]
+    assert skipped and skipped[0]["log_level"] == "warning"
 
 
 def test_dictionary_value_type_wins_over_claim_report() -> None:

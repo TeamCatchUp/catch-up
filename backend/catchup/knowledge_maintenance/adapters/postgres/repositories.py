@@ -825,11 +825,14 @@ class SqlAlchemyMutationProposalRepository:
         self,
         *,
         workspace_id: int,
-    ) -> tuple[tuple[uuid.UUID, str], ...]:
-        """아직 열려 있는 모순 계획서를 식별자와 key로 되짚는다.
+    ) -> tuple[tuple[uuid.UUID, str, str | None], ...]:
+        """열려 있는 모순 계획서를 식별자·key·predicate로 되짚는다.
 
         proposal_kind로 거른다. detector로 거르면 판정기 이름이 바뀐 뒤
         옛 이름으로 쓴 계획서가 회수 대상에서 빠져 영원히 남는다.
+
+        predicate는 resolver_metadata에서 읽는다. 값이 문자열이 아니면
+        None으로 준다. 호출자가 사전과 견줄 수 없는 값이기 때문이다.
         """
         rows = self._session.scalars(
             select(KnowledgeMutationProposalRow).where(
@@ -839,7 +842,17 @@ class SqlAlchemyMutationProposalRepository:
                 KnowledgeMutationProposalRow.status == "pending",
             )
         ).all()
-        return tuple((row.id, row.idempotency_key) for row in rows)
+        found: list[tuple[uuid.UUID, str, str | None]] = []
+        for row in rows:
+            predicate = (row.resolver_metadata or {}).get("predicate")
+            found.append(
+                (
+                    row.id,
+                    row.idempotency_key,
+                    predicate if isinstance(predicate, str) else None,
+                )
+            )
+        return tuple(found)
 
     def add_contradiction_proposal(
         self,
