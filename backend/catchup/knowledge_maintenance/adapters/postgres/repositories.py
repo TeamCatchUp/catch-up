@@ -57,6 +57,7 @@ from catchup.knowledge_maintenance.contracts.extraction import ExtractionVocabul
 from catchup.knowledge_maintenance.contracts.extraction import (
     RelationAssertionCandidateDraft,
 )
+from catchup.knowledge_maintenance.domain.entity_resolution import anchor_excerpt
 from catchup.knowledge_maintenance.domain.evidence import Locator
 from catchup.knowledge_maintenance.domain.knowledge_candidate import (
     EntityResolutionStatus,
@@ -613,7 +614,7 @@ class SqlAlchemyKnowledgeCandidateRepository:
             select(
                 KnowledgeEntityCandidateRow,
                 SourceVersionRow.source_type,
-                func.left(ObservationRow.normalized_content, 300),
+                ObservationRow.normalized_content,
             )
             .join(
                 KnowledgeExtractionRunRow,
@@ -654,9 +655,13 @@ class SqlAlchemyKnowledgeCandidateRepository:
                 raw_payload=row.raw_payload,
                 source_type=source_type,
                 created_at=row.created_at,
-                observation_excerpt=excerpt,
+                observation_excerpt=(
+                    anchor_excerpt(content, row.proposed_name)
+                    if content is not None
+                    else None
+                ),
             )
-            for row, source_type, excerpt in (
+            for row, source_type, content in (
                 self._session.execute(statement).all()
             )
         )

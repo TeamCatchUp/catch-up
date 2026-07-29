@@ -6,6 +6,8 @@ from datetime import datetime
 from datetime import timedelta
 from datetime import timezone
 
+from structlog.testing import capture_logs
+
 from catchup.knowledge_maintenance.domain.entity_resolution import IdentityVerdict
 from catchup.knowledge_maintenance.domain.entity_resolution import normalize_name
 from catchup.knowledge_maintenance.domain.knowledge_candidate import (
@@ -312,6 +314,28 @@ def test_same_verdict_writes_one_proposal_per_group() -> None:
     assert len(kwargs["merge_candidate_ids"]) == 1
     # 후보는 pending 유지 — 적용은 승인 트랜잭션의 일이다.
     assert uow.knowledge_candidates.resolved == {}
+
+
+def test_false_verdict_logs_group_and_reason() -> None:
+    """same=false 판정도 그룹 이름과 이유가 감사 로그에 남는다."""
+    judge = FakeJudge(
+        IdentityVerdict(
+            same=False,
+            reason="속성이 달라 다른 대상이다",
+            proposed_type=None,
+            proposed_name=None,
+        )
+    )
+    uow = FakeUnitOfWork(_slack_group())
+
+    with capture_logs() as logs:
+        resolve_entity_candidates(workspace_id=WORKSPACE, judge=judge, uow=uow)
+
+    judged = [entry for entry in logs if entry["event"] == "identity_group_judged"]
+    assert len(judged) == 1
+    assert judged[0]["group"] == "slack"
+    assert judged[0]["same"] is False
+    assert judged[0]["reason"] == "속성이 달라 다른 대상이다"
 
 
 def test_rerun_with_same_members_skips_judge_and_keeps_proposal() -> None:
