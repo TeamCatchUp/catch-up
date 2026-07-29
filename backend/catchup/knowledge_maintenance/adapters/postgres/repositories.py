@@ -57,6 +57,7 @@ from catchup.knowledge_maintenance.contracts.extraction import ExtractionVocabul
 from catchup.knowledge_maintenance.contracts.extraction import (
     RelationAssertionCandidateDraft,
 )
+from catchup.knowledge_maintenance.domain.claim_conflict import StoredClaimCandidate
 from catchup.knowledge_maintenance.domain.entity_resolution import anchor_excerpt
 from catchup.knowledge_maintenance.domain.evidence import Locator
 from catchup.knowledge_maintenance.domain.knowledge_candidate import (
@@ -666,6 +667,71 @@ class SqlAlchemyKnowledgeCandidateRepository:
             )
         )
 
+    def find_claim_candidates(
+        self,
+        *,
+        workspace_id: int,
+    ) -> tuple[StoredClaimCandidate, ...]:
+        """claim 후보를 관찰 시각과 subject 해소 결과와 함께 읽는다.
+
+        관찰 시각은 후보 → 실행 → 입력 Observation 노드 → Observation →
+        SourceVersion 경로로 얻는다. 어느 주장이 더 최근인지가 모순
+        판정의 입력이기 때문이다. subject가 entity 후보라면 그 후보 행을
+        outer join해 해소 결과를 함께 담는다. 아직 해소되지 않은 후보도
+        빠지면 안 되므로 outer join이어야 한다.
+        """
+        statement = (
+            select(
+                KnowledgeClaimCandidateRow,
+                SourceVersionRow.observed_at,
+                KnowledgeEntityCandidateRow.resolved_node_id,
+            )
+            .join(
+                KnowledgeExtractionRunRow,
+                KnowledgeClaimCandidateRow.extraction_run_id
+                == KnowledgeExtractionRunRow.id,
+            )
+            .join(
+                KnowledgeNodeRow,
+                KnowledgeExtractionRunRow.input_node_id == KnowledgeNodeRow.id,
+            )
+            .join(
+                ObservationRow,
+                ObservationRow.id
+                == cast(KnowledgeNodeRow.resource_id, PgUUID),
+            )
+            .join(
+                SourceVersionRow,
+                ObservationRow.source_version_id == SourceVersionRow.id,
+            )
+            .outerjoin(
+                KnowledgeEntityCandidateRow,
+                KnowledgeClaimCandidateRow.subject_entity_candidate_id
+                == KnowledgeEntityCandidateRow.id,
+            )
+            .where(KnowledgeClaimCandidateRow.workspace_id == workspace_id)
+            .order_by(
+                KnowledgeClaimCandidateRow.created_at,
+                KnowledgeClaimCandidateRow.id,
+            )
+        )
+        return tuple(
+            StoredClaimCandidate(
+                id=row.id,
+                subject_entity_candidate_id=row.subject_entity_candidate_id,
+                subject_node_id=row.subject_node_id,
+                subject_resolved_node_id=resolved_node_id,
+                predicate=row.predicate,
+                value_type=row.value_type,
+                value=row.value,
+                statement=row.statement,
+                observed_at=observed_at,
+            )
+            for row, observed_at, resolved_node_id in (
+                self._session.execute(statement).all()
+            )
+        )
+
     def mark_entity_resolved(
         self,
         *,
@@ -724,6 +790,101 @@ class SqlAlchemyMutationProposalRepository:
         )
         self._session.flush()
 
+    def find_pending_duplicate_groups(
+        self,
+        *,
+        workspace_id: int,
+    ) -> dict[uuid.UUID, uuid.UUID]:
+        """아직 열려 있는 병합 계획서의 멤버를 계획서로 되짚는다.
+
+        member_ids를 SQL에서 펼치지 않고 Python에서 읽는다. 열려 있는
+        계획서의 수가 작아 이득이 없고, JSONB 배열을 펼치는 질의는 읽기
+        어렵기 때문이다.
+        """
+        rows = self._session.scalars(
+            select(KnowledgeMutationProposalRow).where(
+                KnowledgeMutationProposalRow.workspace_id == workspace_id,
+                KnowledgeMutationProposalRow.proposal_kind == "duplicate",
+                KnowledgeMutationProposalRow.status == "pending",
+            )
+        ).all()
+        groups: dict[uuid.UUID, uuid.UUID] = {}
+        for row in rows:
+            member_ids = (row.resolver_metadata or {}).get("member_ids")
+            if not isinstance(member_ids, list):
+                continue
+            for member_id in member_ids:
+                try:
+                    groups[uuid.UUID(str(member_id))] = row.id
+                except ValueError:
+                    # 낡은 metadata가 식별자가 아닌 값을 담고 있으면 버린다.
+                    continue
+        return groups
+
+    def add_contradiction_proposal(
+        self,
+        *,
+        workspace_id: int,
+        idempotency_key: str,
+        trigger_claim_candidate_id: uuid.UUID,
+        detector: str,
+        detector_version: str,
+        summary: str,
+        resolver_metadata: Mapping[str, JsonValue],
+    ) -> uuid.UUID:
+        """같은 대상의 주장끼리 값이 어긋난다는 사실을 계획서로 남긴다.
+
+        `add_duplicate_proposal`과 같이 같은 key의 행이 있으면 상태와
+        무관하게 되살려 갈아끼운다. `(workspace_id, idempotency_key)`
+        UNIQUE가 상태를 구분하지 않기 때문이다.
+
+        trigger는 셋 중 정확히 하나만 채워야 하므로 entity trigger를
+        비운다. operation은 만들지 않고, 되살린 행에 남아 있던 것은
+        지운다.
+        """
+        existing = self._session.scalar(
+            select(KnowledgeMutationProposalRow).where(
+                KnowledgeMutationProposalRow.workspace_id == workspace_id,
+                KnowledgeMutationProposalRow.idempotency_key
+                == idempotency_key,
+            )
+        )
+        if existing is not None:
+            proposal_id = existing.id
+            existing.status = "pending"
+            existing.proposal_kind = "contradiction"
+            existing.trigger_entity_candidate_id = None
+            existing.trigger_relation_assertion_candidate_id = None
+            existing.trigger_claim_candidate_id = trigger_claim_candidate_id
+            existing.detector = detector
+            existing.detector_version = detector_version
+            existing.summary = summary
+            existing.resolver_metadata = dict(resolver_metadata)
+            self._session.execute(
+                KnowledgeMutationOperationRow.__table__.delete().where(
+                    KnowledgeMutationOperationRow.proposal_id == proposal_id
+                )
+            )
+            self._session.flush()
+            return proposal_id
+
+        proposal_id = uuid.uuid4()
+        self._session.add(
+            KnowledgeMutationProposalRow(
+                id=proposal_id,
+                workspace_id=workspace_id,
+                trigger_claim_candidate_id=trigger_claim_candidate_id,
+                proposal_kind="contradiction",
+                detector=detector,
+                detector_version=detector_version,
+                summary=summary,
+                idempotency_key=idempotency_key,
+                resolver_metadata=dict(resolver_metadata),
+            )
+        )
+        self._session.flush()
+        return proposal_id
+
     def add_duplicate_proposal(
         self,
         *,
@@ -757,6 +918,11 @@ class SqlAlchemyMutationProposalRepository:
         if existing is not None:
             proposal_id = existing.id
             existing.status = "pending"
+            existing.proposal_kind = "duplicate"
+            # trigger는 셋 중 정확히 하나여야 한다. 다른 종류의 계획서가
+            # 쓰던 key를 되살리는 경우 나머지를 비워야 한다.
+            existing.trigger_claim_candidate_id = None
+            existing.trigger_relation_assertion_candidate_id = None
             existing.trigger_entity_candidate_id = trigger_entity_candidate_id
             existing.detector = detector
             existing.detector_version = detector_version
