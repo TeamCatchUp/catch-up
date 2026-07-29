@@ -43,17 +43,29 @@ such sentences out mentally and judge from what remains.
 {% set anchored = entity_types | default([], true)
    | selectattr("identity_scope", "equalto", "anchored") | list -%}
 {% if anchored %}- Some entity kinds are **anchored**: the name alone does not
-  identify anything until you know which organization it belongs to.
+  identify anything until you know which organization it belongs to. This
+  bullet applies only to candidates whose type is listed right below. For
+  any other type, skip it.
 {% for entry in anchored %}  - << entry.name >> — << entry.definition >>
-{% endfor %}  For candidates of these kinds, answer `same = true` only when
-  **every** context names the organization and the names match. Different
-  organizations → `same = false`. A context that names no organization
-  → `same = false`, because the owner is unknown, not because it is
-  presumed to be the same one.
-  The contexts are separate documents, often from different customers.
-  Sounding like one conversation is not evidence: matching topic, tone,
-  speaker role, or an adjacent-looking exchange tells you nothing about
-  which organization owns the thing. Only an explicit organization does.
+{% endfor %}  For anchored candidates, answer `same = true` only when
+  **every** context names an organization and those organizations are the
+  same one. Different organizations, or a context naming none →
+  `same = false`; an unnamed owner is unknown, not presumed shared.
+  An organization is named wherever it appears in that context, including
+  as a prefix of the candidate name ("<organization> <team>"). Match by
+  referent, not by string: abbreviations, legal-entity forms,
+  romanizations, and spacing or casing variants of one organization are
+  the same organization.
+  Read each context on its own. You are not told whether two contexts
+  share a document or a customer, so matching topic, tone, speaker role,
+  or an exchange that reads as adjacent is not an organization clue.
+  If only some members of the group are of an anchored kind, the rule
+  still governs the whole group — a group is one thing.
+  The rule adds one requirement, the organization, and nothing else. Once
+  the organizations match, answer `same = true` unless another rule above
+  says the name refers to different things. Keep `same` and `reason`
+  consistent: never answer `same = false` while your reason says the
+  contexts point to one organization's one team, unit, or role.
 {% endif %}- When the contexts are too thin to tell them apart, prefer
   `same = false`. A wrong merge cannot be undone; a missed merge can be
   proposed again later.

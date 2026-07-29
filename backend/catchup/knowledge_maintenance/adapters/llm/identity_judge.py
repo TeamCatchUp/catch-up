@@ -64,6 +64,9 @@ class BedrockIdentityJudge:
         group: tuple[JudgeCandidate, ...],
     ) -> IdentityVerdict:
         """그룹이 같은 대상인지 판정한다. 계약 위반이면 예외를 올린다."""
+        # 사전 정의문은 발췌와 달리 규칙 자리에 그대로 들어간다. 검토를
+        # 거쳐 발행된 계약 문장이기 때문이다. 원문에서 흘러든 텍스트를
+        # 여기에 넣으면 발췌 격리 문단을 우회하는 통로가 된다.
         rendered = prompt_loader.get_prompt(
             TEMPLATE_PATH,
             candidates=group,

@@ -25,8 +25,14 @@ LLM은 비결정적이므로 `--repeat`로 같은 케이스를 여러 번 묻는
   표현하지 못한다. 멤버별 판정 계약으로 바꿀 때 별도 평가한다.
 - canonical type/name은 결과에 표시만 한다. 폐쇄 어휘가 생기기 전에는
   엄격 채점하지 않는다.
-- 주입하는 entity 종류 사전은 `EVAL_ENTITY_TYPES`로 고정한다. 발행된 DB
-  스냅샷과 어긋날 수 있으므로, 스냅샷을 고칠 때 이쪽도 같이 본다.
+- 주입하는 entity 종류 사전은 발행 대상 파일 `data/vocabulary_v2.json`을
+  그대로 읽는다. 평가용 사본을 따로 두지 않으므로 사전과 평가가 갈라지지
+  않는다.
+- 그 사전에 `person`이 없다. `직원04(동명이인)`의 후보 type이 `person`이라
+  이 케이스만은 anchored 규칙이 적용되지 않고 일반 규칙으로 판정된다.
+  평가 편의로 사전에 종류를 더하지 않는다. 사전은 사용자 검토를 거쳐
+  발행되는 계약이고, 평가가 그 계약을 몰래 늘리면 러너가 실제로 쓰는
+  사전과 달라진다. `person` 추가 여부는 사전 쪽에서 결정할 일이다.
 
 실행:
     uv run python -m catchup.evaluation.eval_identity_judge
@@ -36,9 +42,11 @@ LLM은 비결정적이므로 `--repeat`로 같은 케이스를 여러 번 묻는
 from __future__ import annotations
 
 import argparse
+import json
 import uuid
 from dataclasses import dataclass
 from enum import StrEnum
+from pathlib import Path
 
 from catchup.components.llm.constants import LlmProvider
 from catchup.components.llm.constants import ModelCapacity
@@ -47,58 +55,46 @@ from catchup.knowledge_maintenance.adapters.llm.identity_judge import (
     BedrockIdentityJudge,
 )
 from catchup.knowledge_maintenance.contracts.extraction import EntityTypeEntry
+from catchup.knowledge_maintenance.contracts.extraction import ExtractionVocabulary
 from catchup.knowledge_maintenance.domain.entity_resolution import IdentityVerdict
 from catchup.knowledge_maintenance.ports.identity_judge import JudgeCandidate
 
-# 평가에 주입하는 entity 종류 사전이다. DB 스냅샷을 읽지 않고 여기에
-# 고정한다. 평가 입력이 발행 시점의 DB 상태에 따라 흔들리면 같은 케이스의
-# 점수를 시점 간에 비교할 수 없다.
-EVAL_ENTITY_TYPES: tuple[EntityTypeEntry, ...] = (
-    EntityTypeEntry(
-        name="team",
-        definition=(
-            "A working group inside one organization. Its name is reused "
-            "across organizations, so it identifies nothing on its own."
-        ),
-        identity_scope="anchored",
-        examples=("보안팀", "운영팀"),
-    ),
-    EntityTypeEntry(
-        name="organizational_unit",
-        definition=(
-            "A department or unit inside one organization, named the same "
-            "way in many organizations."
-        ),
-        identity_scope="anchored",
-        examples=("인사팀", "물류운영팀"),
-    ),
-    EntityTypeEntry(
-        name="person",
-        definition=(
-            "An individual, identified only together with the organization "
-            "or role they belong to."
-        ),
-        identity_scope="anchored",
-        examples=("직원04 매니저",),
-    ),
-    EntityTypeEntry(
-        name="product",
-        definition=(
-            "A product offered under a name that identifies it on its own, "
-            "across every organization that adopts it."
-        ),
-        identity_scope="standalone",
-        examples=("캐치업", "Jira"),
-    ),
-    EntityTypeEntry(
-        name="platform",
-        definition=(
-            "An externally operated platform whose name identifies it on "
-            "its own."
-        ),
-        identity_scope="standalone",
-        examples=("Slack",),
-    ),
+VOCABULARY_PATH = Path(__file__).parent / "data" / "vocabulary_v2.json"
+
+
+def _load_eval_entity_types() -> tuple[EntityTypeEntry, ...]:
+    """발행 대상 어휘 v2 파일에서 entity 종류 사전을 읽는다.
+
+    DB가 아니라 파일에서 읽는다. 평가 입력이 발행 시점의 DB 상태를 따라
+    흔들리면 시점이 다른 점수를 비교할 수 없다. 반대로 사전을 이 파일에
+    따로 적어 두면 프롬프트가 실제로 받는 정의와 평가가 재는 정의가 조용히
+    갈라진다. 그래서 같은 원본 하나를 본다.
+
+    파일이 없으면 조용히 넘기지 않는다. 빈 사전으로 돌린 결과는 anchored
+    규칙을 아예 재지 않은 점수인데 표에는 정상 실행처럼 찍히기 때문이다.
+    """
+    payload = json.loads(VOCABULARY_PATH.read_text(encoding="utf-8"))
+    return ExtractionVocabulary.model_validate(payload).entity_type_entries
+
+
+EVAL_ENTITY_TYPES: tuple[EntityTypeEntry, ...] = _load_eval_entity_types()
+
+# 규칙을 확정한 뒤 회귀만 확인하려고 한 번씩 물어본 held-out 케이스다.
+# 이 결과는 프롬프트 수정의 근거가 아니었다. 수정은 regression의
+# `보안팀(정보 부족)`을 보고 확정했고, 아래 케이스는 그 수정이 이미 맞던
+# 것을 깨뜨리지 않았는지 확인한 사살이다. 그래도 튜닝 시점에 답을 본 것은
+# 사실이므로 기록을 코드에 남긴다. 다음 프롬프트 버전에서는 다시 깨끗한
+# held-out으로 친다.
+#
+# 같은 probe에 있던 `보안팀(같은 회사)`는 여기 없다. 그 케이스는 확인에
+# 그치지 않고 실제로 깨져 프롬프트를 고치게 했으므로, 사살 기록이 아니라
+# `seen_during_tuning=True`로 regression에 강등했다.
+PROBED_AFTER_FREEZE: frozenset[str] = frozenset(
+    {
+        "직원04(동명이인)",
+        "운영팀(회사 다름)",
+        "보안팀(회사 다름)",
+    }
 )
 
 
@@ -434,10 +430,65 @@ REGRESSION_CASES: tuple[EvalCase, ...] = (
             ),
         ),
     ),
+    EvalCase(
+        # anchored 규칙을 조인 뒤 이 케이스가 0/4로 뒤집혔다. 두 발췌가
+        # 모두 "페이루트 보안팀"이라고 적었는데도 모델이 소속이 없다고
+        # 답했다. 규칙이 조직명을 별도 항목으로만 찾게 만든 탓이라, 이름
+        # 안에 붙은 조직도 조직 명시라는 문장을 프롬프트에 넣어 잡았다.
+        # 이 수정의 근거가 된 케이스이므로 held-out에 둘 수 없다.
+        key="보안팀(같은 회사)",
+        kind="same-type-same-tenant",
+        expected=ExpectedIdentity.SAME,
+        seen_during_tuning=True,
+        rationale=(
+            "두 발췌 모두 페이루트의 같은 보안팀을 명시적으로 가리킨다."
+        ),
+        members=(
+            (
+                "team",
+                "보안팀",
+                "고객: 페이루트 보안팀은 결제 데이터 때문에 전용 VPC를 "
+                "우선 검토하고 있습니다.",
+            ),
+            (
+                "team",
+                "보안팀",
+                "고객: API 명세는 페이루트 보안팀 승인을 받은 뒤 "
+                "전달드릴게요.",
+            ),
+        ),
+    ),
 )
 
 
 HELD_OUT_CASES: tuple[EvalCase, ...] = (
+    EvalCase(
+        # PROBED_AFTER_FREEZE에 기록된 확인 사살 케이스다. 규칙 확정 뒤
+        # 회귀 확인으로 한 번 물었고 결과가 프롬프트 수정의 근거는
+        # 아니었으므로 held-out에 남긴다.
+        key="보안팀(회사 다름)",
+        kind="same-type-cross-tenant",
+        expected=ExpectedIdentity.DIFFERENT,
+        seen_during_tuning=False,
+        rationale=(
+            "한빛물류 보안팀과 페이루트 보안팀은 이름과 type만 같은 "
+            "서로 다른 조직이다."
+        ),
+        members=(
+            (
+                "team",
+                "보안팀",
+                "고객: 한빛물류는 전용 VPC를 선호하지만 보안팀은 "
+                "온프레미스도 같이 검토하자고 합니다.",
+            ),
+            (
+                "team",
+                "보안팀",
+                "고객: 페이루트 보안팀 확인을 받은 뒤 API 명세를 "
+                "전달드릴게요.",
+            ),
+        ),
+    ),
     EvalCase(
         key="직원04(동명이인)",
         kind="same-type-homonym",
@@ -557,53 +608,6 @@ HELD_OUT_CASES: tuple[EvalCase, ...] = (
                 "Jira",
                 "고객: 세종에듀 개발팀이 Jira를 쓰는데, 스프린트 회고 "
                 "내용까지 검색 대상으로 넣고 싶어요.",
-            ),
-        ),
-    ),
-    EvalCase(
-        key="보안팀(회사 다름)",
-        kind="same-type-cross-tenant",
-        expected=ExpectedIdentity.DIFFERENT,
-        seen_during_tuning=False,
-        rationale=(
-            "한빛물류 보안팀과 페이루트 보안팀은 이름과 type만 같은 "
-            "서로 다른 조직이다."
-        ),
-        members=(
-            (
-                "team",
-                "보안팀",
-                "고객: 한빛물류는 전용 VPC를 선호하지만 보안팀은 "
-                "온프레미스도 같이 검토하자고 합니다.",
-            ),
-            (
-                "team",
-                "보안팀",
-                "고객: 페이루트 보안팀 확인을 받은 뒤 API 명세를 "
-                "전달드릴게요.",
-            ),
-        ),
-    ),
-    EvalCase(
-        key="보안팀(같은 회사)",
-        kind="same-type-same-tenant",
-        expected=ExpectedIdentity.SAME,
-        seen_during_tuning=False,
-        rationale=(
-            "두 발췌 모두 페이루트의 같은 보안팀을 명시적으로 가리킨다."
-        ),
-        members=(
-            (
-                "team",
-                "보안팀",
-                "고객: 페이루트 보안팀은 결제 데이터 때문에 전용 VPC를 "
-                "우선 검토하고 있습니다.",
-            ),
-            (
-                "team",
-                "보안팀",
-                "고객: API 명세는 페이루트 보안팀 승인을 받은 뒤 "
-                "전달드릴게요.",
             ),
         ),
     ),
