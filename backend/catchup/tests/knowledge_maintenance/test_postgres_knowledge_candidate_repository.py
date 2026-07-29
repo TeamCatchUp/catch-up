@@ -457,6 +457,78 @@ def test_every_candidate_is_linked_to_its_observation(
     assert claim_links[0]["excerpt"] == "9월 예정입니다."
 
 
+def _claim_locator(
+    session_factory: Callable[[], Session],
+    run_id: uuid.UUID,
+) -> dict:
+    """저장된 Claim evidence의 locator를 읽는다."""
+    with KnowledgeMaintenanceUnitOfWork(session_factory) as uow:
+        session = uow.knowledge_candidates._session  # noqa: SLF001
+        return session.scalars(
+            select(EvidenceLinkRow).where(
+                EvidenceLinkRow.extraction_run_id == run_id,
+                EvidenceLinkRow.claim_candidate_id.is_not(None),
+            )
+        ).one().locator
+
+
+def test_claim_evidence_carries_char_offset_locator(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+) -> None:
+    """본문에서 다시 찾은 인용은 문자 offset으로 위치가 남는다."""
+    observation = _stored_observation(workspace_id, session_factory)
+
+    result = store_knowledge_candidates(
+        observation,
+        _batch(),
+        spec=SPEC,
+        uow=uow_factory(),
+    )
+
+    locator = _claim_locator(session_factory, result.batch.run_id)
+    assert locator["kind"] == "char_offset"
+    sliced = NORMALIZED_CONTENT[locator["start"] : locator["end"]]
+    assert sliced == "9월 예정입니다."
+    assert result.batch.located_claim_count == 1
+    assert result.batch.demoted_claim_count == 0
+
+
+def test_claim_evidence_is_demoted_when_statement_is_fabricated(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+) -> None:
+    """본문에 없는 인용은 위치 없이 문서 단위 근거로 낮아진다."""
+    observation = _stored_observation(workspace_id, session_factory)
+    batch = _batch().model_copy(
+        update={
+            "claims": (
+                ClaimCandidateDraft(
+                    local_key="c1",
+                    subject_local_key="e1",
+                    predicate="release_month",
+                    value_type="text",
+                    value="2026-09",
+                    statement="12월로 미뤄졌습니다.",
+                ),
+            )
+        }
+    )
+
+    result = store_knowledge_candidates(
+        observation,
+        batch,
+        spec=SPEC,
+        uow=uow_factory(),
+    )
+
+    assert _claim_locator(session_factory, result.batch.run_id) == {}
+    assert result.batch.located_claim_count == 0
+    assert result.batch.demoted_claim_count == 1
+
+
 def test_run_is_recorded_as_succeeded(
     workspace_id: int,
     session_factory: Callable[[], Session],

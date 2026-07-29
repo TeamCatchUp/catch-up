@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import uuid
+from dataclasses import asdict
 from datetime import datetime
 from decimal import Decimal
 
@@ -48,6 +49,7 @@ from catchup.knowledge_maintenance.contracts.extraction import ExtractionVocabul
 from catchup.knowledge_maintenance.contracts.extraction import (
     RelationAssertionCandidateDraft,
 )
+from catchup.knowledge_maintenance.domain.evidence import Locator
 from catchup.knowledge_maintenance.domain.knowledge_candidate import ExtractionMethod
 from catchup.knowledge_maintenance.domain.knowledge_candidate import ExtractionRun
 from catchup.knowledge_maintenance.domain.knowledge_candidate import ExtractionRunSpec
@@ -490,6 +492,7 @@ class SqlAlchemyKnowledgeCandidateRepository:
         claim_candidate_id: uuid.UUID | None = None,
         relation_candidate_id: uuid.UUID | None = None,
         excerpt: str | None = None,
+        locator: Locator | None = None,
     ) -> uuid.UUID:
         """후보가 어떤 Observation에서 나왔는지 잇는다."""
         row = KnowledgeCandidateEvidenceLinkRow(
@@ -502,6 +505,7 @@ class SqlAlchemyKnowledgeCandidateRepository:
             evidence_node_id=evidence_node_id,
             evidence_role="supports",
             excerpt=excerpt,
+            locator=asdict(locator) if locator is not None else {},
         )
         self._session.add(row)
         self._session.flush()

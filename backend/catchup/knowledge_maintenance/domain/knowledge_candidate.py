@@ -147,6 +147,9 @@ class StoredCandidateBatch:
         claim_ids: claim 후보의 local_key와 식별자를 잇는다.
         relation_ids: relation 후보의 local_key와 식별자를 잇는다.
         evidence_link_count: 남긴 근거 링크의 수를 나타낸다.
+        located_claim_count: 인용을 본문에서 다시 찾은 claim의 수를 나타낸다.
+        demoted_claim_count: 인용을 찾지 못해 문서 단위 근거로 낮춘 claim의
+            수를 나타낸다.
     """
 
     run_id: uuid.UUID
@@ -154,6 +157,8 @@ class StoredCandidateBatch:
     claim_ids: Mapping[str, uuid.UUID] = field(default_factory=dict)
     relation_ids: Mapping[str, uuid.UUID] = field(default_factory=dict)
     evidence_link_count: int = 0
+    located_claim_count: int = 0
+    demoted_claim_count: int = 0
 
     @property
     def candidate_count(self) -> int:
