@@ -18,6 +18,13 @@ they all refer to the **same real-world thing**.
   labels → they are the same. Answer `same = true`.
 - Same word used for genuinely different things (a channel named "Slack"
   vs the Slack platform itself) → answer `same = false`.
+- Judge identity by **what kind of thing** the name refers to in each
+  context, not by whether its attribute values agree. Conflicting
+  numbers, limits, dates, or availability (e.g. one document says a rate
+  limit is 60/min, another says 120/min) are **not** evidence of
+  different identity — the same thing's attributes change over time, and
+  sources can be wrong. Contradictions between claims are handled by a
+  later stage; your question is only whether the referent is the same.
 - When the contexts are too thin to tell them apart, prefer
   `same = false`. A wrong merge cannot be undone; a missed merge can be
   proposed again later.
