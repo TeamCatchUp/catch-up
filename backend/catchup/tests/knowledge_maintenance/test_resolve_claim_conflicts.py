@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from dataclasses import replace
 from datetime import datetime
 from datetime import timedelta
 from datetime import timezone
@@ -118,6 +119,15 @@ class FakeProposalRepository:
         del workspace_id
         return dict(self.duplicate_groups)
 
+    def find_pending_contradiction_proposals(self, *, workspace_id):
+        del workspace_id
+        return tuple(
+            (record["id"], key)
+            for key, record in self.rows.items()
+            if record["status"] == "pending"
+            and record["kind"] == "contradiction"
+        )
+
     def add_contradiction_proposal(self, **kwargs):
         key = kwargs["idempotency_key"]
         existing = self.rows.get(key)
@@ -125,6 +135,7 @@ class FakeProposalRepository:
         self.rows[key] = {
             "id": proposal_id,
             "status": "pending",
+            "kind": "contradiction",
             "resolver_metadata": dict(kwargs["resolver_metadata"]),
             "kwargs": kwargs,
         }
@@ -397,3 +408,124 @@ def test_rerun_with_same_members_skips() -> None:
         if entry["event"] == "claim_conflict_completed"
     ]
     assert completed and completed[0]["proposals_created"] == 0
+
+
+def test_converged_values_abandon_stale_proposal() -> None:
+    """값이 한 종으로 수렴하면 낡은 proposal을 회수한다."""
+    node_id = uuid.uuid4()
+    first = _claim(value=60, node_id=node_id, minutes=0)
+    second = _claim(value=120, node_id=node_id, minutes=5)
+    uow = FakeUnitOfWork([first, second])
+    resolve_claim_conflicts(
+        workspace_id=WORKSPACE,
+        vocabulary=VOCABULARY,
+        uow=uow,
+    )
+    key = conflict_idempotency_key(f"node:{node_id}", "rate_limit")
+    proposal_id = uow.mutation_proposals.rows[key]["id"]
+
+    uow.knowledge_candidates.claims = [first, replace(second, value=60)]
+    result = resolve_claim_conflicts(
+        workspace_id=WORKSPACE,
+        vocabulary=VOCABULARY,
+        uow=uow,
+    )
+
+    assert result.conflicts_found == 0
+    assert result.proposals_created == 0
+    assert result.proposals_abandoned == 1
+    assert uow.mutation_proposals.abandoned == [proposal_id]
+    assert uow.mutation_proposals.rows[key]["status"] == "abandoned"
+
+
+def test_disappeared_claims_abandon_stale_proposal() -> None:
+    """비교할 claim이 사라지면 남아 있던 proposal을 접는다."""
+    node_id = uuid.uuid4()
+    uow = FakeUnitOfWork(
+        [
+            _claim(value=60, node_id=node_id, minutes=0),
+            _claim(value=120, node_id=node_id, minutes=5),
+        ]
+    )
+    resolve_claim_conflicts(
+        workspace_id=WORKSPACE,
+        vocabulary=VOCABULARY,
+        uow=uow,
+    )
+    key = conflict_idempotency_key(f"node:{node_id}", "rate_limit")
+
+    uow.knowledge_candidates.claims = []
+    result = resolve_claim_conflicts(
+        workspace_id=WORKSPACE,
+        vocabulary=VOCABULARY,
+        uow=uow,
+    )
+
+    assert result.proposals_abandoned == 1
+    assert uow.mutation_proposals.rows[key]["status"] == "abandoned"
+
+
+def test_subject_key_migration_abandons_old_key() -> None:
+    """subject 키가 이주하면 옛 키를 접고 새 키로 다시 쓴다."""
+    first_candidate = uuid.uuid4()
+    second_candidate = uuid.uuid4()
+    group_proposal = uuid.uuid4()
+    first = _claim(value=60, candidate_id=first_candidate, minutes=0)
+    second = _claim(value=120, candidate_id=second_candidate, minutes=5)
+    uow = FakeUnitOfWork(
+        [first, second],
+        duplicate_groups={
+            first_candidate: group_proposal,
+            second_candidate: group_proposal,
+        },
+    )
+    resolve_claim_conflicts(
+        workspace_id=WORKSPACE,
+        vocabulary=VOCABULARY,
+        uow=uow,
+    )
+    old_key = conflict_idempotency_key(
+        f"proposal:{group_proposal}", "rate_limit"
+    )
+    old_id = uow.mutation_proposals.rows[old_key]["id"]
+
+    # 병합이 승인되면 후보가 노드로 해소되고 병합 계획서는 닫힌다.
+    node_id = uuid.uuid4()
+    uow.knowledge_candidates.claims = [
+        replace(first, subject_resolved_node_id=node_id),
+        replace(second, subject_resolved_node_id=node_id),
+    ]
+    uow.mutation_proposals.duplicate_groups = {}
+    result = resolve_claim_conflicts(
+        workspace_id=WORKSPACE,
+        vocabulary=VOCABULARY,
+        uow=uow,
+    )
+
+    new_key = conflict_idempotency_key(f"node:{node_id}", "rate_limit")
+    assert result.proposals_created == 1
+    assert result.proposals_abandoned == 1
+    assert uow.mutation_proposals.abandoned == [old_id]
+    assert uow.mutation_proposals.rows[old_key]["status"] == "abandoned"
+    assert uow.mutation_proposals.rows[new_key]["status"] == "pending"
+
+
+def test_dictionary_value_type_wins_over_claim_report() -> None:
+    """claim이 잘못 신고한 value_type 대신 사전 치역으로 비교한다."""
+    node_id = uuid.uuid4()
+    uow = FakeUnitOfWork(
+        [
+            _claim(value=60, value_type="text", node_id=node_id, minutes=0),
+            _claim(value=120, value_type="text", node_id=node_id, minutes=5),
+        ]
+    )
+
+    result = resolve_claim_conflicts(
+        workspace_id=WORKSPACE,
+        vocabulary=VOCABULARY,
+        uow=uow,
+    )
+
+    assert result.groups_compared == 1
+    assert result.conflicts_found == 1
+    assert result.proposals_created == 1

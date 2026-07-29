@@ -38,6 +38,20 @@ class MutationProposalRepository(Protocol):
         """
         ...
 
+    def find_pending_contradiction_proposals(
+        self,
+        *,
+        workspace_id: int,
+    ) -> tuple[tuple[uuid.UUID, str], ...]:
+        """아직 열려 있는 모순 계획서를 식별자와 key로 되짚는다.
+
+        모순은 사라질 수 있다. 값이 한 종으로 수렴하거나 근거 claim이
+        없어지거나 subject가 다른 키로 이주하면 옛 계획서는 더 이상
+        사실이 아니다. 이번 실행이 확인한 key와 견주어 회수하려면 열려
+        있는 목록을 통째로 읽어야 한다.
+        """
+        ...
+
     def add_duplicate_proposal(
         self,
         *,

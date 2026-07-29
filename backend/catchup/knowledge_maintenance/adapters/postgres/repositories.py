@@ -821,6 +821,26 @@ class SqlAlchemyMutationProposalRepository:
                     continue
         return groups
 
+    def find_pending_contradiction_proposals(
+        self,
+        *,
+        workspace_id: int,
+    ) -> tuple[tuple[uuid.UUID, str], ...]:
+        """아직 열려 있는 모순 계획서를 식별자와 key로 되짚는다.
+
+        proposal_kind로 거른다. detector로 거르면 판정기 이름이 바뀐 뒤
+        옛 이름으로 쓴 계획서가 회수 대상에서 빠져 영원히 남는다.
+        """
+        rows = self._session.scalars(
+            select(KnowledgeMutationProposalRow).where(
+                KnowledgeMutationProposalRow.workspace_id == workspace_id,
+                KnowledgeMutationProposalRow.proposal_kind
+                == "contradiction",
+                KnowledgeMutationProposalRow.status == "pending",
+            )
+        ).all()
+        return tuple((row.id, row.idempotency_key) for row in rows)
+
     def add_contradiction_proposal(
         self,
         *,

@@ -10,19 +10,29 @@ from sqlalchemy import create_engine
 from sqlalchemy import inspect
 from sqlalchemy import select
 from sqlalchemy import text
+from sqlalchemy import update
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 from sqlalchemy.orm import sessionmaker
 
 from catchup.configs.config import settings
+from catchup.db.models import KnowledgeClaimCandidate as ClaimRow
 from catchup.db.models import KnowledgeMutationOperation as OperationRow
 from catchup.db.models import KnowledgeMutationProposal as ProposalRow
 from catchup.db.models import Workspace
 from catchup.knowledge_maintenance.adapters.postgres.unit_of_work import (
     KnowledgeMaintenanceUnitOfWork,
 )
+from catchup.knowledge_maintenance.contracts.extraction import ExtractionVocabulary
+from catchup.knowledge_maintenance.contracts.extraction import PredicateEntry
 from catchup.knowledge_maintenance.domain.knowledge_candidate import (
     EntityResolutionStatus,
+)
+from catchup.knowledge_maintenance.services.resolve_claim_conflicts import (
+    conflict_idempotency_key,
+)
+from catchup.knowledge_maintenance.services.resolve_claim_conflicts import (
+    resolve_claim_conflicts,
 )
 from catchup.knowledge_maintenance.services.store_knowledge_candidates import (
     store_knowledge_candidates,
@@ -344,3 +354,151 @@ def test_find_pending_duplicate_groups_maps_members_to_proposal(
         )
     assert representative not in groups
     assert other not in groups
+
+
+def test_find_pending_contradiction_proposals_lists_open_rows(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+) -> None:
+    """열려 있는 모순 계획서만 key와 함께 되짚힌다."""
+    stored = _stored_candidates(workspace_id, session_factory, uow_factory)
+    trigger = stored.claim_ids["c1"]
+    representative = stored.entity_ids["e1"]
+    other = stored.entity_ids["e2"]
+    conflict_key = f"contradiction:{uuid.uuid4().hex}"
+    duplicate_key = f"group:{uuid.uuid4().hex}"
+
+    with uow_factory() as uow:
+        conflict_id = uow.mutation_proposals.add_contradiction_proposal(
+            workspace_id=workspace_id,
+            idempotency_key=conflict_key,
+            trigger_claim_candidate_id=trigger,
+            detector="catchup.claim_value_conflict",
+            detector_version="1",
+            summary="값이 둘이다",
+            resolver_metadata={},
+        )
+        uow.mutation_proposals.add_duplicate_proposal(
+            workspace_id=workspace_id,
+            idempotency_key=duplicate_key,
+            trigger_entity_candidate_id=representative,
+            detector="catchup.name_group_judge",
+            detector_version="1",
+            summary="같은 이름 후보 병합",
+            resolver_metadata={"member_hash": "abc"},
+            representative_candidate_id=representative,
+            merge_candidate_ids=(other,),
+            proposed_type="feature",
+            proposed_name="결제 기능",
+        )
+        uow.commit()
+
+    with uow_factory() as uow:
+        found = uow.mutation_proposals.find_pending_contradiction_proposals(
+            workspace_id=workspace_id,
+        )
+    assert (conflict_id, conflict_key) in found
+    # 병합 계획서는 다른 종류라 회수 대상이 아니다.
+    assert duplicate_key not in {key for _, key in found}
+
+    with uow_factory() as uow:
+        uow.mutation_proposals.abandon(proposal_id=conflict_id)
+        uow.commit()
+
+    with uow_factory() as uow:
+        found = uow.mutation_proposals.find_pending_contradiction_proposals(
+            workspace_id=workspace_id,
+        )
+    assert conflict_key not in {key for _, key in found}
+
+
+def _rewrite_claim(
+    session_factory: Callable[[], Session],
+    claim_id: uuid.UUID,
+    predicate: str,
+    value: object,
+) -> None:
+    """저장된 claim의 predicate와 값을 시나리오에 맞게 바꾼다."""
+    with session_factory() as session:
+        session.execute(
+            update(ClaimRow)
+            .where(ClaimRow.id == claim_id)
+            .values(predicate=predicate, value_type="number", value=value)
+        )
+        session.commit()
+
+
+def test_converged_values_abandon_stale_contradiction_proposal(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+) -> None:
+    """실 DB에서도 값이 수렴하면 재실행이 낡은 계획서를 접는다."""
+    predicate = f"conflict_test_{uuid.uuid4().hex[:8]}"
+    vocabulary = ExtractionVocabulary(
+        snapshot_id="test",
+        predicate_entries=(
+            PredicateEntry(
+                name=predicate,
+                definition="테스트용 수치를 나타낸다.",
+                value_type="number",
+            ),
+        ),
+    )
+    first = _stored_candidates(workspace_id, session_factory, uow_factory)
+    second = _stored_candidates(workspace_id, session_factory, uow_factory)
+
+    with uow_factory() as uow:
+        node = uow.knowledge_nodes.create_entity_node(
+            workspace_id=workspace_id,
+            entity_type="feature",
+            canonical_key=f"{SOURCE_TYPE}:feature:{uuid.uuid4().hex}",
+            display_name="결제 기능",
+        )
+        for stored in (first, second):
+            uow.knowledge_candidates.mark_entity_resolved(
+                candidate_id=stored.entity_ids["e1"],
+                status=EntityResolutionStatus.ACCEPTED,
+                resolved_node_id=node.id,
+            )
+        uow.commit()
+
+    _rewrite_claim(session_factory, first.claim_ids["c1"], predicate, 60)
+    _rewrite_claim(session_factory, second.claim_ids["c1"], predicate, 120)
+
+    created = resolve_claim_conflicts(
+        workspace_id=workspace_id,
+        vocabulary=vocabulary,
+        uow=uow_factory(),
+    )
+    assert created.conflicts_found == 1
+    assert created.proposals_created == 1
+
+    key = conflict_idempotency_key(f"node:{node.id}", predicate)
+    with uow_factory() as uow:
+        opened = uow.mutation_proposals.find_pending_by_idempotency_key(
+            workspace_id=workspace_id,
+            idempotency_key=key,
+        )
+    assert opened is not None
+
+    _rewrite_claim(session_factory, second.claim_ids["c1"], predicate, 60)
+    recalled = resolve_claim_conflicts(
+        workspace_id=workspace_id,
+        vocabulary=vocabulary,
+        uow=uow_factory(),
+    )
+
+    assert recalled.conflicts_found == 0
+    assert recalled.proposals_abandoned >= 1
+    with uow_factory() as uow:
+        still_open = uow.mutation_proposals.find_pending_by_idempotency_key(
+            workspace_id=workspace_id,
+            idempotency_key=key,
+        )
+    assert still_open is None
+    with session_factory() as session:
+        row = session.get(ProposalRow, opened.id)
+        assert row is not None
+        assert row.status == "abandoned"

@@ -82,7 +82,8 @@ class ClaimConflictResult:
         groups_compared: 실제로 값을 견준 그룹 수를 나타낸다.
         conflicts_found: 값이 두 종 이상으로 갈린 그룹 수를 나타낸다.
         proposals_created: 새로 쓴 모순 proposal 수를 나타낸다.
-        proposals_abandoned: 구성이 달라져 접은 proposal 수를 나타낸다.
+        proposals_abandoned: 구성이 달라지거나 모순이 사라져 접은
+            proposal 수를 나타낸다.
         duplicates_observed: 같은 값이 겹쳐 나온 수를 나타낸다.
     """
 
@@ -134,10 +135,16 @@ def resolve_claim_conflicts(
         created = 0
         abandoned = 0
         duplicates = 0
+        active_keys: set[str] = set()
         for (subject_key, predicate), members in sorted(groups.items()):
+            entry = vocabulary.predicate_entry(predicate)
+            if entry is None:  # 그룹을 만든 뒤로 사전이 바뀔 일은 없다.
+                continue
             parsed: list[tuple[StoredClaimCandidate, str]] = []
             for claim in members:
-                normalized = normalize_value(claim.value_type, claim.value)
+                # 치역은 사전이 정한다. LLM이 신고한 value_type을 믿으면
+                # 잘못 신고된 claim이 비교에서 조용히 빠진다.
+                normalized = normalize_value(entry.value_type, claim.value)
                 if normalized is None:
                     unparseable += 1
                     continue
@@ -155,6 +162,7 @@ def resolve_claim_conflicts(
             parsed.sort(key=lambda item: (item[0].observed_at, item[0].id))
             member_hash = _member_hash(claim for claim, _ in parsed)
             key = conflict_idempotency_key(subject_key, predicate)
+            active_keys.add(key)
             existing = (
                 uow.mutation_proposals.find_pending_by_idempotency_key(
                     workspace_id=workspace_id,
@@ -206,6 +214,24 @@ def resolve_claim_conflicts(
                 predicate=predicate,
                 distinct_values=len(distinct),
                 claim_count=len(parsed),
+            )
+
+        # 이번 실행이 확인하지 못한 모순 계획서는 회수한다. 값이
+        # 수렴하거나 근거 claim이 사라지거나 subject가 다른 키로
+        # 이주하면 옛 계획서는 더 이상 사실이 아니기 때문이다.
+        stale = uow.mutation_proposals.find_pending_contradiction_proposals(
+            workspace_id=workspace_id,
+        )
+        for proposal_id, idempotency_key in stale:
+            if idempotency_key in active_keys:
+                continue
+            uow.mutation_proposals.abandon(proposal_id=proposal_id)
+            abandoned += 1
+            logger.info(
+                "claim_conflict_recalled",
+                workspace_id=workspace_id,
+                proposal_id=str(proposal_id),
+                idempotency_key=idempotency_key,
             )
 
         uow.commit()
