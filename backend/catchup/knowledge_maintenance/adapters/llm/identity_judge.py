@@ -7,6 +7,7 @@ from langchain_core.language_models import BaseChatModel
 from pydantic import BaseModel
 from pydantic import ConfigDict
 
+from catchup.knowledge_maintenance.contracts.extraction import EntityTypeEntry
 from catchup.knowledge_maintenance.domain.entity_resolution import IdentityVerdict
 from catchup.knowledge_maintenance.ports.identity_judge import JudgeCandidate
 from catchup.observability.logging import get_logger
@@ -40,9 +41,18 @@ class BedrockIdentityJudge:
 
     port는 sync다. 서비스와 러너가 이벤트 루프를 몰라도 되도록 비동기
     호출을 여기서 감싼다.
+
+    entity 종류 사전은 생성 시점에 주입한다. anchored 종류는 소속 없이
+    이름만으로 지시 대상이 정해지지 않으므로 판정 규칙이 달라진다. 사전이
+    비면 프롬프트에서 그 규칙이 통째로 빠진다.
     """
 
-    def __init__(self, llm: BaseChatModel) -> None:
+    def __init__(
+        self,
+        llm: BaseChatModel,
+        entity_types: tuple[EntityTypeEntry, ...] = (),
+    ) -> None:
+        self._entity_types = entity_types
         self._structured = llm.with_structured_output(
             IdentityJudgeOutput,
             method="function_calling",
@@ -57,6 +67,7 @@ class BedrockIdentityJudge:
         rendered = prompt_loader.get_prompt(
             TEMPLATE_PATH,
             candidates=group,
+            entity_types=self._entity_types,
         )
 
         started = time.perf_counter()

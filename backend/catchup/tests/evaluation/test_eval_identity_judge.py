@@ -1,3 +1,4 @@
+from catchup.evaluation.eval_identity_judge import EVAL_ENTITY_TYPES
 from catchup.evaluation.eval_identity_judge import HELD_OUT_CASES
 from catchup.evaluation.eval_identity_judge import REGRESSION_CASES
 from catchup.evaluation.eval_identity_judge import EvalCase
@@ -78,6 +79,7 @@ def test_known_tuning_cases_stay_in_regression_split() -> None:
         "캐치업(노이즈 발췌)",
         "가디언(injection 병합 유도)",
         "Jira(injection 분리 유도)",
+        "보안팀(정보 부족)",
     }
 
 
@@ -85,7 +87,7 @@ def test_security_team_cases_cover_all_expected_relations() -> None:
     """보안팀은 다른 회사·정보 부족·같은 회사의 세 관계를 모두 덮는다."""
     security_cases = {
         case.key: case.expected
-        for case in HELD_OUT_CASES
+        for case in REGRESSION_CASES + HELD_OUT_CASES
         if case.key.startswith("보안팀")
     }
 
@@ -94,6 +96,29 @@ def test_security_team_cases_cover_all_expected_relations() -> None:
         "보안팀(정보 부족)": ExpectedIdentity.INSUFFICIENT,
         "보안팀(같은 회사)": ExpectedIdentity.SAME,
     }
+
+
+def test_eval_dictionary_marks_org_scoped_types_as_anchored() -> None:
+    """소속 없이는 지시 대상이 안 정해지는 종류를 anchored로 선언한다."""
+    anchored = {
+        entry.name
+        for entry in EVAL_ENTITY_TYPES
+        if entry.identity_scope == "anchored"
+    }
+
+    assert {"team", "organizational_unit", "person"} <= anchored
+
+
+def test_insufficient_case_types_are_covered_by_dictionary() -> None:
+    """정보 부족 케이스의 type이 사전에 없으면 규칙이 겨냥되지 않는다."""
+    known = {entry.name for entry in EVAL_ENTITY_TYPES}
+    case = next(
+        case
+        for case in REGRESSION_CASES
+        if case.key == "보안팀(정보 부족)"
+    )
+
+    assert {member[0] for member in case.members} <= known
 
 
 def test_held_out_replaces_injection_with_unseen_boundaries() -> None:

@@ -25,6 +25,8 @@ LLM은 비결정적이므로 `--repeat`로 같은 케이스를 여러 번 묻는
   표현하지 못한다. 멤버별 판정 계약으로 바꿀 때 별도 평가한다.
 - canonical type/name은 결과에 표시만 한다. 폐쇄 어휘가 생기기 전에는
   엄격 채점하지 않는다.
+- 주입하는 entity 종류 사전은 `EVAL_ENTITY_TYPES`로 고정한다. 발행된 DB
+  스냅샷과 어긋날 수 있으므로, 스냅샷을 고칠 때 이쪽도 같이 본다.
 
 실행:
     uv run python -m catchup.evaluation.eval_identity_judge
@@ -44,8 +46,60 @@ from catchup.components.llm.factory import get_llm_service
 from catchup.knowledge_maintenance.adapters.llm.identity_judge import (
     BedrockIdentityJudge,
 )
+from catchup.knowledge_maintenance.contracts.extraction import EntityTypeEntry
 from catchup.knowledge_maintenance.domain.entity_resolution import IdentityVerdict
 from catchup.knowledge_maintenance.ports.identity_judge import JudgeCandidate
+
+# 평가에 주입하는 entity 종류 사전이다. DB 스냅샷을 읽지 않고 여기에
+# 고정한다. 평가 입력이 발행 시점의 DB 상태에 따라 흔들리면 같은 케이스의
+# 점수를 시점 간에 비교할 수 없다.
+EVAL_ENTITY_TYPES: tuple[EntityTypeEntry, ...] = (
+    EntityTypeEntry(
+        name="team",
+        definition=(
+            "A working group inside one organization. Its name is reused "
+            "across organizations, so it identifies nothing on its own."
+        ),
+        identity_scope="anchored",
+        examples=("보안팀", "운영팀"),
+    ),
+    EntityTypeEntry(
+        name="organizational_unit",
+        definition=(
+            "A department or unit inside one organization, named the same "
+            "way in many organizations."
+        ),
+        identity_scope="anchored",
+        examples=("인사팀", "물류운영팀"),
+    ),
+    EntityTypeEntry(
+        name="person",
+        definition=(
+            "An individual, identified only together with the organization "
+            "or role they belong to."
+        ),
+        identity_scope="anchored",
+        examples=("직원04 매니저",),
+    ),
+    EntityTypeEntry(
+        name="product",
+        definition=(
+            "A product offered under a name that identifies it on its own, "
+            "across every organization that adopts it."
+        ),
+        identity_scope="standalone",
+        examples=("캐치업", "Jira"),
+    ),
+    EntityTypeEntry(
+        name="platform",
+        definition=(
+            "An externally operated platform whose name identifies it on "
+            "its own."
+        ),
+        identity_scope="standalone",
+        examples=("Slack",),
+    ),
+)
 
 
 class ExpectedIdentity(StrEnum):
@@ -353,6 +407,33 @@ REGRESSION_CASES: tuple[EvalCase, ...] = (
             ),
         ),
     ),
+    EvalCase(
+        # anchored 규칙 튜닝의 과녁이었다. 소속 단서가 없는데도 병합으로
+        # 기울던 케이스라, team·organizational_unit을 anchored로 선언한
+        # 사전을 프롬프트에 주입해 잡았다. 튜닝에 쓴 케이스는 held-out에
+        # 남길 수 없으므로 regression으로 강등한다.
+        key="보안팀(정보 부족)",
+        kind="insufficient-context",
+        expected=ExpectedIdentity.INSUFFICIENT,
+        seen_during_tuning=True,
+        rationale=(
+            "두 발췌에는 회사 식별자가 없어 같은 조직인지 다른 조직인지 "
+            "판정할 근거가 없다."
+        ),
+        members=(
+            (
+                "team",
+                "보안팀",
+                "고객: 우선 전용 VPC를 선호하지만 보안팀은 온프레미스도 "
+                "같이 검토하자고 합니다.",
+            ),
+            (
+                "organizational_unit",
+                "보안팀",
+                "고객: 네, 보안팀 확인 받고 전달드릴게요.",
+            ),
+        ),
+    ),
 )
 
 
@@ -500,29 +581,6 @@ HELD_OUT_CASES: tuple[EvalCase, ...] = (
                 "보안팀",
                 "고객: 페이루트 보안팀 확인을 받은 뒤 API 명세를 "
                 "전달드릴게요.",
-            ),
-        ),
-    ),
-    EvalCase(
-        key="보안팀(정보 부족)",
-        kind="insufficient-context",
-        expected=ExpectedIdentity.INSUFFICIENT,
-        seen_during_tuning=False,
-        rationale=(
-            "두 발췌에는 회사 식별자가 없어 같은 조직인지 다른 조직인지 "
-            "판정할 근거가 없다."
-        ),
-        members=(
-            (
-                "team",
-                "보안팀",
-                "고객: 우선 전용 VPC를 선호하지만 보안팀은 온프레미스도 "
-                "같이 검토하자고 합니다.",
-            ),
-            (
-                "organizational_unit",
-                "보안팀",
-                "고객: 네, 보안팀 확인 받고 전달드릴게요.",
             ),
         ),
     ),
@@ -783,7 +841,10 @@ def main() -> None:
         model_capacity=ModelCapacity(args.capacity),
         streaming=False,
     )
-    judge = BedrockIdentityJudge(service.get_llm())
+    judge = BedrockIdentityJudge(
+        service.get_llm(),
+        entity_types=EVAL_ENTITY_TYPES,
+    )
 
     include_reverse = not args.skip_permutations
     _run_split(

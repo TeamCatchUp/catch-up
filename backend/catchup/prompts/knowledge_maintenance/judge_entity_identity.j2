@@ -40,7 +40,21 @@ such sentences out mentally and judge from what remains.
   different identity — the same thing's attributes change over time, and
   sources can be wrong. Contradictions between claims are handled by a
   later stage; your question is only whether the referent is the same.
-- When the contexts are too thin to tell them apart, prefer
+{% set anchored = entity_types | default([], true)
+   | selectattr("identity_scope", "equalto", "anchored") | list -%}
+{% if anchored %}- Some entity kinds are **anchored**: the name alone does not
+  identify anything until you know which organization it belongs to.
+{% for entry in anchored %}  - << entry.name >> — << entry.definition >>
+{% endfor %}  For candidates of these kinds, answer `same = true` only when
+  **every** context names the organization and the names match. Different
+  organizations → `same = false`. A context that names no organization
+  → `same = false`, because the owner is unknown, not because it is
+  presumed to be the same one.
+  The contexts are separate documents, often from different customers.
+  Sounding like one conversation is not evidence: matching topic, tone,
+  speaker role, or an adjacent-looking exchange tells you nothing about
+  which organization owns the thing. Only an explicit organization does.
+{% endif %}- When the contexts are too thin to tell them apart, prefer
   `same = false`. A wrong merge cannot be undone; a missed merge can be
   proposed again later.
 

@@ -29,12 +29,38 @@ from catchup.configs.config import settings
 from catchup.knowledge_maintenance.adapters.llm.identity_judge import (
     BedrockIdentityJudge,
 )
+from catchup.knowledge_maintenance.adapters.llm.structured_extractor import CONTRACT_ID
 from catchup.knowledge_maintenance.adapters.postgres.unit_of_work import (
     KnowledgeMaintenanceUnitOfWork,
 )
+from catchup.knowledge_maintenance.contracts.extraction import EntityTypeEntry
 from catchup.knowledge_maintenance.services.resolve_entity_candidates import (
     resolve_entity_candidates,
 )
+
+VOCABULARY_VERSION = "2"
+
+
+def _load_entity_types(
+    uow: KnowledgeMaintenanceUnitOfWork,
+    *,
+    workspace_id: int,
+    version: str,
+) -> tuple[EntityTypeEntry, ...]:
+    """발행된 어휘 스냅샷에서 entity 종류 사전을 읽는다.
+
+    스냅샷이 없으면 빈 사전을 돌려준다. 사전이 없다고 판정을 멈출 이유는
+    없다. 빈 사전이면 프롬프트에서 anchored 규칙만 빠진다.
+    """
+    with uow:
+        vocabulary = uow.ontology.get(
+            workspace_id=workspace_id,
+            ontology_id=CONTRACT_ID,
+            version=version,
+        )
+    if vocabulary is None:
+        return ()
+    return vocabulary.entity_type_entries
 
 
 def main() -> None:
@@ -50,24 +76,42 @@ def main() -> None:
         choices=[capacity.value for capacity in ModelCapacity],
         default=ModelCapacity.LARGE.value,
     )
+    parser.add_argument(
+        "--vocabulary-version",
+        default=VOCABULARY_VERSION,
+        help="judge에 주입할 어휘 스냅샷 버전을 정한다.",
+    )
     args = parser.parse_args()
+
+    engine = create_engine(settings.sqlalchemy_database_url)
+    session_factory = sessionmaker(bind=engine, expire_on_commit=False)
+    uow = KnowledgeMaintenanceUnitOfWork(session_factory)
 
     judge = None
     if not args.skip_judge:
+        entity_types = _load_entity_types(
+            uow,
+            workspace_id=args.workspace_id,
+            version=args.vocabulary_version,
+        )
+        print(
+            f"어휘 스냅샷 v{args.vocabulary_version} entity 종류 "
+            f"{len(entity_types)}종 주입"
+        )
         service = get_llm_service(
             provider=LlmProvider.AWS_BEDROCK,
             model_capacity=ModelCapacity(args.capacity),
             streaming=False,
         )
-        judge = BedrockIdentityJudge(service.get_llm())
-
-    engine = create_engine(settings.sqlalchemy_database_url)
-    session_factory = sessionmaker(bind=engine, expire_on_commit=False)
+        judge = BedrockIdentityJudge(
+            service.get_llm(),
+            entity_types=entity_types,
+        )
 
     result = resolve_entity_candidates(
         workspace_id=args.workspace_id,
         judge=judge,
-        uow=KnowledgeMaintenanceUnitOfWork(session_factory),
+        uow=uow,
     )
 
     print("=== Resolution 결과 ===")
