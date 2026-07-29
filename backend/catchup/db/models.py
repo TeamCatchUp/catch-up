@@ -4462,6 +4462,303 @@ class KnowledgeCandidateEvidenceLink(Base):
     )
 
 
+class KnowledgeMutationProposal(Base):
+    """resolver가 발견한 신규·중복·모순을 검토 단위로 묶는다.
+
+    canonical DB 수정 명령으로 바로 실행하지 않는다. 계획서로 저장되고,
+    적용은 승인 트랜잭션의 일이다. 사람이 직접 승인하는 대상도 아니다 —
+    사람은 이 계획으로 compile된 ArtifactChangeProposal을 승인한다.
+    """
+
+    __tablename__ = "knowledge_mutation_proposals"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+    )
+    workspace_id: Mapped[int] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    trigger_entity_candidate_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=True,
+    )
+    trigger_claim_candidate_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=True,
+    )
+    trigger_relation_assertion_candidate_id: Mapped[uuid.UUID | None] = (
+        mapped_column(UUID(as_uuid=True), nullable=True)
+    )
+    proposal_kind: Mapped[str] = mapped_column(String(16), nullable=False)
+    detector: Mapped[str] = mapped_column(String(64), nullable=False)
+    detector_version: Mapped[str] = mapped_column(String(64), nullable=False)
+    summary: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(16),
+        nullable=False,
+        default="pending",
+        server_default=text("'pending'"),
+    )
+    idempotency_key: Mapped[str] = mapped_column(String(255), nullable=False)
+    resolver_metadata: Mapped[dict[str, Any]] = mapped_column(
+        JSONB,
+        nullable=False,
+        default=dict,
+        server_default=text("'{}'::jsonb"),
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+    applied_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "workspace_id",
+            "id",
+            name="uq_knowledge_mutation_proposals_workspace_id_id",
+        ),
+        UniqueConstraint(
+            "workspace_id",
+            "idempotency_key",
+            name="uq_knowledge_mutation_proposals_idempotency_key",
+        ),
+        ForeignKeyConstraint(
+            ["workspace_id", "trigger_entity_candidate_id"],
+            [
+                "knowledge_entity_candidates.workspace_id",
+                "knowledge_entity_candidates.id",
+            ],
+            name="fk_knowledge_mutation_proposals_entity_candidate",
+        ),
+        ForeignKeyConstraint(
+            ["workspace_id", "trigger_claim_candidate_id"],
+            [
+                "knowledge_claim_candidates.workspace_id",
+                "knowledge_claim_candidates.id",
+            ],
+            name="fk_knowledge_mutation_proposals_claim_candidate",
+        ),
+        ForeignKeyConstraint(
+            ["workspace_id", "trigger_relation_assertion_candidate_id"],
+            [
+                "knowledge_relation_assertion_candidates.workspace_id",
+                "knowledge_relation_assertion_candidates.id",
+            ],
+            name="fk_knowledge_mutation_proposals_relation_candidate",
+        ),
+        CheckConstraint(
+            "proposal_kind IN "
+            "('create', 'duplicate', 'contradiction', 'mixed')",
+            name="ck_knowledge_mutation_proposals_kind",
+        ),
+        CheckConstraint(
+            "num_nonnulls("
+            "trigger_entity_candidate_id, "
+            "trigger_claim_candidate_id, "
+            "trigger_relation_assertion_candidate_id"
+            ") = 1",
+            name="ck_knowledge_mutation_proposals_exactly_one_trigger",
+        ),
+        CheckConstraint(
+            "status IN ('pending', 'applied', 'stale', 'abandoned')",
+            name="ck_knowledge_mutation_proposals_status",
+        ),
+        Index(
+            "ix_knowledge_mutation_proposals_review_queue",
+            "workspace_id",
+            "status",
+            "created_at",
+        ),
+    )
+
+
+class KnowledgeMutationOperation(Base):
+    """proposal이 승인되면 적용할 작은 변경들을 순서대로 담는다.
+
+    operation별 필수 reference는 application layer가 검증한다.
+    """
+
+    __tablename__ = "knowledge_mutation_operations"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+    )
+    workspace_id: Mapped[int] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    proposal_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=False,
+    )
+    sequence: Mapped[int] = mapped_column(Integer, nullable=False)
+    operation_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    entity_candidate_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=True,
+    )
+    claim_candidate_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=True,
+    )
+    relation_assertion_candidate_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=True,
+    )
+    target_node_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=True,
+    )
+    evidence_node_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=True,
+    )
+    effective_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    operation_data: Mapped[dict[str, Any]] = mapped_column(
+        JSONB,
+        nullable=False,
+        default=dict,
+        server_default=text("'{}'::jsonb"),
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["workspace_id", "proposal_id"],
+            [
+                "knowledge_mutation_proposals.workspace_id",
+                "knowledge_mutation_proposals.id",
+            ],
+            name="fk_knowledge_mutation_operations_proposal",
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["workspace_id", "entity_candidate_id"],
+            [
+                "knowledge_entity_candidates.workspace_id",
+                "knowledge_entity_candidates.id",
+            ],
+            name="fk_knowledge_mutation_operations_entity_candidate",
+        ),
+        ForeignKeyConstraint(
+            ["workspace_id", "claim_candidate_id"],
+            [
+                "knowledge_claim_candidates.workspace_id",
+                "knowledge_claim_candidates.id",
+            ],
+            name="fk_knowledge_mutation_operations_claim_candidate",
+        ),
+        ForeignKeyConstraint(
+            ["workspace_id", "relation_assertion_candidate_id"],
+            [
+                "knowledge_relation_assertion_candidates.workspace_id",
+                "knowledge_relation_assertion_candidates.id",
+            ],
+            name="fk_knowledge_mutation_operations_relation_candidate",
+        ),
+        ForeignKeyConstraint(
+            ["workspace_id", "target_node_id"],
+            ["knowledge_nodes.workspace_id", "knowledge_nodes.id"],
+            name="fk_knowledge_mutation_operations_target_node",
+        ),
+        ForeignKeyConstraint(
+            ["workspace_id", "evidence_node_id"],
+            ["knowledge_nodes.workspace_id", "knowledge_nodes.id"],
+            name="fk_knowledge_mutation_operations_evidence_node",
+        ),
+        UniqueConstraint(
+            "proposal_id",
+            "sequence",
+            name="uq_knowledge_mutation_operations_sequence",
+        ),
+        CheckConstraint(
+            "sequence >= 1",
+            name="ck_knowledge_mutation_operations_sequence",
+        ),
+        CheckConstraint(
+            "operation_type IN ("
+            "'create_entity', 'merge_entity', "
+            "'create_claim', 'invalidate_claim', 'supersede_claim', "
+            "'create_relation_assertion', "
+            "'invalidate_relation_assertion', "
+            "'supersede_relation_assertion', "
+            "'attach_evidence'"
+            ")",
+            name="ck_knowledge_mutation_operations_type",
+        ),
+    )
+
+
+class KnowledgeNodeAlias(Base):
+    """Entity resolution에 쓰는 이름 목록을 담는다.
+
+    alias는 identity가 아니라 identity를 찾기 위한 단서다. alias가 같다는
+    이유만으로 자동 병합하지 않는다.
+    """
+
+    __tablename__ = "knowledge_node_aliases"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+    )
+    workspace_id: Mapped[int] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    node_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=False,
+    )
+    alias: Mapped[str] = mapped_column(Text, nullable=False)
+    normalized_alias: Mapped[str] = mapped_column(Text, nullable=False)
+    source: Mapped[str] = mapped_column(String(32), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["workspace_id", "node_id"],
+            ["knowledge_nodes.workspace_id", "knowledge_nodes.id"],
+            name="fk_knowledge_node_aliases_node",
+            ondelete="CASCADE",
+        ),
+        UniqueConstraint(
+            "workspace_id",
+            "node_id",
+            "normalized_alias",
+            name="uq_knowledge_node_aliases_normalized",
+        ),
+        CheckConstraint(
+            "source IN ('source', 'extractor', 'human', 'system')",
+            name="ck_knowledge_node_aliases_source",
+        ),
+        Index(
+            "ix_knowledge_node_aliases_lookup",
+            "workspace_id",
+            "normalized_alias",
+        ),
+    )
+
+
 class KnowledgeOntologySnapshot(Base):
     """추출이 따른 어휘 목록을 그 시점 그대로 보존한다.
 
