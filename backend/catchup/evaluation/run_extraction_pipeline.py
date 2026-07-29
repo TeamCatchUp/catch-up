@@ -70,6 +70,54 @@ from catchup.knowledge_maintenance.services.store_knowledge_candidates import (
 UNVERSIONED_ONTOLOGY = "unversioned"
 
 
+def _load_vocabulary(
+    session_factory: Callable[[], Session],
+    *,
+    workspace_id: int,
+    version: str | None,
+) -> ExtractionVocabulary:
+    """시작 어휘를 정한다.
+
+    버전을 주지 않으면 빈 어휘에서 시작해 라운드마다 키운다. 주면 그
+    스냅샷을 읽어 첫 라운드부터 사전을 프롬프트에 싣는다.
+    """
+    if version is None:
+        return ExtractionVocabulary()
+    with KnowledgeMaintenanceUnitOfWork(session_factory) as uow:
+        found = uow.ontology.get(
+            workspace_id=workspace_id,
+            ontology_id=CONTRACT_ID,
+            version=version,
+        )
+    if found is None:
+        raise SystemExit(
+            f"어휘 스냅샷을 찾을 수 없다: {CONTRACT_ID} {version}"
+        )
+    return found
+
+
+def _keep_dictionary(
+    grown: ExtractionVocabulary,
+    base: ExtractionVocabulary,
+) -> ExtractionVocabulary:
+    """라운드 누적 결과에 처음 실었던 사전과 버전을 되돌린다.
+
+    `_grow_vocabulary`는 이름 목록만 합치고 entry와 snapshot_id를 새로
+    쓴다. 고정 버전으로 돌릴 때는 정의가 사라지면 안 되고 실행 기록이
+    가리키는 버전도 흔들리면 안 되므로 원래 값을 다시 붙인다.
+    """
+    if not base.snapshot_id:
+        return grown
+    return grown.model_copy(
+        update={
+            "snapshot_id": base.snapshot_id,
+            "entity_type_entries": base.entity_type_entries,
+            "predicate_entries": base.predicate_entries,
+            "relation_type_entries": base.relation_type_entries,
+        }
+    )
+
+
 def _named(vocabulary: ExtractionVocabulary) -> ExtractionVocabulary:
     """이름 없는 어휘에 스냅샷 이름을 붙인다."""
     if vocabulary.snapshot_id:
@@ -198,6 +246,12 @@ async def main() -> None:
         choices=[capacity.value for capacity in ModelCapacity],
         default=ModelCapacity.LARGE.value,
     )
+    parser.add_argument(
+        "--ontology-version",
+        type=str,
+        default=None,
+        help="이 버전의 어휘 스냅샷을 시작 어휘로 쓴다.",
+    )
     args = parser.parse_args()
 
     engine = create_engine(settings.sqlalchemy_database_url)
@@ -232,12 +286,25 @@ async def main() -> None:
     )
     extractor = StructuredKnowledgeExtractor(service.get_llm())
     semaphore = asyncio.Semaphore(args.concurrency)
-    vocabulary = ExtractionVocabulary()
+    base_vocabulary = _load_vocabulary(
+        session_factory,
+        workspace_id=args.workspace_id,
+        version=args.ontology_version,
+    )
+    vocabulary = base_vocabulary
 
     print(
         f"Observation {len(pending)}건, 라운드 {args.round_size}건씩, "
         f"동시 {args.concurrency}건, 모델 {args.capacity}"
     )
+    if base_vocabulary.snapshot_id:
+        print(
+            f"시작 어휘 {base_vocabulary.snapshot_id} — "
+            f"predicate {len(base_vocabulary.predicates)}종"
+            f" (정의 {len(base_vocabulary.predicate_entries)}종),"
+            f" relation {len(base_vocabulary.relation_types)}종"
+            f" (정의 {len(base_vocabulary.relation_type_entries)}종)"
+        )
 
     summary = {"stored": 0, "reused": 0, "error": 0, "contract_violation": 0}
     totals = {
@@ -291,10 +358,13 @@ async def main() -> None:
             )
             print(f"  {record['key']}  {detail}")
 
-        vocabulary = _grow_vocabulary(
-            vocabulary,
-            _harvest_shape(list(results)),
-            number,
+        vocabulary = _keep_dictionary(
+            _grow_vocabulary(
+                vocabulary,
+                _harvest_shape(list(results)),
+                number,
+            ),
+            base_vocabulary,
         )
 
     print("\n=== 저장 결과 ===")

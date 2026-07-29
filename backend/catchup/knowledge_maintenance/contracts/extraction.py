@@ -323,8 +323,17 @@ class ExtractionVocabulary(BaseModel):
         return None
 
     def is_empty(self) -> bool:
-        """아직 아무 어휘도 확정되지 않았는지 나타낸다."""
-        return not self.predicates and not self.relation_types
+        """아직 아무 어휘도 확정되지 않았는지 나타낸다.
+
+        entity 종류는 이름 목록으로 파생되지 않으므로 entry를 직접 본다.
+        entity entry만 채운 어휘를 비었다고 보면 프롬프트의 어휘 섹션이
+        통째로 빠진다.
+        """
+        return not (
+            self.predicates
+            or self.relation_types
+            or self.entity_type_entries
+        )
 
 
 class KnowledgeExtractionRequest(BaseModel):
