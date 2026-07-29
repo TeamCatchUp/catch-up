@@ -145,6 +145,25 @@ FROM knowledge_candidate_evidence_links
 WHERE workspace_id = :ws AND claim_candidate_id IS NOT NULL
 """
 
+RESOLUTION_SQL = """
+SELECT
+  (SELECT count(*) FROM knowledge_nodes
+    WHERE workspace_id = :ws AND node_kind = 'entity') AS canonical_entities,
+  (SELECT count(*) FROM knowledge_entity_candidates
+    WHERE workspace_id = :ws
+      AND resolution_status = 'accepted') AS accepted,
+  (SELECT count(*) FROM knowledge_entity_candidates
+    WHERE workspace_id = :ws
+      AND resolution_status = 'merged') AS merged,
+  (SELECT count(*) FROM knowledge_entity_candidates
+    WHERE workspace_id = :ws
+      AND resolution_status = 'pending') AS still_pending,
+  (SELECT count(*) FROM knowledge_mutation_proposals
+    WHERE workspace_id = :ws AND status = 'pending') AS pending_proposals,
+  (SELECT count(*) FROM knowledge_node_aliases
+    WHERE workspace_id = :ws) AS aliases
+"""
+
 
 def _pct(part: int, whole: int) -> str:
     """비율을 표시용 문자열로 만든다."""
@@ -175,6 +194,9 @@ def main() -> None:
         )
         vocab = conn.execute(text(VOCAB_SQL), params).mappings().one()
         citation = conn.execute(text(CITATION_SQL), params).mappings().one()
+        resolution = (
+            conn.execute(text(RESOLUTION_SQL), params).mappings().one()
+        )
     engine.dispose()
 
     print("=== 규모 ===")
@@ -232,6 +254,25 @@ def main() -> None:
     print(
         f"  위치 확정 {citation['located']} · 강등 {citation['demoted']}"
         f" (강등률 {_pct(citation['demoted'], checked)})"
+    )
+
+    print("\n=== Resolution ===")
+    resolved = resolution["accepted"] + resolution["merged"]
+    ratio = (
+        f"{resolved / resolution['canonical_entities']:.2f}배"
+        if resolution["canonical_entities"]
+        else "-"
+    )
+    print(
+        f"  canonical entity {resolution['canonical_entities']}"
+        f"  | 후보 accepted {resolution['accepted']}"
+        f" · merged {resolution['merged']}"
+        f" · pending {resolution['still_pending']}"
+    )
+    print(
+        f"  실측 압축률 {ratio} (해소 후보 {resolved} ÷ canonical)"
+        f"  | pending proposal {resolution['pending_proposals']}"
+        f"  | alias {resolution['aliases']}"
     )
 
 
