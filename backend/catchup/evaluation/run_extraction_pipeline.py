@@ -181,6 +181,8 @@ def _store(
         "entities": len(stored.batch.entity_ids),
         "claims": len(stored.batch.claim_ids),
         "relations": len(stored.batch.relation_ids),
+        "located": stored.batch.located_claim_count,
+        "demoted": stored.batch.demoted_claim_count,
     }
 
 
@@ -237,7 +239,13 @@ async def main() -> None:
     )
 
     summary = {"stored": 0, "reused": 0, "error": 0, "contract_violation": 0}
-    totals = {"entities": 0, "claims": 0, "relations": 0}
+    totals = {
+        "entities": 0,
+        "claims": 0,
+        "relations": 0,
+        "located": 0,
+        "demoted": 0,
+    }
 
     for offset in range(0, len(pending), args.round_size):
         chunk = pending[offset : offset + args.round_size]
@@ -296,6 +304,14 @@ async def main() -> None:
         f"  claim {totals['claims']}"
         f"  relation {totals['relations']}"
     )
+    # 인용 검증 결과다. 강등률이 높으면 프롬프트나 매칭 완화를 재고한다.
+    verified = totals["located"] + totals["demoted"]
+    if verified:
+        rate = totals["demoted"] / verified * 100
+        print(
+            f"  claim 인용 — 위치 확정 {totals['located']}"
+            f"  강등 {totals['demoted']} ({rate:.1f}%)"
+        )
     print(f"  끝난 시각 {datetime.now(timezone.utc).isoformat()}")
 
     engine.dispose()
