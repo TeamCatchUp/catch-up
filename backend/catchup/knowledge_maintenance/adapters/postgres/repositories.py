@@ -994,6 +994,57 @@ def _json_hash(value: object) -> str:
     return hashlib.sha256(encoded).hexdigest()
 
 
+def _encode_claim_vocabulary(vocabulary: ExtractionVocabulary) -> object:
+    """predicates 컬럼에 담을 값을 만든다.
+
+    사전 항목이 없으면 예전과 같은 이름 목록 그대로 둔다. 항목이 있으면
+    이름 목록과 항목을 함께 담은 객체로 감싼다. 전용 컬럼을 새로 만들려면
+    migration이 필요하고, JSONB 한 칸이면 스키마 변경 없이 같은 사실을
+    보존할 수 있기 때문이다. entity 종류 항목도 claim이 무엇에 대한
+    주장인지를 정하는 어휘이므로 여기에 함께 둔다.
+    """
+    if not vocabulary.predicate_entries and not vocabulary.entity_type_entries:
+        return list(vocabulary.predicates)
+    return {
+        "names": list(vocabulary.predicates),
+        "predicate_entries": [
+            entry.model_dump(mode="json")
+            for entry in vocabulary.predicate_entries
+        ],
+        "entity_type_entries": [
+            entry.model_dump(mode="json")
+            for entry in vocabulary.entity_type_entries
+        ],
+    }
+
+
+def _encode_relation_vocabulary(vocabulary: ExtractionVocabulary) -> object:
+    """relation_types 컬럼에 담을 값을 만든다."""
+    if not vocabulary.relation_type_entries:
+        return list(vocabulary.relation_types)
+    return {
+        "names": list(vocabulary.relation_types),
+        "relation_type_entries": [
+            entry.model_dump(mode="json")
+            for entry in vocabulary.relation_type_entries
+        ],
+    }
+
+
+def _decode_names(column_value: object) -> tuple[str, ...]:
+    """컬럼 값에서 이름 목록을 읽는다."""
+    if isinstance(column_value, dict):
+        return tuple(column_value.get("names", ()))
+    return tuple(column_value or ())
+
+
+def _decode_entries(column_value: object, key: str) -> tuple[dict, ...]:
+    """컬럼 값에서 사전 항목 원본을 읽는다."""
+    if isinstance(column_value, dict):
+        return tuple(column_value.get(key, ()))
+    return ()
+
+
 class SqlAlchemyOntologyRepository:
     """어휘 스냅샷의 영속성을 PostgreSQL로 구현한다."""
 
@@ -1019,8 +1070,17 @@ class SqlAlchemyOntologyRepository:
             return None
         return ExtractionVocabulary(
             snapshot_id=row.version,
-            predicates=tuple(row.predicates),
-            relation_types=tuple(row.relation_types),
+            predicates=_decode_names(row.predicates),
+            relation_types=_decode_names(row.relation_types),
+            entity_type_entries=_decode_entries(
+                row.predicates, "entity_type_entries"
+            ),
+            predicate_entries=_decode_entries(
+                row.predicates, "predicate_entries"
+            ),
+            relation_type_entries=_decode_entries(
+                row.relation_types, "relation_type_entries"
+            ),
         )
 
     def ensure(
@@ -1040,9 +1100,15 @@ class SqlAlchemyOntologyRepository:
             version=vocabulary.snapshot_id,
         )
         if found is not None:
+            # 이름뿐 아니라 정의까지 비교한다. 같은 이름에 다른 뜻을 담으면
+            # 그 버전으로 추출한 후보가 어떤 규칙을 따랐는지 기록이 어긋난다.
             if (
                 found.predicates != vocabulary.predicates
                 or found.relation_types != vocabulary.relation_types
+                or found.entity_type_entries != vocabulary.entity_type_entries
+                or found.predicate_entries != vocabulary.predicate_entries
+                or found.relation_type_entries
+                != vocabulary.relation_type_entries
             ):
                 raise OntologySnapshotConflict(
                     f"{ontology_id} {vocabulary.snapshot_id}에 다른 어휘를 "
@@ -1056,8 +1122,8 @@ class SqlAlchemyOntologyRepository:
             workspace_id=workspace_id,
             ontology_id=ontology_id,
             version=vocabulary.snapshot_id,
-            predicates=list(vocabulary.predicates),
-            relation_types=list(vocabulary.relation_types),
+            predicates=_encode_claim_vocabulary(vocabulary),
+            relation_types=_encode_relation_vocabulary(vocabulary),
         )
         self._session.add(row)
         self._session.flush()

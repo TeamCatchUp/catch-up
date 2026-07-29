@@ -1,0 +1,458 @@
+{
+  "snapshot_id": "2",
+  "entity_type_entries": [
+    {
+      "name": "team",
+      "definition": "한 회사 안에서 역할로 묶인 조직 단위. 같은 이름의 팀이 회사마다 있으므로 소속을 모르면 지시 대상이 정해지지 않는다.",
+      "identity_scope": "anchored",
+      "examples": ["검색팀", "고객지원팀", "플랫폼팀"]
+    },
+    {
+      "name": "organizational_unit",
+      "definition": "회사·본부·부문처럼 team보다 큰 조직 단위. 실측의 organization·customer_organization·external_party를 이 종류로 모은다.",
+      "identity_scope": "anchored",
+      "examples": ["A사", "고객사 IT본부"]
+    },
+    {
+      "name": "role",
+      "definition": "사람이 조직 안에서 맡은 직책이나 담당. 사람 자체가 아니라 자리를 가리키며, 어느 조직의 자리인지 없이는 대상이 정해지지 않는다.",
+      "identity_scope": "anchored",
+      "examples": ["보안 담당자", "워크스페이스 관리자"]
+    },
+    {
+      "name": "product",
+      "definition": "고객에게 판매·제공되는 완결된 상품. 이름 자체가 시장에서 유일하게 통용된다.",
+      "identity_scope": "standalone",
+      "examples": ["CatchUp", "채널톡"]
+    },
+    {
+      "name": "system",
+      "definition": "따로 배포되고 운영되는 소프트웨어 구성 요소. 실측의 storage_system·application·environment를 이 종류로 모은다.",
+      "identity_scope": "standalone",
+      "examples": ["PostgreSQL", "Redis Stack", "벡터 인덱스 서버"]
+    },
+    {
+      "name": "api",
+      "definition": "외부에 노출된 호출 규약 하나. endpoint 묶음이나 공개 API 이름을 가리킨다.",
+      "identity_scope": "standalone",
+      "examples": ["Slack Web API", "검색 API"]
+    },
+    {
+      "name": "integration",
+      "definition": "두 제품·시스템을 잇는 연동 자체. 실측의 integration_tool을 포함한다. 잇는 대상이 아니라 연결 그 자체가 대상이다.",
+      "identity_scope": "standalone",
+      "examples": ["Jira 연동", "Confluence 연동"]
+    },
+    {
+      "name": "feature",
+      "definition": "제품이 사용자에게 제공하는 기능 단위. 화면이나 명령으로 사용자가 직접 쓸 수 있는 것이다.",
+      "identity_scope": "standalone",
+      "examples": ["통합 검색", "요약 카드", "권한 필터"]
+    },
+    {
+      "name": "service",
+      "definition": "내부 경계로 나뉜 백엔드 서비스. 사용자에게 보이는 feature와 달리 배포·운영 단위다.",
+      "identity_scope": "standalone",
+      "examples": ["결제 서비스", "인덱싱 서비스"]
+    },
+    {
+      "name": "issue",
+      "definition": "보고되어 추적되는 문제나 장애 하나. 증상이 아니라 추적 대상이 되는 사건을 가리킨다.",
+      "identity_scope": "standalone",
+      "examples": ["검색 결과 불일치", "삭제 메시지 검색 노출"]
+    },
+    {
+      "name": "document",
+      "definition": "제목을 가진 문서 하나. 실측의 document_type·space는 문서 자체가 아니므로 여기에 넣지 않는다.",
+      "identity_scope": "standalone",
+      "examples": ["온보딩 가이드", "2024 보안 정책"]
+    },
+    {
+      "name": "process",
+      "definition": "정해진 순서로 수행되는 업무·운영 절차. 실측의 review_process·sync_process를 포함한다.",
+      "identity_scope": "standalone",
+      "examples": ["권한 검토 절차", "증분 동기화"]
+    },
+    {
+      "name": "platform",
+      "definition": "여러 제품·서비스가 올라가는 기반. 특정 기능이 아니라 그 위에서 무언가가 돌아가는 토대를 가리킨다.",
+      "identity_scope": "standalone",
+      "examples": ["AWS", "Slack"]
+    },
+    {
+      "name": "data_source",
+      "definition": "지식이 유입되는 원천 채널. 실측의 data_asset·data_scope와 달리 유입 경로 자체다.",
+      "identity_scope": "standalone",
+      "examples": ["Slack 채널", "Confluence 스페이스"]
+    },
+    {
+      "name": "project",
+      "definition": "기간과 목표가 정해진 일의 묶음. 조직이 아니라 일이 대상이다.",
+      "identity_scope": "standalone",
+      "examples": ["검색 품질 개선 프로젝트"]
+    },
+    {
+      "name": "channel_talk_manager",
+      "definition": "채널톡 상담을 담당한 매니저. 레이어 1이 매니저 ID로 이미 확정해 넘겨주므로 이름만으로 판별하지 않는다.",
+      "identity_scope": "standalone",
+      "examples": ["상담 매니저 김OO"]
+    },
+    {
+      "name": "channel_talk_user",
+      "definition": "채널톡으로 문의한 고객 사용자. 레이어 1이 사용자 ID로 이미 확정해 넘겨준다.",
+      "identity_scope": "standalone",
+      "examples": ["문의 고객"]
+    }
+  ],
+  "predicate_entries": [
+    {
+      "name": "issue_type",
+      "definition": "issue가 어떤 종류의 문제인지 분류한다. 실측에서는 enum과 text가 섞였고 값에 payment_service·warehouse_management 같은 도메인 이름까지 들어왔다. 무엇에 대한 문제인지는 관계(affects)가 표현하므로, 여기는 증상의 종류만 담는 enum으로 확정한다.",
+      "domain": ["issue"],
+      "value_type": "enum",
+      "enum_values": [
+        "search_quality",
+        "indexing_delay",
+        "data_sync",
+        "permission",
+        "integration_failure",
+        "rate_limit",
+        "display",
+        "billing",
+        "other"
+      ],
+      "examples": [
+        "검색 결과가 서로 다르게 나온다 → search_quality",
+        "삭제한 메시지가 계속 검색된다 → indexing_delay"
+      ]
+    },
+    {
+      "name": "status",
+      "definition": "issue나 제안의 현재 처리 상태를 나타낸다. 실측 값이 한국어와 영어로 섞여 있어(실패·resolved) 영어 enum으로 확정한다. 실패는 failed로, permission_verification_required는 pending_review로 옮긴다.",
+      "domain": ["issue", "process"],
+      "value_type": "enum",
+      "enum_values": [
+        "proposed",
+        "in_progress",
+        "pending_review",
+        "resolved",
+        "failed",
+        "not_supported"
+      ],
+      "examples": [
+        "권한 검토가 끝나야 진행됩니다 → pending_review",
+        "지원하지 않습니다 → not_supported"
+      ]
+    },
+    {
+      "name": "occurrence_time",
+      "definition": "문제가 일어났다고 원문이 말한 시점을 원문 표기 그대로 담는다. 실측 값이 어제 오후 4시쯤처럼 상대 표현이라 date로 바꾸면 원문에 없는 정밀도를 지어낸다.",
+      "domain": ["issue"],
+      "value_type": "text",
+      "enum_values": [],
+      "examples": ["어제 오후 4시쯤 오류가 났어요 → 어제 오후 4시쯤"]
+    },
+    {
+      "name": "start_time",
+      "definition": "어떤 일이 시작한다고 원문이 말한 시점을 원문 표기 그대로 담는다. 실측에 2024-10과 오후 2시가 함께 있어 date로 확정할 수 없다. 실제 유효 기간은 claim의 valid_from이 담당한다.",
+      "domain": [],
+      "value_type": "text",
+      "enum_values": [],
+      "examples": ["오후 2시부터 점검합니다 → 오후 2시"]
+    },
+    {
+      "name": "end_time",
+      "definition": "어떤 일이 끝난다고 원문이 말한 시점을 원문 표기 그대로 담는다. start_time과 같은 이유로 text다.",
+      "domain": [],
+      "value_type": "text",
+      "enum_values": [],
+      "examples": ["2시 40분에 복구됐습니다 → 2시 40분"]
+    },
+    {
+      "name": "last_updated_date",
+      "definition": "문서나 자료가 마지막으로 갱신된 날짜다. 실측 값이 모두 연월일이라 date로 확정한다.",
+      "domain": ["document"],
+      "value_type": "date",
+      "enum_values": [],
+      "examples": ["2024년 7월 3일에 마지막으로 고쳤습니다 → 2024-07-03"]
+    },
+    {
+      "name": "workaround_available",
+      "definition": "근본 해결 전에 쓸 수 있는 우회 방법이 있는지 나타낸다.",
+      "domain": ["issue"],
+      "value_type": "boolean",
+      "enum_values": [],
+      "examples": ["임시로 이렇게 하시면 됩니다 → true"]
+    },
+    {
+      "name": "requires_permission_review",
+      "definition": "쓰기 전에 권한 검토를 거쳐야 하는지 나타낸다.",
+      "domain": ["feature", "integration", "data_source"],
+      "value_type": "boolean",
+      "enum_values": [],
+      "examples": ["보안팀 검토 후 열어드립니다 → true"]
+    },
+    {
+      "name": "error_code",
+      "definition": "오류를 식별하는 코드나 메시지를 원문 그대로 담는다.",
+      "domain": ["issue", "api"],
+      "value_type": "text",
+      "enum_values": [],
+      "examples": ["429 Too Many Requests가 떴어요 → 429 Too Many Requests"]
+    },
+    {
+      "name": "rate_limit_per_minute",
+      "definition": "분당 허용되는 API 호출 횟수",
+      "domain": ["api"],
+      "value_type": "number",
+      "enum_values": [],
+      "examples": ["분당 60회입니다 → 60"]
+    },
+    {
+      "name": "max_file_size_mb",
+      "definition": "업로드할 수 있는 파일 하나의 최대 크기를 MB로 나타낸다.",
+      "domain": ["feature", "system"],
+      "value_type": "number",
+      "enum_values": [],
+      "examples": ["25MB까지 올릴 수 있어요 → 25"]
+    },
+    {
+      "name": "typical_file_size_gb",
+      "definition": "실제로 다루는 자료 한 벌의 대표적인 크기를 GB로 나타낸다. 상한인 max_file_size_mb와 달리 흔한 값이다.",
+      "domain": ["data_source", "system"],
+      "value_type": "number",
+      "enum_values": [],
+      "examples": ["보통 2GB 정도 됩니다 → 2"]
+    },
+    {
+      "name": "indexing_delay_minutes",
+      "definition": "원문이 들어온 뒤 검색에 반영되기까지 걸리는 시간을 분으로 나타낸다.",
+      "domain": ["system", "feature"],
+      "value_type": "number",
+      "enum_values": [],
+      "examples": ["10분 정도 뒤에 검색됩니다 → 10"]
+    },
+    {
+      "name": "sync_interval_minutes",
+      "definition": "동기화를 다시 도는 주기를 분으로 나타낸다. 한 번 반영에 걸리는 indexing_delay_minutes와 다르다.",
+      "domain": ["integration", "process"],
+      "value_type": "number",
+      "enum_values": [],
+      "examples": ["한 시간마다 동기화합니다 → 60"]
+    },
+    {
+      "name": "typical_duration_minutes",
+      "definition": "그 일이 보통 걸리는 시간을 분으로 나타낸다.",
+      "domain": ["process"],
+      "value_type": "number",
+      "enum_values": [],
+      "examples": ["보통 한 시간 걸려요 → 60"]
+    },
+    {
+      "name": "refund_period_days",
+      "definition": "환불을 요청할 수 있는 기간을 일수로 나타낸다.",
+      "domain": ["product", "service"],
+      "value_type": "number",
+      "enum_values": [],
+      "examples": ["7일 안에 환불 가능합니다 → 7"]
+    },
+    {
+      "name": "team_size",
+      "definition": "그 조직에 속한 사람 수를 나타낸다.",
+      "domain": ["team", "organizational_unit"],
+      "value_type": "number",
+      "enum_values": [],
+      "examples": ["저희 팀은 12명입니다 → 12"]
+    },
+    {
+      "name": "user_count",
+      "definition": "그것을 실제로 쓰는 사용자 수를 나타낸다. 조직 인원인 team_size와 다르다.",
+      "domain": ["product", "feature", "system"],
+      "value_type": "number",
+      "enum_values": [],
+      "examples": ["80명이 쓰고 있어요 → 80"]
+    },
+    {
+      "name": "page_count",
+      "definition": "문서나 자료의 쪽 수를 나타낸다.",
+      "domain": ["document"],
+      "value_type": "number",
+      "enum_values": [],
+      "examples": ["180쪽짜리 매뉴얼입니다 → 180"]
+    },
+    {
+      "name": "invite_command",
+      "definition": "그것을 불러들일 때 입력하는 명령 문자열을 원문 그대로 담는다.",
+      "domain": ["product", "integration"],
+      "value_type": "text",
+      "enum_values": [],
+      "examples": ["채널에서 /invite @CatchUp 을 치세요 → /invite @CatchUp"]
+    },
+    {
+      "name": "deployment_phase",
+      "definition": "도입이 어느 단계까지 왔는지 나타낸다. 실측 값이 PoC 하나뿐이라 흔히 쓰는 세 단계로 좁혀 enum으로 확정한다.",
+      "domain": ["product", "integration"],
+      "value_type": "enum",
+      "enum_values": ["poc", "pilot", "production"],
+      "examples": ["아직 PoC 단계입니다 → poc"]
+    },
+    {
+      "name": "recommended_scope",
+      "definition": "권장하는 적용 범위나 공개 범위를 원문 표현 그대로 담는다. 실측 값이 하나뿐이고 표현이 제각각이라 아직 enum으로 좁히지 않는다.",
+      "domain": [],
+      "value_type": "text",
+      "enum_values": [],
+      "examples": ["공개 범위로 두시길 권합니다 → 공개 범위"]
+    },
+    {
+      "name": "incremental_event_handling",
+      "definition": "증분 이벤트를 어떻게 처리하는지를 원문 표현 그대로 담는다. 실측 값이 하나뿐이라 치역을 확정하지 않는다.",
+      "domain": ["integration", "process"],
+      "value_type": "text",
+      "enum_values": [],
+      "examples": ["증분 이벤트는 대기 상태입니다 → 대기 상태"]
+    }
+  ],
+  "relation_type_entries": [
+    {
+      "name": "inquires_about",
+      "definition": "고객이 무엇에 대해 물었는지 잇는다. 문제 제기가 아니라 질문이다.",
+      "domain": ["channel_talk_user"],
+      "range_": [],
+      "examples": ["고객이 환불 규정을 물었다"]
+    },
+    {
+      "name": "reported",
+      "definition": "누가 어떤 issue를 처음 알렸는지 잇는다. 알린 행위 자체다.",
+      "domain": [],
+      "range_": ["issue"],
+      "examples": ["매니저가 검색 오류를 보고했다"]
+    },
+    {
+      "name": "reported_issue_with",
+      "definition": "누가 어느 대상에서 문제를 겪었는지 잇는다. reported가 issue를 가리키는 것과 달리 여기 끝점은 문제가 난 대상이다.",
+      "domain": [],
+      "range_": [],
+      "examples": ["고객이 결제 기능에서 문제를 겪었다"]
+    },
+    {
+      "name": "assisted",
+      "definition": "매니저가 어떤 고객을 응대했는지 잇는다. 상담 한 건의 담당 관계다.",
+      "domain": ["channel_talk_manager"],
+      "range_": ["channel_talk_user"],
+      "examples": ["매니저가 문의 고객을 응대했다"]
+    },
+    {
+      "name": "handled",
+      "definition": "누가 어떤 issue나 절차를 맡아 처리했는지 잇는다. 사람 대 사람인 assisted와 달리 끝점은 일이다.",
+      "domain": [],
+      "range_": ["issue", "process"],
+      "examples": ["플랫폼팀이 인덱싱 지연을 처리했다"]
+    },
+    {
+      "name": "advises",
+      "definition": "권고나 조언을 준 관계를 잇는다. 처리한 것이 아니라 하라고 권한 것이다.",
+      "domain": [],
+      "range_": [],
+      "examples": ["보안 담당자가 권한 검토를 권했다"]
+    },
+    {
+      "name": "uses",
+      "definition": "누가 무엇을 쓰는지 잇는다. 사람이나 조직이 도구·제품을 쓰는 관계다.",
+      "domain": [],
+      "range_": [],
+      "examples": ["검색팀이 CatchUp을 쓴다"]
+    },
+    {
+      "name": "supports",
+      "definition": "어떤 것이 무엇을 지원하는지 잇는다. 기능 제공 여부이지 사용 관계가 아니다.",
+      "domain": ["product", "system", "api", "integration"],
+      "range_": [],
+      "examples": ["CatchUp이 Confluence를 지원한다"]
+    },
+    {
+      "name": "requires",
+      "definition": "무엇이 있어야 그것이 성립하는지 잇는다. 없으면 동작하지 않는 필수 조건이다.",
+      "domain": [],
+      "range_": [],
+      "examples": ["Jira 연동은 관리자 권한을 요구한다"]
+    },
+    {
+      "name": "integrates_with",
+      "definition": "두 제품·시스템이 서로 연동됨을 잇는다. 방향이 없으며 데이터가 오가는 관계다.",
+      "domain": ["product", "system", "platform"],
+      "range_": ["product", "system", "platform"],
+      "examples": ["CatchUp이 Slack과 연동된다"]
+    },
+    {
+      "name": "connected_to",
+      "definition": "연결돼 있다는 사실만 있고 무엇이 오가는지는 원문이 말하지 않을 때 쓴다. 연동 규격이 분명하면 integrates_with를 쓴다.",
+      "domain": [],
+      "range_": [],
+      "examples": ["사내 SSO에 연결돼 있다"]
+    },
+    {
+      "name": "calls",
+      "definition": "어느 쪽이 어느 API를 호출하는지 잇는다. 방향이 있다.",
+      "domain": ["system", "service", "feature"],
+      "range_": ["api", "system", "service"],
+      "examples": ["인덱싱 서비스가 Slack Web API를 호출한다"]
+    },
+    {
+      "name": "syncs_to",
+      "definition": "데이터를 어디로 보내 맞추는지 잇는다. 보내는 쪽이 source다.",
+      "domain": ["data_source", "system", "integration"],
+      "range_": ["system", "data_source"],
+      "examples": ["Confluence 문서가 벡터 인덱스로 동기화된다"]
+    },
+    {
+      "name": "stored_in",
+      "definition": "무엇이 어디에 저장되는지 잇는다. 옮기는 syncs_to와 달리 머무는 곳이다.",
+      "domain": [],
+      "range_": ["system"],
+      "examples": ["첨부 파일은 S3에 저장된다"]
+    },
+    {
+      "name": "belongs_to",
+      "definition": "무엇이 어느 조직이나 상위 묶음에 속하는지 잇는다.",
+      "domain": [],
+      "range_": ["team", "organizational_unit", "product", "project"],
+      "examples": ["검색팀이 플랫폼본부에 속한다"]
+    },
+    {
+      "name": "performs",
+      "definition": "누가 어떤 절차를 수행하는지 잇는다. 한 번 처리한 handled와 달리 반복되는 역할이다.",
+      "domain": ["team", "role", "system", "service"],
+      "range_": ["process"],
+      "examples": ["고객지원팀이 권한 검토 절차를 수행한다"]
+    },
+    {
+      "name": "created",
+      "definition": "누가 무엇을 만들었는지 잇는다.",
+      "domain": [],
+      "range_": [],
+      "examples": ["플랫폼팀이 온보딩 가이드를 만들었다"]
+    },
+    {
+      "name": "affects",
+      "definition": "어떤 일이 무엇에 영향을 주는지 잇는다. issue의 영향 범위를 표현할 때 주로 쓴다.",
+      "domain": ["issue", "process"],
+      "range_": [],
+      "examples": ["인덱싱 지연이 통합 검색에 영향을 준다"]
+    },
+    {
+      "name": "triggers",
+      "definition": "무엇이 무엇을 촉발하는지 잇는다. 원인과 결과가 아니라 실행을 일으키는 관계다.",
+      "domain": [],
+      "range_": [],
+      "examples": ["문서 갱신이 재인덱싱을 촉발한다"]
+    },
+    {
+      "name": "replaces",
+      "definition": "무엇이 무엇을 대신하게 됐는지 잇는다. 앞의 것은 더 이상 쓰이지 않는다.",
+      "domain": [],
+      "range_": [],
+      "examples": ["새 검색 API가 예전 검색 API를 대체한다"]
+    }
+  ]
+}
