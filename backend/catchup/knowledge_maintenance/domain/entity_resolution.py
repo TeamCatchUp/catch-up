@@ -54,6 +54,28 @@ def normalize_name(name: str) -> str:
     return collapsed.casefold()
 
 
+def anchor_excerpt(content: str, name: str, *, window: int = 300) -> str:
+    """이름의 첫 언급 주변으로 발췌 창을 맞춘다.
+
+    entity evidence는 문서 단위라 인용 span이 없다. 문서 앞부분을
+    그대로 자르면 후보가 뒤에서 언급될 때 엉뚱한 맥락이 판정에
+    들어가므로, 이름을 본문에서 찾아 그 주변을 뜬다. 이름이 없으면
+    (추출기가 표기를 바꾼 경우) 문서 앞부분으로 물러난다.
+    """
+    if len(content) <= window:
+        return content
+
+    position = content.find(name)
+    if position < 0:
+        position = content.casefold().find(name.casefold())
+    if position < 0:
+        return content[:window]
+
+    start = max(0, position - (window - len(name)) // 2)
+    start = min(start, len(content) - window)
+    return content[start : start + window]
+
+
 def deterministic_canonical_key(
     source_type: str,
     entity_type: str,
