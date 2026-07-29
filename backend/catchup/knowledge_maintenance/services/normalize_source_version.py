@@ -3,12 +3,16 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum
 
+from catchup.knowledge_maintenance.domain.knowledge_node import NodeKind
 from catchup.knowledge_maintenance.domain.observation import StoredObservation
 from catchup.knowledge_maintenance.domain.source_version import SourceVersion
 from catchup.knowledge_maintenance.ports.observation_normalizer import (
     ObservationNormalizer,
 )
 from catchup.knowledge_maintenance.ports.observations import ObservationUnitOfWork
+from catchup.observability.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 class NormalizationResult(StrEnum):
@@ -37,34 +41,87 @@ def normalize_source_version(
 ) -> SourceVersionNormalizationResult:
     """원문 한 버전을 정규화해 Observation을 최대 하나 남긴다.
 
+    이미 저장된 원문을 뒤늦게 정규화할 때 쓰는 진입점이며 transaction을
+    스스로 연다. 수집과 함께 묶어야 하면 `normalize_within_transaction`을
+    쓴다.
+    """
+    with uow:
+        result = normalize_within_transaction(
+            source_version,
+            normalizer=normalizer,
+            uow=uow,
+        )
+        uow.commit()
+        return result
+
+
+def normalize_within_transaction(
+    source_version: SourceVersion,
+    *,
+    normalizer: ObservationNormalizer,
+    uow: ObservationUnitOfWork,
+) -> SourceVersionNormalizationResult:
+    """이미 열린 transaction 안에서 정규화한다.
+
+    transaction을 소유하지 않으므로 수집과 한 경계로 묶을 수 있다. 초안의
+    T1이 SourceVersion과 Observation을 함께 확정하도록 요구한다.
+
     같은 원문을 같은 정규화 계약으로 다시 처리하면 새로 만들지 않는다.
     정규화에는 LLM이 없어 결과가 같기 때문이며, 그래서 재실행이 안전하다.
     계약 버전이 올라가면 판정 키가 달라져 새 Observation이 생기고, 기존
     것은 그대로 남는다.
     """
-    with uow:
-        existing = uow.observations.get_by_normalizer(
-            workspace_id=source_version.workspace_id,
-            source_version_id=source_version.id,
-            normalizer_id=normalizer.normalizer_id,
-            normalizer_version=normalizer.normalizer_version,
-        )
-        if existing is not None:
-            return SourceVersionNormalizationResult(
-                observation=existing,
-                result=NormalizationResult.REUSED,
-            )
-
-        # 정규화를 transaction 안에서 하는 것은 LLM 호출이 없기 때문이다.
-        # Extractor는 이 경계 밖에서 돈다.
-        observation = normalizer.normalize(source_version)
-        stored = uow.observations.add(
-            workspace_id=source_version.workspace_id,
-            source_version_id=source_version.id,
-            observation=observation,
-        )
-        uow.commit()
+    existing = uow.observations.get_by_normalizer(
+        workspace_id=source_version.workspace_id,
+        source_version_id=source_version.id,
+        normalizer_id=normalizer.normalizer_id,
+        normalizer_version=normalizer.normalizer_version,
+    )
+    if existing is not None:
+        # 이미 있으면 아무것도 쓰지 않는다. node는 Observation과 같은
+        # transaction에서 만들어지므로 함께 있거나 함께 없다.
         return SourceVersionNormalizationResult(
-            observation=stored,
-            result=NormalizationResult.CREATED,
+            observation=existing,
+            result=NormalizationResult.REUSED,
         )
+
+    # 정규화를 transaction 안에서 하는 것은 LLM 호출이 없기 때문이다.
+    # Extractor는 이 경계 밖에서 돈다.
+    observation = normalizer.normalize(source_version)
+    stored = uow.observations.add(
+        workspace_id=source_version.workspace_id,
+        source_version_id=source_version.id,
+        observation=observation,
+    )
+    _ensure_node(stored, uow)
+    logger.info(
+        "observation_normalized",
+        workspace_id=source_version.workspace_id,
+        source_version_id=str(source_version.id),
+        observation_id=str(stored.id),
+        normalizer_id=normalizer.normalizer_id,
+        normalizer_version=normalizer.normalizer_version,
+        observation_kind=observation.observation_kind.value,
+        content_length=len(observation.content or ""),
+        metadata_entity_count=len(observation.metadata_entities),
+    )
+    return SourceVersionNormalizationResult(
+        observation=stored,
+        result=NormalizationResult.CREATED,
+    )
+
+
+def _ensure_node(
+    stored: StoredObservation,
+    uow: ObservationUnitOfWork,
+) -> None:
+    """Observation을 graph에서 가리킬 수 있게 node identity를 붙인다.
+
+    ExtractionRun의 `input_node_id`와 근거 링크의 `evidence_node_id`가 이
+    node를 가리킨다. 없으면 추출 결과를 저장할 수 없다.
+    """
+    uow.knowledge_nodes.ensure_for_resource(
+        workspace_id=stored.workspace_id,
+        node_kind=NodeKind.OBSERVATION,
+        resource_id=stored.id,
+    )

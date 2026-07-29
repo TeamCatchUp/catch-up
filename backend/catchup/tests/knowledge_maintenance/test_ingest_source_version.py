@@ -3,6 +3,7 @@ from __future__ import annotations
 import uuid
 from dataclasses import FrozenInstanceError
 from datetime import datetime
+from datetime import timedelta
 from datetime import timezone
 from types import TracebackType
 from typing import Self
@@ -11,8 +12,12 @@ import pytest
 from pydantic import ValidationError
 
 from catchup.knowledge_maintenance.contracts.source_change import SourceChangeEnvelope
+from catchup.knowledge_maintenance.domain.knowledge_node import KnowledgeNode
+from catchup.knowledge_maintenance.domain.knowledge_node import NodeKind
+from catchup.knowledge_maintenance.domain.knowledge_node import resource_ref_for
 from catchup.knowledge_maintenance.domain.source_version import SourceIdentity
 from catchup.knowledge_maintenance.domain.source_version import SourceVersion
+from catchup.knowledge_maintenance.ports.knowledge_nodes import KnowledgeNodeRepository
 from catchup.knowledge_maintenance.ports.source_versions import SourceVersionRepository
 from catchup.knowledge_maintenance.services.ingest_source_version import IngestionResult
 from catchup.knowledge_maintenance.services.ingest_source_version import (
@@ -90,9 +95,60 @@ class FakeSourceVersionRepository(SourceVersionRepository):
         self.items.append(source_version)
 
 
+class FakeKnowledgeNodeRepository(KnowledgeNodeRepository):
+    def __init__(self) -> None:
+        self.items: list[KnowledgeNode] = []
+
+    def get_for_resource(
+        self,
+        *,
+        workspace_id: int,
+        node_kind: NodeKind,
+        resource_id: uuid.UUID,
+    ) -> KnowledgeNode | None:
+        return next(
+            (
+                item
+                for item in self.items
+                if item.workspace_id == workspace_id
+                and item.node_kind == node_kind
+                and item.resource is not None
+                and item.resource.resource_id == str(resource_id)
+            ),
+            None,
+        )
+
+    def ensure_for_resource(
+        self,
+        *,
+        workspace_id: int,
+        node_kind: NodeKind,
+        resource_id: uuid.UUID,
+        display_name: str | None = None,
+    ) -> KnowledgeNode:
+        found = self.get_for_resource(
+            workspace_id=workspace_id,
+            node_kind=node_kind,
+            resource_id=resource_id,
+        )
+        if found is not None:
+            return found
+
+        node = KnowledgeNode(
+            id=uuid.uuid4(),
+            workspace_id=workspace_id,
+            node_kind=node_kind,
+            resource=resource_ref_for(node_kind, resource_id),
+            display_name=display_name,
+        )
+        self.items.append(node)
+        return node
+
+
 class FakeSourceVersionUnitOfWork:
     def __init__(self) -> None:
         self.source_versions = FakeSourceVersionRepository()
+        self.knowledge_nodes = FakeKnowledgeNodeRepository()
         self.committed = False
 
     def __enter__(self) -> Self:
@@ -292,3 +348,41 @@ def test_source_version_is_immutable_after_contract_conversion() -> None:
 
     with pytest.raises(TypeError):
         source_version.metadata["owner"] = "product"
+
+
+def test_observing_the_same_document_again_is_a_duplicate() -> None:
+    """바뀌지 않은 문서를 다시 본 것은 충돌이 아니다.
+
+    Poller는 주기마다 같은 문서를 다시 보며 그때 `observed_at`만 달라진다.
+    그 값이 payload hash에 들어가면 정상 폴링이 매번 예외가 된다.
+    """
+    uow = FakeSourceVersionUnitOfWork()
+    first = _envelope()
+    _ingest(first, uow)
+
+    later = first.model_copy(
+        update={
+            "event_id": "event-second-poll",
+            "observed_at": first.observed_at + timedelta(minutes=5),
+        }
+    )
+    result = _ingest(later, uow, version_id=uuid.uuid4())
+
+    assert result.result == IngestionResult.DUPLICATE
+    assert result.source_version_id == VERSION_ID
+    assert len(uow.source_versions.items) == 1
+
+
+def test_a_changed_document_with_the_same_key_is_still_rejected() -> None:
+    """원문이 달라졌는데 같은 전달 키를 쓰면 그대로 막는다.
+
+    `observed_at`을 hash에서 뺀 것이 이 방어까지 무르게 하지 않는다.
+    """
+    uow = FakeSourceVersionUnitOfWork()
+    first = _envelope()
+    _ingest(first, uow)
+
+    changed = first.model_copy(update={"content": "결제 기능은 10월로 밀렸다."})
+
+    with pytest.raises(SourceVersionPayloadConflict):
+        _ingest(changed, uow, version_id=uuid.uuid4())

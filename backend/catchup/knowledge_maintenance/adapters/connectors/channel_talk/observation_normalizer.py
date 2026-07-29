@@ -155,11 +155,15 @@ def _render_utterances(messages: Iterable[ChannelTalkUserChatMessage]) -> str:
         if role is None:
             continue
 
-        text = (
-            _ATTACHMENT_PLACEHOLDER
-            if message.attachments
-            else (message.plain_text or "").strip()
-        )
+        # 첨부가 있어도 사람이 함께 쓴 말은 남긴다. 파일명을 본문에서
+        # 걷어내는 것과 발화를 지우는 것은 다른 일이다.
+        text = (message.plain_text or "").strip()
+        if message.attachments:
+            text = (
+                f"{text} {_ATTACHMENT_PLACEHOLDER}"
+                if text
+                else _ATTACHMENT_PLACEHOLDER
+            )
         if not text:
             continue
 

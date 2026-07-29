@@ -8,10 +8,10 @@ from pathlib import Path
 
 import pytest
 
-from catchup.knowledge_maintenance.adapters.channel_talk.observation_normalizer import (
+from catchup.knowledge_maintenance.adapters.connectors.channel_talk.observation_normalizer import (
     CHANNEL_TALK_USER_CHAT_MEDIA_TYPE,
 )
-from catchup.knowledge_maintenance.adapters.channel_talk.observation_normalizer import (
+from catchup.knowledge_maintenance.adapters.connectors.channel_talk.observation_normalizer import (
     ChannelTalkUserChatNormalizer,
 )
 from catchup.knowledge_maintenance.domain.observation import ObservationKind
@@ -242,3 +242,40 @@ def test_source_attributes_are_json_serializable(normalizer) -> None:
     observation = normalizer.normalize(_source_version(BOT_AND_BUTTON))
 
     json.dumps(dict(observation.source_attributes))
+
+
+def test_a_message_with_both_text_and_attachment_keeps_both(normalizer) -> None:
+    """첨부가 있다고 사람이 쓴 말을 버리면 안 된다.
+
+    fixture는 파일이 언제나 별도 메시지라 이 경우가 드러나지 않는다.
+    실제 상담에서는 "이 오류 화면입니다"와 스크린샷이 한 메시지로 온다.
+    """
+    payload = json.loads(_payload(ATTACHMENTS))
+    payload["messages"].append(
+        {
+            "message_id": "m-both",
+            "user_chat_id": ATTACHMENTS,
+            "person_type": "customer",
+            "author": {
+                "author_type": "customer",
+                "user_id": "u-both",
+                "name": "사용자",
+            },
+            "plain_text": "이 오류 화면입니다. 계속 재발합니다.",
+            "created_at": "2026-06-15T09:00:00Z",
+            "attachments": [{"name": "error.png", "content_type": "image/png"}],
+        }
+    )
+
+    observation = normalizer.normalize(
+        _source_version(ATTACHMENTS, content=json.dumps(payload))
+    )
+
+    assert "고객: 이 오류 화면입니다. 계속 재발합니다. [파일 첨부]" in (
+        observation.content
+    )
+    # 파일명은 여전히 본문 밖에 있다.
+    assert "error.png" not in observation.content
+    assert "error.png" in [
+        item["name"] for item in observation.source_attributes["attachments"]
+    ]

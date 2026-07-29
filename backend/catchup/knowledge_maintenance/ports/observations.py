@@ -7,6 +7,7 @@ from typing import Self
 
 from catchup.knowledge_maintenance.domain.observation import NormalizedObservation
 from catchup.knowledge_maintenance.domain.observation import StoredObservation
+from catchup.knowledge_maintenance.ports.knowledge_nodes import KnowledgeNodeRepository
 
 
 class ObservationRepository(Protocol):
@@ -50,6 +51,7 @@ class ObservationUnitOfWork(Protocol):
     """
 
     observations: ObservationRepository
+    knowledge_nodes: KnowledgeNodeRepository
 
     def __enter__(self) -> Self: ...
 

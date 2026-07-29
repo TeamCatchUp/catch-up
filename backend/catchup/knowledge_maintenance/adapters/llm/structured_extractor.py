@@ -1,19 +1,25 @@
 from __future__ import annotations
 
+import hashlib
+import time
 from dataclasses import dataclass
 
 from langchain_core.language_models import BaseChatModel
 
+from catchup.knowledge_maintenance.contracts.extraction import ExtractionVocabulary
 from catchup.knowledge_maintenance.contracts.extraction import KnowledgeCandidateBatch
 from catchup.knowledge_maintenance.contracts.extraction import (
     KnowledgeExtractionRequest,
 )
 from catchup.knowledge_maintenance.contracts.extraction import metadata_local_key
 from catchup.knowledge_maintenance.domain.observation import MetadataEntity
+from catchup.observability.logging import get_logger
 from catchup.prompts.loader import prompt_loader
 
 TEMPLATE_PATH = "knowledge_maintenance/extract_knowledge_candidates.j2"
 CONTRACT_ID = "catchup.knowledge_candidates"
+
+logger = get_logger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
@@ -71,7 +77,33 @@ class StructuredKnowledgeExtractor:
             vocabulary=request.vocabulary,
         )
 
-        response = await self._structured.ainvoke(rendered)
+        # 무엇을 근거로 무엇을 물었는지 남긴다. 본문과 이름은 싣지 않는다.
+        # 상담 원문은 개인정보를 담고 감사 로그는 오래 남기 때문이다.
+        vocabulary = request.vocabulary or ExtractionVocabulary()
+        call_context = {
+            "source_type": request.source_type,
+            "contract_version": request.contract_version,
+            "content_length": len(request.content),
+            "content_hash": _content_fingerprint(request.content),
+            "metadata_entity_count": len(known_entities),
+            "ontology_version": vocabulary.snapshot_id or None,
+            "predicate_count": len(vocabulary.predicates),
+            "relation_type_count": len(vocabulary.relation_types),
+        }
+        logger.info("knowledge_extraction_started", **call_context)
+
+        started = time.perf_counter()
+        try:
+            response = await self._structured.ainvoke(rendered)
+        except Exception as error:
+            logger.exception(
+                "knowledge_extraction_failed",
+                error_type=type(error).__name__,
+                elapsed=round(time.perf_counter() - started, 3),
+                **call_context,
+            )
+            raise
+        elapsed = round(time.perf_counter() - started, 3)
         raw = response.get("raw")
 
         parsed = response.get("parsed")
@@ -82,13 +114,44 @@ class StructuredKnowledgeExtractor:
             try:
                 parsed.validate_metadata_references(known_keys)
             except ValueError as error:
+                logger.warning(
+                    "knowledge_extraction_rejected",
+                    reason="unknown_metadata_reference",
+                    detail=str(error),
+                    elapsed=elapsed,
+                    **call_context,
+                )
                 return None, ExtractionDiagnostics(
                     raw_output=_dump(raw),
                     parse_error=str(error),
                 )
+
+            logger.info(
+                "knowledge_extraction_completed",
+                elapsed=elapsed,
+                entity_count=len(parsed.entities),
+                claim_count=len(parsed.claims),
+                relation_count=len(parsed.relation_assertions),
+                # 어휘를 벗어난 predicate는 막지 않고 표시만 한다. 새 개념일
+                # 수도 있고 동의어일 수도 있어 형식 검사로는 가릴 수 없다.
+                off_vocabulary_predicates=sorted(
+                    {claim.predicate for claim in parsed.claims}
+                    - set(vocabulary.predicates)
+                )
+                if vocabulary.predicates
+                else [],
+                **call_context,
+            )
             return parsed, ExtractionDiagnostics(raw_output=_dump(raw))
 
         error = response.get("parsing_error")
+        logger.warning(
+            "knowledge_extraction_rejected",
+            reason="contract_violation",
+            detail=str(error) if error is not None else "unknown",
+            elapsed=elapsed,
+            **call_context,
+        )
         return None, ExtractionDiagnostics(
             raw_output=_dump(raw),
             parse_error=str(error) if error is not None else "unknown",
@@ -120,3 +183,12 @@ def _dump(raw: object) -> dict | None:
     if hasattr(raw, "model_dump"):
         return raw.model_dump(mode="json")
     return {"repr": repr(raw)}
+
+
+def _content_fingerprint(content: str) -> str:
+    """본문 대신 남길 지문을 만든다.
+
+    같은 원문을 여러 번 추출했는지 로그만으로 판별할 수 있게 하되, 본문
+    자체는 남기지 않는다.
+    """
+    return hashlib.sha256(content.encode("utf-8")).hexdigest()[:16]
