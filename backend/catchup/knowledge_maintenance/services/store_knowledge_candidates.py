@@ -179,7 +179,8 @@ def store_knowledge_candidates(
             relation_count=len(relation_ids),
             evidence_link_count=evidence.total,
             located_claim_count=evidence.located_claims,
-            demoted_claim_count=evidence.demoted_claims,
+            demoted_not_found_count=evidence.not_found_claims,
+            demoted_ambiguous_count=evidence.ambiguous_claims,
         )
 
         return CandidateStorageResult(
@@ -190,7 +191,8 @@ def store_knowledge_candidates(
                 relation_ids=relation_ids,
                 evidence_link_count=evidence.total,
                 located_claim_count=evidence.located_claims,
-                demoted_claim_count=evidence.demoted_claims,
+                demoted_not_found_count=evidence.not_found_claims,
+                demoted_ambiguous_count=evidence.ambiguous_claims,
             )
         )
 
@@ -331,13 +333,14 @@ class EvidenceStorageCounts:
     Attributes:
         total: 남긴 근거 링크 전체 수를 나타낸다.
         located_claims: 인용을 본문에서 다시 찾은 claim 수를 나타낸다.
-        demoted_claims: 인용을 확정하지 못해 문서 단위로 낮춘 claim 수를
-            나타낸다.
+        not_found_claims: 인용이 본문에 없어 낮춘 claim 수를 나타낸다.
+        ambiguous_claims: 인용이 여러 번 나와 낮춘 claim 수를 나타낸다.
     """
 
     total: int = 0
     located_claims: int = 0
-    demoted_claims: int = 0
+    not_found_claims: int = 0
+    ambiguous_claims: int = 0
 
 
 def _store_evidence(
@@ -360,7 +363,8 @@ def _store_evidence(
     """
     count = 0
     located = 0
-    demoted = 0
+    not_found = 0
+    ambiguous = 0
     for local_key, candidate_id in entity_ids.items():
         del local_key
         uow.knowledge_candidates.add_evidence_link(
@@ -376,17 +380,20 @@ def _store_evidence(
         statement = statements.get(local_key)
         locator = locate_excerpt(observation.observation.content, statement)
         if locator is None:
-            demoted += 1
             content = observation.observation.content or ""
+            if statement in content:
+                ambiguous += 1
+                reason = "ambiguous"
+            else:
+                not_found += 1
+                reason = "not_found"
             logger.info(
                 "claim_evidence_demoted",
                 workspace_id=observation.workspace_id,
                 observation_id=str(observation.id),
                 run_id=str(run_id),
                 claim_local_key=local_key,
-                reason=(
-                    "ambiguous" if statement in content else "not_found"
-                ),
+                reason=reason,
             )
         else:
             located += 1
@@ -413,7 +420,8 @@ def _store_evidence(
     return EvidenceStorageCounts(
         total=count,
         located_claims=located,
-        demoted_claims=demoted,
+        not_found_claims=not_found,
+        ambiguous_claims=ambiguous,
     )
 
 

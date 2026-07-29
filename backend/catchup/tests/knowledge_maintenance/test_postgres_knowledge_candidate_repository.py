@@ -472,12 +472,12 @@ def _claim_locator(
         ).one().locator
 
 
-def test_claim_evidence_carries_char_offset_locator(
+def test_claim_evidence_carries_codepoint_offset_locator(
     workspace_id: int,
     session_factory: Callable[[], Session],
     uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
 ) -> None:
-    """본문에서 다시 찾은 인용은 문자 offset으로 위치가 남는다."""
+    """본문에서 다시 찾은 인용은 code point offset으로 위치가 남는다."""
     observation = _stored_observation(workspace_id, session_factory)
 
     result = store_knowledge_candidates(
@@ -488,11 +488,12 @@ def test_claim_evidence_carries_char_offset_locator(
     )
 
     locator = _claim_locator(session_factory, result.batch.run_id)
-    assert locator["kind"] == "char_offset"
+    assert locator["kind"] == "codepoint_offset"
     sliced = NORMALIZED_CONTENT[locator["start"] : locator["end"]]
     assert sliced == "9월 예정입니다."
     assert result.batch.located_claim_count == 1
-    assert result.batch.demoted_claim_count == 0
+    assert result.batch.demoted_not_found_count == 0
+    assert result.batch.demoted_ambiguous_count == 0
 
 
 def test_claim_evidence_is_demoted_when_statement_is_fabricated(
@@ -526,7 +527,35 @@ def test_claim_evidence_is_demoted_when_statement_is_fabricated(
 
     assert _claim_locator(session_factory, result.batch.run_id) == {}
     assert result.batch.located_claim_count == 0
-    assert result.batch.demoted_claim_count == 1
+    assert result.batch.demoted_not_found_count == 1
+    assert result.batch.demoted_ambiguous_count == 0
+
+
+def test_claim_evidence_is_demoted_when_statement_is_ambiguous(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+) -> None:
+    """본문에 두 번 나오는 인용은 위치를 단정하지 않고 사유를 구분해 센다."""
+    repeated = "고객: 9월 예정입니다.\n상담원: 9월 예정입니다."
+    observation = _stored_observation(
+        workspace_id,
+        session_factory,
+        content=repeated,
+        content_hash=content_hash(repeated),
+    )
+
+    result = store_knowledge_candidates(
+        observation,
+        _batch(),
+        spec=SPEC,
+        uow=uow_factory(),
+    )
+
+    assert _claim_locator(session_factory, result.batch.run_id) == {}
+    assert result.batch.located_claim_count == 0
+    assert result.batch.demoted_not_found_count == 0
+    assert result.batch.demoted_ambiguous_count == 1
 
 
 def test_run_is_recorded_as_succeeded(

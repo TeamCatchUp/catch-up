@@ -148,8 +148,10 @@ class StoredCandidateBatch:
         relation_ids: relation 후보의 local_key와 식별자를 잇는다.
         evidence_link_count: 남긴 근거 링크의 수를 나타낸다.
         located_claim_count: 인용을 본문에서 다시 찾은 claim의 수를 나타낸다.
-        demoted_claim_count: 인용을 찾지 못해 문서 단위 근거로 낮춘 claim의
-            수를 나타낸다.
+        demoted_not_found_count: 인용이 본문에 없어 문서 단위 근거로 낮춘
+            claim의 수를 나타낸다. 환각 의심 신호다.
+        demoted_ambiguous_count: 인용이 본문에 여러 번 나와 위치를 단정하지
+            못한 claim의 수를 나타낸다. 인용 자체는 진짜일 수 있다.
     """
 
     run_id: uuid.UUID
@@ -158,7 +160,8 @@ class StoredCandidateBatch:
     relation_ids: Mapping[str, uuid.UUID] = field(default_factory=dict)
     evidence_link_count: int = 0
     located_claim_count: int = 0
-    demoted_claim_count: int = 0
+    demoted_not_found_count: int = 0
+    demoted_ambiguous_count: int = 0
 
     @property
     def candidate_count(self) -> int:
