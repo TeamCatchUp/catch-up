@@ -269,6 +269,8 @@ def test_unlisted_or_text_predicate_is_ignored() -> None:
     assert result.conflicts_found == 0
     assert result.proposals_created == 0
     assert result.claims_without_subject_key == 0
+    # 빠진 4건이 어디로 갔는지 출력만으로 복원돼야 한다.
+    assert result.claims_not_comparable == 4
 
 
 def test_subject_without_identity_evidence_is_excluded() -> None:

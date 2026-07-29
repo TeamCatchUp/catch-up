@@ -78,6 +78,8 @@ class ClaimConflictResult:
     Attributes:
         claims_scanned: 읽어들인 claim 후보 수를 나타낸다.
         claims_without_subject_key: identity 근거가 없어 뺀 수를 나타낸다.
+        claims_not_comparable: 사전 미등재나 text 치역이라 비교하지 않은
+            수를 나타낸다.
         claims_unparseable: 값을 비교 키로 못 바꾼 수를 나타낸다.
         groups_compared: 실제로 값을 견준 그룹 수를 나타낸다.
         conflicts_found: 값이 두 종 이상으로 갈린 그룹 수를 나타낸다.
@@ -89,6 +91,7 @@ class ClaimConflictResult:
 
     claims_scanned: int = 0
     claims_without_subject_key: int = 0
+    claims_not_comparable: int = 0
     claims_unparseable: int = 0
     groups_compared: int = 0
     conflicts_found: int = 0
@@ -117,10 +120,12 @@ def resolve_claim_conflicts(
         groups: dict[tuple[str, str], list[StoredClaimCandidate]] = {}
         value_types: dict[str, str] = {}
         without_key = 0
+        not_comparable = 0
         for claim in claims:
             entry = vocabulary.predicate_entry(claim.predicate)
             if entry is None or entry.value_type == "text":
                 # 사전 미등재와 text 치역은 비교하지 않는다.
+                not_comparable += 1
                 continue
             value_types[claim.predicate] = entry.value_type
             subject_key = _subject_key(claim, duplicate_groups)
@@ -228,6 +233,7 @@ def resolve_claim_conflicts(
     result = ClaimConflictResult(
         claims_scanned=len(claims),
         claims_without_subject_key=without_key,
+        claims_not_comparable=not_comparable,
         claims_unparseable=unparseable,
         groups_compared=compared,
         conflicts_found=conflicts,
@@ -240,6 +246,7 @@ def resolve_claim_conflicts(
         workspace_id=workspace_id,
         claims_scanned=result.claims_scanned,
         claims_without_subject_key=result.claims_without_subject_key,
+        claims_not_comparable=result.claims_not_comparable,
         claims_unparseable=result.claims_unparseable,
         groups_compared=result.groups_compared,
         conflicts_found=result.conflicts_found,
