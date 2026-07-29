@@ -318,6 +318,17 @@ def _judge_name_groups(
             continue
         judged += 1
 
+        # same=false는 proposal이 남지 않아 이 로그가 유일한 기록이다.
+        # 판정 근거는 감사 대상이므로 결과와 무관하게 남긴다.
+        logger.info(
+            "identity_group_judged",
+            workspace_id=workspace_id,
+            group=normalized_name,
+            member_count=len(members),
+            same=verdict.same,
+            reason=verdict.reason,
+        )
+
         if not verdict.same:
             continue
 
