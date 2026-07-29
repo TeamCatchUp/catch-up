@@ -50,6 +50,16 @@ JUDGE_DETECTOR = "catchup.name_group_judge"
 JUDGE_DETECTOR_VERSION = "1"
 
 
+def group_idempotency_key(normalized_name: str) -> str:
+    """이름 그룹의 proposal key를 만든다.
+
+    정규화 이름을 그대로 쓰면 255자 컬럼을 넘칠 수 있어 고정 길이
+    해시로 만든다. 사람이 읽을 이름은 summary와 resolver_metadata에
+    남는다.
+    """
+    return hashlib.sha256(normalized_name.encode("utf-8")).hexdigest()
+
+
 class ResolutionUnitOfWork(Protocol):
     """resolution이 쓰는 transaction 경계를 정의한다."""
 
@@ -271,16 +281,19 @@ def _judge_name_groups(
             continue
         members = sorted(members, key=lambda c: (c.created_at, c.id))
         member_hash = _member_hash(members)
+        key = group_idempotency_key(normalized_name)
 
         existing = uow.mutation_proposals.find_pending_by_idempotency_key(
             workspace_id=workspace_id,
-            idempotency_key=normalized_name,
+            idempotency_key=key,
         )
-        if (
-            existing is not None
-            and existing.resolver_metadata.get("member_hash") == member_hash
-        ):
-            continue
+        if existing is not None:
+            if existing.resolver_metadata.get("member_hash") == member_hash:
+                continue
+            # 멤버가 달라진 순간 기존 계획서는 낡았다. 새 판정이 무엇이든
+            # 옛 구성의 병합안을 검토 큐에 남겨두면 안 된다.
+            uow.mutation_proposals.abandon(proposal_id=existing.id)
+            abandoned += 1
 
         try:
             verdict = judge.judge(
@@ -289,6 +302,7 @@ def _judge_name_groups(
                         candidate_id=member.id,
                         proposed_type=member.proposed_type,
                         proposed_name=member.proposed_name,
+                        excerpt=member.observation_excerpt,
                     )
                     for member in members
                 )
@@ -307,14 +321,10 @@ def _judge_name_groups(
         if not verdict.same:
             continue
 
-        if existing is not None:
-            uow.mutation_proposals.abandon(proposal_id=existing.id)
-            abandoned += 1
-
         representative = members[0]
         uow.mutation_proposals.add_duplicate_proposal(
             workspace_id=workspace_id,
-            idempotency_key=normalized_name,
+            idempotency_key=key,
             trigger_entity_candidate_id=representative.id,
             detector=JUDGE_DETECTOR,
             detector_version=JUDGE_DETECTOR_VERSION,
@@ -323,6 +333,7 @@ def _judge_name_groups(
                 f"{verdict.reason}"
             ),
             resolver_metadata={
+                "group_name": normalized_name,
                 "member_ids": [str(member.id) for member in members],
                 "member_hash": member_hash,
                 "reason": verdict.reason,

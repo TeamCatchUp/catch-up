@@ -610,7 +610,11 @@ class SqlAlchemyKnowledgeCandidateRepository:
         접두로 요구하기 때문이다.
         """
         statement = (
-            select(KnowledgeEntityCandidateRow, SourceVersionRow.source_type)
+            select(
+                KnowledgeEntityCandidateRow,
+                SourceVersionRow.source_type,
+                func.left(ObservationRow.normalized_content, 300),
+            )
             .join(
                 KnowledgeExtractionRunRow,
                 KnowledgeEntityCandidateRow.extraction_run_id
@@ -650,8 +654,11 @@ class SqlAlchemyKnowledgeCandidateRepository:
                 raw_payload=row.raw_payload,
                 source_type=source_type,
                 created_at=row.created_at,
+                observation_excerpt=excerpt,
             )
-            for row, source_type in self._session.execute(statement).all()
+            for row, source_type, excerpt in (
+                self._session.execute(statement).all()
+            )
         )
 
     def mark_entity_resolved(
@@ -727,24 +734,53 @@ class SqlAlchemyMutationProposalRepository:
         proposed_type: str,
         proposed_name: str,
     ) -> uuid.UUID:
-        """같은 대상 후보들을 하나로 합치는 계획서를 쓴다."""
-        proposal_id = uuid.uuid4()
-        self._session.add(
-            KnowledgeMutationProposalRow(
-                id=proposal_id,
-                workspace_id=workspace_id,
-                trigger_entity_candidate_id=trigger_entity_candidate_id,
-                proposal_kind="duplicate",
-                detector=detector,
-                detector_version=detector_version,
-                summary=summary,
-                idempotency_key=idempotency_key,
-                resolver_metadata=dict(resolver_metadata),
+        """같은 대상 후보들을 하나로 합치는 계획서를 쓴다.
+
+        같은 key의 행이 이미 있으면 상태와 무관하게 그 행을 되살려
+        내용을 갈아끼운다. `(workspace_id, idempotency_key)` UNIQUE가
+        상태를 구분하지 않아 abandoned 행도 key를 차지하기 때문이다.
+        새 INSERT를 시도하면 충돌이 나고 같은 트랜잭션의 결정론 병합까지
+        되돌아간다.
+        """
+        existing = self._session.scalar(
+            select(KnowledgeMutationProposalRow).where(
+                KnowledgeMutationProposalRow.workspace_id == workspace_id,
+                KnowledgeMutationProposalRow.idempotency_key
+                == idempotency_key,
             )
         )
-        # relationship이 없어 flush 순서가 보장되지 않으므로 proposal을
-        # 먼저 확정한다.
-        self._session.flush()
+        if existing is not None:
+            proposal_id = existing.id
+            existing.status = "pending"
+            existing.trigger_entity_candidate_id = trigger_entity_candidate_id
+            existing.detector = detector
+            existing.detector_version = detector_version
+            existing.summary = summary
+            existing.resolver_metadata = dict(resolver_metadata)
+            self._session.execute(
+                KnowledgeMutationOperationRow.__table__.delete().where(
+                    KnowledgeMutationOperationRow.proposal_id == proposal_id
+                )
+            )
+            self._session.flush()
+        else:
+            proposal_id = uuid.uuid4()
+            self._session.add(
+                KnowledgeMutationProposalRow(
+                    id=proposal_id,
+                    workspace_id=workspace_id,
+                    trigger_entity_candidate_id=trigger_entity_candidate_id,
+                    proposal_kind="duplicate",
+                    detector=detector,
+                    detector_version=detector_version,
+                    summary=summary,
+                    idempotency_key=idempotency_key,
+                    resolver_metadata=dict(resolver_metadata),
+                )
+            )
+            # relationship이 없어 flush 순서가 보장되지 않으므로 proposal을
+            # 먼저 확정한다.
+            self._session.flush()
 
         self._session.add(
             KnowledgeMutationOperationRow(

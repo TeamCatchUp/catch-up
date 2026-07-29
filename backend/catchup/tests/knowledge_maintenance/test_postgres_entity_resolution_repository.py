@@ -123,6 +123,8 @@ def test_find_pending_returns_source_type_and_payload(
     assert sample.source_type == SOURCE_TYPE
     assert sample.raw_payload["attributes"]["external_key"] == "user-abc"
     assert sample.extraction_method.value == "deterministic"
+    assert sample.observation_excerpt is not None
+    assert sample.observation_excerpt.startswith("고객:")
 
 
 def test_mark_entity_resolved_excludes_from_pending(
@@ -282,3 +284,69 @@ def test_duplicate_proposal_roundtrip_and_abandon(
             )
             is None
         )
+
+
+def test_replacing_proposal_reuses_key_row(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+) -> None:
+    """같은 key로 다시 쓰면 UNIQUE 충돌 없이 행이 교체된다.
+
+    abandoned 행이 key를 계속 차지하므로, 새 INSERT가 아니라 기존 행을
+    되살려 내용과 operation을 갈아끼워야 한다.
+    """
+    stored = _stored_candidates(workspace_id, session_factory, uow_factory)
+    representative = stored.entity_ids["e1"]
+    other = stored.entity_ids["e2"]
+
+    with uow_factory() as uow:
+        first_id = uow.mutation_proposals.add_duplicate_proposal(
+            workspace_id=workspace_id,
+            idempotency_key="group-key",
+            trigger_entity_candidate_id=representative,
+            detector="catchup.name_group_judge",
+            detector_version="1",
+            summary="첫 계획",
+            resolver_metadata={"member_hash": "old"},
+            representative_candidate_id=representative,
+            merge_candidate_ids=(other,),
+            proposed_type="feature",
+            proposed_name="결제 기능",
+        )
+        uow.mutation_proposals.abandon(proposal_id=first_id)
+        uow.commit()
+
+    with uow_factory() as uow:
+        second_id = uow.mutation_proposals.add_duplicate_proposal(
+            workspace_id=workspace_id,
+            idempotency_key="group-key",
+            trigger_entity_candidate_id=other,
+            detector="catchup.name_group_judge",
+            detector_version="1",
+            summary="멤버가 달라진 새 계획",
+            resolver_metadata={"member_hash": "new"},
+            representative_candidate_id=other,
+            merge_candidate_ids=(representative,),
+            proposed_type="feature",
+            proposed_name="결제 기능",
+        )
+        uow.commit()
+
+    with uow_factory() as uow:
+        found = uow.mutation_proposals.find_pending_by_idempotency_key(
+            workspace_id=workspace_id,
+            idempotency_key="group-key",
+        )
+    assert found is not None
+    assert found.id == second_id
+    assert found.resolver_metadata["member_hash"] == "new"
+
+    with session_factory() as session:
+        operations = session.scalars(
+            select(OperationRow)
+            .where(OperationRow.proposal_id == second_id)
+            .order_by(OperationRow.sequence)
+        ).all()
+    assert operations[0].entity_candidate_id == other
+    assert operations[1].entity_candidate_id == representative

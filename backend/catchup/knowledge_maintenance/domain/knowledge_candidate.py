@@ -44,6 +44,9 @@ class StoredEntityCandidate:
             external_key가 여기 있다.
         source_type: 후보가 나온 원문의 source 종류를 나타낸다.
         created_at: 후보가 저장된 시각을 나타낸다.
+        observation_excerpt: 후보가 나온 Observation 본문의 앞부분을
+            담는다. identity 판정이 이름만으로 단정하지 않도록 원문
+            맥락을 준다.
     """
 
     id: uuid.UUID
@@ -55,6 +58,7 @@ class StoredEntityCandidate:
     raw_payload: Mapping[str, object]
     source_type: str
     created_at: datetime
+    observation_excerpt: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

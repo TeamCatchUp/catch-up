@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from dataclasses import replace
 from datetime import datetime
 from datetime import timedelta
 from datetime import timezone
@@ -19,6 +20,9 @@ from catchup.knowledge_maintenance.domain.knowledge_candidate import (
 )
 from catchup.knowledge_maintenance.domain.knowledge_node import KnowledgeNode
 from catchup.knowledge_maintenance.domain.knowledge_node import NodeKind
+from catchup.knowledge_maintenance.services.resolve_entity_candidates import (
+    group_idempotency_key,
+)
 from catchup.knowledge_maintenance.services.resolve_entity_candidates import (
     resolve_entity_candidates,
 )
@@ -302,7 +306,7 @@ def test_same_verdict_writes_one_proposal_per_group() -> None:
 
     assert result.groups_judged == 1
     assert result.proposals_created == 1
-    stored = uow.mutation_proposals.proposals["slack"]
+    stored = uow.mutation_proposals.proposals[group_idempotency_key("slack")]
     kwargs = stored["kwargs"]
     assert kwargs["proposed_type"] == "integration"
     assert len(kwargs["merge_candidate_ids"]) == 1
@@ -352,7 +356,7 @@ def test_member_change_abandons_old_proposal() -> None:
     resolve_entity_candidates(
         workspace_id=WORKSPACE, judge=judge, uow=first_uow
     )
-    old_id = first_uow.mutation_proposals.proposals["slack"]["id"]
+    old_id = first_uow.mutation_proposals.proposals[group_idempotency_key("slack")]["id"]
 
     grown = members + [
         _candidate(
@@ -400,6 +404,122 @@ def test_judge_failure_skips_group_and_continues() -> None:
     assert result.groups_failed == 1
     assert result.proposals_created == 0
     assert uow.committed
+
+
+def test_member_change_with_different_verdict_abandons_stale_proposal() -> None:
+    """멤버가 달라진 뒤 다르다는 판정이 나와도 낡은 계획서는 접힌다."""
+    same_judge = FakeJudge(
+        IdentityVerdict(
+            same=True,
+            reason="같은 제품이다",
+            proposed_type="integration",
+            proposed_name="Slack",
+        )
+    )
+    members = _slack_group()
+    first_uow = FakeUnitOfWork(members)
+    resolve_entity_candidates(
+        workspace_id=WORKSPACE, judge=same_judge, uow=first_uow
+    )
+    key = group_idempotency_key("slack")
+    old_id = first_uow.mutation_proposals.proposals[key]["id"]
+
+    grown = members + [
+        _candidate(
+            name="SLACK",
+            entity_type="channel",
+            method=ExtractionMethod.LLM,
+            minutes=2,
+        )
+    ]
+    different_judge = FakeJudge(
+        IdentityVerdict(same=False, reason="채널이 섞여 단정할 수 없다")
+    )
+    second_uow = FakeUnitOfWork(grown)
+    second_uow.mutation_proposals = first_uow.mutation_proposals
+    result = resolve_entity_candidates(
+        workspace_id=WORKSPACE, judge=different_judge, uow=second_uow
+    )
+
+    assert result.proposals_abandoned == 1
+    assert old_id in second_uow.mutation_proposals.abandoned
+    assert result.proposals_created == 0
+    assert (
+        second_uow.mutation_proposals.find_pending_by_idempotency_key(
+            workspace_id=WORKSPACE, idempotency_key=key
+        )
+        is None
+    )
+
+
+def test_idempotency_key_is_fixed_length_hash() -> None:
+    """proposal key는 이름 길이와 무관하게 255자 안의 고정 길이다."""
+    long_name = "매우 긴 기능 이름 " * 40  # 400자 이상
+    judge = FakeJudge(
+        IdentityVerdict(
+            same=True,
+            reason="같은 기능이다",
+            proposed_type="feature",
+            proposed_name="긴 기능",
+        )
+    )
+    uow = FakeUnitOfWork(
+        [
+            _candidate(
+                name=long_name,
+                entity_type="feature",
+                method=ExtractionMethod.LLM,
+            ),
+            _candidate(
+                name=long_name,
+                entity_type="product",
+                method=ExtractionMethod.LLM,
+                minutes=1,
+            ),
+        ]
+    )
+
+    result = resolve_entity_candidates(
+        workspace_id=WORKSPACE, judge=judge, uow=uow
+    )
+
+    assert result.proposals_created == 1
+    (key,) = uow.mutation_proposals.proposals.keys()
+    assert len(key) == 64
+    assert key == group_idempotency_key(normalize_name(long_name))
+
+
+def test_judge_receives_observation_excerpt() -> None:
+    """판정 입력에 원문 맥락이 실린다."""
+    judge = FakeJudge(
+        IdentityVerdict(same=False, reason="맥락이 달라 단정할 수 없다")
+    )
+    members = [
+        _candidate(
+            name="Slack",
+            entity_type="platform",
+            method=ExtractionMethod.LLM,
+        ),
+        _candidate(
+            name="slack",
+            entity_type="integration",
+            method=ExtractionMethod.LLM,
+            minutes=1,
+        ),
+    ]
+    members = [
+        replace(member, observation_excerpt="고객: Slack 연결이 끊겼어요.")
+        for member in members
+    ]
+    uow = FakeUnitOfWork(members)
+
+    resolve_entity_candidates(workspace_id=WORKSPACE, judge=judge, uow=uow)
+
+    (group,) = judge.calls
+    assert all(
+        candidate.excerpt == "고객: Slack 연결이 끊겼어요."
+        for candidate in group
+    )
 
 
 def test_single_member_group_is_not_judged() -> None:
