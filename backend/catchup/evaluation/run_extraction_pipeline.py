@@ -200,18 +200,6 @@ async def main() -> None:
     engine = create_engine(settings.sqlalchemy_database_url)
     session_factory = sessionmaker(bind=engine, expire_on_commit=False)
 
-    with KnowledgeMaintenanceUnitOfWork(session_factory) as uow:
-        # 큐를 도입하기 전에 저장된 Observation에는 지시가 없다. 채워 둔다.
-        backfilled = uow.pipeline_events.backfill_missing(
-            workspace_id=args.workspace_id,
-            event_type=PipelineEventType.OBSERVATION_READY,
-        )
-        uow.commit()
-    if backfilled:
-        print(f"큐에 없던 Observation {backfilled}건을 채웠다.")
-
-    # 시각은 백필 뒤에 읽는다. 먼저 읽으면 방금 넣은 일의 available_at이
-    # 그보다 뒤라 아직 오지 않은 것으로 보인다.
     now = datetime.now(timezone.utc)
     with KnowledgeMaintenanceUnitOfWork(session_factory) as reader:
         events = reader.pipeline_events.claim_pending(

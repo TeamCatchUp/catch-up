@@ -347,44 +347,6 @@ def test_processed_events_do_not_come_back(
     assert result.observation_id not in remaining
 
 
-def test_backfill_queues_observations_that_predate_the_queue(
-    workspace_id: int,
-    session_factory: Callable[[], Session],
-    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
-) -> None:
-    """큐를 도입하기 전에 저장된 Observation이 영영 묻히지 않는다."""
-    result = ingest_and_normalize(
-        _envelope(workspace_id),
-        normalizer=_StubNormalizer(),
-        uow=uow_factory(),
-    )
-
-    # 지시를 지워 큐 이전 상태를 만든다.
-    with KnowledgeMaintenanceUnitOfWork(session_factory) as uow:
-        session = uow.pipeline_events._session  # noqa: SLF001
-        session.execute(
-            text("DELETE FROM knowledge_pipeline_outbox WHERE aggregate_id = :i"),
-            {"i": result.observation_id},
-        )
-        uow.commit()
-
-    assert result.observation_id not in {
-        item.aggregate_id for item in _claim(session_factory, workspace_id)
-    }
-
-    with KnowledgeMaintenanceUnitOfWork(session_factory) as uow:
-        added = uow.pipeline_events.backfill_missing(
-            workspace_id=workspace_id,
-            event_type=PipelineEventType.OBSERVATION_READY,
-        )
-        uow.commit()
-
-    assert added >= 1
-    assert result.observation_id in {
-        item.aggregate_id for item in _claim(session_factory, workspace_id)
-    }
-
-
 def test_backoff_grows_with_attempts() -> None:
     """같은 대상에 재시도가 몰리지 않게 대기를 배로 늘린다."""
     first = next_attempt_at(1, now=NOW) - NOW

@@ -711,45 +711,6 @@ class SqlAlchemyPipelineEventRepository:
         self._session.flush()
         return _pipeline_event_to_domain(row)
 
-    def backfill_missing(
-        self,
-        *,
-        workspace_id: int,
-        event_type: PipelineEventType,
-        limit: int | None = None,
-    ) -> int:
-        """큐에 없는 기존 Observation을 채운다."""
-        if event_type is not PipelineEventType.OBSERVATION_READY:
-            raise ValueError(f"backfill을 모르는 event_type이다: {event_type}")
-
-        queued = (
-            select(PipelineOutboxRow.id)
-            .where(
-                PipelineOutboxRow.event_type == event_type.value,
-                PipelineOutboxRow.aggregate_id == ObservationRow.id,
-            )
-            .exists()
-        )
-        statement = (
-            select(ObservationRow.id)
-            .where(ObservationRow.workspace_id == workspace_id, ~queued)
-            .order_by(ObservationRow.created_at, ObservationRow.id)
-        )
-        if limit is not None:
-            statement = statement.limit(limit)
-
-        added = 0
-        for observation_id in self._session.scalars(statement).all():
-            created = self.enqueue(
-                workspace_id=workspace_id,
-                event_type=event_type,
-                aggregate_type=PipelineAggregateType.OBSERVATION,
-                aggregate_id=observation_id,
-            )
-            if created is not None:
-                added += 1
-        return added
-
 
 def _pipeline_event_to_domain(row: PipelineOutboxRow) -> PipelineEvent:
     """저장된 row를 도메인 타입으로 되돌린다."""

@@ -61,17 +61,3 @@ class PipelineEventRepository(Protocol):
         도메인의 `resolve_failure`가 한다.
         """
         ...
-
-    def backfill_missing(
-        self,
-        *,
-        workspace_id: int,
-        event_type: PipelineEventType,
-        limit: int | None = None,
-    ) -> int:
-        """큐에 없는 기존 대상을 채운다.
-
-        큐를 도입하기 전에 저장된 Observation에는 지시가 없다. 그것들이
-        영영 처리되지 않는 일을 막는다.
-        """
-        ...
