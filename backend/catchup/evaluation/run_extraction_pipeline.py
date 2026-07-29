@@ -35,6 +35,7 @@ from catchup.configs.config import settings
 from catchup.db.models import Observation as ObservationRow
 from catchup.evaluation.eval_llm_wiki_extraction import CONTRACT_VERSION
 from catchup.evaluation.eval_llm_wiki_extraction import _grow_vocabulary
+from catchup.evaluation.eval_llm_wiki_extraction import _harvest
 from catchup.knowledge_maintenance.adapters.llm.structured_extractor import CONTRACT_ID
 from catchup.knowledge_maintenance.adapters.llm.structured_extractor import (
     TEMPLATE_PATH,
@@ -96,26 +97,37 @@ def _load_vocabulary(
     return found
 
 
-def _keep_dictionary(
-    grown: ExtractionVocabulary,
-    base: ExtractionVocabulary,
+def _next_vocabulary(
+    current: ExtractionVocabulary,
+    results: list[dict],
+    *,
+    round_index: int,
+    pinned: bool,
 ) -> ExtractionVocabulary:
-    """라운드 누적 결과에 처음 실었던 사전과 버전을 되돌린다.
+    """다음 라운드가 쓸 어휘를 정한다.
 
-    `_grow_vocabulary`는 이름 목록만 합치고 entry와 snapshot_id를 새로
-    쓴다. 고정 버전으로 돌릴 때는 정의가 사라지면 안 되고 실행 기록이
-    가리키는 버전도 흔들리면 안 되므로 원래 값을 다시 붙인다.
+    버전을 고정한 실행은 어휘를 키우지 않는다. 이유가 둘이다. 첫째,
+    한 버전 이름은 한 내용을 가리켜야 하므로 같은 이름에 라운드마다
+    다른 내용을 담으면 스냅샷 저장이 충돌한다. 둘째, 사전을 들여온
+    뒤의 새 이름은 자동으로 편입되는 것이 아니라 승격 절차를 거쳐야
+    한다. 그래서 여기서는 승격 후보로 적어 두기만 한다.
     """
-    if not base.snapshot_id:
-        return grown
-    return grown.model_copy(
-        update={
-            "snapshot_id": base.snapshot_id,
-            "entity_type_entries": base.entity_type_entries,
-            "predicate_entries": base.predicate_entries,
-            "relation_type_entries": base.relation_type_entries,
-        }
-    )
+    if not pinned:
+        return _grow_vocabulary(current, results, round_index)
+
+    predicates, relation_types = _harvest(results)
+    unknown_predicates = sorted(predicates - set(current.predicates))
+    unknown_relations = sorted(relation_types - set(current.relation_types))
+    reused = len(predicates) - len(unknown_predicates)
+    if predicates:
+        print(f"  사전 predicate 재사용 {reused}/{len(predicates)}")
+    if unknown_predicates or unknown_relations:
+        print(
+            f"  승격 후보 (사전에 없어 이번 실행에는 싣지 않는다) — "
+            f"predicate {unknown_predicates} / "
+            f"relation {unknown_relations}"
+        )
+    return current
 
 
 def _named(vocabulary: ExtractionVocabulary) -> ExtractionVocabulary:
@@ -286,24 +298,24 @@ async def main() -> None:
     )
     extractor = StructuredKnowledgeExtractor(service.get_llm())
     semaphore = asyncio.Semaphore(args.concurrency)
-    base_vocabulary = _load_vocabulary(
+    vocabulary = _load_vocabulary(
         session_factory,
         workspace_id=args.workspace_id,
         version=args.ontology_version,
     )
-    vocabulary = base_vocabulary
 
     print(
         f"Observation {len(pending)}건, 라운드 {args.round_size}건씩, "
         f"동시 {args.concurrency}건, 모델 {args.capacity}"
     )
-    if base_vocabulary.snapshot_id:
+    if args.ontology_version is not None:
         print(
-            f"시작 어휘 {base_vocabulary.snapshot_id} — "
-            f"predicate {len(base_vocabulary.predicates)}종"
-            f" (정의 {len(base_vocabulary.predicate_entries)}종),"
-            f" relation {len(base_vocabulary.relation_types)}종"
-            f" (정의 {len(base_vocabulary.relation_type_entries)}종)"
+            f"어휘 {vocabulary.snapshot_id} 고정 — "
+            f"predicate {len(vocabulary.predicates)}종"
+            f" (정의 {len(vocabulary.predicate_entries)}종),"
+            f" relation {len(vocabulary.relation_types)}종"
+            f" (정의 {len(vocabulary.relation_type_entries)}종)."
+            f" 새 이름은 승격 후보로만 남긴다."
         )
 
     summary = {"stored": 0, "reused": 0, "error": 0, "contract_violation": 0}
@@ -358,13 +370,11 @@ async def main() -> None:
             )
             print(f"  {record['key']}  {detail}")
 
-        vocabulary = _keep_dictionary(
-            _grow_vocabulary(
-                vocabulary,
-                _harvest_shape(list(results)),
-                number,
-            ),
-            base_vocabulary,
+        vocabulary = _next_vocabulary(
+            vocabulary,
+            _harvest_shape(list(results)),
+            round_index=number,
+            pinned=args.ontology_version is not None,
         )
 
     print("\n=== 저장 결과 ===")

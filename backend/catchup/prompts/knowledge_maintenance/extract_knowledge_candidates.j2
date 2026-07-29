@@ -32,7 +32,17 @@ Predicates (for claims) — reuse the exact name when the definition fits:
 {% endif -%}
 {% if entry.examples %}  e.g. << entry.examples | join(" · ") >>
 {% endif -%}
+{% endfor -%}
+<# 정의가 아직 없는 이름도 함께 실어야 한다. 감추면 관찰로 늘어난
+   용어가 다음 문서에서 사라져 재사용이 끊긴다. -#>
+{% set defined = vocabulary.predicate_entries | map(attribute="name") | list -%}
+{% set undefined = vocabulary.predicates | reject("in", defined) | list -%}
+{% if undefined %}
+Used before, definition not written down yet:
+{% for predicate in undefined -%}
+- << predicate >>
 {% endfor %}
+{% endif -%}
 {% elif vocabulary.predicates -%}
 Predicates (for claims):
 {% for predicate in vocabulary.predicates -%}
@@ -51,7 +61,15 @@ definition fits:
 {% endif -%}
 {% if entry.examples %}  e.g. << entry.examples | join(" · ") >>
 {% endif -%}
+{% endfor -%}
+{% set defined = vocabulary.relation_type_entries | map(attribute="name") | list -%}
+{% set undefined = vocabulary.relation_types | reject("in", defined) | list -%}
+{% if undefined %}
+Used before, definition not written down yet:
+{% for relation_type in undefined -%}
+- << relation_type >>
 {% endfor %}
+{% endif -%}
 {% elif vocabulary.relation_types -%}
 Relation types (for relation assertions):
 {% for relation_type in vocabulary.relation_types -%}
