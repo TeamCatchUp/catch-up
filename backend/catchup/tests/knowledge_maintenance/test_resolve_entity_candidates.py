@@ -5,6 +5,7 @@ from datetime import datetime
 from datetime import timedelta
 from datetime import timezone
 
+from catchup.knowledge_maintenance.domain.entity_resolution import IdentityVerdict
 from catchup.knowledge_maintenance.domain.entity_resolution import normalize_name
 from catchup.knowledge_maintenance.domain.knowledge_candidate import (
     EntityResolutionStatus,
@@ -247,3 +248,178 @@ def test_deterministic_without_external_key_stays_pending() -> None:
 
     assert result.nodes_created == 0
     assert uow.knowledge_candidates.resolved == {}
+
+
+class FakeJudge:
+    """정해진 판정을 돌려주고 호출을 기록한다."""
+
+    def __init__(self, verdict: IdentityVerdict) -> None:
+        self.verdict = verdict
+        self.calls: list[tuple] = []
+
+    def judge(self, group):
+        self.calls.append(group)
+        return self.verdict
+
+
+class FailingJudge:
+    def judge(self, group):
+        del group
+        raise RuntimeError("판정 모델이 응답하지 않는다")
+
+
+def _slack_group() -> list[StoredEntityCandidate]:
+    return [
+        _candidate(
+            name="Slack",
+            entity_type="platform",
+            method=ExtractionMethod.LLM,
+        ),
+        _candidate(
+            name="slack",
+            entity_type="integration",
+            method=ExtractionMethod.LLM,
+            minutes=1,
+        ),
+    ]
+
+
+def test_same_verdict_writes_one_proposal_per_group() -> None:
+    """같다고 판정된 그룹은 proposal 하나로 남는다."""
+    judge = FakeJudge(
+        IdentityVerdict(
+            same=True,
+            reason="같은 제품이다",
+            proposed_type="integration",
+            proposed_name="Slack",
+        )
+    )
+    uow = FakeUnitOfWork(_slack_group())
+
+    result = resolve_entity_candidates(
+        workspace_id=WORKSPACE, judge=judge, uow=uow
+    )
+
+    assert result.groups_judged == 1
+    assert result.proposals_created == 1
+    stored = uow.mutation_proposals.proposals["slack"]
+    kwargs = stored["kwargs"]
+    assert kwargs["proposed_type"] == "integration"
+    assert len(kwargs["merge_candidate_ids"]) == 1
+    # 후보는 pending 유지 — 적용은 승인 트랜잭션의 일이다.
+    assert uow.knowledge_candidates.resolved == {}
+
+
+def test_rerun_with_same_members_skips_judge_and_keeps_proposal() -> None:
+    """멤버가 같으면 재실행이 판정도 proposal도 반복하지 않는다."""
+    judge = FakeJudge(
+        IdentityVerdict(
+            same=True,
+            reason="같은 제품이다",
+            proposed_type="integration",
+            proposed_name="Slack",
+        )
+    )
+    members = _slack_group()
+    first_uow = FakeUnitOfWork(members)
+    resolve_entity_candidates(
+        workspace_id=WORKSPACE, judge=judge, uow=first_uow
+    )
+
+    second_uow = FakeUnitOfWork(members)
+    second_uow.mutation_proposals = first_uow.mutation_proposals
+    result = resolve_entity_candidates(
+        workspace_id=WORKSPACE, judge=judge, uow=second_uow
+    )
+
+    assert result.groups_judged == 0
+    assert result.proposals_created == 0
+    assert len(judge.calls) == 1
+
+
+def test_member_change_abandons_old_proposal() -> None:
+    """멤버가 늘면 기존 pending을 접고 새로 쓴다."""
+    judge = FakeJudge(
+        IdentityVerdict(
+            same=True,
+            reason="같은 제품이다",
+            proposed_type="integration",
+            proposed_name="Slack",
+        )
+    )
+    members = _slack_group()
+    first_uow = FakeUnitOfWork(members)
+    resolve_entity_candidates(
+        workspace_id=WORKSPACE, judge=judge, uow=first_uow
+    )
+    old_id = first_uow.mutation_proposals.proposals["slack"]["id"]
+
+    grown = members + [
+        _candidate(
+            name="SLACK",
+            entity_type="system",
+            method=ExtractionMethod.LLM,
+            minutes=2,
+        )
+    ]
+    second_uow = FakeUnitOfWork(grown)
+    second_uow.mutation_proposals = first_uow.mutation_proposals
+    result = resolve_entity_candidates(
+        workspace_id=WORKSPACE, judge=judge, uow=second_uow
+    )
+
+    assert result.proposals_abandoned == 1
+    assert old_id in second_uow.mutation_proposals.abandoned
+    assert result.proposals_created == 1
+
+
+def test_different_verdict_writes_nothing() -> None:
+    """다르다는 판정은 아무 기록도 남기지 않는다."""
+    judge = FakeJudge(
+        IdentityVerdict(same=False, reason="채널과 연동은 다른 대상이다")
+    )
+    uow = FakeUnitOfWork(_slack_group())
+
+    result = resolve_entity_candidates(
+        workspace_id=WORKSPACE, judge=judge, uow=uow
+    )
+
+    assert result.groups_judged == 1
+    assert result.proposals_created == 0
+    assert uow.mutation_proposals.proposals == {}
+
+
+def test_judge_failure_skips_group_and_continues() -> None:
+    """판정 실패는 그 그룹만 건너뛴다."""
+    uow = FakeUnitOfWork(_slack_group())
+
+    result = resolve_entity_candidates(
+        workspace_id=WORKSPACE, judge=FailingJudge(), uow=uow
+    )
+
+    assert result.groups_failed == 1
+    assert result.proposals_created == 0
+    assert uow.committed
+
+
+def test_single_member_group_is_not_judged() -> None:
+    """혼자인 이름은 판정 대상이 아니다."""
+    judge = FakeJudge(
+        IdentityVerdict(same=False, reason="판정할 일이 없어야 한다")
+    )
+    uow = FakeUnitOfWork(
+        [
+            _candidate(
+                name="결제 기능",
+                entity_type="feature",
+                method=ExtractionMethod.LLM,
+            )
+        ]
+    )
+
+    result = resolve_entity_candidates(
+        workspace_id=WORKSPACE, judge=judge, uow=uow
+    )
+
+    assert result.groups_judged == 0
+    assert judge.calls == []
