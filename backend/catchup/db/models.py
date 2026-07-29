@@ -3487,3 +3487,129 @@ class AgentTriggerOutbox(Base):
         Index("idx_agent_trigger_outbox_status_created_at", "status", "created_at"),
         Index("idx_agent_trigger_outbox_stream_message_id", "stream_message_id"),
     )
+
+
+# =====================
+# Knowledge Maintenance
+# =====================
+class SourceVersion(Base):
+    """Knowledge Maintenance가 관찰한 원문 버전을 불변 record로 보존한다."""
+
+    __tablename__ = "source_versions"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+    )
+    workspace_id: Mapped[int] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    source_type: Mapped[str] = mapped_column(String(50), nullable=False)
+
+    # 외부 source 문서 하나를 식별하는 복합 identity를 평탄화해 보존한다.
+    entity_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    scope_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    target_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    external_document_id: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+    )
+
+    change_kind: Mapped[str] = mapped_column(String(16), nullable=False)
+    source_version_key: Mapped[str] = mapped_column(
+        String(512),
+        nullable=False,
+    )
+    title: Mapped[str | None] = mapped_column(Text, nullable=True)
+    canonical_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    content: Mapped[str | None] = mapped_column(Text, nullable=True)
+    content_type: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+    )
+    content_hash: Mapped[str | None] = mapped_column(
+        String(64),
+        nullable=True,
+    )
+    source_updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    observed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+    )
+    idempotency_key: Mapped[str] = mapped_column(
+        String(512),
+        nullable=False,
+    )
+    payload_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    source_metadata: Mapped[dict[str, Any]] = mapped_column(
+        "metadata",
+        JSONB,
+        nullable=False,
+        default=dict,
+        server_default=text("'{}'::jsonb"),
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "workspace_id",
+            "idempotency_key",
+            name="uq_source_versions_workspace_idempotency_key",
+        ),
+        UniqueConstraint(
+            "workspace_id",
+            "source_type",
+            "entity_type",
+            "scope_id",
+            "target_id",
+            "external_document_id",
+            "source_version_key",
+            name="uq_source_versions_logical_version",
+        ),
+        CheckConstraint(
+            "change_kind IN ('created', 'updated', 'deleted')",
+            name="ck_source_versions_change_kind",
+        ),
+        CheckConstraint(
+            "("
+            "change_kind = 'deleted' "
+            "AND content IS NULL "
+            "AND content_type IS NULL "
+            "AND content_hash IS NULL"
+            ") OR ("
+            "change_kind IN ('created', 'updated') "
+            "AND content IS NOT NULL "
+            "AND content_type IS NOT NULL "
+            "AND content_hash IS NOT NULL"
+            ")",
+            name="ck_source_versions_content_by_change_kind",
+        ),
+        CheckConstraint(
+            "char_length(payload_hash) = 64",
+            name="ck_source_versions_payload_hash_length",
+        ),
+        CheckConstraint(
+            "content_hash IS NULL OR char_length(content_hash) = 64",
+            name="ck_source_versions_content_hash_length",
+        ),
+        Index(
+            "idx_source_versions_source_latest",
+            "workspace_id",
+            "source_type",
+            "entity_type",
+            "scope_id",
+            "target_id",
+            "external_document_id",
+            "source_updated_at",
+            "observed_at",
+            "created_at",
+        ),
+    )
