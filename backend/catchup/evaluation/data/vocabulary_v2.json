@@ -45,14 +45,14 @@
     },
     {
       "name": "feature",
-      "definition": "제품이 사용자에게 제공하는 기능 단위. 화면이나 명령으로 사용자가 직접 쓸 수 있는 것이다.",
-      "identity_scope": "standalone",
+      "definition": "제품이 사용자에게 제공하는 기능 단위. 화면이나 명령으로 사용자가 직접 쓸 수 있는 것이다. 통합 검색·요약 같은 이름은 제품마다 있으므로, 어느 제품(그리고 어느 회사)의 기능인지 없이는 지시 대상이 정해지지 않는다.",
+      "identity_scope": "anchored",
       "examples": ["통합 검색", "요약 카드", "권한 필터"]
     },
     {
       "name": "service",
-      "definition": "내부 경계로 나뉜 백엔드 서비스. 사용자에게 보이는 feature와 달리 배포·운영 단위다.",
-      "identity_scope": "standalone",
+      "definition": "내부 경계로 나뉜 백엔드 서비스. 사용자에게 보이는 feature와 달리 배포·운영 단위다. 결제 서비스 같은 이름은 회사마다 있으므로, 어느 조직의 서비스인지 없이는 지시 대상이 정해지지 않는다.",
+      "identity_scope": "anchored",
       "examples": ["결제 서비스", "인덱싱 서비스"]
     },
     {
@@ -87,8 +87,8 @@
     },
     {
       "name": "project",
-      "definition": "기간과 목표가 정해진 일의 묶음. 조직이 아니라 일이 대상이다.",
-      "identity_scope": "standalone",
+      "definition": "기간과 목표가 정해진 일의 묶음. 조직이 아니라 일이 대상이다. 검색 품질 개선 프로젝트 같은 이름은 회사마다 있으므로, 어느 조직의 프로젝트인지 없이는 지시 대상이 정해지지 않는다.",
+      "identity_scope": "anchored",
       "examples": ["검색 품질 개선 프로젝트"]
     },
     {
@@ -154,19 +154,26 @@
     },
     {
       "name": "start_time",
-      "definition": "어떤 일이 시작한다고 원문이 말한 시점을 원문 표기 그대로 담는다. 실측에 2024-10과 오후 2시가 함께 있어 date로 확정할 수 없다. 실제 유효 기간은 claim의 valid_from이 담당한다.",
+      "definition": "어떤 일이 시작한 시점을 절대 날짜로 담는다. 상대·부분 시간 표현은 문서의 관찰 시각을 기준으로 절대 날짜(YYYY-MM-DD 또는 YYYY-MM)로 해소한다. 해소 불가능하면 claim을 내지 않는다 — 비교 불가능한 claim보다 빠진 claim이 싸다.",
       "domain": [],
-      "value_type": "text",
+      "value_type": "date",
       "enum_values": [],
-      "examples": ["오후 2시부터 점검합니다 → 오후 2시"]
+      "examples": [
+        "9월부터요 → 2026-09",
+        "어제 2시 40분에 장애 시작(6/25 상담) → 2026-06-24",
+        "오후 2시부터 점검합니다(2026-10-02 문서) → 2026-10-02"
+      ]
     },
     {
       "name": "end_time",
-      "definition": "어떤 일이 끝난다고 원문이 말한 시점을 원문 표기 그대로 담는다. start_time과 같은 이유로 text다.",
+      "definition": "어떤 일이 끝난 시점을 절대 날짜로 담는다. 상대·부분 시간 표현은 문서의 관찰 시각을 기준으로 절대 날짜(YYYY-MM-DD 또는 YYYY-MM)로 해소한다. 해소 불가능하면 claim을 내지 않는다 — 비교 불가능한 claim보다 빠진 claim이 싸다.",
       "domain": [],
-      "value_type": "text",
+      "value_type": "date",
       "enum_values": [],
-      "examples": ["2시 40분에 복구됐습니다 → 2시 40분"]
+      "examples": [
+        "9월까지였어요 → 2026-09",
+        "어제 2시 40분에 복구(6/25 상담) → 2026-06-24"
+      ]
     },
     {
       "name": "last_updated_date",
@@ -183,6 +190,17 @@
       "value_type": "boolean",
       "enum_values": [],
       "examples": ["임시로 이렇게 하시면 됩니다 → true"]
+    },
+    {
+      "name": "is_supported",
+      "definition": "대상 기능을 현재 지원하는지 나타낸다. 실측에서 SSO 지원·미지원 발화가 status=not_supported로 잘못 담겼는데, 그것은 issue의 처리 상태이지 기능의 지원 여부가 아니다. 이 그릇이 올바른 자리다.",
+      "domain": ["feature"],
+      "value_type": "boolean",
+      "enum_values": [],
+      "examples": [
+        "SSO는 현재 지원하지 않습니다 → false",
+        "SSO를 지원합니다 → true"
+      ]
     },
     {
       "name": "requires_permission_review",
