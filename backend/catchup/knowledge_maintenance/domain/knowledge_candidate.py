@@ -29,6 +29,51 @@ class ExtractionRunStatus(StrEnum):
     FAILED = "failed"
 
 
+@dataclass(frozen=True, slots=True)
+class StoredEntityCandidate:
+    """저장된 entity 후보를 resolution이 읽는 형태로 표현한다.
+
+    Attributes:
+        id: 후보 행을 식별한다.
+        run_id: 후보를 만든 추출 실행을 가리킨다.
+        local_key: 그 실행 안에서의 이름을 보존한다.
+        proposed_type: Extractor 또는 레이어 1이 제안한 종류를 나타낸다.
+        proposed_name: 제안된 표시 이름을 나타낸다.
+        extraction_method: 결정론인지 LLM 추론인지 나타낸다.
+        raw_payload: 저장 시점의 원본 draft를 보존한다. 결정론 후보의
+            external_key가 여기 있다.
+        source_type: 후보가 나온 원문의 source 종류를 나타낸다.
+        created_at: 후보가 저장된 시각을 나타낸다.
+    """
+
+    id: uuid.UUID
+    run_id: uuid.UUID
+    local_key: str
+    proposed_type: str
+    proposed_name: str
+    extraction_method: ExtractionMethod
+    raw_payload: Mapping[str, object]
+    source_type: str
+    created_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class StoredMutationProposal:
+    """저장된 mutation proposal을 resolution이 읽는 형태로 표현한다.
+
+    Attributes:
+        id: proposal 행을 식별한다.
+        idempotency_key: 같은 검토 단위의 중복 생성을 막는 키를 나타낸다.
+        status: proposal의 lifecycle 상태를 나타낸다.
+        resolver_metadata: resolver가 남긴 판정 근거를 보존한다.
+    """
+
+    id: uuid.UUID
+    idempotency_key: str
+    status: str
+    resolver_metadata: Mapping[str, object]
+
+
 class EntityResolutionStatus(StrEnum):
     """Entity 후보가 canonical identity로 가는 길을 나타낸다.
 

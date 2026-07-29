@@ -13,6 +13,9 @@ from catchup.knowledge_maintenance.adapters.postgres.repositories import (
     SqlAlchemyKnowledgeNodeRepository,
 )
 from catchup.knowledge_maintenance.adapters.postgres.repositories import (
+    SqlAlchemyMutationProposalRepository,
+)
+from catchup.knowledge_maintenance.adapters.postgres.repositories import (
     SqlAlchemyObservationRepository,
 )
 from catchup.knowledge_maintenance.adapters.postgres.repositories import (
@@ -41,6 +44,7 @@ class KnowledgeMaintenanceUnitOfWork:
     knowledge_candidates: SqlAlchemyKnowledgeCandidateRepository
     ontology: SqlAlchemyOntologyRepository
     pipeline_events: SqlAlchemyPipelineEventRepository
+    mutation_proposals: SqlAlchemyMutationProposalRepository
 
     def __init__(self, session_factory: Callable[[], Session]) -> None:
         self._session_factory = session_factory
@@ -55,6 +59,7 @@ class KnowledgeMaintenanceUnitOfWork:
         self.knowledge_candidates = SqlAlchemyKnowledgeCandidateRepository(session)
         self.ontology = SqlAlchemyOntologyRepository(session)
         self.pipeline_events = SqlAlchemyPipelineEventRepository(session)
+        self.mutation_proposals = SqlAlchemyMutationProposalRepository(session)
         return self
 
     def __exit__(
