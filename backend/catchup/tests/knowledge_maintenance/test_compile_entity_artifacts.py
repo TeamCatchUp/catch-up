@@ -26,6 +26,7 @@ from catchup.knowledge_maintenance.domain.artifact import validate_blocks
 from catchup.knowledge_maintenance.domain.claim_conflict import StoredClaimCandidate
 from catchup.knowledge_maintenance.ports.artifacts import ArtifactProposalConflict
 from catchup.knowledge_maintenance.ports.artifacts import EntityCardSource
+from catchup.knowledge_maintenance.ports.artifacts import StoredArtifactProposal
 from catchup.knowledge_maintenance.ports.mutation_proposals import StoredPendingProposal
 from catchup.knowledge_maintenance.services.compile_entity_artifacts import (
     ARTIFACT_KIND_ENTITY_SUMMARY,
@@ -252,6 +253,27 @@ class FakeArtifactRepository:
         )
         return revision_id
 
+    def list_pending_proposals(self) -> list[StoredArtifactProposal]:
+        nodes = {
+            artifact_id: node_id
+            for (_, node_id), artifact_id in self.artifacts.items()
+        }
+        return [
+            StoredArtifactProposal(
+                id=row["id"],
+                artifact_id=row["artifact_id"],
+                subject_node_id=nodes[row["artifact_id"]],
+                title=self.titles[row["artifact_id"]],
+                status=row["status"],
+                blocks=row["blocks"],
+                content_hash=row["content_hash"],
+                base_revision_id=row["base_revision_id"],
+                rejection_reason=row["rejection_reason"],
+            )
+            for row in self.by_key.values()
+            if row["status"] == "pending"
+        ]
+
     def pending_rows(self) -> list[dict]:
         """계류 중인 변경안 행을 돌려준다. 테스트가 상태를 볼 자리다."""
         return [
@@ -299,6 +321,20 @@ def _only_pending(uow: FakeUnitOfWork) -> dict:
     rows = uow.artifacts.pending_rows()
     assert len(rows) == 1
     return rows[0]
+
+
+def _publish(uow: FakeUnitOfWork, *, revision_number: int) -> uuid.UUID:
+    """지금 계류 중인 변경안 하나를 승인해 판으로 발행한다."""
+    proposal_id = _only_pending(uow)["id"]
+    row = uow.artifacts.by_id[proposal_id]
+    uow.artifacts.mark_approved(proposal_id=proposal_id, reviewer="tester")
+    uow.artifacts.add_revision(
+        artifact_id=row["artifact_id"],
+        revision_number=revision_number,
+        blocks=row["blocks"],
+        source_proposal_id=proposal_id,
+    )
+    return proposal_id
 
 
 def _contradiction(
@@ -704,6 +740,62 @@ def test_written_blocks_hold_their_own_hash() -> None:
 
     row = _only_pending(uow)
     assert row["content_hash"] == blocks_content_hash(row["blocks"])
+
+
+def test_conflicting_revert_skips_only_that_node() -> None:
+    """승인된 옛 판 내용으로 되돌아간 노드만 건너뛰고 나머지는 돈다.
+
+    rev1=A와 rev2=B가 이미 발행된 뒤 내용이 A로 돌아오면 멱등 키가
+    승인 행과 부딪힌다. 그 노드 하나만 접어 두고 다른 노드의 카드
+    작업은 그대로 끝나야 한다.
+    """
+    first = uuid.uuid4()
+    second = uuid.uuid4()
+    claim = _claim(node_id=first, value=60)
+    uow = FakeUnitOfWork(
+        sources=[_source(first, "첫 기능"), _source(second, "둘째 기능")],
+        claims=[claim],
+    )
+    _run(uow, limit=1)
+    _publish(uow, revision_number=1)
+    uow.knowledge_candidates.claims = [replace(claim, value=120)]
+    _run(uow, limit=1)
+    _publish(uow, revision_number=2)
+
+    uow.knowledge_candidates.claims = [claim, _claim(node_id=second)]
+    result = _run(uow, limit=2)
+
+    assert result.nodes_considered == 2
+    assert result.proposals_conflicted == 1
+    assert result.proposals_created == 1
+    assert uow.committed == 3
+    row = _only_pending(uow)
+    artifact_id = uow.artifacts.artifacts[
+        (ARTIFACT_KIND_ENTITY_SUMMARY, second)
+    ]
+    assert row["artifact_id"] == artifact_id
+
+
+def test_skipped_node_abandons_stale_pending() -> None:
+    """지문이 그대로라 넘기는 노드도 내용이 다른 낡은 계류는 접는다."""
+    node_id = uuid.uuid4()
+    claim = _claim(node_id=node_id, value=60)
+    uow = FakeUnitOfWork(sources=[_source(node_id)], claims=[claim])
+    _run(uow)
+    _publish(uow, revision_number=1)
+    uow.knowledge_candidates.claims = [replace(claim, value=120)]
+    _run(uow)
+    stale_id = _only_pending(uow)["id"]
+
+    uow.knowledge_candidates.claims = [claim]
+    result = _run(uow)
+
+    assert result.unchanged_skipped == 1
+    assert result.proposals_abandoned == 1
+    assert result.proposals_created == 0
+    assert result.proposals_revived == 0
+    assert uow.artifacts.by_id[stale_id]["status"] == "abandoned"
+    assert uow.artifacts.pending_rows() == []
 
 
 def test_fake_refuses_to_revive_decided_rows() -> None:

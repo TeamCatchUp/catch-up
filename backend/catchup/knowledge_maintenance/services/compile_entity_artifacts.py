@@ -38,6 +38,7 @@ from catchup.knowledge_maintenance.domain.artifact import artifact_idempotency_k
 from catchup.knowledge_maintenance.domain.artifact import blocks_content_hash
 from catchup.knowledge_maintenance.domain.artifact import validate_blocks
 from catchup.knowledge_maintenance.domain.claim_conflict import StoredClaimCandidate
+from catchup.knowledge_maintenance.ports.artifacts import ArtifactProposalConflict
 from catchup.knowledge_maintenance.ports.artifacts import ArtifactRepository
 from catchup.knowledge_maintenance.ports.knowledge_candidates import (
     KnowledgeCandidateRepository,
@@ -87,6 +88,8 @@ class ArtifactCompileResult:
         proposals_abandoned: 낡아서 접은 계류 변경안 수를 나타낸다.
         unchanged_skipped: 지문이 그대로라 아무것도 쓰지 않은 문서 수를
             나타낸다.
+        proposals_conflicted: 멱등 키가 이미 결정된 변경안과 부딪혀
+            건너뛴 문서 수를 나타낸다.
     """
 
     nodes_considered: int = 0
@@ -94,6 +97,7 @@ class ArtifactCompileResult:
     proposals_revived: int = 0
     proposals_abandoned: int = 0
     unchanged_skipped: int = 0
+    proposals_conflicted: int = 0
 
 
 def compile_entity_artifacts(
@@ -108,11 +112,18 @@ def compile_entity_artifacts(
     어휘 사전은 호출자가 스냅샷에서 읽어 넘긴다. 어느 판본으로 카드를
     만들었는지가 블록에 남아야 하고, 그 판본을 고르는 일은 실행을
     시작하는 쪽의 결정이기 때문이다.
+
+    한 노드가 실패해도 나머지 노드의 작업은 살린다. 커밋이 루프 끝에
+    한 번뿐이라 예외가 그대로 올라가면 다른 노드의 카드까지 통째로
+    되돌아가기 때문이다. 승인된 옛 판 내용으로의 회귀 제안은 현재 멱등
+    키 설계상 자동 재제안이 불가능하므로 그 노드만 건너뛰고 센다. 사람이
+    그 회귀를 다시 볼 값어치가 있는지는 후속 스펙 판단으로 남긴다.
     """
     created = 0
     revived = 0
     abandoned = 0
     skipped = 0
+    conflicted = 0
     with uow:
         sources = uow.artifacts.find_top_entity_nodes(limit=limit)
         claims = uow.knowledge_candidates.find_claim_candidates(
@@ -156,6 +167,11 @@ def compile_entity_artifacts(
             )
             if content_hash in known:
                 skipped += 1
+                abandoned += _abandon_stale_pending(
+                    uow,
+                    artifact_id=artifact_id,
+                    content_hash=content_hash,
+                )
                 continue
 
             replaced = uow.artifacts.abandon_pending_proposals(
@@ -165,15 +181,29 @@ def compile_entity_artifacts(
             latest = uow.artifacts.find_latest_revision_id_and_number(
                 artifact_id=artifact_id,
             )
-            proposal_id = uow.artifacts.add_or_revive_proposal(
-                artifact_id=artifact_id,
-                blocks=blocks,
-                content_hash=content_hash,
-                idempotency_key=artifact_idempotency_key(
-                    artifact_id, content_hash
-                ),
-                base_revision_id=None if latest is None else latest[0],
-            )
+            try:
+                proposal_id = uow.artifacts.add_or_revive_proposal(
+                    artifact_id=artifact_id,
+                    blocks=blocks,
+                    content_hash=content_hash,
+                    idempotency_key=artifact_idempotency_key(
+                        artifact_id, content_hash
+                    ),
+                    base_revision_id=None if latest is None else latest[0],
+                )
+            except ArtifactProposalConflict:
+                # 사람이 이미 결정한 행이 같은 키를 쓰고 있다. 이 노드만
+                # 건너뛰고 나머지 노드의 작업은 그대로 커밋한다. 바로 위에서
+                # 접은 계류는 되돌리지 않는다. 그 내용은 이미 낡았다.
+                conflicted += 1
+                logger.warning(
+                    "artifact_compile_proposal_conflict",
+                    workspace_id=workspace_id,
+                    node_id=str(source.node_id),
+                    artifact_id=str(artifact_id),
+                    content_hash=content_hash,
+                )
+                continue
             if replaced:
                 revived += 1
             else:
@@ -196,6 +226,7 @@ def compile_entity_artifacts(
         proposals_revived=revived,
         proposals_abandoned=abandoned,
         unchanged_skipped=skipped,
+        proposals_conflicted=conflicted,
     )
     logger.info(
         "artifact_compile_completed",
@@ -205,8 +236,34 @@ def compile_entity_artifacts(
         proposals_revived=result.proposals_revived,
         proposals_abandoned=result.proposals_abandoned,
         unchanged_skipped=result.unchanged_skipped,
+        proposals_conflicted=result.proposals_conflicted,
     )
     return result
+
+
+def _abandon_stale_pending(
+    uow: ArtifactCompileUnitOfWork,
+    *,
+    artifact_id: uuid.UUID,
+    content_hash: str,
+) -> int:
+    """넘어가는 문서에 남은, 내용이 다른 계류 변경안을 접는다.
+
+    지문이 그대로라 이번에 쓸 것이 없어도 큐에 내용이 다른 변경안이
+    남아 있을 수 있다. 그것을 사람이 나중에 승인하면 지금 컴파일한
+    본문과 다른 판이 발행되므로 여기서 접는다.
+
+    지금 지문과 같은 계류가 있으면 아무것도 접지 않는다. 그 행이 곧
+    이번 내용이라 접으면 검토 큐가 이유 없이 비기 때문이다.
+    """
+    hashes = {
+        proposal.content_hash
+        for proposal in uow.artifacts.list_pending_proposals()
+        if proposal.artifact_id == artifact_id
+    }
+    if not hashes or content_hash in hashes:
+        return 0
+    return uow.artifacts.abandon_pending_proposals(artifact_id=artifact_id)
 
 
 def _group_claims_by_node(

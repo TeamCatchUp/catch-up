@@ -139,12 +139,14 @@ def main() -> None:
     print(f"  대상 노드 {result.nodes_considered}")
     # 서비스 필드 이름과 달리 뜻은 "처음 올림"과 "직전 계류를 대신해
     # 다시 올림"이다. 이름을 그대로 적으면 되살아난 행으로 읽히므로
-    # 여기서는 뜻으로 적는다.
+    # 여기서는 뜻으로 적는다. "충돌 보류"는 승인된 옛 판 내용으로
+    # 되돌아가 멱등 키가 부딪혀 이번에 올리지 못한 문서 수다.
     print(
         f"  변경안 신규 {result.proposals_created}"
         f" · 갱신 {result.proposals_revived}"
         f" · 접힘 {result.proposals_abandoned}"
         f" · 내용 그대로 {result.unchanged_skipped}"
+        f" · 충돌 보류 {result.proposals_conflicted}"
     )
 
     _print_pending_cards(uow)
