@@ -11,13 +11,11 @@ interface DetailHeaderProps {
   userId: string;
   userName: string;
   userDepartment: string;
-  /** 진입 경로 (감사 로그에서 진입 시 'audit-logs') */
-  from?: string;
 }
 
 /** 질문 로그 상세 — 헤더 (타이틀 + 유저 정보 + 목록 복귀) */
-export default function DetailHeader({ userName, userDepartment, from }: DetailHeaderProps) {
-  const backHref = from === 'audit-logs' ? '/admin/audit-logs?tab=question' : '/admin/question-logs';
+export default function DetailHeader({ userName, userDepartment }: DetailHeaderProps) {
+  const backHref = '/admin/question-logs';
 
   return (
     <div className="flex flex-col gap-6">
