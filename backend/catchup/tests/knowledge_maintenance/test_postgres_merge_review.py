@@ -21,11 +21,15 @@ from sqlalchemy.orm import Session
 from sqlalchemy.orm import sessionmaker
 
 from catchup.configs.config import settings
+from catchup.db.models import KnowledgeEntityCandidate as CandidateRow
 from catchup.db.models import KnowledgeMutationOperation as OperationRow
 from catchup.db.models import KnowledgeMutationProposal as ProposalRow
 from catchup.db.models import Workspace
 from catchup.knowledge_maintenance.adapters.postgres.unit_of_work import (
     KnowledgeMaintenanceUnitOfWork,
+)
+from catchup.knowledge_maintenance.services.apply_mutation_proposals import (
+    apply_mutation_proposals,
 )
 from catchup.knowledge_maintenance.services.review_merge_proposal import (
     MergeReviewError,
@@ -389,3 +393,90 @@ def test_contradiction_is_not_decidable_here(
         row = session.get(ProposalRow, contradiction_id)
     assert row is not None
     assert row.status == "pending"
+
+
+def test_apply_resolves_candidates_on_real_rows(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+) -> None:
+    """승인된 안건이 실 DB에서 적용되어 후보가 해소된다."""
+    proposal_id, _, representative, other = _merge_proposal(
+        workspace_id, session_factory, uow_factory
+    )
+    review_merge_proposal(
+        uow_factory(),
+        workspace_id=workspace_id,
+        proposal_id=proposal_id,
+        verdict="approved",
+        reviewer="ba2slk",
+    )
+
+    result = apply_mutation_proposals(uow_factory, workspace_id=workspace_id)
+
+    assert result.proposals_applied >= 1
+    with session_factory() as session:
+        row = session.get(ProposalRow, proposal_id)
+        assert row is not None
+        assert row.status == "applied"
+        assert row.applied_at is not None
+        rep = session.get(CandidateRow, representative)
+        member = session.get(CandidateRow, other)
+    assert rep is not None and member is not None
+    assert rep.resolution_status == "accepted"
+    assert member.resolution_status == "merged"
+    assert rep.resolved_node_id == member.resolved_node_id
+    assert rep.resolved_node_id is not None
+
+    rerun = apply_mutation_proposals(uow_factory, workspace_id=workspace_id)
+    assert rerun.proposals_applied == 0
+    assert rerun.candidates_resolved == 0
+
+
+def test_apply_isolates_failing_proposal(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+) -> None:
+    """미지 명령을 가진 안건만 실패하고 나머지는 적용된다."""
+    good_id, _, good_rep, good_member = _merge_proposal(
+        workspace_id, session_factory, uow_factory
+    )
+    bad_id, _, bad_rep, _bad_member = _merge_proposal(
+        workspace_id, session_factory, uow_factory
+    )
+    for proposal_id in (good_id, bad_id):
+        review_merge_proposal(
+            uow_factory(),
+            workspace_id=workspace_id,
+            proposal_id=proposal_id,
+            verdict="approved",
+            reviewer="ba2slk",
+        )
+    # 실패 유도: bad 안건에 이 슬라이스가 지원하지 않는 명령을 심는다.
+    with session_factory() as session:
+        session.add(
+            OperationRow(
+                id=uuid.uuid4(),
+                workspace_id=workspace_id,
+                proposal_id=bad_id,
+                sequence=9,
+                operation_type="invalidate_claim",
+                operation_data={},
+            )
+        )
+        session.commit()
+
+    result = apply_mutation_proposals(uow_factory, workspace_id=workspace_id)
+
+    assert result.proposals_applied == 1
+    assert result.proposals_failed == 1
+    with session_factory() as session:
+        good = session.get(ProposalRow, good_id)
+        bad = session.get(ProposalRow, bad_id)
+        bad_rep_row = session.get(CandidateRow, bad_rep)
+    assert good is not None and bad is not None
+    assert good.status == "applied"
+    assert bad.status == "approved"
+    assert bad_rep_row is not None
+    assert bad_rep_row.resolved_node_id is None

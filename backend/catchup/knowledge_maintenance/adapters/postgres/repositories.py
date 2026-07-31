@@ -107,6 +107,7 @@ from catchup.knowledge_maintenance.ports.mutation_proposals import (
 )
 from catchup.knowledge_maintenance.ports.mutation_proposals import StoredMergeCandidate
 from catchup.knowledge_maintenance.ports.mutation_proposals import StoredMergeProposal
+from catchup.knowledge_maintenance.ports.mutation_proposals import StoredOperation
 from catchup.knowledge_maintenance.ports.mutation_proposals import StoredPendingProposal
 from catchup.knowledge_maintenance.ports.ontology import OntologySnapshotConflict
 from catchup.observability.logging import get_logger
@@ -374,7 +375,7 @@ class SqlAlchemyKnowledgeNodeRepository:
         *,
         workspace_id: int,
         entity_type: str,
-        canonical_key: str,
+        canonical_key: str | None,
         display_name: str,
     ) -> KnowledgeNode:
         """canonical entity 노드를 발급한다."""
@@ -795,6 +796,22 @@ class SqlAlchemyKnowledgeCandidateRepository:
         )
         self._session.flush()
 
+    def get_entity_resolution(
+        self,
+        *,
+        candidate_id: uuid.UUID,
+    ) -> tuple[str, uuid.UUID | None] | None:
+        """entity 후보의 현재 해소 상태와 노드를 읽는다."""
+        row = self._session.execute(
+            select(
+                KnowledgeEntityCandidateRow.resolution_status,
+                KnowledgeEntityCandidateRow.resolved_node_id,
+            ).where(KnowledgeEntityCandidateRow.id == candidate_id)
+        ).one_or_none()
+        if row is None:
+            return None
+        return (row[0], row[1])
+
 
 class SqlAlchemyMutationProposalRepository:
     """mutation proposal의 영속성을 PostgreSQL로 구현한다."""
@@ -934,6 +951,72 @@ class SqlAlchemyMutationProposalRepository:
             reviewer=reviewer,
             rejection_reason=reason,
         )
+
+    def find_approved_proposals_with_operations(
+        self,
+        *,
+        workspace_id: int,
+    ) -> list[tuple[uuid.UUID, tuple[StoredOperation, ...]]]:
+        """승인됐지만 아직 적용되지 않은 안건을 명령과 함께 모은다."""
+        proposal_ids = self._session.scalars(
+            select(KnowledgeMutationProposalRow.id)
+            .where(
+                KnowledgeMutationProposalRow.workspace_id == workspace_id,
+                KnowledgeMutationProposalRow.status == "approved",
+            )
+            .order_by(KnowledgeMutationProposalRow.created_at)
+        ).all()
+        if not proposal_ids:
+            return []
+        operation_rows = self._session.scalars(
+            select(KnowledgeMutationOperationRow)
+            .where(
+                KnowledgeMutationOperationRow.workspace_id == workspace_id,
+                KnowledgeMutationOperationRow.proposal_id.in_(proposal_ids),
+            )
+            .order_by(
+                KnowledgeMutationOperationRow.proposal_id,
+                KnowledgeMutationOperationRow.sequence,
+            )
+        ).all()
+        grouped: dict[uuid.UUID, list[StoredOperation]] = {}
+        for row in operation_rows:
+            grouped.setdefault(row.proposal_id, []).append(
+                StoredOperation(
+                    sequence=row.sequence,
+                    operation_type=row.operation_type,
+                    entity_candidate_id=row.entity_candidate_id,
+                    operation_data=row.operation_data or {},
+                )
+            )
+        return [
+            (proposal_id, tuple(grouped.get(proposal_id, ())))
+            for proposal_id in proposal_ids
+        ]
+
+    def mark_applied(
+        self,
+        *,
+        workspace_id: int,
+        proposal_id: uuid.UUID,
+    ) -> None:
+        """안건을 적용 완료로 끝맺고 applied_at을 기록한다.
+
+        Raises:
+            MergeProposalAlreadyDecided: approved 상태가 아니다.
+        """
+        result = self._session.execute(
+            update(KnowledgeMutationProposalRow)
+            .where(
+                KnowledgeMutationProposalRow.workspace_id == workspace_id,
+                KnowledgeMutationProposalRow.id == proposal_id,
+                KnowledgeMutationProposalRow.status == "approved",
+            )
+            .values(status="applied", applied_at=func.now())
+        )
+        if result.rowcount != 1:
+            raise MergeProposalAlreadyDecided(str(proposal_id))
+        self._session.flush()
 
     def _decide_merge(
         self,

@@ -136,6 +136,18 @@ class KnowledgeCandidateRepository(Protocol):
         """후보가 어느 canonical 노드로 해소됐는지 기록한다."""
         ...
 
+    def get_entity_resolution(
+        self,
+        *,
+        candidate_id: uuid.UUID,
+    ) -> tuple[str, uuid.UUID | None] | None:
+        """entity 후보의 현재 해소 상태와 노드를 읽는다.
+
+        Applier가 이미 해소된 후보를 다시 해소하지 않기 위해 쓴다.
+        후보가 없으면 None이다.
+        """
+        ...
+
     def find_succeeded_run(
         self,
         *,

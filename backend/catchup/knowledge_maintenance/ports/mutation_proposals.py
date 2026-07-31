@@ -57,6 +57,25 @@ class StoredMergeProposal:
 
 
 @dataclass(frozen=True, slots=True)
+class StoredOperation:
+    """proposal에 딸린 적용 명령 하나를 읽는 형태로 담는다.
+
+    Attributes:
+        sequence: 실행 순서를 나타낸다.
+        operation_type: 어떤 종류의 변경인지 나타낸다.
+        entity_candidate_id: 명령이 다루는 entity 후보를 가리킨다.
+        operation_data: 명령의 재료를 담는다. create_entity는
+            proposed_type·proposed_name을, merge_entity는
+            merge_into_sequence를 여기서 읽는다.
+    """
+
+    sequence: int
+    operation_type: str
+    entity_candidate_id: uuid.UUID | None
+    operation_data: Mapping[str, object]
+
+
+@dataclass(frozen=True, slots=True)
 class StoredPendingProposal:
     """어떤 대상에 걸려 있는 계류 안건 하나를 읽는 형태로 담는다.
 
@@ -184,6 +203,33 @@ class MutationProposalRepository(Protocol):
 
         Raises:
             MergeProposalAlreadyDecided: 계류 중인 병합 안건이 아니다.
+        """
+        ...
+
+    def find_approved_proposals_with_operations(
+        self,
+        *,
+        workspace_id: int,
+    ) -> list[tuple[uuid.UUID, tuple[StoredOperation, ...]]]:
+        """승인됐지만 아직 적용되지 않은 안건을 명령과 함께 모은다.
+
+        Applier의 입력이다. operations는 sequence 순서로 담는다.
+        """
+        ...
+
+    def mark_applied(
+        self,
+        *,
+        workspace_id: int,
+        proposal_id: uuid.UUID,
+    ) -> None:
+        """안건을 적용 완료로 끝맺고 applied_at을 기록한다.
+
+        approved 행 하나만 갱신한다. 결정 없이 적용되는 경로를 DB
+        수준에서 막기 위해서다.
+
+        Raises:
+            MergeProposalAlreadyDecided: approved 상태가 아니다.
         """
         ...
 

@@ -1,0 +1,267 @@
+"""승인된 병합 안건의 적용 명령을 결정론적으로 실행한다.
+
+결정(approved)과 적용(applied)은 다른 순간이다. 이 실행기는 결정
+저널을 소비할 뿐 아무것도 판단하지 않는다 — 판단은 judge(판정)와
+사람(결정)이 이미 끝냈다.
+
+proposal 하나가 트랜잭션 하나다. 하나가 실패해도 다른 안건의 적용은
+살아남아야 하고, 실패한 안건은 approved로 남아 재시도할 수 있어야
+한다. 미지의 명령은 조용히 건너뛰지 않고 그 안건만 실패로 처리한다 —
+새 명령 종류가 소리 없이 무시되면 결정과 현실이 어긋난다.
+"""
+
+from __future__ import annotations
+
+import uuid
+from collections.abc import Callable
+from dataclasses import dataclass
+from types import TracebackType
+from typing import Protocol
+from typing import Self
+
+from catchup.knowledge_maintenance.domain.knowledge_candidate import (
+    EntityResolutionStatus,
+)
+from catchup.knowledge_maintenance.ports.knowledge_candidates import (
+    KnowledgeCandidateRepository,
+)
+from catchup.knowledge_maintenance.ports.knowledge_nodes import KnowledgeNodeRepository
+from catchup.knowledge_maintenance.ports.mutation_proposals import (
+    MutationProposalRepository,
+)
+from catchup.knowledge_maintenance.ports.mutation_proposals import StoredOperation
+from catchup.observability.logging import get_logger
+
+logger = get_logger(__name__)
+
+SUPPORTED_OPERATIONS = ("create_entity", "merge_entity")
+
+
+class ApplyOperationError(Exception):
+    """적용할 수 없는 명령을 만났음을 알린다."""
+
+
+class ApplyUnitOfWork(Protocol):
+    """적용이 쓰는 transaction 경계를 정의한다."""
+
+    mutation_proposals: MutationProposalRepository
+    knowledge_candidates: KnowledgeCandidateRepository
+    knowledge_nodes: KnowledgeNodeRepository
+
+    def __enter__(self) -> Self: ...
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None: ...
+
+    def commit(self) -> None: ...
+
+
+@dataclass(frozen=True, slots=True)
+class ApplyResult:
+    """적용 한 번의 집계를 표현한다.
+
+    Attributes:
+        proposals_applied: 끝까지 적용된 안건 수를 나타낸다.
+        proposals_failed: 실패해 approved로 남은 안건 수를 나타낸다.
+        candidates_resolved: 이번에 새로 해소된 후보 수를 나타낸다.
+        candidates_already_resolved: 이미 해소돼 있어 건너뛴 후보
+            수를 나타낸다.
+    """
+
+    proposals_applied: int
+    proposals_failed: int
+    candidates_resolved: int
+    candidates_already_resolved: int
+
+
+@dataclass
+class _Tally:
+    """proposal 하나를 적용하는 동안의 셈을 담는다."""
+
+    resolved: int = 0
+    already: int = 0
+
+
+def apply_mutation_proposals(
+    uow_factory: Callable[[], ApplyUnitOfWork],
+    *,
+    workspace_id: int,
+) -> ApplyResult:
+    """승인된 안건을 순서대로 적용한다.
+
+    factory를 받는 이유는 proposal 단위 트랜잭션 때문이다. 한 uow에
+    전부 태우면 마지막 안건의 실패가 앞선 적용까지 되돌린다.
+    """
+    with uow_factory() as uow:
+        approved = uow.mutation_proposals.find_approved_proposals_with_operations(
+            workspace_id=workspace_id,
+        )
+
+    applied = 0
+    failed = 0
+    resolved = 0
+    already = 0
+    for proposal_id, operations in approved:
+        try:
+            tally = _apply_one(
+                uow_factory,
+                workspace_id=workspace_id,
+                proposal_id=proposal_id,
+                operations=operations,
+            )
+        except ApplyOperationError as error:
+            failed += 1
+            logger.error(
+                "mutation_apply_failed",
+                workspace_id=workspace_id,
+                proposal_id=str(proposal_id),
+                reason=str(error),
+            )
+            continue
+        applied += 1
+        resolved += tally.resolved
+        already += tally.already
+        logger.info(
+            "mutation_proposal_applied",
+            workspace_id=workspace_id,
+            proposal_id=str(proposal_id),
+            candidates_resolved=tally.resolved,
+            candidates_already_resolved=tally.already,
+        )
+
+    result = ApplyResult(
+        proposals_applied=applied,
+        proposals_failed=failed,
+        candidates_resolved=resolved,
+        candidates_already_resolved=already,
+    )
+    logger.info(
+        "mutation_apply_completed",
+        workspace_id=workspace_id,
+        proposals_applied=result.proposals_applied,
+        proposals_failed=result.proposals_failed,
+        candidates_resolved=result.candidates_resolved,
+        candidates_already_resolved=result.candidates_already_resolved,
+    )
+    return result
+
+
+def _apply_one(
+    uow_factory: Callable[[], ApplyUnitOfWork],
+    *,
+    workspace_id: int,
+    proposal_id: uuid.UUID,
+    operations: tuple[StoredOperation, ...],
+) -> _Tally:
+    """안건 하나를 자기 트랜잭션 안에서 적용한다."""
+    unsupported = [
+        operation.operation_type
+        for operation in operations
+        if operation.operation_type not in SUPPORTED_OPERATIONS
+    ]
+    if unsupported:
+        raise ApplyOperationError(
+            f"지원하지 않는 명령이다: {sorted(set(unsupported))}"
+        )
+
+    tally = _Tally()
+    with uow_factory() as uow:
+        nodes_by_sequence: dict[int, uuid.UUID] = {}
+        for operation in sorted(operations, key=lambda item: item.sequence):
+            if operation.operation_type == "create_entity":
+                nodes_by_sequence[operation.sequence] = _apply_create(
+                    uow,
+                    workspace_id=workspace_id,
+                    operation=operation,
+                    tally=tally,
+                )
+            else:
+                _apply_merge(
+                    uow,
+                    operation=operation,
+                    nodes_by_sequence=nodes_by_sequence,
+                    tally=tally,
+                )
+        uow.mutation_proposals.mark_applied(
+            workspace_id=workspace_id,
+            proposal_id=proposal_id,
+        )
+        uow.commit()
+    return tally
+
+
+def _apply_create(
+    uow: ApplyUnitOfWork,
+    *,
+    workspace_id: int,
+    operation: StoredOperation,
+    tally: _Tally,
+) -> uuid.UUID:
+    """대표 후보로 canonical 노드를 만들거나 기존 노드를 재사용한다."""
+    candidate_id = operation.entity_candidate_id
+    if candidate_id is None:
+        raise ApplyOperationError("create_entity에 후보가 없다")
+    current = uow.knowledge_candidates.get_entity_resolution(
+        candidate_id=candidate_id,
+    )
+    if current is None:
+        raise ApplyOperationError(f"후보가 없다: {candidate_id}")
+    _status, resolved_node_id = current
+    if resolved_node_id is not None:
+        # 대표가 이미 해소됐으면 그 노드가 곧 병합 대상이다. 새 노드를
+        # 만들면 같은 대상이 둘로 갈라진다.
+        tally.already += 1
+        return resolved_node_id
+
+    node = uow.knowledge_nodes.create_entity_node(
+        workspace_id=workspace_id,
+        entity_type=str(operation.operation_data["proposed_type"]),
+        canonical_key=None,
+        display_name=str(operation.operation_data["proposed_name"]),
+    )
+    uow.knowledge_candidates.mark_entity_resolved(
+        candidate_id=candidate_id,
+        status=EntityResolutionStatus.ACCEPTED,
+        resolved_node_id=node.id,
+    )
+    tally.resolved += 1
+    return node.id
+
+
+def _apply_merge(
+    uow: ApplyUnitOfWork,
+    *,
+    operation: StoredOperation,
+    nodes_by_sequence: dict[int, uuid.UUID],
+    tally: _Tally,
+) -> None:
+    """멤버 후보를 대표의 노드로 해소한다."""
+    candidate_id = operation.entity_candidate_id
+    if candidate_id is None:
+        raise ApplyOperationError("merge_entity에 후보가 없다")
+    target_sequence = operation.operation_data.get("merge_into_sequence")
+    target_node_id = nodes_by_sequence.get(int(str(target_sequence)))
+    if target_node_id is None:
+        raise ApplyOperationError(
+            f"병합 대상 sequence가 없다: {target_sequence}"
+        )
+
+    current = uow.knowledge_candidates.get_entity_resolution(
+        candidate_id=candidate_id,
+    )
+    if current is None:
+        raise ApplyOperationError(f"후보가 없다: {candidate_id}")
+    _status, resolved_node_id = current
+    if resolved_node_id is not None:
+        tally.already += 1
+        return
+    uow.knowledge_candidates.mark_entity_resolved(
+        candidate_id=candidate_id,
+        status=EntityResolutionStatus.MERGED,
+        resolved_node_id=target_node_id,
+    )
+    tally.resolved += 1
