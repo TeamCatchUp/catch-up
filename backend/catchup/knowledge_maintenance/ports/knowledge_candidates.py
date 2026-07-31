@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import Sequence
 from datetime import datetime
 from decimal import Decimal
 from types import TracebackType
@@ -145,6 +146,23 @@ class KnowledgeCandidateRepository(Protocol):
 
         Applier가 이미 해소된 후보를 다시 해소하지 않기 위해 쓴다.
         후보가 없으면 None이다.
+        """
+        ...
+
+    def accept_claims(
+        self,
+        *,
+        claim_ids: Sequence[uuid.UUID],
+    ) -> int:
+        """claim 후보들을 canonical 지식으로 확정한다.
+
+        pending인 행만 accepted로 전이한다 — 이미 확정된 claim은
+        건드리지 않는다(같은 사실은 한 번만 확정된다). valid_from은
+        근거 관찰의 사실 시각이 있으면 채우고 없으면 NULL로 둔다.
+        시간 정보의 품질이 확정을 막으면 안 되기 때문이다. valid_to는
+        여기서 절대 쓰지 않는다 — 구간을 닫는 것은 별도의 결정이다.
+
+        이번에 새로 확정된 수를 돌려준다.
         """
         ...
 

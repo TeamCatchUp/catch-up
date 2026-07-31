@@ -21,15 +21,26 @@ from sqlalchemy.orm import Session
 from sqlalchemy.orm import sessionmaker
 
 from catchup.configs.config import settings
+from catchup.db.models import KnowledgeClaimCandidate as ClaimRow
 from catchup.db.models import KnowledgeEntityCandidate as CandidateRow
 from catchup.db.models import KnowledgeMutationOperation as OperationRow
 from catchup.db.models import KnowledgeMutationProposal as ProposalRow
 from catchup.db.models import Workspace
+from catchup.knowledge_maintenance.adapters.postgres.repositories import (
+    SqlAlchemyKnowledgeCandidateRepository,
+)
 from catchup.knowledge_maintenance.adapters.postgres.unit_of_work import (
     KnowledgeMaintenanceUnitOfWork,
 )
+from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_CLAIM_SECTION
+from catchup.knowledge_maintenance.domain.artifact import ArtifactBlock
+from catchup.knowledge_maintenance.domain.artifact import artifact_idempotency_key
+from catchup.knowledge_maintenance.domain.artifact import blocks_content_hash
 from catchup.knowledge_maintenance.services.apply_mutation_proposals import (
     apply_mutation_proposals,
+)
+from catchup.knowledge_maintenance.services.review_artifact_proposal import (
+    review_artifact_proposal,
 )
 from catchup.knowledge_maintenance.services.review_merge_proposal import (
     MergeReviewError,
@@ -480,3 +491,129 @@ def test_apply_isolates_failing_proposal(
     assert bad.status == "approved"
     assert bad_rep_row is not None
     assert bad_rep_row.resolved_node_id is None
+
+
+def _artifact_proposal_over_claim(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+) -> tuple[uuid.UUID, uuid.UUID]:
+    """실 claim을 근거로 실은 문서 변경안을 만든다."""
+    observation = _stored_observation(workspace_id, session_factory)
+    stored = store_knowledge_candidates(
+        observation,
+        _batch(),
+        spec=SPEC,
+        uow=uow_factory(),
+    ).batch
+    claim_id = next(iter(stored.claim_ids.values()))
+    blocks = (
+        ArtifactBlock(
+            block_kind=BLOCK_KIND_CLAIM_SECTION,
+            heading="release_month",
+            body="2026-09",
+            claim_ids=(claim_id,),
+            proposal_ids=(),
+            ontology_version="2",
+        ),
+    )
+    with uow_factory() as uow:
+        node = uow.knowledge_nodes.create_entity_node(
+            workspace_id=workspace_id,
+            entity_type="feature",
+            canonical_key=f"test:feature:{uuid.uuid4().hex}",
+            display_name="결제 기능",
+        )
+        artifact_id = uow.artifacts.get_or_create_artifact(
+            kind="entity_summary",
+            subject_node_id=node.id,
+            title="결제 기능",
+        )
+        content_hash = blocks_content_hash(blocks)
+        proposal_id = uow.artifacts.add_or_revive_proposal(
+            artifact_id=artifact_id,
+            blocks=blocks,
+            content_hash=content_hash,
+            idempotency_key=artifact_idempotency_key(
+                artifact_id, content_hash, base_revision_id=None
+            ),
+            base_revision_id=None,
+        )
+        uow.commit()
+    return proposal_id, claim_id
+
+
+def test_document_approval_accepts_backing_claims(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+) -> None:
+    """문서 승인이 근거 claim을 확정하고 valid_from을 채운다."""
+    proposal_id, claim_id = _artifact_proposal_over_claim(
+        workspace_id, session_factory, uow_factory
+    )
+
+    result = review_artifact_proposal(
+        uow_factory(),
+        proposal_id=proposal_id,
+        verdict="approved",
+        reviewer="ba2slk",
+    )
+
+    assert result.claims_accepted == 1
+    with session_factory() as session:
+        claim = session.get(ClaimRow, claim_id)
+    assert claim is not None
+    assert claim.resolution_status == "accepted"
+    # 테스트 관찰은 occurred_at을 갖고 있으므로 valid_from이 그 시각으로
+    # 채워져야 한다.
+    assert claim.valid_from is not None
+
+
+def test_approval_rolls_back_when_acceptance_fails(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """claim 확정이 터지면 판·승인까지 함께 되감긴다."""
+    proposal_id, claim_id = _artifact_proposal_over_claim(
+        workspace_id, session_factory, uow_factory
+    )
+
+    def _boom(self, *, claim_ids):
+        raise RuntimeError("확정 실패 재현")
+
+    monkeypatch.setattr(
+        SqlAlchemyKnowledgeCandidateRepository, "accept_claims", _boom
+    )
+
+    with pytest.raises(RuntimeError):
+        review_artifact_proposal(
+            uow_factory(),
+            proposal_id=proposal_id,
+            verdict="approved",
+            reviewer="ba2slk",
+        )
+
+    with session_factory() as session:
+        claim = session.get(ClaimRow, claim_id)
+        revision_count = session.scalar(
+            text(
+                "SELECT count(*) FROM knowledge_artifact_revisions r "
+                "JOIN knowledge_artifact_change_proposals p "
+                "ON p.id = r.source_proposal_id WHERE p.id = :pid"
+            ),
+            {"pid": str(proposal_id)},
+        )
+        proposal_status = session.scalar(
+            text(
+                "SELECT status FROM knowledge_artifact_change_proposals "
+                "WHERE id = :pid"
+            ),
+            {"pid": str(proposal_id)},
+        )
+    assert claim is not None
+    assert claim.resolution_status == "pending"
+    assert revision_count == 0
+    assert proposal_status == "pending"

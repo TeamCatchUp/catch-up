@@ -188,6 +188,7 @@ class FakeArtifactRepository:
 class FakeUnitOfWork:
     def __init__(self) -> None:
         self.artifacts = FakeArtifactRepository()
+        self.knowledge_candidates = FakeClaimRepository()
         self.committed = False
 
     def __enter__(self):
@@ -511,3 +512,150 @@ def test_blank_reviewer_is_refused() -> None:
 
     assert uow.artifacts.revisions == []
     assert uow.committed is False
+
+
+class FakeClaimRepository:
+    """claim 확정 전이를 실 DB처럼 흉내 낸다.
+
+    accepted는 불변이다. 같은 claim이 여러 문서에 실려도 확정은 한
+    번이어야 하므로, 이미 accepted인 행은 세지 않고 건너뛴다.
+    """
+
+    def __init__(self) -> None:
+        self.status: dict[uuid.UUID, str] = {}
+        self.calls: list[tuple[uuid.UUID, ...]] = []
+
+    def add_claim(self, *, status: str = "pending") -> uuid.UUID:
+        claim_id = uuid.uuid4()
+        self.status[claim_id] = status
+        return claim_id
+
+    def accept_claims(self, *, claim_ids) -> int:
+        self.calls.append(tuple(claim_ids))
+        accepted = 0
+        for claim_id in claim_ids:
+            if self.status.get(claim_id, "pending") == "pending":
+                self.status[claim_id] = "accepted"
+                accepted += 1
+        return accepted
+
+
+def _blocks_with_claims(
+    claim_ids: tuple[uuid.UUID, ...],
+    *,
+    open_proposal_id: uuid.UUID | None = None,
+) -> tuple[ArtifactBlock, ...]:
+    """claim_section과 열린 질문이 섞인 블록 한 벌을 만든다."""
+    blocks = [
+        ArtifactBlock(
+            block_kind=BLOCK_KIND_CLAIM_SECTION,
+            heading="release_month",
+            body="2026-09",
+            claim_ids=claim_ids[:1],
+            proposal_ids=(),
+            ontology_version="1",
+        ),
+        ArtifactBlock(
+            block_kind=BLOCK_KIND_CLAIM_SECTION,
+            heading="rate_limit",
+            body="60",
+            claim_ids=claim_ids,
+            proposal_ids=(),
+            ontology_version="1",
+        ),
+    ]
+    if open_proposal_id is not None:
+        blocks.append(
+            ArtifactBlock(
+                block_kind="open_question",
+                heading="열린 질문: contradiction",
+                body="값이 갈린다",
+                claim_ids=(),
+                proposal_ids=(open_proposal_id,),
+                ontology_version="1",
+            )
+        )
+    return tuple(blocks)
+
+
+def test_approve_accepts_only_claim_section_claims() -> None:
+    """승인은 claim_section의 claim만 확정하고 중복은 한 번만 센다."""
+    uow = FakeUnitOfWork()
+    claims = uow.knowledge_candidates
+    first = claims.add_claim()
+    second = claims.add_claim()
+    open_proposal = uuid.uuid4()
+    artifact_id = uuid.uuid4()
+    proposal_id = uow.artifacts.add_proposal(
+        artifact_id=artifact_id,
+        blocks=_blocks_with_claims(
+            (first, second), open_proposal_id=open_proposal
+        ),
+        base_revision_id=None,
+    )
+
+    result = review_artifact_proposal(
+        uow,
+        proposal_id=proposal_id,
+        verdict="approved",
+        reviewer="ba2slk",
+    )
+
+    assert result.claims_accepted == 2
+    assert claims.status[first] == "accepted"
+    assert claims.status[second] == "accepted"
+    # 두 블록에 걸친 first는 호출에서 한 번만 나타나야 한다.
+    assert len(claims.calls) == 1
+    assert sorted(claims.calls[0], key=str) == sorted(
+        [first, second], key=str
+    )
+    # 열린 질문의 안건 id는 claim 확정 경로에 결코 섞이지 않는다.
+    assert open_proposal not in claims.calls[0]
+
+
+def test_approve_skips_already_accepted_claims() -> None:
+    """이미 확정된 claim은 다시 세지 않는다."""
+    uow = FakeUnitOfWork()
+    claims = uow.knowledge_candidates
+    done = claims.add_claim(status="accepted")
+    fresh = claims.add_claim()
+    proposal_id = uow.artifacts.add_proposal(
+        artifact_id=uuid.uuid4(),
+        blocks=_blocks_with_claims((done, fresh)),
+        base_revision_id=None,
+    )
+
+    result = review_artifact_proposal(
+        uow,
+        proposal_id=proposal_id,
+        verdict="approved",
+        reviewer="ba2slk",
+    )
+
+    assert result.claims_accepted == 1
+    assert claims.status[done] == "accepted"
+    assert claims.status[fresh] == "accepted"
+
+
+def test_reject_accepts_nothing() -> None:
+    """반려는 어떤 claim도 확정하지 않는다."""
+    uow = FakeUnitOfWork()
+    claims = uow.knowledge_candidates
+    claim_id = claims.add_claim()
+    proposal_id = uow.artifacts.add_proposal(
+        artifact_id=uuid.uuid4(),
+        blocks=_blocks_with_claims((claim_id,)),
+        base_revision_id=None,
+    )
+
+    result = review_artifact_proposal(
+        uow,
+        proposal_id=proposal_id,
+        verdict="rejected",
+        reviewer="ba2slk",
+        reason="근거가 약하다",
+    )
+
+    assert result.claims_accepted == 0
+    assert claims.calls == []
+    assert claims.status[claim_id] == "pending"

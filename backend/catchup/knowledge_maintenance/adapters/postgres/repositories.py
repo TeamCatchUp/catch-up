@@ -812,6 +812,68 @@ class SqlAlchemyKnowledgeCandidateRepository:
             return None
         return (row[0], row[1])
 
+    def accept_claims(
+        self,
+        *,
+        claim_ids: Sequence[uuid.UUID],
+    ) -> int:
+        """claim 후보들을 canonical 지식으로 확정한다.
+
+        valid_from의 재료는 근거 관찰의 occurred_at이다. claim →
+        extraction run → 입력 observation 노드 → observation 행으로
+        거슬러 올라가 읽는다. 없으면 NULL로 둔다 — 시간 정보의 품질이
+        확정을 막으면 안 된다.
+        """
+        unique_ids = list(dict.fromkeys(claim_ids))
+        if not unique_ids:
+            return 0
+        pending_rows = self._session.execute(
+            select(
+                KnowledgeClaimCandidateRow.id,
+                ObservationRow.occurred_at,
+            )
+            .join(
+                KnowledgeExtractionRunRow,
+                KnowledgeExtractionRunRow.id
+                == KnowledgeClaimCandidateRow.extraction_run_id,
+            )
+            .join(
+                KnowledgeNodeRow,
+                KnowledgeNodeRow.id
+                == KnowledgeExtractionRunRow.input_node_id,
+            )
+            .outerjoin(
+                ObservationRow,
+                ObservationRow.id
+                == cast(KnowledgeNodeRow.resource_id, PgUUID),
+            )
+            .where(
+                KnowledgeClaimCandidateRow.id.in_(unique_ids),
+                KnowledgeClaimCandidateRow.resolution_status == "pending",
+            )
+        ).all()
+
+        accepted = 0
+        for claim_id, occurred_at in pending_rows:
+            result = self._session.execute(
+                update(KnowledgeClaimCandidateRow)
+                .where(
+                    KnowledgeClaimCandidateRow.id == claim_id,
+                    KnowledgeClaimCandidateRow.resolution_status
+                    == "pending",
+                )
+                .values(
+                    resolution_status="accepted",
+                    valid_from=func.coalesce(
+                        KnowledgeClaimCandidateRow.valid_from,
+                        occurred_at,
+                    ),
+                )
+            )
+            accepted += result.rowcount
+        self._session.flush()
+        return accepted
+
 
 class SqlAlchemyMutationProposalRepository:
     """mutation proposal의 영속성을 PostgreSQL로 구현한다."""

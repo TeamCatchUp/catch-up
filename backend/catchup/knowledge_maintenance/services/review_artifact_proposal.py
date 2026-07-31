@@ -24,8 +24,13 @@ from typing import Self
 
 from sqlalchemy.exc import IntegrityError
 
+from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_CLAIM_SECTION
+from catchup.knowledge_maintenance.domain.artifact import ArtifactBlock
 from catchup.knowledge_maintenance.ports.artifacts import ArtifactRepository
 from catchup.knowledge_maintenance.ports.artifacts import ProposalAlreadyDecided
+from catchup.knowledge_maintenance.ports.knowledge_candidates import (
+    KnowledgeCandidateRepository,
+)
 from catchup.observability.logging import get_logger
 
 logger = get_logger(__name__)
@@ -63,18 +68,28 @@ class ReviewResult:
         verdict: 내려진 결정을 나타낸다.
         revision_id: 승인이 만든 판을 가리킨다. 반려면 없다.
         revision_number: 승인이 만든 판의 번호를 나타낸다. 반려면 없다.
+        claims_accepted: 승인이 새로 확정한 claim 수를 나타낸다.
+            반려면 0이다.
     """
 
     proposal_id: uuid.UUID
     verdict: str
     revision_id: uuid.UUID | None
     revision_number: int | None
+    claims_accepted: int = 0
 
 
 class ArtifactReviewUnitOfWork(Protocol):
-    """검토 확정이 쓰는 transaction 경계를 정의한다."""
+    """검토 확정이 쓰는 transaction 경계를 정의한다.
+
+    mutation proposal 저장소는 여기에 없다. 문서 승인은 claim_section의
+    claim 확정만 함축하고, open_question에 실린 계류 안건에는 어떤
+    결정도 함축하지 않는다 — 접근 자체가 없어야 그 불변식이 구조로
+    보장된다.
+    """
 
     artifacts: ArtifactRepository
+    knowledge_candidates: KnowledgeCandidateRepository
 
     def __enter__(self) -> Self: ...
 
@@ -172,6 +187,15 @@ def review_artifact_proposal(
                 proposal_id=proposal_id,
                 reviewer=reviewer,
             )
+            # 문서에 근거로 실린 claim은 이 승인으로 canonical 지식이
+            # 된다. 판·상태·확정이 한 transaction이어야 셋이 어긋난
+            # 상태가 남지 않는다.
+            claim_ids = _claim_section_ids(proposal.blocks)
+            claims_accepted = 0
+            if claim_ids:
+                claims_accepted = uow.knowledge_candidates.accept_claims(
+                    claim_ids=claim_ids,
+                )
             uow.commit()
         except ProposalAlreadyDecided as error:
             # 다른 검토가 먼저 결정을 확정했다. with 블록을 예외로 빠져
@@ -198,10 +222,29 @@ def review_artifact_proposal(
         revision_id=str(revision_id),
         revision_number=revision_number,
         reviewer=reviewer,
+        claims_accepted=claims_accepted,
     )
     return ReviewResult(
         proposal_id=proposal_id,
         verdict=VERDICT_APPROVED,
         revision_id=revision_id,
         revision_number=revision_number,
+        claims_accepted=claims_accepted,
     )
+
+
+def _claim_section_ids(
+    blocks: tuple[ArtifactBlock, ...],
+) -> tuple[uuid.UUID, ...]:
+    """claim_section 블록의 근거 claim id를 순서 보존으로 모은다.
+
+    open_question의 proposal_ids는 여기서 읽지 않는다. 열린 질문은
+    제시이지 결정이 아니다.
+    """
+    seen: dict[uuid.UUID, None] = {}
+    for block in blocks:
+        if block.block_kind != BLOCK_KIND_CLAIM_SECTION:
+            continue
+        for claim_id in block.claim_ids:
+            seen.setdefault(claim_id, None)
+    return tuple(seen)
