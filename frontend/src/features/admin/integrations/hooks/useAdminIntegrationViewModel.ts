@@ -12,7 +12,7 @@ import type {
   IntegrationService,
 } from '../types/integrationModel';
 import type { AdminConnectorStatusResponse } from '../types/syncModel';
-import { resolveConnectorStatus, type ConnectorQueryFlags } from '../utils/resolveConnectorStatus';
+import { type ConnectorQueryFlags, resolveConnectorStatus } from '../utils/resolveConnectorStatus';
 
 // 단일 source 통합. 이전엔 이 파일이 'github, jira, ...' 순서였고 useEmbeddingHistory는 'jira, github, ...'
 // 순서로 drift되어 있었음 — constants/connectorOrder.ts로 정렬 통일.
