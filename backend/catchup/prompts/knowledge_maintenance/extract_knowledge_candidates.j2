@@ -13,19 +13,74 @@ that is what makes two documents comparable. Coin a new term only when
 nothing here expresses what the document says, and keep it in the same
 naming style.
 
-{% if vocabulary.predicates %}
-Predicates (for claims):
-{% for predicate in vocabulary.predicates %}
+{% if vocabulary.entity_type_entries -%}
+Entity types — use the exact name when the definition fits:
+{% for entry in vocabulary.entity_type_entries -%}
+- << entry.name >> — << entry.definition >>
+{% if entry.identity_scope == "anchored" %}  the name alone does not say which one it is; call it this type only when the document also says who it belongs to
+{% endif -%}
+{% if entry.examples %}  e.g. << entry.examples | join(" · ") >>
+{% endif -%}
+{% endfor %}
+{% endif -%}
+
+{% if vocabulary.predicate_entries -%}
+Predicates (for claims) — reuse the exact name when the definition fits:
+{% for entry in vocabulary.predicate_entries -%}
+- << entry.name >> (<< entry.value_type >>{% if entry.enum_values %}, one of: << entry.enum_values | join(" / ") >>{% endif %}) — << entry.definition >>
+{% if entry.domain %}  subjects: << entry.domain | join(", ") >>
+{% endif -%}
+{% if entry.examples %}  e.g. << entry.examples | join(" · ") >>
+{% endif -%}
+{% endfor -%}
+<# 정의가 아직 없는 이름도 함께 실어야 한다. 감추면 관찰로 늘어난
+   용어가 다음 문서에서 사라져 재사용이 끊긴다. -#>
+{% set defined = vocabulary.predicate_entries | map(attribute="name") | list -%}
+{% set undefined = vocabulary.predicates | reject("in", defined) | list -%}
+{% if undefined %}
+Used before, definition not written down yet:
+{% for predicate in undefined -%}
 - << predicate >>
 {% endfor %}
-{% endif %}
+{% endif -%}
+{% elif vocabulary.predicates -%}
+Predicates (for claims):
+{% for predicate in vocabulary.predicates -%}
+- << predicate >>
+{% endfor %}
+{% endif -%}
 
-{% if vocabulary.relation_types %}
-Relation types (for relation assertions):
-{% for relation_type in vocabulary.relation_types %}
+{% if vocabulary.relation_type_entries -%}
+Relation types (for relation assertions) — reuse the exact name when the
+definition fits:
+{% for entry in vocabulary.relation_type_entries -%}
+- << entry.name >> — << entry.definition >>
+{% if entry.domain %}  subjects: << entry.domain | join(", ") >>
+{% endif -%}
+{% if entry.range_ %}  targets: << entry.range_ | join(", ") >>
+{% endif -%}
+{% if entry.examples %}  e.g. << entry.examples | join(" · ") >>
+{% endif -%}
+{% endfor -%}
+{% set defined = vocabulary.relation_type_entries | map(attribute="name") | list -%}
+{% set undefined = vocabulary.relation_types | reject("in", defined) | list -%}
+{% if undefined %}
+Used before, definition not written down yet:
+{% for relation_type in undefined -%}
 - << relation_type >>
 {% endfor %}
-{% endif %}
+{% endif -%}
+{% elif vocabulary.relation_types -%}
+Relation types (for relation assertions):
+{% for relation_type in vocabulary.relation_types -%}
+- << relation_type >>
+{% endfor %}
+{% endif -%}
+
+{% if vocabulary.entity_type_entries or vocabulary.predicate_entries or vocabulary.relation_type_entries -%}
+A definition beats a guess from the name. If a document's phrasing does not
+match the definition above, do not reuse that term — coin a new one.
+{% endif -%}
 {% endif %}
 
 {% if metadata_entities %}

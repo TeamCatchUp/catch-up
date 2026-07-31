@@ -10,6 +10,7 @@ from catchup.knowledge_maintenance.adapters.llm.identity_judge import (
 from catchup.knowledge_maintenance.adapters.llm.identity_judge import (
     IdentityJudgeOutput,
 )
+from catchup.knowledge_maintenance.contracts.extraction import EntityTypeEntry
 from catchup.knowledge_maintenance.ports.identity_judge import JudgeCandidate
 
 
@@ -71,6 +72,52 @@ def test_same_output_becomes_verdict() -> None:
     rendered = llm.structured.prompts[0]
     assert "Slack" in rendered
     assert "Slack 연결이 끊겼습니다." in rendered
+
+
+def _verdict_llm() -> _FakeLlm:
+    return _FakeLlm(
+        {
+            "parsed": IdentityJudgeOutput(same=False, reason="근거 부족"),
+            "raw": None,
+        }
+    )
+
+
+def test_anchored_types_enter_the_prompt() -> None:
+    """anchored로 선언한 종류만 판정 규칙으로 렌더된다."""
+    llm = _verdict_llm()
+    judge = BedrockIdentityJudge(
+        llm,
+        entity_types=(
+            EntityTypeEntry(
+                name="team",
+                definition="A working group inside one organization.",
+                identity_scope="anchored",
+            ),
+            EntityTypeEntry(
+                name="product",
+                definition="A product named the same everywhere.",
+                identity_scope="standalone",
+            ),
+        ),
+    )
+
+    judge.judge(_group())
+
+    rendered = llm.structured.prompts[0]
+    assert "anchored" in rendered
+    assert "team — A working group inside one organization." in rendered
+    assert "A product named the same everywhere." not in rendered
+
+
+def test_empty_dictionary_drops_the_anchored_rule() -> None:
+    """사전이 비면 규칙이 통째로 빠진다. 빈 목록만 남기지 않는다."""
+    llm = _verdict_llm()
+    judge = BedrockIdentityJudge(llm)
+
+    judge.judge(_group())
+
+    assert "anchored" not in llm.structured.prompts[0]
 
 
 def test_parse_failure_raises() -> None:

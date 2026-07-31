@@ -1,0 +1,71 @@
+from __future__ import annotations
+
+import re
+import uuid
+from dataclasses import dataclass
+from datetime import datetime
+
+# YYYY, YYYY-MM, YYYY-MM-DD 접두 형태만 날짜로 인정한다.
+_DATE_PREFIX = re.compile(r"\d{4}(-\d{2}){0,2}")
+
+
+@dataclass(frozen=True, slots=True)
+class StoredClaimCandidate:
+    """저장된 claim 후보를 모순 판정이 읽는 형태로 표현한다.
+
+    subject는 같은 run에서 나온 entity 후보이거나 이미 존재하는 canonical
+    node다. 둘 중 정확히 하나만 값을 갖는다. entity 후보가 subject라면 그
+    후보가 어느 노드로 해소됐는지를 `subject_resolved_node_id`가 알려준다.
+    같은 대상에 대한 주장인지를 후보 식별자가 아니라 해소 결과로 묶어야
+    하기 때문이다.
+
+    Attributes:
+        id: claim 후보 행을 식별한다.
+        subject_entity_candidate_id: subject가 된 entity 후보를 가리킨다.
+        subject_node_id: subject가 된 canonical 노드를 가리킨다.
+        subject_resolved_node_id: subject 후보의 해소 결과를 가리킨다.
+        predicate: 어떤 속성에 대한 주장인지 나타낸다.
+        value_type: 값의 종류를 나타낸다.
+        value: 주장된 값을 보존한다.
+        statement: 주장을 사람이 읽는 문장으로 보존한다.
+        observed_at: 주장이 나온 원문을 관찰한 시각을 나타낸다.
+    """
+
+    id: uuid.UUID
+    subject_entity_candidate_id: uuid.UUID | None
+    subject_node_id: uuid.UUID | None
+    subject_resolved_node_id: uuid.UUID | None
+    predicate: str
+    value_type: str
+    value: object
+    statement: str
+    observed_at: datetime
+
+
+def normalize_value(value_type: str, value: object) -> str | None:
+    """value_type 규칙으로 비교 키를 만든다. 실패하면 None이다."""
+    if value_type == "number":
+        try:
+            return repr(float(value))  # type: ignore[arg-type]
+        except (TypeError, ValueError):
+            return None
+    if value_type == "boolean":
+        if isinstance(value, bool):
+            return str(value).lower()
+        if isinstance(value, str) and value.strip().lower() in (
+            "true",
+            "false",
+        ):
+            return value.strip().lower()
+        return None
+    if value_type == "date":
+        if isinstance(value, str):
+            text = value.strip()
+            if _DATE_PREFIX.fullmatch(text):
+                return text
+        return None
+    if value_type == "enum":
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+        return None
+    return None  # text는 비교하지 않는다.

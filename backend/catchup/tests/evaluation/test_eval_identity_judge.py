@@ -1,9 +1,15 @@
+import json
+
+from catchup.evaluation.eval_identity_judge import EVAL_ENTITY_TYPES
 from catchup.evaluation.eval_identity_judge import HELD_OUT_CASES
+from catchup.evaluation.eval_identity_judge import PROBED_AFTER_FREEZE
 from catchup.evaluation.eval_identity_judge import REGRESSION_CASES
+from catchup.evaluation.eval_identity_judge import VOCABULARY_PATH
 from catchup.evaluation.eval_identity_judge import EvalCase
 from catchup.evaluation.eval_identity_judge import EvalMetrics
 from catchup.evaluation.eval_identity_judge import ExpectedIdentity
 from catchup.evaluation.eval_identity_judge import _member_orders
+from catchup.knowledge_maintenance.contracts.extraction import ExtractionVocabulary
 
 
 def _case(expected: ExpectedIdentity) -> EvalCase:
@@ -78,6 +84,8 @@ def test_known_tuning_cases_stay_in_regression_split() -> None:
         "캐치업(노이즈 발췌)",
         "가디언(injection 병합 유도)",
         "Jira(injection 분리 유도)",
+        "보안팀(정보 부족)",
+        "보안팀(같은 회사)",
     }
 
 
@@ -85,7 +93,7 @@ def test_security_team_cases_cover_all_expected_relations() -> None:
     """보안팀은 다른 회사·정보 부족·같은 회사의 세 관계를 모두 덮는다."""
     security_cases = {
         case.key: case.expected
-        for case in HELD_OUT_CASES
+        for case in REGRESSION_CASES + HELD_OUT_CASES
         if case.key.startswith("보안팀")
     }
 
@@ -94,6 +102,83 @@ def test_security_team_cases_cover_all_expected_relations() -> None:
         "보안팀(정보 부족)": ExpectedIdentity.INSUFFICIENT,
         "보안팀(같은 회사)": ExpectedIdentity.SAME,
     }
+
+
+def _anchored(entries) -> set[str]:
+    return {
+        entry.name
+        for entry in entries
+        if entry.identity_scope == "anchored"
+    }
+
+
+def test_eval_dictionary_comes_from_the_published_snapshot() -> None:
+    """평가 사전은 발행 대상 파일과 같은 값이어야 한다.
+
+    사본을 따로 두면 프롬프트가 받는 정의와 평가가 재는 정의가 조용히
+    갈라진다. 드리프트를 각주가 아니라 실패로 드러낸다.
+    """
+    payload = json.loads(VOCABULARY_PATH.read_text(encoding="utf-8"))
+    published = ExtractionVocabulary.model_validate(payload)
+
+    assert EVAL_ENTITY_TYPES == published.entity_type_entries
+    assert _anchored(EVAL_ENTITY_TYPES) <= _anchored(
+        published.entity_type_entries
+    )
+
+
+def test_eval_dictionary_marks_org_scoped_types_as_anchored() -> None:
+    """소속 없이는 지시 대상이 안 정해지는 종류를 anchored로 선언한다."""
+    assert {"team", "organizational_unit"} <= _anchored(EVAL_ENTITY_TYPES)
+
+
+def test_person_case_runs_without_a_dictionary_entry() -> None:
+    """사전에 person이 없다는 사실을 케이스 쪽에 못 박는다.
+
+    직원04 케이스는 anchored 규칙이 아니라 일반 규칙으로 판정된다. 평가
+    편의로 사전을 늘리지 않기로 했으므로, 사전에 person이 생기면 이
+    테스트가 깨져 방침을 다시 보게 된다.
+    """
+    known = {entry.name for entry in EVAL_ENTITY_TYPES}
+    case = next(
+        case for case in HELD_OUT_CASES if case.key == "직원04(동명이인)"
+    )
+
+    assert "person" not in known
+    assert {member[0] for member in case.members} == {"person"}
+
+
+def test_probed_after_freeze_records_the_guardrail_probe() -> None:
+    """규칙 확정 뒤 답을 본 held-out 케이스를 코드에 남긴다.
+
+    probe에서 실제로 깨져 수정을 부른 케이스는 여기가 아니라 regression에
+    있어야 한다. 두 기록이 겹치면 강등해야 할 케이스가 사살 기록 뒤에
+    숨는다.
+    """
+    held_out_keys = {case.key for case in HELD_OUT_CASES}
+    tuned_keys = {
+        case.key for case in REGRESSION_CASES if case.seen_during_tuning
+    }
+
+    assert PROBED_AFTER_FREEZE == {
+        "직원04(동명이인)",
+        "운영팀(회사 다름)",
+        "보안팀(회사 다름)",
+    }
+    assert PROBED_AFTER_FREEZE <= held_out_keys
+    assert not PROBED_AFTER_FREEZE & tuned_keys
+
+
+def test_insufficient_case_types_are_covered_by_dictionary() -> None:
+    """정보 부족 케이스의 type이 사전에 없으면 규칙이 겨냥되지 않는다."""
+    known = {entry.name for entry in EVAL_ENTITY_TYPES}
+    case = next(
+        case
+        for case in REGRESSION_CASES
+        if case.key == "보안팀(정보 부족)"
+    )
+
+    assert {member[0] for member in case.members} <= known
 
 
 def test_held_out_replaces_injection_with_unseen_boundaries() -> None:

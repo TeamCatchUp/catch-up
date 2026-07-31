@@ -12,6 +12,7 @@ from catchup.knowledge_maintenance.contracts.extraction import EntityCandidateDr
 from catchup.knowledge_maintenance.contracts.extraction import (
     RelationAssertionCandidateDraft,
 )
+from catchup.knowledge_maintenance.domain.claim_conflict import StoredClaimCandidate
 from catchup.knowledge_maintenance.domain.evidence import Locator
 from catchup.knowledge_maintenance.domain.knowledge_candidate import (
     EntityResolutionStatus,
@@ -111,6 +112,18 @@ class KnowledgeCandidateRepository(Protocol):
         workspace_id: int,
     ) -> tuple[StoredEntityCandidate, ...]:
         """아직 해소되지 않은 entity 후보를 source_type과 함께 읽는다."""
+        ...
+
+    def find_claim_candidates(
+        self,
+        *,
+        workspace_id: int,
+    ) -> tuple[StoredClaimCandidate, ...]:
+        """claim 후보를 관찰 시각과 subject 해소 결과와 함께 읽는다.
+
+        모순 판정은 같은 대상에 대한 주장끼리 비교하는 일이고, 어느 쪽이
+        더 최근인지도 알아야 한다. 후보 행만으로는 둘 다 알 수 없다.
+        """
         ...
 
     def mark_entity_resolved(

@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import re
 from datetime import datetime
+from typing import Literal
 from typing import Self
 
 from pydantic import BaseModel
@@ -215,16 +216,69 @@ def _resolves(local_key: str, entity_keys: set[str]) -> bool:
     return local_key in entity_keys or is_metadata_local_key(local_key)
 
 
+class EntityTypeEntry(BaseModel):
+    """entity 종류 하나의 사전 항목을 정의한다.
+
+    identity_scope가 anchored면 이 종류의 이름은 소속(조직) 없이는
+    지시 대상이 정해지지 않는다. judge는 소속 근거 없이 병합을
+    제안하지 않는다.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    name: str
+    definition: str
+    identity_scope: Literal["standalone", "anchored"]
+    examples: tuple[str, ...] = ()
+
+
+class PredicateEntry(BaseModel):
+    """claim 속성 하나의 사전 항목을 정의한다."""
+
+    model_config = ConfigDict(frozen=True)
+
+    name: str
+    definition: str
+    domain: tuple[str, ...] = ()
+    value_type: Literal["number", "date", "boolean", "enum", "text"]
+    enum_values: tuple[str, ...] = ()
+    examples: tuple[str, ...] = ()
+
+    @model_validator(mode="after")
+    def _enum_needs_values(self) -> Self:
+        if self.value_type == "enum" and not self.enum_values:
+            raise ValueError("enum 치역에는 허용 값 목록이 필요하다")
+        return self
+
+
+class RelationTypeEntry(BaseModel):
+    """관계 종류 하나의 사전 항목을 정의한다."""
+
+    model_config = ConfigDict(frozen=True)
+
+    name: str
+    definition: str
+    domain: tuple[str, ...] = ()
+    range_: tuple[str, ...] = ()
+    examples: tuple[str, ...] = ()
+
+
 class ExtractionVocabulary(BaseModel):
     """추출이 쓸 수 있는 폐쇄 어휘를 정의한다.
 
     predicate와 relation type을 나눠 담는다. 한 목록으로 섞으면 값에 대한
     주장과 Entity 사이의 관계가 같은 어휘처럼 보여 오용이 생긴다.
 
+    사전 항목(entry)이 원본이고 이름 목록은 그 파생값이다. entry가 없는
+    예전 스냅샷은 이름 목록만으로도 그대로 읽힌다.
+
     Attributes:
         snapshot_id: 이 어휘가 어느 버전인지 식별한다.
         predicates: Claim이 쓸 수 있는 속성 이름을 나타낸다.
         relation_types: RelationAssertion이 쓸 수 있는 관계 이름을 나타낸다.
+        entity_type_entries: entity 종류의 사전 항목을 담는다.
+        predicate_entries: predicate의 사전 항목을 담는다.
+        relation_type_entries: 관계 종류의 사전 항목을 담는다.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -232,10 +286,54 @@ class ExtractionVocabulary(BaseModel):
     snapshot_id: str = ""
     predicates: tuple[str, ...] = ()
     relation_types: tuple[str, ...] = ()
+    entity_type_entries: tuple[EntityTypeEntry, ...] = ()
+    predicate_entries: tuple[PredicateEntry, ...] = ()
+    relation_type_entries: tuple[RelationTypeEntry, ...] = ()
+
+    @model_validator(mode="after")
+    def _derive_names_from_entries(self) -> Self:
+        # entry가 원본이고 이름 목록은 파생값이다. v1 스냅샷은 entry가
+        # 없으므로 기존 목록이 그대로 남는다.
+        if self.predicate_entries and not self.predicates:
+            object.__setattr__(
+                self,
+                "predicates",
+                tuple(entry.name for entry in self.predicate_entries),
+            )
+        if self.relation_type_entries and not self.relation_types:
+            object.__setattr__(
+                self,
+                "relation_types",
+                tuple(entry.name for entry in self.relation_type_entries),
+            )
+        return self
+
+    def predicate_entry(self, name: str) -> PredicateEntry | None:
+        """이름으로 predicate 사전 항목을 찾는다."""
+        for entry in self.predicate_entries:
+            if entry.name == name:
+                return entry
+        return None
+
+    def entity_type_entry(self, name: str) -> EntityTypeEntry | None:
+        """이름으로 entity 종류 사전 항목을 찾는다."""
+        for entry in self.entity_type_entries:
+            if entry.name == name:
+                return entry
+        return None
 
     def is_empty(self) -> bool:
-        """아직 아무 어휘도 확정되지 않았는지 나타낸다."""
-        return not self.predicates and not self.relation_types
+        """아직 아무 어휘도 확정되지 않았는지 나타낸다.
+
+        entity 종류는 이름 목록으로 파생되지 않으므로 entry를 직접 본다.
+        entity entry만 채운 어휘를 비었다고 보면 프롬프트의 어휘 섹션이
+        통째로 빠진다.
+        """
+        return not (
+            self.predicates
+            or self.relation_types
+            or self.entity_type_entries
+        )
 
 
 class KnowledgeExtractionRequest(BaseModel):
