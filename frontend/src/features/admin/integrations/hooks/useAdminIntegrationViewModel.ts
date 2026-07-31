@@ -7,10 +7,12 @@ import { adminConnectorQueries } from '../queries/adminConnector.queries';
 import type {
   AdminIntegrationViewModel,
   ConnectorDetail,
+  ConnectorDetailStatus,
   ConnectorResource,
   IntegrationService,
 } from '../types/integrationModel';
 import type { AdminConnectorStatusResponse } from '../types/syncModel';
+import { resolveConnectorStatus, type ConnectorQueryFlags } from '../utils/resolveConnectorStatus';
 
 // 단일 source 통합. 이전엔 이 파일이 'github, jira, ...' 순서였고 useEmbeddingHistory는 'jira, github, ...'
 // 순서로 drift되어 있었음 — constants/connectorOrder.ts로 정렬 통일.
@@ -77,14 +79,43 @@ export const useAdminIntegrationViewModel = (): AdminIntegrationViewModel => {
     return map as Record<IntegrationService, AdminConnectorStatusResponse | undefined>;
   }, [statusQueries]);
 
+  // 서비스 → connection-status 쿼리 매핑. jira/confluence는 atlassian 하나를 공유한다.
+  const connectionFlagsByService = useMemo<Record<IntegrationService, ConnectorQueryFlags>>(
+    () => ({
+      jira: { isLoading: atlassianStatus.isLoading, isError: atlassianStatus.isError },
+      confluence: { isLoading: atlassianStatus.isLoading, isError: atlassianStatus.isError },
+      github: { isLoading: githubStatus.isLoading, isError: githubStatus.isError },
+      slack: { isLoading: slackStatus.isLoading, isError: slackStatus.isError },
+      channel_talk: { isLoading: channelTalkStatus.isLoading, isError: channelTalkStatus.isError },
+    }),
+    [atlassianStatus, githubStatus, slackStatus, channelTalkStatus],
+  );
+
+  // 서비스 → target-status 쿼리 매핑. SOURCE_ORDER 인덱스로 statusQueries와 대응한다.
+  const targetFlagsByService = useMemo<Record<IntegrationService, ConnectorQueryFlags>>(() => {
+    const map: Record<string, ConnectorQueryFlags> = {};
+    SOURCE_ORDER.forEach((source, i) => {
+      const q = statusQueries[i];
+      map[source] = { isLoading: q?.isLoading ?? true, isError: q?.isError ?? false };
+    });
+    return map as Record<IntegrationService, ConnectorQueryFlags>;
+  }, [statusQueries]);
+
+  const getStatus = useCallback(
+    (service: IntegrationService): ConnectorDetailStatus =>
+      resolveConnectorStatus(connectionFlagsByService[service], targetFlagsByService[service]),
+    [connectionFlagsByService, targetFlagsByService],
+  );
+
   const integrationMenu = useMemo(
     () =>
       INTEGRATION_ACCOUNTS.map((item) => ({
         ...item,
         actionText: `${item.name} 연동하기`,
         connected: isServiceConnected(item.service),
+        status: getStatus(item.service),
       })),
-    [isServiceConnected],
+    [isServiceConnected, getStatus],
   );
 
   const getConnectorDetail = useCallback(
@@ -104,23 +135,18 @@ export const useAdminIntegrationViewModel = (): AdminIntegrationViewModel => {
       }));
 
       return {
+        status: getStatus(service),
         connected: isServiceConnected(service),
         dataRange: formatRange(globalOldest, globalLatest),
         resources,
         resourceLabel: RESOURCE_LABELS[service],
       };
     },
-    [statusMap, isServiceConnected],
+    [statusMap, isServiceConnected, getStatus],
   );
 
   return {
     integrationMenu,
     getConnectorDetail,
-    isLoading:
-      statusQueries.some((q) => q.isLoading) ||
-      atlassianStatus.isLoading ||
-      slackStatus.isLoading ||
-      githubStatus.isLoading ||
-      channelTalkStatus.isLoading,
   };
 };

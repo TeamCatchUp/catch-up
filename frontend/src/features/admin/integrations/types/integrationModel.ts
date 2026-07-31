@@ -7,10 +7,14 @@ import type { MappedSourceInfo } from './userSourceMappingApi';
 /** 관리자 연동 화면 탭 식별자 */
 export type AdminIntegrationTab = 'my' | 'member';
 
+/** 커넥터 상세·메뉴 항목의 데이터 준비 상태 */
+export type ConnectorDetailStatus = 'loading' | 'error' | 'ready';
+
 /** 관리자 좌측 연동 메뉴 아이템 */
 export interface IntegrationMenuItem extends IntegrationAccountMeta {
   actionText: string;
   connected: boolean;
+  status: ConnectorDetailStatus;
 }
 
 /** 연동된 리소스 항목 (per-target 임베딩 기간 포함) */
@@ -21,6 +25,7 @@ export interface ConnectorResource {
 
 /** 서비스별 연동 상세 정보 */
 export interface ConnectorDetail {
+  status: ConnectorDetailStatus;
   connected: boolean;
   dataRange: string;
   resources: ConnectorResource[];
@@ -32,7 +37,6 @@ export interface AdminIntegrationViewModel {
   integrationMenu: IntegrationMenuItem[];
   /** 선택된 서비스의 연동 상세 */
   getConnectorDetail: (service: IntegrationService) => ConnectorDetail;
-  isLoading: boolean;
 }
 
 /** 이용자 연동 상태 값 */
