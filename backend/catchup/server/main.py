@@ -566,6 +566,7 @@ if settings.DEBUG_API_ENABLED:
     from catchup.server.debug.knowledge_maintenance_reset import (
         router as knowledge_maintenance_reset_router,
     )
+    from catchup.server.debug.knowledge_review import router as knowledge_review_router
     from catchup.server.debug.retrieval_v2_probe import (
         router as retrieval_v2_probe_router,
     )
@@ -574,6 +575,7 @@ if settings.DEBUG_API_ENABLED:
     app.include_router(agent_simulate_router)
     app.include_router(retrieval_v2_probe_router)
     app.include_router(knowledge_maintenance_reset_router)
+    app.include_router(knowledge_review_router)
     logger.warning("debug_api_enabled", note="disable DEBUG_API_ENABLED in production")
 
 app.include_router(mcp_well_known_router)
