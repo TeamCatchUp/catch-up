@@ -11,6 +11,51 @@ from catchup.knowledge_maintenance.domain.knowledge_candidate import (
 from catchup.knowledge_maintenance.domain.source_version import JsonValue
 
 
+class MergeProposalAlreadyDecided(Exception):
+    """이미 결정된 병합 안건을 다시 결정하려 할 때 던진다.
+
+    결정은 감사 기록이다. 나중 결정이 먼저 확정된 결정을 조용히 덮으면
+    "누가 언제 정했나"가 사라지므로, 덮어쓰기 대신 명시적으로 거부한다.
+    """
+
+
+@dataclass(frozen=True, slots=True)
+class StoredMergeCandidate:
+    """병합 안건에 묶인 entity 후보 하나를 읽는 형태로 담는다.
+
+    Attributes:
+        id: 후보 행을 식별한다.
+        proposed_name: 추출기가 제안한 이름이다. 사람이 안건을 도메인
+            언어("A와 B가 같은가?")로 읽는 재료다.
+        proposed_type: 추출기가 제안한 entity 종류다.
+        resolution_status: 후보의 현재 해소 상태다. 이미 해소된 후보가
+            섞여 있으면 검토자가 알아야 한다.
+    """
+
+    id: uuid.UUID
+    proposed_name: str
+    proposed_type: str
+    resolution_status: str
+
+
+@dataclass(frozen=True, slots=True)
+class StoredMergeProposal:
+    """검토 대기 중인 병합 안건 하나를 읽는 형태로 담는다.
+
+    Attributes:
+        id: proposal 행을 식별한다.
+        summary: 판정기가 남긴 요약이다.
+        resolver_metadata: judge의 판정 근거를 보존한다.
+        candidates: 묶인 후보들이다. operations의 sequence 순서를
+            따르므로 첫 후보가 대표다.
+    """
+
+    id: uuid.UUID
+    summary: str
+    resolver_metadata: Mapping[str, object]
+    candidates: tuple[StoredMergeCandidate, ...]
+
+
 @dataclass(frozen=True, slots=True)
 class StoredPendingProposal:
     """어떤 대상에 걸려 있는 계류 안건 하나를 읽는 형태로 담는다.
@@ -93,6 +138,55 @@ class MutationProposalRepository(Protocol):
         """
         ...
 
+    def list_pending_duplicates(
+        self,
+        *,
+        workspace_id: int,
+    ) -> list[StoredMergeProposal]:
+        """검토 대기 중인 병합 안건을 후보 상세와 함께 모은다.
+
+        사람이 안건을 도메인 언어로 읽으려면 후보의 이름과 종류가
+        필요하다. 후보 순서는 operations의 sequence를 따른다 — 첫
+        후보가 대표다.
+        """
+        ...
+
+    def mark_merge_approved(
+        self,
+        *,
+        workspace_id: int,
+        proposal_id: uuid.UUID,
+        reviewer: str,
+    ) -> None:
+        """병합 안건을 승인으로 끝맺는다.
+
+        pending인 duplicate 행 하나만 갱신한다. 대상이 없으면 —
+        이미 결정됐거나, 없는 안건이거나, 병합 안건이 아니면 —
+        `MergeProposalAlreadyDecided`를 던진다.
+
+        Raises:
+            MergeProposalAlreadyDecided: 계류 중인 병합 안건이 아니다.
+        """
+        ...
+
+    def mark_merge_rejected(
+        self,
+        *,
+        workspace_id: int,
+        proposal_id: uuid.UUID,
+        reviewer: str,
+        reason: str,
+    ) -> None:
+        """병합 안건을 사유와 함께 반려로 끝맺는다.
+
+        사유는 DB CHECK가 요구한다. 이유 없는 반려는 같은 안건을
+        다시 판단하게 만들기 때문이다.
+
+        Raises:
+            MergeProposalAlreadyDecided: 계류 중인 병합 안건이 아니다.
+        """
+        ...
+
     def add_duplicate_proposal(
         self,
         *,
@@ -113,6 +207,12 @@ class MutationProposalRepository(Protocol):
         operation은 두 종류다. 대표 후보의 create_entity가 1번이고,
         나머지 후보의 merge_entity가 그 뒤를 따르며 1번이 만들 노드를
         가리킨다.
+
+        같은 key의 행이 이미 결정돼 있으면(approved·applied·rejected)
+        되살리지 않고 그 id를 그대로 돌려준다 — 사람은 같은 사실에
+        대해 한 번만 결정한다. 계류·접힘 행만 내용을 갈아끼워 되살리고,
+        되살릴 때 이전 결정 흔적(reviewer·reviewed_at·rejection_reason·
+        applied_at)을 지운다.
         """
         ...
 

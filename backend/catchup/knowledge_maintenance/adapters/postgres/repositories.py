@@ -102,8 +102,16 @@ from catchup.knowledge_maintenance.ports.artifacts import ArtifactProposalConfli
 from catchup.knowledge_maintenance.ports.artifacts import EntityCardSource
 from catchup.knowledge_maintenance.ports.artifacts import ProposalAlreadyDecided
 from catchup.knowledge_maintenance.ports.artifacts import StoredArtifactProposal
+from catchup.knowledge_maintenance.ports.mutation_proposals import (
+    MergeProposalAlreadyDecided,
+)
+from catchup.knowledge_maintenance.ports.mutation_proposals import StoredMergeCandidate
+from catchup.knowledge_maintenance.ports.mutation_proposals import StoredMergeProposal
 from catchup.knowledge_maintenance.ports.mutation_proposals import StoredPendingProposal
 from catchup.knowledge_maintenance.ports.ontology import OntologySnapshotConflict
+from catchup.observability.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 def _identity_matches(
@@ -827,6 +835,140 @@ class SqlAlchemyMutationProposalRepository:
         )
         self._session.flush()
 
+    def list_pending_duplicates(
+        self,
+        *,
+        workspace_id: int,
+    ) -> list[StoredMergeProposal]:
+        """검토 대기 중인 병합 안건을 후보 상세와 함께 모은다."""
+        proposal_rows = self._session.scalars(
+            select(KnowledgeMutationProposalRow)
+            .where(
+                KnowledgeMutationProposalRow.workspace_id == workspace_id,
+                KnowledgeMutationProposalRow.proposal_kind == "duplicate",
+                KnowledgeMutationProposalRow.status == "pending",
+            )
+            .order_by(KnowledgeMutationProposalRow.created_at)
+        ).all()
+        if not proposal_rows:
+            return []
+
+        proposal_ids = [row.id for row in proposal_rows]
+        member_rows = self._session.execute(
+            select(
+                KnowledgeMutationOperationRow.proposal_id,
+                KnowledgeEntityCandidateRow,
+            )
+            .join(
+                KnowledgeEntityCandidateRow,
+                KnowledgeEntityCandidateRow.id
+                == KnowledgeMutationOperationRow.entity_candidate_id,
+            )
+            .where(
+                KnowledgeMutationOperationRow.workspace_id == workspace_id,
+                KnowledgeEntityCandidateRow.workspace_id == workspace_id,
+                KnowledgeMutationOperationRow.proposal_id.in_(proposal_ids),
+            )
+            .order_by(
+                KnowledgeMutationOperationRow.proposal_id,
+                KnowledgeMutationOperationRow.sequence,
+            )
+        ).all()
+
+        members: dict[uuid.UUID, list[StoredMergeCandidate]] = {}
+        for proposal_id, candidate in member_rows:
+            members.setdefault(proposal_id, []).append(
+                StoredMergeCandidate(
+                    id=candidate.id,
+                    proposed_name=candidate.proposed_name,
+                    proposed_type=candidate.proposed_type,
+                    resolution_status=candidate.resolution_status,
+                )
+            )
+        return [
+            StoredMergeProposal(
+                id=row.id,
+                summary=row.summary,
+                resolver_metadata=row.resolver_metadata,
+                candidates=tuple(members.get(row.id, ())),
+            )
+            for row in proposal_rows
+        ]
+
+    def mark_merge_approved(
+        self,
+        *,
+        workspace_id: int,
+        proposal_id: uuid.UUID,
+        reviewer: str,
+    ) -> None:
+        """병합 안건을 승인으로 끝맺는다.
+
+        Raises:
+            MergeProposalAlreadyDecided: 계류 중인 병합 안건이 아니다.
+        """
+        self._decide_merge(
+            workspace_id=workspace_id,
+            proposal_id=proposal_id,
+            status="approved",
+            reviewer=reviewer,
+        )
+
+    def mark_merge_rejected(
+        self,
+        *,
+        workspace_id: int,
+        proposal_id: uuid.UUID,
+        reviewer: str,
+        reason: str,
+    ) -> None:
+        """병합 안건을 사유와 함께 반려로 끝맺는다.
+
+        Raises:
+            MergeProposalAlreadyDecided: 계류 중인 병합 안건이 아니다.
+        """
+        self._decide_merge(
+            workspace_id=workspace_id,
+            proposal_id=proposal_id,
+            status="rejected",
+            reviewer=reviewer,
+            rejection_reason=reason,
+        )
+
+    def _decide_merge(
+        self,
+        *,
+        workspace_id: int,
+        proposal_id: uuid.UUID,
+        status: str,
+        reviewer: str,
+        rejection_reason: str | None = None,
+    ) -> None:
+        """결정 UPDATE를 계류 행 하나로 한정한다.
+
+        status='pending' 조건과 rowcount 검사가 결정 경합의 방어선이다.
+        잠금 없는 사전 확인이 없으므로, 두 결정이 동시에 와도 UPDATE의
+        행 재평가에서 한쪽만 1행을 얻는다.
+        """
+        result = self._session.execute(
+            update(KnowledgeMutationProposalRow)
+            .where(
+                KnowledgeMutationProposalRow.workspace_id == workspace_id,
+                KnowledgeMutationProposalRow.id == proposal_id,
+                KnowledgeMutationProposalRow.proposal_kind == "duplicate",
+                KnowledgeMutationProposalRow.status == "pending",
+            )
+            .values(
+                status=status,
+                reviewer=reviewer,
+                reviewed_at=func.now(),
+                rejection_reason=rejection_reason,
+            )
+        )
+        if result.rowcount != 1:
+            raise MergeProposalAlreadyDecided(str(proposal_id))
+        self._session.flush()
+
     def find_pending_duplicate_groups(
         self,
         *,
@@ -1031,11 +1173,11 @@ class SqlAlchemyMutationProposalRepository:
     ) -> uuid.UUID:
         """같은 대상 후보들을 하나로 합치는 계획서를 쓴다.
 
-        같은 key의 행이 이미 있으면 상태와 무관하게 그 행을 되살려
-        내용을 갈아끼운다. `(workspace_id, idempotency_key)` UNIQUE가
-        상태를 구분하지 않아 abandoned 행도 key를 차지하기 때문이다.
-        새 INSERT를 시도하면 충돌이 나고 같은 트랜잭션의 결정론 병합까지
-        되돌아간다.
+        같은 key의 행이 계류·접힘 상태면 그 행을 되살려 내용을
+        갈아끼운다. `(workspace_id, idempotency_key)` UNIQUE가 상태를
+        구분하지 않아 abandoned 행도 key를 차지하기 때문이다. 반면
+        이미 결정된 행(approved·applied·rejected)은 건드리지 않고 그
+        id만 돌려준다 — 사람의 결정은 judge 재실행이 덮을 수 없다.
         """
         existing = self._session.scalar(
             select(KnowledgeMutationProposalRow).where(
@@ -1044,9 +1186,27 @@ class SqlAlchemyMutationProposalRepository:
                 == idempotency_key,
             )
         )
+        if existing is not None and existing.status in (
+            "approved",
+            "applied",
+            "rejected",
+        ):
+            logger.info(
+                "merge_proposal_already_decided_skip",
+                workspace_id=workspace_id,
+                proposal_id=str(existing.id),
+                status=existing.status,
+            )
+            return existing.id
         if existing is not None:
             proposal_id = existing.id
             existing.status = "pending"
+            # 되살아난 안건은 새 검토 사건이다. 이전 결정의 흔적이
+            # 남으면 감사 기록이 거짓이 된다.
+            existing.reviewer = None
+            existing.reviewed_at = None
+            existing.rejection_reason = None
+            existing.applied_at = None
             existing.proposal_kind = "duplicate"
             # trigger는 셋 중 정확히 하나여야 한다. 다른 종류의 계획서가
             # 쓰던 key를 되살리는 경우 나머지를 비워야 한다.
