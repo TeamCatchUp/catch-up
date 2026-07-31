@@ -4911,3 +4911,227 @@ class KnowledgePipelineOutbox(Base):
             "id",
         ),
     )
+
+
+class KnowledgeArtifact(Base):
+    """사람이 읽는 문서 한 편의 identity를 잡아 둔다.
+
+    본문은 여기 두지 않는다. 본문은 승인된 revision이 갖고, 이 행은 "무엇에
+    대한 어떤 문서인가"만 말한다. 그래야 문서가 여러 판으로 자라도 참조하는
+    쪽은 같은 주소를 계속 쓴다.
+
+    kind에 CHECK를 걸지 않는다. 문서 종류는 앞으로 늘어날 자리라, DB 제약으로
+    묶으면 종류를 하나 늘릴 때마다 마이그레이션이 필요해진다.
+    """
+
+    __tablename__ = "knowledge_artifacts"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+    )
+    workspace_id: Mapped[int] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    kind: Mapped[str] = mapped_column(String(32), nullable=False)
+    subject_node_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=False,
+    )
+    title: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "workspace_id",
+            "id",
+            name="uq_knowledge_artifacts_workspace_id_id",
+        ),
+        # 같은 대상에 같은 종류 문서가 둘 생기지 않게 한다. compile이
+        # "만들거나 찾아 쓴다"로 성립하는 근거다.
+        UniqueConstraint(
+            "workspace_id",
+            "kind",
+            "subject_node_id",
+            name="uq_knowledge_artifacts_subject",
+        ),
+        ForeignKeyConstraint(
+            ["workspace_id", "subject_node_id"],
+            ["knowledge_nodes.workspace_id", "knowledge_nodes.id"],
+            name="fk_knowledge_artifacts_subject_node",
+        ),
+    )
+
+
+class KnowledgeArtifactChangeProposal(Base):
+    """사람이 승인하거나 반려할 문서 변경안 한 건을 담는다.
+
+    사람이 실제로 보는 검토 단위다. mutation proposal이 기계가 발견한 변경
+    후보라면, 이쪽은 그것을 compile해 문서 본문 형태로 보여 주는 쪽이다.
+
+    `base_revision_id`는 이 변경안이 딛고 선 판을 가리킨다. 승인 시점에
+    문서가 그 사이 다른 판으로 넘어갔는지 판단하는 근거가 된다.
+    """
+
+    __tablename__ = "knowledge_artifact_change_proposals"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+    )
+    workspace_id: Mapped[int] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    artifact_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=False,
+    )
+    blocks: Mapped[list[Any]] = mapped_column(
+        JSONB,
+        nullable=False,
+        default=list,
+        server_default=text("'[]'::jsonb"),
+    )
+    status: Mapped[str] = mapped_column(
+        String(16),
+        nullable=False,
+        default="pending",
+        server_default=text("'pending'"),
+    )
+    content_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    idempotency_key: Mapped[str] = mapped_column(String(255), nullable=False)
+    base_revision_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=True,
+    )
+    rejection_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    reviewed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    reviewer: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "workspace_id",
+            "id",
+            name="uq_knowledge_artifact_change_proposals_workspace_id_id",
+        ),
+        UniqueConstraint(
+            "workspace_id",
+            "idempotency_key",
+            name="uq_knowledge_artifact_change_proposals_idempotency_key",
+        ),
+        ForeignKeyConstraint(
+            ["workspace_id", "artifact_id"],
+            ["knowledge_artifacts.workspace_id", "knowledge_artifacts.id"],
+            name="fk_knowledge_artifact_change_proposals_artifact",
+            ondelete="CASCADE",
+        ),
+        # revision과 서로 참조하므로 순환을 끊도록 나중에 건다.
+        ForeignKeyConstraint(
+            ["workspace_id", "base_revision_id"],
+            [
+                "knowledge_artifact_revisions.workspace_id",
+                "knowledge_artifact_revisions.id",
+            ],
+            name="fk_knowledge_artifact_change_proposals_base_revision",
+            use_alter=True,
+        ),
+        CheckConstraint(
+            "status IN ('pending', 'approved', 'rejected', 'abandoned')",
+            name="ck_knowledge_artifact_change_proposals_status",
+        ),
+        # 반려는 이유가 남아야 한다. 이유 없는 반려는 다음 사람이 같은
+        # 변경안을 다시 올리게 만든다.
+        CheckConstraint(
+            "status <> 'rejected' OR rejection_reason IS NOT NULL",
+            name="ck_knowledge_artifact_change_proposals_rejection_reason",
+        ),
+        Index(
+            "ix_knowledge_artifact_change_proposals_review_queue",
+            "workspace_id",
+            "status",
+            "created_at",
+        ),
+    )
+
+
+class KnowledgeArtifactRevision(Base):
+    """승인으로 확정된 문서 한 판을 그대로 보존한다.
+
+    문서를 덮어쓰지 않고 판을 쌓는다. 그래야 지금 문장이 어느 승인에서
+    나왔는지 `source_proposal_id`로 되짚을 수 있고, 과거 판을 그대로 다시
+    읽을 수 있다.
+    """
+
+    __tablename__ = "knowledge_artifact_revisions"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+    )
+    workspace_id: Mapped[int] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    artifact_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=False,
+    )
+    revision_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    blocks: Mapped[list[Any]] = mapped_column(
+        JSONB,
+        nullable=False,
+        default=list,
+        server_default=text("'[]'::jsonb"),
+    )
+    source_proposal_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=False,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "workspace_id",
+            "id",
+            name="uq_knowledge_artifact_revisions_workspace_id_id",
+        ),
+        # 판 번호가 겹치면 순서가 무너진다. 동시 승인을 DB가 막는 자리다.
+        UniqueConstraint(
+            "workspace_id",
+            "artifact_id",
+            "revision_number",
+            name="uq_knowledge_artifact_revisions_number",
+        ),
+        ForeignKeyConstraint(
+            ["workspace_id", "artifact_id"],
+            ["knowledge_artifacts.workspace_id", "knowledge_artifacts.id"],
+            name="fk_knowledge_artifact_revisions_artifact",
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["workspace_id", "source_proposal_id"],
+            [
+                "knowledge_artifact_change_proposals.workspace_id",
+                "knowledge_artifact_change_proposals.id",
+            ],
+            name="fk_knowledge_artifact_revisions_source_proposal",
+        ),
+    )
