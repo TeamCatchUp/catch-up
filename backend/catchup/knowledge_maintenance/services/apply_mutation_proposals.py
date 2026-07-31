@@ -34,7 +34,7 @@ from catchup.observability.logging import get_logger
 
 logger = get_logger(__name__)
 
-SUPPORTED_OPERATIONS = ("create_entity", "merge_entity")
+SUPPORTED_OPERATIONS = ("create_entity", "merge_entity", "supersede_claim")
 
 
 class ApplyOperationError(Exception):
@@ -70,12 +70,21 @@ class ApplyResult:
         candidates_resolved: 이번에 새로 해소된 후보 수를 나타낸다.
         candidates_already_resolved: 이미 해소돼 있어 건너뛴 후보
             수를 나타낸다.
+        claims_superseded: 구간을 닫은 claim 수를 나타낸다. 한때
+            참이었던 주장이다.
+        claims_invalidated: 지식이 되기 전에 탈락한 claim 수를
+            나타낸다.
+        claims_already_closed: 이미 닫혔거나 탈락해 건너뛴 claim
+            수를 나타낸다.
     """
 
     proposals_applied: int
     proposals_failed: int
     candidates_resolved: int
     candidates_already_resolved: int
+    claims_superseded: int = 0
+    claims_invalidated: int = 0
+    claims_already_closed: int = 0
 
 
 @dataclass
@@ -84,6 +93,9 @@ class _Tally:
 
     resolved: int = 0
     already: int = 0
+    superseded: int = 0
+    invalidated: int = 0
+    closed_already: int = 0
 
 
 def apply_mutation_proposals(
@@ -105,6 +117,9 @@ def apply_mutation_proposals(
     failed = 0
     resolved = 0
     already = 0
+    superseded = 0
+    invalidated = 0
+    closed_already = 0
     for proposal_id, operations in approved:
         try:
             tally = _apply_one(
@@ -125,6 +140,9 @@ def apply_mutation_proposals(
         applied += 1
         resolved += tally.resolved
         already += tally.already
+        superseded += tally.superseded
+        invalidated += tally.invalidated
+        closed_already += tally.closed_already
         logger.info(
             "mutation_proposal_applied",
             workspace_id=workspace_id,
@@ -138,6 +156,9 @@ def apply_mutation_proposals(
         proposals_failed=failed,
         candidates_resolved=resolved,
         candidates_already_resolved=already,
+        claims_superseded=superseded,
+        claims_invalidated=invalidated,
+        claims_already_closed=closed_already,
     )
     logger.info(
         "mutation_apply_completed",
@@ -146,6 +167,9 @@ def apply_mutation_proposals(
         proposals_failed=result.proposals_failed,
         candidates_resolved=result.candidates_resolved,
         candidates_already_resolved=result.candidates_already_resolved,
+        claims_superseded=result.claims_superseded,
+        claims_invalidated=result.claims_invalidated,
+        claims_already_closed=result.claims_already_closed,
     )
     return result
 
@@ -179,13 +203,15 @@ def _apply_one(
                     operation=operation,
                     tally=tally,
                 )
-            else:
+            elif operation.operation_type == "merge_entity":
                 _apply_merge(
                     uow,
                     operation=operation,
                     nodes_by_sequence=nodes_by_sequence,
                     tally=tally,
                 )
+            else:
+                _apply_supersede(uow, operation=operation, tally=tally)
         uow.mutation_proposals.mark_applied(
             workspace_id=workspace_id,
             proposal_id=proposal_id,
@@ -265,3 +291,50 @@ def _apply_merge(
         resolved_node_id=target_node_id,
     )
     tally.resolved += 1
+
+
+def _apply_supersede(
+    uow: ApplyUnitOfWork,
+    *,
+    operation: StoredOperation,
+    tally: _Tally,
+) -> None:
+    """패자 claim을 닫거나 탈락시키고 승자를 확정한다.
+
+    닫는 방식은 패자의 상태가 정한다. 한때 받아들여진 주장은 구간만
+    닫아 "그때는 참이었다"를 남기고, 지식이 된 적 없는 후보는 구간
+    없이 탈락시킨다. 사람에게 둘을 구분해 묻지 않는 이유가 여기 있다 —
+    상태가 이미 답을 갖고 있다.
+    """
+    claim_id = operation.claim_candidate_id
+    if claim_id is None:
+        raise ApplyOperationError("supersede_claim에 대상 claim이 없다")
+    current = uow.knowledge_candidates.get_claim_validity(claim_id=claim_id)
+    if current is None:
+        raise ApplyOperationError(f"claim이 없다: {claim_id}")
+
+    status, _valid_from, valid_to = current
+    if valid_to is not None or status == "rejected":
+        tally.closed_already += 1
+    elif status == "pending":
+        uow.knowledge_candidates.reject_claim(claim_id=claim_id)
+        tally.invalidated += 1
+    else:
+        uow.knowledge_candidates.close_claim(
+            claim_id=claim_id,
+            valid_to=operation.operation_data["valid_to"],
+        )
+        tally.superseded += 1
+
+    winner_raw = operation.operation_data.get("winner_claim_id")
+    if winner_raw is None:
+        return
+    try:
+        winner_id = uuid.UUID(str(winner_raw))
+    except ValueError as error:
+        raise ApplyOperationError(
+            f"승자 claim id를 읽을 수 없다: {winner_raw}"
+        ) from error
+    # 승자가 아직 후보면 이 판정으로 확정된다. 이미 확정돼 있으면
+    # 이 호출은 0을 돌려주고 아무것도 바꾸지 않는다.
+    uow.knowledge_candidates.accept_claims(claim_ids=[winner_id])

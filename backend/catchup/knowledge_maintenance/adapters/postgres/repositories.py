@@ -1231,6 +1231,7 @@ class SqlAlchemyMutationProposalRepository:
                     sequence=row.sequence,
                     operation_type=row.operation_type,
                     entity_candidate_id=row.entity_candidate_id,
+                    claim_candidate_id=row.claim_candidate_id,
                     operation_data=row.operation_data or {},
                 )
             )

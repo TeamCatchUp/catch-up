@@ -32,6 +32,9 @@ from catchup.db.models import Workspace
 from catchup.knowledge_maintenance.adapters.postgres.unit_of_work import (
     KnowledgeMaintenanceUnitOfWork,
 )
+from catchup.knowledge_maintenance.services.apply_mutation_proposals import (
+    apply_mutation_proposals,
+)
 from catchup.knowledge_maintenance.services.review_contradiction_proposal import (
     ContradictionReviewError,
 )
@@ -297,3 +300,72 @@ def test_stranger_claim_cannot_win(
     assert row is not None
     assert row.status == "pending"
     assert "decision" not in row.resolver_metadata
+
+
+def test_apply_closes_loser_interval_on_real_rows(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+) -> None:
+    """판정을 적용하면 패자 구간이 실제로 닫히고 상태는 남는다."""
+    proposal_id, winner, loser = _contradiction(
+        workspace_id, session_factory, uow_factory
+    )
+    review_contradiction_proposal(
+        uow_factory(),
+        workspace_id=workspace_id,
+        proposal_id=proposal_id,
+        winner_claim_id=winner,
+        reviewer="ba2slk",
+        now=DECIDED_AT,
+    )
+
+    result = apply_mutation_proposals(uow_factory, workspace_id=workspace_id)
+
+    assert result.claims_superseded >= 1
+    with session_factory() as session:
+        proposal = session.get(ProposalRow, proposal_id)
+        loser_row = session.get(ClaimRow, loser)
+        winner_row = session.get(ClaimRow, winner)
+    assert proposal is not None
+    assert proposal.status == "applied"
+    assert loser_row is not None and winner_row is not None
+    # 한때 참이었다는 사실은 남고 구간만 닫힌다.
+    assert loser_row.resolution_status == "accepted"
+    assert loser_row.valid_to is not None
+    assert loser_row.valid_to > loser_row.valid_from
+    assert winner_row.valid_to is None
+
+    rerun = apply_mutation_proposals(uow_factory, workspace_id=workspace_id)
+    assert rerun.claims_superseded == 0
+
+
+def test_apply_rejects_pending_loser_on_real_rows(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+) -> None:
+    """지식이 된 적 없는 패자는 구간 없이 탈락한다."""
+    proposal_id, winner, loser = _contradiction(
+        workspace_id,
+        session_factory,
+        uow_factory,
+        loser_status="pending",
+    )
+    review_contradiction_proposal(
+        uow_factory(),
+        workspace_id=workspace_id,
+        proposal_id=proposal_id,
+        winner_claim_id=winner,
+        reviewer="ba2slk",
+        now=DECIDED_AT,
+    )
+
+    result = apply_mutation_proposals(uow_factory, workspace_id=workspace_id)
+
+    assert result.claims_invalidated == 1
+    with session_factory() as session:
+        loser_row = session.get(ClaimRow, loser)
+    assert loser_row is not None
+    assert loser_row.resolution_status == "rejected"
+    assert loser_row.valid_to is None

@@ -104,14 +104,18 @@ class StoredOperation:
         sequence: 실행 순서를 나타낸다.
         operation_type: 어떤 종류의 변경인지 나타낸다.
         entity_candidate_id: 명령이 다루는 entity 후보를 가리킨다.
+        claim_candidate_id: 명령이 다루는 claim 후보를 가리킨다.
+            supersede_claim이 닫을 패자가 여기 있다.
         operation_data: 명령의 재료를 담는다. create_entity는
             proposed_type·proposed_name을, merge_entity는
-            merge_into_sequence를 여기서 읽는다.
+            merge_into_sequence를, supersede_claim은 winner_claim_id와
+            valid_to를 여기서 읽는다.
     """
 
     sequence: int
     operation_type: str
     entity_candidate_id: uuid.UUID | None
+    claim_candidate_id: uuid.UUID | None
     operation_data: Mapping[str, object]
 
 
