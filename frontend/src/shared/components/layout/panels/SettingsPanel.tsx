@@ -4,6 +4,7 @@ import { usePathname, useRouter } from 'next/navigation';
 
 import IconArrowBack from '@/public/icons/icon/arrow_back.svg';
 import IconArticlePerson from '@/public/icons/icon/article_person.svg';
+import IconBlock from '@/public/icons/icon/block.svg';
 import IconBuilding from '@/public/icons/icon/building.svg';
 import IconClock from '@/public/icons/icon/clock.svg';
 import IconFilter2 from '@/public/icons/icon/filter-2.svg';
@@ -11,7 +12,7 @@ import IconGraphOutline from '@/public/icons/icon/graph_outline.svg';
 import IconGroup from '@/public/icons/icon/group.svg';
 import IconHelp from '@/public/icons/icon/help.svg';
 import IconHistory from '@/public/icons/icon/history.svg';
-import IconLink from '@/public/icons/icon/link.svg';
+import IconHistoryMember from '@/public/icons/icon/history_member.svg';
 import IconLock from '@/public/icons/icon/lock.svg';
 import IconPerson from '@/public/icons/icon/person.svg';
 import IconPlugin from '@/public/icons/icon/plugin.svg';
@@ -82,7 +83,7 @@ const SETTINGS_SECTIONS_BY_ROLE: Record<UserRole, SettingsSection[]> = {
           Icon: IconBuilding,
           items: [
             { name: '커넥터 연결', href: '/admin/connectors', Icon: IconPlugin },
-            { name: '이용자 매핑', href: '/admin/user-mapping', Icon: IconLink },
+            { name: '이용자 매핑', href: '/admin/user-mapping', Icon: IconBlock },
           ],
         },
         {
@@ -90,8 +91,8 @@ const SETTINGS_SECTIONS_BY_ROLE: Record<UserRole, SettingsSection[]> = {
           name: '멤버 관리',
           Icon: IconGroup,
           items: [
-            { name: '멤버 정보', href: '/admin/members', Icon: IconPlugin },
-            { name: '멤버 채팅 기록', href: '/admin/question-logs', Icon: IconArticlePerson },
+            { name: '멤버 정보', href: '/admin/members', Icon: IconArticlePerson },
+            { name: '멤버 채팅 기록', href: '/admin/question-logs', Icon: IconHistoryMember },
           ],
         },
         { kind: 'item', name: '토큰 사용량 관리', href: '/admin/token-usage', Icon: IconGraphOutline },

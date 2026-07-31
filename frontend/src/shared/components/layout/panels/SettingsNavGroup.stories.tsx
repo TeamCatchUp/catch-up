@@ -1,8 +1,8 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite';
 import { expect, within } from 'storybook/test';
 
+import IconBlock from '@/public/icons/icon/block.svg';
 import IconBuilding from '@/public/icons/icon/building.svg';
-import IconLink from '@/public/icons/icon/link.svg';
 import IconPlugin from '@/public/icons/icon/plugin.svg';
 
 import { catchupParameters } from '../../../../../.storybook/catchupStoryParameters';
@@ -10,7 +10,7 @@ import SettingsNavGroup from './SettingsNavGroup';
 
 const CHILDREN = [
   { name: '커넥터 연결', href: '/admin/connectors', Icon: IconPlugin },
-  { name: '이용자 매핑', href: '/admin/user-mapping', Icon: IconLink },
+  { name: '이용자 매핑', href: '/admin/user-mapping', Icon: IconBlock },
 ];
 
 const meta = {
