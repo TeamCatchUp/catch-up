@@ -15,7 +15,7 @@ interface MappingCheckPopoverProps {
  */
 export default function MappingCheckPopover({ onClose }: MappingCheckPopoverProps) {
   return (
-    <div className="border-line-normal-strong bg-fill-normal-normal shadow-tooltip flex w-115 flex-col gap-1 rounded-xl border p-3">
+    <div className="border-accent-black-lighten bg-fill-normal-normal shadow-tooltip flex w-115 flex-col gap-1 rounded-xl border p-3">
       <div className="flex items-center gap-2">
         <IconInfoFilled className="text-icon-normal-normal size-5.5 shrink-0" />
         <span className="text-body-small text-text-normal-strong min-w-0 flex-1">

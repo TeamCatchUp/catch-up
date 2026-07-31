@@ -32,7 +32,7 @@ function ScopeCompareCard({ tone, title, items }: ScopeCompareCardProps) {
       <ul className="flex flex-col gap-2">
         {items.map((item) => (
           <li key={item} className="flex items-center gap-4">
-            <span aria-hidden="true" className="bg-fill-normal-interaction-pressed size-1.5 shrink-0 rounded-full" />
+            <span aria-hidden="true" className="bg-dim-black-25 size-1.5 shrink-0 rounded-full" />
             <span className="text-body-small text-text-normal-normal">{item}</span>
           </li>
         ))}

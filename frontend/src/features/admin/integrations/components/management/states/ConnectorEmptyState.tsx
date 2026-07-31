@@ -36,10 +36,10 @@ export default function ConnectorEmptyState({ onStart }: ConnectorEmptyStateProp
         className="pointer-events-none absolute top-11.75 left-1/2 size-118.5 -translate-x-1/2"
       >
         <div
-          className={`border-line-normal-neutral bg-fill-normal-normal shadow-card absolute inset-0 rounded-full border ${FADE_55}`}
+          className={`border-line-normal-assistive bg-fill-normal-normal shadow-card absolute inset-0 rounded-full border ${FADE_55}`}
         />
         <div
-          className={`border-line-normal-neutral bg-fill-normal-normal shadow-card absolute inset-15.5 rounded-full border ${FADE_42}`}
+          className={`border-line-normal-assistive bg-fill-normal-normal shadow-card absolute inset-15.5 rounded-full border ${FADE_42}`}
         />
         {LOGO_POSITIONS.map(({ service, left, top }) => {
           const Logo = CONNECTOR_LOGOS[service];
