@@ -105,6 +105,12 @@ from catchup.knowledge_maintenance.ports.artifacts import StoredArtifactProposal
 from catchup.knowledge_maintenance.ports.mutation_proposals import (
     MergeProposalAlreadyDecided,
 )
+from catchup.knowledge_maintenance.ports.mutation_proposals import (
+    StoredContradictionProposal,
+)
+from catchup.knowledge_maintenance.ports.mutation_proposals import (
+    StoredContradictionValue,
+)
 from catchup.knowledge_maintenance.ports.mutation_proposals import StoredMergeCandidate
 from catchup.knowledge_maintenance.ports.mutation_proposals import StoredMergeProposal
 from catchup.knowledge_maintenance.ports.mutation_proposals import StoredOperation
@@ -126,6 +132,44 @@ def _identity_matches(
         SourceVersionRow.external_document_id
         == source_identity.external_document_id,
     ]
+
+
+def _contradiction_values(
+    raw: object,
+) -> tuple[StoredContradictionValue, ...]:
+    """판정 근거의 값 목록을 읽는 형태로 옮긴다.
+
+    낡은 metadata에는 값 목록이 없거나 형태가 다를 수 있다. 읽을 수
+    없는 항목은 조용히 버리는 대신 통째로 비워, 호출자가 "고를 것이
+    없는 안건"으로 다루게 한다.
+    """
+    if not isinstance(raw, list):
+        return ()
+    values: list[StoredContradictionValue] = []
+    for item in raw:
+        if not isinstance(item, Mapping):
+            return ()
+        try:
+            claim_id = uuid.UUID(str(item["claim_id"]))
+        except (KeyError, ValueError, TypeError):
+            return ()
+        values.append(
+            StoredContradictionValue(
+                claim_id=claim_id,
+                value=item.get("value"),
+                normalized=_optional_str(item.get("normalized")),
+                statement=_optional_str(item.get("statement")),
+                observed_at=_optional_str(item.get("observed_at")),
+            )
+        )
+    return tuple(values)
+
+
+def _optional_str(value: object) -> str | None:
+    """문자열로 읽을 수 있으면 문자열로, 아니면 None으로 준다."""
+    if value is None:
+        return None
+    return str(value)
 
 
 def _mentions_candidate(
@@ -812,6 +856,60 @@ class SqlAlchemyKnowledgeCandidateRepository:
             return None
         return (row[0], row[1])
 
+    def get_claim_validity(
+        self,
+        *,
+        claim_id: uuid.UUID,
+    ) -> tuple[str, datetime | None, datetime | None] | None:
+        """claim 후보의 상태와 유효 구간을 읽는다."""
+        row = self._session.execute(
+            select(
+                KnowledgeClaimCandidateRow.resolution_status,
+                KnowledgeClaimCandidateRow.valid_from,
+                KnowledgeClaimCandidateRow.valid_to,
+            ).where(KnowledgeClaimCandidateRow.id == claim_id)
+        ).one_or_none()
+        if row is None:
+            return None
+        return (row[0], row[1], row[2])
+
+    def close_claim(
+        self,
+        *,
+        claim_id: uuid.UUID,
+        valid_to: datetime,
+    ) -> None:
+        """한때 참이었던 claim의 구간을 닫는다.
+
+        resolution_status는 건드리지 않는다. accepted로 남아야 "그때는
+        참이었다"를 질의할 수 있다.
+        """
+        self._session.execute(
+            update(KnowledgeClaimCandidateRow)
+            .where(
+                KnowledgeClaimCandidateRow.id == claim_id,
+                KnowledgeClaimCandidateRow.valid_to.is_(None),
+            )
+            .values(valid_to=valid_to)
+        )
+        self._session.flush()
+
+    def reject_claim(
+        self,
+        *,
+        claim_id: uuid.UUID,
+    ) -> None:
+        """지식이 된 적 없는 후보를 탈락시킨다."""
+        self._session.execute(
+            update(KnowledgeClaimCandidateRow)
+            .where(
+                KnowledgeClaimCandidateRow.id == claim_id,
+                KnowledgeClaimCandidateRow.resolution_status == "pending",
+            )
+            .values(resolution_status="rejected")
+        )
+        self._session.flush()
+
     def accept_claims(
         self,
         *,
@@ -1013,6 +1111,91 @@ class SqlAlchemyMutationProposalRepository:
             reviewer=reviewer,
             rejection_reason=reason,
         )
+
+    def list_pending_contradictions(
+        self,
+        *,
+        workspace_id: int,
+    ) -> list[StoredContradictionProposal]:
+        """검토 대기 중인 모순 안건을 값 후보와 함께 모은다."""
+        rows = self._session.scalars(
+            select(KnowledgeMutationProposalRow)
+            .where(
+                KnowledgeMutationProposalRow.workspace_id == workspace_id,
+                KnowledgeMutationProposalRow.proposal_kind
+                == "contradiction",
+                KnowledgeMutationProposalRow.status == "pending",
+            )
+            .order_by(KnowledgeMutationProposalRow.created_at)
+        ).all()
+        found: list[StoredContradictionProposal] = []
+        for row in rows:
+            metadata = row.resolver_metadata or {}
+            values = _contradiction_values(metadata.get("values"))
+            if not values:
+                # 값 후보를 읽을 수 없는 안건은 사람이 고를 것이 없다.
+                continue
+            found.append(
+                StoredContradictionProposal(
+                    id=row.id,
+                    predicate=str(metadata.get("predicate") or ""),
+                    subject_key=str(metadata.get("subject_key") or ""),
+                    summary=row.summary,
+                    values=values,
+                )
+            )
+        return found
+
+    def record_contradiction_decision(
+        self,
+        *,
+        workspace_id: int,
+        proposal_id: uuid.UUID,
+        decision: Mapping[str, object],
+        supersede_targets: Sequence[tuple[uuid.UUID, Mapping[str, object]]],
+        reviewer: str,
+    ) -> None:
+        """모순 결정을 저널에 남기고 적용 명령을 후생성한다.
+
+        Raises:
+            MergeProposalAlreadyDecided: 계류 중인 모순 안건이 아니다.
+        """
+        row = self._session.scalar(
+            select(KnowledgeMutationProposalRow).where(
+                KnowledgeMutationProposalRow.workspace_id == workspace_id,
+                KnowledgeMutationProposalRow.id == proposal_id,
+                KnowledgeMutationProposalRow.proposal_kind
+                == "contradiction",
+                KnowledgeMutationProposalRow.status == "pending",
+            )
+        )
+        if row is None:
+            raise MergeProposalAlreadyDecided(str(proposal_id))
+
+        # 판정 근거를 남긴 채 결정만 더한다. 기존 키를 덮으면 무엇을
+        # 보고 정했는지가 사라진다.
+        metadata = dict(row.resolver_metadata or {})
+        metadata["decision"] = dict(decision)
+        row.resolver_metadata = metadata
+        row.status = "approved"
+        row.reviewer = reviewer
+        row.reviewed_at = func.now()
+
+        for sequence, (claim_id, data) in enumerate(
+            supersede_targets, start=1
+        ):
+            self._session.add(
+                KnowledgeMutationOperationRow(
+                    id=uuid.uuid4(),
+                    workspace_id=workspace_id,
+                    proposal_id=proposal_id,
+                    sequence=sequence,
+                    operation_type="supersede_claim",
+                    claim_candidate_id=claim_id,
+                    operation_data=dict(data),
+                )
+            )
+        self._session.flush()
 
     def find_approved_proposals_with_operations(
         self,

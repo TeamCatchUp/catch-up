@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Mapping
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -54,6 +55,45 @@ class StoredMergeProposal:
     summary: str
     resolver_metadata: Mapping[str, object]
     candidates: tuple[StoredMergeCandidate, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class StoredContradictionValue:
+    """모순 안건에 실린 값 후보 하나를 읽는 형태로 담는다.
+
+    Attributes:
+        claim_id: 이 값을 주장한 claim 후보를 가리킨다. 사람이 고르는
+            승자가 이 id다.
+        value: 주장된 원본 값을 보존한다.
+        normalized: 비교에 쓴 정규화 값을 보존한다.
+        statement: 주장을 사람이 읽는 문장으로 보존한다.
+        observed_at: 주장이 나온 원문을 관찰한 시각을 나타낸다.
+    """
+
+    claim_id: uuid.UUID
+    value: object
+    normalized: str | None
+    statement: str | None
+    observed_at: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class StoredContradictionProposal:
+    """검토 대기 중인 모순 안건 하나를 읽는 형태로 담는다.
+
+    Attributes:
+        id: proposal 행을 식별한다.
+        predicate: 어떤 속성에서 값이 갈렸는지 나타낸다.
+        subject_key: 어느 대상에 대한 모순인지 나타낸다.
+        summary: 판정기가 남긴 요약을 보존한다.
+        values: 갈린 값 후보들이다. 사람은 이 중 하나를 승자로 고른다.
+    """
+
+    id: uuid.UUID
+    predicate: str
+    subject_key: str
+    summary: str
+    values: tuple[StoredContradictionValue, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -203,6 +243,42 @@ class MutationProposalRepository(Protocol):
 
         Raises:
             MergeProposalAlreadyDecided: 계류 중인 병합 안건이 아니다.
+        """
+        ...
+
+    def list_pending_contradictions(
+        self,
+        *,
+        workspace_id: int,
+    ) -> list[StoredContradictionProposal]:
+        """검토 대기 중인 모순 안건을 값 후보와 함께 모은다.
+
+        사람이 "어느 값이 맞나"를 고르려면 값과 그 근거 문장, 관찰
+        시각이 함께 보여야 한다. 승자로 지정할 claim id도 여기서 나온다.
+        """
+        ...
+
+    def record_contradiction_decision(
+        self,
+        *,
+        workspace_id: int,
+        proposal_id: uuid.UUID,
+        decision: Mapping[str, object],
+        supersede_targets: Sequence[tuple[uuid.UUID, Mapping[str, object]]],
+        reviewer: str,
+    ) -> None:
+        """모순 결정을 저널에 남기고 적용 명령을 후생성한다.
+
+        결정 내용(승자·패자·닫을 시각)은 resolver_metadata의 decision
+        키에 병합한다. 안건 종류마다 결정의 형태가 달라 컬럼으로 두면
+        대부분이 비는 표가 되기 때문이다. 기존 키는 보존한다.
+
+        같은 transaction에서 패자마다 supersede_claim operation을
+        sequence 1..N으로 만든다. 결정이 명령을 만드는 유일한 자리이며,
+        그 뒤로 Applier는 저널만 소비한다.
+
+        Raises:
+            MergeProposalAlreadyDecided: 계류 중인 모순 안건이 아니다.
         """
         ...
 
