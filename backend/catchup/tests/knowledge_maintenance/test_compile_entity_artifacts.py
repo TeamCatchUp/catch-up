@@ -26,6 +26,7 @@ from catchup.knowledge_maintenance.domain.artifact import validate_blocks
 from catchup.knowledge_maintenance.domain.claim_conflict import StoredClaimCandidate
 from catchup.knowledge_maintenance.ports.artifacts import ArtifactProposalConflict
 from catchup.knowledge_maintenance.ports.artifacts import EntityCardSource
+from catchup.knowledge_maintenance.ports.artifacts import ProposalAlreadyDecided
 from catchup.knowledge_maintenance.ports.artifacts import StoredArtifactProposal
 from catchup.knowledge_maintenance.ports.mutation_proposals import StoredPendingProposal
 from catchup.knowledge_maintenance.services.compile_entity_artifacts import (
@@ -218,18 +219,31 @@ class FakeArtifactRepository:
         self.by_id[proposal_id] = row
         return proposal_id
 
+    def _pending_row(self, proposal_id: uuid.UUID) -> dict:
+        """계류 중인 행만 내준다.
+
+        실 저장소는 `status = 'pending'`을 UPDATE 조건에 두어 이미 결정된
+        행에는 결정을 싣지 않는다. fake가 덮어쓰면 그 규칙이 사라진다.
+        """
+        row = self.by_id.get(proposal_id)
+        if row is None or row["status"] != "pending":
+            raise ProposalAlreadyDecided(
+                f"변경안 {proposal_id}는 계류 중이 아니다"
+            )
+        return row
+
     def mark_rejected(
         self, *, proposal_id: uuid.UUID, reviewer: str, reason: str
     ) -> None:
         if not reason:
             raise ValueError("반려에는 사유가 필요하다.")
-        row = self.by_id[proposal_id]
+        row = self._pending_row(proposal_id)
         row["status"] = "rejected"
         row["rejection_reason"] = reason
         row["reviewer"] = reviewer
 
     def mark_approved(self, *, proposal_id: uuid.UUID, reviewer: str) -> None:
-        row = self.by_id[proposal_id]
+        row = self._pending_row(proposal_id)
         row["status"] = "approved"
         row["reviewer"] = reviewer
 

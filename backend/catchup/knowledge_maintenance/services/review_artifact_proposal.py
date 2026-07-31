@@ -25,6 +25,7 @@ from typing import Self
 from sqlalchemy.exc import IntegrityError
 
 from catchup.knowledge_maintenance.ports.artifacts import ArtifactRepository
+from catchup.knowledge_maintenance.ports.artifacts import ProposalAlreadyDecided
 from catchup.observability.logging import get_logger
 
 logger = get_logger(__name__)
@@ -47,6 +48,9 @@ class ProposalReviewError(Exception):
     동시 승인이 판 번호에서 부딪혀 저장소가 IntegrityError를 던지는 것도
     여기에 포함한다. 그것도 결국 "이 결정은 지금 확정할 수 없다"는 같은
     말이므로, 호출자가 저장 계층 예외까지 따로 잡게 두지 않는다.
+
+    두 검토가 같은 변경안을 두고 부딪혀 저장소가 ProposalAlreadyDecided를
+    던지는 것도 마찬가지다.
     """
 
 
@@ -118,12 +122,20 @@ def review_artifact_proposal(
         if verdict == VERDICT_REJECTED:
             if reason is None or not reason.strip():
                 raise ProposalReviewError("반려는 사유가 있어야 한다")
-            uow.artifacts.mark_rejected(
-                proposal_id=proposal_id,
-                reviewer=reviewer,
-                reason=reason,
-            )
-            uow.commit()
+            try:
+                uow.artifacts.mark_rejected(
+                    proposal_id=proposal_id,
+                    reviewer=reviewer,
+                    reason=reason,
+                )
+                uow.commit()
+            except ProposalAlreadyDecided as error:
+                # 위의 계류 검사는 잠금 없는 읽기라, 그 사이에 다른 검토가
+                # 결정을 확정했을 수 있다. 저장소가 그것을 잡아 주므로
+                # 이 서비스의 거부 하나로 옮겨 담는다.
+                raise ProposalReviewError(
+                    f"변경안 {proposal_id}를 다른 검토가 먼저 결정했다"
+                ) from error
             logger.info(
                 "artifact_proposal_rejected",
                 proposal_id=str(proposal_id),
@@ -161,6 +173,13 @@ def review_artifact_proposal(
                 reviewer=reviewer,
             )
             uow.commit()
+        except ProposalAlreadyDecided as error:
+            # 다른 검토가 먼저 결정을 확정했다. with 블록을 예외로 빠져
+            # 나가면 같은 transaction에서 쌓던 판까지 함께 되감기므로,
+            # 반려된 변경안을 가리키는 판이 남지 않는다.
+            raise ProposalReviewError(
+                f"변경안 {proposal_id}를 다른 검토가 먼저 결정했다"
+            ) from error
         except IntegrityError as error:
             # 최신 판을 읽은 뒤 쓰기까지 사이에 다른 승인이 같은 번호를
             # 선점하면 UNIQUE가 막는다. 서비스의 낡음 검사로는 이 race를

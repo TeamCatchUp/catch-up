@@ -100,6 +100,7 @@ from catchup.knowledge_maintenance.domain.source_version import SourceIdentity
 from catchup.knowledge_maintenance.domain.source_version import SourceVersion
 from catchup.knowledge_maintenance.ports.artifacts import ArtifactProposalConflict
 from catchup.knowledge_maintenance.ports.artifacts import EntityCardSource
+from catchup.knowledge_maintenance.ports.artifacts import ProposalAlreadyDecided
 from catchup.knowledge_maintenance.ports.artifacts import StoredArtifactProposal
 from catchup.knowledge_maintenance.ports.mutation_proposals import StoredPendingProposal
 from catchup.knowledge_maintenance.ports.ontology import OntologySnapshotConflict
@@ -1441,21 +1442,19 @@ class SqlAlchemyArtifactRepository:
         )
 
     def mark_approved(self, *, proposal_id: uuid.UUID, reviewer: str) -> None:
-        """변경안을 승인으로 끝맺는다."""
-        self._session.execute(
-            update(KnowledgeArtifactChangeProposalRow)
-            .where(
-                KnowledgeArtifactChangeProposalRow.workspace_id
-                == self._workspace_id,
-                KnowledgeArtifactChangeProposalRow.id == proposal_id,
-            )
-            .values(
-                status="approved",
-                reviewer=reviewer,
-                reviewed_at=func.now(),
-            )
+        """아직 계류 중인 변경안을 승인으로 끝맺는다.
+
+        Raises:
+            ProposalAlreadyDecided: 바꿀 계류 행이 없을 때 던진다.
+        """
+        self._decide(
+            proposal_id=proposal_id,
+            values={
+                "status": "approved",
+                "reviewer": reviewer,
+                "reviewed_at": func.now(),
+            },
         )
-        self._session.flush()
 
     def mark_rejected(
         self,
@@ -1464,25 +1463,59 @@ class SqlAlchemyArtifactRepository:
         reviewer: str,
         reason: str,
     ) -> None:
-        """변경안을 사유와 함께 반려로 끝맺는다.
+        """아직 계류 중인 변경안을 사유와 함께 반려로 끝맺는다.
 
         사유는 DB CHECK가 요구한다. 이유 없는 반려는 다음 사람이 같은
         변경안을 다시 올리게 만들기 때문이다.
+
+        Raises:
+            ProposalAlreadyDecided: 바꿀 계류 행이 없을 때 던진다.
         """
-        self._session.execute(
+        self._decide(
+            proposal_id=proposal_id,
+            values={
+                "status": "rejected",
+                "rejection_reason": reason,
+                "reviewer": reviewer,
+                "reviewed_at": func.now(),
+            },
+        )
+
+    def _decide(
+        self,
+        *,
+        proposal_id: uuid.UUID,
+        values: Mapping[str, object],
+    ) -> None:
+        """계류 중인 변경안에만 결정을 싣는다.
+
+        `status = 'pending'`을 UPDATE 조건에 둔다. 이것이 낙관적 전이다.
+        결정을 쓰는 쪽이 행을 다시 읽으며 조건을 맞춰 보므로, 두 검토가
+        같은 계류 행을 읽었더라도 먼저 커밋한 쪽만 조건에 걸린다. 미리
+        잠그지 않는 대신 진 쪽이 바꾼 행 수 0으로 자기가 졌음을 안다.
+
+        바꾼 행이 정확히 하나가 아니면 던진다. 0이면 남이 먼저 결정했거나
+        없는 변경안이고, 둘 이상은 있을 수 없는 일이라 조용히 넘기면
+        결정이 겹쳐 쓰인 채로 커밋된다.
+
+        Raises:
+            ProposalAlreadyDecided: 바꾼 계류 행이 하나가 아닐 때 던진다.
+        """
+        result = self._session.execute(
             update(KnowledgeArtifactChangeProposalRow)
             .where(
                 KnowledgeArtifactChangeProposalRow.workspace_id
                 == self._workspace_id,
                 KnowledgeArtifactChangeProposalRow.id == proposal_id,
+                KnowledgeArtifactChangeProposalRow.status == "pending",
             )
-            .values(
-                status="rejected",
-                rejection_reason=reason,
-                reviewer=reviewer,
-                reviewed_at=func.now(),
-            )
+            .values(**values)
         )
+        if result.rowcount != 1:
+            raise ProposalAlreadyDecided(
+                f"변경안 {proposal_id}는 계류 중이 아니라 결정을 실을 수"
+                f" 없다. 바꾼 행 {result.rowcount}개."
+            )
         self._session.flush()
 
     def add_revision(

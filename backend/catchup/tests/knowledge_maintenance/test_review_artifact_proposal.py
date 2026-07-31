@@ -16,6 +16,7 @@ from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_CLAIM_SECTI
 from catchup.knowledge_maintenance.domain.artifact import ArtifactBlock
 from catchup.knowledge_maintenance.domain.artifact import deserialize_blocks
 from catchup.knowledge_maintenance.domain.artifact import serialize_blocks
+from catchup.knowledge_maintenance.ports.artifacts import ProposalAlreadyDecided
 from catchup.knowledge_maintenance.ports.artifacts import StoredArtifactProposal
 from catchup.knowledge_maintenance.services.review_artifact_proposal import (
     ProposalReviewError,
@@ -50,6 +51,10 @@ class FakeArtifactRepository:
     `status <> 'rejected' OR rejection_reason IS NOT NULL` CHECK과
     `(artifact_id, revision_number)` UNIQUE를 그대로 재현한다. 조용히
     통과시키면 서비스가 규칙을 어겨도 테스트가 초록으로 남는다.
+
+    결정 쓰기가 계류 행에만 걸리는 낙관적 전이도 재현한다. 실 저장소는
+    `status = 'pending'`을 UPDATE 조건에 두고 바뀐 행이 없으면 던지는데,
+    덮어쓰는 fake는 결정이 겹쳐 쓰이는 것을 그대로 통과시킨다.
     """
 
     def __init__(self) -> None:
@@ -146,13 +151,22 @@ class FakeArtifactRepository:
         )
         return deserialize_blocks(row["blocks"])
 
+    def _pending_row(self, proposal_id: uuid.UUID) -> dict[str, Any]:
+        """계류 중인 행만 내준다. 아니면 실 저장소처럼 던진다."""
+        row = self.proposals.get(proposal_id)
+        if row is None or row["status"] != "pending":
+            raise ProposalAlreadyDecided(
+                f"변경안 {proposal_id}는 계류 중이 아니다"
+            )
+        return row
+
     def mark_approved(
         self,
         *,
         proposal_id: uuid.UUID,
         reviewer: str,
     ) -> None:
-        row = self.proposals[proposal_id]
+        row = self._pending_row(proposal_id)
         row["status"] = "approved"
         row["reviewer"] = reviewer
 
@@ -165,7 +179,7 @@ class FakeArtifactRepository:
     ) -> None:
         if reason is None:
             raise ValueError("반려는 사유가 있어야 한다")
-        row = self.proposals[proposal_id]
+        row = self._pending_row(proposal_id)
         row["status"] = "rejected"
         row["reviewer"] = reviewer
         row["rejection_reason"] = reason
@@ -409,6 +423,37 @@ def test_already_decided_proposal_cannot_be_reviewed(status: str) -> None:
     assert uow.artifacts.revisions == []
     assert uow.artifacts.proposals[proposal_id]["status"] == status
     assert uow.committed is False
+
+
+@pytest.mark.parametrize("status", ["approved", "rejected", "abandoned"])
+def test_marking_decided_proposal_is_refused_by_repository(
+    status: str,
+) -> None:
+    """이미 결정된 행에는 저장소가 결정을 싣지 않는다.
+
+    서비스의 계류 검사를 거치지 않고 저장소를 직접 부른다. 그 검사는
+    잠금 없는 읽기라 두 검토가 나란히 통과할 수 있으므로, 마지막 방어는
+    쓰기 자체에 있어야 한다.
+    """
+    repository = FakeArtifactRepository()
+    proposal_id = repository.add_proposal(
+        artifact_id=uuid.uuid4(),
+        blocks=_blocks("2026-09"),
+        base_revision_id=None,
+        status=status,
+    )
+
+    with pytest.raises(ProposalAlreadyDecided):
+        repository.mark_approved(proposal_id=proposal_id, reviewer=REVIEWER)
+    with pytest.raises(ProposalAlreadyDecided):
+        repository.mark_rejected(
+            proposal_id=proposal_id,
+            reviewer=REVIEWER,
+            reason="근거가 부족하다",
+        )
+
+    assert repository.proposals[proposal_id]["status"] == status
+    assert repository.proposals[proposal_id]["reviewer"] is None
 
 
 def test_unknown_proposal_is_refused() -> None:

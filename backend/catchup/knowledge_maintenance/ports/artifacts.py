@@ -12,6 +12,15 @@ class ArtifactProposalConflict(Exception):
     """이미 결정된 변경안이 같은 멱등 키를 쓰고 있음을 알린다."""
 
 
+class ProposalAlreadyDecided(Exception):
+    """결정을 쓰려던 변경안이 이미 결정된 상태였음을 알린다.
+
+    `ArtifactProposalConflict`와 다른 일이다. 그쪽은 새 변경안이 남의
+    멱등 키를 밟는 일이고, 이쪽은 두 검토자의 결정이 같은 행을 두고
+    부딪히는 일이다. 하나로 합치면 호출자가 둘을 가려 다룰 수 없다.
+    """
+
+
 @dataclass(frozen=True, slots=True)
 class StoredArtifactProposal:
     """저장된 문서 변경안 한 건을 검토자가 볼 수 있는 형태로 담는다.
@@ -144,7 +153,16 @@ class ArtifactRepository(Protocol):
         ...
 
     def mark_approved(self, *, proposal_id: uuid.UUID, reviewer: str) -> None:
-        """변경안을 승인으로 끝맺는다."""
+        """아직 계류 중인 변경안을 승인으로 끝맺는다.
+
+        계류 중인 행만 바꾼다. 두 검토자가 같은 변경안을 동시에 열면
+        둘 다 계류로 읽으므로, 상태 검사만으로는 나중 쓰기가 먼저
+        확정된 결정을 덮는다. 그 전이를 쓰기 자체의 조건으로 옮겨
+        한 행에 결정이 한 번만 실리게 한다.
+
+        Raises:
+            ProposalAlreadyDecided: 바꿀 계류 행이 없을 때 던진다.
+        """
         ...
 
     def mark_rejected(
@@ -154,7 +172,13 @@ class ArtifactRepository(Protocol):
         reviewer: str,
         reason: str,
     ) -> None:
-        """변경안을 사유와 함께 반려로 끝맺는다."""
+        """아직 계류 중인 변경안을 사유와 함께 반려로 끝맺는다.
+
+        `mark_approved`와 같이 계류 중인 행만 바꾼다.
+
+        Raises:
+            ProposalAlreadyDecided: 바꿀 계류 행이 없을 때 던진다.
+        """
         ...
 
     def add_revision(

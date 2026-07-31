@@ -4,6 +4,10 @@
 둘을 같은 dict에 담아 두므로 경계가 하나인지 아닌지가 드러나지 않는다.
 실 DB에 넣어 커밋 뒤 두 쓰기가 함께 보이는지, 중간에 터지면 앞선 쓰기까지
 되감기는지, 판 번호를 선점당하면 서비스의 거부로 바뀌는지 본다.
+
+두 검토가 같은 변경안을 두고 부딪히는 경합도 여기서 본다. 서비스의 계류
+검사는 잠금 없는 읽기라 둘 다 통과하므로, 나중 쓰기가 먼저 확정된 결정을
+덮지 않는지는 실 transaction 둘을 붙여야만 드러난다.
 """
 
 from __future__ import annotations
@@ -15,6 +19,7 @@ from collections.abc import Iterator
 import pytest
 from sqlalchemy import Engine
 from sqlalchemy import create_engine
+from sqlalchemy import delete
 from sqlalchemy import inspect
 from sqlalchemy import select
 from sqlalchemy import text
@@ -105,6 +110,60 @@ def uow_factory(
     )
 
 
+@pytest.fixture
+def committed_artifacts() -> list[uuid.UUID]:
+    """실 커밋으로 만든 문서의 식별자를 모은다. 뒤처리 대상이다."""
+    return []
+
+
+@pytest.fixture
+def committed_uow_factory(
+    engine: Engine,
+    workspace_id: int,
+    committed_artifacts: list[uuid.UUID],
+) -> Iterator[Callable[[], KnowledgeMaintenanceUnitOfWork]]:
+    """정말로 커밋하는 UnitOfWork를 낸다. UoW마다 다른 연결을 쓴다.
+
+    다른 테스트가 쓰는 `session_factory`는 한 연결 위의 savepoint라 여러
+    세션이 사실은 같은 transaction이다. 결정 경합은 두 transaction이 각각
+    커밋해야만 생기므로 여기서는 engine에 직접 물린다. 되감기로 지워지지
+    않으니 만든 행은 끝나고 손으로 지운다.
+    """
+    session_factory = sessionmaker(bind=engine, expire_on_commit=False)
+
+    yield lambda: KnowledgeMaintenanceUnitOfWork(
+        session_factory, workspace_id=workspace_id
+    )
+
+    with session_factory() as session:
+        for artifact_id in committed_artifacts:
+            node_id = session.scalar(
+                select(KnowledgeArtifact.subject_node_id).where(
+                    KnowledgeArtifact.id == artifact_id
+                )
+            )
+            session.execute(
+                delete(RevisionRow).where(
+                    RevisionRow.artifact_id == artifact_id
+                )
+            )
+            session.execute(
+                delete(ProposalRow).where(
+                    ProposalRow.artifact_id == artifact_id
+                )
+            )
+            session.execute(
+                delete(KnowledgeArtifact).where(
+                    KnowledgeArtifact.id == artifact_id
+                )
+            )
+            if node_id is not None:
+                session.execute(
+                    delete(NodeRow).where(NodeRow.id == node_id)
+                )
+        session.commit()
+
+
 def _blocks(body: str) -> tuple[ArtifactBlock, ...]:
     """근거를 갖춘 블록 한 벌을 만든다."""
     return (
@@ -163,6 +222,153 @@ def _add(
         idempotency_key=artifact_idempotency_key(artifact_id, content_hash),
         base_revision_id=base_revision_id,
     )
+
+
+def _committed_proposal(
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+    workspace_id: int,
+    committed_artifacts: list[uuid.UUID],
+) -> uuid.UUID:
+    """정말로 커밋된 계류 변경안 하나를 새 문서 위에 마련한다."""
+    with uow_factory() as uow:
+        node = uow.knowledge_nodes.create_entity_node(
+            workspace_id=workspace_id,
+            entity_type="feature",
+            canonical_key=f"test:feature:{uuid.uuid4().hex}",
+            display_name="결제 기능",
+        )
+        artifact_id = uow.artifacts.get_or_create_artifact(
+            kind=ARTIFACT_KIND,
+            subject_node_id=node.id,
+            title="결제 기능",
+        )
+        proposal_id = _add(uow, artifact_id, _blocks("2026-09"))
+        uow.commit()
+    committed_artifacts.append(artifact_id)
+    return proposal_id
+
+
+def _let_rival_decide_after_read(
+    monkeypatch: pytest.MonkeyPatch,
+    rival: Callable[[], None],
+) -> None:
+    """계류 검사와 결정 쓰기 사이에 다른 검토를 끼워 넣는다.
+
+    서비스는 변경안을 읽어 계류인지 보고 나서 결정을 쓴다. 그 읽기가
+    끝난 직후에 다른 transaction이 결정을 확정하고 커밋하게 만들면,
+    잠금 없는 검사를 통과한 쪽이 남의 결정을 덮으려 드는 순간이 그대로
+    재현된다. 시간에 기대지 않으므로 실행마다 같은 순서가 나온다.
+
+    끼워 넣기는 한 번만 한다. 다른 검토도 같은 서비스를 지나가므로
+    막지 않으면 끝없이 스스로를 부른다.
+    """
+    original = SqlAlchemyArtifactRepository.get_proposal
+    fired = False
+
+    def _read_then_yield(self, *, proposal_id: uuid.UUID):
+        nonlocal fired
+        found = original(self, proposal_id=proposal_id)
+        if not fired:
+            fired = True
+            rival()
+        return found
+
+    monkeypatch.setattr(
+        SqlAlchemyArtifactRepository, "get_proposal", _read_then_yield
+    )
+
+
+def test_reject_committed_first_beats_late_approval(
+    workspace_id: int,
+    committed_artifacts: list[uuid.UUID],
+    committed_uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """먼저 커밋된 반려를 뒤늦은 승인이 덮지 못한다.
+
+    덮으면 반려된 변경안을 가리키는 판이 남는다. 감사 기록으로 읽으면
+    "반려됐는데 문서에 실렸다"는 모순이라 조용히 넘길 수 없다.
+    """
+    proposal_id = _committed_proposal(
+        committed_uow_factory, workspace_id, committed_artifacts
+    )
+
+    def _rival() -> None:
+        review_artifact_proposal(
+            committed_uow_factory(),
+            proposal_id=proposal_id,
+            verdict="rejected",
+            reviewer="first",
+            reason="근거가 부족하다",
+        )
+
+    _let_rival_decide_after_read(monkeypatch, _rival)
+
+    with pytest.raises(ProposalReviewError):
+        review_artifact_proposal(
+            committed_uow_factory(),
+            proposal_id=proposal_id,
+            verdict="approved",
+            reviewer="second",
+        )
+
+    with committed_uow_factory() as uow:
+        proposal = uow.artifacts.get_proposal(proposal_id=proposal_id)
+        assert proposal is not None
+        assert proposal.status == "rejected"
+        assert proposal.rejection_reason == "근거가 부족하다"
+        # 진 승인이 쌓던 판까지 함께 되감겨야 상태와 판이 어긋나지 않는다.
+        assert (
+            uow.artifacts.find_latest_revision_id_and_number(
+                artifact_id=committed_artifacts[-1]
+            )
+            is None
+        )
+
+
+def test_approve_committed_first_beats_late_rejection(
+    workspace_id: int,
+    committed_artifacts: list[uuid.UUID],
+    committed_uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """먼저 커밋된 승인을 뒤늦은 반려가 덮지 못한다.
+
+    덮으면 반려로 적힌 변경안이 이미 발행된 판의 출처로 남는다.
+    """
+    proposal_id = _committed_proposal(
+        committed_uow_factory, workspace_id, committed_artifacts
+    )
+
+    def _rival() -> None:
+        review_artifact_proposal(
+            committed_uow_factory(),
+            proposal_id=proposal_id,
+            verdict="approved",
+            reviewer="first",
+        )
+
+    _let_rival_decide_after_read(monkeypatch, _rival)
+
+    with pytest.raises(ProposalReviewError):
+        review_artifact_proposal(
+            committed_uow_factory(),
+            proposal_id=proposal_id,
+            verdict="rejected",
+            reviewer="second",
+            reason="근거가 부족하다",
+        )
+
+    with committed_uow_factory() as uow:
+        proposal = uow.artifacts.get_proposal(proposal_id=proposal_id)
+        assert proposal is not None
+        assert proposal.status == "approved"
+        assert proposal.rejection_reason is None
+        latest = uow.artifacts.find_latest_revision_id_and_number(
+            artifact_id=committed_artifacts[-1]
+        )
+        assert latest is not None
+        assert latest[1] == 1
 
 
 def test_approve_commits_revision_and_status_together(
