@@ -2,81 +2,110 @@
 
 import { usePathname, useRouter } from 'next/navigation';
 
-import ArticlePerson from '@/public/icons/icon/article_person.svg';
-import Clock from '@/public/icons/icon/clock.svg';
-import CloudCheck from '@/public/icons/icon/cloud_check.svg';
-import Database from '@/public/icons/icon/database.svg';
-import Filter2 from '@/public/icons/icon/filter-2.svg';
-import Group from '@/public/icons/icon/group.svg';
-import Help from '@/public/icons/icon/help.svg';
-import Lock from '@/public/icons/icon/lock.svg';
-import Person from '@/public/icons/icon/person.svg';
-import Shield from '@/public/icons/icon/shield.svg';
+import IconArrowBack from '@/public/icons/icon/arrow_back.svg';
+import IconArticlePerson from '@/public/icons/icon/article_person.svg';
+import IconBuilding from '@/public/icons/icon/building.svg';
+import IconClock from '@/public/icons/icon/clock.svg';
+import IconFilter2 from '@/public/icons/icon/filter-2.svg';
+import IconGraphOutline from '@/public/icons/icon/graph_outline.svg';
+import IconGroup from '@/public/icons/icon/group.svg';
+import IconHelp from '@/public/icons/icon/help.svg';
+import IconHistory from '@/public/icons/icon/history.svg';
+import IconLink from '@/public/icons/icon/link.svg';
+import IconLock from '@/public/icons/icon/lock.svg';
+import IconPerson from '@/public/icons/icon/person.svg';
+import IconPlugin from '@/public/icons/icon/plugin.svg';
 import type { UserRole } from '@/shared/queries/auth.types';
 import { useSidebarStore } from '@/shared/store/sidebarStore';
 import { useUserStore } from '@/shared/store/userStore';
-import { cn } from '@/shared/utils/cn';
+
+import SettingsNavGroup, { type SettingsNavGroupChild } from './SettingsNavGroup';
+import SnbMenuItem from './SnbMenuItem';
 
 interface SettingsMenuItem {
+  kind: 'item';
   name: string;
   href: string;
   Icon: React.ComponentType<React.SVGProps<SVGSVGElement>>;
 }
 
+interface SettingsMenuGroup {
+  kind: 'group';
+  name: string;
+  Icon: React.ComponentType<React.SVGProps<SVGSVGElement>>;
+  items: SettingsNavGroupChild[];
+}
+
+type SettingsEntry = SettingsMenuItem | SettingsMenuGroup;
+
 interface SettingsSection {
   label: string;
-  items: SettingsMenuItem[];
+  entries: SettingsEntry[];
 }
 
 /**
- * 사용자 권한별 설정 패널 섹션과 메뉴를 정의
+ * 사용자 권한별 설정 패널 섹션과 메뉴.
+ * Figma 마스터 `Settings SNB`(5181:83143 루트어드민 / 5851:72323 팀원) 기준이다.
+ * Catch Up MCP는 라우트가 없어 제외했다 — 준비되면 여기에 한 줄 추가한다.
  */
 const SETTINGS_SECTIONS_BY_ROLE: Record<UserRole, SettingsSection[]> = {
   user: [
     {
       label: '내 설정',
-      items: [
-        { name: '계정', href: '/mypage/profile', Icon: Person },
-        { name: '개인 맞춤 설정', href: '/mypage/preferences', Icon: Filter2 },
-        { name: '질문 히스토리', href: '/mypage/history', Icon: Clock },
-        { name: '토큰 사용량', href: '/mypage/token-usage', Icon: Database },
-        { name: '도움말', href: '/mypage/help', Icon: Help },
+      entries: [
+        { kind: 'item', name: '계정', href: '/mypage/profile', Icon: IconPerson },
+        { kind: 'item', name: '개인 맞춤 설정', href: '/mypage/preferences', Icon: IconFilter2 },
+        { kind: 'item', name: '채팅 히스토리', href: '/mypage/history', Icon: IconClock },
+        { kind: 'item', name: '토큰 사용량 관리', href: '/mypage/token-usage', Icon: IconGraphOutline },
       ],
+    },
+    {
+      label: '지원',
+      entries: [{ kind: 'item', name: '도움말', href: '/mypage/help', Icon: IconHelp }],
     },
   ],
   admin: [
     {
       label: '내 설정',
-      items: [
-        { name: '계정', href: '/mypage/profile', Icon: Person },
-        { name: '협업툴 연동', href: '/admin/integrations', Icon: CloudCheck },
-        { name: '개인 맞춤 설정', href: '/mypage/preferences', Icon: Filter2 },
-        { name: '질문 히스토리', href: '/mypage/history', Icon: Clock },
+      entries: [
+        { kind: 'item', name: '계정', href: '/mypage/profile', Icon: IconPerson },
+        { kind: 'item', name: '개인 맞춤 설정', href: '/mypage/preferences', Icon: IconFilter2 },
+        { kind: 'item', name: '채팅 히스토리', href: '/mypage/history', Icon: IconHistory },
       ],
     },
     {
       label: '조직 관리',
-      items: [
-        { name: '이용자 관리', href: '/admin/members', Icon: Group },
-        { name: '이용자 질문 기록', href: '/admin/question-logs', Icon: ArticlePerson },
-        { name: '감사 로그', href: '/admin/audit-logs', Icon: Shield },
-        { name: '토큰 사용량 관리', href: '/admin/token-usage', Icon: Database },
+      entries: [
+        {
+          kind: 'group',
+          name: '조직 협업툴 연동',
+          Icon: IconBuilding,
+          items: [
+            { name: '커넥터 연결', href: '/admin/connectors', Icon: IconPlugin },
+            { name: '이용자 매핑', href: '/admin/user-mapping', Icon: IconLink },
+          ],
+        },
+        {
+          kind: 'group',
+          name: '멤버 관리',
+          Icon: IconGroup,
+          items: [
+            { name: '멤버 정보', href: '/admin/members', Icon: IconPlugin },
+            { name: '멤버 질문 기록', href: '/admin/question-logs', Icon: IconArticlePerson },
+          ],
+        },
+        { kind: 'item', name: '토큰 사용량 관리', href: '/admin/token-usage', Icon: IconGraphOutline },
+        { kind: 'item', name: '권한 관리', href: '/admin/permissions', Icon: IconLock },
       ],
     },
     {
-      label: '권한 관리',
-      items: [{ name: '권한 정보', href: '/admin/permissions', Icon: Lock }],
-    },
-    {
       label: '지원',
-      items: [{ name: '도움말', href: '/mypage/help', Icon: Help }],
+      entries: [{ kind: 'item', name: '도움말', href: '/mypage/help', Icon: IconHelp }],
     },
   ],
 };
 
-/**
- * 좌측 설정 패널 렌더링 및 메뉴 라우팅을 처리
- */
+/** 좌측 설정 패널 렌더링 및 메뉴 라우팅 */
 export default function SettingsPanel() {
   const pathname = usePathname();
   const router = useRouter();
@@ -84,43 +113,49 @@ export default function SettingsPanel() {
   const role: UserRole = userRole === 'admin' ? 'admin' : 'user';
   const { setActivePanel } = useSidebarStore();
 
+  const isActive = (href: string) => pathname === href || pathname.startsWith(href + '/');
+
   const handleClick = (href: string) => {
     setActivePanel('settings');
     router.push(href);
   };
 
   return (
-    <div className="border-line-normal-neutral bg-fill-normal-normal flex h-screen w-60 shrink-0 flex-col gap-5 border-r px-2 py-5">
+    <div className="border-line-normal-neutral bg-fill-normal-normal flex h-screen w-60 shrink-0 flex-col gap-5 border-r px-2 py-3">
+      <SnbMenuItem
+        Icon={IconArrowBack}
+        label="메인으로 가기"
+        onClick={() => router.push('/')}
+        className="border-line-normal-neutral shadow-card h-12 border"
+      />
+
       {SETTINGS_SECTIONS_BY_ROLE[role].map((section) => (
         <div key={section.label} className="flex flex-col gap-1.5">
           <div className="px-2.5">
             <span className="text-body-xsmall text-text-normal-alternative font-medium">{section.label}</span>
           </div>
-          <div className="flex flex-col gap-0">
-            {section.items.map((item) => {
-              const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
-
-              return (
-                <button
-                  key={item.href}
-                  onClick={() => handleClick(item.href)}
-                  className={cn(
-                    'flex h-9 w-full cursor-pointer items-center gap-3 rounded-lg px-2.5 py-1.5 transition-colors',
-                    isActive
-                      ? 'bg-fill-primary-normal-neutral text-text-primary-normal'
-                      : 'text-text-normal-normal hover:bg-fill-normal-interaction-hover',
-                  )}
-                >
-                  <item.Icon
-                    className={cn(
-                      'h-6 w-6 shrink-0',
-                      isActive ? 'text-icon-primary-normal' : 'text-icon-normal-normal',
-                    )}
-                  />
-                  <span className="text-body-small">{item.name}</span>
-                </button>
-              );
-            })}
+          <div className="flex flex-col">
+            {section.entries.map((entry) =>
+              entry.kind === 'group' ? (
+                <SettingsNavGroup
+                  key={entry.name}
+                  label={entry.name}
+                  Icon={entry.Icon}
+                  items={entry.items}
+                  activeHref={entry.items.find((item) => isActive(item.href))?.href ?? null}
+                  onSelect={handleClick}
+                  defaultExpanded={entry.items.some((item) => isActive(item.href))}
+                />
+              ) : (
+                <SnbMenuItem
+                  key={entry.href}
+                  Icon={entry.Icon}
+                  label={entry.name}
+                  selected={isActive(entry.href)}
+                  onClick={() => handleClick(entry.href)}
+                />
+              ),
+            )}
           </div>
         </div>
       ))}
