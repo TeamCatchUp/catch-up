@@ -157,8 +157,19 @@ def blocks_content_hash(blocks: Sequence[ArtifactBlock]) -> str:
 
 
 def artifact_idempotency_key(
-    artifact_id: uuid.UUID, content_hash: str
+    artifact_id: uuid.UUID,
+    content_hash: str,
+    *,
+    base_revision_id: uuid.UUID | None,
 ) -> str:
-    """문서와 내용 지문으로 멱등 키를 만든다."""
-    raw = f"artifact:{artifact_id}:{content_hash}"
+    """문서·기준 판·내용 지문으로 검토 사건의 멱등 키를 만든다.
+
+    기준 판을 키에 넣는 이유는 같은 내용이라도 다른 판 위에서의
+    제안은 다른 검토 사건이기 때문이다. 내용이 승인된 옛 판으로
+    되돌아와도 새 판을 기준으로 다시 검토 큐에 올라야 하고, 기준
+    판이 같은 재실행만 멱등으로 접힌다. 첫 제안은 기준 판이 없으니
+    root로 적는다.
+    """
+    base = "root" if base_revision_id is None else str(base_revision_id)
+    raw = f"artifact:{artifact_id}:{base}:{content_hash}"
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()

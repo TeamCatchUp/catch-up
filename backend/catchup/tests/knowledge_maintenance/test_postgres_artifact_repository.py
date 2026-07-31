@@ -261,7 +261,9 @@ def _add(
         artifact_id=artifact_id,
         blocks=blocks,
         content_hash=content_hash,
-        idempotency_key=artifact_idempotency_key(artifact_id, content_hash),
+        idempotency_key=artifact_idempotency_key(
+            artifact_id, content_hash, base_revision_id=base_revision_id
+        ),
         base_revision_id=base_revision_id,
     )
     return proposal_id, content_hash
@@ -386,7 +388,9 @@ def test_add_or_revive_proposal_revives_abandoned_row(
             artifact_id=artifact_id,
             blocks=revived_blocks,
             content_hash=content_hash,
-            idempotency_key=artifact_idempotency_key(artifact_id, content_hash),
+            idempotency_key=artifact_idempotency_key(
+                artifact_id, content_hash, base_revision_id=None
+            ),
             base_revision_id=None,
         )
         uow.commit()
@@ -416,7 +420,9 @@ def test_add_or_revive_proposal_never_reopens_decided_rows(
     artifact_id = _artifact_id(uow_factory, session_factory, workspace_id)
     blocks = _blocks("첫 판")
     content_hash = blocks_content_hash(blocks)
-    key = artifact_idempotency_key(artifact_id, content_hash)
+    key = artifact_idempotency_key(
+        artifact_id, content_hash, base_revision_id=None
+    )
 
     with uow_factory() as uow:
         approved_id, _ = _add(uow, artifact_id, blocks)
@@ -465,7 +471,7 @@ def test_add_or_revive_proposal_never_reopens_decided_rows(
                 blocks=rejected_blocks,
                 content_hash=rejected_hash,
                 idempotency_key=artifact_idempotency_key(
-                    artifact_id, rejected_hash
+                    artifact_id, rejected_hash, base_revision_id=None
                 ),
                 base_revision_id=None,
             )
@@ -503,7 +509,7 @@ def test_add_or_revive_proposal_refuses_unsupported_blocks(
                 blocks=blocks,
                 content_hash=content_hash,
                 idempotency_key=artifact_idempotency_key(
-                    artifact_id, content_hash
+                    artifact_id, content_hash, base_revision_id=None
                 ),
                 base_revision_id=None,
             )

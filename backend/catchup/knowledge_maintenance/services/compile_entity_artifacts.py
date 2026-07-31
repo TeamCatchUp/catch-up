@@ -181,20 +181,24 @@ def compile_entity_artifacts(
             latest = uow.artifacts.find_latest_revision_id_and_number(
                 artifact_id=artifact_id,
             )
+            base_revision_id = None if latest is None else latest[0]
             try:
                 proposal_id = uow.artifacts.add_or_revive_proposal(
                     artifact_id=artifact_id,
                     blocks=blocks,
                     content_hash=content_hash,
                     idempotency_key=artifact_idempotency_key(
-                        artifact_id, content_hash
+                        artifact_id,
+                        content_hash,
+                        base_revision_id=base_revision_id,
                     ),
-                    base_revision_id=None if latest is None else latest[0],
+                    base_revision_id=base_revision_id,
                 )
             except ArtifactProposalConflict:
-                # 사람이 이미 결정한 행이 같은 키를 쓰고 있다. 이 노드만
-                # 건너뛰고 나머지 노드의 작업은 그대로 커밋한다. 바로 위에서
-                # 접은 계류는 되돌리지 않는다. 그 내용은 이미 낡았다.
+                # 키에 기준 판이 들어가므로 정상 흐름에서는 결정된 행과
+                # 부딪히지 않는다. 그래도 부딪히면 데이터 이상 신호이므로
+                # 이 노드만 건너뛰고 나머지 노드의 작업은 그대로 커밋한다.
+                # 바로 위에서 접은 계류는 되돌리지 않는다.
                 conflicted += 1
                 logger.warning(
                     "artifact_compile_proposal_conflict",

@@ -756,33 +756,70 @@ def test_written_blocks_hold_their_own_hash() -> None:
     assert row["content_hash"] == blocks_content_hash(row["blocks"])
 
 
-def test_conflicting_revert_skips_only_that_node() -> None:
-    """승인된 옛 판 내용으로 되돌아간 노드만 건너뛰고 나머지는 돈다.
+def test_approved_revert_becomes_new_review_event() -> None:
+    """승인된 옛 판 내용으로 되돌아오면 새 판 기준의 검토 사건이 된다.
 
-    rev1=A와 rev2=B가 이미 발행된 뒤 내용이 A로 돌아오면 멱등 키가
-    승인 행과 부딪힌다. 그 노드 하나만 접어 두고 다른 노드의 카드
-    작업은 그대로 끝나야 한다.
+    rev1=A와 rev2=B가 발행된 뒤 내용이 A로 돌아오면, 멱등 키에 기준
+    판이 들어가므로 rev1을 만든 옛 승인 행과 부딪히지 않고 rev2를
+    base로 한 새 계류가 생긴다. 승인하면 rev3=A로 현재 사실에
+    돌아온다.
+    """
+    node_id = uuid.uuid4()
+    claim = _claim(node_id=node_id, value=60)
+    uow = FakeUnitOfWork(sources=[_source(node_id)], claims=[claim])
+    _run(uow)
+    first_pending = _only_pending(uow)
+    original_blocks = first_pending["blocks"]
+    _publish(uow, revision_number=1)
+    uow.knowledge_candidates.claims = [replace(claim, value=120)]
+    _run(uow)
+    _publish(uow, revision_number=2)
+
+    uow.knowledge_candidates.claims = [claim]
+    result = _run(uow)
+
+    assert result.proposals_conflicted == 0
+    assert result.proposals_created == 1
+    revert_pending = _only_pending(uow)
+    assert revert_pending["blocks"] == original_blocks
+    assert revert_pending["id"] != first_pending["id"]
+
+    _publish(uow, revision_number=3)
+    revision = uow.artifacts.revisions[-1]
+    assert revision["revision_number"] == 3
+    assert revision["blocks"] == serialize_blocks(original_blocks)
+
+
+def test_conflicting_node_is_isolated_from_the_rest() -> None:
+    """결정 행과 키가 부딪힌 노드만 접고 나머지 노드는 그대로 돈다.
+
+    기준 판이 키에 들어간 뒤로 정상 흐름에서는 이 충돌이 나지 않는다.
+    그래도 데이터 이상으로 부딪히면 실행 전체가 죽는 대신 그 노드만
+    건너뛰어야 한다. 저장 계층을 이상 상태 대신 직접 흉내 낸다.
     """
     first = uuid.uuid4()
     second = uuid.uuid4()
-    claim = _claim(node_id=first, value=60)
     uow = FakeUnitOfWork(
         sources=[_source(first, "첫 기능"), _source(second, "둘째 기능")],
-        claims=[claim],
+        claims=[_claim(node_id=first, value=60), _claim(node_id=second)],
     )
-    _run(uow, limit=1)
-    _publish(uow, revision_number=1)
-    uow.knowledge_candidates.claims = [replace(claim, value=120)]
-    _run(uow, limit=1)
-    _publish(uow, revision_number=2)
+    original = uow.artifacts.add_or_revive_proposal
 
-    uow.knowledge_candidates.claims = [claim, _claim(node_id=second)]
+    def _raising(**kwargs: object) -> uuid.UUID:
+        first_artifact = uow.artifacts.artifacts.get(
+            (ARTIFACT_KIND_ENTITY_SUMMARY, first)
+        )
+        if kwargs["artifact_id"] == first_artifact:
+            raise ArtifactProposalConflict("이상 상태 재현")
+        return original(**kwargs)
+
+    uow.artifacts.add_or_revive_proposal = _raising  # type: ignore[method-assign]
+
     result = _run(uow, limit=2)
 
     assert result.nodes_considered == 2
     assert result.proposals_conflicted == 1
     assert result.proposals_created == 1
-    assert uow.committed == 3
     row = _only_pending(uow)
     artifact_id = uow.artifacts.artifacts[
         (ARTIFACT_KIND_ENTITY_SUMMARY, second)

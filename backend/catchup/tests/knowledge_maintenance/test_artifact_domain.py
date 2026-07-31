@@ -131,7 +131,17 @@ def test_idempotency_key_is_stable_and_distinct() -> None:
     artifact_id = uuid.UUID("33333333-3333-3333-3333-333333333333")
     other_id = uuid.UUID("44444444-4444-4444-4444-444444444444")
     content_hash = blocks_content_hash([_claim_block("h1")])
-    key = artifact_idempotency_key(artifact_id, content_hash)
-    assert key == artifact_idempotency_key(artifact_id, content_hash)
-    assert key != artifact_idempotency_key(other_id, content_hash)
+    base = uuid.UUID("55555555-5555-5555-5555-555555555555")
+    key = artifact_idempotency_key(
+        artifact_id, content_hash, base_revision_id=None
+    )
+    assert key == artifact_idempotency_key(
+        artifact_id, content_hash, base_revision_id=None
+    )
+    assert key != artifact_idempotency_key(
+        other_id, content_hash, base_revision_id=None
+    )
+    assert key != artifact_idempotency_key(
+        artifact_id, content_hash, base_revision_id=base
+    )
     assert len(key) == 64

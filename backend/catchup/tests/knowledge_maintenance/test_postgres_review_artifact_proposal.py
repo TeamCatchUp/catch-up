@@ -23,6 +23,7 @@ from sqlalchemy import delete
 from sqlalchemy import inspect
 from sqlalchemy import select
 from sqlalchemy import text
+from sqlalchemy import update as sa_update
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 from sqlalchemy.orm import sessionmaker
@@ -142,6 +143,13 @@ def committed_uow_factory(
                     KnowledgeArtifact.id == artifact_id
                 )
             )
+            # 판과 변경안이 서로를 가리키므로(base_revision_id ↔
+            # source_proposal_id) 참조를 먼저 끊고 지운다.
+            session.execute(
+                sa_update(ProposalRow)
+                .where(ProposalRow.artifact_id == artifact_id)
+                .values(base_revision_id=None)
+            )
             session.execute(
                 delete(RevisionRow).where(
                     RevisionRow.artifact_id == artifact_id
@@ -219,7 +227,9 @@ def _add(
         artifact_id=artifact_id,
         blocks=blocks,
         content_hash=content_hash,
-        idempotency_key=artifact_idempotency_key(artifact_id, content_hash),
+        idempotency_key=artifact_idempotency_key(
+            artifact_id, content_hash, base_revision_id=base_revision_id
+        ),
         base_revision_id=base_revision_id,
     )
 
@@ -537,3 +547,67 @@ def test_approve_turns_number_collision_into_review_error(
             )
         ).all()
         assert list(numbers) == [1]
+
+
+def test_approved_revert_reaches_new_revision(
+    workspace_id: int,
+    committed_artifacts: list[uuid.UUID],
+    committed_uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+) -> None:
+    """승인된 옛 판 내용으로 돌아와도 새 판으로 승인될 수 있다.
+
+    멱등 키에 기준 판이 들어가므로 rev2 위에서 제안하는 A는 rev1을
+    만든 옛 승인 행과 다른 검토 사건이다. A 승인 → B 승인 → A 복귀가
+    rev3=A로 끝나야 문서가 현재 사실로 돌아올 길이 있다.
+    """
+    proposal_a = _committed_proposal(
+        committed_uow_factory, workspace_id, committed_artifacts
+    )
+    artifact_id = committed_artifacts[-1]
+    blocks_a = _blocks("2026-09")
+
+    first = review_artifact_proposal(
+        committed_uow_factory(),
+        proposal_id=proposal_a,
+        verdict="approved",
+        reviewer=REVIEWER,
+    )
+    assert first.revision_number == 1
+
+    with committed_uow_factory() as uow:
+        proposal_b = _add(
+            uow, artifact_id, _blocks("2026-10"), base_revision_id=first.revision_id
+        )
+        uow.commit()
+    second = review_artifact_proposal(
+        committed_uow_factory(),
+        proposal_id=proposal_b,
+        verdict="approved",
+        reviewer=REVIEWER,
+    )
+    assert second.revision_number == 2
+
+    with committed_uow_factory() as uow:
+        revert_id = _add(
+            uow, artifact_id, blocks_a, base_revision_id=second.revision_id
+        )
+        uow.commit()
+    assert revert_id not in (proposal_a, proposal_b)
+
+    third = review_artifact_proposal(
+        committed_uow_factory(),
+        proposal_id=revert_id,
+        verdict="approved",
+        reviewer=REVIEWER,
+    )
+    assert third.revision_number == 3
+
+    with committed_uow_factory() as uow:
+        session = uow._session
+        stored = session.scalars(
+            select(RevisionRow).where(
+                RevisionRow.artifact_id == artifact_id,
+                RevisionRow.revision_number == 3,
+            )
+        ).one()
+        assert deserialize_blocks(stored.blocks) == blocks_a
