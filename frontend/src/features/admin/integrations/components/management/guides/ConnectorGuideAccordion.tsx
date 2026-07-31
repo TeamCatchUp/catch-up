@@ -1,0 +1,50 @@
+'use client';
+
+import { useState } from 'react';
+
+import IconArrowDown from '@/public/icons/icon/arrow_down.svg';
+import IconArrowRight from '@/public/icons/icon/arrow_right2.svg';
+import IconInfoFilled from '@/public/icons/icon/info_filled.svg';
+
+import { CONNECTOR_CONTENT } from '../../../constants/connectorContent';
+import type { IntegrationService } from '../../../types/integrationModel';
+
+interface ConnectorGuideAccordionProps {
+  service: IntegrationService;
+  /** 기존 *GuideSection 컴포넌트. 내용은 손대지 않는다 */
+  children: React.ReactNode;
+  defaultExpanded?: boolean;
+}
+
+/**
+ * "○○ 연동 가이드 보기" 접기/펼치기.
+ * Figma `16966:26874` — gap 16, radius 12.
+ *
+ * 펼쳐지는 내용은 PNG를 static import 하므로, Storybook에서 뜨려면
+ * 계획 ①의 next/image 대체(`.storybook/NextImageStub.tsx`)가 살아 있어야 한다.
+ */
+export default function ConnectorGuideAccordion({
+  service,
+  children,
+  defaultExpanded = false,
+}: ConnectorGuideAccordionProps) {
+  const [expanded, setExpanded] = useState(defaultExpanded);
+  const ArrowIcon = expanded ? IconArrowDown : IconArrowRight;
+
+  return (
+    <div className="flex flex-col gap-4 rounded-xl">
+      <button
+        type="button"
+        onClick={() => setExpanded((prev) => !prev)}
+        aria-expanded={expanded}
+        className="flex cursor-pointer items-center gap-2.5 rounded-xl text-left"
+      >
+        <IconInfoFilled className="text-icon-normal-alternative size-5 shrink-0" />
+        <span className="text-heading-medium text-text-normal-neutral flex-1">{CONNECTOR_CONTENT[service].guideLabel}</span>
+        <ArrowIcon className="text-icon-normal-normal size-6 shrink-0" />
+      </button>
+
+      {expanded && children}
+    </div>
+  );
+}
