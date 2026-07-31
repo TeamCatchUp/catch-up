@@ -4,11 +4,13 @@ import hashlib
 import json
 import uuid
 from collections.abc import Mapping
+from collections.abc import Sequence
 from dataclasses import asdict
 from datetime import datetime
 from decimal import Decimal
 
 from sqlalchemy import ColumnElement
+from sqlalchemy import Select
 from sqlalchemy import cast
 from sqlalchemy import func
 from sqlalchemy import select
@@ -16,6 +18,11 @@ from sqlalchemy import update
 from sqlalchemy.dialects.postgresql import UUID as PgUUID
 from sqlalchemy.orm import Session
 
+from catchup.db.models import KnowledgeArtifact as KnowledgeArtifactRow
+from catchup.db.models import (
+    KnowledgeArtifactChangeProposal as KnowledgeArtifactChangeProposalRow,
+)
+from catchup.db.models import KnowledgeArtifactRevision as KnowledgeArtifactRevisionRow
 from catchup.db.models import (
     KnowledgeCandidateEvidenceLink as KnowledgeCandidateEvidenceLinkRow,
 )
@@ -57,6 +64,10 @@ from catchup.knowledge_maintenance.contracts.extraction import ExtractionVocabul
 from catchup.knowledge_maintenance.contracts.extraction import (
     RelationAssertionCandidateDraft,
 )
+from catchup.knowledge_maintenance.domain.artifact import ArtifactBlock
+from catchup.knowledge_maintenance.domain.artifact import deserialize_blocks
+from catchup.knowledge_maintenance.domain.artifact import serialize_blocks
+from catchup.knowledge_maintenance.domain.artifact import validate_blocks
 from catchup.knowledge_maintenance.domain.claim_conflict import StoredClaimCandidate
 from catchup.knowledge_maintenance.domain.entity_resolution import anchor_excerpt
 from catchup.knowledge_maintenance.domain.evidence import Locator
@@ -87,6 +98,9 @@ from catchup.knowledge_maintenance.domain.pipeline_event import next_attempt_at
 from catchup.knowledge_maintenance.domain.pipeline_event import resolve_failure
 from catchup.knowledge_maintenance.domain.source_version import SourceIdentity
 from catchup.knowledge_maintenance.domain.source_version import SourceVersion
+from catchup.knowledge_maintenance.ports.artifacts import ArtifactProposalConflict
+from catchup.knowledge_maintenance.ports.artifacts import EntityCardSource
+from catchup.knowledge_maintenance.ports.artifacts import StoredArtifactProposal
 from catchup.knowledge_maintenance.ports.ontology import OntologySnapshotConflict
 
 
@@ -1014,6 +1028,427 @@ class SqlAlchemyMutationProposalRepository:
             )
         self._session.flush()
         return proposal_id
+
+
+class SqlAlchemyArtifactRepository:
+    """문서·변경안·판의 영속성을 PostgreSQL로 구현한다.
+
+    workspace를 생성 시점에 고정한다. 한 문서를 다루는 호출이 여럿이라
+    메서드마다 workspace를 다시 받으면 호출자가 그중 하나를 틀릴 자리가
+    생기기 때문이다.
+    """
+
+    def __init__(self, session: Session, workspace_id: int | None) -> None:
+        self._session = session
+        self._scoped_workspace_id = workspace_id
+
+    @property
+    def _workspace_id(self) -> int:
+        """고정된 workspace를 돌려준다. 없으면 쓰지 못하게 막는다."""
+        if self._scoped_workspace_id is None:
+            raise RuntimeError(
+                "artifact 저장소는 workspace_id를 받은 UnitOfWork에서만"
+                " 쓸 수 있다."
+            )
+        return self._scoped_workspace_id
+
+    def find_top_entity_nodes(self, *, limit: int) -> list[EntityCardSource]:
+        """카드를 만들 대상 노드를 claim이 많은 순으로 고른다.
+
+        claim의 subject는 canonical 노드를 직접 가리키거나, 해소를 마친
+        entity 후보를 거쳐 가리킨다. 지금 파이프라인은 뒤쪽으로 저장하므로
+        두 경로를 coalesce로 합쳐 센다. 한쪽만 보면 대부분의 노드가 0건이
+        된다.
+
+        claim과 inner join하므로 claim이 없는 노드는 자연히 빠진다. 순위가
+        같을 때는 노드 식별자로 갈라 실행마다 순서가 흔들리지 않게 한다.
+        """
+        subject_node_id = func.coalesce(
+            KnowledgeClaimCandidateRow.subject_node_id,
+            KnowledgeEntityCandidateRow.resolved_node_id,
+        )
+        claim_count = func.count(KnowledgeClaimCandidateRow.id)
+        statement = (
+            select(
+                KnowledgeNodeRow.id,
+                KnowledgeNodeRow.display_name,
+                KnowledgeNodeRow.canonical_key,
+                claim_count,
+            )
+            .select_from(KnowledgeClaimCandidateRow)
+            .outerjoin(
+                KnowledgeEntityCandidateRow,
+                KnowledgeClaimCandidateRow.subject_entity_candidate_id
+                == KnowledgeEntityCandidateRow.id,
+            )
+            .join(
+                KnowledgeNodeRow,
+                KnowledgeNodeRow.id == subject_node_id,
+            )
+            .where(
+                KnowledgeClaimCandidateRow.workspace_id == self._workspace_id,
+                KnowledgeNodeRow.workspace_id == self._workspace_id,
+                KnowledgeNodeRow.node_kind == NodeKind.ENTITY.value,
+                KnowledgeNodeRow.lifecycle_state == "active",
+            )
+            .group_by(
+                KnowledgeNodeRow.id,
+                KnowledgeNodeRow.display_name,
+                KnowledgeNodeRow.canonical_key,
+            )
+            .order_by(claim_count.desc(), KnowledgeNodeRow.id)
+            .limit(limit)
+        )
+        return [
+            EntityCardSource(
+                node_id=node_id,
+                display_name=display_name or canonical_key or str(node_id),
+                claim_count=count,
+            )
+            for node_id, display_name, canonical_key, count in (
+                self._session.execute(statement).all()
+            )
+        ]
+
+    def get_or_create_artifact(
+        self,
+        *,
+        kind: str,
+        subject_node_id: uuid.UUID,
+        title: str,
+    ) -> uuid.UUID:
+        """대상에 붙는 문서를 만들거나 이미 있는 것을 돌려준다.
+
+        이미 있으면 제목을 덮어쓰지 않는다. 제목은 문서의 정체성이라
+        컴파일을 다시 돌 때마다 바뀌면 사람이 같은 문서인지 알 수 없다.
+        """
+        found = self._session.scalar(
+            select(KnowledgeArtifactRow.id).where(
+                KnowledgeArtifactRow.workspace_id == self._workspace_id,
+                KnowledgeArtifactRow.kind == kind,
+                KnowledgeArtifactRow.subject_node_id == subject_node_id,
+            )
+        )
+        if found is not None:
+            return found
+
+        artifact_id = uuid.uuid4()
+        self._session.add(
+            KnowledgeArtifactRow(
+                id=artifact_id,
+                workspace_id=self._workspace_id,
+                kind=kind,
+                subject_node_id=subject_node_id,
+                title=title,
+            )
+        )
+        self._session.flush()
+        return artifact_id
+
+    def find_latest_revision_id_and_number(
+        self,
+        *,
+        artifact_id: uuid.UUID,
+    ) -> tuple[uuid.UUID, int] | None:
+        """문서의 가장 최근 판을 식별자와 번호로 돌려준다."""
+        row = self._session.execute(
+            select(
+                KnowledgeArtifactRevisionRow.id,
+                KnowledgeArtifactRevisionRow.revision_number,
+            )
+            .where(
+                KnowledgeArtifactRevisionRow.workspace_id
+                == self._workspace_id,
+                KnowledgeArtifactRevisionRow.artifact_id == artifact_id,
+            )
+            .order_by(KnowledgeArtifactRevisionRow.revision_number.desc())
+            .limit(1)
+        ).first()
+        if row is None:
+            return None
+        return (row[0], row[1])
+
+    def find_latest_content_hashes(
+        self,
+        *,
+        artifact_id: uuid.UUID,
+    ) -> set[str]:
+        """이미 사람 앞에 놓인 내용의 지문을 모은다.
+
+        판에는 지문 컬럼이 없다. 판은 승인된 변경안을 그대로 얼린 것이므로
+        그 변경안의 지문이 곧 판의 지문이다. 승인된 변경안을 따로 훑지
+        않는 이유도 같다. 지나간 판의 지문은 넣지 않는다. 옛 내용으로
+        되돌리자는 제안은 사람이 다시 볼 값어치가 있기 때문이다.
+        """
+        hashes: set[str] = set()
+        latest_hash = self._session.scalar(
+            select(KnowledgeArtifactChangeProposalRow.content_hash)
+            .select_from(KnowledgeArtifactRevisionRow)
+            .join(
+                KnowledgeArtifactChangeProposalRow,
+                KnowledgeArtifactRevisionRow.source_proposal_id
+                == KnowledgeArtifactChangeProposalRow.id,
+            )
+            .where(
+                KnowledgeArtifactRevisionRow.workspace_id
+                == self._workspace_id,
+                KnowledgeArtifactRevisionRow.artifact_id == artifact_id,
+            )
+            .order_by(KnowledgeArtifactRevisionRow.revision_number.desc())
+            .limit(1)
+        )
+        if latest_hash is not None:
+            hashes.add(latest_hash)
+
+        hashes.update(
+            self._session.scalars(
+                select(
+                    KnowledgeArtifactChangeProposalRow.content_hash
+                ).where(
+                    KnowledgeArtifactChangeProposalRow.workspace_id
+                    == self._workspace_id,
+                    KnowledgeArtifactChangeProposalRow.artifact_id
+                    == artifact_id,
+                    KnowledgeArtifactChangeProposalRow.status.in_(
+                        ("pending", "rejected")
+                    ),
+                )
+            )
+        )
+        return hashes
+
+    def abandon_pending_proposals(self, *, artifact_id: uuid.UUID) -> int:
+        """문서에 계류 중인 변경안을 모두 접고 접은 수를 돌려준다."""
+        result = self._session.execute(
+            update(KnowledgeArtifactChangeProposalRow)
+            .where(
+                KnowledgeArtifactChangeProposalRow.workspace_id
+                == self._workspace_id,
+                KnowledgeArtifactChangeProposalRow.artifact_id == artifact_id,
+                KnowledgeArtifactChangeProposalRow.status == "pending",
+            )
+            .values(status="abandoned")
+        )
+        self._session.flush()
+        return result.rowcount
+
+    def add_or_revive_proposal(
+        self,
+        *,
+        artifact_id: uuid.UUID,
+        blocks: Sequence[ArtifactBlock],
+        content_hash: str,
+        idempotency_key: str,
+        base_revision_id: uuid.UUID | None,
+    ) -> uuid.UUID:
+        """변경안을 올린다. 아직 열려 있거나 접힌 행이면 되살려 갈아끼운다.
+
+        `(workspace_id, idempotency_key)` UNIQUE가 상태를 구분하지 않아
+        접힌 행도 key를 계속 차지한다. 새로 INSERT하면 충돌이 나고 같은
+        transaction의 다른 작업까지 되돌아가므로 그 행을 되살린다.
+
+        되살리는 것은 pending과 abandoned뿐이다. 사람이 이미 결정을 내린
+        approved·rejected 행은 건드리지 않고 예외로 알린다. 멱등 키가
+        문서와 내용 지문으로만 만들어져 내용이 A→B→A로 되돌아오면 옛
+        결정과 같은 키가 다시 오는데, 그때 되살리면 발행된 판이 가리키는
+        승인 행이 pending으로 뒤집히며 검토자와 승인 시각이 지워진다.
+        승인 감사 기록을 잃는 것은 조용히 넘길 수 있는 일이 아니다.
+
+        되살릴 때 검토 흔적을 지운다. 반려 사유와 검토자가 남아 있으면
+        새 변경안이 이미 반려된 것처럼 보이기 때문이다.
+
+        Raises:
+            ArtifactBlockError: 블록이 근거 계약을 어겼을 때 던진다.
+            ArtifactProposalConflict: 같은 키를 이미 결정된 변경안이 쓰고
+                있을 때 던진다.
+        """
+        # 근거 없는 문장을 막는 마지막 자리다. 저장 전에 본다.
+        validate_blocks(blocks)
+        payload = serialize_blocks(blocks)
+
+        existing = self._session.scalar(
+            select(KnowledgeArtifactChangeProposalRow).where(
+                KnowledgeArtifactChangeProposalRow.workspace_id
+                == self._workspace_id,
+                KnowledgeArtifactChangeProposalRow.idempotency_key
+                == idempotency_key,
+            )
+        )
+        if existing is not None:
+            if existing.status not in ("pending", "abandoned"):
+                raise ArtifactProposalConflict(
+                    f"{existing.status} 상태의 변경안 {existing.id}가 같은"
+                    f" 멱등 키를 쓰고 있어 되살릴 수 없다."
+                )
+            existing.artifact_id = artifact_id
+            existing.blocks = payload
+            existing.status = "pending"
+            existing.content_hash = content_hash
+            existing.base_revision_id = base_revision_id
+            existing.rejection_reason = None
+            existing.reviewer = None
+            existing.reviewed_at = None
+            self._session.flush()
+            return existing.id
+
+        proposal_id = uuid.uuid4()
+        self._session.add(
+            KnowledgeArtifactChangeProposalRow(
+                id=proposal_id,
+                workspace_id=self._workspace_id,
+                artifact_id=artifact_id,
+                blocks=payload,
+                status="pending",
+                content_hash=content_hash,
+                idempotency_key=idempotency_key,
+                base_revision_id=base_revision_id,
+            )
+        )
+        self._session.flush()
+        return proposal_id
+
+    def get_proposal(
+        self,
+        *,
+        proposal_id: uuid.UUID,
+    ) -> StoredArtifactProposal | None:
+        """변경안 하나를 문서 제목·대상과 함께 읽는다."""
+        row = self._session.execute(
+            self._proposal_statement().where(
+                KnowledgeArtifactChangeProposalRow.id == proposal_id
+            )
+        ).first()
+        if row is None:
+            return None
+        return _artifact_proposal_to_domain(row[0], row[1], row[2])
+
+    def list_pending_proposals(self) -> list[StoredArtifactProposal]:
+        """검토를 기다리는 변경안을 오래된 순으로 읽는다."""
+        statement = (
+            self._proposal_statement()
+            .where(KnowledgeArtifactChangeProposalRow.status == "pending")
+            .order_by(
+                KnowledgeArtifactChangeProposalRow.created_at,
+                KnowledgeArtifactChangeProposalRow.id,
+            )
+        )
+        return [
+            _artifact_proposal_to_domain(proposal, subject_node_id, title)
+            for proposal, subject_node_id, title in (
+                self._session.execute(statement).all()
+            )
+        ]
+
+    def _proposal_statement(self) -> Select:
+        """변경안을 문서 정보와 함께 읽는 질의의 공통 뼈대를 만든다."""
+        return (
+            select(
+                KnowledgeArtifactChangeProposalRow,
+                KnowledgeArtifactRow.subject_node_id,
+                KnowledgeArtifactRow.title,
+            )
+            .join(
+                KnowledgeArtifactRow,
+                KnowledgeArtifactChangeProposalRow.artifact_id
+                == KnowledgeArtifactRow.id,
+            )
+            .where(
+                KnowledgeArtifactChangeProposalRow.workspace_id
+                == self._workspace_id,
+                KnowledgeArtifactRow.workspace_id == self._workspace_id,
+            )
+        )
+
+    def mark_approved(self, *, proposal_id: uuid.UUID, reviewer: str) -> None:
+        """변경안을 승인으로 끝맺는다."""
+        self._session.execute(
+            update(KnowledgeArtifactChangeProposalRow)
+            .where(
+                KnowledgeArtifactChangeProposalRow.workspace_id
+                == self._workspace_id,
+                KnowledgeArtifactChangeProposalRow.id == proposal_id,
+            )
+            .values(
+                status="approved",
+                reviewer=reviewer,
+                reviewed_at=func.now(),
+            )
+        )
+        self._session.flush()
+
+    def mark_rejected(
+        self,
+        *,
+        proposal_id: uuid.UUID,
+        reviewer: str,
+        reason: str,
+    ) -> None:
+        """변경안을 사유와 함께 반려로 끝맺는다.
+
+        사유는 DB CHECK가 요구한다. 이유 없는 반려는 다음 사람이 같은
+        변경안을 다시 올리게 만들기 때문이다.
+        """
+        self._session.execute(
+            update(KnowledgeArtifactChangeProposalRow)
+            .where(
+                KnowledgeArtifactChangeProposalRow.workspace_id
+                == self._workspace_id,
+                KnowledgeArtifactChangeProposalRow.id == proposal_id,
+            )
+            .values(
+                status="rejected",
+                rejection_reason=reason,
+                reviewer=reviewer,
+                reviewed_at=func.now(),
+            )
+        )
+        self._session.flush()
+
+    def add_revision(
+        self,
+        *,
+        artifact_id: uuid.UUID,
+        revision_number: int,
+        blocks: Sequence[ArtifactBlock],
+        source_proposal_id: uuid.UUID,
+    ) -> uuid.UUID:
+        """승인으로 확정된 판을 새로 쌓는다.
+
+        판 번호가 겹치면 UNIQUE가 막는다. 동시에 두 승인이 같은 번호를
+        쓰는 것을 DB가 거절하는 자리이므로 여기서 미리 검사하지 않는다.
+        """
+        revision_id = uuid.uuid4()
+        self._session.add(
+            KnowledgeArtifactRevisionRow(
+                id=revision_id,
+                workspace_id=self._workspace_id,
+                artifact_id=artifact_id,
+                revision_number=revision_number,
+                blocks=serialize_blocks(blocks),
+                source_proposal_id=source_proposal_id,
+            )
+        )
+        self._session.flush()
+        return revision_id
+
+
+def _artifact_proposal_to_domain(
+    row: KnowledgeArtifactChangeProposalRow,
+    subject_node_id: uuid.UUID,
+    title: str,
+) -> StoredArtifactProposal:
+    """저장된 변경안 row를 검토자가 볼 형태로 되돌린다."""
+    return StoredArtifactProposal(
+        id=row.id,
+        artifact_id=row.artifact_id,
+        subject_node_id=subject_node_id,
+        title=title,
+        status=row.status,
+        blocks=deserialize_blocks(row.blocks),
+        content_hash=row.content_hash,
+        base_revision_id=row.base_revision_id,
+        rejection_reason=row.rejection_reason,
+    )
 
 
 def _json_hash(value: object) -> str:
