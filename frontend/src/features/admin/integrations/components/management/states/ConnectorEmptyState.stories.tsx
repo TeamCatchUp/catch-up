@@ -29,7 +29,7 @@ const meta = {
         '로고 4개는 바깥 원(r=237), GitHub만 안쪽 원(r=175) 위에 놓인다.',
         '원의 stroke는 위→아래로 사라지는 그라디언트라 mask-image로 재현했다.',
       ],
-      dataNotes: ['CTA 라벨 "커텍터 연결하기"는 Figma 원문이다 — 오타로 보이나 임의로 고치지 않는다.'],
+      dataNotes: ['CTA 라벨은 Figma 원문이 "커텍터 연결하기"(오타)라 사용자 확인 후 "커넥터"로 교정했다.'],
     }),
   },
 } satisfies Meta<typeof ConnectorEmptyState>;
@@ -54,7 +54,7 @@ export const Default: Story = {
     const decoration = canvasElement.querySelector('[aria-hidden="true"]');
     await expect(decoration).toBeInTheDocument();
 
-    await userEvent.click(canvas.getByRole('button', { name: '커텍터 연결하기' }));
+    await userEvent.click(canvas.getByRole('button', { name: '커넥터 연결하기' }));
     await expect(args.onStart).toHaveBeenCalled();
   },
 };

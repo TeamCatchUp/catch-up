@@ -59,8 +59,9 @@ export default function ConnectorEmptyState({ onStart }: ConnectorEmptyStateProp
       <p className="text-body-small text-text-normal-alternative relative text-center whitespace-pre-line">
         {'Slack · Jira · Confluence 같은 협업툴을 연결하면,\n팀에 흩어진 대화와 문서를 한데 모아 필요한 답을 근거와 함께 찾아드려요.'}
       </p>
+      {/* Figma 원문은 "커텍터 연결하기"(오타). 사용자 확인 후 교정했다 */}
       <Button variant="box-solid-primary" size="lg" onClick={onStart} className="relative">
-        커텍터 연결하기
+        커넥터 연결하기
       </Button>
     </div>
   );
