@@ -1,6 +1,6 @@
 import Image from 'next/image';
 
-import { GITHUB_GUIDE_IMAGES } from '../../constants/integrationsConfig';
+import { GITHUB_GUIDE_IMAGES } from '../../../constants/integrationsConfig';
 
 /** GitHub 연동 가이드 섹션 */
 export default function GithubGuideSection() {

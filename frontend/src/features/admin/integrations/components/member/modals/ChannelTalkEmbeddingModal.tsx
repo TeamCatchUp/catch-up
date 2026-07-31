@@ -15,9 +15,9 @@ import { adminConnectorQueries } from '../../../queries/adminConnector.queries';
 import type { SyncConnector } from '../../../types/syncModel';
 import { groupChannelTalkSyncDispatch, pickSyncDays } from '../../../utils/channelTalkSyncDispatch';
 import { type ChannelTalkChannel, mapChannelTalkSyncTargets } from '../../../utils/mapChannelTalkSyncTargets';
-import ChannelGroup from './channelTalk/ChannelGroup';
-import ChannelGroupListEmpty from './channelTalk/ChannelGroupListEmpty';
-import ChannelList from './channelTalk/ChannelList';
+import ChannelGroup from './channel-talk/ChannelGroup';
+import ChannelGroupListEmpty from './channel-talk/ChannelGroupListEmpty';
+import ChannelList from './channel-talk/ChannelList';
 
 interface ChannelTalkEmbeddingModalProps {
   open: boolean;

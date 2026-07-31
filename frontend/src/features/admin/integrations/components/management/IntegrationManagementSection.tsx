@@ -12,11 +12,11 @@ import { cn } from '@/shared/utils/cn';
 
 import { RESOURCES_PER_PAGE } from '../../constants/integrationsConfig';
 import type { ConnectorDetail, IntegrationMenuItem, IntegrationService } from '../../types/integrationModel';
-import ChannelTalkManagementPanel from './channelTalk/ChannelTalkManagementPanel';
-import ConfluenceGuideSection from './ConfluenceGuideSection';
-import GithubGuideSection from './GithubGuideSection';
-import JiraGuideSection from './JiraGuideSection';
-import SlackGuideSection from './SlackGuideSection';
+import ChannelTalkManagementPanel from './channel-talk/ChannelTalkManagementPanel';
+import ConfluenceGuideSection from './guides/ConfluenceGuideSection';
+import GithubGuideSection from './guides/GithubGuideSection';
+import JiraGuideSection from './guides/JiraGuideSection';
+import SlackGuideSection from './guides/SlackGuideSection';
 
 /** 서비스별 리소스 아이템 아이콘 */
 const RESOURCE_ICONS: Record<IntegrationService, React.ComponentType<React.SVGProps<SVGSVGElement>>> = {
