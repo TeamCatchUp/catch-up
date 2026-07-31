@@ -80,10 +80,10 @@ export const RootAdmin: Story = {
     await expect(canvas.getByRole('button', { name: '커넥터 연결' })).toHaveAttribute('aria-current', 'page');
 
     // 멤버 관리는 접혀 있다가 클릭하면 펼쳐진다
-    await expect(canvas.queryByRole('button', { name: '멤버 질문 기록' })).not.toBeInTheDocument();
+    await expect(canvas.queryByRole('button', { name: '멤버 채팅 기록' })).not.toBeInTheDocument();
     await userEvent.click(canvas.getByRole('button', { name: /멤버 관리/ }));
     await expect(canvas.getByRole('button', { name: '멤버 정보' })).toBeInTheDocument();
-    await expect(canvas.getByRole('button', { name: '멤버 질문 기록' })).toBeInTheDocument();
+    await expect(canvas.getByRole('button', { name: '멤버 채팅 기록' })).toBeInTheDocument();
   },
 };
 

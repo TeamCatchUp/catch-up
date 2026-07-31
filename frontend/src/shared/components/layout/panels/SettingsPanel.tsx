@@ -91,7 +91,7 @@ const SETTINGS_SECTIONS_BY_ROLE: Record<UserRole, SettingsSection[]> = {
           Icon: IconGroup,
           items: [
             { name: '멤버 정보', href: '/admin/members', Icon: IconPlugin },
-            { name: '멤버 질문 기록', href: '/admin/question-logs', Icon: IconArticlePerson },
+            { name: '멤버 채팅 기록', href: '/admin/question-logs', Icon: IconArticlePerson },
           ],
         },
         { kind: 'item', name: '토큰 사용량 관리', href: '/admin/token-usage', Icon: IconGraphOutline },
