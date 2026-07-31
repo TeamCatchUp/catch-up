@@ -63,6 +63,7 @@ def _claim(
     value: object = 60,
     value_type: str = "number",
     minutes: int = 0,
+    valid_to: datetime | None = None,
 ) -> StoredClaimCandidate:
     """canonical 노드를 subject로 삼는 claim 후보를 하나 만든다."""
     return StoredClaimCandidate(
@@ -75,6 +76,7 @@ def _claim(
         value=value,
         statement=f"{predicate}는 {value}이다",
         observed_at=NOW + timedelta(minutes=minutes),
+        valid_to=valid_to,
     )
 
 
@@ -882,3 +884,47 @@ def test_fake_refuses_to_revive_decided_rows() -> None:
             idempotency_key="key",
             base_revision_id=None,
         )
+
+
+def test_closed_claims_leave_the_card() -> None:
+    """구간이 닫힌 주장은 카드에도 Read Set에도 실리지 않는다."""
+    node_id = uuid.uuid4()
+    alive = _claim(node_id=node_id, value=60)
+    closed = _claim(
+        node_id=node_id, value=120, valid_to=NOW + timedelta(days=1)
+    )
+    uow = FakeUnitOfWork(sources=[_source(node_id)], claims=[alive, closed])
+
+    _run(uow)
+
+    row = _only_pending(uow)
+    blocks = row["blocks"]
+    bodies = " ".join(block.body for block in blocks)
+    assert "60" in bodies
+    assert "120" not in bodies
+    claim_ids = {
+        claim_id for block in blocks for claim_id in block.claim_ids
+    }
+    assert alive.id in claim_ids
+    assert closed.id not in claim_ids
+
+
+def test_section_disappears_when_every_value_is_closed() -> None:
+    """한 속성의 값이 전부 닫히면 그 절 자체가 사라진다."""
+    node_id = uuid.uuid4()
+    closed = _claim(
+        node_id=node_id,
+        predicate="rate_limit",
+        value=60,
+        valid_to=NOW + timedelta(days=1),
+    )
+    alive = _claim(node_id=node_id, predicate="is_supported", value=True,
+                   value_type="boolean")
+    uow = FakeUnitOfWork(sources=[_source(node_id)], claims=[closed, alive])
+
+    _run(uow)
+
+    row = _only_pending(uow)
+    headings = [block.heading for block in row["blocks"]]
+    assert "rate_limit" not in headings
+    assert "is_supported" in headings

@@ -56,6 +56,7 @@ def _claim(
     resolved_node_id: uuid.UUID | None = None,
     statement: str = "",
     minutes: int = 0,
+    valid_to: datetime | None = None,
 ) -> StoredClaimCandidate:
     return StoredClaimCandidate(
         id=uuid.uuid4(),
@@ -67,6 +68,7 @@ def _claim(
         value=value,
         statement=statement or f"{predicate}는 {value}이다",
         observed_at=NOW + timedelta(minutes=minutes),
+        valid_to=valid_to,
     )
 
 
@@ -631,3 +633,33 @@ def test_dictionary_value_type_wins_over_claim_report() -> None:
     assert result.groups_compared == 1
     assert result.conflicts_found == 1
     assert result.proposals_created == 1
+
+
+def test_closed_claim_leaves_the_comparison() -> None:
+    """구간이 닫힌 주장은 비교에서 빠지고 모순도 사라진다."""
+    node_id = uuid.uuid4()
+    alive = _claim(
+        value=60,
+        resolved_node_id=node_id,
+        candidate_id=uuid.uuid4(),
+    )
+    closed = _claim(
+        value=120,
+        resolved_node_id=node_id,
+        candidate_id=uuid.uuid4(),
+        minutes=10,
+        valid_to=NOW + timedelta(days=1),
+    )
+    uow = FakeUnitOfWork([alive, closed])
+
+    result = resolve_claim_conflicts(
+        workspace_id=WORKSPACE,
+        vocabulary=VOCABULARY,
+        uow=uow,
+    )
+
+    assert result.claims_scanned == 2
+    assert result.claims_closed == 1
+    # 값이 한 종만 남아 견줄 그룹이 되지 못한다.
+    assert result.conflicts_found == 0
+    assert result.proposals_created == 0

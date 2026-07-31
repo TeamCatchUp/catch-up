@@ -816,6 +816,7 @@ class SqlAlchemyKnowledgeCandidateRepository:
                 value=row.value,
                 statement=row.statement,
                 observed_at=observed_at,
+                valid_to=row.valid_to,
             )
             for row, observed_at, resolved_node_id in (
                 self._session.execute(statement).all()
