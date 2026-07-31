@@ -2,12 +2,33 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Mapping
+from dataclasses import dataclass
 from typing import Protocol
 
 from catchup.knowledge_maintenance.domain.knowledge_candidate import (
     StoredMutationProposal,
 )
 from catchup.knowledge_maintenance.domain.source_version import JsonValue
+
+
+@dataclass(frozen=True, slots=True)
+class StoredPendingProposal:
+    """어떤 대상에 걸려 있는 계류 안건 하나를 읽는 형태로 담는다.
+
+    문서가 이 안건을 열린 질문으로 옮겨 적을 때 쓴다. 요약과 판정 근거를
+    그대로 실어야 하므로 둘 다 담는다.
+
+    Attributes:
+        id: proposal 행을 식별한다.
+        proposal_kind: 어떤 종류의 안건인지 나타낸다.
+        summary: 판정기가 남긴 요약을 보존한다.
+        resolver_metadata: 판정 근거를 보존한다.
+    """
+
+    id: uuid.UUID
+    proposal_kind: str
+    summary: str
+    resolver_metadata: Mapping[str, object]
 
 
 class MutationProposalRepository(Protocol):
@@ -54,6 +75,21 @@ class MutationProposalRepository(Protocol):
         더 이상 그 속성을 비교하지 않는다"를 구분할 수 없는데, 뒤쪽까지
         회수하면 어휘를 되돌리는 순간 검토 큐가 통째로 비기 때문이다.
         낡은 metadata에 predicate가 없으면 None이다.
+        """
+        ...
+
+    def find_pending_for_subject_node(
+        self,
+        *,
+        workspace_id: int,
+        node_id: uuid.UUID,
+    ) -> list[StoredPendingProposal]:
+        """어떤 canonical 노드에 걸려 있는 계류 안건을 모은다.
+
+        모순 안건은 판정 근거의 subject_key가 그 노드를 가리키는 것이고,
+        병합 안건은 멤버 후보 가운데 그 노드로 해소된 것이 있는 것이다.
+        둘 다 봐야 하는 이유는 카드가 "이 대상에 대해 아직 답이 나오지
+        않은 질문"을 빠짐없이 실어야 하기 때문이다.
         """
         ...
 

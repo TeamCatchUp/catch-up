@@ -101,6 +101,7 @@ from catchup.knowledge_maintenance.domain.source_version import SourceVersion
 from catchup.knowledge_maintenance.ports.artifacts import ArtifactProposalConflict
 from catchup.knowledge_maintenance.ports.artifacts import EntityCardSource
 from catchup.knowledge_maintenance.ports.artifacts import StoredArtifactProposal
+from catchup.knowledge_maintenance.ports.mutation_proposals import StoredPendingProposal
 from catchup.knowledge_maintenance.ports.ontology import OntologySnapshotConflict
 
 
@@ -115,6 +116,27 @@ def _identity_matches(
         SourceVersionRow.external_document_id
         == source_identity.external_document_id,
     ]
+
+
+def _mentions_candidate(
+    metadata: Mapping[str, object],
+    candidate_ids: set[uuid.UUID],
+) -> bool:
+    """병합 계획서의 멤버 가운데 주어진 후보가 있는지 본다.
+
+    낡은 metadata가 식별자가 아닌 값을 담고 있으면 그 항목만 버린다.
+    """
+    member_ids = metadata.get("member_ids")
+    if not isinstance(member_ids, list):
+        return False
+    for member_id in member_ids:
+        try:
+            parsed = uuid.UUID(str(member_id))
+        except ValueError:
+            continue
+        if parsed in candidate_ids:
+            return True
+    return False
 
 
 class SqlAlchemySourceVersionRepository:
@@ -867,6 +889,65 @@ class SqlAlchemyMutationProposalRepository:
                 )
             )
         return tuple(found)
+
+    def find_pending_for_subject_node(
+        self,
+        *,
+        workspace_id: int,
+        node_id: uuid.UUID,
+    ) -> list[StoredPendingProposal]:
+        """어떤 canonical 노드에 걸려 있는 계류 안건을 모은다.
+
+        모순은 판정 근거의 subject_key로, 병합은 멤버 후보의 해소 결과로
+        가려낸다. 판정 근거가 JSONB라 걸러내기를 Python에서 한다. 열려
+        있는 계획서의 수가 작아 이득이 없고, `find_pending_duplicate_groups`
+        도 같은 이유로 그렇게 읽는다.
+
+        workspace로 먼저 좁힌다. 노드 식별자가 UUID라 정확성은 그것만으로도
+        지켜지지만, 이 저장소의 다른 질의가 모두 workspace를 경계로 삼고
+        검토 큐 인덱스도 workspace_id를 앞세우기 때문이다.
+
+        순서를 식별자로 고정한다. 이 목록이 문서 본문의 순서가 되므로
+        실행마다 흔들리면 같은 내용이 다른 지문을 낳는다.
+        """
+        candidate_ids = set(
+            self._session.scalars(
+                select(KnowledgeEntityCandidateRow.id).where(
+                    KnowledgeEntityCandidateRow.workspace_id == workspace_id,
+                    KnowledgeEntityCandidateRow.resolved_node_id == node_id,
+                )
+            ).all()
+        )
+        rows = self._session.scalars(
+            select(KnowledgeMutationProposalRow)
+            .where(
+                KnowledgeMutationProposalRow.workspace_id == workspace_id,
+                KnowledgeMutationProposalRow.status == "pending",
+                KnowledgeMutationProposalRow.proposal_kind.in_(
+                    ("contradiction", "duplicate")
+                ),
+            )
+            .order_by(KnowledgeMutationProposalRow.id)
+        ).all()
+
+        found: list[StoredPendingProposal] = []
+        subject_key = f"node:{node_id}"
+        for row in rows:
+            metadata = row.resolver_metadata or {}
+            if row.proposal_kind == "contradiction":
+                if metadata.get("subject_key") != subject_key:
+                    continue
+            elif not _mentions_candidate(metadata, candidate_ids):
+                continue
+            found.append(
+                StoredPendingProposal(
+                    id=row.id,
+                    proposal_kind=row.proposal_kind,
+                    summary=row.summary,
+                    resolver_metadata=metadata,
+                )
+            )
+        return found
 
     def add_contradiction_proposal(
         self,

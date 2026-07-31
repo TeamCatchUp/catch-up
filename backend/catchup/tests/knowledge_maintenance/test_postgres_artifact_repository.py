@@ -184,13 +184,13 @@ def _claim_on_node(
     return row.id
 
 
-def _claim_via_candidate(
+def _resolved_candidate(
     session: Session,
     workspace_id: int,
     run_id: uuid.UUID,
     node_id: uuid.UUID,
 ) -> uuid.UUID:
-    """해소된 entity 후보를 거쳐 노드에 붙는 claim을 하나 만든다."""
+    """어떤 노드로 해소를 마친 entity 후보를 하나 만든다."""
     candidate = EntityCandidateRow(
         id=uuid.uuid4(),
         workspace_id=workspace_id,
@@ -204,12 +204,23 @@ def _claim_via_candidate(
     )
     session.add(candidate)
     session.flush()
+    return candidate.id
+
+
+def _claim_via_candidate(
+    session: Session,
+    workspace_id: int,
+    run_id: uuid.UUID,
+    node_id: uuid.UUID,
+) -> uuid.UUID:
+    """해소된 entity 후보를 거쳐 노드에 붙는 claim을 하나 만든다."""
+    candidate_id = _resolved_candidate(session, workspace_id, run_id, node_id)
     row = ClaimRow(
         id=uuid.uuid4(),
         workspace_id=workspace_id,
         extraction_run_id=run_id,
         local_key=f"c-{uuid.uuid4().hex}",
-        subject_entity_candidate_id=candidate.id,
+        subject_entity_candidate_id=candidate_id,
         predicate="owner",
         value_type="string",
         value="결제팀",
@@ -634,6 +645,161 @@ def test_list_pending_proposals_returns_only_open_rows(
     assert found.base_revision_id is None
     assert found.rejection_reason is None
     assert found.blocks[0].block_kind == BLOCK_KIND_CLAIM_SECTION
+
+
+def _contradiction_proposal(
+    uow: KnowledgeMaintenanceUnitOfWork,
+    workspace_id: int,
+    claim_id: uuid.UUID,
+    node_id: uuid.UUID,
+) -> uuid.UUID:
+    """어떤 노드를 대상으로 삼는 모순 계획서를 하나 쓴다."""
+    return uow.mutation_proposals.add_contradiction_proposal(
+        workspace_id=workspace_id,
+        idempotency_key=f"contradiction-{uuid.uuid4().hex}",
+        trigger_claim_candidate_id=claim_id,
+        detector="test",
+        detector_version="1",
+        summary="'release_month' 값이 2종으로 갈린다",
+        resolver_metadata={
+            "subject_key": f"node:{node_id}",
+            "predicate": "release_month",
+        },
+    )
+
+
+def _duplicate_proposal(
+    uow: KnowledgeMaintenanceUnitOfWork,
+    workspace_id: int,
+    candidate_id: uuid.UUID,
+) -> uuid.UUID:
+    """어떤 후보를 멤버로 삼는 병합 계획서를 하나 쓴다."""
+    return uow.mutation_proposals.add_duplicate_proposal(
+        workspace_id=workspace_id,
+        idempotency_key=f"duplicate-{uuid.uuid4().hex}",
+        trigger_entity_candidate_id=candidate_id,
+        detector="test",
+        detector_version="1",
+        summary="같은 이름 후보 2건 병합",
+        resolver_metadata={"member_ids": [str(candidate_id)]},
+        representative_candidate_id=candidate_id,
+        merge_candidate_ids=(),
+        proposed_type="feature",
+        proposed_name="결제 기능",
+    )
+
+
+def test_find_pending_for_subject_node_matches_both_kinds(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+) -> None:
+    """대상 노드에 걸린 모순·병합 안건만 돌아오고 남의 것은 빠진다."""
+    with session_factory() as session:
+        run_id = _extraction_run(session, workspace_id)
+        node_id = _entity_node(session, workspace_id, "결제 기능")
+        other_node_id = _entity_node(session, workspace_id, "정산 기능")
+        claim_id = _claim_on_node(session, workspace_id, run_id, node_id)
+        other_claim_id = _claim_on_node(
+            session, workspace_id, run_id, other_node_id
+        )
+        member_id = _resolved_candidate(
+            session, workspace_id, run_id, node_id
+        )
+        stranger_id = _resolved_candidate(
+            session, workspace_id, run_id, other_node_id
+        )
+        session.commit()
+
+    with uow_factory() as uow:
+        contradiction_id = _contradiction_proposal(
+            uow, workspace_id, claim_id, node_id
+        )
+        duplicate_id = _duplicate_proposal(uow, workspace_id, member_id)
+        _contradiction_proposal(
+            uow, workspace_id, other_claim_id, other_node_id
+        )
+        _duplicate_proposal(uow, workspace_id, stranger_id)
+        uow.commit()
+
+    with uow_factory() as uow:
+        found = uow.mutation_proposals.find_pending_for_subject_node(
+            workspace_id=workspace_id, node_id=node_id
+        )
+
+    assert {item.id for item in found} == {contradiction_id, duplicate_id}
+    kinds = {item.id: item.proposal_kind for item in found}
+    assert kinds[contradiction_id] == "contradiction"
+    assert kinds[duplicate_id] == "duplicate"
+    contradiction = next(
+        item for item in found if item.id == contradiction_id
+    )
+    assert contradiction.summary == "'release_month' 값이 2종으로 갈린다"
+    assert contradiction.resolver_metadata["subject_key"] == (
+        f"node:{node_id}"
+    )
+    duplicate = next(item for item in found if item.id == duplicate_id)
+    assert duplicate.resolver_metadata["member_ids"] == [str(member_id)]
+
+    # 접힌 안건은 더 이상 답을 기다리지 않으므로 카드에 실리지 않는다.
+    with uow_factory() as uow:
+        uow.mutation_proposals.abandon(proposal_id=contradiction_id)
+        uow.commit()
+
+    with uow_factory() as uow:
+        remaining = uow.mutation_proposals.find_pending_for_subject_node(
+            workspace_id=workspace_id, node_id=node_id
+        )
+    assert {item.id for item in remaining} == {duplicate_id}
+
+
+def test_find_pending_for_subject_node_stays_in_workspace(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+) -> None:
+    """다른 workspace의 같은 모양 안건은 결과에 섞이지 않는다.
+
+    판정 근거의 subject_key는 JSONB 문자열이라 어느 workspace에서도 남의
+    노드를 가리키는 값을 담을 수 있다. workspace로 먼저 좁히지 않으면 그
+    행이 카드에 실린다.
+    """
+    with session_factory() as session:
+        company_id = session.scalars(
+            select(Workspace.company_id).where(Workspace.id == workspace_id)
+        ).one()
+        stranger = Workspace(name="다른 워크스페이스", company_id=company_id)
+        session.add(stranger)
+        session.flush()
+        stranger_workspace_id = stranger.id
+
+        run_id = _extraction_run(session, workspace_id)
+        node_id = _entity_node(session, workspace_id, "결제 기능")
+        claim_id = _claim_on_node(session, workspace_id, run_id, node_id)
+
+        stranger_run_id = _extraction_run(session, stranger_workspace_id)
+        stranger_node_id = _entity_node(
+            session, stranger_workspace_id, "결제 기능"
+        )
+        stranger_claim_id = _claim_on_node(
+            session, stranger_workspace_id, stranger_run_id, stranger_node_id
+        )
+        session.commit()
+
+    with uow_factory() as uow:
+        mine = _contradiction_proposal(uow, workspace_id, claim_id, node_id)
+        # 남의 workspace가 내 노드를 가리키는 근거를 담고 있는 상황이다.
+        _contradiction_proposal(
+            uow, stranger_workspace_id, stranger_claim_id, node_id
+        )
+        uow.commit()
+
+    with uow_factory() as uow:
+        found = uow.mutation_proposals.find_pending_for_subject_node(
+            workspace_id=workspace_id, node_id=node_id
+        )
+
+    assert [item.id for item in found] == [mine]
 
 
 def test_duplicate_revision_number_is_rejected(
