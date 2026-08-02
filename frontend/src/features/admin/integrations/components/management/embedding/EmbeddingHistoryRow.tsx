@@ -22,7 +22,7 @@ interface EmbeddingHistoryRowProps {
 function StatusBadge({ status, failureCount = 0 }: Pick<EmbeddingHistoryRowProps, 'status' | 'failureCount'>) {
   if (status === 'running') {
     return (
-      <span className="bg-accent-light-blue-lighten flex items-center gap-2 rounded-lg px-2 py-1">
+      <span className="bg-accent-light-blue-lighten inline-flex items-center gap-2 rounded-lg px-2 py-1">
         <span className="text-body-xsmall text-text-primary-normal">진행중</span>
         <IconRotate className="text-icon-primary-normal size-4.5" />
       </span>
@@ -31,14 +31,14 @@ function StatusBadge({ status, failureCount = 0 }: Pick<EmbeddingHistoryRowProps
 
   if (status === 'success') {
     return (
-      <span className="bg-accent-green-lighten flex items-center gap-2 rounded-lg px-2 py-1">
+      <span className="bg-accent-green-lighten inline-flex items-center rounded-lg px-2 py-1">
         <span className="text-body-xsmall text-status-positive">성공</span>
       </span>
     );
   }
 
   return (
-    <span className="bg-accent-red-lighten flex items-center gap-2 rounded-lg px-2 py-1">
+    <span className="bg-accent-red-lighten inline-flex items-center gap-2 rounded-lg px-2 py-1">
       <span className="text-body-xsmall text-status-destructive">실패</span>
       <span aria-hidden="true" className="bg-accent-red-default h-2.5 w-px shrink-0" />
       <span className="text-body-xsmall text-status-destructive">{formatFailureCount(failureCount)}</span>
@@ -47,7 +47,7 @@ function StatusBadge({ status, failureCount = 0 }: Pick<EmbeddingHistoryRowProps
 }
 
 /**
- * 임베딩 히스토리 한 행.
+ * 임베딩 히스토리 한 행. `<tr>`이라 `<tbody>` 안에서만 쓴다.
  * Figma 컴포넌트셋 `17134:113077` — 4슬롯(대상 fill / 상태 150 / 시각 150 / 액션 32),
  * padding 8/12, gap 16, h46.
  *
@@ -65,25 +65,27 @@ export default function EmbeddingHistoryRow({
   const Logo = CONNECTOR_LOGOS[service];
 
   return (
-    <div className="flex h-11.5 items-center gap-4 px-3 py-2">
-      <div className="flex min-w-0 flex-1 items-center gap-2.5">
-        <Logo className="size-5 shrink-0" />
-        <span className="text-body-small text-text-normal-neutral truncate">{target}</span>
-      </div>
+    <tr className="h-11.5">
+      <td className="py-2 pr-4 pl-3">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <Logo className="size-5 shrink-0" />
+          <span className="text-body-small text-text-normal-neutral truncate">{target}</span>
+        </div>
+      </td>
 
-      <div className="flex w-37.5 shrink-0 items-center">
+      <td className="w-37.5 py-2 pr-4">
         <StatusBadge status={status} failureCount={failureCount} />
-      </div>
+      </td>
 
-      <div className="flex w-37.5 shrink-0 items-center">
+      <td className="w-37.5 py-2 pr-4">
         {executedAt ? (
           <span className="text-body-small text-text-normal-assistive">{executedAt}</span>
         ) : (
-          <span aria-hidden="true" className="bg-line-normal-neutral h-0.75 w-4.5 rounded-full" />
+          <span aria-hidden="true" className="bg-line-normal-neutral block h-0.75 w-4.5 rounded-full" />
         )}
-      </div>
+      </td>
 
-      <div className="flex size-8 shrink-0 items-center justify-center">
+      <td className="w-11 py-2 pr-3">
         {status === 'failed' && onRetry && (
           <Tooltip>
             <TooltipTrigger asChild>
@@ -94,7 +96,7 @@ export default function EmbeddingHistoryRow({
             <TooltipContent>임베딩 재시도</TooltipContent>
           </Tooltip>
         )}
-      </div>
-    </div>
+      </td>
+    </tr>
   );
 }

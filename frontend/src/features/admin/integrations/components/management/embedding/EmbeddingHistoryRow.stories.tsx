@@ -47,8 +47,13 @@ export default meta;
 
 type Story = StoryObj<typeof EmbeddingHistoryRow>;
 
+/** tr이라 table/tbody 안에서만 유효하다 */
 const Frame = ({ children }: { children: React.ReactNode }) => (
-  <div className="bg-fill-normal-normal w-179 p-3">{children}</div>
+  <div className="bg-fill-normal-normal w-179 p-3">
+    <table className="w-full table-fixed">
+      <tbody>{children}</tbody>
+    </table>
+  </div>
 );
 
 export const Running: Story = {
