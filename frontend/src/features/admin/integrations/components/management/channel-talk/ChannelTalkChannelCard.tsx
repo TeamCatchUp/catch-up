@@ -2,11 +2,12 @@
 
 import { useState } from 'react';
 
-import IconAddCircle from '@/public/icons/icon/add_circle.svg';
+import IconAddSmall from '@/public/icons/icon/add_small.svg';
 import IconCheck from '@/public/icons/icon/check.svg';
+import IconDelete from '@/public/icons/icon/delete.svg';
 import IconMegaphone from '@/public/icons/icon/megaphone.svg';
 import IconSend from '@/public/icons/icon/send.svg';
-import IconTag from '@/public/icons/icon/tag.svg';
+import IconTagChannel from '@/public/icons/icon/tag_channel.svg';
 import { Button } from '@/shared/components/ui/button';
 import { ConfirmDialog } from '@/shared/components/ui/confirm-dialog';
 
@@ -33,8 +34,18 @@ interface ChannelTalkChannelCardProps {
   onTestDocumentSpaceConnection: (dsId: string) => void;
 }
 
-// tested → 헤더 한 줄 collapsed lock (변경하려면 삭제 후 재등록)
-// idle/error → expanded (키 입력 + 연결 테스트 버튼 노출)
+/**
+ * 채널톡 채널 하나의 연결 폼.
+ * Figma `17363:100295` — 좌측 레일 32(칩 32 + 세로선) + 본문 668, gap 16.
+ *
+ * 신규 디자인은 카드 테두리를 쓰지 않고 **레일과 들여쓰기로만** 계층을 표현한다.
+ * 도큐먼트 스페이스 추가는 하단 텍스트 링크에서 헤더 우측 버튼으로 올라왔고,
+ * 삭제는 아이콘 버튼이 됐다.
+ *
+ * tested → 헤더 한 줄 collapsed lock (변경하려면 삭제 후 재등록)
+ * idle/error → expanded (키 입력 + 연결 테스트 버튼 노출)
+ * 이 동작은 Figma에 근거가 없어 현행에서 승계했다.
+ */
 export default function ChannelTalkChannelCard({
   channel,
   onUpdate,
@@ -52,125 +63,104 @@ export default function ChannelTalkChannelCard({
   const fieldState: 'idle' | 'error' = status === 'error' ? 'error' : 'idle';
   const canTestConnection = isChannelSecretsFilled(channel);
 
-  const headerSection = isTested ? (
-    // ─── tested → collapsed: 헤더 한 줄 ───
-    <div className="flex flex-wrap items-center gap-2 px-4 py-5">
-      <div className="flex min-w-0 flex-1 items-center gap-3">
-        <div className="bg-fill-primary-normal-neutral flex size-8 shrink-0 items-center justify-center rounded-lg">
-          <IconTag className="text-icon-primary-normal size-5" />
-        </div>
-        <h3 className="text-heading-small text-text-normal-normal min-w-0 flex-1 truncate">{channel.name}</h3>
-      </div>
-      <div className="flex shrink-0 items-center gap-3">
-        <div className="flex items-center gap-1">
-          <IconCheck className="text-icon-primary-normal size-4.5 shrink-0" />
-          <span className="text-body-xsmall text-text-primary-normal">테스트 완료</span>
-        </div>
-        <div className="bg-line-normal-neutral h-4.5 w-px" aria-hidden />
-        <Button variant="box-outline-gray" size="sm" onClick={() => setDeleteDialogOpen(true)}>
-          삭제
-        </Button>
-      </div>
-    </div>
-  ) : (
-    // ─── idle/error → expanded: 입력 폼 + 연결 테스트 버튼 ───
-    <div className="flex flex-col gap-4 px-4 py-5">
-      {/* Header — tag icon + 채널명 + 삭제 버튼 */}
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="flex min-w-0 flex-1 items-center gap-3">
-          <div className="bg-fill-primary-normal-neutral flex size-8 shrink-0 items-center justify-center rounded-lg">
-            <IconTag className="text-icon-primary-normal size-5" />
-          </div>
-          <h3 className="text-heading-small text-text-normal-normal min-w-0 flex-1 truncate">{channel.name}</h3>
-        </div>
-        <Button variant="box-outline-gray" size="sm" onClick={() => setDeleteDialogOpen(true)}>
-          삭제
-        </Button>
-      </div>
-
-      {/* Access Key + Access Secret */}
-      <div className="flex gap-3">
-        <ChannelTalkFieldRow
-          label="Access Key"
-          value={channel.accessKey}
-          placeholder="Access Key 입력하기"
-          state={fieldState}
-          onChange={(next) => onUpdate({ accessKey: next })}
-        />
-        <ChannelTalkFieldRow
-          label="Access Secret"
-          value={channel.accessSecret}
-          placeholder="Access Secret 입력하기"
-          state={fieldState}
-          onChange={(next) => onUpdate({ accessSecret: next })}
-        />
-      </div>
-
-      {/* Webhook Token — full width */}
-      <ChannelTalkFieldRow
-        label="Webhook Token"
-        value={channel.webhookToken}
-        placeholder="Webhook Token 입력하기"
-        state={fieldState}
-        onChange={(next) => onUpdate({ webhookToken: next })}
-      />
-
-      {/* Error 메시지 */}
-      {status === 'error' && channel.errorMessage ? (
-        <p className="text-body-xsmall text-status-destructive">{channel.errorMessage}</p>
-      ) : null}
-
-      {/* Megaphone 안내 */}
-      <div className="flex items-center gap-1.5">
-        <IconMegaphone className="text-icon-normal-alternative size-4.5 shrink-0" />
-        <p className="text-body-xsmall text-text-normal-assistive">{MEGAPHONE_NOTICE}</p>
-      </div>
-
-      {/* 연결 테스트 하기 버튼 — Send 아이콘 + 텍스트 */}
-      <Button
-        variant={canTestConnection ? 'box-soft-primary' : 'box-outline-gray'}
-        size="md"
-        onClick={onTestConnection}
-        disabled={!canTestConnection}
-        className="h-11.5 w-full gap-2.5"
-      >
-        <IconSend className="size-5.5 shrink-0" />
-        연결 테스트 하기
-      </Button>
-    </div>
-  );
-
   return (
-    <div className="border-line-normal-neutral bg-fill-normal-normal relative flex flex-col overflow-hidden rounded-xl border">
-      {/* 좌측 파란색 indicator strip */}
-      <div className="bg-line-primary-strong z-base absolute top-4 left-0 h-8 w-1 rounded-full" aria-hidden />
+    <div className="flex gap-4">
+      {/* 좌측 레일 — 채널 칩과 세로선으로 하위 도큐먼트와의 계층을 표현한다 */}
+      <div aria-hidden="true" className="flex w-8 shrink-0 flex-col items-center">
+        <div className="bg-fill-primary-normal-neutral flex size-8 shrink-0 items-center justify-center rounded-lg">
+          <IconTagChannel className="text-icon-primary-normal size-5" />
+        </div>
+        <div className="bg-line-normal-neutral w-px flex-1" />
+      </div>
 
-      {headerSection}
-
-      {/* 도큐먼트 wrapper + Add button */}
-      <div className="flex flex-col gap-3 px-4 pb-4">
-        {channel.documentSpaces.length > 0 ? (
-          <div className="border-line-normal-neutral flex flex-col border-t">
-            {channel.documentSpaces.map((ds) => (
-              <ChannelTalkDocumentSpaceCard
-                key={ds.id}
-                documentSpace={ds}
-                onUpdate={(patch) => onUpdateDocumentSpace(ds.id, patch)}
-                onRemove={() => onRemoveDocumentSpace(ds.id)}
-                onTestConnection={() => onTestDocumentSpaceConnection(ds.id)}
-              />
-            ))}
+      <div className="flex min-w-0 flex-1 flex-col gap-6 pb-6">
+        {/* 헤더 — 채널명 + 도큐먼트 추가 + 삭제 */}
+        <div className="flex min-h-8 flex-wrap items-center gap-2">
+          <h3 className="text-heading-small text-text-normal-normal min-w-0 flex-1 truncate">{channel.name}</h3>
+          <div className="flex shrink-0 items-center gap-2">
+            {isTested && (
+              <>
+                <span className="flex items-center gap-1">
+                  <IconCheck className="text-icon-primary-normal size-4.5 shrink-0" />
+                  <span className="text-body-xsmall text-text-primary-normal">테스트 완료</span>
+                </span>
+                <span aria-hidden="true" className="bg-line-normal-neutral h-4.5 w-px" />
+              </>
+            )}
+            <Button variant="box-outline-gray" size="sm" onClick={onAddDocumentSpace}>
+              <IconAddSmall className="size-5" />
+              도큐먼트 스페이스
+            </Button>
+            <Button
+              variant="icon-outline-gray"
+              size="sm"
+              onClick={() => setDeleteDialogOpen(true)}
+              aria-label="채널 삭제"
+            >
+              <IconDelete className="size-5" />
+            </Button>
           </div>
-        ) : null}
+        </div>
 
-        <button
-          type="button"
-          onClick={onAddDocumentSpace}
-          className="text-heading-small text-text-primary-normal flex cursor-pointer items-center gap-2 self-start px-1.5 py-1"
-        >
-          <IconAddCircle className="text-icon-primary-normal size-5.5 shrink-0" />
-          <span>도큐먼트 스페이스 추가</span>
-        </button>
+        {/* tested면 폼을 접는다 */}
+        {!isTested && (
+          <div className="flex flex-col gap-4">
+            <div className="flex gap-3">
+              <ChannelTalkFieldRow
+                label="Access Key"
+                value={channel.accessKey}
+                placeholder="Access Key 입력하기"
+                state={fieldState}
+                onChange={(next) => onUpdate({ accessKey: next })}
+              />
+              <ChannelTalkFieldRow
+                label="Access Secret"
+                value={channel.accessSecret}
+                placeholder="Access Secret 입력하기"
+                state={fieldState}
+                onChange={(next) => onUpdate({ accessSecret: next })}
+              />
+            </div>
+
+            <ChannelTalkFieldRow
+              label="Webhook Token"
+              value={channel.webhookToken}
+              placeholder="Webhook Token 입력하기"
+              state={fieldState}
+              onChange={(next) => onUpdate({ webhookToken: next })}
+            />
+
+            {status === 'error' && channel.errorMessage ? (
+              <p className="text-body-xsmall text-status-destructive">{channel.errorMessage}</p>
+            ) : null}
+
+            <div className="flex items-center gap-1.5">
+              <IconMegaphone className="text-icon-normal-alternative size-4.5 shrink-0" />
+              <p className="text-body-xsmall text-text-normal-assistive">{MEGAPHONE_NOTICE}</p>
+            </div>
+
+            <Button
+              variant={canTestConnection ? 'box-soft-primary' : 'box-outline-gray'}
+              size="md"
+              onClick={onTestConnection}
+              disabled={!canTestConnection}
+              className="h-11.5 w-full gap-2.5"
+            >
+              <IconSend className="size-5.5 shrink-0" />
+              연결 테스트 하기
+            </Button>
+          </div>
+        )}
+
+        {channel.documentSpaces.map((ds) => (
+          <ChannelTalkDocumentSpaceCard
+            key={ds.id}
+            documentSpace={ds}
+            onUpdate={(patch) => onUpdateDocumentSpace(ds.id, patch)}
+            onRemove={() => onRemoveDocumentSpace(ds.id)}
+            onTestConnection={() => onTestDocumentSpaceConnection(ds.id)}
+          />
+        ))}
       </div>
 
       <ConfirmDialog

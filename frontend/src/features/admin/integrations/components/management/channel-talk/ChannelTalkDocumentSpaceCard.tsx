@@ -4,6 +4,8 @@ import { useState } from 'react';
 
 import IconBook from '@/public/icons/icon/book.svg';
 import IconCheck from '@/public/icons/icon/check.svg';
+import IconDelete from '@/public/icons/icon/delete.svg';
+import IconReply from '@/public/icons/icon/reply.svg';
 import IconSend from '@/public/icons/icon/send.svg';
 import { Button } from '@/shared/components/ui/button';
 import { ConfirmDialog } from '@/shared/components/ui/confirm-dialog';
@@ -35,10 +37,14 @@ export default function ChannelTalkDocumentSpaceCard({
   const fieldState: 'idle' | 'error' = status === 'error' ? 'error' : 'idle';
   const canTestConnection = isDocumentSpaceSecretsFilled(documentSpace);
 
+  /** Figma 17367:102658 — reply 아이콘으로 채널 하위임을 표시하고 칩으로 종류를 표시한다 */
   const leftColumn = (
-    <div className="bg-fill-primary-normal-neutral flex size-8 shrink-0 items-center justify-center rounded-lg">
-      <IconBook className="text-icon-primary-normal size-5" />
-    </div>
+    <>
+      <IconReply aria-hidden="true" className="text-icon-normal-assistive size-6 shrink-0" />
+      <div className="bg-fill-primary-normal-neutral flex size-8 shrink-0 items-center justify-center rounded-lg">
+        <IconBook className="text-icon-primary-normal size-5" />
+      </div>
+    </>
   );
 
   const confirmDialog = (
@@ -68,8 +74,13 @@ export default function ChannelTalkDocumentSpaceCard({
                 <span className="text-body-xsmall text-text-primary-normal">테스트 완료</span>
               </div>
               <div className="bg-line-normal-neutral h-4.5 w-px" aria-hidden />
-              <Button variant="box-outline-gray" size="sm" onClick={() => setDeleteDialogOpen(true)}>
-                삭제
+              <Button
+                variant="icon-outline-gray"
+                size="sm"
+                onClick={() => setDeleteDialogOpen(true)}
+                aria-label="도큐먼트 스페이스 삭제"
+              >
+                <IconDelete className="size-5" />
               </Button>
             </div>
           </div>
@@ -89,8 +100,13 @@ export default function ChannelTalkDocumentSpaceCard({
         {/* Header — 이름 + 삭제 버튼 */}
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h4 className="text-heading-small text-text-normal-normal min-w-0 flex-1 truncate">{documentSpace.name}</h4>
-          <Button variant="box-outline-gray" size="sm" onClick={() => setDeleteDialogOpen(true)}>
-            삭제
+          <Button
+            variant="icon-outline-gray"
+            size="sm"
+            onClick={() => setDeleteDialogOpen(true)}
+            aria-label="도큐먼트 스페이스 삭제"
+          >
+            <IconDelete className="size-5" />
           </Button>
         </div>
 
