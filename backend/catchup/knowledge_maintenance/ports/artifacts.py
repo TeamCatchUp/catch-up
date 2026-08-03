@@ -3,6 +3,7 @@ from __future__ import annotations
 import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Protocol
 
 from catchup.knowledge_maintenance.domain.artifact import ArtifactBlock
@@ -46,6 +47,30 @@ class StoredArtifactProposal:
     content_hash: str
     base_revision_id: uuid.UUID | None
     rejection_reason: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class CurrentRevisionForProjection:
+    """검색 projection이 읽는 current revision 한 판을 담는다.
+
+    current revision은 컬럼이 아니라 계산값이다. 문서마다 판 번호가 가장
+    큰 한 판이 지금 발행된 내용이므로, 이 값 객체도 문서당 한 건만 나온다.
+
+    Attributes:
+        artifact_id: 이 판이 속한 문서를 가리킨다.
+        title: 문서 제목을 보존한다.
+        revision_id: 이 판을 가리킨다.
+        revision_number: 판 번호를 나타낸다.
+        blocks: 판 본문을 도메인 블록으로 담는다.
+        created_at: 판이 발행된 시각을 나타낸다.
+    """
+
+    artifact_id: uuid.UUID
+    title: str
+    revision_id: uuid.UUID
+    revision_number: int
+    blocks: tuple[ArtifactBlock, ...]
+    created_at: datetime
 
 
 @dataclass(frozen=True, slots=True)
@@ -95,6 +120,24 @@ class ArtifactRepository(Protocol):
         artifact_id: uuid.UUID,
     ) -> tuple[uuid.UUID, int] | None:
         """문서의 가장 최근 판을 식별자와 번호로 돌려준다."""
+        ...
+
+    def find_current_revisions(
+        self, *, workspace_id: int
+    ) -> tuple[CurrentRevisionForProjection, ...]:
+        """workspace의 모든 문서에서 current revision을 한 번에 읽는다.
+
+        검색 인덱스는 원장에서 다시 만들 수 있는 projection이므로,
+        재투영은 지금 발행된 판 전부를 훑어야 한다. 문서마다 따로 묻는
+        대신 한 질의로 모아 읽는다. 판이 하나도 없는 문서는 아직 사람
+        앞에 놓인 내용이 없으므로 빠진다.
+
+        workspace를 명시로 받는다. 저장소가 고정한 workspace와 다르면
+        재투영이 남의 문서를 실을 자리이므로, 어긋나면 막는다.
+
+        Raises:
+            ValueError: 저장소가 고정한 workspace와 다를 때 던진다.
+        """
         ...
 
     def find_latest_content_hashes(

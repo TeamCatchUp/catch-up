@@ -104,6 +104,7 @@ from catchup.knowledge_maintenance.domain.source_version import JsonValue
 from catchup.knowledge_maintenance.domain.source_version import SourceIdentity
 from catchup.knowledge_maintenance.domain.source_version import SourceVersion
 from catchup.knowledge_maintenance.ports.artifacts import ArtifactProposalConflict
+from catchup.knowledge_maintenance.ports.artifacts import CurrentRevisionForProjection
 from catchup.knowledge_maintenance.ports.artifacts import EntityCardSource
 from catchup.knowledge_maintenance.ports.artifacts import ProposalAlreadyDecided
 from catchup.knowledge_maintenance.ports.artifacts import StoredArtifactProposal
@@ -1838,6 +1839,90 @@ class SqlAlchemyArtifactRepository:
         if row is None:
             return None
         return (row[0], row[1])
+
+    def find_current_revisions(
+        self, *, workspace_id: int
+    ) -> tuple[CurrentRevisionForProjection, ...]:
+        """workspace의 모든 문서에서 current revision을 한 번에 읽는다.
+
+        current revision은 컬럼이 아니라 문서별 판 번호의 최대값이다.
+        `find_latest_revision_id_and_number`가 문서 하나에 하는 일을
+        문서별 최대 판 번호 서브쿼리로 넓혀, 한 질의로 문서당 한 행만
+        고른다. 판이 없는 문서는 판 쪽에서 시작해 조인하므로 자연히
+        빠진다.
+
+        Raises:
+            ValueError: 저장소가 고정한 workspace와 다를 때 던진다.
+        """
+        if workspace_id != self._workspace_id:
+            raise ValueError(
+                f"저장소가 고정한 workspace {self._workspace_id}와 요청한"
+                f" workspace {workspace_id}가 다르다."
+            )
+
+        latest = (
+            select(
+                KnowledgeArtifactRevisionRow.artifact_id.label("artifact_id"),
+                func.max(KnowledgeArtifactRevisionRow.revision_number).label(
+                    "revision_number"
+                ),
+            )
+            .where(
+                KnowledgeArtifactRevisionRow.workspace_id == workspace_id,
+            )
+            .group_by(KnowledgeArtifactRevisionRow.artifact_id)
+            .subquery()
+        )
+        statement = (
+            select(
+                KnowledgeArtifactRevisionRow.artifact_id,
+                KnowledgeArtifactRow.title,
+                KnowledgeArtifactRevisionRow.id,
+                KnowledgeArtifactRevisionRow.revision_number,
+                KnowledgeArtifactRevisionRow.blocks,
+                KnowledgeArtifactRevisionRow.created_at,
+            )
+            .select_from(KnowledgeArtifactRevisionRow)
+            .join(
+                latest,
+                (
+                    KnowledgeArtifactRevisionRow.artifact_id
+                    == latest.c.artifact_id
+                )
+                & (
+                    KnowledgeArtifactRevisionRow.revision_number
+                    == latest.c.revision_number
+                ),
+            )
+            .join(
+                KnowledgeArtifactRow,
+                KnowledgeArtifactRow.id
+                == KnowledgeArtifactRevisionRow.artifact_id,
+            )
+            .where(
+                KnowledgeArtifactRevisionRow.workspace_id == workspace_id,
+                KnowledgeArtifactRow.workspace_id == workspace_id,
+            )
+            .order_by(KnowledgeArtifactRevisionRow.artifact_id)
+        )
+        return tuple(
+            CurrentRevisionForProjection(
+                artifact_id=artifact_id,
+                title=title,
+                revision_id=revision_id,
+                revision_number=revision_number,
+                blocks=deserialize_blocks(blocks),
+                created_at=created_at,
+            )
+            for (
+                artifact_id,
+                title,
+                revision_id,
+                revision_number,
+                blocks,
+                created_at,
+            ) in self._session.execute(statement).all()
+        )
 
     def find_latest_content_hashes(
         self,

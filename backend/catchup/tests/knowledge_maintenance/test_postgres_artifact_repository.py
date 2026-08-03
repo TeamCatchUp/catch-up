@@ -808,6 +808,94 @@ def test_find_pending_for_subject_node_stays_in_workspace(
     assert [item.id for item in found] == [mine]
 
 
+def _publish_revision(
+    uow: KnowledgeMaintenanceUnitOfWork,
+    artifact_id: uuid.UUID,
+    revision_number: int,
+    body: str,
+) -> uuid.UUID:
+    """변경안을 올려 승인하고 그 내용으로 판을 하나 발행한다."""
+    blocks = _blocks(body)
+    proposal_id, _ = _add(uow, artifact_id, blocks)
+    uow.artifacts.mark_approved(proposal_id=proposal_id, reviewer="tester")
+    return uow.artifacts.add_revision(
+        artifact_id=artifact_id,
+        revision_number=revision_number,
+        blocks=blocks,
+        source_proposal_id=proposal_id,
+    )
+
+
+def test_find_current_revisions_returns_latest_only(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+) -> None:
+    """artifact마다 최신 판 1건만 돌아오고 판 없는 문서는 빠진다."""
+    published = _artifact_id(uow_factory, session_factory, workspace_id)
+    empty = _artifact_id(uow_factory, session_factory, workspace_id)
+
+    with uow_factory() as uow:
+        _publish_revision(uow, published, 1, "옛 판")
+        latest_id = _publish_revision(uow, published, 2, "새 판")
+        uow.commit()
+
+    with uow_factory() as uow:
+        rows = uow.artifacts.find_current_revisions(workspace_id=workspace_id)
+
+    by_artifact = {row.artifact_id: row for row in rows}
+    # 판이 두 개라도 문서 하나당 행 하나만 나온다.
+    assert len(rows) == len(by_artifact)
+    assert empty not in by_artifact
+
+    row = by_artifact[published]
+    assert row.revision_id == latest_id
+    assert row.revision_number == 2
+    assert row.title == "결제 기능"
+    assert row.created_at is not None
+    # 블록이 JSONB에서 도메인 타입으로 복원된다.
+    assert row.blocks[0].heading == "release_month"
+    assert row.blocks[0].body == "새 판"
+    assert row.blocks[0].block_kind == BLOCK_KIND_CLAIM_SECTION
+    assert isinstance(row.blocks[0].claim_ids[0], uuid.UUID)
+
+
+def test_find_current_revisions_stays_in_workspace(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+) -> None:
+    """다른 workspace의 판은 결과에 섞이지 않는다."""
+    with session_factory() as session:
+        company_id = session.scalars(
+            select(Workspace.company_id).where(Workspace.id == workspace_id)
+        ).one()
+        stranger = Workspace(name="다른 워크스페이스", company_id=company_id)
+        session.add(stranger)
+        session.flush()
+        stranger_workspace_id = stranger.id
+        stranger_node_id = _entity_node(
+            session, stranger_workspace_id, "결제 기능"
+        )
+        session.commit()
+
+    with KnowledgeMaintenanceUnitOfWork(
+        session_factory, workspace_id=stranger_workspace_id
+    ) as uow:
+        stranger_artifact = uow.artifacts.get_or_create_artifact(
+            kind=ARTIFACT_KIND,
+            subject_node_id=stranger_node_id,
+            title="남의 결제 기능",
+        )
+        _publish_revision(uow, stranger_artifact, 1, "남의 판")
+        uow.commit()
+
+    with uow_factory() as uow:
+        rows = uow.artifacts.find_current_revisions(workspace_id=workspace_id)
+
+    assert stranger_artifact not in {row.artifact_id for row in rows}
+
+
 def test_duplicate_revision_number_is_rejected(
     workspace_id: int,
     session_factory: Callable[[], Session],
