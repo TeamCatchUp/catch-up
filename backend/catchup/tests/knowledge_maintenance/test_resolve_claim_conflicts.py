@@ -840,6 +840,53 @@ def test_decided_proposal_with_legacy_hash_survives_rerun() -> None:
     assert len(standing) == 1
 
 
+def test_decided_proposal_with_legacy_hash_value_change_reopens() -> None:
+    """구 포맷 해시가 일치해도 값이 정정됐으면 재검토를 연다.
+
+    구 포맷 해시(`sha256("id,id,…")`)에는 값 정보가 없어 멤버 id만
+    같으면 무조건 일치한다. 그 상태로 값 대조를 건너뛰면, 배포 전
+    구 포맷 결정이 남아 있는 claim의 값이 나중에 정정돼도 조용히
+    standing으로 읽혀 새 검토 사건이 열리지 않는다.
+    """
+    node_id = uuid.uuid4()
+    claims = [
+        _claim(value=60, node_id=node_id, minutes=0),
+        _claim(value=120, node_id=node_id, minutes=10),
+    ]
+    uow = FakeUnitOfWork(claims)
+    resolve_claim_conflicts(
+        workspace_id=WORKSPACE, vocabulary=VOCABULARY, uow=uow
+    )
+    key = conflict_idempotency_key(f"node:{node_id}", "rate_limit")
+    decided = _decide(uow.mutation_proposals, key)
+    # 배포 전 결정 행은 구 포맷(id만 이어붙인) 해시를 갖고 있었다.
+    legacy_hash = hashlib.sha256(
+        ",".join(sorted(str(claim.id) for claim in claims)).encode(
+            "utf-8"
+        )
+    ).hexdigest()
+    decided["resolver_metadata"]["member_hash"] = legacy_hash
+
+    # 두 번째 claim의 값이 120 -> 90으로 정정된다. id 구성은 그대로다.
+    uow.knowledge_candidates.claims[1] = replace(
+        uow.knowledge_candidates.claims[1], value=90
+    )
+
+    result = resolve_claim_conflicts(
+        workspace_id=WORKSPACE, vocabulary=VOCABULARY, uow=uow
+    )
+
+    rows = uow.mutation_proposals.rows
+    assert rows[key]["status"] == "approved"
+    assert rows[key]["resolver_metadata"]["decision"] == {
+        "winner_claim_id": "w"
+    }
+    new_keys = [k for k in rows if k != key]
+    assert len(new_keys) == 1
+    assert rows[new_keys[0]]["status"] == "pending"
+    assert result.proposals_created == 1
+
+
 def test_decided_proposal_new_members_open_new_review_event() -> None:
     """구성이 달라지면 결정 행을 덮지 않고 새 검토 사건을 연다."""
     node_id = uuid.uuid4()
