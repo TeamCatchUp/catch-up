@@ -9,6 +9,7 @@ import pytest
 from catchup.knowledge_maintenance.domain.observation import MetadataEntity
 from catchup.knowledge_maintenance.domain.observation import NormalizedObservation
 from catchup.knowledge_maintenance.domain.observation import ObservationKind
+from catchup.knowledge_maintenance.domain.observation import utterance_event_at
 
 
 def _observation(**overrides: object) -> NormalizedObservation:
@@ -78,3 +79,26 @@ def test_metadata_entity_rejects_blank_display_name() -> None:
             external_key="user-1",
             display_name="  ",
         )
+
+
+def _spans() -> dict[str, object]:
+    return {
+        "utterance_spans": [
+            {"start": 0, "end": 10, "at": "2026-08-01T10:00:00+00:00"},
+            {"start": 11, "end": 25, "at": "2026-08-10T11:30:00+00:00"},
+        ]
+    }
+
+
+def test_utterance_event_at_picks_the_span_that_contains_the_offset() -> None:
+    """근거 위치가 든 발화의 시각을 고른다."""
+    assert utterance_event_at(_spans(), 0) == "2026-08-01T10:00:00+00:00"
+    assert utterance_event_at(_spans(), 9) == "2026-08-01T10:00:00+00:00"
+    assert utterance_event_at(_spans(), 11) == "2026-08-10T11:30:00+00:00"
+
+
+def test_utterance_event_at_is_empty_outside_every_span() -> None:
+    """구간 밖이면 시각을 지어내지 않는다."""
+    assert utterance_event_at(_spans(), 10) is None
+    assert utterance_event_at(_spans(), 999) is None
+    assert utterance_event_at({}, 0) is None

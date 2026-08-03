@@ -333,6 +333,80 @@ def test_each_utterance_keeps_its_own_timestamp(normalizer) -> None:
     )
 
 
+def test_utterance_spans_map_each_offset_range_to_its_time(normalizer) -> None:
+    """발화 구간 지도가 본문 offset과 시각을 정확히 잇는다.
+
+    claim이 어느 발화에서 나왔는지는 이 지도로만 판정할 수 있다. 구간이
+    본문과 한 칸이라도 어긋나면 주장이 남의 시각을 얻는다.
+    """
+    payload = json.loads(_payload(BOT_AND_BUTTON))
+    payload["messages"] = [
+        {
+            "message_id": "m-day1",
+            "user_chat_id": BOT_AND_BUTTON,
+            "person_type": "customer",
+            "author": {
+                "author_type": "customer",
+                "user_id": "u-1",
+                "name": "사용자",
+            },
+            "plain_text": "요금제 문의드립니다.",
+            "created_at": "2026-08-01T10:00:00Z",
+        },
+        {
+            "message_id": "m-day2",
+            "user_chat_id": BOT_AND_BUTTON,
+            "person_type": "manager",
+            "author": {
+                "author_type": "manager",
+                "manager_id": "mg-1",
+                "name": "상담원",
+            },
+            "plain_text": "새 요금제가 적용됩니다.",
+            "created_at": "2026-08-10T11:30:00Z",
+        },
+    ]
+
+    observation = normalizer.normalize(
+        _source_version(BOT_AND_BUTTON, content=json.dumps(payload))
+    )
+
+    spans = observation.source_attributes["utterance_spans"]
+    assert len(spans) == 2
+    content = observation.content
+    assert spans[0]["at"] == "2026-08-01T10:00:00+00:00"
+    assert spans[1]["at"] == "2026-08-10T11:30:00+00:00"
+    assert "요금제 문의드립니다." in content[spans[0]["start"] : spans[0]["end"]]
+    assert "새 요금제가 적용됩니다." in content[spans[1]["start"] : spans[1]["end"]]
+    # 뒷날 발화의 위치가 앞선 구간에 걸치면 시각이 뒤집힌다.
+    assert spans[0]["end"] < spans[1]["start"]
+    assert content.index("새 요금제가 적용됩니다.") >= spans[1]["start"]
+
+
+def test_utterance_without_a_time_leaves_no_span(normalizer) -> None:
+    """시각 없는 발화는 구간을 만들지 않는다 — 없는 시각을 지어내지 않는다."""
+    payload = json.loads(_payload(BOT_AND_BUTTON))
+    payload["messages"] = [
+        {
+            "message_id": "m-nostamp",
+            "user_chat_id": BOT_AND_BUTTON,
+            "person_type": "customer",
+            "author": {
+                "author_type": "customer",
+                "user_id": "u-1",
+                "name": "사용자",
+            },
+            "plain_text": "요금제 문의드립니다.",
+        },
+    ]
+
+    observation = normalizer.normalize(
+        _source_version(BOT_AND_BUTTON, content=json.dumps(payload))
+    )
+
+    assert observation.source_attributes["utterance_spans"] == []
+
+
 def test_timestamp_prefix_keeps_the_utterance_text_intact(normalizer) -> None:
     """시각을 붙여도 발화 원문은 그대로 남는다.
 
