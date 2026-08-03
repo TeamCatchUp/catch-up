@@ -33,6 +33,10 @@ const meta = {
         '구 카드의 "보안 관련 설명 / 원문 보기" 행은 신규 디자인에 없다.',
       ],
       dataNotes: ['미연동·범위 없음 문구는 Figma에 없어 현행 코드에서 승계했다.'],
+      tokenNotes: [
+        '카드 배경 #F7F7F8 = bg-fill-normal-strong. 테두리만 있는 게 아니라 채워진 카드다.',
+        '연동됨 #3385FF = text-text-primary-assistive, 날짜 #6D7882 = text-text-normal-alternative.',
+      ],
     }),
   },
 } satisfies Meta<typeof ConnectorSummaryCard>;

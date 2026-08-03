@@ -19,10 +19,10 @@ interface ConnectorSummaryCardProps {
  */
 export default function ConnectorSummaryCard({ connected, dataRange }: ConnectorSummaryCardProps) {
   return (
-    <dl className="border-line-normal-neutral divide-line-normal-neutral divide-y overflow-hidden rounded-xl border">
-      <div className="flex h-13 items-center justify-between gap-4 px-4">
+    <dl className="border-line-normal-neutral divide-line-normal-neutral bg-fill-normal-strong divide-y overflow-hidden rounded-xl border">
+      <div className="flex h-13 items-center justify-between gap-8 px-4">
         <dt className="text-body-small text-text-normal-normal">연동 상태</dt>
-        <dd className="flex items-center gap-1">
+        <dd className="flex items-center gap-2 px-1.5 py-1">
           {connected ? (
             <>
               <IconCloudCheckFilled className="text-icon-primary-assistive size-5 shrink-0" />
@@ -37,11 +37,11 @@ export default function ConnectorSummaryCard({ connected, dataRange }: Connector
         </dd>
       </div>
 
-      <div className="flex h-13 items-center justify-between gap-4 px-4">
+      <div className="flex h-13 items-center justify-between gap-8 px-4">
         <dt className="text-body-small text-text-normal-normal">임베딩 데이터 범위</dt>
         <dd
           className={
-            dataRange ? 'text-body-small text-text-normal-normal' : 'text-body-small text-text-normal-assistive'
+            dataRange ? 'text-body-small text-text-normal-alternative px-1.5' : 'text-body-small text-text-normal-assistive'
           }
         >
           {dataRange ?? '연동되지 않았습니다.'}
