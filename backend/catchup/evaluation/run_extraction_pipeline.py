@@ -446,26 +446,31 @@ def _observation_of(
 
     기준 시각 사슬의 아래 두 단계(원문 변경 시각·수집 시각)는
     Observation이 아니라 그 바탕이 된 SourceVersion에 있으므로 함께
-    읽어 둔다. SourceVersion 행이 없으면 Observation을 만든 시각을
-    수집 시각으로 삼는다 — 사슬의 마지막 단계는 비어 있으면 안 된다.
+    읽어 둔다.
+
+    `fk_observations_source_version`이 존재를 보장하고
+    `observed_at`은 NOT NULL이므로, Observation이 있는데 SourceVersion을
+    못 찾는 것은 스키마 손상 신호다. 다른 시각으로 메우지 않고 이
+    건을 건너뛰며 소리를 낸다 — 사슬에 없는 단계를 몰래 끼워 넣으면
+    기준 시각의 출처가 거짓이 된다.
     """
     session = uow.observations._session  # noqa: SLF001
     row = session.get(ObservationRow, event.aggregate_id)
     if row is None:
         return None
-    observation = observation_to_domain(row)
     version = session.get(SourceVersionRow, row.source_version_id)
+    if version is None:
+        logger.error(
+            "extraction_source_version_missing",
+            observation_id=str(row.id),
+            source_version_id=str(row.source_version_id),
+        )
+        return None
     return PendingEntry(
         event_id=event.id,
-        observation=observation,
-        source_updated_at=(
-            version.source_updated_at if version is not None else None
-        ),
-        observed_at=(
-            version.observed_at
-            if version is not None
-            else observation.created_at
-        ),
+        observation=observation_to_domain(row),
+        source_updated_at=version.source_updated_at,
+        observed_at=version.observed_at,
     )
 
 
