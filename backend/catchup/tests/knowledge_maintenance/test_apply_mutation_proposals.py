@@ -13,6 +13,7 @@ from types import TracebackType
 from typing import Any
 from typing import Self
 
+from catchup.knowledge_maintenance.domain.entity_resolution import normalize_name
 from catchup.knowledge_maintenance.domain.knowledge_candidate import (
     EntityResolutionStatus,
 )
@@ -34,6 +35,7 @@ class FakeState:
     candidates: dict[uuid.UUID, dict[str, Any]] = field(default_factory=dict)
     claim_rows: dict[uuid.UUID, dict[str, Any]] = field(default_factory=dict)
     nodes: list[KnowledgeNode] = field(default_factory=list)
+    aliases: list[dict[str, Any]] = field(default_factory=list)
 
     def add_claim(
         self,
@@ -208,6 +210,34 @@ class FakeNodeRepo:
         self.state.nodes.append(node)
         return node
 
+    def add_alias(
+        self,
+        *,
+        workspace_id: int,
+        node_id: uuid.UUID,
+        alias: str,
+        normalized_alias: str,
+        source: str,
+    ) -> None:
+        # 실 DB의 (workspace_id, node_id, normalized_alias) UNIQUE를
+        # 흉내 낸다. 중복이면 조용히 넘어가는 것이 실 어댑터 계약이다.
+        for row in self.state.aliases:
+            if (
+                row["workspace_id"] == workspace_id
+                and row["node_id"] == node_id
+                and row["normalized_alias"] == normalized_alias
+            ):
+                return
+        self.state.aliases.append(
+            {
+                "workspace_id": workspace_id,
+                "node_id": node_id,
+                "alias": alias,
+                "normalized_alias": normalized_alias,
+                "source": source,
+            }
+        )
+
 
 @dataclass
 class FakeUnitOfWork:
@@ -229,6 +259,7 @@ class FakeUnitOfWork:
             "candidates": copy.deepcopy(self.state.candidates),
             "claim_rows": copy.deepcopy(self.state.claim_rows),
             "nodes": list(self.state.nodes),
+            "aliases": copy.deepcopy(self.state.aliases),
         }
         return self
 
@@ -247,6 +278,7 @@ class FakeUnitOfWork:
             self.state.claim_rows.clear()
             self.state.claim_rows.update(self._snapshot["claim_rows"])
             self.state.nodes[:] = self._snapshot["nodes"]
+            self.state.aliases[:] = self._snapshot["aliases"]
             self.rolled_back += 1
 
     def commit(self) -> None:
@@ -291,6 +323,61 @@ def test_applies_create_and_merge() -> None:
     assert member_row["resolved_node_id"] == node.id
     assert state.proposals[proposal_id]["status"] == "applied"
     assert state.proposals[proposal_id]["applied_at"] is not None
+
+
+def test_created_node_gets_name_alias() -> None:
+    """새 노드는 제안된 이름으로 불릴 수 있어야 한다."""
+    state = FakeState()
+    representative = state.add_candidate()
+    state.add_approved_merge(representative=representative, members=())
+
+    _run(state)
+
+    node = state.nodes[0]
+    assert node.canonical_key is None
+    assert state.aliases == [
+        {
+            "workspace_id": WORKSPACE_ID,
+            "node_id": node.id,
+            "alias": "결제 기능",
+            "normalized_alias": normalize_name("결제 기능"),
+            "source": "system",
+        }
+    ]
+
+
+def test_alias_is_not_duplicated_on_rerun() -> None:
+    """적용을 다시 돌려도 alias 행이 불어나지 않는다."""
+    state = FakeState()
+    representative = state.add_candidate()
+    state.add_approved_merge(representative=representative, members=())
+
+    _run(state)
+    node_id = state.nodes[0].id
+    # 같은 노드에 같은 이름을 다시 기록해도 무동작이어야 한다.
+    FakeNodeRepo(state).add_alias(
+        workspace_id=WORKSPACE_ID,
+        node_id=node_id,
+        alias="결제 기능",
+        normalized_alias=normalize_name("결제 기능"),
+        source="system",
+    )
+    _run(state)
+
+    assert len(state.aliases) == 1
+
+
+def test_reused_node_gets_no_alias() -> None:
+    """이미 해소된 대표의 노드에는 alias를 더하지 않는다."""
+    state = FakeState()
+    representative = state.add_candidate(
+        status="merged", resolved_node_id=uuid.uuid4()
+    )
+    state.add_approved_merge(representative=representative, members=())
+
+    _run(state)
+
+    assert state.aliases == []
 
 
 def test_resolved_representative_is_reused() -> None:
