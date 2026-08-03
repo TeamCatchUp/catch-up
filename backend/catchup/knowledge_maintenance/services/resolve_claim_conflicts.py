@@ -210,9 +210,16 @@ def resolve_claim_conflicts(
                 )
             )
             if decided is not None:
-                if decided.resolver_metadata.get("member_hash") == (
-                    member_hash
-                ):
+                decided_hash = decided.resolver_metadata.get(
+                    "member_hash"
+                )
+                is_standing = decided_hash == member_hash or (
+                    decided_hash
+                    == _legacy_member_hash(
+                        claim for claim, _ in parsed
+                    )
+                )
+                if is_standing:
                     # 사람이 이 구성에 이미 결정을 내렸다. 같은 사실을
                     # 다시 묻지 않는다.
                     logger.info(
@@ -320,6 +327,7 @@ def resolve_claim_conflicts(
         claims_scanned=result.claims_scanned,
         claims_without_subject_key=result.claims_without_subject_key,
         claims_not_comparable=result.claims_not_comparable,
+        claims_closed=result.claims_closed,
         claims_unparseable=result.claims_unparseable,
         groups_compared=result.groups_compared,
         conflicts_found=result.conflicts_found,
@@ -421,6 +429,21 @@ def _member_hash(
             f"{claim.id}:{normalized}" for claim, normalized in members
         )
     )
+    return hashlib.sha256(joined.encode("utf-8")).hexdigest()
+
+
+def _legacy_member_hash(
+    claims: Iterable[StoredClaimCandidate],
+) -> str:
+    """member_hash 구 포맷(`sha256("id,id,…")`)을 계산한다.
+
+    포맷을 `sha256("id:normalized,…")`으로 바꾸면서, 배포 전에 결정된
+    proposal의 resolver_metadata에는 구 포맷 해시가 그대로 남는다. 그
+    행을 신 포맷으로만 비교하면 구성이 그대로인데도 달라졌다고 읽혀
+    가짜 재검토 사건이 열린다. 포맷 전환기 동안 결정 행과의 standing
+    판정에서만 이 구 포맷도 함께 대조해 호환한다.
+    """
+    joined = ",".join(sorted(str(claim.id) for claim in claims))
     return hashlib.sha256(joined.encode("utf-8")).hexdigest()
 
 

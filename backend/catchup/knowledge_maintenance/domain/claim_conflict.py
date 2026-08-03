@@ -100,6 +100,9 @@ def dates_compatible(values: set[str]) -> bool:
     정밀도로 말한 것이다. 가장 정밀한 값 하나를 나머지 전부가
     구간 접두로 포함해야 겹침이다. 같은 정밀도의 서로 다른 값이
     섞이면 겹침이 아니다.
+
+    values는 비어 있지 않은 집합이어야 한다. 호출자가 이미 len>=2를
+    보장하므로 빈 집합 방어는 하지 않는다.
     """
     longest = max(values, key=len)
     return all(
