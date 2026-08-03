@@ -19,6 +19,9 @@ catchup/experiments/**/output/
 # 빌더가 raw에서 payload를 다시 만들 수 있으므로 산출물을 추적하지 않는다.
 catchup/experiments/channel_talk/
 
+# LongMemEval oracle 원본 — 15MB짜리 외부 데이터셋이라 추적하지 않는다
+experiments/longmemeval/*.json
+
 # 평가 데이터셋은 코드와 함께 관리한다
 !catchup/evaluation/data/
 !catchup/evaluation/data/**
