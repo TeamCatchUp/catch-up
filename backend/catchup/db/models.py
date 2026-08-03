@@ -56,6 +56,7 @@ class SourceType(StrEnum):
     GITHUB = "github"
     SLACK = "slack"
     CHANNEL_TALK = "channel_talk"
+    LLM_WIKI = "llm_wiki"
 
 
 class VectorStoreEntityType(StrEnum):
