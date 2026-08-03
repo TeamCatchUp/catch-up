@@ -504,6 +504,119 @@ def test_claim_evidence_carries_codepoint_offset_locator(
     assert result.batch.demoted_ambiguous_count == 0
 
 
+def test_claim_evidence_carries_its_own_utterance_time(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+) -> None:
+    """위치가 확정된 claim은 자기 발화의 시각을 locator에 함께 얻는다."""
+    statement = "9월 예정입니다."
+    start = NORMALIZED_CONTENT.index(statement)
+    line_start = NORMALIZED_CONTENT.index("상담원:")
+    observation = _stored_observation(
+        workspace_id,
+        session_factory,
+        source_attributes={
+            "utterance_spans": [
+                {
+                    "start": 0,
+                    "end": line_start - 1,
+                    "at": "2026-08-01T10:00:00+00:00",
+                },
+                {
+                    "start": line_start,
+                    "end": len(NORMALIZED_CONTENT),
+                    "at": "2026-08-10T11:30:00+00:00",
+                },
+            ]
+        },
+    )
+
+    result = store_knowledge_candidates(
+        observation,
+        _batch(),
+        spec=SPEC,
+        uow=uow_factory(),
+    )
+
+    locator = _claim_locator(session_factory, result.batch.run_id)
+    assert line_start <= start
+    # 문서 시작(8/1)이 아니라 그 문장을 말한 발화(8/10)의 시각이어야 한다.
+    assert locator["event_at"] == "2026-08-10T11:30:00+00:00"
+
+
+def test_claim_evidence_has_no_time_when_the_position_is_lost(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+) -> None:
+    """위치를 잃은 claim은 시각도 얻지 않는다 — 남의 발화 시각을 붙이지 않는다."""
+    observation = _stored_observation(
+        workspace_id,
+        session_factory,
+        source_attributes={
+            "utterance_spans": [
+                {
+                    "start": 0,
+                    "end": len(NORMALIZED_CONTENT),
+                    "at": "2026-08-10T11:30:00+00:00",
+                }
+            ]
+        },
+    )
+    batch = _batch().model_copy(
+        update={
+            "claims": (
+                ClaimCandidateDraft(
+                    local_key="c1",
+                    subject_local_key="e1",
+                    predicate="release_month",
+                    value_type="text",
+                    value="2026-09",
+                    statement="12월로 미뤄졌습니다.",
+                ),
+            )
+        }
+    )
+
+    result = store_knowledge_candidates(
+        observation,
+        batch,
+        spec=SPEC,
+        uow=uow_factory(),
+    )
+
+    assert _claim_locator(session_factory, result.batch.run_id) == {}
+
+
+def test_claim_evidence_has_no_time_outside_every_utterance_span(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+) -> None:
+    """발화 구간 밖의 인용은 시각 없이 위치만 남는다."""
+    observation = _stored_observation(
+        workspace_id,
+        session_factory,
+        source_attributes={
+            "utterance_spans": [
+                {"start": 0, "end": 3, "at": "2026-08-01T10:00:00+00:00"}
+            ]
+        },
+    )
+
+    result = store_knowledge_candidates(
+        observation,
+        _batch(),
+        spec=SPEC,
+        uow=uow_factory(),
+    )
+
+    locator = _claim_locator(session_factory, result.batch.run_id)
+    assert locator["kind"] == "codepoint_offset"
+    assert "event_at" not in locator
+
+
 def test_claim_evidence_is_demoted_when_statement_is_fabricated(
     workspace_id: int,
     session_factory: Callable[[], Session],

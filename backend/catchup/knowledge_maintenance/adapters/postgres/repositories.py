@@ -718,7 +718,12 @@ class SqlAlchemyKnowledgeCandidateRepository:
         excerpt: str | None = None,
         locator: Locator | None = None,
     ) -> uuid.UUID:
-        """후보가 어떤 Observation에서 나왔는지 잇는다."""
+        """후보가 어떤 Observation에서 나왔는지 잇는다.
+
+        locator의 빈 항목은 저장하지 않는다. `locator != '{}'`가 인용 검증
+        통과 여부를 읽는 신호이므로, 값이 없는 키까지 적으면 그 판정과
+        무관한 잡음이 JSONB에 남는다.
+        """
         row = KnowledgeCandidateEvidenceLinkRow(
             id=uuid.uuid4(),
             workspace_id=workspace_id,
@@ -729,7 +734,15 @@ class SqlAlchemyKnowledgeCandidateRepository:
             evidence_node_id=evidence_node_id,
             evidence_role="supports",
             excerpt=excerpt,
-            locator=asdict(locator) if locator is not None else {},
+            locator=(
+                {
+                    key: value
+                    for key, value in asdict(locator).items()
+                    if value is not None
+                }
+                if locator is not None
+                else {}
+            ),
         )
         self._session.add(row)
         self._session.flush()
