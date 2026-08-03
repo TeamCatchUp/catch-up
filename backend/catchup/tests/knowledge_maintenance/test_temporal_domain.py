@@ -5,6 +5,7 @@ from datetime import timezone
 
 from catchup.knowledge_maintenance.domain.temporal import claim_not_closed_at
 from catchup.knowledge_maintenance.domain.temporal import claim_valid_at
+from catchup.knowledge_maintenance.domain.temporal import resolve_reference_time
 
 T = datetime(2026, 8, 1, 12, 0, tzinfo=timezone.utc)
 BEFORE = datetime(2026, 7, 1, tzinfo=timezone.utc)
@@ -54,3 +55,24 @@ def test_claim_closing_after_t_is_not_closed() -> None:
 def test_closing_boundary_is_half_open() -> None:
     # 구간은 [from, to)다. T == valid_to면 이미 닫힌 것으로 본다.
     assert not claim_not_closed_at(T, T)
+
+
+def test_reference_time_prefers_occurred_at() -> None:
+    value, source = resolve_reference_time(
+        occurred_at=BEFORE, source_updated_at=T, observed_at=AFTER
+    )
+    assert (value, source) == (BEFORE, "occurred_at")
+
+
+def test_reference_time_falls_back_to_source_updated_at() -> None:
+    value, source = resolve_reference_time(
+        occurred_at=None, source_updated_at=T, observed_at=AFTER
+    )
+    assert (value, source) == (T, "source_updated_at")
+
+
+def test_reference_time_falls_back_to_observed_at() -> None:
+    value, source = resolve_reference_time(
+        occurred_at=None, source_updated_at=None, observed_at=AFTER
+    )
+    assert (value, source) == (AFTER, "observed_at")

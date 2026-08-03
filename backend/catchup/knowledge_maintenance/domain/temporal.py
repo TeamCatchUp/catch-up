@@ -36,3 +36,25 @@ def claim_not_closed_at(
     분리한다.
     """
     return valid_to is None or valid_to > at
+
+
+def resolve_reference_time(
+    *,
+    occurred_at: datetime | None,
+    source_updated_at: datetime | None,
+    observed_at: datetime,
+) -> tuple[datetime, str]:
+    """문서의 기준 시각과 그 출처를 정한다.
+
+    기준 시각은 문서 안의 시간 표현을 해석할 때 "지금"으로 삼는
+    시각이다. 원천 사건 시각(occurred_at)이 최선이고, 없으면 원문
+    변경 시각, 그것도 없으면 수집 시각으로 내려간다 — Graphiti
+    reference_time 방식이다. 어느 단계가 쓰였는지가 품질 추적의
+    재료이므로 출처를 함께 돌려준다. reader의 SQL coalesce
+    (find_claim_candidates)와 같은 사슬이어야 한다.
+    """
+    if occurred_at is not None:
+        return occurred_at, "occurred_at"
+    if source_updated_at is not None:
+        return source_updated_at, "source_updated_at"
+    return observed_at, "observed_at"
