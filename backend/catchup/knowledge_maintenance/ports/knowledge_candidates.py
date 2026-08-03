@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Sequence
+from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
 from types import TracebackType
@@ -27,6 +28,19 @@ from catchup.knowledge_maintenance.domain.knowledge_candidate import (
 )
 from catchup.knowledge_maintenance.ports.knowledge_nodes import KnowledgeNodeRepository
 from catchup.knowledge_maintenance.ports.ontology import OntologyRepository
+
+
+@dataclass(frozen=True, slots=True)
+class AsOfClaim:
+    """as-of 조회 결과의 claim 하나를 담는다."""
+
+    claim_id: uuid.UUID
+    predicate: str
+    value_type: str
+    value: object
+    statement: str
+    valid_from: datetime | None
+    valid_to: datetime | None
 
 
 class KnowledgeCandidateRepository(Protocol):
@@ -124,6 +138,28 @@ class KnowledgeCandidateRepository(Protocol):
 
         모순 판정은 같은 대상에 대한 주장끼리 비교하는 일이고, 어느 쪽이
         더 최근인지도 알아야 한다. 후보 행만으로는 둘 다 알 수 없다.
+        """
+        ...
+
+    def find_accepted_claims_as_of(
+        self,
+        *,
+        workspace_id: int,
+        subject_node_id: uuid.UUID,
+        at: datetime,
+        predicate: str | None = None,
+    ) -> tuple[AsOfClaim, ...]:
+        """어떤 노드에 대해 at 시점에 참이었던 claim을 읽는다.
+
+        구간 조건은 `domain.temporal.claim_valid_at`과 정의가 같다 —
+        `(valid_from IS NULL OR valid_from <= at) AND (valid_to IS NULL
+        OR valid_to > at)`. 그 함수가 유일한 정의처이고 이 SQL은 같은
+        규칙을 DB로 옮긴 것이므로, 한쪽만 고치면 안 된다.
+
+        accepted만 싣는다. pending은 아직 지식이 아니고 rejected는
+        참이었던 적이 없다. subject는 노드를 직접 가리키는 claim과, 그
+        노드로 해소된 entity 후보를 가리키는 claim 둘 다 본다.
+        predicate를 주면 그 술어만 거른다.
         """
         ...
 

@@ -27,6 +27,20 @@ class KnowledgeNodeRepository(Protocol):
         """canonical key로 entity 노드를 찾는다."""
         ...
 
+    def find_entity_by_normalized_alias(
+        self,
+        *,
+        workspace_id: int,
+        normalized_alias: str,
+    ) -> KnowledgeNode | None:
+        """정규화된 alias 정확 일치로 entity 노드를 찾는다.
+
+        alias는 identity가 아니라 단서이므로 같은 alias가 여러 노드에
+        걸릴 수 있다. 그때는 node id 순 첫 번째 하나만 돌려준다 —
+        같은 질의가 같은 답을 주어야 하기 때문이다. 못 찾으면 None이다.
+        """
+        ...
+
     def create_entity_node(
         self,
         *,
