@@ -8,6 +8,8 @@ from datetime import timezone
 from pathlib import Path
 from typing import Any
 
+import pytest
+
 from catchup.evaluation.longmemeval.dataset import bootstrap_sessions
 from catchup.evaluation.longmemeval.dataset import load_oracle
 from catchup.evaluation.longmemeval.dataset import parse_lme_date
@@ -99,6 +101,23 @@ def test_parse_lme_date_returns_utc_aware_datetime() -> None:
     assert parsed == datetime(2023, 4, 10, 23, 7, tzinfo=timezone.utc)
     assert parsed.tzinfo is timezone.utc
     assert parsed.utcoffset() is not None
+
+
+@pytest.mark.parametrize(
+    "weekday",
+    ["Mon", "월", "lun.", "Понедельник", "Tue", ""],
+)
+def test_parse_lme_date_ignores_the_weekday_token(weekday: str) -> None:
+    """요일 토큰이 무슨 문자열이든 날짜 값이 달라지지 않는다.
+
+    `%a`로 읽으면 요일 이름이 프로세스 로케일에 묶인다. 비-C 로케일에서
+    같은 파일이 `ValueError`로 죽거나, 요일이 틀린 데이터에서 파싱이
+    실패한다. 날짜는 연·월·일·시·분만으로 이미 정해지므로 요일은 값에
+    아무 영향도 주면 안 된다.
+    """
+    parsed = parse_lme_date(f"2023/04/10 ({weekday}) 23:07")
+
+    assert parsed == datetime(2023, 4, 10, 23, 7, tzinfo=timezone.utc)
 
 
 def test_load_oracle_sorts_sessions_in_timestamp_order(tmp_path: Path) -> None:

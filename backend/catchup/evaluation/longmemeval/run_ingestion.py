@@ -64,6 +64,31 @@ DEFAULT_ORACLE_PATH = (
 SOURCE_TYPE = "longmemeval"
 SCOPE_ID = "longmemeval"
 ENTITY_TYPE = "session"
+EVAL_WORKSPACE_ID = 902
+"""평가 전용 workspace 식별자를 나타낸다. bootstrap은 여기 못 넣는다."""
+
+
+def check_bootstrap_workspace(mode: str, workspace_id: int) -> None:
+    """bootstrap 모드가 평가 workspace를 겨냥하면 막는다.
+
+    부트스트랩 세션은 어휘 튜닝용이라 평가 대상 밖에서 고른 것이다.
+    이 세션이 평가 workspace에 섞이면 채점기는 아무 오류도 보지 못한
+    채 오염된 지식 위에서 점수를 낸다 — 벤치마크가 조용히 무효가 된다.
+    되돌리기도 어려우므로 실행 전에 끊는다.
+
+    Raises:
+        SystemExit: bootstrap 모드인데 workspace가 평가용일 때 낸다.
+    """
+    if mode != "bootstrap":
+        return
+    if workspace_id != EVAL_WORKSPACE_ID:
+        return
+    raise SystemExit(
+        f"bootstrap 모드는 평가 workspace({EVAL_WORKSPACE_ID})에 "
+        "넣을 수 없다. 부트스트랩 세션이 평가 지식에 섞이면 벤치마크가 "
+        "조용히 무효가 된다. `--workspace-id 901` 등 별도 workspace를 "
+        "지정하라."
+    )
 
 
 def session_content(session: OracleSession) -> str:
@@ -145,7 +170,11 @@ def _eval_sessions(
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--workspace-id", type=int, default=902)
+    parser.add_argument(
+        "--workspace-id",
+        type=int,
+        default=EVAL_WORKSPACE_ID,
+    )
     parser.add_argument(
         "--mode",
         choices=("eval", "bootstrap"),
@@ -159,6 +188,8 @@ def main() -> None:
         default=DEFAULT_ORACLE_PATH,
     )
     args = parser.parse_args()
+
+    check_bootstrap_workspace(args.mode, args.workspace_id)
 
     if not args.oracle_path.exists():
         raise SystemExit(f"oracle 파일이 없다: {args.oracle_path}")

@@ -17,6 +17,7 @@ DB와 LLM에 의존하지 않는 순수 데이터 모듈이다. 파일을 읽고
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Iterable
 from collections.abc import Mapping
 from collections.abc import Sequence
@@ -26,8 +27,11 @@ from datetime import timezone
 from pathlib import Path
 from typing import Any
 
-LME_DATE_FORMAT = "%Y/%m/%d (%a) %H:%M"
-"""oracle의 날짜 문자열 형식을 나타낸다. 예: `2023/04/10 (Mon) 23:07`."""
+LME_DATE_FORMAT = "%Y/%m/%d %H:%M"
+"""요일 토큰을 벗겨낸 뒤 쓰는 날짜 형식을 나타낸다."""
+
+LME_WEEKDAY_TOKEN = re.compile(r"\s*\([^()]*\)\s*")
+"""날짜 문자열 안의 요일 괄호 토큰을 나타낸다. 예: ` (Mon) `."""
 
 ABSTENTION_SUFFIX = "_abs"
 """abstention 문항의 question_id 접미사를 나타낸다."""
@@ -103,8 +107,14 @@ def parse_lme_date(raw: str) -> datetime:
 
     원본에는 시간대 정보가 없다. 데이터셋 전체를 하나의 시간축에 놓으려고
     UTC로 고정해 읽는다.
+
+    요일 괄호 토큰(` (Mon) `)은 파싱 전에 정규식으로 벗겨낸다.
+    `%a`로 읽으면 프로세스 로케일에 따라 같은 파일이 어디서는 읽히고
+    어디서는 `ValueError`가 난다. 날짜 값은 연·월·일·시·분만으로 이미
+    정해지므로 요일은 버려도 정보 손실이 없다.
     """
-    return datetime.strptime(raw, LME_DATE_FORMAT).replace(
+    normalized = LME_WEEKDAY_TOKEN.sub(" ", raw).strip()
+    return datetime.strptime(normalized, LME_DATE_FORMAT).replace(
         tzinfo=timezone.utc
     )
 

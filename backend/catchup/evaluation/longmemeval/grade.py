@@ -329,17 +329,24 @@ def grade_questions(
     evidence: Mapping[str, EvidenceStats],
     judge: JudgeFn,
     on_row: Callable[[GradeRow], None] | None = None,
+    on_skip: Callable[[str], None] | None = None,
 ) -> list[GradeRow]:
     """답변 목록을 하나씩 판정하고 오답에 원인을 붙인다.
 
     귀속은 오답(`no`)에만 붙인다. 못 읽은 판정(`error`)에 원인을 붙이면
     파이프라인이 실패했다는 증거가 없는데도 실패 분포가 커진다.
+
+    채점 서브셋에 없는 question_id는 판정하지 않고 건너뛰되 `on_skip`으로
+    알린다. 조용히 버리면 결과 파일과 서브셋이 어긋났을 때 분모만 작아진
+    정답률이 정상처럼 보인다.
     """
     rows: list[GradeRow] = []
     for result in results:
         question_id = str(result["question_id"])
         question = questions.get(question_id)
         if question is None:
+            if on_skip is not None:
+                on_skip(question_id)
             continue
         hypothesis = str(result.get("hypothesis") or "")
         trace = traces.get(question_id, {})
@@ -587,6 +594,8 @@ class ReportInputs:
         contradiction_total: workspace 전체 모순 안건 수를 나타낸다.
         contradiction_decided: 그중 결정이 내려진 안건 수를 나타낸다.
         vocabulary_snapshots: 추출에 쓰인 어휘 스냅샷 목록을 담는다.
+        skipped_question_ids: 채점 서브셋에 없어 버린 결과 행의 식별자를
+            담는다. 정답률 분모에 들어가지 않은 문항이다.
         input_price: 입력 토큰 백만 개당 단가를 나타낸다.
         output_price: 출력 토큰 백만 개당 단가를 나타낸다.
     """
@@ -600,6 +609,7 @@ class ReportInputs:
     contradiction_total: int
     contradiction_decided: int
     vocabulary_snapshots: tuple[tuple[str, str, int], ...]
+    skipped_question_ids: tuple[str, ...] = ()
     input_price: float = DEFAULT_INPUT_PRICE
     output_price: float = DEFAULT_OUTPUT_PRICE
 
@@ -647,6 +657,18 @@ def render_report(inputs: ReportInputs) -> str:
     )
     lines.append("")
 
+    skipped = inputs.skipped_question_ids
+    if skipped:
+        lines.append(
+            f"주의: QA 결과 {len(skipped)}건이 채점 서브셋에 없어 판정 "
+            "없이 버려졌다. 위 분모에는 들어가지 않았으므로 결과 파일과 "
+            "`--per-type` 서브셋이 같은 실행에서 나온 것인지 확인하라."
+        )
+        preview = ", ".join(f"`{qid}`" for qid in sorted(skipped)[:10])
+        suffix = " …" if len(skipped) > 10 else ""
+        lines.append(f"버린 문항: {preview}{suffix}")
+        lines.append("")
+
     lines.append("## 유형별 정답률")
     lines.append("")
     lines.append("| 유형 | 문항 | 정답 | 오답 | 미채점 | 정답률 |")
@@ -689,7 +711,7 @@ def render_report(inputs: ReportInputs) -> str:
     lines.append("## 진단 한계")
     lines.append("")
     lines.append(
-        "위 분포는 정확한 인과 추적이 아니라 근사다. 세 한계 모두 "
+        "위 분포는 정확한 인과 추적이 아니라 근사다. 네 한계 모두 "
         "실패를 실제보다 적게 세는 쪽으로 기울므로, 이 표를 낙관 쪽으로 "
         "더 읽으면 안 된다."
     )
@@ -712,6 +734,13 @@ def render_report(inputs: ReportInputs) -> str:
         "않았다\"를 컨텍스트 claim이 0인지로 근사한다. 승자가 아닌 다른 "
         "claim이 실려 있으면 이 규칙은 걸리지 않고 `answer_generation`으로 "
         "흐른다."
+    )
+    lines.append(
+        "4. relation 조회 경로가 없다. 조회는 subject 단위 as-of 질의뿐"
+        "이라, 두 subject를 잇는 relation을 물어야 풀리는 multi-session "
+        "문항은 근거가 지식에 있어도 컨텍스트에 실리지 않는다. 이 오답은 "
+        "귀속에서 별도 원인으로 갈라지지 않고 `answer_generation` 쪽으로 "
+        "흘러 실제 조회 실패보다 적게 잡힌다."
     )
     lines.append("")
 
@@ -990,6 +1019,7 @@ def main() -> int:
         judge = bedrock_judge(service.get_llm())
 
         grades_path = args.results_dir / GRADES_FILENAME
+        skipped: list[str] = []
         started = time.perf_counter()
         with grades_path.open("w", encoding="utf-8") as grades_file:
 
@@ -1012,6 +1042,7 @@ def main() -> int:
                 evidence=evidence,
                 judge=judge,
                 on_row=_record,
+                on_skip=skipped.append,
             )
         grade_elapsed_ms = (time.perf_counter() - started) * 1000
     finally:
@@ -1027,6 +1058,7 @@ def main() -> int:
         contradiction_total=len(proposals),
         contradiction_decided=sum(1 for p in proposals if p.decided),
         vocabulary_snapshots=tuple(snapshots),
+        skipped_question_ids=tuple(skipped),
         input_price=args.input_price,
         output_price=args.output_price,
     )
@@ -1066,6 +1098,12 @@ def main() -> int:
     graded = sum(1 for row in rows if row.verdict != VERDICT_ERROR)
     print(f"\n=== 채점 결과 (ws={args.workspace_id}) ===")
     print(f"  정답 {correct}/{graded}  (미채점 {len(rows) - graded})")
+    if skipped:
+        print(
+            f"  [경고] 채점 서브셋에 없어 버린 결과 {len(skipped)}건: "
+            + ", ".join(sorted(skipped)[:10])
+            + (" …" if len(skipped) > 10 else "")
+        )
     print(f"  {args.results_dir / GRADES_FILENAME}")
     print(f"  {report_path}")
     print(f"  {grade_usage_path}")

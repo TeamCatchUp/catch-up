@@ -16,10 +16,13 @@ DB도 LLM도 부르지 않는다.
 
 from __future__ import annotations
 
+from datetime import datetime
+from datetime import timezone
 from pathlib import Path
 
 import pytest
 
+from catchup.evaluation.longmemeval.dataset import OracleQuestion
 from catchup.evaluation.longmemeval.diagnosis import ANSWER_GENERATION
 from catchup.evaluation.longmemeval.diagnosis import EvidenceStats
 from catchup.evaluation.longmemeval.diagnosis import FailureAttribution
@@ -33,9 +36,11 @@ from catchup.evaluation.longmemeval.grade import VERDICT_ERROR
 from catchup.evaluation.longmemeval.grade import VERDICT_NO
 from catchup.evaluation.longmemeval.grade import VERDICT_YES
 from catchup.evaluation.longmemeval.grade import GradeRow
+from catchup.evaluation.longmemeval.grade import JudgeResult
 from catchup.evaluation.longmemeval.grade import ReportInputs
 from catchup.evaluation.longmemeval.grade import build_judge_prompt
 from catchup.evaluation.longmemeval.grade import estimate_cost
+from catchup.evaluation.longmemeval.grade import grade_questions
 from catchup.evaluation.longmemeval.grade import judge_rule
 from catchup.evaluation.longmemeval.grade import parse_verdict
 from catchup.evaluation.longmemeval.grade import render_report
@@ -155,7 +160,10 @@ def test_estimate_cost_is_zero_without_tokens() -> None:
     assert cost == pytest.approx(0.0)
 
 
-def _report_inputs() -> ReportInputs:
+def _report_inputs(
+    *,
+    skipped_question_ids: tuple[str, ...] = (),
+) -> ReportInputs:
     """오답 한 건짜리 최소 리포트 입력을 만든다."""
     row = GradeRow(
         question_id="q1",
@@ -187,13 +195,14 @@ def _report_inputs() -> ReportInputs:
         contradiction_total=3,
         contradiction_decided=1,
         vocabulary_snapshots=(("ont-1", "v1", 40),),
+        skipped_question_ids=skipped_question_ids,
     )
 
 
 def test_report_states_the_attribution_limits() -> None:
-    """리포트 본문이 귀속 근사의 한계 셋을 스스로 밝힌다.
+    """리포트 본문이 귀속 근사의 한계 넷을 스스로 밝힌다.
 
-    리포트만 읽는 사람에게 이 한계가 안 보이면, 셋 다 실패를 적게 세는
+    리포트만 읽는 사람에게 이 한계가 안 보이면, 넷 다 실패를 적게 세는
     쪽으로 기운 분포를 있는 그대로의 인과로 읽게 된다.
     """
     report = render_report(_report_inputs())
@@ -205,3 +214,59 @@ def test_report_states_the_attribution_limits() -> None:
     assert "has_answer" in report
     assert "adjudication_wrong" in report
     assert "승자 claim" in report
+    assert "relation" in report
+    assert "subject" in report
+
+
+def test_report_warns_about_rows_dropped_from_grading() -> None:
+    """채점 서브셋 밖이라 버린 결과 행을 리포트가 드러낸다.
+
+    버린 행은 정답률 분모에 안 들어간다. 조용히 사라지면 결과 파일과
+    서브셋이 어긋났을 때도 분모만 작아진 정답률이 정상처럼 보인다.
+    """
+    report = render_report(_report_inputs(skipped_question_ids=("q9", "q8")))
+
+    assert "2건" in report
+    assert "`q8`" in report
+    assert "`q9`" in report
+
+
+def test_report_omits_the_drop_warning_when_nothing_was_dropped() -> None:
+    """버린 행이 없으면 경고 문구를 넣지 않는다."""
+    report = render_report(_report_inputs())
+
+    assert "버린 문항" not in report
+
+
+def _question(question_id: str) -> OracleQuestion:
+    """채점에 필요한 최소 필드만 채운 문항을 만든다."""
+    return OracleQuestion(
+        question_id=question_id,
+        question_type="knowledge-update",
+        question="Where does she work?",
+        answer="Globex",
+        question_date=datetime(2023, 5, 1, tzinfo=timezone.utc),
+        sessions=(),
+        answer_session_ids=frozenset(),
+    )
+
+
+def test_grade_questions_reports_rows_outside_the_subset() -> None:
+    """서브셋에 없는 결과 행을 건너뛰되 그 사실을 `on_skip`으로 알린다."""
+    dropped: list[str] = []
+
+    rows = grade_questions(
+        [{"question_id": "q1"}, {"question_id": "ghost"}],
+        questions={"q1": _question("q1")},
+        traces={},
+        evidence={},
+        judge=lambda **_: JudgeResult(
+            verdict=VERDICT_YES,
+            raw="yes",
+            usage=UsageTotals(),
+        ),
+        on_skip=dropped.append,
+    )
+
+    assert [row.question_id for row in rows] == ["q1"]
+    assert dropped == ["ghost"]
