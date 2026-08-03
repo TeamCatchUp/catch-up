@@ -11,9 +11,17 @@
 모듈은 DB에 아무것도 쓰지 않고, 저장 직전에 발행이 읽을 계약인
 `ExtractionVocabulary.model_validate`를 스스로 통과시켜 본다.
 
+재료는 아직 승인 경계를 지나지 않은 관찰이되, 전부는 아니다.
+`resolution_status`가 `pending`이거나 `accepted`인 candidate만 읽는다.
+`rejected`는 참이었던 적이 없는 값(오류값 포함)이고 `duplicate`는 같은
+값을 다시 세는 것이라, 둘 다 치역 판단과 관찰 횟수를 오염시킨다.
+
 모델이 지어낸 predicate와 계약에 없는 치역은 조용히 통과시키지 않고
-거부한다. 초안이라도 사람이 검토할 대상은 실제로 관찰된 것뿐이어야
-한다.
+거부한다. 배치로 나눠 물을 때도 판정 기준은 그 배치에서 실제로 보여준
+predicate다 — 아직 샘플을 보여주지도 않은 predicate의 치역은 근거가
+없기 때문이다. 반대로 모델이 대답을 빠뜨린 predicate는 조용히 사라지지
+않게 경고로 남긴다. 초안이라도 사람이 검토할 대상은 실제로 관찰된
+것뿐이어야 한다.
 
 실행:
     uv run python -m catchup.evaluation.longmemeval.draft_vocabulary \\
@@ -36,6 +44,7 @@ from pathlib import Path
 from typing import Any
 from typing import Literal
 
+import structlog
 from langchain_core.language_models import BaseChatModel
 from pydantic import BaseModel
 from pydantic import ConfigDict
@@ -55,6 +64,8 @@ from catchup.db.models import KnowledgeClaimCandidate
 from catchup.knowledge_maintenance.contracts.extraction import ExtractionVocabulary
 from catchup.knowledge_maintenance.contracts.extraction import PredicateEntry
 
+logger = structlog.get_logger(__name__)
+
 DEFAULT_WORKSPACE_ID = 901
 DEFAULT_SNAPSHOT_ID = "draft"
 # 한 번에 너무 많은 predicate를 물으면 뒤쪽 정의가 뭉개진다. 배치로
@@ -66,6 +77,11 @@ DEFAULT_SAMPLE_LIMIT = 5
 VALUE_PREVIEW_LIMIT = 120
 
 VALUE_TYPES = ("number", "date", "boolean", "enum", "text")
+
+# 치역 판단의 재료가 될 자격이 있는 관찰만 남긴다. rejected는 참이었던
+# 적이 없는 값이고 duplicate는 같은 값의 재계수라, 값 샘플에도 관찰
+# 횟수에도 들어가면 안 된다.
+SAMPLE_RESOLUTION_STATUSES = ("pending", "accepted")
 
 PROMPT_HEADER = """\
 You are drafting a closed vocabulary for a knowledge extraction pipeline.
@@ -277,12 +293,15 @@ def draft_vocabulary(
             "value_type을 붙일 predicate가 하나도 없다."
         )
 
-    requested = frozenset(sample.predicate for sample in samples)
     entries: list[PredicateEntry] = []
     seen: set[str] = set()
     usage = UsageTotals()
 
     for batch in _batched(samples, max(batch_size, 1)):
+        # 판정 기준은 전체 요청이 아니라 이 배치다. 다른 배치의
+        # predicate가 섞여 오면 그 치역은 샘플을 보지 않고 나온
+        # 것이므로 근거가 없다.
+        requested = frozenset(sample.predicate for sample in batch)
         response = draft(batch)
         usage = usage.plus(response.usage)
         for payload in response.entries:
@@ -295,6 +314,23 @@ def draft_vocabulary(
             entries.append(entry)
 
     ordered = {entry.name: entry for entry in entries}
+    missing = [
+        sample.predicate
+        for sample in samples
+        if sample.predicate not in ordered
+    ]
+    if missing:
+        # 초안이 조용히 짧아지면 사람은 그 predicate를 검토 대상에서
+        # 통째로 놓친다. 멈추지는 않되 반드시 보이게 남긴다.
+        logger.warning(
+            "draft_vocabulary.missing_predicates",
+            count=len(missing),
+            predicates=missing,
+        )
+        print(
+            f"경고: 모델이 응답하지 않은 predicate {len(missing)}종이 "
+            f"초안에서 빠졌다: {', '.join(missing)}"
+        )
     entries = [
         ordered[sample.predicate]
         for sample in samples
@@ -321,7 +357,10 @@ def load_predicate_samples(
     """부트스트랩 workspace의 predicate와 값 샘플을 읽는다.
 
     읽기 전용이다. candidate 테이블을 직접 본다 — 아직 승인 경계를 지나지
-    않은 관찰이 어휘의 재료이기 때문이다.
+    않은 관찰이 어휘의 재료이기 때문이다. 다만 `pending`과 `accepted`만
+    센다. `rejected`는 참이었던 적이 없는 값(오류값 포함)이고
+    `duplicate`는 같은 값의 재계수라, 값 샘플과 관찰 횟수 양쪽을
+    오염시킨다.
     """
     ranked = (
         select(
@@ -338,7 +377,12 @@ def load_predicate_samples(
             .over(partition_by=KnowledgeClaimCandidate.predicate)
             .label("occurrences"),
         )
-        .where(KnowledgeClaimCandidate.workspace_id == workspace_id)
+        .where(
+            KnowledgeClaimCandidate.workspace_id == workspace_id,
+            KnowledgeClaimCandidate.resolution_status.in_(
+                SAMPLE_RESOLUTION_STATUSES
+            ),
+        )
         .subquery()
     )
 

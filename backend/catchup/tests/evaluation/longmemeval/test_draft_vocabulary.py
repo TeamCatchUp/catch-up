@@ -15,6 +15,7 @@ import json
 from types import SimpleNamespace
 
 import pytest
+from sqlalchemy.dialects import postgresql
 
 from catchup.evaluation.longmemeval.draft_vocabulary import DraftResponse
 from catchup.evaluation.longmemeval.draft_vocabulary import PredicateSample
@@ -22,6 +23,7 @@ from catchup.evaluation.longmemeval.draft_vocabulary import UsageTotals
 from catchup.evaluation.longmemeval.draft_vocabulary import VocabularyDraftError
 from catchup.evaluation.longmemeval.draft_vocabulary import build_prompt
 from catchup.evaluation.longmemeval.draft_vocabulary import draft_vocabulary
+from catchup.evaluation.longmemeval.draft_vocabulary import load_predicate_samples
 from catchup.evaluation.longmemeval.draft_vocabulary import usage_from_message
 from catchup.knowledge_maintenance.contracts.extraction import ExtractionVocabulary
 
@@ -159,6 +161,63 @@ def test_usage_totals_are_summed_across_batches():
     assert outcome.usage.output_tokens == 8
     assert outcome.usage.as_dict()["total_tokens"] == 25
     assert outcome.vocabulary.predicates == ("a", "b")
+
+
+def test_predicate_from_another_batch_is_rejected():
+    """다른 배치의 predicate를 미리 정의해 오면 거부한다.
+
+    배치 1은 `b`의 값 샘플을 본 적이 없다. 그 상태에서 나온 `b`의
+    치역은 관찰이 아니라 짐작이므로, 나중 배치에서 "중복"으로 뒤늦게
+    터지기 전에 여기서 멈춘다.
+    """
+    draft = _fake_draft(
+        DraftResponse(entries=(_entry(name="a"), _entry(name="b"))),
+        DraftResponse(entries=(_entry(name="b"),)),
+    )
+
+    with pytest.raises(VocabularyDraftError) as error:
+        draft_vocabulary([_sample("a"), _sample("b")], draft, batch_size=1)
+
+    assert "b" in str(error.value)
+    assert "요청하지 않은" in str(error.value)
+    assert [len(call) for call in draft.calls] == [1]
+
+
+def test_missing_predicate_is_reported_loudly(capsys):
+    """모델이 빠뜨린 predicate는 조용히 사라지지 않고 경고로 남는다."""
+    draft = _fake_draft(DraftResponse(entries=(_entry(name="a"),)))
+
+    outcome = draft_vocabulary([_sample("a"), _sample("b")], draft)
+
+    assert outcome.vocabulary.predicates == ("a",)
+    printed = capsys.readouterr().out
+    assert "b" in printed
+    assert "경고" in printed
+
+
+def test_samples_exclude_rejected_and_duplicate_candidates():
+    """값 샘플 조회가 pending·accepted candidate만 읽는다."""
+    captured: list = []
+
+    class _FakeResult:
+        def all(self):
+            return []
+
+    class _FakeSession:
+        def execute(self, statement):
+            captured.append(statement)
+            return _FakeResult()
+
+    load_predicate_samples(_FakeSession(), workspace_id=901)
+
+    compiled = str(
+        captured[0].compile(
+            dialect=postgresql.dialect(),
+            compile_kwargs={"literal_binds": True},
+        )
+    )
+    assert "resolution_status IN ('pending', 'accepted')" in compiled
+    assert "rejected" not in compiled
 
 
 def test_empty_samples_are_rejected():
