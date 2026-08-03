@@ -30,7 +30,10 @@ const meta = {
       },
       viewport: { width: 716, height: 400 },
       states: ['rows', 'empty', 'long-name'],
-      layoutNotes: ['헤더 716×36, 행 716×46, 대상 x12 w496, 범위 x524 w180.'],
+      layoutNotes: [
+        '표 716, 헤더 36, 행 46. 대상 x12 w496 / 범위 x524 w180.',
+        '범위 열은 192(=716-524)여야 날짜가 한 줄에 들어간다. 180으로 잡으면 줄바꿈이 난다.',
+      ],
       dataNotes: ['Figma는 9행 고정이고 페이지네이션이 없다 — 현행 Pagination 유지 여부는 계획 ④에서 정한다.'],
     }),
   },
@@ -40,8 +43,9 @@ export default meta;
 
 type Story = StoryObj<typeof EmbeddedResourceTable>;
 
+/** Figma 기준 폭 재현 — 패널 780 안에 좌우 32 여백, 표는 정확히 716 */
 const Frame = ({ children }: { children: React.ReactNode }) => (
-  <div className="bg-fill-normal-normal w-179 p-6">{children}</div>
+  <div className="bg-fill-normal-normal w-195 px-8 py-6">{children}</div>
 );
 
 export const Rows: Story = {
@@ -55,7 +59,14 @@ export const Rows: Story = {
 
     await expect(canvas.getByText('임베딩된 채널')).toBeInTheDocument();
     await expect(canvas.getByText('데이터 범위')).toBeInTheDocument();
-    await expect(canvas.getAllByRole('row')).toHaveLength(5); // 헤더 1 + 본문 4
+
+    const rows = canvas.getAllByRole('row');
+    await expect(rows).toHaveLength(5); // 헤더 1 + 본문 4
+
+    // 범위 열이 좁으면 날짜가 줄바꿈되어 행이 46을 넘는다 — 폭 회귀 감지
+    for (const row of rows.slice(1)) {
+      await expect(row.getBoundingClientRect().height).toBeLessThanOrEqual(46);
+    }
   },
 };
 

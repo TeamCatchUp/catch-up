@@ -17,7 +17,11 @@ interface EmbeddedResourceTableProps {
 
 /**
  * 임베딩 관리 탭의 대상 목록.
- * Figma `17071:111748` — 헤더 716×36, 행 716×46, 대상 x12 w496, 범위 x524 w180.
+ * Figma `17071:111748`(Slack) · `17169:31054`(Jira) — 둘의 구조가 같다.
+ *
+ * 표 716, 헤더 36, 행 46. 대상 x12 w496 / 범위 x524 w180.
+ * 범위 열은 `716-524=192`이고 그 안에서 내용이 180을 정확히 채운다
+ * (`2000.00.00`81 + 6 + `-`7 + 6 + `2000.00.00`80). 192보다 좁히면 줄바꿈이 난다.
  *
  * 비면 표 대신 빈 상태로 통째로 교체된다(요약 카드는 위에 그대로 남는다).
  * Figma는 9행 고정에 페이지네이션이 없다 — 현행 Pagination 유지 여부는 계획 ④에서 정한다.
@@ -34,7 +38,7 @@ export default function EmbeddedResourceTable({ service, label, rows }: Embedded
           <th scope="col" className="text-body-xsmall text-text-normal-alternative pr-4 pl-3 text-left font-medium">
             {label}
           </th>
-          <th scope="col" className="text-body-xsmall text-text-normal-alternative w-45 pr-3 text-left font-medium">
+          <th scope="col" className="text-body-xsmall text-text-normal-alternative w-48 pr-3 text-left font-medium">
             데이터 범위
           </th>
         </tr>
@@ -48,7 +52,9 @@ export default function EmbeddedResourceTable({ service, label, rows }: Embedded
                 <span className="text-body-small text-text-normal-neutral truncate">{row.name}</span>
               </div>
             </td>
-            <td className="text-body-small text-text-normal-assistive w-45 py-2 pr-3">{row.dataRange}</td>
+            <td className="text-body-small text-text-normal-assistive w-48 py-2 pr-3 whitespace-nowrap">
+              {row.dataRange}
+            </td>
           </tr>
         ))}
       </tbody>
