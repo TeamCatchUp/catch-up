@@ -150,6 +150,8 @@ async def _extract_one(
         source_type="channel_talk",
         metadata_entities=observation.observation.metadata_entities,
         vocabulary=vocabulary,
+        # 사슬로 계산한 기준 시각 연결은 러너 배선 단계에서 붙인다.
+        reference_time=None,
         contract_version=CONTRACT_VERSION,
     )
 

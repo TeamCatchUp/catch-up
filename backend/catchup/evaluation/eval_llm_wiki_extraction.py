@@ -40,7 +40,7 @@ from catchup.knowledge_maintenance.contracts.extraction import (
     KnowledgeExtractionRequest,
 )
 
-CONTRACT_VERSION = "0"
+CONTRACT_VERSION = "1"
 DEFAULT_OUTPUT_DIR = (
     Path(__file__).parent.parent / "experiments" / "llm_wiki_extraction" / "output"
 )
@@ -164,6 +164,7 @@ async def _extract_one(
         source_type=source.source_type,
         metadata_entities=source.observation.metadata_entities,
         vocabulary=vocabulary,
+        reference_time=None,
         contract_version=CONTRACT_VERSION,
     )
 

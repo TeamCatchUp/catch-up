@@ -347,7 +347,10 @@ class KnowledgeExtractionRequest(BaseModel):
         source_type: 원문이 유입된 source 종류를 나타낸다.
         metadata_entities: 원문 밖 구조에서 이미 확정된 대상을 전달한다.
         vocabulary: 허용된 predicate와 relation type 목록을 전달한다.
-        contract_version: 추출 계약의 버전을 나타낸다.
+        reference_time: 문서의 시간 표현을 해석할 기준 시각을 전달한다.
+            원천 사건 시각이 최선이며, 없으면 절대화 지시가 내려가지 않는다.
+        contract_version: 추출 계약의 버전을 나타낸다. 계약 필드가
+            추가·변경되면 올린다.
     """
 
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
@@ -357,4 +360,5 @@ class KnowledgeExtractionRequest(BaseModel):
     metadata_entities: tuple[MetadataEntity, ...] = ()
     # None이면 어휘 제약 없이 추출한다. 어휘를 만들기 전 관찰 단계에서 쓴다.
     vocabulary: ExtractionVocabulary | None = None
+    reference_time: datetime | None = None
     contract_version: str

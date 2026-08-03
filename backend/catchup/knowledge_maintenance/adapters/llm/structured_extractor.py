@@ -75,6 +75,7 @@ class StructuredKnowledgeExtractor:
             source_type=request.source_type,
             metadata_entities=known_entities,
             vocabulary=request.vocabulary,
+            reference_time=request.reference_time,
         )
 
         # 무엇을 근거로 무엇을 물었는지 남긴다. 본문과 이름은 싣지 않는다.
@@ -89,6 +90,11 @@ class StructuredKnowledgeExtractor:
             "ontology_version": vocabulary.snapshot_id or None,
             "predicate_count": len(vocabulary.predicates),
             "relation_type_count": len(vocabulary.relation_types),
+            "reference_time": (
+                request.reference_time.isoformat()
+                if request.reference_time
+                else None
+            ),
         }
         logger.info("knowledge_extraction_started", **call_context)
 
