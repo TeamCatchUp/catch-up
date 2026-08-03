@@ -8,8 +8,8 @@ import CheckboxIcon from '@/shared/components/ui/checkbox-icon';
 
 import { DEFAULT_PERIOD, type Period } from '../../../../constants/period';
 import type { ChannelTalkChannel } from '../../../../utils/mapChannelTalkSyncTargets';
-import EntityChip from './EntityChip';
-import PeriodSelect from './PeriodSelect';
+import EntityChip from '../../../management/channel-talk/EntityChip';
+import PeriodSelect from '../../../management/channel-talk/PeriodSelect';
 
 interface ChannelGroupProps {
   channel: ChannelTalkChannel;

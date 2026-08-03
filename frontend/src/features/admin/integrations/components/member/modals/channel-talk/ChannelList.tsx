@@ -7,7 +7,7 @@ import CheckboxIcon from '@/shared/components/ui/checkbox-icon';
 import { cn } from '@/shared/utils/cn';
 
 import type { ChannelTalkChannel } from '../../../../utils/mapChannelTalkSyncTargets';
-import EntityChip from './EntityChip';
+import EntityChip from '../../../management/channel-talk/EntityChip';
 
 interface ChannelListProps {
   channels: ChannelTalkChannel[];

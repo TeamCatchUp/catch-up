@@ -1,14 +1,16 @@
 'use client';
 
+import IconTagChannel from '@/public/icons/icon/tag_channel.svg';
 import { cn } from '@/shared/utils/cn';
 
+import EntityChip from '../EntityChip';
 import type { ChannelTalkChannelTarget } from './channelTalkEmbeddingTarget';
-import ChannelTalkNameIcon from './ChannelTalkNameIcon';
 
 interface ChannelTalkChannelListPanelProps {
   channels: readonly ChannelTalkChannelTarget[];
-  activeChannelId: string;
-  onActiveChannelChange: (id: string) => void;
+  /** 우측 패널에 표시 중인 채널 ids — 임베딩 선택과 무관한 visibility state */
+  visibleChannelIds: ReadonlySet<string>;
+  onToggleVisibility: (channelId: string) => void;
 }
 
 /**
@@ -16,16 +18,17 @@ interface ChannelTalkChannelListPanelProps {
  * Figma `17414:97989` 280×634 — 헤더 44 + 목록.
  *
  * 목록 `17414:97995`: `px 12`, 카운트와 리스트 사이 gap 6, 아이템 사이 gap 2.
- * 아이템 `17414:97999`: padding 12, gap 12, radius 8, 선택 시
+ * 아이템 `17414:97999`: padding 12, gap 12, radius 8, 켜져 있으면
  * `fill/primary/normal/neutral` 배경. 테두리는 없다.
  *
- * 여기서 고른 채널은 우측 상세의 강조 대상일 뿐 임베딩 선택이 아니다 —
- * 실제 선택은 우측 체크박스가 한다.
+ * 여기서 켠 채널만 우측에 나온다. 임베딩 선택이 아니라 **표시 토글**이고,
+ * 끄면 그 채널의 임베딩 선택도 함께 풀린다 — 구 모달(`ChannelList`)과 같은
+ * 시맨틱이다.
  */
 export default function ChannelTalkChannelListPanel({
   channels,
-  activeChannelId,
-  onActiveChannelChange,
+  visibleChannelIds,
+  onToggleVisibility,
 }: ChannelTalkChannelListPanelProps) {
   return (
     <div className="flex min-h-0 min-w-0 flex-col">
@@ -38,19 +41,20 @@ export default function ChannelTalkChannelListPanel({
 
         <ul className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto">
           {channels.map((channel) => {
-            const active = channel.id === activeChannelId;
+            const visible = visibleChannelIds.has(channel.id);
             return (
               <li key={channel.id}>
                 <button
                   type="button"
-                  aria-current={active ? 'true' : undefined}
-                  onClick={() => onActiveChannelChange(channel.id)}
+                  aria-pressed={visible}
+                  aria-label={`${channel.name} 표시 (해제 시 임베딩 선택도 함께 해제됨)`}
+                  onClick={() => onToggleVisibility(channel.id)}
                   className={cn(
                     'flex w-full cursor-pointer items-center gap-3 rounded-lg p-3 text-left transition-colors',
-                    active ? 'bg-fill-primary-normal-neutral' : 'hover:bg-fill-normal-interaction-hover',
+                    visible ? 'bg-fill-primary-normal-neutral' : 'hover:bg-fill-normal-interaction-hover',
                   )}
                 >
-                  <ChannelTalkNameIcon kind="channel" />
+                  <EntityChip icon={IconTagChannel} />
                   <span className="text-body-small text-text-normal-neutral min-w-0 flex-1 truncate">
                     {channel.name}
                   </span>

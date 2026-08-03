@@ -1,18 +1,19 @@
 'use client';
 
+import IconBook from '@/public/icons/icon/book.svg';
 import IconReply from '@/public/icons/icon/reply.svg';
 import CheckboxIcon from '@/shared/components/ui/checkbox-icon';
 
-import ChannelTalkDataRangeDropdown from './ChannelTalkDataRangeDropdown';
+import type { Period } from '../../../../constants/period';
+import EntityChip from '../EntityChip';
+import PeriodSelect from '../PeriodSelect';
 import type { ChannelTalkDocumentTarget } from './channelTalkEmbeddingTarget';
-import ChannelTalkNameIcon from './ChannelTalkNameIcon';
 
 interface ChannelTalkDocumentItemProps {
   document: ChannelTalkDocumentTarget;
   selected: boolean;
-  dataRangeOptions: readonly string[];
   onToggle: () => void;
-  onDataRangeChange: (next: string) => void;
+  onDataRangeChange: (next: Period) => void;
 }
 
 /**
@@ -26,7 +27,6 @@ interface ChannelTalkDocumentItemProps {
 export default function ChannelTalkDocumentItem({
   document,
   selected,
-  dataRangeOptions,
   onToggle,
   onDataRangeChange,
 }: ChannelTalkDocumentItemProps) {
@@ -47,17 +47,13 @@ export default function ChannelTalkDocumentItem({
         <div className="flex min-w-0 flex-1 items-center gap-2.5">
           <IconReply aria-hidden="true" className="text-icon-normal-alternative size-6 shrink-0 rotate-180" />
           <div className="flex min-w-0 flex-1 items-center gap-3">
-            <ChannelTalkNameIcon kind="document" />
+            <EntityChip icon={IconBook} />
             <span className="text-body-small text-text-normal-neutral min-w-0 flex-1 truncate">{document.name}</span>
           </div>
         </div>
 
-        <ChannelTalkDataRangeDropdown
-          value={document.dataRange}
-          options={dataRangeOptions}
-          onChange={onDataRangeChange}
-          label={document.name}
-        />
+        {/* Figma Dropdown h36·w68 — SelectTrigger 는 py 기반이라 높이를 박아야 36이 된다 */}
+        <PeriodSelect value={document.dataRange} onChange={onDataRangeChange} className="h-9 w-17 shrink-0" />
       </div>
     </li>
   );

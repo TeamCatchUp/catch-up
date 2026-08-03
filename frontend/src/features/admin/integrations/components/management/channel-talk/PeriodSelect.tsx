@@ -4,7 +4,7 @@ import IconDropdownDown from '@/public/icons/icon/dropdown_down.svg';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/components/ui/select';
 import { cn } from '@/shared/utils/cn';
 
-import { isPeriod, type Period, PERIOD_OPTIONS } from '../../../../constants/period';
+import { isPeriod, type Period, PERIOD_OPTIONS } from '../../../constants/period';
 
 interface PeriodSelectProps {
   value: Period;

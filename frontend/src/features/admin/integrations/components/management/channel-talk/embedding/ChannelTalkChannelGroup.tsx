@@ -1,20 +1,23 @@
 'use client';
 
+import IconTagChannel from '@/public/icons/icon/tag_channel.svg';
 import CheckboxIcon from '@/shared/components/ui/checkbox-icon';
 
-import ChannelTalkDataRangeDropdown from './ChannelTalkDataRangeDropdown';
+import type { Period } from '../../../../constants/period';
+import EntityChip from '../EntityChip';
+import PeriodSelect from '../PeriodSelect';
 import ChannelTalkDocumentItem from './ChannelTalkDocumentItem';
 import type { ChannelTalkChannelTarget } from './channelTalkEmbeddingTarget';
-import ChannelTalkNameIcon from './ChannelTalkNameIcon';
 
 interface ChannelTalkChannelGroupProps {
   channel: ChannelTalkChannelTarget;
-  selectedDocumentIds: readonly string[];
-  dataRangeOptions: readonly string[];
+  /** 채널 자신이 임베딩 대상으로 선택됐는지 — 하위 스페이스와 독립이다 */
+  channelSelected: boolean;
+  selectedDocumentIds: ReadonlySet<string>;
   onToggleChannel: () => void;
   onToggleDocument: (documentId: string) => void;
-  onChannelDataRangeChange: (next: string) => void;
-  onDocumentDataRangeChange: (documentId: string, next: string) => void;
+  onChannelDataRangeChange: (next: Period) => void;
+  onDocumentDataRangeChange: (documentId: string, next: Period) => void;
 }
 
 /**
@@ -25,21 +28,22 @@ interface ChannelTalkChannelGroupProps {
  * py 10, gap 32. 좌측은 체크박스 + 이름, 그 아래 한 줄이 "전체 N개 · M개 선택됨"이고
  * 선택 수만 `text/primary/normal`로 강조된다. 우측은 채널 단위 데이터 기간이다.
  *
- * 채널 체크박스는 하위 도큐먼트가 일부만 선택되면 indeterminate 다.
+ * 채널 체크박스는 하위 전체선택이 **아니다**. 채널 대화 자체가 임베딩 대상이라
+ * 집계도 `1 + 스페이스 수`로 센다 — 구 모달(`ChannelGroup`)과 같은 시맨틱이다.
  */
 export default function ChannelTalkChannelGroup({
   channel,
+  channelSelected,
   selectedDocumentIds,
-  dataRangeOptions,
   onToggleChannel,
   onToggleDocument,
   onChannelDataRangeChange,
   onDocumentDataRangeChange,
 }: ChannelTalkChannelGroupProps) {
-  const total = channel.documentSpaces.length;
-  const selectedCount = channel.documentSpaces.filter((doc) => selectedDocumentIds.includes(doc.id)).length;
-  const allSelected = total > 0 && selectedCount === total;
-  const partiallySelected = selectedCount > 0 && selectedCount < total;
+  // 채널 대화 1건 + 하위 스페이스
+  const total = 1 + channel.documentSpaces.length;
+  const selectedCount =
+    (channelSelected ? 1 : 0) + channel.documentSpaces.filter((doc) => selectedDocumentIds.has(doc.id)).length;
 
   return (
     <section>
@@ -53,20 +57,15 @@ export default function ChannelTalkChannelGroup({
             <button
               type="button"
               role="checkbox"
-              aria-checked={partiallySelected ? 'mixed' : allSelected}
-              aria-label={channel.name}
+              aria-checked={channelSelected}
+              aria-label={`${channel.name} 채널 선택`}
               onClick={onToggleChannel}
               className="shrink-0 cursor-pointer"
             >
-              <CheckboxIcon
-                checked={allSelected}
-                indeterminate={partiallySelected}
-                className="size-6"
-                wrapperClassName="p-1.5"
-              />
+              <CheckboxIcon checked={channelSelected} className="size-6" wrapperClassName="p-1.5" />
             </button>
             <div className="flex min-w-0 flex-1 items-center gap-3">
-              <ChannelTalkNameIcon kind="channel" />
+              <EntityChip icon={IconTagChannel} />
               <span className="text-body-small text-text-normal-neutral min-w-0 flex-1 truncate">{channel.name}</span>
             </div>
           </div>
@@ -79,12 +78,8 @@ export default function ChannelTalkChannelGroup({
           </div>
         </div>
 
-        <ChannelTalkDataRangeDropdown
-          value={channel.dataRange}
-          options={dataRangeOptions}
-          onChange={onChannelDataRangeChange}
-          label={channel.name}
-        />
+        {/* Figma Dropdown h36·w75 — SelectTrigger 는 py 기반이라 높이를 박아야 36이 된다 */}
+        <PeriodSelect value={channel.dataRange} onChange={onChannelDataRangeChange} className="h-9 w-18.75 shrink-0" />
       </div>
 
       <ul className="flex flex-col pr-5 pl-3">
@@ -92,8 +87,7 @@ export default function ChannelTalkChannelGroup({
           <ChannelTalkDocumentItem
             key={document.id}
             document={document}
-            selected={selectedDocumentIds.includes(document.id)}
-            dataRangeOptions={dataRangeOptions}
+            selected={selectedDocumentIds.has(document.id)}
             onToggle={() => onToggleDocument(document.id)}
             onDataRangeChange={(next) => onDocumentDataRangeChange(document.id, next)}
           />
