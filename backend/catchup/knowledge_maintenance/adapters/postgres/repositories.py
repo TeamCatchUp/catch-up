@@ -1004,6 +1004,37 @@ class SqlAlchemyMutationProposalRepository:
             resolver_metadata=row.resolver_metadata,
         )
 
+    def find_decided_by_idempotency_key(
+        self,
+        *,
+        workspace_id: int,
+        idempotency_key: str,
+    ) -> StoredMutationProposal | None:
+        """같은 검토 단위에 이미 내려진 결정을 찾는다.
+
+        결정된 행이 있으면 판정기가 그 구성(member_hash)과 지금의 모순을
+        견줘, 같은 사실이면 다시 묻지 않고 구성이 달라졌으면 새 검토
+        사건을 연다.
+        """
+        row = self._session.scalar(
+            select(KnowledgeMutationProposalRow).where(
+                KnowledgeMutationProposalRow.workspace_id == workspace_id,
+                KnowledgeMutationProposalRow.idempotency_key
+                == idempotency_key,
+                KnowledgeMutationProposalRow.status.in_(
+                    ("approved", "applied", "rejected")
+                ),
+            )
+        )
+        if row is None:
+            return None
+        return StoredMutationProposal(
+            id=row.id,
+            idempotency_key=row.idempotency_key,
+            status=row.status,
+            resolver_metadata=row.resolver_metadata,
+        )
+
     def abandon(self, *, proposal_id: uuid.UUID) -> None:
         """proposal을 접는다."""
         self._session.execute(
@@ -1160,7 +1191,11 @@ class SqlAlchemyMutationProposalRepository:
 
         Raises:
             MergeProposalAlreadyDecided: 계류 중인 모순 안건이 아니다.
+            ValueError: reviewer가 비어 있다. 결정 저널은 누가 정했는지를
+                저장소 수준에서 요구한다.
         """
+        if not reviewer.strip():
+            raise ValueError("reviewer가 비어 있어 결정을 기록할 수 없다.")
         row = self._session.scalar(
             select(KnowledgeMutationProposalRow).where(
                 KnowledgeMutationProposalRow.workspace_id == workspace_id,
@@ -1279,7 +1314,13 @@ class SqlAlchemyMutationProposalRepository:
         status='pending' 조건과 rowcount 검사가 결정 경합의 방어선이다.
         잠금 없는 사전 확인이 없으므로, 두 결정이 동시에 와도 UPDATE의
         행 재평가에서 한쪽만 1행을 얻는다.
+
+        Raises:
+            ValueError: reviewer가 비어 있다. 결정 저널은 누가 정했는지를
+                저장소 수준에서 요구한다.
         """
+        if not reviewer.strip():
+            raise ValueError("reviewer가 비어 있어 결정을 기록할 수 없다.")
         result = self._session.execute(
             update(KnowledgeMutationProposalRow)
             .where(
@@ -1435,9 +1476,11 @@ class SqlAlchemyMutationProposalRepository:
     ) -> uuid.UUID:
         """같은 대상의 주장끼리 값이 어긋난다는 사실을 계획서로 남긴다.
 
-        `add_duplicate_proposal`과 같이 같은 key의 행이 있으면 상태와
-        무관하게 되살려 갈아끼운다. `(workspace_id, idempotency_key)`
-        UNIQUE가 상태를 구분하지 않기 때문이다.
+        `add_duplicate_proposal`과 같이 계류·접힘 상태의 같은 key 행은
+        되살려 갈아끼운다. `(workspace_id, idempotency_key)` UNIQUE가
+        상태를 구분하지 않기 때문이다. 반면 이미 결정된 행(approved·
+        applied·rejected)은 행과 operation을 그대로 보존하고 id만
+        돌려준다 — 사람의 결정은 판정 재실행이 덮을 수 없다.
 
         trigger는 셋 중 정확히 하나만 채워야 하므로 entity trigger를
         비운다. operation은 만들지 않고, 되살린 행에 남아 있던 것은
@@ -1450,9 +1493,27 @@ class SqlAlchemyMutationProposalRepository:
                 == idempotency_key,
             )
         )
+        if existing is not None and existing.status in (
+            "approved",
+            "applied",
+            "rejected",
+        ):
+            logger.info(
+                "contradiction_proposal_already_decided_skip",
+                workspace_id=workspace_id,
+                proposal_id=str(existing.id),
+                status=existing.status,
+            )
+            return existing.id
         if existing is not None:
             proposal_id = existing.id
             existing.status = "pending"
+            # 되살아난 안건은 새 검토 사건이다. 이전 결정의 흔적이
+            # 남으면 감사 기록이 거짓이 된다.
+            existing.reviewer = None
+            existing.reviewed_at = None
+            existing.rejection_reason = None
+            existing.applied_at = None
             existing.proposal_kind = "contradiction"
             existing.trigger_entity_candidate_id = None
             existing.trigger_relation_assertion_candidate_id = None

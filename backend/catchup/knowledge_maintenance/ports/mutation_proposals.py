@@ -151,6 +151,20 @@ class MutationProposalRepository(Protocol):
         """같은 검토 단위로 이미 열려 있는 proposal을 찾는다."""
         ...
 
+    def find_decided_by_idempotency_key(
+        self,
+        *,
+        workspace_id: int,
+        idempotency_key: str,
+    ) -> StoredMutationProposal | None:
+        """같은 검토 단위에 이미 내려진 결정을 찾는다.
+
+        approved·applied·rejected 행이 대상이다. 판정기가 이 결정의
+        구성(member_hash)과 지금의 모순을 견줘 같은 사실을 다시 묻지
+        않게 한다.
+        """
+        ...
+
     def abandon(self, *, proposal_id: uuid.UUID) -> None:
         """proposal을 접는다. 멤버가 달라져 낡은 계획서가 됐을 때 쓴다."""
         ...

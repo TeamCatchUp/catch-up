@@ -42,14 +42,24 @@ CONFLICT_DETECTOR = "catchup.claim_value_conflict"
 CONFLICT_DETECTOR_VERSION = "1"
 
 
-def conflict_idempotency_key(subject_key: str, predicate: str) -> str:
+def conflict_idempotency_key(
+    subject_key: str,
+    predicate: str,
+    member_hash: str | None = None,
+) -> str:
     """모순 검토 단위의 proposal key를 만든다.
 
     subject_key와 predicate를 그대로 이으면 255자 컬럼을 넘길 수 있어
     고정 길이 해시로 만든다. 사람이 읽을 값은 summary와
     resolver_metadata에 남는다.
+
+    member_hash가 있으면 key에 섞는다. 같은 subject·predicate에 이미
+    결정이 내려진 뒤 다른 구성의 모순이 생겼을 때, 결정된 행을 덮지
+    않고 새 검토 사건을 여는 데 쓴다.
     """
     raw = f"contradiction:{subject_key}:{predicate}"
+    if member_hash is not None:
+        raw = f"{raw}:{member_hash}"
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
@@ -175,6 +185,40 @@ def resolve_claim_conflicts(
             parsed.sort(key=lambda item: (item[0].observed_at, item[0].id))
             member_hash = _member_hash(claim for claim, _ in parsed)
             key = conflict_idempotency_key(subject_key, predicate)
+            decided = (
+                uow.mutation_proposals.find_decided_by_idempotency_key(
+                    workspace_id=workspace_id,
+                    idempotency_key=key,
+                )
+            )
+            if decided is not None:
+                if decided.resolver_metadata.get("member_hash") == (
+                    member_hash
+                ):
+                    # 사람이 이 구성에 이미 결정을 내렸다. 같은 사실을
+                    # 다시 묻지 않는다.
+                    logger.info(
+                        "claim_conflict_decision_standing",
+                        workspace_id=workspace_id,
+                        proposal_id=str(decided.id),
+                        subject_key=subject_key,
+                        predicate=predicate,
+                    )
+                    continue
+                # 구성이 달라졌다. 결정된 행은 감사 기록이므로 덮지 않고
+                # 멤버 지문을 섞은 key로 새 검토 사건을 연다. key가
+                # 구성마다 결정론적이라 재실행이 같은 사건을 가리킨다.
+                key = conflict_idempotency_key(
+                    subject_key, predicate, member_hash
+                )
+                decided_variant = (
+                    uow.mutation_proposals.find_decided_by_idempotency_key(
+                        workspace_id=workspace_id,
+                        idempotency_key=key,
+                    )
+                )
+                if decided_variant is not None:
+                    continue
             active_keys.add(key)
             existing = (
                 uow.mutation_proposals.find_pending_by_idempotency_key(

@@ -85,9 +85,12 @@ class FakeProposalRepository:
     """proposal 저장소를 DB 제약까지 흉내 내어 대신한다.
 
     `(workspace_id, idempotency_key)` UNIQUE를 dict 키로 재현한다. 같은
-    키의 행이 있으면 상태와 무관하게 그 행을 되살려 갈아끼운다. 실 DB의
-    `add_contradiction_proposal`이 그렇게 동작하기 때문이다.
+    키의 계류·접힘 행은 되살려 갈아끼우되 결정 흔적을 지우고, 이미
+    결정된 행(approved·applied·rejected)은 보존한 채 id만 돌려준다. 실
+    DB의 `add_contradiction_proposal`이 그렇게 동작하기 때문이다.
     """
+
+    DECIDED = ("approved", "applied", "rejected")
 
     def __init__(
         self,
@@ -97,6 +100,14 @@ class FakeProposalRepository:
         self.duplicate_groups = dict(duplicate_groups or {})
         self.abandoned: list[uuid.UUID] = []
 
+    def _stored(self, idempotency_key: str, found: dict):
+        return StoredMutationProposal(
+            id=found["id"],
+            idempotency_key=idempotency_key,
+            status=found["status"],
+            resolver_metadata=found["resolver_metadata"],
+        )
+
     def find_pending_by_idempotency_key(
         self, *, workspace_id, idempotency_key
     ):
@@ -104,12 +115,16 @@ class FakeProposalRepository:
         found = self.rows.get(idempotency_key)
         if found is None or found["status"] != "pending":
             return None
-        return StoredMutationProposal(
-            id=found["id"],
-            idempotency_key=idempotency_key,
-            status=found["status"],
-            resolver_metadata=found["resolver_metadata"],
-        )
+        return self._stored(idempotency_key, found)
+
+    def find_decided_by_idempotency_key(
+        self, *, workspace_id, idempotency_key
+    ):
+        del workspace_id
+        found = self.rows.get(idempotency_key)
+        if found is None or found["status"] not in self.DECIDED:
+            return None
+        return self._stored(idempotency_key, found)
 
     def abandon(self, *, proposal_id):
         self.abandoned.append(proposal_id)
@@ -137,6 +152,10 @@ class FakeProposalRepository:
     def add_contradiction_proposal(self, **kwargs):
         key = kwargs["idempotency_key"]
         existing = self.rows.get(key)
+        if existing is not None and existing["status"] in self.DECIDED:
+            # 사람의 결정은 판정 재실행이 덮을 수 없다. 실 repo와 같이
+            # 행·명령을 보존한 채 id만 돌려준다.
+            return existing["id"]
         proposal_id = existing["id"] if existing else uuid.uuid4()
         self.rows[key] = {
             "id": proposal_id,
@@ -144,6 +163,10 @@ class FakeProposalRepository:
             "kind": "contradiction",
             "resolver_metadata": dict(kwargs["resolver_metadata"]),
             "kwargs": kwargs,
+            # 되살아난 안건은 새 검토 사건이다. 결정 흔적과 명령을 비운다.
+            "reviewer": None,
+            "reviewed_at": None,
+            "operations": [],
         }
         return proposal_id
 
@@ -663,3 +686,109 @@ def test_closed_claim_leaves_the_comparison() -> None:
     # 값이 한 종만 남아 견줄 그룹이 되지 못한다.
     assert result.conflicts_found == 0
     assert result.proposals_created == 0
+
+
+def _decide(repo: FakeProposalRepository, key: str) -> dict:
+    """계류 안건에 사람의 결정을 흉내 내어 새긴다."""
+    row = repo.rows[key]
+    row["status"] = "approved"
+    row["reviewer"] = "debug:test-user"
+    row["reviewed_at"] = NOW
+    row["resolver_metadata"]["decision"] = {"winner_claim_id": "w"}
+    row["operations"] = [{"operation_type": "supersede_claim"}]
+    return row
+
+
+def test_decided_proposal_survives_rerun_with_same_members() -> None:
+    """같은 구성의 재실행은 승인된 결정과 명령을 건드리지 않는다."""
+    node_id = uuid.uuid4()
+    claims = [
+        _claim(value=60, node_id=node_id, minutes=0),
+        _claim(value=120, node_id=node_id, minutes=10),
+    ]
+    uow = FakeUnitOfWork(claims)
+    resolve_claim_conflicts(
+        workspace_id=WORKSPACE, vocabulary=VOCABULARY, uow=uow
+    )
+    key = conflict_idempotency_key(f"node:{node_id}", "rate_limit")
+    decided = _decide(uow.mutation_proposals, key)
+
+    result = resolve_claim_conflicts(
+        workspace_id=WORKSPACE, vocabulary=VOCABULARY, uow=uow
+    )
+
+    row = uow.mutation_proposals.rows[key]
+    assert row["status"] == "approved"
+    assert row["reviewer"] == "debug:test-user"
+    assert row["resolver_metadata"]["decision"] == {"winner_claim_id": "w"}
+    assert row["operations"] == decided["operations"]
+    assert result.proposals_created == 0
+    assert result.proposals_abandoned == 0
+    assert len(uow.mutation_proposals.rows) == 1
+
+
+def test_decided_proposal_new_members_open_new_review_event() -> None:
+    """구성이 달라지면 결정 행을 덮지 않고 새 검토 사건을 연다."""
+    node_id = uuid.uuid4()
+    claims = [
+        _claim(value=60, node_id=node_id, minutes=0),
+        _claim(value=120, node_id=node_id, minutes=10),
+    ]
+    uow = FakeUnitOfWork(claims)
+    resolve_claim_conflicts(
+        workspace_id=WORKSPACE, vocabulary=VOCABULARY, uow=uow
+    )
+    base_key = conflict_idempotency_key(f"node:{node_id}", "rate_limit")
+    _decide(uow.mutation_proposals, base_key)
+
+    # 새 claim이 진 값을 다시 주장한다 — TMS의 결정 재개다.
+    uow.knowledge_candidates.claims.append(
+        _claim(value=90, node_id=node_id, minutes=20)
+    )
+    result = resolve_claim_conflicts(
+        workspace_id=WORKSPACE, vocabulary=VOCABULARY, uow=uow
+    )
+
+    rows = uow.mutation_proposals.rows
+    assert rows[base_key]["status"] == "approved"
+    assert rows[base_key]["resolver_metadata"]["decision"] == {
+        "winner_claim_id": "w"
+    }
+    new_keys = [key for key in rows if key != base_key]
+    assert len(new_keys) == 1
+    new_row = rows[new_keys[0]]
+    assert new_row["status"] == "pending"
+    member_hash = new_row["resolver_metadata"]["member_hash"]
+    assert new_keys[0] == conflict_idempotency_key(
+        f"node:{node_id}", "rate_limit", member_hash
+    )
+    assert result.proposals_created == 1
+
+
+def test_new_review_event_is_stable_across_reruns() -> None:
+    """새 검토 사건은 재실행마다 생성·회수를 반복하지 않는다."""
+    node_id = uuid.uuid4()
+    claims = [
+        _claim(value=60, node_id=node_id, minutes=0),
+        _claim(value=120, node_id=node_id, minutes=10),
+    ]
+    uow = FakeUnitOfWork(claims)
+    resolve_claim_conflicts(
+        workspace_id=WORKSPACE, vocabulary=VOCABULARY, uow=uow
+    )
+    base_key = conflict_idempotency_key(f"node:{node_id}", "rate_limit")
+    _decide(uow.mutation_proposals, base_key)
+    uow.knowledge_candidates.claims.append(
+        _claim(value=90, node_id=node_id, minutes=20)
+    )
+    resolve_claim_conflicts(
+        workspace_id=WORKSPACE, vocabulary=VOCABULARY, uow=uow
+    )
+
+    result = resolve_claim_conflicts(
+        workspace_id=WORKSPACE, vocabulary=VOCABULARY, uow=uow
+    )
+
+    assert result.proposals_created == 0
+    assert result.proposals_abandoned == 0
+    assert len(uow.mutation_proposals.rows) == 2

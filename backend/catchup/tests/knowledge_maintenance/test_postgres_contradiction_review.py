@@ -369,3 +369,115 @@ def test_apply_rejects_pending_loser_on_real_rows(
     assert loser_row is not None
     assert loser_row.resolution_status == "rejected"
     assert loser_row.valid_to is None
+
+
+def test_resolver_rerun_preserves_decision_and_operations(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+) -> None:
+    """판정 재실행이 승인된 결정과 supersede 명령을 덮지 못한다."""
+    proposal_id, winner, loser = _contradiction(
+        workspace_id, session_factory, uow_factory
+    )
+    review_contradiction_proposal(
+        uow_factory(),
+        workspace_id=workspace_id,
+        proposal_id=proposal_id,
+        winner_claim_id=winner,
+        reviewer="ba2slk",
+        now=DECIDED_AT,
+    )
+    with session_factory() as session:
+        key = session.get(ProposalRow, proposal_id).idempotency_key
+
+    # apply 전에 검수 파이프라인이 다시 돈 상황을 재현한다.
+    with uow_factory() as uow:
+        returned = uow.mutation_proposals.add_contradiction_proposal(
+            workspace_id=workspace_id,
+            idempotency_key=key,
+            trigger_claim_candidate_id=loser,
+            detector="catchup.claim_value_conflict",
+            detector_version="1",
+            summary="재실행이 만든 새 요약",
+            resolver_metadata={"member_hash": "changed"},
+        )
+        uow.commit()
+
+    assert returned == proposal_id
+    with session_factory() as session:
+        row = session.get(ProposalRow, proposal_id)
+        operations = session.scalars(
+            select(OperationRow).where(
+                OperationRow.proposal_id == proposal_id
+            )
+        ).all()
+    assert row is not None
+    assert row.status == "approved"
+    assert row.reviewer == "ba2slk"
+    assert row.reviewed_at is not None
+    assert row.resolver_metadata["decision"]["winner_claim_id"] == str(
+        winner
+    )
+    # 재실행의 요약·근거가 결정 행을 덮지 않는다.
+    assert row.summary != "재실행이 만든 새 요약"
+    assert len(operations) == 1
+    assert operations[0].operation_type == "supersede_claim"
+
+
+def test_revived_proposal_clears_decision_remnants(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+) -> None:
+    """접힌 안건을 되살릴 때 이전 결정의 흔적이 남지 않는다."""
+    proposal_id, winner, _loser = _contradiction(
+        workspace_id, session_factory, uow_factory
+    )
+    with session_factory() as session:
+        row = session.get(ProposalRow, proposal_id)
+        key = row.idempotency_key
+        # 결정 흔적이 남은 접힘 행을 재현한다.
+        row.status = "abandoned"
+        row.reviewer = "ghost"
+        row.reviewed_at = DECIDED_AT
+        row.rejection_reason = "옛 사유"
+        session.commit()
+
+    with uow_factory() as uow:
+        revived = uow.mutation_proposals.add_contradiction_proposal(
+            workspace_id=workspace_id,
+            idempotency_key=key,
+            trigger_claim_candidate_id=winner,
+            detector="catchup.claim_value_conflict",
+            detector_version="1",
+            summary="되살아난 안건",
+            resolver_metadata={"member_hash": "revived"},
+        )
+        uow.commit()
+
+    assert revived == proposal_id
+    with session_factory() as session:
+        row = session.get(ProposalRow, proposal_id)
+    assert row is not None
+    assert row.status == "pending"
+    assert row.reviewer is None
+    assert row.reviewed_at is None
+    assert row.rejection_reason is None
+    assert row.applied_at is None
+
+
+def test_blank_reviewer_is_refused_at_repository(
+    workspace_id: int,
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+) -> None:
+    """공백 reviewer는 저장소가 결정 기록 전에 거부한다."""
+    with uow_factory() as uow:
+        with pytest.raises(ValueError):
+            uow.mutation_proposals.record_contradiction_decision(
+                workspace_id=workspace_id,
+                proposal_id=uuid.uuid4(),
+                decision={"winner_claim_id": "w"},
+                supersede_targets=(),
+                reviewer="   ",
+            )
