@@ -21,19 +21,22 @@ export default function EmbeddingActiveTable({ service, items }: EmbeddingActive
   if (items.length === 0) return null;
 
   return (
-    <table className="w-full table-fixed">
-      <EmbeddingTableHeader />
-      <tbody>
-        {items.map((item) => (
-          <EmbeddingHistoryRow
-            key={item.id}
-            service={service}
-            target={item.target}
-            status="running"
-            executedAt={null}
-          />
-        ))}
-      </tbody>
-    </table>
+    // 상태·시각·액션 열이 344로 고정이라 좁아지면 대상 열이 짓눌린다
+    <div className="overflow-x-auto">
+      <table className="w-full min-w-136 table-fixed">
+        <EmbeddingTableHeader />
+        <tbody>
+          {items.map((item) => (
+            <EmbeddingHistoryRow
+              key={item.id}
+              service={service}
+              target={item.target}
+              status="running"
+              executedAt={null}
+            />
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }

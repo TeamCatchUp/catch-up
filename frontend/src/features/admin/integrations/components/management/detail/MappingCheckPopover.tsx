@@ -14,8 +14,9 @@ interface MappingCheckPopoverProps {
  * 매핑 부재의 영향은 접근 제어가 아니라 이름 인식 품질이라 흐름을 막을 근거가 없다.
  */
 export default function MappingCheckPopover({ onClose }: MappingCheckPopoverProps) {
+  // Figma 는 hug(내용 맞춤)이라 폭을 고정하지 않는다. 460 은 상한일 뿐이다
   return (
-    <div className="border-accent-black-lighten bg-fill-normal-normal shadow-tooltip flex w-115 flex-col gap-1 rounded-xl border p-3">
+    <div className="border-accent-black-lighten bg-fill-normal-normal shadow-tooltip flex max-w-115 flex-col gap-1 rounded-xl border p-3">
       <div className="flex items-center gap-2">
         <IconInfoFilled className="text-icon-normal-normal size-5.5 shrink-0" />
         <span className="text-body-small text-text-normal-strong min-w-0 flex-1">

@@ -10,12 +10,13 @@ import Image from 'next/image';
 export default function EmbeddingEmptyState() {
   return (
     <div className="flex flex-col items-center gap-6 py-30">
+      {/* 258 은 Figma 크기이자 상한 — 컨테이너가 더 좁으면 따라 줄어든다 */}
       <Image
         src="/image/status/empty-embedding-light.png"
         alt=""
         width={258}
         height={70}
-        className="h-auto w-64.5"
+        className="h-auto w-full max-w-64.5"
       />
       <p className="text-body-small text-text-normal-assistive">임베딩한 채널이 없습니다</p>
     </div>

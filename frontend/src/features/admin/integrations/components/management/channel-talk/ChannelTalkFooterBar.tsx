@@ -45,7 +45,7 @@ export default function ChannelTalkFooterBar({
           채널 추가
         </Button>
         <Button
-          variant="box-solid-primary"
+          variant="box-soft-primary"
           size="md"
           onClick={onProceed}
           disabled={!canProceed}

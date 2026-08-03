@@ -41,47 +41,50 @@ export default function EmbeddedResourceTable({ service, label, rows }: Embedded
   if (rows.length === 0) return <EmbeddingEmptyState />;
 
   return (
-    <table className="w-full table-fixed">
-      <thead>
-        <tr className="h-9">
-          <th scope="col" className="text-body-xsmall text-text-normal-alternative pr-4 pl-3 text-left font-medium">
-            {label}
-          </th>
-          <th scope="col" className="text-body-xsmall text-text-normal-alternative w-48 pr-3 text-left font-medium">
-            데이터 범위
-          </th>
-        </tr>
-      </thead>
-
-      {rows.map((row, groupIndex) => (
-        <tbody key={row.id}>
-          <tr className={groupIndex > 0 ? 'h-12 border-t-2 border-transparent' : 'h-11.5'}>
-            <td className="py-2 pr-4 pl-3">
-              <div className="flex min-w-0 items-center gap-2.5">
-                <Logo className="size-5 shrink-0" />
-                <span className="text-body-small text-text-normal-neutral truncate">{row.name}</span>
-              </div>
-            </td>
-            <td className="text-body-small text-text-normal-assistive w-48 py-2 pr-3 whitespace-nowrap">
-              {row.dataRange}
-            </td>
+    // 범위 열이 192로 고정이라 좁아지면 대상 열이 짓눌린다. 최소 폭을 두고 넘치면 가로 스크롤
+    <div className="overflow-x-auto">
+      <table className="w-full min-w-100 table-fixed">
+        <thead>
+          <tr className="h-9">
+            <th scope="col" className="text-body-xsmall text-text-normal-alternative pr-4 pl-3 text-left font-medium">
+              {label}
+            </th>
+            <th scope="col" className="text-body-xsmall text-text-normal-alternative w-48 pr-3 text-left font-medium">
+              데이터 범위
+            </th>
           </tr>
+        </thead>
 
-          {row.children?.map((child) => (
-            <tr key={child.id} className="h-11.5">
-              <td className="pr-4 pl-5.5">
+        {rows.map((row, groupIndex) => (
+          <tbody key={row.id}>
+            <tr className={groupIndex > 0 ? 'h-12 border-t-2 border-transparent' : 'h-11.5'}>
+              <td className="py-2 pr-4 pl-3">
                 <div className="flex min-w-0 items-center gap-2.5">
-                  <IconConnector aria-hidden="true" className="h-11.75 w-3.5 shrink-0" />
-                  <span className="text-body-small text-text-normal-neutral truncate">{child.name}</span>
+                  <Logo className="size-5 shrink-0" />
+                  <span className="text-body-small text-text-normal-neutral truncate">{row.name}</span>
                 </div>
               </td>
-              <td className="text-body-small text-text-normal-assistive w-48 pr-3 whitespace-nowrap">
-                {child.dataRange}
+              <td className="text-body-small text-text-normal-assistive w-48 py-2 pr-3 whitespace-nowrap">
+                {row.dataRange}
               </td>
             </tr>
-          ))}
-        </tbody>
-      ))}
-    </table>
+
+            {row.children?.map((child) => (
+              <tr key={child.id} className="h-11.5">
+                <td className="pr-4 pl-5.5">
+                  <div className="flex min-w-0 items-center gap-2.5">
+                    <IconConnector aria-hidden="true" className="h-11.75 w-3.5 shrink-0" />
+                    <span className="text-body-small text-text-normal-neutral truncate">{child.name}</span>
+                  </div>
+                </td>
+                <td className="text-body-small text-text-normal-assistive w-48 pr-3 whitespace-nowrap">
+                  {child.dataRange}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        ))}
+      </table>
+    </div>
   );
 }

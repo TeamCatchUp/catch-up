@@ -71,22 +71,25 @@ export default function EmbeddingHistoryTable({ service, items, onRetry }: Embed
       </div>
 
       {visible.length > 0 ? (
-        <table className="w-full table-fixed">
-          <EmbeddingTableHeader />
-          <tbody>
-            {visible.map((item) => (
-              <EmbeddingHistoryRow
-                key={item.id}
-                service={service}
-                target={item.target}
-                status={item.status}
-                executedAt={item.executedAt}
-                failureCount={item.failureCount}
-                onRetry={item.status === 'failed' ? () => onRetry(item.id) : undefined}
-              />
-            ))}
-          </tbody>
-        </table>
+        // 상태·시각·액션 열이 344로 고정이라 좁아지면 대상 열이 짓눌린다
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-136 table-fixed">
+            <EmbeddingTableHeader />
+            <tbody>
+              {visible.map((item) => (
+                <EmbeddingHistoryRow
+                  key={item.id}
+                  service={service}
+                  target={item.target}
+                  status={item.status}
+                  executedAt={item.executedAt}
+                  failureCount={item.failureCount}
+                  onRetry={item.status === 'failed' ? () => onRetry(item.id) : undefined}
+                />
+              ))}
+            </tbody>
+          </table>
+        </div>
       ) : (
         <p className="text-body-small text-text-normal-assistive px-3 py-6">임베딩 히스토리가 없습니다.</p>
       )}
