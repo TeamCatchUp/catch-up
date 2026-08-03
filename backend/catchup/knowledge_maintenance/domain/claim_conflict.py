@@ -32,6 +32,9 @@ class StoredClaimCandidate:
         valid_to: 주장이 참이었던 구간의 끝을 나타낸다. 아직 참이면
             None이다. 닫힌 주장은 더 이상 모순의 당사자가 아니고
             문서의 현재 판에도 실리지 않는다.
+        citation_verified: 근거 인용의 원문 대조 결과를 나타낸다. True는
+            locator가 확정된 검증 인용, False는 evidence는 있으나 대조에
+            실패한 환각 의심, None은 evidence link가 없는 경우다.
     """
 
     id: uuid.UUID
@@ -44,6 +47,7 @@ class StoredClaimCandidate:
     statement: str
     observed_at: datetime
     valid_to: datetime | None = None
+    citation_verified: bool | None = None
 
 
 def normalize_value(

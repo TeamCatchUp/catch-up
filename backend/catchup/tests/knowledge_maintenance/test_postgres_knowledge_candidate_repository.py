@@ -36,6 +36,7 @@ from catchup.knowledge_maintenance.contracts.extraction import KnowledgeCandidat
 from catchup.knowledge_maintenance.contracts.extraction import (
     RelationAssertionCandidateDraft,
 )
+from catchup.knowledge_maintenance.domain.evidence import Locator
 from catchup.knowledge_maintenance.domain.knowledge_candidate import ExtractionMethod
 from catchup.knowledge_maintenance.domain.knowledge_candidate import ExtractionRunSpec
 from catchup.knowledge_maintenance.domain.knowledge_node import NodeKind
@@ -556,6 +557,119 @@ def test_claim_evidence_is_demoted_when_statement_is_ambiguous(
     assert result.batch.located_claim_count == 0
     assert result.batch.demoted_not_found_count == 0
     assert result.batch.demoted_ambiguous_count == 1
+
+
+def test_find_claim_candidates_carries_citation_verified(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+) -> None:
+    """locator 확정·강등·evidence 없음이 각각 True/False/None으로 온다."""
+    observation = _stored_observation(workspace_id, session_factory)
+
+    with KnowledgeMaintenanceUnitOfWork(session_factory) as uow:
+        node_id = uow.knowledge_nodes.get_for_resource(
+            workspace_id=workspace_id,
+            node_kind=NodeKind.OBSERVATION,
+            resource_id=observation.id,
+        ).id
+        uow.ontology.ensure(
+            workspace_id=workspace_id,
+            ontology_id=SPEC.ontology_id,
+            vocabulary=SPEC.vocabulary,
+        )
+        run = uow.knowledge_candidates.start_run(
+            workspace_id=workspace_id,
+            input_node_id=node_id,
+            spec=SPEC,
+            started_at=NOW,
+        )
+        entity_id = uow.knowledge_candidates.add_entity_candidate(
+            workspace_id=workspace_id,
+            run_id=run.id,
+            draft=EntityCandidateDraft(
+                local_key="e1",
+                proposed_type="feature",
+                proposed_name="결제 기능",
+            ),
+            extraction_method=ExtractionMethod.LLM,
+        )
+        verified_id = uow.knowledge_candidates.add_claim_candidate(
+            workspace_id=workspace_id,
+            run_id=run.id,
+            draft=ClaimCandidateDraft(
+                local_key="c1",
+                subject_local_key="e1",
+                predicate="release_month",
+                value_type="text",
+                value="2026-09",
+                statement="9월 예정입니다.",
+            ),
+            subject_candidate_id=entity_id,
+            spec=SPEC,
+            extraction_method=ExtractionMethod.LLM,
+        )
+        demoted_id = uow.knowledge_candidates.add_claim_candidate(
+            workspace_id=workspace_id,
+            run_id=run.id,
+            draft=ClaimCandidateDraft(
+                local_key="c2",
+                subject_local_key="e1",
+                predicate="release_month",
+                value_type="text",
+                value="2026-12",
+                statement="12월로 미뤄졌습니다.",
+            ),
+            subject_candidate_id=entity_id,
+            spec=SPEC,
+            extraction_method=ExtractionMethod.LLM,
+        )
+        no_evidence_id = uow.knowledge_candidates.add_claim_candidate(
+            workspace_id=workspace_id,
+            run_id=run.id,
+            draft=ClaimCandidateDraft(
+                local_key="c3",
+                subject_local_key="e1",
+                predicate="release_month",
+                value_type="text",
+                value="2026-06",
+                statement="6월이라는 말도 있었습니다.",
+            ),
+            subject_candidate_id=entity_id,
+            spec=SPEC,
+            extraction_method=ExtractionMethod.LLM,
+        )
+        start = NORMALIZED_CONTENT.index("9월 예정입니다.")
+        uow.knowledge_candidates.add_evidence_link(
+            workspace_id=workspace_id,
+            run_id=run.id,
+            evidence_node_id=node_id,
+            claim_candidate_id=verified_id,
+            excerpt="9월 예정입니다.",
+            locator=Locator(
+                kind="codepoint_offset",
+                start=start,
+                end=start + len("9월 예정입니다."),
+            ),
+        )
+        uow.knowledge_candidates.add_evidence_link(
+            workspace_id=workspace_id,
+            run_id=run.id,
+            evidence_node_id=node_id,
+            claim_candidate_id=demoted_id,
+            excerpt="12월로 미뤄졌습니다.",
+            locator=None,
+        )
+        uow.commit()
+
+    with KnowledgeMaintenanceUnitOfWork(session_factory) as uow:
+        candidates = uow.knowledge_candidates.find_claim_candidates(
+            workspace_id=workspace_id,
+        )
+
+    by_id = {candidate.id: candidate for candidate in candidates}
+    assert by_id[verified_id].citation_verified is True
+    assert by_id[demoted_id].citation_verified is False
+    assert by_id[no_evidence_id].citation_verified is None
 
 
 def test_run_is_recorded_as_succeeded(

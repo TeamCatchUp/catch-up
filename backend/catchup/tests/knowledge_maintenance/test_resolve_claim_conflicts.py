@@ -911,3 +911,27 @@ def test_enum_value_outside_dictionary_counts_unparseable() -> None:
     assert result.claims_unparseable == 1
     assert result.conflicts_found == 0
     assert result.proposals_created == 0
+
+
+def test_values_carry_citation_verified():
+    node = uuid.uuid4()
+    claims = [
+        _claim(predicate="rate_limit", value=60, node_id=node),
+        replace(
+            _claim(
+                predicate="rate_limit",
+                value=120,
+                node_id=node,
+                minutes=1,
+            ),
+            citation_verified=False,
+        ),
+    ]
+    uow = FakeUnitOfWork(claims)
+    resolve_claim_conflicts(
+        workspace_id=WORKSPACE, vocabulary=VOCABULARY, uow=uow
+    )
+    key = conflict_idempotency_key(f"node:{node}", "rate_limit")
+    values = uow.mutation_proposals.rows[key]["resolver_metadata"]["values"]
+    assert values[0]["citation_verified"] is None
+    assert values[1]["citation_verified"] is False

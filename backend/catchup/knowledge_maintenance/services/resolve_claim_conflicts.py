@@ -259,6 +259,7 @@ def resolve_claim_conflicts(
                     "normalized": normalized,
                     "observed_at": claim.observed_at.isoformat(),
                     "statement": claim.statement,
+                    "citation_verified": claim.citation_verified,
                 }
                 for claim, normalized in parsed
             ]
