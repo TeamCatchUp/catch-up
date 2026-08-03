@@ -15,6 +15,7 @@ from sqlalchemy import cast
 from sqlalchemy import func
 from sqlalchemy import select
 from sqlalchemy import update
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PgUUID
 from sqlalchemy.orm import Session
 
@@ -160,6 +161,9 @@ def _contradiction_values(
                 normalized=_optional_str(item.get("normalized")),
                 statement=_optional_str(item.get("statement")),
                 observed_at=_optional_str(item.get("observed_at")),
+                citation_verified=_optional_bool(
+                    item.get("citation_verified")
+                ),
             )
         )
     return tuple(values)
@@ -170,6 +174,11 @@ def _optional_str(value: object) -> str | None:
     if value is None:
         return None
     return str(value)
+
+
+def _optional_bool(value: object) -> bool | None:
+    """불리언이면 그대로, 아니면 None으로 준다."""
+    return value if isinstance(value, bool) else None
 
 
 def _mentions_candidate(
@@ -770,11 +779,25 @@ class SqlAlchemyKnowledgeCandidateRepository:
         outer join해 해소 결과를 함께 담는다. 아직 해소되지 않은 후보도
         빠지면 안 되므로 outer join이어야 한다.
         """
+        citation_verified = (
+            select(
+                func.bool_or(
+                    KnowledgeCandidateEvidenceLinkRow.locator
+                    != cast({}, JSONB)
+                )
+            )
+            .where(
+                KnowledgeCandidateEvidenceLinkRow.claim_candidate_id
+                == KnowledgeClaimCandidateRow.id
+            )
+            .scalar_subquery()
+        )
         statement = (
             select(
                 KnowledgeClaimCandidateRow,
                 SourceVersionRow.observed_at,
                 KnowledgeEntityCandidateRow.resolved_node_id,
+                citation_verified,
             )
             .join(
                 KnowledgeExtractionRunRow,
@@ -817,8 +840,9 @@ class SqlAlchemyKnowledgeCandidateRepository:
                 statement=row.statement,
                 observed_at=observed_at,
                 valid_to=row.valid_to,
+                citation_verified=verified,
             )
-            for row, observed_at, resolved_node_id in (
+            for row, observed_at, resolved_node_id, verified in (
                 self._session.execute(statement).all()
             )
         )

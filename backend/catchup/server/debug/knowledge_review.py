@@ -288,6 +288,7 @@ def list_contradiction_proposals(workspace_id: int = 1) -> dict[str, Any]:
                         "normalized": value.normalized,
                         "statement": value.statement,
                         "observed_at": value.observed_at,
+                        "citation_verified": value.citation_verified,
                     }
                     for value in proposal.values
                 ],

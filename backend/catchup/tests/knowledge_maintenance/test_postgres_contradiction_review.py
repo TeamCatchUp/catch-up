@@ -171,6 +171,7 @@ def _contradiction(
                         "statement": "분당 60회입니다",
                         "normalized": "60.0",
                         "observed_at": EARLY.isoformat(),
+                        "citation_verified": True,
                     },
                     {
                         "value": 120,
@@ -229,6 +230,29 @@ def test_decision_preserves_evidence_and_creates_operations(
     assert operations[0].operation_type == "supersede_claim"
     assert operations[0].claim_candidate_id == loser
     assert operations[0].operation_data["valid_to"] == LATER.isoformat()
+
+
+def test_pending_contradiction_values_carry_citation_verified(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+) -> None:
+    """citation_verified가 읽기 port까지 왕복한다."""
+    proposal_id, winner, loser = _contradiction(
+        workspace_id, session_factory, uow_factory
+    )
+
+    with uow_factory() as uow:
+        pending = uow.mutation_proposals.list_pending_contradictions(
+            workspace_id=workspace_id,
+        )
+
+    proposal = next(
+        candidate for candidate in pending if candidate.id == proposal_id
+    )
+    by_claim_id = {value.claim_id: value for value in proposal.values}
+    assert by_claim_id[winner].citation_verified is True
+    assert by_claim_id[loser].citation_verified is None
 
 
 def test_second_decision_is_refused(

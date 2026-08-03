@@ -62,6 +62,10 @@ def render_contradiction_card(proposal: StoredContradictionProposal) -> str:
             lines.append(f"    근거   {value.statement}")
         if value.observed_at:
             lines.append(f"    관찰   {value.observed_at}")
+        if value.citation_verified is True:
+            lines.append("    인용   원문 대조 통과")
+        elif value.citation_verified is False:
+            lines.append("    인용   원문 미확인 — 환각 의심")
     return "\n".join(lines)
 
 

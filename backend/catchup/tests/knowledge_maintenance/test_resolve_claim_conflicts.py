@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import uuid
 from dataclasses import replace
 from datetime import datetime
@@ -41,6 +42,18 @@ VOCABULARY = ExtractionVocabulary(
             name="description",
             definition="자유 서술을 나타낸다.",
             value_type="text",
+        ),
+    ),
+)
+
+ENUM_VOCABULARY = ExtractionVocabulary(
+    snapshot_id="v2",
+    predicate_entries=(
+        PredicateEntry(
+            name="plan_tier",
+            definition="요금제 단계를 나타낸다.",
+            value_type="enum",
+            enum_values=("free", "pro"),
         ),
     ),
 )
@@ -239,8 +252,8 @@ def test_conflicting_numbers_create_one_proposal() -> None:
     assert row["kwargs"]["trigger_claim_candidate_id"] == earlier.id
 
 
-def test_same_value_counts_duplicate_without_proposal() -> None:
-    """같은 값 두 claim은 중복 지표만 올리고 proposal이 없다."""
+def test_converged_values_leave_no_conflict_and_no_duplicates() -> None:
+    """값이 수렴하는 두 claim은 모순도 중복 지표도 남기지 않는다."""
     node_id = uuid.uuid4()
     uow = FakeUnitOfWork(
         [
@@ -255,10 +268,43 @@ def test_same_value_counts_duplicate_without_proposal() -> None:
         uow=uow,
     )
 
-    assert result.duplicates_observed == 1
+    assert result.duplicates_observed == 0
     assert result.conflicts_found == 0
     assert result.proposals_created == 0
     assert uow.mutation_proposals.rows == {}
+
+
+def test_duplicates_counted_only_in_conflict_groups() -> None:
+    """중복 관찰은 모순 그룹 안에서만 센다 — 수렴 그룹은 세지 않는다."""
+    node = uuid.uuid4()
+    claims = [
+        # 수렴 그룹: 같은 값 2건 — 모순 아님, 중복도 세지 않는다.
+        _claim(predicate="rate_limit", value=60, node_id=node),
+        _claim(predicate="rate_limit", value=60, node_id=node, minutes=1),
+        # 모순 그룹: 60, 60, 120 — 중복 1.
+        _claim(predicate="rate_limit", value=60, node_id=uuid.uuid4()),
+    ]
+    conflict_node = claims[2].subject_node_id
+    claims += [
+        _claim(
+            predicate="rate_limit",
+            value=60,
+            node_id=conflict_node,
+            minutes=1,
+        ),
+        _claim(
+            predicate="rate_limit",
+            value=120,
+            node_id=conflict_node,
+            minutes=2,
+        ),
+    ]
+    uow = FakeUnitOfWork(claims)
+    result = resolve_claim_conflicts(
+        workspace_id=WORKSPACE, vocabulary=VOCABULARY, uow=uow
+    )
+    assert result.conflicts_found == 1
+    assert result.duplicates_observed == 1
 
 
 def test_unlisted_or_text_predicate_is_ignored() -> None:
@@ -404,6 +450,36 @@ def test_member_change_abandons_and_replaces() -> None:
     # UNIQUE(workspace_id, idempotency_key) 때문에 같은 행을 되살린다.
     assert row["id"] == original_id
     assert len(row["resolver_metadata"]["values"]) == 3
+
+
+def test_value_correction_changes_member_hash() -> None:
+    """같은 멤버라도 정규화 값이 정정되면 member_hash가 달라진다."""
+    node_id = uuid.uuid4()
+    first = _claim(value=60, node_id=node_id, minutes=0)
+    second = _claim(value=120, node_id=node_id, minutes=5)
+    uow = FakeUnitOfWork([first, second])
+    resolve_claim_conflicts(
+        workspace_id=WORKSPACE,
+        vocabulary=VOCABULARY,
+        uow=uow,
+    )
+    key = conflict_idempotency_key(f"node:{node_id}", "rate_limit")
+    hash_before = uow.mutation_proposals.rows[key]["resolver_metadata"][
+        "member_hash"
+    ]
+
+    # 같은 claim 행의 값이 정정되어 다시 들어온다.
+    uow.knowledge_candidates.claims = [first, replace(second, value=90)]
+    resolve_claim_conflicts(
+        workspace_id=WORKSPACE,
+        vocabulary=VOCABULARY,
+        uow=uow,
+    )
+
+    hash_after = uow.mutation_proposals.rows[key]["resolver_metadata"][
+        "member_hash"
+    ]
+    assert hash_before != hash_after
 
 
 def test_rerun_with_same_members_skips() -> None:
@@ -727,6 +803,90 @@ def test_decided_proposal_survives_rerun_with_same_members() -> None:
     assert len(uow.mutation_proposals.rows) == 1
 
 
+def test_decided_proposal_with_legacy_hash_survives_rerun() -> None:
+    """구 포맷 member_hash로 결정된 행도 같은 구성 재실행에서 안전하다."""
+    node_id = uuid.uuid4()
+    claims = [
+        _claim(value=60, node_id=node_id, minutes=0),
+        _claim(value=120, node_id=node_id, minutes=10),
+    ]
+    uow = FakeUnitOfWork(claims)
+    resolve_claim_conflicts(
+        workspace_id=WORKSPACE, vocabulary=VOCABULARY, uow=uow
+    )
+    key = conflict_idempotency_key(f"node:{node_id}", "rate_limit")
+    decided = _decide(uow.mutation_proposals, key)
+    # 배포 전 결정 행은 구 포맷(id만 이어붙인) 해시를 갖고 있었다.
+    legacy_hash = hashlib.sha256(
+        ",".join(sorted(str(claim.id) for claim in claims)).encode(
+            "utf-8"
+        )
+    ).hexdigest()
+    decided["resolver_metadata"]["member_hash"] = legacy_hash
+
+    with capture_logs() as logs:
+        result = resolve_claim_conflicts(
+            workspace_id=WORKSPACE, vocabulary=VOCABULARY, uow=uow
+        )
+
+    assert result.proposals_created == 0
+    assert result.proposals_abandoned == 0
+    assert len(uow.mutation_proposals.rows) == 1
+    standing = [
+        entry
+        for entry in logs
+        if entry["event"] == "claim_conflict_decision_standing"
+    ]
+    assert len(standing) == 1
+
+
+def test_decided_proposal_with_legacy_hash_value_change_reopens() -> None:
+    """구 포맷 해시가 일치해도 값이 정정됐으면 재검토를 연다.
+
+    구 포맷 해시(`sha256("id,id,…")`)에는 값 정보가 없어 멤버 id만
+    같으면 무조건 일치한다. 그 상태로 값 대조를 건너뛰면, 배포 전
+    구 포맷 결정이 남아 있는 claim의 값이 나중에 정정돼도 조용히
+    standing으로 읽혀 새 검토 사건이 열리지 않는다.
+    """
+    node_id = uuid.uuid4()
+    claims = [
+        _claim(value=60, node_id=node_id, minutes=0),
+        _claim(value=120, node_id=node_id, minutes=10),
+    ]
+    uow = FakeUnitOfWork(claims)
+    resolve_claim_conflicts(
+        workspace_id=WORKSPACE, vocabulary=VOCABULARY, uow=uow
+    )
+    key = conflict_idempotency_key(f"node:{node_id}", "rate_limit")
+    decided = _decide(uow.mutation_proposals, key)
+    # 배포 전 결정 행은 구 포맷(id만 이어붙인) 해시를 갖고 있었다.
+    legacy_hash = hashlib.sha256(
+        ",".join(sorted(str(claim.id) for claim in claims)).encode(
+            "utf-8"
+        )
+    ).hexdigest()
+    decided["resolver_metadata"]["member_hash"] = legacy_hash
+
+    # 두 번째 claim의 값이 120 -> 90으로 정정된다. id 구성은 그대로다.
+    uow.knowledge_candidates.claims[1] = replace(
+        uow.knowledge_candidates.claims[1], value=90
+    )
+
+    result = resolve_claim_conflicts(
+        workspace_id=WORKSPACE, vocabulary=VOCABULARY, uow=uow
+    )
+
+    rows = uow.mutation_proposals.rows
+    assert rows[key]["status"] == "approved"
+    assert rows[key]["resolver_metadata"]["decision"] == {
+        "winner_claim_id": "w"
+    }
+    new_keys = [k for k in rows if k != key]
+    assert len(new_keys) == 1
+    assert rows[new_keys[0]]["status"] == "pending"
+    assert result.proposals_created == 1
+
+
 def test_decided_proposal_new_members_open_new_review_event() -> None:
     """구성이 달라지면 결정 행을 덮지 않고 새 검토 사건을 연다."""
     node_id = uuid.uuid4()
@@ -792,3 +952,104 @@ def test_new_review_event_is_stable_across_reruns() -> None:
     assert result.proposals_created == 0
     assert result.proposals_abandoned == 0
     assert len(uow.mutation_proposals.rows) == 2
+
+
+def test_partial_precision_date_overlap_is_not_conflict() -> None:
+    node = uuid.uuid4()
+    claims = [
+        _claim(
+            predicate="release_date",
+            value="2026-09",
+            value_type="date",
+            node_id=node,
+        ),
+        _claim(
+            predicate="release_date",
+            value="2026-09-15",
+            value_type="date",
+            node_id=node,
+            minutes=1,
+        ),
+    ]
+    uow = FakeUnitOfWork(claims)
+    result = resolve_claim_conflicts(
+        workspace_id=WORKSPACE, vocabulary=VOCABULARY, uow=uow
+    )
+    assert result.conflicts_found == 0
+    assert result.proposals_created == 0
+    assert result.date_precision_overlaps == 1
+
+
+def test_distinct_full_dates_still_conflict() -> None:
+    node = uuid.uuid4()
+    claims = [
+        _claim(
+            predicate="release_date",
+            value="2026-09-15",
+            value_type="date",
+            node_id=node,
+        ),
+        _claim(
+            predicate="release_date",
+            value="2026-09-20",
+            value_type="date",
+            node_id=node,
+            minutes=1,
+        ),
+    ]
+    uow = FakeUnitOfWork(claims)
+    result = resolve_claim_conflicts(
+        workspace_id=WORKSPACE, vocabulary=VOCABULARY, uow=uow
+    )
+    assert result.conflicts_found == 1
+    assert result.date_precision_overlaps == 0
+
+
+def test_enum_value_outside_dictionary_counts_unparseable() -> None:
+    node = uuid.uuid4()
+    claims = [
+        _claim(
+            predicate="plan_tier",
+            value="enterprise",
+            value_type="enum",
+            node_id=node,
+        ),
+        _claim(
+            predicate="plan_tier",
+            value="pro",
+            value_type="enum",
+            node_id=node,
+            minutes=1,
+        ),
+    ]
+    uow = FakeUnitOfWork(claims)
+    result = resolve_claim_conflicts(
+        workspace_id=WORKSPACE, vocabulary=ENUM_VOCABULARY, uow=uow
+    )
+    assert result.claims_unparseable == 1
+    assert result.conflicts_found == 0
+    assert result.proposals_created == 0
+
+
+def test_values_carry_citation_verified() -> None:
+    node = uuid.uuid4()
+    claims = [
+        _claim(predicate="rate_limit", value=60, node_id=node),
+        replace(
+            _claim(
+                predicate="rate_limit",
+                value=120,
+                node_id=node,
+                minutes=1,
+            ),
+            citation_verified=False,
+        ),
+    ]
+    uow = FakeUnitOfWork(claims)
+    resolve_claim_conflicts(
+        workspace_id=WORKSPACE, vocabulary=VOCABULARY, uow=uow
+    )
+    key = conflict_idempotency_key(f"node:{node}", "rate_limit")
+    values = uow.mutation_proposals.rows[key]["resolver_metadata"]["values"]
+    assert values[0]["citation_verified"] is None
+    assert values[1]["citation_verified"] is False

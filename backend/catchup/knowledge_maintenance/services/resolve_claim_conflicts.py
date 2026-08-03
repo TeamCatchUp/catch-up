@@ -25,8 +25,13 @@ from typing import Protocol
 from typing import Self
 
 from catchup.knowledge_maintenance.contracts.extraction import ExtractionVocabulary
+from catchup.knowledge_maintenance.contracts.extraction import PredicateEntry
 from catchup.knowledge_maintenance.domain.claim_conflict import StoredClaimCandidate
+from catchup.knowledge_maintenance.domain.claim_conflict import dates_compatible
 from catchup.knowledge_maintenance.domain.claim_conflict import normalize_value
+from catchup.knowledge_maintenance.domain.knowledge_candidate import (
+    StoredMutationProposal,
+)
 from catchup.knowledge_maintenance.domain.source_version import JsonValue
 from catchup.knowledge_maintenance.ports.knowledge_candidates import (
     KnowledgeCandidateRepository,
@@ -97,7 +102,11 @@ class ClaimConflictResult:
         proposals_created: 새로 쓴 모순 proposal 수를 나타낸다.
         proposals_abandoned: 구성이 달라지거나 모순이 사라져 접은
             proposal 수를 나타낸다.
-        duplicates_observed: 같은 값이 겹쳐 나온 수를 나타낸다.
+        duplicates_observed: 모순 그룹 안에서 같은 값이 겹쳐 관찰된
+            수를 나타낸다. 리포트의 계류 모순 중복 지표와 같은
+            정의이며, 차이는 스코프(이번 실행 vs 계류 중)뿐이다.
+        date_precision_overlaps: 정밀도만 다른 날짜 겹침이라 모순으로
+            세지 않은 그룹 수를 나타낸다.
     """
 
     claims_scanned: int = 0
@@ -110,6 +119,7 @@ class ClaimConflictResult:
     proposals_created: int = 0
     proposals_abandoned: int = 0
     duplicates_observed: int = 0
+    date_precision_overlaps: int = 0
 
 
 def resolve_claim_conflicts(
@@ -130,7 +140,7 @@ def resolve_claim_conflicts(
         )
 
         groups: dict[tuple[str, str], list[StoredClaimCandidate]] = {}
-        value_types: dict[str, str] = {}
+        entries: dict[str, PredicateEntry] = {}
         without_key = 0
         not_comparable = 0
         closed = 0
@@ -145,7 +155,7 @@ def resolve_claim_conflicts(
                 # 사전 미등재와 text 치역은 비교하지 않는다.
                 not_comparable += 1
                 continue
-            value_types[claim.predicate] = entry.value_type
+            entries[claim.predicate] = entry
             subject_key = _subject_key(claim, duplicate_groups)
             if subject_key is None:
                 without_key += 1
@@ -160,14 +170,20 @@ def resolve_claim_conflicts(
         created = 0
         abandoned = 0
         duplicates = 0
+        date_overlaps = 0
         active_keys: set[str] = set()
         for (subject_key, predicate), members in sorted(groups.items()):
-            value_type = value_types[predicate]
+            entry = entries[predicate]
+            value_type = entry.value_type
             parsed: list[tuple[StoredClaimCandidate, str]] = []
             for claim in members:
                 # 치역은 사전이 정한다. LLM이 신고한 value_type을 믿으면
                 # 잘못 신고된 claim이 비교에서 조용히 빠진다.
-                normalized = normalize_value(value_type, claim.value)
+                normalized = normalize_value(
+                    value_type,
+                    claim.value,
+                    enum_values=entry.enum_values,
+                )
                 if normalized is None:
                     unparseable += 1
                     continue
@@ -177,13 +193,18 @@ def resolve_claim_conflicts(
             compared += 1
 
             distinct = {normalized for _, normalized in parsed}
-            duplicates += len(parsed) - len(distinct)
             if len(distinct) < 2:
                 continue
+            if value_type == "date" and dates_compatible(distinct):
+                # 정밀도만 다른 같은 시점이다. 모순이라 부르면 사람이
+                # 같은 사실 사이에서 승자를 고르게 된다.
+                date_overlaps += 1
+                continue
+            duplicates += len(parsed) - len(distinct)
             conflicts += 1
 
             parsed.sort(key=lambda item: (item[0].observed_at, item[0].id))
-            member_hash = _member_hash(claim for claim, _ in parsed)
+            member_hash = _member_hash(parsed)
             key = conflict_idempotency_key(subject_key, predicate)
             decided = (
                 uow.mutation_proposals.find_decided_by_idempotency_key(
@@ -192,9 +213,17 @@ def resolve_claim_conflicts(
                 )
             )
             if decided is not None:
-                if decided.resolver_metadata.get("member_hash") == (
-                    member_hash
-                ):
+                decided_hash = decided.resolver_metadata.get(
+                    "member_hash"
+                )
+                is_standing = decided_hash == member_hash or (
+                    decided_hash
+                    == _legacy_member_hash(
+                        claim for claim, _ in parsed
+                    )
+                    and _legacy_values_match(decided, parsed)
+                )
+                if is_standing:
                     # 사람이 이 구성에 이미 결정을 내렸다. 같은 사실을
                     # 다시 묻지 않는다.
                     logger.info(
@@ -243,6 +272,7 @@ def resolve_claim_conflicts(
                     "normalized": normalized,
                     "observed_at": claim.observed_at.isoformat(),
                     "statement": claim.statement,
+                    "citation_verified": claim.citation_verified,
                 }
                 for claim, normalized in parsed
             ]
@@ -293,6 +323,7 @@ def resolve_claim_conflicts(
         proposals_created=created,
         proposals_abandoned=abandoned,
         duplicates_observed=duplicates,
+        date_precision_overlaps=date_overlaps,
     )
     logger.info(
         "claim_conflict_completed",
@@ -300,12 +331,14 @@ def resolve_claim_conflicts(
         claims_scanned=result.claims_scanned,
         claims_without_subject_key=result.claims_without_subject_key,
         claims_not_comparable=result.claims_not_comparable,
+        claims_closed=result.claims_closed,
         claims_unparseable=result.claims_unparseable,
         groups_compared=result.groups_compared,
         conflicts_found=result.conflicts_found,
         proposals_created=result.proposals_created,
         proposals_abandoned=result.proposals_abandoned,
         duplicates_observed=result.duplicates_observed,
+        date_precision_overlaps=result.date_precision_overlaps,
     )
     return result
 
@@ -387,10 +420,71 @@ def _subject_key(
     return None
 
 
-def _member_hash(claims: Iterable[StoredClaimCandidate]) -> str:
-    """그룹 구성의 지문을 만든다. 멤버가 달라지면 값이 달라진다."""
+def _member_hash(
+    members: Iterable[tuple[StoredClaimCandidate, str]],
+) -> str:
+    """그룹 구성의 지문을 만든다.
+
+    멤버가 달라지거나 같은 멤버의 정규화 값이 달라지면 지문이
+    달라진다. 값 정정은 사람이 다시 봐야 할 새 구성이기 때문이다.
+    """
+    joined = ",".join(
+        sorted(
+            f"{claim.id}:{normalized}" for claim, normalized in members
+        )
+    )
+    return hashlib.sha256(joined.encode("utf-8")).hexdigest()
+
+
+def _legacy_member_hash(
+    claims: Iterable[StoredClaimCandidate],
+) -> str:
+    """member_hash 구 포맷(`sha256("id,id,…")`)을 계산한다.
+
+    포맷을 `sha256("id:normalized,…")`으로 바꾸면서, 배포 전에 결정된
+    proposal의 resolver_metadata에는 구 포맷 해시가 그대로 남는다. 그
+    행을 신 포맷으로만 비교하면 구성이 그대로인데도 달라졌다고 읽혀
+    가짜 재검토 사건이 열린다. 포맷 전환기 동안 결정 행과의 standing
+    판정에서만 이 구 포맷도 함께 대조해 호환한다.
+    """
     joined = ",".join(sorted(str(claim.id) for claim in claims))
     return hashlib.sha256(joined.encode("utf-8")).hexdigest()
+
+
+def _legacy_values_match(
+    decided: StoredMutationProposal,
+    parsed: Iterable[tuple[StoredClaimCandidate, str]],
+) -> bool:
+    """구 포맷 해시 일치를 정규화 값 대조로 보강한다.
+
+    구 포맷 해시는 멤버 id만 이어붙인 지문이라 값 정보를 담지 않는다.
+    id 구성이 그대로인 채 한 claim의 값만 정정돼도 구 해시는 똑같이
+    일치해, 값 대조 없이는 standing으로 잘못 읽혀 정정이 조용히
+    묻힌다. decided 행의 resolver_metadata["values"]에 심어둔
+    claim_id -> normalized 값을 지금 파싱한 값과 전부 대조해야
+    실제로 같은 사실인지 확인할 수 있다. metadata를 읽을 수 없거나
+    항목이 불완전하면 안전한 쪽(standing 아님)으로 판정한다.
+    """
+    raw_values = decided.resolver_metadata.get("values")
+    if not isinstance(raw_values, list):
+        return False
+    decided_normalized: dict[str, object] = {}
+    for entry in raw_values:
+        if not isinstance(entry, dict):
+            return False
+        claim_id = entry.get("claim_id")
+        normalized = entry.get("normalized")
+        if claim_id is None or normalized is None:
+            return False
+        decided_normalized[claim_id] = normalized
+
+    current = list(parsed)
+    if len(decided_normalized) != len(current):
+        return False
+    for claim, normalized in current:
+        if decided_normalized.get(str(claim.id)) != normalized:
+            return False
+    return True
 
 
 def _json_value(value: object) -> JsonValue:
