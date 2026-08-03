@@ -22,3 +22,17 @@ def claim_valid_at(
     if valid_to is not None and valid_to <= at:
         return False
     return True
+
+
+def claim_not_closed_at(
+    valid_to: datetime | None,
+    at: datetime,
+) -> bool:
+    """claim이 at 시점 기준으로 아직 닫히지 않았는지 판정한다.
+
+    valid_from은 보지 않는다 — 감지기와 컴파일러는 "닫힌 주장 제외"
+    의미론을 쓴다. 발효 예정(valid_from이 미래) claim을 현재 판정에
+    넣을지는 별도 결정 사항이라 as-of 조회(claim_valid_at)와 의미를
+    분리한다.
+    """
+    return valid_to is None or valid_to > at

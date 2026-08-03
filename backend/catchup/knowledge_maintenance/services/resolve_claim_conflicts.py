@@ -32,7 +32,7 @@ from catchup.knowledge_maintenance.domain.claim_conflict import StoredClaimCandi
 from catchup.knowledge_maintenance.domain.claim_conflict import dates_compatible
 from catchup.knowledge_maintenance.domain.claim_conflict import normalize_value
 from catchup.knowledge_maintenance.domain.source_version import JsonValue
-from catchup.knowledge_maintenance.domain.temporal import claim_valid_at
+from catchup.knowledge_maintenance.domain.temporal import claim_not_closed_at
 from catchup.knowledge_maintenance.ports.knowledge_candidates import (
     KnowledgeCandidateRepository,
 )
@@ -146,11 +146,11 @@ def resolve_claim_conflicts(
         not_comparable = 0
         closed = 0
         for claim in claims:
-            if not claim_valid_at(claim.valid_from, claim.valid_to, now):
-                # 지금 참인 구간 밖의 주장이다. 사람이 이미 판정해
-                # 닫았거나 아직 시작하지 않았다. 다시 비교하면 해소된
-                # 모순이 영원히 되살아난다. 판정 정의는
-                # `domain.temporal.claim_valid_at`이 단독으로 갖는다.
+            if not claim_not_closed_at(claim.valid_to, now):
+                # 사람이 이미 판정해 닫은 주장이다. 다시 비교하면
+                # 해소된 모순이 영원히 되살아난다. 발효 예정
+                # (valid_from이 미래)인 주장은 여기서 거르지 않는다 —
+                # 판정 정의는 `domain.temporal`이 단독으로 갖는다.
                 closed += 1
                 continue
             entry = vocabulary.predicate_entry(claim.predicate)

@@ -39,7 +39,7 @@ from catchup.knowledge_maintenance.domain.artifact import artifact_idempotency_k
 from catchup.knowledge_maintenance.domain.artifact import blocks_content_hash
 from catchup.knowledge_maintenance.domain.artifact import validate_blocks
 from catchup.knowledge_maintenance.domain.claim_conflict import StoredClaimCandidate
-from catchup.knowledge_maintenance.domain.temporal import claim_valid_at
+from catchup.knowledge_maintenance.domain.temporal import claim_not_closed_at
 from catchup.knowledge_maintenance.ports.artifacts import ArtifactProposalConflict
 from catchup.knowledge_maintenance.ports.artifacts import ArtifactRepository
 from catchup.knowledge_maintenance.ports.knowledge_candidates import (
@@ -320,14 +320,15 @@ def _claim_sections(
     순서이므로 그것이 카드의 순서가 된다. 미등재를 이름순으로 두는 것은
     기댈 순서가 이름밖에 없기 때문이다.
 
-    now 시점에 참인 구간 밖의 주장은 싣지 않는다. 문서의 현재 판은
-    지금 믿는 것을 말해야 하기 때문이다. 지나간 값은 claim 행과 옛
-    판에 그대로 남아 있으므로 사라지는 것이 아니다. 판정 정의는
-    `domain.temporal.claim_valid_at`이 단독으로 갖는다.
+    now 시점에 구간이 닫힌 주장은 싣지 않는다. 문서의 현재 판은 지금
+    믿는 것을 말해야 하기 때문이다. 지나간 값은 claim 행과 옛 판에
+    그대로 남아 있으므로 사라지는 것이 아니다. 발효 예정(valid_from이
+    미래)인 주장은 거르지 않는다 — 판정 정의는 `domain.temporal`이
+    단독으로 갖는다.
     """
     grouped: dict[str, list[StoredClaimCandidate]] = {}
     for claim in claims:
-        if not claim_valid_at(claim.valid_from, claim.valid_to, now):
+        if not claim_not_closed_at(claim.valid_to, now):
             continue
         grouped.setdefault(claim.predicate, []).append(claim)
 

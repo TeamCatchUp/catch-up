@@ -754,6 +754,10 @@ def test_find_claim_candidates_excludes_rejected(
     by_id = {candidate.id: candidate for candidate in candidates}
     assert by_id[claim_ids["closed"]].valid_to is not None
     assert by_id[claim_ids["live"]].valid_to is None
+    # 구간의 시작도 함께 실린다. as-of 조회가 읽을 재료다.
+    assert by_id[claim_ids["live"]].valid_from is not None
+    # 확정되지 않은 후보는 구간이 열리지 않았으므로 시작이 없다.
+    assert by_id[claim_ids["pending"]].valid_from is None
 
 
 def test_run_is_recorded_as_succeeded(

@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from datetime import timezone
 
+from catchup.knowledge_maintenance.domain.temporal import claim_not_closed_at
 from catchup.knowledge_maintenance.domain.temporal import claim_valid_at
 
 T = datetime(2026, 8, 1, 12, 0, tzinfo=timezone.utc)
@@ -36,3 +37,20 @@ def test_boundaries_are_half_open() -> None:
 
 def test_not_yet_started_is_invalid() -> None:
     assert not claim_valid_at(AFTER, None, T)
+
+
+def test_open_claim_is_not_closed() -> None:
+    assert claim_not_closed_at(None, T)
+
+
+def test_claim_closed_before_t_is_closed() -> None:
+    assert not claim_not_closed_at(BEFORE, T)
+
+
+def test_claim_closing_after_t_is_not_closed() -> None:
+    assert claim_not_closed_at(AFTER, T)
+
+
+def test_closing_boundary_is_half_open() -> None:
+    # 구간은 [from, to)다. T == valid_to면 이미 닫힌 것으로 본다.
+    assert not claim_not_closed_at(T, T)

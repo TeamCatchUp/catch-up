@@ -68,6 +68,7 @@ def _claim(
     resolved_node_id: uuid.UUID | None = None,
     statement: str = "",
     minutes: int = 0,
+    valid_from: datetime | None = None,
     valid_to: datetime | None = None,
 ) -> StoredClaimCandidate:
     return StoredClaimCandidate(
@@ -80,6 +81,7 @@ def _claim(
         value=value,
         statement=statement or f"{predicate}는 {value}이다",
         observed_at=NOW + timedelta(minutes=minutes),
+        valid_from=valid_from,
         valid_to=valid_to,
     )
 
@@ -761,6 +763,40 @@ def test_closed_claim_leaves_the_comparison() -> None:
     # 값이 한 종만 남아 견줄 그룹이 되지 못한다.
     assert result.conflicts_found == 0
     assert result.proposals_created == 0
+
+
+def test_future_valid_from_claim_stays_in_the_comparison() -> None:
+    """발효 예정인 주장도 비교에 남는다.
+
+    감지기는 "닫힌 주장 제외" 의미론을 쓴다. valid_from이 미래인
+    accepted claim은 아직 닫히지 않았으므로 모순의 당사자로 남아야
+    한다. 이 주장을 현재 판정에서 뺄지는 별도 결정 사항이다.
+    """
+    node_id = uuid.uuid4()
+    alive = _claim(
+        value=60,
+        resolved_node_id=node_id,
+        candidate_id=uuid.uuid4(),
+    )
+    upcoming = _claim(
+        value=120,
+        resolved_node_id=node_id,
+        candidate_id=uuid.uuid4(),
+        minutes=10,
+        valid_from=NOW + timedelta(days=3650),
+    )
+    uow = FakeUnitOfWork([alive, upcoming])
+
+    result = resolve_claim_conflicts(
+        workspace_id=WORKSPACE,
+        vocabulary=VOCABULARY,
+        uow=uow,
+    )
+
+    assert result.claims_scanned == 2
+    assert result.claims_closed == 0
+    assert result.conflicts_found == 1
+    assert result.proposals_created == 1
 
 
 def _decide(repo: FakeProposalRepository, key: str) -> dict:
