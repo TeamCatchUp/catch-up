@@ -9,7 +9,6 @@ import { CONNECTOR_CONTENT } from '../../constants/connectorContent';
 import { useAdminIntegrationViewModel } from '../../hooks/useAdminIntegrationViewModel';
 import type { IntegrationService } from '../../types/integrationModel';
 import ConnectorCatalog from '../management/catalog/ConnectorCatalog';
-import ConnectorCatalogNotice from '../management/catalog/ConnectorCatalogNotice';
 import ChannelTalkFlowPanel from '../management/channel-talk/ChannelTalkFlowPanel';
 import type { ChannelTalkStep } from '../management/channel-talk/ChannelTalkStepper';
 import ConnectorSidebarList from '../management/ConnectorSidebarList';
@@ -80,16 +79,14 @@ export default function ConnectorConnectView() {
   const rightPane = (() => {
     switch (resolved.kind) {
       case 'catalog':
+        // 안내 배너는 ConnectorCatalog가 내부에서 렌더한다 — 여기서 또 붙이면 중복
         return (
-          <div className="flex flex-col gap-6">
-            <ConnectorCatalog
-              connectedServices={connectedMenu.map((item) => item.service)}
-              columns={hasConnected ? 2 : 3}
-              onConnect={handleConnect}
-              onLearnMore={goCheckMapping}
-            />
-            <ConnectorCatalogNotice onLearnMore={goCheckMapping} />
-          </div>
+          <ConnectorCatalog
+            connectedServices={connectedMenu.map((item) => item.service)}
+            columns={hasConnected ? 2 : 3}
+            onConnect={handleConnect}
+            onLearnMore={goCheckMapping}
+          />
         );
       case 'preconnect': {
         const detail = getConnectorDetail(resolved.service);
