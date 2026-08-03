@@ -73,6 +73,9 @@ from catchup.knowledge_maintenance.domain.claim_conflict import StoredClaimCandi
 from catchup.knowledge_maintenance.domain.entity_resolution import anchor_excerpt
 from catchup.knowledge_maintenance.domain.evidence import Locator
 from catchup.knowledge_maintenance.domain.knowledge_candidate import (
+    AssertionResolutionStatus,
+)
+from catchup.knowledge_maintenance.domain.knowledge_candidate import (
     EntityResolutionStatus,
 )
 from catchup.knowledge_maintenance.domain.knowledge_candidate import ExtractionMethod
@@ -779,6 +782,12 @@ class SqlAlchemyKnowledgeCandidateRepository:
         판정의 입력이기 때문이다. subject가 entity 후보라면 그 후보 행을
         outer join해 해소 결과를 함께 담는다. 아직 해소되지 않은 후보도
         빠지면 안 되므로 outer join이어야 한다.
+
+        rejected는 참이었던 적 없는 후보라 이 reader의 기본 경로에서
+        제외한다. 감사는 행 보존과 결정 저널이 담당하므로 조회에서 빼도
+        기록은 남는다. 반대로 닫힌 accepted는 "한때 참이었다"를 묻는
+        temporal 자료라 계속 싣고, 거르는 일은 각 소비자가 valid_to로
+        한다.
         """
         citation_verified = (
             select(
@@ -823,7 +832,11 @@ class SqlAlchemyKnowledgeCandidateRepository:
                 KnowledgeClaimCandidateRow.subject_entity_candidate_id
                 == KnowledgeEntityCandidateRow.id,
             )
-            .where(KnowledgeClaimCandidateRow.workspace_id == workspace_id)
+            .where(
+                KnowledgeClaimCandidateRow.workspace_id == workspace_id,
+                KnowledgeClaimCandidateRow.resolution_status
+                != AssertionResolutionStatus.REJECTED.value,
+            )
             .order_by(
                 KnowledgeClaimCandidateRow.created_at,
                 KnowledgeClaimCandidateRow.id,
