@@ -45,6 +45,10 @@ const Frame = ({ children }: { children: React.ReactNode }) => (
   <div className="bg-fill-normal-normal w-195">{children}</div>
 );
 
+/** 숫자만 색이 달라 텍스트 노드가 쪼개진다 — p 요소의 textContent로 본다 */
+const byLine = (text: string) => (_content: string, el: Element | null) =>
+  el?.tagName === 'P' && el.textContent === text;
+
 export const Disabled: Story = {
   render: (args) => (
     <Frame>
@@ -54,8 +58,8 @@ export const Disabled: Story = {
   play: async ({ canvasElement, userEvent, args }) => {
     const canvas = within(canvasElement);
 
-    await expect(canvas.getByText('5개 채널')).toBeInTheDocument();
-    await expect(canvas.getByText('18개 도큐먼트 연결됨')).toBeInTheDocument();
+    await expect(canvas.getByText(byLine('5개 채널'))).toBeInTheDocument();
+    await expect(canvas.getByText(byLine('18개 도큐먼트 연결됨'))).toBeInTheDocument();
     await expect(canvas.getByRole('button', { name: /임베딩하기/ })).toBeDisabled();
 
     await userEvent.click(canvas.getByRole('button', { name: /채널 추가/ }));
@@ -86,7 +90,7 @@ export const Zero: Story = {
   ),
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await expect(canvas.getByText('0개 채널')).toBeInTheDocument();
-    await expect(canvas.getByText('0개 도큐먼트 연결됨')).toBeInTheDocument();
+    await expect(canvas.getByText(byLine('0개 채널'))).toBeInTheDocument();
+    await expect(canvas.getByText(byLine('0개 도큐먼트 연결됨'))).toBeInTheDocument();
   },
 };

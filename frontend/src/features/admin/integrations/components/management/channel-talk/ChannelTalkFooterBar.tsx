@@ -13,9 +13,14 @@ interface ChannelTalkFooterBarProps {
 
 /**
  * 채널톡 연결 관리 하단 고정 바.
- * Figma `17363:100408` — 780×60, 집계 좌측 · 액션 우측, 가운데 4×4 점 구분자.
+ * Figma `17345:84633` — padding 12/32, gap 6, 상단 경계선만 있고 배경은 없다.
  *
- * 집계에는 실패 건수의 50,000+ 규칙을 적용하지 않는다(사용자 결정).
+ * 집계에서 **숫자만** `#3385FF`로 강조된다(`{ts1}5{/ts1}개 채널`).
+ * 실패 건수의 50,000+ 규칙은 여기 적용하지 않는다(사용자 결정).
+ *
+ * 버튼은 Figma의 Box Button medium 두 종이다.
+ *   채널 추가   Solid Blue(Secondary) = box-soft-primary
+ *   임베딩하기  Solid Blue(Primary)   = box-solid-primary
  */
 export default function ChannelTalkFooterBar({
   channelCount,
@@ -25,21 +30,29 @@ export default function ChannelTalkFooterBar({
   onProceed,
 }: ChannelTalkFooterBarProps) {
   return (
-    <div className="border-line-normal-neutral bg-fill-normal-normal flex h-15 items-center justify-between gap-4 border-t px-8">
-      <div className="flex min-w-0 items-center gap-2.5">
-        <span className="text-body-small text-text-normal-neutral">{channelCount}개 채널</span>
-        <span aria-hidden="true" className="bg-line-normal-neutral size-1 shrink-0 rounded-full" />
-        <span className="text-body-small text-text-normal-neutral truncate">{documentCount}개 도큐먼트 연결됨</span>
-      </div>
+    <div className="border-line-normal-neutral flex items-center gap-1.5 border-t px-8 py-3">
+      <p className="text-body-small text-text-normal-normal shrink-0">
+        <span className="text-text-primary-assistive">{channelCount}</span>개 채널
+      </p>
+      <span aria-hidden="true" className="bg-dim-black-25 size-1 shrink-0 rounded-full" />
+      <p className="text-body-small text-text-normal-normal min-w-0 flex-1 truncate">
+        <span className="text-text-primary-assistive">{documentCount}</span>개 도큐먼트 연결됨
+      </p>
 
       <div className="flex shrink-0 items-center gap-3">
-        <Button variant="box-outline-gray" size="md" onClick={onAddChannel}>
+        <Button variant="box-soft-primary" size="md" onClick={onAddChannel}>
           <IconAddSmall className="size-5" />
           채널 추가
         </Button>
-        <Button variant="box-solid-primary" size="md" onClick={onProceed} disabled={!canProceed}>
+        <Button
+          variant="box-solid-primary"
+          size="md"
+          onClick={onProceed}
+          disabled={!canProceed}
+          className="text-heading-small"
+        >
           임베딩하기
-          <IconArrowRight2 className="size-5" />
+          <IconArrowRight2 className="size-6" />
         </Button>
       </div>
     </div>
