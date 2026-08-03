@@ -418,6 +418,36 @@ def test_member_change_abandons_and_replaces() -> None:
     assert len(row["resolver_metadata"]["values"]) == 3
 
 
+def test_value_correction_changes_member_hash() -> None:
+    """같은 멤버라도 정규화 값이 정정되면 member_hash가 달라진다."""
+    node_id = uuid.uuid4()
+    first = _claim(value=60, node_id=node_id, minutes=0)
+    second = _claim(value=120, node_id=node_id, minutes=5)
+    uow = FakeUnitOfWork([first, second])
+    resolve_claim_conflicts(
+        workspace_id=WORKSPACE,
+        vocabulary=VOCABULARY,
+        uow=uow,
+    )
+    key = conflict_idempotency_key(f"node:{node_id}", "rate_limit")
+    hash_before = uow.mutation_proposals.rows[key]["resolver_metadata"][
+        "member_hash"
+    ]
+
+    # 같은 claim 행의 값이 정정되어 다시 들어온다.
+    uow.knowledge_candidates.claims = [first, replace(second, value=90)]
+    resolve_claim_conflicts(
+        workspace_id=WORKSPACE,
+        vocabulary=VOCABULARY,
+        uow=uow,
+    )
+
+    hash_after = uow.mutation_proposals.rows[key]["resolver_metadata"][
+        "member_hash"
+    ]
+    assert hash_before != hash_after
+
+
 def test_rerun_with_same_members_skips() -> None:
     """member_hash가 같으면 재실행이 proposal을 반복하지 않는다."""
     node_id = uuid.uuid4()

@@ -199,7 +199,7 @@ def resolve_claim_conflicts(
             conflicts += 1
 
             parsed.sort(key=lambda item: (item[0].observed_at, item[0].id))
-            member_hash = _member_hash(claim for claim, _ in parsed)
+            member_hash = _member_hash(parsed)
             key = conflict_idempotency_key(subject_key, predicate)
             decided = (
                 uow.mutation_proposals.find_decided_by_idempotency_key(
@@ -405,9 +405,19 @@ def _subject_key(
     return None
 
 
-def _member_hash(claims: Iterable[StoredClaimCandidate]) -> str:
-    """그룹 구성의 지문을 만든다. 멤버가 달라지면 값이 달라진다."""
-    joined = ",".join(sorted(str(claim.id) for claim in claims))
+def _member_hash(
+    members: Iterable[tuple[StoredClaimCandidate, str]],
+) -> str:
+    """그룹 구성의 지문을 만든다.
+
+    멤버가 달라지거나 같은 멤버의 정규화 값이 달라지면 지문이
+    달라진다. 값 정정은 사람이 다시 봐야 할 새 구성이기 때문이다.
+    """
+    joined = ",".join(
+        sorted(
+            f"{claim.id}:{normalized}" for claim, normalized in members
+        )
+    )
     return hashlib.sha256(joined.encode("utf-8")).hexdigest()
 
 
