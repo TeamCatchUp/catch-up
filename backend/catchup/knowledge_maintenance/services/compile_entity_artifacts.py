@@ -26,6 +26,7 @@ from collections.abc import Mapping
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
+from datetime import timezone
 from types import TracebackType
 from typing import Protocol
 from typing import Self
@@ -38,6 +39,7 @@ from catchup.knowledge_maintenance.domain.artifact import artifact_idempotency_k
 from catchup.knowledge_maintenance.domain.artifact import blocks_content_hash
 from catchup.knowledge_maintenance.domain.artifact import validate_blocks
 from catchup.knowledge_maintenance.domain.claim_conflict import StoredClaimCandidate
+from catchup.knowledge_maintenance.domain.temporal import claim_not_closed_at
 from catchup.knowledge_maintenance.ports.artifacts import ArtifactProposalConflict
 from catchup.knowledge_maintenance.ports.artifacts import ArtifactRepository
 from catchup.knowledge_maintenance.ports.knowledge_candidates import (
@@ -124,6 +126,7 @@ def compile_entity_artifacts(
     abandoned = 0
     skipped = 0
     conflicted = 0
+    now = datetime.now(timezone.utc)
     with uow:
         sources = uow.artifacts.find_top_entity_nodes(limit=limit)
         claims = uow.knowledge_candidates.find_claim_candidates(
@@ -141,6 +144,7 @@ def compile_entity_artifacts(
                 claims=node_claims,
                 pending=pending,
                 vocabulary=vocabulary,
+                now=now,
             )
             if not blocks:
                 # 쓸 내용이 없으면 빈 카드를 만들지 않는다. 검토자에게
@@ -292,11 +296,12 @@ def _build_blocks(
     claims: Sequence[StoredClaimCandidate],
     pending: Sequence[StoredPendingProposal],
     vocabulary: ExtractionVocabulary,
+    now: datetime,
 ) -> tuple[ArtifactBlock, ...]:
     """카드 본문을 이룰 블록을 정해진 순서로 만든다."""
     ontology_version = vocabulary.snapshot_id or None
     blocks = [
-        *_claim_sections(claims, vocabulary, ontology_version),
+        *_claim_sections(claims, vocabulary, ontology_version, now),
         *_open_questions(pending, ontology_version),
     ]
     return tuple(blocks)
@@ -306,6 +311,7 @@ def _claim_sections(
     claims: Sequence[StoredClaimCandidate],
     vocabulary: ExtractionVocabulary,
     ontology_version: str | None,
+    now: datetime,
 ) -> list[ArtifactBlock]:
     """predicate별 claim_section 블록을 사전 순서대로 만든다.
 
@@ -314,13 +320,15 @@ def _claim_sections(
     순서이므로 그것이 카드의 순서가 된다. 미등재를 이름순으로 두는 것은
     기댈 순서가 이름밖에 없기 때문이다.
 
-    구간이 닫힌 주장은 싣지 않는다. 문서의 현재 판은 지금 믿는 것을
-    말해야 하기 때문이다. 지나간 값은 claim 행과 옛 판에 그대로 남아
-    있으므로 사라지는 것이 아니다.
+    now 시점에 구간이 닫힌 주장은 싣지 않는다. 문서의 현재 판은 지금
+    믿는 것을 말해야 하기 때문이다. 지나간 값은 claim 행과 옛 판에
+    그대로 남아 있으므로 사라지는 것이 아니다. 발효 예정(valid_from이
+    미래)인 주장은 거르지 않는다 — 판정 정의는 `domain.temporal`이
+    단독으로 갖는다.
     """
     grouped: dict[str, list[StoredClaimCandidate]] = {}
     for claim in claims:
-        if claim.valid_to is not None:
+        if not claim_not_closed_at(claim.valid_to, now):
             continue
         grouped.setdefault(claim.predicate, []).append(claim)
 

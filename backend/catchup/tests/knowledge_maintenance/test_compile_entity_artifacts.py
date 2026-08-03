@@ -63,6 +63,7 @@ def _claim(
     value: object = 60,
     value_type: str = "number",
     minutes: int = 0,
+    valid_from: datetime | None = None,
     valid_to: datetime | None = None,
 ) -> StoredClaimCandidate:
     """canonical 노드를 subject로 삼는 claim 후보를 하나 만든다."""
@@ -76,6 +77,7 @@ def _claim(
         value=value,
         statement=f"{predicate}는 {value}이다",
         observed_at=NOW + timedelta(minutes=minutes),
+        valid_from=valid_from,
         valid_to=valid_to,
     )
 
@@ -907,6 +909,62 @@ def test_closed_claims_leave_the_card() -> None:
     }
     assert alive.id in claim_ids
     assert closed.id not in claim_ids
+
+
+def test_future_valid_from_claim_stays_on_the_card() -> None:
+    """발효 예정인 주장도 카드에 실린다.
+
+    컴파일러는 "닫힌 주장 제외" 의미론을 쓴다. valid_from이 미래인
+    accepted claim은 아직 닫히지 않았으므로 조용히 빠지면 안 된다.
+    """
+    node_id = uuid.uuid4()
+    alive = _claim(node_id=node_id, value=60)
+    upcoming = _claim(
+        node_id=node_id,
+        predicate="is_supported",
+        value=True,
+        value_type="boolean",
+        valid_from=NOW + timedelta(days=3650),
+    )
+    uow = FakeUnitOfWork(sources=[_source(node_id)], claims=[alive, upcoming])
+
+    _run(uow)
+
+    row = _only_pending(uow)
+    blocks = row["blocks"]
+    claim_ids = {
+        claim_id for block in blocks for claim_id in block.claim_ids
+    }
+    assert alive.id in claim_ids
+    assert upcoming.id in claim_ids
+
+
+def test_future_valid_to_claim_stays_on_the_card() -> None:
+    """닫힘이 예정된 주장도 발효 전까지는 카드에 남는다.
+
+    supersede 결정은 패자의 valid_to를 승자의 valid_from으로 닫는데,
+    그 시각이 미래면 지금은 아직 닫힌 주장이 아니다. 발효 전에 미리
+    지우면 카드가 "아직 참인 사실"을 감추게 된다.
+    """
+    node_id = uuid.uuid4()
+    closing_soon = _claim(
+        node_id=node_id,
+        value=60,
+        valid_to=datetime.now(timezone.utc) + timedelta(days=30),
+    )
+    uow = FakeUnitOfWork(
+        sources=[_source(node_id)], claims=[closing_soon]
+    )
+
+    _run(uow)
+
+    row = _only_pending(uow)
+    blocks = row["blocks"]
+    claim_ids = {
+        claim_id for block in blocks for claim_id in block.claim_ids
+    }
+    assert closing_soon.id in claim_ids
+    assert "60" in " ".join(block.body for block in blocks)
 
 
 def test_section_disappears_when_every_value_is_closed() -> None:

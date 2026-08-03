@@ -68,6 +68,7 @@ def _claim(
     resolved_node_id: uuid.UUID | None = None,
     statement: str = "",
     minutes: int = 0,
+    valid_from: datetime | None = None,
     valid_to: datetime | None = None,
 ) -> StoredClaimCandidate:
     return StoredClaimCandidate(
@@ -80,6 +81,7 @@ def _claim(
         value=value,
         statement=statement or f"{predicate}는 {value}이다",
         observed_at=NOW + timedelta(minutes=minutes),
+        valid_from=valid_from,
         valid_to=valid_to,
     )
 
@@ -763,6 +765,40 @@ def test_closed_claim_leaves_the_comparison() -> None:
     assert result.proposals_created == 0
 
 
+def test_future_valid_from_claim_stays_in_the_comparison() -> None:
+    """발효 예정인 주장도 비교에 남는다.
+
+    감지기는 "닫힌 주장 제외" 의미론을 쓴다. valid_from이 미래인
+    accepted claim은 아직 닫히지 않았으므로 모순의 당사자로 남아야
+    한다. 이 주장을 현재 판정에서 뺄지는 별도 결정 사항이다.
+    """
+    node_id = uuid.uuid4()
+    alive = _claim(
+        value=60,
+        resolved_node_id=node_id,
+        candidate_id=uuid.uuid4(),
+    )
+    upcoming = _claim(
+        value=120,
+        resolved_node_id=node_id,
+        candidate_id=uuid.uuid4(),
+        minutes=10,
+        valid_from=NOW + timedelta(days=3650),
+    )
+    uow = FakeUnitOfWork([alive, upcoming])
+
+    result = resolve_claim_conflicts(
+        workspace_id=WORKSPACE,
+        vocabulary=VOCABULARY,
+        uow=uow,
+    )
+
+    assert result.claims_scanned == 2
+    assert result.claims_closed == 0
+    assert result.conflicts_found == 1
+    assert result.proposals_created == 1
+
+
 def _decide(repo: FakeProposalRepository, key: str) -> dict:
     """계류 안건에 사람의 결정을 흉내 내어 새긴다."""
     row = repo.rows[key]
@@ -867,6 +903,67 @@ def test_new_review_event_is_stable_across_reruns() -> None:
     assert result.proposals_created == 0
     assert result.proposals_abandoned == 0
     assert len(uow.mutation_proposals.rows) == 2
+
+
+def test_future_valid_to_loser_is_held_by_the_standing_decision() -> None:
+    """발효 전 패자가 비교에 다시 들어와도 결정이 재질문을 막는다.
+
+    supersede 결정은 패자의 valid_to를 승자의 valid_from으로 닫는데,
+    그 시각이 미래면 지금은 아직 닫힌 주장이 아니다. 감지기는 "닫힌
+    주장 제외" 의미론을 쓰므로 결정 직후부터 발효 시각까지 패자가
+    비교에 다시 노출된다. 이 창은 의도된 의미이며, 열려서는 안 되는
+    것은 노출이 아니라 재질문이다. 같은 구성의 결정이 서 있으면
+    member_hash 멱등 키가 결정 행을 가리켜 새 proposal을 만들지 않고
+    기존 행도 건드리지 않는다.
+    """
+    node_id = uuid.uuid4()
+    winner = _claim(value=120, node_id=node_id, minutes=10)
+    loser = _claim(
+        value=60,
+        node_id=node_id,
+        minutes=0,
+        # 승자의 valid_from이 미래라 패자의 닫힘도 아직 오지 않았다.
+        valid_to=datetime.now(timezone.utc) + timedelta(days=30),
+    )
+    uow = FakeUnitOfWork([winner, loser])
+    resolve_claim_conflicts(
+        workspace_id=WORKSPACE, vocabulary=VOCABULARY, uow=uow
+    )
+    key = conflict_idempotency_key(f"node:{node_id}", "rate_limit")
+    decided = _decide(uow.mutation_proposals, key)
+    decided["status"] = "applied"
+    decided["resolver_metadata"]["decision"] = {
+        "winner_claim_id": str(winner.id)
+    }
+
+    with capture_logs() as logs:
+        result = resolve_claim_conflicts(
+            workspace_id=WORKSPACE, vocabulary=VOCABULARY, uow=uow
+        )
+
+    # 미래 valid_to는 아직 닫힌 구간이 아니라 비교에 남는다.
+    assert result.claims_scanned == 2
+    assert result.claims_closed == 0
+    assert result.conflicts_found == 1
+    # 결정이 서 있으므로 새 안건도, 회수도 없다.
+    assert result.proposals_created == 0
+    assert result.proposals_abandoned == 0
+    assert len(uow.mutation_proposals.rows) == 1
+    row = uow.mutation_proposals.rows[key]
+    assert row["status"] == "applied"
+    assert row["reviewer"] == "debug:test-user"
+    assert row["reviewed_at"] == NOW
+    assert row["resolver_metadata"]["decision"] == {
+        "winner_claim_id": str(winner.id)
+    }
+    assert row["operations"] == [{"operation_type": "supersede_claim"}]
+    assert uow.mutation_proposals.abandoned == []
+    standing = [
+        entry
+        for entry in logs
+        if entry["event"] == "claim_conflict_decision_standing"
+    ]
+    assert standing and standing[0]["proposal_id"] == str(row["id"])
 
 
 def test_partial_precision_date_overlap_is_not_conflict() -> None:

@@ -25,6 +25,8 @@ from catchup.db.models import KnowledgeClaimCandidate as ClaimRow
 from catchup.db.models import KnowledgeEntityCandidate as CandidateRow
 from catchup.db.models import KnowledgeMutationOperation as OperationRow
 from catchup.db.models import KnowledgeMutationProposal as ProposalRow
+from catchup.db.models import KnowledgeNode as KnowledgeNodeRow
+from catchup.db.models import KnowledgeNodeAlias as AliasRow
 from catchup.db.models import Workspace
 from catchup.knowledge_maintenance.adapters.postgres.repositories import (
     SqlAlchemyKnowledgeCandidateRepository,
@@ -36,6 +38,7 @@ from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_CLAIM_SECTI
 from catchup.knowledge_maintenance.domain.artifact import ArtifactBlock
 from catchup.knowledge_maintenance.domain.artifact import artifact_idempotency_key
 from catchup.knowledge_maintenance.domain.artifact import blocks_content_hash
+from catchup.knowledge_maintenance.domain.entity_resolution import normalize_name
 from catchup.knowledge_maintenance.services.apply_mutation_proposals import (
     apply_mutation_proposals,
 )
@@ -442,6 +445,60 @@ def test_apply_resolves_candidates_on_real_rows(
     rerun = apply_mutation_proposals(uow_factory, workspace_id=workspace_id)
     assert rerun.proposals_applied == 0
     assert rerun.candidates_resolved == 0
+
+
+def test_apply_writes_name_alias_for_created_node(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+) -> None:
+    """적용이 만든 노드는 실 DB에서도 이름으로 찾을 수 있다."""
+    proposal_id, _, representative, _other = _merge_proposal(
+        workspace_id, session_factory, uow_factory
+    )
+    review_merge_proposal(
+        uow_factory(),
+        workspace_id=workspace_id,
+        proposal_id=proposal_id,
+        verdict="approved",
+        reviewer="ba2slk",
+    )
+
+    apply_mutation_proposals(uow_factory, workspace_id=workspace_id)
+
+    with session_factory() as session:
+        rep = session.get(CandidateRow, representative)
+        assert rep is not None and rep.resolved_node_id is not None
+        node_id = rep.resolved_node_id
+        node = session.get(KnowledgeNodeRow, node_id)
+        rows = list(
+            session.execute(
+                select(AliasRow).where(AliasRow.node_id == node_id)
+            ).scalars()
+        )
+    assert node is not None
+    assert node.canonical_key is None
+    assert len(rows) == 1
+    assert rows[0].alias == "결제 기능"
+    assert rows[0].normalized_alias == normalize_name("결제 기능")
+    assert rows[0].source == "system"
+
+    # 읽기 경로가 그 이름으로 노드를 실제로 찾아낸다.
+    with uow_factory() as uow:
+        found = uow.knowledge_nodes.find_entity_by_normalized_alias(
+            workspace_id=workspace_id,
+            normalized_alias=normalize_name("결제 기능"),
+        )
+    assert found is not None and found.id == node_id
+
+    apply_mutation_proposals(uow_factory, workspace_id=workspace_id)
+    with session_factory() as session:
+        rerun_rows = list(
+            session.execute(
+                select(AliasRow).where(AliasRow.node_id == node_id)
+            ).scalars()
+        )
+    assert len(rerun_rows) == 1
 
 
 def test_apply_isolates_failing_proposal(

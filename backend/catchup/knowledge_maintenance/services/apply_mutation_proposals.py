@@ -19,6 +19,7 @@ from types import TracebackType
 from typing import Protocol
 from typing import Self
 
+from catchup.knowledge_maintenance.domain.entity_resolution import normalize_name
 from catchup.knowledge_maintenance.domain.knowledge_candidate import (
     EntityResolutionStatus,
 )
@@ -227,7 +228,16 @@ def _apply_create(
     operation: StoredOperation,
     tally: _Tally,
 ) -> uuid.UUID:
-    """대표 후보로 canonical 노드를 만들거나 기존 노드를 재사용한다."""
+    """대표 후보로 canonical 노드를 만들거나 기존 노드를 재사용한다.
+
+    새로 만든 노드에는 곧바로 이름 alias를 남긴다. 이 경로의 노드는
+    외부 ID가 없어 canonical_key가 비므로, alias가 없으면 읽기 경로가
+    (canonical_key -> normalized_alias 순으로 찾는다) 방금 만든 노드를
+    어떤 이름으로도 못 찾는다. 노드를 만들면 그 이름으로 부를 수
+    있어야 한다는 계약을 쓰기 쪽에서 지킨다. 기존 노드를 재사용하는
+    분기는 이전 적용이나 다른 경로가 이미 그 계약을 지켰으므로 여기서
+    alias를 더하지 않는다.
+    """
     candidate_id = operation.entity_candidate_id
     if candidate_id is None:
         raise ApplyOperationError("create_entity에 후보가 없다")
@@ -243,11 +253,21 @@ def _apply_create(
         tally.already += 1
         return resolved_node_id
 
+    proposed_name = str(operation.operation_data["proposed_name"])
     node = uow.knowledge_nodes.create_entity_node(
         workspace_id=workspace_id,
         entity_type=str(operation.operation_data["proposed_type"]),
         canonical_key=None,
-        display_name=str(operation.operation_data["proposed_name"]),
+        display_name=proposed_name,
+    )
+    # add_alias는 같은 정규화 alias를 만나면 그냥 넘어가므로 적용을
+    # 다시 돌려도 행이 불어나지 않는다.
+    uow.knowledge_nodes.add_alias(
+        workspace_id=workspace_id,
+        node_id=node.id,
+        alias=proposed_name,
+        normalized_alias=normalize_name(proposed_name),
+        source="system",
     )
     uow.knowledge_candidates.mark_entity_resolved(
         candidate_id=candidate_id,

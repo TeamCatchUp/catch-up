@@ -13,6 +13,7 @@ from sqlalchemy import ColumnElement
 from sqlalchemy import Select
 from sqlalchemy import cast
 from sqlalchemy import func
+from sqlalchemy import or_
 from sqlalchemy import select
 from sqlalchemy import update
 from sqlalchemy.dialects.postgresql import JSONB
@@ -108,6 +109,7 @@ from catchup.knowledge_maintenance.ports.artifacts import CurrentRevisionForProj
 from catchup.knowledge_maintenance.ports.artifacts import EntityCardSource
 from catchup.knowledge_maintenance.ports.artifacts import ProposalAlreadyDecided
 from catchup.knowledge_maintenance.ports.artifacts import StoredArtifactProposal
+from catchup.knowledge_maintenance.ports.knowledge_candidates import AsOfClaim
 from catchup.knowledge_maintenance.ports.mutation_proposals import (
     MergeProposalAlreadyDecided,
 )
@@ -425,6 +427,35 @@ class SqlAlchemyKnowledgeNodeRepository:
                 KnowledgeNodeRow.node_kind == NodeKind.ENTITY.value,
                 KnowledgeNodeRow.canonical_key == canonical_key,
             )
+        )
+        return knowledge_node_to_domain(row) if row is not None else None
+
+    def find_entity_by_normalized_alias(
+        self,
+        *,
+        workspace_id: int,
+        normalized_alias: str,
+    ) -> KnowledgeNode | None:
+        """정규화된 alias 정확 일치로 entity 노드를 찾는다.
+
+        alias는 identity가 아니라 단서이므로 같은 alias가 여러 노드에
+        걸릴 수 있다. 그때는 node id 순 첫 번째만 돌려준다 — 같은
+        질의가 같은 답을 주어야 하기 때문이다.
+        """
+        row = self._session.scalar(
+            select(KnowledgeNodeRow)
+            .join(
+                KnowledgeNodeAliasRow,
+                KnowledgeNodeAliasRow.node_id == KnowledgeNodeRow.id,
+            )
+            .where(
+                KnowledgeNodeAliasRow.workspace_id == workspace_id,
+                KnowledgeNodeAliasRow.normalized_alias == normalized_alias,
+                KnowledgeNodeRow.workspace_id == workspace_id,
+                KnowledgeNodeRow.node_kind == NodeKind.ENTITY.value,
+            )
+            .order_by(KnowledgeNodeRow.id)
+            .limit(1)
         )
         return knowledge_node_to_domain(row) if row is not None else None
 
@@ -854,12 +885,83 @@ class SqlAlchemyKnowledgeCandidateRepository:
                 value=row.value,
                 statement=row.statement,
                 observed_at=observed_at,
+                valid_from=row.valid_from,
                 valid_to=row.valid_to,
                 citation_verified=verified,
             )
             for row, observed_at, resolved_node_id, verified in (
                 self._session.execute(statement).all()
             )
+        )
+
+    def find_accepted_claims_as_of(
+        self,
+        *,
+        workspace_id: int,
+        subject_node_id: uuid.UUID,
+        at: datetime,
+        predicate: str | None = None,
+    ) -> tuple[AsOfClaim, ...]:
+        """어떤 노드에 대해 at 시점에 참이었던 claim을 읽는다.
+
+        구간 조건은 `domain.temporal.claim_valid_at`과 정의가 같다 —
+        `(valid_from IS NULL OR valid_from <= at) AND (valid_to IS NULL
+        OR valid_to > at)`. 그 함수가 유일한 정의처이고 여기 SQL은 같은
+        규칙을 DB로 옮긴 것이라, 한쪽만 고치면 두 경로의 답이 갈린다.
+
+        subject 해소는 `find_claim_candidates`와 같은 방식이다. 노드를
+        직접 가리키는 claim과, 그 노드로 해소된 entity 후보를 가리키는
+        claim 둘 다 같은 대상에 대한 주장이기 때문이다. 상태는
+        accepted만 본다 — pending은 아직 지식이 아니고 rejected는
+        참이었던 적이 없다.
+        """
+        statement = (
+            select(KnowledgeClaimCandidateRow)
+            .outerjoin(
+                KnowledgeEntityCandidateRow,
+                KnowledgeClaimCandidateRow.subject_entity_candidate_id
+                == KnowledgeEntityCandidateRow.id,
+            )
+            .where(
+                KnowledgeClaimCandidateRow.workspace_id == workspace_id,
+                or_(
+                    KnowledgeClaimCandidateRow.subject_node_id
+                    == subject_node_id,
+                    KnowledgeEntityCandidateRow.resolved_node_id
+                    == subject_node_id,
+                ),
+                KnowledgeClaimCandidateRow.resolution_status
+                == AssertionResolutionStatus.ACCEPTED.value,
+                or_(
+                    KnowledgeClaimCandidateRow.valid_from.is_(None),
+                    KnowledgeClaimCandidateRow.valid_from <= at,
+                ),
+                or_(
+                    KnowledgeClaimCandidateRow.valid_to.is_(None),
+                    KnowledgeClaimCandidateRow.valid_to > at,
+                ),
+            )
+            .order_by(
+                KnowledgeClaimCandidateRow.predicate,
+                KnowledgeClaimCandidateRow.created_at,
+                KnowledgeClaimCandidateRow.id,
+            )
+        )
+        if predicate is not None:
+            statement = statement.where(
+                KnowledgeClaimCandidateRow.predicate == predicate
+            )
+        return tuple(
+            AsOfClaim(
+                claim_id=row.id,
+                predicate=row.predicate,
+                value_type=row.value_type,
+                value=row.value,
+                statement=row.statement,
+                valid_from=row.valid_from,
+                valid_to=row.valid_to,
+            )
+            for row in self._session.scalars(statement).all()
         )
 
     def mark_entity_resolved(
