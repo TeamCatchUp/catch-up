@@ -113,7 +113,7 @@ def main() -> None:
         f"  비교 그룹 {result.groups_compared}"
         f"  | 모순 그룹 {result.conflicts_found}"
         f" · 날짜 정밀도 겹침 {result.date_precision_overlaps}"
-        f"  | 같은 값 중복 관찰 {result.duplicates_observed}"
+        f"  | 같은 값 중복 관찰(모순 그룹) {result.duplicates_observed}"
     )
     print(
         f"  proposal 생성 {result.proposals_created}"

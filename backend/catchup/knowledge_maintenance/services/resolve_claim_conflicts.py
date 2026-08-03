@@ -99,7 +99,9 @@ class ClaimConflictResult:
         proposals_created: 새로 쓴 모순 proposal 수를 나타낸다.
         proposals_abandoned: 구성이 달라지거나 모순이 사라져 접은
             proposal 수를 나타낸다.
-        duplicates_observed: 같은 값이 겹쳐 나온 수를 나타낸다.
+        duplicates_observed: 모순 그룹 안에서 같은 값이 겹쳐 관찰된
+            수를 나타낸다. 리포트의 계류 모순 중복 지표와 같은
+            정의이며, 차이는 스코프(이번 실행 vs 계류 중)뿐이다.
         date_precision_overlaps: 정밀도만 다른 날짜 겹침이라 모순으로
             세지 않은 그룹 수를 나타낸다.
     """
@@ -188,7 +190,6 @@ def resolve_claim_conflicts(
             compared += 1
 
             distinct = {normalized for _, normalized in parsed}
-            duplicates += len(parsed) - len(distinct)
             if len(distinct) < 2:
                 continue
             if value_type == "date" and dates_compatible(distinct):
@@ -196,6 +197,7 @@ def resolve_claim_conflicts(
                 # 같은 사실 사이에서 승자를 고르게 된다.
                 date_overlaps += 1
                 continue
+            duplicates += len(parsed) - len(distinct)
             conflicts += 1
 
             parsed.sort(key=lambda item: (item[0].observed_at, item[0].id))

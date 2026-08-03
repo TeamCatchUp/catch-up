@@ -267,10 +267,43 @@ def test_same_value_counts_duplicate_without_proposal() -> None:
         uow=uow,
     )
 
-    assert result.duplicates_observed == 1
+    assert result.duplicates_observed == 0
     assert result.conflicts_found == 0
     assert result.proposals_created == 0
     assert uow.mutation_proposals.rows == {}
+
+
+def test_duplicates_counted_only_in_conflict_groups() -> None:
+    """중복 관찰은 모순 그룹 안에서만 센다 — 수렴 그룹은 세지 않는다."""
+    node = uuid.uuid4()
+    claims = [
+        # 수렴 그룹: 같은 값 2건 — 모순 아님, 중복도 세지 않는다.
+        _claim(predicate="rate_limit", value=60, node_id=node),
+        _claim(predicate="rate_limit", value=60, node_id=node, minutes=1),
+        # 모순 그룹: 60, 60, 120 — 중복 1.
+        _claim(predicate="rate_limit", value=60, node_id=uuid.uuid4()),
+    ]
+    conflict_node = claims[2].subject_node_id
+    claims += [
+        _claim(
+            predicate="rate_limit",
+            value=60,
+            node_id=conflict_node,
+            minutes=1,
+        ),
+        _claim(
+            predicate="rate_limit",
+            value=120,
+            node_id=conflict_node,
+            minutes=2,
+        ),
+    ]
+    uow = FakeUnitOfWork(claims)
+    result = resolve_claim_conflicts(
+        workspace_id=WORKSPACE, vocabulary=VOCABULARY, uow=uow
+    )
+    assert result.conflicts_found == 1
+    assert result.duplicates_observed == 1
 
 
 def test_unlisted_or_text_predicate_is_ignored() -> None:

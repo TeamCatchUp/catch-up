@@ -497,7 +497,7 @@ def main() -> None:
     print(
         f"  contradiction proposal {conflict['proposals']}건"
         f"  | 묶인 claim {conflict['member_claims']}"
-        f"  | 같은 값 중복 관찰 {conflict['duplicates']}"
+        f"  | 같은 값 중복 관찰(계류 모순) {conflict['duplicates']}"
     )
     for row in conflict_list:
         print(
