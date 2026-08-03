@@ -27,6 +27,7 @@ from typing import Self
 from catchup.knowledge_maintenance.contracts.extraction import ExtractionVocabulary
 from catchup.knowledge_maintenance.contracts.extraction import PredicateEntry
 from catchup.knowledge_maintenance.domain.claim_conflict import StoredClaimCandidate
+from catchup.knowledge_maintenance.domain.claim_conflict import dates_compatible
 from catchup.knowledge_maintenance.domain.claim_conflict import normalize_value
 from catchup.knowledge_maintenance.domain.source_version import JsonValue
 from catchup.knowledge_maintenance.ports.knowledge_candidates import (
@@ -99,6 +100,8 @@ class ClaimConflictResult:
         proposals_abandoned: 구성이 달라지거나 모순이 사라져 접은
             proposal 수를 나타낸다.
         duplicates_observed: 같은 값이 겹쳐 나온 수를 나타낸다.
+        date_precision_overlaps: 정밀도만 다른 날짜 겹침이라 모순으로
+            세지 않은 그룹 수를 나타낸다.
     """
 
     claims_scanned: int = 0
@@ -111,6 +114,7 @@ class ClaimConflictResult:
     proposals_created: int = 0
     proposals_abandoned: int = 0
     duplicates_observed: int = 0
+    date_precision_overlaps: int = 0
 
 
 def resolve_claim_conflicts(
@@ -161,6 +165,7 @@ def resolve_claim_conflicts(
         created = 0
         abandoned = 0
         duplicates = 0
+        date_overlaps = 0
         active_keys: set[str] = set()
         for (subject_key, predicate), members in sorted(groups.items()):
             entry = entries[predicate]
@@ -185,6 +190,11 @@ def resolve_claim_conflicts(
             distinct = {normalized for _, normalized in parsed}
             duplicates += len(parsed) - len(distinct)
             if len(distinct) < 2:
+                continue
+            if value_type == "date" and dates_compatible(distinct):
+                # 정밀도만 다른 같은 시점이다. 모순이라 부르면 사람이
+                # 같은 사실 사이에서 승자를 고르게 된다.
+                date_overlaps += 1
                 continue
             conflicts += 1
 
@@ -299,6 +309,7 @@ def resolve_claim_conflicts(
         proposals_created=created,
         proposals_abandoned=abandoned,
         duplicates_observed=duplicates,
+        date_precision_overlaps=date_overlaps,
     )
     logger.info(
         "claim_conflict_completed",
@@ -312,6 +323,7 @@ def resolve_claim_conflicts(
         proposals_created=result.proposals_created,
         proposals_abandoned=result.proposals_abandoned,
         duplicates_observed=result.duplicates_observed,
+        date_precision_overlaps=result.date_precision_overlaps,
     )
     return result
 

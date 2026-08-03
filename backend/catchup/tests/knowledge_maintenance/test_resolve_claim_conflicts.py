@@ -806,6 +806,57 @@ def test_new_review_event_is_stable_across_reruns() -> None:
     assert len(uow.mutation_proposals.rows) == 2
 
 
+def test_partial_precision_date_overlap_is_not_conflict() -> None:
+    node = uuid.uuid4()
+    claims = [
+        _claim(
+            predicate="release_date",
+            value="2026-09",
+            value_type="date",
+            node_id=node,
+        ),
+        _claim(
+            predicate="release_date",
+            value="2026-09-15",
+            value_type="date",
+            node_id=node,
+            minutes=1,
+        ),
+    ]
+    uow = FakeUnitOfWork(claims)
+    result = resolve_claim_conflicts(
+        workspace_id=WORKSPACE, vocabulary=VOCABULARY, uow=uow
+    )
+    assert result.conflicts_found == 0
+    assert result.proposals_created == 0
+    assert result.date_precision_overlaps == 1
+
+
+def test_distinct_full_dates_still_conflict() -> None:
+    node = uuid.uuid4()
+    claims = [
+        _claim(
+            predicate="release_date",
+            value="2026-09-15",
+            value_type="date",
+            node_id=node,
+        ),
+        _claim(
+            predicate="release_date",
+            value="2026-09-20",
+            value_type="date",
+            node_id=node,
+            minutes=1,
+        ),
+    ]
+    uow = FakeUnitOfWork(claims)
+    result = resolve_claim_conflicts(
+        workspace_id=WORKSPACE, vocabulary=VOCABULARY, uow=uow
+    )
+    assert result.conflicts_found == 1
+    assert result.date_precision_overlaps == 0
+
+
 def test_enum_value_outside_dictionary_counts_unparseable() -> None:
     node = uuid.uuid4()
     claims = [

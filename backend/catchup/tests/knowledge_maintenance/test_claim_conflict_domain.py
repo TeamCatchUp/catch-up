@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from catchup.knowledge_maintenance.domain.claim_conflict import dates_compatible
 from catchup.knowledge_maintenance.domain.claim_conflict import normalize_value
 
 
@@ -47,3 +48,14 @@ def test_enum_inside_dictionary_values_normalizes() -> None:
 
 def test_enum_without_dictionary_values_passes_through() -> None:
     assert normalize_value("enum", "pro") == "pro"
+
+
+def test_partial_precision_dates_are_compatible():
+    assert dates_compatible({"2026-09", "2026-09-15"})
+    assert dates_compatible({"2026", "2026-09", "2026-09-15"})
+
+
+def test_distinct_dates_are_not_compatible():
+    assert not dates_compatible({"2026-09-15", "2026-09-20"})
+    assert not dates_compatible({"2026-09", "2026-10"})
+    assert not dates_compatible({"2026-09", "2026-09-15", "2026-09-20"})

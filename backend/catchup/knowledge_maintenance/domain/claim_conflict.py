@@ -87,3 +87,18 @@ def normalize_value(
             return None
         return stripped
     return None  # text는 비교하지 않는다.
+
+
+def dates_compatible(values: set[str]) -> bool:
+    """정밀도만 다른 날짜 값들이 같은 시점으로 겹치면 True를 준다.
+
+    "2026-09"와 "2026-09-15"는 다른 주장이 아니라 같은 시점을 다른
+    정밀도로 말한 것이다. 가장 정밀한 값 하나를 나머지 전부가
+    구간 접두로 포함해야 겹침이다. 같은 정밀도의 서로 다른 값이
+    섞이면 겹침이 아니다.
+    """
+    longest = max(values, key=len)
+    return all(
+        value == longest or longest.startswith(value + "-")
+        for value in values
+    )
