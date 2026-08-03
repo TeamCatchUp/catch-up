@@ -89,17 +89,23 @@ OPEN_BOUND = "present"
 SUBJECT_PROMPT_HEADER = f"""\
 You are preparing a lookup key for a knowledge base of stored facts.
 
-Read the question and list the entities whose stored facts would answer
-it — people, organizations, places, pets, products, or other named
-things the question is about.
+Read the question and list the subjects whose stored facts would answer
+it — people, organizations, places, pets, products, events,
+collections, or anything else the question is about. Subjects may be
+named or generic noun phrases: the knowledge base stores plain noun
+phrases such as "desktop computer", "autographed baseball collection",
+or "charity cycling event" as entity names, so list those too.
 
 Rules:
-- List at most {MAX_SUBJECTS} entities, most likely first.
-- Copy each name as it appears in the question. Do not translate,
+- List at most {MAX_SUBJECTS} subjects, most likely first.
+- Copy each subject as it appears in the question. Do not translate,
   expand, or invent names.
+- Strip determiners and possessives ("the", "my", "his", "her",
+  "their") and keep the core noun phrase: "my car" becomes "car".
 - Prefer the specific thing being asked about over the person asking.
 - Use noun phrases only. No verbs, no sentences, no questions.
-- If the question names no entity at all, return an empty list.
+- Return an empty list only when the question is about no subject at
+  all, such as a bare greeting.
 
 Question:
 """

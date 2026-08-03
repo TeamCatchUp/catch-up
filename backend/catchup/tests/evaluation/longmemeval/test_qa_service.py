@@ -24,6 +24,7 @@ from catchup.evaluation.longmemeval.qa_service import SubjectResult
 from catchup.evaluation.longmemeval.qa_service import UsageTotals
 from catchup.evaluation.longmemeval.qa_service import answer_questions
 from catchup.evaluation.longmemeval.qa_service import build_answer_prompt
+from catchup.evaluation.longmemeval.qa_service import build_subject_prompt
 from catchup.evaluation.longmemeval.qa_service import render_claims_context
 from catchup.evaluation.longmemeval.qa_service import run_question
 from catchup.knowledge_maintenance.ports.knowledge_candidates import AsOfClaim
@@ -403,3 +404,23 @@ def test_answer_questions_aggregates_usage_and_keeps_order() -> None:
     assert total.calls == 4
     assert total.input_tokens == 80
     assert total.output_tokens == 14
+
+
+def test_subject_prompt_allows_generic_noun_phrases() -> None:
+    """subject 프롬프트가 제네릭 명사구까지 뽑게 지시한다.
+
+    지식 베이스의 canonical entity 이름에는 "desktop computer" 같은
+    제네릭 명사구가 많다. 고유명사만 요구하면 추출이 빈 목록을 내고
+    문항 전체가 abstention으로 떨어지므로, 지시 문구를 고정한다.
+    """
+    prompt = build_subject_prompt("What did I buy for my desktop computer?")
+
+    assert "named or generic noun phrases" in prompt
+    assert "desktop computer" in prompt
+    assert "Return an empty list only when the question is about no" in prompt
+    assert "bare greeting" in prompt
+    assert '"my car" becomes "car"' in prompt
+    assert f"List at most {MAX_SUBJECTS} subjects" in prompt
+    assert "Do not translate,\n  expand, or invent names." in prompt
+    assert "Use noun phrases only." in prompt
+    assert prompt.endswith("What did I buy for my desktop computer?\n")
