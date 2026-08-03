@@ -197,3 +197,17 @@ async def test_validity_bound_format_holds_without_reference_time() -> None:
 
     prompt = llm.runnable.rendered_prompt
     assert "full calendar date (`YYYY-MM-DD`)" in prompt
+
+
+@pytest.mark.asyncio
+async def test_per_message_timestamps_anchor_relative_expressions() -> None:
+    """발화 시각이 본문에 있으면 그 시각을 앵커로 쓰라고 지시해야 한다."""
+    llm = _StubChatModel({"parsed": KnowledgeCandidateBatch(), "raw": None})
+    extractor = StructuredKnowledgeExtractor(llm)
+
+    await extractor.extract(
+        _request(reference_time=datetime(2026, 8, 1, tzinfo=timezone.utc))
+    )
+
+    prompt = llm.runnable.rendered_prompt
+    assert "nearest preceding message" in prompt

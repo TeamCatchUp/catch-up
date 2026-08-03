@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import uuid
 from datetime import datetime
 from datetime import timezone
@@ -32,6 +33,9 @@ ATTACHMENTS = "ct-eval-014"
 
 # 정규화된 본문에서 화자를 가리키는 이름이다.
 _SPEAKER_PREFIXES = ("고객:", "상담원:", "봇:", "[내부] 상담원:", "[내부] 봇:")
+
+# 발화 줄 앞에 붙는 발화 시각이다.
+_UTTERANCE_STAMP = re.compile(r"^\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}\] ")
 
 
 def _payload(key: str) -> str:
@@ -79,7 +83,11 @@ def test_every_content_line_is_an_utterance(normalizer) -> None:
     lines = observation.content.splitlines()
     assert lines
     for line in lines:
-        assert line.startswith(_SPEAKER_PREFIXES), line
+        # 발화 시각은 화자 앞에 붙으므로 걷어내고 본다.
+        assert _UTTERANCE_STAMP.match(line), line
+        assert _UTTERANCE_STAMP.sub("", line).startswith(
+            _SPEAKER_PREFIXES
+        ), line
 
 
 def test_chat_title_is_not_in_content(normalizer) -> None:
@@ -279,3 +287,100 @@ def test_a_message_with_both_text_and_attachment_keeps_both(normalizer) -> None:
     assert "error.png" in [
         item["name"] for item in observation.source_attributes["attachments"]
     ]
+
+
+def test_each_utterance_keeps_its_own_timestamp(normalizer) -> None:
+    """날짜를 넘긴 상담은 발화마다 자기 날짜를 본문에 남긴다.
+
+    문서 기준 시각 하나만으로는 8/2 발화의 "내일"이 상담 시작일인 8/1
+    기준으로 잘못 풀린다. 상대 시간의 앵커는 발화 단위로 보존돼야 한다.
+    """
+    payload = json.loads(_payload(BOT_AND_BUTTON))
+    payload["messages"] = [
+        {
+            "message_id": "m-day1",
+            "user_chat_id": BOT_AND_BUTTON,
+            "person_type": "customer",
+            "author": {
+                "author_type": "customer",
+                "user_id": "u-1",
+                "name": "사용자",
+            },
+            "plain_text": "요금제 문의드립니다.",
+            "created_at": "2026-08-01T10:00:00Z",
+        },
+        {
+            "message_id": "m-day2",
+            "user_chat_id": BOT_AND_BUTTON,
+            "person_type": "manager",
+            "author": {
+                "author_type": "manager",
+                "manager_id": "mg-1",
+                "name": "상담원",
+            },
+            "plain_text": "내일 새 요금제가 적용됩니다.",
+            "created_at": "2026-08-02T11:30:00Z",
+        },
+    ]
+
+    observation = normalizer.normalize(
+        _source_version(BOT_AND_BUTTON, content=json.dumps(payload))
+    )
+
+    assert "[2026-08-01 10:00] 고객: 요금제 문의드립니다." in observation.content
+    assert "[2026-08-02 11:30] 상담원: 내일 새 요금제가 적용됩니다." in (
+        observation.content
+    )
+
+
+def test_timestamp_prefix_keeps_the_utterance_text_intact(normalizer) -> None:
+    """시각을 붙여도 발화 원문은 그대로 남는다.
+
+    claim의 statement는 본문에서 다시 찾아야 하므로, 원문이 부분 문자열로
+    보존되지 않으면 근거 위치를 잃는다.
+    """
+    payload = json.loads(_payload(BOT_AND_BUTTON))
+    payload["messages"] = [
+        {
+            "message_id": "m-quote",
+            "user_chat_id": BOT_AND_BUTTON,
+            "person_type": "manager",
+            "author": {
+                "author_type": "manager",
+                "manager_id": "mg-1",
+                "name": "상담원",
+            },
+            "plain_text": "새 요금제는 다음 달 15일부터 적용됩니다.",
+            "created_at": "2026-08-02T11:30:00Z",
+        },
+    ]
+
+    observation = normalizer.normalize(
+        _source_version(BOT_AND_BUTTON, content=json.dumps(payload))
+    )
+
+    assert "새 요금제는 다음 달 15일부터 적용됩니다." in observation.content
+
+
+def test_an_utterance_without_a_timestamp_keeps_no_prefix(normalizer) -> None:
+    """시각을 모르는 발화는 없는 기준을 지어내지 않는다."""
+    payload = json.loads(_payload(BOT_AND_BUTTON))
+    payload["messages"] = [
+        {
+            "message_id": "m-nostamp",
+            "user_chat_id": BOT_AND_BUTTON,
+            "person_type": "customer",
+            "author": {
+                "author_type": "customer",
+                "user_id": "u-1",
+                "name": "사용자",
+            },
+            "plain_text": "요금제 문의드립니다.",
+        },
+    ]
+
+    observation = normalizer.normalize(
+        _source_version(BOT_AND_BUTTON, content=json.dumps(payload))
+    )
+
+    assert observation.content == "고객: 요금제 문의드립니다."

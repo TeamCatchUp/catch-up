@@ -63,7 +63,9 @@ class ChannelTalkUserChatNormalizer:
     """ChannelTalk user chat 한 건을 NormalizedObservation으로 옮긴다."""
 
     normalizer_id = "channel_talk.user_chat"
-    normalizer_version = "1"
+    # 2: 발화마다 자기 시각을 본문에 남긴다. 본문이 달라졌으므로 이전 버전으로
+    # 만든 관찰은 다시 정규화해야 한다.
+    normalizer_version = "2"
 
     def normalize(self, source_version: SourceVersion) -> NormalizedObservation:
         if source_version.change_kind == ChangeKind.DELETED:
@@ -145,7 +147,15 @@ def _role_of(message: ChannelTalkUserChatMessage) -> str | None:
 
 
 def _render_utterances(messages: Iterable[ChannelTalkUserChatMessage]) -> str:
-    """사람이 한 말만 골라 본문을 만든다."""
+    """사람이 한 말만 골라 본문을 만든다.
+
+    발화마다 자기 시각을 앞에 붙인다. 상담 하나가 여러 날에 걸치면 "내일",
+    "어제" 같은 상대 표현의 기준이 발화마다 다른데, 문서 하나에 기준 시각을
+    하나만 주면 뒷날 발화가 상담 시작일로 잘못 앵커되기 때문이다.
+
+    시각을 모르는 발화는 접두사 없이 남긴다. 없는 시각을 지어내는 것보다
+    기준을 비워 두고 문서 기준 시각으로 물러나는 편이 안전하다.
+    """
     lines: list[str] = []
     for message in messages:
         if _is_lifecycle_log(message) or _submitted_form_inputs(message):
@@ -168,7 +178,12 @@ def _render_utterances(messages: Iterable[ChannelTalkUserChatMessage]) -> str:
             continue
 
         mark = _PRIVATE_MARK if message.is_private else ""
-        lines.append(f"{mark}{role}: {text}")
+        stamp = (
+            f"[{message.created_at:%Y-%m-%d %H:%M}] "
+            if message.created_at is not None
+            else ""
+        )
+        lines.append(f"{stamp}{mark}{role}: {text}")
 
     return "\n".join(lines)
 

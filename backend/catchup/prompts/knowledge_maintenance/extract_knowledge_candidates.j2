@@ -170,6 +170,9 @@ the document.
   `YYYY`, `YYYY-MM`, or `YYYY-MM-DD` form only. If a time expression
   cannot be resolved to an absolute date, omit that value (or the claim
   if the time is its point).
+- Messages may carry their own `[YYYY-MM-DD HH:MM]` timestamps. Resolve
+  each relative expression against the nearest preceding message
+  timestamp, falling back to the document reference time.
 - If the document states a time bound for a claim, set `valid_from` or
   `valid_to`, resolved the same way. Unlike a claim's value, a bound must
   resolve to a full calendar date (`YYYY-MM-DD`) or a full timestamp — if
