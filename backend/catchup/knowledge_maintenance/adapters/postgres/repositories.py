@@ -10,6 +10,7 @@ from datetime import datetime
 from decimal import Decimal
 
 from sqlalchemy import ColumnElement
+from sqlalchemy import DateTime
 from sqlalchemy import Select
 from sqlalchemy import cast
 from sqlalchemy import func
@@ -718,7 +719,12 @@ class SqlAlchemyKnowledgeCandidateRepository:
         excerpt: str | None = None,
         locator: Locator | None = None,
     ) -> uuid.UUID:
-        """후보가 어떤 Observation에서 나왔는지 잇는다."""
+        """후보가 어떤 Observation에서 나왔는지 잇는다.
+
+        locator의 빈 항목은 저장하지 않는다. `locator != '{}'`가 인용 검증
+        통과 여부를 읽는 신호이므로, 값이 없는 키까지 적으면 그 판정과
+        무관한 잡음이 JSONB에 남는다.
+        """
         row = KnowledgeCandidateEvidenceLinkRow(
             id=uuid.uuid4(),
             workspace_id=workspace_id,
@@ -729,7 +735,15 @@ class SqlAlchemyKnowledgeCandidateRepository:
             evidence_node_id=evidence_node_id,
             evidence_role="supports",
             excerpt=excerpt,
-            locator=asdict(locator) if locator is not None else {},
+            locator=(
+                {
+                    key: value
+                    for key, value in asdict(locator).items()
+                    if value is not None
+                }
+                if locator is not None
+                else {}
+            ),
         )
         self._session.add(row)
         self._session.flush()
@@ -811,7 +825,17 @@ class SqlAlchemyKnowledgeCandidateRepository:
 
         관찰 시각은 후보 → 실행 → 입력 Observation 노드 → Observation →
         SourceVersion 경로로 얻는다. 어느 주장이 더 최근인지가 모순
-        판정의 입력이기 때문이다. subject가 entity 후보라면 그 후보 행을
+        판정의 입력이기 때문이다. 그 시각은 claim 발화 시각을 맨 앞에 둔
+        사슬(evidence locator의 event_at → occurred_at →
+        source_updated_at → observed_at)로 공급한다.
+
+        claim 발화 시각이 최우선이다 — 추출이 발화 prefix로 본 시각과
+        소비자가 보는 시각이 발화 단위로 일치한다. 문서 시각만 쓰면 8/1에
+        열린 상담의 8/10 발화가 8/5에 열린 상담보다 오래된 것으로 정렬되어
+        모순 판정의 승자가 뒤집힌다. 발화 시각이 없는 claim은 뒤의 문서
+        사슬로 물러나며, 그 사슬은
+        domain.temporal.resolve_reference_time과 같다.
+        subject가 entity 후보라면 그 후보 행을
         outer join해 해소 결과를 함께 담는다. 아직 해소되지 않은 후보도
         빠지면 안 되므로 outer join이어야 한다.
 
@@ -834,10 +858,32 @@ class SqlAlchemyKnowledgeCandidateRepository:
             )
             .scalar_subquery()
         )
+        # 근거 링크는 claim 하나에 여러 개일 수 있다. 그중 가장 이른 발화
+        # 시각을 쓴다 — 주장이 처음 말해진 때가 그 주장의 시간이다.
+        claim_event_at = (
+            select(
+                func.min(
+                    cast(
+                        KnowledgeCandidateEvidenceLinkRow.locator["event_at"].astext,
+                        DateTime(timezone=True),
+                    )
+                )
+            )
+            .where(
+                KnowledgeCandidateEvidenceLinkRow.claim_candidate_id
+                == KnowledgeClaimCandidateRow.id
+            )
+            .scalar_subquery()
+        )
         statement = (
             select(
                 KnowledgeClaimCandidateRow,
-                SourceVersionRow.observed_at,
+                func.coalesce(
+                    claim_event_at,
+                    ObservationRow.occurred_at,
+                    SourceVersionRow.source_updated_at,
+                    SourceVersionRow.observed_at,
+                ).label("observed_at"),
                 KnowledgeEntityCandidateRow.resolved_node_id,
                 citation_verified,
             )

@@ -162,9 +162,15 @@ def _stored_observation(
     session_factory: Callable[[], Session],
     *,
     with_node: bool = True,
+    source_updated_at: datetime | None = NOW,
+    source_observed_at: datetime = NOW,
     **overrides: object,
 ) -> StoredObservation:
-    """Observation과 그 node까지 실제로 저장한다."""
+    """Observation과 그 node까지 실제로 저장한다.
+
+    원문 변경 시각과 수집 시각을 따로 받는다 — 기준 시각 사슬의
+    각 단계를 테스트가 하나씩 비워볼 수 있어야 한다.
+    """
     document_id = f"CAM-{uuid.uuid4().hex[:8]}"
     source_version = SourceVersion(
         id=uuid.uuid4(),
@@ -183,8 +189,8 @@ def _stored_observation(
         content='{"detail": {}}',
         content_type="application/vnd.channel-talk.user-chat+json",
         content_hash="a" * 64,
-        source_updated_at=NOW,
-        observed_at=NOW,
+        source_updated_at=source_updated_at,
+        observed_at=source_observed_at,
         idempotency_key=f"test:{document_id}",
         payload_hash="b" * 64,
         metadata={},
@@ -498,6 +504,119 @@ def test_claim_evidence_carries_codepoint_offset_locator(
     assert result.batch.demoted_ambiguous_count == 0
 
 
+def test_claim_evidence_carries_its_own_utterance_time(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+) -> None:
+    """위치가 확정된 claim은 자기 발화의 시각을 locator에 함께 얻는다."""
+    statement = "9월 예정입니다."
+    start = NORMALIZED_CONTENT.index(statement)
+    line_start = NORMALIZED_CONTENT.index("상담원:")
+    observation = _stored_observation(
+        workspace_id,
+        session_factory,
+        source_attributes={
+            "utterance_spans": [
+                {
+                    "start": 0,
+                    "end": line_start - 1,
+                    "at": "2026-08-01T10:00:00+00:00",
+                },
+                {
+                    "start": line_start,
+                    "end": len(NORMALIZED_CONTENT),
+                    "at": "2026-08-10T11:30:00+00:00",
+                },
+            ]
+        },
+    )
+
+    result = store_knowledge_candidates(
+        observation,
+        _batch(),
+        spec=SPEC,
+        uow=uow_factory(),
+    )
+
+    locator = _claim_locator(session_factory, result.batch.run_id)
+    assert line_start <= start
+    # 문서 시작(8/1)이 아니라 그 문장을 말한 발화(8/10)의 시각이어야 한다.
+    assert locator["event_at"] == "2026-08-10T11:30:00+00:00"
+
+
+def test_claim_evidence_has_no_time_when_the_position_is_lost(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+) -> None:
+    """위치를 잃은 claim은 시각도 얻지 않는다 — 남의 발화 시각을 붙이지 않는다."""
+    observation = _stored_observation(
+        workspace_id,
+        session_factory,
+        source_attributes={
+            "utterance_spans": [
+                {
+                    "start": 0,
+                    "end": len(NORMALIZED_CONTENT),
+                    "at": "2026-08-10T11:30:00+00:00",
+                }
+            ]
+        },
+    )
+    batch = _batch().model_copy(
+        update={
+            "claims": (
+                ClaimCandidateDraft(
+                    local_key="c1",
+                    subject_local_key="e1",
+                    predicate="release_month",
+                    value_type="text",
+                    value="2026-09",
+                    statement="12월로 미뤄졌습니다.",
+                ),
+            )
+        }
+    )
+
+    result = store_knowledge_candidates(
+        observation,
+        batch,
+        spec=SPEC,
+        uow=uow_factory(),
+    )
+
+    assert _claim_locator(session_factory, result.batch.run_id) == {}
+
+
+def test_claim_evidence_has_no_time_outside_every_utterance_span(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+) -> None:
+    """발화 구간 밖의 인용은 시각 없이 위치만 남는다."""
+    observation = _stored_observation(
+        workspace_id,
+        session_factory,
+        source_attributes={
+            "utterance_spans": [
+                {"start": 0, "end": 3, "at": "2026-08-01T10:00:00+00:00"}
+            ]
+        },
+    )
+
+    result = store_knowledge_candidates(
+        observation,
+        _batch(),
+        spec=SPEC,
+        uow=uow_factory(),
+    )
+
+    locator = _claim_locator(session_factory, result.batch.run_id)
+    assert locator["kind"] == "codepoint_offset"
+    assert "event_at" not in locator
+
+
 def test_claim_evidence_is_demoted_when_statement_is_fabricated(
     workspace_id: int,
     session_factory: Callable[[], Session],
@@ -758,6 +877,226 @@ def test_find_claim_candidates_excludes_rejected(
     assert by_id[claim_ids["live"]].valid_from is not None
     # 확정되지 않은 후보는 구간이 열리지 않았으므로 시작이 없다.
     assert by_id[claim_ids["pending"]].valid_from is None
+
+
+def _chat_with_one_utterance(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+    *,
+    statement: str,
+    opened_at: datetime,
+    spoken_at: datetime,
+) -> uuid.UUID:
+    """상담 하나를 저장하고 그 발화에서 나온 claim의 id를 돌려준다.
+
+    상담이 열린 시각과 발화 시각을 따로 받는다 — 둘이 다를 때 어느 쪽이
+    claim의 시간이 되는지가 이 회귀의 관심사다.
+    """
+    line = f"[{spoken_at:%Y-%m-%d %H:%M}] 상담원: {statement}"
+    observation = _stored_observation(
+        workspace_id,
+        session_factory,
+        content=line,
+        content_hash=content_hash(line),
+        occurred_at=opened_at,
+        source_updated_at=opened_at,
+        source_observed_at=opened_at,
+        source_attributes={
+            "utterance_spans": [
+                {
+                    "start": 0,
+                    "end": len(line),
+                    "at": spoken_at.isoformat(),
+                }
+            ]
+        },
+    )
+    batch = KnowledgeCandidateBatch(
+        entities=[
+            EntityCandidateDraft(
+                local_key="e1",
+                proposed_type="feature",
+                proposed_name="결제 기능",
+            )
+        ],
+        claims=[
+            ClaimCandidateDraft(
+                local_key="c1",
+                subject_local_key="e1",
+                predicate="release_month",
+                value_type="text",
+                value="2026-09",
+                statement=statement,
+            )
+        ],
+        relation_assertions=[],
+    )
+    result = store_knowledge_candidates(
+        observation,
+        batch,
+        spec=SPEC,
+        uow=uow_factory(),
+    )
+    return result.batch.claim_ids["c1"]
+
+
+def test_observed_at_follows_the_utterance_not_the_chat_opening(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+) -> None:
+    """상담 시작 순서가 아니라 발화 순서로 claim의 선후가 정해진다.
+
+    8/1에 열린 상담의 8/10 발화는 8/5에 열린 상담의 8/5 발화보다 나중이다.
+    문서 시각만 보면 이 선후가 뒤집혀 모순 판정의 승자가 바뀐다.
+    """
+    opened_early = datetime(2026, 8, 1, 9, 0, tzinfo=timezone.utc)
+    late_utterance = datetime(2026, 8, 10, 11, 30, tzinfo=timezone.utc)
+    opened_later = datetime(2026, 8, 5, 9, 0, tzinfo=timezone.utc)
+
+    first_chat_claim = _chat_with_one_utterance(
+        workspace_id,
+        session_factory,
+        uow_factory,
+        statement="결제 기능은 10월로 미뤄졌습니다.",
+        opened_at=opened_early,
+        spoken_at=late_utterance,
+    )
+    second_chat_claim = _chat_with_one_utterance(
+        workspace_id,
+        session_factory,
+        uow_factory,
+        statement="결제 기능은 9월 예정입니다.",
+        opened_at=opened_later,
+        spoken_at=opened_later,
+    )
+
+    with KnowledgeMaintenanceUnitOfWork(session_factory) as uow:
+        candidates = uow.knowledge_candidates.find_claim_candidates(
+            workspace_id=workspace_id,
+        )
+
+    by_id = {candidate.id: candidate for candidate in candidates}
+    assert by_id[first_chat_claim].observed_at == late_utterance
+    assert by_id[second_chat_claim].observed_at == opened_later
+    assert by_id[first_chat_claim].observed_at > by_id[second_chat_claim].observed_at
+
+
+def _claim_observed_at(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+    observation: StoredObservation,
+) -> datetime:
+    """관찰 하나에 claim을 달고 reader가 준 관찰 시각을 돌려준다."""
+    with KnowledgeMaintenanceUnitOfWork(session_factory) as uow:
+        node_id = uow.knowledge_nodes.get_for_resource(
+            workspace_id=workspace_id,
+            node_kind=NodeKind.OBSERVATION,
+            resource_id=observation.id,
+        ).id
+        uow.ontology.ensure(
+            workspace_id=workspace_id,
+            ontology_id=SPEC.ontology_id,
+            vocabulary=SPEC.vocabulary,
+        )
+        run = uow.knowledge_candidates.start_run(
+            workspace_id=workspace_id,
+            input_node_id=node_id,
+            spec=SPEC,
+            started_at=NOW,
+        )
+        entity_id = uow.knowledge_candidates.add_entity_candidate(
+            workspace_id=workspace_id,
+            run_id=run.id,
+            draft=EntityCandidateDraft(
+                local_key="e1",
+                proposed_type="feature",
+                proposed_name="결제 기능",
+            ),
+            extraction_method=ExtractionMethod.LLM,
+        )
+        claim_id = uow.knowledge_candidates.add_claim_candidate(
+            workspace_id=workspace_id,
+            run_id=run.id,
+            draft=ClaimCandidateDraft(
+                local_key="c1",
+                subject_local_key="e1",
+                predicate="release_month",
+                value_type="text",
+                value="2026-09",
+                statement="9월 예정입니다.",
+            ),
+            subject_candidate_id=entity_id,
+            spec=SPEC,
+            extraction_method=ExtractionMethod.LLM,
+        )
+        uow.commit()
+
+    with KnowledgeMaintenanceUnitOfWork(session_factory) as uow:
+        candidates = uow.knowledge_candidates.find_claim_candidates(
+            workspace_id=workspace_id,
+        )
+
+    by_id = {candidate.id: candidate for candidate in candidates}
+    return by_id[claim_id].observed_at
+
+
+def test_observed_at_prefers_occurred_at(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+) -> None:
+    """사건 시각이 있으면 그것이 관찰 시각이 된다."""
+    occurred_at = NOW - timedelta(days=10)
+    observation = _stored_observation(
+        workspace_id,
+        session_factory,
+        occurred_at=occurred_at,
+        source_updated_at=NOW - timedelta(days=5),
+        source_observed_at=NOW,
+    )
+
+    found = _claim_observed_at(workspace_id, session_factory, observation)
+
+    assert found == occurred_at
+
+
+def test_observed_at_falls_back_to_source_updated_at(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+) -> None:
+    """사건 시각이 없으면 원문 변경 시각으로 내려간다."""
+    source_updated_at = NOW - timedelta(days=5)
+    observation = _stored_observation(
+        workspace_id,
+        session_factory,
+        occurred_at=None,
+        source_updated_at=source_updated_at,
+        source_observed_at=NOW,
+    )
+
+    found = _claim_observed_at(workspace_id, session_factory, observation)
+
+    assert found == source_updated_at
+
+
+def test_observed_at_falls_back_to_collection_time(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+) -> None:
+    """둘 다 없으면 수집 시각이 남는다 — 사슬의 마지막 단계다."""
+    collected_at = NOW - timedelta(hours=3)
+    observation = _stored_observation(
+        workspace_id,
+        session_factory,
+        occurred_at=None,
+        source_updated_at=None,
+        source_observed_at=collected_at,
+    )
+
+    found = _claim_observed_at(workspace_id, session_factory, observation)
+
+    assert found == collected_at
 
 
 def test_run_is_recorded_as_succeeded(

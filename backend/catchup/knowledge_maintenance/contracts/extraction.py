@@ -13,11 +13,15 @@ LLM 출력이며, resolution과 승인 경계를 지나야 확정 지식이 된�
 from __future__ import annotations
 
 import re
+from datetime import UTC
 from datetime import datetime
+from typing import Annotated
 from typing import Literal
 from typing import Self
 
+from pydantic import AfterValidator
 from pydantic import BaseModel
+from pydantic import BeforeValidator
 from pydantic import ConfigDict
 from pydantic import Field
 from pydantic import field_validator
@@ -48,6 +52,68 @@ def _require_text(value: str, field_name: str) -> str:
     if not normalized:
         raise ValueError(f"{field_name} must not be blank")
     return normalized
+
+
+# 부분 날짜(연도만, 연-월)를 걸러내기 위한 형태다. 프롬프트는 claim의 값에는
+# `YYYY`, `YYYY-MM`도 허용하지만 valid_from/valid_to는 완전한 달력 날짜만
+# 받는다. 두 형식을 한 validator에서 구분하기 위해 date-only만 따로 본다.
+_DATE_ONLY_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+_BARE_NUMBER_PATTERN = re.compile(r"^\d+(\.\d+)?$")
+
+
+def _normalize_validity_bound(value: object) -> object:
+    """validity 경계 값을 UTC aware datetime으로만 받아들인다.
+
+    프롬프트는 valid_from/valid_to를 완전한 달력 날짜(`YYYY-MM-DD`)나 완전한
+    시각으로만 쓰라고 지시하며, 확정할 수 없으면 비우라고 한다. 이 validator는
+    그 형식 계약을 계약 자체에서 한 번 더 막는다.
+
+    숫자와 숫자로만 이루어진 문자열은 거부한다. pydantic이 `"2026"`을 Unix
+    timestamp 2,026초로 읽어 1970-01-01로 조용히 바꿔놓기 때문이다. 잘못된
+    시점을 지식으로 저장하는 것보다 시끄럽게 거부하는 편이 낫다.
+
+    `YYYY-MM-DD`는 그 날 자정으로 읽는다. tz를 붙이는 일은 파싱이 끝난 뒤
+    `_as_utc`가 맡는다.
+    """
+    if value is None:
+        return None
+    if isinstance(value, bool) or isinstance(value, (int, float)):
+        raise ValueError(
+            "validity bound must be a full calendar date or datetime string, "
+            "not a number"
+        )
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return None
+        if _BARE_NUMBER_PATTERN.match(text):
+            raise ValueError(
+                "validity bound must be a full calendar date "
+                f"(YYYY-MM-DD), got a partial or numeric value: {text!r}"
+            )
+        if _DATE_ONLY_PATTERN.match(text):
+            return datetime.strptime(text, "%Y-%m-%d")
+        return text
+    return value
+
+
+def _as_utc(value: datetime | None) -> datetime | None:
+    """tz 없는 경계 값을 UTC로 읽는다.
+
+    문자열이 pydantic을 거쳐 datetime이 된 뒤에야 tzinfo를 알 수 있으므로
+    aware화는 파싱 이후에 한 번 더 한다.
+    """
+    if value is not None and value.tzinfo is None:
+        return value.replace(tzinfo=UTC)
+    return value
+
+
+# 두 draft가 같은 규칙을 쓰도록 경계 타입을 한 곳에서 정의한다.
+ValidityBound = Annotated[
+    datetime | None,
+    BeforeValidator(_normalize_validity_bound),
+    AfterValidator(_as_utc),
+]
 
 
 class EntityCandidateDraft(BaseModel):
@@ -82,8 +148,8 @@ class ClaimCandidateDraft(BaseModel):
     value: JsonValue
     # 원문에서 이 주장을 뒷받침하는 문구다. 서버가 offset을 다시 찾는다.
     statement: str
-    valid_from: datetime | None = None
-    valid_to: datetime | None = None
+    valid_from: ValidityBound = None
+    valid_to: ValidityBound = None
 
     @field_validator(
         "local_key",
@@ -107,8 +173,8 @@ class RelationAssertionCandidateDraft(BaseModel):
     target_local_key: str
     relation_type: str
     assertion_text: str
-    valid_from: datetime | None = None
-    valid_to: datetime | None = None
+    valid_from: ValidityBound = None
+    valid_to: ValidityBound = None
 
     @field_validator(
         "local_key",
@@ -329,11 +395,7 @@ class ExtractionVocabulary(BaseModel):
         entity entry만 채운 어휘를 비었다고 보면 프롬프트의 어휘 섹션이
         통째로 빠진다.
         """
-        return not (
-            self.predicates
-            or self.relation_types
-            or self.entity_type_entries
-        )
+        return not (self.predicates or self.relation_types or self.entity_type_entries)
 
 
 class KnowledgeExtractionRequest(BaseModel):
@@ -347,7 +409,10 @@ class KnowledgeExtractionRequest(BaseModel):
         source_type: 원문이 유입된 source 종류를 나타낸다.
         metadata_entities: 원문 밖 구조에서 이미 확정된 대상을 전달한다.
         vocabulary: 허용된 predicate와 relation type 목록을 전달한다.
-        contract_version: 추출 계약의 버전을 나타낸다.
+        reference_time: 문서의 시간 표현을 해석할 기준 시각을 전달한다.
+            원천 사건 시각이 최선이며, 없으면 절대화 지시가 내려가지 않는다.
+        contract_version: 추출 계약의 버전을 나타낸다. 계약 필드가
+            추가·변경되면 올린다.
     """
 
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
@@ -357,4 +422,5 @@ class KnowledgeExtractionRequest(BaseModel):
     metadata_entities: tuple[MetadataEntity, ...] = ()
     # None이면 어휘 제약 없이 추출한다. 어휘를 만들기 전 관찰 단계에서 쓴다.
     vocabulary: ExtractionVocabulary | None = None
+    reference_time: datetime | None = None
     contract_version: str

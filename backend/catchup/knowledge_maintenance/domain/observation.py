@@ -18,6 +18,43 @@ class ObservationKind(StrEnum):
     TOMBSTONE = "tombstone"
 
 
+# 발화 구간 지도가 담기는 `source_attributes` 키다. normalizer가 쓰고
+# candidate 저장이 읽는 유일한 통로이므로 이름을 한 곳에서 정한다.
+UTTERANCE_SPANS_ATTRIBUTE = "utterance_spans"
+
+
+def utterance_event_at(
+    source_attributes: Mapping[str, JsonValue],
+    offset: int,
+) -> str | None:
+    """본문 offset이 속한 발화의 시각을 ISO 8601 문자열로 돌려준다.
+
+    문서 하나에 시각을 하나만 두면 여러 날에 걸친 상담의 뒷날 발화가 상담
+    시작 시각으로 앵커된다. 주장의 시간은 그 주장이 발화된 시각이어야 하므로
+    claim의 근거 위치로 발화를 되짚는다.
+
+    offset 단위는 `domain.evidence.Locator`와 같은 Unicode code point다.
+    구간을 찾지 못하면 None을 돌려주고, 호출자는 문서 단위 사슬로 물러난다 —
+    없는 시각을 지어내지 않는다.
+    """
+    spans = source_attributes.get(UTTERANCE_SPANS_ATTRIBUTE)
+    if not isinstance(spans, list):
+        return None
+    for span in spans:
+        if not isinstance(span, dict):
+            continue
+        start = span.get("start")
+        end = span.get("end")
+        at = span.get("at")
+        if not isinstance(start, int) or not isinstance(end, int):
+            continue
+        if not isinstance(at, str):
+            continue
+        if start <= offset < end:
+            return at
+    return None
+
+
 @dataclass(frozen=True, slots=True)
 class MetadataEntity:
     """source metadata에서 결정론적으로 뽑은 Entity 후보를 표현한다.

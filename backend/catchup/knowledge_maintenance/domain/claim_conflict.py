@@ -28,7 +28,10 @@ class StoredClaimCandidate:
         value_type: 값의 종류를 나타낸다.
         value: 주장된 값을 보존한다.
         statement: 주장을 사람이 읽는 문장으로 보존한다.
-        observed_at: 주장이 나온 원문을 관찰한 시각을 나타낸다.
+        observed_at: 주장이 나온 원문의 기준 시각을 나타낸다. 사건
+            시각이 최선이고 없으면 원문 변경 시각, 그것도 없으면 수집
+            시각이다 — `domain.temporal.resolve_reference_time`과 같은
+            사슬이다. 어느 주장이 더 최근인지를 이 값으로 가린다.
         valid_from: 주장이 참이었던 구간의 시작을 나타낸다. 시작을
             모르면 None이고, 그때도 구간에는 포함한다 — 판정은
             `domain.temporal.claim_valid_at`이 단독으로 정의한다.

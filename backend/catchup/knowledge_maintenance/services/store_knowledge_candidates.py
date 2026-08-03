@@ -17,6 +17,7 @@ from __future__ import annotations
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
+from dataclasses import replace
 from datetime import datetime
 from datetime import timezone
 from decimal import Decimal
@@ -35,6 +36,7 @@ from catchup.knowledge_maintenance.domain.knowledge_candidate import (
 from catchup.knowledge_maintenance.domain.knowledge_node import NodeKind
 from catchup.knowledge_maintenance.domain.observation import MetadataEntity
 from catchup.knowledge_maintenance.domain.observation import StoredObservation
+from catchup.knowledge_maintenance.domain.observation import utterance_event_at
 from catchup.knowledge_maintenance.ports.knowledge_candidates import (
     KnowledgeCandidateUnitOfWork,
 )
@@ -360,6 +362,11 @@ def _store_evidence(
     위치를 확정한다. LLM의 인용 주장은 검증 없이 믿지 않는다. 정확히 한 번
     나오면 locator에 문자 offset을 적고, 없거나 여러 번이면 위치 없이 문서
     단위 근거로 낮춘다.
+
+    위치가 확정되면 그 위치가 속한 발화의 시각도 locator에 함께 적는다.
+    주장의 시간은 그 주장이 발화된 시각이어야 하기 때문이다. 위치를 잃었거나
+    발화 구간 밖이면 시각도 남기지 않는다 — 소비자가 문서 단위 사슬로
+    물러나는 편이 남의 발화 시각을 붙이는 것보다 안전하다.
     """
     count = 0
     located = 0
@@ -397,6 +404,13 @@ def _store_evidence(
             )
         else:
             located += 1
+            locator = replace(
+                locator,
+                event_at=utterance_event_at(
+                    observation.observation.source_attributes,
+                    locator.start,
+                ),
+            )
         uow.knowledge_candidates.add_evidence_link(
             workspace_id=observation.workspace_id,
             run_id=run_id,

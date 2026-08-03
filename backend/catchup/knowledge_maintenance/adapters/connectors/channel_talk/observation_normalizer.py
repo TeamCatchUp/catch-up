@@ -29,6 +29,7 @@ from catchup.connectors.channel_talk.schemas.user_chat import ChannelTalkUserCha
 from catchup.connectors.channel_talk.schemas.user_chat_message import (
     ChannelTalkUserChatMessage,
 )
+from catchup.knowledge_maintenance.domain.observation import UTTERANCE_SPANS_ATTRIBUTE
 from catchup.knowledge_maintenance.domain.observation import MetadataEntity
 from catchup.knowledge_maintenance.domain.observation import NormalizedObservation
 from catchup.knowledge_maintenance.domain.observation import ObservationKind
@@ -63,7 +64,11 @@ class ChannelTalkUserChatNormalizer:
     """ChannelTalk user chat 한 건을 NormalizedObservation으로 옮긴다."""
 
     normalizer_id = "channel_talk.user_chat"
-    normalizer_version = "1"
+    # 2: 발화마다 자기 시각을 본문에 남긴다. 본문이 달라졌으므로 이전 버전으로
+    # 만든 관찰은 다시 정규화해야 한다.
+    # 3: 발화 구간과 시각의 지도를 `utterance_spans`로 함께 남긴다. 저장
+    # 구조가 달라졌으므로 이전 버전의 관찰은 다시 정규화해야 한다.
+    normalizer_version = "3"
 
     def normalize(self, source_version: SourceVersion) -> NormalizedObservation:
         if source_version.change_kind == ChangeKind.DELETED:
@@ -85,14 +90,18 @@ class ChannelTalkUserChatNormalizer:
             for item in payload["messages"]
         ]
 
-        content = _render_utterances(messages)
+        content, utterance_spans = _render_utterances(messages)
         return NormalizedObservation(
             normalizer_id=self.normalizer_id,
             normalizer_version=self.normalizer_version,
             observation_kind=ObservationKind.DOCUMENT,
             content=content,
             content_hash=content_hash(content),
-            source_attributes=_collect_attributes(detail, messages),
+            source_attributes=_collect_attributes(
+                detail,
+                messages,
+                utterance_spans=utterance_spans,
+            ),
             metadata_entities=_collect_entities(detail),
             occurred_at=_opened_at(detail, messages),
         )
@@ -144,9 +153,29 @@ def _role_of(message: ChannelTalkUserChatMessage) -> str | None:
     return _ROLE_BY_AUTHOR_TYPE.get(message.author.author_type)
 
 
-def _render_utterances(messages: Iterable[ChannelTalkUserChatMessage]) -> str:
-    """사람이 한 말만 골라 본문을 만든다."""
+def _render_utterances(
+    messages: Iterable[ChannelTalkUserChatMessage],
+) -> tuple[str, list[JsonValue]]:
+    """사람이 한 말만 골라 본문을 만들고 발화 구간 지도를 함께 낸다.
+
+    발화마다 자기 시각을 앞에 붙인다. 상담 하나가 여러 날에 걸치면 "내일",
+    "어제" 같은 상대 표현의 기준이 발화마다 다른데, 문서 하나에 기준 시각을
+    하나만 주면 뒷날 발화가 상담 시작일로 잘못 앵커되기 때문이다.
+
+    시각을 모르는 발화는 접두사 없이 남긴다. 없는 시각을 지어내는 것보다
+    기준을 비워 두고 문서 기준 시각으로 물러나는 편이 안전하다.
+
+    두 번째 반환값은 `[{"start", "end", "at"}]` 형태의 발화 구간 지도다.
+    본문에 찍힌 시각은 사람과 LLM이 읽는 것이지 기계가 되읽을 형식이
+    아니므로, claim이 어느 발화에서 나왔는지 판정할 구조를 따로 남긴다.
+    구간은 발화 줄 전체(시각 접두사 포함)를 가리키며 offset 단위는
+    `domain.evidence.Locator`와 같은 Unicode code point다 — claim의
+    locator를 이 구간에 그대로 대조할 수 있어야 하기 때문이다. 시각을 모르는
+    발화는 항목을 만들지 않는다.
+    """
     lines: list[str] = []
+    spans: list[JsonValue] = []
+    offset = 0
     for message in messages:
         if _is_lifecycle_log(message) or _submitted_form_inputs(message):
             continue
@@ -168,16 +197,40 @@ def _render_utterances(messages: Iterable[ChannelTalkUserChatMessage]) -> str:
             continue
 
         mark = _PRIVATE_MARK if message.is_private else ""
-        lines.append(f"{mark}{role}: {text}")
+        stamp = (
+            f"[{message.created_at:%Y-%m-%d %H:%M}] "
+            if message.created_at is not None
+            else ""
+        )
+        line = f"{stamp}{mark}{role}: {text}"
+        lines.append(line)
+        if message.created_at is not None:
+            spans.append(
+                {
+                    "start": offset,
+                    "end": offset + len(line),
+                    "at": _moment(message.created_at),
+                }
+            )
+        # 줄 사이 개행 한 칸까지 세어야 다음 발화의 시작이 본문 offset과
+        # 맞는다.
+        offset += len(line) + 1
 
-    return "\n".join(lines)
+    return "\n".join(lines), spans
 
 
 def _collect_attributes(
     detail: ChannelTalkUserChatDetail,
     messages: list[ChannelTalkUserChatMessage],
+    *,
+    utterance_spans: list[JsonValue],
 ) -> dict[str, JsonValue]:
-    """본문에서 걷어낸 것과 원문 상태를 함께 보존한다."""
+    """본문에서 걷어낸 것과 원문 상태를 함께 보존한다.
+
+    발화 구간 지도(`utterance_spans`)도 여기에 싣는다. 본문이 아니라 본문을
+    읽는 방법이므로 상태값과 같은 자리에 두는 것이 맞고, 저장 경로가 이미
+    있어 스키마를 늘리지 않아도 된다.
+    """
     lifecycle: list[JsonValue] = [
         {
             "action": message.log.action,
@@ -208,6 +261,7 @@ def _collect_attributes(
         "priority": detail.priority,
         "tags": [tag.name or tag.key for tag in detail.tags],
         "lifecycle": lifecycle,
+        UTTERANCE_SPANS_ATTRIBUTE: utterance_spans,
         "attachments": attachments,
         "buttons": buttons,
         "form_submissions": form_submissions,

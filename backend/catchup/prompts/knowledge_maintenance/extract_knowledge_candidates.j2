@@ -163,8 +163,27 @@ the document.
   claim. Do not paraphrase it; the server locates this text in the source.
 - Extract only what this document states. Do not add what you know from
   elsewhere, and do not resolve contradictions you find.
+{%- if reference_time %}
+- The document's reference time is << reference_time >>. Interpret every
+  relative time expression ("next month", "어제", "다음 달 15일") against
+  this reference time and write absolute values. Dates must use the
+  `YYYY`, `YYYY-MM`, or `YYYY-MM-DD` form only. If a time expression
+  cannot be resolved to an absolute date, omit that value (or the claim
+  if the time is its point).
+- Messages may carry their own `[YYYY-MM-DD HH:MM]` timestamps. Resolve
+  each relative expression against the nearest preceding message
+  timestamp, falling back to the document reference time.
 - If the document states a time bound for a claim, set `valid_from` or
-  `valid_to`. Leave them empty otherwise.
+  `valid_to`, resolved the same way. Unlike a claim's value, a bound must
+  resolve to a full calendar date (`YYYY-MM-DD`) or a full timestamp — if
+  you can only determine the year or the month, leave the bound empty.
+{%- else %}
+- If the document states a time bound for a claim, set `valid_from` or
+  `valid_to`. A bound must be a full calendar date (`YYYY-MM-DD`) or a
+  full timestamp — if you can only determine the year or the month, leave
+  the bound empty. Leave them empty otherwise. Do not guess dates for
+  relative time expressions.
+{%- endif %}
 - Skip pleasantries, greetings, and routine status noise.
 - Returning nothing is a valid answer when the document holds no knowledge
   worth keeping.

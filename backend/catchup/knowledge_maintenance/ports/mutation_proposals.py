@@ -67,7 +67,9 @@ class StoredContradictionValue:
         value: 주장된 원본 값을 보존한다.
         normalized: 비교에 쓴 정규화 값을 보존한다.
         statement: 주장을 사람이 읽는 문장으로 보존한다.
-        observed_at: 주장이 나온 원문을 관찰한 시각을 나타낸다.
+        observed_at: 주장이 놓인 시각이다. 사건 시각을 먼저 쓰고 없으면
+            원문 변경 시각, 그것도 없으면 수집 시각으로 내려가는
+            domain.temporal.resolve_reference_time과 같은 사슬이다.
         citation_verified: 근거 인용의 원문 대조 결과다. 낡은 안건에는
             없어 None일 수 있다.
     """

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime
+from datetime import timezone
 from typing import Any
 
 import pytest
@@ -142,3 +144,70 @@ async def test_parsed_batch_is_returned_as_is() -> None:
     batch = await extractor.extract(_request())
 
     assert batch.entities[0].proposed_name == "결제 기능"
+
+
+@pytest.mark.asyncio
+async def test_reference_time_is_rendered_into_the_prompt() -> None:
+    llm = _StubChatModel({"parsed": KnowledgeCandidateBatch(), "raw": None})
+    extractor = StructuredKnowledgeExtractor(llm)
+
+    await extractor.extract(
+        _request(reference_time=datetime(2026, 8, 1, tzinfo=timezone.utc))
+    )
+
+    prompt = llm.runnable.rendered_prompt
+    assert "2026-08-01" in prompt
+
+
+@pytest.mark.asyncio
+async def test_missing_reference_time_keeps_conservative_instruction() -> None:
+    llm = _StubChatModel({"parsed": KnowledgeCandidateBatch(), "raw": None})
+    extractor = StructuredKnowledgeExtractor(llm)
+
+    await extractor.extract(_request(reference_time=None))
+
+    prompt = llm.runnable.rendered_prompt
+    # 기준 시각이 없으면 상대 시간을 추측하지 말라는 보수 지시만 남는다.
+    assert "reference time" not in prompt
+    assert "Do not guess dates for" in prompt
+
+
+@pytest.mark.asyncio
+async def test_validity_bounds_demand_a_full_calendar_date() -> None:
+    """경계는 값과 달리 부분 날짜를 허용하지 않는다고 지시해야 한다."""
+    llm = _StubChatModel({"parsed": KnowledgeCandidateBatch(), "raw": None})
+    extractor = StructuredKnowledgeExtractor(llm)
+
+    await extractor.extract(
+        _request(reference_time=datetime(2026, 8, 1, tzinfo=timezone.utc))
+    )
+
+    prompt = llm.runnable.rendered_prompt
+    assert "full calendar date (`YYYY-MM-DD`)" in prompt
+    assert "leave the bound empty" in prompt
+
+
+@pytest.mark.asyncio
+async def test_validity_bound_format_holds_without_reference_time() -> None:
+    """기준 시각이 없어도 경계 형식 요구는 유지된다."""
+    llm = _StubChatModel({"parsed": KnowledgeCandidateBatch(), "raw": None})
+    extractor = StructuredKnowledgeExtractor(llm)
+
+    await extractor.extract(_request(reference_time=None))
+
+    prompt = llm.runnable.rendered_prompt
+    assert "full calendar date (`YYYY-MM-DD`)" in prompt
+
+
+@pytest.mark.asyncio
+async def test_per_message_timestamps_anchor_relative_expressions() -> None:
+    """발화 시각이 본문에 있으면 그 시각을 앵커로 쓰라고 지시해야 한다."""
+    llm = _StubChatModel({"parsed": KnowledgeCandidateBatch(), "raw": None})
+    extractor = StructuredKnowledgeExtractor(llm)
+
+    await extractor.extract(
+        _request(reference_time=datetime(2026, 8, 1, tzinfo=timezone.utc))
+    )
+
+    prompt = llm.runnable.rendered_prompt
+    assert "nearest preceding message" in prompt

@@ -73,6 +73,9 @@ FROM knowledge_entity_candidates
 WHERE workspace_id = :ws
 """
 
+# valid_from은 두 경로로 채워진다. 추출이 원문 시각을 앵커링해 채우거나,
+# accept 때 원천 occurred_at으로 backfill된다. "추출이 채웠는가"를 보려면
+# backfill이 아직 닿지 않은 pending 행만 봐야 하므로 두 벌로 센다.
 CLAIM_SQL = """
 SELECT
   (SELECT count(*) FROM knowledge_claim_candidates
@@ -93,7 +96,33 @@ SELECT
   (SELECT count(*) FROM knowledge_claim_candidates
     WHERE workspace_id = :ws
       AND (valid_from IS NOT NULL OR valid_to IS NOT NULL)
-  ) AS with_time_axis
+  ) AS with_time_axis,
+  (SELECT count(*) FROM knowledge_claim_candidates
+    WHERE workspace_id = :ws
+      AND valid_from IS NOT NULL
+  ) AS with_valid_from,
+  (SELECT count(*) FROM knowledge_claim_candidates
+    WHERE workspace_id = :ws
+      AND resolution_status = 'pending'
+  ) AS pending_claims,
+  (SELECT count(*) FROM knowledge_claim_candidates
+    WHERE workspace_id = :ws
+      AND resolution_status = 'pending'
+      AND valid_from IS NOT NULL
+  ) AS pending_with_valid_from
+"""
+
+# valid_to를 무엇으로 채웠는지는 스키마 컬럼이 아니라 결정 metadata에
+# 남는다. decision_time이 많다면 사건 시각을 못 얻고 있다는 뜻이다.
+VALID_TO_SOURCE_SQL = """
+SELECT resolver_metadata->'decision'->>'valid_to_source' AS source,
+       count(*) AS decisions
+FROM knowledge_mutation_proposals
+WHERE workspace_id = :ws
+  AND proposal_kind = 'contradiction'
+  AND status IN ('approved', 'applied')
+  AND resolver_metadata->'decision' ? 'valid_to_source'
+GROUP BY 1
 """
 
 CONTRADICTION_SQL = """
@@ -347,6 +376,9 @@ def main() -> None:
             conn.execute(text(ENTITY_COMPRESSION_SQL), params).mappings().one()
         )
         claim = conn.execute(text(CLAIM_SQL), params).mappings().one()
+        valid_to_sources = (
+            conn.execute(text(VALID_TO_SOURCE_SQL), params).mappings().all()
+        )
         contradictions = (
             conn.execute(text(CONTRADICTION_SQL), params).mappings().all()
         )
@@ -414,12 +446,34 @@ def main() -> None:
         f"  | 자기참조 {claim['self_referential']}"
         f"  | 시간축 채움 {claim['with_time_axis']}/{claim['claims']}"
     )
+    print(
+        f"  valid_from 채움(추출) "
+        f"{claim['pending_with_valid_from']}/{claim['pending_claims']}"
+        f" ({_pct(claim['pending_with_valid_from'], claim['pending_claims'])})"
+        f"  | valid_from 채움(확정 backfill 포함) "
+        f"{claim['with_valid_from']}/{claim['claims']}"
+        f" ({_pct(claim['with_valid_from'], claim['claims'])})"
+    )
     print(f"  모순 후보 쌍 (같은 subject+predicate, 다른 값): "
           f"{len(contradictions)}")
     for row in contradictions:
         print(
             f"    {row['subject']} · {row['predicate']} — "
             f"값 {row['distinct_values']}종"
+        )
+
+    print("\n=== 시간축 품질 ===")
+    by_source = {row["source"]: row["decisions"] for row in valid_to_sources}
+    if not by_source:
+        print("  valid_to fallback 사용률 — 결정 없음")
+    else:
+        decided = sum(by_source.values())
+        decision_time = by_source.get("decision_time", 0)
+        print(
+            f"  valid_to fallback 사용률 — "
+            f"decision_time {decision_time}"
+            f" / winner_valid_from {by_source.get('winner_valid_from', 0)}"
+            f" (fallback {_pct(decision_time, decided)})"
         )
 
     print("\n=== 어휘 발산 ===")

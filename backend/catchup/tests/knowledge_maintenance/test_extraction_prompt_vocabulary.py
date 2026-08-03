@@ -22,6 +22,7 @@ def _render(vocabulary: ExtractionVocabulary | None) -> str:
         metadata_entities=(),
         content="본문",
         source_type="channel_talk",
+        reference_time=None,
     )
 
 

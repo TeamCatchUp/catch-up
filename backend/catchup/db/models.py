@@ -4348,6 +4348,13 @@ class KnowledgeCandidateEvidenceLink(Base):
     주장 원문을 감사용으로 보존한 것이지 검증된 인용이 아니다. locator의
     offset은 Unicode code point 단위다(UTF-16 아님). 통과 여부는
     content와 excerpt로 언제든 재계산할 수 있다.
+
+    `locator`는 "어디서"와 함께 "언제"도 담는다. 위치가 확정된 Claim
+    evidence는 그 위치가 속한 발화의 시각을 `event_at`(ISO 8601 문자열)로
+    싣는다. 주장의 시간은 그 주장이 발화된 시각이어야 하는데, Observation의
+    `occurred_at`은 문서 하나에 하나뿐이라 여러 날에 걸친 상담에서는 뒷날
+    발화가 상담 시작 시각으로 앵커되기 때문이다. 발화 구간을 모르면 키가
+    없고, 소비자는 문서 단위 사슬로 물러난다.
     """
 
     __tablename__ = "knowledge_candidate_evidence_links"
