@@ -9,6 +9,10 @@ CREATED_AT_TOOLS = [
     SourceType.GITHUB,
     SourceType.SLACK,
     SourceType.CHANNEL_TALK,
+    # LLM Wiki projection의 updated_at은 revision 시각이라 created_at과
+    # 값이 같다. 화이트리스트는 "어느 필드로 시간 필터를 걸 소스인가"를
+    # 정하므로 created_at 쪽에만 넣는다.
+    SourceType.LLM_WIKI,
 ]
 
 UPDATED_AT_TOOLS = [
