@@ -4,6 +4,7 @@ import uuid
 from collections.abc import Callable
 from collections.abc import Iterator
 from datetime import datetime
+from datetime import timedelta
 from datetime import timezone
 from decimal import Decimal
 
@@ -670,6 +671,89 @@ def test_find_claim_candidates_carries_citation_verified(
     assert by_id[verified_id].citation_verified is True
     assert by_id[demoted_id].citation_verified is False
     assert by_id[no_evidence_id].citation_verified is None
+
+
+def test_find_claim_candidates_excludes_rejected(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+) -> None:
+    """rejected는 빠지고 pending·accepted·닫힌 accepted는 실린다."""
+    observation = _stored_observation(workspace_id, session_factory)
+
+    with KnowledgeMaintenanceUnitOfWork(session_factory) as uow:
+        node_id = uow.knowledge_nodes.get_for_resource(
+            workspace_id=workspace_id,
+            node_kind=NodeKind.OBSERVATION,
+            resource_id=observation.id,
+        ).id
+        uow.ontology.ensure(
+            workspace_id=workspace_id,
+            ontology_id=SPEC.ontology_id,
+            vocabulary=SPEC.vocabulary,
+        )
+        run = uow.knowledge_candidates.start_run(
+            workspace_id=workspace_id,
+            input_node_id=node_id,
+            spec=SPEC,
+            started_at=NOW,
+        )
+        entity_id = uow.knowledge_candidates.add_entity_candidate(
+            workspace_id=workspace_id,
+            run_id=run.id,
+            draft=EntityCandidateDraft(
+                local_key="e1",
+                proposed_type="feature",
+                proposed_name="결제 기능",
+            ),
+            extraction_method=ExtractionMethod.LLM,
+        )
+        claim_ids = {
+            local_key: uow.knowledge_candidates.add_claim_candidate(
+                workspace_id=workspace_id,
+                run_id=run.id,
+                draft=ClaimCandidateDraft(
+                    local_key=local_key,
+                    subject_local_key="e1",
+                    predicate="release_month",
+                    value_type="text",
+                    value=value,
+                    statement=f"{value} 예정입니다.",
+                ),
+                subject_candidate_id=entity_id,
+                spec=SPEC,
+                extraction_method=ExtractionMethod.LLM,
+            )
+            for local_key, value in (
+                ("pending", "2026-09"),
+                ("live", "2026-10"),
+                ("closed", "2026-11"),
+                ("rejected", "2026-12"),
+            )
+        }
+        uow.knowledge_candidates.accept_claims(
+            claim_ids=[claim_ids["live"], claim_ids["closed"]],
+        )
+        uow.knowledge_candidates.close_claim(
+            claim_id=claim_ids["closed"],
+            valid_to=NOW + timedelta(days=1),
+        )
+        uow.knowledge_candidates.reject_claim(claim_id=claim_ids["rejected"])
+        uow.commit()
+
+    with KnowledgeMaintenanceUnitOfWork(session_factory) as uow:
+        candidates = uow.knowledge_candidates.find_claim_candidates(
+            workspace_id=workspace_id,
+        )
+
+    found = {candidate.id for candidate in candidates}
+    assert claim_ids["rejected"] not in found
+    assert claim_ids["pending"] in found
+    assert claim_ids["live"] in found
+    # 닫힌 accepted는 "한때 참이었다"의 재료라 계속 실려야 한다.
+    assert claim_ids["closed"] in found
+    by_id = {candidate.id: candidate for candidate in candidates}
+    assert by_id[claim_ids["closed"]].valid_to is not None
+    assert by_id[claim_ids["live"]].valid_to is None
 
 
 def test_run_is_recorded_as_succeeded(
