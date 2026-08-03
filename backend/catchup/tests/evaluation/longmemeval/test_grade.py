@@ -7,13 +7,22 @@ error로 드러낸다 — 못 읽은 응답을 조용히 오답으로 세면 정
 규칙 분기는 abstention이 유형보다 먼저다. 셋, 비용은 토큰 × 단가라는
 한 줄 산식이다.
 
+넷, 리포트 본문이 귀속의 근사 한계를 스스로 밝히는지도 못 박는다.
+리포트만 읽는 사람은 이 파일들을 열어 보지 않으므로, 한계가 코드
+주석에만 있으면 그 사람은 분포를 실제보다 낙관적으로 읽는다.
+
 DB도 LLM도 부르지 않는다.
 """
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
+from catchup.evaluation.longmemeval.diagnosis import ANSWER_GENERATION
+from catchup.evaluation.longmemeval.diagnosis import EvidenceStats
+from catchup.evaluation.longmemeval.diagnosis import FailureAttribution
 from catchup.evaluation.longmemeval.draft_vocabulary import UsageTotals
 from catchup.evaluation.longmemeval.grade import ABSTENTION_RULE
 from catchup.evaluation.longmemeval.grade import DEFAULT_RULE
@@ -23,10 +32,13 @@ from catchup.evaluation.longmemeval.grade import TEMPORAL_RULE
 from catchup.evaluation.longmemeval.grade import VERDICT_ERROR
 from catchup.evaluation.longmemeval.grade import VERDICT_NO
 from catchup.evaluation.longmemeval.grade import VERDICT_YES
+from catchup.evaluation.longmemeval.grade import GradeRow
+from catchup.evaluation.longmemeval.grade import ReportInputs
 from catchup.evaluation.longmemeval.grade import build_judge_prompt
 from catchup.evaluation.longmemeval.grade import estimate_cost
 from catchup.evaluation.longmemeval.grade import judge_rule
 from catchup.evaluation.longmemeval.grade import parse_verdict
+from catchup.evaluation.longmemeval.grade import render_report
 
 
 @pytest.mark.parametrize(
@@ -141,3 +153,55 @@ def test_estimate_cost_is_zero_without_tokens() -> None:
     cost = estimate_cost(UsageTotals(), input_price=3.0, output_price=15.0)
 
     assert cost == pytest.approx(0.0)
+
+
+def _report_inputs() -> ReportInputs:
+    """오답 한 건짜리 최소 리포트 입력을 만든다."""
+    row = GradeRow(
+        question_id="q1",
+        question_type="knowledge-update",
+        is_abstention=False,
+        verdict=VERDICT_NO,
+        hypothesis="She works at Globex.",
+        judge_raw="no",
+        abstained=False,
+        subject_miss=False,
+        evidence_stats=EvidenceStats(
+            extracted_claims=4,
+            contradictions_detected=1,
+            contradictions_decided=1,
+        ),
+        attribution=FailureAttribution(
+            cause=ANSWER_GENERATION,
+            evidence={"context_claims": 5, "extracted_claims": 4},
+        ),
+        usage=UsageTotals(calls=1, input_tokens=10, output_tokens=1),
+    )
+    return ReportInputs(
+        workspace_id=902,
+        results_dir=Path("/tmp/results"),
+        rows=(row,),
+        qa_usage=UsageTotals(calls=2, input_tokens=100, output_tokens=20),
+        qa_elapsed_ms=1200.0,
+        grade_elapsed_ms=300.0,
+        contradiction_total=3,
+        contradiction_decided=1,
+        vocabulary_snapshots=(("ont-1", "v1", 40),),
+    )
+
+
+def test_report_states_the_attribution_limits() -> None:
+    """리포트 본문이 귀속 근사의 한계 셋을 스스로 밝힌다.
+
+    리포트만 읽는 사람에게 이 한계가 안 보이면, 셋 다 실패를 적게 세는
+    쪽으로 기운 분포를 있는 그대로의 인과로 읽게 된다.
+    """
+    report = render_report(_report_inputs())
+
+    assert "## 진단 한계" in report
+    assert "conflict_missed" in report
+    assert "위음성" in report
+    assert "claim_not_extracted" in report
+    assert "has_answer" in report
+    assert "adjudication_wrong" in report
+    assert "승자 claim" in report

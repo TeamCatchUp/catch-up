@@ -109,10 +109,14 @@ def test_conflict_missed_does_not_fire_for_other_types() -> None:
     assert result.cause == ANSWER_GENERATION
 
 
-def test_adjudication_wrong_when_decision_and_context_both_exist() -> None:
-    """모순을 판정했고 재료도 실렸는데 틀렸으면 판정을 의심한다."""
+def test_adjudication_wrong_when_decision_did_not_reach_context() -> None:
+    """모순은 판정됐는데 컨텍스트가 비었으면 전파 실패를 지목한다."""
     result = attribute_failure(
-        _trace(question_type="knowledge-update"),
+        _trace(
+            question_type="knowledge-update",
+            as_of_claims=0,
+            history_claims=0,
+        ),
         EvidenceStats(
             extracted_claims=4,
             contradictions_detected=2,
@@ -122,13 +126,17 @@ def test_adjudication_wrong_when_decision_and_context_both_exist() -> None:
 
     assert result.cause == ADJUDICATION_WRONG
     assert result.evidence["contradictions_decided"] == 2
-    assert result.evidence["context_claims"] == 5
+    assert result.evidence["context_claims"] == 0
 
 
 def test_adjudication_wrong_wins_over_temporal_gap() -> None:
-    """구간이 비어도 모순 판정이 먼저 걸리면 그쪽이 대표다."""
+    """컨텍스트가 비면 시간 구간 결손보다 전파 실패가 먼저다."""
     result = attribute_failure(
-        _trace(question_type="temporal-reasoning", history_claims=0),
+        _trace(
+            question_type="temporal-reasoning",
+            as_of_claims=0,
+            history_claims=0,
+        ),
         EvidenceStats(
             extracted_claims=4,
             contradictions_detected=1,
@@ -137,6 +145,27 @@ def test_adjudication_wrong_wins_over_temporal_gap() -> None:
     )
 
     assert result.cause == ADJUDICATION_WRONG
+
+
+def test_decided_contradiction_with_context_falls_to_answer_generation() -> (
+    None
+):
+    """재료가 실렸는데 틀렸으면 판정이 아니라 답변 생성을 의심한다.
+
+    trace가 승자 claim id를 담지 않아 "실린 것이 승자인가"를 못 본다.
+    컨텍스트에 무엇이든 실렸으면 전파는 된 것으로 보고 아래로 흘린다.
+    """
+    result = attribute_failure(
+        _trace(question_type="knowledge-update"),
+        EvidenceStats(
+            extracted_claims=4,
+            contradictions_detected=2,
+            contradictions_decided=2,
+        ),
+    )
+
+    assert result.cause == ANSWER_GENERATION
+    assert result.evidence["context_claims"] == 5
 
 
 def test_temporal_gap_when_history_is_empty() -> None:

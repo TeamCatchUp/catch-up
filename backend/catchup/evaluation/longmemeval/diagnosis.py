@@ -12,6 +12,21 @@
 이 모듈은 DB도 LLM도 부르지 않는다. QA trace 한 줄과 DB에서 미리 센
 수치(`EvidenceStats`)만 받는다. 그 수치를 실제로 읽어 오는 일은
 `grade.py`가 맡는다.
+
+귀속은 근사다. 세 가지 한계를 안고 읽어야 한다.
+
+1. 문항과 모순 안건은 claim 집합이 겹치는지로만 잇는다. 한 workspace에
+   여러 문항의 세션이 섞이므로 다른 문항 때문에 열린 안건이 이 문항에
+   잡힐 수 있다. 그래서 `conflict_missed`는 위음성 쪽으로 기운다 — 실제
+   놓친 것보다 덜 잡힌다.
+2. `extracted_claims`는 근거 세션 단위 집계이지 has_answer 턴 단위가
+   아니다. 근거 세션의 다른 턴에서 나온 claim도 세므로
+   `claim_not_extracted`는 실제보다 관대하다 — 실제 추출 실패보다 덜
+   잡힌다.
+3. QA trace는 승자 claim의 id를 담지 않는다. 그래서
+   `adjudication_wrong`은 "판정 결과가 QA 컨텍스트에 안 실렸다"를
+   컨텍스트 claim이 0인지로 근사한다. 승자가 아닌 다른 claim이 실려
+   있으면 이 규칙은 걸리지 않고 `answer_generation`으로 흐른다.
 """
 
 from __future__ import annotations
@@ -30,7 +45,11 @@ CONFLICT_MISSED = "conflict_missed"
 """값이 바뀐 문항인데 모순 안건이 판정되지 않았음을 나타낸다."""
 
 ADJUDICATION_WRONG = "adjudication_wrong"
-"""모순을 판정했고 재료도 실렸는데 답이 틀렸음을 나타낸다."""
+"""모순은 판정됐는데 그 결과가 QA 컨텍스트까지 오지 않았음을 나타낸다.
+
+trace에 승자 claim의 id가 없어서 "승자가 실렸는가"를 직접 못 본다.
+컨텍스트 claim이 0인지로 근사한다.
+"""
 
 TEMPORAL_GAP = "temporal_gap"
 """시간 추론 문항에 과거 구간이 실리지 않았음을 나타낸다."""
@@ -154,7 +173,7 @@ def attribute_failure(
             },
         )
 
-    if evidence_stats.contradictions_decided > 0 and context_claims > 0:
+    if evidence_stats.contradictions_decided > 0 and context_claims == 0:
         return FailureAttribution(
             cause=ADJUDICATION_WRONG,
             evidence={

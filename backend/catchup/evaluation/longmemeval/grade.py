@@ -686,6 +686,35 @@ def render_report(inputs: ReportInputs) -> str:
     )
     lines.append("")
 
+    lines.append("## 진단 한계")
+    lines.append("")
+    lines.append(
+        "위 분포는 정확한 인과 추적이 아니라 근사다. 세 한계 모두 "
+        "실패를 실제보다 적게 세는 쪽으로 기울므로, 이 표를 낙관 쪽으로 "
+        "더 읽으면 안 된다."
+    )
+    lines.append("")
+    lines.append(
+        "1. 문항과 모순 안건은 claim 집합이 겹치는지로만 잇는다. 한 "
+        "workspace에 여러 문항의 세션이 섞이므로 다른 문항 때문에 열린 "
+        "안건이 이 문항에 잡힐 수 있다. 그래서 `conflict_missed`는 "
+        "위음성 쪽으로 기운다 — 실제로 놓친 모순보다 적게 잡힌다."
+    )
+    lines.append(
+        "2. `extracted_claims`는 근거 세션 단위 집계이지 has_answer 턴 "
+        "단위가 아니다. 정답과 무관한 다른 턴에서 나온 claim도 세므로 "
+        "`claim_not_extracted`는 관대하다 — 실제 추출 실패보다 적게 "
+        "잡힌다."
+    )
+    lines.append(
+        "3. QA trace가 승자 claim의 id를 담지 않아, "
+        "`adjudication_wrong`은 \"판정 결과가 QA 컨텍스트까지 오지 "
+        "않았다\"를 컨텍스트 claim이 0인지로 근사한다. 승자가 아닌 다른 "
+        "claim이 실려 있으면 이 규칙은 걸리지 않고 `answer_generation`으로 "
+        "흐른다."
+    )
+    lines.append("")
+
     lines.append("## 조회 깔때기")
     lines.append("")
     misses = sum(1 for row in rows if row.subject_miss)
