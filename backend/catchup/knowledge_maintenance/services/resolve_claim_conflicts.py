@@ -20,6 +20,8 @@ import uuid
 from collections.abc import Iterable
 from collections.abc import Mapping
 from dataclasses import dataclass
+from datetime import datetime
+from datetime import timezone
 from types import TracebackType
 from typing import Protocol
 from typing import Self
@@ -30,6 +32,7 @@ from catchup.knowledge_maintenance.domain.claim_conflict import StoredClaimCandi
 from catchup.knowledge_maintenance.domain.claim_conflict import dates_compatible
 from catchup.knowledge_maintenance.domain.claim_conflict import normalize_value
 from catchup.knowledge_maintenance.domain.source_version import JsonValue
+from catchup.knowledge_maintenance.domain.temporal import claim_valid_at
 from catchup.knowledge_maintenance.ports.knowledge_candidates import (
     KnowledgeCandidateRepository,
 )
@@ -126,6 +129,7 @@ def resolve_claim_conflicts(
     uow: ClaimConflictUnitOfWork,
 ) -> ClaimConflictResult:
     """claim 값의 모순을 찾아 proposal로 남기고 집계를 돌려준다."""
+    now = datetime.now(timezone.utc)
     with uow:
         claims = uow.knowledge_candidates.find_claim_candidates(
             workspace_id=workspace_id,
@@ -142,9 +146,11 @@ def resolve_claim_conflicts(
         not_comparable = 0
         closed = 0
         for claim in claims:
-            if claim.valid_to is not None:
-                # 사람이 이미 판정해 닫은 주장이다. 다시 비교하면
-                # 해소된 모순이 영원히 되살아난다.
+            if not claim_valid_at(claim.valid_from, claim.valid_to, now):
+                # 지금 참인 구간 밖의 주장이다. 사람이 이미 판정해
+                # 닫았거나 아직 시작하지 않았다. 다시 비교하면 해소된
+                # 모순이 영원히 되살아난다. 판정 정의는
+                # `domain.temporal.claim_valid_at`이 단독으로 갖는다.
                 closed += 1
                 continue
             entry = vocabulary.predicate_entry(claim.predicate)

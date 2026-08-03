@@ -29,6 +29,9 @@ class StoredClaimCandidate:
         value: 주장된 값을 보존한다.
         statement: 주장을 사람이 읽는 문장으로 보존한다.
         observed_at: 주장이 나온 원문을 관찰한 시각을 나타낸다.
+        valid_from: 주장이 참이었던 구간의 시작을 나타낸다. 시작을
+            모르면 None이고, 그때도 구간에는 포함한다 — 판정은
+            `domain.temporal.claim_valid_at`이 단독으로 정의한다.
         valid_to: 주장이 참이었던 구간의 끝을 나타낸다. 아직 참이면
             None이다. 닫힌 주장은 더 이상 모순의 당사자가 아니고
             문서의 현재 판에도 실리지 않는다.
@@ -46,6 +49,7 @@ class StoredClaimCandidate:
     value: object
     statement: str
     observed_at: datetime
+    valid_from: datetime | None = None
     valid_to: datetime | None = None
     citation_verified: bool | None = None
 

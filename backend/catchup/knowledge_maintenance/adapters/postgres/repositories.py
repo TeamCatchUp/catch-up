@@ -854,6 +854,7 @@ class SqlAlchemyKnowledgeCandidateRepository:
                 value=row.value,
                 statement=row.statement,
                 observed_at=observed_at,
+                valid_from=row.valid_from,
                 valid_to=row.valid_to,
                 citation_verified=verified,
             )
