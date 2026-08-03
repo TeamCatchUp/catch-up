@@ -79,8 +79,10 @@ class AsOfQueryResult:
 
     Attributes:
         subject: 매칭된 대상을 담고, 못 찾으면 None이다.
-        as_of: 판정 기준으로 실제 쓴 시각을 나타낸다.
-        claims: 그 시점에 참이었던 accepted claim을 담는다.
+        as_of: 판정 기준으로 실제 쓴 시각을 나타낸다. history 조회에서는
+            거르지 않고 조회한 시각을 기록만 한다.
+        claims: 그 시점에 참이었던 accepted claim을 담는다. history
+            조회에서는 닫힌 accepted까지 함께 담는다.
     """
 
     subject: MatchedSubject | None
@@ -107,7 +109,7 @@ def query_claims_as_of(
     as_of = datetime.now(timezone.utc) if at is None else at
 
     with uow:
-        node, matched_by = _match_subject(
+        node, matched_by = _resolve_subject(
             workspace_id=workspace_id,
             subject=subject,
             uow=uow,
@@ -145,7 +147,62 @@ def query_claims_as_of(
     return AsOfQueryResult(subject=matched, as_of=as_of, claims=claims)
 
 
-def _match_subject(
+def query_claims_history(
+    *,
+    workspace_id: int,
+    subject: str,
+    predicate: str | None = None,
+    uow: KnowledgeReadUnitOfWork,
+) -> AsOfQueryResult:
+    """subject에 대해 accepted였던 claim을 시점 제한 없이 읽는다.
+
+    as-of 조회가 "지금 무엇이 참인가"라면 이쪽은 "무엇이 참이었던
+    적 있는가"다. 닫힌 accepted가 함께 나오므로 valid_from·valid_to를
+    이어 붙이면 "언제 바뀌었는지"를 되짚을 수 있다. rejected는
+    as-of와 똑같이 뺀다 — 한 번도 참이었던 적이 없기 때문이다.
+
+    결과의 `as_of`는 조회한 시각을 그대로 담을 뿐, 어떤 행도 거르지
+    않는다. as-of 조회와 결과 모양을 맞춰 소비자가 두 경로를 같은
+    코드로 다루게 하려는 것이고, 시점 필터가 아니다.
+    """
+    queried_at = datetime.now(timezone.utc)
+
+    with uow:
+        node, matched_by = _resolve_subject(
+            workspace_id=workspace_id,
+            subject=subject,
+            uow=uow,
+        )
+        if node is None:
+            claims: tuple[AsOfClaim, ...] = ()
+            matched = None
+        else:
+            claims = uow.knowledge_candidates.find_accepted_claims_history(
+                workspace_id=workspace_id,
+                subject_node_id=node.id,
+                predicate=predicate,
+            )
+            matched = MatchedSubject(
+                node_id=node.id,
+                entity_type=node.entity_type or "",
+                display_name=node.display_name,
+                matched_by=matched_by,
+            )
+
+    logger.info(
+        "knowledge_history_queried",
+        workspace_id=workspace_id,
+        subject=subject,
+        matched_by=matched.matched_by if matched else None,
+        matched_node_id=str(matched.node_id) if matched else None,
+        queried_at=queried_at.isoformat(),
+        predicate=predicate,
+        claim_count=len(claims),
+    )
+    return AsOfQueryResult(subject=matched, as_of=queried_at, claims=claims)
+
+
+def _resolve_subject(
     *,
     workspace_id: int,
     subject: str,

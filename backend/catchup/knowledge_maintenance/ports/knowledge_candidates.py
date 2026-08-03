@@ -167,6 +167,29 @@ class KnowledgeCandidateRepository(Protocol):
         """
         ...
 
+    def find_accepted_claims_history(
+        self,
+        *,
+        workspace_id: int,
+        subject_node_id: uuid.UUID,
+        predicate: str | None = None,
+    ) -> tuple[AsOfClaim, ...]:
+        """어떤 노드에 대해 accepted였던 claim을 시점 제한 없이 읽는다.
+
+        `find_accepted_claims_as_of`와 유일하게 다른 점은 구간 조건이
+        없다는 것이다. 그래서 live accepted와 닫힌 accepted가 함께
+        나오고, "언제 바뀌었나"를 valid_from·valid_to로 되짚을 수 있다.
+
+        rejected는 여기서도 뺀다. 닫힌 accepted는 "한때 참이었다"지만
+        rejected는 "참이었던 적이 없다"라, 둘을 같이 실으면 역사가
+        아니라 소문이 된다.
+
+        정렬은 valid_from 오름차순이되 NULL이 앞이고, 같으면 관측
+        시각과 id 순이다. "언제부터인지 모르는 주장"을 시간선의 맨 앞에
+        두어야 그 뒤 구간이 이어지는 순서로 읽히기 때문이다.
+        """
+        ...
+
     def mark_entity_resolved(
         self,
         *,

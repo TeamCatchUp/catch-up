@@ -14,6 +14,7 @@ from sqlalchemy import DateTime
 from sqlalchemy import Select
 from sqlalchemy import cast
 from sqlalchemy import func
+from sqlalchemy import nullsfirst
 from sqlalchemy import or_
 from sqlalchemy import select
 from sqlalchemy import update
@@ -962,6 +963,81 @@ class SqlAlchemyKnowledgeCandidateRepository:
         참이었던 적이 없다.
         """
         statement = (
+            self._accepted_claims_of_subject(
+                workspace_id=workspace_id,
+                subject_node_id=subject_node_id,
+                predicate=predicate,
+            )
+            .where(
+                or_(
+                    KnowledgeClaimCandidateRow.valid_from.is_(None),
+                    KnowledgeClaimCandidateRow.valid_from <= at,
+                ),
+                or_(
+                    KnowledgeClaimCandidateRow.valid_to.is_(None),
+                    KnowledgeClaimCandidateRow.valid_to > at,
+                ),
+            )
+            .order_by(
+                KnowledgeClaimCandidateRow.predicate,
+                KnowledgeClaimCandidateRow.created_at,
+                KnowledgeClaimCandidateRow.id,
+            )
+        )
+        return self._as_of_claims(statement)
+
+    def find_accepted_claims_history(
+        self,
+        *,
+        workspace_id: int,
+        subject_node_id: uuid.UUID,
+        predicate: str | None = None,
+    ) -> tuple[AsOfClaim, ...]:
+        """어떤 노드에 대해 accepted였던 claim을 시점 제한 없이 읽는다.
+
+        `find_accepted_claims_as_of`와 술어가 하나 다르다 — 구간 조건이
+        없다. 그래서 live accepted와 닫힌 accepted가 함께 나오고,
+        "언제 바뀌었나"를 valid_from·valid_to로 되짚을 수 있다.
+
+        rejected는 여기서도 뺀다. 닫힌 accepted는 "한때 참이었다"지만
+        rejected는 "참이었던 적이 없다"라, 둘을 같이 실으면 역사가
+        아니라 소문이 된다.
+
+        정렬은 valid_from 오름차순에 NULL이 먼저다. "언제부터인지
+        모르는 주장"을 시간선 맨 앞에 둬야 그 뒤 구간이 이어지는 순서로
+        읽힌다. 같은 valid_from끼리는 관측 순서를 대신하는
+        `created_at`과 id로 묶어 매번 같은 순서를 준다 — 근거 링크의
+        event_at은 inner join이 필요해, 관측이 없는 claim을 조용히
+        떨어뜨린다.
+        """
+        statement = self._accepted_claims_of_subject(
+            workspace_id=workspace_id,
+            subject_node_id=subject_node_id,
+            predicate=predicate,
+        ).order_by(
+            nullsfirst(KnowledgeClaimCandidateRow.valid_from.asc()),
+            KnowledgeClaimCandidateRow.created_at,
+            KnowledgeClaimCandidateRow.id,
+        )
+        return self._as_of_claims(statement)
+
+    def _accepted_claims_of_subject(
+        self,
+        *,
+        workspace_id: int,
+        subject_node_id: uuid.UUID,
+        predicate: str | None,
+    ) -> Select[tuple[KnowledgeClaimCandidateRow]]:
+        """어떤 노드에 대한 accepted claim을 고르는 술어를 만든다.
+
+        as-of와 history가 대상 선정에서 갈리면 "닫혔다"의 뜻이 두 갈래가
+        된다. 구간과 정렬만 각자 얹도록 공통부를 한 곳에 둔다.
+
+        subject 해소는 `find_claim_candidates`와 같은 방식이다. 노드를
+        직접 가리키는 claim과, 그 노드로 해소된 entity 후보를 가리키는
+        claim 둘 다 같은 대상에 대한 주장이기 때문이다.
+        """
+        statement = (
             select(KnowledgeClaimCandidateRow)
             .outerjoin(
                 KnowledgeEntityCandidateRow,
@@ -978,25 +1054,19 @@ class SqlAlchemyKnowledgeCandidateRepository:
                 ),
                 KnowledgeClaimCandidateRow.resolution_status
                 == AssertionResolutionStatus.ACCEPTED.value,
-                or_(
-                    KnowledgeClaimCandidateRow.valid_from.is_(None),
-                    KnowledgeClaimCandidateRow.valid_from <= at,
-                ),
-                or_(
-                    KnowledgeClaimCandidateRow.valid_to.is_(None),
-                    KnowledgeClaimCandidateRow.valid_to > at,
-                ),
-            )
-            .order_by(
-                KnowledgeClaimCandidateRow.predicate,
-                KnowledgeClaimCandidateRow.created_at,
-                KnowledgeClaimCandidateRow.id,
             )
         )
         if predicate is not None:
             statement = statement.where(
                 KnowledgeClaimCandidateRow.predicate == predicate
             )
+        return statement
+
+    def _as_of_claims(
+        self,
+        statement: Select[tuple[KnowledgeClaimCandidateRow]],
+    ) -> tuple[AsOfClaim, ...]:
+        """claim 행을 읽기 경로가 쓰는 모양으로 옮긴다."""
         return tuple(
             AsOfClaim(
                 claim_id=row.id,
