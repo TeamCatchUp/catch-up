@@ -75,7 +75,13 @@ class StructuredKnowledgeExtractor:
             source_type=request.source_type,
             metadata_entities=known_entities,
             vocabulary=request.vocabulary,
-            reference_time=request.reference_time,
+            # datetime을 그대로 넘기면 템플릿이 `2026-08-01 00:00:00+00:00`
+            # 꼴로 찍는다. ISO 8601이 모델에게 덜 헷갈린다.
+            reference_time=(
+                request.reference_time.isoformat()
+                if request.reference_time
+                else None
+            ),
         )
 
         # 무엇을 근거로 무엇을 물었는지 남긴다. 본문과 이름은 싣지 않는다.

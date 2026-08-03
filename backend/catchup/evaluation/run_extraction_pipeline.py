@@ -23,7 +23,9 @@ import asyncio
 from collections.abc import Callable
 from datetime import datetime
 from datetime import timezone
+from typing import NamedTuple
 
+import structlog
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 from sqlalchemy.orm import sessionmaker
@@ -33,6 +35,7 @@ from catchup.components.llm.constants import ModelCapacity
 from catchup.components.llm.factory import get_llm_service
 from catchup.configs.config import settings
 from catchup.db.models import Observation as ObservationRow
+from catchup.db.models import SourceVersion as SourceVersionRow
 from catchup.evaluation.eval_llm_wiki_extraction import CONTRACT_VERSION
 from catchup.evaluation.eval_llm_wiki_extraction import _grow_vocabulary
 from catchup.evaluation.eval_llm_wiki_extraction import _harvest
@@ -59,6 +62,7 @@ from catchup.knowledge_maintenance.domain.pipeline_event import FailureKind
 from catchup.knowledge_maintenance.domain.pipeline_event import PipelineEvent
 from catchup.knowledge_maintenance.domain.pipeline_event import PipelineEventStatus
 from catchup.knowledge_maintenance.domain.pipeline_event import PipelineEventType
+from catchup.knowledge_maintenance.domain.temporal import resolve_reference_time
 from catchup.knowledge_maintenance.services.store_knowledge_candidates import (
     record_failed_extraction,
 )
@@ -69,6 +73,21 @@ from catchup.knowledge_maintenance.services.store_knowledge_candidates import (
 # 어휘를 만들기 전 단계에서는 스냅샷 이름이 없다. 비워 두는 대신 그 사실을
 # 값으로 남겨야 실행이 어휘를 가리킬 수 있다.
 UNVERSIONED_ONTOLOGY = "unversioned"
+
+logger = structlog.get_logger(__name__)
+
+
+class PendingEntry(NamedTuple):
+    """추출을 기다리는 일 하나가 들고 다니는 재료다.
+
+    기준 시각 사슬을 추출 시점에 계산하려면 Observation만으로는
+    모자라 원문 버전의 시각이 함께 따라와야 한다.
+    """
+
+    event_id: int
+    observation: StoredObservation
+    source_updated_at: datetime | None
+    observed_at: datetime
 
 
 def _load_vocabulary(
@@ -139,19 +158,30 @@ def _named(vocabulary: ExtractionVocabulary) -> ExtractionVocabulary:
 
 async def _extract_one(
     extractor: StructuredKnowledgeExtractor,
-    entry: tuple[int, StoredObservation],
+    entry: PendingEntry,
     semaphore: asyncio.Semaphore,
     vocabulary: ExtractionVocabulary,
 ) -> dict:
     """Observation 하나를 추출한다. 실패해도 멈추지 않는다."""
-    event_id, observation = entry
+    event_id, observation = entry.event_id, entry.observation
+    reference_time, reference_time_source = resolve_reference_time(
+        occurred_at=observation.observation.occurred_at,
+        source_updated_at=entry.source_updated_at,
+        observed_at=entry.observed_at,
+    )
+    # 어느 단계가 쓰였는지는 추출 품질을 되짚는 재료이자 감사 기록이다.
+    logger.info(
+        "extraction_reference_time_resolved",
+        observation_id=str(observation.id),
+        reference_time=reference_time.isoformat(),
+        reference_time_source=reference_time_source,
+    )
     request = KnowledgeExtractionRequest(
         content=observation.observation.content,
         source_type="channel_talk",
         metadata_entities=observation.observation.metadata_entities,
         vocabulary=vocabulary,
-        # 사슬로 계산한 기준 시각 연결은 러너 배선 단계에서 붙인다.
-        reference_time=None,
+        reference_time=reference_time,
         contract_version=CONTRACT_VERSION,
     )
 
@@ -411,13 +441,32 @@ def _observation_of(
     event: PipelineEvent,
     uow: KnowledgeMaintenanceUnitOfWork,
     workspace_id: int,
-) -> tuple[int, StoredObservation] | None:
-    """큐의 일이 가리키는 Observation을 읽는다."""
+) -> PendingEntry | None:
+    """큐의 일이 가리키는 Observation과 원문 시각을 읽는다.
+
+    기준 시각 사슬의 아래 두 단계(원문 변경 시각·수집 시각)는
+    Observation이 아니라 그 바탕이 된 SourceVersion에 있으므로 함께
+    읽어 둔다. SourceVersion 행이 없으면 Observation을 만든 시각을
+    수집 시각으로 삼는다 — 사슬의 마지막 단계는 비어 있으면 안 된다.
+    """
     session = uow.observations._session  # noqa: SLF001
     row = session.get(ObservationRow, event.aggregate_id)
     if row is None:
         return None
-    return event.id, observation_to_domain(row)
+    observation = observation_to_domain(row)
+    version = session.get(SourceVersionRow, row.source_version_id)
+    return PendingEntry(
+        event_id=event.id,
+        observation=observation,
+        source_updated_at=(
+            version.source_updated_at if version is not None else None
+        ),
+        observed_at=(
+            version.observed_at
+            if version is not None
+            else observation.created_at
+        ),
+    )
 
 
 def _settle(
