@@ -162,9 +162,15 @@ def _stored_observation(
     session_factory: Callable[[], Session],
     *,
     with_node: bool = True,
+    source_updated_at: datetime | None = NOW,
+    source_observed_at: datetime = NOW,
     **overrides: object,
 ) -> StoredObservation:
-    """Observation과 그 node까지 실제로 저장한다."""
+    """Observation과 그 node까지 실제로 저장한다.
+
+    원문 변경 시각과 수집 시각을 따로 받는다 — 기준 시각 사슬의
+    각 단계를 테스트가 하나씩 비워볼 수 있어야 한다.
+    """
     document_id = f"CAM-{uuid.uuid4().hex[:8]}"
     source_version = SourceVersion(
         id=uuid.uuid4(),
@@ -183,8 +189,8 @@ def _stored_observation(
         content='{"detail": {}}',
         content_type="application/vnd.channel-talk.user-chat+json",
         content_hash="a" * 64,
-        source_updated_at=NOW,
-        observed_at=NOW,
+        source_updated_at=source_updated_at,
+        observed_at=source_observed_at,
         idempotency_key=f"test:{document_id}",
         payload_hash="b" * 64,
         metadata={},
@@ -758,6 +764,122 @@ def test_find_claim_candidates_excludes_rejected(
     assert by_id[claim_ids["live"]].valid_from is not None
     # 확정되지 않은 후보는 구간이 열리지 않았으므로 시작이 없다.
     assert by_id[claim_ids["pending"]].valid_from is None
+
+
+def _claim_observed_at(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+    observation: StoredObservation,
+) -> datetime:
+    """관찰 하나에 claim을 달고 reader가 준 관찰 시각을 돌려준다."""
+    with KnowledgeMaintenanceUnitOfWork(session_factory) as uow:
+        node_id = uow.knowledge_nodes.get_for_resource(
+            workspace_id=workspace_id,
+            node_kind=NodeKind.OBSERVATION,
+            resource_id=observation.id,
+        ).id
+        uow.ontology.ensure(
+            workspace_id=workspace_id,
+            ontology_id=SPEC.ontology_id,
+            vocabulary=SPEC.vocabulary,
+        )
+        run = uow.knowledge_candidates.start_run(
+            workspace_id=workspace_id,
+            input_node_id=node_id,
+            spec=SPEC,
+            started_at=NOW,
+        )
+        entity_id = uow.knowledge_candidates.add_entity_candidate(
+            workspace_id=workspace_id,
+            run_id=run.id,
+            draft=EntityCandidateDraft(
+                local_key="e1",
+                proposed_type="feature",
+                proposed_name="결제 기능",
+            ),
+            extraction_method=ExtractionMethod.LLM,
+        )
+        claim_id = uow.knowledge_candidates.add_claim_candidate(
+            workspace_id=workspace_id,
+            run_id=run.id,
+            draft=ClaimCandidateDraft(
+                local_key="c1",
+                subject_local_key="e1",
+                predicate="release_month",
+                value_type="text",
+                value="2026-09",
+                statement="9월 예정입니다.",
+            ),
+            subject_candidate_id=entity_id,
+            spec=SPEC,
+            extraction_method=ExtractionMethod.LLM,
+        )
+        uow.commit()
+
+    with KnowledgeMaintenanceUnitOfWork(session_factory) as uow:
+        candidates = uow.knowledge_candidates.find_claim_candidates(
+            workspace_id=workspace_id,
+        )
+
+    by_id = {candidate.id: candidate for candidate in candidates}
+    return by_id[claim_id].observed_at
+
+
+def test_observed_at_prefers_occurred_at(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+) -> None:
+    """사건 시각이 있으면 그것이 관찰 시각이 된다."""
+    occurred_at = NOW - timedelta(days=10)
+    observation = _stored_observation(
+        workspace_id,
+        session_factory,
+        occurred_at=occurred_at,
+        source_updated_at=NOW - timedelta(days=5),
+        source_observed_at=NOW,
+    )
+
+    found = _claim_observed_at(workspace_id, session_factory, observation)
+
+    assert found == occurred_at
+
+
+def test_observed_at_falls_back_to_source_updated_at(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+) -> None:
+    """사건 시각이 없으면 원문 변경 시각으로 내려간다."""
+    source_updated_at = NOW - timedelta(days=5)
+    observation = _stored_observation(
+        workspace_id,
+        session_factory,
+        occurred_at=None,
+        source_updated_at=source_updated_at,
+        source_observed_at=NOW,
+    )
+
+    found = _claim_observed_at(workspace_id, session_factory, observation)
+
+    assert found == source_updated_at
+
+
+def test_observed_at_falls_back_to_collection_time(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+) -> None:
+    """둘 다 없으면 수집 시각이 남는다 — 사슬의 마지막 단계다."""
+    collected_at = NOW - timedelta(hours=3)
+    observation = _stored_observation(
+        workspace_id,
+        session_factory,
+        occurred_at=None,
+        source_updated_at=None,
+        source_observed_at=collected_at,
+    )
+
+    found = _claim_observed_at(workspace_id, session_factory, observation)
+
+    assert found == collected_at
 
 
 def test_run_is_recorded_as_succeeded(

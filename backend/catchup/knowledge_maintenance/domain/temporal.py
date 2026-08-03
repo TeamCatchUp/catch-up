@@ -1,9 +1,13 @@
-"""claim 유효 구간의 단일 정의다.
+"""claim 시간축의 단일 정의다 — 유효 구간과 기준 시각을 함께 정한다.
 
 "T 시점에 참인가"의 답은 이 함수 하나가 정한다. 구간은 [valid_from,
 valid_to) 반개구간이고, 시작 미상(valid_from None)은 포함한다 —
 확실성 구분은 소비자가 valid_from 값으로 한다. SQL reader의 as-of
 조건은 이 정의와 동일해야 한다.
+
+"문서를 읽을 때의 지금은 언제인가"도 여기서 정한다
+(resolve_reference_time). 추출이 쓰는 기준 시각과 reader가 공급하는
+관찰 시각이 같은 사슬을 타야 하기 때문이다.
 """
 
 from __future__ import annotations

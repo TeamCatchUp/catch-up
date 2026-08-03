@@ -811,7 +811,11 @@ class SqlAlchemyKnowledgeCandidateRepository:
 
         관찰 시각은 후보 → 실행 → 입력 Observation 노드 → Observation →
         SourceVersion 경로로 얻는다. 어느 주장이 더 최근인지가 모순
-        판정의 입력이기 때문이다. subject가 entity 후보라면 그 후보 행을
+        판정의 입력이기 때문이다. 그 시각은 사건 시각 우선 사슬
+        (occurred_at → source_updated_at → observed_at)로 공급한다.
+        domain.temporal.resolve_reference_time과 같은 사슬이다 — 추출이
+        본 기준 시각과 소비자가 보는 시각이 일치해야 한다.
+        subject가 entity 후보라면 그 후보 행을
         outer join해 해소 결과를 함께 담는다. 아직 해소되지 않은 후보도
         빠지면 안 되므로 outer join이어야 한다.
 
@@ -837,7 +841,11 @@ class SqlAlchemyKnowledgeCandidateRepository:
         statement = (
             select(
                 KnowledgeClaimCandidateRow,
-                SourceVersionRow.observed_at,
+                func.coalesce(
+                    ObservationRow.occurred_at,
+                    SourceVersionRow.source_updated_at,
+                    SourceVersionRow.observed_at,
+                ).label("observed_at"),
                 KnowledgeEntityCandidateRow.resolved_node_id,
                 citation_verified,
             )
