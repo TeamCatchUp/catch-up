@@ -42,14 +42,24 @@ CONFLICT_DETECTOR = "catchup.claim_value_conflict"
 CONFLICT_DETECTOR_VERSION = "1"
 
 
-def conflict_idempotency_key(subject_key: str, predicate: str) -> str:
+def conflict_idempotency_key(
+    subject_key: str,
+    predicate: str,
+    member_hash: str | None = None,
+) -> str:
     """모순 검토 단위의 proposal key를 만든다.
 
     subject_key와 predicate를 그대로 이으면 255자 컬럼을 넘길 수 있어
     고정 길이 해시로 만든다. 사람이 읽을 값은 summary와
     resolver_metadata에 남는다.
+
+    member_hash가 있으면 key에 섞는다. 같은 subject·predicate에 이미
+    결정이 내려진 뒤 다른 구성의 모순이 생겼을 때, 결정된 행을 덮지
+    않고 새 검토 사건을 여는 데 쓴다.
     """
     raw = f"contradiction:{subject_key}:{predicate}"
+    if member_hash is not None:
+        raw = f"{raw}:{member_hash}"
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
@@ -80,6 +90,7 @@ class ClaimConflictResult:
         claims_without_subject_key: identity 근거가 없어 뺀 수를 나타낸다.
         claims_not_comparable: 사전 미등재나 text 치역이라 비교하지 않은
             수를 나타낸다.
+        claims_closed: 구간이 닫혀 더 이상 비교하지 않는 수를 나타낸다.
         claims_unparseable: 값을 비교 키로 못 바꾼 수를 나타낸다.
         groups_compared: 실제로 값을 견준 그룹 수를 나타낸다.
         conflicts_found: 값이 두 종 이상으로 갈린 그룹 수를 나타낸다.
@@ -92,6 +103,7 @@ class ClaimConflictResult:
     claims_scanned: int = 0
     claims_without_subject_key: int = 0
     claims_not_comparable: int = 0
+    claims_closed: int = 0
     claims_unparseable: int = 0
     groups_compared: int = 0
     conflicts_found: int = 0
@@ -121,7 +133,13 @@ def resolve_claim_conflicts(
         value_types: dict[str, str] = {}
         without_key = 0
         not_comparable = 0
+        closed = 0
         for claim in claims:
+            if claim.valid_to is not None:
+                # 사람이 이미 판정해 닫은 주장이다. 다시 비교하면
+                # 해소된 모순이 영원히 되살아난다.
+                closed += 1
+                continue
             entry = vocabulary.predicate_entry(claim.predicate)
             if entry is None or entry.value_type == "text":
                 # 사전 미등재와 text 치역은 비교하지 않는다.
@@ -167,6 +185,40 @@ def resolve_claim_conflicts(
             parsed.sort(key=lambda item: (item[0].observed_at, item[0].id))
             member_hash = _member_hash(claim for claim, _ in parsed)
             key = conflict_idempotency_key(subject_key, predicate)
+            decided = (
+                uow.mutation_proposals.find_decided_by_idempotency_key(
+                    workspace_id=workspace_id,
+                    idempotency_key=key,
+                )
+            )
+            if decided is not None:
+                if decided.resolver_metadata.get("member_hash") == (
+                    member_hash
+                ):
+                    # 사람이 이 구성에 이미 결정을 내렸다. 같은 사실을
+                    # 다시 묻지 않는다.
+                    logger.info(
+                        "claim_conflict_decision_standing",
+                        workspace_id=workspace_id,
+                        proposal_id=str(decided.id),
+                        subject_key=subject_key,
+                        predicate=predicate,
+                    )
+                    continue
+                # 구성이 달라졌다. 결정된 행은 감사 기록이므로 덮지 않고
+                # 멤버 지문을 섞은 key로 새 검토 사건을 연다. key가
+                # 구성마다 결정론적이라 재실행이 같은 사건을 가리킨다.
+                key = conflict_idempotency_key(
+                    subject_key, predicate, member_hash
+                )
+                decided_variant = (
+                    uow.mutation_proposals.find_decided_by_idempotency_key(
+                        workspace_id=workspace_id,
+                        idempotency_key=key,
+                    )
+                )
+                if decided_variant is not None:
+                    continue
             active_keys.add(key)
             existing = (
                 uow.mutation_proposals.find_pending_by_idempotency_key(
@@ -234,6 +286,7 @@ def resolve_claim_conflicts(
         claims_scanned=len(claims),
         claims_without_subject_key=without_key,
         claims_not_comparable=not_comparable,
+        claims_closed=closed,
         claims_unparseable=unparseable,
         groups_compared=compared,
         conflicts_found=conflicts,

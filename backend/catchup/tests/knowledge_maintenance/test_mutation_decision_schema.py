@@ -10,6 +10,8 @@ from __future__ import annotations
 import uuid
 from collections.abc import Callable
 from collections.abc import Iterator
+from datetime import UTC
+from datetime import datetime
 
 import pytest
 from sqlalchemy import Engine
@@ -40,6 +42,8 @@ from catchup.tests.knowledge_maintenance.test_postgres_knowledge_candidate_repos
 from catchup.tests.knowledge_maintenance.test_postgres_knowledge_candidate_repository import (  # noqa: E501
     _stored_observation,
 )
+
+DECIDED_AT = datetime(2026, 8, 3, 12, 0, tzinfo=UTC)
 
 
 @pytest.fixture(scope="module")
@@ -156,6 +160,8 @@ def test_rejected_requires_reason(
                 workspace_id,
                 trigger,
                 status="rejected",
+                reviewer="tester",
+                reviewed_at=DECIDED_AT,
                 rejection_reason=None,
             )
         )
@@ -181,6 +187,7 @@ def test_decision_statuses_are_accepted(
                 trigger,
                 status="approved",
                 reviewer="tester",
+                reviewed_at=DECIDED_AT,
             )
         )
         session.add(
@@ -189,6 +196,7 @@ def test_decision_statuses_are_accepted(
                 trigger,
                 status="rejected",
                 reviewer="tester",
+                reviewed_at=DECIDED_AT,
                 rejection_reason="근거가 부족하다",
             )
         )
@@ -209,4 +217,80 @@ def test_unknown_status_is_refused(
     assert (
         _violated_constraint(excinfo)
         == "ck_knowledge_mutation_proposals_status"
+    )
+
+
+def test_decision_without_reviewer_is_refused(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+) -> None:
+    """결정 상태인데 reviewer가 없으면 DB가 거부한다."""
+    trigger = _trigger_claim_id(workspace_id, session_factory, uow_factory)
+    with session_factory() as session:
+        session.add(
+            _proposal(
+                workspace_id,
+                trigger,
+                status="approved",
+                reviewer=None,
+                reviewed_at=DECIDED_AT,
+            )
+        )
+        with pytest.raises(IntegrityError) as excinfo:
+            session.flush()
+    assert (
+        _violated_constraint(excinfo)
+        == "ck_knowledge_mutation_proposals_decision_journal"
+    )
+
+
+def test_blank_reviewer_is_refused(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+) -> None:
+    """공백 reviewer는 결정자로 인정되지 않는다."""
+    trigger = _trigger_claim_id(workspace_id, session_factory, uow_factory)
+    with session_factory() as session:
+        session.add(
+            _proposal(
+                workspace_id,
+                trigger,
+                status="approved",
+                reviewer="   ",
+                reviewed_at=DECIDED_AT,
+            )
+        )
+        with pytest.raises(IntegrityError) as excinfo:
+            session.flush()
+    assert (
+        _violated_constraint(excinfo)
+        == "ck_knowledge_mutation_proposals_decision_journal"
+    )
+
+
+def test_decision_without_reviewed_at_is_refused(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+) -> None:
+    """결정 상태인데 reviewed_at이 없으면 DB가 거부한다."""
+    trigger = _trigger_claim_id(workspace_id, session_factory, uow_factory)
+    with session_factory() as session:
+        session.add(
+            _proposal(
+                workspace_id,
+                trigger,
+                status="rejected",
+                reviewer="tester",
+                reviewed_at=None,
+                rejection_reason="근거가 부족하다",
+            )
+        )
+        with pytest.raises(IntegrityError) as excinfo:
+            session.flush()
+    assert (
+        _violated_constraint(excinfo)
+        == "ck_knowledge_mutation_proposals_decision_journal"
     )

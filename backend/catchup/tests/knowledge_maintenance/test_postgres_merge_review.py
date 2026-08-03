@@ -617,3 +617,17 @@ def test_approval_rolls_back_when_acceptance_fails(
     assert claim.resolution_status == "pending"
     assert revision_count == 0
     assert proposal_status == "pending"
+
+
+def test_blank_reviewer_is_refused_at_repository(
+    workspace_id: int,
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+) -> None:
+    """공백 reviewer는 저장소가 결정 기록 전에 거부한다."""
+    with uow_factory() as uow:
+        with pytest.raises(ValueError):
+            uow.mutation_proposals.mark_merge_approved(
+                workspace_id=workspace_id,
+                proposal_id=uuid.uuid4(),
+                reviewer="",
+            )

@@ -106,6 +106,7 @@ def main() -> None:
         f"  claim 스캔 {result.claims_scanned}"
         f"  | identity 근거 없음 {result.claims_without_subject_key}"
         f" · 비교 대상 아님 {result.claims_not_comparable}"
+        f" · 구간 닫힘 {result.claims_closed}"
         f" · 값 해석 실패 {result.claims_unparseable}"
     )
     print(

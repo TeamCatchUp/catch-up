@@ -4583,6 +4583,12 @@ class KnowledgeMutationProposal(Base):
             "status != 'rejected' OR rejection_reason IS NOT NULL",
             name="ck_knowledge_mutation_proposals_rejection_reason",
         ),
+        CheckConstraint(
+            "status NOT IN ('approved', 'rejected', 'applied') "
+            "OR (reviewer IS NOT NULL AND btrim(reviewer) != '' "
+            "AND reviewed_at IS NOT NULL)",
+            name="ck_knowledge_mutation_proposals_decision_journal",
+        ),
         Index(
             "ix_knowledge_mutation_proposals_review_queue",
             "workspace_id",

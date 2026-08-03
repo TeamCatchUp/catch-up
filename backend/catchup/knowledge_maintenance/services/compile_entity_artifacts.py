@@ -313,9 +313,15 @@ def _claim_sections(
     predicate가 이름순으로 뒤를 잇는다. 사전 순서는 사람이 정한 읽는
     순서이므로 그것이 카드의 순서가 된다. 미등재를 이름순으로 두는 것은
     기댈 순서가 이름밖에 없기 때문이다.
+
+    구간이 닫힌 주장은 싣지 않는다. 문서의 현재 판은 지금 믿는 것을
+    말해야 하기 때문이다. 지나간 값은 claim 행과 옛 판에 그대로 남아
+    있으므로 사라지는 것이 아니다.
     """
     grouped: dict[str, list[StoredClaimCandidate]] = {}
     for claim in claims:
+        if claim.valid_to is not None:
+            continue
         grouped.setdefault(claim.predicate, []).append(claim)
 
     order = {

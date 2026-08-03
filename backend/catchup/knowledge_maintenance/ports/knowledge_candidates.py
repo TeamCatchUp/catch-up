@@ -149,6 +149,43 @@ class KnowledgeCandidateRepository(Protocol):
         """
         ...
 
+    def get_claim_validity(
+        self,
+        *,
+        claim_id: uuid.UUID,
+    ) -> tuple[str, datetime | None, datetime | None] | None:
+        """claim 후보의 상태와 유효 구간을 읽는다.
+
+        (resolution_status, valid_from, valid_to)를 돌려준다. 모순
+        결정이 구간을 닫을 시각을 정할 때와, 적용기가 이미 닫힌 claim을
+        다시 닫지 않기 위해 쓴다. 후보가 없으면 None이다.
+        """
+        ...
+
+    def close_claim(
+        self,
+        *,
+        claim_id: uuid.UUID,
+        valid_to: datetime,
+    ) -> None:
+        """한때 참이었던 claim의 구간을 닫는다.
+
+        resolution_status는 accepted로 남긴다. 공식 지식이었다는 사실은
+        "그 시점에 무엇이 참이었나"의 재료이므로 지우지 않는다.
+        """
+        ...
+
+    def reject_claim(
+        self,
+        *,
+        claim_id: uuid.UUID,
+    ) -> None:
+        """지식이 된 적 없는 후보를 탈락시킨다.
+
+        valid_to는 쓰지 않는다. 참이었던 구간이 없으므로 닫을 것도 없다.
+        """
+        ...
+
     def accept_claims(
         self,
         *,
