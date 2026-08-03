@@ -4508,6 +4508,14 @@ class KnowledgeMutationProposal(Base):
         default=dict,
         server_default=text("'{}'::jsonb"),
     )
+    # 결정 저널이다. 병합 안건의 승인·반려는 사람의 결정이므로 누가
+    # 언제 어떤 사유로 정했는지가 행에 남아야 한다.
+    reviewer: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    reviewed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    rejection_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -4567,8 +4575,13 @@ class KnowledgeMutationProposal(Base):
             name="ck_knowledge_mutation_proposals_exactly_one_trigger",
         ),
         CheckConstraint(
-            "status IN ('pending', 'applied', 'stale', 'abandoned')",
+            "status IN ('pending', 'approved', 'applied', "
+            "'rejected', 'stale', 'abandoned')",
             name="ck_knowledge_mutation_proposals_status",
+        ),
+        CheckConstraint(
+            "status != 'rejected' OR rejection_reason IS NOT NULL",
+            name="ck_knowledge_mutation_proposals_rejection_reason",
         ),
         Index(
             "ix_knowledge_mutation_proposals_review_queue",

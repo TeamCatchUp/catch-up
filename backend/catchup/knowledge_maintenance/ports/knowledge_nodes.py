@@ -32,10 +32,14 @@ class KnowledgeNodeRepository(Protocol):
         *,
         workspace_id: int,
         entity_type: str,
-        canonical_key: str,
+        canonical_key: str | None,
         display_name: str,
     ) -> KnowledgeNode:
-        """canonical entity 노드를 발급한다."""
+        """canonical entity 노드를 발급한다.
+
+        외부 ID가 있는 결정론 경로는 canonical_key를 채우고, 사람이
+        승인한 병합처럼 외부 키가 없는 entity는 None으로 만든다.
+        """
         ...
 
     def add_alias(
