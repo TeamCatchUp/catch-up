@@ -29,7 +29,7 @@ const meta = {
       viewport: { width: 716, height: 160 },
       states: ['connected', 'disconnected', 'no-range'],
       reuseNotes: [
-        'ConnectionStatusCard와 DataRangeCard를 대체한다 — 두 카드가 한 카드 2행이 된다.',
+        '구 레이아웃의 카드 2개(ConnectionStatusCard + DataRangeCard)를 대체했고 그 둘은 삭제됐다.',
         '구 카드의 "보안 관련 설명 / 원문 보기" 행은 신규 디자인에 없다.',
       ],
       dataNotes: ['미연동·범위 없음 문구는 Figma에 없어 현행 코드에서 승계했다.'],
