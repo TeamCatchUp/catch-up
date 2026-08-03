@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 
-import { cn } from '@/shared/utils/cn';
+import { Chip } from '@/shared/components/ui/chips';
 
 import type { IntegrationService } from '../../../types/integrationModel';
 import EmbeddingHistoryRow, { type EmbeddingRowStatus } from './EmbeddingHistoryRow';
@@ -32,11 +32,17 @@ interface EmbeddingHistoryTableProps {
 
 /**
  * 임베딩 히스토리 — 제목 + 필터 + 표.
- * Figma `17071:112226` — 필터는 Tab 158×36, 표는 진행중과 같은 4열 헤더.
+ * Figma `17071:112226`, 필터 `17169:75982`(Tab 158×36 = Chips 50 ×3 + gap 4 ×2).
  *
- * 현행 `EmbeddingHistoryCard`에는 필터에 건수 배지와 실패 빨간 점이 있으나
- * Figma 신규에는 없어 뺐다(미결 #18). 빈 상태 문구는 Figma에 근거가 없어
- * 현행에서 승계했다.
+ * 필터는 회색 트랙 위의 세그먼티드 컨트롤이 아니라 **낱개 칩 3개**다.
+ * 선택 칩만 흰 배경 + `line/normal/strong` 테두리를 갖고, 나머지는 텍스트만 남는다 —
+ * `Chip variant="outline"`이 그 토글 패턴 그대로다.
+ * `ChipGroup`은 쓰지 않는다. gap이 10이고 같은 칩을 다시 눌러 전체 해제가 되는데,
+ * 필터는 항상 하나가 선택돼 있어야 한다.
+ *
+ * Figma의 Chips에는 건수 배지와 실패 빨간 점 레이어가 있으나 이 인스턴스에서
+ * 둘 다 hidden이라 뺐다(미결 #18 — 현행 `EmbeddingHistoryCard`에는 있다).
+ * 빈 상태 문구는 Figma에 근거가 없어 현행에서 승계했다.
  */
 export default function EmbeddingHistoryTable({ service, items, onRetry }: EmbeddingHistoryTableProps) {
   const [filter, setFilter] = useState<HistoryFilter>('all');
@@ -46,34 +52,26 @@ export default function EmbeddingHistoryTable({ service, items, onRetry }: Embed
     <div className="flex flex-col gap-5">
       <div className="flex flex-col gap-3">
         <h3 className="text-heading-small text-text-normal-normal">임베딩 히스토리</h3>
-        <div role="tablist" className="bg-fill-normal-strong flex w-fit gap-1 rounded-lg p-1">
-          {FILTERS.map((option) => {
-            const selected = option.value === filter;
-            return (
-              <button
-                key={option.value}
-                type="button"
-                role="tab"
-                aria-selected={selected}
-                onClick={() => setFilter(option.value)}
-                className={cn(
-                  'text-body-small h-7 cursor-pointer rounded-md px-3 transition-colors',
-                  selected
-                    ? 'bg-fill-normal-normal text-text-normal-normal'
-                    : 'text-text-normal-alternative hover:bg-fill-normal-interaction-hover',
-                )}
-              >
-                {option.label}
-              </button>
-            );
-          })}
+        <div role="tablist" className="flex flex-wrap gap-1">
+          {FILTERS.map((option) => (
+            <Chip
+              key={option.value}
+              variant="outline"
+              selected={option.value === filter}
+              role="tab"
+              aria-selected={option.value === filter}
+              onClick={() => setFilter(option.value)}
+            >
+              {option.label}
+            </Chip>
+          ))}
         </div>
       </div>
 
       {visible.length > 0 ? (
-        // 상태·시각·액션 열이 344로 고정이라 좁아지면 대상 열이 짓눌린다
+        // 폭을 박지 않고, 내용 최소폭(약 365)조차 안 되는 슬롯에서만 스크롤로 흘린다
         <div className="overflow-x-auto">
-          <table className="w-full min-w-136 table-fixed">
+          <table className="w-full">
             <EmbeddingTableHeader />
             <tbody>
               {visible.map((item) => (

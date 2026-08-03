@@ -21,9 +21,9 @@ export default function EmbeddingActiveTable({ service, items }: EmbeddingActive
   if (items.length === 0) return null;
 
   return (
-    // 상태·시각·액션 열이 344로 고정이라 좁아지면 대상 열이 짓눌린다
+    // 폭을 박지 않고, 내용 최소폭조차 안 되는 슬롯에서만 스크롤로 흘린다
     <div className="overflow-x-auto">
-      <table className="w-full min-w-136 table-fixed">
+      <table className="w-full">
         <EmbeddingTableHeader />
         <tbody>
           {items.map((item) => (

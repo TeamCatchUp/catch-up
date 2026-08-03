@@ -30,10 +30,14 @@ const meta = {
         nodeId: '17071:112226',
       },
       viewport: { width: 716, height: 560 },
-      states: ['all', 'success-only', 'failed-only', 'empty'],
+      states: ['all', 'success-only', 'failed-only', 'empty', 'narrow'],
+      layoutNotes: [
+        '필터는 Tab 158×36 = Chips 50 ×3 + gap 4 ×2. 회색 트랙이 없는 낱개 칩이라 Chip variant="outline"을 쓴다.',
+        '표 열 폭은 박지 않는다. 상태·시각·액션 whitespace-nowrap, 대상 w-full max-w-0 + truncate.',
+      ],
       dataNotes: [
         '필터 라벨은 현행과 같은 전체/성공/실패다.',
-        '현행에 있던 건수 배지와 실패 빨간 점은 Figma 신규에 없어 뺐다 — 미결 #18.',
+        'Figma Chips의 건수 배지(0:4)와 실패 빨간 점(0:5) 레이어는 이 인스턴스에서 hidden이라 뺐다 — 미결 #18.',
       ],
     }),
   },
@@ -96,6 +100,41 @@ export const FailedOnly: Story = {
   },
 };
 
+/**
+ * 선택 칩만 흰 배경 + 테두리를 갖는다. 회색 트랙 위 세그먼티드 컨트롤이 아니다.
+ * Figma `17169:75982` — Chips 50×36, gap 4.
+ */
+export const FilterChips: Story = {
+  render: (args) => (
+    <Frame>
+      <EmbeddingHistoryTable {...args} />
+    </Frame>
+  ),
+  play: async ({ canvasElement, userEvent }) => {
+    const canvas = within(canvasElement);
+    const all = canvas.getByRole('tab', { name: '전체' });
+    const success = canvas.getByRole('tab', { name: '성공' });
+
+    // 미선택 칩은 배경도 테두리도 없다
+    const idle = getComputedStyle(success);
+    await expect(idle.borderTopColor).toBe('rgba(0, 0, 0, 0)');
+    await expect(idle.backgroundColor).toBe('rgba(0, 0, 0, 0)');
+
+    // 선택 칩은 흰 배경 + line/normal/strong (#dbdcdf) 테두리
+    const active = getComputedStyle(all);
+    await expect(active.borderTopColor).toBe('rgb(219, 220, 223)');
+    await expect(active.backgroundColor).toBe('rgb(255, 255, 255)');
+
+    // 칩 높이 36
+    await expect(all.getBoundingClientRect().height).toBe(36);
+
+    // 선택이 옮겨가도 폭이 흔들리지 않는다 — 두 상태 모두 px-3 + border
+    const widthBefore = success.getBoundingClientRect().width;
+    await userEvent.click(success);
+    await expect(success.getBoundingClientRect().width).toBe(widthBefore);
+  },
+};
+
 export const Empty: Story = {
   args: { items: [] },
   render: (args) => (
@@ -107,5 +146,42 @@ export const Empty: Story = {
     const canvas = within(canvasElement);
     // 빈 상태 문구는 현행 코드에서 승계한다 — Figma에 근거가 없다
     await expect(canvas.getByText('임베딩 히스토리가 없습니다.')).toBeInTheDocument();
+  },
+};
+
+/**
+ * Figma 716의 60% 슬롯(424). 상태·시각·액션은 내용 폭을 유지하고 대상 열만 줄며,
+ * 가로 스크롤 없이 들어와야 한다.
+ *
+ * 이 표의 내용 최소폭은 약 365다 — 날짜(약 145) + 배지 + 재시도 버튼이 실측값이라
+ * 그 아래로는 어떤 방식으로도 안 줄어든다. 그래서 `overflow-x-auto`를 하한으로 남긴다.
+ */
+export const Narrow: Story = {
+  args: { items: ITEMS.slice(0, 2) },
+  render: (args) => (
+    <div className="bg-fill-normal-normal w-112 p-3">
+      <EmbeddingHistoryTable {...args} />
+    </div>
+  ),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const table = canvas.getByRole('table');
+    const scroller = table.parentElement as HTMLElement;
+
+    // 가로 스크롤 없음 — 표가 슬롯에 맞춰 줄어든다.
+    // 1px 여유는 열 4개의 소수점 폭이 scrollWidth 반올림에서 합쳐진 값이다(실제 넘침 아님)
+    await expect(scroller.scrollWidth).toBeLessThanOrEqual(scroller.clientWidth + 1);
+
+    // 헤더 라벨이 두 줄로 접히면 36을 넘는다
+    await expect(canvas.getAllByRole('row')[0].getBoundingClientRect().height).toBe(36);
+
+    // 실행 시각이 줄바꿈되면 행이 46을 넘는다
+    for (const row of canvas.getAllByRole('row').slice(1)) {
+      await expect(row.getBoundingClientRect().height).toBeLessThanOrEqual(48);
+    }
+
+    // 대상 이름이 잘려서 표시된다 — 줄어드는 건 대상 열뿐
+    const name = canvas.getAllByText(/^채널명/)[0];
+    await expect(name.scrollWidth).toBeGreaterThan(name.clientWidth);
   },
 };

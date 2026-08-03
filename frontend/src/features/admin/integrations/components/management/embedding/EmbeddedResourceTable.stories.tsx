@@ -32,7 +32,8 @@ const meta = {
       states: ['rows', 'empty', 'channel-talk-hierarchy', 'long-name'],
       layoutNotes: [
         '표 716, 헤더 36, 행 46. 대상 x12 w496 / 범위 x524 w180.',
-        '범위 열은 192(=716-524)여야 날짜가 한 줄에 들어간다. 180으로 잡으면 줄바꿈이 난다.',
+        '열 폭은 박지 않는다. 범위 열 whitespace-nowrap → 내용 폭(180), 대상 열 w-full max-w-0 → 나머지 + truncate.',
+        'Narrow 스토리가 320 슬롯에서 줄바꿈·가로 넘침이 없는지 지킨다.',
       ],
       dataNotes: ['Figma는 9행 고정이고 페이지네이션이 없다 — 현행 Pagination 유지 여부는 계획 ④에서 정한다.'],
     }),
@@ -140,6 +141,41 @@ export const ChannelTalkHierarchy: Story = {
     for (const row of rows.slice(1)) {
       await expect(row.getBoundingClientRect().height).toBeLessThanOrEqual(48);
     }
+  },
+};
+
+/**
+ * Figma 716의 절반도 안 되는 슬롯. 대상 열이 줄어들며 truncate 되고,
+ * 날짜는 끝까지 한 줄이며, 표가 슬롯 밖으로 넘치지 않아야 한다.
+ */
+export const Narrow: Story = {
+  args: { service: 'channel_talk', rows: ROWS.slice(0, 2) },
+  render: (args) => (
+    <div className="bg-fill-normal-normal w-80 p-3">
+      <EmbeddedResourceTable {...args} />
+    </div>
+  ),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const table = canvas.getByRole('table');
+    const slot = table.parentElement as HTMLElement;
+
+    // 가로 넘침 없음 — overflow-x-auto 없이도 슬롯 안에 들어와야 한다.
+    // 1px 여유는 열 폭 소수점이 scrollWidth 반올림에서 합쳐진 값이다(실제 넘침 아님)
+    await expect(table.getBoundingClientRect().width).toBeLessThanOrEqual(slot.clientWidth);
+    await expect(slot.scrollWidth).toBeLessThanOrEqual(slot.clientWidth + 1);
+
+    // 헤더 라벨이 두 줄로 접히면 36을 넘는다
+    await expect(canvas.getAllByRole('row')[0].getBoundingClientRect().height).toBe(36);
+
+    // 날짜는 여전히 한 줄 → 행 높이가 안 늘어난다
+    for (const row of canvas.getAllByRole('row').slice(1)) {
+      await expect(row.getBoundingClientRect().height).toBeLessThanOrEqual(48);
+    }
+
+    // 대상 이름은 잘려서 표시된다
+    const name = canvas.getAllByText(/^채널명/)[0];
+    await expect(name.scrollWidth).toBeGreaterThan(name.clientWidth);
   },
 };
 

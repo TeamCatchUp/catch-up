@@ -66,18 +66,19 @@ export default function EmbeddingHistoryRow({
 
   return (
     <tr className="h-11.5">
-      <td className="py-2 pr-4 pl-3">
+      {/* max-w-0 + w-full: 나머지 폭을 다 먹으면서 truncate가 걸리게 하는 표 전용 관용구 */}
+      <td className="w-full max-w-0 py-2 pr-4 pl-3">
         <div className="flex min-w-0 items-center gap-2.5">
           <Logo className="size-5 shrink-0" />
           <span className="text-body-small text-text-normal-neutral truncate">{target}</span>
         </div>
       </td>
 
-      <td className="w-37.5 py-2 pr-4">
+      <td className="py-2 pr-4 whitespace-nowrap">
         <StatusBadge status={status} failureCount={failureCount} />
       </td>
 
-      <td className="w-37.5 py-2 pr-4">
+      <td className="py-2 pr-4 whitespace-nowrap">
         {executedAt ? (
           <span className="text-body-small text-text-normal-assistive">{executedAt}</span>
         ) : (
@@ -85,7 +86,7 @@ export default function EmbeddingHistoryRow({
         )}
       </td>
 
-      <td className="w-11 py-2 pr-3">
+      <td className="py-2 pr-3">
         {status === 'failed' && onRetry && (
           <Tooltip>
             <TooltipTrigger asChild>
