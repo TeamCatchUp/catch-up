@@ -5,8 +5,6 @@ import { Button } from '@/shared/components/ui/button';
 interface ChannelTalkFooterBarProps {
   channelCount: number;
   documentCount: number;
-  /** 임베딩 단계로 넘어갈 수 있는지 */
-  canProceed: boolean;
   onAddChannel: () => void;
   onProceed: () => void;
 }
@@ -21,11 +19,15 @@ interface ChannelTalkFooterBarProps {
  * 버튼은 Figma의 Box Button medium 두 종이다.
  *   채널 추가   Solid Blue(Secondary) = box-soft-primary
  *   임베딩하기  Solid Blue(Primary)   = box-solid-primary
+ *
+ * 임베딩하기에는 활성 조건이 없다(사용자 결정). secret 입력 여부나
+ * `connectionStatus`로 막지 않는다 — 검증은 다음 단계와 서버가 한다.
+ * 다음 단계의 {@link ChannelTalkEmbeddingFooterBar}는 선택 0개면 비활성인데,
+ * 그건 임베딩할 대상 자체가 없는 경우라 성격이 다르다.
  */
 export default function ChannelTalkFooterBar({
   channelCount,
   documentCount,
-  canProceed,
   onAddChannel,
   onProceed,
 }: ChannelTalkFooterBarProps) {
@@ -44,13 +46,7 @@ export default function ChannelTalkFooterBar({
           <IconAddSmall className="size-5" />
           채널 추가
         </Button>
-        <Button
-          variant="box-soft-primary"
-          size="md"
-          onClick={onProceed}
-          disabled={!canProceed}
-          className="text-heading-small"
-        >
+        <Button variant="box-soft-primary" size="md" onClick={onProceed} className="text-heading-small">
           임베딩하기
           <IconArrowRight2 className="size-6" />
         </Button>

@@ -8,9 +8,8 @@ const meta = {
   title: 'Compositions/Admin/Integrations/Channel Talk/ChannelTalkFooterBar',
   component: ChannelTalkFooterBar,
   tags: ['autodocs'],
-  args: { channelCount: 5, documentCount: 18, canProceed: false, onAddChannel: fn(), onProceed: fn() },
+  args: { channelCount: 5, documentCount: 18, onAddChannel: fn(), onProceed: fn() },
   argTypes: {
-    canProceed: { control: 'boolean' },
     channelCount: { control: 'number' },
     documentCount: { control: 'number' },
   },
@@ -28,10 +27,11 @@ const meta = {
         nodeId: '17363:100408',
       },
       viewport: { width: 780, height: 100 },
-      states: ['disabled', 'enabled', 'zero'],
+      states: ['default', 'zero'],
       dataNotes: [
         '집계 문구는 "N개 채널 · M개 도큐먼트 연결됨" — 가운데 4x4 점 구분자.',
         '실패 건수의 50,000+ 규칙은 여기 적용하지 않는다(사용자 결정).',
+        '임베딩하기에 활성 조건이 없다(사용자 결정) — 채널 0개여도 누를 수 있다.',
       ],
     }),
   },
@@ -49,7 +49,7 @@ const Frame = ({ children }: { children: React.ReactNode }) => (
 const byLine = (text: string) => (_content: string, el: Element | null) =>
   el?.tagName === 'P' && el.textContent === text;
 
-export const Disabled: Story = {
+export const Default: Story = {
   render: (args) => (
     <Frame>
       <ChannelTalkFooterBar {...args} />
@@ -60,27 +60,16 @@ export const Disabled: Story = {
 
     await expect(canvas.getByText(byLine('5개 채널'))).toBeInTheDocument();
     await expect(canvas.getByText(byLine('18개 도큐먼트 연결됨'))).toBeInTheDocument();
-    await expect(canvas.getByRole('button', { name: /임베딩하기/ })).toBeDisabled();
 
     await userEvent.click(canvas.getByRole('button', { name: /채널 추가/ }));
     await expect(args.onAddChannel).toHaveBeenCalled();
-  },
-};
 
-export const Enabled: Story = {
-  args: { canProceed: true },
-  render: (args) => (
-    <Frame>
-      <ChannelTalkFooterBar {...args} />
-    </Frame>
-  ),
-  play: async ({ canvasElement, userEvent, args }) => {
-    const canvas = within(canvasElement);
     await userEvent.click(canvas.getByRole('button', { name: /임베딩하기/ }));
     await expect(args.onProceed).toHaveBeenCalled();
   },
 };
 
+/** 채널이 없어도 임베딩하기는 막지 않는다 — 활성 조건이 없다(사용자 결정) */
 export const Zero: Story = {
   args: { channelCount: 0, documentCount: 0 },
   render: (args) => (
@@ -88,9 +77,13 @@ export const Zero: Story = {
       <ChannelTalkFooterBar {...args} />
     </Frame>
   ),
-  play: async ({ canvasElement }) => {
+  play: async ({ canvasElement, args, userEvent }) => {
     const canvas = within(canvasElement);
     await expect(canvas.getByText(byLine('0개 채널'))).toBeInTheDocument();
     await expect(canvas.getByText(byLine('0개 도큐먼트 연결됨'))).toBeInTheDocument();
+
+    await expect(canvas.getByRole('button', { name: /임베딩하기/ })).toBeEnabled();
+    await userEvent.click(canvas.getByRole('button', { name: /임베딩하기/ }));
+    await expect(args.onProceed).toHaveBeenCalled();
   },
 };
