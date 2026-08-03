@@ -5,7 +5,7 @@ import { catchupParameters } from '../../../../../../../.storybook/catchupStoryP
 import MappingCheckPopover from './MappingCheckPopover';
 
 const meta = {
-  title: 'Compositions/Admin/Integrations/MappingCheckPopover',
+  title: 'Compositions/Admin/Integrations/Detail/MappingCheckPopover',
   component: MappingCheckPopover,
   tags: ['autodocs'],
   args: { onClose: fn() },

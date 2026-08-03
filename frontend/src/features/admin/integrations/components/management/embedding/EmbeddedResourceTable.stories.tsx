@@ -11,7 +11,7 @@ const ROWS = Array.from({ length: 4 }, (_, i) => ({
 }));
 
 const meta = {
-  title: 'Compositions/Admin/Integrations/EmbeddedResourceTable',
+  title: 'Compositions/Admin/Integrations/Embedding/EmbeddedResourceTable',
   component: EmbeddedResourceTable,
   tags: ['autodocs'],
   args: { service: 'slack', label: '임베딩된 채널', rows: ROWS },

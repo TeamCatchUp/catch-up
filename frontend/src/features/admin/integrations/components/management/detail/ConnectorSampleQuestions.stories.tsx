@@ -5,7 +5,7 @@ import { catchupParameters } from '../../../../../../../.storybook/catchupStoryP
 import ConnectorSampleQuestions from './ConnectorSampleQuestions';
 
 const meta = {
-  title: 'Compositions/Admin/Integrations/ConnectorSampleQuestions',
+  title: 'Compositions/Admin/Integrations/Detail/ConnectorSampleQuestions',
   component: ConnectorSampleQuestions,
   tags: ['autodocs'],
   args: { service: 'slack' },

@@ -5,7 +5,7 @@ import { catchupParameters } from '../../../../../../../.storybook/catchupStoryP
 import ConnectorCatalogNotice from './ConnectorCatalogNotice';
 
 const meta = {
-  title: 'Compositions/Admin/Integrations/ConnectorCatalogNotice',
+  title: 'Compositions/Admin/Integrations/Connect/ConnectorCatalogNotice',
   component: ConnectorCatalogNotice,
   tags: ['autodocs'],
   args: { onLearnMore: fn() },

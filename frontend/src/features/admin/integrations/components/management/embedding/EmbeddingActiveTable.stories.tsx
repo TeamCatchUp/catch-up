@@ -10,7 +10,7 @@ const ITEMS = Array.from({ length: 5 }, (_, i) => ({
 }));
 
 const meta = {
-  title: 'Compositions/Admin/Integrations/EmbeddingActiveTable',
+  title: 'Compositions/Admin/Integrations/Embedding/EmbeddingActiveTable',
   component: EmbeddingActiveTable,
   tags: ['autodocs'],
   args: { service: 'slack', items: ITEMS },

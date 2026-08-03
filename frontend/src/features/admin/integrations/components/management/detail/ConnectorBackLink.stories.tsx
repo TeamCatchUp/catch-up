@@ -5,7 +5,7 @@ import { catchupParameters } from '../../../../../../../.storybook/catchupStoryP
 import ConnectorBackLink from './ConnectorBackLink';
 
 const meta = {
-  title: 'Compositions/Admin/Integrations/ConnectorBackLink',
+  title: 'Compositions/Admin/Integrations/Detail/ConnectorBackLink',
   component: ConnectorBackLink,
   tags: ['autodocs'],
   args: { onBack: fn() },

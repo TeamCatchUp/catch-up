@@ -5,7 +5,7 @@ import { catchupParameters } from '../../../../../../../.storybook/catchupStoryP
 import ConnectorEmptyState from './ConnectorEmptyState';
 
 const meta = {
-  title: 'Compositions/Admin/Integrations/ConnectorEmptyState',
+  title: 'Compositions/Admin/Integrations/States/ConnectorEmptyState',
   component: ConnectorEmptyState,
   tags: ['autodocs'],
   args: { onStart: fn() },

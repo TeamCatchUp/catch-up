@@ -5,7 +5,7 @@ import { catchupParameters } from '../../../../../../../.storybook/catchupStoryP
 import ConnectorSummaryCard from './ConnectorSummaryCard';
 
 const meta = {
-  title: 'Compositions/Admin/Integrations/ConnectorSummaryCard',
+  title: 'Compositions/Admin/Integrations/Embedding/ConnectorSummaryCard',
   component: ConnectorSummaryCard,
   tags: ['autodocs'],
   args: { connected: true, dataRange: '2000.00.00 - 2000.00.00' },

@@ -5,7 +5,7 @@ import { catchupParameters } from '../../../../../../../.storybook/catchupStoryP
 import ChannelTalkStepper from './ChannelTalkStepper';
 
 const meta = {
-  title: 'Compositions/Admin/Integrations/ChannelTalkStepper',
+  title: 'Compositions/Admin/Integrations/Channel Talk/ChannelTalkStepper',
   component: ChannelTalkStepper,
   tags: ['autodocs'],
   args: { current: 'connect', onBack: fn() },

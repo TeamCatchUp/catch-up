@@ -5,7 +5,7 @@ import { catchupParameters } from '../../../../../../../.storybook/catchupStoryP
 import ConnectorScopeCompare from './ConnectorScopeCompare';
 
 const meta = {
-  title: 'Compositions/Admin/Integrations/ConnectorScopeCompare',
+  title: 'Compositions/Admin/Integrations/Detail/ConnectorScopeCompare',
   component: ConnectorScopeCompare,
   tags: ['autodocs'],
   args: { service: 'slack' },

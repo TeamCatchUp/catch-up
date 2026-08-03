@@ -23,7 +23,7 @@ const filled: ChannelTalkChannel = {
 };
 
 const meta = {
-  title: 'Compositions/Admin/Integrations/ChannelTalkChannelCard',
+  title: 'Compositions/Admin/Integrations/Channel Talk/ChannelTalkChannelCard',
   component: ChannelTalkChannelCard,
   tags: ['autodocs'],
   args: {

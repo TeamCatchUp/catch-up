@@ -12,7 +12,7 @@ const ITEMS = [
 ];
 
 const meta = {
-  title: 'Compositions/Admin/Integrations/EmbeddingHistoryTable',
+  title: 'Compositions/Admin/Integrations/Embedding/EmbeddingHistoryTable',
   component: EmbeddingHistoryTable,
   tags: ['autodocs'],
   args: { service: 'slack', items: ITEMS, onRetry: fn() },

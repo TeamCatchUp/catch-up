@@ -5,7 +5,7 @@ import { catchupParameters } from '../../../../../../../.storybook/catchupStoryP
 import ChannelTalkFooterBar from './ChannelTalkFooterBar';
 
 const meta = {
-  title: 'Compositions/Admin/Integrations/ChannelTalkFooterBar',
+  title: 'Compositions/Admin/Integrations/Channel Talk/ChannelTalkFooterBar',
   component: ChannelTalkFooterBar,
   tags: ['autodocs'],
   args: { channelCount: 5, documentCount: 18, canProceed: false, onAddChannel: fn(), onProceed: fn() },

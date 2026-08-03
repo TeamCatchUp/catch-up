@@ -5,7 +5,7 @@ import { catchupParameters } from '../../../../../../../.storybook/catchupStoryP
 import SlackGuideSection from './SlackGuideSection';
 
 const meta = {
-  title: 'Compositions/Admin/Integrations/SlackGuideSection',
+  title: 'Compositions/Admin/Integrations/Guides/SlackGuideSection',
   component: SlackGuideSection,
   tags: ['autodocs'],
   parameters: {

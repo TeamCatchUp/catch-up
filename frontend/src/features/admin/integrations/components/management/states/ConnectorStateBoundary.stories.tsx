@@ -8,7 +8,7 @@ import ConnectorStateBoundary from './ConnectorStateBoundary';
 const statusOptions: readonly ConnectorDetailStatus[] = ['loading', 'error', 'ready'];
 
 const meta = {
-  title: 'Compositions/Admin/Integrations/ConnectorStateBoundary',
+  title: 'Compositions/Admin/Integrations/States/ConnectorStateBoundary',
   component: ConnectorStateBoundary,
   tags: ['autodocs'],
   args: {

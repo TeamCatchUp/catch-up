@@ -13,7 +13,7 @@ const FIVE = [
 ];
 
 const meta = {
-  title: 'Compositions/Admin/Integrations/ConnectorSidebarList',
+  title: 'Compositions/Admin/Integrations/Connect/ConnectorSidebarList',
   component: ConnectorSidebarList,
   tags: ['autodocs'],
   args: { connectors: FIVE, selected: null, onSelect: fn(), onAdd: fn() },

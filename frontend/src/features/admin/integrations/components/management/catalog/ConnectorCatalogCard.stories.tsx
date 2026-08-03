@@ -5,7 +5,7 @@ import { catchupParameters } from '../../../../../../../.storybook/catchupStoryP
 import ConnectorCatalogCard from './ConnectorCatalogCard';
 
 const meta = {
-  title: 'Compositions/Admin/Integrations/ConnectorCatalogCard',
+  title: 'Compositions/Admin/Integrations/Connect/ConnectorCatalogCard',
   component: ConnectorCatalogCard,
   tags: ['autodocs'],
   args: { service: 'slack', connected: false, onConnect: fn() },

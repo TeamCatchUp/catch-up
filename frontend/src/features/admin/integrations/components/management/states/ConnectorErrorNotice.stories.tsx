@@ -5,7 +5,7 @@ import { catchupParameters } from '../../../../../../../.storybook/catchupStoryP
 import ConnectorErrorNotice from './ConnectorErrorNotice';
 
 const meta = {
-  title: 'Compositions/Admin/Integrations/ConnectorErrorNotice',
+  title: 'Compositions/Admin/Integrations/States/ConnectorErrorNotice',
   component: ConnectorErrorNotice,
   tags: ['autodocs'],
   args: {

@@ -5,7 +5,7 @@ import { catchupParameters } from '../../../../../../../.storybook/catchupStoryP
 import EmbeddingSegmentTabs from './EmbeddingSegmentTabs';
 
 const meta = {
-  title: 'Compositions/Admin/Integrations/EmbeddingSegmentTabs',
+  title: 'Compositions/Admin/Integrations/Embedding/EmbeddingSegmentTabs',
   component: EmbeddingSegmentTabs,
   tags: ['autodocs'],
   args: { value: 'manage', hasRunning: false, onChange: fn() },

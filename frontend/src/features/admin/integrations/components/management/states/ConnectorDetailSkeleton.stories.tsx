@@ -5,7 +5,7 @@ import { catchupParameters } from '../../../../../../../.storybook/catchupStoryP
 import ConnectorDetailSkeleton from './ConnectorDetailSkeleton';
 
 const meta = {
-  title: 'Compositions/Admin/Integrations/ConnectorDetailSkeleton',
+  title: 'Compositions/Admin/Integrations/States/ConnectorDetailSkeleton',
   component: ConnectorDetailSkeleton,
   tags: ['autodocs'],
   parameters: {

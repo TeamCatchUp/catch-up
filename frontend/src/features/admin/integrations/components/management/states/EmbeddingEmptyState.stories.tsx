@@ -5,7 +5,7 @@ import { catchupParameters } from '../../../../../../../.storybook/catchupStoryP
 import EmbeddingEmptyState from './EmbeddingEmptyState';
 
 const meta = {
-  title: 'Compositions/Admin/Integrations/EmbeddingEmptyState',
+  title: 'Compositions/Admin/Integrations/States/EmbeddingEmptyState',
   component: EmbeddingEmptyState,
   tags: ['autodocs'],
   parameters: {

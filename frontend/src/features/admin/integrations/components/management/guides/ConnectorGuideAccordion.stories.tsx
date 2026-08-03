@@ -6,7 +6,7 @@ import ConnectorGuideAccordion from './ConnectorGuideAccordion';
 import SlackGuideSection from './SlackGuideSection';
 
 const meta = {
-  title: 'Compositions/Admin/Integrations/ConnectorGuideAccordion',
+  title: 'Compositions/Admin/Integrations/Guides/ConnectorGuideAccordion',
   component: ConnectorGuideAccordion,
   tags: ['autodocs'],
   args: { service: 'slack', children: <SlackGuideSection /> },

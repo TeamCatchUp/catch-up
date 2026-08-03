@@ -5,7 +5,7 @@ import { catchupParameters } from '../../../../../../../.storybook/catchupStoryP
 import EmbeddingHistoryRow from './EmbeddingHistoryRow';
 
 const meta = {
-  title: 'Compositions/Admin/Integrations/EmbeddingHistoryRow',
+  title: 'Compositions/Admin/Integrations/Embedding/EmbeddingHistoryRow',
   component: EmbeddingHistoryRow,
   tags: ['autodocs'],
   args: {

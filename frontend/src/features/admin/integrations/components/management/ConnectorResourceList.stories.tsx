@@ -12,7 +12,7 @@ const sample = (count: number): ConnectorResource[] =>
   }));
 
 const meta = {
-  title: 'Compositions/Admin/Integrations/ConnectorResourceList',
+  title: 'Compositions/Admin/Integrations/Embedding/ConnectorResourceList',
   component: ConnectorResourceList,
   tags: ['autodocs'],
   args: {
