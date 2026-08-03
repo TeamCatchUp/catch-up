@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import uuid
 from dataclasses import replace
 from datetime import datetime
@@ -802,6 +803,43 @@ def test_decided_proposal_survives_rerun_with_same_members() -> None:
     assert len(uow.mutation_proposals.rows) == 1
 
 
+def test_decided_proposal_with_legacy_hash_survives_rerun() -> None:
+    """구 포맷 member_hash로 결정된 행도 같은 구성 재실행에서 안전하다."""
+    node_id = uuid.uuid4()
+    claims = [
+        _claim(value=60, node_id=node_id, minutes=0),
+        _claim(value=120, node_id=node_id, minutes=10),
+    ]
+    uow = FakeUnitOfWork(claims)
+    resolve_claim_conflicts(
+        workspace_id=WORKSPACE, vocabulary=VOCABULARY, uow=uow
+    )
+    key = conflict_idempotency_key(f"node:{node_id}", "rate_limit")
+    decided = _decide(uow.mutation_proposals, key)
+    # 배포 전 결정 행은 구 포맷(id만 이어붙인) 해시를 갖고 있었다.
+    legacy_hash = hashlib.sha256(
+        ",".join(sorted(str(claim.id) for claim in claims)).encode(
+            "utf-8"
+        )
+    ).hexdigest()
+    decided["resolver_metadata"]["member_hash"] = legacy_hash
+
+    with capture_logs() as logs:
+        result = resolve_claim_conflicts(
+            workspace_id=WORKSPACE, vocabulary=VOCABULARY, uow=uow
+        )
+
+    assert result.proposals_created == 0
+    assert result.proposals_abandoned == 0
+    assert len(uow.mutation_proposals.rows) == 1
+    standing = [
+        entry
+        for entry in logs
+        if entry["event"] == "claim_conflict_decision_standing"
+    ]
+    assert len(standing) == 1
+
+
 def test_decided_proposal_new_members_open_new_review_event() -> None:
     """구성이 달라지면 결정 행을 덮지 않고 새 검토 사건을 연다."""
     node_id = uuid.uuid4()
@@ -946,7 +984,7 @@ def test_enum_value_outside_dictionary_counts_unparseable() -> None:
     assert result.proposals_created == 0
 
 
-def test_values_carry_citation_verified():
+def test_values_carry_citation_verified() -> None:
     node = uuid.uuid4()
     claims = [
         _claim(predicate="rate_limit", value=60, node_id=node),

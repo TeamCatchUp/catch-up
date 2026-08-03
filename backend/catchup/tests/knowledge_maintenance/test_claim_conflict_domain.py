@@ -50,12 +50,12 @@ def test_enum_without_dictionary_values_passes_through() -> None:
     assert normalize_value("enum", "pro") == "pro"
 
 
-def test_partial_precision_dates_are_compatible():
+def test_partial_precision_dates_are_compatible() -> None:
     assert dates_compatible({"2026-09", "2026-09-15"})
     assert dates_compatible({"2026", "2026-09", "2026-09-15"})
 
 
-def test_distinct_dates_are_not_compatible():
+def test_distinct_dates_are_not_compatible() -> None:
     assert not dates_compatible({"2026-09-15", "2026-09-20"})
     assert not dates_compatible({"2026-09", "2026-10"})
     assert not dates_compatible({"2026-09", "2026-09-15", "2026-09-20"})
