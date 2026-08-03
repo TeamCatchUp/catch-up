@@ -905,6 +905,67 @@ def test_new_review_event_is_stable_across_reruns() -> None:
     assert len(uow.mutation_proposals.rows) == 2
 
 
+def test_future_valid_to_loser_is_held_by_the_standing_decision() -> None:
+    """발효 전 패자가 비교에 다시 들어와도 결정이 재질문을 막는다.
+
+    supersede 결정은 패자의 valid_to를 승자의 valid_from으로 닫는데,
+    그 시각이 미래면 지금은 아직 닫힌 주장이 아니다. 감지기는 "닫힌
+    주장 제외" 의미론을 쓰므로 결정 직후부터 발효 시각까지 패자가
+    비교에 다시 노출된다. 이 창은 의도된 의미이며, 열려서는 안 되는
+    것은 노출이 아니라 재질문이다. 같은 구성의 결정이 서 있으면
+    member_hash 멱등 키가 결정 행을 가리켜 새 proposal을 만들지 않고
+    기존 행도 건드리지 않는다.
+    """
+    node_id = uuid.uuid4()
+    winner = _claim(value=120, node_id=node_id, minutes=10)
+    loser = _claim(
+        value=60,
+        node_id=node_id,
+        minutes=0,
+        # 승자의 valid_from이 미래라 패자의 닫힘도 아직 오지 않았다.
+        valid_to=datetime.now(timezone.utc) + timedelta(days=30),
+    )
+    uow = FakeUnitOfWork([winner, loser])
+    resolve_claim_conflicts(
+        workspace_id=WORKSPACE, vocabulary=VOCABULARY, uow=uow
+    )
+    key = conflict_idempotency_key(f"node:{node_id}", "rate_limit")
+    decided = _decide(uow.mutation_proposals, key)
+    decided["status"] = "applied"
+    decided["resolver_metadata"]["decision"] = {
+        "winner_claim_id": str(winner.id)
+    }
+
+    with capture_logs() as logs:
+        result = resolve_claim_conflicts(
+            workspace_id=WORKSPACE, vocabulary=VOCABULARY, uow=uow
+        )
+
+    # 미래 valid_to는 아직 닫힌 구간이 아니라 비교에 남는다.
+    assert result.claims_scanned == 2
+    assert result.claims_closed == 0
+    assert result.conflicts_found == 1
+    # 결정이 서 있으므로 새 안건도, 회수도 없다.
+    assert result.proposals_created == 0
+    assert result.proposals_abandoned == 0
+    assert len(uow.mutation_proposals.rows) == 1
+    row = uow.mutation_proposals.rows[key]
+    assert row["status"] == "applied"
+    assert row["reviewer"] == "debug:test-user"
+    assert row["reviewed_at"] == NOW
+    assert row["resolver_metadata"]["decision"] == {
+        "winner_claim_id": str(winner.id)
+    }
+    assert row["operations"] == [{"operation_type": "supersede_claim"}]
+    assert uow.mutation_proposals.abandoned == []
+    standing = [
+        entry
+        for entry in logs
+        if entry["event"] == "claim_conflict_decision_standing"
+    ]
+    assert standing and standing[0]["proposal_id"] == str(row["id"])
+
+
 def test_partial_precision_date_overlap_is_not_conflict() -> None:
     node = uuid.uuid4()
     claims = [

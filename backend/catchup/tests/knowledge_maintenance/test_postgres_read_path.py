@@ -222,17 +222,20 @@ def test_find_entity_by_normalized_alias(
         session.commit()
 
     with uow_factory() as uow:
+        # 실 DB에는 E2E가 남긴 alias가 이미 있다. 고정 문자열을 쓰면
+        # 남의 노드를 찾아 놓고 실패한다.
+        normalized = f"캐치업 오픈 api {uuid.uuid4().hex}"
         uow.knowledge_nodes.add_alias(
             workspace_id=workspace_id,
             node_id=node_id,
-            alias="캐치업 오픈 API",
-            normalized_alias="캐치업 오픈 api",
+            alias=normalized.upper(),
+            normalized_alias=normalized,
             source="human",
         )
 
         found = uow.knowledge_nodes.find_entity_by_normalized_alias(
             workspace_id=workspace_id,
-            normalized_alias="캐치업 오픈 api",
+            normalized_alias=normalized,
         )
         assert found is not None
         assert found.id == node_id
