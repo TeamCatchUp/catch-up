@@ -29,3 +29,21 @@ def test_date_normalizes_to_iso_prefix() -> None:
 def test_text_values_are_not_compared() -> None:
     """text는 비교 키를 만들지 않는다. 표현 차이가 모순이 아니기 때문이다."""
     assert normalize_value("text", "9월 예정") is None
+
+
+def test_enum_outside_dictionary_values_is_unparseable() -> None:
+    assert (
+        normalize_value("enum", "enterprise", enum_values=("free", "pro"))
+        is None
+    )
+
+
+def test_enum_inside_dictionary_values_normalizes() -> None:
+    assert (
+        normalize_value("enum", " pro ", enum_values=("free", "pro"))
+        == "pro"
+    )
+
+
+def test_enum_without_dictionary_values_passes_through() -> None:
+    assert normalize_value("enum", "pro") == "pro"

@@ -46,8 +46,19 @@ class StoredClaimCandidate:
     valid_to: datetime | None = None
 
 
-def normalize_value(value_type: str, value: object) -> str | None:
-    """value_type 규칙으로 비교 키를 만든다. 실패하면 None이다."""
+def normalize_value(
+    value_type: str,
+    value: object,
+    *,
+    enum_values: tuple[str, ...] = (),
+) -> str | None:
+    """value_type 규칙으로 비교 키를 만든다. 실패하면 None이다.
+
+    enum은 사전이 준 enum_values 안의 값만 비교 키가 된다. 사전 밖
+    값을 통과시키면 extractor 신조어가 검토된 치역인 척 모순 비교에
+    섞인다. enum_values가 비어 있으면 대조 없이 통과한다 — 치역을
+    모르는 호출자가 값을 잃지 않게 하기 위해서다.
+    """
     if value_type == "number":
         try:
             return repr(float(value))  # type: ignore[arg-type]
@@ -69,7 +80,10 @@ def normalize_value(value_type: str, value: object) -> str | None:
                 return text
         return None
     if value_type == "enum":
-        if isinstance(value, str) and value.strip():
-            return value.strip()
-        return None
+        if not isinstance(value, str) or not value.strip():
+            return None
+        stripped = value.strip()
+        if enum_values and stripped not in enum_values:
+            return None
+        return stripped
     return None  # text는 비교하지 않는다.

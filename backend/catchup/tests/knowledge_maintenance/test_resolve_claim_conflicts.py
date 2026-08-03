@@ -45,6 +45,18 @@ VOCABULARY = ExtractionVocabulary(
     ),
 )
 
+ENUM_VOCABULARY = ExtractionVocabulary(
+    snapshot_id="v2",
+    predicate_entries=(
+        PredicateEntry(
+            name="plan_tier",
+            definition="요금제 단계를 나타낸다.",
+            value_type="enum",
+            enum_values=("free", "pro"),
+        ),
+    ),
+)
+
 
 def _claim(
     *,
@@ -792,3 +804,29 @@ def test_new_review_event_is_stable_across_reruns() -> None:
     assert result.proposals_created == 0
     assert result.proposals_abandoned == 0
     assert len(uow.mutation_proposals.rows) == 2
+
+
+def test_enum_value_outside_dictionary_counts_unparseable() -> None:
+    node = uuid.uuid4()
+    claims = [
+        _claim(
+            predicate="plan_tier",
+            value="enterprise",
+            value_type="enum",
+            node_id=node,
+        ),
+        _claim(
+            predicate="plan_tier",
+            value="pro",
+            value_type="enum",
+            node_id=node,
+            minutes=1,
+        ),
+    ]
+    uow = FakeUnitOfWork(claims)
+    result = resolve_claim_conflicts(
+        workspace_id=WORKSPACE, vocabulary=ENUM_VOCABULARY, uow=uow
+    )
+    assert result.claims_unparseable == 1
+    assert result.conflicts_found == 0
+    assert result.proposals_created == 0

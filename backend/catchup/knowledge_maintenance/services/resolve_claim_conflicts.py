@@ -25,6 +25,7 @@ from typing import Protocol
 from typing import Self
 
 from catchup.knowledge_maintenance.contracts.extraction import ExtractionVocabulary
+from catchup.knowledge_maintenance.contracts.extraction import PredicateEntry
 from catchup.knowledge_maintenance.domain.claim_conflict import StoredClaimCandidate
 from catchup.knowledge_maintenance.domain.claim_conflict import normalize_value
 from catchup.knowledge_maintenance.domain.source_version import JsonValue
@@ -130,7 +131,7 @@ def resolve_claim_conflicts(
         )
 
         groups: dict[tuple[str, str], list[StoredClaimCandidate]] = {}
-        value_types: dict[str, str] = {}
+        entries: dict[str, PredicateEntry] = {}
         without_key = 0
         not_comparable = 0
         closed = 0
@@ -145,7 +146,7 @@ def resolve_claim_conflicts(
                 # 사전 미등재와 text 치역은 비교하지 않는다.
                 not_comparable += 1
                 continue
-            value_types[claim.predicate] = entry.value_type
+            entries[claim.predicate] = entry
             subject_key = _subject_key(claim, duplicate_groups)
             if subject_key is None:
                 without_key += 1
@@ -162,12 +163,17 @@ def resolve_claim_conflicts(
         duplicates = 0
         active_keys: set[str] = set()
         for (subject_key, predicate), members in sorted(groups.items()):
-            value_type = value_types[predicate]
+            entry = entries[predicate]
+            value_type = entry.value_type
             parsed: list[tuple[StoredClaimCandidate, str]] = []
             for claim in members:
                 # 치역은 사전이 정한다. LLM이 신고한 value_type을 믿으면
                 # 잘못 신고된 claim이 비교에서 조용히 빠진다.
-                normalized = normalize_value(value_type, claim.value)
+                normalized = normalize_value(
+                    value_type,
+                    claim.value,
+                    enum_values=entry.enum_values,
+                )
                 if normalized is None:
                     unparseable += 1
                     continue
