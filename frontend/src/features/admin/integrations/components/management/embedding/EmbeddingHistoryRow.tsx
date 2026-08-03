@@ -2,10 +2,12 @@ import IconReset from '@/public/icons/icon/reset.svg';
 import IconRotate from '@/public/icons/icon/rotate.svg';
 import { Button } from '@/shared/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/components/ui/tooltip';
+import { cn } from '@/shared/utils/cn';
 
 import { CONNECTOR_LOGOS } from '../../../constants/connectorLogos';
 import type { IntegrationService } from '../../../types/integrationModel';
 import { formatFailureCount } from '../../../utils/formatFailureCount';
+import { EMBEDDING_ROW_GRID } from './embeddingTableGrid';
 
 export type EmbeddingRowStatus = 'running' | 'success' | 'failed';
 
@@ -48,9 +50,10 @@ function StatusBadge({ status, failureCount = 0 }: Pick<EmbeddingHistoryRowProps
 
 /**
  * 임베딩 히스토리 한 행. `<tr>`이라 `<tbody>` 안에서만 쓴다.
- * Figma 컴포넌트셋 `17134:113077` — 4슬롯(대상 fill / 상태 150 / 시각 150 / 액션 32),
- * padding 8/12, gap 16, h46.
+ * Figma 컴포넌트셋 `17134:113077`, 실측 행 `17169:75976`·`17169:75993`.
+ * 4슬롯(대상 fill / 상태 150 / 시각 150 / 액션 32), padding 12, gap 16, h46.
  *
+ * 열 폭은 {@link EMBEDDING_ROW_GRID}가 정한다 — 셀에 padding을 주지 않는다.
  * 진행중의 시각 칸은 텍스트가 아니라 회색 선이다. 성공 행도 액션 슬롯을
  * 비운 채 유지해 열 정렬을 맞춘다.
  */
@@ -65,20 +68,17 @@ export default function EmbeddingHistoryRow({
   const Logo = CONNECTOR_LOGOS[service];
 
   return (
-    <tr className="h-11.5">
-      {/* max-w-0 + w-full: 나머지 폭을 다 먹으면서 truncate가 걸리게 하는 표 전용 관용구 */}
-      <td className="w-full max-w-0 py-2 pr-4 pl-3">
-        <div className="flex min-w-0 items-center gap-2.5">
-          <Logo className="size-5 shrink-0" />
-          <span className="text-body-small text-text-normal-neutral truncate">{target}</span>
-        </div>
+    <tr role="row" className={cn(EMBEDDING_ROW_GRID, 'h-11.5')}>
+      <td role="cell" className="flex min-w-0 items-center gap-2.5">
+        <Logo className="size-5 shrink-0" />
+        <span className="text-body-small text-text-normal-neutral truncate">{target}</span>
       </td>
 
-      <td className="py-2 pr-4 whitespace-nowrap">
+      <td role="cell" className="min-w-0">
         <StatusBadge status={status} failureCount={failureCount} />
       </td>
 
-      <td className="py-2 pr-4 whitespace-nowrap">
+      <td role="cell" className="min-w-0 truncate">
         {executedAt ? (
           <span className="text-body-small text-text-normal-assistive">{executedAt}</span>
         ) : (
@@ -86,7 +86,8 @@ export default function EmbeddingHistoryRow({
         )}
       </td>
 
-      <td className="py-2 pr-3">
+      {/* 아이콘 버튼 30을 32 칸에 담고 오른쪽 padding 선(x704)에 붙인다 */}
+      <td role="cell" className="flex justify-end">
         {status === 'failed' && onRetry && (
           <Tooltip>
             <TooltipTrigger asChild>

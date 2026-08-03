@@ -31,8 +31,8 @@ const meta = {
       viewport: { width: 716, height: 400 },
       states: ['rows', 'empty', 'channel-talk-hierarchy', 'long-name'],
       layoutNotes: [
-        '표 716, 헤더 36, 행 46. 대상 x12 w496 / 범위 x524 w180.',
-        '열 폭은 박지 않는다. 범위 열 whitespace-nowrap → 내용 폭(180), 대상 열 w-full max-w-0 → 나머지 + truncate.',
+        '표 716, 헤더 36, 행 46. 716 = 12 | 대상(1fr) 496 | 16 | 범위 180 | 12.',
+        '<table> 엘리먼트에 행 grid. 범위는 Figma에서 hug지만 행마다 grid가 따로라 auto로 두면 헤더가 어긋난다.',
         'Narrow 스토리가 320 슬롯에서 줄바꿈·가로 넘침이 없는지 지킨다.',
       ],
       dataNotes: ['Figma는 9행 고정이고 페이지네이션이 없다 — 현행 Pagination 유지 여부는 계획 ④에서 정한다.'],

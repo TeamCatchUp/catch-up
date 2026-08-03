@@ -69,11 +69,11 @@ export default function EmbeddingHistoryTable({ service, items, onRetry }: Embed
       </div>
 
       {visible.length > 0 ? (
-        // 폭을 박지 않고, 내용 최소폭(약 365)조차 안 되는 슬롯에서만 스크롤로 흘린다
+        // 고정 열 합(약 404)조차 안 되는 슬롯에서만 스크롤로 흘린다
         <div className="overflow-x-auto">
-          <table className="w-full">
+          <table role="table" className="block w-full min-w-fit">
             <EmbeddingTableHeader />
-            <tbody>
+            <tbody role="rowgroup" className="block">
               {visible.map((item) => (
                 <EmbeddingHistoryRow
                   key={item.id}

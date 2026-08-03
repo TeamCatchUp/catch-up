@@ -33,7 +33,8 @@ const meta = {
       states: ['all', 'success-only', 'failed-only', 'empty', 'narrow'],
       layoutNotes: [
         '필터는 Tab 158×36 = Chips 50 ×3 + gap 4 ×2. 회색 트랙이 없는 낱개 칩이라 Chip variant="outline"을 쓴다.',
-        '표 열 폭은 박지 않는다. 상태·시각·액션 whitespace-nowrap, 대상 w-full max-w-0 + truncate.',
+        '표는 <table> 엘리먼트에 행 grid. 716 = 12 | 대상(1fr) | 16 | 150 | 16 | 150 | 16 | 32 | 12.',
+        '진행중 표와 열 x가 같아야 해서 폭을 내용에 맡기지 않는다 — 템플릿은 embeddingTableGrid.ts 하나뿐이다.',
       ],
       dataNotes: [
         '필터 라벨은 현행과 같은 전체/성공/실패다.',
@@ -150,16 +151,19 @@ export const Empty: Story = {
 };
 
 /**
- * Figma 716의 60% 슬롯(424). 상태·시각·액션은 내용 폭을 유지하고 대상 열만 줄며,
- * 가로 스크롤 없이 들어와야 한다.
+ * Figma 716의 75% 슬롯(536). 상태 150 · 시각 150 · 액션 32는 그대로 두고
+ * 대상 열(1fr)만 132로 줄어 truncate 된다.
  *
- * 이 표의 내용 최소폭은 약 365다 — 날짜(약 145) + 배지 + 재시도 버튼이 실측값이라
- * 그 아래로는 어떤 방식으로도 안 줄어든다. 그래서 `overflow-x-auto`를 하한으로 남긴다.
+ * 하한은 404다 — 고정 열 332 + gap 48 + padding 24. 그 아래는 어떤 방식으로도
+ * 안 줄어들어서 `overflow-x-auto`로 흘린다.
  */
 export const Narrow: Story = {
-  args: { items: ITEMS.slice(0, 2) },
+  args: {
+    // 대상 열이 실제로 잘리는지 보려면 132보다 긴 이름이 필요하다
+    items: ITEMS.slice(0, 2).map((item) => ({ ...item, target: `${item.target} text text text text text text` })),
+  },
   render: (args) => (
-    <div className="bg-fill-normal-normal w-112 p-3">
+    <div className="bg-fill-normal-normal w-140 p-3">
       <EmbeddingHistoryTable {...args} />
     </div>
   ),
