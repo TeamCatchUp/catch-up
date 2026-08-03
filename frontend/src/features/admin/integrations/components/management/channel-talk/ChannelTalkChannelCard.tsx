@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 
-import IconAddSmall from '@/public/icons/icon/add_small.svg';
+import IconAddCircle from '@/public/icons/icon/add_circle.svg';
 import IconCheck from '@/public/icons/icon/check.svg';
 import IconDelete from '@/public/icons/icon/delete.svg';
 import IconMegaphone from '@/public/icons/icon/megaphone.svg';
@@ -88,7 +88,7 @@ export default function ChannelTalkChannelCard({
               </>
             )}
             <Button variant="box-outline-gray" size="sm" onClick={onAddDocumentSpace}>
-              <IconAddSmall className="size-5" />
+              <IconAddCircle className="size-5" />
               도큐먼트 스페이스
             </Button>
             <Button
