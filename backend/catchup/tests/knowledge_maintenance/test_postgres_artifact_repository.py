@@ -896,6 +896,22 @@ def test_find_current_revisions_stays_in_workspace(
     assert stranger_artifact not in {row.artifact_id for row in rows}
 
 
+def test_find_current_revisions_refuses_other_workspace(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+) -> None:
+    """저장소가 고정한 workspace와 다른 값을 넘기면 막힌다.
+
+    어긋난 채로 읽으면 재투영이 남의 문서를 검색 인덱스에 싣는다.
+    """
+    with uow_factory() as uow:
+        with pytest.raises(ValueError):
+            uow.artifacts.find_current_revisions(
+                workspace_id=workspace_id + 1_000_000
+            )
+
+
 def test_duplicate_revision_number_is_rejected(
     workspace_id: int,
     session_factory: Callable[[], Session],
