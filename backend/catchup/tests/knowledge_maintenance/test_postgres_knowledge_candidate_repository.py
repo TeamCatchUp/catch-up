@@ -879,6 +879,110 @@ def test_find_claim_candidates_excludes_rejected(
     assert by_id[claim_ids["pending"]].valid_from is None
 
 
+def _chat_with_one_utterance(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+    *,
+    statement: str,
+    opened_at: datetime,
+    spoken_at: datetime,
+) -> uuid.UUID:
+    """상담 하나를 저장하고 그 발화에서 나온 claim의 id를 돌려준다.
+
+    상담이 열린 시각과 발화 시각을 따로 받는다 — 둘이 다를 때 어느 쪽이
+    claim의 시간이 되는지가 이 회귀의 관심사다.
+    """
+    line = f"[{spoken_at:%Y-%m-%d %H:%M}] 상담원: {statement}"
+    observation = _stored_observation(
+        workspace_id,
+        session_factory,
+        content=line,
+        content_hash=content_hash(line),
+        occurred_at=opened_at,
+        source_updated_at=opened_at,
+        source_observed_at=opened_at,
+        source_attributes={
+            "utterance_spans": [
+                {
+                    "start": 0,
+                    "end": len(line),
+                    "at": spoken_at.isoformat(),
+                }
+            ]
+        },
+    )
+    batch = KnowledgeCandidateBatch(
+        entities=[
+            EntityCandidateDraft(
+                local_key="e1",
+                proposed_type="feature",
+                proposed_name="결제 기능",
+            )
+        ],
+        claims=[
+            ClaimCandidateDraft(
+                local_key="c1",
+                subject_local_key="e1",
+                predicate="release_month",
+                value_type="text",
+                value="2026-09",
+                statement=statement,
+            )
+        ],
+        relation_assertions=[],
+    )
+    result = store_knowledge_candidates(
+        observation,
+        batch,
+        spec=SPEC,
+        uow=uow_factory(),
+    )
+    return result.batch.claim_ids["c1"]
+
+
+def test_observed_at_follows_the_utterance_not_the_chat_opening(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+) -> None:
+    """상담 시작 순서가 아니라 발화 순서로 claim의 선후가 정해진다.
+
+    8/1에 열린 상담의 8/10 발화는 8/5에 열린 상담의 8/5 발화보다 나중이다.
+    문서 시각만 보면 이 선후가 뒤집혀 모순 판정의 승자가 바뀐다.
+    """
+    opened_early = datetime(2026, 8, 1, 9, 0, tzinfo=timezone.utc)
+    late_utterance = datetime(2026, 8, 10, 11, 30, tzinfo=timezone.utc)
+    opened_later = datetime(2026, 8, 5, 9, 0, tzinfo=timezone.utc)
+
+    first_chat_claim = _chat_with_one_utterance(
+        workspace_id,
+        session_factory,
+        uow_factory,
+        statement="결제 기능은 10월로 미뤄졌습니다.",
+        opened_at=opened_early,
+        spoken_at=late_utterance,
+    )
+    second_chat_claim = _chat_with_one_utterance(
+        workspace_id,
+        session_factory,
+        uow_factory,
+        statement="결제 기능은 9월 예정입니다.",
+        opened_at=opened_later,
+        spoken_at=opened_later,
+    )
+
+    with KnowledgeMaintenanceUnitOfWork(session_factory) as uow:
+        candidates = uow.knowledge_candidates.find_claim_candidates(
+            workspace_id=workspace_id,
+        )
+
+    by_id = {candidate.id: candidate for candidate in candidates}
+    assert by_id[first_chat_claim].observed_at == late_utterance
+    assert by_id[second_chat_claim].observed_at == opened_later
+    assert by_id[first_chat_claim].observed_at > by_id[second_chat_claim].observed_at
+
+
 def _claim_observed_at(
     workspace_id: int,
     session_factory: Callable[[], Session],

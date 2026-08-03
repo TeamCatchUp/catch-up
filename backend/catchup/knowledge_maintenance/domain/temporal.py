@@ -8,6 +8,11 @@ valid_to) 반개구간이고, 시작 미상(valid_from None)은 포함한다 —
 "문서를 읽을 때의 지금은 언제인가"도 여기서 정한다
 (resolve_reference_time). 추출이 쓰는 기준 시각과 reader가 공급하는
 관찰 시각이 같은 사슬을 타야 하기 때문이다.
+
+시각에는 층위가 둘이다. 문서 사슬(occurred_at → source_updated_at →
+observed_at)은 문서 하나에 시각 하나를 주고, claim 발화 시각(evidence
+locator의 event_at)은 주장마다 그 주장이 말해진 시각을 준다. claim을
+비교할 때는 발화 시각이 먼저다 — 문서 사슬은 그것이 없을 때의 폴백이다.
 """
 
 from __future__ import annotations
