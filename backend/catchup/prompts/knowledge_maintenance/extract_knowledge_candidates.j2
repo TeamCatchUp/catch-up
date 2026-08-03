@@ -171,11 +171,14 @@ the document.
   cannot be resolved to an absolute date, omit that value (or the claim
   if the time is its point).
 - If the document states a time bound for a claim, set `valid_from` or
-  `valid_to` as absolute dates resolved the same way. Leave them empty
-  otherwise.
+  `valid_to`, resolved the same way. Unlike a claim's value, a bound must
+  resolve to a full calendar date (`YYYY-MM-DD`) or a full timestamp — if
+  you can only determine the year or the month, leave the bound empty.
 {%- else %}
 - If the document states a time bound for a claim, set `valid_from` or
-  `valid_to`. Leave them empty otherwise. Do not guess dates for
+  `valid_to`. A bound must be a full calendar date (`YYYY-MM-DD`) or a
+  full timestamp — if you can only determine the year or the month, leave
+  the bound empty. Leave them empty otherwise. Do not guess dates for
   relative time expressions.
 {%- endif %}
 - Skip pleasantries, greetings, and routine status noise.

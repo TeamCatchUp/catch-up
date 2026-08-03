@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from datetime import datetime
+from datetime import timezone
+
 import pytest
 from pydantic import ValidationError
 
@@ -138,3 +141,70 @@ def test_metadata_reference_must_exist_in_the_request() -> None:
 
     with pytest.raises(ValueError, match="m3"):
         batch.validate_metadata_references(frozenset({"m1", "m2"}))
+
+
+# validity 경계는 claim의 값과 형식이 다르다. 값에는 `2026`, `2026-09` 같은
+# 부분 날짜가 허용되지만, 경계는 완전한 달력 날짜만 받는다. 부분 날짜가
+# 경계로 새어들면 pydantic이 Unix timestamp로 읽어 1970으로 변질시키거나
+# 배치 전체를 탈락시킨다.
+
+
+@pytest.mark.parametrize("bound", ["valid_from", "valid_to"])
+def test_year_only_bound_is_rejected_instead_of_becoming_1970(bound) -> None:
+    """연도만 있는 경계는 epoch 초로 읽히지 않고 거부된다."""
+    with pytest.raises(ValidationError):
+        _claim(**{bound: "2026"})
+    with pytest.raises(ValidationError):
+        _relation(**{bound: "2026"})
+
+
+@pytest.mark.parametrize("bound", ["valid_from", "valid_to"])
+def test_year_month_bound_is_rejected(bound) -> None:
+    """연-월까지만 아는 경계는 채우지 않고 거부한다."""
+    with pytest.raises(ValidationError):
+        _claim(**{bound: "2026-09"})
+    with pytest.raises(ValidationError):
+        _relation(**{bound: "2026-09"})
+
+
+@pytest.mark.parametrize("bound", ["valid_from", "valid_to"])
+def test_numeric_bound_is_rejected(bound) -> None:
+    """숫자로 들어온 경계는 timestamp로 해석하지 않는다."""
+    with pytest.raises(ValidationError):
+        _claim(**{bound: 2026})
+    with pytest.raises(ValidationError):
+        _relation(**{bound: 1782000000})
+
+
+@pytest.mark.parametrize("bound", ["valid_from", "valid_to"])
+def test_full_calendar_date_becomes_utc_midnight(bound) -> None:
+    """`YYYY-MM-DD`는 그 날 UTC 자정으로 읽는다."""
+    expected = datetime(2026, 9, 15, tzinfo=timezone.utc)
+
+    assert getattr(_claim(**{bound: "2026-09-15"}), bound) == expected
+    assert getattr(_relation(**{bound: "2026-09-15"}), bound) == expected
+
+
+@pytest.mark.parametrize("bound", ["valid_from", "valid_to"])
+def test_aware_iso_bound_passes_through(bound) -> None:
+    """tz가 붙은 완전한 시각은 그대로 통과한다."""
+    claim = _claim(**{bound: "2026-09-15T10:30:00+00:00"})
+
+    assert getattr(claim, bound) == datetime(2026, 9, 15, 10, 30, tzinfo=timezone.utc)
+
+
+@pytest.mark.parametrize("bound", ["valid_from", "valid_to"])
+def test_naive_iso_bound_is_read_as_utc(bound) -> None:
+    """tz 없는 시각은 UTC로 본다. 파이프라인의 시각 기준이 UTC이기 때문이다."""
+    expected = datetime(2026, 9, 15, 10, 30, tzinfo=timezone.utc)
+
+    assert getattr(_claim(**{bound: "2026-09-15T10:30:00"}), bound) == expected
+    assert (
+        getattr(_relation(**{bound: datetime(2026, 9, 15, 10, 30)}), bound) == expected
+    )
+
+
+def test_empty_bound_stays_empty() -> None:
+    """확정할 수 없어 비워 보낸 경계는 None으로 남는다."""
+    assert _claim(valid_from=None).valid_from is None
+    assert _claim(valid_to="").valid_to is None
