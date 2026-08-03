@@ -251,8 +251,8 @@ def test_conflicting_numbers_create_one_proposal() -> None:
     assert row["kwargs"]["trigger_claim_candidate_id"] == earlier.id
 
 
-def test_same_value_counts_duplicate_without_proposal() -> None:
-    """같은 값 두 claim은 중복 지표만 올리고 proposal이 없다."""
+def test_converged_values_leave_no_conflict_and_no_duplicates() -> None:
+    """값이 수렴하는 두 claim은 모순도 중복 지표도 남기지 않는다."""
     node_id = uuid.uuid4()
     uow = FakeUnitOfWork(
         [
