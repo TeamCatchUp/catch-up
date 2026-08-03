@@ -29,9 +29,6 @@ from catchup.knowledge_maintenance.contracts.extraction import PredicateEntry
 from catchup.knowledge_maintenance.domain.claim_conflict import StoredClaimCandidate
 from catchup.knowledge_maintenance.domain.claim_conflict import dates_compatible
 from catchup.knowledge_maintenance.domain.claim_conflict import normalize_value
-from catchup.knowledge_maintenance.domain.knowledge_candidate import (
-    StoredMutationProposal,
-)
 from catchup.knowledge_maintenance.domain.source_version import JsonValue
 from catchup.knowledge_maintenance.ports.knowledge_candidates import (
     KnowledgeCandidateRepository,
@@ -213,17 +210,9 @@ def resolve_claim_conflicts(
                 )
             )
             if decided is not None:
-                decided_hash = decided.resolver_metadata.get(
-                    "member_hash"
-                )
-                is_standing = decided_hash == member_hash or (
-                    decided_hash
-                    == _legacy_member_hash(
-                        claim for claim, _ in parsed
-                    )
-                    and _legacy_values_match(decided, parsed)
-                )
-                if is_standing:
+                if decided.resolver_metadata.get("member_hash") == (
+                    member_hash
+                ):
                     # 사람이 이 구성에 이미 결정을 내렸다. 같은 사실을
                     # 다시 묻지 않는다.
                     logger.info(
@@ -434,57 +423,6 @@ def _member_hash(
         )
     )
     return hashlib.sha256(joined.encode("utf-8")).hexdigest()
-
-
-def _legacy_member_hash(
-    claims: Iterable[StoredClaimCandidate],
-) -> str:
-    """member_hash 구 포맷(`sha256("id,id,…")`)을 계산한다.
-
-    포맷을 `sha256("id:normalized,…")`으로 바꾸면서, 배포 전에 결정된
-    proposal의 resolver_metadata에는 구 포맷 해시가 그대로 남는다. 그
-    행을 신 포맷으로만 비교하면 구성이 그대로인데도 달라졌다고 읽혀
-    가짜 재검토 사건이 열린다. 포맷 전환기 동안 결정 행과의 standing
-    판정에서만 이 구 포맷도 함께 대조해 호환한다.
-    """
-    joined = ",".join(sorted(str(claim.id) for claim in claims))
-    return hashlib.sha256(joined.encode("utf-8")).hexdigest()
-
-
-def _legacy_values_match(
-    decided: StoredMutationProposal,
-    parsed: Iterable[tuple[StoredClaimCandidate, str]],
-) -> bool:
-    """구 포맷 해시 일치를 정규화 값 대조로 보강한다.
-
-    구 포맷 해시는 멤버 id만 이어붙인 지문이라 값 정보를 담지 않는다.
-    id 구성이 그대로인 채 한 claim의 값만 정정돼도 구 해시는 똑같이
-    일치해, 값 대조 없이는 standing으로 잘못 읽혀 정정이 조용히
-    묻힌다. decided 행의 resolver_metadata["values"]에 심어둔
-    claim_id -> normalized 값을 지금 파싱한 값과 전부 대조해야
-    실제로 같은 사실인지 확인할 수 있다. metadata를 읽을 수 없거나
-    항목이 불완전하면 안전한 쪽(standing 아님)으로 판정한다.
-    """
-    raw_values = decided.resolver_metadata.get("values")
-    if not isinstance(raw_values, list):
-        return False
-    decided_normalized: dict[str, object] = {}
-    for entry in raw_values:
-        if not isinstance(entry, dict):
-            return False
-        claim_id = entry.get("claim_id")
-        normalized = entry.get("normalized")
-        if claim_id is None or normalized is None:
-            return False
-        decided_normalized[claim_id] = normalized
-
-    current = list(parsed)
-    if len(decided_normalized) != len(current):
-        return False
-    for claim, normalized in current:
-        if decided_normalized.get(str(claim.id)) != normalized:
-            return False
-    return True
 
 
 def _json_value(value: object) -> JsonValue:

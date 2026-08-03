@@ -97,6 +97,7 @@ from catchup.knowledge_maintenance.domain.pipeline_event import PipelineEventSta
 from catchup.knowledge_maintenance.domain.pipeline_event import PipelineEventType
 from catchup.knowledge_maintenance.domain.pipeline_event import next_attempt_at
 from catchup.knowledge_maintenance.domain.pipeline_event import resolve_failure
+from catchup.knowledge_maintenance.domain.source_version import JsonValue
 from catchup.knowledge_maintenance.domain.source_version import SourceIdentity
 from catchup.knowledge_maintenance.domain.source_version import SourceVersion
 from catchup.knowledge_maintenance.ports.artifacts import ArtifactProposalConflict
