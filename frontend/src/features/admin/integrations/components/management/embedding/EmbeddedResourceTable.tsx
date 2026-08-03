@@ -48,7 +48,7 @@ export default function EmbeddedResourceTable({ service, label, rows }: Embedded
     <div className="overflow-x-auto">
       <table role="table" className="block w-full min-w-fit">
         <thead role="rowgroup" className="block">
-          <tr role="row" className={cn(RESOURCE_ROW_GRID, 'h-9')}>
+          <tr role="row" className={cn(RESOURCE_ROW_GRID, 'min-h-9')}>
             {/* truncate: 좁은 슬롯에서 라벨이 두 줄로 접혀 헤더가 36을 넘는 걸 막는다 */}
             <th
               role="columnheader"
@@ -69,7 +69,7 @@ export default function EmbeddedResourceTable({ service, label, rows }: Embedded
 
         {rows.map((row, groupIndex) => (
           <tbody role="rowgroup" key={row.id} className={cn('block', groupIndex > 0 && 'mt-0.5')}>
-            <tr role="row" className={cn(RESOURCE_ROW_GRID, 'h-11.5')}>
+            <tr role="row" className={cn(RESOURCE_ROW_GRID, 'min-h-11.5')}>
               <td role="cell" className="flex min-w-0 items-center gap-2.5">
                 <Logo className="size-5 shrink-0" />
                 <span className="text-body-small text-text-normal-neutral truncate">{row.name}</span>
@@ -83,7 +83,14 @@ export default function EmbeddedResourceTable({ service, label, rows }: Embedded
               // 도큐먼트 행은 x22 — 행 padding 12에 10을 더한다
               <tr key={child.id} role="row" className={cn(RESOURCE_ROW_GRID, 'h-11.5 pl-5.5')}>
                 <td role="cell" className="flex min-w-0 items-center gap-2.5">
-                  <IconConnector aria-hidden="true" className="h-11.75 w-3.5 shrink-0" />
+                  {/*
+                   * 아이콘 47은 행 46보다 1 커야 연속된 도큐먼트의 세로선이 이어진다.
+                   * 그대로 두면 행 높이(py 8 + 47 + 8)를 밀어올리므로, 형제 행의 로고와
+                   * 같은 20짜리 자리만 차지하게 하고 아이콘은 그 위에 absolute 로 얹는다.
+                   */}
+                  <span aria-hidden="true" className="relative block h-5 w-3.5 shrink-0">
+                    <IconConnector className="absolute top-1/2 left-0 h-11.75 w-3.5 -translate-y-1/2" />
+                  </span>
                   <span className="text-body-small text-text-normal-neutral truncate">{child.name}</span>
                 </td>
                 <td role="cell" className="text-body-small text-text-normal-assistive whitespace-nowrap">

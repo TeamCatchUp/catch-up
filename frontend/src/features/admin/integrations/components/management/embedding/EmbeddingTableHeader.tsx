@@ -13,7 +13,7 @@ import { EMBEDDING_ROW_GRID } from './embeddingTableGrid';
 export default function EmbeddingTableHeader() {
   return (
     <thead role="rowgroup" className="block">
-      <tr role="row" className={cn(EMBEDDING_ROW_GRID, 'h-9')}>
+      <tr role="row" className={cn(EMBEDDING_ROW_GRID, 'min-h-9')}>
         {/* truncate: 좁은 슬롯에서 라벨이 두 줄로 접혀 헤더가 36을 넘는 걸 막는다 */}
         <th
           role="columnheader"

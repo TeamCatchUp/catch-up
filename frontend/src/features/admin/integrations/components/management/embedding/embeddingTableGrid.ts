@@ -17,8 +17,12 @@
  *
  * 150·32는 Tailwind 스케일에 없는 Figma 실측값이라 임의값으로 둔다.
  * 액션 32는 아이콘 버튼 30을 담는 칸이고, 버튼은 오른쪽 padding 선에 붙는다.
+ *
+ * 행 높이 46은 고정값이 아니라 `py 8 + 아이콘 버튼 30 + 8`의 결과다. 그래서
+ * 높이를 박지 않고 `py-2`로 만든다 — 쓰는 쪽은 `min-h-*`만 얹는다. 높이를
+ * 고정하면 배지나 버튼이 커졌을 때 행이 자라지 않고 내용이 잘린다.
  */
-export const EMBEDDING_ROW_GRID = 'grid grid-cols-[minmax(0,1fr)_150px_150px_32px] items-center gap-4 px-3';
+export const EMBEDDING_ROW_GRID = 'grid grid-cols-[minmax(0,1fr)_150px_150px_32px] items-center gap-4 px-3 py-2';
 
 /**
  * 임베딩 대상 목록의 열 정의.
@@ -27,5 +31,7 @@ export const EMBEDDING_ROW_GRID = 'grid grid-cols-[minmax(0,1fr)_150px_150px_32p
  * 범위는 Figma에서 hug지만 `auto`로 두면 안 된다. 행마다 grid가 따로라
  * `auto` 트랙이 그 행의 내용으로 정해지고, 헤더("데이터 범위" 59)와
  * 본문(날짜 172)이 서로 다른 자리에 놓인다. hug의 결과값 180을 고정한다.
+ *
+ * 세로는 {@link EMBEDDING_ROW_GRID}와 같은 이유로 `py-2` + `min-h-*`다.
  */
-export const RESOURCE_ROW_GRID = 'grid grid-cols-[minmax(0,1fr)_180px] items-center gap-4 px-3';
+export const RESOURCE_ROW_GRID = 'grid grid-cols-[minmax(0,1fr)_180px] items-center gap-4 px-3 py-2';
