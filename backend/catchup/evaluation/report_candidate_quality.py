@@ -73,6 +73,9 @@ FROM knowledge_entity_candidates
 WHERE workspace_id = :ws
 """
 
+# valid_from은 두 경로로 채워진다. 추출이 원문 시각을 앵커링해 채우거나,
+# accept 때 원천 occurred_at으로 backfill된다. "추출이 채웠는가"를 보려면
+# backfill이 아직 닿지 않은 pending 행만 봐야 하므로 두 벌로 센다.
 CLAIM_SQL = """
 SELECT
   (SELECT count(*) FROM knowledge_claim_candidates
@@ -97,7 +100,16 @@ SELECT
   (SELECT count(*) FROM knowledge_claim_candidates
     WHERE workspace_id = :ws
       AND valid_from IS NOT NULL
-  ) AS with_valid_from
+  ) AS with_valid_from,
+  (SELECT count(*) FROM knowledge_claim_candidates
+    WHERE workspace_id = :ws
+      AND resolution_status = 'pending'
+  ) AS pending_claims,
+  (SELECT count(*) FROM knowledge_claim_candidates
+    WHERE workspace_id = :ws
+      AND resolution_status = 'pending'
+      AND valid_from IS NOT NULL
+  ) AS pending_with_valid_from
 """
 
 # valid_to를 무엇으로 채웠는지는 스키마 컬럼이 아니라 결정 metadata에
@@ -433,7 +445,13 @@ def main() -> None:
         f"{claim['mixed_value_type_predicates']}/{vocab['predicates']}"
         f"  | 자기참조 {claim['self_referential']}"
         f"  | 시간축 채움 {claim['with_time_axis']}/{claim['claims']}"
-        f"  | valid_from 채움률 {claim['with_valid_from']}/{claim['claims']}"
+    )
+    print(
+        f"  valid_from 채움(추출) "
+        f"{claim['pending_with_valid_from']}/{claim['pending_claims']}"
+        f" ({_pct(claim['pending_with_valid_from'], claim['pending_claims'])})"
+        f"  | valid_from 채움(확정 backfill 포함) "
+        f"{claim['with_valid_from']}/{claim['claims']}"
         f" ({_pct(claim['with_valid_from'], claim['claims'])})"
     )
     print(f"  모순 후보 쌍 (같은 subject+predicate, 다른 값): "

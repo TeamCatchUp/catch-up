@@ -164,6 +164,7 @@ async def _extract_one(
         source_type=source.source_type,
         metadata_entities=source.observation.metadata_entities,
         vocabulary=vocabulary,
+        # 평가 데이터셋에는 원문 시각이 없으므로 주입하지 않는다.
         reference_time=None,
         contract_version=CONTRACT_VERSION,
     )
