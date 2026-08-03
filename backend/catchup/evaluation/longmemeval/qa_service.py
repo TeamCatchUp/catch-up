@@ -15,8 +15,20 @@ abstention 문구를 쓴다. 빈 컨텍스트를 모델에 넘겨 "모른다고 
 
 두 결과는 한 텍스트로 합치되 절을 나눈다. 나누지 않으면 모델이 이미
 끝난 사실을 현재로 읽는다. history 절에서는 as-of 절에 이미 실린
-claim을 빼고, 남은 것(닫힌 구간)만 적는다. 같은 문장을 두 번 실으면
-토큰만 늘고 모델은 그것을 두 개의 사실로 오해한다.
+claim을 빼고, 남은 것만 적는다. 같은 문장을 두 번 실으면 토큰만 늘고
+모델은 그것을 두 개의 사실로 오해한다.
+
+남은 것을 전부 "한때 참이었다"로 싣지는 않는다. history 조회에는 시점
+필터가 없어서 실제로 닫힌 과거 구간과 질문 시점보다 나중에 발효하는
+구간이 섞여 들어온다. 수집 러너가 여러 문항의 세션을 한 workspace에
+넣으므로 다른 문항의 미래 사실이 같은 대상에 붙는 일이 실제로 생긴다.
+그래서 질문 시각을 기준으로 셋으로 나눈다.
+
+- `valid_from > at`: 질문 시점의 시스템이 알 수 없어야 할 지식이므로
+  컨텍스트에서 뺀다. 뺀 개수는 trace에 남겨 진단에 쓴다.
+- `valid_to <= at`: 진짜로 끝난 구간이라 "no longer true" 절에 싣는다.
+- 그 밖(구간을 몰라 as-of에 안 잡힌 것 등): 구간 표기 그대로 별도
+  절에 싣고 끝났다고 단정하지 않는다.
 
 subject 추출과 답변 생성은 호출자가 주입한다. 이 모듈은 DB도 LLM도
 직접 부르지 않는다. 실제 연결은 `run_qa.py`가 맡는다.
@@ -31,6 +43,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from dataclasses import field
 from datetime import datetime
+from datetime import timezone
 from typing import Any
 
 from catchup.evaluation.longmemeval.dataset import OracleQuestion
@@ -46,6 +59,7 @@ __all__ = [
     "ExtractSubjectsFn",
     "KnowledgeLookup",
     "QuestionOutcome",
+    "RenderedContext",
     "SubjectResult",
     "SubjectTrace",
     "UsageTotals",
@@ -97,9 +111,11 @@ Rules:
 - Use nothing but the stored knowledge. Do not use your own world
   knowledge, and do not guess.
 - The question is asked on the given date. Facts under "Known as of"
-  were true on that date. Facts under "History" were true once and are
-  no longer, so use them only for questions about the past or about
-  when something changed.
+  were true on that date. Facts under "History (no longer true)" were
+  true once and are no longer, so use them only for questions about the
+  past or about when something changed. Facts under "History (validity
+  unknown)" have an unclear period — do not assume they are current and
+  do not assume they have ended.
 - Each fact shows the period it was true for as (from~to). "{OPEN_BOUND}"
   means it is still true, "{UNKNOWN_BOUND}" means the start is unknown.
 - If the stored knowledge does not support an answer, reply exactly:
@@ -210,6 +226,8 @@ class QuestionOutcome:
         abstained: 재료가 없어 거절했는지 나타낸다.
         subjects: subject별 조회 흔적을 시도 순서대로 담는다.
         claims_context: 답변 모델에 넘긴 텍스트를 그대로 담는다.
+        future_claims_excluded: 질문 시점 이후 발효라 컨텍스트에서 뺀
+            claim 수를 나타낸다.
         usage: 이 문항이 쓴 토큰 합계를 담는다.
         elapsed_ms: 이 문항 처리에 걸린 시간을 밀리초로 담는다.
     """
@@ -222,6 +240,7 @@ class QuestionOutcome:
     claims_context: str
     usage: UsageTotals
     elapsed_ms: float
+    future_claims_excluded: int = 0
 
     @property
     def as_of_claims(self) -> int:
@@ -250,6 +269,7 @@ class QuestionOutcome:
             ),
             "as_of_claims": self.as_of_claims,
             "history_claims": self.history_claims,
+            "future_claims_excluded": self.future_claims_excluded,
             "context_chars": len(self.claims_context),
             "elapsed_ms": round(self.elapsed_ms, 3),
             "usage": self.usage.as_dict(),
@@ -284,31 +304,79 @@ def render_claim_line(claim: AsOfClaim) -> str:
     return line
 
 
+def _as_utc(moment: datetime) -> datetime:
+    """비교에 쓸 수 있도록 시각을 aware UTC로 맞춘다.
+
+    naive와 aware를 그대로 비교하면 TypeError가 난다. 저장 값은 UTC로
+    적재되므로 tzinfo가 없으면 UTC로 읽는다.
+    """
+    if moment.tzinfo is None:
+        return moment.replace(tzinfo=timezone.utc)
+    return moment
+
+
+def _is_future(claim: AsOfClaim, *, at: datetime) -> bool:
+    """질문 시점 이후에야 발효하는 claim인지 판단한다."""
+    if claim.valid_from is None:
+        return False
+    return _as_utc(claim.valid_from) > _as_utc(at)
+
+
+def _is_closed_past(claim: AsOfClaim, *, at: datetime) -> bool:
+    """질문 시점에 이미 끝나 있던 claim인지 판단한다."""
+    if claim.valid_to is None:
+        return False
+    return _as_utc(claim.valid_to) <= _as_utc(at)
+
+
+@dataclass(frozen=True, slots=True)
+class RenderedContext:
+    """답변 모델에 넘길 텍스트와 그것을 만들며 버린 것을 함께 담는다.
+
+    Attributes:
+        text: 컨텍스트 문자열을 담는다. 재료가 없으면 빈 문자열이다.
+        future_claims_excluded: 질문 시점 이후 발효라 뺀 claim 수를
+            나타낸다.
+    """
+
+    text: str
+    future_claims_excluded: int = 0
+
+
 def render_claims_context(
     lookups: Iterable[tuple[str, AsOfQueryResult, AsOfQueryResult]],
     *,
     as_of: datetime,
-) -> str:
+) -> RenderedContext:
     """subject별 as-of·history 결과를 하나의 텍스트로 편다.
 
     subject마다 절을 나누고, 그 안을 다시 as-of와 history로 나눈다.
-    history 절에는 as-of 절에 이미 실린 claim을 넣지 않는다. 남는 것은
-    이미 닫힌 구간뿐이라, 모델이 "지금 참"과 "한때 참"을 줄 단위로
-    구분할 수 있다.
+    history 절에는 as-of 절에 이미 실린 claim을 넣지 않는다. 남은 것은
+    질문 시각 기준으로 다시 셋으로 갈린다 — 미래 발효는 통째로 빼고,
+    닫힌 과거는 "no longer true" 절에, 구간을 모르는 것은 "validity
+    unknown" 절에 싣는다. 미래 사실을 "한때 참이었다"로 뒤집어 실으면
+    temporal-reasoning 답이 그대로 오염된다.
 
     claim이 하나도 없는 subject는 통째로 뺀다. 이름만 적힌 빈 절은
     모델에게 "그 대상은 아는데 사실이 없다"로 읽혀 없는 답을 지어낼
     빌미가 된다.
     """
     blocks: list[str] = []
+    future_excluded = 0
     for subject, as_of_result, history_result in lookups:
         seen = {claim.claim_id for claim in as_of_result.claims}
-        closed = tuple(
-            claim
-            for claim in history_result.claims
-            if claim.claim_id not in seen
-        )
-        if not as_of_result.claims and not closed:
+        closed: list[AsOfClaim] = []
+        unknown: list[AsOfClaim] = []
+        for claim in history_result.claims:
+            if claim.claim_id in seen:
+                continue
+            if _is_future(claim, at=as_of):
+                future_excluded += 1
+            elif _is_closed_past(claim, at=as_of):
+                closed.append(claim)
+            else:
+                unknown.append(claim)
+        if not as_of_result.claims and not closed and not unknown:
             continue
 
         matched = as_of_result.subject or history_result.subject
@@ -325,8 +393,14 @@ def render_claims_context(
         if closed:
             lines.append("### History (no longer true)")
             lines.extend(render_claim_line(claim) for claim in closed)
+        if unknown:
+            lines.append("### History (validity unknown)")
+            lines.extend(render_claim_line(claim) for claim in unknown)
         blocks.append("\n".join(lines))
-    return "\n\n".join(blocks)
+    return RenderedContext(
+        text="\n\n".join(blocks),
+        future_claims_excluded=future_excluded,
+    )
 
 
 def build_subject_prompt(question: str) -> str:
@@ -416,10 +490,11 @@ def run_question(
         )
         lookups.append((subject, as_of_result, history_result))
 
-    claims_context = render_claims_context(
+    rendered = render_claims_context(
         lookups,
         as_of=question.question_date,
     )
+    claims_context = rendered.text
 
     if claims_context:
         answered = answer(
@@ -443,6 +518,7 @@ def run_question(
         claims_context=claims_context,
         usage=usage,
         elapsed_ms=(time.perf_counter() - started) * 1000,
+        future_claims_excluded=rendered.future_claims_excluded,
     )
 
 

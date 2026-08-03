@@ -196,6 +196,7 @@ def test_context_carries_valid_span_and_history_section() -> None:
     )
 
     context = outcome.claims_context
+    assert "### History (no longer true)" in context
     assert "[employer] Acme" in context
     assert "2023-01-01T00:00:00+00:00~present" in context
     assert "2022-01-01T00:00:00+00:00~2023-01-01T00:00:00+00:00" in context
@@ -223,7 +224,85 @@ def test_context_marks_unknown_valid_from() -> None:
         as_of=QUESTION_DATE,
     )
 
-    assert "unknown~present" in context
+    assert "unknown~present" in context.text
+
+
+def test_future_claim_is_excluded_and_counted_in_trace() -> None:
+    """질문 시점 이후 발효 claim은 컨텍스트에서 빠지고 trace에 센다."""
+    live = _claim()
+    future = _claim(
+        value="Initech",
+        valid_from=datetime(2024, 1, 1, tzinfo=timezone.utc),
+        valid_to=None,
+    )
+    answer = _FakeAnswer()
+
+    outcome = run_question(
+        _question(),
+        lookup=_lookup(
+            as_of={"Alice": _hit(live)},
+            history={"Alice": _hit(live, future)},
+        ),
+        extract_subjects=_FakeExtract(("Alice",)),
+        answer=answer,
+    )
+
+    context = outcome.claims_context
+    # 미래 사실이 "한때 참이었다"로 뒤집혀 실리면 temporal 답이 오염된다.
+    assert "Initech" not in context
+    assert "no longer true" not in context.lower()
+    assert outcome.future_claims_excluded == 1
+    assert outcome.trace_payload()["future_claims_excluded"] == 1
+
+
+def test_future_only_history_leaves_subject_out_of_context() -> None:
+    """미래 claim만 있는 대상은 절 자체가 만들어지지 않는다."""
+    future = _claim(
+        value="Initech",
+        valid_from=datetime(2024, 1, 1, tzinfo=timezone.utc),
+        valid_to=datetime(2025, 1, 1, tzinfo=timezone.utc),
+    )
+
+    rendered = render_claims_context(
+        (("Alice", _hit(), _hit(future)),),
+        as_of=QUESTION_DATE,
+    )
+
+    assert rendered.text == ""
+    assert rendered.future_claims_excluded == 1
+
+
+def test_closed_past_claim_stays_in_no_longer_true_section() -> None:
+    """질문 시점에 이미 끝난 claim은 no longer true 절에 남는다."""
+    closed = _claim(
+        value="Globex",
+        valid_from=datetime(2022, 1, 1, tzinfo=timezone.utc),
+        valid_to=datetime(2023, 1, 1, tzinfo=timezone.utc),
+    )
+
+    rendered = render_claims_context(
+        (("Alice", _hit(_claim()), _hit(closed)),),
+        as_of=QUESTION_DATE,
+    )
+
+    assert "### History (no longer true)" in rendered.text
+    assert "[employer] Globex" in rendered.text
+    assert "validity unknown" not in rendered.text
+    assert rendered.future_claims_excluded == 0
+
+
+def test_unbounded_history_claim_goes_to_validity_unknown() -> None:
+    """구간이 불명한 claim은 끝났다고 단정하지 않고 따로 싣는다."""
+    unclear = _claim(value="Globex", valid_from=None, valid_to=None)
+
+    rendered = render_claims_context(
+        (("Alice", _hit(_claim()), _hit(unclear)),),
+        as_of=QUESTION_DATE,
+    )
+
+    assert "### History (validity unknown)" in rendered.text
+    assert "no longer true" not in rendered.text.lower()
+    assert "[employer] Globex (unknown~present)" in rendered.text
 
 
 def test_trace_records_every_subject_attempt() -> None:
@@ -245,6 +324,7 @@ def test_trace_records_every_subject_attempt() -> None:
     assert payload["subjects_tried"] == ["Alice", "Bob"]
     assert payload["as_of_claims"] == 1
     assert payload["history_claims"] == 2
+    assert payload["future_claims_excluded"] == 0
     assert payload["elapsed_ms"] >= 0
     assert payload["usage"]["calls"] == 2
     assert payload["usage"]["input_tokens"] == 40
