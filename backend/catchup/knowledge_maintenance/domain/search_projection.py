@@ -69,7 +69,8 @@ def project_revision_blocks(
                 metadata={
                     "source": SOURCE,
                     "entity_type": ENTITY_TYPE,
-                    "scope_id": workspace_id,
+                    # scope_id는 시스템 관례를 따라 문자열로 저장한다.
+                    "scope_id": str(workspace_id),
                     "artifact_id": str(artifact_id),
                     "revision_id": str(revision_id),
                     "revision_number": revision_number,

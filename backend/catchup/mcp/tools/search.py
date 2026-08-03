@@ -111,9 +111,10 @@ async def search_documents(
     """
     Search the company knowledge base using hybrid search (vector + keyword).
 
-    Indexes content from Slack, Jira, Confluence, GitHub, and ChannelTalk — all in one
-    query. Useful for questions about decisions, ongoing projects, team discussions,
-    issue history, or any company-specific context that spans multiple platforms.
+    Indexes content from Slack, Jira, Confluence, GitHub, ChannelTalk, and LLM Wiki
+    (human-reviewed canonical knowledge cards) — all in one query. Useful for
+    questions about decisions, ongoing projects, team discussions, issue history, or
+    any company-specific context that spans multiple platforms.
 
     Each result contains a summarized or contextual representation of the document,
     not the full original text. Use 'read_documents' to retrieve the original content
@@ -133,7 +134,7 @@ async def search_documents(
         page: Page number, 1-indexed (default: 1).
         sources: Restrict search to specific sources. Omit or leave empty to search
             across all sources. Valid values:
-            slack, jira, confluence, github, channel_talk.
+            slack, jira, confluence, github, channel_talk, llm_wiki.
         date_from: Start date filter in ISO8601 format (e.g. "2025-01-01"). Optional.
         date_to: End date filter in ISO8601 format (e.g. "2025-12-31"). Optional.
     """

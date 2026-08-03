@@ -52,7 +52,7 @@ def test_projects_block_to_document() -> None:
     assert doc.content == "캐치업 오픈 API — rate_limit_per_minute: 60 (관찰)"
     assert doc.metadata["source"] == "llm_wiki"
     assert doc.metadata["entity_type"] == "artifact_revision"
-    assert doc.metadata["scope_id"] == 1
+    assert doc.metadata["scope_id"] == "1"
     assert doc.metadata["artifact_id"] == str(ARTIFACT_ID)
     assert doc.metadata["revision_id"] == str(REVISION_ID)
     assert doc.metadata["revision_number"] == 3

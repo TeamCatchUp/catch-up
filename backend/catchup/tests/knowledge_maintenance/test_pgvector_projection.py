@@ -136,7 +136,7 @@ def _document(document_id: str, workspace_id: int) -> ProjectionDocument:
         metadata={
             "source": "llm_wiki",
             "entity_type": "artifact_revision",
-            "scope_id": workspace_id,
+            "scope_id": str(workspace_id),
             "title": "제목",
         },
     )
@@ -151,7 +151,7 @@ def _foreign_document(
         metadata={
             "source": source,
             "entity_type": "message",
-            "scope_id": workspace_id,
+            "scope_id": str(workspace_id),
         },
     )
 
