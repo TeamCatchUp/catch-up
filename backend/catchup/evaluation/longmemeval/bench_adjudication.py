@@ -41,8 +41,10 @@ class WinnerCandidate:
         locator_start: 근거 인용이 원문에서 시작하는 위치다. 같은
             문서 안에서 앞선 인용이 이긴다.
         statement: 주장을 사람이 읽는 문장이다. 사전순으로 가른다.
-        normalized: 비교에 쓴 정규화 값이다. 마지막 tie-break이며,
-            모순 안건의 값은 서로 다르므로 여기서 순위가 확정된다.
+        normalized: 비교에 쓴 정규화 값이다. 마지막 tie-break 키다.
+            모순 안건에는 서로 다른 정규화 값이 최소 둘 있지만, 같은
+            정규화 값을 가진 claim이 여럿 섞여 들어올 수 있으므로
+            이것으로도 전순서가 보장되지는 않는다.
     """
 
     claim_id: uuid.UUID
@@ -61,10 +63,14 @@ class WinnerSelection:
         claim_id: 참으로 정해진 주장을 가리킨다.
         tie_break_used: 관찰 시각만으로 가리지 못해 입력 유래 보조
             키까지 내려갔는지 나타낸다. 감사 로그에 남는다.
+        tie_exhausted: 보조 키를 끝까지 써도 최상위 후보와 키가 완전히
+            같은 후보가 더 있었는지 나타낸다. 입력 유래 정보로는 더
+            가를 수 없었다는 뜻이라 감사 로그에 따로 남긴다.
     """
 
     claim_id: uuid.UUID
     tie_break_used: bool
+    tie_exhausted: bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -144,9 +150,21 @@ def _tie_break_key(
 def select_winner(candidates: Sequence[WinnerCandidate]) -> WinnerSelection:
     """가장 최근에 관찰된 주장을 승자로 고른다.
 
-    같은 시각이 여럿이면 입력 유래 보조 키로 가른다. 어느 쪽으로
-    갔는지는 결과에 남겨 감사 로그가 tie-break 사용 여부를 적을 수
-    있게 한다.
+    입력 유래 키 하나(관찰 시각 내림차순 → external_document_id →
+    locator start → statement → normalized)로 후보를 줄 세우고 맨 앞을
+    고른다. 시각으로 이미 갈리면 보조 키는 쓰이지 않는다.
+
+    이 키는 전순서가 아니다. 한 모순 안건 안에 normalized·statement·
+    observed_at이 완전히 같은 claim 쌍이 실제로 들어올 수 있다
+    (`resolve_claim_conflicts`가 그런 중복을 세어 둔다). 그때는 정렬
+    결과의 맨 앞이 입력 리스트 순서에 좌우된다.
+
+    그래도 판정 자체는 유효하다. 키가 완전히 같은 후보들은 입력 유래
+    정보로는 구분할 수 없고, 승자로 확정되는 값도 그로 인해 닫히는
+    구간도 서로 같다. 즉 어느 쪽이 승자가 되든 뒤따르는 지식 결과가
+    같다 — 전순서가 보장되는 것이 아니라, 남은 tie가 의미 동치라서
+    무해한 것이다. 다만 그런 tie가 있었다는 사실은 `tie_exhausted`로
+    드러내 감사 로그가 적을 수 있게 한다.
 
     Raises:
         ValueError: 후보가 하나도 없을 때 던진다.
@@ -160,10 +178,16 @@ def select_winner(candidates: Sequence[WinnerCandidate]) -> WinnerSelection:
         for candidate in candidates
         if _observed_at_key(candidate) == latest
     ]
-    winner = min(pool, key=_tie_break_key)
+    ordered = sorted(pool, key=_tie_break_key)
+    winner = ordered[0]
+    winner_key = _tie_break_key(winner)
+    same_key = sum(
+        1 for candidate in ordered if _tie_break_key(candidate) == winner_key
+    )
     return WinnerSelection(
         claim_id=winner.claim_id,
         tie_break_used=len(pool) > 1,
+        tie_exhausted=same_key > 1,
     )
 
 

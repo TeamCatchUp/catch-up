@@ -85,6 +85,7 @@ DEFAULT_WORKSPACE_ID = 902
 DEFAULT_COMPILE_LIMIT = 100_000
 
 DECISION_EVENT = "bench_adjudication_decided"
+TIE_EXHAUSTED_EVENT = "bench_adjudication_tie_exhausted"
 
 
 def _load_vocabulary(
@@ -200,6 +201,16 @@ def _adjudicate_contradictions(
             )
             continue
         selection = select_winner(candidates)
+        if selection.tie_exhausted:
+            # 입력 유래 키를 끝까지 써도 갈리지 않은 후보가 남았다는
+            # 뜻이다. 승자 값과 닫히는 구간이 같아 판정은 유효하지만,
+            # 재실행 시 어느 claim_id가 뽑히는지는 입력 순서를 탄다.
+            logger.warning(
+                TIE_EXHAUSTED_EVENT,
+                proposal_id=str(proposal.id),
+                kind="contradiction",
+                winner=str(selection.claim_id),
+            )
         try:
             review_contradiction_proposal(
                 uow,

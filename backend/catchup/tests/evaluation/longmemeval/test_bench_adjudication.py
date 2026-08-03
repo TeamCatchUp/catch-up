@@ -16,6 +16,7 @@ import pytest
 
 from catchup.evaluation.longmemeval.bench_adjudication import AdjudicationSteps
 from catchup.evaluation.longmemeval.bench_adjudication import WinnerCandidate
+from catchup.evaluation.longmemeval.bench_adjudication import candidate_from_value
 from catchup.evaluation.longmemeval.bench_adjudication import pick_winner
 from catchup.evaluation.longmemeval.bench_adjudication import run_adjudication
 from catchup.evaluation.longmemeval.bench_adjudication import select_winner
@@ -160,6 +161,40 @@ class TestTieBreakDeterminism:
 
         assert select_winner(tied).tie_break_used is True
         assert select_winner(clear).tie_break_used is False
+
+
+class TestTieExhausted:
+    """입력 유래 키로 더 가를 수 없는 잔여 tie를 드러내는지 본다."""
+
+    def test_키가_완전히_같으면_tie_exhausted를_보고한다(self) -> None:
+        # 한 모순 안건 안에 normalized·statement·observed_at이 모두
+        # 같은 claim 쌍이 실제로 들어올 수 있다. 그때 승자는 입력
+        # 순서를 타므로, 그 사실을 결과에 드러내야 한다.
+        twin_a = _value(value="같은 값", statement="같은 문장")
+        twin_b = _value(value="같은 값", statement="같은 문장")
+        other = _value(
+            value="다른 값",
+            statement="다른 문장",
+            observed_at="2020-01-01T00:00:00+00:00",
+        )
+        by_claim = {v.claim_id: v.value for v in (twin_a, twin_b, other)}
+
+        forward = select_winner(
+            [candidate_from_value(v) for v in (twin_a, twin_b, other)]
+        )
+        backward = select_winner(
+            [candidate_from_value(v) for v in (other, twin_b, twin_a)]
+        )
+
+        assert by_claim[forward.claim_id] == by_claim[backward.claim_id]
+        assert forward.tie_exhausted is True
+        assert backward.tie_exhausted is True
+
+    def test_입력_유래_키로_갈리면_tie_exhausted가_아니다(self) -> None:
+        alpha = _candidate(statement="alpha")
+        beta = _candidate(statement="beta")
+
+        assert select_winner([beta, alpha]).tie_exhausted is False
 
 
 class _StepRecorder:
