@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/nextjs-vite';
 import { expect, fn, within } from 'storybook/test';
 
 import { catchupParameters } from '../../../../../../../.storybook/catchupStoryParameters';
-import type { ChannelTalkChannel } from '../../../types/channelTalkModel';
+import type { ChannelTalkChannel, ChannelTalkDocumentSpace } from '../../../types/channelTalkModel';
 import ChannelTalkChannelCard from './ChannelTalkChannelCard';
 
 const base: ChannelTalkChannel = {
@@ -21,6 +21,16 @@ const filled: ChannelTalkChannel = {
   accessSecret: 'abcdefg',
   webhookToken: 'abcdefg',
 };
+
+const documentSpace = (id: string, overrides: Partial<ChannelTalkDocumentSpace> = {}): ChannelTalkDocumentSpace => ({
+  id,
+  name: `도큐먼트 스페이스 ${id} texttexttexttexttexttexttexttexttext`,
+  accessKey: 'abcdefg',
+  accessSecret: 'abcdefg',
+  syncInterval: '1hour',
+  connectionStatus: 'idle',
+  ...overrides,
+});
 
 const meta = {
   title: 'Compositions/Admin/Integrations/Channel Talk/ChannelTalkChannelCard',
@@ -50,7 +60,7 @@ const meta = {
         nodeId: '17363:100300',
       },
       viewport: { width: 716, height: 500 },
-      states: ['empty', 'filled', 'tested', 'error'],
+      states: ['empty', 'filled', 'tested', 'error', 'with-document-spaces', 'document-space-tested'],
       interactionNotes: [
         '이 스토리는 레이아웃이 아니라 동작을 고정한다 — 카드 골격이 Figma 신규로 바뀌어도 통과해야 한다.',
         'tested면 폼이 접히고, 키가 다 차야 연결 테스트가 활성이며, 삭제는 확인 모달을 거친다.',
@@ -115,6 +125,58 @@ export const Tested: Story = {
     await expect(canvas.getByText('테스트 완료')).toBeInTheDocument();
     await expect(canvas.queryByRole('button', { name: /연결 테스트 하기/ })).not.toBeInTheDocument();
     await expect(canvas.queryByText('Access Key')).not.toBeInTheDocument();
+  },
+};
+
+/**
+ * Figma "입력 전_Default_도큐먼트스페이스 추가 시" 변형.
+ * 계층 표현(레일 세로선 · icon/reply · 들여쓰기)이 실제로 읽히는지 보는 유일한 스토리다.
+ */
+export const WithDocumentSpaces: Story = {
+  args: {
+    channel: { ...filled, documentSpaces: [documentSpace('1'), documentSpace('2', { accessKey: '', accessSecret: '' })] },
+  },
+  render: (args) => (
+    <Frame>
+      <ChannelTalkChannelCard {...args} />
+    </Frame>
+  ),
+  play: async ({ canvasElement, userEvent, args }) => {
+    const canvas = within(canvasElement);
+
+    await expect(canvas.getByText(/도큐먼트 스페이스 1/)).toBeInTheDocument();
+    await expect(canvas.getByText(/도큐먼트 스페이스 2/)).toBeInTheDocument();
+
+    // 채널 1 + 도큐먼트 2 = 연결 테스트 버튼 3개. 2번 도큐먼트만 키가 비어 비활성
+    const testButtons = canvas.getAllByRole('button', { name: /연결 테스트 하기/ });
+    await expect(testButtons).toHaveLength(3);
+    await expect(testButtons[2]).toBeDisabled();
+
+    await userEvent.click(canvas.getByRole('button', { name: /도큐먼트 스페이스$/ }));
+    await expect(args.onAddDocumentSpace).toHaveBeenCalled();
+  },
+};
+
+/** Figma "도큐먼트스페이스_테스트 완료" 변형 — 채널과 도큐먼트의 상태는 독립이다 */
+export const DocumentSpaceTested: Story = {
+  args: {
+    channel: {
+      ...filled,
+      connectionStatus: 'tested',
+      documentSpaces: [documentSpace('1', { connectionStatus: 'tested' }), documentSpace('2')],
+    },
+  },
+  render: (args) => (
+    <Frame>
+      <ChannelTalkChannelCard {...args} />
+    </Frame>
+  ),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    // 채널과 도큐먼트1이 접혀 "테스트 완료" 2개, 도큐먼트2만 폼이 열려 있다
+    await expect(canvas.getAllByText('테스트 완료')).toHaveLength(2);
+    await expect(canvas.getAllByRole('button', { name: /연결 테스트 하기/ })).toHaveLength(1);
   },
 };
 
