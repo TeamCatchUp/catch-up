@@ -73,7 +73,7 @@ function PickerHarness({
 }
 
 const meta = {
-  title: 'Compositions/Admin/Integrations/ChannelTalk/EmbeddingTargetPicker',
+  title: 'Compositions/Admin/Integrations/Channel Talk/ChannelTalkEmbeddingTargetPicker',
   component: ChannelTalkEmbeddingTargetPicker,
   tags: ['autodocs'],
   parameters: {

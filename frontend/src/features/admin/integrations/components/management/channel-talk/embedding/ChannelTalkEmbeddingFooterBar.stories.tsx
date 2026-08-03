@@ -5,7 +5,7 @@ import { catchupParameters } from '../../../../../../../../.storybook/catchupSto
 import ChannelTalkEmbeddingFooterBar from './ChannelTalkEmbeddingFooterBar';
 
 const meta = {
-  title: 'Compositions/Admin/Integrations/ChannelTalk/EmbeddingFooterBar',
+  title: 'Compositions/Admin/Integrations/Channel Talk/ChannelTalkEmbeddingFooterBar',
   component: ChannelTalkEmbeddingFooterBar,
   tags: ['autodocs'],
   args: {
