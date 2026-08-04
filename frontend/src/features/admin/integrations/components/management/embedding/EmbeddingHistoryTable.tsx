@@ -49,7 +49,7 @@ export default function EmbeddingHistoryTable({ service, items, onRetry }: Embed
   const visible = filter === 'all' ? items : items.filter((item) => item.status === filter);
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex flex-col gap-2">
       <div className="flex flex-col gap-3">
         <h3 className="text-heading-small text-text-normal-normal">임베딩 히스토리</h3>
         <div role="tablist" className="flex flex-wrap gap-1">

@@ -31,8 +31,9 @@ export default function ChannelTalkFooterBar({
   onAddChannel,
   onProceed,
 }: ChannelTalkFooterBarProps) {
+  // 실측: 줄바꿈 없이는 1024부터 버튼이 잘렸다(900에서 125px) — 좁으면 버튼 묶음이 아랫줄로
   return (
-    <div className="border-line-normal-neutral flex items-center gap-1.5 border-t px-8 py-3">
+    <div className="border-line-normal-neutral flex flex-wrap items-center gap-x-1.5 gap-y-2 border-t px-8 py-3">
       <p className="text-body-small text-text-normal-normal shrink-0">
         <span className="text-text-primary-assistive">{channelCount}</span>개 채널
       </p>

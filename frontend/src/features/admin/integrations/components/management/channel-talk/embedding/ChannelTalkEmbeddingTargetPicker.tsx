@@ -52,8 +52,14 @@ export default function ChannelTalkEmbeddingTargetPicker({
 }: ChannelTalkEmbeddingTargetPickerProps) {
   const visible = channels.filter((channel) => visibleChannelIds.has(channel.id));
 
+  /*
+   * 높이 634는 Figma 값. `max-h-full`은 부모가 높이를 안 줘 아무 일도 하지 않았고,
+   * 1440×900에서도 하단 바가 44px 화면 밖이었다(실측). 뷰포트에서 위 스택
+   * (전역 헤더~스텝퍼 약 310) + 아래 하단 바(약 74)를 뺀 값으로 눌리게 하고,
+   * 너무 낮은 화면에서는 400을 하한으로 잡아 목록이 뭉개지지 않게 한다.
+   */
   return (
-    <div className="border-line-normal-neutral flex h-158.5 max-h-full overflow-hidden rounded-xl border">
+    <div className="border-line-normal-neutral flex h-158.5 max-h-[max(25rem,calc(100dvh-24rem))] overflow-hidden rounded-xl border">
       <div className="w-70 shrink-0">
         <ChannelTalkChannelListPanel
           channels={channels}

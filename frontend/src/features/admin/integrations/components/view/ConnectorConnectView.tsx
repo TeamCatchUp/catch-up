@@ -84,7 +84,6 @@ export default function ConnectorConnectView() {
         return (
           <ConnectorCatalog
             connectedServices={connectedMenu.map((item) => item.service)}
-            columns={hasConnected ? 2 : 3}
             onConnect={handleConnect}
             onLearnMore={goCheckMapping}
           />

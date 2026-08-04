@@ -8,9 +8,8 @@ const meta = {
   title: 'Compositions/Admin/Integrations/Connect/ConnectorCatalog',
   component: ConnectorCatalog,
   tags: ['autodocs'],
-  args: { connectedServices: [], columns: 3, onConnect: fn(), onLearnMore: fn() },
+  args: { connectedServices: [], onConnect: fn(), onLearnMore: fn() },
   argTypes: {
-    columns: { control: 'inline-radio', options: [2, 3] },
   },
   parameters: {
     ...catchupParameters({
@@ -98,7 +97,7 @@ export const AllConnected: Story = {
  * 열 수는 컨테이너 폭이 아니라 부모가 아는 정보(연동됨 목록 유무)라 prop으로 받는다.
  */
 export const TwoColumn: Story = {
-  args: { connectedServices: ['slack'], columns: 2 },
+  args: { connectedServices: ['slack'] },
   render: (args) => (
     <div className="bg-fill-normal-normal w-195 p-8">
       <ConnectorCatalog {...args} />

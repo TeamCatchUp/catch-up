@@ -1,5 +1,3 @@
-import { cn } from '@/shared/utils/cn';
-
 import { CONNECTOR_CATEGORIES, CONNECTOR_CONTENT } from '../../../constants/connectorContent';
 import type { IntegrationService } from '../../../types/integrationModel';
 import ConnectorCatalogCard from './ConnectorCatalogCard';
@@ -9,12 +7,6 @@ const SERVICES = Object.keys(CONNECTOR_CONTENT) as IntegrationService[];
 
 interface ConnectorCatalogProps {
   connectedServices: readonly IntegrationService[];
-  /**
-   * 카드 그리드 열 수.
-   * 전폭(빈 상태)은 3열, 연동됨 목록이 있는 2단 배치의 우측 컬럼은 2열이다.
-   * 컨테이너 폭으로 추론하지 않는다 — 부모가 이미 아는 정보다.
-   */
-  columns?: 2 | 3;
   onConnect: (service: IntegrationService) => void;
   onLearnMore: () => void;
 }
@@ -23,12 +15,7 @@ interface ConnectorCatalogProps {
  * "연결 찾기" 카탈로그 — 카테고리 그룹 + 카드 그리드 + 하단 안내.
  * Figma `16922:134207`(3열) · `17125:115103`(2열).
  */
-export default function ConnectorCatalog({
-  connectedServices,
-  columns = 3,
-  onConnect,
-  onLearnMore,
-}: ConnectorCatalogProps) {
+export default function ConnectorCatalog({ connectedServices, onConnect, onLearnMore }: ConnectorCatalogProps) {
   return (
     <div className="flex flex-col gap-8">
       <div className="flex flex-col gap-1">
@@ -43,7 +30,13 @@ export default function ConnectorCatalog({
         return (
           <section key={category} className="flex flex-col gap-3">
             <h3 className="text-body-small text-text-normal-alternative">{category}</h3>
-            <div className={cn('grid gap-4', columns === 3 ? 'grid-cols-3' : 'grid-cols-2')}>
+            {/*
+              * 열 수를 박지 않는다. Figma 카드는 3열 315 / 2열 350 — 최소 280을 주면
+              * 설계 폭(전폭 1040 → 3열 336, 2단 우측 714 → 2열 349)이 그대로 나오고,
+              * 그보다 좁으면 열이 줄어 카드가 찌그러지지 않는다(실측: 열 고정 시
+              * 1152에서 221, 900에서 95까지 떨어졌다).
+              */}
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-4">
               {services.map((service) => (
                 <ConnectorCatalogCard
                   key={service}

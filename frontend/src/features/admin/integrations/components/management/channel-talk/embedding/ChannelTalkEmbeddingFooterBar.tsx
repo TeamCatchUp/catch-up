@@ -31,7 +31,7 @@ export default function ChannelTalkEmbeddingFooterBar({
   onEmbed,
 }: ChannelTalkEmbeddingFooterBarProps) {
   return (
-    <div className="border-line-normal-neutral flex items-center gap-1.5 border-t px-8 py-3">
+    <div className="border-line-normal-neutral flex flex-wrap items-center gap-x-1.5 gap-y-2 border-t px-8 py-3">
       <div className="flex min-w-0 flex-1 items-center gap-1.5">
         <button
           type="button"
