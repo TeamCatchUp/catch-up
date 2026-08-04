@@ -16,7 +16,7 @@ interface ChannelTalkEmbeddingFooterBarProps {
  * 스텝 ①의 {@link ChannelTalkFooterBar}(채널 추가 + 진행 버튼)와는 다른 컴포넌트다.
  *
  * 체크 표시는 **전부 선택했을 때만** 들어온다 — 일부 선택의 indeterminate 표시는
- * 쓰지 않는다(사용자 결정 2026-08-05). 라벨 텍스트는 버튼 안에 있어 텍스트를
+ * 쓰지 않는다(사용자 결정 2026-08-04). 라벨 텍스트는 버튼 안에 있어 텍스트를
  * 눌러도 토글되고, 접근성 이름도 이 텍스트가 된다.
  */
 export default function ChannelTalkEmbeddingFooterBar({
