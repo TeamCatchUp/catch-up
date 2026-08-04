@@ -83,12 +83,16 @@ from catchup.evaluation.longmemeval.run_qa import USAGE_FILENAME
 from catchup.evaluation.longmemeval.workspace_manifest import DEFAULT_MANIFEST_PATH
 from catchup.evaluation.longmemeval.workspace_manifest import check_manifest_covers
 from catchup.evaluation.longmemeval.workspace_manifest import load_manifest
+from catchup.evaluation.longmemeval.workspace_manifest import warn_shared_workspace
 from catchup.evaluation.longmemeval.workspace_manifest import workspace_by_question
 
 DEFAULT_WORKSPACE_ID = 902
 GRADES_FILENAME = "grades.jsonl"
 REPORT_FILENAME = "report.md"
 GRADE_USAGE_FILENAME = "grade_usage.json"
+
+SHARED_WORKSPACE_EVENT = "bench_grade_shared_workspace"
+"""manifest 없이 공용 workspace에서 진단할 때 남길 로그 이름을 나타낸다."""
 
 DEFAULT_INPUT_PRICE = 3.0
 DEFAULT_OUTPUT_PRICE = 15.0
@@ -391,6 +395,25 @@ def grade_questions(
         if on_row is not None:
             on_row(row)
     return rows
+
+
+def resolve_workspace_for(
+    manifest: Path | None,
+    question_ids: Iterable[str],
+) -> dict[str, int] | None:
+    """진단을 어느 workspace에서 읽을지 정하고, 없으면 시끄럽게 알린다.
+
+    manifest가 없으면 옛 단일 workspace 방식으로 돌아가되 그 사실을
+    경고로 남긴다. 격리 없는 실행은 문항 하나의 근거를 남의 세션까지
+    합쳐 세므로 실패 귀속이 통째로 낙관 쪽으로 기운다 — 리포트만 보는
+    사람이 그것을 모르면 안 된다.
+    """
+    if manifest is not None and manifest.exists():
+        workspace_for = workspace_by_question(load_manifest(manifest))
+        check_manifest_covers(question_ids, workspace_for)
+        return workspace_for
+    warn_shared_workspace(manifest, event=SHARED_WORKSPACE_EVENT)
+    return None
 
 
 def load_claim_sessions(
@@ -1096,10 +1119,7 @@ def main() -> int:
     )
     questions = {question.question_id: question for question in subset}
 
-    workspace_for: dict[str, int] | None = None
-    if args.manifest is not None and args.manifest.exists():
-        workspace_for = workspace_by_question(load_manifest(args.manifest))
-        check_manifest_covers(questions, workspace_for)
+    workspace_for = resolve_workspace_for(args.manifest, questions)
 
     qa_usage = UsageTotals()
     usage_path = args.results_dir / USAGE_FILENAME

@@ -1,6 +1,6 @@
 """문항별 workspace 격리가 실제로 조회를 갈라놓는지 검증한다.
 
-지키는 선은 둘이다.
+지키는 선은 셋이다.
 
 하나, 문항 A의 haystack에서 나온 지식이 문항 B의 조회에 걸리면 안 된다.
 전 문항을 한 workspace에 부었을 때는 같은 이름의 대상이 두 문항에 나오면
@@ -10,6 +10,10 @@ B가 "모른다"고 답해야 하는 자리에서 A의 사실로 답한다. 어�
 
 둘, workspace 번호는 결정론이어야 한다. 재실행이 다른 번호를 쓰면 같은
 문항의 지식이 두 곳에 나뉘어 앞선 수집이 통째로 버려진다.
+
+셋, manifest가 없어 격리 없이 도는 실행은 조용히 지나가면 안 된다. 그
+실행은 오류 하나 없이 돌면서 점수만 부풀리므로, 경고가 사라지면 그
+결과를 격리 실행의 점수와 나란히 놓게 된다.
 
 DB도 LLM도 부르지 않는다.
 """
@@ -23,8 +27,10 @@ from datetime import timezone
 from pathlib import Path
 
 import pytest
+import structlog.testing
 
 from catchup.evaluation.longmemeval import grade
+from catchup.evaluation.longmemeval import run_qa
 from catchup.evaluation.longmemeval.dataset import OracleQuestion
 from catchup.evaluation.longmemeval.dataset import OracleSession
 from catchup.evaluation.longmemeval.qa_service import ABSTENTION_ANSWER
@@ -369,3 +375,43 @@ def test_assignment_exposes_its_workspace_name() -> None:
     )
 
     assert assignment.workspace_name == "bench-lme-q-q-a"
+
+
+def test_run_qa_shouts_when_the_manifest_is_missing(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """QA 러너가 공용 workspace로 떨어질 때 경고를 찍는다.
+
+    격리 없는 실행은 오류 하나 없이 돌면서 abstention 점수만 부풀린다.
+    경고가 사라지면 그 결과를 격리 실행과 나란히 놓게 되므로 못 박는다.
+    """
+    missing = tmp_path / "workspace_manifest.json"
+
+    with structlog.testing.capture_logs() as logs:
+        workspace_for = run_qa.resolve_workspace_for(missing, ["q-a"])
+
+    captured = capsys.readouterr()
+    assert workspace_for is None
+    assert "문항 간 기억 격리 없음" in captured.out
+    assert "문항 간 기억 격리 없음" in captured.err
+    assert str(missing) in captured.out
+    assert [entry["event"] for entry in logs] == ["bench_qa_shared_workspace"]
+
+
+def test_grade_shouts_when_the_manifest_is_missing(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """채점기가 공용 workspace에서 진단할 때 경고를 찍는다."""
+    missing = tmp_path / "workspace_manifest.json"
+
+    with structlog.testing.capture_logs() as logs:
+        workspace_for = grade.resolve_workspace_for(missing, ["q-a"])
+
+    captured = capsys.readouterr()
+    assert workspace_for is None
+    assert "문항 간 기억 격리 없음" in captured.out
+    assert "문항 간 기억 격리 없음" in captured.err
+    assert str(missing) in captured.err
+    assert [entry["event"] for entry in logs] == ["bench_grade_shared_workspace"]

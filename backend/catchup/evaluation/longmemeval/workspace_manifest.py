@@ -24,6 +24,7 @@ workspace 번호는 난수가 아니라 `base + 서브셋 안의 인덱스`다. 
 from __future__ import annotations
 
 import json
+import sys
 from collections.abc import Iterable
 from collections.abc import Mapping
 from collections.abc import Sequence
@@ -31,20 +32,27 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+import structlog
+
 from catchup.evaluation.longmemeval.dataset import OracleQuestion
 
 __all__ = [
     "DEFAULT_MANIFEST_PATH",
     "DEFAULT_WORKSPACE_BASE",
+    "SHARED_WORKSPACE_WARNING",
     "WORKSPACE_NAME_MAX_LENGTH",
     "WORKSPACE_NAME_PREFIX",
     "WorkspaceAssignment",
     "assign_workspaces",
     "check_manifest_covers",
     "load_manifest",
+    "shared_workspace_warning",
+    "warn_shared_workspace",
     "workspace_by_question",
     "write_manifest",
 ]
+
+logger = structlog.get_logger(__name__)
 
 DEFAULT_WORKSPACE_BASE = 910000
 """문항별 workspace 번호의 시작점을 나타낸다.
@@ -203,6 +211,44 @@ def check_manifest_covers(
         f"manifest에 없는 문항이 {len(missing)}건이다: {preview}. "
         "수집 때와 같은 `--per-type`으로 돌리거나 수집 러너를 다시 "
         "실행해 manifest를 새로 쓴다."
+    )
+
+
+SHARED_WORKSPACE_WARNING = (
+    "workspace manifest 없음 — 전 문항이 공용 workspace를 조회한다"
+    "(문항 간 기억 격리 없음): {path}"
+)
+"""manifest 없이 옛 단일 workspace 방식으로 떨어질 때의 경고 문구다."""
+
+
+def shared_workspace_warning(manifest: Path | None) -> str:
+    """공용 workspace로 떨어졌다는 경고 한 줄을 만든다.
+
+    찾다 실패한 경로를 그대로 싣는다. 러너가 기본 경로를 쓰는데 수집
+    러너는 다른 곳에 manifest를 썼을 때, 경로가 없으면 사람이 "격리가
+    안 켜졌다"까지만 알고 어디를 고쳐야 하는지는 모른다.
+    """
+    path = "(경로 미지정)" if manifest is None else str(manifest)
+    return SHARED_WORKSPACE_WARNING.format(path=path)
+
+
+def warn_shared_workspace(manifest: Path | None, *, event: str) -> None:
+    """격리 없이 도는 실행임을 사람과 로그 양쪽에 알린다.
+
+    하위 호환은 유지하되 조용히 떨어지지는 않는다. 격리 없는 실행은
+    abstention 문항이 남의 기억으로 답해도 오류 없이 점수만 오르므로,
+    결과를 나중에 보는 사람이 그 사실을 모르면 그 점수를 격리 실행과
+    나란히 놓는다.
+
+    stdout과 stderr에 모두 찍는다. 러너 출력을 파일로 돌리는 쪽과
+    터미널만 보는 쪽 중 어느 한쪽이 경고를 놓치면 안 된다.
+    """
+    message = shared_workspace_warning(manifest)
+    print(f"[경고] {message}")
+    print(f"[경고] {message}", file=sys.stderr)
+    logger.warning(
+        event,
+        manifest_path=None if manifest is None else str(manifest),
     )
 
 

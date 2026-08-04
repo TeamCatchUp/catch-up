@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import argparse
 import json
+from collections.abc import Iterable
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -59,7 +60,9 @@ from catchup.evaluation.longmemeval.qa_service import answer_questions
 from catchup.evaluation.longmemeval.qa_service import build_answer_prompt
 from catchup.evaluation.longmemeval.qa_service import build_subject_prompt
 from catchup.evaluation.longmemeval.workspace_manifest import DEFAULT_MANIFEST_PATH
+from catchup.evaluation.longmemeval.workspace_manifest import check_manifest_covers
 from catchup.evaluation.longmemeval.workspace_manifest import load_manifest
+from catchup.evaluation.longmemeval.workspace_manifest import warn_shared_workspace
 from catchup.evaluation.longmemeval.workspace_manifest import workspace_by_question
 from catchup.knowledge_maintenance.adapters.postgres.unit_of_work import (
     KnowledgeMaintenanceUnitOfWork,
@@ -82,6 +85,9 @@ DEFAULT_ORACLE_PATH = (
 RESULTS_FILENAME = "qa_results.jsonl"
 TRACE_FILENAME = "qa_trace.jsonl"
 USAGE_FILENAME = "qa_usage.json"
+
+SHARED_WORKSPACE_EVENT = "bench_qa_shared_workspace"
+"""manifest 없이 공용 workspace로 조회할 때 남길 로그 이름을 나타낸다."""
 
 
 class SubjectCandidates(BaseModel):
@@ -218,6 +224,26 @@ def manifest_lookup_for(
     return choose
 
 
+def resolve_workspace_for(
+    manifest: Path | None,
+    question_ids: Iterable[str],
+) -> dict[str, int] | None:
+    """문항별 workspace 대응표를 정하고, 없으면 시끄럽게 알린다.
+
+    manifest 파일이 없으면 옛 단일 workspace 방식으로 돌아간다 — 격리
+    이전에 쌓아 둔 workspace를 다시 재볼 수 있어야 하기 때문이다. 다만
+    그 순간을 경고 없이 넘기지 않는다. 격리가 꺼진 실행은 오류 하나 없이
+    돌면서 abstention 문항의 점수만 부풀리므로, 조용히 떨어지면 그
+    결과를 격리 실행의 점수와 나란히 놓게 된다.
+    """
+    if manifest is not None and manifest.exists():
+        workspace_for = workspace_by_question(load_manifest(manifest))
+        check_manifest_covers(question_ids, workspace_for)
+        return workspace_for
+    warn_shared_workspace(manifest, event=SHARED_WORKSPACE_EVENT)
+    return None
+
+
 def _write_line(handle: TextIO, payload: dict[str, Any]) -> None:
     """JSONL 한 줄을 쓰고 곧바로 내보낸다."""
     handle.write(json.dumps(payload, ensure_ascii=False) + "\n")
@@ -281,13 +307,10 @@ def main() -> int:
     if not questions:
         raise SystemExit("답할 문항이 없다.")
 
-    workspace_for: dict[str, int] | None = None
-    if args.manifest is not None and args.manifest.exists():
-        workspace_for = workspace_by_question(load_manifest(args.manifest))
-        check_manifest_covers(
-            (question.question_id for question in questions),
-            workspace_for,
-        )
+    workspace_for = resolve_workspace_for(
+        args.manifest,
+        (question.question_id for question in questions),
+    )
 
     args.output.mkdir(parents=True, exist_ok=True)
     results_path = args.output / RESULTS_FILENAME
