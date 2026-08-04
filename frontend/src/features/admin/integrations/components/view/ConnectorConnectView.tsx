@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 import { API } from '@/shared/api/endpoints';
+import { cn } from '@/shared/utils/cn';
 
 import { CONNECTOR_CONTENT } from '../../constants/connectorContent';
 import { useAdminIntegrationViewModel } from '../../hooks/useAdminIntegrationViewModel';
@@ -128,6 +129,16 @@ export default function ConnectorConnectView() {
   })();
 
   /*
+   * pane padding을 누가 갖는가 — 채널톡 (F)만 스스로 갖는다.
+   *
+   * Figma `17414:97603`의 우측 pane은 `Table container`(pad 0)이고 그 아래
+   * `콘텐츠(pad 24/32)`와 `하단바(pad 12/32, border-top)`가 **형제**다. 하단바의
+   * 위 경계선이 pane 좌우 끝까지 가야 하는데, pane에 padding을 걸어 두면 그 안에
+   * 들어간 하단바의 선이 좌우 32씩 잘린다. 그래서 (F)에서는 padding을 넘겨준다.
+   */
+  const paneOwnsPadding = resolved.kind === 'channelTalkFlow';
+
+  /*
    * 부트스트랩 — connection-status 쿼리가 아직이면 hasConnected가 false라
    * 빈 상태가 번쩍 나타난다. 판정 전에는 스켈레톤을 깐다.
    */
@@ -142,7 +153,11 @@ export default function ConnectorConnectView() {
 
   // 연동 0개 — 사이드바 없이 테두리 카드 하나 (Figma `17122:112581` 우측 padding 규칙 동일)
   if (!hasConnected) {
-    return <div className="border-line-normal-neutral rounded-2xl border px-8 py-6">{rightPane}</div>;
+    return (
+      <div className={cn('border-line-normal-neutral overflow-hidden rounded-2xl border', !paneOwnsPadding && 'px-8 py-6')}>
+        {rightPane}
+      </div>
+    );
   }
 
   /*
@@ -172,7 +187,7 @@ export default function ConnectorConnectView() {
           onAdd={() => setState({ kind: 'catalog' })}
         />
       </aside>
-      <div className="min-w-0 flex-1 px-8 py-6">{rightPane}</div>
+      <div className={cn('min-w-0 flex-1', !paneOwnsPadding && 'px-8 py-6')}>{rightPane}</div>
     </div>
   );
 }

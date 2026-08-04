@@ -65,12 +65,20 @@ export default function ChannelTalkChannelCard({
 
   return (
     <div className="flex gap-4">
-      {/* 좌측 레일 — 채널 칩과 세로선으로 하위 도큐먼트와의 계층을 표현한다 */}
+      {/*
+       * 좌측 레일 — 채널 칩과 세로선으로 하위 도큐먼트와의 계층을 표현한다.
+       * 실측 `17332:84380`(같은 값이 `17363:100295` 상태 4종에도 동일):
+       *   칩   32 r8 `#f7f7f8` + 아이콘 20 `#0066ff` — 칩 배경은 파랑이 아니다
+       *   세로선 `#e1e2e4` **2px 파선**(dashPattern [4,4])
+       *
+       * 파선이라 배경색 div로는 안 되고 border를 쓴다. CSS `dashed`의 마디 길이는
+       * 브라우저가 선 굵기에서 정하는데, 2px에서 4/4에 근접해 Figma와 맞는다.
+       */}
       <div aria-hidden="true" className="flex w-8 shrink-0 flex-col items-center">
-        <div className="bg-fill-primary-normal-neutral flex size-8 shrink-0 items-center justify-center rounded-lg">
+        <div className="bg-fill-normal-strong flex size-8 shrink-0 items-center justify-center rounded-lg">
           <IconTagChannel className="text-icon-primary-normal size-5" />
         </div>
-        <div className="bg-line-normal-neutral w-px flex-1" />
+        <div className="border-line-normal-normal flex-1 border-l-2 border-dashed" />
       </div>
 
       <div className="flex min-w-0 flex-1 flex-col gap-6 pb-6">

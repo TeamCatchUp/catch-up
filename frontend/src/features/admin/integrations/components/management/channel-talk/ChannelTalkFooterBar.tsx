@@ -47,7 +47,7 @@ export default function ChannelTalkFooterBar({
           <IconAddSmall className="size-5" />
           채널 추가
         </Button>
-        <Button variant="box-soft-primary" size="md" onClick={onProceed} className="text-heading-small">
+        <Button variant="box-solid-primary" size="md" onClick={onProceed} className="text-heading-small">
           임베딩하기
           <IconArrowRight2 className="size-6" />
         </Button>

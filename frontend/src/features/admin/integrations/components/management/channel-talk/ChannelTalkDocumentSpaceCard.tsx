@@ -37,11 +37,14 @@ export default function ChannelTalkDocumentSpaceCard({
   const fieldState: 'idle' | 'error' = status === 'error' ? 'error' : 'idle';
   const canTestConnection = isDocumentSpaceSecretsFilled(documentSpace);
 
-  /** Figma 17367:102658 — reply 아이콘으로 채널 하위임을 표시하고 칩으로 종류를 표시한다 */
+  /**
+   * Figma 17367:102658 — reply 아이콘으로 채널 하위임을 표시하고 칩으로 종류를 표시한다.
+   * 칩은 채널 레일과 같은 규칙이다(실측 `17332:84380`): 배경 `#f7f7f8`, 아이콘 `#0066ff`.
+   */
   const leftColumn = (
     <>
       <IconReply aria-hidden="true" className="text-icon-normal-assistive size-6 shrink-0" />
-      <div className="bg-fill-primary-normal-neutral flex size-8 shrink-0 items-center justify-center rounded-lg">
+      <div className="bg-fill-normal-strong flex size-8 shrink-0 items-center justify-center rounded-lg">
         <IconBook className="text-icon-primary-normal size-5" />
       </div>
     </>

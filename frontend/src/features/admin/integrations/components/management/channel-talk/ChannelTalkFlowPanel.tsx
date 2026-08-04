@@ -55,27 +55,39 @@ export default function ChannelTalkFlowPanel({
   const initialState = useMemo(() => deriveChannelTalkInitialState(channelTalkStatus), [channelTalkStatus]);
 
   if (statusQuery.isLoading) {
-    return <div className="flex flex-col gap-6" />;
+    return <div className="flex flex-col gap-6 px-8 py-6" />;
   }
 
   // fetch 실패 시 "등록 없음"으로 오인 방지 — 명시적 에러 표시
   if (statusQuery.isError) {
     return (
-      <div className="border-line-normal-assistive bg-fill-normal-strong text-body-small text-status-destructive rounded-xl border px-4 py-3">
+      <div className="mx-8 my-6 border-line-normal-assistive bg-fill-normal-strong text-body-small text-status-destructive rounded-xl border px-4 py-3">
         채널톡 연동 정보를 불러오지 못했습니다. 잠시 후 다시 시도해주세요.
       </div>
     );
   }
 
+  /*
+   * pane padding을 이 패널이 갖는다(ConnectorConnectView가 넘겨준다).
+   * Figma `17414:97603`의 `Table container`(pad 0) = [콘텐츠 pad 24/32, gap 24] +
+   * [하단바 pad 12/32, border-top]. 하단바는 콘텐츠의 **형제**라 위 경계선이
+   * pane 좌우 끝까지 간다 — 콘텐츠 padding 안에 넣으면 32씩 잘린다.
+   *
+   * 그래서 각 스텝이 `[padding 걸린 콘텐츠][전폭 하단바]` 두 형제를 낸다.
+   * 여기 헤더 블록의 `pt-6`과 스텝 콘텐츠의 `pt-6`이 합쳐져 Figma의
+   * pad-top 24 + gap 24가 된다.
+   */
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col">
       {/* Figma `17414:97604`·`17332:84379` — 스텝퍼 위에 커넥터 헤더(로고 60 + 이름 + 설명)가 온다 */}
-      <ConnectorDetailHeader
-        service="channel_talk"
-        title={workspaceName ?? CONNECTOR_CONTENT.channel_talk.name}
-        description={CONNECTOR_CONTENT.channel_talk.headerDescription}
-      />
-      <ChannelTalkStepper current={step} onBack={onExit} />
+      <div className="flex flex-col gap-6 px-8 pt-6">
+        <ConnectorDetailHeader
+          service="channel_talk"
+          title={workspaceName ?? CONNECTOR_CONTENT.channel_talk.name}
+          description={CONNECTOR_CONTENT.channel_talk.headerDescription}
+        />
+        <ChannelTalkStepper current={step} onBack={onExit} />
+      </div>
       {step === 'connect' ? (
         <ConnectStep key={statusQuery.dataUpdatedAt} initialState={initialState} onProceed={() => setStep('embed')} />
       ) : (
@@ -116,9 +128,10 @@ function ConnectStep({ initialState, onProceed }: ConnectStepProps) {
     };
   }, [state.channels]);
 
+  // 콘텐츠와 하단바는 형제다 — 하단바 경계선이 pane 전폭을 쓰게 한다(패널 주석 참조)
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-3">
+    <>
+      <div className="flex flex-col gap-3 px-8 pt-6 pb-6">
         {state.channels.map((channel) => (
           <ChannelTalkChannelCard
             key={channel.id}
@@ -140,7 +153,7 @@ function ConnectStep({ initialState, onProceed }: ConnectStepProps) {
         onAddChannel={addChannel}
         onProceed={onProceed}
       />
-    </div>
+    </>
   );
 }
 
@@ -206,19 +219,22 @@ function EmbedStep({ onDone }: EmbedStepProps) {
     })),
   }));
 
+  // 콘텐츠와 하단바는 형제다 — 하단바 경계선이 pane 전폭을 쓰게 한다(패널 주석 참조)
   return (
-    <div className="flex flex-col gap-4">
-      <ChannelTalkEmbeddingTargetPicker
-        channels={pickerChannels}
-        visibleChannelIds={visibleChannelIds}
-        selectedChannelIds={selectedChannelIds}
-        selectedDocumentIds={selectedSpaceIds}
-        onToggleVisibility={toggleVisibility}
-        onToggleChannel={toggleChannel}
-        onToggleDocument={(_channelId, spaceId) => toggleSpace(spaceId)}
-        onChannelDataRangeChange={(channelId, next) => setChannelPeriod(channelId, next)}
-        onDocumentDataRangeChange={(_channelId, spaceId, next) => setSpacePeriod(spaceId, next)}
-      />
+    <>
+      <div className="px-8 pt-6 pb-6">
+        <ChannelTalkEmbeddingTargetPicker
+          channels={pickerChannels}
+          visibleChannelIds={visibleChannelIds}
+          selectedChannelIds={selectedChannelIds}
+          selectedDocumentIds={selectedSpaceIds}
+          onToggleVisibility={toggleVisibility}
+          onToggleChannel={toggleChannel}
+          onToggleDocument={(_channelId, spaceId) => toggleSpace(spaceId)}
+          onChannelDataRangeChange={(channelId, next) => setChannelPeriod(channelId, next)}
+          onDocumentDataRangeChange={(_channelId, spaceId, next) => setSpacePeriod(spaceId, next)}
+        />
+      </div>
 
       <ChannelTalkEmbeddingFooterBar
         channelCount={channelCount}
@@ -231,6 +247,6 @@ function EmbedStep({ onDone }: EmbedStepProps) {
           void submit(channels, { selectedChannelIds, selectedSpaceIds, channelPeriods, spacePeriods });
         }}
       />
-    </div>
+    </>
   );
 }
