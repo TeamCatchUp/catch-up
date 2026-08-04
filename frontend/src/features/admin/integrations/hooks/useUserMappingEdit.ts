@@ -89,16 +89,36 @@ export function useUserMappingEdit(users: readonly MappingEditUser[]) {
         }
       }
 
-      const requests = Object.entries(byVendor).map(([vendor, items]) =>
-        api.patch<PreMappingBulkUpdateResponse>(API.admin.preMappingsBulk(vendor), { items }),
+      // vendor별 PATCH는 서로 독립이라 하나가 실패해도 나머지는 서버에 반영된다 — allSettled로 집계
+      const entries = Object.entries(byVendor);
+      const results = await Promise.allSettled(
+        entries.map(([vendor, items]) =>
+          api.patch<PreMappingBulkUpdateResponse>(API.admin.preMappingsBulk(vendor), { items }),
+        ),
       );
-      return Promise.all(requests);
+      const failed = results.filter((r) => r.status === 'rejected').length;
+      return { total: entries.length, failed };
     },
-    onSuccess: () => {
-      toast('저장이 완료되었습니다.', { description: '계정 연동 정보가 반영되었습니다.' });
-      queryClient.invalidateQueries({ queryKey: userSourceMappingQueries.all() });
-      setOverrides({});
-      setIsEditMode(false);
+    onSuccess: ({ total, failed }) => {
+      // 하나라도 성공했으면 서버 상태가 변했다 — 항상 최신으로 당긴다
+      if (failed < total) queryClient.invalidateQueries({ queryKey: userSourceMappingQueries.all() });
+
+      if (failed === 0) {
+        toast('저장이 완료되었습니다.', { description: '계정 연동 정보가 반영되었습니다.' });
+        setOverrides({});
+        setIsEditMode(false);
+        return;
+      }
+
+      if (failed < total) {
+        // 일부 실패 — 수정 모드를 유지해 재시도할 수 있게 한다. 같은 값 재전송은 무해하다
+        toast('일부만 저장되었습니다.', {
+          description: `${total - failed}/${total}개 협업툴 저장 성공. 다시 시도해주세요.`,
+        });
+        return;
+      }
+
+      toast('일시적인 오류가 발생했습니다.', { description: '잠시 후 다시 시도해주세요.' });
     },
     onError: () => {
       toast('일시적인 오류가 발생했습니다.', { description: '잠시 후 다시 시도해주세요.' });
