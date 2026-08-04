@@ -206,6 +206,8 @@ def _run_main(
     tmp_path: Path,
     *,
     published: bool,
+    extra_args: tuple[str, ...] = (),
+    captured_kwargs: dict | None = None,
 ) -> int:
     """DB·LLM을 대역으로 갈아 끼운 채 CLI 진입점을 부른다."""
     oracle = tmp_path / "oracle.json"
@@ -237,7 +239,12 @@ def _run_main(
     monkeypatch.setattr(run_qa, "bedrock_answer", lambda llm: None)
     monkeypatch.setattr(run_qa, "create_engine", lambda url: _FakeEngine())
     monkeypatch.setattr(run_qa, "sessionmaker", lambda **kwargs: None)
-    monkeypatch.setattr(run_qa, "run_and_publish", lambda *a, **kw: summary)
+    def _publish(*args, **kwargs) -> QaRunSummary:
+        if captured_kwargs is not None:
+            captured_kwargs.update(kwargs)
+        return summary
+
+    monkeypatch.setattr(run_qa, "run_and_publish", _publish)
     monkeypatch.setattr(
         "sys.argv",
         [
@@ -248,9 +255,47 @@ def _run_main(
             str(tmp_path / "no-manifest.json"),
             "--oracle-path",
             str(oracle),
+            *extra_args,
         ],
     )
     return run_qa.main()
+
+
+def test_similarity_fallback_is_on_unless_the_flag_turns_it_off(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """유사 후보 되짚기는 기본이 on이고 플래그로만 꺼진다."""
+    default: dict = {}
+    _run_main(monkeypatch, tmp_path, published=True, captured_kwargs=default)
+    assert default["use_similarity_fallback"] is True
+
+    baseline: dict = {}
+    _run_main(
+        monkeypatch,
+        tmp_path,
+        published=True,
+        extra_args=("--similarity-fallback", "off"),
+        captured_kwargs=baseline,
+    )
+    assert baseline["use_similarity_fallback"] is False
+
+
+def test_usage_payload_records_the_similarity_switch() -> None:
+    """비용 파일에 되짚기 on/off를 남겨 두 실행을 구분할 수 있게 한다."""
+    payload = json.loads(
+        run_qa.usage_payload(
+            workspace_id=902,
+            manifest=None,
+            capacity="large",
+            questions=2,
+            abstained=1,
+            total=UsageTotals(calls=2),
+            similarity_fallback=False,
+        )
+    )
+
+    assert payload["similarity_fallback"] is False
 
 
 def test_the_cli_fails_loudly_when_the_pointer_was_taken_over(

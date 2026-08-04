@@ -13,6 +13,12 @@ haystack이 따로 격리되어 있으므로 조회도 문항마다 자기 works
 간다. manifest가 없으면 `--workspace-id` 하나로 전부 읽던 옛 방식으로
 돌아간다 — 격리 이전에 쌓아 둔 workspace를 다시 재볼 수 있어야 한다.
 
+subject 정확 일치가 빗나갔을 때 이름이 비슷한 후보를 되짚을지는
+`--similarity-fallback`이 정한다. 기본은 on이고, off는 되짚기가 점수를
+얼마나 움직였는지 재기 위한 기준선이다. 어느 쪽으로 돌았는지는
+`qa_usage.json`에 남는다 — 두 실행의 점수를 나란히 놓고 볼 때 그 값이
+없으면 어느 쪽이 기준선인지 알 수 없다.
+
 결과는 세 파일로 나눠 쓴다. 채점기가 읽을 최소 형태(`qa_results.jsonl`),
 왜 그 답이 나왔는지 되짚을 흔적(`qa_trace.jsonl`), 비용 집계
 (`qa_usage.json`)다. 세 파일 모두 실행 전용 디렉토리
@@ -227,6 +233,7 @@ def usage_payload(
     questions: int,
     abstained: int,
     total: UsageTotals,
+    similarity_fallback: bool = True,
 ) -> str:
     """비용 집계 파일에 쓸 JSON 본문을 만든다."""
     return (
@@ -237,6 +244,7 @@ def usage_payload(
                 "capacity": capacity,
                 "questions": questions,
                 "abstained": abstained,
+                "similarity_fallback": similarity_fallback,
                 **total.as_dict(),
             },
             ensure_ascii=False,
@@ -276,6 +284,7 @@ def run_and_publish(
     workspace_id: int | None,
     manifest: Path | None,
     capacity: str,
+    use_similarity_fallback: bool = True,
 ) -> QaRunSummary:
     """전 문항을 답하고, 다 끝났을 때만 이번 run을 완주본으로 세운다.
 
@@ -319,6 +328,7 @@ def run_and_publish(
                 lookup=lookup,
                 extract_subjects=extract_subjects,
                 answer=answer,
+                use_similarity_fallback=use_similarity_fallback,
                 on_outcome=_record,
             )
 
@@ -330,6 +340,7 @@ def run_and_publish(
                 questions=len(outcomes),
                 abstained=abstained,
                 total=total,
+                similarity_fallback=use_similarity_fallback,
             ),
             encoding="utf-8",
         )
@@ -384,6 +395,17 @@ def main() -> int:
         "--oracle-path",
         type=Path,
         default=DEFAULT_ORACLE_PATH,
+    )
+    parser.add_argument(
+        "--similarity-fallback",
+        choices=["on", "off"],
+        default="on",
+        help=(
+            "subject 정확 일치가 빗나갔을 때 이름이 비슷한 후보를 그 "
+            "canonical 이름으로 다시 조회할지 정한다(기본 on). off는 "
+            "되짚기가 점수를 얼마나 움직였는지 재기 위한 기준선 측정용이고, "
+            "그때는 후보 재조회를 아예 하지 않는다."
+        ),
     )
     parser.add_argument(
         "--capacity",
@@ -444,6 +466,7 @@ def main() -> int:
             workspace_id=None if isolated else args.workspace_id,
             manifest=args.manifest if isolated else None,
             capacity=args.capacity,
+            use_similarity_fallback=args.similarity_fallback == "on",
         )
     finally:
         engine.dispose()
@@ -455,6 +478,7 @@ def main() -> int:
     )
     print(f"\n=== QA 결과 ({scope}) ===")
     print(f"  문항: {summary.questions}  거절: {summary.abstained}")
+    print(f"  유사 후보 되짚기: {args.similarity_fallback}")
     print(
         f"  호출 {summary.usage.calls}회, "
         f"토큰 {summary.usage.total_tokens}"

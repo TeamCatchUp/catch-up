@@ -30,6 +30,18 @@ claim을 빼고, 남은 것만 적는다. 같은 문장을 두 번 실으면 토
 - 그 밖(구간을 몰라 as-of에 안 잡힌 것 등): 구간 표기 그대로 별도
   절에 싣고 끝났다고 단정하지 않는다.
 
+정확 매칭이 빗나간 subject에는 한 단계짜리 되짚기가 붙는다. 조회
+서비스는 이름이 비슷한 노드를 후보로만 돌려주고 확정은 하지 않는다.
+그 확정을 여기서 한다 — 후보의 `display_name`은 canonical 이름이라
+그대로 다시 조회하면 정확 매칭으로 걸린다(2-hop). 되짚어 온 블록은
+"(similar match: ...)" 라벨을 달아 싣는다. 라벨 없이 섞으면 모델이
+근사 결과를 확정된 사실로 읽는다. 되짚기는 한 단계에서 멈춘다 —
+재조회 결과가 물고 온 후보는 따라가지 않는다.
+
+후보 claim이 실렸다고 답변 지시가 느슨해지지는 않는다. 질문과 무관한
+claim이 실렸을 때 거절하는 것은 여전히 프롬프트의 abstention 지시이고,
+그것이 마지막 방어선이다.
+
 subject 추출과 답변 생성은 호출자가 주입한다. 이 모듈은 DB도 LLM도
 직접 부르지 않는다. 실제 연결은 `run_qa.py`가 맡는다.
 """
@@ -37,6 +49,7 @@ subject 추출과 답변 생성은 호출자가 주입한다. 이 모듈은 DB�
 from __future__ import annotations
 
 import time
+import uuid
 from collections.abc import Callable
 from collections.abc import Iterable
 from collections.abc import Sequence
@@ -50,9 +63,13 @@ from catchup.evaluation.longmemeval.dataset import OracleQuestion
 from catchup.evaluation.longmemeval.usage import UsageTotals
 from catchup.knowledge_maintenance.ports.knowledge_candidates import AsOfClaim
 from catchup.knowledge_maintenance.services.query_knowledge_as_of import AsOfQueryResult
+from catchup.knowledge_maintenance.services.query_knowledge_as_of import (
+    SubjectCandidate,
+)
 
 __all__ = [
     "ABSTENTION_ANSWER",
+    "MAX_SIMILAR_CANDIDATES",
     "MAX_SUBJECTS",
     "AnswerFn",
     "AnswerResult",
@@ -61,6 +78,8 @@ __all__ = [
     "LookupFor",
     "QuestionOutcome",
     "RenderedContext",
+    "SimilarityTrace",
+    "SubjectLookup",
     "SubjectResult",
     "SubjectTrace",
     "answer_questions",
@@ -80,6 +99,14 @@ LongMemEval의 abstention 채점은 "모른다고 말했는가"를 본다. 문�
 
 MAX_SUBJECTS = 5
 """한 문항에서 조회할 subject 후보의 최대 개수를 나타낸다."""
+
+MAX_SIMILAR_CANDIDATES = 5
+"""한 문항에서 되짚어 볼 유사 후보의 최대 개수를 나타낸다.
+
+miss마다 후보가 최대 다섯씩 오므로 subject 다섯이 모두 빗나가면
+재조회가 스물다섯 번까지 늘어난다. 조회 비용과 컨텍스트 길이를
+문항 단위로 묶어 두려고 총량에 상한을 건다.
+"""
 
 UNKNOWN_BOUND = "unknown"
 """언제부터 참인지 모르는 구간 시작을 나타낸다."""
@@ -244,6 +271,32 @@ class SubjectTrace:
 
 
 @dataclass(frozen=True, slots=True)
+class SimilarityTrace:
+    """유사 후보 하나를 되짚은 흔적을 담는다.
+
+    Attributes:
+        name: 재조회에 쓴 후보 이름을 담고, 이름이 없으면 None이다.
+        score: 조회 서비스가 매긴 이름 유사도 점수를 나타낸다.
+        claims_found: 재조회가 돌려준 서로 다른 claim 수를 나타낸다.
+        skipped: 이름이 없어 재조회 자체를 못 했는지 나타낸다.
+    """
+
+    name: str | None
+    score: float
+    claims_found: int
+    skipped: bool = False
+
+    def as_dict(self) -> dict[str, Any]:
+        """trace 파일에 담을 형태로 바꾼다."""
+        return {
+            "name": self.name,
+            "score": self.score,
+            "claims_found": self.claims_found,
+            "skipped": self.skipped,
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class QuestionOutcome:
     """문항 한 건을 처리한 결과와 그 근거를 담는다.
 
@@ -258,6 +311,10 @@ class QuestionOutcome:
             claim 수를 나타낸다.
         usage: 이 문항이 쓴 토큰 합계를 담는다.
         elapsed_ms: 이 문항 처리에 걸린 시간을 밀리초로 담는다.
+        similarity_candidates: 되짚어 본 유사 후보의 흔적을 시도 순서대로
+            담는다.
+        similarity_used: 후보를 되짚어 온 블록이 실제로 컨텍스트에
+            실렸는지 나타낸다. 후보를 조회만 하고 빈손이었으면 False다.
     """
 
     question_id: str
@@ -269,6 +326,8 @@ class QuestionOutcome:
     usage: UsageTotals
     elapsed_ms: float
     future_claims_excluded: int = 0
+    similarity_candidates: tuple[SimilarityTrace, ...] = ()
+    similarity_used: bool = False
 
     @property
     def as_of_claims(self) -> int:
@@ -298,6 +357,10 @@ class QuestionOutcome:
             "as_of_claims": self.as_of_claims,
             "history_claims": self.history_claims,
             "future_claims_excluded": self.future_claims_excluded,
+            "similarity_candidates": [
+                trace.as_dict() for trace in self.similarity_candidates
+            ],
+            "similarity_used": self.similarity_used,
             "context_chars": len(self.claims_context),
             "elapsed_ms": round(self.elapsed_ms, 3),
             "usage": self.usage.as_dict(),
@@ -371,8 +434,36 @@ class RenderedContext:
     future_claims_excluded: int = 0
 
 
+@dataclass(frozen=True, slots=True)
+class SubjectLookup:
+    """이름 하나를 조회한 결과와 그것을 실을 제목을 함께 담는다.
+
+    Attributes:
+        subject: 조회에 쓴 입력 문자열을 담는다.
+        as_of_result: as-of 조회 결과를 담는다.
+        history_result: history 조회 결과를 담는다.
+        label: 컨텍스트 절 제목으로 쓸 문자열을 담는다. None이면
+            subject와 저장된 이름으로 제목을 만든다. 유사 후보를 되짚어
+            온 블록만 제목을 직접 정한다 — 그 블록이 근사 결과라는
+            사실이 제목에 남아야 하기 때문이다.
+    """
+
+    subject: str
+    as_of_result: AsOfQueryResult
+    history_result: AsOfQueryResult
+    label: str | None = None
+
+
+def similarity_label(subject: str, candidate: SubjectCandidate) -> str:
+    """유사 후보로 되짚어 온 블록의 제목을 만든다."""
+    return (
+        f"{subject} (similar match: {candidate.display_name}, "
+        f"score {candidate.score:.2f})"
+    )
+
+
 def render_claims_context(
-    lookups: Iterable[tuple[str, AsOfQueryResult, AsOfQueryResult]],
+    lookups: Iterable[SubjectLookup],
     *,
     as_of: datetime,
 ) -> RenderedContext:
@@ -391,7 +482,10 @@ def render_claims_context(
     """
     blocks: list[str] = []
     future_excluded = 0
-    for subject, as_of_result, history_result in lookups:
+    for entry in lookups:
+        subject = entry.subject
+        as_of_result = entry.as_of_result
+        history_result = entry.history_result
         seen = {claim.claim_id for claim in as_of_result.claims}
         closed: list[AsOfClaim] = []
         unknown: list[AsOfClaim] = []
@@ -408,9 +502,9 @@ def render_claims_context(
             continue
 
         matched = as_of_result.subject or history_result.subject
-        label = subject
-        if matched is not None and matched.display_name:
-            if matched.display_name != subject:
+        label = entry.label or subject
+        if entry.label is None and matched is not None:
+            if matched.display_name and matched.display_name != subject:
                 label = f"{subject} (stored as {matched.display_name})"
         lines = [f"## {label}"]
         if as_of_result.claims:
@@ -477,6 +571,25 @@ def normalize_subjects(
     return tuple(ordered)
 
 
+def rank_similar_candidates(
+    *results: AsOfQueryResult,
+) -> tuple[SubjectCandidate, ...]:
+    """여러 조회가 낸 유사 후보를 하나의 순위로 합친다.
+
+    as-of와 history가 같은 노드를 각각 후보로 낼 수 있다. node_id로
+    묶어 점수가 높은 쪽만 남기고 점수 내림차순으로 세운다.
+    """
+    best: dict[uuid.UUID, SubjectCandidate] = {}
+    for result in results:
+        for candidate in result.similar_candidates:
+            current = best.get(candidate.node_id)
+            if current is None or candidate.score > current.score:
+                best[candidate.node_id] = candidate
+    return tuple(
+        sorted(best.values(), key=lambda item: item.score, reverse=True)
+    )
+
+
 def run_question(
     question: OracleQuestion,
     *,
@@ -484,13 +597,22 @@ def run_question(
     extract_subjects: ExtractSubjectsFn,
     answer: AnswerFn,
     max_subjects: int = MAX_SUBJECTS,
+    use_similarity_fallback: bool = True,
+    max_similar_candidates: int = MAX_SIMILAR_CANDIDATES,
 ) -> QuestionOutcome:
     """문항 하나를 저장된 지식만으로 답한다.
 
-    순서는 subject 추출 → 이중 조회 → 컨텍스트 렌더 → 답변이다.
-    컨텍스트가 비면 마지막 단계를 건너뛰고 고정 abstention을 쓴다.
-    재료가 없는데도 모델을 부르면 그 답은 저장된 지식이 아니라 모델의
-    사전 지식에서 나온 것이라 벤치마크가 재려는 값을 오염시킨다.
+    순서는 subject 추출 → 이중 조회 → (필요하면) 유사 후보 되짚기 →
+    컨텍스트 렌더 → 답변이다. 컨텍스트가 비면 마지막 단계를 건너뛰고
+    고정 abstention을 쓴다. 재료가 없는데도 모델을 부르면 그 답은 저장된
+    지식이 아니라 모델의 사전 지식에서 나온 것이라 벤치마크가 재려는
+    값을 오염시킨다.
+
+    되짚기는 정확 매칭이 빗나간 subject에만 붙는다. 이미 노드를 찾은
+    subject에 근사 후보를 덧붙이면 확실한 답 옆에 비슷한 이름의 남의
+    사실이 끼어든다. `use_similarity_fallback`을 끄면 후보를 조회조차
+    하지 않는다 — 되짚기가 점수를 얼마나 움직였는지 재려면 그 없는
+    쪽 기준선이 필요하다.
     """
     started = time.perf_counter()
 
@@ -499,7 +621,8 @@ def run_question(
     subjects = normalize_subjects(extraction.subjects, limit=max_subjects)
 
     traces: list[SubjectTrace] = []
-    lookups: list[tuple[str, AsOfQueryResult, AsOfQueryResult]] = []
+    lookups: list[SubjectLookup] = []
+    missed: list[tuple[str, tuple[SubjectCandidate, ...]]] = []
     for subject in subjects:
         as_of_result = lookup.as_of(subject, question.question_date)
         history_result = lookup.history(subject)
@@ -516,13 +639,83 @@ def run_question(
                 history_claims=len(history_result.claims),
             )
         )
-        lookups.append((subject, as_of_result, history_result))
+        lookups.append(
+            SubjectLookup(
+                subject=subject,
+                as_of_result=as_of_result,
+                history_result=history_result,
+            )
+        )
+        if matched is None:
+            missed.append(
+                (
+                    subject,
+                    rank_similar_candidates(as_of_result, history_result),
+                )
+            )
+
+    similarity_traces: list[SimilarityTrace] = []
+    fallback_lookups: list[SubjectLookup] = []
+    if use_similarity_fallback:
+        # 같은 이름을 두 번 조회하지 않는다. 원래 subject도 이미 조회한
+        # 이름이라 함께 막는다.
+        queried = {subject.casefold() for subject in subjects}
+        requeried = 0
+        for subject, candidates in missed:
+            for candidate in candidates:
+                if requeried >= max_similar_candidates:
+                    break
+                name = (candidate.display_name or "").strip()
+                if not name:
+                    similarity_traces.append(
+                        SimilarityTrace(
+                            name=candidate.display_name,
+                            score=candidate.score,
+                            claims_found=0,
+                            skipped=True,
+                        )
+                    )
+                    continue
+                key = name.casefold()
+                if key in queried:
+                    continue
+                queried.add(key)
+                requeried += 1
+                candidate_as_of = lookup.as_of(name, question.question_date)
+                candidate_history = lookup.history(name)
+                found = {
+                    claim.claim_id for claim in candidate_as_of.claims
+                } | {claim.claim_id for claim in candidate_history.claims}
+                similarity_traces.append(
+                    SimilarityTrace(
+                        name=name,
+                        score=candidate.score,
+                        claims_found=len(found),
+                    )
+                )
+                # 재조회 결과가 또 유사 후보를 달고 와도 따라가지 않는다.
+                # 이름을 타고 계속 번지면 무엇을 근거로 답했는지가
+                # 흐려지고 조회 수도 예측할 수 없게 된다.
+                fallback_lookups.append(
+                    SubjectLookup(
+                        subject=name,
+                        as_of_result=candidate_as_of,
+                        history_result=candidate_history,
+                        label=similarity_label(subject, candidate),
+                    )
+                )
 
     rendered = render_claims_context(
         lookups,
         as_of=question.question_date,
     )
-    claims_context = rendered.text
+    fallback_rendered = render_claims_context(
+        fallback_lookups,
+        as_of=question.question_date,
+    )
+    claims_context = "\n\n".join(
+        part for part in (rendered.text, fallback_rendered.text) if part
+    )
 
     if claims_context:
         answered = answer(
@@ -546,7 +739,12 @@ def run_question(
         claims_context=claims_context,
         usage=usage,
         elapsed_ms=(time.perf_counter() - started) * 1000,
-        future_claims_excluded=rendered.future_claims_excluded,
+        future_claims_excluded=(
+            rendered.future_claims_excluded
+            + fallback_rendered.future_claims_excluded
+        ),
+        similarity_candidates=tuple(similarity_traces),
+        similarity_used=bool(fallback_rendered.text),
     )
 
 
@@ -557,6 +755,7 @@ def answer_questions(
     extract_subjects: ExtractSubjectsFn,
     answer: AnswerFn,
     max_subjects: int = MAX_SUBJECTS,
+    use_similarity_fallback: bool = True,
     on_outcome: Callable[[QuestionOutcome], None] | None = None,
 ) -> list[QuestionOutcome]:
     """문항 목록을 입력 순서대로 처리한다.
@@ -576,6 +775,7 @@ def answer_questions(
             extract_subjects=extract_subjects,
             answer=answer,
             max_subjects=max_subjects,
+            use_similarity_fallback=use_similarity_fallback,
         )
         outcomes.append(outcome)
         if on_outcome is not None:

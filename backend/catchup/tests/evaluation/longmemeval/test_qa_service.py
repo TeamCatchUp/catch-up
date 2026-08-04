@@ -20,6 +20,7 @@ from catchup.evaluation.longmemeval.qa_service import ABSTENTION_ANSWER
 from catchup.evaluation.longmemeval.qa_service import MAX_SUBJECTS
 from catchup.evaluation.longmemeval.qa_service import AnswerResult
 from catchup.evaluation.longmemeval.qa_service import KnowledgeLookup
+from catchup.evaluation.longmemeval.qa_service import SubjectLookup
 from catchup.evaluation.longmemeval.qa_service import SubjectResult
 from catchup.evaluation.longmemeval.qa_service import answer_questions
 from catchup.evaluation.longmemeval.qa_service import build_answer_prompt
@@ -30,6 +31,9 @@ from catchup.evaluation.longmemeval.usage import UsageTotals
 from catchup.knowledge_maintenance.ports.knowledge_candidates import AsOfClaim
 from catchup.knowledge_maintenance.services.query_knowledge_as_of import AsOfQueryResult
 from catchup.knowledge_maintenance.services.query_knowledge_as_of import MatchedSubject
+from catchup.knowledge_maintenance.services.query_knowledge_as_of import (
+    SubjectCandidate,
+)
 
 QUESTION_DATE = datetime(2023, 6, 1, tzinfo=timezone.utc)
 
@@ -216,10 +220,10 @@ def test_context_marks_unknown_valid_from() -> None:
     """언제부터인지 모르는 claim은 unknown으로 드러낸다."""
     context = render_claims_context(
         (
-            (
-                "Alice",
-                _hit(_claim(valid_from=None)),
-                _hit(),
+            SubjectLookup(
+                subject="Alice",
+                as_of_result=_hit(_claim(valid_from=None)),
+                history_result=_hit(),
             ),
         ),
         as_of=QUESTION_DATE,
@@ -265,7 +269,13 @@ def test_future_only_history_leaves_subject_out_of_context() -> None:
     )
 
     rendered = render_claims_context(
-        (("Alice", _hit(), _hit(future)),),
+        (
+            SubjectLookup(
+                subject="Alice",
+                as_of_result=_hit(),
+                history_result=_hit(future),
+            ),
+        ),
         as_of=QUESTION_DATE,
     )
 
@@ -282,7 +292,13 @@ def test_closed_past_claim_stays_in_no_longer_true_section() -> None:
     )
 
     rendered = render_claims_context(
-        (("Alice", _hit(_claim()), _hit(closed)),),
+        (
+            SubjectLookup(
+                subject="Alice",
+                as_of_result=_hit(_claim()),
+                history_result=_hit(closed),
+            ),
+        ),
         as_of=QUESTION_DATE,
     )
 
@@ -297,7 +313,13 @@ def test_unbounded_history_claim_goes_to_validity_unknown() -> None:
     unclear = _claim(value="Globex", valid_from=None, valid_to=None)
 
     rendered = render_claims_context(
-        (("Alice", _hit(_claim()), _hit(unclear)),),
+        (
+            SubjectLookup(
+                subject="Alice",
+                as_of_result=_hit(_claim()),
+                history_result=_hit(unclear),
+            ),
+        ),
         as_of=QUESTION_DATE,
     )
 
@@ -404,6 +426,216 @@ def test_answer_questions_aggregates_usage_and_keeps_order() -> None:
     assert total.calls == 4
     assert total.input_tokens == 80
     assert total.output_tokens == 14
+
+
+def _candidate(
+    display_name: str | None = "Alice Kim",
+    score: float = 0.42,
+) -> SubjectCandidate:
+    """정확 매칭이 빗나갔을 때 함께 오는 유사 후보 하나를 만든다."""
+    return SubjectCandidate(
+        node_id=uuid.uuid4(),
+        display_name=display_name,
+        entity_type="person",
+        score=score,
+    )
+
+
+def _miss_with(*candidates: SubjectCandidate) -> AsOfQueryResult:
+    """유사 후보를 달고 온 miss 결과를 만든다."""
+    return AsOfQueryResult(
+        subject=None,
+        as_of=QUESTION_DATE,
+        claims=(),
+        similar_candidates=tuple(candidates),
+    )
+
+
+class _RecordingLookup:
+    """조회 호출을 순서대로 기록하는 fake 조회다."""
+
+    def __init__(
+        self,
+        as_of: dict[str, AsOfQueryResult] | None = None,
+        history: dict[str, AsOfQueryResult] | None = None,
+    ) -> None:
+        self.as_of_map = as_of or {}
+        self.history_map = history or {}
+        self.calls: list[str] = []
+
+    def as_lookup(self) -> KnowledgeLookup:
+        """qa_service가 받는 조회 묶음으로 감싼다."""
+        return KnowledgeLookup(as_of=self._as_of, history=self._history)
+
+    def _as_of(self, subject: str, at: datetime) -> AsOfQueryResult:
+        self.calls.append(subject)
+        return self.as_of_map.get(subject, _miss())
+
+    def _history(self, subject: str) -> AsOfQueryResult:
+        return self.history_map.get(subject, _miss())
+
+
+def test_similar_candidate_is_requeried_and_loaded_with_label() -> None:
+    """miss에 후보가 있으면 그 이름으로 다시 조회해 라벨로 싣는다."""
+    lookup = _RecordingLookup(
+        as_of={"Alice": _miss_with(_candidate())},
+        history={
+            "Alice": _miss_with(_candidate()),
+            "Alice Kim": _hit(_claim()),
+        },
+    )
+    answer = _FakeAnswer()
+
+    outcome = run_question(
+        _question(),
+        lookup=lookup.as_lookup(),
+        extract_subjects=_FakeExtract(("Alice",)),
+        answer=answer,
+        use_similarity_fallback=True,
+    )
+
+    assert lookup.calls == ["Alice", "Alice Kim"]
+    context = outcome.claims_context
+    assert "(similar match: Alice Kim, score 0.42)" in context
+    assert "[employer] Acme" in context
+    assert answer.calls == [context]
+    assert outcome.abstained is False
+
+    payload = outcome.trace_payload()
+    assert payload["similarity_used"] is True
+    assert payload["similarity_candidates"] == [
+        {
+            "name": "Alice Kim",
+            "score": 0.42,
+            "claims_found": 1,
+            "skipped": False,
+        }
+    ]
+
+
+def test_similarity_fallback_off_keeps_the_old_abstention_path() -> None:
+    """off면 후보가 있어도 재조회하지 않고 기존 abstention으로 닫는다."""
+    lookup = _RecordingLookup(
+        as_of={"Alice": _miss_with(_candidate())},
+        history={"Alice Kim": _hit(_claim())},
+    )
+    answer = _FakeAnswer()
+
+    outcome = run_question(
+        _question(),
+        lookup=lookup.as_lookup(),
+        extract_subjects=_FakeExtract(("Alice",)),
+        answer=answer,
+        use_similarity_fallback=False,
+    )
+
+    assert lookup.calls == ["Alice"]
+    assert outcome.claims_context == ""
+    assert outcome.hypothesis == ABSTENTION_ANSWER
+    assert outcome.abstained is True
+    assert answer.calls == []
+
+    payload = outcome.trace_payload()
+    assert payload["similarity_used"] is False
+    assert payload["similarity_candidates"] == []
+
+
+def test_all_candidates_empty_still_abstains() -> None:
+    """후보를 다 되짚어도 claim이 없으면 그대로 거절한다."""
+    lookup = _RecordingLookup(
+        as_of={"Alice": _miss_with(_candidate(), _candidate("Alicia", 0.2))},
+    )
+    answer = _FakeAnswer()
+
+    outcome = run_question(
+        _question(),
+        lookup=lookup.as_lookup(),
+        extract_subjects=_FakeExtract(("Alice",)),
+        answer=answer,
+    )
+
+    assert lookup.calls == ["Alice", "Alice Kim", "Alicia"]
+    assert outcome.claims_context == ""
+    assert outcome.hypothesis == ABSTENTION_ANSWER
+    assert outcome.abstained is True
+    assert answer.calls == []
+
+    payload = outcome.trace_payload()
+    assert payload["similarity_used"] is False
+    assert [item["name"] for item in payload["similarity_candidates"]] == [
+        "Alice Kim",
+        "Alicia",
+    ]
+    assert all(
+        item["claims_found"] == 0
+        for item in payload["similarity_candidates"]
+    )
+
+
+def test_candidate_without_display_name_is_skipped_and_traced() -> None:
+    """이름 없는 후보는 재조회할 수 없으므로 건너뛰고 trace에 남긴다."""
+    lookup = _RecordingLookup(
+        as_of={"Alice": _miss_with(_candidate(None, 0.5), _candidate())},
+        history={"Alice Kim": _hit(_claim())},
+    )
+
+    outcome = run_question(
+        _question(),
+        lookup=lookup.as_lookup(),
+        extract_subjects=_FakeExtract(("Alice",)),
+        answer=_FakeAnswer(),
+    )
+
+    assert lookup.calls == ["Alice", "Alice Kim"]
+    payload = outcome.trace_payload()
+    assert payload["similarity_candidates"] == [
+        {"name": None, "score": 0.5, "claims_found": 0, "skipped": True},
+        {
+            "name": "Alice Kim",
+            "score": 0.42,
+            "claims_found": 1,
+            "skipped": False,
+        },
+    ]
+    assert payload["similarity_used"] is True
+
+
+def test_candidate_requery_does_not_chain_into_another_hop() -> None:
+    """재조회가 또 후보를 물고 와도 한 단계에서 멈춘다."""
+    lookup = _RecordingLookup(
+        as_of={
+            "Alice": _miss_with(_candidate()),
+            "Alice Kim": _miss_with(_candidate("Alicia Kim", 0.3)),
+        },
+    )
+
+    outcome = run_question(
+        _question(),
+        lookup=lookup.as_lookup(),
+        extract_subjects=_FakeExtract(("Alice",)),
+        answer=_FakeAnswer(),
+    )
+
+    assert lookup.calls == ["Alice", "Alice Kim"]
+    assert outcome.abstained is True
+
+
+def test_matched_subject_does_not_trigger_similarity_fallback() -> None:
+    """정확 매칭이 걸린 subject는 후보 경로를 아예 타지 않는다."""
+    lookup = _RecordingLookup(
+        as_of={"Alice": _hit(_claim())},
+    )
+
+    outcome = run_question(
+        _question(),
+        lookup=lookup.as_lookup(),
+        extract_subjects=_FakeExtract(("Alice",)),
+        answer=_FakeAnswer(),
+    )
+
+    assert lookup.calls == ["Alice"]
+    assert outcome.trace_payload()["similarity_candidates"] == []
+    assert outcome.trace_payload()["similarity_used"] is False
 
 
 def test_subject_prompt_allows_generic_noun_phrases() -> None:
