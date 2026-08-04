@@ -24,6 +24,7 @@ workspace 번호는 난수가 아니라 `base + 서브셋 안의 인덱스`다. 
 from __future__ import annotations
 
 import json
+import os
 import sys
 from collections.abc import Iterable
 from collections.abc import Mapping
@@ -39,6 +40,7 @@ from catchup.evaluation.longmemeval.dataset import OracleQuestion
 __all__ = [
     "DEFAULT_MANIFEST_PATH",
     "DEFAULT_WORKSPACE_BASE",
+    "MANIFEST_TEMP_SUFFIX",
     "SHARED_WORKSPACE_WARNING",
     "WORKSPACE_NAME_MAX_LENGTH",
     "WORKSPACE_NAME_PREFIX",
@@ -46,7 +48,10 @@ __all__ = [
     "assign_workspaces",
     "check_manifest_covers",
     "load_manifest",
+    "manifest_temp_path",
+    "publish_manifest",
     "shared_workspace_warning",
+    "stage_manifest",
     "warn_shared_workspace",
     "workspace_by_question",
     "write_manifest",
@@ -158,17 +163,68 @@ def assign_workspaces(
     )
 
 
+MANIFEST_TEMP_SUFFIX = ".tmp"
+"""공개 전 manifest가 머무는 임시 경로의 접미사를 나타낸다."""
+
+
+def manifest_temp_path(path: Path) -> Path:
+    """최종 경로에 대응하는 임시 경로를 만든다.
+
+    같은 디렉토리에 둔다. `os.replace`가 원자적인 것은 같은 파일시스템
+    안에서일 때뿐이라, 임시 파일을 시스템 temp에 두면 그 보장이 사라진다.
+    """
+    return path.with_name(path.name + MANIFEST_TEMP_SUFFIX)
+
+
+def stage_manifest(
+    path: Path,
+    assignments: Iterable[WorkspaceAssignment],
+) -> Path:
+    """대응표를 임시 경로에 먼저 써 둔다. 아직 공개하지 않는다.
+
+    수집이 중간에 깨지면 이 파일만 남는다. 그 사실이 진단 재료다 —
+    workspace는 만들어졌지만 세션 적재가 끝나지 않았다는 뜻이다.
+
+    Returns:
+        내용을 담아 둔 임시 경로를 돌려준다.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = [assignment.as_dict() for assignment in assignments]
+    temporary = manifest_temp_path(path)
+    temporary.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    return temporary
+
+
+def publish_manifest(path: Path) -> None:
+    """임시 경로의 대응표를 최종 경로로 원자적으로 옮긴다.
+
+    `os.replace`라 읽는 쪽이 보는 것은 완성본 아니면 아무것도 없음, 둘 중
+    하나다. 반쯤 쓰인 파일이 보이면 JSON 파싱이 깨지고, 더 나쁘게는
+    앞부분만 유효한 배열로 읽혀 일부 문항만 격리된 것처럼 보인다.
+
+    호출자는 세션 적재가 전부 성공한 뒤에만 부른다. 중간에 실패하면 최종
+    경로에 manifest가 없으므로 QA·채점 러너는 "manifest 없음 → 경고 +
+    공용 workspace 폴백" 경로로 떨어진다. 부분 적재된 workspace를 정상
+    격리 실행으로 오인해 빈 지식으로 점수를 내는 일이 그 연결로 막힌다.
+    """
+    os.replace(manifest_temp_path(path), path)
+
+
 def write_manifest(
     path: Path,
     assignments: Iterable[WorkspaceAssignment],
 ) -> None:
-    """문항-workspace 대응표를 JSON 배열로 쓴다."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    payload = [assignment.as_dict() for assignment in assignments]
-    path.write_text(
-        json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
-        encoding="utf-8",
-    )
+    """대응표를 임시 경로에 쓰고 곧바로 공개한다.
+
+    적재 성공 여부와 무관하게 바로 공개해도 되는 자리(테스트·수동 복구)
+    에서만 쓴다. 수집 러너는 `stage_manifest`와 `publish_manifest`를
+    나눠 부른다.
+    """
+    stage_manifest(path, assignments)
+    publish_manifest(path)
 
 
 def load_manifest(path: Path) -> tuple[WorkspaceAssignment, ...]:

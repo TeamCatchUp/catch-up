@@ -7,21 +7,35 @@
 
 문항별 workspace를 만드는 자리도 같은 이유로 못 박는다. 행을 만들지
 못했는데 그냥 넘어가면 그다음 적재가 FK 오류로 무너지고, 원인이 여기였다는
-사실이 로그 어디에도 남지 않는다.
+사실이 로그 어디에도 남지 않는다. 남의 문항이 쓰던 번호를 그대로
+재사용하는 것도 같은 종류의 조용한 오염이라 함께 막는다.
+
+manifest 공개 시점도 못 박는다. 적재가 깨졌는데 완성된 manifest가 남으면
+QA는 격리가 켜졌다고 판단해 빈 workspace를 조회하고, 그 결과를 정상
+점수로 기록한다.
 
 DB도 LLM도 부르지 않는다.
 """
 
 from __future__ import annotations
 
+import json
+from datetime import datetime
+from datetime import timezone
+from pathlib import Path
 from typing import Any
 
 import pytest
 
+from catchup.evaluation.longmemeval.dataset import OracleQuestion
+from catchup.evaluation.longmemeval.dataset import OracleSession
 from catchup.evaluation.longmemeval.run_ingestion import EVAL_WORKSPACE_ID
 from catchup.evaluation.longmemeval.run_ingestion import check_bootstrap_workspace
 from catchup.evaluation.longmemeval.run_ingestion import ensure_workspace
+from catchup.evaluation.longmemeval.run_ingestion import ingest_eval_subset
 from catchup.evaluation.longmemeval.workspace_manifest import WORKSPACE_NAME_MAX_LENGTH
+from catchup.evaluation.longmemeval.workspace_manifest import assign_workspaces
+from catchup.evaluation.longmemeval.workspace_manifest import manifest_temp_path
 
 
 def test_bootstrap_into_the_eval_workspace_is_refused() -> None:
@@ -164,3 +178,76 @@ def test_ensure_workspace_stops_when_the_template_is_missing() -> None:
         ensure_workspace(session, workspace_id=910000, name="bench-lme-q-q-a")
 
     assert "910000" in str(excinfo.value)
+
+
+def _question(question_id: str, session_ids: tuple[str, ...]) -> OracleQuestion:
+    """세션 몇 개만 달린 최소 문항을 만든다."""
+    when = datetime(2026, 5, 1, tzinfo=timezone.utc)
+    return OracleQuestion(
+        question_id=question_id,
+        question_type="single-session-user",
+        question="q",
+        answer="a",
+        question_date=when,
+        sessions=tuple(
+            OracleSession(session_id=session_id, timestamp=when, turns=())
+            for session_id in session_ids
+        ),
+        answer_session_ids=frozenset(),
+    )
+
+
+def test_manifest_is_published_only_after_every_session_lands(
+    tmp_path: Path,
+) -> None:
+    """모든 세션 적재가 끝나야 최종 경로에 manifest가 나타난다."""
+    questions = [_question("q-a", ("s1", "s2")), _question("q-b", ("s3",))]
+    assignments = assign_workspaces(questions, base=910000)
+    manifest = tmp_path / "workspace_manifest.json"
+    seen: list[str] = []
+
+    def _ingest(session: OracleSession, assignment: Any) -> None:
+        # 적재 도중에는 최종 manifest가 아직 없어야 한다. 있으면 QA가
+        # 부분 workspace를 격리 실행으로 오인할 창이 열린다.
+        assert not manifest.exists()
+        seen.append(session.session_id)
+
+    total = ingest_eval_subset(
+        assignments,
+        questions,
+        manifest_out=manifest,
+        ingest=_ingest,
+    )
+
+    assert total == 3
+    assert seen == ["s1", "s2", "s3"]
+    assert manifest.exists()
+    assert not manifest_temp_path(manifest).exists()
+    payload = json.loads(manifest.read_text(encoding="utf-8"))
+    assert [item["question_id"] for item in payload] == ["q-a", "q-b"]
+
+
+def test_a_failed_ingestion_leaves_no_published_manifest(
+    tmp_path: Path,
+) -> None:
+    """중간에 깨지면 임시 파일만 남고 최종 manifest는 없다."""
+    questions = [_question("q-a", ("s1", "s2")), _question("q-b", ("s3",))]
+    assignments = assign_workspaces(questions, base=910000)
+    manifest = tmp_path / "workspace_manifest.json"
+
+    def _ingest(session: OracleSession, assignment: Any) -> None:
+        if session.session_id == "s2":
+            raise RuntimeError("적재 실패")
+
+    with pytest.raises(RuntimeError):
+        ingest_eval_subset(
+            assignments,
+            questions,
+            manifest_out=manifest,
+            ingest=_ingest,
+        )
+
+    assert not manifest.exists()
+    # 임시 파일은 남는다. workspace는 만들어졌는데 적재가 끝나지 않았다는
+    # 사실이 그 자체로 진단 재료다.
+    assert manifest_temp_path(manifest).exists()

@@ -19,7 +19,9 @@ T1(원문 + Observation + 큐 지시)을 확정한다. 그다음 단계인 추�
 eval 모드의 workspace 번호는 `--workspace-base`(기본 910000)에 서브셋 안의
 인덱스를 더한 값이다. 인덱스는 `select_subset` 순서라 같은 입력이면 늘 같은
 번호가 나오고, 재실행이 같은 곳을 덮어쓴다. 어느 문항이 어디에 들어갔는지는
-manifest JSON에 적어 QA·채점 러너가 읽는다.
+manifest JSON에 적어 QA·채점 러너가 읽는다. 그 파일은 세션 적재가 전부
+성공한 뒤에야 최종 경로에 나타난다 — 중간에 깨졌는데 완성된 manifest가
+남으면 QA가 부분 workspace를 격리 실행으로 오인한다.
 
 `workspaces` 테이블에는 FK가 걸려 있어 행이 먼저 있어야 한다. 그래서 적재
 전에 `ensure_workspace`가 행을 만들어 둔다. 이미 있는 번호면 만들지 않고
@@ -39,6 +41,8 @@ from __future__ import annotations
 
 import argparse
 import json
+from collections.abc import Callable
+from collections.abc import Sequence
 from pathlib import Path
 
 from sqlalchemy import create_engine
@@ -47,6 +51,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.orm import sessionmaker
 
 from catchup.configs.config import settings
+from catchup.evaluation.longmemeval.dataset import OracleQuestion
 from catchup.evaluation.longmemeval.dataset import OracleSession
 from catchup.evaluation.longmemeval.dataset import bootstrap_sessions
 from catchup.evaluation.longmemeval.dataset import load_oracle
@@ -54,8 +59,10 @@ from catchup.evaluation.longmemeval.dataset import select_subset
 from catchup.evaluation.longmemeval.workspace_manifest import DEFAULT_MANIFEST_PATH
 from catchup.evaluation.longmemeval.workspace_manifest import DEFAULT_WORKSPACE_BASE
 from catchup.evaluation.longmemeval.workspace_manifest import WORKSPACE_NAME_MAX_LENGTH
+from catchup.evaluation.longmemeval.workspace_manifest import WorkspaceAssignment
 from catchup.evaluation.longmemeval.workspace_manifest import assign_workspaces
-from catchup.evaluation.longmemeval.workspace_manifest import write_manifest
+from catchup.evaluation.longmemeval.workspace_manifest import publish_manifest
+from catchup.evaluation.longmemeval.workspace_manifest import stage_manifest
 from catchup.knowledge_maintenance.adapters.connectors.longmemeval.observation_normalizer import (  # noqa: E501
     LONGMEMEVAL_SESSION_MEDIA_TYPE,
 )
@@ -299,6 +306,51 @@ def _ingest_one(
     )
 
 
+IngestSessionFn = Callable[[OracleSession, WorkspaceAssignment], None]
+"""세션 하나를 그 문항의 workspace에 넣는 함수의 모양을 정의한다."""
+
+
+def ingest_eval_subset(
+    assignments: Sequence[WorkspaceAssignment],
+    questions: Sequence[OracleQuestion],
+    *,
+    manifest_out: Path,
+    ingest: IngestSessionFn,
+) -> int:
+    """문항별 세션을 다 넣은 뒤에만 manifest를 공개한다.
+
+    공개 시점이 핵심이다. workspace 행만 만들고 manifest를 먼저 쓰면,
+    첫 세션 적재에서 실패해도 40문항을 모두 덮는 정상 JSON이 남는다.
+    그다음 QA는 격리가 켜진 실행이라고 판단해 비었거나 일부만 찬
+    workspace를 조회하고, 대량 abstention을 정상 결과로 기록한다. 오류가
+    수집 단계에 있었다는 정보는 어디에도 남지 않는다.
+
+    그래서 임시 경로에만 먼저 써 두고(`stage_manifest`), 마지막 세션까지
+    성공한 뒤에 원자적으로 옮긴다(`publish_manifest`). 중간에 실패하면
+    최종 경로에 manifest가 없으므로 QA·채점은 "manifest 없음 → 경고 +
+    공용 workspace 폴백"으로 떨어진다. 부분 workspace를 격리 실행으로
+    오인하는 경로가 그렇게 끊긴다.
+
+    Returns:
+        적재를 시도한 세션 수를 돌려준다.
+    """
+    stage_manifest(manifest_out, assignments)
+
+    total_sessions = 0
+    for assignment, question in zip(assignments, questions, strict=True):
+        print(
+            f"[{assignment.question_id}] "
+            f"ws={assignment.workspace_id} "
+            f"세션 {len(question.sessions)}건"
+        )
+        for session in question.sessions:
+            ingest(session, assignment)
+            total_sessions += 1
+
+    publish_manifest(manifest_out)
+    return total_sessions
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -364,27 +416,26 @@ def main() -> None:
                         workspace_id=assignment.workspace_id,
                         name=assignment.workspace_name,
                     )
-            write_manifest(args.manifest_out, assignments)
 
-            total_sessions = 0
-            for assignment, question in zip(
-                assignments, subset, strict=True
-            ):
-                print(
-                    f"[{assignment.question_id}] "
-                    f"ws={assignment.workspace_id} "
-                    f"세션 {len(question.sessions)}건"
+            def _ingest(
+                session: OracleSession,
+                assignment: WorkspaceAssignment,
+            ) -> None:
+                _ingest_one(
+                    session,
+                    workspace_id=assignment.workspace_id,
+                    normalizer=normalizer,
+                    session_factory=session_factory,
+                    summary=summary,
+                    prefix=f"{assignment.workspace_id} ",
                 )
-                for session in question.sessions:
-                    _ingest_one(
-                        session,
-                        workspace_id=assignment.workspace_id,
-                        normalizer=normalizer,
-                        session_factory=session_factory,
-                        summary=summary,
-                        prefix=f"{assignment.workspace_id} ",
-                    )
-                    total_sessions += 1
+
+            total_sessions = ingest_eval_subset(
+                assignments,
+                subset,
+                manifest_out=args.manifest_out,
+                ingest=_ingest,
+            )
 
             created = summary.get("created/created", 0)
             print("\n=== 수집 결과 (mode=eval, 문항별 격리) ===")
