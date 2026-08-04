@@ -1,9 +1,12 @@
 'use client';
 
 import { useState } from 'react';
+import { AnimatePresence, motion } from 'motion/react';
 
 import IconArrowDown from '@/public/icons/icon/arrow_down.svg';
 import IconArrowRight from '@/public/icons/icon/arrow_right2.svg';
+import { usePrefersReducedMotion } from '@/shared/hooks/usePrefersReducedMotion';
+import { disclosureExpand, disclosureExpandReduced, MotionState } from '@/shared/motion';
 
 import SnbMenuItem from './SnbMenuItem';
 
@@ -38,7 +41,22 @@ export default function SettingsNavGroup({
   defaultExpanded = false,
 }: SettingsNavGroupProps) {
   const [expanded, setExpanded] = useState(defaultExpanded);
+
+  /*
+   * SNB 밖 경로(예: 커넥터 화면의 "매핑 확인하기" 버튼)로 하위 경로에 진입해도
+   * 활성 항목이 보이도록, 하위가 새로 활성화되는 순간 펼친다. 패널이 레이아웃에
+   * 상주해 리마운트되지 않으므로 초기값만으로는 부족하다. 활성 상태에서 수동으로
+   * 접는 것은 그대로 존중한다.
+   */
+  const hasActiveChild = items.some((item) => item.href === activeHref);
+  const [prevHasActiveChild, setPrevHasActiveChild] = useState(hasActiveChild);
+  if (hasActiveChild !== prevHasActiveChild) {
+    setPrevHasActiveChild(hasActiveChild);
+    if (hasActiveChild) setExpanded(true);
+  }
+
   const ArrowIcon = expanded ? IconArrowDown : IconArrowRight;
+  const prefersReducedMotion = usePrefersReducedMotion();
 
   return (
     <div className="flex flex-col">
@@ -50,22 +68,32 @@ export default function SettingsNavGroup({
         trailing={<ArrowIcon className="text-icon-normal-normal size-5.5 shrink-0" />}
       />
 
-      {/* 하위 목록 — 들여쓰기 + 좌측 세로선으로 상위와의 계층을 표시한다 */}
-      {expanded && (
-        <div className="pl-5.5">
-          <div className="border-line-normal-neutral flex flex-col border-l pl-5.5">
-            {items.map((child) => (
-              <SnbMenuItem
-                key={child.href}
-                Icon={child.Icon}
-                label={child.name}
-                selected={activeHref === child.href}
-                onClick={() => onSelect(child.href)}
-              />
-            ))}
-          </div>
-        </div>
-      )}
+      {/* 하위 목록 — 들여쓰기 + 좌측 세로선으로 상위와의 계층을 표시한다.
+          overflow-hidden은 높이가 줄어드는 동안 세로선과 항목이 밖으로 새는 것을 막는다 */}
+      <AnimatePresence initial={false}>
+        {expanded && (
+          <motion.div
+            key="items"
+            variants={prefersReducedMotion ? disclosureExpandReduced : disclosureExpand}
+            initial={MotionState.Hidden}
+            animate={MotionState.Visible}
+            exit={MotionState.Exit}
+            className="overflow-hidden pl-5.5"
+          >
+            <div className="border-line-normal-neutral flex flex-col border-l pl-5.5">
+              {items.map((child) => (
+                <SnbMenuItem
+                  key={child.href}
+                  Icon={child.Icon}
+                  label={child.name}
+                  selected={activeHref === child.href}
+                  onClick={() => onSelect(child.href)}
+                />
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

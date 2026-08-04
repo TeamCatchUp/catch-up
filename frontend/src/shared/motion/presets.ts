@@ -59,6 +59,31 @@ export const collapseExpand: Variants = {
   },
 };
 
+/** 사이드바 메뉴·아코디언 등 클릭 즉시 반응해야 하는 접기/펴기.
+ *  collapseExpand(0.5)는 콘텐츠 등장용이라 토글 조작에는 굼뜨게 느껴진다.
+ *  적용 대상에 반드시 overflow-hidden을 함께 준다 — height 축소 중 자식이 밖으로 나온다. */
+export const disclosureExpand: Variants = {
+  hidden: { opacity: 0, height: 0 },
+  visible: {
+    opacity: 1,
+    height: 'auto',
+    transition: { duration: 0.2, ease: motionEase },
+  },
+  exit: {
+    opacity: 0,
+    height: 0,
+    transition: { duration: 0.15, ease: motionEase },
+  },
+};
+
+/** disclosureExpand의 reduced-motion 변형. 높이 변화를 애니메이션 없이 즉시 반영한다.
+ *  usePrefersReducedMotion()이 true일 때 호출부가 이쪽으로 교체한다. */
+export const disclosureExpandReduced: Variants = {
+  hidden: { opacity: 0, height: 0, transition: { duration: 0 } },
+  visible: { opacity: 1, height: 'auto', transition: { duration: 0 } },
+  exit: { opacity: 0, height: 0, transition: { duration: 0 } },
+};
+
 /** 두 요소 swap 시 opacity crossfade. AnimatePresence mode="wait"와 함께 사용. */
 export const crossfade: Variants = {
   hidden: { opacity: 0 },

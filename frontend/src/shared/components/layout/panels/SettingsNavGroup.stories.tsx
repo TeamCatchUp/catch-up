@@ -1,5 +1,6 @@
+import { useState } from 'react';
 import type { Meta, StoryObj } from '@storybook/nextjs-vite';
-import { expect, within } from 'storybook/test';
+import { expect, waitFor, within } from 'storybook/test';
 
 import IconBlock from '@/public/icons/icon/block.svg';
 import IconBuilding from '@/public/icons/icon/building.svg';
@@ -39,7 +40,7 @@ const meta = {
         nodeId: '5181:83143',
       },
       viewport: { width: 320, height: 320 },
-      states: ['collapsed', 'expanded', 'expanded-child-selected'],
+      states: ['collapsed', 'expanded', 'expanded-child-selected', 'auto-expand-on-route'],
       reuseNotes: ['조직 협업툴 연동과 멤버 관리 두 곳에서 쓴다.'],
       interactionNotes: ['헤더 클릭으로 펼침/접힘이 토글된다.'],
       dataNotes: [
@@ -114,6 +115,35 @@ export const TogglesOnHeaderClick: Story = {
     await userEvent.click(header);
     await expect(canvas.getByRole('button', { name: '커넥터 연결' })).toBeInTheDocument();
     await userEvent.click(header);
-    await expect(canvas.queryByRole('button', { name: '커넥터 연결' })).not.toBeInTheDocument();
+    // 접힘은 퇴장 애니메이션이 끝난 뒤 unmount 된다 — 즉시 단언하면 실패한다
+    await waitFor(() => expect(canvas.queryByRole('button', { name: '커넥터 연결' })).not.toBeInTheDocument());
+  },
+};
+
+/** 그룹 밖 버튼(화면 내 링크 등)으로 하위 경로에 진입하면 접혀 있던 그룹이 스스로 펼쳐진다 */
+export const ExpandsWhenChildBecomesActive: Story = {
+  render: (args) => {
+    const Harness = () => {
+      const [activeHref, setActiveHref] = useState<string | null>(null);
+      return (
+        <Frame>
+          <SettingsNavGroup {...args} activeHref={activeHref} onSelect={setActiveHref} defaultExpanded={false} />
+          <button type="button" onClick={() => setActiveHref('/admin/user-mapping')}>
+            외부 경로 이동
+          </button>
+        </Frame>
+      );
+    };
+    return <Harness />;
+  },
+  play: async ({ canvasElement, userEvent }) => {
+    const canvas = within(canvasElement);
+
+    await expect(canvas.queryByRole('button', { name: '이용자 매핑' })).not.toBeInTheDocument();
+
+    await userEvent.click(canvas.getByRole('button', { name: '외부 경로 이동' }));
+    await waitFor(() =>
+      expect(canvas.getByRole('button', { name: '이용자 매핑' })).toHaveAttribute('aria-current', 'page'),
+    );
   },
 };
