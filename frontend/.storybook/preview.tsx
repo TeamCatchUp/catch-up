@@ -60,6 +60,13 @@ const preview: Preview = {
   loaders: [mswLoader],
   parameters: {
     layout: 'fullscreen',
+    // Flows(여정 문서)를 사이드바 맨 위로. Flows 안은 여정 순서(커넥터 연결 → 이용자 매핑)로 고정한다
+    // — 기본 정렬이 가나다순이라 '이용자 매핑'이 앞서기 때문이다.
+    options: {
+      storySort: {
+        order: ['Flows', ['커넥터 연결', '이용자 매핑'], 'Screens', 'Compositions', 'Primitives'],
+      },
+    },
     nextjs: {
       appDirectory: true,
     },
