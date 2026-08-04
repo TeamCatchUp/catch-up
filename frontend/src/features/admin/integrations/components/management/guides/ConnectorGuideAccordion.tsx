@@ -18,7 +18,14 @@ interface ConnectorGuideAccordionProps {
 
 /**
  * "○○ 연동 가이드 보기" 접기/펼치기.
- * Figma `16966:26874` — gap 16, radius 12.
+ * Figma `16966:26874` — gap 16, radius 12. 헤더 행 실측 `16966:26875`:
+ *   info 아이콘 20  `#ff9200`(orange-50) = status-cautionary
+ *   라벨            17/SemiBold `#464c53` = heading-medium + text-normal-neutral
+ *   화살표 24       `#6d7882`(gray-50)   = icon-normal-neutral
+ *   행 정렬 MIN, gap 10 — 화살표는 라벨 **바로 옆**이다. 우측 끝으로 밀지 않는다.
+ *
+ * 접힘 상태는 Figma에 없다(모든 인스턴스가 펼침 + arrow down) —
+ * 접힘 = arrow_right2 는 현행 승계다.
  *
  * 펼쳐지는 내용은 PNG를 static import 하므로, Storybook에서 뜨려면
  * 계획 ①의 next/image 대체(`.storybook/NextImageStub.tsx`)가 살아 있어야 한다.
@@ -39,9 +46,9 @@ export default function ConnectorGuideAccordion({
         aria-expanded={expanded}
         className="flex cursor-pointer items-center gap-2.5 rounded-xl text-left"
       >
-        <IconInfoFilled className="text-icon-normal-alternative size-5 shrink-0" />
-        <span className="text-heading-medium text-text-normal-neutral flex-1">{CONNECTOR_CONTENT[service].guideLabel}</span>
-        <ArrowIcon className="text-icon-normal-normal size-6 shrink-0" />
+        <IconInfoFilled className="text-status-cautionary size-5 shrink-0" />
+        <span className="text-heading-medium text-text-normal-neutral">{CONNECTOR_CONTENT[service].guideLabel}</span>
+        <ArrowIcon className="text-icon-normal-neutral size-6 shrink-0" />
       </button>
 
       {expanded && children}
