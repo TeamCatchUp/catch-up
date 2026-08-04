@@ -160,8 +160,18 @@ function CardShell({
 }
 
 /** (E) 연동됨 상세 — 탭 전환은 화면 상태라 스토리가 직접 든다 */
-function ConnectedDetailSurface({ onSelectConnector }: { onSelectConnector: (service: IntegrationService) => void }) {
-  const [tab, setTab] = useState<EmbeddingTabValue>('manage');
+function ConnectedDetailSurface({
+  onSelectConnector,
+  initialTab = 'manage',
+  activeItems = [{ id: 't-1', target: 'Catch Up | 캐치업' }],
+  historyItems = HISTORY_FIXTURE,
+}: {
+  onSelectConnector: (service: IntegrationService) => void;
+  initialTab?: EmbeddingTabValue;
+  activeItems?: { id: string; target: string }[];
+  historyItems?: typeof HISTORY_FIXTURE;
+}) {
+  const [tab, setTab] = useState<EmbeddingTabValue>(initialTab);
 
   return (
     <PageShell>
@@ -177,7 +187,7 @@ function ConnectedDetailSurface({ onSelectConnector }: { onSelectConnector: (ser
               </Button>
             }
           />
-          <EmbeddingSegmentTabs value={tab} hasRunning onChange={setTab} />
+          <EmbeddingSegmentTabs value={tab} hasRunning={activeItems.length > 0} onChange={setTab} />
           {tab === 'manage' ? (
             <div className="flex flex-col gap-6">
               <ConnectorSummaryCard connected dataRange="2026.04.15 - 2026.07.23" />
@@ -185,8 +195,8 @@ function ConnectedDetailSurface({ onSelectConnector }: { onSelectConnector: (ser
             </div>
           ) : (
             <div className="flex flex-col gap-8">
-              <EmbeddingActiveTable service="channel_talk" items={[{ id: 't-1', target: 'Catch Up | 캐치업' }]} />
-              <EmbeddingHistoryTable service="channel_talk" items={HISTORY_FIXTURE} onRetry={fn()} />
+              <EmbeddingActiveTable service="channel_talk" items={activeItems} />
+              <EmbeddingHistoryTable service="channel_talk" items={historyItems} onRetry={fn()} />
             </div>
           )}
         </div>
@@ -591,4 +601,87 @@ export const Empty: Story = {
       <ConnectorEmptyState onStart={fn()} />
     </PageShell>
   ),
+};
+
+/** 현황 탭 진행 중 — 채널 1 + 도큐먼트 2가 동시에 도는 상태 */
+const ACTIVE_ITEMS_FIXTURE = [
+  { id: 't-1', target: 'Catch Up | 캐치업' },
+  { id: 't-2', target: 'Catch Up Guide' },
+  { id: 't-3', target: '도큐먼트 스페이스 2' },
+];
+
+/** 현황 탭 실패 이력 — 일반 실패와 5만 캡 초과가 섞인 상태 */
+const HISTORY_FAILED_FIXTURE = [
+  { id: 'h-1', target: 'Catch Up | 캐치업', status: 'success' as const, executedAt: '2026.07.23 09:52 PM' },
+  { id: 'h-2', target: 'Catch Up Guide', status: 'failed' as const, executedAt: '2026.07.01 11:10 AM', failureCount: 42 },
+  {
+    id: 'h-3',
+    target: '도큐먼트 스페이스 2',
+    status: 'failed' as const,
+    executedAt: '2026.06.28 08:15 AM',
+    failureCount: 50_001,
+  },
+];
+
+/** (E) 연결됨 상세 · 현황 탭 — 진행 중 작업이 도는 화면. 탭 점은 진행 표 파생이다 */
+export const StatusTabRunning: Story = {
+  parameters: {
+    ...catchupParameters({
+      level: 'screen',
+      domain: 'admin',
+      fsdLayer: 'features',
+      owner: 'feature',
+      dataProfile: 'realistic-fixture',
+      designSource: 'dev-preview',
+      viewport: { width: 1440, height: 900 },
+      states: ['status-tab-running'],
+      layoutNotes: ['현황 탭 진행중 표 — 채널 1 + 도큐먼트 2, 3건이 동시에 돈다.'],
+    }),
+  },
+  render: (args) => (
+    <ConnectedDetailSurface onSelectConnector={args.onSelectConnector} initialTab="status" activeItems={ACTIVE_ITEMS_FIXTURE} />
+  ),
+  play: async ({ canvasElement, step }) => {
+    const canvas = within(canvasElement);
+    await step('진행 중 표 — 3개 대상이 돈다', async () => {
+      await expect(canvas.getByText('도큐먼트 스페이스 2')).toBeInTheDocument();
+    });
+    await step('현황 탭이 선택돼 있고 진행 점이 붙는다', async () => {
+      await expect(canvas.getByRole('tab', { name: /임베딩 현황/ })).toHaveAttribute('aria-selected', 'true');
+    });
+  },
+};
+
+/** (E) 연결됨 상세 · 현황 탭 — 진행 없음 + 실패 이력. 재시도 버튼은 실패 행에만 붙는다 */
+export const StatusTabFailed: Story = {
+  parameters: {
+    ...catchupParameters({
+      level: 'screen',
+      domain: 'admin',
+      fsdLayer: 'features',
+      owner: 'feature',
+      dataProfile: 'realistic-fixture',
+      designSource: 'dev-preview',
+      viewport: { width: 1440, height: 900 },
+      states: ['status-tab-failed'],
+      layoutNotes: ['현황 탭 진행 없음 — 히스토리에 5만 캡 초과 실패가 섞인다.'],
+    }),
+  },
+  render: (args) => (
+    <ConnectedDetailSurface
+      onSelectConnector={args.onSelectConnector}
+      initialTab="status"
+      activeItems={[]}
+      historyItems={HISTORY_FAILED_FIXTURE}
+    />
+  ),
+  play: async ({ canvasElement, step }) => {
+    const canvas = within(canvasElement);
+    await step('5만 초과 실패 건수는 캡 표기된다', async () => {
+      await expect(canvas.getByText('50,000+건')).toBeInTheDocument();
+    });
+    await step('재시도 버튼은 실패 행 수만큼만', async () => {
+      await expect(canvas.getAllByRole('button', { name: '임베딩 재시도' })).toHaveLength(2);
+    });
+  },
 };
