@@ -15,6 +15,10 @@ error로 드러낸다 — 못 읽은 응답을 조용히 오답으로 세면 정
 완주 산출물에 `--limit`으로 앞 N문항만 채점하는 것은 광고된 비용 제어
 수단이라, 나머지 행을 오류로 보면 그 길이 통째로 막힌다.
 
+여섯, 읽을 산출물을 포인터가 가리키는 run에서만 가져오는지도 본다.
+포인터를 거치지 않으면 답변은 새 run, 근거와 비용은 옛 run인 묶음이
+채점된다.
+
 실제 DB와 Bedrock은 fake로 대신한다.
 """
 
@@ -31,6 +35,7 @@ from types import SimpleNamespace
 import pytest
 
 from catchup.evaluation.longmemeval import grade
+from catchup.evaluation.longmemeval.atomic_publish import staged_outputs
 from catchup.evaluation.longmemeval.dataset import OracleQuestion
 from catchup.evaluation.longmemeval.diagnosis import ANSWER_GENERATION
 from catchup.evaluation.longmemeval.diagnosis import EvidenceStats
@@ -410,30 +415,39 @@ def _oracle_payload(question_id: str) -> dict[str, object]:
     }
 
 
-def _write_qa_outputs(results_dir: Path, question_ids: Sequence[str]) -> None:
-    """완주한 QA 실행의 결과·trace 산출물을 흉내 내 쓴다."""
-    results_dir.mkdir(parents=True, exist_ok=True)
-    (results_dir / RESULTS_FILENAME).write_text(
-        "".join(
-            json.dumps({"question_id": qid, "hypothesis": "Globex."}) + "\n"
-            for qid in question_ids
-        ),
-        encoding="utf-8",
-    )
-    (results_dir / TRACE_FILENAME).write_text(
-        "".join(
-            json.dumps(
-                {
-                    "question_id": qid,
-                    "elapsed_ms": 1.0,
-                    "subjects_tried": ["she"],
-                }
-            )
-            + "\n"
-            for qid in question_ids
-        ),
-        encoding="utf-8",
-    )
+def _write_qa_outputs(
+    results_dir: Path,
+    question_ids: Sequence[str],
+    *,
+    hypothesis: str = "Globex.",
+) -> None:
+    """완주한 QA 실행의 결과·trace 산출물을 run 디렉토리에 흉내 내 쓴다."""
+    with staged_outputs(
+        results_dir,
+        (RESULTS_FILENAME, TRACE_FILENAME),
+    ) as (results_path, trace_path):
+        results_path.write_text(
+            "".join(
+                json.dumps({"question_id": qid, "hypothesis": hypothesis})
+                + "\n"
+                for qid in question_ids
+            ),
+            encoding="utf-8",
+        )
+        trace_path.write_text(
+            "".join(
+                json.dumps(
+                    {
+                        "question_id": qid,
+                        "elapsed_ms": 1.0,
+                        "subjects_tried": ["she"],
+                    }
+                )
+                + "\n"
+                for qid in question_ids
+            ),
+            encoding="utf-8",
+        )
 
 
 class _FakeSession:
@@ -615,4 +629,85 @@ def test_main_rejects_a_duplicate_inside_the_graded_selection(
         grade.main()
 
     assert "중복 1건" in str(excinfo.value)
+    assert judged == []
+
+
+def _grade_argv(
+    results_dir: Path,
+    oracle_path: Path,
+    tmp_path: Path,
+) -> list[str]:
+    """채점기 main에 넘길 최소 인자 목록을 만든다."""
+    return [
+        "grade",
+        "--results-dir",
+        str(results_dir),
+        "--oracle-path",
+        str(oracle_path),
+        "--manifest",
+        str(tmp_path / "missing-manifest.json"),
+    ]
+
+
+def test_main_reads_the_run_the_pointer_names(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """채점기는 포인터가 가리키는 run의 산출물만 읽는다.
+
+    같은 출력 디렉토리로 두 실행이 돌면 옛 run의 파일도 디스크에 남아
+    있다. 포인터를 거치지 않고 읽으면 답변은 새 run, 근거와 비용은 옛
+    run인 묶음이 채점된다.
+    """
+    oracle_path = tmp_path / "oracle.json"
+    oracle_path.write_text(
+        json.dumps([_oracle_payload("q1")]),
+        encoding="utf-8",
+    )
+    results_dir = tmp_path / "results"
+    _write_qa_outputs(results_dir, ["q1"], hypothesis="옛 run의 답")
+    _write_qa_outputs(results_dir, ["q1"], hypothesis="새 run의 답")
+    judged = _stub_grade_dependencies(monkeypatch)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        _grade_argv(results_dir, oracle_path, tmp_path),
+    )
+
+    assert grade.main() == 0
+
+    assert judged == ["새 run의 답"]
+
+
+def test_main_refuses_a_results_dir_without_a_pointer(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """포인터가 없으면 옛 방식의 flat 산출물을 읽지 않고 멈춘다.
+
+    하위 호환으로 읽어 주면 서로 다른 run이 섞인 묶음을 다시 채점하게
+    된다. 섞임 위험을 되살리느니 재실행을 요구한다.
+    """
+    oracle_path = tmp_path / "oracle.json"
+    oracle_path.write_text(
+        json.dumps([_oracle_payload("q1")]),
+        encoding="utf-8",
+    )
+    results_dir = tmp_path / "results"
+    results_dir.mkdir()
+    (results_dir / RESULTS_FILENAME).write_text(
+        json.dumps({"question_id": "q1", "hypothesis": "Globex."}) + "\n",
+        encoding="utf-8",
+    )
+    judged = _stub_grade_dependencies(monkeypatch)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        _grade_argv(results_dir, oracle_path, tmp_path),
+    )
+
+    with pytest.raises(SystemExit) as excinfo:
+        grade.main()
+
+    assert "포인터가 없다" in str(excinfo.value)
     assert judged == []

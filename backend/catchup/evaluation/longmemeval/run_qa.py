@@ -15,10 +15,13 @@ haystack이 따로 격리되어 있으므로 조회도 문항마다 자기 works
 
 결과는 세 파일로 나눠 쓴다. 채점기가 읽을 최소 형태(`qa_results.jsonl`),
 왜 그 답이 나왔는지 되짚을 흔적(`qa_trace.jsonl`), 비용 집계
-(`qa_usage.json`)다. 세 파일 모두 실행 전용 임시 경로에 쓰다가 전 문항이
-성공한 뒤에만 최종 경로로 원자 공개한다. 부분 결과를 최종 이름으로
-남기면 채점기가 그것을 완주 결과로 읽고 줄어든 분모 위에서 점수를 낸다
-— 어려운 문항에서 깨진 실행일수록 점수가 오히려 높아진다.
+(`qa_usage.json`)다. 세 파일 모두 실행 전용 디렉토리
+`<output>/runs/<run_id>/`에 쓰고, 전 문항이 성공한 뒤에야 포인터 파일
+`<output>/current_run.json`이 그 run을 완주본으로 가리킨다. 부분 결과를
+완주본으로 가리키면 채점기가 줄어든 분모 위에서 점수를 낸다 — 어려운
+문항에서 깨진 실행일수록 점수가 오히려 높아진다. 세 파일을 하나씩 최종
+경로로 옮기지 않는 이유도 같다. 파일별 교체는 같은 출력 디렉토리로 도는
+두 실행의 결과·trace·usage를 섞어 놓는다.
 
 실행:
     uv run python -m catchup.evaluation.longmemeval.run_qa \\
@@ -48,6 +51,7 @@ from catchup.components.llm.constants import LlmProvider
 from catchup.components.llm.constants import ModelCapacity
 from catchup.components.llm.factory import get_llm_service
 from catchup.configs.config import settings
+from catchup.evaluation.longmemeval.atomic_publish import pointer_path
 from catchup.evaluation.longmemeval.atomic_publish import staged_outputs
 from catchup.evaluation.longmemeval.dataset import OracleQuestion
 from catchup.evaluation.longmemeval.dataset import load_oracle
@@ -250,11 +254,13 @@ class QaRunSummary:
         questions: 답을 낸 문항 수를 나타낸다.
         abstained: 그중 거절로 닫은 문항 수를 나타낸다.
         usage: 실행 전체가 쓴 토큰 집계를 나타낸다.
+        run_directory: 세 산출물이 놓인 이번 run의 디렉토리를 나타낸다.
     """
 
     questions: int
     abstained: int
     usage: UsageTotals
+    run_directory: Path
 
 
 def run_and_publish(
@@ -263,23 +269,24 @@ def run_and_publish(
     lookup: KnowledgeLookup | LookupFor,
     extract_subjects: ExtractSubjectsFn,
     answer: AnswerFn,
-    results_path: Path,
-    trace_path: Path,
-    usage_path: Path,
+    output: Path,
     workspace_id: int | None,
     manifest: Path | None,
     capacity: str,
 ) -> QaRunSummary:
-    """전 문항을 답하고, 다 끝났을 때만 세 산출물을 공개한다.
+    """전 문항을 답하고, 다 끝났을 때만 이번 run을 완주본으로 세운다.
 
-    문항 하나가 깨지면 예외가 그대로 올라가고 최종 경로에는 아무것도
-    남지 않는다. 부분 결과를 정상 파일명으로 남기면 채점기가 그것을
-    완주 결과로 읽는다 — 이 함수의 존재 이유가 그 연결을 끊는 것이다.
+    문항 하나가 깨지면 예외가 그대로 올라가고 포인터는 `running`에 멈춘다.
+    부분 결과가 완주본으로 읽히면 채점기가 그 위에서 점수를 낸다 — 이
+    함수의 존재 이유가 그 연결을 끊는 것이다.
     """
     total = UsageTotals()
     abstained = 0
 
-    with staged_outputs((results_path, trace_path, usage_path)) as (
+    with staged_outputs(
+        output,
+        (RESULTS_FILENAME, TRACE_FILENAME, USAGE_FILENAME),
+    ) as (
         results_temp,
         trace_temp,
         usage_temp,
@@ -327,6 +334,7 @@ def run_and_publish(
         questions=len(outcomes),
         abstained=abstained,
         usage=total,
+        run_directory=results_temp.parent,
     )
 
 
@@ -354,7 +362,11 @@ def main() -> int:
         "--output",
         type=Path,
         required=True,
-        help="결과 세 파일을 쓸 디렉토리를 정한다.",
+        help=(
+            "산출물 루트 디렉토리를 정한다. 세 파일은 그 아래 "
+            "`runs/<run_id>/`에 놓이고, 완주하면 `current_run.json`이 "
+            "그 run을 가리킨다. 채점기에는 이 루트를 넘긴다."
+        ),
     )
     parser.add_argument("--per-type", type=int, default=10)
     parser.add_argument(
@@ -394,9 +406,6 @@ def main() -> int:
     )
 
     args.output.mkdir(parents=True, exist_ok=True)
-    results_path = args.output / RESULTS_FILENAME
-    trace_path = args.output / TRACE_FILENAME
-    usage_path = args.output / USAGE_FILENAME
 
     service = get_llm_service(
         provider=LlmProvider.AWS_BEDROCK,
@@ -426,9 +435,7 @@ def main() -> int:
             lookup=lookup,
             extract_subjects=bedrock_extract_subjects(llm),
             answer=bedrock_answer(llm),
-            results_path=results_path,
-            trace_path=trace_path,
-            usage_path=usage_path,
+            output=args.output,
             workspace_id=None if isolated else args.workspace_id,
             manifest=args.manifest if isolated else None,
             capacity=args.capacity,
@@ -447,9 +454,10 @@ def main() -> int:
         f"  호출 {summary.usage.calls}회, "
         f"토큰 {summary.usage.total_tokens}"
     )
-    print(f"  {results_path}")
-    print(f"  {trace_path}")
-    print(f"  {usage_path}")
+    print(f"  run 디렉토리: {summary.run_directory}")
+    print(f"    {RESULTS_FILENAME}, {TRACE_FILENAME}, {USAGE_FILENAME}")
+    print(f"  포인터: {pointer_path(args.output)}")
+    print(f"  채점: --results-dir {args.output} (포인터가 이 run을 가리킨다)")
     return 0
 
 

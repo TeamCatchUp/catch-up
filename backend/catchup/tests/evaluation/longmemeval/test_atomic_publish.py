@@ -1,81 +1,197 @@
-"""부분 산출물이 완주 결과로 보이지 않는지 못 박는다.
+"""산출물 묶음이 한 run 단위로만 보이는지 못 박는다.
 
-QA 러너가 N번째 문항에서 깨지면 앞의 N-1건은 이미 파일에 있다. 그
-파일이 최종 이름으로 남으면 채점기는 그것을 완주 결과로 읽고 줄어든
-분모 위에서 점수를 낸다 — 못 푼 문항이 뒤쪽에 몰린 실행일수록 점수가
-높아진다. 그래서 "전 문항 성공 뒤에만 최종 경로에 나타난다"를 고정한다.
+QA 러너가 N번째 문항에서 깨지면 앞의 N-1건은 이미 파일에 있다. 그것이
+완주본으로 읽히면 채점기는 줄어든 분모 위에서 점수를 낸다 — 못 푼 문항이
+뒤쪽에 몰린 실행일수록 점수가 높아진다. 그래서 "전 문항 성공 뒤에만
+포인터가 그 run을 가리킨다"를 고정한다.
 
-지난 실행의 완주본이 최종 경로에 남는 경로도 같이 막는다. 방금 실패한
-실행의 결과라고 믿으면서 옛 점수를 다시 읽게 되기 때문이다.
+묶음의 원자성도 같이 못 박는다. 세 파일을 하나씩 최종 경로로 옮기면 같은
+출력 디렉토리로 도는 두 실행이 results는 B, trace·usage는 A인 묶음을
+남긴다. 답변은 B인데 실패 귀속과 비용은 A로 읽히므로 진단이 통째로
+거짓이 된다. 그래서 run 디렉토리를 완성한 뒤 포인터 하나만 바꾼다.
 
 DB도 LLM도 부르지 않는다.
 """
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
 
+from catchup.evaluation.longmemeval.atomic_publish import POINTER_FILENAME
+from catchup.evaluation.longmemeval.atomic_publish import RUN_STATUS_COMPLETE
+from catchup.evaluation.longmemeval.atomic_publish import current_run_directory
 from catchup.evaluation.longmemeval.atomic_publish import new_run_id
+from catchup.evaluation.longmemeval.atomic_publish import pointer_path
+from catchup.evaluation.longmemeval.atomic_publish import read_pointer
+from catchup.evaluation.longmemeval.atomic_publish import run_directory
 from catchup.evaluation.longmemeval.atomic_publish import run_temp_path
 from catchup.evaluation.longmemeval.atomic_publish import staged_outputs
 
-
-def test_outputs_appear_only_after_the_block_finishes(tmp_path: Path) -> None:
-    """본문이 끝나야 최종 경로에 산출물이 나타난다."""
-    results = tmp_path / "qa_results.jsonl"
-    usage = tmp_path / "qa_usage.json"
-
-    with staged_outputs((results, usage)) as (results_temp, usage_temp):
-        results_temp.write_text("{}\n", encoding="utf-8")
-        usage_temp.write_text("{}\n", encoding="utf-8")
-        assert not results.exists()
-        assert not usage.exists()
-
-    assert results.read_text(encoding="utf-8") == "{}\n"
-    assert usage.read_text(encoding="utf-8") == "{}\n"
-    assert not results_temp.exists()
-    assert not usage_temp.exists()
+RESULTS = "qa_results.jsonl"
+TRACE = "qa_trace.jsonl"
+USAGE = "qa_usage.json"
+BUNDLE = (RESULTS, TRACE, USAGE)
 
 
-def test_a_failure_leaves_no_final_output(tmp_path: Path) -> None:
-    """중간에 깨지면 최종 경로에 부분 산출물이 남지 않는다."""
-    results = tmp_path / "qa_results.jsonl"
-    usage = tmp_path / "qa_usage.json"
+def _write_bundle(paths: tuple[Path, ...], marker: str) -> None:
+    """세 산출물에 어느 run이 썼는지 알아볼 표식을 남긴다."""
+    for path in paths:
+        path.write_text(marker, encoding="utf-8")
 
+
+def test_the_bundle_becomes_current_only_after_the_block_finishes(
+    tmp_path: Path,
+) -> None:
+    """본문이 끝나야 포인터가 그 run을 완주본으로 가리킨다."""
+    with staged_outputs(tmp_path, BUNDLE) as paths:
+        _write_bundle(paths, "done")
+        with pytest.raises(SystemExit):
+            current_run_directory(tmp_path)
+
+    directory = current_run_directory(tmp_path)
+    assert directory == paths[0].parent
+    for name in BUNDLE:
+        assert (directory / name).read_text(encoding="utf-8") == "done"
+
+
+def test_a_failure_leaves_no_current_run(tmp_path: Path) -> None:
+    """중간에 깨지면 완주본이 없다고 읽힌다."""
     with pytest.raises(RuntimeError):
-        with staged_outputs((results, usage)) as (results_temp, _usage_temp):
-            results_temp.write_text('{"question_id": "q1"}\n', encoding="utf-8")
+        with staged_outputs(tmp_path, BUNDLE) as paths:
+            paths[0].write_text('{"question_id": "q1"}\n', encoding="utf-8")
             raise RuntimeError("두 번째 문항에서 Bedrock이 깨졌다")
 
-    assert not results.exists()
-    assert not usage.exists()
-    assert list(tmp_path.iterdir()) == []
+    with pytest.raises(SystemExit) as excinfo:
+        current_run_directory(tmp_path)
+
+    assert "완주하지 못했다" in str(excinfo.value)
 
 
-def test_a_failure_removes_the_previous_run_output(tmp_path: Path) -> None:
-    """지난 실행의 완주본도 남기지 않는다.
+def test_a_failure_does_not_republish_the_previous_run(tmp_path: Path) -> None:
+    """지난 실행의 완주본을 이번 실행의 결과로 읽히게 두지 않는다.
 
     남겨 두면 채점기가 방금 실패한 실행의 결과라고 믿으면서 옛 점수를
     다시 읽는다. 실패했다는 정보는 어디에도 남지 않는다.
     """
-    results = tmp_path / "qa_results.jsonl"
-    results.write_text('{"question_id": "old"}\n', encoding="utf-8")
+    with staged_outputs(tmp_path, BUNDLE) as paths:
+        _write_bundle(paths, "old")
+    old_directory = paths[0].parent
 
     with pytest.raises(RuntimeError):
-        with staged_outputs((results,)):
+        with staged_outputs(tmp_path, BUNDLE):
             raise RuntimeError("적재 실패")
 
-    assert not results.exists()
+    with pytest.raises(SystemExit):
+        current_run_directory(tmp_path)
+    # 옛 run 디렉토리 자체는 남는다. 사후 진단에서 직전 실행과 무엇이
+    # 달라졌는지를 그대로 열어 볼 수 있어야 한다.
+    assert (old_directory / RESULTS).read_text(encoding="utf-8") == "old"
 
 
-def test_each_run_stages_into_its_own_temp_path(tmp_path: Path) -> None:
-    """실행마다 다른 임시 경로를 쓴다."""
-    path = tmp_path / "qa_results.jsonl"
+def test_a_failed_run_keeps_its_partial_files_for_diagnosis(
+    tmp_path: Path,
+) -> None:
+    """깨진 run의 부분 산출물은 자기 디렉토리에 그대로 남는다."""
+    with pytest.raises(RuntimeError):
+        with staged_outputs(tmp_path, BUNDLE) as paths:
+            paths[0].write_text("partial", encoding="utf-8")
+            raise RuntimeError("적재 실패")
 
-    first = run_temp_path(path, run_id=new_run_id())
-    second = run_temp_path(path, run_id=new_run_id())
+    assert paths[0].read_text(encoding="utf-8") == "partial"
+
+
+def test_interleaved_runs_never_mix_their_bundles(tmp_path: Path) -> None:
+    """두 실행이 교차로 끝나도 완주본 세 파일은 한 run의 것이다.
+
+    파일별 `os.replace`는 results만 B, trace·usage는 A인 묶음을 남긴다.
+    답변은 B인데 실패 귀속과 비용은 A로 읽혀 진단이 거짓이 된다.
+    """
+    first = staged_outputs(tmp_path, BUNDLE)
+    second = staged_outputs(tmp_path, BUNDLE)
+    first_paths = first.__enter__()
+    second_paths = second.__enter__()
+
+    _write_bundle(first_paths, "A")
+    _write_bundle(second_paths, "B")
+    # B가 먼저 끝나고 A가 나중에 끝난다.
+    second.__exit__(None, None, None)
+    first.__exit__(None, None, None)
+
+    directory = current_run_directory(tmp_path)
+    markers = {
+        (directory / name).read_text(encoding="utf-8") for name in BUNDLE
+    }
+    assert markers == {"A"}
+
+
+def test_the_pointer_names_the_run_it_points_at(tmp_path: Path) -> None:
+    """포인터는 run_id와 완주 여부를 담은 파일 하나다."""
+    run_id = new_run_id()
+
+    with staged_outputs(tmp_path, BUNDLE, run_id=run_id) as paths:
+        _write_bundle(paths, "done")
+
+    pointer = read_pointer(tmp_path)
+    assert pointer == {"run_id": run_id, "status": RUN_STATUS_COMPLETE}
+    assert pointer_path(tmp_path).name == POINTER_FILENAME
+    assert current_run_directory(tmp_path) == run_directory(
+        tmp_path,
+        run_id=run_id,
+    )
+
+
+def test_a_missing_pointer_is_refused_instead_of_read_flat(
+    tmp_path: Path,
+) -> None:
+    """포인터가 없으면 디렉토리에 바로 놓인 옛 산출물을 읽지 않는다.
+
+    하위 호환으로 flat 파일을 읽어 주면 서로 다른 run이 섞인 묶음을 다시
+    채점하게 된다. 섞임 위험을 되살리느니 재실행을 요구한다.
+    """
+    (tmp_path / RESULTS).write_text(
+        '{"question_id": "q1"}\n',
+        encoding="utf-8",
+    )
+
+    with pytest.raises(SystemExit) as excinfo:
+        current_run_directory(tmp_path)
+
+    assert "포인터가 없다" in str(excinfo.value)
+
+
+def test_a_half_written_pointer_never_becomes_visible(tmp_path: Path) -> None:
+    """포인터는 임시 파일에 다 쓴 뒤 원자적으로 교체된다."""
+    with staged_outputs(tmp_path, BUNDLE) as paths:
+        _write_bundle(paths, "done")
+
+    assert json.loads(pointer_path(tmp_path).read_text(encoding="utf-8"))
+    leftovers = [
+        path
+        for path in tmp_path.iterdir()
+        if path.name.startswith(f"{POINTER_FILENAME}.tmp")
+    ]
+    assert leftovers == []
+
+
+def test_each_run_stages_into_its_own_directory(tmp_path: Path) -> None:
+    """실행마다 다른 run 디렉토리를 쓴다."""
+    first = run_directory(tmp_path, run_id=new_run_id())
+    second = run_directory(tmp_path, run_id=new_run_id())
 
     assert first != second
-    assert first.parent == path.parent
+    assert first.parent == second.parent
+
+
+def test_run_temp_path_stays_in_the_same_directory() -> None:
+    """단일 파일 publish의 임시 경로는 최종 경로와 같은 디렉토리에 둔다.
+
+    `os.replace`가 원자적인 것은 같은 파일시스템 안에서일 때뿐이다.
+    """
+    path = Path("/tmp/results/manifest.json")
+
+    temporary = run_temp_path(path, run_id=new_run_id())
+
+    assert temporary.parent == path.parent

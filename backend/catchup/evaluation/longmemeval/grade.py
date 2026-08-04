@@ -9,6 +9,12 @@
 정답")을 그대로 옮겨 썼다. 그래서 이 값은 공식 리더보드 점수와 직접
 비교할 수 없다. 리포트가 그 사실을 매번 적는다.
 
+읽을 QA 산출물은 `--results-dir` 바로 아래가 아니라 `current_run.json`이
+가리키는 run 디렉토리에서 가져온다. 포인터 하나만 원자적으로 바뀌므로
+결과·trace·비용 셋은 늘 같은 실행의 것이다. 포인터가 없거나 완주를
+말하지 않으면 시끄럽게 멈춘다 — 옛 방식으로 디렉토리에 바로 놓인
+산출물을 읽어 주면 서로 다른 run이 섞인 묶음을 다시 채점하게 된다.
+
 순서는 "선택 후 검사"다. 먼저 채점 대상 집합을 정하고, QA 산출물에서 그
 집합에 드는 행만 고른 다음, 고른 집합 안에서만 누락·중복을 본다. 부분
 결과에 점수를 매기면 분모가 남은 문항 수로 줄어 중간에 깨진 실행이 오히려
@@ -74,6 +80,7 @@ from catchup.db.models import KnowledgeMutationProposal
 from catchup.db.models import KnowledgeNode
 from catchup.db.models import Observation
 from catchup.db.models import SourceVersion
+from catchup.evaluation.longmemeval.atomic_publish import current_run_directory
 from catchup.evaluation.longmemeval.dataset import OracleQuestion
 from catchup.evaluation.longmemeval.dataset import load_oracle
 from catchup.evaluation.longmemeval.dataset import select_subset
@@ -800,6 +807,9 @@ class ReportInputs:
         contradiction_total: workspace 전체 모순 안건 수를 나타낸다.
         contradiction_decided: 그중 결정이 내려진 안건 수를 나타낸다.
         vocabulary_snapshots: 추출에 쓰인 어휘 스냅샷 목록을 담는다.
+        qa_run_id: 채점한 QA run의 식별자를 담는다. 결과·trace·비용이
+            어느 실행에서 함께 나온 것인지를 리포트만 보고 알 수 있게
+            한다.
         excluded_question_ids: 채점 대상 밖이라 판정하지 않은 결과 행의
             식별자를 담는다. 정답률 분모에 들어가지 않은 문항이며,
             `--limit`으로 부분 채점하면 정상적으로 생긴다.
@@ -818,6 +828,7 @@ class ReportInputs:
     contradiction_total: int
     contradiction_decided: int
     vocabulary_snapshots: tuple[tuple[str, str, int], ...]
+    qa_run_id: str | None = None
     excluded_question_ids: tuple[str, ...] = ()
     manifest_path: Path | None = None
     input_price: float = DEFAULT_INPUT_PRICE
@@ -854,6 +865,8 @@ def render_report(inputs: ReportInputs) -> str:
             f"- workspace: 문항별 격리 (manifest: `{inputs.manifest_path}`)"
         )
     lines.append(f"- 결과 디렉토리: `{inputs.results_dir}`")
+    if inputs.qa_run_id is not None:
+        lines.append(f"- QA run: `{inputs.qa_run_id}`")
     lines.append(
         f"- 채점 시각: {datetime.now(timezone.utc).isoformat(timespec='seconds')}"
     )
@@ -1138,7 +1151,11 @@ def main() -> int:
         "--results-dir",
         type=Path,
         required=True,
-        help="QA 러너가 쓴 결과 디렉토리를 정한다. 산출물도 여기에 쓴다.",
+        help=(
+            "QA 러너에 넘겼던 산출물 루트를 정한다. 읽을 세 파일은 "
+            "`current_run.json`이 가리키는 run 디렉토리에서 가져오고, "
+            "채점 산출물은 이 루트에 쓴다."
+        ),
     )
     parser.add_argument(
         "--limit",
@@ -1175,8 +1192,11 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    results_path = args.results_dir / RESULTS_FILENAME
-    trace_path = args.results_dir / TRACE_FILENAME
+    # 세 파일은 포인터가 가리키는 run 디렉토리에서만 읽는다. 포인터
+    # 교체가 원자적이라 어느 시점에 읽어도 셋은 같은 run의 것이다.
+    qa_run_dir = current_run_directory(args.results_dir)
+    results_path = qa_run_dir / RESULTS_FILENAME
+    trace_path = qa_run_dir / TRACE_FILENAME
     if not results_path.exists():
         raise SystemExit(f"QA 결과 파일이 없다: {results_path}")
     if not trace_path.exists():
@@ -1226,7 +1246,7 @@ def main() -> int:
     )
 
     qa_usage = UsageTotals()
-    usage_path = args.results_dir / USAGE_FILENAME
+    usage_path = qa_run_dir / USAGE_FILENAME
     if usage_path.exists():
         payload = json.loads(usage_path.read_text(encoding="utf-8"))
         qa_usage = UsageTotals(
@@ -1296,6 +1316,7 @@ def main() -> int:
         contradiction_total=diagnostics.contradiction_total,
         contradiction_decided=diagnostics.contradiction_decided,
         vocabulary_snapshots=diagnostics.vocabulary_snapshots,
+        qa_run_id=qa_run_dir.name,
         excluded_question_ids=tuple(excluded),
         manifest_path=args.manifest if workspace_for is not None else None,
         input_price=args.input_price,
