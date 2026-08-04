@@ -52,7 +52,7 @@ export default function ConnectorPreConnectDetail({
 
   return (
     <div className="flex flex-col gap-8">
-      <div className="flex flex-col gap-3">
+      <div className="relative">
         <ConnectorDetailHeader
           service={service}
           title={content.name}
@@ -68,8 +68,14 @@ export default function ConnectorPreConnectDetail({
             </>
           }
         />
+        {/*
+         * Figma `16922:134092`의 Tooltip은 ABSOLUTE다 — 흐름에 넣으면 아래 본문을
+         * 밀어낸다. 실측: 헤더 아래 20(y83 - 헤더 63), 우측 안쪽 123(1040-557-360).
+         * 123은 [매핑 확인하기]를 가리키도록 [연결하기] 폭만큼 비켜 둔 값이라
+         * 스케일에 없다. left-0은 좁은 pane에서 max-w가 잡히도록 반대편을 연다.
+         */}
         {popoverOpen && (
-          <div className="flex justify-end">
+          <div className="absolute top-full right-0 left-0 z-10 mt-5 flex justify-end pr-[123px] max-md:pr-0">
             <MappingCheckPopover onClose={() => setPopoverOpen(false)} />
           </div>
         )}
