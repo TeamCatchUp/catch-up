@@ -40,6 +40,7 @@ from catchup.evaluation.longmemeval.dataset import OracleQuestion
 __all__ = [
     "DEFAULT_MANIFEST_PATH",
     "DEFAULT_WORKSPACE_BASE",
+    "MANIFEST_INVALIDATED_SUFFIX",
     "MANIFEST_TEMP_SUFFIX",
     "SHARED_WORKSPACE_WARNING",
     "WORKSPACE_NAME_MAX_LENGTH",
@@ -47,7 +48,9 @@ __all__ = [
     "WorkspaceAssignment",
     "assign_workspaces",
     "check_manifest_covers",
+    "invalidate_manifest",
     "load_manifest",
+    "manifest_invalidated_path",
     "manifest_temp_path",
     "publish_manifest",
     "shared_workspace_warning",
@@ -196,6 +199,42 @@ def stage_manifest(
         encoding="utf-8",
     )
     return temporary
+
+
+MANIFEST_INVALIDATED_SUFFIX = ".invalidated"
+"""무효화된 옛 manifest가 옮겨 가는 경로의 접미사를 나타낸다."""
+
+
+def manifest_invalidated_path(path: Path) -> Path:
+    """무효화한 옛 manifest를 둘 경로를 만든다.
+
+    같은 디렉토리에 둔다. `os.replace`의 원자성은 같은 파일시스템 안에서만
+    보장되고, 진단할 때 옛 대응표를 그 자리에서 바로 찾을 수 있어야 한다.
+    """
+    return path.with_name(path.name + MANIFEST_INVALIDATED_SUFFIX)
+
+
+def invalidate_manifest(path: Path) -> Path | None:
+    """이전 실행이 남긴 최종 manifest를 원자적으로 비공개로 돌린다.
+
+    같은 경로로 두 번째 수집을 도는 정상 재실행이 문제다. 옛 manifest가
+    최종 경로에 남은 채로 적재가 시작되면, 그 실행이 중간에 깨져도 최종
+    경로에는 40문항을 모두 덮는 완성된 JSON이 그대로 있다. workspace
+    일부는 이미 새 데이터로 바뀌었는데 QA·채점은 그 옛 대응표를 완성본으로
+    믿고 점수를 낸다 — 수집이 실패했다는 정보가 어디에도 남지 않는다.
+
+    그래서 적재를 시작하기 직전에 옛 파일을 옆으로 치운다. 지우지 않고
+    옮기는 이유는 진단이다. 어느 문항이 어느 workspace에 있었는지는 실패
+    뒤 정리에 필요한 정보이고, 지워 버리면 그 흔적까지 사라진다.
+
+    Returns:
+        옮겨 둔 경로를 돌려준다. 최종 manifest가 없었으면 None이다.
+    """
+    if not path.exists():
+        return None
+    moved = manifest_invalidated_path(path)
+    os.replace(path, moved)
+    return moved
 
 
 def publish_manifest(path: Path) -> None:

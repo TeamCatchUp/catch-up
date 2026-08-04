@@ -21,7 +21,9 @@ eval 모드의 workspace 번호는 `--workspace-base`(기본 910000)에 서브�
 번호가 나오고, 재실행이 같은 곳을 덮어쓴다. 어느 문항이 어디에 들어갔는지는
 manifest JSON에 적어 QA·채점 러너가 읽는다. 그 파일은 세션 적재가 전부
 성공한 뒤에야 최종 경로에 나타난다 — 중간에 깨졌는데 완성된 manifest가
-남으면 QA가 부분 workspace를 격리 실행으로 오인한다.
+남으면 QA가 부분 workspace를 격리 실행으로 오인한다. 재실행은 적재를
+시작하기 전에 옛 manifest를 `.invalidated`로 치운다. 그러지 않으면 두
+번째 실행이 깨져도 첫 실행의 완성본이 최종 경로에 그대로 남는다.
 
 `workspaces` 테이블에는 FK가 걸려 있어 행이 먼저 있어야 한다. 그래서 적재
 전에 `ensure_workspace`가 행을 만들어 둔다. 이미 있는 번호면 만들지 않고
@@ -61,6 +63,7 @@ from catchup.evaluation.longmemeval.workspace_manifest import DEFAULT_WORKSPACE_
 from catchup.evaluation.longmemeval.workspace_manifest import WORKSPACE_NAME_MAX_LENGTH
 from catchup.evaluation.longmemeval.workspace_manifest import WorkspaceAssignment
 from catchup.evaluation.longmemeval.workspace_manifest import assign_workspaces
+from catchup.evaluation.longmemeval.workspace_manifest import invalidate_manifest
 from catchup.evaluation.longmemeval.workspace_manifest import publish_manifest
 from catchup.evaluation.longmemeval.workspace_manifest import stage_manifest
 from catchup.knowledge_maintenance.adapters.connectors.longmemeval.observation_normalizer import (  # noqa: E501
@@ -331,10 +334,16 @@ def ingest_eval_subset(
     공용 workspace 폴백"으로 떨어진다. 부분 workspace를 격리 실행으로
     오인하는 경로가 그렇게 끊긴다.
 
+    같은 이유로 적재를 시작하기 직전에 옛 최종 manifest를 무효화한다
+    (`invalidate_manifest`). 재실행은 이미 한 번 성공한 경로 위에서 도는
+    일이 보통이고, 그때 옛 manifest를 그대로 두면 "실패하면 최종 경로가
+    빈다"는 위 연결이 성립하지 않는다.
+
     Returns:
         적재를 시도한 세션 수를 돌려준다.
     """
     stage_manifest(manifest_out, assignments)
+    invalidate_manifest(manifest_out)
 
     total_sessions = 0
     for assignment, question in zip(assignments, questions, strict=True):

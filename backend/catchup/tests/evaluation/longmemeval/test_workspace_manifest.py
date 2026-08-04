@@ -44,7 +44,9 @@ from catchup.evaluation.longmemeval.workspace_manifest import WORKSPACE_NAME_MAX
 from catchup.evaluation.longmemeval.workspace_manifest import WorkspaceAssignment
 from catchup.evaluation.longmemeval.workspace_manifest import assign_workspaces
 from catchup.evaluation.longmemeval.workspace_manifest import check_manifest_covers
+from catchup.evaluation.longmemeval.workspace_manifest import invalidate_manifest
 from catchup.evaluation.longmemeval.workspace_manifest import load_manifest
+from catchup.evaluation.longmemeval.workspace_manifest import manifest_invalidated_path
 from catchup.evaluation.longmemeval.workspace_manifest import workspace_by_question
 from catchup.evaluation.longmemeval.workspace_manifest import workspace_name
 from catchup.evaluation.longmemeval.workspace_manifest import write_manifest
@@ -415,3 +417,32 @@ def test_grade_shouts_when_the_manifest_is_missing(
     assert "문항 간 기억 격리 없음" in captured.err
     assert str(missing) in captured.err
     assert [entry["event"] for entry in logs] == ["bench_grade_shared_workspace"]
+
+
+def test_invalidate_manifest_moves_the_published_file(tmp_path: Path) -> None:
+    """공개된 manifest는 지우지 않고 옆으로 치운다."""
+    manifest = tmp_path / "workspace_manifest.json"
+    write_manifest(
+        manifest,
+        (
+            WorkspaceAssignment(
+                question_id="q-a",
+                workspace_id=910000,
+                session_ids=("s1",),
+            ),
+        ),
+    )
+
+    moved = invalidate_manifest(manifest)
+
+    assert moved == manifest_invalidated_path(manifest)
+    assert not manifest.exists()
+    assert [item.question_id for item in load_manifest(moved)] == ["q-a"]
+
+
+def test_invalidate_manifest_ignores_a_missing_file(tmp_path: Path) -> None:
+    """공개된 manifest가 없으면 아무 일도 하지 않는다."""
+    manifest = tmp_path / "workspace_manifest.json"
+
+    assert invalidate_manifest(manifest) is None
+    assert not manifest_invalidated_path(manifest).exists()

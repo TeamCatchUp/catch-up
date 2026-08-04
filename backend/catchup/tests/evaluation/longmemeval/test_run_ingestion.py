@@ -35,7 +35,9 @@ from catchup.evaluation.longmemeval.run_ingestion import ensure_workspace
 from catchup.evaluation.longmemeval.run_ingestion import ingest_eval_subset
 from catchup.evaluation.longmemeval.workspace_manifest import WORKSPACE_NAME_MAX_LENGTH
 from catchup.evaluation.longmemeval.workspace_manifest import assign_workspaces
+from catchup.evaluation.longmemeval.workspace_manifest import manifest_invalidated_path
 from catchup.evaluation.longmemeval.workspace_manifest import manifest_temp_path
+from catchup.evaluation.longmemeval.workspace_manifest import write_manifest
 
 
 def test_bootstrap_into_the_eval_workspace_is_refused() -> None:
@@ -251,3 +253,65 @@ def test_a_failed_ingestion_leaves_no_published_manifest(
     # 임시 파일은 남는다. workspace는 만들어졌는데 적재가 끝나지 않았다는
     # 사실이 그 자체로 진단 재료다.
     assert manifest_temp_path(manifest).exists()
+
+
+def test_a_failed_reingestion_removes_the_previous_manifest(
+    tmp_path: Path,
+) -> None:
+    """옛 manifest가 있던 자리에서 재수집이 깨지면 최종 경로가 빈다.
+
+    한 번 성공한 경로 위에서 다시 도는 것이 정상 재실행이다. 그때 옛
+    manifest가 최종 경로에 남으면, 두 번째 수집이 깨져도 QA·채점은 옛
+    대응표를 완성본으로 읽는다 — workspace 일부는 이미 새 데이터로 바뀐
+    상태라 점수가 조용히 어긋난다.
+    """
+    old = [_question("q-old", ("s0",))]
+    manifest = tmp_path / "workspace_manifest.json"
+    write_manifest(manifest, assign_workspaces(old, base=910000))
+    assert manifest.exists()
+
+    questions = [_question("q-a", ("s1", "s2"))]
+    assignments = assign_workspaces(questions, base=910000)
+
+    def _ingest(session: OracleSession, assignment: Any) -> None:
+        if session.session_id == "s2":
+            raise RuntimeError("적재 실패")
+
+    with pytest.raises(RuntimeError):
+        ingest_eval_subset(
+            assignments,
+            questions,
+            manifest_out=manifest,
+            ingest=_ingest,
+        )
+
+    assert not manifest.exists()
+    # 옛 대응표는 지우지 않고 옆으로 치운다. 어느 문항이 어느 workspace에
+    # 있었는지는 실패 뒤 정리에 필요한 정보다.
+    moved = json.loads(
+        manifest_invalidated_path(manifest).read_text(encoding="utf-8")
+    )
+    assert [item["question_id"] for item in moved] == ["q-old"]
+
+
+def test_a_successful_reingestion_publishes_the_new_manifest(
+    tmp_path: Path,
+) -> None:
+    """무효화한 뒤 성공하면 새 대응표가 최종 경로에 나타난다."""
+    old = [_question("q-old", ("s0",))]
+    manifest = tmp_path / "workspace_manifest.json"
+    write_manifest(manifest, assign_workspaces(old, base=910000))
+
+    questions = [_question("q-a", ("s1", "s2"))]
+    assignments = assign_workspaces(questions, base=910000)
+
+    total = ingest_eval_subset(
+        assignments,
+        questions,
+        manifest_out=manifest,
+        ingest=lambda session, assignment: None,
+    )
+
+    assert total == 2
+    payload = json.loads(manifest.read_text(encoding="utf-8"))
+    assert [item["question_id"] for item in payload] == ["q-a"]
