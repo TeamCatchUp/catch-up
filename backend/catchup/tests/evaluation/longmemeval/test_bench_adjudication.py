@@ -15,6 +15,7 @@ import uuid
 import pytest
 
 from catchup.evaluation.longmemeval.bench_adjudication import AdjudicationSteps
+from catchup.evaluation.longmemeval.bench_adjudication import StepOutcome
 from catchup.evaluation.longmemeval.bench_adjudication import WinnerCandidate
 from catchup.evaluation.longmemeval.bench_adjudication import candidate_from_value
 from catchup.evaluation.longmemeval.bench_adjudication import pick_winner
@@ -203,12 +204,12 @@ class _StepRecorder:
     def __init__(self) -> None:
         self.calls: list[str] = []
 
-    def step(self, name: str, count: int = 0):
-        """이름을 적고 건수를 돌려주는 단계 하나를 만든다."""
+    def step(self, name: str, count: int = 0, failed: int = 0):
+        """이름을 적고 처리·실패 건수를 돌려주는 단계 하나를 만든다."""
 
-        def run() -> int:
+        def run() -> StepOutcome:
             self.calls.append(name)
-            return count
+            return StepOutcome(done=count, failed=failed)
 
         return run
 
@@ -283,3 +284,58 @@ class TestCandidatesFromProposal:
         )
 
         assert pick_winner(proposal.values) == proposal.values[1].claim_id
+
+
+class TestAdjudicationFailures:
+    """건별 실패가 결과에 남아 러너가 실패로 끝낼 수 있게 한다."""
+
+    def _steps(self, recorder: _StepRecorder, **failures: int) -> AdjudicationSteps:
+        """실패 건수만 바꿔 끼운 단계 묶음을 만든다."""
+        return AdjudicationSteps(
+            approve_merges=recorder.step(
+                "approve_merges", 1, failures.get("merge", 0)
+            ),
+            apply_mutations=recorder.step(
+                "apply_mutations", 1, failures.get("apply", 0)
+            ),
+            detect_conflicts=recorder.step("detect_conflicts", 1),
+            adjudicate_contradictions=recorder.step(
+                "adjudicate", 1, failures.get("contradiction", 0)
+            ),
+            compile_artifacts=recorder.step("compile", 1),
+            approve_artifacts=recorder.step(
+                "approve_artifacts", 1, failures.get("artifact", 0)
+            ),
+        )
+
+    def test_실패가_없으면_failures가_0이다(self) -> None:
+        counts = run_adjudication(self._steps(_StepRecorder()))
+
+        assert counts.failures == 0
+
+    def test_병합_승인_실패가_결과에_남는다(self) -> None:
+        recorder = _StepRecorder()
+
+        counts = run_adjudication(self._steps(recorder, merge=1))
+
+        assert counts.merges_failed == 1
+        assert counts.failures == 1
+        # 실패해도 남은 단계는 전부 돈다. 첫 실패에서 멈추면 그 뒤의
+        # 실패가 드러나지 않아 같은 실행을 여러 번 반복하게 된다.
+        assert recorder.calls[-1] == "approve_artifacts"
+
+    def test_적용_실패는_두_번의_적용을_합친다(self) -> None:
+        # `apply_mutations`는 병합 적용과 판정 적용 두 번 불린다.
+        counts = run_adjudication(self._steps(_StepRecorder(), apply=2))
+
+        assert counts.mutations_failed == 4
+        assert counts.failures == 4
+
+    def test_모순_판정과_카드_승인_실패도_센다(self) -> None:
+        counts = run_adjudication(
+            self._steps(_StepRecorder(), contradiction=3, artifact=2)
+        )
+
+        assert counts.contradictions_failed == 3
+        assert counts.artifacts_failed == 2
+        assert counts.failures == 5

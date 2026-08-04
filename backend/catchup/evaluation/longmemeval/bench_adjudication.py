@@ -74,19 +74,37 @@ class WinnerSelection:
 
 
 @dataclass(frozen=True, slots=True)
+class StepOutcome:
+    """단계 하나가 무엇을 처리했고 무엇을 놓쳤는지 담는다.
+
+    건수만 돌려주면 건별 실패가 결과에서 사라진다. 무인 판정은 사람이
+    큐를 다시 보지 않는 자리라, 승인 하나가 실패해도 그 안건은 영영
+    계류로 남고 그만큼 지식이 빠진 채 점수가 나온다. 그래서 처리한 수와
+    실패한 수를 함께 들고 다닌다.
+
+    Attributes:
+        done: 끝까지 처리한 건수를 나타낸다.
+        failed: 오류로 건너뛴 건수를 나타낸다.
+    """
+
+    done: int
+    failed: int = 0
+
+
+@dataclass(frozen=True, slots=True)
 class AdjudicationSteps:
     """무인 판정 한 회차가 밟을 단계들을 담는다.
 
-    각 단계는 처리 건수를 돌려준다. 호출자가 진짜 서비스를 묶어 넣고,
-    테스트는 순서를 적는 가짜를 넣는다.
+    각 단계는 처리 건수와 실패 건수를 돌려준다. 호출자가 진짜 서비스를
+    묶어 넣고, 테스트는 순서를 적는 가짜를 넣는다.
     """
 
-    approve_merges: Callable[[], int]
-    apply_mutations: Callable[[], int]
-    detect_conflicts: Callable[[], int]
-    adjudicate_contradictions: Callable[[], int]
-    compile_artifacts: Callable[[], int]
-    approve_artifacts: Callable[[], int]
+    approve_merges: Callable[[], StepOutcome]
+    apply_mutations: Callable[[], StepOutcome]
+    detect_conflicts: Callable[[], StepOutcome]
+    adjudicate_contradictions: Callable[[], StepOutcome]
+    compile_artifacts: Callable[[], StepOutcome]
+    approve_artifacts: Callable[[], StepOutcome]
 
 
 @dataclass(frozen=True, slots=True)
@@ -101,6 +119,11 @@ class AdjudicationCounts:
         supersedes_applied: 판정 결정을 적용한 안건 수다.
         artifacts_compiled: 새로 올라간 문서 변경안 수다.
         artifacts_approved: 자동 승인한 문서 변경안 수다.
+        merges_failed: 승인에 실패해 계류로 남은 병합 안건 수다.
+        mutations_failed: 적용에 실패해 approved로 남은 안건 수다. 병합
+            적용과 판정 적용 두 번을 합친 값이다.
+        contradictions_failed: 판정에 실패해 계류로 남은 모순 안건 수다.
+        artifacts_failed: 승인에 실패해 계류로 남은 문서 변경안 수다.
     """
 
     merges_approved: int
@@ -110,6 +133,25 @@ class AdjudicationCounts:
     supersedes_applied: int
     artifacts_compiled: int
     artifacts_approved: int
+    merges_failed: int = 0
+    mutations_failed: int = 0
+    contradictions_failed: int = 0
+    artifacts_failed: int = 0
+
+    @property
+    def failures(self) -> int:
+        """이 회차가 처리하지 못하고 남긴 안건 수를 나타낸다.
+
+        하나라도 남으면 그 workspace의 지식은 미완성이다. 러너는 이
+        값으로 종료 코드를 정한다 — 건별 실패를 경고로만 남기고 exit 0으로
+        끝내면 오케스트레이터가 그 workspace를 완료로 기록한다.
+        """
+        return (
+            self.merges_failed
+            + self.mutations_failed
+            + self.contradictions_failed
+            + self.artifacts_failed
+        )
 
 
 def _observed_at_key(candidate: WinnerCandidate) -> tuple[int, str]:
@@ -225,20 +267,29 @@ def run_adjudication(steps: AdjudicationSteps) -> AdjudicationCounts:
     순서가 규칙이다. 병합 결정을 적용하기 전에 모순을 찾으면 아직 하나로
     묶이지 않은 후보의 주장이 비교 그룹에서 빠져 모순을 놓친다. 판정을
     적용하기 전에 문서를 컴파일하면 이미 진 값이 카드에 실린다.
+
+    건별 실패가 있어도 남은 단계를 계속 돌린다. 첫 실패에서 멈추면 그
+    뒤의 실패가 드러나지 않아 사람이 같은 실행을 여러 번 반복하게 된다.
+    대신 실패 수를 전부 모아 결과에 싣는다 — 멈추지 않는 것과 조용히
+    지나가는 것은 다르다.
     """
-    merges_approved = steps.approve_merges()
-    merges_applied = steps.apply_mutations()
-    conflicts_found = steps.detect_conflicts()
-    contradictions_decided = steps.adjudicate_contradictions()
-    supersedes_applied = steps.apply_mutations()
-    artifacts_compiled = steps.compile_artifacts()
-    artifacts_approved = steps.approve_artifacts()
+    merges = steps.approve_merges()
+    merge_apply = steps.apply_mutations()
+    conflicts = steps.detect_conflicts()
+    contradictions = steps.adjudicate_contradictions()
+    supersede_apply = steps.apply_mutations()
+    compiled = steps.compile_artifacts()
+    approved = steps.approve_artifacts()
     return AdjudicationCounts(
-        merges_approved=merges_approved,
-        merges_applied=merges_applied,
-        conflicts_found=conflicts_found,
-        contradictions_decided=contradictions_decided,
-        supersedes_applied=supersedes_applied,
-        artifacts_compiled=artifacts_compiled,
-        artifacts_approved=artifacts_approved,
+        merges_approved=merges.done,
+        merges_applied=merge_apply.done,
+        conflicts_found=conflicts.done,
+        contradictions_decided=contradictions.done,
+        supersedes_applied=supersede_apply.done,
+        artifacts_compiled=compiled.done,
+        artifacts_approved=approved.done,
+        merges_failed=merges.failed,
+        mutations_failed=merge_apply.failed + supersede_apply.failed,
+        contradictions_failed=contradictions.failed,
+        artifacts_failed=approved.failed,
     )
