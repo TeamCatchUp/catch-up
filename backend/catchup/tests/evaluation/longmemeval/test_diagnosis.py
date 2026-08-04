@@ -21,6 +21,7 @@ from catchup.evaluation.longmemeval.diagnosis import SUBJECT_MISS
 from catchup.evaluation.longmemeval.diagnosis import TEMPORAL_GAP
 from catchup.evaluation.longmemeval.diagnosis import EvidenceStats
 from catchup.evaluation.longmemeval.diagnosis import attribute_failure
+from catchup.evaluation.longmemeval.diagnosis import subject_miss_of
 
 
 def _trace(
@@ -29,6 +30,7 @@ def _trace(
     subject_miss: bool = False,
     as_of_claims: int = 3,
     history_claims: int = 2,
+    similarity_used: bool = False,
 ) -> dict[str, Any]:
     """QA 러너가 남기는 trace 한 줄을 흉내 낸다."""
     return {
@@ -49,6 +51,8 @@ def _trace(
         "subject_miss": subject_miss,
         "as_of_claims": as_of_claims,
         "history_claims": history_claims,
+        "similarity_candidates": [],
+        "similarity_used": similarity_used,
         "future_claims_excluded": 0,
         "context_chars": 120,
         "elapsed_ms": 1200.0,
@@ -75,6 +79,55 @@ def test_subject_miss_wins_over_every_downstream_symptom() -> None:
     assert result.cause == SUBJECT_MISS
     assert result.evidence["subject_miss"] is True
     assert result.evidence["subjects_tried"] == ["Alice"]
+
+
+def test_similarity_fallback_takes_the_question_off_subject_miss() -> None:
+    """되짚은 블록이 실렸으면 subject miss여도 상류 실패로 세지 않는다.
+
+    정확 매칭은 빗나갔지만 답변 재료는 컨텍스트에 실렸다. 이 문항까지
+    subject_miss로 세면 fallback을 켠 실행과 끈 실행의 분포가 같아져
+    켰을 때의 효과가 측정에서 사라진다.
+    """
+    result = attribute_failure(
+        _trace(
+            question_type="multi-session",
+            subject_miss=True,
+            similarity_used=True,
+        ),
+        EvidenceStats(extracted_claims=4),
+    )
+
+    assert result.cause == ANSWER_GENERATION
+    assert result.evidence["context_claims"] == 5
+
+
+def test_similarity_fallback_does_not_skip_downstream_rules() -> None:
+    """되짚기가 실려도 그 아래 규칙은 평소대로 순서대로 걸린다."""
+    result = attribute_failure(
+        _trace(
+            question_type="multi-session",
+            subject_miss=True,
+            similarity_used=True,
+        ),
+        EvidenceStats(extracted_claims=0),
+    )
+
+    assert result.cause == CLAIM_NOT_EXTRACTED
+
+
+def test_subject_miss_stays_when_the_fallback_loaded_nothing() -> None:
+    """되짚은 블록이 안 실렸으면 예전대로 subject_miss가 대표다."""
+    result = attribute_failure(
+        _trace(
+            question_type="multi-session",
+            subject_miss=True,
+            similarity_used=False,
+        ),
+        EvidenceStats(extracted_claims=4),
+    )
+
+    assert result.cause == SUBJECT_MISS
+    assert result.evidence["subject_miss"] is True
 
 
 def test_claim_not_extracted_wins_over_conflict_missed() -> None:
@@ -202,6 +255,18 @@ def test_missing_subject_trace_counts_as_subject_miss() -> None:
     )
 
     assert result.cause == SUBJECT_MISS
+
+
+def test_subject_miss_of_still_reports_the_raw_lookup_fact() -> None:
+    """되짚기가 실려도 조회 원시 사실은 그대로 miss로 읽는다.
+
+    보정은 귀속 단계에서만 한다. 이 함수까지 바꾸면 리포트의 조회 깔때기
+    열이 실제 정확 매칭 실패율을 더 낮게 말하게 된다.
+    """
+    assert (
+        subject_miss_of(_trace(subject_miss=True, similarity_used=True))
+        is True
+    )
 
 
 def test_failure_causes_are_listed_in_priority_order() -> None:
