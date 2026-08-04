@@ -19,9 +19,13 @@ claim이 실제로 나왔는지와 모순 안건이 판정됐는지를 DB에서 
 읽기 전용이며 `knowledge_maintenance`를 거치지 않고 evaluation 쪽에서
 직접 select한다 — 진단용 조회는 지식 유지보수의 계약이 아니다.
 
+진단 근거를 어느 workspace에서 읽을지는 수집 러너가 쓴 manifest가 정한다.
+문항마다 haystack이 따로 격리되어 있으므로 진단도 문항마다 자기
+workspace에서 읽어야 한다. manifest가 없으면 `--workspace-id` 하나로 전부
+읽던 옛 방식으로 돌아간다.
+
 실행:
     uv run python -m catchup.evaluation.longmemeval.grade \\
-        --workspace-id 902 \\
         --results-dir experiments/longmemeval/results/
 """
 
@@ -76,6 +80,10 @@ from catchup.evaluation.longmemeval.run_qa import DEFAULT_ORACLE_PATH
 from catchup.evaluation.longmemeval.run_qa import RESULTS_FILENAME
 from catchup.evaluation.longmemeval.run_qa import TRACE_FILENAME
 from catchup.evaluation.longmemeval.run_qa import USAGE_FILENAME
+from catchup.evaluation.longmemeval.workspace_manifest import DEFAULT_MANIFEST_PATH
+from catchup.evaluation.longmemeval.workspace_manifest import check_manifest_covers
+from catchup.evaluation.longmemeval.workspace_manifest import load_manifest
+from catchup.evaluation.longmemeval.workspace_manifest import workspace_by_question
 
 DEFAULT_WORKSPACE_ID = 902
 GRADES_FILENAME = "grades.jsonl"
@@ -581,6 +589,87 @@ def load_vocabulary_snapshots(
 
 
 @dataclass(frozen=True, slots=True)
+class Diagnostics:
+    """진단에 쓸 DB 집계를 문항별로 모아 담는다.
+
+    Attributes:
+        evidence: 문항마다 근거 세션이 만든 것들의 집계를 담는다.
+        contradiction_total: 읽은 workspace들의 모순 안건 총수를 담는다.
+        contradiction_decided: 그중 결정이 내려진 안건 수를 담는다.
+        vocabulary_snapshots: 추출에 쓰인 어휘 스냅샷을 합쳐 담는다.
+    """
+
+    evidence: dict[str, EvidenceStats]
+    contradiction_total: int
+    contradiction_decided: int
+    vocabulary_snapshots: tuple[tuple[str, str, int], ...]
+
+
+def collect_diagnostics(
+    session: Session,
+    questions: Sequence[OracleQuestion],
+    *,
+    workspace_id: int,
+    workspace_for: Mapping[str, int] | None = None,
+) -> Diagnostics:
+    """문항마다 자기 workspace에서 진단 근거를 읽어 합친다.
+
+    `workspace_for`가 있으면 문항별 격리 실행이다. 문항 하나의 근거를
+    다른 문항의 workspace에서 세면 그 문항이 만들지도 않은 claim과 안건이
+    잡혀 실패 귀속이 통째로 어긋난다. 그래서 workspace마다 한 번씩 읽고
+    그 workspace에 속한 문항만 그 값으로 센다.
+
+    어휘 스냅샷은 workspace를 가로질러 합친다. 서로 다른 어휘로 뽑힌
+    claim이 섞였는지는 실행 전체에 대한 질문이기 때문이다.
+    """
+    groups: dict[int, list[OracleQuestion]] = {}
+    if workspace_for is None:
+        groups[workspace_id] = list(questions)
+    else:
+        for question in questions:
+            target = workspace_for[question.question_id]
+            groups.setdefault(target, []).append(question)
+
+    evidence: dict[str, EvidenceStats] = {}
+    total = 0
+    decided = 0
+    snapshot_counts: dict[tuple[str, str], int] = {}
+    for target, group in sorted(groups.items()):
+        claim_sessions = load_claim_sessions(session, workspace_id=target)
+        proposals = load_contradiction_proposals(
+            session,
+            workspace_id=target,
+        )
+        evidence.update(
+            build_evidence_stats(
+                group,
+                claim_sessions=claim_sessions,
+                proposals=proposals,
+            )
+        )
+        total += len(proposals)
+        decided += sum(1 for proposal in proposals if proposal.decided)
+        for ontology_id, version, count in load_vocabulary_snapshots(
+            session,
+            workspace_id=target,
+        ):
+            key = (ontology_id, version)
+            snapshot_counts[key] = snapshot_counts.get(key, 0) + count
+
+    return Diagnostics(
+        evidence=evidence,
+        contradiction_total=total,
+        contradiction_decided=decided,
+        vocabulary_snapshots=tuple(
+            (ontology_id, version, count)
+            for (ontology_id, version), count in sorted(
+                snapshot_counts.items()
+            )
+        ),
+    )
+
+
+@dataclass(frozen=True, slots=True)
 class ReportInputs:
     """리포트 한 장을 쓰는 데 필요한 모든 값을 담는다.
 
@@ -596,6 +685,8 @@ class ReportInputs:
         vocabulary_snapshots: 추출에 쓰인 어휘 스냅샷 목록을 담는다.
         skipped_question_ids: 채점 서브셋에 없어 버린 결과 행의 식별자를
             담는다. 정답률 분모에 들어가지 않은 문항이다.
+        manifest_path: 문항별 격리 실행이면 대응표 경로를 담고, 단일
+            workspace 실행이면 None이다.
         input_price: 입력 토큰 백만 개당 단가를 나타낸다.
         output_price: 출력 토큰 백만 개당 단가를 나타낸다.
     """
@@ -610,6 +701,7 @@ class ReportInputs:
     contradiction_decided: int
     vocabulary_snapshots: tuple[tuple[str, str, int], ...]
     skipped_question_ids: tuple[str, ...] = ()
+    manifest_path: Path | None = None
     input_price: float = DEFAULT_INPUT_PRICE
     output_price: float = DEFAULT_OUTPUT_PRICE
 
@@ -637,7 +729,12 @@ def render_report(inputs: ReportInputs) -> str:
     errors = [row for row in rows if row.verdict == VERDICT_ERROR]
 
     lines: list[str] = ["# LongMemEval 채점 리포트", ""]
-    lines.append(f"- workspace: {inputs.workspace_id}")
+    if inputs.manifest_path is None:
+        lines.append(f"- workspace: {inputs.workspace_id} (전 문항 공용)")
+    else:
+        lines.append(
+            f"- workspace: 문항별 격리 (manifest: `{inputs.manifest_path}`)"
+        )
     lines.append(f"- 결과 디렉토리: `{inputs.results_dir}`")
     lines.append(
         f"- 채점 시각: {datetime.now(timezone.utc).isoformat(timespec='seconds')}"
@@ -716,12 +813,21 @@ def render_report(inputs: ReportInputs) -> str:
         "더 읽으면 안 된다."
     )
     lines.append("")
-    lines.append(
-        "1. 문항과 모순 안건은 claim 집합이 겹치는지로만 잇는다. 한 "
-        "workspace에 여러 문항의 세션이 섞이므로 다른 문항 때문에 열린 "
-        "안건이 이 문항에 잡힐 수 있다. 그래서 `conflict_missed`는 "
-        "위음성 쪽으로 기운다 — 실제로 놓친 모순보다 적게 잡힌다."
-    )
+    if inputs.manifest_path is None:
+        lines.append(
+            "1. 문항과 모순 안건은 claim 집합이 겹치는지로만 잇는다. 한 "
+            "workspace에 여러 문항의 세션이 섞이므로 다른 문항 때문에 열린 "
+            "안건이 이 문항에 잡힐 수 있다. 그래서 `conflict_missed`는 "
+            "위음성 쪽으로 기운다 — 실제로 놓친 모순보다 적게 잡힌다."
+        )
+    else:
+        lines.append(
+            "1. 문항과 모순 안건은 claim 집합이 겹치는지로만 잇는다. "
+            "workspace가 문항별로 갈려 있어 다른 문항의 안건은 섞이지 "
+            "않지만, 같은 문항의 distractor 세션에서 열린 안건은 여전히 "
+            "이 문항에 잡힌다. 그래서 `conflict_missed`는 위음성 쪽으로 "
+            "기운다 — 실제로 놓친 모순보다 적게 잡힌다."
+        )
     lines.append(
         "2. `extracted_claims`는 근거 세션 단위 집계이지 has_answer 턴 "
         "단위가 아니다. 정답과 무관한 다른 턴에서 나온 claim도 세므로 "
@@ -913,7 +1019,18 @@ def main() -> int:
         "--workspace-id",
         type=int,
         default=DEFAULT_WORKSPACE_ID,
-        help="진단 근거를 읽어올 평가 workspace를 정한다.",
+        help=(
+            "manifest가 없을 때 진단 근거를 읽어올 단일 workspace를 정한다."
+        ),
+    )
+    parser.add_argument(
+        "--manifest",
+        type=Path,
+        default=DEFAULT_MANIFEST_PATH,
+        help=(
+            "수집 러너가 쓴 문항-workspace 대응표를 정한다. 파일이 없으면 "
+            "`--workspace-id` 하나로 전부 읽는 옛 방식으로 돈다."
+        ),
     )
     parser.add_argument(
         "--results-dir",
@@ -979,6 +1096,11 @@ def main() -> int:
     )
     questions = {question.question_id: question for question in subset}
 
+    workspace_for: dict[str, int] | None = None
+    if args.manifest is not None and args.manifest.exists():
+        workspace_for = workspace_by_question(load_manifest(args.manifest))
+        check_manifest_covers(questions, workspace_for)
+
     qa_usage = UsageTotals()
     usage_path = args.results_dir / USAGE_FILENAME
     if usage_path.exists():
@@ -993,23 +1115,13 @@ def main() -> int:
     session_factory = sessionmaker(bind=engine, expire_on_commit=False)
     try:
         with session_factory() as session:
-            claim_sessions = load_claim_sessions(
+            diagnostics = collect_diagnostics(
                 session,
+                subset,
                 workspace_id=args.workspace_id,
+                workspace_for=workspace_for,
             )
-            proposals = load_contradiction_proposals(
-                session,
-                workspace_id=args.workspace_id,
-            )
-            snapshots = load_vocabulary_snapshots(
-                session,
-                workspace_id=args.workspace_id,
-            )
-        evidence = build_evidence_stats(
-            subset,
-            claim_sessions=claim_sessions,
-            proposals=proposals,
-        )
+        evidence = diagnostics.evidence
 
         service = get_llm_service(
             provider=LlmProvider.AWS_BEDROCK,
@@ -1055,10 +1167,11 @@ def main() -> int:
         qa_usage=qa_usage,
         qa_elapsed_ms=qa_elapsed_ms,
         grade_elapsed_ms=grade_elapsed_ms,
-        contradiction_total=len(proposals),
-        contradiction_decided=sum(1 for p in proposals if p.decided),
-        vocabulary_snapshots=tuple(snapshots),
+        contradiction_total=diagnostics.contradiction_total,
+        contradiction_decided=diagnostics.contradiction_decided,
+        vocabulary_snapshots=diagnostics.vocabulary_snapshots,
         skipped_question_ids=tuple(skipped),
+        manifest_path=args.manifest if workspace_for is not None else None,
         input_price=args.input_price,
         output_price=args.output_price,
     )
@@ -1070,7 +1183,12 @@ def main() -> int:
     grade_usage_path.write_text(
         json.dumps(
             {
-                "workspace_id": args.workspace_id,
+                "workspace_id": (
+                    None if workspace_for is not None else args.workspace_id
+                ),
+                "manifest": (
+                    str(args.manifest) if workspace_for is not None else None
+                ),
                 "capacity": args.capacity,
                 "judge_prompt_version": JUDGE_PROMPT_VERSION,
                 "graded": len(rows),
@@ -1096,7 +1214,12 @@ def main() -> int:
 
     correct = sum(1 for row in rows if row.verdict == VERDICT_YES)
     graded = sum(1 for row in rows if row.verdict != VERDICT_ERROR)
-    print(f"\n=== 채점 결과 (ws={args.workspace_id}) ===")
+    scope = (
+        f"문항별 격리, manifest={args.manifest}"
+        if workspace_for is not None
+        else f"ws={args.workspace_id}"
+    )
+    print(f"\n=== 채점 결과 ({scope}) ===")
     print(f"  정답 {correct}/{graded}  (미채점 {len(rows) - graded})")
     if skipped:
         print(

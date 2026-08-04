@@ -8,6 +8,11 @@
 열고 commit 없이 빠져나간다. 평가가 지식 상태를 건드리면 같은 실행을
 두 번 돌린 결과가 달라진다.
 
+어느 workspace를 읽을지는 수집 러너가 쓴 manifest가 정한다. 문항마다
+haystack이 따로 격리되어 있으므로 조회도 문항마다 자기 workspace로만
+간다. manifest가 없으면 `--workspace-id` 하나로 전부 읽던 옛 방식으로
+돌아간다 — 격리 이전에 쌓아 둔 workspace를 다시 재볼 수 있어야 한다.
+
 결과는 세 파일로 나눠 쓴다. 채점기가 읽을 최소 형태(`qa_results.jsonl`),
 왜 그 답이 나왔는지 되짚을 흔적(`qa_trace.jsonl`), 비용 집계
 (`qa_usage.json`)다. 한 건이 끝날 때마다 흘려 쓰고 flush하므로 중간에
@@ -15,7 +20,6 @@
 
 실행:
     uv run python -m catchup.evaluation.longmemeval.run_qa \\
-        --workspace-id 902 \\
         --output experiments/longmemeval/results/ \\
         --per-type 10
 """
@@ -40,6 +44,7 @@ from catchup.components.llm.constants import LlmProvider
 from catchup.components.llm.constants import ModelCapacity
 from catchup.components.llm.factory import get_llm_service
 from catchup.configs.config import settings
+from catchup.evaluation.longmemeval.dataset import OracleQuestion
 from catchup.evaluation.longmemeval.dataset import load_oracle
 from catchup.evaluation.longmemeval.dataset import select_subset
 from catchup.evaluation.longmemeval.draft_vocabulary import UsageTotals
@@ -47,11 +52,15 @@ from catchup.evaluation.longmemeval.draft_vocabulary import usage_from_message
 from catchup.evaluation.longmemeval.qa_service import MAX_SUBJECTS
 from catchup.evaluation.longmemeval.qa_service import AnswerResult
 from catchup.evaluation.longmemeval.qa_service import KnowledgeLookup
+from catchup.evaluation.longmemeval.qa_service import LookupFor
 from catchup.evaluation.longmemeval.qa_service import QuestionOutcome
 from catchup.evaluation.longmemeval.qa_service import SubjectResult
 from catchup.evaluation.longmemeval.qa_service import answer_questions
 from catchup.evaluation.longmemeval.qa_service import build_answer_prompt
 from catchup.evaluation.longmemeval.qa_service import build_subject_prompt
+from catchup.evaluation.longmemeval.workspace_manifest import DEFAULT_MANIFEST_PATH
+from catchup.evaluation.longmemeval.workspace_manifest import load_manifest
+from catchup.evaluation.longmemeval.workspace_manifest import workspace_by_question
 from catchup.knowledge_maintenance.adapters.postgres.unit_of_work import (
     KnowledgeMaintenanceUnitOfWork,
 )
@@ -188,6 +197,27 @@ def postgres_lookup(session_factory, *, workspace_id: int) -> KnowledgeLookup:
     return KnowledgeLookup(as_of=as_of, history=history)
 
 
+def manifest_lookup_for(
+    session_factory,
+    *,
+    workspace_for: dict[str, int],
+) -> LookupFor:
+    """문항마다 자기 workspace를 읽는 조회 경로를 고른다.
+
+    manifest에 없는 문항은 `check_manifest_covers`가 앞서 걸러 낸다.
+    여기서 기본 workspace로 되돌리면 그 문항만 남의 기억을 보게 되므로
+    KeyError로 터지는 편이 낫다.
+    """
+
+    def choose(question: OracleQuestion) -> KnowledgeLookup:
+        return postgres_lookup(
+            session_factory,
+            workspace_id=workspace_for[question.question_id],
+        )
+
+    return choose
+
+
 def _write_line(handle: TextIO, payload: dict[str, Any]) -> None:
     """JSONL 한 줄을 쓰고 곧바로 내보낸다."""
     handle.write(json.dumps(payload, ensure_ascii=False) + "\n")
@@ -200,7 +230,19 @@ def main() -> int:
         "--workspace-id",
         type=int,
         default=DEFAULT_WORKSPACE_ID,
-        help="지식을 읽어올 평가 workspace를 정한다.",
+        help=(
+            "manifest가 없을 때 지식을 읽어올 단일 workspace를 정한다. "
+            "manifest가 있으면 그쪽이 문항별 workspace를 정한다."
+        ),
+    )
+    parser.add_argument(
+        "--manifest",
+        type=Path,
+        default=DEFAULT_MANIFEST_PATH,
+        help=(
+            "수집 러너가 쓴 문항-workspace 대응표를 정한다. 파일이 없으면 "
+            "`--workspace-id` 하나로 전부 읽는 옛 방식으로 돈다."
+        ),
     )
     parser.add_argument(
         "--output",
@@ -238,6 +280,14 @@ def main() -> int:
         questions = questions[: max(args.limit, 0)]
     if not questions:
         raise SystemExit("답할 문항이 없다.")
+
+    workspace_for: dict[str, int] | None = None
+    if args.manifest is not None and args.manifest.exists():
+        workspace_for = workspace_by_question(load_manifest(args.manifest))
+        check_manifest_covers(
+            (question.question_id for question in questions),
+            workspace_for,
+        )
 
     args.output.mkdir(parents=True, exist_ok=True)
     results_path = args.output / RESULTS_FILENAME
@@ -277,12 +327,20 @@ def main() -> int:
                     f"{'ABSTAIN' if outcome.abstained else 'ANSWER'}"
                 )
 
-            outcomes = answer_questions(
-                questions,
-                lookup=postgres_lookup(
+            if workspace_for is None:
+                lookup: KnowledgeLookup | LookupFor = postgres_lookup(
                     session_factory,
                     workspace_id=args.workspace_id,
-                ),
+                )
+            else:
+                lookup = manifest_lookup_for(
+                    session_factory,
+                    workspace_for=workspace_for,
+                )
+
+            outcomes = answer_questions(
+                questions,
+                lookup=lookup,
                 extract_subjects=bedrock_extract_subjects(llm),
                 answer=bedrock_answer(llm),
                 on_outcome=_record,
@@ -290,10 +348,12 @@ def main() -> int:
     finally:
         engine.dispose()
 
+    isolated = workspace_for is not None
     usage_path.write_text(
         json.dumps(
             {
-                "workspace_id": args.workspace_id,
+                "workspace_id": None if isolated else args.workspace_id,
+                "manifest": str(args.manifest) if isolated else None,
                 "capacity": args.capacity,
                 "questions": len(outcomes),
                 "abstained": abstained,
@@ -306,7 +366,12 @@ def main() -> int:
         encoding="utf-8",
     )
 
-    print(f"\n=== QA 결과 (ws={args.workspace_id}) ===")
+    scope = (
+        f"문항별 격리, manifest={args.manifest}"
+        if isolated
+        else f"ws={args.workspace_id}"
+    )
+    print(f"\n=== QA 결과 ({scope}) ===")
     print(f"  문항: {len(outcomes)}  거절: {abstained}")
     print(f"  호출 {total.calls}회, 토큰 {total.total_tokens}")
     print(f"  {results_path}")

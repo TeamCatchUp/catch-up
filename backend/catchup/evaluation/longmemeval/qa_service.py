@@ -20,8 +20,8 @@ claim을 빼고, 남은 것만 적는다. 같은 문장을 두 번 실으면 토
 
 남은 것을 전부 "한때 참이었다"로 싣지는 않는다. history 조회에는 시점
 필터가 없어서 실제로 닫힌 과거 구간과 질문 시점보다 나중에 발효하는
-구간이 섞여 들어온다. 수집 러너가 여러 문항의 세션을 한 workspace에
-넣으므로 다른 문항의 미래 사실이 같은 대상에 붙는 일이 실제로 생긴다.
+구간이 섞여 들어온다. 문항별로 workspace를 갈라도 한 문항의 haystack
+안에 질문 시점보다 나중의 세션이 들어 있어 같은 일이 생긴다.
 그래서 질문 시각을 기준으로 셋으로 나눈다.
 
 - `valid_from > at`: 질문 시점의 시스템이 알 수 없어야 할 지식이므로
@@ -58,6 +58,7 @@ __all__ = [
     "AnswerResult",
     "ExtractSubjectsFn",
     "KnowledgeLookup",
+    "LookupFor",
     "QuestionOutcome",
     "RenderedContext",
     "SubjectResult",
@@ -67,6 +68,7 @@ __all__ = [
     "build_answer_prompt",
     "build_subject_prompt",
     "render_claims_context",
+    "resolve_lookup",
     "run_question",
 ]
 
@@ -187,6 +189,27 @@ class KnowledgeLookup:
 
     as_of: AsOfLookupFn
     history: HistoryLookupFn
+
+
+LookupFor = Callable[[OracleQuestion], KnowledgeLookup]
+"""문항 하나가 쓸 조회 경로를 골라 주는 함수를 나타낸다.
+
+문항마다 haystack이 다른 workspace에 격리되어 있으면 조회 대상도 문항마다
+달라진다. 그 선택을 호출자에게 맡기려고 함수 자리를 열어 둔다.
+"""
+
+
+def resolve_lookup(
+    lookup: KnowledgeLookup | LookupFor,
+    question: OracleQuestion,
+) -> KnowledgeLookup:
+    """문항 하나에 쓸 조회 경로를 확정한다.
+
+    하나로 고정된 조회면 그대로 쓰고, 함수면 문항을 넘겨 고르게 한다.
+    """
+    if isinstance(lookup, KnowledgeLookup):
+        return lookup
+    return lookup(question)
 
 
 @dataclass(frozen=True, slots=True)
@@ -531,13 +554,17 @@ def run_question(
 def answer_questions(
     questions: Sequence[OracleQuestion],
     *,
-    lookup: KnowledgeLookup,
+    lookup: KnowledgeLookup | LookupFor,
     extract_subjects: ExtractSubjectsFn,
     answer: AnswerFn,
     max_subjects: int = MAX_SUBJECTS,
     on_outcome: Callable[[QuestionOutcome], None] | None = None,
 ) -> list[QuestionOutcome]:
     """문항 목록을 입력 순서대로 처리한다.
+
+    `lookup`은 조회 경로 하나이거나, 문항을 받아 조회 경로를 고르는
+    함수다. 문항별로 haystack을 다른 workspace에 격리해 두었으면 후자를
+    넘겨 문항마다 자기 workspace만 보게 한다.
 
     `on_outcome`은 한 건이 끝날 때마다 불린다. 긴 실행 도중 진행 상황을
     보여주거나 중간 결과를 흘려 쓰는 데 쓴다.
@@ -546,7 +573,7 @@ def answer_questions(
     for question in questions:
         outcome = run_question(
             question,
-            lookup=lookup,
+            lookup=resolve_lookup(lookup, question),
             extract_subjects=extract_subjects,
             answer=answer,
             max_subjects=max_subjects,
