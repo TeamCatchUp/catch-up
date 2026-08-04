@@ -27,13 +27,13 @@ const CsvUploadModal = dynamic(() => import('../member/modals/CsvUploadModal'));
 
 const PAGE_SIZE = 10;
 
-/** 통계 카드 5종 — Jira·Confluence는 API가 따로 주지만 표 열은 atlassian 하나다 */
-const STAT_ORDER: readonly { key: keyof typeof CONNECTOR_LOGOS; source: MappingSource }[] = [
-  { key: 'jira', source: 'atlassian' },
-  { key: 'github', source: 'github' },
-  { key: 'slack', source: 'slack' },
-  { key: 'confluence', source: 'atlassian' },
-  { key: 'channel_talk', source: 'channel_talk' },
+/** 통계 카드 5종. 표시 전용이라 표 열(atlassian 합침 4종)과 대응할 필요가 없다 */
+const STAT_ORDER: readonly (keyof typeof CONNECTOR_LOGOS)[] = [
+  'jira',
+  'github',
+  'slack',
+  'confluence',
+  'channel_talk',
 ];
 
 const toCell = (info: MappedSourceInfo | null): MappingCellValue => {
@@ -61,28 +61,30 @@ const toRow = (item: UserSourceMappingItem): UserMappingRow => {
  * /admin/user-mapping 화면. 스펙 ②(`2026-08-04-이용자매핑-리디자인-design.md`).
  *
  * 계정 등록 상태(통계 카드) → 계정 매핑 상태(필터 칩 + 액션 + 표 + 페이지네이션).
- * 카드를 누르면 그 커넥터로 표가 1열로 접히고, 칩은 API의 `mapping_status`
- * (all/full/partial)와 1:1이다.
+ * 통계 카드는 표시 전용이고, 표를 거르는 건 필터 칩뿐이다(사용자 결정 2026-08-04).
+ * 앞 3개 칩은 API의 `mapping_status`(all/full/partial)와 1:1이고, 채널톡 칩만
+ * 표를 1열로 좁히는 뷰 필터다.
  *
  * 감사에서 `MISSING`으로 남은 4건(목록 조회 실패 / 필터 결과 0명 / 카드 로딩·부분
  * 실패 / CSV 진행중)은 디자인 근거가 없어 구현하지 않는다.
  */
 export default function UserMappingView() {
   const queryClient = useQueryClient();
-  const [status, setStatus] = useState<MappingStatusFilter>('all');
-  const [statKey, setStatKey] = useState<string | null>(null);
+  const [filter, setFilter] = useState<MappingStatusFilter>('all');
   const [page, setPage] = useState(1);
   const [csvOpen, setCsvOpen] = useState(false);
 
   const statusQuery = useQuery(userSourceMappingQueries.status());
-  const listQuery = useQuery(userSourceMappingQueries.list({ mapping_status: status, page, size: PAGE_SIZE }));
+  // 채널톡 칩은 상태 필터가 아니라 뷰 필터라 조회는 all로 나간다
+  const mappingStatus = filter === 'channel_talk' ? 'all' : filter;
+  const listQuery = useQuery(userSourceMappingQueries.list({ mapping_status: mappingStatus, page, size: PAGE_SIZE }));
 
   // `?? []`를 인라인으로 두면 매 렌더 새 배열이라 아래 useMemo가 무의미해진다
   const items = useMemo(() => listQuery.data?.items ?? [], [listQuery.data?.items]);
   const rows = useMemo(() => items.map(toRow), [items]);
   const totalPages = Math.max(1, Math.ceil((listQuery.data?.total ?? 0) / PAGE_SIZE));
 
-  const statItems: MappingStatItem[] = STAT_ORDER.map(({ key }) => {
+  const statItems: MappingStatItem[] = STAT_ORDER.map((key) => {
     const count = statusQuery.data?.[key];
     const users = count?.users ?? 0;
     const mapped = count?.mapped ?? 0;
@@ -95,8 +97,7 @@ export default function UserMappingView() {
     };
   });
 
-  const filterSource = statKey ? (STAT_ORDER.find((s) => s.key === statKey)?.source ?? null) : null;
-  const sourceLabel = statKey ? CONNECTOR_CONTENT[statKey as IntegrationService].name : null;
+  const filterSource: MappingSource | null = filter === 'channel_talk' ? 'channel_talk' : null;
 
   // 수정 모드 — 구 UsersStatusSection 로직을 훅으로 공유한다
   const editUsers = useMemo(
@@ -124,8 +125,7 @@ export default function UserMappingView() {
     onError: () => toast('일시적인 오류가 발생했습니다.', { description: '잠시 후 다시 시도해주세요.' }),
   });
 
-  const resetPage = () => setPage(1);
-  const isEmpty = !listQuery.isLoading && rows.length === 0 && status === 'all' && !statKey;
+  const isEmpty = !listQuery.isLoading && rows.length === 0 && filter === 'all';
 
   return (
     <div className="flex flex-col gap-10">
@@ -134,14 +134,7 @@ export default function UserMappingView() {
           <h2 className="text-heading-large text-text-normal-normal">계정 등록 상태</h2>
           <p className="text-body-small text-text-normal-alternative">팀의 매핑 등록 상태를 확인할 수 있어요.</p>
         </div>
-        <MappingStatCardRow
-          items={statItems}
-          selected={statKey}
-          onToggle={(key) => {
-            setStatKey((prev) => (prev === key ? null : key));
-            resetPage();
-          }}
-        />
+        <MappingStatCardRow items={statItems} />
       </section>
 
       <section className="flex flex-col gap-4">
@@ -154,16 +147,10 @@ export default function UserMappingView() {
 
         <div className="flex flex-wrap items-center justify-between gap-x-8 gap-y-3">
           <MappingFilterChips
-            value={status}
+            value={filter}
             onChange={(next) => {
-              setStatus(next);
-              setStatKey(null);
-              resetPage();
-            }}
-            sourceLabel={sourceLabel}
-            onClearSource={() => {
-              setStatKey(null);
-              resetPage();
+              setFilter(next);
+              setPage(1);
             }}
           />
 

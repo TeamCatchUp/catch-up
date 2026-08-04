@@ -8,7 +8,7 @@ const meta = {
   title: 'Compositions/Admin/Integrations/User Mapping/MappingFilterChips',
   component: MappingFilterChips,
   tags: ['autodocs'],
-  args: { value: 'all', onChange: fn(), onClearSource: fn() },
+  args: { value: 'all', onChange: fn() },
   parameters: {
     ...catchupParameters({
       level: 'composition',
@@ -23,11 +23,12 @@ const meta = {
         nodeId: '17379:78312',
       },
       viewport: { width: 600, height: 100 },
-      states: ['default', 'source-active'],
+      states: ['default', 'channel-talk'],
       dataNotes: [
         '값은 API status 필터와 1:1 (all/full/partial).',
         '칩 마스터 라벨은 ✏️ Value 플레이스홀더 — 라벨은 화면 실측(전체 이용자/전체 연동됨/일부 미연동).',
-        '커넥터 칩은 통계 카드 탭이 만들고, 다시 누르면 해제.',
+        '커넥터 칩은 채널톡 하나만 고정이다(사용자 결정 2026-08-04) — 통계 카드는 표시 전용이라 칩을 만들지 않는다.',
+        '채널톡은 상태 필터가 아니라 표를 1열로 좁히는 뷰 필터다 — 조회는 all 로 나간다.',
       ],
     }),
   },
@@ -48,17 +49,16 @@ export const Default: Story = {
   },
 };
 
-/** 통계 카드 탭으로 커넥터 필터가 걸린 상태 — 커넥터 칩이 선택을 가져간다 */
-export const SourceActive: Story = {
-  args: { sourceLabel: '채널톡' },
+/** 채널톡 — 상태 필터가 아니라 표를 1열로 좁히는 고정 뷰 필터 */
+export const ChannelTalk: Story = {
+  args: { value: 'channel_talk' },
   play: async ({ canvasElement, userEvent, args }) => {
     const canvas = within(canvasElement);
 
-    const source = canvas.getByRole('tab', { name: '채널톡' });
-    await expect(source).toHaveAttribute('aria-selected', 'true');
+    await expect(canvas.getByRole('tab', { name: '채널톡' })).toHaveAttribute('aria-selected', 'true');
     await expect(canvas.getByRole('tab', { name: '전체 이용자' })).toHaveAttribute('aria-selected', 'false');
 
-    await userEvent.click(source);
-    await expect(args.onClearSource).toHaveBeenCalled();
+    await userEvent.click(canvas.getByRole('tab', { name: '전체 이용자' }));
+    await expect(args.onChange).toHaveBeenCalledWith('all');
   },
 };

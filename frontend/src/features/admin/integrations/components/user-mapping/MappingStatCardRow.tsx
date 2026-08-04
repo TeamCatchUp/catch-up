@@ -1,5 +1,3 @@
-'use client';
-
 import type { ComponentType, SVGProps } from 'react';
 
 import MappingStatCard from './MappingStatCard';
@@ -15,25 +13,19 @@ export interface MappingStatItem {
 
 interface MappingStatCardRowProps {
   items: readonly MappingStatItem[];
-  /** 선택된 카드 key. null이면 전체 */
-  selected: string | null;
-  onToggle: (key: string) => void;
 }
 
 /**
  * 계정 등록 상태 카드 행.
- * Figma `17240:74853` — 카드 5장이 1040을 5등분(208), 카드 사이 구분선은 없다.
- * 통계는 5종(Jira·Confluence 분리)이고 표 필터는 4종(atlassian 합침)이라
- * 카드 key → 표 필터 매핑은 배선(호출부)이 정한다.
+ * Figma `17300:80304` — 흰 배경 + `line/normal/neutral` 1px + radius 12,
+ * 카드 5장이 1040을 5등분(208), 카드 사이 gap 0. 구분은 두 번째 카드부터 걸린
+ * 왼쪽 선이 만든다(카드가 담당).
+ *
+ * 표시 전용이다 — 카드를 눌러도 아래 표는 바뀌지 않는다(사용자 결정 2026-08-04).
+ * 통계는 5종(Jira·Confluence 분리)이고 표 열은 4종(atlassian 합침)이라
+ * 애초에 1:1로 대응하지도 않는다.
  */
-export default function MappingStatCardRow({ items, selected, onToggle }: MappingStatCardRowProps) {
-  /*
-   * Figma `17300:80304` — 흰 배경 + `line/normal/neutral` 1px + radius 12,
-   * 카드 사이 gap 0. 구분은 두 번째 카드부터 걸린 왼쪽 선이 만든다(카드가 담당).
-   *
-   * 1024에서 5장을 flex-1로 균등 압축하면 130px까지 줄어 내용이 겹쳤다(실측).
-   * 카드 최소폭을 두고 넘치면 줄바꿈한다 — 카탈로그와 같은 처리다.
-   */
+export default function MappingStatCardRow({ items }: MappingStatCardRowProps) {
   return (
     <div className="border-line-normal-neutral bg-fill-normal-normal flex flex-wrap overflow-hidden rounded-xl border">
       {items.map((item) => (
@@ -43,8 +35,6 @@ export default function MappingStatCardRow({ items, selected, onToggle }: Mappin
           name={item.name}
           percent={item.percent}
           countLabel={item.countLabel}
-          selected={selected === item.key}
-          onToggle={() => onToggle(item.key)}
         />
       ))}
     </div>
