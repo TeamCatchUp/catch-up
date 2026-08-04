@@ -4,6 +4,8 @@ import DefaultProfile from '@/public/icons/icon/default_profile.svg';
 import { Skeleton } from '@/shared/components/ui/skeleton';
 import { cn } from '@/shared/utils/cn';
 
+import type { AccountOption, AccountOverride } from '../../hooks/useUserMappingEdit';
+import AccountSelectDropdown from '../member/tables/AccountSelectDropdown';
 import {
   MAPPING_SOURCE_LABELS,
   MAPPING_SOURCES,
@@ -13,6 +15,15 @@ import {
 } from './userMappingModel';
 import { MAPPING_ROW_GRID_FULL, MAPPING_ROW_GRID_SINGLE } from './userMappingTableGrid';
 
+/** 수정 모드에서 셀을 드롭다운으로 바꾸기 위한 배선 (구 UsersStatusSection 승계) */
+export interface UserMappingEditBinding {
+  optionsByService: Partial<Record<MappingSource, AccountOption[]>>;
+  /** 셀에 걸린 로컬 변경 — 없으면 서버 값을 그대로 보여준다 */
+  overrideOf: (rowId: string, source: MappingSource) => AccountOverride | undefined;
+  onSelectAccount: (rowId: string, source: MappingSource, account: AccountOption) => void;
+  onToggleUnused: (rowId: string, source: MappingSource, unused: boolean) => void;
+}
+
 interface UserMappingTableProps {
   rows: readonly UserMappingRow[];
   /** null이면 전체 4열, 값이 있으면 그 커넥터 1열 (통계 카드 탭 연동) */
@@ -21,6 +32,8 @@ interface UserMappingTableProps {
   isLoading?: boolean;
   /** 스켈레톤 행 수. 페이지 사이즈와 일치시키면 height shift 0 */
   skeletonCount?: number;
+  /** 있으면 커넥터 셀이 계정 선택 드롭다운으로 바뀐다(구버전 `17379:92742` 패턴) */
+  edit?: UserMappingEditBinding;
 }
 
 const Avatar = ({ picture, className }: { picture?: string | null; className?: string }) =>
@@ -68,6 +81,7 @@ export default function UserMappingTable({
   filterSource = null,
   isLoading = false,
   skeletonCount = 10,
+  edit,
 }: UserMappingTableProps) {
   const sources: readonly MappingSource[] = filterSource ? [filterSource] : MAPPING_SOURCES;
   const rowGrid = filterSource ? MAPPING_ROW_GRID_SINGLE : MAPPING_ROW_GRID_FULL;
@@ -136,6 +150,32 @@ export default function UserMappingTable({
 
                   {sources.map((source) => {
                     const value = row.accounts[source] ?? null;
+
+                    if (edit) {
+                      const override = edit.overrideOf(row.id, source);
+                      const account =
+                        override?.type === 'account'
+                          ? override.account
+                          : override?.type === 'unused'
+                            ? undefined
+                            : value && value !== 'unused'
+                              ? { id: '', name: value.name, identifier: value.identifier, picture: value.picture ?? null }
+                              : undefined;
+                      const unused = override ? override.type === 'unused' : value === 'unused';
+
+                      return (
+                        <td key={source} role="cell" className="min-w-0">
+                          <AccountSelectDropdown
+                            status={unused ? '미사용' : '미등록'}
+                            options={edit.optionsByService[source] ?? []}
+                            selectedAccount={account}
+                            onSelect={(next) => edit.onSelectAccount(row.id, source, next)}
+                            onToggleUnused={(next) => edit.onToggleUnused(row.id, source, next)}
+                          />
+                        </td>
+                      );
+                    }
+
                     return (
                       <td key={source} role="cell" className="min-w-0">
                         {value === 'unused' ? (
