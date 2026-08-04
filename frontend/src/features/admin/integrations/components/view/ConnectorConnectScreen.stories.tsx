@@ -21,7 +21,9 @@ import ChannelTalkStepper, { type ChannelTalkStep } from '../management/channel-
 import ChannelTalkEmbeddingFooterBar from '../management/channel-talk/embedding/ChannelTalkEmbeddingFooterBar';
 import ChannelTalkEmbeddingTargetPicker from '../management/channel-talk/embedding/ChannelTalkEmbeddingTargetPicker';
 import ConnectorSidebarList, { type ConnectedConnector } from '../management/ConnectorSidebarList';
+import ConnectorBackLink from '../management/detail/ConnectorBackLink';
 import ConnectorDetailHeader from '../management/detail/ConnectorDetailHeader';
+import ConnectorPreConnectDetail from '../management/detail/ConnectorPreConnectDetail';
 import EmbeddedResourceTable from '../management/embedding/EmbeddedResourceTable';
 import EmbeddingActiveTable from '../management/embedding/EmbeddingActiveTable';
 import EmbeddingHistoryTable from '../management/embedding/EmbeddingHistoryTable';
@@ -194,6 +196,37 @@ function ConnectedDetailSurface({ onSelectConnector }: { onSelectConnector: (ser
 }
 
 /**
+ * (D) 연동 전 상세 — ConnectorConnectView의 preconnect 분기와 같은 골격.
+ * 사이드바 클릭으로 도구를 갈아끼워 커넥터별 카피(Confluence 확정본)를 훑는다.
+ */
+function PreConnectDetailSurface({
+  initialService,
+  onSelectConnector,
+}: {
+  initialService: IntegrationService;
+  onSelectConnector: (service: IntegrationService) => void;
+}) {
+  const [service, setService] = useState<IntegrationService>(initialService);
+
+  return (
+    <PageShell>
+      <CardShell
+        selected={service}
+        onSelectConnector={(next) => {
+          setService(next);
+          onSelectConnector(next);
+        }}
+      >
+        <div className="flex flex-col gap-6">
+          <ConnectorBackLink onBack={fn()} />
+          <ConnectorPreConnectDetail service={service} onCheckMapping={fn()} onConnect={fn()} />
+        </div>
+      </CardShell>
+    </PageShell>
+  );
+}
+
+/**
  * (F) 채널톡 2스텝 — ChannelTalkFlowPanel과 같은 골격.
  * 콘텐츠(px-8)와 하단바가 형제라 하단바 경계선이 pane 전폭을 쓴다.
  */
@@ -316,7 +349,14 @@ const meta = {
       dataProfile: 'realistic-fixture',
       designSource: 'dev-preview',
       viewport: { width: 1440, height: 900 },
-      states: ['connected-detail', 'channel-talk-step1', 'channel-talk-step2', 'catalog', 'empty'],
+      states: [
+        'pre-connect-detail',
+        'connected-detail',
+        'channel-talk-step1',
+        'channel-talk-step2',
+        'catalog',
+        'empty',
+      ],
       dataNotes: [
         '사이드바·채널톡 fixture는 2026-08-04 스테이징 실측 응답(connector/status, connection-status)을 옮긴 값이다.',
         '데이터 훅은 붙이지 않는다 — 배선 검증은 프로덕션 빌드 Playwright가 담당하고, 여기는 화면 조립 규칙을 고정한다.',
@@ -331,6 +371,45 @@ const meta = {
 export default meta;
 
 type Story = StoryObj<ConnectorScreenStoryArgs>;
+
+export const PreConnectDetail: Story = {
+  parameters: {
+    ...catchupParameters({
+      level: 'screen',
+      domain: 'admin',
+      fsdLayer: 'features',
+      owner: 'feature',
+      dataProfile: 'realistic-fixture',
+      designSource: 'figma',
+      figma: {
+        url: 'https://www.figma.com/design/7UwupbVvmHkElmP2OBJQio/%F0%9F%8D%85-Design-System?node-id=16922-134092&m=dev',
+        fileKey: '7UwupbVvmHkElmP2OBJQio',
+        nodeId: '16922:134092',
+      },
+      viewport: { width: 1440, height: 900 },
+      states: ['jira', 'github', 'confluence', 'channel-talk'],
+      dataNotes: [
+        '카피는 Confluence "커넥터 연동 안내 문구"(CU, pageId 157941761) 확정본이다 — 사이드바 클릭으로 도구별 문구를 훑는다.',
+      ],
+    }),
+  },
+  render: (args) => <PreConnectDetailSurface initialService="jira" onSelectConnector={args.onSelectConnector} />,
+  play: async ({ args, canvasElement, step, userEvent }) => {
+    const canvas = within(canvasElement);
+
+    await step('Jira — Confluence 확정 카피', async () => {
+      await expect(canvas.getByText(/완료된 이슈는 누구도 다시 열어보지 않아요/)).toBeInTheDocument();
+      await expect(canvas.getByText('"이 기능 왜 보류됐었지?"')).toBeInTheDocument();
+    });
+
+    await step('사이드바 Github 클릭 → Github 카피', async () => {
+      await userEvent.click(canvas.getByRole('button', { name: /Github - TeamCatchUp/ }));
+      await expect(args.onSelectConnector).toHaveBeenCalledWith('github');
+      await expect(canvas.getByText(/코드에는 "왜"가 없습니다/)).toBeInTheDocument();
+      await expect(canvas.getByText('코드 수정과 푸시 — 읽기 전용으로만 동작해요')).toBeInTheDocument();
+    });
+  },
+};
 
 export const ConnectedDetail: Story = {
   parameters: {
