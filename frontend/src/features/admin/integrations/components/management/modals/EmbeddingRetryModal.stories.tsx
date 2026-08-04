@@ -33,6 +33,7 @@ const meta = {
         '로딩 중에는 onOpenChange가 undefined로 막혀 닫을 수 없다 (EmbeddingRetryModal.tsx:35).',
       ],
     }),
+    docs: { story: { inline: false, height: '620px' } },
   },
 } satisfies Meta<typeof EmbeddingRetryModal>;
 

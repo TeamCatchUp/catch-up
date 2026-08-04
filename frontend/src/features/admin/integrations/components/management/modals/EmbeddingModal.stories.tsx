@@ -80,6 +80,7 @@ const meta = {
         '전체 선택하기는 검색 필터를 무시하고 접근 가능 전체를 선택한다 (EmbeddingModal.tsx:65-83).',
       ],
     }),
+    docs: { story: { inline: false, height: '760px' } },
   },
 } satisfies Meta<typeof EmbeddingModal>;
 
