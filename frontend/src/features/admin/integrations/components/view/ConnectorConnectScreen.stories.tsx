@@ -26,7 +26,7 @@ import ConnectorDetailHeader from '../management/detail/ConnectorDetailHeader';
 import ConnectorPreConnectDetail from '../management/detail/ConnectorPreConnectDetail';
 import EmbeddedResourceTable from '../management/embedding/EmbeddedResourceTable';
 import EmbeddingActiveTable from '../management/embedding/EmbeddingActiveTable';
-import EmbeddingHistoryTable from '../management/embedding/EmbeddingHistoryTable';
+import EmbeddingHistoryTable, { type EmbeddingHistoryItem } from '../management/embedding/EmbeddingHistoryTable';
 import EmbeddingSegmentTabs, { type EmbeddingTabValue } from '../management/embedding/EmbeddingSegmentTabs';
 import ConnectorEmptyState from '../management/states/ConnectorEmptyState';
 
@@ -169,7 +169,7 @@ function ConnectedDetailSurface({
   onSelectConnector: (service: IntegrationService) => void;
   initialTab?: EmbeddingTabValue;
   activeItems?: { id: string; target: string }[];
-  historyItems?: typeof HISTORY_FIXTURE;
+  historyItems?: EmbeddingHistoryItem[];
 }) {
   const [tab, setTab] = useState<EmbeddingTabValue>(initialTab);
 
@@ -603,11 +603,19 @@ export const Empty: Story = {
   ),
 };
 
-/** 현황 탭 진행 중 — 채널 1 + 도큐먼트 2가 동시에 도는 상태 */
+/**
+ * 현황 탭 진행 중 — 도큐먼트 2건이 도는 상태.
+ * '캐치업' 채널은 완료돼 이력으로 넘어가 있어 진행 집합엔 없다(useEmbeddingHistory.ts:24-27 —
+ * in_progress/pending/retrying만 진행 표에, 나머지는 이력 표에 실린다. 대상은 한쪽에만 존재).
+ */
 const ACTIVE_ITEMS_FIXTURE = [
-  { id: 't-1', target: 'Catch Up | 캐치업' },
   { id: 't-2', target: 'Catch Up Guide' },
   { id: 't-3', target: '도큐먼트 스페이스 2' },
+];
+
+/** 현황 탭 진행 중 화면의 이력 — 완료된 '캐치업' 채널 성공 1건만(HISTORY_FIXTURE의 h-1과 같은 대상) */
+const HISTORY_RUNNING_FIXTURE = [
+  { id: 'h-1', target: 'Catch Up | 캐치업', status: 'success' as const, executedAt: '2026.07.23 09:52 PM' },
 ];
 
 /** 현황 탭 실패 이력 — 일반 실패와 5만 캡 초과가 섞인 상태 */
@@ -635,19 +643,24 @@ export const StatusTabRunning: Story = {
       designSource: 'dev-preview',
       viewport: { width: 1440, height: 900 },
       states: ['status-tab-running'],
-      layoutNotes: ['현황 탭 진행중 표 — 채널 1 + 도큐먼트 2, 3건이 동시에 돈다.'],
+      layoutNotes: ['현황 탭 진행중 표 — 도큐먼트 2건이 돈다. 완료된 캐치업 채널은 이력 1건으로 갈린다.'],
     }),
   },
   render: (args) => (
-    <ConnectedDetailSurface onSelectConnector={args.onSelectConnector} initialTab="status" activeItems={ACTIVE_ITEMS_FIXTURE} />
+    <ConnectedDetailSurface
+      onSelectConnector={args.onSelectConnector}
+      initialTab="status"
+      activeItems={ACTIVE_ITEMS_FIXTURE}
+      historyItems={HISTORY_RUNNING_FIXTURE}
+    />
   ),
   play: async ({ canvasElement, step }) => {
     const canvas = within(canvasElement);
-    await step('진행 중 표 — 3개 대상이 돈다', async () => {
+    await step('진행 중 표 — 도큐먼트 대상이 돈다', async () => {
       await expect(canvas.getByText('도큐먼트 스페이스 2')).toBeInTheDocument();
     });
     await step('현황 탭이 선택돼 있고 진행 점이 붙는다', async () => {
-      await expect(canvas.getByRole('tab', { name: /임베딩 현황/ })).toHaveAttribute('aria-selected', 'true');
+      await expect(canvas.getByRole('tab', { name: /임베딩 현황.*진행 중/ })).toHaveAttribute('aria-selected', 'true');
     });
   },
 };
