@@ -25,6 +25,10 @@ const MEGAPHONE_NOTICE =
 
 interface ChannelTalkChannelCardProps {
   channel: ChannelTalkChannel;
+  /** 채널 연결 테스트 요청 진행 중 — 버튼을 잠근다 */
+  isTesting?: boolean;
+  /** 연결 테스트 진행 중인 도큐먼트 스페이스 ids */
+  testingDocumentSpaceIds?: ReadonlySet<string>;
   onUpdate: (patch: ChannelTalkChannelPatch) => void;
   onRemove: () => void;
   onAddDocumentSpace: () => void;
@@ -42,6 +46,8 @@ interface ChannelTalkChannelCardProps {
  */
 export default function ChannelTalkChannelCard({
   channel,
+  isTesting = false,
+  testingDocumentSpaceIds,
   onUpdate,
   onRemove,
   onAddDocumentSpace,
@@ -137,7 +143,7 @@ export default function ChannelTalkChannelCard({
               variant={canTestConnection ? 'box-soft-primary' : 'box-outline-gray'}
               size="md"
               onClick={onTestConnection}
-              disabled={!canTestConnection}
+              disabled={!canTestConnection || isTesting}
               className="h-11.5 w-full gap-2.5"
             >
               <IconSend className="size-5.5 shrink-0" />
@@ -150,6 +156,7 @@ export default function ChannelTalkChannelCard({
           <ChannelTalkDocumentSpaceCard
             key={ds.id}
             documentSpace={ds}
+            isTesting={testingDocumentSpaceIds?.has(ds.id) ?? false}
             onUpdate={(patch) => onUpdateDocumentSpace(ds.id, patch)}
             onRemove={() => onRemoveDocumentSpace(ds.id)}
             onTestConnection={() => onTestDocumentSpaceConnection(ds.id)}

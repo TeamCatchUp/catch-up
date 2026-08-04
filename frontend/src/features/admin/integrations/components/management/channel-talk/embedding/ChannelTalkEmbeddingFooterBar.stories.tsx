@@ -36,7 +36,7 @@ const meta = {
         '집계는 숫자만 #3385FF로 강조된다.',
       ],
       interactionNotes: [
-        '체크 표시는 전부 선택했을 때만 — 일부 선택 indeterminate는 쓰지 않는다(사용자 결정 2026-08-05).',
+        '체크 표시는 전부 선택했을 때만 — 일부 선택 indeterminate는 쓰지 않는다(사용자 결정 2026-08-04).',
         '라벨 텍스트가 버튼 안에 있어 텍스트 클릭도 토글이다.',
       ],
     }),
@@ -99,5 +99,23 @@ export const NoneSelected: Story = {
     const canvas = within(canvasElement);
     await expect(canvas.getByRole('checkbox', { name: '전체 선택하기' })).toHaveAttribute('aria-checked', 'false');
     await expect(canvas.getByRole('button', { name: '임베딩하기' })).toBeDisabled();
+  },
+};
+
+/** 채널 대화만 선택 — 도큐먼트 스페이스가 없어도 제출 가능해야 한다 (develop 동작 승계) */
+export const ChannelOnly: Story = {
+  args: { channelCount: 1, documentCount: 0, allSelected: false },
+  render: (args) => (
+    <Frame>
+      <ChannelTalkEmbeddingFooterBar {...args} />
+    </Frame>
+  ),
+  play: async ({ canvasElement, userEvent, args }) => {
+    const canvas = within(canvasElement);
+    const submit = canvas.getByRole('button', { name: '임베딩하기' });
+
+    await expect(submit).toBeEnabled();
+    await userEvent.click(submit);
+    await expect(args.onEmbed).toHaveBeenCalled();
   },
 };

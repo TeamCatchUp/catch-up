@@ -106,7 +106,7 @@ const meta = {
         nodeId: '17414:97988',
       },
       viewport: { width: 780, height: 720 },
-      states: ['default', 'visibility-toggle', 'narrow'],
+      states: ['default', 'visibility-toggle', 'nothing-visible', 'narrow'],
       layoutNotes: [
         '716×634 = 좌 채널 목록 280 + 우 선택 상세 436. 좌만 고정, 우가 남은 폭을 먹는다.',
         '컬럼 헤더 pl 12 / pr 20 / py 8, gap 32. 좌측 36 스페이서가 체크박스 자리를 비운다.',
@@ -172,6 +172,22 @@ export const VisibilityToggle: Story = {
     // 다시 켜면 돌아오지만 선택은 풀려 있다
     await userEvent.click(firstToggle);
     await expect(canvas.queryByText('1개 선택됨')).not.toBeInTheDocument();
+  },
+};
+
+/** 표시 채널 0개 — 우측 pane에 안내가 나온다 (구 모달 ChannelGroupListEmpty 승계) */
+export const NothingVisible: Story = {
+  render: () => <PickerHarness initialVisible={[]} />,
+  play: async ({ canvasElement, userEvent }) => {
+    const canvas = within(canvasElement);
+
+    await expect(canvas.getByText('채널을 선택하세요')).toBeInTheDocument();
+    await expect(canvas.getByText(/왼쪽에서 채널을 선택하면/)).toBeInTheDocument();
+
+    // 좌측에서 채널을 켜면 안내가 사라지고 그룹이 나타난다
+    await userEvent.click(canvas.getAllByRole('button', { name: /표시/ })[0]);
+    await expect(canvas.queryByText('채널을 선택하세요')).not.toBeInTheDocument();
+    await expect(canvas.getByText('전체 9개')).toBeInTheDocument();
   },
 };
 

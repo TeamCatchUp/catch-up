@@ -3,6 +3,8 @@
 import { useMemo, useState } from 'react';
 import { useQueries, useQuery } from '@tanstack/react-query';
 
+import { Skeleton } from '@/shared/components/ui/skeleton';
+
 import { CONNECTOR_CONTENT } from '../../../constants/connectorContent';
 import { DEFAULT_PERIOD } from '../../../constants/period';
 import { useChannelTalkEmbeddingSubmit } from '../../../hooks/useChannelTalkEmbeddingSubmit';
@@ -55,7 +57,13 @@ export default function ChannelTalkFlowPanel({
   const initialState = useMemo(() => deriveChannelTalkInitialState(channelTalkStatus), [channelTalkStatus]);
 
   if (statusQuery.isLoading) {
-    return <div className="flex flex-col gap-6 px-8 py-6" />;
+    return (
+      <div className="flex flex-col gap-6 px-8 py-6">
+        <Skeleton className="h-15 w-80" />
+        <Skeleton className="h-9 w-full" />
+        <Skeleton className="h-40 w-full" />
+      </div>
+    );
   }
 
   // fetch 실패 시 "등록 없음"으로 오인 방지 — 명시적 에러 표시
@@ -101,6 +109,8 @@ interface ConnectStepProps {
 function ConnectStep({ initialState, onProceed }: ConnectStepProps) {
   const {
     state,
+    pendingChannelIds,
+    pendingDocumentSpaceIds,
     addChannel,
     updateChannel,
     removeChannel,
@@ -131,6 +141,8 @@ function ConnectStep({ initialState, onProceed }: ConnectStepProps) {
           <ChannelTalkChannelCard
             key={channel.id}
             channel={channel}
+            isTesting={pendingChannelIds.has(channel.id)}
+            testingDocumentSpaceIds={pendingDocumentSpaceIds}
             onUpdate={(patch) => updateChannel(channel.id, patch)}
             onRemove={() => removeChannel(channel.id)}
             onAddDocumentSpace={() => addDocumentSpace(channel.id)}
@@ -202,6 +214,41 @@ function EmbedStep({ onDone }: EmbedStepProps) {
   const { handleJobStart } = useEmbeddingJobs();
   const { submit, isSubmitting } = useChannelTalkEmbeddingSubmit({ onSettled: onDone, onJobStart: handleJobStart });
 
+  /*
+   * 로딩·에러·채널 없음을 각각 명시한다 — 셋 다 channels가 []라서 구분 없이는
+   * 똑같은 빈 선택기로 보인다. 스텝퍼로 ②에 바로 진입할 수 있어 실제 도달 경로다.
+   */
+  const isTargetsLoading = channelStatusQuery.isLoading || targetsQueries.some((q) => q.isLoading);
+  const isTargetsError = channelStatusQuery.isError || targetsQueries.some((q) => q.isError);
+
+  if (isTargetsLoading) {
+    return (
+      <div className="px-8 pt-6 pb-6">
+        <div className="border-line-normal-neutral flex flex-col gap-3 rounded-xl border p-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-9 w-full" />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (isTargetsError) {
+    return (
+      <div className="mx-8 my-6 border-line-normal-assistive bg-fill-normal-strong text-body-small text-status-destructive rounded-xl border px-4 py-3">
+        임베딩 대상을 불러오지 못했습니다. 잠시 후 다시 시도해주세요.
+      </div>
+    );
+  }
+
+  if (channels.length === 0) {
+    return (
+      <div className="mx-8 my-6 border-line-normal-assistive bg-fill-normal-strong text-body-small text-text-normal-alternative rounded-xl border px-4 py-3">
+        등록된 채널이 없습니다. 스텝 ①에서 채널을 먼저 연결해주세요.
+      </div>
+    );
+  }
+
   // 선택기 모델로 어댑트 — 기간은 명시 설정만 보관하므로 기본값을 여기서 채운다
   const pickerChannels: ChannelTalkChannelTarget[] = channels.map((ch) => ({
     id: ch.channel_id,
@@ -235,6 +282,7 @@ function EmbedStep({ onDone }: EmbedStepProps) {
         channelCount={channelCount}
         documentCount={spaceCount}
         allSelected={isAllSelected}
+        isSubmitting={isSubmitting}
         onToggleAll={toggleAll}
         onEmbed={() => {
           if (isSubmitting) return;

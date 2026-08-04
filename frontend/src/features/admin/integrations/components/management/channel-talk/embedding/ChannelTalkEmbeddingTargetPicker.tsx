@@ -1,5 +1,7 @@
 'use client';
 
+import IconTag from '@/public/icons/icon/tag.svg';
+
 import type { Period } from '../../../../constants/period';
 import ChannelTalkChannelGroup from './ChannelTalkChannelGroup';
 import ChannelTalkChannelListPanel from './ChannelTalkChannelListPanel';
@@ -67,6 +69,20 @@ export default function ChannelTalkEmbeddingTargetPicker({
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto">
+          {/* 표시 채널이 없을 때의 안내 — 구 모달 ChannelGroupListEmpty의 카피 승계 */}
+          {visible.length === 0 && (
+            <div className="flex h-full flex-col items-center justify-center gap-2.5 px-5">
+              <div className="border-line-normal-strong inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-dashed p-1.5">
+                <IconTag className="text-text-normal-alternative size-6" />
+              </div>
+              <p className="text-heading-small text-text-normal-normal">채널을 선택하세요</p>
+              <p className="text-body-small text-text-normal-assistive text-center">
+                왼쪽에서 채널을 선택하면
+                <br />
+                임베딩할 도큐먼트 스페이스 목록이 표시됩니다
+              </p>
+            </div>
+          )}
           {visible.map((channel) => (
             <ChannelTalkChannelGroup
               key={channel.id}

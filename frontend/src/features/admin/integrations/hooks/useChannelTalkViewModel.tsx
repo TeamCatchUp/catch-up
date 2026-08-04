@@ -49,6 +49,9 @@ function toastCredentialError(code: string | undefined, message: string | undefi
 
 interface ChannelTalkViewModel {
   state: ChannelTalkConnectionState;
+  /** 연결 테스트가 진행 중인 카드 ids — 테스트 버튼 비활성 표시용 */
+  pendingChannelIds: ReadonlySet<string>;
+  pendingDocumentSpaceIds: ReadonlySet<string>;
   addChannel: () => void;
   updateChannel: (channelId: string, patch: ChannelTalkChannelPatch) => void;
   removeChannel: (channelId: string) => void;
@@ -233,6 +236,8 @@ export function useChannelTalkViewModel(initialState: ChannelTalkConnectionState
 
   return {
     state,
+    pendingChannelIds,
+    pendingDocumentSpaceIds,
     addChannel,
     updateChannel,
     removeChannel,

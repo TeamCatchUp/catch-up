@@ -7,6 +7,8 @@ interface ChannelTalkEmbeddingFooterBarProps {
   channelCount: number;
   documentCount: number;
   allSelected: boolean;
+  /** 제출 요청이 진행 중 — 버튼을 잠그고 라벨로 알린다 */
+  isSubmitting?: boolean;
   onToggleAll: () => void;
   onEmbed: () => void;
 }
@@ -23,6 +25,7 @@ export default function ChannelTalkEmbeddingFooterBar({
   channelCount,
   documentCount,
   allSelected,
+  isSubmitting = false,
   onToggleAll,
   onEmbed,
 }: ChannelTalkEmbeddingFooterBarProps) {
@@ -57,7 +60,7 @@ export default function ChannelTalkEmbeddingFooterBar({
           variant="box-solid-primary"
           size="md"
           onClick={onEmbed}
-          disabled={channelCount === 0 && documentCount === 0}
+          disabled={isSubmitting || (channelCount === 0 && documentCount === 0)}
         >
           임베딩하기
         </Button>

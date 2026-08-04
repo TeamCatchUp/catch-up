@@ -17,6 +17,8 @@ import ChannelTalkSyncIntervalDropdown from './ChannelTalkSyncIntervalDropdown';
 
 interface ChannelTalkDocumentSpaceCardProps {
   documentSpace: ChannelTalkDocumentSpace;
+  /** 연결 테스트 요청 진행 중 — 버튼을 잠근다 */
+  isTesting?: boolean;
   onUpdate: (patch: ChannelTalkDocumentSpacePatch) => void;
   onRemove: () => void;
   onTestConnection: () => void;
@@ -26,6 +28,7 @@ interface ChannelTalkDocumentSpaceCardProps {
 // tested → 헤더 한 줄 collapsed lock. idle/error → expanded
 export default function ChannelTalkDocumentSpaceCard({
   documentSpace,
+  isTesting = false,
   onUpdate,
   onRemove,
   onTestConnection,
@@ -153,7 +156,7 @@ export default function ChannelTalkDocumentSpaceCard({
           variant={canTestConnection ? 'box-soft-primary' : 'box-outline-gray'}
           size="md"
           onClick={onTestConnection}
-          disabled={!canTestConnection}
+          disabled={!canTestConnection || isTesting}
           className="h-11.5 w-full gap-2.5"
         >
           <IconSend className="size-5.5 shrink-0" />
