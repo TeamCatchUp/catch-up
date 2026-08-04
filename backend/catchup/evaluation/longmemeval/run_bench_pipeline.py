@@ -24,9 +24,12 @@ workspace를 건너뛰고 이어 가면 빈 지식이 섞인 채로 점수가 �
 읽어 그대로 옮기는 일이라 파일 입력을 받는 발행 러너의 계약과 맞지 않고,
 `uow.ontology.ensure`가 이미 "있으면 그대로, 다르면 충돌"을 보장한다.
 
-추출이 끝나면 그 workspace의 pending `observation.ready` 이벤트가 0인지
-확인한다. 러너는 실패한 건을 재시도 대기로 되돌리고 exit 0으로 끝날 수
-있어서, 종료 코드만으로는 "다 처리했다"를 말할 수 없다.
+추출이 끝나면 그 workspace의 `observation.ready` 이벤트를 두 갈래로
+확인한다. 아직 큐에 남은 것(pending·processing)이 0인지, 그리고 재시도를
+소진해 접힌 것(failed)이 0인지다. 러너는 실패한 건을 재시도 대기로
+되돌리거나 아예 failed로 닫고도 exit 0으로 끝날 수 있어서, 종료 코드만
+으로는 "다 처리했다"를 말할 수 없다. failed를 빼고 세면 claim이 통째로
+빠진 workspace가 정상 완료로 지나간다.
 
 실행:
     uv run python -m catchup.evaluation.longmemeval.run_bench_pipeline \\
@@ -66,12 +69,13 @@ __all__ = [
     "EXTRACTION_MODULE",
     "RESOLUTION_MODULE",
     "ADJUDICATION_MODULE",
+    "ObservationBacklog",
     "StepCommand",
     "StepReport",
     "WorkspaceReport",
     "build_step_commands",
     "copy_vocabulary_snapshot",
-    "count_pending_observation_events",
+    "count_observation_backlog",
     "run_pipeline",
     "subprocess_step_runner",
 ]
@@ -87,26 +91,55 @@ EXTRACTION_MODULE = "catchup.evaluation.run_extraction_pipeline"
 RESOLUTION_MODULE = "catchup.evaluation.run_resolution_pipeline"
 ADJUDICATION_MODULE = "catchup.evaluation.longmemeval.run_bench_adjudication"
 
-UNFINISHED_EVENT_STATUSES = [
+UNFINISHED_EVENT_STATUSES = (
     PipelineEventStatus.PENDING.value,
     PipelineEventStatus.PROCESSING.value,
-]
+)
 """아직 소화되지 않은 큐 상태를 나타낸다.
 
 `processing`도 센다. 러너가 집어 갔다가 끝내지 못한 것도 처리되지 않은
 일이고, 빼고 세면 "다 끝났다"가 거짓이 된다.
 """
 
-PENDING_OBSERVATION_EVENTS_SQL = text(
+FAILED_EVENT_STATUS = PipelineEventStatus.FAILED.value
+"""재시도 한도를 넘겨 접힌 상태를 나타낸다.
+
+큐에는 남지 않지만 처리된 것도 아니다. 이 상태의 이벤트가 있는
+workspace는 그만큼 claim이 비어 있으므로 완료로 볼 수 없다.
+"""
+
+UNPROCESSED_EVENT_STATUSES = (*UNFINISHED_EVENT_STATUSES, FAILED_EVENT_STATUS)
+"""`processed`에 이르지 못한 상태를 모두 나타낸다."""
+
+UNPROCESSED_OBSERVATION_EVENTS_SQL = text(
     """
-    SELECT count(*)
+    SELECT status, count(*)
     FROM knowledge_pipeline_outbox
     WHERE workspace_id = :workspace_id
       AND event_type = :event_type
       AND status = ANY(:statuses)
+    GROUP BY status
     """
 )
-"""추출이 아직 소화하지 못한 일의 수를 센다."""
+"""추출이 `processed`로 닫지 못한 일을 상태별로 센다."""
+
+
+@dataclass(frozen=True, slots=True)
+class ObservationBacklog:
+    """추출이 남긴 observation 이벤트를 상태별로 담는다.
+
+    Attributes:
+        unfinished: 아직 큐에 남은(pending·processing) 건수를 나타낸다.
+        failed: 재시도를 소진해 접힌 건수를 나타낸다.
+    """
+
+    unfinished: int
+    failed: int
+
+    @property
+    def total(self) -> int:
+        """처리되지 못한 전체 건수를 나타낸다."""
+        return self.unfinished + self.failed
 
 
 @dataclass(frozen=True, slots=True)
@@ -116,8 +149,8 @@ class StepCommand:
     Attributes:
         label: 사람이 읽을 단계 이름을 나타낸다.
         argv: subprocess에 넘길 인자를 담는다.
-        drains_observations: 이 단계 뒤에 pending 이벤트 0을 확인할지
-            나타낸다. 추출만 해당한다.
+        drains_observations: 이 단계 뒤에 남은 observation 이벤트가
+            0인지 확인할지 나타낸다. 추출만 해당한다.
     """
 
     label: str
@@ -160,8 +193,8 @@ StepRunner = Callable[[StepCommand], int]
 VocabularyCopier = Callable[[int], str]
 """workspace 하나에 어휘를 보장하고 `copied`/`reused`를 돌려준다."""
 
-PendingCounter = Callable[[int], int]
-"""workspace 하나의 미처리 observation 이벤트 수를 돌려준다."""
+BacklogCounter = Callable[[int], ObservationBacklog]
+"""workspace 하나의 처리되지 못한 observation 이벤트를 상태별로 돌려준다."""
 
 
 def build_step_commands(
@@ -288,26 +321,34 @@ def copy_vocabulary_snapshot(
     return "copied"
 
 
-def count_pending_observation_events(
+def count_observation_backlog(
     session: Session,
     *,
     workspace_id: int,
-) -> int:
-    """추출이 아직 소화하지 못한 일의 수를 센다.
+) -> ObservationBacklog:
+    """추출이 `processed`로 닫지 못한 일을 상태별로 센다.
+
+    큐에 남은 것과 접힌 것을 나눠 센다. 둘 다 "처리되지 않았다"는 점은
+    같지만 사람이 할 일이 다르다 — 남은 것은 러너를 더 돌리면 되고,
+    접힌 것은 실패 원인을 먼저 봐야 한다.
 
     읽기만 한다. 평가 러너가 큐 상태를 건드리면 같은 실행을 두 번 돌린
     결과가 달라진다.
     """
-    return (
-        session.execute(
-            PENDING_OBSERVATION_EVENTS_SQL,
-            {
-                "workspace_id": workspace_id,
-                "event_type": PipelineEventType.OBSERVATION_READY.value,
-                "statuses": UNFINISHED_EVENT_STATUSES,
-            },
-        ).scalar()
-        or 0
+    rows = session.execute(
+        UNPROCESSED_OBSERVATION_EVENTS_SQL,
+        {
+            "workspace_id": workspace_id,
+            "event_type": PipelineEventType.OBSERVATION_READY.value,
+            "statuses": list(UNPROCESSED_EVENT_STATUSES),
+        },
+    ).all()
+    by_status = {str(status): int(count) for status, count in rows}
+    return ObservationBacklog(
+        unfinished=sum(
+            by_status.get(status, 0) for status in UNFINISHED_EVENT_STATUSES
+        ),
+        failed=by_status.get(FAILED_EVENT_STATUS, 0),
     )
 
 
@@ -317,7 +358,7 @@ def run_pipeline(
     ontology_version: str,
     run_step: StepRunner,
     copy_vocabulary: VocabularyCopier,
-    count_pending: PendingCounter,
+    count_backlog: BacklogCounter,
 ) -> tuple[WorkspaceReport, ...]:
     """workspace를 하나씩 끝까지 밀고, 실패하면 그 자리에서 멈춘다.
 
@@ -326,8 +367,8 @@ def run_pipeline(
     달라져 되짚기 어렵다.
 
     Raises:
-        SystemExit: 단계가 0이 아닌 코드로 끝났거나, 추출 뒤에도 처리하지
-            못한 observation 이벤트가 남았을 때 낸다.
+        SystemExit: 단계가 0이 아닌 코드로 끝났거나, 추출 뒤에도
+            observation 이벤트가 큐에 남았거나 failed로 접혔을 때 낸다.
     """
     reports: list[WorkspaceReport] = []
     for index, workspace_id in enumerate(workspace_ids, start=1):
@@ -354,14 +395,24 @@ def run_pipeline(
                     "건너뛰면 빈 지식이 섞인 채로 점수가 나온다."
                 )
             if command.drains_observations:
-                remaining = count_pending(workspace_id)
-                if remaining:
+                backlog = count_backlog(workspace_id)
+                if backlog.unfinished:
                     raise SystemExit(
                         f"workspace {workspace_id}의 {command.label}가 끝난 "
                         f"뒤에도 처리하지 못한 observation 이벤트가 "
-                        f"{remaining}건 남았다. 추출 러너는 실패한 건을 "
-                        "재시도 대기로 되돌리고 정상 종료하므로 exit code만 "
-                        "믿을 수 없다. 로그에서 실패 원인을 확인한다."
+                        f"{backlog.unfinished}건 남았다. 추출 러너는 실패한 "
+                        "건을 재시도 대기로 되돌리고 정상 종료하므로 exit "
+                        "code만 믿을 수 없다. 로그에서 실패 원인을 확인한다."
+                    )
+                if backlog.failed:
+                    raise SystemExit(
+                        f"workspace {workspace_id}의 {command.label}가 "
+                        f"observation 이벤트 {backlog.failed}건을 failed로 "
+                        "닫았다. 재시도 한도를 넘긴 실패라 큐에는 남지 않지만 "
+                        "그만큼 claim이 비어 있다. 이대로 이어 가면 지식이 빠진 "
+                        "workspace가 정상 완료로 기록된다. "
+                        "knowledge_pipeline_outbox의 last_error에서 원인을 "
+                        "확인하고 그 이벤트를 다시 큐에 넣은 뒤 재실행한다."
                     )
             steps.append(StepReport(label=command.label, seconds=elapsed))
             print(f"  {command.label}: {elapsed:.1f}s")
@@ -436,9 +487,9 @@ def main() -> int:
             ontology_version=args.ontology_version,
         )
 
-    def _count(workspace_id: int) -> int:
+    def _count(workspace_id: int) -> ObservationBacklog:
         with session_factory() as session:
-            return count_pending_observation_events(
+            return count_observation_backlog(
                 session,
                 workspace_id=workspace_id,
             )
@@ -455,7 +506,7 @@ def main() -> int:
             ontology_version=args.ontology_version,
             run_step=subprocess_step_runner,
             copy_vocabulary=_copy,
-            count_pending=_count,
+            count_backlog=_count,
         )
     finally:
         engine.dispose()

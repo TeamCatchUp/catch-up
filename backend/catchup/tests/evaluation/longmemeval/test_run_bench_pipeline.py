@@ -18,6 +18,7 @@ import pytest
 from catchup.evaluation.longmemeval.run_bench_pipeline import ADJUDICATION_MODULE
 from catchup.evaluation.longmemeval.run_bench_pipeline import EXTRACTION_MODULE
 from catchup.evaluation.longmemeval.run_bench_pipeline import RESOLUTION_MODULE
+from catchup.evaluation.longmemeval.run_bench_pipeline import ObservationBacklog
 from catchup.evaluation.longmemeval.run_bench_pipeline import StepCommand
 from catchup.evaluation.longmemeval.run_bench_pipeline import build_step_commands
 from catchup.evaluation.longmemeval.run_bench_pipeline import copy_vocabulary_snapshot
@@ -53,8 +54,8 @@ def _always_reused(workspace_id: int) -> str:
     return "reused"
 
 
-def _drained(workspace_id: int) -> int:
-    return 0
+def _drained(workspace_id: int) -> ObservationBacklog:
+    return ObservationBacklog(unfinished=0, failed=0)
 
 
 def test_build_step_commands_targets_the_given_workspace() -> None:
@@ -91,7 +92,7 @@ def test_run_pipeline_walks_every_workspace_in_order() -> None:
         ontology_version="2",
         run_step=runner,
         copy_vocabulary=_always_reused,
-        count_pending=_drained,
+        count_backlog=_drained,
     )
 
     assert runner.labels == ["추출", "해소", "판정"] * 2
@@ -125,7 +126,7 @@ def test_run_pipeline_ensures_vocabulary_before_the_first_step() -> None:
         ontology_version="2",
         run_step=_run,
         copy_vocabulary=_copy,
-        count_pending=_drained,
+        count_backlog=_drained,
     )
 
     assert events[0] == "vocab:910000"
@@ -142,7 +143,7 @@ def test_run_pipeline_stops_at_the_first_failing_step() -> None:
             ontology_version="2",
             run_step=runner,
             copy_vocabulary=_always_reused,
-            count_pending=_drained,
+            count_backlog=_drained,
         )
 
     message = str(excinfo.value)
@@ -156,8 +157,8 @@ def test_run_pipeline_stops_when_observations_are_left_unprocessed() -> None:
     """추출이 exit 0이어도 큐가 남아 있으면 멈춘다."""
     runner = _Recorder()
 
-    def _left_behind(workspace_id: int) -> int:
-        return 4
+    def _left_behind(workspace_id: int) -> ObservationBacklog:
+        return ObservationBacklog(unfinished=4, failed=0)
 
     with pytest.raises(SystemExit) as excinfo:
         run_pipeline(
@@ -165,12 +166,40 @@ def test_run_pipeline_stops_when_observations_are_left_unprocessed() -> None:
             ontology_version="2",
             run_step=runner,
             copy_vocabulary=_always_reused,
-            count_pending=_left_behind,
+            count_backlog=_left_behind,
         )
 
     message = str(excinfo.value)
     assert "910000" in message
     assert "4건" in message
+    assert runner.labels == ["추출"]
+
+
+def test_run_pipeline_stops_when_observations_ended_failed() -> None:
+    """큐가 비었어도 failed로 접힌 이벤트가 있으면 멈춘다.
+
+    재시도 한도를 넘긴 실패는 큐에서 사라진다. pending·processing만 세면
+    남은 건수가 0이라 오케스트레이터가 다음 단계로 넘어가고, claim이 통째로
+    빠진 workspace가 정상 완료로 기록된다.
+    """
+    runner = _Recorder()
+
+    def _all_failed(workspace_id: int) -> ObservationBacklog:
+        return ObservationBacklog(unfinished=0, failed=2)
+
+    with pytest.raises(SystemExit) as excinfo:
+        run_pipeline(
+            [910000, 910001],
+            ontology_version="2",
+            run_step=runner,
+            copy_vocabulary=_always_reused,
+            count_backlog=_all_failed,
+        )
+
+    message = str(excinfo.value)
+    assert "910000" in message
+    assert "2건" in message
+    assert "failed" in message
     assert runner.labels == ["추출"]
 
 
