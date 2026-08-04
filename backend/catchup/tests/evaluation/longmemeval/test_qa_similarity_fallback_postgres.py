@@ -361,3 +361,51 @@ def test_fallback_loads_only_the_top_candidate_not_its_namesake(
     assert WRONG_ANSWER not in outcome.claims_context
     assert answer.contexts == [outcome.claims_context]
 
+
+def test_lookup_with_similarity_off_asks_the_database_for_no_candidates(
+    session_factory: Callable[[], Session],
+    workspace_id: int,
+) -> None:
+    """러너가 되짚기를 끄면 유사 후보 조회가 DB까지 가지 않는다.
+
+    스위치를 QA 쪽에만 두면 후보 SQL은 그대로 돈다. 답변 점수는 같아도
+    elapsed time과 DB 부하 기준선이 "되짚기 없는 실행"이 아니게 되어,
+    되짚기의 비용을 그 기준선과 비교할 수 없다.
+    """
+    missing = f"absent subject {uuid.uuid4().hex}"
+
+    on = postgres_lookup(session_factory, workspace_id=workspace_id)
+    off = postgres_lookup(
+        session_factory,
+        workspace_id=workspace_id,
+        include_similar=False,
+    )
+
+    with session_factory() as session:
+        node_id = uuid.uuid4()
+        _entity_node(
+            session,
+            workspace_id,
+            node_id=node_id,
+            display_name=missing.replace("absent", "present"),
+        )
+        session.commit()
+
+    uow = KnowledgeMaintenanceUnitOfWork(
+        session_factory,
+        workspace_id=workspace_id,
+    )
+    with uow:
+        uow.knowledge_nodes.add_alias(
+            workspace_id=workspace_id,
+            node_id=node_id,
+            alias=missing.replace("absent", "present"),
+            normalized_alias=missing.replace("absent", "present"),
+            source="extractor",
+        )
+        uow.commit()
+
+    assert on.as_of(missing, QUESTION_DATE).similar_candidates != ()
+    assert on.history(missing).similar_candidates != ()
+    assert off.as_of(missing, QUESTION_DATE).similar_candidates == ()
+    assert off.history(missing).similar_candidates == ()

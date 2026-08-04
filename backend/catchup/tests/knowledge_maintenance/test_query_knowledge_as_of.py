@@ -677,6 +677,59 @@ def test_history_exact_match_skips_similarity_lookup() -> None:
     assert uow.knowledge_nodes.similarity_calls == []
 
 
+def test_include_similar_off_never_touches_the_similarity_repository() -> None:
+    """off면 miss여도 유사 후보 SQL 자체를 부르지 않는다.
+
+    이 조회는 workspace의 alias 전부를 훑는다. 후보를 쓰지 않을
+    호출자에게는 그 비용이 통째로 낭비이고, 되짚기 없는 기준선을
+    재려면 그 비용까지 빠져야 한다.
+    """
+    uow = FakeUnitOfWork(
+        nodes=FakeNodeRepository(
+            by_alias={"캐치업 오픈 api 결제": _node()},
+        ),
+        claims=FakeClaimRepository((_claim(),)),
+    )
+
+    as_of_result = query_claims_as_of(
+        workspace_id=WORKSPACE,
+        subject="캐치업 오픈 API",
+        at=AT,
+        include_similar=False,
+        uow=uow,
+    )
+    history_result = query_claims_history(
+        workspace_id=WORKSPACE,
+        subject="캐치업 오픈 API",
+        include_similar=False,
+        uow=uow,
+    )
+
+    assert as_of_result.subject is None
+    assert history_result.subject is None
+    assert as_of_result.similar_candidates == ()
+    assert history_result.similar_candidates == ()
+    assert uow.knowledge_nodes.similarity_calls == []
+
+
+def test_include_similar_defaults_to_on() -> None:
+    """인자를 주지 않으면 기존 동작 그대로 후보를 조회한다."""
+    uow = FakeUnitOfWork(
+        nodes=FakeNodeRepository(
+            by_alias={"캐치업 오픈 api 결제": _node()},
+        ),
+    )
+
+    result = query_claims_as_of(
+        workspace_id=WORKSPACE,
+        subject="캐치업 오픈 API",
+        at=AT,
+        uow=uow,
+    )
+
+    assert result.similar_candidates != ()
+    assert uow.knowledge_nodes.similarity_calls != []
+
 
 def test_node_read_uses_the_given_id_without_resolving_a_name() -> None:
     """node id 조회는 이름 해소를 전혀 거치지 않는다."""

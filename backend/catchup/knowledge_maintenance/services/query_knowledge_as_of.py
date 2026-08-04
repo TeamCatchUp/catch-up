@@ -141,6 +141,7 @@ def query_claims_as_of(
     subject: str,
     at: datetime | None = None,
     predicate: str | None = None,
+    include_similar: bool = True,
     uow: KnowledgeReadUnitOfWork,
 ) -> AsOfQueryResult:
     """subject가 at 시점에 갖고 있던 claim을 읽는다.
@@ -148,6 +149,11 @@ def query_claims_as_of(
     at을 주지 않으면 현재 시각을 한 번만 읽어 고정한다. 조회 도중
     시각을 두 번 읽으면 결과와 그 결과를 만든 기준이 어긋날 수 있기
     때문이다. at은 timezone을 포함해야 한다.
+
+    `include_similar`를 끄면 정확 매칭이 빗나가도 유사 후보를 조회하지
+    않는다. 후보를 쓰지 않을 호출자에게는 그 조회가 workspace의 모든
+    alias를 훑는 순수한 낭비이고, 되짚기가 점수를 얼마나 움직였는지
+    재려면 그 비용까지 빠진 기준선이 필요하기 때문이다.
     """
     if at is not None and at.tzinfo is None:
         raise ValueError("at must include timezone information")
@@ -162,10 +168,14 @@ def query_claims_as_of(
         if node is None:
             claims: tuple[AsOfClaim, ...] = ()
             matched = None
-            similar = _find_similar_candidates(
-                workspace_id=workspace_id,
-                subject=subject,
-                uow=uow,
+            similar = (
+                _find_similar_candidates(
+                    workspace_id=workspace_id,
+                    subject=subject,
+                    uow=uow,
+                )
+                if include_similar
+                else ()
             )
         else:
             similar = ()
@@ -210,6 +220,7 @@ def query_claims_history(
     workspace_id: int,
     subject: str,
     predicate: str | None = None,
+    include_similar: bool = True,
     uow: KnowledgeReadUnitOfWork,
 ) -> AsOfQueryResult:
     """subject에 대해 accepted였던 claim을 시점 제한 없이 읽는다.
@@ -222,6 +233,9 @@ def query_claims_history(
     결과의 `as_of`는 조회한 시각을 그대로 담을 뿐, 어떤 행도 거르지
     않는다. as-of 조회와 결과 모양을 맞춰 소비자가 두 경로를 같은
     코드로 다루게 하려는 것이고, 시점 필터가 아니다.
+
+    `include_similar`의 뜻은 `query_claims_as_of`와 같다. 끄면 miss여도
+    유사 후보를 조회하지 않는다.
     """
     queried_at = datetime.now(timezone.utc)
 
@@ -234,10 +248,14 @@ def query_claims_history(
         if node is None:
             claims: tuple[AsOfClaim, ...] = ()
             matched = None
-            similar = _find_similar_candidates(
-                workspace_id=workspace_id,
-                subject=subject,
-                uow=uow,
+            similar = (
+                _find_similar_candidates(
+                    workspace_id=workspace_id,
+                    subject=subject,
+                    uow=uow,
+                )
+                if include_similar
+                else ()
             )
         else:
             similar = ()

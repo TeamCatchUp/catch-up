@@ -666,8 +666,11 @@ def run_question(
     읽는다. 이미 노드를 찾은 subject에 근사 후보를 덧붙이면 확실한 답
     옆에 비슷한 이름의 남의 사실이 끼어든다.
 
-    `use_similarity_fallback`을 끄면 되짚기를 하지 않는다. 되짚기가
-    점수를 얼마나 움직였는지 재려면 그 없는 쪽 기준선이 필요하다.
+    `use_similarity_fallback`을 끄면 되짚기를 하지 않는다. 후보 조회
+    자체를 없애는 일은 이 함수가 못 한다 — 그 SQL은 조회 서비스 안에서
+    일어나므로, 호출자가 `include_similar`를 끈 조회 경로를 만들어
+    넘겨야 한다(`run_qa.postgres_lookup`). 되짚기가 점수를 얼마나
+    움직였는지 재려면 조회 비용까지 빠진 기준선이 필요하다.
     """
     started = time.perf_counter()
 

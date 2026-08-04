@@ -178,11 +178,17 @@ def postgres_lookup(
     session_factory,
     *,
     workspace_id: int,
+    include_similar: bool = True,
 ) -> KnowledgeLookup:
     """이름·node id 네 조회 경로를 실제 DB에 연결한다.
 
     UnitOfWork를 조회마다 새로 만든다. 하나를 재사용하면 앞 조회의
     session이 이미 닫혀 있어 두 번째 조회가 깨진다.
+
+    `include_similar`는 이름 조회에만 건다. 끄면 정확 매칭이 빗나가도
+    유사 후보 SQL을 아예 돌리지 않으므로, 되짚기를 끈 실행이 그 조회
+    비용까지 빼고 도는 진짜 기준선이 된다. node id 조회는 애초에
+    후보를 찾지 않아 이 스위치와 무관하다.
     """
 
     def _uow() -> KnowledgeMaintenanceUnitOfWork:
@@ -196,6 +202,7 @@ def postgres_lookup(
             workspace_id=workspace_id,
             subject=subject,
             at=at,
+            include_similar=include_similar,
             uow=_uow(),
         )
 
@@ -203,6 +210,7 @@ def postgres_lookup(
         return query_claims_history(
             workspace_id=workspace_id,
             subject=subject,
+            include_similar=include_similar,
             uow=_uow(),
         )
 
@@ -233,6 +241,7 @@ def manifest_lookup_for(
     session_factory,
     *,
     workspace_for: dict[str, int],
+    include_similar: bool = True,
 ) -> LookupFor:
     """문항마다 자기 workspace를 읽는 조회 경로를 고른다.
 
@@ -245,6 +254,7 @@ def manifest_lookup_for(
         return postgres_lookup(
             session_factory,
             workspace_id=workspace_for[question.question_id],
+            include_similar=include_similar,
         )
 
     return choose
@@ -494,15 +504,18 @@ def main() -> int:
     session_factory = sessionmaker(bind=engine, expire_on_commit=False)
 
     isolated = workspace_for is not None
+    use_fallback = args.similarity_fallback == "on"
     if workspace_for is None:
         lookup: KnowledgeLookup | LookupFor = postgres_lookup(
             session_factory,
             workspace_id=args.workspace_id,
+            include_similar=use_fallback,
         )
     else:
         lookup = manifest_lookup_for(
             session_factory,
             workspace_for=workspace_for,
+            include_similar=use_fallback,
         )
 
     try:
@@ -515,7 +528,7 @@ def main() -> int:
             workspace_id=None if isolated else args.workspace_id,
             manifest=args.manifest if isolated else None,
             capacity=args.capacity,
-            use_similarity_fallback=args.similarity_fallback == "on",
+            use_similarity_fallback=use_fallback,
         )
     finally:
         engine.dispose()
