@@ -21,6 +21,10 @@
    `complete`로 바뀐다. 중간에 깨지면 포인터는 `running`에 멈추고 읽는
    쪽은 시끄럽게 거절한다 — 지난 실행의 완주본을 방금 실패한 실행의
    결과라고 믿으면서 옛 점수를 다시 읽는 일이 그래야 막힌다.
+4. 완료를 쓰기 직전에 포인터가 아직 자기 것인지 본다. 남의 것이면
+   넘기지 않는다. 그러지 않으면 A 시작 → B 시작 → A 성공 → B 실패
+   순서에서 A의 완료 쓰기가 B의 `running`을 덮어, 최신 실행이 실패한
+   사실이 포인터에서 사라진다.
 
 옛 run 디렉토리는 지우지 않는다. 포인터가 현재를 정하므로 남아 있어도
 오독되지 않고, 깨진 실행이 어디까지 갔는지·직전 실행과 무엇이 달라졌는지를
@@ -31,12 +35,15 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 import uuid
 from collections.abc import Iterator
 from collections.abc import Sequence
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
+
+import structlog
 
 __all__ = [
     "POINTER_FILENAME",
@@ -46,6 +53,7 @@ __all__ = [
     "RUN_TEMP_SUFFIX",
     "current_run_directory",
     "new_run_id",
+    "owns_pointer",
     "pointer_path",
     "publish_run_file",
     "read_pointer",
@@ -54,6 +62,8 @@ __all__ = [
     "staged_outputs",
     "write_pointer",
 ]
+
+logger = structlog.get_logger(__name__)
 
 RUN_TEMP_SUFFIX = ".tmp"
 """공개 전 파일이 머무는 임시 경로의 접미사를 나타낸다."""
@@ -164,6 +174,40 @@ def current_run_directory(output: Path) -> Path:
     return run_directory(output, run_id=run_id)
 
 
+def owns_pointer(output: Path, *, run_id: str) -> bool:
+    """포인터가 아직 이 run을 가리키는지 본다."""
+    pointer = read_pointer(output)
+    if pointer is None:
+        return False
+    return str(pointer.get("run_id") or "") == run_id
+
+
+def _warn_pointer_taken_over(
+    output: Path,
+    *,
+    run_id: str,
+    holder: str,
+) -> None:
+    """포인터를 넘기지 않았다는 사실을 사람과 로그 양쪽에 알린다.
+
+    stdout과 stderr에 모두 찍는다. 러너 출력을 파일로 돌리는 쪽과
+    터미널만 보는 쪽 중 어느 한쪽이 경고를 놓치면 안 된다.
+    """
+    message = (
+        f"더 최신 실행이 시작돼 이 run은 포인터를 넘기지 않는다 "
+        f"(run_id={run_id}, 현재 포인터={holder or '?'}) — 결과는 "
+        f"{run_directory(output, run_id=run_id)}에 보존됨"
+    )
+    print(f"[경고] {message}")
+    print(f"[경고] {message}", file=sys.stderr)
+    logger.warning(
+        "longmemeval.pointer_taken_over",
+        run_id=run_id,
+        pointer_run_id=holder or None,
+        output=str(output),
+    )
+
+
 @contextmanager
 def staged_outputs(
     output: Path,
@@ -178,9 +222,23 @@ def staged_outputs(
     가리키게 두면, 이번 실행이 깨졌을 때 채점기가 방금 실패한 실행의
     결과라고 믿으면서 옛 점수를 다시 읽는다.
 
-    나가면서 예외가 없었을 때만 포인터를 `complete`로 바꾼다. 파일 하나가
-    아니라 포인터 하나를 교체하는 것이라, 같은 출력 디렉토리로 두 실행이
-    동시에 끝나도 읽는 쪽이 보는 세 파일은 늘 한 run의 것이다.
+    나가면서 예외가 없었고 포인터가 아직 이 run의 것일 때만 `complete`로
+    바꾼다. 파일 하나가 아니라 포인터 하나를 교체하는 것이라, 같은 출력
+    디렉토리로 두 실행이 동시에 끝나도 읽는 쪽이 보는 세 파일은 늘 한
+    run의 것이다.
+
+    소유권을 보는 이유는 겹친 실행에서 실패가 조용히 사라지지 않게 하는
+    것이다. 확인 없이 완료를 쓰면 A 시작 → B 시작 → A 성공 → B 실패
+    순서에서 포인터가 `A/complete`로 되살아나, 최신 실행 B가 실패했는데도
+    채점기가 A를 현재 완주본으로 읽는다. 소유권을 보면 포인터는
+    `B/running`에 남고 읽는 쪽이 시끄럽게 거절한다.
+
+    포인터를 읽는 시점과 교체하는 시점 사이의 미시 경합까지는 막지
+    못한다. 그 사이에 다른 실행이 포인터를 가져가면 이 run의 완료 쓰기가
+    여전히 그것을 덮을 수 있다. 완전히 없애려면 output 단위 단일-writer
+    파일 잠금이 필요한데, 지금은 사람이 직접 부르는 CLI 러너뿐이라 두
+    실행이 밀리초 단위로 겹칠 일이 드물어 이 잔여 위험을 받아들인다.
+    자동 스케줄러가 붙으면 잠금을 후속으로 넣는다.
 
     Yields:
         `filenames`와 같은 순서의 run 디렉토리 안 경로들을 내보낸다.
@@ -190,4 +248,12 @@ def staged_outputs(
     directory.mkdir(parents=True, exist_ok=True)
     write_pointer(output, run_id=identifier, status=RUN_STATUS_RUNNING)
     yield tuple(directory / name for name in filenames)
+    if not owns_pointer(output, run_id=identifier):
+        pointer = read_pointer(output) or {}
+        _warn_pointer_taken_over(
+            output,
+            run_id=identifier,
+            holder=str(pointer.get("run_id") or ""),
+        )
+        return
     write_pointer(output, run_id=identifier, status=RUN_STATUS_COMPLETE)

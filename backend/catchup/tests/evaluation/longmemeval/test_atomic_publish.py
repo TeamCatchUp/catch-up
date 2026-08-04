@@ -22,6 +22,7 @@ import pytest
 
 from catchup.evaluation.longmemeval.atomic_publish import POINTER_FILENAME
 from catchup.evaluation.longmemeval.atomic_publish import RUN_STATUS_COMPLETE
+from catchup.evaluation.longmemeval.atomic_publish import RUN_STATUS_RUNNING
 from catchup.evaluation.longmemeval.atomic_publish import current_run_directory
 from catchup.evaluation.longmemeval.atomic_publish import new_run_id
 from catchup.evaluation.longmemeval.atomic_publish import pointer_path
@@ -108,9 +109,12 @@ def test_interleaved_runs_never_mix_their_bundles(tmp_path: Path) -> None:
 
     파일별 `os.replace`는 results만 B, trace·usage는 A인 묶음을 남긴다.
     답변은 B인데 실패 귀속과 비용은 A로 읽혀 진단이 거짓이 된다.
+
+    A 시작 → B 시작 → B 성공 → A 성공 순서다. 늦게 끝난 A는 포인터를
+    이미 B가 가져갔으므로 덮지 않는다 — 최신 실행이 B이기 때문이다.
     """
-    first = staged_outputs(tmp_path, BUNDLE)
-    second = staged_outputs(tmp_path, BUNDLE)
+    first = staged_outputs(tmp_path, BUNDLE, run_id="A")
+    second = staged_outputs(tmp_path, BUNDLE, run_id="B")
     first_paths = first.__enter__()
     second_paths = second.__enter__()
 
@@ -120,11 +124,52 @@ def test_interleaved_runs_never_mix_their_bundles(tmp_path: Path) -> None:
     second.__exit__(None, None, None)
     first.__exit__(None, None, None)
 
+    assert read_pointer(tmp_path) == {
+        "run_id": "B",
+        "status": RUN_STATUS_COMPLETE,
+    }
     directory = current_run_directory(tmp_path)
     markers = {
         (directory / name).read_text(encoding="utf-8") for name in BUNDLE
     }
-    assert markers == {"A"}
+    assert markers == {"B"}
+
+
+def test_an_older_success_never_hides_a_newer_failure(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """오래된 완료가 최신 실행의 실패를 덮지 못한다.
+
+    A 시작 → B 시작 → A 성공 → B 실패 순서다. A가 소유권을 보지 않고
+    완료를 쓰면 포인터가 `A/complete`로 되살아나, 최신 실행 B가 실패한
+    사실이 사라지고 채점기가 A를 현재 완주본으로 읽는다.
+    """
+    first = staged_outputs(tmp_path, BUNDLE, run_id="A")
+    second = staged_outputs(tmp_path, BUNDLE, run_id="B")
+    first_paths = first.__enter__()
+    second.__enter__()
+
+    _write_bundle(first_paths, "A")
+    first.__exit__(None, None, None)
+    error = RuntimeError("B가 두 번째 문항에서 깨졌다")
+    # 예외를 삼키지 않는다 — 호출한 쪽의 `with`가 그대로 다시 낸다.
+    assert second.__exit__(RuntimeError, error, error.__traceback__) is False
+
+    assert read_pointer(tmp_path) == {
+        "run_id": "B",
+        "status": RUN_STATUS_RUNNING,
+    }
+    with pytest.raises(SystemExit) as excinfo:
+        current_run_directory(tmp_path)
+    assert "완주하지 못했다" in str(excinfo.value)
+    # A의 결과 자체는 자기 디렉토리에 그대로 남아 사후 진단에 쓰인다.
+    assert (run_directory(tmp_path, run_id="A") / RESULTS).read_text(
+        encoding="utf-8"
+    ) == "A"
+    captured = capsys.readouterr()
+    assert "포인터를 넘기지 않는다" in captured.out
+    assert "포인터를 넘기지 않는다" in captured.err
 
 
 def test_the_pointer_names_the_run_it_points_at(tmp_path: Path) -> None:
