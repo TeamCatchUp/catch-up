@@ -12,6 +12,8 @@ import type {
   IntegrationService,
 } from '../types/integrationModel';
 import type { AdminConnectorStatusResponse } from '../types/syncModel';
+import { buildChannelTalkResourceTree } from '../utils/buildChannelTalkResourceTree';
+import { formatEmbeddingRange } from '../utils/embeddingUtils';
 import { type ConnectorQueryFlags, resolveConnectorStatus } from '../utils/resolveConnectorStatus';
 
 // 단일 source 통합. 이전엔 이 파일이 'github, jira, ...' 순서였고 useEmbeddingHistory는 'jira, github, ...'
@@ -24,20 +26,6 @@ const RESOURCE_LABELS: Record<IntegrationService, string> = {
   slack: '임베딩된 Slack 채널',
   confluence: '임베딩된 Confluence Space',
   channel_talk: '연결된 채널톡 채널',
-};
-
-/** "YYYY. M. D." 날짜 포맷 */
-const formatDate = (dateStr: string | null): string => {
-  if (!dateStr) return '';
-  const d = new Date(dateStr);
-  if (isNaN(d.getTime())) return dateStr;
-  return `${d.getFullYear()}. ${d.getMonth() + 1}. ${d.getDate()}.`;
-};
-
-/** oldest ~ latest 범위 문자열 */
-const formatRange = (oldest: string | null, latest: string | null): string => {
-  if (!oldest && !latest) return '-';
-  return `${formatDate(oldest)} ~ ${formatDate(latest)}`;
 };
 
 /** 관리자 연동 화면에서 필요한 데이터를 조합해 반환 */
@@ -155,15 +143,20 @@ export const useAdminIntegrationViewModel = (): AdminIntegrationViewModel => {
       const globalOldest = allOldest.length ? allOldest.sort()[0] : null;
       const globalLatest = allLatest.length ? allLatest.sort().reverse()[0] : null;
 
-      const resources: ConnectorResource[] = targets.map((t) => ({
-        name: t.target_name,
-        dateRange: formatRange(t.oldest, t.latest),
-      }));
+      // 채널톡만 채널 → 도큐먼트 스페이스 2단이다. 나머지는 계층이 없어 평면.
+      const resources: ConnectorResource[] =
+        service === 'channel_talk'
+          ? buildChannelTalkResourceTree(targets)
+          : targets.map((t) => ({
+              id: `${t.scope_id}-${t.target_id}`,
+              name: t.target_name,
+              dateRange: formatEmbeddingRange(t.oldest, t.latest),
+            }));
 
       return {
         status: getStatus(service),
         connected: isServiceConnected(service),
-        dataRange: formatRange(globalOldest, globalLatest),
+        dataRange: formatEmbeddingRange(globalOldest, globalLatest),
         resources,
         resourceLabel: RESOURCE_LABELS[service],
         workspaceName: getWorkspaceName(service),

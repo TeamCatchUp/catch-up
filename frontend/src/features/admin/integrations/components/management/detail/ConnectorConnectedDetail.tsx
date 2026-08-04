@@ -9,13 +9,13 @@ import { useEmbeddingGaps } from '../../../hooks/useEmbeddingGaps';
 import { useEmbeddingHistory } from '../../../hooks/useEmbeddingHistory';
 import { useEmbeddingJobs } from '../../../hooks/useEmbeddingJobs';
 import { useSyncRecordRetry } from '../../../queries/syncRecords.mutations';
-import type { ConnectorDetail, IntegrationService } from '../../../types/integrationModel';
+import type { ConnectorDetail, ConnectorResource, IntegrationService } from '../../../types/integrationModel';
 import type { AdminConnectorTargetRangeResponse } from '../../../types/syncModel';
 import { formatHistoryDate } from '../../../utils/embeddingUtils';
 import EmbeddingModal from '../../member/modals/EmbeddingModal';
 import EmbeddingRetryModal from '../../member/modals/EmbeddingRetryModal';
 import ConnectorSummaryCard from '../cards/ConnectorSummaryCard';
-import EmbeddedResourceTable from '../embedding/EmbeddedResourceTable';
+import EmbeddedResourceTable, { type EmbeddedResourceRow } from '../embedding/EmbeddedResourceTable';
 import EmbeddingActiveTable from '../embedding/EmbeddingActiveTable';
 import EmbeddingHistoryTable, { type EmbeddingHistoryItem } from '../embedding/EmbeddingHistoryTable';
 import EmbeddingSegmentTabs, { type EmbeddingTabValue } from '../embedding/EmbeddingSegmentTabs';
@@ -45,6 +45,21 @@ export default function ConnectorConnectedDetail({
   const [tab, setTab] = useState<EmbeddingTabValue>('manage');
   const [embeddingModalOpen, setEmbeddingModalOpen] = useState(false);
   const [retryTarget, setRetryTarget] = useState<AdminConnectorTargetRangeResponse | null>(null);
+
+  /*
+   * 뷰모델의 리소스 트리 → 표 행. 채널톡은 채널 아래 도큐먼트 스페이스가 children으로
+   * 달려 오고(useAdminIntegrationViewModel → buildChannelTalkResourceTree), 나머지
+   * 도구는 children이 없어 평면 그대로다.
+   */
+  const resourceRows = useMemo(() => {
+    const toRow = (r: ConnectorResource): EmbeddedResourceRow => ({
+      id: r.id,
+      name: r.name,
+      dataRange: r.dateRange ?? '-',
+      children: r.children?.map(toRow),
+    });
+    return detail.resources.map(toRow);
+  }, [detail.resources]);
 
   // 진행중 — 이 서비스의 활성 job에 속한 target들
   const { progresses, handleJobStart } = useEmbeddingJobs();
@@ -144,15 +159,7 @@ export default function ConnectorConnectedDetail({
             connected={detail.connected}
             dataRange={detail.dataRange === '-' ? null : detail.dataRange}
           />
-          {/*
-           * 채널톡의 채널→도큐먼트 계층은 이 API(connector/status targets)가 평면으로만
-           * 줘서 아직 살리지 못한다 — 계층 응답이 생기면 children으로 매핑한다(미결)
-           */}
-          <EmbeddedResourceTable
-            service={service}
-            label={detail.resourceLabel}
-            rows={detail.resources.map((r, i) => ({ id: `${r.name}-${i}`, name: r.name, dataRange: r.dateRange ?? '-' }))}
-          />
+          <EmbeddedResourceTable service={service} label={detail.resourceLabel} rows={resourceRows} />
         </div>
       ) : (
         <div className="flex flex-col gap-8">

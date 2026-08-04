@@ -25,8 +25,15 @@ export interface IntegrationMenuItem extends IntegrationAccountMeta {
 
 /** 연동된 리소스 항목 (per-target 임베딩 기간 포함) */
 export interface ConnectorResource {
+  /** target 고유 키 — 대상 이름은 중복될 수 있어 목록 key로 쓰지 않는다 */
+  id: string;
   name: string;
   dateRange: string | null;
+  /**
+   * 채널톡 전용 — 채널 아래 도큐먼트 스페이스.
+   * 다른 도구는 계층이 없어 비워 둔다.
+   */
+  children?: ConnectorResource[];
 }
 
 /** 서비스별 연동 상세 정보 */

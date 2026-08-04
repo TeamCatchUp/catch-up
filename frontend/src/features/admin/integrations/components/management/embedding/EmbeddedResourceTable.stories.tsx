@@ -137,6 +137,20 @@ export const ChannelTalkHierarchy: Story = {
     const documentLeft = documentName.getBoundingClientRect().left;
     await expect(documentLeft).toBeGreaterThan(channelLeft);
 
+    // 묶음의 마지막 도큐먼트는 가운데 가지에서 선이 끝나고, 나머지는 다음 행까지 이어진다
+    for (const tbody of canvasElement.querySelectorAll('tbody')) {
+      const connectors = [...tbody.querySelectorAll('span[aria-hidden="true"] svg path')];
+
+      for (const [index, line] of connectors.entries()) {
+        const row = line.closest('tr')!.getBoundingClientRect();
+        const isLast = index === connectors.length - 1;
+        const expected = isLast ? (row.top + row.bottom) / 2 : row.bottom;
+
+        // 46 행에 47 아이콘이라 이어지는 쪽은 0.5씩 넘긴다
+        await expect(Math.abs(line.getBoundingClientRect().bottom - expected)).toBeLessThanOrEqual(1);
+      }
+    }
+
     // 계층이 생겨도 날짜는 여전히 한 줄이어야 한다
     for (const row of rows.slice(1)) {
       await expect(row.getBoundingClientRect().height).toBeLessThanOrEqual(48);

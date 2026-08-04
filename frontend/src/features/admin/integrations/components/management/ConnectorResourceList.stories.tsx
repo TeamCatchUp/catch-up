@@ -7,8 +7,9 @@ import ConnectorResourceList from './ConnectorResourceList';
 
 const sample = (count: number): ConnectorResource[] =>
   Array.from({ length: count }, (_, i) => ({
+    id: `PROJECT-${i + 1}`,
     name: `PROJECT-${i + 1}`,
-    dateRange: '2026. 1. 1. ~ 2026. 7. 30.',
+    dateRange: '2026.01.01 - 2026.07.30',
   }));
 
 const meta = {
@@ -76,8 +77,9 @@ export const LongText: Story = {
   args: {
     resources: [
       {
+        id: 'long-text',
         name: '아주 긴 프로젝트 이름이 들어가는 경우 잘림 처리가 되는지 확인하기 위한 리소스 항목입니다',
-        dateRange: '2026. 1. 1. ~ 2026. 7. 30.',
+        dateRange: '2026.01.01 - 2026.07.30',
       },
     ],
   },
