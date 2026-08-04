@@ -12,12 +12,12 @@ import { CONNECTOR_CONTENT } from '../../constants/connectorContent';
 import { CONNECTOR_LOGOS } from '../../constants/connectorLogos';
 import type { AccountOverride } from '../../hooks/useUserMappingEdit';
 import type { IntegrationService } from '../../types/integrationModel';
-import type { AccountOption } from '../member/tables/AccountSelectDropdown';
+import type { MappingSource, UserMappingRow } from '../../types/userMappingModel';
+import type { AccountOption } from '../user-mapping/AccountSelectDropdown';
 import MappingActionsBar from '../user-mapping/MappingActionsBar';
 import MappingFilterChips, { type MappingStatusFilter } from '../user-mapping/MappingFilterChips';
 import MappingStatCardRow, { type MappingStatItem } from '../user-mapping/MappingStatCardRow';
 import MappingSyncNotice from '../user-mapping/MappingSyncNotice';
-import type { MappingSource, UserMappingRow } from '../user-mapping/userMappingModel';
 import UserMappingTable from '../user-mapping/UserMappingTable';
 
 /*

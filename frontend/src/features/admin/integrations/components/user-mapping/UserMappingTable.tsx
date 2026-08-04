@@ -1,28 +1,9 @@
-import Image from 'next/image';
-
-import DefaultProfile from '@/public/icons/icon/default_profile.svg';
 import { Skeleton } from '@/shared/components/ui/skeleton';
 import { cn } from '@/shared/utils/cn';
 
-import type { AccountOption, AccountOverride } from '../../hooks/useUserMappingEdit';
-import AccountSelectDropdown from '../member/tables/AccountSelectDropdown';
-import {
-  MAPPING_SOURCE_LABELS,
-  MAPPING_SOURCES,
-  type MappingAccount,
-  type MappingSource,
-  type UserMappingRow,
-} from './userMappingModel';
+import { MAPPING_SOURCE_LABELS, MAPPING_SOURCES, type MappingSource, type UserMappingRow } from '../../types/userMappingModel';
 import { MAPPING_ROW_GRID_FULL, MAPPING_ROW_GRID_SINGLE } from './userMappingTableGrid';
-
-/** 수정 모드에서 셀을 드롭다운으로 바꾸기 위한 배선 (구 UsersStatusSection 승계) */
-export interface UserMappingEditBinding {
-  optionsByService: Partial<Record<MappingSource, AccountOption[]>>;
-  /** 셀에 걸린 로컬 변경 — 없으면 서버 값을 그대로 보여준다 */
-  overrideOf: (rowId: string, source: MappingSource) => AccountOverride | undefined;
-  onSelectAccount: (rowId: string, source: MappingSource, account: AccountOption) => void;
-  onToggleUnused: (rowId: string, source: MappingSource, unused: boolean) => void;
-}
+import UserMappingTableRow, { type UserMappingEditBinding } from './UserMappingTableRow';
 
 interface UserMappingTableProps {
   rows: readonly UserMappingRow[];
@@ -36,45 +17,13 @@ interface UserMappingTableProps {
   edit?: UserMappingEditBinding;
 }
 
-const Avatar = ({ picture, className }: { picture?: string | null; className?: string }) =>
-  picture ? (
-    <Image
-      src={picture}
-      alt=""
-      width={20}
-      height={20}
-      className={cn('border-fill-normal-strong size-5 shrink-0 rounded-full border', className)}
-    />
-  ) : (
-    <DefaultProfile
-      className={cn('border-fill-normal-strong text-text-normal-assistive size-5 shrink-0 rounded-full border', className)}
-    />
-  );
-
-/** 커넥터 계정 셀 — 아바타+이름 / 이메일 2줄. Figma `17060:75378` (셀 max 165) */
-function AccountCell({ account }: { account: MappingAccount }) {
-  return (
-    <div className="flex max-w-41.25 min-w-0 flex-col gap-0.5">
-      <div className="flex w-full items-center gap-2">
-        <Avatar picture={account.picture} />
-        <span className="text-body-xsmall text-text-normal-normal min-w-0 flex-1 truncate">{account.name}</span>
-      </div>
-      <span className="text-body-xsmall text-text-normal-alternative w-full truncate">{account.identifier}</span>
-    </div>
-  );
-}
-
 /**
- * 이용자 매핑 표.
- * Figma `17060:75363`(전체 4열) · `17379:78332`(커넥터 필터 1열).
+ * 이용자 매핑 표 — 전체 4열 / 커넥터 필터 1열.
  *
- * table 엘리먼트 + 행 grid — 열 폭은 {@link MAPPING_ROW_GRID_FULL} /
- * {@link MAPPING_ROW_GRID_SINGLE}이 정한다. display를 grid로 덮으면 표 시맨틱이
- * 사라지므로 `role`을 되살린다(임베딩 표와 같은 처리).
- *
- * 셀 값 3종: 계정(2줄) / "미사용" 태그 / 미연동 "-".
- * 빈 상태 배너("CSV 파일을 업로드해주세요!")는 표 밖 요소라 `MappingSyncNotice`가
- * 담당한다 — 이 표는 rows가 비면 헤더만 남긴다.
+ * table 엘리먼트 + 행 grid. display를 grid로 덮으면 표 시맨틱이 사라지므로
+ * `role`을 되살린다(임베딩 표와 같은 처리). 행 렌더링(셀 값 3종·수정 모드 분기)은
+ * {@link UserMappingTableRow}가, 빈 상태 배너는 `MappingSyncNotice`가 담당한다 —
+ * 이 표는 rows가 비면 헤더만 남긴다.
  */
 export default function UserMappingTable({
   rows,
@@ -91,7 +40,6 @@ export default function UserMappingTable({
     <div className="overflow-x-auto">
       <table role="table" className="block w-full min-w-fit">
         <thead role="rowgroup" className="block">
-          {/* 헤더 36 — fill/normal/strong 배경, 13px text/normal/neutral */}
           <tr role="row" className={cn(rowGrid, 'bg-fill-normal-strong min-h-9 rounded-lg')}>
             <th role="columnheader" scope="col">
               <span className="sr-only">연동 상태</span>
@@ -115,7 +63,11 @@ export default function UserMappingTable({
         <tbody role="rowgroup" className="block">
           {isLoading
             ? Array.from({ length: skeletonCount }).map((_, index) => (
-                <tr key={`skeleton-${index}`} role="row" className={cn(rowGrid, 'border-line-normal-neutral min-h-16.5 border-b py-3')}>
+                <tr
+                  key={`skeleton-${index}`}
+                  role="row"
+                  className={cn(rowGrid, 'border-line-normal-neutral min-h-16.5 border-b py-3')}
+                >
                   <td role="cell" />
                   <td role="cell">
                     <Skeleton className="h-5 w-24" />
@@ -128,69 +80,7 @@ export default function UserMappingTable({
                 </tr>
               ))
             : rows.map((row) => (
-                <tr key={row.id} role="row" className={cn(rowGrid, 'border-line-normal-neutral min-h-16.5 border-b py-3')}>
-                  {/* 상태 점 — 전부 연동 녹색 / 일부 미연동 적색 */}
-                  <td role="cell">
-                    <span
-                      className={cn(
-                        'block size-2 rounded-full',
-                        row.fullyMapped ? 'bg-status-positive' : 'bg-status-destructive',
-                      )}
-                    >
-                      <span className="sr-only">{row.fullyMapped ? '전체 연동됨' : '일부 미연동'}</span>
-                    </span>
-                  </td>
-
-                  <td role="cell" className="flex min-w-0 items-center gap-3">
-                    <Avatar picture={row.user.picture} />
-                    <span className="text-body-small text-text-normal-normal min-w-0 flex-1 truncate">
-                      {row.user.name}
-                    </span>
-                  </td>
-
-                  {sources.map((source) => {
-                    const value = row.accounts[source] ?? null;
-
-                    if (edit) {
-                      const override = edit.overrideOf(row.id, source);
-                      const account =
-                        override?.type === 'account'
-                          ? override.account
-                          : override?.type === 'unused'
-                            ? undefined
-                            : value && value !== 'unused'
-                              ? { id: '', name: value.name, identifier: value.identifier, picture: value.picture ?? null }
-                              : undefined;
-                      const unused = override ? override.type === 'unused' : value === 'unused';
-
-                      return (
-                        <td key={source} role="cell" className="min-w-0">
-                          <AccountSelectDropdown
-                            status={unused ? '미사용' : '미등록'}
-                            options={edit.optionsByService[source] ?? []}
-                            selectedAccount={account}
-                            onSelect={(next) => edit.onSelectAccount(row.id, source, next)}
-                            onToggleUnused={(next) => edit.onToggleUnused(row.id, source, next)}
-                          />
-                        </td>
-                      );
-                    }
-
-                    return (
-                      <td key={source} role="cell" className="min-w-0">
-                        {value === 'unused' ? (
-                          <span className="bg-fill-normal-strong text-body-xsmall text-text-normal-alternative rounded-md2 inline-flex px-1.5 py-0.5">
-                            미사용
-                          </span>
-                        ) : value ? (
-                          <AccountCell account={value} />
-                        ) : (
-                          <span className="text-body-xsmall text-text-normal-assistive">-</span>
-                        )}
-                      </td>
-                    );
-                  })}
-                </tr>
+                <UserMappingTableRow key={row.id} row={row} sources={sources} rowGrid={rowGrid} edit={edit} />
               ))}
         </tbody>
       </table>

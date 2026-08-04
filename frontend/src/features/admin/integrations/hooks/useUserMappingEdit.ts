@@ -1,20 +1,20 @@
 'use client';
 
-import { useCallback, useMemo, useState } from 'react';
-import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useCallback, useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 
 import api from '@/shared/api/client';
 import { API } from '@/shared/api/endpoints';
 
-import type { AccountOption } from '../components/member/tables/AccountSelectDropdown';
-import { adminConnectorQueries } from '../queries/adminConnector.queries';
+import type { AccountOption } from '../components/user-mapping/AccountSelectDropdown';
 import { userSourceMappingQueries } from '../queries/userSourceMapping.queries';
 import type { PreMappingBulkUpdateResponse, PreMappingUpdateItem, VendorType } from '../types/integrationApi';
 import type { IntegrationService } from '../types/integrationModel';
+import { useVendorAccountOptions } from './useVendorAccountOptions';
 
 // 드롭다운이 이미 정의한 타입을 단일 출처로 쓴다 — 중복 선언하면 구조가 같아도 서로 안 맞는다
-export type { AccountOption } from '../components/member/tables/AccountSelectDropdown';
+export type { AccountOption } from '../components/user-mapping/AccountSelectDropdown';
 
 /** 수정 모드에서 셀에 건 로컬 변경 — 계정 지정 또는 "이 협업툴 미사용" 선언 */
 export type AccountOverride = { type: 'account'; account: AccountOption } | { type: 'unused' };
@@ -50,51 +50,8 @@ export function useUserMappingEdit(users: readonly MappingEditUser[]) {
   const [isEditMode, setIsEditMode] = useState(false);
   const [overrides, setOverrides] = useState<Record<string, Partial<Record<IntegrationService, AccountOverride>>>>({});
 
-  const githubUsers = useInfiniteQuery({
-    ...adminConnectorQueries.vendorUsers({ vendorType: 'github' }),
-    enabled: isEditMode,
-  });
-  const atlassianUsers = useInfiniteQuery({
-    ...adminConnectorQueries.vendorUsers({ vendorType: 'atlassian' }),
-    enabled: isEditMode,
-  });
-  const slackUsers = useInfiniteQuery({
-    ...adminConnectorQueries.vendorUsers({ vendorType: 'slack' }),
-    enabled: isEditMode,
-  });
-  const channelTalkUsers = useInfiniteQuery({
-    ...adminConnectorQueries.vendorUsers({ vendorType: 'channel_talk' }),
-    enabled: isEditMode,
-  });
-
-  const accountOptionsByService = useMemo<Partial<Record<IntegrationService, AccountOption[]>>>(() => {
-    if (!isEditMode) return {};
-
-    const toOptions = (
-      pages: { items: { id: string; name: string; identifier: string | null; picture: string | null }[] }[] | undefined,
-    ): AccountOption[] =>
-      pages?.flatMap((page) =>
-        page.items.map((item) => ({
-          id: item.id,
-          name: item.name,
-          identifier: item.identifier ?? '',
-          picture: item.picture,
-        })),
-      ) ?? [];
-
-    return {
-      github: toOptions(githubUsers.data?.pages),
-      jira: toOptions(atlassianUsers.data?.pages),
-      slack: toOptions(slackUsers.data?.pages),
-      channel_talk: toOptions(channelTalkUsers.data?.pages),
-    };
-  }, [
-    isEditMode,
-    githubUsers.data?.pages,
-    atlassianUsers.data?.pages,
-    slackUsers.data?.pages,
-    channelTalkUsers.data?.pages,
-  ]);
+  // 계정 후보 조회는 수정 모드에서만 — vendor 4종 병렬 infinite query
+  const accountOptionsByService = useVendorAccountOptions(isEditMode);
 
   const selectAccount = useCallback((userKey: string, service: IntegrationService, account: AccountOption) => {
     setOverrides((prev) => ({ ...prev, [userKey]: { ...prev[userKey], [service]: { type: 'account', account } } }));

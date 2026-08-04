@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/nextjs-vite';
 import { expect, within } from 'storybook/test';
 
 import { catchupParameters } from '../../../../../../.storybook/catchupStoryParameters';
-import type { UserMappingRow } from './userMappingModel';
+import type { UserMappingRow } from '../../types/userMappingModel';
 import UserMappingTable from './UserMappingTable';
 
 const account = (name: string) => ({ name, identifier: 'dlkjfcccldjl@gmail.comcomcomcom' });

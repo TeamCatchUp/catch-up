@@ -1,9 +1,8 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import dynamic from 'next/dynamic';
-import { toast } from 'sonner';
 
 import { Button } from '@/shared/components/ui/button';
 import Pagination from '@/shared/components/ui/pagination';
@@ -11,51 +10,26 @@ import Pagination from '@/shared/components/ui/pagination';
 import { CONNECTOR_CONTENT } from '../../constants/connectorContent';
 import { CONNECTOR_LOGOS } from '../../constants/connectorLogos';
 import { useUserMappingEdit } from '../../hooks/useUserMappingEdit';
-import { adminConnectorMutations } from '../../queries/adminConnector.mutations';
-import { userSourceMappingMutations } from '../../queries/userSourceMapping.mutations';
+import { useUserMappingSync } from '../../hooks/useUserMappingSync';
 import { userSourceMappingQueries } from '../../queries/userSourceMapping.queries';
 import type { IntegrationService } from '../../types/integrationModel';
-import type { MappedSourceInfo, UserSourceMappingItem } from '../../types/userSourceMappingApi';
+import type { MappingSource } from '../../types/userMappingModel';
+import { mapUserMappingRows } from '../../utils/mapUserMappingRows';
 import MappingActionsBar from '../user-mapping/MappingActionsBar';
 import MappingFilterChips, { type MappingStatusFilter } from '../user-mapping/MappingFilterChips';
 import MappingStatCardRow, { type MappingStatItem } from '../user-mapping/MappingStatCardRow';
 import MappingSyncNotice from '../user-mapping/MappingSyncNotice';
-import { MAPPING_SOURCES, type MappingCellValue, type MappingSource, type UserMappingRow } from '../user-mapping/userMappingModel';
 import UserMappingTable from '../user-mapping/UserMappingTable';
 
-const CsvUploadModal = dynamic(() => import('../member/modals/CsvUploadModal'));
+const CsvUploadModal = dynamic(() => import('../user-mapping/CsvUploadModal'));
 
 const PAGE_SIZE = 10;
 
 /** 통계 카드 5종. 표시 전용이라 표 열(atlassian 합침 4종)과 대응할 필요가 없다 */
-const STAT_ORDER: readonly (keyof typeof CONNECTOR_LOGOS)[] = [
-  'jira',
-  'github',
-  'slack',
-  'confluence',
-  'channel_talk',
-];
+const STAT_ORDER: readonly (keyof typeof CONNECTOR_LOGOS)[] = ['jira', 'github', 'slack', 'confluence', 'channel_talk'];
 
-const toCell = (info: MappedSourceInfo | null): MappingCellValue => {
-  if (!info) return null;
-  if (!info.name && !info.identifier) return null;
-  return { name: info.name ?? '-', identifier: info.identifier ?? '', picture: info.picture };
-};
-
-const toRow = (item: UserSourceMappingItem): UserMappingRow => {
-  const accounts: Partial<Record<MappingSource, MappingCellValue>> = {
-    atlassian: toCell(item.atlassian),
-    github: toCell(item.github),
-    slack: toCell(item.slack),
-    channel_talk: toCell(item.channel_talk),
-  };
-  return {
-    id: String(item.user_id),
-    user: { name: item.name },
-    fullyMapped: MAPPING_SOURCES.every((source) => accounts[source] != null),
-    accounts,
-  };
-};
+/** atlassian 열은 수정 모드에서 jira 계정 후보·override 슬롯을 쓴다 — 백엔드 vendor 매핑이 jira=atlassian이라서다 */
+const toEditService = (source: MappingSource): IntegrationService => (source === 'atlassian' ? 'jira' : source);
 
 /**
  * /admin/user-mapping 화면. 스펙 ②(`2026-08-04-이용자매핑-리디자인-design.md`).
@@ -69,7 +43,6 @@ const toRow = (item: UserSourceMappingItem): UserMappingRow => {
  * 실패 / CSV 진행중)은 디자인 근거가 없어 구현하지 않는다.
  */
 export default function UserMappingView() {
-  const queryClient = useQueryClient();
   const [filter, setFilter] = useState<MappingStatusFilter>('all');
   const [page, setPage] = useState(1);
   const [csvOpen, setCsvOpen] = useState(false);
@@ -81,7 +54,7 @@ export default function UserMappingView() {
 
   // `?? []`를 인라인으로 두면 매 렌더 새 배열이라 아래 useMemo가 무의미해진다
   const items = useMemo(() => listQuery.data?.items ?? [], [listQuery.data?.items]);
-  const rows = useMemo(() => items.map(toRow), [items]);
+  const rows = useMemo(() => mapUserMappingRows(items), [items]);
   const totalPages = Math.max(1, Math.ceil((listQuery.data?.total ?? 0) / PAGE_SIZE));
 
   const statItems: MappingStatItem[] = STAT_ORDER.map((key) => {
@@ -101,29 +74,14 @@ export default function UserMappingView() {
 
   // 수정 모드 — 구 UsersStatusSection 로직을 훅으로 공유한다
   const editUsers = useMemo(
-    () => items.map((item) => ({ userKey: String(item.user_id), sub: item.sub, email: item.email, userName: item.name })),
+    () =>
+      items.map((item) => ({ userKey: String(item.user_id), sub: item.sub, email: item.email, userName: item.name })),
     [items],
   );
   const edit = useUserMappingEdit(editUsers);
 
-  // 동기화 2종 — 토스트 문구까지 현행 구현 승계
-  const syncSso = useMutation({
-    ...adminConnectorMutations.syncOAuthUsers(),
-    onSuccess: () => {
-      toast('동기화가 완료되었습니다.', { description: 'SSO 사용자 정보가 반영되었습니다.' });
-      queryClient.invalidateQueries({ queryKey: userSourceMappingQueries.all() });
-    },
-    onError: () => toast('일시적인 오류가 발생했습니다.', { description: '잠시 후 다시 시도해주세요.' }),
-  });
-
-  const syncDb = useMutation({
-    ...userSourceMappingMutations.refresh(),
-    onSuccess: () => {
-      toast('이용자 DB 동기화 성공', { description: '데이터가 정상적으로 반영되었습니다.' });
-      queryClient.invalidateQueries({ queryKey: userSourceMappingQueries.all() });
-    },
-    onError: () => toast('일시적인 오류가 발생했습니다.', { description: '잠시 후 다시 시도해주세요.' }),
-  });
+  // 동기화 2종 — 토스트 문구까지 현행 구현 승계 (훅으로 추출)
+  const sync = useUserMappingSync();
 
   const isEmpty = !listQuery.isLoading && rows.length === 0 && filter === 'all';
 
@@ -165,11 +123,11 @@ export default function UserMappingView() {
             </div>
           ) : (
             <MappingActionsBar
-              onSyncSso={() => syncSso.mutate()}
-              onSyncDb={() => syncDb.mutate()}
+              onSyncSso={sync.syncSso}
+              onSyncDb={sync.syncDb}
               onOpenCsvUpload={() => setCsvOpen(true)}
               onEdit={edit.startEdit}
-              isSyncing={syncSso.isPending || syncDb.isPending}
+              isSyncing={sync.isSyncing}
             />
           )}
         </div>
@@ -191,12 +149,10 @@ export default function UserMappingView() {
                     slack: edit.accountOptionsByService.slack,
                     channel_talk: edit.accountOptionsByService.channel_talk,
                   },
-                  overrideOf: (rowId, source) =>
-                    edit.overrides[rowId]?.[source === 'atlassian' ? 'jira' : (source as IntegrationService)],
+                  overrideOf: (rowId, source) => edit.overrides[rowId]?.[toEditService(source)],
                   onSelectAccount: (rowId, source, account) =>
-                    edit.selectAccount(rowId, source === 'atlassian' ? 'jira' : (source as IntegrationService), account),
-                  onToggleUnused: (rowId, source, unused) =>
-                    edit.toggleUnused(rowId, source === 'atlassian' ? 'jira' : (source as IntegrationService), unused),
+                    edit.selectAccount(rowId, toEditService(source), account),
+                  onToggleUnused: (rowId, source, unused) => edit.toggleUnused(rowId, toEditService(source), unused),
                 }
               : undefined
           }
