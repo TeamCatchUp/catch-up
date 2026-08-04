@@ -9,6 +9,7 @@ import * as SegmentTabsStories from '../components/management/embedding/Embeddin
 import * as EmbeddingModalStories from '../components/management/modals/EmbeddingModal.stories';
 import * as RetryModalStories from '../components/management/modals/EmbeddingRetryModal.stories';
 import * as EmbeddingEmptyStories from '../components/management/states/EmbeddingEmptyState.stories';
+import * as Screens from '../components/view/ConnectorConnectScreen.stories';
 
 <Meta title="Flows/임베딩" />
 
@@ -41,6 +42,10 @@ import * as EmbeddingEmptyStories from '../components/management/states/Embeddin
 
 ### 주요 분기
 
+**임베딩이 쌓인 뒤의 관리 탭** — 요약 카드와 채널→도큐먼트 계층 표가 화면에서 이렇게 보인다.
+
+<Canvas of={Screens.ConnectedDetail} />
+
 **아직 임베딩된 것이 없을 때** — 연결됨 상세의 관리 탭이 빈 상태 안내를 보여준다.
 
 <Canvas of={EmbeddingEmptyStories.Default} />
@@ -68,7 +73,15 @@ import * as EmbeddingEmptyStories from '../components/management/states/Embeddin
 
 연결됨 상세의 **임베딩 현황** 탭. 진행 중인 작업이 있으면 표로 나오고, 탭에 점이 붙는다.
 
+<Canvas of={Screens.StatusTabRunning} />
+
+### 부품 상세
+
+**진행 중 표** — 아직 끝나지 않은 대상만 남는 표. 완료된 대상은 이력으로 넘어간다.
+
 <Canvas of={ActiveTableStories.Running} />
+
+**탭의 진행 점** — 진행 중 표에 항목이 있을 때만 붙는 파생 표시다.
 
 <Canvas of={SegmentTabsStories.RunningDot} />
 
@@ -84,6 +97,12 @@ import * as EmbeddingEmptyStories from '../components/management/states/Embeddin
 ## 4. 성공/실패 이력
 
 임베딩 현황 탭의 히스토리. 전체/성공/실패 필터 칩은 항상 하나가 선택되어 있다(전체 해제 불가).
+
+<Canvas of={Screens.StatusTabFailed} />
+
+### 부품 상세
+
+**필터 칩** — 전체/성공/실패.
 
 <Canvas of={HistoryTableStories.FilterChips} />
 
