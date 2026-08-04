@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import uuid
 from collections.abc import Callable
 from collections.abc import Iterator
+from datetime import datetime
+from datetime import timezone
 
 import pytest
 from sqlalchemy import Engine
@@ -14,15 +17,27 @@ from sqlalchemy.orm import Session
 from sqlalchemy.orm import sessionmaker
 
 from catchup.configs.config import settings
+from catchup.db.models import KnowledgeClaimCandidate as ClaimRow
+from catchup.db.models import KnowledgeEntityCandidate as EntityCandidateRow
 from catchup.db.models import KnowledgeMutationOperation as OperationRow
 from catchup.db.models import KnowledgeMutationProposal as ProposalRow
+from catchup.db.models import KnowledgeNode as NodeRow
 from catchup.db.models import KnowledgeNodeAlias as AliasRow
 from catchup.db.models import Workspace
 from catchup.knowledge_maintenance.adapters.postgres.unit_of_work import (
     KnowledgeMaintenanceUnitOfWork,
 )
+from catchup.knowledge_maintenance.contracts.extraction import ClaimCandidateDraft
+from catchup.knowledge_maintenance.contracts.extraction import EntityCandidateDraft
+from catchup.knowledge_maintenance.contracts.extraction import KnowledgeCandidateBatch
 from catchup.knowledge_maintenance.domain.knowledge_candidate import (
     EntityResolutionStatus,
+)
+from catchup.knowledge_maintenance.services.query_knowledge_as_of import (
+    query_claims_as_of,
+)
+from catchup.knowledge_maintenance.services.resolve_entity_candidates import (
+    resolve_entity_candidates,
 )
 from catchup.knowledge_maintenance.services.store_knowledge_candidates import (
     store_knowledge_candidates,
@@ -350,3 +365,108 @@ def test_replacing_proposal_reuses_key_row(
         ).all()
     assert operations[0].entity_candidate_id == other
     assert operations[1].entity_candidate_id == representative
+
+
+class _UnusedJudge:
+    """단일 그룹만 있는 실행에서 판정이 불리지 않음을 강제한다."""
+
+    def judge(self, group):
+        raise AssertionError(f"단일 후보에 판정이 불렸다: {group}")
+
+
+def _singleton_batch(name: str) -> KnowledgeCandidateBatch:
+    """이름이 하나뿐인 entity와 그 entity에 대한 claim을 만든다."""
+    return KnowledgeCandidateBatch(
+        entities=[
+            EntityCandidateDraft(
+                local_key="e1",
+                proposed_type="feature",
+                proposed_name=name,
+            )
+        ],
+        claims=[
+            ClaimCandidateDraft(
+                local_key="c1",
+                subject_local_key="e1",
+                predicate="release_month",
+                value_type="text",
+                value="2026-09",
+                statement="9월 예정입니다.",
+            )
+        ],
+        relation_assertions=[],
+    )
+
+
+def test_promoted_singleton_carries_claims_into_read_path(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+) -> None:
+    """승격된 entity의 claim이 노드에 매달려 이름으로 조회된다.
+
+    승격의 값어치는 노드 행이 생기는 데 있지 않고, 그 노드를 통해
+    claim이 읽기 경로에 드러나는 데 있다. claim은 여전히 후보 행을
+    subject로 가리키므로 `resolved_node_id`가 그 사슬의 유일한 연결
+    고리다. 조회 이름이 canonical_key가 아니라 alias로만 걸린다는 것도
+    여기서 함께 확인한다 — 승격 노드에는 key가 없다.
+    """
+    name = f"결제 기능 {uuid.uuid4().hex[:8]}"
+    observation = _stored_observation(workspace_id, session_factory)
+    stored = store_knowledge_candidates(
+        observation,
+        _singleton_batch(name),
+        spec=SPEC,
+        uow=uow_factory(),
+    ).batch
+    candidate_id = stored.entity_ids["e1"]
+    claim_id = stored.claim_ids["c1"]
+
+    result = resolve_entity_candidates(
+        workspace_id=workspace_id,
+        judge=_UnusedJudge(),
+        uow=uow_factory(),
+    )
+
+    assert result.singletons_promoted >= 1
+    with session_factory() as session:
+        candidate = session.get(EntityCandidateRow, candidate_id)
+        assert candidate is not None
+        assert candidate.resolution_status == "accepted"
+        node_id = candidate.resolved_node_id
+        assert node_id is not None
+        # 승격 노드는 canonical_key 없이 alias로만 불린다.
+        node = session.get(NodeRow, node_id)
+        assert node is not None
+        assert node.canonical_key is None
+        aliases = session.scalars(
+            select(AliasRow).where(AliasRow.node_id == node_id)
+        ).all()
+        assert [(alias.alias, alias.source) for alias in aliases] == [
+            (name, "extractor")
+        ]
+        # 읽기 경로는 accepted claim만 본다. claim 승인은 다른 단계의
+        # 일이라 여기서는 결과 상태만 만들어 둔다.
+        claim = session.get(ClaimRow, claim_id)
+        assert claim is not None
+        claim.resolution_status = "accepted"
+        session.commit()
+
+    with uow_factory() as uow:
+        claims = uow.knowledge_candidates.find_claim_candidates(
+            workspace_id=workspace_id,
+        )
+    found = next(claim for claim in claims if claim.id == claim_id)
+    assert found.subject_resolved_node_id == node_id
+
+    as_of = query_claims_as_of(
+        workspace_id=workspace_id,
+        subject=name,
+        at=datetime(2026, 8, 5, tzinfo=timezone.utc),
+        uow=uow_factory(),
+    )
+
+    assert as_of.subject is not None
+    assert as_of.subject.node_id == node_id
+    assert [claim.claim_id for claim in as_of.claims] == [claim_id]
+    assert as_of.claims[0].value == "2026-09"
