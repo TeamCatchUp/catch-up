@@ -13,14 +13,8 @@ interface ChannelTalkEmbeddingFooterBarProps {
 }
 
 /**
- * 임베딩 대상 선택 단계의 하단 바.
- * Figma `17414:97736` 780×60 — 위선만 있고 배경은 없다. px 32 / py 12.
- *
- * 스텝 ①의 {@link ChannelTalkFooterBar}(`17345:84633`)와 다른 물건이다 —
- * 저건 `채널 추가` + `임베딩하기` 두 버튼이고 이건 전체 선택 체크박스 + 버튼 하나다.
- *
- * 집계는 숫자만 `#3385FF`로 강조된다. 그 값을 주는 `bg-*`가 없어 텍스트 토큰
- * `text-primary-assistive`를 쓴다 — 스텝 ① 하단 바와 같은 처리다.
+ * 임베딩 대상 선택 단계(스텝 ②)의 하단 바 — 전체 선택 체크박스 + 집계 + 제출 버튼.
+ * 스텝 ①의 {@link ChannelTalkFooterBar}(채널 추가 + 진행 버튼)와는 다른 컴포넌트다.
  */
 export default function ChannelTalkEmbeddingFooterBar({
   channelCount,

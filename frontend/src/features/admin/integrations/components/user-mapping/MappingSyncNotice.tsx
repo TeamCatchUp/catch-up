@@ -21,11 +21,7 @@ const MESSAGES: Record<MappingSyncNoticeVariant, string> = {
 
 /**
  * 매핑 표 위의 동기화 안내 배너 — 구버전 승계(사용자 승인 2026-08-04).
- * Figma `17379:92301`(빈 상태) · `17379:92020`(부분 실패).
- * 1000×43, px 16 py 10, gap 16, radius 8, `accent-red-lighten` 배경,
- * icon/error 20 + 15px `accent-red-default` 문구.
- * 부분 실패에는 "마지막 동기화 {시각}"(13px)과 [↻ 동기화 재시도]
- * (Text Button Secondary Mono small)가 붙는다.
+ * 부분 실패 변형에만 "마지막 동기화 {시각}"과 [동기화 재시도] 버튼이 붙는다.
  */
 export default function MappingSyncNotice({ variant, lastSyncedAt, onRetry }: MappingSyncNoticeProps) {
   return (

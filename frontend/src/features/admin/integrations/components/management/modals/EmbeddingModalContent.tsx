@@ -14,8 +14,7 @@ export interface EmbeddingContentProps {
 
 /**
  * 임베딩 모달 항목 목록 (모든 서비스 공통).
- * Figma `17190:120045` — 행 52, px 16 py 8, gap 8, 아래선 line/normal/assistive.
- * 좌측에 커넥터 로고 20, 이름 15px text/normal/neutral, 우측 체크박스 36.
+ * 좌측 커넥터 로고 + 이름, 우측 체크박스. 접근 불가 항목은 비활성으로 남긴다.
  */
 export default function EmbeddingModalContent({ service, targets, selectedItems, onToggleItem }: EmbeddingContentProps) {
   const Logo = CONNECTOR_LOGOS[service];

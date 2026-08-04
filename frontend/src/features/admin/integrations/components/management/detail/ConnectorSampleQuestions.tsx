@@ -9,7 +9,6 @@ interface ConnectorSampleQuestionsProps {
 
 /**
  * "이렇게 물어볼 수 있어요." 예시 질문 목록.
- * Figma `16922:134108` — gap 8, icon/check 24.
  */
 export default function ConnectorSampleQuestions({ service }: ConnectorSampleQuestionsProps) {
   const { sampleQuestions } = CONNECTOR_CONTENT[service];

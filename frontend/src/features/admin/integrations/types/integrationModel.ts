@@ -17,7 +17,7 @@ export interface IntegrationMenuItem extends IntegrationAccountMeta {
   status: ConnectorDetailStatus;
   /**
    * 연동된 조직·워크스페이스의 대표 이름. connection-status `items[].name`이다.
-   * 사이드바는 "{도구명} - {이 값}", 상세 헤더는 이 값만 쓴다(Figma `17125:115106`·`17071:111151`).
+   * 사이드바는 "{도구명} - {이 값}", 상세 헤더는 이 값만 쓴다.
    * 미연동이거나 백엔드가 null을 주면 null.
    */
   workspaceName: string | null;

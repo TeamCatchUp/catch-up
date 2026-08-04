@@ -15,11 +15,6 @@ interface ChannelTalkChannelListPanelProps {
 
 /**
  * 임베딩 대상 선택기의 좌측 채널 목록.
- * Figma `17414:97989` 280×634 — 헤더 44 + 목록.
- *
- * 목록 `17414:97995`: `px 12`, 카운트와 리스트 사이 gap 6, 아이템 사이 gap 2.
- * 아이템 `17414:97999`: padding 12, gap 12, radius 8, 켜져 있으면
- * `fill/primary/normal/neutral` 배경. 테두리는 없다.
  *
  * 여기서 켠 채널만 우측에 나온다. 임베딩 선택이 아니라 **표시 토글**이고,
  * 끄면 그 채널의 임베딩 선택도 함께 풀린다 — 구 모달(`ChannelList`)과 같은

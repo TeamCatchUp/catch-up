@@ -67,7 +67,7 @@ export default function ConnectorConnectView() {
   const resolved: ViewState =
     state ?? (hasConnected ? { kind: 'detail', service: connectedMenu[0].service } : { kind: 'catalog' });
 
-  const goCheckMapping = () => router.push('/admin/user-mapping');
+  const goCheckMapping = () => router.push('/mypage/help/support/2');
 
   const handleConnect = (service: IntegrationService) => {
     setState({ kind: 'preconnect', service });
@@ -128,14 +128,7 @@ export default function ConnectorConnectView() {
     }
   })();
 
-  /*
-   * pane padding을 누가 갖는가 — 채널톡 (F)만 스스로 갖는다.
-   *
-   * Figma `17414:97603`의 우측 pane은 `Table container`(pad 0)이고 그 아래
-   * `콘텐츠(pad 24/32)`와 `하단바(pad 12/32, border-top)`가 **형제**다. 하단바의
-   * 위 경계선이 pane 좌우 끝까지 가야 하는데, pane에 padding을 걸어 두면 그 안에
-   * 들어간 하단바의 선이 좌우 32씩 잘린다. 그래서 (F)에서는 padding을 넘겨준다.
-   */
+  // 채널톡 (F)만 하단 바 경계선이 pane 전폭을 써야 해서 padding을 패널 스스로 갖는다
   const paneOwnsPadding = resolved.kind === 'channelTalkFlow';
 
   /*
@@ -151,22 +144,18 @@ export default function ConnectorConnectView() {
     return <ConnectorEmptyState onStart={() => setEntered(true)} />;
   }
 
-  // 연동 0개 — 사이드바 없이 테두리 카드 하나 (Figma `17122:112581` 우측 padding 규칙 동일)
+  // 연동 0개 — 사이드바 없이 테두리 카드 하나
   if (!hasConnected) {
     return (
-      <div className={cn('border-line-normal-neutral overflow-hidden rounded-2xl border', !paneOwnsPadding && 'px-8 py-6')}>
+      <div
+        className={cn('border-line-normal-neutral overflow-hidden rounded-2xl border', !paneOwnsPadding && 'px-8 py-6')}
+      >
         {rightPane}
       </div>
     );
   }
 
-  /*
-   * 연동 ≥1 — 사이드바 260 + 우측을 **하나의 테두리**로 감싼다.
-   * Figma `17125:115106`·`17169:74058`: 바깥 radius 16 + `line/normal/neutral` 1px,
-   * 두 단 사이 gap 0(사이드바의 오른쪽 경계선이 구분), 사이드바 padding 12,
-   * 우측 padding 24/32 → 콘텐츠 716.
-   * 사이드바는 고정 260, 우측이 남은 폭을 먹는다.
-   */
+  // 연동 ≥1 — 고정 폭 사이드바 + 우측 pane을 하나의 테두리로 감싼다. 구분선은 사이드바의 오른쪽 경계선
   return (
     <div className="border-line-normal-neutral flex overflow-hidden rounded-2xl border">
       <aside className="border-line-normal-neutral w-65 shrink-0 border-r p-3">

@@ -13,7 +13,6 @@ interface ConnectorCatalogProps {
 
 /**
  * "연결 찾기" 카탈로그 — 카테고리 그룹 + 카드 그리드 + 하단 안내.
- * Figma `16922:134207`(3열) · `17125:115103`(2열).
  */
 export default function ConnectorCatalog({ connectedServices, onConnect, onLearnMore }: ConnectorCatalogProps) {
   return (
@@ -31,10 +30,8 @@ export default function ConnectorCatalog({ connectedServices, onConnect, onLearn
           <section key={category} className="flex flex-col gap-3">
             <h3 className="text-body-small text-text-normal-alternative">{category}</h3>
             {/*
-              * 열 수를 박지 않는다. Figma 카드는 3열 315 / 2열 350 — 최소 280을 주면
-              * 설계 폭(전폭 1040 → 3열 336, 2단 우측 714 → 2열 349)이 그대로 나오고,
-              * 그보다 좁으면 열이 줄어 카드가 찌그러지지 않는다(실측: 열 고정 시
-              * 1152에서 221, 900에서 95까지 떨어졌다).
+              * 열 수를 박지 않는다 — auto-fill이라 설계 폭에서는 Figma의 열 수가
+              * 그대로 나오고, 그보다 좁으면 열이 줄어 카드가 찌그러지지 않는다.
               */}
             <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-4">
               {services.map((service) => (

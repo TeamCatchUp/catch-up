@@ -32,12 +32,11 @@ interface EmbeddingHistoryTableProps {
 
 /**
  * 임베딩 히스토리 — 제목 + 필터 + 표.
- * Figma `17071:112226`, 필터 `17169:75982`(Tab 158×36 = Chips 50 ×3 + gap 4 ×2).
  *
  * 필터는 회색 트랙 위의 세그먼티드 컨트롤이 아니라 **낱개 칩 3개**다.
- * 선택 칩만 흰 배경 + `line/normal/strong` 테두리를 갖고, 나머지는 텍스트만 남는다 —
+ * 선택 칩만 흰 배경 + 테두리를 갖고, 나머지는 텍스트만 남는다 —
  * `Chip variant="outline"`이 그 토글 패턴 그대로다.
- * `ChipGroup`은 쓰지 않는다. gap이 10이고 같은 칩을 다시 눌러 전체 해제가 되는데,
+ * `ChipGroup`은 쓰지 않는다. 같은 칩을 다시 눌러 전체 해제가 되는데,
  * 필터는 항상 하나가 선택돼 있어야 한다.
  *
  * Figma의 Chips에는 건수 배지와 실패 빨간 점 레이어가 있으나 이 인스턴스에서
@@ -69,7 +68,7 @@ export default function EmbeddingHistoryTable({ service, items, onRetry }: Embed
       </div>
 
       {visible.length > 0 ? (
-        // 고정 열 합(약 404)조차 안 되는 슬롯에서만 스크롤로 흘린다
+        // 고정 열 합조차 안 되는 좁은 슬롯에서만 스크롤로 흘린다
         <div className="overflow-x-auto">
           <table role="table" className="block w-full min-w-fit">
             <EmbeddingTableHeader />

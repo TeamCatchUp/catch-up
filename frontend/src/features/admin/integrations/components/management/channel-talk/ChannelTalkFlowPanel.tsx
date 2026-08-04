@@ -32,7 +32,7 @@ interface ChannelTalkFlowPanelProps {
 }
 
 /**
- * (F) 채널톡 2스텝 플로우. 스펙 §5-4, Figma `17414:97604`.
+ * (F) 채널톡 2스텝 플로우. 스펙 §5-4.
  * 스텝바 + [① 채널 연결 관리 | ② 임베딩하기] + 각 스텝의 하단 바.
  *
  * 구 `ChannelTalkManagementPanel`의 연동 상태·데이터 범위 섹션은 신규 (F)에
@@ -68,18 +68,13 @@ export default function ChannelTalkFlowPanel({
   }
 
   /*
-   * pane padding을 이 패널이 갖는다(ConnectorConnectView가 넘겨준다).
-   * Figma `17414:97603`의 `Table container`(pad 0) = [콘텐츠 pad 24/32, gap 24] +
-   * [하단바 pad 12/32, border-top]. 하단바는 콘텐츠의 **형제**라 위 경계선이
-   * pane 좌우 끝까지 간다 — 콘텐츠 padding 안에 넣으면 32씩 잘린다.
-   *
-   * 그래서 각 스텝이 `[padding 걸린 콘텐츠][전폭 하단바]` 두 형제를 낸다.
-   * 여기 헤더 블록의 `pt-6`과 스텝 콘텐츠의 `pt-6`이 합쳐져 Figma의
-   * pad-top 24 + gap 24가 된다.
+   * pane padding은 이 패널이 갖는다(ConnectorConnectView가 넘겨준다). 하단바의 위
+   * 경계선이 pane 전폭을 써야 해서, 각 스텝은 `[padding 콘텐츠][전폭 하단바]` 두
+   * 형제를 낸다.
    */
   return (
     <div className="flex flex-col">
-      {/* Figma `17414:97604`·`17332:84379` — 스텝퍼 위에 커넥터 헤더(로고 60 + 이름 + 설명)가 온다 */}
+      {/* 스텝퍼 위에 커넥터 헤더(로고 + 이름 + 설명)가 온다 */}
       <div className="flex flex-col gap-6 px-8 pt-6">
         <ConnectorDetailHeader
           service="channel_talk"

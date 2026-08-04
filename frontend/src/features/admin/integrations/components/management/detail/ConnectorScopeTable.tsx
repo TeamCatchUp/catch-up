@@ -6,9 +6,7 @@ interface ConnectorScopeTableProps {
 }
 
 /**
- * "연동 범위" 4행 표.
- * Figma `16922:134113` — 행 padding 14/20, gap 16, 라벨 열 150px 고정,
- * 마지막 행을 뺀 나머지에 하단 경계선.
+ * "연동 범위" 4행 표. 라벨 열은 고정 폭, 마지막 행을 뺀 나머지에 하단 경계선.
  */
 export default function ConnectorScopeTable({ service }: ConnectorScopeTableProps) {
   const { scope } = CONNECTOR_CONTENT[service];

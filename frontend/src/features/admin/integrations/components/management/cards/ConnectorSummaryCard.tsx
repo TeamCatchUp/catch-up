@@ -9,7 +9,6 @@ interface ConnectorSummaryCardProps {
 
 /**
  * 커넥터 상세 요약 — 연동 상태 + 임베딩 데이터 범위 2행.
- * Figma `17071:111589` — 716×104, 행 각 52, 라벨 x16, 값 우측 정렬.
  *
  * 구 레이아웃의 카드 2개(`ConnectionStatusCard` + `DataRangeCard`)를 대체했고,
  * 그 둘은 2026-08-03에 삭제됐다. 구 카드에 있던 "보안 관련 설명 / 원문 보기" 행은
@@ -38,7 +37,7 @@ export default function ConnectorSummaryCard({ connected, dataRange }: Connector
       </div>
 
       <div className="flex h-13 items-center justify-between gap-8 px-4">
-        {/* 라벨이 먼저 줄고, 날짜는 한 줄을 유지한다 — 좁은 폭에서 값이 두 줄로 접히면 행 52가 무너진다 */}
+        {/* 라벨이 먼저 줄고, 날짜는 한 줄을 유지한다 — 좁은 폭에서 값이 두 줄로 접히면 행 높이가 무너진다 */}
         <dt className="text-body-small text-text-normal-normal min-w-0 truncate">임베딩 데이터 범위</dt>
         <dd
           className={

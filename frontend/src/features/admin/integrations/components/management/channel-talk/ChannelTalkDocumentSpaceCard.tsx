@@ -38,8 +38,8 @@ export default function ChannelTalkDocumentSpaceCard({
   const canTestConnection = isDocumentSpaceSecretsFilled(documentSpace);
 
   /**
-   * Figma 17367:102658 — reply 아이콘으로 채널 하위임을 표시하고 칩으로 종류를 표시한다.
-   * 칩은 채널 레일과 같은 규칙이다(실측 `17332:84380`): 배경 `#f7f7f8`, 아이콘 `#0066ff`.
+   * reply 아이콘으로 채널 하위임을 표시하고 칩으로 종류를 표시한다.
+   * 칩은 채널 레일과 같은 규칙이다.
    */
   const leftColumn = (
     <>

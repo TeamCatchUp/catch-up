@@ -20,24 +20,14 @@ interface ChannelTalkEmbeddingTargetPickerProps {
 }
 
 /**
- * 임베딩 대상 선택기.
- * Figma `17414:97988` 716×634 — 좌 채널 목록 280 / 우 선택 상세 436.
+ * 임베딩 대상 선택기 — 좌 채널 목록 / 우 선택 상세.
  *
  * 원래 모달(`ChannelTalkEmbeddingModal`)이었는데 커넥터 상세 화면 안으로 들어왔다.
  * 스텝 ②(임베딩하기)의 본문이다. 선택 시맨틱은 구 모달을 그대로 승계한다 —
  * 좌측은 표시 토글, 채널 체크박스는 채널 대화 자체, 집계는 `1 + 스페이스 수`.
  *
- * 좌 280은 고정, 우는 남은 폭을 먹는다 — 우측이 이름 + 기간 드롭다운을 같이
- * 담아야 해서 여유가 필요한 쪽이다.
- *
- * 높이 634는 Figma 값이고 `max-h-full`로 더 낮은 슬롯에서 눌린다. 목록은 각 패널
- * 안에서 세로 스크롤한다.
- *
- * 컬럼 헤더 `17414:109308`: 아래선 `line/normal/neutral`, pl 12 / pr 20 / py 8,
- * gap 32, 좌측 36 스페이서는 체크박스 자리를 비워 이름 시작점을 맞춘 것이다.
- * 우측 라벨 폭 75는 채널 단위 기간 드롭다운 폭과 같다.
- *
- * 바깥 테두리와 radius는 Figma 스크린샷에서 읽은 값이다(노드 속성 미확인).
+ * 좌측은 고정 폭, 우측이 남은 폭을 먹는다 — 우측이 이름 + 기간 드롭다운을 같이
+ * 담아야 해서 여유가 필요한 쪽이다. 목록은 각 패널 안에서 세로 스크롤한다.
  */
 export default function ChannelTalkEmbeddingTargetPicker({
   channels,
@@ -52,12 +42,7 @@ export default function ChannelTalkEmbeddingTargetPicker({
 }: ChannelTalkEmbeddingTargetPickerProps) {
   const visible = channels.filter((channel) => visibleChannelIds.has(channel.id));
 
-  /*
-   * 높이 634는 Figma 값. `max-h-full`은 부모가 높이를 안 줘 아무 일도 하지 않았고,
-   * 1440×900에서도 하단 바가 44px 화면 밖이었다(실측). 뷰포트에서 위 스택
-   * (전역 헤더~스텝퍼 약 310) + 아래 하단 바(약 74)를 뺀 값으로 눌리게 하고,
-   * 너무 낮은 화면에서는 400을 하한으로 잡아 목록이 뭉개지지 않게 한다.
-   */
+  // 목록이 화면 안에서 스크롤되도록 뷰포트 기반 최대 높이(하한 400)를 건다 — 수치 근거는 measurements 문서
   return (
     <div className="border-line-normal-neutral flex h-158.5 max-h-[max(25rem,calc(100dvh-24rem))] overflow-hidden rounded-xl border">
       <div className="w-70 shrink-0">
@@ -77,7 +62,7 @@ export default function ChannelTalkEmbeddingTargetPicker({
               채널&도큐먼트 스페이스명
             </span>
           </div>
-          {/* 75 = 채널 단위 기간 드롭다운 폭 */}
+          {/* 헤더 라벨 폭은 아래 행의 기간 드롭다운 폭과 맞춘다 */}
           <span className="text-body-xsmall text-text-normal-alternative w-18.75 shrink-0 truncate">데이터 기간</span>
         </div>
 

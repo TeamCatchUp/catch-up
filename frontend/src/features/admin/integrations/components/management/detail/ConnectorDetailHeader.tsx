@@ -12,8 +12,7 @@ interface ConnectorDetailHeaderProps {
 
 /**
  * 커넥터 상세 헤더.
- * Figma `16922:134099`(연동 전) · `17306:82027`(연동됨) — 로고 칩 60 안에 로고 44, gap 16.
- * 두 상태가 같은 헤더를 쓰고 액션만 바뀐다.
+ * 연동 전·연동됨 두 상태가 같은 헤더를 쓰고 액션만 바뀐다.
  */
 export default function ConnectorDetailHeader({ service, title, description, actions }: ConnectorDetailHeaderProps) {
   const Logo = CONNECTOR_LOGOS[service];

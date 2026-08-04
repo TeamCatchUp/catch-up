@@ -14,7 +14,6 @@ interface ConnectorCatalogCardProps {
 
 /**
  * 카탈로그의 커넥터 카드 1장.
- * Figma `16922:134217` — padding 16, 로고 칩 40 안에 로고 28, 버튼 h30.
  */
 export default function ConnectorCatalogCard({ service, connected, onConnect }: ConnectorCatalogCardProps) {
   const content = CONNECTOR_CONTENT[service];

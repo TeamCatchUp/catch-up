@@ -8,7 +8,6 @@ interface MappingCheckPopoverProps {
 
 /**
  * 연결 전 이용자 매핑 확인을 권하는 비차단 안내.
- * Figma `17251:77202` — Tooltip size=large, padding 12, gap 4, radius 12.
  *
  * 본문은 온보딩 문서("처음 오셨나요? — 나의 이름표")를 바탕으로 교체했다
  * (사용자 지시 2026-08-05). 매핑의 실제 효용이 그 문서의 논리다:
@@ -16,11 +15,11 @@ interface MappingCheckPopoverProps {
  * 등록해야 기록이 흩어지지 않고 '나의 업무 맥락'으로 정리된다.
  * Figma 원문("권한에 맞는 검색 결과")은 스펙 미결 #1로 남아 있었다.
  *
- * 같은 문구의 확인 모달(`17251:77261`)은 구현하지 않는다(스펙 결정 #1).
+ * 같은 문구의 확인 모달은 구현하지 않는다(스펙 결정 #1).
  * 매핑 부재의 영향은 접근 제어가 아니라 인식 품질이라 흐름을 막을 근거가 없다.
  */
 export default function MappingCheckPopover({ onClose }: MappingCheckPopoverProps) {
-  // Figma 는 hug(내용 맞춤)이라 폭을 고정하지 않는다. 460 은 상한일 뿐이다
+  // 폭은 내용에 맞추고 고정하지 않는다 — max-w 는 상한일 뿐이다
   return (
     <div className="border-accent-black-lighten bg-fill-normal-normal shadow-tooltip flex max-w-115 flex-col gap-1 rounded-xl border p-3">
       <div className="flex items-center gap-2">

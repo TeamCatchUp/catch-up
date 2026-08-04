@@ -50,9 +50,7 @@ function StatusBadge({ status, failureCount = 0 }: Pick<EmbeddingHistoryRowProps
 
 /**
  * 임베딩 히스토리 한 행. `<tr>`이라 `<tbody>` 안에서만 쓴다.
- * Figma 컴포넌트셋 `17134:113077`, 실측 행 `17169:75976`·`17169:75993`.
- * 4슬롯(대상 fill / 상태 150 / 시각 150 / 액션 32), padding 12/8, gap 16.
- * 높이 46은 `8 + 아이콘 버튼 30 + 8`이라 고정하지 않고 `min-h`로 둔다.
+ * 행 높이는 아이콘 버튼이 만드는 값이라 고정하지 않고 `min-h`로 둔다.
  *
  * 폭·간격은 {@link EMBEDDING_ROW_GRID}가 정한다 — 셀에 padding을 주지 않는다.
  * 진행중의 시각 칸은 텍스트가 아니라 회색 선이다. 성공 행도 액션 슬롯을
@@ -87,7 +85,7 @@ export default function EmbeddingHistoryRow({
         )}
       </td>
 
-      {/* 아이콘 버튼 30을 32 칸에 담고 오른쪽 padding 선(x704)에 붙인다 */}
+      {/* 아이콘 버튼을 액션 칸의 오른쪽 끝에 붙인다 */}
       <td role="cell" className="flex justify-end">
         {status === 'failed' && onRetry && (
           <Tooltip>

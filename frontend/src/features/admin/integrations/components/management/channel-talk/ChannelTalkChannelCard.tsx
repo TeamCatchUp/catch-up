@@ -35,16 +35,10 @@ interface ChannelTalkChannelCardProps {
 }
 
 /**
- * 채널톡 채널 하나의 연결 폼.
- * Figma `17363:100295` — 좌측 레일 32(칩 32 + 세로선) + 본문 668, gap 16.
- *
- * 신규 디자인은 카드 테두리를 쓰지 않고 **레일과 들여쓰기로만** 계층을 표현한다.
- * 도큐먼트 스페이스 추가는 하단 텍스트 링크에서 헤더 우측 버튼으로 올라왔고,
- * 삭제는 아이콘 버튼이 됐다.
+ * 채널톡 채널 하나의 연결 폼. 카드 테두리 없이 좌측 레일과 들여쓰기로만 계층을 표현한다.
  *
  * tested → 헤더 한 줄 collapsed lock (변경하려면 삭제 후 재등록)
  * idle/error → expanded (키 입력 + 연결 테스트 버튼 노출)
- * 이 동작은 Figma에 근거가 없어 현행에서 승계했다.
  */
 export default function ChannelTalkChannelCard({
   channel,
@@ -65,15 +59,7 @@ export default function ChannelTalkChannelCard({
 
   return (
     <div className="flex gap-4">
-      {/*
-       * 좌측 레일 — 채널 칩과 세로선으로 하위 도큐먼트와의 계층을 표현한다.
-       * 실측 `17332:84380`(같은 값이 `17363:100295` 상태 4종에도 동일):
-       *   칩   32 r8 `#f7f7f8` + 아이콘 20 `#0066ff` — 칩 배경은 파랑이 아니다
-       *   세로선 `#e1e2e4` **2px 파선**(dashPattern [4,4])
-       *
-       * 파선이라 배경색 div로는 안 되고 border를 쓴다. CSS `dashed`의 마디 길이는
-       * 브라우저가 선 굵기에서 정하는데, 2px에서 4/4에 근접해 Figma와 맞는다.
-       */}
+      {/* 좌측 레일 — 채널 칩 + 파선 세로선으로 하위 도큐먼트와의 계층 표현. 파선은 배경색 div로 안 되므로 border를 쓴다 */}
       <div aria-hidden="true" className="flex w-8 shrink-0 flex-col items-center">
         <div className="bg-fill-normal-strong flex size-8 shrink-0 items-center justify-center rounded-lg">
           <IconTagChannel className="text-icon-primary-normal size-5" />

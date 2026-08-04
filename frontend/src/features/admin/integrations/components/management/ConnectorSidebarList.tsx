@@ -20,8 +20,7 @@ interface ConnectorSidebarListProps {
 }
 
 /**
- * 좌측 "연동됨" 커넥터 목록.
- * Figma `17125:115103` — 항목은 설정 사이드바와 같은 `SNB/menu`다.
+ * 좌측 "연동됨" 커넥터 목록 — 항목은 설정 사이드바와 같은 `SNB/menu`다.
  * 추가하기와 커넥터 항목을 통틀어 정확히 하나만 selected다.
  */
 export default function ConnectorSidebarList({ connectors, selected, onSelect, onAdd }: ConnectorSidebarListProps) {

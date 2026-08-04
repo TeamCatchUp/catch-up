@@ -1,14 +1,7 @@
 /**
- * 이용자 매핑 표의 열 정의 — `embeddingTableGrid.ts`와 같은 패턴.
- *
- * Figma 행 `17060:75372`(전체) · `17386:94452`(커넥터 필터):
- * `1040 = 24 | 점 8 | 16 | 사용자 | 16 | 커넥터 셀들 | 24`, 행 py 12, 내용 42(2줄 셀).
- *
- * 전체 뷰는 사용자 140 + 커넥터 4열(셀 max 165, 열 간 시각 여백은 셀 상한이 만든다).
- * 커넥터 필터 뷰는 사용자 476 + 커넥터 476 — 균등 1fr 2개.
- * 열 수가 상태에 따라 4↔1로 바뀌므로 템플릿 상수를 통째로 교체한다.
- *
- * 높이는 박지 않는다 — 행 66은 `py 12 + 2줄 셀 42`의 결과다(임베딩 표와 같은 원칙).
+ * 이용자 매핑 표의 행 grid 템플릿 — `embeddingTableGrid.ts`와 같은 패턴.
+ * 커넥터 열 수가 필터에 따라 4↔1로 바뀌므로 템플릿 상수를 통째로 교체한다.
+ * 높이는 고정하지 않는다. 실측 근거: docs/specs/2026-08-04-cam256-figma-measurements-design.md
  */
 export const MAPPING_ROW_GRID_FULL =
   'grid grid-cols-[8px_minmax(0,140px)_repeat(4,minmax(0,1fr))] items-center gap-4 px-6';

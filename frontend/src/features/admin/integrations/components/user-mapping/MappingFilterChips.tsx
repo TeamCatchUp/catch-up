@@ -6,7 +6,7 @@ import { cn } from '@/shared/utils/cn';
  * 필터 값 4종.
  * 앞 3개는 API의 `mapping_status`(all/full/partial)와 1:1이고,
  * `channel_talk`은 표를 채널톡 1열로 좁히는 뷰 필터다 — 상태 필터가 아니라
- * 조회는 `all`로 나간다(Figma `17300:80428` 채널톡 화면).
+ * 조회는 `all`로 나간다.
  */
 export type MappingStatusFilter = 'all' | 'full' | 'partial' | 'channel_talk';
 
@@ -23,15 +23,10 @@ interface MappingFilterChipsProps {
 }
 
 /**
- * 계정 매핑 상태 필터.
- * Figma `17379:78313` — 낱개 칩이 아니라 **세그먼티드 컨트롤**이다.
- * 트랙 `fill/normal/strong` + `line/normal/neutral` 1px + radius 8, padding·gap 2.
- * 칩 h32, padding 8/10, radius 7.
- *   미선택  배경 없음, `text/normal/alternative`
- *   선택    `fill/normal/normal` + `line/normal/assistive` 1px, `text/normal/normal`
+ * 계정 매핑 상태 필터 — 낱개 칩이 아니라 **세그먼티드 컨트롤**이다.
  *
  * hover·pressed 는 임베딩 관리/현황 탭(`EmbeddingSegmentTabs`)과 같게 맞춘다
- * (사용자 지시) — Figma 토글이 두 상태를 같은 6%로 두고 있어 같은 토큰을 쓴다.
+ * (사용자 지시) — Figma 토글이 두 상태를 같은 값으로 두고 있어 같은 토큰을 쓴다.
  *
  * 선택 칩에만 테두리가 있어 미선택에 투명 테두리를 깔아야 상태가 바뀔 때
  * 1px 씩 튀지 않는다.
@@ -55,7 +50,6 @@ export default function MappingFilterChips({ value, onChange }: MappingFilterChi
             aria-selected={selected}
             onClick={() => onChange(option.value)}
             className={cn(
-              // radius 7 은 트랙 8에서 padding 2를 뺀 Figma 실측값이라 스케일에 없다
               'text-body-small flex h-8 shrink-0 cursor-pointer items-center rounded-[7px] border px-2.5 py-2 whitespace-nowrap transition-colors',
               selected
                 ? 'bg-fill-normal-normal border-line-normal-assistive text-text-normal-normal'

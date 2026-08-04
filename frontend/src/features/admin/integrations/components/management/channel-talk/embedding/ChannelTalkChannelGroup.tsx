@@ -22,11 +22,8 @@ interface ChannelTalkChannelGroupProps {
 
 /**
  * 채널 헤더 + 그 아래 도큐먼트 스페이스 목록.
- * Figma `17449:111871`(헤더 436×67) + `17449:111884`(목록).
- *
- * 헤더는 `fill/normal/strong` 배경에 `line/normal/assistive` 아래선, pl 12 / pr 20,
- * py 10, gap 32. 좌측은 체크박스 + 이름, 그 아래 한 줄이 "전체 N개 · M개 선택됨"이고
- * 선택 수만 `text/primary/normal`로 강조된다. 우측은 채널 단위 데이터 기간이다.
+ * 헤더 좌측은 체크박스 + 이름과 "전체 N개 · M개 선택됨" 집계(선택 수만 강조),
+ * 우측은 채널 단위 데이터 기간이다.
  *
  * 채널 체크박스는 하위 전체선택이 **아니다**. 채널 대화 자체가 임베딩 대상이라
  * 집계도 `1 + 스페이스 수`로 센다 — 구 모달(`ChannelGroup`)과 같은 시맨틱이다.
@@ -50,8 +47,8 @@ export default function ChannelTalkChannelGroup({
       <div className="bg-fill-normal-strong border-line-normal-assistive flex items-center gap-8 border-b py-2.5 pr-5 pl-3">
         <div className="flex min-w-0 flex-1 flex-col justify-center gap-0.5">
           {/*
-           * h 25 는 Figma `17449:111873` 값이고, 체크박스 36 은 위아래로 5.5씩 넘친다.
-           * 높이를 열어두면 체크박스가 행을 밀어 헤더가 67 대신 79 가 된다.
+           * 체크박스가 이 줄 높이보다 커서 위아래로 넘친다. 높이를 열어두면
+           * 체크박스가 행을 밀어 헤더가 설계보다 높아지므로 고정한다.
            */}
           <div className="flex h-6.25 items-center gap-1.5">
             <button
@@ -70,7 +67,7 @@ export default function ChannelTalkChannelGroup({
             </div>
           </div>
 
-          {/* pl 42 = 체크박스 36 + gap 6. 위 줄의 이름과 왼쪽을 맞춘다 */}
+          {/* 체크박스 폭 + gap 만큼 들여써서 위 줄의 이름과 왼쪽을 맞춘다 */}
           <div className="flex items-center gap-3 pl-10.5">
             <span className="text-body-xsmall text-text-normal-assistive shrink-0">전체 {total}개</span>
             <span aria-hidden="true" className="bg-line-normal-normal h-3 w-px shrink-0" />
@@ -79,13 +76,10 @@ export default function ChannelTalkChannelGroup({
         </div>
 
         {/*
-         * Figma Dropdown h36·w75 — SelectTrigger 는 py 기반이라 높이를 박아야 36이 된다.
-         *
-         * 폭은 Figma의 75가 아니라 80(min-w-20)이다. PERIOD_OPTIONS 최장 라벨 "N개월"이
-         * 15px 폰트로 약 38px인데, 여기에 border 2 + px 16 + gap 6 + 아이콘 16을 더하면
-         * 78px가 필요하다. 75로는 산술적으로 안 들어간다. w- 가 아니라 min-w- 인 이유는
-         * 옵션이 길어졌을 때 잘리는 대신 늘어나게 하려는 것이고, 지금 6개 옵션은 전부
-         * 78 이하라 실제 렌더 폭은 도큐먼트 행과 똑같이 80으로 맞는다.
+         * SelectTrigger 는 py 기반이라 높이를 박아야 설계 높이가 된다.
+         * 폭은 Figma 값으로는 최장 기간 라벨이 산술적으로 안 들어가 살짝 키웠다.
+         * w- 가 아니라 min-w- 인 이유는 옵션이 길어졌을 때 잘리는 대신
+         * 늘어나게 하려는 것이다.
          */}
         <PeriodSelect value={channel.dataRange} onChange={onChannelDataRangeChange} className="h-9 min-w-20 shrink-0" />
       </div>

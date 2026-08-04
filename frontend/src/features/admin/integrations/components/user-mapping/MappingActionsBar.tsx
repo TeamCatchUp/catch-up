@@ -14,11 +14,8 @@ interface MappingActionsBarProps {
 }
 
 /**
- * 계정 매핑 상태 액션 바.
- * Figma `17379:78312` 우측 — Box Button Outline(Gray) medium ×4
- * (`box-outline-gray`), CSV·수정하기는 좌측 아이콘, 사이에 세로 divider.
- * 라벨은 Figma 인스턴스 실측: SSO User 동기화 / 이용자 DB 동기화 /
- * CSV 일괄 등록 / 수정하기.
+ * 계정 매핑 상태 액션 바 — 동기화 2종 + CSV 등록 + 수정하기 버튼 묶음.
+ * 동기화·CSV 묶음과 수정하기 사이는 세로 divider로 구분한다.
  */
 export default function MappingActionsBar({
   onSyncSso,

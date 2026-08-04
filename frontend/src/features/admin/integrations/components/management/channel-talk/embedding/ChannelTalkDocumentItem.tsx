@@ -18,7 +18,6 @@ interface ChannelTalkDocumentItemProps {
 
 /**
  * 채널 하위 도큐먼트 스페이스 한 줄.
- * Figma `17449:111885` 404×56 — 체크박스 36 + gap 10 + 본문(fill).
  *
  * 구분선은 행 전체가 아니라 **본문에만** 붙는다. 체크박스 왼쪽은 선이 없어서
  * 계층이 들여쓰기로 읽힌다.
@@ -52,7 +51,7 @@ export default function ChannelTalkDocumentItem({
           </div>
         </div>
 
-        {/* Figma Dropdown h36·w68 — 폭을 80(min-w-20)으로 올린 근거는 ChannelTalkChannelGroup 주석 참조 */}
+        {/* 높이·최소 폭 규칙은 ChannelTalkChannelGroup 의 기간 드롭다운과 같다 — 근거는 그쪽 주석 참조 */}
         <PeriodSelect value={document.dataRange} onChange={onDataRangeChange} className="h-9 min-w-20 shrink-0" />
       </div>
     </li>

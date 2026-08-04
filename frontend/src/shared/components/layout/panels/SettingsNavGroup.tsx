@@ -27,7 +27,6 @@ interface SettingsNavGroupProps {
 
 /**
  * 하위 메뉴를 가진 설정 사이드바 항목.
- * Figma 마스터 `Settings SNB / users=루트어드민`(5181:83143)의 확장형 메뉴에 대응한다.
  * 조직 협업툴 연동과 멤버 관리 두 곳에서 쓴다.
  */
 export default function SettingsNavGroup({
@@ -51,7 +50,7 @@ export default function SettingsNavGroup({
         trailing={<ArrowIcon className="text-icon-normal-normal size-5.5 shrink-0" />}
       />
 
-      {/* 하위 목록: padding-left 22px + 좌측 세로선 (Figma 5181:83143) */}
+      {/* 하위 목록 — 들여쓰기 + 좌측 세로선으로 상위와의 계층을 표시한다 */}
       {expanded && (
         <div className="pl-5.5">
           <div className="border-line-normal-neutral flex flex-col border-l pl-5.5">

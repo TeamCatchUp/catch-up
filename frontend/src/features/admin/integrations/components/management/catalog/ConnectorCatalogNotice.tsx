@@ -8,7 +8,6 @@ interface ConnectorCatalogNoticeProps {
 
 /**
  * 카탈로그 하단 안내 배너.
- * Figma `16966:66318` — padding 8, gap 8, radius 8, bg #F7F7F8.
  */
 export default function ConnectorCatalogNotice({ onLearnMore }: ConnectorCatalogNoticeProps) {
   return (

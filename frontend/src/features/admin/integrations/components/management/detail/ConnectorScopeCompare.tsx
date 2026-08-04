@@ -47,7 +47,6 @@ interface ConnectorScopeCompareProps {
 
 /**
  * "연동돼요 / 연동 안 돼요" 대조 카드.
- * Figma `16966:26838` — 카드 padding 16, gap 12, radius 12, 불릿 6px 원.
  */
 export default function ConnectorScopeCompare({ service }: ConnectorScopeCompareProps) {
   const { included, excluded } = CONNECTOR_CONTENT[service];

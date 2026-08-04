@@ -34,12 +34,11 @@ interface ConnectorPreConnectDetailProps {
 }
 
 /**
- * (D) 커넥터 상세 — 연동 전. 스펙 §5-2, Figma `16922:134087`.
+ * (D) 커넥터 상세 — 연동 전(스펙 §5-2).
  * 헤더 + 매핑 팝오버(닫기 전까지 표시) + 소개 + 예시 질문 + 연동 범위 +
  * 대조 카드 + 가이드 아코디언.
  *
- * 버튼 라벨은 `연결하기`다(Figma `16922:134092` 실측). 매핑 확인 모달은
- * 구현하지 않는다(스펙 결정 #1) — 팝오버가 비차단 안내를 대신한다.
+ * 매핑 확인 모달은 구현하지 않는다(스펙 결정 #1) — 팝오버가 비차단 안내를 대신한다.
  */
 export default function ConnectorPreConnectDetail({
   service,
@@ -69,13 +68,11 @@ export default function ConnectorPreConnectDetail({
           }
         />
         {/*
-         * Figma `16922:134092`의 Tooltip은 ABSOLUTE다 — 흐름에 넣으면 아래 본문을
-         * 밀어낸다. 실측: 헤더 아래 20(y83 - 헤더 63), 우측 안쪽 123(1040-557-360).
-         * 123은 [매핑 확인하기]를 가리키도록 [연결하기] 폭만큼 비켜 둔 값이라
-         * 스케일에 없다. left-0은 좁은 pane에서 max-w가 잡히도록 반대편을 연다.
+         * 팝오버는 absolute다 — 흐름에 넣으면 아래 본문을 밀어낸다.
+         * left-0은 좁은 pane에서 max-w가 잡히도록 반대편을 연다.
          */}
         {popoverOpen && (
-          <div className="z-local absolute top-full right-0 left-0 mt-5 flex justify-end pr-[123px] max-md:pr-0">
+          <div className="z-local absolute right-0 flex justify-end">
             <MappingCheckPopover onClose={() => setPopoverOpen(false)} />
           </div>
         )}

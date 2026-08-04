@@ -4,9 +4,8 @@ import { CONNECTOR_LOGOS } from '../../../constants/connectorLogos';
 import type { IntegrationService } from '../../../types/integrationModel';
 
 /**
- * 일러스트 로고 칩의 배치.
- * Figma `17122:112585`의 절대 좌표를 장식 박스(474×474) 기준으로 옮긴 값이다.
- * 4개는 바깥 원(r=237), GitHub만 안쪽 원(r=175) 위에 있다.
+ * 일러스트 로고 칩의 배치 — 장식 박스 기준 절대 좌표.
+ * 4개는 바깥 원, GitHub만 안쪽 원 위에 있다.
  */
 const LOGO_POSITIONS: readonly { service: IntegrationService; left: number; top: number }[] = [
   { service: 'jira', left: 102, top: 6 },
@@ -26,7 +25,7 @@ interface ConnectorEmptyStateProps {
 
 /**
  * 연결된 커넥터가 하나도 없을 때의 안내.
- * Figma `17122:112578` — 카드 padding 200/32, gap 24. 장식은 absolute라 흐름에서 빠진다.
+ * 장식은 absolute라 흐름에서 빠진다.
  */
 export default function ConnectorEmptyState({ onStart }: ConnectorEmptyStateProps) {
   return (

@@ -18,11 +18,7 @@ interface ConnectorGuideAccordionProps {
 
 /**
  * "○○ 연동 가이드 보기" 접기/펼치기.
- * Figma `16966:26874` — gap 16, radius 12. 헤더 행 실측 `16966:26875`:
- *   info 아이콘 20  `#ff9200`(orange-50) = status-cautionary
- *   라벨            17/SemiBold `#464c53` = heading-medium + text-normal-neutral
- *   화살표 24       `#6d7882`(gray-50)   = icon-normal-neutral
- *   행 정렬 MIN, gap 10 — 화살표는 라벨 **바로 옆**이다. 우측 끝으로 밀지 않는다.
+ * 화살표는 라벨 **바로 옆**이다 — 우측 끝으로 밀지 않는다.
  *
  * 접힘 상태는 Figma에 없다(모든 인스턴스가 펼침 + arrow down) —
  * 접힘 = arrow_right2 는 현행 승계다.
