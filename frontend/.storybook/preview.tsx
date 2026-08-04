@@ -61,7 +61,7 @@ const preview: Preview = {
   parameters: {
     layout: 'fullscreen',
     // Flows(여정 문서)를 사이드바 맨 위로. Flows 안은 여정 순서(커넥터 연결 → 이용자 매핑)로 고정한다
-    // — 기본 정렬이 가나다순이라 '이용자 매핑'이 앞서기 때문이다.
+    // — 임포트 순서 등 암묵적 정렬에 맡기지 않고, 여정 순서를 명시적으로 고정하기 위해서다.
     options: {
       storySort: {
         order: ['Flows', ['커넥터 연결', '이용자 매핑'], 'Screens', 'Compositions', 'Primitives'],
