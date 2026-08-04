@@ -21,6 +21,34 @@ export interface ChannelTalkSyncDispatchGroup {
   periods: Period[];
 }
 
+/** POST /sync/full 요청 한 건 — connector는 호출부가 붙인다 */
+export interface ChannelTalkSyncRequest {
+  scope_id: string;
+  targets: FullSyncTarget[];
+  sync_days: number | null;
+}
+
+/**
+ * 선택 상태 → channel별 /sync/full 요청 페이로드.
+ * `sync_days`는 **그 채널에서 사용된 기간만으로** 정한다 — 다른 채널의 '전체'
+ * 선택이 전염되면 좁게 고른 채널까지 전체 기간으로 동기화된다.
+ */
+export function buildChannelTalkSyncRequests(
+  channels: ChannelTalkChannel[],
+  selectedChannelIds: Set<string>,
+  selectedSpaceIds: Set<string>,
+  channelPeriods: Record<string, Period>,
+  spacePeriods: Record<string, Period>,
+): ChannelTalkSyncRequest[] {
+  return groupChannelTalkSyncDispatch(channels, selectedChannelIds, selectedSpaceIds, channelPeriods, spacePeriods).map(
+    ({ channel, targets, periods }) => ({
+      scope_id: channel.channel_id,
+      targets,
+      sync_days: pickSyncDays(periods),
+    }),
+  );
+}
+
 // POST /sync/full은 scope_id 1개라 channel별 1회씩 호출 — 빈 그룹은 제외
 export function groupChannelTalkSyncDispatch(
   channels: ChannelTalkChannel[],

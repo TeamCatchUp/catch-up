@@ -4,10 +4,10 @@ import { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { toast } from 'sonner';
 
-import { DEFAULT_PERIOD, type Period } from '../constants/period';
+import { type Period } from '../constants/period';
 import { adminConnectorMutations } from '../queries/adminConnector.mutations';
 import type { SyncConnector } from '../types/syncModel';
-import { groupChannelTalkSyncDispatch, pickSyncDays } from '../utils/channelTalkSyncDispatch';
+import { buildChannelTalkSyncRequests } from '../utils/channelTalkSyncDispatch';
 import type { ChannelTalkChannel } from '../utils/mapChannelTalkSyncTargets';
 
 export interface ChannelTalkSubmitSelection {
@@ -40,8 +40,9 @@ export function useChannelTalkEmbeddingSubmit({ onSettled, onJobStart }: UseChan
     if (channels.length === 0) return;
     if (selectedChannelIds.size === 0 && selectedSpaceIds.size === 0) return;
 
-    // channel별로 sync 요청 그룹화 (백엔드 scope_id 단일 제약 → channel당 1번 mutation 호출)
-    const channelGroups = groupChannelTalkSyncDispatch(
+    // channel별 요청 페이로드 (백엔드 scope_id 단일 제약 → channel당 1번 mutation 호출).
+    // sync_days는 채널별로 독립 계산된다 — buildChannelTalkSyncRequests 참조
+    const requests = buildChannelTalkSyncRequests(
       channels,
       selectedChannelIds,
       selectedSpaceIds,
@@ -49,25 +50,13 @@ export function useChannelTalkEmbeddingSubmit({ onSettled, onJobStart }: UseChan
       spacePeriods,
     );
 
-    if (channelGroups.length === 0) return;
-
-    // 모든 그룹에서 사용된 period를 합쳐 가장 넓은 기간 1개로 sync_days 결정.
-    // 빈 period 슬롯은 DEFAULT_PERIOD로 보강 (group은 명시 period만 수집)
-    const usedPeriods = channelGroups.flatMap((g) => (g.periods.length > 0 ? g.periods : [DEFAULT_PERIOD]));
-    const syncDays = pickSyncDays(usedPeriods);
+    if (requests.length === 0) return;
 
     setIsSubmitting(true);
     try {
       // channel별 병렬 mutation. allSettled로 일부 실패 허용.
       const results = await Promise.allSettled(
-        channelGroups.map(({ channel, targets }) =>
-          syncMutation.mutateAsync({
-            connector: 'channel_talk',
-            scope_id: channel.channel_id,
-            targets,
-            sync_days: syncDays,
-          }),
-        ),
+        requests.map((request) => syncMutation.mutateAsync({ connector: 'channel_talk', ...request })),
       );
 
       let acceptedCount = 0;
@@ -99,6 +88,11 @@ export function useChannelTalkEmbeddingSubmit({ onSettled, onJobStart }: UseChan
             failedCount += 1;
             lastFailMessage = response.message ?? null;
             break;
+          default: {
+            // 상태값이 늘면 컴파일 타임에 잡는다 — useEmbeddingJobs.toButtonState와 같은 패턴
+            const _exhaustive: never = response.status;
+            return _exhaustive;
+          }
         }
       });
 
@@ -106,15 +100,15 @@ export function useChannelTalkEmbeddingSubmit({ onSettled, onJobStart }: UseChan
       if (acceptedCount > 0) {
         toast('임베딩이 시작되었습니다.', {
           description:
-            acceptedCount === channelGroups.length
+            acceptedCount === requests.length
               ? '준비가 끝나면 즉시 알려드릴게요.'
-              : `${acceptedCount}/${channelGroups.length} 채널이 시작되었어요.`,
+              : `${acceptedCount}/${requests.length} 채널이 시작되었어요.`,
         });
         onSettled();
       } else if (conflictCount > 0) {
         toast.warning('이미 진행 중인 임베딩이 있습니다.');
         onSettled();
-      } else if (noEventsCount === channelGroups.length) {
+      } else if (noEventsCount === requests.length) {
         toast.info('임베딩할 대상이 없습니다.');
       } else if (failedCount > 0 || errorCount > 0) {
         toast('임베딩 요청에 실패했습니다.', { description: lastFailMessage });
