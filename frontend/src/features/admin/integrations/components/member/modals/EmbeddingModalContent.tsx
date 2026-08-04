@@ -1,16 +1,25 @@
 import CheckboxIcon from '@/shared/components/ui/checkbox-icon';
 import { cn } from '@/shared/utils/cn';
 
+import { CONNECTOR_LOGOS } from '../../../constants/connectorLogos';
+import type { IntegrationService } from '../../../types/integrationModel';
 import type { SyncTargetItem } from '../../../types/syncModel';
 
 export interface EmbeddingContentProps {
+  service: IntegrationService;
   targets: SyncTargetItem[];
   selectedItems: Set<string>;
   onToggleItem: (targetId: string) => void;
 }
 
-/** 임베딩 모달 항목 목록 (모든 서비스 공통) */
-export default function EmbeddingModalContent({ targets, selectedItems, onToggleItem }: EmbeddingContentProps) {
+/**
+ * 임베딩 모달 항목 목록 (모든 서비스 공통).
+ * Figma `17190:120045` — 행 52, px 16 py 8, gap 8, 아래선 line/normal/assistive.
+ * 좌측에 커넥터 로고 20, 이름 15px text/normal/neutral, 우측 체크박스 36.
+ */
+export default function EmbeddingModalContent({ service, targets, selectedItems, onToggleItem }: EmbeddingContentProps) {
+  const Logo = CONNECTOR_LOGOS[service];
+
   return (
     <div className="border-line-normal-assistive overflow-clip rounded-xl border">
       <div className="thin-scrollbar flex max-h-101 flex-col overflow-y-auto">
@@ -25,14 +34,15 @@ export default function EmbeddingModalContent({ targets, selectedItems, onToggle
               disabled={disabled}
               onClick={() => onToggleItem(target.target_id)}
               className={cn(
-                'border-line-normal-assistive flex w-full items-center gap-5 border-b px-5 py-3 last:border-b-0',
+                'border-line-normal-assistive flex w-full items-center gap-2 border-b px-4 py-2 last:border-b-0',
                 disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer',
               )}
             >
+              <Logo aria-hidden="true" className="size-5 shrink-0" />
               <span className="text-body-small text-text-normal-neutral min-w-0 flex-1 truncate text-left">
                 {target.display_name}
               </span>
-              {!disabled && <CheckboxIcon checked={checked} className="size-6" />}
+              {!disabled && <CheckboxIcon checked={checked} className="size-6" wrapperClassName="p-1.5" />}
             </button>
           );
         })}

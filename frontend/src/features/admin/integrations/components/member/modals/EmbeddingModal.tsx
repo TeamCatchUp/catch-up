@@ -245,8 +245,9 @@ export default function EmbeddingModal({ open, onOpenChange, service, serviceNam
                       {Array.from({ length: 5 }).map((_, i) => (
                         <div
                           key={i}
-                          className="border-line-normal-assistive flex items-center gap-5 border-b px-5 py-3 last:border-b-0"
+                          className="border-line-normal-assistive flex items-center gap-2 border-b px-4 py-2 last:border-b-0"
                         >
+                          <Skeleton className="size-5 shrink-0 rounded-full" />
                           <Skeleton className="h-4 flex-1" />
                           <Skeleton className="size-6 shrink-0 rounded" />
                         </div>
@@ -255,6 +256,7 @@ export default function EmbeddingModal({ open, onOpenChange, service, serviceNam
                   </div>
                 ) : (
                   <EmbeddingModalContent
+                    service={service}
                     targets={filteredTargets}
                     selectedItems={selectedItems}
                     onToggleItem={toggleItem}
@@ -265,17 +267,12 @@ export default function EmbeddingModal({ open, onOpenChange, service, serviceNam
           )}
         </div>
 
-        {/* 푸터 */}
-        <div className="flex h-9 items-start justify-end gap-3 px-6">
-          <Button variant="capsule-outline-mono" size="md" onClick={handleClose}>
-            취소
+        {/* 푸터 — Figma `17190:119083`: Box Button medium 2개, gap 12, 우측 정렬. 라벨은 닫기/임베딩하기 */}
+        <div className="flex items-center justify-end gap-3 px-6">
+          <Button variant="box-outline-gray" size="md" onClick={handleClose}>
+            닫기
           </Button>
-          <Button
-            variant="capsule-solid-primary"
-            size="md"
-            disabled={isSubmitDisabled || noScope}
-            onClick={handleSubmit}
-          >
+          <Button variant="box-solid-primary" size="md" disabled={isSubmitDisabled || noScope} onClick={handleSubmit}>
             {syncMutation.isPending ? '요청 중...' : '임베딩하기'}
           </Button>
         </div>
