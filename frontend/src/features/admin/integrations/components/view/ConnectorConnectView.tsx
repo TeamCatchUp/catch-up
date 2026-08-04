@@ -15,6 +15,7 @@ import ConnectorSidebarList from '../management/ConnectorSidebarList';
 import ConnectorBackLink from '../management/detail/ConnectorBackLink';
 import ConnectorConnectedDetail from '../management/detail/ConnectorConnectedDetail';
 import ConnectorPreConnectDetail from '../management/detail/ConnectorPreConnectDetail';
+import ConnectorDetailSkeleton from '../management/states/ConnectorDetailSkeleton';
 import ConnectorEmptyState from '../management/states/ConnectorEmptyState';
 import ConnectorStateBoundary from '../management/states/ConnectorStateBoundary';
 
@@ -126,6 +127,14 @@ export default function ConnectorConnectView() {
         );
     }
   })();
+
+  /*
+   * 부트스트랩 — connection-status 쿼리가 아직이면 hasConnected가 false라
+   * 빈 상태가 번쩍 나타난다. 판정 전에는 스켈레톤을 깐다.
+   */
+  if (!hasConnected && integrationMenu.some((item) => item.status === 'loading')) {
+    return <ConnectorDetailSkeleton />;
+  }
 
   // (A) 빈 상태 — 연동 0개 + 카탈로그 진입 전. 자체 테두리 카드라 셸을 덧씌우지 않는다
   if (!hasConnected && !entered && state === null) {
