@@ -23,11 +23,12 @@ const meta = {
         nodeId: '16922:134087',
       },
       viewport: { width: 780, height: 1200 },
-      states: ['default', 'popover-dismissed', 'channel-talk'],
+      states: ['default', 'popover-dismissed', 'channel-talk', 'github'],
       dataNotes: [
-        '문구는 전부 CONNECTOR_CONTENT에서 온다 — Jira/Github/Confluence/채널톡은 Slack 카피 복제(TODO(copy)).',
+        '문구는 전부 CONNECTOR_CONTENT에서 온다 — Confluence 확정본(pageId 157941761), Slack만 Figma 실측.',
         '매핑 확인 모달은 구현하지 않는다(스펙 결정 #1) — 팝오버가 비차단 안내를 대신한다.',
         '채널톡은 가이드 아코디언이 없다(현행에도 없음).',
+        'Github은 [연결하기]를 숨긴다(사용자 결정 2026-08-04) — 가이드가 직접 설치를 안내. 구 코드 동작 승계.',
       ],
     }),
   },
@@ -70,6 +71,22 @@ export const PopoverDismissed: Story = {
     const canvas = within(canvasElement);
     await userEvent.click(canvas.getByRole('button', { name: '닫기' }));
     await expect(canvas.queryByText('연동 전, 이용자 매핑 상태를 확인해 주세요')).not.toBeInTheDocument();
+  },
+};
+
+/** Github은 인앱 연결 진입이 없다 — [연결하기]를 숨기고 가이드가 직접 설치를 안내한다 */
+export const Github: Story = {
+  args: { service: 'github' },
+  render: (args) => (
+    <Frame>
+      <ConnectorPreConnectDetail {...args} />
+    </Frame>
+  ),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.queryByRole('button', { name: '연결하기' })).not.toBeInTheDocument();
+    await expect(canvas.getByRole('button', { name: '매핑 확인하기' })).toBeInTheDocument();
+    await expect(canvas.getByText('Github 연동 가이드 보기')).toBeInTheDocument();
   },
 };
 

@@ -61,9 +61,17 @@ export default function ConnectorPreConnectDetail({
               <Button variant="box-soft-primary" size="md" onClick={onCheckMapping}>
                 매핑 확인하기
               </Button>
-              <Button variant="box-solid-primary" size="md" onClick={onConnect}>
-                연결하기
-              </Button>
+              {/*
+               * Github은 [연결하기]를 숨긴다(사용자 결정 2026-08-04) — 인앱 진입이
+               * 없고 가이드 아코디언이 GitHub 앱 직접 설치를 안내한다. 구 코드도
+               * `selectedService !== 'github'` 로 버튼을 숨겼다. 하드코딩 설치
+               * URL이나 GITHUB_INSTALLATION_LINK 배선은 존재한 적이 없다.
+               */}
+              {service !== 'github' && (
+                <Button variant="box-solid-primary" size="md" onClick={onConnect}>
+                  연결하기
+                </Button>
+              )}
             </>
           }
         />

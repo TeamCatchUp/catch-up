@@ -31,7 +31,7 @@ const startOAuth = (service: IntegrationService) => {
       window.location.href = API.atlassian.install;
       break;
     case 'github':
-      // 현행에도 Github 설치 진입이 없다 — 연동 안내만 제공(카탈로그 유지)
+      // 도달하지 않는다 — (D)가 github의 [연결하기]를 숨긴다(가이드로 직접 설치 안내)
       break;
     case 'channel_talk':
       // OAuth가 없다 — 호출부에서 (F)로 전환한다
