@@ -86,7 +86,7 @@ export default function ChannelTalkFlowPanel({
           title={workspaceName ?? CONNECTOR_CONTENT.channel_talk.name}
           description={CONNECTOR_CONTENT.channel_talk.headerDescription}
         />
-        <ChannelTalkStepper current={step} onBack={onExit} />
+        <ChannelTalkStepper current={step} onStepChange={setStep} onBack={onExit} />
       </div>
       {step === 'connect' ? (
         <ConnectStep key={statusQuery.dataUpdatedAt} initialState={initialState} onProceed={() => setStep('embed')} />

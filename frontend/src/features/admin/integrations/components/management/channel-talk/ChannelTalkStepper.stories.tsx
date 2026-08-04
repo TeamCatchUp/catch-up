@@ -8,7 +8,7 @@ const meta = {
   title: 'Compositions/Admin/Integrations/Channel Talk/ChannelTalkStepper',
   component: ChannelTalkStepper,
   tags: ['autodocs'],
-  args: { current: 'connect', onBack: fn() },
+  args: { current: 'connect', onStepChange: fn(), onBack: fn() },
   argTypes: {
     current: { control: 'inline-radio', options: ['connect', 'embed'] },
   },
@@ -55,6 +55,11 @@ export const Step1: Story = {
     // 현재 단계를 스크린리더에도 알린다
     await expect(canvas.getByText('채널 연결 관리').closest('li')).toHaveAttribute('aria-current', 'step');
 
+    // 다음 단계로 건너뛴다 — 하단 바 [임베딩하기]와 같이 활성 조건이 없다.
+    // 숫자 칩은 aria-hidden이라(순서는 ol이 이미 알린다) 접근성 이름은 라벨뿐이다
+    await userEvent.click(canvas.getByRole('button', { name: '임베딩하기' }));
+    await expect(args.onStepChange).toHaveBeenCalledWith('embed');
+
     await userEvent.click(canvas.getByRole('button', { name: /임베딩 관리로/ }));
     await expect(args.onBack).toHaveBeenCalled();
   },
@@ -67,9 +72,13 @@ export const Step2: Story = {
       <ChannelTalkStepper {...args} />
     </Frame>
   ),
-  play: async ({ canvasElement }) => {
+  play: async ({ canvasElement, userEvent, args }) => {
     const canvas = within(canvasElement);
     await expect(canvas.getByText('임베딩하기').closest('li')).toHaveAttribute('aria-current', 'step');
     await expect(canvas.getByText('채널 연결 관리').closest('li')).not.toHaveAttribute('aria-current');
+
+    // 되돌아가기 — 하단 바에는 ②→① 경로가 없어 스텝퍼가 유일하다
+    await userEvent.click(canvas.getByRole('button', { name: '채널 연결 관리' }));
+    await expect(args.onStepChange).toHaveBeenCalledWith('connect');
   },
 };
