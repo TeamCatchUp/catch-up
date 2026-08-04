@@ -36,7 +36,18 @@ export default function SnbMenuItem({
       aria-expanded={expanded}
       className={cn(
         'flex h-9 w-full cursor-pointer items-center justify-between gap-3 rounded-lg px-2.5 py-1.5 transition-colors',
-        selected ? 'bg-fill-normal-strong' : 'hover:bg-fill-normal-interaction-hover',
+        /*
+         * Figma `17668:37474`(SNB_menu_item) 5상태:
+         *   Default 없음 · Hover 6% · Pressed 10% · Selected #f7f7f8 · Selected_hover 8%
+         * (6/8/10%는 #1e2124 알파 오버레이)
+         *
+         * 코드의 interaction 토큰은 아직 solid neutral 세대라 알파 3단계를 그대로
+         * 못 낸다. Selected 는 `fill-normal-strong`(#f7f7f8)로 정확히 일치하고,
+         * hover/pressed 는 상대 순서(hover < pressed)를 지키는 기존 토큰으로 낸다.
+         * 알파 오버레이 전환은 디자인 시스템 차원의 별도 작업이다.
+         */
+        'hover:bg-fill-normal-interaction-hover active:bg-fill-normal-interaction-pressed',
+        selected && 'bg-fill-normal-strong',
         className,
       )}
     >

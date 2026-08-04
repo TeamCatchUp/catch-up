@@ -64,15 +64,20 @@ const SLACK_INTRO =
   '결정, 맥락, 답변이 Slack에선 매일 스크롤 아래로 사라집니다. 중요한 채널만 동기화해두면, 필요할 때 다시 불러올 수 있어요.';
 
 /*
- * 헤더 한 줄 설명. Slack 것만 Figma `16922:134099` 실측값이고, 나머지는 그 문형
- * ("<어디>에 묻힌 <무엇>을 다시 꺼내오세요")을 따라 도구별 어휘로 맞춘 초안이다.
- * 카탈로그 카드의 catalogDescription 과 대상 어휘를 일치시켰다.
+ * 헤더 한 줄 설명. Slack 것만 Figma `16922:134099` 실측값이고 나머지는 초안이다.
+ *
+ * 일부러 같은 문형을 돌려쓰지 않았다 — 도구를 옮겨다니며 볼 때 문장 틀만 같고 명사만
+ * 갈리면 카피가 아니라 템플릿으로 읽힌다. 대신 각 도구가 실제로 되찾아주는 것을
+ * 다르게 잡았다: 채널톡은 지난 답변, Confluence는 출처, Jira는 결정의 이유,
+ * Github은 코드 밖 논의.
+ *
+ * 헤더는 truncate 되므로 Slack 원본(22자) 언저리를 넘기지 않는다.
  */
 const SLACK_HEADER_DESCRIPTION = '채팅 스레드에 묻힌 결정을 다시 꺼내오세요';
-const CHANNEL_TALK_HEADER_DESCRIPTION = '상담 이력에 묻힌 답변을 다시 꺼내오세요';
-const CONFLUENCE_HEADER_DESCRIPTION = '문서에 묻힌 결정의 근거를 다시 꺼내오세요';
-const JIRA_HEADER_DESCRIPTION = '이슈에 묻힌 작업 맥락을 다시 꺼내오세요';
-const GITHUB_HEADER_DESCRIPTION = 'PR · 리뷰에 묻힌 논의를 다시 꺼내오세요';
+const CHANNEL_TALK_HEADER_DESCRIPTION = '고객이 물어본 것, 우리가 답한 것 그대로 찾아드려요';
+const CONFLUENCE_HEADER_DESCRIPTION = '어느 문서에 있었는지까지 같이 알려드려요';
+const JIRA_HEADER_DESCRIPTION = '왜 이렇게 하기로 했는지, 이슈가 기억하고 있어요';
+const GITHUB_HEADER_DESCRIPTION = 'PR과 리뷰에 오간 이야기까지 검색됩니다';
 
 /*
  * 채널톡 카피. Figma에 연동 전 상세 프레임이 없어 초안이다 — 다만 Slack 값을 그대로

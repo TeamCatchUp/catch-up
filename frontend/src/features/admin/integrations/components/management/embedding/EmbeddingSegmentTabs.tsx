@@ -39,10 +39,16 @@ export default function EmbeddingSegmentTabs({ value, hasRunning, onChange }: Em
             aria-selected={selected}
             onClick={() => onChange(tab.value)}
             className={cn(
-              'flex h-9 flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-lg px-4 py-1.5 transition-colors',
+              'text-body-small flex h-9 flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-lg px-4 py-1.5 transition-colors',
+              /*
+               * Figma `17668:37475`(toggle_button): unselected 없음 · hover 6% · pressed 6%.
+               * 눌림 상태가 코드에 아예 없어 터치·키보드 활성화 때 아무 반응이 없었다.
+               * Figma 는 hover 와 pressed 가 같은 값이라 같은 토큰을 쓴다 —
+               * 마우스로 누를 땐 색이 안 바뀐다(디자이너 확인 필요).
+               */
               selected
-                ? 'bg-fill-normal-normal text-body-small text-text-normal-normal'
-                : 'text-body-small text-text-normal-alternative hover:bg-fill-normal-interaction-hover',
+                ? 'bg-fill-normal-normal text-text-normal-normal'
+                : 'text-text-normal-alternative hover:bg-fill-normal-interaction-hover active:bg-fill-normal-interaction-hover',
             )}
           >
             {tab.label}
