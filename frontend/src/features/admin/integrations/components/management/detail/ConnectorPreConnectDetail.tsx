@@ -75,7 +75,7 @@ export default function ConnectorPreConnectDetail({
          * 스케일에 없다. left-0은 좁은 pane에서 max-w가 잡히도록 반대편을 연다.
          */}
         {popoverOpen && (
-          <div className="absolute top-full right-0 left-0 z-10 mt-5 flex justify-end pr-[123px] max-md:pr-0">
+          <div className="z-local absolute top-full right-0 left-0 mt-5 flex justify-end pr-[123px] max-md:pr-0">
             <MappingCheckPopover onClose={() => setPopoverOpen(false)} />
           </div>
         )}
