@@ -273,6 +273,27 @@ def test_grade_questions_reports_rows_outside_the_subset() -> None:
     assert dropped == ["ghost"]
 
 
+def test_grade_row_reads_subject_miss_with_the_diagnosis_rule() -> None:
+    """빈 후보를 miss로 읽는 판단이 채점 행에서도 같다.
+
+    규칙을 채점기에 다시 쓰면 한쪽만 고친 순간 리포트의 subject_miss 열과
+    귀속 분포가 같은 실행을 다르게 설명한다.
+    """
+    rows = grade_questions(
+        [{"question_id": "q1"}],
+        questions={"q1": _question("q1")},
+        traces={"q1": {"subjects_tried": []}},
+        evidence={},
+        judge=lambda **_: JudgeResult(
+            verdict=VERDICT_YES,
+            raw="yes",
+            usage=UsageTotals(),
+        ),
+    )
+
+    assert rows[0].subject_miss is True
+
+
 def test_coverage_passes_when_every_question_appears_once() -> None:
     """대상 문항이 정확히 한 번씩 있으면 그대로 통과한다."""
     check_question_coverage(["q1", "q2"], ["q2", "q1"], label="QA 결과")

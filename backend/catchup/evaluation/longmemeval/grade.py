@@ -78,6 +78,7 @@ from catchup.evaluation.longmemeval.diagnosis import FAILURE_CAUSES
 from catchup.evaluation.longmemeval.diagnosis import EvidenceStats
 from catchup.evaluation.longmemeval.diagnosis import FailureAttribution
 from catchup.evaluation.longmemeval.diagnosis import attribute_failure
+from catchup.evaluation.longmemeval.diagnosis import subject_miss_of
 from catchup.evaluation.longmemeval.run_qa import DEFAULT_ORACLE_PATH
 from catchup.evaluation.longmemeval.run_qa import RESULTS_FILENAME
 from catchup.evaluation.longmemeval.run_qa import TRACE_FILENAME
@@ -437,9 +438,7 @@ def grade_questions(
             hypothesis=hypothesis,
             judge_raw=judged.raw,
             abstained=bool(trace.get("abstained", False)),
-            subject_miss=bool(
-                trace.get("subject_miss", not trace.get("subjects_tried"))
-            ),
+            subject_miss=subject_miss_of(trace),
             evidence_stats=stats,
             attribution=attribution,
             usage=judged.usage,

@@ -114,12 +114,16 @@ class FailureAttribution:
         return {"cause": self.cause, "evidence": dict(self.evidence)}
 
 
-def _subject_miss(trace_row: Mapping[str, Any]) -> bool:
+def subject_miss_of(trace_row: Mapping[str, Any]) -> bool:
     """subject 조회가 전부 빗나갔는지 읽는다.
 
     후보를 하나도 못 뽑은 경우도 miss다. QA 러너의 `all()`도 빈 목록을
     참으로 읽으므로 기본값을 같은 쪽으로 맞춘다 — 두 파일이 같은 실행을
     다르게 설명하면 안 된다.
+
+    채점기도 grades 행에 같은 값을 싣는다. 그쪽에서 규칙을 다시 쓰면
+    한쪽만 고친 순간 리포트의 subject_miss 열과 귀속 분포가 갈라지므로,
+    판단은 여기 한 곳에만 둔다.
     """
     subjects_tried = trace_row.get("subjects_tried") or ()
     return bool(trace_row.get("subject_miss", not subjects_tried))
@@ -140,7 +144,7 @@ def attribute_failure(
     history_claims = int(trace_row.get("history_claims") or 0)
     context_claims = as_of_claims + history_claims
 
-    if _subject_miss(trace_row):
+    if subject_miss_of(trace_row):
         return FailureAttribution(
             cause=SUBJECT_MISS,
             evidence={
