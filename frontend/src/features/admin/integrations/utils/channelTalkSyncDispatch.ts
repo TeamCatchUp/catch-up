@@ -1,23 +1,13 @@
-import { DEFAULT_PERIOD, type Period } from '../constants/period';
+import { DEFAULT_PERIOD, type Period,PERIOD_SYNC_DAYS } from '../constants/period';
 import type { FullSyncTarget } from '../types/syncModel';
 import type { ChannelTalkChannel } from './mapChannelTalkSyncTargets';
-
-// Period 라벨 → 백엔드 sync_days. '전체' = null → 백엔드 기본값(1095) 사용
-const PERIOD_TO_DAYS: Record<Period, number | null> = {
-  '1개월': 30,
-  '3개월': 90,
-  '6개월': 180,
-  '1년': 365,
-  '3년': 1095,
-  전체: null,
-};
 
 // 백엔드가 단일 sync_days만 받아 가장 긴 period 채택. '전체' 포함 시 null
 export function pickSyncDays(periods: Period[]): number | null {
   if (periods.length === 0) return null;
   let maxDays = 0;
   for (const p of periods) {
-    const days = PERIOD_TO_DAYS[p];
+    const days = PERIOD_SYNC_DAYS[p];
     if (days === null) return null;
     if (days > maxDays) maxDays = days;
   }

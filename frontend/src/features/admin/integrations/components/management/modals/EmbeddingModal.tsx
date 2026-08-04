@@ -1,8 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { useMutation, useQuery } from '@tanstack/react-query';
-import { toast } from 'sonner';
+import { useQuery } from '@tanstack/react-query';
 
 import Cancel from '@/public/icons/icon/cancel.svg';
 import IconSearch from '@/public/icons/icon/search.svg';
@@ -13,21 +12,16 @@ import { Skeleton } from '@/shared/components/ui/skeleton';
 import type { IntegrationService } from '@/shared/types/integrationService';
 import { cn } from '@/shared/utils/cn';
 
+import { type Period,PERIOD_OPTIONS, PERIOD_SYNC_DAYS } from '../../../constants/period';
+import { useEmbeddingSubmit } from '../../../hooks/useEmbeddingSubmit';
 import { useScopeId } from '../../../hooks/useScopeId';
-import { adminConnectorMutations } from '../../../queries/adminConnector.mutations';
 import { adminConnectorQueries } from '../../../queries/adminConnector.queries';
 import type { FullSyncTarget, SyncConnector } from '../../../types/syncModel';
 import EmbeddingModalContent from './EmbeddingModalContent';
 
-const PERIOD_OPTIONS = ['1개월', '3개월', '6개월', '1년', '3년'] as const;
-
-const PERIOD_TO_DAYS: Record<string, number> = {
-  '1개월': 30,
-  '3개월': 90,
-  '6개월': 180,
-  '1년': 365,
-  '3년': 1095,
-};
+/** 모달은 명시 기간만 받는다 — '전체'는 채널톡 선택기 전용 개념 */
+const MODAL_PERIOD_OPTIONS = PERIOD_OPTIONS.filter((p): p is Exclude<Period, '전체'> => p !== '전체');
+const DEFAULT_MODAL_PERIOD: Period = '3년';
 
 /** 서비스별 항목 용어 */
 const getItemLabel = (service: IntegrationService) => {
@@ -49,9 +43,9 @@ interface EmbeddingModalProps {
   onJobStart?: (jobId: string, connector: SyncConnector) => void;
 }
 
-/** 임베딩 모달 (셸) */
+/** 임베딩 모달 (셸) — 기간·대상 선택 폼. 제출과 토스트는 useEmbeddingSubmit이 담당 */
 export default function EmbeddingModal({ open, onOpenChange, service, serviceName, onJobStart }: EmbeddingModalProps) {
-  const [selectedPeriod, setSelectedPeriod] = useState<string>('3년');
+  const [selectedPeriod, setSelectedPeriod] = useState<Period>(DEFAULT_MODAL_PERIOD);
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -65,10 +59,7 @@ export default function EmbeddingModal({ open, onOpenChange, service, serviceNam
 
   const targets = useMemo(() => targetsData?.targets ?? [], [targetsData]);
 
-  const syncMutation = useMutation(adminConnectorMutations.syncFull());
-
   const itemLabel = getItemLabel(service);
-  const isSubmitDisabled = selectedItems.size === 0 || syncMutation.isPending;
   const noScope = !isScopeLoading && !scopeId;
 
   const accessibleTargets = useMemo(() => targets.filter((t) => t.is_accessible), [targets]);
@@ -98,7 +89,7 @@ export default function EmbeddingModal({ open, onOpenChange, service, serviceNam
   );
 
   const resetFormState = () => {
-    setSelectedPeriod('3년');
+    setSelectedPeriod(DEFAULT_MODAL_PERIOD);
     setSelectedItems(new Set());
     setSearchQuery('');
   };
@@ -110,47 +101,15 @@ export default function EmbeddingModal({ open, onOpenChange, service, serviceNam
 
   const handleClose = () => handleDialogOpenChange(false);
 
-  const handleSubmit = async () => {
-    if (!scopeId) return;
+  const { submit, isSubmitting } = useEmbeddingSubmit({ onSettled: handleClose, onJobStart });
+  const isSubmitDisabled = selectedItems.size === 0 || isSubmitting;
 
-    const syncDays = PERIOD_TO_DAYS[selectedPeriod] ?? 30;
+  const handleSubmit = () => {
+    if (!scopeId) return;
     const selectedTargets: FullSyncTarget[] = targets
       .filter((t) => selectedItems.has(t.target_id))
       .map((t) => ({ target_type: t.target_type, target_id: t.target_id }));
-
-    try {
-      const result = await syncMutation.mutateAsync({
-        connector,
-        scope_id: scopeId,
-        targets: selectedTargets,
-        sync_days: syncDays,
-      });
-
-      const response = result.data;
-
-      switch (response.status) {
-        case 'accepted':
-          toast('임베딩이 시작되었습니다.', {
-            description: '준비가 끝나면 즉시 알려드릴게요.',
-          });
-          if (response.job_id) onJobStart?.(response.job_id, connector);
-          handleClose();
-          break;
-        case 'conflict':
-          toast.warning('이미 진행 중인 임베딩이 있습니다.');
-          if (response.job_id) onJobStart?.(response.job_id, connector);
-          handleClose();
-          break;
-        case 'no_events':
-          toast.info('임베딩할 대상이 없습니다.');
-          break;
-        case 'failed':
-          toast('임베딩 요청에 실패했습니다.', { description: response.message });
-          break;
-      }
-    } catch {
-      toast('임베딩 요청 중 오류가 발생했습니다.');
-    }
+    void submit({ connector, scopeId, targets: selectedTargets, syncDays: PERIOD_SYNC_DAYS[selectedPeriod] });
   };
 
   return (
@@ -193,7 +152,7 @@ export default function EmbeddingModal({ open, onOpenChange, service, serviceNam
                   <span className="bg-accent-red-orange-default block size-1.25 shrink-0 rounded-full" />
                 </div>
                 <div className="flex gap-2">
-                  {PERIOD_OPTIONS.map((period) => (
+                  {MODAL_PERIOD_OPTIONS.map((period) => (
                     <button
                       key={period}
                       type="button"
@@ -267,13 +226,13 @@ export default function EmbeddingModal({ open, onOpenChange, service, serviceNam
           )}
         </div>
 
-        {/* 푸터 — Figma `17190:119083`: Box Button medium 2개, gap 12, 우측 정렬. 라벨은 닫기/임베딩하기 */}
+        {/* 푸터 */}
         <div className="flex items-center justify-end gap-3 px-6">
           <Button variant="box-outline-gray" size="md" onClick={handleClose}>
             닫기
           </Button>
           <Button variant="box-solid-primary" size="md" disabled={isSubmitDisabled || noScope} onClick={handleSubmit}>
-            {syncMutation.isPending ? '요청 중...' : '임베딩하기'}
+            {isSubmitting ? '요청 중...' : '임베딩하기'}
           </Button>
         </div>
       </DialogContent>

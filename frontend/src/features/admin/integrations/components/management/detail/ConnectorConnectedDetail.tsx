@@ -5,20 +5,18 @@ import { useMemo, useState } from 'react';
 import { Button } from '@/shared/components/ui/button';
 
 import { CONNECTOR_CONTENT } from '../../../constants/connectorContent';
-import { useEmbeddingGaps } from '../../../hooks/useEmbeddingGaps';
 import { useEmbeddingHistory } from '../../../hooks/useEmbeddingHistory';
 import { useEmbeddingJobs } from '../../../hooks/useEmbeddingJobs';
-import { useSyncRecordRetry } from '../../../queries/syncRecords.mutations';
+import { useEmbeddingRetry } from '../../../hooks/useEmbeddingRetry';
 import type { ConnectorDetail, ConnectorResource, IntegrationService } from '../../../types/integrationModel';
-import type { AdminConnectorTargetRangeResponse } from '../../../types/syncModel';
 import { formatHistoryDate } from '../../../utils/embeddingUtils';
-import EmbeddingModal from '../../member/modals/EmbeddingModal';
-import EmbeddingRetryModal from '../../member/modals/EmbeddingRetryModal';
 import ConnectorSummaryCard from '../cards/ConnectorSummaryCard';
 import EmbeddedResourceTable, { type EmbeddedResourceRow } from '../embedding/EmbeddedResourceTable';
 import EmbeddingActiveTable from '../embedding/EmbeddingActiveTable';
 import EmbeddingHistoryTable, { type EmbeddingHistoryItem } from '../embedding/EmbeddingHistoryTable';
 import EmbeddingSegmentTabs, { type EmbeddingTabValue } from '../embedding/EmbeddingSegmentTabs';
+import EmbeddingModal from '../modals/EmbeddingModal';
+import EmbeddingRetryModal from '../modals/EmbeddingRetryModal';
 import ConnectorDetailHeader from './ConnectorDetailHeader';
 
 interface ConnectorConnectedDetailProps {
@@ -29,12 +27,9 @@ interface ConnectorConnectedDetailProps {
 }
 
 /**
- * (E) 커넥터 상세 — 연동됨. 스펙 §5-3, Figma `17306:82016`.
+ * (E) 커넥터 상세 — 연동됨. 스펙 §5-3.
  * 헤더 + 세그먼트 탭 + [관리: 요약 카드 + 대상 표 | 현황: 진행중 표 + 히스토리].
- *
- * 헤더 제목은 연동된 조직·워크스페이스의 대표 이름이다(connection-status
- * `items[].name`). 재시도 흐름(gap 조회 → EmbeddingRetryModal → useSyncRecordRetry)은
- * 구 `EmbeddingHistoryCard`의 것을 그대로 옮겼다.
+ * 헤더 제목은 연동된 조직·워크스페이스의 대표 이름이다(connection-status `items[].name`).
  */
 export default function ConnectorConnectedDetail({
   service,
@@ -44,7 +39,6 @@ export default function ConnectorConnectedDetail({
   const content = CONNECTOR_CONTENT[service];
   const [tab, setTab] = useState<EmbeddingTabValue>('manage');
   const [embeddingModalOpen, setEmbeddingModalOpen] = useState(false);
-  const [retryTarget, setRetryTarget] = useState<AdminConnectorTargetRangeResponse | null>(null);
 
   /*
    * 뷰모델의 리소스 트리 → 표 행. 채널톡은 채널 아래 도큐먼트 스페이스가 children으로
@@ -84,11 +78,11 @@ export default function ConnectorConnectedDetail({
     return [...seen.values()];
   }, [progresses, service]);
 
-  // 히스토리 — 완료(success/failed) target들
+  // 히스토리 — 완료(success/failed) target들. 재시도 흐름은 useEmbeddingRetry가 담당
   const { historyByConnector } = useEmbeddingHistory();
   const historyItems = useMemo(() => historyByConnector[service] ?? [], [historyByConnector, service]);
   const failedItems = useMemo(() => historyItems.filter((item) => item.sync_status === 'failed'), [historyItems]);
-  const { gapByTargetId } = useEmbeddingGaps(failedItems);
+  const retry = useEmbeddingRetry(failedItems);
 
   const historyRows: EmbeddingHistoryItem[] = useMemo(
     () =>
@@ -99,28 +93,11 @@ export default function ConnectorConnectedDetail({
           target: item.target_name,
           status: failed ? ('failed' as const) : ('success' as const),
           executedAt: formatHistoryDate((failed ? item.last_failed_at : item.last_succeeded_at) ?? ''),
-          failureCount: failed ? gapByTargetId.get(item.target_id)?.totalMissing : undefined,
+          failureCount: failed ? retry.gapByTargetId.get(item.target_id)?.totalMissing : undefined,
         };
       }),
-    [historyItems, gapByTargetId],
+    [historyItems, retry.gapByTargetId],
   );
-
-  // 재시도 — 구 EmbeddingHistoryCard의 흐름 그대로
-  const retryMutation = useSyncRecordRetry();
-  const retryGap = retryTarget ? gapByTargetId.get(retryTarget.target_id) : undefined;
-
-  const handleRetryConfirm = () => {
-    if (!retryTarget || !retryGap) return;
-    retryMutation.mutate(
-      {
-        event_id: retryGap.eventId,
-        records: retryGap.records
-          .filter((r) => r.missing_count > 0)
-          .map((r) => ({ record_type: r.record_type, record_ids: r.missing_ids })),
-      },
-      { onSuccess: () => setRetryTarget(null) },
-    );
-  };
 
   /*
    * 헤더 액션은 도구에 따라 다르다(Figma 실측).
@@ -140,8 +117,7 @@ export default function ConnectorConnectedDetail({
     <div className="flex flex-col gap-6">
       <ConnectorDetailHeader
         service={service}
-        // 연동됨 헤더 제목은 도구명이 아니라 연동된 조직·워크스페이스의 대표 이름이다
-        // (Figma `17071:111151` "캐치업-Catchup"). 백엔드가 null이면 도구명으로 폴백한다
+        // 헤더 제목은 연동된 조직·워크스페이스 대표 이름 — 백엔드가 null이면 도구명으로 폴백
         title={detail.workspaceName ?? content.name}
         description={content.headerDescription}
         actions={
@@ -169,7 +145,7 @@ export default function ConnectorConnectedDetail({
             items={historyRows}
             onRetry={(id) => {
               const item = historyItems.find((h) => `${h.scope_id}-${h.target_id}` === id);
-              if (item) setRetryTarget(item);
+              if (item) retry.openRetryModal(item);
             }}
           />
         </div>
@@ -186,17 +162,15 @@ export default function ConnectorConnectedDetail({
       )}
 
       <EmbeddingRetryModal
-        open={!!retryTarget}
-        onOpenChange={(open) => {
-          if (!open && !retryMutation.isPending) setRetryTarget(null);
-        }}
-        targetName={retryTarget?.target_name ?? ''}
-        totalCount={retryGap?.totalExpected ?? 0}
-        successCount={retryGap?.totalStored ?? 0}
-        failedCount={retryGap?.totalMissing ?? 0}
-        retryAttempt={retryGap?.attempt ?? 0}
-        isLoading={retryMutation.isPending}
-        onConfirm={handleRetryConfirm}
+        open={!!retry.retryTarget}
+        onOpenChange={retry.handleModalOpenChange}
+        targetName={retry.retryTarget?.target_name ?? ''}
+        totalCount={retry.retryGap?.totalExpected ?? 0}
+        successCount={retry.retryGap?.totalStored ?? 0}
+        failedCount={retry.retryGap?.totalMissing ?? 0}
+        retryAttempt={retry.retryGap?.attempt ?? 0}
+        isLoading={retry.isRetrying}
+        onConfirm={retry.confirmRetry}
       />
     </div>
   );
