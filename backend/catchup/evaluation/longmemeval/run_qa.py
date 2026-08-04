@@ -225,6 +225,17 @@ def _write_line(handle: TextIO, payload: dict[str, Any]) -> None:
     handle.flush()
 
 
+def _with_fallback(exact: int, fallback: int) -> str:
+    """정확 매칭 수와 되짚기 몫을 한 칸에 적는다.
+
+    되짚기로만 재료를 채운 문항은 정확 매칭 수가 0이다. 그 0만 찍으면
+    진행 출력이 "재료가 없었다"로 읽히므로 되짚은 몫을 괄호로 덧붙인다.
+    """
+    if not fallback:
+        return str(exact)
+    return f"{exact}(+{fallback} fallback)"
+
+
 def usage_payload(
     *,
     workspace_id: int | None,
@@ -316,10 +327,17 @@ def run_and_publish(
                     abstained += 1
                 _write_line(results_file, outcome.result_payload())
                 _write_line(trace_file, outcome.trace_payload())
+                as_of = _with_fallback(
+                    outcome.as_of_claims,
+                    outcome.fallback_as_of_claims,
+                )
+                history = _with_fallback(
+                    outcome.history_claims,
+                    outcome.fallback_history_claims,
+                )
                 print(
                     f"  {outcome.question_id}  "
-                    f"as_of={outcome.as_of_claims} "
-                    f"history={outcome.history_claims}  "
+                    f"as_of={as_of} history={history}  "
                     f"{'ABSTAIN' if outcome.abstained else 'ANSWER'}"
                 )
 

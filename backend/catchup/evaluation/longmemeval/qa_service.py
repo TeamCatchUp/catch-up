@@ -315,6 +315,11 @@ class QuestionOutcome:
             담는다.
         similarity_used: 후보를 되짚어 온 블록이 실제로 컨텍스트에
             실렸는지 나타낸다. 후보를 조회만 하고 빈손이었으면 False다.
+        fallback_as_of_claims: 되짚기가 컨텍스트에 실은 as-of claim 수를
+            나타낸다. `subjects`는 정확 매칭 조회만 세므로 이 값은 거기
+            안 들어간다.
+        fallback_history_claims: 되짚기가 컨텍스트에 실은 history claim
+            수를 나타낸다.
     """
 
     question_id: str
@@ -328,15 +333,21 @@ class QuestionOutcome:
     future_claims_excluded: int = 0
     similarity_candidates: tuple[SimilarityTrace, ...] = ()
     similarity_used: bool = False
+    fallback_as_of_claims: int = 0
+    fallback_history_claims: int = 0
 
     @property
     def as_of_claims(self) -> int:
-        """as-of 조회로 모은 claim 총수를 나타낸다."""
+        """정확 매칭 as-of 조회로 모은 claim 총수를 나타낸다.
+
+        되짚기가 실어 온 claim은 여기 안 들어간다. 이 값은 "정확 매칭이
+        얼마나 먹혔는가"를 재는 원시 수치라서 의미를 섞으면 안 된다.
+        """
         return sum(trace.as_of_claims for trace in self.subjects)
 
     @property
     def history_claims(self) -> int:
-        """history 조회로 모은 claim 총수를 나타낸다."""
+        """정확 매칭 history 조회로 모은 claim 총수를 나타낸다."""
         return sum(trace.history_claims for trace in self.subjects)
 
     def result_payload(self) -> dict[str, Any]:
@@ -361,6 +372,8 @@ class QuestionOutcome:
                 trace.as_dict() for trace in self.similarity_candidates
             ],
             "similarity_used": self.similarity_used,
+            "fallback_as_of_claims": self.fallback_as_of_claims,
+            "fallback_history_claims": self.fallback_history_claims,
             "context_chars": len(self.claims_context),
             "elapsed_ms": round(self.elapsed_ms, 3),
             "usage": self.usage.as_dict(),
@@ -428,10 +441,14 @@ class RenderedContext:
         text: 컨텍스트 문자열을 담는다. 재료가 없으면 빈 문자열이다.
         future_claims_excluded: 질문 시점 이후 발효라 뺀 claim 수를
             나타낸다.
+        as_of_claims: "Known as of" 절에 실제로 실린 claim 수를 나타낸다.
+        history_claims: history 두 절에 실제로 실린 claim 수를 나타낸다.
     """
 
     text: str
     future_claims_excluded: int = 0
+    as_of_claims: int = 0
+    history_claims: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -482,6 +499,8 @@ def render_claims_context(
     """
     blocks: list[str] = []
     future_excluded = 0
+    as_of_rendered = 0
+    history_rendered = 0
     for entry in lookups:
         subject = entry.subject
         as_of_result = entry.as_of_result
@@ -501,6 +520,8 @@ def render_claims_context(
         if not as_of_result.claims and not closed and not unknown:
             continue
 
+        as_of_rendered += len(as_of_result.claims)
+        history_rendered += len(closed) + len(unknown)
         matched = as_of_result.subject or history_result.subject
         label = entry.label or subject
         if entry.label is None and matched is not None:
@@ -522,6 +543,8 @@ def render_claims_context(
     return RenderedContext(
         text="\n\n".join(blocks),
         future_claims_excluded=future_excluded,
+        as_of_claims=as_of_rendered,
+        history_claims=history_rendered,
     )
 
 
@@ -578,6 +601,10 @@ def rank_similar_candidates(
 
     as-of와 history가 같은 노드를 각각 후보로 낼 수 있다. node_id로
     묶어 점수가 높은 쪽만 남기고 점수 내림차순으로 세운다.
+
+    점수가 같으면 node_id 오름차순으로 가른다. 되짚기는 앞에서부터
+    정해진 개수만 조회하므로, 동점 순서가 실행마다 흔들리면 같은 입력에
+    다른 컨텍스트가 나와 비교 자체가 무의미해진다.
     """
     best: dict[uuid.UUID, SubjectCandidate] = {}
     for result in results:
@@ -586,7 +613,10 @@ def rank_similar_candidates(
             if current is None or candidate.score > current.score:
                 best[candidate.node_id] = candidate
     return tuple(
-        sorted(best.values(), key=lambda item: item.score, reverse=True)
+        sorted(
+            best.values(),
+            key=lambda item: (-item.score, str(item.node_id)),
+        )
     )
 
 
@@ -745,6 +775,8 @@ def run_question(
         ),
         similarity_candidates=tuple(similarity_traces),
         similarity_used=bool(fallback_rendered.text),
+        fallback_as_of_claims=fallback_rendered.as_of_claims,
+        fallback_history_claims=fallback_rendered.history_claims,
     )
 
 

@@ -16,6 +16,9 @@ from datetime import datetime
 from datetime import timezone
 
 from catchup.evaluation.longmemeval.dataset import OracleQuestion
+from catchup.evaluation.longmemeval.diagnosis import ANSWER_GENERATION
+from catchup.evaluation.longmemeval.diagnosis import EvidenceStats
+from catchup.evaluation.longmemeval.diagnosis import attribute_failure
 from catchup.evaluation.longmemeval.qa_service import ABSTENTION_ANSWER
 from catchup.evaluation.longmemeval.qa_service import MAX_SUBJECTS
 from catchup.evaluation.longmemeval.qa_service import AnswerResult
@@ -25,6 +28,7 @@ from catchup.evaluation.longmemeval.qa_service import SubjectResult
 from catchup.evaluation.longmemeval.qa_service import answer_questions
 from catchup.evaluation.longmemeval.qa_service import build_answer_prompt
 from catchup.evaluation.longmemeval.qa_service import build_subject_prompt
+from catchup.evaluation.longmemeval.qa_service import rank_similar_candidates
 from catchup.evaluation.longmemeval.qa_service import render_claims_context
 from catchup.evaluation.longmemeval.qa_service import run_question
 from catchup.evaluation.longmemeval.usage import UsageTotals
@@ -510,6 +514,103 @@ def test_similar_candidate_is_requeried_and_loaded_with_label() -> None:
             "claims_found": 1,
             "skipped": False,
         }
+    ]
+
+
+def test_fallback_claims_are_counted_apart_from_exact_match() -> None:
+    """되짚기가 실은 재료는 정확 매칭 수치와 따로 세어 trace에 남는다.
+
+    정확 매칭이 다 빗나간 문항은 `as_of_claims`가 0이다. 되짚은 몫까지
+    그 0에 묻히면 진단 하류 규칙이 "컨텍스트가 비었다"로 읽는다.
+    """
+    lookup = _RecordingLookup(
+        as_of={
+            "Alice": _miss_with(_candidate()),
+            "Alice Kim": _hit(_claim()),
+        },
+        history={
+            "Alice Kim": _hit(
+                _claim(
+                    value="Globex",
+                    valid_to=datetime(2023, 3, 1, tzinfo=timezone.utc),
+                )
+            ),
+        },
+    )
+
+    outcome = run_question(
+        _question(),
+        lookup=lookup.as_lookup(),
+        extract_subjects=_FakeExtract(("Alice",)),
+        answer=_FakeAnswer(),
+    )
+
+    payload = outcome.trace_payload()
+    assert payload["subject_miss"] is True
+    assert payload["as_of_claims"] == 0
+    assert payload["history_claims"] == 0
+    assert payload["fallback_as_of_claims"] == 1
+    assert payload["fallback_history_claims"] == 1
+    assert payload["similarity_used"] is True
+
+
+def test_runner_fallback_trace_reaches_answer_generation() -> None:
+    """러너가 실제로 만든 fallback trace는 답변 생성 단계로 흐른다.
+
+    러너가 못 만드는 모양(subject_miss + 정확 매칭 claim > 0)으로 진단을
+    검증하면, 하류 규칙이 fallback 수치를 무시해도 테스트가 통과해 버린다.
+    그래서 여기서는 러너 출력을 그대로 진단에 넣는다.
+    """
+    lookup = _RecordingLookup(
+        as_of={
+            "Alice": _miss_with(_candidate()),
+            "Alice Kim": _hit(_claim()),
+        },
+    )
+
+    outcome = run_question(
+        _question(),
+        lookup=lookup.as_lookup(),
+        extract_subjects=_FakeExtract(("Alice",)),
+        answer=_FakeAnswer(),
+    )
+
+    attribution = attribute_failure(
+        outcome.trace_payload(),
+        EvidenceStats(
+            extracted_claims=4,
+            contradictions_detected=2,
+            contradictions_decided=2,
+        ),
+    )
+
+    assert attribution.cause == ANSWER_GENERATION
+    assert attribution.evidence["context_claims"] == 1
+
+
+def test_similar_candidates_break_score_ties_by_node_id() -> None:
+    """점수가 같으면 node_id로 갈라 순서를 고정한다."""
+    first = SubjectCandidate(
+        node_id=uuid.UUID("00000000-0000-0000-0000-000000000001"),
+        display_name="Alice Kim",
+        entity_type="person",
+        score=0.42,
+    )
+    second = SubjectCandidate(
+        node_id=uuid.UUID("00000000-0000-0000-0000-000000000002"),
+        display_name="Alice Lee",
+        entity_type="person",
+        score=0.42,
+    )
+
+    ranked = rank_similar_candidates(
+        _miss_with(second, first),
+        _miss_with(first, second),
+    )
+
+    assert [item.node_id for item in ranked] == [
+        first.node_id,
+        second.node_id,
     ]
 
 

@@ -31,8 +31,14 @@ def _trace(
     as_of_claims: int = 3,
     history_claims: int = 2,
     similarity_used: bool = False,
+    fallback_as_of_claims: int = 0,
+    fallback_history_claims: int = 0,
 ) -> dict[str, Any]:
-    """QA 러너가 남기는 trace 한 줄을 흉내 낸다."""
+    """QA 러너가 남기는 trace 한 줄을 흉내 낸다.
+
+    `as_of_claims`·`history_claims`는 정확 매칭 조회분만 센다. 되짚기가
+    실은 몫은 `fallback_*`에만 들어간다 — 러너가 실제로 그렇게 쓴다.
+    """
     return {
         "question_id": "q1",
         "question_type": question_type,
@@ -53,6 +59,8 @@ def _trace(
         "history_claims": history_claims,
         "similarity_candidates": [],
         "similarity_used": similarity_used,
+        "fallback_as_of_claims": fallback_as_of_claims,
+        "fallback_history_claims": fallback_history_claims,
         "future_claims_excluded": 0,
         "context_chars": 120,
         "elapsed_ms": 1200.0,
@@ -87,12 +95,19 @@ def test_similarity_fallback_takes_the_question_off_subject_miss() -> None:
     정확 매칭은 빗나갔지만 답변 재료는 컨텍스트에 실렸다. 이 문항까지
     subject_miss로 세면 fallback을 켠 실행과 끈 실행의 분포가 같아져
     켰을 때의 효과가 측정에서 사라진다.
+
+    러너가 실제로 만드는 형태를 그대로 쓴다 — subject를 다 놓쳤으니
+    `as_of_claims`는 0이고, 재료는 `fallback_*`에만 실려 있다.
     """
     result = attribute_failure(
         _trace(
             question_type="multi-session",
             subject_miss=True,
+            as_of_claims=0,
+            history_claims=0,
             similarity_used=True,
+            fallback_as_of_claims=3,
+            fallback_history_claims=2,
         ),
         EvidenceStats(extracted_claims=4),
     )
@@ -107,12 +122,82 @@ def test_similarity_fallback_does_not_skip_downstream_rules() -> None:
         _trace(
             question_type="multi-session",
             subject_miss=True,
+            as_of_claims=0,
+            history_claims=0,
             similarity_used=True,
+            fallback_as_of_claims=3,
+            fallback_history_claims=2,
         ),
         EvidenceStats(extracted_claims=0),
     )
 
     assert result.cause == CLAIM_NOT_EXTRACTED
+
+
+def test_fallback_claims_keep_adjudication_wrong_from_firing() -> None:
+    """되짚기가 재료를 실었으면 전파 실패로 잘못 세지 않는다.
+
+    subject를 다 놓친 문항은 정확 매칭 수치가 0이다. 하류 규칙이 그 0을
+    "컨텍스트가 비었다"로 읽으면, fallback을 켠 실행이 오히려 판정
+    전파가 나빠진 것처럼 보인다.
+    """
+    result = attribute_failure(
+        _trace(
+            question_type="knowledge-update",
+            subject_miss=True,
+            as_of_claims=0,
+            history_claims=0,
+            similarity_used=True,
+            fallback_as_of_claims=2,
+            fallback_history_claims=1,
+        ),
+        EvidenceStats(
+            extracted_claims=4,
+            contradictions_detected=2,
+            contradictions_decided=2,
+        ),
+    )
+
+    assert result.cause == ANSWER_GENERATION
+    assert result.evidence["context_claims"] == 3
+
+
+def test_fallback_history_keeps_temporal_gap_from_firing() -> None:
+    """되짚기가 과거 구간을 실었으면 구간 결손으로 세지 않는다."""
+    result = attribute_failure(
+        _trace(
+            question_type="temporal-reasoning",
+            subject_miss=True,
+            as_of_claims=0,
+            history_claims=0,
+            similarity_used=True,
+            fallback_as_of_claims=1,
+            fallback_history_claims=2,
+        ),
+        EvidenceStats(extracted_claims=4),
+    )
+
+    assert result.cause == ANSWER_GENERATION
+    assert result.evidence["context_claims"] == 3
+
+
+def test_temporal_gap_still_fires_when_fallback_has_no_history() -> None:
+    """되짚기가 as-of만 실었으면 시간 구간 결손은 그대로 걸린다."""
+    result = attribute_failure(
+        _trace(
+            question_type="temporal-reasoning",
+            subject_miss=True,
+            as_of_claims=0,
+            history_claims=0,
+            similarity_used=True,
+            fallback_as_of_claims=3,
+            fallback_history_claims=0,
+        ),
+        EvidenceStats(extracted_claims=4),
+    )
+
+    assert result.cause == TEMPORAL_GAP
+    assert result.evidence["as_of_claims"] == 3
 
 
 def test_subject_miss_stays_when_the_fallback_loaded_nothing() -> None:
