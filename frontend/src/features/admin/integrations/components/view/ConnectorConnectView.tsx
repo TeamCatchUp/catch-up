@@ -125,18 +125,26 @@ export default function ConnectorConnectView() {
     }
   })();
 
-  // (A) 빈 상태 — 연동 0개 + 카탈로그 진입 전
+  // (A) 빈 상태 — 연동 0개 + 카탈로그 진입 전. 자체 테두리 카드라 셸을 덧씌우지 않는다
   if (!hasConnected && !entered && state === null) {
     return <ConnectorEmptyState onStart={() => setEntered(true)} />;
   }
 
+  // 연동 0개 — 사이드바 없이 테두리 카드 하나 (Figma `17122:112581` 우측 padding 규칙 동일)
   if (!hasConnected) {
-    return rightPane;
+    return <div className="border-line-normal-neutral rounded-2xl border px-8 py-6">{rightPane}</div>;
   }
 
+  /*
+   * 연동 ≥1 — 사이드바 260 + 우측을 **하나의 테두리**로 감싼다.
+   * Figma `17125:115106`·`17169:74058`: 바깥 radius 16 + `line/normal/neutral` 1px,
+   * 두 단 사이 gap 0(사이드바의 오른쪽 경계선이 구분), 사이드바 padding 12,
+   * 우측 padding 24/32 → 콘텐츠 716.
+   * 사이드바는 고정 260, 우측이 남은 폭을 먹는다.
+   */
   return (
-    <div className="flex gap-8">
-      <aside className="w-60 shrink-0">
+    <div className="border-line-normal-neutral flex overflow-hidden rounded-2xl border">
+      <aside className="border-line-normal-neutral w-65 shrink-0 border-r p-3">
         <ConnectorSidebarList
           connectors={connectedMenu.map((item) => ({
             service: item.service,
@@ -154,7 +162,7 @@ export default function ConnectorConnectView() {
           onAdd={() => setState({ kind: 'catalog' })}
         />
       </aside>
-      <div className="min-w-0 flex-1">{rightPane}</div>
+      <div className="min-w-0 flex-1 px-8 py-6">{rightPane}</div>
     </div>
   );
 }

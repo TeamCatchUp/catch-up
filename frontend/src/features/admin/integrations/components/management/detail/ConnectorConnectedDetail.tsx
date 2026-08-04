@@ -48,13 +48,26 @@ export default function ConnectorConnectedDetail({
 
   // 진행중 — 이 서비스의 활성 job에 속한 target들
   const { progresses, handleJobStart } = useEmbeddingJobs();
-  const activeItems = useMemo(
-    () =>
-      progresses
-        .filter((p) => p.connector === service)
-        .flatMap((p) => p.items.map((item) => ({ id: item.targetId, target: item.displayName }))),
-    [progresses, service],
-  );
+  const activeItems = useMemo(() => {
+    /*
+     * job의 items에는 그 job의 **모든** target이 상태와 함께 들어 있다.
+     * 완료된 것까지 넘기면 전부 "진행중"으로 표시되므로 미완료만 거른다
+     * (구 EmbeddingProgressPanel:111 과 같은 필터).
+     *
+     * 그리고 한 커넥터에 job이 여럿일 수 있어(채널톡 multi-channel, 같은 도구
+     * 재실행) target이 중복된다 — targetId로 dedupe 하지 않으면 표에 같은 줄이
+     * 두 번 나오고 React key 도 충돌한다.
+     */
+    const seen = new Map<string, { id: string; target: string }>();
+    for (const progress of progresses) {
+      if (progress.connector !== service) continue;
+      for (const item of progress.items) {
+        if (item.status !== 'pending' && item.status !== 'in_progress' && item.status !== 'retrying') continue;
+        if (!seen.has(item.targetId)) seen.set(item.targetId, { id: item.targetId, target: item.displayName });
+      }
+    }
+    return [...seen.values()];
+  }, [progresses, service]);
 
   // 히스토리 — 완료(success/failed) target들
   const { historyByConnector } = useEmbeddingHistory();
