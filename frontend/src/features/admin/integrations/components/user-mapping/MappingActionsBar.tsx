@@ -1,7 +1,7 @@
 'use client';
 
-import IconAddSquare from '@/public/icons/icon/add_square.svg';
 import IconEditPencil from '@/public/icons/icon/edit_pencil.svg';
+import IconTodo from '@/public/icons/icon/todo.svg';
 import { Button } from '@/shared/components/ui/button';
 
 interface MappingActionsBarProps {
@@ -36,7 +36,7 @@ export default function MappingActionsBar({
         이용자 DB 동기화
       </Button>
       <Button variant="box-outline-gray" size="md" onClick={onOpenCsvUpload}>
-        <IconAddSquare className="size-5" />
+        <IconTodo className="size-5" />
         CSV 일괄 등록
       </Button>
       <span aria-hidden="true" className="bg-line-normal-neutral mx-2 h-6 w-px shrink-0" />

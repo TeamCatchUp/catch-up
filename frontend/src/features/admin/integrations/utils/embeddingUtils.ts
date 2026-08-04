@@ -14,10 +14,14 @@ export const RESOURCE_ICONS: Record<SyncConnector, React.ComponentType<React.SVG
   channel_talk: IconTag,
 };
 
-/** 날짜 문자열 → "2026.03.18 (수) 09:52 PM" 포맷. "YYYY-MM-DD" 및 ISO datetime 모두 지원. */
+/**
+ * 날짜 문자열 → "2026.03.18 09:52 PM" 포맷. "YYYY-MM-DD" 및 ISO datetime 모두 지원.
+ *
+ * 임베딩 현황 표의 "실행 시각" 형식이다(Figma `17169:75993` — `2026.03.18 00:00 PM`).
+ * 리디자인 전에는 요일 `(수)`이 들어갔는데 신규 디자인에 없어 뺐다.
+ */
 export const formatHistoryDate = (dateStr: string): string => {
   if (!dateStr) return '';
-  const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
   const format = (d: Date): string => {
     const y = d.getFullYear();
     const month = String(d.getMonth() + 1).padStart(2, '0');
@@ -26,7 +30,7 @@ export const formatHistoryDate = (dateStr: string): string => {
     const ampm = hours >= 12 ? 'PM' : 'AM';
     const h12 = String(hours % 12 || 12).padStart(2, '0');
     const minutes = String(d.getMinutes()).padStart(2, '0');
-    return `${y}.${month}.${day} (${dayNames[d.getDay()]}) ${h12}:${minutes} ${ampm}`;
+    return `${y}.${month}.${day} ${h12}:${minutes} ${ampm}`;
   };
   // "YYYY-MM-DD" 형태: 직접 파싱 (타임존 변환 방지)
   if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
