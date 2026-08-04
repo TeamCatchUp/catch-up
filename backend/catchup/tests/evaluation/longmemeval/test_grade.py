@@ -39,6 +39,7 @@ from catchup.evaluation.longmemeval.grade import GradeRow
 from catchup.evaluation.longmemeval.grade import JudgeResult
 from catchup.evaluation.longmemeval.grade import ReportInputs
 from catchup.evaluation.longmemeval.grade import build_judge_prompt
+from catchup.evaluation.longmemeval.grade import check_question_coverage
 from catchup.evaluation.longmemeval.grade import estimate_cost
 from catchup.evaluation.longmemeval.grade import grade_questions
 from catchup.evaluation.longmemeval.grade import judge_rule
@@ -270,3 +271,40 @@ def test_grade_questions_reports_rows_outside_the_subset() -> None:
 
     assert [row.question_id for row in rows] == ["q1"]
     assert dropped == ["ghost"]
+
+
+def test_coverage_passes_when_every_question_appears_once() -> None:
+    """대상 문항이 정확히 한 번씩 있으면 그대로 통과한다."""
+    check_question_coverage(["q1", "q2"], ["q2", "q1"], label="QA 결과")
+
+
+def test_coverage_rejects_a_missing_result() -> None:
+    """결과 하나가 빠지면 판정 전에 멈춘다.
+
+    부분 결과를 채점하면 분모가 남은 문항 수로 줄어, 중간에 깨진 실행이
+    오히려 높은 정답률로 보인다.
+    """
+    with pytest.raises(SystemExit) as excinfo:
+        check_question_coverage(["q1", "q2"], ["q1"], label="QA 결과")
+
+    message = str(excinfo.value)
+    assert "누락 1건" in message
+    assert "q2" in message
+
+
+def test_coverage_rejects_a_duplicated_question_id() -> None:
+    """같은 문항이 두 번 있으면 분모가 부풀므로 멈춘다."""
+    with pytest.raises(SystemExit) as excinfo:
+        check_question_coverage(["q1"], ["q1", "q1"], label="QA 결과")
+
+    assert "중복 1건" in str(excinfo.value)
+
+
+def test_coverage_rejects_a_question_outside_the_subset() -> None:
+    """채점 대상 밖의 결과가 섞여 있어도 멈춘다."""
+    with pytest.raises(SystemExit) as excinfo:
+        check_question_coverage(["q1"], ["q1", "ghost"], label="QA 결과")
+
+    message = str(excinfo.value)
+    assert "대상 밖 1건" in message
+    assert "ghost" in message

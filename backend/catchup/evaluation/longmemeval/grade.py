@@ -9,6 +9,10 @@
 정답")을 그대로 옮겨 썼다. 그래서 이 값은 공식 리더보드 점수와 직접
 비교할 수 없다. 리포트가 그 사실을 매번 적는다.
 
+판정을 시작하기 전에 QA 산출물이 채점 대상 문항을 정확히 한 번씩 덮는지
+먼저 본다. 부분 결과에 점수를 매기면 분모가 남은 문항 수로 줄어, 중간에
+깨진 실행이 오히려 높은 정답률로 보인다.
+
 읽지 못한 판정은 오답으로 세지 않고 error로 따로 센다. 못 읽은 응답을
 조용히 오답으로 접으면 점수가 낮아진 이유가 파이프라인인지 채점기인지
 구분되지 않는다.
@@ -331,6 +335,57 @@ def read_jsonl(path: Path) -> list[dict[str, Any]]:
             if stripped:
                 rows.append(json.loads(stripped))
     return rows
+
+
+def _id_preview(question_ids: Sequence[str]) -> str:
+    """어긋난 문항 목록을 한 줄로 줄여 보여준다."""
+    head = ", ".join(question_ids[:10])
+    return head + (" …" if len(question_ids) > 10 else "")
+
+
+def check_question_coverage(
+    expected: Sequence[str],
+    actual: Sequence[str],
+    *,
+    label: str,
+) -> None:
+    """채점 대상과 QA 산출물의 문항 집합이 정확히 같은지 확인한다.
+
+    QA가 중간에 깨진 실행은 앞쪽 문항의 결과만 남긴다. 그 파일을 그대로
+    채점하면 분모가 남은 문항 수로 줄고, 못 푼 문항이 뒤쪽에 몰려 있으면
+    실패한 실행의 정답률이 오히려 높게 나온다. 중복 question_id도 같은
+    문항을 두 번 세어 분모를 부풀린다.
+
+    그래서 판정을 한 번이라도 부르기 전에 막는다. judge를 돌린 뒤에
+    알아채면 이미 쓴 토큰은 돌아오지 않는다.
+
+    Raises:
+        SystemExit: 누락·중복·초과가 하나라도 있을 때 낸다.
+    """
+    expected_ids = set(expected)
+    counted = Counter(actual)
+    missing = sorted(expected_ids - set(counted))
+    unexpected = sorted(set(counted) - expected_ids)
+    duplicated = sorted(
+        question_id for question_id, count in counted.items() if count > 1
+    )
+    if not (missing or unexpected or duplicated):
+        return
+
+    problems: list[str] = []
+    if missing:
+        problems.append(f"누락 {len(missing)}건({_id_preview(missing)})")
+    if duplicated:
+        problems.append(f"중복 {len(duplicated)}건({_id_preview(duplicated)})")
+    if unexpected:
+        problems.append(
+            f"대상 밖 {len(unexpected)}건({_id_preview(unexpected)})"
+        )
+    raise SystemExit(
+        f"{label}가 채점 대상 {len(expected_ids)}문항과 어긋난다: "
+        + ", ".join(problems)
+        + ". QA 러너를 같은 `--per-type`·`--limit`으로 다시 완주시킨다."
+    )
 
 
 def grade_questions(
@@ -1096,28 +1151,42 @@ def main() -> int:
     trace_path = args.results_dir / TRACE_FILENAME
     if not results_path.exists():
         raise SystemExit(f"QA 결과 파일이 없다: {results_path}")
+    if not trace_path.exists():
+        raise SystemExit(f"QA trace 파일이 없다: {trace_path}")
     if not args.oracle_path.exists():
         raise SystemExit(f"oracle 파일이 없다: {args.oracle_path}")
-
-    results = read_jsonl(results_path)
-    if args.limit is not None:
-        results = results[: max(args.limit, 0)]
-    if not results:
-        raise SystemExit("채점할 답변이 없다.")
-
-    traces = {
-        str(row["question_id"]): row
-        for row in (read_jsonl(trace_path) if trace_path.exists() else [])
-    }
-    qa_elapsed_ms = sum(
-        float(row.get("elapsed_ms") or 0.0) for row in traces.values()
-    )
 
     subset = select_subset(
         load_oracle(args.oracle_path),
         per_type=args.per_type,
     )
+    if args.limit is not None:
+        subset = subset[: max(args.limit, 0)]
+    if not subset:
+        raise SystemExit("채점할 문항이 없다.")
     questions = {question.question_id: question for question in subset}
+
+    # `--limit`은 결과가 아니라 채점 대상에 건다. QA 러너도 같은 순서의
+    # 문항 목록을 앞에서부터 자르므로, 두 러너가 같은 값을 받으면 두
+    # 집합은 정확히 같아야 한다.
+    expected_ids = [question.question_id for question in subset]
+    results = read_jsonl(results_path)
+    trace_rows = read_jsonl(trace_path)
+    check_question_coverage(
+        expected_ids,
+        [str(row.get("question_id") or "") for row in results],
+        label=f"QA 결과({results_path.name})",
+    )
+    check_question_coverage(
+        expected_ids,
+        [str(row.get("question_id") or "") for row in trace_rows],
+        label=f"QA trace({trace_path.name})",
+    )
+
+    traces = {str(row["question_id"]): row for row in trace_rows}
+    qa_elapsed_ms = sum(
+        float(row.get("elapsed_ms") or 0.0) for row in traces.values()
+    )
 
     workspace_for = resolve_workspace_for(args.manifest, questions)
 

@@ -15,8 +15,10 @@ haystack이 따로 격리되어 있으므로 조회도 문항마다 자기 works
 
 결과는 세 파일로 나눠 쓴다. 채점기가 읽을 최소 형태(`qa_results.jsonl`),
 왜 그 답이 나왔는지 되짚을 흔적(`qa_trace.jsonl`), 비용 집계
-(`qa_usage.json`)다. 한 건이 끝날 때마다 흘려 쓰고 flush하므로 중간에
-멈춰도 그때까지의 결과는 남는다.
+(`qa_usage.json`)다. 세 파일 모두 실행 전용 임시 경로에 쓰다가 전 문항이
+성공한 뒤에만 최종 경로로 원자 공개한다. 부분 결과를 최종 이름으로
+남기면 채점기가 그것을 완주 결과로 읽고 줄어든 분모 위에서 점수를 낸다
+— 어려운 문항에서 깨진 실행일수록 점수가 오히려 높아진다.
 
 실행:
     uv run python -m catchup.evaluation.longmemeval.run_qa \\
@@ -29,6 +31,8 @@ from __future__ import annotations
 import argparse
 import json
 from collections.abc import Iterable
+from collections.abc import Sequence
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -45,13 +49,16 @@ from catchup.components.llm.constants import LlmProvider
 from catchup.components.llm.constants import ModelCapacity
 from catchup.components.llm.factory import get_llm_service
 from catchup.configs.config import settings
+from catchup.evaluation.longmemeval.atomic_publish import staged_outputs
 from catchup.evaluation.longmemeval.dataset import OracleQuestion
 from catchup.evaluation.longmemeval.dataset import load_oracle
 from catchup.evaluation.longmemeval.dataset import select_subset
 from catchup.evaluation.longmemeval.draft_vocabulary import UsageTotals
 from catchup.evaluation.longmemeval.draft_vocabulary import usage_from_message
 from catchup.evaluation.longmemeval.qa_service import MAX_SUBJECTS
+from catchup.evaluation.longmemeval.qa_service import AnswerFn
 from catchup.evaluation.longmemeval.qa_service import AnswerResult
+from catchup.evaluation.longmemeval.qa_service import ExtractSubjectsFn
 from catchup.evaluation.longmemeval.qa_service import KnowledgeLookup
 from catchup.evaluation.longmemeval.qa_service import LookupFor
 from catchup.evaluation.longmemeval.qa_service import QuestionOutcome
@@ -250,6 +257,121 @@ def _write_line(handle: TextIO, payload: dict[str, Any]) -> None:
     handle.flush()
 
 
+def usage_payload(
+    *,
+    workspace_id: int | None,
+    manifest: Path | None,
+    capacity: str,
+    questions: int,
+    abstained: int,
+    total: UsageTotals,
+) -> str:
+    """비용 집계 파일에 쓸 JSON 본문을 만든다."""
+    return (
+        json.dumps(
+            {
+                "workspace_id": workspace_id,
+                "manifest": None if manifest is None else str(manifest),
+                "capacity": capacity,
+                "questions": questions,
+                "abstained": abstained,
+                **total.as_dict(),
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n"
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class QaRunSummary:
+    """완주한 실행 하나가 남긴 요약을 담는다.
+
+    Attributes:
+        questions: 답을 낸 문항 수를 나타낸다.
+        abstained: 그중 거절로 닫은 문항 수를 나타낸다.
+        usage: 실행 전체가 쓴 토큰 집계를 나타낸다.
+    """
+
+    questions: int
+    abstained: int
+    usage: UsageTotals
+
+
+def run_and_publish(
+    questions: Sequence[OracleQuestion],
+    *,
+    lookup: KnowledgeLookup | LookupFor,
+    extract_subjects: ExtractSubjectsFn,
+    answer: AnswerFn,
+    results_path: Path,
+    trace_path: Path,
+    usage_path: Path,
+    workspace_id: int | None,
+    manifest: Path | None,
+    capacity: str,
+) -> QaRunSummary:
+    """전 문항을 답하고, 다 끝났을 때만 세 산출물을 공개한다.
+
+    문항 하나가 깨지면 예외가 그대로 올라가고 최종 경로에는 아무것도
+    남지 않는다. 부분 결과를 정상 파일명으로 남기면 채점기가 그것을
+    완주 결과로 읽는다 — 이 함수의 존재 이유가 그 연결을 끊는 것이다.
+    """
+    total = UsageTotals()
+    abstained = 0
+
+    with staged_outputs((results_path, trace_path, usage_path)) as (
+        results_temp,
+        trace_temp,
+        usage_temp,
+    ):
+        with (
+            results_temp.open("w", encoding="utf-8") as results_file,
+            trace_temp.open("w", encoding="utf-8") as trace_file,
+        ):
+
+            def _record(outcome: QuestionOutcome) -> None:
+                nonlocal total, abstained
+                total = total.plus(outcome.usage)
+                if outcome.abstained:
+                    abstained += 1
+                _write_line(results_file, outcome.result_payload())
+                _write_line(trace_file, outcome.trace_payload())
+                print(
+                    f"  {outcome.question_id}  "
+                    f"as_of={outcome.as_of_claims} "
+                    f"history={outcome.history_claims}  "
+                    f"{'ABSTAIN' if outcome.abstained else 'ANSWER'}"
+                )
+
+            outcomes = answer_questions(
+                questions,
+                lookup=lookup,
+                extract_subjects=extract_subjects,
+                answer=answer,
+                on_outcome=_record,
+            )
+
+        usage_temp.write_text(
+            usage_payload(
+                workspace_id=workspace_id,
+                manifest=manifest,
+                capacity=capacity,
+                questions=len(outcomes),
+                abstained=abstained,
+                total=total,
+            ),
+            encoding="utf-8",
+        )
+
+    return QaRunSummary(
+        questions=len(outcomes),
+        abstained=abstained,
+        usage=total,
+    )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -327,67 +449,33 @@ def main() -> int:
     engine = create_engine(settings.sqlalchemy_database_url)
     session_factory = sessionmaker(bind=engine, expire_on_commit=False)
 
-    total = UsageTotals()
-    abstained = 0
+    isolated = workspace_for is not None
+    if workspace_for is None:
+        lookup: KnowledgeLookup | LookupFor = postgres_lookup(
+            session_factory,
+            workspace_id=args.workspace_id,
+        )
+    else:
+        lookup = manifest_lookup_for(
+            session_factory,
+            workspace_for=workspace_for,
+        )
 
     try:
-        with (
-            results_path.open("w", encoding="utf-8") as results_file,
-            trace_path.open("w", encoding="utf-8") as trace_file,
-        ):
-
-            def _record(outcome: QuestionOutcome) -> None:
-                nonlocal total, abstained
-                total = total.plus(outcome.usage)
-                if outcome.abstained:
-                    abstained += 1
-                _write_line(results_file, outcome.result_payload())
-                _write_line(trace_file, outcome.trace_payload())
-                print(
-                    f"  {outcome.question_id}  "
-                    f"as_of={outcome.as_of_claims} "
-                    f"history={outcome.history_claims}  "
-                    f"{'ABSTAIN' if outcome.abstained else 'ANSWER'}"
-                )
-
-            if workspace_for is None:
-                lookup: KnowledgeLookup | LookupFor = postgres_lookup(
-                    session_factory,
-                    workspace_id=args.workspace_id,
-                )
-            else:
-                lookup = manifest_lookup_for(
-                    session_factory,
-                    workspace_for=workspace_for,
-                )
-
-            outcomes = answer_questions(
-                questions,
-                lookup=lookup,
-                extract_subjects=bedrock_extract_subjects(llm),
-                answer=bedrock_answer(llm),
-                on_outcome=_record,
-            )
+        summary = run_and_publish(
+            questions,
+            lookup=lookup,
+            extract_subjects=bedrock_extract_subjects(llm),
+            answer=bedrock_answer(llm),
+            results_path=results_path,
+            trace_path=trace_path,
+            usage_path=usage_path,
+            workspace_id=None if isolated else args.workspace_id,
+            manifest=args.manifest if isolated else None,
+            capacity=args.capacity,
+        )
     finally:
         engine.dispose()
-
-    isolated = workspace_for is not None
-    usage_path.write_text(
-        json.dumps(
-            {
-                "workspace_id": None if isolated else args.workspace_id,
-                "manifest": str(args.manifest) if isolated else None,
-                "capacity": args.capacity,
-                "questions": len(outcomes),
-                "abstained": abstained,
-                **total.as_dict(),
-            },
-            ensure_ascii=False,
-            indent=2,
-        )
-        + "\n",
-        encoding="utf-8",
-    )
 
     scope = (
         f"문항별 격리, manifest={args.manifest}"
@@ -395,8 +483,11 @@ def main() -> int:
         else f"ws={args.workspace_id}"
     )
     print(f"\n=== QA 결과 ({scope}) ===")
-    print(f"  문항: {len(outcomes)}  거절: {abstained}")
-    print(f"  호출 {total.calls}회, 토큰 {total.total_tokens}")
+    print(f"  문항: {summary.questions}  거절: {summary.abstained}")
+    print(
+        f"  호출 {summary.usage.calls}회, "
+        f"토큰 {summary.usage.total_tokens}"
+    )
     print(f"  {results_path}")
     print(f"  {trace_path}")
     print(f"  {usage_path}")
