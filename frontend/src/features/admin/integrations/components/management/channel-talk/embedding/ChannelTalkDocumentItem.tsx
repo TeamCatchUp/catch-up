@@ -45,15 +45,15 @@ export default function ChannelTalkDocumentItem({
 
       <div className="border-line-normal-assistive flex min-w-0 flex-1 items-center gap-8 border-b py-2.5">
         <div className="flex min-w-0 flex-1 items-center gap-2.5">
-          <IconReply aria-hidden="true" className="text-icon-normal-alternative size-6 shrink-0 rotate-180" />
+          <IconReply aria-hidden="true" className="text-icon-normal-alternative size-6 shrink-0" />
           <div className="flex min-w-0 flex-1 items-center gap-3">
             <EntityChip icon={IconBook} />
             <span className="text-body-small text-text-normal-neutral min-w-0 flex-1 truncate">{document.name}</span>
           </div>
         </div>
 
-        {/* Figma Dropdown h36·w68 — SelectTrigger 는 py 기반이라 높이를 박아야 36이 된다 */}
-        <PeriodSelect value={document.dataRange} onChange={onDataRangeChange} className="h-9 w-17 shrink-0" />
+        {/* Figma Dropdown h36·w68 — 폭을 80(min-w-20)으로 올린 근거는 ChannelTalkChannelGroup 주석 참조 */}
+        <PeriodSelect value={document.dataRange} onChange={onDataRangeChange} className="h-9 min-w-20 shrink-0" />
       </div>
     </li>
   );

@@ -78,8 +78,16 @@ export default function ChannelTalkChannelGroup({
           </div>
         </div>
 
-        {/* Figma Dropdown h36·w75 — SelectTrigger 는 py 기반이라 높이를 박아야 36이 된다 */}
-        <PeriodSelect value={channel.dataRange} onChange={onChannelDataRangeChange} className="h-9 w-18.75 shrink-0" />
+        {/*
+         * Figma Dropdown h36·w75 — SelectTrigger 는 py 기반이라 높이를 박아야 36이 된다.
+         *
+         * 폭은 Figma의 75가 아니라 80(min-w-20)이다. PERIOD_OPTIONS 최장 라벨 "N개월"이
+         * 15px 폰트로 약 38px인데, 여기에 border 2 + px 16 + gap 6 + 아이콘 16을 더하면
+         * 78px가 필요하다. 75로는 산술적으로 안 들어간다. w- 가 아니라 min-w- 인 이유는
+         * 옵션이 길어졌을 때 잘리는 대신 늘어나게 하려는 것이고, 지금 6개 옵션은 전부
+         * 78 이하라 실제 렌더 폭은 도큐먼트 행과 똑같이 80으로 맞는다.
+         */}
+        <PeriodSelect value={channel.dataRange} onChange={onChannelDataRangeChange} className="h-9 min-w-20 shrink-0" />
       </div>
 
       <ul className="flex flex-col pr-5 pl-3">

@@ -20,9 +20,17 @@ export default function PeriodSelect({ value, onChange, className }: PeriodSelec
         if (isPeriod(next)) onChange(next);
       }}
     >
-      {/* 채널톡 dropdown spec(gap/6, padding/8) — shared select default(gap-3, py-1.5)보다 좁음 */}
+      {/*
+       * 채널톡 dropdown spec(gap/6, padding/8) — shared select default(gap-3, px-2.5, py-1.5)보다 좁음.
+       *
+       * `w-auto`와 `[&>span]:line-clamp-none`이 한 쌍이다. shared SelectTrigger는 `w-full`에
+       * `[&>span]:line-clamp-1`이 걸려 있어서, 호출부가 고정 폭을 주면 라벨이 말없이 잘린다.
+       * 실제로 그랬다 — 68px 트리거에서 border 2 + px 20 + gap 6 + 아이콘 16을 빼면 글자 자리가
+       * 24px인데 "1개월"은 15px 폰트로 약 38px다. 폭만 늘리고 line-clamp를 두면 라벨이 길어지는
+       * 순간 같은 일이 반복되므로 둘 다 푼다. 폭 하한은 호출부가 min-w-*로 준다.
+       */}
       <SelectTrigger
-        className={cn('gap-1.5 py-2', className)}
+        className={cn('w-auto gap-1.5 px-2 py-2 [&>span]:line-clamp-none', className)}
         endIcon={<IconDropdownDown className="text-icon-normal-neutral size-4 shrink-0" />}
       >
         <SelectValue />
