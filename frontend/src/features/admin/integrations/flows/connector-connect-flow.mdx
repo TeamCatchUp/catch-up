@@ -6,9 +6,7 @@ import * as TargetPickerStories from '../components/management/channel-talk/embe
 import * as CatalogStories from '../components/management/catalog/ConnectorCatalog.stories';
 import * as MappingCheckPopoverStories from '../components/management/detail/MappingCheckPopover.stories';
 import * as PreConnectStories from '../components/management/detail/ConnectorPreConnectDetail.stories';
-import * as HistoryRowStories from '../components/management/embedding/EmbeddingHistoryRow.stories';
 import * as StateBoundaryStories from '../components/management/states/ConnectorStateBoundary.stories';
-import * as EmbeddingEmptyStories from '../components/management/states/EmbeddingEmptyState.stories';
 import * as Screens from '../components/view/ConnectorConnectScreen.stories';
 
 <Meta title="Flows/커넥터 연결" />
@@ -28,6 +26,7 @@ import * as Screens from '../components/view/ConnectorConnectScreen.stories';
 
 3·4단계는 채널톡 전용 동선이다. 다른 도구는 연결 전 상세에서 바로 연결로 넘어간다.
 후속 단계인 계정 연결은 [이용자 매핑 flow](?path=/docs/flows-이용자-매핑--docs)가 다룬다.
+임베딩의 진행·실패·재시도는 [임베딩 flow](?path=/docs/flows-임베딩--docs)가 다룬다.
 
 ## 1. 카탈로그
 
@@ -88,6 +87,7 @@ Access Key·Secret을 넣고 연결 테스트를 통과시킨다. 테스트를 �
 연결된 채널·도큐먼트 스페이스가 계층 표로 나오고, 임베딩할 대상과 데이터 기간을 고른다.
 선택이 0개면 하단 [임베딩하기]가 비활성이고, 하나라도 고르면 활성화된다.
 "전체 선택하기"는 라벨 텍스트를 클릭해도 토글된다.
+선택한 기간이 실제 요청으로 어떻게 계산되는지는 [임베딩 flow](?path=/docs/flows-임베딩--docs) 참고.
 
 <Canvas of={Screens.ChannelTalkStep2} />
 
@@ -111,13 +111,7 @@ Access Key·Secret을 넣고 연결 테스트를 통과시킨다. 테스트를 �
 
 ### 주요 분기
 
-**임베딩 실패 이력** — 히스토리 행이 실패 상태와 원인을 보여준다.
-
-<Canvas of={HistoryRowStories.Failed} />
-
-**임베딩된 리소스가 없을 때** — 관리 탭이 빈 상태 안내를 보여준다.
-
-<Canvas of={EmbeddingEmptyStories.Default} />
+임베딩 현황·실패 이력·재시도는 [임베딩 flow](?path=/docs/flows-임베딩--docs)에서 다룬다.
 
 **화면 부트스트랩 경계** — 커넥터 화면 전체는 진입 시 로딩/에러 경계로 감싸져 있다.
 로딩 중엔 스켈레톤이 나오고(빈 상태 플래시 방지), 실패하면 에러 안내가 나온다.
