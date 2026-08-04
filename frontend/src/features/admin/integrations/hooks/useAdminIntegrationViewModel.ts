@@ -71,6 +71,31 @@ export const useAdminIntegrationViewModel = (): AdminIntegrationViewModel => {
     [atlassianStatus.data, slackStatus.data, githubStatus.data, channelTalkStatus.data],
   );
 
+  /**
+   * 연동 조직·워크스페이스의 대표 이름 — connection-status `items[].name`.
+   * jira/confluence는 atlassian OAuth 하나를 공유하므로 같은 사이트명을 쓴다.
+   * 채널톡은 워크스페이스 개념이 없고 채널 credential이 N개라 첫 채널명을 대표로 삼는다
+   * (여러 채널일 때의 표기는 Figma에 근거가 없다).
+   */
+  const getWorkspaceName = useCallback(
+    (service: IntegrationService): string | null => {
+      switch (service) {
+        case 'jira':
+        case 'confluence':
+          return atlassianStatus.data?.items?.[0]?.name ?? null;
+        case 'github':
+          return githubStatus.data?.items?.[0]?.name ?? null;
+        case 'slack':
+          return slackStatus.data?.items?.[0]?.name ?? null;
+        case 'channel_talk': {
+          const items = channelTalkStatus.data?.vendor === 'channel_talk' ? channelTalkStatus.data.items : [];
+          return items.find((item) => item.metadata.credential_type === 'channel')?.name ?? null;
+        }
+      }
+    },
+    [atlassianStatus.data, githubStatus.data, slackStatus.data, channelTalkStatus.data],
+  );
+
   const statusMap = useMemo<Record<IntegrationService, AdminConnectorStatusResponse | undefined>>(() => {
     const map: Record<string, AdminConnectorStatusResponse | undefined> = {};
     SOURCE_ORDER.forEach((source, i) => {
@@ -114,8 +139,9 @@ export const useAdminIntegrationViewModel = (): AdminIntegrationViewModel => {
         actionText: `${item.name} 연동하기`,
         connected: isServiceConnected(item.service),
         status: getStatus(item.service),
+        workspaceName: getWorkspaceName(item.service),
       })),
-    [isServiceConnected, getStatus],
+    [isServiceConnected, getStatus, getWorkspaceName],
   );
 
   const getConnectorDetail = useCallback(
@@ -140,9 +166,10 @@ export const useAdminIntegrationViewModel = (): AdminIntegrationViewModel => {
         dataRange: formatRange(globalOldest, globalLatest),
         resources,
         resourceLabel: RESOURCE_LABELS[service],
+        workspaceName: getWorkspaceName(service),
       };
     },
-    [statusMap, isServiceConnected, getStatus],
+    [statusMap, isServiceConnected, getStatus, getWorkspaceName],
   );
 
   return {

@@ -110,7 +110,8 @@ export default function ConnectorConnectView() {
             <ConnectorConnectedDetail
               service={resolved.service}
               detail={detail}
-              onEnterChannelTalkFlow={() => setState({ kind: 'channelTalkFlow', step: 'embed' })}
+              // 헤더 액션이 "채널 연결하기"라 스텝 ①로 들어간다 — 채널 등록이 임베딩보다 선행이다
+              onEnterChannelTalkFlow={() => setState({ kind: 'channelTalkFlow', step: 'connect' })}
             />
           </ConnectorStateBoundary>
         );
@@ -119,6 +120,7 @@ export default function ConnectorConnectView() {
         return (
           <ChannelTalkFlowPanel
             initialStep={resolved.step}
+            workspaceName={connectedMenu.find((item) => item.service === 'channel_talk')?.workspaceName ?? null}
             onExit={() => setState({ kind: 'detail', service: 'channel_talk' })}
           />
         );
@@ -148,8 +150,8 @@ export default function ConnectorConnectView() {
         <ConnectorSidebarList
           connectors={connectedMenu.map((item) => ({
             service: item.service,
-            // 워크스페이스명은 API가 아직 주지 않는다 — 도구명으로 대신한다(미결)
-            workspaceName: CONNECTOR_CONTENT[item.service].name,
+            // connection-status items[].name. 백엔드가 null을 주면 도구명으로 폴백한다
+            workspaceName: item.workspaceName ?? CONNECTOR_CONTENT[item.service].name,
           }))}
           selected={
             resolved.kind === 'preconnect' || resolved.kind === 'detail'

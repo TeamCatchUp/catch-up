@@ -32,8 +32,8 @@ interface ConnectorConnectedDetailProps {
  * (E) 커넥터 상세 — 연동됨. 스펙 §5-3, Figma `17306:82016`.
  * 헤더 + 세그먼트 탭 + [관리: 요약 카드 + 대상 표 | 현황: 진행중 표 + 히스토리].
  *
- * 헤더 제목은 스펙상 워크스페이스명인데 API가 주지 않아 도구명으로 둔다(미결 — 백엔드).
- * 재시도 흐름(gap 조회 → EmbeddingRetryModal → useSyncRecordRetry)은
+ * 헤더 제목은 연동된 조직·워크스페이스의 대표 이름이다(connection-status
+ * `items[].name`). 재시도 흐름(gap 조회 → EmbeddingRetryModal → useSyncRecordRetry)은
  * 구 `EmbeddingHistoryCard`의 것을 그대로 옮겼다.
  */
 export default function ConnectorConnectedDetail({
@@ -107,8 +107,17 @@ export default function ConnectorConnectedDetail({
     );
   };
 
-  const handleAddEmbedding = () => {
-    if (service === 'channel_talk') onEnterChannelTalkFlow();
+  /*
+   * 헤더 액션은 도구에 따라 다르다(Figma 실측).
+   *   채널톡  "채널 연결하기" → (F) 스텝 ① 채널 연결 관리
+   *   그 외    "임베딩 추가"   → 임베딩 모달
+   * 채널톡은 채널 credential 등록이 선행이라 임베딩 단계로 바로 보내지 않는다.
+   */
+  const isChannelTalk = service === 'channel_talk';
+  const actionLabel = isChannelTalk ? '채널 연결하기' : '임베딩 추가';
+
+  const handleHeaderAction = () => {
+    if (isChannelTalk) onEnterChannelTalkFlow();
     else setEmbeddingModalOpen(true);
   };
 
@@ -116,11 +125,13 @@ export default function ConnectorConnectedDetail({
     <div className="flex flex-col gap-6">
       <ConnectorDetailHeader
         service={service}
-        title={content.name}
+        // 연동됨 헤더 제목은 도구명이 아니라 연동된 조직·워크스페이스의 대표 이름이다
+        // (Figma `17071:111151` "캐치업-Catchup"). 백엔드가 null이면 도구명으로 폴백한다
+        title={detail.workspaceName ?? content.name}
         description={content.headerDescription}
         actions={
-          <Button variant="box-solid-primary" size="md" onClick={handleAddEmbedding}>
-            임베딩 추가
+          <Button variant="box-solid-primary" size="lg" onClick={handleHeaderAction}>
+            {actionLabel}
           </Button>
         }
       />
@@ -157,7 +168,7 @@ export default function ConnectorConnectedDetail({
         </div>
       )}
 
-      {service !== 'channel_talk' && (
+      {!isChannelTalk && (
         <EmbeddingModal
           open={embeddingModalOpen}
           onOpenChange={setEmbeddingModalOpen}

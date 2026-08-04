@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 import { useQueries, useQuery } from '@tanstack/react-query';
 
+import { CONNECTOR_CONTENT } from '../../../constants/connectorContent';
 import { DEFAULT_PERIOD } from '../../../constants/period';
 import { useChannelTalkEmbeddingSubmit } from '../../../hooks/useChannelTalkEmbeddingSubmit';
 import { useChannelTalkSelection } from '../../../hooks/useChannelTalkSelection';
@@ -13,6 +14,7 @@ import type { ChannelTalkConnectionState } from '../../../types/channelTalkModel
 import type { ChannelTalkConnectionStatusResponse } from '../../../types/connectionStatusApi';
 import { deriveChannelTalkInitialState } from '../../../utils/deriveChannelTalkInitialState';
 import { type ChannelTalkChannel, mapChannelTalkSyncTargets } from '../../../utils/mapChannelTalkSyncTargets';
+import ConnectorDetailHeader from '../detail/ConnectorDetailHeader';
 import ChannelTalkChannelCard from './ChannelTalkChannelCard';
 import ChannelTalkFooterBar from './ChannelTalkFooterBar';
 import ChannelTalkStepper, { type ChannelTalkStep } from './ChannelTalkStepper';
@@ -21,8 +23,10 @@ import type { ChannelTalkChannelTarget } from './embedding/channelTalkEmbeddingT
 import ChannelTalkEmbeddingTargetPicker from './embedding/ChannelTalkEmbeddingTargetPicker';
 
 interface ChannelTalkFlowPanelProps {
-  /** (D) 연결하기 → 'connect', (E) 임베딩 추가 → 'embed' */
+  /** (D) 연결하기 · (E) 채널 연결하기 모두 스텝 ①로 들어온다 */
   initialStep?: ChannelTalkStep;
+  /** 헤더 제목에 쓰는 대표 이름 — connection-status `items[].name` */
+  workspaceName?: string | null;
   /** 스텝퍼 "임베딩 관리로" + 임베딩 접수 시 — (E)로 복귀 */
   onExit: () => void;
 }
@@ -37,7 +41,11 @@ interface ChannelTalkFlowPanelProps {
  * 스텝②는 구 `ChannelTalkEmbeddingModal`의 데이터 흐름
  * (credentials → channel_id별 sync targets → 선택 → POST /sync/full)을 승계한다.
  */
-export default function ChannelTalkFlowPanel({ initialStep = 'connect', onExit }: ChannelTalkFlowPanelProps) {
+export default function ChannelTalkFlowPanel({
+  initialStep = 'connect',
+  workspaceName,
+  onExit,
+}: ChannelTalkFlowPanelProps) {
   const [step, setStep] = useState<ChannelTalkStep>(initialStep);
   const statusQuery = useQuery(adminConnectorQueries.connectionStatus('channel_talk'));
   const channelTalkStatus =
@@ -61,6 +69,12 @@ export default function ChannelTalkFlowPanel({ initialStep = 'connect', onExit }
 
   return (
     <div className="flex flex-col gap-6">
+      {/* Figma `17414:97604`·`17332:84379` — 스텝퍼 위에 커넥터 헤더(로고 60 + 이름 + 설명)가 온다 */}
+      <ConnectorDetailHeader
+        service="channel_talk"
+        title={workspaceName ?? CONNECTOR_CONTENT.channel_talk.name}
+        description={CONNECTOR_CONTENT.channel_talk.headerDescription}
+      />
       <ChannelTalkStepper current={step} onBack={onExit} />
       {step === 'connect' ? (
         <ConnectStep key={statusQuery.dataUpdatedAt} initialState={initialState} onProceed={() => setStep('embed')} />

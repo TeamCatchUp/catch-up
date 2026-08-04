@@ -15,6 +15,12 @@ export interface IntegrationMenuItem extends IntegrationAccountMeta {
   actionText: string;
   connected: boolean;
   status: ConnectorDetailStatus;
+  /**
+   * 연동된 조직·워크스페이스의 대표 이름. connection-status `items[].name`이다.
+   * 사이드바는 "{도구명} - {이 값}", 상세 헤더는 이 값만 쓴다(Figma `17125:115106`·`17071:111151`).
+   * 미연동이거나 백엔드가 null을 주면 null.
+   */
+  workspaceName: string | null;
 }
 
 /** 연동된 리소스 항목 (per-target 임베딩 기간 포함) */
@@ -30,6 +36,8 @@ export interface ConnectorDetail {
   dataRange: string;
   resources: ConnectorResource[];
   resourceLabel: string;
+  /** 상세 헤더 제목에 쓰는 대표 이름 — {@link IntegrationMenuItem.workspaceName}과 같은 값 */
+  workspaceName: string | null;
 }
 
 /** 관리자 연동 화면에서 사용하는 데이터 모델 */
