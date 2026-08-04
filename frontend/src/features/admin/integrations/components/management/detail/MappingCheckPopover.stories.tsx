@@ -25,7 +25,7 @@ const meta = {
       viewport: { width: 480, height: 200 },
       states: ['default'],
       dataNotes: [
-        '본문이 "권한에 맞는 검색 결과"라고 하나 매핑 부재의 실제 영향은 이름 인식 품질이다 — 스펙 미결 #1.',
+        '본문은 온보딩 문서("처음 오셨나요? — 나의 이름표") 기반으로 교체 (사용자 지시 2026-08-05). Figma 원문("권한에 맞는 검색 결과")은 스펙 미결 #1이었다.',
         'Figma 17251:77261 매핑 확인 모달은 구현하지 않는다 (스펙 결정 #1). 이 팝오버가 비차단 안내를 맡는다.',
       ],
     }),
@@ -46,7 +46,7 @@ export const Default: Story = {
     const canvas = within(canvasElement);
 
     await expect(canvas.getByText('연동 전, 이용자 매핑 상태를 확인해 주세요')).toBeInTheDocument();
-    await expect(canvas.getByText(/계정 매핑이 필요해요/)).toBeInTheDocument();
+    await expect(canvas.getByText(/나의 업무 맥락/)).toBeInTheDocument();
 
     await userEvent.click(canvas.getByRole('button', { name: '닫기' }));
     await expect(args.onClose).toHaveBeenCalled();
