@@ -21,6 +21,7 @@ import pytest
 from catchup.evaluation.longmemeval.run_ingestion import EVAL_WORKSPACE_ID
 from catchup.evaluation.longmemeval.run_ingestion import check_bootstrap_workspace
 from catchup.evaluation.longmemeval.run_ingestion import ensure_workspace
+from catchup.evaluation.longmemeval.workspace_manifest import WORKSPACE_NAME_MAX_LENGTH
 
 
 def test_bootstrap_into_the_eval_workspace_is_refused() -> None:
@@ -55,29 +56,36 @@ class _FakeResult:
 
 
 class _FakeSession:
-    """workspace 행이 있는지 없는지만 흉내 내는 fake session이다.
+    """workspace 행의 id와 이름만 흉내 내는 fake session이다.
 
-    실제 DB의 `ON CONFLICT DO NOTHING`처럼, 기준 workspace가 없으면 INSERT가
-    아무 행도 만들지 않고 조용히 끝나는 상황을 재현한다.
+    실제 DB를 두 군데서 따라 한다. 하나는 `ON CONFLICT DO NOTHING`이라
+    기준 workspace가 없으면 INSERT가 아무 행도 만들지 않고 조용히 끝나는
+    것, 다른 하나는 이미 있는 행의 이름을 덮어쓰지 않는 것이다. 이름을
+    덮어쓰는 fake를 쓰면 소유 검증이 무엇을 막는지 드러나지 않는다.
+
+    `workspaces.name`은 varchar(50)이라 넘치는 이름은 잘라서 저장한다.
     """
 
-    def __init__(self, *, existing: set[int]) -> None:
-        self.existing = existing
+    def __init__(self, *, existing: dict[int, str] | None = None) -> None:
+        self.existing: dict[int, str] = dict(existing or {})
         self.template_exists = True
         self.statements: list[str] = []
         self.commits = 0
 
     def execute(self, statement: Any, params: dict[str, Any]) -> _FakeResult:
-        """INSERT면 행을 만들고, SELECT면 존재 여부를 돌려준다."""
+        """INSERT면 행을 만들고, SELECT면 저장된 이름을 돌려준다."""
         text = str(statement)
         self.statements.append(text)
+        workspace_id = params["workspace_id"]
         if "INSERT" in text:
-            if self.template_exists:
-                self.existing.add(params["workspace_id"])
+            if self.template_exists and workspace_id not in self.existing:
+                self.existing[workspace_id] = params["name"][
+                    :WORKSPACE_NAME_MAX_LENGTH
+                ]
             return _FakeResult(None)
-        return _FakeResult(
-            (1,) if params["workspace_id"] in self.existing else None
-        )
+        if workspace_id not in self.existing:
+            return _FakeResult(None)
+        return _FakeResult((self.existing[workspace_id],))
 
     def commit(self) -> None:
         """커밋 횟수만 센다."""
@@ -86,26 +94,70 @@ class _FakeSession:
 
 def test_ensure_workspace_creates_a_missing_row() -> None:
     """없는 workspace는 만들고 커밋한다."""
-    session = _FakeSession(existing=set())
+    session = _FakeSession()
 
     ensure_workspace(session, workspace_id=910000, name="bench-lme-q-q-a")
 
-    assert 910000 in session.existing
+    assert session.existing == {910000: "bench-lme-q-q-a"}
     assert session.commits == 1
 
 
-def test_ensure_workspace_leaves_an_existing_row_alone() -> None:
-    """이미 있는 workspace는 그대로 두고 통과시킨다."""
-    session = _FakeSession(existing={910000})
+def test_ensure_workspace_reuses_a_row_with_the_same_name() -> None:
+    """같은 문항의 workspace면 그대로 재사용하고 INSERT도 하지 않는다."""
+    session = _FakeSession(existing={910000: "bench-lme-q-q-a"})
 
-    ensure_workspace(session, workspace_id=910000, name="다른-이름")
+    ensure_workspace(session, workspace_id=910000, name="bench-lme-q-q-a")
 
-    assert session.existing == {910000}
+    assert session.existing == {910000: "bench-lme-q-q-a"}
+    assert not any("INSERT" in text for text in session.statements)
+    assert session.commits == 0
+
+
+def test_ensure_workspace_refuses_a_row_owned_by_another_question() -> None:
+    """번호가 다른 문항에 재배정되면 적재 전에 멈춘다."""
+    session = _FakeSession(existing={910001: "bench-lme-q-08f4fc43"})
+
+    with pytest.raises(SystemExit) as excinfo:
+        ensure_workspace(
+            session,
+            workspace_id=910001,
+            name="bench-lme-q-031748ae",
+        )
+
+    message = str(excinfo.value)
+    assert "910001" in message
+    assert "bench-lme-q-08f4fc43" in message
+    assert "bench-lme-q-031748ae" in message
+    assert "--workspace-base" in message
+    assert not any("INSERT" in text for text in session.statements)
+
+
+def test_ensure_workspace_refuses_a_human_workspace() -> None:
+    """사람이 쓰던 workspace를 겨냥해도 조용히 얹지 않는다."""
+    session = _FakeSession(existing={902: "bench-longmemeval-eval"})
+
+    with pytest.raises(SystemExit) as excinfo:
+        ensure_workspace(session, workspace_id=902, name="bench-lme-q-q-a")
+
+    assert "bench-longmemeval-eval" in str(excinfo.value)
+
+
+def test_ensure_workspace_compares_truncated_names() -> None:
+    """50자에서 잘려 저장된 이름도 같은 문항이면 통과시킨다."""
+    long_id = "q" * 60
+    name = f"bench-lme-q-{long_id}"
+    session = _FakeSession(
+        existing={910000: name[:WORKSPACE_NAME_MAX_LENGTH]}
+    )
+
+    ensure_workspace(session, workspace_id=910000, name=name)
+
+    assert session.commits == 0
 
 
 def test_ensure_workspace_stops_when_the_template_is_missing() -> None:
     """기준 workspace가 없어 행을 못 만들면 조용히 넘어가지 않는다."""
-    session = _FakeSession(existing=set())
+    session = _FakeSession()
     session.template_exists = False
 
     with pytest.raises(SystemExit) as excinfo:

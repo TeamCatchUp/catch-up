@@ -22,7 +22,10 @@ eval 모드의 workspace 번호는 `--workspace-base`(기본 910000)에 서브�
 manifest JSON에 적어 QA·채점 러너가 읽는다.
 
 `workspaces` 테이블에는 FK가 걸려 있어 행이 먼저 있어야 한다. 그래서 적재
-전에 `ensure_workspace`가 행을 만들어 둔다.
+전에 `ensure_workspace`가 행을 만들어 둔다. 이미 있는 번호면 만들지 않고
+이름으로 소유를 확인한다 — 번호는 서브셋 안의 인덱스에 매여 있어
+`--per-type`을 바꾸면 같은 번호가 다른 문항에 재배정되고, 그대로 재사용하면
+옛 문항의 기억 위에 새 문항이 쌓이기 때문이다.
 
 같은 세션을 다시 넣어도 idempotency key로 재사용되므로 여러 번 돌려도
 안전하다. 그 키의 UNIQUE는 workspace 단위라 문항별 중복 적재를 막지 않는다.
@@ -50,6 +53,7 @@ from catchup.evaluation.longmemeval.dataset import load_oracle
 from catchup.evaluation.longmemeval.dataset import select_subset
 from catchup.evaluation.longmemeval.workspace_manifest import DEFAULT_MANIFEST_PATH
 from catchup.evaluation.longmemeval.workspace_manifest import DEFAULT_WORKSPACE_BASE
+from catchup.evaluation.longmemeval.workspace_manifest import WORKSPACE_NAME_MAX_LENGTH
 from catchup.evaluation.longmemeval.workspace_manifest import assign_workspaces
 from catchup.evaluation.longmemeval.workspace_manifest import write_manifest
 from catchup.knowledge_maintenance.adapters.connectors.longmemeval.observation_normalizer import (  # noqa: E501
@@ -97,9 +101,44 @@ ENSURE_WORKSPACE_SQL = text(
     """
 )
 
-WORKSPACE_EXISTS_SQL = text(
-    "SELECT 1 FROM workspaces WHERE id = :workspace_id"
+WORKSPACE_NAME_SQL = text(
+    "SELECT name FROM workspaces WHERE id = :workspace_id"
 )
+
+
+def check_workspace_owner(
+    *,
+    workspace_id: int,
+    stored_name: str | None,
+    expected_name: str,
+) -> None:
+    """이미 있는 workspace가 이번 문항의 것인지 이름으로 대조한다.
+
+    workspace 번호는 `base + 서브셋 안의 인덱스`라 `--per-type`이 달라지면
+    같은 번호가 다른 문항에 다시 배정된다. 그때 행을 그대로 재사용하면 옛
+    문항의 세션 위에 새 문항의 세션이 쌓이고, manifest는 그 workspace가 새
+    문항 전용이라고 적는다 — 막으려던 문항 간 교차 오염이 오류 하나 없이
+    되살아난다. 사람이 쓰던 workspace를 `--workspace-base`가 겨냥한 경우도
+    `ON CONFLICT DO NOTHING`이 삼켜 같은 결과가 된다.
+
+    이름은 `workspace_name`이 만든 `bench-lme-q-{question_id}`이고 컬럼이
+    varchar(50)이라 잘린다. 그래서 대조도 같은 길이로 자른 뒤에 한다.
+
+    Raises:
+        SystemExit: 기존 workspace가 다른 문항의 것일 때 낸다.
+    """
+    expected = expected_name[:WORKSPACE_NAME_MAX_LENGTH]
+    actual = (stored_name or "")[:WORKSPACE_NAME_MAX_LENGTH]
+    if actual == expected:
+        return
+    raise SystemExit(
+        f"workspace {workspace_id}는 이미 다른 주인의 것이다. "
+        f"DB에 있는 이름은 {actual!r}이고 이번 문항이 기대한 이름은 "
+        f"{expected!r}이다. 서브셋 크기(`--per-type`)를 바꾸면 같은 번호가 "
+        "다른 문항에 다시 배정되어 옛 문항의 세션이 그대로 섞인다. "
+        "`--workspace-base`를 빈 번호대로 옮기거나, 기존 벤치 workspace를 "
+        "지운 뒤 다시 돌린다."
+    )
 
 
 def ensure_workspace(
@@ -109,18 +148,29 @@ def ensure_workspace(
     name: str,
     template_workspace_id: int = TEMPLATE_WORKSPACE_ID,
 ) -> None:
-    """문항용 workspace 행을 만들어 둔다. 이미 있으면 그대로 둔다.
+    """문항용 workspace 행을 만들어 둔다. 이미 있으면 소유를 확인한다.
 
     수집 대상 테이블이 `workspaces`를 FK로 참조하므로 행이 없으면 적재가
-    통째로 깨진다. 이름은 덮어쓰지 않는다 — 재실행이 사람이 고친 이름을
-    되돌리면 안 되고, 문항과 workspace를 잇는 것은 이름이 아니라
-    manifest이기 때문이다.
+    통째로 깨진다. 이름은 덮어쓰지 않는다 — 대신 이번 문항의 이름과
+    맞는지 대조해, 남의 workspace면 적재 전에 멈춘다.
 
     Raises:
-        SystemExit: 기준 workspace가 없어 행을 만들지 못했을 때 낸다.
-            조용히 넘어가면 그다음 적재가 FK 오류로 무너지고, 원인이
-            여기였다는 사실이 드러나지 않는다.
+        SystemExit: 기준 workspace가 없어 행을 만들지 못했을 때, 또는
+            그 번호가 다른 문항·사람의 workspace일 때 낸다. 조용히
+            넘어가면 적재가 FK 오류로 무너지거나 남의 기억 위에 쌓인다.
     """
+    found = session.execute(
+        WORKSPACE_NAME_SQL,
+        {"workspace_id": workspace_id},
+    ).first()
+    if found is not None:
+        check_workspace_owner(
+            workspace_id=workspace_id,
+            stored_name=found[0],
+            expected_name=name,
+        )
+        return
+
     session.execute(
         ENSURE_WORKSPACE_SQL,
         {
@@ -130,15 +180,22 @@ def ensure_workspace(
         },
     )
     session.commit()
-    exists = session.execute(
-        WORKSPACE_EXISTS_SQL,
+    created = session.execute(
+        WORKSPACE_NAME_SQL,
         {"workspace_id": workspace_id},
     ).first()
-    if exists is None:
+    if created is None:
         raise SystemExit(
             f"workspace {workspace_id}를 만들지 못했다. company_id를 베껴 올 "
             f"기준 workspace({template_workspace_id})가 DB에 없다."
         )
+    # 다른 실행이 그사이에 같은 번호를 채갔을 수 있다. INSERT가 삼켜진
+    # 경우까지 잡으려면 만든 뒤에도 한 번 더 대조해야 한다.
+    check_workspace_owner(
+        workspace_id=workspace_id,
+        stored_name=created[0],
+        expected_name=name,
+    )
 
 
 def check_bootstrap_workspace(mode: str, workspace_id: int) -> None:
