@@ -64,7 +64,7 @@ const preview: Preview = {
     // — 임포트 순서 등 암묵적 정렬에 맡기지 않고, 여정 순서를 명시적으로 고정하기 위해서다.
     options: {
       storySort: {
-        order: ['Flows', ['커넥터 연결', '이용자 매핑'], 'Screens', 'Compositions', 'Primitives'],
+        order: ['Flows', ['커넥터 연결', '임베딩', '이용자 매핑'], 'Screens', 'Compositions', 'Primitives'],
       },
     },
     nextjs: {
