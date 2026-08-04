@@ -331,11 +331,14 @@ def test_find_entity_candidates_by_similarity(
                 normalized_alias=f"autographed baseball collection {token}",
                 source="extractor",
             )
+        # 격리 토큰을 질의와 나눠 쓰면 그 토큰의 bigram 겹침만으로
+        # 무관 노드가 threshold를 넘길 수 있다. 무관 alias는 질의와
+        # 글자를 하나도 공유하지 않는 한글 이름으로 둔다.
         uow.knowledge_nodes.add_alias(
             workspace_id=workspace_id,
             node_id=unrelated,
-            alias=f"quarterly revenue report {token}",
-            normalized_alias=f"quarterly revenue report {token}",
+            alias="분기 매출 보고서",
+            normalized_alias="분기 매출 보고서",
             source="extractor",
         )
 
