@@ -61,7 +61,7 @@ export default function ChannelTalkFlowPanel({
   // fetch 실패 시 "등록 없음"으로 오인 방지 — 명시적 에러 표시
   if (statusQuery.isError) {
     return (
-      <div className="mx-8 my-6 border-line-normal-assistive bg-fill-normal-strong text-body-small text-status-destructive rounded-xl border px-4 py-3">
+      <div className="border-line-normal-assistive bg-fill-normal-strong text-body-small text-status-destructive mx-8 my-6 rounded-xl border px-4 py-3">
         채널톡 연동 정보를 불러오지 못했습니다. 잠시 후 다시 시도해주세요.
       </div>
     );
@@ -235,7 +235,6 @@ function EmbedStep({ onDone }: EmbedStepProps) {
         channelCount={channelCount}
         documentCount={spaceCount}
         allSelected={isAllSelected}
-        partiallySelected={!isAllSelected && (channelCount > 0 || spaceCount > 0)}
         onToggleAll={toggleAll}
         onEmbed={() => {
           if (isSubmitting) return;

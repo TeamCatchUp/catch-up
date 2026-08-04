@@ -7,7 +7,6 @@ interface ChannelTalkEmbeddingFooterBarProps {
   channelCount: number;
   documentCount: number;
   allSelected: boolean;
-  partiallySelected: boolean;
   onToggleAll: () => void;
   onEmbed: () => void;
 }
@@ -15,34 +14,31 @@ interface ChannelTalkEmbeddingFooterBarProps {
 /**
  * 임베딩 대상 선택 단계(스텝 ②)의 하단 바 — 전체 선택 체크박스 + 집계 + 제출 버튼.
  * 스텝 ①의 {@link ChannelTalkFooterBar}(채널 추가 + 진행 버튼)와는 다른 컴포넌트다.
+ *
+ * 체크 표시는 **전부 선택했을 때만** 들어온다 — 일부 선택의 indeterminate 표시는
+ * 쓰지 않는다(사용자 결정 2026-08-05). 라벨 텍스트는 버튼 안에 있어 텍스트를
+ * 눌러도 토글되고, 접근성 이름도 이 텍스트가 된다.
  */
 export default function ChannelTalkEmbeddingFooterBar({
   channelCount,
   documentCount,
   allSelected,
-  partiallySelected,
   onToggleAll,
   onEmbed,
 }: ChannelTalkEmbeddingFooterBarProps) {
   return (
     <div className="border-line-normal-neutral flex flex-wrap items-center gap-x-1.5 gap-y-2 border-t px-8 py-3">
-      <div className="flex min-w-0 flex-1 items-center gap-1.5">
+      <div className="flex min-w-0 flex-1 items-center">
         <button
           type="button"
           role="checkbox"
-          aria-checked={partiallySelected ? 'mixed' : allSelected}
-          aria-label="전체 선택하기"
+          aria-checked={allSelected}
           onClick={onToggleAll}
-          className="shrink-0 cursor-pointer"
+          className="flex min-w-0 cursor-pointer items-center gap-1.5"
         >
-          <CheckboxIcon
-            checked={allSelected}
-            indeterminate={partiallySelected}
-            className="size-6"
-            wrapperClassName="p-1.5"
-          />
+          <CheckboxIcon checked={allSelected} className="size-6" wrapperClassName="p-1.5" />
+          <span className="text-body-small text-text-normal-alternative truncate">전체 선택하기</span>
         </button>
-        <span className="text-body-small text-text-normal-alternative truncate">전체 선택하기</span>
       </div>
 
       <div className="flex shrink-0 items-center gap-3">
@@ -56,7 +52,13 @@ export default function ChannelTalkEmbeddingFooterBar({
           </p>
         </div>
 
-        <Button variant="box-solid-primary" size="md" onClick={onEmbed} disabled={documentCount === 0}>
+        {/* 채널 대화 자체도 독립 임베딩 대상이다 — 도큐먼트 없이 채널만 선택해도 제출 가능 */}
+        <Button
+          variant="box-solid-primary"
+          size="md"
+          onClick={onEmbed}
+          disabled={channelCount === 0 && documentCount === 0}
+        >
           임베딩하기
         </Button>
       </div>

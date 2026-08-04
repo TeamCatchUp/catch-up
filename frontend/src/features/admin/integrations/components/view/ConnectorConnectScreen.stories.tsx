@@ -315,7 +315,6 @@ function ChannelTalkFlowSurface({
                 channelCount={selection.channelCount}
                 documentCount={selection.spaceCount}
                 allSelected={selection.isAllSelected}
-                partiallySelected={!selection.isAllSelected && (selection.channelCount > 0 || selection.spaceCount > 0)}
                 onToggleAll={selection.toggleAll}
                 onEmbed={fn()}
               />

@@ -12,7 +12,6 @@ const meta = {
     channelCount: 5,
     documentCount: 18,
     allSelected: false,
-    partiallySelected: true,
     onToggleAll: fn(),
     onEmbed: fn(),
   },
@@ -30,11 +29,15 @@ const meta = {
         nodeId: '17414:97736',
       },
       viewport: { width: 780, height: 120 },
-      states: ['partial', 'all', 'none'],
+      states: ['some', 'all', 'none', 'channel-only'],
       layoutNotes: ['780×60, 위선만 있고 배경 없음. px 32 / py 12, gap 6.'],
       dataNotes: [
         '스텝 ①의 ChannelTalkFooterBar(17345:84633)와 다른 물건이다 — 저건 버튼 2개.',
         '집계는 숫자만 #3385FF로 강조된다.',
+      ],
+      interactionNotes: [
+        '체크 표시는 전부 선택했을 때만 — 일부 선택 indeterminate는 쓰지 않는다(사용자 결정 2026-08-05).',
+        '라벨 텍스트가 버튼 안에 있어 텍스트 클릭도 토글이다.',
       ],
     }),
   },
@@ -48,7 +51,8 @@ const Frame = ({ children }: { children: React.ReactNode }) => (
   <div className="bg-fill-normal-normal w-195">{children}</div>
 );
 
-export const Partial: Story = {
+/** 일부 선택 — 체크는 비어 있다. indeterminate 표시를 쓰지 않는다 */
+export const SomeSelected: Story = {
   render: (args) => (
     <Frame>
       <ChannelTalkEmbeddingFooterBar {...args} />
@@ -58,10 +62,11 @@ export const Partial: Story = {
     const canvas = within(canvasElement);
     const checkbox = canvas.getByRole('checkbox', { name: '전체 선택하기' });
 
-    await expect(checkbox).toHaveAttribute('aria-checked', 'mixed');
+    await expect(checkbox).toHaveAttribute('aria-checked', 'false');
     await expect(canvas.getByText('개 채널')).toBeInTheDocument();
 
-    await userEvent.click(checkbox);
+    // 라벨 텍스트가 버튼 안에 있다 — 텍스트 클릭도 토글
+    await userEvent.click(canvas.getByText('전체 선택하기'));
     await expect(args.onToggleAll).toHaveBeenCalled();
 
     await userEvent.click(canvas.getByRole('button', { name: '임베딩하기' }));
@@ -70,7 +75,7 @@ export const Partial: Story = {
 };
 
 export const AllSelected: Story = {
-  args: { allSelected: true, partiallySelected: false },
+  args: { allSelected: true },
   render: (args) => (
     <Frame>
       <ChannelTalkEmbeddingFooterBar {...args} />
@@ -84,7 +89,7 @@ export const AllSelected: Story = {
 
 /** 하나도 안 고르면 임베딩할 대상이 없다 */
 export const NoneSelected: Story = {
-  args: { channelCount: 0, documentCount: 0, allSelected: false, partiallySelected: false },
+  args: { channelCount: 0, documentCount: 0, allSelected: false },
   render: (args) => (
     <Frame>
       <ChannelTalkEmbeddingFooterBar {...args} />
