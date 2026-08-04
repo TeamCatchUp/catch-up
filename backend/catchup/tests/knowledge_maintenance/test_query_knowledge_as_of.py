@@ -12,6 +12,12 @@ from catchup.knowledge_maintenance.domain.knowledge_node import NodeKind
 from catchup.knowledge_maintenance.domain.knowledge_node import NodeLifecycleState
 from catchup.knowledge_maintenance.ports.knowledge_candidates import AsOfClaim
 from catchup.knowledge_maintenance.services.query_knowledge_as_of import (
+    SIMILARITY_CANDIDATE_LIMIT,
+)
+from catchup.knowledge_maintenance.services.query_knowledge_as_of import (
+    SIMILARITY_THRESHOLD,
+)
+from catchup.knowledge_maintenance.services.query_knowledge_as_of import (
     query_claims_as_of,
 )
 from catchup.knowledge_maintenance.services.query_knowledge_as_of import (
@@ -482,3 +488,163 @@ def test_history_predicate_filter_passthrough() -> None:
     )
     assert entry["predicate"] == "owner"
     assert entry["claim_count"] == 1
+
+
+def test_exact_match_skips_similarity_lookup() -> None:
+    """정확 일치가 되면 유사 후보 조회 자체를 부르지 않는다."""
+    node = _node(canonical_key="feature:오픈 api")
+    uow = FakeUnitOfWork(
+        nodes=FakeNodeRepository(
+            by_canonical_key={"feature:오픈 api": node},
+            by_alias={"캐치업 오픈 api 결제": _node()},
+        ),
+        claims=FakeClaimRepository((_claim(),)),
+    )
+
+    with capture_logs() as logs:
+        result = query_claims_as_of(
+            workspace_id=WORKSPACE,
+            subject="feature:오픈 api",
+            at=AT,
+            uow=uow,
+        )
+
+    assert result.similar_candidates == ()
+    assert uow.knowledge_nodes.similarity_calls == []
+
+    entry = next(
+        log for log in logs if log["event"] == "knowledge_as_of_queried"
+    )
+    assert entry["similar_candidate_count"] == 0
+    assert entry["top_similarity_score"] is None
+
+
+def test_alias_match_skips_similarity_lookup() -> None:
+    """alias로 걸려도 유사 후보 조회는 일어나지 않는다."""
+    alias_node = _node()
+    uow = FakeUnitOfWork(
+        nodes=FakeNodeRepository(by_alias={"캐치업 오픈 api": alias_node}),
+        claims=FakeClaimRepository((_claim(),)),
+    )
+
+    result = query_claims_as_of(
+        workspace_id=WORKSPACE,
+        subject="  캐치업   오픈 API  ",
+        at=AT,
+        uow=uow,
+    )
+
+    assert result.similar_candidates == ()
+    assert uow.knowledge_nodes.similarity_calls == []
+
+
+def test_miss_returns_similar_candidates_without_deciding() -> None:
+    """정확 일치가 없으면 유사 후보만 동반한다. 확정은 하지 않는다."""
+    similar = _node(display_name="캐치업 오픈 API 결제")
+    uow = FakeUnitOfWork(
+        nodes=FakeNodeRepository(
+            by_alias={"캐치업 오픈 api 결제": similar},
+        ),
+        claims=FakeClaimRepository((_claim(),)),
+    )
+
+    with capture_logs() as logs:
+        result = query_claims_as_of(
+            workspace_id=WORKSPACE,
+            subject="캐치업 오픈 API",
+            at=AT,
+            uow=uow,
+        )
+
+    # 후보가 있어도 subject는 여전히 None이고 claim은 비어 있다.
+    assert result.subject is None
+    assert result.claims == ()
+    assert uow.knowledge_candidates.calls == []
+
+    assert len(result.similar_candidates) == 1
+    candidate = result.similar_candidates[0]
+    assert candidate.node_id == similar.id
+    assert candidate.display_name == "캐치업 오픈 API 결제"
+    assert candidate.entity_type == "feature"
+    assert candidate.score > 0.0
+
+    call = uow.knowledge_nodes.similarity_calls[0]
+    assert call["normalized_query"] == "캐치업 오픈 api"
+    assert call["threshold"] == SIMILARITY_THRESHOLD
+    assert call["limit"] == SIMILARITY_CANDIDATE_LIMIT
+
+    entry = next(
+        log for log in logs if log["event"] == "knowledge_as_of_queried"
+    )
+    assert entry["matched_by"] is None
+    assert entry["claim_count"] == 0
+    assert entry["similar_candidate_count"] == 1
+    assert entry["top_similarity_score"] == candidate.score
+
+
+def test_miss_without_similar_nodes_stays_empty() -> None:
+    """비슷한 것도 없으면 후보는 빈 튜플 그대로다."""
+    uow = FakeUnitOfWork(
+        nodes=FakeNodeRepository(by_alias={"완전히 다른 이름": _node()}),
+    )
+
+    result = query_claims_as_of(
+        workspace_id=WORKSPACE,
+        subject="캐치업 오픈 API",
+        at=AT,
+        uow=uow,
+    )
+
+    assert result.subject is None
+    assert result.similar_candidates == ()
+    assert uow.knowledge_nodes.similarity_calls != []
+
+
+def test_history_miss_returns_similar_candidates() -> None:
+    """history도 같은 규칙으로 유사 후보를 동반한다."""
+    similar = _node(display_name="캐치업 오픈 API 결제")
+    uow = FakeUnitOfWork(
+        nodes=FakeNodeRepository(
+            by_alias={"캐치업 오픈 api 결제": similar},
+        ),
+        claims=FakeClaimRepository((_claim(),)),
+    )
+
+    with capture_logs() as logs:
+        result = query_claims_history(
+            workspace_id=WORKSPACE,
+            subject="캐치업 오픈 API",
+            uow=uow,
+        )
+
+    assert result.subject is None
+    assert result.claims == ()
+    assert uow.knowledge_candidates.history_calls == []
+    assert [item.node_id for item in result.similar_candidates] == [similar.id]
+
+    entry = next(
+        log for log in logs if log["event"] == "knowledge_history_queried"
+    )
+    assert entry["similar_candidate_count"] == 1
+    assert entry["top_similarity_score"] == result.similar_candidates[0].score
+
+
+def test_history_exact_match_skips_similarity_lookup() -> None:
+    """history도 정확 일치면 유사 조회를 부르지 않는다."""
+    node = _node(canonical_key="feature:오픈 api")
+    uow = FakeUnitOfWork(
+        nodes=FakeNodeRepository(
+            by_canonical_key={"feature:오픈 api": node},
+            by_alias={"캐치업 오픈 api 결제": _node()},
+        ),
+        claims=FakeClaimRepository((_claim(),)),
+    )
+
+    result = query_claims_history(
+        workspace_id=WORKSPACE,
+        subject="feature:오픈 api",
+        uow=uow,
+    )
+
+    assert result.similar_candidates == ()
+    assert uow.knowledge_nodes.similarity_calls == []

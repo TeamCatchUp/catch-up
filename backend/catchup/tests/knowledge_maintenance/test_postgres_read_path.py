@@ -33,6 +33,12 @@ from catchup.db.models import Workspace
 from catchup.knowledge_maintenance.adapters.postgres.unit_of_work import (
     KnowledgeMaintenanceUnitOfWork,
 )
+from catchup.knowledge_maintenance.services.query_knowledge_as_of import (
+    query_claims_as_of,
+)
+from catchup.knowledge_maintenance.services.query_knowledge_as_of import (
+    query_claims_history,
+)
 
 T_JULY_10 = datetime(2026, 7, 10, tzinfo=timezone.utc)
 T_AUG_1 = datetime(2026, 8, 1, tzinfo=timezone.utc)
@@ -789,3 +795,130 @@ def test_history_predicate_filter(
             predicate="owner",
         )
         assert [claim.claim_id for claim in found] == [wanted]
+
+
+def test_as_of_miss_returns_real_bigm_candidates(
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+    session_factory: Callable[[], Session],
+    workspace_id: int,
+) -> None:
+    """정확 일치가 없으면 실제 bigm 후보를 동반해 돌려준다.
+
+    후보를 주더라도 subject는 여전히 None이고 claim은 비어 있다 —
+    유사도는 제시까지고 확정은 소비자 몫이다.
+    """
+    token = uuid.uuid4().hex[:8]
+
+    with session_factory() as session:
+        node_id = _entity_node(session, workspace_id, "야구공")
+        run_id = _extraction_run(session, workspace_id)
+        _claim(
+            session,
+            workspace_id,
+            run_id,
+            node_id=node_id,
+            status="accepted",
+            value="A",
+        )
+        session.commit()
+
+    with uow_factory() as uow:
+        uow.knowledge_nodes.add_alias(
+            workspace_id=workspace_id,
+            node_id=node_id,
+            alias=f"autographed baseball collection {token}",
+            normalized_alias=f"autographed baseball collection {token}",
+            source="extractor",
+        )
+        uow.commit()
+
+    result = query_claims_as_of(
+        workspace_id=workspace_id,
+        subject=f"Autographed Baseballs {token}",
+        at=T_AUG_1,
+        uow=uow_factory(),
+    )
+
+    assert result.subject is None
+    assert result.claims == ()
+    by_id = {item.node_id: item for item in result.similar_candidates}
+    assert node_id in by_id
+    assert by_id[node_id].display_name == "야구공"
+    assert by_id[node_id].entity_type == "feature"
+    assert by_id[node_id].score > 0.0
+
+
+def test_history_miss_returns_real_bigm_candidates(
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+    session_factory: Callable[[], Session],
+    workspace_id: int,
+) -> None:
+    """history 경로도 같은 fallback을 탄다."""
+    token = uuid.uuid4().hex[:8]
+
+    with session_factory() as session:
+        node_id = _entity_node(session, workspace_id, "야구공")
+        session.commit()
+
+    with uow_factory() as uow:
+        uow.knowledge_nodes.add_alias(
+            workspace_id=workspace_id,
+            node_id=node_id,
+            alias=f"autographed baseball collection {token}",
+            normalized_alias=f"autographed baseball collection {token}",
+            source="extractor",
+        )
+        uow.commit()
+
+    result = query_claims_history(
+        workspace_id=workspace_id,
+        subject=f"Autographed Baseballs {token}",
+        uow=uow_factory(),
+    )
+
+    assert result.subject is None
+    assert result.claims == ()
+    assert node_id in {item.node_id for item in result.similar_candidates}
+
+
+def test_exact_match_returns_no_candidates(
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+    session_factory: Callable[[], Session],
+    workspace_id: int,
+) -> None:
+    """alias 정확 일치로 걸리면 유사 후보를 붙이지 않는다."""
+    token = uuid.uuid4().hex[:8]
+    alias = f"autographed baseballs {token}"
+
+    with session_factory() as session:
+        node_id = _entity_node(session, workspace_id, "야구공")
+        neighbor = _entity_node(session, workspace_id, "이웃")
+        session.commit()
+
+    with uow_factory() as uow:
+        uow.knowledge_nodes.add_alias(
+            workspace_id=workspace_id,
+            node_id=node_id,
+            alias=alias,
+            normalized_alias=alias,
+            source="extractor",
+        )
+        uow.knowledge_nodes.add_alias(
+            workspace_id=workspace_id,
+            node_id=neighbor,
+            alias=f"autographed baseball collection {token}",
+            normalized_alias=f"autographed baseball collection {token}",
+            source="extractor",
+        )
+        uow.commit()
+
+    result = query_claims_as_of(
+        workspace_id=workspace_id,
+        subject=f"Autographed Baseballs {token}",
+        at=T_AUG_1,
+        uow=uow_factory(),
+    )
+
+    assert result.subject is not None
+    assert result.subject.node_id == node_id
+    assert result.similar_candidates == ()

@@ -3,8 +3,10 @@
 대상은 검색이 아니라 정확 매칭으로만 찾는다. canonical key가 먼저이고,
 없으면 정규화한 alias가 다음이다. canonical key는 identity 그 자체지만
 alias는 단서일 뿐이라, 둘이 같은 입력에 걸리면 identity가 이겨야
-하기 때문이다. 유사도 검색은 여기에 없다 — 읽기 경로가 어떤 노드를
-답했는지 재현 가능해야 하고, 근사 매칭은 그 성질을 깨뜨린다.
+하기 때문이다. 정확 매칭이 모두 빗나가면 이름이 비슷한 노드를
+후보로 함께 돌려주지만, 유사도는 후보 제시까지만 한다 — 확정은
+소비자 몫이라 이 서비스가 답한 노드는 여전히 정확 매칭의 결과뿐이고
+재현성은 그대로다.
 
 시점 판정은 이 서비스가 하지 않는다. 구간 규칙의 정의처는
 `domain.temporal.claim_valid_at`이고 reader의 SQL이 같은 규칙을
@@ -35,6 +37,13 @@ logger = get_logger(__name__)
 
 MATCHED_BY_CANONICAL_KEY = "canonical_key"
 MATCHED_BY_ALIAS = "alias"
+
+# 정확 매칭이 빗나갔을 때만 쓰는 후보 조회 기준이다. 문턱값을 낮게
+# 두는 이유는 오타나 부분 표기가 대개 낮은 점수로 떨어지기 때문이고,
+# 후보 수를 다섯으로 묶는 이유는 사람이 한눈에 고를 수 있는 양이기
+# 때문이다. 둘 다 매칭 기준이 아니라 제시 기준이다.
+SIMILARITY_THRESHOLD = 0.1
+SIMILARITY_CANDIDATE_LIMIT = 5
 
 
 class KnowledgeReadUnitOfWork(Protocol):
@@ -74,6 +83,28 @@ class MatchedSubject:
 
 
 @dataclass(frozen=True, slots=True)
+class SubjectCandidate:
+    """정확 매칭이 빗나갔을 때 함께 제시하는 유사 후보를 표현한다.
+
+    MatchedSubject와 달리 "이 노드가 답이다"라는 뜻이 아니다.
+    matched_by가 없는 것도 그래서다 — 어떤 방식으로도 매칭되지
+    않았기 때문이다.
+
+    Attributes:
+        node_id: 후보 entity 노드를 식별한다.
+        display_name: 사람이 알아볼 이름을 나타낸다.
+        entity_type: 그 노드의 entity 종류를 나타낸다.
+        score: 이름 유사도 점수를 나타낸다. 순위를 매기는 용도이고
+            절대값의 의미는 구현에 달려 있다.
+    """
+
+    node_id: uuid.UUID
+    display_name: str | None
+    entity_type: str | None
+    score: float
+
+
+@dataclass(frozen=True, slots=True)
 class AsOfQueryResult:
     """as-of 조회 한 번의 결과를 표현한다.
 
@@ -83,11 +114,15 @@ class AsOfQueryResult:
             거르지 않고 조회한 시각을 기록만 한다.
         claims: 그 시점에 참이었던 accepted claim을 담는다. history
             조회에서는 닫힌 accepted까지 함께 담는다.
+        similar_candidates: 정확 매칭이 빗나갔을 때만 채운다. 매칭에
+            성공하면 언제나 비어 있다 — 답이 정해진 자리에 근사
+            후보를 섞으면 소비자가 둘을 구별할 수 없기 때문이다.
     """
 
     subject: MatchedSubject | None
     as_of: datetime
     claims: tuple[AsOfClaim, ...]
+    similar_candidates: tuple[SubjectCandidate, ...] = ()
 
 
 def query_claims_as_of(
@@ -117,7 +152,13 @@ def query_claims_as_of(
         if node is None:
             claims: tuple[AsOfClaim, ...] = ()
             matched = None
+            similar = _find_similar_candidates(
+                workspace_id=workspace_id,
+                subject=subject,
+                uow=uow,
+            )
         else:
+            similar = ()
             claims = uow.knowledge_candidates.find_accepted_claims_as_of(
                 workspace_id=workspace_id,
                 subject_node_id=node.id,
@@ -143,8 +184,15 @@ def query_claims_as_of(
         as_of=as_of.isoformat(),
         predicate=predicate,
         claim_count=len(claims),
+        similar_candidate_count=len(similar),
+        top_similarity_score=similar[0].score if similar else None,
     )
-    return AsOfQueryResult(subject=matched, as_of=as_of, claims=claims)
+    return AsOfQueryResult(
+        subject=matched,
+        as_of=as_of,
+        claims=claims,
+        similar_candidates=similar,
+    )
 
 
 def query_claims_history(
@@ -176,7 +224,13 @@ def query_claims_history(
         if node is None:
             claims: tuple[AsOfClaim, ...] = ()
             matched = None
+            similar = _find_similar_candidates(
+                workspace_id=workspace_id,
+                subject=subject,
+                uow=uow,
+            )
         else:
+            similar = ()
             claims = uow.knowledge_candidates.find_accepted_claims_history(
                 workspace_id=workspace_id,
                 subject_node_id=node.id,
@@ -198,8 +252,15 @@ def query_claims_history(
         queried_at=queried_at.isoformat(),
         predicate=predicate,
         claim_count=len(claims),
+        similar_candidate_count=len(similar),
+        top_similarity_score=similar[0].score if similar else None,
     )
-    return AsOfQueryResult(subject=matched, as_of=queried_at, claims=claims)
+    return AsOfQueryResult(
+        subject=matched,
+        as_of=queried_at,
+        claims=claims,
+        similar_candidates=similar,
+    )
 
 
 def _resolve_subject(
@@ -224,3 +285,32 @@ def _resolve_subject(
         return node, MATCHED_BY_ALIAS
 
     return None, ""
+
+
+def _find_similar_candidates(
+    *,
+    workspace_id: int,
+    subject: str,
+    uow: KnowledgeReadUnitOfWork,
+) -> tuple[SubjectCandidate, ...]:
+    """이름이 비슷한 노드를 후보로만 모은다.
+
+    정확 매칭이 모두 빗나간 뒤에만 부른다. 여기서 나온 노드는 어떤
+    경우에도 subject로 승격하지 않는다 — 승격시키는 순간 읽기 경로가
+    근사 매칭이 되어 재현성이 깨지기 때문이다.
+    """
+    found = uow.knowledge_nodes.find_entity_candidates_by_similarity(
+        workspace_id=workspace_id,
+        normalized_query=normalize_name(subject),
+        threshold=SIMILARITY_THRESHOLD,
+        limit=SIMILARITY_CANDIDATE_LIMIT,
+    )
+    return tuple(
+        SubjectCandidate(
+            node_id=node.id,
+            display_name=node.display_name,
+            entity_type=node.entity_type,
+            score=score,
+        )
+        for node, score in found
+    )
