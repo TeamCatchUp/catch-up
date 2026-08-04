@@ -41,6 +41,25 @@ class KnowledgeNodeRepository(Protocol):
         """
         ...
 
+    def find_entity_candidates_by_similarity(
+        self,
+        *,
+        workspace_id: int,
+        normalized_query: str,
+        threshold: float,
+        limit: int,
+    ) -> list[tuple[KnowledgeNode, float]]:
+        """이름이 비슷한 active entity 노드를 점수와 함께 찾는다.
+
+        정확 일치가 실패했을 때 쓰는 fallback이다. alias 하나하나에
+        bigram 유사도를 매기고 노드마다 가장 높은 점수만 남긴다 —
+        alias가 많은 노드가 상위 후보를 독차지하지 않게 하기 위해서다.
+
+        threshold 이상인 것만, 점수 내림차순·node id 오름차순으로 최대
+        limit개를 준다. 흡수된(merged) 노드는 후보가 아니다.
+        """
+        ...
+
     def create_entity_node(
         self,
         *,

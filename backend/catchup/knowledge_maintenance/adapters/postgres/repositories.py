@@ -93,6 +93,7 @@ from catchup.knowledge_maintenance.domain.knowledge_candidate import (
 )
 from catchup.knowledge_maintenance.domain.knowledge_node import KnowledgeNode
 from catchup.knowledge_maintenance.domain.knowledge_node import NodeKind
+from catchup.knowledge_maintenance.domain.knowledge_node import NodeLifecycleState
 from catchup.knowledge_maintenance.domain.knowledge_node import resource_ref_for
 from catchup.knowledge_maintenance.domain.observation import NormalizedObservation
 from catchup.knowledge_maintenance.domain.observation import StoredObservation
@@ -460,6 +461,53 @@ class SqlAlchemyKnowledgeNodeRepository:
             .limit(1)
         )
         return knowledge_node_to_domain(row) if row is not None else None
+
+    def find_entity_candidates_by_similarity(
+        self,
+        *,
+        workspace_id: int,
+        normalized_query: str,
+        threshold: float,
+        limit: int,
+    ) -> list[tuple[KnowledgeNode, float]]:
+        """이름이 비슷한 active entity 노드를 점수와 함께 찾는다.
+
+        alias마다 bigm_similarity를 매기고 노드 단위 MAX로 접는다.
+        alias가 많은 노드가 같은 후보를 여러 줄 차지하면 상위 N이
+        노드 하나로 차 버리기 때문이다.
+
+        pg_bigm의 `=%` 연산자는 쓰지 않는다. 그 연산자의 판정 기준은
+        세션 전역 GUC인 `pg_bigm.similarity_limit`이라, 같은 호출이
+        세션 설정에 따라 다른 답을 준다. 호출자가 넘긴 threshold를
+        술어에 직접 써야 답이 호출 인자만으로 정해진다.
+        """
+        score = func.max(
+            func.bigm_similarity(
+                KnowledgeNodeAliasRow.normalized_alias,
+                normalized_query,
+            )
+        ).label("score")
+        rows = self._session.execute(
+            select(KnowledgeNodeRow, score)
+            .join(
+                KnowledgeNodeAliasRow,
+                KnowledgeNodeAliasRow.node_id == KnowledgeNodeRow.id,
+            )
+            .where(
+                KnowledgeNodeAliasRow.workspace_id == workspace_id,
+                KnowledgeNodeRow.workspace_id == workspace_id,
+                KnowledgeNodeRow.node_kind == NodeKind.ENTITY.value,
+                KnowledgeNodeRow.lifecycle_state
+                == NodeLifecycleState.ACTIVE.value,
+            )
+            .group_by(KnowledgeNodeRow.id)
+            .having(score >= threshold)
+            .order_by(score.desc(), KnowledgeNodeRow.id.asc())
+            .limit(limit)
+        ).all()
+        return [
+            (knowledge_node_to_domain(row), float(value)) for row, value in rows
+        ]
 
     def create_entity_node(
         self,

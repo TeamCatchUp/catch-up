@@ -9,6 +9,7 @@ from structlog.testing import capture_logs
 
 from catchup.knowledge_maintenance.domain.knowledge_node import KnowledgeNode
 from catchup.knowledge_maintenance.domain.knowledge_node import NodeKind
+from catchup.knowledge_maintenance.domain.knowledge_node import NodeLifecycleState
 from catchup.knowledge_maintenance.ports.knowledge_candidates import AsOfClaim
 from catchup.knowledge_maintenance.services.query_knowledge_as_of import (
     query_claims_as_of,
@@ -73,6 +74,7 @@ class FakeNodeRepository:
         self.by_alias = dict(by_alias or {})
         self.canonical_key_calls: list[str] = []
         self.alias_calls: list[str] = []
+        self.similarity_calls: list[dict] = []
 
     def get_entity_by_canonical_key(
         self,
@@ -93,6 +95,48 @@ class FakeNodeRepository:
         del workspace_id
         self.alias_calls.append(normalized_alias)
         return self.by_alias.get(normalized_alias)
+
+    def find_entity_candidates_by_similarity(
+        self,
+        *,
+        workspace_id: int,
+        normalized_query: str,
+        threshold: float,
+        limit: int,
+    ) -> list[tuple[KnowledgeNode, float]]:
+        """유사 후보 조회를 흉내 낸다. 점수 계산은 실물이 아니다.
+
+        실물은 pg_bigm의 bigram 유사도이고 여기서는 공백 토큰 겹침
+        비율이다. 점수의 절대값은 실 DB와 다르므로 서비스의 문턱값
+        판단을 이 fake로 검증하면 안 된다. 대신 실 DB가 보장하는
+        구조 규칙(노드 단위 MAX 1행, active만, threshold 이상,
+        점수 내림차순·node id 오름차순, limit)은 그대로 지킨다.
+        """
+        del workspace_id
+        self.similarity_calls.append(
+            {
+                "normalized_query": normalized_query,
+                "threshold": threshold,
+                "limit": limit,
+            }
+        )
+        query_tokens = set(normalized_query.split())
+        best: dict[uuid.UUID, tuple[KnowledgeNode, float]] = {}
+        for alias, node in self.by_alias.items():
+            if node.lifecycle_state is not NodeLifecycleState.ACTIVE:
+                continue
+            alias_tokens = set(alias.split())
+            union = query_tokens | alias_tokens
+            shared = len(query_tokens & alias_tokens)
+            score = shared / len(union) if union else 0.0
+            if score < threshold:
+                continue
+            found = best.get(node.id)
+            if found is None or score > found[1]:
+                best[node.id] = (node, score)
+
+        ranked = sorted(best.values(), key=lambda item: (-item[1], item[0].id))
+        return ranked[:limit]
 
 
 class FakeClaimRepository:

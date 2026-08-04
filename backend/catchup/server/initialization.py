@@ -33,6 +33,10 @@ HEAVY_INDICES = [
     CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_cmetadata_title_bigm_v2
     ON langchain_pg_embedding USING GIN ((lower(cmetadata ->> 'title')) gin_bigm_ops)
     """,
+    """
+    CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_knowledge_node_aliases_bigm
+    ON knowledge_node_aliases USING GIN (normalized_alias gin_bigm_ops)
+    """,
 ]
 
 # document 컬럼 전체에 걸린 인덱스 — PGBigmRetriever는 cmetadata 필드만 검색하므로 미사용
@@ -63,6 +67,7 @@ KS_HEAVY_INDEX_NAMES = ["idx_ks_body_bigm", "idx_ks_title_bigm"]
 _ALL_CONCURRENTLY_MANAGED_INDICES = [
     "idx_cmetadata_contextual_bigm_v2",
     "idx_cmetadata_title_bigm_v2",
+    "idx_knowledge_node_aliases_bigm",
     "idx_embedding_hnsw_v2",
     "idx_ks_body_bigm",
     "idx_ks_title_bigm",
@@ -346,7 +351,11 @@ async def ensure_pg_indices(orphan_cutoff: datetime.datetime) -> None:
             await conn.execute(f"DROP INDEX CONCURRENTLY IF EXISTS {index_name}")
             logger.info("obsolete_index_dropped", index_name=index_name)
 
-        heavy_index_names = ["idx_cmetadata_contextual_bigm_v2", "idx_cmetadata_title_bigm_v2"]
+        heavy_index_names = [
+            "idx_cmetadata_contextual_bigm_v2",
+            "idx_cmetadata_title_bigm_v2",
+            "idx_knowledge_node_aliases_bigm",
+        ]
         for index_name in heavy_index_names:
             row = await (await conn.execute(f"""
                 SELECT indisvalid FROM pg_index

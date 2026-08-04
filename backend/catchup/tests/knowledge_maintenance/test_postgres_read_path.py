@@ -1,7 +1,8 @@
-"""읽기 경로 SQL reader 2개를 실 PostgreSQL로 확인한다.
+"""읽기 경로 SQL reader를 실 PostgreSQL로 확인한다.
 
-as-of 구간 규칙과 alias 정확 일치 규칙은 파이썬이 아니라 SQL 술어 안에
-산다. fake로는 술어가 틀려도 드러나지 않으므로 실 DB에 넣어 본다.
+as-of 구간 규칙, alias 정확 일치 규칙, bigm 유사 후보 규칙은 파이썬이
+아니라 SQL 술어 안에 산다. fake로는 술어가 틀려도 드러나지 않고
+bigm_similarity 점수는 흉내조차 낼 수 없으므로 실 DB에 넣어 본다.
 """
 
 from __future__ import annotations
@@ -94,8 +95,17 @@ def uow_factory(
     )
 
 
-def _entity_node(session: Session, workspace_id: int, name: str) -> uuid.UUID:
-    """canonical entity 노드를 하나 만든다."""
+def _entity_node(
+    session: Session,
+    workspace_id: int,
+    name: str,
+    *,
+    merged_into: uuid.UUID | None = None,
+) -> uuid.UUID:
+    """canonical entity 노드를 하나 만든다.
+
+    merged_into를 주면 그 노드로 흡수된 merged 노드가 된다.
+    """
     node = NodeRow(
         id=uuid.uuid4(),
         workspace_id=workspace_id,
@@ -103,6 +113,8 @@ def _entity_node(session: Session, workspace_id: int, name: str) -> uuid.UUID:
         entity_type="feature",
         canonical_key=f"test:feature:{uuid.uuid4().hex}",
         display_name=name,
+        lifecycle_state="merged" if merged_into is not None else "active",
+        merged_into_node_id=merged_into,
     )
     session.add(node)
     session.flush()
@@ -275,6 +287,202 @@ def test_find_entity_by_normalized_alias_is_deterministic(
         )
         assert found is not None
         assert found.id == min(first, second)
+
+
+def test_find_entity_candidates_by_similarity(
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+    session_factory: Callable[[], Session],
+    workspace_id: int,
+) -> None:
+    """이름이 비슷한 active entity만 점수와 함께 돌려준다.
+
+    무관한 노드와 병합된 노드는 후보가 아니다. 병합된 노드를 주면
+    이미 흡수된 이름으로 되돌아가는 제안이 생긴다.
+    """
+    token = uuid.uuid4().hex[:8]
+    query = f"autographed baseballs {token}"
+
+    with session_factory() as session:
+        target = _entity_node(session, workspace_id, "야구공")
+        unrelated = _entity_node(session, workspace_id, "무관")
+        live = _entity_node(session, workspace_id, "흡수처")
+        merged = _entity_node(session, workspace_id, "병합됨", merged_into=live)
+        session.commit()
+
+    with uow_factory() as uow:
+        for node_id in (target, merged):
+            uow.knowledge_nodes.add_alias(
+                workspace_id=workspace_id,
+                node_id=node_id,
+                alias=f"autographed baseball collection {token}",
+                normalized_alias=f"autographed baseball collection {token}",
+                source="extractor",
+            )
+        uow.knowledge_nodes.add_alias(
+            workspace_id=workspace_id,
+            node_id=unrelated,
+            alias=f"quarterly revenue report {token}",
+            normalized_alias=f"quarterly revenue report {token}",
+            source="extractor",
+        )
+
+        found = uow.knowledge_nodes.find_entity_candidates_by_similarity(
+            workspace_id=workspace_id,
+            normalized_query=query,
+            threshold=0.3,
+            limit=10,
+        )
+
+    by_id = {node.id: score for node, score in found}
+    assert target in by_id
+    assert by_id[target] > 0.0
+    assert merged not in by_id
+    assert unrelated not in by_id
+
+
+def test_find_entity_candidates_by_similarity_honors_threshold(
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+    session_factory: Callable[[], Session],
+    workspace_id: int,
+) -> None:
+    """threshold보다 낮은 점수는 후보가 아니다."""
+    token = uuid.uuid4().hex[:8]
+
+    with session_factory() as session:
+        node_id = _entity_node(session, workspace_id, "야구공")
+        session.commit()
+
+    with uow_factory() as uow:
+        uow.knowledge_nodes.add_alias(
+            workspace_id=workspace_id,
+            node_id=node_id,
+            alias=f"autographed baseball collection {token}",
+            normalized_alias=f"autographed baseball collection {token}",
+            source="extractor",
+        )
+
+        found = uow.knowledge_nodes.find_entity_candidates_by_similarity(
+            workspace_id=workspace_id,
+            normalized_query=f"autographed baseballs {token}",
+            threshold=0.9,
+            limit=10,
+        )
+
+    assert node_id not in {node.id for node, _ in found}
+
+
+def test_find_entity_candidates_by_similarity_takes_max_per_node(
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+    session_factory: Callable[[], Session],
+    workspace_id: int,
+) -> None:
+    """한 노드에 alias가 여럿이면 가장 높은 점수 한 행만 준다.
+
+    alias 수만큼 같은 노드가 반복되면 상위 N 후보가 노드 하나로
+    차 버린다.
+    """
+    token = uuid.uuid4().hex[:8]
+    query = f"autographed baseballs {token}"
+
+    with session_factory() as session:
+        node_id = _entity_node(session, workspace_id, "야구공")
+        session.commit()
+
+    with uow_factory() as uow:
+        for alias in (
+            f"autographed baseballs {token}",
+            f"autographed baseball collection {token}",
+        ):
+            uow.knowledge_nodes.add_alias(
+                workspace_id=workspace_id,
+                node_id=node_id,
+                alias=alias,
+                normalized_alias=alias,
+                source="extractor",
+            )
+
+        found = uow.knowledge_nodes.find_entity_candidates_by_similarity(
+            workspace_id=workspace_id,
+            normalized_query=query,
+            threshold=0.3,
+            limit=10,
+        )
+
+    rows = [(node, score) for node, score in found if node.id == node_id]
+    assert len(rows) == 1
+    assert rows[0][1] == pytest.approx(1.0)
+
+
+def test_find_entity_candidates_by_similarity_is_ordered(
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+    session_factory: Callable[[], Session],
+    workspace_id: int,
+) -> None:
+    """점수 내림차순, 동점이면 node id 오름차순으로 준다."""
+    token = uuid.uuid4().hex[:8]
+    alias = f"autographed baseball collection {token}"
+
+    with session_factory() as session:
+        first = _entity_node(session, workspace_id, "A")
+        second = _entity_node(session, workspace_id, "B")
+        session.commit()
+
+    with uow_factory() as uow:
+        for node_id in (first, second):
+            uow.knowledge_nodes.add_alias(
+                workspace_id=workspace_id,
+                node_id=node_id,
+                alias=alias,
+                normalized_alias=alias,
+                source="extractor",
+            )
+
+        found = uow.knowledge_nodes.find_entity_candidates_by_similarity(
+            workspace_id=workspace_id,
+            normalized_query=f"autographed baseballs {token}",
+            threshold=0.3,
+            limit=10,
+        )
+
+    scores = [score for _, score in found]
+    assert scores == sorted(scores, reverse=True)
+    ours = [node.id for node, _ in found if node.id in {first, second}]
+    assert ours == sorted([first, second])
+
+
+def test_find_entity_candidates_by_similarity_respects_limit(
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+    session_factory: Callable[[], Session],
+    workspace_id: int,
+) -> None:
+    """limit보다 많은 후보를 돌려주지 않는다."""
+    token = uuid.uuid4().hex[:8]
+
+    with session_factory() as session:
+        node_ids = [
+            _entity_node(session, workspace_id, f"야구공 {index}")
+            for index in range(3)
+        ]
+        session.commit()
+
+    with uow_factory() as uow:
+        for node_id in node_ids:
+            uow.knowledge_nodes.add_alias(
+                workspace_id=workspace_id,
+                node_id=node_id,
+                alias=f"autographed baseball collection {token}",
+                normalized_alias=f"autographed baseball collection {token}",
+                source="extractor",
+            )
+
+        found = uow.knowledge_nodes.find_entity_candidates_by_similarity(
+            workspace_id=workspace_id,
+            normalized_query=f"autographed baseballs {token}",
+            threshold=0.3,
+            limit=2,
+        )
+
+    assert len(found) == 2
 
 
 def test_as_of_returns_interval_matching_accepted_only(
