@@ -9,9 +9,12 @@
 정답")을 그대로 옮겨 썼다. 그래서 이 값은 공식 리더보드 점수와 직접
 비교할 수 없다. 리포트가 그 사실을 매번 적는다.
 
-판정을 시작하기 전에 QA 산출물이 채점 대상 문항을 정확히 한 번씩 덮는지
-먼저 본다. 부분 결과에 점수를 매기면 분모가 남은 문항 수로 줄어, 중간에
-깨진 실행이 오히려 높은 정답률로 보인다.
+순서는 "선택 후 검사"다. 먼저 채점 대상 집합을 정하고, QA 산출물에서 그
+집합에 드는 행만 고른 다음, 고른 집합 안에서만 누락·중복을 본다. 부분
+결과에 점수를 매기면 분모가 남은 문항 수로 줄어 중간에 깨진 실행이 오히려
+높은 정답률로 보이기 때문이다. 반대로 완주 산출물에 `--limit`으로 앞
+N문항만 채점하는 것은 정상 사용이므로, 대상 밖 행은 오류가 아니라 "채점
+제외"로 세어 stdout과 리포트에 남긴다.
 
 읽지 못한 판정은 오답으로 세지 않고 error로 따로 센다. 못 읽은 응답을
 조용히 오답으로 접으면 점수가 낮아진 이유가 파이프라인인지 채점기인지
@@ -348,7 +351,7 @@ def check_question_coverage(
     *,
     label: str,
 ) -> None:
-    """채점 대상과 QA 산출물의 문항 집합이 정확히 같은지 확인한다.
+    """채점 대상과 고른 산출물 행의 문항 집합이 정확히 같은지 확인한다.
 
     QA가 중간에 깨진 실행은 앞쪽 문항의 결과만 남긴다. 그 파일을 그대로
     채점하면 분모가 남은 문항 수로 줄고, 못 푼 문항이 뒤쪽에 몰려 있으면
@@ -357,6 +360,11 @@ def check_question_coverage(
 
     그래서 판정을 한 번이라도 부르기 전에 막는다. judge를 돌린 뒤에
     알아채면 이미 쓴 토큰은 돌아오지 않는다.
+
+    `actual`은 이미 채점 대상으로 골라낸 행들의 식별자여야 한다.
+    `select_rows_to_grade`가 대상 밖 행을 먼저 빼고 부르므로 초과는
+    보통 일어나지 않지만, 다른 호출자가 거르지 않고 넘길 때를 대비해
+    검사는 남겨 둔다.
 
     Raises:
         SystemExit: 누락·중복·초과가 하나라도 있을 때 낸다.
@@ -383,7 +391,60 @@ def check_question_coverage(
     raise SystemExit(
         f"{label}가 채점 대상 {len(expected_ids)}문항과 어긋난다: "
         + ", ".join(problems)
-        + ". QA 러너를 같은 `--per-type`·`--limit`으로 다시 완주시킨다."
+        + ". QA 러너를 같은 `--per-type`으로 다시 완주시킨다."
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class GradingSelection:
+    """완주 산출물에서 골라낸 채점 대상 행과 제외 문항을 함께 담는다.
+
+    Attributes:
+        rows: 채점 대상 집합에 드는 산출물 행을 원래 순서대로 담는다.
+        excluded_ids: 대상 밖이라 채점하지 않은 문항 식별자를 담는다.
+            오류가 아니라 집계용이다.
+    """
+
+    rows: tuple[Mapping[str, Any], ...]
+    excluded_ids: tuple[str, ...]
+
+
+def select_rows_to_grade(
+    rows: Sequence[Mapping[str, Any]],
+    expected: Sequence[str],
+    *,
+    label: str,
+) -> GradingSelection:
+    """완주 산출물에서 채점 대상 문항의 행만 고르고 그 안을 검사한다.
+
+    선택이 검사보다 먼저다. 산출물 전체가 대상 집합과 같아야 한다고 보면
+    40문항을 완주한 뒤 `--limit 1`로 앞 한 문항만 채점하는 정상 사용이
+    "대상 밖 39건"으로 거절된다. 완주 산출물에 부분 채점을 거는 것은
+    비용 제어 수단이지 오류가 아니다.
+
+    반대로 고른 집합 안의 누락과 중복은 그대로 막는다. 그쪽은 분모를
+    줄이거나 부풀려 점수 자체를 틀리게 만들기 때문이다.
+
+    Raises:
+        SystemExit: 고른 집합에 누락이나 중복이 있을 때 낸다.
+    """
+    expected_ids = set(expected)
+    selected: list[Mapping[str, Any]] = []
+    excluded: set[str] = set()
+    for row in rows:
+        question_id = str(row.get("question_id") or "")
+        if question_id in expected_ids:
+            selected.append(row)
+        else:
+            excluded.add(question_id)
+    check_question_coverage(
+        expected,
+        [str(row.get("question_id") or "") for row in selected],
+        label=label,
+    )
+    return GradingSelection(
+        rows=tuple(selected),
+        excluded_ids=tuple(sorted(excluded)),
     )
 
 
@@ -739,8 +800,9 @@ class ReportInputs:
         contradiction_total: workspace 전체 모순 안건 수를 나타낸다.
         contradiction_decided: 그중 결정이 내려진 안건 수를 나타낸다.
         vocabulary_snapshots: 추출에 쓰인 어휘 스냅샷 목록을 담는다.
-        skipped_question_ids: 채점 서브셋에 없어 버린 결과 행의 식별자를
-            담는다. 정답률 분모에 들어가지 않은 문항이다.
+        excluded_question_ids: 채점 대상 밖이라 판정하지 않은 결과 행의
+            식별자를 담는다. 정답률 분모에 들어가지 않은 문항이며,
+            `--limit`으로 부분 채점하면 정상적으로 생긴다.
         manifest_path: 문항별 격리 실행이면 대응표 경로를 담고, 단일
             workspace 실행이면 None이다.
         input_price: 입력 토큰 백만 개당 단가를 나타낸다.
@@ -756,7 +818,7 @@ class ReportInputs:
     contradiction_total: int
     contradiction_decided: int
     vocabulary_snapshots: tuple[tuple[str, str, int], ...]
-    skipped_question_ids: tuple[str, ...] = ()
+    excluded_question_ids: tuple[str, ...] = ()
     manifest_path: Path | None = None
     input_price: float = DEFAULT_INPUT_PRICE
     output_price: float = DEFAULT_OUTPUT_PRICE
@@ -810,16 +872,19 @@ def render_report(inputs: ReportInputs) -> str:
     )
     lines.append("")
 
-    skipped = inputs.skipped_question_ids
-    if skipped:
+    excluded = inputs.excluded_question_ids
+    if excluded:
         lines.append(
-            f"주의: QA 결과 {len(skipped)}건이 채점 서브셋에 없어 판정 "
-            "없이 버려졌다. 위 분모에는 들어가지 않았으므로 결과 파일과 "
-            "`--per-type` 서브셋이 같은 실행에서 나온 것인지 확인하라."
+            f"채점 제외 {len(excluded)}건: QA 산출물에는 있으나 이번 채점 "
+            "대상 밖이라 판정하지 않았다. `--limit`이나 다른 `--per-type`"
+            "으로 완주 산출물의 일부만 채점하면 정상적으로 생기는 값이며, "
+            "위 분모에는 들어가지 않는다. 그럴 의도가 아니었다면 결과 "
+            "파일과 서브셋이 같은 실행에서 나온 것인지 확인하라. 위 QA "
+            "비용은 제외분까지 포함한 실행 전체 값이다."
         )
-        preview = ", ".join(f"`{qid}`" for qid in sorted(skipped)[:10])
-        suffix = " …" if len(skipped) > 10 else ""
-        lines.append(f"버린 문항: {preview}{suffix}")
+        preview = ", ".join(f"`{qid}`" for qid in sorted(excluded)[:10])
+        suffix = " …" if len(excluded) > 10 else ""
+        lines.append(f"채점 제외 문항: {preview}{suffix}")
         lines.append("")
 
     lines.append("## 유형별 정답률")
@@ -1079,7 +1144,11 @@ def main() -> int:
         "--limit",
         type=int,
         default=None,
-        help="채점할 문항 수를 앞에서부터 제한한다. 비용 제어용이다.",
+        help=(
+            "채점 대상을 서브셋 앞에서부터 N문항으로 줄인다. QA 산출물은 "
+            "완주본 그대로 두고 그중 이 N문항만 판정하며, 나머지는 "
+            "`채점 제외`로 집계한다. judge 비용 제어용이다."
+        ),
     )
     parser.add_argument("--per-type", type=int, default=10)
     parser.add_argument(
@@ -1125,24 +1194,27 @@ def main() -> int:
         raise SystemExit("채점할 문항이 없다.")
     questions = {question.question_id: question for question in subset}
 
-    # `--limit`은 결과가 아니라 채점 대상에 건다. QA 러너도 같은 순서의
-    # 문항 목록을 앞에서부터 자르므로, 두 러너가 같은 값을 받으면 두
-    # 집합은 정확히 같아야 한다.
+    # `--limit`은 산출물이 아니라 채점 대상에 건다. QA 산출물은 완주본
+    # 전체를 읽고 그중 대상 집합에 드는 행만 고른 뒤, 고른 집합 안에서만
+    # 누락·중복을 본다. 완주본에 부분 채점을 거는 것은 정상 사용이므로
+    # 대상 밖 행은 오류가 아니라 제외 집계로 남긴다.
     expected_ids = [question.question_id for question in subset]
-    results = read_jsonl(results_path)
-    trace_rows = read_jsonl(trace_path)
-    check_question_coverage(
+    result_selection = select_rows_to_grade(
+        read_jsonl(results_path),
         expected_ids,
-        [str(row.get("question_id") or "") for row in results],
         label=f"QA 결과({results_path.name})",
     )
-    check_question_coverage(
+    trace_selection = select_rows_to_grade(
+        read_jsonl(trace_path),
         expected_ids,
-        [str(row.get("question_id") or "") for row in trace_rows],
         label=f"QA trace({trace_path.name})",
     )
+    results = result_selection.rows
+    excluded_ids = sorted(
+        set(result_selection.excluded_ids) | set(trace_selection.excluded_ids)
+    )
 
-    traces = {str(row["question_id"]): row for row in trace_rows}
+    traces = {str(row["question_id"]): row for row in trace_selection.rows}
     qa_elapsed_ms = sum(
         float(row.get("elapsed_ms") or 0.0) for row in traces.values()
     )
@@ -1183,7 +1255,9 @@ def main() -> int:
         judge = bedrock_judge(service.get_llm())
 
         grades_path = args.results_dir / GRADES_FILENAME
-        skipped: list[str] = []
+        # 대상 밖 행은 이미 골라내고 들어왔다. `on_skip`은 그래도 걸어
+        # 둔다 — 선택이 뚫리면 조용히 분모만 줄어드는 대신 드러난다.
+        excluded: list[str] = list(excluded_ids)
         started = time.perf_counter()
         with grades_path.open("w", encoding="utf-8") as grades_file:
 
@@ -1206,7 +1280,7 @@ def main() -> int:
                 evidence=evidence,
                 judge=judge,
                 on_row=_record,
-                on_skip=skipped.append,
+                on_skip=excluded.append,
             )
         grade_elapsed_ms = (time.perf_counter() - started) * 1000
     finally:
@@ -1222,7 +1296,7 @@ def main() -> int:
         contradiction_total=diagnostics.contradiction_total,
         contradiction_decided=diagnostics.contradiction_decided,
         vocabulary_snapshots=diagnostics.vocabulary_snapshots,
-        skipped_question_ids=tuple(skipped),
+        excluded_question_ids=tuple(excluded),
         manifest_path=args.manifest if workspace_for is not None else None,
         input_price=args.input_price,
         output_price=args.output_price,
@@ -1273,11 +1347,11 @@ def main() -> int:
     )
     print(f"\n=== 채점 결과 ({scope}) ===")
     print(f"  정답 {correct}/{graded}  (미채점 {len(rows) - graded})")
-    if skipped:
+    if excluded:
         print(
-            f"  [경고] 채점 서브셋에 없어 버린 결과 {len(skipped)}건: "
-            + ", ".join(sorted(skipped)[:10])
-            + (" …" if len(skipped) > 10 else "")
+            f"  채점 제외 {len(excluded)}건(대상 밖): "
+            + ", ".join(sorted(excluded)[:10])
+            + (" …" if len(excluded) > 10 else "")
         )
     print(f"  {args.results_dir / GRADES_FILENAME}")
     print(f"  {report_path}")
