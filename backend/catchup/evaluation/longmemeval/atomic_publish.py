@@ -40,6 +40,8 @@ import uuid
 from collections.abc import Iterator
 from collections.abc import Sequence
 from contextlib import contextmanager
+from dataclasses import dataclass
+from dataclasses import field
 from pathlib import Path
 from typing import Any
 
@@ -51,6 +53,7 @@ __all__ = [
     "RUN_STATUS_COMPLETE",
     "RUN_STATUS_RUNNING",
     "RUN_TEMP_SUFFIX",
+    "StagedRun",
     "current_run_directory",
     "new_run_id",
     "owns_pointer",
@@ -208,13 +211,36 @@ def _warn_pointer_taken_over(
     )
 
 
+@dataclass(slots=True)
+class StagedRun:
+    """진행 중인 run 하나의 산출물 경로와 공개 결과를 담는다.
+
+    `taken_over`가 경고 출력과 별개로 존재하는 이유는, 포인터를 넘기지
+    못했다는 사실을 사람 눈이 아니라 호출한 코드가 읽어야 하기 때문이다.
+    경고만 찍고 조용히 성공으로 돌아가면 러너는 exit 0으로 끝나고, 그
+    출력을 믿은 채점기는 이 run이 아니라 남의 run을 읽는다.
+
+    Attributes:
+        run_id: 이번 실행을 남과 갈라놓는 ID를 나타낸다.
+        directory: 산출물이 놓인 이번 run의 디렉토리를 나타낸다.
+        paths: 요청한 순서 그대로의 산출물 경로들을 나타낸다.
+        taken_over: 더 최신 실행이 포인터를 가져가 이 run이 현재로
+            공개되지 못했는지를 나타낸다. 블록을 빠져나온 뒤에 읽는다.
+    """
+
+    run_id: str
+    directory: Path
+    paths: tuple[Path, ...]
+    taken_over: bool = field(default=False)
+
+
 @contextmanager
 def staged_outputs(
     output: Path,
     filenames: Sequence[str],
     *,
     run_id: str | None = None,
-) -> Iterator[tuple[Path, ...]]:
+) -> Iterator[StagedRun]:
     """산출물 묶음을 run 디렉토리에 쓰게 하고 완주했을 때만 공개한다.
 
     들어가면서 포인터를 이번 run의 `running`으로 바꾼다. 그 순간부터
@@ -240,16 +266,27 @@ def staged_outputs(
     실행이 밀리초 단위로 겹칠 일이 드물어 이 잔여 위험을 받아들인다.
     자동 스케줄러가 붙으면 잠금을 후속으로 넣는다.
 
+    포인터를 넘기지 못했을 때는 경고만 찍고 끝내지 않고 `taken_over`를
+    세워 그 사실을 호출한 쪽에 남긴다. 러너가 그것을 보고 non-zero로
+    끝내야, 자기 결과가 현재라고 믿고 채점을 이어 가는 일이 막힌다.
+
     Yields:
-        `filenames`와 같은 순서의 run 디렉토리 안 경로들을 내보낸다.
+        `filenames`와 같은 순서의 경로를 담은 `StagedRun`을 내보낸다.
+        블록을 빠져나온 뒤 `taken_over`로 공개 여부를 읽는다.
     """
     identifier = new_run_id() if run_id is None else run_id
     directory = run_directory(output, run_id=identifier)
     directory.mkdir(parents=True, exist_ok=True)
     write_pointer(output, run_id=identifier, status=RUN_STATUS_RUNNING)
-    yield tuple(directory / name for name in filenames)
+    staged = StagedRun(
+        run_id=identifier,
+        directory=directory,
+        paths=tuple(directory / name for name in filenames),
+    )
+    yield staged
     if not owns_pointer(output, run_id=identifier):
         pointer = read_pointer(output) or {}
+        staged.taken_over = True
         _warn_pointer_taken_over(
             output,
             run_id=identifier,

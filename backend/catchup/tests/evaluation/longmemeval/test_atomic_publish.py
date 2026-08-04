@@ -47,7 +47,8 @@ def test_the_bundle_becomes_current_only_after_the_block_finishes(
     tmp_path: Path,
 ) -> None:
     """본문이 끝나야 포인터가 그 run을 완주본으로 가리킨다."""
-    with staged_outputs(tmp_path, BUNDLE) as paths:
+    with staged_outputs(tmp_path, BUNDLE) as staged:
+        paths = staged.paths
         _write_bundle(paths, "done")
         with pytest.raises(SystemExit):
             current_run_directory(tmp_path)
@@ -61,8 +62,11 @@ def test_the_bundle_becomes_current_only_after_the_block_finishes(
 def test_a_failure_leaves_no_current_run(tmp_path: Path) -> None:
     """중간에 깨지면 완주본이 없다고 읽힌다."""
     with pytest.raises(RuntimeError):
-        with staged_outputs(tmp_path, BUNDLE) as paths:
-            paths[0].write_text('{"question_id": "q1"}\n', encoding="utf-8")
+        with staged_outputs(tmp_path, BUNDLE) as staged:
+            staged.paths[0].write_text(
+                '{"question_id": "q1"}\n',
+                encoding="utf-8",
+            )
             raise RuntimeError("두 번째 문항에서 Bedrock이 깨졌다")
 
     with pytest.raises(SystemExit) as excinfo:
@@ -77,9 +81,9 @@ def test_a_failure_does_not_republish_the_previous_run(tmp_path: Path) -> None:
     남겨 두면 채점기가 방금 실패한 실행의 결과라고 믿으면서 옛 점수를
     다시 읽는다. 실패했다는 정보는 어디에도 남지 않는다.
     """
-    with staged_outputs(tmp_path, BUNDLE) as paths:
-        _write_bundle(paths, "old")
-    old_directory = paths[0].parent
+    with staged_outputs(tmp_path, BUNDLE) as staged:
+        _write_bundle(staged.paths, "old")
+    old_directory = staged.directory
 
     with pytest.raises(RuntimeError):
         with staged_outputs(tmp_path, BUNDLE):
@@ -97,11 +101,11 @@ def test_a_failed_run_keeps_its_partial_files_for_diagnosis(
 ) -> None:
     """깨진 run의 부분 산출물은 자기 디렉토리에 그대로 남는다."""
     with pytest.raises(RuntimeError):
-        with staged_outputs(tmp_path, BUNDLE) as paths:
-            paths[0].write_text("partial", encoding="utf-8")
+        with staged_outputs(tmp_path, BUNDLE) as staged:
+            staged.paths[0].write_text("partial", encoding="utf-8")
             raise RuntimeError("적재 실패")
 
-    assert paths[0].read_text(encoding="utf-8") == "partial"
+    assert staged.paths[0].read_text(encoding="utf-8") == "partial"
 
 
 def test_interleaved_runs_never_mix_their_bundles(tmp_path: Path) -> None:
@@ -115,11 +119,11 @@ def test_interleaved_runs_never_mix_their_bundles(tmp_path: Path) -> None:
     """
     first = staged_outputs(tmp_path, BUNDLE, run_id="A")
     second = staged_outputs(tmp_path, BUNDLE, run_id="B")
-    first_paths = first.__enter__()
-    second_paths = second.__enter__()
+    first_staged = first.__enter__()
+    second_staged = second.__enter__()
 
-    _write_bundle(first_paths, "A")
-    _write_bundle(second_paths, "B")
+    _write_bundle(first_staged.paths, "A")
+    _write_bundle(second_staged.paths, "B")
     # B가 먼저 끝나고 A가 나중에 끝난다.
     second.__exit__(None, None, None)
     first.__exit__(None, None, None)
@@ -147,10 +151,10 @@ def test_an_older_success_never_hides_a_newer_failure(
     """
     first = staged_outputs(tmp_path, BUNDLE, run_id="A")
     second = staged_outputs(tmp_path, BUNDLE, run_id="B")
-    first_paths = first.__enter__()
+    first_staged = first.__enter__()
     second.__enter__()
 
-    _write_bundle(first_paths, "A")
+    _write_bundle(first_staged.paths, "A")
     first.__exit__(None, None, None)
     error = RuntimeError("B가 두 번째 문항에서 깨졌다")
     # 예외를 삼키지 않는다 — 호출한 쪽의 `with`가 그대로 다시 낸다.
@@ -172,12 +176,37 @@ def test_an_older_success_never_hides_a_newer_failure(
     assert "포인터를 넘기지 않는다" in captured.err
 
 
+def test_the_handle_says_whether_this_run_became_current(
+    tmp_path: Path,
+) -> None:
+    """포인터를 넘겼는지를 핸들이 호출한 쪽에 말해 준다.
+
+    경고 출력은 사람만 읽는다. 러너가 exit 코드를 정하려면 코드가 읽을
+    값이 있어야 한다 — 없으면 빼앗긴 run도 성공으로 끝난다.
+    """
+    first = staged_outputs(tmp_path, BUNDLE, run_id="A")
+    second = staged_outputs(tmp_path, BUNDLE, run_id="B")
+    first_staged = first.__enter__()
+    second_staged = second.__enter__()
+
+    _write_bundle(first_staged.paths, "A")
+    _write_bundle(second_staged.paths, "B")
+    second.__exit__(None, None, None)
+    first.__exit__(None, None, None)
+
+    assert first_staged.taken_over is True
+    assert second_staged.taken_over is False
+    assert first_staged.run_id == "A"
+    assert first_staged.directory == run_directory(tmp_path, run_id="A")
+    assert first_staged.paths[0].parent == first_staged.directory
+
+
 def test_the_pointer_names_the_run_it_points_at(tmp_path: Path) -> None:
     """포인터는 run_id와 완주 여부를 담은 파일 하나다."""
     run_id = new_run_id()
 
-    with staged_outputs(tmp_path, BUNDLE, run_id=run_id) as paths:
-        _write_bundle(paths, "done")
+    with staged_outputs(tmp_path, BUNDLE, run_id=run_id) as staged:
+        _write_bundle(staged.paths, "done")
 
     pointer = read_pointer(tmp_path)
     assert pointer == {"run_id": run_id, "status": RUN_STATUS_COMPLETE}
@@ -209,8 +238,8 @@ def test_a_missing_pointer_is_refused_instead_of_read_flat(
 
 def test_a_half_written_pointer_never_becomes_visible(tmp_path: Path) -> None:
     """포인터는 임시 파일에 다 쓴 뒤 원자적으로 교체된다."""
-    with staged_outputs(tmp_path, BUNDLE) as paths:
-        _write_bundle(paths, "done")
+    with staged_outputs(tmp_path, BUNDLE) as staged:
+        _write_bundle(staged.paths, "done")
 
     assert json.loads(pointer_path(tmp_path).read_text(encoding="utf-8"))
     leftovers = [

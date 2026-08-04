@@ -255,12 +255,15 @@ class QaRunSummary:
         abstained: 그중 거절로 닫은 문항 수를 나타낸다.
         usage: 실행 전체가 쓴 토큰 집계를 나타낸다.
         run_directory: 세 산출물이 놓인 이번 run의 디렉토리를 나타낸다.
+        published: 포인터가 이 run을 완주본으로 가리키게 됐는지를
+            나타낸다. 더 최신 실행이 포인터를 가져갔으면 False다.
     """
 
     questions: int
     abstained: int
     usage: UsageTotals
     run_directory: Path
+    published: bool
 
 
 def run_and_publish(
@@ -279,6 +282,10 @@ def run_and_publish(
     문항 하나가 깨지면 예외가 그대로 올라가고 포인터는 `running`에 멈춘다.
     부분 결과가 완주본으로 읽히면 채점기가 그 위에서 점수를 낸다 — 이
     함수의 존재 이유가 그 연결을 끊는 것이다.
+
+    전 문항을 답했더라도 더 최신 실행이 포인터를 가져갔으면 이 run은
+    현재가 아니다. 그 사실을 요약의 `published`로 넘겨 호출한 쪽이 성공과
+    구분하게 한다.
     """
     total = UsageTotals()
     abstained = 0
@@ -286,11 +293,8 @@ def run_and_publish(
     with staged_outputs(
         output,
         (RESULTS_FILENAME, TRACE_FILENAME, USAGE_FILENAME),
-    ) as (
-        results_temp,
-        trace_temp,
-        usage_temp,
-    ):
+    ) as staged:
+        results_temp, trace_temp, usage_temp = staged.paths
         with (
             results_temp.open("w", encoding="utf-8") as results_file,
             trace_temp.open("w", encoding="utf-8") as trace_file,
@@ -334,7 +338,8 @@ def run_and_publish(
         questions=len(outcomes),
         abstained=abstained,
         usage=total,
-        run_directory=results_temp.parent,
+        run_directory=staged.directory,
+        published=not staged.taken_over,
     )
 
 
@@ -457,6 +462,16 @@ def main() -> int:
     print(f"  run 디렉토리: {summary.run_directory}")
     print(f"    {RESULTS_FILENAME}, {TRACE_FILENAME}, {USAGE_FILENAME}")
     print(f"  포인터: {pointer_path(args.output)}")
+    if not summary.published:
+        # 문항은 다 답했지만 이 run은 현재가 아니다. exit 0으로 끝내면
+        # 사람이나 자동화가 이어서 채점을 돌리고, 그 채점은 이 run이
+        # 아니라 포인터를 가져간 다른 run을 읽는다.
+        print("  이 run은 현재로 공개되지 않았다 (더 최신 실행이 시작됨)")
+        print(
+            f"  결과는 {summary.run_directory}에 보존, "
+            "채점 대상은 다른 run이다"
+        )
+        return 1
     print(f"  채점: --results-dir {args.output} (포인터가 이 run을 가리킨다)")
     return 0
 

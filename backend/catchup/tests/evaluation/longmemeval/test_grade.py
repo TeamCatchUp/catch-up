@@ -425,7 +425,8 @@ def _write_qa_outputs(
     with staged_outputs(
         results_dir,
         (RESULTS_FILENAME, TRACE_FILENAME),
-    ) as (results_path, trace_path):
+    ) as staged:
+        results_path, trace_path = staged.paths
         results_path.write_text(
             "".join(
                 json.dumps({"question_id": qid, "hypothesis": hypothesis})

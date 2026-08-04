@@ -5,6 +5,10 @@
 못 푼 문항이 뒤쪽에 몰린 실행일수록 점수가 높아진다. 그래서 "전 문항
 성공 뒤에만 포인터가 이 run을 가리킨다"를 러너 수준에서 고정한다.
 
+전 문항을 답했더라도 더 최신 실행이 포인터를 가져갔으면 이 run은 현재가
+아니다. 그때 CLI가 exit 0과 "포인터가 이 run을 가리킨다"를 내면 그 출력을
+믿은 사람이나 자동화가 남의 run을 채점한다. 그 경로도 여기서 막는다.
+
 DB도 LLM도 부르지 않는다.
 """
 
@@ -18,7 +22,11 @@ from pathlib import Path
 
 import pytest
 
+from catchup.evaluation.longmemeval import run_qa
+from catchup.evaluation.longmemeval.atomic_publish import RUN_STATUS_RUNNING
 from catchup.evaluation.longmemeval.atomic_publish import current_run_directory
+from catchup.evaluation.longmemeval.atomic_publish import read_pointer
+from catchup.evaluation.longmemeval.atomic_publish import write_pointer
 from catchup.evaluation.longmemeval.dataset import OracleQuestion
 from catchup.evaluation.longmemeval.qa_service import AnswerResult
 from catchup.evaluation.longmemeval.qa_service import KnowledgeLookup
@@ -26,6 +34,7 @@ from catchup.evaluation.longmemeval.qa_service import SubjectResult
 from catchup.evaluation.longmemeval.run_qa import RESULTS_FILENAME
 from catchup.evaluation.longmemeval.run_qa import TRACE_FILENAME
 from catchup.evaluation.longmemeval.run_qa import USAGE_FILENAME
+from catchup.evaluation.longmemeval.run_qa import QaRunSummary
 from catchup.evaluation.longmemeval.run_qa import run_and_publish
 from catchup.evaluation.longmemeval.usage import UsageTotals
 from catchup.knowledge_maintenance.ports.knowledge_candidates import AsOfClaim
@@ -150,3 +159,124 @@ def test_a_failed_question_publishes_nothing(tmp_path: Path) -> None:
     assert len(answered) == 2
     with pytest.raises(SystemExit):
         current_run_directory(tmp_path)
+
+
+def test_a_run_that_lost_the_pointer_reports_it_to_its_caller(
+    tmp_path: Path,
+) -> None:
+    """포인터를 빼앗긴 run은 요약에서 공개 실패를 말한다.
+
+    경고 출력만으로는 부족하다. 호출한 쪽이 읽을 값이 없으면 러너는
+    성공으로 돌아가고, 그 출력을 믿은 채점기가 남의 run을 읽는다.
+    """
+
+    def _answer(*, question, question_date, claims_context) -> AnswerResult:
+        # 첫 문항을 답하는 사이에 더 최신 실행이 포인터를 가져간다.
+        write_pointer(tmp_path, run_id="newer", status=RUN_STATUS_RUNNING)
+        return AnswerResult(answer="Acme.", usage=UsageTotals(calls=1))
+
+    summary = _run(tmp_path, _answer)
+
+    assert summary.published is False
+    assert read_pointer(tmp_path) == {
+        "run_id": "newer",
+        "status": RUN_STATUS_RUNNING,
+    }
+    # 이 run의 산출물 자체는 자기 디렉토리에 그대로 남는다.
+    assert (summary.run_directory / RESULTS_FILENAME).exists()
+
+
+class _FakeLlmService:
+    """모델을 부르지 않는 LLM 서비스 대역이다."""
+
+    def get_llm(self) -> object:
+        """모델 자리에 놓을 아무 객체나 돌려준다."""
+        return object()
+
+
+class _FakeEngine:
+    """dispose만 받는 엔진 대역이다."""
+
+    def dispose(self) -> None:
+        """정리할 것이 없다."""
+
+
+def _run_main(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    *,
+    published: bool,
+) -> int:
+    """DB·LLM을 대역으로 갈아 끼운 채 CLI 진입점을 부른다."""
+    oracle = tmp_path / "oracle.json"
+    oracle.write_text("[]", encoding="utf-8")
+    output = tmp_path / "out"
+    summary = QaRunSummary(
+        questions=2,
+        abstained=0,
+        usage=UsageTotals(calls=2),
+        run_directory=output / "runs" / "A",
+        published=published,
+    )
+    monkeypatch.setattr(run_qa, "load_oracle", lambda path: ())
+    monkeypatch.setattr(
+        run_qa,
+        "select_subset",
+        lambda questions, per_type: [_question("q-a")],
+    )
+    monkeypatch.setattr(
+        run_qa,
+        "get_llm_service",
+        lambda **kwargs: _FakeLlmService(),
+    )
+    monkeypatch.setattr(
+        run_qa,
+        "bedrock_extract_subjects",
+        lambda llm: _extract,
+    )
+    monkeypatch.setattr(run_qa, "bedrock_answer", lambda llm: None)
+    monkeypatch.setattr(run_qa, "create_engine", lambda url: _FakeEngine())
+    monkeypatch.setattr(run_qa, "sessionmaker", lambda **kwargs: None)
+    monkeypatch.setattr(run_qa, "run_and_publish", lambda *a, **kw: summary)
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "run_qa",
+            "--output",
+            str(output),
+            "--manifest",
+            str(tmp_path / "no-manifest.json"),
+            "--oracle-path",
+            str(oracle),
+        ],
+    )
+    return run_qa.main()
+
+
+def test_the_cli_fails_loudly_when_the_pointer_was_taken_over(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """포인터를 빼앗기면 exit 1로 끝나고 채점 안내를 내지 않는다."""
+    code = _run_main(monkeypatch, tmp_path, published=False)
+
+    captured = capsys.readouterr()
+    assert code == 1
+    assert "현재로 공개되지 않았다" in captured.out
+    assert "채점 대상은 다른 run이다" in captured.out
+    assert "포인터가 이 run을 가리킨다" not in captured.out
+
+
+def test_the_cli_still_points_at_a_published_run(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """정상 완주는 그대로 exit 0과 채점 안내로 끝난다."""
+    code = _run_main(monkeypatch, tmp_path, published=True)
+
+    captured = capsys.readouterr()
+    assert code == 0
+    assert "포인터가 이 run을 가리킨다" in captured.out
+    assert "현재로 공개되지 않았다" not in captured.out
