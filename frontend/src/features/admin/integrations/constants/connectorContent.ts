@@ -25,15 +25,15 @@ export interface ConnectorContent {
 export const CONNECTOR_CATEGORIES = ['커뮤니케이션', '문서 · 지식', '개발 · 이슈 관리'] as const;
 
 /*
- * TODO(copy): Jira · Github · Confluence 의 intro / sampleQuestions / scope /
- * included / excluded 는 Figma에 연동 전 상세 프레임이 없어 Slack 값을 복제했다.
+ * Jira · Confluence · Github · 채널톡 카피는 Confluence "커넥터 연동 안내 문구"
+ * (CU 스페이스, pageId 157941761, 2026-08-04 판)를 원문 그대로 옮겼다.
+ * Slack만 그 문서에 없어 Figma `16922:134092` 실측값을 유지한다.
  *
- * 복제한 값에는 Slack 전용 어휘가 있다 — "DM · 그룹 DM", "봇을 초대한 비공개 채널",
- * "스레드 안의 답글". 다른 도구 화면에 그대로 나가면 사실과 다른 데이터 범위 안내가 된다.
- * 배포 전 카피 확정이 필요하다. 스펙 §8 결정 #4 참조.
+ * 원문과 다르게 적용한 것 두 가지뿐이다:
+ *   - scope 라벨 "언제, 어떻게" → "언제·어떻게" (Slack Figma 라벨 표기를 따름)
+ *   - 예시 질문은 기존 렌더 형식대로 따옴표로 감싼다
  *
- * headerDescription 은 도구별로 분리했다(아래 *_HEADER_DESCRIPTION). 헤더는 연동 전·후
- * 양쪽에 노출돼서 Slack 문구가 채널톡 상세에 그대로 찍히는 게 눈에 띄었다.
+ * headerDescription 은 문서에 없다 — 도구별 초안(아래 *_HEADER_DESCRIPTION)을 유지한다.
  */
 const SLACK_SCOPE: readonly ConnectorScopeRow[] = [
   { label: '무엇을', value: '메시지 · 스레드 · 답글 (선택한 채널의 대화)' },
@@ -79,41 +79,128 @@ const CONFLUENCE_HEADER_DESCRIPTION = '어느 문서에 있었는지까지 같�
 const JIRA_HEADER_DESCRIPTION = '왜 이렇게 하기로 했는지, 이슈가 기억하고 있어요';
 const GITHUB_HEADER_DESCRIPTION = 'PR과 리뷰에 오간 이야기까지 검색됩니다';
 
-/*
- * 채널톡 카피. Figma에 연동 전 상세 프레임이 없어 초안이다 — 다만 Slack 값을 그대로
- * 두는 것보다는 낫다. Slack 복제본은 "DM · 그룹 DM", "봇을 초대한 비공개 채널"처럼
- * 채널톡에 없는 개념을 데이터 범위 안내로 내보내고 있었다.
- *
- * 채널톡의 연결 단위는 "채널"(고객사 워크스페이스)이고 채널마다 액세스 키 등록이
- * 선행이다 — (F) 채널 연결 관리 스텝이 그것이다. scope / excluded 문구는 그 전제를 따랐다.
- */
-const CHANNEL_TALK_SCOPE: readonly ConnectorScopeRow[] = [
-  { label: '무엇을', value: '고객 상담 대화 · 매니저 답변 (선택한 채널의 상담 이력)' },
-  { label: '어디까지', value: '내가 연결한 채널만. 채널마다 액세스 키를 등록한 뒤' },
-  { label: '언제·어떻게', value: '연결 시 지난 상담 1차 동기화 → 이후 새 상담 자동 반영' },
-  { label: '누가 볼 수 있나', value: '워크스페이스 멤버 (원본 채널 접근 범위를 따름)' },
+// ─── Jira ───
+
+const JIRA_INTRO =
+  '완료된 이슈는 누구도 다시 열어보지 않아요. 하지만 왜 그렇게 결정했고 어떻게 해결했는지는 전부 그 안에 남아 있죠. 프로젝트를 동기화해두면, 필요할 때 다시 불러올 수 있어요.';
+
+const JIRA_SAMPLE_QUESTIONS = [
+  '"이 기능 왜 보류됐었지?"',
+  '"그 버그, 전에도 리포트된 적 있어?"',
+  '"지난 스프린트에서 안 끝난 이슈 뭐야?"',
+] as const;
+
+const JIRA_SCOPE: readonly ConnectorScopeRow[] = [
+  { label: '무엇을', value: '이슈, 댓글, 상태 변경 이력 (선택한 프로젝트의 작업 기록)' },
+  { label: '어디까지', value: '내가 고른 프로젝트만. 연동 계정에 접근 권한이 있는 프로젝트만 선택할 수 있어요' },
+  { label: '언제·어떻게', value: '연결 시 기존 이슈 1차 동기화 → 이후 새 이슈와 변경 사항 자동 반영' },
+  { label: '누가 볼 수 있나', value: '워크스페이스 멤버 (원본 프로젝트의 접근 권한을 따름)' },
 ];
 
-const CHANNEL_TALK_SAMPLE_QUESTIONS = [
-  '"환불 문의는 보통 어떻게 안내했지?"',
-  '"이번 주에 가장 많이 들어온 문의가 뭐야?"',
-  '"이 오류를 문의한 고객에게 뭐라고 답했지?"',
+const JIRA_INCLUDED = [
+  '선택한 프로젝트의 이슈와 댓글',
+  '이슈의 상태와 담당자 변경 이력',
+  '에픽–하위 이슈의 연결 관계',
+  '스프린트와 백로그의 작업 목록',
 ] as const;
 
-const CHANNEL_TALK_INCLUDED = [
-  '연결한 채널의 고객 상담 대화',
-  '상담에 달린 매니저 답변 · 후속 대응',
-  '상담이 오간 순서와 맥락',
+const JIRA_EXCLUDED = [
+  '선택하지 않은 프로젝트',
+  '연동 계정에 접근 권한이 없는 프로젝트',
+  '첨부파일 원본 — 이슈 본문과 댓글의 텍스트를 읽어요',
+  '개인 필터와 보드 설정',
 ] as const;
 
-const CHANNEL_TALK_EXCLUDED = [
-  '팀 채팅 · 매니저 간 DM — 고객 상담만 읽어요',
-  '액세스 키를 등록하지 않은 채널',
-  '상담에 첨부된 파일의 내용',
+// ─── Confluence ───
+
+const CONFLUENCE_INTRO =
+  '문서는 계속 쌓이는데, 어떤 게 최신이고 어디에 있는지는 아무도 정확히 모릅니다. 정리한 사람이 떠나면 지식도 함께 사라져요. 컨플루언스 스페이스를 동기화해두면, 필요할 때 다시 불러올 수 있어요.';
+
+const CONFLUENCE_SAMPLE_QUESTIONS = [
+  '"온보딩 가이드 최신 버전 어디 있어?"',
+  '"이 정책, 언제 어떻게 바뀌었지?"',
+  '"그때 회의록에서 결정 근거 찾아줘"',
 ] as const;
+
+const CONFLUENCE_SCOPE: readonly ConnectorScopeRow[] = [
+  { label: '무엇을', value: '페이지, 댓글, 페이지 계층 구조 (선택한 스페이스의 문서)' },
+  { label: '어디까지', value: '내가 고른 스페이스만. 열람 제한이 걸린 페이지는 연동 계정의 권한을 따라요' },
+  { label: '언제·어떻게', value: '연결 시 기존 페이지 1차 동기화 → 이후 수정되거나 새로 만든 페이지 자동 반영' },
+  { label: '누가 볼 수 있나', value: '워크스페이스 멤버 (원본 스페이스의 공개 범위를 따름)' },
+];
+
+const CONFLUENCE_INCLUDED = [
+  '선택한 스페이스의 페이지와 하위 페이지',
+  '발행된 페이지, 초안(Draft), 휴지통 페이지',
+  '페이지에 달린 댓글',
+  '페이지 간 계층과 링크 관계',
+] as const;
+
+const CONFLUENCE_EXCLUDED = [
+  '선택하지 않은 스페이스',
+  '첨부파일 원본 — 페이지 본문과 댓글의 텍스트를 읽어요',
+  '열람 제한으로 연동 계정이 볼 수 없는 페이지',
+  '페이지 작성과 수정 — 읽기 전용으로 동작해요',
+] as const;
+
+// ─── Github ───
+
+const GITHUB_INTRO =
+  '코드에는 "왜"가 없습니다. 왜 이렇게 구현했는지는 PR 리뷰와 이슈 논의에 있는데, 머지되는 순간 아무도 다시 읽지 않아요. 중요한 리포지토리만 동기화해두면, 필요할 때 다시 불러올 수 있어요.';
+
+const GITHUB_SAMPLE_QUESTIONS = [
+  '"이 로직, 왜 이렇게 바꿨었지?"',
+  '"그 버그 어떤 PR에서 고쳤어?"',
+  '"이 모듈 최근에 어떤 변경이 있었어?"',
+] as const;
+
+const GITHUB_SCOPE: readonly ConnectorScopeRow[] = [
+  { label: '무엇을', value: '이슈, PR, 리뷰 코멘트 (선택한 리포지토리의 개발 기록)' },
+  { label: '어디까지', value: '내가 고른 리포지토리만. 프라이빗 리포는 앱 설치 시 접근을 허용한 것만' },
+  { label: '언제·어떻게', value: '연결 시 기존 이슈와 PR 1차 동기화 → 이후 새 활동 자동 반영' },
+  { label: '누가 볼 수 있나', value: '워크스페이스 멤버 (원본 리포지토리의 접근 권한을 따름)' },
+];
+
+const GITHUB_INCLUDED = [
+  '선택한 리포의 이슈, PR, 리뷰 코멘트',
+  'PR의 변경 요약과 커밋 메시지',
+  '접근을 허용한 프라이빗 리포',
+  '이슈와 PR의 라벨, 상태 이력',
+] as const;
+
+const GITHUB_EXCLUDED = [
+  '선택하지 않은 리포지토리',
+  '접근을 허용하지 않은 프라이빗 리포',
+  '코드 수정과 푸시 — 읽기 전용으로만 동작해요',
+] as const;
+
+// ─── 채널톡 ───
 
 const CHANNEL_TALK_INTRO =
-  '고객이 이미 물어본 것, 우리가 이미 답한 것이 상담 이력 아래로 쌓입니다. 필요한 채널만 동기화해두면 같은 질문에 매번 처음부터 찾지 않아도 돼요.';
+  '상담은 종료돼도 고객의 목소리는 반복됩니다. 같은 질문, 같은 요구가 매일 새 상담으로 다시 들어와요. 상담을 동기화해두면, 흩어진 문의를 고객별, 주제별로 다시 불러올 수 있어요.';
+
+const CHANNEL_TALK_SAMPLE_QUESTIONS = [
+  '"이 고객사, 전에 뭐 문의했었지?"',
+  '"이번 주 가장 많이 들어온 문의 뭐야?"',
+  '"이 기능 요청한 고객이 어디어디야?"',
+] as const;
+
+const CHANNEL_TALK_SCOPE: readonly ConnectorScopeRow[] = [
+  { label: '무엇을', value: '고객 상담 대화와 상담 태그 (연결한 채널의 상담 기록)' },
+  { label: '어디까지', value: '연결한 채널톡 채널만. 고객 상담 대화를 읽어요 — 팀챗 등 내부 대화는 읽지 않아요' },
+  { label: '언제·어떻게', value: '연결 시 과거 상담 1차 동기화 → 이후 새 상담 자동 반영' },
+  // 원문 그대로다 — "위키 권한 설정"이 CatchUp 어휘와 맞는지는 문서 쪽에 확인 필요
+  { label: '누가 볼 수 있나', value: '워크스페이스 멤버 (위키 권한 설정을 따름)' },
+];
+
+const CHANNEL_TALK_INCLUDED = [
+  '상담 대화 내용 — 진행 중이거나 종료된 상담 모두',
+  '연결 시점 이전의 과거 상담',
+  '고객사별 문의 이력 타임라인과 상담 태그',
+  '문의에서 이어지는 요구, 버그 신호',
+] as const;
+
+const CHANNEL_TALK_EXCLUDED = ['팀챗 등 내부 대화 — 고객과의 상담만 읽어요'] as const;
 
 /** 커넥터별 카탈로그·상세 문구. Figma 16922:134207 · 16922:134092 실측값 */
 export const CONNECTOR_CONTENT: Record<IntegrationService, ConnectorContent> = {
@@ -146,11 +233,11 @@ export const CONNECTOR_CONTENT: Record<IntegrationService, ConnectorContent> = {
     category: '문서 · 지식',
     catalogDescription: '위키·기획 문서에서 근거와 함께 답 찾기',
     headerDescription: CONFLUENCE_HEADER_DESCRIPTION,
-    intro: SLACK_INTRO, // TODO(copy)
-    sampleQuestions: SLACK_SAMPLE_QUESTIONS, // TODO(copy)
-    scope: SLACK_SCOPE, // TODO(copy)
-    included: SLACK_INCLUDED, // TODO(copy)
-    excluded: SLACK_EXCLUDED, // TODO(copy)
+    intro: CONFLUENCE_INTRO,
+    sampleQuestions: CONFLUENCE_SAMPLE_QUESTIONS,
+    scope: CONFLUENCE_SCOPE,
+    included: CONFLUENCE_INCLUDED,
+    excluded: CONFLUENCE_EXCLUDED,
     guideLabel: 'Confluence 연동 가이드 보기',
   },
   jira: {
@@ -158,11 +245,11 @@ export const CONNECTOR_CONTENT: Record<IntegrationService, ConnectorContent> = {
     category: '개발 · 이슈 관리',
     catalogDescription: '이슈에 흩어진 작업 맥락과 결정의 이유 찾기',
     headerDescription: JIRA_HEADER_DESCRIPTION,
-    intro: SLACK_INTRO, // TODO(copy)
-    sampleQuestions: SLACK_SAMPLE_QUESTIONS, // TODO(copy)
-    scope: SLACK_SCOPE, // TODO(copy)
-    included: SLACK_INCLUDED, // TODO(copy)
-    excluded: SLACK_EXCLUDED, // TODO(copy)
+    intro: JIRA_INTRO,
+    sampleQuestions: JIRA_SAMPLE_QUESTIONS,
+    scope: JIRA_SCOPE,
+    included: JIRA_INCLUDED,
+    excluded: JIRA_EXCLUDED,
     guideLabel: 'Jira 연동 가이드 보기',
   },
   github: {
@@ -170,11 +257,11 @@ export const CONNECTOR_CONTENT: Record<IntegrationService, ConnectorContent> = {
     category: '개발 · 이슈 관리',
     catalogDescription: 'PR·이슈·코드에 숨은 맥락까지 검색',
     headerDescription: GITHUB_HEADER_DESCRIPTION,
-    intro: SLACK_INTRO, // TODO(copy)
-    sampleQuestions: SLACK_SAMPLE_QUESTIONS, // TODO(copy)
-    scope: SLACK_SCOPE, // TODO(copy)
-    included: SLACK_INCLUDED, // TODO(copy)
-    excluded: SLACK_EXCLUDED, // TODO(copy)
+    intro: GITHUB_INTRO,
+    sampleQuestions: GITHUB_SAMPLE_QUESTIONS,
+    scope: GITHUB_SCOPE,
+    included: GITHUB_INCLUDED,
+    excluded: GITHUB_EXCLUDED,
     guideLabel: 'Github 연동 가이드 보기',
   },
 };
