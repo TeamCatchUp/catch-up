@@ -267,7 +267,13 @@ def _compile_artifacts(
     vocabulary: ExtractionVocabulary,
     limit: int,
 ) -> StepOutcome:
-    """모든 entity의 카드를 컴파일해 변경안으로 올린다."""
+    """모든 entity의 카드를 컴파일해 변경안으로 올린다.
+
+    멱등 키가 이미 결정된 변경안과 부딪힌 노드는 컴파일러가 건너뛰고
+    충돌로 센다. 그 entity의 새 카드는 만들어지지 않으므로 실패로 올려
+    보낸다 — 로그에만 남기면 exit 0으로 끝나 오케스트레이터가 카드 빠진
+    workspace를 완료로 기록한다.
+    """
     result = compile_entity_artifacts(
         uow,
         workspace_id=workspace_id,
@@ -283,7 +289,8 @@ def _compile_artifacts(
         conflicted=result.proposals_conflicted,
     )
     return StepOutcome(
-        done=result.proposals_created + result.proposals_revived
+        done=result.proposals_created + result.proposals_revived,
+        failed=result.proposals_conflicted,
     )
 
 
@@ -351,6 +358,7 @@ def report_counts(counts: AdjudicationCounts) -> int:
     print(f"  병합 승인 실패 {counts.merges_failed}")
     print(f"  적용 실패 {counts.mutations_failed}")
     print(f"  모순 판정 실패 {counts.contradictions_failed}")
+    print(f"  카드 컴파일 충돌 {counts.compilations_failed}")
     print(f"  카드 승인 실패 {counts.artifacts_failed}")
     print(
         f"  합계 {counts.failures}건이 계류로 남았다. "

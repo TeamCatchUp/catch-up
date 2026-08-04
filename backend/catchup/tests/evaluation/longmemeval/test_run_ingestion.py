@@ -36,8 +36,16 @@ from catchup.evaluation.longmemeval.run_ingestion import ingest_eval_subset
 from catchup.evaluation.longmemeval.workspace_manifest import WORKSPACE_NAME_MAX_LENGTH
 from catchup.evaluation.longmemeval.workspace_manifest import assign_workspaces
 from catchup.evaluation.longmemeval.workspace_manifest import manifest_invalidated_path
-from catchup.evaluation.longmemeval.workspace_manifest import manifest_temp_path
 from catchup.evaluation.longmemeval.workspace_manifest import write_manifest
+
+
+def _staged(manifest: Path) -> list[Path]:
+    """아직 공개되지 않은 임시 manifest를 모은다.
+
+    임시 경로에는 실행 ID가 붙으므로 이름을 미리 알 수 없다. 같은 경로로
+    겹쳐 도는 실행이 서로의 파일을 덮지 않게 하려고 그렇게 만들었다.
+    """
+    return sorted(manifest.parent.glob(f"{manifest.name}.tmp.*"))
 
 
 def test_bootstrap_into_the_eval_workspace_is_refused() -> None:
@@ -224,7 +232,7 @@ def test_manifest_is_published_only_after_every_session_lands(
     assert total == 3
     assert seen == ["s1", "s2", "s3"]
     assert manifest.exists()
-    assert not manifest_temp_path(manifest).exists()
+    assert _staged(manifest) == []
     payload = json.loads(manifest.read_text(encoding="utf-8"))
     assert [item["question_id"] for item in payload] == ["q-a", "q-b"]
 
@@ -252,7 +260,7 @@ def test_a_failed_ingestion_leaves_no_published_manifest(
     assert not manifest.exists()
     # 임시 파일은 남는다. workspace는 만들어졌는데 적재가 끝나지 않았다는
     # 사실이 그 자체로 진단 재료다.
-    assert manifest_temp_path(manifest).exists()
+    assert len(_staged(manifest)) == 1
 
 
 def test_a_failed_reingestion_removes_the_previous_manifest(

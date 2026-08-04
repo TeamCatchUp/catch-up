@@ -35,13 +35,15 @@ from typing import Any
 
 import structlog
 
+from catchup.evaluation.longmemeval.atomic_publish import new_run_id
+from catchup.evaluation.longmemeval.atomic_publish import publish_run_file
+from catchup.evaluation.longmemeval.atomic_publish import run_temp_path
 from catchup.evaluation.longmemeval.dataset import OracleQuestion
 
 __all__ = [
     "DEFAULT_MANIFEST_PATH",
     "DEFAULT_WORKSPACE_BASE",
     "MANIFEST_INVALIDATED_SUFFIX",
-    "MANIFEST_TEMP_SUFFIX",
     "SHARED_WORKSPACE_WARNING",
     "WORKSPACE_NAME_MAX_LENGTH",
     "WORKSPACE_NAME_PREFIX",
@@ -166,34 +168,36 @@ def assign_workspaces(
     )
 
 
-MANIFEST_TEMP_SUFFIX = ".tmp"
-"""공개 전 manifest가 머무는 임시 경로의 접미사를 나타낸다."""
+def manifest_temp_path(path: Path, *, run_id: str) -> Path:
+    """최종 경로에 대응하는 이 실행 전용 임시 경로를 만든다.
 
-
-def manifest_temp_path(path: Path) -> Path:
-    """최종 경로에 대응하는 임시 경로를 만든다.
-
-    같은 디렉토리에 둔다. `os.replace`가 원자적인 것은 같은 파일시스템
-    안에서일 때뿐이라, 임시 파일을 시스템 temp에 두면 그 보장이 사라진다.
+    실행마다 다른 이름을 쓰는 것이 요점이다. 고정된 `.tmp` 하나를 나눠
+    쓰면 같은 manifest 경로로 겹쳐 도는 두 수집이 서로의 임시 파일을
+    덮는다. 그러면 먼저 끝난 쪽이 남의 미완성 대응표를 최종 경로에
+    공개하고, 나중 쪽은 자기 임시 파일이 사라져 `FileNotFoundError`로
+    끝난다.
     """
-    return path.with_name(path.name + MANIFEST_TEMP_SUFFIX)
+    return run_temp_path(path, run_id=run_id)
 
 
 def stage_manifest(
     path: Path,
     assignments: Iterable[WorkspaceAssignment],
+    *,
+    run_id: str | None = None,
 ) -> Path:
-    """대응표를 임시 경로에 먼저 써 둔다. 아직 공개하지 않는다.
+    """대응표를 이 실행 전용 임시 경로에 먼저 써 둔다. 아직 공개하지 않는다.
 
     수집이 중간에 깨지면 이 파일만 남는다. 그 사실이 진단 재료다 —
     workspace는 만들어졌지만 세션 적재가 끝나지 않았다는 뜻이다.
 
     Returns:
-        내용을 담아 둔 임시 경로를 돌려준다.
+        내용을 담아 둔 임시 경로를 돌려준다. 공개할 때 그대로 넘긴다.
     """
+    identifier = new_run_id() if run_id is None else run_id
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = [assignment.as_dict() for assignment in assignments]
-    temporary = manifest_temp_path(path)
+    temporary = manifest_temp_path(path, run_id=identifier)
     temporary.write_text(
         json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
@@ -237,8 +241,12 @@ def invalidate_manifest(path: Path) -> Path | None:
     return moved
 
 
-def publish_manifest(path: Path) -> None:
-    """임시 경로의 대응표를 최종 경로로 원자적으로 옮긴다.
+def publish_manifest(path: Path, temporary: Path) -> None:
+    """이 실행이 stage한 대응표를 최종 경로로 원자적으로 옮긴다.
+
+    옮길 임시 경로를 인자로 받는다. 최종 경로에서 임시 경로를 다시
+    계산하면 같은 경로로 겹쳐 도는 다른 수집의 임시 파일을 공개할 수
+    있고, 그 실행은 아직 세션 적재 중이다.
 
     `os.replace`라 읽는 쪽이 보는 것은 완성본 아니면 아무것도 없음, 둘 중
     하나다. 반쯤 쓰인 파일이 보이면 JSON 파싱이 깨지고, 더 나쁘게는
@@ -249,7 +257,7 @@ def publish_manifest(path: Path) -> None:
     공용 workspace 폴백" 경로로 떨어진다. 부분 적재된 workspace를 정상
     격리 실행으로 오인해 빈 지식으로 점수를 내는 일이 그 연결로 막힌다.
     """
-    os.replace(manifest_temp_path(path), path)
+    publish_run_file(path, temporary)
 
 
 def write_manifest(
@@ -262,8 +270,7 @@ def write_manifest(
     에서만 쓴다. 수집 러너는 `stage_manifest`와 `publish_manifest`를
     나눠 부른다.
     """
-    stage_manifest(path, assignments)
-    publish_manifest(path)
+    publish_manifest(path, stage_manifest(path, assignments))
 
 
 def load_manifest(path: Path) -> tuple[WorkspaceAssignment, ...]:

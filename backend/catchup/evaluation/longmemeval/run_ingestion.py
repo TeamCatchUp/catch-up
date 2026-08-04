@@ -328,8 +328,11 @@ def ingest_eval_subset(
     workspace를 조회하고, 대량 abstention을 정상 결과로 기록한다. 오류가
     수집 단계에 있었다는 정보는 어디에도 남지 않는다.
 
-    그래서 임시 경로에만 먼저 써 두고(`stage_manifest`), 마지막 세션까지
-    성공한 뒤에 원자적으로 옮긴다(`publish_manifest`). 중간에 실패하면
+    그래서 이 실행 전용 임시 경로에만 먼저 써 두고(`stage_manifest`),
+    마지막 세션까지 성공한 뒤에 그 파일만 원자적으로 옮긴다
+    (`publish_manifest`). 임시 경로가 실행마다 다르므로 같은 manifest
+    경로로 겹쳐 도는 다른 수집의 대응표를 대신 공개하는 일도 없다.
+    중간에 실패하면
     최종 경로에 manifest가 없으므로 QA·채점은 "manifest 없음 → 경고 +
     공용 workspace 폴백"으로 떨어진다. 부분 workspace를 격리 실행으로
     오인하는 경로가 그렇게 끊긴다.
@@ -342,7 +345,7 @@ def ingest_eval_subset(
     Returns:
         적재를 시도한 세션 수를 돌려준다.
     """
-    stage_manifest(manifest_out, assignments)
+    staged = stage_manifest(manifest_out, assignments)
     invalidate_manifest(manifest_out)
 
     total_sessions = 0
@@ -356,7 +359,7 @@ def ingest_eval_subset(
             ingest(session, assignment)
             total_sessions += 1
 
-    publish_manifest(manifest_out)
+    publish_manifest(manifest_out, staged)
     return total_sessions
 
 

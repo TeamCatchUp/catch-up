@@ -17,7 +17,13 @@ import pytest
 
 from catchup.evaluation.longmemeval import run_bench_adjudication
 from catchup.evaluation.longmemeval.bench_adjudication import AdjudicationCounts
+from catchup.evaluation.longmemeval.bench_adjudication import AdjudicationSteps
+from catchup.evaluation.longmemeval.bench_adjudication import StepOutcome
+from catchup.evaluation.longmemeval.bench_adjudication import run_adjudication
 from catchup.knowledge_maintenance.ports.mutation_proposals import StoredMergeProposal
+from catchup.knowledge_maintenance.services.compile_entity_artifacts import (
+    ArtifactCompileResult,
+)
 from catchup.knowledge_maintenance.services.review_merge_proposal import (
     MergeReviewError,
 )
@@ -60,6 +66,65 @@ def test_report_counts_fails_when_a_single_item_is_left(
 def test_report_counts_fails_on_an_apply_failure() -> None:
     """적용 실패도 종료 코드에 실린다."""
     assert run_bench_adjudication.report_counts(_counts(mutations_failed=2)) == 1
+
+
+def test_report_counts_fails_on_a_compile_conflict(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """카드 컴파일 충돌 한 건도 exit 1로 이어진다."""
+    code = run_bench_adjudication.report_counts(_counts(compilations_failed=1))
+
+    assert code == 1
+    assert "카드 컴파일 충돌 1" in capsys.readouterr().out
+
+
+def test_compile_artifacts_counts_a_conflict_as_a_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """멱등 키 충돌로 건너뛴 entity를 실패로 올려 보낸다.
+
+    충돌한 노드의 새 카드는 만들어지지 않는다. 로그에만 남기면
+    `counts.failures`가 0이라 exit 0으로 끝나고, 오케스트레이터는 카드가
+    빠진 workspace를 완료로 기록한다.
+    """
+    monkeypatch.setattr(
+        run_bench_adjudication,
+        "compile_entity_artifacts",
+        lambda uow, *, workspace_id, vocabulary, limit: ArtifactCompileResult(
+            nodes_considered=3,
+            proposals_created=1,
+            proposals_revived=0,
+            unchanged_skipped=1,
+            proposals_conflicted=1,
+        ),
+    )
+
+    outcome = run_bench_adjudication._compile_artifacts(
+        _FakeUow(()),
+        workspace_id=910000,
+        vocabulary=object(),
+        limit=100,
+    )
+
+    assert outcome.done == 1
+    assert outcome.failed == 1
+
+
+def test_run_adjudication_carries_a_compile_conflict_to_the_counts() -> None:
+    """컴파일 충돌이 회차 집계의 실패 합계까지 이어진다."""
+    counts = run_adjudication(
+        AdjudicationSteps(
+            approve_merges=lambda: StepOutcome(done=0),
+            apply_mutations=lambda: StepOutcome(done=0),
+            detect_conflicts=lambda: StepOutcome(done=0),
+            adjudicate_contradictions=lambda: StepOutcome(done=0),
+            compile_artifacts=lambda: StepOutcome(done=0, failed=1),
+            approve_artifacts=lambda: StepOutcome(done=0),
+        )
+    )
+
+    assert counts.compilations_failed == 1
+    assert counts.failures == 1
 
 
 class _FakeMutationProposals:

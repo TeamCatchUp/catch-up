@@ -123,6 +123,7 @@ class AdjudicationCounts:
         mutations_failed: 적용에 실패해 approved로 남은 안건 수다. 병합
             적용과 판정 적용 두 번을 합친 값이다.
         contradictions_failed: 판정에 실패해 계류로 남은 모순 안건 수다.
+        compilations_failed: 멱등 키 충돌로 카드를 만들지 못한 entity 수다.
         artifacts_failed: 승인에 실패해 계류로 남은 문서 변경안 수다.
     """
 
@@ -136,6 +137,7 @@ class AdjudicationCounts:
     merges_failed: int = 0
     mutations_failed: int = 0
     contradictions_failed: int = 0
+    compilations_failed: int = 0
     artifacts_failed: int = 0
 
     @property
@@ -150,6 +152,7 @@ class AdjudicationCounts:
             self.merges_failed
             + self.mutations_failed
             + self.contradictions_failed
+            + self.compilations_failed
             + self.artifacts_failed
         )
 
@@ -291,5 +294,6 @@ def run_adjudication(steps: AdjudicationSteps) -> AdjudicationCounts:
         merges_failed=merges.failed,
         mutations_failed=merge_apply.failed + supersede_apply.failed,
         contradictions_failed=contradictions.failed,
+        compilations_failed=compiled.failed,
         artifacts_failed=approved.failed,
     )

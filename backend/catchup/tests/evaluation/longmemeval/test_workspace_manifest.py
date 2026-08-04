@@ -47,6 +47,8 @@ from catchup.evaluation.longmemeval.workspace_manifest import check_manifest_cov
 from catchup.evaluation.longmemeval.workspace_manifest import invalidate_manifest
 from catchup.evaluation.longmemeval.workspace_manifest import load_manifest
 from catchup.evaluation.longmemeval.workspace_manifest import manifest_invalidated_path
+from catchup.evaluation.longmemeval.workspace_manifest import publish_manifest
+from catchup.evaluation.longmemeval.workspace_manifest import stage_manifest
 from catchup.evaluation.longmemeval.workspace_manifest import workspace_by_question
 from catchup.evaluation.longmemeval.workspace_manifest import workspace_name
 from catchup.evaluation.longmemeval.workspace_manifest import write_manifest
@@ -446,3 +448,35 @@ def test_invalidate_manifest_ignores_a_missing_file(tmp_path: Path) -> None:
 
     assert invalidate_manifest(manifest) is None
     assert not manifest_invalidated_path(manifest).exists()
+
+
+def test_two_writers_never_publish_each_others_manifest(
+    tmp_path: Path,
+) -> None:
+    """같은 경로로 겹쳐 도는 두 수집이 서로의 임시 파일을 건드리지 않는다.
+
+    고정된 `.tmp` 하나를 나눠 쓰면 B의 stage가 A의 임시 파일을 덮는다.
+    그러면 A의 publish가 아직 적재 중인 B의 대응표를 최종 경로에
+    공개하고, 뒤이은 B의 publish는 임시 파일이 이미 사라져
+    `FileNotFoundError`로 끝난다. 그 사이 QA는 B의 부분 workspace를
+    완료 실행으로 읽는다.
+
+    그래서 stage와 publish를 교차시켜 각자 자기 내용만 공개하는지 본다.
+    최종 승자는 마지막 publish다.
+    """
+    manifest = tmp_path / "workspace_manifest.json"
+    first = assign_workspaces([_question("q-a")], base=910000)
+    second = assign_workspaces([_question("q-b")], base=920000)
+
+    first_staged = stage_manifest(manifest, first)
+    second_staged = stage_manifest(manifest, second)
+
+    assert first_staged != second_staged
+    assert [item.question_id for item in load_manifest(first_staged)] == ["q-a"]
+
+    publish_manifest(manifest, first_staged)
+    assert [item.question_id for item in load_manifest(manifest)] == ["q-a"]
+
+    publish_manifest(manifest, second_staged)
+    assert [item.question_id for item in load_manifest(manifest)] == ["q-b"]
+    assert sorted(tmp_path.glob(f"{manifest.name}.tmp.*")) == []
