@@ -21,8 +21,10 @@ workspace 하나에 대해 네 가지를 순서대로 한다.
 workspace를 건너뛰고 이어 가면 빈 지식이 섞인 채로 점수가 나온다.
 
 어휘 발행만 subprocess가 아니라 in-process다. 원본 workspace의 어휘를
-읽어 그대로 옮기는 일이라 파일 입력을 받는 발행 러너의 계약과 맞지 않고,
-`uow.ontology.ensure`가 이미 "있으면 그대로, 다르면 충돌"을 보장한다.
+읽어 그대로 옮기는 일이라 파일 입력을 받는 발행 러너의 계약과 맞지 않다.
+대상에 같은 버전이 이미 있어도 원본과 내용을 맞춰 본 뒤에만 재사용으로
+넘어간다 — 버전 이름만 같고 사전이 다르면 workspace마다 다른 어휘로
+추출하면서 요약에는 같은 버전 재사용이라고 찍힌다.
 
 추출이 끝나면 그 workspace의 `observation.ready` 이벤트를 두 갈래로
 확인한다. 아직 큐에 남은 것(pending·processing)이 0인지, 그리고 재시도를
@@ -60,6 +62,7 @@ from catchup.knowledge_maintenance.adapters.llm.structured_extractor import CONT
 from catchup.knowledge_maintenance.adapters.postgres.unit_of_work import (
     KnowledgeMaintenanceUnitOfWork,
 )
+from catchup.knowledge_maintenance.contracts.extraction import ExtractionVocabulary
 from catchup.knowledge_maintenance.domain.pipeline_event import PipelineEventStatus
 from catchup.knowledge_maintenance.domain.pipeline_event import PipelineEventType
 from catchup.knowledge_maintenance.ports.ontology import OntologySnapshotConflict
@@ -76,6 +79,7 @@ __all__ = [
     "build_step_commands",
     "copy_vocabulary_snapshot",
     "count_observation_backlog",
+    "describe_vocabulary_difference",
     "run_pipeline",
     "subprocess_step_runner",
 ]
@@ -259,6 +263,41 @@ def subprocess_step_runner(command: StepCommand) -> int:
     return subprocess.run(command.argv, check=False).returncode
 
 
+def describe_vocabulary_difference(
+    source: ExtractionVocabulary,
+    target: ExtractionVocabulary,
+) -> str:
+    """두 어휘가 어디서 갈리는지 한 줄로 적는다.
+
+    사람이 다음에 할 일은 "어느 사전이 맞는가"를 정하는 것이라, 다르다는
+    사실만으로는 부족하다. 어느 쪽에만 있는 predicate가 무엇인지까지
+    보여야 원본을 잘못 지정한 것인지 옛 스냅샷이 남은 것인지 갈린다.
+    """
+    source_names = set(source.predicates)
+    target_names = set(target.predicates)
+    parts = [
+        f"predicate 수가 {len(source.predicates)} 대 "
+        f"{len(target.predicates)}로 다르다"
+        if len(source.predicates) != len(target.predicates)
+        else f"predicate 수는 {len(source.predicates)}로 같다"
+    ]
+    only_source = sorted(source_names - target_names)
+    only_target = sorted(target_names - source_names)
+    if only_source:
+        parts.append(f"원본에만 있는 것: {', '.join(only_source[:5])}")
+    if only_target:
+        parts.append(f"대상에만 있는 것: {', '.join(only_target[:5])}")
+    if not only_source and not only_target:
+        # 이름은 같은데 내용이 갈린 경우다. 치역이나 설명이 다르면
+        # 추출 결과가 달라지므로 이름만 보고 같다고 할 수 없다.
+        parts.append(
+            "predicate 이름은 같지만 사전 항목 내용이 다르다"
+            f"(항목 수 {len(source.predicate_entries)} 대 "
+            f"{len(target.predicate_entries)})"
+        )
+    return "; ".join(parts)
+
+
 def copy_vocabulary_snapshot(
     uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
     *,
@@ -268,28 +307,25 @@ def copy_vocabulary_snapshot(
 ) -> str:
     """원본 workspace의 어휘를 이 workspace에도 같은 버전으로 남긴다.
 
-    `ensure`를 바로 부르지 않고 `get`으로 먼저 확인한다. 이미 있는 것이
-    정상 재실행인데, `ensure`는 내용이 다르면 `OntologySnapshotConflict`를
-    던지므로 그 경우를 "이미 있음"과 구별해 다뤄야 한다. 충돌은 삼키지
-    않는다 — 같은 버전 이름이 workspace마다 다른 사전을 가리키면 어느
-    사전으로 뽑은 후보인지 기록이 거짓이 된다.
+    대상에 같은 버전이 이미 있어도 원본을 반드시 읽어 내용을 맞춰 본다.
+    같으면 정상 재실행이므로 재사용하고, 다르면 멈춘다. 대상에 무언가
+    있다는 것만 보고 재사용으로 접으면, workspace마다 다른 사전을 쓰면서
+    요약에는 같은 버전을 재사용했다고 찍힌다 — 어느 사전으로 뽑은
+    후보인지 기록이 거짓이 되고, 사전이 달라 빠진 predicate는 점수에만
+    나타난다. `--source-workspace-id`를 바꾸거나 옛 실행의 스냅샷이 그
+    번호에 남아 있을 때 실제로 닿는 경로다.
+
+    비교는 `ExtractionVocabulary` 전체를 본다. predicate 이름만 맞춰
+    보면 치역·설명이 갈린 사전이 같은 것으로 통과한다.
 
     Returns:
-        새로 남겼으면 "copied", 이미 있었으면 "reused"를 돌려준다.
+        새로 남겼으면 "copied", 같은 내용이 이미 있었으면 "reused"를
+        돌려준다.
 
     Raises:
         SystemExit: 원본에 그 버전이 없거나, 대상에 같은 이름의 다른
             어휘가 이미 있을 때 낸다.
     """
-    with uow_factory() as uow:
-        existing = uow.ontology.get(
-            workspace_id=target_workspace_id,
-            ontology_id=CONTRACT_ID,
-            version=ontology_version,
-        )
-    if existing is not None:
-        return "reused"
-
     with uow_factory() as uow:
         source = uow.ontology.get(
             workspace_id=source_workspace_id,
@@ -302,6 +338,27 @@ def copy_vocabulary_snapshot(
             f"{CONTRACT_ID} v{ontology_version}이 없다. "
             "publish_vocabulary_snapshot으로 먼저 발행하거나 "
             "`--source-workspace-id`를 사전이 있는 workspace로 바꾼다."
+        )
+
+    with uow_factory() as uow:
+        existing = uow.ontology.get(
+            workspace_id=target_workspace_id,
+            ontology_id=CONTRACT_ID,
+            version=ontology_version,
+        )
+    if existing is not None:
+        if existing == source:
+            return "reused"
+        raise SystemExit(
+            f"workspace {target_workspace_id}에 이미 v{ontology_version} "
+            f"이름으로 다른 어휘가 있다. 원본 workspace "
+            f"{source_workspace_id}와 "
+            f"{describe_vocabulary_difference(source, existing)}. "
+            "같은 버전 이름이 workspace마다 다른 사전을 가리키면 어느 "
+            "사전으로 뽑은 후보인지 기록이 거짓이 된다. 이 번호를 다른 "
+            "실행이 쓰고 있다는 뜻이므로 `--workspace-base`를 옮겨 다시 "
+            "수집하거나, `--source-workspace-id`를 이 workspace가 쓰던 "
+            "원본으로 되돌린다."
         )
 
     with uow_factory() as uow:

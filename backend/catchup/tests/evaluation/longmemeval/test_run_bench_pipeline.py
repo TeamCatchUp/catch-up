@@ -278,8 +278,8 @@ def test_copy_vocabulary_snapshot_copies_from_the_source() -> None:
     assert copied.predicates == ("works_at",)
 
 
-def test_copy_vocabulary_snapshot_skips_an_existing_snapshot() -> None:
-    """이미 있으면 그대로 두고 재사용이라고 알린다."""
+def test_copy_vocabulary_snapshot_skips_an_identical_snapshot() -> None:
+    """내용까지 같으면 그대로 두고 재사용이라고 알린다."""
     ontology = _FakeOntology()
     ontology.stored[(902, "2")] = _vocabulary("2", "works_at")
     ontology.stored[(910000, "2")] = _vocabulary("2", "works_at")
@@ -292,6 +292,35 @@ def test_copy_vocabulary_snapshot_skips_an_existing_snapshot() -> None:
     )
 
     assert result == "reused"
+
+
+def test_copy_vocabulary_snapshot_refuses_a_different_snapshot() -> None:
+    """같은 버전에 다른 내용이 있으면 정상 조회 경로에서도 멈춘다.
+
+    대상에 무언가 있다는 것만 보고 재사용으로 접으면, workspace마다 다른
+    사전으로 추출하면서 요약에는 같은 버전 재사용으로 찍힌다. 원본을
+    바꿨거나 옛 실행의 스냅샷이 그 번호에 남았을 때 실제로 닿는다.
+    """
+    ontology = _FakeOntology()
+    ontology.stored[(902, "2")] = _vocabulary("2", "works_at")
+    ontology.stored[(910000, "2")] = _vocabulary("2", "lives_in")
+
+    with pytest.raises(SystemExit) as excinfo:
+        copy_vocabulary_snapshot(
+            lambda: _FakeUow(ontology),
+            source_workspace_id=902,
+            target_workspace_id=910000,
+            ontology_version="2",
+        )
+
+    message = str(excinfo.value)
+    assert "910000" in message
+    assert "902" in message
+    # 어느 사전이 무엇을 더 갖고 있는지까지 적어야 다음에 할 일이 갈린다.
+    assert "works_at" in message
+    assert "lives_in" in message
+    # 대상 스냅샷을 덮어쓰지 않았는지 본다.
+    assert ontology.stored[(910000, "2")].predicates == ("lives_in",)
 
 
 def test_copy_vocabulary_snapshot_stops_without_a_source() -> None:
@@ -310,12 +339,11 @@ def test_copy_vocabulary_snapshot_stops_without_a_source() -> None:
 
 
 def test_copy_vocabulary_snapshot_reports_a_conflict() -> None:
-    """같은 이름에 다른 어휘가 있으면 충돌을 삼키지 않는다.
+    """`ensure`가 던지는 충돌도 삼키지 않는다.
 
-    `get`으로 선확인하는 경로를 지나쳐도 막히는지 본다. 대상에 같은
-    버전이 다른 내용으로 이미 있으면 `get`이 그것을 돌려주므로 정상
-    경로에서는 재사용으로 끝난다. 그래서 여기서는 조회 키가 어긋나
-    `ensure`까지 도달하는 경우를 만들어 확인한다.
+    내용 비교는 조회한 시점의 값으로 한다. 그 사이에 다른 실행이 같은
+    번호에 다른 사전을 남기면 비교를 통과한 뒤 `ensure`에서 갈린다.
+    여기서는 대상 조회만 못 보는 repository로 그 창을 재현한다.
     """
     ontology = _FakeOntology()
     ontology.stored[(902, "2")] = _vocabulary("2", "works_at")
