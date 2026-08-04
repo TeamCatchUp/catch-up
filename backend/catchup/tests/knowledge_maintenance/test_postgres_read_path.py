@@ -16,6 +16,7 @@ from datetime import timezone
 import pytest
 from sqlalchemy import Engine
 from sqlalchemy import create_engine
+from sqlalchemy import event
 from sqlalchemy import inspect
 from sqlalchemy import select
 from sqlalchemy import text
@@ -1047,3 +1048,174 @@ def test_node_read_skips_a_merged_node(
     assert result.subject is None
     assert result.claims == ()
 
+
+BIGM_INDEX_SQL = """
+CREATE INDEX {name} ON knowledge_node_aliases
+USING GIN (normalized_alias gin_bigm_ops)
+"""
+"""서버 초기화가 만드는 `idx_knowledge_node_aliases_bigm`과 같은 인덱스다.
+
+실물은 `CREATE INDEX CONCURRENTLY`라 transaction 안에서 못 만든다.
+opclass와 대상 컬럼이 같으면 실행 계획도 같으므로, 테스트는 같은
+정의를 non-concurrent로 만들어 트랜잭션과 함께 되돌린다.
+"""
+
+
+def _seed_aliases(connection, workspace_id: int, count: int) -> None:
+    """유사 후보 조회가 훑을 alias를 한 번에 채운다."""
+    connection.execute(
+        text(
+            """
+            INSERT INTO knowledge_nodes (
+                id, workspace_id, node_kind, entity_type,
+                canonical_key, display_name, lifecycle_state
+            )
+            SELECT
+                gen_random_uuid(), :ws, 'entity', 'feature',
+                'plan:' || i, 'plan alias number ' || i, 'active'
+            FROM generate_series(1, :n) AS i
+            """
+        ),
+        {"ws": workspace_id, "n": count},
+    )
+    connection.execute(
+        text(
+            """
+            INSERT INTO knowledge_node_aliases (
+                id, workspace_id, node_id, alias, normalized_alias, source
+            )
+            SELECT
+                gen_random_uuid(), :ws, n.id, n.display_name,
+                n.display_name, 'extractor'
+            FROM knowledge_nodes n
+            WHERE n.workspace_id = :ws
+              AND n.canonical_key LIKE 'plan:%'
+            """
+        ),
+        {"ws": workspace_id},
+    )
+
+
+def test_similar_candidate_query_uses_the_bigm_gin_index(
+    engine: Engine,
+    workspace_id: int,
+) -> None:
+    """유사 후보 조회가 alias의 bigm GIN 인덱스를 실제로 탄다.
+
+    `=%`가 아니라 함수 집계 술어로 거르면 이 인덱스는 index condition이
+    될 수 없어, miss 한 번마다 workspace의 alias 전부에 유사도 함수가
+    돈다. 계획을 고정해 두지 않으면 그 형태로 되돌아가도 아무 테스트가
+    깨지지 않는다.
+
+    실행 계획은 데이터 크기에 따라 갈리므로 alias를 충분히 넣는다.
+    행이 적으면 workspace B-tree가 더 싸서 planner가 그쪽을 고르고,
+    그것은 인덱스를 못 타는 것과 다른 이야기다.
+    """
+    index_name = f"tmp_alias_bigm_{uuid.uuid4().hex[:8]}"
+    connection = engine.connect()
+    transaction = connection.begin()
+    statements: list[tuple[str, object]] = []
+
+    def _record(conn, cursor, statement, parameters, context, many) -> None:
+        statements.append((statement, parameters))
+
+    try:
+        _seed_aliases(connection, workspace_id, 5000)
+        connection.execute(text(BIGM_INDEX_SQL.format(name=index_name)))
+        connection.execute(text("ANALYZE knowledge_node_aliases"))
+        connection.execute(text("ANALYZE knowledge_nodes"))
+        connection.execute(text("SET LOCAL enable_seqscan = off"))
+
+        factory = sessionmaker(
+            bind=connection,
+            join_transaction_mode="create_savepoint",
+            expire_on_commit=False,
+        )
+        event.listen(connection, "before_cursor_execute", _record)
+        try:
+            with KnowledgeMaintenanceUnitOfWork(
+                factory, workspace_id=workspace_id
+            ) as uow:
+                found = uow.knowledge_nodes.find_entity_candidates_by_similarity(
+                    workspace_id=workspace_id,
+                    normalized_query="plan alias number 4242",
+                    threshold=0.1,
+                    limit=5,
+                )
+        finally:
+            event.remove(connection, "before_cursor_execute", _record)
+
+        assert [node.display_name for node, _ in found][0] == (
+            "plan alias number 4242"
+        )
+
+        # 계획을 세울 SQL은 repository가 실제로 보낸 그 문장이어야 한다.
+        # 테스트가 SQL을 다시 쓰면 repository가 바뀌어도 계획은 그대로다.
+        similarity_sql = [
+            item for item in statements if "bigm_similarity" in item[0]
+        ]
+        assert len(similarity_sql) == 1
+        statement, parameters = similarity_sql[0]
+        connection.execute(
+            text("SELECT set_config('pg_bigm.similarity_limit', '0.1', true)")
+        )
+        plan = "\n".join(
+            row[0]
+            for row in connection.exec_driver_sql(
+                "EXPLAIN " + statement, parameters
+            ).all()
+        )
+    finally:
+        transaction.rollback()
+        connection.close()
+
+    assert f"Bitmap Index Scan on {index_name}" in plan
+    assert "Index Cond: (normalized_alias =% " in plan
+
+
+def test_similarity_limit_does_not_leak_out_of_the_transaction(
+    engine: Engine,
+    workspace_id: int,
+) -> None:
+    """threshold를 SET LOCAL로 걸어 session에 남기지 않는다.
+
+    `=%`의 판정 기준은 GUC라, 조회가 그 값을 session에 남기면 같은
+    connection의 다음 조회가 남의 문턱값으로 돈다. SET LOCAL은
+    transaction이 끝나면 되돌아가므로 UnitOfWork 경계가 곧 수명이다.
+    """
+    connection = engine.connect()
+    try:
+        with connection.begin():
+            before = connection.execute(
+                text("SHOW pg_bigm.similarity_limit")
+            ).scalar()
+
+        transaction = connection.begin()
+        factory = sessionmaker(
+            bind=connection,
+            join_transaction_mode="create_savepoint",
+            expire_on_commit=False,
+        )
+        with KnowledgeMaintenanceUnitOfWork(
+            factory, workspace_id=workspace_id
+        ) as uow:
+            uow.knowledge_nodes.find_entity_candidates_by_similarity(
+                workspace_id=workspace_id,
+                normalized_query="leak probe",
+                threshold=0.42,
+                limit=5,
+            )
+            inside = connection.execute(
+                text("SHOW pg_bigm.similarity_limit")
+            ).scalar()
+        transaction.rollback()
+
+        with connection.begin():
+            after = connection.execute(
+                text("SHOW pg_bigm.similarity_limit")
+            ).scalar()
+    finally:
+        connection.close()
+
+    assert float(inside) == 0.42
+    assert after == before

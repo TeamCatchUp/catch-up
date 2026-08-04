@@ -492,37 +492,77 @@ class SqlAlchemyKnowledgeNodeRepository:
     ) -> list[tuple[KnowledgeNode, float]]:
         """이름이 비슷한 active entity 노드를 점수와 함께 찾는다.
 
-        alias마다 bigm_similarity를 매기고 노드 단위 MAX로 접는다.
-        alias가 많은 노드가 같은 후보를 여러 줄 차지하면 상위 N이
-        노드 하나로 차 버리기 때문이다.
+        두 단으로 나눠 읽는다. 먼저 `=%`로 alias 행을 줄이고, 남은
+        행에만 bigm_similarity를 매겨 노드 단위 MAX로 접는다. 노드
+        단위로 접는 이유는 alias가 많은 노드가 같은 후보를 여러 줄
+        차지하면 상위 N이 노드 하나로 차 버리기 때문이다.
 
-        pg_bigm의 `=%` 연산자는 쓰지 않는다. 그 연산자의 판정 기준은
-        세션 전역 GUC인 `pg_bigm.similarity_limit`이라, 같은 호출이
-        세션 설정에 따라 다른 답을 준다. 호출자가 넘긴 threshold를
-        술어에 직접 써야 답이 호출 인자만으로 정해진다.
+        `=%`를 쓰는 이유는 그 형태만 `idx_knowledge_node_aliases_bigm`
+        (GIN, gin_bigm_ops)을 타기 때문이다. 함수 호출을 모든 행에
+        계산한 뒤 HAVING으로 거르는 형태는 index condition이 되지
+        못해, miss 한 번마다 workspace의 alias 전부에 유사도 함수가
+        돈다.
+
+        `=%`의 판정 기준은 GUC `pg_bigm.similarity_limit`이라 예전에는
+        세션 설정에 답이 끌려다닐 위험 때문에 쓰지 않았다. 그 위험은
+        `set_config(..., is_local => true)`, 즉 SET LOCAL로 없앤다.
+        조회 직전 호출자가 넘긴 threshold를 현재 transaction에만 걸고,
+        transaction이 끝나면 원래 값으로 돌아가므로 session에 설정이
+        남지 않는다. `KnowledgeMaintenanceUnitOfWork`는 빠져나올 때
+        rollback·close를 하므로 그 경계가 곧 설정의 수명이다.
+
+        두 단의 문턱값이 같으므로 결과는 한 단짜리와 같다. `=%`는
+        유사도가 문턱값 이상인 행만 통과시키고, MAX는 통과한 행들
+        중에서 고른다 — 걸러진 행은 어차피 HAVING을 넘지 못한다.
         """
-        score = func.max(
+        # SET LOCAL을 문자열로 조립하지 않는다. SET은 bind 파라미터를
+        # 받지 못하지만 set_config는 받으므로, threshold가 값으로만
+        # 들어간다.
+        self._session.execute(
+            select(
+                func.set_config(
+                    "pg_bigm.similarity_limit",
+                    str(threshold),
+                    True,
+                )
+            )
+        )
+        narrowed = (
+            select(
+                KnowledgeNodeAliasRow.node_id.label("node_id"),
+                KnowledgeNodeAliasRow.normalized_alias.label(
+                    "normalized_alias"
+                ),
+            )
+            .where(
+                KnowledgeNodeAliasRow.workspace_id == workspace_id,
+                KnowledgeNodeAliasRow.normalized_alias.op("=%")(
+                    normalized_query
+                ),
+            )
+            .subquery()
+        )
+        narrowed_score = func.max(
             func.bigm_similarity(
-                KnowledgeNodeAliasRow.normalized_alias,
+                narrowed.c.normalized_alias,
                 normalized_query,
             )
         ).label("score")
         rows = self._session.execute(
-            select(KnowledgeNodeRow, score)
+            select(KnowledgeNodeRow, narrowed_score)
             .join(
-                KnowledgeNodeAliasRow,
-                KnowledgeNodeAliasRow.node_id == KnowledgeNodeRow.id,
+                narrowed,
+                narrowed.c.node_id == KnowledgeNodeRow.id,
             )
             .where(
-                KnowledgeNodeAliasRow.workspace_id == workspace_id,
                 KnowledgeNodeRow.workspace_id == workspace_id,
                 KnowledgeNodeRow.node_kind == NodeKind.ENTITY.value,
                 KnowledgeNodeRow.lifecycle_state
                 == NodeLifecycleState.ACTIVE.value,
             )
             .group_by(KnowledgeNodeRow.id)
-            .having(score >= threshold)
-            .order_by(score.desc(), KnowledgeNodeRow.id.asc())
+            .having(narrowed_score >= threshold)
+            .order_by(narrowed_score.desc(), KnowledgeNodeRow.id.asc())
             .limit(limit)
         ).all()
         return [
