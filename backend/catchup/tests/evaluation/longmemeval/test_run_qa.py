@@ -20,7 +20,6 @@ from pathlib import Path
 import pytest
 
 from catchup.evaluation.longmemeval.dataset import OracleQuestion
-from catchup.evaluation.longmemeval.draft_vocabulary import UsageTotals
 from catchup.evaluation.longmemeval.qa_service import AnswerResult
 from catchup.evaluation.longmemeval.qa_service import KnowledgeLookup
 from catchup.evaluation.longmemeval.qa_service import SubjectResult
@@ -28,6 +27,7 @@ from catchup.evaluation.longmemeval.run_qa import RESULTS_FILENAME
 from catchup.evaluation.longmemeval.run_qa import TRACE_FILENAME
 from catchup.evaluation.longmemeval.run_qa import USAGE_FILENAME
 from catchup.evaluation.longmemeval.run_qa import run_and_publish
+from catchup.evaluation.longmemeval.usage import UsageTotals
 from catchup.knowledge_maintenance.ports.knowledge_candidates import AsOfClaim
 from catchup.knowledge_maintenance.services.query_knowledge_as_of import AsOfQueryResult
 from catchup.knowledge_maintenance.services.query_knowledge_as_of import MatchedSubject

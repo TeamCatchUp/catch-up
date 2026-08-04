@@ -61,6 +61,8 @@ from catchup.components.llm.constants import ModelCapacity
 from catchup.components.llm.factory import get_llm_service
 from catchup.configs.config import settings
 from catchup.db.models import KnowledgeClaimCandidate
+from catchup.evaluation.longmemeval.usage import UsageTotals
+from catchup.evaluation.longmemeval.usage import usage_from_message
 from catchup.knowledge_maintenance.contracts.extraction import ExtractionVocabulary
 from catchup.knowledge_maintenance.contracts.extraction import PredicateEntry
 
@@ -122,37 +124,6 @@ class PredicateSample:
     observed_value_types: tuple[str, ...] = ()
     values: tuple[str, ...] = ()
     occurrences: int = 0
-
-
-@dataclass(frozen=True)
-class UsageTotals:
-    """LLM 호출이 쓴 토큰을 합산한다."""
-
-    calls: int = 0
-    input_tokens: int = 0
-    output_tokens: int = 0
-
-    @property
-    def total_tokens(self) -> int:
-        """입력과 출력 토큰을 합친 수를 나타낸다."""
-        return self.input_tokens + self.output_tokens
-
-    def plus(self, other: UsageTotals) -> UsageTotals:
-        """다른 집계를 더한 새 집계를 만든다."""
-        return UsageTotals(
-            calls=self.calls + other.calls,
-            input_tokens=self.input_tokens + other.input_tokens,
-            output_tokens=self.output_tokens + other.output_tokens,
-        )
-
-    def as_dict(self) -> dict[str, int]:
-        """비용 계측 파일에 담을 형태로 바꾼다."""
-        return {
-            "calls": self.calls,
-            "input_tokens": self.input_tokens,
-            "output_tokens": self.output_tokens,
-            "total_tokens": self.total_tokens,
-        }
 
 
 @dataclass(frozen=True)
@@ -224,21 +195,6 @@ def build_prompt(samples: Sequence[PredicateSample]) -> str:
         for value in sample.values:
             lines.append(f"    · {value}")
     return "\n".join(lines)
-
-
-def usage_from_message(message: Any) -> UsageTotals:
-    """응답 메시지의 usage_metadata를 사용량 집계로 옮긴다.
-
-    구조화 출력을 쓰면 파싱된 모델에는 토큰 수가 남지 않는다. 그래서
-    `include_raw=True`로 받은 원본 메시지에서 읽는다. 메타데이터가 아예
-    없더라도 호출은 있었으므로 호출 수는 센다.
-    """
-    metadata = getattr(message, "usage_metadata", None) or {}
-    return UsageTotals(
-        calls=1,
-        input_tokens=int(metadata.get("input_tokens") or 0),
-        output_tokens=int(metadata.get("output_tokens") or 0),
-    )
 
 
 def _batched(

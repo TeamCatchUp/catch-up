@@ -21,12 +21,12 @@ from catchup.evaluation.longmemeval.qa_service import MAX_SUBJECTS
 from catchup.evaluation.longmemeval.qa_service import AnswerResult
 from catchup.evaluation.longmemeval.qa_service import KnowledgeLookup
 from catchup.evaluation.longmemeval.qa_service import SubjectResult
-from catchup.evaluation.longmemeval.qa_service import UsageTotals
 from catchup.evaluation.longmemeval.qa_service import answer_questions
 from catchup.evaluation.longmemeval.qa_service import build_answer_prompt
 from catchup.evaluation.longmemeval.qa_service import build_subject_prompt
 from catchup.evaluation.longmemeval.qa_service import render_claims_context
 from catchup.evaluation.longmemeval.qa_service import run_question
+from catchup.evaluation.longmemeval.usage import UsageTotals
 from catchup.knowledge_maintenance.ports.knowledge_candidates import AsOfClaim
 from catchup.knowledge_maintenance.services.query_knowledge_as_of import AsOfQueryResult
 from catchup.knowledge_maintenance.services.query_knowledge_as_of import MatchedSubject

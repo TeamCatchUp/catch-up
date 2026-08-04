@@ -26,7 +26,6 @@ from catchup.evaluation.longmemeval.dataset import OracleQuestion
 from catchup.evaluation.longmemeval.diagnosis import ANSWER_GENERATION
 from catchup.evaluation.longmemeval.diagnosis import EvidenceStats
 from catchup.evaluation.longmemeval.diagnosis import FailureAttribution
-from catchup.evaluation.longmemeval.draft_vocabulary import UsageTotals
 from catchup.evaluation.longmemeval.grade import ABSTENTION_RULE
 from catchup.evaluation.longmemeval.grade import DEFAULT_RULE
 from catchup.evaluation.longmemeval.grade import JUDGE_PROMPT_VERSION
@@ -45,6 +44,7 @@ from catchup.evaluation.longmemeval.grade import grade_questions
 from catchup.evaluation.longmemeval.grade import judge_rule
 from catchup.evaluation.longmemeval.grade import parse_verdict
 from catchup.evaluation.longmemeval.grade import render_report
+from catchup.evaluation.longmemeval.usage import UsageTotals
 
 
 @pytest.mark.parametrize(

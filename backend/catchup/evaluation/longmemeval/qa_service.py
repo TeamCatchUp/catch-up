@@ -47,7 +47,7 @@ from datetime import timezone
 from typing import Any
 
 from catchup.evaluation.longmemeval.dataset import OracleQuestion
-from catchup.evaluation.longmemeval.draft_vocabulary import UsageTotals
+from catchup.evaluation.longmemeval.usage import UsageTotals
 from catchup.knowledge_maintenance.ports.knowledge_candidates import AsOfClaim
 from catchup.knowledge_maintenance.services.query_knowledge_as_of import AsOfQueryResult
 
@@ -63,7 +63,6 @@ __all__ = [
     "RenderedContext",
     "SubjectResult",
     "SubjectTrace",
-    "UsageTotals",
     "answer_questions",
     "build_answer_prompt",
     "build_subject_prompt",

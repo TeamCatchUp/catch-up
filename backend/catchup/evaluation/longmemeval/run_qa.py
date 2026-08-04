@@ -30,7 +30,6 @@ from __future__ import annotations
 
 import argparse
 import json
-from collections.abc import Iterable
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
@@ -53,8 +52,6 @@ from catchup.evaluation.longmemeval.atomic_publish import staged_outputs
 from catchup.evaluation.longmemeval.dataset import OracleQuestion
 from catchup.evaluation.longmemeval.dataset import load_oracle
 from catchup.evaluation.longmemeval.dataset import select_subset
-from catchup.evaluation.longmemeval.draft_vocabulary import UsageTotals
-from catchup.evaluation.longmemeval.draft_vocabulary import usage_from_message
 from catchup.evaluation.longmemeval.qa_service import MAX_SUBJECTS
 from catchup.evaluation.longmemeval.qa_service import AnswerFn
 from catchup.evaluation.longmemeval.qa_service import AnswerResult
@@ -66,11 +63,11 @@ from catchup.evaluation.longmemeval.qa_service import SubjectResult
 from catchup.evaluation.longmemeval.qa_service import answer_questions
 from catchup.evaluation.longmemeval.qa_service import build_answer_prompt
 from catchup.evaluation.longmemeval.qa_service import build_subject_prompt
+from catchup.evaluation.longmemeval.usage import UsageTotals
+from catchup.evaluation.longmemeval.usage import message_text
+from catchup.evaluation.longmemeval.usage import usage_from_message
 from catchup.evaluation.longmemeval.workspace_manifest import DEFAULT_MANIFEST_PATH
-from catchup.evaluation.longmemeval.workspace_manifest import check_manifest_covers
-from catchup.evaluation.longmemeval.workspace_manifest import load_manifest
-from catchup.evaluation.longmemeval.workspace_manifest import warn_shared_workspace
-from catchup.evaluation.longmemeval.workspace_manifest import workspace_by_question
+from catchup.evaluation.longmemeval.workspace_manifest import resolve_workspace_for
 from catchup.knowledge_maintenance.adapters.postgres.unit_of_work import (
     KnowledgeMaintenanceUnitOfWork,
 )
@@ -109,25 +106,6 @@ class SubjectCandidates(BaseModel):
             f"most likely first."
         ),
     )
-
-
-def _message_text(message: Any) -> str:
-    """모델 응답에서 사람이 읽을 본문만 뽑는다.
-
-    Bedrock은 content를 문자열로도, 블록 리스트로도 돌려준다. 리스트일
-    때 그대로 문자열로 만들면 답변에 JSON 껍데기가 섞인다.
-    """
-    content = getattr(message, "content", message)
-    if isinstance(content, str):
-        return content.strip()
-    if isinstance(content, list):
-        parts = [
-            str(block.get("text", ""))
-            for block in content
-            if isinstance(block, dict) and block.get("type", "text") == "text"
-        ]
-        return "".join(parts).strip()
-    return str(content).strip()
 
 
 def bedrock_extract_subjects(llm: BaseChatModel):
@@ -172,7 +150,7 @@ def bedrock_answer(llm: BaseChatModel):
             )
         )
         return AnswerResult(
-            answer=_message_text(message),
+            answer=message_text(message),
             usage=usage_from_message(message),
         )
 
@@ -229,26 +207,6 @@ def manifest_lookup_for(
         )
 
     return choose
-
-
-def resolve_workspace_for(
-    manifest: Path | None,
-    question_ids: Iterable[str],
-) -> dict[str, int] | None:
-    """문항별 workspace 대응표를 정하고, 없으면 시끄럽게 알린다.
-
-    manifest 파일이 없으면 옛 단일 workspace 방식으로 돌아간다 — 격리
-    이전에 쌓아 둔 workspace를 다시 재볼 수 있어야 하기 때문이다. 다만
-    그 순간을 경고 없이 넘기지 않는다. 격리가 꺼진 실행은 오류 하나 없이
-    돌면서 abstention 문항의 점수만 부풀리므로, 조용히 떨어지면 그
-    결과를 격리 실행의 점수와 나란히 놓게 된다.
-    """
-    if manifest is not None and manifest.exists():
-        workspace_for = workspace_by_question(load_manifest(manifest))
-        check_manifest_covers(question_ids, workspace_for)
-        return workspace_for
-    warn_shared_workspace(manifest, event=SHARED_WORKSPACE_EVENT)
-    return None
 
 
 def _write_line(handle: TextIO, payload: dict[str, Any]) -> None:
@@ -432,6 +390,7 @@ def main() -> int:
     workspace_for = resolve_workspace_for(
         args.manifest,
         (question.question_id for question in questions),
+        event=SHARED_WORKSPACE_EVENT,
     )
 
     args.output.mkdir(parents=True, exist_ok=True)

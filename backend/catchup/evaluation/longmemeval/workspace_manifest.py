@@ -55,6 +55,7 @@ __all__ = [
     "manifest_invalidated_path",
     "manifest_temp_path",
     "publish_manifest",
+    "resolve_workspace_for",
     "shared_workspace_warning",
     "stage_manifest",
     "warn_shared_workspace",
@@ -362,3 +363,30 @@ def workspace_by_question(
         assignment.question_id: assignment.workspace_id
         for assignment in assignments
     }
+
+
+def resolve_workspace_for(
+    manifest: Path | None,
+    question_ids: Iterable[str],
+    *,
+    event: str,
+) -> dict[str, int] | None:
+    """문항별 workspace 대응표를 정하고, 없으면 시끄럽게 알린다.
+
+    manifest 파일이 없으면 옛 단일 workspace 방식으로 돌아간다 — 격리
+    이전에 쌓아 둔 workspace를 다시 재볼 수 있어야 하기 때문이다. 다만
+    그 순간을 경고 없이 넘기지 않는다. 격리가 꺼진 실행은 오류 하나 없이
+    돌면서 abstention 문항의 점수만 부풀리고 실패 귀속도 낙관 쪽으로
+    기울므로, 조용히 떨어지면 그 결과를 격리 실행의 값과 나란히 놓게
+    된다.
+
+    러너마다 다른 로그 이름을 남길 수 있게 `event`만 받는다. QA와 채점은
+    같은 판단을 하지만, 어느 러너가 격리 없이 돌았는지는 나중에 구분할
+    수 있어야 한다.
+    """
+    if manifest is not None and manifest.exists():
+        workspace_for = workspace_by_question(load_manifest(manifest))
+        check_manifest_covers(question_ids, workspace_for)
+        return workspace_for
+    warn_shared_workspace(manifest, event=event)
+    return None

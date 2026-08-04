@@ -19,12 +19,12 @@ from sqlalchemy.dialects import postgresql
 
 from catchup.evaluation.longmemeval.draft_vocabulary import DraftResponse
 from catchup.evaluation.longmemeval.draft_vocabulary import PredicateSample
-from catchup.evaluation.longmemeval.draft_vocabulary import UsageTotals
 from catchup.evaluation.longmemeval.draft_vocabulary import VocabularyDraftError
 from catchup.evaluation.longmemeval.draft_vocabulary import build_prompt
 from catchup.evaluation.longmemeval.draft_vocabulary import draft_vocabulary
 from catchup.evaluation.longmemeval.draft_vocabulary import load_predicate_samples
-from catchup.evaluation.longmemeval.draft_vocabulary import usage_from_message
+from catchup.evaluation.longmemeval.usage import UsageTotals
+from catchup.evaluation.longmemeval.usage import usage_from_message
 from catchup.knowledge_maintenance.contracts.extraction import ExtractionVocabulary
 
 

@@ -35,9 +35,10 @@ from catchup.db.models import KnowledgeNode as NodeRow
 from catchup.db.models import KnowledgeOntologySnapshot as SnapshotRow
 from catchup.db.models import Workspace
 from catchup.evaluation.longmemeval.run_ingestion import ensure_workspace
+from catchup.evaluation.longmemeval.run_qa import SHARED_WORKSPACE_EVENT
 from catchup.evaluation.longmemeval.run_qa import manifest_lookup_for
-from catchup.evaluation.longmemeval.run_qa import resolve_workspace_for
 from catchup.evaluation.longmemeval.workspace_manifest import WorkspaceAssignment
+from catchup.evaluation.longmemeval.workspace_manifest import resolve_workspace_for
 from catchup.evaluation.longmemeval.workspace_manifest import workspace_name
 from catchup.evaluation.longmemeval.workspace_manifest import write_manifest
 from catchup.knowledge_maintenance.adapters.postgres.unit_of_work import (
@@ -247,7 +248,11 @@ def test_each_question_reads_only_its_own_workspace(
         ),
     )
 
-    workspace_for = resolve_workspace_for(manifest, (QUESTION_A, QUESTION_B))
+    workspace_for = resolve_workspace_for(
+        manifest,
+        (QUESTION_A, QUESTION_B),
+        event=SHARED_WORKSPACE_EVENT,
+    )
     assert workspace_for == {
         QUESTION_A: WORKSPACE_A,
         QUESTION_B: WORKSPACE_B,

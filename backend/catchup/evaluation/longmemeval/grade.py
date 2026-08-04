@@ -78,17 +78,15 @@ from catchup.evaluation.longmemeval.diagnosis import FAILURE_CAUSES
 from catchup.evaluation.longmemeval.diagnosis import EvidenceStats
 from catchup.evaluation.longmemeval.diagnosis import FailureAttribution
 from catchup.evaluation.longmemeval.diagnosis import attribute_failure
-from catchup.evaluation.longmemeval.draft_vocabulary import UsageTotals
-from catchup.evaluation.longmemeval.draft_vocabulary import usage_from_message
 from catchup.evaluation.longmemeval.run_qa import DEFAULT_ORACLE_PATH
 from catchup.evaluation.longmemeval.run_qa import RESULTS_FILENAME
 from catchup.evaluation.longmemeval.run_qa import TRACE_FILENAME
 from catchup.evaluation.longmemeval.run_qa import USAGE_FILENAME
+from catchup.evaluation.longmemeval.usage import UsageTotals
+from catchup.evaluation.longmemeval.usage import message_text
+from catchup.evaluation.longmemeval.usage import usage_from_message
 from catchup.evaluation.longmemeval.workspace_manifest import DEFAULT_MANIFEST_PATH
-from catchup.evaluation.longmemeval.workspace_manifest import check_manifest_covers
-from catchup.evaluation.longmemeval.workspace_manifest import load_manifest
-from catchup.evaluation.longmemeval.workspace_manifest import warn_shared_workspace
-from catchup.evaluation.longmemeval.workspace_manifest import workspace_by_question
+from catchup.evaluation.longmemeval.workspace_manifest import resolve_workspace_for
 
 DEFAULT_WORKSPACE_ID = 902
 GRADES_FILENAME = "grades.jsonl"
@@ -450,25 +448,6 @@ def grade_questions(
         if on_row is not None:
             on_row(row)
     return rows
-
-
-def resolve_workspace_for(
-    manifest: Path | None,
-    question_ids: Iterable[str],
-) -> dict[str, int] | None:
-    """진단을 어느 workspace에서 읽을지 정하고, 없으면 시끄럽게 알린다.
-
-    manifest가 없으면 옛 단일 workspace 방식으로 돌아가되 그 사실을
-    경고로 남긴다. 격리 없는 실행은 문항 하나의 근거를 남의 세션까지
-    합쳐 세므로 실패 귀속이 통째로 낙관 쪽으로 기운다 — 리포트만 보는
-    사람이 그것을 모르면 안 된다.
-    """
-    if manifest is not None and manifest.exists():
-        workspace_for = workspace_by_question(load_manifest(manifest))
-        check_manifest_covers(question_ids, workspace_for)
-        return workspace_for
-    warn_shared_workspace(manifest, event=SHARED_WORKSPACE_EVENT)
-    return None
 
 
 def load_claim_sessions(
@@ -1042,25 +1021,6 @@ def render_report(inputs: ReportInputs) -> str:
     return "\n".join(lines)
 
 
-def _message_text(message: Any) -> str:
-    """모델 응답에서 사람이 읽을 본문만 뽑는다.
-
-    Bedrock은 content를 문자열로도 블록 리스트로도 돌려준다. 리스트를
-    그대로 문자열로 만들면 첫 단어가 판정이 아니라 JSON 껍데기가 된다.
-    """
-    content = getattr(message, "content", message)
-    if isinstance(content, str):
-        return content.strip()
-    if isinstance(content, list):
-        parts = [
-            str(block.get("text", ""))
-            for block in content
-            if isinstance(block, dict) and block.get("type", "text") == "text"
-        ]
-        return "".join(parts).strip()
-    return str(content).strip()
-
-
 def bedrock_judge(llm: BaseChatModel) -> JudgeFn:
     """Bedrock 모델을 판정 함수로 감싼다."""
 
@@ -1081,7 +1041,7 @@ def bedrock_judge(llm: BaseChatModel) -> JudgeFn:
                 is_abstention=is_abstention,
             )
         )
-        raw = _message_text(message)
+        raw = message_text(message)
         return JudgeResult(
             verdict=parse_verdict(raw),
             raw=raw,
@@ -1188,7 +1148,11 @@ def main() -> int:
         float(row.get("elapsed_ms") or 0.0) for row in traces.values()
     )
 
-    workspace_for = resolve_workspace_for(args.manifest, questions)
+    workspace_for = resolve_workspace_for(
+        args.manifest,
+        questions,
+        event=SHARED_WORKSPACE_EVENT,
+    )
 
     qa_usage = UsageTotals()
     usage_path = args.results_dir / USAGE_FILENAME

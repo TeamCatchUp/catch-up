@@ -37,8 +37,8 @@ from catchup.evaluation.longmemeval.qa_service import ABSTENTION_ANSWER
 from catchup.evaluation.longmemeval.qa_service import AnswerResult
 from catchup.evaluation.longmemeval.qa_service import KnowledgeLookup
 from catchup.evaluation.longmemeval.qa_service import SubjectResult
-from catchup.evaluation.longmemeval.qa_service import UsageTotals
 from catchup.evaluation.longmemeval.qa_service import answer_questions
+from catchup.evaluation.longmemeval.usage import UsageTotals
 from catchup.evaluation.longmemeval.workspace_manifest import DEFAULT_WORKSPACE_BASE
 from catchup.evaluation.longmemeval.workspace_manifest import WORKSPACE_NAME_MAX_LENGTH
 from catchup.evaluation.longmemeval.workspace_manifest import WorkspaceAssignment
@@ -48,6 +48,7 @@ from catchup.evaluation.longmemeval.workspace_manifest import invalidate_manifes
 from catchup.evaluation.longmemeval.workspace_manifest import load_manifest
 from catchup.evaluation.longmemeval.workspace_manifest import manifest_invalidated_path
 from catchup.evaluation.longmemeval.workspace_manifest import publish_manifest
+from catchup.evaluation.longmemeval.workspace_manifest import resolve_workspace_for
 from catchup.evaluation.longmemeval.workspace_manifest import stage_manifest
 from catchup.evaluation.longmemeval.workspace_manifest import workspace_by_question
 from catchup.evaluation.longmemeval.workspace_manifest import workspace_name
@@ -393,7 +394,11 @@ def test_run_qa_shouts_when_the_manifest_is_missing(
     missing = tmp_path / "workspace_manifest.json"
 
     with structlog.testing.capture_logs() as logs:
-        workspace_for = run_qa.resolve_workspace_for(missing, ["q-a"])
+        workspace_for = resolve_workspace_for(
+            missing,
+            ["q-a"],
+            event=run_qa.SHARED_WORKSPACE_EVENT,
+        )
 
     captured = capsys.readouterr()
     assert workspace_for is None
@@ -411,7 +416,11 @@ def test_grade_shouts_when_the_manifest_is_missing(
     missing = tmp_path / "workspace_manifest.json"
 
     with structlog.testing.capture_logs() as logs:
-        workspace_for = grade.resolve_workspace_for(missing, ["q-a"])
+        workspace_for = resolve_workspace_for(
+            missing,
+            ["q-a"],
+            event=grade.SHARED_WORKSPACE_EVENT,
+        )
 
     captured = capsys.readouterr()
     assert workspace_for is None
