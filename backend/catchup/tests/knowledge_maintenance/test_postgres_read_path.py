@@ -39,6 +39,12 @@ from catchup.knowledge_maintenance.services.query_knowledge_as_of import (
 from catchup.knowledge_maintenance.services.query_knowledge_as_of import (
     query_claims_history,
 )
+from catchup.knowledge_maintenance.services.query_knowledge_as_of import (
+    query_claims_of_node,
+)
+from catchup.knowledge_maintenance.services.query_knowledge_as_of import (
+    query_claims_of_node_history,
+)
 
 T_JULY_10 = datetime(2026, 7, 10, tzinfo=timezone.utc)
 T_AUG_1 = datetime(2026, 8, 1, tzinfo=timezone.utc)
@@ -922,3 +928,122 @@ def test_exact_match_returns_no_candidates(
     assert result.subject is not None
     assert result.subject.node_id == node_id
     assert result.similar_candidates == ()
+
+
+def test_node_read_is_not_hijacked_by_a_shared_alias(
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+    session_factory: Callable[[], Session],
+    workspace_id: int,
+) -> None:
+    """같은 이름을 가진 다른 노드가 있어도 지목한 노드만 읽는다.
+
+    alias uniqueness는 workspace·node·normalized_alias 조합에만 걸려
+    있어 같은 이름이 여러 노드에 살 수 있다. 이름으로 다시 조회하면
+    그중 node id가 가장 작은 하나가 나오므로, 유사도가 고른 노드가
+    아닌 남의 claim이 답의 근거가 된다. node id 조회는 그 왕복 자체가
+    없어야 한다.
+    """
+    token = uuid.uuid4().hex[:8]
+    shared = f"shared name {token}"
+
+    with session_factory() as session:
+        first = _entity_node(session, workspace_id, "첫째")
+        second = _entity_node(session, workspace_id, "둘째")
+        run_id = _extraction_run(session, workspace_id)
+        _claim(
+            session,
+            workspace_id,
+            run_id,
+            node_id=first,
+            status="accepted",
+            valid_from=JULY_1,
+            value="첫째의 사실",
+        )
+        _claim(
+            session,
+            workspace_id,
+            run_id,
+            node_id=second,
+            status="accepted",
+            valid_from=JULY_1,
+            value="둘째의 사실",
+        )
+        session.commit()
+
+    with uow_factory() as uow:
+        for node_id in (first, second):
+            uow.knowledge_nodes.add_alias(
+                workspace_id=workspace_id,
+                node_id=node_id,
+                alias=shared,
+                normalized_alias=shared,
+                source="extractor",
+            )
+        uow.commit()
+
+    by_name = query_claims_as_of(
+        workspace_id=workspace_id,
+        subject=shared,
+        at=T_AUG_1,
+        uow=uow_factory(),
+    )
+    loser = second if by_name.subject.node_id == first else first
+
+    by_node = query_claims_of_node(
+        workspace_id=workspace_id,
+        node_id=loser,
+        at=T_AUG_1,
+        uow=uow_factory(),
+    )
+    history = query_claims_of_node_history(
+        workspace_id=workspace_id,
+        node_id=loser,
+        uow=uow_factory(),
+    )
+
+    # 이름 조회는 둘 중 하나만 고른다 — 그래서 이름으로 되짚으면 진다.
+    assert by_name.subject is not None
+    assert by_name.subject.node_id == min(first, second, key=str)
+    assert by_node.subject is not None
+    assert by_node.subject.node_id == loser
+    assert by_node.subject.matched_by == "node_id"
+    assert [claim.value for claim in by_node.claims] == [
+        "첫째의 사실" if loser == first else "둘째의 사실"
+    ]
+    assert [claim.value for claim in history.claims] == [
+        "첫째의 사실" if loser == first else "둘째의 사실"
+    ]
+
+
+def test_node_read_skips_a_merged_node(
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+    session_factory: Callable[[], Session],
+    workspace_id: int,
+) -> None:
+    """흡수된 노드를 node id로 지목해도 claim을 읽지 않는다."""
+    with session_factory() as session:
+        survivor = _entity_node(session, workspace_id, "흡수처")
+        merged = _entity_node(
+            session, workspace_id, "흡수됨", merged_into=survivor
+        )
+        run_id = _extraction_run(session, workspace_id)
+        _claim(
+            session,
+            workspace_id,
+            run_id,
+            node_id=merged,
+            status="accepted",
+            valid_from=JULY_1,
+        )
+        session.commit()
+
+    result = query_claims_of_node(
+        workspace_id=workspace_id,
+        node_id=merged,
+        at=T_AUG_1,
+        uow=uow_factory(),
+    )
+
+    assert result.subject is None
+    assert result.claims == ()
+

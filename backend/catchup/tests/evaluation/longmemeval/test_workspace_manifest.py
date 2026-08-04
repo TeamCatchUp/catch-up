@@ -142,7 +142,22 @@ class _WorkspaceScopedLookups:
                 return _hit()
             return _miss()
 
-        return KnowledgeLookup(as_of=as_of, history=history)
+        def as_of_node(node_id: uuid.UUID, at: datetime) -> AsOfQueryResult:
+            if workspace_id == self.claims_in:
+                return _hit()
+            return _miss()
+
+        def history_node(node_id: uuid.UUID) -> AsOfQueryResult:
+            if workspace_id == self.claims_in:
+                return _hit()
+            return _miss()
+
+        return KnowledgeLookup(
+            as_of=as_of,
+            history=history,
+            as_of_node=as_of_node,
+            history_node=history_node,
+        )
 
 
 def _extract(question: str) -> SubjectResult:

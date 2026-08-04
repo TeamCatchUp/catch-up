@@ -87,6 +87,8 @@ def _lookup() -> KnowledgeLookup:
     return KnowledgeLookup(
         as_of=lambda subject, at: _hit(),
         history=lambda subject: _hit(),
+        as_of_node=lambda node_id, at: _hit(),
+        history_node=lambda node_id: _hit(),
     )
 
 

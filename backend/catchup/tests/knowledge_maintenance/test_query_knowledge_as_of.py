@@ -12,6 +12,9 @@ from catchup.knowledge_maintenance.domain.knowledge_node import NodeKind
 from catchup.knowledge_maintenance.domain.knowledge_node import NodeLifecycleState
 from catchup.knowledge_maintenance.ports.knowledge_candidates import AsOfClaim
 from catchup.knowledge_maintenance.services.query_knowledge_as_of import (
+    MATCHED_BY_NODE_ID,
+)
+from catchup.knowledge_maintenance.services.query_knowledge_as_of import (
     SIMILARITY_CANDIDATE_LIMIT,
 )
 from catchup.knowledge_maintenance.services.query_knowledge_as_of import (
@@ -22,6 +25,12 @@ from catchup.knowledge_maintenance.services.query_knowledge_as_of import (
 )
 from catchup.knowledge_maintenance.services.query_knowledge_as_of import (
     query_claims_history,
+)
+from catchup.knowledge_maintenance.services.query_knowledge_as_of import (
+    query_claims_of_node,
+)
+from catchup.knowledge_maintenance.services.query_knowledge_as_of import (
+    query_claims_of_node_history,
 )
 
 WORKSPACE = 1
@@ -75,12 +84,30 @@ class FakeNodeRepository:
         *,
         by_canonical_key: dict[str, KnowledgeNode] | None = None,
         by_alias: dict[str, KnowledgeNode] | None = None,
+        by_id: dict[uuid.UUID, KnowledgeNode] | None = None,
     ) -> None:
         self.by_canonical_key = dict(by_canonical_key or {})
         self.by_alias = dict(by_alias or {})
+        self.by_id = dict(by_id or {})
         self.canonical_key_calls: list[str] = []
         self.alias_calls: list[str] = []
+        self.id_calls: list[uuid.UUID] = []
         self.similarity_calls: list[dict] = []
+
+    def get_entity_by_id(
+        self,
+        *,
+        workspace_id: int,
+        node_id: uuid.UUID,
+    ) -> KnowledgeNode | None:
+        """node id 조회를 흉내 낸다. lifecycle은 거르지 않는다.
+
+        실물 SQL도 거르지 않는다. 살아 있는 노드만 쓸지는 서비스가
+        정하므로, fake가 미리 걸러 내면 그 판단을 검증할 수 없다.
+        """
+        del workspace_id
+        self.id_calls.append(node_id)
+        return self.by_id.get(node_id)
 
     def get_entity_by_canonical_key(
         self,
@@ -648,3 +675,115 @@ def test_history_exact_match_skips_similarity_lookup() -> None:
 
     assert result.similar_candidates == ()
     assert uow.knowledge_nodes.similarity_calls == []
+
+
+
+def test_node_read_uses_the_given_id_without_resolving_a_name() -> None:
+    """node id 조회는 이름 해소를 전혀 거치지 않는다."""
+    node = _node(canonical_key="feature:오픈 api")
+    uow = FakeUnitOfWork(
+        nodes=FakeNodeRepository(by_id={node.id: node}),
+        claims=FakeClaimRepository((_claim(),)),
+    )
+
+    result = query_claims_of_node(
+        workspace_id=WORKSPACE,
+        node_id=node.id,
+        at=AT,
+        uow=uow,
+    )
+
+    assert result.subject is not None
+    assert result.subject.node_id == node.id
+    assert result.subject.matched_by == MATCHED_BY_NODE_ID
+    assert result.similar_candidates == ()
+    assert len(result.claims) == 1
+    assert uow.knowledge_nodes.id_calls == [node.id]
+    assert uow.knowledge_nodes.canonical_key_calls == []
+    assert uow.knowledge_nodes.alias_calls == []
+    assert uow.knowledge_nodes.similarity_calls == []
+
+
+def test_node_history_read_uses_the_history_reader() -> None:
+    """node id history 조회는 닫힌 accepted까지 읽는다."""
+    node = _node()
+    closed = _claim(valid_from=JULY_1, valid_to=JULY_15)
+    uow = FakeUnitOfWork(
+        nodes=FakeNodeRepository(by_id={node.id: node}),
+        claims=FakeClaimRepository((closed,)),
+    )
+
+    as_of_result = query_claims_of_node(
+        workspace_id=WORKSPACE,
+        node_id=node.id,
+        at=AT,
+        uow=uow,
+    )
+    history_result = query_claims_of_node_history(
+        workspace_id=WORKSPACE,
+        node_id=node.id,
+        uow=uow,
+    )
+
+    assert as_of_result.claims == ()
+    assert [claim.claim_id for claim in history_result.claims] == [
+        closed.claim_id
+    ]
+
+
+def test_node_read_of_a_missing_node_is_empty() -> None:
+    """없는 node id는 claim을 읽지 않고 빈 결과를 준다."""
+    uow = FakeUnitOfWork(claims=FakeClaimRepository((_claim(),)))
+    missing = uuid.uuid4()
+
+    result = query_claims_of_node(
+        workspace_id=WORKSPACE,
+        node_id=missing,
+        at=AT,
+        uow=uow,
+    )
+
+    assert result.subject is None
+    assert result.claims == ()
+    assert uow.knowledge_candidates.calls == []
+
+
+def test_node_read_of_a_merged_node_is_empty() -> None:
+    """접힌 노드의 claim은 근거로 쓰지 않는다.
+
+    merged 노드는 identity가 이미 다른 노드로 넘어간 상태다. 그 노드의
+    claim을 되살려 실으면 병합 결정이 답변 경로에서만 무효가 된다.
+    """
+    survivor = _node()
+    merged = KnowledgeNode(
+        id=uuid.uuid4(),
+        workspace_id=WORKSPACE,
+        node_kind=NodeKind.ENTITY,
+        entity_type="feature",
+        display_name="옛 오픈 API",
+        lifecycle_state=NodeLifecycleState.MERGED,
+        merged_into_node_id=survivor.id,
+    )
+    uow = FakeUnitOfWork(
+        nodes=FakeNodeRepository(by_id={merged.id: merged}),
+        claims=FakeClaimRepository((_claim(),)),
+    )
+
+    as_of_result = query_claims_of_node(
+        workspace_id=WORKSPACE,
+        node_id=merged.id,
+        at=AT,
+        uow=uow,
+    )
+    history_result = query_claims_of_node_history(
+        workspace_id=WORKSPACE,
+        node_id=merged.id,
+        uow=uow,
+    )
+
+    assert as_of_result.subject is None
+    assert as_of_result.claims == ()
+    assert history_result.subject is None
+    assert history_result.claims == ()
+    assert uow.knowledge_candidates.calls == []
+    assert uow.knowledge_candidates.history_calls == []

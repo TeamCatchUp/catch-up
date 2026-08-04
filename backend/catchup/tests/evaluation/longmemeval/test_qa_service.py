@@ -107,6 +107,8 @@ def _lookup(
     return KnowledgeLookup(
         as_of=lambda subject, at: as_of_map.get(subject, _miss()),
         history=lambda subject: history_map.get(subject, _miss()),
+        as_of_node=lambda node_id, at: _miss(),
+        history_node=lambda node_id: _miss(),
     )
 
 
@@ -384,7 +386,12 @@ def test_subjects_are_capped_and_deduplicated() -> None:
         seen.append(subject)
         return _miss()
 
-    lookup = KnowledgeLookup(as_of=_as_of, history=lambda subject: _miss())
+    lookup = KnowledgeLookup(
+        as_of=_as_of,
+        history=lambda subject: _miss(),
+        as_of_node=lambda node_id, at: _miss(),
+        history_node=lambda node_id: _miss(),
+    )
     extract = _FakeExtract(
         ("Alice", "Alice", "Bob", "Carol", "Dave", "Erin", "Frank")
     )
@@ -432,13 +439,34 @@ def test_answer_questions_aggregates_usage_and_keeps_order() -> None:
     assert total.output_tokens == 14
 
 
+_NODE_NAMESPACE = uuid.UUID("11111111-1111-1111-1111-111111111111")
+_NODE_NAMES: dict[uuid.UUID, str] = {}
+
+
+def _node_id_for(name: str) -> uuid.UUID:
+    """이름 하나에 고정된 node id를 붙인다.
+
+    되짚기가 node id로 읽으므로 fake도 응답을 node id로 세워야 한다.
+    이름에서 id를 결정론으로 만들면 테스트는 이름으로 쓰고 fake는
+    id로만 찾는다 — 실물이 없앤 이름 왕복을 fake가 되살리지 않는다.
+
+    호출 기록을 사람이 읽게 하려고 반대 방향도 적어 둔다. uuid5는
+    되돌릴 수 없으므로 만들 때 남기는 수밖에 없다.
+    """
+    node_id = uuid.uuid5(_NODE_NAMESPACE, name)
+    _NODE_NAMES[node_id] = name
+    return node_id
+
+
 def _candidate(
     display_name: str | None = "Alice Kim",
     score: float = 0.42,
+    *,
+    node_id: uuid.UUID | None = None,
 ) -> SubjectCandidate:
     """정확 매칭이 빗나갔을 때 함께 오는 유사 후보 하나를 만든다."""
     return SubjectCandidate(
-        node_id=uuid.uuid4(),
+        node_id=node_id or _node_id_for(display_name or "unnamed"),
         display_name=display_name,
         entity_type="person",
         score=score,
@@ -456,20 +484,42 @@ def _miss_with(*candidates: SubjectCandidate) -> AsOfQueryResult:
 
 
 class _RecordingLookup:
-    """조회 호출을 순서대로 기록하는 fake 조회다."""
+    """이름 조회와 node id 조회를 따로 기록하는 fake 조회다.
+
+    node 응답은 이름으로 받아 `_node_id_for`로 바꿔 담고, 조회는 node
+    id로만 찾는다. 되짚기가 이름으로 되돌아가면 그 조회는 아무것도
+    찾지 못한다 — 실물이 고친 왕복이 여기서 되살아나지 않게 하려는
+    것이다. 기록에는 node 조회를 "node:이름"으로 남겨 어느 입구를
+    썼는지 드러낸다.
+    """
 
     def __init__(
         self,
         as_of: dict[str, AsOfQueryResult] | None = None,
         history: dict[str, AsOfQueryResult] | None = None,
+        node_as_of: dict[str, AsOfQueryResult] | None = None,
+        node_history: dict[str, AsOfQueryResult] | None = None,
     ) -> None:
         self.as_of_map = as_of or {}
         self.history_map = history or {}
+        self.node_as_of_map = {
+            _node_id_for(name): result
+            for name, result in (node_as_of or {}).items()
+        }
+        self.node_history_map = {
+            _node_id_for(name): result
+            for name, result in (node_history or {}).items()
+        }
         self.calls: list[str] = []
 
     def as_lookup(self) -> KnowledgeLookup:
         """qa_service가 받는 조회 묶음으로 감싼다."""
-        return KnowledgeLookup(as_of=self._as_of, history=self._history)
+        return KnowledgeLookup(
+            as_of=self._as_of,
+            history=self._history,
+            as_of_node=self._as_of_node,
+            history_node=self._history_node,
+        )
 
     def _as_of(self, subject: str, at: datetime) -> AsOfQueryResult:
         self.calls.append(subject)
@@ -478,15 +528,24 @@ class _RecordingLookup:
     def _history(self, subject: str) -> AsOfQueryResult:
         return self.history_map.get(subject, _miss())
 
+    def _as_of_node(
+        self,
+        node_id: uuid.UUID,
+        at: datetime,
+    ) -> AsOfQueryResult:
+        self.calls.append(f"node:{_NODE_NAMES.get(node_id, node_id)}")
+        return self.node_as_of_map.get(node_id, _miss())
+
+    def _history_node(self, node_id: uuid.UUID) -> AsOfQueryResult:
+        return self.node_history_map.get(node_id, _miss())
+
 
 def test_similar_candidate_is_requeried_and_loaded_with_label() -> None:
-    """miss에 후보가 있으면 그 이름으로 다시 조회해 라벨로 싣는다."""
+    """miss에 후보가 있으면 그 node id로 다시 읽어 라벨로 싣는다."""
     lookup = _RecordingLookup(
         as_of={"Alice": _miss_with(_candidate())},
-        history={
-            "Alice": _miss_with(_candidate()),
-            "Alice Kim": _hit(_claim()),
-        },
+        history={"Alice": _miss_with(_candidate())},
+        node_history={"Alice Kim": _hit(_claim())},
     )
     answer = _FakeAnswer()
 
@@ -498,7 +557,7 @@ def test_similar_candidate_is_requeried_and_loaded_with_label() -> None:
         use_similarity_fallback=True,
     )
 
-    assert lookup.calls == ["Alice", "Alice Kim"]
+    assert lookup.calls == ["Alice", "node:Alice Kim"]
     context = outcome.claims_context
     assert "(similar match: Alice Kim, score 0.42)" in context
     assert "[employer] Acme" in context
@@ -509,10 +568,10 @@ def test_similar_candidate_is_requeried_and_loaded_with_label() -> None:
     assert payload["similarity_used"] is True
     assert payload["similarity_candidates"] == [
         {
+            "node_id": str(_node_id_for("Alice Kim")),
             "name": "Alice Kim",
             "score": 0.42,
             "claims_found": 1,
-            "skipped": False,
         }
     ]
 
@@ -524,11 +583,9 @@ def test_fallback_claims_are_counted_apart_from_exact_match() -> None:
     그 0에 묻히면 진단 하류 규칙이 "컨텍스트가 비었다"로 읽는다.
     """
     lookup = _RecordingLookup(
-        as_of={
-            "Alice": _miss_with(_candidate()),
-            "Alice Kim": _hit(_claim()),
-        },
-        history={
+        as_of={"Alice": _miss_with(_candidate())},
+        node_as_of={"Alice Kim": _hit(_claim())},
+        node_history={
             "Alice Kim": _hit(
                 _claim(
                     value="Globex",
@@ -562,10 +619,8 @@ def test_runner_fallback_trace_reaches_answer_generation() -> None:
     그래서 여기서는 러너 출력을 그대로 진단에 넣는다.
     """
     lookup = _RecordingLookup(
-        as_of={
-            "Alice": _miss_with(_candidate()),
-            "Alice Kim": _hit(_claim()),
-        },
+        as_of={"Alice": _miss_with(_candidate())},
+        node_as_of={"Alice Kim": _hit(_claim())},
     )
 
     outcome = run_question(
@@ -618,7 +673,7 @@ def test_similarity_fallback_off_keeps_the_old_abstention_path() -> None:
     """off면 후보가 있어도 재조회하지 않고 기존 abstention으로 닫는다."""
     lookup = _RecordingLookup(
         as_of={"Alice": _miss_with(_candidate())},
-        history={"Alice Kim": _hit(_claim())},
+        node_history={"Alice Kim": _hit(_claim())},
     )
     answer = _FakeAnswer()
 
@@ -655,7 +710,7 @@ def test_all_candidates_empty_still_abstains() -> None:
         answer=answer,
     )
 
-    assert lookup.calls == ["Alice", "Alice Kim", "Alicia"]
+    assert lookup.calls == ["Alice", "node:Alice Kim", "node:Alicia"]
     assert outcome.claims_context == ""
     assert outcome.hypothesis == ABSTENTION_ANSWER
     assert outcome.abstained is True
@@ -673,11 +728,18 @@ def test_all_candidates_empty_still_abstains() -> None:
     )
 
 
-def test_candidate_without_display_name_is_skipped_and_traced() -> None:
-    """이름 없는 후보는 재조회할 수 없으므로 건너뛰고 trace에 남긴다."""
+def test_candidate_without_display_name_is_still_read_by_node_id() -> None:
+    """이름 없는 후보도 node id로 읽고 라벨에 그 id를 적는다.
+
+    이름으로 되짚던 때는 이름 없는 후보를 통째로 버렸다. 조회 키가
+    identity로 바뀌었으므로 이름은 사람이 읽을 표시일 뿐이고, 이름이
+    비었다는 이유로 근거를 버릴 까닭이 없다.
+    """
+    nameless = _candidate(None, 0.5, node_id=_node_id_for("nameless node"))
     lookup = _RecordingLookup(
-        as_of={"Alice": _miss_with(_candidate(None, 0.5), _candidate())},
-        history={"Alice Kim": _hit(_claim())},
+        as_of={"Alice": _miss_with(nameless, _candidate())},
+        node_as_of={"nameless node": _hit(_claim(value="Initech"))},
+        node_history={"Alice Kim": _hit(_claim())},
     )
 
     outcome = run_question(
@@ -687,25 +749,31 @@ def test_candidate_without_display_name_is_skipped_and_traced() -> None:
         answer=_FakeAnswer(),
     )
 
-    assert lookup.calls == ["Alice", "Alice Kim"]
+    assert lookup.calls == ["Alice", "node:nameless node", "node:Alice Kim"]
     payload = outcome.trace_payload()
     assert payload["similarity_candidates"] == [
-        {"name": None, "score": 0.5, "claims_found": 0, "skipped": True},
         {
+            "node_id": str(nameless.node_id),
+            "name": None,
+            "score": 0.5,
+            "claims_found": 1,
+        },
+        {
+            "node_id": str(_node_id_for("Alice Kim")),
             "name": "Alice Kim",
             "score": 0.42,
             "claims_found": 1,
-            "skipped": False,
         },
     ]
     assert payload["similarity_used"] is True
+    assert f"similar match: {nameless.node_id}" in outcome.claims_context
 
 
 def test_candidate_requery_does_not_chain_into_another_hop() -> None:
     """재조회가 또 후보를 물고 와도 한 단계에서 멈춘다."""
     lookup = _RecordingLookup(
-        as_of={
-            "Alice": _miss_with(_candidate()),
+        as_of={"Alice": _miss_with(_candidate())},
+        node_as_of={
             "Alice Kim": _miss_with(_candidate("Alicia Kim", 0.3)),
         },
     )
@@ -717,7 +785,7 @@ def test_candidate_requery_does_not_chain_into_another_hop() -> None:
         answer=_FakeAnswer(),
     )
 
-    assert lookup.calls == ["Alice", "Alice Kim"]
+    assert lookup.calls == ["Alice", "node:Alice Kim"]
     assert outcome.abstained is True
 
 

@@ -462,6 +462,26 @@ class SqlAlchemyKnowledgeNodeRepository:
         )
         return knowledge_node_to_domain(row) if row is not None else None
 
+    def get_entity_by_id(
+        self,
+        *,
+        workspace_id: int,
+        node_id: uuid.UUID,
+    ) -> KnowledgeNode | None:
+        """node id로 entity 노드를 그대로 찾는다.
+
+        이름 해소가 없는 조회다. lifecycle은 거르지 않는다 — 살아 있는
+        노드만 쓸지는 읽기 경로가 정한다.
+        """
+        row = self._session.scalar(
+            select(KnowledgeNodeRow).where(
+                KnowledgeNodeRow.workspace_id == workspace_id,
+                KnowledgeNodeRow.node_kind == NodeKind.ENTITY.value,
+                KnowledgeNodeRow.id == node_id,
+            )
+        )
+        return knowledge_node_to_domain(row) if row is not None else None
+
     def find_entity_candidates_by_similarity(
         self,
         *,

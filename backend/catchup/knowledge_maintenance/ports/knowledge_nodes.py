@@ -41,6 +41,25 @@ class KnowledgeNodeRepository(Protocol):
         """
         ...
 
+    def get_entity_by_id(
+        self,
+        *,
+        workspace_id: int,
+        node_id: uuid.UUID,
+    ) -> KnowledgeNode | None:
+        """node id로 entity 노드를 그대로 찾는다.
+
+        이름을 거치지 않는 유일한 조회다. 이미 identity를 손에 쥔
+        호출자가 그것을 이름으로 되돌렸다가 다시 푸는 일을 막는다 —
+        같은 이름이 여러 노드에 걸릴 수 있어 그 왕복은 다른 노드로
+        착지할 수 있기 때문이다.
+
+        lifecycle은 거르지 않고 찾은 그대로 돌려준다. 살아 있는 노드만
+        쓸지는 읽기 경로마다 다른 판단이라 저장소가 미리 정하지 않는다.
+        entity가 아니거나 없으면 None이다.
+        """
+        ...
+
     def find_entity_candidates_by_similarity(
         self,
         *,

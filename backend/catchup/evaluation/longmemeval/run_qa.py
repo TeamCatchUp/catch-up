@@ -39,6 +39,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
@@ -87,6 +88,12 @@ from catchup.knowledge_maintenance.services.query_knowledge_as_of import (
 )
 from catchup.knowledge_maintenance.services.query_knowledge_as_of import (
     query_claims_history,
+)
+from catchup.knowledge_maintenance.services.query_knowledge_as_of import (
+    query_claims_of_node,
+)
+from catchup.knowledge_maintenance.services.query_knowledge_as_of import (
+    query_claims_of_node_history,
 )
 
 DEFAULT_WORKSPACE_ID = 902
@@ -167,8 +174,12 @@ def bedrock_answer(llm: BaseChatModel):
     return answer
 
 
-def postgres_lookup(session_factory, *, workspace_id: int) -> KnowledgeLookup:
-    """as-of·history 조회를 실제 DB에 연결한다.
+def postgres_lookup(
+    session_factory,
+    *,
+    workspace_id: int,
+) -> KnowledgeLookup:
+    """이름·node id 네 조회 경로를 실제 DB에 연결한다.
 
     UnitOfWork를 조회마다 새로 만든다. 하나를 재사용하면 앞 조회의
     session이 이미 닫혀 있어 두 번째 조회가 깨진다.
@@ -195,7 +206,27 @@ def postgres_lookup(session_factory, *, workspace_id: int) -> KnowledgeLookup:
             uow=_uow(),
         )
 
-    return KnowledgeLookup(as_of=as_of, history=history)
+    def as_of_node(node_id: uuid.UUID, at: datetime) -> AsOfQueryResult:
+        return query_claims_of_node(
+            workspace_id=workspace_id,
+            node_id=node_id,
+            at=at,
+            uow=_uow(),
+        )
+
+    def history_node(node_id: uuid.UUID) -> AsOfQueryResult:
+        return query_claims_of_node_history(
+            workspace_id=workspace_id,
+            node_id=node_id,
+            uow=_uow(),
+        )
+
+    return KnowledgeLookup(
+        as_of=as_of,
+        history=history,
+        as_of_node=as_of_node,
+        history_node=history_node,
+    )
 
 
 def manifest_lookup_for(

@@ -32,11 +32,14 @@ claim을 빼고, 남은 것만 적는다. 같은 문장을 두 번 실으면 토
 
 정확 매칭이 빗나간 subject에는 한 단계짜리 되짚기가 붙는다. 조회
 서비스는 이름이 비슷한 노드를 후보로만 돌려주고 확정은 하지 않는다.
-그 확정을 여기서 한다 — 후보의 `display_name`은 canonical 이름이라
-그대로 다시 조회하면 정확 매칭으로 걸린다(2-hop). 되짚어 온 블록은
-"(similar match: ...)" 라벨을 달아 싣는다. 라벨 없이 섞으면 모델이
-근사 결과를 확정된 사실로 읽는다. 되짚기는 한 단계에서 멈춘다 —
-재조회 결과가 물고 온 후보는 따라가지 않는다.
+그 확정을 여기서 한다 — 고른 후보의 `node_id`로 claim을 바로 읽는다.
+후보의 `display_name`을 다시 넣어 조회하지 않는다. 같은 정규화 alias가
+여러 노드에 걸릴 수 있어서 이름 왕복은 유사도가 고른 노드가 아니라
+이름이 같은 다른 노드로 착지할 수 있고, 그러면 남의 사실이 답의
+근거가 된다. 되짚어 온 블록은 "(similar match: ...)" 라벨을 달아
+싣는다. 라벨 없이 섞으면 모델이 근사 결과를 확정된 사실로 읽는다.
+되짚기는 한 단계에서 멈춘다 — 재조회 결과가 물고 온 후보는 따라가지
+않는다.
 
 후보 claim이 실렸다고 답변 지시가 느슨해지지는 않는다. 질문과 무관한
 claim이 실렸을 때 거절하는 것은 여전히 프롬프트의 abstention 지시이고,
@@ -203,18 +206,33 @@ AsOfLookupFn = Callable[[str, datetime], AsOfQueryResult]
 HistoryLookupFn = Callable[[str], AsOfQueryResult]
 """subject로 history claim을 읽는 함수를 나타낸다."""
 
+NodeAsOfLookupFn = Callable[[uuid.UUID, datetime], AsOfQueryResult]
+"""node id와 시각으로 as-of claim을 읽는 함수를 나타낸다."""
+
+NodeHistoryLookupFn = Callable[[uuid.UUID], AsOfQueryResult]
+"""node id로 history claim을 읽는 함수를 나타낸다."""
+
 
 @dataclass(frozen=True, slots=True)
 class KnowledgeLookup:
-    """as-of와 history 두 조회 경로를 한 묶음으로 담는다.
+    """이름 조회와 node id 조회 네 경로를 한 묶음으로 담는다.
+
+    이름 두 개는 subject 추출이 낸 문자열을 푸는 입구이고, node id 두
+    개는 이미 노드를 손에 쥔 뒤 쓰는 입구다. 유사 후보 되짚기가
+    후자를 쓴다 — 후보의 이름으로 다시 조회하면 같은 이름을 가진 다른
+    노드로 착지할 수 있기 때문이다.
 
     Attributes:
-        as_of: 어떤 시점에 참이었던 claim을 읽는다.
-        history: 한때 참이었던 claim까지 읽는다.
+        as_of: 어떤 시점에 참이었던 claim을 이름으로 읽는다.
+        history: 한때 참이었던 claim까지 이름으로 읽는다.
+        as_of_node: 어떤 시점에 참이었던 claim을 node id로 읽는다.
+        history_node: 한때 참이었던 claim까지 node id로 읽는다.
     """
 
     as_of: AsOfLookupFn
     history: HistoryLookupFn
+    as_of_node: NodeAsOfLookupFn
+    history_node: NodeHistoryLookupFn
 
 
 LookupFor = Callable[[OracleQuestion], KnowledgeLookup]
@@ -275,24 +293,27 @@ class SimilarityTrace:
     """유사 후보 하나를 되짚은 흔적을 담는다.
 
     Attributes:
-        name: 재조회에 쓴 후보 이름을 담고, 이름이 없으면 None이다.
+        node_id: 되짚어 읽은 노드를 식별한다. 되짚기가 무엇을 읽었는지는
+            이름이 아니라 이 값으로만 확정된다 — 같은 이름이 여러 노드에
+            걸릴 수 있기 때문이다.
+        name: 후보의 이름을 담고, 이름이 없으면 None이다. 사람이 읽기
+            위한 값이고 조회 키가 아니다.
         score: 조회 서비스가 매긴 이름 유사도 점수를 나타낸다.
         claims_found: 재조회가 돌려준 서로 다른 claim 수를 나타낸다.
-        skipped: 이름이 없어 재조회 자체를 못 했는지 나타낸다.
     """
 
+    node_id: uuid.UUID
     name: str | None
     score: float
     claims_found: int
-    skipped: bool = False
 
     def as_dict(self) -> dict[str, Any]:
         """trace 파일에 담을 형태로 바꾼다."""
         return {
+            "node_id": str(self.node_id),
             "name": self.name,
             "score": self.score,
             "claims_found": self.claims_found,
-            "skipped": self.skipped,
         }
 
 
@@ -472,11 +493,14 @@ class SubjectLookup:
 
 
 def similarity_label(subject: str, candidate: SubjectCandidate) -> str:
-    """유사 후보로 되짚어 온 블록의 제목을 만든다."""
-    return (
-        f"{subject} (similar match: {candidate.display_name}, "
-        f"score {candidate.score:.2f})"
-    )
+    """유사 후보로 되짚어 온 블록의 제목을 만든다.
+
+    이름이 없는 후보는 node id로 적는다. 되짚기가 node id로 읽으므로
+    이름 없는 노드도 근거가 될 수 있고, 그때 제목이 비면 모델도 사람도
+    그 블록이 무엇에 대한 것인지 알 수 없다.
+    """
+    name = candidate.display_name or str(candidate.node_id)
+    return f"{subject} (similar match: {name}, score {candidate.score:.2f})"
 
 
 def render_claims_context(
@@ -638,11 +662,12 @@ def run_question(
     지식이 아니라 모델의 사전 지식에서 나온 것이라 벤치마크가 재려는
     값을 오염시킨다.
 
-    되짚기는 정확 매칭이 빗나간 subject에만 붙는다. 이미 노드를 찾은
-    subject에 근사 후보를 덧붙이면 확실한 답 옆에 비슷한 이름의 남의
-    사실이 끼어든다. `use_similarity_fallback`을 끄면 후보를 조회조차
-    하지 않는다 — 되짚기가 점수를 얼마나 움직였는지 재려면 그 없는
-    쪽 기준선이 필요하다.
+    되짚기는 정확 매칭이 빗나간 subject에만 붙고, 후보의 node id로
+    읽는다. 이미 노드를 찾은 subject에 근사 후보를 덧붙이면 확실한 답
+    옆에 비슷한 이름의 남의 사실이 끼어든다.
+
+    `use_similarity_fallback`을 끄면 되짚기를 하지 않는다. 되짚기가
+    점수를 얼마나 움직였는지 재려면 그 없는 쪽 기준선이 필요하다.
     """
     started = time.perf_counter()
 
@@ -687,48 +712,54 @@ def run_question(
     similarity_traces: list[SimilarityTrace] = []
     fallback_lookups: list[SubjectLookup] = []
     if use_similarity_fallback:
-        # 같은 이름을 두 번 조회하지 않는다. 원래 subject도 이미 조회한
-        # 이름이라 함께 막는다.
-        queried = {subject.casefold() for subject in subjects}
+        # 같은 노드를 두 번 읽지 않는다. 정확 매칭으로 이미 읽은 노드도
+        # 함께 막는다. 판정 기준이 이름이 아니라 node id인 이유는
+        # 되짚기가 읽는 단위 자체가 노드이기 때문이다 — 이름으로 걸러
+        # 내면 이름이 같은 다른 노드를 통째로 놓치거나 이름이 없는
+        # 노드를 매번 다시 읽는다.
+        visited: set[uuid.UUID] = set()
+        for entry in lookups:
+            found_subject = (
+                entry.as_of_result.subject or entry.history_result.subject
+            )
+            if found_subject is not None:
+                visited.add(found_subject.node_id)
         requeried = 0
         for subject, candidates in missed:
             for candidate in candidates:
                 if requeried >= max_similar_candidates:
                     break
-                name = (candidate.display_name or "").strip()
-                if not name:
-                    similarity_traces.append(
-                        SimilarityTrace(
-                            name=candidate.display_name,
-                            score=candidate.score,
-                            claims_found=0,
-                            skipped=True,
-                        )
-                    )
+                if candidate.node_id in visited:
                     continue
-                key = name.casefold()
-                if key in queried:
-                    continue
-                queried.add(key)
+                visited.add(candidate.node_id)
                 requeried += 1
-                candidate_as_of = lookup.as_of(name, question.question_date)
-                candidate_history = lookup.history(name)
+                # 이름이 아니라 후보의 node id로 읽는다. 후보의
+                # display_name을 다시 조회하면 같은 정규화 alias를 가진
+                # 다른 노드가 답으로 올 수 있고, 그러면 유사도가 고른
+                # 노드가 아닌 남의 사실이 근거로 실린다.
+                candidate_as_of = lookup.as_of_node(
+                    candidate.node_id,
+                    question.question_date,
+                )
+                candidate_history = lookup.history_node(candidate.node_id)
                 found = {
                     claim.claim_id for claim in candidate_as_of.claims
                 } | {claim.claim_id for claim in candidate_history.claims}
                 similarity_traces.append(
                     SimilarityTrace(
-                        name=name,
+                        node_id=candidate.node_id,
+                        name=candidate.display_name,
                         score=candidate.score,
                         claims_found=len(found),
                     )
                 )
                 # 재조회 결과가 또 유사 후보를 달고 와도 따라가지 않는다.
-                # 이름을 타고 계속 번지면 무엇을 근거로 답했는지가
-                # 흐려지고 조회 수도 예측할 수 없게 된다.
+                # node id 조회는 애초에 후보를 달고 오지 않지만, 규칙은
+                # 그대로다 — 되짚기는 한 단계에서 멈춘다.
                 fallback_lookups.append(
                     SubjectLookup(
-                        subject=name,
+                        subject=candidate.display_name
+                        or str(candidate.node_id),
                         as_of_result=candidate_as_of,
                         history_result=candidate_history,
                         label=similarity_label(subject, candidate),
