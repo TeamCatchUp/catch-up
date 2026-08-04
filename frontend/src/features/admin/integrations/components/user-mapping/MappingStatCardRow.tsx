@@ -27,8 +27,15 @@ interface MappingStatCardRowProps {
  * 카드 key → 표 필터 매핑은 배선(호출부)이 정한다.
  */
 export default function MappingStatCardRow({ items, selected, onToggle }: MappingStatCardRowProps) {
+  /*
+   * Figma `17300:80304` — 흰 배경 + `line/normal/neutral` 1px + radius 12,
+   * 카드 사이 gap 0. 구분은 두 번째 카드부터 걸린 왼쪽 선이 만든다(카드가 담당).
+   *
+   * 1024에서 5장을 flex-1로 균등 압축하면 130px까지 줄어 내용이 겹쳤다(실측).
+   * 카드 최소폭을 두고 넘치면 줄바꿈한다 — 카탈로그와 같은 처리다.
+   */
   return (
-    <div className="border-line-normal-neutral flex overflow-x-auto rounded-xl border">
+    <div className="border-line-normal-neutral bg-fill-normal-normal flex flex-wrap overflow-hidden rounded-xl border">
       {items.map((item) => (
         <MappingStatCard
           key={item.key}

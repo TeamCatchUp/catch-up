@@ -24,8 +24,13 @@ interface MappingStatCardProps {
  * px 6 py 2, radius 6, 13px text/primary/normal).
  *
  * 카드 폭 208은 행 1040의 5등분이라 박지 않는다 — 행이 5등분한다.
- * selected 시각 변형은 Figma에 없어(감사 B-2 UNKNOWN) 발명하지 않고
- * `aria-pressed`만 노출한다 — 필터 결과는 아래 칩과 표가 보여준다.
+ *
+ * **상태 변형이 하나도 없다.** Figma 카드 5장은 전부 FRAME(컴포넌트 인스턴스가
+ * 아니라 variant 자체가 없음)이고, 전체 화면과 채널톡 필터 화면에서 fill 이
+ * 똑같이 비어 있다 — hover · pressed · selected 어느 것도 그려지지 않았다.
+ * 그래서 배경 변화를 넣지 않고 `aria-pressed` 로만 상태를 알린다. 눌린 결과는
+ * 필터 칩과 표가 대신 보여준다. (누를 수 있다는 것은 섹션 부제
+ * "커넥터 탭을 누르면 …"이 근거다.)
  */
 export default function MappingStatCard({ Logo, name, percent, countLabel, selected, onToggle }: MappingStatCardProps) {
   return (
@@ -33,7 +38,8 @@ export default function MappingStatCard({ Logo, name, percent, countLabel, selec
       type="button"
       aria-pressed={selected}
       onClick={onToggle}
-      className="hover:bg-fill-normal-interaction-hover active:bg-fill-normal-interaction-pressed flex min-w-0 flex-1 cursor-pointer items-center gap-5 p-5 text-left transition-colors"
+      // basis 180: 로고칩 48 + gap 20 + 이름·완료율이 겹치지 않는 하한. 넘치면 행이 줄바꿈한다
+      className="border-line-normal-neutral flex min-w-0 flex-1 basis-45 cursor-pointer items-center gap-5 border-l p-5 text-left first:border-l-0"
     >
       <span className="bg-fill-normal-strong flex size-12 shrink-0 items-center justify-center rounded-xl p-2">
         <Logo className="size-7" />
