@@ -4,10 +4,13 @@
 
 결정론 단계는 즉시 적용한다. 외부 ID가 같으면 같은 대상이라는 판정은
 틀릴 수 없고, 사람이 봐도 거절할 이유가 없다. metadata 후보를 canonical
-노드로 발급·병합하고, 이미 존재하는 canonical key와 정확히 일치하는
-LLM 후보를 그 노드에 병합한다. LLM 후보의 신규 canonical 발급은 하지
-않는다 — 후보 단계의 병합은 UPDATE 몇 줄이지만 canonical 창설 후
-병합은 lifecycle과 FK 정리가 따르므로, 창설을 늦출수록 병합이 싸다.
+노드로 발급·병합하고, 이미 존재하는 canonical key와 정확히 일치하거나
+같은 종류의 이름 alias에 정확히 걸리는 LLM 후보를 그 노드에 병합한다.
+alias까지 보는 이유는 사람이 승인해 만든 노드에는 canonical key가 없어
+key 조회만으로는 같은 이름이 다시 와도 영영 닿지 못하기 때문이다. LLM
+후보의 신규 canonical 발급은 하지 않는다 — 후보 단계의 병합은 UPDATE 몇
+줄이지만 canonical 창설 후 병합은 lifecycle과 FK 정리가 따르므로, 창설을
+늦출수록 병합이 싸다.
 
 fuzzy 단계는 proposal만 쓴다. 같은 정규화 이름인데 후보가 여럿인 그룹을
 LLM이 판정하고, 같다고 하면 KnowledgeMutationProposal로 남긴다. 적용은
@@ -33,6 +36,9 @@ from catchup.knowledge_maintenance.domain.knowledge_candidate import ExtractionM
 from catchup.knowledge_maintenance.domain.knowledge_candidate import (
     StoredEntityCandidate,
 )
+from catchup.knowledge_maintenance.domain.knowledge_node import KnowledgeNode
+from catchup.knowledge_maintenance.domain.knowledge_node import NodeKind
+from catchup.knowledge_maintenance.domain.knowledge_node import NodeLifecycleState
 from catchup.knowledge_maintenance.ports.identity_judge import IdentityJudge
 from catchup.knowledge_maintenance.ports.identity_judge import JudgeCandidate
 from catchup.knowledge_maintenance.ports.knowledge_candidates import (
@@ -187,6 +193,12 @@ def resolve_entity_candidates(
                 canonical_key=key,
             )
             if node is None:
+                node = _reattachable_node(
+                    workspace_id=workspace_id,
+                    candidate=candidate,
+                    uow=uow,
+                )
+            if node is None:
                 remaining_llm.append(candidate)
                 continue
             uow.knowledge_candidates.mark_entity_resolved(
@@ -256,6 +268,49 @@ def _external_key(candidate: StoredEntityCandidate) -> str | None:
     if not isinstance(external_key, str) or not external_key.strip():
         return None
     return external_key
+
+
+def _reattachable_node(
+    *,
+    workspace_id: int,
+    candidate: StoredEntityCandidate,
+    uow: ResolutionUnitOfWork,
+) -> KnowledgeNode | None:
+    """이름 alias로 후보를 흡수할 기존 노드를 찾는다.
+
+    canonical_key 조회만으로는 사람이 승인해 만든 노드에 후보가 절대
+    닿지 못한다. 그 노드는 외부 ID가 없어 canonical_key가 비어 있고,
+    가진 단서는 이름 alias뿐이기 때문이다. 그래서 key가 빗나가면 정규화
+    이름 alias 정확 일치를 한 번 더 본다.
+
+    다만 alias는 identity가 아니다. 이름 키에는 type이 들어 있지 않아
+    같은 이름의 다른 종류가 걸릴 수 있으므로, 노드의 entity_type이 후보
+    proposed_type과 같을 때만 흡수한다 — 과병합은 후보를 pending으로
+    남겨두는 것보다 되돌리기가 훨씬 비싸다. 흡수된·퇴역한 노드도
+    흡수처가 아니다. 조건을 못 넘기면 None을 주어 fuzzy 판정 대상으로
+    남긴다.
+    """
+    node = uow.knowledge_nodes.find_entity_by_normalized_alias(
+        workspace_id=workspace_id,
+        normalized_alias=normalize_name(candidate.proposed_name),
+    )
+    if node is None:
+        return None
+    if node.node_kind is not NodeKind.ENTITY:
+        return None
+    if node.lifecycle_state is not NodeLifecycleState.ACTIVE:
+        return None
+    if node.entity_type != candidate.proposed_type:
+        logger.info(
+            "entity_alias_reattach_type_mismatch",
+            workspace_id=workspace_id,
+            candidate_id=str(candidate.id),
+            node_id=str(node.id),
+            node_entity_type=node.entity_type,
+            proposed_type=candidate.proposed_type,
+        )
+        return None
+    return node
 
 
 def _judge_name_groups(

@@ -34,6 +34,8 @@ from catchup.knowledge_maintenance.adapters.postgres.repositories import (
 from catchup.knowledge_maintenance.adapters.postgres.unit_of_work import (
     KnowledgeMaintenanceUnitOfWork,
 )
+from catchup.knowledge_maintenance.contracts.extraction import EntityCandidateDraft
+from catchup.knowledge_maintenance.contracts.extraction import KnowledgeCandidateBatch
 from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_CLAIM_SECTION
 from catchup.knowledge_maintenance.domain.artifact import ArtifactBlock
 from catchup.knowledge_maintenance.domain.artifact import artifact_idempotency_key
@@ -41,6 +43,9 @@ from catchup.knowledge_maintenance.domain.artifact import blocks_content_hash
 from catchup.knowledge_maintenance.domain.entity_resolution import normalize_name
 from catchup.knowledge_maintenance.services.apply_mutation_proposals import (
     apply_mutation_proposals,
+)
+from catchup.knowledge_maintenance.services.resolve_entity_candidates import (
+    resolve_entity_candidates,
 )
 from catchup.knowledge_maintenance.services.review_artifact_proposal import (
     review_artifact_proposal,
@@ -499,6 +504,67 @@ def test_apply_writes_name_alias_for_created_node(
             ).scalars()
         )
     assert len(rerun_rows) == 1
+
+
+def test_new_candidate_reattaches_to_applied_node(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+) -> None:
+    """적용이 만든 canonical_key 없는 노드에 동명 후보가 다시 붙는다."""
+    proposal_id, _, representative, _other = _merge_proposal(
+        workspace_id, session_factory, uow_factory
+    )
+    review_merge_proposal(
+        uow_factory(),
+        workspace_id=workspace_id,
+        proposal_id=proposal_id,
+        verdict="approved",
+        reviewer="ba2slk",
+    )
+    apply_mutation_proposals(uow_factory, workspace_id=workspace_id)
+    with session_factory() as session:
+        rep = session.get(CandidateRow, representative)
+        assert rep is not None and rep.resolved_node_id is not None
+        node_id = rep.resolved_node_id
+        node = session.get(KnowledgeNodeRow, node_id)
+    assert node is not None and node.canonical_key is None
+
+    # 같은 이름이 다음 관측에서 다시 나온다. canonical_key 조회로는
+    # 절대 걸리지 않는 노드다.
+    observation = _stored_observation(workspace_id, session_factory)
+    stored = store_knowledge_candidates(
+        observation,
+        KnowledgeCandidateBatch(
+            entities=[
+                EntityCandidateDraft(
+                    local_key="e1",
+                    proposed_type="feature",
+                    proposed_name="결제 기능",
+                )
+            ]
+        ),
+        spec=SPEC,
+        uow=uow_factory(),
+    ).batch
+    again = stored.entity_ids["e1"]
+
+    resolve_entity_candidates(
+        workspace_id=workspace_id, judge=None, uow=uow_factory()
+    )
+
+    with session_factory() as session:
+        row = session.get(CandidateRow, again)
+        aliases = list(
+            session.execute(
+                select(AliasRow).where(AliasRow.node_id == node_id)
+            ).scalars()
+        )
+    assert row is not None
+    assert row.resolution_status == "merged"
+    assert row.resolved_node_id == node_id
+    # 이미 있는 이름이므로 alias 행이 불어나지 않는다.
+    assert len(aliases) == 1
 
 
 def test_apply_isolates_failing_proposal(

@@ -22,6 +22,7 @@ from catchup.knowledge_maintenance.domain.knowledge_candidate import (
 )
 from catchup.knowledge_maintenance.domain.knowledge_node import KnowledgeNode
 from catchup.knowledge_maintenance.domain.knowledge_node import NodeKind
+from catchup.knowledge_maintenance.domain.knowledge_node import NodeLifecycleState
 from catchup.knowledge_maintenance.services.resolve_entity_candidates import (
     group_idempotency_key,
 )
@@ -75,13 +76,35 @@ class FakeCandidateRepository:
 
 
 class FakeNodeRepository:
+    """노드 저장소를 흉내 낸다.
+
+    canonical_key는 비어 있을 수 있고 같은 alias가 여러 노드에 걸릴 수
+    있으므로 실 DB처럼 노드를 id로 담고, alias 조회는 node id 순 첫
+    번째만 돌려준다.
+    """
+
     def __init__(self) -> None:
-        self.nodes: dict[str, KnowledgeNode] = {}
+        self.nodes: dict[uuid.UUID, KnowledgeNode] = {}
         self.aliases: list[tuple[uuid.UUID, str]] = []
 
     def get_entity_by_canonical_key(self, *, workspace_id, canonical_key):
         del workspace_id
-        return self.nodes.get(canonical_key)
+        matched = [
+            node
+            for node in self.nodes.values()
+            if node.canonical_key == canonical_key
+        ]
+        return min(matched, key=lambda node: node.id) if matched else None
+
+    def find_entity_by_normalized_alias(self, *, workspace_id, normalized_alias):
+        del workspace_id
+        matched = [
+            self.nodes[node_id]
+            for node_id, alias in self.aliases
+            if alias == normalized_alias
+            and self.nodes[node_id].node_kind is NodeKind.ENTITY
+        ]
+        return min(matched, key=lambda node: node.id) if matched else None
 
     def create_entity_node(
         self, *, workspace_id, entity_type, canonical_key, display_name
@@ -94,8 +117,12 @@ class FakeNodeRepository:
             canonical_key=canonical_key,
             display_name=display_name,
         )
-        self.nodes[canonical_key] = node
+        self.nodes[node.id] = node
         return node
+
+    def replace_node(self, node: KnowledgeNode) -> None:
+        """테스트가 노드 상태를 바꿔 끼운다."""
+        self.nodes[node.id] = node
 
     def add_alias(
         self, *, workspace_id, node_id, alias, normalized_alias, source
@@ -221,6 +248,105 @@ def test_llm_candidate_merges_into_existing_canonical_key() -> None:
     resolved = uow.knowledge_candidates.resolved
     only = next(iter(resolved.values()))
     assert only == (EntityResolutionStatus.MERGED, existing.id)
+
+
+def _promoted_node(
+    uow: FakeUnitOfWork,
+    *,
+    name: str,
+    entity_type: str,
+) -> KnowledgeNode:
+    """사람이 승인해 만들어진 canonical_key 없는 노드를 재현한다."""
+    node = uow.knowledge_nodes.create_entity_node(
+        workspace_id=WORKSPACE,
+        entity_type=entity_type,
+        canonical_key=None,
+        display_name=name,
+    )
+    uow.knowledge_nodes.add_alias(
+        workspace_id=WORKSPACE,
+        node_id=node.id,
+        alias=name,
+        normalized_alias=normalize_name(name),
+        source="system",
+    )
+    return node
+
+
+def test_llm_candidate_reattaches_to_alias_of_keyless_node() -> None:
+    """canonical_key 없는 노드에도 같은 이름 후보가 흡수된다."""
+    uow = FakeUnitOfWork(
+        [
+            _candidate(
+                name="결제 기능",
+                entity_type="feature",
+                method=ExtractionMethod.LLM,
+            )
+        ]
+    )
+    existing = _promoted_node(uow, name="결제 기능", entity_type="feature")
+
+    result = resolve_entity_candidates(
+        workspace_id=WORKSPACE, judge=None, uow=uow
+    )
+
+    assert result.nodes_created == 0
+    assert result.candidates_merged == 1
+    only = next(iter(uow.knowledge_candidates.resolved.values()))
+    assert only == (EntityResolutionStatus.MERGED, existing.id)
+    # alias는 이미 있으므로 재부착이 행을 늘리지 않는다.
+    assert uow.knowledge_nodes.aliases == [
+        (existing.id, normalize_name("결제 기능"))
+    ]
+
+
+def test_alias_hit_with_other_type_is_not_absorbed() -> None:
+    """이름만 같고 type이 다르면 흡수하지 않는다."""
+    uow = FakeUnitOfWork(
+        [
+            _candidate(
+                name="결제 기능",
+                entity_type="feature",
+                method=ExtractionMethod.LLM,
+            )
+        ]
+    )
+    _promoted_node(uow, name="결제 기능", entity_type="system")
+
+    result = resolve_entity_candidates(
+        workspace_id=WORKSPACE, judge=None, uow=uow
+    )
+
+    assert result.candidates_merged == 0
+    assert uow.knowledge_candidates.resolved == {}
+
+
+def test_alias_hit_on_merged_node_is_not_absorbed() -> None:
+    """흡수된 노드는 재부착 대상이 아니다."""
+    uow = FakeUnitOfWork(
+        [
+            _candidate(
+                name="결제 기능",
+                entity_type="feature",
+                method=ExtractionMethod.LLM,
+            )
+        ]
+    )
+    node = _promoted_node(uow, name="결제 기능", entity_type="feature")
+    uow.knowledge_nodes.replace_node(
+        replace(
+            node,
+            lifecycle_state=NodeLifecycleState.MERGED,
+            merged_into_node_id=uuid.uuid4(),
+        )
+    )
+
+    result = resolve_entity_candidates(
+        workspace_id=WORKSPACE, judge=None, uow=uow
+    )
+
+    assert result.candidates_merged == 0
+    assert uow.knowledge_candidates.resolved == {}
 
 
 def test_llm_candidate_with_new_name_stays_pending() -> None:
