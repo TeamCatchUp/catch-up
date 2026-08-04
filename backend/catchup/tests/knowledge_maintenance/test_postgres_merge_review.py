@@ -567,6 +567,68 @@ def test_new_candidate_reattaches_to_applied_node(
     assert len(aliases) == 1
 
 
+def test_reattach_skips_other_type_node_ahead_in_id_order(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+) -> None:
+    """같은 이름의 다른 type 노드가 앞서도 같은 type 노드로 흡수된다."""
+    name = f"결제 기능 {uuid.uuid4().hex[:8]}"
+    front, behind = sorted([uuid.uuid4(), uuid.uuid4()])
+    with session_factory() as session:
+        for node_id, entity_type in ((front, "system"), (behind, "feature")):
+            session.add(
+                KnowledgeNodeRow(
+                    id=node_id,
+                    workspace_id=workspace_id,
+                    node_kind="entity",
+                    entity_type=entity_type,
+                    canonical_key=None,
+                    display_name=name,
+                    lifecycle_state="active",
+                )
+            )
+            session.flush()
+            session.add(
+                AliasRow(
+                    id=uuid.uuid4(),
+                    workspace_id=workspace_id,
+                    node_id=node_id,
+                    alias=name,
+                    normalized_alias=normalize_name(name),
+                    source="human",
+                )
+            )
+        session.commit()
+
+    observation = _stored_observation(workspace_id, session_factory)
+    stored = store_knowledge_candidates(
+        observation,
+        KnowledgeCandidateBatch(
+            entities=[
+                EntityCandidateDraft(
+                    local_key="e1",
+                    proposed_type="feature",
+                    proposed_name=name,
+                )
+            ]
+        ),
+        spec=SPEC,
+        uow=uow_factory(),
+    ).batch
+    candidate_id = stored.entity_ids["e1"]
+
+    resolve_entity_candidates(
+        workspace_id=workspace_id, judge=None, uow=uow_factory()
+    )
+
+    with session_factory() as session:
+        row = session.get(CandidateRow, candidate_id)
+    assert row is not None
+    assert row.resolution_status == "merged"
+    assert row.resolved_node_id == behind
+
+
 def test_apply_isolates_failing_proposal(
     workspace_id: int,
     session_factory: Callable[[], Session],

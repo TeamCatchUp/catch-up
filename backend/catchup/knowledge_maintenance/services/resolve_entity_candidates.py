@@ -289,10 +289,21 @@ def _reattachable_node(
     남겨두는 것보다 되돌리기가 훨씬 비싸다. 흡수된·퇴역한 노드도
     흡수처가 아니다. 조건을 못 넘기면 None을 주어 fuzzy 판정 대상으로
     남긴다.
+
+    type 거르기는 조회에 넘긴다. alias 조회는 1건만 돌려주므로 여기서
+    뒤늦게 type을 보면, 같은 이름의 다른 type 노드가 id 순으로 앞설 때
+    정작 맞는 노드가 영영 발견되지 않는다. 돌아온 1건에 대한 type 검사는
+    이중 방어로 남긴다.
+
+    한계: 같은 이름·같은 type의 active 노드가 둘 이상이면 흡수처가
+    uuid 순 첫 번째로 임의 고정된다. 지금은 사람 승인이 만든 노드에만
+    생기는 드문 상황이라 두고 있으나, 승격이 자동화되면 이 tie-break가
+    사실상의 병합 정책이 되므로 별도 과제로 다뤄야 한다.
     """
     node = uow.knowledge_nodes.find_entity_by_normalized_alias(
         workspace_id=workspace_id,
         normalized_alias=normalize_name(candidate.proposed_name),
+        entity_type=candidate.proposed_type,
     )
     if node is None:
         return None

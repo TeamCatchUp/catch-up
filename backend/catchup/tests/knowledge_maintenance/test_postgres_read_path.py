@@ -114,16 +114,19 @@ def _entity_node(
     name: str,
     *,
     merged_into: uuid.UUID | None = None,
+    entity_type: str = "feature",
+    node_id: uuid.UUID | None = None,
 ) -> uuid.UUID:
     """canonical entity 노드를 하나 만든다.
 
-    merged_into를 주면 그 노드로 흡수된 merged 노드가 된다.
+    merged_into를 주면 그 노드로 흡수된 merged 노드가 된다. node_id는
+    alias 조회의 id 순 tie-break를 고정해야 할 때 쓴다.
     """
     node = NodeRow(
-        id=uuid.uuid4(),
+        id=node_id if node_id is not None else uuid.uuid4(),
         workspace_id=workspace_id,
         node_kind="entity",
-        entity_type="feature",
+        entity_type=entity_type,
         canonical_key=f"test:feature:{uuid.uuid4().hex}",
         display_name=name,
         lifecycle_state="merged" if merged_into is not None else "active",
@@ -300,6 +303,67 @@ def test_find_entity_by_normalized_alias_is_deterministic(
         )
         assert found is not None
         assert found.id == min(first, second)
+
+
+def test_find_entity_by_normalized_alias_filters_entity_type(
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+    session_factory: Callable[[], Session],
+    workspace_id: int,
+) -> None:
+    """entity_type을 주면 다른 type 노드가 앞서도 같은 type을 준다."""
+    front, behind = sorted([uuid.uuid4(), uuid.uuid4()])
+    with session_factory() as session:
+        _entity_node(
+            session,
+            workspace_id,
+            "앞선 노드",
+            entity_type="system",
+            node_id=front,
+        )
+        _entity_node(
+            session,
+            workspace_id,
+            "뒤선 노드",
+            entity_type="feature",
+            node_id=behind,
+        )
+        session.commit()
+
+    with uow_factory() as uow:
+        normalized = f"동명 이type {uuid.uuid4().hex}"
+        for node_id in (front, behind):
+            uow.knowledge_nodes.add_alias(
+                workspace_id=workspace_id,
+                node_id=node_id,
+                alias=normalized,
+                normalized_alias=normalized,
+                source="human",
+            )
+
+        # 필터가 없으면 id 순 첫 번째, 즉 다른 type 노드가 걸린다.
+        assert (
+            uow.knowledge_nodes.find_entity_by_normalized_alias(
+                workspace_id=workspace_id,
+                normalized_alias=normalized,
+            ).id
+            == front
+        )
+        typed = uow.knowledge_nodes.find_entity_by_normalized_alias(
+            workspace_id=workspace_id,
+            normalized_alias=normalized,
+            entity_type="feature",
+        )
+        assert typed is not None
+        assert typed.id == behind
+
+        assert (
+            uow.knowledge_nodes.find_entity_by_normalized_alias(
+                workspace_id=workspace_id,
+                normalized_alias=normalized,
+                entity_type="없는 type",
+            )
+            is None
+        )
 
 
 def test_find_entity_candidates_by_similarity(

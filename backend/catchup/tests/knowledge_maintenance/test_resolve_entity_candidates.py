@@ -96,13 +96,19 @@ class FakeNodeRepository:
         ]
         return min(matched, key=lambda node: node.id) if matched else None
 
-    def find_entity_by_normalized_alias(self, *, workspace_id, normalized_alias):
+    def find_entity_by_normalized_alias(
+        self, *, workspace_id, normalized_alias, entity_type=None
+    ):
         del workspace_id
         matched = [
             self.nodes[node_id]
             for node_id, alias in self.aliases
             if alias == normalized_alias
             and self.nodes[node_id].node_kind is NodeKind.ENTITY
+            and (
+                entity_type is None
+                or self.nodes[node_id].entity_type == entity_type
+            )
         ]
         return min(matched, key=lambda node: node.id) if matched else None
 
@@ -255,14 +261,22 @@ def _promoted_node(
     *,
     name: str,
     entity_type: str,
+    node_id: uuid.UUID | None = None,
 ) -> KnowledgeNode:
-    """사람이 승인해 만들어진 canonical_key 없는 노드를 재현한다."""
-    node = uow.knowledge_nodes.create_entity_node(
+    """사람이 승인해 만들어진 canonical_key 없는 노드를 재현한다.
+
+    node_id를 주면 그 id로 만든다. alias 조회의 tie-break가 id 순이라
+    어느 노드가 앞서는지 고정해야 하는 테스트가 쓴다.
+    """
+    node = KnowledgeNode(
+        id=node_id if node_id is not None else uuid.uuid4(),
         workspace_id=WORKSPACE,
+        node_kind=NodeKind.ENTITY,
         entity_type=entity_type,
         canonical_key=None,
         display_name=name,
     )
+    uow.knowledge_nodes.replace_node(node)
     uow.knowledge_nodes.add_alias(
         workspace_id=WORKSPACE,
         node_id=node.id,
@@ -319,6 +333,34 @@ def test_alias_hit_with_other_type_is_not_absorbed() -> None:
 
     assert result.candidates_merged == 0
     assert uow.knowledge_candidates.resolved == {}
+
+
+def test_alias_reattach_finds_same_type_behind_other_type() -> None:
+    """다른 type 노드가 id 순으로 앞서도 같은 type 노드로 흡수된다."""
+    uow = FakeUnitOfWork(
+        [
+            _candidate(
+                name="결제 기능",
+                entity_type="feature",
+                method=ExtractionMethod.LLM,
+            )
+        ]
+    )
+    front, behind = sorted([uuid.uuid4(), uuid.uuid4()])
+    _promoted_node(
+        uow, name="결제 기능", entity_type="system", node_id=front
+    )
+    target = _promoted_node(
+        uow, name="결제 기능", entity_type="feature", node_id=behind
+    )
+
+    result = resolve_entity_candidates(
+        workspace_id=WORKSPACE, judge=None, uow=uow
+    )
+
+    assert result.candidates_merged == 1
+    only = next(iter(uow.knowledge_candidates.resolved.values()))
+    assert only == (EntityResolutionStatus.MERGED, target.id)
 
 
 def test_alias_hit_on_merged_node_is_not_absorbed() -> None:
