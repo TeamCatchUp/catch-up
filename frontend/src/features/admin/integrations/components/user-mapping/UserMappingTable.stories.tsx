@@ -28,7 +28,8 @@ const ROWS: readonly UserMappingRow[] = [
   {
     id: 'u3',
     user: { name: '아주 긴 이름의 사용자입니다 직원20' },
-    fullyMapped: false,
+    // 채널톡은 매니저 기반이라 미사용이 감점되지 않는다 — 나머지 3열이 계정이면 녹색
+    fullyMapped: true,
     accounts: { atlassian: account('직원20'), github: account('직원20'), slack: account('직원20'), channel_talk: 'unused' },
   },
   {
@@ -66,6 +67,7 @@ const meta = {
       ],
       dataNotes: [
         '셀 3종: 계정(아바타+이름/이메일) / 미사용 태그 / 미연동 "-".',
+        '미사용은 응답에 없어 status counts로 추론한다(mapUserMappingRows). 채널톡 미매핑은 항상 미사용이고 점 감점 없음.',
         '빈 상태 배너는 MappingSyncNotice 담당 — 이 표는 rows가 비면 헤더만 남긴다.',
         '스켈레톤은 구 UsersTable 승계(감사 A-5).',
       ],
@@ -99,9 +101,9 @@ export const Full: Story = {
     }
     // 미사용 태그 행
     await expect(canvas.getAllByText('미사용').length).toBeGreaterThan(0);
-    // 상태 점 — 전체 연동 1명, 일부 미연동 3명
-    await expect(canvas.getByText('전체 연동됨')).toBeInTheDocument();
-    await expect(canvas.getAllByText('일부 미연동')).toHaveLength(3);
+    // 상태 점 — 전체 연동 2명(채널톡 미사용은 감점 없음), 일부 미연동 2명
+    await expect(canvas.getAllByText('전체 연동됨')).toHaveLength(2);
+    await expect(canvas.getAllByText('일부 미연동')).toHaveLength(2);
   },
 };
 
