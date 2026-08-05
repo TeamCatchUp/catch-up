@@ -168,9 +168,11 @@ export default function ChannelTalkChannelCard({
         open={deleteDialogOpen}
         onOpenChange={setDeleteDialogOpen}
         title="채널을 삭제하면 입력한 모든 데이터가 사라집니다."
+        // 백엔드는 채널만 삭제하고 하위 스페이스 credential은 남긴다(cascade 없음, T-5) —
+        // "함께 삭제된다"고 안내하면 거짓이 되므로 먼저 지우도록 유도한다
         description={
           channel.documentSpaces.length > 0
-            ? `'${channel.name}' 채널에 연결된 도큐먼트 스페이스 정보 역시 모두 삭제됩니다.`
+            ? `'${channel.name}' 채널의 도큐먼트 스페이스는 함께 삭제되지 않아요. 스페이스를 먼저 삭제한 뒤 채널을 삭제해주세요.`
             : '이 채널을 삭제하시겠어요?'
         }
         confirmLabel="삭제하기"
