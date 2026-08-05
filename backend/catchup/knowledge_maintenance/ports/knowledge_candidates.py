@@ -190,6 +190,32 @@ class KnowledgeCandidateRepository(Protocol):
         """
         ...
 
+    def find_accepted_claims_by_text(
+        self,
+        *,
+        workspace_id: int,
+        query_texts: Sequence[str],
+        at: datetime,
+        limit: int,
+    ) -> tuple[AsOfClaim, ...]:
+        """키워드와 겹치는 accepted claim을 workspace 횡단으로 모은다.
+
+        subject 노드를 거치지 않는다 — 여러 세션·여러 entity에 흩어진
+        사건 claim을 시간선 하나로 모으는 것이 목적이다. 매칭 대상은
+        predicate·value·statement이고, 하나라도 키워드를 포함하면
+        싣는다.
+
+        `valid_from > at`은 제외한다 — 질문 시점 이후에 발효되는
+        지식을 미리 보여주지 않는 기존 차단 규칙과 같다. 닫힌
+        accepted(valid_to 있음)는 포함한다 — 한때 참이었던 사건도
+        타임라인의 일부다. rejected는 뺀다.
+
+        정렬은 valid_from 오름차순이되 NULL이 뒤다. as-of/history와
+        달리 시점 모르는 사건을 뒤로 미는 이유는, 타임라인의 번호가
+        날짜 있는 사건의 순서를 나타내야 하기 때문이다.
+        """
+        ...
+
     def mark_entity_resolved(
         self,
         *,

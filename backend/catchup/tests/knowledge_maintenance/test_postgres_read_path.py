@@ -46,11 +46,15 @@ from catchup.knowledge_maintenance.services.query_knowledge_as_of import (
 from catchup.knowledge_maintenance.services.query_knowledge_as_of import (
     query_claims_of_node_history,
 )
+from catchup.knowledge_maintenance.services.query_knowledge_as_of import (
+    query_claims_timeline,
+)
 
 T_JULY_10 = datetime(2026, 7, 10, tzinfo=timezone.utc)
 T_AUG_1 = datetime(2026, 8, 1, tzinfo=timezone.utc)
 JULY_1 = datetime(2026, 7, 1, tzinfo=timezone.utc)
 JULY_15 = datetime(2026, 7, 15, tzinfo=timezone.utc)
+AUG_10 = datetime(2026, 8, 10, tzinfo=timezone.utc)
 
 
 @pytest.fixture(scope="module")
@@ -190,8 +194,14 @@ def _claim(
     valid_to: datetime | None = None,
     predicate: str = "release_month",
     value: str = "2026-09",
+    statement: str | None = None,
 ) -> uuid.UUID:
-    """유효 구간과 상태를 지정한 claim 후보를 하나 만든다."""
+    """유효 구간과 상태를 지정한 claim 후보를 하나 만든다.
+
+    statement를 주지 않으면 `predicate=value` 모양으로 채운다.
+    키워드가 statement에만 또는 value에만 있는 경우를 나눠 심어야 할
+    때는 명시해 끊는다.
+    """
     row = ClaimRow(
         id=uuid.uuid4(),
         workspace_id=workspace_id,
@@ -203,7 +213,9 @@ def _claim(
         value_type="string",
         value=value,
         value_hash=uuid.uuid4().hex + uuid.uuid4().hex,
-        statement=f"{predicate}={value}",
+        statement=(
+            f"{predicate}={value}" if statement is None else statement
+        ),
         ontology_id="test",
         ontology_version="1",
         extraction_method="llm",
@@ -1114,6 +1126,157 @@ def test_node_read_skips_a_merged_node(
 
     assert result.subject is None
     assert result.claims == ()
+
+
+def test_timeline_query_collects_by_text_in_time_order(
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+    session_factory: Callable[[], Session],
+    workspace_id: int,
+) -> None:
+    """키워드가 겹치는 accepted claim을 시간 오름차순으로 모은다.
+
+    statement에만 겹친 claim과 value에만 겹친 claim이 함께 나와야
+    한다 — 사건 claim의 키워드가 어느 컬럼에 앉을지는 추출 결과마다
+    다르다. 질문 시점 뒤에 발효되는 claim과 rejected는 빠진다.
+    """
+    keyword = f"workshop{uuid.uuid4().hex[:8]}"
+
+    with session_factory() as session:
+        node_id = _entity_node(session, workspace_id, "사용자")
+        run_id = _extraction_run(session, workspace_id)
+
+        by_statement = _claim(
+            session,
+            workspace_id,
+            run_id,
+            node_id=node_id,
+            status="accepted",
+            predicate=f"attended_{keyword}",
+            value="7월",
+            valid_from=JULY_1,
+        )
+        by_value = _claim(
+            session,
+            workspace_id,
+            run_id,
+            node_id=node_id,
+            status="accepted",
+            predicate="event_note",
+            value=f"{keyword} 두 번째 참석",
+            statement="사건 기록 하나",
+            valid_from=JULY_15,
+        )
+        future = _claim(
+            session,
+            workspace_id,
+            run_id,
+            node_id=node_id,
+            status="accepted",
+            predicate=f"attended_{keyword}",
+            value="8월",
+            valid_from=AUG_10,
+        )
+        rejected = _claim(
+            session,
+            workspace_id,
+            run_id,
+            node_id=node_id,
+            status="rejected",
+            predicate=f"attended_{keyword}",
+            value="거절",
+            valid_from=JULY_1,
+        )
+        session.commit()
+
+    result = query_claims_timeline(
+        workspace_id=workspace_id,
+        query_texts=(keyword,),
+        at=T_AUG_1,
+        uow=uow_factory(),
+    )
+
+    assert result.as_of == T_AUG_1
+    assert [claim.claim_id for claim in result.claims] == [
+        by_statement,
+        by_value,
+    ]
+    returned = [claim.valid_from for claim in result.claims]
+    assert returned == sorted(returned)
+    assert all(moment is None or moment <= T_AUG_1 for moment in returned)
+    assert future not in {claim.claim_id for claim in result.claims}
+    assert rejected not in {claim.claim_id for claim in result.claims}
+
+
+def test_timeline_query_escapes_like_wildcards(
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+    session_factory: Callable[[], Session],
+    workspace_id: int,
+) -> None:
+    """키워드의 `%`·`_`가 와일드카드로 새지 않는다.
+
+    escape가 빠지면 "100%" 같은 키워드 하나가 workspace의 claim 전부를
+    긁어 온다. 와일드카드로 해석되면 걸릴 claim을 하나 심고 빈 결과를
+    확인한다.
+    """
+    token = uuid.uuid4().hex[:8]
+
+    with session_factory() as session:
+        node_id = _entity_node(session, workspace_id, "사용자")
+        run_id = _extraction_run(session, workspace_id)
+        _claim(
+            session,
+            workspace_id,
+            run_id,
+            node_id=node_id,
+            status="accepted",
+            predicate="event_note",
+            value="와일드카드 미끼",
+            statement=f"zz-{token}-noXmatch",
+            valid_from=JULY_1,
+        )
+        session.commit()
+
+    result = query_claims_timeline(
+        workspace_id=workspace_id,
+        query_texts=("zz%no_match",),
+        at=T_AUG_1,
+        uow=uow_factory(),
+    )
+
+    assert result.claims == ()
+
+
+def test_timeline_query_ignores_blank_keywords(
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+    workspace_id: int,
+) -> None:
+    """빈 키워드만 오면 조회하지 않고 빈 결과를 준다.
+
+    빈 문자열로 만든 `%%` 패턴은 모든 행에 걸려, 키워드 없는 질문이
+    workspace 전체를 긁어 오는 사고가 된다.
+    """
+    result = query_claims_timeline(
+        workspace_id=workspace_id,
+        query_texts=("", "   "),
+        at=T_AUG_1,
+        uow=uow_factory(),
+    )
+
+    assert result.claims == ()
+
+
+def test_timeline_query_requires_timezone(
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+    workspace_id: int,
+) -> None:
+    """timezone 없는 at은 거부한다."""
+    with pytest.raises(ValueError):
+        query_claims_timeline(
+            workspace_id=workspace_id,
+            query_texts=("workshop",),
+            at=datetime(2026, 8, 1),
+            uow=uow_factory(),
+        )
 
 
 BIGM_INDEX_SQL = """

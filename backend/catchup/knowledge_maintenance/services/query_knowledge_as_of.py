@@ -24,6 +24,7 @@ alias가 여러 노드에 걸릴 수 있어 고른 노드가 아닌 다른 노�
 from __future__ import annotations
 
 import uuid
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from datetime import timezone
@@ -289,6 +290,56 @@ def query_claims_history(
         claims=claims,
         similar_candidates=similar,
     )
+
+
+@dataclass(frozen=True, slots=True)
+class TimelineQueryResult:
+    """타임라인 조회 한 번의 결과를 표현한다.
+
+    Attributes:
+        claims: 키워드와 겹친 accepted claim을 valid_from 오름차순
+            (NULL은 뒤)으로 담는다.
+        as_of: 미래 발효 차단의 기준으로 쓴 시각을 나타낸다.
+    """
+
+    claims: tuple[AsOfClaim, ...]
+    as_of: datetime
+
+
+def query_claims_timeline(
+    *,
+    workspace_id: int,
+    query_texts: Sequence[str],
+    at: datetime,
+    limit: int = 40,
+    uow: KnowledgeReadUnitOfWork,
+) -> TimelineQueryResult:
+    """키워드와 겹치는 사건 claim을 workspace 횡단 시간선으로 모은다.
+
+    subject 노드 point-lookup이 못 하는 일을 맡는다 — "몇 번
+    갔었나", "몇 번째인가"처럼 여러 세션·여러 entity에 흩어진 사건을
+    한 시간선에 놓아야 답할 수 있는 질문의 재료다. at은 timezone을
+    포함해야 한다.
+    """
+    if at.tzinfo is None:
+        raise ValueError("at must include timezone information")
+
+    with uow:
+        claims = uow.knowledge_candidates.find_accepted_claims_by_text(
+            workspace_id=workspace_id,
+            query_texts=query_texts,
+            at=at,
+            limit=limit,
+        )
+
+    logger.info(
+        "knowledge_timeline_queried",
+        workspace_id=workspace_id,
+        query_texts=list(query_texts),
+        as_of=at.isoformat(),
+        claim_count=len(claims),
+    )
+    return TimelineQueryResult(claims=claims, as_of=at)
 
 
 def query_claims_of_node(
