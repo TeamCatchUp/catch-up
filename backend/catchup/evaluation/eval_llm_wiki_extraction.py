@@ -249,6 +249,25 @@ def _grow_vocabulary(
     )
 
 
+def _temporal_fill_stats(results: list[dict]) -> tuple[int, int, int]:
+    """valid_from 기입 규모를 (전체 기입, date형 기입, date형 전체)로 센다."""
+    claims_with_bound = 0
+    dated_with_bound = 0
+    dated_total = 0
+    for result in results:
+        if result["status"] != "ok":
+            continue
+        for claim in result["batch"]["claims"]:
+            filled = claim["valid_from"] is not None
+            if filled:
+                claims_with_bound += 1
+            if claim["value_type"] == "date":
+                dated_total += 1
+                if filled:
+                    dated_with_bound += 1
+    return claims_with_bound, dated_with_bound, dated_total
+
+
 def _summarize(results: list[dict]) -> None:
     """관찰하려던 세 가지를 콘솔에 낸다."""
     statuses = Counter(result["status"] for result in results)
@@ -281,6 +300,16 @@ def _summarize(results: list[dict]) -> None:
     print(f"  claim: {sum(predicates.values())}")
     print(f"  relation: {sum(relation_types.values())}")
     print(f"  아무것도 안 나온 문서: {empty_documents}")
+    claims_with_bound, dated_with_bound, dated_total = _temporal_fill_stats(results)
+    print(f"  valid_from 기입: {claims_with_bound}")
+    if dated_total:
+        print(
+            f"  date형 value의 valid_from 기입: "
+            f"{dated_with_bound}/{dated_total} "
+            f"({dated_with_bound / dated_total:.1%})"
+        )
+    else:
+        print("  date형 value claim이 없다")
 
     print(f"\n=== predicate ({len(predicates)}종) ===")
     for predicate, count in predicates.most_common():
