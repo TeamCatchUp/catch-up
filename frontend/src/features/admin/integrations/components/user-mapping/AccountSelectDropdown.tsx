@@ -39,8 +39,8 @@ export default function AccountSelectDropdown({
   onToggleUnused,
 }: AccountSelectDropdownProps) {
   const [open, setOpen] = useState(false);
-  const [localUnused, setLocalUnused] = useState(status === '미사용');
-  const isUnused = !selectedAccount && localUnused;
+  // 미사용 여부는 부모가 진실이다(override → status 왕복) — 로컬 state로 들면 취소·재진입 시 고착된다
+  const isUnused = !selectedAccount && status === '미사용';
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -97,13 +97,7 @@ export default function AccountSelectDropdown({
               <span className="text-body-small text-text-normal-alternative flex-1">
                 해당 협업 툴을 사용하지 않습니다.
               </span>
-              <Switch
-                checked={isUnused}
-                onCheckedChange={(checked) => {
-                  setLocalUnused(checked);
-                  onToggleUnused(checked);
-                }}
-              />
+              <Switch checked={isUnused} onCheckedChange={onToggleUnused} />
             </div>
           </div>
 
