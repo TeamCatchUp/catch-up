@@ -39,7 +39,7 @@ const channel = (overrides: Partial<ChannelTalkChannel> = {}): ChannelTalkChanne
 
 const state = (channels: ChannelTalkChannel[], overrides: Partial<ChannelTalkConnectionState> = {}): ChannelTalkConnectionState => ({
   connected: true,
-  lastSyncedAt: null,
+  credentialVerifiedAt: null,
   channels,
   ...overrides,
 });
@@ -141,7 +141,7 @@ describe('연결 테스트 결과 반영', () => {
     expect(ch.webhookToken).toBe(MASKED_PLACEHOLDER);
     expect(ch.connectionStatus).toBe('tested');
     expect(next.connected).toBe(true);
-    expect(next.lastSyncedAt).toBe('2026-08-04T00:00:00Z');
+    expect(next.credentialVerifiedAt).toBe('2026-08-04T00:00:00Z');
   });
 
   it('webhook 미설정 응답이면 webhookToken을 비운다', () => {
@@ -168,6 +168,7 @@ describe('연결 테스트 결과 반영', () => {
       credential_last_verified_at: null,
       association_status: null,
       status_reason: null,
+      polling_cycle_hours: 1,
       status: 'connected',
       message: 'ok',
     };
@@ -177,6 +178,24 @@ describe('연결 테스트 결과 반영', () => {
     expect(space.id).toBe('backend-sp');
     expect(space.accessKey).toBe(MASKED_PLACEHOLDER);
     expect(space.connectionStatus).toBe('tested');
+  });
+
+  it('도큐먼트 스페이스 성공 시 서버가 확정한 동기화 주기로 갱신한다', () => {
+    const response: ChannelTalkDocumentConnectResponse = {
+      installed: true,
+      channel_id: 'backend-ch',
+      space_id: 'backend-sp',
+      space_name: '백엔드 스페이스',
+      credential_last_verified_at: null,
+      association_status: null,
+      status_reason: null,
+      polling_cycle_hours: 24,
+      status: 'connected',
+      message: 'ok',
+    };
+    const s = state([channel({ documentSpaces: [ds({ syncInterval: '1hour' })] })]);
+    const next = applyDocumentSpaceTestSuccess(s, 'ch-1', 'ds-1', response);
+    expect(next.channels[0].documentSpaces[0].syncInterval).toBe('24hour');
   });
 
   it('markChannelError는 메시지 생략 시 기존 메시지를 비운다', () => {

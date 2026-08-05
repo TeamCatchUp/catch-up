@@ -6,7 +6,7 @@ import type {
   ChannelTalkDocumentSpace,
   ChannelTalkDocumentSpacePatch,
 } from '../types/channelTalkModel';
-import { DOCUMENT_SPACE_SYNC_INTERVAL_DEFAULT, MASKED_PLACEHOLDER } from '../types/channelTalkModel';
+import { DOCUMENT_SPACE_SYNC_INTERVAL_DEFAULT, MASKED_PLACEHOLDER, syncIntervalFromHours } from '../types/channelTalkModel';
 
 /**
  * 채널톡 연동 화면 상태의 순수 전이 함수들.
@@ -201,7 +201,7 @@ export function applyChannelTestSuccess(
     connectionStatus: 'tested' as const,
     errorMessage: undefined,
   }));
-  return { ...next, connected: true, lastSyncedAt: data.credential_last_verified_at };
+  return { ...next, connected: true, credentialVerifiedAt: data.credential_last_verified_at };
 }
 
 export function applyDocumentSpaceTestSuccess(
@@ -216,6 +216,8 @@ export function applyDocumentSpaceTestSuccess(
     name: data.space_name ?? ds.name,
     accessKey: MASKED_PLACEHOLDER,
     accessSecret: MASKED_PLACEHOLDER,
+    // 서버가 확정한 주기로 동기화 — 로컬 선택값과 다르면 서버가 진실이다
+    syncInterval: syncIntervalFromHours(data.polling_cycle_hours),
     connectionStatus: 'tested' as const,
     errorMessage: undefined,
   }));
