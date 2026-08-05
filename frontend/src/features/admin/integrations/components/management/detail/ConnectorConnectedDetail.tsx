@@ -10,6 +10,7 @@ import { useEmbeddingJobs } from '../../../hooks/useEmbeddingJobs';
 import { useEmbeddingRetry } from '../../../hooks/useEmbeddingRetry';
 import type { ConnectorDetail, ConnectorResource, IntegrationService } from '../../../types/integrationModel';
 import { formatHistoryDate } from '../../../utils/embeddingUtils';
+import { syncTargetKey } from '../../../utils/syncTargetKey';
 import ConnectorSummaryCard from '../cards/ConnectorSummaryCard';
 import EmbeddedResourceTable, { type EmbeddedResourceRow } from '../embedding/EmbeddedResourceTable';
 import EmbeddingActiveTable from '../embedding/EmbeddingActiveTable';
@@ -89,11 +90,13 @@ export default function ConnectorConnectedDetail({
       historyItems.map((item) => {
         const failed = item.sync_status === 'failed';
         return {
-          id: `${item.scope_id}-${item.target_id}`,
+          // (scope_id, target_type, target_id) 3-튜플 키 — 채널톡 channel/space id 충돌 방지
+          id: syncTargetKey(item),
           target: item.target_name,
           status: failed ? ('failed' as const) : ('success' as const),
           executedAt: formatHistoryDate((failed ? item.last_failed_at : item.last_succeeded_at) ?? ''),
-          failureCount: failed ? retry.gapByTargetId.get(item.target_id)?.totalMissing : undefined,
+          // gap 미도착(로딩·실패)이면 undefined — 배지가 0건 대신 미확정으로 그린다
+          failureCount: failed ? retry.gapByTargetId.get(syncTargetKey(item))?.totalMissing : undefined,
         };
       }),
     [historyItems, retry.gapByTargetId],
@@ -144,7 +147,7 @@ export default function ConnectorConnectedDetail({
             service={service}
             items={historyRows}
             onRetry={(id) => {
-              const item = historyItems.find((h) => `${h.scope_id}-${h.target_id}` === id);
+              const item = historyItems.find((h) => syncTargetKey(h) === id);
               if (item) retry.openRetryModal(item);
             }}
           />
@@ -164,12 +167,12 @@ export default function ConnectorConnectedDetail({
       <EmbeddingRetryModal
         open={!!retry.retryTarget}
         onOpenChange={retry.handleModalOpenChange}
-        targetName={retry.retryTarget?.target_name ?? ''}
         totalCount={retry.retryGap?.totalExpected ?? 0}
         successCount={retry.retryGap?.totalStored ?? 0}
         failedCount={retry.retryGap?.totalMissing ?? 0}
         retryAttempt={retry.retryGap?.attempt ?? 0}
         isLoading={retry.isRetrying}
+        confirmDisabled={!retry.hasRetryableRecords}
         onConfirm={retry.confirmRetry}
       />
     </div>

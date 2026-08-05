@@ -4,32 +4,37 @@ import IconErrorFilled from '@/public/icons/icon/error_filled.svg';
 import IconRotate from '@/public/icons/icon/rotate.svg';
 import { Dialog, DialogContent, DialogTitle } from '@/shared/components/ui/dialog';
 
+/** 백엔드 sync_events.max_attempts 기본값 — 응답에 한도가 없어(T-3) 기본값을 상수로 둔다 */
+const MAX_RETRY_ATTEMPTS = 3;
+
 interface EmbeddingRetryModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  targetName: string;
   totalCount: number;
   successCount: number;
   failedCount: number;
   retryAttempt: number;
   retryingCount?: number;
   isLoading?: boolean;
+  /** 재시도할 누락 레코드가 없으면 확인 버튼을 잠근다 — 빈 records는 백엔드가 422로 거부 */
+  confirmDisabled?: boolean;
   onConfirm: () => void;
 }
 
 const EmbeddingRetryModal = ({
   open,
   onOpenChange,
-  targetName: _targetName,
   totalCount,
   successCount,
   failedCount,
   retryAttempt,
   retryingCount = 0,
   isLoading = false,
+  confirmDisabled = false,
   onConfirm,
 }: EmbeddingRetryModalProps) => {
-  const isFirstRetry = retryAttempt <= 4;
+  // attempt는 DB 제약상 0..max_attempts — 한도에 닿기 전까지가 "첫 재시도" 안내다
+  const isFirstRetry = retryAttempt < MAX_RETRY_ATTEMPTS;
 
   return (
     <Dialog open={open} onOpenChange={isLoading ? undefined : onOpenChange}>
@@ -68,7 +73,8 @@ const EmbeddingRetryModal = ({
                   </span>
                 </div>
 
-                {!isFirstRetry && (
+                {/* 재시도 중 건수는 대응 백엔드 필드가 없어 호출부가 안 넘기면 0 — 0개 카드는 숨긴다 */}
+                {!isFirstRetry && retryingCount > 0 && (
                   <div className="bg-fill-normal-strong flex items-center gap-3 rounded-xl p-3">
                     <div className="bg-fill-normal-normal flex shrink-0 items-center justify-center rounded-xl p-2">
                       <IconRotate className="text-accent-violet-default size-7" />
@@ -145,7 +151,8 @@ const EmbeddingRetryModal = ({
               <button
                 type="button"
                 onClick={onConfirm}
-                className="bg-fill-primary-normal-normal text-body-small flex h-9 cursor-pointer items-center justify-center overflow-clip rounded-full px-3 py-1.5 text-white"
+                disabled={confirmDisabled}
+                className="bg-fill-primary-normal-normal text-body-small flex h-9 cursor-pointer items-center justify-center overflow-clip rounded-full px-3 py-1.5 text-white disabled:cursor-not-allowed disabled:opacity-40"
               >
                 다시 임베딩하기
               </button>

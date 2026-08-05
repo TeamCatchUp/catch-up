@@ -4,6 +4,7 @@ import { useState } from 'react';
 
 import { useSyncRecordRetry } from '../queries/syncRecords.mutations';
 import type { AdminConnectorTargetRangeResponse } from '../types/syncModel';
+import { syncTargetKey } from '../utils/syncTargetKey';
 import { useEmbeddingGaps } from './useEmbeddingGaps';
 
 /**
@@ -15,10 +16,13 @@ export function useEmbeddingRetry(failedItems: AdminConnectorTargetRangeResponse
   const retryMutation = useSyncRecordRetry();
   const [retryTarget, setRetryTarget] = useState<AdminConnectorTargetRangeResponse | null>(null);
 
-  const retryGap = retryTarget ? gapByTargetId.get(retryTarget.target_id) : undefined;
+  const retryGap = retryTarget ? gapByTargetId.get(syncTargetKey(retryTarget)) : undefined;
+
+  // 백엔드가 records 빈 배열을 422로 거부한다 — 누락 0건이면 재시도할 것이 없다
+  const hasRetryableRecords = !!retryGap && retryGap.records.some((r) => r.missing_count > 0);
 
   const confirmRetry = () => {
-    if (!retryTarget || !retryGap) return;
+    if (!retryTarget || !retryGap || !hasRetryableRecords) return;
     retryMutation.mutate(
       {
         event_id: retryGap.eventId,
@@ -38,6 +42,7 @@ export function useEmbeddingRetry(failedItems: AdminConnectorTargetRangeResponse
     gapByTargetId,
     retryTarget,
     retryGap,
+    hasRetryableRecords,
     isRetrying: retryMutation.isPending,
     openRetryModal: setRetryTarget,
     confirmRetry,

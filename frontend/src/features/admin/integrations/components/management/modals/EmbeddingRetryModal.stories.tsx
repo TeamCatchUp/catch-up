@@ -12,7 +12,6 @@ const meta = {
     open: true,
     onOpenChange: fn(),
     onConfirm: fn(),
-    targetName: 'Catch Up Guide',
     totalCount: 128_400,
     successCount: 120_000,
     failedCount: 8_400,
@@ -27,10 +26,11 @@ const meta = {
       dataProfile: 'static',
       designSource: 'dev-preview',
       viewport: { width: 560, height: 640 },
-      states: ['first-retry', 'exhausted', 'loading'],
+      states: ['first-retry', 'exhausted', 'loading', 'no-retryable-records'],
       dataNotes: [
-        '카피 분기 기준은 isFirstRetry = retryAttempt <= 4 (EmbeddingRetryModal.tsx:32).',
-        '로딩 중에는 onOpenChange가 undefined로 막혀 닫을 수 없다 (EmbeddingRetryModal.tsx:35).',
+        '카피 분기 기준은 isFirstRetry = retryAttempt < 3 — 백엔드 sync_events.max_attempts 기본값(3)이며 attempt는 DB 제약상 그 이하다.',
+        '로딩 중에는 onOpenChange가 undefined로 막혀 닫을 수 없다.',
+        'confirmDisabled는 gap의 누락 레코드 0건일 때 — 빈 records 전송은 백엔드가 422로 거부한다.',
       ],
     }),
     docs: { story: { inline: false, height: '620px' } },
@@ -41,7 +41,7 @@ export default meta;
 
 type Story = StoryObj<typeof EmbeddingRetryModal>;
 
-/** 4회 이하 — "실패한 N개만 다시 해볼까요?" 제안, 재시도 카운트 카드 없음 */
+/** 한도 전(attempt < 3) — "실패한 N개만 다시 해볼까요?" 제안, 재시도 카운트 카드 없음 */
 export const FirstRetry: Story = {
   play: async () => {
     const portal = within(document.body);
@@ -53,9 +53,9 @@ export const FirstRetry: Story = {
   },
 };
 
-/** 5회 이상 — 재시도 카운트 카드 + "완료되지 못했어요" + 문의 유도 카피 */
+/** 한도 도달(attempt >= 3) — 재시도 카운트 카드 + "완료되지 못했어요" + 문의 유도 카피 */
 export const Exhausted: Story = {
-  args: { retryAttempt: 5, retryingCount: 3_200 },
+  args: { retryAttempt: 3, retryingCount: 3_200 },
   play: async () => {
     const portal = within(document.body);
     await expect(portal.getByText('8,400개가 완료되지 못했어요')).toBeInTheDocument();
@@ -72,5 +72,14 @@ export const Loading: Story = {
     await expect(portal.getByText(/다시 임베딩을 진행하고 있어요/)).toBeInTheDocument();
     await expect(portal.getByText('재시도가 완료되면 창이 바로 꺼집니다.')).toBeInTheDocument();
     await expect(portal.queryByRole('button')).not.toBeInTheDocument();
+  },
+};
+
+/** 누락 레코드 0건 — 보낼 것이 없어 확인 버튼을 잠근다(빈 records는 백엔드 422) */
+export const NoRetryableRecords: Story = {
+  args: { failedCount: 0, confirmDisabled: true },
+  play: async () => {
+    const portal = within(document.body);
+    await expect(portal.getByRole('button', { name: '다시 임베딩하기' })).toBeDisabled();
   },
 };
