@@ -22,6 +22,7 @@ from catchup.knowledge_maintenance.domain.knowledge_candidate import (
 )
 from catchup.knowledge_maintenance.domain.knowledge_node import KnowledgeNode
 from catchup.knowledge_maintenance.domain.knowledge_node import NodeKind
+from catchup.knowledge_maintenance.domain.knowledge_node import NodeLifecycleState
 from catchup.knowledge_maintenance.services.resolve_entity_candidates import (
     group_idempotency_key,
 )
@@ -75,13 +76,42 @@ class FakeCandidateRepository:
 
 
 class FakeNodeRepository:
+    """노드 저장소를 흉내 낸다.
+
+    canonical_key는 비어 있을 수 있고 같은 alias가 여러 노드에 걸릴 수
+    있으므로 실 DB처럼 노드를 id로 담고, alias 조회는 node id 순 첫
+    번째만 돌려준다.
+    """
+
     def __init__(self) -> None:
-        self.nodes: dict[str, KnowledgeNode] = {}
+        self.nodes: dict[uuid.UUID, KnowledgeNode] = {}
         self.aliases: list[tuple[uuid.UUID, str]] = []
+        self.alias_sources: list[tuple[uuid.UUID, str, str]] = []
 
     def get_entity_by_canonical_key(self, *, workspace_id, canonical_key):
         del workspace_id
-        return self.nodes.get(canonical_key)
+        matched = [
+            node
+            for node in self.nodes.values()
+            if node.canonical_key == canonical_key
+        ]
+        return min(matched, key=lambda node: node.id) if matched else None
+
+    def find_entity_by_normalized_alias(
+        self, *, workspace_id, normalized_alias, entity_type=None
+    ):
+        del workspace_id
+        matched = [
+            self.nodes[node_id]
+            for node_id, alias in self.aliases
+            if alias == normalized_alias
+            and self.nodes[node_id].node_kind is NodeKind.ENTITY
+            and (
+                entity_type is None
+                or self.nodes[node_id].entity_type == entity_type
+            )
+        ]
+        return min(matched, key=lambda node: node.id) if matched else None
 
     def create_entity_node(
         self, *, workspace_id, entity_type, canonical_key, display_name
@@ -94,15 +124,20 @@ class FakeNodeRepository:
             canonical_key=canonical_key,
             display_name=display_name,
         )
-        self.nodes[canonical_key] = node
+        self.nodes[node.id] = node
         return node
+
+    def replace_node(self, node: KnowledgeNode) -> None:
+        """테스트가 노드 상태를 바꿔 끼운다."""
+        self.nodes[node.id] = node
 
     def add_alias(
         self, *, workspace_id, node_id, alias, normalized_alias, source
     ):
-        del workspace_id, alias, source
+        del workspace_id, alias
         if (node_id, normalized_alias) not in self.aliases:
             self.aliases.append((node_id, normalized_alias))
+            self.alias_sources.append((node_id, normalized_alias, source))
 
 
 class FakeProposalRepository:
@@ -221,6 +256,141 @@ def test_llm_candidate_merges_into_existing_canonical_key() -> None:
     resolved = uow.knowledge_candidates.resolved
     only = next(iter(resolved.values()))
     assert only == (EntityResolutionStatus.MERGED, existing.id)
+
+
+def _promoted_node(
+    uow: FakeUnitOfWork,
+    *,
+    name: str,
+    entity_type: str,
+    node_id: uuid.UUID | None = None,
+) -> KnowledgeNode:
+    """사람이 승인해 만들어진 canonical_key 없는 노드를 재현한다.
+
+    node_id를 주면 그 id로 만든다. alias 조회의 tie-break가 id 순이라
+    어느 노드가 앞서는지 고정해야 하는 테스트가 쓴다.
+    """
+    node = KnowledgeNode(
+        id=node_id if node_id is not None else uuid.uuid4(),
+        workspace_id=WORKSPACE,
+        node_kind=NodeKind.ENTITY,
+        entity_type=entity_type,
+        canonical_key=None,
+        display_name=name,
+    )
+    uow.knowledge_nodes.replace_node(node)
+    uow.knowledge_nodes.add_alias(
+        workspace_id=WORKSPACE,
+        node_id=node.id,
+        alias=name,
+        normalized_alias=normalize_name(name),
+        source="system",
+    )
+    return node
+
+
+def test_llm_candidate_reattaches_to_alias_of_keyless_node() -> None:
+    """canonical_key 없는 노드에도 같은 이름 후보가 흡수된다."""
+    uow = FakeUnitOfWork(
+        [
+            _candidate(
+                name="결제 기능",
+                entity_type="feature",
+                method=ExtractionMethod.LLM,
+            )
+        ]
+    )
+    existing = _promoted_node(uow, name="결제 기능", entity_type="feature")
+
+    result = resolve_entity_candidates(
+        workspace_id=WORKSPACE, judge=None, uow=uow
+    )
+
+    assert result.nodes_created == 0
+    assert result.candidates_merged == 1
+    only = next(iter(uow.knowledge_candidates.resolved.values()))
+    assert only == (EntityResolutionStatus.MERGED, existing.id)
+    # alias는 이미 있으므로 재부착이 행을 늘리지 않는다.
+    assert uow.knowledge_nodes.aliases == [
+        (existing.id, normalize_name("결제 기능"))
+    ]
+
+
+def test_alias_hit_with_other_type_is_not_absorbed() -> None:
+    """이름만 같고 type이 다르면 흡수하지 않는다."""
+    uow = FakeUnitOfWork(
+        [
+            _candidate(
+                name="결제 기능",
+                entity_type="feature",
+                method=ExtractionMethod.LLM,
+            )
+        ]
+    )
+    _promoted_node(uow, name="결제 기능", entity_type="system")
+
+    result = resolve_entity_candidates(
+        workspace_id=WORKSPACE, judge=None, uow=uow
+    )
+
+    assert result.candidates_merged == 0
+    assert uow.knowledge_candidates.resolved == {}
+
+
+def test_alias_reattach_finds_same_type_behind_other_type() -> None:
+    """다른 type 노드가 id 순으로 앞서도 같은 type 노드로 흡수된다."""
+    uow = FakeUnitOfWork(
+        [
+            _candidate(
+                name="결제 기능",
+                entity_type="feature",
+                method=ExtractionMethod.LLM,
+            )
+        ]
+    )
+    front, behind = sorted([uuid.uuid4(), uuid.uuid4()])
+    _promoted_node(
+        uow, name="결제 기능", entity_type="system", node_id=front
+    )
+    target = _promoted_node(
+        uow, name="결제 기능", entity_type="feature", node_id=behind
+    )
+
+    result = resolve_entity_candidates(
+        workspace_id=WORKSPACE, judge=None, uow=uow
+    )
+
+    assert result.candidates_merged == 1
+    only = next(iter(uow.knowledge_candidates.resolved.values()))
+    assert only == (EntityResolutionStatus.MERGED, target.id)
+
+
+def test_alias_hit_on_merged_node_is_not_absorbed() -> None:
+    """흡수된 노드는 재부착 대상이 아니다."""
+    uow = FakeUnitOfWork(
+        [
+            _candidate(
+                name="결제 기능",
+                entity_type="feature",
+                method=ExtractionMethod.LLM,
+            )
+        ]
+    )
+    node = _promoted_node(uow, name="결제 기능", entity_type="feature")
+    uow.knowledge_nodes.replace_node(
+        replace(
+            node,
+            lifecycle_state=NodeLifecycleState.MERGED,
+            merged_into_node_id=uuid.uuid4(),
+        )
+    )
+
+    result = resolve_entity_candidates(
+        workspace_id=WORKSPACE, judge=None, uow=uow
+    )
+
+    assert result.candidates_merged == 0
+    assert uow.knowledge_candidates.resolved == {}
 
 
 def test_llm_candidate_with_new_name_stays_pending() -> None:
@@ -567,3 +737,102 @@ def test_single_member_group_is_not_judged() -> None:
 
     assert result.groups_judged == 0
     assert judge.calls == []
+
+
+def test_single_member_group_is_promoted_to_node() -> None:
+    """관찰이 하나뿐인 이름은 사람 없이 노드로 승격된다."""
+    judge = FakeJudge(
+        IdentityVerdict(same=False, reason="판정할 일이 없어야 한다")
+    )
+    candidate = _candidate(
+        name="결제 기능",
+        entity_type="feature",
+        method=ExtractionMethod.LLM,
+    )
+    uow = FakeUnitOfWork([candidate])
+
+    with capture_logs() as logs:
+        result = resolve_entity_candidates(
+            workspace_id=WORKSPACE, judge=judge, uow=uow
+        )
+
+    assert result.singletons_promoted == 1
+    # 결정론 단계는 아무것도 발급하지 않았다.
+    assert result.nodes_created == 0
+    (node,) = uow.knowledge_nodes.nodes.values()
+    assert node.entity_type == "feature"
+    assert node.display_name == "결제 기능"
+    # canonical_key는 비운다 — 재부착은 alias가 맡는다.
+    assert node.canonical_key is None
+    assert uow.knowledge_candidates.resolved == {
+        candidate.id: (EntityResolutionStatus.ACCEPTED, node.id)
+    }
+    assert uow.knowledge_nodes.alias_sources == [
+        (node.id, normalize_name("결제 기능"), "extractor")
+    ]
+    promoted = [
+        entry for entry in logs if entry["event"] == "entity_singleton_promoted"
+    ]
+    assert len(promoted) == 1
+    assert promoted[0]["candidate_id"] == str(candidate.id)
+    assert promoted[0]["node_id"] == str(node.id)
+    assert promoted[0]["normalized_name"] == normalize_name("결제 기능")
+
+
+def test_promotion_leaves_multi_member_groups_to_judge() -> None:
+    """복수 후보 그룹은 그대로 판정 경로를 탄다."""
+    judge = FakeJudge(
+        IdentityVerdict(
+            same=True,
+            reason="같은 제품이다",
+            proposed_type="integration",
+            proposed_name="Slack",
+        )
+    )
+    alone = _candidate(
+        name="결제 기능",
+        entity_type="feature",
+        method=ExtractionMethod.LLM,
+        minutes=2,
+    )
+    uow = FakeUnitOfWork([*_slack_group(), alone])
+
+    result = resolve_entity_candidates(
+        workspace_id=WORKSPACE, judge=judge, uow=uow
+    )
+
+    assert result.singletons_promoted == 1
+    assert result.groups_judged == 1
+    assert result.proposals_created == 1
+    # 판정은 복수 그룹에만 갔고, 그 후보들은 pending으로 남는다.
+    (group,) = judge.calls
+    assert {member.proposed_name for member in group} == {"Slack", "slack"}
+    assert set(uow.knowledge_candidates.resolved) == {alone.id}
+
+
+def test_promoted_candidate_is_not_promoted_again() -> None:
+    """승격된 후보는 pending이 아니라 재실행이 노드를 더 만들지 않는다."""
+    judge = FakeJudge(
+        IdentityVerdict(same=False, reason="판정할 일이 없어야 한다")
+    )
+    uow = FakeUnitOfWork(
+        [
+            _candidate(
+                name="결제 기능",
+                entity_type="feature",
+                method=ExtractionMethod.LLM,
+            )
+        ]
+    )
+
+    first = resolve_entity_candidates(
+        workspace_id=WORKSPACE, judge=judge, uow=uow
+    )
+    second = resolve_entity_candidates(
+        workspace_id=WORKSPACE, judge=judge, uow=uow
+    )
+
+    assert first.singletons_promoted == 1
+    assert second.singletons_promoted == 0
+    assert len(uow.knowledge_nodes.nodes) == 1
+    assert len(uow.knowledge_nodes.aliases) == 1

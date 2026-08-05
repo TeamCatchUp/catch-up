@@ -438,14 +438,19 @@ class SqlAlchemyKnowledgeNodeRepository:
         *,
         workspace_id: int,
         normalized_alias: str,
+        entity_type: str | None = None,
     ) -> KnowledgeNode | None:
         """정규화된 alias 정확 일치로 entity 노드를 찾는다.
 
         alias는 identity가 아니라 단서이므로 같은 alias가 여러 노드에
         걸릴 수 있다. 그때는 node id 순 첫 번째만 돌려준다 — 같은
         질의가 같은 답을 주어야 하기 때문이다.
+
+        entity_type을 주면 그 type의 노드만 후보로 좁힌다. 1건만 돌려주는
+        조회라 type을 뒤에서 보면 다른 type 노드가 id 순으로 앞설 때 맞는
+        노드가 가려지므로, 거르기를 SQL 안에서 한다.
         """
-        row = self._session.scalar(
+        statement = (
             select(KnowledgeNodeRow)
             .join(
                 KnowledgeNodeAliasRow,
@@ -457,8 +462,13 @@ class SqlAlchemyKnowledgeNodeRepository:
                 KnowledgeNodeRow.workspace_id == workspace_id,
                 KnowledgeNodeRow.node_kind == NodeKind.ENTITY.value,
             )
-            .order_by(KnowledgeNodeRow.id)
-            .limit(1)
+        )
+        if entity_type is not None:
+            statement = statement.where(
+                KnowledgeNodeRow.entity_type == entity_type
+            )
+        row = self._session.scalar(
+            statement.order_by(KnowledgeNodeRow.id).limit(1)
         )
         return knowledge_node_to_domain(row) if row is not None else None
 

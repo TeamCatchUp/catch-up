@@ -32,12 +32,18 @@ class KnowledgeNodeRepository(Protocol):
         *,
         workspace_id: int,
         normalized_alias: str,
+        entity_type: str | None = None,
     ) -> KnowledgeNode | None:
         """정규화된 alias 정확 일치로 entity 노드를 찾는다.
 
         alias는 identity가 아니라 단서이므로 같은 alias가 여러 노드에
         걸릴 수 있다. 그때는 node id 순 첫 번째 하나만 돌려준다 —
         같은 질의가 같은 답을 주어야 하기 때문이다. 못 찾으면 None이다.
+
+        entity_type을 주면 그 type의 노드만 후보로 본다. 걸러내기를
+        호출자가 아니라 조회가 해야 하는 이유는, 1건만 돌려주는 조회에서
+        type을 나중에 보면 다른 type 노드가 id 순으로 앞설 때 정작 맞는
+        노드가 영영 보이지 않기 때문이다.
         """
         ...
 

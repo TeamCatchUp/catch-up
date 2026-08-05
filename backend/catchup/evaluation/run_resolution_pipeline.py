@@ -1,9 +1,10 @@
 """pending entity 후보를 canonical identity로 해소한다.
 
 `run_extraction_pipeline.py`의 다음 단계다. 저쪽이 Observation에서 후보를
-뽑는다면, 이 스크립트는 쌓인 후보를 결정론 병합(즉시 적용)과 같은 이름
-그룹 LLM 판정(proposal)으로 해소한다. 행 2 Resolution의 첫 슬라이스를
-손으로 돌려 보는 것이다.
+뽑는다면, 이 스크립트는 쌓인 후보를 결정론 병합(즉시 적용), 관찰이
+하나뿐인 이름의 승격(즉시 적용), 후보가 여럿인 이름의 LLM 판정
+(proposal)으로 해소한다. 행 2 Resolution의 첫 슬라이스를 손으로 돌려
+보는 것이다.
 
 여러 번 돌려도 안전하다. 해소된 후보는 스캔에서 빠지고, proposal은
 그룹당 pending 하나만 유지된다.
@@ -120,6 +121,7 @@ def main() -> None:
         f"  | 후보 accepted {result.candidates_accepted}"
         f" · merged {result.candidates_merged}"
     )
+    print(f"  단일 관찰 승격 {result.singletons_promoted}")
     print(
         f"  판정 그룹 {result.groups_judged}"
         f" (실패 {result.groups_failed})"

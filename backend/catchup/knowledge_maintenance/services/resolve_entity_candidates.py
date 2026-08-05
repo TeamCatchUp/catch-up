@@ -4,14 +4,19 @@
 
 결정론 단계는 즉시 적용한다. 외부 ID가 같으면 같은 대상이라는 판정은
 틀릴 수 없고, 사람이 봐도 거절할 이유가 없다. metadata 후보를 canonical
-노드로 발급·병합하고, 이미 존재하는 canonical key와 정확히 일치하는
-LLM 후보를 그 노드에 병합한다. LLM 후보의 신규 canonical 발급은 하지
-않는다 — 후보 단계의 병합은 UPDATE 몇 줄이지만 canonical 창설 후
-병합은 lifecycle과 FK 정리가 따르므로, 창설을 늦출수록 병합이 싸다.
+노드로 발급·병합하고, 이미 존재하는 canonical key와 정확히 일치하거나
+같은 종류의 이름 alias에 정확히 걸리는 LLM 후보를 그 노드에 병합한다.
+alias까지 보는 이유는 사람이 승인해 만든 노드에는 canonical key가 없어
+key 조회만으로는 같은 이름이 다시 와도 영영 닿지 못하기 때문이다. 이
+단계에서 LLM 후보의 신규 canonical 발급은 하지 않는다 — 후보 단계의
+병합은 UPDATE 몇 줄이지만 canonical 창설 후 병합은 lifecycle과 FK
+정리가 따르므로, 창설을 늦출수록 병합이 싸다.
 
-fuzzy 단계는 proposal만 쓴다. 같은 정규화 이름인데 후보가 여럿인 그룹을
-LLM이 판정하고, 같다고 하면 KnowledgeMutationProposal로 남긴다. 적용은
-승인 트랜잭션의 일이다.
+fuzzy 단계는 이름 그룹의 크기로 갈린다. 후보가 여럿인 그룹만 LLM이
+판정하고, 같다고 하면 KnowledgeMutationProposal로 남긴다 — 적용은 승인
+트랜잭션의 일이다. 후보가 하나뿐인 이름은 판정하지도, 사람에게 묻지도
+않고 그 자리에서 노드로 승격한다. identity 판정은 "이 둘이 같은
+대상인가"라는 질문이라 대상이 하나면 물을 것이 없기 때문이다.
 """
 
 from __future__ import annotations
@@ -33,6 +38,9 @@ from catchup.knowledge_maintenance.domain.knowledge_candidate import ExtractionM
 from catchup.knowledge_maintenance.domain.knowledge_candidate import (
     StoredEntityCandidate,
 )
+from catchup.knowledge_maintenance.domain.knowledge_node import KnowledgeNode
+from catchup.knowledge_maintenance.domain.knowledge_node import NodeKind
+from catchup.knowledge_maintenance.domain.knowledge_node import NodeLifecycleState
 from catchup.knowledge_maintenance.ports.identity_judge import IdentityJudge
 from catchup.knowledge_maintenance.ports.identity_judge import JudgeCandidate
 from catchup.knowledge_maintenance.ports.knowledge_candidates import (
@@ -84,13 +92,18 @@ class ResolutionResult:
     """resolution 한 번의 집계를 표현한다.
 
     Attributes:
-        nodes_created: 새로 발급한 canonical 노드 수를 나타낸다.
+        nodes_created: 결정론 단계가 새로 발급한 canonical 노드 수를
+            나타낸다. 승격이 만든 노드는 아래 `singletons_promoted`가
+            따로 센다 — 두 경로는 발급 근거가 달라 한 칸에 섞으면
+            "무엇이 노드를 만들었나"를 되짚을 수 없다.
         candidates_accepted: 노드 발급의 주체가 된 후보 수를 나타낸다.
         candidates_merged: 기존 노드에 흡수된 후보 수를 나타낸다.
         proposals_created: 새로 쓴 병합 proposal 수를 나타낸다.
         proposals_abandoned: 멤버가 달라져 접은 proposal 수를 나타낸다.
         groups_judged: LLM이 판정한 그룹 수를 나타낸다.
         groups_failed: 판정에 실패해 건너뛴 그룹 수를 나타낸다.
+        singletons_promoted: 후보가 하나뿐이라 판정 없이 노드로 승격한
+            후보 수를 나타낸다. 후보 하나가 노드 하나다.
     """
 
     nodes_created: int = 0
@@ -100,6 +113,7 @@ class ResolutionResult:
     proposals_abandoned: int = 0
     groups_judged: int = 0
     groups_failed: int = 0
+    singletons_promoted: int = 0
 
 
 def resolve_entity_candidates(
@@ -187,6 +201,12 @@ def resolve_entity_candidates(
                 canonical_key=key,
             )
             if node is None:
+                node = _reattachable_node(
+                    workspace_id=workspace_id,
+                    candidate=candidate,
+                    uow=uow,
+                )
+            if node is None:
                 remaining_llm.append(candidate)
                 continue
             uow.knowledge_candidates.mark_entity_resolved(
@@ -222,6 +242,7 @@ def resolve_entity_candidates(
         proposals_abandoned=fuzzy.abandoned,
         groups_judged=fuzzy.judged,
         groups_failed=fuzzy.failed,
+        singletons_promoted=fuzzy.promoted,
     )
     logger.info(
         "entity_resolution_completed",
@@ -233,6 +254,7 @@ def resolve_entity_candidates(
         proposals_abandoned=result.proposals_abandoned,
         groups_judged=result.groups_judged,
         groups_failed=result.groups_failed,
+        singletons_promoted=result.singletons_promoted,
     )
     return result
 
@@ -245,6 +267,7 @@ class _FuzzyCounts:
     abandoned: int = 0
     judged: int = 0
     failed: int = 0
+    promoted: int = 0
 
 
 def _external_key(candidate: StoredEntityCandidate) -> str | None:
@@ -258,6 +281,60 @@ def _external_key(candidate: StoredEntityCandidate) -> str | None:
     return external_key
 
 
+def _reattachable_node(
+    *,
+    workspace_id: int,
+    candidate: StoredEntityCandidate,
+    uow: ResolutionUnitOfWork,
+) -> KnowledgeNode | None:
+    """이름 alias로 후보를 흡수할 기존 노드를 찾는다.
+
+    canonical_key 조회만으로는 사람이 승인해 만든 노드에 후보가 절대
+    닿지 못한다. 그 노드는 외부 ID가 없어 canonical_key가 비어 있고,
+    가진 단서는 이름 alias뿐이기 때문이다. 그래서 key가 빗나가면 정규화
+    이름 alias 정확 일치를 한 번 더 본다.
+
+    다만 alias는 identity가 아니다. 이름 키에는 type이 들어 있지 않아
+    같은 이름의 다른 종류가 걸릴 수 있으므로, 노드의 entity_type이 후보
+    proposed_type과 같을 때만 흡수한다 — 과병합은 후보를 pending으로
+    남겨두는 것보다 되돌리기가 훨씬 비싸다. 흡수된·퇴역한 노드도
+    흡수처가 아니다. 조건을 못 넘기면 None을 주어 fuzzy 판정 대상으로
+    남긴다.
+
+    type 거르기는 조회에 넘긴다. alias 조회는 1건만 돌려주므로 여기서
+    뒤늦게 type을 보면, 같은 이름의 다른 type 노드가 id 순으로 앞설 때
+    정작 맞는 노드가 영영 발견되지 않는다. 돌아온 1건에 대한 type 검사는
+    이중 방어로 남긴다.
+
+    한계: 같은 이름·같은 type의 active 노드가 둘 이상이면 흡수처가
+    uuid 순 첫 번째로 임의 고정된다. 지금은 사람 승인이 만든 노드에만
+    생기는 드문 상황이라 두고 있으나, 승격이 자동화되면 이 tie-break가
+    사실상의 병합 정책이 되므로 별도 과제로 다뤄야 한다.
+    """
+    node = uow.knowledge_nodes.find_entity_by_normalized_alias(
+        workspace_id=workspace_id,
+        normalized_alias=normalize_name(candidate.proposed_name),
+        entity_type=candidate.proposed_type,
+    )
+    if node is None:
+        return None
+    if node.node_kind is not NodeKind.ENTITY:
+        return None
+    if node.lifecycle_state is not NodeLifecycleState.ACTIVE:
+        return None
+    if node.entity_type != candidate.proposed_type:
+        logger.info(
+            "entity_alias_reattach_type_mismatch",
+            workspace_id=workspace_id,
+            candidate_id=str(candidate.id),
+            node_id=str(node.id),
+            node_entity_type=node.entity_type,
+            proposed_type=candidate.proposed_type,
+        )
+        return None
+    return node
+
+
 def _judge_name_groups(
     *,
     workspace_id: int,
@@ -265,7 +342,11 @@ def _judge_name_groups(
     judge: IdentityJudge,
     uow: ResolutionUnitOfWork,
 ) -> _FuzzyCounts:
-    """같은 정규화 이름 그룹을 판정하고 proposal을 쓴다."""
+    """같은 정규화 이름 그룹을 판정하고 proposal을 쓴다.
+
+    후보가 하나뿐인 그룹은 판정을 건너뛰고 곧바로 승격한다. 그쪽
+    근거는 `_promote_singleton`에 있다.
+    """
     groups: dict[str, list[StoredEntityCandidate]] = {}
     for candidate in candidates:
         groups.setdefault(
@@ -276,8 +357,16 @@ def _judge_name_groups(
     abandoned = 0
     judged = 0
     failed = 0
+    promoted = 0
     for normalized_name, members in sorted(groups.items()):
-        if len(members) < 2:
+        if len(members) == 1:
+            _promote_singleton(
+                workspace_id=workspace_id,
+                candidate=members[0],
+                normalized_name=normalized_name,
+                uow=uow,
+            )
+            promoted += 1
             continue
         members = sorted(members, key=lambda c: (c.created_at, c.id))
         member_hash = _member_hash(members)
@@ -363,6 +452,66 @@ def _judge_name_groups(
         abandoned=abandoned,
         judged=judged,
         failed=failed,
+        promoted=promoted,
+    )
+
+
+def _promote_singleton(
+    *,
+    workspace_id: int,
+    candidate: StoredEntityCandidate,
+    normalized_name: str,
+    uow: ResolutionUnitOfWork,
+) -> None:
+    """관찰이 하나뿐인 후보를 canonical 노드로 승격한다.
+
+    사람에게 묻지 않는다. 사람이 판정하는 것은 "이 후보들이 같은
+    대상인가"이고, 후보가 하나면 그 질문 자체가 성립하지 않는다.
+    판정할 대상이 없는데 검토 큐에 올리면 사람은 매번 승인만 누르게
+    되고, 그런 큐는 정작 판정이 필요한 안건까지 함께 묻는다. 외부 ID가
+    같으면 사람 없이 노드를 내주는 결정론 단계의 선례를 "관찰이
+    하나뿐이면"으로 넓힌 것이다.
+
+    여기 도달했다는 것은 이 후보를 흡수할 기존 노드가 없다는 뜻이다.
+    앞선 1단계가 canonical key 정확 일치와 같은 종류의 이름 alias
+    재부착을 이미 둘 다 시도해 빗나갔기 때문이다. 그래서 승격은 기존
+    노드를 다시 찾지 않고 곧바로 발급한다.
+
+    canonical_key는 비운다. 외부 ID가 없어 만들 key가 없고, 나중에 같은
+    이름이 다시 오면 alias 재부착이 이 노드로 데려온다 — 사람이 승인해
+    만드는 노드와 같은 관례다. 그래서 alias 기록은 선택이 아니라 계약
+    이행이다. alias가 없으면 읽기 경로가 방금 만든 노드를 어떤 이름으로도
+    못 찾는다.
+
+    alias source는 "extractor"다. 이 이름은 추출기가 제안한 것이고, 그
+    출처를 그대로 남겨야 나중에 이름의 신뢰도를 출처별로 가릴 수 있다.
+    "system"은 사람이 승인한 결정의 산물에 쓰는 표시라 여기서 쓰면
+    사람의 판정을 거친 이름처럼 보이게 된다.
+    """
+    node = uow.knowledge_nodes.create_entity_node(
+        workspace_id=workspace_id,
+        entity_type=candidate.proposed_type,
+        canonical_key=None,
+        display_name=candidate.proposed_name,
+    )
+    uow.knowledge_nodes.add_alias(
+        workspace_id=workspace_id,
+        node_id=node.id,
+        alias=candidate.proposed_name,
+        normalized_alias=normalized_name,
+        source="extractor",
+    )
+    uow.knowledge_candidates.mark_entity_resolved(
+        candidate_id=candidate.id,
+        status=EntityResolutionStatus.ACCEPTED,
+        resolved_node_id=node.id,
+    )
+    logger.info(
+        "entity_singleton_promoted",
+        workspace_id=workspace_id,
+        candidate_id=str(candidate.id),
+        node_id=str(node.id),
+        normalized_name=normalized_name,
     )
 
 

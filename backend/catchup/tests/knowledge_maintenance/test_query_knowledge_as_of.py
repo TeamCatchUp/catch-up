@@ -124,10 +124,16 @@ class FakeNodeRepository:
         *,
         workspace_id: int,
         normalized_alias: str,
+        entity_type: str | None = None,
     ) -> KnowledgeNode | None:
         del workspace_id
         self.alias_calls.append(normalized_alias)
-        return self.by_alias.get(normalized_alias)
+        found = self.by_alias.get(normalized_alias)
+        if found is None:
+            return None
+        if entity_type is not None and found.entity_type != entity_type:
+            return None
+        return found
 
     def find_entity_candidates_by_similarity(
         self,
