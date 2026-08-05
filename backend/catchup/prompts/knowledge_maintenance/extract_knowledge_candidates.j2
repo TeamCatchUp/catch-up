@@ -143,6 +143,20 @@ can only be a label.
 
 `value_type` must be one of `date`, `number`, `boolean`, `enum`, `text`.
 
+## Events are knowledge too
+
+A document often narrates events — someone attended, decided, planned, or
+finished something. Extract them as claims: pick the most central entity
+as the subject, put the action into a snake_case verb-based predicate, and
+when the time is the point of the fact, make the date the value.
+
+    good   communication_workshop · attended_on · "2026-01-10"
+    good   communication_workshop · practice_planned_for · "2026-01-17"
+    good   communication_workshop · key_topic · "active_listening"
+
+An event that names no reusable entity still counts — attach it to the
+entity the document is about.
+
 ## What not to extract
 
 The document may display the source system's own record fields — ticket
@@ -187,8 +201,8 @@ the document.
   relative time expressions.
 {%- endif %}
 - Skip pleasantries, greetings, and routine status noise.
-- Returning nothing is a valid answer when the document holds no knowledge
-  worth keeping.
+- Returning nothing is valid only when the document holds no facts at all —
+  pure pleasantries or routine notifications.
 
 ## Document
 

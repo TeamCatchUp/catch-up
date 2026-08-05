@@ -41,3 +41,15 @@ def test_drop_only_noise() -> None:
     assert "Drop a fact only when it is small talk or routine noise" in rendered
     assert "A missing claim costs less" not in rendered
     assert "it is not a claim" not in rendered
+
+
+def test_event_fewshot_renders() -> None:
+    rendered = _render()
+    assert "Events are knowledge too" in rendered
+    assert "attended_on" in rendered
+
+
+def test_returning_nothing_is_narrow() -> None:
+    rendered = _render()
+    assert "no facts at all" in rendered
+    assert "no knowledge worth keeping" not in rendered
