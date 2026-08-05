@@ -27,7 +27,7 @@ const GUIDES: Partial<Record<IntegrationService, React.ReactNode>> = {
 
 interface ConnectorPreConnectDetailProps {
   service: IntegrationService;
-  /** 매핑 확인하기 → /admin/user-mapping 이동 */
+  /** 매핑 확인하기 — 현재 구현은 매핑 도움말 문서(/mypage/help/support/2)로 보낸다. /admin/user-mapping 직행 전환 여부는 미결 */
   onCheckMapping: () => void;
   /** 연결하기 — OAuth 이탈. 채널톡은 2스텝 진입 */
   onConnect: () => void;
