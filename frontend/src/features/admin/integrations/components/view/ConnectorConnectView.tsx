@@ -18,6 +18,7 @@ import ConnectorConnectedDetail from '../management/detail/ConnectorConnectedDet
 import ConnectorPreConnectDetail from '../management/detail/ConnectorPreConnectDetail';
 import ConnectorDetailSkeleton from '../management/states/ConnectorDetailSkeleton';
 import ConnectorEmptyState from '../management/states/ConnectorEmptyState';
+import ConnectorErrorNotice from '../management/states/ConnectorErrorNotice';
 import ConnectorStateBoundary from '../management/states/ConnectorStateBoundary';
 
 /** 서비스별 OAuth 이탈 — 구 IntegrationManagementSection의 핸들러를 옮겼다 */
@@ -133,8 +134,13 @@ export default function ConnectorConnectView() {
 
   /*
    * 부트스트랩 — connection-status 쿼리가 아직이면 hasConnected가 false라
-   * 빈 상태가 번쩍 나타난다. 판정 전에는 스켈레톤을 깐다.
+   * 빈 상태가 번쩍 나타난다. 판정 전에는 스켈레톤을 깔고, 하나라도 실패했으면
+   * 연동 여부를 모르는 상태이므로 빈 상태 대신 오류를 알린다(resolveConnectorStatus의
+   * error > loading > ready 우선순위와 같은 규칙).
    */
+  if (!hasConnected && integrationMenu.some((item) => item.status === 'error')) {
+    return <ConnectorErrorNotice serviceName="커넥터" />;
+  }
   if (!hasConnected && integrationMenu.some((item) => item.status === 'loading')) {
     return <ConnectorDetailSkeleton />;
   }

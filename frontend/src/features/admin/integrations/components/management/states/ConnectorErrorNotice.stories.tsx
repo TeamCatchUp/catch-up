@@ -64,6 +64,25 @@ export const ChannelTalkCopyParity: Story = {
   },
 };
 
+// 부트스트랩 실패 — ConnectorConnectView가 연동 0개 판정 전에 쿼리가 실패하면
+// 빈 상태 대신 이 범용 문구를 렌더한다("커넥터"는 특정 도구가 아닌 전체를 가리킨다)
+export const BootstrapFailure: Story = {
+  args: {
+    serviceName: '커넥터',
+  },
+  render: (args) => (
+    <div className="bg-fill-normal-normal flex min-h-40 w-160 flex-col p-6">
+      <ConnectorErrorNotice {...args} />
+    </div>
+  ),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(
+      canvas.getByText('커넥터 연동 정보를 불러오지 못했습니다. 잠시 후 다시 시도해주세요.'),
+    ).toBeInTheDocument();
+  },
+};
+
 export const LongServiceName: Story = {
   args: {
     serviceName: 'Confluence',
