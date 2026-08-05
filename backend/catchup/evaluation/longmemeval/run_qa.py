@@ -13,6 +13,12 @@ haystack이 따로 격리되어 있으므로 조회도 문항마다 자기 works
 간다. manifest가 없으면 `--workspace-id` 하나로 전부 읽던 옛 방식으로
 돌아간다 — 격리 이전에 쌓아 둔 workspace를 다시 재볼 수 있어야 한다.
 
+subject 정확 일치가 빗나갔을 때 이름이 비슷한 후보를 되짚을지는
+`--similarity-fallback`이 정한다. 기본은 on이고, off는 되짚기가 점수를
+얼마나 움직였는지 재기 위한 기준선이다. 어느 쪽으로 돌았는지는
+`qa_usage.json`에 남는다 — 두 실행의 점수를 나란히 놓고 볼 때 그 값이
+없으면 어느 쪽이 기준선인지 알 수 없다.
+
 결과는 세 파일로 나눠 쓴다. 채점기가 읽을 최소 형태(`qa_results.jsonl`),
 왜 그 답이 나왔는지 되짚을 흔적(`qa_trace.jsonl`), 비용 집계
 (`qa_usage.json`)다. 세 파일 모두 실행 전용 디렉토리
@@ -33,6 +39,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
@@ -81,6 +88,12 @@ from catchup.knowledge_maintenance.services.query_knowledge_as_of import (
 )
 from catchup.knowledge_maintenance.services.query_knowledge_as_of import (
     query_claims_history,
+)
+from catchup.knowledge_maintenance.services.query_knowledge_as_of import (
+    query_claims_of_node,
+)
+from catchup.knowledge_maintenance.services.query_knowledge_as_of import (
+    query_claims_of_node_history,
 )
 
 DEFAULT_WORKSPACE_ID = 902
@@ -161,11 +174,21 @@ def bedrock_answer(llm: BaseChatModel):
     return answer
 
 
-def postgres_lookup(session_factory, *, workspace_id: int) -> KnowledgeLookup:
-    """as-of·history 조회를 실제 DB에 연결한다.
+def postgres_lookup(
+    session_factory,
+    *,
+    workspace_id: int,
+    include_similar: bool = True,
+) -> KnowledgeLookup:
+    """이름·node id 네 조회 경로를 실제 DB에 연결한다.
 
     UnitOfWork를 조회마다 새로 만든다. 하나를 재사용하면 앞 조회의
     session이 이미 닫혀 있어 두 번째 조회가 깨진다.
+
+    `include_similar`는 이름 조회에만 건다. 끄면 정확 매칭이 빗나가도
+    유사 후보 SQL을 아예 돌리지 않으므로, 되짚기를 끈 실행이 그 조회
+    비용까지 빼고 도는 진짜 기준선이 된다. node id 조회는 애초에
+    후보를 찾지 않아 이 스위치와 무관하다.
     """
 
     def _uow() -> KnowledgeMaintenanceUnitOfWork:
@@ -179,6 +202,7 @@ def postgres_lookup(session_factory, *, workspace_id: int) -> KnowledgeLookup:
             workspace_id=workspace_id,
             subject=subject,
             at=at,
+            include_similar=include_similar,
             uow=_uow(),
         )
 
@@ -186,16 +210,38 @@ def postgres_lookup(session_factory, *, workspace_id: int) -> KnowledgeLookup:
         return query_claims_history(
             workspace_id=workspace_id,
             subject=subject,
+            include_similar=include_similar,
             uow=_uow(),
         )
 
-    return KnowledgeLookup(as_of=as_of, history=history)
+    def as_of_node(node_id: uuid.UUID, at: datetime) -> AsOfQueryResult:
+        return query_claims_of_node(
+            workspace_id=workspace_id,
+            node_id=node_id,
+            at=at,
+            uow=_uow(),
+        )
+
+    def history_node(node_id: uuid.UUID) -> AsOfQueryResult:
+        return query_claims_of_node_history(
+            workspace_id=workspace_id,
+            node_id=node_id,
+            uow=_uow(),
+        )
+
+    return KnowledgeLookup(
+        as_of=as_of,
+        history=history,
+        as_of_node=as_of_node,
+        history_node=history_node,
+    )
 
 
 def manifest_lookup_for(
     session_factory,
     *,
     workspace_for: dict[str, int],
+    include_similar: bool = True,
 ) -> LookupFor:
     """문항마다 자기 workspace를 읽는 조회 경로를 고른다.
 
@@ -208,6 +254,7 @@ def manifest_lookup_for(
         return postgres_lookup(
             session_factory,
             workspace_id=workspace_for[question.question_id],
+            include_similar=include_similar,
         )
 
     return choose
@@ -219,6 +266,17 @@ def _write_line(handle: TextIO, payload: dict[str, Any]) -> None:
     handle.flush()
 
 
+def _with_fallback(exact: int, fallback: int) -> str:
+    """정확 매칭 수와 되짚기 몫을 한 칸에 적는다.
+
+    되짚기로만 재료를 채운 문항은 정확 매칭 수가 0이다. 그 0만 찍으면
+    진행 출력이 "재료가 없었다"로 읽히므로 되짚은 몫을 괄호로 덧붙인다.
+    """
+    if not fallback:
+        return str(exact)
+    return f"{exact}(+{fallback} fallback)"
+
+
 def usage_payload(
     *,
     workspace_id: int | None,
@@ -227,6 +285,7 @@ def usage_payload(
     questions: int,
     abstained: int,
     total: UsageTotals,
+    similarity_fallback: bool = True,
 ) -> str:
     """비용 집계 파일에 쓸 JSON 본문을 만든다."""
     return (
@@ -237,6 +296,7 @@ def usage_payload(
                 "capacity": capacity,
                 "questions": questions,
                 "abstained": abstained,
+                "similarity_fallback": similarity_fallback,
                 **total.as_dict(),
             },
             ensure_ascii=False,
@@ -276,6 +336,7 @@ def run_and_publish(
     workspace_id: int | None,
     manifest: Path | None,
     capacity: str,
+    use_similarity_fallback: bool = True,
 ) -> QaRunSummary:
     """전 문항을 답하고, 다 끝났을 때만 이번 run을 완주본으로 세운다.
 
@@ -307,10 +368,17 @@ def run_and_publish(
                     abstained += 1
                 _write_line(results_file, outcome.result_payload())
                 _write_line(trace_file, outcome.trace_payload())
+                as_of = _with_fallback(
+                    outcome.as_of_claims,
+                    outcome.fallback_as_of_claims,
+                )
+                history = _with_fallback(
+                    outcome.history_claims,
+                    outcome.fallback_history_claims,
+                )
                 print(
                     f"  {outcome.question_id}  "
-                    f"as_of={outcome.as_of_claims} "
-                    f"history={outcome.history_claims}  "
+                    f"as_of={as_of} history={history}  "
                     f"{'ABSTAIN' if outcome.abstained else 'ANSWER'}"
                 )
 
@@ -319,6 +387,7 @@ def run_and_publish(
                 lookup=lookup,
                 extract_subjects=extract_subjects,
                 answer=answer,
+                use_similarity_fallback=use_similarity_fallback,
                 on_outcome=_record,
             )
 
@@ -330,6 +399,7 @@ def run_and_publish(
                 questions=len(outcomes),
                 abstained=abstained,
                 total=total,
+                similarity_fallback=use_similarity_fallback,
             ),
             encoding="utf-8",
         )
@@ -386,6 +456,17 @@ def main() -> int:
         default=DEFAULT_ORACLE_PATH,
     )
     parser.add_argument(
+        "--similarity-fallback",
+        choices=["on", "off"],
+        default="on",
+        help=(
+            "subject 정확 일치가 빗나갔을 때 이름이 비슷한 후보를 그 "
+            "canonical 이름으로 다시 조회할지 정한다(기본 on). off는 "
+            "되짚기가 점수를 얼마나 움직였는지 재기 위한 기준선 측정용이고, "
+            "그때는 후보 재조회를 아예 하지 않는다."
+        ),
+    )
+    parser.add_argument(
         "--capacity",
         choices=[capacity.value for capacity in ModelCapacity],
         default=ModelCapacity.LARGE.value,
@@ -423,15 +504,18 @@ def main() -> int:
     session_factory = sessionmaker(bind=engine, expire_on_commit=False)
 
     isolated = workspace_for is not None
+    use_fallback = args.similarity_fallback == "on"
     if workspace_for is None:
         lookup: KnowledgeLookup | LookupFor = postgres_lookup(
             session_factory,
             workspace_id=args.workspace_id,
+            include_similar=use_fallback,
         )
     else:
         lookup = manifest_lookup_for(
             session_factory,
             workspace_for=workspace_for,
+            include_similar=use_fallback,
         )
 
     try:
@@ -444,6 +528,7 @@ def main() -> int:
             workspace_id=None if isolated else args.workspace_id,
             manifest=args.manifest if isolated else None,
             capacity=args.capacity,
+            use_similarity_fallback=use_fallback,
         )
     finally:
         engine.dispose()
@@ -455,6 +540,7 @@ def main() -> int:
     )
     print(f"\n=== QA 결과 ({scope}) ===")
     print(f"  문항: {summary.questions}  거절: {summary.abstained}")
+    print(f"  유사 후보 되짚기: {args.similarity_fallback}")
     print(
         f"  호출 {summary.usage.calls}회, "
         f"토큰 {summary.usage.total_tokens}"

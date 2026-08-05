@@ -181,6 +181,9 @@ def test_estimate_cost_is_zero_without_tokens() -> None:
 def _report_inputs(
     *,
     excluded_question_ids: tuple[str, ...] = (),
+    similarity_used: bool = False,
+    similarity_candidates: int = 0,
+    similarity_fallback: bool | None = None,
 ) -> ReportInputs:
     """오답 한 건짜리 최소 리포트 입력을 만든다."""
     row = GradeRow(
@@ -202,6 +205,8 @@ def _report_inputs(
             evidence={"context_claims": 5, "extracted_claims": 4},
         ),
         usage=UsageTotals(calls=1, input_tokens=10, output_tokens=1),
+        similarity_used=similarity_used,
+        similarity_candidates=similarity_candidates,
     )
     return ReportInputs(
         workspace_id=902,
@@ -214,6 +219,7 @@ def _report_inputs(
         contradiction_decided=1,
         vocabulary_snapshots=(("ont-1", "v1", 40),),
         excluded_question_ids=excluded_question_ids,
+        similarity_fallback=similarity_fallback,
     )
 
 
@@ -234,6 +240,41 @@ def test_report_states_the_attribution_limits() -> None:
     assert "승자 claim" in report
     assert "relation" in report
     assert "subject" in report
+
+
+def test_report_counts_similarity_fallback_reach() -> None:
+    """되짚기가 몇 문항에 닿았는지를 리포트가 따로 센다.
+
+    on·off 두 실행을 비교하려면 "후보를 떠올린 문항"과 "그 블록이 실제로
+    컨텍스트에 실린 문항"이 갈려 보여야 한다.
+    """
+    report = render_report(
+        _report_inputs(
+            similarity_used=True,
+            similarity_candidates=3,
+            similarity_fallback=True,
+        )
+    )
+
+    assert "## 유사 후보 되짚기" in report
+    assert "| 후보를 되짚어 본 문항 | 1 | 100.0% |" in report
+    assert "| 되짚은 블록이 컨텍스트에 실린 문항 | 1 | 100.0% |" in report
+    assert "fallback off" not in report
+
+
+def test_report_marks_a_fallback_off_run() -> None:
+    """끄고 돌린 실행은 0이 버그가 아니라 설정임을 리포트가 밝힌다."""
+    report = render_report(_report_inputs(similarity_fallback=False))
+
+    assert "fallback off로 돌았다" in report
+    assert "| 되짚은 블록이 컨텍스트에 실린 문항 | 0 | 0.0% |" in report
+
+
+def test_report_says_when_the_fallback_setting_is_unknown() -> None:
+    """on·off 기록이 없는 옛 산출물이면 그 사실을 밝힌다."""
+    report = render_report(_report_inputs())
+
+    assert "on·off 기록이 없다" in report
 
 
 def test_report_counts_rows_left_out_of_grading() -> None:
@@ -309,6 +350,33 @@ def test_grade_row_reads_subject_miss_with_the_diagnosis_rule() -> None:
     )
 
     assert rows[0].subject_miss is True
+
+
+def test_grade_row_carries_the_similarity_fallback_trace() -> None:
+    """되짚기 흔적을 trace에서 채점 행으로 그대로 옮긴다.
+
+    리포트가 on·off를 비교하려면 문항별 흔적이 채점 행까지 와야 한다.
+    """
+    rows = grade_questions(
+        [{"question_id": "q1"}],
+        questions={"q1": _question("q1")},
+        traces={
+            "q1": {
+                "subjects_tried": ["Alice"],
+                "similarity_used": True,
+                "similarity_candidates": [{"name": "Alice B"}],
+            }
+        },
+        evidence={},
+        judge=lambda **_: JudgeResult(
+            verdict=VERDICT_YES,
+            raw="yes",
+            usage=UsageTotals(),
+        ),
+    )
+
+    assert rows[0].similarity_used is True
+    assert rows[0].similarity_candidates == 1
 
 
 def test_coverage_passes_when_every_question_appears_once() -> None:

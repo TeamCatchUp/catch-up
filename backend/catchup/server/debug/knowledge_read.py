@@ -11,6 +11,10 @@ JSON으로 옮기는 껍데기다.
 valid_from과 valid_to는 null을 그대로 내보낸다. "언제부터인지 모른다"와
 "아직 안 끝났다"는 소비자가 구분해야 할 정보지, 임의의 시각으로 메워
 없앨 정보가 아니다.
+
+similar_candidates도 마찬가지로 subject와 분리해 내보낸다. 이름이
+비슷하다는 것과 대상으로 확정됐다는 것은 다른 사실이라, 한 자리에
+합치면 소비자가 근사 결과를 정답으로 읽게 된다.
 """
 
 from __future__ import annotations
@@ -110,5 +114,17 @@ def read_claims_as_of(
                 ),
             }
             for claim in result.claims
+        ],
+        # 정확 매칭이 빗나갔을 때만 채워진다. subject와 한 자리에 섞지
+        # 않는 이유는 후보가 답이 아니기 때문이다 — 소비자가 둘을
+        # 구별할 수 있도록 자리를 나눠 둔다.
+        "similar_candidates": [
+            {
+                "node_id": str(candidate.node_id),
+                "display_name": candidate.display_name,
+                "entity_type": candidate.entity_type,
+                "score": candidate.score,
+            }
+            for candidate in result.similar_candidates
         ],
     }

@@ -301,6 +301,10 @@ class GradeRow:
         evidence_stats: 근거 세션에서 DB가 만든 것들의 집계를 담는다.
         attribution: 오답일 때의 대표 원인을 담고, 그 밖에는 None이다.
         usage: 이 문항 판정이 쓴 토큰을 담는다.
+        similarity_used: 유사 후보를 되짚은 블록이 실제로 컨텍스트에
+            실렸는지 나타낸다.
+        similarity_candidates: 되짚어 본 유사 후보 수를 나타낸다. 후보를
+            떠올렸지만 컨텍스트까지 가지 못한 문항은 이 값만 0보다 크다.
     """
 
     question_id: str
@@ -314,6 +318,8 @@ class GradeRow:
     evidence_stats: EvidenceStats
     attribution: FailureAttribution | None
     usage: UsageTotals
+    similarity_used: bool = False
+    similarity_candidates: int = 0
 
     @property
     def bucket(self) -> str:
@@ -333,6 +339,8 @@ class GradeRow:
             "judge_raw": self.judge_raw,
             "abstained": self.abstained,
             "subject_miss": self.subject_miss,
+            "similarity_used": self.similarity_used,
+            "similarity_candidates": self.similarity_candidates,
             "evidence_stats": self.evidence_stats.as_dict(),
             "attribution": (
                 None
@@ -518,6 +526,10 @@ def grade_questions(
             evidence_stats=stats,
             attribution=attribution,
             usage=judged.usage,
+            similarity_used=bool(trace.get("similarity_used", False)),
+            similarity_candidates=len(
+                trace.get("similarity_candidates") or ()
+            ),
         )
         rows.append(row)
         if on_row is not None:
@@ -825,6 +837,9 @@ class ReportInputs:
             workspace 실행이면 None이다.
         input_price: 입력 토큰 백만 개당 단가를 나타낸다.
         output_price: 출력 토큰 백만 개당 단가를 나타낸다.
+        similarity_fallback: 채점한 QA 실행이 유사 후보 되짚기를 켠 채
+            돌았는지를 나타낸다. 비용 집계 파일이 이 값을 안 담은 옛
+            실행이면 None이다.
     """
 
     workspace_id: int
@@ -841,6 +856,7 @@ class ReportInputs:
     manifest_path: Path | None = None
     input_price: float = DEFAULT_INPUT_PRICE
     output_price: float = DEFAULT_OUTPUT_PRICE
+    similarity_fallback: bool | None = None
 
     @property
     def judge_usage(self) -> UsageTotals:
@@ -944,6 +960,38 @@ def render_report(inputs: ReportInputs) -> str:
     lines.append(
         "귀속은 상류 우선이다. 한 문항에 증상이 겹치면 위 표의 위쪽 "
         "원인 하나만 대표로 센다."
+    )
+    lines.append("")
+
+    lines.append("## 유사 후보 되짚기")
+    lines.append("")
+    if inputs.similarity_fallback is False:
+        lines.append("이 실행은 fallback off로 돌았다. 아래 값은 모두 0이다.")
+        lines.append("")
+    elif inputs.similarity_fallback is None:
+        lines.append(
+            "이 실행의 비용 집계에 on·off 기록이 없다. 아래 값은 trace에 "
+            "남은 흔적만으로 센 것이다."
+        )
+        lines.append("")
+    similarity_used = sum(1 for row in rows if row.similarity_used)
+    similarity_tried = sum(1 for row in rows if row.similarity_candidates > 0)
+    lines.append("| 지표 | 값 | 비율 |")
+    lines.append("| --- | ---: | ---: |")
+    lines.append(
+        f"| 후보를 되짚어 본 문항 | {similarity_tried} | "
+        f"{_ratio(similarity_tried, len(rows))} |"
+    )
+    lines.append(
+        f"| 되짚은 블록이 컨텍스트에 실린 문항 | {similarity_used} | "
+        f"{_ratio(similarity_used, len(rows))} |"
+    )
+    lines.append("")
+    lines.append(
+        "되짚은 블록이 실린 문항은 위 귀속 표에서 `subject_miss`로 세지 "
+        "않는다. 정확 매칭은 빗나갔어도 답변 재료는 실렸으므로 상류에서 "
+        "샌 것이 아니다. 그래서 아래 `조회 깔때기`의 subject miss 수는 "
+        "이 문항들을 그대로 포함한다 — 두 값은 다른 것을 센다."
     )
     lines.append("")
 
@@ -1254,6 +1302,7 @@ def main() -> int:
     )
 
     qa_usage = UsageTotals()
+    similarity_fallback: bool | None = None
     usage_path = qa_run_dir / USAGE_FILENAME
     if usage_path.exists():
         payload = json.loads(usage_path.read_text(encoding="utf-8"))
@@ -1262,6 +1311,9 @@ def main() -> int:
             input_tokens=int(payload.get("input_tokens") or 0),
             output_tokens=int(payload.get("output_tokens") or 0),
         )
+        raw_fallback = payload.get("similarity_fallback")
+        if raw_fallback is not None:
+            similarity_fallback = bool(raw_fallback)
 
     engine = create_engine(settings.sqlalchemy_database_url)
     session_factory = sessionmaker(bind=engine, expire_on_commit=False)
@@ -1329,6 +1381,7 @@ def main() -> int:
         manifest_path=args.manifest if workspace_for is not None else None,
         input_price=args.input_price,
         output_price=args.output_price,
+        similarity_fallback=similarity_fallback,
     )
     report_path = args.results_dir / REPORT_FILENAME
     report_path.write_text(render_report(report_inputs), encoding="utf-8")

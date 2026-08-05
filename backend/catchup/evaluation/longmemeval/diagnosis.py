@@ -48,7 +48,8 @@ ADJUDICATION_WRONG = "adjudication_wrong"
 """모순은 판정됐는데 그 결과가 QA 컨텍스트까지 오지 않았음을 나타낸다.
 
 trace에 승자 claim의 id가 없어서 "승자가 실렸는가"를 직접 못 본다.
-컨텍스트 claim이 0인지로 근사한다.
+컨텍스트 claim이 0인지로 근사한다. 이때 세는 컨텍스트 claim에는 유사
+후보 되짚기가 실어 온 몫도 들어간다.
 """
 
 TEMPORAL_GAP = "temporal_gap"
@@ -137,14 +138,37 @@ def attribute_failure(
 
     위에서부터 처음 걸리는 규칙이 대표다. 증상이 겹쳐도 더 아래 규칙은
     보지 않는다.
+
+    단 subject_miss는 유사 후보 되짚기가 실제로 컨텍스트를 채웠으면
+    대표로 삼지 않는다. 정확 매칭이 빗나간 것은 사실이지만, 되짚은
+    블록이 답변 재료를 실어 준 문항은 상류에서 샌 것이 아니다. 그 문항을
+    subject_miss로 세면 fallback을 켠 실행과 끈 실행의 분포가 똑같이
+    보여서, 켰을 때의 효과가 측정에서 지워진다. 그래서 이 경우는 다음
+    순위로 흘려보내 진짜로 걸린 곳을 고르게 한다.
+
+    `subject_miss_of`가 읽는 조회 원시 사실은 그대로 둔다. 보정은 이
+    귀속 단계에서만 한다.
+
+    보정은 subject_miss 한 규칙에서 끝나지 않는다. trace의
+    `as_of_claims`·`history_claims`는 정확 매칭 조회분만 세므로, 되짚기로
+    재료를 채운 문항은 그 둘이 0이다. 하류 규칙이 그 0을 그대로 읽으면
+    "컨텍스트가 비었다"는 거짓 증거로 `adjudication_wrong`이나
+    `temporal_gap`에 걸린다. 그러면 fallback을 켠 실행이 "판정·시간
+    추론이 나빠졌다"로 읽혀 정반대 결론이 나온다. 그래서 하류 규칙은
+    되짚기가 실제로 실은 `fallback_*`을 합산한 실효 수치로 판단한다.
     """
     question_type = str(trace_row.get("question_type") or "")
     subjects_tried = list(trace_row.get("subjects_tried") or ())
     as_of_claims = int(trace_row.get("as_of_claims") or 0)
     history_claims = int(trace_row.get("history_claims") or 0)
-    context_claims = as_of_claims + history_claims
+    fallback_as_of = int(trace_row.get("fallback_as_of_claims") or 0)
+    fallback_history = int(trace_row.get("fallback_history_claims") or 0)
+    effective_as_of = as_of_claims + fallback_as_of
+    effective_history = history_claims + fallback_history
+    context_claims = effective_as_of + effective_history
+    similarity_used = bool(trace_row.get("similarity_used", False))
 
-    if subject_miss_of(trace_row):
+    if subject_miss_of(trace_row) and not similarity_used:
         return FailureAttribution(
             cause=SUBJECT_MISS,
             evidence={
@@ -188,13 +212,13 @@ def attribute_failure(
             },
         )
 
-    if question_type == TEMPORAL_TYPE and history_claims == 0:
+    if question_type == TEMPORAL_TYPE and effective_history == 0:
         return FailureAttribution(
             cause=TEMPORAL_GAP,
             evidence={
                 "question_type": question_type,
                 "history_claims": 0,
-                "as_of_claims": as_of_claims,
+                "as_of_claims": effective_as_of,
             },
         )
 
