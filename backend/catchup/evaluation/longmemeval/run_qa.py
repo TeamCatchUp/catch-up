@@ -84,6 +84,9 @@ from catchup.knowledge_maintenance.adapters.postgres.unit_of_work import (
 )
 from catchup.knowledge_maintenance.services.query_knowledge_as_of import AsOfQueryResult
 from catchup.knowledge_maintenance.services.query_knowledge_as_of import (
+    TimelineQueryResult,
+)
+from catchup.knowledge_maintenance.services.query_knowledge_as_of import (
     query_claims_as_of,
 )
 from catchup.knowledge_maintenance.services.query_knowledge_as_of import (
@@ -94,6 +97,9 @@ from catchup.knowledge_maintenance.services.query_knowledge_as_of import (
 )
 from catchup.knowledge_maintenance.services.query_knowledge_as_of import (
     query_claims_of_node_history,
+)
+from catchup.knowledge_maintenance.services.query_knowledge_as_of import (
+    query_claims_timeline,
 )
 
 DEFAULT_WORKSPACE_ID = 902
@@ -180,7 +186,7 @@ def postgres_lookup(
     workspace_id: int,
     include_similar: bool = True,
 ) -> KnowledgeLookup:
-    """이름·node id 네 조회 경로를 실제 DB에 연결한다.
+    """이름·node id·타임라인 조회 경로를 실제 DB에 연결한다.
 
     UnitOfWork를 조회마다 새로 만든다. 하나를 재사용하면 앞 조회의
     session이 이미 닫혀 있어 두 번째 조회가 깨진다.
@@ -189,6 +195,10 @@ def postgres_lookup(
     유사 후보 SQL을 아예 돌리지 않으므로, 되짚기를 끈 실행이 그 조회
     비용까지 빼고 도는 진짜 기준선이 된다. node id 조회는 애초에
     후보를 찾지 않아 이 스위치와 무관하다.
+
+    타임라인 조회는 subject 노드를 거치지 않고 키워드로 claim을 바로
+    훑는다. 여러 세션에 흩어진 사건을 한 시간선에 놓아야 답이 나오는
+    문항의 재료다.
     """
 
     def _uow() -> KnowledgeMaintenanceUnitOfWork:
@@ -229,11 +239,22 @@ def postgres_lookup(
             uow=_uow(),
         )
 
+    def timeline(
+        query_texts: Sequence[str], at: datetime
+    ) -> TimelineQueryResult:
+        return query_claims_timeline(
+            workspace_id=workspace_id,
+            query_texts=query_texts,
+            at=at,
+            uow=_uow(),
+        )
+
     return KnowledgeLookup(
         as_of=as_of,
         history=history,
         as_of_node=as_of_node,
         history_node=history_node,
+        timeline=timeline,
     )
 
 

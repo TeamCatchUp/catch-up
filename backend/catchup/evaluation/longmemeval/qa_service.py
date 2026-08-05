@@ -41,6 +41,13 @@ claim을 빼고, 남은 것만 적는다. 같은 문장을 두 번 실으면 토
 되짚기는 한 단계에서 멈춘다 — 재조회 결과가 물고 온 후보는 따라가지
 않는다.
 
+subject 조회가 못 하는 일도 하나 있다. "몇 번 갔었나", "몇 번째인가"
+류는 여러 세션·여러 entity에 흩어진 사건을 한 시간선에 놓아야 답이
+나온다. 그래서 subject 절 뒤에 번호 붙인 타임라인 절을 하나 더 붙인다
+— 날짜 순으로 1부터 세어 두면 생성기는 번호를 읽기만 하면 된다. 이
+경로는 호출자가 조회 함수를 넘길 때만 켜지고, 넘기지 않으면 예전과
+똑같이 돈다.
+
 후보 claim이 실렸다고 답변 지시가 느슨해지지는 않는다. 질문과 무관한
 claim이 실렸을 때 거절하는 것은 여전히 프롬프트의 abstention 지시이고,
 그것이 마지막 방어선이다.
@@ -69,6 +76,9 @@ from catchup.knowledge_maintenance.services.query_knowledge_as_of import AsOfQue
 from catchup.knowledge_maintenance.services.query_knowledge_as_of import (
     SubjectCandidate,
 )
+from catchup.knowledge_maintenance.services.query_knowledge_as_of import (
+    TimelineQueryResult,
+)
 
 __all__ = [
     "ABSTENTION_ANSWER",
@@ -85,10 +95,12 @@ __all__ = [
     "SubjectLookup",
     "SubjectResult",
     "SubjectTrace",
+    "TimelineLookupFn",
     "answer_questions",
     "build_answer_prompt",
     "build_subject_prompt",
     "render_claims_context",
+    "render_timeline",
     "resolve_lookup",
     "run_question",
 ]
@@ -155,6 +167,9 @@ Rules:
   do not assume they have ended.
 - Each fact shows the period it was true for as (from~to). "{OPEN_BOUND}"
   means it is still true, "{UNKNOWN_BOUND}" means the start is unknown.
+- A numbered Timeline section, when present, lists dated events in
+  chronological order — use the numbers for counting and ordinal
+  questions, and compute date differences from the dates shown.
 - If the stored knowledge does not support an answer, reply exactly:
   {ABSTENTION_ANSWER}
 - Answer in one short sentence. No explanation, no citations.
@@ -212,6 +227,9 @@ NodeAsOfLookupFn = Callable[[uuid.UUID, datetime], AsOfQueryResult]
 NodeHistoryLookupFn = Callable[[uuid.UUID], AsOfQueryResult]
 """node id로 history claim을 읽는 함수를 나타낸다."""
 
+TimelineLookupFn = Callable[[Sequence[str], datetime], TimelineQueryResult]
+"""키워드 목록과 시각으로 workspace 횡단 타임라인을 읽는 함수를 나타낸다."""
+
 
 @dataclass(frozen=True, slots=True)
 class KnowledgeLookup:
@@ -227,12 +245,16 @@ class KnowledgeLookup:
         history: 한때 참이었던 claim까지 이름으로 읽는다.
         as_of_node: 어떤 시점에 참이었던 claim을 node id로 읽는다.
         history_node: 한때 참이었던 claim까지 node id로 읽는다.
+        timeline: 키워드와 겹치는 사건 claim을 workspace 횡단으로 읽는다.
+            None이면 타임라인 절을 만들지 않는다 — 이 경로가 없던
+            실행과의 비교 기준선이기도 하다.
     """
 
     as_of: AsOfLookupFn
     history: HistoryLookupFn
     as_of_node: NodeAsOfLookupFn
     history_node: NodeHistoryLookupFn
+    timeline: TimelineLookupFn | None = None
 
 
 LookupFor = Callable[[OracleQuestion], KnowledgeLookup]
@@ -341,6 +363,10 @@ class QuestionOutcome:
             안 들어간다.
         fallback_history_claims: 되짚기가 컨텍스트에 실은 history claim
             수를 나타낸다.
+        timeline_claims: 타임라인 절에 실제로 실린 claim 수를 나타낸다.
+            subject 절에 이미 실려 빠진 claim은 여기 안 들어간다.
+        timeline_used: 타임라인 절이 컨텍스트에 실렸는지 나타낸다.
+            조회만 하고 실을 것이 없었으면 False다.
     """
 
     question_id: str
@@ -356,6 +382,8 @@ class QuestionOutcome:
     similarity_used: bool = False
     fallback_as_of_claims: int = 0
     fallback_history_claims: int = 0
+    timeline_claims: int = 0
+    timeline_used: bool = False
 
     @property
     def as_of_claims(self) -> int:
@@ -395,6 +423,8 @@ class QuestionOutcome:
             "similarity_used": self.similarity_used,
             "fallback_as_of_claims": self.fallback_as_of_claims,
             "fallback_history_claims": self.fallback_history_claims,
+            "timeline_claims": self.timeline_claims,
+            "timeline_used": self.timeline_used,
             "context_chars": len(self.claims_context),
             "elapsed_ms": round(self.elapsed_ms, 3),
             "usage": self.usage.as_dict(),
@@ -570,6 +600,52 @@ def render_claims_context(
         as_of_claims=as_of_rendered,
         history_claims=history_rendered,
     )
+
+
+def _timeline_body(claim: AsOfClaim) -> str:
+    """타임라인 한 줄에서 날짜 뒤에 붙는 부분을 만든다.
+
+    문장이 비면 값까지만 적는다. 문장 자리에 "None"을 적으면 모델이
+    그것을 사실의 일부로 읽는다.
+    """
+    body = f"[{claim.predicate}] {_format_value(claim.value)}"
+    statement = " ".join((claim.statement or "").split())
+    if statement:
+        return f"{body} — {statement}"
+    return body
+
+
+def render_timeline(
+    claims: Sequence[AsOfClaim],
+    *,
+    matching: Sequence[str],
+    exclude: frozenset[uuid.UUID],
+) -> tuple[str, int]:
+    """타임라인 절 텍스트와 실린 claim 수를 만든다.
+
+    날짜 있는 사건에 1부터 번호를 붙인다 — 건수와 "몇 번째"는
+    생성기가 번호를 읽기만 하면 되게 한다. 날짜 모르는 사건은 번호
+    없이 뒤에 둔다. 이미 subject 절에 실린 claim은 뺀다. 실을 것이
+    없으면 빈 문자열을 준다 — 빈 절은 발뺌 빌미가 된다.
+    """
+    dated: list[tuple[str, AsOfClaim]] = []
+    undated: list[AsOfClaim] = []
+    for claim in claims:
+        if claim.claim_id in exclude:
+            continue
+        moment = claim.valid_from
+        if moment is None:
+            undated.append(claim)
+        else:
+            dated.append((moment.date().isoformat(), claim))
+    if not dated and not undated:
+        return "", 0
+    lines = [f"## Timeline (matching: {', '.join(matching)})"]
+    for number, (date_text, claim) in enumerate(dated, start=1):
+        lines.append(f"{number}. {date_text} — {_timeline_body(claim)}")
+    for claim in undated:
+        lines.append(f"(date unknown) — {_timeline_body(claim)}")
+    return "\n".join(lines), len(dated) + len(undated)
 
 
 def build_subject_prompt(question: str) -> str:
@@ -777,8 +853,28 @@ def run_question(
         fallback_lookups,
         as_of=question.question_date,
     )
+    timeline_text = ""
+    timeline_count = 0
+    if lookup.timeline is not None and subjects:
+        timeline_result = lookup.timeline(subjects, question.question_date)
+        already_rendered = frozenset(
+            claim.claim_id
+            for entry in (*lookups, *fallback_lookups)
+            for claim in (
+                *entry.as_of_result.claims,
+                *entry.history_result.claims,
+            )
+        )
+        timeline_text, timeline_count = render_timeline(
+            timeline_result.claims,
+            matching=subjects,
+            exclude=already_rendered,
+        )
+
     claims_context = "\n\n".join(
-        part for part in (rendered.text, fallback_rendered.text) if part
+        part
+        for part in (rendered.text, fallback_rendered.text, timeline_text)
+        if part
     )
 
     if claims_context:
@@ -811,6 +907,8 @@ def run_question(
         similarity_used=bool(fallback_rendered.text),
         fallback_as_of_claims=fallback_rendered.as_of_claims,
         fallback_history_claims=fallback_rendered.history_claims,
+        timeline_claims=timeline_count,
+        timeline_used=bool(timeline_text),
     )
 
 
