@@ -67,9 +67,10 @@ export const RootAdmin: Story = {
   play: async ({ canvasElement, userEvent }) => {
     const canvas = within(canvasElement);
 
-    await expect(canvas.getByRole('button', { name: /메인으로 가기/ })).toBeInTheDocument();
-    await expect(canvas.getByRole('button', { name: /조직 협업툴 연동/ })).toBeInTheDocument();
-    await expect(canvas.getByRole('button', { name: /멤버 관리/ })).toBeInTheDocument();
+    // Chromatic 캡처 환경은 로컬보다 렌더가 늦을 수 있다 — 존재 단언은 재시도형 findByRole로
+    await expect(await canvas.findByRole('button', { name: /메인으로 가기/ })).toBeInTheDocument();
+    await expect(await canvas.findByRole('button', { name: /조직 협업툴 연동/ })).toBeInTheDocument();
+    await expect(await canvas.findByRole('button', { name: /멤버 관리/ })).toBeInTheDocument();
 
     // 감사 로그는 폐기됐다
     await expect(canvas.queryByRole('button', { name: /감사 로그/ })).not.toBeInTheDocument();
@@ -77,13 +78,13 @@ export const RootAdmin: Story = {
     await expect(canvas.queryByRole('button', { name: /Catch Up MCP/ })).not.toBeInTheDocument();
 
     // 활성 경로가 /admin/connectors 이므로 협업툴 연동 그룹은 펼쳐진 채 시작한다
-    await expect(canvas.getByRole('button', { name: '커넥터 연결' })).toHaveAttribute('aria-current', 'page');
+    await expect(await canvas.findByRole('button', { name: '커넥터 연결' })).toHaveAttribute('aria-current', 'page');
 
     // 멤버 관리는 접혀 있다가 클릭하면 펼쳐진다
     await expect(canvas.queryByRole('button', { name: '멤버 채팅 기록' })).not.toBeInTheDocument();
     await userEvent.click(canvas.getByRole('button', { name: /멤버 관리/ }));
-    await expect(canvas.getByRole('button', { name: '멤버 정보' })).toBeInTheDocument();
-    await expect(canvas.getByRole('button', { name: '멤버 채팅 기록' })).toBeInTheDocument();
+    await expect(await canvas.findByRole('button', { name: '멤버 정보' })).toBeInTheDocument();
+    await expect(await canvas.findByRole('button', { name: '멤버 채팅 기록' })).toBeInTheDocument();
   },
 };
 
