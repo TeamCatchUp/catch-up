@@ -33,7 +33,7 @@ const meta = {
         nodeId: '17413:33953',
       },
       viewport: { width: 716, height: 100 },
-      states: ['running', 'success', 'failed', 'failed-over-cap'],
+      states: ['running', 'success', 'failed', 'failed-over-cap', 'failed-count-pending'],
       layoutNotes: [
         '4슬롯: 대상(fill) · 상태(150) · 시각(150) · 액션(32).',
         '진행중의 시각 칸은 텍스트가 아니라 회색 선이다.',
@@ -103,6 +103,23 @@ export const Failed: Story = {
 
     await userEvent.click(canvas.getByRole('button', { name: '임베딩 재시도' }));
     await expect(args.onRetry).toHaveBeenCalled();
+  },
+};
+
+/** 실패 건수 미확정 — gap 조회가 로딩 중이거나 실패하면 0건 대신 대시를 그린다 */
+export const FailedCountPending: Story = {
+  args: { status: 'failed', executedAt: '2026.03.18 00:00 PM', failureCount: undefined },
+  render: (args) => (
+    <Frame>
+      <EmbeddingHistoryRow {...args} />
+    </Frame>
+  ),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByText('실패')).toBeInTheDocument();
+    // 유효한 0과 구분 — "0건"이 아니라 "-"
+    await expect(canvas.queryByText('0건')).not.toBeInTheDocument();
+    await expect(canvas.getByText('-')).toBeInTheDocument();
   },
 };
 

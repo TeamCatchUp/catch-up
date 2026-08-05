@@ -17,11 +17,12 @@ interface EmbeddingHistoryRowProps {
   status: EmbeddingRowStatus;
   /** 진행중이면 null — 시각 칸에 선이 들어간다 */
   executedAt: string | null;
+  /** undefined는 미확정(gap 조회 로딩·실패) — 0건과 구분해 대시로 그린다 */
   failureCount?: number;
   onRetry?: () => void;
 }
 
-function StatusBadge({ status, failureCount = 0 }: Pick<EmbeddingHistoryRowProps, 'status' | 'failureCount'>) {
+function StatusBadge({ status, failureCount }: Pick<EmbeddingHistoryRowProps, 'status' | 'failureCount'>) {
   if (status === 'running') {
     return (
       <span className="bg-accent-light-blue-lighten inline-flex items-center gap-2 rounded-lg px-2 py-1">
@@ -43,7 +44,9 @@ function StatusBadge({ status, failureCount = 0 }: Pick<EmbeddingHistoryRowProps
     <span className="bg-accent-red-lighten inline-flex items-center gap-2 rounded-lg px-2 py-1">
       <span className="text-body-xsmall text-status-destructive">실패</span>
       <span aria-hidden="true" className="bg-accent-red-default h-2.5 w-px shrink-0" />
-      <span className="text-body-xsmall text-status-destructive">{formatFailureCount(failureCount)}</span>
+      <span className="text-body-xsmall text-status-destructive">
+        {failureCount != null ? formatFailureCount(failureCount) : '-'}
+      </span>
     </span>
   );
 }
@@ -61,7 +64,7 @@ export default function EmbeddingHistoryRow({
   target,
   status,
   executedAt,
-  failureCount = 0,
+  failureCount,
   onRetry,
 }: EmbeddingHistoryRowProps) {
   const Logo = CONNECTOR_LOGOS[service];
