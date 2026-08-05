@@ -8,7 +8,6 @@ import { Button } from '@/shared/components/ui/button';
 import { Separator } from '@/shared/components/ui/separator';
 
 interface DetailHeaderProps {
-  userId: string;
   userName: string;
   userDepartment: string;
 }
