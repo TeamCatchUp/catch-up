@@ -126,7 +126,8 @@ class AwsBedrockLlmService(BaseLlmService):
         config = Config(
             max_pool_connections=200,
             retries={"max_attempts": self._max_attempts, "mode": "standard"},
-            read_timeout=50,
+            # 회수 우선 추출은 응답이 길어 50초를 넘기므로 여유를 둔다.
+            read_timeout=120,
             connect_timeout=5,
         )
 
