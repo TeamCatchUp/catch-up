@@ -117,29 +117,31 @@ by a number; those are reserved for the already-known entities above.
 
     payment_feature --depends_on--> auth_system
 
-## The value must be a literal
+## The value
 
-This is the rule that decides whether something is a claim at all.
-
-A value is one date, one number, one boolean, one short label. If what you
-want to write is a sentence, it is not a claim.
+A literal beats a sentence. One date, one number, one boolean, one short
+label — literals are what the conflict detector can compare, so reach for
+them first.
 
     good   payment_feature · release_month · "2026-05"
     good   slack_ingestion · min_title_length · 10
-    bad    payment_feature · has_bug · "Sync가 안되는 버그"
-    bad    slack_ingestion · embedding_policy · "제목이 10글자 이하면 임베딩 안 함"
 
-When you catch yourself writing a sentence into `value`, do one of these
-instead.
+When the fact does not reduce to a literal, walk down this ladder.
 
 1. Find the literal hiding inside it. "제목이 10글자 이하면 임베딩 안 함"
    carries the number 10, so report `min_title_length · 10`.
-2. If it describes how two things relate, make it a RelationAssertion.
-3. If neither works, leave it out. A missing claim costs less than a claim
-   that cannot be compared with anything.
+2. If it describes how two entities relate, make it a RelationAssertion.
+3. Otherwise keep it as a claim with `value_type: text`. Make the value a
+   compact label for the fact — a noun phrase or snake_case tag, under
+   about 40 characters. The label is an index key, not evidence: the
+   quoted `statement` carries the actual content, so never put anything
+   into the value that the quoted span does not contain.
+
+Drop a fact only when it is small talk or routine noise. A real fact about
+a person, a system, or an event belongs in the wiki even when its value
+can only be a label.
 
 `value_type` must be one of `date`, `number`, `boolean`, `enum`, `text`.
-Reach for `text` last, and keep it under about 40 characters.
 
 ## What not to extract
 
