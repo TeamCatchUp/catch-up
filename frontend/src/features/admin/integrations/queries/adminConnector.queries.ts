@@ -4,14 +4,7 @@ import api from '@/shared/api/client';
 import { API } from '@/shared/api/endpoints';
 
 import type { ConnectionStatusResponse, ConnectorVendor } from '../types/connectionStatusApi';
-import type {
-  ConfluenceConnectorStatus,
-  GithubConnectorStatus,
-  JiraConnectorStatus,
-  SlackConnectorStatus,
-  VendorType,
-  VendorUsersResponse,
-} from '../types/integrationApi';
+import type { VendorType, VendorUsersResponse } from '../types/integrationApi';
 import type {
   AdminConnectorStatusResponse,
   ConnectorStatusSource,
@@ -23,42 +16,6 @@ import type {
 
 export const adminConnectorQueries = {
   all: () => ['admin', 'connector'] as const,
-
-  githubStatus: () =>
-    queryOptions({
-      queryKey: [...adminConnectorQueries.all(), 'github'] as const,
-      queryFn: async (): Promise<GithubConnectorStatus> => {
-        const res = await api.get<GithubConnectorStatus>(API.admin.connector.githubStatus);
-        return res.data;
-      },
-    }),
-
-  jiraStatus: () =>
-    queryOptions({
-      queryKey: [...adminConnectorQueries.all(), 'jira'] as const,
-      queryFn: async (): Promise<JiraConnectorStatus> => {
-        const res = await api.get<JiraConnectorStatus>(API.admin.connector.jiraStatus);
-        return res.data;
-      },
-    }),
-
-  slackStatus: () =>
-    queryOptions({
-      queryKey: [...adminConnectorQueries.all(), 'slack'] as const,
-      queryFn: async (): Promise<SlackConnectorStatus> => {
-        const res = await api.get<SlackConnectorStatus>(API.admin.connector.slackStatus);
-        return res.data;
-      },
-    }),
-
-  confluenceStatus: () =>
-    queryOptions({
-      queryKey: [...adminConnectorQueries.all(), 'confluence'] as const,
-      queryFn: async (): Promise<ConfluenceConnectorStatus> => {
-        const res = await api.get<ConfluenceConnectorStatus>(API.admin.connector.confluenceStatus);
-        return res.data;
-      },
-    }),
 
   vendorUsers: (params: { vendorType: VendorType; size?: number }) =>
     infiniteQueryOptions({

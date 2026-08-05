@@ -1,7 +1,7 @@
 'use client';
 
 import type { Meta, StoryObj } from '@storybook/nextjs-vite';
-import { expect, within } from 'storybook/test';
+import { expect, waitFor, within } from 'storybook/test';
 
 import InfoIcon from '@/public/icons/icon/info.svg';
 
@@ -58,6 +58,9 @@ const meta = {
       interactionNotes: ['The play function hovers the trigger and checks the portal tooltip content.'],
       reuseNotes: ['Primitive tooltip used by Agent Studio settings help text.'],
     }),
+    // Chromatic은 CSS 애니메이션을 첫 프레임에서 동결한다 — enter 키프레임의 opacity 0에
+    // 얼어붙으면 toBeVisible 단언이 실패하므로, 끝 상태에서 동결하도록 지정한다.
+    chromatic: { pauseAnimationAtEnd: true },
   },
 } satisfies Meta<TooltipStoryArgs>;
 
@@ -88,7 +91,8 @@ export const Playground: Story = {
 
     await userEvent.hover(canvas.getByRole('button', { name: args.label }));
     const tooltipMatches = await portal.findAllByText(args.description);
-    await expect(tooltipMatches[0]).toBeVisible();
+    // 페이드인이 끝나기 전에 단언이 돌 수 있어 재시도로 감싼다
+    await waitFor(() => expect(tooltipMatches[0]).toBeVisible());
   },
 };
 

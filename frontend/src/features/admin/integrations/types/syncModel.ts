@@ -151,7 +151,9 @@ export interface AdminConnectorTargetRangeResponse {
   target_id: string;
   target_name: string;
   event_id: string;
-  sync_status: string;
+  // 백엔드 스키마는 자유 문자열(str)이지만 값은 SyncEventStatus enum에서 나온다 —
+  // 미지의 값은 isCompletedSyncTarget의 allowlist가 성공으로 오인하지 않게 거른다
+  sync_status: SyncTargetStatus;
   last_succeeded_at: string | null;
   last_failed_at: string | null;
   oldest: string | null;

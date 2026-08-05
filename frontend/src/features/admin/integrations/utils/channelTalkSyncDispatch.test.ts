@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { Period } from '../constants/period';
-import { groupChannelTalkSyncDispatch, pickSyncDays } from './channelTalkSyncDispatch';
+import { buildChannelTalkSyncRequests, groupChannelTalkSyncDispatch, pickSyncDays } from './channelTalkSyncDispatch';
 import type { ChannelTalkChannel } from './mapChannelTalkSyncTargets';
 
 const channelA: ChannelTalkChannel = {
@@ -110,6 +110,42 @@ describe('groupChannelTalkSyncDispatch', () => {
       {},
     );
     expect(result[0].periods).toEqual(['전체']);
+  });
+});
+
+describe('buildChannelTalkSyncRequests', () => {
+  it('sync_days는 채널별로 독립 계산된다 — 다른 채널의 전체 선택이 전염되지 않는다', () => {
+    const result = buildChannelTalkSyncRequests(
+      [channelA, channelB],
+      new Set(['ch-a', 'ch-b']),
+      new Set(),
+      { 'ch-a': '1개월', 'ch-b': '전체' },
+      {},
+    );
+    expect(result).toHaveLength(2);
+    expect(result[0]).toEqual({
+      scope_id: 'ch-a',
+      targets: [{ target_type: 'channel', target_id: 'ch-a' }],
+      sync_days: 30,
+    });
+    expect(result[1].scope_id).toBe('ch-b');
+    expect(result[1].sync_days).toBeNull();
+  });
+
+  it('한 채널 안에서는 가장 긴 기간을 채택한다', () => {
+    const result = buildChannelTalkSyncRequests(
+      [channelA],
+      new Set(['ch-a']),
+      new Set(['sp-1']),
+      { 'ch-a': '1개월' },
+      { 'sp-1': '1년' },
+    );
+    expect(result[0].sync_days).toBe(365);
+  });
+
+  it('선택 없는 채널은 요청을 만들지 않는다', () => {
+    const result = buildChannelTalkSyncRequests([channelA, channelB], new Set(['ch-b']), new Set(), {}, {});
+    expect(result.map((r) => r.scope_id)).toEqual(['ch-b']);
   });
 });
 

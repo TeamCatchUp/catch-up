@@ -59,6 +59,8 @@ export interface ChannelTalkDocumentConnectResponse {
   credential_last_verified_at: string | null;
   association_status: string | null;
   status_reason: string | null;
+  // 서버에 저장된 동기화 주기 — 상태 hydrate가 이 값을 무시하면 재제출 때 덮어쓴다
+  polling_cycle_hours: number;
   status: 'connected';
   message: string;
 }

@@ -3,6 +3,7 @@ import { useQueries } from '@tanstack/react-query';
 
 import { syncRecordGapsOptions } from '../queries/syncRecords.queries';
 import type { AdminConnectorTargetRangeResponse, SyncRecordGapItem, SyncTargetStatus } from '../types/syncModel';
+import { syncTargetKey } from '../utils/syncTargetKey';
 
 export interface GapSummary {
   eventId: string;
@@ -25,6 +26,7 @@ export const useEmbeddingGaps = (failedItems: AdminConnectorTargetRangeResponse[
     queries: targets.map((item) => syncRecordGapsOptions(item.event_id)),
   });
 
+  // 키는 (scope_id, target_type, target_id) 3-튜플 — 채널톡의 channel/space id 충돌 방지
   const gapByTargetId = useMemo((): Map<string, GapSummary> => {
     const map = new Map<string, GapSummary>();
     targets.forEach((item, i) => {
@@ -33,7 +35,7 @@ export const useEmbeddingGaps = (failedItems: AdminConnectorTargetRangeResponse[
         const totalMissing = data.records.reduce((sum, r) => sum + r.missing_count, 0);
         const totalExpected = data.records.reduce((sum, r) => sum + r.expected_count, 0);
         const totalStored = data.records.reduce((sum, r) => sum + r.stored_count, 0);
-        map.set(item.target_id, {
+        map.set(syncTargetKey(item), {
           eventId: item.event_id,
           attempt: data.attempt ?? 0,
           eventStatus: data.event_status,

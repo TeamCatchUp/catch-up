@@ -1,23 +1,13 @@
-import { DEFAULT_PERIOD, type Period } from '../constants/period';
+import { DEFAULT_PERIOD, type Period,PERIOD_SYNC_DAYS } from '../constants/period';
 import type { FullSyncTarget } from '../types/syncModel';
 import type { ChannelTalkChannel } from './mapChannelTalkSyncTargets';
-
-// Period 라벨 → 백엔드 sync_days. '전체' = null → 백엔드 기본값(1095) 사용
-const PERIOD_TO_DAYS: Record<Period, number | null> = {
-  '1개월': 30,
-  '3개월': 90,
-  '6개월': 180,
-  '1년': 365,
-  '3년': 1095,
-  전체: null,
-};
 
 // 백엔드가 단일 sync_days만 받아 가장 긴 period 채택. '전체' 포함 시 null
 export function pickSyncDays(periods: Period[]): number | null {
   if (periods.length === 0) return null;
   let maxDays = 0;
   for (const p of periods) {
-    const days = PERIOD_TO_DAYS[p];
+    const days = PERIOD_SYNC_DAYS[p];
     if (days === null) return null;
     if (days > maxDays) maxDays = days;
   }
@@ -29,6 +19,34 @@ export interface ChannelTalkSyncDispatchGroup {
   channel: ChannelTalkChannel;
   targets: FullSyncTarget[];
   periods: Period[];
+}
+
+/** POST /sync/full 요청 한 건 — connector는 호출부가 붙인다 */
+export interface ChannelTalkSyncRequest {
+  scope_id: string;
+  targets: FullSyncTarget[];
+  sync_days: number | null;
+}
+
+/**
+ * 선택 상태 → channel별 /sync/full 요청 페이로드.
+ * `sync_days`는 **그 채널에서 사용된 기간만으로** 정한다 — 다른 채널의 '전체'
+ * 선택이 전염되면 좁게 고른 채널까지 전체 기간으로 동기화된다.
+ */
+export function buildChannelTalkSyncRequests(
+  channels: ChannelTalkChannel[],
+  selectedChannelIds: Set<string>,
+  selectedSpaceIds: Set<string>,
+  channelPeriods: Record<string, Period>,
+  spacePeriods: Record<string, Period>,
+): ChannelTalkSyncRequest[] {
+  return groupChannelTalkSyncDispatch(channels, selectedChannelIds, selectedSpaceIds, channelPeriods, spacePeriods).map(
+    ({ channel, targets, periods }) => ({
+      scope_id: channel.channel_id,
+      targets,
+      sync_days: pickSyncDays(periods),
+    }),
+  );
 }
 
 // POST /sync/full은 scope_id 1개라 channel별 1회씩 호출 — 빈 그룹은 제외

@@ -72,18 +72,17 @@ export const API = {
       decide: `${API_PREFIX}/admin/members/requests/decide`, // POST 승인/반려
     },
     queries: `${API_PREFIX}/admin/queries`, // GET 이용자 질문 기록 (페이지네이션, 필터, 검색)
-    // auditLogs: 엔드포인트 미확정, mock 직접 사용
+    // 감사 로그 화면은 CAM-256에서 제거됨. 백엔드에 실존하는 감사 로그 계약은
+    // GET /api/v1/audit-logs/download (CSV 스트리밍, date_range 쿼리) 하나뿐이다 — 필요 시 여기 추가.
     connector: {
-      githubStatus: `${API_PREFIX}/admin/connector/github/status`, // GET GitHub 연동 상태
-      jiraStatus: `${API_PREFIX}/admin/connector/jira/status`, // GET Jira 연동 상태
-      slackStatus: `${API_PREFIX}/admin/connector/slack/status`, // GET Slack 연동 상태
-      confluenceStatus: `${API_PREFIX}/admin/connector/confluence/status`, // GET Confluence 연동 상태
+      // vendor별 GET .../{vendor}/status 엔드포인트는 백엔드에 존재하지 않는다(404) — 아래 status 하나가 canonical
       status: `${API_PREFIX}/admin/connector/status`, // GET target별 임베딩 데이터 범위 (?source=)
       channelTalk: {
-        credentials: `${API_PREFIX}/admin/connector/channel_talk/credentials`, // GET(list)/POST 채널 credential 조회/저장(upsert)
+        // 이 라우터에 GET은 없다(백엔드 테스트가 405를 고정) — 조회는 integrations.connectionStatus 사용
+        credentials: `${API_PREFIX}/admin/connector/channel_talk/credentials`, // POST 채널 credential 저장(upsert)
         credentialsValidate: `${API_PREFIX}/admin/connector/channel_talk/credentials/validate`, // POST 채널 credential 검증
         // DELETE는 ?channel_id=X query parameter 사용
-        documentCredentials: `${API_PREFIX}/admin/connector/channel_talk/documents/credentials`, // GET(list)/POST 도큐먼트 스페이스 credential 조회/저장
+        documentCredentials: `${API_PREFIX}/admin/connector/channel_talk/documents/credentials`, // POST 도큐먼트 스페이스 credential 저장
         documentCredentialsValidate: `${API_PREFIX}/admin/connector/channel_talk/documents/credentials/validate`, // POST 도큐먼트 스페이스 credential 검증
         // DELETE는 ?space_id=X query parameter 사용
       },
@@ -102,8 +101,8 @@ export const API = {
   },
 
   mapping: {
-    upload: `${API_PREFIX}/mapping/upload`, // POST GitHub 매핑 CSV/Excel 일괄 업로드 (multipart/form-data)
-    vendorUpload: (vendor: string) => `${API_PREFIX}/mapping/${vendor}/upload`, // POST 협업툴별 사용자 매핑 CSV/Excel 일괄 업로드
+    // /mapping/upload(vendor 없는 형태)는 백엔드에 없다 — 경로는 /{vendor_type}/upload 뿐
+    vendorUpload: (vendor: string) => `${API_PREFIX}/mapping/${vendor}/upload`, // POST 협업툴별 사용자 매핑 CSV/Excel 일괄 업로드 (multipart/form-data)
   },
 
   stats: {

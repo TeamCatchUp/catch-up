@@ -1,0 +1,46 @@
+import ImgGuideConfluenceAccept from '@/public/image/guide/guide_confluence_accept.png';
+import ImgGuideConfluenceIntegrationPage from '@/public/image/guide/guide_confluence_integration_page.png';
+import ImgGuideConfluenceSiteSelection from '@/public/image/guide/guide_confluence_site_selection.png';
+import ImgGuideGithubInstall from '@/public/image/guide/guide_github_install.png';
+import ImgGuideGithubIntegrationPage from '@/public/image/guide/guide_github_integration_page.png';
+import ImgGuideGithubRepository from '@/public/image/guide/guide_github_repository.png';
+import ImgGuideGithubRepositoryInstall from '@/public/image/guide/guide_github_repository_install.png';
+import ImgGuideJiraAccept from '@/public/image/guide/guide_jira_accept.png';
+import ImgGuideJiraConnectorInstall from '@/public/image/guide/guide_jira_connector_install.png';
+import ImgGuideJiraIntegrationPage from '@/public/image/guide/guide_jira_integration_page.png';
+import ImgGuideJiraSiteSelection from '@/public/image/guide/guide_jira_site_selection.png';
+import ImgGuideSlackIntegrationPage from '@/public/image/guide/guide_slack_integration_page.png';
+import ImgGuideSlackPermissions from '@/public/image/guide/guide_slack_permissions.png';
+
+// 가이드 이미지 static import는 components/management/guides/의 4개 파일만 쓴다.
+// integrationsConfig에 함께 두면 RESOURCES_PER_PAGE나 INTEGRATION_ACCOUNTS를 쓰는 모듈까지
+// PNG 13장을 끌고 오게 되고, Storybook의 vite next-image 변환이 Windows 경로에서 깨진다.
+
+/** Jira 가이드 이미지 리소스 */
+export const JIRA_GUIDE_IMAGES = {
+  integrationPage: ImgGuideJiraIntegrationPage,
+  connectorInstall: ImgGuideJiraConnectorInstall,
+  siteSelection: ImgGuideJiraSiteSelection,
+  accept: ImgGuideJiraAccept,
+};
+
+/** GitHub 가이드 이미지 리소스 */
+export const GITHUB_GUIDE_IMAGES = {
+  integrationPage: ImgGuideGithubIntegrationPage,
+  install: ImgGuideGithubInstall,
+  repository: ImgGuideGithubRepository,
+  repositoryInstall: ImgGuideGithubRepositoryInstall,
+};
+
+/** Slack 가이드 이미지 리소스 */
+export const SLACK_GUIDE_IMAGES = {
+  integrationPage: ImgGuideSlackIntegrationPage,
+  permissions: ImgGuideSlackPermissions,
+};
+
+/** Confluence 가이드 이미지 리소스 */
+export const CONFLUENCE_GUIDE_IMAGES = {
+  integrationPage: ImgGuideConfluenceIntegrationPage,
+  siteSelection: ImgGuideConfluenceSiteSelection,
+  accept: ImgGuideConfluenceAccept,
+};

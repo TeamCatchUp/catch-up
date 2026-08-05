@@ -30,7 +30,6 @@ export default function QuestionLogDetailPage() {
 
   const messageId = Number(params.messageId);
   const userId = searchParams.get('userId') ?? '';
-  const from = searchParams.get('from') ?? undefined;
 
   // 유저 정보 조회
   const { data: usersData } = useQuery(adminMembersQueries.list());
@@ -68,7 +67,7 @@ export default function QuestionLogDetailPage() {
 
   return (
     <section className="flex flex-col gap-6 px-16 pt-9 pb-30">
-      <DetailHeader userId={userId} userName={user?.name ?? ''} userDepartment={user?.department ?? ''} from={from} />
+      <DetailHeader userName={user?.name ?? ''} userDepartment={user?.department ?? ''} />
 
       {detailQuery.isLoading && (
         <div className="text-body-small text-text-normal-assistive py-4">데이터를 불러오는 중입니다...</div>

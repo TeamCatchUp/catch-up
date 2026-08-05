@@ -121,14 +121,19 @@
   --color-accent-violet-neutral: var(--accent-violet-neutral);
   --color-accent-violet-lighten: var(--accent-violet-lighten);
   --color-accent-light-blue-default: var(--accent-light-blue);
+  --color-accent-light-blue-neutral: var(--accent-light-blue-neutral);
   --color-accent-light-blue-lighten: var(--accent-light-blue-lighten);
   --color-accent-pink-default: var(--accent-pink);
+  --color-accent-pink-neutral: var(--accent-pink-neutral);
   --color-accent-pink-lighten: var(--accent-pink-lighten);
   --color-accent-red-default: var(--accent-red);
+  --color-accent-red-neutral: var(--accent-red-neutral);
   --color-accent-red-lighten: var(--accent-red-lighten);
   --color-accent-information-default: var(--accent-information);
+  --color-accent-information-neutral: var(--accent-information-neutral);
   --color-accent-information-lighten: var(--accent-information-lighten);
   --color-accent-black-default: var(--accent-black);
+  --color-accent-black-neutral: var(--accent-black-neutral);
   --color-accent-black-lighten: var(--accent-black-lighten);
 
   /* Accent compatibility aliases */

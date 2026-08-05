@@ -47,6 +47,8 @@ export default defineConfig({
             provider: playwright({}),
             headless: true,
             instances: [{ browser: 'chromium' }],
+            // 기본 포트 63315는 Windows 예약 포트 범위(63313-63412)에 들어 EACCES가 난다
+            api: { port: 53315 },
           },
         },
       },
@@ -56,6 +58,8 @@ export default defineConfig({
     alias: [
       { find: '@/public', replacement: path.resolve(rootDir, './public') },
       { find: '@', replacement: path.resolve(rootDir, './src') },
+      // Next가 내부 alias로 해석하는 가상 모듈 — 테스트에서는 빈 모듈로 대체
+      { find: 'server-only', replacement: path.resolve(rootDir, './src/test/stubs/server-only.ts') },
     ],
   },
 });

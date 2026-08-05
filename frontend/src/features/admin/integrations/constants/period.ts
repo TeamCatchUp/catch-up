@@ -13,3 +13,13 @@ export const DEFAULT_PERIOD: Period = '전체';
 
 export const isPeriod = (value: string): value is Period =>
   (PERIOD_OPTIONS as readonly string[]).includes(value);
+
+/** Period 라벨 → 백엔드 sync_days. '전체' = null → 백엔드 기본값 사용 */
+export const PERIOD_SYNC_DAYS: Record<Period, number | null> = {
+  '1개월': 30,
+  '3개월': 90,
+  '6개월': 180,
+  '1년': 365,
+  '3년': 1095,
+  전체: null,
+};
