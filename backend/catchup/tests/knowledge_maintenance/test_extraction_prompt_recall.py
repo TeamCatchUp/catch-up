@@ -29,6 +29,13 @@ def test_value_ladder_keeps_text_claims() -> None:
     assert "the quoted span does not contain" in rendered
 
 
+def test_claim_definition_matches_value_ladder() -> None:
+    """claim 정의의 value 서술이 가치 사다리와 어긋나지 않는지 본다."""
+    rendered = _render()
+    assert "a single literal" not in rendered
+    assert "a literal, or a compact text label when it isn't" in rendered
+
+
 def test_drop_only_noise() -> None:
     rendered = _render()
     assert "Drop a fact only when it is small talk or routine noise" in rendered
