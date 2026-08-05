@@ -11,7 +11,7 @@ import UserMappingView from '../view/UserMappingView';
  */
 export default function UserMappingPageClient() {
   return (
-    <section className="mx-auto flex w-full flex-col gap-10 px-16 pt-9 pb-30 min-[1440px]:max-w-292">
+    <section className="mx-auto flex w-full flex-col gap-10 px-16 pt-9 pb-5 min-[1440px]:max-w-292">
       <div className="flex flex-col gap-2">
         <h1 className="text-heading-xlarge text-text-normal-normal">이용자 매핑</h1>
         <p className="text-body-small text-text-normal-alternative">CatchUp에서 사용하는 앱을 찾아 관리합니다.</p>

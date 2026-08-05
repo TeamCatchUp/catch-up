@@ -118,7 +118,7 @@ const EMBED_CHANNELS_FIXTURE = [
 /** ConnectorsPageClient의 셸 — 제목 블록 + gap 40 (Figma 17122:112580 공통 규칙) */
 function PageShell({ children }: { children: React.ReactNode }) {
   return (
-    <section className="bg-background-normal-normal mx-auto flex w-full flex-col gap-10 px-16 pt-9 pb-30 min-[1440px]:max-w-292">
+    <section className="bg-background-normal-normal mx-auto flex w-full flex-col gap-10 px-16 pt-9 pb-5 min-[1440px]:max-w-292">
       <div className="flex flex-col gap-2">
         <h1 className="text-heading-xlarge text-text-normal-normal">커넥터 연결</h1>
         <p className="text-body-small text-text-normal-alternative">CatchUp에서 사용하는 앱을 찾아 관리합니다.</p>

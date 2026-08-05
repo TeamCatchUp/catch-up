@@ -130,7 +130,7 @@ const EDIT_OPTIONS: Partial<Record<MappingSource, AccountOption[]>> = {
 /** UserMappingPageClient의 셸 — 커넥터 연결과 같은 규칙(px-16, gap 40) */
 function PageShell({ children }: { children: React.ReactNode }) {
   return (
-    <section className="bg-background-normal-normal mx-auto flex w-full flex-col gap-10 px-16 pt-9 pb-30 min-[1440px]:max-w-292">
+    <section className="bg-background-normal-normal mx-auto flex w-full flex-col gap-10 px-16 pt-9 pb-5 min-[1440px]:max-w-292">
       <div className="flex flex-col gap-2">
         <h1 className="text-heading-xlarge text-text-normal-normal">이용자 매핑</h1>
         {/* UserMappingPageClient 실제 카피 그대로 */}
