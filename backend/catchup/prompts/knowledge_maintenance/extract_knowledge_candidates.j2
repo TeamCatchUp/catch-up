@@ -141,6 +141,11 @@ When the fact does not reduce to a literal, walk down this ladder.
    quoted `statement` carries the actual content, so never put anything
    into the value that the quoted span does not contain.
 
+Never put a whole sentence into the value.
+
+    bad    payment_feature · bug_report · "Sync가 안되는 버그가 있다는 보고"
+    good   payment_feature · bug_report · "sync_failure"
+
 Drop a fact only when it is small talk or routine noise. A real fact about
 a person, a system, or an event belongs in the wiki even when its value
 can only be a label.
@@ -160,6 +165,10 @@ when the time is the point of the fact, make the date the value.
 
 An event that names no reusable entity still counts — attach it to the
 entity the document is about.
+
+This covers only events the body *narrates*. When the source system marks
+the same thing as a record field, the rule below (What not to extract)
+wins.
 
 ## What not to extract
 

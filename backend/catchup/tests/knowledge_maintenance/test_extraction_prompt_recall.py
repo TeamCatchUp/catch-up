@@ -49,6 +49,21 @@ def test_event_fewshot_renders() -> None:
     assert "attended_on" in rendered
 
 
+def test_event_yields_to_record_field_rule() -> None:
+    """사건 추출과 소스 레코드 필드 금지의 우선순위가 명시되는지 본다."""
+    rendered = _render()
+    assert "This covers only events the body *narrates*" in rendered
+    assert "(What not to extract)\nwins." in rendered
+
+
+def test_sentence_shaped_value_has_bad_example() -> None:
+    """문장을 value에 통째로 넣는 실패 모드의 대조쌍이 있는지 본다."""
+    rendered = _render()
+    assert "Never put a whole sentence into the value." in rendered
+    assert 'bad    payment_feature · bug_report · "Sync가 안되는' in rendered
+    assert 'good   payment_feature · bug_report · "sync_failure"' in rendered
+
+
 def test_returning_nothing_is_narrow() -> None:
     rendered = _render()
     assert "no facts at all" in rendered
