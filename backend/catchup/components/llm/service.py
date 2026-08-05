@@ -74,6 +74,7 @@ class OpenAiLlmService(BaseLlmService):
 
 class AwsBedrockLlmService(BaseLlmService):
     DEFAULT_MAX_ATTEMPTS = 5
+    DEFAULT_READ_TIMEOUT = 50
 
     def __init__(
         self,
@@ -84,6 +85,7 @@ class AwsBedrockLlmService(BaseLlmService):
         thinking_budget_tokens: int = 8000,
         max_response_tokens: int | None = None,
         max_attempts: int = DEFAULT_MAX_ATTEMPTS,
+        read_timeout: int = DEFAULT_READ_TIMEOUT,
     ):
         """AWS Bedrock LLM 서비스.
 
@@ -100,12 +102,17 @@ class AwsBedrockLlmService(BaseLlmService):
             max_attempts: botocore 레벨의 최대 재시도 횟수.
                          RAG 파이프라인에서는 LangGraph RetryPolicy를 사용하므로 0으로 설정 권장.
                          Ingestion 등 단발성 호출에서는 기본값(5) 사용.
+            read_timeout: botocore read timeout 초.
+                         기본 50초는 fail-fast 설계 의도다.
+                         지식 추출처럼 응답이 길어 50초를 넘기는 단발성
+                         호출에서만 상향한다.
         """
         self._isolated = isolated
         self._extended_thinking = extended_thinking
         self._thinking_budget_tokens = thinking_budget_tokens
         self._max_response_tokens = max_response_tokens
         self._max_attempts = max_attempts
+        self._read_timeout = read_timeout
         super().__init__(model_capacity, streaming)
 
     def _create_llm(
@@ -126,8 +133,7 @@ class AwsBedrockLlmService(BaseLlmService):
         config = Config(
             max_pool_connections=200,
             retries={"max_attempts": self._max_attempts, "mode": "standard"},
-            # 회수 우선 추출은 응답이 길어 50초를 넘기므로 여유를 둔다.
-            read_timeout=120,
+            read_timeout=self._read_timeout,
             connect_timeout=5,
         )
 
