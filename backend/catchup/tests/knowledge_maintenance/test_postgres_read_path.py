@@ -429,3 +429,155 @@ def test_as_of_predicate_filter(
             predicate="owner",
         )
         assert [claim.claim_id for claim in found] == [wanted]
+
+
+def test_history_includes_closed_accepted_and_excludes_rejected(
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+    session_factory: Callable[[], Session],
+    workspace_id: int,
+) -> None:
+    """history는 닫힌 accepted까지 싣고 rejected는 계속 뺀다."""
+    with session_factory() as session:
+        node_id = _entity_node(session, workspace_id, "결제")
+        run_id = _extraction_run(session, workspace_id)
+
+        closed = _claim(
+            session,
+            workspace_id,
+            run_id,
+            node_id=node_id,
+            status="accepted",
+            valid_from=JULY_1,
+            valid_to=JULY_15,
+            value="B",
+        )
+        live = _claim(
+            session,
+            workspace_id,
+            run_id,
+            node_id=node_id,
+            status="accepted",
+            valid_from=JULY_15,
+            value="A",
+        )
+        undated = _claim(
+            session,
+            workspace_id,
+            run_id,
+            node_id=node_id,
+            status="accepted",
+            value="C",
+        )
+        _claim(
+            session,
+            workspace_id,
+            run_id,
+            node_id=node_id,
+            status="pending",
+            value="D",
+        )
+        _claim(
+            session,
+            workspace_id,
+            run_id,
+            node_id=node_id,
+            status="rejected",
+            value="E",
+        )
+        session.commit()
+
+    with uow_factory() as uow:
+        at_august = uow.knowledge_candidates.find_accepted_claims_as_of(
+            workspace_id=workspace_id,
+            subject_node_id=node_id,
+            at=T_AUG_1,
+        )
+        assert {claim.claim_id for claim in at_august} == {live, undated}
+
+        history = uow.knowledge_candidates.find_accepted_claims_history(
+            workspace_id=workspace_id,
+            subject_node_id=node_id,
+        )
+        assert [claim.claim_id for claim in history] == [
+            undated,
+            closed,
+            live,
+        ]
+
+        by_id = {claim.claim_id: claim for claim in history}
+        assert by_id[closed].valid_from == JULY_1
+        assert by_id[closed].valid_to == JULY_15
+        assert by_id[live].valid_to is None
+        assert by_id[undated].valid_from is None
+
+
+def test_history_includes_claims_resolved_to_the_node(
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+    session_factory: Callable[[], Session],
+    workspace_id: int,
+) -> None:
+    """subject가 그 노드로 해소된 후보인 닫힌 claim도 history에 든다."""
+    with session_factory() as session:
+        node_id = _entity_node(session, workspace_id, "결제")
+        run_id = _extraction_run(session, workspace_id)
+        candidate_id = _resolved_candidate(
+            session, workspace_id, run_id, node_id
+        )
+        claim_id = _claim(
+            session,
+            workspace_id,
+            run_id,
+            candidate_id=candidate_id,
+            status="accepted",
+            valid_from=JULY_1,
+            valid_to=JULY_15,
+            value="via-candidate",
+        )
+        session.commit()
+
+    with uow_factory() as uow:
+        found = uow.knowledge_candidates.find_accepted_claims_history(
+            workspace_id=workspace_id,
+            subject_node_id=node_id,
+        )
+        assert [claim.claim_id for claim in found] == [claim_id]
+
+
+def test_history_predicate_filter(
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+    session_factory: Callable[[], Session],
+    workspace_id: int,
+) -> None:
+    """predicate를 주면 닫힌 claim도 그 predicate만 남는다."""
+    with session_factory() as session:
+        node_id = _entity_node(session, workspace_id, "결제")
+        run_id = _extraction_run(session, workspace_id)
+        wanted = _claim(
+            session,
+            workspace_id,
+            run_id,
+            node_id=node_id,
+            status="accepted",
+            predicate="owner",
+            valid_from=JULY_1,
+            valid_to=JULY_15,
+            value="플랫폼팀",
+        )
+        _claim(
+            session,
+            workspace_id,
+            run_id,
+            node_id=node_id,
+            status="accepted",
+            predicate="release_month",
+            value="2026-09",
+        )
+        session.commit()
+
+    with uow_factory() as uow:
+        found = uow.knowledge_candidates.find_accepted_claims_history(
+            workspace_id=workspace_id,
+            subject_node_id=node_id,
+            predicate="owner",
+        )
+        assert [claim.claim_id for claim in found] == [wanted]

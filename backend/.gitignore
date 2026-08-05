@@ -19,6 +19,12 @@ catchup/experiments/**/output/
 # 빌더가 raw에서 payload를 다시 만들 수 있으므로 산출물을 추적하지 않는다.
 catchup/experiments/channel_talk/
 
+# LongMemEval 로컬 실험 자산 — oracle 원본(15MB짜리 외부 데이터셋), 어휘
+# 초안, 실행 산출물(results/)까지 전부 추적하지 않는다. 러너가 다시 만들 수
+# 있는 것들이며, 확장자·하위 디렉토리로 갈라 놓으면 새 산출물이 조용히
+# 커밋에 딸려 들어간다.
+experiments/longmemeval/
+
 # 평가 데이터셋은 코드와 함께 관리한다
 !catchup/evaluation/data/
 !catchup/evaluation/data/**

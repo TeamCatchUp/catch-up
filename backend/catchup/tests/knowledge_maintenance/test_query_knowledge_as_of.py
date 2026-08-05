@@ -13,9 +13,14 @@ from catchup.knowledge_maintenance.ports.knowledge_candidates import AsOfClaim
 from catchup.knowledge_maintenance.services.query_knowledge_as_of import (
     query_claims_as_of,
 )
+from catchup.knowledge_maintenance.services.query_knowledge_as_of import (
+    query_claims_history,
+)
 
 WORKSPACE = 1
 AT = datetime(2026, 8, 1, 9, 0, tzinfo=timezone.utc)
+JULY_1 = datetime(2026, 7, 1, tzinfo=timezone.utc)
+JULY_15 = datetime(2026, 7, 15, tzinfo=timezone.utc)
 
 
 def _node(
@@ -33,15 +38,21 @@ def _node(
     )
 
 
-def _claim(predicate: str = "rate_limit", value: object = 60) -> AsOfClaim:
+def _claim(
+    predicate: str = "rate_limit",
+    value: object = 60,
+    *,
+    valid_from: datetime | None = None,
+    valid_to: datetime | None = None,
+) -> AsOfClaim:
     return AsOfClaim(
         claim_id=uuid.uuid4(),
         predicate=predicate,
         value_type="number",
         value=value,
         statement=f"{predicate}은 {value}이다",
-        valid_from=None,
-        valid_to=None,
+        valid_from=valid_from,
+        valid_to=valid_to,
     )
 
 
@@ -85,9 +96,17 @@ class FakeNodeRepository:
 
 
 class FakeClaimRepository:
+    """as-of는 구간 술어를, history는 구간 무시를 그대로 흉내 낸다.
+
+    실 DB에서 두 reader를 가르는 것은 구간 조건 하나뿐이다. fake가
+    as-of에서도 구간을 안 거르면 닫힌 claim이 두 경로에서 똑같이 나와,
+    history가 실제로 넓은지 검증하지 못한다.
+    """
+
     def __init__(self, claims: tuple[AsOfClaim, ...] = ()) -> None:
         self.claims = claims
         self.calls: list[dict] = []
+        self.history_calls: list[dict] = []
 
     def find_accepted_claims_as_of(
         self,
@@ -105,6 +124,40 @@ class FakeClaimRepository:
                 "predicate": predicate,
             }
         )
+        return tuple(
+            claim
+            for claim in self._filter_by_predicate(predicate)
+            if (claim.valid_from is None or claim.valid_from <= at)
+            and (claim.valid_to is None or claim.valid_to > at)
+        )
+
+    def find_accepted_claims_history(
+        self,
+        *,
+        workspace_id: int,
+        subject_node_id: uuid.UUID,
+        predicate: str | None = None,
+    ) -> tuple[AsOfClaim, ...]:
+        self.history_calls.append(
+            {
+                "workspace_id": workspace_id,
+                "subject_node_id": subject_node_id,
+                "predicate": predicate,
+            }
+        )
+        return tuple(
+            sorted(
+                self._filter_by_predicate(predicate),
+                key=lambda claim: (
+                    claim.valid_from is not None,
+                    claim.valid_from or AT,
+                ),
+            )
+        )
+
+    def _filter_by_predicate(
+        self, predicate: str | None
+    ) -> tuple[AsOfClaim, ...]:
         if predicate is None:
             return self.claims
         return tuple(
@@ -261,3 +314,127 @@ def test_predicate_filter_passthrough() -> None:
 
     assert uow.knowledge_candidates.calls[0]["predicate"] == "owner"
     assert [claim.predicate for claim in result.claims] == ["owner"]
+
+
+def _history_uow(claims: tuple[AsOfClaim, ...]) -> FakeUnitOfWork:
+    node = _node(canonical_key="feature:오픈 api")
+    return FakeUnitOfWork(
+        nodes=FakeNodeRepository(
+            by_canonical_key={"feature:오픈 api": node},
+        ),
+        claims=FakeClaimRepository(claims),
+    )
+
+
+def test_history_includes_closed_claims_that_as_of_drops() -> None:
+    """닫힌 claim은 as-of에선 빠지고 history에선 구간과 함께 나온다."""
+    closed = _claim("rate_limit", 30, valid_from=JULY_1, valid_to=JULY_15)
+    live = _claim("rate_limit", 60, valid_from=JULY_15)
+    uow = _history_uow((closed, live))
+
+    as_of = query_claims_as_of(
+        workspace_id=WORKSPACE,
+        subject="feature:오픈 api",
+        at=AT,
+        uow=uow,
+    )
+    history = query_claims_history(
+        workspace_id=WORKSPACE,
+        subject="feature:오픈 api",
+        uow=uow,
+    )
+
+    assert [claim.claim_id for claim in as_of.claims] == [live.claim_id]
+    assert [claim.claim_id for claim in history.claims] == [
+        closed.claim_id,
+        live.claim_id,
+    ]
+    by_id = {claim.claim_id: claim for claim in history.claims}
+    assert by_id[closed.claim_id].valid_from == JULY_1
+    assert by_id[closed.claim_id].valid_to == JULY_15
+    assert by_id[live.claim_id].valid_to is None
+
+
+def test_history_as_of_is_the_call_time_not_a_filter() -> None:
+    """history의 as_of는 조회 시각 기록일 뿐 구간을 자르지 않는다."""
+    closed = _claim("rate_limit", 30, valid_from=JULY_1, valid_to=JULY_15)
+    uow = _history_uow((closed,))
+
+    before = datetime.now(timezone.utc)
+    result = query_claims_history(
+        workspace_id=WORKSPACE,
+        subject="feature:오픈 api",
+        uow=uow,
+    )
+    after = datetime.now(timezone.utc)
+
+    assert before - timedelta(seconds=1) <= result.as_of <= after
+    assert result.as_of.tzinfo is not None
+    assert [claim.claim_id for claim in result.claims] == [closed.claim_id]
+    assert uow.knowledge_candidates.calls == []
+
+
+def test_history_matches_subject_like_as_of() -> None:
+    """subject 매칭 규칙은 as-of와 같은 헬퍼를 그대로 쓴다."""
+    alias_node = _node()
+    uow = FakeUnitOfWork(
+        nodes=FakeNodeRepository(by_alias={"캐치업 오픈 api": alias_node}),
+        claims=FakeClaimRepository((_claim(),)),
+    )
+
+    result = query_claims_history(
+        workspace_id=WORKSPACE,
+        subject="  캐치업   오픈 API  ",
+        uow=uow,
+    )
+
+    assert result.subject is not None
+    assert result.subject.node_id == alias_node.id
+    assert result.subject.matched_by == "alias"
+    assert uow.knowledge_nodes.alias_calls == ["캐치업 오픈 api"]
+
+
+def test_history_no_match_returns_empty_and_logs() -> None:
+    """대상을 못 찾으면 reader를 부르지 않고 빈 결과를 남긴다."""
+    uow = FakeUnitOfWork(claims=FakeClaimRepository((_claim(),)))
+
+    with capture_logs() as logs:
+        result = query_claims_history(
+            workspace_id=WORKSPACE,
+            subject="없는 이름",
+            uow=uow,
+        )
+
+    assert result.subject is None
+    assert result.claims == ()
+    assert uow.knowledge_candidates.history_calls == []
+
+    entry = next(
+        log for log in logs if log["event"] == "knowledge_history_queried"
+    )
+    assert entry["workspace_id"] == WORKSPACE
+    assert entry["subject"] == "없는 이름"
+    assert entry["matched_by"] is None
+    assert entry["claim_count"] == 0
+
+
+def test_history_predicate_filter_passthrough() -> None:
+    """predicate 인자는 history reader로 그대로 넘어간다."""
+    uow = _history_uow((_claim(), _claim("owner", "결제팀")))
+
+    with capture_logs() as logs:
+        result = query_claims_history(
+            workspace_id=WORKSPACE,
+            subject="feature:오픈 api",
+            predicate="owner",
+            uow=uow,
+        )
+
+    assert uow.knowledge_candidates.history_calls[0]["predicate"] == "owner"
+    assert [claim.predicate for claim in result.claims] == ["owner"]
+
+    entry = next(
+        log for log in logs if log["event"] == "knowledge_history_queried"
+    )
+    assert entry["predicate"] == "owner"
+    assert entry["claim_count"] == 1
