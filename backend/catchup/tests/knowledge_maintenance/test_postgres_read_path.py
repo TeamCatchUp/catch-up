@@ -54,6 +54,8 @@ T_JULY_10 = datetime(2026, 7, 10, tzinfo=timezone.utc)
 T_AUG_1 = datetime(2026, 8, 1, tzinfo=timezone.utc)
 JULY_1 = datetime(2026, 7, 1, tzinfo=timezone.utc)
 JULY_15 = datetime(2026, 7, 15, tzinfo=timezone.utc)
+JULY_20 = datetime(2026, 7, 20, tzinfo=timezone.utc)
+JULY_25 = datetime(2026, 7, 25, tzinfo=timezone.utc)
 AUG_10 = datetime(2026, 8, 10, tzinfo=timezone.utc)
 
 
@@ -1137,7 +1139,9 @@ def test_timeline_query_collects_by_text_in_time_order(
 
     statement에만 겹친 claim과 value에만 겹친 claim이 함께 나와야
     한다 — 사건 claim의 키워드가 어느 컬럼에 앉을지는 추출 결과마다
-    다르다. 질문 시점 뒤에 발효되는 claim과 rejected는 빠진다.
+    다르다. 이미 닫힌 accepted claim("한때 참이었다")도 함께 나와야
+    한다 — 세는 질문은 지금 유효한 것만이 아니라 일어난 일 전부를
+    센다. 질문 시점 뒤에 발효되는 claim과 rejected는 빠진다.
     """
     keyword = f"workshop{uuid.uuid4().hex[:8]}"
 
@@ -1165,6 +1169,17 @@ def test_timeline_query_collects_by_text_in_time_order(
             value=f"{keyword} 두 번째 참석",
             statement="사건 기록 하나",
             valid_from=JULY_15,
+        )
+        closed = _claim(
+            session,
+            workspace_id,
+            run_id,
+            node_id=node_id,
+            status="accepted",
+            predicate=f"attended_{keyword}",
+            value="7월 하순",
+            valid_from=JULY_20,
+            valid_to=JULY_25,
         )
         future = _claim(
             session,
@@ -1199,7 +1214,10 @@ def test_timeline_query_collects_by_text_in_time_order(
     assert [claim.claim_id for claim in result.claims] == [
         by_statement,
         by_value,
+        closed,
     ]
+    closed_row = result.claims[2]
+    assert closed_row.valid_to == JULY_25
     returned = [claim.valid_from for claim in result.claims]
     assert returned == sorted(returned)
     assert all(moment is None or moment <= T_AUG_1 for moment in returned)

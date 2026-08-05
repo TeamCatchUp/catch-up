@@ -95,7 +95,6 @@ __all__ = [
     "SubjectLookup",
     "SubjectResult",
     "SubjectTrace",
-    "TimelineLookupFn",
     "answer_questions",
     "build_answer_prompt",
     "build_subject_prompt",
@@ -615,6 +614,18 @@ def _timeline_body(claim: AsOfClaim) -> str:
     return body
 
 
+def _timeline_until(claim: AsOfClaim) -> str:
+    """닫힌 claim의 종료 날짜를 날짜 줄에 덧붙일 꼬리로 만든다.
+
+    타임라인은 닫힌 accepted claim도 싣는다. 종료 날짜를 적지 않으면
+    답변 프롬프트의 기간 표기 규칙이 "아직 유효하다"로 읽히므로,
+    valid_to가 있으면 날짜 옆에 그대로 드러낸다.
+    """
+    if claim.valid_to is None:
+        return ""
+    return f" (until {claim.valid_to.date().isoformat()})"
+
+
 def render_timeline(
     claims: Sequence[AsOfClaim],
     *,
@@ -625,8 +636,9 @@ def render_timeline(
 
     날짜 있는 사건에 1부터 번호를 붙인다 — 건수와 "몇 번째"는
     생성기가 번호를 읽기만 하면 되게 한다. 날짜 모르는 사건은 번호
-    없이 뒤에 둔다. 이미 subject 절에 실린 claim은 뺀다. 실을 것이
-    없으면 빈 문자열을 준다 — 빈 절은 발뺌 빌미가 된다.
+    없이 뒤에 둔다. 종료 날짜가 있으면 날짜 옆에 `(until ...)`로
+    적는다. 이미 subject 절에 실린 claim은 뺀다. 실을 것이 없으면
+    빈 문자열을 준다 — 빈 절은 발뺌 빌미가 된다.
     """
     dated: list[tuple[str, AsOfClaim]] = []
     undated: list[AsOfClaim] = []
@@ -642,9 +654,11 @@ def render_timeline(
         return "", 0
     lines = [f"## Timeline (matching: {', '.join(matching)})"]
     for number, (date_text, claim) in enumerate(dated, start=1):
-        lines.append(f"{number}. {date_text} — {_timeline_body(claim)}")
+        head = f"{number}. {date_text}{_timeline_until(claim)}"
+        lines.append(f"{head} — {_timeline_body(claim)}")
     for claim in undated:
-        lines.append(f"(date unknown) — {_timeline_body(claim)}")
+        head = f"(date unknown){_timeline_until(claim)}"
+        lines.append(f"{head} — {_timeline_body(claim)}")
     return "\n".join(lines), len(dated) + len(undated)
 
 
@@ -857,6 +871,10 @@ def run_question(
     timeline_count = 0
     if lookup.timeline is not None and subjects:
         timeline_result = lookup.timeline(subjects, question.question_date)
+        # 이 집합은 "조회된" claim 전부라서 렌더에서 버린 미래 발효분도
+        # 담는다. 타임라인 SQL이 같은 `at`으로 미래를 이미 잘라 두므로
+        # 그 id가 타임라인 결과에 나타날 일이 없고, 따라서 과잉 제외로
+        # 실린 사건이 사라지는 일도 없다.
         already_rendered = frozenset(
             claim.claim_id
             for entry in (*lookups, *fallback_lookups)

@@ -2,10 +2,12 @@
 
 타임라인 절이 존재하는 이유는 "몇 번 갔었나"·"몇 번째인가"처럼 여러
 세션에 흩어진 사건을 한 줄로 세워야 답이 나오는 질문이다. 그래서 이
-파일이 지키는 선은 셋이다. 하나, 날짜 있는 사건에 날짜 순으로 번호가
+파일이 지키는 선은 넷이다. 하나, 날짜 있는 사건에 날짜 순으로 번호가
 붙는다 — 생성기는 번호를 읽기만 하면 된다. 둘, subject 절에 이미 실린
 claim은 타임라인에 다시 싣지 않고, 전부 중복이면 절 자체를 내지
 않는다. 셋, 타임라인 조회 경로가 없는 호출자는 예전과 똑같이 돈다.
+넷, 이미 끝난 사건은 날짜 옆에 종료 날짜를 달고 나온다 — 닫힌 claim을
+싣는데 종료를 적지 않으면 모델이 아직 유효한 사실로 읽는다.
 
 DB도 LLM도 부르지 않는다. 조회와 모델 자리에 고정 응답 fake만 넣는다.
 """
@@ -50,6 +52,7 @@ def _claim(
     predicate: str = "visited",
     value: str = "clinic",
     valid_from: datetime | None = None,
+    valid_to: datetime | None = None,
 ) -> AsOfClaim:
     """claim 한 건을 만든다."""
     return AsOfClaim(
@@ -59,7 +62,7 @@ def _claim(
         value=value,
         statement=f"Alice visited the {value}.",
         valid_from=valid_from,
-        valid_to=None,
+        valid_to=valid_to,
     )
 
 
@@ -94,6 +97,7 @@ def _lookup(
     """
     as_of_result = as_of or _miss()
     history_result = history or _miss()
+
     def timeline_fn(
         query_texts: Sequence[str], at: datetime
     ) -> TimelineQueryResult:
@@ -156,6 +160,26 @@ def test_timeline_section_renders_numbered_and_dated() -> None:
     trace = outcome.trace_payload()
     assert trace["timeline_used"] is True
     assert trace["timeline_claims"] == 3
+
+
+def test_timeline_line_shows_valid_to() -> None:
+    """끝난 사건은 날짜 옆에 종료 날짜가 붙는다."""
+    closed = _claim(
+        valid_from=datetime(2026, 7, 1, tzinfo=timezone.utc),
+        valid_to=datetime(2026, 7, 20, tzinfo=timezone.utc),
+    )
+
+    outcome = run_question(
+        _question(),
+        lookup=_lookup(timeline_claims=(closed,)),
+        extract_subjects=_extract,
+        answer=_answer,
+    )
+
+    assert (
+        "1. 2026-07-01 (until 2026-07-20) — [visited] clinic"
+        in outcome.claims_context
+    )
 
 
 def test_timeline_deduplicates_subject_claims() -> None:
