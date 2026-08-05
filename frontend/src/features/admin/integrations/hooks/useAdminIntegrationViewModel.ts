@@ -14,7 +14,9 @@ import type {
 import type { AdminConnectorStatusResponse } from '../types/syncModel';
 import { buildChannelTalkResourceTree } from '../utils/buildChannelTalkResourceTree';
 import { formatEmbeddingRange } from '../utils/embeddingUtils';
+import { isCompletedSyncTarget } from '../utils/isCompletedSyncTarget';
 import { type ConnectorQueryFlags, resolveConnectorStatus } from '../utils/resolveConnectorStatus';
+import { syncTargetKey } from '../utils/syncTargetKey';
 
 // 단일 source 통합. 이전엔 이 파일이 'github, jira, ...' 순서였고 useEmbeddingHistory는 'jira, github, ...'
 // 순서로 drift되어 있었음 — constants/connectorOrder.ts로 정렬 통일.
@@ -135,20 +137,27 @@ export const useAdminIntegrationViewModel = (): AdminIntegrationViewModel => {
   const getConnectorDetail = useCallback(
     (service: IntegrationService): ConnectorDetail => {
       const status = statusMap[service];
-      const targets = status?.targets ?? [];
+      const allTargets = status?.targets ?? [];
+      /*
+       * 응답 targets는 "연결됨 ∪ 이력 있음"이라 임베딩된 적 없는 target이
+       * sync_status:"pending", event_id:"" 합성 행으로 섞여 온다.
+       * "임베딩된 X" 표와 데이터 범위는 완료(success/failed) 이력이 있는 것만 쓴다 —
+       * 채널톡만 라벨이 "연결된 채널"이라 연결만 된 채널도 트리에 남긴다.
+       */
+      const embedded = allTargets.filter(isCompletedSyncTarget);
 
-      // 전체 데이터 범위: 모든 target 중 가장 오래된 oldest ~ 가장 최신 latest
-      const allOldest = targets.map((t) => t.oldest).filter(Boolean) as string[];
-      const allLatest = targets.map((t) => t.latest).filter(Boolean) as string[];
+      // 전체 데이터 범위: 임베딩된 target 중 가장 오래된 oldest ~ 가장 최신 latest
+      const allOldest = embedded.map((t) => t.oldest).filter(Boolean) as string[];
+      const allLatest = embedded.map((t) => t.latest).filter(Boolean) as string[];
       const globalOldest = allOldest.length ? allOldest.sort()[0] : null;
       const globalLatest = allLatest.length ? allLatest.sort().reverse()[0] : null;
 
       // 채널톡만 채널 → 도큐먼트 스페이스 2단이다. 나머지는 계층이 없어 평면.
       const resources: ConnectorResource[] =
         service === 'channel_talk'
-          ? buildChannelTalkResourceTree(targets)
-          : targets.map((t) => ({
-              id: `${t.scope_id}-${t.target_id}`,
+          ? buildChannelTalkResourceTree(allTargets)
+          : embedded.map((t) => ({
+              id: syncTargetKey(t),
               name: t.target_name,
               dateRange: formatEmbeddingRange(t.oldest, t.latest),
             }));
