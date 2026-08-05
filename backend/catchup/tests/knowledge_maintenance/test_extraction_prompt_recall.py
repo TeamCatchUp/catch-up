@@ -53,3 +53,8 @@ def test_returning_nothing_is_narrow() -> None:
     rendered = _render()
     assert "no facts at all" in rendered
     assert "no knowledge worth keeping" not in rendered
+
+
+def test_entity_restraint_renders() -> None:
+    rendered = _render()
+    assert "merely mentioned in passing" in rendered
