@@ -45,10 +45,18 @@ const SERVICE_TO_VENDOR: Partial<Record<IntegrationService, VendorType>> = {
  * `sub`가 없는 사용자는 백엔드가 요구하는 필수 필드를 채울 수 없어 저장에서 조용히
  * 빠진다 — 사용자에게 알릴지는 미결(감사 E-5).
  */
+/** 저장은 성공했지만 반영 여부 검증이 필요한 Atlassian "미사용" 선언 — 재조회 데이터로 대조한다 */
+export interface SavedAtlassianUnused {
+  userKeys: string[];
+  /** 이 시각 이후에 도착한 목록 데이터로만 판정한다 — 이전 캐시로 대조하면 오탐이다 */
+  savedAt: number;
+}
+
 export function useUserMappingEdit(users: readonly MappingEditUser[]) {
   const queryClient = useQueryClient();
   const [isEditMode, setIsEditMode] = useState(false);
   const [overrides, setOverrides] = useState<Record<string, Partial<Record<IntegrationService, AccountOverride>>>>({});
+  const [savedAtlassianUnused, setSavedAtlassianUnused] = useState<SavedAtlassianUnused | null>(null);
 
   // 계정 후보 조회는 수정 모드에서만 — vendor 4종 병렬 infinite query
   const accountOptionsByService = useVendorAccountOptions(isEditMode);
@@ -104,6 +112,15 @@ export function useUserMappingEdit(users: readonly MappingEditUser[]) {
       if (failed < total) queryClient.invalidateQueries({ queryKey: userSourceMappingQueries.all() });
 
       if (failed === 0) {
+        // Atlassian "미사용"은 백엔드가 Jira 매핑만 지워 Confluence 매핑이 남을 수 있다.
+        // 반영 여부는 재조회 데이터로만 알 수 있으므로 대상만 기록해 두고 뷰가 대조한다.
+        const atlassianUnusedKeys = Object.entries(overrides)
+          .filter(([, serviceOverrides]) => serviceOverrides.jira?.type === 'unused')
+          .map(([userKey]) => userKey);
+        if (atlassianUnusedKeys.length > 0) {
+          setSavedAtlassianUnused({ userKeys: atlassianUnusedKeys, savedAt: Date.now() });
+        }
+
         toast('저장이 완료되었습니다.', { description: '계정 연동 정보가 반영되었습니다.' });
         setOverrides({});
         setIsEditMode(false);
@@ -139,6 +156,8 @@ export function useUserMappingEdit(users: readonly MappingEditUser[]) {
     setIsEditMode(false);
   }, []);
 
+  const clearSavedAtlassianUnused = useCallback(() => setSavedAtlassianUnused(null), []);
+
   return {
     isEditMode,
     startEdit: () => setIsEditMode(true),
@@ -149,5 +168,7 @@ export function useUserMappingEdit(users: readonly MappingEditUser[]) {
     accountOptionsByService,
     selectAccount,
     toggleUnused,
+    savedAtlassianUnused,
+    clearSavedAtlassianUnused,
   };
 }

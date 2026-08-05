@@ -1,8 +1,9 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import dynamic from 'next/dynamic';
+import { toast } from 'sonner';
 
 import { Button } from '@/shared/components/ui/button';
 import Pagination from '@/shared/components/ui/pagination';
@@ -14,6 +15,7 @@ import { useUserMappingSync } from '../../hooks/useUserMappingSync';
 import { userSourceMappingQueries } from '../../queries/userSourceMapping.queries';
 import type { IntegrationService } from '../../types/integrationModel';
 import type { MappingSource } from '../../types/userMappingModel';
+import { findUnappliedAtlassianUnused } from '../../utils/findUnappliedAtlassianUnused';
 import { mapUserMappingRows } from '../../utils/mapUserMappingRows';
 import MappingActionsBar from '../user-mapping/MappingActionsBar';
 import MappingFilterChips, { type MappingStatusFilter } from '../user-mapping/MappingFilterChips';
@@ -54,7 +56,8 @@ export default function UserMappingView() {
 
   // `?? []`를 인라인으로 두면 매 렌더 새 배열이라 아래 useMemo가 무의미해진다
   const items = useMemo(() => listQuery.data?.items ?? [], [listQuery.data?.items]);
-  const rows = useMemo(() => mapUserMappingRows(items), [items]);
+  // status counts는 미사용 추론에 쓰인다 — 아직 없으면 추론 없이 렌더하고 도착 시 갱신
+  const rows = useMemo(() => mapUserMappingRows(items, statusQuery.data), [items, statusQuery.data]);
   const totalPages = Math.max(1, Math.ceil((listQuery.data?.total ?? 0) / PAGE_SIZE));
 
   const statItems: MappingStatItem[] = STAT_ORDER.map((key) => {
@@ -82,6 +85,24 @@ export default function UserMappingView() {
 
   // 동기화 2종 — 토스트 문구까지 현행 구현 승계 (훅으로 추출)
   const sync = useUserMappingSync();
+
+  /*
+   * Atlassian "미사용" 저장 반영 검증 — 백엔드가 Jira 매핑만 지우므로 Confluence
+   * 매핑이 남은 이용자는 저장 뒤에도 계정이 되살아난다. 저장 이후 도착한 재조회
+   * 데이터로만 대조한다(이전 캐시로 대조하면 항상 오탐). 현재 페이지에 없는
+   * 행은 판정하지 않는다.
+   */
+  const { savedAtlassianUnused, clearSavedAtlassianUnused } = edit;
+  useEffect(() => {
+    if (!savedAtlassianUnused || listQuery.dataUpdatedAt <= savedAtlassianUnused.savedAt) return;
+    const unapplied = findUnappliedAtlassianUnused(rows, savedAtlassianUnused.userKeys);
+    if (unapplied.length > 0) {
+      toast.warning('일부 Atlassian 미사용 처리가 반영되지 않았습니다.', {
+        description: `${unapplied.map((r) => r.user.name).join(', ')} — Confluence 매핑이 남아 있어 현재 화면에서는 해제할 수 없습니다.`,
+      });
+    }
+    clearSavedAtlassianUnused();
+  }, [rows, listQuery.dataUpdatedAt, savedAtlassianUnused, clearSavedAtlassianUnused]);
 
   const isEmpty = !listQuery.isLoading && rows.length === 0 && filter === 'all';
 
