@@ -26,11 +26,13 @@ describe('CONNECTOR_CONTENT', () => {
     }
   });
 
-  it('예시 질문과 대조 항목은 각각 3개다', () => {
+  it('예시 질문은 3개 고정, 대조 항목은 도구별 가변이되 비어 있지 않다', () => {
+    // 대조 항목(연동돼요/안 돼요)은 도구마다 1~4개로 다르다 — Slack만 Figma 실측(3개)이고
+    // 나머지는 의도된 초안 카피다. ScopeCompareCard는 개수 가변을 그대로 렌더한다.
     for (const content of Object.values(CONNECTOR_CONTENT)) {
       expect(content.sampleQuestions).toHaveLength(3);
-      expect(content.included).toHaveLength(3);
-      expect(content.excluded).toHaveLength(3);
+      expect(content.included.length).toBeGreaterThan(0);
+      expect(content.excluded.length).toBeGreaterThan(0);
     }
   });
 
