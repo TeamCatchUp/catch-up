@@ -218,6 +218,20 @@ def test_deserialize_source_with_bad_datetime_raises_block_error() -> None:
         deserialize_blocks([corrupted])
 
 
+def test_deserialize_source_with_string_verified_raises_block_error() -> None:
+    """문자열 "false"를 검증 통과로 뒤집지 않고 손상으로 알린다."""
+    block = _claim_block("h1", sources=(_block_source(),))
+    payload = serialize_blocks([block])[0]
+    corrupted = {
+        **payload,
+        "sources": [
+            {**payload["sources"][0], "citation_verified": "false"}
+        ],
+    }
+    with pytest.raises(ArtifactBlockError):
+        deserialize_blocks([corrupted])
+
+
 def test_idempotency_key_is_stable_and_distinct() -> None:
     artifact_id = uuid.UUID("33333333-3333-3333-3333-333333333333")
     other_id = uuid.UUID("44444444-4444-4444-4444-444444444444")

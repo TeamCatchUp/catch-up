@@ -173,7 +173,6 @@ def _parse_sources(values: Any, index: int) -> tuple[BlockSource, ...]:
     sources: list[BlockSource] = []
     try:
         for item in values:
-            raw_verified = item.get("citation_verified")
             sources.append(
                 BlockSource(
                     claim_id=uuid.UUID(str(item["claim_id"])),
@@ -181,8 +180,8 @@ def _parse_sources(values: Any, index: int) -> tuple[BlockSource, ...]:
                     observed_at=datetime.fromisoformat(
                         str(item["observed_at"])
                     ),
-                    citation_verified=(
-                        None if raw_verified is None else bool(raw_verified)
+                    citation_verified=_parse_citation_verified(
+                        item.get("citation_verified")
                     ),
                 )
             )
@@ -191,6 +190,21 @@ def _parse_sources(values: Any, index: int) -> tuple[BlockSource, ...]:
             f"raw[{index}].sources: 근거 인용을 읽을 수 없다"
         ) from error
     return tuple(sources)
+
+
+def _parse_citation_verified(value: Any) -> bool | None:
+    """저장된 대조 판정을 되돌린다. bool도 None도 아니면 손상이다.
+
+    bool()로 넓게 받으면 문자열 "false"처럼 truthy한 값이 조용히 검증
+    통과(True)로 뒤집힌다. 대조 판정은 환각 의심을 알리는 신호이므로,
+    타입을 좁혀 받고 나머지는 호출부가 손상으로 처리하게 던진다.
+
+    Raises:
+        TypeError: 값이 bool도 None도 아닐 때 던진다.
+    """
+    if value is None or isinstance(value, bool):
+        return value
+    raise TypeError(f"citation_verified가 bool도 None도 아니다: {value!r}")
 
 
 def _parse_ids(values: Any, index: int, field: str) -> tuple[uuid.UUID, ...]:
