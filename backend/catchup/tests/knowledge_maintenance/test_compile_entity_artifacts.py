@@ -65,6 +65,7 @@ def _claim(
     minutes: int = 0,
     valid_from: datetime | None = None,
     valid_to: datetime | None = None,
+    citation_verified: bool | None = None,
 ) -> StoredClaimCandidate:
     """canonical 노드를 subject로 삼는 claim 후보를 하나 만든다."""
     return StoredClaimCandidate(
@@ -79,6 +80,7 @@ def _claim(
         observed_at=NOW + timedelta(minutes=minutes),
         valid_from=valid_from,
         valid_to=valid_to,
+        citation_verified=citation_verified,
     )
 
 
@@ -996,3 +998,101 @@ def test_section_disappears_when_every_value_is_closed() -> None:
     headings = [block.heading for block in row["blocks"]]
     assert "rate_limit" not in headings
     assert "is_supported" in headings
+
+
+def test_claim_section_sources_follow_member_order() -> None:
+    """근거 인용이 claim_ids와 같은 순서로 원본 그대로 실린다."""
+    node_id = uuid.uuid4()
+    older = _claim(
+        node_id=node_id, value=60, minutes=0, citation_verified=True
+    )
+    newer = _claim(
+        node_id=node_id, value=120, minutes=30, citation_verified=False
+    )
+    # 입력 순서를 관찰 시각 역순으로 준다. 정렬이 sources에도 걸리는지
+    # 보려면 입력 순서와 기대 순서가 달라야 한다.
+    uow = FakeUnitOfWork(sources=[_source(node_id)], claims=[newer, older])
+
+    _run(uow)
+
+    block = _only_pending(uow)["blocks"][0]
+    assert block.claim_ids == (older.id, newer.id)
+    assert [source.claim_id for source in block.sources] == [
+        older.id,
+        newer.id,
+    ]
+    assert [source.statement for source in block.sources] == [
+        older.statement,
+        newer.statement,
+    ]
+    assert [source.observed_at for source in block.sources] == [
+        older.observed_at,
+        newer.observed_at,
+    ]
+    assert [source.citation_verified for source in block.sources] == [
+        True,
+        False,
+    ]
+
+
+def test_open_question_sources_skip_missing_statement() -> None:
+    """statement가 없는 값 후보는 근거 인용에서 빠진다."""
+    node_id = uuid.uuid4()
+    older = _claim(node_id=node_id, value=60, minutes=0)
+    newer = _claim(node_id=node_id, value=120, minutes=30)
+    proposal = _contradiction(node_id=node_id, claim_ids=(older.id, newer.id))
+    values = proposal.resolver_metadata["values"]
+    assert isinstance(values, list)
+    proposal = replace(
+        proposal,
+        resolver_metadata={
+            **proposal.resolver_metadata,
+            "values": [
+                values[0],
+                {
+                    key: value
+                    for key, value in values[1].items()
+                    if key != "statement"
+                },
+            ],
+        },
+    )
+    uow = FakeUnitOfWork(
+        sources=[_source(node_id)],
+        claims=[older, newer],
+        pending={node_id: [proposal]},
+    )
+
+    _run(uow)
+
+    question = _only_pending(uow)["blocks"][-1]
+    # 값 후보는 둘이지만 인용은 statement를 가진 하나뿐이다.
+    assert question.claim_ids == (older.id, newer.id)
+    assert [source.claim_id for source in question.sources] == [older.id]
+    assert question.sources[0].statement == "rate_limit는 60이다"
+    assert question.sources[0].observed_at == NOW
+    assert question.sources[0].citation_verified is None
+
+
+def test_compiled_blocks_pass_validation_with_sources() -> None:
+    """근거 인용이 붙은 컴파일 산출 블록이 부분집합 규칙을 지킨다."""
+    node_id = uuid.uuid4()
+    older = _claim(node_id=node_id, value=60, minutes=0)
+    newer = _claim(node_id=node_id, value=120, minutes=30)
+    proposal = _contradiction(node_id=node_id, claim_ids=(older.id, newer.id))
+    uow = FakeUnitOfWork(
+        sources=[_source(node_id)],
+        claims=[older, newer],
+        pending={node_id: [proposal]},
+    )
+
+    _run(uow)
+
+    blocks = _only_pending(uow)["blocks"]
+    validate_blocks(blocks)
+    assert len(blocks) == 2
+    for block in blocks:
+        assert block.sources
+        assert {source.claim_id for source in block.sources} <= set(
+            block.claim_ids
+        )
