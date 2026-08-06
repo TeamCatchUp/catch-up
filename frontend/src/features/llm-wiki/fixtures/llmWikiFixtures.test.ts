@@ -43,9 +43,10 @@ describe('llmWikiFixtures 정합성', () => {
     expect(REVIEW_STAT_CARD_FIXTURES).toHaveLength(4);
   });
 
-  it('문서 행 fixture는 breadcrumbs를 가진다 (3화면 공용 요건)', () => {
+  // 3화면 공용 전제는 Figma 재확인에서 깨졌다 — breadcrumbs는 대시보드 행만의 요건으로 남는다
+  it('문서 행 fixture는 채널 > 폴더 breadcrumbs를 가진다 (대시보드 행 요건)', () => {
     for (const row of DOCUMENT_ROW_FIXTURES) {
-      expect(row.breadcrumbs.length).toBeGreaterThan(0);
+      expect(row.breadcrumbs.map((crumb) => crumb.kind)).toEqual(['channel', 'folder']);
     }
   });
 });

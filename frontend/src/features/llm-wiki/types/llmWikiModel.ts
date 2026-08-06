@@ -18,19 +18,34 @@ export type ReviewItemType = KnownReviewItemType | (string & {});
 export type KnownDocumentStatus = 'reviewed';
 export type DocumentStatus = KnownDocumentStatus | (string & {});
 
+// breadcrumb 종류. Figma가 아이콘을 정의한 것은 채널·폴더 2종뿐이라 나머지는 열어둔다
+export type KnownBreadcrumbKind = 'channel' | 'folder';
+export type BreadcrumbKind = KnownBreadcrumbKind | (string & {});
+
+/** [SPEC] 채널 > 폴더 경로의 한 마디. 종류마다 Figma 아이콘이 갈려서 문자열로 뭉갤 수 없다 */
+export interface DocumentBreadcrumb {
+  kind: BreadcrumbKind;
+  label: string;
+}
+
+/**
+ * 대시보드 문서 표(17606:149822)의 행 계약.
+ *
+ * 문서_폴더 메인(17762:104801)·문서_채널 메인(17762:103743)의 행은 3열이
+ * "연결 VOC & 고객사 수"이고 breadcrumbs가 없어 이 계약과 다르다 — 스펙 미결로 분리됐다.
+ * 그래서 vocCount·customerCount는 여기 두지 않는다(어느 화면에도 breadcrumbs와 공존하지 않는다).
+ */
 export interface DocumentRowData {
   id: string;
   /** [BE] knowledge_artifacts.title */
   title: string;
   /** [SPEC] 채널 > 폴더 경로. 백엔드에 채널·폴더 개념 없음 */
-  breadcrumbs: readonly string[];
+  breadcrumbs: readonly DocumentBreadcrumb[];
   status: DocumentStatus;
   /** 에러 아이콘 행 — 배지와의 공존 규칙 UNKNOWN(감사) 상태로 시각만 존재 */
   hasConflictIcon: boolean;
-  /** [SPEC] 연결 VOC 수 — 집계 API 협상 대상 */
-  vocCount: number;
-  /** [SPEC] 고객사 수 — 집계 API 협상 대상 */
-  customerCount: number;
+  /** [SPEC] 태그 목록. 행에는 첫 1개만 칩으로 보이고 나머지는 "+N"으로 접힌다 */
+  tags: readonly string[];
   /** [SPEC] 최근 활동 표시 문자열 (예: "3시간 전") */
   lastActivityLabel: string;
 }

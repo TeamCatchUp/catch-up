@@ -5,14 +5,17 @@ import type {
   TagCategory,
 } from '../types/llmWikiModel';
 
+// 태그 3개 = 칩 1개 + "+2" — Figma 대시보드 행(17762:103678)이 보여주는 조합 그대로다
 const BASE_DOCUMENT_ROW: DocumentRowData = {
   id: 'doc-payment-retry',
   title: '결제 승인 실패 시 재시도 정책',
-  breadcrumbs: ['결제', '승인·실패 처리'],
+  breadcrumbs: [
+    { kind: 'channel', label: '결제' },
+    { kind: 'folder', label: '승인·실패 처리' },
+  ],
   status: 'reviewed',
   hasConflictIcon: false,
-  vocCount: 12,
-  customerCount: 4,
+  tags: ['재시도 정책', '결제 실패', 'PG 연동'],
   lastActivityLabel: '3시간 전',
 };
 
@@ -23,21 +26,26 @@ export const createDocumentRow = (overrides?: Partial<DocumentRowData>): Documen
 
 export const DOCUMENT_ROW_FIXTURES: readonly DocumentRowData[] = [
   createDocumentRow(),
+  // 태그 1개 — "+N" 칩이 붙지 않는 행
   createDocumentRow({
     id: 'doc-refund-window',
     title: '환불 가능 기간 안내',
-    breadcrumbs: ['결제', '환불'],
-    vocCount: 7,
-    customerCount: 2,
+    breadcrumbs: [
+      { kind: 'channel', label: '결제' },
+      { kind: 'folder', label: '환불' },
+    ],
+    tags: ['환불'],
     lastActivityLabel: '어제',
   }),
   createDocumentRow({
     id: 'doc-sso-conflict',
     title: 'SSO 로그인 제한 정책',
-    breadcrumbs: ['계정', '인증'],
+    breadcrumbs: [
+      { kind: 'channel', label: '계정' },
+      { kind: 'folder', label: '인증' },
+    ],
     hasConflictIcon: true,
-    vocCount: 21,
-    customerCount: 9,
+    tags: ['SSO', '보안'],
     lastActivityLabel: '15분 전',
   }),
 ];
