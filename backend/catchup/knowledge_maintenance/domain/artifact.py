@@ -22,7 +22,7 @@ class ArtifactBlockError(ValueError):
 
 @dataclass(frozen=True, slots=True)
 class BlockSource:
-    """블록 본문 한 줄의 근거 인용을 표현한다.
+    """블록 본문의 근거 인용 하나를 표현한다.
 
     statement는 추출이 검증한 원문 span 인용 그대로다(불변식 6).
     citation_verified는 저장된 대조 판정을 나른다 — True는 검증 인용,
@@ -50,7 +50,9 @@ class ArtifactBlock:
         claim_ids: 본문의 근거가 된 claim들을 가리킨다.
         proposal_ids: 답을 기다리는 proposal들을 가리킨다.
         ontology_version: 본문을 만든 온톨로지 판본을 나타낸다.
-        sources: 본문 각 줄의 근거 인용을 나른다. claim_ids의 부분집합이다.
+        sources: 본문의 근거 인용을 순서대로 나른다. claim_ids의
+            부분집합이다. 본문 줄과 1:1은 아니다 — 인용을 만들 값을
+            읽지 못한 줄은 빠진다.
     """
 
     block_kind: str

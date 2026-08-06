@@ -479,14 +479,19 @@ def _claim_id_of(item: Mapping[str, object]) -> uuid.UUID | None:
 def _value_sources(
     values: Sequence[Mapping[str, object]],
 ) -> tuple[BlockSource, ...]:
-    """값 후보의 근거 인용을 본문 줄 순서대로 모은다.
+    """값 후보의 근거 인용을 값 후보 순서대로 모은다.
 
     claim·인용 문장·관찰 시점을 모두 읽을 수 있는 후보만 싣는다. 낡은
-    metadata에 어느 하나가 빠져 있으면 그 줄의 인용만 빠뜨리고 넘어간다.
-    카드 전체가 깨지는 것보다 낫다는 기존 방침을 따른다.
+    metadata에 어느 하나가 빠져 있으면 그 후보의 인용만 빠뜨리고 넘어간다.
+    카드 전체가 깨지는 것보다 낫다는 기존 방침을 따른다. 그래서 인용 수는
+    본문 줄 수보다 적을 수 있다 — 열린 질문 블록에서 인용과 본문 줄은
+    1:1이 아니다.
 
-    대조 판정은 계획서 metadata에 남지 않으므로 None으로 둔다. 여기서
-    False로 적으면 환각 의심이 아닌 인용이 의심으로 표시된다.
+    대조 판정은 None으로 둔다. 값이 없어서가 아니다.
+    `resolve_claim_conflicts`가 값 후보마다 `citation_verified`를 실제로
+    적어 두므로 metadata에는 값이 있다. 이 슬라이스가 스펙대로 그 실값
+    배선을 보류했을 뿐이고, 배선은 별도 백로그로 남았다. 그때까지 열린
+    질문의 인용은 evidence 없음으로 보인다.
     """
     sources: list[BlockSource] = []
     for item in values:
