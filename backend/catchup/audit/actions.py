@@ -114,6 +114,18 @@ class ManualSearchAction(BaseAuditAction):
     SEND_QUERY = "send_query"
 
 
+class KnowledgeReviewAction(BaseAuditAction):
+    """
+    위키 검수 루프의 조회·결정·적용을 기록
+    """
+    LIST = "list"
+    DETAIL = "detail"
+    APPROVE = "approve"
+    REJECT = "reject"
+    RESOLVE = "resolve"
+    APPLY = "apply"
+
+
 class McpAction(BaseAuditAction):
     SEARCH_KNOWLEDGE_BASE = "search_knowledge_base"
     READ_DOCUMENTS = "read_documents"
