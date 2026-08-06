@@ -651,6 +651,81 @@ def test_list_pending_proposals_returns_only_open_rows(
     assert found.base_revision_id is None
     assert found.rejection_reason is None
     assert found.blocks[0].block_kind == BLOCK_KIND_CLAIM_SECTION
+    # 검토 큐가 정렬·표시에 쓰는 두 값이 port까지 왕복한다.
+    assert found.origin == "compiled"
+    assert found.created_at is not None
+
+
+def test_list_pending_proposals_pages_the_oldest_first_order(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+) -> None:
+    """limit/offset이 오래된 순 위에서 겹치지 않게 자른다."""
+    artifact_id = _artifact_id(uow_factory, session_factory, workspace_id)
+
+    with uow_factory() as uow:
+        for index in range(3):
+            _add(uow, artifact_id, _blocks(f"본문 {index}"))
+        uow.commit()
+
+    with uow_factory() as uow:
+        everything = uow.artifacts.list_pending_proposals()
+        first = uow.artifacts.list_pending_proposals(limit=2)
+        second = uow.artifacts.list_pending_proposals(limit=2, offset=2)
+
+    ordered = [proposal.id for proposal in everything]
+    assert [proposal.id for proposal in first] == ordered[:2]
+    assert [proposal.id for proposal in second] == ordered[2:4]
+
+
+def test_find_contested_subject_node_ids_resolves_both_subject_paths(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+) -> None:
+    """모순 claim의 subject가 노드로 되짚어져 충돌 집합에 들어온다.
+
+    claim이 노드를 직접 가리키는 경우와 해소된 entity 후보를 거치는
+    경우를 둘 다 본다. 뒤쪽이 빠지면 아직 노드가 없던 대상의 문서에
+    충돌 표시가 붙지 않는다.
+    """
+    with session_factory() as session:
+        run_id = _extraction_run(session, workspace_id)
+        direct_node = _entity_node(session, workspace_id, "결제 기능")
+        candidate_node = _entity_node(session, workspace_id, "정산 기능")
+        calm_node = _entity_node(session, workspace_id, "알림 기능")
+        direct_claim = _claim_on_node(
+            session, workspace_id, run_id, direct_node
+        )
+        candidate_claim = _claim_via_candidate(
+            session, workspace_id, run_id, candidate_node
+        )
+        calm_claim = _claim_on_node(session, workspace_id, run_id, calm_node)
+        session.commit()
+
+    with uow_factory() as uow:
+        _contradiction_proposal(
+            uow, workspace_id, direct_claim, direct_node
+        )
+        _contradiction_proposal(
+            uow, workspace_id, candidate_claim, candidate_node
+        )
+        decided = _contradiction_proposal(
+            uow, workspace_id, calm_claim, calm_node
+        )
+        uow.mutation_proposals.abandon(proposal_id=decided)
+        uow.commit()
+
+    with uow_factory() as uow:
+        contested = uow.mutation_proposals.find_contested_subject_node_ids(
+            workspace_id=workspace_id,
+        )
+
+    assert direct_node in contested
+    assert candidate_node in contested
+    # 접힌 모순은 더 이상 답을 기다리지 않으므로 충돌이 아니다.
+    assert calm_node not in contested
 
 
 def _contradiction_proposal(
@@ -670,6 +745,17 @@ def _contradiction_proposal(
         resolver_metadata={
             "subject_key": f"node:{node_id}",
             "predicate": "release_month",
+            # 판정기는 값 후보를 항상 함께 남긴다. 충돌 노드 조회가
+            # 이 목록에서 claim을 되짚으므로 실제 모양대로 담는다.
+            "values": [
+                {
+                    "claim_id": str(claim_id),
+                    "value": "2026-09",
+                    "normalized": "2026-09",
+                    "statement": "9월 예정입니다.",
+                    "observed_at": "2026-07-01T00:00:00+00:00",
+                }
+            ],
         },
     )
 

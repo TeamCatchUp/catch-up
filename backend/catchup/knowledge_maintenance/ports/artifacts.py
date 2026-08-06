@@ -36,6 +36,10 @@ class StoredArtifactProposal:
         content_hash: 본문 내용의 지문을 나타낸다.
         base_revision_id: 이 변경안이 딛고 선 판을 가리킨다.
         rejection_reason: 반려 사유를 보존한다.
+        origin: 이 변경안이 어디서 왔는지 나타낸다. 검토 큐가 컴파일러가
+            만든 안건과 사람이 올린 안건을 가려 보여 주는 재료다.
+        created_at: 변경안이 올라온 시각을 나타낸다. 검토 큐의 정렬
+            기준이므로 목록을 읽는 쪽이 함께 받아야 한다.
     """
 
     id: uuid.UUID
@@ -47,6 +51,8 @@ class StoredArtifactProposal:
     content_hash: str
     base_revision_id: uuid.UUID | None
     rejection_reason: str | None
+    origin: str
+    created_at: datetime
 
 
 @dataclass(frozen=True, slots=True)
@@ -191,8 +197,18 @@ class ArtifactRepository(Protocol):
         """변경안 하나를 문서 제목·대상과 함께 읽는다."""
         ...
 
-    def list_pending_proposals(self) -> list[StoredArtifactProposal]:
-        """검토를 기다리는 변경안을 오래된 순으로 읽는다."""
+    def list_pending_proposals(
+        self,
+        *,
+        limit: int | None = None,
+        offset: int = 0,
+    ) -> list[StoredArtifactProposal]:
+        """검토를 기다리는 변경안을 오래된 순으로 읽는다.
+
+        limit/offset은 그 오래된 순 위에서 자른다. 다른 순서로 보여 주는
+        호출자는 여기서 자르면 안 된다 — 자기 정렬이 페이지 경계를 넘어
+        섞이기 때문이다. limit이 None이면 전부 읽는다.
+        """
         ...
 
     def mark_approved(self, *, proposal_id: uuid.UUID, reviewer: str) -> None:

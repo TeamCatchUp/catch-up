@@ -1616,6 +1616,60 @@ class SqlAlchemyMutationProposalRepository:
             )
         return found
 
+    def find_contested_subject_node_ids(
+        self,
+        *,
+        workspace_id: int,
+    ) -> frozenset[uuid.UUID]:
+        """pending 모순이 걸린 subject 노드 id 집합을 만든다.
+
+        값 후보의 claim을 모아 노드로 해소한다. 해소는
+        `_accepted_claims_of_subject`의 역방향이고 같은 조인이다 — claim이
+        노드를 직접 가리키거나, 그 노드로 해소된 entity 후보를 가리키면
+        같은 대상에 대한 주장이기 때문이다.
+
+        claim의 상태는 보지 않는다. 모순은 아직 지식이 되지 못한 후보
+        사이에서도 생기고, 사람이 답하기를 기다린다는 사실은 그 상태와
+        무관하기 때문이다.
+        """
+        rows = self._session.scalars(
+            select(KnowledgeMutationProposalRow).where(
+                KnowledgeMutationProposalRow.workspace_id == workspace_id,
+                KnowledgeMutationProposalRow.proposal_kind
+                == "contradiction",
+                KnowledgeMutationProposalRow.status == "pending",
+            )
+        ).all()
+        claim_ids: set[uuid.UUID] = set()
+        for row in rows:
+            metadata = row.resolver_metadata or {}
+            for value in _contradiction_values(metadata.get("values")):
+                claim_ids.add(value.claim_id)
+        if not claim_ids:
+            return frozenset()
+
+        resolved = self._session.execute(
+            select(
+                KnowledgeClaimCandidateRow.subject_node_id,
+                KnowledgeEntityCandidateRow.resolved_node_id,
+            )
+            .outerjoin(
+                KnowledgeEntityCandidateRow,
+                KnowledgeClaimCandidateRow.subject_entity_candidate_id
+                == KnowledgeEntityCandidateRow.id,
+            )
+            .where(
+                KnowledgeClaimCandidateRow.workspace_id == workspace_id,
+                KnowledgeClaimCandidateRow.id.in_(claim_ids),
+            )
+        ).all()
+        found: set[uuid.UUID] = set()
+        for subject_node_id, resolved_node_id in resolved:
+            node_id = subject_node_id or resolved_node_id
+            if node_id is not None:
+                found.add(node_id)
+        return frozenset(found)
+
     def record_contradiction_decision(
         self,
         *,
@@ -2477,8 +2531,18 @@ class SqlAlchemyArtifactRepository:
             return None
         return _artifact_proposal_to_domain(row[0], row[1], row[2])
 
-    def list_pending_proposals(self) -> list[StoredArtifactProposal]:
-        """검토를 기다리는 변경안을 오래된 순으로 읽는다."""
+    def list_pending_proposals(
+        self,
+        *,
+        limit: int | None = None,
+        offset: int = 0,
+    ) -> list[StoredArtifactProposal]:
+        """검토를 기다리는 변경안을 오래된 순으로 읽는다.
+
+        정렬을 `(created_at, id)`로 고정한다. 시각이 같은 행이 있으면
+        페이지마다 순서가 흔들려 같은 행이 두 쪽에 나오거나 아예 빠질 수
+        있기 때문이다. limit/offset은 그 순서 위에서 자른다.
+        """
         statement = (
             self._proposal_statement()
             .where(KnowledgeArtifactChangeProposalRow.status == "pending")
@@ -2487,6 +2551,10 @@ class SqlAlchemyArtifactRepository:
                 KnowledgeArtifactChangeProposalRow.id,
             )
         )
+        if offset:
+            statement = statement.offset(offset)
+        if limit is not None:
+            statement = statement.limit(limit)
         return [
             _artifact_proposal_to_domain(proposal, subject_node_id, title)
             for proposal, subject_node_id, title in (
@@ -2635,6 +2703,8 @@ def _artifact_proposal_to_domain(
         content_hash=row.content_hash,
         base_revision_id=row.base_revision_id,
         rejection_reason=row.rejection_reason,
+        origin=row.origin,
+        created_at=row.created_at,
     )
 
 

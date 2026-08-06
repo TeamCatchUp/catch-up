@@ -466,6 +466,55 @@ def test_rerun_is_noop() -> None:
     assert len(state.nodes) == 1
 
 
+def test_apply_single_proposal_only_touches_target() -> None:
+    """안건 하나를 지정하면 그 안건만 적용되고 다른 승인은 남는다."""
+    state = FakeState()
+    target_rep = state.add_candidate()
+    target_id = state.add_approved_merge(
+        representative=target_rep, members=()
+    )
+    other_rep = state.add_candidate()
+    other_id = state.add_approved_merge(representative=other_rep, members=())
+
+    result = apply_mutation_proposals(
+        lambda: FakeUnitOfWork(state),
+        workspace_id=WORKSPACE_ID,
+        proposal_id=target_id,
+    )
+
+    assert result.proposals_applied == 1
+    assert result.candidates_resolved == 1
+    assert state.proposals[target_id]["status"] == "applied"
+    # 지정되지 않은 승인은 결정 저널에 그대로 남아 다음 적용을 기다린다.
+    assert state.proposals[other_id]["status"] == "approved"
+    assert state.candidates[other_rep]["resolved_node_id"] is None
+    assert len(state.nodes) == 1
+
+
+def test_apply_unknown_proposal_applies_nothing() -> None:
+    """승인 목록에 없는 안건을 지정하면 0건 적용으로 끝난다.
+
+    실패로 세지 않는다. 없는 안건은 적용이 실패한 것이 아니라 적용할
+    것이 없는 것이고, 404를 낼지는 라우터가 적용 건수로 판단한다.
+    """
+    state = FakeState()
+    representative = state.add_candidate()
+    approved_id = state.add_approved_merge(
+        representative=representative, members=()
+    )
+
+    result = apply_mutation_proposals(
+        lambda: FakeUnitOfWork(state),
+        workspace_id=WORKSPACE_ID,
+        proposal_id=uuid.uuid4(),
+    )
+
+    assert result.proposals_applied == 0
+    assert result.proposals_failed == 0
+    assert state.proposals[approved_id]["status"] == "approved"
+    assert len(state.nodes) == 0
+
+
 def _supersede_proposal(
     state: FakeState,
     *,

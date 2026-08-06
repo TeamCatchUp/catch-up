@@ -103,16 +103,25 @@ def apply_mutation_proposals(
     uow_factory: Callable[[], ApplyUnitOfWork],
     *,
     workspace_id: int,
+    proposal_id: uuid.UUID | None = None,
 ) -> ApplyResult:
     """승인된 안건을 순서대로 적용한다.
 
     factory를 받는 이유는 proposal 단위 트랜잭션 때문이다. 한 uow에
     전부 태우면 마지막 안건의 실패가 앞선 적용까지 되돌린다.
+
+    `proposal_id`를 주면 그 안건만 적용한다. 사람이 큐에서 한 건을
+    골라 적용하는 경로다. 지정한 안건이 승인 목록에 없으면 아무것도
+    적용하지 않고 0건으로 끝낸다 — 없는 안건과 적용에 실패한 안건은
+    다른 일이므로 실패로 세지 않고, 404를 낼지는 적용 건수를 보는
+    호출자가 정한다.
     """
     with uow_factory() as uow:
         approved = uow.mutation_proposals.find_approved_proposals_with_operations(
             workspace_id=workspace_id,
         )
+    if proposal_id is not None:
+        approved = [item for item in approved if item[0] == proposal_id]
 
     applied = 0
     failed = 0
@@ -164,6 +173,10 @@ def apply_mutation_proposals(
     logger.info(
         "mutation_apply_completed",
         workspace_id=workspace_id,
+        # 한 건만 적용한 실행과 전체 적용을 감사 기록에서 구분한다.
+        scoped_proposal_id=(
+            None if proposal_id is None else str(proposal_id)
+        ),
         proposals_applied=result.proposals_applied,
         proposals_failed=result.proposals_failed,
         candidates_resolved=result.candidates_resolved,

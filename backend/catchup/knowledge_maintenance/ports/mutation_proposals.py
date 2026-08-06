@@ -220,6 +220,24 @@ class MutationProposalRepository(Protocol):
         """
         ...
 
+    def find_contested_subject_node_ids(
+        self,
+        *,
+        workspace_id: int,
+    ) -> frozenset[uuid.UUID]:
+        """pending 모순이 걸린 subject 노드 id 집합을 만든다.
+
+        모순 proposal의 값 후보 claim들이 가리키는 subject를 노드로
+        해소해 모은다. 검토 큐가 "이 문서에 충돌이 걸렸는가"를 표시하는
+        재료다.
+
+        판정 근거의 subject_key를 그대로 읽지 않는다. 아직 노드가 없던
+        대상은 key가 병합 계획서를 가리키는데(`proposal:<id>`), 그 뒤에
+        후보가 노드로 해소되면 key는 낡은 채 남는다. claim에서 노드로
+        되짚으면 두 경우가 하나의 규칙으로 모인다.
+        """
+        ...
+
     def list_pending_duplicates(
         self,
         *,
