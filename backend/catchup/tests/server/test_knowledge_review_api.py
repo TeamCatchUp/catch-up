@@ -1009,16 +1009,24 @@ def test_reject_without_reason_is_400(
 def test_already_decided_returns_409_with_code(
     app: FastAPI, client: TestClient, reviewer: User
 ) -> None:
-    """이미 결정된 변경안은 409 ALREADY_DECIDED다."""
+    """이미 결정된 변경안은 409 ALREADY_DECIDED다.
+
+    실패 감사 기록에도 그 code가 남는지 함께 본다. `audit_log`는 예외의
+    `code` 속성만 읽으므로, detail에만 코드가 있으면 감사 스트림에는
+    "승인이 실패했다"만 남고 이유가 사라진다.
+    """
     proposal_id = uuid.uuid4()
     stored = _proposal(proposal_id=proposal_id, status="approved")
     app.dependency_overrides[get_review_uow_factory] = lambda: _fake_factory(
         artifacts=_FakeArtifacts(proposal=stored)
     )
 
-    with patch(
-        "catchup.server.knowledge_review.api.review_artifact_proposal",
-        side_effect=ProposalReviewError("변경안은 이미 approved 상태다"),
+    with (
+        patch(
+            "catchup.server.knowledge_review.api.review_artifact_proposal",
+            side_effect=ProposalReviewError("변경안은 이미 approved 상태다"),
+        ),
+        patch("catchup.audit.utils.emit_audit_event") as emit,
     ):
         response = client.post(
             f"/api/v1/knowledge-review/artifacts/{proposal_id}/approve"
@@ -1029,6 +1037,10 @@ def test_already_decided_returns_409_with_code(
         "code": "ALREADY_DECIDED",
         "message": "이미 결정된 변경안입니다.",
     }
+    recorded = emit.call_args.kwargs
+    assert recorded["status"] == AuditStatus.FAILURE
+    assert recorded["metadata"].context == "ALREADY_DECIDED"
+    assert recorded["metadata"].proposal_id == str(proposal_id)
 
 
 def test_stale_base_revision_returns_409_with_code(

@@ -57,11 +57,17 @@ def review_error(status_code: int, *, code: str, message: str) -> HTTPException:
     문구는 사람에게 보여 주기만 하도록 나눈 것이다. 내부 예외 문자열은
     절대 담지 않는다 — 변경안 식별자나 저장소 사정이 그대로 새어 나가면
     오류 응답이 내부 구조를 설명하는 문서가 된다.
+
+    code는 예외 객체에도 붙인다. `audit_log`는 예외의 `code` 속성만 읽어
+    감사 기록의 context를 채우므로, detail에만 담으면 404·409로 끝난
+    요청의 실패 기록에 이유가 남지 않는다.
     """
-    return HTTPException(
+    error = HTTPException(
         status_code=status_code,
         detail={"code": code, "message": message},
     )
+    error.code = code
+    return error
 
 
 def deny_reviewer(
