@@ -12,9 +12,11 @@ from decimal import Decimal
 from sqlalchemy import ColumnElement
 from sqlalchemy import DateTime
 from sqlalchemy import Select
+from sqlalchemy import String
 from sqlalchemy import cast
 from sqlalchemy import func
 from sqlalchemy import nullsfirst
+from sqlalchemy import nullslast
 from sqlalchemy import or_
 from sqlalchemy import select
 from sqlalchemy import update
@@ -1136,6 +1138,67 @@ class SqlAlchemyKnowledgeCandidateRepository:
             nullsfirst(KnowledgeClaimCandidateRow.valid_from.asc()),
             KnowledgeClaimCandidateRow.created_at,
             KnowledgeClaimCandidateRow.id,
+        )
+        return self._as_of_claims(statement)
+
+    def find_accepted_claims_by_text(
+        self,
+        *,
+        workspace_id: int,
+        query_texts: Sequence[str],
+        at: datetime,
+        limit: int,
+    ) -> tuple[AsOfClaim, ...]:
+        """키워드와 겹치는 accepted claim을 workspace 횡단으로 모은다.
+
+        subject 노드를 거치지 않는다 — 여러 세션·여러 entity에 흩어진
+        사건 claim을 시간선 하나로 모으는 것이 목적이다.
+
+        ILIKE 부분 일치를 쓴다. `%`·`_`는 escape해 키워드가
+        와일드카드로 새지 않게 한다. value는 JSONB라 문자열로 cast해
+        비교한다 — 문자열 값은 JSON 따옴표가 붙지만 부분 일치라
+        영향이 없다.
+
+        정렬은 valid_from 오름차순이되 NULL이 뒤다. 날짜를 모르는
+        사건이 앞에 서면 타임라인의 번호가 사건의 순서를 뜻하지 않게
+        된다.
+        """
+        cleaned = [text.strip() for text in query_texts if text.strip()]
+        if not cleaned:
+            return ()
+        columns = (
+            KnowledgeClaimCandidateRow.predicate,
+            KnowledgeClaimCandidateRow.value.cast(String),
+            KnowledgeClaimCandidateRow.statement,
+        )
+        matchers: list[ColumnElement[bool]] = []
+        for keyword in cleaned:
+            escaped = (
+                keyword.replace("\\", "\\\\")
+                .replace("%", "\\%")
+                .replace("_", "\\_")
+            )
+            pattern = f"%{escaped}%"
+            for column in columns:
+                matchers.append(column.ilike(pattern, escape="\\"))
+        statement = (
+            select(KnowledgeClaimCandidateRow)
+            .where(
+                KnowledgeClaimCandidateRow.workspace_id == workspace_id,
+                KnowledgeClaimCandidateRow.resolution_status
+                == AssertionResolutionStatus.ACCEPTED.value,
+                or_(
+                    KnowledgeClaimCandidateRow.valid_from.is_(None),
+                    KnowledgeClaimCandidateRow.valid_from <= at,
+                ),
+                or_(*matchers),
+            )
+            .order_by(
+                nullslast(KnowledgeClaimCandidateRow.valid_from.asc()),
+                KnowledgeClaimCandidateRow.created_at,
+                KnowledgeClaimCandidateRow.id,
+            )
+            .limit(limit)
         )
         return self._as_of_claims(statement)
 
