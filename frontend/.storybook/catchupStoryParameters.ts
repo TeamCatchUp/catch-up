@@ -1,6 +1,6 @@
 interface CatchupStoryParametersBase {
   level: 'primitive' | 'composition' | 'screen';
-  domain: 'shared' | 'home' | 'hybrid-search' | 'chat' | 'agent-studio' | 'admin' | 'onboarding';
+  domain: 'shared' | 'home' | 'hybrid-search' | 'chat' | 'agent-studio' | 'admin' | 'onboarding' | 'llm-wiki';
   fsdLayer: 'shared' | 'entities' | 'features' | 'widgets' | 'app';
   owner: 'shared' | 'feature' | 'widget' | 'app';
   dataProfile: 'static' | 'realistic-fixture' | 'msw' | 'empty' | 'loading' | 'error';
