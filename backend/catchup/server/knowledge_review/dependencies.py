@@ -27,6 +27,7 @@ from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from catchup.auth.dependencies import cookie_scheme
 from catchup.auth.dependencies import get_current_user
 from catchup.db.dependencies import get_db
 from catchup.db.engine import SessionLocal
@@ -54,6 +55,43 @@ def review_error(status_code: int, *, code: str, message: str) -> HTTPException:
     )
 
 
+def get_reviewer_user(
+    access_token: str = Depends(cookie_scheme),
+    db: Session = Depends(get_db),
+) -> User:
+    """인증된 사용자를 이 라우터의 오류 계약에 맞춰 돌려준다.
+
+    `get_current_user`를 그대로 쓰지 않고 감싼다. 그쪽은 401 detail을 사람이
+    읽는 문자열로 던지는데, 이 라우터는 전 응답의 detail이
+    `{"code", "message"}`라고 약속했다. 소비자가 가장 자주 만나는 오류가
+    세션 만료이므로, 하필 그 응답만 모양이 달라 코드로 분기할 수 없으면
+    약속이 무의미해진다.
+
+    감싸는 쪽을 고친 이유는 `get_current_user`가 다른 라우터 전체의 계약이기
+    때문이다. 거기를 바꾸면 이 슬라이스와 무관한 소비자의 오류 처리가
+    함께 깨진다.
+
+    `Depends`가 아니라 직접 호출한다. 하위 의존성의 예외는 이 함수가 실행되기
+    전에 이미 밖으로 나가므로, `Depends(get_current_user)`로는 잡을 자리가
+    없다.
+
+    Raises:
+        HTTPException: 쿠키가 없거나 토큰이 유효하지 않으면 401을 던진다.
+    """
+    try:
+        return get_current_user(access_token=access_token, db=db)
+    except HTTPException as error:
+        if error.status_code != 401:
+            raise
+        # 원래 문구는 버린다. 쿠키 없음·만료·없는 사용자를 가려 알려 주면
+        # 로그인하지 않은 상대에게 계정 존재 여부를 흘리게 된다.
+        raise review_error(
+            401,
+            code="UNAUTHENTICATED",
+            message="로그인이 필요합니다.",
+        ) from error
+
+
 @dataclass(frozen=True, slots=True)
 class ReviewerContext:
     """검토자 한 사람이 서 있는 자리를 담는다.
@@ -73,7 +111,7 @@ class ReviewerContext:
 
 def resolve_reviewer_workspace(
     workspace_id: int | None = None,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_reviewer_user),
     db: Session = Depends(get_db),
 ) -> ReviewerContext:
     """검토자 컨텍스트를 확정한다.

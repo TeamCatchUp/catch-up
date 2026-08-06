@@ -18,12 +18,14 @@ from collections.abc import Iterator
 from datetime import datetime
 from datetime import timezone
 from types import TracebackType
+from typing import Any
 from unittest.mock import patch
 
 import pytest
 from fastapi import FastAPI
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
+from sqlalchemy import Connection
 from sqlalchemy import Engine
 from sqlalchemy import create_engine
 from sqlalchemy import inspect
@@ -33,15 +35,21 @@ from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 from sqlalchemy.orm import sessionmaker
 
-from catchup.auth.dependencies import get_current_user
 from catchup.configs.config import settings
 from catchup.db.dependencies import get_db
+from catchup.db.models import KnowledgeNode
 from catchup.db.models import User
 from catchup.db.models import UserStatus
 from catchup.db.models import UserWorkspace
 from catchup.db.models import WikiReviewerGrant
 from catchup.db.models import Workspace
+from catchup.knowledge_maintenance.adapters.postgres.unit_of_work import (
+    KnowledgeMaintenanceUnitOfWork,
+)
+from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_CLAIM_SECTION
 from catchup.knowledge_maintenance.domain.artifact import ArtifactBlock
+from catchup.knowledge_maintenance.domain.artifact import artifact_idempotency_key
+from catchup.knowledge_maintenance.domain.artifact import blocks_content_hash
 from catchup.knowledge_maintenance.ports.artifacts import StoredArtifactProposal
 from catchup.knowledge_maintenance.ports.mutation_proposals import (
     StoredContradictionProposal,
@@ -66,6 +74,7 @@ from catchup.knowledge_maintenance.services.review_contradiction_proposal import
 from catchup.server.knowledge_review.api import router
 from catchup.server.knowledge_review.dependencies import ReviewerContext
 from catchup.server.knowledge_review.dependencies import get_review_uow_factory
+from catchup.server.knowledge_review.dependencies import get_reviewer_user
 from catchup.server.knowledge_review.dependencies import resolve_reviewer_workspace
 
 AT = datetime(2026, 8, 1, 9, 0, tzinfo=timezone.utc)
@@ -110,24 +119,44 @@ def workspace_ids(engine: Engine) -> tuple[int, int]:
 
 
 @pytest.fixture
-def db(engine: Engine) -> Iterator[Session]:
-    """테스트마다 되감는 세션을 만든다.
+def connection(engine: Engine) -> Iterator[Connection]:
+    """테스트마다 되감는 연결 하나를 만든다.
 
-    바깥 트랜잭션을 롤백하므로 여기서 만든 사용자·권한 행은 남지 않는다.
+    바깥 트랜잭션을 롤백하므로 여기서 만든 사용자·권한·문서 행은 남지
+    않는다.
     """
     connection = engine.connect()
     transaction = connection.begin()
-    session = sessionmaker(
+
+    yield connection
+
+    transaction.rollback()
+    connection.close()
+
+
+@pytest.fixture
+def session_factory(connection: Connection) -> Callable[[], Session]:
+    """같은 트랜잭션 위에 세션을 여는 factory를 만든다.
+
+    실 UnitOfWork에 물릴 수 있어야 한다. 별도 연결을 쓰면 커밋하지 않은
+    테스트 데이터가 UoW 쪽에서 보이지 않아, 저장소 질의를 실 DB로 확인할
+    방법이 없어진다.
+    """
+    return sessionmaker(
         bind=connection,
         join_transaction_mode="create_savepoint",
         expire_on_commit=False,
-    )()
+    )
+
+
+@pytest.fixture
+def db(session_factory: Callable[[], Session]) -> Iterator[Session]:
+    """권한 행을 넣고 읽을 세션을 만든다."""
+    session = session_factory()
 
     yield session
 
     session.close()
-    transaction.rollback()
-    connection.close()
 
 
 def _make_user(db: Session, *, email: str) -> User:
@@ -312,11 +341,16 @@ def client(app: FastAPI) -> Iterator[TestClient]:
 
 @pytest.fixture
 def as_user(app: FastAPI, db: Session) -> Callable[[User], None]:
-    """인증만 우회한다. 소속·권한 검사는 실 DB로 그대로 돈다."""
+    """인증만 우회한다. 소속·권한 검사는 실 DB로 그대로 돈다.
+
+    우회하는 자리는 라우터가 실제로 의존하는 `get_reviewer_user`다. 그
+    아래의 `get_current_user`를 덮으면 래핑을 지나지 않아, 401 계약이
+    깨져도 테스트가 알아채지 못한다.
+    """
 
     def register(user: User) -> None:
         app.dependency_overrides[get_db] = lambda: db
-        app.dependency_overrides[get_current_user] = lambda: user
+        app.dependency_overrides[get_reviewer_user] = lambda: user
 
     return register
 
@@ -434,10 +468,34 @@ def test_uow_factory_binds_context_workspace(
 
 
 def test_queue_requires_authentication(client: TestClient) -> None:
-    """비로그인 요청은 401이다."""
+    """비로그인 요청은 401이고, 오류 계약을 지킨다.
+
+    소비자가 가장 자주 만나는 오류가 세션 만료다. 그 응답만 detail이 사람이
+    읽는 문자열이면 코드로 분기할 수 없으니, 여기서 모양까지 못박는다.
+    """
     response = client.get("/api/v1/knowledge-review/queue")
 
     assert response.status_code == 401
+    assert response.json()["detail"] == {
+        "code": "UNAUTHENTICATED",
+        "message": "로그인이 필요합니다.",
+    }
+
+
+def test_authentication_error_hides_internal_reason(
+    client: TestClient,
+) -> None:
+    """토큰이 유효하지 않은 경우도 같은 코드 하나로 알린다.
+
+    쿠키 없음·만료·없는 사용자를 가려 알려 주면 로그인하지 않은 상대에게
+    계정 존재 여부를 흘린다.
+    """
+    client.cookies.set("access_token", "not-a-real-token")
+
+    response = client.get("/api/v1/knowledge-review/queue")
+
+    assert response.status_code == 401
+    assert response.json()["detail"]["code"] == "UNAUTHENTICATED"
 
 
 def test_queue_requires_reviewer(
@@ -636,6 +694,147 @@ def test_detail_missing_proposal_returns_404(
 
     assert response.status_code == 404
     assert response.json()["detail"]["code"] == "PROPOSAL_NOT_FOUND"
+
+
+# ======================= workspace 경계 =======================
+#
+# 여기만 실 UnitOfWork를 쓴다. 경계를 지키는 것은 저장소 질의의 where 절이라,
+# 대역으로 바꾸면 그 절이 빠져도 테스트가 통과한다. `SessionLocal`만 테스트
+# 연결로 바꿔치기해 `get_review_uow_factory`의 workspace 결정 경로는 실제
+# 코드가 그대로 돌게 둔다.
+
+
+def _seed_pending_proposal(
+    session_factory: Callable[[], Session], *, workspace_id: int
+) -> uuid.UUID:
+    """어느 workspace에 계류 변경안 하나를 실 DB로 심는다."""
+    node_id = uuid.uuid4()
+    with session_factory() as session:
+        session.add(
+            KnowledgeNode(
+                id=node_id,
+                workspace_id=workspace_id,
+                node_kind="entity",
+                entity_type="feature",
+                canonical_key=f"test:review-api:{uuid.uuid4().hex}",
+                display_name="속도 제한 기능",
+            )
+        )
+        session.commit()
+
+    blocks = (
+        ArtifactBlock(
+            block_kind=BLOCK_KIND_CLAIM_SECTION,
+            heading="rate_limit",
+            body="rate_limit은 60이다",
+            claim_ids=(uuid.uuid4(),),
+            proposal_ids=(),
+            ontology_version="1",
+        ),
+    )
+    content_hash = blocks_content_hash(blocks)
+    with KnowledgeMaintenanceUnitOfWork(
+        session_factory, workspace_id=workspace_id
+    ) as uow:
+        artifact_id = uow.artifacts.get_or_create_artifact(
+            kind="entity_summary",
+            subject_node_id=node_id,
+            title="오픈 API",
+        )
+        proposal_id = uow.artifacts.add_or_revive_proposal(
+            artifact_id=artifact_id,
+            blocks=blocks,
+            content_hash=content_hash,
+            idempotency_key=artifact_idempotency_key(
+                artifact_id, content_hash, base_revision_id=None
+            ),
+            base_revision_id=None,
+        )
+        uow.commit()
+    return proposal_id
+
+
+def _real_session_local(
+    session_factory: Callable[[], Session],
+) -> Any:
+    """실 UnitOfWork가 테스트 트랜잭션 위에서 돌게 바꿔치기한다."""
+    return patch(
+        "catchup.server.knowledge_review.dependencies.SessionLocal",
+        session_factory,
+    )
+
+
+def test_detail_hides_other_workspace_proposal(
+    app: FastAPI,
+    client: TestClient,
+    db: Session,
+    session_factory: Callable[[], Session],
+    workspace_ids: tuple[int, int],
+    as_user: Callable[[User], None],
+) -> None:
+    """다른 workspace의 변경안은 상세로 볼 수 없다.
+
+    대조군을 함께 둔다. 그 workspace의 검토자에게는 같은 식별자가 200으로
+    보여야, 404가 "경계가 막았다"는 뜻이지 "그런 안건이 애초에 없다"는 뜻이
+    아님이 증명된다.
+    """
+    first, second = workspace_ids
+    proposal_id = _seed_pending_proposal(session_factory, workspace_id=second)
+
+    insider = _make_user(db, email="ws-insider@example.com")
+    _join(db, user=insider, workspace_id=second)
+    _grant(db, user=insider, workspace_id=second)
+    as_user(insider)
+    with _real_session_local(session_factory):
+        allowed = client.get(f"/api/v1/knowledge-review/queue/{proposal_id}")
+
+    assert allowed.status_code == 200
+    assert allowed.json()["proposal_id"] == str(proposal_id)
+
+    outsider = _make_user(db, email="ws-outsider@example.com")
+    _join(db, user=outsider, workspace_id=first)
+    _grant(db, user=outsider, workspace_id=first)
+    as_user(outsider)
+    with _real_session_local(session_factory):
+        response = client.get(f"/api/v1/knowledge-review/queue/{proposal_id}")
+
+    assert response.status_code == 404
+    assert response.json()["detail"]["code"] == "PROPOSAL_NOT_FOUND"
+
+
+def test_approve_rejects_other_workspace_proposal(
+    app: FastAPI,
+    client: TestClient,
+    db: Session,
+    session_factory: Callable[[], Session],
+    workspace_ids: tuple[int, int],
+    as_user: Callable[[User], None],
+) -> None:
+    """다른 workspace의 변경안은 승인할 수도 없다.
+
+    결정은 되돌릴 수 없으므로, 404를 받는 것만으로는 부족하다. 뒤에 그
+    변경안이 여전히 계류 상태인지도 확인해 아무것도 쓰이지 않았음을 본다.
+    """
+    first, second = workspace_ids
+    proposal_id = _seed_pending_proposal(session_factory, workspace_id=second)
+    outsider = _make_user(db, email="ws-approve@example.com")
+    _join(db, user=outsider, workspace_id=first)
+    _grant(db, user=outsider, workspace_id=first)
+    as_user(outsider)
+
+    with _real_session_local(session_factory):
+        response = client.post(
+            f"/api/v1/knowledge-review/artifacts/{proposal_id}/approve"
+        )
+
+    assert response.status_code == 404
+    assert response.json()["detail"]["code"] == "PROPOSAL_NOT_FOUND"
+    with KnowledgeMaintenanceUnitOfWork(
+        session_factory, workspace_id=second
+    ) as uow:
+        untouched = uow.artifacts.get_proposal(proposal_id=proposal_id)
+    assert untouched is not None
+    assert untouched.status == "pending"
 
 
 # ======================= 엔드포인트: 결정 =======================
