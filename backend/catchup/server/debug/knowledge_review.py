@@ -32,9 +32,12 @@ from catchup.db.engine import SessionLocal
 from catchup.knowledge_maintenance.adapters.postgres.unit_of_work import (
     KnowledgeMaintenanceUnitOfWork,
 )
+from catchup.knowledge_maintenance.ports.artifacts import StoredArtifactProposal
 from catchup.knowledge_maintenance.services.apply_mutation_proposals import (
     apply_mutation_proposals,
 )
+from catchup.knowledge_maintenance.services.list_review_queue import ReviewQueueItem
+from catchup.knowledge_maintenance.services.list_review_queue import list_review_queue
 from catchup.knowledge_maintenance.services.review_artifact_proposal import (
     ProposalReviewError,
 )
@@ -101,41 +104,67 @@ def _uow_factory(workspace_id: int) -> Callable[
     return factory
 
 
+def _artifact_item(
+    item: ReviewQueueItem, proposal: StoredArtifactProposal
+) -> dict[str, Any]:
+    """큐 한 줄과 저장된 변경안을 debug 응답 한 건으로 합친다.
+
+    큐 한 줄에 없는 `base_revision_id`와 본문 블록은 저장된 변경안에서
+    가져온다. 외부 뷰어가 이 필드들을 쓰고 있어 뺄 수 없다.
+    """
+    return {
+        "id": str(item.proposal_id),
+        "artifact_id": str(item.artifact_id),
+        "title": item.title,
+        "status": item.status,
+        "base_revision_id": (
+            None
+            if proposal.base_revision_id is None
+            else str(proposal.base_revision_id)
+        ),
+        "blocks": [
+            {
+                "block_kind": block.block_kind,
+                "heading": block.heading,
+                "body": block.body,
+                "claim_ids": [
+                    str(claim_id) for claim_id in block.claim_ids
+                ],
+                "proposal_ids": [
+                    str(source_id) for source_id in block.proposal_ids
+                ],
+                "ontology_version": block.ontology_version,
+            }
+            for block in proposal.blocks
+        ],
+    }
+
+
 @router.get("/knowledge-review/artifacts")
 def list_artifact_proposals(workspace_id: int = 1) -> dict[str, Any]:
-    """계류 중인 문서 변경안을 본문 블록과 함께 돌려준다."""
+    """계류 중인 문서 변경안을 본문 블록과 함께 돌려준다.
+
+    목록의 순서는 정식 검토 큐 서비스가 정한다. 개발 도구가 CLI 러너나
+    정식 API와 다른 순서를 보여 주면 재현하려던 화면을 재현하지 못한다.
+    """
     _guard()
     with _uow_factory(workspace_id)() as uow:
-        proposals = uow.artifacts.list_pending_proposals()
+        pending = {
+            proposal.id: proposal
+            for proposal in uow.artifacts.list_pending_proposals()
+        }
+    # 큐 서비스는 한 쪽을 50건으로 자른다. 이 엔드포인트는 계류 안건을
+    # 전부 보여 왔으므로 계류 수만큼 열어 잘리지 않게 한다.
+    page = list_review_queue(
+        _uow_factory(workspace_id)(),
+        workspace_id=workspace_id,
+        limit=len(pending),
+    )
     return {
         "items": [
-            {
-                "id": str(proposal.id),
-                "artifact_id": str(proposal.artifact_id),
-                "title": proposal.title,
-                "status": proposal.status,
-                "base_revision_id": (
-                    None
-                    if proposal.base_revision_id is None
-                    else str(proposal.base_revision_id)
-                ),
-                "blocks": [
-                    {
-                        "block_kind": block.block_kind,
-                        "heading": block.heading,
-                        "body": block.body,
-                        "claim_ids": [
-                            str(claim_id) for claim_id in block.claim_ids
-                        ],
-                        "proposal_ids": [
-                            str(item) for item in block.proposal_ids
-                        ],
-                        "ontology_version": block.ontology_version,
-                    }
-                    for block in proposal.blocks
-                ],
-            }
-            for proposal in proposals
+            _artifact_item(item, pending[item.proposal_id])
+            for item in page.items
+            if item.proposal_id in pending
         ]
     }
 
@@ -192,7 +221,11 @@ def reject_artifact_proposal(
 
 @router.get("/knowledge-review/merges")
 def list_merge_proposals(workspace_id: int = 1) -> dict[str, Any]:
-    """계류 중인 병합 안건을 후보 상세와 함께 돌려준다."""
+    """계류 중인 병합 안건을 후보 상세와 함께 돌려준다.
+
+    병합은 정식 검토 큐(문서 변경안)의 범위 밖이라 경유할 서비스가 없어
+    저장소를 그대로 읽는다.
+    """
     _guard()
     with _uow_factory(workspace_id)() as uow:
         proposals = uow.mutation_proposals.list_pending_duplicates(
@@ -268,7 +301,11 @@ def reject_merge_proposal(
 
 @router.get("/knowledge-review/contradictions")
 def list_contradiction_proposals(workspace_id: int = 1) -> dict[str, Any]:
-    """계류 중인 모순 안건을 값 후보와 함께 돌려준다."""
+    """계류 중인 모순 안건을 값 후보와 함께 돌려준다.
+
+    모순 판정은 정식 검토 큐(문서 변경안)의 범위 밖이라 경유할 서비스가
+    없어 저장소를 그대로 읽는다.
+    """
     _guard()
     with _uow_factory(workspace_id)() as uow:
         proposals = uow.mutation_proposals.list_pending_contradictions(
