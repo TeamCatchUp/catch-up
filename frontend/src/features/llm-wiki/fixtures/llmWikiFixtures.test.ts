@@ -11,10 +11,12 @@ import {
 
 describe('llmWikiFixtures 정합성', () => {
   it('rejected 항목은 rejectionReason이 반드시 있다 (DB CHECK와 동일 불변식)', () => {
-    for (const item of REVIEW_QUEUE_ITEM_FIXTURES) {
-      if (item.status === 'rejected') {
-        expect(item.rejectionReason).toBeTruthy();
-      }
+    const rejected = REVIEW_QUEUE_ITEM_FIXTURES.filter((item) => item.status === 'rejected');
+    // rejected fixture가 사라지면 아래 루프가 0회 돌아 테스트가 공허하게 통과한다 — 존재 자체를 먼저 못박는다
+    expect(rejected.length).toBeGreaterThan(0);
+
+    for (const item of rejected) {
+      expect(item.rejectionReason).toBeTruthy();
     }
   });
 
