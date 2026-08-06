@@ -159,9 +159,16 @@ finished something. Extract them as claims: pick the most central entity
 as the subject, put the action into a snake_case verb-based predicate, and
 when the time is the point of the fact, make the date the value.
 
-    good   communication_workshop · attended_on · "2026-01-10"
-    good   communication_workshop · practice_planned_for · "2026-01-17"
+When the event's date resolves to a full calendar date, also
+set the claim's `valid_from` to that same date. A one-off event leaves
+`valid_to` empty. When the date resolves only to a year or a month,
+keep it in the value and leave `valid_from` empty — a bound must be a
+full calendar date.
+
+    good   communication_workshop · attended_on · "2026-01-10" · valid_from "2026-01-10"
+    good   communication_workshop · practice_planned_for · "2026-01-17" · valid_from "2026-01-17"
     good   communication_workshop · key_topic · "active_listening"
+    good   marathon · completed_in · "2026-04" · valid_from empty (month only)
 
 An event that names no reusable entity still counts — attach it to the
 entity the document is about.

@@ -73,3 +73,17 @@ def test_returning_nothing_is_narrow() -> None:
 def test_entity_restraint_renders() -> None:
     rendered = _render()
     assert "merely mentioned in passing" in rendered
+
+
+def test_event_valid_from_rule_renders() -> None:
+    """사건 claim의 valid_from 기입 규칙이 렌더되는지 본다."""
+    rendered = _render()
+    assert "set the claim's `valid_from`" in rendered
+    assert 'valid_from "2026-01-10"' in rendered
+
+
+def test_partial_date_keeps_bound_empty() -> None:
+    """부분 날짜는 value로만 담고 bound를 비우는 규칙이 렌더되는지 본다."""
+    rendered = _render()
+    assert "leave `valid_from` empty" in rendered
+    assert 'completed_in · "2026-04"' in rendered
