@@ -50,12 +50,29 @@ class QueuePageResponse(BaseModel):
     offset: int
 
 
+class BlockSourceResponse(BaseModel):
+    """블록 본문 한 줄의 근거 인용을 담는다.
+
+    statement가 근거의 정본이고 body의 값 표기는 색인용 라벨이다.
+    citation_verified는 신뢰도 표시 재료다 — True 검증 인용, False
+    대조 실패, None evidence 없음.
+    """
+
+    claim_id: str
+    statement: str
+    observed_at: datetime
+    citation_verified: bool | None
+
+
 class BlockResponse(BaseModel):
     """변경안 본문 블록 하나를 담는다.
 
     claim_ids·proposal_ids가 블록 단위 Read Set(근거 장부)이다. 문서의
     어느 문장이 무엇을 근거로 삼았는지는 블록에서만 알 수 있으므로,
     상세 응답은 이것을 블록에 붙인 채로 내보낸다.
+
+    sources는 그 근거의 원문 인용이다. 근거 인용 없이 만들어진 옛 블록도
+    그대로 읽혀야 하므로 빈 목록을 기본값으로 둔다.
     """
 
     block_kind: str
@@ -64,6 +81,7 @@ class BlockResponse(BaseModel):
     claim_ids: list[str]
     proposal_ids: list[str]
     ontology_version: str | None
+    sources: list[BlockSourceResponse] = []
 
 
 class ReadSetResponse(BaseModel):

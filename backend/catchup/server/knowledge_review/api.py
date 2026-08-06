@@ -68,6 +68,7 @@ from catchup.server.knowledge_review.dependencies import review_error
 from catchup.server.knowledge_review.schemas import ApplyResponse
 from catchup.server.knowledge_review.schemas import ArtifactRefResponse
 from catchup.server.knowledge_review.schemas import BlockResponse
+from catchup.server.knowledge_review.schemas import BlockSourceResponse
 from catchup.server.knowledge_review.schemas import ConflictResponse
 from catchup.server.knowledge_review.schemas import ConflictValueResponse
 from catchup.server.knowledge_review.schemas import DecisionResponse
@@ -504,6 +505,15 @@ def _to_detail(
                 claim_ids=block_claim_ids,
                 proposal_ids=block_proposal_ids,
                 ontology_version=block.ontology_version,
+                sources=[
+                    BlockSourceResponse(
+                        claim_id=str(source.claim_id),
+                        statement=source.statement,
+                        observed_at=source.observed_at,
+                        citation_verified=source.citation_verified,
+                    )
+                    for source in block.sources
+                ],
             )
         )
     return ProposalDetailResponse(

@@ -51,6 +51,7 @@ from catchup.knowledge_maintenance.adapters.postgres.unit_of_work import (
 )
 from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_CLAIM_SECTION
 from catchup.knowledge_maintenance.domain.artifact import ArtifactBlock
+from catchup.knowledge_maintenance.domain.artifact import BlockSource
 from catchup.knowledge_maintenance.domain.artifact import artifact_idempotency_key
 from catchup.knowledge_maintenance.domain.artifact import blocks_content_hash
 from catchup.knowledge_maintenance.ports.artifacts import StoredArtifactProposal
@@ -310,8 +311,15 @@ def _proposal(
     status: str = "pending",
     subject_node_id: uuid.UUID | None = None,
     base_revision_id: uuid.UUID | None = None,
+    claim_id: uuid.UUID | None = None,
+    sources: tuple[BlockSource, ...] = (),
 ) -> StoredArtifactProposal:
-    """상세 응답에 쓸 변경안 한 건을 만든다."""
+    """상세 응답에 쓸 변경안 한 건을 만든다.
+
+    sources를 주는 호출자는 claim_id도 같이 줘서 근거 인용이 블록
+    claim_ids 안에 들게 한다 — 도메인 검증이 요구하는 부분집합 관계를
+    대역에서도 지킨다.
+    """
     return StoredArtifactProposal(
         id=proposal_id,
         artifact_id=uuid.uuid4(),
@@ -323,9 +331,10 @@ def _proposal(
                 block_kind="claim_section",
                 heading="속도 제한",
                 body="rate_limit은 60이다",
-                claim_ids=(uuid.uuid4(),),
+                claim_ids=(claim_id or uuid.uuid4(),),
                 proposal_ids=(),
                 ontology_version="v1",
+                sources=sources,
             ),
         ),
         content_hash="hash",
@@ -724,6 +733,57 @@ def test_detail_returns_blocks_read_set_and_conflicts(
     ]
     # 모든 조회가 컨텍스트의 workspace 하나로만 나갔다.
     assert set(mutations.workspace_ids) == {workspace_id}
+
+
+def test_detail_blocks_carry_sources(
+    app: FastAPI, client: TestClient, reviewer: User
+) -> None:
+    """블록에 붙은 근거 인용이 상세 응답에 그대로 실린다."""
+    proposal_id = uuid.uuid4()
+    claim_id = uuid.uuid4()
+    stored = _proposal(
+        proposal_id=proposal_id,
+        claim_id=claim_id,
+        sources=(
+            BlockSource(
+                claim_id=claim_id,
+                statement="rate_limit은 60이다",
+                observed_at=AT,
+                citation_verified=True,
+            ),
+        ),
+    )
+    app.dependency_overrides[get_review_uow_factory] = lambda: _fake_factory(
+        artifacts=_FakeArtifacts(proposal=stored)
+    )
+
+    response = client.get(f"/api/v1/knowledge-review/queue/{proposal_id}")
+
+    assert response.status_code == 200
+    assert response.json()["blocks"][0]["sources"] == [
+        {
+            "claim_id": str(claim_id),
+            "statement": "rate_limit은 60이다",
+            "observed_at": AT.isoformat().replace("+00:00", "Z"),
+            "citation_verified": True,
+        }
+    ]
+
+
+def test_detail_blocks_without_sources_return_empty_list(
+    app: FastAPI, client: TestClient, reviewer: User
+) -> None:
+    """근거 인용 없이 만들어진 옛 블록은 빈 목록으로 나간다."""
+    proposal_id = uuid.uuid4()
+    stored = _proposal(proposal_id=proposal_id)
+    app.dependency_overrides[get_review_uow_factory] = lambda: _fake_factory(
+        artifacts=_FakeArtifacts(proposal=stored)
+    )
+
+    response = client.get(f"/api/v1/knowledge-review/queue/{proposal_id}")
+
+    assert response.status_code == 200
+    assert response.json()["blocks"][0]["sources"] == []
 
 
 def test_detail_missing_proposal_returns_404(
