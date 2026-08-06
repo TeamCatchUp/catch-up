@@ -27,6 +27,7 @@ from fastapi import HTTPException
 from fastapi import Query
 
 from catchup.audit.actions import KnowledgeReviewAction
+from catchup.audit.metadata import KnowledgeReviewAuditMetadata
 from catchup.audit.utils import audit_log
 from catchup.knowledge_maintenance.ports.artifacts import StoredArtifactProposal
 from catchup.knowledge_maintenance.ports.mutation_proposals import (
@@ -176,7 +177,10 @@ def get_queue_item(
     response_model=DecisionResponse,
     description="문서 변경안을 승인해 새 판을 발행한다.",
 )
-@audit_log(action=KnowledgeReviewAction.APPROVE)
+@audit_log(
+    action=KnowledgeReviewAction.APPROVE,
+    metadata_factory=KnowledgeReviewAuditMetadata.from_audit,
+)
 def approve_artifact(
     proposal_id: uuid.UUID,
     context: ReviewerContext = Depends(resolve_reviewer_workspace),
@@ -213,7 +217,10 @@ def approve_artifact(
     response_model=DecisionResponse,
     description="문서 변경안을 사유와 함께 반려한다.",
 )
-@audit_log(action=KnowledgeReviewAction.REJECT)
+@audit_log(
+    action=KnowledgeReviewAction.REJECT,
+    metadata_factory=KnowledgeReviewAuditMetadata.from_audit,
+)
 def reject_artifact(
     proposal_id: uuid.UUID,
     payload: RejectRequest,
@@ -257,7 +264,10 @@ def reject_artifact(
     response_model=ResolveResponse,
     description="모순 안건의 승자를 정해 결정 저널을 남긴다.",
 )
-@audit_log(action=KnowledgeReviewAction.RESOLVE)
+@audit_log(
+    action=KnowledgeReviewAction.RESOLVE,
+    metadata_factory=KnowledgeReviewAuditMetadata.from_audit,
+)
 def resolve_contradiction(
     proposal_id: uuid.UUID,
     payload: ResolveRequest,
@@ -266,9 +276,32 @@ def resolve_contradiction(
 ) -> ResolveResponse:
     """모순 판정을 확정하고 그 결과를 돌려준다.
 
+    판정 전에 안건 상태를 한 번 읽는다. 서비스는 "없는 안건"과 "이미
+    결정된 안건"을 같은 예외로 알리는데, 소비자가 할 일은 그 둘에서
+    다르다 — 앞은 잘못된 식별자이고 뒤는 큐가 낡은 것이다.
+
     Raises:
-        HTTPException: 판정을 받아들일 수 없으면 409를 던진다.
+        HTTPException: 안건이 없으면 404, 이미 결정됐거나 판정을 받아들일
+            수 없으면 409를 던진다.
     """
+    with uow_factory() as uow:
+        status = uow.mutation_proposals.get_contradiction_status(
+            workspace_id=context.workspace_id,
+            proposal_id=proposal_id,
+        )
+    if status is None:
+        # 저장소가 workspace로 좁혀 읽으므로 남의 workspace 안건도 404다.
+        raise review_error(
+            404,
+            code="PROPOSAL_NOT_FOUND",
+            message="모순 안건을 찾을 수 없습니다.",
+        )
+    if status != PROPOSAL_STATUS_PENDING:
+        raise review_error(
+            409,
+            code="ALREADY_DECIDED",
+            message="이미 결정된 모순 안건입니다.",
+        )
     try:
         result = review_contradiction_proposal(
             uow_factory(),
@@ -318,7 +351,10 @@ def apply_all(
     response_model=ApplyResponse,
     description="승인된 안건 하나의 결정 저널을 적용한다.",
 )
-@audit_log(action=KnowledgeReviewAction.APPLY)
+@audit_log(
+    action=KnowledgeReviewAction.APPLY,
+    metadata_factory=KnowledgeReviewAuditMetadata.from_audit,
+)
 def apply_one(
     proposal_id: uuid.UUID,
     context: ReviewerContext = Depends(resolve_reviewer_workspace),
@@ -399,9 +435,10 @@ def _contradiction_review_error(
 ) -> HTTPException:
     """모순 판정 실패를 상태 코드와 오류 코드로 옮긴다.
 
-    계류 목록에 없으면 없는 안건과 이미 결정된 안건이 한 사실로 보인다.
-    저장소에 그 둘을 가르는 조회가 없어 하나의 409로 알린다 — 어느
-    쪽이든 소비자가 할 일은 큐를 다시 읽는 것으로 같다.
+    없는 안건과 이미 결정된 안건은 핸들러의 사전 조회가 이미 갈랐다.
+    그래도 계류 목록에 없을 수 있다 — 사전 조회 뒤에 다른 판정이 먼저
+    확정했거나, 값 후보를 읽을 수 없어 목록에서 빠진 안건이다. 둘 다
+    소비자가 할 일은 큐를 다시 읽는 것으로 같아 하나의 409로 알린다.
     """
     with uow_factory() as uow:
         pending = uow.mutation_proposals.list_pending_contradictions(

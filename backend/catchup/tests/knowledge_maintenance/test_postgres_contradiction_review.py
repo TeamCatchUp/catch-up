@@ -255,6 +255,52 @@ def test_pending_contradiction_values_carry_citation_verified(
     assert by_claim_id[loser].citation_verified is None
 
 
+def test_contradiction_status_separates_missing_from_decided(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+) -> None:
+    """단건 상태 조회가 없는 안건과 결정된 안건을 가른다.
+
+    계류 목록만 읽으면 둘이 한 사실로 보인다. workspace 필터도 함께
+    본다 — 그 절이 빠지면 남의 안건 상태가 새어 나간다.
+    """
+    proposal_id, winner, _ = _contradiction(
+        workspace_id, session_factory, uow_factory
+    )
+
+    with uow_factory() as uow:
+        repository = uow.mutation_proposals
+        pending = repository.get_contradiction_status(
+            workspace_id=workspace_id, proposal_id=proposal_id
+        )
+        missing = repository.get_contradiction_status(
+            workspace_id=workspace_id, proposal_id=uuid.uuid4()
+        )
+        # 그 행은 이 workspace에만 있으므로 다른 값으로는 보이지 않는다.
+        other_workspace = repository.get_contradiction_status(
+            workspace_id=workspace_id + 1000, proposal_id=proposal_id
+        )
+
+    assert (pending, missing, other_workspace) == ("pending", None, None)
+
+    review_contradiction_proposal(
+        uow_factory(),
+        workspace_id=workspace_id,
+        proposal_id=proposal_id,
+        winner_claim_id=winner,
+        reviewer="ba2slk",
+        now=DECIDED_AT,
+    )
+
+    with uow_factory() as uow:
+        decided = uow.mutation_proposals.get_contradiction_status(
+            workspace_id=workspace_id, proposal_id=proposal_id
+        )
+
+    assert decided == "approved"
+
+
 def test_second_decision_is_refused(
     workspace_id: int,
     session_factory: Callable[[], Session],

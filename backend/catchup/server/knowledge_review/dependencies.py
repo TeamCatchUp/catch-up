@@ -10,6 +10,10 @@ workspace는 쿼리 파라미터를 믿지 않는다. 준 값이라도 소속(Us
 하나일 때만 그것으로 정한다. 여러 곳에 속한 사람에게 임의로 하나를 골라
 주면 남의 workspace 문서를 자기 것으로 착각한 채 결정할 자리가 생긴다.
 
+거부도 감사 기록이다. 막힌 시도가 남지 않으면 감사 스트림은 통과한 결정만
+담아, "누가 어느 workspace를 들여다보려 했나"를 나중에 물을 수 없다. 그래서
+거부는 전부 `deny_reviewer`를 지나며 감사 이벤트를 하나 낸다.
+
 UnitOfWork도 여기서 만든다. `KnowledgeMaintenanceUnitOfWork`는 생성 시점의
 workspace_id로 artifact 저장소를 고정하고, mutation 저장소는 호출마다
 workspace_id를 받는다. 둘이 어긋나면 타입은 통과하는데 충돌 표시가 남의
@@ -27,6 +31,11 @@ from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from catchup.audit.actions import KnowledgeReviewAction
+from catchup.audit.base import AuditLevel
+from catchup.audit.base import AuditStatus
+from catchup.audit.emitters import emit_audit_event
+from catchup.audit.metadata import KnowledgeReviewAuditMetadata
 from catchup.auth.dependencies import cookie_scheme
 from catchup.auth.dependencies import get_current_user
 from catchup.db.dependencies import get_db
@@ -53,6 +62,35 @@ def review_error(status_code: int, *, code: str, message: str) -> HTTPException:
         status_code=status_code,
         detail={"code": code, "message": message},
     )
+
+
+def deny_reviewer(
+    status_code: int,
+    *,
+    code: str,
+    message: str,
+    user_id: int,
+    workspace_id: int | None,
+) -> HTTPException:
+    """인가 거부를 감사 스트림에 남기고 표준 오류를 만든다.
+
+    `audit_log` 데코레이터는 핸들러가 실행되는 동안의 예외만 본다. 인가
+    거부는 의존성에서 끝나 핸들러에 닿지 않으므로, 그 경로만 감사 기록이
+    비어 막힌 시도가 남지 않는다. 그래서 여기서 감사 이벤트를 직접 낸다 —
+    로거를 따로 만들지 않고 `emit_audit_event`를 쓰는 이유는 성공한 결정과
+    같은 채널·같은 모양으로 한 스트림에 모여야 하기 때문이다.
+    """
+    emit_audit_event(
+        action=KnowledgeReviewAction.AUTHORIZE,
+        status=AuditStatus.FAILURE,
+        level=AuditLevel.WARNING,
+        metadata=KnowledgeReviewAuditMetadata(
+            context=code,
+            user_id=user_id,
+            workspace_id=workspace_id,
+        ),
+    )
+    return review_error(status_code, code=code, message=message)
 
 
 def get_reviewer_user(
@@ -135,17 +173,21 @@ def resolve_reviewer_workspace(
 
     if workspace_id is None:
         if not memberships:
-            raise review_error(
+            raise deny_reviewer(
                 403,
                 code="NOT_MEMBER",
                 message="속한 워크스페이스가 없습니다.",
+                user_id=current_user.id,
+                workspace_id=None,
             )
         if len(memberships) > 1:
-            raise review_error(
+            raise deny_reviewer(
                 400,
                 code="WORKSPACE_REQUIRED",
                 message="여러 워크스페이스에 속해 있어 workspace_id가"
                 " 필요합니다.",
+                user_id=current_user.id,
+                workspace_id=None,
             )
         resolved_workspace_id = memberships[0]
     else:
@@ -153,10 +195,12 @@ def resolve_reviewer_workspace(
             # 소속을 먼저 본다. 권한 없음보다 소속 없음이 먼저 걸려야
             # "남의 workspace에 검토자 권한이 있는지"를 이 응답으로
             # 떠볼 수 없다.
-            raise review_error(
+            raise deny_reviewer(
                 403,
                 code="NOT_MEMBER",
                 message="해당 워크스페이스의 구성원이 아닙니다.",
+                user_id=current_user.id,
+                workspace_id=workspace_id,
             )
         resolved_workspace_id = workspace_id
 
@@ -167,10 +211,12 @@ def resolve_reviewer_workspace(
         )
     )
     if granted is None:
-        raise review_error(
+        raise deny_reviewer(
             403,
             code="NOT_REVIEWER",
             message="위키 검토자 권한이 없습니다.",
+            user_id=current_user.id,
+            workspace_id=resolved_workspace_id,
         )
 
     return ReviewerContext(

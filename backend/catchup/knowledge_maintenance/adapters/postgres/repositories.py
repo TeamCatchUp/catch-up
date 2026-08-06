@@ -1616,6 +1616,22 @@ class SqlAlchemyMutationProposalRepository:
             )
         return found
 
+    def get_contradiction_status(
+        self,
+        *,
+        workspace_id: int,
+        proposal_id: uuid.UUID,
+    ) -> str | None:
+        """모순 안건 하나의 현재 상태를 읽는다. 없으면 None이다."""
+        return self._session.scalar(
+            select(KnowledgeMutationProposalRow.status).where(
+                KnowledgeMutationProposalRow.workspace_id == workspace_id,
+                KnowledgeMutationProposalRow.id == proposal_id,
+                KnowledgeMutationProposalRow.proposal_kind
+                == "contradiction",
+            )
+        )
+
     def find_contested_subject_node_ids(
         self,
         *,

@@ -299,6 +299,20 @@ class MutationProposalRepository(Protocol):
         """
         ...
 
+    def get_contradiction_status(
+        self,
+        *,
+        workspace_id: int,
+        proposal_id: uuid.UUID,
+    ) -> str | None:
+        """모순 안건 하나의 현재 상태를 읽는다. 없으면 None이다.
+
+        계류 목록만으로는 "없는 안건"과 "이미 결정된 안건"이 한 사실로
+        보인다. 소비자가 할 일은 그 둘에서 다르므로(식별자를 고칠지, 큐를
+        다시 읽을지) 상태를 한 건씩 읽을 자리를 둔다.
+        """
+        ...
+
     def record_contradiction_decision(
         self,
         *,
