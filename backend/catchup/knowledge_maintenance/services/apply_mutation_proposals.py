@@ -130,12 +130,15 @@ def apply_mutation_proposals(
     superseded = 0
     invalidated = 0
     closed_already = 0
-    for proposal_id, operations in approved:
+    # 루프 변수를 파라미터와 다른 이름으로 둔다. 같은 이름을 쓰면
+    # 루프가 파라미터를 덮어써서, 뒤에 나오는 감사 로그의
+    # `scoped_proposal_id`가 "전체 적용"인지 "한 건 적용"인지를 잃는다.
+    for approved_id, operations in approved:
         try:
             tally = _apply_one(
                 uow_factory,
                 workspace_id=workspace_id,
-                proposal_id=proposal_id,
+                proposal_id=approved_id,
                 operations=operations,
             )
         except ApplyOperationError as error:
@@ -143,7 +146,7 @@ def apply_mutation_proposals(
             logger.error(
                 "mutation_apply_failed",
                 workspace_id=workspace_id,
-                proposal_id=str(proposal_id),
+                proposal_id=str(approved_id),
                 reason=str(error),
             )
             continue
@@ -156,7 +159,7 @@ def apply_mutation_proposals(
         logger.info(
             "mutation_proposal_applied",
             workspace_id=workspace_id,
-            proposal_id=str(proposal_id),
+            proposal_id=str(approved_id),
             candidates_resolved=tally.resolved,
             candidates_already_resolved=tally.already,
         )
@@ -174,9 +177,7 @@ def apply_mutation_proposals(
         "mutation_apply_completed",
         workspace_id=workspace_id,
         # 한 건만 적용한 실행과 전체 적용을 감사 기록에서 구분한다.
-        scoped_proposal_id=(
-            None if proposal_id is None else str(proposal_id)
-        ),
+        scoped_proposal_id=None if proposal_id is None else str(proposal_id),
         proposals_applied=result.proposals_applied,
         proposals_failed=result.proposals_failed,
         candidates_resolved=result.candidates_resolved,
