@@ -9,6 +9,8 @@ from __future__ import annotations
 import uuid
 from collections.abc import Callable
 from collections.abc import Iterator
+from datetime import datetime
+from datetime import timezone
 
 import pytest
 from sqlalchemy import Engine
@@ -144,6 +146,11 @@ def _proposal(
         "idempotency_key": f"key:{uuid.uuid4().hex}",
     }
     values.update(overrides)
+    # 결정 상태 행은 결정 저널이 함께 채워져야 DB가 받는다. 저널 자체를
+    # 시험하는 쪽은 reviewer를 직접 넘겨 이 채움을 비켜 간다.
+    if values["status"] in ("approved", "rejected"):
+        values.setdefault("reviewer", "tester")
+        values.setdefault("reviewed_at", datetime.now(timezone.utc))
     return KnowledgeArtifactChangeProposal(**values)
 
 

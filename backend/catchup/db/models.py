@@ -474,6 +474,30 @@ class UserWorkspace(Base):
     workspace: Mapped["Workspace"] = relationship(back_populates="user_links")
 
 
+class WikiReviewerGrant(Base):
+    """위키 검토자 권한 한 건을 담는다.
+
+    기획의 "워크스페이스 역할과 별개로 지정되는 위키 권한"이다. 행이
+    있으면 그 workspace의 검토자다. 부여 API는 범위 밖이라 초기에는
+    운영자가 직접 삽입한다.
+    """
+
+    __tablename__ = "wiki_reviewer_grants"
+
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    workspace_id: Mapped[int] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="CASCADE"), primary_key=True
+    )
+    granted_by: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
+    granted_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
 class KnowledgeSource(Base):
     __tablename__ = "knowledge_sources"
 
@@ -5043,6 +5067,15 @@ class KnowledgeArtifactChangeProposal(Base):
         nullable=True,
     )
     reviewer: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # 변경의 기원 — 기획 이력 배지(승인된 변경 제안·검토자 직접 편집·
+    # 외부 유입 승인·승인된 연결)와 1:1. manual/external/linked의 생성
+    # 경로는 후속 슬라이스이고 지금은 값만 예약한다.
+    origin: Mapped[str] = mapped_column(
+        String(16),
+        nullable=False,
+        default="compiled",
+        server_default=text("'compiled'"),
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -5085,6 +5118,19 @@ class KnowledgeArtifactChangeProposal(Base):
         CheckConstraint(
             "status <> 'rejected' OR rejection_reason IS NOT NULL",
             name="ck_knowledge_artifact_change_proposals_rejection_reason",
+        ),
+        CheckConstraint(
+            "origin IN ('compiled', 'manual', 'external', 'linked')",
+            name="ck_knowledge_artifact_change_proposals_origin",
+        ),
+        # 결정에는 반드시 결정자와 시각이 남는다. 병합/모순 proposal의
+        # ck_knowledge_mutation_proposals_decision_journal과 같은 형태 —
+        # 문서 승인 경로만 이 강제가 빠져 있던 비대칭을 교정한다.
+        CheckConstraint(
+            "status NOT IN ('approved', 'rejected') "
+            "OR (reviewer IS NOT NULL AND btrim(reviewer) != '' "
+            "AND reviewed_at IS NOT NULL)",
+            name="ck_knowledge_artifact_change_proposals_decision_journal",
         ),
         Index(
             "ix_knowledge_artifact_change_proposals_review_queue",
