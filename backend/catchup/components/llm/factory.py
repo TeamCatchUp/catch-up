@@ -26,6 +26,7 @@ def get_llm_service(
     thinking_budget_tokens: int = 8000,
     max_response_tokens: int | None = None,
     max_attempts: int = AwsBedrockLlmService.DEFAULT_MAX_ATTEMPTS,
+    read_timeout: int = AwsBedrockLlmService.DEFAULT_READ_TIMEOUT,
 ) -> BaseLlmService:
     if provider == LlmProvider.OPENAI:
         return OpenAiLlmService(
@@ -42,6 +43,7 @@ def get_llm_service(
             thinking_budget_tokens=thinking_budget_tokens,
             max_response_tokens=max_response_tokens,
             max_attempts=max_attempts,
+            read_timeout=read_timeout,
         )
 
     raise ValueError(f"Unknown provider: {provider}")

@@ -335,6 +335,7 @@ async def main() -> None:
         provider=LlmProvider.AWS_BEDROCK,
         model_capacity=ModelCapacity(args.capacity),
         streaming=False,
+        read_timeout=120,
     )
     extractor = StructuredKnowledgeExtractor(service.get_llm())
 
