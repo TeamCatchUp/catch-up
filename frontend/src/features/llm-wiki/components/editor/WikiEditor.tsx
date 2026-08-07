@@ -6,6 +6,9 @@ import StarterKit from '@tiptap/starter-kit';
 
 import { WikiBlockAttrs } from './extensions/wikiBlockAttrs';
 
+/** WikiEditor가 쓰는 확장 목록. 테스트가 같은 목록으로 왕복을 검증한다 — 배열에서 확장을 빼면 그 테스트가 깨진다. */
+export const WIKI_EDITOR_EXTENSIONS = [StarterKit, WikiBlockAttrs];
+
 export interface WikiEditorProps {
   /** 최초 1회만 반영된다. 이후 변경은 무시 — uncontrolled다. */
   initialContent?: JSONContent;
@@ -30,7 +33,7 @@ export default function WikiEditor({ initialContent, editable = true, onUpdate, 
   }, [onUpdate, onContentError]);
 
   const editor = useEditor({
-    extensions: [StarterKit, WikiBlockAttrs],
+    extensions: WIKI_EDITOR_EXTENSIONS,
     content: initialContent,
     editable,
     // App Router는 서버에서 한 번 렌더된다. 즉시 렌더하면 hydration이 어긋난다.

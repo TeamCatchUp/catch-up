@@ -2,6 +2,7 @@ import { Editor } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import { describe, expect, it } from 'vitest';
 
+import { WIKI_EDITOR_EXTENSIONS } from '../WikiEditor';
 import { WikiBlockAttrs } from './wikiBlockAttrs';
 
 function createEditor() {
@@ -70,5 +71,21 @@ describe('wikiBlockAttrs', () => {
     expect(editor.getHTML()).not.toContain('origin');
     expect(editor.getHTML()).not.toContain('claimIds');
     expect(editor.getHTML()).not.toContain('c_1');
+  });
+
+  it('WikiEditor의 실제 확장 목록으로도 왕복이 성립한다 — 배선 회귀 방지', () => {
+    const editor = new Editor({ extensions: WIKI_EDITOR_EXTENSIONS });
+    editor.commands.setContent({
+      type: 'doc',
+      content: [
+        {
+          type: 'paragraph',
+          attrs: { origin: 'system', claimIds: ['c_1'] },
+          content: [{ type: 'text', text: '본문' }],
+        },
+      ],
+    });
+
+    expect(editor.getJSON().content?.[0]?.attrs).toMatchObject({ origin: 'system', claimIds: ['c_1'] });
   });
 });
