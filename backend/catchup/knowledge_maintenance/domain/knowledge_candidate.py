@@ -83,19 +83,28 @@ class EntityResolutionStatus(StrEnum):
 
     Claim·RelationAssertion과 값이 다르다. Entity는 다른 Entity로 흡수되지만
     (`merged`), 주장은 같은 내용이 이미 있으면 중복이 된다(`duplicate`).
+
+    `superseded`는 사람 결정이 아니라 재추출이 구 배치를 대체할 때 붙는다.
     """
 
     PENDING = "pending"
     ACCEPTED = "accepted"
     MERGED = "merged"
     REJECTED = "rejected"
+    SUPERSEDED = "superseded"  # 재추출이 대체한 구 배치의 후보. 사람 결정이 아니다.
 
 
 class AssertionResolutionStatus(StrEnum):
+    """주장 후보(Claim·RelationAssertion)의 해소 상태를 나타낸다.
+
+    `superseded`는 사람 결정이 아니라 재추출이 구 배치를 대체할 때 붙는다.
+    """
+
     PENDING = "pending"
     ACCEPTED = "accepted"
     DUPLICATE = "duplicate"
     REJECTED = "rejected"
+    SUPERSEDED = "superseded"  # 재추출이 대체한 구 배치의 후보. 사람 결정이 아니다.
 
 
 @dataclass(frozen=True, slots=True)
