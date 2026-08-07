@@ -12,9 +12,10 @@
 
 커서가 DB에서 도출되므로 부분 수집이 곧 영구 누락이 된다. 폴러가 못 집은
 대화보다 최신인 대화를 저장하면 커서가 그 위로 올라가 다음 회차에도 빠진
-대화를 찾지 못한다. 그래서 두 가드를 둔다. 변경 목록 자체가 잘렸으면 아무것도
-넣지 않고 실패로 끝내고, 개별 대화가 빠졌으면 그 대화보다 오래된 것만 넣고
-나머지는 다음 회차로 미룬다.
+대화를 찾지 못한다. 그래서 세 가드를 둔다. 변경 목록 자체가 잘렸으면 아무것도
+넣지 않고 실패로 끝내고, 폴러가 개별 대화를 빠뜨렸으면 그 대화보다 오래된
+것만 넣고 나머지는 다음 회차로 미룬다. 저장 단계에서 대화 하나가 터지면
+거기서 루프를 멈추고 남은 대화를 전부 다음 회차로 미룬다.
 
 같은 대화를 다시 넣어도 idempotency key로 재사용되므로 여러 번 돌려도 안전하다.
 
@@ -31,6 +32,8 @@ import argparse
 import asyncio
 from collections.abc import Callable
 from collections.abc import Sequence
+from dataclasses import dataclass
+from dataclasses import field
 from datetime import datetime
 from datetime import timedelta
 from datetime import timezone
@@ -59,6 +62,9 @@ from catchup.knowledge_maintenance.adapters.postgres.unit_of_work import (
 )
 from catchup.knowledge_maintenance.contracts.source_change import SourceChangeEnvelope
 from catchup.knowledge_maintenance.ports.source_poller import SkippedItem
+from catchup.knowledge_maintenance.services.ingest_and_normalize import (
+    SourceIntakeResult,
+)
 from catchup.knowledge_maintenance.services.ingest_and_normalize import (
     ingest_and_normalize,
 )
@@ -144,6 +150,73 @@ def _split_by_barrier(
         if envelope.source_updated_at >= barrier
     ]
     return ingest_now, held_back
+
+
+@dataclass(frozen=True, slots=True)
+class IngestFailure:
+    """저장 단계에서 루프를 멈추게 한 대화 하나를 기록한다."""
+
+    chat_id: str
+    error_type: str
+    error_message: str
+
+
+@dataclass(slots=True)
+class IngestRunReport:
+    """저장 루프가 어디까지 나아갔는지 알린다.
+
+    Attributes:
+        summary: 확정 결과별 건수다.
+        ingested: 실제로 확정한 envelope다.
+        failure: 루프를 멈추게 한 대화다. 없으면 None이다.
+        held_back: 실패 이후 손대지 않은 envelope다.
+    """
+
+    summary: dict[str, int] = field(default_factory=dict)
+    ingested: list[SourceChangeEnvelope] = field(default_factory=list)
+    failure: IngestFailure | None = None
+    held_back: list[SourceChangeEnvelope] = field(default_factory=list)
+
+
+def _ingest_envelopes(
+    envelopes: Sequence[SourceChangeEnvelope],
+    *,
+    ingest: Callable[[SourceChangeEnvelope], SourceIntakeResult],
+    emit: Callable[[str], None] = print,
+) -> IngestRunReport:
+    """오래된 것부터 저장하고 첫 실패에서 멈춘다.
+
+    커서는 저장된 원문의 최신 `source_updated_at`에서 도출된다. 그래서
+    실패한 대화보다 최신인 대화를 계속 저장하면 커서가 실패한 대화를
+    지나쳐 다음 회차에도 그 대화를 찾지 못한다. 실패를 건너뛰고 진행하는
+    것이 곧 영구 누락이므로, 첫 실패에서 루프를 끊어 커서를 실패 지점
+    아래에 머무르게 한다. 남은 대화는 커서가 나아가지 않았으므로 다음 회차에
+    자동으로 다시 집힌다.
+
+    오래된 것부터 처리한다는 순서가 이 장벽의 전제다. 폴러는 목록의 기준
+    시각으로 정렬하지만 envelope의 `source_updated_at`은 대화 상세에서
+    오므로 둘이 어긋날 수 있다. 그래서 여기서 다시 오름차순으로 세운다.
+    """
+    ordered = sorted(envelopes, key=lambda envelope: envelope.source_updated_at)
+    report = IngestRunReport()
+    for index, envelope in enumerate(ordered):
+        chat_id = envelope.source_identity.external_document_id
+        try:
+            result = ingest(envelope)
+        except Exception as error:
+            report.failure = IngestFailure(
+                chat_id=chat_id,
+                error_type=type(error).__name__,
+                error_message=str(error),
+            )
+            report.held_back = list(ordered[index + 1 :])
+            emit(f"  {chat_id}  실패  {type(error).__name__}: {error}")
+            return report
+        label = f"{result.ingestion.value}/{result.normalization.value}"
+        report.summary[label] = report.summary.get(label, 0) + 1
+        report.ingested.append(envelope)
+        emit(f"  {chat_id}  {label}  observation {str(result.observation_id)[:8]}")
+    return report
 
 
 def _parse_states(value: str) -> tuple[str, ...]:
@@ -282,38 +355,30 @@ async def main() -> None:
         return
 
     normalizer = ChannelTalkUserChatNormalizer()
-    summary: dict[str, int] = {}
-    failed = 0
-    for envelope in envelopes:
-        chat_id = envelope.source_identity.external_document_id
+
+    def _ingest_one(envelope: SourceChangeEnvelope) -> SourceIntakeResult:
         # envelope마다 새 UoW를 쓴다. 대화 하나의 실패가 앞서 확정한
         # 대화까지 되돌리지 않게 하려면 트랜잭션이 서로 독립해야 한다.
-        try:
-            result = ingest_and_normalize(
-                envelope,
-                normalizer=normalizer,
-                uow=KnowledgeMaintenanceUnitOfWork(session_factory),
-            )
-        except Exception as error:
-            # 한 대화의 충돌이나 정규화 실패로 남은 대화를 버리지 않는다.
-            # 실패한 대화는 이번 회차에서 빠지고, 커서가 그 시각을 이미
-            # 지나갔으면 다음 회차에도 안 집힌다. 그래서 조용히 넘기지 않고
-            # 대화 id까지 찍어 사람이 `--since`로 되돌릴 수 있게 한다.
-            failed += 1
-            print(f"  {chat_id}  실패  {type(error).__name__}: {error}")
-            continue
-        label = f"{result.ingestion.value}/{result.normalization.value}"
-        summary[label] = summary.get(label, 0) + 1
-        print(f"  {chat_id}  {label}  observation {str(result.observation_id)[:8]}")
+        return ingest_and_normalize(
+            envelope,
+            normalizer=normalizer,
+            uow=KnowledgeMaintenanceUnitOfWork(session_factory),
+        )
+
+    report = _ingest_envelopes(envelopes, ingest=_ingest_one)
 
     print("\n=== 수집 결과 ===")
-    for label, count in sorted(summary.items()):
+    for label, count in sorted(report.summary.items()):
         print(f"  {label}: {count}")
-    if failed:
+    if report.failure is not None:
         print(
-            f"  실패 {failed}건 — 이번 회차에서 건너뛴 대화다. 커서가 이미 "
-            "지나갔을 수 있으니 위에 찍힌 시각 이전으로 `--since`를 주어 "
-            "다시 돌린다."
+            f"  실패 1건에서 중단 — {report.failure.chat_id} "
+            f"({report.failure.error_type}: {report.failure.error_message}). "
+            "커서가 실패 대화를 지나치지 않도록 이후 대화를 넣지 않는다."
+        )
+        print(
+            f"  보류 {len(report.held_back)}건 — 실패 대화보다 최신이라 "
+            "커서가 이 대화들 아래에 머무르므로 다음 회차에 다시 집힌다."
         )
     if poll_result.skipped:
         print(
@@ -325,7 +390,8 @@ async def main() -> None:
             "다음 회차에 다시 집힌다."
         )
     print(
-        f"  대화 {len(envelopes)}건, 끝난 시각 {datetime.now(timezone.utc).isoformat()}"
+        f"  대화 {len(report.ingested)}건 확정 (대상 {len(envelopes)}건), "
+        f"끝난 시각 {datetime.now(timezone.utc).isoformat()}"
     )
 
     engine.dispose()

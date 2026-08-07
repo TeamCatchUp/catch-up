@@ -1,22 +1,32 @@
-"""폴링 러너의 커서 안전 장벽 계산을 검증한다.
+"""폴링 러너의 커서 안전 장벽을 검증한다.
 
 러너의 증분 커서는 저장된 원문의 최신 `source_updated_at`에서 도출된다.
 그래서 수집하지 못한 대화보다 최신인 대화를 저장하면 커서가 빠진 대화를
-지나쳐 다음 회차에도 집히지 않는다. 그 사고를 막는 함수가
-`_split_by_barrier` 하나이므로 여기서만 직접 검증한다.
+지나쳐 다음 회차에도 집히지 않는다. 장벽은 두 군데에 있다. 폴러가 알린
+누락은 `_split_by_barrier`가 막고, 저장 단계에서 터진 대화는
+`_ingest_envelopes`가 첫 실패에서 루프를 끊어 막는다.
 """
 
 from __future__ import annotations
 
+import uuid
 from datetime import datetime
 from datetime import timedelta
 from datetime import timezone
 
+from catchup.evaluation.run_channel_talk_poll_pipeline import _ingest_envelopes
 from catchup.evaluation.run_channel_talk_poll_pipeline import _split_by_barrier
 from catchup.knowledge_maintenance.contracts.source_change import SourceChangeEnvelope
 from catchup.knowledge_maintenance.contracts.source_change import SourceIdentityPayload
 from catchup.knowledge_maintenance.domain.source_version import ChangeKind
 from catchup.knowledge_maintenance.ports.source_poller import SkippedItem
+from catchup.knowledge_maintenance.services.ingest_and_normalize import (
+    SourceIntakeResult,
+)
+from catchup.knowledge_maintenance.services.ingest_source_version import IngestionResult
+from catchup.knowledge_maintenance.services.normalize_source_version import (
+    NormalizationResult,
+)
 
 CHANNEL_ID = "ch-catchup-eval"
 NOW = datetime(2026, 8, 7, 9, 0, tzinfo=timezone.utc)
@@ -159,3 +169,111 @@ def test_split_by_barrier_holds_back_envelope_equal_to_barrier() -> None:
 
     assert ingest_now == []
     assert _ids(held_back) == ["chat-tie"]
+
+
+def _intake_result() -> SourceIntakeResult:
+    """저장 성공 결과를 만든다."""
+    return SourceIntakeResult(
+        source_version_id=uuid.uuid4(),
+        observation_id=uuid.uuid4(),
+        ingestion=IngestionResult.CREATED,
+        normalization=NormalizationResult.CREATED,
+    )
+
+
+def test_ingest_envelopes_stops_at_the_first_failure() -> None:
+    """오래된 대화가 터지면 최신 대화를 저장하지 않는다.
+
+    커서는 저장된 원문의 최신 시각에서 도출되므로, 실패를 건너뛰고 최신
+    대화를 저장하면 커서가 실패 대화를 지나쳐 영구 누락이 된다.
+    """
+    older = _envelope("chat-older", NOW - timedelta(hours=9))
+    newer = _envelope("chat-newer", NOW - timedelta(hours=1))
+    seen: list[str] = []
+
+    def _ingest(envelope: SourceChangeEnvelope) -> SourceIntakeResult:
+        chat_id = envelope.source_identity.external_document_id
+        seen.append(chat_id)
+        if chat_id == "chat-older":
+            raise RuntimeError("payload conflict")
+        return _intake_result()
+
+    report = _ingest_envelopes([older, newer], ingest=_ingest, emit=lambda _: None)
+
+    assert seen == ["chat-older"]
+    assert report.ingested == []
+    assert report.failure is not None
+    assert report.failure.chat_id == "chat-older"
+    assert report.failure.error_type == "RuntimeError"
+    assert report.failure.error_message == "payload conflict"
+    assert _ids(report.held_back) == ["chat-newer"]
+
+
+def test_ingest_envelopes_keeps_progress_made_before_the_failure() -> None:
+    """실패 이전에 확정한 대화는 그대로 남고, 이후만 보류한다."""
+    envelopes = [
+        _envelope("chat-1", NOW - timedelta(hours=9)),
+        _envelope("chat-2", NOW - timedelta(hours=6)),
+        _envelope("chat-3", NOW - timedelta(hours=3)),
+        _envelope("chat-4", NOW - timedelta(hours=1)),
+    ]
+
+    def _ingest(envelope: SourceChangeEnvelope) -> SourceIntakeResult:
+        if envelope.source_identity.external_document_id == "chat-2":
+            raise ValueError("normalization failed")
+        return _intake_result()
+
+    report = _ingest_envelopes(envelopes, ingest=_ingest, emit=lambda _: None)
+
+    assert _ids(report.ingested) == ["chat-1"]
+    assert report.summary == {"created/created": 1}
+    assert report.failure is not None
+    assert report.failure.chat_id == "chat-2"
+    assert _ids(report.held_back) == ["chat-3", "chat-4"]
+
+
+def test_ingest_envelopes_processes_oldest_first_even_if_unsorted() -> None:
+    """입력이 뒤섞여 있어도 오래된 것부터 처리한다.
+
+    장벽의 전제가 처리 순서이므로 함수가 직접 오름차순을 세운다.
+    """
+    newer = _envelope("chat-newer", NOW - timedelta(hours=1))
+    older = _envelope("chat-older", NOW - timedelta(hours=9))
+    middle = _envelope("chat-middle", NOW - timedelta(hours=5))
+    seen: list[str] = []
+
+    def _ingest(envelope: SourceChangeEnvelope) -> SourceIntakeResult:
+        chat_id = envelope.source_identity.external_document_id
+        seen.append(chat_id)
+        if chat_id == "chat-middle":
+            raise RuntimeError("db error")
+        return _intake_result()
+
+    report = _ingest_envelopes(
+        [newer, older, middle],
+        ingest=_ingest,
+        emit=lambda _: None,
+    )
+
+    assert seen == ["chat-older", "chat-middle"]
+    assert _ids(report.ingested) == ["chat-older"]
+    assert _ids(report.held_back) == ["chat-newer"]
+
+
+def test_ingest_envelopes_ingests_all_when_nothing_fails() -> None:
+    """전부 성공하면 보류도 실패도 없다."""
+    envelopes = [
+        _envelope("chat-a", NOW - timedelta(hours=5)),
+        _envelope("chat-b", NOW - timedelta(hours=1)),
+    ]
+
+    report = _ingest_envelopes(
+        envelopes,
+        ingest=lambda _: _intake_result(),
+        emit=lambda _: None,
+    )
+
+    assert _ids(report.ingested) == ["chat-a", "chat-b"]
+    assert report.failure is None
+    assert report.held_back == []
+    assert report.summary == {"created/created": 2}
