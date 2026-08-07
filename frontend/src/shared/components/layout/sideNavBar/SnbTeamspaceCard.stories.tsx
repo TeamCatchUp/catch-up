@@ -32,6 +32,9 @@ const meta = {
         '이름 옆 점이 무엇을 알리는지도 미정이라 표시 여부만 props로 받는다.',
       ],
       interactionNotes: ['onClick 미전달 시 button이 아닌 div로 렌더한다 — 눌리는 것처럼 보이게 하지 않는다.'],
+      layoutNotes: [
+        '렌더 높이가 시안보다 3px 크다. Figma는 테두리를 안쪽에 그려 높이에 더하지 않고 캡션 텍스트 박스를 20으로 올림하는데, 브라우저는 테두리 2px를 더하고 캡션이 19.5다. 세로 패딩 자체는 8로 같다.',
+      ],
     }),
   },
 } satisfies Meta<typeof SnbTeamspaceCard>;

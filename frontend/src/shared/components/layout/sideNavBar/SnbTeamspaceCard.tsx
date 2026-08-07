@@ -42,7 +42,7 @@ export default function SnbTeamspaceCard({
     </>
   );
 
-  const shell = cn('border-line-normal-neutral flex w-full flex-col gap-1.5 rounded-xl border px-2.5 py-1.5', className);
+  const shell = cn('border-line-normal-neutral flex w-full flex-col gap-1.5 rounded-xl border px-2.5 py-2', className);
 
   if (!onClick) {
     return <div className={shell}>{body}</div>;
