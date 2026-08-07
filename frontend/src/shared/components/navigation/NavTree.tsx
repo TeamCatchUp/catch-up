@@ -3,8 +3,8 @@
 import { type ComponentType, type SVGProps, useState } from 'react';
 
 import IconAdd from '@/public/icons/icon/add_small.svg';
-import IconCaret from '@/public/icons/icon/arrow_right.svg';
-import IconDepthConnector from '@/public/icons/icon/arrow_right2.svg';
+// 표시형의 depth 연결자와 탐색형의 접기 캐럿이 같은 자산을 쓴다
+import IconArrowRight2 from '@/public/icons/icon/arrow_right2.svg';
 import IconMore from '@/public/icons/icon/kebab_horizontal.svg';
 import { cn } from '@/shared/utils/cn';
 
@@ -127,7 +127,7 @@ export default function NavTree({
       return (
         <span className="flex h-7 items-center gap-2" style={{ paddingInlineStart: depth * STATIC_INDENT_PX }}>
           {depth > 0 && (
-            <IconDepthConnector
+            <IconArrowRight2
               data-slot="nav-tree-depth-connector"
               aria-hidden
               className="text-icon-normal-neutral size-6 shrink-0"
@@ -185,7 +185,10 @@ export default function NavTree({
                     isActive ? 'text-icon-primary-normal' : 'text-icon-normal-neutral',
                   )}
                 >
-                  <IconCaret aria-hidden className={cn('size-4.5 transition-transform', expanded && 'rotate-90')} />
+                  <IconArrowRight2
+                    aria-hidden
+                    className={cn('size-4.5 transition-transform', expanded && 'rotate-90')}
+                  />
                 </button>
               )}
             </span>

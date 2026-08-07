@@ -92,7 +92,7 @@ const meta = {
         '접기/펼치기는 캐럿 버튼 전용이다. 행 본문 클릭은 이동만 한다.',
         '캐럿은 자식이 있는 행에만, hover 또는 포커스에서 앞 아이콘을 대체해 나타난다.',
         'hover는 플레이로 어서션하지 않는다 — userEvent.hover()는 합성 이벤트라 브라우저의 :hover를 켜지 못한다. focus-within으로 검증한다.',
-        '펼침 캐럿은 arrow_right 90도 회전이다 — 시안에 펼침 상태가 없어 잠정값이다(design-request).',
+        '캐럿은 표시형 depth 연결자와 같은 arrow_right2 자산이고, 펼침은 90도 회전이다 — 시안에 펼침 상태가 없어 잠정값이다(design-request).',
       ],
     }),
   },
