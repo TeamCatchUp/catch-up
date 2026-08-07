@@ -17,12 +17,12 @@ const meta = {
       dataProfile: 'static',
       designSource: 'figma',
       figma: {
-        url: 'https://www.figma.com/design/7UwupbVvmHkElmP2OBJQio/Design-System?node-id=17698-184152',
+        url: 'https://www.figma.com/design/7UwupbVvmHkElmP2OBJQio/Design-System?node-id=17698-184150',
         fileKey: '7UwupbVvmHkElmP2OBJQio',
-        nodeId: '17698:184152',
+        nodeId: '17698:184150',
       },
       viewport: { width: 200, height: 80 },
-      states: ['reviewed'],
+      states: ['reviewed', 'unknown-status'],
       dataNotes: [
         '디자인 확정 배지는 "검토 완료" 1종뿐이다. contested·pending_review 배지는 발명 금지(감사 계약).',
         '미지 status 값이 오면 배지를 렌더하지 않는다 — 임의 시각화가 승인된 디자인처럼 남는 것을 막는다.',

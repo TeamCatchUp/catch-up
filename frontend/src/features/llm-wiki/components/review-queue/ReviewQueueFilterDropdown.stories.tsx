@@ -7,14 +7,14 @@ import IconPerson from '@/public/icons/icon/person.svg';
 import IconWikiChannel from '@/public/icons/icon/wiki_channel.svg';
 
 import { catchupParameters } from '../../../../../.storybook/catchupStoryParameters';
-import ReviewQueueFilterDropdown, { type FilterSection } from './ReviewQueueFilterDropdown';
+import ReviewQueueFilterDropdown, { type ReviewQueueFilterSection } from './ReviewQueueFilterDropdown';
 
 /**
  * 필터 축과 옵션은 전부 fixture다 — 컴포넌트는 축 목록을 알지 못한다.
  * 축 순서·아이콘은 8/7 Figma 실측(17762:105379 카드 3축 + 17762:105382 신뢰도)을 그대로 옮겼다.
  * 옵션 목록은 Figma에 없다(서브메뉴 `Show submenu: false`) — 스토리 전용 표본이다.
  */
-const SECTIONS: readonly FilterSection[] = [
+const SECTIONS: readonly ReviewQueueFilterSection[] = [
   {
     id: 'target-channel',
     label: '대상 채널',

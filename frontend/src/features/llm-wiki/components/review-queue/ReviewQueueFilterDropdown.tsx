@@ -14,15 +14,15 @@ import {
   DropdownMenuTrigger,
 } from '@/shared/components/ui/dropdown-menu';
 
-export interface FilterOption {
+export interface ReviewQueueFilterOption {
   id: string;
   label: string;
 }
 
-export interface FilterSection {
+export interface ReviewQueueFilterSection {
   id: string;
   label: string;
-  options: readonly FilterOption[];
+  options: readonly ReviewQueueFilterOption[];
   /**
    * 축 좌측 아이콘. Figma는 축마다 다른 아이콘을 쓰지만(wiki_channel·person·calendar_clock·cloud_check)
    * 축 자체가 props 주입이므로 아이콘도 주입받는다 — 축 id로 아이콘을 찾는 표를 컴포넌트가 들면
@@ -32,7 +32,7 @@ export interface FilterSection {
 }
 
 interface ReviewQueueFilterDropdownProps {
-  sections: readonly FilterSection[];
+  sections: readonly ReviewQueueFilterSection[];
   onSelect?: (sectionId: string, optionId: string) => void;
 }
 
