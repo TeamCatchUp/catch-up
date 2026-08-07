@@ -2,9 +2,23 @@
 
 import { forwardRef, useImperativeHandle, useState } from 'react';
 
-import { Command, CommandEmpty, CommandItem, CommandList } from '@/shared/components/ui/command';
+import { Command, CommandEmpty, CommandGroup, CommandItem, CommandList } from '@/shared/components/ui/command';
 
 import type { SlashItem, SlashMenuHandle } from '../../types/llmWikiEditor';
+
+/** 정의 순서를 유지하며 group별로 묶는다. 하이라이트 인덱스는 평평한 items 기준이라 그대로 둔다. */
+function groupItems(items: readonly SlashItem[]): [string, SlashItem[]][] {
+  const map = new Map<string, SlashItem[]>();
+  for (const item of items) {
+    const bucket = map.get(item.group);
+    if (bucket) {
+      bucket.push(item);
+    } else {
+      map.set(item.group, [item]);
+    }
+  }
+  return [...map.entries()];
+}
 
 export interface SlashMenuProps {
   items: readonly SlashItem[];
@@ -65,16 +79,20 @@ const SlashMenu = forwardRef<SlashMenuHandle, SlashMenuProps>(function SlashMenu
     >
       <CommandList>
         <CommandEmpty>일치하는 블록이 없습니다</CommandEmpty>
-        {items.map((item) => (
-          <CommandItem key={item.id} value={item.id} onSelect={() => onSelect(item)}>
-            {item.Icon && <item.Icon aria-hidden className="text-icon-normal-normal size-6 shrink-0" />}
-            <span className="flex min-w-0 flex-col">
-              <span className="text-text-normal-normal truncate">{item.label}</span>
-              {item.description && (
-                <span className="text-label-xsmall text-text-normal-alternative truncate">{item.description}</span>
-              )}
-            </span>
-          </CommandItem>
+        {groupItems(items).map(([group, groupedItems]) => (
+          <CommandGroup key={group} heading={group}>
+            {groupedItems.map((item) => (
+              <CommandItem key={item.id} value={item.id} onSelect={() => onSelect(item)}>
+                {item.Icon && <item.Icon aria-hidden className="text-icon-normal-normal size-6 shrink-0" />}
+                <span className="flex min-w-0 flex-col">
+                  <span className="text-text-normal-normal truncate">{item.label}</span>
+                  {item.description && (
+                    <span className="text-label-xsmall text-text-normal-alternative truncate">{item.description}</span>
+                  )}
+                </span>
+              </CommandItem>
+            ))}
+          </CommandGroup>
         ))}
       </CommandList>
     </Command>

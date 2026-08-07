@@ -12,6 +12,8 @@ export interface SlashItem {
   id: string;
   label: string;
   description?: string;
+  /** 메뉴 그룹 제목 (노션식 섹션 구분). 같은 group끼리 붙여 정의해야 순서가 유지된다 */
+  group: string;
   /** 한글·영문을 둘 다 넣는다. 사용자가 /제목도 /h1도 친다. */
   keywords: readonly string[];
   Icon?: ComponentType<SVGProps<SVGSVGElement>>;

@@ -5,6 +5,51 @@ import type { Editor } from '@tiptap/core';
 import { useEditorState } from '@tiptap/react';
 import { BubbleMenu } from '@tiptap/react/menus';
 
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/shared/components/ui/dropdown-menu';
+
+/** 블록 전환 대상 — 노션 turn-into와 같은 목록. 표·구분선은 "전환"이 성립하지 않아 뺀다. */
+const TURN_INTO: readonly { label: string; isActive: (e: Editor) => boolean; run: (e: Editor) => void }[] = [
+  { label: '본문', isActive: (e) => e.isActive('paragraph'), run: (e) => e.chain().focus().setParagraph().run() },
+  {
+    label: '제목 1',
+    isActive: (e) => e.isActive('heading', { level: 1 }),
+    run: (e) => e.chain().focus().setHeading({ level: 1 }).run(),
+  },
+  {
+    label: '제목 2',
+    isActive: (e) => e.isActive('heading', { level: 2 }),
+    run: (e) => e.chain().focus().setHeading({ level: 2 }).run(),
+  },
+  {
+    label: '제목 3',
+    isActive: (e) => e.isActive('heading', { level: 3 }),
+    run: (e) => e.chain().focus().setHeading({ level: 3 }).run(),
+  },
+  {
+    label: '글머리 목록',
+    isActive: (e) => e.isActive('bulletList'),
+    run: (e) => e.chain().focus().toggleBulletList().run(),
+  },
+  {
+    label: '번호 목록',
+    isActive: (e) => e.isActive('orderedList'),
+    run: (e) => e.chain().focus().toggleOrderedList().run(),
+  },
+  { label: '체크박스', isActive: (e) => e.isActive('taskList'), run: (e) => e.chain().focus().toggleTaskList().run() },
+  {
+    label: '인용',
+    isActive: (e) => e.isActive('blockquote'),
+    run: (e) => e.chain().focus().toggleBlockquote().run(),
+  },
+  { label: '코드', isActive: (e) => e.isActive('codeBlock'), run: (e) => e.chain().focus().toggleCodeBlock().run() },
+  { label: '콜아웃', isActive: (e) => e.isActive('callout'), run: (e) => e.chain().focus().toggleCallout().run() },
+];
+
 /**
  * 선택 시 뜨는 플로팅 서식 툴바 (스펙 §12 — Notion-like 템플릿의 floating toolbar 대응).
  *
@@ -41,6 +86,7 @@ export default function FormattingToolbar({ editor }: FormattingToolbarProps) {
       alignLeft: e.isActive({ textAlign: 'left' }),
       alignCenter: e.isActive({ textAlign: 'center' }),
       alignRight: e.isActive({ textAlign: 'right' }),
+      blockLabel: TURN_INTO.find((entry) => entry.isActive(e))?.label ?? '본문',
     }),
   });
 
@@ -86,6 +132,24 @@ export default function FormattingToolbar({ editor }: FormattingToolbarProps) {
           </>
         ) : (
           <>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button type="button" aria-label="블록 전환" className={`${BUTTON_CLASS} gap-1`}>
+                  {state.blockLabel}
+                  <svg aria-hidden viewBox="0 0 20 20" className="size-3" fill="none" stroke="currentColor" strokeWidth="1.5">
+                    <path d="M6 8l4 4 4-4" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start">
+                {TURN_INTO.map((entry) => (
+                  <DropdownMenuItem key={entry.label} onSelect={() => entry.run(editor)}>
+                    {entry.label}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <span aria-hidden className="bg-line-normal-neutral mx-0.5 h-5 w-px" />
             <button
               type="button"
               aria-label="굵게"

@@ -44,6 +44,8 @@ const meta = {
         'markdown-shortcut',
         'invalid-content',
         'formatting-toolbar',
+        'turn-into',
+        'add-block-button',
       ],
       dataNotes: [
         '저장·API가 없다. 상태는 Tiptap 내부(ProseMirror state)에 있고 onUpdate로 관찰만 한다.',
@@ -194,6 +196,62 @@ export const FormattingToolbarStory: Story = {
     await userEvent.click(within(toolbar).getByRole('button', { name: '가운데 정렬' }));
     const aligned = surface.querySelector('p[style*="text-align: center"], p[style*="text-align:center"]');
     await expect(aligned).not.toBeNull();
+  },
+};
+
+/** 블록 전환(turn-into) — 툴바 좌측 드롭다운으로 본문을 제목 2로 바꾼다. */
+export const TurnInto: Story = {
+  args: { initialContent: EDITOR_SKELETON_DOC },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const body = within(canvasElement.ownerDocument.body);
+    const surface = canvas.getByRole('textbox');
+
+    const paragraph = within(surface).getByText('검토자 메모: 원인 확인 중.');
+    await userEvent.click(paragraph);
+    const doc = paragraph.ownerDocument;
+    const range = doc.createRange();
+    range.selectNodeContents(paragraph);
+    const selection = doc.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+
+    const toolbar = await body.findByRole('toolbar', { name: '텍스트 서식' });
+    await userEvent.click(within(toolbar).getByRole('button', { name: '블록 전환' }));
+    await userEvent.click(await body.findByText('제목 2'));
+
+    const h2s = [...surface.querySelectorAll('h2')].map((el) => el.textContent);
+    await expect(h2s).toContain('검토자 메모: 원인 확인 중.');
+  },
+};
+
+/**
+ * 드래그 핸들 옆 + 버튼 — 현재 블록 아래에 빈 문단을 만들고 슬래시 메뉴를 연다.
+ * '/' 삽입 경로를 그대로 타므로 메뉴 상태 배선이 중복되지 않는다.
+ */
+export const AddBlockButton: Story = {
+  args: {
+    initialContent: {
+      type: 'doc',
+      content: [{ type: 'paragraph', content: [{ type: 'text', text: '기준 블록' }] }],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const body = within(canvasElement.ownerDocument.body);
+    const surface = canvas.getByRole('textbox');
+
+    // 캐럿을 블록 안에 둔다 — 헤드리스에서는 hover가 DragHandle의 mousemove 추적으로 이어지지
+    // 않아 + 버튼이 "선택 블록 뒤 삽입" 폴백 경로를 탄다(실브라우저에서는 호버 블록 기준).
+    await userEvent.click(within(surface).getByText('기준 블록'));
+
+    // 핸들은 호버 전까지 visibility:hidden이고 user-event는 숨은 요소 클릭을 조용히 무시한다.
+    // 실 UX(호버→표시→클릭)는 실브라우저에서 검증했다 — 여기서는 배선 회귀만 보므로 네이티브 클릭.
+    const addButton = await canvas.findByRole('button', { name: '아래에 블록 추가' });
+    (addButton as HTMLButtonElement).click();
+
+    // 슬래시 메뉴가 열린다 — '/' 삽입이 Suggestion을 트리거했다는 뜻
+    await expect(await body.findByText('제목 1')).toBeInTheDocument();
   },
 };
 
