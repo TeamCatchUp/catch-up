@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import UniqueID from '@tiptap/extension-unique-id';
 import { EditorContent, type JSONContent, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 
@@ -9,11 +10,21 @@ import { Popover, PopoverAnchor, PopoverContent } from '@/shared/components/ui/p
 import type { SlashMenuHandle, SlashMenuState } from '../../types/llmWikiEditor';
 import BlockDragHandle from './BlockDragHandle';
 import { SlashCommand } from './extensions/slashCommand';
-import { WikiBlockAttrs } from './extensions/wikiBlockAttrs';
+import { WIKI_BLOCK_ATTR_TYPES, WikiBlockAttrs } from './extensions/wikiBlockAttrs';
 import SlashMenu from './SlashMenu';
 
-/** WikiEditor가 쓰는 확장 목록. 테스트가 같은 목록으로 왕복을 검증한다 — 배열에서 확장을 빼면 그 테스트가 깨진다. */
-export const WIKI_EDITOR_EXTENSIONS = [StarterKit, WikiBlockAttrs];
+/**
+ * WikiEditor가 쓰는 확장 목록. 테스트가 같은 목록으로 왕복을 검증한다 — 배열에서 확장을 빼면 그 테스트가 깨진다.
+ *
+ * UniqueID: 블록 안정 ID를 직접 만들지 않는다는 스펙 §2 결정. blocks[] 어댑터가 이 id를
+ * 그대로 싣는다(§11 — content_hash에서 제외하는 규칙은 백엔드 계약 협상 대상).
+ * 대상 노드는 attrs 보존 목록과 같은 집합을 쓴다 — 두 목록이 갈라지면 "attrs는 남는데 id가 없는" 블록이 생긴다.
+ */
+export const WIKI_EDITOR_EXTENSIONS = [
+  StarterKit,
+  WikiBlockAttrs,
+  UniqueID.configure({ types: [...WIKI_BLOCK_ATTR_TYPES] }),
+];
 
 export interface WikiEditorProps {
   /** 최초 1회만 반영된다. 이후 변경은 무시 — uncontrolled다. */
@@ -101,7 +112,15 @@ export default function WikiEditor({ initialContent, editable = true, onUpdate, 
         Radix가 충돌 감지·플립·포탈을 알아서 한다. top/left를 직접 계산하면
         메뉴가 화면 아래에서 잘린다.
       */}
-      <Popover open={menu !== null}>
+      <Popover
+        open={menu !== null}
+        // 에디터 밖을 클릭하면 Radix가 onOpenChange(false)를 부른다. 무시하면 메뉴가 뜬 채 남는다 —
+        // 에디터 "안" 클릭은 selection 트랜잭션으로 Suggestion이 닫지만, 페이지 다른 영역은 트랜잭션이 없다.
+        // Suggestion 플러그인 상태까지 닫지는 못하므로, 이어서 타이핑하면 메뉴가 다시 열릴 수 있다(의도된 동작).
+        onOpenChange={(open) => {
+          if (!open) setMenu(null);
+        }}
+      >
         <PopoverAnchor asChild>
           <div
             aria-hidden

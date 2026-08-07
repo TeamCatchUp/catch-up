@@ -88,4 +88,21 @@ describe('wikiBlockAttrs', () => {
 
     expect(editor.getJSON().content?.[0]?.attrs).toMatchObject({ origin: 'system', claimIds: ['c_1'] });
   });
+
+  it('블록에 안정 ID가 자동으로 붙는다 — UniqueID 배선 회귀 방지 (스펙 §2)', () => {
+    const editor = new Editor({ extensions: WIKI_EDITOR_EXTENSIONS });
+    editor.commands.setContent({
+      type: 'doc',
+      content: [
+        { type: 'paragraph', content: [{ type: 'text', text: '첫 블록' }] },
+        { type: 'heading', attrs: { level: 2 }, content: [{ type: 'text', text: '둘째 블록' }] },
+      ],
+    });
+
+    const blocks = editor.getJSON().content ?? [];
+    const ids = blocks.map((node) => node.attrs?.id as string | undefined);
+    expect(ids[0]).toBeTruthy();
+    expect(ids[1]).toBeTruthy();
+    expect(ids[0]).not.toBe(ids[1]);
+  });
 });

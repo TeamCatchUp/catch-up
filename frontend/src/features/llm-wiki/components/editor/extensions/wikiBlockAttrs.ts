@@ -23,6 +23,10 @@ export const WIKI_BLOCK_ATTR_TYPES = [
  * 나중에 백엔드가 claim_ids를 실어 보낼 때 자리가 없으면 로드 → 편집 → 저장 한 번에 사라지고,
  * 화면에 안 보이는 값이라 눈으로는 절대 알 수 없다.
  *
+ * 알려진 한계: 왕복 보존은 setContent/getJSON 경로만이다. renderHTML이 no-op이라 DOM을 거치는
+ * 클립보드 복사→붙여넣기에서는 이 값들이 사라진다(에디터 내부 드래그 이동은 slice를 그대로 써서 안전).
+ * 해법은 clipboard 플러그인 — blocks[] 어댑터 작업에서 다룬다.
+ *
  * 근거: docs/specs/2026-08-07-llm-wiki-tiptap-editor-design.md §5
  */
 export const WikiBlockAttrs = Extension.create({

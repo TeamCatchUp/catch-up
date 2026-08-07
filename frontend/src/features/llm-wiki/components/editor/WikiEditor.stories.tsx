@@ -83,6 +83,31 @@ export const SlashMenuInsert: Story = {
   },
 };
 
+/**
+ * 키보드로 항목을 고른다 — ↓로 하이라이트를 옮기고 Enter로 삽입.
+ * slashCommand.onKeyDown → WikiEditor.handleMenuKeyDown → menuRef → SlashMenu useImperativeHandle
+ * 로 이어지는, 태스크 3개를 가로지르는 유일한 런타임 이음새의 회귀 감시다.
+ * (조합 중 Enter 같은 IME 경로는 자동화 불가 — 상단 수동 체크리스트가 담당한다.)
+ */
+export const SlashMenuKeyboard: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const body = within(canvasElement.ownerDocument.body);
+
+    const surface = canvas.getByRole('textbox');
+    await userEvent.click(surface);
+    await userEvent.keyboard('/');
+
+    await expect(await body.findByText('제목 1')).toBeInTheDocument();
+
+    // 하이라이트 초기값은 0(제목 1). ↓ 한 번이면 제목 2다.
+    await userEvent.keyboard('{ArrowDown}{Enter}');
+
+    await expect(surface.querySelector('h2')).not.toBeNull();
+    await expect(surface).not.toHaveTextContent('/');
+  },
+};
+
 /** 글 중간의 /는 메뉴를 열지 않는다. and/or 를 칠 때 떠서는 안 된다. */
 export const SlashInsideWordDoesNotOpen: Story = {
   play: async ({ canvasElement }) => {

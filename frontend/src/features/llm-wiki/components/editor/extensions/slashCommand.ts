@@ -71,14 +71,9 @@ export const SlashCommand = Extension.create<SlashCommandOptions>({
               currentProps = props;
               publish();
             },
-            onKeyDown: ({ event }) => {
-              if (event.key === 'Escape') {
-                currentProps = null;
-                publish();
-                return true;
-              }
-              return onKeyDown(event);
-            },
+            // Escape는 여기서 처리하지 않는다 — Suggestion이 Escape를 먼저 가로채 dispatchExit까지
+            // 수행하고(dismissedRange로 같은 자리 재개방도 막는다), 우리 onExit이 메뉴를 닫는다.
+            onKeyDown: ({ event }) => onKeyDown(event),
             onExit: () => {
               currentProps = null;
               publish();
