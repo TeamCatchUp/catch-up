@@ -41,7 +41,7 @@ from catchup.evaluation.eval_llm_wiki_extraction import _grow_vocabulary
 from catchup.evaluation.eval_llm_wiki_extraction import _harvest
 from catchup.knowledge_maintenance.adapters.llm.structured_extractor import CONTRACT_ID
 from catchup.knowledge_maintenance.adapters.llm.structured_extractor import (
-    TEMPLATE_PATH,
+    PROMPT_VERSION,
 )
 from catchup.knowledge_maintenance.adapters.llm.structured_extractor import (
     StructuredKnowledgeExtractor,
@@ -381,7 +381,7 @@ async def main() -> None:
             ontology_id=CONTRACT_ID,
             vocabulary=_named(vocabulary),
             model=args.capacity,
-            prompt_version=TEMPLATE_PATH,
+            prompt_version=PROMPT_VERSION,
         )
 
         for result in results:
