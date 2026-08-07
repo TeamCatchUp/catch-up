@@ -108,7 +108,7 @@ const VendorFileUploader = ({
         <>
           <button
             onClick={() => inputRef.current?.click()}
-            className="border-line-normal-neutral bg-fill-normal-strong hover:bg-fill-normal-interaction-hover flex size-30 cursor-pointer items-center justify-center rounded-xl border transition-colors"
+            className="border-line-normal-neutral bg-fill-normal-strong hover:fill-overlay-hover flex size-30 cursor-pointer items-center justify-center rounded-xl border transition-colors"
           >
             <IconAdd className="text-text-normal-assistive size-6" />
           </button>
