@@ -7,7 +7,7 @@ import { catchupParameters } from '../../../../../.storybook/catchupStoryParamet
 import SnbRailItem from './SnbRailItem';
 
 const meta = {
-  title: 'Compositions/Shared/Layout/SnbRailItem',
+  title: 'Compositions/Shared/Layout/SideNavBar/Parts/SnbRailItem',
   component: SnbRailItem,
   tags: ['autodocs'],
   args: { Icon: IconSearch, label: '검색', selected: false, onClick: fn() },

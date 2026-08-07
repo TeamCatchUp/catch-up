@@ -25,7 +25,7 @@ import SnbSpaceSwitcher from './SnbSpaceSwitcher';
 import SnbTeamspaceCard from './SnbTeamspaceCard';
 
 const meta = {
-  title: 'Compositions/Shared/Layout/SideNavShell',
+  title: 'Compositions/Shared/Layout/SideNavBar/Shell/SideNavShell',
   component: SideNavShell,
   parameters: {
     ...catchupParameters({

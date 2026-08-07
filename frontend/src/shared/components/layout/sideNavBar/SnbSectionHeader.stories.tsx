@@ -5,7 +5,7 @@ import { catchupParameters } from '../../../../../.storybook/catchupStoryParamet
 import SnbSectionHeader, { SnbBetaBadge } from './SnbSectionHeader';
 
 const meta = {
-  title: 'Compositions/Shared/Layout/SnbSectionHeader',
+  title: 'Compositions/Shared/Layout/SideNavBar/Parts/SnbSectionHeader',
   component: SnbSectionHeader,
   tags: ['autodocs'],
   args: { label: '프로젝트' },

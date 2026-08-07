@@ -8,7 +8,7 @@ import { catchupParameters } from '../../../../../.storybook/catchupStoryParamet
 import SnbSpaceSwitcher from './SnbSpaceSwitcher';
 
 const meta = {
-  title: 'Compositions/Shared/Layout/SnbSpaceSwitcher',
+  title: 'Compositions/Shared/Layout/SideNavBar/Parts/SnbSpaceSwitcher',
   component: SnbSpaceSwitcher,
   tags: ['autodocs'],
   args: { Icon: IconHome, label: '홈', selected: true, variant: 'expanded', onClick: fn() },

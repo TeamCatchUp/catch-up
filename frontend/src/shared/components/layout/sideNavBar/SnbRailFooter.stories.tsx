@@ -5,7 +5,7 @@ import { catchupParameters } from '../../../../../.storybook/catchupStoryParamet
 import SnbRailFooter from './SnbRailFooter';
 
 const meta = {
-  title: 'Compositions/Shared/Layout/SnbRailFooter',
+  title: 'Compositions/Shared/Layout/SideNavBar/Parts/SnbRailFooter',
   component: SnbRailFooter,
   tags: ['autodocs'],
   args: { userName: '팀원G', onSettingsClick: fn(), onProfileClick: fn() },

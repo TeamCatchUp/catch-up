@@ -15,7 +15,7 @@ const CHILDREN = [
 ];
 
 const meta = {
-  title: 'Compositions/Shared/Layout/SettingsNavGroup',
+  title: 'Compositions/Shared/Layout/Settings/SettingsNavGroup',
   component: SettingsNavGroup,
   tags: ['autodocs'],
   args: {

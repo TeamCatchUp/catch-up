@@ -7,7 +7,7 @@ import { catchupParameters } from '../../../../../.storybook/catchupStoryParamet
 import SnbTeamspaceCard from './SnbTeamspaceCard';
 
 const meta = {
-  title: 'Compositions/Shared/Layout/SnbTeamspaceCard',
+  title: 'Compositions/Shared/Layout/SideNavBar/Parts/SnbTeamspaceCard',
   component: SnbTeamspaceCard,
   tags: ['autodocs'],
   args: { name: 'Acme의 지식 허브', Icon: IconTeamspace },

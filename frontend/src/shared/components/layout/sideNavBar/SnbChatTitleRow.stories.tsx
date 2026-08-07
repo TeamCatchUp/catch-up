@@ -5,7 +5,7 @@ import { catchupParameters } from '../../../../../.storybook/catchupStoryParamet
 import SnbChatTitleRow from './SnbChatTitleRow';
 
 const meta = {
-  title: 'Compositions/Shared/Layout/SnbChatTitleRow',
+  title: 'Compositions/Shared/Layout/SideNavBar/Parts/SnbChatTitleRow',
   component: SnbChatTitleRow,
   tags: ['autodocs'],
   args: { label: '연동 테스트 중단 리스크', selected: false, onClick: fn() },

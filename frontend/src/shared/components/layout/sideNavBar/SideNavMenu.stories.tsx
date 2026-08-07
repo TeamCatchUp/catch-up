@@ -32,7 +32,7 @@ function SideNavMenuSurface({ isOpen, activePanel }: SideNavMenuStoryArgs) {
 }
 
 const meta = {
-  title: 'Compositions/Shared/Layout/SideNavMenu',
+  title: 'Compositions/Shared/Layout/SideNavBar/SideNavMenu',
   tags: ['autodocs'],
   args: {
     isOpen: true,

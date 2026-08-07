@@ -25,7 +25,7 @@ function SettingsPanelSurface({ role }: SettingsPanelStoryArgs) {
 }
 
 const meta = {
-  title: 'Compositions/Shared/Layout/SettingsPanel',
+  title: 'Compositions/Shared/Layout/Settings/SettingsPanel',
   tags: ['autodocs'],
   args: { role: 'admin' },
   argTypes: {

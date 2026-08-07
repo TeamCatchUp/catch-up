@@ -5,7 +5,7 @@ import { catchupParameters } from '../../../../../.storybook/catchupStoryParamet
 import SnbFooter from './SnbFooter';
 
 const meta = {
-  title: 'Compositions/Shared/Layout/SnbFooter',
+  title: 'Compositions/Shared/Layout/SideNavBar/Parts/SnbFooter',
   component: SnbFooter,
   tags: ['autodocs'],
   args: {

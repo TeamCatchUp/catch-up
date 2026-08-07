@@ -9,7 +9,7 @@ import SnbRailItem from './SnbRailItem';
 import SnbSpaceSwitcher from './SnbSpaceSwitcher';
 
 const meta = {
-  title: 'Compositions/Shared/Layout/SideNavRail',
+  title: 'Compositions/Shared/Layout/SideNavBar/Shell/SideNavRail',
   component: SideNavRail,
   parameters: {
     ...catchupParameters({

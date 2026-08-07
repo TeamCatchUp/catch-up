@@ -7,7 +7,7 @@ import { catchupParameters } from '../../../../../.storybook/catchupStoryParamet
 import SnbNavRow from './SnbNavRow';
 
 const meta = {
-  title: 'Compositions/Shared/Layout/SnbNavRow',
+  title: 'Compositions/Shared/Layout/SideNavBar/Parts/SnbNavRow',
   component: SnbNavRow,
   tags: ['autodocs'],
   args: { label: '검색', Icon: IconSearch, selected: false, onClick: fn() },
