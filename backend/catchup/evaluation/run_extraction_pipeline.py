@@ -10,6 +10,9 @@ LLM 호출은 transaction 밖에서 한다. 추출이 끝난 뒤에야 저장 tr
 아직 추출하지 않은 Observation만 고르므로 중간에 멈췄다 다시 돌려도 한 일을
 되풀이하지 않는다.
 
+실데이터 운용의 정본 경로는 사전 고정 + 수렴 러너다. 미고정(성장) 모드는
+발행본이 없는 초기 상태의 관찰용으로만 남는다.
+
 개발과 평가 전용이다.
 
 실행:
@@ -63,6 +66,9 @@ from catchup.knowledge_maintenance.domain.pipeline_event import PipelineEvent
 from catchup.knowledge_maintenance.domain.pipeline_event import PipelineEventStatus
 from catchup.knowledge_maintenance.domain.pipeline_event import PipelineEventType
 from catchup.knowledge_maintenance.domain.temporal import resolve_reference_time
+from catchup.knowledge_maintenance.services.converge_vocabulary import (
+    resolve_latest_published_version,
+)
 from catchup.knowledge_maintenance.services.store_knowledge_candidates import (
     record_failed_extraction,
 )
@@ -294,7 +300,10 @@ async def main() -> None:
         "--ontology-version",
         type=str,
         default=None,
-        help="이 버전의 어휘 스냅샷을 시작 어휘로 쓴다.",
+        help=(
+            "이 버전을 고정한다. 생략하면 최신 발행본을 자동 선택하고, "
+            "발행본이 없으면 빈 어휘로 시작해 라운드마다 키운다."
+        ),
     )
     args = parser.parse_args()
 
@@ -331,17 +340,29 @@ async def main() -> None:
     )
     extractor = StructuredKnowledgeExtractor(service.get_llm())
     semaphore = asyncio.Semaphore(args.concurrency)
+    resolved_version = args.ontology_version
+    if resolved_version is None:
+        with KnowledgeMaintenanceUnitOfWork(session_factory) as uow:
+            resolved_version = resolve_latest_published_version(
+                uow.ontology.list_versions(
+                    workspace_id=args.workspace_id,
+                    ontology_id=CONTRACT_ID,
+                )
+            )
+        if resolved_version is not None:
+            print(f"최신 발행 어휘 {resolved_version}을 자동 선택했다.")
+    pinned = resolved_version is not None
     vocabulary = _load_vocabulary(
         session_factory,
         workspace_id=args.workspace_id,
-        version=args.ontology_version,
+        version=resolved_version,
     )
 
     print(
         f"Observation {len(pending)}건, 라운드 {args.round_size}건씩, "
         f"동시 {args.concurrency}건, 모델 {args.capacity}"
     )
-    if args.ontology_version is not None:
+    if pinned:
         print(
             f"어휘 {vocabulary.snapshot_id} 고정 — "
             f"predicate {len(vocabulary.predicates)}종"
@@ -407,7 +428,7 @@ async def main() -> None:
             vocabulary,
             _harvest_shape(list(results)),
             round_index=number,
-            pinned=args.ontology_version is not None,
+            pinned=pinned,
         )
 
     print("\n=== 저장 결과 ===")
