@@ -68,9 +68,10 @@ export default function BlockDiffCard({
             {after && <DiffText lines={after} tone="added" />}
           </div>
           {reason && (
-            <p className="bg-fill-normal-strong text-body-small text-text-normal-neutral mt-3 rounded-xl px-4 py-3">
-              수정된 이유&nbsp;&nbsp;{reason}
-            </p>
+            <div className="bg-fill-normal-strong mt-3 flex flex-col gap-2 rounded-xl px-4 py-3">
+              <span className="text-body-xsmall text-text-normal-alternative">수정된 이유</span>
+              <p className="text-body-small text-text-normal-neutral">{reason}</p>
+            </div>
           )}
         </>
       )}

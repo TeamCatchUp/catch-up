@@ -49,7 +49,7 @@ const meta = {
       tokenNotes: [
         '패널 색은 8/7 실측 확정 — removed: bg-red-1(#FFFAFA)/바 red-40/호버 red-5, added: bg-green-5(#E6FAF2)/바 green-60(#00985A)/호버 green-10. 감사 §9 부록 참조.',
         '단어 강조(red-10/green-20)만 시안에 없는 프론트 결정 — design-request 10번으로 디자이너 확인 대기.',
-        '카드 테두리 #EAEBEC=border-line-normal-neutral·radius 12=rounded-xl. 수정된 이유 바 #F7F7F8=bg-fill-normal-strong, 텍스트 #464C53=text-text-normal-neutral.',
+        '카드 테두리 #EAEBEC=border-line-normal-neutral·radius 12=rounded-xl. 수정된 이유 바(17849:106254, 8/7 개정): 세로 배치 gap 8 — 레이블 #6D7882=text-text-normal-alternative body-xsmall + 본문 #464C53=text-text-normal-neutral body-small, 배경 #F7F7F8=bg-fill-normal-strong.',
       ],
       interactionNotes: [
         '줄 호버 하이라이트는 패널별 독립이고 클릭 동작이 없다(시안 우측 첫 행 진한 초록 #D9F7EB = 호버 상태, 2026-08-07 확인).',
