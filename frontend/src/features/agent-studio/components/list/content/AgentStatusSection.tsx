@@ -23,16 +23,16 @@ const STATUS_SECTION_STYLE: Record<
   },
   제작중: {
     outerClassName: 'bg-fill-normal-strong',
-    headerClassName: 'bg-fill-normal-interaction-disable',
+    headerClassName: 'bg-fill-section-header',
     labelClassName: 'text-text-normal-normal',
-    countClassName: 'bg-fill-normal-interaction-pressed-hover',
+    countClassName: 'bg-fill-section-header-badge',
     countTextClassName: 'text-text-normal-alternative',
   },
   '사용 안함': {
     outerClassName: 'bg-fill-normal-strong',
-    headerClassName: 'bg-fill-normal-interaction-disable',
+    headerClassName: 'bg-fill-section-header',
     labelClassName: 'text-text-normal-alternative',
-    countClassName: 'bg-fill-normal-interaction-pressed-hover',
+    countClassName: 'bg-fill-section-header-badge',
     countTextClassName: 'text-text-normal-alternative',
   },
 };
