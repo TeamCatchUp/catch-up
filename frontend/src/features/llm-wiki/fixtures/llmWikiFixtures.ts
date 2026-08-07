@@ -2,7 +2,7 @@ import type {
   DocumentRowData,
   ReviewQueueItemData,
   ReviewStatCardData,
-  TagCategory,
+  TagItem,
 } from '../types/llmWikiModel';
 
 // 태그 3개 = 칩 1개 + "+2" — Figma 대시보드 행(17762:103678)이 보여주는 조합 그대로다
@@ -99,18 +99,18 @@ export const REVIEW_STAT_CARD_FIXTURES: readonly ReviewStatCardData[] = [
   { id: 'stat-stale-documents', label: '장기 미변경 문서', count: 5 },
 ];
 
-export const TAG_CATEGORY_FIXTURES: readonly TagCategory[] = [
-  {
-    id: 'category-billing',
-    name: '결제',
-    tags: [
-      { id: 'tag-retry', name: '재시도 정책', documentCount: 4 },
-      { id: 'tag-refund', name: '환불', documentCount: 6 },
-    ],
-  },
-  {
-    id: 'category-account',
-    name: '계정',
-    tags: [{ id: 'tag-sso', name: 'SSO', documentCount: 3 }],
-  },
+/**
+ * 대시보드 태그 영역 좌측 목록(17762:103078)의 데이터.
+ *
+ * 카테고리로 묶지 않는다 — 명세 §11이 태그 계층 구조를 범위 밖으로 못박았고 시안도 평평한 목록이다.
+ * 6개는 Figma 좌측 목록(8행, 300px 높이 = 스크롤)보다 적은 수라 스크롤이 걸리지 않는다.
+ * 스크롤 경계는 TagCategoryList 스토리가 별도 픽스처로 잰다.
+ */
+export const TAG_FIXTURES: readonly TagItem[] = [
+  { id: 'tag-retry', name: '재시도 정책', documentCount: 4 },
+  { id: 'tag-refund', name: '환불', documentCount: 6 },
+  { id: 'tag-payment-failure', name: '결제 실패', documentCount: 9 },
+  { id: 'tag-sso', name: 'SSO', documentCount: 3 },
+  { id: 'tag-notification', name: '알림 설정', documentCount: 5 },
+  { id: 'tag-export', name: '데이터 내보내기', documentCount: 2 },
 ];

@@ -81,15 +81,18 @@ export interface ReviewStatCardData {
   count: number;
 }
 
+/**
+ * [SPEC] 태그는 전부 명세 유래 — 백엔드 스키마에 없음.
+ *
+ * 계층(카테고리 → 하위 태그)을 만들지 않는다. MVP 명세 §11이 "태그 계층 구조"를 범위 밖으로
+ * 명시했고(2026-08-05-llm-wiki-mvp-design.md), 8/7 Figma 재확인에서도 대시보드 태그 영역
+ * (17762:103078)은 그룹 헤더 없는 평평한 목록이었다. 그래서 이 타입이 태그 목록의 유일한 단위다.
+ *
+ * documentCount는 명세 §6("누적 문의 건수")에서 온 계약 보존용 필드다 — 태그 목록 시안에는
+ * 건수 표기가 없으므로 TagCategoryList는 이 값을 렌더하지 않는다.
+ */
 export interface TagItem {
   id: string;
   name: string;
   documentCount: number;
-}
-
-/** [SPEC] 태그는 전부 명세 유래 — 백엔드 스키마에 없음 */
-export interface TagCategory {
-  id: string;
-  name: string;
-  tags: readonly TagItem[];
 }
