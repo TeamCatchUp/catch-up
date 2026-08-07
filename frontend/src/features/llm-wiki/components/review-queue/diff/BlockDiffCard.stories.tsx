@@ -47,6 +47,8 @@ const meta = {
         '엔트리는 픽스처 blocks[] 쌍에 computeBlockDiff를 돌려 얻는다 — 계산과 표시가 같은 파이프라인을 지나는 것을 스토리가 상시 검증한다.',
         'removed 카드(빨강 단일 전폭)는 시안에 없는 프론트 잠정안이다 — added(초록 단일 전폭)의 거울상. design-request 9번으로 확인 요청 상태.',
         '카드 제목·"수정된 이유"의 실카피는 시안이 placeholder라 미정(감사 UNKNOWN 카피 미정). 빈 diff·로딩·에러 스토리는 만들지 않는다(MISSING).',
+        '삭제 블록도 사유를 갖는다(2026-08-07 계약 결정) — 그래서 삭제는 proposed에서 "빠짐"이 아니라 removed:true tombstone으로 온다. 빠짐만으로 온 블록은 사유 없는 카드가 되고, 그 빈 푸터가 계약 위반의 신호다(NoReason 스토리가 그 모습).',
+        '"수정된 이유"는 백엔드에 대응 컬럼이 없다 — 제안 테이블의 reason은 검토자용 rejection_reason뿐이다. 출처·단위(블록당 vs 제안서당)는 API 계약 협상 대상.',
       ],
       tokenNotes: [
         '패널 색은 8/7 실측 확정(17849:106867·17848:106179) — removed: bg-red-1(#FFFAFA)/좌측 바 2px red-40, added: bg-green-5(#E6FAF2)/좌측 바 2px green-60(#00985A). 패널 자체에는 padding도 radius도 없다.',
@@ -113,8 +115,9 @@ export const Removed: Story = {
     await expect(canvas.getByText('수동 재시도 안내')).toBeInTheDocument();
     // added의 거울상 — 초록(after) 패널이 없어야 한다
     await expect(canvasElement.querySelectorAll('[class*="border-green"]')).toHaveLength(0);
-    // removed는 reason이 없다 — 푸터 바가 렌더되지 않는다
-    await expect(canvas.queryByText(/수정된 이유/)).toBeNull();
+    // 삭제도 사유를 갖는다(2026-08-07 계약 결정) — 지워지는 변경일수록 근거가 필요하다
+    await expect(canvas.getByText(/수정된 이유/)).toBeInTheDocument();
+    await expect(canvas.getByText(/상담원 수동 안내 절차가 폐지/)).toBeInTheDocument();
   },
 };
 

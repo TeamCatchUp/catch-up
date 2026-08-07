@@ -43,6 +43,29 @@ describe('computeBlockDiff', () => {
     expect(removed.after).toBeNull();
   });
 
+  it('삭제 tombstone은 원문을 base에서 가져오고 사유를 싣는다', () => {
+    const entries = computeBlockDiff(
+      [block({ heading: '수동 재시도 안내', body: '상담원이 안내한다.', claimIds: ['c-manual-1'] })],
+      [block({ heading: '수동 재시도 안내', body: '', claimIds: ['c-manual-1'], removed: true, reason: '절차 폐지' })],
+    );
+
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toMatchObject({ kind: 'removed', title: '수동 재시도 안내', reason: '절차 폐지' });
+    expect(entries[0].after).toBeNull();
+    // tombstone의 빈 body가 아니라 base의 원문이 보여야 한다
+    expect(entries[0].before![0].segments[0].text).toBe('상담원이 안내한다.');
+  });
+
+  it('tombstone 없이 빠진 블록도 카드가 되지만 사유가 없다 (계약 위반 신호)', () => {
+    const entries = computeBlockDiff(
+      [block({ heading: '사라진 블록', body: '내용', claimIds: ['c-gone'] })],
+      [],
+    );
+
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toMatchObject({ kind: 'removed', reason: null });
+  });
+
   it('claimIds가 비면 페어링되지 않고 added+removed로 갈라진다', () => {
     const entries = computeBlockDiff(
       [block({ claimIds: [] })],

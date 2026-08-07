@@ -20,6 +20,14 @@ export interface WikiBlock {
   claimIds: readonly string[];
   /** [SPEC] "수정된 이유" — 백엔드 필드 미확정, 계약 협상 대상 */
   reason?: string | null;
+  /**
+   * [SPEC] 삭제 제안 표식. proposed 배열에 tombstone으로 실린다.
+   *
+   * 삭제를 "proposed에서 빠짐"으로만 표현하면 사유를 실을 자리가 없다 — 삭제된 블록도
+   * 사유를 갖는다는 계약(2026-08-07 결정)이라 명시 표현이 필요하다. 삭제될 원문은
+   * 페어링된 base 블록에서 가져오므로 tombstone의 body는 비워도 된다.
+   */
+  removed?: boolean;
 }
 
 export type BlockChangeKind = 'added' | 'removed' | 'modified';

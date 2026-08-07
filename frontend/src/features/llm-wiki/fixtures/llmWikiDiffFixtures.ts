@@ -38,6 +38,15 @@ export const PROPOSED_WIKI_BLOCKS: readonly WikiBlock[] = [
     claimIds: ['c-pg-1'],
     reason: '점검 시간대 재시도 실패 문의가 신규 근거 VOC로 유입됨',
   },
+  // 삭제 tombstone — 원문은 base에서 가져오므로 body는 비운다
+  {
+    kind: 'claim_section',
+    heading: '수동 재시도 안내',
+    body: '',
+    claimIds: ['c-manual-1'],
+    removed: true,
+    reason: '자동 재시도가 3회로 늘면서 상담원 수동 안내 절차가 폐지됨',
+  },
 ];
 
 /** LongText 스토리용 — 긴 문단에서 자연 줄바꿈·단어 강조가 함께 보이는 쌍 */

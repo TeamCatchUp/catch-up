@@ -59,6 +59,21 @@ export function computeBlockDiff(
       (candidate, index) => !usedBase.has(index) && sharesClaimId(candidate, proposed),
     );
 
+    // 삭제 tombstone — 사유를 실으려고 proposed에 명시로 온다. 원문은 페어링된 base 쪽이다
+    if (proposed.removed) {
+      if (baseIndex !== -1) usedBase.add(baseIndex);
+      const deleted = baseIndex === -1 ? proposed : baseBlocks[baseIndex];
+      entries.push({
+        id: `removed-${proposedIndex}`,
+        kind: 'removed',
+        title: deleted.heading,
+        before: plainLines(deleted.body),
+        after: null,
+        reason: proposed.reason ?? null,
+      });
+      return;
+    }
+
     if (baseIndex === -1) {
       entries.push({
         id: `added-${proposedIndex}`,
@@ -86,10 +101,12 @@ export function computeBlockDiff(
     });
   });
 
+  // tombstone 없이 그냥 빠진 블록. 계약상 오면 안 되지만 조용히 사라지는 것보다 카드로 드러낸다 —
+  // 사유를 실을 자리가 없어 reason은 null이고, 그 빈 푸터가 계약 위반의 표시가 된다
   baseBlocks.forEach((base, baseIndex) => {
     if (usedBase.has(baseIndex)) return;
     entries.push({
-      id: `removed-${baseIndex}`,
+      id: `removed-orphan-${baseIndex}`,
       kind: 'removed',
       title: base.heading,
       before: plainLines(base.body),
