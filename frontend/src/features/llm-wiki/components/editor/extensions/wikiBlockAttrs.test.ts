@@ -1,0 +1,74 @@
+import { Editor } from '@tiptap/core';
+import StarterKit from '@tiptap/starter-kit';
+import { describe, expect, it } from 'vitest';
+
+import { WikiBlockAttrs } from './wikiBlockAttrs';
+
+function createEditor() {
+  return new Editor({ extensions: [StarterKit, WikiBlockAttrs] });
+}
+
+describe('wikiBlockAttrs', () => {
+  it('origin·claimIds는 왕복에서 살아남는다', () => {
+    const editor = createEditor();
+    editor.commands.setContent({
+      type: 'doc',
+      content: [
+        {
+          type: 'paragraph',
+          attrs: { origin: 'system', claimIds: ['c_1', 'c_2'] },
+          content: [{ type: 'text', text: '결제 실패가 증가했다.' }],
+        },
+      ],
+    });
+
+    const first = editor.getJSON().content?.[0];
+    expect(first?.attrs).toMatchObject({ origin: 'system', claimIds: ['c_1', 'c_2'] });
+  });
+
+  it('heading에서도 보존된다 — 특정 노드만 뚫려 있으면 안 된다', () => {
+    const editor = createEditor();
+    editor.commands.setContent({
+      type: 'doc',
+      content: [
+        {
+          type: 'heading',
+          attrs: { level: 2, origin: 'system', claimIds: ['c_9'] },
+          content: [{ type: 'text', text: '현황' }],
+        },
+      ],
+    });
+
+    const first = editor.getJSON().content?.[0];
+    expect(first?.attrs).toMatchObject({ level: 2, origin: 'system', claimIds: ['c_9'] });
+  });
+
+  it('값이 없으면 null이다 — 없는 키를 지어내지 않는다', () => {
+    const editor = createEditor();
+    editor.commands.setContent({
+      type: 'doc',
+      content: [{ type: 'paragraph', content: [{ type: 'text', text: '검토자 메모' }] }],
+    });
+
+    const first = editor.getJSON().content?.[0];
+    expect(first?.attrs).toMatchObject({ origin: null, claimIds: null });
+  });
+
+  it('DOM에는 새어나오지 않는다 — 렌더용 값이 아니다', () => {
+    const editor = createEditor();
+    editor.commands.setContent({
+      type: 'doc',
+      content: [
+        {
+          type: 'paragraph',
+          attrs: { origin: 'system', claimIds: ['c_1'] },
+          content: [{ type: 'text', text: '본문' }],
+        },
+      ],
+    });
+
+    expect(editor.getHTML()).not.toContain('origin');
+    expect(editor.getHTML()).not.toContain('claimIds');
+    expect(editor.getHTML()).not.toContain('c_1');
+  });
+});

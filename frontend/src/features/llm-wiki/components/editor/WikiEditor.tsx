@@ -4,6 +4,8 @@ import { useEffect, useRef } from 'react';
 import { EditorContent, type JSONContent, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 
+import { WikiBlockAttrs } from './extensions/wikiBlockAttrs';
+
 export interface WikiEditorProps {
   /** 최초 1회만 반영된다. 이후 변경은 무시 — uncontrolled다. */
   initialContent?: JSONContent;
@@ -28,7 +30,7 @@ export default function WikiEditor({ initialContent, editable = true, onUpdate, 
   }, [onUpdate, onContentError]);
 
   const editor = useEditor({
-    extensions: [StarterKit],
+    extensions: [StarterKit, WikiBlockAttrs],
     content: initialContent,
     editable,
     // App Router는 서버에서 한 번 렌더된다. 즉시 렌더하면 hydration이 어긋난다.
