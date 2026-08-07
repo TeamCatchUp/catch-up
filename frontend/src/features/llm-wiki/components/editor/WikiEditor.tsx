@@ -48,8 +48,12 @@ export default function WikiEditor({ initialContent, editable = true, onUpdate, 
 
   // useEditor는 deps 없이 리렌더되면 editable을 현재 에디터 값으로 되돌린다.
   // 즉 옵션에 넘긴 editable은 마운트 이후 무시된다 — 여기서 직접 밀어 넣어야 반응한다.
+  // 두 번째 인자 emitUpdate는 기본값이 true다. immediatelyRender: false라 editor는 두 번째
+  // 렌더에 생기고, 이 effect는 반드시 한 번 돈다 — 그대로 두면 사용자가 한 글자도 치기 전에
+  // onUpdate(초기 문서)가 불려서 부모의 dirty 추적·autosave가 마운트 직후 "변경됨"이 된다.
+  // false여도 setOptions가 view.updateState까지 하므로 editable 변경 자체는 적용된다.
   useEffect(() => {
-    editor?.setEditable(editable);
+    editor?.setEditable(editable, false);
   }, [editor, editable]);
 
   return <EditorContent editor={editor} className="min-h-40" />;
