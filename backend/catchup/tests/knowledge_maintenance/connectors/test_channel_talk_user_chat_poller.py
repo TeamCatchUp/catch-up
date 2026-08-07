@@ -31,6 +31,12 @@ from catchup.knowledge_maintenance.adapters.connectors.channel_talk.observation_
     ChannelTalkUserChatNormalizer,
 )
 from catchup.knowledge_maintenance.adapters.connectors.channel_talk.user_chat_poller import (  # noqa: E501
+    SKIP_REASON_FETCH_FAILED,
+)
+from catchup.knowledge_maintenance.adapters.connectors.channel_talk.user_chat_poller import (  # noqa: E501
+    SKIP_REASON_MESSAGES_TRUNCATED,
+)
+from catchup.knowledge_maintenance.adapters.connectors.channel_talk.user_chat_poller import (  # noqa: E501
     ChannelTalkUserChatPoller,
 )
 from catchup.knowledge_maintenance.contracts.source_change import SourceChangeEnvelope
@@ -299,13 +305,14 @@ async def test_poll_builds_envelope_normalizer_can_consume() -> None:
         message_pages={chat_id: [_message_payload(chat_id)]},
     )
 
-    envelopes = await _poller(client).poll(
+    result = await _poller(client).poll(
         workspace_id=WORKSPACE_ID,
         lookback_start=LOOKBACK_START,
         limit=10,
         max_pages=3,
         states=("closed",),
     )
+    envelopes = result.envelopes
 
     assert len(envelopes) == 1
     envelope = envelopes[0]
@@ -366,13 +373,14 @@ async def test_poll_payload_carries_no_raw_api_payload() -> None:
         },
     )
 
-    envelopes = await _poller(client).poll(
+    result = await _poller(client).poll(
         workspace_id=WORKSPACE_ID,
         lookback_start=LOOKBACK_START,
         limit=10,
         max_pages=3,
         states=("closed",),
     )
+    envelopes = result.envelopes
 
     payload = json.loads(envelopes[0].content or "")
     assert "raw_payload" not in payload["detail"]
@@ -429,13 +437,14 @@ async def test_poll_payload_drops_volatile_customer_fields() -> None:
         )
 
     async def _poll(client: _FakeChannelTalkClient) -> SourceChangeEnvelope:
-        envelopes = await _poller(client).poll(
+        result = await _poller(client).poll(
             workspace_id=WORKSPACE_ID,
             lookback_start=LOOKBACK_START,
             limit=10,
             max_pages=3,
             states=("closed",),
         )
+        envelopes = result.envelopes
         assert len(envelopes) == 1
         return envelopes[0]
 
@@ -513,24 +522,32 @@ async def test_poll_stops_at_lookback_boundary() -> None:
         message_pages={"chat-fresh": [_message_payload("chat-fresh")]},
     )
 
-    envelopes = await _poller(client).poll(
+    result = await _poller(client).poll(
         workspace_id=WORKSPACE_ID,
         lookback_start=LOOKBACK_START,
         limit=10,
         max_pages=5,
         states=("closed",),
     )
+    envelopes = result.envelopes
 
     # 경계 페이지는 끝까지 처리하되 다음 페이지는 요청하지 않는다.
     assert len(client.list_calls) == 1
     assert [
         envelope.source_identity.external_document_id for envelope in envelopes
     ] == ["chat-fresh"]
+    # 경계에 닿아 멈춘 것은 창을 다 본 것이므로 잘림이 아니다.
+    assert result.list_truncated is False
+    assert result.skipped == []
 
 
 @pytest.mark.asyncio
 async def test_poll_skips_failed_chat_and_continues() -> None:
-    """대화 1건의 조회 실패는 그 대화만 빼고 폴링을 계속한다."""
+    """대화 1건의 조회 실패는 그 대화만 빼고 폴링을 계속한다.
+
+    빼는 것으로 끝나지 않고 실패 사실을 결과에 실어 올린다. 러너가 이 신호를
+    못 받으면 실패 대화보다 최신인 대화를 저장해 커서를 지나쳐 버린다.
+    """
     older = NOW - timedelta(hours=5)
     newer = NOW - timedelta(hours=1)
     client = _FakeChannelTalkClient(
@@ -553,18 +570,24 @@ async def test_poll_skips_failed_chat_and_continues() -> None:
         failing_chat_ids=frozenset({"chat-broken"}),
     )
 
-    envelopes = await _poller(client).poll(
+    result = await _poller(client).poll(
         workspace_id=WORKSPACE_ID,
         lookback_start=LOOKBACK_START,
         limit=10,
         max_pages=3,
         states=("closed",),
     )
+    envelopes = result.envelopes
 
     assert "chat-broken" in client.detail_calls
     assert [
         envelope.source_identity.external_document_id for envelope in envelopes
     ] == ["chat-ok"]
+    assert [(item.item_id, item.reason) for item in result.skipped] == [
+        ("chat-broken", SKIP_REASON_FETCH_FAILED)
+    ]
+    assert result.skipped[0].ordering_marker == older
+    assert result.list_truncated is False
 
 
 @pytest.mark.asyncio
@@ -587,13 +610,14 @@ async def test_poll_dedupes_chat_across_states() -> None:
         message_pages={chat_id: [_message_payload(chat_id)]},
     )
 
-    envelopes = await _poller(client).poll(
+    result = await _poller(client).poll(
         workspace_id=WORKSPACE_ID,
         lookback_start=LOOKBACK_START,
         limit=10,
         max_pages=3,
         states=("opened", "closed"),
     )
+    envelopes = result.envelopes
 
     assert len(envelopes) == 1
     assert client.detail_calls == [chat_id]
@@ -625,13 +649,14 @@ async def test_poll_selects_oldest_chats_when_limit_is_reached() -> None:
         },
     )
 
-    envelopes = await _poller(client).poll(
+    result = await _poller(client).poll(
         workspace_id=WORKSPACE_ID,
         lookback_start=LOOKBACK_START,
         limit=2,
         max_pages=3,
         states=("closed",),
     )
+    envelopes = result.envelopes
 
     assert [
         envelope.source_identity.external_document_id for envelope in envelopes
@@ -658,13 +683,14 @@ async def test_poll_marks_created_when_never_updated() -> None:
         message_pages={chat_id: [_message_payload(chat_id)]},
     )
 
-    envelopes = await _poller(client).poll(
+    result = await _poller(client).poll(
         workspace_id=WORKSPACE_ID,
         lookback_start=LOOKBACK_START,
         limit=10,
         max_pages=3,
         states=("opened",),
     )
+    envelopes = result.envelopes
 
     assert envelopes[0].change_kind == ChangeKind.CREATED
 
@@ -693,7 +719,135 @@ async def test_poll_follows_message_cursor() -> None:
         },
     )
 
-    envelopes = await _poller(client).poll(
+    result = await _poller(client).poll(
+        workspace_id=WORKSPACE_ID,
+        lookback_start=LOOKBACK_START,
+        limit=10,
+        max_pages=3,
+        states=("closed",),
+    )
+    envelopes = result.envelopes
+
+    payload = json.loads(envelopes[0].content or "")
+    assert len(payload["messages"]) == 4
+
+
+@pytest.mark.asyncio
+async def test_poll_skips_chat_when_messages_are_truncated() -> None:
+    """메시지를 끝까지 못 받으면 envelope를 만들지 않고 건너뜀으로 낸다.
+
+    잘린 메시지를 완전 수집과 같은 버전 키로 봉하면, 나중에 온전히 받아
+    다시 넣을 때 payload가 달라 충돌로 막혀 메시지를 영영 못 채운다.
+    """
+    chat_id = "chat-cut"
+    updated_at = NOW - timedelta(hours=1)
+    client = _FakeChannelTalkClient(
+        list_pages={
+            "closed": [_list_payload([(chat_id, updated_at)], state="closed")],
+        },
+        details={
+            chat_id: _detail_payload(
+                chat_id,
+                created_at=NOW - timedelta(days=1),
+                updated_at=updated_at,
+            ),
+        },
+        message_pages={
+            # 커서가 끝나지 않는 응답이다. 마지막 페이지가 자기 자신을
+            # 가리켜 상한이 없으면 무한히 이어진다.
+            chat_id: [
+                _message_payload(chat_id, next_cursor="1"),
+                _message_payload(chat_id, next_cursor="2"),
+                _message_payload(chat_id, next_cursor="2"),
+            ],
+        },
+    )
+
+    result = await _poller(client).poll(
+        workspace_id=WORKSPACE_ID,
+        lookback_start=LOOKBACK_START,
+        limit=10,
+        max_pages=2,
+        states=("closed",),
+    )
+
+    assert result.envelopes == []
+    assert [(item.item_id, item.reason) for item in result.skipped] == [
+        (chat_id, SKIP_REASON_MESSAGES_TRUNCATED)
+    ]
+    assert result.skipped[0].ordering_marker == updated_at
+    assert result.list_truncated is False
+
+
+@pytest.mark.asyncio
+async def test_poll_reports_list_truncation() -> None:
+    """목록이 페이지 상한에 잘렸는데 커서가 남으면 잘림으로 낸다."""
+    fresh = NOW - timedelta(hours=1)
+    client = _FakeChannelTalkClient(
+        list_pages={
+            "closed": [
+                _list_payload(
+                    [("chat-fresh", fresh)],
+                    state="closed",
+                    next_cursor="page-2",
+                ),
+            ],
+        },
+        details={
+            "chat-fresh": _detail_payload(
+                "chat-fresh",
+                created_at=fresh,
+                updated_at=fresh,
+            ),
+        },
+        message_pages={"chat-fresh": [_message_payload("chat-fresh")]},
+    )
+
+    result = await _poller(client).poll(
+        workspace_id=WORKSPACE_ID,
+        lookback_start=LOOKBACK_START,
+        limit=10,
+        max_pages=1,
+        states=("closed",),
+    )
+
+    assert result.list_truncated is True
+    # 잘림 판단은 목록 순회에서 나오므로 envelope 생성 자체는 막지 않는다.
+    # 무엇을 넣지 않을지는 러너가 정한다.
+    assert len(client.list_calls) == 1
+    assert len(result.envelopes) == 1
+
+
+@pytest.mark.asyncio
+async def test_poll_recovers_skipped_chat_on_next_run() -> None:
+    """1회차에 실패한 오래된 대화가 2회차에 집힌다.
+
+    1회차 결과만 보고도 러너가 장벽을 세울 수 있어야 한다. 실패 대화보다
+    최신인 대화를 그때 넣어 버리면 커서가 실패 대화를 지나쳐 2회차에도
+    안 집힌다.
+    """
+    older = NOW - timedelta(hours=5)
+    newer = NOW - timedelta(hours=1)
+    entries = [("chat-old", older), ("chat-new", newer)]
+
+    def _client(*, failing: frozenset[str]) -> _FakeChannelTalkClient:
+        return _FakeChannelTalkClient(
+            list_pages={"closed": [_list_payload(entries, state="closed")]},
+            details={
+                chat_id: _detail_payload(
+                    chat_id,
+                    created_at=marker,
+                    updated_at=marker,
+                )
+                for chat_id, marker in entries
+            },
+            message_pages={
+                chat_id: [_message_payload(chat_id)] for chat_id, _ in entries
+            },
+            failing_chat_ids=failing,
+        )
+
+    first = await _poller(_client(failing=frozenset({"chat-old"}))).poll(
         workspace_id=WORKSPACE_ID,
         lookback_start=LOOKBACK_START,
         limit=10,
@@ -701,5 +855,31 @@ async def test_poll_follows_message_cursor() -> None:
         states=("closed",),
     )
 
-    payload = json.loads(envelopes[0].content or "")
-    assert len(payload["messages"]) == 4
+    assert [item.item_id for item in first.skipped] == ["chat-old"]
+    barrier = min(
+        item.ordering_marker
+        for item in first.skipped
+        if item.ordering_marker is not None
+    )
+    # chat-new는 장벽보다 최신이라 이번 회차에서 보류 대상이다.
+    assert barrier == older
+    assert [
+        envelope.source_identity.external_document_id
+        for envelope in first.envelopes
+        if envelope.source_updated_at < barrier
+    ] == []
+
+    # 2회차: 조회가 복구되고 커서는 여전히 chat-old 아래에 있다.
+    second = await _poller(_client(failing=frozenset())).poll(
+        workspace_id=WORKSPACE_ID,
+        lookback_start=LOOKBACK_START,
+        limit=10,
+        max_pages=3,
+        states=("closed",),
+    )
+
+    assert second.skipped == []
+    assert [
+        envelope.source_identity.external_document_id
+        for envelope in second.envelopes
+    ] == ["chat-old", "chat-new"]

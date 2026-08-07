@@ -6,6 +6,10 @@
 normalizer가 두 경로를 구분하지 못해야 실데이터와 합성 데이터의 파이프라인
 결과를 서로 대조할 수 있기 때문이다.
 
+만든 envelope만 내지 않고 부분 수집 신호까지 함께 낸다. 러너의 증분 커서는
+저장된 원문의 최신 시각에서 도출되므로, 못 집은 대화를 조용히 삼키면 그보다
+최신인 대화를 저장하는 순간 커서가 빠진 대화를 지나쳐 영구 누락이 된다.
+
 여기서는 저장도 정규화도 하지 않는다. 원문을 읽어 계약 형태로 바꾸는 것까지가
 이 어댑터의 책임이고, 그 다음은 러너가 이어받는다.
 """
@@ -30,8 +34,23 @@ from catchup.knowledge_maintenance.adapters.connectors.channel_talk.observation_
 from catchup.knowledge_maintenance.contracts.source_change import SourceChangeEnvelope
 from catchup.knowledge_maintenance.contracts.source_change import SourceIdentityPayload
 from catchup.knowledge_maintenance.domain.source_version import ChangeKind
+from catchup.knowledge_maintenance.ports.source_poller import SkippedItem
+from catchup.knowledge_maintenance.ports.source_poller import SourcePollResult
 
 logger = structlog.get_logger(__name__)
+
+# 부분 수집의 사유다. 러너가 문자열을 그대로 사람에게 찍는다.
+SKIP_REASON_FETCH_FAILED = "fetch_failed"
+SKIP_REASON_MESSAGES_TRUNCATED = "messages_truncated"
+
+__all__ = [
+    "SKIP_REASON_FETCH_FAILED",
+    "SKIP_REASON_MESSAGES_TRUNCATED",
+    "ChannelTalkUserChatPoller",
+    "DEFAULT_STATES",
+    "SkippedItem",
+    "SourcePollResult",
+]
 
 SOURCE_TYPE = "channel_talk"
 ENTITY_TYPE = "user_chat"
@@ -83,10 +102,15 @@ class ChannelTalkUserChatPoller:
         limit: int,
         max_pages: int,
         states: Sequence[str] = DEFAULT_STATES,
-    ) -> list[SourceChangeEnvelope]:
-        """lookback_start 이후 바뀐 대화를 수집 계약 envelope로 변환한다."""
+    ) -> SourcePollResult:
+        """lookback_start 이후 바뀐 대화를 수집 계약 envelope로 변환한다.
+
+        만든 envelope만 내지 않고, 수집하지 못한 대화와 목록 잘림 여부를
+        함께 낸다. 부분 수집 신호를 버리면 러너의 DB 파생 커서가 미수집
+        대화를 지나쳐 영구 누락이 된다.
+        """
         observed_at = datetime.now(timezone.utc)
-        markers_by_chat_id = await self._list_changed_chats(
+        markers_by_chat_id, list_truncated = await self._list_changed_chats(
             lookback_start=lookback_start,
             max_pages=max_pages,
             states=states,
@@ -100,8 +124,9 @@ class ChannelTalkUserChatPoller:
         )[: max(0, limit)]
 
         envelopes: list[SourceChangeEnvelope] = []
+        skipped: list[SkippedItem] = []
         for chat_id, marker in selected:
-            envelope = await self._build_envelope(
+            envelope, skip = await self._build_envelope(
                 chat_id=chat_id,
                 workspace_id=workspace_id,
                 ordering_marker=marker,
@@ -110,7 +135,13 @@ class ChannelTalkUserChatPoller:
             )
             if envelope is not None:
                 envelopes.append(envelope)
-        return envelopes
+            if skip is not None:
+                skipped.append(skip)
+        return SourcePollResult(
+            envelopes=envelopes,
+            skipped=skipped,
+            list_truncated=list_truncated,
+        )
 
     async def _list_changed_chats(
         self,
@@ -118,14 +149,20 @@ class ChannelTalkUserChatPoller:
         lookback_start: datetime,
         max_pages: int,
         states: Sequence[str],
-    ) -> dict[str, datetime | None]:
+    ) -> tuple[dict[str, datetime | None], bool]:
         """state별 목록을 훑어 바뀐 대화 id와 증분 기준 시각을 모은다.
 
         같은 대화가 여러 state 목록에 나오면 한 건으로 합치고, 기준 시각은
         더 최신 쪽을 남긴다.
+
+        두 번째 값은 목록이 잘렸는지다. 페이지 상한에 걸렸는데 다음 커서가
+        아직 남아 있으면 창 하단을 못 본 것이다. 이 신호를 버리면 러너의 DB
+        파생 커서가 못 본 대화를 지나쳐 영구 누락이 된다. 경계에 닿아 멈춘
+        것과 커서가 끝나 멈춘 것은 창을 다 본 것이므로 잘림이 아니다.
         """
         page_limit = max(1, max_pages)
         markers_by_chat_id: dict[str, datetime | None] = {}
+        truncated = False
 
         for state in states:
             cursor: str | None = None
@@ -151,15 +188,19 @@ class ChannelTalkUserChatPoller:
                         continue
                     _remember_marker(markers_by_chat_id, item.user_chat_id, marker)
 
-                if (
-                    reached_boundary
-                    or page.next_cursor is None
-                    or page_count >= page_limit
-                ):
+                if reached_boundary or page.next_cursor is None:
+                    break
+                if page_count >= page_limit:
+                    truncated = True
+                    logger.warning(
+                        "channel_talk_poll_list_truncated",
+                        state=state,
+                        page_limit=page_limit,
+                    )
                     break
                 cursor = page.next_cursor
 
-        return markers_by_chat_id
+        return markers_by_chat_id, truncated
 
     async def _build_envelope(
         self,
@@ -169,11 +210,19 @@ class ChannelTalkUserChatPoller:
         ordering_marker: datetime | None,
         observed_at: datetime,
         max_pages: int,
-    ) -> SourceChangeEnvelope | None:
+    ) -> tuple[SourceChangeEnvelope | None, SkippedItem | None]:
         """대화 한 건의 상세와 메시지를 envelope로 봉한다.
 
-        조회에 실패하면 None을 낸다. 대화 한 건의 실패로 폴링 전체를 버리면
-        멀쩡한 나머지까지 다음 회차로 밀리기 때문이다.
+        envelope 대신 SkippedItem을 내는 경우가 둘이다. 조회가 실패했을
+        때와, 메시지를 끝까지 못 받았을 때다. 어느 쪽이든 대화 한 건의
+        문제로 폴링 전체를 버리지는 않되, 빠진 사실은 러너까지 올린다.
+        부분 수집 신호를 버리면 러너의 DB 파생 커서가 이 대화를 지나쳐
+        영구 누락이 된다.
+
+        메시지가 잘렸을 때 envelope를 만들지 않는 이유가 하나 더 있다.
+        버전 키는 대화의 `updatedAt`이라 완전 수집과 값이 같다. 잘린
+        payload를 그 키로 봉하면, 나중에 온전히 받아 다시 넣을 때
+        SourceVersionPayloadConflict로 터져 메시지를 영영 못 채운다.
         """
         try:
             detail = await self._client.get_user_chat(
@@ -182,7 +231,7 @@ class ChannelTalkUserChatPoller:
                 channel_id=self._channel_id,
                 user_chat_id=chat_id,
             )
-            messages = await self._fetch_messages(
+            messages, messages_complete = await self._fetch_messages(
                 chat_id=chat_id,
                 max_pages=max_pages,
             )
@@ -192,7 +241,24 @@ class ChannelTalkUserChatPoller:
                 user_chat_id=chat_id,
                 error=str(error),
             )
-            return None
+            return None, SkippedItem(
+                item_id=chat_id,
+                ordering_marker=ordering_marker,
+                reason=SKIP_REASON_FETCH_FAILED,
+            )
+
+        if not messages_complete:
+            logger.warning(
+                "channel_talk_poll_messages_truncated",
+                user_chat_id=chat_id,
+                page_limit=max(1, max_pages),
+                fetched_messages=len(messages),
+            )
+            return None, SkippedItem(
+                item_id=chat_id,
+                ordering_marker=ordering_marker,
+                reason=SKIP_REASON_MESSAGES_TRUNCATED,
+            )
 
         updated = detail.timing.updated_at or ordering_marker or observed_at
         source_version_key = str(int(updated.timestamp() * 1000))
@@ -210,7 +276,7 @@ class ChannelTalkUserChatPoller:
             ],
         }
 
-        return SourceChangeEnvelope(
+        envelope = SourceChangeEnvelope(
             schema_version=1,
             event_id=idempotency_key,
             workspace_id=workspace_id,
@@ -235,17 +301,23 @@ class ChannelTalkUserChatPoller:
             idempotency_key=idempotency_key,
             metadata={},
         )
+        return envelope, None
 
     async def _fetch_messages(
         self,
         *,
         chat_id: str,
         max_pages: int,
-    ) -> list[ChannelTalkUserChatMessage]:
+    ) -> tuple[list[ChannelTalkUserChatMessage], bool]:
         """대화의 메시지를 시간순으로 끝까지 받는다.
 
         페이지 수 상한은 목록 순회와 같다. 커서가 끝나지 않는 응답에 갇히지
         않으려면 한 대화에도 같은 한도가 필요하다.
+
+        두 번째 값은 끝까지 받았는지다. 상한에 걸렸는데 다음 커서가 남아
+        있으면 False다. 이 신호를 버리고 잘린 메시지로 envelope를 봉하면
+        완전 수집과 같은 버전 키에 다른 payload가 붙어, 나중에 온전히 받아도
+        충돌로 막혀 메시지를 채울 수 없다.
         """
         page_limit = max(1, max_pages)
         messages: list[ChannelTalkUserChatMessage] = []
@@ -262,10 +334,11 @@ class ChannelTalkUserChatPoller:
             )
             page_count += 1
             messages.extend(page.messages)
-            if page.next_cursor is None or page_count >= page_limit:
-                break
+            if page.next_cursor is None:
+                return messages, True
+            if page_count >= page_limit:
+                return messages, False
             cursor = page.next_cursor
-        return messages
 
 
 def _dump_without_raw_payload(model: BaseModel) -> dict[str, object]:

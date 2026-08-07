@@ -10,6 +10,12 @@
 때문이다. 저장한 원문이 아예 없으면 `--backfill-days` 전부터 훑는다.
 `--since`를 주면 DB 도출을 건너뛰고 그 시각을 그대로 쓴다.
 
+커서가 DB에서 도출되므로 부분 수집이 곧 영구 누락이 된다. 폴러가 못 집은
+대화보다 최신인 대화를 저장하면 커서가 그 위로 올라가 다음 회차에도 빠진
+대화를 찾지 못한다. 그래서 두 가드를 둔다. 변경 목록 자체가 잘렸으면 아무것도
+넣지 않고 실패로 끝내고, 개별 대화가 빠졌으면 그 대화보다 오래된 것만 넣고
+나머지는 다음 회차로 미룬다.
+
 같은 대화를 다시 넣어도 idempotency key로 재사용되므로 여러 번 돌려도 안전하다.
 
 개발과 평가 전용이다.
@@ -24,6 +30,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 from collections.abc import Callable
+from collections.abc import Sequence
 from datetime import datetime
 from datetime import timedelta
 from datetime import timezone
@@ -50,6 +57,8 @@ from catchup.knowledge_maintenance.adapters.connectors.channel_talk.user_chat_po
 from catchup.knowledge_maintenance.adapters.postgres.unit_of_work import (
     KnowledgeMaintenanceUnitOfWork,
 )
+from catchup.knowledge_maintenance.contracts.source_change import SourceChangeEnvelope
+from catchup.knowledge_maintenance.ports.source_poller import SkippedItem
 from catchup.knowledge_maintenance.services.ingest_and_normalize import (
     ingest_and_normalize,
 )
@@ -99,6 +108,42 @@ def _derive_lookback_start(
             latest = latest.replace(tzinfo=timezone.utc)
         return latest.astimezone(timezone.utc) - overlap
     return datetime.now(timezone.utc) - timedelta(days=max(1, args.backfill_days))
+
+
+def _split_by_barrier(
+    envelopes: Sequence[SourceChangeEnvelope],
+    skipped: Sequence[SkippedItem],
+) -> tuple[list[SourceChangeEnvelope], list[SourceChangeEnvelope]]:
+    """빠진 대화보다 최신인 envelope를 이번 회차에서 뺀다.
+
+    커서는 저장된 원문의 최신 `source_updated_at`에서 도출된다. 그래서
+    빠진 대화보다 최신인 대화를 먼저 저장하면 커서가 빠진 대화를 지나쳐
+    다음 회차에도 집히지 않는다. 가장 오래된 빠진 대화의 기준 시각을
+    장벽으로 두고, 그보다 오래된 것만 넣는다.
+
+    기준 시각을 모르는 빠진 대화가 하나라도 있으면 장벽을 세울 수 없다.
+    그 대화가 창의 어디에 있는지 모르므로 어떤 envelope도 안전하다고
+    증명할 수 없어 전부 미룬다.
+    """
+    if not skipped:
+        return list(envelopes), []
+
+    markers = [item.ordering_marker for item in skipped]
+    if any(marker is None for marker in markers):
+        return [], list(envelopes)
+
+    barrier = min(marker for marker in markers if marker is not None)
+    ingest_now = [
+        envelope
+        for envelope in envelopes
+        if envelope.source_updated_at < barrier
+    ]
+    held_back = [
+        envelope
+        for envelope in envelopes
+        if envelope.source_updated_at >= barrier
+    ]
+    return ingest_now, held_back
 
 
 def _parse_states(value: str) -> tuple[str, ...]:
@@ -185,7 +230,7 @@ async def main() -> None:
         access_secret=connection.access_secret,
         channel_id=connection.channel_id,
     )
-    envelopes = await poller.poll(
+    poll_result = await poller.poll(
         workspace_id=args.workspace_id,
         lookback_start=lookback_start,
         limit=args.limit,
@@ -193,7 +238,23 @@ async def main() -> None:
         states=args.states,
     )
 
-    if len(envelopes) >= args.limit:
+    if poll_result.list_truncated:
+        # 목록이 잘렸으면 창 하단에 무엇이 남았는지조차 모른다. 이 상태로
+        # 한 건이라도 넣으면 커서가 못 본 대화를 지나쳐 영구 누락이 된다.
+        print(
+            "  오류: 변경 목록이 페이지 상한에 잘렸다 — 창 하단이 잘렸다. "
+            "아무것도 넣지 않는다. `--max-pages`를 늘리거나 `--since`로 "
+            "범위를 좁혀 다시 돌린다."
+        )
+        engine.dispose()
+        raise SystemExit(1)
+
+    envelopes, held_back = _split_by_barrier(
+        poll_result.envelopes,
+        poll_result.skipped,
+    )
+
+    if len(poll_result.envelopes) >= args.limit:
         # limit에 걸리면 이번 회차가 창 전체를 다 보지 못했다는 뜻이다.
         # 커서는 이번에 넣은 대화의 최신 시각까지만 나아가므로, 남은
         # 대화는 러너를 다시 돌려야 집힌다.
@@ -202,8 +263,21 @@ async def main() -> None:
             "있다. 남은 대화를 집으려면 러너를 다시 돌린다."
         )
 
+    for item in poll_result.skipped:
+        print(f"  {item.item_id}  건너뜀  {item.reason}")
+    if held_back:
+        print(
+            f"  보류 {len(held_back)}건 — 실패 대화보다 최신이라 커서 안전을 "
+            "위해 다음 회차로 미룬다."
+        )
+        if any(item.ordering_marker is None for item in poll_result.skipped):
+            print(
+                "    건너뛴 대화의 기준 시각을 몰라 창의 어디에 있는지 알 수 "
+                "없다. 안전을 증명할 수 없어 전부 미룬다."
+            )
+
     if not envelopes:
-        print("바뀐 대화가 없다.")
+        print("이번 회차에 넣을 대화가 없다.")
         engine.dispose()
         return
 
@@ -240,6 +314,15 @@ async def main() -> None:
             f"  실패 {failed}건 — 이번 회차에서 건너뛴 대화다. 커서가 이미 "
             "지나갔을 수 있으니 위에 찍힌 시각 이전으로 `--since`를 주어 "
             "다시 돌린다."
+        )
+    if poll_result.skipped:
+        print(
+            f"  건너뜀 {len(poll_result.skipped)}건 — 폴러가 수집하지 못한 대화다."
+        )
+    if held_back:
+        print(
+            f"  보류 {len(held_back)}건 — 커서가 이 대화들 아래에 머무르므로 "
+            "다음 회차에 다시 집힌다."
         )
     print(
         f"  대화 {len(envelopes)}건, 끝난 시각 {datetime.now(timezone.utc).isoformat()}"
