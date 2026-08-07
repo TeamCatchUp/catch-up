@@ -19,13 +19,14 @@ import WikiEditor from './WikiEditor';
  * 조합 과정이 생기지 않아, 가짜 이벤트로 테스트를 만들면 "통과하는데 실제로는 깨지는"
  * 형태가 된다. 스토리를 여는 사람이 검증자다.
  *
- * ── autodocs를 쓰지 않는다 (리포 관례에서 의도적으로 이탈) ──────────────
- * Docs는 파일의 모든 스토리를 한 화면에 동시 마운트한다. 에디터 하나가 ProseMirror
- * view + DragHandle + BubbleMenu + Suggestion 2개(슬래시·이모지)를 들고 있어서
- * 그 비용이 인스턴스 수만큼 곱해진다 — Docs가 사이드바 클릭 시 기본 착지라
- * 열자마자 페이지가 멈췄다(실측 .ProseMirror 17개). 무거운 스토리만 빼도 렉이
- * 남아서, 에디터에 한해 Docs 자체를 두지 않는다. 사이드바 클릭 시 첫 스토리로 착지한다.
- * 스토리 16개와 자동 테스트는 전부 그대로다 — 커버리지 손실 없음.
+ * ── UI를 가볍게 유지하는 두 장치 (리포 관례에서 의도적으로 이탈) ──────────
+ * ① autodocs 없음. Docs는 파일의 모든 스토리를 한 화면에 동시 마운트하는데,
+ *    에디터 하나가 ProseMirror view + DragHandle + BubbleMenu + Suggestion 2개를
+ *    들고 있어 그 비용이 인스턴스 수만큼 곱해진다(실측 .ProseMirror 17개 → 멈춤).
+ * ② 회귀 테스트 스토리는 전부 tags: ['!dev']. play 함수는 UI에서 계측되며
+ *    자동 실행되는데 그게 초 단위로 걸린다 — 타이핑 24자 play가 25초에도 미완이었다.
+ *    vitest(`--project=storybook`)에서는 같은 play가 수백 ms다.
+ *    사이드바에는 아래 Playground 3종만 남고, 테스트 커버리지는 그대로다.
  * ────────────────────────────────────────────────────
  */
 const meta = {
@@ -71,8 +72,36 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof WikiEditor>;
 
+/**
+ * ── 손으로 만지는 스토리 (play 없음) ───────────────────────────────
+ * 아래 3개만 사이드바에 보인다. 슬래시 메뉴·툴바·드래그 핸들·이모지·블록 11종을
+ * 전부 여기서 시험할 수 있다.
+ */
+
+/** 빈 에디터. `/`로 블록 삽입, 텍스트 선택 시 서식 툴바, `:`로 이모지. */
+export const Playground: Story = {};
+
+/** 문서가 들어 있는 상태. 제목·문단·목록. */
+export const PlaygroundWithContent: Story = {
+  args: { initialContent: EDITOR_SKELETON_DOC },
+};
+
+/** 2차 블록(체크박스·콜아웃·표)이 들어 있는 상태. */
+export const PlaygroundWithBlocks: Story = {
+  args: { initialContent: EDITOR_PHASE2_DOC },
+};
+
+/**
+ * ── 아래는 전부 회귀 테스트용 (tags: ['!dev'] — 사이드바에 없음) ──────
+ * play 함수가 계측되며 자동 실행되는데, UI에서는 그게 초 단위로 걸려
+ * 스토리를 열자마자 멈춘 것처럼 보인다(실측: 타이핑 24자 play가 25초 미완).
+ * vitest(`--project=storybook`)에서는 같은 play가 수백 ms에 끝나므로
+ * 커버리지는 그대로 두고 사이드바에서만 감춘다.
+ */
+
 /** 빈 문서. 클릭해서 타이핑하면 글자가 들어간다. */
 export const Empty: Story = {
+  tags: ['!dev'],
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
 
@@ -88,6 +117,7 @@ export const Empty: Story = {
 
 /** /를 치면 메뉴가 뜨고, 항목을 고르면 블록이 바뀐다. */
 export const SlashMenuInsert: Story = {
+  tags: ['!dev'],
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const body = within(canvasElement.ownerDocument.body);
@@ -114,6 +144,7 @@ export const SlashMenuInsert: Story = {
  * (조합 중 Enter 같은 IME 경로는 자동화 불가 — 상단 수동 체크리스트가 담당한다.)
  */
 export const SlashMenuKeyboard: Story = {
+  tags: ['!dev'],
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const body = within(canvasElement.ownerDocument.body);
@@ -137,6 +168,7 @@ export const SlashMenuKeyboard: Story = {
  * 1차의 "and/ 차단" 규칙을 사용자 결정으로 대체했다 — 이 스토리가 그 결정의 회귀 감시다.
  */
 export const SlashAfterWordOpens: Story = {
+  tags: ['!dev'],
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const body = within(canvasElement.ownerDocument.body);
@@ -151,6 +183,7 @@ export const SlashAfterWordOpens: Story = {
 
 /** 슬래시로 2차 블록 3종(체크박스·표·콜아웃)이 실제로 삽입된다. */
 export const SlashInsertsPhase2Blocks: Story = {
+  tags: ['!dev'],
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const body = within(canvasElement.ownerDocument.body);
@@ -173,6 +206,7 @@ export const SlashInsertsPhase2Blocks: Story = {
  * 글리프는 문자 기반(B·I·U·S) — 서식 아이콘 자산 부재의 임시 시각(노션 방식과 동일).
  */
 export const FormattingToolbarStory: Story = {
+  tags: ['!dev'],
   name: 'Formatting Toolbar',
   args: { initialContent: EDITOR_SKELETON_DOC },
   play: async ({ canvasElement }) => {
@@ -211,6 +245,7 @@ export const FormattingToolbarStory: Story = {
 
 /** 블록 전환(turn-into) — 툴바 좌측 드롭다운으로 본문을 제목 2로 바꾼다. */
 export const TurnInto: Story = {
+  tags: ['!dev'],
   args: { initialContent: EDITOR_SKELETON_DOC },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
@@ -240,6 +275,7 @@ export const TurnInto: Story = {
  * '/' 삽입 경로를 그대로 타므로 메뉴 상태 배선이 중복되지 않는다.
  */
 export const AddBlockButton: Story = {
+  tags: ['!dev'],
   args: {
     initialContent: {
       type: 'doc',
@@ -267,6 +303,7 @@ export const AddBlockButton: Story = {
 
 /** 콜아웃 — 커스텀 노드가 블록을 감싸고 다시 풀 수 있다. */
 export const CalloutToggle: Story = {
+  tags: ['!dev'],
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const body = within(canvasElement.ownerDocument.body);
@@ -288,6 +325,7 @@ export const CalloutToggle: Story = {
  * (drag_indicator.svg + 호버 시 노출). 시안 요청은 design-request에 올라가 있다.
  */
 export const DragHandle: Story = {
+  tags: ['!dev'],
   args: {
     initialContent: {
       type: 'doc',
@@ -309,6 +347,7 @@ export const DragHandle: Story = {
 
 /** 픽스처 로드. 골격 블록만 들어 있다 — 표·체크박스·콜아웃은 다음 단계다. */
 export const WithContent: Story = {
+  tags: ['!dev'],
   args: { initialContent: EDITOR_SKELETON_DOC, onUpdate: fn() },
   play: async ({ args, canvasElement }) => {
     const canvas = within(canvasElement);
@@ -330,6 +369,7 @@ export const WithContent: Story = {
 
 /** 2차 블록 JSON 로드 — 체크박스·콜아웃·표가 blocks[] 형태 그대로 렌더된다. */
 export const WithPhase2Content: Story = {
+  tags: ['!dev'],
   args: { initialContent: EDITOR_PHASE2_DOC, onContentError: fn() },
   play: async ({ args, canvasElement }) => {
     const canvas = within(canvasElement);
@@ -346,6 +386,7 @@ export const WithPhase2Content: Story = {
 
 /** `:` 이모지 서제스천 — :sm 검색 → 선택 → 이모지 문자 삽입. */
 export const EmojiPicker: Story = {
+  tags: ['!dev'],
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const body = within(canvasElement.ownerDocument.body);
@@ -363,6 +404,7 @@ export const EmojiPicker: Story = {
 
 /** 읽기 전용. 타이핑해도 내용이 바뀌지 않는다. */
 export const ReadOnly: Story = {
+  tags: ['!dev'],
   args: { initialContent: EDITOR_SKELETON_DOC, editable: false },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
@@ -384,6 +426,7 @@ export const ReadOnly: Story = {
  * 라이브러리를 테스트하는 게 아니라 명세 요구가 만족되는지를 본다.
  */
 export const MarkdownShortcuts: Story = {
+  tags: ['!dev'],
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const surface = canvas.getByRole('textbox');
@@ -411,6 +454,7 @@ export const MarkdownShortcuts: Story = {
  * 들어오면서 이전 표본을 교체했다.
  */
 export const InvalidContentIsReported: Story = {
+  tags: ['!dev'],
   args: {
     onContentError: fn(),
     initialContent: {
