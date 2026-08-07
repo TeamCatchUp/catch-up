@@ -1,9 +1,4 @@
-import type {
-  DocumentRowData,
-  ReviewQueueItemData,
-  ReviewStatCardData,
-  TagItem,
-} from '../types/llmWikiModel';
+import type { DocumentRowData, ReviewQueueItemData, ReviewStatCardData, TagItem } from '../types/llmWikiModel';
 
 // 태그 3개 = 칩 1개 + "+2" — Figma 대시보드 행(17762:103678)이 보여주는 조합 그대로다
 const BASE_DOCUMENT_ROW: DocumentRowData = {
@@ -64,9 +59,10 @@ const BASE_REVIEW_QUEUE_ITEM: ReviewQueueItemData = {
   hasConflictIcon: false,
 };
 
-export const createReviewQueueItem = (
-  overrides?: Partial<ReviewQueueItemData>,
-): ReviewQueueItemData => ({ ...BASE_REVIEW_QUEUE_ITEM, ...overrides });
+export const createReviewQueueItem = (overrides?: Partial<ReviewQueueItemData>): ReviewQueueItemData => ({
+  ...BASE_REVIEW_QUEUE_ITEM,
+  ...overrides,
+});
 
 export const REVIEW_QUEUE_ITEM_FIXTURES: readonly ReviewQueueItemData[] = [
   createReviewQueueItem({

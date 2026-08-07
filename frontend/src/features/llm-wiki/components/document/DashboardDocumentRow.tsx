@@ -41,11 +41,7 @@ export default function DashboardDocumentRow({ document, onClick }: DashboardDoc
 
   // Figma 행 프레임은 fills=[]라 hover 채움이 정의되어 있지 않다 — 시각을 발명하지 않는다.
   return (
-    <button
-      type="button"
-      onClick={() => onClick?.(id)}
-      className={cn(DASHBOARD_DOCUMENT_ROW_GRID, 'w-full text-left')}
-    >
+    <button type="button" onClick={() => onClick?.(id)} className={cn(DASHBOARD_DOCUMENT_ROW_GRID, 'w-full text-left')}>
       {/* 문서 열 — 이 행에서 폭을 흡수하는 유일한 슬롯 */}
       <span className="flex min-w-0 items-center gap-4">
         <span
@@ -70,20 +66,11 @@ export default function DashboardDocumentRow({ document, onClick }: DashboardDoc
 
                 return (
                   <Fragment key={`${crumb.kind}-${crumb.label}`}>
-                    {index > 0 && (
-                      <IconArrowRight
-                        aria-hidden
-                        className="text-icon-normal-neutral size-5 shrink-0"
-                      />
-                    )}
+                    {index > 0 && <IconArrowRight aria-hidden className="text-icon-normal-neutral size-5 shrink-0" />}
                     {/* Text Button(408:1916) — padding 4/6, gap 4, radius 1000 */}
                     <span className="flex min-w-0 items-center gap-1 rounded-full px-1.5 py-1">
-                      {CrumbIcon && (
-                        <CrumbIcon aria-hidden className="text-icon-normal-neutral size-5 shrink-0" />
-                      )}
-                      <span className="text-body-xsmall text-text-normal-neutral truncate">
-                        {crumb.label}
-                      </span>
+                      {CrumbIcon && <CrumbIcon aria-hidden className="text-icon-normal-neutral size-5 shrink-0" />}
+                      <span className="text-body-xsmall text-text-normal-neutral truncate">{crumb.label}</span>
                     </span>
                   </Fragment>
                 );
@@ -113,9 +100,7 @@ export default function DashboardDocumentRow({ document, onClick }: DashboardDoc
       </span>
 
       {/* 최근 활동 열 — Figma textAlign RIGHT */}
-      <span className="text-body-small text-text-normal-alternative text-right">
-        {lastActivityLabel}
-      </span>
+      <span className="text-body-small text-text-normal-alternative text-right">{lastActivityLabel}</span>
     </button>
   );
 }

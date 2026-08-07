@@ -114,8 +114,7 @@ export const WithErrorIconRuleTBD: Story = {
 export const LongTitleInNarrowSlot: Story = {
   args: {
     document: createDocumentRow({
-      title:
-        '결제 승인 실패 시 재시도 정책 및 PG사별 예외 처리와 고객 안내 문구 표준화 가이드 문서명 text text text',
+      title: '결제 승인 실패 시 재시도 정책 및 PG사별 예외 처리와 고객 안내 문구 표준화 가이드 문서명 text text text',
     }),
   },
   decorators: [
@@ -132,9 +131,7 @@ export const LongTitleInNarrowSlot: Story = {
     const heading = canvas.getByText(args.document.title);
 
     // 제목이 늘어나도 행은 슬롯을 넘지 않는다.
-    await expect(row.getBoundingClientRect().width).toBeLessThanOrEqual(
-      slot.getBoundingClientRect().width,
-    );
+    await expect(row.getBoundingClientRect().width).toBeLessThanOrEqual(slot.getBoundingClientRect().width);
     await expect(row.scrollWidth).toBeLessThanOrEqual(row.clientWidth);
 
     // 고정폭 3열은 좁아져도 그대로다 — 줄어드는 쪽은 문서 열이어야 한다.
