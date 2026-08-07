@@ -112,7 +112,7 @@ export default function RagInput({ filters, isLoading, onSendMessage, onStop, on
                 type="button"
                 aria-label="답변 생성 중지"
                 onClick={onStop}
-                className="bg-fill-stop-button flex h-10 w-10 items-center justify-center rounded-full"
+                className="bg-fill-normal-interaction-disable flex h-10 w-10 items-center justify-center rounded-full"
               >
                 <Stop className="text-text-normal-neutral relative left-px h-6 w-6 cursor-pointer" />
               </button>

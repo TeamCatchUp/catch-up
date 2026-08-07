@@ -19,12 +19,12 @@ const STATUS_SECTION_SKELETON_STYLE: Record<
   },
   제작중: {
     outerClassName: 'bg-fill-normal-strong',
-    headerClassName: 'bg-fill-section-header',
+    headerClassName: 'bg-fill-normal-interaction-disable',
     labelClassName: 'text-text-normal-normal',
   },
   '사용 안함': {
     outerClassName: 'bg-fill-normal-strong',
-    headerClassName: 'bg-fill-section-header',
+    headerClassName: 'bg-fill-normal-interaction-disable',
     labelClassName: 'text-text-normal-alternative',
   },
 };

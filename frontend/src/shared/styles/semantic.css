@@ -18,11 +18,8 @@
   --color-fill-primary-normal-interaction-disable: var(--fill-primary-interaction-disable);
   --color-fill-primary-normal-interaction-hover-assistive: var(--fill-primary-interaction-hover-assistive);
 
-  /* 비상태 전용 (fill-interaction 오용 분리분) */
+  /* 스켈레톤 전용 */
   --color-skeleton-bone: var(--skeleton-bone);
-  --color-fill-section-header: var(--fill-section-header);
-  --color-fill-section-header-badge: var(--fill-section-header-badge);
-  --color-fill-stop-button: var(--fill-stop-button);
 
   /* Fill compatibility aliases */
   --color-fill-normal: var(--fill-normal);

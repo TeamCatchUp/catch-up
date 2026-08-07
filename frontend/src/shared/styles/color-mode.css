@@ -49,14 +49,9 @@
     --fill-primary-normal-neutral: var(--color-blue-5);
     --fill-normal-assistive-dark: var(--color-white);
 
-    /* 비상태 전용 (fill-interaction 오용 분리분 — 최종 대체 토큰은 디자이너 확정 대기, 값은 분리 전과 동일 유지) */
+    /* 스켈레톤 전용 (상태 토큰을 정적 배경으로 쓰던 것을 분리 — 값은 분리 전과 동일) */
     --skeleton-bone: var(--color-neutral-3);
     --skeleton-shimmer: var(--color-neutral-3);
-    --fill-section-header: var(--color-neutral-3);
-    --fill-section-header-badge: var(--color-neutral-5);
-    --fill-stop-button: var(--color-neutral-3);
-    --scrollbar-thumb: var(--color-neutral-4);
-    --scrollbar-thumb-strong: var(--color-neutral-5);
 
     /* Text */
     --text-strong: var(--color-gray-90);
@@ -203,14 +198,9 @@
     --fill-primary-normal-neutral: color-mix(in srgb, var(--color-blue-10) 12%, transparent);
     --fill-normal-assistive-dark: var(--color-neutral-83);
 
-    /* 비상태 전용 (fill-interaction 오용 분리분) */
+    /* 스켈레톤 전용 */
     --skeleton-bone: var(--color-neutral-70);
     --skeleton-shimmer: var(--color-neutral-75);
-    --fill-section-header: var(--color-neutral-70);
-    --fill-section-header-badge: var(--color-neutral-60);
-    --fill-stop-button: var(--color-neutral-70);
-    --scrollbar-thumb: var(--color-neutral-70);
-    --scrollbar-thumb-strong: var(--color-neutral-60);
 
     /* Text */
     --text-strong: var(--color-gray-5);
