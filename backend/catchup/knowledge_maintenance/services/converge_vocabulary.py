@@ -38,6 +38,12 @@ from catchup.knowledge_maintenance.contracts.vocabulary_convergence import (
 from catchup.knowledge_maintenance.contracts.vocabulary_convergence import (
     VocabularyConvergenceProposal,
 )
+from catchup.knowledge_maintenance.ports.knowledge_candidates import (
+    KnowledgeCandidateUnitOfWork,
+)
+from catchup.observability.logging import get_logger
+
+logger = get_logger(__name__)
 
 # 발행된 어휘 스냅샷의 이름 체계다. `round-4`처럼 실험용으로 만든 스냅샷은
 # 여기 걸리지 않아 최신 발행본 계산에서 빠진다.
@@ -448,4 +454,83 @@ def merge_vocabulary(
             *current.relation_type_entries,
             *guarded.relation_entries,
         ),
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class PublishOutcome:
+    """발행 결과를 표현한다.
+
+    Attributes:
+        version: 새로 발행한 버전 이름이다. 발행하지 않았으면 None이다.
+        added_predicates: 이번 버전에서 더한 predicate 이름을 담는다.
+        added_relations: 이번 버전에서 더한 relation 이름을 담는다.
+    """
+
+    version: str | None
+    added_predicates: tuple[str, ...] = ()
+    added_relations: tuple[str, ...] = ()
+
+
+def publish_converged_vocabulary(
+    guarded: ConvergenceGuardResult,
+    *,
+    workspace_id: int,
+    ontology_id: str,
+    current: ExtractionVocabulary,
+    uow: KnowledgeCandidateUnitOfWork,
+) -> PublishOutcome:
+    """가드를 통과한 신규 entry를 새 버전 스냅샷으로 발행한다.
+
+    신규 entry가 하나도 없으면 버전을 만들지 않는다. 동의어 흡수만 통과한
+    라운드도 마찬가지다 — 흡수는 정본 사전의 내용을 바꾸지 않으므로, 발행하면
+    내용이 같은 버전만 늘어나 계보가 무엇이 달라졌는지 말해주지 못한다.
+
+    버전 번호는 저장된 발행본 목록에서 계산한다. 인자로 받은 `current`의
+    이름을 믿지 않는 것은 그것이 `round-4`처럼 발행 체계 밖의 실험용
+    스냅샷일 수 있기 때문이다.
+    """
+    added_predicates = tuple(entry.name for entry in guarded.predicate_entries)
+    added_relations = tuple(entry.name for entry in guarded.relation_entries)
+
+    if not added_predicates and not added_relations:
+        logger.info(
+            "vocabulary_publish_skipped",
+            workspace_id=workspace_id,
+            ontology_id=ontology_id,
+            base_snapshot_id=current.snapshot_id,
+            absorption_count=len(guarded.absorptions),
+            rejection_count=len(guarded.rejections),
+        )
+        return PublishOutcome(version=None)
+
+    with uow:
+        versions = uow.ontology.list_versions(
+            workspace_id=workspace_id,
+            ontology_id=ontology_id,
+        )
+        version = next_published_version(versions)
+        merged = merge_vocabulary(current, guarded, version=version)
+        uow.ontology.ensure(
+            workspace_id=workspace_id,
+            ontology_id=ontology_id,
+            vocabulary=merged,
+        )
+        uow.commit()
+
+    logger.info(
+        "vocabulary_published",
+        workspace_id=workspace_id,
+        ontology_id=ontology_id,
+        version=version,
+        base_snapshot_id=current.snapshot_id,
+        added_predicate_count=len(added_predicates),
+        added_relation_count=len(added_relations),
+        absorption_count=len(guarded.absorptions),
+        rejection_count=len(guarded.rejections),
+    )
+    return PublishOutcome(
+        version=version,
+        added_predicates=added_predicates,
+        added_relations=added_relations,
     )

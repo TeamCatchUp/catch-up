@@ -35,8 +35,13 @@ from catchup.knowledge_maintenance.contracts.extraction import ClaimCandidateDra
 from catchup.knowledge_maintenance.contracts.extraction import EntityCandidateDraft
 from catchup.knowledge_maintenance.contracts.extraction import ExtractionVocabulary
 from catchup.knowledge_maintenance.contracts.extraction import KnowledgeCandidateBatch
+from catchup.knowledge_maintenance.contracts.extraction import PredicateEntry
 from catchup.knowledge_maintenance.contracts.extraction import (
     RelationAssertionCandidateDraft,
+)
+from catchup.knowledge_maintenance.contracts.extraction import RelationTypeEntry
+from catchup.knowledge_maintenance.contracts.vocabulary_convergence import (
+    SynonymAbsorption,
 )
 from catchup.knowledge_maintenance.domain.evidence import Locator
 from catchup.knowledge_maintenance.domain.knowledge_candidate import (
@@ -54,6 +59,13 @@ from catchup.knowledge_maintenance.domain.source_version import ChangeKind
 from catchup.knowledge_maintenance.domain.source_version import SourceIdentity
 from catchup.knowledge_maintenance.domain.source_version import SourceVersion
 from catchup.knowledge_maintenance.ports.ontology import OntologySnapshotConflict
+from catchup.knowledge_maintenance.services.converge_vocabulary import (
+    ConvergenceGuardResult,
+)
+from catchup.knowledge_maintenance.services.converge_vocabulary import GuardRejection
+from catchup.knowledge_maintenance.services.converge_vocabulary import (
+    publish_converged_vocabulary,
+)
 from catchup.knowledge_maintenance.services.store_knowledge_candidates import (
     ObservationNodeMissing,
 )
@@ -1705,6 +1717,10 @@ def test_a_run_without_raw_output_stores_sql_null(
 # 테스트는 자기만 쓰는 이름을 붙여 남의 행과 섞이지 않게 한다.
 USAGE_PREFIX = "vocab_convergence_test_"
 
+# 개발 workspace를 공유하므로 발행 계보 테스트는 전용 ontology를 쓴다. 기존
+# 커밋된 스냅샷이 `list_versions`에 섞이면 다음 버전 계산이 흔들린다.
+CONVERGENCE_ONTOLOGY_ID = "catchup.test-convergence"
+
 
 def _store_claim_candidates(
     workspace_id: int,
@@ -2053,3 +2069,203 @@ class TestSummarizeRelationUsage:
         assert item.usage_count == 2
         # 비어 있는 assertion_text는 예문에 넣지 않는다.
         assert len(item.example_assertions) == 1
+
+
+class TestPublishConvergedVocabulary:
+    """수렴 통과분의 발행이 실 DB에서 어떻게 남는지 고정한다."""
+
+    def _guarded(
+        self,
+        *,
+        predicate_entries: tuple[PredicateEntry, ...] = (),
+        relation_entries: tuple[RelationTypeEntry, ...] = (),
+        absorptions: tuple[SynonymAbsorption, ...] = (),
+        rejections: tuple[GuardRejection, ...] = (),
+    ) -> ConvergenceGuardResult:
+        return ConvergenceGuardResult(
+            predicate_entries=predicate_entries,
+            relation_entries=relation_entries,
+            absorptions=absorptions,
+            rejections=rejections,
+            covered_names=tuple(
+                entry.name
+                for entry in (*predicate_entries, *relation_entries)
+            ),
+        )
+
+    def test_발행은_버전을_단조_증가시키고_기존을_보존한다(
+        self,
+        workspace_id: int,
+        session_factory: Callable[[], Session],
+        uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+    ) -> None:
+        """v1을 그대로 두고 v2에 기존+신규를 함께 담아야 한다."""
+        first = ExtractionVocabulary(
+            snapshot_id="v1",
+            predicates=("release_month",),
+            relation_types=("depends_on",),
+        )
+        with KnowledgeMaintenanceUnitOfWork(session_factory) as uow:
+            uow.ontology.ensure(
+                workspace_id=workspace_id,
+                ontology_id=CONVERGENCE_ONTOLOGY_ID,
+                vocabulary=first,
+            )
+            uow.commit()
+
+        guarded = self._guarded(
+            predicate_entries=(
+                PredicateEntry(
+                    name="deployment_scheduled_on",
+                    definition="배포 예정 일자를 담는다.",
+                    value_type="date",
+                ),
+            ),
+        )
+
+        outcome = publish_converged_vocabulary(
+            guarded,
+            workspace_id=workspace_id,
+            ontology_id=CONVERGENCE_ONTOLOGY_ID,
+            current=first,
+            uow=uow_factory(),
+        )
+
+        assert outcome.version == "v2"
+        assert outcome.added_predicates == ("deployment_scheduled_on",)
+        assert outcome.added_relations == ()
+
+        with KnowledgeMaintenanceUnitOfWork(session_factory) as reader:
+            stored_first = reader.ontology.get(
+                workspace_id=workspace_id,
+                ontology_id=CONVERGENCE_ONTOLOGY_ID,
+                version="v1",
+            )
+            stored_second = reader.ontology.get(
+                workspace_id=workspace_id,
+                ontology_id=CONVERGENCE_ONTOLOGY_ID,
+                version="v2",
+            )
+
+        assert stored_first == first
+        assert stored_second is not None
+        assert set(stored_second.predicates) >= set(stored_first.predicates)
+        assert stored_second.predicates == (
+            "release_month",
+            "deployment_scheduled_on",
+        )
+        assert stored_second.relation_types == ("depends_on",)
+        assert stored_second.predicate_entries == guarded.predicate_entries
+
+    def test_신규_0이면_발행하지_않는다(
+        self,
+        workspace_id: int,
+        session_factory: Callable[[], Session],
+        uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+    ) -> None:
+        """사전 내용이 안 바뀌는 라운드는 버전을 만들지 않는다."""
+        current = ExtractionVocabulary(
+            snapshot_id="v1",
+            predicates=("release_month",),
+        )
+        with KnowledgeMaintenanceUnitOfWork(session_factory) as uow:
+            uow.ontology.ensure(
+                workspace_id=workspace_id,
+                ontology_id=CONVERGENCE_ONTOLOGY_ID,
+                vocabulary=current,
+            )
+            uow.commit()
+
+        with KnowledgeMaintenanceUnitOfWork(session_factory) as reader:
+            before = reader.ontology.list_versions(
+                workspace_id=workspace_id,
+                ontology_id=CONVERGENCE_ONTOLOGY_ID,
+            )
+
+        # absorption만 통과한 라운드다. 정본 사전은 그대로다.
+        guarded = self._guarded(
+            absorptions=(
+                SynonymAbsorption(
+                    candidate_name="release_mon",
+                    canonical_name="release_month",
+                    rationale="같은 뜻의 축약형이다.",
+                ),
+            ),
+            rejections=(GuardRejection(name="bad", reason="관측 증거 없음"),),
+        )
+
+        outcome = publish_converged_vocabulary(
+            guarded,
+            workspace_id=workspace_id,
+            ontology_id=CONVERGENCE_ONTOLOGY_ID,
+            current=current,
+            uow=uow_factory(),
+        )
+
+        assert outcome.version is None
+        assert outcome.added_predicates == ()
+        assert outcome.added_relations == ()
+
+        with KnowledgeMaintenanceUnitOfWork(session_factory) as reader:
+            after = reader.ontology.list_versions(
+                workspace_id=workspace_id,
+                ontology_id=CONVERGENCE_ONTOLOGY_ID,
+            )
+
+        assert after == before
+
+    def test_구_버전_문자열은_계보에_끼지_않는다(
+        self,
+        workspace_id: int,
+        session_factory: Callable[[], Session],
+        uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+    ) -> None:
+        """`vN` 체계 밖의 이름은 발행 계보의 최신으로 보지 않는다."""
+        current = ExtractionVocabulary(
+            snapshot_id="round-4",
+            predicates=("release_month",),
+        )
+        with KnowledgeMaintenanceUnitOfWork(session_factory) as uow:
+            uow.ontology.ensure(
+                workspace_id=workspace_id,
+                ontology_id=CONVERGENCE_ONTOLOGY_ID,
+                vocabulary=ExtractionVocabulary(
+                    snapshot_id="2",
+                    predicates=("release_month",),
+                ),
+            )
+            uow.ontology.ensure(
+                workspace_id=workspace_id,
+                ontology_id=CONVERGENCE_ONTOLOGY_ID,
+                vocabulary=current,
+            )
+            uow.commit()
+
+        outcome = publish_converged_vocabulary(
+            self._guarded(
+                relation_entries=(
+                    RelationTypeEntry(
+                        name="blocked_by",
+                        definition="진행을 막는 대상을 가리킨다.",
+                    ),
+                ),
+            ),
+            workspace_id=workspace_id,
+            ontology_id=CONVERGENCE_ONTOLOGY_ID,
+            current=current,
+            uow=uow_factory(),
+        )
+
+        assert outcome.version == "v1"
+        assert outcome.added_relations == ("blocked_by",)
+
+        with KnowledgeMaintenanceUnitOfWork(session_factory) as reader:
+            published = reader.ontology.get(
+                workspace_id=workspace_id,
+                ontology_id=CONVERGENCE_ONTOLOGY_ID,
+                version="v1",
+            )
+
+        assert published is not None
+        assert published.relation_types == ("blocked_by",)
+        assert published.predicates == ("release_month",)
