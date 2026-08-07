@@ -111,7 +111,7 @@ export const HomeExpanded: Story = {
       </div>
     </SideNavShell>
   ),
-  play: async ({ args, canvasElement, userEvent }) => {
+  play: async ({ args, canvasElement, step, userEvent }) => {
     const canvas = within(canvasElement);
 
     await expect(canvas.getByText('에이전트')).toBeInTheDocument();
@@ -121,6 +121,28 @@ export const HomeExpanded: Story = {
     await expect(canvas.getByRole('button', { name: '파일명texttexttexttext' })).toBeInTheDocument();
     // 요청됨 배지는 서버 값이다
     await expect(canvas.getByTestId('snb-nav-row-count')).toHaveTextContent('1');
+
+    await step('셸 골격 치수를 값으로 고정한다', async () => {
+      const nav = canvasElement.querySelector('nav')!;
+      const navArea = canvas.getByTestId('side-nav-shell-nav-area');
+      const box = (el: Element) => el.getBoundingClientRect();
+
+      await expect(Math.round(box(nav).width)).toBe(240);
+      await expect(Math.round(box(nav.children[0].children[0]).height)).toBe(56);
+      await expect(getComputedStyle(navArea).rowGap).toBe('20px');
+      await expect(getComputedStyle(navArea).paddingLeft).toBe('8px');
+      // 모드 스위처 아래 주 내비 블록은 12 간격이다
+      await expect(getComputedStyle(navArea.children[0]).rowGap).toBe('12px');
+      await expect(Math.round(box(nav.children[1]).height)).toBe(97);
+    });
+
+    await step('트리 들여쓰기는 depth마다 20이다', async () => {
+      const rows = [...canvasElement.querySelectorAll('[data-slot="nav-tree-row"]')];
+      const left = (el: Element) => el.getBoundingClientRect().left;
+
+      await expect(left(rows[1]) - left(rows[0])).toBe(20);
+      await expect(left(rows[2]) - left(rows[0])).toBe(40);
+    });
 
     await userEvent.click(canvas.getByRole('button', { name: '사이드바 접기' }));
     await expect(args.onCollapse).toHaveBeenCalledTimes(1);
