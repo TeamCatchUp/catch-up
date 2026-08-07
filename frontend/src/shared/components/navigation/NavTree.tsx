@@ -2,8 +2,10 @@
 
 import { type ComponentType, type SVGProps, useState } from 'react';
 
+import IconAdd from '@/public/icons/icon/add_small.svg';
 import IconCaret from '@/public/icons/icon/arrow_right.svg';
 import IconDepthConnector from '@/public/icons/icon/arrow_right2.svg';
+import IconMore from '@/public/icons/icon/kebab_horizontal.svg';
 import { cn } from '@/shared/utils/cn';
 
 export interface NavTreeNode {
@@ -12,6 +14,8 @@ export interface NavTreeNode {
   /** 행 앞 아이콘. 채널/폴더/문서 같은 의미는 이 컴포넌트가 모른다 — 소비처가 넣는다 */
   Icon?: ComponentType<SVGProps<SVGSVGElement>>;
   children?: readonly NavTreeNode[];
+  /** 하위 추가(+) 어포던스를 가질 수 있는 행인가. 무엇을 추가하는지는 소비처가 안다 */
+  canAddChild?: boolean;
 }
 
 interface NavTreeProps {
@@ -22,6 +26,10 @@ interface NavTreeProps {
   defaultExpandedIds?: readonly string[];
   /** 미전달 시 정적 표시 모드: 전체 펼침 고정, 토글·클릭 불가 (문서 위치 표시형) */
   onNodeClick?: (id: string) => void;
+  /** 전달 시 모든 행에 더보기(⋯). 정적 표시 모드에서는 무시된다 */
+  onNodeMore?: (id: string) => void;
+  /** 전달 시 canAddChild 행에만 하위 추가(+). 정적 표시 모드에서는 무시된다 */
+  onNodeAdd?: (id: string) => void;
   className?: string;
 }
 
@@ -38,6 +46,31 @@ const INTERACTIVE_INDENT_PX = 20;
 const STATIC_INDENT_PX = 16;
 
 /**
+ * Figma `Icon button` 22×22 (내부 아이콘 18). 행 hover·포커스에서만 나타나는 행 액션이다.
+ * 무엇을 여는지·무엇을 추가하는지는 이 컴포넌트가 모른다 — 소비처의 핸들러가 안다.
+ */
+function RowActionButton({
+  label,
+  Icon,
+  onClick,
+}: {
+  label: string;
+  Icon: ComponentType<SVGProps<SVGSVGElement>>;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      onClick={onClick}
+      className="text-icon-normal-neutral hover:bg-fill-normal-interaction-hover flex size-5.5 shrink-0 cursor-pointer items-center justify-center rounded-full"
+    >
+      <Icon aria-hidden className="size-4.5" />
+    </button>
+  );
+}
+
+/**
  * depth·아이콘·라벨·접기·active만 아는 프레젠테이션 트리.
  *
  * 두 곳이 같은 구조를 쓴다:
@@ -51,7 +84,15 @@ const STATIC_INDENT_PX = 16;
  * 버튼이 아닌 마크업이라 어차피 별도 행 렌더러가 필요하다. SNB/menu 형상이 바뀌면
  * 두 파일을 같이 고쳐야 한다.
  */
-export default function NavTree({ nodes, activeId, defaultExpandedIds, onNodeClick, className }: NavTreeProps) {
+export default function NavTree({
+  nodes,
+  activeId,
+  defaultExpandedIds,
+  onNodeClick,
+  onNodeMore,
+  onNodeAdd,
+  className,
+}: NavTreeProps) {
   const isStatic = onNodeClick === undefined;
   const [expandedIds, setExpandedIds] = useState<ReadonlySet<string>>(() => new Set(defaultExpandedIds));
 
@@ -155,6 +196,26 @@ export default function NavTree({ nodes, activeId, defaultExpandedIds, onNodeCli
           >
             {label}
           </button>
+
+          {/*
+           * 액션은 오버레이가 아니라 in-flow다 — Figma 실측에서 채널 라벨 폭이
+           * default 170 → hover 112로 줄고 그 차이가 정확히 gap 12 + 액션 46이다.
+           * hover만 걸면 키보드로 도달할 수 없어 focus-within을 함께 본다.
+           */}
+          {(onNodeMore || (onNodeAdd && node.canAddChild)) && (
+            <div className="hidden shrink-0 items-center gap-0.5 group-focus-within:flex group-hover:flex">
+              {onNodeMore && (
+                <RowActionButton label={`${node.label} 더보기`} Icon={IconMore} onClick={() => onNodeMore(node.id)} />
+              )}
+              {onNodeAdd && node.canAddChild && (
+                <RowActionButton
+                  label={`${node.label} 하위 추가`}
+                  Icon={IconAdd}
+                  onClick={() => onNodeAdd(node.id)}
+                />
+              )}
+            </div>
+          )}
         </div>
       </div>
     );

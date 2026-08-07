@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite';
-import { expect, fn, userEvent, within } from 'storybook/test';
+import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 
 import IconFile from '@/public/icons/icon/file.svg';
 import IconFolder from '@/public/icons/icon/folder.svg';
@@ -20,18 +20,20 @@ const SNB_TREE: readonly NavTreeNode[] = [
     id: 'channel-1',
     label: '채널명 text text text text 1',
     Icon: IconWikiChannel,
+    canAddChild: true,
     children: [
-      { id: 'folder-1', label: '폴더명 text text text t 1', Icon: IconFolder },
+      { id: 'folder-1', label: '폴더명 text text text t 1', Icon: IconFolder, canAddChild: true },
       {
         id: 'folder-2',
         label: '폴더명 text text text t 2',
         Icon: IconFolder,
+        canAddChild: true,
         children: [{ id: 'file-1', label: '파일명texttexttext 1', Icon: IconFile }],
       },
     ],
   },
-  { id: 'channel-2', label: '채널명 text text text text 2', Icon: IconWikiChannel },
-  { id: 'channel-3', label: '채널명 text text text text 3', Icon: IconWikiChannel },
+  { id: 'channel-2', label: '채널명 text text text text 2', Icon: IconWikiChannel, canAddChild: true },
+  { id: 'channel-3', label: '채널명 text text text text 3', Icon: IconWikiChannel, canAddChild: true },
 ];
 
 /** 검토 큐 우측 "문서 위치" — 채널 > 폴더 경로 조각 (Figma 17564:127054) */
@@ -184,8 +186,8 @@ export const ActiveHighlight: Story = {
 };
 
 export const StaticLocation: Story = {
-  // 문서 위치 표시형: 핸들러 없음 → 전체 펼침 고정, 토글 불가
-  args: { nodes: DOCUMENT_LOCATION },
+  // 문서 위치 표시형: onNodeClick이 없으면 액션 핸들러를 줘도 정적 모드다 — 버튼이 0개여야 한다
+  args: { nodes: DOCUMENT_LOCATION, onNodeMore: fn(), onNodeAdd: fn() },
   render: (args) => (
     <Frame>
       <NavTree {...args} />
@@ -246,5 +248,65 @@ export const LongLabelNarrow: Story = {
     await expect(rowOf(file).getBoundingClientRect().right).toBeLessThanOrEqual(
       canvasElement.getBoundingClientRect().right,
     );
+  },
+};
+
+/*
+ * 행 액션은 hover와 포커스 양쪽에서 나타난다. 플레이는 포커스로만 검증한다 —
+ * userEvent.hover()는 합성 이벤트라 실제 브라우저의 CSS :hover를 켜지 못한다.
+ */
+export const RowActions: Story = {
+  args: {
+    defaultExpandedIds: ['channel-1', 'folder-2'],
+    onNodeClick: fn(),
+    onNodeMore: fn(),
+    onNodeAdd: fn(),
+  },
+  render: (args) => (
+    <Frame>
+      <NavTree {...args} />
+    </Frame>
+  ),
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    // 아무 행도 hover·포커스 상태가 아니면 액션은 보이지 않는다
+    await expect(canvas.queryByRole('button', { name: '채널명 text text text text 1 더보기' })).toBeNull();
+
+    const channel = canvas.getByRole('button', { name: '채널명 text text text text 1' });
+    channel.focus();
+
+    const more = canvas.getByRole('button', { name: '채널명 text text text text 1 더보기' });
+    const add = canvas.getByRole('button', { name: '채널명 text text text text 1 하위 추가' });
+
+    // Figma Icon button 22×22, 그룹 gap 2 (17892:26494)
+    await expect(Math.round(more.getBoundingClientRect().width)).toBe(22);
+    await expect(Math.round(more.getBoundingClientRect().height)).toBe(22);
+    await expect(Math.round(add.getBoundingClientRect().left - more.getBoundingClientRect().right)).toBe(2);
+
+    // 액션이 나타나면 라벨 폭이 실제로 줄어든다 — 시안이 그린 레이아웃 시프트다
+    const channelLabel = channel.querySelector('span')!;
+    const widthWithActions = channelLabel.getBoundingClientRect().width;
+    channel.blur();
+    await waitFor(async () => {
+      await expect(channelLabel.getBoundingClientRect().width).toBeGreaterThan(widthWithActions);
+    });
+
+    // 하위를 가질 수 없는 행은 ⋯만 갖는다 (Figma 하위메뉴_파일 컬럼)
+    const file = canvas.getByRole('button', { name: '파일명texttexttext 1' });
+    file.focus();
+    await expect(canvas.getByRole('button', { name: '파일명texttexttext 1 더보기' })).toBeInTheDocument();
+    await expect(canvas.queryByRole('button', { name: '파일명texttexttext 1 하위 추가' })).toBeNull();
+
+    // 액션 클릭은 이동도 토글도 건드리지 않는다
+    await userEvent.click(canvas.getByRole('button', { name: '파일명texttexttext 1 더보기' }));
+    await expect(args.onNodeMore).toHaveBeenCalledWith('file-1');
+    await expect(args.onNodeClick).not.toHaveBeenCalled();
+
+    // 하위 추가는 canAddChild 행에서만 불린다
+    const folder = canvas.getByRole('button', { name: '폴더명 text text text t 2' });
+    folder.focus();
+    await userEvent.click(canvas.getByRole('button', { name: '폴더명 text text text t 2 하위 추가' }));
+    await expect(args.onNodeAdd).toHaveBeenCalledWith('folder-2');
   },
 };
