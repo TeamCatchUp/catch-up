@@ -2,8 +2,8 @@
 
 import { useState } from 'react';
 
-import IconDropdownDown from '@/public/icons/icon/dropdown_down.svg';
-import IconDropdownUp from '@/public/icons/icon/dropdown_up.svg';
+import IconArrowDropdownDown from '@/public/icons/icon/arrow_dropdown_down.svg';
+import IconArrowDropdownRight from '@/public/icons/icon/arrow_dropdown_right.svg';
 import { Button } from '@/shared/components/ui/button';
 import { cn } from '@/shared/utils/cn';
 
@@ -35,7 +35,8 @@ export default function BlockDiffCard({
 }: BlockDiffCardProps) {
   const [collapsed, setCollapsed] = useState(defaultCollapsed);
   const { id, kind, title, before, after, reason } = entry;
-  const ChevronIcon = collapsed ? IconDropdownDown : IconDropdownUp;
+  // 접힘 → 오른쪽, 펼침 → 아래. disclosure triangle 관례이자 시안의 icon/arrow_drop_down(6413:79613) 계열이다
+  const ChevronIcon = collapsed ? IconArrowDropdownRight : IconArrowDropdownDown;
 
   return (
     <section className="border-line-normal-neutral rounded-xl border p-4">

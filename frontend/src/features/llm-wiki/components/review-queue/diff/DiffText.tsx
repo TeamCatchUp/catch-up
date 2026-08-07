@@ -22,14 +22,17 @@ export default function DiffText({ lines, tone }: DiffTextProps) {
   const styles = TONE_STYLES[tone];
 
   return (
-    <div className={cn('flex-1 border-l-2 py-1', styles.panel)}>
+    <div className={cn('flex-1 border-l-2', styles.panel)}>
       {lines.map((line, lineIndex) => (
         <p
           key={lineIndex}
-          className={cn('text-body-small text-text-normal-normal min-h-6.5 px-3 py-2', styles.line)}
+          className={cn(
+            'text-reading-body-md-small text-text-normal-normal min-h-6.5 px-3 py-2',
+            styles.line,
+          )}
         >
           {line.segments.map((segment, segmentIndex) => (
-            <span key={segmentIndex} className={cn(segment.emphasized && styles.emphasized)}>
+            <span key={segmentIndex} className={cn(segment.emphasized && cn('px-0.5', styles.emphasized))}>
               {segment.text}
             </span>
           ))}
