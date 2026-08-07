@@ -18,6 +18,7 @@ from datetime import datetime
 from datetime import timezone
 
 import structlog
+from pydantic import BaseModel
 
 from catchup.connectors.channel_talk.core.client import ChannelTalkCoreApiClient
 from catchup.connectors.channel_talk.schemas.user_chat_message import (
@@ -42,6 +43,10 @@ DEFAULT_STATES: tuple[str, ...] = ("opened", "closed", "snoozed")
 # limit이 걸려도 먼저 집히게 한다. 판단할 근거가 없는 대화를 뒤로 미루면
 # 다음 폴링에서도 계속 밀려 영영 수집되지 않는다.
 _UNKNOWN_MARKER = datetime.min.replace(tzinfo=timezone.utc)
+
+# 계약에 실리지 않는 필드다. 합성 빌더는 이 값을 채우지 않으므로 폴러도
+# 빼야 두 경로의 payload가 같아진다.
+_RAW_PAYLOAD_KEY = "raw_payload"
 
 
 class ChannelTalkUserChatPoller:
@@ -183,12 +188,15 @@ class ChannelTalkUserChatPoller:
         source_version_key = str(int(updated.timestamp() * 1000))
         idempotency_key = f"{chat_id}-{source_version_key}"
 
+        # raw_payload는 봉하지 않는다. 파싱 모델이 들고 있는 API 원문을 그대로
+        # 실으면 합성 빌더가 내는 payload와 형태가 갈리고, payload_hash가
+        # 내용과 무관한 원문 필드까지 타게 된다. 그러면 바뀐 것이 없는 대화를
+        # 다시 폴링해도 DUPLICATE로 흡수되지 않고 충돌로 터진다.
         payload = {
             "schema_version": PAYLOAD_SCHEMA_VERSION,
-            "detail": detail.model_dump(mode="json", exclude_none=True),
+            "detail": _dump_without_raw_payload(detail),
             "messages": [
-                message.model_dump(mode="json", exclude_none=True)
-                for message in messages
+                _dump_without_raw_payload(message) for message in messages
             ],
         }
 
@@ -248,6 +256,33 @@ class ChannelTalkUserChatPoller:
                 break
             cursor = page.next_cursor
         return messages
+
+
+def _dump_without_raw_payload(model: BaseModel) -> dict[str, object]:
+    """파싱 모델을 계약 payload로 덮으면서 API 원문 사본을 걷어낸다.
+
+    중첩 모델(blocks·log·form·web_page)도 각자 `raw_payload`를 들고 있어
+    위 한 겹만 빼면 원문이 남는다. 그래서 덮어낸 결과를 재귀로 훑는다.
+    """
+    return _strip_mapping(model.model_dump(mode="json", exclude_none=True))
+
+
+def _strip_mapping(value: dict[str, object]) -> dict[str, object]:
+    """dict에서 `raw_payload` 키를 지우고 나머지 값을 훑는다."""
+    return {
+        key: _strip_value(item)
+        for key, item in value.items()
+        if key != _RAW_PAYLOAD_KEY
+    }
+
+
+def _strip_value(value: object) -> object:
+    """중첩된 dict·list를 따라 내려가며 원문 사본을 걷어낸다."""
+    if isinstance(value, dict):
+        return _strip_mapping(value)
+    if isinstance(value, list):
+        return [_strip_value(item) for item in value]
+    return value
 
 
 def _remember_marker(

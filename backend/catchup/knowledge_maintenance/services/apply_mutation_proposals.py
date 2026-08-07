@@ -21,6 +21,9 @@ from typing import Self
 
 from catchup.knowledge_maintenance.domain.entity_resolution import normalize_name
 from catchup.knowledge_maintenance.domain.knowledge_candidate import (
+    AssertionResolutionStatus,
+)
+from catchup.knowledge_maintenance.domain.knowledge_candidate import (
     EntityResolutionStatus,
 )
 from catchup.knowledge_maintenance.ports.knowledge_candidates import (
@@ -77,6 +80,9 @@ class ApplyResult:
             나타낸다.
         claims_already_closed: 이미 닫혔거나 탈락해 건너뛴 claim
             수를 나타낸다.
+        claims_skipped_superseded: 재추출이 은퇴시켜 건너뛴 claim 수를
+            나타낸다. 지식이 된 적 없으므로 닫지도 탈락시키지도
+            않는다.
     """
 
     proposals_applied: int
@@ -86,6 +92,7 @@ class ApplyResult:
     claims_superseded: int = 0
     claims_invalidated: int = 0
     claims_already_closed: int = 0
+    claims_skipped_superseded: int = 0
 
 
 @dataclass
@@ -97,6 +104,7 @@ class _Tally:
     superseded: int = 0
     invalidated: int = 0
     closed_already: int = 0
+    skipped_superseded: int = 0
 
 
 def apply_mutation_proposals(
@@ -130,6 +138,7 @@ def apply_mutation_proposals(
     superseded = 0
     invalidated = 0
     closed_already = 0
+    skipped_superseded = 0
     # 루프 변수를 파라미터와 다른 이름으로 둔다. 같은 이름을 쓰면
     # 루프가 파라미터를 덮어써서, 뒤에 나오는 감사 로그의
     # `scoped_proposal_id`가 "전체 적용"인지 "한 건 적용"인지를 잃는다.
@@ -156,6 +165,7 @@ def apply_mutation_proposals(
         superseded += tally.superseded
         invalidated += tally.invalidated
         closed_already += tally.closed_already
+        skipped_superseded += tally.skipped_superseded
         logger.info(
             "mutation_proposal_applied",
             workspace_id=workspace_id,
@@ -172,6 +182,7 @@ def apply_mutation_proposals(
         claims_superseded=superseded,
         claims_invalidated=invalidated,
         claims_already_closed=closed_already,
+        claims_skipped_superseded=skipped_superseded,
     )
     logger.info(
         "mutation_apply_completed",
@@ -185,6 +196,7 @@ def apply_mutation_proposals(
         claims_superseded=result.claims_superseded,
         claims_invalidated=result.claims_invalidated,
         claims_already_closed=result.claims_already_closed,
+        claims_skipped_superseded=result.claims_skipped_superseded,
     )
     return result
 
@@ -212,12 +224,14 @@ def _apply_one(
         nodes_by_sequence: dict[int, uuid.UUID] = {}
         for operation in sorted(operations, key=lambda item: item.sequence):
             if operation.operation_type == "create_entity":
-                nodes_by_sequence[operation.sequence] = _apply_create(
+                created = _apply_create(
                     uow,
                     workspace_id=workspace_id,
                     operation=operation,
                     tally=tally,
                 )
+                if created is not None:
+                    nodes_by_sequence[operation.sequence] = created
             elif operation.operation_type == "merge_entity":
                 _apply_merge(
                     uow,
@@ -241,8 +255,13 @@ def _apply_create(
     workspace_id: int,
     operation: StoredOperation,
     tally: _Tally,
-) -> uuid.UUID:
+) -> uuid.UUID | None:
     """대표 후보로 canonical 노드를 만들거나 기존 노드를 재사용한다.
+
+    대표가 재추출로 은퇴(`superseded`)했으면 노드를 만들지 않고 None을
+    낸다. 이 대표를 가리키던 병합 명령은 대상 노드를 못 찾아 그 안건만
+    실패로 남는데, 은퇴한 대표로 새 노드를 세우는 것보다 사람이 다시 보게
+    두는 편이 안전하다.
 
     새로 만든 노드에는 곧바로 이름 alias를 남긴다. 이 경로의 노드는
     외부 ID가 없어 canonical_key가 비므로, alias가 없으면 읽기 경로가
@@ -260,12 +279,17 @@ def _apply_create(
     )
     if current is None:
         raise ApplyOperationError(f"후보가 없다: {candidate_id}")
-    _status, resolved_node_id = current
+    status, resolved_node_id = current
     if resolved_node_id is not None:
         # 대표가 이미 해소됐으면 그 노드가 곧 병합 대상이다. 새 노드를
         # 만들면 같은 대상이 둘로 갈라진다.
         tally.already += 1
         return resolved_node_id
+    if status == EntityResolutionStatus.SUPERSEDED:
+        # 승인 이후 재추출이 대표를 은퇴시켰다. 은퇴한 후보를 accepted로
+        # 되돌리면 사람 결정이 아닌 상태 변화를 결정처럼 남긴다.
+        tally.already += 1
+        return None
 
     proposed_name = str(operation.operation_data["proposed_name"])
     node = uow.knowledge_nodes.create_entity_node(
@@ -315,8 +339,13 @@ def _apply_merge(
     )
     if current is None:
         raise ApplyOperationError(f"후보가 없다: {candidate_id}")
-    _status, resolved_node_id = current
+    status, resolved_node_id = current
     if resolved_node_id is not None:
+        tally.already += 1
+        return
+    if status == EntityResolutionStatus.SUPERSEDED:
+        # 재추출이 은퇴시킨 멤버는 병합하지 않는다. 은퇴한 후보를 merged로
+        # 표시하면 사라진 후보가 지식에 붙은 것처럼 보인다.
         tally.already += 1
         return
     uow.knowledge_candidates.mark_entity_resolved(
@@ -348,7 +377,12 @@ def _apply_supersede(
         raise ApplyOperationError(f"claim이 없다: {claim_id}")
 
     status, _valid_from, valid_to = current
-    if valid_to is not None or status == "rejected":
+    if status == AssertionResolutionStatus.SUPERSEDED:
+        # 승인 이후 재추출이 이 후보를 은퇴시켰다. 여기서 구간을 닫으면
+        # 지식이 된 적 없는 주장이 "한때 참이었다"로 남는다. 사람 결정도
+        # 아니므로 탈락시키지도 않고 그대로 둔다.
+        tally.skipped_superseded += 1
+    elif valid_to is not None or status == "rejected":
         tally.closed_already += 1
     elif status == "pending":
         uow.knowledge_candidates.reject_claim(claim_id=claim_id)

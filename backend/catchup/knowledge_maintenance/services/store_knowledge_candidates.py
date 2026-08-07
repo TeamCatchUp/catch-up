@@ -76,8 +76,10 @@ def store_knowledge_candidates(
 ) -> CandidateStorageResult:
     """추출 결과 한 벌을 후보로 저장한다.
 
-    같은 Observation에 이미 실행 기록이 있으면 다시 저장하지 않는다. 후보를
-    두 벌 쌓으면 resolution이 같은 대상을 여러 번 보게 된다.
+    같은 Observation에 같은 계약(prompt·어휘·모델)으로 성공한 실행이 있으면
+    그 실행을 재사용하고 아무것도 저장하지 않는다. 계약이 다르면 새 배치를
+    저장하고, 같은 입력에서 나온 구 pending 후보를 superseded로 은퇴시킨다.
+    은퇴시키지 않으면 resolution이 같은 대상을 두 벌로 보게 된다.
     """
     clock = clock or _utcnow
     now = clock()

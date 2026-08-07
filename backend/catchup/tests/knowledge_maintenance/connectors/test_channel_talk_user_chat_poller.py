@@ -304,6 +304,46 @@ async def test_poll_builds_envelope_normalizer_can_consume() -> None:
 
 
 @pytest.mark.asyncio
+async def test_poll_payload_carries_no_raw_api_payload() -> None:
+    """payload에 API 원문 사본을 싣지 않는다.
+
+    합성 빌더는 `raw_payload`를 채우지 않으므로, 폴러가 실으면 두 경로의
+    계약이 갈린다. 게다가 payload_hash가 내용과 무관한 원문 필드까지 타서
+    바뀐 것 없는 대화의 재폴링이 충돌로 터진다.
+    """
+    chat_id = "chat-raw"
+    updated_at = NOW - timedelta(hours=1)
+    client = _FakeChannelTalkClient(
+        list_pages={
+            "closed": [_list_payload([(chat_id, updated_at)], state="closed")],
+        },
+        details={
+            chat_id: _detail_payload(
+                chat_id,
+                created_at=NOW - timedelta(days=1),
+                updated_at=updated_at,
+            ),
+        },
+        message_pages={chat_id: [_message_payload(chat_id)]},
+    )
+
+    envelopes = await _poller(client).poll(
+        workspace_id=WORKSPACE_ID,
+        lookback_start=LOOKBACK_START,
+        limit=10,
+        max_pages=3,
+        states=("closed",),
+    )
+
+    payload = json.loads(envelopes[0].content or "")
+    assert "raw_payload" not in payload["detail"]
+    for message in payload["messages"]:
+        assert "raw_payload" not in message
+    # 중첩된 어디에도 남아 있지 않아야 한다.
+    assert "raw_payload" not in (envelopes[0].content or "")
+
+
+@pytest.mark.asyncio
 async def test_poll_stops_at_lookback_boundary() -> None:
     """lookback 이전 아이템을 만나면 그 페이지까지만 처리하고 멈춘다."""
     fresh = NOW - timedelta(hours=1)

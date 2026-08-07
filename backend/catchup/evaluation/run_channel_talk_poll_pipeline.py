@@ -193,6 +193,15 @@ async def main() -> None:
         states=args.states,
     )
 
+    if len(envelopes) >= args.limit:
+        # limit에 걸리면 이번 회차가 창 전체를 다 보지 못했다는 뜻이다.
+        # 커서는 이번에 넣은 대화의 최신 시각까지만 나아가므로, 남은
+        # 대화는 러너를 다시 돌려야 집힌다.
+        print(
+            f"  주의: limit {args.limit}건에 걸렸다 — 이번 폴링은 잘렸을 수 "
+            "있다. 남은 대화를 집으려면 러너를 다시 돌린다."
+        )
+
     if not envelopes:
         print("바뀐 대화가 없다.")
         engine.dispose()
@@ -200,22 +209,38 @@ async def main() -> None:
 
     normalizer = ChannelTalkUserChatNormalizer()
     summary: dict[str, int] = {}
+    failed = 0
     for envelope in envelopes:
+        chat_id = envelope.source_identity.external_document_id
         # envelope마다 새 UoW를 쓴다. 대화 하나의 실패가 앞서 확정한
         # 대화까지 되돌리지 않게 하려면 트랜잭션이 서로 독립해야 한다.
-        result = ingest_and_normalize(
-            envelope,
-            normalizer=normalizer,
-            uow=KnowledgeMaintenanceUnitOfWork(session_factory),
-        )
+        try:
+            result = ingest_and_normalize(
+                envelope,
+                normalizer=normalizer,
+                uow=KnowledgeMaintenanceUnitOfWork(session_factory),
+            )
+        except Exception as error:
+            # 한 대화의 충돌이나 정규화 실패로 남은 대화를 버리지 않는다.
+            # 실패한 대화는 이번 회차에서 빠지고, 커서가 그 시각을 이미
+            # 지나갔으면 다음 회차에도 안 집힌다. 그래서 조용히 넘기지 않고
+            # 대화 id까지 찍어 사람이 `--since`로 되돌릴 수 있게 한다.
+            failed += 1
+            print(f"  {chat_id}  실패  {type(error).__name__}: {error}")
+            continue
         label = f"{result.ingestion.value}/{result.normalization.value}"
         summary[label] = summary.get(label, 0) + 1
-        chat_id = envelope.source_identity.external_document_id
         print(f"  {chat_id}  {label}  observation {str(result.observation_id)[:8]}")
 
     print("\n=== 수집 결과 ===")
     for label, count in sorted(summary.items()):
         print(f"  {label}: {count}")
+    if failed:
+        print(
+            f"  실패 {failed}건 — 이번 회차에서 건너뛴 대화다. 커서가 이미 "
+            "지나갔을 수 있으니 위에 찍힌 시각 이전으로 `--since`를 주어 "
+            "다시 돌린다."
+        )
     print(
         f"  대화 {len(envelopes)}건, 끝난 시각 {datetime.now(timezone.utc).isoformat()}"
     )
