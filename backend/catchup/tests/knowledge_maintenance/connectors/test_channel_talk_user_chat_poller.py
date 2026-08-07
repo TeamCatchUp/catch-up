@@ -75,8 +75,12 @@ def _detail_payload(
     created_at: datetime,
     updated_at: datetime | None,
     state: str = "closed",
+    customer_extras: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """user-chat 상세 API 원문을 만든다."""
+    """user-chat 상세 API 원문을 만든다.
+
+    `customer_extras`로 고객 객체에 실데이터에서 관찰된 휘발 필드를 얹는다.
+    """
     return {
         "userChat": {
             "id": chat_id,
@@ -94,6 +98,7 @@ def _detail_payload(
             "id": "user-1",
             "name": "김고객",
             "type": "user",
+            **(customer_extras or {}),
         },
         "managers": [
             {"id": "manager-1", "name": "박상담", "email": "pm@example.com"},
@@ -105,8 +110,39 @@ def _message_payload(
     chat_id: str,
     *,
     next_cursor: str | None = None,
+    with_sub_objects: bool = False,
 ) -> dict[str, Any]:
-    """user-chat 메시지 목록 API 원문을 만든다."""
+    """user-chat 메시지 목록 API 원문을 만든다.
+
+    `with_sub_objects`를 켜면 blocks·log·form·webPage를 채운다. 이 중첩
+    모델들은 각자 `raw_payload`를 들고 있어서 원문 유출 경로가 된다.
+    """
+    sub_objects: dict[str, Any] = (
+        {
+            "blocks": [
+                {"type": "text", "value": "결제 금액이 예상과 다릅니다."},
+                {"type": "text", "value": "확인 부탁드립니다."},
+            ],
+            "log": {
+                "type": "chat.open",
+                "action": "대화 시작",
+                "name": "김고객",
+            },
+            "form": {
+                "type": "profileBot",
+                "submittedAt": _iso(NOW - timedelta(hours=3)),
+                "inputs": [
+                    {"label": "이메일", "type": "email", "value": "a@example.com"},
+                ],
+            },
+            "webPage": {
+                "url": "https://example.com/billing",
+                "title": "요금 안내",
+            },
+        }
+        if with_sub_objects
+        else {}
+    )
     return {
         "messages": [
             {
@@ -115,6 +151,7 @@ def _message_payload(
                 "personType": "user",
                 "plainText": "결제 금액이 예상과 다릅니다.",
                 "createdAt": _iso(NOW - timedelta(hours=3)),
+                **sub_objects,
             },
             {
                 "id": f"{chat_id}-m2",
@@ -324,7 +361,9 @@ async def test_poll_payload_carries_no_raw_api_payload() -> None:
                 updated_at=updated_at,
             ),
         },
-        message_pages={chat_id: [_message_payload(chat_id)]},
+        message_pages={
+            chat_id: [_message_payload(chat_id, with_sub_objects=True)],
+        },
     )
 
     envelopes = await _poller(client).poll(
@@ -339,8 +378,110 @@ async def test_poll_payload_carries_no_raw_api_payload() -> None:
     assert "raw_payload" not in payload["detail"]
     for message in payload["messages"]:
         assert "raw_payload" not in message
-    # 중첩된 어디에도 남아 있지 않아야 한다.
+
+    # blocks·log·form·webPage가 실제로 채워졌는지부터 확인한다. 비어 있으면
+    # 원문 유출 경로를 지나가지 않아 이 테스트가 아무것도 막지 못한다.
+    first_message = payload["messages"][0]
+    assert first_message["blocks"]
+    assert first_message["log"]
+    assert first_message["form"]["inputs"]
+    assert first_message["web_page"]
+
+    # 어느 깊이에도 남아 있지 않아야 한다.
+    assert _find_keys(payload, "raw_payload") == []
     assert "raw_payload" not in (envelopes[0].content or "")
+
+
+@pytest.mark.asyncio
+async def test_poll_payload_drops_volatile_customer_fields() -> None:
+    """고객의 휘발 필드는 payload에 싣지 않는다.
+
+    고객 엔티티는 대화와 따로 바뀐다. 실측에서 대화의 `updatedAt`은 그대로인데
+    `profile.lastReferrer`와 `updatedAt`(고객)만 달라졌다. 그 필드가 payload에
+    실리면 같은 idempotency_key에 다른 payload가 붙어 재폴링이 충돌로 터진다.
+    """
+    chat_id = "chat-customer"
+    updated_at = NOW - timedelta(hours=1)
+    created_at = NOW - timedelta(days=1)
+
+    def _client(*, referrer: str, seen_at: datetime) -> _FakeChannelTalkClient:
+        return _FakeChannelTalkClient(
+            list_pages={
+                "closed": [_list_payload([(chat_id, updated_at)], state="closed")],
+            },
+            details={
+                chat_id: _detail_payload(
+                    chat_id,
+                    created_at=created_at,
+                    updated_at=updated_at,
+                    customer_extras={
+                        "email": "customer@example.com",
+                        "profile": {"lastReferrer": referrer, "name": "김고객"},
+                        "updatedAt": _iso(seen_at),
+                        "lastSeenAt": _iso(seen_at),
+                        "createdAt": _iso(created_at),
+                        "avatarUrl": f"https://cdn.example.com/{referrer}.png",
+                        "country": "kr",
+                    },
+                ),
+            },
+            message_pages={chat_id: [_message_payload(chat_id)]},
+        )
+
+    async def _poll(client: _FakeChannelTalkClient) -> SourceChangeEnvelope:
+        envelopes = await _poller(client).poll(
+            workspace_id=WORKSPACE_ID,
+            lookback_start=LOOKBACK_START,
+            limit=10,
+            max_pages=3,
+            states=("closed",),
+        )
+        assert len(envelopes) == 1
+        return envelopes[0]
+
+    first = await _poll(_client(referrer="google", seen_at=NOW - timedelta(hours=2)))
+    second = await _poll(_client(referrer="naver", seen_at=NOW))
+
+    customer = json.loads(first.content or "")["detail"]["customer"]
+    assert customer == {
+        "external_user_id": "user-1",
+        "user_type": "user",
+        "name": "김고객",
+        "email": "customer@example.com",
+    }
+    for volatile_key in (
+        "profile",
+        "remote_updated_at",
+        "last_seen_at",
+        "remote_created_at",
+        "avatar_url",
+        "country",
+        "channel_id",
+    ):
+        assert volatile_key not in customer
+
+    # 휘발 필드만 다른 두 폴링은 같은 payload를 낸다.
+    assert first.idempotency_key == second.idempotency_key
+    assert first.content == second.content
+
+    # allowlist를 통과한 뒤에도 파싱 모델로 다시 검증된다.
+    ChannelTalkUserChatDetail.model_validate(
+        json.loads(first.content or "")["detail"]
+    )
+
+
+def _find_keys(value: Any, target: str) -> list[str]:
+    """중첩된 dict·list를 훑어 target 키가 나온 경로를 모은다."""
+    found: list[str] = []
+    if isinstance(value, dict):
+        for key, item in value.items():
+            if key == target:
+                found.append(key)
+            found.extend(_find_keys(item, target))
+    elif isinstance(value, list):
+        for item in value:
+            found.extend(_find_keys(item, target))
+    return found
 
 
 @pytest.mark.asyncio

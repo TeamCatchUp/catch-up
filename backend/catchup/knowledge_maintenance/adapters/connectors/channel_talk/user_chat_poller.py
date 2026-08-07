@@ -48,6 +48,16 @@ _UNKNOWN_MARKER = datetime.min.replace(tzinfo=timezone.utc)
 # 빼야 두 경로의 payload가 같아진다.
 _RAW_PAYLOAD_KEY = "raw_payload"
 
+# 대화 payload에 실을 고객 필드다. normalizer가 Entity 후보를 만들 때
+# 읽는 네 개가 전부다.
+_CUSTOMER_KEY = "customer"
+_CUSTOMER_ALLOWED_KEYS: tuple[str, ...] = (
+    "external_user_id",
+    "user_type",
+    "name",
+    "email",
+)
+
 
 class ChannelTalkUserChatPoller:
     """ChannelTalk user chat 변경을 SourceChangeEnvelope로 낸다."""
@@ -194,7 +204,7 @@ class ChannelTalkUserChatPoller:
         # 다시 폴링해도 DUPLICATE로 흡수되지 않고 충돌로 터진다.
         payload = {
             "schema_version": PAYLOAD_SCHEMA_VERSION,
-            "detail": _dump_without_raw_payload(detail),
+            "detail": _project_detail_customer(_dump_without_raw_payload(detail)),
             "messages": [
                 _dump_without_raw_payload(message) for message in messages
             ],
@@ -265,6 +275,30 @@ def _dump_without_raw_payload(model: BaseModel) -> dict[str, object]:
     위 한 겹만 빼면 원문이 남는다. 그래서 덮어낸 결과를 재귀로 훑는다.
     """
     return _strip_mapping(model.model_dump(mode="json", exclude_none=True))
+
+
+def _project_detail_customer(detail: dict[str, object]) -> dict[str, object]:
+    """고객 객체를 normalizer가 읽는 네 필드로만 좁힌다.
+
+    고객은 대화와 따로 사는 엔티티라서 `profile.lastReferrer`·
+    `remote_updated_at`·`last_seen_at` 같은 필드가 대화와 무관하게 계속
+    바뀐다. 그런데 우리 버전 키는 대화의 `updatedAt`이다. 그대로 실으면
+    같은 idempotency_key에 다른 payload가 붙어, 폴링 창이 겹칠 때마다
+    SourceVersionPayloadConflict로 터진다. 그래서 휘발 필드를 아예 payload
+    밖에 둔다.
+    """
+    customer = detail.get(_CUSTOMER_KEY)
+    if not isinstance(customer, dict):
+        return detail
+
+    return {
+        **detail,
+        _CUSTOMER_KEY: {
+            key: customer[key]
+            for key in _CUSTOMER_ALLOWED_KEYS
+            if key in customer
+        },
+    }
 
 
 def _strip_mapping(value: dict[str, object]) -> dict[str, object]:
