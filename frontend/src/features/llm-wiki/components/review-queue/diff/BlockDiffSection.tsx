@@ -10,6 +10,8 @@ export interface BlockDiffSectionProps {
   onApprove: (id: string) => void;
   onRevert: (id: string) => void;
   onDelete: (id: string) => void;
+  /** 카드의 연필 버튼 — 블록 단위 편집. 진입 후 UI는 디자인 미정 */
+  onEditRequest: (id: string) => void;
 }
 
 /**
@@ -24,6 +26,7 @@ export default function BlockDiffSection({
   onApprove,
   onRevert,
   onDelete,
+  onEditRequest,
 }: BlockDiffSectionProps) {
   return (
     <section className="flex w-full flex-col gap-3">
@@ -49,6 +52,7 @@ export default function BlockDiffSection({
           onApprove={onApprove}
           onRevert={onRevert}
           onDelete={onDelete}
+          onEditRequest={onEditRequest}
         />
       ))}
     </section>

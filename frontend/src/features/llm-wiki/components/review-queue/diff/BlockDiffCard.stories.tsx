@@ -21,7 +21,7 @@ const meta = {
   title: 'Compositions/LLM Wiki/ReviewQueue/BlockDiffCard',
   component: BlockDiffCard,
   tags: ['autodocs'],
-  args: { onApprove: fn(), onRevert: fn(), onDelete: fn() },
+  args: { onApprove: fn(), onRevert: fn(), onDelete: fn(), onEditRequest: fn() },
   parameters: {
     ...catchupParameters({
       level: 'composition',
@@ -31,15 +31,17 @@ const meta = {
       dataProfile: 'realistic-fixture',
       designSource: 'figma',
       figma: {
-        url: 'https://www.figma.com/design/7UwupbVvmHkElmP2OBJQio/Design-System?node-id=17848-106171',
+        url: 'https://www.figma.com/design/7UwupbVvmHkElmP2OBJQio/Design-System?node-id=17849-106310',
         fileKey: '7UwupbVvmHkElmP2OBJQio',
-        nodeId: '17848:106171',
+        nodeId: '17849:106310',
       },
       viewport: { width: 700, height: 420 },
       states: ['modified', 'added', 'removed', 'collapsed', 'long-text', 'no-reason'],
       reuseNotes: [
-        '버튼은 공용 Button(box-solid-primary/box-outline-gray/icon-only-gray)을 그대로 쓴다 — 시안의 Box Button small(30px)·Icon button small(28px) 대응.',
-        '시안의 연필·순환화살표 아이콘과 카드 직접 수정 버튼은 렌더하지 않는다 — 순환화살표는 되돌리기 중복, 블록 단위 편집 진입은 디자인 미정으로 추후 작업(2026-08-07 사용자 확정). 카드 버튼은 삭제·되돌리기·승인 3종.',
+        '버튼은 공용 Button(box-solid-primary/box-outline-gray/icon-only-gray)을 그대로 쓴다 — 시안의 Box Button small(30px)·Icon button small(28px) 대응. 아이콘 버튼 28px는 AgentCard 관례대로 size="sm" + size-7이다.',
+        '헤더 배치는 시안 17849:106310 그대로 — 셰브런 · 제목 · 편집(연필) · 되돌리기(rotate) · 삭제 · 승인. 되돌리기가 텍스트 버튼에서 아이콘 버튼으로 바뀌었다(2026-08-07 사용자 확정).',
+        'rotate.svg의 마스크 id mask0_408_2113이 시안 icon/rotate(408:2113)와 일치한다 — 같은 자산이다. edit_pencil.svg는 마스크가 없어 파일명·viewBox로만 대조했다.',
+        '연필 버튼의 aria-label은 "이 블록 수정"이다 — 섹션 헤더의 전역 "직접 수정"과 접근성 이름이 겹치면 안 된다.',
       ],
       dataNotes: [
         '엔트리는 픽스처 blocks[] 쌍에 computeBlockDiff를 돌려 얻는다 — 계산과 표시가 같은 파이프라인을 지나는 것을 스토리가 상시 검증한다.',
@@ -51,6 +53,7 @@ const meta = {
         '줄은 padding 8/12 = py-2 px-3, 타이포는 Reading/body(md)/small = text-reading-body-md-small(15px/1.75). 일반 body-small(1.5)이 아니다 — 줄 높이 42가 여기서 나온다.',
         '초록 강조 #B0EFD5=green-20 + 좌우 2px(px-0.5)는 시안에 실재한다(17849:106894, 호버 행 안의 텍스트 hug 프레임). 다만 단어 단위인지 줄 전체인지는 placeholder라 갈리지 않아 단어 단위는 프론트 결정.',
         '빨강 강조 red-10(#FED5D5)은 시안 대응물이 없다 — 빨강 행이 전부 빈 프레임이라 초록의 거울상으로 잡았다. design-request 10번 확인 대기.',
+        '박스 버튼은 h-7.5(30)을 명시한다 — outline은 1px 테두리로 30이 되는데 solid는 28이라 나란히 두면 어긋난다. 공용 Button 특성이고 리포 관례(pending/page.tsx의 h-11.5)를 따랐다.',
         '카드 테두리 #EAEBEC=border-line-normal-neutral·radius 12=rounded-xl. 수정된 이유 바(17849:106254, 8/7 개정): 세로 배치 gap 8 — 레이블 #6D7882=text-text-normal-alternative body-xsmall + 본문 #464C53=text-text-normal-neutral body-small, 배경 #F7F7F8=bg-fill-normal-strong.',
       ],
       interactionNotes: [
@@ -81,9 +84,15 @@ export const Modified: Story = {
     await expect(args.onRevert).toHaveBeenCalledWith(modifiedEntry.id);
     await userEvent.click(canvas.getByRole('button', { name: '삭제' }));
     await expect(args.onDelete).toHaveBeenCalledWith(modifiedEntry.id);
+    await userEvent.click(canvas.getByRole('button', { name: '이 블록 수정' }));
+    await expect(args.onEditRequest).toHaveBeenCalledWith(modifiedEntry.id);
 
-    // 카드에는 직접 수정 버튼이 없다 — 섹션 헤더에만 있다(2026-08-07 사용자 결정)
+    // 카드의 편집 버튼은 블록 단위라 섹션 헤더의 전역 "직접 수정"과 이름이 겹치면 안 된다
     await expect(canvas.queryByRole('button', { name: '직접 수정' })).toBeNull();
+
+    // 시안 순서: 셰브런 · 제목 · 연필 · rotate · 삭제 · 승인
+    const names = canvas.getAllByRole('button').map((b) => b.getAttribute('aria-label') ?? b.textContent);
+    await expect(names).toEqual(['접기', '이 블록 수정', '되돌리기', '삭제', '승인']);
   },
 };
 
