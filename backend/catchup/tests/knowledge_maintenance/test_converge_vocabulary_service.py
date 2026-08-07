@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from structlog.testing import capture_logs
+
 from catchup.knowledge_maintenance.contracts.extraction import ExtractionVocabulary
 from catchup.knowledge_maintenance.contracts.extraction import PredicateEntry
 from catchup.knowledge_maintenance.contracts.vocabulary_convergence import (
@@ -356,6 +358,70 @@ def test_병합은_기존을_보존하고_신규를_더한다():
     assert merged.relation_types == ("depends_on",)
     assert merged.predicate_entries[0] is current.predicate_entries[0]
     assert len(merged.predicate_entries) == 2
+
+
+def test_판정_사유가_감사_로그에_남는다():
+    # 흡수·채택·기각의 사유는 감사 기록이다. 러너 stdout은 남지 않으므로
+    # structlog에 실려야 한다.
+    proposal = VocabularyConvergenceProposal(
+        absorptions=(
+            SynonymAbsorption(
+                candidate_name="배포일",
+                canonical_name="deployment_scheduled_on",
+                reason="같은 날짜를 가리킨다.",
+            ),
+        ),
+        predicate_entries=(
+            _proposed("release_date", reason="관측이 날짜로 닫힌다."),
+            _proposed("no_evidence", source_candidates=("nowhere",)),
+        ),
+        relation_entries=(
+            ProposedRelationEntry(
+                name="depends_on",
+                definition="의존한다",
+                source_candidates=("depends on",),
+                reason="예시가 의존을 말한다.",
+            ),
+        ),
+    )
+
+    with capture_logs() as logs:
+        result = _guard(
+            proposal,
+            predicate_usage=(_usage("release_date"), _usage("배포일")),
+            relation_usage=(RelationUsage(name="depends on", usage_count=2),),
+        )
+
+    assert len(result.rejections) == 1
+
+    absorptions = [log for log in logs if log["event"] == "vocabulary_absorption_judged"]
+    assert absorptions == [
+        {
+            "event": "vocabulary_absorption_judged",
+            "log_level": "info",
+            "candidate_name": "배포일",
+            "canonical_name": "deployment_scheduled_on",
+            "reason": "같은 날짜를 가리킨다.",
+        }
+    ]
+
+    accepted = {
+        log["name"]: log for log in logs if log["event"] == "vocabulary_entry_accepted"
+    }
+    assert set(accepted) == {"release_date", "depends_on"}
+    assert accepted["release_date"]["kind"] == "predicate"
+    assert accepted["release_date"]["value_type"] == "date"
+    assert accepted["release_date"]["reason"] == "관측이 날짜로 닫힌다."
+    assert accepted["depends_on"]["kind"] == "relation"
+    assert accepted["depends_on"]["reason"] == "예시가 의존을 말한다."
+
+    rejected = [log for log in logs if log["event"] == "vocabulary_entry_rejected"]
+    assert [(log["name"], log["reason"]) for log in rejected] == [
+        ("no_evidence", "관측 증거 없음")
+    ]
+
+    # 예문·관측값은 상담 원문 조각이라 실리지 않는다.
+    assert not any("예문" in str(log) for log in logs)
 
 
 def test_이름_온리_현행_사전과도_병합된다():

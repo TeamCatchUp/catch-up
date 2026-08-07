@@ -1721,6 +1721,10 @@ USAGE_PREFIX = "vocab_convergence_test_"
 # 커밋된 스냅샷이 `list_versions`에 섞이면 다음 버전 계산이 흔들린다.
 CONVERGENCE_ONTOLOGY_ID = "catchup.test-convergence"
 
+# 낡은 기준 사전 거부는 계보에 v1·v2를 함께 쌓아야 하므로 또 다른 전용
+# ontology를 쓴다.
+STALE_BASE_ONTOLOGY_ID = "catchup.test-convergence-stale"
+
 
 def _store_claim_candidates(
     workspace_id: int,
@@ -2188,7 +2192,7 @@ class TestPublishConvergedVocabulary:
                 SynonymAbsorption(
                     candidate_name="release_mon",
                     canonical_name="release_month",
-                    rationale="같은 뜻의 축약형이다.",
+                    reason="같은 뜻의 축약형이다.",
                 ),
             ),
             rejections=(GuardRejection(name="bad", reason="관측 증거 없음"),),
@@ -2269,3 +2273,109 @@ class TestPublishConvergedVocabulary:
         assert published is not None
         assert published.relation_types == ("blocked_by",)
         assert published.predicates == ("release_month",)
+
+    def test_낡은_기준_사전으로는_발행을_거부한다(
+        self,
+        workspace_id: int,
+        session_factory: Callable[[], Session],
+        uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+    ) -> None:
+        """v2가 있는데 v1을 기준으로 발행하면 v2 항목이 사라진다."""
+        first = ExtractionVocabulary(
+            snapshot_id="v1",
+            predicates=("release_month",),
+        )
+        with KnowledgeMaintenanceUnitOfWork(session_factory) as uow:
+            uow.ontology.ensure(
+                workspace_id=workspace_id,
+                ontology_id=STALE_BASE_ONTOLOGY_ID,
+                vocabulary=first,
+            )
+            uow.commit()
+
+        second_outcome = publish_converged_vocabulary(
+            self._guarded(
+                predicate_entries=(
+                    PredicateEntry(
+                        name="deployment_scheduled_on",
+                        definition="배포 예정 일자를 담는다.",
+                        value_type="date",
+                    ),
+                ),
+            ),
+            workspace_id=workspace_id,
+            ontology_id=STALE_BASE_ONTOLOGY_ID,
+            current=first,
+            uow=uow_factory(),
+        )
+        assert second_outcome.version == "v2"
+
+        with pytest.raises(RuntimeError, match="최신 발행본"):
+            publish_converged_vocabulary(
+                self._guarded(
+                    predicate_entries=(
+                        PredicateEntry(
+                            name="release_channel",
+                            definition="배포 채널을 담는다.",
+                            value_type="text",
+                        ),
+                    ),
+                ),
+                workspace_id=workspace_id,
+                ontology_id=STALE_BASE_ONTOLOGY_ID,
+                current=first,
+                uow=uow_factory(),
+            )
+
+        with KnowledgeMaintenanceUnitOfWork(session_factory) as reader:
+            versions = reader.ontology.list_versions(
+                workspace_id=workspace_id,
+                ontology_id=STALE_BASE_ONTOLOGY_ID,
+            )
+            latest = reader.ontology.get(
+                workspace_id=workspace_id,
+                ontology_id=STALE_BASE_ONTOLOGY_ID,
+                version="v2",
+            )
+
+        assert "v3" not in versions
+        assert latest is not None
+        assert latest.predicates == ("release_month", "deployment_scheduled_on")
+
+    def test_발행_체계_밖_이름은_낡음_검사를_받지_않는다(
+        self,
+        workspace_id: int,
+        session_factory: Callable[[], Session],
+        uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+    ) -> None:
+        """빈 이름·`vN` 아닌 이름은 계보의 일부가 아니라 그냥 발행한다."""
+        published = ExtractionVocabulary(
+            snapshot_id="v1",
+            predicates=("release_month",),
+        )
+        with KnowledgeMaintenanceUnitOfWork(session_factory) as uow:
+            uow.ontology.ensure(
+                workspace_id=workspace_id,
+                ontology_id=STALE_BASE_ONTOLOGY_ID,
+                vocabulary=published,
+            )
+            uow.commit()
+
+        legacy = ExtractionVocabulary(predicates=("legacy_p",))
+        outcome = publish_converged_vocabulary(
+            self._guarded(
+                predicate_entries=(
+                    PredicateEntry(
+                        name="release_channel",
+                        definition="배포 채널을 담는다.",
+                        value_type="text",
+                    ),
+                ),
+            ),
+            workspace_id=workspace_id,
+            ontology_id=STALE_BASE_ONTOLOGY_ID,
+            current=legacy,
+            uow=uow_factory(),
+        )
+
+        assert outcome.version == "v2"

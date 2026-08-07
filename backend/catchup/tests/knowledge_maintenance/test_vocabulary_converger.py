@@ -68,6 +68,33 @@ class _FakeLlm:
         return self.runnable
 
 
+class _SequenceStructuredRunnable:
+    """호출마다 정해진 응답을 차례로 돌려주는 대역이다.
+
+    응답이 예외면 던진다. 재시도가 실제로 두 번째 호출을 하는지 보려면
+    호출 횟수를 세야 한다.
+    """
+
+    def __init__(self, responses: list[dict[str, Any] | Exception]) -> None:
+        self._responses = responses
+        self.call_count = 0
+
+    async def ainvoke(self, prompt: str) -> dict[str, Any]:
+        response = self._responses[self.call_count]
+        self.call_count += 1
+        if isinstance(response, Exception):
+            raise response
+        return response
+
+
+class _SequenceLlm:
+    def __init__(self, responses: list[dict[str, Any] | Exception]) -> None:
+        self.runnable = _SequenceStructuredRunnable(responses)
+
+    def with_structured_output(self, *args: Any, **kwargs: Any):
+        return self.runnable
+
+
 def _current_vocabulary() -> ExtractionVocabulary:
     return ExtractionVocabulary(
         predicate_entries=(
@@ -159,7 +186,11 @@ class TestPromptRendering:
         assert "absorption" in rendered
         # Rule 2: 서로 동의어면 하나의 정본 이름으로 모은다.
         assert "source_candidates" in rendered
-        # Rule 3: 새 항목의 필수 요소.
+        # Rule 3: 새 항목의 필수 요소. source_candidates는 모든 항목에
+        # 필수다 — 비면 가드의 관측 증거 검사에서 떨어진다.
+        assert "EVERY new entry needs `source_candidates`" in rendered
+        assert "verbatim as observed" in rendered
+        assert "배포예정일" in rendered
         assert "value_type" in rendered
         assert "enum_values" in rendered
         assert "number|date|boolean|enum|text" in rendered
@@ -235,3 +266,79 @@ class TestLlmVocabularyConverger:
         )
 
         assert result is None
+
+
+class TestRetry:
+    """실패 한 번은 재시도로 덮고, 두 번이면 포기한다."""
+
+    def _proposal(self) -> VocabularyConvergenceProposal:
+        return VocabularyConvergenceProposal(
+            predicate_entries=(
+                ProposedPredicateEntry(
+                    name="release_date",
+                    definition="배포 날짜다.",
+                    value_type="date",
+                    source_candidates=("release_date",),
+                    reason="관측이 날짜로 닫힌다.",
+                ),
+            ),
+        )
+
+    @pytest.mark.asyncio
+    async def test_한_번_실패해도_재시도로_제안을_받는다(self) -> None:
+        proposal = self._proposal()
+        llm = _SequenceLlm(
+            [
+                RuntimeError("upstream down"),
+                {"parsed": proposal, "raw": None, "parsing_error": None},
+            ]
+        )
+        converger = LlmVocabularyConverger(llm)
+
+        result = await converger.propose(
+            current=ExtractionVocabulary(),
+            predicate_usage=[_usage("release_date")],
+            relation_usage=[],
+        )
+
+        assert result == proposal
+        assert llm.runnable.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_파싱_실패도_재시도한다(self) -> None:
+        proposal = self._proposal()
+        llm = _SequenceLlm(
+            [
+                {"parsed": None, "raw": None, "parsing_error": "schema mismatch"},
+                {"parsed": proposal, "raw": None, "parsing_error": None},
+            ]
+        )
+        converger = LlmVocabularyConverger(llm)
+
+        result = await converger.propose(
+            current=ExtractionVocabulary(),
+            predicate_usage=[_usage("release_date")],
+            relation_usage=[],
+        )
+
+        assert result == proposal
+        assert llm.runnable.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_두_번_실패하면_None이고_더_조르지_않는다(self) -> None:
+        llm = _SequenceLlm(
+            [
+                RuntimeError("upstream down"),
+                {"parsed": None, "raw": None, "parsing_error": "schema mismatch"},
+            ]
+        )
+        converger = LlmVocabularyConverger(llm)
+
+        result = await converger.propose(
+            current=ExtractionVocabulary(),
+            predicate_usage=[_usage("release_date")],
+            relation_usage=[],
+        )
+
+        assert result is None
+        assert llm.runnable.call_count == 2

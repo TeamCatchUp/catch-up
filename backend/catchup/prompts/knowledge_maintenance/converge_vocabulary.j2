@@ -79,15 +79,24 @@ Relation types: (no relation type entries yet)
    lower snake_case name and emit exactly ONE entry whose
    `source_candidates` lists every name it absorbs — including the canonical
    name itself when that name was observed.
-3. Every new entry needs a precise `definition`, a `value_type` that is one
-   of `number|date|boolean|enum|text`, and a `reason`. When `value_type` is
-   `enum`, `enum_values` must cover every observed value for that name.
-   Relation entries need a `definition` and a `reason`, plus `domain` and
-   `range_` when the examples make the endpoint types clear.
+3. EVERY new entry needs `source_candidates`, a precise `definition`, a
+   `value_type` that is one of `number|date|boolean|enum|text`, and a
+   `reason`. `source_candidates` must list every observed OOV name this
+   entry represents, verbatim as observed above — including non-English
+   names copied exactly as they appear (for example `배포예정일`), and
+   including the entry's own name when that name was observed. Never leave
+   `source_candidates` empty: the observed names are the only evidence the
+   entry has, so an entry renamed into English with an empty list is
+   dropped. When `value_type` is `enum`, `enum_values` must cover every
+   observed value for that name. Relation entries need the same
+   `source_candidates`, plus a `definition` and a `reason`, and `domain`
+   and `range_` when the examples make the endpoint types clear.
 4. Never redefine, rename, or narrow an entry that already exists above.
    This step is additions and absorptions only.
-5. Names must be lower snake_case English. Reject transliteration and
-   Korean names — rewrite them into snake_case English.
+5. Entry names must be lower snake_case English. Rewrite transliterated and
+   Korean names into snake_case English — and keep the original observed
+   name in `source_candidates`, otherwise the rewritten entry loses the
+   evidence that justified it.
 6. Give a `reason` for every absorption and every entry. It becomes the
    audit trail a human reads later, so say what evidence made you decide,
    not that you decided.

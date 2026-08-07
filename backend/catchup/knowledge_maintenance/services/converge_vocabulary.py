@@ -267,6 +267,13 @@ def _guard_predicates(
         entries.append(entry)
         covered.append(normalized)
         covered.extend(item.source_candidates)
+        logger.info(
+            "vocabulary_entry_accepted",
+            kind="predicate",
+            name=normalized,
+            value_type=entry.value_type,
+            reason=item.reason,
+        )
 
     return entries, rejections, covered
 
@@ -324,6 +331,12 @@ def _guard_relations(
         entries.append(entry)
         covered.append(normalized)
         covered.extend(item.source_candidates)
+        logger.info(
+            "vocabulary_entry_accepted",
+            kind="relation",
+            name=normalized,
+            reason=item.reason,
+        )
 
     return entries, rejections, covered
 
@@ -367,6 +380,12 @@ def _guard_absorptions(
             continue
         absorptions.append(item)
         covered.append(item.candidate_name)
+        logger.info(
+            "vocabulary_absorption_judged",
+            candidate_name=item.candidate_name,
+            canonical_name=item.canonical_name,
+            reason=item.reason,
+        )
 
     return absorptions, rejections, covered
 
@@ -408,15 +427,26 @@ def guard_convergence(
         if name and name not in covered:
             covered.append(name)
 
+    rejections = (
+        *predicate_rejections,
+        *relation_rejections,
+        *absorption_rejections,
+    )
+    # 판정 사유는 감사 기록이다. 러너 stdout만으로는 남지 않으므로
+    # 항목별로 structlog에도 싣는다. 예문·관측값은 상담 원문 조각이라
+    # 싣지 않는다.
+    for rejection in rejections:
+        logger.info(
+            "vocabulary_entry_rejected",
+            name=rejection.name,
+            reason=rejection.reason,
+        )
+
     return ConvergenceGuardResult(
         predicate_entries=tuple(predicate_entries),
         relation_entries=tuple(relation_entries),
         absorptions=tuple(absorptions),
-        rejections=(
-            *predicate_rejections,
-            *relation_rejections,
-            *absorption_rejections,
-        ),
+        rejections=rejections,
         covered_names=tuple(covered),
     )
 
@@ -472,6 +502,40 @@ class PublishOutcome:
     added_relations: tuple[str, ...] = ()
 
 
+def _reject_stale_base(
+    current: ExtractionVocabulary,
+    versions: Sequence[str],
+    *,
+    workspace_id: int,
+    ontology_id: str,
+) -> None:
+    """기준 사전이 최신 발행본이 아니면 발행을 거부한다.
+
+    병합은 `current` 위에만 쌓는다. `v3`이 있는데 `v1`을 기준으로 발행하면
+    새 최신본 `v4`에서 `v2`·`v3`의 항목이 조용히 사라진다. 발행 체계 밖의
+    이름(빈 문자열, `round-4`, `2`)은 계보의 일부가 아니므로 검사하지
+    않는다.
+    """
+    if not PUBLISHED_VERSION_PATTERN.match(current.snapshot_id or ""):
+        return
+    latest = resolve_latest_published_version(versions)
+    if latest == current.snapshot_id:
+        return
+    logger.error(
+        "vocabulary_publish_refused",
+        workspace_id=workspace_id,
+        ontology_id=ontology_id,
+        base_snapshot_id=current.snapshot_id,
+        latest_published_version=latest,
+        reason="stale_base",
+    )
+    raise RuntimeError(
+        f"기준 사전 {current.snapshot_id}이 최신 발행본 {latest}이 아니다. "
+        "이 상태로 발행하면 그 사이 버전의 항목이 새 최신본에서 사라진다. "
+        "최신 발행본을 기준으로 다시 돌린다."
+    )
+
+
 def publish_converged_vocabulary(
     guarded: ConvergenceGuardResult,
     *,
@@ -489,6 +553,9 @@ def publish_converged_vocabulary(
     버전 번호는 저장된 발행본 목록에서 계산한다. 인자로 받은 `current`의
     이름을 믿지 않는 것은 그것이 `round-4`처럼 발행 체계 밖의 실험용
     스냅샷일 수 있기 때문이다.
+
+    `current`가 `vN` 체계이면서 최신 발행본이 아니면 `RuntimeError`로
+    발행을 거부한다.
     """
     added_predicates = tuple(entry.name for entry in guarded.predicate_entries)
     added_relations = tuple(entry.name for entry in guarded.relation_entries)
@@ -506,6 +573,12 @@ def publish_converged_vocabulary(
 
     with uow:
         versions = uow.ontology.list_versions(
+            workspace_id=workspace_id,
+            ontology_id=ontology_id,
+        )
+        _reject_stale_base(
+            current,
+            versions,
             workspace_id=workspace_id,
             ontology_id=ontology_id,
         )
