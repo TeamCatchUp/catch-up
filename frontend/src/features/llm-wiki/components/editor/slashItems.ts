@@ -42,7 +42,8 @@ export const SLASH_ITEMS: readonly SlashItem[] = [
     id: 'bullet-list',
     label: '글머리 목록',
     description: '순서 없는 목록',
-    keywords: ['목록', '리스트', '불릿', 'list', 'bullet', 'ul'],
+    // description("순서 없는 목록")은 필터 대상이 아니므로 '순서'를 keywords에 직접 넣는다
+    keywords: ['목록', '리스트', '불릿', '순서', 'list', 'bullet', 'ul'],
     Icon: IconList,
     command: (editor, range) => {
       editor.chain().focus().deleteRange(range).toggleBulletList().run();
@@ -52,7 +53,7 @@ export const SLASH_ITEMS: readonly SlashItem[] = [
     id: 'ordered-list',
     label: '번호 목록',
     description: '순서 있는 목록',
-    keywords: ['목록', '번호', '리스트', 'list', 'ordered', 'ol', 'number'],
+    keywords: ['목록', '번호', '리스트', '순서', 'list', 'ordered', 'ol', 'number'],
     command: (editor, range) => {
       editor.chain().focus().deleteRange(range).toggleOrderedList().run();
     },
