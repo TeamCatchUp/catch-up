@@ -4,11 +4,11 @@ import { expect, fn, userEvent, within } from 'storybook/test';
 import { catchupParameters } from '../../../../../.storybook/catchupStoryParameters';
 import { TAG_FIXTURES } from '../../fixtures/llmWikiFixtures';
 import type { TagItem } from '../../types/llmWikiModel';
-import TagCategoryList from './TagCategoryList';
+import TagNavigationList from './TagNavigationList';
 
 const meta = {
-  title: 'Compositions/LLM Wiki/Tags/TagCategoryList',
-  component: TagCategoryList,
+  title: 'Compositions/LLM Wiki/Tags/TagNavigationList',
+  component: TagNavigationList,
   tags: ['autodocs'],
   args: { tags: TAG_FIXTURES, onTagClick: fn() },
   parameters: {
@@ -56,10 +56,10 @@ const meta = {
       ],
     }),
   },
-} satisfies Meta<typeof TagCategoryList>;
+} satisfies Meta<typeof TagNavigationList>;
 
 export default meta;
-type Story = StoryObj<typeof TagCategoryList>;
+type Story = StoryObj<typeof TagNavigationList>;
 
 /** Figma 좌측 열 슬롯(280×300). 컴포넌트가 폭·높이를 갖지 않으므로 슬롯이 준다. */
 const paneSlot: Decorator = (Story) => (

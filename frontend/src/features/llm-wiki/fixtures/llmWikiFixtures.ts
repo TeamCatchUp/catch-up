@@ -104,7 +104,7 @@ export const REVIEW_STAT_CARD_FIXTURES: readonly ReviewStatCardData[] = [
  *
  * 카테고리로 묶지 않는다 — 명세 §11이 태그 계층 구조를 범위 밖으로 못박았고 시안도 평평한 목록이다.
  * 6개는 Figma 좌측 목록(8행, 300px 높이 = 스크롤)보다 적은 수라 스크롤이 걸리지 않는다.
- * 스크롤 경계는 TagCategoryList 스토리가 별도 픽스처로 잰다.
+ * 스크롤 경계는 TagNavigationList 스토리가 별도 픽스처로 잰다.
  */
 export const TAG_FIXTURES: readonly TagItem[] = [
   { id: 'tag-retry', name: '재시도 정책', documentCount: 4 },

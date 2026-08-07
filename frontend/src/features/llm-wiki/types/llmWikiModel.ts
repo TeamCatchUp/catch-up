@@ -89,7 +89,7 @@ export interface ReviewStatCardData {
  * (17762:103078)은 그룹 헤더 없는 평평한 목록이었다. 그래서 이 타입이 태그 목록의 유일한 단위다.
  *
  * documentCount는 명세 §6("누적 문의 건수")에서 온 계약 보존용 필드다 — 태그 목록 시안에는
- * 건수 표기가 없으므로 TagCategoryList는 이 값을 렌더하지 않는다.
+ * 건수 표기가 없으므로 TagNavigationList는 이 값을 렌더하지 않는다.
  */
 export interface TagItem {
   id: string;
