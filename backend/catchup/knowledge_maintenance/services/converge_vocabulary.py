@@ -152,19 +152,18 @@ def _matched_usage(
     ]
 
 
-def _prepare(
+def _resolve_name(
     proposed_name: str,
-    source_candidates: Sequence[str],
     *,
     known: Sequence[str],
     seen: set[str],
-    observed: set[str],
-) -> tuple[str, set[str]] | GuardRejection:
-    """이름 정규화부터 관측 증거까지 공통 가드를 순서대로 검사한다.
+) -> str | GuardRejection:
+    """이름 가드(규칙 1~3)를 순서대로 검사한다.
 
-    통과하면 정규화 이름과 근거 이름 집합을 돌려주고, 아니면 첫 위반
-    사유로 기각을 돌려준다. 스키마 검증(규칙 4)은 모델이 서로 달라
-    호출자가 맡는다.
+    통과하면 정규화된 이름을 돌려주고, 아니면 첫 위반 사유로 기각을
+    돌려준다. 통과한 이름은 곧바로 `seen`에 등록한다. 규칙 3은
+    무조건적이어서 이 항목이 뒤에서 스키마·enum으로 떨어져도 같은 이름의
+    다음 항목은 중복으로 기각돼야 한다.
     """
     normalized = normalize_vocabulary_name(proposed_name)
     if not normalized:
@@ -173,13 +172,24 @@ def _prepare(
         return GuardRejection(name=normalized, reason="기존 엔트리 개정 금지")
     if normalized in seen:
         return GuardRejection(name=normalized, reason="제안 내 중복")
+    seen.add(normalized)
+    return normalized
+
+
+def _evidence_sources(
+    normalized: str,
+    source_candidates: Sequence[str],
+) -> set[str]:
+    """이 항목의 근거가 될 이름 집합을 만든다.
+
+    원본 표기와 정규화형을 모두 담는다. 제안이 어느 쪽 표기로 근거를
+    적어도 관측 집합과 매칭되게 하려는 것이다.
+    """
     sources = {normalize_vocabulary_name(candidate) for candidate in source_candidates}
     sources.update(source_candidates)
     sources.add(normalized)
     sources.discard("")
-    if not sources & observed:
-        return GuardRejection(name=normalized, reason="관측 증거 없음")
-    return normalized, sources
+    return sources
 
 
 def _guard_predicates(
@@ -196,17 +206,15 @@ def _guard_predicates(
     seen: set[str] = set()
 
     for item in proposed:
-        prepared = _prepare(
+        resolved = _resolve_name(
             item.name,
-            item.source_candidates,
             known=current.predicates,
             seen=seen,
-            observed=observed,
         )
-        if isinstance(prepared, GuardRejection):
-            rejections.append(prepared)
+        if isinstance(resolved, GuardRejection):
+            rejections.append(resolved)
             continue
-        normalized, sources = prepared
+        normalized = resolved
 
         try:
             entry = PredicateEntry.model_validate(
@@ -228,6 +236,11 @@ def _guard_predicates(
             )
             continue
 
+        sources = _evidence_sources(normalized, item.source_candidates)
+        if not sources & observed:
+            rejections.append(GuardRejection(name=normalized, reason="관측 증거 없음"))
+            continue
+
         if entry.value_type == "enum":
             matched = _matched_usage(predicate_usage, sources)
             observed_values: set[str] = set()
@@ -245,7 +258,6 @@ def _guard_predicates(
                 )
                 continue
 
-        seen.add(normalized)
         entries.append(entry)
         covered.append(normalized)
         covered.extend(item.source_candidates)
@@ -269,17 +281,15 @@ def _guard_relations(
     seen: set[str] = set()
 
     for item in proposed:
-        prepared = _prepare(
+        resolved = _resolve_name(
             item.name,
-            item.source_candidates,
             known=current.relation_types,
             seen=seen,
-            observed=observed,
         )
-        if isinstance(prepared, GuardRejection):
-            rejections.append(prepared)
+        if isinstance(resolved, GuardRejection):
+            rejections.append(resolved)
             continue
-        normalized, _ = prepared
+        normalized = resolved
 
         try:
             entry = RelationTypeEntry.model_validate(
@@ -300,7 +310,11 @@ def _guard_relations(
             )
             continue
 
-        seen.add(normalized)
+        sources = _evidence_sources(normalized, item.source_candidates)
+        if not sources & observed:
+            rejections.append(GuardRejection(name=normalized, reason="관측 증거 없음"))
+            continue
+
         entries.append(entry)
         covered.append(normalized)
         covered.extend(item.source_candidates)

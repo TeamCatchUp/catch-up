@@ -130,6 +130,42 @@ def test_스키마_위반은_항목만_기각():
     assert [r.name for r in result.rejections] == ["broken_enum"]
 
 
+def test_스키마와_관측을_동시에_어기면_스키마_사유로_기각():
+    # 가드 순서가 브리프 그대로 4(스키마) → 5(관측 증거)여야 한다. 순서가
+    # 뒤집히면 사유가 "관측 증거 없음"으로 바뀐다.
+    proposal = VocabularyConvergenceProposal(
+        predicate_entries=(
+            _proposed(
+                "broken_and_unobserved",
+                value_type="enum",
+                enum_values=(),
+                source_candidates=("nowhere",),
+            ),
+        ),
+    )
+    result = _guard(proposal, predicate_usage=())
+    assert result.predicate_entries == ()
+    assert len(result.rejections) == 1
+    assert result.rejections[0].reason.startswith("스키마 검증 실패")
+    assert "enum" in result.rejections[0].reason
+
+
+def test_스키마로_기각된_첫_항목도_중복_슬롯을_차지한다():
+    # 규칙 3은 무조건적이다. 첫 항목이 뒤에서 떨어져도 같은 이름의 다음
+    # 항목은 중복으로 기각된다.
+    proposal = VocabularyConvergenceProposal(
+        predicate_entries=(
+            _proposed("release_date", value_type="enum", enum_values=()),
+            _proposed("release_date"),
+        ),
+    )
+    result = _guard(proposal, predicate_usage=(_usage("release_date"),))
+    assert result.predicate_entries == ()
+    reasons = [r.reason for r in result.rejections]
+    assert reasons[0].startswith("스키마 검증 실패")
+    assert reasons[1] == "제안 내 중복"
+
+
 def test_관측_증거_없는_항목_기각():
     proposal = VocabularyConvergenceProposal(
         predicate_entries=(
