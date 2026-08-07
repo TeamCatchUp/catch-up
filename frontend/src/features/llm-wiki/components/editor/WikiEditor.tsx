@@ -7,6 +7,7 @@ import StarterKit from '@tiptap/starter-kit';
 import { Popover, PopoverAnchor, PopoverContent } from '@/shared/components/ui/popover';
 
 import type { SlashMenuHandle, SlashMenuState } from '../../types/llmWikiEditor';
+import BlockDragHandle from './BlockDragHandle';
 import { SlashCommand } from './extensions/slashCommand';
 import { WikiBlockAttrs } from './extensions/wikiBlockAttrs';
 import SlashMenu from './SlashMenu';
@@ -93,6 +94,7 @@ export default function WikiEditor({ initialContent, editable = true, onUpdate, 
   return (
     <>
       <EditorContent editor={editor} className="min-h-40" />
+      <BlockDragHandle editor={editor} />
 
       {/*
         커서에는 DOM 요소가 없다. 보이지 않는 anchor를 clientRect 좌표로 옮겨두면

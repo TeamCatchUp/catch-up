@@ -31,7 +31,7 @@ const meta = {
       dataProfile: 'static',
       designSource: 'dev-preview',
       viewport: { width: 720, height: 480 },
-      states: ['empty', 'slash-menu-open'],
+      states: ['empty', 'slash-menu-open', 'drag-handle'],
       dataNotes: [
         '저장·API가 없다. 상태는 Tiptap 내부(ProseMirror state)에 있고 onUpdate로 관찰만 한다.',
         'blocks[] 어댑터는 이번 범위 밖이다 — initialContent는 Tiptap JSON 그대로다.',
@@ -93,5 +93,29 @@ export const SlashInsideWordDoesNotOpen: Story = {
     await userEvent.keyboard('and/');
 
     await expect(body.queryByText('제목 1')).toBeNull();
+  },
+};
+
+/**
+ * 드래그 핸들. 명세·Figma 근거가 없는 유일한 기능이라 시각을 최소로 뒀다
+ * (drag_indicator.svg + 호버 시 노출). 시안 요청은 design-request에 올라가 있다.
+ */
+export const DragHandle: Story = {
+  args: {
+    initialContent: {
+      type: 'doc',
+      content: [
+        { type: 'paragraph', content: [{ type: 'text', text: '첫 번째 문단' }] },
+        { type: 'paragraph', content: [{ type: 'text', text: '두 번째 문단' }] },
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    const surface = canvas.getByRole('textbox');
+    await userEvent.hover(surface);
+
+    await expect(canvas.getByTestId('block-drag-handle')).toBeInTheDocument();
   },
 };
