@@ -1,7 +1,8 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite';
-import { expect, userEvent, within } from 'storybook/test';
+import { expect, fn, userEvent, within } from 'storybook/test';
 
 import { catchupParameters } from '../../../../../.storybook/catchupStoryParameters';
+import { EDITOR_SKELETON_DOC } from '../../fixtures/llmWikiEditorFixtures';
 import WikiEditor from './WikiEditor';
 
 /**
@@ -31,7 +32,7 @@ const meta = {
       dataProfile: 'static',
       designSource: 'dev-preview',
       viewport: { width: 720, height: 480 },
-      states: ['empty', 'slash-menu-open', 'drag-handle'],
+      states: ['empty', 'slash-menu-open', 'drag-handle', 'with-content', 'read-only', 'markdown-shortcut', 'invalid-content'],
       dataNotes: [
         '저장·API가 없다. 상태는 Tiptap 내부(ProseMirror state)에 있고 onUpdate로 관찰만 한다.',
         'blocks[] 어댑터는 이번 범위 밖이다 — initialContent는 Tiptap JSON 그대로다.',
@@ -117,5 +118,88 @@ export const DragHandle: Story = {
     await userEvent.hover(surface);
 
     await expect(canvas.getByTestId('block-drag-handle')).toBeInTheDocument();
+  },
+};
+
+/** 픽스처 로드. 골격 블록만 들어 있다 — 표·체크박스·콜아웃은 다음 단계다. */
+export const WithContent: Story = {
+  args: { initialContent: EDITOR_SKELETON_DOC, onUpdate: fn() },
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement);
+    const surface = canvas.getByRole('textbox');
+
+    await expect(surface).toHaveTextContent('8월 들어 결제 실패가 증가했다.');
+    await expect(surface.querySelector('h2')).not.toBeNull();
+    await expect(surface.querySelectorAll('li')).toHaveLength(2);
+
+    // origin·claimIds는 화면에 나오면 안 된다 — 렌더용 값이 아니다.
+    await expect(surface.innerHTML).not.toContain('claimIds');
+    await expect(surface.innerHTML).not.toContain('c_1');
+
+    // 사용자가 아무것도 치지 않았는데 onUpdate가 불리면 안 된다 — 부모의 dirty 추적·autosave가
+    // 마운트 직후 "변경됨"이 된다. setEditable(editable, false)가 지키는 불변식의 회귀 감시.
+    await expect(args.onUpdate).not.toHaveBeenCalled();
+  },
+};
+
+/** 읽기 전용. 타이핑해도 내용이 바뀌지 않는다. */
+export const ReadOnly: Story = {
+  args: { initialContent: EDITOR_SKELETON_DOC, editable: false },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const surface = canvas.getByRole('textbox');
+
+    const before = surface.textContent;
+    await userEvent.click(surface);
+    await userEvent.keyboard('이 글자는 들어가면 안 된다');
+
+    await expect(surface.textContent).toBe(before);
+  },
+};
+
+/**
+ * 마크다운 단축 입력 — 명세 209행이 제목·목록·코드 3종을 요구한다.
+ *
+ * 구현 코드가 0줄이라(StarterKit의 input rule) 검증을 빠뜨리기 쉽다. 그런데 "StarterKit이
+ * 준다"는 건 우리의 가정이고, StarterKit 옵션을 나중에 건드리면 조용히 깨진다.
+ * 라이브러리를 테스트하는 게 아니라 명세 요구가 만족되는지를 본다.
+ */
+export const MarkdownShortcuts: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const surface = canvas.getByRole('textbox');
+
+    await userEvent.click(surface);
+
+    await userEvent.keyboard('# 제목이 된다{Enter}');
+    await expect(surface.querySelector('h1')).not.toBeNull();
+
+    await userEvent.keyboard('- 목록이 된다{Enter}{Enter}');
+    await expect(surface.querySelector('ul li')).not.toBeNull();
+
+    // StarterKit codeBlock input rule은 /^```[\s\n]$/ — 백틱 3개 "뒤의 공백"이 방아쇠다.
+    await userEvent.keyboard('``` ');
+    await expect(surface.querySelector('pre code')).not.toBeNull();
+  },
+};
+
+/**
+ * 스키마에 없는 노드가 들어오면 onContentError가 불린다.
+ *
+ * enableContentCheck를 켜지 않으면 ProseMirror가 말없이 버린다. 지금은 픽스처만 넣어
+ * 티가 안 나지만, blocks[]가 들어올 때 claim_section이 사라지고도 화면은 멀쩡해 보인다.
+ * table은 이번 범위에 없는 노드라 검증 표본으로 쓴다(다음 단계에 TableKit이 붙으면
+ * 다른 미지 노드로 바꾼다).
+ */
+export const InvalidContentIsReported: Story = {
+  args: {
+    onContentError: fn(),
+    initialContent: {
+      type: 'doc',
+      content: [{ type: 'table', content: [] }],
+    },
+  },
+  play: async ({ args }) => {
+    await expect(args.onContentError).toHaveBeenCalled();
   },
 };
