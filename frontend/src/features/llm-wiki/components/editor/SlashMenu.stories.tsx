@@ -43,7 +43,7 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof SlashMenu>;
 
-/** 전체 항목. 골격 단계라 8개다(표·체크박스·콜아웃은 다음 단계). */
+/** 전체 항목 11종 — 명세 9종에서 이미지를 빼고 제목을 3단계로 편 것(스펙 §12). */
 export const Default: Story = {
   play: async ({ args, canvasElement }) => {
     const canvas = within(canvasElement);
@@ -51,10 +51,13 @@ export const Default: Story = {
     await expect(canvas.getByText('제목 1')).toBeInTheDocument();
     await expect(canvas.getByText('글머리 목록')).toBeInTheDocument();
     await expect(canvas.getByText('구분선')).toBeInTheDocument();
+    // 2차 블록 3종(스펙 §12)
+    await expect(canvas.getByText('체크박스')).toBeInTheDocument();
+    await expect(canvas.getByText('표')).toBeInTheDocument();
+    await expect(canvas.getByText('콜아웃')).toBeInTheDocument();
 
-    // 다음 단계 블록이 새어들어오면 안 된다.
-    await expect(canvas.queryByText('표')).toBeNull();
-    await expect(canvas.queryByText('콜아웃')).toBeNull();
+    // 영구 제외(이미지·멘션·문서 링크)는 새어들어오면 안 된다.
+    await expect(canvas.queryByText('이미지')).toBeNull();
 
     await userEvent.click(canvas.getByText('인용'));
     await expect(args.onSelect).toHaveBeenCalledWith(expect.objectContaining({ id: 'blockquote' }));
