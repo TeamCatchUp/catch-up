@@ -733,6 +733,59 @@ class SqlAlchemyKnowledgeCandidateRepository:
             completed_at=row.completed_at,
         )
 
+    def supersede_stale_pending_candidates(
+        self,
+        *,
+        workspace_id: int,
+        input_node_id: uuid.UUID,
+        current_run_id: uuid.UUID,
+    ) -> int:
+        """같은 입력의 이전 실행이 남긴 pending 후보를 은퇴시킨다.
+
+        재추출이 만든 새 배치와 구 배치가 resolution에 이중으로 잡히는
+        것을 막기 위해서다. pending만 superseded로 전이한다 — 사람 결정과
+        해소 결과(accepted·merged·duplicate·rejected)는 되돌릴 수 없는
+        기록이라 건드리지 않는다.
+        """
+        stale_run_ids = (
+            select(KnowledgeExtractionRunRow.id)
+            .where(
+                KnowledgeExtractionRunRow.workspace_id == workspace_id,
+                KnowledgeExtractionRunRow.input_node_id == input_node_id,
+                KnowledgeExtractionRunRow.id != current_run_id,
+            )
+            .scalar_subquery()
+        )
+        total = 0
+        for row_type, pending, superseded in (
+            (
+                KnowledgeEntityCandidateRow,
+                EntityResolutionStatus.PENDING.value,
+                EntityResolutionStatus.SUPERSEDED.value,
+            ),
+            (
+                KnowledgeClaimCandidateRow,
+                AssertionResolutionStatus.PENDING.value,
+                AssertionResolutionStatus.SUPERSEDED.value,
+            ),
+            (
+                KnowledgeRelationCandidateRow,
+                AssertionResolutionStatus.PENDING.value,
+                AssertionResolutionStatus.SUPERSEDED.value,
+            ),
+        ):
+            result = self._session.execute(
+                update(row_type)
+                .where(
+                    row_type.workspace_id == workspace_id,
+                    row_type.extraction_run_id.in_(stale_run_ids),
+                    row_type.resolution_status == pending,
+                )
+                .values(resolution_status=superseded)
+            )
+            total += result.rowcount or 0
+        return total
+
     def add_entity_candidate(
         self,
         *,
@@ -965,6 +1018,9 @@ class SqlAlchemyKnowledgeCandidateRepository:
         기록은 남는다. 반대로 닫힌 accepted는 "한때 참이었다"를 묻는
         temporal 자료라 계속 싣고, 거르는 일은 각 소비자가 valid_to로
         한다.
+
+        superseded도 뺀다. 재추출이 대체한 구 배치라 새 배치와 함께
+        실리면 같은 주장이 두 번 판정된다.
         """
         citation_verified = (
             select(
@@ -1033,8 +1089,12 @@ class SqlAlchemyKnowledgeCandidateRepository:
             )
             .where(
                 KnowledgeClaimCandidateRow.workspace_id == workspace_id,
-                KnowledgeClaimCandidateRow.resolution_status
-                != AssertionResolutionStatus.REJECTED.value,
+                KnowledgeClaimCandidateRow.resolution_status.notin_(
+                    (
+                        AssertionResolutionStatus.REJECTED.value,
+                        AssertionResolutionStatus.SUPERSEDED.value,
+                    )
+                ),
             )
             .order_by(
                 KnowledgeClaimCandidateRow.created_at,

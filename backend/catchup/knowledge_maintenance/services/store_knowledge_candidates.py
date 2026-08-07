@@ -127,6 +127,25 @@ def store_knowledge_candidates(
             started_at=now,
         )
 
+        # 재추출이면 구 배치의 pending 후보를 먼저 은퇴시킨다. 같은 UoW
+        # 안이라 은퇴와 새 배치 저장은 함께 확정되거나 함께 무산된다.
+        superseded_count = (
+            uow.knowledge_candidates.supersede_stale_pending_candidates(
+                workspace_id=observation.workspace_id,
+                input_node_id=node.id,
+                current_run_id=run.id,
+            )
+        )
+        if superseded_count:
+            logger.info(
+                "knowledge_candidates_superseded",
+                workspace_id=observation.workspace_id,
+                observation_id=str(observation.id),
+                input_node_id=str(node.id),
+                run_id=str(run.id),
+                superseded_count=superseded_count,
+            )
+
         entity_ids = _store_entities(
             observation,
             batch,

@@ -38,6 +38,9 @@ from catchup.knowledge_maintenance.contracts.extraction import (
     RelationAssertionCandidateDraft,
 )
 from catchup.knowledge_maintenance.domain.evidence import Locator
+from catchup.knowledge_maintenance.domain.knowledge_candidate import (
+    EntityResolutionStatus,
+)
 from catchup.knowledge_maintenance.domain.knowledge_candidate import ExtractionMethod
 from catchup.knowledge_maintenance.domain.knowledge_candidate import ExtractionRunSpec
 from catchup.knowledge_maintenance.domain.knowledge_node import NodeKind
@@ -1431,6 +1434,115 @@ def test_a_new_prompt_version_triggers_re_extraction(
     assert not first.reused
     assert not second.reused
     assert second.batch.run_id != first.batch.run_id
+
+
+def test_reextraction_supersedes_stale_pending_candidates(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+) -> None:
+    """재추출은 구 실행이 남긴 pending 후보를 은퇴시킨다.
+
+    은퇴시키지 않으면 resolution이 구 배치와 새 배치를 함께 긁어 같은
+    대상을 두 번 처리한다. 사람 결정과 해소 결과는 그대로 둔다.
+    """
+    observation = _stored_observation(workspace_id, session_factory)
+
+    first = store_knowledge_candidates(
+        observation, _batch(), spec=SPEC, uow=uow_factory()
+    )
+    accepted_candidate_id = first.batch.entity_ids["m1"]
+
+    with uow_factory() as uow:
+        node = uow.knowledge_nodes.create_entity_node(
+            workspace_id=workspace_id,
+            entity_type="channel_talk_user",
+            canonical_key=f"{SOURCE_TYPE}:channel_talk_user:{uuid.uuid4().hex}",
+            display_name="사용자 008",
+        )
+        uow.knowledge_candidates.mark_entity_resolved(
+            candidate_id=accepted_candidate_id,
+            status=EntityResolutionStatus.ACCEPTED,
+            resolved_node_id=node.id,
+        )
+        uow.commit()
+
+    second = store_knowledge_candidates(
+        observation,
+        _batch(),
+        spec=_spec(prompt_version="extract_knowledge_candidates/2"),
+        uow=uow_factory(),
+    )
+    assert second.batch.run_id != first.batch.run_id
+
+    with KnowledgeMaintenanceUnitOfWork(session_factory) as uow:
+        session = uow.knowledge_candidates._session  # noqa: SLF001
+        old_statuses = {
+            model.__name__: sorted(
+                {
+                    status
+                    for status in session.scalars(
+                        select(model.resolution_status).where(
+                            model.extraction_run_id == first.batch.run_id,
+                            model.id != accepted_candidate_id,
+                        )
+                    )
+                }
+            )
+            for model in (EntityCandidateRow, ClaimCandidateRow, RelationRow)
+        }
+        new_statuses = {
+            model.__name__: sorted(
+                {
+                    status
+                    for status in session.scalars(
+                        select(model.resolution_status).where(
+                            model.extraction_run_id == second.batch.run_id
+                        )
+                    )
+                }
+            )
+            for model in (EntityCandidateRow, ClaimCandidateRow, RelationRow)
+        }
+        accepted_status = session.scalar(
+            select(EntityCandidateRow.resolution_status).where(
+                EntityCandidateRow.id == accepted_candidate_id
+            )
+        )
+
+    # 구 run의 pending이던 후보는 전부 은퇴한다.
+    assert old_statuses == {
+        "KnowledgeEntityCandidate": ["superseded"],
+        "KnowledgeClaimCandidate": ["superseded"],
+        "KnowledgeRelationAssertionCandidate": ["superseded"],
+    }
+    # 사람 결정·해소 결과는 불변이다.
+    assert accepted_status == EntityResolutionStatus.ACCEPTED.value
+    # 새 run의 후보는 그대로 pending이다.
+    assert new_statuses == {
+        "KnowledgeEntityCandidate": ["pending"],
+        "KnowledgeClaimCandidate": ["pending"],
+        "KnowledgeRelationAssertionCandidate": ["pending"],
+    }
+
+    with KnowledgeMaintenanceUnitOfWork(session_factory) as uow:
+        pending_entity_ids = {
+            candidate.id
+            for candidate in uow.knowledge_candidates.find_pending_entity_candidates(
+                workspace_id=workspace_id,
+            )
+        }
+        claim_ids = {
+            candidate.id
+            for candidate in uow.knowledge_candidates.find_claim_candidates(
+                workspace_id=workspace_id,
+            )
+        }
+
+    assert not (set(first.batch.entity_ids.values()) & pending_entity_ids)
+    assert set(second.batch.entity_ids.values()) <= pending_entity_ids
+    assert not (set(first.batch.claim_ids.values()) & claim_ids)
+    assert set(second.batch.claim_ids.values()) <= claim_ids
 
 
 def test_a_new_ontology_version_triggers_re_extraction(
