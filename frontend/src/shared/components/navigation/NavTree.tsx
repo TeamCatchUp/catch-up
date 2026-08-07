@@ -2,6 +2,7 @@
 
 import { type ComponentType, type SVGProps, useState } from 'react';
 
+import IconCaret from '@/public/icons/icon/arrow_right.svg';
 import IconDepthConnector from '@/public/icons/icon/arrow_right2.svg';
 import { cn } from '@/shared/utils/cn';
 
@@ -85,28 +86,57 @@ export default function NavTree({ nodes, activeId, defaultExpandedIds, onNodeCli
 
     return (
       <div style={{ paddingInlineStart: depth * INTERACTIVE_INDENT_PX }}>
-        <button
-          type="button"
-          aria-current={node.id === activeId ? 'page' : undefined}
-          // 접히는 행만 펼침 상태를 노출한다. 잎 노드에 aria-expanded를 붙이면 거짓말이 된다
-          aria-expanded={hasChildren ? expanded : undefined}
-          onClick={() => {
-            if (hasChildren) toggle(node.id);
-            onNodeClick(node.id);
-          }}
+        <div
+          data-slot="nav-tree-row"
           className={cn(
-            'flex h-9 w-full cursor-pointer items-center gap-3 rounded-lg px-2.5 py-1.5 transition-colors',
+            'group flex h-9 items-center gap-3 rounded-lg px-2.5 py-1.5 transition-colors',
             /*
              * SnbMenuItem과 같은 근거 — Figma는 상태를 알파 오버레이로 구분하지만 코드의
              * interaction 토큰은 아직 solid neutral 세대라 상대 순서(hover < pressed)만 지킨다.
+             * 행이 더 이상 버튼이 아니라서 pressed는 내부 버튼의 :active를 has()로 받는다.
              */
-            'hover:bg-fill-normal-interaction-hover active:bg-fill-normal-interaction-pressed',
-            node.id === activeId && 'bg-fill-normal-strong',
+            'hover:bg-fill-normal-interaction-hover has-[button:active]:bg-fill-normal-interaction-pressed',
           )}
         >
-          {node.Icon && <node.Icon aria-hidden className="text-icon-normal-neutral size-5.5 shrink-0" />}
-          {label}
-        </button>
+          {/*
+           * 캐럿 대상 행은 Icon 유무와 무관하게 22px 슬롯을 예약한다.
+           * 슬롯이 없으면 hover에 캐럿이 생기면서 라벨이 22px 밀린다.
+           */}
+          {(hasChildren || node.Icon) && (
+            <span className="relative flex size-5.5 shrink-0 items-center justify-center">
+              {node.Icon && (
+                <node.Icon
+                  aria-hidden
+                  className={cn(
+                    'text-icon-normal-neutral size-5.5',
+                    hasChildren && 'group-focus-within:hidden group-hover:hidden',
+                  )}
+                />
+              )}
+              {hasChildren && (
+                <button
+                  type="button"
+                  aria-label={`${node.label} ${expanded ? '접기' : '펼치기'}`}
+                  aria-expanded={expanded}
+                  onClick={() => toggle(node.id)}
+                  className="text-icon-normal-neutral hover:bg-fill-normal-interaction-hover absolute hidden size-5.5 cursor-pointer items-center justify-center rounded-full group-focus-within:flex group-hover:flex"
+                >
+                  <IconCaret aria-hidden className={cn('size-4.5 transition-transform', expanded && 'rotate-90')} />
+                </button>
+              )}
+            </span>
+          )}
+
+          <button
+            type="button"
+            aria-current={node.id === activeId ? 'page' : undefined}
+            onClick={() => onNodeClick(node.id)}
+            // 라벨 span이 flex 아이템이어야 truncate가 동작한다 — 인라인이면 overflow가 무시된다
+            className="flex min-w-0 flex-1 cursor-pointer"
+          >
+            {label}
+          </button>
+        </div>
       </div>
     );
   };

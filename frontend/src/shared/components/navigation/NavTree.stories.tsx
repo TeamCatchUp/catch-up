@@ -102,6 +102,9 @@ const Frame = ({ children }: { children: React.ReactNode }) => (
 
 const left = (element: Element) => element.getBoundingClientRect().left;
 
+/** 라벨 버튼에서 그 행의 컨테이너를 찾는다. 배경·들여쓰기·행 높이는 전부 컨테이너가 갖는다 */
+const rowOf = (labelButton: Element) => labelButton.closest('[data-slot="nav-tree-row"]')!;
+
 export const Interactive: Story = {
   args: {
     activeId: 'file-1',
@@ -116,35 +119,38 @@ export const Interactive: Story = {
   play: async ({ args, canvasElement }) => {
     const canvas = within(canvasElement);
 
-    // 펼쳐진 채널·폴더 아래 파일까지 보인다
-    const file = canvas.getByRole('button', { name: '파일명texttexttext 1' });
-    await expect(file).toBeInTheDocument();
-
     const channel = canvas.getByRole('button', { name: '채널명 text text text text 1' });
-
-    // depth마다 20px씩 들여쓴다 (Figma SNB 트리 depth 0/1/2 = x 0/20/40)
     const folder = canvas.getByRole('button', { name: '폴더명 text text text t 1' });
-    await expect(left(folder) - left(channel)).toBe(20);
-    await expect(left(file) - left(channel)).toBe(40);
+    const file = canvas.getByRole('button', { name: '파일명texttexttext 1' });
+
+    // depth마다 20px씩 들여쓴다 (Figma 17873:46294 — Depth 2 List x=20, Depth 3 List x=40)
+    await expect(left(rowOf(folder)) - left(rowOf(channel))).toBe(20);
+    await expect(left(rowOf(file)) - left(rowOf(channel))).toBe(40);
     // 들여쓴 행은 오른쪽 끝이 밀리지 않는다 — 폭이 줄어들 뿐이다
-    await expect(folder.getBoundingClientRect().right).toBe(channel.getBoundingClientRect().right);
+    await expect(rowOf(folder).getBoundingClientRect().right).toBe(rowOf(channel).getBoundingClientRect().right);
 
-    // 자식이 있는 행만 펼침 상태를 노출한다
-    await expect(channel).toHaveAttribute('aria-expanded', 'true');
-    // 자식이 없는 행은 aria-expanded를 붙이지 않는다
-    await expect(canvas.getByRole('button', { name: '채널명 text text text text 2' })).not.toHaveAttribute(
-      'aria-expanded',
-    );
-
-    // 행을 누르면 접히고, 소비처에도 클릭이 전달된다
+    // 행 본문 클릭은 이동만 한다 — 더 이상 접히지 않는다
     await userEvent.click(channel);
-    await expect(canvas.queryByRole('button', { name: '파일명texttexttext 1' })).toBeNull();
-    await expect(channel).toHaveAttribute('aria-expanded', 'false');
     await expect(args.onNodeClick).toHaveBeenCalledWith('channel-1');
-
-    // 다시 누르면 펼쳐진다
-    await userEvent.click(channel);
     await expect(canvas.getByRole('button', { name: '파일명texttexttext 1' })).toBeInTheDocument();
+
+    // 접기/펼치기는 캐럿만 한다. 캐럿은 hover 또는 포커스에서 나타난다
+    channel.focus();
+    const collapse = canvas.getByRole('button', { name: '채널명 text text text text 1 접기' });
+    await expect(collapse).toHaveAttribute('aria-expanded', 'true');
+
+    await userEvent.click(collapse);
+    await expect(canvas.queryByRole('button', { name: '파일명texttexttext 1' })).toBeNull();
+
+    const expand = canvas.getByRole('button', { name: '채널명 text text text text 1 펼치기' });
+    await expect(expand).toHaveAttribute('aria-expanded', 'false');
+    await userEvent.click(expand);
+    await expect(canvas.getByRole('button', { name: '파일명texttexttext 1' })).toBeInTheDocument();
+
+    // 자식이 없는 행에는 캐럿 자체가 없다 — 누를 것이 없으면 어포던스도 없다
+    const leaf = canvas.getByRole('button', { name: '채널명 text text text text 2' });
+    leaf.focus();
+    await expect(canvas.queryByRole('button', { name: '채널명 text text text text 2 펼치기' })).toBeNull();
   },
 };
 
@@ -224,7 +230,7 @@ export const LongLabelNarrow: Story = {
     const file = canvas.getByRole('button', { name: '파일명texttexttext 1' });
 
     // 가장 깊은 행도 36px을 유지한다 (Figma SNB/menu 행 높이)
-    await expect(Math.round(file.getBoundingClientRect().height)).toBe(36);
+    await expect(Math.round(rowOf(file).getBoundingClientRect().height)).toBe(36);
 
     // 라벨은 잘린다 — 넘치는 폭이 실제로 있어야 truncate가 일한 것이다
     const label = file.querySelector('span');
@@ -232,6 +238,8 @@ export const LongLabelNarrow: Story = {
     await expect(label!.scrollWidth).toBeGreaterThan(label!.clientWidth);
 
     // 슬롯 밖으로 새지 않는다
-    await expect(file.getBoundingClientRect().right).toBeLessThanOrEqual(canvasElement.getBoundingClientRect().right);
+    await expect(rowOf(file).getBoundingClientRect().right).toBeLessThanOrEqual(
+      canvasElement.getBoundingClientRect().right,
+    );
   },
 };
