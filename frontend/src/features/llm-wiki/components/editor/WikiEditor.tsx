@@ -1,17 +1,32 @@
 'use client';
 
+import { useEffect, useRef } from 'react';
 import { EditorContent, type JSONContent, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 
 export interface WikiEditorProps {
   /** 최초 1회만 반영된다. 이후 변경은 무시 — uncontrolled다. */
   initialContent?: JSONContent;
+  /** 마운트 후 바뀌어도 반영된다 — 아래 useEffect가 setEditable로 밀어 넣는다. */
   editable?: boolean;
   onUpdate?: (doc: JSONContent) => void;
   onContentError?: (error: Error) => void;
 }
 
 export default function WikiEditor({ initialContent, editable = true, onUpdate, onContentError }: WikiEditorProps) {
+  // Editor 생성자가 this.on('update', this.options.onUpdate)로 함수 참조를 그대로 등록하고,
+  // useEditor의 옵션 비교는 핸들러 키를 제외한다. 콜백을 직접 넘기면 첫 렌더의 클로저가
+  // 영원히 호출된다 — 부모가 새 콜백을 넘겨도 갱신되지 않는다. 그래서 ref로 우회한다.
+  // 렌더 중 ref를 쓰면 react-hooks/refs가 막는다(그리고 concurrent 렌더에서 실제로 위험하다).
+  // 커밋 후 갱신해도 되는 이유: 이 콜백들은 DOM 이벤트에서만 불리고, DOM 이벤트는 커밋 뒤에 온다.
+  const onUpdateRef = useRef(onUpdate);
+  const onContentErrorRef = useRef(onContentError);
+
+  useEffect(() => {
+    onUpdateRef.current = onUpdate;
+    onContentErrorRef.current = onContentError;
+  }, [onUpdate, onContentError]);
+
   const editor = useEditor({
     extensions: [StarterKit],
     content: initialContent,
@@ -24,12 +39,18 @@ export default function WikiEditor({ initialContent, editable = true, onUpdate, 
     enableContentCheck: true,
     onContentError: ({ error }) => {
       console.error('[WikiEditor] 스키마에 없는 콘텐츠', error);
-      onContentError?.(error);
+      onContentErrorRef.current?.(error);
     },
     onUpdate: ({ editor: instance }) => {
-      onUpdate?.(instance.getJSON());
+      onUpdateRef.current?.(instance.getJSON());
     },
   });
+
+  // useEditor는 deps 없이 리렌더되면 editable을 현재 에디터 값으로 되돌린다.
+  // 즉 옵션에 넘긴 editable은 마운트 이후 무시된다 — 여기서 직접 밀어 넣어야 반응한다.
+  useEffect(() => {
+    editor?.setEditable(editable);
+  }, [editor, editable]);
 
   return <EditorContent editor={editor} className="min-h-40" />;
 }
