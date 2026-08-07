@@ -31,7 +31,7 @@ const meta = {
       dataProfile: 'static',
       designSource: 'dev-preview',
       viewport: { width: 720, height: 480 },
-      states: ['empty'],
+      states: ['empty', 'slash-menu-open'],
       dataNotes: [
         '저장·API가 없다. 상태는 Tiptap 내부(ProseMirror state)에 있고 onUpdate로 관찰만 한다.',
         'blocks[] 어댑터는 이번 범위 밖이다 — initialContent는 Tiptap JSON 그대로다.',
@@ -58,5 +58,40 @@ export const Empty: Story = {
     await userEvent.keyboard('결제 실패가 증가했다.');
 
     await expect(surface).toHaveTextContent('결제 실패가 증가했다.');
+  },
+};
+
+/** /를 치면 메뉴가 뜨고, 항목을 고르면 블록이 바뀐다. */
+export const SlashMenuInsert: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const body = within(canvasElement.ownerDocument.body);
+
+    const surface = canvas.getByRole('textbox');
+    await userEvent.click(surface);
+    await userEvent.keyboard('/');
+
+    // 메뉴는 포털로 렌더된다 — body 스코프에서 찾는다.
+    await expect(await body.findByText('제목 1')).toBeInTheDocument();
+
+    await userEvent.click(body.getByText('제목 1'));
+
+    // 슬래시 문자는 지워지고 문단이 제목으로 바뀐다.
+    await expect(surface.querySelector('h1')).not.toBeNull();
+    await expect(surface).not.toHaveTextContent('/');
+  },
+};
+
+/** 글 중간의 /는 메뉴를 열지 않는다. and/or 를 칠 때 떠서는 안 된다. */
+export const SlashInsideWordDoesNotOpen: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const body = within(canvasElement.ownerDocument.body);
+
+    const surface = canvas.getByRole('textbox');
+    await userEvent.click(surface);
+    await userEvent.keyboard('and/');
+
+    await expect(body.queryByText('제목 1')).toBeNull();
   },
 };

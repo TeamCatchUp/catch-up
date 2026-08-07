@@ -1,10 +1,15 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { EditorContent, type JSONContent, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 
+import { Popover, PopoverAnchor, PopoverContent } from '@/shared/components/ui/popover';
+
+import type { SlashMenuHandle, SlashMenuState } from '../../types/llmWikiEditor';
+import { SlashCommand } from './extensions/slashCommand';
 import { WikiBlockAttrs } from './extensions/wikiBlockAttrs';
+import SlashMenu from './SlashMenu';
 
 /** WikiEditor가 쓰는 확장 목록. 테스트가 같은 목록으로 왕복을 검증한다 — 배열에서 확장을 빼면 그 테스트가 깨진다. */
 export const WIKI_EDITOR_EXTENSIONS = [StarterKit, WikiBlockAttrs];
@@ -32,8 +37,30 @@ export default function WikiEditor({ initialContent, editable = true, onUpdate, 
     onContentErrorRef.current = onContentError;
   }, [onUpdate, onContentError]);
 
+  const [menu, setMenu] = useState<SlashMenuState | null>(null);
+  const menuRef = useRef<SlashMenuHandle>(null);
+
+  // 메뉴가 닫혀 있으면(핸들 없음) 키를 소비하지 않는다.
+  const handleMenuKeyDown = useCallback((event: KeyboardEvent) => menuRef.current?.onKeyDown(event) ?? false, []);
+
+  // SlashCommand는 컴포넌트별 콜백(setMenu·menuRef)을 물기 때문에 인스턴스마다 configure한다.
+  // setMenu(useState setter)·handleMenuKeyDown은 identity가 안정적이라 1회 생성으로 충분하다.
+  const extensions = useMemo(
+    () => [
+      ...WIKI_EDITOR_EXTENSIONS,
+      // react-hooks/refs 오탐: configure는 콜백을 저장만 하고(Extension options), menuRef.current
+      // 접근은 Suggestion onKeyDown 즉 키보드 이벤트 시점에만 일어난다 — 렌더 중 읽기 경로가 없다.
+      // eslint-disable-next-line react-hooks/refs
+      SlashCommand.configure({
+        onStateChange: setMenu,
+        onKeyDown: handleMenuKeyDown,
+      }),
+    ],
+    [handleMenuKeyDown],
+  );
+
   const editor = useEditor({
-    extensions: WIKI_EDITOR_EXTENSIONS,
+    extensions,
     content: initialContent,
     editable,
     // App Router는 서버에서 한 번 렌더된다. 즉시 렌더하면 hydration이 어긋난다.
@@ -61,5 +88,40 @@ export default function WikiEditor({ initialContent, editable = true, onUpdate, 
     editor?.setEditable(editable, false);
   }, [editor, editable]);
 
-  return <EditorContent editor={editor} className="min-h-40" />;
+  const rect = menu?.clientRect;
+
+  return (
+    <>
+      <EditorContent editor={editor} className="min-h-40" />
+
+      {/*
+        커서에는 DOM 요소가 없다. 보이지 않는 anchor를 clientRect 좌표로 옮겨두면
+        Radix가 충돌 감지·플립·포탈을 알아서 한다. top/left를 직접 계산하면
+        메뉴가 화면 아래에서 잘린다.
+      */}
+      <Popover open={menu !== null}>
+        <PopoverAnchor asChild>
+          <div
+            aria-hidden
+            className="pointer-events-none fixed"
+            style={{
+              top: rect?.top ?? 0,
+              left: rect?.left ?? 0,
+              width: rect?.width ?? 0,
+              height: rect?.height ?? 0,
+            }}
+          />
+        </PopoverAnchor>
+        <PopoverContent
+          align="start"
+          side="bottom"
+          className="w-auto border-none bg-transparent p-0 shadow-none"
+          // 포커스는 에디터에 남아야 한다. 메뉴가 가져가면 타이핑이 끊긴다.
+          onOpenAutoFocus={(event) => event.preventDefault()}
+        >
+          {menu && <SlashMenu ref={menuRef} items={menu.items} onSelect={menu.onSelect} />}
+        </PopoverContent>
+      </Popover>
+    </>
+  );
 }
