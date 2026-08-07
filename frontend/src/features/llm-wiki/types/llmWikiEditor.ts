@@ -34,3 +34,17 @@ export interface SlashMenuState {
 export interface SlashMenuHandle {
   onKeyDown: (event: KeyboardEvent) => boolean;
 }
+
+/** `:` 이모지 서제스천의 한 항목 — node-emoji의 search 결과 형태 */
+export interface EmojiItem {
+  name: string;
+  emoji: string;
+}
+
+/** emojiCommand 확장이 React로 올려보내는 메뉴 상태. null이면 닫힘. */
+export interface EmojiMenuState {
+  items: readonly EmojiItem[];
+  query: string;
+  clientRect: DOMRect | null;
+  onSelect: (item: EmojiItem) => void;
+}

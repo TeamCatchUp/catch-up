@@ -12,9 +12,11 @@ import StarterKit from '@tiptap/starter-kit';
 
 import { Popover, PopoverAnchor, PopoverContent } from '@/shared/components/ui/popover';
 
-import type { SlashMenuHandle, SlashMenuState } from '../../types/llmWikiEditor';
+import type { EmojiMenuState, SlashMenuHandle, SlashMenuState } from '../../types/llmWikiEditor';
 import BlockDragHandle from './BlockDragHandle';
+import EmojiMenu from './EmojiMenu';
 import { Callout } from './extensions/callout';
+import { EmojiCommand } from './extensions/emojiCommand';
 import { SlashCommand } from './extensions/slashCommand';
 import { WIKI_BLOCK_ATTR_TYPES, WikiBlockAttrs } from './extensions/wikiBlockAttrs';
 import FormattingToolbar from './FormattingToolbar';
@@ -67,9 +69,12 @@ export default function WikiEditor({ initialContent, editable = true, onUpdate, 
 
   const [menu, setMenu] = useState<SlashMenuState | null>(null);
   const menuRef = useRef<SlashMenuHandle>(null);
+  const [emojiMenu, setEmojiMenu] = useState<EmojiMenuState | null>(null);
+  const emojiMenuRef = useRef<SlashMenuHandle>(null);
 
   // 메뉴가 닫혀 있으면(핸들 없음) 키를 소비하지 않는다.
   const handleMenuKeyDown = useCallback((event: KeyboardEvent) => menuRef.current?.onKeyDown(event) ?? false, []);
+  const handleEmojiKeyDown = useCallback((event: KeyboardEvent) => emojiMenuRef.current?.onKeyDown(event) ?? false, []);
 
   // SlashCommand는 컴포넌트별 콜백(setMenu·menuRef)을 물기 때문에 인스턴스마다 configure한다.
   // setMenu(useState setter)·handleMenuKeyDown은 identity가 안정적이라 1회 생성으로 충분하다.
@@ -83,8 +88,13 @@ export default function WikiEditor({ initialContent, editable = true, onUpdate, 
         onStateChange: setMenu,
         onKeyDown: handleMenuKeyDown,
       }),
+      // eslint-disable-next-line react-hooks/refs -- 위와 동일한 오탐: 저장만 하고 이벤트 시점에 읽는다
+      EmojiCommand.configure({
+        onStateChange: setEmojiMenu,
+        onKeyDown: handleEmojiKeyDown,
+      }),
     ],
-    [handleMenuKeyDown],
+    [handleMenuKeyDown, handleEmojiKeyDown],
   );
 
   const editor = useEditor({
@@ -175,6 +185,35 @@ export default function WikiEditor({ initialContent, editable = true, onUpdate, 
           onOpenAutoFocus={(event) => event.preventDefault()}
         >
           {menu && <SlashMenu ref={menuRef} items={menu.items} onSelect={menu.onSelect} />}
+        </PopoverContent>
+      </Popover>
+
+      {/* `:` 이모지 서제스천 — 슬래시 메뉴와 같은 anchor 패턴의 별도 Popover */}
+      <Popover
+        open={emojiMenu !== null}
+        onOpenChange={(open) => {
+          if (!open) setEmojiMenu(null);
+        }}
+      >
+        <PopoverAnchor asChild>
+          <div
+            aria-hidden
+            className="pointer-events-none fixed"
+            style={{
+              top: emojiMenu?.clientRect?.top ?? 0,
+              left: emojiMenu?.clientRect?.left ?? 0,
+              width: emojiMenu?.clientRect?.width ?? 0,
+              height: emojiMenu?.clientRect?.height ?? 0,
+            }}
+          />
+        </PopoverAnchor>
+        <PopoverContent
+          align="start"
+          side="bottom"
+          className="w-auto border-none bg-transparent p-0 shadow-none"
+          onOpenAutoFocus={(event) => event.preventDefault()}
+        >
+          {emojiMenu && <EmojiMenu ref={emojiMenuRef} items={emojiMenu.items} onSelect={emojiMenu.onSelect} />}
         </PopoverContent>
       </Popover>
     </>

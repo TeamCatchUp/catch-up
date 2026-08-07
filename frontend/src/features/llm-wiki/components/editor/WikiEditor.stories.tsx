@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/nextjs-vite';
 import { expect, fn, userEvent, within } from 'storybook/test';
 
 import { catchupParameters } from '../../../../../.storybook/catchupStoryParameters';
-import { EDITOR_SKELETON_DOC } from '../../fixtures/llmWikiEditorFixtures';
+import { EDITOR_PHASE2_DOC, EDITOR_SKELETON_DOC } from '../../fixtures/llmWikiEditorFixtures';
 import WikiEditor from './WikiEditor';
 
 /**
@@ -46,6 +46,8 @@ const meta = {
         'formatting-toolbar',
         'turn-into',
         'add-block-button',
+        'phase2-content',
+        'emoji-picker',
       ],
       dataNotes: [
         '저장·API가 없다. 상태는 Tiptap 내부(ProseMirror state)에 있고 onUpdate로 관찰만 한다.',
@@ -315,6 +317,39 @@ export const WithContent: Story = {
     // 사용자가 아무것도 치지 않았는데 onUpdate가 불리면 안 된다 — 부모의 dirty 추적·autosave가
     // 마운트 직후 "변경됨"이 된다. setEditable(editable, false)가 지키는 불변식의 회귀 감시.
     await expect(args.onUpdate).not.toHaveBeenCalled();
+  },
+};
+
+/** 2차 블록 JSON 로드 — 체크박스·콜아웃·표가 blocks[] 형태 그대로 렌더된다. */
+export const WithPhase2Content: Story = {
+  args: { initialContent: EDITOR_PHASE2_DOC, onContentError: fn() },
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement);
+    const surface = canvas.getByRole('textbox');
+
+    await expect(surface.querySelectorAll('ul[data-type="taskList"] input[type="checkbox"]')).toHaveLength(2);
+    await expect(surface.querySelector('ul[data-type="taskList"] input[type="checkbox"]:checked')).not.toBeNull();
+    await expect(surface.querySelector('div[data-type="callout"]')).toHaveTextContent('새벽 배치 기준');
+    await expect(surface.querySelectorAll('table th')).toHaveLength(2);
+    // 전부 스키마 안이어야 한다 — 하나라도 밖이면 조용한 소실이 시작된다
+    await expect(args.onContentError).not.toHaveBeenCalled();
+  },
+};
+
+/** `:` 이모지 서제스천 — :sm 검색 → 선택 → 이모지 문자 삽입. */
+export const EmojiPicker: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const body = within(canvasElement.ownerDocument.body);
+    const surface = canvas.getByRole('textbox');
+
+    await userEvent.click(surface);
+    await userEvent.keyboard(':smile');
+
+    const option = await body.findByText(':smile:');
+    await userEvent.click(option);
+
+    await expect(surface.textContent).toContain('😄');
   },
 };
 

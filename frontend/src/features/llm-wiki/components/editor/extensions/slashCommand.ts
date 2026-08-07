@@ -1,4 +1,5 @@
 import { type Editor, Extension, type Range } from '@tiptap/core';
+import { PluginKey } from '@tiptap/pm/state';
 import Suggestion from '@tiptap/suggestion';
 
 import type { SlashItem, SlashMenuState } from '../../../types/llmWikiEditor';
@@ -33,6 +34,8 @@ export const SlashCommand = Extension.create<SlashCommandOptions>({
     return [
       Suggestion<SlashItem>({
         editor: this.editor,
+        // emojiCommand와 같은 에디터에 산다 — 기본 pluginKey 공유 충돌 방지
+        pluginKey: new PluginKey('slashSuggestion'),
         char: '/',
         // 노션식(스펙 §12): 단어 끝에 바로 /를 쳐도 연다. "및/또는" 타이핑 중 메뉴가 번쩍이는
         // 거슬림도 노션과 같이 온다 — 사용자가 노션 동작 추종을 선택했다(1차의 [' '] 제한 대체).
