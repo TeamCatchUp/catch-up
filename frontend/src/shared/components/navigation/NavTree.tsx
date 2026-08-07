@@ -71,18 +71,22 @@ function RowActionButton({
 }
 
 /**
- * depth·아이콘·라벨·접기·active만 아는 프레젠테이션 트리.
+ * depth·아이콘·라벨·접기·선택만 아는 프레젠테이션 트리.
  *
  * 두 곳이 같은 구조를 쓴다:
- * - SNB 프로젝트 섹션 — 탐색형. 행을 누르면 접히고 현재 위치가 하이라이트된다.
+ * - SNB 프로젝트 섹션 — 탐색형. 캐럿으로 접고, 행을 누르면 이동하고, 현재 위치가 하이라이트된다.
  * - 검토 큐 "문서 위치" — 표시형. `onNodeClick`을 넘기지 않으면 이 모드가 된다.
+ *
+ * 행 상태는 Figma `17895:46178`(NavTree상세)이 근거다. hover·포커스에서 앞 아이콘이
+ * 캐럿으로 바뀌고 우측에 액션이 붙으며, 그만큼 라벨 폭이 실제로 줄어든다.
  *
  * 탐색형 행의 형상(h 36 / px 10 / gap 12 / radius 8 / 아이콘 슬롯 22)은 Figma에서
  * `SNB/menu` 인스턴스이며 {@link ../layout/panels/SnbMenuItem SnbMenuItem}과 같다.
- * 그래도 SnbMenuItem을 재사용하지 않은 이유는 두 가지다 — (1) 트리 행의 아이콘 색이
+ * 그래도 SnbMenuItem을 재사용하지 않은 이유는 세 가지다 — (1) 트리 행의 아이콘 색이
  * Icon/Normal/Neutral로 Primary Nav 쪽 Icon/Normal/Normal과 다르고, (2) 표시형은
- * 버튼이 아닌 마크업이라 어차피 별도 행 렌더러가 필요하다. SNB/menu 형상이 바뀌면
- * 두 파일을 같이 고쳐야 한다.
+ * 버튼이 아닌 마크업이라 어차피 별도 행 렌더러가 필요하며, (3) 행 안에 버튼이 셋이라
+ * SnbMenuItem처럼 행 자체를 버튼으로 만들 수 없다. SNB/menu 형상이 바뀌면 두 파일을
+ * 같이 고쳐야 한다.
  */
 export default function NavTree({
   nodes,
