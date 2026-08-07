@@ -15,6 +15,7 @@ from sqlalchemy import func
 from sqlalchemy import inspect
 from sqlalchemy import select
 from sqlalchemy import text
+from sqlalchemy import update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
@@ -1698,3 +1699,357 @@ def test_a_run_without_raw_output_stores_sql_null(
         )
 
     assert has_value is False
+
+
+# 이 워크스페이스에는 다른 테스트가 남긴 후보가 이미 커밋되어 있으므로, 집계
+# 테스트는 자기만 쓰는 이름을 붙여 남의 행과 섞이지 않게 한다.
+USAGE_PREFIX = "vocab_convergence_test_"
+
+
+def _store_claim_candidates(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+    *,
+    claims: list[ClaimCandidateDraft],
+    subject_type: str = "feature",
+) -> dict[str, uuid.UUID]:
+    """pending claim 후보들을 한 run으로 저장하고 local_key별 id를 돌려준다."""
+    observation = _stored_observation(workspace_id, session_factory)
+
+    with KnowledgeMaintenanceUnitOfWork(session_factory) as uow:
+        node_id = uow.knowledge_nodes.get_for_resource(
+            workspace_id=workspace_id,
+            node_kind=NodeKind.OBSERVATION,
+            resource_id=observation.id,
+        ).id
+        uow.ontology.ensure(
+            workspace_id=workspace_id,
+            ontology_id=SPEC.ontology_id,
+            vocabulary=SPEC.vocabulary,
+        )
+        run = uow.knowledge_candidates.start_run(
+            workspace_id=workspace_id,
+            input_node_id=node_id,
+            spec=SPEC,
+            started_at=NOW,
+        )
+        entity_id = uow.knowledge_candidates.add_entity_candidate(
+            workspace_id=workspace_id,
+            run_id=run.id,
+            draft=EntityCandidateDraft(
+                local_key="e1",
+                proposed_type=subject_type,
+                proposed_name="결제 기능",
+            ),
+            extraction_method=ExtractionMethod.LLM,
+        )
+        claim_ids = {
+            draft.local_key: uow.knowledge_candidates.add_claim_candidate(
+                workspace_id=workspace_id,
+                run_id=run.id,
+                draft=draft,
+                subject_candidate_id=entity_id,
+                spec=SPEC,
+                extraction_method=ExtractionMethod.LLM,
+            )
+            for draft in claims
+        }
+        uow.commit()
+    return claim_ids
+
+
+def _store_relation_candidates(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+    *,
+    relations: list[RelationAssertionCandidateDraft],
+) -> dict[str, uuid.UUID]:
+    """pending 관계 후보들을 한 run으로 저장하고 local_key별 id를 돌려준다."""
+    observation = _stored_observation(workspace_id, session_factory)
+
+    with KnowledgeMaintenanceUnitOfWork(session_factory) as uow:
+        node_id = uow.knowledge_nodes.get_for_resource(
+            workspace_id=workspace_id,
+            node_kind=NodeKind.OBSERVATION,
+            resource_id=observation.id,
+        ).id
+        uow.ontology.ensure(
+            workspace_id=workspace_id,
+            ontology_id=SPEC.ontology_id,
+            vocabulary=SPEC.vocabulary,
+        )
+        run = uow.knowledge_candidates.start_run(
+            workspace_id=workspace_id,
+            input_node_id=node_id,
+            spec=SPEC,
+            started_at=NOW,
+        )
+        entity_ids = {
+            local_key: uow.knowledge_candidates.add_entity_candidate(
+                workspace_id=workspace_id,
+                run_id=run.id,
+                draft=EntityCandidateDraft(
+                    local_key=local_key,
+                    proposed_type="feature",
+                    proposed_name=local_key,
+                ),
+                extraction_method=ExtractionMethod.LLM,
+            )
+            for local_key in ("e1", "e2")
+        }
+        relation_ids = {
+            draft.local_key: uow.knowledge_candidates.add_relation_candidate(
+                workspace_id=workspace_id,
+                run_id=run.id,
+                draft=draft,
+                source_candidate_id=entity_ids[draft.source_local_key],
+                target_candidate_id=entity_ids[draft.target_local_key],
+                extraction_method=ExtractionMethod.LLM,
+            )
+            for draft in relations
+        }
+        uow.commit()
+    return relation_ids
+
+
+def _patch_candidate(
+    session_factory: Callable[[], Session],
+    model,
+    candidate_id: uuid.UUID,
+    **values: object,
+) -> None:
+    """후보 행의 컬럼을 직접 고친다.
+
+    superseded 상태와 비어 있는 assertion_text는 저장 경로가 만들지 않으므로
+    테스트가 행을 손질한다.
+    """
+    with KnowledgeMaintenanceUnitOfWork(session_factory) as uow:
+        session = uow.knowledge_candidates._session  # noqa: SLF001
+        session.execute(
+            update(model).where(model.id == candidate_id).values(**values)
+        )
+        uow.commit()
+
+
+def _claim_draft(
+    local_key: str,
+    *,
+    predicate: str,
+    value: object,
+    statement: str,
+    value_type: str = "text",
+) -> ClaimCandidateDraft:
+    return ClaimCandidateDraft(
+        local_key=local_key,
+        subject_local_key="e1",
+        predicate=predicate,
+        value_type=value_type,
+        value=value,
+        statement=statement,
+    )
+
+
+class TestSummarizePredicateUsage:
+    """pending claim 후보의 predicate 사용 현황 집계를 고정한다."""
+
+    def test_pending만_집계하고_상태별로_거른다(
+        self,
+        workspace_id: int,
+        session_factory: Callable[[], Session],
+    ) -> None:
+        predicate = f"{USAGE_PREFIX}deployment_scheduled_on"
+        claim_ids = _store_claim_candidates(
+            workspace_id,
+            session_factory,
+            claims=[
+                _claim_draft(
+                    local_key,
+                    predicate=predicate,
+                    value="2026-08-12",
+                    statement=f"{local_key} 배포 예정입니다.",
+                )
+                for local_key in ("p1", "p2", "superseded", "rejected")
+            ],
+        )
+        _patch_candidate(
+            session_factory,
+            ClaimCandidateRow,
+            claim_ids["superseded"],
+            resolution_status="superseded",
+        )
+        with KnowledgeMaintenanceUnitOfWork(session_factory) as uow:
+            uow.knowledge_candidates.reject_claim(
+                claim_id=claim_ids["rejected"],
+            )
+            uow.commit()
+
+        with KnowledgeMaintenanceUnitOfWork(session_factory) as uow:
+            usage = uow.knowledge_candidates.summarize_predicate_usage(
+                workspace_id=workspace_id,
+            )
+
+        by_name = {item.name: item for item in usage}
+        assert by_name[predicate].usage_count == 2
+
+    def test_값과_예문을_상한까지_중복_없이_담는다(
+        self,
+        workspace_id: int,
+        session_factory: Callable[[], Session],
+    ) -> None:
+        predicate = f"{USAGE_PREFIX}capped_predicate"
+        _store_claim_candidates(
+            workspace_id,
+            session_factory,
+            claims=[
+                _claim_draft(
+                    "c1",
+                    predicate=predicate,
+                    value="2026-08-12",
+                    statement="8월 12일에 배포합니다.",
+                ),
+                _claim_draft(
+                    "c2",
+                    predicate=predicate,
+                    value="2026-08-12",
+                    statement="배포는 8월 12일입니다.",
+                ),
+                _claim_draft(
+                    "c3",
+                    predicate=predicate,
+                    value={"day": 3},
+                    value_type="json",
+                    statement="8월 12일에 배포합니다.",
+                ),
+            ],
+        )
+
+        with KnowledgeMaintenanceUnitOfWork(session_factory) as uow:
+            usage = uow.knowledge_candidates.summarize_predicate_usage(
+                workspace_id=workspace_id,
+                value_cap=2,
+                example_cap=1,
+            )
+
+        item = {entry.name: entry for entry in usage}[predicate]
+        assert item.usage_count == 3
+        # 문자열 값은 비가공이어야 한다. Task 3의 enum 치역 가드가 사전의
+        # enum_values와 이 문자열을 직접 비교한다.
+        assert "2026-08-12" in item.observed_values
+        assert '{"day": 3}' in item.observed_values
+        assert len(item.observed_values) <= 2
+        assert len(item.example_statements) == 1
+        assert set(item.value_types) == {"text", "json"}
+
+    def test_subject_entity_후보의_종류를_모은다(
+        self,
+        workspace_id: int,
+        session_factory: Callable[[], Session],
+    ) -> None:
+        predicate = f"{USAGE_PREFIX}owner_of"
+        _store_claim_candidates(
+            workspace_id,
+            session_factory,
+            claims=[
+                _claim_draft(
+                    "c1",
+                    predicate=predicate,
+                    value="결제팀",
+                    statement="결제팀이 담당합니다.",
+                )
+            ],
+            subject_type="service",
+        )
+
+        with KnowledgeMaintenanceUnitOfWork(session_factory) as uow:
+            usage = uow.knowledge_candidates.summarize_predicate_usage(
+                workspace_id=workspace_id,
+            )
+
+        item = {entry.name: entry for entry in usage}[predicate]
+        assert item.subject_types == ("service",)
+
+    def test_사용_횟수_내림차순으로_돌려준다(
+        self,
+        workspace_id: int,
+        session_factory: Callable[[], Session],
+    ) -> None:
+        rare = f"{USAGE_PREFIX}rare_predicate"
+        common = f"{USAGE_PREFIX}common_predicate"
+        _store_claim_candidates(
+            workspace_id,
+            session_factory,
+            claims=[
+                _claim_draft(
+                    "c1",
+                    predicate=rare,
+                    value="한 번",
+                    statement="한 번 쓰였습니다.",
+                ),
+                *[
+                    _claim_draft(
+                        f"c{index}",
+                        predicate=common,
+                        value=f"값 {index}",
+                        statement=f"{index}번째로 쓰였습니다.",
+                    )
+                    for index in range(2, 5)
+                ],
+            ],
+        )
+
+        with KnowledgeMaintenanceUnitOfWork(session_factory) as uow:
+            usage = uow.knowledge_candidates.summarize_predicate_usage(
+                workspace_id=workspace_id,
+            )
+
+        names = [
+            item.name for item in usage if item.name in {rare, common}
+        ]
+        assert names == [common, rare]
+
+
+class TestSummarizeRelationUsage:
+    """pending 관계 후보의 relation type 사용 현황 집계를 고정한다."""
+
+    def test_pending_관계의_이름과_예문을_집계한다(
+        self,
+        workspace_id: int,
+        session_factory: Callable[[], Session],
+    ) -> None:
+        relation_type = f"{USAGE_PREFIX}depends_on"
+        relation_ids = _store_relation_candidates(
+            workspace_id,
+            session_factory,
+            relations=[
+                RelationAssertionCandidateDraft(
+                    local_key=local_key,
+                    source_local_key="e1",
+                    target_local_key="e2",
+                    relation_type=relation_type,
+                    assertion_text=f"{local_key} 의존합니다.",
+                )
+                for local_key in ("r1", "no_text", "superseded")
+            ],
+        )
+        _patch_candidate(
+            session_factory,
+            RelationRow,
+            relation_ids["no_text"],
+            assertion_text=None,
+        )
+        _patch_candidate(
+            session_factory,
+            RelationRow,
+            relation_ids["superseded"],
+            resolution_status="superseded",
+        )
+
+        with KnowledgeMaintenanceUnitOfWork(session_factory) as uow:
+            usage = uow.knowledge_candidates.summarize_relation_usage(
+                workspace_id=workspace_id,
+            )
+
+        item = {entry.name: entry for entry in usage}[relation_type]
+        assert item.usage_count == 2
+        # 비어 있는 assertion_text는 예문에 넣지 않는다.
+        assert len(item.example_assertions) == 1

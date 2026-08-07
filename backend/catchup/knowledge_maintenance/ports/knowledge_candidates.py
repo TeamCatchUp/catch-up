@@ -14,6 +14,10 @@ from catchup.knowledge_maintenance.contracts.extraction import EntityCandidateDr
 from catchup.knowledge_maintenance.contracts.extraction import (
     RelationAssertionCandidateDraft,
 )
+from catchup.knowledge_maintenance.contracts.vocabulary_convergence import (
+    PredicateUsage,
+)
+from catchup.knowledge_maintenance.contracts.vocabulary_convergence import RelationUsage
 from catchup.knowledge_maintenance.domain.claim_conflict import StoredClaimCandidate
 from catchup.knowledge_maintenance.domain.evidence import Locator
 from catchup.knowledge_maintenance.domain.knowledge_candidate import (
@@ -145,6 +149,31 @@ class KnowledgeCandidateRepository(Protocol):
 
         rejected와 superseded는 뺀다. 참이었던 적 없는 후보와 재추출이
         대체한 구 배치는 모순 판정의 재료가 아니다.
+        """
+        ...
+
+    def summarize_predicate_usage(
+        self,
+        *,
+        workspace_id: int,
+        value_cap: int = 20,
+        example_cap: int = 5,
+    ) -> tuple[PredicateUsage, ...]:
+        """pending 후보의 predicate 사용 현황을 집계한다.
+
+        OOV 판정은 소비자의 몫이다.
+        """
+        ...
+
+    def summarize_relation_usage(
+        self,
+        *,
+        workspace_id: int,
+        example_cap: int = 5,
+    ) -> tuple[RelationUsage, ...]:
+        """pending 후보의 relation type 사용 현황을 집계한다.
+
+        OOV 판정은 소비자의 몫이다.
         """
         ...
 

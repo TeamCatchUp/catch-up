@@ -8,6 +8,7 @@ from collections.abc import Sequence
 from dataclasses import asdict
 from datetime import datetime
 from decimal import Decimal
+from typing import Any
 
 from sqlalchemy import ColumnElement
 from sqlalchemy import DateTime
@@ -70,6 +71,10 @@ from catchup.knowledge_maintenance.contracts.extraction import ExtractionVocabul
 from catchup.knowledge_maintenance.contracts.extraction import (
     RelationAssertionCandidateDraft,
 )
+from catchup.knowledge_maintenance.contracts.vocabulary_convergence import (
+    PredicateUsage,
+)
+from catchup.knowledge_maintenance.contracts.vocabulary_convergence import RelationUsage
 from catchup.knowledge_maintenance.domain.artifact import ArtifactBlock
 from catchup.knowledge_maintenance.domain.artifact import deserialize_blocks
 from catchup.knowledge_maintenance.domain.artifact import serialize_blocks
@@ -1120,6 +1125,130 @@ class SqlAlchemyKnowledgeCandidateRepository:
                 self._session.execute(statement).all()
             )
         )
+
+    def summarize_predicate_usage(
+        self,
+        *,
+        workspace_id: int,
+        value_cap: int = 20,
+        example_cap: int = 5,
+    ) -> tuple[PredicateUsage, ...]:
+        """pending claim 후보의 predicate 사용 현황을 집계한다.
+
+        사전 등재 여부로 거르지 않는다 — OOV 판정은 소비자의 몫이다.
+        집계는 Python에서 한다. 평가 러너 규모라 caps를 SQL로 옮길 이유가
+        없고, 값 직렬화 규칙을 한 곳에 두는 편이 낫다.
+        """
+        rows = self._session.execute(
+            select(
+                KnowledgeClaimCandidateRow.predicate,
+                KnowledgeClaimCandidateRow.value_type,
+                KnowledgeClaimCandidateRow.value,
+                KnowledgeClaimCandidateRow.statement,
+                KnowledgeEntityCandidateRow.proposed_type,
+            )
+            .join(
+                KnowledgeEntityCandidateRow,
+                (
+                    KnowledgeEntityCandidateRow.workspace_id
+                    == KnowledgeClaimCandidateRow.workspace_id
+                )
+                & (
+                    KnowledgeEntityCandidateRow.id
+                    == KnowledgeClaimCandidateRow.subject_entity_candidate_id
+                ),
+                isouter=True,
+            )
+            .where(
+                KnowledgeClaimCandidateRow.workspace_id == workspace_id,
+                KnowledgeClaimCandidateRow.resolution_status == "pending",
+            )
+        ).all()
+
+        grouped: dict[str, dict[str, Any]] = {}
+        for predicate, value_type, value, statement, subject_type in rows:
+            bucket = grouped.setdefault(
+                predicate,
+                {
+                    "count": 0,
+                    "value_types": set(),
+                    "values": [],
+                    "statements": [],
+                    "subject_types": set(),
+                },
+            )
+            bucket["count"] += 1
+            bucket["value_types"].add(value_type)
+            # 문자열 값은 비가공으로 둔다. 소비자의 enum 치역 가드가 사전의
+            # enum_values와 이 문자열을 직접 비교한다.
+            serialized = (
+                value
+                if isinstance(value, str)
+                else json.dumps(value, ensure_ascii=False, sort_keys=True)
+            )
+            if serialized not in bucket["values"]:
+                bucket["values"].append(serialized)
+            if statement not in bucket["statements"]:
+                bucket["statements"].append(statement)
+            if subject_type is not None:
+                bucket["subject_types"].add(subject_type)
+
+        usage = [
+            PredicateUsage(
+                name=name,
+                usage_count=bucket["count"],
+                value_types=tuple(sorted(bucket["value_types"])),
+                observed_values=tuple(sorted(bucket["values"])[:value_cap]),
+                example_statements=tuple(bucket["statements"][:example_cap]),
+                subject_types=tuple(sorted(bucket["subject_types"])),
+            )
+            for name, bucket in grouped.items()
+        ]
+        usage.sort(key=lambda item: (-item.usage_count, item.name))
+        return tuple(usage)
+
+    def summarize_relation_usage(
+        self,
+        *,
+        workspace_id: int,
+        example_cap: int = 5,
+    ) -> tuple[RelationUsage, ...]:
+        """pending 관계 후보의 relation type 사용 현황을 집계한다.
+
+        사전 등재 여부로 거르지 않는다 — OOV 판정은 소비자의 몫이다.
+        """
+        rows = self._session.execute(
+            select(
+                KnowledgeRelationCandidateRow.relation_type,
+                KnowledgeRelationCandidateRow.assertion_text,
+            ).where(
+                KnowledgeRelationCandidateRow.workspace_id == workspace_id,
+                KnowledgeRelationCandidateRow.resolution_status == "pending",
+            )
+        ).all()
+
+        grouped: dict[str, dict[str, Any]] = {}
+        for relation_type, assertion_text in rows:
+            bucket = grouped.setdefault(
+                relation_type,
+                {"count": 0, "assertions": []},
+            )
+            bucket["count"] += 1
+            if assertion_text is None:
+                continue
+            if assertion_text not in bucket["assertions"]:
+                bucket["assertions"].append(assertion_text)
+
+        usage = [
+            RelationUsage(
+                name=name,
+                usage_count=bucket["count"],
+                example_assertions=tuple(bucket["assertions"][:example_cap]),
+            )
+            for name, bucket in grouped.items()
+        ]
+        usage.sort(key=lambda item: (-item.usage_count, item.name))
+        return tuple(usage)
 
     def find_accepted_claims_as_of(
         self,
