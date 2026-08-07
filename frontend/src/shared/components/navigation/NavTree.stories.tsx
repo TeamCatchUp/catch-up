@@ -175,6 +175,11 @@ export const ActiveHighlight: Story = {
     );
     // 하이라이트는 한 곳뿐이다
     await expect(canvasElement.querySelectorAll('[aria-current="page"]')).toHaveLength(1);
+
+    // 선택 상태는 primary 계열이다 (Figma 17859:133090 — Fill/Primary/Normal/Neutral)
+    const active = canvas.getByRole('button', { name: '폴더명 text text text t 1' });
+    await expect(rowOf(active)).toHaveClass('bg-fill-primary-normal-neutral');
+    await expect(active.querySelector('span')).toHaveClass('text-text-primary-normal');
   },
 };
 

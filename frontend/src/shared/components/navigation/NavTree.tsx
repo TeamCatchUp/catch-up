@@ -64,8 +64,18 @@ export default function NavTree({ nodes, activeId, defaultExpandedIds, onNodeCli
     });
 
   const renderRow = (node: NavTreeNode, depth: number, hasChildren: boolean, expanded: boolean) => {
+    // 표시형은 선택 개념이 없다 — 경로 조각을 보여주는 것이 전부다
+    const isActive = !isStatic && node.id === activeId;
+
     const label = (
-      <span className="text-body-small text-text-normal-normal min-w-0 truncate text-left">{node.label}</span>
+      <span
+        className={cn(
+          'text-body-small min-w-0 truncate text-left',
+          isActive ? 'text-text-primary-normal' : 'text-text-normal-normal',
+        )}
+      >
+        {node.label}
+      </span>
     );
 
     if (isStatic) {
@@ -96,6 +106,11 @@ export default function NavTree({ nodes, activeId, defaultExpandedIds, onNodeCli
              * 행이 더 이상 버튼이 아니라서 pressed는 내부 버튼의 :active를 has()로 받는다.
              */
             'hover:bg-fill-normal-interaction-hover has-[button:active]:bg-fill-normal-interaction-pressed',
+            /*
+             * Selected / Selected_hover (Figma 17859:133090·133095). 선택 상태에서는
+             * 중립 hover 대신 primary hover_assistive가 덮는다.
+             */
+            isActive && 'bg-fill-primary-normal-neutral hover:bg-fill-primary-normal-interaction-hover-assistive',
           )}
         >
           {/*
@@ -108,7 +123,8 @@ export default function NavTree({ nodes, activeId, defaultExpandedIds, onNodeCli
                 <node.Icon
                   aria-hidden
                   className={cn(
-                    'text-icon-normal-neutral size-5.5',
+                    'size-5.5',
+                    isActive ? 'text-icon-primary-normal' : 'text-icon-normal-neutral',
                     hasChildren && 'group-focus-within:hidden group-hover:hidden',
                   )}
                 />
@@ -119,7 +135,10 @@ export default function NavTree({ nodes, activeId, defaultExpandedIds, onNodeCli
                   aria-label={`${node.label} ${expanded ? '접기' : '펼치기'}`}
                   aria-expanded={expanded}
                   onClick={() => toggle(node.id)}
-                  className="text-icon-normal-neutral hover:bg-fill-normal-interaction-hover absolute hidden size-5.5 cursor-pointer items-center justify-center rounded-full group-focus-within:flex group-hover:flex"
+                  className={cn(
+                    'hover:bg-fill-normal-interaction-hover absolute hidden size-5.5 cursor-pointer items-center justify-center rounded-full group-focus-within:flex group-hover:flex',
+                    isActive ? 'text-icon-primary-normal' : 'text-icon-normal-neutral',
+                  )}
                 >
                   <IconCaret aria-hidden className={cn('size-4.5 transition-transform', expanded && 'rotate-90')} />
                 </button>
@@ -129,7 +148,7 @@ export default function NavTree({ nodes, activeId, defaultExpandedIds, onNodeCli
 
           <button
             type="button"
-            aria-current={node.id === activeId ? 'page' : undefined}
+            aria-current={isActive ? 'page' : undefined}
             onClick={() => onNodeClick(node.id)}
             // 라벨 span이 flex 아이템이어야 truncate가 동작한다 — 인라인이면 overflow가 무시된다
             className="flex min-w-0 flex-1 cursor-pointer"
