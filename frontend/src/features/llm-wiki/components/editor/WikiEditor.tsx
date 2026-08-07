@@ -15,9 +15,9 @@ import { Popover, PopoverAnchor, PopoverContent } from '@/shared/components/ui/p
 import type { SlashMenuHandle, SlashMenuState } from '../../types/llmWikiEditor';
 import BlockDragHandle from './BlockDragHandle';
 import { Callout } from './extensions/callout';
-import FormattingToolbar from './FormattingToolbar';
 import { SlashCommand } from './extensions/slashCommand';
 import { WIKI_BLOCK_ATTR_TYPES, WikiBlockAttrs } from './extensions/wikiBlockAttrs';
+import FormattingToolbar from './FormattingToolbar';
 import SlashMenu from './SlashMenu';
 
 /**

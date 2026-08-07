@@ -69,7 +69,7 @@ export default function FormattingToolbar({ editor }: FormattingToolbarProps) {
         {linkDraft !== null ? (
           <>
             <input
-              // eslint-disable-next-line jsx-a11y/no-autofocus -- 링크 모드 전환 직후 입력이 목적지다
+               
               autoFocus
               value={linkDraft}
               onChange={(event) => setLinkDraft(event.target.value)}
