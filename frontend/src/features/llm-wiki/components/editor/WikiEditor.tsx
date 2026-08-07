@@ -15,6 +15,7 @@ import { Popover, PopoverAnchor, PopoverContent } from '@/shared/components/ui/p
 import type { SlashMenuHandle, SlashMenuState } from '../../types/llmWikiEditor';
 import BlockDragHandle from './BlockDragHandle';
 import { Callout } from './extensions/callout';
+import FormattingToolbar from './FormattingToolbar';
 import { SlashCommand } from './extensions/slashCommand';
 import { WIKI_BLOCK_ATTR_TYPES, WikiBlockAttrs } from './extensions/wikiBlockAttrs';
 import SlashMenu from './SlashMenu';
@@ -138,6 +139,7 @@ export default function WikiEditor({ initialContent, editable = true, onUpdate, 
         ].join(' ')}
       />
       <BlockDragHandle editor={editor} />
+      {editor && editable && <FormattingToolbar editor={editor} />}
 
       {/*
         커서에는 DOM 요소가 없다. 보이지 않는 anchor를 clientRect 좌표로 옮겨두면

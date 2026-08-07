@@ -43,6 +43,7 @@ const meta = {
         'read-only',
         'markdown-shortcut',
         'invalid-content',
+        'formatting-toolbar',
       ],
       dataNotes: [
         '저장·API가 없다. 상태는 Tiptap 내부(ProseMirror state)에 있고 onUpdate로 관찰만 한다.',
@@ -152,6 +153,47 @@ export const SlashInsertsPhase2Blocks: Story = {
     await userEvent.keyboard('{Enter}{Enter}/표');
     await userEvent.click(await body.findByText('표'));
     await expect(surface.querySelectorAll('table td, table th').length).toBeGreaterThan(0);
+  },
+};
+
+/**
+ * 플로팅 서식 툴바(스펙 §12) — 텍스트를 선택하면 뜨고, 굵게를 누르면 strong이 생긴다.
+ * 글리프는 문자 기반(B·I·U·S) — 서식 아이콘 자산 부재의 임시 시각(노션 방식과 동일).
+ */
+export const FormattingToolbarStory: Story = {
+  name: 'Formatting Toolbar',
+  args: { initialContent: EDITOR_SKELETON_DOC },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const body = within(canvasElement.ownerDocument.body);
+    const surface = canvas.getByRole('textbox');
+
+    // 선택 전에는 툴바가 없다
+    await expect(body.queryByRole('toolbar', { name: '텍스트 서식' })).toBeNull();
+
+    // tripleClick은 헤드리스에서 PM 선택으로 이어지지 않고(detail 시퀀스가 handleTripleClick에 닿지 않음),
+    // user-event의 {Home}/{End}는 contenteditable에서 "Not implemented"다. DOM Range를 직접 걸면
+    // 브라우저가 selectionchange를 발사하고 PM이 그걸 집는다 — 실브라우저 수동 재현과 같은 경로.
+    const paragraph = within(surface).getByText('검토자 메모: 원인 확인 중.');
+    await userEvent.click(paragraph);
+    const doc = paragraph.ownerDocument;
+    const range = doc.createRange();
+    range.selectNodeContents(paragraph);
+    const selection = doc.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+
+    const toolbar = await body.findByRole('toolbar', { name: '텍스트 서식' });
+    await userEvent.click(within(toolbar).getByRole('button', { name: '굵게' }));
+    // 마크 적용이 노드 DOM을 재생성할 수 있어 stale 참조 대신 surface에서 재조회한다
+    const strong = surface.querySelector('strong');
+    await expect(strong).not.toBeNull();
+    await expect(strong).toHaveTextContent('검토자 메모');
+
+    // 정렬 — 가운데를 누르면 블록에 text-align이 붙는다
+    await userEvent.click(within(toolbar).getByRole('button', { name: '가운데 정렬' }));
+    const aligned = surface.querySelector('p[style*="text-align: center"], p[style*="text-align:center"]');
+    await expect(aligned).not.toBeNull();
   },
 };
 
