@@ -32,7 +32,18 @@ const meta = {
       dataProfile: 'static',
       designSource: 'dev-preview',
       viewport: { width: 720, height: 480 },
-      states: ['empty', 'slash-menu-open', 'drag-handle', 'with-content', 'read-only', 'markdown-shortcut', 'invalid-content'],
+      states: [
+        'empty',
+        'slash-menu-open',
+        'slash-after-word',
+        'phase2-blocks',
+        'callout',
+        'drag-handle',
+        'with-content',
+        'read-only',
+        'markdown-shortcut',
+        'invalid-content',
+      ],
       dataNotes: [
         '저장·API가 없다. 상태는 Tiptap 내부(ProseMirror state)에 있고 onUpdate로 관찰만 한다.',
         'blocks[] 어댑터는 이번 범위 밖이다 — initialContent는 Tiptap JSON 그대로다.',
@@ -108,8 +119,11 @@ export const SlashMenuKeyboard: Story = {
   },
 };
 
-/** 글 중간의 /는 메뉴를 열지 않는다. and/or 를 칠 때 떠서는 안 된다. */
-export const SlashInsideWordDoesNotOpen: Story = {
+/**
+ * 노션식 트리거(스펙 §12): 단어 끝에 바로 /를 쳐도 메뉴가 열린다.
+ * 1차의 "and/ 차단" 규칙을 사용자 결정으로 대체했다 — 이 스토리가 그 결정의 회귀 감시다.
+ */
+export const SlashAfterWordOpens: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const body = within(canvasElement.ownerDocument.body);
@@ -118,7 +132,44 @@ export const SlashInsideWordDoesNotOpen: Story = {
     await userEvent.click(surface);
     await userEvent.keyboard('and/');
 
-    await expect(body.queryByText('제목 1')).toBeNull();
+    await expect(await body.findByText('제목 1')).toBeInTheDocument();
+  },
+};
+
+/** 슬래시로 2차 블록 3종(체크박스·표·콜아웃)이 실제로 삽입된다. */
+export const SlashInsertsPhase2Blocks: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const body = within(canvasElement.ownerDocument.body);
+    const surface = canvas.getByRole('textbox');
+
+    await userEvent.click(surface);
+    await userEvent.keyboard('/체크');
+    await userEvent.click(await body.findByText('체크박스'));
+    await expect(surface.querySelector('ul[data-type="taskList"] input[type="checkbox"]')).not.toBeNull();
+
+    // 체크박스 목록을 빠져나와 새 문단에서 표 삽입
+    await userEvent.keyboard('{Enter}{Enter}/표');
+    await userEvent.click(await body.findByText('표'));
+    await expect(surface.querySelectorAll('table td, table th').length).toBeGreaterThan(0);
+  },
+};
+
+/** 콜아웃 — 커스텀 노드가 블록을 감싸고 다시 풀 수 있다. */
+export const CalloutToggle: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const body = within(canvasElement.ownerDocument.body);
+    const surface = canvas.getByRole('textbox');
+
+    await userEvent.click(surface);
+    await userEvent.keyboard('강조할 내용');
+    await userEvent.keyboard('/콜아웃');
+    await userEvent.click(await body.findByText('콜아웃'));
+
+    const callout = surface.querySelector('div[data-type="callout"]');
+    await expect(callout).not.toBeNull();
+    await expect(callout).toHaveTextContent('강조할 내용');
   },
 };
 
@@ -213,15 +264,15 @@ export const MarkdownShortcuts: Story = {
  *
  * enableContentCheck를 켜지 않으면 ProseMirror가 말없이 버린다. 지금은 픽스처만 넣어
  * 티가 안 나지만, blocks[]가 들어올 때 claim_section이 사라지고도 화면은 멀쩡해 보인다.
- * table은 이번 범위에 없는 노드라 검증 표본으로 쓴다(다음 단계에 TableKit이 붙으면
- * 다른 미지 노드로 바꾼다).
+ * image는 범위 밖(영구 제외) 노드라 검증 표본으로 쓴다 — 2차에서 table이 스키마에
+ * 들어오면서 이전 표본을 교체했다.
  */
 export const InvalidContentIsReported: Story = {
   args: {
     onContentError: fn(),
     initialContent: {
       type: 'doc',
-      content: [{ type: 'table', content: [] }],
+      content: [{ type: 'image', attrs: { src: 'x.png' } }],
     },
   },
   play: async ({ args }) => {

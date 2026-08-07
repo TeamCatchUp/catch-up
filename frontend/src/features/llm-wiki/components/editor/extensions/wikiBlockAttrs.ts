@@ -13,6 +13,11 @@ export const WIKI_BLOCK_ATTR_TYPES = [
   'orderedList',
   'listItem',
   'horizontalRule',
+  // 2차 확장 블록 (스펙 §12) — 표의 행·셀은 블록이 아니라 표 내부 구조라 제외
+  'taskList',
+  'taskItem',
+  'table',
+  'callout',
 ] as const satisfies readonly string[];
 
 /**

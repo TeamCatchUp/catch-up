@@ -34,8 +34,9 @@ export const SlashCommand = Extension.create<SlashCommandOptions>({
       Suggestion<SlashItem>({
         editor: this.editor,
         char: '/',
-        // 빈 블록 시작(앞 글자 없음) 또는 공백 뒤에서만 연다. and/or 를 칠 때 뜨면 안 된다.
-        allowedPrefixes: [' '],
+        // 노션식(스펙 §12): 단어 끝에 바로 /를 쳐도 연다. "및/또는" 타이핑 중 메뉴가 번쩍이는
+        // 거슬림도 노션과 같이 온다 — 사용자가 노션 동작 추종을 선택했다(1차의 [' '] 제한 대체).
+        allowedPrefixes: null,
         startOfLine: false,
         items: ({ query }) => [...filterSlashItems(SLASH_ITEMS, query)],
         command: ({ editor, range, props }) => {

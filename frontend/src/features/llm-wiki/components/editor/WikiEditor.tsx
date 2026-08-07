@@ -1,6 +1,11 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import Highlight from '@tiptap/extension-highlight';
+import { TableKit } from '@tiptap/extension-table';
+import TaskItem from '@tiptap/extension-task-item';
+import TaskList from '@tiptap/extension-task-list';
+import TextAlign from '@tiptap/extension-text-align';
 import UniqueID from '@tiptap/extension-unique-id';
 import { EditorContent, type JSONContent, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
@@ -9,6 +14,7 @@ import { Popover, PopoverAnchor, PopoverContent } from '@/shared/components/ui/p
 
 import type { SlashMenuHandle, SlashMenuState } from '../../types/llmWikiEditor';
 import BlockDragHandle from './BlockDragHandle';
+import { Callout } from './extensions/callout';
 import { SlashCommand } from './extensions/slashCommand';
 import { WIKI_BLOCK_ATTR_TYPES, WikiBlockAttrs } from './extensions/wikiBlockAttrs';
 import SlashMenu from './SlashMenu';
@@ -19,11 +25,20 @@ import SlashMenu from './SlashMenu';
  * UniqueID: 블록 안정 ID를 직접 만들지 않는다는 스펙 §2 결정. blocks[] 어댑터가 이 id를
  * 그대로 싣는다(§11 — content_hash에서 제외하는 규칙은 백엔드 계약 협상 대상).
  * 대상 노드는 attrs 보존 목록과 같은 집합을 쓴다 — 두 목록이 갈라지면 "attrs는 남는데 id가 없는" 블록이 생긴다.
+ *
+ * 인라인 마크(굵게·기울임·밑줄·취소선·인라인코드·링크)는 StarterKit v3에 이미 들어 있다.
+ * 2차(스펙 §12)에서 더한 것: Highlight·TextAlign(마크·정렬), TaskList·TaskItem·TableKit·Callout(블록).
  */
 export const WIKI_EDITOR_EXTENSIONS = [
   StarterKit,
   WikiBlockAttrs,
   UniqueID.configure({ types: [...WIKI_BLOCK_ATTR_TYPES] }),
+  Highlight,
+  TextAlign.configure({ types: ['heading', 'paragraph'] }),
+  TaskList,
+  TaskItem.configure({ nested: true }),
+  TableKit.configure({ table: { resizable: false } }),
+  Callout,
 ];
 
 export interface WikiEditorProps {
@@ -104,7 +119,24 @@ export default function WikiEditor({ initialContent, editable = true, onUpdate, 
 
   return (
     <>
-      <EditorContent editor={editor} className="min-h-40" />
+      {/* 콘텐츠 시각은 최소만 — 본문 시안이 없다(design-request 대기). 표 테두리·체크박스 배치·아웃라인 제거만. */}
+      <EditorContent
+        editor={editor}
+        className={[
+          'min-h-40',
+          '[&_.ProseMirror]:outline-none',
+          // 체크박스 목록: 마커 제거 + 체크박스-본문 가로 배치
+          '[&_ul[data-type=taskList]]:list-none [&_ul[data-type=taskList]]:pl-0',
+          '[&_ul[data-type=taskList]_li]:flex [&_ul[data-type=taskList]_li]:items-start [&_ul[data-type=taskList]_li]:gap-2',
+          '[&_ul[data-type=taskList]_li_>_label]:shrink-0 [&_ul[data-type=taskList]_li_>_div]:min-w-0 [&_ul[data-type=taskList]_li_>_div]:flex-1',
+          // 표: 라인 토큰 테두리 + 셀 여백
+          '[&_table]:border-collapse',
+          '[&_td]:border [&_th]:border [&_td]:border-line-normal-normal [&_th]:border-line-normal-normal',
+          '[&_td]:px-2 [&_td]:py-1 [&_th]:px-2 [&_th]:py-1 [&_th]:bg-fill-normal-strong',
+          // 콜아웃 내부 블록 간격
+          '[&_div[data-type=callout]_>_*+*]:mt-2',
+        ].join(' ')}
+      />
       <BlockDragHandle editor={editor} />
 
       {/*

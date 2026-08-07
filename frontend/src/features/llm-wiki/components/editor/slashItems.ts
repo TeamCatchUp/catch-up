@@ -4,11 +4,10 @@ import IconList from '@/public/icons/icon/list.svg';
 import type { SlashItem } from '../../types/llmWikiEditor';
 
 /**
- * 골격 단계의 슬래시 항목. 전부 StarterKit이 이미 주는 블록이다.
- * 표·체크박스·콜아웃은 다음 단계다(TableKit·ListKit·커스텀 노드).
+ * 슬래시 항목. 블록 11종 — 명세 §3의 9종에서 이미지를 빼고(스펙 §12), 제목을 3단계로 편 것.
  *
  * Icon이 없는 항목은 라벨만 렌더된다 — public/icons/icon/ 에 자산이 없다.
- * 비슷한 아이콘으로 대체하지 않는다.
+ * 에디터 전용 아이콘 세트는 2차 배치 C에서 붙는다(스펙 §12 아이콘 방침).
  */
 export const SLASH_ITEMS: readonly SlashItem[] = [
   {
@@ -56,6 +55,33 @@ export const SLASH_ITEMS: readonly SlashItem[] = [
     keywords: ['목록', '번호', '리스트', '순서', 'list', 'ordered', 'ol', 'number'],
     command: (editor, range) => {
       editor.chain().focus().deleteRange(range).toggleOrderedList().run();
+    },
+  },
+  {
+    id: 'task-list',
+    label: '체크박스',
+    description: '할 일 목록',
+    keywords: ['체크박스', '할일', '투두', '체크', 'todo', 'task', 'checkbox', 'check'],
+    command: (editor, range) => {
+      editor.chain().focus().deleteRange(range).toggleTaskList().run();
+    },
+  },
+  {
+    id: 'table',
+    label: '표',
+    description: '3×3 표 삽입',
+    keywords: ['표', '테이블', 'table', 'grid'],
+    command: (editor, range) => {
+      editor.chain().focus().deleteRange(range).insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run();
+    },
+  },
+  {
+    id: 'callout',
+    label: '콜아웃',
+    description: '강조 상자',
+    keywords: ['콜아웃', '강조', '알림', 'callout', 'note', 'info'],
+    command: (editor, range) => {
+      editor.chain().focus().deleteRange(range).toggleCallout().run();
     },
   },
   {

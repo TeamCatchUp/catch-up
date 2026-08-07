@@ -89,6 +89,37 @@ describe('wikiBlockAttrs', () => {
     expect(editor.getJSON().content?.[0]?.attrs).toMatchObject({ origin: 'system', claimIds: ['c_1'] });
   });
 
+  it('2차 블록(체크박스·표·콜아웃)에서도 attrs·id가 보존된다 — 확장 목록과 attr 목록의 동기화 감시', () => {
+    const editor = new Editor({ extensions: WIKI_EDITOR_EXTENSIONS });
+    editor.commands.setContent({
+      type: 'doc',
+      content: [
+        {
+          type: 'taskList',
+          attrs: { origin: 'human', claimIds: null },
+          content: [
+            {
+              type: 'taskItem',
+              attrs: { checked: false, origin: 'human', claimIds: null },
+              content: [{ type: 'paragraph', content: [{ type: 'text', text: '할 일' }] }],
+            },
+          ],
+        },
+        {
+          type: 'callout',
+          attrs: { origin: 'system', claimIds: ['c_9'] },
+          content: [{ type: 'paragraph', content: [{ type: 'text', text: '강조' }] }],
+        },
+      ],
+    });
+
+    const [task, callout] = editor.getJSON().content ?? [];
+    expect(task?.attrs).toMatchObject({ origin: 'human' });
+    expect(task?.attrs?.id).toBeTruthy();
+    expect(callout?.attrs).toMatchObject({ origin: 'system', claimIds: ['c_9'] });
+    expect(callout?.attrs?.id).toBeTruthy();
+  });
+
   it('블록에 안정 ID가 자동으로 붙는다 — UniqueID 배선 회귀 방지 (스펙 §2)', () => {
     const editor = new Editor({ extensions: WIKI_EDITOR_EXTENSIONS });
     editor.commands.setContent({
