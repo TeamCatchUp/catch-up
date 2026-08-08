@@ -256,6 +256,44 @@ def _scenario_rejected_hashes(
     }
 
 
+def _scenario_latest_rejection_wins(
+    repository: BlockVerdictRepository,
+    *,
+    artifact_id: uuid.UUID,
+    proposal_id: uuid.UUID,
+) -> None:
+    """같은 지문에 반려가 여럿이면 나중 사유가 남는지 확인한다.
+
+    나중 결정을 먼저 넣고 block_index도 더 작게 준다. 결정 시각으로
+    정렬하지 않으면 저장 순서든 block_index 순서든 먼저 넣은 쪽이 아니라
+    나중에 넣은 옛 사유가 dict에 남아 이 검사가 깨진다.
+    """
+    repository.upsert_verdict(
+        proposal_id=proposal_id,
+        block_index=0,
+        block_content_hash=HASH_A,
+        verdict="rejected",
+        rejection_reason="다시 봐도 근거가 낡았다.",
+        chosen_winner_claim_id=None,
+        reviewer=REVIEWER,
+        reviewed_at=SECOND_AT,
+    )
+    repository.upsert_verdict(
+        proposal_id=proposal_id,
+        block_index=1,
+        block_content_hash=HASH_A,
+        verdict="rejected",
+        rejection_reason="근거가 부족하다.",
+        chosen_winner_claim_id=None,
+        reviewer=REVIEWER,
+        reviewed_at=FIRST_AT,
+    )
+
+    assert repository.find_rejected_hashes(artifact_id=artifact_id) == {
+        HASH_A: "다시 봐도 근거가 낡았다."
+    }
+
+
 def test_postgres_upsert_and_list(
     workspace_id: int,
     session_factory: Callable[[], Session],
@@ -284,6 +322,21 @@ def test_postgres_find_rejected_hashes(
             proposal_id=proposal_id,
             other_artifact_id=other_artifact_id,
             other_proposal_id=other_proposal_id,
+        )
+
+
+def test_postgres_latest_rejection_reason_wins(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+) -> None:
+    """실 DB에서 같은 지문의 반려는 나중 사유로 접힌다."""
+    with session_factory() as session:
+        artifact_id, proposal_id = _proposal(session, workspace_id)
+        repository = SqlAlchemyBlockVerdictRepository(session, workspace_id)
+        _scenario_latest_rejection_wins(
+            repository,
+            artifact_id=artifact_id,
+            proposal_id=proposal_id,
         )
 
 
@@ -443,6 +496,23 @@ def test_fake_find_rejected_hashes() -> None:
         proposal_id=proposal_id,
         other_artifact_id=other_artifact_id,
         other_proposal_id=other_proposal_id,
+    )
+
+
+def test_fake_latest_rejection_reason_wins() -> None:
+    """fake도 같은 지문의 반려를 나중 사유로 접는다."""
+    artifacts, verdicts = _fake_pair()
+    artifact_id = uuid.uuid4()
+    proposal_id = artifacts.add_proposal(
+        artifact_id=artifact_id,
+        blocks=(),
+        base_revision_id=None,
+    )
+
+    _scenario_latest_rejection_wins(
+        verdicts,
+        artifact_id=artifact_id,
+        proposal_id=proposal_id,
     )
 
 
