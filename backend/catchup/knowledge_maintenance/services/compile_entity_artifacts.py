@@ -15,6 +15,11 @@ LLM을 부르지 않는다. 카드는 이미 저장된 claim과 계류 중인 �
 대한 결정이므로 같은 문장을 또 올리면 검토자가 같은 일을 되풀이한다.
 판정이 블록 지문에 매여 있어 내용이 바뀌면 그 블록은 다시 올라온다.
 
+다만 대조 블록이 그렇게 빠지면 그 안건은 열린 질문으로 되살린다. 대조로
+나간 안건은 열린 질문에서 이미 빠져 있어, 대조까지 사라지면 계류인 안건이
+검수 표면 어디에도 보이지 않게 된다. 반려된 것은 "이 값들을 이렇게 대조로
+보여 주는 방식"이지 "이 안건을 닫는다"가 아니다.
+
 열린 질문은 각색하지 않는다. 판정기가 남긴 summary와 resolver_metadata의
 값·근거를 그대로 옮긴다. Compiler가 요약을 다시 쓰면 사람이 보는 문장과
 검토 큐의 근거가 달라진다.
@@ -184,15 +189,33 @@ def compile_entity_artifacts(
                 subject_node_id=source.node_id,
                 title=source.display_name,
             )
-            blocks, dropped = _drop_rejected_blocks(
+            rejected = uow.block_verdicts.find_rejected_hashes(
+                artifact_id=artifact_id,
+            )
+            blocks, dropped, suppressed_ids = _drop_rejected_blocks(
                 blocks,
-                uow.block_verdicts.find_rejected_hashes(
-                    artifact_id=artifact_id,
-                ),
+                rejected,
                 workspace_id=workspace_id,
                 artifact_id=artifact_id,
             )
             suppressed += dropped
+            reopened, dropped_again, _ = _drop_rejected_blocks(
+                _revive_suppressed_questions(
+                    blocks,
+                    pending=pending,
+                    suppressed_ids=suppressed_ids,
+                    ontology_version=vocabulary.snapshot_id or None,
+                ),
+                rejected,
+                workspace_id=workspace_id,
+                artifact_id=artifact_id,
+            )
+            # 되살린 열린 질문도 같은 반려 장부를 거친다. 그 형태까지
+            # 사람이 반려했다면 되살릴 것이 아니라 빠져야 한다.
+            suppressed += dropped_again
+            if reopened:
+                validate_blocks(reopened)
+                blocks = (*blocks, *reopened)
             if not blocks:
                 # 남은 문장이 없으면 빈 카드 규칙과 같이 건너뛴다. 다만
                 # 큐에 남은 계류는 접는다. 그 계류가 담은 본문이 바로
@@ -301,18 +324,23 @@ def _drop_rejected_blocks(
     *,
     workspace_id: int,
     artifact_id: uuid.UUID,
-) -> tuple[tuple[ArtifactBlock, ...], int]:
+) -> tuple[tuple[ArtifactBlock, ...], int, frozenset[uuid.UUID]]:
     """사람이 반려한 내용과 지문이 같은 블록을 뺀다.
 
     반려는 그 내용에 대한 결정이므로, 같은 내용이 다시 컴파일돼 올라오면
     사람이 같은 것을 또 보게 된다. 그것이 좀비 블록이다. 판정은 블록
     지문에 매여 있으니 내용이 한 글자라도 바뀌면 지문이 달라져 그 블록은
     다시 검토 큐에 오른다. 반려를 영구 삭제로 굳히지 않는 장치다.
+
+    남은 블록·뺀 수와 함께, 빠진 블록이 가리키던 안건 식별자를 돌려준다.
+    그 안건이 검수 표면에서 통째로 사라지지 않게 하려면 무엇이 함께
+    빠졌는지 호출자가 알아야 한다.
     """
     if not rejected:
-        return tuple(blocks), 0
+        return tuple(blocks), 0, frozenset()
     kept: list[ArtifactBlock] = []
     dropped = 0
+    suppressed_ids: set[uuid.UUID] = set()
     for block in blocks:
         digest = block_content_hash(block)
         reason = rejected.get(digest)
@@ -320,6 +348,7 @@ def _drop_rejected_blocks(
             kept.append(block)
             continue
         dropped += 1
+        suppressed_ids.update(block.proposal_ids)
         logger.info(
             "artifact_compile_block_suppressed",
             workspace_id=workspace_id,
@@ -327,7 +356,44 @@ def _drop_rejected_blocks(
             block_hash=digest,
             reason=reason,
         )
-    return tuple(kept), dropped
+    return tuple(kept), dropped, frozenset(suppressed_ids)
+
+
+def _revive_suppressed_questions(
+    kept: Sequence[ArtifactBlock],
+    *,
+    pending: Sequence[StoredPendingProposal],
+    suppressed_ids: frozenset[uuid.UUID],
+    ontology_version: str | None,
+) -> tuple[ArtifactBlock, ...]:
+    """반려로 빠진 블록이 데려간 모순 안건을 열린 질문으로 되살린다.
+
+    대조로 나간 안건은 `_build_blocks`가 열린 질문에서 이미 뺐다. 그
+    대조 블록마저 반려로 빠지면 계류인 안건이 카드 어디에도 없게 되어,
+    검토자가 그 안건을 다시 만날 길이 사라진다. 반려된 것은 대조라는
+    표현 방식이지 안건 자체가 아니므로 열린 질문 형태로 다시 올린다.
+
+    아직 남은 블록이 가리키는 안건은 되살리지 않는다. 같은 안건이 카드에
+    두 번 나오면 검토자가 한 결정을 두 자리에서 내려야 한다.
+
+    순서는 `_open_questions`가 정한 그대로다. 정렬 규칙을 여기서 새로
+    만들면 같은 입력이 다른 본문을 낳는다.
+    """
+    if not suppressed_ids:
+        return ()
+    still_shown = {
+        proposal_id
+        for block in kept
+        for proposal_id in block.proposal_ids
+    }
+    revived = [
+        proposal
+        for proposal in pending
+        if proposal.proposal_kind == PROPOSAL_KIND_CONTRADICTION
+        and proposal.id in suppressed_ids
+        and proposal.id not in still_shown
+    ]
+    return tuple(_open_questions(revived, ontology_version))
 
 
 def _abandon_stale_pending(

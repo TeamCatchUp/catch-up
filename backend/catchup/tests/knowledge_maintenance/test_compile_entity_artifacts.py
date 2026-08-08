@@ -1364,6 +1364,73 @@ def test_rejected_block_is_dropped_from_the_next_compile() -> None:
     assert fresh["content_hash"] == blocks_content_hash(fresh["blocks"])
 
 
+def test_rejected_contested_block_reopens_its_question() -> None:
+    """반려로 빠진 대조 블록의 안건은 열린 질문으로 되살아난다.
+
+    대조로 나간 안건은 열린 질문에서 이미 빠져 있다. 대조까지 반려로
+    사라지면 계류인 안건이 카드 어디에도 없어, 사람이 다시 만날 길이
+    없어진다. 반려된 것은 대조라는 표현 방식이지 안건 자체가 아니다.
+    """
+    node_id = uuid.uuid4()
+    older = _claim(node_id=node_id, value=60, minutes=0)
+    newer = _claim(node_id=node_id, value=120, minutes=30)
+    contradiction = _contradiction(
+        node_id=node_id, claim_ids=(older.id, newer.id)
+    )
+    uow = FakeUnitOfWork(
+        sources=[_source(node_id)],
+        claims=[older, newer],
+        pending={node_id: [contradiction]},
+    )
+    _run(uow)
+    first = _only_pending(uow)
+    assert [block.block_kind for block in first["blocks"]] == [
+        BLOCK_KIND_CONTESTED
+    ]
+    _reject_block(uow, proposal_id=first["id"], block_index=0)
+
+    result = _run(uow)
+
+    assert result.blocks_suppressed == 1
+    fresh = _only_pending(uow)
+    kinds = [block.block_kind for block in fresh["blocks"]]
+    assert BLOCK_KIND_CONTESTED not in kinds
+    assert kinds == [BLOCK_KIND_OPEN_QUESTION]
+    assert fresh["blocks"][0].proposal_ids == (contradiction.id,)
+    assert fresh["content_hash"] == blocks_content_hash(fresh["blocks"])
+    validate_blocks(fresh["blocks"])
+    # 되살린 카드도 같은 입력이면 같은 본문이라 다시 쌓이지 않는다.
+    assert _run(uow).unchanged_skipped == 1
+
+
+def test_reopened_question_can_be_rejected_too() -> None:
+    """되살린 열린 질문도 반려하면 다시 올라오지 않는다.
+
+    되살리기가 반려 장부를 건너뛰면 사람이 두 형태를 모두 물려도 같은
+    안건이 영원히 되돌아온다.
+    """
+    node_id = uuid.uuid4()
+    older = _claim(node_id=node_id, value=60, minutes=0)
+    newer = _claim(node_id=node_id, value=120, minutes=30)
+    contradiction = _contradiction(
+        node_id=node_id, claim_ids=(older.id, newer.id)
+    )
+    uow = FakeUnitOfWork(
+        sources=[_source(node_id)],
+        claims=[older, newer],
+        pending={node_id: [contradiction]},
+    )
+    _run(uow)
+    _reject_block(uow, proposal_id=_only_pending(uow)["id"], block_index=0)
+    _run(uow)
+    _reject_block(uow, proposal_id=_only_pending(uow)["id"], block_index=0)
+
+    result = _run(uow)
+
+    assert result.blocks_suppressed == 2
+    assert uow.artifacts.pending_rows() == []
+
+
 def test_changed_block_reappears_after_rejection() -> None:
     """반려된 블록도 내용이 바뀌면 다시 검토 큐에 오른다."""
     node_id = uuid.uuid4()
