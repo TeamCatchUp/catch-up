@@ -6,6 +6,7 @@ import uuid
 from collections.abc import Mapping
 from collections.abc import Sequence
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any
 
 # 위키 문서 본문을 이루는 블록의 종류다.
@@ -17,6 +18,21 @@ _BLOCK_KINDS = (BLOCK_KIND_CLAIM_SECTION, BLOCK_KIND_OPEN_QUESTION)
 
 class ArtifactBlockError(ValueError):
     """블록이 근거 계약을 어겼음을 알린다."""
+
+
+@dataclass(frozen=True, slots=True)
+class BlockSource:
+    """블록 본문의 근거 인용 하나를 표현한다.
+
+    statement는 추출이 검증한 원문 span 인용 그대로다(불변식 6).
+    citation_verified는 저장된 대조 판정을 나른다 — True는 검증 인용,
+    False는 대조 실패(환각 의심), None은 evidence 없음이다.
+    """
+
+    claim_id: uuid.UUID
+    statement: str
+    observed_at: datetime
+    citation_verified: bool | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -34,6 +50,9 @@ class ArtifactBlock:
         claim_ids: 본문의 근거가 된 claim들을 가리킨다.
         proposal_ids: 답을 기다리는 proposal들을 가리킨다.
         ontology_version: 본문을 만든 온톨로지 판본을 나타낸다.
+        sources: 본문의 근거 인용을 순서대로 나른다. claim_ids의
+            부분집합이다. 본문 줄과 1:1은 아니다 — 인용을 만들 값을
+            읽지 못한 줄은 빠진다.
     """
 
     block_kind: str
@@ -42,6 +61,7 @@ class ArtifactBlock:
     claim_ids: tuple[uuid.UUID, ...]
     proposal_ids: tuple[uuid.UUID, ...]
     ontology_version: str | None
+    sources: tuple[BlockSource, ...] = ()
 
 
 def validate_blocks(blocks: Sequence[ArtifactBlock]) -> None:
@@ -51,7 +71,8 @@ def validate_blocks(blocks: Sequence[ArtifactBlock]) -> None:
     실리는 것이 이 계약이 막으려는 유일한 사고이기 때문이다.
 
     Raises:
-        ArtifactBlockError: 미지의 block_kind이거나 근거가 비었을 때 던진다.
+        ArtifactBlockError: 미지의 block_kind이거나 근거가 비었을 때, 또는
+            sources가 claim_ids를 벗어났을 때 던진다.
     """
     for index, block in enumerate(blocks):
         if block.block_kind not in _BLOCK_KINDS:
@@ -59,6 +80,13 @@ def validate_blocks(blocks: Sequence[ArtifactBlock]) -> None:
                 f"blocks[{index}]: 알 수 없는 block_kind"
                 f" {block.block_kind!r}"
             )
+        allowed = set(block.claim_ids)
+        for source in block.sources:
+            if source.claim_id not in allowed:
+                raise ArtifactBlockError(
+                    f"blocks[{index}]: sources의 claim_id"
+                    f" {source.claim_id}가 claim_ids에 없다"
+                )
         if block.block_kind == BLOCK_KIND_CLAIM_SECTION:
             if not block.claim_ids:
                 raise ArtifactBlockError(
@@ -84,6 +112,15 @@ def serialize_blocks(
                 str(proposal_id) for proposal_id in block.proposal_ids
             ],
             "ontology_version": block.ontology_version,
+            "sources": [
+                {
+                    "claim_id": str(source.claim_id),
+                    "statement": source.statement,
+                    "observed_at": source.observed_at.isoformat(),
+                    "citation_verified": source.citation_verified,
+                }
+                for source in block.sources
+            ],
         }
         for block in blocks
     ]
@@ -125,9 +162,51 @@ def deserialize_blocks(
                     if item.get("ontology_version") is None
                     else str(item["ontology_version"])
                 ),
+                sources=_parse_sources(item.get("sources"), index),
             )
         )
     return tuple(blocks)
+
+
+def _parse_sources(values: Any, index: int) -> tuple[BlockSource, ...]:
+    """저장된 sources를 되돌린다. 키가 없으면 빈 튜플이다."""
+    if not values:
+        return ()
+    sources: list[BlockSource] = []
+    try:
+        for item in values:
+            sources.append(
+                BlockSource(
+                    claim_id=uuid.UUID(str(item["claim_id"])),
+                    statement=str(item["statement"]),
+                    observed_at=datetime.fromisoformat(
+                        str(item["observed_at"])
+                    ),
+                    citation_verified=_parse_citation_verified(
+                        item.get("citation_verified")
+                    ),
+                )
+            )
+    except (AttributeError, KeyError, TypeError, ValueError) as error:
+        raise ArtifactBlockError(
+            f"raw[{index}].sources: 근거 인용을 읽을 수 없다"
+        ) from error
+    return tuple(sources)
+
+
+def _parse_citation_verified(value: Any) -> bool | None:
+    """저장된 대조 판정을 되돌린다. bool도 None도 아니면 손상이다.
+
+    bool()로 넓게 받으면 문자열 "false"처럼 truthy한 값이 조용히 검증
+    통과(True)로 뒤집힌다. 대조 판정은 환각 의심을 알리는 신호이므로,
+    타입을 좁혀 받고 나머지는 호출부가 손상으로 처리하게 던진다.
+
+    Raises:
+        TypeError: 값이 bool도 None도 아닐 때 던진다.
+    """
+    if value is None or isinstance(value, bool):
+        return value
+    raise TypeError(f"citation_verified가 bool도 None도 아니다: {value!r}")
 
 
 def _parse_ids(values: Any, index: int, field: str) -> tuple[uuid.UUID, ...]:

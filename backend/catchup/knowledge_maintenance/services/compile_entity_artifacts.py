@@ -35,6 +35,7 @@ from catchup.knowledge_maintenance.contracts.extraction import ExtractionVocabul
 from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_CLAIM_SECTION
 from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_OPEN_QUESTION
 from catchup.knowledge_maintenance.domain.artifact import ArtifactBlock
+from catchup.knowledge_maintenance.domain.artifact import BlockSource
 from catchup.knowledge_maintenance.domain.artifact import artifact_idempotency_key
 from catchup.knowledge_maintenance.domain.artifact import blocks_content_hash
 from catchup.knowledge_maintenance.domain.artifact import validate_blocks
@@ -358,6 +359,15 @@ def _claim_sections(
                 claim_ids=tuple(claim.id for claim in members),
                 proposal_ids=(),
                 ontology_version=ontology_version,
+                sources=tuple(
+                    BlockSource(
+                        claim_id=claim.id,
+                        statement=claim.statement,
+                        observed_at=claim.observed_at,
+                        citation_verified=claim.citation_verified,
+                    )
+                    for claim in members
+                ),
             )
         )
     return sections
@@ -386,6 +396,7 @@ def _open_questions(
                 claim_ids=_claim_ids_in(values),
                 proposal_ids=(proposal.id,),
                 ontology_version=ontology_version,
+                sources=_value_sources(values),
             )
         )
     return blocks
@@ -425,19 +436,78 @@ def _observed_date(raw: object) -> str | None:
         return raw
 
 
+def _observed_moment(raw: object) -> datetime | None:
+    """저장된 관찰 시각을 시점으로 읽는다. 읽지 못하면 None이다.
+
+    본문 한 줄을 적는 `_observed_date`는 읽지 못한 값을 원문 그대로
+    보여 주지만, 근거 인용의 observed_at은 시점이어야 하므로 여기서는
+    실패를 None으로 알린다.
+    """
+    if not isinstance(raw, str) or not raw:
+        return None
+    try:
+        return datetime.fromisoformat(raw)
+    except ValueError:
+        return None
+
+
 def _claim_ids_in(
     values: Sequence[Mapping[str, object]],
 ) -> tuple[uuid.UUID, ...]:
     """값 후보가 가리키는 근거 claim을 순서대로 모은다."""
     found: list[uuid.UUID] = []
     for item in values:
-        raw = item.get("claim_id")
-        if not isinstance(raw, str):
-            continue
-        try:
-            claim_id = uuid.UUID(raw)
-        except ValueError:
+        claim_id = _claim_id_of(item)
+        if claim_id is None:
             continue
         if claim_id not in found:
             found.append(claim_id)
     return tuple(found)
+
+
+def _claim_id_of(item: Mapping[str, object]) -> uuid.UUID | None:
+    """값 후보가 가리키는 claim 식별자를 읽는다. 못 읽으면 None이다."""
+    raw = item.get("claim_id")
+    if not isinstance(raw, str):
+        return None
+    try:
+        return uuid.UUID(raw)
+    except ValueError:
+        return None
+
+
+def _value_sources(
+    values: Sequence[Mapping[str, object]],
+) -> tuple[BlockSource, ...]:
+    """값 후보의 근거 인용을 값 후보 순서대로 모은다.
+
+    claim·인용 문장·관찰 시점을 모두 읽을 수 있는 후보만 싣는다. 낡은
+    metadata에 어느 하나가 빠져 있으면 그 후보의 인용만 빠뜨리고 넘어간다.
+    카드 전체가 깨지는 것보다 낫다는 기존 방침을 따른다. 그래서 인용 수는
+    본문 줄 수보다 적을 수 있다 — 열린 질문 블록에서 인용과 본문 줄은
+    1:1이 아니다.
+
+    대조 판정은 None으로 둔다. 값이 없어서가 아니다.
+    `resolve_claim_conflicts`가 값 후보마다 `citation_verified`를 실제로
+    적어 두므로 metadata에는 값이 있다. 이 슬라이스가 스펙대로 그 실값
+    배선을 보류했을 뿐이고, 배선은 별도 백로그로 남았다. 그때까지 열린
+    질문의 인용은 evidence 없음으로 보인다.
+    """
+    sources: list[BlockSource] = []
+    for item in values:
+        claim_id = _claim_id_of(item)
+        statement = item.get("statement")
+        observed_at = _observed_moment(item.get("observed_at"))
+        if claim_id is None or observed_at is None:
+            continue
+        if not isinstance(statement, str) or not statement:
+            continue
+        sources.append(
+            BlockSource(
+                claim_id=claim_id,
+                statement=statement,
+                observed_at=observed_at,
+                citation_verified=None,
+            )
+        )
+    return tuple(sources)

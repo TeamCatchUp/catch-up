@@ -39,6 +39,7 @@ from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_CLAIM_SECTI
 from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_OPEN_QUESTION
 from catchup.knowledge_maintenance.domain.artifact import ArtifactBlock
 from catchup.knowledge_maintenance.domain.artifact import ArtifactBlockError
+from catchup.knowledge_maintenance.domain.artifact import BlockSource
 from catchup.knowledge_maintenance.domain.artifact import artifact_idempotency_key
 from catchup.knowledge_maintenance.domain.artifact import blocks_content_hash
 from catchup.knowledge_maintenance.ports.artifacts import ArtifactProposalConflict
@@ -1025,3 +1026,94 @@ def test_duplicate_revision_number_is_rejected(
                 blocks=_blocks("첫 판"),
                 source_proposal_id=proposal_id,
             )
+
+
+def test_blocks_with_sources_roundtrip_via_repository(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+) -> None:
+    """근거 인용이 붙은 블록이 JSONB를 왕복해도 그대로 돌아온다."""
+    artifact_id = _artifact_id(uow_factory, session_factory, workspace_id)
+    verified_claim = uuid.uuid4()
+    unlinked_claim = uuid.uuid4()
+    blocks = (
+        ArtifactBlock(
+            block_kind=BLOCK_KIND_CLAIM_SECTION,
+            heading="release_month",
+            body="2026-09 (2026-07-30 관찰)",
+            claim_ids=(verified_claim, unlinked_claim),
+            proposal_ids=(),
+            ontology_version="1",
+            sources=(
+                BlockSource(
+                    claim_id=verified_claim,
+                    statement="9월 예정입니다.",
+                    observed_at=datetime(
+                        2026, 7, 30, 9, 0, tzinfo=timezone.utc
+                    ),
+                    citation_verified=True,
+                ),
+                # evidence가 없는 인용은 None으로 남아야 한다. bool로 넓게
+                # 받으면 이 값이 False로 뒤집혀 환각 의심과 뒤섞인다.
+                BlockSource(
+                    claim_id=unlinked_claim,
+                    statement="10월로 미뤄질 수도 있습니다.",
+                    observed_at=datetime(
+                        2026, 7, 31, 9, 0, tzinfo=timezone.utc
+                    ),
+                    citation_verified=None,
+                ),
+            ),
+        ),
+    )
+
+    with uow_factory() as uow:
+        proposal_id, _ = _add(uow, artifact_id, blocks)
+        uow.commit()
+
+    with uow_factory() as uow:
+        stored = uow.artifacts.get_proposal(proposal_id=proposal_id)
+
+    assert stored is not None
+    assert stored.blocks == blocks
+    assert stored.blocks[0].sources[0].citation_verified is True
+    assert stored.blocks[0].sources[1].citation_verified is None
+
+
+def test_legacy_blocks_without_sources_still_load(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+) -> None:
+    """sources 키가 없는 옛 저장 형태도 빈 인용으로 읽힌다.
+
+    이 필드가 붙기 전에 저장된 행이 그대로 남아 있다. 검토 큐가 그 행을
+    읽다 깨지면 옛 변경안을 사람이 결정할 수 없게 된다.
+    """
+    artifact_id = _artifact_id(uow_factory, session_factory, workspace_id)
+
+    with uow_factory() as uow:
+        proposal_id, _ = _add(uow, artifact_id, _blocks("2026-09"))
+        uow.commit()
+
+    with session_factory() as session:
+        row = session.get(ProposalRow, proposal_id)
+        assert row is not None
+        row.blocks = [
+            {key: value for key, value in block.items() if key != "sources"}
+            for block in row.blocks
+        ]
+        session.commit()
+
+    with session_factory() as session:
+        row = session.get(ProposalRow, proposal_id)
+        assert row is not None
+        assert "sources" not in row.blocks[0]
+
+    with uow_factory() as uow:
+        stored = uow.artifacts.get_proposal(proposal_id=proposal_id)
+
+    assert stored is not None
+    assert stored.blocks[0].sources == ()
+    assert stored.blocks[0].body == "2026-09"
