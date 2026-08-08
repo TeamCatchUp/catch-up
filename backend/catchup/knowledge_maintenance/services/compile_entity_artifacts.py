@@ -194,11 +194,18 @@ def compile_entity_artifacts(
             )
             suppressed += dropped
             if not blocks:
-                # 남은 문장이 없으면 빈 카드 규칙과 같이 건너뛴다.
+                # 남은 문장이 없으면 빈 카드 규칙과 같이 건너뛴다. 다만
+                # 큐에 남은 계류는 접는다. 그 계류가 담은 본문이 바로
+                # 방금 반려된 내용이라, 두면 사람이 같은 것을 또 본다.
+                abandoned += uow.artifacts.abandon_pending_proposals(
+                    artifact_id=artifact_id,
+                )
                 logger.info(
-                    "artifact_compile_node_empty",
+                    "artifact_compile_node_all_blocks_suppressed",
                     workspace_id=workspace_id,
                     node_id=str(source.node_id),
+                    artifact_id=str(artifact_id),
+                    blocks_suppressed=dropped,
                 )
                 continue
 
@@ -383,7 +390,7 @@ def _build_blocks(
         vocabulary,
         ontology_version,
         now,
-        _contested_targets(pending),
+        _contradictions(pending),
     )
     contested_ids = {
         proposal_id
@@ -398,23 +405,38 @@ def _build_blocks(
     return tuple([*sections, *questions])
 
 
-def _contested_targets(
-    pending: Sequence[StoredPendingProposal],
-) -> dict[uuid.UUID, StoredPendingProposal]:
-    """모순 안건이 가리키는 claim을 그 안건에 이어 준다.
+@dataclass(frozen=True, slots=True)
+class _Contradiction:
+    """모순 안건 하나와 그 안건이 다루는 claim 집합을 담는다.
 
-    한 claim을 여러 모순 안건이 가리키면 식별자가 앞선 안건을 택한다.
-    어느 안건이 더 중요한지는 컴파일러가 판단할 일이 아니므로, 내용과
-    무관하게 늘 같은 답이 나오는 기준만 쓴다.
+    Attributes:
+        proposal: 계류 중인 모순 안건을 가리킨다.
+        claim_ids: 안건의 판정 근거가 가리키는 claim들을 나타낸다.
     """
-    targets: dict[uuid.UUID, StoredPendingProposal] = {}
-    for proposal in sorted(pending, key=lambda item: str(item.id)):
-        if proposal.proposal_kind != PROPOSAL_KIND_CONTRADICTION:
-            continue
-        values = _metadata_values(proposal.resolver_metadata)
-        for claim_id in _claim_ids_in(values):
-            targets.setdefault(claim_id, proposal)
-    return targets
+
+    proposal: StoredPendingProposal
+    claim_ids: frozenset[uuid.UUID]
+
+
+def _contradictions(
+    pending: Sequence[StoredPendingProposal],
+) -> tuple[_Contradiction, ...]:
+    """모순 안건과 그 안건이 다루는 claim 집합을 짝지어 모은다.
+
+    안건 순서를 식별자로 고정한다. 한 절에 걸리는 안건이 여럿일 때 어느
+    것을 대조로 낼지도 이 순서로 정해지는데, 어느 안건이 더 중요한지는
+    컴파일러가 판단할 일이 아니므로 내용과 무관한 기준만 쓴다.
+    """
+    return tuple(
+        _Contradiction(
+            proposal=proposal,
+            claim_ids=frozenset(
+                _claim_ids_in(_metadata_values(proposal.resolver_metadata))
+            ),
+        )
+        for proposal in sorted(pending, key=lambda item: str(item.id))
+        if proposal.proposal_kind == PROPOSAL_KIND_CONTRADICTION
+    )
 
 
 def _claim_sections(
@@ -422,7 +444,7 @@ def _claim_sections(
     vocabulary: ExtractionVocabulary,
     ontology_version: str | None,
     now: datetime,
-    contested: Mapping[uuid.UUID, StoredPendingProposal],
+    contradictions: Sequence[_Contradiction],
 ) -> list[ArtifactBlock]:
     """predicate별 claim_section 블록을 사전 순서대로 만든다.
 
@@ -437,10 +459,14 @@ def _claim_sections(
     미래)인 주장은 거르지 않는다 — 판정 정의는 `domain.temporal`이
     단독으로 갖는다.
 
-    모순 안건이 걸린 predicate는 절 대신 대조 블록으로 낸다. 값을 줄로
-    늘어놓기만 하면 검토자가 어느 것을 고를지 결정할 자리가 카드에
-    없기 때문이다. 여기서도 값을 고르지는 않는다 — 후보를 나란히 놓을
-    뿐이다.
+    모순 안건이 걸린 predicate는 대조 블록을 앞세운다. 값을 줄로 늘어놓기만
+    하면 검토자가 어느 것을 고를지 결정할 자리가 카드에 없기 때문이다.
+    여기서도 값을 고르지는 않는다 — 후보를 나란히 놓을 뿐이다.
+
+    대조에 들어가는 것은 그 안건이 가리키는 claim뿐이다. 같은 predicate에
+    있어도 안건이 다루지 않는 값까지 후보로 넣으면, 검토자가 안건 밖의
+    claim을 승자로 고를 수 있게 되어 결정을 적용하는 쪽 계약이 깨진다.
+    안건 밖의 값들은 같은 제목의 claim_section으로 대조 블록 뒤에 잇는다.
     """
     grouped: dict[str, list[StoredClaimCandidate]] = {}
     for claim in claims:
@@ -463,17 +489,23 @@ def _claim_sections(
             grouped[predicate],
             key=lambda claim: (claim.observed_at, claim.id),
         )
-        proposal = _contested_proposal(members, contested)
-        if proposal is not None:
+        picked = _contested_pick(members, contradictions)
+        if picked is not None:
+            proposal, disputed = picked
             sections.append(
                 _contested_block(
                     predicate=predicate,
-                    members=members,
+                    members=disputed,
                     proposal=proposal,
                     ontology_version=ontology_version,
                 )
             )
-            continue
+            taken = {claim.id for claim in disputed}
+            members = [
+                claim for claim in members if claim.id not in taken
+            ]
+            if not members:
+                continue
         sections.append(
             ArtifactBlock(
                 block_kind=BLOCK_KIND_CLAIM_SECTION,
@@ -503,23 +535,26 @@ def _claim_source(claim: StoredClaimCandidate) -> BlockSource:
     )
 
 
-def _contested_proposal(
+def _contested_pick(
     members: Sequence[StoredClaimCandidate],
-    contested: Mapping[uuid.UUID, StoredPendingProposal],
-) -> StoredPendingProposal | None:
-    """이 절을 대조로 낼 모순 안건을 고른다. 없으면 None이다.
+    contradictions: Sequence[_Contradiction],
+) -> tuple[StoredPendingProposal, tuple[StoredClaimCandidate, ...]] | None:
+    """이 절을 대조로 낼 안건과 그 후보 claim을 고른다. 없으면 None이다.
 
-    살아 있는 값이 하나뿐이면 대조가 성립하지 않으므로 평범한 절로
-    둔다. 그 경우 안건은 열린 질문으로 그대로 남는다.
+    후보는 안건이 가리키는 claim과 살아 있는 값의 교집합이다. 그 교집합이
+    둘 미만이면 대조가 성립하지 않으므로 평범한 절로 두고, 안건은 열린
+    질문으로 그대로 남긴다. 한쪽 값이 닫힌 뒤에도 안건이 열려 있는 경우가
+    그렇다.
     """
     if len(members) < 2:
         return None
-    matched = [
-        contested[claim.id] for claim in members if claim.id in contested
-    ]
-    if not matched:
-        return None
-    return min(matched, key=lambda proposal: str(proposal.id))
+    for contradiction in contradictions:
+        disputed = tuple(
+            claim for claim in members if claim.id in contradiction.claim_ids
+        )
+        if len(disputed) >= 2:
+            return (contradiction.proposal, disputed)
+    return None
 
 
 def _contested_block(

@@ -668,6 +668,44 @@ def test_contested_block_replaces_its_open_question() -> None:
     assert proposal_ids == {contradiction.id, duplicate.id}
 
 
+def test_contested_variants_stay_inside_the_proposal() -> None:
+    """안건이 다루지 않는 값은 후보가 아니라 따로 선 절로 실린다.
+
+    후보를 절 전체로 넓히면 검토자가 안건 밖의 claim을 승자로 고를 수
+    있게 되는데, 결정을 적용하는 쪽은 패자를 "안건의 claim - 승자"로
+    본다. 그러면 고른 승자가 어디에도 속하지 않는다.
+    """
+    node_id = uuid.uuid4()
+    older = _claim(node_id=node_id, value=60, minutes=0)
+    newer = _claim(node_id=node_id, value=120, minutes=30)
+    unrelated = _claim(node_id=node_id, value=240, minutes=60)
+    proposal = _contradiction(node_id=node_id, claim_ids=(older.id, newer.id))
+    uow = FakeUnitOfWork(
+        sources=[_source(node_id)],
+        claims=[older, newer, unrelated],
+        pending={node_id: [proposal]},
+    )
+
+    _run(uow)
+
+    blocks = _only_pending(uow)["blocks"]
+    assert [block.block_kind for block in blocks] == [
+        BLOCK_KIND_CONTESTED,
+        BLOCK_KIND_CLAIM_SECTION,
+    ]
+    contested, section = blocks
+    assert [variant.claim_id for variant in contested.variants] == sorted(
+        (older.id, newer.id), key=str
+    )
+    assert set(contested.claim_ids) == {older.id, newer.id}
+    assert contested.body == "상충하는 값 2개 — 검토 필요"
+    # 안건 밖의 값은 같은 제목의 절로 뒤에 붙는다.
+    assert section.heading == "rate_limit"
+    assert section.claim_ids == (unrelated.id,)
+    assert section.body == "240 (2026-07-30 관찰)"
+    validate_blocks(blocks)
+
+
 def test_contested_blocks_are_deterministic_across_input_order() -> None:
     """대조 블록도 입력 순서와 무관하게 같은 지문을 낸다."""
     node_id = uuid.uuid4()
@@ -1359,7 +1397,11 @@ def test_changed_block_reappears_after_rejection() -> None:
 
 
 def test_node_with_every_block_rejected_is_skipped() -> None:
-    """블록이 모두 반려로 빠지면 빈 카드를 만들지 않는다."""
+    """블록이 모두 반려로 빠지면 빈 카드 대신 계류를 접는다.
+
+    남은 계류는 방금 반려된 본문을 담고 있다. 그대로 두면 사람이 같은
+    것을 검토 큐에서 또 만난다.
+    """
     node_id = uuid.uuid4()
     uow = FakeUnitOfWork(
         sources=[_source(node_id)],
@@ -1374,9 +1416,9 @@ def test_node_with_every_block_rejected_is_skipped() -> None:
     assert result.blocks_suppressed == 1
     assert result.proposals_created == 0
     assert result.proposals_revived == 0
-    assert uow.artifacts.pending_rows() == [
-        uow.artifacts.by_id[stale_id],
-    ]
+    assert result.proposals_abandoned == 1
+    assert uow.artifacts.pending_rows() == []
+    assert uow.artifacts.by_id[stale_id]["status"] == "abandoned"
 
 
 def test_compiled_blocks_pass_validation_with_sources() -> None:
