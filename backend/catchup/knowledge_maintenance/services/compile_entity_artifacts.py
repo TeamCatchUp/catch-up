@@ -7,8 +7,13 @@ LLM을 부르지 않는다. 카드는 이미 저장된 claim과 계류 중인 �
 
 값을 고르지 않는다. 한 predicate에 값이 여럿이면 전부 나열하고, 어느
 값이 맞는지 묻는 일은 열린 질문 블록이 맡는다. 값을 고르는 것도 빼는
-것도 판단이고, 판단은 사람의 몫이다. 그래서 모순 안건이 열려 있어도
-claim_section은 값을 그대로 남긴다.
+것도 판단이고, 판단은 사람의 몫이다. 모순 안건이 걸린 절은 대조 블록으로
+내되, 거기서도 후보를 claim_id 순으로 나란히 놓을 뿐 어느 값도 앞세우지
+않는다.
+
+사람이 반려한 블록은 같은 내용이면 다시 싣지 않는다. 반려는 그 내용에
+대한 결정이므로 같은 문장을 또 올리면 검토자가 같은 일을 되풀이한다.
+판정이 블록 지문에 매여 있어 내용이 바뀌면 그 블록은 다시 올라온다.
 
 열린 질문은 각색하지 않는다. 판정기가 남긴 summary와 resolver_metadata의
 값·근거를 그대로 옮긴다. Compiler가 요약을 다시 쓰면 사람이 보는 문장과
@@ -33,16 +38,20 @@ from typing import Self
 
 from catchup.knowledge_maintenance.contracts.extraction import ExtractionVocabulary
 from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_CLAIM_SECTION
+from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_CONTESTED
 from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_OPEN_QUESTION
 from catchup.knowledge_maintenance.domain.artifact import ArtifactBlock
 from catchup.knowledge_maintenance.domain.artifact import BlockSource
+from catchup.knowledge_maintenance.domain.artifact import ContestedVariant
 from catchup.knowledge_maintenance.domain.artifact import artifact_idempotency_key
+from catchup.knowledge_maintenance.domain.artifact import block_content_hash
 from catchup.knowledge_maintenance.domain.artifact import blocks_content_hash
 from catchup.knowledge_maintenance.domain.artifact import validate_blocks
 from catchup.knowledge_maintenance.domain.claim_conflict import StoredClaimCandidate
 from catchup.knowledge_maintenance.domain.temporal import claim_not_closed_at
 from catchup.knowledge_maintenance.ports.artifacts import ArtifactProposalConflict
 from catchup.knowledge_maintenance.ports.artifacts import ArtifactRepository
+from catchup.knowledge_maintenance.ports.block_verdicts import BlockVerdictRepository
 from catchup.knowledge_maintenance.ports.knowledge_candidates import (
     KnowledgeCandidateRepository,
 )
@@ -57,6 +66,9 @@ logger = get_logger(__name__)
 # entity 하나를 설명하는 요약 카드의 문서 종류다.
 ARTIFACT_KIND_ENTITY_SUMMARY = "entity_summary"
 
+# 값이 갈렸음을 알리는 계류 안건의 종류다.
+PROPOSAL_KIND_CONTRADICTION = "contradiction"
+
 
 class ArtifactCompileUnitOfWork(Protocol):
     """카드 컴파일이 쓰는 transaction 경계를 정의한다."""
@@ -64,6 +76,7 @@ class ArtifactCompileUnitOfWork(Protocol):
     artifacts: ArtifactRepository
     knowledge_candidates: KnowledgeCandidateRepository
     mutation_proposals: MutationProposalRepository
+    block_verdicts: BlockVerdictRepository
 
     def __enter__(self) -> Self: ...
 
@@ -93,6 +106,8 @@ class ArtifactCompileResult:
             나타낸다.
         proposals_conflicted: 멱등 키가 이미 결정된 변경안과 부딪혀
             건너뛴 문서 수를 나타낸다.
+        blocks_suppressed: 사람이 반려한 내용과 지문이 같아 카드에서 뺀
+            블록 수를 나타낸다.
     """
 
     nodes_considered: int = 0
@@ -101,6 +116,7 @@ class ArtifactCompileResult:
     proposals_abandoned: int = 0
     unchanged_skipped: int = 0
     proposals_conflicted: int = 0
+    blocks_suppressed: int = 0
 
 
 def compile_entity_artifacts(
@@ -127,6 +143,7 @@ def compile_entity_artifacts(
     abandoned = 0
     skipped = 0
     conflicted = 0
+    suppressed = 0
     now = datetime.now(timezone.utc)
     with uow:
         sources = uow.artifacts.find_top_entity_nodes(limit=limit)
@@ -161,12 +178,31 @@ def compile_entity_artifacts(
             # 하지만 서비스가 먼저 잡아야 잘못된 블록이 transaction에
             # 실리지 않는다.
             validate_blocks(blocks)
-            content_hash = blocks_content_hash(blocks)
+            # 반려 판정은 문서에 매여 있으므로 문서를 먼저 확보한다.
             artifact_id = uow.artifacts.get_or_create_artifact(
                 kind=ARTIFACT_KIND_ENTITY_SUMMARY,
                 subject_node_id=source.node_id,
                 title=source.display_name,
             )
+            blocks, dropped = _drop_rejected_blocks(
+                blocks,
+                uow.block_verdicts.find_rejected_hashes(
+                    artifact_id=artifact_id,
+                ),
+                workspace_id=workspace_id,
+                artifact_id=artifact_id,
+            )
+            suppressed += dropped
+            if not blocks:
+                # 남은 문장이 없으면 빈 카드 규칙과 같이 건너뛴다.
+                logger.info(
+                    "artifact_compile_node_empty",
+                    workspace_id=workspace_id,
+                    node_id=str(source.node_id),
+                )
+                continue
+
+            content_hash = blocks_content_hash(blocks)
             known = uow.artifacts.find_latest_content_hashes(
                 artifact_id=artifact_id,
             )
@@ -236,6 +272,7 @@ def compile_entity_artifacts(
         proposals_abandoned=abandoned,
         unchanged_skipped=skipped,
         proposals_conflicted=conflicted,
+        blocks_suppressed=suppressed,
     )
     logger.info(
         "artifact_compile_completed",
@@ -246,8 +283,44 @@ def compile_entity_artifacts(
         proposals_abandoned=result.proposals_abandoned,
         unchanged_skipped=result.unchanged_skipped,
         proposals_conflicted=result.proposals_conflicted,
+        blocks_suppressed=result.blocks_suppressed,
     )
     return result
+
+
+def _drop_rejected_blocks(
+    blocks: Sequence[ArtifactBlock],
+    rejected: Mapping[str, str],
+    *,
+    workspace_id: int,
+    artifact_id: uuid.UUID,
+) -> tuple[tuple[ArtifactBlock, ...], int]:
+    """사람이 반려한 내용과 지문이 같은 블록을 뺀다.
+
+    반려는 그 내용에 대한 결정이므로, 같은 내용이 다시 컴파일돼 올라오면
+    사람이 같은 것을 또 보게 된다. 그것이 좀비 블록이다. 판정은 블록
+    지문에 매여 있으니 내용이 한 글자라도 바뀌면 지문이 달라져 그 블록은
+    다시 검토 큐에 오른다. 반려를 영구 삭제로 굳히지 않는 장치다.
+    """
+    if not rejected:
+        return tuple(blocks), 0
+    kept: list[ArtifactBlock] = []
+    dropped = 0
+    for block in blocks:
+        digest = block_content_hash(block)
+        reason = rejected.get(digest)
+        if reason is None:
+            kept.append(block)
+            continue
+        dropped += 1
+        logger.info(
+            "artifact_compile_block_suppressed",
+            workspace_id=workspace_id,
+            artifact_id=str(artifact_id),
+            block_hash=digest,
+            reason=reason,
+        )
+    return tuple(kept), dropped
 
 
 def _abandon_stale_pending(
@@ -299,13 +372,49 @@ def _build_blocks(
     vocabulary: ExtractionVocabulary,
     now: datetime,
 ) -> tuple[ArtifactBlock, ...]:
-    """카드 본문을 이룰 블록을 정해진 순서로 만든다."""
+    """카드 본문을 이룰 블록을 정해진 순서로 만든다.
+
+    대조로 실린 모순 안건은 열린 질문에서 뺀다. 같은 안건이 카드에 두 번
+    나오면 검토자가 한 결정을 두 자리에서 내려야 하기 때문이다.
+    """
     ontology_version = vocabulary.snapshot_id or None
-    blocks = [
-        *_claim_sections(claims, vocabulary, ontology_version, now),
-        *_open_questions(pending, ontology_version),
-    ]
-    return tuple(blocks)
+    sections = _claim_sections(
+        claims,
+        vocabulary,
+        ontology_version,
+        now,
+        _contested_targets(pending),
+    )
+    contested_ids = {
+        proposal_id
+        for block in sections
+        if block.block_kind == BLOCK_KIND_CONTESTED
+        for proposal_id in block.proposal_ids
+    }
+    questions = _open_questions(
+        [item for item in pending if item.id not in contested_ids],
+        ontology_version,
+    )
+    return tuple([*sections, *questions])
+
+
+def _contested_targets(
+    pending: Sequence[StoredPendingProposal],
+) -> dict[uuid.UUID, StoredPendingProposal]:
+    """모순 안건이 가리키는 claim을 그 안건에 이어 준다.
+
+    한 claim을 여러 모순 안건이 가리키면 식별자가 앞선 안건을 택한다.
+    어느 안건이 더 중요한지는 컴파일러가 판단할 일이 아니므로, 내용과
+    무관하게 늘 같은 답이 나오는 기준만 쓴다.
+    """
+    targets: dict[uuid.UUID, StoredPendingProposal] = {}
+    for proposal in sorted(pending, key=lambda item: str(item.id)):
+        if proposal.proposal_kind != PROPOSAL_KIND_CONTRADICTION:
+            continue
+        values = _metadata_values(proposal.resolver_metadata)
+        for claim_id in _claim_ids_in(values):
+            targets.setdefault(claim_id, proposal)
+    return targets
 
 
 def _claim_sections(
@@ -313,6 +422,7 @@ def _claim_sections(
     vocabulary: ExtractionVocabulary,
     ontology_version: str | None,
     now: datetime,
+    contested: Mapping[uuid.UUID, StoredPendingProposal],
 ) -> list[ArtifactBlock]:
     """predicate별 claim_section 블록을 사전 순서대로 만든다.
 
@@ -326,6 +436,11 @@ def _claim_sections(
     그대로 남아 있으므로 사라지는 것이 아니다. 발효 예정(valid_from이
     미래)인 주장은 거르지 않는다 — 판정 정의는 `domain.temporal`이
     단독으로 갖는다.
+
+    모순 안건이 걸린 predicate는 절 대신 대조 블록으로 낸다. 값을 줄로
+    늘어놓기만 하면 검토자가 어느 것을 고를지 결정할 자리가 카드에
+    없기 때문이다. 여기서도 값을 고르지는 않는다 — 후보를 나란히 놓을
+    뿐이다.
     """
     grouped: dict[str, list[StoredClaimCandidate]] = {}
     for claim in claims:
@@ -348,29 +463,95 @@ def _claim_sections(
             grouped[predicate],
             key=lambda claim: (claim.observed_at, claim.id),
         )
+        proposal = _contested_proposal(members, contested)
+        if proposal is not None:
+            sections.append(
+                _contested_block(
+                    predicate=predicate,
+                    members=members,
+                    proposal=proposal,
+                    ontology_version=ontology_version,
+                )
+            )
+            continue
         sections.append(
             ArtifactBlock(
                 block_kind=BLOCK_KIND_CLAIM_SECTION,
                 heading=predicate,
-                body="\n".join(
-                    f"{claim.value} ({claim.observed_at:%Y-%m-%d} 관찰)"
-                    for claim in members
-                ),
+                body="\n".join(_claim_line(claim) for claim in members),
                 claim_ids=tuple(claim.id for claim in members),
                 proposal_ids=(),
                 ontology_version=ontology_version,
-                sources=tuple(
-                    BlockSource(
-                        claim_id=claim.id,
-                        statement=claim.statement,
-                        observed_at=claim.observed_at,
-                        citation_verified=claim.citation_verified,
-                    )
-                    for claim in members
-                ),
+                sources=tuple(_claim_source(claim) for claim in members),
             )
         )
     return sections
+
+
+def _claim_line(claim: StoredClaimCandidate) -> str:
+    """claim 하나를 원본 값과 관찰 날짜 그대로 한 줄로 적는다."""
+    return f"{claim.value} ({claim.observed_at:%Y-%m-%d} 관찰)"
+
+
+def _claim_source(claim: StoredClaimCandidate) -> BlockSource:
+    """claim의 저장된 인용을 블록 근거로 옮긴다."""
+    return BlockSource(
+        claim_id=claim.id,
+        statement=claim.statement,
+        observed_at=claim.observed_at,
+        citation_verified=claim.citation_verified,
+    )
+
+
+def _contested_proposal(
+    members: Sequence[StoredClaimCandidate],
+    contested: Mapping[uuid.UUID, StoredPendingProposal],
+) -> StoredPendingProposal | None:
+    """이 절을 대조로 낼 모순 안건을 고른다. 없으면 None이다.
+
+    살아 있는 값이 하나뿐이면 대조가 성립하지 않으므로 평범한 절로
+    둔다. 그 경우 안건은 열린 질문으로 그대로 남는다.
+    """
+    if len(members) < 2:
+        return None
+    matched = [
+        contested[claim.id] for claim in members if claim.id in contested
+    ]
+    if not matched:
+        return None
+    return min(matched, key=lambda proposal: str(proposal.id))
+
+
+def _contested_block(
+    *,
+    predicate: str,
+    members: Sequence[StoredClaimCandidate],
+    proposal: StoredPendingProposal,
+    ontology_version: str | None,
+) -> ArtifactBlock:
+    """상충하는 값들을 후보로 나란히 놓은 대조 블록을 만든다.
+
+    후보 순서는 claim_id 사전순으로 고정한다. 관찰 시각이나 값으로 줄을
+    세우면 컴파일러가 최신 값이나 특정 값을 앞세우는 셈이 되는데, 어느
+    값이 맞는지 고르는 일은 사람의 몫이다.
+    """
+    return ArtifactBlock(
+        block_kind=BLOCK_KIND_CONTESTED,
+        heading=predicate,
+        body=f"상충하는 값 {len(members)}개 — 검토 필요",
+        claim_ids=tuple(claim.id for claim in members),
+        proposal_ids=(proposal.id,),
+        ontology_version=ontology_version,
+        sources=tuple(_claim_source(claim) for claim in members),
+        variants=tuple(
+            ContestedVariant(
+                claim_id=claim.id,
+                body=_claim_line(claim),
+                sources=(_claim_source(claim),),
+            )
+            for claim in sorted(members, key=lambda item: str(item.id))
+        ),
+    )
 
 
 def _open_questions(

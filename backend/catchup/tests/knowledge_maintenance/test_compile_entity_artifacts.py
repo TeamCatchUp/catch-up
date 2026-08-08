@@ -12,14 +12,17 @@ from dataclasses import replace
 from datetime import datetime
 from datetime import timedelta
 from datetime import timezone
+from typing import Any
 
 import pytest
 
 from catchup.knowledge_maintenance.contracts.extraction import ExtractionVocabulary
 from catchup.knowledge_maintenance.contracts.extraction import PredicateEntry
 from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_CLAIM_SECTION
+from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_CONTESTED
 from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_OPEN_QUESTION
 from catchup.knowledge_maintenance.domain.artifact import ArtifactBlock
+from catchup.knowledge_maintenance.domain.artifact import block_content_hash
 from catchup.knowledge_maintenance.domain.artifact import blocks_content_hash
 from catchup.knowledge_maintenance.domain.artifact import serialize_blocks
 from catchup.knowledge_maintenance.domain.artifact import validate_blocks
@@ -28,6 +31,7 @@ from catchup.knowledge_maintenance.ports.artifacts import ArtifactProposalConfli
 from catchup.knowledge_maintenance.ports.artifacts import EntityCardSource
 from catchup.knowledge_maintenance.ports.artifacts import ProposalAlreadyDecided
 from catchup.knowledge_maintenance.ports.artifacts import StoredArtifactProposal
+from catchup.knowledge_maintenance.ports.block_verdicts import StoredBlockVerdict
 from catchup.knowledge_maintenance.ports.mutation_proposals import StoredPendingProposal
 from catchup.knowledge_maintenance.services.compile_entity_artifacts import (
     ARTIFACT_KIND_ENTITY_SUMMARY,
@@ -311,6 +315,82 @@ class FakeArtifactRepository:
         ]
 
 
+class FakeBlockVerdictRepository:
+    """블록 결정 저장소를 DB 제약까지 흉내 내어 대신한다.
+
+    `(proposal_id, block_index)` UNIQUE를 dict 키로 재현하고, verdict 값과
+    반려 사유와 결정자 공백 CHECK도 그대로 막는다. 변경안 저장 dict를
+    artifact fake와 나눠 써서, 실 저장소처럼 변경안 FK를 거쳐 문서에
+    닿는다. 그래야 남의 문서 반려가 섞이지 않는 것이 드러난다.
+    """
+
+    def __init__(self, proposals: dict[uuid.UUID, dict]) -> None:
+        self._proposals = proposals
+        self.verdicts: dict[tuple[uuid.UUID, int], dict[str, Any]] = {}
+
+    def upsert_verdict(
+        self,
+        *,
+        proposal_id: uuid.UUID,
+        block_index: int,
+        block_content_hash: str,
+        verdict: str,
+        rejection_reason: str | None,
+        chosen_winner_claim_id: uuid.UUID | None,
+        reviewer: str,
+        reviewed_at: datetime,
+    ) -> None:
+        if proposal_id not in self._proposals:
+            raise ValueError(f"변경안 {proposal_id}가 없다")
+        if verdict not in ("approved", "rejected"):
+            raise ValueError(f"약속되지 않은 판정 {verdict}")
+        if verdict == "rejected" and not (rejection_reason or "").strip():
+            raise ValueError("반려는 사유가 있어야 한다")
+        if not reviewer.strip():
+            raise ValueError("결정자가 있어야 한다")
+        self.verdicts[(proposal_id, block_index)] = {
+            "proposal_id": proposal_id,
+            "block_index": block_index,
+            "block_content_hash": block_content_hash,
+            "verdict": verdict,
+            "rejection_reason": rejection_reason,
+            "chosen_winner_claim_id": chosen_winner_claim_id,
+            "reviewer": reviewer,
+            "reviewed_at": reviewed_at,
+        }
+
+    def list_for_proposal(
+        self, *, proposal_id: uuid.UUID
+    ) -> tuple[StoredBlockVerdict, ...]:
+        rows = [
+            row
+            for row in self.verdicts.values()
+            if row["proposal_id"] == proposal_id
+        ]
+        rows.sort(key=lambda row: row["block_index"])
+        return tuple(StoredBlockVerdict(**row) for row in rows)
+
+    def find_rejected_hashes(
+        self, *, artifact_id: uuid.UUID
+    ) -> dict[str, str]:
+        rows = [
+            row
+            for row in self.verdicts.values()
+            if row["verdict"] == "rejected"
+            and self._artifact_id(row["proposal_id"]) == artifact_id
+        ]
+        rows.sort(key=lambda row: (row["reviewed_at"], row["block_index"]))
+        return {
+            row["block_content_hash"]: row["rejection_reason"] or ""
+            for row in rows
+        }
+
+    def _artifact_id(self, proposal_id: uuid.UUID) -> uuid.UUID | None:
+        """결정이 매달린 변경안을 거쳐 문서를 찾는다."""
+        row = self._proposals.get(proposal_id)
+        return None if row is None else row["artifact_id"]
+
+
 class FakeUnitOfWork:
     def __init__(
         self,
@@ -322,6 +402,7 @@ class FakeUnitOfWork:
         self.artifacts = FakeArtifactRepository(sources)
         self.knowledge_candidates = FakeClaimRepository(claims)
         self.mutation_proposals = FakeMutationProposalRepository(pending)
+        self.block_verdicts = FakeBlockVerdictRepository(self.artifacts.by_id)
         self.committed = 0
 
     def __enter__(self):
@@ -365,6 +446,29 @@ def _publish(uow: FakeUnitOfWork, *, revision_number: int) -> uuid.UUID:
         source_proposal_id=proposal_id,
     )
     return proposal_id
+
+
+def _reject_block(
+    uow: FakeUnitOfWork,
+    *,
+    proposal_id: uuid.UUID,
+    block_index: int,
+    reason: str = "근거가 부족하다",
+) -> str:
+    """계류 변경안의 블록 하나에 반려 결정을 남기고 그 지문을 돌려준다."""
+    block = uow.artifacts.by_id[proposal_id]["blocks"][block_index]
+    digest = block_content_hash(block)
+    uow.block_verdicts.upsert_verdict(
+        proposal_id=proposal_id,
+        block_index=block_index,
+        block_content_hash=digest,
+        verdict="rejected",
+        rejection_reason=reason,
+        chosen_winner_claim_id=None,
+        reviewer="tester",
+        reviewed_at=NOW,
+    )
+    return digest
 
 
 def _contradiction(
@@ -489,8 +593,8 @@ def test_multiple_values_are_all_listed_without_judgement() -> None:
     assert block.claim_ids == (older.id, newer.id)
 
 
-def test_pending_proposal_becomes_open_question_block() -> None:
-    """계류 안건은 값 후보를 그대로 나열한 열린 질문으로 실린다."""
+def test_contradiction_predicate_renders_contested_block() -> None:
+    """모순 안건이 걸린 predicate는 대조 블록 하나로 실린다."""
     node_id = uuid.uuid4()
     older = _claim(node_id=node_id, value=60, minutes=0)
     newer = _claim(node_id=node_id, value=120, minutes=30)
@@ -504,23 +608,131 @@ def test_pending_proposal_becomes_open_question_block() -> None:
     _run(uow)
 
     blocks = _only_pending(uow)["blocks"]
+    assert [block.block_kind for block in blocks] == [BLOCK_KIND_CONTESTED]
+    block = blocks[0]
+    assert block.heading == "rate_limit"
+    assert block.body == "상충하는 값 2개 — 검토 필요"
+    assert block.proposal_ids == (proposal.id,)
+    assert set(block.claim_ids) == {older.id, newer.id}
+    # 후보 순서는 claim_id 사전순으로 고정한다. 관찰 시각이나 값으로 줄을
+    # 세우면 컴파일러가 어느 값을 앞세울지 판단하는 셈이 된다.
+    assert [variant.claim_id for variant in block.variants] == sorted(
+        (older.id, newer.id), key=str
+    )
+    bodies = {
+        variant.claim_id: variant.body for variant in block.variants
+    }
+    assert bodies[older.id] == "60 (2026-07-30 관찰)"
+    assert bodies[newer.id] == "120 (2026-07-30 관찰)"
+    for variant in block.variants:
+        assert [source.claim_id for source in variant.sources] == [
+            variant.claim_id
+        ]
+    validate_blocks(blocks)
+
+
+def test_contested_block_replaces_its_open_question() -> None:
+    """대조로 실린 모순 안건은 열린 질문으로 다시 나오지 않는다."""
+    node_id = uuid.uuid4()
+    older = _claim(node_id=node_id, value=60, minutes=0)
+    newer = _claim(node_id=node_id, value=120, minutes=30)
+    contradiction = _contradiction(
+        node_id=node_id, claim_ids=(older.id, newer.id)
+    )
+    duplicate = StoredPendingProposal(
+        id=uuid.uuid4(),
+        proposal_kind="duplicate",
+        summary="같은 대상으로 보이는 후보 2건을 합칠지 묻는다",
+        resolver_metadata={"member_ids": [str(uuid.uuid4())]},
+    )
+    uow = FakeUnitOfWork(
+        sources=[_source(node_id)],
+        claims=[older, newer],
+        pending={node_id: [contradiction, duplicate]},
+    )
+
+    _run(uow)
+
+    blocks = _only_pending(uow)["blocks"]
+    assert [block.block_kind for block in blocks] == [
+        BLOCK_KIND_CONTESTED,
+        BLOCK_KIND_OPEN_QUESTION,
+    ]
+    # 모순이 아닌 안건은 열린 질문 그대로 남는다.
+    assert blocks[1].proposal_ids == (duplicate.id,)
+    proposal_ids = {
+        proposal_id
+        for block in blocks
+        for proposal_id in block.proposal_ids
+    }
+    assert proposal_ids == {contradiction.id, duplicate.id}
+
+
+def test_contested_blocks_are_deterministic_across_input_order() -> None:
+    """대조 블록도 입력 순서와 무관하게 같은 지문을 낸다."""
+    node_id = uuid.uuid4()
+    older = _claim(node_id=node_id, value=60, minutes=0)
+    newer = _claim(node_id=node_id, value=120, minutes=30)
+    proposal = _contradiction(node_id=node_id, claim_ids=(older.id, newer.id))
+    forward = FakeUnitOfWork(
+        sources=[_source(node_id)],
+        claims=[older, newer],
+        pending={node_id: [proposal]},
+    )
+    backward = FakeUnitOfWork(
+        sources=[_source(node_id)],
+        claims=[newer, older],
+        pending={node_id: [proposal]},
+    )
+
+    _run(forward)
+    _run(backward)
+
+    assert (
+        _only_pending(forward)["content_hash"]
+        == _only_pending(backward)["content_hash"]
+    )
+    # 같은 입력을 다시 컴파일해도 지문이 흔들리지 않아야 한다.
+    assert _run(forward).unchanged_skipped == 1
+
+
+def test_single_live_claim_keeps_open_question() -> None:
+    """모순 안건이라도 살아 있는 값이 하나뿐이면 대조하지 않는다.
+
+    대조는 후보가 둘 이상일 때만 성립한다. 한쪽이 닫힌 뒤에도 안건이
+    열려 있으면 절은 평범한 claim_section으로 두고 질문만 남긴다.
+    """
+    node_id = uuid.uuid4()
+    older = _claim(node_id=node_id, value=60, minutes=0)
+    closed = _claim(
+        node_id=node_id,
+        value=120,
+        minutes=30,
+        valid_to=NOW + timedelta(days=1),
+    )
+    proposal = _contradiction(node_id=node_id, claim_ids=(older.id, closed.id))
+    uow = FakeUnitOfWork(
+        sources=[_source(node_id)],
+        claims=[older, closed],
+        pending={node_id: [proposal]},
+    )
+
+    _run(uow)
+
+    blocks = _only_pending(uow)["blocks"]
+    assert [block.block_kind for block in blocks] == [
+        BLOCK_KIND_CLAIM_SECTION,
+        BLOCK_KIND_OPEN_QUESTION,
+    ]
     question = blocks[-1]
-    assert question.block_kind == BLOCK_KIND_OPEN_QUESTION
     assert question.heading == "열린 질문: contradiction"
-    assert question.proposal_ids == (proposal.id,)
     assert question.body.splitlines() == [
         "'rate_limit' 값이 2종으로 갈린다: claim 2건",
         "- 60 (2026-07-30 관찰)",
         "- 120 (2026-07-31 관찰)",
     ]
     # 근거 claim도 함께 가리켜야 블록이 Read Set 노릇을 한다.
-    assert question.claim_ids == (older.id, newer.id)
-    # 모순이 있어도 claim_section은 값을 그대로 남긴다.
-    assert blocks[0].block_kind == BLOCK_KIND_CLAIM_SECTION
-    assert blocks[0].body.splitlines() == [
-        "60 (2026-07-30 관찰)",
-        "120 (2026-07-30 관찰)",
-    ]
+    assert question.claim_ids == (older.id, closed.id)
 
 
 def test_duplicate_proposal_open_question_keeps_summary() -> None:
@@ -1036,10 +1248,19 @@ def test_claim_section_sources_follow_member_order() -> None:
 
 
 def test_open_question_sources_skip_missing_statement() -> None:
-    """statement가 없는 값 후보는 근거 인용에서 빠진다."""
+    """statement가 없는 값 후보는 근거 인용에서 빠진다.
+
+    한쪽 값이 닫혀 대조가 서지 않는 안건을 쓴다. 대조로 실리면 인용을
+    metadata가 아니라 claim에서 만들므로 이 규칙이 걸리지 않는다.
+    """
     node_id = uuid.uuid4()
     older = _claim(node_id=node_id, value=60, minutes=0)
-    newer = _claim(node_id=node_id, value=120, minutes=30)
+    newer = _claim(
+        node_id=node_id,
+        value=120,
+        minutes=30,
+        valid_to=NOW + timedelta(days=1),
+    )
     proposal = _contradiction(node_id=node_id, claim_ids=(older.id, newer.id))
     values = proposal.resolver_metadata["values"]
     assert isinstance(values, list)
@@ -1074,6 +1295,90 @@ def test_open_question_sources_skip_missing_statement() -> None:
     assert question.sources[0].citation_verified is None
 
 
+def test_rejected_block_is_dropped_from_the_next_compile() -> None:
+    """사람이 반려한 블록은 같은 내용이면 다시 실리지 않는다."""
+    node_id = uuid.uuid4()
+    uow = FakeUnitOfWork(
+        sources=[_source(node_id)],
+        claims=[
+            _claim(node_id=node_id, value=60),
+            _claim(
+                node_id=node_id,
+                predicate="release_month",
+                value="2026-09",
+                value_type="date",
+            ),
+        ],
+    )
+    _run(uow)
+    first = _only_pending(uow)
+    assert [block.heading for block in first["blocks"]] == [
+        "release_month",
+        "rate_limit",
+    ]
+    _reject_block(uow, proposal_id=first["id"], block_index=0)
+
+    result = _run(uow)
+
+    assert result.blocks_suppressed == 1
+    fresh = _only_pending(uow)
+    assert [block.heading for block in fresh["blocks"]] == ["rate_limit"]
+    assert fresh["content_hash"] == blocks_content_hash(fresh["blocks"])
+
+
+def test_changed_block_reappears_after_rejection() -> None:
+    """반려된 블록도 내용이 바뀌면 다시 검토 큐에 오른다."""
+    node_id = uuid.uuid4()
+    month = _claim(
+        node_id=node_id,
+        predicate="release_month",
+        value="2026-09",
+        value_type="date",
+    )
+    uow = FakeUnitOfWork(
+        sources=[_source(node_id)],
+        claims=[_claim(node_id=node_id, value=60), month],
+    )
+    _run(uow)
+    _reject_block(uow, proposal_id=_only_pending(uow)["id"], block_index=0)
+    _run(uow)
+
+    uow.knowledge_candidates.claims = [
+        _claim(node_id=node_id, value=60),
+        replace(month, value="2026-10"),
+    ]
+    result = _run(uow)
+
+    assert result.blocks_suppressed == 0
+    fresh = _only_pending(uow)
+    assert [block.heading for block in fresh["blocks"]] == [
+        "release_month",
+        "rate_limit",
+    ]
+    assert fresh["blocks"][0].body == "2026-10 (2026-07-30 관찰)"
+
+
+def test_node_with_every_block_rejected_is_skipped() -> None:
+    """블록이 모두 반려로 빠지면 빈 카드를 만들지 않는다."""
+    node_id = uuid.uuid4()
+    uow = FakeUnitOfWork(
+        sources=[_source(node_id)],
+        claims=[_claim(node_id=node_id, value=60)],
+    )
+    _run(uow)
+    stale_id = _only_pending(uow)["id"]
+    _reject_block(uow, proposal_id=stale_id, block_index=0)
+
+    result = _run(uow)
+
+    assert result.blocks_suppressed == 1
+    assert result.proposals_created == 0
+    assert result.proposals_revived == 0
+    assert uow.artifacts.pending_rows() == [
+        uow.artifacts.by_id[stale_id],
+    ]
+
+
 def test_compiled_blocks_pass_validation_with_sources() -> None:
     """근거 인용이 붙은 컴파일 산출 블록이 부분집합 규칙을 지킨다."""
     node_id = uuid.uuid4()
@@ -1090,7 +1395,8 @@ def test_compiled_blocks_pass_validation_with_sources() -> None:
 
     blocks = _only_pending(uow)["blocks"]
     validate_blocks(blocks)
-    assert len(blocks) == 2
+    # 모순 안건은 대조 블록 하나로 접히므로 절과 질문이 따로 서지 않는다.
+    assert len(blocks) == 1
     for block in blocks:
         assert block.sources
         assert {source.claim_id for source in block.sources} <= set(
