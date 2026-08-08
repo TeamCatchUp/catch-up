@@ -32,6 +32,7 @@ from catchup.db.engine import SessionLocal
 from catchup.knowledge_maintenance.adapters.postgres.unit_of_work import (
     KnowledgeMaintenanceUnitOfWork,
 )
+from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_CONTESTED
 from catchup.knowledge_maintenance.ports.artifacts import StoredArtifactProposal
 from catchup.knowledge_maintenance.services.apply_mutation_proposals import (
     apply_mutation_proposals,
@@ -111,6 +112,10 @@ def _artifact_item(
 
     큐 한 줄에 없는 `base_revision_id`와 본문 블록은 저장된 변경안에서
     가져온다. 외부 뷰어가 이 필드들을 쓰고 있어 뺄 수 없다.
+
+    다툼(contested) 블록은 본문이 "상충하는 값 N개"라는 표지뿐이라
+    후보(variants)를 함께 실어야 무엇이 갈렸는지 읽을 수 있다. 다툼이
+    아닌 블록에서는 빈 목록이다.
     """
     return {
         "id": str(item.proposal_id),
@@ -134,6 +139,13 @@ def _artifact_item(
                     str(source_id) for source_id in block.proposal_ids
                 ],
                 "ontology_version": block.ontology_version,
+                "variants": [
+                    {
+                        "claim_id": str(variant.claim_id),
+                        "body": variant.body,
+                    }
+                    for variant in block.variants
+                ],
             }
             for block in proposal.blocks
         ],
@@ -173,8 +185,33 @@ def list_artifact_proposals(workspace_id: int = 1) -> dict[str, Any]:
 def approve_artifact_proposal(
     proposal_id: uuid.UUID, workspace_id: int = 1
 ) -> dict[str, Any]:
-    """문서 변경안을 승인해 새 판을 발행한다."""
+    """문서 변경안을 승인해 새 판을 발행한다.
+
+    다툼(contested) 블록이 있거나 블록 결정이 이미 적혀 있으면 거절한다.
+    통짜 승인에는 다툼의 승자를 고르는 자리가 없어 사람이 고르지 않은 값이
+    판에 실리고, 적혀 있던 블록 결정은 읽히지 않은 채 덮인다. 정식 API가
+    막는 것을 개발 도구로 우회할 수 있으면 막는 뜻이 없다.
+    """
     _guard()
+    with _uow_factory(workspace_id)() as uow:
+        pending = uow.artifacts.get_proposal(proposal_id=proposal_id)
+        recorded = (
+            uow.block_verdicts.list_for_proposal(proposal_id=proposal_id)
+            if pending is not None
+            else ()
+        )
+    if pending is not None and any(
+        block.block_kind == BLOCK_KIND_CONTESTED for block in pending.blocks
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail="다툼 블록이 있어 블록 검토를 거쳐야 한다.",
+        )
+    if recorded:
+        raise HTTPException(
+            status_code=409,
+            detail="블록 검토가 시작된 변경안은 발행으로 끝내야 한다.",
+        )
     try:
         result = review_artifact_proposal(
             _uow_factory(workspace_id)(),
