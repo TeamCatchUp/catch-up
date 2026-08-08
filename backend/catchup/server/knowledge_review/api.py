@@ -230,21 +230,37 @@ def approve_artifact(
 ) -> DecisionResponse:
     """승인을 확정하고 그 결과를 돌려준다.
 
-    다툼 블록이 있는 변경안은 여기서 막는다. 통짜 승인에는 승자를 고르는
-    자리가 없어, 그대로 태우면 사람이 고르지 않은 값이 문서에 실린다.
-    그런 안건은 블록 결정과 발행을 거쳐야 한다.
+    두 경우를 여기서 막는다.
+
+    다툼 블록이 있으면 통짜 승인에 승자를 고르는 자리가 없다. 그대로
+    태우면 사람이 고르지 않은 값이 문서에 실린다.
+
+    블록 결정이 하나라도 적혀 있으면, 그 결정을 읽지 않는 통짜 승인은
+    반려된 블록까지 판에 실어 사람의 결정을 덮어쓴다. 사람의 결정은
+    되돌릴 수 없어야 하므로, 블록 검토가 시작된 안건은 발행으로만 끝난다.
 
     Raises:
-        HTTPException: 변경안이 없으면 404, 다툼 블록이 있거나 결정을
-            받아들일 수 없으면 409를 던진다.
+        HTTPException: 변경안이 없으면 404, 다툼 블록이 있거나 블록 결정이
+            시작됐거나 결정을 받아들일 수 없으면 409를 던진다.
     """
     with uow_factory() as uow:
         pending = uow.artifacts.get_proposal(proposal_id=proposal_id)
+        recorded = (
+            uow.block_verdicts.list_for_proposal(proposal_id=proposal_id)
+            if pending is not None
+            else ()
+        )
     if pending is not None and _has_contested(pending):
         raise review_error(
             409,
             code="CONTESTED_REQUIRES_BLOCK_REVIEW",
             message="다툼 블록이 있어 블록 검토를 거쳐야 합니다.",
+        )
+    if recorded:
+        raise review_error(
+            409,
+            code="BLOCK_REVIEW_IN_PROGRESS",
+            message="블록 검토가 시작된 변경안은 발행으로 끝내야 합니다.",
         )
     try:
         result = review_artifact_proposal(

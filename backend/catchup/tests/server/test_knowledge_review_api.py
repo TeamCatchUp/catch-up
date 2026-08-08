@@ -31,6 +31,7 @@ from sqlalchemy import create_engine
 from sqlalchemy import inspect
 from sqlalchemy import select
 from sqlalchemy import text
+from sqlalchemy import update
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 from sqlalchemy.orm import sessionmaker
@@ -40,6 +41,7 @@ from catchup.audit.base import AuditLevel
 from catchup.audit.base import AuditStatus
 from catchup.configs.config import settings
 from catchup.db.dependencies import get_db
+from catchup.db.models import KnowledgeArtifactChangeProposal
 from catchup.db.models import KnowledgeNode
 from catchup.db.models import User
 from catchup.db.models import UserStatus
@@ -57,6 +59,7 @@ from catchup.knowledge_maintenance.domain.artifact import ContestedVariant
 from catchup.knowledge_maintenance.domain.artifact import artifact_idempotency_key
 from catchup.knowledge_maintenance.domain.artifact import block_content_hash
 from catchup.knowledge_maintenance.domain.artifact import blocks_content_hash
+from catchup.knowledge_maintenance.domain.artifact import serialize_blocks
 from catchup.knowledge_maintenance.ports.artifacts import StoredArtifactProposal
 from catchup.knowledge_maintenance.ports.block_verdicts import StoredBlockVerdict
 from catchup.knowledge_maintenance.ports.mutation_proposals import (
@@ -2122,3 +2125,287 @@ def test_publish_invalid_returns_422(
     assert response.status_code == 422
     assert response.json()["detail"]["code"] == "INVALID"
     assert "조립한 본문이" not in response.text
+
+
+def test_approve_after_block_verdict_is_blocked_and_publish_works(
+    app: FastAPI,
+    client: TestClient,
+    reviewer: User,
+    session_factory: Callable[[], Session],
+    workspace_ids: tuple[int, int],
+) -> None:
+    """블록 결정이 시작된 뒤의 통짜 승인은 409로 막힌다.
+
+    통짜 승인은 블록 결정을 읽지 않으므로, 그대로 태우면 사람이 반려한
+    블록까지 판에 실린다. 사람의 결정을 덮어쓰는 셈이라 막아야 한다.
+    막기만 하고 끝나면 안건이 갇히므로, 같은 안건이 발행 경로로는 정상
+    확정되는 것까지 함께 본다.
+    """
+    workspace_id, _ = workspace_ids
+    proposal_id, blocks = _seed_two_block_proposal(
+        session_factory, workspace_id=workspace_id
+    )
+
+    with _real_session_local(session_factory):
+        recorded = client.put(
+            _verdict_path(proposal_id, 1),
+            json={
+                "verdict": "rejected",
+                "rejection_reason": "담당이 확정되지 않았다",
+                "block_content_hash": block_content_hash(blocks[1]),
+            },
+        )
+        blocked = client.post(
+            f"/api/v1/knowledge-review/artifacts/{proposal_id}/approve"
+        )
+
+    assert recorded.status_code == 200
+    assert blocked.status_code == 409
+    assert blocked.json()["detail"]["code"] == "BLOCK_REVIEW_IN_PROGRESS"
+    with KnowledgeMaintenanceUnitOfWork(
+        session_factory, workspace_id=workspace_id
+    ) as uow:
+        untouched = uow.artifacts.get_proposal(proposal_id=proposal_id)
+    assert untouched.status == "pending"
+
+    with _real_session_local(session_factory):
+        client.put(
+            _verdict_path(proposal_id, 0),
+            json={
+                "verdict": "approved",
+                "block_content_hash": block_content_hash(blocks[0]),
+            },
+        )
+        published = client.post(
+            f"/api/v1/knowledge-review/queue/{proposal_id}/publish",
+            json={"base_revision_id": None},
+        )
+
+    assert published.status_code == 200
+    assert published.json()["blocks_published"] == 1
+    assert published.json()["blocks_rejected"] == 1
+
+
+def test_block_verdict_on_decided_proposal_returns_409(
+    app: FastAPI,
+    client: TestClient,
+    reviewer: User,
+    session_factory: Callable[[], Session],
+    workspace_ids: tuple[int, int],
+) -> None:
+    """이미 확정된 변경안에는 블록 결정을 더 적을 수 없다."""
+    workspace_id, _ = workspace_ids
+    proposal_id, blocks = _seed_two_block_proposal(
+        session_factory, workspace_id=workspace_id
+    )
+
+    with _real_session_local(session_factory):
+        for index, block in enumerate(blocks):
+            client.put(
+                _verdict_path(proposal_id, index),
+                json={
+                    "verdict": "approved",
+                    "block_content_hash": block_content_hash(block),
+                },
+            )
+        client.post(
+            f"/api/v1/knowledge-review/queue/{proposal_id}/publish",
+            json={"base_revision_id": None},
+        )
+        response = client.put(
+            _verdict_path(proposal_id, 0),
+            json={
+                "verdict": "rejected",
+                "rejection_reason": "역시 아니다",
+                "block_content_hash": block_content_hash(blocks[0]),
+            },
+        )
+
+    assert response.status_code == 409
+    assert response.json()["detail"]["code"] == "ALREADY_DECIDED"
+
+
+def test_publish_stale_block_returns_409(
+    app: FastAPI,
+    client: TestClient,
+    reviewer: User,
+    session_factory: Callable[[], Session],
+    workspace_ids: tuple[int, int],
+) -> None:
+    """결정을 적은 뒤 본문이 바뀌면 발행이 409 STALE_BLOCK으로 멈춘다."""
+    workspace_id, _ = workspace_ids
+    proposal_id, blocks = _seed_two_block_proposal(
+        session_factory, workspace_id=workspace_id
+    )
+
+    with _real_session_local(session_factory):
+        for index, block in enumerate(blocks):
+            client.put(
+                _verdict_path(proposal_id, index),
+                json={
+                    "verdict": "approved",
+                    "block_content_hash": block_content_hash(block),
+                },
+            )
+
+    # 결정을 적은 뒤 본문이 바뀐 상황을 만든다. 재컴파일이 같은 변경안의
+    # 본문을 갈아 끼우는 자리를 저장 계층에서 그대로 흉내낸 것이다.
+    changed = (
+        blocks[0],
+        ArtifactBlock(
+            block_kind=BLOCK_KIND_CLAIM_SECTION,
+            heading=blocks[1].heading,
+            body="담당은 인프라 팀이다",
+            claim_ids=blocks[1].claim_ids,
+            proposal_ids=(),
+            ontology_version="1",
+        ),
+    )
+    with session_factory() as session:
+        session.execute(
+            update(KnowledgeArtifactChangeProposal)
+            .where(KnowledgeArtifactChangeProposal.id == proposal_id)
+            .values(blocks=serialize_blocks(changed))
+        )
+        session.commit()
+
+    with _real_session_local(session_factory):
+        response = client.post(
+            f"/api/v1/knowledge-review/queue/{proposal_id}/publish",
+            json={"base_revision_id": None},
+        )
+
+    assert response.status_code == 409
+    assert response.json()["detail"]["code"] == "STALE_BLOCK"
+
+
+def test_block_verdict_requires_reviewer(
+    app: FastAPI,
+    client: TestClient,
+    db: Session,
+    workspace_ids: tuple[int, int],
+    as_user: Callable[[User], None],
+) -> None:
+    """블록 결정도 검토자만 할 수 있다."""
+    workspace_id, _ = workspace_ids
+    user = _make_user(db, email="verdict-member@example.com")
+    _join(db, user=user, workspace_id=workspace_id)
+    as_user(user)
+    app.dependency_overrides[get_review_uow_factory] = lambda: _fake_factory()
+
+    with patch(
+        "catchup.server.knowledge_review.api.upsert_block_verdict"
+    ) as service:
+        response = client.put(
+            _verdict_path(uuid.uuid4(), 0),
+            json={
+                "verdict": "approved",
+                "block_content_hash": "a" * 64,
+            },
+        )
+
+    assert response.status_code == 403
+    assert response.json()["detail"]["code"] == "NOT_REVIEWER"
+    service.assert_not_called()
+
+
+def test_publish_requires_reviewer(
+    app: FastAPI,
+    client: TestClient,
+    db: Session,
+    workspace_ids: tuple[int, int],
+    as_user: Callable[[User], None],
+) -> None:
+    """발행도 검토자만 할 수 있다."""
+    workspace_id, _ = workspace_ids
+    user = _make_user(db, email="publish-member@example.com")
+    _join(db, user=user, workspace_id=workspace_id)
+    as_user(user)
+    app.dependency_overrides[get_review_uow_factory] = lambda: _fake_factory()
+
+    with patch(
+        "catchup.server.knowledge_review.api.publish_artifact_proposal"
+    ) as service:
+        response = client.post(
+            f"/api/v1/knowledge-review/queue/{uuid.uuid4()}/publish",
+            json={"base_revision_id": None},
+        )
+
+    assert response.status_code == 403
+    assert response.json()["detail"]["code"] == "NOT_REVIEWER"
+    service.assert_not_called()
+
+
+def test_block_verdict_hides_other_workspace_proposal(
+    app: FastAPI,
+    client: TestClient,
+    db: Session,
+    session_factory: Callable[[], Session],
+    workspace_ids: tuple[int, int],
+    as_user: Callable[[User], None],
+) -> None:
+    """다른 workspace의 변경안에는 블록 결정을 적을 수 없다.
+
+    404를 받는 것만으로는 부족하다. 결정 저널이 그대로 비어 있는지도
+    확인해 아무것도 쓰이지 않았음을 본다.
+    """
+    first, second = workspace_ids
+    proposal_id, blocks = _seed_two_block_proposal(
+        session_factory, workspace_id=second
+    )
+    outsider = _make_user(db, email="ws-verdict@example.com")
+    _join(db, user=outsider, workspace_id=first)
+    _grant(db, user=outsider, workspace_id=first)
+    as_user(outsider)
+
+    with _real_session_local(session_factory):
+        response = client.put(
+            _verdict_path(proposal_id, 0),
+            json={
+                "verdict": "approved",
+                "block_content_hash": block_content_hash(blocks[0]),
+            },
+        )
+
+    assert response.status_code == 404
+    assert response.json()["detail"]["code"] == "NOT_FOUND"
+    with KnowledgeMaintenanceUnitOfWork(
+        session_factory, workspace_id=second
+    ) as uow:
+        stored = uow.block_verdicts.list_for_proposal(
+            proposal_id=proposal_id
+        )
+    assert stored == ()
+
+
+def test_publish_hides_other_workspace_proposal(
+    app: FastAPI,
+    client: TestClient,
+    db: Session,
+    session_factory: Callable[[], Session],
+    workspace_ids: tuple[int, int],
+    as_user: Callable[[User], None],
+) -> None:
+    """다른 workspace의 변경안은 발행할 수도 없다."""
+    first, second = workspace_ids
+    proposal_id, _ = _seed_two_block_proposal(
+        session_factory, workspace_id=second
+    )
+    outsider = _make_user(db, email="ws-publish@example.com")
+    _join(db, user=outsider, workspace_id=first)
+    _grant(db, user=outsider, workspace_id=first)
+    as_user(outsider)
+
+    with _real_session_local(session_factory):
+        response = client.post(
+            f"/api/v1/knowledge-review/queue/{proposal_id}/publish",
+            json={"base_revision_id": None},
+        )
+
+    assert response.status_code == 404
+    assert response.json()["detail"]["code"] == "NOT_FOUND"
+    with KnowledgeMaintenanceUnitOfWork(
+        session_factory, workspace_id=second
+    ) as uow:
+        untouched = uow.artifacts.get_proposal(proposal_id=proposal_id)
+    assert untouched.status == "pending"
