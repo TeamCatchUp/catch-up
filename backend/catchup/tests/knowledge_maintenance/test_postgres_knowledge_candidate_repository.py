@@ -15,6 +15,7 @@ from sqlalchemy import func
 from sqlalchemy import inspect
 from sqlalchemy import select
 from sqlalchemy import text
+from sqlalchemy import update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
@@ -34,8 +35,13 @@ from catchup.knowledge_maintenance.contracts.extraction import ClaimCandidateDra
 from catchup.knowledge_maintenance.contracts.extraction import EntityCandidateDraft
 from catchup.knowledge_maintenance.contracts.extraction import ExtractionVocabulary
 from catchup.knowledge_maintenance.contracts.extraction import KnowledgeCandidateBatch
+from catchup.knowledge_maintenance.contracts.extraction import PredicateEntry
 from catchup.knowledge_maintenance.contracts.extraction import (
     RelationAssertionCandidateDraft,
+)
+from catchup.knowledge_maintenance.contracts.extraction import RelationTypeEntry
+from catchup.knowledge_maintenance.contracts.vocabulary_convergence import (
+    SynonymAbsorption,
 )
 from catchup.knowledge_maintenance.domain.evidence import Locator
 from catchup.knowledge_maintenance.domain.knowledge_candidate import (
@@ -53,6 +59,13 @@ from catchup.knowledge_maintenance.domain.source_version import ChangeKind
 from catchup.knowledge_maintenance.domain.source_version import SourceIdentity
 from catchup.knowledge_maintenance.domain.source_version import SourceVersion
 from catchup.knowledge_maintenance.ports.ontology import OntologySnapshotConflict
+from catchup.knowledge_maintenance.services.converge_vocabulary import (
+    ConvergenceGuardResult,
+)
+from catchup.knowledge_maintenance.services.converge_vocabulary import GuardRejection
+from catchup.knowledge_maintenance.services.converge_vocabulary import (
+    publish_converged_vocabulary,
+)
 from catchup.knowledge_maintenance.services.store_knowledge_candidates import (
     ObservationNodeMissing,
 )
@@ -1698,3 +1711,671 @@ def test_a_run_without_raw_output_stores_sql_null(
         )
 
     assert has_value is False
+
+
+# 이 워크스페이스에는 다른 테스트가 남긴 후보가 이미 커밋되어 있으므로, 집계
+# 테스트는 자기만 쓰는 이름을 붙여 남의 행과 섞이지 않게 한다.
+USAGE_PREFIX = "vocab_convergence_test_"
+
+# 개발 workspace를 공유하므로 발행 계보 테스트는 전용 ontology를 쓴다. 기존
+# 커밋된 스냅샷이 `list_versions`에 섞이면 다음 버전 계산이 흔들린다.
+CONVERGENCE_ONTOLOGY_ID = "catchup.test-convergence"
+
+# 낡은 기준 사전 거부는 계보에 v1·v2를 함께 쌓아야 하므로 또 다른 전용
+# ontology를 쓴다.
+STALE_BASE_ONTOLOGY_ID = "catchup.test-convergence-stale"
+
+
+def _store_claim_candidates(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+    *,
+    claims: list[ClaimCandidateDraft],
+    subject_type: str = "feature",
+) -> dict[str, uuid.UUID]:
+    """pending claim 후보들을 한 run으로 저장하고 local_key별 id를 돌려준다."""
+    observation = _stored_observation(workspace_id, session_factory)
+
+    with KnowledgeMaintenanceUnitOfWork(session_factory) as uow:
+        node_id = uow.knowledge_nodes.get_for_resource(
+            workspace_id=workspace_id,
+            node_kind=NodeKind.OBSERVATION,
+            resource_id=observation.id,
+        ).id
+        uow.ontology.ensure(
+            workspace_id=workspace_id,
+            ontology_id=SPEC.ontology_id,
+            vocabulary=SPEC.vocabulary,
+        )
+        run = uow.knowledge_candidates.start_run(
+            workspace_id=workspace_id,
+            input_node_id=node_id,
+            spec=SPEC,
+            started_at=NOW,
+        )
+        entity_id = uow.knowledge_candidates.add_entity_candidate(
+            workspace_id=workspace_id,
+            run_id=run.id,
+            draft=EntityCandidateDraft(
+                local_key="e1",
+                proposed_type=subject_type,
+                proposed_name="결제 기능",
+            ),
+            extraction_method=ExtractionMethod.LLM,
+        )
+        claim_ids = {
+            draft.local_key: uow.knowledge_candidates.add_claim_candidate(
+                workspace_id=workspace_id,
+                run_id=run.id,
+                draft=draft,
+                subject_candidate_id=entity_id,
+                spec=SPEC,
+                extraction_method=ExtractionMethod.LLM,
+            )
+            for draft in claims
+        }
+        uow.commit()
+    return claim_ids
+
+
+def _store_relation_candidates(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+    *,
+    relations: list[RelationAssertionCandidateDraft],
+) -> dict[str, uuid.UUID]:
+    """pending 관계 후보들을 한 run으로 저장하고 local_key별 id를 돌려준다."""
+    observation = _stored_observation(workspace_id, session_factory)
+
+    with KnowledgeMaintenanceUnitOfWork(session_factory) as uow:
+        node_id = uow.knowledge_nodes.get_for_resource(
+            workspace_id=workspace_id,
+            node_kind=NodeKind.OBSERVATION,
+            resource_id=observation.id,
+        ).id
+        uow.ontology.ensure(
+            workspace_id=workspace_id,
+            ontology_id=SPEC.ontology_id,
+            vocabulary=SPEC.vocabulary,
+        )
+        run = uow.knowledge_candidates.start_run(
+            workspace_id=workspace_id,
+            input_node_id=node_id,
+            spec=SPEC,
+            started_at=NOW,
+        )
+        entity_ids = {
+            local_key: uow.knowledge_candidates.add_entity_candidate(
+                workspace_id=workspace_id,
+                run_id=run.id,
+                draft=EntityCandidateDraft(
+                    local_key=local_key,
+                    proposed_type="feature",
+                    proposed_name=local_key,
+                ),
+                extraction_method=ExtractionMethod.LLM,
+            )
+            for local_key in ("e1", "e2")
+        }
+        relation_ids = {
+            draft.local_key: uow.knowledge_candidates.add_relation_candidate(
+                workspace_id=workspace_id,
+                run_id=run.id,
+                draft=draft,
+                source_candidate_id=entity_ids[draft.source_local_key],
+                target_candidate_id=entity_ids[draft.target_local_key],
+                extraction_method=ExtractionMethod.LLM,
+            )
+            for draft in relations
+        }
+        uow.commit()
+    return relation_ids
+
+
+def _patch_candidate(
+    session_factory: Callable[[], Session],
+    model,
+    candidate_id: uuid.UUID,
+    **values: object,
+) -> None:
+    """후보 행의 컬럼을 직접 고친다.
+
+    superseded 상태와 비어 있는 assertion_text는 저장 경로가 만들지 않으므로
+    테스트가 행을 손질한다.
+    """
+    with KnowledgeMaintenanceUnitOfWork(session_factory) as uow:
+        session = uow.knowledge_candidates._session  # noqa: SLF001
+        session.execute(
+            update(model).where(model.id == candidate_id).values(**values)
+        )
+        uow.commit()
+
+
+def _claim_draft(
+    local_key: str,
+    *,
+    predicate: str,
+    value: object,
+    statement: str,
+    value_type: str = "text",
+) -> ClaimCandidateDraft:
+    return ClaimCandidateDraft(
+        local_key=local_key,
+        subject_local_key="e1",
+        predicate=predicate,
+        value_type=value_type,
+        value=value,
+        statement=statement,
+    )
+
+
+class TestSummarizePredicateUsage:
+    """pending claim 후보의 predicate 사용 현황 집계를 고정한다."""
+
+    def test_pending만_집계하고_상태별로_거른다(
+        self,
+        workspace_id: int,
+        session_factory: Callable[[], Session],
+    ) -> None:
+        predicate = f"{USAGE_PREFIX}deployment_scheduled_on"
+        claim_ids = _store_claim_candidates(
+            workspace_id,
+            session_factory,
+            claims=[
+                _claim_draft(
+                    local_key,
+                    predicate=predicate,
+                    value="2026-08-12",
+                    statement=f"{local_key} 배포 예정입니다.",
+                )
+                for local_key in ("p1", "p2", "superseded", "rejected")
+            ],
+        )
+        _patch_candidate(
+            session_factory,
+            ClaimCandidateRow,
+            claim_ids["superseded"],
+            resolution_status="superseded",
+        )
+        with KnowledgeMaintenanceUnitOfWork(session_factory) as uow:
+            uow.knowledge_candidates.reject_claim(
+                claim_id=claim_ids["rejected"],
+            )
+            uow.commit()
+
+        with KnowledgeMaintenanceUnitOfWork(session_factory) as uow:
+            usage = uow.knowledge_candidates.summarize_predicate_usage(
+                workspace_id=workspace_id,
+            )
+
+        by_name = {item.name: item for item in usage}
+        assert by_name[predicate].usage_count == 2
+
+    def test_값과_예문을_상한까지_중복_없이_담는다(
+        self,
+        workspace_id: int,
+        session_factory: Callable[[], Session],
+    ) -> None:
+        predicate = f"{USAGE_PREFIX}capped_predicate"
+        _store_claim_candidates(
+            workspace_id,
+            session_factory,
+            claims=[
+                _claim_draft(
+                    "c1",
+                    predicate=predicate,
+                    value="2026-08-12",
+                    statement="8월 12일에 배포합니다.",
+                ),
+                _claim_draft(
+                    "c2",
+                    predicate=predicate,
+                    value="2026-08-12",
+                    statement="배포는 8월 12일입니다.",
+                ),
+                _claim_draft(
+                    "c3",
+                    predicate=predicate,
+                    value={"day": 3},
+                    value_type="json",
+                    statement="8월 12일에 배포합니다.",
+                ),
+            ],
+        )
+
+        with KnowledgeMaintenanceUnitOfWork(session_factory) as uow:
+            usage = uow.knowledge_candidates.summarize_predicate_usage(
+                workspace_id=workspace_id,
+                value_cap=2,
+                example_cap=1,
+            )
+
+        item = {entry.name: entry for entry in usage}[predicate]
+        assert item.usage_count == 3
+        # 문자열 값은 비가공이어야 한다. Task 3의 enum 치역 가드가 사전의
+        # enum_values와 이 문자열을 직접 비교한다.
+        assert "2026-08-12" in item.observed_values
+        assert '{"day": 3}' in item.observed_values
+        assert len(item.observed_values) <= 2
+        assert len(item.example_statements) == 1
+        assert set(item.value_types) == {"text", "json"}
+
+    def test_subject_entity_후보의_종류를_모은다(
+        self,
+        workspace_id: int,
+        session_factory: Callable[[], Session],
+    ) -> None:
+        predicate = f"{USAGE_PREFIX}owner_of"
+        _store_claim_candidates(
+            workspace_id,
+            session_factory,
+            claims=[
+                _claim_draft(
+                    "c1",
+                    predicate=predicate,
+                    value="결제팀",
+                    statement="결제팀이 담당합니다.",
+                )
+            ],
+            subject_type="service",
+        )
+
+        with KnowledgeMaintenanceUnitOfWork(session_factory) as uow:
+            usage = uow.knowledge_candidates.summarize_predicate_usage(
+                workspace_id=workspace_id,
+            )
+
+        item = {entry.name: entry for entry in usage}[predicate]
+        assert item.subject_types == ("service",)
+
+    def test_사용_횟수_내림차순으로_돌려준다(
+        self,
+        workspace_id: int,
+        session_factory: Callable[[], Session],
+    ) -> None:
+        rare = f"{USAGE_PREFIX}rare_predicate"
+        common = f"{USAGE_PREFIX}common_predicate"
+        _store_claim_candidates(
+            workspace_id,
+            session_factory,
+            claims=[
+                _claim_draft(
+                    "c1",
+                    predicate=rare,
+                    value="한 번",
+                    statement="한 번 쓰였습니다.",
+                ),
+                *[
+                    _claim_draft(
+                        f"c{index}",
+                        predicate=common,
+                        value=f"값 {index}",
+                        statement=f"{index}번째로 쓰였습니다.",
+                    )
+                    for index in range(2, 5)
+                ],
+            ],
+        )
+
+        with KnowledgeMaintenanceUnitOfWork(session_factory) as uow:
+            usage = uow.knowledge_candidates.summarize_predicate_usage(
+                workspace_id=workspace_id,
+            )
+
+        names = [
+            item.name for item in usage if item.name in {rare, common}
+        ]
+        assert names == [common, rare]
+
+
+class TestSummarizeRelationUsage:
+    """pending 관계 후보의 relation type 사용 현황 집계를 고정한다."""
+
+    def test_pending_관계의_이름과_예문을_집계한다(
+        self,
+        workspace_id: int,
+        session_factory: Callable[[], Session],
+    ) -> None:
+        relation_type = f"{USAGE_PREFIX}depends_on"
+        relation_ids = _store_relation_candidates(
+            workspace_id,
+            session_factory,
+            relations=[
+                RelationAssertionCandidateDraft(
+                    local_key=local_key,
+                    source_local_key="e1",
+                    target_local_key="e2",
+                    relation_type=relation_type,
+                    assertion_text=f"{local_key} 의존합니다.",
+                )
+                for local_key in ("r1", "no_text", "superseded")
+            ],
+        )
+        _patch_candidate(
+            session_factory,
+            RelationRow,
+            relation_ids["no_text"],
+            assertion_text=None,
+        )
+        _patch_candidate(
+            session_factory,
+            RelationRow,
+            relation_ids["superseded"],
+            resolution_status="superseded",
+        )
+
+        with KnowledgeMaintenanceUnitOfWork(session_factory) as uow:
+            usage = uow.knowledge_candidates.summarize_relation_usage(
+                workspace_id=workspace_id,
+            )
+
+        item = {entry.name: entry for entry in usage}[relation_type]
+        assert item.usage_count == 2
+        # 비어 있는 assertion_text는 예문에 넣지 않는다.
+        assert len(item.example_assertions) == 1
+
+
+class TestPublishConvergedVocabulary:
+    """수렴 통과분의 발행이 실 DB에서 어떻게 남는지 고정한다."""
+
+    def _guarded(
+        self,
+        *,
+        predicate_entries: tuple[PredicateEntry, ...] = (),
+        relation_entries: tuple[RelationTypeEntry, ...] = (),
+        absorptions: tuple[SynonymAbsorption, ...] = (),
+        rejections: tuple[GuardRejection, ...] = (),
+    ) -> ConvergenceGuardResult:
+        return ConvergenceGuardResult(
+            predicate_entries=predicate_entries,
+            relation_entries=relation_entries,
+            absorptions=absorptions,
+            rejections=rejections,
+            covered_names=tuple(
+                entry.name
+                for entry in (*predicate_entries, *relation_entries)
+            ),
+        )
+
+    def test_발행은_버전을_단조_증가시키고_기존을_보존한다(
+        self,
+        workspace_id: int,
+        session_factory: Callable[[], Session],
+        uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+    ) -> None:
+        """v1을 그대로 두고 v2에 기존+신규를 함께 담아야 한다."""
+        first = ExtractionVocabulary(
+            snapshot_id="v1",
+            predicates=("release_month",),
+            relation_types=("depends_on",),
+        )
+        with KnowledgeMaintenanceUnitOfWork(session_factory) as uow:
+            uow.ontology.ensure(
+                workspace_id=workspace_id,
+                ontology_id=CONVERGENCE_ONTOLOGY_ID,
+                vocabulary=first,
+            )
+            uow.commit()
+
+        guarded = self._guarded(
+            predicate_entries=(
+                PredicateEntry(
+                    name="deployment_scheduled_on",
+                    definition="배포 예정 일자를 담는다.",
+                    value_type="date",
+                ),
+            ),
+        )
+
+        outcome = publish_converged_vocabulary(
+            guarded,
+            workspace_id=workspace_id,
+            ontology_id=CONVERGENCE_ONTOLOGY_ID,
+            current=first,
+            uow=uow_factory(),
+        )
+
+        assert outcome.version == "v2"
+        assert outcome.added_predicates == ("deployment_scheduled_on",)
+        assert outcome.added_relations == ()
+
+        with KnowledgeMaintenanceUnitOfWork(session_factory) as reader:
+            stored_first = reader.ontology.get(
+                workspace_id=workspace_id,
+                ontology_id=CONVERGENCE_ONTOLOGY_ID,
+                version="v1",
+            )
+            stored_second = reader.ontology.get(
+                workspace_id=workspace_id,
+                ontology_id=CONVERGENCE_ONTOLOGY_ID,
+                version="v2",
+            )
+
+        assert stored_first == first
+        assert stored_second is not None
+        assert set(stored_second.predicates) >= set(stored_first.predicates)
+        assert stored_second.predicates == (
+            "release_month",
+            "deployment_scheduled_on",
+        )
+        assert stored_second.relation_types == ("depends_on",)
+        assert stored_second.predicate_entries == guarded.predicate_entries
+
+    def test_신규_0이면_발행하지_않는다(
+        self,
+        workspace_id: int,
+        session_factory: Callable[[], Session],
+        uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+    ) -> None:
+        """사전 내용이 안 바뀌는 라운드는 버전을 만들지 않는다."""
+        current = ExtractionVocabulary(
+            snapshot_id="v1",
+            predicates=("release_month",),
+        )
+        with KnowledgeMaintenanceUnitOfWork(session_factory) as uow:
+            uow.ontology.ensure(
+                workspace_id=workspace_id,
+                ontology_id=CONVERGENCE_ONTOLOGY_ID,
+                vocabulary=current,
+            )
+            uow.commit()
+
+        with KnowledgeMaintenanceUnitOfWork(session_factory) as reader:
+            before = reader.ontology.list_versions(
+                workspace_id=workspace_id,
+                ontology_id=CONVERGENCE_ONTOLOGY_ID,
+            )
+
+        # absorption만 통과한 라운드다. 정본 사전은 그대로다.
+        guarded = self._guarded(
+            absorptions=(
+                SynonymAbsorption(
+                    candidate_name="release_mon",
+                    canonical_name="release_month",
+                    reason="같은 뜻의 축약형이다.",
+                ),
+            ),
+            rejections=(GuardRejection(name="bad", reason="관측 증거 없음"),),
+        )
+
+        outcome = publish_converged_vocabulary(
+            guarded,
+            workspace_id=workspace_id,
+            ontology_id=CONVERGENCE_ONTOLOGY_ID,
+            current=current,
+            uow=uow_factory(),
+        )
+
+        assert outcome.version is None
+        assert outcome.added_predicates == ()
+        assert outcome.added_relations == ()
+
+        with KnowledgeMaintenanceUnitOfWork(session_factory) as reader:
+            after = reader.ontology.list_versions(
+                workspace_id=workspace_id,
+                ontology_id=CONVERGENCE_ONTOLOGY_ID,
+            )
+
+        assert after == before
+
+    def test_구_버전_문자열은_계보에_끼지_않는다(
+        self,
+        workspace_id: int,
+        session_factory: Callable[[], Session],
+        uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+    ) -> None:
+        """`vN` 체계 밖의 이름은 발행 계보의 최신으로 보지 않는다."""
+        current = ExtractionVocabulary(
+            snapshot_id="round-4",
+            predicates=("release_month",),
+        )
+        with KnowledgeMaintenanceUnitOfWork(session_factory) as uow:
+            uow.ontology.ensure(
+                workspace_id=workspace_id,
+                ontology_id=CONVERGENCE_ONTOLOGY_ID,
+                vocabulary=ExtractionVocabulary(
+                    snapshot_id="2",
+                    predicates=("release_month",),
+                ),
+            )
+            uow.ontology.ensure(
+                workspace_id=workspace_id,
+                ontology_id=CONVERGENCE_ONTOLOGY_ID,
+                vocabulary=current,
+            )
+            uow.commit()
+
+        outcome = publish_converged_vocabulary(
+            self._guarded(
+                relation_entries=(
+                    RelationTypeEntry(
+                        name="blocked_by",
+                        definition="진행을 막는 대상을 가리킨다.",
+                    ),
+                ),
+            ),
+            workspace_id=workspace_id,
+            ontology_id=CONVERGENCE_ONTOLOGY_ID,
+            current=current,
+            uow=uow_factory(),
+        )
+
+        assert outcome.version == "v1"
+        assert outcome.added_relations == ("blocked_by",)
+
+        with KnowledgeMaintenanceUnitOfWork(session_factory) as reader:
+            published = reader.ontology.get(
+                workspace_id=workspace_id,
+                ontology_id=CONVERGENCE_ONTOLOGY_ID,
+                version="v1",
+            )
+
+        assert published is not None
+        assert published.relation_types == ("blocked_by",)
+        assert published.predicates == ("release_month",)
+
+    def test_낡은_기준_사전으로는_발행을_거부한다(
+        self,
+        workspace_id: int,
+        session_factory: Callable[[], Session],
+        uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+    ) -> None:
+        """v2가 있는데 v1을 기준으로 발행하면 v2 항목이 사라진다."""
+        first = ExtractionVocabulary(
+            snapshot_id="v1",
+            predicates=("release_month",),
+        )
+        with KnowledgeMaintenanceUnitOfWork(session_factory) as uow:
+            uow.ontology.ensure(
+                workspace_id=workspace_id,
+                ontology_id=STALE_BASE_ONTOLOGY_ID,
+                vocabulary=first,
+            )
+            uow.commit()
+
+        second_outcome = publish_converged_vocabulary(
+            self._guarded(
+                predicate_entries=(
+                    PredicateEntry(
+                        name="deployment_scheduled_on",
+                        definition="배포 예정 일자를 담는다.",
+                        value_type="date",
+                    ),
+                ),
+            ),
+            workspace_id=workspace_id,
+            ontology_id=STALE_BASE_ONTOLOGY_ID,
+            current=first,
+            uow=uow_factory(),
+        )
+        assert second_outcome.version == "v2"
+
+        with pytest.raises(RuntimeError, match="최신 발행본"):
+            publish_converged_vocabulary(
+                self._guarded(
+                    predicate_entries=(
+                        PredicateEntry(
+                            name="release_channel",
+                            definition="배포 채널을 담는다.",
+                            value_type="text",
+                        ),
+                    ),
+                ),
+                workspace_id=workspace_id,
+                ontology_id=STALE_BASE_ONTOLOGY_ID,
+                current=first,
+                uow=uow_factory(),
+            )
+
+        with KnowledgeMaintenanceUnitOfWork(session_factory) as reader:
+            versions = reader.ontology.list_versions(
+                workspace_id=workspace_id,
+                ontology_id=STALE_BASE_ONTOLOGY_ID,
+            )
+            latest = reader.ontology.get(
+                workspace_id=workspace_id,
+                ontology_id=STALE_BASE_ONTOLOGY_ID,
+                version="v2",
+            )
+
+        assert "v3" not in versions
+        assert latest is not None
+        assert latest.predicates == ("release_month", "deployment_scheduled_on")
+
+    def test_발행_체계_밖_이름은_낡음_검사를_받지_않는다(
+        self,
+        workspace_id: int,
+        session_factory: Callable[[], Session],
+        uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+    ) -> None:
+        """빈 이름·`vN` 아닌 이름은 계보의 일부가 아니라 그냥 발행한다."""
+        published = ExtractionVocabulary(
+            snapshot_id="v1",
+            predicates=("release_month",),
+        )
+        with KnowledgeMaintenanceUnitOfWork(session_factory) as uow:
+            uow.ontology.ensure(
+                workspace_id=workspace_id,
+                ontology_id=STALE_BASE_ONTOLOGY_ID,
+                vocabulary=published,
+            )
+            uow.commit()
+
+        legacy = ExtractionVocabulary(predicates=("legacy_p",))
+        outcome = publish_converged_vocabulary(
+            self._guarded(
+                predicate_entries=(
+                    PredicateEntry(
+                        name="release_channel",
+                        definition="배포 채널을 담는다.",
+                        value_type="text",
+                    ),
+                ),
+            ),
+            workspace_id=workspace_id,
+            ontology_id=STALE_BASE_ONTOLOGY_ID,
+            current=legacy,
+            uow=uow_factory(),
+        )
+
+        assert outcome.version == "v2"

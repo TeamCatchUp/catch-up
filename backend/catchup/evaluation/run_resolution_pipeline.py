@@ -35,11 +35,27 @@ from catchup.knowledge_maintenance.adapters.postgres.unit_of_work import (
     KnowledgeMaintenanceUnitOfWork,
 )
 from catchup.knowledge_maintenance.contracts.extraction import EntityTypeEntry
+from catchup.knowledge_maintenance.services.converge_vocabulary import (
+    resolve_latest_published_version,
+)
 from catchup.knowledge_maintenance.services.resolve_entity_candidates import (
     resolve_entity_candidates,
 )
 
-VOCABULARY_VERSION = "2"
+
+def _resolve_vocabulary_version(
+    uow: KnowledgeMaintenanceUnitOfWork,
+    *,
+    workspace_id: int,
+) -> str | None:
+    """최신 발행본 어휘 버전을 고른다."""
+    with uow:
+        return resolve_latest_published_version(
+            uow.ontology.list_versions(
+                workspace_id=workspace_id,
+                ontology_id=CONTRACT_ID,
+            )
+        )
 
 
 def _load_entity_types(
@@ -50,8 +66,10 @@ def _load_entity_types(
 ) -> tuple[EntityTypeEntry, ...]:
     """발행된 어휘 스냅샷에서 entity 종류 사전을 읽는다.
 
-    스냅샷이 없으면 빈 사전을 돌려준다. 사전이 없다고 판정을 멈출 이유는
-    없다. 빈 사전이면 프롬프트에서 anchored 규칙만 빠진다.
+    스냅샷이 없으면 무엇을 찾았는지 알리고 빈 사전을 돌려준다. 사전이
+    없다고 판정을 멈출 이유는 없다. 빈 사전이면 프롬프트에서 anchored
+    규칙만 빠진다. 다만 조용히 빠지면 판정 품질이 떨어진 이유를 나중에
+    알 수 없으므로 반드시 알린다.
     """
     with uow:
         vocabulary = uow.ontology.get(
@@ -60,6 +78,10 @@ def _load_entity_types(
             version=version,
         )
     if vocabulary is None:
+        print(
+            f"경고: 어휘 스냅샷 {version}을 찾지 못했다. "
+            "entity 종류 사전 없이(anchored 규칙 없이) 판정한다."
+        )
         return ()
     return vocabulary.entity_type_entries
 
@@ -79,8 +101,10 @@ def main() -> None:
     )
     parser.add_argument(
         "--vocabulary-version",
-        default=VOCABULARY_VERSION,
-        help="judge에 주입할 어휘 스냅샷 버전을 정한다.",
+        default=None,
+        help=(
+            "judge에 주입할 어휘 스냅샷 버전. 생략하면 최신 발행본을 고른다."
+        ),
     )
     args = parser.parse_args()
 
@@ -90,15 +114,30 @@ def main() -> None:
 
     judge = None
     if not args.skip_judge:
-        entity_types = _load_entity_types(
-            uow,
-            workspace_id=args.workspace_id,
-            version=args.vocabulary_version,
-        )
-        print(
-            f"어휘 스냅샷 v{args.vocabulary_version} entity 종류 "
-            f"{len(entity_types)}종 주입"
-        )
+        version = args.vocabulary_version
+        if version is None:
+            version = _resolve_vocabulary_version(
+                uow,
+                workspace_id=args.workspace_id,
+            )
+        entity_types: tuple[EntityTypeEntry, ...] = ()
+        if version is None:
+            print(
+                "발행된 어휘 스냅샷이 없다. "
+                "run_vocabulary_convergence_pipeline을 먼저 돌리면 "
+                "entity 종류 사전이 판정에 주입된다. "
+                "이번에는 사전 없이 판정한다."
+            )
+        else:
+            entity_types = _load_entity_types(
+                uow,
+                workspace_id=args.workspace_id,
+                version=version,
+            )
+            print(
+                f"어휘 스냅샷 {version} entity 종류 "
+                f"{len(entity_types)}종 주입"
+            )
         service = get_llm_service(
             provider=LlmProvider.AWS_BEDROCK,
             model_capacity=ModelCapacity(args.capacity),

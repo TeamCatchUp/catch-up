@@ -40,8 +40,10 @@ from catchup.knowledge_maintenance.contracts.extraction import ExtractionVocabul
 from catchup.knowledge_maintenance.services.compile_entity_artifacts import (
     compile_entity_artifacts,
 )
+from catchup.knowledge_maintenance.services.converge_vocabulary import (
+    resolve_latest_published_version,
+)
 
-ONTOLOGY_VERSION = "2"
 DEFAULT_LIMIT = 2
 
 
@@ -91,8 +93,11 @@ def main() -> None:
     )
     parser.add_argument(
         "--ontology-version",
-        default=ONTOLOGY_VERSION,
-        help="카드에 판본으로 남길 어휘 스냅샷 버전을 정한다.",
+        default=None,
+        help=(
+            "카드에 판본으로 남길 어휘 스냅샷 버전. 생략하면 최신 발행본을 "
+            "고른다."
+        ),
     )
     args = parser.parse_args()
 
@@ -103,15 +108,32 @@ def main() -> None:
         workspace_id=args.workspace_id,
     )
 
+    version = args.ontology_version
+    if version is None:
+        with uow:
+            version = resolve_latest_published_version(
+                uow.ontology.list_versions(
+                    workspace_id=args.workspace_id,
+                    ontology_id=CONTRACT_ID,
+                )
+            )
+    if version is None:
+        print(
+            "발행된 어휘 스냅샷이 없다. "
+            "run_vocabulary_convergence_pipeline을 먼저 돌린다."
+        )
+        engine.dispose()
+        return
+
     vocabulary = _load_vocabulary(
         uow,
         workspace_id=args.workspace_id,
-        version=args.ontology_version,
+        version=version,
     )
     if vocabulary is None:
         print(
-            f"어휘 스냅샷 v{args.ontology_version}이 없다. "
-            f"publish_vocabulary_snapshot을 먼저 돌린다."
+            f"어휘 스냅샷 {version}이 없다. "
+            f"run_vocabulary_convergence_pipeline을 먼저 돌린다."
         )
         engine.dispose()
         return
@@ -119,12 +141,12 @@ def main() -> None:
         # 사전이 비면 카드는 만들어지지만 predicate 순서를 사람이 정한
         # 대로 놓지 못하고 이름순으로 떨어진다. 그 사실을 미리 알린다.
         print(
-            f"어휘 스냅샷 v{args.ontology_version}에 predicate 사전 항목이 "
+            f"어휘 스냅샷 {version}에 predicate 사전 항목이 "
             f"없다. 카드의 절 순서는 이름순으로 떨어진다."
         )
     else:
         print(
-            f"어휘 스냅샷 v{vocabulary.snapshot_id} predicate 사전 "
+            f"어휘 스냅샷 {vocabulary.snapshot_id} predicate 사전 "
             f"{len(vocabulary.predicate_entries)}종 주입"
         )
 

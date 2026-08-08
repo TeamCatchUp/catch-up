@@ -16,7 +16,7 @@
 실행:
     uv run python -m catchup.evaluation.run_claim_conflict_pipeline
     uv run python -m catchup.evaluation.run_claim_conflict_pipeline \
-        --workspace-id 1 --ontology-version 2
+        --workspace-id 1 --ontology-version v2
 """
 
 from __future__ import annotations
@@ -32,11 +32,12 @@ from catchup.knowledge_maintenance.adapters.postgres.unit_of_work import (
     KnowledgeMaintenanceUnitOfWork,
 )
 from catchup.knowledge_maintenance.contracts.extraction import ExtractionVocabulary
+from catchup.knowledge_maintenance.services.converge_vocabulary import (
+    resolve_latest_published_version,
+)
 from catchup.knowledge_maintenance.services.resolve_claim_conflicts import (
     resolve_claim_conflicts,
 )
-
-ONTOLOGY_VERSION = "2"
 
 
 def _load_vocabulary(
@@ -59,8 +60,8 @@ def main() -> None:
     parser.add_argument("--workspace-id", type=int, default=1)
     parser.add_argument(
         "--ontology-version",
-        default=ONTOLOGY_VERSION,
-        help="비교 기준으로 읽을 어휘 스냅샷 버전을 정한다.",
+        default=None,
+        help="비교 기준 어휘 버전. 생략하면 최신 발행본을 고른다.",
     )
     args = parser.parse_args()
 
@@ -68,15 +69,32 @@ def main() -> None:
     session_factory = sessionmaker(bind=engine, expire_on_commit=False)
     uow = KnowledgeMaintenanceUnitOfWork(session_factory)
 
+    version = args.ontology_version
+    if version is None:
+        with uow:
+            version = resolve_latest_published_version(
+                uow.ontology.list_versions(
+                    workspace_id=args.workspace_id,
+                    ontology_id=CONTRACT_ID,
+                )
+            )
+    if version is None:
+        print(
+            "발행된 어휘 스냅샷이 없다. "
+            "run_vocabulary_convergence_pipeline을 먼저 돌린다."
+        )
+        engine.dispose()
+        return
+
     vocabulary = _load_vocabulary(
         uow,
         workspace_id=args.workspace_id,
-        version=args.ontology_version,
+        version=version,
     )
     if vocabulary is None:
         print(
-            f"어휘 스냅샷 v{args.ontology_version}이 없다. "
-            f"publish_vocabulary_snapshot을 먼저 돌린다."
+            f"어휘 스냅샷 {version}이 없다. "
+            f"run_vocabulary_convergence_pipeline을 먼저 돌린다."
         )
         engine.dispose()
         return
@@ -84,14 +102,14 @@ def main() -> None:
         # 이름 목록만 있는 스냅샷은 치역을 모른다. 비교 대상이 하나도
         # 남지 않으므로 돌려도 0건이 나온다. 그 사실을 미리 알린다.
         print(
-            f"어휘 스냅샷 v{args.ontology_version}에 predicate 사전 항목이 "
+            f"어휘 스냅샷 {version}에 predicate 사전 항목이 "
             f"없다. 치역을 담은 사전을 먼저 발행한다."
         )
         engine.dispose()
         return
 
     print(
-        f"어휘 스냅샷 v{vocabulary.snapshot_id} predicate 사전 "
+        f"어휘 스냅샷 {vocabulary.snapshot_id} predicate 사전 "
         f"{len(vocabulary.predicate_entries)}종 주입"
     )
 
