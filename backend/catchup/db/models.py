@@ -5141,6 +5141,98 @@ class KnowledgeArtifactChangeProposal(Base):
     )
 
 
+class KnowledgeBlockVerdict(Base):
+    """변경안 안의 블록 한 칸에 대한 사람의 판정을 남긴다.
+
+    변경안 전체를 통째로 승인·반려하던 자리를 블록 단위로 쪼갠다. 한 변경안
+    안에서 어떤 문단은 통과하고 어떤 문단은 근거가 모자라 막히는 일이
+    정상이기 때문이다.
+
+    저널이므로 블록당 한 줄만 산다. 사람이 마음을 바꿔 다시 누르면 유일
+    제약 위에서 갱신으로 흡수되고, 판정 자체는 결정자와 시각을 반드시
+    달고 남는다.
+
+    `chosen_winner_claim_id`에는 FK를 걸지 않는다. 후보 claim 테이블과 서로
+    참조하면 순환과 수명 결합이 생기는데, 이 행은 "그때 사람이 무엇을
+    골랐는가"를 기록할 뿐이라 claim이 나중에 닫혀도 기록은 그대로 남아야
+    한다.
+    """
+
+    __tablename__ = "knowledge_block_verdicts"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+    )
+    workspace_id: Mapped[int] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    proposal_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey(
+            "knowledge_artifact_change_proposals.id",
+            ondelete="CASCADE",
+        ),
+        nullable=False,
+    )
+    block_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    block_content_hash: Mapped[str] = mapped_column(
+        String(64),
+        nullable=False,
+    )
+    verdict: Mapped[str] = mapped_column(String(16), nullable=False)
+    rejection_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    chosen_winner_claim_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=True,
+    )
+    reviewer: Mapped[str] = mapped_column(String(255), nullable=False)
+    reviewed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "proposal_id",
+            "block_index",
+            name="uq_block_verdict_proposal_block",
+        ),
+        CheckConstraint(
+            "verdict IN ('approved','rejected')",
+            name="ck_block_verdict_kind",
+        ),
+        # 반려는 이유가 남아야 한다. 이유 없는 반려는 다음 사람이 같은
+        # 블록을 그대로 다시 올리게 만든다.
+        CheckConstraint(
+            "verdict != 'rejected' OR (rejection_reason IS NOT NULL "
+            "AND length(trim(rejection_reason)) > 0)",
+            name="ck_block_verdict_rejection_reason",
+        ),
+        CheckConstraint(
+            "length(trim(reviewer)) > 0",
+            name="ck_block_verdict_reviewer",
+        ),
+        Index(
+            "ix_knowledge_block_verdicts_workspace_proposal",
+            "workspace_id",
+            "proposal_id",
+        ),
+    )
+
+
 class KnowledgeArtifactRevision(Base):
     """승인으로 확정된 문서 한 판을 그대로 보존한다.
 
