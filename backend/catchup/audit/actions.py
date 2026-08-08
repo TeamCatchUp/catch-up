@@ -125,6 +125,8 @@ class KnowledgeReviewAction(BaseAuditAction):
     REJECT = "reject"
     RESOLVE = "resolve"
     APPLY = "apply"
+    BLOCK_VERDICT = "block_verdict"
+    PUBLISH = "publish"
 
 
 class McpAction(BaseAuditAction):

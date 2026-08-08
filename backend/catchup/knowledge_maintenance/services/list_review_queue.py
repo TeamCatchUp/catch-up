@@ -12,11 +12,13 @@
 비용이며, 이 수가 커지면 충돌 표시를 SQL로 내려 정렬까지 DB에 맡기는 것이
 다음 수순이다.
 
-충돌 판정은 문서의 대상 노드로 한다. 계류 중인 모순의 값 후보 claim들이
-가리키는 subject 노드 집합을 저장소에서 받아, 변경안이 설명하는 노드가 그
-집합에 있으면 충돌로 표시한다. 안건의 본문(Read Set)을 뒤지지 않는 이유는
-문서가 아직 그 모순을 열린 질문으로 옮겨 적지 못한 상태에서도 검토자가
-"이 대상에 답이 갈렸다"를 알아야 하기 때문이다.
+충돌 판정은 본문의 다툼(contested) 블록 유무로 한다. 컴파일러가 값이 갈린
+속성을 contested 블록으로 옮겨 적으므로, 그 블록이 있다는 것이 곧 "이
+안건에 사람이 골라야 할 것이 있다"는 뜻이다.
+
+대상 노드로 판정하던 옛 경로는 걷어냈다. 목록의 표시와 상세의 충돌 목록이
+서로 다른 사실에서 나와, 표시는 켜졌는데 목록은 빈 상태가 만들어질 수
+있었기 때문이다. 유도가 하나면 그 어긋남이 성립하지 않는다.
 """
 
 from __future__ import annotations
@@ -28,12 +30,10 @@ from types import TracebackType
 from typing import Protocol
 from typing import Self
 
+from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_CONTESTED
 from catchup.knowledge_maintenance.domain.artifact import ArtifactBlock
 from catchup.knowledge_maintenance.ports.artifacts import ArtifactRepository
 from catchup.knowledge_maintenance.ports.artifacts import StoredArtifactProposal
-from catchup.knowledge_maintenance.ports.mutation_proposals import (
-    MutationProposalRepository,
-)
 from catchup.observability.logging import get_logger
 
 logger = get_logger(__name__)
@@ -47,12 +47,11 @@ class ReviewQueueUnitOfWork(Protocol):
     """검토 큐 조회가 쓰는 읽기 전용 transaction 경계를 정의한다.
 
     commit을 요구하지 않는다. 이 경로는 아무것도 쓰지 않기 때문이다.
-    두 저장소를 함께 받는 이유는 충돌 표시가 mutation 쪽 사실이라
-    한 transaction 안에서 같은 시점을 봐야 하기 때문이다.
+    저장소가 artifact 하나뿐인 이유는 충돌 표시가 본문 블록에서 나오기
+    때문이다 — mutation 쪽을 함께 읽던 자리는 사라졌다.
     """
 
     artifacts: ArtifactRepository
-    mutation_proposals: MutationProposalRepository
 
     def __enter__(self) -> Self: ...
 
@@ -127,13 +126,8 @@ def list_review_queue(
 
     with uow:
         proposals = uow.artifacts.list_pending_proposals()
-        contested = uow.mutation_proposals.find_contested_subject_node_ids(
-            workspace_id=workspace_id,
-        )
 
-    items = [
-        _to_item(proposal, contested=contested) for proposal in proposals
-    ]
+    items = [_to_item(proposal) for proposal in proposals]
     if contains_conflict is not None:
         items = [
             item
@@ -156,11 +150,7 @@ def list_review_queue(
     return ReviewQueuePage(items=page, total=total)
 
 
-def _to_item(
-    proposal: StoredArtifactProposal,
-    *,
-    contested: frozenset[uuid.UUID],
-) -> ReviewQueueItem:
+def _to_item(proposal: StoredArtifactProposal) -> ReviewQueueItem:
     """변경안 하나를 큐 한 줄로 옮긴다."""
     return ReviewQueueItem(
         proposal_id=proposal.id,
@@ -169,7 +159,10 @@ def _to_item(
         status=proposal.status,
         summary=_summary(proposal.blocks),
         origin=proposal.origin,
-        contains_conflict=proposal.subject_node_id in contested,
+        contains_conflict=any(
+            block.block_kind == BLOCK_KIND_CONTESTED
+            for block in proposal.blocks
+        ),
         created_at=proposal.created_at,
     )
 

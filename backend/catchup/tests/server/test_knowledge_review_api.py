@@ -50,11 +50,15 @@ from catchup.knowledge_maintenance.adapters.postgres.unit_of_work import (
     KnowledgeMaintenanceUnitOfWork,
 )
 from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_CLAIM_SECTION
+from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_CONTESTED
 from catchup.knowledge_maintenance.domain.artifact import ArtifactBlock
 from catchup.knowledge_maintenance.domain.artifact import BlockSource
+from catchup.knowledge_maintenance.domain.artifact import ContestedVariant
 from catchup.knowledge_maintenance.domain.artifact import artifact_idempotency_key
+from catchup.knowledge_maintenance.domain.artifact import block_content_hash
 from catchup.knowledge_maintenance.domain.artifact import blocks_content_hash
 from catchup.knowledge_maintenance.ports.artifacts import StoredArtifactProposal
+from catchup.knowledge_maintenance.ports.block_verdicts import StoredBlockVerdict
 from catchup.knowledge_maintenance.ports.mutation_proposals import (
     StoredContradictionProposal,
 )
@@ -65,6 +69,12 @@ from catchup.knowledge_maintenance.ports.mutation_proposals import StoredPending
 from catchup.knowledge_maintenance.services.apply_mutation_proposals import ApplyResult
 from catchup.knowledge_maintenance.services.list_review_queue import ReviewQueueItem
 from catchup.knowledge_maintenance.services.list_review_queue import ReviewQueuePage
+from catchup.knowledge_maintenance.services.publish_artifact_proposal import (
+    PublishError,
+)
+from catchup.knowledge_maintenance.services.publish_artifact_proposal import (
+    PublishResult,
+)
 from catchup.knowledge_maintenance.services.review_artifact_proposal import (
     ProposalReviewError,
 )
@@ -260,6 +270,22 @@ class _FakeMutations:
         return self._statuses.get(proposal_id)
 
 
+class _FakeBlockVerdicts:
+    """블록 결정 저널 조회만 흉내낸다."""
+
+    def __init__(
+        self, *, stored: tuple[StoredBlockVerdict, ...] = ()
+    ) -> None:
+        self._stored = stored
+
+    def list_for_proposal(
+        self, *, proposal_id: uuid.UUID
+    ) -> tuple[StoredBlockVerdict, ...]:
+        return tuple(
+            item for item in self._stored if item.proposal_id == proposal_id
+        )
+
+
 class _FakeUow:
     """라우터가 쓰는 transaction 경계를 흉내낸다."""
 
@@ -268,9 +294,11 @@ class _FakeUow:
         *,
         artifacts: _FakeArtifacts,
         mutation_proposals: _FakeMutations,
+        block_verdicts: _FakeBlockVerdicts,
     ) -> None:
         self.artifacts = artifacts
         self.mutation_proposals = mutation_proposals
+        self.block_verdicts = block_verdicts
 
     def __enter__(self) -> _FakeUow:
         return self
@@ -291,15 +319,18 @@ def _fake_factory(
     *,
     artifacts: _FakeArtifacts | None = None,
     mutations: _FakeMutations | None = None,
+    verdicts: _FakeBlockVerdicts | None = None,
 ) -> Callable[[], _FakeUow]:
     """같은 대역 저장소를 계속 돌려주는 factory를 만든다."""
     resolved_artifacts = artifacts or _FakeArtifacts()
     resolved_mutations = mutations or _FakeMutations()
+    resolved_verdicts = verdicts or _FakeBlockVerdicts()
 
     def factory() -> _FakeUow:
         return _FakeUow(
             artifacts=resolved_artifacts,
             mutation_proposals=resolved_mutations,
+            block_verdicts=resolved_verdicts,
         )
 
     return factory
@@ -339,6 +370,59 @@ def _proposal(
         ),
         content_hash="hash",
         base_revision_id=base_revision_id,
+        rejection_reason=None,
+        origin="compiled",
+        created_at=AT,
+    )
+
+
+def _contested_proposal(
+    *,
+    proposal_id: uuid.UUID,
+    contradiction_id: uuid.UUID,
+    winner_claim_id: uuid.UUID,
+    loser_claim_id: uuid.UUID,
+    subject_node_id: uuid.UUID | None = None,
+) -> StoredArtifactProposal:
+    """다툼 블록 하나만 가진 변경안을 만든다."""
+    return StoredArtifactProposal(
+        id=proposal_id,
+        artifact_id=uuid.uuid4(),
+        subject_node_id=subject_node_id or uuid.uuid4(),
+        title="오픈 API",
+        status="pending",
+        blocks=(
+            ArtifactBlock(
+                block_kind=BLOCK_KIND_CONTESTED,
+                heading="속도 제한",
+                body="값이 갈렸다",
+                claim_ids=(winner_claim_id, loser_claim_id),
+                proposal_ids=(contradiction_id,),
+                ontology_version="v1",
+                sources=(),
+                variants=(
+                    ContestedVariant(
+                        claim_id=winner_claim_id,
+                        body="rate_limit은 60이다",
+                        sources=(
+                            BlockSource(
+                                claim_id=winner_claim_id,
+                                statement="rate_limit은 60이다",
+                                observed_at=AT,
+                                citation_verified=True,
+                            ),
+                        ),
+                    ),
+                    ContestedVariant(
+                        claim_id=loser_claim_id,
+                        body="rate_limit은 120이다",
+                        sources=(),
+                    ),
+                ),
+            ),
+        ),
+        content_hash="hash",
+        base_revision_id=None,
         rejection_reason=None,
         origin="compiled",
         created_at=AT,
@@ -661,20 +745,28 @@ def test_detail_returns_blocks_read_set_and_conflicts(
     reviewer: User,
     workspace_ids: tuple[int, int],
 ) -> None:
-    """상세는 본문·근거 장부와 이 대상에 걸린 충돌을 함께 싣는다."""
+    """상세는 본문·근거 장부와 다툼 블록이 가리키는 충돌을 함께 싣는다.
+
+    충돌 목록은 블록의 proposal_ids로만 모은다. subject_key로 모으던 옛
+    경로와 달리, 표시(contains_conflict)와 목록이 같은 사실 하나에서
+    나오므로 둘이 어긋날 자리가 없다.
+    """
     workspace_id, _ = workspace_ids
     proposal_id = uuid.uuid4()
-    subject_node_id = uuid.uuid4()
-    stored = _proposal(
-        proposal_id=proposal_id, subject_node_id=subject_node_id
-    )
     conflict_id = uuid.uuid4()
     other_conflict_id = uuid.uuid4()
     claim_id = uuid.uuid4()
+    loser_claim_id = uuid.uuid4()
+    stored = _contested_proposal(
+        proposal_id=proposal_id,
+        contradiction_id=conflict_id,
+        winner_claim_id=claim_id,
+        loser_claim_id=loser_claim_id,
+    )
     contradiction = StoredContradictionProposal(
         id=conflict_id,
         predicate="rate_limit",
-        subject_key=f"node:{subject_node_id}",
+        subject_key=f"node:{stored.subject_node_id}",
         summary="rate_limit 값이 갈렸다",
         values=(
             StoredContradictionValue(
@@ -693,18 +785,7 @@ def test_detail_returns_blocks_read_set_and_conflicts(
         summary="남의 대상 모순",
         values=(),
     )
-    mutations = _FakeMutations(
-        contested=frozenset({subject_node_id}),
-        pending=(contradiction, other),
-        subject_pending=(
-            StoredPendingProposal(
-                id=conflict_id,
-                proposal_kind="contradiction",
-                summary="rate_limit 값이 갈렸다",
-                resolver_metadata={},
-            ),
-        ),
-    )
+    mutations = _FakeMutations(pending=(contradiction, other))
     app.dependency_overrides[get_review_uow_factory] = lambda: _fake_factory(
         artifacts=_FakeArtifacts(proposal=stored), mutations=mutations
     )
@@ -715,11 +796,12 @@ def test_detail_returns_blocks_read_set_and_conflicts(
     data = response.json()
     assert data["contains_conflict"] is True
     assert data["blocks"][0]["claim_ids"] == [
-        str(stored.blocks[0].claim_ids[0])
+        str(claim_id),
+        str(loser_claim_id),
     ]
     assert data["read_set"] == {
-        "claim_ids": [str(stored.blocks[0].claim_ids[0])],
-        "proposal_ids": [],
+        "claim_ids": [str(claim_id), str(loser_claim_id)],
+        "proposal_ids": [str(conflict_id)],
     }
     assert [item["proposal_id"] for item in data["conflicts"]] == [
         str(conflict_id)
@@ -798,6 +880,139 @@ def test_detail_missing_proposal_returns_404(
 
     assert response.status_code == 404
     assert response.json()["detail"]["code"] == "PROPOSAL_NOT_FOUND"
+
+
+def test_detail_conflict_flag_follows_contested_blocks(
+    app: FastAPI, client: TestClient, reviewer: User
+) -> None:
+    """다툼 블록이 없으면 대상에 모순이 걸려 있어도 표시하지 않는다.
+
+    옛 경로는 대상 노드로 표시하고 목록은 subject_key로 모아, 표시는
+    켜졌는데 목록은 빈 상태가 나올 수 있었다. 이제 둘 다 블록에서
+    나오므로 그 어긋남이 재현되지 않는다.
+    """
+    proposal_id = uuid.uuid4()
+    stored = _proposal(proposal_id=proposal_id)
+    contradiction = StoredContradictionProposal(
+        id=uuid.uuid4(),
+        predicate="rate_limit",
+        subject_key=f"node:{stored.subject_node_id}",
+        summary="rate_limit 값이 갈렸다",
+        values=(),
+    )
+    mutations = _FakeMutations(
+        contested=frozenset({stored.subject_node_id}),
+        pending=(contradiction,),
+        subject_pending=(
+            StoredPendingProposal(
+                id=contradiction.id,
+                proposal_kind="contradiction",
+                summary="rate_limit 값이 갈렸다",
+                resolver_metadata={},
+            ),
+        ),
+    )
+    app.dependency_overrides[get_review_uow_factory] = lambda: _fake_factory(
+        artifacts=_FakeArtifacts(proposal=stored), mutations=mutations
+    )
+
+    response = client.get(f"/api/v1/knowledge-review/queue/{proposal_id}")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["contains_conflict"] is False
+    assert data["conflicts"] == []
+
+
+def test_detail_contested_block_carries_variants_only(
+    app: FastAPI, client: TestClient, reviewer: User
+) -> None:
+    """다툼 블록은 후보만 싣고 블록 sources를 겹쳐 싣지 않는다."""
+    proposal_id = uuid.uuid4()
+    winner = uuid.uuid4()
+    loser = uuid.uuid4()
+    stored = _contested_proposal(
+        proposal_id=proposal_id,
+        contradiction_id=uuid.uuid4(),
+        winner_claim_id=winner,
+        loser_claim_id=loser,
+    )
+    app.dependency_overrides[get_review_uow_factory] = lambda: _fake_factory(
+        artifacts=_FakeArtifacts(proposal=stored)
+    )
+
+    response = client.get(f"/api/v1/knowledge-review/queue/{proposal_id}")
+
+    assert response.status_code == 200
+    block = response.json()["blocks"][0]
+    assert block["block_index"] == 0
+    assert block["block_content_hash"] == block_content_hash(
+        stored.blocks[0]
+    )
+    assert block["sources"] == []
+    assert [variant["claim_id"] for variant in block["variants"]] == [
+        str(winner),
+        str(loser),
+    ]
+    assert block["variants"][0]["sources"] == [
+        {
+            "claim_id": str(winner),
+            "statement": "rate_limit은 60이다",
+            "observed_at": AT.isoformat().replace("+00:00", "Z"),
+            "citation_verified": True,
+        }
+    ]
+
+
+def test_detail_plain_block_has_no_variants(
+    app: FastAPI, client: TestClient, reviewer: User
+) -> None:
+    """다툼이 아닌 블록의 variants는 없음(null)으로 나간다."""
+    proposal_id = uuid.uuid4()
+    stored = _proposal(proposal_id=proposal_id)
+    app.dependency_overrides[get_review_uow_factory] = lambda: _fake_factory(
+        artifacts=_FakeArtifacts(proposal=stored)
+    )
+
+    response = client.get(f"/api/v1/knowledge-review/queue/{proposal_id}")
+
+    assert response.status_code == 200
+    assert response.json()["blocks"][0]["variants"] is None
+
+
+def test_detail_block_carries_recorded_verdict(
+    app: FastAPI, client: TestClient, reviewer: User
+) -> None:
+    """이미 내려진 블록 결정이 상세 응답에 함께 실린다.
+
+    검토자가 화면을 다시 열었을 때 자기가 무엇을 눌렀는지 보이지 않으면,
+    같은 블록을 다시 판정하거나 미결정으로 착각한다.
+    """
+    proposal_id = uuid.uuid4()
+    stored = _proposal(proposal_id=proposal_id)
+    verdict = StoredBlockVerdict(
+        proposal_id=proposal_id,
+        block_index=0,
+        block_content_hash=block_content_hash(stored.blocks[0]),
+        verdict="rejected",
+        rejection_reason="근거가 부족하다",
+        chosen_winner_claim_id=None,
+        reviewer="user:1",
+        reviewed_at=AT,
+    )
+    app.dependency_overrides[get_review_uow_factory] = lambda: _fake_factory(
+        artifacts=_FakeArtifacts(proposal=stored),
+        verdicts=_FakeBlockVerdicts(stored=(verdict,)),
+    )
+
+    response = client.get(f"/api/v1/knowledge-review/queue/{proposal_id}")
+
+    assert response.status_code == 200
+    recorded = response.json()["blocks"][0]["verdict"]
+    assert recorded["verdict"] == "rejected"
+    assert recorded["rejection_reason"] == "근거가 부족하다"
+    assert recorded["block_index"] == 0
+    assert recorded["reviewer"] == "user:1"
 
 
 # ======================= workspace 경계 =======================
@@ -1018,6 +1233,39 @@ def test_approve_audit_records_proposal_id(
     assert recorded["status"] == AuditStatus.SUCCESS
     assert recorded["metadata"].proposal_id == str(proposal_id)
     assert recorded["metadata"].workspace_id == workspace_id
+
+
+def test_approve_with_contested_block_requires_block_review(
+    app: FastAPI, client: TestClient, reviewer: User
+) -> None:
+    """다툼 블록이 있는 변경안은 통짜 승인으로 확정할 수 없다.
+
+    통짜 승인은 승자를 고르는 자리가 없다. 그대로 태우면 사람이 고르지
+    않은 값이 문서에 실리므로, 블록 검토를 거치라고 돌려보낸다.
+    """
+    proposal_id = uuid.uuid4()
+    stored = _contested_proposal(
+        proposal_id=proposal_id,
+        contradiction_id=uuid.uuid4(),
+        winner_claim_id=uuid.uuid4(),
+        loser_claim_id=uuid.uuid4(),
+    )
+    app.dependency_overrides[get_review_uow_factory] = lambda: _fake_factory(
+        artifacts=_FakeArtifacts(proposal=stored)
+    )
+
+    with patch(
+        "catchup.server.knowledge_review.api.review_artifact_proposal"
+    ) as service:
+        response = client.post(
+            f"/api/v1/knowledge-review/artifacts/{proposal_id}/approve"
+        )
+
+    assert response.status_code == 409
+    assert (
+        response.json()["detail"]["code"] == "CONTESTED_REQUIRES_BLOCK_REVIEW"
+    )
+    service.assert_not_called()
 
 
 def test_reject_passes_reason(
@@ -1439,3 +1687,438 @@ def test_apply_requires_reviewer(
     assert response.status_code == 403
     assert response.json()["detail"]["code"] == "NOT_REVIEWER"
     service.assert_not_called()
+
+
+# ======================= 엔드포인트: 블록 결정·발행 =======================
+#
+# 여기는 실 UnitOfWork로 돈다. 블록 결정은 저널 유일 제약 위의 upsert이고
+# 발행은 그 저널을 모아 판을 쌓는 일이라, 대역으로 바꾸면 정작 확인하려는
+# 부분 승인이 DB에서 성립하는지를 볼 수 없다.
+
+
+def _seed_two_block_proposal(
+    session_factory: Callable[[], Session], *, workspace_id: int
+) -> tuple[uuid.UUID, tuple[ArtifactBlock, ...]]:
+    """블록 두 칸짜리 계류 변경안을 실 DB로 심는다."""
+    node_id = uuid.uuid4()
+    with session_factory() as session:
+        session.add(
+            KnowledgeNode(
+                id=node_id,
+                workspace_id=workspace_id,
+                node_kind="entity",
+                entity_type="feature",
+                canonical_key=f"test:block-review:{uuid.uuid4().hex}",
+                display_name="속도 제한 기능",
+            )
+        )
+        session.commit()
+
+    blocks = (
+        ArtifactBlock(
+            block_kind=BLOCK_KIND_CLAIM_SECTION,
+            heading="rate_limit",
+            body="rate_limit은 60이다",
+            claim_ids=(uuid.uuid4(),),
+            proposal_ids=(),
+            ontology_version="1",
+        ),
+        ArtifactBlock(
+            block_kind=BLOCK_KIND_CLAIM_SECTION,
+            heading="owner",
+            body="담당은 플랫폼 팀이다",
+            claim_ids=(uuid.uuid4(),),
+            proposal_ids=(),
+            ontology_version="1",
+        ),
+    )
+    content_hash = blocks_content_hash(blocks)
+    with KnowledgeMaintenanceUnitOfWork(
+        session_factory, workspace_id=workspace_id
+    ) as uow:
+        artifact_id = uow.artifacts.get_or_create_artifact(
+            kind="entity_summary",
+            subject_node_id=node_id,
+            title="오픈 API",
+        )
+        proposal_id = uow.artifacts.add_or_revive_proposal(
+            artifact_id=artifact_id,
+            blocks=blocks,
+            content_hash=content_hash,
+            idempotency_key=artifact_idempotency_key(
+                artifact_id, content_hash, base_revision_id=None
+            ),
+            base_revision_id=None,
+        )
+        uow.commit()
+    return proposal_id, blocks
+
+
+def _verdict_path(proposal_id: uuid.UUID, block_index: int) -> str:
+    """블록 결정 엔드포인트 경로를 만든다."""
+    return (
+        f"/api/v1/knowledge-review/queue/{proposal_id}"
+        f"/blocks/{block_index}/verdict"
+    )
+
+
+def test_block_verdict_records_and_absorbs_redecision(
+    app: FastAPI,
+    client: TestClient,
+    reviewer: User,
+    session_factory: Callable[[], Session],
+    workspace_ids: tuple[int, int],
+) -> None:
+    """블록 결정은 저장한 그대로 나오고, 다시 누르면 갱신으로 흡수된다."""
+    workspace_id, _ = workspace_ids
+    proposal_id, blocks = _seed_two_block_proposal(
+        session_factory, workspace_id=workspace_id
+    )
+
+    with _real_session_local(session_factory):
+        first = client.put(
+            _verdict_path(proposal_id, 0),
+            json={
+                "verdict": "approved",
+                "block_content_hash": block_content_hash(blocks[0]),
+            },
+        )
+        second = client.put(
+            _verdict_path(proposal_id, 0),
+            json={
+                "verdict": "rejected",
+                "rejection_reason": "근거가 부족하다",
+                "block_content_hash": block_content_hash(blocks[0]),
+            },
+        )
+
+    assert first.status_code == 200
+    body = first.json()
+    assert body["proposal_id"] == str(proposal_id)
+    assert body["block_index"] == 0
+    assert body["verdict"] == "approved"
+    assert body["reviewer"] == f"user:{reviewer.id}"
+    assert body["chosen_winner_claim_id"] is None
+
+    assert second.status_code == 200
+    assert second.json()["verdict"] == "rejected"
+    with KnowledgeMaintenanceUnitOfWork(
+        session_factory, workspace_id=workspace_id
+    ) as uow:
+        stored = uow.block_verdicts.list_for_proposal(
+            proposal_id=proposal_id
+        )
+    assert len(stored) == 1
+    assert stored[0].verdict == "rejected"
+    assert stored[0].rejection_reason == "근거가 부족하다"
+
+
+def test_block_verdict_stale_hash_returns_409(
+    app: FastAPI,
+    client: TestClient,
+    reviewer: User,
+    session_factory: Callable[[], Session],
+    workspace_ids: tuple[int, int],
+) -> None:
+    """검토자가 본 본문의 지문이 다르면 409 STALE_BLOCK이다."""
+    workspace_id, _ = workspace_ids
+    proposal_id, _ = _seed_two_block_proposal(
+        session_factory, workspace_id=workspace_id
+    )
+
+    with _real_session_local(session_factory):
+        response = client.put(
+            _verdict_path(proposal_id, 0),
+            json={
+                "verdict": "approved",
+                "block_content_hash": "0" * 64,
+            },
+        )
+
+    assert response.status_code == 409
+    assert response.json()["detail"]["code"] == "STALE_BLOCK"
+
+
+def test_block_verdict_rejection_without_reason_is_422(
+    app: FastAPI,
+    client: TestClient,
+    reviewer: User,
+    session_factory: Callable[[], Session],
+    workspace_ids: tuple[int, int],
+) -> None:
+    """사유 없는 블록 반려는 422 INVALID다.
+
+    500으로 새면 소비자는 자기 입력이 틀렸다는 것을 알 수 없다.
+    """
+    workspace_id, _ = workspace_ids
+    proposal_id, blocks = _seed_two_block_proposal(
+        session_factory, workspace_id=workspace_id
+    )
+
+    with _real_session_local(session_factory):
+        response = client.put(
+            _verdict_path(proposal_id, 0),
+            json={
+                "verdict": "rejected",
+                "block_content_hash": block_content_hash(blocks[0]),
+            },
+        )
+
+    assert response.status_code == 422
+    assert response.json()["detail"]["code"] == "INVALID"
+
+
+def test_block_verdict_missing_proposal_returns_404(
+    app: FastAPI,
+    client: TestClient,
+    reviewer: User,
+    session_factory: Callable[[], Session],
+) -> None:
+    """이 workspace에 없는 변경안의 블록 결정은 404다."""
+    with _real_session_local(session_factory):
+        response = client.put(
+            _verdict_path(uuid.uuid4(), 0),
+            json={
+                "verdict": "approved",
+                "block_content_hash": "0" * 64,
+            },
+        )
+
+    assert response.status_code == 404
+    assert response.json()["detail"]["code"] == "NOT_FOUND"
+
+
+def test_block_verdict_audit_records_block_index(
+    app: FastAPI,
+    client: TestClient,
+    reviewer: User,
+    workspace_ids: tuple[int, int],
+) -> None:
+    """블록 결정 감사 기록에는 어느 블록을 결정했는지가 남는다."""
+    workspace_id, _ = workspace_ids
+    proposal_id = uuid.uuid4()
+    app.dependency_overrides[get_review_uow_factory] = lambda: _fake_factory()
+    stored = StoredBlockVerdict(
+        proposal_id=proposal_id,
+        block_index=1,
+        block_content_hash="a" * 64,
+        verdict="approved",
+        rejection_reason=None,
+        chosen_winner_claim_id=None,
+        reviewer=f"user:{reviewer.id}",
+        reviewed_at=AT,
+    )
+
+    with (
+        patch(
+            "catchup.server.knowledge_review.api.upsert_block_verdict",
+            return_value=stored,
+        ) as service,
+        patch("catchup.audit.utils.emit_audit_event") as emit,
+    ):
+        response = client.put(
+            _verdict_path(proposal_id, 1),
+            json={
+                "verdict": "approved",
+                "block_content_hash": "a" * 64,
+            },
+        )
+
+    assert response.status_code == 200
+    assert service.call_args.kwargs["block_index"] == 1
+    assert service.call_args.kwargs["reviewer"] == f"user:{reviewer.id}"
+    recorded = emit.call_args.kwargs
+    assert recorded["action"] == KnowledgeReviewAction.BLOCK_VERDICT
+    assert recorded["status"] == AuditStatus.SUCCESS
+    assert recorded["metadata"].proposal_id == str(proposal_id)
+    assert recorded["metadata"].block_index == 1
+    assert recorded["metadata"].workspace_id == workspace_id
+
+
+def test_publish_partial_approval_creates_revision(
+    app: FastAPI,
+    client: TestClient,
+    reviewer: User,
+    session_factory: Callable[[], Session],
+    workspace_ids: tuple[int, int],
+) -> None:
+    """승인된 블록만으로 새 판을 쌓고 반려 블록은 빠진다."""
+    workspace_id, _ = workspace_ids
+    proposal_id, blocks = _seed_two_block_proposal(
+        session_factory, workspace_id=workspace_id
+    )
+
+    with _real_session_local(session_factory):
+        client.put(
+            _verdict_path(proposal_id, 0),
+            json={
+                "verdict": "approved",
+                "block_content_hash": block_content_hash(blocks[0]),
+            },
+        )
+        client.put(
+            _verdict_path(proposal_id, 1),
+            json={
+                "verdict": "rejected",
+                "rejection_reason": "담당이 확정되지 않았다",
+                "block_content_hash": block_content_hash(blocks[1]),
+            },
+        )
+        response = client.post(
+            f"/api/v1/knowledge-review/queue/{proposal_id}/publish",
+            json={"base_revision_id": None},
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["verdict"] == "approved"
+    assert body["blocks_published"] == 1
+    assert body["blocks_rejected"] == 1
+    assert body["revision_number"] == 1
+    assert body["contradictions_resolved"] == 0
+
+    with KnowledgeMaintenanceUnitOfWork(
+        session_factory, workspace_id=workspace_id
+    ) as uow:
+        decided = uow.artifacts.get_proposal(proposal_id=proposal_id)
+        latest = uow.artifacts.find_latest_revision_id_and_number(
+            artifact_id=decided.artifact_id,
+        )
+    assert decided.status == "approved"
+    assert latest == (uuid.UUID(body["revision_id"]), 1)
+
+
+def test_publish_undecided_blocks_returns_409_with_indexes(
+    app: FastAPI,
+    client: TestClient,
+    reviewer: User,
+    session_factory: Callable[[], Session],
+    workspace_ids: tuple[int, int],
+) -> None:
+    """결정이 빠진 블록이 있으면 409에 그 번호가 실린다."""
+    workspace_id, _ = workspace_ids
+    proposal_id, blocks = _seed_two_block_proposal(
+        session_factory, workspace_id=workspace_id
+    )
+
+    with _real_session_local(session_factory):
+        client.put(
+            _verdict_path(proposal_id, 0),
+            json={
+                "verdict": "approved",
+                "block_content_hash": block_content_hash(blocks[0]),
+            },
+        )
+        response = client.post(
+            f"/api/v1/knowledge-review/queue/{proposal_id}/publish",
+            json={"base_revision_id": None},
+        )
+
+    assert response.status_code == 409
+    detail = response.json()["detail"]
+    assert detail["code"] == "UNDECIDED_BLOCKS"
+    assert detail["undecided_block_indexes"] == [1]
+
+
+def test_publish_stale_base_returns_409(
+    app: FastAPI,
+    client: TestClient,
+    reviewer: User,
+    session_factory: Callable[[], Session],
+    workspace_ids: tuple[int, int],
+) -> None:
+    """클라이언트가 본 기준 판이 다르면 409 STALE_BASE다."""
+    workspace_id, _ = workspace_ids
+    proposal_id, blocks = _seed_two_block_proposal(
+        session_factory, workspace_id=workspace_id
+    )
+
+    with _real_session_local(session_factory):
+        for index, block in enumerate(blocks):
+            client.put(
+                _verdict_path(proposal_id, index),
+                json={
+                    "verdict": "approved",
+                    "block_content_hash": block_content_hash(block),
+                },
+            )
+        response = client.post(
+            f"/api/v1/knowledge-review/queue/{proposal_id}/publish",
+            json={"base_revision_id": str(uuid.uuid4())},
+        )
+
+    assert response.status_code == 409
+    assert response.json()["detail"]["code"] == "STALE_BASE"
+
+
+def test_publish_audit_records_proposal_id(
+    app: FastAPI,
+    client: TestClient,
+    reviewer: User,
+    workspace_ids: tuple[int, int],
+) -> None:
+    """발행 감사 기록에는 어느 안건을 확정했는지가 남는다."""
+    workspace_id, _ = workspace_ids
+    proposal_id = uuid.uuid4()
+    revision_id = uuid.uuid4()
+    app.dependency_overrides[get_review_uow_factory] = lambda: _fake_factory()
+    result = PublishResult(
+        proposal_id=proposal_id,
+        verdict="approved",
+        revision_id=revision_id,
+        revision_number=2,
+        blocks_published=3,
+        blocks_rejected=1,
+        contradictions_resolved=1,
+        claims_accepted=4,
+    )
+
+    with (
+        patch(
+            "catchup.server.knowledge_review.api.publish_artifact_proposal",
+            return_value=result,
+        ) as service,
+        patch("catchup.audit.utils.emit_audit_event") as emit,
+    ):
+        response = client.post(
+            f"/api/v1/knowledge-review/queue/{proposal_id}/publish",
+            json={"base_revision_id": None},
+        )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "proposal_id": str(proposal_id),
+        "verdict": "approved",
+        "revision_id": str(revision_id),
+        "revision_number": 2,
+        "blocks_published": 3,
+        "blocks_rejected": 1,
+        "contradictions_resolved": 1,
+        "claims_accepted": 4,
+    }
+    assert service.call_args.kwargs["workspace_id"] == workspace_id
+    assert service.call_args.kwargs["reviewer"] == f"user:{reviewer.id}"
+    recorded = emit.call_args.kwargs
+    assert recorded["action"] == KnowledgeReviewAction.PUBLISH
+    assert recorded["metadata"].proposal_id == str(proposal_id)
+
+
+def test_publish_invalid_returns_422(
+    app: FastAPI, client: TestClient, reviewer: User
+) -> None:
+    """조립이 계약을 어긴 발행은 500이 아니라 422다."""
+    proposal_id = uuid.uuid4()
+    app.dependency_overrides[get_review_uow_factory] = lambda: _fake_factory()
+
+    with patch(
+        "catchup.server.knowledge_review.api.publish_artifact_proposal",
+        side_effect=PublishError("INVALID", "조립한 본문이 계약을 어겼다"),
+    ):
+        response = client.post(
+            f"/api/v1/knowledge-review/queue/{proposal_id}/publish",
+            json={"base_revision_id": None},
+        )
+
+    assert response.status_code == 422
+    assert response.json()["detail"]["code"] == "INVALID"
+    assert "조립한 본문이" not in response.text
