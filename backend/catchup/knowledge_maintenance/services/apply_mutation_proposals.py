@@ -103,16 +103,25 @@ def apply_mutation_proposals(
     uow_factory: Callable[[], ApplyUnitOfWork],
     *,
     workspace_id: int,
+    proposal_id: uuid.UUID | None = None,
 ) -> ApplyResult:
     """승인된 안건을 순서대로 적용한다.
 
     factory를 받는 이유는 proposal 단위 트랜잭션 때문이다. 한 uow에
     전부 태우면 마지막 안건의 실패가 앞선 적용까지 되돌린다.
+
+    `proposal_id`를 주면 그 안건만 적용한다. 사람이 큐에서 한 건을
+    골라 적용하는 경로다. 지정한 안건이 승인 목록에 없으면 아무것도
+    적용하지 않고 0건으로 끝낸다 — 없는 안건과 적용에 실패한 안건은
+    다른 일이므로 실패로 세지 않고, 404를 낼지는 적용 건수를 보는
+    호출자가 정한다.
     """
     with uow_factory() as uow:
         approved = uow.mutation_proposals.find_approved_proposals_with_operations(
             workspace_id=workspace_id,
         )
+    if proposal_id is not None:
+        approved = [item for item in approved if item[0] == proposal_id]
 
     applied = 0
     failed = 0
@@ -121,12 +130,15 @@ def apply_mutation_proposals(
     superseded = 0
     invalidated = 0
     closed_already = 0
-    for proposal_id, operations in approved:
+    # 루프 변수를 파라미터와 다른 이름으로 둔다. 같은 이름을 쓰면
+    # 루프가 파라미터를 덮어써서, 뒤에 나오는 감사 로그의
+    # `scoped_proposal_id`가 "전체 적용"인지 "한 건 적용"인지를 잃는다.
+    for approved_id, operations in approved:
         try:
             tally = _apply_one(
                 uow_factory,
                 workspace_id=workspace_id,
-                proposal_id=proposal_id,
+                proposal_id=approved_id,
                 operations=operations,
             )
         except ApplyOperationError as error:
@@ -134,7 +146,7 @@ def apply_mutation_proposals(
             logger.error(
                 "mutation_apply_failed",
                 workspace_id=workspace_id,
-                proposal_id=str(proposal_id),
+                proposal_id=str(approved_id),
                 reason=str(error),
             )
             continue
@@ -147,7 +159,7 @@ def apply_mutation_proposals(
         logger.info(
             "mutation_proposal_applied",
             workspace_id=workspace_id,
-            proposal_id=str(proposal_id),
+            proposal_id=str(approved_id),
             candidates_resolved=tally.resolved,
             candidates_already_resolved=tally.already,
         )
@@ -164,6 +176,8 @@ def apply_mutation_proposals(
     logger.info(
         "mutation_apply_completed",
         workspace_id=workspace_id,
+        # 한 건만 적용한 실행과 전체 적용을 감사 기록에서 구분한다.
+        scoped_proposal_id=None if proposal_id is None else str(proposal_id),
         proposals_applied=result.proposals_applied,
         proposals_failed=result.proposals_failed,
         candidates_resolved=result.candidates_resolved,

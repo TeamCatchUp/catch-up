@@ -8,6 +8,8 @@ fake는 실 DB의 제약을 흉내 낸다. 반려에 사유가 없으면 막고,
 from __future__ import annotations
 
 import uuid
+from datetime import UTC
+from datetime import datetime
 from typing import Any
 
 import pytest
@@ -26,6 +28,7 @@ from catchup.knowledge_maintenance.services.review_artifact_proposal import (
 )
 
 REVIEWER = "tester"
+CREATED_AT = datetime(2026, 8, 1, 9, 0, tzinfo=UTC)
 
 
 def _blocks(body: str) -> tuple[ArtifactBlock, ...]:
@@ -82,6 +85,8 @@ class FakeArtifactRepository:
             "base_revision_id": base_revision_id,
             "rejection_reason": None,
             "reviewer": None,
+            "origin": "compiled",
+            "created_at": CREATED_AT,
         }
         return proposal_id
 
@@ -103,6 +108,8 @@ class FakeArtifactRepository:
             content_hash=row["content_hash"],
             base_revision_id=row["base_revision_id"],
             rejection_reason=row["rejection_reason"],
+            origin=row["origin"],
+            created_at=row["created_at"],
         )
 
     def find_latest_revision_id_and_number(

@@ -13,6 +13,8 @@ from types import TracebackType
 from typing import Any
 from typing import Self
 
+from structlog.testing import capture_logs
+
 from catchup.knowledge_maintenance.domain.entity_resolution import normalize_name
 from catchup.knowledge_maintenance.domain.knowledge_candidate import (
     EntityResolutionStatus,
@@ -464,6 +466,112 @@ def test_rerun_is_noop() -> None:
     assert result.proposals_failed == 0
     assert result.candidates_resolved == 0
     assert len(state.nodes) == 1
+
+
+def test_apply_single_proposal_only_touches_target() -> None:
+    """안건 하나를 지정하면 그 안건만 적용되고 다른 승인은 남는다."""
+    state = FakeState()
+    target_rep = state.add_candidate()
+    target_id = state.add_approved_merge(
+        representative=target_rep, members=()
+    )
+    other_rep = state.add_candidate()
+    other_id = state.add_approved_merge(representative=other_rep, members=())
+
+    result = apply_mutation_proposals(
+        lambda: FakeUnitOfWork(state),
+        workspace_id=WORKSPACE_ID,
+        proposal_id=target_id,
+    )
+
+    assert result.proposals_applied == 1
+    assert result.candidates_resolved == 1
+    assert state.proposals[target_id]["status"] == "applied"
+    # 지정되지 않은 승인은 결정 저널에 그대로 남아 다음 적용을 기다린다.
+    assert state.proposals[other_id]["status"] == "approved"
+    assert state.candidates[other_rep]["resolved_node_id"] is None
+    assert len(state.nodes) == 1
+
+
+def test_apply_unknown_proposal_applies_nothing() -> None:
+    """승인 목록에 없는 안건을 지정하면 0건 적용으로 끝난다.
+
+    실패로 세지 않는다. 없는 안건은 적용이 실패한 것이 아니라 적용할
+    것이 없는 것이고, 404를 낼지는 라우터가 적용 건수로 판단한다.
+    """
+    state = FakeState()
+    representative = state.add_candidate()
+    approved_id = state.add_approved_merge(
+        representative=representative, members=()
+    )
+
+    result = apply_mutation_proposals(
+        lambda: FakeUnitOfWork(state),
+        workspace_id=WORKSPACE_ID,
+        proposal_id=uuid.uuid4(),
+    )
+
+    assert result.proposals_applied == 0
+    assert result.proposals_failed == 0
+    assert state.proposals[approved_id]["status"] == "approved"
+    assert len(state.nodes) == 0
+
+
+def _completion_log(logs: list[dict[str, Any]]) -> dict[str, Any]:
+    """적용 한 번의 마무리 감사 기록 하나를 골라낸다."""
+    entries = [log for log in logs if log["event"] == "mutation_apply_completed"]
+    assert len(entries) == 1
+    return entries[0]
+
+
+def test_apply_all_logs_no_scope_even_with_many_approved() -> None:
+    """전체 적용은 승인이 여러 건이어도 범위를 비워 기록한다.
+
+    이 필드는 감사 기록에서 "전체 적용"과 "한 건 골라 적용"을 가르는
+    유일한 표시다. 마지막으로 처리한 안건의 id가 새면 전체 적용이
+    한 건 적용처럼 남는다.
+    """
+    state = FakeState()
+    first = state.add_approved_merge(
+        representative=state.add_candidate(), members=()
+    )
+    second = state.add_approved_merge(
+        representative=state.add_candidate(), members=()
+    )
+
+    with capture_logs() as logs:
+        result = apply_mutation_proposals(
+            lambda: FakeUnitOfWork(state), workspace_id=WORKSPACE_ID
+        )
+
+    assert result.proposals_applied == 2
+    entry = _completion_log(logs)
+    assert entry["scoped_proposal_id"] is None
+    assert entry["proposals_applied"] == 2
+    assert state.proposals[first]["status"] == "applied"
+    assert state.proposals[second]["status"] == "applied"
+
+
+def test_apply_single_proposal_logs_that_scope() -> None:
+    """한 건을 지정하면 그 id가 문자열로 기록된다."""
+    state = FakeState()
+    target_id = state.add_approved_merge(
+        representative=state.add_candidate(), members=()
+    )
+    state.add_approved_merge(
+        representative=state.add_candidate(), members=()
+    )
+
+    with capture_logs() as logs:
+        result = apply_mutation_proposals(
+            lambda: FakeUnitOfWork(state),
+            workspace_id=WORKSPACE_ID,
+            proposal_id=target_id,
+        )
+
+    assert result.proposals_applied == 1
+    entry = _completion_log(logs)
+    assert entry["scoped_proposal_id"] == str(target_id)
 
 
 def _supersede_proposal(

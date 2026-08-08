@@ -63,6 +63,7 @@ from catchup.server.initialization import ensure_pg_indices
 from catchup.server.initialization import ensure_vector_index
 from catchup.server.initialization import truncate_langgraph_checkpoints_once
 from catchup.server.integrations.api import router as integrations_router
+from catchup.server.knowledge_review.api import router as knowledge_review_router
 from catchup.server.mapping.api import router as github_mapping_csv_router
 from catchup.server.mcp.install_api import router as mcp_install_router
 from catchup.server.mcp.oauth_api import router as mcp_oauth_router
@@ -558,6 +559,7 @@ app.include_router(settings_router)
 app.include_router(sync_runtime_router)
 app.include_router(stats_router)
 app.include_router(search_router)
+app.include_router(knowledge_review_router)
 app.include_router(audit_router)
 app.include_router(workflow_credentials_router)
 
@@ -567,7 +569,13 @@ if settings.DEBUG_API_ENABLED:
         router as knowledge_maintenance_reset_router,
     )
     from catchup.server.debug.knowledge_read import router as knowledge_read_router
-    from catchup.server.debug.knowledge_review import router as knowledge_review_router
+
+    # 정식 라우터와 이름이 겹치지 않게 별칭을 나눈다. 같은 이름을 쓰면
+    # 모듈 전역이 debug 라우터로 덮여, 나중에 이 이름을 읽는 코드가 어느
+    # 표면을 가리키는지 알 수 없게 된다.
+    from catchup.server.debug.knowledge_review import (
+        router as debug_knowledge_review_router,
+    )
     from catchup.server.debug.retrieval_v2_probe import (
         router as retrieval_v2_probe_router,
     )
@@ -576,7 +584,7 @@ if settings.DEBUG_API_ENABLED:
     app.include_router(agent_simulate_router)
     app.include_router(retrieval_v2_probe_router)
     app.include_router(knowledge_maintenance_reset_router)
-    app.include_router(knowledge_review_router)
+    app.include_router(debug_knowledge_review_router)
     app.include_router(knowledge_read_router)
     logger.warning("debug_api_enabled", note="disable DEBUG_API_ENABLED in production")
 

@@ -218,6 +218,9 @@ class FakeArtifactRepository:
             "idempotency_key": idempotency_key,
             "base_revision_id": base_revision_id,
             "rejection_reason": None,
+            # 실 DB의 기본값과 같다. Compiler가 만든 안건은 compiled다.
+            "origin": "compiled",
+            "created_at": NOW,
         }
         self.by_key[idempotency_key] = row
         self.by_id[proposal_id] = row
@@ -271,7 +274,12 @@ class FakeArtifactRepository:
         )
         return revision_id
 
-    def list_pending_proposals(self) -> list[StoredArtifactProposal]:
+    def list_pending_proposals(
+        self,
+        *,
+        limit: int | None = None,
+        offset: int = 0,
+    ) -> list[StoredArtifactProposal]:
         nodes = {
             artifact_id: node_id
             for (_, node_id), artifact_id in self.artifacts.items()
@@ -287,6 +295,8 @@ class FakeArtifactRepository:
                 content_hash=row["content_hash"],
                 base_revision_id=row["base_revision_id"],
                 rejection_reason=row["rejection_reason"],
+                origin=row["origin"],
+                created_at=row["created_at"],
             )
             for row in self.by_key.values()
             if row["status"] == "pending"

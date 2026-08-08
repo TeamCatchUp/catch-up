@@ -655,6 +655,24 @@ class McpAuditMetadata(BaseAuditMetadata):
         )
 
 
+class KnowledgeReviewAuditMetadata(BaseAuditMetadata):
+    proposal_id: str | None = None
+    workspace_id: int | None = None
+    user_id: int | None = None
+
+    @classmethod
+    def from_audit(
+        cls, data: "AuditLogMetadataInput"
+    ) -> "KnowledgeReviewAuditMetadata":
+        proposal_id = data.arguments.get("proposal_id")
+        context = data.arguments.get("context")
+
+        return cls(
+            proposal_id=None if proposal_id is None else str(proposal_id),
+            workspace_id=getattr(context, "workspace_id", None),
+        )
+
+
 class ManualSearchAuditMetadata(BaseAuditMetadata):
     user_id: int
     query: str
