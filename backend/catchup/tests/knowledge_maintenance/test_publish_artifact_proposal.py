@@ -19,6 +19,7 @@ from typing import Self
 
 import pytest
 from sqlalchemy.exc import IntegrityError
+from structlog.testing import capture_logs
 
 from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_CLAIM_SECTION
 from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_CONTESTED
@@ -784,6 +785,139 @@ def test_resolve_race_rolls_the_whole_publish_back() -> None:
     assert uow.artifacts.revisions == []
     assert uow.artifacts.proposals[proposal_id]["status"] == "pending"
     assert claims.calls == []
+    assert uow.committed == 0
+
+
+def test_rollback_log_names_the_resolved_contradictions() -> None:
+    """앞선 파생 결정이 되감기면 무엇이 되감겼는지 로그로 남긴다.
+
+    파생 서비스는 바깥 commit보다 먼저 자기 로그를 남긴다. 뒤이어 발행이
+    엎어지면 감사 스트림에 해소 기록만 남으므로, 되감김 기록이 그 짝을
+    맞춰 주어야 한다.
+    """
+    uow = FakeUnitOfWork()
+    claims = uow.knowledge_candidates
+    first_winner = claims.add_claim(valid_from=LATER)
+    first_loser = claims.add_claim(valid_from=EARLY)
+    second_winner = claims.add_claim()
+    second_loser = claims.add_claim()
+    live_id = uow.mutation_proposals.add_contradiction(
+        claim_ids=(first_winner, first_loser)
+    )
+    # 둘째 안건은 이미 다른 판정이 끝내 두었다.
+    decided_id = uow.mutation_proposals.add_contradiction(
+        claim_ids=(second_winner, second_loser), status="approved"
+    )
+    blocks = (
+        _contested_block(
+            heading="rate_limit_per_minute",
+            contradiction_id=live_id,
+            first=first_winner,
+            second=first_loser,
+        ),
+        _contested_block(
+            heading="timeout_seconds",
+            contradiction_id=decided_id,
+            first=second_winner,
+            second=second_loser,
+        ),
+    )
+    proposal_id = uow.artifacts.add_proposal(
+        artifact_id=uuid.uuid4(), blocks=blocks, base_revision_id=None
+    )
+    _record_verdict(uow, proposal_id, 0, chosen_winner_claim_id=first_winner)
+    _record_verdict(uow, proposal_id, 1, chosen_winner_claim_id=second_winner)
+
+    with capture_logs() as logs:
+        with pytest.raises(PublishError) as error:
+            _publish(uow, proposal_id)
+
+    assert error.value.code == "CONFLICT_RACE"
+    entries = [
+        entry
+        for entry in logs
+        if entry["event"] == "artifact_publish_rolled_back"
+    ]
+    assert len(entries) == 1
+    assert entries[0]["log_level"] == "warning"
+    assert entries[0]["code"] == "CONFLICT_RACE"
+    assert entries[0]["proposal_id"] == str(proposal_id)
+    assert entries[0]["rolled_back_contradiction_ids"] == [str(live_id)]
+    assert uow.artifacts.revisions == []
+    assert uow.committed == 0
+
+
+def test_rollback_log_is_absent_on_success() -> None:
+    """발행이 끝까지 가면 되감김 기록은 남지 않는다."""
+    uow = FakeUnitOfWork()
+    claims = uow.knowledge_candidates
+    proposal_id = uow.artifacts.add_proposal(
+        artifact_id=uuid.uuid4(),
+        blocks=(_claim_block(claims.add_claim(), "release_month"),),
+        base_revision_id=None,
+    )
+    _record_verdict(uow, proposal_id, 0)
+
+    with capture_logs() as logs:
+        _publish(uow, proposal_id)
+
+    events = [entry["event"] for entry in logs]
+    assert "artifact_publish_rolled_back" not in events
+    assert "artifact_proposal_published" in events
+
+
+def test_variant_citing_a_foreign_claim_is_refused() -> None:
+    """실체화한 승자가 남의 claim을 인용하면 근거 계약이 막는다.
+
+    조립본은 승자 claim 하나만 근거로 남기므로, variant가 다른 후보의
+    인용을 달고 있으면 sources가 claim_ids를 벗어난다. 그 문장은 문서에
+    실릴 수 없다.
+    """
+    uow = FakeUnitOfWork()
+    claims = uow.knowledge_candidates
+    winner = claims.add_claim()
+    loser = claims.add_claim()
+    contradiction_id = uow.mutation_proposals.add_contradiction(
+        claim_ids=(winner, loser)
+    )
+    block = _contested_block(
+        heading="rate_limit_per_minute",
+        contradiction_id=contradiction_id,
+        first=winner,
+        second=loser,
+    )
+    # 승자 후보가 패자의 인용을 달고 있다.
+    poisoned = ArtifactBlock(
+        block_kind=block.block_kind,
+        heading=block.heading,
+        body=block.body,
+        claim_ids=block.claim_ids,
+        proposal_ids=block.proposal_ids,
+        ontology_version=block.ontology_version,
+        sources=block.sources,
+        variants=(
+            ContestedVariant(
+                claim_id=winner,
+                body=block.variants[0].body,
+                sources=(_source(loser, "남의 근거"),),
+            ),
+            block.variants[1],
+        ),
+    )
+    proposal_id = uow.artifacts.add_proposal(
+        artifact_id=uuid.uuid4(), blocks=(poisoned,), base_revision_id=None
+    )
+    _record_verdict(uow, proposal_id, 0, chosen_winner_claim_id=winner)
+
+    with pytest.raises(PublishError) as error:
+        _publish(uow, proposal_id)
+
+    assert error.value.code == "INVALID"
+    assert uow.artifacts.revisions == []
+    # 조립은 쓰기 전에 끝나므로 파생 결정도 나가지 않는다.
+    assert uow.mutation_proposals.proposals[contradiction_id]["status"] == (
+        "pending"
+    )
     assert uow.committed == 0
 
 

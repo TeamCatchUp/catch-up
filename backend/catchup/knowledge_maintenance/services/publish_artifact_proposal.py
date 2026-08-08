@@ -220,7 +220,55 @@ def publish_artifact_proposal(
         # 누가 발행했는지 없는 확정은 감사 기록이 되지 못한다.
         raise PublishError(CODE_INVALID, "발행자가 비어 있다")
     decided_at = datetime.now(UTC) if now is None else now
+    # 파생 결정은 자기 로그를 바깥 commit보다 먼저 남긴다. 뒤에서 발행이
+    # 엎어지면 DB는 되감기는데 감사 스트림에는 해소 기록만 남으므로,
+    # 무엇이 되감겼는지 같은 스트림에 적어 짝을 맞춘다.
+    resolved: list[uuid.UUID] = []
 
+    try:
+        return _publish_in_transaction(
+            uow,
+            workspace_id=workspace_id,
+            proposal_id=proposal_id,
+            base_revision_id=base_revision_id,
+            reviewer=reviewer,
+            decided_at=decided_at,
+            resolved=resolved,
+        )
+    except Exception as error:
+        code = error.code if isinstance(error, PublishError) else "UNEXPECTED"
+        logger.warning(
+            "artifact_publish_rolled_back",
+            workspace_id=workspace_id,
+            proposal_id=str(proposal_id),
+            code=code,
+            rolled_back_contradiction_ids=[
+                str(contradiction_id) for contradiction_id in resolved
+            ],
+            reviewer=reviewer,
+        )
+        raise
+
+
+def _publish_in_transaction(
+    uow: ArtifactPublishUnitOfWork,
+    *,
+    workspace_id: int,
+    proposal_id: uuid.UUID,
+    base_revision_id: uuid.UUID | None,
+    reviewer: str,
+    decided_at: datetime,
+    resolved: list[uuid.UUID],
+) -> PublishResult:
+    """발행의 한 transaction을 연다.
+
+    되감김 로그를 남기려면 파생 결정이 어디까지 나갔는지 알아야 한다.
+    `resolved`는 호출자가 쥔 그릇이며, 예외로 빠져나가도 거기까지의
+    진행이 남는다.
+
+    Raises:
+        PublishError: 발행을 받아들일 수 없을 때 던진다.
+    """
     with uow:
         proposal = uow.artifacts.get_proposal(proposal_id=proposal_id)
         if proposal is None:
@@ -267,6 +315,7 @@ def publish_artifact_proposal(
             approvals=contested,
             reviewer=reviewer,
             decided_at=decided_at,
+            resolved=resolved,
         )
 
         if not assembled:
@@ -514,11 +563,16 @@ def _resolve_contested(
     approvals: tuple[_ContestedApproval, ...],
     reviewer: str,
     decided_at: datetime,
+    resolved: list[uuid.UUID],
 ) -> None:
     """다툼 승인마다 모순 안건에 같은 승자로 결정을 남긴다.
 
     기존 판정 서비스를 그대로 부른다. 결정 저널과 supersede 명령을 만드는
     자리를 둘로 늘리면 두 경로가 어긋날 수 있기 때문이다.
+
+    성공한 안건 id를 `resolved`에 쌓는다. 여러 건 가운데 뒤쪽이 터지면
+    앞쪽 결정도 함께 되감기므로, 무엇이 되감겼는지 호출자가 감사 스트림에
+    적을 수 있어야 한다.
 
     Raises:
         PublishError: 안건이 이미 결정됐거나 승자를 받아들일 수 없을 때
@@ -536,6 +590,7 @@ def _resolve_contested(
                 reviewer=reviewer,
                 now=decided_at,
             )
+            resolved.append(approval.contradiction_id)
         except ContradictionReviewError as error:
             raise PublishError(
                 CODE_CONFLICT_RACE,
