@@ -1229,13 +1229,59 @@ def test_approve_audit_records_proposal_id(
     assert recorded["metadata"].workspace_id == workspace_id
 
 
+@pytest.mark.parametrize(
+    ("code", "message"),
+    [
+        (
+            "CONTESTED_REQUIRES_BLOCK_REVIEW",
+            "다툼 블록이 있어 블록 검토를 거쳐야 합니다.",
+        ),
+        (
+            "BLOCK_REVIEW_IN_PROGRESS",
+            "블록 검토가 시작된 변경안은 발행으로 끝내야 합니다.",
+        ),
+    ],
+)
+def test_approve_relays_service_block_review_codes(
+    app: FastAPI,
+    client: TestClient,
+    reviewer: User,
+    code: str,
+    message: str,
+) -> None:
+    """통짜 승인 가드는 서비스가 갖고, 라우터는 코드를 409로 옮긴다.
+
+    같은 검사를 라우터가 또 하면 정식 API·debug·CLI 세 표면의 규칙이
+    갈라진다. 그래서 여기서 확인하는 것은 옮기기뿐이다. 예외 문구는
+    내부 사정을 담고 있어 응답에 새어 나오지 않아야 한다.
+    """
+    proposal_id = uuid.uuid4()
+    app.dependency_overrides[get_review_uow_factory] = lambda: _fake_factory()
+
+    with patch(
+        "catchup.server.knowledge_review.api.review_artifact_proposal",
+        side_effect=ProposalReviewError(
+            f"변경안 {proposal_id}는 확정할 수 없다", code=code
+        ),
+    ):
+        response = client.post(
+            f"/api/v1/knowledge-review/artifacts/{proposal_id}/approve"
+        )
+
+    assert response.status_code == 409
+    assert response.json()["detail"]["code"] == code
+    assert response.json()["detail"]["message"] == message
+    assert "확정할 수 없다" not in response.text
+
+
 def test_approve_with_contested_block_requires_block_review(
     app: FastAPI, client: TestClient, reviewer: User
 ) -> None:
     """다툼 블록이 있는 변경안은 통짜 승인으로 확정할 수 없다.
 
     통짜 승인은 승자를 고르는 자리가 없다. 그대로 태우면 사람이 고르지
-    않은 값이 문서에 실리므로, 블록 검토를 거치라고 돌려보낸다.
+    않은 값이 문서에 실리므로, 블록 검토를 거치라고 돌려보낸다. 막는 것은
+    서비스이고, 이 테스트는 라우터를 거친 응답까지 그대로 나오는지 본다.
     """
     proposal_id = uuid.uuid4()
     stored = _contested_proposal(
@@ -1248,18 +1294,14 @@ def test_approve_with_contested_block_requires_block_review(
         artifacts=_FakeArtifacts(proposal=stored)
     )
 
-    with patch(
-        "catchup.server.knowledge_review.api.review_artifact_proposal"
-    ) as service:
-        response = client.post(
-            f"/api/v1/knowledge-review/artifacts/{proposal_id}/approve"
-        )
+    response = client.post(
+        f"/api/v1/knowledge-review/artifacts/{proposal_id}/approve"
+    )
 
     assert response.status_code == 409
     assert (
         response.json()["detail"]["code"] == "CONTESTED_REQUIRES_BLOCK_REVIEW"
     )
-    service.assert_not_called()
 
 
 def test_reject_passes_reason(

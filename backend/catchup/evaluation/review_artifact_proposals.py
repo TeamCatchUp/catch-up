@@ -7,7 +7,14 @@
 
 카드는 저장된 본문을 그대로 옮긴다. 요약을 다시 쓰거나 값을 골라 주면
 검토자가 승인하는 문장과 문서에 실릴 문장이 달라진다. 그래서 heading과
-body를 손대지 않고, 열린 질문만 눈에 띄게 표시한다.
+body를 손대지 않고, 열린 질문과 다툼만 눈에 띄게 표시한다.
+
+다툼(contested) 블록은 본문이 "상충하는 값 N개"라는 표지뿐이라 후보를
+함께 적는다. 표지만 보면 무엇이 갈렸는지 알 수 없다. 여기서도 고르지는
+않는다 — 저장된 순서 그대로 나란히 적을 뿐이다.
+
+통짜 승인은 다툼 블록이 있거나 블록 결정이 이미 적힌 안건을 확정하지
+못한다. 서비스가 막고 이 러너는 블록 검수 경로로 가라고 안내한다.
 
 반려는 사유가 있어야 한다. 왜 물렸는지 없는 반려는 다음 컴파일이 같은
 카드를 다시 올렸을 때 아무 도움이 되지 않는다.
@@ -34,8 +41,15 @@ from catchup.configs.config import settings
 from catchup.knowledge_maintenance.adapters.postgres.unit_of_work import (
     KnowledgeMaintenanceUnitOfWork,
 )
+from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_CONTESTED
 from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_OPEN_QUESTION
 from catchup.knowledge_maintenance.ports.artifacts import StoredArtifactProposal
+from catchup.knowledge_maintenance.services.review_artifact_proposal import (
+    CODE_BLOCK_REVIEW_IN_PROGRESS,
+)
+from catchup.knowledge_maintenance.services.review_artifact_proposal import (
+    CODE_CONTESTED_REQUIRES_BLOCK_REVIEW,
+)
 from catchup.knowledge_maintenance.services.review_artifact_proposal import (
     VERDICT_APPROVED,
 )
@@ -51,12 +65,28 @@ from catchup.knowledge_maintenance.services.review_artifact_proposal import (
 
 DEFAULT_REVIEWER = "cli"
 
+# 통짜 승인이 막혔을 때 사람에게 보여 줄 안내다. 막혔다는 사실만 알리면
+# 검토자는 다음에 무엇을 할지 알 수 없다.
+_BLOCKED_APPROVAL_HINTS: dict[str, str] = {
+    CODE_CONTESTED_REQUIRES_BLOCK_REVIEW: (
+        "다툼 블록이 있어 통짜 승인으로 확정할 수 없다."
+        " 블록별로 결정한 뒤 발행 경로로 끝내라."
+    ),
+    CODE_BLOCK_REVIEW_IN_PROGRESS: (
+        "블록 결정이 이미 적혀 있어 통짜 승인으로 확정할 수 없다."
+        " 남은 블록을 마저 결정한 뒤 발행 경로로 끝내라."
+    ),
+}
+
 
 def render_proposal_card(proposal: StoredArtifactProposal) -> str:
     """변경안 하나를 마크다운 유사 텍스트 카드로 옮긴다.
 
     본문을 각색하지 않는다. 저장된 heading과 body를 그대로 적고, 열린
-    질문 블록에만 표시를 붙여 나머지 서술과 구분한다.
+    질문과 다툼 블록에만 표시를 붙여 나머지 서술과 구분한다.
+
+    다툼 블록은 후보를 claim_id와 본문 그대로 뒤에 잇는다. 표지 한 줄만
+    보면 무엇이 갈렸는지 읽을 수 없기 때문이다.
     """
     lines = [
         f"# {proposal.title}",
@@ -64,11 +94,22 @@ def render_proposal_card(proposal: StoredArtifactProposal) -> str:
         f" · 열린 질문 {count_open_questions(proposal)}개",
     ]
     for block in proposal.blocks:
-        marker = "⚠ " if block.block_kind == BLOCK_KIND_OPEN_QUESTION else ""
+        marker = _block_marker(block.block_kind)
         lines.append("")
         lines.append(f"## {marker}{block.heading}")
         lines.append(block.body)
+        for variant in block.variants:
+            lines.append(f"  - [{variant.claim_id}] {variant.body}")
     return "\n".join(lines)
+
+
+def _block_marker(block_kind: str) -> str:
+    """블록 종류를 카드에서 눈에 띄게 할 표지로 옮긴다."""
+    if block_kind == BLOCK_KIND_OPEN_QUESTION:
+        return "⚠ "
+    if block_kind == BLOCK_KIND_CONTESTED:
+        return "⚔ "
+    return ""
 
 
 def count_open_questions(proposal: StoredArtifactProposal) -> int:
@@ -107,7 +148,12 @@ def _review(
     reviewer: str,
     reason: str | None,
 ) -> int:
-    """결정 하나를 확정하고 프로세스 종료 코드를 돌려준다."""
+    """결정 하나를 확정하고 프로세스 종료 코드를 돌려준다.
+
+    통짜 승인이 막히는 두 경우는 안내를 함께 찍는다. 검토자가 다음에
+    설 자리가 블록 검수라는 것을 알려 주지 않으면 안건이 갇힌 것처럼
+    보인다.
+    """
     try:
         result = review_artifact_proposal(
             uow,
@@ -118,6 +164,9 @@ def _review(
         )
     except ProposalReviewError as error:
         print(f"결정을 확정하지 못했다: {error}")
+        hint = _BLOCKED_APPROVAL_HINTS.get(error.code or "")
+        if hint is not None:
+            print(f"  → {hint}")
         return 1
 
     if result.verdict == VERDICT_APPROVED:

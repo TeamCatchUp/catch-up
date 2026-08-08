@@ -117,6 +117,20 @@ _BLOCK_VERDICT_ERRORS: dict[str, tuple[int, str]] = {
     "INVALID": (422, "블록 결정 요청이 올바르지 않습니다."),
 }
 
+# 통짜 승인이 닿지 못하는 자리를 서비스가 코드로 알린다. 여기는 그 코드를
+# 상태 코드와 문구로 옮기기만 한다 — 같은 검사를 라우터가 또 하면 정식
+# API·debug·CLI 세 표면의 규칙이 갈라진다.
+_ARTIFACT_REVIEW_ERRORS: dict[str, tuple[int, str]] = {
+    "CONTESTED_REQUIRES_BLOCK_REVIEW": (
+        409,
+        "다툼 블록이 있어 블록 검토를 거쳐야 합니다.",
+    ),
+    "BLOCK_REVIEW_IN_PROGRESS": (
+        409,
+        "블록 검토가 시작된 변경안은 발행으로 끝내야 합니다.",
+    ),
+}
+
 _PUBLISH_ERRORS: dict[str, tuple[int, str]] = {
     "NOT_FOUND": (404, "변경안을 찾을 수 없습니다."),
     "ALREADY_DECIDED": (409, "이미 결정된 변경안입니다."),
@@ -178,8 +192,9 @@ def get_queue_item(
     """변경안 하나를 충돌 목록·블록 결정과 함께 돌려준다.
 
     충돌은 본문의 다툼(contested) 블록에서만 나온다. 표시와 목록이 같은
-    사실 하나에서 나오므로, 표시는 켜졌는데 목록이 빈 상태가 만들어질 수
-    없다.
+    사실 하나에서 나오므로 둘이 서로 다른 이유로 어긋나지 않는다. 표시가
+    켜졌는데 목록이 비는 것은 그 안건이 이미 결정돼 계류 목록에서 빠진
+    경우이며, 그때도 표시는 본문에 다툼 블록이 있다는 사실 그대로다.
 
     Raises:
         HTTPException: 이 workspace에 그 변경안이 없을 때 404를 던진다.
@@ -230,38 +245,15 @@ def approve_artifact(
 ) -> DecisionResponse:
     """승인을 확정하고 그 결과를 돌려준다.
 
-    두 경우를 여기서 막는다.
-
-    다툼 블록이 있으면 통짜 승인에 승자를 고르는 자리가 없다. 그대로
-    태우면 사람이 고르지 않은 값이 문서에 실린다.
-
-    블록 결정이 하나라도 적혀 있으면, 그 결정을 읽지 않는 통짜 승인은
-    반려된 블록까지 판에 실어 사람의 결정을 덮어쓴다. 사람의 결정은
-    되돌릴 수 없어야 하므로, 블록 검토가 시작된 안건은 발행으로만 끝난다.
+    다툼 블록이 있거나 블록 결정이 이미 적혀 있는 안건은 서비스가 막고,
+    여기서는 그 코드를 409로 옮긴다. 다툼 블록에는 통짜 승인이 승자를
+    고를 자리가 없고, 적힌 블록 결정은 통짜 승인이 읽지 않아 반려된
+    블록까지 판에 실리기 때문이다.
 
     Raises:
         HTTPException: 변경안이 없으면 404, 다툼 블록이 있거나 블록 결정이
             시작됐거나 결정을 받아들일 수 없으면 409를 던진다.
     """
-    with uow_factory() as uow:
-        pending = uow.artifacts.get_proposal(proposal_id=proposal_id)
-        recorded = (
-            uow.block_verdicts.list_for_proposal(proposal_id=proposal_id)
-            if pending is not None
-            else ()
-        )
-    if pending is not None and _has_contested(pending):
-        raise review_error(
-            409,
-            code="CONTESTED_REQUIRES_BLOCK_REVIEW",
-            message="다툼 블록이 있어 블록 검토를 거쳐야 합니다.",
-        )
-    if recorded:
-        raise review_error(
-            409,
-            code="BLOCK_REVIEW_IN_PROGRESS",
-            message="블록 검토가 시작된 변경안은 발행으로 끝내야 합니다.",
-        )
     try:
         result = review_artifact_proposal(
             uow_factory(),
@@ -270,7 +262,9 @@ def approve_artifact(
             reviewer=context.reviewer,
         )
     except ProposalReviewError as error:
-        raise _artifact_review_error(uow_factory, proposal_id) from error
+        raise _artifact_review_error(
+            uow_factory, proposal_id, code=error.code
+        ) from error
     return DecisionResponse(
         proposal_id=str(result.proposal_id),
         verdict=result.verdict,
@@ -322,7 +316,9 @@ def reject_artifact(
             reason=payload.reason,
         )
     except ProposalReviewError as error:
-        raise _artifact_review_error(uow_factory, proposal_id) from error
+        raise _artifact_review_error(
+            uow_factory, proposal_id, code=error.code
+        ) from error
     return DecisionResponse(
         proposal_id=str(result.proposal_id),
         verdict=result.verdict,
@@ -565,14 +561,24 @@ def apply_one(
 def _artifact_review_error(
     uow_factory: ReviewUowFactory,
     proposal_id: uuid.UUID,
+    *,
+    code: str | None = None,
 ) -> HTTPException:
     """문서 변경안 결정 실패를 상태 코드와 오류 코드로 옮긴다.
 
-    서비스의 예외 계층은 `ProposalReviewError` 하나뿐이라 종류를 예외에서
-    읽을 수 없다. 그래서 실패한 뒤에 저장소를 한 번 더 읽어 지금 상태로
-    코드를 정한다. 읽기 전용이고 결정 규칙을 다시 판정하지 않는다 —
-    소비자가 무엇을 고쳐야 하는지 알려 주는 진단일 뿐이다.
+    서비스가 코드를 실어 보낸 거절은 그 코드로 바로 옮긴다. 무엇이
+    막았는지 예외 자체가 말해 주므로 저장소를 다시 읽을 이유가 없다.
+
+    코드가 없는 거절은 종류를 예외에서 읽을 수 없다. 그래서 실패한 뒤에
+    저장소를 한 번 더 읽어 지금 상태로 코드를 정한다. 읽기 전용이고 결정
+    규칙을 다시 판정하지 않는다 — 소비자가 무엇을 고쳐야 하는지 알려 주는
+    진단일 뿐이다.
     """
+    if code is not None:
+        status_code, message = _ARTIFACT_REVIEW_ERRORS.get(
+            code, _UNMAPPED_ERROR
+        )
+        return review_error(status_code, code=code, message=message)
     with uow_factory() as uow:
         proposal = uow.artifacts.get_proposal(proposal_id=proposal_id)
         if proposal is None:

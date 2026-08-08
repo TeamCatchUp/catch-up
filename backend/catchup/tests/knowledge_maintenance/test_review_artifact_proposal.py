@@ -15,7 +15,9 @@ from typing import Any
 import pytest
 
 from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_CLAIM_SECTION
+from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_CONTESTED
 from catchup.knowledge_maintenance.domain.artifact import ArtifactBlock
+from catchup.knowledge_maintenance.domain.artifact import ContestedVariant
 from catchup.knowledge_maintenance.domain.artifact import deserialize_blocks
 from catchup.knowledge_maintenance.domain.artifact import serialize_blocks
 from catchup.knowledge_maintenance.ports.artifacts import ProposalAlreadyDecided
@@ -603,6 +605,131 @@ def test_blank_reviewer_is_refused() -> None:
 
     assert uow.artifacts.revisions == []
     assert uow.committed is False
+
+
+def _contested_blocks() -> tuple[ArtifactBlock, ...]:
+    """다툼 블록 한 벌을 대조 계약대로 만든다."""
+    first = uuid.uuid4()
+    second = uuid.uuid4()
+    return (
+        ArtifactBlock(
+            block_kind=BLOCK_KIND_CONTESTED,
+            heading="rate_limit",
+            body="상충하는 값 2개 — 검토 필요",
+            claim_ids=(first, second),
+            proposal_ids=(uuid.uuid4(),),
+            ontology_version="1",
+            variants=tuple(
+                ContestedVariant(
+                    claim_id=claim_id,
+                    body=f"{claim_id} 후보",
+                    sources=(),
+                )
+                for claim_id in sorted((first, second), key=str)
+            ),
+        ),
+    )
+
+
+def test_approve_refuses_contested_blocks() -> None:
+    """다툼 블록이 있는 변경안은 통짜 승인으로 확정하지 않는다.
+
+    통짜 승인에는 승자를 고르는 자리가 없다. 그대로 태우면 사람이 고르지
+    않은 값이 문서에 실린다. 서비스가 막아야 정식 API·debug·CLI 세 표면이
+    같은 규칙을 쓴다.
+    """
+    uow = FakeUnitOfWork()
+    proposal_id = uow.artifacts.add_proposal(
+        artifact_id=uuid.uuid4(),
+        blocks=_contested_blocks(),
+        base_revision_id=None,
+    )
+
+    with pytest.raises(ProposalReviewError) as caught:
+        review_artifact_proposal(
+            uow,
+            proposal_id=proposal_id,
+            verdict="approved",
+            reviewer=REVIEWER,
+        )
+
+    assert caught.value.code == "CONTESTED_REQUIRES_BLOCK_REVIEW"
+    assert uow.artifacts.revisions == []
+    assert uow.artifacts.proposals[proposal_id]["status"] == "pending"
+    assert uow.committed is False
+
+
+def test_approve_refuses_when_block_verdict_is_recorded() -> None:
+    """블록 결정이 적힌 변경안은 통짜 승인으로 확정하지 않는다.
+
+    통짜 승인은 그 결정을 읽지 않으므로 반려된 블록까지 판에 실어 사람의
+    결정을 덮는다. 사람의 결정은 되돌릴 수 없어야 한다.
+    """
+    uow = FakeUnitOfWork()
+    blocks = _blocks("2026-09")
+    proposal_id = uow.artifacts.add_proposal(
+        artifact_id=uuid.uuid4(),
+        blocks=blocks,
+        base_revision_id=None,
+    )
+    uow.block_verdicts.upsert_verdict(
+        proposal_id=proposal_id,
+        block_index=0,
+        block_content_hash="a" * 64,
+        verdict="rejected",
+        rejection_reason="근거가 부족하다",
+        chosen_winner_claim_id=None,
+        reviewer=REVIEWER,
+        reviewed_at=CREATED_AT,
+    )
+
+    with pytest.raises(ProposalReviewError) as caught:
+        review_artifact_proposal(
+            uow,
+            proposal_id=proposal_id,
+            verdict="approved",
+            reviewer=REVIEWER,
+        )
+
+    assert caught.value.code == "BLOCK_REVIEW_IN_PROGRESS"
+    assert uow.artifacts.revisions == []
+    assert uow.artifacts.proposals[proposal_id]["status"] == "pending"
+    assert uow.committed is False
+
+
+def test_reject_is_allowed_while_block_review_is_in_progress() -> None:
+    """블록 결정이 적혀 있어도 통짜 반려는 막지 않는다.
+
+    두 가드는 승인 경로의 것이다. 반려는 어떤 블록도 판에 싣지 않으므로
+    사람의 블록 결정을 덮지 않는다.
+    """
+    uow = FakeUnitOfWork()
+    proposal_id = uow.artifacts.add_proposal(
+        artifact_id=uuid.uuid4(),
+        blocks=_blocks("2026-09"),
+        base_revision_id=None,
+    )
+    uow.block_verdicts.upsert_verdict(
+        proposal_id=proposal_id,
+        block_index=0,
+        block_content_hash="a" * 64,
+        verdict="approved",
+        rejection_reason=None,
+        chosen_winner_claim_id=None,
+        reviewer=REVIEWER,
+        reviewed_at=CREATED_AT,
+    )
+
+    result = review_artifact_proposal(
+        uow,
+        proposal_id=proposal_id,
+        verdict="rejected",
+        reviewer=REVIEWER,
+        reason="카드 전체가 낡았다",
+    )
+
+    assert result.verdict == "rejected"
+    assert uow.artifacts.proposals[proposal_id]["status"] == "rejected"
 
 
 class FakeClaimRepository:

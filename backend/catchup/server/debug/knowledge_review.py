@@ -32,7 +32,6 @@ from catchup.db.engine import SessionLocal
 from catchup.knowledge_maintenance.adapters.postgres.unit_of_work import (
     KnowledgeMaintenanceUnitOfWork,
 )
-from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_CONTESTED
 from catchup.knowledge_maintenance.ports.artifacts import StoredArtifactProposal
 from catchup.knowledge_maintenance.services.apply_mutation_proposals import (
     apply_mutation_proposals,
@@ -65,6 +64,17 @@ router = APIRouter(prefix="/api/v1/debug", tags=["debug"])
 # 결정자를 고정한다. 개발 도구가 남긴 결정과 사람이 내린 결정이 감사
 # 기록에서 구분되지 않으면 저널을 믿을 수 없게 된다.
 DEBUG_REVIEWER = "debug:test-user"
+
+# 서비스가 코드로 알린 거절을 사람이 읽을 문구로 옮긴다. 나머지 거절은
+# 개발 도구라 예외 문구를 그대로 보여 준다.
+_ARTIFACT_APPROVE_DETAILS: dict[str, str] = {
+    "CONTESTED_REQUIRES_BLOCK_REVIEW": (
+        "다툼 블록이 있어 블록 검토를 거쳐야 한다."
+    ),
+    "BLOCK_REVIEW_IN_PROGRESS": (
+        "블록 검토가 시작된 변경안은 발행으로 끝내야 한다."
+    ),
+}
 
 
 class RejectRequest(BaseModel):
@@ -187,31 +197,12 @@ def approve_artifact_proposal(
 ) -> dict[str, Any]:
     """문서 변경안을 승인해 새 판을 발행한다.
 
-    다툼(contested) 블록이 있거나 블록 결정이 이미 적혀 있으면 거절한다.
-    통짜 승인에는 다툼의 승자를 고르는 자리가 없어 사람이 고르지 않은 값이
-    판에 실리고, 적혀 있던 블록 결정은 읽히지 않은 채 덮인다. 정식 API가
-    막는 것을 개발 도구로 우회할 수 있으면 막는 뜻이 없다.
+    다툼(contested) 블록이 있거나 블록 결정이 이미 적혀 있으면 서비스가
+    거절하고, 여기서는 그 코드를 읽어 안내 문구로 옮긴다. 통짜 승인에는
+    다툼의 승자를 고르는 자리가 없어 사람이 고르지 않은 값이 판에 실리고,
+    적혀 있던 블록 결정은 읽히지 않은 채 덮이기 때문이다.
     """
     _guard()
-    with _uow_factory(workspace_id)() as uow:
-        pending = uow.artifacts.get_proposal(proposal_id=proposal_id)
-        recorded = (
-            uow.block_verdicts.list_for_proposal(proposal_id=proposal_id)
-            if pending is not None
-            else ()
-        )
-    if pending is not None and any(
-        block.block_kind == BLOCK_KIND_CONTESTED for block in pending.blocks
-    ):
-        raise HTTPException(
-            status_code=409,
-            detail="다툼 블록이 있어 블록 검토를 거쳐야 한다.",
-        )
-    if recorded:
-        raise HTTPException(
-            status_code=409,
-            detail="블록 검토가 시작된 변경안은 발행으로 끝내야 한다.",
-        )
     try:
         result = review_artifact_proposal(
             _uow_factory(workspace_id)(),
@@ -220,7 +211,12 @@ def approve_artifact_proposal(
             reviewer=DEBUG_REVIEWER,
         )
     except ProposalReviewError as error:
-        raise HTTPException(status_code=409, detail=str(error)) from error
+        raise HTTPException(
+            status_code=409,
+            detail=_ARTIFACT_APPROVE_DETAILS.get(
+                error.code or "", str(error)
+            ),
+        ) from error
     return {
         "proposal_id": str(result.proposal_id),
         "verdict": result.verdict,
