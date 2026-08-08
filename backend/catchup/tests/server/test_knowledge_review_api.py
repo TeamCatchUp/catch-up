@@ -235,24 +235,16 @@ class _FakeMutations:
     def __init__(
         self,
         *,
-        contested: frozenset[uuid.UUID] = frozenset(),
         pending: tuple[StoredContradictionProposal, ...] = (),
         subject_pending: tuple[StoredPendingProposal, ...] = (),
         statuses: dict[uuid.UUID, str] | None = None,
     ) -> None:
-        self._contested = contested
         self._pending = pending
         self._subject_pending = subject_pending
         # 실 저장소처럼 계류 여부와 무관하게 상태를 돌려준다. 계류 목록에
         # 없는 안건도 행 자체는 남아 있기 때문이다.
         self._statuses = dict(statuses or {})
         self.workspace_ids: list[int] = []
-
-    def find_contested_subject_node_ids(
-        self, *, workspace_id: int
-    ) -> frozenset[uuid.UUID]:
-        self.workspace_ids.append(workspace_id)
-        return self._contested
 
     def find_pending_for_subject_node(
         self, *, workspace_id: int, node_id: uuid.UUID
@@ -904,7 +896,6 @@ def test_detail_conflict_flag_follows_contested_blocks(
         values=(),
     )
     mutations = _FakeMutations(
-        contested=frozenset({stored.subject_node_id}),
         pending=(contradiction,),
         subject_pending=(
             StoredPendingProposal(
