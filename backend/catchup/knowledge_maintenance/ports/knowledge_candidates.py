@@ -142,6 +142,9 @@ class KnowledgeCandidateRepository(Protocol):
         관찰 시각은 claim 발화 시각이 최우선이다 — 추출이 발화 prefix로
         본 시각과 소비자가 보는 시각이 발화 단위로 일치해야 한다. 발화
         시각이 없으면 문서 사슬로 물러난다.
+
+        rejected와 superseded는 뺀다. 참이었던 적 없는 후보와 재추출이
+        대체한 구 배치는 모순 판정의 재료가 아니다.
         """
         ...
 
@@ -305,6 +308,23 @@ class KnowledgeCandidateRepository(Protocol):
         않는다. 그것은 중복 방지가 아니라 Observation을 영구히 얼리는 일이다.
 
         실패한 실행은 세지 않는다. 재시도를 막으면 안 되기 때문이다.
+        """
+        ...
+
+    def supersede_stale_pending_candidates(
+        self,
+        *,
+        workspace_id: int,
+        input_node_id: uuid.UUID,
+        current_run_id: uuid.UUID,
+    ) -> int:
+        """같은 입력의 이전 실행이 남긴 pending 후보를 은퇴시킨다.
+
+        재추출이 만든 새 배치와 구 배치가 resolution에 이중으로 잡히는
+        것을 막기 위해서다. pending만 superseded로 전이하며, 사람 결정과
+        해소 결과(accepted·merged·duplicate·rejected)는 건드리지 않는다.
+
+        은퇴시킨 행 수를 돌려준다.
         """
         ...
 

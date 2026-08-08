@@ -4048,7 +4048,7 @@ class KnowledgeEntityCandidate(Base):
             name="ck_knowledge_entity_candidates_extraction_method",
         ),
         CheckConstraint(
-            "resolution_status IN ('pending', 'accepted', 'merged', 'rejected')",
+            "resolution_status IN ('pending', 'accepted', 'merged', 'rejected', 'superseded')",
             name="ck_knowledge_entity_candidates_resolution_status",
         ),
     )
@@ -4184,7 +4184,7 @@ class KnowledgeClaimCandidate(Base):
             name="ck_knowledge_claim_candidates_extraction_method",
         ),
         CheckConstraint(
-            "resolution_status IN ('pending', 'accepted', 'duplicate', 'rejected')",
+            "resolution_status IN ('pending', 'accepted', 'duplicate', 'rejected', 'superseded')",
             name="ck_knowledge_claim_candidates_resolution_status",
         ),
         CheckConstraint(
@@ -4346,7 +4346,7 @@ class KnowledgeRelationAssertionCandidate(Base):
             name="ck_knowledge_relation_candidates_extraction_method",
         ),
         CheckConstraint(
-            "resolution_status IN ('pending', 'accepted', 'duplicate', 'rejected')",
+            "resolution_status IN ('pending', 'accepted', 'duplicate', 'rejected', 'superseded')",
             name="ck_knowledge_relation_candidates_resolution_status",
         ),
         CheckConstraint(

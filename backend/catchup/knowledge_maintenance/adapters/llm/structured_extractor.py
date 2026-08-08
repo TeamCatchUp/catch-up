@@ -6,6 +6,9 @@ from dataclasses import dataclass
 
 from langchain_core.language_models import BaseChatModel
 
+from catchup.knowledge_maintenance.adapters.llm.prompt_versioning import (
+    versioned_prompt,
+)
 from catchup.knowledge_maintenance.contracts.extraction import ExtractionVocabulary
 from catchup.knowledge_maintenance.contracts.extraction import KnowledgeCandidateBatch
 from catchup.knowledge_maintenance.contracts.extraction import (
@@ -17,6 +20,7 @@ from catchup.observability.logging import get_logger
 from catchup.prompts.loader import prompt_loader
 
 TEMPLATE_PATH = "knowledge_maintenance/extract_knowledge_candidates.j2"
+PROMPT_VERSION = versioned_prompt(TEMPLATE_PATH)
 CONTRACT_ID = "catchup.knowledge_candidates"
 
 logger = get_logger(__name__)

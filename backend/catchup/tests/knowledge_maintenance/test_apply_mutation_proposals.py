@@ -677,6 +677,61 @@ def test_supersede_is_idempotent() -> None:
     assert second.claims_superseded == 0
 
 
+def test_supersede_skips_superseded_loser() -> None:
+    """승인 뒤 재추출이 은퇴시킨 패자는 닫지도 탈락시키지도 않는다.
+
+    은퇴한 후보는 지식이 된 적이 없다. 여기에 valid_to를 찍으면 "한때
+    참이었다"가 없던 일로 만들어진다.
+    """
+    state = FakeState()
+    winner = state.add_claim(status="accepted")
+    loser = state.add_claim(status="superseded")
+    _supersede_proposal(state, winner=winner, losers=(loser,))
+
+    result, _ = _run(state)
+
+    assert result.proposals_applied == 1
+    assert result.claims_skipped_superseded == 1
+    assert result.claims_superseded == 0
+    assert result.claims_invalidated == 0
+    assert result.claims_already_closed == 0
+    row = state.claim_rows[loser]
+    assert row["resolution_status"] == "superseded"
+    assert row["valid_to"] is None
+
+
+def test_superseded_member_is_not_merged() -> None:
+    """은퇴한 멤버 후보는 merged로 다시 표시되지 않는다."""
+    state = FakeState()
+    representative = state.add_candidate()
+    retired = state.add_candidate(status="superseded")
+    state.add_approved_merge(
+        representative=representative, members=(retired,)
+    )
+
+    result, _ = _run(state)
+
+    assert result.candidates_already_resolved == 1
+    assert result.candidates_resolved == 1
+    row = state.candidates[retired]
+    assert row["resolution_status"] == "superseded"
+    assert row["resolved_node_id"] is None
+
+
+def test_superseded_representative_creates_no_node() -> None:
+    """은퇴한 대표로는 새 노드를 세우지 않는다."""
+    state = FakeState()
+    representative = state.add_candidate(status="superseded")
+    state.add_approved_merge(representative=representative, members=())
+
+    result, _ = _run(state)
+
+    assert result.candidates_already_resolved == 1
+    assert result.candidates_resolved == 0
+    assert state.nodes == []
+    assert state.candidates[representative]["resolution_status"] == "superseded"
+
+
 def test_supersede_without_claim_fails_that_proposal() -> None:
     """대상 claim이 없는 명령은 그 판정만 실패시킨다."""
     state = FakeState()

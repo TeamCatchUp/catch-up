@@ -76,8 +76,10 @@ def store_knowledge_candidates(
 ) -> CandidateStorageResult:
     """추출 결과 한 벌을 후보로 저장한다.
 
-    같은 Observation에 이미 실행 기록이 있으면 다시 저장하지 않는다. 후보를
-    두 벌 쌓으면 resolution이 같은 대상을 여러 번 보게 된다.
+    같은 Observation에 같은 계약(prompt·어휘·모델)으로 성공한 실행이 있으면
+    그 실행을 재사용하고 아무것도 저장하지 않는다. 계약이 다르면 새 배치를
+    저장하고, 같은 입력에서 나온 구 pending 후보를 superseded로 은퇴시킨다.
+    은퇴시키지 않으면 resolution이 같은 대상을 두 벌로 보게 된다.
     """
     clock = clock or _utcnow
     now = clock()
@@ -126,6 +128,25 @@ def store_knowledge_candidates(
             spec=spec,
             started_at=now,
         )
+
+        # 재추출이면 구 배치의 pending 후보를 먼저 은퇴시킨다. 같은 UoW
+        # 안이라 은퇴와 새 배치 저장은 함께 확정되거나 함께 무산된다.
+        superseded_count = (
+            uow.knowledge_candidates.supersede_stale_pending_candidates(
+                workspace_id=observation.workspace_id,
+                input_node_id=node.id,
+                current_run_id=run.id,
+            )
+        )
+        if superseded_count:
+            logger.info(
+                "knowledge_candidates_superseded",
+                workspace_id=observation.workspace_id,
+                observation_id=str(observation.id),
+                input_node_id=str(node.id),
+                run_id=str(run.id),
+                superseded_count=superseded_count,
+            )
 
         entity_ids = _store_entities(
             observation,
