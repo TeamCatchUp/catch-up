@@ -73,21 +73,27 @@ export default function FormattingToolbar({ editor }: FormattingToolbarProps) {
   // 링크 입력 모드 — 툴바 내용이 입력창으로 바뀐다 (노션과 동일한 인라인 전환)
   const [linkDraft, setLinkDraft] = useState<string | null>(null);
 
+  // 이 셀렉터는 "모든" 트랜잭션마다 돈다 — 타이핑 한 글자도 트랜잭션이다.
+  // 전부 계산하면 isActive가 매 키 입력마다 20회 넘게 도는데(마크 7 + 정렬 3 + 블록 스캔 10),
+  // 툴바는 선택이 있을 때만 보이므로 접힌 선택(=타이핑 중)에서는 계산 자체를 건너뛴다.
   const state = useEditorState({
     editor,
-    selector: ({ editor: e }) => ({
-      bold: e.isActive('bold'),
-      italic: e.isActive('italic'),
-      underline: e.isActive('underline'),
-      strike: e.isActive('strike'),
-      code: e.isActive('code'),
-      highlight: e.isActive('highlight'),
-      link: e.isActive('link'),
-      alignLeft: e.isActive({ textAlign: 'left' }),
-      alignCenter: e.isActive({ textAlign: 'center' }),
-      alignRight: e.isActive({ textAlign: 'right' }),
-      blockLabel: TURN_INTO.find((entry) => entry.isActive(e))?.label ?? '본문',
-    }),
+    selector: ({ editor: e }) => {
+      if (e.state.selection.empty) return null;
+      return {
+        bold: e.isActive('bold'),
+        italic: e.isActive('italic'),
+        underline: e.isActive('underline'),
+        strike: e.isActive('strike'),
+        code: e.isActive('code'),
+        highlight: e.isActive('highlight'),
+        link: e.isActive('link'),
+        alignLeft: e.isActive({ textAlign: 'left' }),
+        alignCenter: e.isActive({ textAlign: 'center' }),
+        alignRight: e.isActive({ textAlign: 'right' }),
+        blockLabel: TURN_INTO.find((entry) => entry.isActive(e))?.label ?? '본문',
+      };
+    },
   });
 
   const applyLink = () => {
@@ -102,6 +108,9 @@ export default function FormattingToolbar({ editor }: FormattingToolbarProps) {
 
   return (
     <BubbleMenu editor={editor} updateDelay={100} options={{ placement: 'top', offset: 6 }}>
+      {/* state가 null이면 선택이 접혀 있다 — 툴바 DOM 자체를 만들지 않는다.
+          BubbleMenu는 계속 마운트해 둔다(플러그인 add/remove가 더 비싸다). */}
+      {state === null ? null : (
       <div
         role="toolbar"
         aria-label="텍스트 서식"
@@ -251,6 +260,7 @@ export default function FormattingToolbar({ editor }: FormattingToolbarProps) {
           </>
         )}
       </div>
+      )}
     </BubbleMenu>
   );
 }

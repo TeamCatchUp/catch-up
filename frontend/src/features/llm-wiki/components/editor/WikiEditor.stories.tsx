@@ -32,7 +32,18 @@ import WikiEditor from './WikiEditor';
 const meta = {
   title: 'Compositions/LLM Wiki/Editor/WikiEditor',
   component: WikiEditor,
+  argTypes: {
+    // Controls는 객체 arg를 라이브 JSON 트리로 렌더한다 — initialContent는 문서 전체라
+    // 매니저가 그 트리를 들고 있게 된다. 편집할 값도 아니므로 컨트롤을 끈다.
+    initialContent: { control: false },
+    onUpdate: { control: false },
+    onContentError: { control: false },
+  },
   parameters: {
+    // onUpdate는 키 입력마다 문서 전체 JSON을 넘긴다 — Actions 패널이 켜져 있으면
+    // 그 페이로드가 매 글자 직렬화되어 패널에 쌓인다. 스토리에서 쓰지 않으므로 끈다
+    // (테스트 스토리의 fn() 스파이는 애드온과 무관하게 그대로 동작한다).
+    actions: { disable: true },
     ...catchupParameters({
       level: 'composition',
       domain: 'llm-wiki',
