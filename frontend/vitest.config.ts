@@ -47,8 +47,12 @@ export default defineConfig({
             provider: playwright({}),
             headless: true,
             instances: [{ browser: 'chromium' }],
-            // 기본 포트 63315는 Windows 예약 포트 범위(63313-63412)에 들어 EACCES가 난다
-            api: { port: 53315 },
+            // Windows 동적 포트 범위(49152~65535) 안의 포트는 Hyper-V/WSL이 부팅마다 100개
+            // 단위로 예약해 가서 EACCES로 죽는다 — 예약 목록이 재부팅마다 바뀌므로
+            // "지금은 비어 있다"로는 못 고른다. 실제로 63315 → 53315 순으로 두 번 당했다.
+            // 동적 범위 밖(<49152)으로 내리면 그 예약 대상에서 아예 빠진다.
+            // 확인: netsh int ipv4 show dynamicport tcp / show excludedportrange protocol=tcp
+            api: { port: 7331 },
           },
         },
       },
