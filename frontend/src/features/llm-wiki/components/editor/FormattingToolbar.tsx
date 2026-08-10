@@ -141,7 +141,15 @@ export default function FormattingToolbar({ editor }: FormattingToolbarProps) {
           </>
         ) : (
           <>
-            <DropdownMenu>
+            {/*
+              modal={false} 필수. Radix DropdownMenu는 기본이 modal이고, 열려 있는 동안
+              document.body의 pointer-events를 꺼둔 뒤 닫힐 때 되돌린다. 그런데 이 툴바는
+              선택이 풀리면 통째로 언마운트되고(위 state === null), 블록 전환은 실행 즉시
+              선택을 바꾼다 — 즉 "메뉴가 열린 채 언마운트"가 정상 경로에서 발생한다.
+              그때 되돌리는 쪽이 실행되지 않으면 body가 pointer-events: none으로 굳어
+              페이지 전체가 클릭되지 않는다. 비모달은 body를 아예 건드리지 않는다.
+            */}
+            <DropdownMenu modal={false}>
               <DropdownMenuTrigger asChild>
                 <button type="button" aria-label="블록 전환" className={`${BUTTON_CLASS} gap-1`}>
                   {state.blockLabel}
