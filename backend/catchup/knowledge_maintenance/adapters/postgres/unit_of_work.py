@@ -10,6 +10,9 @@ from catchup.knowledge_maintenance.adapters.postgres.repositories import (
     SqlAlchemyArtifactRepository,
 )
 from catchup.knowledge_maintenance.adapters.postgres.repositories import (
+    SqlAlchemyBlockVerdictRepository,
+)
+from catchup.knowledge_maintenance.adapters.postgres.repositories import (
     SqlAlchemyKnowledgeCandidateRepository,
 )
 from catchup.knowledge_maintenance.adapters.postgres.repositories import (
@@ -49,6 +52,7 @@ class KnowledgeMaintenanceUnitOfWork:
     pipeline_events: SqlAlchemyPipelineEventRepository
     mutation_proposals: SqlAlchemyMutationProposalRepository
     artifacts: SqlAlchemyArtifactRepository
+    block_verdicts: SqlAlchemyBlockVerdictRepository
 
     def __init__(
         self,
@@ -58,9 +62,10 @@ class KnowledgeMaintenanceUnitOfWork:
     ) -> None:
         """transaction 경계를 만든다.
 
-        `workspace_id`는 artifact 저장소만 쓴다. 다른 저장소는 메서드마다
-        workspace를 받으므로 기본값을 두어 기존 호출자를 그대로 둔다.
-        문서 작업을 하려면 반드시 넘겨야 하며, 없이 쓰면 저장소가 막는다.
+        `workspace_id`는 artifact 저장소와 블록 결정 저장소만 쓴다. 다른
+        저장소는 메서드마다 workspace를 받으므로 기본값을 두어 기존
+        호출자를 그대로 둔다. 문서 작업을 하려면 반드시 넘겨야 하며,
+        없이 쓰면 저장소가 막는다.
 
         키워드로만 받는다. 위치 인자로 열어 두면 session factory 자리에
         잘못 넣거나 그 반대로 넣어도 조용히 통과할 자리가 생긴다.
@@ -80,6 +85,9 @@ class KnowledgeMaintenanceUnitOfWork:
         self.pipeline_events = SqlAlchemyPipelineEventRepository(session)
         self.mutation_proposals = SqlAlchemyMutationProposalRepository(session)
         self.artifacts = SqlAlchemyArtifactRepository(
+            session, self._workspace_id
+        )
+        self.block_verdicts = SqlAlchemyBlockVerdictRepository(
             session, self._workspace_id
         )
         return self

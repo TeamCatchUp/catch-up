@@ -12,6 +12,12 @@
 결정이 끝난 변경안은 다시 판정하지 않고 예외로 알린다. 무동작으로 넘기면
 호출자는 자기 결정이 반영된 줄 알지만 실제로는 아무 일도 없었던 것이 된다.
 사람의 결정을 다루는 자리라 침묵이 가장 위험하다.
+
+통짜 승인이 닿지 못하는 두 자리를 여기서 막는다. 다툼 블록이 있으면
+승자를 고르는 자리가 통짜 승인에 없고, 블록 결정이 하나라도 적혀 있으면
+그 결정을 읽지 않는 통짜 승인이 반려된 블록까지 판에 싣는다. 두 검사를
+서비스가 갖는 이유는 호출 표면이 셋(정식 API·debug 라우터·CLI 러너)이기
+때문이다. 표면마다 복제하면 하나가 빠진 자리로 불변식이 새어 나간다.
 """
 
 from __future__ import annotations
@@ -25,9 +31,11 @@ from typing import Self
 from sqlalchemy.exc import IntegrityError
 
 from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_CLAIM_SECTION
+from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_CONTESTED
 from catchup.knowledge_maintenance.domain.artifact import ArtifactBlock
 from catchup.knowledge_maintenance.ports.artifacts import ArtifactRepository
 from catchup.knowledge_maintenance.ports.artifacts import ProposalAlreadyDecided
+from catchup.knowledge_maintenance.ports.block_verdicts import BlockVerdictRepository
 from catchup.knowledge_maintenance.ports.knowledge_candidates import (
     KnowledgeCandidateRepository,
 )
@@ -41,6 +49,12 @@ VERDICT_REJECTED = "rejected"
 _VERDICTS = (VERDICT_APPROVED, VERDICT_REJECTED)
 
 PROPOSAL_STATUS_PENDING = "pending"
+
+# 통짜 승인이 닿지 못하는 두 자리를 가리키는 분류 코드다. 호출자는 예외
+# 문구가 아니라 이 코드로 분기한다 — 문구를 파싱해 나누면 문구를 다듬는
+# 순간 소비자 계약이 조용히 깨진다.
+CODE_CONTESTED_REQUIRES_BLOCK_REVIEW = "CONTESTED_REQUIRES_BLOCK_REVIEW"
+CODE_BLOCK_REVIEW_IN_PROGRESS = "BLOCK_REVIEW_IN_PROGRESS"
 
 
 class ProposalReviewError(Exception):
@@ -56,7 +70,16 @@ class ProposalReviewError(Exception):
 
     두 검토가 같은 변경안을 두고 부딪혀 저장소가 ProposalAlreadyDecided를
     던지는 것도 마찬가지다.
+
+    Attributes:
+        code: 호출자가 다르게 안내해야 하는 거절만 분류해 담는다. 나머지는
+            None이고, 그때 호출자는 지금 상태를 다시 읽어 사유를 정한다.
     """
+
+    def __init__(self, message: str, *, code: str | None = None) -> None:
+        """거절 사유와 선택적 분류 코드를 담는다."""
+        super().__init__(message)
+        self.code = code
 
 
 @dataclass(frozen=True, slots=True)
@@ -86,10 +109,16 @@ class ArtifactReviewUnitOfWork(Protocol):
     claim 확정만 함축하고, open_question에 실린 계류 안건에는 어떤
     결정도 함축하지 않는다 — 접근 자체가 없어야 그 불변식이 구조로
     보장된다.
+
+    블록 결정 저널은 반대로 여기에 있어야 한다. 통짜 승인이 그 저널을
+    읽지 않으면 사람이 반려한 블록까지 판에 실리므로, 승인을 막을지
+    판단하려면 읽기 접근이 필요하다. 읽기만 하고 쓰지는 않는다 — 블록
+    결정을 남기는 일은 `review_block_verdict`의 몫이다.
     """
 
     artifacts: ArtifactRepository
     knowledge_candidates: KnowledgeCandidateRepository
+    block_verdicts: BlockVerdictRepository
 
     def __enter__(self) -> Self: ...
 
@@ -164,6 +193,24 @@ def review_artifact_proposal(
                 revision_number=None,
             )
 
+        if _has_contested(proposal.blocks):
+            # 통짜 승인에는 승자를 고르는 자리가 없다. 그대로 태우면
+            # 사람이 고르지 않은 값이 문서에 실린다.
+            raise ProposalReviewError(
+                f"변경안 {proposal_id}에 다툼 블록이 있어 블록 검토를"
+                " 거쳐야 한다",
+                code=CODE_CONTESTED_REQUIRES_BLOCK_REVIEW,
+            )
+        if uow.block_verdicts.list_for_proposal(proposal_id=proposal_id):
+            # 적힌 블록 결정을 읽지 않는 통짜 승인은 반려된 블록까지 판에
+            # 실어 사람의 결정을 덮는다. 사람의 결정은 되돌릴 수 없어야
+            # 하므로, 블록 검토가 시작된 안건은 발행으로만 끝난다.
+            raise ProposalReviewError(
+                f"변경안 {proposal_id}는 블록 검토가 시작돼 발행으로"
+                " 끝내야 한다",
+                code=CODE_BLOCK_REVIEW_IN_PROGRESS,
+            )
+
         latest = uow.artifacts.find_latest_revision_id_and_number(
             artifact_id=proposal.artifact_id,
         )
@@ -230,6 +277,17 @@ def review_artifact_proposal(
         revision_id=revision_id,
         revision_number=revision_number,
         claims_accepted=claims_accepted,
+    )
+
+
+def _has_contested(blocks: tuple[ArtifactBlock, ...]) -> bool:
+    """본문에 다툼 블록이 있는지 본다.
+
+    대상 노드나 subject_key로 되짚지 않는다. 유도가 둘이면 둘이 어긋날 수
+    있어, 다툼 여부의 근거는 본문 하나로 둔다.
+    """
+    return any(
+        block.block_kind == BLOCK_KIND_CONTESTED for block in blocks
     )
 
 

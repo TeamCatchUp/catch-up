@@ -13,6 +13,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 from typing import Any
+from typing import Literal
 
 from pydantic import BaseModel
 from pydantic import Field
@@ -64,6 +65,37 @@ class BlockSourceResponse(BaseModel):
     citation_verified: bool | None
 
 
+class VariantResponse(BaseModel):
+    """다툼 블록이 나란히 보여 주는 후보 하나를 담는다.
+
+    claim_id가 블록 결정에 실을 승자 식별자다. 후보마다 근거를 따로 나르는
+    이유는, 검토자가 어느 쪽이 맞는지 고르려면 후보별 근거가 섞이지 않아야
+    하기 때문이다.
+    """
+
+    claim_id: str
+    body: str
+    sources: list[BlockSourceResponse] = []
+
+
+class BlockVerdictResponse(BaseModel):
+    """블록 하나에 내려진 결정을 담는다.
+
+    저장된 결정을 그대로 비춘다. block_content_hash는 그 결정이 어떤 본문을
+    보고 내려졌는지를 못박는 지문이며, 소비자는 다음 결정 요청에 지금 보고
+    있는 본문의 지문을 실어 낡은 화면의 결정이 기록되는 것을 막는다.
+    """
+
+    proposal_id: str
+    block_index: int
+    block_content_hash: str
+    verdict: str
+    rejection_reason: str | None
+    chosen_winner_claim_id: str | None
+    reviewer: str
+    reviewed_at: datetime
+
+
 class BlockResponse(BaseModel):
     """변경안 본문 블록 하나를 담는다.
 
@@ -71,17 +103,31 @@ class BlockResponse(BaseModel):
     어느 문장이 무엇을 근거로 삼았는지는 블록에서만 알 수 있으므로,
     상세 응답은 이것을 블록에 붙인 채로 내보낸다.
 
+    block_index는 목록에서의 자리이며 블록 결정 요청의 경로에 그대로
+    실린다. block_content_hash는 지금 본문의 지문이다.
+
     sources는 그 근거의 원문 인용이다. 근거 인용 없이 만들어진 옛 블록도
-    그대로 읽혀야 하므로 빈 목록을 기본값으로 둔다.
+    그대로 읽혀야 하므로 빈 목록을 기본값으로 둔다. 다툼 블록은 근거가
+    후보마다 갈리므로 sources를 비우고 variants에만 싣는다 — 둘 다 실으면
+    같은 인용이 두 자리에 나와 소비자가 어느 쪽을 정본으로 삼을지 알 수
+    없다.
+
+    variants는 다툼 블록에서만 값이 있고 그 밖에서는 없음이다. 빈 목록으로
+    두지 않는 이유는 "후보가 없는 블록"과 "후보를 다투는 블록인데 후보가
+    비었다"를 소비자가 구별할 수 있어야 하기 때문이다.
     """
 
+    block_index: int
     block_kind: str
     heading: str
     body: str
     claim_ids: list[str]
     proposal_ids: list[str]
     ontology_version: str | None
+    block_content_hash: str
     sources: list[BlockSourceResponse] = []
+    variants: list[VariantResponse] | None = None
+    verdict: BlockVerdictResponse | None = None
 
 
 class ReadSetResponse(BaseModel):
@@ -119,10 +165,14 @@ class ConflictResponse(BaseModel):
 class ProposalDetailResponse(BaseModel):
     """변경안 상세를 담는다.
 
-    contains_conflict가 true인데 conflicts가 빈 경우가 있다. 충돌 표시는
-    값 후보 claim을 노드로 되짚어 판정하고, 목록은 판정 근거의 subject_key로
-    모으기 때문이다. 노드가 나중에 생긴 대상은 key가 낡은 채 남아 목록에서
-    빠질 수 있다 — 표시를 지우는 대신 그대로 알린다.
+    contains_conflict와 conflicts는 같은 사실 하나에서 나온다. 표시는 본문에
+    다툼(contested) 블록이 있는지이고, 목록은 그 블록들이 가리키는 모순
+    안건이다. 대상 노드와 subject_key라는 서로 다른 두 경로로 각각 구하던
+    옛 방식은 둘이 어긋날 수 있었고, 그 자리를 없앴다.
+
+    그래도 표시가 켜졌는데 목록이 빌 수 있다. 다툼 블록이 가리킨 안건이
+    먼저 판정되면 계류 목록에서 빠지기 때문이다. 빈 목록은 표시가 틀렸다는
+    뜻이 아니라 그 안건이 이미 결정됐다는 뜻이다.
     """
 
     proposal_id: str
@@ -141,6 +191,49 @@ class RejectRequest(BaseModel):
     """반려 사유를 담는다. 사유 없는 반려는 서비스와 DB가 모두 거부한다."""
 
     reason: str
+
+
+class BlockVerdictRequest(BaseModel):
+    """블록 하나에 내리는 결정을 담는다.
+
+    block_content_hash는 검토자가 화면에서 본 본문의 지문이다. 필수인 이유는
+    이것이 "무엇을 보고 결정했나"를 못박는 유일한 재료이기 때문이다. 없이
+    받으면 사람이 읽지 않은 문장에 사람의 이름이 붙을 수 있다.
+    """
+
+    verdict: Literal["approved", "rejected"]
+    rejection_reason: str | None = None
+    chosen_winner_claim_id: uuid.UUID | None = None
+    block_content_hash: str
+
+
+class PublishRequest(BaseModel):
+    """발행이 딛고 선 기준 판을 담는다.
+
+    없음(null)은 "아직 판이 없는 문서"라는 뜻이지 생략이 아니다. 그래서
+    기본값을 두지 않고 명시를 요구한다 — 빠뜨린 요청을 "판 없음"으로
+    읽어 주면 낙관적 잠금이 조용히 꺼진다. 값이 변경안의 기준과 다르면
+    발행은 거부된다.
+    """
+
+    base_revision_id: uuid.UUID | None
+
+
+class PublishResponse(BaseModel):
+    """발행 한 번의 결과를 담는다.
+
+    전 블록이 반려됐으면 verdict가 rejected이고 판이 없어 revision 자리가
+    비어 있다.
+    """
+
+    proposal_id: str
+    verdict: str
+    revision_id: str | None
+    revision_number: int | None
+    blocks_published: int
+    blocks_rejected: int
+    contradictions_resolved: int
+    claims_accepted: int
 
 
 class ResolveRequest(BaseModel):

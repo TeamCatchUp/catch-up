@@ -65,6 +65,17 @@ router = APIRouter(prefix="/api/v1/debug", tags=["debug"])
 # 기록에서 구분되지 않으면 저널을 믿을 수 없게 된다.
 DEBUG_REVIEWER = "debug:test-user"
 
+# 서비스가 코드로 알린 거절을 사람이 읽을 문구로 옮긴다. 나머지 거절은
+# 개발 도구라 예외 문구를 그대로 보여 준다.
+_ARTIFACT_APPROVE_DETAILS: dict[str, str] = {
+    "CONTESTED_REQUIRES_BLOCK_REVIEW": (
+        "다툼 블록이 있어 블록 검토를 거쳐야 한다."
+    ),
+    "BLOCK_REVIEW_IN_PROGRESS": (
+        "블록 검토가 시작된 변경안은 발행으로 끝내야 한다."
+    ),
+}
+
 
 class RejectRequest(BaseModel):
     """반려 사유를 담는다. 사유 없는 반려는 서비스가 거부한다."""
@@ -111,6 +122,10 @@ def _artifact_item(
 
     큐 한 줄에 없는 `base_revision_id`와 본문 블록은 저장된 변경안에서
     가져온다. 외부 뷰어가 이 필드들을 쓰고 있어 뺄 수 없다.
+
+    다툼(contested) 블록은 본문이 "상충하는 값 N개"라는 표지뿐이라
+    후보(variants)를 함께 실어야 무엇이 갈렸는지 읽을 수 있다. 다툼이
+    아닌 블록에서는 빈 목록이다.
     """
     return {
         "id": str(item.proposal_id),
@@ -134,6 +149,13 @@ def _artifact_item(
                     str(source_id) for source_id in block.proposal_ids
                 ],
                 "ontology_version": block.ontology_version,
+                "variants": [
+                    {
+                        "claim_id": str(variant.claim_id),
+                        "body": variant.body,
+                    }
+                    for variant in block.variants
+                ],
             }
             for block in proposal.blocks
         ],
@@ -173,7 +195,13 @@ def list_artifact_proposals(workspace_id: int = 1) -> dict[str, Any]:
 def approve_artifact_proposal(
     proposal_id: uuid.UUID, workspace_id: int = 1
 ) -> dict[str, Any]:
-    """문서 변경안을 승인해 새 판을 발행한다."""
+    """문서 변경안을 승인해 새 판을 발행한다.
+
+    다툼(contested) 블록이 있거나 블록 결정이 이미 적혀 있으면 서비스가
+    거절하고, 여기서는 그 코드를 읽어 안내 문구로 옮긴다. 통짜 승인에는
+    다툼의 승자를 고르는 자리가 없어 사람이 고르지 않은 값이 판에 실리고,
+    적혀 있던 블록 결정은 읽히지 않은 채 덮이기 때문이다.
+    """
     _guard()
     try:
         result = review_artifact_proposal(
@@ -183,7 +211,12 @@ def approve_artifact_proposal(
             reviewer=DEBUG_REVIEWER,
         )
     except ProposalReviewError as error:
-        raise HTTPException(status_code=409, detail=str(error)) from error
+        raise HTTPException(
+            status_code=409,
+            detail=_ARTIFACT_APPROVE_DETAILS.get(
+                error.code or "", str(error)
+            ),
+        ) from error
     return {
         "proposal_id": str(result.proposal_id),
         "verdict": result.verdict,

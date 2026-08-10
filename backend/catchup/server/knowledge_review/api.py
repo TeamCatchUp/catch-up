@@ -29,7 +29,12 @@ from fastapi import Query
 from catchup.audit.actions import KnowledgeReviewAction
 from catchup.audit.metadata import KnowledgeReviewAuditMetadata
 from catchup.audit.utils import audit_log
+from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_CONTESTED
+from catchup.knowledge_maintenance.domain.artifact import ArtifactBlock
+from catchup.knowledge_maintenance.domain.artifact import BlockSource
+from catchup.knowledge_maintenance.domain.artifact import block_content_hash
 from catchup.knowledge_maintenance.ports.artifacts import StoredArtifactProposal
+from catchup.knowledge_maintenance.ports.block_verdicts import StoredBlockVerdict
 from catchup.knowledge_maintenance.ports.mutation_proposals import (
     StoredContradictionProposal,
 )
@@ -39,6 +44,12 @@ from catchup.knowledge_maintenance.services.apply_mutation_proposals import (
 )
 from catchup.knowledge_maintenance.services.list_review_queue import ReviewQueueItem
 from catchup.knowledge_maintenance.services.list_review_queue import list_review_queue
+from catchup.knowledge_maintenance.services.publish_artifact_proposal import (
+    PublishError,
+)
+from catchup.knowledge_maintenance.services.publish_artifact_proposal import (
+    publish_artifact_proposal,
+)
 from catchup.knowledge_maintenance.services.review_artifact_proposal import (
     PROPOSAL_STATUS_PENDING,
 )
@@ -53,6 +64,12 @@ from catchup.knowledge_maintenance.services.review_artifact_proposal import (
 )
 from catchup.knowledge_maintenance.services.review_artifact_proposal import (
     review_artifact_proposal,
+)
+from catchup.knowledge_maintenance.services.review_block_verdict import (
+    BlockVerdictError,
+)
+from catchup.knowledge_maintenance.services.review_block_verdict import (
+    upsert_block_verdict,
 )
 from catchup.knowledge_maintenance.services.review_contradiction_proposal import (
     ContradictionReviewError,
@@ -69,23 +86,65 @@ from catchup.server.knowledge_review.schemas import ApplyResponse
 from catchup.server.knowledge_review.schemas import ArtifactRefResponse
 from catchup.server.knowledge_review.schemas import BlockResponse
 from catchup.server.knowledge_review.schemas import BlockSourceResponse
+from catchup.server.knowledge_review.schemas import BlockVerdictRequest
+from catchup.server.knowledge_review.schemas import BlockVerdictResponse
 from catchup.server.knowledge_review.schemas import ConflictResponse
 from catchup.server.knowledge_review.schemas import ConflictValueResponse
 from catchup.server.knowledge_review.schemas import DecisionResponse
 from catchup.server.knowledge_review.schemas import ProposalDetailResponse
+from catchup.server.knowledge_review.schemas import PublishRequest
+from catchup.server.knowledge_review.schemas import PublishResponse
 from catchup.server.knowledge_review.schemas import QueueItemResponse
 from catchup.server.knowledge_review.schemas import QueuePageResponse
 from catchup.server.knowledge_review.schemas import ReadSetResponse
 from catchup.server.knowledge_review.schemas import RejectRequest
 from catchup.server.knowledge_review.schemas import ResolveRequest
 from catchup.server.knowledge_review.schemas import ResolveResponse
+from catchup.server.knowledge_review.schemas import VariantResponse
 
 router = APIRouter(
     prefix="/api/v1/knowledge-review",
     tags=["Knowledge Review"],
 )
 
-CONTRADICTION_KIND = "contradiction"
+# 블록 결정 거절 사유를 상태 코드와 사람이 읽는 문구로 옮긴다. 서비스가
+# 준 코드를 그대로 응답 code로 쓰되, 문구는 여기서 정한다 — 예외 문자열은
+# 변경안 식별자와 저장소 사정을 담고 있어 그대로 내보낼 수 없다.
+_BLOCK_VERDICT_ERRORS: dict[str, tuple[int, str]] = {
+    "NOT_FOUND": (404, "변경안을 찾을 수 없습니다."),
+    "ALREADY_DECIDED": (409, "이미 결정된 변경안입니다."),
+    "STALE_BLOCK": (409, "블록 본문이 바뀌었습니다. 다시 읽어 주세요."),
+    "INVALID": (422, "블록 결정 요청이 올바르지 않습니다."),
+}
+
+# 통짜 승인이 닿지 못하는 자리를 서비스가 코드로 알린다. 여기는 그 코드를
+# 상태 코드와 문구로 옮기기만 한다 — 같은 검사를 라우터가 또 하면 정식
+# API·debug·CLI 세 표면의 규칙이 갈라진다.
+_ARTIFACT_REVIEW_ERRORS: dict[str, tuple[int, str]] = {
+    "CONTESTED_REQUIRES_BLOCK_REVIEW": (
+        409,
+        "다툼 블록이 있어 블록 검토를 거쳐야 합니다.",
+    ),
+    "BLOCK_REVIEW_IN_PROGRESS": (
+        409,
+        "블록 검토가 시작된 변경안은 발행으로 끝내야 합니다.",
+    ),
+}
+
+_PUBLISH_ERRORS: dict[str, tuple[int, str]] = {
+    "NOT_FOUND": (404, "변경안을 찾을 수 없습니다."),
+    "ALREADY_DECIDED": (409, "이미 결정된 변경안입니다."),
+    "UNDECIDED_BLOCKS": (409, "아직 결정하지 않은 블록이 있습니다."),
+    "STALE_BASE": (409, "문서가 새 판으로 넘어가 이 변경안은 낡았습니다."),
+    "STALE_BLOCK": (409, "블록 본문이 결정 시점과 달라졌습니다."),
+    "CONFLICT_RACE": (409, "모순 안건이 먼저 결정돼 발행할 수 없습니다."),
+    "INVALID": (422, "발행 요청이 올바르지 않습니다."),
+}
+
+# 알 수 없는 코드를 500으로 흘리지 않는다. 서비스가 사유를 늘렸는데 여기가
+# 따라오지 못한 것은 소비자 잘못이 아니지만, 그래도 "지금은 안 된다"는
+# 사실은 정확하므로 409로 알리고 코드는 그대로 넘긴다.
+_UNMAPPED_ERROR = (409, "지금 이 요청을 확정할 수 없습니다.")
 
 
 @router.get(
@@ -130,7 +189,12 @@ def get_queue_item(
     context: ReviewerContext = Depends(resolve_reviewer_workspace),
     uow_factory: ReviewUowFactory = Depends(get_review_uow_factory),
 ) -> ProposalDetailResponse:
-    """변경안 하나를 충돌 목록과 함께 돌려준다.
+    """변경안 하나를 충돌 목록·블록 결정과 함께 돌려준다.
+
+    충돌은 본문의 다툼(contested) 블록에서만 나온다. 표시와 목록이 같은
+    사실 하나에서 나오므로 둘이 서로 다른 이유로 어긋나지 않는다. 표시가
+    켜졌는데 목록이 비는 것은 그 안건이 이미 결정돼 계류 목록에서 빠진
+    경우이며, 그때도 표시는 본문에 다툼 블록이 있다는 사실 그대로다.
 
     Raises:
         HTTPException: 이 workspace에 그 변경안이 없을 때 404를 던진다.
@@ -145,32 +209,24 @@ def get_queue_item(
                 code="PROPOSAL_NOT_FOUND",
                 message="변경안을 찾을 수 없습니다.",
             )
-        contested = uow.mutation_proposals.find_contested_subject_node_ids(
-            workspace_id=context.workspace_id,
+        verdicts = uow.block_verdicts.list_for_proposal(
+            proposal_id=proposal_id,
         )
-        subject_pending = uow.mutation_proposals.find_pending_for_subject_node(
-            workspace_id=context.workspace_id,
-            node_id=proposal.subject_node_id,
-        )
-        contradictions = uow.mutation_proposals.list_pending_contradictions(
-            workspace_id=context.workspace_id,
+        contested_ids = _contested_contradiction_ids(proposal)
+        contradictions = (
+            uow.mutation_proposals.list_pending_contradictions(
+                workspace_id=context.workspace_id,
+            )
+            if contested_ids
+            else []
         )
 
-    subject_proposal_ids = {
-        pending.id
-        for pending in subject_pending
-        if pending.proposal_kind == CONTRADICTION_KIND
-    }
     conflicts = [
         _to_conflict(item)
         for item in contradictions
-        if item.id in subject_proposal_ids
+        if item.id in contested_ids
     ]
-    return _to_detail(
-        proposal,
-        contains_conflict=proposal.subject_node_id in contested,
-        conflicts=conflicts,
-    )
+    return _to_detail(proposal, conflicts=conflicts, verdicts=verdicts)
 
 
 @router.post(
@@ -189,9 +245,14 @@ def approve_artifact(
 ) -> DecisionResponse:
     """승인을 확정하고 그 결과를 돌려준다.
 
+    다툼 블록이 있거나 블록 결정이 이미 적혀 있는 안건은 서비스가 막고,
+    여기서는 그 코드를 409로 옮긴다. 다툼 블록에는 통짜 승인이 승자를
+    고를 자리가 없고, 적힌 블록 결정은 통짜 승인이 읽지 않아 반려된
+    블록까지 판에 실리기 때문이다.
+
     Raises:
-        HTTPException: 변경안이 없으면 404, 결정을 받아들일 수 없으면
-            409를 던진다.
+        HTTPException: 변경안이 없으면 404, 다툼 블록이 있거나 블록 결정이
+            시작됐거나 결정을 받아들일 수 없으면 409를 던진다.
     """
     try:
         result = review_artifact_proposal(
@@ -201,7 +262,9 @@ def approve_artifact(
             reviewer=context.reviewer,
         )
     except ProposalReviewError as error:
-        raise _artifact_review_error(uow_factory, proposal_id) from error
+        raise _artifact_review_error(
+            uow_factory, proposal_id, code=error.code
+        ) from error
     return DecisionResponse(
         proposal_id=str(result.proposal_id),
         verdict=result.verdict,
@@ -253,7 +316,9 @@ def reject_artifact(
             reason=payload.reason,
         )
     except ProposalReviewError as error:
-        raise _artifact_review_error(uow_factory, proposal_id) from error
+        raise _artifact_review_error(
+            uow_factory, proposal_id, code=error.code
+        ) from error
     return DecisionResponse(
         proposal_id=str(result.proposal_id),
         verdict=result.verdict,
@@ -329,6 +394,114 @@ def resolve_contradiction(
     )
 
 
+@router.put(
+    path="/queue/{proposal_id}/blocks/{block_index}/verdict",
+    response_model=BlockVerdictResponse,
+    description="변경안 본문 블록 하나에 승인·반려를 기록한다.",
+)
+@audit_log(
+    action=KnowledgeReviewAction.BLOCK_VERDICT,
+    metadata_factory=KnowledgeReviewAuditMetadata.from_audit,
+)
+def put_block_verdict(
+    proposal_id: uuid.UUID,
+    block_index: int,
+    payload: BlockVerdictRequest,
+    context: ReviewerContext = Depends(resolve_reviewer_workspace),
+    uow_factory: ReviewUowFactory = Depends(get_review_uow_factory),
+) -> BlockVerdictResponse:
+    """블록 결정을 저널에 남기고 그 결정을 돌려준다.
+
+    같은 블록을 다시 눌러도 200이다. 마음을 바꾸는 것은 검토의 일부이고,
+    서비스가 유일 제약 위에서 갱신으로 흡수한다.
+
+    PUT인 이유가 그것이다. 블록당 결정은 하나뿐이라 같은 요청을 몇 번
+    보내도 결과가 같다.
+
+    Raises:
+        HTTPException: 변경안이 없으면 404, 이미 결정됐거나 본문이 바뀌었으면
+            409, 보낸 값 자체가 틀렸으면 422를 던진다.
+    """
+    try:
+        stored = upsert_block_verdict(
+            uow_factory(),
+            proposal_id=proposal_id,
+            block_index=block_index,
+            block_content_hash_seen=payload.block_content_hash,
+            verdict=payload.verdict,
+            rejection_reason=payload.rejection_reason,
+            chosen_winner_claim_id=payload.chosen_winner_claim_id,
+            reviewer=context.reviewer,
+        )
+    except BlockVerdictError as error:
+        status_code, message = _BLOCK_VERDICT_ERRORS.get(
+            error.code, _UNMAPPED_ERROR
+        )
+        raise review_error(
+            status_code, code=error.code, message=message
+        ) from error
+    return _to_block_verdict(stored)
+
+
+@router.post(
+    path="/queue/{proposal_id}/publish",
+    response_model=PublishResponse,
+    description="블록 결정을 모아 변경안을 확정하고 새 판을 발행한다.",
+)
+@audit_log(
+    action=KnowledgeReviewAction.PUBLISH,
+    metadata_factory=KnowledgeReviewAuditMetadata.from_audit,
+)
+def publish_proposal(
+    proposal_id: uuid.UUID,
+    payload: PublishRequest,
+    context: ReviewerContext = Depends(resolve_reviewer_workspace),
+    uow_factory: ReviewUowFactory = Depends(get_review_uow_factory),
+) -> PublishResponse:
+    """발행을 확정하고 그 결과를 돌려준다.
+
+    미결정 블록이 남았으면 그 번호를 응답에 함께 싣는다. 코드만 돌려주면
+    소비자는 검토자를 어느 블록으로 데려가야 하는지 알 수 없어 목록을
+    처음부터 다시 훑게 된다.
+
+    Raises:
+        HTTPException: 변경안이 없으면 404, 미결정·낡음·경합이면 409,
+            보낸 값이나 조립 결과가 계약을 어기면 422를 던진다.
+    """
+    try:
+        result = publish_artifact_proposal(
+            uow_factory(),
+            workspace_id=context.workspace_id,
+            proposal_id=proposal_id,
+            base_revision_id=payload.base_revision_id,
+            reviewer=context.reviewer,
+        )
+    except PublishError as error:
+        status_code, message = _PUBLISH_ERRORS.get(
+            error.code, _UNMAPPED_ERROR
+        )
+        extra = (
+            {"undecided_block_indexes": list(error.undecided)}
+            if error.undecided
+            else None
+        )
+        raise review_error(
+            status_code, code=error.code, message=message, extra=extra
+        ) from error
+    return PublishResponse(
+        proposal_id=str(result.proposal_id),
+        verdict=result.verdict,
+        revision_id=(
+            None if result.revision_id is None else str(result.revision_id)
+        ),
+        revision_number=result.revision_number,
+        blocks_published=result.blocks_published,
+        blocks_rejected=result.blocks_rejected,
+        contradictions_resolved=result.contradictions_resolved,
+        claims_accepted=result.claims_accepted,
+    )
+
+
 @router.post(
     path="/apply",
     response_model=ApplyResponse,
@@ -388,14 +561,24 @@ def apply_one(
 def _artifact_review_error(
     uow_factory: ReviewUowFactory,
     proposal_id: uuid.UUID,
+    *,
+    code: str | None = None,
 ) -> HTTPException:
     """문서 변경안 결정 실패를 상태 코드와 오류 코드로 옮긴다.
 
-    서비스의 예외 계층은 `ProposalReviewError` 하나뿐이라 종류를 예외에서
-    읽을 수 없다. 그래서 실패한 뒤에 저장소를 한 번 더 읽어 지금 상태로
-    코드를 정한다. 읽기 전용이고 결정 규칙을 다시 판정하지 않는다 —
-    소비자가 무엇을 고쳐야 하는지 알려 주는 진단일 뿐이다.
+    서비스가 코드를 실어 보낸 거절은 그 코드로 바로 옮긴다. 무엇이
+    막았는지 예외 자체가 말해 주므로 저장소를 다시 읽을 이유가 없다.
+
+    코드가 없는 거절은 종류를 예외에서 읽을 수 없다. 그래서 실패한 뒤에
+    저장소를 한 번 더 읽어 지금 상태로 코드를 정한다. 읽기 전용이고 결정
+    규칙을 다시 판정하지 않는다 — 소비자가 무엇을 고쳐야 하는지 알려 주는
+    진단일 뿐이다.
     """
+    if code is not None:
+        status_code, message = _ARTIFACT_REVIEW_ERRORS.get(
+            code, _UNMAPPED_ERROR
+        )
+        return review_error(status_code, code=code, message=message)
     with uow_factory() as uow:
         proposal = uow.artifacts.get_proposal(proposal_id=proposal_id)
         if proposal is None:
@@ -480,40 +663,123 @@ def _to_queue_item(item: ReviewQueueItem) -> QueueItemResponse:
     )
 
 
+def _has_contested(proposal: StoredArtifactProposal) -> bool:
+    """이 변경안에 다툼 블록이 있는지 본다.
+
+    충돌 표시의 유일한 근거다. 대상 노드나 subject_key로 되짚지 않는 이유는
+    유도가 둘이면 둘이 어긋날 수 있기 때문이다.
+    """
+    return any(
+        block.block_kind == BLOCK_KIND_CONTESTED for block in proposal.blocks
+    )
+
+
+def _contested_contradiction_ids(
+    proposal: StoredArtifactProposal,
+) -> set[uuid.UUID]:
+    """다툼 블록들이 가리키는 모순 안건 식별자를 모은다."""
+    return {
+        contradiction_id
+        for block in proposal.blocks
+        if block.block_kind == BLOCK_KIND_CONTESTED
+        for contradiction_id in block.proposal_ids
+    }
+
+
+def _to_block_verdict(stored: StoredBlockVerdict) -> BlockVerdictResponse:
+    """저장된 블록 결정을 응답으로 옮긴다."""
+    return BlockVerdictResponse(
+        proposal_id=str(stored.proposal_id),
+        block_index=stored.block_index,
+        block_content_hash=stored.block_content_hash,
+        verdict=stored.verdict,
+        rejection_reason=stored.rejection_reason,
+        chosen_winner_claim_id=(
+            None
+            if stored.chosen_winner_claim_id is None
+            else str(stored.chosen_winner_claim_id)
+        ),
+        reviewer=stored.reviewer,
+        reviewed_at=stored.reviewed_at,
+    )
+
+
+def _to_sources(
+    sources: tuple[BlockSource, ...],
+) -> list[BlockSourceResponse]:
+    """근거 인용들을 응답으로 옮긴다."""
+    return [
+        BlockSourceResponse(
+            claim_id=str(source.claim_id),
+            statement=source.statement,
+            observed_at=source.observed_at,
+            citation_verified=source.citation_verified,
+        )
+        for source in sources
+    ]
+
+
+def _to_block(
+    block: ArtifactBlock,
+    *,
+    block_index: int,
+    verdict: StoredBlockVerdict | None,
+) -> BlockResponse:
+    """블록 하나를 상세 응답의 블록으로 옮긴다.
+
+    다툼 블록은 후보(variants)만 싣고 블록 자체의 sources는 비운다. 같은
+    인용이 두 자리에 나오면 소비자가 어느 쪽을 정본으로 삼을지 알 수 없고,
+    후보별로 갈린 근거가 한 덩어리로 뭉쳐 보인다.
+    """
+    contested = block.block_kind == BLOCK_KIND_CONTESTED
+    return BlockResponse(
+        block_index=block_index,
+        block_kind=block.block_kind,
+        heading=block.heading,
+        body=block.body,
+        claim_ids=[str(claim_id) for claim_id in block.claim_ids],
+        proposal_ids=[str(item) for item in block.proposal_ids],
+        ontology_version=block.ontology_version,
+        block_content_hash=block_content_hash(block),
+        sources=[] if contested else _to_sources(block.sources),
+        variants=(
+            [
+                VariantResponse(
+                    claim_id=str(variant.claim_id),
+                    body=variant.body,
+                    sources=_to_sources(variant.sources),
+                )
+                for variant in block.variants
+            ]
+            if contested
+            else None
+        ),
+        verdict=None if verdict is None else _to_block_verdict(verdict),
+    )
+
+
 def _to_detail(
     proposal: StoredArtifactProposal,
     *,
-    contains_conflict: bool,
     conflicts: list[ConflictResponse],
+    verdicts: tuple[StoredBlockVerdict, ...],
 ) -> ProposalDetailResponse:
     """변경안 하나를 상세 응답으로 옮긴다."""
+    contains_conflict = _has_contested(proposal)
+    by_index = {verdict.block_index: verdict for verdict in verdicts}
     claim_ids: dict[str, None] = {}
     proposal_ids: dict[str, None] = {}
     blocks: list[BlockResponse] = []
-    for block in proposal.blocks:
-        block_claim_ids = [str(claim_id) for claim_id in block.claim_ids]
-        block_proposal_ids = [str(item) for item in block.proposal_ids]
-        for claim_id in block_claim_ids:
-            claim_ids.setdefault(claim_id, None)
-        for item in block_proposal_ids:
-            proposal_ids.setdefault(item, None)
+    for index, block in enumerate(proposal.blocks):
+        for claim_id in block.claim_ids:
+            claim_ids.setdefault(str(claim_id), None)
+        for item in block.proposal_ids:
+            proposal_ids.setdefault(str(item), None)
         blocks.append(
-            BlockResponse(
-                block_kind=block.block_kind,
-                heading=block.heading,
-                body=block.body,
-                claim_ids=block_claim_ids,
-                proposal_ids=block_proposal_ids,
-                ontology_version=block.ontology_version,
-                sources=[
-                    BlockSourceResponse(
-                        claim_id=str(source.claim_id),
-                        statement=source.statement,
-                        observed_at=source.observed_at,
-                        citation_verified=source.citation_verified,
-                    )
-                    for source in block.sources
-                ],
+            _to_block(
+                block,
+                block_index=index,
+                verdict=by_index.get(index),
             )
         )
     return ProposalDetailResponse(

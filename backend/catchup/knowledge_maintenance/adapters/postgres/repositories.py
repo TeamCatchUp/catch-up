@@ -23,6 +23,7 @@ from sqlalchemy import select
 from sqlalchemy import update
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PgUUID
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
 from catchup.db.models import KnowledgeArtifact as KnowledgeArtifactRow
@@ -30,6 +31,7 @@ from catchup.db.models import (
     KnowledgeArtifactChangeProposal as KnowledgeArtifactChangeProposalRow,
 )
 from catchup.db.models import KnowledgeArtifactRevision as KnowledgeArtifactRevisionRow
+from catchup.db.models import KnowledgeBlockVerdict as KnowledgeBlockVerdictRow
 from catchup.db.models import (
     KnowledgeCandidateEvidenceLink as KnowledgeCandidateEvidenceLinkRow,
 )
@@ -119,6 +121,7 @@ from catchup.knowledge_maintenance.ports.artifacts import CurrentRevisionForProj
 from catchup.knowledge_maintenance.ports.artifacts import EntityCardSource
 from catchup.knowledge_maintenance.ports.artifacts import ProposalAlreadyDecided
 from catchup.knowledge_maintenance.ports.artifacts import StoredArtifactProposal
+from catchup.knowledge_maintenance.ports.block_verdicts import StoredBlockVerdict
 from catchup.knowledge_maintenance.ports.knowledge_candidates import AsOfClaim
 from catchup.knowledge_maintenance.ports.mutation_proposals import (
     MergeProposalAlreadyDecided,
@@ -1821,60 +1824,6 @@ class SqlAlchemyMutationProposalRepository:
             )
         )
 
-    def find_contested_subject_node_ids(
-        self,
-        *,
-        workspace_id: int,
-    ) -> frozenset[uuid.UUID]:
-        """pending 모순이 걸린 subject 노드 id 집합을 만든다.
-
-        값 후보의 claim을 모아 노드로 해소한다. 해소는
-        `_accepted_claims_of_subject`의 역방향이고 같은 조인이다 — claim이
-        노드를 직접 가리키거나, 그 노드로 해소된 entity 후보를 가리키면
-        같은 대상에 대한 주장이기 때문이다.
-
-        claim의 상태는 보지 않는다. 모순은 아직 지식이 되지 못한 후보
-        사이에서도 생기고, 사람이 답하기를 기다린다는 사실은 그 상태와
-        무관하기 때문이다.
-        """
-        rows = self._session.scalars(
-            select(KnowledgeMutationProposalRow).where(
-                KnowledgeMutationProposalRow.workspace_id == workspace_id,
-                KnowledgeMutationProposalRow.proposal_kind
-                == "contradiction",
-                KnowledgeMutationProposalRow.status == "pending",
-            )
-        ).all()
-        claim_ids: set[uuid.UUID] = set()
-        for row in rows:
-            metadata = row.resolver_metadata or {}
-            for value in _contradiction_values(metadata.get("values")):
-                claim_ids.add(value.claim_id)
-        if not claim_ids:
-            return frozenset()
-
-        resolved = self._session.execute(
-            select(
-                KnowledgeClaimCandidateRow.subject_node_id,
-                KnowledgeEntityCandidateRow.resolved_node_id,
-            )
-            .outerjoin(
-                KnowledgeEntityCandidateRow,
-                KnowledgeClaimCandidateRow.subject_entity_candidate_id
-                == KnowledgeEntityCandidateRow.id,
-            )
-            .where(
-                KnowledgeClaimCandidateRow.workspace_id == workspace_id,
-                KnowledgeClaimCandidateRow.id.in_(claim_ids),
-            )
-        ).all()
-        found: set[uuid.UUID] = set()
-        for subject_node_id, resolved_node_id in resolved:
-            node_id = subject_node_id or resolved_node_id
-            if node_id is not None:
-                found.add(node_id)
-        return frozenset(found)
-
     def record_contradiction_decision(
         self,
         *,
@@ -2890,6 +2839,165 @@ class SqlAlchemyArtifactRepository:
         )
         self._session.flush()
         return revision_id
+
+
+class SqlAlchemyBlockVerdictRepository:
+    """블록 결정 저널의 영속성을 PostgreSQL로 구현한다.
+
+    artifact 저장소와 같이 workspace를 생성 시점에 고정한다. 결정 행이
+    가리키는 변경안 FK는 workspace를 함께 보지 않으므로, 남의 workspace
+    변경안에 결정을 다는 일을 DB가 막지 못한다. 그 자리를 이 저장소가
+    읽기와 쓰기 양쪽에서 대신 막는다.
+    """
+
+    def __init__(self, session: Session, workspace_id: int | None) -> None:
+        self._session = session
+        self._scoped_workspace_id = workspace_id
+
+    @property
+    def _workspace_id(self) -> int:
+        """고정된 workspace를 돌려준다. 없으면 쓰지 못하게 막는다."""
+        if self._scoped_workspace_id is None:
+            raise RuntimeError(
+                "블록 결정 저장소는 workspace_id를 받은 UnitOfWork에서만"
+                " 쓸 수 있다."
+            )
+        return self._scoped_workspace_id
+
+    def upsert_verdict(
+        self,
+        *,
+        proposal_id: uuid.UUID,
+        block_index: int,
+        block_content_hash: str,
+        verdict: str,
+        rejection_reason: str | None,
+        chosen_winner_claim_id: uuid.UUID | None,
+        reviewer: str,
+        reviewed_at: datetime,
+    ) -> None:
+        """블록 하나의 결정을 저널에 남긴다.
+
+        `updated_at`을 set_에 직접 넣는다. `on_conflict_do_update`는 ORM의
+        onupdate를 태우지 않아, 넣지 않으면 재판정한 행의 갱신 시각이 첫
+        저장 때 값에 머문다.
+
+        Raises:
+            ValueError: 변경안이 고정된 workspace에 없을 때 던진다.
+        """
+        self._assert_proposal_in_workspace(proposal_id)
+        statement = pg_insert(KnowledgeBlockVerdictRow).values(
+            id=uuid.uuid4(),
+            workspace_id=self._workspace_id,
+            proposal_id=proposal_id,
+            block_index=block_index,
+            block_content_hash=block_content_hash,
+            verdict=verdict,
+            rejection_reason=rejection_reason,
+            chosen_winner_claim_id=chosen_winner_claim_id,
+            reviewer=reviewer,
+            reviewed_at=reviewed_at,
+        )
+        statement = statement.on_conflict_do_update(
+            constraint="uq_block_verdict_proposal_block",
+            set_={
+                "block_content_hash": statement.excluded.block_content_hash,
+                "verdict": statement.excluded.verdict,
+                "rejection_reason": statement.excluded.rejection_reason,
+                "chosen_winner_claim_id": (
+                    statement.excluded.chosen_winner_claim_id
+                ),
+                "reviewer": statement.excluded.reviewer,
+                "reviewed_at": statement.excluded.reviewed_at,
+                "updated_at": func.now(),
+            },
+        )
+        self._session.execute(statement)
+        self._session.flush()
+
+    def list_for_proposal(
+        self, *, proposal_id: uuid.UUID
+    ) -> tuple[StoredBlockVerdict, ...]:
+        """변경안에 달린 결정을 block_index 순으로 읽는다."""
+        rows = self._session.scalars(
+            select(KnowledgeBlockVerdictRow)
+            .where(
+                KnowledgeBlockVerdictRow.workspace_id == self._workspace_id,
+                KnowledgeBlockVerdictRow.proposal_id == proposal_id,
+            )
+            .order_by(KnowledgeBlockVerdictRow.block_index)
+        ).all()
+        return tuple(_block_verdict_to_domain(row) for row in rows)
+
+    def find_rejected_hashes(
+        self, *, artifact_id: uuid.UUID
+    ) -> dict[str, str]:
+        """artifact의 과거 반려 블록을 hash에서 사유로 모은다.
+
+        결정 행은 변경안에 매달려 있으므로 변경안을 거쳐 문서로 올라간다.
+        같은 지문에 반려가 여럿이면 나중 결정이 이긴다. 그래서 결정 시각
+        오름차순으로 읽어 마지막 사유가 dict에 남게 한다.
+        """
+        rows = self._session.execute(
+            select(
+                KnowledgeBlockVerdictRow.block_content_hash,
+                KnowledgeBlockVerdictRow.rejection_reason,
+            )
+            .join(
+                KnowledgeArtifactChangeProposalRow,
+                KnowledgeBlockVerdictRow.proposal_id
+                == KnowledgeArtifactChangeProposalRow.id,
+            )
+            .where(
+                KnowledgeBlockVerdictRow.workspace_id == self._workspace_id,
+                KnowledgeArtifactChangeProposalRow.workspace_id
+                == self._workspace_id,
+                KnowledgeArtifactChangeProposalRow.artifact_id == artifact_id,
+                KnowledgeBlockVerdictRow.verdict == "rejected",
+            )
+            .order_by(
+                KnowledgeBlockVerdictRow.reviewed_at,
+                KnowledgeBlockVerdictRow.block_index,
+            )
+        ).all()
+        return {
+            content_hash: reason or "" for content_hash, reason in rows
+        }
+
+    def _assert_proposal_in_workspace(self, proposal_id: uuid.UUID) -> None:
+        """결정을 달 변경안이 고정된 workspace 것인지 확인한다.
+
+        Raises:
+            ValueError: 그 workspace에 그런 변경안이 없을 때 던진다.
+        """
+        found = self._session.scalar(
+            select(KnowledgeArtifactChangeProposalRow.id).where(
+                KnowledgeArtifactChangeProposalRow.id == proposal_id,
+                KnowledgeArtifactChangeProposalRow.workspace_id
+                == self._workspace_id,
+            )
+        )
+        if found is None:
+            raise ValueError(
+                f"변경안 {proposal_id}는 workspace {self._workspace_id}에"
+                " 없어 블록 결정을 달 수 없다."
+            )
+
+
+def _block_verdict_to_domain(
+    row: KnowledgeBlockVerdictRow,
+) -> StoredBlockVerdict:
+    """저장된 블록 결정 row를 읽는 쪽이 쓸 형태로 되돌린다."""
+    return StoredBlockVerdict(
+        proposal_id=row.proposal_id,
+        block_index=row.block_index,
+        block_content_hash=row.block_content_hash,
+        verdict=row.verdict,
+        rejection_reason=row.rejection_reason,
+        chosen_winner_claim_id=row.chosen_winner_claim_id,
+        reviewer=row.reviewer,
+        reviewed_at=row.reviewed_at,
+    )
 
 
 def _artifact_proposal_to_domain(

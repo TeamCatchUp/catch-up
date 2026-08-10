@@ -287,6 +287,7 @@ def _compile_artifacts(
         revived=result.proposals_revived,
         unchanged=result.unchanged_skipped,
         conflicted=result.proposals_conflicted,
+        blocks_suppressed=result.blocks_suppressed,
     )
     return StepOutcome(
         done=result.proposals_created + result.proposals_revived,

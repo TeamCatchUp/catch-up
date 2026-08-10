@@ -12,8 +12,13 @@ from typing import Any
 # 위키 문서 본문을 이루는 블록의 종류다.
 BLOCK_KIND_CLAIM_SECTION = "claim_section"
 BLOCK_KIND_OPEN_QUESTION = "open_question"
+BLOCK_KIND_CONTESTED = "contested"
 
-_BLOCK_KINDS = (BLOCK_KIND_CLAIM_SECTION, BLOCK_KIND_OPEN_QUESTION)
+_BLOCK_KINDS = (
+    BLOCK_KIND_CLAIM_SECTION,
+    BLOCK_KIND_OPEN_QUESTION,
+    BLOCK_KIND_CONTESTED,
+)
 
 
 class ArtifactBlockError(ValueError):
@@ -36,6 +41,25 @@ class BlockSource:
 
 
 @dataclass(frozen=True, slots=True)
+class ContestedVariant:
+    """contested 블록이 나란히 보여 주는 후보 서술 하나를 표현한다.
+
+    상충하는 claim들을 하나로 합치지 않고 각자의 근거와 함께 남긴다.
+    검토자가 어느 쪽이 맞는지 고르려면 후보별 근거가 분리돼 있어야 하기
+    때문이다.
+
+    Attributes:
+        claim_id: 이 후보의 근거가 된 claim을 가리킨다.
+        body: 이 후보의 서술 본문을 보존한다.
+        sources: 이 후보의 근거 인용을 순서대로 나른다.
+    """
+
+    claim_id: uuid.UUID
+    body: str
+    sources: tuple[BlockSource, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class ArtifactBlock:
     """위키 문서 본문의 블록 하나를 표현한다.
 
@@ -53,6 +77,8 @@ class ArtifactBlock:
         sources: 본문의 근거 인용을 순서대로 나른다. claim_ids의
             부분집합이다. 본문 줄과 1:1은 아니다 — 인용을 만들 값을
             읽지 못한 줄은 빠진다.
+        variants: contested 블록이 대조하는 후보 서술들을 나른다.
+            contested가 아닌 블록에서는 비어 있어야 한다.
     """
 
     block_kind: str
@@ -62,6 +88,7 @@ class ArtifactBlock:
     proposal_ids: tuple[uuid.UUID, ...]
     ontology_version: str | None
     sources: tuple[BlockSource, ...] = ()
+    variants: tuple[ContestedVariant, ...] = ()
 
 
 def validate_blocks(blocks: Sequence[ArtifactBlock]) -> None:
@@ -71,8 +98,9 @@ def validate_blocks(blocks: Sequence[ArtifactBlock]) -> None:
     실리는 것이 이 계약이 막으려는 유일한 사고이기 때문이다.
 
     Raises:
-        ArtifactBlockError: 미지의 block_kind이거나 근거가 비었을 때, 또는
-            sources가 claim_ids를 벗어났을 때 던진다.
+        ArtifactBlockError: 미지의 block_kind이거나 근거가 비었을 때,
+            sources나 variants가 claim_ids를 벗어났을 때, 또는 contested
+            계약(후보 2개 이상·모순 안건 참조)을 어겼을 때 던진다.
     """
     for index, block in enumerate(blocks):
         if block.block_kind not in _BLOCK_KINDS:
@@ -87,23 +115,62 @@ def validate_blocks(blocks: Sequence[ArtifactBlock]) -> None:
                     f"blocks[{index}]: sources의 claim_id"
                     f" {source.claim_id}가 claim_ids에 없다"
                 )
+        if block.block_kind != BLOCK_KIND_CONTESTED and block.variants:
+            raise ArtifactBlockError(
+                f"blocks[{index}]: contested가 아닌 블록에 variants가 있다"
+            )
         if block.block_kind == BLOCK_KIND_CLAIM_SECTION:
             if not block.claim_ids:
                 raise ArtifactBlockError(
                     f"blocks[{index}]: claim_section에 claim_ids가 없다"
                 )
+        elif block.block_kind == BLOCK_KIND_CONTESTED:
+            _validate_contested(block, index, allowed)
         elif not block.proposal_ids:
             raise ArtifactBlockError(
                 f"blocks[{index}]: open_question에 proposal_ids가 없다"
             )
 
 
+def _validate_contested(
+    block: ArtifactBlock, index: int, allowed: set[uuid.UUID]
+) -> None:
+    """contested 블록의 대조 계약을 검사한다.
+
+    후보가 하나뿐이면 대조가 아니고, 모순 안건을 가리키지 못하면 검토자가
+    무엇을 결정해야 하는지 알 수 없다. 둘 다 fail-closed로 막는다.
+
+    Raises:
+        ArtifactBlockError: 후보가 2개 미만이거나, variants의 claim_id가
+            claim_ids를 벗어났거나, proposal_ids가 비었을 때 던진다.
+    """
+    if len(block.variants) < 2:
+        raise ArtifactBlockError(
+            f"blocks[{index}]: contested에 variants가 2개 미만이다"
+        )
+    for variant in block.variants:
+        if variant.claim_id not in allowed:
+            raise ArtifactBlockError(
+                f"blocks[{index}]: variants의 claim_id"
+                f" {variant.claim_id}가 claim_ids에 없다"
+            )
+    if not block.proposal_ids:
+        raise ArtifactBlockError(
+            f"blocks[{index}]: contested에 proposal_ids가 없다"
+        )
+
+
 def serialize_blocks(
     blocks: Sequence[ArtifactBlock],
 ) -> list[dict[str, Any]]:
-    """블록들을 JSONB 저장 형태로 바꾼다. UUID는 문자열로 적는다."""
-    return [
-        {
+    """블록들을 JSONB 저장 형태로 바꾼다. UUID는 문자열로 적는다.
+
+    variants는 값이 있을 때만 키로 적는다. 후보가 없는 기존 블록의 저장
+    형태를 그대로 두어야 내용 지문이 흔들리지 않기 때문이다.
+    """
+    items: list[dict[str, Any]] = []
+    for block in blocks:
+        item: dict[str, Any] = {
             "block_kind": block.block_kind,
             "heading": block.heading,
             "body": block.body,
@@ -112,17 +179,33 @@ def serialize_blocks(
                 str(proposal_id) for proposal_id in block.proposal_ids
             ],
             "ontology_version": block.ontology_version,
-            "sources": [
-                {
-                    "claim_id": str(source.claim_id),
-                    "statement": source.statement,
-                    "observed_at": source.observed_at.isoformat(),
-                    "citation_verified": source.citation_verified,
-                }
-                for source in block.sources
-            ],
+            "sources": _serialize_sources(block.sources),
         }
-        for block in blocks
+        if block.variants:
+            item["variants"] = [
+                {
+                    "claim_id": str(variant.claim_id),
+                    "body": variant.body,
+                    "sources": _serialize_sources(variant.sources),
+                }
+                for variant in block.variants
+            ]
+        items.append(item)
+    return items
+
+
+def _serialize_sources(
+    sources: Sequence[BlockSource],
+) -> list[dict[str, Any]]:
+    """근거 인용들을 JSONB 저장 형태로 바꾼다."""
+    return [
+        {
+            "claim_id": str(source.claim_id),
+            "statement": source.statement,
+            "observed_at": source.observed_at.isoformat(),
+            "citation_verified": source.citation_verified,
+        }
+        for source in sources
     ]
 
 
@@ -163,9 +246,35 @@ def deserialize_blocks(
                     else str(item["ontology_version"])
                 ),
                 sources=_parse_sources(item.get("sources"), index),
+                variants=_parse_variants(item.get("variants"), index),
             )
         )
     return tuple(blocks)
+
+
+def _parse_variants(values: Any, index: int) -> tuple[ContestedVariant, ...]:
+    """저장된 variants를 되돌린다. 키가 없으면 빈 튜플이다.
+
+    Raises:
+        ArtifactBlockError: 후보를 읽을 수 없을 때 던진다.
+    """
+    if not values:
+        return ()
+    variants: list[ContestedVariant] = []
+    try:
+        for item in values:
+            variants.append(
+                ContestedVariant(
+                    claim_id=uuid.UUID(str(item["claim_id"])),
+                    body=str(item["body"]),
+                    sources=_parse_sources(item.get("sources"), index),
+                )
+            )
+    except (AttributeError, KeyError, TypeError, ValueError) as error:
+        raise ArtifactBlockError(
+            f"raw[{index}].variants: 대조 후보를 읽을 수 없다"
+        ) from error
+    return tuple(variants)
 
 
 def _parse_sources(values: Any, index: int) -> tuple[BlockSource, ...]:
@@ -228,6 +337,22 @@ def blocks_content_hash(blocks: Sequence[ArtifactBlock]) -> str:
     """
     payload = json.dumps(
         serialize_blocks(blocks),
+        sort_keys=True,
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def block_content_hash(block: ArtifactBlock) -> str:
+    """블록 하나의 내용 sha256 지문을 만든다.
+
+    blocks_content_hash와 같은 canonical 규약(키 정렬·비ASCII 보존·공백
+    없음)을 쓴다. 블록 단위 판정이 어떤 내용에 대한 판정이었는지 못박아,
+    본문이 바뀐 뒤에도 옛 판정이 되살아나는 것을 막는 열쇠다.
+    """
+    payload = json.dumps(
+        serialize_blocks([block])[0],
         sort_keys=True,
         ensure_ascii=False,
         separators=(",", ":"),

@@ -680,55 +680,6 @@ def test_list_pending_proposals_pages_the_oldest_first_order(
     assert [proposal.id for proposal in second] == ordered[2:4]
 
 
-def test_find_contested_subject_node_ids_resolves_both_subject_paths(
-    workspace_id: int,
-    session_factory: Callable[[], Session],
-    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
-) -> None:
-    """모순 claim의 subject가 노드로 되짚어져 충돌 집합에 들어온다.
-
-    claim이 노드를 직접 가리키는 경우와 해소된 entity 후보를 거치는
-    경우를 둘 다 본다. 뒤쪽이 빠지면 아직 노드가 없던 대상의 문서에
-    충돌 표시가 붙지 않는다.
-    """
-    with session_factory() as session:
-        run_id = _extraction_run(session, workspace_id)
-        direct_node = _entity_node(session, workspace_id, "결제 기능")
-        candidate_node = _entity_node(session, workspace_id, "정산 기능")
-        calm_node = _entity_node(session, workspace_id, "알림 기능")
-        direct_claim = _claim_on_node(
-            session, workspace_id, run_id, direct_node
-        )
-        candidate_claim = _claim_via_candidate(
-            session, workspace_id, run_id, candidate_node
-        )
-        calm_claim = _claim_on_node(session, workspace_id, run_id, calm_node)
-        session.commit()
-
-    with uow_factory() as uow:
-        _contradiction_proposal(
-            uow, workspace_id, direct_claim, direct_node
-        )
-        _contradiction_proposal(
-            uow, workspace_id, candidate_claim, candidate_node
-        )
-        decided = _contradiction_proposal(
-            uow, workspace_id, calm_claim, calm_node
-        )
-        uow.mutation_proposals.abandon(proposal_id=decided)
-        uow.commit()
-
-    with uow_factory() as uow:
-        contested = uow.mutation_proposals.find_contested_subject_node_ids(
-            workspace_id=workspace_id,
-        )
-
-    assert direct_node in contested
-    assert candidate_node in contested
-    # 접힌 모순은 더 이상 답을 기다리지 않으므로 충돌이 아니다.
-    assert calm_node not in contested
-
-
 def _contradiction_proposal(
     uow: KnowledgeMaintenanceUnitOfWork,
     workspace_id: int,

@@ -657,6 +657,7 @@ class McpAuditMetadata(BaseAuditMetadata):
 
 class KnowledgeReviewAuditMetadata(BaseAuditMetadata):
     proposal_id: str | None = None
+    block_index: int | None = None
     workspace_id: int | None = None
     user_id: int | None = None
 
@@ -669,6 +670,7 @@ class KnowledgeReviewAuditMetadata(BaseAuditMetadata):
 
         return cls(
             proposal_id=None if proposal_id is None else str(proposal_id),
+            block_index=data.arguments.get("block_index"),
             workspace_id=getattr(context, "workspace_id", None),
         )
 

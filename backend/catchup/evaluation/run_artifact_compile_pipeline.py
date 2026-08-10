@@ -170,6 +170,9 @@ def main() -> None:
         f" · 내용 그대로 {result.unchanged_skipped}"
         f" · 충돌 보류 {result.proposals_conflicted}"
     )
+    # 반려된 내용과 지문이 같아 카드에서 빠진 블록 수다. 조용히 사라지면
+    # 카드가 왜 짧아졌는지 알 길이 없으므로 함께 적는다.
+    print(f"  반려 재등장 차단 블록 {result.blocks_suppressed}")
 
     _print_pending_cards(uow)
 

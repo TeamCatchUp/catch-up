@@ -25,6 +25,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from typing import Any
 
 from fastapi import Depends
 from fastapi import HTTPException
@@ -50,7 +51,13 @@ from catchup.knowledge_maintenance.adapters.postgres.unit_of_work import (
 ReviewUowFactory = Callable[[], KnowledgeMaintenanceUnitOfWork]
 
 
-def review_error(status_code: int, *, code: str, message: str) -> HTTPException:
+def review_error(
+    status_code: int,
+    *,
+    code: str,
+    message: str,
+    extra: dict[str, Any] | None = None,
+) -> HTTPException:
     """검수 API의 표준 오류를 만든다.
 
     detail을 `{"code", "message"}`로 고정한다. 소비자가 코드로 분기하고
@@ -58,13 +65,21 @@ def review_error(status_code: int, *, code: str, message: str) -> HTTPException:
     절대 담지 않는다 — 변경안 식별자나 저장소 사정이 그대로 새어 나가면
     오류 응답이 내부 구조를 설명하는 문서가 된다.
 
+    `extra`는 그 두 키 위에 얹는 구조화된 재료다. 소비자가 화면을 고치려면
+    코드만으로 부족한 경우가 있다 — 미결정 블록 번호가 그렇다. 사람이 읽는
+    문구에 섞어 넣으면 소비자가 문구를 파싱하게 되므로 키를 따로 세운다.
+    code·message는 덮어쓰지 못한다.
+
     code는 예외 객체에도 붙인다. `audit_log`는 예외의 `code` 속성만 읽어
     감사 기록의 context를 채우므로, detail에만 담으면 404·409로 끝난
     요청의 실패 기록에 이유가 남지 않는다.
     """
+    detail: dict[str, Any] = dict(extra or {})
+    detail["code"] = code
+    detail["message"] = message
     error = HTTPException(
         status_code=status_code,
-        detail={"code": code, "message": message},
+        detail=detail,
     )
     error.code = code
     return error

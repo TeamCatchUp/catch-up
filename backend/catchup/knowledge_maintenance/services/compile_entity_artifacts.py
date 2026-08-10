@@ -7,8 +7,18 @@ LLM을 부르지 않는다. 카드는 이미 저장된 claim과 계류 중인 �
 
 값을 고르지 않는다. 한 predicate에 값이 여럿이면 전부 나열하고, 어느
 값이 맞는지 묻는 일은 열린 질문 블록이 맡는다. 값을 고르는 것도 빼는
-것도 판단이고, 판단은 사람의 몫이다. 그래서 모순 안건이 열려 있어도
-claim_section은 값을 그대로 남긴다.
+것도 판단이고, 판단은 사람의 몫이다. 모순 안건이 걸린 절은 대조 블록으로
+내되, 거기서도 후보를 claim_id 순으로 나란히 놓을 뿐 어느 값도 앞세우지
+않는다.
+
+사람이 반려한 블록은 같은 내용이면 다시 싣지 않는다. 반려는 그 내용에
+대한 결정이므로 같은 문장을 또 올리면 검토자가 같은 일을 되풀이한다.
+판정이 블록 지문에 매여 있어 내용이 바뀌면 그 블록은 다시 올라온다.
+
+다만 대조 블록이 그렇게 빠지면 그 안건은 열린 질문으로 되살린다. 대조로
+나간 안건은 열린 질문에서 이미 빠져 있어, 대조까지 사라지면 계류인 안건이
+검수 표면 어디에도 보이지 않게 된다. 반려된 것은 "이 값들을 이렇게 대조로
+보여 주는 방식"이지 "이 안건을 닫는다"가 아니다.
 
 열린 질문은 각색하지 않는다. 판정기가 남긴 summary와 resolver_metadata의
 값·근거를 그대로 옮긴다. Compiler가 요약을 다시 쓰면 사람이 보는 문장과
@@ -33,16 +43,20 @@ from typing import Self
 
 from catchup.knowledge_maintenance.contracts.extraction import ExtractionVocabulary
 from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_CLAIM_SECTION
+from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_CONTESTED
 from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_OPEN_QUESTION
 from catchup.knowledge_maintenance.domain.artifact import ArtifactBlock
 from catchup.knowledge_maintenance.domain.artifact import BlockSource
+from catchup.knowledge_maintenance.domain.artifact import ContestedVariant
 from catchup.knowledge_maintenance.domain.artifact import artifact_idempotency_key
+from catchup.knowledge_maintenance.domain.artifact import block_content_hash
 from catchup.knowledge_maintenance.domain.artifact import blocks_content_hash
 from catchup.knowledge_maintenance.domain.artifact import validate_blocks
 from catchup.knowledge_maintenance.domain.claim_conflict import StoredClaimCandidate
 from catchup.knowledge_maintenance.domain.temporal import claim_not_closed_at
 from catchup.knowledge_maintenance.ports.artifacts import ArtifactProposalConflict
 from catchup.knowledge_maintenance.ports.artifacts import ArtifactRepository
+from catchup.knowledge_maintenance.ports.block_verdicts import BlockVerdictRepository
 from catchup.knowledge_maintenance.ports.knowledge_candidates import (
     KnowledgeCandidateRepository,
 )
@@ -57,6 +71,9 @@ logger = get_logger(__name__)
 # entity 하나를 설명하는 요약 카드의 문서 종류다.
 ARTIFACT_KIND_ENTITY_SUMMARY = "entity_summary"
 
+# 값이 갈렸음을 알리는 계류 안건의 종류다.
+PROPOSAL_KIND_CONTRADICTION = "contradiction"
+
 
 class ArtifactCompileUnitOfWork(Protocol):
     """카드 컴파일이 쓰는 transaction 경계를 정의한다."""
@@ -64,6 +81,7 @@ class ArtifactCompileUnitOfWork(Protocol):
     artifacts: ArtifactRepository
     knowledge_candidates: KnowledgeCandidateRepository
     mutation_proposals: MutationProposalRepository
+    block_verdicts: BlockVerdictRepository
 
     def __enter__(self) -> Self: ...
 
@@ -93,6 +111,8 @@ class ArtifactCompileResult:
             나타낸다.
         proposals_conflicted: 멱등 키가 이미 결정된 변경안과 부딪혀
             건너뛴 문서 수를 나타낸다.
+        blocks_suppressed: 사람이 반려한 내용과 지문이 같아 카드에서 뺀
+            블록 수를 나타낸다.
     """
 
     nodes_considered: int = 0
@@ -101,6 +121,7 @@ class ArtifactCompileResult:
     proposals_abandoned: int = 0
     unchanged_skipped: int = 0
     proposals_conflicted: int = 0
+    blocks_suppressed: int = 0
 
 
 def compile_entity_artifacts(
@@ -127,6 +148,7 @@ def compile_entity_artifacts(
     abandoned = 0
     skipped = 0
     conflicted = 0
+    suppressed = 0
     now = datetime.now(timezone.utc)
     with uow:
         sources = uow.artifacts.find_top_entity_nodes(limit=limit)
@@ -161,12 +183,56 @@ def compile_entity_artifacts(
             # 하지만 서비스가 먼저 잡아야 잘못된 블록이 transaction에
             # 실리지 않는다.
             validate_blocks(blocks)
-            content_hash = blocks_content_hash(blocks)
+            # 반려 판정은 문서에 매여 있으므로 문서를 먼저 확보한다.
             artifact_id = uow.artifacts.get_or_create_artifact(
                 kind=ARTIFACT_KIND_ENTITY_SUMMARY,
                 subject_node_id=source.node_id,
                 title=source.display_name,
             )
+            rejected = uow.block_verdicts.find_rejected_hashes(
+                artifact_id=artifact_id,
+            )
+            blocks, dropped, suppressed_ids = _drop_rejected_blocks(
+                blocks,
+                rejected,
+                workspace_id=workspace_id,
+                artifact_id=artifact_id,
+            )
+            suppressed += dropped
+            reopened, dropped_again, _ = _drop_rejected_blocks(
+                _revive_suppressed_questions(
+                    blocks,
+                    pending=pending,
+                    suppressed_ids=suppressed_ids,
+                    ontology_version=vocabulary.snapshot_id or None,
+                ),
+                rejected,
+                workspace_id=workspace_id,
+                artifact_id=artifact_id,
+            )
+            # 되살린 열린 질문도 같은 반려 장부를 거친다. 그 형태까지
+            # 사람이 반려했다면 되살릴 것이 아니라 빠져야 한다.
+            suppressed += dropped_again
+            if reopened:
+                validate_blocks(reopened)
+                blocks = (*blocks, *reopened)
+            if not blocks:
+                # 남은 문장이 없으면 빈 카드 규칙과 같이 건너뛴다. 다만
+                # 큐에 남은 계류는 접는다. 그 계류가 담은 본문이 바로
+                # 방금 반려된 내용이라, 두면 사람이 같은 것을 또 본다.
+                abandoned += uow.artifacts.abandon_pending_proposals(
+                    artifact_id=artifact_id,
+                )
+                logger.info(
+                    "artifact_compile_node_all_blocks_suppressed",
+                    workspace_id=workspace_id,
+                    node_id=str(source.node_id),
+                    artifact_id=str(artifact_id),
+                    blocks_suppressed=dropped,
+                )
+                continue
+
+            content_hash = blocks_content_hash(blocks)
             known = uow.artifacts.find_latest_content_hashes(
                 artifact_id=artifact_id,
             )
@@ -236,6 +302,7 @@ def compile_entity_artifacts(
         proposals_abandoned=abandoned,
         unchanged_skipped=skipped,
         proposals_conflicted=conflicted,
+        blocks_suppressed=suppressed,
     )
     logger.info(
         "artifact_compile_completed",
@@ -246,8 +313,87 @@ def compile_entity_artifacts(
         proposals_abandoned=result.proposals_abandoned,
         unchanged_skipped=result.unchanged_skipped,
         proposals_conflicted=result.proposals_conflicted,
+        blocks_suppressed=result.blocks_suppressed,
     )
     return result
+
+
+def _drop_rejected_blocks(
+    blocks: Sequence[ArtifactBlock],
+    rejected: Mapping[str, str],
+    *,
+    workspace_id: int,
+    artifact_id: uuid.UUID,
+) -> tuple[tuple[ArtifactBlock, ...], int, frozenset[uuid.UUID]]:
+    """사람이 반려한 내용과 지문이 같은 블록을 뺀다.
+
+    반려는 그 내용에 대한 결정이므로, 같은 내용이 다시 컴파일돼 올라오면
+    사람이 같은 것을 또 보게 된다. 그것이 좀비 블록이다. 판정은 블록
+    지문에 매여 있으니 내용이 한 글자라도 바뀌면 지문이 달라져 그 블록은
+    다시 검토 큐에 오른다. 반려를 영구 삭제로 굳히지 않는 장치다.
+
+    남은 블록·뺀 수와 함께, 빠진 블록이 가리키던 안건 식별자를 돌려준다.
+    그 안건이 검수 표면에서 통째로 사라지지 않게 하려면 무엇이 함께
+    빠졌는지 호출자가 알아야 한다.
+    """
+    if not rejected:
+        return tuple(blocks), 0, frozenset()
+    kept: list[ArtifactBlock] = []
+    dropped = 0
+    suppressed_ids: set[uuid.UUID] = set()
+    for block in blocks:
+        digest = block_content_hash(block)
+        reason = rejected.get(digest)
+        if reason is None:
+            kept.append(block)
+            continue
+        dropped += 1
+        suppressed_ids.update(block.proposal_ids)
+        logger.info(
+            "artifact_compile_block_suppressed",
+            workspace_id=workspace_id,
+            artifact_id=str(artifact_id),
+            block_hash=digest,
+            reason=reason,
+        )
+    return tuple(kept), dropped, frozenset(suppressed_ids)
+
+
+def _revive_suppressed_questions(
+    kept: Sequence[ArtifactBlock],
+    *,
+    pending: Sequence[StoredPendingProposal],
+    suppressed_ids: frozenset[uuid.UUID],
+    ontology_version: str | None,
+) -> tuple[ArtifactBlock, ...]:
+    """반려로 빠진 블록이 데려간 모순 안건을 열린 질문으로 되살린다.
+
+    대조로 나간 안건은 `_build_blocks`가 열린 질문에서 이미 뺐다. 그
+    대조 블록마저 반려로 빠지면 계류인 안건이 카드 어디에도 없게 되어,
+    검토자가 그 안건을 다시 만날 길이 사라진다. 반려된 것은 대조라는
+    표현 방식이지 안건 자체가 아니므로 열린 질문 형태로 다시 올린다.
+
+    아직 남은 블록이 가리키는 안건은 되살리지 않는다. 같은 안건이 카드에
+    두 번 나오면 검토자가 한 결정을 두 자리에서 내려야 한다.
+
+    순서는 `_open_questions`가 정한 그대로다. 정렬 규칙을 여기서 새로
+    만들면 같은 입력이 다른 본문을 낳는다.
+    """
+    if not suppressed_ids:
+        return ()
+    still_shown = {
+        proposal_id
+        for block in kept
+        for proposal_id in block.proposal_ids
+    }
+    revived = [
+        proposal
+        for proposal in pending
+        if proposal.proposal_kind == PROPOSAL_KIND_CONTRADICTION
+        and proposal.id in suppressed_ids
+        and proposal.id not in still_shown
+    ]
+    return tuple(_open_questions(revived, ontology_version))
 
 
 def _abandon_stale_pending(
@@ -299,13 +445,64 @@ def _build_blocks(
     vocabulary: ExtractionVocabulary,
     now: datetime,
 ) -> tuple[ArtifactBlock, ...]:
-    """카드 본문을 이룰 블록을 정해진 순서로 만든다."""
+    """카드 본문을 이룰 블록을 정해진 순서로 만든다.
+
+    대조로 실린 모순 안건은 열린 질문에서 뺀다. 같은 안건이 카드에 두 번
+    나오면 검토자가 한 결정을 두 자리에서 내려야 하기 때문이다.
+    """
     ontology_version = vocabulary.snapshot_id or None
-    blocks = [
-        *_claim_sections(claims, vocabulary, ontology_version, now),
-        *_open_questions(pending, ontology_version),
-    ]
-    return tuple(blocks)
+    sections = _claim_sections(
+        claims,
+        vocabulary,
+        ontology_version,
+        now,
+        _contradictions(pending),
+    )
+    contested_ids = {
+        proposal_id
+        for block in sections
+        if block.block_kind == BLOCK_KIND_CONTESTED
+        for proposal_id in block.proposal_ids
+    }
+    questions = _open_questions(
+        [item for item in pending if item.id not in contested_ids],
+        ontology_version,
+    )
+    return tuple([*sections, *questions])
+
+
+@dataclass(frozen=True, slots=True)
+class _Contradiction:
+    """모순 안건 하나와 그 안건이 다루는 claim 집합을 담는다.
+
+    Attributes:
+        proposal: 계류 중인 모순 안건을 가리킨다.
+        claim_ids: 안건의 판정 근거가 가리키는 claim들을 나타낸다.
+    """
+
+    proposal: StoredPendingProposal
+    claim_ids: frozenset[uuid.UUID]
+
+
+def _contradictions(
+    pending: Sequence[StoredPendingProposal],
+) -> tuple[_Contradiction, ...]:
+    """모순 안건과 그 안건이 다루는 claim 집합을 짝지어 모은다.
+
+    안건 순서를 식별자로 고정한다. 한 절에 걸리는 안건이 여럿일 때 어느
+    것을 대조로 낼지도 이 순서로 정해지는데, 어느 안건이 더 중요한지는
+    컴파일러가 판단할 일이 아니므로 내용과 무관한 기준만 쓴다.
+    """
+    return tuple(
+        _Contradiction(
+            proposal=proposal,
+            claim_ids=frozenset(
+                _claim_ids_in(_metadata_values(proposal.resolver_metadata))
+            ),
+        )
+        for proposal in sorted(pending, key=lambda item: str(item.id))
+        if proposal.proposal_kind == PROPOSAL_KIND_CONTRADICTION
+    )
 
 
 def _claim_sections(
@@ -313,6 +510,7 @@ def _claim_sections(
     vocabulary: ExtractionVocabulary,
     ontology_version: str | None,
     now: datetime,
+    contradictions: Sequence[_Contradiction],
 ) -> list[ArtifactBlock]:
     """predicate별 claim_section 블록을 사전 순서대로 만든다.
 
@@ -326,6 +524,15 @@ def _claim_sections(
     그대로 남아 있으므로 사라지는 것이 아니다. 발효 예정(valid_from이
     미래)인 주장은 거르지 않는다 — 판정 정의는 `domain.temporal`이
     단독으로 갖는다.
+
+    모순 안건이 걸린 predicate는 대조 블록을 앞세운다. 값을 줄로 늘어놓기만
+    하면 검토자가 어느 것을 고를지 결정할 자리가 카드에 없기 때문이다.
+    여기서도 값을 고르지는 않는다 — 후보를 나란히 놓을 뿐이다.
+
+    대조에 들어가는 것은 그 안건이 가리키는 claim뿐이다. 같은 predicate에
+    있어도 안건이 다루지 않는 값까지 후보로 넣으면, 검토자가 안건 밖의
+    claim을 승자로 고를 수 있게 되어 결정을 적용하는 쪽 계약이 깨진다.
+    안건 밖의 값들은 같은 제목의 claim_section으로 대조 블록 뒤에 잇는다.
     """
     grouped: dict[str, list[StoredClaimCandidate]] = {}
     for claim in claims:
@@ -348,29 +555,104 @@ def _claim_sections(
             grouped[predicate],
             key=lambda claim: (claim.observed_at, claim.id),
         )
+        picked = _contested_pick(members, contradictions)
+        if picked is not None:
+            proposal, disputed = picked
+            sections.append(
+                _contested_block(
+                    predicate=predicate,
+                    members=disputed,
+                    proposal=proposal,
+                    ontology_version=ontology_version,
+                )
+            )
+            taken = {claim.id for claim in disputed}
+            members = [
+                claim for claim in members if claim.id not in taken
+            ]
+            if not members:
+                continue
         sections.append(
             ArtifactBlock(
                 block_kind=BLOCK_KIND_CLAIM_SECTION,
                 heading=predicate,
-                body="\n".join(
-                    f"{claim.value} ({claim.observed_at:%Y-%m-%d} 관찰)"
-                    for claim in members
-                ),
+                body="\n".join(_claim_line(claim) for claim in members),
                 claim_ids=tuple(claim.id for claim in members),
                 proposal_ids=(),
                 ontology_version=ontology_version,
-                sources=tuple(
-                    BlockSource(
-                        claim_id=claim.id,
-                        statement=claim.statement,
-                        observed_at=claim.observed_at,
-                        citation_verified=claim.citation_verified,
-                    )
-                    for claim in members
-                ),
+                sources=tuple(_claim_source(claim) for claim in members),
             )
         )
     return sections
+
+
+def _claim_line(claim: StoredClaimCandidate) -> str:
+    """claim 하나를 원본 값과 관찰 날짜 그대로 한 줄로 적는다."""
+    return f"{claim.value} ({claim.observed_at:%Y-%m-%d} 관찰)"
+
+
+def _claim_source(claim: StoredClaimCandidate) -> BlockSource:
+    """claim의 저장된 인용을 블록 근거로 옮긴다."""
+    return BlockSource(
+        claim_id=claim.id,
+        statement=claim.statement,
+        observed_at=claim.observed_at,
+        citation_verified=claim.citation_verified,
+    )
+
+
+def _contested_pick(
+    members: Sequence[StoredClaimCandidate],
+    contradictions: Sequence[_Contradiction],
+) -> tuple[StoredPendingProposal, tuple[StoredClaimCandidate, ...]] | None:
+    """이 절을 대조로 낼 안건과 그 후보 claim을 고른다. 없으면 None이다.
+
+    후보는 안건이 가리키는 claim과 살아 있는 값의 교집합이다. 그 교집합이
+    둘 미만이면 대조가 성립하지 않으므로 평범한 절로 두고, 안건은 열린
+    질문으로 그대로 남긴다. 한쪽 값이 닫힌 뒤에도 안건이 열려 있는 경우가
+    그렇다.
+    """
+    if len(members) < 2:
+        return None
+    for contradiction in contradictions:
+        disputed = tuple(
+            claim for claim in members if claim.id in contradiction.claim_ids
+        )
+        if len(disputed) >= 2:
+            return (contradiction.proposal, disputed)
+    return None
+
+
+def _contested_block(
+    *,
+    predicate: str,
+    members: Sequence[StoredClaimCandidate],
+    proposal: StoredPendingProposal,
+    ontology_version: str | None,
+) -> ArtifactBlock:
+    """상충하는 값들을 후보로 나란히 놓은 대조 블록을 만든다.
+
+    후보 순서는 claim_id 사전순으로 고정한다. 관찰 시각이나 값으로 줄을
+    세우면 컴파일러가 최신 값이나 특정 값을 앞세우는 셈이 되는데, 어느
+    값이 맞는지 고르는 일은 사람의 몫이다.
+    """
+    return ArtifactBlock(
+        block_kind=BLOCK_KIND_CONTESTED,
+        heading=predicate,
+        body=f"상충하는 값 {len(members)}개 — 검토 필요",
+        claim_ids=tuple(claim.id for claim in members),
+        proposal_ids=(proposal.id,),
+        ontology_version=ontology_version,
+        sources=tuple(_claim_source(claim) for claim in members),
+        variants=tuple(
+            ContestedVariant(
+                claim_id=claim.id,
+                body=_claim_line(claim),
+                sources=(_claim_source(claim),),
+            )
+            for claim in sorted(members, key=lambda item: str(item.id))
+        ),
+    )
 
 
 def _open_questions(
