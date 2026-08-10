@@ -90,3 +90,15 @@ class ChannelListResponse(BaseModel):
     """채널 목록 전체를 담는다."""
 
     channels: list[ChannelListItemResponse]
+
+
+class ArtifactOwnerResponse(BaseModel):
+    """문서 담당자 한 명의 지정 결과를 담는다.
+
+    담당자 명단 전체를 싣는다. 지정은 멱등이라 응답 코드만으로는 "지금
+    누가 담당인가"를 알 수 없는데, 그 답을 위해 목록을 한 번 더 왕복하면
+    두 응답 사이에서 명단이 갈린다.
+    """
+
+    artifact_id: str
+    user_ids: list[int]

@@ -121,6 +121,21 @@ def load_artifact_channel_id(
     )
 
 
+def _is_artifact_admin(
+    roles: WikiRoleContext, *, artifact_channel_id: uuid.UUID | None
+) -> bool:
+    """이 문서에 대해 관리자로 서는지 정한다.
+
+    채널에 놓인 문서는 그 채널의 관리자, 미분류 문서는 전역 ADMIN이다.
+    전역 ADMIN이 채널 문서까지 열지 않는 이유는 확정 매트릭스가 관리자
+    권한을 채널 단위로 끊어 두었기 때문이다 — 열어 두면 채널 경계가
+    관리 축에서만 사라진다.
+    """
+    if artifact_channel_id is None:
+        return roles.is_global_admin
+    return artifact_channel_id in roles.admin_channel_ids
+
+
 def can_decide_artifact(
     roles: WikiRoleContext,
     *,
@@ -135,6 +150,33 @@ def can_decide_artifact(
     if owner_user_ids:
         # 담당자가 있는 문서는 담당자만 — 관리자 폴백이 서지 않는다.
         return False
-    if artifact_channel_id is None:
-        return roles.is_global_admin
-    return artifact_channel_id in roles.admin_channel_ids
+    return _is_artifact_admin(roles, artifact_channel_id=artifact_channel_id)
+
+
+def can_manage_owners(
+    roles: WikiRoleContext,
+    *,
+    artifact_channel_id: uuid.UUID | None,
+    artifact_id: uuid.UUID,
+    owner_user_ids: frozenset[int],
+    user_id: int,
+    for_removal: bool,
+) -> bool:
+    """이 사용자가 이 문서의 담당자 명단을 고칠 수 있는지 정한다.
+
+    검수(can_decide_artifact)와 규칙이 다르다. 검수에서 관리자는 담당자
+    없는 문서의 폴백이지만, 담당자 지정은 확정 매트릭스가 "관리자 ○ 모든
+    문서 / 담당자 ○ 해당 문서에 한함"이라 관리자에게 담당자 유무와 무관한
+    권한을 준다. 폴백 규칙을 여기까지 끌고 오면 담당자가 한 명 생긴 순간
+    그 문서의 담당자 명단을 아무도 고칠 수 없게 잠긴다.
+
+    해제는 관리자만이다. 담당자 본인도 못 한다 — 자기 자신을 포함해 명단을
+    비울 수 있으면 문서가 조용히 무주공산이 되고, 그 순간 검수 폴백이
+    관리자에게 넘어간다. 명단이 줄어드는 방향만 관리자를 거치게 두어
+    책임자가 사라지는 일이 감사에 남게 한다.
+    """
+    if _is_artifact_admin(roles, artifact_channel_id=artifact_channel_id):
+        return True
+    if for_removal:
+        return False
+    return artifact_id in roles.owned_artifact_ids and user_id in owner_user_ids

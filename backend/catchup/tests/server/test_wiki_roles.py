@@ -4,6 +4,7 @@ import uuid
 
 from catchup.server.wiki.roles import WikiRoleContext
 from catchup.server.wiki.roles import can_decide_artifact
+from catchup.server.wiki.roles import can_manage_owners
 
 
 def _roles(**kwargs) -> WikiRoleContext:
@@ -90,6 +91,88 @@ def test_owner_row_without_role_snapshot_is_not_enough() -> None:
         artifact_id=artifact_id,
         owner_user_ids=frozenset({7}),
         user_id=7,
+    )
+
+
+def test_owner_assigns_but_admin_is_not_blocked_by_owners() -> None:
+    """지정은 담당자 본인도, 그 채널 관리자도 할 수 있다.
+
+    검수와 갈리는 지점이다. 검수에서 관리자는 담당자 없는 문서의 폴백이지만,
+    지정은 확정 매트릭스가 "관리자 ○ 모든 문서"라 담당자가 있어도 선다.
+    """
+    channel_id = uuid.uuid4()
+    artifact_id = uuid.uuid4()
+    owner_user_ids = frozenset({7})
+    common = dict(
+        artifact_channel_id=channel_id,
+        artifact_id=artifact_id,
+        owner_user_ids=owner_user_ids,
+        for_removal=False,
+    )
+
+    owner = _roles(owned_artifact_ids=frozenset({artifact_id}))
+    assert can_manage_owners(owner, user_id=7, **common)
+
+    admin = _roles(admin_channel_ids=frozenset({channel_id}))
+    assert can_manage_owners(admin, user_id=9, **common)
+
+
+def test_stranger_cannot_assign_owner() -> None:
+    """역할이 없는 구성원도, 남의 채널 관리자도 지정하지 못한다."""
+    artifact_id = uuid.uuid4()
+    channel_id = uuid.uuid4()
+    common = dict(
+        artifact_channel_id=channel_id,
+        artifact_id=artifact_id,
+        owner_user_ids=frozenset(),
+        user_id=7,
+        for_removal=False,
+    )
+
+    assert not can_manage_owners(_roles(), **common)
+    # 다른 채널의 관리자는 이 문서에 서지 못한다.
+    assert not can_manage_owners(
+        _roles(admin_channel_ids=frozenset({uuid.uuid4()})), **common
+    )
+    # 채널 문서는 전역 ADMIN이라도 그 채널 관리자가 아니면 불가다.
+    assert not can_manage_owners(_roles(is_global_admin=True), **common)
+
+
+def test_owner_cannot_remove_owner() -> None:
+    """해제는 관리자만이다 — 담당자 본인도 막힌다."""
+    channel_id = uuid.uuid4()
+    artifact_id = uuid.uuid4()
+    common = dict(
+        artifact_channel_id=channel_id,
+        artifact_id=artifact_id,
+        owner_user_ids=frozenset({7}),
+        user_id=7,
+        for_removal=True,
+    )
+
+    assert not can_manage_owners(
+        _roles(owned_artifact_ids=frozenset({artifact_id})), **common
+    )
+    assert can_manage_owners(
+        _roles(admin_channel_ids=frozenset({channel_id})), **common
+    )
+
+
+def test_unassigned_artifact_owner_removal_needs_global_admin() -> None:
+    """미분류 문서의 해제 폴백은 전역 ADMIN 하나다."""
+    artifact_id = uuid.uuid4()
+    common = dict(
+        artifact_channel_id=None,
+        artifact_id=artifact_id,
+        owner_user_ids=frozenset({7}),
+        user_id=7,
+        for_removal=True,
+    )
+
+    assert can_manage_owners(_roles(is_global_admin=True), **common)
+    # 어느 채널의 관리자든 미분류 문서에는 서지 못한다.
+    assert not can_manage_owners(
+        _roles(admin_channel_ids=frozenset({uuid.uuid4()})), **common
     )
 
 

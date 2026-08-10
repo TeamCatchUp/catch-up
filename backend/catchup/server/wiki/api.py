@@ -33,15 +33,20 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from catchup.db.dependencies import get_db
+from catchup.db.models import ArtifactOwner
 from catchup.db.models import Channel
 from catchup.db.models import ChannelAdmin
 from catchup.db.models import ChannelFolder
 from catchup.db.models import KnowledgeArtifact
+from catchup.db.models import UserWorkspace
 from catchup.server.knowledge_review.dependencies import MemberContext
 from catchup.server.knowledge_review.dependencies import deny_reviewer
 from catchup.server.knowledge_review.dependencies import resolve_member_workspace
 from catchup.server.knowledge_review.dependencies import review_error
+from catchup.server.wiki.roles import can_manage_owners
+from catchup.server.wiki.roles import load_artifact_owner_ids
 from catchup.server.wiki.roles import load_wiki_roles
+from catchup.server.wiki.schemas import ArtifactOwnerResponse
 from catchup.server.wiki.schemas import ChannelCreateRequest
 from catchup.server.wiki.schemas import ChannelListItemResponse
 from catchup.server.wiki.schemas import ChannelListResponse
@@ -59,6 +64,7 @@ router = APIRouter(
 _CHANNEL_NAME_CONSTRAINT = "uq_channels_workspace_name"
 _FOLDER_NAME_CONSTRAINT = "uq_channel_folders_channel_name"
 _ARTIFACT_FOLDER_CONSTRAINT = "fk_knowledge_artifacts_folder"
+_OWNER_PK_CONSTRAINT = "artifact_owners_pkey"
 
 
 def _violates(error: IntegrityError, constraint: str) -> bool:
@@ -153,6 +159,59 @@ def _load_folder(
             message="폴더를 찾을 수 없습니다.",
         )
     return folder
+
+
+def _load_artifact(
+    db: Session, *, artifact_id: uuid.UUID, workspace_id: int
+) -> KnowledgeArtifact:
+    """이 workspace의 문서 한 편을 읽는다.
+
+    다른 workspace의 문서는 없는 것으로 답한다. 채널과 같은 이유다 —
+    403으로 가르면 응답만으로 남의 workspace에 그 문서가 있는지를 떠볼 수
+    있다.
+
+    Raises:
+        HTTPException: 문서가 없으면 404를 던진다.
+    """
+    artifact = db.scalar(
+        select(KnowledgeArtifact).where(
+            KnowledgeArtifact.id == artifact_id,
+            KnowledgeArtifact.workspace_id == workspace_id,
+        )
+    )
+    if artifact is None:
+        raise review_error(
+            404,
+            code="ARTIFACT_NOT_FOUND",
+            message="문서를 찾을 수 없습니다.",
+        )
+    return artifact
+
+
+def _require_workspace_member(
+    db: Session, *, user_id: int, workspace_id: int
+) -> None:
+    """지정 대상이 이 workspace 구성원인지 확인한다.
+
+    소속 밖 사람에게 역할을 주면 그 사람은 검수 표면에는 서지 못하면서
+    역할 행만 남아, 담당자가 있는데 아무도 결정하지 못하는 문서가 된다.
+    권한 문제가 아니라 요청 자체가 성립하지 않는 경우라 400이다.
+
+    Raises:
+        HTTPException: 대상이 구성원이 아니면 400을 던진다.
+    """
+    membership = db.scalar(
+        select(UserWorkspace.user_id).where(
+            UserWorkspace.user_id == user_id,
+            UserWorkspace.workspace_id == workspace_id,
+        )
+    )
+    if membership is None:
+        raise review_error(
+            400,
+            code="USER_NOT_MEMBER",
+            message="대상 사용자가 이 워크스페이스의 구성원이 아닙니다.",
+        )
 
 
 @router.post(
@@ -443,5 +502,135 @@ def delete_folder(
                 " 문서를 먼저 옮겨 주세요.",
             ) from error
         raise
+
+    return Response(status_code=204)
+
+
+@router.put(
+    path="/artifacts/{artifact_id}/owners/{user_id}",
+    response_model=ArtifactOwnerResponse,
+    status_code=201,
+    description="문서 담당자를 지정한다. 관리자 또는 그 문서 담당자만 할 수 있다.",
+)
+def assign_artifact_owner(
+    artifact_id: uuid.UUID,
+    user_id: int,
+    response: Response,
+    context: MemberContext = Depends(resolve_member_workspace),
+    db: Session = Depends(get_db),
+) -> ArtifactOwnerResponse:
+    """담당자 한 명을 문서에 붙인다.
+
+    멱등이다. 이미 담당자면 200으로, 새로 붙었으면 201로 답한다. 담당자
+    지정은 화면에서 여러 사람이 동시에 누르는 종류의 조작이라, 두 번째
+    요청이 409로 실패하면 소비자는 자기가 이긴 경우와 진 경우를 갈라야
+    한다 — 결과 상태는 같은데 오류 처리만 늘어난다.
+
+    Raises:
+        HTTPException: 문서가 없으면 404, 명단을 고칠 자격이 없으면 403,
+            대상이 구성원이 아니면 400을 던진다.
+    """
+    artifact = _load_artifact(
+        db, artifact_id=artifact_id, workspace_id=context.workspace_id
+    )
+    roles = load_wiki_roles(
+        db, user_id=context.user.id, workspace_id=context.workspace_id
+    )
+    owner_user_ids = load_artifact_owner_ids(db, artifact.id)
+    if not can_manage_owners(
+        roles,
+        artifact_channel_id=artifact.channel_id,
+        artifact_id=artifact.id,
+        owner_user_ids=owner_user_ids,
+        user_id=context.user.id,
+        for_removal=False,
+    ):
+        raise deny_reviewer(
+            403,
+            code="NOT_OWNER_MANAGER",
+            message="이 문서의 담당자를 지정할 자격이 없습니다.",
+            user_id=context.user.id,
+            workspace_id=context.workspace_id,
+        )
+    _require_workspace_member(
+        db, user_id=user_id, workspace_id=context.workspace_id
+    )
+
+    if user_id in owner_user_ids:
+        response.status_code = 200
+    else:
+        db.add(
+            ArtifactOwner(
+                artifact_id=artifact.id,
+                user_id=user_id,
+                granted_by=context.user.id,
+            )
+        )
+        try:
+            db.commit()
+        except IntegrityError as error:
+            db.rollback()
+            # 같은 사람을 동시에 지정한 경우다. 결과 상태가 요청과 같으므로
+            # 멱등 경로로 합류시킨다.
+            if _violates(error, _OWNER_PK_CONSTRAINT):
+                response.status_code = 200
+            else:
+                raise
+
+    return ArtifactOwnerResponse(
+        artifact_id=str(artifact.id),
+        user_ids=sorted(load_artifact_owner_ids(db, artifact.id)),
+    )
+
+
+@router.delete(
+    path="/artifacts/{artifact_id}/owners/{user_id}",
+    status_code=204,
+    description="문서 담당자를 해제한다. 관리자만 할 수 있다.",
+)
+def remove_artifact_owner(
+    artifact_id: uuid.UUID,
+    user_id: int,
+    context: MemberContext = Depends(resolve_member_workspace),
+    db: Session = Depends(get_db),
+) -> Response:
+    """담당자 한 명을 문서에서 뗀다.
+
+    담당자 본인도 못 뗀다. 명단이 줄어드는 방향만 관리자를 거치게 두어야
+    책임자가 스스로 사라지는 일이 감사에 남는다.
+
+    없는 담당자를 떼는 요청도 204다. 자격 확인은 이미 지났고 결과 상태가
+    요청과 같으므로, 404로 가르면 소비자에게 "그 사람이 담당자였는가"만
+    알려 주고 할 일은 늘어난다.
+
+    Raises:
+        HTTPException: 문서가 없으면 404, 관리자가 아니면 403을 던진다.
+    """
+    artifact = _load_artifact(
+        db, artifact_id=artifact_id, workspace_id=context.workspace_id
+    )
+    roles = load_wiki_roles(
+        db, user_id=context.user.id, workspace_id=context.workspace_id
+    )
+    if not can_manage_owners(
+        roles,
+        artifact_channel_id=artifact.channel_id,
+        artifact_id=artifact.id,
+        owner_user_ids=load_artifact_owner_ids(db, artifact.id),
+        user_id=context.user.id,
+        for_removal=True,
+    ):
+        raise deny_reviewer(
+            403,
+            code="NOT_OWNER_MANAGER",
+            message="이 문서의 담당자를 해제할 자격이 없습니다.",
+            user_id=context.user.id,
+            workspace_id=context.workspace_id,
+        )
+
+    owner = db.get(ArtifactOwner, (artifact.id, user_id))
+    if owner is not None:
+        db.delete(owner)
+        db.commit()
 
     return Response(status_code=204)
