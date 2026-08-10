@@ -5,9 +5,8 @@ import DragHandle from '@tiptap/extension-drag-handle-react';
 import type { Node } from '@tiptap/pm/model';
 import type { Editor } from '@tiptap/react';
 
+import IconAdd from '@/public/icons/icon/add.svg';
 import IconDragIndicator from '@/public/icons/icon/drag_indicator.svg';
-
-import { IconPlus } from './editorIcons';
 
 export interface BlockDragHandleProps {
   editor: Editor | null;
@@ -59,7 +58,7 @@ export default function BlockDragHandle({ editor }: BlockDragHandleProps) {
           onClick={insertBlockBelow}
           className="text-icon-normal-alternative hover:bg-fill-normal-interaction-hover cursor-pointer rounded p-0.5"
         >
-          <IconPlus className="size-5" />
+          <IconAdd aria-hidden className="size-5" />
         </button>
         <div
           data-testid="block-drag-handle"

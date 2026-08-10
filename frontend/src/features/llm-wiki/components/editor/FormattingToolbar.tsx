@@ -5,6 +5,7 @@ import type { Editor } from '@tiptap/core';
 import { useEditorState } from '@tiptap/react';
 import { BubbleMenu } from '@tiptap/react/menus';
 
+import IconDropdownDown from '@/public/icons/icon/dropdown_down.svg';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -153,9 +154,7 @@ export default function FormattingToolbar({ editor }: FormattingToolbarProps) {
               <DropdownMenuTrigger asChild>
                 <button type="button" aria-label="블록 전환" className={`${BUTTON_CLASS} gap-1`}>
                   {state.blockLabel}
-                  <svg aria-hidden viewBox="0 0 20 20" className="size-3" fill="none" stroke="currentColor" strokeWidth="1.5">
-                    <path d="M6 8l4 4 4-4" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
+                  <IconDropdownDown aria-hidden className="size-4 shrink-0" />
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start">

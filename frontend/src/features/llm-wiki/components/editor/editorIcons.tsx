@@ -3,9 +3,12 @@ import type { ComponentType, SVGProps } from 'react';
 /**
  * 에디터 전용 임시 아이콘 세트 (스펙 §12 아이콘 방침).
  *
- * public/icons/icon/ 공용 자산에 없는 글리프를 에디터 폴더 안에 스코프해 둔다 —
+ * public/icons/icon/ 공용 자산에 없는 글리프만 에디터 폴더 안에 스코프해 둔다 —
  * 디자이너 자산이 도착하면 이 파일 하나만 교체한다. design-request의 아이콘 요청은 유지 중.
  * 제목·번호 목록은 노션과 같은 문자 글리프(H1·H2·H3·1.)를 SVG <text>로 감쌌다.
+ *
+ * **여기에 넣기 전에 public/icons/icon/를 먼저 뒤진다.** 8/10 감사에서 IconPlus가
+ * `add.svg`와 중복이라 제거됐다 — 이 파일의 존재 이유는 "임시 대체"이지 "새 아이콘 서랍"이 아니다.
  */
 
 type Icon = ComponentType<SVGProps<SVGSVGElement>>;
@@ -73,15 +76,6 @@ export function IconCallout(props: SVGProps<SVGSVGElement>) {
     <svg viewBox="0 0 20 20" aria-hidden fill="none" stroke="currentColor" strokeWidth="1.5" {...props}>
       <rect x="3" y="4.5" width="14" height="11" rx="2" />
       <line x1="6.5" y1="4.5" x2="6.5" y2="15.5" />
-    </svg>
-  );
-}
-
-export function IconPlus(props: SVGProps<SVGSVGElement>) {
-  return (
-    <svg viewBox="0 0 20 20" aria-hidden fill="none" stroke="currentColor" strokeWidth="1.5" {...props}>
-      <line x1="10" y1="4.5" x2="10" y2="15.5" strokeLinecap="round" />
-      <line x1="4.5" y1="10" x2="15.5" y2="10" strokeLinecap="round" />
     </svg>
   );
 }
