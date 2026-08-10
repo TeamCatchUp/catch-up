@@ -159,43 +159,37 @@ def get_reviewer_user(
 
 
 @dataclass(frozen=True, slots=True)
-class ReviewerContext:
-    """검토자 한 사람이 서 있는 자리를 담는다.
+class MemberContext:
+    """소속만 확인된 사용자가 서 있는 자리를 담는다.
 
     Attributes:
         user: 인증된 사용자다.
-        workspace_id: 이 요청이 다룰 workspace다. 조회·결정·적용이 모두
-            이 값 하나만 쓴다.
-        reviewer: 결정 저널에 남길 판정자 식별자다. `user:<id>` 형태이며
-            DB CHECK가 빈 문자열을 거부하므로 항상 비지 않는다.
-        roles: 이 workspace에서의 위키 역할 스냅샷이다. 요청 한 번에 한 번만
-            읽어, 핸들러마다 다시 조회하다 판정이 갈리는 일을 막는다.
+        workspace_id: 이 요청이 다룰 workspace다.
     """
 
     user: User
     workspace_id: int
-    reviewer: str
-    roles: WikiRoleContext
 
 
-def resolve_reviewer_workspace(
+def resolve_member_workspace(
     workspace_id: int | None = None,
     current_user: User = Depends(get_reviewer_user),
     db: Session = Depends(get_db),
-) -> ReviewerContext:
-    """검토자 컨텍스트를 확정한다.
+) -> MemberContext:
+    """소속만 보고 workspace를 확정한다.
 
-    workspace_id를 안 주면 사용자의 소속이 하나일 때 그것을 쓴다.
-    여러 곳이면 명시를 요구한다(400). 준 값은 소속(UserWorkspace)과
-    위키 역할을 모두 통과해야 한다 — 소속만 있으면 403(NOT_REVIEWER),
-    소속이 없으면 403(NOT_MEMBER).
+    workspace_id를 안 주면 사용자의 소속이 하나일 때 그것을 쓴다. 여러
+    곳이면 명시를 요구한다(400). 준 값은 소속(UserWorkspace)을 통과해야
+    한다 — 아니면 403(NOT_MEMBER)이다.
 
-    오류 코드 NOT_REVIEWER는 그대로 둔다. 자격의 출처가 권한 행에서 역할로
-    바뀌었을 뿐 소비자가 할 일은 같아서, 코드를 바꾸면 화면만 깨진다.
+    역할 게이트가 없다는 것이 이 문의 요점이다. 채널·폴더 관리처럼
+    "구성원이면 누구나 서고, 대상마다 관리자인지 다시 본다"는 표면은
+    검수 자격(NOT_REVIEWER)으로 막으면 안 된다 — 아직 채널이 하나도 없는
+    사람은 어떤 역할도 없어 채널을 만들 문 앞에서 막힌다.
 
     Raises:
-        HTTPException: 소속이나 권한이 없거나, 여러 소속에서 workspace를
-            고르지 않았을 때 던진다.
+        HTTPException: 소속이 없거나, 여러 소속에서 workspace를 고르지
+            않았을 때 던진다.
     """
     memberships = list(
         db.scalars(
@@ -227,8 +221,7 @@ def resolve_reviewer_workspace(
     else:
         if workspace_id not in memberships:
             # 소속을 먼저 본다. 권한 없음보다 소속 없음이 먼저 걸려야
-            # "남의 workspace에 검토자 권한이 있는지"를 이 응답으로
-            # 떠볼 수 없다.
+            # "남의 workspace에 권한이 있는지"를 이 응답으로 떠볼 수 없다.
             raise deny_reviewer(
                 403,
                 code="NOT_MEMBER",
@@ -237,6 +230,54 @@ def resolve_reviewer_workspace(
                 workspace_id=workspace_id,
             )
         resolved_workspace_id = workspace_id
+
+    return MemberContext(
+        user=current_user, workspace_id=resolved_workspace_id
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class ReviewerContext:
+    """검토자 한 사람이 서 있는 자리를 담는다.
+
+    Attributes:
+        user: 인증된 사용자다.
+        workspace_id: 이 요청이 다룰 workspace다. 조회·결정·적용이 모두
+            이 값 하나만 쓴다.
+        reviewer: 결정 저널에 남길 판정자 식별자다. `user:<id>` 형태이며
+            DB CHECK가 빈 문자열을 거부하므로 항상 비지 않는다.
+        roles: 이 workspace에서의 위키 역할 스냅샷이다. 요청 한 번에 한 번만
+            읽어, 핸들러마다 다시 조회하다 판정이 갈리는 일을 막는다.
+    """
+
+    user: User
+    workspace_id: int
+    reviewer: str
+    roles: WikiRoleContext
+
+
+def resolve_reviewer_workspace(
+    workspace_id: int | None = None,
+    current_user: User = Depends(get_reviewer_user),
+    db: Session = Depends(get_db),
+) -> ReviewerContext:
+    """검토자 컨텍스트를 확정한다.
+
+    소속과 workspace 결정은 `resolve_member_workspace`가 한다. 여기서는
+    그 위에 위키 역할(채널 관리자·문서 담당자·전역 ADMIN) 게이트만
+    얹는다 — 소속만 있으면 403(NOT_REVIEWER)이다.
+
+    오류 코드 NOT_REVIEWER는 그대로 둔다. 자격의 출처가 권한 행에서 역할로
+    바뀌었을 뿐 소비자가 할 일은 같아서, 코드를 바꾸면 화면만 깨진다.
+
+    Raises:
+        HTTPException: 소속이나 권한이 없거나, 여러 소속에서 workspace를
+            고르지 않았을 때 던진다.
+    """
+    member = resolve_member_workspace(
+        workspace_id=workspace_id, current_user=current_user, db=db
+    )
+    resolved_workspace_id = member.workspace_id
 
     roles = load_wiki_roles(
         db, user_id=current_user.id, workspace_id=resolved_workspace_id
