@@ -44,7 +44,7 @@ interface WikiPageHeaderDetailProps extends WikiPageHeaderCommonProps {
   /** 마지막 마디가 현재 페이지다 — 강조되고 클릭되지 않는다 */
   breadcrumbs: readonly DocumentBreadcrumb[];
   onBreadcrumbClick?: (crumb: DocumentBreadcrumb, index: number) => void;
-  /** 현재 페이지 옆 태그 슬롯. 확정 시안은 검토큐의 ReviewNeededTag 1종 */
+  /** 현재 페이지 옆 태그 슬롯. 확정 시안은 검토큐의 "검토 필요" 1종 — DocumentStatusBadge가 공급한다 */
   badge?: ReactNode;
 }
 

@@ -14,8 +14,16 @@ export type ChangeProposalStatus = 'pending' | 'approved' | 'rejected' | 'abando
 export type KnownReviewItemType = 'publish' | 'merge' | 'contradiction';
 export type ReviewItemType = KnownReviewItemType | (string & {});
 
-// 디자인 확정 배지는 "검토 완료" 1종뿐 — 나머지 상태 표기는 미정이라 열어둔다
-export type KnownDocumentStatus = 'reviewed';
+/**
+ * [SPEC] 문서 상태. 백엔드에 대응 필드가 없다 — 큐 행의 `status`는 제안 판정
+ * (ChangeProposalStatus)이지 문서 상태가 아니다.
+ *
+ * 셋 다 시안 전수 조사(8/10)로 확인된 값이다. 그 밖은 여전히 미정이라 열어둔다.
+ * - reviewed       "검토 완료" 표 상태 열 (17698:184150 외 21곳)
+ * - pending_review "검토 대기" 대시보드 표 (17849:106521)
+ * - needs_review   "검토 필요" 검토큐 헤더(17942:91620) · 검토큐 상세 메타 줄(17896:46635)
+ */
+export type KnownDocumentStatus = 'reviewed' | 'pending_review' | 'needs_review';
 export type DocumentStatus = KnownDocumentStatus | (string & {});
 
 // breadcrumb 종류. Figma가 아이콘을 정의한 것은 채널·폴더 2종뿐이라 나머지는 열어둔다

@@ -10,7 +10,7 @@ import IconOpenInNew from '@/public/icons/icon/open_in_new_24.svg';
 import { Button } from '@/shared/components/ui/button';
 
 import { catchupParameters } from '../../../../../.storybook/catchupStoryParameters';
-import ReviewNeededTag from './ReviewNeededTag';
+import DocumentStatusBadge from '../document/DocumentStatusBadge';
 import WikiPageHeader from './WikiPageHeader';
 
 /** 5종 중 4종의 우측은 ⋯ 하나뿐이다. 메뉴 내용 시안이 없어 트리거만 두고 열지 않는다. */
@@ -88,7 +88,7 @@ const meta = {
         'breadcrumb는 전부 props 주입이고 기존 DocumentBreadcrumb 계약(kind + label)을 그대로 쓴다 — 공유 파일 llmWikiModel.ts는 건드리지 않았다.',
         '마지막 마디가 현재 페이지다. 버튼이 아니고 aria-current="page"를 갖는다 — 클릭 대상이 아니라는 사실을 시각(색)이 아니라 마크업으로도 남긴다.',
         '우측 슬롯 내용물은 전부 소비처 몫이다. ⋯ 메뉴 항목 시안이 없어 트리거만 두고 DropdownMenu를 붙이지 않았다.',
-        '"검토 필요" 태그는 ReviewNeededTag로 분리했다 — 헤더는 자리(현재 마디 옆, gap 8)만 정하고 내용을 모른다.',
+        '"검토 필요" 태그는 상태 배지 워크스트림의 DocumentStatusBadge(status="needs_review" size="sm")다 — 헤더는 자리(현재 마디 옆, gap 8)만 정하고 내용을 모른다. 8/10 통합 전에는 이 폴더의 ReviewNeededTag였다.',
         '로딩·빈·에러 헤더는 만들지 않는다(시안 없음, 감사 금지 목록).',
       ],
       tokenNotes: [
@@ -223,7 +223,7 @@ export const ReviewQueueDocument: Story = {
       { kind: 'document', label: 'Update documentation content' },
     ],
     onBreadcrumbClick: fn(),
-    badge: <ReviewNeededTag />,
+    badge: <DocumentStatusBadge status="needs_review" size="sm" />,
     actions: <ReviewQueueActions />,
   },
   play: async ({ canvasElement }) => {
@@ -261,7 +261,7 @@ export const LongTitleInNarrowSlot: Story = {
       { kind: 'folder', label: '폴더명' },
       { kind: 'document', label: NARROW_CURRENT_LABEL },
     ],
-    badge: <ReviewNeededTag />,
+    badge: <DocumentStatusBadge status="needs_review" size="sm" />,
     actions: <ReviewQueueActions />,
   },
   decorators: [
