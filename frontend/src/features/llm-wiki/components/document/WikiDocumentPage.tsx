@@ -4,6 +4,7 @@ import type { JSONContent } from '@tiptap/react';
 
 import type { WikiDocumentFixture } from '../../fixtures/llmWikiDocumentFixtures';
 import WikiEditor from '../editor/WikiEditor';
+import DevEditToggle from './DevEditToggle';
 import WikiDocumentMeta from './WikiDocumentMeta';
 
 export interface DocumentView {
@@ -53,7 +54,13 @@ export default function WikiDocumentPage({ document, proposalId }: WikiDocumentP
           title={document.title}
           authorName={document.authorName}
           createdLabel={document.createdLabel}
-        />
+        >
+          <DevEditToggle
+            documentId={document.id}
+            proposalId={document.proposalId}
+            isEditing={view.mode === 'edit'}
+          />
+        </WikiDocumentMeta>
 
         {/* 편집 중에는 무엇을 보고 있는지 알려준다 — 모드에 따라 문서 내용 자체가 바뀐다(스펙 §5) */}
         {view.mode === 'edit' && (
