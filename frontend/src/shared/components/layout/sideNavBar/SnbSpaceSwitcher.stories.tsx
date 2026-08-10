@@ -35,7 +35,7 @@ const meta = {
       reuseNotes: ['홈 ↔ LLM Wiki 두 모드 사이를 오가는 유일한 컨트롤이다.'],
       tokenNotes: [
         '펼침 선택은 Fill/Primary/Normal/Neutral, 미선택은 Fill/Normal/Strong이다.',
-        '닫힘 선택은 배경 대신 흰 카드 + Line/Normal/Neutral 테두리 + Shadow/card다.',
+        '닫힘 선택 카드는 Fill/Normal/Assistive다 — 라이트에서는 fill-normal-normal과 같은 흰색이라 눈으로 구분되지 않지만 다크에서 갈린다(neutral-83 ↔ neutral-85). play가 클래스로 고정한다.',
       ],
       dataNotes: ['아이콘은 Figma가 filled 변형(icon/home_filled·icon/stacks_filled)을 쓴다 — 자산 확보는 조립 단계 과제다.'],
     }),
@@ -119,5 +119,9 @@ export const ClosedPair: Story = {
     await expect(canvas.getByRole('button', { name: 'LLM Wiki' }).querySelector('svg')).toHaveClass(
       'text-icon-normal-neutral',
     );
+
+    // 선택 카드 배경은 Fill/Normal/Assistive다. 라이트에서 fill-normal-normal과
+    // 같은 흰색이라 렌더로는 구분되지 않으니 클래스로 고정한다 — 다크에서 갈린다
+    await expect(home).toHaveClass('bg-fill-normal-assistive');
   },
 };

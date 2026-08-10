@@ -40,7 +40,7 @@ export default function SnbSpaceSwitcher({
           ? cn(
               'size-9 shrink-0 rounded-xl',
               selected
-                ? 'border-line-normal-neutral bg-fill-normal-normal shadow-card border'
+                ? 'border-line-normal-neutral bg-fill-normal-assistive shadow-card border'
                 : 'hover:bg-fill-normal-interaction-hover active:bg-fill-normal-interaction-pressed',
             )
           : cn(
