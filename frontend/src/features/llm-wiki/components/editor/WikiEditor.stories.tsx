@@ -44,6 +44,11 @@ const meta = {
     // 그 페이로드가 매 글자 직렬화되어 패널에 쌓인다. 스토리에서 쓰지 않으므로 끈다
     // (테스트 스토리의 fn() 스파이는 애드온과 무관하게 그대로 동작한다).
     actions: { disable: true },
+    // 기본은 스냅샷 제외. tags: ['!dev']는 사이드바만 숨기고 Chromatic 캡처에서는 안 빠지는데,
+    // 아래 회귀 테스트 스토리들의 play는 브라우저 계측 환경에서 초 단위로 걸려(타이핑 24자 play가
+    // 25초에도 미완 — 실측) 캡처가 에러로 끝난다. 그 커버리지는 vitest가 이미 담당하고,
+    // 시각 회귀로서의 값어치는 Playground 3종에 있다 — 그 셋만 아래에서 다시 켠다.
+    chromatic: { disableSnapshot: true },
     ...catchupParameters({
       level: 'composition',
       domain: 'llm-wiki',
@@ -90,16 +95,20 @@ type Story = StoryObj<typeof WikiEditor>;
  */
 
 /** 빈 에디터. `/`로 블록 삽입, 텍스트 선택 시 서식 툴바, `:`로 이모지. */
-export const Playground: Story = {};
+export const Playground: Story = {
+  parameters: { chromatic: { disableSnapshot: false } },
+};
 
 /** 문서가 들어 있는 상태. 제목·문단·목록. */
 export const PlaygroundWithContent: Story = {
   args: { initialContent: EDITOR_SKELETON_DOC },
+  parameters: { chromatic: { disableSnapshot: false } },
 };
 
 /** 2차 블록(체크박스·콜아웃·표)이 들어 있는 상태. */
 export const PlaygroundWithBlocks: Story = {
   args: { initialContent: EDITOR_PHASE2_DOC },
+  parameters: { chromatic: { disableSnapshot: false } },
 };
 
 /**
