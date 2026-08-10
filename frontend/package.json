@@ -16,7 +16,7 @@
     "verify:tailwind": "tailwindcss -i src/shared/styles/globals.css -o output/tailwind.css --minify",
     "storybook": "storybook dev -p 6006",
     "build:storybook": "storybook build",
-    "chromatic": "npx -y dotenv-cli -e .env -- chromatic --build-script-name build:storybook",
+    "chromatic": "npx -y dotenv-cli -e .env -- chromatic --build-script-name build:storybook --only-changed",
     "verify:ui": "node scripts/verify-ui.mjs",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui"
