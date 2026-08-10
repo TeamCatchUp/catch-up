@@ -474,21 +474,108 @@ class UserWorkspace(Base):
     workspace: Mapped["Workspace"] = relationship(back_populates="user_links")
 
 
-class WikiReviewerGrant(Base):
-    """위키 검토자 권한 한 건을 담는다.
+class Channel(Base):
+    """LLM Wiki의 개념 단위인 채널 하나를 담는다.
 
-    기획의 "워크스페이스 역할과 별개로 지정되는 위키 권한"이다. 행이
-    있으면 그 workspace의 검토자다. 부여 API는 범위 밖이라 초기에는
-    운영자가 직접 삽입한다.
+    workspace 1 : N 채널이며 문서는 채널(과 폴더) 아래에 놓인다. 목적·문체·
+    구독 같은 config 필드는 두지 않는다 — 트랙 2·3의 테이블이 이 id를
+    참조하는 방향이다.
     """
 
-    __tablename__ = "wiki_reviewer_grants"
+    __tablename__ = "channels"
+    __table_args__ = (
+        UniqueConstraint(
+            "workspace_id", "name", name="uq_channels_workspace_name"
+        ),
+    )
 
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+    )
+    workspace_id: Mapped[int] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False
+    )
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    created_by: Mapped[int] = mapped_column(
+        ForeignKey("users.id"), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
+class ChannelFolder(Base):
+    """채널 바로 아래의 폴더 하나를 담는다.
+
+    parent 컬럼이 없다 — depth 최대 1을 구조로 강제한다.
+    """
+
+    __tablename__ = "channel_folders"
+    __table_args__ = (
+        UniqueConstraint(
+            "channel_id", "name", name="uq_channel_folders_channel_name"
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+    )
+    channel_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("channels.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
+class ChannelAdmin(Base):
+    """채널 관리자 한 명을 담는다.
+
+    확정 기획의 위키 단위 관리자다. 채널 생성 시 생성자가 자동으로
+    삽입되고, 기존 관리자가 추가 지정할 수 있다.
+    """
+
+    __tablename__ = "channel_admins"
+
+    channel_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("channels.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
     user_id: Mapped[int] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
     )
-    workspace_id: Mapped[int] = mapped_column(
-        ForeignKey("workspaces.id", ondelete="CASCADE"), primary_key=True
+    granted_by: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
+    granted_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
+class ArtifactOwner(Base):
+    """문서 담당자 한 명을 담는다.
+
+    확정 기획의 문서 단위 담당자(1~N)다. 검수 권한의 1차 출처이며, 담당자
+    없는 문서는 채널 관리자(미분류는 전역 ADMIN)로 폴백한다.
+    """
+
+    __tablename__ = "artifact_owners"
+
+    artifact_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("knowledge_artifacts.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
     )
     granted_by: Mapped[int | None] = mapped_column(
         ForeignKey("users.id"), nullable=True
@@ -4986,6 +5073,16 @@ class KnowledgeArtifact(Base):
         nullable=False,
     )
     kind: Mapped[str] = mapped_column(String(32), nullable=False)
+    channel_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("channels.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    folder_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("channel_folders.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     subject_node_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         nullable=False,
