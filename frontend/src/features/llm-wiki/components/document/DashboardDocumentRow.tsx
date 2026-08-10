@@ -3,11 +3,10 @@ import { Fragment } from 'react';
 import IconArrowRight from '@/public/icons/icon/arrow_right2.svg';
 import IconErrorFilled from '@/public/icons/icon/error_filled.svg';
 import IconFileFilled from '@/public/icons/icon/file_filled.svg';
-import IconFolder from '@/public/icons/icon/folder.svg';
-import IconWikiChannel from '@/public/icons/icon/wiki_channel.svg';
 import { cn } from '@/shared/utils/cn';
 
-import type { BreadcrumbKind, DocumentRowData } from '../../types/llmWikiModel';
+import type { DocumentRowData } from '../../types/llmWikiModel';
+import { BREADCRUMB_ICON } from '../breadcrumbIcons';
 import DocumentStatusBadge from './DocumentStatusBadge';
 
 /**
@@ -19,13 +18,6 @@ import DocumentStatusBadge from './DocumentStatusBadge';
  */
 export const DASHBOARD_DOCUMENT_ROW_GRID =
   'grid grid-cols-[minmax(0,1fr)_194px_184px_96px] items-center gap-4 rounded-lg p-1.5';
-
-// Figma가 아이콘을 정의한 breadcrumb 종류는 채널·폴더 2종뿐이다.
-// 미지 종류는 아이콘을 발명하지 않고 라벨만 렌더한다(DocumentStatusBadge와 같은 규칙).
-const BREADCRUMB_ICON: Partial<Record<BreadcrumbKind, typeof IconWikiChannel>> = {
-  channel: IconWikiChannel,
-  folder: IconFolder,
-};
 
 interface DashboardDocumentRowProps {
   document: DocumentRowData;
