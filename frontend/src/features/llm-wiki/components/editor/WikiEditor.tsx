@@ -130,22 +130,34 @@ export default function WikiEditor({ initialContent, editable = true, onUpdate, 
 
   return (
     <>
-      {/* 콘텐츠 시각은 최소만 — 본문 시안이 없다(design-request 대기). 표 테두리·체크박스 배치·아웃라인 제거만. */}
+      {/*
+        본문 타이포그래피는 채팅이 쓰는 공용 markdown.css(`.markdown-body`)를 그대로 재사용한다.
+        globals.css가 이미 전역 로드하므로 클래스만 붙이면 된다 — 제목·문단·목록·인용·코드·표·링크가
+        한 번에 잡힌다. 이게 없으면 Tailwind preflight가 제목 크기를 지워서 h1~h3가 문단과
+        완전히 같은 16px/400으로 보이고, 마크다운 단축이 "안 먹는 것처럼" 보인다(실측 확인).
+
+        아래 유틸은 markdown.css가 다루지 않는 것만 덮는다. Tailwind utilities 레이어가
+        markdown.css(@layer base)보다 우선하므로 충돌 시 여기가 이긴다.
+      */}
       <EditorContent
         editor={editor}
         className={[
+          'markdown-body',
           'min-h-40',
           '[&_.ProseMirror]:outline-none',
-          // 체크박스 목록: 마커 제거 + 체크박스-본문 가로 배치
+          // 체크박스 목록: markdown.css의 ul 마커·들여쓰기를 무효화하고 가로 배치
           '[&_ul[data-type=taskList]]:list-none [&_ul[data-type=taskList]]:pl-0',
           '[&_ul[data-type=taskList]_li]:flex [&_ul[data-type=taskList]_li]:items-start [&_ul[data-type=taskList]_li]:gap-2',
           '[&_ul[data-type=taskList]_li_>_label]:shrink-0 [&_ul[data-type=taskList]_li_>_div]:min-w-0 [&_ul[data-type=taskList]_li_>_div]:flex-1',
-          // 표: 라인 토큰 테두리 + 셀 여백
-          '[&_table]:border-collapse',
+          // 콜아웃 — markdown.css에 없는 블록
+          '[&_div[data-type=callout]_>_*+*]:mt-2 [&_div[data-type=callout]_>_*:last-child]:mb-0',
+          // 구분선·하이라이트 — markdown.css에 없다
+          '[&_hr]:border-line-normal-normal [&_hr]:my-4',
+          '[&_mark]:bg-fill-primary-normal-neutral [&_mark]:rounded-sm [&_mark]:px-0.5',
+          // 표 격자 — markdown.css의 표는 읽기용이라 행 구분선만 있다.
+          // 편집 중에는 셀 경계가 보여야 커서가 어느 칸에 있는지 알 수 있어 격자를 되살린다(여백·글자는 그대로 둔다).
           '[&_td]:border [&_th]:border [&_td]:border-line-normal-normal [&_th]:border-line-normal-normal',
-          '[&_td]:px-2 [&_td]:py-1 [&_th]:px-2 [&_th]:py-1 [&_th]:bg-fill-normal-strong',
-          // 콜아웃 내부 블록 간격
-          '[&_div[data-type=callout]_>_*+*]:mt-2',
+          '[&_th]:bg-fill-normal-strong',
         ].join(' ')}
       />
       <BlockDragHandle editor={editor} />
