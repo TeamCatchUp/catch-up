@@ -10,6 +10,11 @@ debug 라우터와 달리 인증과 검토자 권한을 요구하고, 결정 저
 판단의 재료이기 때문이다. 병합 결정은 이 표면에 없다 — 문서 검토와 다른
 화면의 일이라 debug 라우터에 남겨 둔다.
 
+인가는 두 겹이다. 의존성이 "검수 표면에 설 자격"을 보고, 대상이 정해지는
+핸들러가 "이 문서를 결정할 수 있는가"를 다시 본다. 문서마다 담당자가 다르니
+자격 하나로는 부족하고, 그렇다고 판정을 서비스로 내리면 CLI·debug 표면까지
+같은 인가를 지게 된다.
+
 불변식은 전부 서비스가 지킨다. 이 라우터는 컨텍스트를 확정하고 서비스를
 부르고 예외를 상태 코드로 옮기는 껍데기이며, 결정 규칙을 스스로 갖지
 않는다. 오류 코드는 예외 문자열이 아니라 저장소에서 다시 읽은 상태로
@@ -25,10 +30,12 @@ from fastapi import APIRouter
 from fastapi import Depends
 from fastapi import HTTPException
 from fastapi import Query
+from sqlalchemy.orm import Session
 
 from catchup.audit.actions import KnowledgeReviewAction
 from catchup.audit.metadata import KnowledgeReviewAuditMetadata
 from catchup.audit.utils import audit_log
+from catchup.db.dependencies import get_db
 from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_CONTESTED
 from catchup.knowledge_maintenance.domain.artifact import ArtifactBlock
 from catchup.knowledge_maintenance.domain.artifact import BlockSource
@@ -101,6 +108,9 @@ from catchup.server.knowledge_review.schemas import RejectRequest
 from catchup.server.knowledge_review.schemas import ResolveRequest
 from catchup.server.knowledge_review.schemas import ResolveResponse
 from catchup.server.knowledge_review.schemas import VariantResponse
+from catchup.server.wiki.roles import can_decide_artifact
+from catchup.server.wiki.roles import load_artifact_channel_id
+from catchup.server.wiki.roles import load_artifact_owner_ids
 
 router = APIRouter(
     prefix="/api/v1/knowledge-review",
@@ -147,6 +157,74 @@ _PUBLISH_ERRORS: dict[str, tuple[int, str]] = {
 _UNMAPPED_ERROR = (409, "지금 이 요청을 확정할 수 없습니다.")
 
 
+def _require_decidable_proposal(
+    uow_factory: ReviewUowFactory,
+    db: Session,
+    context: ReviewerContext,
+    proposal_id: uuid.UUID,
+    *,
+    not_found_code: str = "PROPOSAL_NOT_FOUND",
+) -> StoredArtifactProposal:
+    """변경안을 읽고 담당자·폴백 판정을 통과시킨다.
+
+    담당자·채널 조회는 UnitOfWork가 아니라 라우터의 db 세션으로 나간다.
+    UoW의 내부 세션을 꺼내 쓰면 저장소 경계가 무너지고, 인가 조회가
+    knowledge_maintenance 포트에 얹혀 표면마다 따라다니게 된다.
+
+    없음을 알리는 코드는 호출자가 정한다. 블록 결정·발행은 서비스가 쓰던
+    NOT_FOUND를 이미 소비자와 약속했고, 인가를 앞에 끼워 넣었다는 이유로
+    그 코드가 바뀌면 화면이 깨진다.
+
+    Raises:
+        HTTPException: 변경안이 없으면 404, 이 문서의 검수 권한이 없으면
+            403 NOT_DOCUMENT_REVIEWER를 던진다.
+    """
+    with uow_factory() as uow:
+        proposal = uow.artifacts.get_proposal(proposal_id=proposal_id)
+    if proposal is None:
+        # 저장소가 workspace로 좁혀 읽으므로, 남의 workspace 변경안도
+        # 여기서 404가 된다 — 존재 여부를 떠볼 자리가 없다.
+        raise review_error(
+            404,
+            code=not_found_code,
+            message="변경안을 찾을 수 없습니다.",
+        )
+    if not can_decide_artifact(
+        context.roles,
+        artifact_channel_id=load_artifact_channel_id(
+            db, proposal.artifact_id
+        ),
+        artifact_id=proposal.artifact_id,
+        owner_user_ids=load_artifact_owner_ids(db, proposal.artifact_id),
+        user_id=context.user.id,
+    ):
+        raise review_error(
+            403,
+            code="NOT_DOCUMENT_REVIEWER",
+            message="이 문서의 검수 권한이 없습니다.",
+        )
+    return proposal
+
+
+def _require_wiki_admin(context: ReviewerContext) -> None:
+    """문서가 특정되지 않는 요청을 관리자에게만 연다.
+
+    모순 판정과 적용은 대상 문서가 하나로 정해지지 않아 담당자 판정을 걸
+    자리가 없다. 담당자에게 이 직접 경로가 필요하지도 않다 — 다툼 블록을
+    거친 모순은 발행이 파생으로 닫는다.
+
+    Raises:
+        HTTPException: 관리자가 아니면 403 NOT_DOCUMENT_REVIEWER를 던진다.
+    """
+    if context.roles.is_global_admin or context.roles.admin_channel_ids:
+        return
+    raise review_error(
+        403,
+        code="NOT_DOCUMENT_REVIEWER",
+        message="관리자만 할 수 있는 작업입니다.",
+    )
+
+
 @router.get(
     path="/queue",
     response_model=QueuePageResponse,
@@ -188,6 +266,7 @@ def get_queue_item(
     proposal_id: uuid.UUID,
     context: ReviewerContext = Depends(resolve_reviewer_workspace),
     uow_factory: ReviewUowFactory = Depends(get_review_uow_factory),
+    db: Session = Depends(get_db),
 ) -> ProposalDetailResponse:
     """변경안 하나를 충돌 목록·블록 결정과 함께 돌려준다.
 
@@ -197,18 +276,13 @@ def get_queue_item(
     경우이며, 그때도 표시는 본문에 다툼 블록이 있다는 사실 그대로다.
 
     Raises:
-        HTTPException: 이 workspace에 그 변경안이 없을 때 404를 던진다.
+        HTTPException: 이 workspace에 그 변경안이 없으면 404, 이 문서의
+            검수 권한이 없으면 403을 던진다.
     """
+    proposal = _require_decidable_proposal(
+        uow_factory, db, context, proposal_id
+    )
     with uow_factory() as uow:
-        proposal = uow.artifacts.get_proposal(proposal_id=proposal_id)
-        if proposal is None:
-            # 저장소가 workspace로 좁혀 읽으므로, 남의 workspace 변경안도
-            # 여기서 404가 된다 — 존재 여부를 떠볼 자리가 없다.
-            raise review_error(
-                404,
-                code="PROPOSAL_NOT_FOUND",
-                message="변경안을 찾을 수 없습니다.",
-            )
         verdicts = uow.block_verdicts.list_for_proposal(
             proposal_id=proposal_id,
         )
@@ -242,6 +316,7 @@ def approve_artifact(
     proposal_id: uuid.UUID,
     context: ReviewerContext = Depends(resolve_reviewer_workspace),
     uow_factory: ReviewUowFactory = Depends(get_review_uow_factory),
+    db: Session = Depends(get_db),
 ) -> DecisionResponse:
     """승인을 확정하고 그 결과를 돌려준다.
 
@@ -251,9 +326,11 @@ def approve_artifact(
     블록까지 판에 실리기 때문이다.
 
     Raises:
-        HTTPException: 변경안이 없으면 404, 다툼 블록이 있거나 블록 결정이
-            시작됐거나 결정을 받아들일 수 없으면 409를 던진다.
+        HTTPException: 변경안이 없으면 404, 이 문서의 검수 권한이 없으면
+            403, 다툼 블록이 있거나 블록 결정이 시작됐거나 결정을 받아들일
+            수 없으면 409를 던진다.
     """
+    _require_decidable_proposal(uow_factory, db, context, proposal_id)
     try:
         result = review_artifact_proposal(
             uow_factory(),
@@ -290,6 +367,7 @@ def reject_artifact(
     payload: RejectRequest,
     context: ReviewerContext = Depends(resolve_reviewer_workspace),
     uow_factory: ReviewUowFactory = Depends(get_review_uow_factory),
+    db: Session = Depends(get_db),
 ) -> DecisionResponse:
     """반려를 확정하고 그 결과를 돌려준다.
 
@@ -297,9 +375,13 @@ def reject_artifact(
     막지만, 그때는 "받아들일 수 없는 결정"과 구별되지 않는 409가 되어
     소비자가 입력을 고치면 되는 상황임을 알 수 없다.
 
+    사유 검사를 인가보다 먼저 두는 이유도 같다. 보낸 값의 모양이 틀린 것은
+    권한과 무관하고, 순서를 뒤집으면 소비자가 400을 받을 상황에서 404·403을
+    받아 무엇을 고쳐야 하는지 알 수 없다.
+
     Raises:
-        HTTPException: 사유가 비면 400, 변경안이 없으면 404, 결정을
-            받아들일 수 없으면 409를 던진다.
+        HTTPException: 사유가 비면 400, 변경안이 없으면 404, 이 문서의 검수
+            권한이 없으면 403, 결정을 받아들일 수 없으면 409를 던진다.
     """
     if not payload.reason.strip():
         raise review_error(
@@ -307,6 +389,7 @@ def reject_artifact(
             code="REASON_REQUIRED",
             message="반려는 사유가 있어야 합니다.",
         )
+    _require_decidable_proposal(uow_factory, db, context, proposal_id)
     try:
         result = review_artifact_proposal(
             uow_factory(),
@@ -346,10 +429,15 @@ def resolve_contradiction(
     결정된 안건"을 같은 예외로 알리는데, 소비자가 할 일은 그 둘에서
     다르다 — 앞은 잘못된 식별자이고 뒤는 큐가 낡은 것이다.
 
+    인가는 관리자 게이트다. 모순 안건은 대상 문서가 하나로 정해지지 않아
+    담당자 판정을 걸 자리가 없다. 담당자가 이 경로를 필요로 하지도 않는다 —
+    다툼 블록을 거친 모순은 발행이 파생으로 닫는다.
+
     Raises:
-        HTTPException: 안건이 없으면 404, 이미 결정됐거나 판정을 받아들일
-            수 없으면 409를 던진다.
+        HTTPException: 관리자가 아니면 403, 안건이 없으면 404, 이미
+            결정됐거나 판정을 받아들일 수 없으면 409를 던진다.
     """
+    _require_wiki_admin(context)
     with uow_factory() as uow:
         status = uow.mutation_proposals.get_contradiction_status(
             workspace_id=context.workspace_id,
@@ -409,6 +497,7 @@ def put_block_verdict(
     payload: BlockVerdictRequest,
     context: ReviewerContext = Depends(resolve_reviewer_workspace),
     uow_factory: ReviewUowFactory = Depends(get_review_uow_factory),
+    db: Session = Depends(get_db),
 ) -> BlockVerdictResponse:
     """블록 결정을 저널에 남기고 그 결정을 돌려준다.
 
@@ -419,9 +508,13 @@ def put_block_verdict(
     보내도 결과가 같다.
 
     Raises:
-        HTTPException: 변경안이 없으면 404, 이미 결정됐거나 본문이 바뀌었으면
-            409, 보낸 값 자체가 틀렸으면 422를 던진다.
+        HTTPException: 변경안이 없으면 404, 이 문서의 검수 권한이 없으면
+            403, 이미 결정됐거나 본문이 바뀌었으면 409, 보낸 값 자체가
+            틀렸으면 422를 던진다.
     """
+    _require_decidable_proposal(
+        uow_factory, db, context, proposal_id, not_found_code="NOT_FOUND"
+    )
     try:
         stored = upsert_block_verdict(
             uow_factory(),
@@ -457,6 +550,7 @@ def publish_proposal(
     payload: PublishRequest,
     context: ReviewerContext = Depends(resolve_reviewer_workspace),
     uow_factory: ReviewUowFactory = Depends(get_review_uow_factory),
+    db: Session = Depends(get_db),
 ) -> PublishResponse:
     """발행을 확정하고 그 결과를 돌려준다.
 
@@ -465,9 +559,13 @@ def publish_proposal(
     처음부터 다시 훑게 된다.
 
     Raises:
-        HTTPException: 변경안이 없으면 404, 미결정·낡음·경합이면 409,
-            보낸 값이나 조립 결과가 계약을 어기면 422를 던진다.
+        HTTPException: 변경안이 없으면 404, 이 문서의 검수 권한이 없으면
+            403, 미결정·낡음·경합이면 409, 보낸 값이나 조립 결과가 계약을
+            어기면 422를 던진다.
     """
+    _require_decidable_proposal(
+        uow_factory, db, context, proposal_id, not_found_code="NOT_FOUND"
+    )
     try:
         result = publish_artifact_proposal(
             uow_factory(),
@@ -512,7 +610,14 @@ def apply_all(
     context: ReviewerContext = Depends(resolve_reviewer_workspace),
     uow_factory: ReviewUowFactory = Depends(get_review_uow_factory),
 ) -> ApplyResponse:
-    """workspace의 승인된 안건을 전부 적용한다."""
+    """workspace의 승인된 안건을 전부 적용한다.
+
+    대상이 여럿이라 담당자 판정을 걸 자리가 없어 관리자 게이트를 쓴다.
+
+    Raises:
+        HTTPException: 관리자가 아니면 403을 던진다.
+    """
+    _require_wiki_admin(context)
     result = apply_mutation_proposals(
         uow_factory,
         workspace_id=context.workspace_id,
@@ -541,9 +646,14 @@ def apply_one(
     소비자가 성공으로 읽으면 안 된다. 적용 중 실패한 안건은 0건이 아니라
     proposals_failed로 세지므로 여기에 걸리지 않는다.
 
+    mutation 안건은 문서와 1:1이 아니라 담당자 판정을 걸 자리가 없다.
+    그래서 한 건 적용도 관리자 게이트를 쓴다.
+
     Raises:
-        HTTPException: 적용된 안건이 없으면 404를 던진다.
+        HTTPException: 관리자가 아니면 403, 적용된 안건이 없으면 404를
+            던진다.
     """
+    _require_wiki_admin(context)
     result = apply_mutation_proposals(
         uow_factory,
         workspace_id=context.workspace_id,
