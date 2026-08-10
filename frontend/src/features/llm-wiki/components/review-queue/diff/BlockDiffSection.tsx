@@ -10,8 +10,6 @@ export interface BlockDiffSectionProps {
   onApprove: (id: string) => void;
   /** 제안 기각. 백엔드 RejectRequest와 같은 판정이다 */
   onReject: (id: string) => void;
-  /** 카드의 연필 버튼 — 블록 단위 편집. 진입 후 UI는 디자인 미정 */
-  onEditRequest: (id: string) => void;
 }
 
 /**
@@ -25,7 +23,6 @@ export default function BlockDiffSection({
   onEditDocument,
   onApprove,
   onReject,
-  onEditRequest,
 }: BlockDiffSectionProps) {
   return (
     <section className="flex w-full flex-col gap-3">
@@ -50,7 +47,6 @@ export default function BlockDiffSection({
           entry={entry}
           onApprove={onApprove}
           onReject={onReject}
-          onEditRequest={onEditRequest}
         />
       ))}
     </section>

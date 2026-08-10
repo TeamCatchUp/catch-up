@@ -21,7 +21,7 @@ const meta = {
   title: 'Compositions/LLM Wiki/ReviewQueue/BlockDiffCard',
   component: BlockDiffCard,
   tags: ['autodocs'],
-  args: { onApprove: fn(), onReject: fn(), onEditRequest: fn() },
+  args: { onApprove: fn(), onReject: fn() },
   parameters: {
     ...catchupParameters({
       level: 'composition',
@@ -39,7 +39,8 @@ const meta = {
       states: ['modified', 'added', 'removed', 'collapsed', 'rejected', 'long-text', 'no-reason'],
       reuseNotes: [
         '버튼은 공용 Button(box-solid-primary/box-outline-gray/icon-only-gray)을 그대로 쓴다 — 시안의 Box Button small(30px)·Icon button small(28px) 대응. 아이콘 버튼 28px는 AgentCard 관례대로 size="sm" + size-7이다.',
-        '헤더 배치(8/7 개정): 셰브런 · 제목 · 편집(연필) · 반려 · 승인. 판정이 승인·반려 둘로 정리되면서 되돌리기(rotate)가 빠지고 삭제가 반려로 바뀌었다 — 백엔드 approve/reject와 1:1이다.',
+        '헤더 배치: 셰브런 · 제목 · 반려 · 승인. 판정이 승인·반려 둘로 정리되면서 되돌리기(rotate)가 빠지고 삭제가 반려로 바뀌었다(8/7) — 백엔드 approve/reject와 1:1이다.',
+        '시안의 연필(개별 블록 수정) 아이콘은 렌더하지 않는다 — 그 기능이 MVP 제외로 확정됐고(8/10), 닿는 곳 없는 버튼은 "구현됨"으로 오독된다. 시안 정리 요청은 검토 큐 design-request 수동 추가 절에 있다.',
         '셰브런 자산 대조 완료: arrow_dropdown_right(mask0_16877_80457) = 접힘 시안 icon/arrow_right(16877:80457), arrow_dropdown_down(mask0_6413_79613) = icon/arrow_drop_down(6413:79613). backspace.svg(mask0_17998_46476)는 8/7 Figma에서 신규 내려받았다.',
         '"반려됨" 배지는 Figma가 Box Button state=Inactive로 그렸지만 누를 수 없는 표시라 span으로 낸다 — 토큰(bg-fill-normal-interaction-inactive·border-line-normal-normal·text-text-normal-assistive)은 그 변형 그대로다.',
         '연필 버튼의 aria-label은 "이 블록 수정"이다 — 섹션 헤더의 전역 "직접 수정"과 접근성 이름이 겹치면 안 된다.',
@@ -85,15 +86,12 @@ export const Modified: Story = {
     await expect(args.onApprove).toHaveBeenCalledWith(modifiedEntry.id);
     await userEvent.click(canvas.getByRole('button', { name: '반려' }));
     await expect(args.onReject).toHaveBeenCalledWith(modifiedEntry.id);
-    await userEvent.click(canvas.getByRole('button', { name: '이 블록 수정' }));
-    await expect(args.onEditRequest).toHaveBeenCalledWith(modifiedEntry.id);
+    // 개별 블록 수정은 MVP 제외라 진입점이 없어야 한다 — 죽은 버튼을 남기지 않는다는 계약(8/10)
+    await expect(canvas.queryByRole('button', { name: /수정/ })).toBeNull();
 
-    // 카드의 편집 버튼은 블록 단위라 섹션 헤더의 전역 "직접 수정"과 이름이 겹치면 안 된다
-    await expect(canvas.queryByRole('button', { name: '직접 수정' })).toBeNull();
-
-    // 시안 순서: 셰브런 · 제목 · 연필 · 반려 · 승인 (되돌리기·삭제는 8/7에 빠졌다)
+    // 셰브런 · 제목 · 반려 · 승인 (되돌리기·삭제는 8/7, 연필은 8/10에 빠졌다)
     const names = canvas.getAllByRole('button').map((b) => b.getAttribute('aria-label') ?? b.textContent);
-    await expect(names).toEqual(['접기', '이 블록 수정', '반려', '승인']);
+    await expect(names).toEqual(['접기', '반려', '승인']);
   },
 };
 

@@ -5,7 +5,6 @@ import { useState } from 'react';
 import IconArrowDropdownDown from '@/public/icons/icon/arrow_dropdown_down.svg';
 import IconArrowDropdownRight from '@/public/icons/icon/arrow_dropdown_right.svg';
 import IconDelete2 from '@/public/icons/icon/delete_2.svg';
-import IconEditPencil from '@/public/icons/icon/edit_pencil.svg';
 import { Button } from '@/shared/components/ui/button';
 import { cn } from '@/shared/utils/cn';
 
@@ -19,8 +18,6 @@ export interface BlockDiffCardProps {
   onApprove: (id: string) => void;
   /** 제안 기각. 백엔드 RejectRequest와 같은 판정이다 */
   onReject: (id: string) => void;
-  /** 이 블록만 편집 — 진입 후 UI는 디자인 미정이라 콜백만 뚫어 둔다 */
-  onEditRequest: (id: string) => void;
 }
 
 /**
@@ -29,13 +26,17 @@ export interface BlockDiffCardProps {
  * 본문 배치는 kind가 정한다 — modified는 좌우 비교, added는 초록 단일,
  * removed는 삭제 고지가 붙은 빨강 단일(DeletedBlockPanel).
  * 판정은 승인·반려 둘뿐이다. 되돌리기(rotate)는 반려와 겹쳐서 8/7에 빠졌다.
+ *
+ * **연필(개별 블록 수정) 아이콘 버튼은 시안에 있으나 구현하지 않는다** — 그 기능이
+ * MVP 제외로 확정됐다(8/10). 눌러도 아무 데도 닿지 않는 버튼을 남기면 "구현됨"으로
+ * 오독된다. 시안 정리 요청은 검토 큐 design-request에 기재돼 있다.
+ * 문서 전체 편집 진입점은 살아 있고, 그건 BlockDiffSection 헤더의 "직접 수정"이다.
  */
 export default function BlockDiffCard({
   entry,
   defaultCollapsed = false,
   onApprove,
   onReject,
-  onEditRequest,
 }: BlockDiffCardProps) {
   const [collapsed, setCollapsed] = useState(defaultCollapsed);
   const { id, kind, title, before, after, reason, rejected = false } = entry;
@@ -65,16 +66,6 @@ export default function BlockDiffCard({
           </span>
         ) : (
           <>
-            {/* 전역 "직접 수정"(섹션 헤더)과 구분하려고 라벨을 블록 단위로 좁혔다 */}
-            <Button
-              variant="icon-only-gray"
-              size="sm"
-              className="size-7"
-              aria-label="이 블록 수정"
-              onClick={() => onEditRequest(id)}
-            >
-              <IconEditPencil aria-hidden className="size-5" />
-            </Button>
             {/* 높이를 박는 이유: outline은 1px 테두리가 더해져 28→30이고 solid는 28이라 나란히 두면 어긋난다.
                 공용 Button의 특성이라 리포 관례(pending/page.tsx)대로 양쪽에 같은 높이를 준다 */}
             <Button variant="box-outline-gray" size="sm" className="h-7.5" onClick={() => onReject(id)}>
