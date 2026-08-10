@@ -4,6 +4,7 @@ import type { JSONContent } from '@tiptap/react';
 
 import type { WikiDocumentFixture } from '../../fixtures/llmWikiDocumentFixtures';
 import WikiEditor from '../editor/WikiEditor';
+import WikiPageHeader from '../header/WikiPageHeader';
 import DevEditToggle from './DevEditToggle';
 import WikiDocumentMeta from './WikiDocumentMeta';
 
@@ -43,11 +44,18 @@ export default function WikiDocumentPage({ document, proposalId }: WikiDocumentP
   return (
     <section className="flex min-h-full flex-col">
       {/*
-        페이지 헤더(브레드크럼 52px) 슬롯. 헤더 세션이 components/header/** 에 공용 셸을
-        랜딩하면 여기 끼운다 — 조합 시점은 오케스트레이터가 공지한다. 그때까지 높이만 잡아
-        아래 레이아웃이 헤더 유무로 흔들리지 않게 한다.
+        페이지 헤더 — 공용 WikiPageHeader의 detail 변형(브레드크럼 체인).
+        문서 시안의 52px 바가 이것이고, 아래 WikiDocumentMeta(카드 안 제목·작성정보)와는
+        다른 층위다(Figma 17735:187317 vs 17735:187320).
+
+        badge는 비워둔다 — 상태 태그 워크스트림이 게이트 대기 중이라 공급원이 없다.
+        actions(⋯ 메뉴)도 비워둔다 — 시안에 아이콘은 있으나 메뉴 항목이 정의돼 있지 않다.
+        헤더가 "메뉴 내용은 소비처가 정한다"고 남겨둔 자리인데, 우리에게 정할 근거가 없다.
+
+        onBreadcrumbClick도 넘기지 않는다 — 채널·폴더 화면 라우트가 아직 없다.
+        핸들러 없이도 이전 마디는 버튼으로 렌더되므로, 라우트가 생기면 한 줄만 더하면 된다.
       */}
-      <div aria-hidden className="border-line-normal-normal h-13 shrink-0 border-b" />
+      <WikiPageHeader variant="detail" breadcrumbs={document.breadcrumbs} />
 
       <div className="mx-auto flex w-full max-w-260 flex-1 flex-col gap-6 px-6 py-9">
         <WikiDocumentMeta

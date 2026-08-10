@@ -1,5 +1,7 @@
 import type { JSONContent } from '@tiptap/react';
 
+import type { DocumentBreadcrumb } from '../types/llmWikiModel';
+
 /**
  * 문서 화면 픽스처. 문서 조회 API가 없어 라우트가 이걸로 렌더한다.
  *
@@ -17,6 +19,11 @@ export interface WikiDocumentFixture {
   authorName: string;
   /** [SPEC] "23시간 전" 같은 표시 문자열. 상대시각 계산은 이 범위 밖 */
   createdLabel: string;
+  /**
+   * 채널 > 폴더 > 현재페이지. WikiPageHeader(variant='detail')의 입력이다.
+   * 마지막 마디가 현재 페이지이므로 title과 같아야 한다 — 테스트가 지킨다.
+   */
+  breadcrumbs: readonly DocumentBreadcrumb[];
   /** 이 문서에 달린 제안. 편집 진입의 1급 키다 */
   proposalId: string;
   /** 발행본 — 열람 모드에서 보여준다 */
@@ -43,6 +50,11 @@ export const WIKI_DOCUMENT_FIXTURES: readonly WikiDocumentFixture[] = [
     title: '결제 실패 대응 가이드',
     authorName: '팀원F',
     createdLabel: '23시간 전',
+    breadcrumbs: [
+      { kind: 'channel', label: '결제' },
+      { kind: 'folder', label: '장애 대응' },
+      { kind: 'document', label: '결제 실패 대응 가이드' },
+    ],
     proposalId: 'prop-billing-1',
     publishedDoc: {
       type: 'doc',

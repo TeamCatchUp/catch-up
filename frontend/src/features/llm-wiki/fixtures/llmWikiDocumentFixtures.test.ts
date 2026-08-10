@@ -21,6 +21,13 @@ describe('llmWikiDocumentFixtures', () => {
     }
   });
 
+  it('breadcrumbs의 마지막 마디가 문서 제목이다 — 헤더가 그 마디를 현재 페이지로 강조한다', () => {
+    for (const doc of WIKI_DOCUMENT_FIXTURES) {
+      expect(doc.breadcrumbs.length).toBeGreaterThan(0);
+      expect(doc.breadcrumbs.at(-1)!.label).toBe(doc.title);
+    }
+  });
+
   it('id가 중복되지 않는다 — 조회가 엉킨다', () => {
     const ids = WIKI_DOCUMENT_FIXTURES.map((doc) => doc.id);
     expect(new Set(ids).size).toBe(ids.length);
