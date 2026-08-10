@@ -39,10 +39,10 @@ from catchup.db.models import ChannelAdmin
 from catchup.db.models import ChannelFolder
 from catchup.db.models import KnowledgeArtifact
 from catchup.db.models import UserWorkspace
-from catchup.server.knowledge_review.dependencies import MemberContext
-from catchup.server.knowledge_review.dependencies import deny_reviewer
-from catchup.server.knowledge_review.dependencies import resolve_member_workspace
-from catchup.server.knowledge_review.dependencies import review_error
+from catchup.server.wiki.dependencies import MemberContext
+from catchup.server.wiki.dependencies import deny_reviewer
+from catchup.server.wiki.dependencies import resolve_member_workspace
+from catchup.server.wiki.dependencies import review_error
 from catchup.server.wiki.roles import can_manage_owners
 from catchup.server.wiki.roles import load_artifact_owner_ids
 from catchup.server.wiki.roles import load_wiki_roles

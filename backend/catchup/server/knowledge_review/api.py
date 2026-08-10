@@ -88,7 +88,6 @@ from catchup.server.knowledge_review.dependencies import ReviewerContext
 from catchup.server.knowledge_review.dependencies import ReviewUowFactory
 from catchup.server.knowledge_review.dependencies import get_review_uow_factory
 from catchup.server.knowledge_review.dependencies import resolve_reviewer_workspace
-from catchup.server.knowledge_review.dependencies import review_error
 from catchup.server.knowledge_review.schemas import ApplyResponse
 from catchup.server.knowledge_review.schemas import ArtifactRefResponse
 from catchup.server.knowledge_review.schemas import BlockResponse
@@ -108,6 +107,7 @@ from catchup.server.knowledge_review.schemas import RejectRequest
 from catchup.server.knowledge_review.schemas import ResolveRequest
 from catchup.server.knowledge_review.schemas import ResolveResponse
 from catchup.server.knowledge_review.schemas import VariantResponse
+from catchup.server.wiki.dependencies import review_error
 from catchup.server.wiki.roles import can_decide_artifact
 from catchup.server.wiki.roles import load_artifact_channel_id
 from catchup.server.wiki.roles import load_artifact_owner_ids

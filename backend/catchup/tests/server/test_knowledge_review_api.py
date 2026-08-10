@@ -726,7 +726,7 @@ def test_authorization_denial_is_audited(
     _join(db, user=user, workspace_id=workspace_id)
 
     with patch(
-        "catchup.server.knowledge_review.dependencies.emit_audit_event"
+        "catchup.server.wiki.dependencies.emit_audit_event"
     ) as emit:
         with pytest.raises(HTTPException):
             resolve_reviewer_workspace(
