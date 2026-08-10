@@ -54,6 +54,7 @@ from catchup.sync.incremental import get_incremental_service
 from catchup.sync.incremental.dead_record_recovery import (
     recover_incremental_dead_records,
 )
+from catchup.utils.rescheduler import reschedule_one_shot_job
 
 logger = logging.getLogger(__name__)
 
@@ -317,6 +318,10 @@ def init_scheduler():
 
     _scheduler = AsyncIOScheduler(timezone=SEOUL_TZ)
 
+    # TODO(llm-wiki-settings-db): 별도 LLM Wiki 설정 테이블이 추가되면 여기서
+    # 기존 작업을 등록하고 DB의 next_run_at으로 ``reschedule_dynamic_job``을
+    # 호출한다.
+
     jira_webhook_refresh_hours = settings.JIRA_WEBHOOK_REFRESH_INTERVAL_HOURS
     _scheduler.add_job(
         refresh_jira_dynamic_webhooks,
@@ -427,3 +432,18 @@ def shutdown_scheduler():
 
 def get_scheduler() -> AsyncIOScheduler | None:
     return _scheduler
+
+
+def reschedule_dynamic_job(
+    *,
+    job_id: str,
+    next_run_at: datetime,
+):
+    """현재 scheduler의 기존 작업을 one-shot 예약으로 변경한다."""
+    if _scheduler is None:
+        raise RuntimeError("scheduler is not initialized")
+    return reschedule_one_shot_job(
+        _scheduler,
+        job_id=job_id,
+        next_run_at=next_run_at,
+    )
