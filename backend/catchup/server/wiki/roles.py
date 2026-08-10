@@ -47,7 +47,12 @@ class WikiRoleContext:
 def load_wiki_roles(
     db: Session, *, user_id: int, workspace_id: int
 ) -> WikiRoleContext:
-    """이 workspace에서 사용자의 역할 전부를 한 번에 읽는다."""
+    """이 workspace에서 사용자의 역할 전부를 한 번에 읽는다.
+
+    세 갈래 모두 workspace로 좁힌다. 스냅샷이 "이 workspace에서 무엇인가"를
+    말하지 않으면, 자격을 집합의 비어 있음으로만 보는 표면 게이트가 남의
+    workspace 역할로 열린다.
+    """
     user_role = db.scalar(select(User.role).where(User.id == user_id))
     admin_channel_ids = frozenset(
         db.scalars(
@@ -59,10 +64,20 @@ def load_wiki_roles(
             )
         ).all()
     )
+    # 담당 문서도 workspace로 좁힌다. 대상 판정은 문서 id 일치를 다시 보므로
+    # 무필터여도 남의 문서를 결정할 자리는 없지만, 표면 게이트(has_any_role)는
+    # 집합이 비었는지만 본다. 좁히지 않으면 A workspace의 담당자가 역할 하나
+    # 없는 B workspace의 검수 표면에 그대로 서서 계류 목록을 읽는다.
     owned_artifact_ids = frozenset(
         db.scalars(
-            select(ArtifactOwner.artifact_id).where(
-                ArtifactOwner.user_id == user_id
+            select(ArtifactOwner.artifact_id)
+            .join(
+                KnowledgeArtifact,
+                KnowledgeArtifact.id == ArtifactOwner.artifact_id,
+            )
+            .where(
+                ArtifactOwner.user_id == user_id,
+                KnowledgeArtifact.workspace_id == workspace_id,
             )
         ).all()
     )

@@ -644,6 +644,39 @@ def test_other_workspace_channel_admin_does_not_count(
     assert excinfo.value.detail["code"] == "NOT_REVIEWER"
 
 
+def test_other_workspace_owner_does_not_count(
+    db: Session, workspace_ids: tuple[int, int]
+) -> None:
+    """다른 workspace 문서의 담당자 자격은 이 문에서 세지 않는다.
+
+    대상 판정은 문서 id 일치를 다시 보므로 남의 문서를 결정할 자리는 애초에
+    없다. 그래도 적재를 좁혀야 하는 이유는 표면 게이트가 집합이 비었는지만
+    보기 때문이다 — 좁히지 않으면 역할 하나 없는 workspace의 계류 목록이
+    그 사람에게 그대로 열린다.
+    """
+    first, second = workspace_ids
+    user = _make_user(db, email="cross-ws-owner@example.com")
+    _join(db, user=user, workspace_id=first)
+    _join(db, user=user, workspace_id=second)
+    artifact_id = _make_artifact(db, workspace_id=second)
+    _make_owner(db, artifact_id=artifact_id, user=user)
+
+    with pytest.raises(HTTPException) as excinfo:
+        resolve_reviewer_workspace(
+            workspace_id=first, current_user=user, db=db
+        )
+
+    assert excinfo.value.status_code == 403
+    assert excinfo.value.detail["code"] == "NOT_REVIEWER"
+
+    # 대조군: 문서가 있는 쪽에서는 같은 사람이 그대로 통과한다. 403이
+    # "경계가 막았다"는 뜻이지 "담당 행이 없다"는 뜻이 아님을 가른다.
+    allowed = resolve_reviewer_workspace(
+        workspace_id=second, current_user=user, db=db
+    )
+    assert allowed.roles.owned_artifact_ids == frozenset({artifact_id})
+
+
 def test_artifact_owner_role_opens_the_surface(
     db: Session, workspace_ids: tuple[int, int]
 ) -> None:
