@@ -31,17 +31,23 @@ interface WikiPageHeaderCommonProps {
 }
 
 interface WikiPageHeaderMainProps extends WikiPageHeaderCommonProps {
-  /** 대시보드(17600:149328)·채널(17752:45516) — Header/state=Main */
+  /** 대시보드(17600:149328) — Header/state=Main */
   variant: 'main';
-  /** 제목 앞 아이콘. 대시보드=icon/dashboard, 채널=icon/home으로 화면마다 갈려서 주입받는다 */
+  /** 제목 앞 아이콘. 화면마다 갈릴 수 있어 주입받는다(대시보드=icon/dashboard) */
   icon?: ReactNode;
   title: string;
 }
 
 interface WikiPageHeaderDetailProps extends WikiPageHeaderCommonProps {
-  /** 폴더(17762:104786)·문서(17922:56420)·검토큐 문서(17930:57154) — Header/state=세부페이지_2단이상 */
+  /**
+   * 폴더(17762:104786)·문서(17922:56420)·검토큐 문서(17930:57154) — Header/state=세부페이지_2단이상.
+   * 채널 화면도 여기에 속한다(사용자 확정 8/10) — 마디가 1개뿐인 체인이다.
+   */
   variant: 'detail';
-  /** 마지막 마디가 현재 페이지다 — 강조되고 클릭되지 않는다 */
+  /**
+   * 마지막 마디가 현재 페이지다 — 강조되고 클릭되지 않는다.
+   * 마디가 1개면 그 하나가 현재 페이지이고 구분자는 그려지지 않는다(채널 화면).
+   */
   breadcrumbs: readonly DocumentBreadcrumb[];
   onBreadcrumbClick?: (crumb: DocumentBreadcrumb, index: number) => void;
   /** 현재 페이지 옆 태그 슬롯. 확정 시안은 검토큐의 "검토 필요" 1종 — DocumentStatusBadge가 공급한다 */

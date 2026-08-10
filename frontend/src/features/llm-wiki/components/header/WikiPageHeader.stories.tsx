@@ -4,7 +4,6 @@ import { expect, fn, userEvent, within } from 'storybook/test';
 import IconArrowDown from '@/public/icons/icon/arrow_down.svg';
 import IconArrowUp from '@/public/icons/icon/arrow_up.svg';
 import IconDashboard from '@/public/icons/icon/dashboard.svg';
-import IconHome from '@/public/icons/icon/home.svg';
 import IconKebabHorizontal from '@/public/icons/icon/kebab_horizontal.svg';
 import IconOpenInNew from '@/public/icons/icon/open_in_new_24.svg';
 import { Button } from '@/shared/components/ui/button';
@@ -71,7 +70,7 @@ const meta = {
       viewport: { width: 1200, height: 120 },
       states: [
         'main-dashboard',
-        'main-channel',
+        'detail-channel',
         'detail-folder',
         'detail-document',
         'detail-review-queue',
@@ -79,10 +78,11 @@ const meta = {
       ],
       reuseNotes: [
         'Figma `Header` 세트(585:7525)의 두 state를 그대로 옮겼다 — state=Main(17001:78508)이 variant="main", state=세부페이지_2단이상(522:2436)이 variant="detail". 검토큐(17930:57154)만 detach된 FRAME이지만 구조는 detail과 같다.',
+        '채널 화면은 시안(17752:45516)이 아직 main형이지만 detail(채널 1마디)로 구현했다 — 사용자 확정(8/10), 시안 갱신 대기. 구현 직전 시안 재확인 규칙의 예외이고, 갱신되면 이 노트를 지운다. main state 자체는 대시보드가 계속 쓴다.',
         '리포에 같은 셸의 선례가 둘 있다: AgentStudioHeader(main, px-16)와 RagContentHeader(detail, px-6). 둘 다 h-13 · justify-between · border-b · py-2로 같고 좌우 패딩만 갈린다 — 이 컴포넌트가 그 공통부를 가진다.',
         '우측 버튼은 shared Button 재사용이다. ⋯ = icon-only-gray/md(p-1.5 + rounded-lg → 36px, Figma Icon button 585:5628과 정확히 일치), 미리보기 = box-outline-gray/md(px-2.5 py-1.5 = Figma 10/6, Box Button 636:6333).',
         'breadcrumb 마디만 Button을 쓰지 않는다. Figma는 Text Button(582:3810)의 size=large_{이전,현재}페이지인데 코드 variant text-secondary-mono에는 그 규격이 없다(lg는 17px·rounded-full, md는 Medium 15px). RagContentHeader도 같은 이유로 직접 그렸다.',
-        '아이콘은 home·menu·arrow_right2를 SVG mask id(=Figma 노드 id)로 동일 확인했고, kebab_horizontal·dashboard·folder·wiki_channel·arrow_down은 path 좌표 대조로 일치를 확인했다. 신규는 arrow_up(기존에 없음)과 open_in_new_24(기존 open_in_new는 18그리드·다른 노드·path 구조 불일치 — SNB의 search_300 선례) 2개다.',
+        '아이콘은 menu·arrow_right2를 SVG mask id(=Figma 노드 id)로 동일 확인했고, kebab_horizontal·dashboard·folder·wiki_channel·arrow_down은 path 좌표 대조로 일치를 확인했다. 신규는 arrow_up(기존에 없음)과 open_in_new_24(기존 open_in_new는 18그리드·다른 노드·path 구조 불일치 — SNB의 search_300 선례) 2개다.',
       ],
       dataNotes: [
         'breadcrumb는 전부 props 주입이고 기존 DocumentBreadcrumb 계약(kind + label)을 그대로 쓴다 — 공유 파일 llmWikiModel.ts는 건드리지 않았다.',
@@ -140,17 +140,42 @@ export const Dashboard: Story = {
   },
 };
 
-/** 채널 17752:45516 — 같은 main state, 아이콘만 icon/home으로 갈린다 */
+/**
+ * 채널 — 채널 1마디짜리 detail 체인.
+ *
+ * **사용자 확정(8/10), 시안 갱신 대기.** 현 시안 17752:45516은 아직 main형(icon/home + 17px 제목,
+ * px-64)인데, 채널도 폴더·문서와 같은 셸을 쓰도록 사용자가 확정했다. 구현 직전 시안 재확인 규칙의
+ * 예외로, 시안이 아니라 이 결정이 앞선 케이스다 — 시안이 갱신되면 이 노트를 지운다.
+ *
+ * 마디가 1개라 그 하나가 곧 현재 페이지다(구분자·클릭 대상 없음). 배지 슬롯은 비운다 —
+ * 상태 태그 전수 조사에서 채널 시안에 상태 배지가 없었다.
+ */
 export const Channel: Story = {
   args: {
-    variant: 'main',
-    icon: <IconHome />,
-    title: '채널명',
+    variant: 'detail',
+    breadcrumbs: [{ kind: 'channel', label: '채널명' }],
     actions: <MoreButton />,
   },
   play: async ({ canvasElement }) => {
-    await expect(within(canvasElement).getByText('채널명')).toBeInTheDocument();
-    await expect(getComputedStyle(getHeader(canvasElement)).paddingLeft).toBe('64px');
+    const canvas = within(canvasElement);
+    const header = getHeader(canvasElement);
+
+    // detail 셸이다 — main(64)과 갈리는 유일한 기하라 값을 직접 잰다.
+    await expect(getComputedStyle(header).paddingLeft).toBe('24px');
+    await expect(header.getBoundingClientRect().height).toBe(52);
+
+    // 1마디도 체인이다. nav가 없으면 main으로 되돌아간 것이다.
+    const nav = canvas.getByRole('navigation');
+
+    // 유일한 마디 = 현재 페이지. 버튼이면 "지금 있는 곳으로 이동"이 생긴다.
+    await expect(canvas.queryByRole('button', { name: '채널명' })).toBeNull();
+    await expect(canvas.getByText('채널명').closest('[aria-current]')).not.toBeNull();
+
+    // 구분자는 마디 사이에만 그려진다 — nav 안 svg는 wiki_channel 하나뿐이어야 한다.
+    await expect(nav.querySelectorAll('svg')).toHaveLength(1);
+
+    // 배지 슬롯은 비어 있다 — 좌측 덩어리의 자식은 nav 하나뿐.
+    await expect(nav.parentElement?.children).toHaveLength(1);
   },
 };
 
