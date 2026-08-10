@@ -51,4 +51,11 @@ export interface BlockDiffEntry {
   before: readonly DiffLine[] | null; // added면 null
   after: readonly DiffLine[] | null; // removed면 null
   reason: string | null;
+  /**
+   * 반려 처리된 블록. 헤더의 액션 버튼이 "반려됨" 배지로 대체된다(Figma 17942:106687).
+   *
+   * 승인됨 배지는 시안에 없어서(MISSING) 대응 값을 만들지 않는다 — 불리언인 이유다.
+   * 블록 단위 판정은 백엔드에 없다(제안 단위 status만 존재) — [SPEC].
+   */
+  rejected?: boolean;
 }

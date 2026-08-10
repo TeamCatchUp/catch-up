@@ -12,7 +12,7 @@ const meta = {
   title: 'Compositions/LLM Wiki/ReviewQueue/BlockDiffSection',
   component: BlockDiffSection,
   tags: ['autodocs'],
-  args: { onEditDocument: fn(), onApprove: fn(), onRevert: fn(), onDelete: fn(), onEditRequest: fn() },
+  args: { onEditDocument: fn(), onApprove: fn(), onReject: fn(), onEditRequest: fn() },
   parameters: {
     ...catchupParameters({
       level: 'composition',

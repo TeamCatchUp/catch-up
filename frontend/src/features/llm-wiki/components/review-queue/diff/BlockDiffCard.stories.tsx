@@ -21,7 +21,7 @@ const meta = {
   title: 'Compositions/LLM Wiki/ReviewQueue/BlockDiffCard',
   component: BlockDiffCard,
   tags: ['autodocs'],
-  args: { onApprove: fn(), onRevert: fn(), onDelete: fn(), onEditRequest: fn() },
+  args: { onApprove: fn(), onReject: fn(), onEditRequest: fn() },
   parameters: {
     ...catchupParameters({
       level: 'composition',
@@ -36,11 +36,12 @@ const meta = {
         nodeId: '17849:106310',
       },
       viewport: { width: 700, height: 420 },
-      states: ['modified', 'added', 'removed', 'collapsed', 'long-text', 'no-reason'],
+      states: ['modified', 'added', 'removed', 'collapsed', 'rejected', 'long-text', 'no-reason'],
       reuseNotes: [
         '버튼은 공용 Button(box-solid-primary/box-outline-gray/icon-only-gray)을 그대로 쓴다 — 시안의 Box Button small(30px)·Icon button small(28px) 대응. 아이콘 버튼 28px는 AgentCard 관례대로 size="sm" + size-7이다.',
-        '헤더 배치는 시안 17849:106310 그대로 — 셰브런 · 제목 · 편집(연필) · 되돌리기(rotate) · 삭제 · 승인. 되돌리기가 텍스트 버튼에서 아이콘 버튼으로 바뀌었다(2026-08-07 사용자 확정).',
-        'rotate.svg의 마스크 id mask0_408_2113이 시안 icon/rotate(408:2113)와 일치한다 — 같은 자산이다. edit_pencil.svg는 마스크가 없어 파일명·viewBox로만 대조했다.',
+        '헤더 배치(8/7 개정): 셰브런 · 제목 · 편집(연필) · 반려 · 승인. 판정이 승인·반려 둘로 정리되면서 되돌리기(rotate)가 빠지고 삭제가 반려로 바뀌었다 — 백엔드 approve/reject와 1:1이다.',
+        '셰브런 자산 대조 완료: arrow_dropdown_right(mask0_16877_80457) = 접힘 시안 icon/arrow_right(16877:80457), arrow_dropdown_down(mask0_6413_79613) = icon/arrow_drop_down(6413:79613). backspace.svg(mask0_17998_46476)는 8/7 Figma에서 신규 내려받았다.',
+        '"반려됨" 배지는 Figma가 Box Button state=Inactive로 그렸지만 누를 수 없는 표시라 span으로 낸다 — 토큰(bg-fill-normal-interaction-inactive·border-line-normal-normal·text-text-normal-assistive)은 그 변형 그대로다.',
         '연필 버튼의 aria-label은 "이 블록 수정"이다 — 섹션 헤더의 전역 "직접 수정"과 접근성 이름이 겹치면 안 된다.',
       ],
       dataNotes: [
@@ -82,19 +83,17 @@ export const Modified: Story = {
 
     await userEvent.click(canvas.getByRole('button', { name: '승인' }));
     await expect(args.onApprove).toHaveBeenCalledWith(modifiedEntry.id);
-    await userEvent.click(canvas.getByRole('button', { name: '되돌리기' }));
-    await expect(args.onRevert).toHaveBeenCalledWith(modifiedEntry.id);
-    await userEvent.click(canvas.getByRole('button', { name: '삭제' }));
-    await expect(args.onDelete).toHaveBeenCalledWith(modifiedEntry.id);
+    await userEvent.click(canvas.getByRole('button', { name: '반려' }));
+    await expect(args.onReject).toHaveBeenCalledWith(modifiedEntry.id);
     await userEvent.click(canvas.getByRole('button', { name: '이 블록 수정' }));
     await expect(args.onEditRequest).toHaveBeenCalledWith(modifiedEntry.id);
 
     // 카드의 편집 버튼은 블록 단위라 섹션 헤더의 전역 "직접 수정"과 이름이 겹치면 안 된다
     await expect(canvas.queryByRole('button', { name: '직접 수정' })).toBeNull();
 
-    // 시안 순서: 셰브런 · 제목 · 연필 · rotate · 삭제 · 승인
+    // 시안 순서: 셰브런 · 제목 · 연필 · 반려 · 승인 (되돌리기·삭제는 8/7에 빠졌다)
     const names = canvas.getAllByRole('button').map((b) => b.getAttribute('aria-label') ?? b.textContent);
-    await expect(names).toEqual(['접기', '이 블록 수정', '되돌리기', '삭제', '승인']);
+    await expect(names).toEqual(['접기', '이 블록 수정', '반려', '승인']);
   },
 };
 
@@ -113,11 +112,26 @@ export const Removed: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await expect(canvas.getByText('수동 재시도 안내')).toBeInTheDocument();
-    // added의 거울상 — 초록(after) 패널이 없어야 한다
+    // 초록(after) 패널이 없어야 한다
     await expect(canvasElement.querySelectorAll('[class*="border-green"]')).toHaveLength(0);
+    // 색만으로 삭제를 알리지 않는다 — 고지 문구가 패널 안에 있어야 한다(17998:46482)
+    await expect(canvas.getByText('콘텐츠를 삭제함')).toBeInTheDocument();
     // 삭제도 사유를 갖는다(2026-08-07 계약 결정) — 지워지는 변경일수록 근거가 필요하다
     await expect(canvas.getByText(/수정된 이유/)).toBeInTheDocument();
     await expect(canvas.getByText(/상담원 수동 안내 절차가 폐지/)).toBeInTheDocument();
+  },
+};
+
+/** 반려 처리된 블록(17942:106687). 액션 버튼이 사라지고 "반려됨" 배지만 남는다. */
+export const Rejected: Story = {
+  args: { entry: { ...modifiedEntry, rejected: true }, defaultCollapsed: true },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    await expect(canvas.getByText('반려됨')).toBeInTheDocument();
+    // 판정이 끝났으므로 액션이 하나도 남으면 안 된다 — 셰브런만 버튼이다
+    const names = canvas.getAllByRole('button').map((b) => b.getAttribute('aria-label') ?? b.textContent);
+    await expect(names).toEqual(['펼치기']);
   },
 };
 

@@ -8,8 +8,8 @@ export interface BlockDiffSectionProps {
   /** 헤더 우상단 "직접 수정" — 눌렀을 때의 동작(본 페이지 이동 등)은 미정이라 콜백만 뚫어 둔다 */
   onEditDocument: () => void;
   onApprove: (id: string) => void;
-  onRevert: (id: string) => void;
-  onDelete: (id: string) => void;
+  /** 제안 기각. 백엔드 RejectRequest와 같은 판정이다 */
+  onReject: (id: string) => void;
   /** 카드의 연필 버튼 — 블록 단위 편집. 진입 후 UI는 디자인 미정 */
   onEditRequest: (id: string) => void;
 }
@@ -24,8 +24,7 @@ export default function BlockDiffSection({
   entries,
   onEditDocument,
   onApprove,
-  onRevert,
-  onDelete,
+  onReject,
   onEditRequest,
 }: BlockDiffSectionProps) {
   return (
@@ -50,8 +49,7 @@ export default function BlockDiffSection({
           key={entry.id}
           entry={entry}
           onApprove={onApprove}
-          onRevert={onRevert}
-          onDelete={onDelete}
+          onReject={onReject}
           onEditRequest={onEditRequest}
         />
       ))}
