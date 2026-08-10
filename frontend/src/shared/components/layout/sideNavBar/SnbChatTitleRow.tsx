@@ -27,10 +27,7 @@ export default function SnbChatTitleRow({
     <div
       className={cn(
         'group flex h-9 w-full items-center gap-1 rounded-lg px-2.5 py-1.5 transition-colors',
-        /*
-         * hover/pressed는 solid 토큰으로 상대 순서만 지킨다(Figma는 알파 오버레이).
-         * 행이 버튼이 아니라서 pressed는 내부 버튼의 :active를 has()로 받는다.
-         */
+        // 행이 버튼이 아니라서 pressed는 내부 버튼의 :active를 has()로 받는다
         'hover:bg-fill-normal-interaction-hover has-[button:active]:bg-fill-normal-interaction-pressed',
         selected && 'bg-fill-primary-normal-neutral hover:bg-fill-primary-normal-interaction-hover-assistive',
         className,

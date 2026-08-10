@@ -36,7 +36,6 @@ export default function SnbSpaceSwitcher({
       aria-label={showsLabel ? undefined : label}
       className={cn(
         'flex h-9 cursor-pointer items-center justify-center gap-1.5 transition-colors',
-        // hover/pressed는 solid 토큰으로 상대 순서만 지킨다(Figma는 알파 오버레이)
         isClosed
           ? cn(
               'size-9 shrink-0 rounded-xl',
@@ -55,7 +54,16 @@ export default function SnbSpaceSwitcher({
     >
       <Icon
         aria-hidden
-        className={cn('size-6 shrink-0', selected ? 'text-icon-normal-strong' : 'text-icon-normal-neutral')}
+        className={cn(
+          'size-6 shrink-0',
+          selected
+            ? 'text-icon-normal-strong'
+            : // 미선택 아이콘은 펼침이 닫힘보다 한 단계 더 옅다. 펼침에서는 라벨을 단
+              // 선택 알약 옆에 아이콘만 남으므로 더 물러나야 대비가 읽힌다
+              isClosed
+              ? 'text-icon-normal-neutral'
+              : 'text-icon-normal-alternative',
+        )}
       />
       {showsLabel && <span className="text-heading-small text-text-normal-strong truncate">{label}</span>}
     </button>

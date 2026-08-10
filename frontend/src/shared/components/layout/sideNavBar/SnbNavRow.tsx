@@ -37,11 +37,6 @@ export default function SnbNavRow({
       aria-current={selected ? 'page' : undefined}
       className={cn(
         'flex h-9 w-full cursor-pointer items-center justify-between gap-3 rounded-lg px-2.5 py-1.5 transition-colors',
-        /*
-         * Figma는 hover/pressed를 알파 오버레이로 구분하지만 코드의 interaction 토큰은
-         * 아직 solid neutral 세대라 상대 순서(hover < pressed)만 지킨다. Selected 계열은
-         * 토큰이 Figma 값과 정확히 일치한다.
-         */
         'hover:bg-fill-normal-interaction-hover active:bg-fill-normal-interaction-pressed',
         selected && 'bg-fill-primary-normal-neutral hover:bg-fill-primary-normal-interaction-hover-assistive',
         className,

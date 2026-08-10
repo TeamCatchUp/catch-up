@@ -34,7 +34,6 @@ export default function SnbRailItem({
       <span
         className={cn(
           'relative flex size-9 shrink-0 items-center justify-center rounded-xl transition-colors',
-          // hover/pressed는 solid 토큰으로 상대 순서만 지킨다(Figma는 알파 오버레이)
           selected
             ? 'bg-fill-primary-normal-neutral hover:bg-fill-primary-normal-interaction-hover-assistive'
             : 'hover:bg-fill-normal-interaction-hover active:bg-fill-normal-interaction-pressed',

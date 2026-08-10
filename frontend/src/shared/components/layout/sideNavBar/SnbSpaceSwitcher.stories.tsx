@@ -63,6 +63,14 @@ export const ExpandedPair: Story = {
     await expect(canvas.getByRole('button', { name: '홈' })).toHaveAttribute('aria-current', 'page');
     // 미선택도 접근 이름은 남는다
     await expect(canvas.getByRole('button', { name: 'LLM Wiki' })).toBeInTheDocument();
+
+    // 펼침 미선택 아이콘은 Icon/Normal/Alternative다 — 닫힘(Neutral)보다 한 단계 옅다
+    await expect(canvas.getByRole('button', { name: '홈' }).querySelector('svg')).toHaveClass(
+      'text-icon-normal-strong',
+    );
+    await expect(canvas.getByRole('button', { name: 'LLM Wiki' }).querySelector('svg')).toHaveClass(
+      'text-icon-normal-alternative',
+    );
   },
 };
 
@@ -106,5 +114,10 @@ export const ClosedPair: Story = {
     const home = canvas.getByRole('button', { name: '홈' });
     await expect(Math.round(home.getBoundingClientRect().width)).toBe(36);
     await expect(Math.round(home.getBoundingClientRect().height)).toBe(36);
+
+    // 닫힘 미선택 아이콘은 Icon/Normal/Neutral — 펼침(Alternative)과 다르다
+    await expect(canvas.getByRole('button', { name: 'LLM Wiki' }).querySelector('svg')).toHaveClass(
+      'text-icon-normal-neutral',
+    );
   },
 };

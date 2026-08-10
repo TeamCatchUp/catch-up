@@ -54,7 +54,6 @@ export default function SnbTeamspaceCard({
       onClick={onClick}
       className={cn(
         shell,
-        // hover/pressed는 solid 토큰으로 상대 순서만 지킨다(Figma는 알파 오버레이)
         'hover:bg-fill-normal-interaction-hover active:bg-fill-normal-interaction-pressed cursor-pointer transition-colors',
       )}
     >
