@@ -58,6 +58,7 @@ router = APIRouter(
 
 _CHANNEL_NAME_CONSTRAINT = "uq_channels_workspace_name"
 _FOLDER_NAME_CONSTRAINT = "uq_channel_folders_channel_name"
+_ARTIFACT_FOLDER_CONSTRAINT = "fk_knowledge_artifacts_folder"
 
 
 def _violates(error: IntegrityError, constraint: str) -> bool:
@@ -418,12 +419,29 @@ def delete_folder(
 ) -> Response:
     """폴더를 지운다.
 
+    문서가 든 폴더는 지우지 못한다. 문서가 딸린 FK는 RESTRICT라 DB가
+    삭제를 막는데, 그 위반을 잡지 않으면 이 경로만 500으로 나가
+    `{"code", "message"}` 계약이 깨진다. "먼저 문서를 옮기라"는 사실을
+    소비자가 코드로 읽을 수 있어야 화면이 다음 할 일을 안내한다.
+
     Raises:
-        HTTPException: 채널·폴더가 없으면 404, 관리자가 아니면 403을
-            던진다.
+        HTTPException: 채널·폴더가 없으면 404, 관리자가 아니면 403,
+            폴더에 문서가 남아 있으면 409를 던진다.
     """
     _require_channel_admin(db, channel_id=channel_id, context=context)
     folder = _load_folder(db, folder_id=folder_id, channel_id=channel_id)
     db.delete(folder)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError as error:
+        db.rollback()
+        if _violates(error, _ARTIFACT_FOLDER_CONSTRAINT):
+            raise review_error(
+                409,
+                code="FOLDER_NOT_EMPTY",
+                message="문서가 있는 폴더는 삭제할 수 없습니다."
+                " 문서를 먼저 옮겨 주세요.",
+            ) from error
+        raise
+
     return Response(status_code=204)

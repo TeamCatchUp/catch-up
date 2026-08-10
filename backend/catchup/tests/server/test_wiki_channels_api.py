@@ -154,9 +154,18 @@ def _make_channel(
 
 
 def _make_artifact(
-    db: Session, *, workspace_id: int, channel_id: uuid.UUID
+    db: Session,
+    *,
+    workspace_id: int,
+    channel_id: uuid.UUID,
+    folder_id: uuid.UUID | None = None,
 ) -> uuid.UUID:
-    """그 채널에 놓인 문서 한 편을 만든다."""
+    """그 채널(과 폴더)에 놓인 문서 한 편을 만든다.
+
+    workspace_id는 채널·폴더와 같은 값을 그대로 받는다. 문서는 채널과
+    폴더에 각각 (workspace_id, ...) 복합 FK로 묶여 있어, 어긋나면 삽입
+    자체가 막힌다.
+    """
     node_id = uuid.uuid4()
     db.add(
         KnowledgeNode(
@@ -176,6 +185,7 @@ def _make_artifact(
             workspace_id=workspace_id,
             kind="entity_summary",
             channel_id=channel_id,
+            folder_id=folder_id,
             subject_node_id=node_id,
             title="오픈 API",
         )
@@ -350,6 +360,45 @@ def test_folder_of_other_channel_is_not_found(
 
     assert mismatched.status_code == 404
     assert mismatched.json()["detail"]["code"] == "FOLDER_NOT_FOUND"
+
+
+def test_folder_with_documents_cannot_be_deleted(
+    client: TestClient,
+    db: Session,
+    member: User,
+    workspace_ids: tuple[int, int],
+) -> None:
+    """문서가 든 폴더 삭제는 409다 — RESTRICT가 500으로 새지 않는다."""
+    workspace_id, _ = workspace_ids
+    channel_id = client.post(
+        "/api/v1/wiki/channels", json={"name": f"보관-{uuid.uuid4().hex[:8]}"}
+    ).json()["id"]
+    folder_id = client.post(
+        f"/api/v1/wiki/channels/{channel_id}/folders", json={"name": "요구사항"}
+    ).json()["id"]
+    _make_artifact(
+        db,
+        workspace_id=workspace_id,
+        channel_id=uuid.UUID(channel_id),
+        folder_id=uuid.UUID(folder_id),
+    )
+    db.commit()
+
+    denied = client.delete(
+        f"/api/v1/wiki/channels/{channel_id}/folders/{folder_id}"
+    )
+
+    assert denied.status_code == 409
+    assert denied.json()["detail"]["code"] == "FOLDER_NOT_EMPTY"
+    # 폴더는 그대로 남는다 — 거부된 삭제가 절반만 반영되지 않는다.
+    assert (
+        db.scalar(
+            select(ChannelFolder).where(
+                ChannelFolder.id == uuid.UUID(folder_id)
+            )
+        )
+        is not None
+    )
 
 
 def test_duplicate_folder_name_conflicts(
