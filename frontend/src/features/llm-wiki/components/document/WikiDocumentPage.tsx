@@ -3,6 +3,8 @@
 import type { JSONContent } from '@tiptap/react';
 
 import type { WikiDocumentFixture } from '../../fixtures/llmWikiDocumentFixtures';
+import WikiEditor from '../editor/WikiEditor';
+import WikiDocumentMeta from './WikiDocumentMeta';
 
 export interface DocumentView {
   mode: 'view' | 'edit';
@@ -27,4 +29,46 @@ export function resolveDocumentView(document: WikiDocumentFixture, proposalId: s
   return matches
     ? { mode: 'edit', doc: document.proposalDoc, canEdit: true }
     : { mode: 'view', doc: document.publishedDoc, canEdit: false };
+}
+
+export interface WikiDocumentPageProps {
+  document: WikiDocumentFixture;
+  proposalId: string | null;
+}
+
+export default function WikiDocumentPage({ document, proposalId }: WikiDocumentPageProps) {
+  const view = resolveDocumentView(document, proposalId);
+
+  return (
+    <section className="flex min-h-full flex-col">
+      {/*
+        페이지 헤더(브레드크럼 52px) 슬롯. 헤더 세션이 components/header/** 에 공용 셸을
+        랜딩하면 여기 끼운다 — 조합 시점은 오케스트레이터가 공지한다. 그때까지 높이만 잡아
+        아래 레이아웃이 헤더 유무로 흔들리지 않게 한다.
+      */}
+      <div aria-hidden className="border-line-normal-normal h-13 shrink-0 border-b" />
+
+      <div className="mx-auto flex w-full max-w-260 flex-1 flex-col gap-6 px-6 py-9">
+        <WikiDocumentMeta
+          title={document.title}
+          authorName={document.authorName}
+          createdLabel={document.createdLabel}
+        />
+
+        {/* 편집 중에는 무엇을 보고 있는지 알려준다 — 모드에 따라 문서 내용 자체가 바뀐다(스펙 §5) */}
+        {view.mode === 'edit' && (
+          <p className="text-label-small text-text-normal-alternative">
+            제안본을 편집 중입니다. 저장 기능은 아직 없어 새로고침하면 사라집니다.
+          </p>
+        )}
+
+        {/*
+          key={view.mode}가 필수다. WikiEditor는 uncontrolled라 initialContent가 최초 1회만
+          반영되는데(에디터 스펙 §8), 모드가 바뀌면 문서 자체가 발행본↔제안본으로 갈린다.
+          재마운트하지 않으면 내용이 안 바뀐다.
+        */}
+        <WikiEditor key={view.mode} initialContent={view.doc} editable={view.mode === 'edit'} />
+      </div>
+    </section>
+  );
 }
