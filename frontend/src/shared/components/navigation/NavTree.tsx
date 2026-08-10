@@ -146,8 +146,9 @@ export default function NavTree({
           className={cn(
             'group flex h-9 items-center gap-3 rounded-lg px-2.5 py-1.5 transition-colors',
             /*
-             * SnbMenuItem과 같은 근거 — Figma는 상태를 알파 오버레이로 구분하지만 코드의
-             * interaction 토큰은 아직 solid neutral 세대라 상대 순서(hover < pressed)만 지킨다.
+             * fill-normal-interaction-* 는 알파 오버레이 세대다(8/7 전환, gray-90 6%/10%).
+             * Figma NavTree상세의 Fill/Normal/interaction/{Hover,Pressed}와 값이 일치하므로
+             * 토큰을 그대로 쓴다. SnbMenuItem 쪽 "solid neutral 세대" 주석은 아직 미갱신이다.
              * 행이 더 이상 버튼이 아니라서 pressed는 내부 버튼의 :active를 has()로 받는다.
              */
             'hover:bg-fill-normal-interaction-hover has-[button:active]:bg-fill-normal-interaction-pressed',

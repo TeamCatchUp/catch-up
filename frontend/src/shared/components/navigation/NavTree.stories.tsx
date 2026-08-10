@@ -87,6 +87,7 @@ const meta = {
         '표시형은 항목 아이콘이 Icon/Normal/Normal, 연결자 화살표만 Icon/Normal/Neutral이다.',
         '라벨은 양쪽 다 body(md)/small(15/1.5). 색은 Text/Normal/Normal, 선택 행만 Text/Primary/Normal.',
         '선택 상태는 Fill/Primary/Normal/Neutral, 선택+hover는 Fill/Primary/Normal/interaction/Hover_Assistive다. 코드 토큰과 값이 정확히 일치한다.',
+        'hover/pressed의 Fill/Normal/interaction/*은 8/7 알파 전환(gray-90 6%/10%) 이후라 시안 값과 일치한다 — 더 이상 solid 근사가 아니다.',
       ],
       interactionNotes: [
         '접기/펼치기는 캐럿 버튼 전용이다. 행 본문 클릭은 이동만 한다.',
