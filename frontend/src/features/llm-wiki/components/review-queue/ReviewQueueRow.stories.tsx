@@ -28,7 +28,7 @@ const meta = {
       reuseNotes: [
         '검토 큐 좌측 목록(17564:126942, 폭 300)의 행이다. 목록 13행 중 12행이 기본형(17849:106767), 최상단 1행만 에러 아이콘 + 선택 채움(17564:126946)이다.',
         'error.svg(마스크 id mask0_389_1866 = Figma icon/error 389:1866)·add_small.svg(mask0_46_1623 = icon/add_small 46:1623)는 리포에 이미 있는 에셋과 컴포넌트 id가 정확히 일치한다 — 신규 export 없음.',
-        '아바타는 AgentCard(agent-studio)의 관례를 그대로 따랐다: size-6.25 원형 + default_profile.svg 폴백 + isSafeUrl 가드. 공용 아바타 컴포넌트는 리포에 아직 없다.',
+        '아바타는 공용 `shared/components/ui/avatar`의 size=small(25px)이다 — 폴백·isSafeUrl 가드가 컴포넌트 안에 있어 행에서 되풀이하지 않는다.',
       ],
       dataNotes: [
         '행에 신뢰도를 표시하지 않는다 — 감사 판정 MISSING(필터에만 존재). fixture의 confidence는 계약 보존용이라 이 컴포넌트는 props로 받지도 않는다. Default·WithErrorIcon play가 미노출을 가드한다.',
@@ -42,7 +42,7 @@ const meta = {
         '행 하단 구분선 #EAEBEC = Line/Normal/Neutral = border-line-normal-neutral, 1px 하단만.',
         '선택 채움 #F7F7F8 = Fill/Normal/Strong = bg-fill-normal-strong. 비선택 행은 fills=[] — 투명이다.',
         '에러 아이콘 #FF6363 = Accent/Red/Default = text-accent-red-default. add_small 칩은 #F7F7F8 배경(bg-fill-normal-strong) + radius/rounded 1000(rounded-full) + 아이콘 #6D7882 = text-icon-normal-neutral.',
-        '아바타 radius/xl 12 = rounded-xl, 테두리 #F4F4F5 = Line/Normal/Assistive = border-line-normal-assistive.',
+        '아바타 radius/xl 12 = rounded-xl, 테두리 #F4F4F5 = Line/Normal/Assistive = border-line-normal-assistive. 공용 Avatar 기본값(radius 1000 + Fill/Normal/Strong #F7F7F8)과 다르다 — 디자인 시스템 원본 imagebox/profile(582:2674)이 아니라 이 목록의 인스턴스 13개가 전부 덮어쓴 값이라 className으로 되덮었다. 어느 쪽이 의도인지는 디자이너 확인 대상.',
       ],
       layoutNotes: [
         '행은 세로 스택(padding 12/16, gap 12)이고 폭은 Figma sizing=fill이라 px를 박지 않았다 — 목록 폭 300은 부모 것이다. FluidWidth 스토리가 400px 슬롯에서 400을 확인한다.',
@@ -87,6 +87,16 @@ export const Default: Story = {
     // 비선택 행은 Figma fills=[] — 채움을 발명하지 않았다.
     await expect(window.getComputedStyle(row).backgroundColor).toBe('rgba(0, 0, 0, 0)');
     await expect(row).not.toHaveAttribute('aria-current');
+
+    // 공용 Avatar 위에 덮은 링이 tailwind-merge를 통과했는지 잰다 — 눈으로는 12와 12.5를 구분할 수 없다.
+    // 기대값은 이 목록 인스턴스(17849:106770)의 radius/xl 12 + Line/Normal/Assistive #F4F4F5이고,
+    // 덮기가 풀리면 Avatar 기본값(9999px + #F7F7F8)으로 돌아가 여기서 깨진다.
+    const avatar = canvasElement.querySelector('svg[viewBox="0 0 40 40"]')?.parentElement;
+    await expect(avatar).not.toBeUndefined();
+    const avatarStyle = window.getComputedStyle(avatar as HTMLElement);
+    await expect(avatarStyle.borderTopLeftRadius).toBe('12px');
+    await expect(avatarStyle.borderTopColor).toBe('rgb(244, 244, 245)');
+    await expect(Math.round((avatar as HTMLElement).getBoundingClientRect().width)).toBe(25);
 
     await userEvent.click(row);
     await expect(args.onSelect).toHaveBeenCalledWith('proposal-payment-retry-v3');

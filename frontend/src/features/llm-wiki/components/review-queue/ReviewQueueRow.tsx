@@ -1,8 +1,7 @@
 import IconAddSmall from '@/public/icons/icon/add_small.svg';
-import DefaultProfileIcon from '@/public/icons/icon/default_profile.svg';
 import IconError from '@/public/icons/icon/error.svg';
+import { Avatar } from '@/shared/components/ui/avatar';
 import { cn } from '@/shared/utils/cn';
-import { isSafeUrl } from '@/shared/utils/isSafeUrl';
 
 import type { ReviewQueueItemData } from '../../types/llmWikiModel';
 
@@ -29,7 +28,6 @@ interface ReviewQueueRowProps {
  */
 export default function ReviewQueueRow({ item, selected = false, onSelect, secondaryTitle }: ReviewQueueRowProps) {
   const { id, title, authorName, authorProfileImageUrl, waitingLabel, hasConflictIcon } = item;
-  const safeProfileImageUrl = authorProfileImageUrl && isSafeUrl(authorProfileImageUrl) ? authorProfileImageUrl : null;
 
   // Figma는 제목 묶음을 한 겹 더 감싸지만(17762:105460) 바깥 gap과 안쪽 gap이 둘 다 12라 평평하게 폈다.
   // 높이 84는 결과값이다(12 + 23 + 12 + 25 + 12) — h-*로 못박지 않는다.
@@ -59,15 +57,13 @@ export default function ReviewQueueRow({ item, selected = false, onSelect, secon
       )}
 
       <span className="text-body-xsmall flex w-full min-w-0 items-center gap-3">
-        {/* 아바타 관례는 AgentCard와 같다 — 공용 컴포넌트가 없어 25px 원형 + 폴백 아이콘을 그대로 반복한다 */}
-        <span className="border-line-normal-assistive flex size-6.25 shrink-0 items-center justify-center overflow-hidden rounded-xl border">
-          {safeProfileImageUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={safeProfileImageUrl} alt="" className="size-full object-cover" />
-          ) : (
-            <DefaultProfileIcon aria-hidden className="size-full" />
-          )}
-        </span>
+        {/*
+          공용 Avatar(size=small 25px)에 이 화면만의 링을 덮어씌운다.
+          디자인 시스템 원본(imagebox/profile 582:2674)은 radius 1000 + Fill/Normal/Strong이지만,
+          검토 큐 목록의 13개 인스턴스는 전부 radius/xl 12 + Line/Normal/Assistive로 덮여 있다.
+          alt를 비우는 이유는 바로 옆에 작성자명이 이미 있어서다(중복 낭독 방지).
+        */}
+        <Avatar size="small" src={authorProfileImageUrl} className="border-line-normal-assistive rounded-xl" />
         <span className="text-text-normal-normal min-w-0 flex-1 truncate">{authorName}</span>
         <span className="text-text-normal-assistive shrink-0">{waitingLabel}</span>
       </span>
