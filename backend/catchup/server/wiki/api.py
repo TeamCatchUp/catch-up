@@ -47,6 +47,7 @@ from catchup.server.wiki.roles import can_manage_owners
 from catchup.server.wiki.roles import load_artifact_owner_ids
 from catchup.server.wiki.roles import load_wiki_roles
 from catchup.server.wiki.schemas import ArtifactOwnerResponse
+from catchup.server.wiki.schemas import ChannelAdminResponse
 from catchup.server.wiki.schemas import ChannelCreateRequest
 from catchup.server.wiki.schemas import ChannelListItemResponse
 from catchup.server.wiki.schemas import ChannelListResponse
@@ -65,6 +66,7 @@ _CHANNEL_NAME_CONSTRAINT = "uq_channels_workspace_name"
 _FOLDER_NAME_CONSTRAINT = "uq_channel_folders_channel_name"
 _ARTIFACT_FOLDER_CONSTRAINT = "fk_knowledge_artifacts_folder"
 _OWNER_PK_CONSTRAINT = "artifact_owners_pkey"
+_ADMIN_PK_CONSTRAINT = "channel_admins_pkey"
 
 
 def _violates(error: IntegrityError, constraint: str) -> bool:
@@ -212,6 +214,19 @@ def _require_workspace_member(
             code="USER_NOT_MEMBER",
             message="대상 사용자가 이 워크스페이스의 구성원이 아닙니다.",
         )
+
+
+def _load_channel_admin_ids(
+    db: Session, channel_id: uuid.UUID
+) -> list[int]:
+    """채널 관리자 명단을 정렬된 순서로 읽는다."""
+    return sorted(
+        db.scalars(
+            select(ChannelAdmin.user_id).where(
+                ChannelAdmin.channel_id == channel_id
+            )
+        ).all()
+    )
 
 
 @router.post(
@@ -634,3 +649,59 @@ def remove_artifact_owner(
         db.commit()
 
     return Response(status_code=204)
+
+
+@router.put(
+    path="/channels/{channel_id}/admins/{user_id}",
+    response_model=ChannelAdminResponse,
+    status_code=201,
+    description="채널 관리자를 추가 지정한다. 그 채널의 기존 관리자만 할 수 있다.",
+)
+def assign_channel_admin(
+    channel_id: uuid.UUID,
+    user_id: int,
+    response: Response,
+    context: MemberContext = Depends(resolve_member_workspace),
+    db: Session = Depends(get_db),
+) -> ChannelAdminResponse:
+    """채널 관리자 한 명을 더 세운다.
+
+    해제는 없다. 마지막 관리자를 뗀 채널은 아무도 고칠 수 없는 상태로
+    남는데, 그 경계를 어떻게 막을지가 아직 기획으로 정해지지 않았다.
+    지정만 열어 두면 그 상태에 빠질 길이 없다.
+
+    Raises:
+        HTTPException: 채널이 없으면 404, 그 채널의 관리자가 아니면 403,
+            대상이 구성원이 아니면 400을 던진다.
+    """
+    channel = _require_channel_admin(
+        db, channel_id=channel_id, context=context
+    )
+    _require_workspace_member(
+        db, user_id=user_id, workspace_id=context.workspace_id
+    )
+
+    existing = db.get(ChannelAdmin, (channel.id, user_id))
+    if existing is not None:
+        response.status_code = 200
+    else:
+        db.add(
+            ChannelAdmin(
+                channel_id=channel.id,
+                user_id=user_id,
+                granted_by=context.user.id,
+            )
+        )
+        try:
+            db.commit()
+        except IntegrityError as error:
+            db.rollback()
+            if _violates(error, _ADMIN_PK_CONSTRAINT):
+                response.status_code = 200
+            else:
+                raise
+
+    return ChannelAdminResponse(
+        channel_id=str(channel.id),
+        user_ids=_load_channel_admin_ids(db, channel.id),
+    )

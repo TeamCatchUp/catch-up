@@ -102,3 +102,10 @@ class ArtifactOwnerResponse(BaseModel):
 
     artifact_id: str
     user_ids: list[int]
+
+
+class ChannelAdminResponse(BaseModel):
+    """채널 관리자 한 명의 지정 결과를 담는다."""
+
+    channel_id: str
+    user_ids: list[int]

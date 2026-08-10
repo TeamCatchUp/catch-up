@@ -489,6 +489,84 @@ def test_non_member_cannot_reach_the_surface(
     assert response.json()["detail"]["code"] == "NOT_MEMBER"
 
 
+# ======================= 관리자 추가 지정 =======================
+
+
+def test_admin_adds_another_admin(
+    client: TestClient, db: Session, member: User, workspace_ids: tuple[int, int]
+) -> None:
+    """기존 관리자가 다른 구성원을 관리자로 세운다 — 멱등이다."""
+    workspace_id, _ = workspace_ids
+    channel_id = client.post(
+        "/api/v1/wiki/channels", json={"name": f"관리-{uuid.uuid4().hex[:8]}"}
+    ).json()["id"]
+    peer = _make_user(db, email=f"peer-{uuid.uuid4().hex[:8]}@example.com")
+    _join(db, user=peer, workspace_id=workspace_id)
+
+    created = client.put(
+        f"/api/v1/wiki/channels/{channel_id}/admins/{peer.id}"
+    )
+
+    assert created.status_code == 201
+    assert sorted(created.json()["user_ids"]) == sorted([member.id, peer.id])
+
+    again = client.put(f"/api/v1/wiki/channels/{channel_id}/admins/{peer.id}")
+
+    assert again.status_code == 200
+
+
+def test_non_admin_cannot_add_admin(
+    client: TestClient, db: Session, member: User, workspace_ids: tuple[int, int]
+) -> None:
+    """남의 채널에는 관리자를 세우지 못한다 — 403 NOT_CHANNEL_ADMIN이다."""
+    workspace_id, _ = workspace_ids
+    other = _make_user(db, email=f"other-{uuid.uuid4().hex[:8]}@example.com")
+    other_channel = _make_channel(
+        db, workspace_id=workspace_id, created_by=other.id
+    )
+    db.add(ChannelAdmin(channel_id=other_channel, user_id=other.id))
+    db.flush()
+
+    denied = client.put(
+        f"/api/v1/wiki/channels/{other_channel}/admins/{member.id}"
+    )
+
+    assert denied.status_code == 403
+    assert denied.json()["detail"]["code"] == "NOT_CHANNEL_ADMIN"
+
+
+def test_adding_non_member_admin_rejected(
+    client: TestClient, db: Session, member: User
+) -> None:
+    """소속 밖 사용자를 관리자로 세우려 하면 400이다."""
+    channel_id = client.post(
+        "/api/v1/wiki/channels", json={"name": f"외부-{uuid.uuid4().hex[:8]}"}
+    ).json()["id"]
+    outsider = _make_user(
+        db, email=f"outsider-{uuid.uuid4().hex[:8]}@example.com"
+    )
+
+    denied = client.put(
+        f"/api/v1/wiki/channels/{channel_id}/admins/{outsider.id}"
+    )
+
+    assert denied.status_code == 400
+    assert denied.json()["detail"]["code"] == "USER_NOT_MEMBER"
+
+
+def test_admin_removal_is_not_exposed(client: TestClient, member: User) -> None:
+    """해제 경로는 없다 — 마지막 관리자가 사라지는 길을 열지 않는다."""
+    channel_id = client.post(
+        "/api/v1/wiki/channels", json={"name": f"해제-{uuid.uuid4().hex[:8]}"}
+    ).json()["id"]
+
+    response = client.delete(
+        f"/api/v1/wiki/channels/{channel_id}/admins/{member.id}"
+    )
+
+    assert response.status_code == 405
+
+
 def test_channels_require_authentication(client: TestClient) -> None:
     """쿠키가 없으면 401이고 오류 모양은 다른 응답과 같다."""
     response = client.get("/api/v1/wiki/channels")
