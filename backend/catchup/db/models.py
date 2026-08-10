@@ -487,6 +487,12 @@ class Channel(Base):
         UniqueConstraint(
             "workspace_id", "name", name="uq_channels_workspace_name"
         ),
+        # 하위 테이블이 (workspace_id, channel_id) 복합 FK로 걸 수 있게
+        # 잉여 UNIQUE를 둔다. 채널이 다른 workspace의 문서를 품는 배치를
+        # DB가 직접 막는 근거다.
+        UniqueConstraint(
+            "workspace_id", "id", name="uq_channels_workspace_id_id"
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -510,12 +516,25 @@ class ChannelFolder(Base):
     """채널 바로 아래의 폴더 하나를 담는다.
 
     parent 컬럼이 없다 — depth 최대 1을 구조로 강제한다.
+
+    workspace_id는 channel에서 유도할 수 있지만 일부러 승격해 둔다. 이
+    컬럼이 있어야 채널과의 관계를 (workspace_id, channel_id) 복합 FK로
+    묶어, 폴더가 다른 workspace의 채널에 붙는 배치를 DB가 막는다.
     """
 
     __tablename__ = "channel_folders"
     __table_args__ = (
         UniqueConstraint(
             "channel_id", "name", name="uq_channel_folders_channel_name"
+        ),
+        UniqueConstraint(
+            "workspace_id", "id", name="uq_channel_folders_workspace_id_id"
+        ),
+        ForeignKeyConstraint(
+            ["workspace_id", "channel_id"],
+            ["channels.workspace_id", "channels.id"],
+            name="fk_channel_folders_channel",
+            ondelete="CASCADE",
         ),
     )
 
@@ -524,9 +543,11 @@ class ChannelFolder(Base):
         primary_key=True,
         default=uuid.uuid4,
     )
+    workspace_id: Mapped[int] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False
+    )
     channel_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("channels.id", ondelete="CASCADE"),
         nullable=False,
     )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -543,6 +564,11 @@ class ChannelAdmin(Base):
     """
 
     __tablename__ = "channel_admins"
+    __table_args__ = (
+        # PK 선두가 channel_id라 "이 사람이 관리자인 채널" 질의는 인덱스를
+        # 못 탄다. 역방향 조회용으로 따로 건다.
+        Index("ix_channel_admins_user_id", "user_id"),
+    )
 
     channel_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
@@ -568,6 +594,10 @@ class ArtifactOwner(Base):
     """
 
     __tablename__ = "artifact_owners"
+    __table_args__ = (
+        # "이 사람이 담당인 문서" 질의가 인가 경로의 1차 조회다.
+        Index("ix_artifact_owners_user_id", "user_id"),
+    )
 
     artifact_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
@@ -5073,14 +5103,15 @@ class KnowledgeArtifact(Base):
         nullable=False,
     )
     kind: Mapped[str] = mapped_column(String(32), nullable=False)
+    # 위치는 workspace 복합 FK로 건다(아래 __table_args__). 복합 FK는
+    # 참조 컬럼이 NULL이면 검사되지 않으므로 미분류(NULL)는 그대로
+    # 성립한다.
     channel_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("channels.id", ondelete="SET NULL"),
         nullable=True,
     )
     folder_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("channel_folders.id", ondelete="SET NULL"),
         nullable=True,
     )
     subject_node_id: Mapped[uuid.UUID] = mapped_column(
@@ -5113,6 +5144,21 @@ class KnowledgeArtifact(Base):
             ["knowledge_nodes.workspace_id", "knowledge_nodes.id"],
             name="fk_knowledge_artifacts_subject_node",
         ),
+        # 문서와 채널·폴더가 같은 workspace임을 DB가 보증한다. ondelete를
+        # 주지 않아 RESTRICT다 — 문서가 남아 있는 채널·폴더는 지워지지
+        # 않고, 지우려면 문서를 먼저 옮겨야 한다.
+        ForeignKeyConstraint(
+            ["workspace_id", "channel_id"],
+            ["channels.workspace_id", "channels.id"],
+            name="fk_knowledge_artifacts_channel",
+        ),
+        ForeignKeyConstraint(
+            ["workspace_id", "folder_id"],
+            ["channel_folders.workspace_id", "channel_folders.id"],
+            name="fk_knowledge_artifacts_folder",
+        ),
+        Index("ix_knowledge_artifacts_channel_id", "channel_id"),
+        Index("ix_knowledge_artifacts_folder_id", "folder_id"),
     )
 
 
