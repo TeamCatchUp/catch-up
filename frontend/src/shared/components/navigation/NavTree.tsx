@@ -148,7 +148,7 @@ export default function NavTree({
             /*
              * fill-normal-interaction-* 는 알파 오버레이 세대다(8/7 전환, gray-90 6%/10%).
              * Figma NavTree상세의 Fill/Normal/interaction/{Hover,Pressed}와 값이 일치하므로
-             * 토큰을 그대로 쓴다. SnbMenuItem 쪽 "solid neutral 세대" 주석은 아직 미갱신이다.
+             * 토큰을 그대로 쓴다.
              * 행이 더 이상 버튼이 아니라서 pressed는 내부 버튼의 :active를 has()로 받는다.
              */
             'hover:bg-fill-normal-interaction-hover has-[button:active]:bg-fill-normal-interaction-pressed',
