@@ -16,7 +16,6 @@ from typing import Any
 from typing import Literal
 
 from pydantic import BaseModel
-from pydantic import Field
 
 
 class ArtifactRefResponse(BaseModel):
@@ -236,12 +235,6 @@ class PublishResponse(BaseModel):
     claims_accepted: int
 
 
-class ResolveRequest(BaseModel):
-    """모순 판정의 승자를 담는다."""
-
-    winner_claim_id: uuid.UUID
-
-
 class DecisionResponse(BaseModel):
     """문서 변경안 결정 한 번의 결과를 담는다.
 
@@ -254,29 +247,3 @@ class DecisionResponse(BaseModel):
     revision_id: str | None = None
     revision_number: int | None = None
     claims_accepted: int = 0
-
-
-class ResolveResponse(BaseModel):
-    """모순 판정 한 번의 결과를 담는다.
-
-    적용은 이 응답 시점에 일어나지 않는다. 결정 저널만 남고, 실제 구간
-    닫기는 apply가 한다.
-    """
-
-    proposal_id: str
-    winner_claim_id: str
-    loser_claim_ids: list[str]
-    valid_to: datetime
-    valid_to_source: str
-
-
-class ApplyResponse(BaseModel):
-    """적용 한 번의 집계를 담는다."""
-
-    proposals_applied: int
-    proposals_failed: int
-    candidates_resolved: int
-    candidates_already_resolved: int
-    claims_superseded: int = Field(default=0)
-    claims_invalidated: int = Field(default=0)
-    claims_already_closed: int = Field(default=0)

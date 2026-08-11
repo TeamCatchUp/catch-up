@@ -80,7 +80,6 @@ from catchup.knowledge_maintenance.ports.mutation_proposals import (
     StoredContradictionValue,
 )
 from catchup.knowledge_maintenance.ports.mutation_proposals import StoredPendingProposal
-from catchup.knowledge_maintenance.services.apply_mutation_proposals import ApplyResult
 from catchup.knowledge_maintenance.services.list_review_queue import ReviewQueueItem
 from catchup.knowledge_maintenance.services.list_review_queue import ReviewQueuePage
 from catchup.knowledge_maintenance.services.publish_artifact_proposal import (
@@ -93,12 +92,6 @@ from catchup.knowledge_maintenance.services.review_artifact_proposal import (
     ProposalReviewError,
 )
 from catchup.knowledge_maintenance.services.review_artifact_proposal import ReviewResult
-from catchup.knowledge_maintenance.services.review_contradiction_proposal import (
-    ContradictionReviewError,
-)
-from catchup.knowledge_maintenance.services.review_contradiction_proposal import (
-    ContradictionReviewResult,
-)
 from catchup.server.knowledge_review.api import router
 from catchup.server.knowledge_review.dependencies import ReviewerContext
 from catchup.server.knowledge_review.dependencies import get_review_uow_factory
@@ -1607,68 +1600,50 @@ def test_member_without_roles_gets_403_not_reviewer(
     service.assert_not_called()
 
 
-def test_contradiction_resolve_requires_admin(
-    app: FastAPI,
-    client: TestClient,
-    db: Session,
-    workspace_ids: tuple[int, int],
-    as_user: Callable[[User], None],
-) -> None:
-    """모순 직접 판정은 관리자 게이트다.
+# ======================= 표면에 없는 운영 경로 =======================
+#
+# 모순 직접 판정(resolve)과 적용(apply)은 기획 UX에 없는 운영 도구라
+# 정식 API에서 뺐다. 그 경로는 debug 라우터와 evaluation CLI 러너가
+# 담당한다. 아래 둘은 "다시 붙지 않았다"를 고정한다 — 서비스는 그대로
+# 남아 있어 라우터 한 줄이면 표면이 되살아난다.
 
-    안건이 대상 문서 하나로 정해지지 않아 담당자 판정을 걸 자리가 없다.
-    담당자에게 이 경로가 필요하지도 않다 — 다툼 블록을 거친 모순은 발행이
-    파생으로 닫는다.
-    """
-    workspace_id, _ = workspace_ids
-    owner = _make_user(db, email="owner-resolve@example.com")
-    _join(db, user=owner, workspace_id=workspace_id)
-    artifact_id = _make_artifact(db, workspace_id=workspace_id)
-    _make_owner(db, artifact_id=artifact_id, user=owner)
-    as_user(owner)
 
-    proposal_id = uuid.uuid4()
-    app.dependency_overrides[get_review_uow_factory] = lambda: _fake_factory(
-        mutations=_FakeMutations(statuses={proposal_id: "pending"})
+def test_operator_routes_are_absent_from_router() -> None:
+    """정식 라우터에 resolve·apply 경로가 없다."""
+    paths = {
+        getattr(route, "path", None) for route in router.routes
+    }
+
+    assert "/api/v1/knowledge-review/apply" not in paths
+    assert not any(
+        path is not None
+        and (path.endswith("/resolve") or "/apply/" in path)
+        for path in paths
     )
 
-    with patch(
-        "catchup.server.knowledge_review.api.review_contradiction_proposal"
-    ) as service:
-        response = client.post(
-            f"/api/v1/knowledge-review/contradictions/{proposal_id}/resolve",
-            json={"winner_claim_id": str(uuid.uuid4())},
-        )
 
-    assert response.status_code == 403
-    assert response.json()["detail"]["code"] == "NOT_DOCUMENT_REVIEWER"
-    service.assert_not_called()
-
-
-def test_apply_requires_admin(
-    app: FastAPI,
-    client: TestClient,
-    db: Session,
-    workspace_ids: tuple[int, int],
-    as_user: Callable[[User], None],
+def test_operator_routes_return_404_when_called(
+    client: TestClient, reviewer: User
 ) -> None:
-    """적용도 관리자만 부를 수 있다."""
-    workspace_id, _ = workspace_ids
-    owner = _make_user(db, email="owner-apply@example.com")
-    _join(db, user=owner, workspace_id=workspace_id)
-    artifact_id = _make_artifact(db, workspace_id=workspace_id)
-    _make_owner(db, artifact_id=artifact_id, user=owner)
-    as_user(owner)
-    app.dependency_overrides[get_review_uow_factory] = lambda: _fake_factory()
+    """인증을 붙여 불러도 404다.
 
-    with patch(
-        "catchup.server.knowledge_review.api.apply_mutation_proposals"
-    ) as service:
-        response = client.post("/api/v1/knowledge-review/apply")
+    권한 거부(403)가 아니라 없음(404)이어야 한다. 403이면 그 경로가
+    아직 서 있고 게이트만 닫힌 것이다.
+    """
+    proposal_id = uuid.uuid4()
 
-    assert response.status_code == 403
-    assert response.json()["detail"]["code"] == "NOT_DOCUMENT_REVIEWER"
-    service.assert_not_called()
+    resolve = client.post(
+        f"/api/v1/knowledge-review/contradictions/{proposal_id}/resolve",
+        json={"winner_claim_id": str(uuid.uuid4())},
+    )
+    apply_all = client.post("/api/v1/knowledge-review/apply")
+    apply_one = client.post(
+        f"/api/v1/knowledge-review/apply/{proposal_id}"
+    )
+
+    assert resolve.status_code == 404
+    assert apply_all.status_code == 404
+    assert apply_one.status_code == 404
 
 
 # ======================= 엔드포인트: 결정 =======================
@@ -1979,279 +1954,6 @@ def test_missing_proposal_decision_returns_404(
 
     assert response.status_code == 404
     assert response.json()["detail"]["code"] == "PROPOSAL_NOT_FOUND"
-
-
-def test_resolve_passes_winner_and_reviewer(
-    app: FastAPI,
-    client: TestClient,
-    reviewer: User,
-    workspace_ids: tuple[int, int],
-) -> None:
-    """모순 판정은 승자와 판정자를 서비스에 넘긴다."""
-    workspace_id, _ = workspace_ids
-    proposal_id = uuid.uuid4()
-    winner = uuid.uuid4()
-    loser = uuid.uuid4()
-    app.dependency_overrides[get_review_uow_factory] = lambda: _fake_factory(
-        mutations=_FakeMutations(statuses={proposal_id: "pending"})
-    )
-    result = ContradictionReviewResult(
-        proposal_id=proposal_id,
-        winner_claim_id=winner,
-        loser_claim_ids=(loser,),
-        valid_to=AT,
-        valid_to_source="winner_valid_from",
-    )
-
-    with patch(
-        "catchup.server.knowledge_review.api.review_contradiction_proposal",
-        return_value=result,
-    ) as service:
-        response = client.post(
-            f"/api/v1/knowledge-review/contradictions/{proposal_id}/resolve",
-            json={"winner_claim_id": str(winner)},
-        )
-
-    assert response.status_code == 200
-    data = response.json()
-    assert data["winner_claim_id"] == str(winner)
-    assert data["loser_claim_ids"] == [str(loser)]
-    assert data["valid_to_source"] == "winner_valid_from"
-    assert service.call_args.kwargs["winner_claim_id"] == winner
-    assert service.call_args.kwargs["reviewer"] == f"user:{reviewer.id}"
-    assert service.call_args.kwargs["workspace_id"] == workspace_id
-
-
-def test_resolve_missing_proposal_returns_404(
-    app: FastAPI, client: TestClient, reviewer: User
-) -> None:
-    """없는 모순 안건은 409가 아니라 404다.
-
-    잘못된 식별자와 낡은 큐는 소비자가 할 일이 다르다. 판정에 닿기 전에
-    갈리는지도 함께 본다.
-    """
-    app.dependency_overrides[get_review_uow_factory] = lambda: _fake_factory()
-
-    with patch(
-        "catchup.server.knowledge_review.api.review_contradiction_proposal"
-    ) as service:
-        response = client.post(
-            "/api/v1/knowledge-review/contradictions"
-            f"/{uuid.uuid4()}/resolve",
-            json={"winner_claim_id": str(uuid.uuid4())},
-        )
-
-    assert response.status_code == 404
-    assert response.json()["detail"]["code"] == "PROPOSAL_NOT_FOUND"
-    service.assert_not_called()
-
-
-def test_resolve_already_decided_returns_409(
-    app: FastAPI, client: TestClient, reviewer: User
-) -> None:
-    """이미 결정된 모순 안건은 409 ALREADY_DECIDED다.
-
-    사람의 결정은 되돌릴 수 없으므로 판정 서비스에 닿지 않아야 한다.
-    """
-    proposal_id = uuid.uuid4()
-    app.dependency_overrides[get_review_uow_factory] = lambda: _fake_factory(
-        mutations=_FakeMutations(statuses={proposal_id: "approved"})
-    )
-
-    with patch(
-        "catchup.server.knowledge_review.api.review_contradiction_proposal"
-    ) as service:
-        response = client.post(
-            f"/api/v1/knowledge-review/contradictions/{proposal_id}/resolve",
-            json={"winner_claim_id": str(uuid.uuid4())},
-        )
-
-    assert response.status_code == 409
-    assert response.json()["detail"] == {
-        "code": "ALREADY_DECIDED",
-        "message": "이미 결정된 모순 안건입니다.",
-    }
-    service.assert_not_called()
-
-
-def test_resolve_non_pending_returns_409_with_code(
-    app: FastAPI, client: TestClient, reviewer: User
-) -> None:
-    """계류 목록에서 사라진 안건은 409 CONTRADICTION_NOT_PENDING이다.
-
-    사전 조회는 계류라고 봤는데 판정이 실패하는 경우다 — 그 사이에 다른
-    판정이 먼저 확정한 경합이다.
-    """
-    proposal_id = uuid.uuid4()
-    app.dependency_overrides[get_review_uow_factory] = lambda: _fake_factory(
-        mutations=_FakeMutations(statuses={proposal_id: "pending"})
-    )
-
-    with patch(
-        "catchup.server.knowledge_review.api.review_contradiction_proposal",
-        side_effect=ContradictionReviewError("찾을 수 없다"),
-    ):
-        response = client.post(
-            f"/api/v1/knowledge-review/contradictions/{proposal_id}/resolve",
-            json={"winner_claim_id": str(uuid.uuid4())},
-        )
-
-    assert response.status_code == 409
-    assert response.json()["detail"]["code"] == "CONTRADICTION_NOT_PENDING"
-
-
-def test_resolve_unknown_winner_returns_409_with_code(
-    app: FastAPI, client: TestClient, reviewer: User
-) -> None:
-    """안건 밖의 주장을 승자로 지정하면 409 WINNER_NOT_CANDIDATE다."""
-    proposal_id = uuid.uuid4()
-    pending = StoredContradictionProposal(
-        id=proposal_id,
-        predicate="rate_limit",
-        subject_key="node:x",
-        summary="갈렸다",
-        values=(
-            StoredContradictionValue(
-                claim_id=uuid.uuid4(),
-                value=60,
-                normalized="60",
-                statement=None,
-                observed_at=None,
-            ),
-        ),
-    )
-    app.dependency_overrides[get_review_uow_factory] = lambda: _fake_factory(
-        mutations=_FakeMutations(
-            pending=(pending,), statuses={proposal_id: "pending"}
-        )
-    )
-
-    with patch(
-        "catchup.server.knowledge_review.api.review_contradiction_proposal",
-        side_effect=ContradictionReviewError("값 후보가 아니다"),
-    ):
-        response = client.post(
-            f"/api/v1/knowledge-review/contradictions/{proposal_id}/resolve",
-            json={"winner_claim_id": str(uuid.uuid4())},
-        )
-
-    assert response.status_code == 409
-    assert response.json()["detail"]["code"] == "WINNER_NOT_CANDIDATE"
-
-
-# ======================= 엔드포인트: 적용 =======================
-
-
-def test_apply_all_returns_counts(
-    app: FastAPI,
-    client: TestClient,
-    reviewer: User,
-    workspace_ids: tuple[int, int],
-) -> None:
-    """전체 적용은 집계를 그대로 돌려준다."""
-    workspace_id, _ = workspace_ids
-    app.dependency_overrides[get_review_uow_factory] = lambda: _fake_factory()
-    result = ApplyResult(
-        proposals_applied=2,
-        proposals_failed=1,
-        candidates_resolved=3,
-        candidates_already_resolved=0,
-        claims_superseded=4,
-        claims_invalidated=0,
-        claims_already_closed=1,
-    )
-
-    with patch(
-        "catchup.server.knowledge_review.api.apply_mutation_proposals",
-        return_value=result,
-    ) as service:
-        response = client.post("/api/v1/knowledge-review/apply")
-
-    assert response.status_code == 200
-    assert response.json() == {
-        "proposals_applied": 2,
-        "proposals_failed": 1,
-        "candidates_resolved": 3,
-        "candidates_already_resolved": 0,
-        "claims_superseded": 4,
-        "claims_invalidated": 0,
-        "claims_already_closed": 1,
-    }
-    assert service.call_args.kwargs == {"workspace_id": workspace_id}
-
-
-def test_apply_single_passes_proposal_id(
-    app: FastAPI, client: TestClient, reviewer: User
-) -> None:
-    """한 건 적용은 안건 식별자를 서비스에 넘긴다."""
-    proposal_id = uuid.uuid4()
-    app.dependency_overrides[get_review_uow_factory] = lambda: _fake_factory()
-    result = ApplyResult(
-        proposals_applied=1,
-        proposals_failed=0,
-        candidates_resolved=1,
-        candidates_already_resolved=0,
-    )
-
-    with patch(
-        "catchup.server.knowledge_review.api.apply_mutation_proposals",
-        return_value=result,
-    ) as service:
-        response = client.post(
-            f"/api/v1/knowledge-review/apply/{proposal_id}"
-        )
-
-    assert response.status_code == 200
-    assert response.json()["proposals_applied"] == 1
-    assert service.call_args.kwargs["proposal_id"] == proposal_id
-
-
-def test_apply_single_not_found_returns_404(
-    app: FastAPI, client: TestClient, reviewer: User
-) -> None:
-    """적용된 것이 하나도 없으면 404다."""
-    app.dependency_overrides[get_review_uow_factory] = lambda: _fake_factory()
-    result = ApplyResult(
-        proposals_applied=0,
-        proposals_failed=0,
-        candidates_resolved=0,
-        candidates_already_resolved=0,
-    )
-
-    with patch(
-        "catchup.server.knowledge_review.api.apply_mutation_proposals",
-        return_value=result,
-    ):
-        response = client.post(
-            f"/api/v1/knowledge-review/apply/{uuid.uuid4()}"
-        )
-
-    assert response.status_code == 404
-    assert response.json()["detail"]["code"] == "PROPOSAL_NOT_APPLIED"
-
-
-def test_apply_requires_reviewer(
-    app: FastAPI,
-    client: TestClient,
-    db: Session,
-    workspace_ids: tuple[int, int],
-    as_user: Callable[[User], None],
-) -> None:
-    """적용도 검토자만 할 수 있다."""
-    workspace_id, _ = workspace_ids
-    user = _make_user(db, email="apply-member@example.com")
-    _join(db, user=user, workspace_id=workspace_id)
-    as_user(user)
-    app.dependency_overrides[get_review_uow_factory] = lambda: _fake_factory()
-
-    with patch(
-        "catchup.server.knowledge_review.api.apply_mutation_proposals"
-    ) as service:
-        response = client.post("/api/v1/knowledge-review/apply")
-
-    assert response.status_code == 403
-    assert response.json()["detail"]["code"] == "NOT_REVIEWER"
-    service.assert_not_called()
 
 
 # ======================= 엔드포인트: 블록 결정·발행 =======================

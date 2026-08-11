@@ -10,6 +10,10 @@ debug 라우터와 달리 인증과 검토자 권한을 요구하고, 결정 저
 판단의 재료이기 때문이다. 병합 결정은 이 표면에 없다 — 문서 검토와 다른
 화면의 일이라 debug 라우터에 남겨 둔다.
 
+모순 직접 판정(resolve)과 적용(apply)도 이 표면에 없다. 기획 UX에 없는
+운영 도구를 인증 표면에 노출하지 않으려는 것이며, 그 경로는 debug 라우터와
+`catchup/evaluation/`의 CLI 러너가 담당한다.
+
 인가는 두 겹이다. 의존성이 "검수 표면에 설 자격"을 보고, 대상이 정해지는
 핸들러가 "이 문서를 결정할 수 있는가"를 다시 본다. 문서마다 담당자가 다르니
 자격 하나로는 부족하고, 그렇다고 판정을 서비스로 내리면 CLI·debug 표면까지
@@ -45,10 +49,6 @@ from catchup.knowledge_maintenance.ports.block_verdicts import StoredBlockVerdic
 from catchup.knowledge_maintenance.ports.mutation_proposals import (
     StoredContradictionProposal,
 )
-from catchup.knowledge_maintenance.services.apply_mutation_proposals import ApplyResult
-from catchup.knowledge_maintenance.services.apply_mutation_proposals import (
-    apply_mutation_proposals,
-)
 from catchup.knowledge_maintenance.services.list_review_queue import ReviewQueueItem
 from catchup.knowledge_maintenance.services.list_review_queue import list_review_queue
 from catchup.knowledge_maintenance.services.publish_artifact_proposal import (
@@ -78,17 +78,10 @@ from catchup.knowledge_maintenance.services.review_block_verdict import (
 from catchup.knowledge_maintenance.services.review_block_verdict import (
     upsert_block_verdict,
 )
-from catchup.knowledge_maintenance.services.review_contradiction_proposal import (
-    ContradictionReviewError,
-)
-from catchup.knowledge_maintenance.services.review_contradiction_proposal import (
-    review_contradiction_proposal,
-)
 from catchup.server.knowledge_review.dependencies import ReviewerContext
 from catchup.server.knowledge_review.dependencies import ReviewUowFactory
 from catchup.server.knowledge_review.dependencies import get_review_uow_factory
 from catchup.server.knowledge_review.dependencies import resolve_reviewer_workspace
-from catchup.server.knowledge_review.schemas import ApplyResponse
 from catchup.server.knowledge_review.schemas import ArtifactRefResponse
 from catchup.server.knowledge_review.schemas import BlockResponse
 from catchup.server.knowledge_review.schemas import BlockSourceResponse
@@ -104,8 +97,6 @@ from catchup.server.knowledge_review.schemas import QueueItemResponse
 from catchup.server.knowledge_review.schemas import QueuePageResponse
 from catchup.server.knowledge_review.schemas import ReadSetResponse
 from catchup.server.knowledge_review.schemas import RejectRequest
-from catchup.server.knowledge_review.schemas import ResolveRequest
-from catchup.server.knowledge_review.schemas import ResolveResponse
 from catchup.server.knowledge_review.schemas import VariantResponse
 from catchup.server.wiki.dependencies import review_error
 from catchup.server.wiki.roles import can_decide_artifact
@@ -204,25 +195,6 @@ def _require_decidable_proposal(
             message="이 문서의 검수 권한이 없습니다.",
         )
     return proposal
-
-
-def _require_wiki_admin(context: ReviewerContext) -> None:
-    """문서가 특정되지 않는 요청을 관리자에게만 연다.
-
-    모순 판정과 적용은 대상 문서가 하나로 정해지지 않아 담당자 판정을 걸
-    자리가 없다. 담당자에게 이 직접 경로가 필요하지도 않다 — 다툼 블록을
-    거친 모순은 발행이 파생으로 닫는다.
-
-    Raises:
-        HTTPException: 관리자가 아니면 403 NOT_DOCUMENT_REVIEWER를 던진다.
-    """
-    if context.roles.is_global_admin or context.roles.admin_channel_ids:
-        return
-    raise review_error(
-        403,
-        code="NOT_DOCUMENT_REVIEWER",
-        message="관리자만 할 수 있는 작업입니다.",
-    )
 
 
 @router.get(
@@ -408,80 +380,6 @@ def reject_artifact(
     )
 
 
-@router.post(
-    path="/contradictions/{proposal_id}/resolve",
-    response_model=ResolveResponse,
-    description="모순 안건의 승자를 정해 결정 저널을 남긴다.",
-)
-@audit_log(
-    action=KnowledgeReviewAction.RESOLVE,
-    metadata_factory=KnowledgeReviewAuditMetadata.from_audit,
-)
-def resolve_contradiction(
-    proposal_id: uuid.UUID,
-    payload: ResolveRequest,
-    context: ReviewerContext = Depends(resolve_reviewer_workspace),
-    uow_factory: ReviewUowFactory = Depends(get_review_uow_factory),
-) -> ResolveResponse:
-    """모순 판정을 확정하고 그 결과를 돌려준다.
-
-    판정 전에 안건 상태를 한 번 읽는다. 서비스는 "없는 안건"과 "이미
-    결정된 안건"을 같은 예외로 알리는데, 소비자가 할 일은 그 둘에서
-    다르다 — 앞은 잘못된 식별자이고 뒤는 큐가 낡은 것이다.
-
-    인가는 관리자 게이트다. 모순 안건은 대상 문서가 하나로 정해지지 않아
-    담당자 판정을 걸 자리가 없다. 담당자가 이 경로를 필요로 하지도 않는다 —
-    다툼 블록을 거친 모순은 발행이 파생으로 닫는다.
-
-    Raises:
-        HTTPException: 관리자가 아니면 403, 안건이 없으면 404, 이미
-            결정됐거나 판정을 받아들일 수 없으면 409를 던진다.
-    """
-    _require_wiki_admin(context)
-    with uow_factory() as uow:
-        status = uow.mutation_proposals.get_contradiction_status(
-            workspace_id=context.workspace_id,
-            proposal_id=proposal_id,
-        )
-    if status is None:
-        # 저장소가 workspace로 좁혀 읽으므로 남의 workspace 안건도 404다.
-        raise review_error(
-            404,
-            code="PROPOSAL_NOT_FOUND",
-            message="모순 안건을 찾을 수 없습니다.",
-        )
-    if status != PROPOSAL_STATUS_PENDING:
-        raise review_error(
-            409,
-            code="ALREADY_DECIDED",
-            message="이미 결정된 모순 안건입니다.",
-        )
-    try:
-        result = review_contradiction_proposal(
-            uow_factory(),
-            workspace_id=context.workspace_id,
-            proposal_id=proposal_id,
-            winner_claim_id=payload.winner_claim_id,
-            reviewer=context.reviewer,
-        )
-    except ContradictionReviewError as error:
-        raise _contradiction_review_error(
-            uow_factory,
-            workspace_id=context.workspace_id,
-            proposal_id=proposal_id,
-            winner_claim_id=payload.winner_claim_id,
-        ) from error
-    return ResolveResponse(
-        proposal_id=str(result.proposal_id),
-        winner_claim_id=str(result.winner_claim_id),
-        loser_claim_ids=[
-            str(claim_id) for claim_id in result.loser_claim_ids
-        ],
-        valid_to=result.valid_to,
-        valid_to_source=result.valid_to_source,
-    )
-
-
 @router.put(
     path="/queue/{proposal_id}/blocks/{block_index}/verdict",
     response_model=BlockVerdictResponse,
@@ -600,74 +498,6 @@ def publish_proposal(
     )
 
 
-@router.post(
-    path="/apply",
-    response_model=ApplyResponse,
-    description="승인된 안건의 결정 저널을 모두 적용한다.",
-)
-@audit_log(action=KnowledgeReviewAction.APPLY)
-def apply_all(
-    context: ReviewerContext = Depends(resolve_reviewer_workspace),
-    uow_factory: ReviewUowFactory = Depends(get_review_uow_factory),
-) -> ApplyResponse:
-    """workspace의 승인된 안건을 전부 적용한다.
-
-    대상이 여럿이라 담당자 판정을 걸 자리가 없어 관리자 게이트를 쓴다.
-
-    Raises:
-        HTTPException: 관리자가 아니면 403을 던진다.
-    """
-    _require_wiki_admin(context)
-    result = apply_mutation_proposals(
-        uow_factory,
-        workspace_id=context.workspace_id,
-    )
-    return _to_apply_response(result)
-
-
-@router.post(
-    path="/apply/{proposal_id}",
-    response_model=ApplyResponse,
-    description="승인된 안건 하나의 결정 저널을 적용한다.",
-)
-@audit_log(
-    action=KnowledgeReviewAction.APPLY,
-    metadata_factory=KnowledgeReviewAuditMetadata.from_audit,
-)
-def apply_one(
-    proposal_id: uuid.UUID,
-    context: ReviewerContext = Depends(resolve_reviewer_workspace),
-    uow_factory: ReviewUowFactory = Depends(get_review_uow_factory),
-) -> ApplyResponse:
-    """안건 하나만 적용한다.
-
-    적용이 0건이면 404다. 승인 목록에 없는 안건은 아직 결정되지 않았거나
-    이미 적용된 것이고, 둘 다 "이 요청으로 적용된 것이 없다"는 사실을
-    소비자가 성공으로 읽으면 안 된다. 적용 중 실패한 안건은 0건이 아니라
-    proposals_failed로 세지므로 여기에 걸리지 않는다.
-
-    mutation 안건은 문서와 1:1이 아니라 담당자 판정을 걸 자리가 없다.
-    그래서 한 건 적용도 관리자 게이트를 쓴다.
-
-    Raises:
-        HTTPException: 관리자가 아니면 403, 적용된 안건이 없으면 404를
-            던진다.
-    """
-    _require_wiki_admin(context)
-    result = apply_mutation_proposals(
-        uow_factory,
-        workspace_id=context.workspace_id,
-        proposal_id=proposal_id,
-    )
-    if result.proposals_applied == 0 and result.proposals_failed == 0:
-        raise review_error(
-            404,
-            code="PROPOSAL_NOT_APPLIED",
-            message="적용할 승인 안건을 찾을 수 없습니다.",
-        )
-    return _to_apply_response(result)
-
-
 def _artifact_review_error(
     uow_factory: ReviewUowFactory,
     proposal_id: uuid.UUID,
@@ -717,44 +547,6 @@ def _artifact_review_error(
         409,
         code="PROPOSAL_NOT_REVIEWABLE",
         message="지금 이 변경안에 결정을 확정할 수 없습니다.",
-    )
-
-
-def _contradiction_review_error(
-    uow_factory: ReviewUowFactory,
-    *,
-    workspace_id: int,
-    proposal_id: uuid.UUID,
-    winner_claim_id: uuid.UUID,
-) -> HTTPException:
-    """모순 판정 실패를 상태 코드와 오류 코드로 옮긴다.
-
-    없는 안건과 이미 결정된 안건은 핸들러의 사전 조회가 이미 갈랐다.
-    그래도 계류 목록에 없을 수 있다 — 사전 조회 뒤에 다른 판정이 먼저
-    확정했거나, 값 후보를 읽을 수 없어 목록에서 빠진 안건이다. 둘 다
-    소비자가 할 일은 큐를 다시 읽는 것으로 같아 하나의 409로 알린다.
-    """
-    with uow_factory() as uow:
-        pending = uow.mutation_proposals.list_pending_contradictions(
-            workspace_id=workspace_id,
-        )
-    found = next((item for item in pending if item.id == proposal_id), None)
-    if found is None:
-        return review_error(
-            409,
-            code="CONTRADICTION_NOT_PENDING",
-            message="계류 중인 모순 안건이 아닙니다.",
-        )
-    if winner_claim_id not in {value.claim_id for value in found.values}:
-        return review_error(
-            409,
-            code="WINNER_NOT_CANDIDATE",
-            message="승자로 지정한 주장이 이 안건의 값 후보가 아닙니다.",
-        )
-    return review_error(
-        409,
-        code="CONTRADICTION_NOT_RESOLVABLE",
-        message="지금 이 모순 안건을 판정할 수 없습니다.",
     )
 
 
@@ -931,17 +723,4 @@ def _to_conflict(
             )
             for value in proposal.values
         ],
-    )
-
-
-def _to_apply_response(result: ApplyResult) -> ApplyResponse:
-    """적용 집계를 응답으로 옮긴다."""
-    return ApplyResponse(
-        proposals_applied=result.proposals_applied,
-        proposals_failed=result.proposals_failed,
-        candidates_resolved=result.candidates_resolved,
-        candidates_already_resolved=result.candidates_already_resolved,
-        claims_superseded=result.claims_superseded,
-        claims_invalidated=result.claims_invalidated,
-        claims_already_closed=result.claims_already_closed,
     )
