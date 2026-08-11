@@ -4,10 +4,17 @@ import type { WikiBlock } from '../../types/llmWikiDiff';
 import { computeBlockDiff } from './computeBlockDiff';
 
 const block = (overrides: Partial<WikiBlock>): WikiBlock => ({
+  blockIndex: 0,
   kind: 'claim_section',
   heading: '재시도 정책',
   body: '결제 승인 실패 시 1회 재시도한다.',
   claimIds: ['c-retry-1'],
+  proposalIds: ['prop-1'],
+  ontologyVersion: 'v1',
+  blockContentHash: 'sha256:test',
+  sources: [],
+  variants: null,
+  verdict: null,
   ...overrides,
 });
 
@@ -57,20 +64,14 @@ describe('computeBlockDiff', () => {
   });
 
   it('tombstone 없이 빠진 블록도 카드가 되지만 사유가 없다 (계약 위반 신호)', () => {
-    const entries = computeBlockDiff(
-      [block({ heading: '사라진 블록', body: '내용', claimIds: ['c-gone'] })],
-      [],
-    );
+    const entries = computeBlockDiff([block({ heading: '사라진 블록', body: '내용', claimIds: ['c-gone'] })], []);
 
     expect(entries).toHaveLength(1);
     expect(entries[0]).toMatchObject({ kind: 'removed', reason: null });
   });
 
   it('claimIds가 비면 페어링되지 않고 added+removed로 갈라진다', () => {
-    const entries = computeBlockDiff(
-      [block({ claimIds: [] })],
-      [block({ claimIds: [], body: '내용이 다르다.' })],
-    );
+    const entries = computeBlockDiff([block({ claimIds: [] })], [block({ claimIds: [], body: '내용이 다르다.' })]);
     expect(entries.map((e) => e.kind)).toEqual(['added', 'removed']);
   });
 
@@ -80,12 +81,8 @@ describe('computeBlockDiff', () => {
       [block({ body: '실패 시 3회까지 재시도한다.' })],
     );
 
-    const beforeTexts = entry
-      .before!.flatMap((line) => line.segments.filter((s) => s.emphasized))
-      .map((s) => s.text);
-    const afterTexts = entry
-      .after!.flatMap((line) => line.segments.filter((s) => s.emphasized))
-      .map((s) => s.text);
+    const beforeTexts = entry.before!.flatMap((line) => line.segments.filter((s) => s.emphasized)).map((s) => s.text);
+    const afterTexts = entry.after!.flatMap((line) => line.segments.filter((s) => s.emphasized)).map((s) => s.text);
 
     expect(beforeTexts.join('')).toContain('1회');
     expect(beforeTexts.join('')).not.toContain('3회');

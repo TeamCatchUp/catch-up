@@ -32,12 +32,19 @@ function toLines(parts: readonly ChangePart[], side: 'before' | 'after'): DiffLi
 
 /** added·removed 카드용 — 강조 없는 줄 목록. 패널 색이 변경 표시의 전부다 */
 function plainLines(body: string): DiffLine[] {
-  return body
-    .split('\n')
-    .map((text) => ({ segments: text.length > 0 ? [{ text, emphasized: false }] : [] }));
+  return body.split('\n').map((text) => ({ segments: text.length > 0 ? [{ text, emphasized: false }] : [] }));
 }
 
 const sharesClaimId = (a: WikiBlock, b: WikiBlock) => a.claimIds.some((id) => b.claimIds.includes(id));
+
+/** 판정 요청에 필요한 값들. 승인됨 배지는 시안이 없어 rejected만 내보낸다 */
+function verdictFields(proposed: WikiBlock) {
+  return {
+    blockIndex: proposed.blockIndex,
+    blockContentHash: proposed.blockContentHash,
+    rejected: proposed.verdict?.verdict === 'rejected',
+  };
+}
 
 /**
  * base/proposed blocks[]에서 diff 카드 목록을 만든다. 페어링 키는 claimIds 교집합이다.
@@ -66,6 +73,7 @@ export function computeBlockDiff(
         before: plainLines(deleted.body),
         after: null,
         reason: proposed.reason ?? null,
+        ...verdictFields(proposed),
       });
       return;
     }
@@ -78,6 +86,7 @@ export function computeBlockDiff(
         before: null,
         after: plainLines(proposed.body),
         reason: proposed.reason ?? null,
+        ...verdictFields(proposed),
       });
       return;
     }
@@ -94,10 +103,12 @@ export function computeBlockDiff(
       before: toLines(parts, 'before'),
       after: toLines(parts, 'after'),
       reason: proposed.reason ?? null,
+      ...verdictFields(proposed),
     });
   });
 
-  // tombstone 없이 빠진 블록. 계약 위반이지만 조용히 사라지는 것보다 사유 없는 카드로 드러낸다
+  // tombstone 없이 빠진 블록. 계약 위반이지만 조용히 사라지는 것보다 사유 없는 카드로 드러낸다.
+  // proposed에 자리가 없어 판정 경로도 없다 — blockIndex·blockContentHash가 null인 이유다
   baseBlocks.forEach((base, baseIndex) => {
     if (usedBase.has(baseIndex)) return;
     entries.push({
@@ -107,6 +118,8 @@ export function computeBlockDiff(
       before: plainLines(base.body),
       after: null,
       reason: null,
+      blockIndex: null,
+      blockContentHash: null,
     });
   });
 
