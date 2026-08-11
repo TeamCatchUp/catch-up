@@ -660,6 +660,11 @@ class KnowledgeReviewAuditMetadata(BaseAuditMetadata):
     block_index: int | None = None
     workspace_id: int | None = None
     user_id: int | None = None
+    # 문서 역할 변경(담당자 해제)이 쓰는 자리다. user_id가 행위자이고
+    # target_user_id가 명단에서 빠진 사람이다 — 둘을 한 필드에 겹쳐 담으면
+    # "누가 누구를 뗐나"를 기록에서 되짚을 수 없다.
+    artifact_id: str | None = None
+    target_user_id: int | None = None
 
     @classmethod
     def from_audit(

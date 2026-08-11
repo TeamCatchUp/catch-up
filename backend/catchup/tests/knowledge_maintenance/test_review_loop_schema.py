@@ -1,8 +1,9 @@
 """검수 루프 API가 딛고 설 스키마 제약을 실 PostgreSQL로 확인한다.
 
-origin 값 집합, 결정 저널 강제, 검토자 권한의 한 벌 유일성은 모두 DB
-제약 안에 산다. fake 저장소는 제약을 흉내내는 쪽이라 제약 문구가 틀려도
-드러나지 않으므로 실 DB에 직접 넣어 본다.
+origin 값 집합과 결정 저널 강제는 둘 다 DB 제약 안에 산다. fake 저장소는
+제약을 흉내내는 쪽이라 제약 문구가 틀려도 드러나지 않으므로 실 DB에 직접
+넣어 본다. 검수 자격은 더 이상 권한 테이블이 아니라 역할이라, 그 제약은
+test_channel_roles_schema.py가 본다.
 """
 
 from __future__ import annotations
@@ -28,8 +29,6 @@ from catchup.configs.config import settings
 from catchup.db.models import KnowledgeArtifact
 from catchup.db.models import KnowledgeArtifactChangeProposal as ProposalRow
 from catchup.db.models import KnowledgeNode as NodeRow
-from catchup.db.models import User
-from catchup.db.models import WikiReviewerGrant
 from catchup.db.models import Workspace
 from catchup.tests.knowledge_maintenance.test_artifact_schema import (
     _violated_constraint,
@@ -49,9 +48,9 @@ def engine() -> Iterator[Engine]:
         engine.dispose()
         pytest.skip("PostgreSQL이 없어 통합 테스트를 건너뛴다.")
 
-    if not inspect(engine).has_table(WikiReviewerGrant.__tablename__):
+    if not inspect(engine).has_table(TABLE):
         engine.dispose()
-        pytest.skip("검토자 권한 테이블이 없다. alembic upgrade head가 필요하다.")
+        pytest.skip("변경안 테이블이 없다. alembic upgrade head가 필요하다.")
 
     yield engine
     engine.dispose()
@@ -130,19 +129,6 @@ def _proposal(
     }
     values.update(overrides)
     return ProposalRow(**values)
-
-
-def _user_id(session: Session) -> int:
-    """권한을 붙일 사용자 하나를 새로 만든다."""
-    user = User(
-        email=f"reviewer-{uuid.uuid4().hex}@example.com",
-        name="검토자",
-        provider="google",
-        status="active",
-    )
-    session.add(user)
-    session.flush()
-    return user.id
 
 
 def test_origin_check_rejects_unknown_value(
@@ -229,24 +215,3 @@ def test_journal_check_allows_decision_with_journal(
         assert stored is not None
         assert stored.status == "approved"
 
-
-def test_reviewer_grant_unique(
-    workspace_id: int,
-    session_factory: Callable[[], Session],
-) -> None:
-    """같은 사용자에게 같은 워크스페이스 권한이 두 번 생기지 않는다."""
-    with session_factory() as session:
-        user_id = _user_id(session)
-        session.add(
-            WikiReviewerGrant(user_id=user_id, workspace_id=workspace_id)
-        )
-        session.commit()
-
-    with session_factory() as session:
-        session.add(
-            WikiReviewerGrant(user_id=user_id, workspace_id=workspace_id)
-        )
-        with pytest.raises(IntegrityError) as excinfo:
-            session.commit()
-
-    assert _violated_constraint(excinfo) == "wiki_reviewer_grants_pkey"
