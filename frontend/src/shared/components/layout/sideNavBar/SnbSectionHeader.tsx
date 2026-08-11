@@ -1,6 +1,6 @@
 import { cn } from '@/shared/utils/cn';
 
-/** 에이전트 섹션 머리글에 붙는 회색 알약. Figma에서 머리글 안에만 나타난다 */
+/** 에이전트 섹션 머리글에 붙는 회색 알약. 머리글 안에서만 쓰인다 */
 export function SnbBetaBadge() {
   return (
     <span className="bg-fill-normal-interaction-hover text-text-normal-alternative inline-flex h-5 shrink-0 items-center justify-center rounded px-1 text-[12px] leading-[1.5] font-medium">

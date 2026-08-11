@@ -14,8 +14,7 @@ export interface SnbRailFooterProps {
 
 /**
  * 닫힌 SNB 하단. 설정과 프로필이 세로로 붙는다.
- *
- * 펼침에서는 설정이 프로필 행 안에 들어가므로 두 형상을 한 컴포넌트로 합치지 않았다.
+ * 펼침에서는 설정이 프로필 행 안에 들어가므로 두 형상을 합치지 않았다.
  */
 export default function SnbRailFooter({
   userName,

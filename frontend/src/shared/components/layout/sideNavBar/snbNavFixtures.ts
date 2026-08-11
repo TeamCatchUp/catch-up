@@ -17,13 +17,7 @@ import IconUpdate from '@/public/icons/icon/update.svg';
 import IconWikiChannel from '@/public/icons/icon/wiki_channel.svg';
 import type { NavTreeNode } from '@/shared/components/navigation/NavTree';
 
-/**
- * 전역 SNB 조립 스토리가 쓰는 시안 데이터.
- *
- * 라벨은 Figma 렌더에서 읽은 문자열 그대로다 — 대부분 placeholder이며 실제 데이터
- * 형태가 아니다. 아이콘은 각 슬롯의 Figma 아이콘 컴포넌트 이름으로 매핑했다.
- * 매핑 근거는 `docs/plans/2026-08-07-전역-snb-리디자인.md` Task 10.
- */
+/** 전역 SNB 조립 스토리가 쓰는 시안 데이터. 라벨은 대부분 placeholder다. */
 export interface SnbNavFixtureItem {
   id: string;
   label: string;

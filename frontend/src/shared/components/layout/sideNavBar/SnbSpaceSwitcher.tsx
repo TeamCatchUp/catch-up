@@ -11,10 +11,8 @@ export interface SnbSpaceSwitcherProps {
 }
 
 /**
- * 홈 ↔ LLM Wiki 모드 스위처. Figma 디자인 시스템 `SNB/ space switcher`에 대응한다.
- *
- * 펼침에서는 선택된 쪽만 라벨을 드러내고 남은 폭을 차지한다 — 두 개를 나란히 두면
- * 선택 상태가 폭으로도 읽힌다. 닫힘에서는 둘 다 정사각이고 선택 쪽만 카드처럼 떠 보인다.
+ * 홈 ↔ LLM Wiki 모드 스위처. 펼침에서는 선택된 쪽만 라벨을 드러내고 남은 폭을 차지한다.
+ * 닫힘에서는 둘 다 정사각이고 선택 쪽만 카드처럼 떠 보인다.
  */
 export default function SnbSpaceSwitcher({
   Icon,
@@ -58,8 +56,7 @@ export default function SnbSpaceSwitcher({
           'size-6 shrink-0',
           selected
             ? 'text-icon-normal-strong'
-            : // 미선택 아이콘은 펼침이 닫힘보다 한 단계 더 옅다. 펼침에서는 라벨을 단
-              // 선택 알약 옆에 아이콘만 남으므로 더 물러나야 대비가 읽힌다
+            : // 미선택 아이콘은 펼침에서 한 단계 더 옅다 — 선택 알약 옆에서 대비가 읽혀야 한다
               isClosed
               ? 'text-icon-normal-neutral'
               : 'text-icon-normal-alternative',

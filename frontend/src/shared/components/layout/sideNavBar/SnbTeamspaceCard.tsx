@@ -11,10 +11,7 @@ export interface SnbTeamspaceCardProps {
 }
 
 /**
- * 현재 팀스페이스 카드. Figma 디자인 시스템 `SNB/Dropdown`에 대응한다.
- *
- * 이름은 Dropdown이지만 시안에 열림 상태도 셰브런도 없다. 전환 컨트롤인지
- * 현재 위치 표시인지 결정되기 전까지 눌리는 것처럼 보이게 만들지 않는다 —
+ * 현재 팀스페이스 카드. 전환 컨트롤인지 위치 표시인지 미정이라 눌리는 것처럼 보이게 만들지 않는다 —
  * `onClick`을 받은 경우에만 버튼이 된다.
  */
 export default function SnbTeamspaceCard({

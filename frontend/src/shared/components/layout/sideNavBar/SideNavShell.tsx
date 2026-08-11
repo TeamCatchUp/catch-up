@@ -6,13 +6,9 @@ import { cn } from '@/shared/utils/cn';
 export interface SideNavShellProps {
   /** 주 메뉴 위에 고정되는 모드 스위처 */
   spaceSwitcher: React.ReactNode;
-  /**
-   * 모드 스위처 아래 주 내비 블록들. 자식 하나하나가 12 간격으로 놓인다 —
-   * 위키는 메뉴 행 묶음 / 팀스페이스 카드 / 드롭다운 행 묶음 세 덩어리를 넘긴다.
-   * 행끼리 붙여야 하는 묶음은 소비처가 감싸서 넘긴다.
-   */
+  /** 모드 스위처 아래 주 내비 블록들. 자식마다 간격이 붙으므로 붙여야 하는 행은 소비처가 감싸서 넘긴다. */
   primaryItems: React.ReactNode;
-  /** 그 아래 섹션들. 구성은 모드마다 다르고 아직 확정되지 않아 소비처가 조립한다 */
+  /** 그 아래 섹션들. 구성이 모드마다 달라 소비처가 조립한다 */
   children: React.ReactNode;
   footer: React.ReactNode;
   onCollapse: () => void;
@@ -21,12 +17,8 @@ export interface SideNavShellProps {
 }
 
 /**
- * 펼친 전역 SNB의 셸.
- *
- * 섹션 구성을 slot으로 받는 이유는 홈과 LLM Wiki의 구성이 다르고, 그 구성 자체가
- * 아직 결정되지 않았기 때문이다. 셸이 목록을 알면 미결을 코드가 정해 버린다.
- *
- * 빈 목록을 받아도 대체 문구를 만들지 않는다 — 빈 상태 카피는 승인된 시안이 없다.
+ * 펼친 전역 SNB의 셸. 섹션 구성은 모드마다 달라 slot으로 받는다.
+ * 빈 목록을 받아도 대체 문구를 만들지 않는다 — 승인된 빈 상태 카피가 없다.
  */
 export default function SideNavShell({
   spaceSwitcher,

@@ -56,7 +56,7 @@ export const Default: Story = {
 
     await expect(item).not.toHaveAttribute('aria-current');
     await expect(canvas.queryByTestId('snb-rail-item-dot')).toBeNull();
-    // 아이콘 칸이 36×36이다 (Figma type=closed menu)
+    // 아이콘 칸은 정사각이다
     const iconSlot = item.querySelector('span');
     await expect(Math.round(iconSlot!.getBoundingClientRect().width)).toBe(36);
     await expect(Math.round(iconSlot!.getBoundingClientRect().height)).toBe(36);

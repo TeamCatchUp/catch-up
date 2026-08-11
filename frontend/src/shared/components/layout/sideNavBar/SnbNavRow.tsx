@@ -15,11 +15,8 @@ export interface SnbNavRowProps {
 }
 
 /**
- * SNB 주 메뉴 행. Figma 디자인 시스템 `SNB/menu`의 `type=Main menu`에 대응한다.
- *
- * 설정 사이드바가 쓰는 {@link ../panels/SnbMenuItem SnbMenuItem}은 같은 컴포넌트 세트의
- * `type=setting`이고 선택 배경이 중립이다. 형상이 같다고 합치면 두 화면 중 하나가
- * 틀린 색을 내게 된다.
+ * SNB 주 메뉴 행. 형상이 같은 {@link ../panels/SnbMenuItem SnbMenuItem}과 합치지 않는다 —
+ * 그쪽은 선택 배경이 중립이라 합치면 두 화면 중 하나가 틀린 색을 낸다.
  */
 export default function SnbNavRow({
   Icon,

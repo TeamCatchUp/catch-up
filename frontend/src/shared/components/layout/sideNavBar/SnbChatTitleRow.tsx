@@ -11,10 +11,7 @@ export interface SnbChatTitleRowProps {
 }
 
 /**
- * SNB 최근 질문 행. Figma 디자인 시스템 `SNB/menu`의 `type=Chat Title`에 대응한다.
- *
- * 행 자체가 버튼이 아니라 컨테이너인 이유는 더보기 버튼이 행 안에 들어가기 때문이다.
- * 버튼 안에 버튼을 넣을 수 없다.
+ * SNB 최근 질문 행. 더보기 버튼이 행 안에 들어가야 해서 행 자체는 버튼이 아니라 컨테이너다.
  */
 export default function SnbChatTitleRow({
   label,

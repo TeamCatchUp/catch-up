@@ -12,10 +12,8 @@ export interface SideNavRailProps {
 }
 
 /**
- * 접힌 전역 SNB의 셸.
- *
- * 펼침과 구조가 아예 다르다 — 브랜드 헤더 대신 로고 버튼 하나, 섹션 대신 평면 목록,
- * 설정이 하단에 독립으로 놓인다. 그래서 하나의 컴포넌트에 열림 분기를 두지 않았다.
+ * 접힌 전역 SNB의 셸. 펼침과 구조가 아예 달라(로고 버튼·평면 목록·독립 설정)
+ * 하나의 컴포넌트에 열림 분기를 두지 않았다.
  */
 export default function SideNavRail({ spaceSwitcher, children, footer, onExpand, className }: SideNavRailProps) {
   return (
@@ -36,7 +34,7 @@ export default function SideNavRail({ spaceSwitcher, children, footer, onExpand,
 
       <div className="mt-3 flex flex-col items-center gap-1">{spaceSwitcher}</div>
 
-      {/* 스위처와 20, 목록과 12 — 위아래 간격이 다르다 */}
+      {/* 스위처 쪽과 목록 쪽의 간격이 다르다 */}
       <div
         aria-hidden
         data-slot="side-nav-rail-divider"

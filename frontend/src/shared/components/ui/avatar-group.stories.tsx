@@ -88,14 +88,14 @@ export const StackOnly: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
 
-    // 겹침 6px은 눈으로 셀 수 없다 — 인접 아바타의 x 간격(25 - 6 = 19)을 잰다.
+    // 겹침은 눈으로 셀 수 없다 — 인접 아바타의 x 간격을 잰다.
     const stack = canvas.getByTestId('stack-3').firstElementChild?.firstElementChild as HTMLElement;
     const [first, second, third] = Array.from(stack.children) as HTMLElement[];
 
     await expect(Math.round(second.getBoundingClientRect().x - first.getBoundingClientRect().x)).toBe(19);
     await expect(Math.round(third.getBoundingClientRect().x - second.getBoundingClientRect().x)).toBe(19);
 
-    // 25 × 3 - 6 × 2 = 63 (Figma imagebox/profile stack=3, size=small의 폭)
+    // 아바타 3개가 겹친 스택의 전체 폭
     await expect(Math.round(stack.getBoundingClientRect().width)).toBe(63);
   },
 };
@@ -129,7 +129,7 @@ export const WithTotalLabel: Story = {
     const canvas = within(canvasElement);
     const pill = canvas.getByTestId('pill-wrap').firstElementChild as HTMLElement;
 
-    // 시안 17849:106441은 112×36이다. 폭은 라벨 글꼴 폭을 타므로 높이만 고정값으로 검사한다.
+    // 폭은 라벨 글꼴 폭을 타므로 높이만 고정값으로 검사한다.
     await expect(Math.round(pill.getBoundingClientRect().height)).toBe(36);
 
     await expect(canvas.getByText('12명')).toBeInTheDocument();
@@ -194,7 +194,7 @@ export const MediumSize: Story = {
     const [first, second] = Array.from(stack.children) as HTMLElement[];
 
     await expect(Math.round(first.getBoundingClientRect().width)).toBe(28);
-    // 겹침은 size와 무관하게 6px 고정이다 — 28 - 6 = 22
+    // 겹침은 size와 무관하게 고정이다
     await expect(Math.round(second.getBoundingClientRect().x - first.getBoundingClientRect().x)).toBe(22);
   },
 };

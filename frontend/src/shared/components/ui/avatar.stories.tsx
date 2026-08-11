@@ -8,7 +8,7 @@ import { Avatar, type AvatarSize } from './avatar';
 
 const SIZES: readonly AvatarSize[] = ['xsmall', 'small', 'medium', 'large', 'xlarge'];
 
-/** Figma가 정의한 size별 지름(px). 스토리 어서션의 기대값이자 variant의 근거다. */
+/** size별 지름(px). 스토리 어서션의 기대값이다. */
 const SIZE_PX: Record<AvatarSize, number> = {
   xsmall: 20,
   small: 25,
@@ -88,7 +88,7 @@ export const AllSizes: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
 
-    // 눈으로 보면 25와 28을 구분할 수 없다 — 지름을 직접 잰다.
+    // 인접 size는 눈으로 구분할 수 없다 — 지름을 직접 잰다.
     for (const size of SIZES) {
       const avatar = canvas.getByTestId(`avatar-${size}`).firstElementChild;
       await expect(avatar).not.toBeNull();
@@ -103,7 +103,7 @@ export const AllSizes: Story = {
 export const WithImage: Story = {
   render: (args) => (
     <div className="bg-fill-normal-normal flex items-center gap-4 p-6">
-      {/* Storybook이 서빙하는 정적 자산을 절대 URL로 만든다 — isSafeUrl이 http(s)만 통과시키기 때문이다. */}
+      {/* 정적 자산을 절대 URL로 만든다 — isSafeUrl이 http(s)만 통과시킨다. */}
       <Avatar {...args} src={new URL('/image/auth/catchup-login.png', window.location.origin).href} />
       <span className="text-body-small text-text-normal-normal">이미지가 있으면 img로 렌더</span>
     </div>
@@ -140,7 +140,7 @@ export const UnsafeUrlFallsBack: Story = {
     await expect(canvas.queryByRole('img')).toBeNull();
     await expect(canvas.getByText('박캐치')).toBeInTheDocument();
 
-    // 폴백 자리가 비어 있지 않은지 — default_profile.svg가 실제로 그려졌는지 본다.
+    // 폴백 아이콘이 실제로 그려졌는지 본다.
     await expect(canvasElement.querySelector('svg')).not.toBeNull();
   },
 };

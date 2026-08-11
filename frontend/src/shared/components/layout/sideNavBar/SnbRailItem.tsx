@@ -11,10 +11,8 @@ export interface SnbRailItemProps {
 }
 
 /**
- * 닫힌 SNB의 Rail 아이템. Figma 디자인 시스템 `SNB/menu`의 `type=closed menu`에 대응한다.
- *
- * 선택 배경이 버튼 전체가 아니라 아이콘 칸에만 들어간다 — 라벨이 아이콘 아래에
- * 따로 놓이는 형상이라 배경이 라벨까지 덮으면 알약이 세로로 길어져 보인다.
+ * 닫힌 SNB의 Rail 아이템. 선택 배경은 버튼 전체가 아니라 아이콘 칸에만 들어간다 —
+ * 라벨까지 덮으면 알약이 세로로 길어져 보인다.
  */
 export default function SnbRailItem({
   Icon,

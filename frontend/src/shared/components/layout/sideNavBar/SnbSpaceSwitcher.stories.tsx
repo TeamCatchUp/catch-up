@@ -64,7 +64,7 @@ export const ExpandedPair: Story = {
     // 미선택도 접근 이름은 남는다
     await expect(canvas.getByRole('button', { name: 'LLM Wiki' })).toBeInTheDocument();
 
-    // 펼침 미선택 아이콘은 Icon/Normal/Alternative다 — 닫힘(Neutral)보다 한 단계 옅다
+    // 펼침 미선택 아이콘은 닫힘보다 한 단계 옅다
     await expect(canvas.getByRole('button', { name: '홈' }).querySelector('svg')).toHaveClass(
       'text-icon-normal-strong',
     );
@@ -110,18 +110,17 @@ export const ClosedPair: Story = {
     await expect(canvas.getByRole('button', { name: 'LLM Wiki' })).toBeInTheDocument();
     await expect(canvas.queryByText('LLM Wiki')).toBeNull();
 
-    // 두 칸 모두 36×36 정사각이다
+    // 두 칸 모두 정사각이다
     const home = canvas.getByRole('button', { name: '홈' });
     await expect(Math.round(home.getBoundingClientRect().width)).toBe(36);
     await expect(Math.round(home.getBoundingClientRect().height)).toBe(36);
 
-    // 닫힘 미선택 아이콘은 Icon/Normal/Neutral — 펼침(Alternative)과 다르다
+    // 닫힘 미선택 아이콘은 펼침과 다른 톤이다
     await expect(canvas.getByRole('button', { name: 'LLM Wiki' }).querySelector('svg')).toHaveClass(
       'text-icon-normal-neutral',
     );
 
-    // 선택 카드 배경은 Fill/Normal/Assistive다. 라이트에서 fill-normal-normal과
-    // 같은 흰색이라 렌더로는 구분되지 않으니 클래스로 고정한다 — 다크에서 갈린다
+    // 선택 카드 배경은 라이트에서 주변과 같은 흰색이라 렌더로 구분되지 않는다 — 클래스로 고정한다
     await expect(home).toHaveClass('bg-fill-normal-assistive');
   },
 };

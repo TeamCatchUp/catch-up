@@ -14,10 +14,8 @@ export interface SnbFooterProps {
 }
 
 /**
- * 펼친 SNB 하단. 신규 버튼과 프로필 행을 담는다.
- *
- * 설정 진입점이 프로필 행 안에 있다. 닫힘 상태에서는 Rail 하단에 독립으로 놓이므로
- * 두 형상을 한 컴포넌트로 합치지 않았다.
+ * 펼친 SNB 하단. 신규 버튼과 프로필 행을 담고, 설정 진입점이 프로필 행 안에 있다.
+ * 닫힘에서는 형상이 달라 한 컴포넌트로 합치지 않았다.
  */
 export default function SnbFooter({
   userName,

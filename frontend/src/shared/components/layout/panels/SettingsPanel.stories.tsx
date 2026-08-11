@@ -67,7 +67,7 @@ export const RootAdmin: Story = {
   play: async ({ canvasElement, userEvent }) => {
     const canvas = within(canvasElement);
 
-    // Chromatic 캡처 환경은 로컬보다 렌더가 늦을 수 있다 — 존재 단언은 재시도형 findByRole로
+    // 캡처 환경은 렌더가 늦을 수 있어 존재 단언은 재시도형 findByRole로 한다
     await expect(await canvas.findByRole('button', { name: /메인으로 가기/ })).toBeInTheDocument();
     await expect(await canvas.findByRole('button', { name: /조직 협업툴 연동/ })).toBeInTheDocument();
     await expect(await canvas.findByRole('button', { name: /멤버 관리/ })).toBeInTheDocument();

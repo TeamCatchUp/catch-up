@@ -10,10 +10,7 @@ import NavTree, { type NavTreeNode } from './NavTree';
 
 /*
  * shared 스토리는 features fixture를 참조할 수 없다(ESLint boundaries) — 데이터 인라인.
- *
- * 라벨은 Figma 실측값을 옮긴 placeholder다. Figma에서는 형제 노드가 전부 똑같은
- * 문자열("채널명 text text text text…")이라 접근성 이름으로 구분이 안 되므로,
- * 스토리에서만 뒤에 번호를 붙였다. 실카피는 미정이다.
+ * 라벨은 placeholder이고, 접근성 이름으로 구분하려고 뒤에 번호를 붙였다.
  */
 const SNB_TREE: readonly NavTreeNode[] = [
   {
@@ -36,7 +33,7 @@ const SNB_TREE: readonly NavTreeNode[] = [
   { id: 'channel-3', label: '채널명 text text text text 3', Icon: IconWikiChannel, canAddChild: true },
 ];
 
-/** 검토 큐 우측 "문서 위치" — 채널 > 폴더 경로 조각 (Figma 17564:127054) */
+/** 검토 큐 우측 "문서 위치" — 채널 > 폴더 경로 조각 */
 const DOCUMENT_LOCATION: readonly NavTreeNode[] = [
   {
     id: 'location-channel',
@@ -103,7 +100,7 @@ export default meta;
 
 type Story = StoryObj<typeof NavTree>;
 
-/** Figma SNB Nav Area 폭 224 = w-56. 컴포넌트는 폭을 안 가지므로 슬롯이 정한다 */
+/** 컴포넌트는 폭을 갖지 않으므로 슬롯이 정한다 */
 const Frame = ({ children }: { children: React.ReactNode }) => (
   <div className="bg-fill-normal-normal w-56 p-2">{children}</div>
 );
@@ -131,7 +128,7 @@ export const Interactive: Story = {
     const folder = canvas.getByRole('button', { name: '폴더명 text text text t 1' });
     const file = canvas.getByRole('button', { name: '파일명texttexttext 1' });
 
-    // depth마다 20px씩 들여쓴다 (Figma 17873:46294 — Depth 2 List x=20, Depth 3 List x=40)
+    // depth마다 한 단계씩 들여쓴다
     await expect(left(rowOf(folder)) - left(rowOf(channel))).toBe(20);
     await expect(left(rowOf(file)) - left(rowOf(channel))).toBe(40);
     // 들여쓴 행은 오른쪽 끝이 밀리지 않는다 — 폭이 줄어들 뿐이다
@@ -184,7 +181,7 @@ export const ActiveHighlight: Story = {
     // 하이라이트는 한 곳뿐이다
     await expect(canvasElement.querySelectorAll('[aria-current="page"]')).toHaveLength(1);
 
-    // 선택 상태는 primary 계열이다 (Figma 17859:133090 — Fill/Primary/Normal/Neutral)
+    // 선택 상태는 primary 계열이다
     const active = canvas.getByRole('button', { name: '폴더명 text text text t 1' });
     await expect(rowOf(active)).toHaveClass('bg-fill-primary-normal-neutral');
     await expect(active.querySelector('span')).toHaveClass('text-text-primary-normal');
@@ -214,18 +211,14 @@ export const StaticLocation: Story = {
     // depth > 0 행에만 연결자 화살표가 붙는다
     await expect(canvasElement.querySelectorAll('[data-slot="nav-tree-depth-connector"]')).toHaveLength(1);
 
-    /*
-     * 라벨 x가 32 → 80으로 48 벌어진다. 들여쓰기 16 + 연결자 24 + gap 8이 그 차이다
-     * (Figma 17564:127054에서 채널 라벨 x=32, 폴더 라벨 x=80).
-     */
+    // 라벨 x 차이 = 들여쓰기 + 연결자 + gap
     await expect(left(folder) - left(channel)).toBe(48);
   },
 };
 
 /*
- * 트리는 깊어질수록 라벨 폭이 줄어든다. Figma도 라벨을 전부 잘라서 보여준다(…).
- * 좁은 슬롯에서 줄바꿈으로 도망가지 않고 자르는지 확인한다 — 줄바꿈이 나면 행 높이가
- * 무너져서 트리 전체 리듬이 깨진다.
+ * 좁은 슬롯에서 라벨이 줄바꿈으로 도망가지 않고 잘리는지 확인한다.
+ * 줄바꿈이 나면 행 높이가 무너져 트리 리듬이 깨진다.
  */
 export const LongLabelNarrow: Story = {
   args: {
@@ -242,7 +235,7 @@ export const LongLabelNarrow: Story = {
     const canvas = within(canvasElement);
     const file = canvas.getByRole('button', { name: '파일명texttexttext 1' });
 
-    // 가장 깊은 행도 36px을 유지한다 (Figma SNB/menu 행 높이)
+    // 가장 깊은 행도 행 높이를 유지한다
     await expect(Math.round(rowOf(file).getBoundingClientRect().height)).toBe(36);
 
     // 라벨은 잘린다 — 넘치는 폭이 실제로 있어야 truncate가 일한 것이다
@@ -259,7 +252,7 @@ export const LongLabelNarrow: Story = {
 
 /*
  * 행 액션은 hover와 포커스 양쪽에서 나타난다. 플레이는 포커스로만 검증한다 —
- * userEvent.hover()는 합성 이벤트라 실제 브라우저의 CSS :hover를 켜지 못한다.
+ * userEvent.hover()는 합성 이벤트라 CSS :hover를 켜지 못한다.
  */
 export const RowActions: Story = {
   args: {
@@ -285,12 +278,12 @@ export const RowActions: Story = {
     const more = canvas.getByRole('button', { name: '채널명 text text text text 1 더보기' });
     const add = canvas.getByRole('button', { name: '채널명 text text text text 1 하위 추가' });
 
-    // Figma Icon button 22×22, 그룹 gap 2 (17892:26494)
+    // 액션 버튼 크기와 그룹 간격
     await expect(Math.round(more.getBoundingClientRect().width)).toBe(22);
     await expect(Math.round(more.getBoundingClientRect().height)).toBe(22);
     await expect(Math.round(add.getBoundingClientRect().left - more.getBoundingClientRect().right)).toBe(2);
 
-    // 액션이 나타나면 라벨 폭이 실제로 줄어든다 — 시안이 그린 레이아웃 시프트다
+    // 액션이 나타나면 라벨 폭이 실제로 줄어든다(의도된 레이아웃 시프트)
     const channelLabel = channel.querySelector('span')!;
     const widthWithActions = channelLabel.getBoundingClientRect().width;
     channel.blur();
@@ -298,7 +291,7 @@ export const RowActions: Story = {
       await expect(channelLabel.getBoundingClientRect().width).toBeGreaterThan(widthWithActions);
     });
 
-    // 하위를 가질 수 없는 행은 ⋯만 갖는다 (Figma 하위메뉴_파일 컬럼)
+    // 하위를 가질 수 없는 행은 ⋯만 갖는다
     const file = canvas.getByRole('button', { name: '파일명texttexttext 1' });
     file.focus();
     await expect(canvas.getByRole('button', { name: '파일명texttexttext 1 더보기' })).toBeInTheDocument();
