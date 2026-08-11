@@ -23,7 +23,6 @@ from typing import Any
 
 from fastapi import Depends
 from fastapi import HTTPException
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from catchup.audit.actions import KnowledgeReviewAction
@@ -33,9 +32,9 @@ from catchup.audit.emitters import emit_audit_event
 from catchup.audit.metadata import KnowledgeReviewAuditMetadata
 from catchup.auth.dependencies import cookie_scheme
 from catchup.auth.dependencies import get_current_user
+from catchup.db import wiki as wiki_queries
 from catchup.db.dependencies import get_db
 from catchup.db.models import User
-from catchup.db.models import UserWorkspace
 
 
 def review_error(
@@ -171,12 +170,8 @@ def resolve_member_workspace(
         HTTPException: 소속이 없거나, 여러 소속에서 workspace를 고르지
             않았을 때 던진다.
     """
-    memberships = list(
-        db.scalars(
-            select(UserWorkspace.workspace_id)
-            .where(UserWorkspace.user_id == current_user.id)
-            .order_by(UserWorkspace.workspace_id)
-        ).all()
+    memberships = wiki_queries.list_membership_workspace_ids(
+        db, current_user.id
     )
 
     if workspace_id is None:

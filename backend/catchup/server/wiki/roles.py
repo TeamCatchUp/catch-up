@@ -4,9 +4,10 @@
 항목의 폴백만, 미분류(channel_id 없음) 문서의 폴백은 전역 ADMIN이다. 판정 함수는 순수 함수로 두어 fake 없이
 단위 테스트한다.
 
-적재는 전부 db 세션을 받는 모듈 함수다. UnitOfWork의 내부 세션을 꺼내
-쓰면 저장소 경계를 넘게 되므로, 역할과 대상 판정에 필요한 조회는 라우터가
-가진 db 의존성으로만 나간다.
+적재는 db 세션을 받는 모듈 함수 하나(`load_wiki_roles`)로, 쿼리 자체는
+`catchup.db.wiki`에 두고 여기서는 결과를 스냅샷으로 조립하기만 한다.
+UnitOfWork의 내부 세션을 꺼내 쓰면 저장소 경계를 넘게 되므로, 역할과 대상
+판정에 필요한 조회는 라우터가 가진 db 의존성으로만 나간다.
 """
 
 from __future__ import annotations
@@ -14,14 +15,9 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass
 
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from catchup.db.models import ArtifactOwner
-from catchup.db.models import Channel
-from catchup.db.models import ChannelAdmin
-from catchup.db.models import KnowledgeArtifact
-from catchup.db.models import User
+from catchup.db import wiki as wiki_queries
 from catchup.db.models import UserRole
 
 
@@ -52,71 +48,25 @@ def load_wiki_roles(
     말하지 않으면, 자격을 집합의 비어 있음으로만 보는 표면 게이트가 남의
     workspace 역할로 열린다.
     """
-    user_role = db.scalar(select(User.role).where(User.id == user_id))
+    user_role = wiki_queries.get_user_role(db, user_id)
     admin_channel_ids = frozenset(
-        db.scalars(
-            select(ChannelAdmin.channel_id)
-            .join(Channel, Channel.id == ChannelAdmin.channel_id)
-            .where(
-                ChannelAdmin.user_id == user_id,
-                Channel.workspace_id == workspace_id,
-            )
-        ).all()
+        wiki_queries.list_admin_channel_ids(
+            db, user_id=user_id, workspace_id=workspace_id
+        )
     )
     # 담당 문서도 workspace로 좁힌다. 대상 판정은 문서 id 일치를 다시 보므로
     # 무필터여도 남의 문서를 결정할 자리는 없지만, 표면 게이트(has_any_role)는
     # 집합이 비었는지만 본다. 좁히지 않으면 A workspace의 담당자가 역할 하나
     # 없는 B workspace의 검수 표면에 그대로 서서 계류 목록을 읽는다.
     owned_artifact_ids = frozenset(
-        db.scalars(
-            select(ArtifactOwner.artifact_id)
-            .join(
-                KnowledgeArtifact,
-                KnowledgeArtifact.id == ArtifactOwner.artifact_id,
-            )
-            .where(
-                ArtifactOwner.user_id == user_id,
-                KnowledgeArtifact.workspace_id == workspace_id,
-            )
-        ).all()
+        wiki_queries.list_owned_artifact_ids(
+            db, user_id=user_id, workspace_id=workspace_id
+        )
     )
     return WikiRoleContext(
         is_global_admin=user_role == UserRole.ADMIN,
         admin_channel_ids=admin_channel_ids,
         owned_artifact_ids=owned_artifact_ids,
-    )
-
-
-def load_artifact_owner_ids(
-    db: Session, artifact_id: uuid.UUID
-) -> frozenset[int]:
-    """문서의 담당자 명단을 읽는다.
-
-    비었다는 사실이 그대로 판정 재료다 — 담당자가 없어야 관리자 폴백이
-    선다.
-    """
-    return frozenset(
-        db.scalars(
-            select(ArtifactOwner.user_id).where(
-                ArtifactOwner.artifact_id == artifact_id
-            )
-        ).all()
-    )
-
-
-def load_artifact_channel_id(
-    db: Session, artifact_id: uuid.UUID
-) -> uuid.UUID | None:
-    """문서가 놓인 채널을 읽는다.
-
-    문서가 없거나 아직 채널에 놓이지 않았으면 None이다. 둘을 가르지 않는
-    이유는 판정이 같기 때문이다 — 어느 쪽이든 채널 관리자가 설 자리가 없고
-    폴백은 전역 ADMIN 하나다.
-    """
-    return db.scalar(
-        select(KnowledgeArtifact.channel_id).where(
-            KnowledgeArtifact.id == artifact_id
-        )
     )
 
 

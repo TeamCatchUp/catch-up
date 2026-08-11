@@ -27,8 +27,6 @@ import uuid
 from fastapi import APIRouter
 from fastapi import Depends
 from fastapi import Response
-from sqlalchemy import func
-from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -36,19 +34,16 @@ from catchup.audit.actions import KnowledgeReviewAction
 from catchup.audit.base import AuditStatus
 from catchup.audit.emitters import emit_audit_event
 from catchup.audit.metadata import KnowledgeReviewAuditMetadata
+from catchup.db import wiki as wiki_queries
 from catchup.db.dependencies import get_db
-from catchup.db.models import ArtifactOwner
 from catchup.db.models import Channel
-from catchup.db.models import ChannelAdmin
 from catchup.db.models import ChannelFolder
 from catchup.db.models import KnowledgeArtifact
-from catchup.db.models import UserWorkspace
 from catchup.server.wiki.dependencies import MemberContext
 from catchup.server.wiki.dependencies import deny_reviewer
 from catchup.server.wiki.dependencies import resolve_member_workspace
 from catchup.server.wiki.dependencies import review_error
 from catchup.server.wiki.roles import can_manage_owners
-from catchup.server.wiki.roles import load_artifact_owner_ids
 from catchup.server.wiki.roles import load_wiki_roles
 from catchup.server.wiki.schemas import ArtifactOwnerResponse
 from catchup.server.wiki.schemas import ChannelAdminResponse
@@ -97,11 +92,8 @@ def _load_channel(
     Raises:
         HTTPException: 채널이 없으면 404를 던진다.
     """
-    channel = db.scalar(
-        select(Channel).where(
-            Channel.id == channel_id,
-            Channel.workspace_id == workspace_id,
-        )
+    channel = wiki_queries.get_channel(
+        db, channel_id=channel_id, workspace_id=workspace_id
     )
     if channel is None:
         raise review_error(
@@ -152,11 +144,8 @@ def _load_folder(
     Raises:
         HTTPException: 폴더가 없거나 그 채널의 것이 아니면 404를 던진다.
     """
-    folder = db.scalar(
-        select(ChannelFolder).where(
-            ChannelFolder.id == folder_id,
-            ChannelFolder.channel_id == channel_id,
-        )
+    folder = wiki_queries.get_folder(
+        db, folder_id=folder_id, channel_id=channel_id
     )
     if folder is None:
         raise review_error(
@@ -179,11 +168,8 @@ def _load_artifact(
     Raises:
         HTTPException: 문서가 없으면 404를 던진다.
     """
-    artifact = db.scalar(
-        select(KnowledgeArtifact).where(
-            KnowledgeArtifact.id == artifact_id,
-            KnowledgeArtifact.workspace_id == workspace_id,
-        )
+    artifact = wiki_queries.get_artifact(
+        db, artifact_id=artifact_id, workspace_id=workspace_id
     )
     if artifact is None:
         raise review_error(
@@ -206,11 +192,8 @@ def _require_workspace_member(
     Raises:
         HTTPException: 대상이 구성원이 아니면 400을 던진다.
     """
-    membership = db.scalar(
-        select(UserWorkspace.user_id).where(
-            UserWorkspace.user_id == user_id,
-            UserWorkspace.workspace_id == workspace_id,
-        )
+    membership = wiki_queries.get_workspace_membership_user_id(
+        db, user_id=user_id, workspace_id=workspace_id
     )
     if membership is None:
         raise review_error(
@@ -224,13 +207,7 @@ def _load_channel_admin_ids(
     db: Session, channel_id: uuid.UUID
 ) -> list[int]:
     """채널 관리자 명단을 정렬된 순서로 읽는다."""
-    return sorted(
-        db.scalars(
-            select(ChannelAdmin.user_id).where(
-                ChannelAdmin.channel_id == channel_id
-            )
-        ).all()
-    )
+    return sorted(wiki_queries.list_channel_admin_ids(db, channel_id))
 
 
 @router.post(
@@ -252,20 +229,19 @@ def create_channel(
     Raises:
         HTTPException: 같은 workspace에 같은 이름이 있으면 409를 던진다.
     """
-    channel = Channel(
+    channel = wiki_queries.add_channel(
+        db,
         workspace_id=context.workspace_id,
         name=request.name,
         created_by=context.user.id,
     )
-    db.add(channel)
     try:
         db.flush()
-        db.add(
-            ChannelAdmin(
-                channel_id=channel.id,
-                user_id=context.user.id,
-                granted_by=context.user.id,
-            )
+        wiki_queries.add_channel_admin(
+            db,
+            channel_id=channel.id,
+            user_id=context.user.id,
+            granted_by=context.user.id,
         )
         db.commit()
     except IntegrityError as error:
@@ -300,23 +276,13 @@ def list_channels(
     일은 이 슬라이스 밖이다 — 채널은 읽는 자리를 고르는 색인이라, 보이지
     않으면 문서를 찾을 길이 없다.
     """
-    channels = list(
-        db.scalars(
-            select(Channel)
-            .where(Channel.workspace_id == context.workspace_id)
-            .order_by(Channel.created_at, Channel.id)
-        ).all()
-    )
+    channels = wiki_queries.list_channels(db, context.workspace_id)
     roles = load_wiki_roles(
         db, user_id=context.user.id, workspace_id=context.workspace_id
     )
 
     folders: dict[uuid.UUID, list[FolderResponse]] = {}
-    for folder in db.scalars(
-        select(ChannelFolder)
-        .where(ChannelFolder.workspace_id == context.workspace_id)
-        .order_by(ChannelFolder.created_at, ChannelFolder.id)
-    ).all():
+    for folder in wiki_queries.list_folders(db, context.workspace_id):
         folders.setdefault(folder.channel_id, []).append(
             FolderResponse(
                 id=str(folder.id),
@@ -325,18 +291,8 @@ def list_channels(
             )
         )
 
-    counts = dict(
-        db.execute(
-            select(
-                KnowledgeArtifact.channel_id,
-                func.count(KnowledgeArtifact.id),
-            )
-            .where(
-                KnowledgeArtifact.workspace_id == context.workspace_id,
-                KnowledgeArtifact.channel_id.is_not(None),
-            )
-            .group_by(KnowledgeArtifact.channel_id)
-        ).all()
+    counts = wiki_queries.count_artifacts_by_channel(
+        db, context.workspace_id
     )
 
     return ChannelListResponse(
@@ -419,12 +375,12 @@ def create_folder(
     channel = _require_channel_admin(
         db, channel_id=channel_id, context=context
     )
-    folder = ChannelFolder(
+    folder = wiki_queries.add_folder(
+        db,
         workspace_id=channel.workspace_id,
         channel_id=channel.id,
         name=request.name,
     )
-    db.add(folder)
     try:
         db.commit()
     except IntegrityError as error:
@@ -508,7 +464,7 @@ def delete_folder(
     """
     _require_channel_admin(db, channel_id=channel_id, context=context)
     folder = _load_folder(db, folder_id=folder_id, channel_id=channel_id)
-    db.delete(folder)
+    wiki_queries.remove_folder(db, folder)
     try:
         db.commit()
     except IntegrityError as error:
@@ -555,7 +511,9 @@ def assign_artifact_owner(
     roles = load_wiki_roles(
         db, user_id=context.user.id, workspace_id=context.workspace_id
     )
-    owner_user_ids = load_artifact_owner_ids(db, artifact.id)
+    owner_user_ids = frozenset(
+        wiki_queries.list_artifact_owner_ids(db, artifact.id)
+    )
     if not can_manage_owners(
         roles,
         artifact_channel_id=artifact.channel_id,
@@ -578,12 +536,11 @@ def assign_artifact_owner(
     if user_id in owner_user_ids:
         response.status_code = 200
     else:
-        db.add(
-            ArtifactOwner(
-                artifact_id=artifact.id,
-                user_id=user_id,
-                granted_by=context.user.id,
-            )
+        wiki_queries.add_artifact_owner(
+            db,
+            artifact_id=artifact.id,
+            user_id=user_id,
+            granted_by=context.user.id,
         )
         try:
             db.commit()
@@ -598,7 +555,9 @@ def assign_artifact_owner(
 
     return ArtifactOwnerResponse(
         artifact_id=str(artifact.id),
-        user_ids=sorted(load_artifact_owner_ids(db, artifact.id)),
+        user_ids=sorted(
+            wiki_queries.list_artifact_owner_ids(db, artifact.id)
+        ),
     )
 
 
@@ -637,7 +596,9 @@ def remove_artifact_owner(
         roles,
         artifact_channel_id=artifact.channel_id,
         artifact_id=artifact.id,
-        owner_user_ids=load_artifact_owner_ids(db, artifact.id),
+        owner_user_ids=frozenset(
+            wiki_queries.list_artifact_owner_ids(db, artifact.id)
+        ),
         user_id=context.user.id,
         for_removal=True,
     ):
@@ -649,9 +610,11 @@ def remove_artifact_owner(
             workspace_id=context.workspace_id,
         )
 
-    owner = db.get(ArtifactOwner, (artifact.id, user_id))
+    owner = wiki_queries.get_artifact_owner(
+        db, artifact_id=artifact.id, user_id=user_id
+    )
     if owner is not None:
-        db.delete(owner)
+        wiki_queries.remove_artifact_owner(db, owner)
         db.commit()
         emit_audit_event(
             action=KnowledgeReviewAction.OWNER_REMOVE,
@@ -697,16 +660,17 @@ def assign_channel_admin(
         db, user_id=user_id, workspace_id=context.workspace_id
     )
 
-    existing = db.get(ChannelAdmin, (channel.id, user_id))
+    existing = wiki_queries.get_channel_admin(
+        db, channel_id=channel.id, user_id=user_id
+    )
     if existing is not None:
         response.status_code = 200
     else:
-        db.add(
-            ChannelAdmin(
-                channel_id=channel.id,
-                user_id=user_id,
-                granted_by=context.user.id,
-            )
+        wiki_queries.add_channel_admin(
+            db,
+            channel_id=channel.id,
+            user_id=user_id,
+            granted_by=context.user.id,
         )
         try:
             db.commit()

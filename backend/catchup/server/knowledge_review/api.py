@@ -39,6 +39,7 @@ from sqlalchemy.orm import Session
 from catchup.audit.actions import KnowledgeReviewAction
 from catchup.audit.metadata import KnowledgeReviewAuditMetadata
 from catchup.audit.utils import audit_log
+from catchup.db import wiki as wiki_queries
 from catchup.db.dependencies import get_db
 from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_CONTESTED
 from catchup.knowledge_maintenance.domain.artifact import ArtifactBlock
@@ -100,8 +101,6 @@ from catchup.server.knowledge_review.schemas import RejectRequest
 from catchup.server.knowledge_review.schemas import VariantResponse
 from catchup.server.wiki.dependencies import review_error
 from catchup.server.wiki.roles import can_decide_artifact
-from catchup.server.wiki.roles import load_artifact_channel_id
-from catchup.server.wiki.roles import load_artifact_owner_ids
 
 router = APIRouter(
     prefix="/api/v1/knowledge-review",
@@ -182,11 +181,13 @@ def _require_decidable_proposal(
         )
     if not can_decide_artifact(
         context.roles,
-        artifact_channel_id=load_artifact_channel_id(
+        artifact_channel_id=wiki_queries.get_artifact_channel_id(
             db, proposal.artifact_id
         ),
         artifact_id=proposal.artifact_id,
-        owner_user_ids=load_artifact_owner_ids(db, proposal.artifact_id),
+        owner_user_ids=frozenset(
+            wiki_queries.list_artifact_owner_ids(db, proposal.artifact_id)
+        ),
         user_id=context.user.id,
     ):
         raise review_error(
