@@ -1,56 +1,44 @@
 /**
- * LLM Wiki 도메인 타입.
- *
- * 백엔드 제품 API가 아직 없어 전부 mock 계약이다. 필드 구분:
- * - [BE] : ERD(knowledge_* 테이블)에 실재하는 컬럼 — 이름·의미를 백엔드 용어에 맞춘다
- * - [SPEC]: MVP 명세에만 있고 백엔드 대응이 없는 값 — API 계약 협상 대상
- * 근거: docs/specs/2026-08-05-llm-wiki-erd-design.md, docs/specs/2026-08-06-llm-wiki-storybook-batch1-design.md §3
+ * LLM Wiki 도메인 타입. 백엔드 제품 API가 없어 전부 mock 계약이다.
+ * [BE]는 ERD에 실재하는 컬럼, [SPEC]은 명세에만 있고 백엔드 대응이 없는 값이다.
  */
 
-// [BE] knowledge_artifact_change_proposals.status — DB CHECK로 닫힌 집합
+// [BE] 제안 판정 — DB CHECK로 닫힌 집합
 export type ChangeProposalStatus = 'pending' | 'approved' | 'rejected' | 'abandoned';
 
-// [BE] 백엔드 검토 큐 3종. 명세는 6유형이라 목록이 아직 흔들린다 — 닫힌 enum 금지
+// [BE] 검토 큐 3종. 명세는 6유형이라 목록이 흔들린다 — 닫힌 enum 금지
 export type KnownReviewItemType = 'publish' | 'merge' | 'contradiction';
 export type ReviewItemType = KnownReviewItemType | (string & {});
 
 /**
- * [SPEC] 문서 상태. 백엔드에 대응 필드가 없다 — 큐 행의 `status`는 제안 판정
- * (ChangeProposalStatus)이지 문서 상태가 아니다.
- *
- * 셋 다 시안 전수 조사(8/10)로 확인된 값이다. 그 밖은 여전히 미정이라 열어둔다.
- * - reviewed       "검토 완료" 표 상태 열 (17698:184150 외 21곳)
- * - pending_review "검토 대기" 대시보드 표 (17849:106521)
- * - needs_review   "검토 필요" 검토큐 헤더(17942:91620) · 검토큐 상세 메타 줄(17896:46635)
+ * [SPEC] 문서 상태. 백엔드에 대응 필드가 없고, 큐 행의 `status`(제안 판정)와 다른 축이다.
+ * 확정된 셋 밖은 미정이라 열어둔다.
  */
 export type KnownDocumentStatus = 'reviewed' | 'pending_review' | 'needs_review';
 export type DocumentStatus = KnownDocumentStatus | (string & {});
 
-// breadcrumb 종류. Figma가 아이콘을 정의한 것은 채널·폴더 2종뿐이라 나머지는 열어둔다
+// breadcrumb 종류. 아이콘이 정의된 것은 채널·폴더 2종뿐이라 나머지는 열어둔다
 export type KnownBreadcrumbKind = 'channel' | 'folder';
 export type BreadcrumbKind = KnownBreadcrumbKind | (string & {});
 
-/** [SPEC] 채널 > 폴더 경로의 한 마디. 종류마다 Figma 아이콘이 갈려서 문자열로 뭉갤 수 없다 */
+/** [SPEC] 채널 > 폴더 경로의 한 마디. 종류마다 아이콘이 갈려서 문자열로 뭉갤 수 없다 */
 export interface DocumentBreadcrumb {
   kind: BreadcrumbKind;
   label: string;
 }
 
 /**
- * 대시보드 문서 표(17606:149822)의 행 계약.
- *
- * 문서_폴더 메인(17762:104801)·문서_채널 메인(17762:103743)의 행은 3열이
- * "연결 VOC & 고객사 수"이고 breadcrumbs가 없어 이 계약과 다르다 — 스펙 미결로 분리됐다.
- * 그래서 vocCount·customerCount는 여기 두지 않는다(어느 화면에도 breadcrumbs와 공존하지 않는다).
+ * 대시보드 문서 표의 행 계약.
+ * 폴더·채널 화면의 행은 열 구성이 달라 별도 계약이다 — vocCount·customerCount는 여기 두지 않는다.
  */
 export interface DocumentRowData {
   id: string;
-  /** [BE] knowledge_artifacts.title */
+  /** [BE] 문서 제목 */
   title: string;
   /** [SPEC] 채널 > 폴더 경로. 백엔드에 채널·폴더 개념 없음 */
   breadcrumbs: readonly DocumentBreadcrumb[];
   status: DocumentStatus;
-  /** 에러 아이콘 행 — 배지와의 공존 규칙 UNKNOWN(감사) 상태로 시각만 존재 */
+  /** 에러 아이콘 행 — 배지와의 공존 규칙은 미정이라 시각만 존재 */
   hasConflictIcon: boolean;
   /** [SPEC] 태그 목록. 행에는 첫 1개만 칩으로 보이고 나머지는 "+N"으로 접힌다 */
   tags: readonly string[];
@@ -61,16 +49,15 @@ export interface DocumentRowData {
 export interface ReviewQueueItemData {
   id: string;
   type: ReviewItemType;
-  /** [BE] mutation_proposals.summary 계열 — 행 제목 */
+  /** [BE] 행 제목 */
   title: string;
   authorName: string;
   authorProfileImageUrl: string | null;
   /** 대기 기간 표시 문자열 (예: "15시간 전") */
   waitingLabel: string;
   /**
-   * [BE] 추출 신뢰도(knowledge_*_candidates.confidence, 0~1).
-   * 명세의 "연결 신뢰도"와 다른 값이다 — 연결 신뢰도는 백엔드에 없다.
-   * 감사 판정상 행 UI에는 표시하지 않는다(MISSING). 계약 보존용으로만 담는다.
+   * [BE] 추출 신뢰도(0~1). 명세의 "연결 신뢰도"와 다른 값이다.
+   * 행 UI에는 표시하지 않는다 — 계약 보존용.
    */
   confidence: number;
   status: ChangeProposalStatus;
@@ -78,26 +65,20 @@ export interface ReviewQueueItemData {
   rejectionReason: string | null;
   /** [BE] stale 판정 기준 revision */
   baseRevisionId: string;
-  /** 충돌(에러 아이콘) 행 — 상단 고정 규칙은 UNKNOWN */
+  /** 충돌(에러 아이콘) 행 — 상단 고정 여부는 미정 */
   hasConflictIcon: boolean;
 }
 
 export interface ReviewStatCardData {
   id: string;
-  /** Figma 확정 4종: 검토 대기 · 미해결 충돌 · 태그 미분류 · 장기 미변경 문서 */
+  /** 검토 대기 · 미해결 충돌 · 태그 미분류 · 장기 미변경 문서 */
   label: string;
   count: number;
 }
 
 /**
- * [SPEC] 태그는 전부 명세 유래 — 백엔드 스키마에 없음.
- *
- * 계층(카테고리 → 하위 태그)을 만들지 않는다. MVP 명세 §11이 "태그 계층 구조"를 범위 밖으로
- * 명시했고(2026-08-05-llm-wiki-mvp-design.md), 8/7 Figma 재확인에서도 대시보드 태그 영역
- * (17762:103078)은 그룹 헤더 없는 평평한 목록이었다. 그래서 이 타입이 태그 목록의 유일한 단위다.
- *
- * documentCount는 명세 §6("누적 문의 건수")에서 온 계약 보존용 필드다 — 태그 목록 시안에는
- * 건수 표기가 없으므로 TagNavigationList는 이 값을 렌더하지 않는다.
+ * [SPEC] 태그. 백엔드 스키마에 없고, 계층 없이 평평한 목록이 유일한 단위다.
+ * documentCount는 계약 보존용이라 TagNavigationList가 렌더하지 않는다.
  */
 export interface TagItem {
   id: string;

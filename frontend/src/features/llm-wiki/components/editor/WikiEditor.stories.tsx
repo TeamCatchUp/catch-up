@@ -6,52 +6,22 @@ import { EDITOR_PHASE2_DOC, EDITOR_SKELETON_DOC } from '../../fixtures/llmWikiEd
 import WikiEditor from './WikiEditor';
 
 /**
- * 이 에디터는 Figma 시안이 없다 — 문서_문서 메인(17735:186169)의 본문이 빈 박스다.
- * 그래서 모든 스토리가 designSource: 'dev-preview'다. figma 키를 넣으면 타입 에러가 난다.
- *
- * ── 한글 IME 수동 체크리스트 — ✅ 2026-08-10 검증 완료 ──────────────
- * ✅ /로 메뉴 열기 → 한글로 검색 → Enter로 선택
- * ✅ 조합 중 Enter가 항목을 선택해버리지 않는가
- * ✅ 조합 중 ↑↓가 커서를 옮기지 않는가
- * ✅ Esc로 닫은 뒤 조합 중이던 글자가 남는가
- * ────────────────────────────────────────────────────
- * composition 이벤트는 실제 IME 엔진이 있어야 재현된다. Playwright의 insertText로는
- * 조합 과정이 생기지 않아, 가짜 이벤트로 테스트를 만들면 "통과하는데 실제로는 깨지는"
- * 형태가 된다. 그래서 이 4항목은 자동 테스트가 지켜주지 않는 유일한 계약이다.
- *
- * 검증한 자리: 앱 라우트 `/llm-wiki/[documentId]?proposalId=...` (편집 모드).
- * Storybook에서는 못 밟는다 — 계측된 play가 초 단위로 걸리고 패널이 숨겨지면 뷰포트가 0×0이다.
- * **SlashMenu의 isComposing 가드나 slashCommand 브리지를 고치면 이 4항목을 다시 밟을 것.**
- *
- * ── UI를 가볍게 유지하는 두 장치 (리포 관례에서 의도적으로 이탈) ──────────
- * ① autodocs 없음. Docs는 파일의 모든 스토리를 한 화면에 동시 마운트하는데,
- *    에디터 하나가 ProseMirror view + DragHandle + BubbleMenu + Suggestion 2개를
- *    들고 있어 그 비용이 인스턴스 수만큼 곱해진다(실측 .ProseMirror 17개 → 멈춤).
- * ② 회귀 테스트 스토리는 전부 tags: ['!dev']. play 함수는 UI에서 계측되며
- *    자동 실행되는데 그게 초 단위로 걸린다 — 타이핑 24자 play가 25초에도 미완이었다.
- *    vitest(`--project=storybook`)에서는 같은 play가 수백 ms다.
- *    사이드바에는 아래 Playground 3종만 남고, 테스트 커버리지는 그대로다.
- * ────────────────────────────────────────────────────
+ * WikiEditor 스토리. Figma 시안이 없어 모든 스토리가 designSource: 'dev-preview'다.
+ * IME 조합 중 동작(Enter·↑↓·Esc)은 자동화 불가 — isComposing 가드·slashCommand 브리지 수정 시 실기기 한글 입력 재검증 필요.
  */
 const meta = {
   title: 'Compositions/LLM Wiki/Editor/WikiEditor',
   component: WikiEditor,
   argTypes: {
-    // Controls는 객체 arg를 라이브 JSON 트리로 렌더한다 — initialContent는 문서 전체라
-    // 매니저가 그 트리를 들고 있게 된다. 편집할 값도 아니므로 컨트롤을 끈다.
+    // 객체 arg는 Controls가 라이브 JSON 트리로 렌더한다 — 편집 대상이 아니므로 끈다.
     initialContent: { control: false },
     onUpdate: { control: false },
     onContentError: { control: false },
   },
   parameters: {
-    // onUpdate는 키 입력마다 문서 전체 JSON을 넘긴다 — Actions 패널이 켜져 있으면
-    // 그 페이로드가 매 글자 직렬화되어 패널에 쌓인다. 스토리에서 쓰지 않으므로 끈다
-    // (테스트 스토리의 fn() 스파이는 애드온과 무관하게 그대로 동작한다).
+    // onUpdate가 키 입력마다 문서 전체 JSON을 넘겨 Actions 패널에 쌓인다 — 끈다.
     actions: { disable: true },
-    // 기본은 스냅샷 제외. tags: ['!dev']는 사이드바만 숨기고 Chromatic 캡처에서는 안 빠지는데,
-    // 아래 회귀 테스트 스토리들의 play는 브라우저 계측 환경에서 초 단위로 걸려(타이핑 24자 play가
-    // 25초에도 미완 — 실측) 캡처가 에러로 끝난다. 그 커버리지는 vitest가 이미 담당하고,
-    // 시각 회귀로서의 값어치는 Playground 3종에 있다 — 그 셋만 아래에서 다시 켠다.
+    // 회귀 테스트 스토리의 play는 캡처 환경에서 시간이 초과된다 — Playground 3종만 아래에서 다시 켠다.
     chromatic: { disableSnapshot: true },
     ...catchupParameters({
       level: 'composition',
@@ -92,11 +62,7 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof WikiEditor>;
 
-/**
- * ── 손으로 만지는 스토리 (play 없음) ───────────────────────────────
- * 아래 3개만 사이드바에 보인다. 슬래시 메뉴·툴바·드래그 핸들·이모지·블록 11종을
- * 전부 여기서 시험할 수 있다.
- */
+/** 손으로 만지는 스토리(play 없음). 사이드바에는 아래 3개만 보인다. */
 
 /** 빈 에디터. `/`로 블록 삽입, 텍스트 선택 시 서식 툴바, `:`로 이모지. */
 export const Playground: Story = {
@@ -116,11 +82,8 @@ export const PlaygroundWithBlocks: Story = {
 };
 
 /**
- * ── 아래는 전부 회귀 테스트용 (tags: ['!dev'] — 사이드바에 없음) ──────
- * play 함수가 계측되며 자동 실행되는데, UI에서는 그게 초 단위로 걸려
- * 스토리를 열자마자 멈춘 것처럼 보인다(실측: 타이핑 24자 play가 25초 미완).
- * vitest(`--project=storybook`)에서는 같은 play가 수백 ms에 끝나므로
- * 커버리지는 그대로 두고 사이드바에서만 감춘다.
+ * 아래는 전부 회귀 테스트용. 에디터 인스턴스가 무거워 autodocs를 쓰지 않고,
+ * play가 UI 계측 환경에서 초 단위로 걸려 tags: ['!dev']로 감춘다 — 커버리지는 vitest가 담당한다.
  */
 
 /** 빈 문서. 클릭해서 타이핑하면 글자가 들어간다. */
@@ -163,9 +126,7 @@ export const SlashMenuInsert: Story = {
 
 /**
  * 키보드로 항목을 고른다 — ↓로 하이라이트를 옮기고 Enter로 삽입.
- * slashCommand.onKeyDown → WikiEditor.handleMenuKeyDown → menuRef → SlashMenu useImperativeHandle
- * 로 이어지는, 태스크 3개를 가로지르는 유일한 런타임 이음새의 회귀 감시다.
- * (조합 중 Enter 같은 IME 경로는 자동화 불가 — 상단 수동 체크리스트가 담당한다.)
+ * slashCommand → WikiEditor → SlashMenu로 이어지는 키 이벤트 배선의 회귀 감시.
  */
 export const SlashMenuKeyboard: Story = {
   tags: ['!dev'],
@@ -187,10 +148,7 @@ export const SlashMenuKeyboard: Story = {
   },
 };
 
-/**
- * 노션식 트리거(스펙 §12): 단어 끝에 바로 /를 쳐도 메뉴가 열린다.
- * 1차의 "and/ 차단" 규칙을 사용자 결정으로 대체했다 — 이 스토리가 그 결정의 회귀 감시다.
- */
+/** 단어 끝에 바로 /를 쳐도 메뉴가 열린다. */
 export const SlashAfterWordOpens: Story = {
   tags: ['!dev'],
   play: async ({ canvasElement }) => {
@@ -225,10 +183,7 @@ export const SlashInsertsPhase2Blocks: Story = {
   },
 };
 
-/**
- * 플로팅 서식 툴바(스펙 §12) — 텍스트를 선택하면 뜨고, 굵게를 누르면 strong이 생긴다.
- * 글리프는 문자 기반(B·I·U·S) — 서식 아이콘 자산 부재의 임시 시각(노션 방식과 동일).
- */
+/** 플로팅 서식 툴바 — 텍스트를 선택하면 뜨고, 굵게·정렬이 적용된다. */
 export const FormattingToolbarStory: Story = {
   tags: ['!dev'],
   name: 'Formatting Toolbar',
@@ -241,9 +196,8 @@ export const FormattingToolbarStory: Story = {
     // 선택 전에는 툴바가 없다
     await expect(body.queryByRole('toolbar', { name: '텍스트 서식' })).toBeNull();
 
-    // tripleClick은 헤드리스에서 PM 선택으로 이어지지 않고(detail 시퀀스가 handleTripleClick에 닿지 않음),
-    // user-event의 {Home}/{End}는 contenteditable에서 "Not implemented"다. DOM Range를 직접 걸면
-    // 브라우저가 selectionchange를 발사하고 PM이 그걸 집는다 — 실브라우저 수동 재현과 같은 경로.
+    // 헤드리스에서는 tripleClick·{Home}/{End}가 contenteditable 선택을 만들지 못한다.
+    // DOM Range를 직접 걸면 selectionchange가 발사되고 ProseMirror가 그걸 집는다.
     const paragraph = within(surface).getByText('검토자 메모: 원인 확인 중.');
     await userEvent.click(paragraph);
     const doc = paragraph.ownerDocument;
@@ -255,7 +209,7 @@ export const FormattingToolbarStory: Story = {
 
     const toolbar = await body.findByRole('toolbar', { name: '텍스트 서식' });
     await userEvent.click(within(toolbar).getByRole('button', { name: '굵게' }));
-    // 마크 적용이 노드 DOM을 재생성할 수 있어 stale 참조 대신 surface에서 재조회한다
+    // 마크 적용이 노드 DOM을 재생성할 수 있어 surface에서 재조회한다
     const strong = surface.querySelector('strong');
     await expect(strong).not.toBeNull();
     await expect(strong).toHaveTextContent('검토자 메모');
@@ -294,10 +248,7 @@ export const TurnInto: Story = {
   },
 };
 
-/**
- * 드래그 핸들 옆 + 버튼 — 현재 블록 아래에 빈 문단을 만들고 슬래시 메뉴를 연다.
- * '/' 삽입 경로를 그대로 타므로 메뉴 상태 배선이 중복되지 않는다.
- */
+/** 드래그 핸들 옆 + 버튼 — 아래에 빈 문단을 만들고 슬래시 메뉴를 연다. */
 export const AddBlockButton: Story = {
   tags: ['!dev'],
   args: {
@@ -311,12 +262,10 @@ export const AddBlockButton: Story = {
     const body = within(canvasElement.ownerDocument.body);
     const surface = canvas.getByRole('textbox');
 
-    // 캐럿을 블록 안에 둔다 — 헤드리스에서는 hover가 DragHandle의 mousemove 추적으로 이어지지
-    // 않아 + 버튼이 "선택 블록 뒤 삽입" 폴백 경로를 탄다(실브라우저에서는 호버 블록 기준).
+    // 헤드리스에서는 hover가 DragHandle 추적으로 이어지지 않아 + 버튼이 "선택 블록 뒤 삽입" 폴백을 탄다.
     await userEvent.click(within(surface).getByText('기준 블록'));
 
-    // 핸들은 호버 전까지 visibility:hidden이고 user-event는 숨은 요소 클릭을 조용히 무시한다.
-    // 실 UX(호버→표시→클릭)는 실브라우저에서 검증했다 — 여기서는 배선 회귀만 보므로 네이티브 클릭.
+    // 핸들은 호버 전까지 visibility:hidden이고 user-event는 숨은 요소 클릭을 무시한다 — 네이티브 클릭을 쓴다.
     const addButton = await canvas.findByRole('button', { name: '아래에 블록 추가' });
     (addButton as HTMLButtonElement).click();
 
@@ -344,10 +293,7 @@ export const CalloutToggle: Story = {
   },
 };
 
-/**
- * 드래그 핸들. 명세·Figma 근거가 없는 유일한 기능이라 시각을 최소로 뒀다
- * (drag_indicator.svg + 호버 시 노출). 시안 요청은 design-request에 올라가 있다.
- */
+/** 드래그 핸들 — 에디터에 호버하면 노출된다. */
 export const DragHandle: Story = {
   tags: ['!dev'],
   args: {
@@ -369,7 +315,7 @@ export const DragHandle: Story = {
   },
 };
 
-/** 픽스처 로드. 골격 블록만 들어 있다 — 표·체크박스·콜아웃은 다음 단계다. */
+/** 픽스처 로드. 골격 블록(제목·문단·목록)만 들어 있다. */
 export const WithContent: Story = {
   tags: ['!dev'],
   args: { initialContent: EDITOR_SKELETON_DOC, onUpdate: fn() },
@@ -385,13 +331,12 @@ export const WithContent: Story = {
     await expect(surface.innerHTML).not.toContain('claimIds');
     await expect(surface.innerHTML).not.toContain('c_1');
 
-    // 사용자가 아무것도 치지 않았는데 onUpdate가 불리면 안 된다 — 부모의 dirty 추적·autosave가
-    // 마운트 직후 "변경됨"이 된다. setEditable(editable, false)가 지키는 불변식의 회귀 감시.
+    // 마운트만으로 onUpdate가 불리면 부모의 dirty 추적이 즉시 "변경됨"이 된다.
     await expect(args.onUpdate).not.toHaveBeenCalled();
   },
 };
 
-/** 2차 블록 JSON 로드 — 체크박스·콜아웃·표가 blocks[] 형태 그대로 렌더된다. */
+/** 2차 블록 JSON 로드 — 체크박스·콜아웃·표가 렌더된다. */
 export const WithPhase2Content: Story = {
   tags: ['!dev'],
   args: { initialContent: EDITOR_PHASE2_DOC, onContentError: fn() },
@@ -403,7 +348,7 @@ export const WithPhase2Content: Story = {
     await expect(surface.querySelector('ul[data-type="taskList"] input[type="checkbox"]:checked')).not.toBeNull();
     await expect(surface.querySelector('div[data-type="callout"]')).toHaveTextContent('새벽 배치 기준');
     await expect(surface.querySelectorAll('table th')).toHaveLength(2);
-    // 전부 스키마 안이어야 한다 — 하나라도 밖이면 조용한 소실이 시작된다
+    // 스키마 밖 노드가 하나라도 있으면 조용히 소실된다
     await expect(args.onContentError).not.toHaveBeenCalled();
   },
 };
@@ -443,11 +388,8 @@ export const ReadOnly: Story = {
 };
 
 /**
- * 마크다운 단축 입력 — 명세 209행이 제목·목록·코드 3종을 요구한다.
- *
- * 구현 코드가 0줄이라(StarterKit의 input rule) 검증을 빠뜨리기 쉽다. 그런데 "StarterKit이
- * 준다"는 건 우리의 가정이고, StarterKit 옵션을 나중에 건드리면 조용히 깨진다.
- * 라이브러리를 테스트하는 게 아니라 명세 요구가 만족되는지를 본다.
+ * 마크다운 단축 입력(제목·목록·코드). StarterKit의 input rule이라 구현 코드는 없지만,
+ * StarterKit 옵션을 건드리면 조용히 깨지므로 여기서 감시한다.
  */
 export const MarkdownShortcuts: Story = {
   tags: ['!dev'],
@@ -463,7 +405,7 @@ export const MarkdownShortcuts: Story = {
     await userEvent.keyboard('- 목록이 된다{Enter}{Enter}');
     await expect(surface.querySelector('ul li')).not.toBeNull();
 
-    // StarterKit codeBlock input rule은 /^```[\s\n]$/ — 백틱 3개 "뒤의 공백"이 방아쇠다.
+    // codeBlock input rule은 백틱 3개 "뒤의 공백"이 방아쇠다.
     await userEvent.keyboard('``` ');
     await expect(surface.querySelector('pre code')).not.toBeNull();
   },
@@ -471,11 +413,7 @@ export const MarkdownShortcuts: Story = {
 
 /**
  * 스키마에 없는 노드가 들어오면 onContentError가 불린다.
- *
- * enableContentCheck를 켜지 않으면 ProseMirror가 말없이 버린다. 지금은 픽스처만 넣어
- * 티가 안 나지만, blocks[]가 들어올 때 claim_section이 사라지고도 화면은 멀쩡해 보인다.
- * image는 범위 밖(영구 제외) 노드라 검증 표본으로 쓴다 — 2차에서 table이 스키마에
- * 들어오면서 이전 표본을 교체했다.
+ * enableContentCheck를 끄면 ProseMirror가 말없이 버려서 소실이 드러나지 않는다.
  */
 export const InvalidContentIsReported: Story = {
   tags: ['!dev'],

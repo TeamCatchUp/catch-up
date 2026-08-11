@@ -5,10 +5,7 @@ import { catchupParameters } from '../../../../../.storybook/catchupStoryParamet
 import { filterSlashItems, SLASH_ITEMS } from './slashItems';
 import SlashMenu from './SlashMenu';
 
-/**
- * Figma 시안이 없다 — designSource: 'dev-preview'.
- * 이 컴포넌트는 Tiptap을 import하지 않아 에디터 없이 단독으로 열린다.
- */
+/** Figma 시안이 없어 designSource는 'dev-preview'다. 에디터 없이 단독으로 열린다. */
 const meta = {
   title: 'Compositions/LLM Wiki/Editor/SlashMenu',
   component: SlashMenu,
@@ -43,7 +40,7 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof SlashMenu>;
 
-/** 전체 항목 11종 — 명세 9종에서 이미지를 빼고 제목을 3단계로 편 것(스펙 §12). */
+/** 전체 항목 11종. */
 export const Default: Story = {
   play: async ({ args, canvasElement }) => {
     const canvas = within(canvasElement);
@@ -51,12 +48,12 @@ export const Default: Story = {
     await expect(canvas.getByText('제목 1')).toBeInTheDocument();
     await expect(canvas.getByText('글머리 목록')).toBeInTheDocument();
     await expect(canvas.getByText('구분선')).toBeInTheDocument();
-    // 2차 블록 3종(스펙 §12)
+    // 2차 블록 3종
     await expect(canvas.getByText('체크박스')).toBeInTheDocument();
     await expect(canvas.getByText('표')).toBeInTheDocument();
     await expect(canvas.getByText('콜아웃')).toBeInTheDocument();
 
-    // 영구 제외(이미지·멘션·문서 링크)는 새어들어오면 안 된다.
+    // 범위 밖 항목(이미지·멘션·문서 링크)이 새어들어오면 안 된다.
     await expect(canvas.queryByText('이미지')).toBeNull();
 
     await userEvent.click(canvas.getByText('인용'));

@@ -15,10 +15,8 @@ import {
 } from './editorIcons';
 
 /**
- * 슬래시 항목. 블록 11종 — 명세 §3의 9종에서 이미지를 빼고(스펙 §12), 제목을 3단계로 편 것.
- *
- * 아이콘: 공용 자산(list·divider.svg)이 있으면 그걸 쓰고, 없는 것은 에디터 전용 임시 세트
- * (editorIcons.tsx — 스펙 §12 아이콘 방침)를 쓴다. 디자이너 자산 도착 시 그 파일만 교체.
+ * 슬래시 메뉴 항목(블록 11종).
+ * 아이콘은 공용 자산이 있으면 그걸 쓰고, 없으면 editorIcons의 임시 세트를 쓴다.
  */
 export const SLASH_ITEMS: readonly SlashItem[] = [
   {
@@ -59,7 +57,7 @@ export const SLASH_ITEMS: readonly SlashItem[] = [
     group: '목록',
     label: '글머리 목록',
     description: '순서 없는 목록',
-    // description("순서 없는 목록")은 필터 대상이 아니므로 '순서'를 keywords에 직접 넣는다
+    // description은 필터 대상이 아니므로 '순서'를 keywords에 직접 넣는다
     keywords: ['목록', '리스트', '불릿', '순서', 'list', 'bullet', 'ul'],
     Icon: IconList,
     command: (editor, range) => {
@@ -146,14 +144,8 @@ export const SLASH_ITEMS: readonly SlashItem[] = [
 ];
 
 /**
- * 슬래시 메뉴 필터.
- *
- * cmdk 내장 필터(command-score)를 쓰지 않는다. 두 가지 이유다.
- * 1. cmdk는 Command.Input 없이 검색 상태를 갖지 못하는데, 공용 래퍼의 CommandInput은
- *    테두리·삭제 버튼이 달린 보이는 검색창이라 슬래시 메뉴에 쓸 자리가 없다.
- * 2. command-score는 영문 퍼지 매칭 설계라 한글에서 결과가 예측되지 않는다.
- *
- * 부분 문자열 일치로 충분하다 — 항목이 8개고, 한글은 퍼지 매칭이 오히려 방해가 된다.
+ * 슬래시 메뉴 필터. cmdk 내장 필터는 보이는 검색창을 요구하고 한글 퍼지 매칭이 예측되지 않아 쓰지 않는다.
+ * 항목 수가 적어 부분 문자열 일치로 충분하다.
  */
 export function filterSlashItems(items: readonly SlashItem[], query: string): readonly SlashItem[] {
   const needle = query.trim().toLowerCase();

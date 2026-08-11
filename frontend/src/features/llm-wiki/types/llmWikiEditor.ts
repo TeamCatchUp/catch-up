@@ -3,16 +3,13 @@ import type { Editor, Range } from '@tiptap/core';
 
 /**
  * 슬래시 메뉴의 한 항목. 메뉴는 블록을 알지 못한다 — 항목이 자기가 뭘 하는지 들고 있다.
- *
- * Icon이 optional인 이유: public/icons/icon/ 에 제목·코드·인용 아이콘 자산이 없다.
- * 없는 아이콘을 비슷한 것으로 대체하지 않는다(지어낸 시각이 승인된 디자인처럼 남는다).
- * 자산 요청은 design-request에 올라가 있다.
+ * 공용 아이콘 자산이 없는 항목이 있어 Icon은 optional이다.
  */
 export interface SlashItem {
   id: string;
   label: string;
   description?: string;
-  /** 메뉴 그룹 제목 (노션식 섹션 구분). 같은 group끼리 붙여 정의해야 순서가 유지된다 */
+  /** 메뉴 그룹 제목. 같은 group끼리 붙여 정의해야 순서가 유지된다 */
   group: string;
   /** 한글·영문을 둘 다 넣는다. 사용자가 /제목도 /h1도 친다. */
   keywords: readonly string[];
@@ -35,7 +32,7 @@ export interface SlashMenuHandle {
   onKeyDown: (event: KeyboardEvent) => boolean;
 }
 
-/** `:` 이모지 서제스천의 한 항목 — node-emoji의 search 결과 형태 */
+/** `:` 이모지 서제스천의 한 항목 */
 export interface EmojiItem {
   name: string;
   emoji: string;

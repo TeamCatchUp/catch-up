@@ -52,7 +52,7 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof DocumentStatusBadge>;
 
-/** 표 상태 열 — 검토 완료 (17698:184150) */
+/** 표 상태 열 — 검토 완료 */
 export const Reviewed: Story = {
   args: { status: 'reviewed' },
   play: async ({ canvasElement }) => {
@@ -60,22 +60,20 @@ export const Reviewed: Story = {
     const badge = canvas.getByText('검토 완료');
     await expect(badge).toBeInTheDocument();
 
-    // shared Badge 기본값은 rounded-full이다. tailwind-merge가 이 덮어쓰기를 놓치면
-    // 알약 모양으로 조용히 되돌아가므로 Figma의 radius/lg(8px)를 직접 못박는다.
+    // shared Badge 기본이 rounded-full이라, 덮어쓰기를 놓치면 알약으로 조용히 되돌아간다.
     await expect(getComputedStyle(badge).borderRadius).toBe('8px');
 
-    // Figma 배지는 icon/verified를 동반한다. aria-hidden이라 접근성 트리에 없으므로 DOM으로 확인한다.
+    // 아이콘은 aria-hidden이라 접근성 트리에 없으므로 DOM으로 확인한다.
     const icon = badge.querySelector('svg');
     await expect(icon).not.toBeNull();
     await expect(icon).toHaveAttribute('aria-hidden');
     await expect(icon!.getBoundingClientRect().width).toBe(20);
-    // Figma export 원본은 fill="#00985A"였다. 재export로 hex가 되살아나면 라이트 모드에서는
-    // 값이 우연히 같아 눈에 띄지 않고 다크 모드에서만 어긋나므로, 계산된 색이 아니라 속성을 못박는다.
+    // 아이콘 fill이 하드코딩 hex로 재export되면 다크 모드에서만 어긋난다 — 속성을 직접 못박는다.
     await expect(icon!.querySelector('path')).toHaveAttribute('fill', 'currentColor');
   },
 };
 
-/** 표 상태 열 — 검토 대기 (17849:106521). 같은 md 규격에서 색·아이콘만 갈린다 */
+/** 표 상태 열 — 검토 대기. 같은 md 규격에서 색·아이콘만 갈린다 */
 export const PendingReview: Story = {
   args: { status: 'pending_review' },
   play: async ({ canvasElement }) => {
@@ -83,21 +81,18 @@ export const PendingReview: Story = {
     const badge = canvas.getByText('검토 대기');
     await expect(badge).toBeInTheDocument();
 
-    // reviewed와 같은 md 규격이라는 것이 이 스토리의 요점이다 — 반경이 갈리면 규격이 새어나간 것이다.
+    // reviewed와 같은 md 규격이어야 한다 — 반경이 갈리면 규격이 새어나간 것이다.
     await expect(getComputedStyle(badge).borderRadius).toBe('8px');
 
     const icon = badge.querySelector('svg');
     await expect(icon).not.toBeNull();
     await expect(icon!.getBoundingClientRect().width).toBe(20);
-    // dash-circle은 fill이 아니라 stroke로 그려진다. 원본 export는 stroke="#464C53"이었다.
+    // dash-circle은 fill이 아니라 stroke로 그려진다.
     await expect(icon!.querySelector('path')).toHaveAttribute('stroke', 'currentColor');
   },
 };
 
-/**
- * 태그 규격 — 검토 필요 (검토큐 헤더 17942:91620 · 검토큐 상세 메타 줄 17896:46635).
- * Figma 레이어명은 Tag 마스터의 기본값인 "진행중"이지만 두 인스턴스 모두 "검토 필요"로 오버라이드돼 있다.
- */
+/** 태그 규격 — 검토 필요. 검토큐 헤더와 상세 메타 줄이 쓴다 */
 export const NeedsReviewTag: Story = {
   args: { status: 'needs_review', size: 'sm' },
   play: async ({ canvasElement }) => {
@@ -105,7 +100,7 @@ export const NeedsReviewTag: Story = {
     const tag = canvas.getByText('검토 필요');
     await expect(tag).toBeInTheDocument();
 
-    // md와 갈리는 지점을 못박는다. sm이 md 값으로 조용히 되돌아가면 여기서 잡힌다.
+    // sm이 md 값으로 조용히 되돌아가면 여기서 잡힌다.
     await expect(getComputedStyle(tag).borderRadius).toBe('6px');
 
     const icon = tag.querySelector('svg');

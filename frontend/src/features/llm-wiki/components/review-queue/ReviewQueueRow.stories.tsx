@@ -61,7 +61,7 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof ReviewQueueRow>;
 
-/** Figma 목록 폭 300px 슬롯. 행 자체는 폭을 갖지 않으므로 슬롯이 폭을 준다. */
+/** 목록 폭 슬롯. 행 자체는 폭을 갖지 않으므로 슬롯이 폭을 준다. */
 const listSlot: Decorator = (Story) => (
   <div className="w-75 overflow-hidden">
     <Story />
@@ -78,19 +78,18 @@ export const Default: Story = {
     await expect(canvas.getByText('직원10')).toBeInTheDocument();
     await expect(canvas.getByText('15시간 전')).toBeInTheDocument();
 
-    // 신뢰도 숫자가 행에 노출되면 안 된다 — 감사 판정 MISSING.
+    // 신뢰도 숫자는 행에 노출하지 않는다.
     await expect(canvas.queryByText(/0\.62|62%/)).toBeNull();
     // 유형도 마찬가지다. 체계가 미정이라 어떤 형태로도 행에 나오면 안 된다.
     await expect(canvas.queryByText(/publish|발행/)).toBeNull();
 
     const row = canvas.getByRole('button');
-    // 비선택 행은 Figma fills=[] — 채움을 발명하지 않았다.
+    // 비선택 행은 채움이 없다 — 발명하지 않는다.
     await expect(window.getComputedStyle(row).backgroundColor).toBe('rgba(0, 0, 0, 0)');
     await expect(row).not.toHaveAttribute('aria-current');
 
-    // 공용 Avatar 위에 덮은 링이 tailwind-merge를 통과했는지 잰다 — 눈으로는 12와 12.5를 구분할 수 없다.
-    // 기대값은 이 목록 인스턴스(17849:106770)의 radius/xl 12 + Line/Normal/Assistive #F4F4F5이고,
-    // 덮기가 풀리면 Avatar 기본값(9999px + #F7F7F8)으로 돌아가 여기서 깨진다.
+    // 공용 Avatar 위에 덮은 radius·테두리가 tailwind-merge를 통과했는지 잰다.
+    // 덮기가 풀리면 Avatar 기본값으로 조용히 돌아간다.
     const avatar = canvasElement.querySelector('svg[viewBox="0 0 40 40"]')?.parentElement;
     await expect(avatar).not.toBeUndefined();
     const avatarStyle = window.getComputedStyle(avatar as HTMLElement);
@@ -103,11 +102,7 @@ export const Default: Story = {
   },
 };
 
-/**
- * 선택된 행(17564:126946). 목록 최상단 행이 상세와 함께 채움 #F7F7F8을 갖는다.
- * 같은 행이 에러 아이콘도 달고 있어 "채움 = 선택"인지 "채움 = 충돌"인지 Figma만으로는 갈리지 않는데,
- * 충돌 색은 대시보드에서 붉은 계열(#FFFAFA)이고 여기 채움은 중립 회색이라 선택으로 읽었다.
- */
+/** 선택된 행 — 중립 회색 채움을 갖는다. */
 export const Selected: Story = {
   args: { item: createReviewQueueItem(), selected: true },
   decorators: [listSlot],
@@ -120,10 +115,7 @@ export const Selected: Story = {
   },
 };
 
-/**
- * 에러(충돌) 아이콘 행. 상단 고정 규칙인지는 UNKNOWN이라 이 컴포넌트는 순서에 관여하지 않는다 —
- * 아이콘 유무만 받는다.
- */
+/** 에러(충돌) 아이콘 행. 행 순서에는 관여하지 않고 아이콘 유무만 받는다. */
 export const WithErrorIcon: Story = {
   args: { item: createReviewQueueItem({ hasConflictIcon: true, type: 'contradiction' }) },
   decorators: [listSlot],
@@ -131,7 +123,7 @@ export const WithErrorIcon: Story = {
     const canvas = within(canvasElement);
     const row = canvas.getByRole('button');
 
-    // icon/error(389:1866) = error.svg. viewBox 24로 에셋 교체를 잡는다.
+    // viewBox로 에셋 교체를 잡는다.
     const icons = [...row.querySelectorAll('svg')];
     await expect(icons.some((icon) => icon.getAttribute('viewBox') === '0 0 24 24')).toBe(true);
 
@@ -142,10 +134,8 @@ export const WithErrorIcon: Story = {
 };
 
 /**
- * add_small + 들여쓴 둘째 줄 행. Figma 레이어 이름이 **"병합"**(17762:102964)이라
- * 감사 문서의 "유사 항목 묶음" 추정과 다르게 읽힌다 — 다만 둘째 줄이 병합 대상 문서 제목인지,
- * 묶인 하위 제안인지는 여전히 확정되지 않았다. 그래서 둘째 줄은 도메인 타입(ReviewQueueItemData)에
- * 넣지 않고 프레젠테이션 prop으로만 받는다. 의미가 확정되면 계약과 이름을 함께 고친다.
+ * 병합 행 — add_small 칩 + 들여쓴 둘째 줄.
+ * 둘째 줄의 의미가 미확정이라 도메인 타입이 아닌 프레젠테이션 prop으로만 받는다.
  */
 export const MergeSecondLineMeaningTBD: Story = {
   args: {
@@ -164,15 +154,12 @@ export const MergeSecondLineMeaningTBD: Story = {
     const secondary = canvas.getByText('환불 가능 기간 안내');
     await expect(secondary).toBeInTheDocument();
 
-    // 둘째 줄은 add_small 칩만큼 들여써진다(칩 26 + gap 12). 들여쓰기가 빠지면 두 줄이 구분되지 않는다.
+    // 둘째 줄은 칩 너비만큼 들여써진다 — 빠지면 두 줄이 구분되지 않는다.
     await expect(secondary.getBoundingClientRect().left).toBeGreaterThan(primary.getBoundingClientRect().left);
   },
 };
 
-/**
- * 좁은 슬롯 + 긴 제목. 행은 px 폭이 없어야 하고(400 슬롯이면 400), 제목은 한 줄 말줄임이어야 한다.
- * 새 디자인 상태가 아니라 Default 상태를 다른 폭에서 다시 잰 것이다.
- */
+/** 좁은 슬롯 + 긴 제목. 행은 px 폭을 갖지 않고, 제목은 한 줄 말줄임이어야 한다. */
 export const FluidWidthAndTruncation: Story = {
   args: {
     item: createReviewQueueItem({
@@ -192,7 +179,7 @@ export const FluidWidthAndTruncation: Story = {
     const row = canvas.getByRole('button');
     const title = canvas.getByText(args.item.title);
 
-    // 폭은 슬롯이 준다 — 행에 300px이 박혔다면 여기서 깨진다.
+    // 폭은 슬롯이 준다 — 행에 고정 폭이 박혔다면 여기서 깨진다.
     await expect(row.getBoundingClientRect().width).toBe(400);
     await expect(row.scrollWidth).toBeLessThanOrEqual(row.clientWidth);
 

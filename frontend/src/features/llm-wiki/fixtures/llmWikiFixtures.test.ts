@@ -28,7 +28,7 @@ describe('llmWikiFixtures 정합성', () => {
   });
 
   it('검토 항목 유형은 열린 타입이다 — 미지 값 대입이 컴파일·실행된다', () => {
-    const futureType: ReviewItemType = 'link_suggestion'; // 명세 6유형 대비, 백엔드엔 아직 없음
+    const futureType: ReviewItemType = 'link_suggestion'; // 백엔드에 아직 없는 유형
     const item = createReviewQueueItem({ type: futureType });
     expect(item.type).toBe('link_suggestion');
   });
@@ -43,7 +43,7 @@ describe('llmWikiFixtures 정합성', () => {
     expect(REVIEW_STAT_CARD_FIXTURES).toHaveLength(4);
   });
 
-  // 3화면 공용 전제는 Figma 재확인에서 깨졌다 — breadcrumbs는 대시보드 행만의 요건으로 남는다
+  // breadcrumbs는 대시보드 행만의 요건이다
   it('문서 행 fixture는 채널 > 폴더 breadcrumbs를 가진다 (대시보드 행 요건)', () => {
     for (const row of DOCUMENT_ROW_FIXTURES) {
       expect(row.breadcrumbs.map((crumb) => crumb.kind)).toEqual(['channel', 'folder']);

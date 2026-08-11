@@ -5,18 +5,16 @@ import BlockDiffCard from './BlockDiffCard';
 
 export interface BlockDiffSectionProps {
   entries: readonly BlockDiffEntry[];
-  /** 헤더 우상단 "직접 수정" — 눌렀을 때의 동작(본 페이지 이동 등)은 미정이라 콜백만 뚫어 둔다 */
+  /** 헤더 우상단 "직접 수정". 동작이 미정이라 콜백만 뚫어 둔다 */
   onEditDocument: () => void;
   onApprove: (id: string) => void;
-  /** 제안 기각. 백엔드 RejectRequest와 같은 판정이다 */
+  /** 제안 기각 */
   onReject: (id: string) => void;
 }
 
 /**
- * 검토 큐 상세의 "수정 내용" 영역(Figma 17564:127037).
- *
- * 변경 0건의 빈 상태 시각은 시안에 없어(MISSING) 발명하지 않는다 —
- * 건수 배지 0으로 헤더만 남는 것이 현재 계약이고, design-request로 확인 요청 상태다.
+ * 검토 큐 상세의 "수정 내용" 영역.
+ * 변경 0건의 빈 상태 시각은 시안에 없어 발명하지 않는다 — 건수 배지 0으로 헤더만 남는다.
  */
 export default function BlockDiffSection({
   entries,

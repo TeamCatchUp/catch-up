@@ -4,20 +4,13 @@ export interface WikiDocumentMetaProps {
   title: string;
   authorName: string;
   createdLabel: string;
-  /** 제목 우측 슬롯. 지금은 임시 편집 버튼, 나중에 아바타 그룹(별도 워크스트림) */
+  /** 제목 우측 슬롯 */
   children?: ReactNode;
 }
 
 /**
- * 문서 메타 영역 — 제목·작성정보.
- *
- * 페이지 헤더(브레드크럼 52px 바)가 아니다. Figma 실측상 둘은 다른 층위다:
- *   17735:187317 "Header" 1376×52   ← 카드 밖 = 페이지 헤더 (헤더 세션 소유)
- *   17735:187318 Card
- *     17735:187320 Horizontal        ← 카드 안 = 이 컴포넌트
- *
- * 시안에 있으나 만들지 않은 것: 아바타 그룹("12명")·유형/상태 태그.
- * 둘 다 채울 데이터가 없어 별도 워크스트림으로 분리됐다(스펙 §4).
+ * 문서 본문 안의 메타 영역 — 제목·작성정보. 브레드크럼 페이지 헤더와는 다른 층위다.
+ * 시안의 아바타 그룹·유형/상태 태그는 채울 데이터가 없어 넣지 않았다.
  */
 export default function WikiDocumentMeta({ title, authorName, createdLabel, children }: WikiDocumentMetaProps) {
   return (

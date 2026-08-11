@@ -23,11 +23,7 @@ export interface ReviewQueueFilterSection {
   id: string;
   label: string;
   options: readonly ReviewQueueFilterOption[];
-  /**
-   * 축 좌측 아이콘. Figma는 축마다 다른 아이콘을 쓰지만(wiki_channel·person·calendar_clock·cloud_check)
-   * 축 자체가 props 주입이므로 아이콘도 주입받는다 — 축 id로 아이콘을 찾는 표를 컴포넌트가 들면
-   * 축이 바뀔 때마다 컴포넌트를 고쳐야 한다.
-   */
+  /** 축 좌측 아이콘. 축 자체가 props 주입이므로 아이콘도 주입받는다. */
   Icon?: ComponentType<SVGProps<SVGSVGElement>>;
 }
 
@@ -37,18 +33,13 @@ interface ReviewQueueFilterDropdownProps {
 }
 
 /**
- * 검토 큐 툴바(17762:105221) 우측 filter_list 아이콘 버튼과 그 필터 메뉴(17762:105379).
- *
- * 축은 평면 목록이 아니라 서브메뉴 트리거다 — Figma 항목마다 `Show icon/arrow_right: true`이고
- * 라벨·구분선 노드가 없다. 각 축의 옵션 화면은 Figma에 없으므로(`Show submenu: false`)
- * 옵션 목록은 이 컴포넌트가 정하지 않고 전부 props로 받는다.
- *
- * 같은 툴바의 유형·상태 드롭다운(17762:105231·17762:105241)은 별개의 outline 칩 컨트롤이라 여기 없다.
+ * 검토 큐 툴바의 필터 아이콘 버튼과 그 메뉴. 축은 평면 목록이 아니라 서브메뉴 트리거다.
+ * 축·옵션 목록은 전부 props로 받는다 — 컴포넌트가 정하지 않는다.
  */
 export default function ReviewQueueFilterDropdown({ sections, onSelect }: ReviewQueueFilterDropdownProps) {
   return (
     <DropdownMenu>
-      {/* Icon button 392:1886 Outline(Gray)/medium — 36 = padding 6 + 아이콘 24 + padding 6. 컨트롤 크기라 고정한다. */}
+      {/* 아이콘 전용 트리거 — 컨트롤 크기라 정사각으로 고정한다. */}
       <DropdownMenuTrigger
         aria-label="필터"
         className="border-line-normal-neutral bg-fill-normal-normal hover:bg-fill-normal-interaction-hover active:bg-fill-normal-interaction-pressed flex size-9 cursor-pointer items-center justify-center rounded-lg border"
@@ -56,11 +47,11 @@ export default function ReviewQueueFilterDropdown({ sections, onSelect }: Review
         <IconFilterList aria-hidden className="text-icon-normal-neutral size-6" />
       </DropdownMenuTrigger>
 
-      {/* 카드 폭 200은 Figma가 fixed로 지정한 값이다. 래퍼 기본은 min-w-50뿐이라 긴 라벨에서 늘어난다. */}
+      {/* 카드 폭은 고정이다 — 공용 래퍼 기본값만으로는 긴 라벨에서 늘어난다. */}
       <DropdownMenuContent align="start" className="w-50">
         {sections.map(({ id, label, options, Icon }) => (
           <DropdownMenuSub key={id}>
-            {/* 항목 높이 40은 결과값이다(padding 8 + 아이콘 24 + 8). 라벨-화살표 gap/4, 아이콘-라벨 gap/10. */}
+            {/* 항목 높이는 패딩+아이콘의 결과값이다 — h-*로 못박지 않는다. */}
             <DropdownMenuSubTrigger className="gap-1">
               <span className="flex min-w-0 flex-1 items-center gap-2.5">
                 {Icon && <Icon aria-hidden className="text-icon-normal-normal size-6 shrink-0" />}

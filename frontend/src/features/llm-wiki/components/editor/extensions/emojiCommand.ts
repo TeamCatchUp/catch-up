@@ -13,11 +13,8 @@ export interface EmojiCommandOptions {
 const MAX_RESULTS = 8;
 
 /**
- * `:` 이모지 서제스천 브리지 — slashCommand와 같은 패턴 (스펙 §12).
- *
- * 트리거는 슬래시와 달리 노션식으로 완화하지 않는다: `http://`의 콜론에서 메뉴가 뜨면
- * URL 타이핑이 매번 방해받는다. 공백 뒤·블록 시작에서만 열고, 검색어 1자 이상일 때만
- * 항목을 준다(`:`만 쳤을 때 전체 목록이 쏟아지는 것 방지).
+ * `:` 이모지 서제스천 브리지. 슬래시와 달리 공백 뒤·블록 시작에서만 연다 —
+ * `http://`의 콜론에서 메뉴가 뜨면 URL 입력이 매번 방해받는다.
  */
 export const EmojiCommand = Extension.create<EmojiCommandOptions>({
   name: 'emojiCommand',
@@ -36,7 +33,7 @@ export const EmojiCommand = Extension.create<EmojiCommandOptions>({
       Suggestion<EmojiItem>({
         editor: this.editor,
         char: ':',
-        // Suggestion 기본 pluginKey는 전역 공유다 — slashCommand와 같은 에디터에 살므로 고유 키 필수
+        // Suggestion 기본 pluginKey는 전역 공유라 slashCommand와 충돌한다 — 고유 키 필수
         pluginKey: new PluginKey('emojiSuggestion'),
         allowedPrefixes: [' '],
         startOfLine: false,

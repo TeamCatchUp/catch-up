@@ -50,8 +50,7 @@ type Story = StoryObj<typeof ReviewStatCard>;
 
 export const Default: Story = {
   args: { stat: REVIEW_STAT_CARD_FIXTURES[0] },
-  // Figma 카드는 248 폭이지만 horizontal fill이다. 슬롯을 일부러 248이 아닌 값으로 두어
-  // 폭이 슬롯을 따라가는지(= px 폭이 박히지 않았는지)를 눈이 아니라 수치로 확인한다.
+  // 슬롯을 시안 폭이 아닌 값으로 둬서 카드에 px 폭이 박히지 않았는지를 수치로 확인한다.
   render: (args) => (
     <div className="w-120">
       <ReviewStatCard {...args} />
@@ -62,7 +61,7 @@ export const Default: Story = {
     await expect(canvas.getByText('검토 대기')).toBeInTheDocument();
     await expect(canvas.getByText('12')).toBeInTheDocument();
 
-    // Figma radius/xl(12px). rounded-lg·rounded-2xl로 흘러가도 눈으로는 잘 안 잡히므로 못박는다.
+    // 반경은 한 단계 어긋나도 눈으로 잘 안 잡히므로 못박는다.
     const card = canvas.getByText('검토 대기').parentElement!;
     await expect(getComputedStyle(card).borderRadius).toBe('12px');
     await expect(card.getBoundingClientRect().width).toBe(480);
@@ -85,12 +84,11 @@ export const AllVariants: Story = {
     const cards = REVIEW_STAT_CARD_FIXTURES.map((stat) => canvas.getByText(stat.label).parentElement!);
     await expect(cards).toHaveLength(4);
 
-    // 톤 매핑이 조용히 무너지면(예: id 오타로 전부 기본값) 4장이 같은 회색이 된다.
-    // 특정 hex를 못박으면 다크 모드에서 깨지므로, "서로 다르다"만 검사한다.
+    // 톤 매핑이 무너지면 4장이 같은 회색이 된다. 특정 색을 못박으면 다크에서 깨지므로 "서로 다르다"만 본다.
     const backgrounds = cards.map((card) => getComputedStyle(card).backgroundColor);
     await expect(new Set(backgrounds).size).toBe(4);
 
-    // 태그 미분류만 수치와 라벨 색이 갈린다(#464C53 / #6D7882). 나머지 3종은 같은 색이다.
+    // 태그 미분류만 수치와 라벨 색이 갈린다. 나머지 3종은 같은 색이다.
     const neutralCard = cards[2];
     const [neutralCount, neutralLabel] = Array.from(neutralCard.children);
     await expect(getComputedStyle(neutralCount).color).not.toBe(getComputedStyle(neutralLabel).color);

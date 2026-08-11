@@ -16,21 +16,13 @@ export interface BlockDiffCardProps {
   entry: BlockDiffEntry;
   defaultCollapsed?: boolean;
   onApprove: (id: string) => void;
-  /** 제안 기각. 백엔드 RejectRequest와 같은 판정이다 */
+  /** 제안 기각 */
   onReject: (id: string) => void;
 }
 
 /**
- * 블록 변경 1건 = 카드 1장 (Figma 펼침 17849:106310 · 접힘 17942:106488 · 반려됨 17942:106687).
- *
- * 본문 배치는 kind가 정한다 — modified는 좌우 비교, added는 초록 단일,
- * removed는 삭제 고지가 붙은 빨강 단일(DeletedBlockPanel).
- * 판정은 승인·반려 둘뿐이다. 되돌리기(rotate)는 반려와 겹쳐서 8/7에 빠졌다.
- *
- * **연필(개별 블록 수정) 아이콘 버튼은 시안에 있으나 구현하지 않는다** — 그 기능이
- * MVP 제외로 확정됐다(8/10). 눌러도 아무 데도 닿지 않는 버튼을 남기면 "구현됨"으로
- * 오독된다. 시안 정리 요청은 검토 큐 design-request에 기재돼 있다.
- * 문서 전체 편집 진입점은 살아 있고, 그건 BlockDiffSection 헤더의 "직접 수정"이다.
+ * 블록 변경 1건 = 카드 1장. 본문 배치는 kind가 정한다 — modified는 좌우 비교, added·removed는 단일 패널.
+ * 개별 블록 수정(연필) 버튼은 시안에 있으나 기능이 범위 밖이라 구현하지 않는다.
  */
 export default function BlockDiffCard({
   entry,
@@ -58,16 +50,14 @@ export default function BlockDiffCard({
         <h3 className="text-heading-medium text-text-normal-normal min-w-0 flex-1 truncate">{title}</h3>
 
         {rejected ? (
-          // Figma는 Box Button state=Inactive를 배지로 썼지만, 누를 수 없는 표시라 span으로 낸다.
-          // 토큰은 그 Inactive 변형과 같은 것을 쓴다.
+          // 시안은 비활성 버튼이지만 누를 수 없는 표시라 span으로 낸다.
           <span className="bg-fill-normal-interaction-inactive border-line-normal-normal text-body-xsmall text-text-normal-assistive flex h-7.5 shrink-0 items-center gap-1 rounded-lg border px-2">
             <IconDelete2 aria-hidden className="text-icon-normal-assistive size-5" />
             반려됨
           </span>
         ) : (
           <>
-            {/* 높이를 박는 이유: outline은 1px 테두리가 더해져 28→30이고 solid는 28이라 나란히 두면 어긋난다.
-                공용 Button의 특성이라 리포 관례(pending/page.tsx)대로 양쪽에 같은 높이를 준다 */}
+            {/* outline은 테두리 1px이 더해져 solid와 높이가 어긋난다 — 양쪽에 같은 높이를 준다 */}
             <Button variant="box-outline-gray" size="sm" className="h-7.5" onClick={() => onReject(id)}>
               반려
             </Button>

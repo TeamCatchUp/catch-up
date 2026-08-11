@@ -1,31 +1,25 @@
 /**
- * 검토 큐 diff 뷰 타입.
- *
- * WikiBlock은 [BE] blocks[] JSONB 원소의 mock 계약이고, 나머지는 전부 프론트가
- * computeBlockDiff로 계산해 만드는 값이라 백엔드 계약이 아니다(닫힌 union 허용).
- * 근거: docs/specs/2026-08-07-llm-wiki-diff-view-design.md §4
+ * 검토 큐 diff 뷰 타입. WikiBlock만 [BE] 계약이고,
+ * 나머지는 computeBlockDiff가 만드는 프론트 값이라 닫힌 union을 쓴다.
  */
 
 /**
- * [BE] knowledge_mutation_proposals.blocks / 발행판 blocks의 원소.
- * 블록 고유 ID가 없어 페어링 키는 claimIds뿐이다(매칭 규칙은 백엔드 미문서화 — [SPEC] 가정).
+ * [BE] 제안·발행판 blocks[]의 원소.
+ * 블록 고유 ID가 없어 페어링 키는 claimIds뿐이다 — 매칭 규칙은 백엔드 미확정.
  */
 export interface WikiBlock {
-  /** [BE] kind — claim_section·open_question 2종이 실재하나 목록이 흔들려 닫지 않는다 */
+  /** [BE] 블록 종류. 목록이 흔들려 닫지 않는다 */
   kind: string;
   heading: string;
-  /** 플레인 문자열 — 인라인 서식 없음(에디터 설계 §3) */
+  /** 플레인 문자열 — 인라인 서식 없음 */
   body: string;
-  /** [BE] claim_ids — 페어링 키 */
+  /** [BE] 페어링 키 */
   claimIds: readonly string[];
   /** [SPEC] "수정된 이유" — 백엔드 필드 미확정, 계약 협상 대상 */
   reason?: string | null;
   /**
-   * [SPEC] 삭제 제안 표식. proposed 배열에 tombstone으로 실린다.
-   *
-   * 삭제를 "proposed에서 빠짐"으로만 표현하면 사유를 실을 자리가 없다 — 삭제된 블록도
-   * 사유를 갖는다는 계약(2026-08-07 결정)이라 명시 표현이 필요하다. 삭제될 원문은
-   * 페어링된 base 블록에서 가져오므로 tombstone의 body는 비워도 된다.
+   * [SPEC] 삭제 제안 표식. proposed 배열에 tombstone으로 실린다 — 삭제된 블록도 사유를 갖기 때문이다.
+   * 원문은 페어링된 base 블록에서 가져오므로 tombstone의 body는 비워도 된다.
    */
   removed?: boolean;
 }
@@ -46,16 +40,14 @@ export interface DiffLine {
 export interface BlockDiffEntry {
   id: string;
   kind: BlockChangeKind;
-  /** 블록 heading. heading 변경 감지는 MVP 밖(스펙 §10 갭 기록) */
+  /** 블록 heading. heading 변경 감지는 범위 밖 */
   title: string;
   before: readonly DiffLine[] | null; // added면 null
   after: readonly DiffLine[] | null; // removed면 null
   reason: string | null;
   /**
-   * 반려 처리된 블록. 헤더의 액션 버튼이 "반려됨" 배지로 대체된다(Figma 17942:106687).
-   *
-   * 승인됨 배지는 시안에 없어서(MISSING) 대응 값을 만들지 않는다 — 불리언인 이유다.
-   * 블록 단위 판정은 백엔드에 없다(제안 단위 status만 존재) — [SPEC].
+   * [SPEC] 반려 처리된 블록. 헤더의 액션 버튼이 "반려됨" 배지로 대체된다.
+   * 승인됨 배지는 시안에 없어 대응 값을 만들지 않는다 — 그래서 불리언이다.
    */
   rejected?: boolean;
 }

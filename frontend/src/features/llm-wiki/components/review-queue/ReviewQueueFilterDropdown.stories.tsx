@@ -9,11 +9,7 @@ import IconWikiChannel from '@/public/icons/icon/wiki_channel.svg';
 import { catchupParameters } from '../../../../../.storybook/catchupStoryParameters';
 import ReviewQueueFilterDropdown, { type ReviewQueueFilterSection } from './ReviewQueueFilterDropdown';
 
-/**
- * 필터 축과 옵션은 전부 fixture다 — 컴포넌트는 축 목록을 알지 못한다.
- * 축 순서·아이콘은 8/7 Figma 실측(17762:105379 카드 3축 + 17762:105382 신뢰도)을 그대로 옮겼다.
- * 옵션 목록은 Figma에 없다(서브메뉴 `Show submenu: false`) — 스토리 전용 표본이다.
- */
+/** 필터 축과 옵션은 전부 fixture다 — 컴포넌트는 축 목록을 알지 못한다. */
 const SECTIONS: readonly ReviewQueueFilterSection[] = [
   {
     id: 'target-channel',
@@ -110,14 +106,14 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof ReviewQueueFilterDropdown>;
 
-/** 닫힌 상태. 툴바(17762:105221) 우측의 filter_list 아이콘 버튼만 보인다. */
+/** 닫힌 상태. 툴바 우측의 필터 아이콘 버튼만 보인다. */
 export const Default: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const body = within(canvasElement.ownerDocument.body);
 
     const trigger = canvas.getByRole('button', { name: '필터' });
-    // 아이콘 버튼 36×36(Icon button 392:1886). 라벨 텍스트가 있으면 폭이 어긋난다.
+    // 아이콘 전용 버튼이라 정사각이어야 한다 — 라벨 텍스트가 있으면 폭이 어긋난다.
     const box = trigger.getBoundingClientRect();
     await expect(box.width).toBe(36);
     await expect(box.height).toBe(36);
@@ -128,7 +124,7 @@ export const Default: Story = {
   },
 };
 
-/** 열린 메뉴(17762:105379). 축 4개가 서브메뉴 트리거로 놓인다. */
+/** 열린 메뉴. 축 4개가 서브메뉴 트리거로 놓인다. */
 export const Open: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
@@ -139,15 +135,14 @@ export const Open: Story = {
     await expect(await body.findByText('대상 채널')).toBeInTheDocument();
     await expect(body.getByText('담당자')).toBeInTheDocument();
     await expect(body.getByText('대기 기간')).toBeInTheDocument();
-    // 신뢰도는 필터 축으로는 FOUND다 — 행에서 뺐다고 여기서도 빠지면 안 된다.
+    // 신뢰도는 필터 축으로는 존재한다 — 행에서 뺐다고 여기서도 빠지면 안 된다.
     await expect(body.getByText('신뢰도')).toBeInTheDocument();
 
     // 축은 서브메뉴 트리거다. 열기 전에는 옵션이 보이면 안 된다(평면 목록으로 펼쳐졌다는 뜻).
     await expect(body.queryByText('결제')).toBeNull();
     await expect(body.queryByText('3일 이상')).toBeNull();
 
-    // Figma가 fixed 200으로 못박은 카드 폭. 열림 애니메이션(zoom-in-95)이 transform을 걸어
-    // getBoundingClientRect는 재는 시점에 따라 197 같은 값이 나온다 — 레이아웃 폭으로 잰다.
+    // 열림 애니메이션이 transform을 걸어 getBoundingClientRect가 흔들린다 — 레이아웃 폭으로 잰다.
     await expect(window.getComputedStyle(body.getByRole('menu')).width).toBe('200px');
   },
 };
@@ -168,10 +163,7 @@ export const SubmenuSelect: Story = {
   },
 };
 
-/**
- * 카드 폭이 200으로 고정이라 긴 축 이름은 잘려야 한다. 감기면 항목 높이 40이 무너진다.
- * 새 디자인 상태가 아니라 Open 상태를 긴 라벨로 다시 잰 것이다.
- */
+/** 카드 폭이 고정이라 긴 축 이름은 잘려야 한다 — 감기면 항목 높이가 무너진다. */
 export const LongLabelTruncation: Story = {
   args: {
     sections: [
@@ -190,7 +182,7 @@ export const LongLabelTruncation: Story = {
     await userEvent.click(canvas.getByRole('button', { name: '필터' }));
     const label = await body.findByText('대상 채널 (연동된 외부 채널 전체에서 고르기)');
 
-    // 긴 라벨이 카드를 늘리면 안 된다(래퍼 기본 min-w-50만으로는 늘어난다).
+    // 긴 라벨이 카드를 늘리면 안 된다 — 공용 래퍼 기본값만으로는 늘어난다.
     await expect(window.getComputedStyle(body.getByRole('menu')).width).toBe('200px');
     await expect(label.scrollWidth).toBeGreaterThan(label.clientWidth);
     await expect(label.getClientRects()).toHaveLength(1);

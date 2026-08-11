@@ -1,14 +1,8 @@
 import type { ComponentType, SVGProps } from 'react';
 
 /**
- * 에디터 전용 임시 아이콘 세트 (스펙 §12 아이콘 방침).
- *
- * public/icons/icon/ 공용 자산에 없는 글리프만 에디터 폴더 안에 스코프해 둔다 —
- * 디자이너 자산이 도착하면 이 파일 하나만 교체한다. design-request의 아이콘 요청은 유지 중.
- * 제목·번호 목록은 노션과 같은 문자 글리프(H1·H2·H3·1.)를 SVG <text>로 감쌌다.
- *
- * **여기에 넣기 전에 public/icons/icon/를 먼저 뒤진다.** 8/10 감사에서 IconPlus가
- * `add.svg`와 중복이라 제거됐다 — 이 파일의 존재 이유는 "임시 대체"이지 "새 아이콘 서랍"이 아니다.
+ * 공용 자산에 없는 글리프만 담는 에디터 전용 임시 아이콘 세트. 자산이 도착하면 이 파일만 교체한다.
+ * 추가 전에 public/icons/icon/을 먼저 뒤진다 — 새 아이콘 서랍이 아니라 임시 대체다.
  */
 
 type Icon = ComponentType<SVGProps<SVGSVGElement>>;

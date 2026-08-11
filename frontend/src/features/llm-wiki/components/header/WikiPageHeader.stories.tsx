@@ -12,7 +12,7 @@ import { catchupParameters } from '../../../../../.storybook/catchupStoryParamet
 import DocumentStatusBadge from '../document/DocumentStatusBadge';
 import WikiPageHeader from './WikiPageHeader';
 
-/** 5종 중 4종의 우측은 ⋯ 하나뿐이다. 메뉴 내용 시안이 없어 트리거만 두고 열지 않는다. */
+/** 우측 액션 슬롯의 ⋯ 트리거. 메뉴 내용 시안이 없어 열지 않는다. */
 function MoreButton({ onClick }: { onClick?: () => void }) {
   return (
     <Button variant="icon-only-gray" size="md" aria-label="더보기" onClick={onClick}>
@@ -21,10 +21,7 @@ function MoreButton({ onClick }: { onClick?: () => void }) {
   );
 }
 
-/**
- * 검토큐 문서 헤더의 우측 3종. 문서 넘기기 방향(∨=다음/∧=이전)은 시안에 라벨이 없어
- * 배치 순서(아래→위)로 읽은 것이다 — 디자이너 확인 대상.
- */
+/** 검토큐 문서 헤더의 우측 3종(다음·이전·미리보기). */
 function ReviewQueueActions() {
   return (
     <>
@@ -44,8 +41,7 @@ function ReviewQueueActions() {
 
 const getHeader = (canvasElement: HTMLElement) => canvasElement.querySelector('header') as HTMLElement;
 
-// props가 variant로 갈리는 union이라 play의 `args`는 좁혀지지 않는다(main 쪽에는 breadcrumb 관련
-// 필드가 없다). 캐스팅 대신 스토리 밖에 값을 두고 args와 play가 같은 것을 가리키게 한다.
+// props가 variant union이라 play의 `args`가 좁혀지지 않는다 — 스파이를 스토리 밖에 둬서 args와 play가 같은 것을 본다.
 const onFolderCrumbClick = fn();
 const onDocumentCrumbClick = fn();
 const NARROW_CURRENT_LABEL = 'Update documentation content 문서 제목이 아주 길어지는 경우의 말줄임 확인용 텍스트';
@@ -112,7 +108,7 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof WikiPageHeader>;
 
-/** 대시보드 17600:149328 — 아이콘 + 제목, 우측 ⋯ */
+/** 대시보드 — 아이콘 + 제목, 우측 ⋯ */
 export const Dashboard: Story = {
   args: {
     variant: 'main',
@@ -127,11 +123,11 @@ export const Dashboard: Story = {
     await expect(canvas.getByText('대시보드')).toBeInTheDocument();
     await expect(canvas.getByRole('button', { name: '더보기' })).toBeInTheDocument();
 
-    // main은 좌우 64. detail(24)과 갈리는 유일한 기하라 값을 직접 잰다.
+    // 좌우 패딩은 main과 detail이 갈리는 유일한 기하라 직접 잰다.
     await expect(getComputedStyle(header).paddingLeft).toBe('64px');
     await expect(header.getBoundingClientRect().height).toBe(52);
 
-    // 아이콘 크기는 소비처가 주지 않고 헤더가 강제한다 — 5종이 흔들리지 않게.
+    // 아이콘 크기는 소비처가 주지 않고 헤더가 강제한다.
     const icon = header.querySelector('svg') as SVGElement;
     await expect(icon.getBoundingClientRect().width).toBe(24);
 
@@ -141,14 +137,8 @@ export const Dashboard: Story = {
 };
 
 /**
- * 채널 — 채널 1마디짜리 detail 체인.
- *
- * **사용자 확정(8/10), 시안 갱신 대기.** 현 시안 17752:45516은 아직 main형(icon/home + 17px 제목,
- * px-64)인데, 채널도 폴더·문서와 같은 셸을 쓰도록 사용자가 확정했다. 구현 직전 시안 재확인 규칙의
- * 예외로, 시안이 아니라 이 결정이 앞선 케이스다 — 시안이 갱신되면 이 노트를 지운다.
- *
- * 마디가 1개라 그 하나가 곧 현재 페이지다(구분자·클릭 대상 없음). 배지 슬롯은 비운다 —
- * 상태 태그 전수 조사에서 채널 시안에 상태 배지가 없었다.
+ * 채널 — 채널 1마디짜리 detail 체인. 그 하나가 곧 현재 페이지다(구분자·클릭 대상 없음).
+ * 배지 슬롯은 비운다.
  */
 export const Channel: Story = {
   args: {
@@ -160,7 +150,7 @@ export const Channel: Story = {
     const canvas = within(canvasElement);
     const header = getHeader(canvasElement);
 
-    // detail 셸이다 — main(64)과 갈리는 유일한 기하라 값을 직접 잰다.
+    // detail 셸이다 — 좌우 패딩이 main과 갈리는 유일한 기하라 직접 잰다.
     await expect(getComputedStyle(header).paddingLeft).toBe('24px');
     await expect(header.getBoundingClientRect().height).toBe(52);
 
@@ -171,7 +161,7 @@ export const Channel: Story = {
     await expect(canvas.queryByRole('button', { name: '채널명' })).toBeNull();
     await expect(canvas.getByText('채널명').closest('[aria-current]')).not.toBeNull();
 
-    // 구분자는 마디 사이에만 그려진다 — nav 안 svg는 wiki_channel 하나뿐이어야 한다.
+    // 구분자는 마디 사이에만 그려진다 — nav 안 svg는 마디 아이콘 하나뿐이어야 한다.
     await expect(nav.querySelectorAll('svg')).toHaveLength(1);
 
     // 배지 슬롯은 비어 있다 — 좌측 덩어리의 자식은 nav 하나뿐.
@@ -179,7 +169,7 @@ export const Channel: Story = {
   },
 };
 
-/** 폴더 17762:104786 — 채널명 > 현재페이지 2단 */
+/** 폴더 — 채널명 > 현재페이지 2단 */
 export const Folder: Story = {
   args: {
     variant: 'detail',
@@ -202,7 +192,7 @@ export const Folder: Story = {
     await expect(canvas.queryByRole('button', { name: '현재페이지' })).toBeNull();
     await expect(canvas.getByText('현재페이지').closest('[aria-current]')).not.toBeNull();
 
-    // Figma Text Button은 h36 고정이다 — padding에서 파생되지 않으므로 직접 잰다.
+    // 마디 높이는 padding에서 파생되지 않는 고정값이라 직접 잰다.
     await expect(channelCrumb.getBoundingClientRect().height).toBe(36);
 
     await userEvent.click(channelCrumb);
@@ -210,11 +200,7 @@ export const Folder: Story = {
   },
 };
 
-/**
- * 문서 열람·직접 편집 17922:56420 — 채널 > 폴더 > 현재페이지 3단.
- * 이 시안의 마디에는 아이콘이 없지만, 가장 최근 시안인 검토큐(17930:57154)가 같은 자리에
- * wiki_channel·folder를 달고 있어 kind 매핑을 그쪽에 맞췄다(디자이너 확인 대상).
- */
+/** 문서 열람·직접 편집 — 채널 > 폴더 > 현재페이지 3단. */
 export const Document: Story = {
   args: {
     variant: 'detail',
@@ -238,7 +224,7 @@ export const Document: Story = {
   },
 };
 
-/** 검토큐 문서 17930:57154 — 3단 + "검토 필요" 태그 + 우측 3종 */
+/** 검토큐 문서 — 3단 + "검토 필요" 태그 + 우측 3종 */
 export const ReviewQueueDocument: Story = {
   args: {
     variant: 'detail',
@@ -259,25 +245,20 @@ export const ReviewQueueDocument: Story = {
     await expect(canvas.getByRole('button', { name: '이전 문서' })).toBeInTheDocument();
     await expect(canvas.getByRole('button', { name: /미리보기/ })).toBeInTheDocument();
 
-    // 태그 기하는 Figma Tag(452:2175) 값이다. shared Badge 기본은 rounded-full이라
-    // tailwind-merge가 덮어쓰기를 놓치면 알약으로 조용히 되돌아간다.
+    // shared Badge 기본이 rounded-full이라, 덮어쓰기를 놓치면 알약으로 조용히 되돌아간다.
     const tag = canvas.getByText('검토 필요');
     await expect(getComputedStyle(tag).borderRadius).toBe('6px');
 
-    // 태그 아이콘은 원본 export가 stroke="#464C53"이었다. 재export로 hex가 되살아나면
-    // 라이트에서는 눈에 안 띄고 다크에서만 어긋나므로 계산색이 아니라 속성을 못박는다.
+    // 아이콘 stroke가 하드코딩 hex로 재export되면 다크 모드에서만 어긋난다 — 속성을 직접 못박는다.
     const tagIcon = tag.querySelector('svg path');
     await expect(tagIcon).toHaveAttribute('stroke', 'currentColor');
 
-    // 배지가 있어도 헤더 높이는 52 그대로여야 한다(태그가 행을 밀지 않는다).
+    // 배지가 있어도 헤더 높이는 그대로여야 한다(태그가 행을 밀지 않는다).
     await expect(getHeader(canvasElement).getBoundingClientRect().height).toBe(52);
   },
 };
 
-/**
- * 좁은 슬롯. 폭이 줄면 현재 마디만 잘리고 이전 마디·태그·우측 액션은 그대로 남아야 한다.
- * 새 상태가 아니라 검토큐와 같은 상태를 좁은 폭에서 다시 잰 것이다.
- */
+/** 좁은 슬롯. 폭이 줄면 현재 마디만 잘리고 이전 마디·태그·우측 액션은 그대로 남는다. */
 export const LongTitleInNarrowSlot: Story = {
   args: {
     variant: 'detail',
@@ -305,8 +286,7 @@ export const LongTitleInNarrowSlot: Story = {
     await expect(header.getBoundingClientRect().width).toBeLessThanOrEqual(slot.getBoundingClientRect().width);
     await expect(header.scrollWidth).toBeLessThanOrEqual(header.clientWidth);
 
-    // 현재 마디만 잘린다. 넘침 없음만으로는 부족하다 — truncate가 빠지면 줄바꿈으로 폭은
-    // 지키면서 헤더 높이가 자라고, 그러면 화면 간 헤더 리듬이 어긋난다.
+    // truncate가 빠지면 줄바꿈으로 폭은 지키면서 헤더 높이가 자란다 — 넘침 없음만으로는 부족하다.
     const current = canvas.getByText(NARROW_CURRENT_LABEL);
     await expect(current.scrollWidth).toBeGreaterThan(current.clientWidth);
     await expect(current.getClientRects()).toHaveLength(1);

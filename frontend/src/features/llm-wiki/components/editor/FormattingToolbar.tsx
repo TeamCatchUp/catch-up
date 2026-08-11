@@ -52,11 +52,8 @@ const TURN_INTO: readonly { label: string; isActive: (e: Editor) => boolean; run
 ];
 
 /**
- * 선택 시 뜨는 플로팅 서식 툴바 (스펙 §12 — Notion-like 템플릿의 floating toolbar 대응).
- *
- * 버튼 글리프는 노션과 같은 문자 기반(B·I·U·S)이다 — 서식 아이콘 자산이 리포에 없고
- * (design-request 대기), 문자 글리프는 노션 자체가 쓰는 방식이라 임시 시각으로도 대표성이 있다.
- * 하이라이트는 <mark> 기본 시각을 버튼 글리프에 그대로 쓴다.
+ * 선택 시 뜨는 플로팅 서식 툴바.
+ * 버튼 글리프는 서식 아이콘 자산이 없어 문자 기반(B·I·U·S)으로 둔 임시 시각이다.
  */
 export interface FormattingToolbarProps {
   editor: Editor;
@@ -71,12 +68,11 @@ function cls(active: boolean) {
 }
 
 export default function FormattingToolbar({ editor }: FormattingToolbarProps) {
-  // 링크 입력 모드 — 툴바 내용이 입력창으로 바뀐다 (노션과 동일한 인라인 전환)
+  // 링크 입력 모드 — 툴바 내용이 입력창으로 바뀐다
   const [linkDraft, setLinkDraft] = useState<string | null>(null);
 
-  // 이 셀렉터는 "모든" 트랜잭션마다 돈다 — 타이핑 한 글자도 트랜잭션이다.
-  // 전부 계산하면 isActive가 매 키 입력마다 20회 넘게 도는데(마크 7 + 정렬 3 + 블록 스캔 10),
-  // 툴바는 선택이 있을 때만 보이므로 접힌 선택(=타이핑 중)에서는 계산 자체를 건너뛴다.
+  // 이 셀렉터는 모든 트랜잭션마다 돈다 — 타이핑 한 글자도 트랜잭션이다.
+  // 툴바는 선택이 있을 때만 보이므로 접힌 선택에서는 계산 자체를 건너뛴다.
   const state = useEditorState({
     editor,
     selector: ({ editor: e }) => {
@@ -115,8 +111,8 @@ export default function FormattingToolbar({ editor }: FormattingToolbarProps) {
       <div
         role="toolbar"
         aria-label="텍스트 서식"
-        // mousedown을 막지 않으면 버튼 클릭이 에디터 선택을 무너뜨려 서식이 빈 선택에 적용된다
-        // (공용 command.tsx 삭제 버튼과 같은 처리). 링크 입력 모드에서는 input이 포커스를 가져야 하므로 예외.
+        // mousedown을 막지 않으면 버튼 클릭이 에디터 선택을 무너뜨린다.
+        // 링크 입력 모드에서는 input이 포커스를 가져야 하므로 예외.
         onMouseDown={(event) => {
           if (linkDraft === null) event.preventDefault();
         }}
@@ -142,14 +138,8 @@ export default function FormattingToolbar({ editor }: FormattingToolbarProps) {
           </>
         ) : (
           <>
-            {/*
-              modal={false} 필수. Radix DropdownMenu는 기본이 modal이고, 열려 있는 동안
-              document.body의 pointer-events를 꺼둔 뒤 닫힐 때 되돌린다. 그런데 이 툴바는
-              선택이 풀리면 통째로 언마운트되고(위 state === null), 블록 전환은 실행 즉시
-              선택을 바꾼다 — 즉 "메뉴가 열린 채 언마운트"가 정상 경로에서 발생한다.
-              그때 되돌리는 쪽이 실행되지 않으면 body가 pointer-events: none으로 굳어
-              페이지 전체가 클릭되지 않는다. 비모달은 body를 아예 건드리지 않는다.
-            */}
+            {/* modal={false} 필수. 이 툴바는 "메뉴가 열린 채 언마운트"가 정상 경로라,
+                모달이면 body의 pointer-events: none이 복구되지 않고 굳는다. */}
             <DropdownMenu modal={false}>
               <DropdownMenuTrigger asChild>
                 <button type="button" aria-label="블록 전환" className={`${BUTTON_CLASS} gap-1`}>
@@ -272,7 +262,7 @@ export default function FormattingToolbar({ editor }: FormattingToolbarProps) {
   );
 }
 
-/** 정렬 글리프 — 자산 없는 아이콘의 임시 인라인 SVG (스펙 §12 아이콘 방침) */
+/** 정렬 글리프 — 자산이 없어 인라인 SVG로 둔 임시 시각 */
 function AlignGlyph({ variant }: { variant: 'left' | 'center' | 'right' }) {
   const x2 = { left: [16, 10, 16], center: [16, 13, 16], right: [16, 16, 16] }[variant];
   const x1 = { left: [4, 4, 4], center: [4, 7, 4], right: [4, 10, 4] }[variant];

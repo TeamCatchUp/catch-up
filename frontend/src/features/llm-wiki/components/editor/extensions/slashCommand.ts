@@ -13,10 +13,8 @@ export interface SlashCommandOptions {
 }
 
 /**
- * @tiptap/suggestion 의 명령형 콜백을 React 상태로 번역하는 브리지.
- *
- * 이 파일만 Tiptap과 메뉴 양쪽을 안다. SlashMenu는 Tiptap을 모르고,
- * WikiEditor는 Suggestion을 모른다.
+ * @tiptap/suggestion의 명령형 콜백을 React 상태로 번역하는 브리지.
+ * 이 파일만 Tiptap과 메뉴 양쪽을 안다.
  */
 export const SlashCommand = Extension.create<SlashCommandOptions>({
   name: 'slashCommand',
@@ -37,8 +35,7 @@ export const SlashCommand = Extension.create<SlashCommandOptions>({
         // emojiCommand와 같은 에디터에 산다 — 기본 pluginKey 공유 충돌 방지
         pluginKey: new PluginKey('slashSuggestion'),
         char: '/',
-        // 노션식(스펙 §12): 단어 끝에 바로 /를 쳐도 연다. "및/또는" 타이핑 중 메뉴가 번쩍이는
-        // 거슬림도 노션과 같이 온다 — 사용자가 노션 동작 추종을 선택했다(1차의 [' '] 제한 대체).
+        // 단어 끝에 바로 /를 쳐도 연다 — "및/또는" 입력 중 메뉴가 번쩍이는 것은 감수한 동작이다.
         allowedPrefixes: null,
         startOfLine: false,
         items: ({ query }) => [...filterSlashItems(SLASH_ITEMS, query)],
@@ -75,8 +72,7 @@ export const SlashCommand = Extension.create<SlashCommandOptions>({
               currentProps = props;
               publish();
             },
-            // Escape는 여기서 처리하지 않는다 — Suggestion이 Escape를 먼저 가로채 dispatchExit까지
-            // 수행하고(dismissedRange로 같은 자리 재개방도 막는다), 우리 onExit이 메뉴를 닫는다.
+            // Escape는 여기서 처리하지 않는다 — Suggestion이 먼저 가로채 exit까지 수행하고, onExit이 메뉴를 닫는다.
             onKeyDown: ({ event }) => onKeyDown(event),
             onExit: () => {
               currentProps = null;

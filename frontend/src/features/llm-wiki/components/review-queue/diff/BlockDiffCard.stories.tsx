@@ -86,10 +86,10 @@ export const Modified: Story = {
     await expect(args.onApprove).toHaveBeenCalledWith(modifiedEntry.id);
     await userEvent.click(canvas.getByRole('button', { name: '반려' }));
     await expect(args.onReject).toHaveBeenCalledWith(modifiedEntry.id);
-    // 개별 블록 수정은 MVP 제외라 진입점이 없어야 한다 — 죽은 버튼을 남기지 않는다는 계약(8/10)
+    // 개별 블록 수정은 범위 밖이라 진입점이 없어야 한다 — 죽은 버튼을 남기지 않는다.
     await expect(canvas.queryByRole('button', { name: /수정/ })).toBeNull();
 
-    // 셰브런 · 제목 · 반려 · 승인 (되돌리기·삭제는 8/7, 연필은 8/10에 빠졌다)
+    // 헤더 액션은 셰브런·반려·승인 셋뿐이다.
     const names = canvas.getAllByRole('button').map((b) => b.getAttribute('aria-label') ?? b.textContent);
     await expect(names).toEqual(['접기', '반려', '승인']);
   },
@@ -112,15 +112,15 @@ export const Removed: Story = {
     await expect(canvas.getByText('수동 재시도 안내')).toBeInTheDocument();
     // 초록(after) 패널이 없어야 한다
     await expect(canvasElement.querySelectorAll('[class*="border-green"]')).toHaveLength(0);
-    // 색만으로 삭제를 알리지 않는다 — 고지 문구가 패널 안에 있어야 한다(17998:46482)
+    // 색만으로 삭제를 알리지 않는다 — 고지 문구가 패널 안에 있어야 한다.
     await expect(canvas.getByText('콘텐츠를 삭제함')).toBeInTheDocument();
-    // 삭제도 사유를 갖는다(2026-08-07 계약 결정) — 지워지는 변경일수록 근거가 필요하다
+    // 삭제도 사유를 갖는다 — 지워지는 변경일수록 근거가 필요하다.
     await expect(canvas.getByText(/수정된 이유/)).toBeInTheDocument();
     await expect(canvas.getByText(/상담원 수동 안내 절차가 폐지/)).toBeInTheDocument();
   },
 };
 
-/** 반려 처리된 블록(17942:106687). 액션 버튼이 사라지고 "반려됨" 배지만 남는다. */
+/** 반려 처리된 블록. 액션 버튼이 사라지고 "반려됨" 배지만 남는다. */
 export const Rejected: Story = {
   args: { entry: { ...modifiedEntry, rejected: true }, defaultCollapsed: true },
   play: async ({ canvasElement }) => {

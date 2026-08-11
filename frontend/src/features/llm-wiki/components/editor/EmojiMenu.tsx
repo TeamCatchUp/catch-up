@@ -12,9 +12,8 @@ export interface EmojiMenuProps {
 }
 
 /**
- * `:` 이모지 서제스천 메뉴 (스펙 §12 — Notion-like 템플릿의 emoji picker 대응).
- * SlashMenu와 같은 구조: Tiptap을 모르고, 키보드는 핸들로 받는다. 글리프가 SVG가 아니라
- * 이모지 문자라 SlashMenu를 재사용하지 않고 얇게 분리했다.
+ * `:` 이모지 서제스천 메뉴. SlashMenu와 같은 구조지만 글리프가 SVG가 아니라 이모지 문자라
+ * 재사용하지 않고 얇게 분리했다.
  */
 const EmojiMenu = forwardRef<SlashMenuHandle, EmojiMenuProps>(function EmojiMenu({ items, onSelect }, ref) {
   const [highlighted, setHighlighted] = useState(0);

@@ -2,11 +2,7 @@ import type { WikiBlock } from '../types/llmWikiDiff';
 
 /**
  * diff 뷰 스토리용 base/proposed blocks[] 쌍.
- *
- * computeBlockDiff(BASE_WIKI_BLOCKS, PROPOSED_WIKI_BLOCKS)가 정확히
- * modified(재시도 정책) → added(PG 점검 시간 예외) → removed(수동 재시도 안내)
- * 세 카드를 내도록 설계됐다 — 이 불변식은 llmWikiDiffFixtures.test.ts가 지킨다.
- * 기존 llmWikiFixtures.ts와 분리한 이유: 이 파일은 blocks[] 형태라 도메인 mock과 성격이 다르다.
+ * computeBlockDiff가 modified → added → removed 세 카드를 내도록 짜여 있고, 그 불변식은 테스트가 지킨다.
  */
 export const BASE_WIKI_BLOCKS: readonly WikiBlock[] = [
   {
@@ -49,7 +45,7 @@ export const PROPOSED_WIKI_BLOCKS: readonly WikiBlock[] = [
   },
 ];
 
-/** LongText 스토리용 — 긴 문단에서 자연 줄바꿈·단어 강조가 함께 보이는 쌍 */
+/** LongText 스토리용 — 긴 문단에서 줄바꿈과 단어 강조가 함께 보이는 쌍 */
 export const LONG_BASE_WIKI_BLOCKS: readonly WikiBlock[] = [
   {
     kind: 'claim_section',

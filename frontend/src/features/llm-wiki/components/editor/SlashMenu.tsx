@@ -27,16 +27,13 @@ export interface SlashMenuProps {
 
 /**
  * 슬래시 메뉴 UI. Tiptap을 import하지 않는다 — 에디터 없이 스토리로 열린다.
- *
- * cmdk의 자체 필터·키보드를 쓰지 않는 이유: 포커스가 ProseMirror에 있어 cmdk 루트가
- * keydown을 받지 못하고, 공용 래퍼의 CommandInput은 보이는 검색창이라 쓸 자리가 없다.
- * 그래서 하이라이트 인덱스를 직접 들고, 키는 밖에서 onKeyDown 핸들로 받는다.
+ * 포커스가 ProseMirror에 있어 cmdk 키보드를 쓸 수 없다 — 하이라이트를 직접 들고 키는 onKeyDown 핸들로 받는다.
  */
 const SlashMenu = forwardRef<SlashMenuHandle, SlashMenuProps>(function SlashMenu({ items, onSelect }, ref) {
   const [highlighted, setHighlighted] = useState(0);
 
-  // 목록이 바뀌면 하이라이트를 처음으로 되돌린다. 안 그러면 인덱스가 범위를 넘는다.
-  // effect가 아니라 렌더 중 리셋(파생 상태 패턴) — react-hooks/set-state-in-effect가 effect 방식을 막는다.
+  // 목록이 바뀌면 하이라이트를 처음으로 되돌린다 — 안 그러면 인덱스가 범위를 넘는다.
+  // effect가 아니라 렌더 중 리셋(파생 상태 패턴)이다.
   const [prevItems, setPrevItems] = useState(items);
   if (items !== prevItems) {
     setPrevItems(items);

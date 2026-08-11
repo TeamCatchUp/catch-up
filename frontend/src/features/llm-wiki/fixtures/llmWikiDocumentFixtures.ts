@@ -3,32 +3,23 @@ import type { JSONContent } from '@tiptap/react';
 import type { DocumentBreadcrumb } from '../types/llmWikiModel';
 
 /**
- * 문서 화면 픽스처. 문서 조회 API가 없어 라우트가 이걸로 렌더한다.
- *
- * 발행본과 제안본을 둘 다 들고 있는 이유: 편집 대상은 제안본이고(스펙 §2),
- * 열람은 발행본이다. 둘의 내용이 달라야 모드 전환이 화면에서 실제로 검증된다 —
- * 같으면 편집을 눌러도 아무것도 안 바뀌어서 "제안본을 연다"는 계약이 공허해진다.
- *
- * llmWikiFixtures.ts(배치 소유 도메인 mock)와 합치지 않는다. 그쪽은 백엔드 ERD를
- * 따르는 계약이고 이건 화면 렌더용 Tiptap JSON이다.
+ * 문서 화면 픽스처(Tiptap JSON). 문서 조회 API가 없어 라우트가 이걸로 렌더한다.
+ * 열람은 발행본, 편집은 제안본이라 둘의 내용이 달라야 모드 전환이 검증된다.
  */
 export interface WikiDocumentFixture {
   id: string;
   title: string;
-  /** [SPEC] 작성자. 백엔드 큐 행에는 작성자 필드가 없다 — API 협상 대상 */
+  /** [SPEC] 작성자. 백엔드에 대응 필드가 없다 */
   authorName: string;
-  /** [SPEC] "23시간 전" 같은 표시 문자열. 상대시각 계산은 이 범위 밖 */
+  /** [SPEC] 표시용 상대시각 문자열. 계산은 범위 밖 */
   createdLabel: string;
-  /**
-   * 채널 > 폴더 > 현재페이지. WikiPageHeader(variant='detail')의 입력이다.
-   * 마지막 마디가 현재 페이지이므로 title과 같아야 한다 — 테스트가 지킨다.
-   */
+  /** 채널 > 폴더 > 현재페이지. 마지막 마디는 title과 같아야 한다 — 테스트가 지킨다. */
   breadcrumbs: readonly DocumentBreadcrumb[];
   /** 이 문서에 달린 제안. 편집 진입의 1급 키다 */
   proposalId: string;
   /** 발행본 — 열람 모드에서 보여준다 */
   publishedDoc: JSONContent;
-  /** 제안본 — 편집 모드에서 열린다. 발행본에 AI가 더한 내용이 반영된 상태 */
+  /** 제안본 — 편집 모드에서 열린다 */
   proposalDoc: JSONContent;
 }
 

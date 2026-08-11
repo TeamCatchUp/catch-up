@@ -55,8 +55,7 @@ export const Default: Story = {
     await expect(canvas.getByText('PG 점검 시간 예외')).toBeInTheDocument();
     await expect(canvas.getByText('수동 재시도 안내')).toBeInTheDocument();
 
-    // 편집 진입점은 섹션 헤더의 전역 "직접 수정" 하나뿐이다 — 개별 블록 수정은 MVP 제외라
-    // 카드에 진입점이 없다(8/10). getByRole 단일 매치가 그 유일성을 상시 검증한다.
+    // 편집 진입점은 섹션 헤더의 "직접 수정" 하나뿐이다 — 개별 블록 수정은 범위 밖이라 카드에 없다.
     await userEvent.click(canvas.getByRole('button', { name: '직접 수정' }));
     await expect(args.onEditDocument).toHaveBeenCalled();
     await expect(canvas.queryByRole('button', { name: '이 블록 수정' })).toBeNull();

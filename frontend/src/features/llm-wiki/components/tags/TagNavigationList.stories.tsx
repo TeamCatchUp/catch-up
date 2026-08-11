@@ -61,19 +61,17 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof TagNavigationList>;
 
-/** Figma 좌측 열 슬롯(280×300). 컴포넌트가 폭·높이를 갖지 않으므로 슬롯이 준다. */
+/** 좌측 열 슬롯. 컴포넌트가 폭·높이를 갖지 않으므로 슬롯이 준다. */
 const paneSlot: Decorator = (Story) => (
   <div className="h-75 w-70">
     <Story />
   </div>
 );
 
-const GRAY = 'rgb(109, 120, 130)'; // #6D7882 Text/Normal/Alternative
-const BLUE = 'rgb(51, 133, 255)'; // #3385FF Text/Primary/Assistive
+const GRAY = 'rgb(109, 120, 130)'; // text-text-normal-alternative
+const BLUE = 'rgb(51, 133, 255)'; // text-text-primary-assistive
 
-/**
- * Figma가 렌더한 그대로의 상태 — 첫 행이 선택(파랑)이고 나머지는 중립이다.
- */
+/** 첫 행이 선택(파랑)이고 나머지는 중립이다. */
 export const Default: Story = {
   args: { selectedTagId: 'tag-retry' },
   decorators: [paneSlot],
@@ -84,12 +82,12 @@ export const Default: Story = {
     await expect(canvas.getByRole('button', { name: '환불' })).toBeInTheDocument();
     await expect(canvas.getAllByRole('button')).toHaveLength(TAG_FIXTURES.length);
 
-    // 카테고리 그룹 머리글이 있으면 안 된다 — 계층 구조는 명세 §11 범위 밖이고 시안에도 없다.
+    // 카테고리 그룹 머리글이 있으면 안 된다 — 태그 계층 구조는 범위 밖이다.
     await expect(canvas.queryByRole('heading')).toBeNull();
     await expect(canvas.queryByText('결제')).toBeNull();
     await expect(canvas.queryByText('계정')).toBeNull();
 
-    // 문서 건수도 행에 새어나오면 안 된다 — 시안 행에 건수 자리가 없다.
+    // 문서 건수도 행에 새어나오면 안 된다.
     for (const tag of TAG_FIXTURES) {
       await expect(canvas.queryByText(String(tag.documentCount))).toBeNull();
     }
@@ -101,7 +99,7 @@ export const Default: Story = {
     await expect(window.getComputedStyle(selected).color).toBe(BLUE);
     await expect(window.getComputedStyle(unselected).color).toBe(GRAY);
 
-    // 비선택 행에 채움을 발명하지 않았다 — Figma 행 노드에 fills가 없다.
+    // 비선택 행에 채움을 발명하지 않았다.
     await expect(window.getComputedStyle(unselected).backgroundColor).toBe('rgba(0, 0, 0, 0)');
 
     await userEvent.click(unselected);
@@ -109,10 +107,7 @@ export const Default: Story = {
   },
 };
 
-/**
- * 아직 아무 태그도 고르지 않은 목록. 새 시각이 아니라 Figma 비선택 행(17762:103082 외 7행) 스타일이
- * 전 행에 적용된 것뿐이다 — 빈 상태가 아니므로 금지 목록에 걸리지 않는다.
- */
+/** 아직 아무 태그도 고르지 않은 목록 — 비선택 행 스타일이 전 행에 적용된다. */
 export const NoSelection: Story = {
   decorators: [paneSlot],
   play: async ({ canvasElement }) => {
@@ -125,10 +120,7 @@ export const NoSelection: Story = {
   },
 };
 
-/**
- * 긴 태그명 + Figma보다 좁은 슬롯. 목록은 px 폭을 갖지 않아야 하고(200 슬롯이면 200),
- * 태그명은 감기지 않고 잘려야 하며 화살표는 줄지 않아야 한다.
- */
+/** 긴 태그명 + 좁은 슬롯. 목록은 px 폭을 갖지 않고, 태그명만 잘리고 화살표는 줄지 않는다. */
 export const LongNameInNarrowSlot: Story = {
   args: {
     tags: [
@@ -150,25 +142,22 @@ export const LongNameInNarrowSlot: Story = {
     const row = canvas.getAllByRole('button')[0];
     const label = within(row).getByText(/결제 승인 실패 재시도 정책/);
 
-    // 폭은 슬롯이 준다 — 280px이 박혔다면 여기서 깨진다.
+    // 폭은 슬롯이 준다 — 고정 폭이 박혔다면 여기서 깨진다.
     await expect(list.getBoundingClientRect().width).toBe(200);
     await expect(list.scrollWidth).toBeLessThanOrEqual(list.clientWidth);
 
-    // 태그명은 한 줄 말줄임이다. 감기면 행 높이 24가 무너져 목록 리듬이 어긋난다.
+    // 태그명은 한 줄 말줄임이다. 감기면 행 높이가 무너져 목록 리듬이 어긋난다.
     await expect(label.scrollWidth).toBeGreaterThan(label.clientWidth);
     await expect(label.getClientRects()).toHaveLength(1);
     await expect(row.getBoundingClientRect().height).toBe(24);
 
-    // 화살표는 축소 대상이 아니다 — Figma에서 fixed 24다.
+    // 화살표는 축소 대상이 아니다.
     const icon = row.querySelector('svg');
     await expect(icon?.getBoundingClientRect().width).toBe(24);
   },
 };
 
-/**
- * Figma 좌측 열은 8행을 300px 안에 담아 이미 넘친다(20 + 8×24 + 7×16 + 20 = 344).
- * overflowScroll y가 노드에 정의돼 있으므로 목록 자신이 스크롤해야 하고, 슬롯을 밀어내면 안 된다.
- */
+/** 행이 슬롯 높이를 넘치면 목록 자신이 스크롤한다 — 슬롯을 밀어내지 않는다. */
 export const ScrollsWithinPane: Story = {
   args: {
     tags: Array.from(

@@ -65,7 +65,7 @@ export const Default: Story = {
     const canvas = within(canvasElement);
 
     await expect(canvas.getByText('결제 승인 실패 시 재시도 정책')).toBeInTheDocument();
-    // breadcrumbs는 채널 > 폴더 2단이다. join된 한 덩어리 문자열이 아니라 각각의 라벨로 렌더된다.
+    // breadcrumbs는 join된 한 덩어리가 아니라 마디별 라벨로 렌더된다.
     await expect(canvas.getByText('결제')).toBeInTheDocument();
     await expect(canvas.getByText('승인·실패 처리')).toBeInTheDocument();
     await expect(canvas.getByText('검토 완료')).toBeInTheDocument();
@@ -76,12 +76,11 @@ export const Default: Story = {
     await expect(canvas.getByText('+2')).toBeInTheDocument();
     await expect(canvas.queryByText('결제 실패')).toBeNull();
 
-    // 충돌 없는 행의 선두 아이콘은 file_filled다. 두 에셋의 viewBox가 달라(18 vs 24)
-    // 아이콘이 바뀌면 여기서 깨진다 — 색 비교와 달리 테마에 흔들리지 않는다.
+    // 선두 아이콘은 viewBox로 구분한다 — 색 비교와 달리 테마에 흔들리지 않는다.
     const row = canvas.getByRole('button');
     await expect(findIconSvg(row)).toHaveAttribute('viewBox', '0 0 18 18');
 
-    // 고정폭 3열이 살아 있는지. 이 값이 무너지면 행끼리 열이 어긋난다.
+    // 고정폭 열이 살아 있는지 — 무너지면 행끼리 열이 어긋난다.
     await expect(canvas.getByText('3시간 전').getBoundingClientRect().width).toBe(96);
 
     await userEvent.click(row);
@@ -89,28 +88,21 @@ export const Default: Story = {
   },
 };
 
-/**
- * 에러(충돌) 아이콘 행. Figma에 시각은 있으나 "검토 완료" 배지와의 공존이 규칙인지는 UNKNOWN이라
- * 이름에 TBD를 남긴다. 규칙이 확정되면 이 스토리 이름과 아래 배지 어서션을 함께 고친다.
- */
+/** 에러(충돌) 아이콘 행. 상태 배지와의 공존 규칙이 미확정이라 이름에 TBD를 남긴다. */
 export const WithErrorIconRuleTBD: Story = {
   args: { document: createDocumentRow({ hasConflictIcon: true }) },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const row = canvas.getByRole('button');
 
-    // 선두 아이콘이 error_filled로 바뀐다(viewBox 24).
+    // 선두 아이콘이 충돌 아이콘으로 바뀐다.
     await expect(findIconSvg(row)).toHaveAttribute('viewBox', '0 0 24 24');
-    // Figma 대시보드에서 에러 아이콘 행도 배지를 함께 달고 있다 — 관찰된 사실만 못박는다.
+    // 충돌 행도 상태 배지를 함께 단다.
     await expect(canvas.getByText('검토 완료')).toBeInTheDocument();
   },
 };
 
-/**
- * 좁은 슬롯. 이 컴포넌트는 고정폭 3열을 들고 있어서, 폭이 줄면 문서 열이 흡수하고
- * 제목이 truncate되어야 한다 — 넘쳐서 행이 가로로 밀리면 안 된다.
- * 새 디자인 상태가 아니라 같은 Default 상태를 좁은 폭에서 다시 잰 것이다.
- */
+/** 좁은 슬롯. 폭이 줄면 고정폭 열이 아니라 문서 열이 흡수하고 제목이 잘려야 한다. */
 export const LongTitleInNarrowSlot: Story = {
   args: {
     document: createDocumentRow({
@@ -134,11 +126,10 @@ export const LongTitleInNarrowSlot: Story = {
     await expect(row.getBoundingClientRect().width).toBeLessThanOrEqual(slot.getBoundingClientRect().width);
     await expect(row.scrollWidth).toBeLessThanOrEqual(row.clientWidth);
 
-    // 고정폭 3열은 좁아져도 그대로다 — 줄어드는 쪽은 문서 열이어야 한다.
+    // 고정폭 열은 좁아져도 그대로다 — 줄어드는 쪽은 문서 열이어야 한다.
     await expect(canvas.getByText('3시간 전').getBoundingClientRect().width).toBe(96);
 
-    // 제목은 잘려야 한다. 넘침 없음(위 두 줄)만으로는 부족하다 — truncate가 빠지면 줄바꿈으로
-    // 폭은 지키면서 행 높이가 자라고, 그러면 행끼리 높이 리듬이 어긋난다.
+    // truncate가 빠지면 줄바꿈으로 폭은 지키면서 행 높이가 자란다 — 넘침 없음만으로는 부족하다.
     await expect(heading.scrollWidth).toBeGreaterThan(heading.clientWidth);
     await expect(heading.getClientRects()).toHaveLength(1);
   },
