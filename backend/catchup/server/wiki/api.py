@@ -32,6 +32,10 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from catchup.audit.actions import KnowledgeReviewAction
+from catchup.audit.base import AuditStatus
+from catchup.audit.emitters import emit_audit_event
+from catchup.audit.metadata import KnowledgeReviewAuditMetadata
 from catchup.db.dependencies import get_db
 from catchup.db.models import ArtifactOwner
 from catchup.db.models import Channel
@@ -611,12 +615,14 @@ def remove_artifact_owner(
 ) -> Response:
     """담당자 한 명을 문서에서 뗀다.
 
-    담당자 본인도 못 뗀다. 명단이 줄어드는 방향만 관리자를 거치게 두어야
-    책임자가 스스로 사라지는 일이 감사에 남는다.
+    담당자 본인도 못 뗀다. 명단이 줄어드는 방향은 관리자만 지나고, 실제로
+    줄어들었을 때 감사 이벤트를 하나 낸다. 거부만 감사에 남으면 스트림은
+    "막힌 시도"만 담고 책임자가 사라진 사실은 담지 않는다.
 
     없는 담당자를 떼는 요청도 204다. 자격 확인은 이미 지났고 결과 상태가
     요청과 같으므로, 404로 가르면 소비자에게 "그 사람이 담당자였는가"만
-    알려 주고 할 일은 늘어난다.
+    알려 주고 할 일은 늘어난다. 그 경우는 명단이 줄지 않았으므로 감사
+    이벤트도 내지 않는다.
 
     Raises:
         HTTPException: 문서가 없으면 404, 관리자가 아니면 403을 던진다.
@@ -647,6 +653,16 @@ def remove_artifact_owner(
     if owner is not None:
         db.delete(owner)
         db.commit()
+        emit_audit_event(
+            action=KnowledgeReviewAction.OWNER_REMOVE,
+            status=AuditStatus.SUCCESS,
+            metadata=KnowledgeReviewAuditMetadata(
+                workspace_id=context.workspace_id,
+                user_id=context.user.id,
+                artifact_id=str(artifact.id),
+                target_user_id=user_id,
+            ),
+        )
 
     return Response(status_code=204)
 

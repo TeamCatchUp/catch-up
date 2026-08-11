@@ -16,6 +16,7 @@ from __future__ import annotations
 import uuid
 from collections.abc import Callable
 from collections.abc import Iterator
+from unittest.mock import patch
 
 import pytest
 from fastapi import FastAPI
@@ -30,6 +31,7 @@ from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 from sqlalchemy.orm import sessionmaker
 
+from catchup.audit.actions import KnowledgeReviewAction
 from catchup.configs.config import settings
 from catchup.db.dependencies import get_db
 from catchup.db.models import ArtifactOwner
@@ -332,6 +334,55 @@ def test_channel_admin_removes_owner(
 
     assert response.status_code == 204
     assert db.get(ArtifactOwner, (artifact_id, member_b.id)) is None
+
+
+def test_removing_owner_emits_audit_event(
+    client: TestClient,
+    as_user: Callable[[User], None],
+    db: Session,
+    admin_user: User,
+    artifact_id: uuid.UUID,
+    member_b: User,
+) -> None:
+    """명단이 줄어든 사실이 감사 스트림에 남는다.
+
+    거부만 남으면 "책임자가 사라진 일"은 어디에도 기록되지 않는다.
+    행위자와 뗀 대상이 따로 실려야 나중에 되짚을 수 있다.
+    """
+    db.add(ArtifactOwner(artifact_id=artifact_id, user_id=member_b.id))
+    db.flush()
+    as_user(admin_user)
+
+    with patch("catchup.server.wiki.api.emit_audit_event") as emit:
+        response = client.delete(_owner_path(artifact_id, member_b))
+
+    assert response.status_code == 204
+    emit.assert_called_once()
+    metadata = emit.call_args.kwargs["metadata"]
+    assert (
+        emit.call_args.kwargs["action"]
+        == KnowledgeReviewAction.OWNER_REMOVE
+    )
+    assert metadata.artifact_id == str(artifact_id)
+    assert metadata.target_user_id == member_b.id
+    assert metadata.user_id == admin_user.id
+
+
+def test_removing_non_owner_emits_no_audit_event(
+    client: TestClient,
+    as_user: Callable[[User], None],
+    admin_user: User,
+    artifact_id: uuid.UUID,
+    member_b: User,
+) -> None:
+    """담당자가 아니었으면 명단이 줄지 않아 감사 이벤트도 없다."""
+    as_user(admin_user)
+
+    with patch("catchup.server.wiki.api.emit_audit_event") as emit:
+        response = client.delete(_owner_path(artifact_id, member_b))
+
+    assert response.status_code == 204
+    emit.assert_not_called()
 
 
 def test_assigning_non_member_rejected(

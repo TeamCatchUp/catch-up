@@ -128,6 +128,10 @@ class KnowledgeReviewAction(BaseAuditAction):
     BLOCK_VERDICT = "block_verdict"
     PUBLISH = "publish"
 
+    # 문서 담당자 명단이 줄어든 사실. 해제만 남긴다 — 책임자가 사라지는
+    # 방향만 나중에 "누가 뗐나"를 물을 수 있어야 한다.
+    OWNER_REMOVE = "owner_remove"
+
 
 class McpAction(BaseAuditAction):
     SEARCH_KNOWLEDGE_BASE = "search_knowledge_base"
