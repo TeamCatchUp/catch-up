@@ -11,6 +11,7 @@ import uuid
 from collections.abc import Callable
 from collections.abc import Iterator
 from typing import Any
+from typing import NamedTuple
 
 import pytest
 from sqlalchemy import Engine
@@ -152,13 +153,26 @@ def _channel(
     return channel_id
 
 
+class _Definition(NamedTuple):
+    """만들어 둔 정의의 identity 네 칸을 함께 들고 다닌다.
+
+    문서 행은 정의의 workspace·채널·kind를 그대로 이어받아야 복합 FK를
+    통과한다. 넷을 따로 넘기다 어긋나면 무엇을 시험하는지 흐려진다.
+    """
+
+    id: uuid.UUID
+    workspace_id: int
+    channel_id: uuid.UUID
+    kind: str
+
+
 def _definition(
     session_factory: Callable[[], Session],
     workspace_id: int,
     channel_id: uuid.UUID,
     user_id: int,
     kind: str = DEFINITION_KIND,
-) -> uuid.UUID:
+) -> _Definition:
     """채널 아래 정의 한 개를 새로 만든다."""
     definition_id = uuid.uuid4()
     with session_factory() as session:
@@ -173,7 +187,7 @@ def _definition(
             )
         )
         session.commit()
-    return definition_id
+    return _Definition(definition_id, workspace_id, channel_id, kind)
 
 
 def _subject_node(
@@ -201,12 +215,27 @@ def _artifact(
     session_factory: Callable[[], Session],
     workspace_id: int,
     subject_node_id: uuid.UUID | None = None,
+    definition: _Definition | None = None,
+    kind: str | None = None,
+    channel_id: uuid.UUID | None = None,
     definition_id: uuid.UUID | None = None,
-    kind: str = ARTIFACT_KIND,
 ) -> uuid.UUID:
-    """주제 노드까지 갖춘 문서 한 편을 새로 만든다."""
+    """주제 노드까지 갖춘 문서 한 편을 새로 만든다.
+
+    정의를 주면 채널·kind를 정의에서 이어받는다. 정합을 어긋내는 시험만
+    kind·channel_id를 따로 넘겨 덮어쓴다.
+    """
     if subject_node_id is None:
         subject_node_id = _subject_node(session_factory, workspace_id)
+
+    if definition is not None:
+        definition_id = definition.id
+        if kind is None:
+            kind = definition.kind
+        if channel_id is None:
+            channel_id = definition.channel_id
+    if kind is None:
+        kind = ARTIFACT_KIND
 
     artifact_id = uuid.uuid4()
     with session_factory() as session:
@@ -215,6 +244,7 @@ def _artifact(
                 id=artifact_id,
                 workspace_id=workspace_id,
                 kind=kind,
+                channel_id=channel_id,
                 subject_node_id=subject_node_id,
                 definition_id=definition_id,
                 title="결제 기능",
@@ -269,25 +299,161 @@ def test_artifact_definition_cross_workspace_blocked(
     user_id: int,
     session_factory: Callable[[], Session],
 ) -> None:
-    """다른 workspace의 정의는 문서에 걸 수 없다."""
+    """다른 workspace의 정의는 문서에 걸 수 없다.
+
+    문서의 채널은 제 workspace 것으로 둔다. 그래야 막는 쪽이 채널 FK가
+    아니라 정의 FK임이 드러난다.
+    """
     other_workspace_id = _other_workspace_id(session_factory, workspace_id)
     foreign_channel_id = _channel(
         session_factory, other_workspace_id, user_id
     )
-    foreign_definition_id = _definition(
+    foreign_definition = _definition(
         session_factory, other_workspace_id, foreign_channel_id, user_id
+    )
+    own_channel_id = _channel(session_factory, workspace_id, user_id)
+
+    with pytest.raises(IntegrityError) as excinfo:
+        _artifact(
+            session_factory,
+            workspace_id,
+            definition_id=foreign_definition.id,
+            channel_id=own_channel_id,
+            kind=foreign_definition.kind,
+        )
+
+    assert (
+        _violated_constraint(excinfo) == "fk_knowledge_artifacts_definition"
+    )
+
+
+def test_artifact_channel_must_match_definition(
+    workspace_id: int,
+    user_id: int,
+    session_factory: Callable[[], Session],
+) -> None:
+    """문서가 정의와 다른 채널에 놓이지 못한다.
+
+    정의는 "이 채널의 이 종류 문서"를 정하는 행이다. 문서가 다른 채널로
+    새면 그 정의로 다시 컴파일할 수 없다.
+    """
+    definition = _definition(
+        session_factory,
+        workspace_id,
+        _channel(session_factory, workspace_id, user_id),
+        user_id,
+    )
+    other_channel_id = _channel(session_factory, workspace_id, user_id)
+
+    with pytest.raises(IntegrityError) as excinfo:
+        _artifact(
+            session_factory,
+            workspace_id,
+            definition=definition,
+            channel_id=other_channel_id,
+        )
+
+    assert (
+        _violated_constraint(excinfo) == "fk_knowledge_artifacts_definition"
+    )
+
+
+def test_artifact_kind_must_match_definition(
+    workspace_id: int,
+    user_id: int,
+    session_factory: Callable[[], Session],
+) -> None:
+    """문서의 kind가 정의의 kind와 어긋나지 못한다."""
+    definition = _definition(
+        session_factory,
+        workspace_id,
+        _channel(session_factory, workspace_id, user_id),
+        user_id,
     )
 
     with pytest.raises(IntegrityError) as excinfo:
         _artifact(
             session_factory,
             workspace_id,
-            definition_id=foreign_definition_id,
+            definition=definition,
+            kind="relation_summary",
         )
 
     assert (
         _violated_constraint(excinfo) == "fk_knowledge_artifacts_definition"
     )
+
+
+def test_definition_without_channel_blocked(
+    workspace_id: int,
+    user_id: int,
+    session_factory: Callable[[], Session],
+) -> None:
+    """정의를 걸어 두고 채널을 비울 수 없다.
+
+    복합 FK는 참조 컬럼 하나가 NULL이면 검사를 통째로 건너뛴다. CHECK가
+    그 우회를 막는 자리다.
+    """
+    definition = _definition(
+        session_factory,
+        workspace_id,
+        _channel(session_factory, workspace_id, user_id),
+        user_id,
+    )
+
+    with pytest.raises(IntegrityError) as excinfo:
+        _artifact(
+            session_factory,
+            workspace_id,
+            definition_id=definition.id,
+            kind=definition.kind,
+        )
+
+    assert (
+        _violated_constraint(excinfo)
+        == "ck_knowledge_artifacts_definition_channel"
+    )
+
+
+def test_same_subject_across_channel_definitions(
+    workspace_id: int,
+    user_id: int,
+    session_factory: Callable[[], Session],
+) -> None:
+    """채널이 다른 두 정의가 같은 대상을 각각 문서화한다.
+
+    정의 기반 identity의 핵심이다. 채널마다 목적이 다르므로 같은 entity를
+    두 채널이 각자 문서로 두는 일이 정상이다. 옛 전역 UNIQUE가 그대로
+    남아 있으면 두 번째가 막힌다.
+    """
+    first = _definition(
+        session_factory,
+        workspace_id,
+        _channel(session_factory, workspace_id, user_id),
+        user_id,
+    )
+    second = _definition(
+        session_factory,
+        workspace_id,
+        _channel(session_factory, workspace_id, user_id),
+        user_id,
+    )
+    subject_node_id = _subject_node(session_factory, workspace_id)
+
+    first_artifact_id = _artifact(
+        session_factory,
+        workspace_id,
+        subject_node_id=subject_node_id,
+        definition=first,
+    )
+    second_artifact_id = _artifact(
+        session_factory,
+        workspace_id,
+        subject_node_id=subject_node_id,
+        definition=second,
+    )
+
+    assert first_artifact_id != second_artifact_id
 
 
 def test_definition_subject_unique(
@@ -297,19 +463,22 @@ def test_definition_subject_unique(
 ) -> None:
     """한 정의가 같은 대상에 문서를 둘 만들지 못한다.
 
-    문서 kind를 달리해 (workspace, kind, subject) 제약을 비켜 둔다. 그래야
-    막는 쪽이 정의-대상 제약임이 드러난다.
+    kind를 가를 필요가 없다. (workspace, kind, subject) 유일성은 이제
+    정의 없는 문서에만 걸리므로, 둘 다 정의의 kind 그대로여도 막는 쪽은
+    정의-대상 제약이다.
     """
-    channel_id = _channel(session_factory, workspace_id, user_id)
-    definition_id = _definition(
-        session_factory, workspace_id, channel_id, user_id
+    definition = _definition(
+        session_factory,
+        workspace_id,
+        _channel(session_factory, workspace_id, user_id),
+        user_id,
     )
     subject_node_id = _subject_node(session_factory, workspace_id)
     _artifact(
         session_factory,
         workspace_id,
         subject_node_id=subject_node_id,
-        definition_id=definition_id,
+        definition=definition,
     )
 
     with pytest.raises(IntegrityError) as excinfo:
@@ -317,14 +486,35 @@ def test_definition_subject_unique(
             session_factory,
             workspace_id,
             subject_node_id=subject_node_id,
-            definition_id=definition_id,
-            kind="relation_summary",
+            definition=definition,
         )
 
     assert (
         _violated_constraint(excinfo)
         == "uq_knowledge_artifacts_definition_subject"
     )
+
+
+def test_null_definition_subject_kind_unique(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+) -> None:
+    """정의 없는 문서끼리는 (kind, 대상) 하나뿐이다.
+
+    부분 유니크 인덱스가 정의 이전 문서에 옛 의미를 그대로 남긴다.
+    컴파일러가 "만들거나 찾아 쓴다"로 성립하는 근거다.
+    """
+    subject_node_id = _subject_node(session_factory, workspace_id)
+    _artifact(
+        session_factory, workspace_id, subject_node_id=subject_node_id
+    )
+
+    with pytest.raises(IntegrityError) as excinfo:
+        _artifact(
+            session_factory, workspace_id, subject_node_id=subject_node_id
+        )
+
+    assert _violated_constraint(excinfo) == "uq_knowledge_artifacts_subject"
 
 
 def test_null_definition_documents_coexist(

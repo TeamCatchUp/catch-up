@@ -584,6 +584,15 @@ class ArtifactDefinition(Base):
             "id",
             name="uq_artifact_definitions_workspace_id_id",
         ),
+        # 문서가 "정의와 같은 채널·같은 kind"임을 DB로 붙들려면 그 넷을 한
+        # 번에 참조해야 한다. 그 복합 FK가 딛고 설 잉여 UNIQUE다.
+        UniqueConstraint(
+            "workspace_id",
+            "id",
+            "channel_id",
+            "kind",
+            name="uq_artifact_definitions_identity",
+        ),
         # ondelete를 주지 않아 RESTRICT다 — 정의가 남아 있는 채널은 지워지지
         # 않고, 지우려면 정의를 먼저 정리해야 한다.
         ForeignKeyConstraint(
@@ -5194,14 +5203,6 @@ class KnowledgeArtifact(Base):
             "id",
             name="uq_knowledge_artifacts_workspace_id_id",
         ),
-        # 같은 대상에 같은 종류 문서가 둘 생기지 않게 한다. compile이
-        # "만들거나 찾아 쓴다"로 성립하는 근거다.
-        UniqueConstraint(
-            "workspace_id",
-            "kind",
-            "subject_node_id",
-            name="uq_knowledge_artifacts_subject",
-        ),
         ForeignKeyConstraint(
             ["workspace_id", "subject_node_id"],
             ["knowledge_nodes.workspace_id", "knowledge_nodes.id"],
@@ -5220,10 +5221,25 @@ class KnowledgeArtifact(Base):
             ["channel_folders.workspace_id", "channel_folders.id"],
             name="fk_knowledge_artifacts_folder",
         ),
+        # 문서가 딛고 선 정의와 같은 workspace·채널·kind임을 DB가 보증한다.
+        # 정의는 "이 채널의 이 종류 문서"를 정하는 행이라, 문서가 다른 채널
+        # 이나 다른 kind로 어긋나면 그 정의로 다시 컴파일할 수 없다.
         ForeignKeyConstraint(
-            ["workspace_id", "definition_id"],
-            ["artifact_definitions.workspace_id", "artifact_definitions.id"],
+            ["workspace_id", "definition_id", "channel_id", "kind"],
+            [
+                "artifact_definitions.workspace_id",
+                "artifact_definitions.id",
+                "artifact_definitions.channel_id",
+                "artifact_definitions.kind",
+            ],
             name="fk_knowledge_artifacts_definition",
+        ),
+        # 복합 FK는 참조 컬럼 중 하나라도 NULL이면 검사를 건너뛴다. 정의를
+        # 걸어 두고 channel_id만 비우면 위 FK가 통째로 풀리므로, 그 우회를
+        # 여기서 막는다. kind는 NOT NULL이라 따로 막을 필요가 없다.
+        CheckConstraint(
+            "definition_id IS NULL OR channel_id IS NOT NULL",
+            name="ck_knowledge_artifacts_definition_channel",
         ),
         # 정의 하나가 같은 대상에 문서를 둘 만들지 못하게 한다. PG에서
         # UNIQUE는 NULL을 중복으로 세지 않으므로, 정의가 생기기 전에 만들어진
@@ -5232,6 +5248,18 @@ class KnowledgeArtifact(Base):
             "definition_id",
             "subject_node_id",
             name="uq_knowledge_artifacts_definition_subject",
+        ),
+        # 정의 이전 문서만 workspace 전역에서 (kind, 대상) 하나다. compile이
+        # "만들거나 찾아 쓴다"로 성립하는 근거이며, 정의 기반 문서의 유일성은
+        # 위 정의-대상 제약이 맡는다. 채널이 다른 두 정의가 같은 대상을
+        # 문서화하는 일이 정상이라 전역 유일성을 씌우면 두 번째가 막힌다.
+        Index(
+            "uq_knowledge_artifacts_subject",
+            "workspace_id",
+            "kind",
+            "subject_node_id",
+            unique=True,
+            postgresql_where=text("definition_id IS NULL"),
         ),
         Index("ix_knowledge_artifacts_channel_id", "channel_id"),
         Index("ix_knowledge_artifacts_folder_id", "folder_id"),

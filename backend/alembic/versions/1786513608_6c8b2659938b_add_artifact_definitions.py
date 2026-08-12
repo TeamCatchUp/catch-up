@@ -89,6 +89,15 @@ def upgrade() -> None:
             "id",
             name="uq_artifact_definitions_workspace_id_id",
         ),
+        # 문서가 "정의와 같은 채널·같은 kind"임을 DB로 붙들 복합 FK의
+        # 참조 지반이다.
+        sa.UniqueConstraint(
+            "workspace_id",
+            "id",
+            "channel_id",
+            "kind",
+            name="uq_artifact_definitions_identity",
+        ),
     )
 
     op.add_column(
@@ -97,15 +106,36 @@ def upgrade() -> None:
             "definition_id", postgresql.UUID(as_uuid=True), nullable=True
         ),
     )
-    # 문서와 정의가 같은 workspace임을 DB가 보증한다. ondelete를 주지 않아
-    # RESTRICT다. 복합 FK는 참조 컬럼이 NULL이면 검사되지 않으므로 정의
-    # 없이 만들어진 문서는 그대로 성립한다.
+    # 문서가 딛고 선 정의와 같은 workspace·채널·kind임을 DB가 보증한다.
+    # ondelete를 주지 않아 RESTRICT다. 복합 FK는 참조 컬럼이 NULL이면
+    # 검사되지 않으므로 정의 없이 만들어진 문서는 그대로 성립한다.
     op.create_foreign_key(
         "fk_knowledge_artifacts_definition",
         ARTIFACTS_TABLE,
         DEFINITIONS_TABLE,
-        ["workspace_id", "definition_id"],
-        ["workspace_id", "id"],
+        ["workspace_id", "definition_id", "channel_id", "kind"],
+        ["workspace_id", "id", "channel_id", "kind"],
+    )
+    # definition_id만 채우고 channel_id를 비우면 위 복합 FK가 통째로 풀린다.
+    # 그 우회를 막는다. kind는 NOT NULL이라 따로 막을 필요가 없다.
+    op.create_check_constraint(
+        "ck_knowledge_artifacts_definition_channel",
+        ARTIFACTS_TABLE,
+        "definition_id IS NULL OR channel_id IS NOT NULL",
+    )
+    # 옛 (workspace, kind, subject) 전역 UNIQUE는 정의 기반 identity와
+    # 충돌한다 — 채널이 다른 두 정의가 같은 대상을 문서화하는 일이 정상인데
+    # 두 번째 INSERT가 막힌다. 정의 이전 문서(definition_id NULL)에만 옛
+    # 의미를 남기는 부분 유니크 인덱스로 바꾼다.
+    op.drop_constraint(
+        "uq_knowledge_artifacts_subject", ARTIFACTS_TABLE, type_="unique"
+    )
+    op.create_index(
+        "uq_knowledge_artifacts_subject",
+        ARTIFACTS_TABLE,
+        ["workspace_id", "kind", "subject_node_id"],
+        unique=True,
+        postgresql_where=sa.text("definition_id IS NULL"),
     )
     # 정의 하나가 같은 대상에 문서를 둘 만들지 못하게 한다. PG에서 UNIQUE는
     # NULL을 중복으로 세지 않으므로 definition_id가 NULL인 문서는 걸리지
@@ -125,6 +155,18 @@ def upgrade() -> None:
 def downgrade() -> None:
     """아티팩트 정의 스키마와 채널 설정 컬럼을 역순으로 없앤다."""
     op.drop_index("ix_knowledge_artifacts_definition_id", ARTIFACTS_TABLE)
+    # 부분 인덱스를 걷고 849358b997d8이 만든 전역 UNIQUE를 되돌린다.
+    op.drop_index("uq_knowledge_artifacts_subject", ARTIFACTS_TABLE)
+    op.create_unique_constraint(
+        "uq_knowledge_artifacts_subject",
+        ARTIFACTS_TABLE,
+        ["workspace_id", "kind", "subject_node_id"],
+    )
+    op.drop_constraint(
+        "ck_knowledge_artifacts_definition_channel",
+        ARTIFACTS_TABLE,
+        type_="check",
+    )
     op.drop_constraint(
         "uq_knowledge_artifacts_definition_subject",
         ARTIFACTS_TABLE,
