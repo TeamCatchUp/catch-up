@@ -13,11 +13,13 @@ from typing import Any
 BLOCK_KIND_CLAIM_SECTION = "claim_section"
 BLOCK_KIND_OPEN_QUESTION = "open_question"
 BLOCK_KIND_CONTESTED = "contested"
+BLOCK_KIND_RELATION_SECTION = "relation_section"
 
 _BLOCK_KINDS = (
     BLOCK_KIND_CLAIM_SECTION,
     BLOCK_KIND_OPEN_QUESTION,
     BLOCK_KIND_CONTESTED,
+    BLOCK_KIND_RELATION_SECTION,
 )
 
 
@@ -64,8 +66,9 @@ class ArtifactBlock:
     """위키 문서 본문의 블록 하나를 표현한다.
 
     블록은 곧 Read Set(근거 장부)이다. claim_section은 자신이 근거로 삼은
-    claim들을, open_question은 답을 기다리는 proposal들을 가리킨다. 근거를
-    가리키지 못하는 블록은 문서에 남을 수 없다.
+    claim들을, open_question은 답을 기다리는 proposal들을, relation_section은
+    근거가 된 관계들을 가리킨다. 근거를 가리키지 못하는 블록은 문서에 남을
+    수 없다.
 
     Attributes:
         block_kind: 블록 종류를 나타낸다.
@@ -79,6 +82,9 @@ class ArtifactBlock:
             읽지 못한 줄은 빠진다.
         variants: contested 블록이 대조하는 후보 서술들을 나른다.
             contested가 아닌 블록에서는 비어 있어야 한다.
+        relation_ids: relation_section 블록의 근거가 된 관계들을
+            가리킨다. relation_section이 아닌 블록에서는 비어 있어야
+            한다.
     """
 
     block_kind: str
@@ -89,6 +95,7 @@ class ArtifactBlock:
     ontology_version: str | None
     sources: tuple[BlockSource, ...] = ()
     variants: tuple[ContestedVariant, ...] = ()
+    relation_ids: tuple[uuid.UUID, ...] = ()
 
 
 def validate_blocks(blocks: Sequence[ArtifactBlock]) -> None:
@@ -99,8 +106,10 @@ def validate_blocks(blocks: Sequence[ArtifactBlock]) -> None:
 
     Raises:
         ArtifactBlockError: 미지의 block_kind이거나 근거가 비었을 때,
-            sources나 variants가 claim_ids를 벗어났을 때, 또는 contested
-            계약(후보 2개 이상·모순 안건 참조)을 어겼을 때 던진다.
+            sources나 variants가 claim_ids를 벗어났을 때, contested
+            계약(후보 2개 이상·모순 안건 참조)을 어겼을 때, 또는
+            relation_section 계약(관계 참조 필수·claim 장부 비움)을
+            어겼을 때 던진다.
     """
     for index, block in enumerate(blocks):
         if block.block_kind not in _BLOCK_KINDS:
@@ -119,7 +128,17 @@ def validate_blocks(blocks: Sequence[ArtifactBlock]) -> None:
             raise ArtifactBlockError(
                 f"blocks[{index}]: contested가 아닌 블록에 variants가 있다"
             )
-        if block.block_kind == BLOCK_KIND_CLAIM_SECTION:
+        if (
+            block.block_kind != BLOCK_KIND_RELATION_SECTION
+            and block.relation_ids
+        ):
+            raise ArtifactBlockError(
+                f"blocks[{index}]: relation_section이 아닌 블록에"
+                " relation_ids가 있다"
+            )
+        if block.block_kind == BLOCK_KIND_RELATION_SECTION:
+            _validate_relation_section(block, index)
+        elif block.block_kind == BLOCK_KIND_CLAIM_SECTION:
             if not block.claim_ids:
                 raise ArtifactBlockError(
                     f"blocks[{index}]: claim_section에 claim_ids가 없다"
@@ -160,13 +179,35 @@ def _validate_contested(
         )
 
 
+def _validate_relation_section(block: ArtifactBlock, index: int) -> None:
+    """relation_section 블록의 장부 계약을 검사한다.
+
+    관계를 가리키지 못하면 근거 없는 서술이므로 fail-closed로 막는다.
+    claim_ids까지 함께 채우면 이 블록의 근거가 claim인지 관계인지
+    장부가 흐려지므로, 근거 종류를 하나로 못박는다.
+
+    Raises:
+        ArtifactBlockError: relation_ids가 비었거나 claim_ids가 차
+            있을 때 던진다.
+    """
+    if not block.relation_ids:
+        raise ArtifactBlockError(
+            f"blocks[{index}]: relation_section에 relation_ids가 없다"
+        )
+    if block.claim_ids:
+        raise ArtifactBlockError(
+            f"blocks[{index}]: relation_section에 claim_ids가 있다"
+        )
+
+
 def serialize_blocks(
     blocks: Sequence[ArtifactBlock],
 ) -> list[dict[str, Any]]:
     """블록들을 JSONB 저장 형태로 바꾼다. UUID는 문자열로 적는다.
 
-    variants는 값이 있을 때만 키로 적는다. 후보가 없는 기존 블록의 저장
-    형태를 그대로 두어야 내용 지문이 흔들리지 않기 때문이다.
+    variants와 relation_ids는 값이 있을 때만 키로 적는다. 후보나 관계가
+    없는 기존 블록의 저장 형태를 그대로 두어야 내용 지문이 흔들리지 않기
+    때문이다.
     """
     items: list[dict[str, Any]] = []
     for block in blocks:
@@ -189,6 +230,10 @@ def serialize_blocks(
                     "sources": _serialize_sources(variant.sources),
                 }
                 for variant in block.variants
+            ]
+        if block.relation_ids:
+            item["relation_ids"] = [
+                str(relation_id) for relation_id in block.relation_ids
             ]
         items.append(item)
     return items
@@ -247,6 +292,9 @@ def deserialize_blocks(
                 ),
                 sources=_parse_sources(item.get("sources"), index),
                 variants=_parse_variants(item.get("variants"), index),
+                relation_ids=_parse_ids(
+                    item.get("relation_ids"), index, "relation_ids"
+                ),
             )
         )
     return tuple(blocks)
