@@ -510,9 +510,9 @@ class Channel(Base):
     purpose_preset: Mapped[str | None] = mapped_column(
         String(64), nullable=True
     )
-    purpose_text: Mapped[str | None] = mapped_column(nullable=True)
+    purpose_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     style_preset: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    style_text: Mapped[str | None] = mapped_column(nullable=True)
+    style_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_by: Mapped[int] = mapped_column(
         ForeignKey("users.id"), nullable=False
     )
@@ -584,6 +584,8 @@ class ArtifactDefinition(Base):
             "id",
             name="uq_artifact_definitions_workspace_id_id",
         ),
+        # ondelete를 주지 않아 RESTRICT다 — 정의가 남아 있는 채널은 지워지지
+        # 않고, 지우려면 정의를 먼저 정리해야 한다.
         ForeignKeyConstraint(
             ["workspace_id", "channel_id"],
             ["channels.workspace_id", "channels.id"],
@@ -601,7 +603,7 @@ class ArtifactDefinition(Base):
         UUID(as_uuid=True), nullable=False
     )
     kind: Mapped[str] = mapped_column(String(64), nullable=False)
-    purpose: Mapped[str | None] = mapped_column(nullable=True)
+    purpose: Mapped[str | None] = mapped_column(Text, nullable=True)
     selection_spec: Mapped[dict[str, Any]] = mapped_column(
         JSONB, nullable=False
     )
