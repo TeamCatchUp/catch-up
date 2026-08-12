@@ -5,13 +5,10 @@ downgrade는 옛 전역 UNIQUE(workspace, kind, subject)를 되돌린다. 정의
 문서화한 행이 있어, 그대로 두면 UNIQUE 생성이 중복으로 막힌다. 정의 기반
 문서를 먼저 걷어내는 파괴적 정리가 실제로 도는지 본다.
 
-경고: 이 테스트는 대상 DB의 정의 기반 문서를 downgrade로 전부 지운다.
-정의 데이터가 들어 있는 DB에서 돌리면 그 데이터가 사라진다.
-
-이 테스트는 스키마 자체를 되돌렸다 다시 올린다. 세션 트랜잭션 밖에서
-alembic이 제 커넥션으로 돌기 때문에 심는 행도 커밋해야 하고, 끝난 뒤
-직접 지운다. 파일을 따로 둔 이유도 다른 테스트와 스키마 상태가 겹치지
-않게 하기 위해서다.
+이 테스트는 공유 DB를 건드리지 않는다. 모듈 픽스처가 폐기 가능한 임시
+DB를 직접 만들고(`catchup_migration_test_*`), 거기에 alembic upgrade head를
+돌린 뒤 왕복을 확인하고, 끝나면 그 DB를 통째로 DROP한다. 스키마를
+되돌렸다 올리는 파괴적 동작이므로 다른 테스트와 DB 자체를 분리한다.
 """
 
 from __future__ import annotations
@@ -19,14 +16,16 @@ from __future__ import annotations
 import pathlib
 import uuid
 from collections.abc import Iterator
+from contextlib import contextmanager
 
 import pytest
 from sqlalchemy import Engine
 from sqlalchemy import create_engine
-from sqlalchemy import delete
 from sqlalchemy import inspect
-from sqlalchemy import select
 from sqlalchemy import text
+from sqlalchemy.engine import URL
+from sqlalchemy.engine import make_url
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
@@ -35,9 +34,11 @@ from alembic import config as alembic_config
 from catchup.configs.config import settings
 from catchup.db.models import ArtifactDefinition
 from catchup.db.models import Channel
+from catchup.db.models import Company
 from catchup.db.models import KnowledgeArtifact
 from catchup.db.models import KnowledgeNode as NodeRow
 from catchup.db.models import User
+from catchup.db.models import UserStatus
 from catchup.db.models import Workspace
 
 # 정의 테이블이 생기기 직전 판이다. downgrade가 멈춰야 할 지점.
@@ -55,30 +56,129 @@ BACKEND_ROOT = pathlib.Path(__file__).resolve().parents[3]
 ALEMBIC_INI = BACKEND_ROOT / "alembic.ini"
 
 
+def _temp_database_name() -> str:
+    """충돌하지 않는 임시 DB 이름을 만든다."""
+    return f"catchup_migration_test_{uuid.uuid4().hex[:8]}"
+
+
+def _with_database(url: URL, database: str) -> URL:
+    """같은 서버의 다른 DB를 가리키는 URL을 만든다."""
+    return url.set(database=database)
+
+
+@contextmanager
+def _alembic_pointed_at(database: str) -> Iterator[alembic_config.Config]:
+    """alembic이 임시 DB를 보도록 settings를 잠시 바꾼다.
+
+    alembic/env.py는 alembic.ini의 sqlalchemy.url을 무조건
+    `settings.sqlalchemy_database_url`로 덮어쓴다. 그래서
+    `config.set_main_option`으로는 주입이 되지 않고, settings 쪽
+    DB 이름을 바꾸는 것이 실제로 작동하는 유일한 주입 지점이다.
+    env.py는 이미 로딩된 settings 싱글턴을 그대로 읽으므로 이 교체가
+    그대로 반영된다.
+    """
+    original = settings.DB_DATABASE
+    settings.DB_DATABASE = database
+    try:
+        yield alembic_config.Config(str(ALEMBIC_INI))
+    finally:
+        settings.DB_DATABASE = original
+
+
 @pytest.fixture(scope="module")
 def engine() -> Iterator[Engine]:
-    engine = create_engine(settings.sqlalchemy_database_url)
+    """임시 DB를 만들고 head까지 올린 뒤 넘기고, 끝나면 DROP한다."""
+    admin_url = make_url(settings.sqlalchemy_database_url)
+    admin_engine = create_engine(
+        admin_url, isolation_level="AUTOCOMMIT"
+    )
     try:
-        with engine.connect() as connection:
+        with admin_engine.connect() as connection:
             connection.execute(text("SELECT 1"))
     except OperationalError:
-        engine.dispose()
+        admin_engine.dispose()
         pytest.skip("PostgreSQL이 없어 통합 테스트를 건너뛴다.")
 
-    if not inspect(engine).has_table(ArtifactDefinition.__tablename__):
-        engine.dispose()
-        pytest.skip("정의 테이블이 없다. alembic upgrade head가 필요하다.")
+    database = _temp_database_name()
+    try:
+        with admin_engine.connect() as connection:
+            connection.execute(text(f'CREATE DATABASE "{database}"'))
+    except DBAPIError as error:
+        admin_engine.dispose()
+        pytest.skip(
+            "임시 DB를 만들 수 없어 통합 테스트를 건너뛴다"
+            f" (CREATE DATABASE 권한 필요): {error}"
+        )
 
-    yield engine
-    engine.dispose()
+    temp_engine: Engine | None = None
+    try:
+        _install_extensions(_with_database(admin_url, database))
+        with _alembic_pointed_at(database) as config:
+            command.upgrade(config, "head")
+        temp_engine = create_engine(_with_database(admin_url, database))
+        yield temp_engine
+    finally:
+        if temp_engine is not None:
+            temp_engine.dispose()
+        _drop_database(admin_engine, database)
+        admin_engine.dispose()
 
 
-def _alembic() -> alembic_config.Config:
-    """이 저장소의 alembic 설정을 그대로 연다.
+def _install_extensions(url: URL) -> None:
+    """마이그레이션이 전제하는 확장을 임시 DB에 깐다.
 
-    env.py가 settings에서 DB URL을 읽으므로 따로 넘기지 않는다.
+    운영 DB에서는 이 확장들이 마이그레이션 밖에서 설치되어 있다.
+    빈 DB에는 없으므로 upgrade 전에 직접 깔아 준다.
     """
-    return alembic_config.Config(str(ALEMBIC_INI))
+    engine = create_engine(url, isolation_level="AUTOCOMMIT")
+    try:
+        with engine.connect() as connection:
+            for extension in ("vector", "pg_bigm"):
+                connection.execute(
+                    text(f"CREATE EXTENSION IF NOT EXISTS {extension}")
+                )
+    except DBAPIError as error:
+        pytest.skip(f"확장을 설치할 수 없어 통합 테스트를 건너뛴다: {error}")
+    finally:
+        engine.dispose()
+
+
+def _drop_database(admin_engine: Engine, database: str) -> None:
+    """임시 DB를 지운다. FORCE가 없는 판에서는 세션을 끊고 지운다."""
+    with admin_engine.connect() as connection:
+        try:
+            connection.execute(
+                text(f'DROP DATABASE IF EXISTS "{database}" WITH (FORCE)')
+            )
+            return
+        except DBAPIError:
+            pass
+        connection.execute(
+            text(
+                "SELECT pg_terminate_backend(pid) FROM pg_stat_activity"
+                " WHERE datname = :database AND pid <> pg_backend_pid()"
+            ).bindparams(database=database)
+        )
+        connection.execute(text(f'DROP DATABASE IF EXISTS "{database}"'))
+
+
+def _seed_tenant(session: Session) -> tuple[int, int]:
+    """빈 임시 DB에 회사·워크스페이스·사용자를 심는다."""
+    company = Company(name="마이그레이션 테스트")
+    session.add(company)
+    session.flush()
+
+    workspace = Workspace(name="마이그레이션 워크스페이스", company_id=company.id)
+    user = User(
+        email=f"migration-{uuid.uuid4().hex[:8]}@example.com",
+        name="마이그레이션 사용자",
+        provider="google",
+        status=UserStatus.ACTIVE,
+    )
+    session.add_all([workspace, user])
+    session.flush()
+
+    return workspace.id, user.id
 
 
 def _seed(session: Session, workspace_id: int, user_id: int) -> dict:
@@ -162,29 +262,6 @@ def _seed(session: Session, workspace_id: int, user_id: int) -> dict:
     }
 
 
-def _cleanup(session: Session, seeded: dict) -> None:
-    """심어 둔 행을 FK 의존 역순으로 지운다."""
-    session.execute(
-        delete(KnowledgeArtifact).where(
-            KnowledgeArtifact.id.in_(
-                [*seeded["artifact_ids"], seeded["legacy_artifact_id"]]
-            )
-        )
-    )
-    session.execute(
-        delete(ArtifactDefinition).where(
-            ArtifactDefinition.channel_id.in_(seeded["channel_ids"])
-        )
-    )
-    session.execute(
-        delete(NodeRow).where(NodeRow.id.in_(seeded["node_ids"]))
-    )
-    session.execute(
-        delete(Channel).where(Channel.id.in_(seeded["channel_ids"]))
-    )
-    session.commit()
-
-
 def test_downgrade_clears_definition_backed_artifacts(
     engine: Engine,
 ) -> None:
@@ -193,22 +270,15 @@ def test_downgrade_clears_definition_backed_artifacts(
     정의 기반 문서는 옛 스키마에 존재할 수 없으므로 지워지고, 정의 없는
     문서는 그대로 남는다.
     """
-    with Session(engine) as session:
-        workspace_id = session.execute(
-            select(Workspace.id).order_by(Workspace.id).limit(1)
-        ).scalar()
-        user_id = session.execute(
-            select(User.id).order_by(User.id).limit(1)
-        ).scalar()
+    database = engine.url.database
+    assert database is not None
+    assert database.startswith("catchup_migration_test_")
 
-    if workspace_id is None or user_id is None:
-        pytest.skip("workspace·user가 없어 통합 테스트를 건너뛴다.")
-
-    config = _alembic()
     with Session(engine) as session:
+        workspace_id, user_id = _seed_tenant(session)
         seeded = _seed(session, workspace_id, user_id)
 
-    try:
+    with _alembic_pointed_at(database) as config:
         command.downgrade(config, PREVIOUS_REVISION)
 
         assert not inspect(engine).has_table(
@@ -230,7 +300,7 @@ def test_downgrade_clears_definition_backed_artifacts(
             )
 
         assert surviving == {seeded["legacy_artifact_id"]}
-    finally:
+
         command.upgrade(config, "head")
-        with Session(engine) as session:
-            _cleanup(session, seeded)
+
+    assert inspect(engine).has_table(ArtifactDefinition.__tablename__)
