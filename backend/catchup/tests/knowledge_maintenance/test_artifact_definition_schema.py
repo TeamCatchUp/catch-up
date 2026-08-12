@@ -39,10 +39,11 @@ DEFINITION_KIND = "entity_summary"
 
 # 정의 하나가 담는 선택 규칙의 최소 형태다. 이 테스트가 보는 것은 JSONB
 # 컬럼이 값을 받는지이지 규칙의 의미가 아니라 상수 하나로 충분하다.
+# 도메인 serialize_selection_spec의 출력 모양과 일치해야 한다.
 SELECTION_SPEC: dict[str, Any] = {
-    "entity": {"entity_type": "feature"},
-    "relations": [],
-    "predicates": [],
+    "entity_filter": {"entity_types": ["feature_request"]},
+    "relation_paths": [],
+    "predicate_sections": None,
 }
 
 CHANNEL_CONFIG_COLUMNS = (
