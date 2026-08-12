@@ -215,7 +215,11 @@ def downgrade() -> None:
 
     파괴적 롤백이다. 정의를 딛고 만들어진 문서와 그 파생 행(검수 판정·
     변경 제안·판본·담당자)을 지운 뒤에야 옛 전역 UNIQUE를 되돌릴 수
-    있다. 정의 없는 문서(definition_id NULL)는 그대로 남는다.
+    있다. 운영 DB에서는 실행 전 백업이 필수다.
+
+    남는 것이 둘이다. 정의 없는 문서(definition_id NULL)는 그대로 두고,
+    검색 projection(langchain_pg_embedding)의 llm_wiki 행은 FK가 없어
+    남는다 — projection은 재생성 가능한 파생물이며 rebuild로 정리한다.
     """
     _delete_definition_backed_artifacts()
 
