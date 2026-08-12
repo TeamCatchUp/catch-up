@@ -477,9 +477,12 @@ class UserWorkspace(Base):
 class Channel(Base):
     """LLM Wiki의 개념 단위인 채널 하나를 담는다.
 
-    workspace 1 : N 채널이며 문서는 채널(과 폴더) 아래에 놓인다. 목적·문체·
-    구독 같은 config 필드는 두지 않는다 — 트랙 2·3의 테이블이 이 id를
-    참조하는 방향이다.
+    workspace 1 : N 채널이며 문서는 채널(과 폴더) 아래에 놓인다. 구독 같은
+    나머지 config 필드는 두지 않는다 — 별도 테이블이 이 id를 참조하는
+    방향이다.
+
+    목적·문체는 프리셋 id를 저장하고, text 컬럼은 자연어 입력 개방을 위한
+    예약 자리다 — 문체의 효력은 표현층이 생길 때부터다.
     """
 
     __tablename__ = "channels"
@@ -504,6 +507,12 @@ class Channel(Base):
         ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False
     )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
+    purpose_preset: Mapped[str | None] = mapped_column(
+        String(64), nullable=True
+    )
+    purpose_text: Mapped[str | None] = mapped_column(nullable=True)
+    style_preset: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    style_text: Mapped[str | None] = mapped_column(nullable=True)
     created_by: Mapped[int] = mapped_column(
         ForeignKey("users.id"), nullable=False
     )
@@ -551,6 +560,54 @@ class ChannelFolder(Base):
         nullable=False,
     )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
+class ArtifactDefinition(Base):
+    """아티팩트 정의 하나를 담는다.
+
+    채널 1:N이며 정의 하나 = kind 하나의 선택 규칙이다. selection_spec은
+    좁은 스키마(entity 필터·relation 경로·predicate 섹션)의 직렬화 값이고
+    쓰기 경로가 도메인 검증을 통과시킨다. claim·entity id를 담는 필드는
+    없다 — 정의는 조건이지 목록이 아니다.
+    """
+
+    __tablename__ = "artifact_definitions"
+    __table_args__ = (
+        UniqueConstraint(
+            "channel_id", "kind", name="uq_artifact_definitions_channel_kind"
+        ),
+        UniqueConstraint(
+            "workspace_id",
+            "id",
+            name="uq_artifact_definitions_workspace_id_id",
+        ),
+        ForeignKeyConstraint(
+            ["workspace_id", "channel_id"],
+            ["channels.workspace_id", "channels.id"],
+            name="fk_artifact_definitions_channel",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    workspace_id: Mapped[int] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False
+    )
+    channel_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), nullable=False
+    )
+    kind: Mapped[str] = mapped_column(String(64), nullable=False)
+    purpose: Mapped[str | None] = mapped_column(nullable=True)
+    selection_spec: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False
+    )
+    created_by: Mapped[int] = mapped_column(
+        ForeignKey("users.id"), nullable=False
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
@@ -5114,6 +5171,10 @@ class KnowledgeArtifact(Base):
         UUID(as_uuid=True),
         nullable=True,
     )
+    definition_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=True,
+    )
     subject_node_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         nullable=False,
@@ -5157,8 +5218,22 @@ class KnowledgeArtifact(Base):
             ["channel_folders.workspace_id", "channel_folders.id"],
             name="fk_knowledge_artifacts_folder",
         ),
+        ForeignKeyConstraint(
+            ["workspace_id", "definition_id"],
+            ["artifact_definitions.workspace_id", "artifact_definitions.id"],
+            name="fk_knowledge_artifacts_definition",
+        ),
+        # 정의 하나가 같은 대상에 문서를 둘 만들지 못하게 한다. PG에서
+        # UNIQUE는 NULL을 중복으로 세지 않으므로, 정의가 생기기 전에 만들어진
+        # 문서(definition_id NULL)는 이 제약에 걸리지 않는다.
+        UniqueConstraint(
+            "definition_id",
+            "subject_node_id",
+            name="uq_knowledge_artifacts_definition_subject",
+        ),
         Index("ix_knowledge_artifacts_channel_id", "channel_id"),
         Index("ix_knowledge_artifacts_folder_id", "folder_id"),
+        Index("ix_knowledge_artifacts_definition_id", "definition_id"),
     )
 
 
