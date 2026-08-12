@@ -4,8 +4,12 @@ downgrade는 옛 전역 UNIQUE(workspace, kind, subject)를 되돌린다. 정의
 기능을 정상적으로 쓴 DB에는 채널이 다른 두 정의가 같은 대상을 각각
 문서화한 행이 있어, 그대로 두면 UNIQUE 생성이 중복으로 막힌다. downgrade는
 그런 데이터를 지우지 않고 거부한다(fail-closed) — 정리는 사람의 명시적
-행위다. 거부가 실제로 걸리는지, 그리고 깨끗한 상태에서는 왕복이 도는지를
-본다.
+행위다.
+
+거부 범위는 이 마이그레이션이 만든 자리 전부다. 정의 기반 문서뿐 아니라,
+문서가 아직 0건인 정의 행과 채널에 저장된 목적·문체 설정도 각각 단독으로
+거부 사유가 된다. 셋을 따로 세우고 거부가 걸리는지, 그리고 전부 정리한
+깨끗한 상태에서는 왕복이 도는지를 본다.
 
 이 테스트는 공유 DB를 건드리지 않는다. 모듈 픽스처가 폐기 가능한 임시
 DB를 직접 만들고(`catchup_migration_test_*`), 거기에 alembic upgrade head를
@@ -280,6 +284,52 @@ def _temp_database(engine: Engine) -> str:
     return database
 
 
+def _alembic_version(engine: Engine) -> str:
+    """임시 DB가 지금 어느 리비전에 서 있는지 읽는다."""
+    with engine.connect() as connection:
+        return connection.execute(
+            text("SELECT version_num FROM alembic_version")
+        ).scalar_one()
+
+
+def _scalar(engine: Engine, query: str) -> int:
+    """단일 값을 세는 질의를 돌린다."""
+    with engine.connect() as connection:
+        return connection.execute(text(query)).scalar_one()
+
+
+def _clear(
+    engine: Engine,
+    *,
+    artifacts: bool = False,
+    definitions: bool = False,
+    channel_settings: bool = False,
+) -> None:
+    """사람이 손으로 정리하는 행위를 흉내 낸다.
+
+    각 테스트가 자기 전제를 직접 만들게 해서 실행 순서에 기대지 않는다.
+    """
+    with Session(engine) as session:
+        if artifacts:
+            session.execute(
+                text(
+                    "DELETE FROM knowledge_artifacts"
+                    " WHERE definition_id IS NOT NULL"
+                )
+            )
+        if definitions:
+            session.execute(text("DELETE FROM artifact_definitions"))
+        if channel_settings:
+            session.execute(
+                text(
+                    "UPDATE channels SET purpose_preset = NULL,"
+                    " purpose_text = NULL, style_preset = NULL,"
+                    " style_text = NULL"
+                )
+            )
+        session.commit()
+
+
 def _surviving_artifact_ids(engine: Engine, seeded: dict) -> set:
     """심은 문서 중 아직 남아 있는 id를 모은다."""
     with engine.connect() as connection:
@@ -298,44 +348,99 @@ def _surviving_artifact_ids(engine: Engine, seeded: dict) -> set:
         )
 
 
-def test_downgrade_refuses_definition_backed_documents(
-    engine: Engine, seeded: dict
-) -> None:
-    """정의 기반 문서가 있으면 downgrade가 거부하고 아무것도 바꾸지 않는다."""
-    database = _temp_database(engine)
+def _expect_refusal(engine: Engine) -> str:
+    """downgrade가 거부하는지 보고 메시지를 돌려준다.
 
+    스키마·리비전이 그대로인지도 함께 본다. alembic이 마이그레이션을
+    트랜잭션으로 감싸므로 거부는 아무것도 commit하지 않아야 한다.
+    """
+    database = _temp_database(engine)
     with _alembic_pointed_at(database) as config:
         with pytest.raises(RuntimeError) as error:
             command.downgrade(config, PREVIOUS_REVISION)
 
-    message = str(error.value)
-    assert "2건" in message
+    assert inspect(engine).has_table(ArtifactDefinition.__tablename__)
+    assert _alembic_version(engine) != PREVIOUS_REVISION
+    return str(error.value)
+
+
+def test_downgrade_refuses_definition_backed_documents(
+    engine: Engine, seeded: dict
+) -> None:
+    """정의 기반 문서가 있으면 downgrade가 거부하고 아무것도 바꾸지 않는다."""
+    message = _expect_refusal(engine)
+
+    assert "정의 기반 문서 2건" in message
     assert "downgrade를 중단한다" in message
     assert "정리" in message
 
-    # 트랜잭션이 통째로 롤백되었으므로 스키마도 데이터도 그대로다.
-    assert inspect(engine).has_table(ArtifactDefinition.__tablename__)
     assert _surviving_artifact_ids(engine, seeded) == {
         *seeded["artifact_ids"],
         seeded["legacy_artifact_id"],
     }
 
 
-def test_downgrade_succeeds_on_clean_state(
+def test_downgrade_refuses_definitions_without_documents(
     engine: Engine, seeded: dict
 ) -> None:
-    """정의 기반 문서를 사람이 걷어낸 뒤에는 왕복이 끝까지 돈다."""
-    database = _temp_database(engine)
+    """문서를 아직 안 만든 정의 행만 있어도 거부한다.
 
+    컴파일 러너를 돌리기 전 상태다. 문서만 세면 이 정의가 DROP TABLE과
+    함께 조용히 사라진다.
+    """
+    _clear(engine, artifacts=True)
+
+    message = _expect_refusal(engine)
+
+    assert "아티팩트 정의 2건" in message
+    assert "정의 기반 문서" not in message
+    assert "downgrade를 중단한다" in message
+
+    assert _scalar(engine, "SELECT count(*) FROM artifact_definitions") == 2
+
+
+def test_downgrade_refuses_channel_settings(
+    engine: Engine, seeded: dict
+) -> None:
+    """정의가 없어도 채널에 저장된 목적·문체 설정만으로 거부한다.
+
+    설정 컬럼은 downgrade가 DROP COLUMN으로 걷어내므로, 값이 있으면
+    사용자 입력이 말없이 사라진다.
+    """
+    _clear(engine, artifacts=True, definitions=True)
+    channel_id = seeded["channel_ids"][0]
     with Session(engine) as session:
         session.execute(
             text(
-                "DELETE FROM knowledge_artifacts"
-                " WHERE definition_id IS NOT NULL"
-            )
+                "UPDATE channels SET purpose_preset = :preset"
+                " WHERE id = :id"
+            ).bindparams(preset="decision_log", id=channel_id)
         )
-        session.execute(text("DELETE FROM artifact_definitions"))
         session.commit()
+
+    message = _expect_refusal(engine)
+
+    assert "채널 목적·문체 설정 1건" in message
+    assert "아티팩트 정의" not in message
+    assert "downgrade를 중단한다" in message
+
+    assert (
+        _scalar(
+            engine,
+            "SELECT count(*) FROM channels WHERE purpose_preset IS NOT NULL",
+        )
+        == 1
+    )
+
+
+def test_downgrade_succeeds_on_clean_state(
+    engine: Engine, seeded: dict
+) -> None:
+    """문서·정의·채널 설정을 사람이 다 걷어낸 뒤에는 왕복이 끝까지 돈다."""
+    database = _temp_database(engine)
+    _clear(
+        engine, artifacts=True, definitions=True, channel_settings=True
+    )
 
     with _alembic_pointed_at(database) as config:
         command.downgrade(config, PREVIOUS_REVISION)

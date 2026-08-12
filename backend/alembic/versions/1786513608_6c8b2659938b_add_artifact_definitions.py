@@ -24,10 +24,21 @@ ARTIFACTS_TABLE = "knowledge_artifacts"
 DEFINITIONS_TABLE = "artifact_definitions"
 CHANNELS_TABLE = "channels"
 
-# downgrade가 막아야 할 상태를 세는 식이다.
-COUNT_DEFINITION_ARTIFACTS = (
-    f"SELECT count(*) FROM {ARTIFACTS_TABLE} WHERE definition_id IS NOT NULL"
-)
+# downgrade가 막아야 할 상태를 세는 식들이다. 이 마이그레이션이 만든 자리
+# 전부가 감시 대상이다. 문서가 아직 없어도 정의 행 자체가, 정의가 없어도
+# 채널 설정 값이 downgrade의 DROP과 함께 사라지기 때문이다.
+COUNT_QUERIES: dict[str, str] = {
+    "정의 기반 문서": (
+        f"SELECT count(*) FROM {ARTIFACTS_TABLE}"
+        " WHERE definition_id IS NOT NULL"
+    ),
+    "아티팩트 정의": f"SELECT count(*) FROM {DEFINITIONS_TABLE}",
+    "채널 목적·문체 설정": (
+        f"SELECT count(*) FROM {CHANNELS_TABLE}"
+        " WHERE purpose_preset IS NOT NULL OR purpose_text IS NOT NULL"
+        " OR style_preset IS NOT NULL OR style_text IS NOT NULL"
+    ),
+}
 
 
 def upgrade() -> None:
@@ -158,37 +169,43 @@ def upgrade() -> None:
     )
 
 
-def _refuse_if_definition_backed_artifacts_exist() -> None:
-    """정의 기반 문서가 남아 있으면 downgrade를 중단한다.
+def _refuse_if_definition_data_exists() -> None:
+    """이 마이그레이션이 만든 자리에 데이터가 있으면 downgrade를 중단한다.
 
-    옛 스키마에는 (workspace, kind, subject) 전역 UNIQUE가 있어, 채널이
-    다른 두 정의가 같은 대상을 각각 문서화한 상태를 담을 수 없다. 그런
-    행이 있는 채로 되돌리면 UNIQUE 생성이 중복으로 막히거나 데이터가
-    말없이 사라진다. 데이터를 지우는 판단은 마이그레이션이 아니라
-    사람이 한다.
+    셋 다 이전 스키마에 존재할 수 없다. 정의 기반 문서는 옛
+    (workspace, kind, subject) 전역 UNIQUE로 담기지 않고, 정의 행과
+    채널 목적·문체 설정은 되돌릴 때 테이블·컬럼과 함께 통째로 사라진다.
+    문서가 아직 0건이어도 정의 행만으로 거부해야 하는 이유다. 데이터를
+    지우는 판단은 마이그레이션이 아니라 사람이 한다.
 
     alembic은 마이그레이션을 트랜잭션 안에서 돌리므로, 여기서 예외를
     던지면 앞선 DDL을 포함해 아무것도 commit되지 않는다.
     """
-    count = op.get_bind().execute(sa.text(COUNT_DEFINITION_ARTIFACTS)).scalar()
-    if count:
+    bind = op.get_bind()
+    found = []
+    for label, query in COUNT_QUERIES.items():
+        count = bind.execute(sa.text(query)).scalar()
+        if count:
+            found.append(f"{label} {count}건")
+    if found:
         raise RuntimeError(
-            f"정의 기반 문서가 {count}건 남아 있어 downgrade를 중단한다."
+            f"{', '.join(found)}이(가) 남아 있어 downgrade를 중단한다."
             " 이 데이터는 이전 스키마에 존재할 수 없다."
-            " 해당 문서와 파생 행을 직접 정리하거나(클린 슬레이트·재수집)"
-            " 정리 후 downgrade를 다시 실행하라."
+            " 해당 행과 설정을 직접 정리한 뒤(클린 슬레이트·재수집)"
+            " downgrade를 다시 실행하라."
         )
 
 
 def downgrade() -> None:
     """아티팩트 정의 스키마와 채널 설정 컬럼을 역순으로 없앤다.
 
-    정의 기반 데이터가 있으면 거부하는 fail-closed 롤백이다. 데이터
+    정의 기반 데이터가 있으면 거부하는 fail-closed 롤백이다. 문서·정의
+    행·채널 설정 중 하나라도 남아 있으면 아무것도 하지 않는다. 데이터
     정리는 사람의 명시적 행위로 남긴다.
 
     정의 없는 문서(definition_id NULL)는 그대로 둔다.
     """
-    _refuse_if_definition_backed_artifacts_exist()
+    _refuse_if_definition_data_exists()
 
     op.drop_index("ix_knowledge_artifacts_definition_id", ARTIFACTS_TABLE)
     # 부분 인덱스를 걷고 849358b997d8이 만든 전역 UNIQUE를 되돌린다.
