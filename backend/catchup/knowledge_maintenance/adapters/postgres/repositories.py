@@ -2400,12 +2400,17 @@ class SqlAlchemyArtifactRepository:
 
         이미 있으면 제목을 덮어쓰지 않는다. 제목은 문서의 정체성이라
         컴파일을 다시 돌 때마다 바뀌면 사람이 같은 문서인지 알 수 없다.
+
+        정의 없는 문서만 찾고 만든다. (workspace, kind, 대상)이 하나임은
+        정의 이전 문서에서만 성립하므로, 정의에 매인 문서까지 후보로 보면
+        엉뚱한 문서에 판을 얹게 된다.
         """
         found = self._session.scalar(
             select(KnowledgeArtifactRow.id).where(
                 KnowledgeArtifactRow.workspace_id == self._workspace_id,
                 KnowledgeArtifactRow.kind == kind,
                 KnowledgeArtifactRow.subject_node_id == subject_node_id,
+                KnowledgeArtifactRow.definition_id.is_(None),
             )
         )
         if found is not None:
