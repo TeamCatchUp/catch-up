@@ -23,18 +23,10 @@ depends_on: Union[str, Sequence[str], None] = None
 ARTIFACTS_TABLE = "knowledge_artifacts"
 DEFINITIONS_TABLE = "artifact_definitions"
 CHANNELS_TABLE = "channels"
-PROPOSALS_TABLE = "knowledge_artifact_change_proposals"
-REVISIONS_TABLE = "knowledge_artifact_revisions"
-VERDICTS_TABLE = "knowledge_block_verdicts"
 
-# 정의 기반 문서를 고르는 부분식이다. 아래 파괴적 정리가 이 범위 밖은
-# 건드리지 않는다.
-DEFINITION_ARTIFACT_IDS = (
-    f"SELECT id FROM {ARTIFACTS_TABLE} WHERE definition_id IS NOT NULL"
-)
-DEFINITION_PROPOSAL_IDS = (
-    f"SELECT id FROM {PROPOSALS_TABLE}"
-    f" WHERE artifact_id IN ({DEFINITION_ARTIFACT_IDS})"
+# downgrade가 막아야 할 상태를 세는 식이다.
+COUNT_DEFINITION_ARTIFACTS = (
+    f"SELECT count(*) FROM {ARTIFACTS_TABLE} WHERE definition_id IS NOT NULL"
 )
 
 
@@ -166,62 +158,37 @@ def upgrade() -> None:
     )
 
 
-def _delete_definition_backed_artifacts() -> None:
-    """정의 기반 문서와 거기서 파생된 행을 FK 의존 역순으로 지운다.
+def _refuse_if_definition_backed_artifacts_exist() -> None:
+    """정의 기반 문서가 남아 있으면 downgrade를 중단한다.
 
     옛 스키마에는 (workspace, kind, subject) 전역 UNIQUE가 있어, 채널이
-    다른 두 정의가 같은 대상을 각각 문서화한 상태를 담을 수 없다. 정의
-    기능을 쓴 DB를 되돌리려면 옛 스키마에 존재할 수 없는 행을 먼저
-    걷어내야 한다.
+    다른 두 정의가 같은 대상을 각각 문서화한 상태를 담을 수 없다. 그런
+    행이 있는 채로 되돌리면 UNIQUE 생성이 중복으로 막히거나 데이터가
+    말없이 사라진다. 데이터를 지우는 판단은 마이그레이션이 아니라
+    사람이 한다.
 
-    proposal과 revision은 서로를 참조하고 그 두 FK에는 ondelete가 없어
-    삭제 순서만으로는 풀리지 않는다. proposal의 base_revision을 먼저
-    끊고 revision·proposal 차례로 지운다. artifact_owners는 ondelete
-    CASCADE라 문서 삭제에 딸려 간다.
+    alembic은 마이그레이션을 트랜잭션 안에서 돌리므로, 여기서 예외를
+    던지면 앞선 DDL을 포함해 아무것도 commit되지 않는다.
     """
-    op.execute(
-        sa.text(
-            f"UPDATE {PROPOSALS_TABLE} SET base_revision_id = NULL"
-            f" WHERE artifact_id IN ({DEFINITION_ARTIFACT_IDS})"
+    count = op.get_bind().execute(sa.text(COUNT_DEFINITION_ARTIFACTS)).scalar()
+    if count:
+        raise RuntimeError(
+            f"정의 기반 문서가 {count}건 남아 있어 downgrade를 중단한다."
+            " 이 데이터는 이전 스키마에 존재할 수 없다."
+            " 해당 문서와 파생 행을 직접 정리하거나(클린 슬레이트·재수집)"
+            " 정리 후 downgrade를 다시 실행하라."
         )
-    )
-    op.execute(
-        sa.text(
-            f"DELETE FROM {VERDICTS_TABLE}"
-            f" WHERE proposal_id IN ({DEFINITION_PROPOSAL_IDS})"
-        )
-    )
-    op.execute(
-        sa.text(
-            f"DELETE FROM {REVISIONS_TABLE}"
-            f" WHERE artifact_id IN ({DEFINITION_ARTIFACT_IDS})"
-        )
-    )
-    op.execute(
-        sa.text(
-            f"DELETE FROM {PROPOSALS_TABLE}"
-            f" WHERE artifact_id IN ({DEFINITION_ARTIFACT_IDS})"
-        )
-    )
-    op.execute(
-        sa.text(
-            f"DELETE FROM {ARTIFACTS_TABLE} WHERE definition_id IS NOT NULL"
-        )
-    )
 
 
 def downgrade() -> None:
     """아티팩트 정의 스키마와 채널 설정 컬럼을 역순으로 없앤다.
 
-    파괴적 롤백이다. 정의를 딛고 만들어진 문서와 그 파생 행(검수 판정·
-    변경 제안·판본·담당자)을 지운 뒤에야 옛 전역 UNIQUE를 되돌릴 수
-    있다. 운영 DB에서는 실행 전 백업이 필수다.
+    정의 기반 데이터가 있으면 거부하는 fail-closed 롤백이다. 데이터
+    정리는 사람의 명시적 행위로 남긴다.
 
-    남는 것이 둘이다. 정의 없는 문서(definition_id NULL)는 그대로 두고,
-    검색 projection(langchain_pg_embedding)의 llm_wiki 행은 FK가 없어
-    남는다 — projection은 재생성 가능한 파생물이며 rebuild로 정리한다.
+    정의 없는 문서(definition_id NULL)는 그대로 둔다.
     """
-    _delete_definition_backed_artifacts()
+    _refuse_if_definition_backed_artifacts_exist()
 
     op.drop_index("ix_knowledge_artifacts_definition_id", ARTIFACTS_TABLE)
     # 부분 인덱스를 걷고 849358b997d8이 만든 전역 UNIQUE를 되돌린다.

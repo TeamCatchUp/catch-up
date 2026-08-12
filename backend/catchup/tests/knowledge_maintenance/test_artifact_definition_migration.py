@@ -2,8 +2,10 @@
 
 downgrade는 옛 전역 UNIQUE(workspace, kind, subject)를 되돌린다. 정의
 기능을 정상적으로 쓴 DB에는 채널이 다른 두 정의가 같은 대상을 각각
-문서화한 행이 있어, 그대로 두면 UNIQUE 생성이 중복으로 막힌다. 정의 기반
-문서를 먼저 걷어내는 파괴적 정리가 실제로 도는지 본다.
+문서화한 행이 있어, 그대로 두면 UNIQUE 생성이 중복으로 막힌다. downgrade는
+그런 데이터를 지우지 않고 거부한다(fail-closed) — 정리는 사람의 명시적
+행위다. 거부가 실제로 걸리는지, 그리고 깨끗한 상태에서는 왕복이 도는지를
+본다.
 
 이 테스트는 공유 DB를 건드리지 않는다. 모듈 픽스처가 폐기 가능한 임시
 DB를 직접 만들고(`catchup_migration_test_*`), 거기에 alembic upgrade head를
@@ -185,7 +187,7 @@ def _seed(session: Session, workspace_id: int, user_id: int) -> dict:
     """정의 기반 문서 둘과 정의 없는 문서 하나를 심는다.
 
     두 문서는 채널이 다른 두 정의 아래 같은 (kind, 대상)을 쓴다. 옛 전역
-    UNIQUE로는 담을 수 없는 상태이며, 이것이 downgrade가 넘어야 할 벽이다.
+    UNIQUE로는 담을 수 없는 상태이며, downgrade가 거부해야 할 상태다.
     """
     channel_ids = [uuid.uuid4(), uuid.uuid4()]
     definition_ids = [uuid.uuid4(), uuid.uuid4()]
@@ -262,21 +264,78 @@ def _seed(session: Session, workspace_id: int, user_id: int) -> dict:
     }
 
 
-def test_downgrade_clears_definition_backed_artifacts(
-    engine: Engine,
-) -> None:
-    """정의 기반 문서가 있어도 downgrade가 끝까지 돈다.
+@pytest.fixture(scope="module")
+def seeded(engine: Engine) -> dict:
+    """임시 DB에 정의 기반 문서 둘과 정의 이전 문서 하나를 한 번만 심는다."""
+    with Session(engine) as session:
+        workspace_id, user_id = _seed_tenant(session)
+        return _seed(session, workspace_id, user_id)
 
-    정의 기반 문서는 옛 스키마에 존재할 수 없으므로 지워지고, 정의 없는
-    문서는 그대로 남는다.
-    """
+
+def _temp_database(engine: Engine) -> str:
+    """임시 DB를 보고 있는지 확인하고 그 이름을 준다."""
     database = engine.url.database
     assert database is not None
     assert database.startswith("catchup_migration_test_")
+    return database
+
+
+def _surviving_artifact_ids(engine: Engine, seeded: dict) -> set:
+    """심은 문서 중 아직 남아 있는 id를 모은다."""
+    with engine.connect() as connection:
+        return set(
+            connection.execute(
+                text(
+                    "SELECT id FROM knowledge_artifacts"
+                    " WHERE id = ANY(:ids)"
+                ).bindparams(
+                    ids=[
+                        *seeded["artifact_ids"],
+                        seeded["legacy_artifact_id"],
+                    ]
+                )
+            ).scalars()
+        )
+
+
+def test_downgrade_refuses_definition_backed_documents(
+    engine: Engine, seeded: dict
+) -> None:
+    """정의 기반 문서가 있으면 downgrade가 거부하고 아무것도 바꾸지 않는다."""
+    database = _temp_database(engine)
+
+    with _alembic_pointed_at(database) as config:
+        with pytest.raises(RuntimeError) as error:
+            command.downgrade(config, PREVIOUS_REVISION)
+
+    message = str(error.value)
+    assert "2건" in message
+    assert "downgrade를 중단한다" in message
+    assert "정리" in message
+
+    # 트랜잭션이 통째로 롤백되었으므로 스키마도 데이터도 그대로다.
+    assert inspect(engine).has_table(ArtifactDefinition.__tablename__)
+    assert _surviving_artifact_ids(engine, seeded) == {
+        *seeded["artifact_ids"],
+        seeded["legacy_artifact_id"],
+    }
+
+
+def test_downgrade_succeeds_on_clean_state(
+    engine: Engine, seeded: dict
+) -> None:
+    """정의 기반 문서를 사람이 걷어낸 뒤에는 왕복이 끝까지 돈다."""
+    database = _temp_database(engine)
 
     with Session(engine) as session:
-        workspace_id, user_id = _seed_tenant(session)
-        seeded = _seed(session, workspace_id, user_id)
+        session.execute(
+            text(
+                "DELETE FROM knowledge_artifacts"
+                " WHERE definition_id IS NOT NULL"
+            )
+        )
+        session.execute(text("DELETE FROM artifact_definitions"))
+        session.commit()
 
     with _alembic_pointed_at(database) as config:
         command.downgrade(config, PREVIOUS_REVISION)
@@ -284,22 +343,10 @@ def test_downgrade_clears_definition_backed_artifacts(
         assert not inspect(engine).has_table(
             ArtifactDefinition.__tablename__
         )
-        with engine.connect() as connection:
-            surviving = set(
-                connection.execute(
-                    text(
-                        "SELECT id FROM knowledge_artifacts"
-                        " WHERE id = ANY(:ids)"
-                    ).bindparams(
-                        ids=[
-                            *seeded["artifact_ids"],
-                            seeded["legacy_artifact_id"],
-                        ]
-                    )
-                ).scalars()
-            )
-
-        assert surviving == {seeded["legacy_artifact_id"]}
+        # 정의 이전 문서는 정리 대상이 아니므로 그대로 남는다.
+        assert _surviving_artifact_ids(engine, seeded) == {
+            seeded["legacy_artifact_id"]
+        }
 
         command.upgrade(config, "head")
 
