@@ -57,7 +57,8 @@ def upgrade() -> None:
         sa.Column(
             "channel_id", postgresql.UUID(as_uuid=True), nullable=False
         ),
-        sa.Column("kind", sa.String(length=64), nullable=False),
+        # 문서 kind 컬럼과 길이가 같아야 정의 kind가 문서에 그대로 실린다.
+        sa.Column("kind", sa.String(length=32), nullable=False),
         sa.Column("purpose", sa.Text(), nullable=True),
         sa.Column(
             "selection_spec", postgresql.JSONB(), nullable=False

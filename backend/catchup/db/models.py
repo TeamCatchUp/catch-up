@@ -611,7 +611,8 @@ class ArtifactDefinition(Base):
     channel_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), nullable=False
     )
-    kind: Mapped[str] = mapped_column(String(64), nullable=False)
+    # 문서 kind 컬럼과 길이가 같아야 정의 kind가 문서에 그대로 실린다.
+    kind: Mapped[str] = mapped_column(String(32), nullable=False)
     purpose: Mapped[str | None] = mapped_column(Text, nullable=True)
     selection_spec: Mapped[dict[str, Any]] = mapped_column(
         JSONB, nullable=False
