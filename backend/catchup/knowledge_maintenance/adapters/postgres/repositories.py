@@ -14,6 +14,7 @@ from sqlalchemy import ColumnElement
 from sqlalchemy import DateTime
 from sqlalchemy import Select
 from sqlalchemy import String
+from sqlalchemy import Text
 from sqlalchemy import cast
 from sqlalchemy import func
 from sqlalchemy import nullsfirst
@@ -26,6 +27,7 @@ from sqlalchemy.dialects.postgresql import UUID as PgUUID
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
+from catchup.db.models import ArtifactDefinition as ArtifactDefinitionRow
 from catchup.db.models import KnowledgeArtifact as KnowledgeArtifactRow
 from catchup.db.models import (
     KnowledgeArtifactChangeProposal as KnowledgeArtifactChangeProposalRow,
@@ -81,6 +83,9 @@ from catchup.knowledge_maintenance.domain.artifact import ArtifactBlock
 from catchup.knowledge_maintenance.domain.artifact import deserialize_blocks
 from catchup.knowledge_maintenance.domain.artifact import serialize_blocks
 from catchup.knowledge_maintenance.domain.artifact import validate_blocks
+from catchup.knowledge_maintenance.domain.artifact_definition import (
+    deserialize_selection_spec,
+)
 from catchup.knowledge_maintenance.domain.claim_conflict import StoredClaimCandidate
 from catchup.knowledge_maintenance.domain.entity_resolution import anchor_excerpt
 from catchup.knowledge_maintenance.domain.evidence import Locator
@@ -116,6 +121,9 @@ from catchup.knowledge_maintenance.domain.pipeline_event import resolve_failure
 from catchup.knowledge_maintenance.domain.source_version import JsonValue
 from catchup.knowledge_maintenance.domain.source_version import SourceIdentity
 from catchup.knowledge_maintenance.domain.source_version import SourceVersion
+from catchup.knowledge_maintenance.ports.artifact_definitions import (
+    StoredArtifactDefinition,
+)
 from catchup.knowledge_maintenance.ports.artifacts import ArtifactProposalConflict
 from catchup.knowledge_maintenance.ports.artifacts import CurrentRevisionForProjection
 from catchup.knowledge_maintenance.ports.artifacts import EntityCardSource
@@ -2881,6 +2889,65 @@ class SqlAlchemyArtifactRepository:
         )
         self._session.flush()
         return revision_id
+
+
+class SqlAlchemyArtifactDefinitionRepository:
+    """정의 행 읽기를 PostgreSQL로 구현한다.
+
+    artifact 저장소와 같이 workspace를 생성 시점에 고정한다.
+    """
+
+    def __init__(self, session: Session, workspace_id: int | None) -> None:
+        self._session = session
+        self._scoped_workspace_id = workspace_id
+
+    @property
+    def _workspace_id(self) -> int:
+        """고정된 workspace를 돌려준다. 없으면 쓰지 못하게 막는다."""
+        if self._scoped_workspace_id is None:
+            raise RuntimeError(
+                "artifact 정의 저장소는 workspace_id를 받은 UnitOfWork에서만"
+                " 쓸 수 있다."
+            )
+        return self._scoped_workspace_id
+
+    def list_definitions(self) -> tuple[StoredArtifactDefinition, ...]:
+        """workspace의 정의를 식별자 사전순으로 모두 읽는다.
+
+        정렬을 DB에 맡긴다. 식별자를 문자열로 캐 순서를 정하므로 파이썬
+        쪽에서 다시 정렬하지 않아도 실행마다 같은 차례가 나온다.
+
+        선택 규칙 역직렬화가 던지면 그대로 올려 보낸다. 깨진 행 하나를
+        건너뛰면 그 정의의 문서만 조용히 비기 때문이다.
+
+        title_prefix는 kind와 같은 값으로 채운다. 아직 제목 앞자리를
+        따로 저장하는 칸이 없다.
+
+        Raises:
+            SelectionSpecError: 저장된 선택 규칙을 읽을 수 없을 때 던진다.
+        """
+        statement = (
+            select(
+                ArtifactDefinitionRow.id,
+                ArtifactDefinitionRow.channel_id,
+                ArtifactDefinitionRow.kind,
+                ArtifactDefinitionRow.selection_spec,
+            )
+            .where(ArtifactDefinitionRow.workspace_id == self._workspace_id)
+            .order_by(cast(ArtifactDefinitionRow.id, Text))
+        )
+        return tuple(
+            StoredArtifactDefinition(
+                id=definition_id,
+                channel_id=channel_id,
+                kind=kind,
+                selection_spec=deserialize_selection_spec(selection_spec),
+                title_prefix=kind,
+            )
+            for definition_id, channel_id, kind, selection_spec in (
+                self._session.execute(statement).all()
+            )
+        )
 
 
 class SqlAlchemyBlockVerdictRepository:
