@@ -65,6 +65,7 @@ from catchup.knowledge_maintenance.adapters.postgres.unit_of_work import (
 )
 from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_CLAIM_SECTION
 from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_CONTESTED
+from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_RELATION_SECTION
 from catchup.knowledge_maintenance.domain.artifact import ArtifactBlock
 from catchup.knowledge_maintenance.domain.artifact import BlockSource
 from catchup.knowledge_maintenance.domain.artifact import ContestedVariant
@@ -500,6 +501,41 @@ def _contested_proposal(
                         sources=(),
                     ),
                 ),
+            ),
+        ),
+        content_hash="hash",
+        base_revision_id=None,
+        rejection_reason=None,
+        origin="compiled",
+        created_at=AT,
+    )
+
+
+def _relation_proposal(
+    *,
+    proposal_id: uuid.UUID,
+    relation_id: uuid.UUID,
+) -> StoredArtifactProposal:
+    """relation_section 블록 하나만 가진 변경안을 만든다.
+
+    relation_section의 근거 장부는 relation_ids 하나뿐이라 claim_ids는
+    비운다 — 도메인 계약이 둘을 함께 채우는 것을 막는다.
+    """
+    return StoredArtifactProposal(
+        id=proposal_id,
+        artifact_id=uuid.uuid4(),
+        subject_node_id=uuid.uuid4(),
+        title="오픈 API",
+        status="pending",
+        blocks=(
+            ArtifactBlock(
+                block_kind=BLOCK_KIND_RELATION_SECTION,
+                heading="의존 관계",
+                body="오픈 API는 인증 서비스에 의존한다",
+                claim_ids=(),
+                proposal_ids=(),
+                ontology_version="v1",
+                relation_ids=(relation_id,),
             ),
         ),
         content_hash="hash",
@@ -981,6 +1017,7 @@ def test_detail_returns_blocks_read_set_and_conflicts(
     assert data["read_set"] == {
         "claim_ids": [str(claim_id), str(loser_claim_id)],
         "proposal_ids": [str(conflict_id)],
+        "relation_ids": [],
     }
     assert [item["proposal_id"] for item in data["conflicts"]] == [
         str(conflict_id)
@@ -1045,6 +1082,36 @@ def test_detail_blocks_without_sources_return_empty_list(
 
     assert response.status_code == 200
     assert response.json()["blocks"][0]["sources"] == []
+
+
+def test_detail_relation_block_carries_relation_ids(
+    app: FastAPI, client: TestClient, reviewer: User
+) -> None:
+    """relation_section 블록의 관계 장부가 블록과 Read Set에 함께 실린다.
+
+    이 블록의 근거는 relation_ids 하나뿐이라, 이것이 빠지면 검토자는
+    근거가 전혀 없는 문장을 보게 된다.
+    """
+    proposal_id = uuid.uuid4()
+    relation_id = uuid.uuid4()
+    stored = _relation_proposal(
+        proposal_id=proposal_id, relation_id=relation_id
+    )
+    app.dependency_overrides[get_review_uow_factory] = lambda: _fake_factory(
+        artifacts=_FakeArtifacts(proposal=stored)
+    )
+
+    response = client.get(f"/api/v1/knowledge-review/queue/{proposal_id}")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["blocks"][0]["relation_ids"] == [str(relation_id)]
+    assert data["blocks"][0]["claim_ids"] == []
+    assert data["read_set"] == {
+        "claim_ids": [],
+        "proposal_ids": [],
+        "relation_ids": [str(relation_id)],
+    }
 
 
 def test_detail_missing_proposal_returns_404(

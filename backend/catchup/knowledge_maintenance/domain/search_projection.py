@@ -79,6 +79,12 @@ def project_revision_blocks(
                     "claim_ids": [
                         str(claim_id) for claim_id in block.claim_ids
                     ],
+                    # relation_section 블록의 근거는 relation_ids
+                    # 하나뿐이라 함께 싣는다.
+                    "relation_ids": [
+                        str(relation_id)
+                        for relation_id in block.relation_ids
+                    ],
                     "contextual_content": content,
                     "created_at": created_at.isoformat(),
                     "updated_at": created_at.isoformat(),
