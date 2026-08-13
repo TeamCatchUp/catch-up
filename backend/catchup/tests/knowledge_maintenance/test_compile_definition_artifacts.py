@@ -409,6 +409,8 @@ def test_empty_predicate_sections_drops_claim_sections() -> None:
                         source_node_id=node_id,
                         target_node_id=target,
                         assertion_text="요청 A는 결제팀이 맡는다",
+                        source_display_name="요청 A",
+                        target_display_name="결제팀",
                     ),
                 )
             ]
@@ -450,6 +452,8 @@ def test_relation_blocks_included_with_ledger() -> None:
                         source_node_id=node_id,
                         target_node_id=target,
                         assertion_text="요청 A는 결제팀이 맡는다",
+                        source_display_name="요청 A",
+                        target_display_name="결제팀",
                     ),
                 )
             ]

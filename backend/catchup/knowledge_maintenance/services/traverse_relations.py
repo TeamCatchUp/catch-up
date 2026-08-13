@@ -14,16 +14,20 @@ frontier 노드를 한 번에 넘기면 노드 수만큼 왕복이 늘어나는 
 
 근거 장부는 도달에 실제로 쓰인 간선만 담는다. 잘려 나간 이웃이나 이미
 방문한 노드로만 가는 간선은 문서에 실리는 노드를 만들어 내지 않았으므로
-근거가 될 수 없다. 남은 이웃에 닿은 간선은 모두 남긴다 — 같은 노드로 가는
-간선이 둘이면 둘 다 그 노드가 문서에 실린 이유이기 때문이다.
+근거가 될 수 없다. 마지막 걸음까지 완주한 경로 위의 간선만 장부에 남긴다 —
+중간에서 끊긴 가지는 도달 노드를 하나도 만들지 못했으므로 근거가 아니다.
+완주한 경로 위라면 같은 노드로 가는 간선이 둘이어도 둘 다 남긴다. 둘 다
+그 노드가 문서에 실린 이유이기 때문이다.
 
 순회 결과를 문서 블록으로 옮기는 일도 이 모듈이 맡는다. 무엇을 모았는지와
 그것을 어떻게 적는지는 함께 바뀌기 때문이다 — 상한에 걸려 잘랐다는 사실이
 본문 마지막 줄이 되는 것이 그 예다.
 
 검색은 없다. 순회는 주입받은 저장소 포트만 쓰고 SQL도 session도 모른다.
-같은 입력이면 같은 결과가 나와야 하고, 그 재현성은 걸음마다의 사전순
-정렬에서 나온다.
+같은 입력이면 같은 결과가 나와야 하고, 그 재현성은 걸음마다의 정렬에서
+나온다. 이웃은 표시 이름 차례로, 같은 이름이면 식별자 차례로 세운다 —
+식별자만으로 세우면 상한에 걸렸을 때 남는 이웃이 이름과 무관하게
+정해지고, 식별자를 다시 만들면 같은 지식에서 다른 문서가 나온다.
 """
 
 from __future__ import annotations
@@ -62,6 +66,25 @@ class PathTraversal:
     truncated_steps: tuple[int, ...]
 
 
+@dataclass(frozen=True, slots=True)
+class _Arrival:
+    """한 걸음에서 이웃 하나에 닿은 간선 하나를 담는다.
+
+    간선만으로는 어느 쪽이 출발이고 어느 쪽이 도착인지가 방향마다
+    달라진다. 완주 여부를 뒤에서 앞으로 되짚으려면 걸음 기준의 출발과
+    도착이 필요하므로 여기에 함께 적어 둔다.
+
+    Attributes:
+        edge: 이 도달을 만든 관계 간선을 담는다.
+        from_node_id: 이 걸음의 frontier 쪽 끝점을 담는다.
+        to_node_id: 이 걸음이 새로 닿은 이웃을 담는다.
+    """
+
+    edge: StoredRelationEdge
+    from_node_id: uuid.UUID
+    to_node_id: uuid.UUID
+
+
 def traverse_relation_path(
     relations: RelationRepository,
     *,
@@ -72,17 +95,25 @@ def traverse_relation_path(
     """시작 노드에서 경로를 따라가 도달 노드와 근거를 모은다.
 
     걸음마다 저장소를 한 번 부르고, 돌아온 간선에서 frontier 반대쪽
-    끝점을 이웃으로 삼는다. 이웃은 id 사전순으로 세우고 상한을 넘은
-    뒤쪽을 버린다. 자른 걸음의 번호는 truncated_steps에 남는다.
+    끝점을 이웃으로 삼는다. 이웃은 표시 이름 차례로, 같은 이름이면
+    식별자 차례로 세우고 상한을 넘은 뒤쪽을 버린다. 자른 걸음의 번호는
+    truncated_steps에 남는다.
 
     이미 방문한 노드는 이웃에서 뺀다. 시작 노드도 방문한 것으로 치므로
     A→B→A 같은 왕복은 두 번째 걸음에서 멈춘다.
 
-    근거로 남기는 간선의 규칙은 하나다: 남은 이웃에 닿은 간선은 모두
-    남긴다. 간선 id 사전순으로 담으므로 같은 노드로 가는 간선이 여럿
-    이어도 차례가 정해진다. 같은 간선이 두 걸음에 걸쳐 다시 나오면 한
-    번만 담는다 — 근거 장부는 어떤 간선을 썼는지의 목록이지 몇 번
-    스쳤는지의 기록이 아니다.
+    근거로 남기는 간선의 규칙은 하나다: 마지막 걸음까지 완주한 경로
+    위의 간선만 남긴다. 걸음마다 도달을 따로 적어 두었다가 순회가 끝난
+    뒤 마지막 도달 노드에서 거꾸로 되짚어, 그 되짚기에 걸리지 않은
+    간선을 버린다. 되짚기는 걸음이 층을 이루고 한 번 방문한 노드로
+    돌아가지 않으므로 끝난다. 중간에서 끊긴 가지를 남기면 문서 본문이
+    도달하지도 않은 노드의 문장을 싣고, 근거 장부가 그것을 근거라고
+    말하게 된다.
+
+    남은 간선은 걸음 차례로, 걸음 안에서는 간선 id 사전순으로 담는다.
+    같은 간선이 두 걸음에 걸쳐 다시 나오면 한 번만 담는다 — 근거
+    장부는 어떤 간선을 썼는지의 목록이지 몇 번 스쳤는지의 기록이
+    아니다.
 
     이을 노드가 없어지면 남은 걸음은 조회하지 않는다. 걸음이 하나도
     없는 경로는 시작 노드 자신을 도달점으로 돌려준다.
@@ -94,10 +125,8 @@ def traverse_relation_path(
     """
     visited = {start_node_id}
     frontier: tuple[uuid.UUID, ...] = (start_node_id,)
-    relation_ids: list[uuid.UUID] = []
-    assertion_lines: list[str] = []
     truncated_steps: list[int] = []
-    recorded: set[uuid.UUID] = set()
+    layers: list[tuple[_Arrival, ...]] = []
 
     for index, step in enumerate(path.steps):
         if not frontier:
@@ -109,29 +138,38 @@ def traverse_relation_path(
             now=now,
         )
         frontier_nodes = set(frontier)
-        arrivals: list[tuple[StoredRelationEdge, uuid.UUID]] = []
+        arrivals: list[_Arrival] = []
+        names: dict[uuid.UUID, str] = {}
         for edge in sorted(edges, key=lambda edge: str(edge.id)):
-            neighbor = _neighbor_of(edge, step.direction, frontier_nodes)
+            origin, neighbor, neighbor_name = _hop_of(
+                edge, step.direction, frontier_nodes
+            )
             if neighbor in visited:
                 continue
-            arrivals.append((edge, neighbor))
+            names.setdefault(neighbor, neighbor_name or "")
+            arrivals.append(
+                _Arrival(edge=edge, from_node_id=origin, to_node_id=neighbor)
+            )
 
-        neighbors = sorted({neighbor for _, neighbor in arrivals}, key=str)
-        if len(neighbors) > MAX_NODES_PER_STEP:
+        ordered = sorted(
+            names.items(), key=lambda item: (item[1], str(item[0]))
+        )
+        if len(ordered) > MAX_NODES_PER_STEP:
             truncated_steps.append(index)
-            neighbors = neighbors[:MAX_NODES_PER_STEP]
-        kept = set(neighbors)
+            ordered = ordered[:MAX_NODES_PER_STEP]
+        kept = {node_id for node_id, _ in ordered}
 
-        for edge, neighbor in arrivals:
-            if neighbor not in kept or edge.id in recorded:
-                continue
-            recorded.add(edge.id)
-            relation_ids.append(edge.id)
-            if edge.assertion_text is not None:
-                assertion_lines.append(edge.assertion_text)
-
+        layers.append(
+            tuple(
+                arrival for arrival in arrivals if arrival.to_node_id in kept
+            )
+        )
         visited |= kept
-        frontier = tuple(neighbors)
+        frontier = tuple(node_id for node_id, _ in ordered)
+
+    relation_ids, assertion_lines = _ledger_of_completed_paths(
+        layers, reached=frontier
+    )
 
     return PathTraversal(
         reached=frontier,
@@ -139,6 +177,48 @@ def traverse_relation_path(
         assertion_lines=tuple(assertion_lines),
         truncated_steps=tuple(truncated_steps),
     )
+
+
+def _ledger_of_completed_paths(
+    layers: list[tuple[_Arrival, ...]],
+    *,
+    reached: tuple[uuid.UUID, ...],
+) -> tuple[list[uuid.UUID], list[str]]:
+    """완주한 경로 위의 간선만 골라 근거 장부와 본문 줄을 만든다.
+
+    마지막 도달 노드에서 거꾸로 올라간다. 마지막 층에서는 도달 노드에
+    닿은 간선만 살아남고, 그 간선들의 출발 노드가 한 층 위의 살아남는
+    도착 노드가 된다. 이것을 첫 층까지 되풀이하면 중간에서 끊긴 가지가
+    전부 떨어져 나간다.
+
+    도달 노드가 하나도 없으면 살아남는 간선도 없다. 어느 간선도 문서에
+    실리는 노드를 만들어 내지 못했기 때문이다.
+
+    담는 차례는 걸음 차례가 먼저고 걸음 안에서는 간선 id 사전순이다.
+    같은 간선이 두 번 나오면 처음 한 번만 담는다.
+    """
+    surviving = set(reached)
+    kept_layers: list[tuple[_Arrival, ...]] = []
+    for arrivals in reversed(layers):
+        alive = tuple(
+            arrival for arrival in arrivals if arrival.to_node_id in surviving
+        )
+        kept_layers.append(alive)
+        surviving = {arrival.from_node_id for arrival in alive}
+    kept_layers.reverse()
+
+    relation_ids: list[uuid.UUID] = []
+    assertion_lines: list[str] = []
+    recorded: set[uuid.UUID] = set()
+    for arrivals in kept_layers:
+        for arrival in sorted(arrivals, key=lambda a: str(a.edge.id)):
+            if arrival.edge.id in recorded:
+                continue
+            recorded.add(arrival.edge.id)
+            relation_ids.append(arrival.edge.id)
+            if arrival.edge.assertion_text is not None:
+                assertion_lines.append(arrival.edge.assertion_text)
+    return relation_ids, assertion_lines
 
 
 def relation_section_block(
@@ -193,27 +273,47 @@ def relation_section_block(
     )
 
 
-def _neighbor_of(
+def _hop_of(
     edge: StoredRelationEdge,
     direction: str,
     frontier_nodes: set[uuid.UUID],
-) -> uuid.UUID:
-    """간선에서 다음 걸음의 출발점이 될 끝점을 고른다.
+) -> tuple[uuid.UUID, uuid.UUID, str | None]:
+    """간선을 이 걸음의 출발점·이웃·이웃 이름으로 읽는다.
 
     out이면 도착 쪽이, in이면 출발 쪽이 이웃이다. any는 어느 쪽이
     frontier에 걸렸는지 모르므로 출발 쪽이 frontier면 도착 쪽을,
     아니면 출발 쪽을 이웃으로 본다. 양 끝이 모두 frontier인 간선은
     어느 쪽을 골라도 이미 방문한 노드라 순회에서 걸러진다.
 
+    출발점을 함께 돌려주는 것은 완주 여부를 거꾸로 되짚기 위해서다.
+    간선만 들고 있으면 방향마다 어느 끝이 이 걸음의 출발이었는지를
+    다시 따져야 한다.
+
     Raises:
         ValueError: 방향이 규약 밖일 때 던진다.
     """
     if direction == DIRECTION_OUT:
-        return edge.target_node_id
+        return (
+            edge.source_node_id,
+            edge.target_node_id,
+            edge.target_display_name,
+        )
     if direction == DIRECTION_IN:
-        return edge.source_node_id
+        return (
+            edge.target_node_id,
+            edge.source_node_id,
+            edge.source_display_name,
+        )
     if direction == DIRECTION_ANY:
         if edge.source_node_id in frontier_nodes:
-            return edge.target_node_id
-        return edge.source_node_id
+            return (
+                edge.source_node_id,
+                edge.target_node_id,
+                edge.target_display_name,
+            )
+        return (
+            edge.target_node_id,
+            edge.source_node_id,
+            edge.source_display_name,
+        )
     raise ValueError(f"알 수 없는 관계 방향이다: {direction!r}")

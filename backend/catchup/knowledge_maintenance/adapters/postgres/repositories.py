@@ -2990,9 +2990,15 @@ class SqlAlchemyRelationRepository:
 
         정렬을 DB에 맡긴다. 식별자를 문자열로 캐 C 대조 규칙으로 줄을
         세우므로, 서버 로케일이 달라도 같은 차례가 나온다.
+
+        해소된 끝점 노드를 한 번 더 이어 표시 이름을 함께 캔다. 순회가
+        이웃을 이름 차례로 세우므로, 이름을 걸음마다 따로 물으면 왕복이
+        곱절이 된다.
         """
         source_candidate = aliased(KnowledgeEntityCandidateRow)
         target_candidate = aliased(KnowledgeEntityCandidateRow)
+        source_node = aliased(KnowledgeNodeRow)
+        target_node = aliased(KnowledgeNodeRow)
         source_endpoint = func.coalesce(
             KnowledgeRelationCandidateRow.source_node_id,
             source_candidate.resolved_node_id,
@@ -3019,6 +3025,8 @@ class SqlAlchemyRelationRepository:
                 source_endpoint,
                 target_endpoint,
                 KnowledgeRelationCandidateRow.assertion_text,
+                source_node.display_name,
+                target_node.display_name,
             )
             .outerjoin(
                 source_candidate,
@@ -3030,6 +3038,8 @@ class SqlAlchemyRelationRepository:
                 KnowledgeRelationCandidateRow.target_entity_candidate_id
                 == target_candidate.id,
             )
+            .outerjoin(source_node, source_node.id == source_endpoint)
+            .outerjoin(target_node, target_node.id == target_endpoint)
             .where(
                 KnowledgeRelationCandidateRow.workspace_id
                 == self._workspace_id,
@@ -3058,12 +3068,16 @@ class SqlAlchemyRelationRepository:
                 source_node_id=source_node_id,
                 target_node_id=target_node_id,
                 assertion_text=assertion_text,
+                source_display_name=source_display_name,
+                target_display_name=target_display_name,
             )
             for (
                 relation_id,
                 source_node_id,
                 target_node_id,
                 assertion_text,
+                source_display_name,
+                target_display_name,
             ) in self._session.execute(statement).all()
         ]
 

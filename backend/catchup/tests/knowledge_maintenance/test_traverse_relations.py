@@ -77,14 +77,31 @@ class FakeRelationRepository:
         source_node_id: uuid.UUID,
         target_node_id: uuid.UUID,
         assertion_text: str | None = None,
+        source_display_name: str | None = None,
+        target_display_name: str | None = None,
     ) -> None:
-        """간선 하나를 저장한다."""
+        """간선 하나를 저장한다.
+
+        이름을 주지 않으면 식별자 문자열을 그대로 이름으로 쓴다. 이름
+        순서와 식별자 순서가 같아지므로, 이름 정렬을 확인하지 않는
+        시험이 이름을 일일이 붙이지 않아도 된다.
+        """
         self.edges.setdefault(relation_type, []).append(
             StoredRelationEdge(
                 id=relation_id,
                 source_node_id=source_node_id,
                 target_node_id=target_node_id,
                 assertion_text=assertion_text,
+                source_display_name=(
+                    source_display_name
+                    if source_display_name is not None
+                    else str(source_node_id)
+                ),
+                target_display_name=(
+                    target_display_name
+                    if target_display_name is not None
+                    else str(target_node_id)
+                ),
             )
         )
 
@@ -192,6 +209,66 @@ def test_step_cap_truncates_and_marks() -> None:
     assert "L60" not in result.assertion_lines
 
 
+def test_step_cap_keeps_the_first_names_not_the_first_ids() -> None:
+    """상한은 이름 차례로 자른다 — 식별자 차례로 자르지 않는다.
+
+    이름과 식별자의 차례를 일부러 반대로 둔다. 식별자로 자르면 이름이
+    가장 앞선 노드가 잘려 나가고, 식별자를 다시 만들 때마다 남는 이웃이
+    달라진다.
+    """
+    repository = FakeRelationRepository()
+    for number in range(1, 52):
+        repository.add(
+            "owns",
+            relation(number),
+            node(1),
+            node(200 + number),
+            target_display_name=f"이웃{51 - number:02d}",
+        )
+
+    result = traverse_relation_path(
+        repository,
+        start_node_id=node(1),
+        path=RelationPath(steps=(RelationStep("owns", DIRECTION_OUT),)),
+        now=NOW,
+    )
+
+    assert result.truncated_steps == (0,)
+    assert len(result.reached) == MAX_NODES_PER_STEP
+    assert result.reached == tuple(
+        node(200 + number) for number in range(51, 1, -1)
+    )
+    # 식별자가 가장 앞선 이웃은 이름이 가장 뒤이므로 잘려 나간다.
+    assert node(201) not in result.reached
+    assert relation(1) not in result.relation_ids
+
+
+def test_dead_branch_edges_stay_out_of_the_ledger() -> None:
+    """중간에서 끊긴 가지의 간선은 본문에도 장부에도 남지 않는다."""
+    repository = FakeRelationRepository()
+    repository.add("owns", relation(1), node(1), node(2), "끊기는 가지")
+    repository.add("owns", relation(2), node(1), node(3), "이어지는 가지")
+    repository.add("member_of", relation(3), node(3), node(4), "끝까지 감")
+
+    result = traverse_relation_path(
+        repository,
+        start_node_id=node(1),
+        path=RelationPath(
+            steps=(
+                RelationStep("owns", DIRECTION_OUT),
+                RelationStep("member_of", DIRECTION_OUT),
+            )
+        ),
+        now=NOW,
+    )
+
+    assert result.reached == (node(4),)
+    assert relation(1) not in result.relation_ids
+    assert "끊기는 가지" not in result.assertion_lines
+    assert result.relation_ids == (relation(2), relation(3))
+    assert result.assertion_lines == ("이어지는 가지", "끝까지 감")
+
+
 def test_edges_to_dropped_nodes_do_not_contribute() -> None:
     """버려진 이웃으로만 가는 간선은 근거 장부에 남지 않는다."""
     repository = FakeRelationRepository()
@@ -212,7 +289,11 @@ def test_edges_to_dropped_nodes_do_not_contribute() -> None:
 
 
 def test_cycle_does_not_loop() -> None:
-    """이미 방문한 노드로는 돌아가지 않는다."""
+    """이미 방문한 노드로는 돌아가지 않는다.
+
+    되돌아가느라 도달이 사라진 가지는 완주하지 못한 가지다. 그래서
+    첫 걸음의 간선도 근거 장부에 남지 않는다.
+    """
     repository = FakeRelationRepository()
     repository.add("owns", relation(1), node(1), node(2))
     repository.add("owns", relation(2), node(2), node(1))
@@ -231,7 +312,8 @@ def test_cycle_does_not_loop() -> None:
 
     assert node(1) not in result.reached
     assert result.reached == ()
-    assert result.relation_ids == (relation(1),)
+    assert result.relation_ids == ()
+    assert result.assertion_lines == ()
 
 
 def test_traversal_stops_when_frontier_empties() -> None:

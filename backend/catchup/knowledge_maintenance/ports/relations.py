@@ -27,12 +27,18 @@ class StoredRelationEdge:
         target_node_id: 관계의 도착 쪽 canonical 노드를 가리킨다.
         assertion_text: 관계를 사람 말로 적은 문장을 담는다. 추출이
             문장을 남기지 않은 관계도 있으므로 비어 있을 수 있다.
+        source_display_name: 출발 쪽 노드의 표시 이름을 담는다. 순회가
+            이웃을 이름 차례로 세우려면 식별자만으로는 모자라기
+            때문이다. 이름이 비어 있는 노드도 있으므로 None일 수 있다.
+        target_display_name: 도착 쪽 노드의 표시 이름을 담는다.
     """
 
     id: uuid.UUID
     source_node_id: uuid.UUID
     target_node_id: uuid.UUID
     assertion_text: str | None
+    source_display_name: str | None
+    target_display_name: str | None
 
 
 class RelationRepository(Protocol):
@@ -75,5 +81,9 @@ class RelationRepository(Protocol):
 
         차례는 관계 주장 식별자 사전순이다. 같은 지식 상태에서 두 번
         물으면 같은 목록이 나와야 문서 본문이 흔들리지 않는다.
+
+        양 끝점의 표시 이름을 함께 돌려준다. 순회가 이웃을 이름 차례로
+        세우고 상한을 자르므로, 이름을 뒤늦게 따로 물으면 걸음마다
+        왕복이 한 번씩 더 늘고 그 사이 상태가 바뀔 자리가 생긴다.
         """
         ...

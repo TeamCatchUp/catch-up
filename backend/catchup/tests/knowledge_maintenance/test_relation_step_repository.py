@@ -483,6 +483,59 @@ def test_resolved_candidate_endpoint_matches_node_ids(
     ]
 
 
+def test_endpoint_display_names_come_back(
+    graph: _Graph,
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+) -> None:
+    """양 끝점의 표시 이름이 간선과 함께 나온다.
+
+    순회는 이 이름으로 이웃을 세우고 상한을 자른다. 이름이 비어 오면
+    남는 이웃이 식별자로 정해져 같은 지식에서 다른 문서가 나온다.
+    """
+    graph.add_relation(
+        source_node_id=graph.node_a, target_node_id=graph.node_b
+    )
+
+    with uow_factory() as uow:
+        edges = uow.relations.find_edges(
+            node_ids=[graph.node_a],
+            relation_type=RELATION_TYPE,
+            direction=DIRECTION_OUT,
+            now=NOW,
+        )
+
+    assert [
+        (edge.source_display_name, edge.target_display_name) for edge in edges
+    ] == [("노드 A", "노드 B")]
+
+
+def test_display_name_follows_the_resolved_endpoint(
+    graph: _Graph,
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+) -> None:
+    """후보를 거쳐 들어온 끝점도 해소된 노드의 이름을 단다.
+
+    후보의 제안 이름을 그대로 쓰면 같은 노드가 걸음마다 다른 이름으로
+    보여 정렬이 흔들린다.
+    """
+    candidate_id = graph.add_candidate(resolved_node_id=graph.node_b)
+    graph.add_relation(
+        source_node_id=graph.node_a, target_candidate_id=candidate_id
+    )
+
+    with uow_factory() as uow:
+        edges = uow.relations.find_edges(
+            node_ids=[graph.node_a],
+            relation_type=RELATION_TYPE,
+            direction=DIRECTION_OUT,
+            now=NOW,
+        )
+
+    assert [
+        (edge.target_node_id, edge.target_display_name) for edge in edges
+    ] == [(graph.node_b, "노드 B")]
+
+
 def test_rejected_relation_excluded(
     graph: _Graph,
     uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
