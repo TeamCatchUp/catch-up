@@ -19,6 +19,8 @@ export const ONBOARDING_STEPS: readonly OnboardingStepInfo[] = [
 
 export const ONBOARDING_PURPOSE_HEADING = '무엇을 위한 위키인가요?';
 export const ONBOARDING_SOURCE_HEADING = '수집 위치를 설정해 주세요';
+export const ONBOARDING_BASIC_INFO_TITLE = '기본 위키 정보';
+export const ONBOARDING_FORMAT_TITLE = '문서 형식';
 
 export const WIKI_NAME_FIELD = {
   label: '이름',
