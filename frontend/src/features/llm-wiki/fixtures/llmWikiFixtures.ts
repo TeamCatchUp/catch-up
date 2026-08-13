@@ -43,6 +43,103 @@ export const DOCUMENT_ROW_FIXTURES: readonly DocumentRowData[] = [
     ownerName: '이진수',
     lastActivityLabel: '어제',
   }),
+  // 이하 9행은 표·페이지네이션을 실제 분량으로 보기 위한 것이다.
+  // 담당자 이름은 전부 다르게 둔다 — 스토리가 담당자 셀을 이름으로 집어 좌표를 잰다.
+  createDocumentRow({
+    id: 'doc-login-mfa',
+    title: '2단계 인증 실패 시 안내 문구',
+    breadcrumbs: [
+      { kind: 'channel', label: '계정' },
+      { kind: 'folder', label: '인증' },
+    ],
+    status: 'pending_review',
+    ownerName: '김하은',
+    lastActivityLabel: '2024.12.12',
+  }),
+  createDocumentRow({
+    id: 'doc-invoice-issue',
+    title: '세금계산서 발행 기준',
+    breadcrumbs: [
+      { kind: 'channel', label: '결제' },
+      { kind: 'folder', label: '정산' },
+    ],
+    ownerName: '최민우',
+    lastActivityLabel: '3일 전',
+  }),
+  createDocumentRow({
+    id: 'doc-plan-change',
+    title: '요금제 변경 시 잔여 기간 처리',
+    breadcrumbs: [
+      { kind: 'channel', label: '결제' },
+      { kind: 'folder', label: '구독' },
+    ],
+    status: 'pending_review',
+    ownerName: '팀원G',
+    lastActivityLabel: '2024.12.11',
+  }),
+  createDocumentRow({
+    id: 'doc-data-export',
+    title: '데이터 내보내기 요청 처리 절차',
+    breadcrumbs: [
+      { kind: 'channel', label: '계정' },
+      { kind: 'folder', label: '데이터' },
+    ],
+    ownerName: '직원30',
+    lastActivityLabel: '2024.12.10',
+  }),
+  createDocumentRow({
+    id: 'doc-notification-policy',
+    title: '알림 발송 시간대 정책',
+    breadcrumbs: [
+      { kind: 'channel', label: '알림' },
+      { kind: 'folder', label: '발송 정책' },
+    ],
+    status: 'pending_review',
+    ownerName: '오세훈',
+    lastActivityLabel: '2024.12.09',
+  }),
+  createDocumentRow({
+    id: 'doc-onboarding-guide',
+    title: '신규 고객사 온보딩 체크리스트',
+    breadcrumbs: [
+      { kind: 'channel', label: '온보딩' },
+      { kind: 'folder', label: '도입' },
+    ],
+    ownerName: '문가영',
+    lastActivityLabel: '2024.12.08',
+  }),
+  createDocumentRow({
+    id: 'doc-sla-response',
+    title: '장애 등급별 응답 시간 기준',
+    breadcrumbs: [
+      { kind: 'channel', label: '운영' },
+      { kind: 'folder', label: 'SLA' },
+    ],
+    status: 'pending_review',
+    ownerName: '배수지',
+    lastActivityLabel: '2024.12.05',
+  }),
+  createDocumentRow({
+    id: 'doc-card-expiry',
+    title: '카드 만료 임박 안내 발송 규칙',
+    breadcrumbs: [
+      { kind: 'channel', label: '결제' },
+      { kind: 'folder', label: '수단 관리' },
+    ],
+    ownerName: '강태호',
+    lastActivityLabel: '2024.12.03',
+  }),
+  createDocumentRow({
+    id: 'doc-account-delete',
+    title: '계정 삭제 요청과 보관 기간',
+    breadcrumbs: [
+      { kind: 'channel', label: '계정' },
+      { kind: 'folder', label: '탈퇴' },
+    ],
+    status: 'pending_review',
+    ownerName: '윤서아',
+    lastActivityLabel: '2024.12.01',
+  }),
 ];
 
 const BASE_REVIEW_QUEUE_ITEM: ReviewQueueItemData = {
