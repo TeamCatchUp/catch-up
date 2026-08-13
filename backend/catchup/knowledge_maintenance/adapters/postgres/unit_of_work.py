@@ -74,6 +74,11 @@ class KnowledgeMaintenanceUnitOfWork:
         self._workspace_id = workspace_id
         self._session: Session | None = None
 
+    @property
+    def workspace_id(self) -> int | None:
+        """Artifact repository에 고정된 workspace 범위를 돌려준다."""
+        return self._workspace_id
+
     def __enter__(self) -> Self:
         session = self._session_factory()
         self._session = session

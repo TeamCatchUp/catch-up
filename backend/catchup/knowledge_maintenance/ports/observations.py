@@ -18,6 +18,13 @@ class ObservationRepository(Protocol):
     `normalizer_id`와 `normalizer_version`이다.
     """
 
+    def get_by_id(
+        self,
+        *,
+        workspace_id: int,
+        observation_id: uuid.UUID,
+    ) -> StoredObservation | None: ...
+
     def get_by_normalizer(
         self,
         *,

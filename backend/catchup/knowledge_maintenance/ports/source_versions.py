@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import uuid
 from types import TracebackType
 from typing import Protocol
 from typing import Self
@@ -11,6 +12,13 @@ from catchup.knowledge_maintenance.ports.knowledge_nodes import KnowledgeNodeRep
 
 class SourceVersionRepository(Protocol):
     """SourceVersion 수집에 필요한 영속성 기능을 정의한다."""
+
+    def get_by_id(
+        self,
+        *,
+        workspace_id: int,
+        source_version_id: uuid.UUID,
+    ) -> SourceVersion | None: ...
 
     def get_by_idempotency_key(
         self,
