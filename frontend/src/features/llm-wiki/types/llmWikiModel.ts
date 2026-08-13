@@ -1,6 +1,6 @@
 /**
- * LLM Wiki 도메인 타입. 백엔드 제품 API가 없어 전부 mock 계약이다.
- * [BE]는 ERD에 실재하는 컬럼, [SPEC]은 명세에만 있고 백엔드 대응이 없는 값이다.
+ * LLM Wiki 도메인 타입. [BE]는 백엔드 스키마에 실재하는 값(knowledge_review·wiki),
+ * [SPEC]은 명세에만 있고 백엔드 대응이 없는 값이다.
  */
 
 // [BE] 제안 판정 — DB CHECK로 닫힌 집합
@@ -21,10 +21,34 @@ export type DocumentStatus = KnownDocumentStatus | (string & {});
 export type KnownBreadcrumbKind = 'channel' | 'folder';
 export type BreadcrumbKind = KnownBreadcrumbKind | (string & {});
 
-/** [SPEC] 채널 > 폴더 경로의 한 마디. 종류마다 아이콘이 갈려서 문자열로 뭉갤 수 없다 */
+/** [BE] 채널 > 폴더 경로의 한 마디. 종류마다 아이콘이 갈려서 문자열로 뭉갤 수 없다 */
 export interface DocumentBreadcrumb {
   kind: BreadcrumbKind;
   label: string;
+}
+
+/** [BE] 채널. 식별자는 UUID 문자열 — 파싱 없이 경로에 그대로 싣는 계약이다 */
+export interface WikiChannel {
+  id: string;
+  name: string;
+  workspaceId: number;
+}
+
+/** [BE] 폴더. 채널 바로 아래 한 겹뿐이다(depth 1 고정) — 상위 폴더 필드가 계약에 없다 */
+export interface WikiFolder {
+  id: string;
+  name: string;
+  channelId: string;
+}
+
+/**
+ * [BE] 채널 목록 한 줄. isAdmin·documentCount·folders가 동봉된다 —
+ * 관리 버튼 노출 판정을 목록과 같은 왕복에서 끝내기 위한 계약이다.
+ */
+export interface WikiChannelListItem extends WikiChannel {
+  isAdmin: boolean;
+  documentCount: number;
+  folders: readonly WikiFolder[];
 }
 
 /**
@@ -35,14 +59,13 @@ export interface DocumentRowData {
   id: string;
   /** [BE] 문서 제목 */
   title: string;
-  /** [SPEC] 채널 > 폴더 경로. 백엔드에 채널·폴더 개념 없음 */
+  /** [BE] 채널 > 폴더 경로. 실물은 WikiChannel·WikiFolder — 경로 조립은 프론트 몫 */
   breadcrumbs: readonly DocumentBreadcrumb[];
   status: DocumentStatus;
-  /** 에러 아이콘 행 — 배지와의 공존 규칙은 미정이라 시각만 존재 */
-  hasConflictIcon: boolean;
-  /** [SPEC] 태그 목록. 행에는 첫 1개만 칩으로 보이고 나머지는 "+N"으로 접힌다 */
-  tags: readonly string[];
-  /** [SPEC] 최근 활동 표시 문자열 (예: "3시간 전") */
+  /** [BE] 담당자 표시명. 지정 API는 실물이나 목록 응답에 이름·이미지 미동봉(협상 대상) */
+  ownerName: string;
+  ownerProfileImageUrl: string | null;
+  /** [SPEC] 최근 활동 표시 문자열 (예: "3시간 전", "2024.12.12") */
   lastActivityLabel: string;
 }
 
@@ -71,7 +94,7 @@ export interface ReviewQueueItemData {
 
 export interface ReviewStatCardData {
   id: string;
-  /** 검토 대기 · 미해결 충돌 · 태그 미분류 · 장기 미변경 문서 */
+  /** 검토 대기 · 내 담당 · 담당자 미지정 */
   label: string;
   count: number;
 }

@@ -39,8 +39,8 @@ describe('llmWikiFixtures 정합성', () => {
     expect(row.status).toBe('reviewed');
   });
 
-  it('스탯 카드 fixture는 Figma 확정 4종이다', () => {
-    expect(REVIEW_STAT_CARD_FIXTURES).toHaveLength(4);
+  it('스탯 카드 fixture는 새 대시보드 확정 3종이다', () => {
+    expect(REVIEW_STAT_CARD_FIXTURES).toHaveLength(3);
   });
 
   // breadcrumbs는 대시보드 행만의 요건이다
@@ -48,5 +48,10 @@ describe('llmWikiFixtures 정합성', () => {
     for (const row of DOCUMENT_ROW_FIXTURES) {
       expect(row.breadcrumbs.map((crumb) => crumb.kind)).toEqual(['channel', 'folder']);
     }
+  });
+
+  it('문서 행 fixture는 검토 대기 행을 포함한다 (표의 두 번째 상태 표본)', () => {
+    // 이 행이 사라지면 검토 대기 배지의 표 노출 경로가 스토리에서 증발한다 — 존재를 못박는다
+    expect(DOCUMENT_ROW_FIXTURES.some((row) => row.status === 'pending_review')).toBe(true);
   });
 });

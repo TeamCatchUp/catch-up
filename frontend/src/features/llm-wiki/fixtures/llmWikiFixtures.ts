@@ -1,6 +1,5 @@
 import type { DocumentRowData, ReviewQueueItemData, ReviewStatCardData, TagItem } from '../types/llmWikiModel';
 
-// 태그 3개 = 칩 1개 + "+2" 조합을 만드는 표본
 const BASE_DOCUMENT_ROW: DocumentRowData = {
   id: 'doc-payment-retry',
   title: '결제 승인 실패 시 재시도 정책',
@@ -9,8 +8,8 @@ const BASE_DOCUMENT_ROW: DocumentRowData = {
     { kind: 'folder', label: '승인·실패 처리' },
   ],
   status: 'reviewed',
-  hasConflictIcon: false,
-  tags: ['재시도 정책', '결제 실패', 'PG 연동'],
+  ownerName: '팀원F',
+  ownerProfileImageUrl: null,
   lastActivityLabel: '3시간 전',
 };
 
@@ -21,7 +20,18 @@ export const createDocumentRow = (overrides?: Partial<DocumentRowData>): Documen
 
 export const DOCUMENT_ROW_FIXTURES: readonly DocumentRowData[] = [
   createDocumentRow(),
-  // 태그 1개 — "+N" 칩이 붙지 않는 행
+  // 검토 대기 행 — 배지 위반 없이 표에 노출되는 두 번째 상태 표본
+  createDocumentRow({
+    id: 'doc-sso-session',
+    title: 'SSO 세션 만료 시간 정책',
+    breadcrumbs: [
+      { kind: 'channel', label: '계정' },
+      { kind: 'folder', label: '인증' },
+    ],
+    status: 'pending_review',
+    ownerName: '직원10',
+    lastActivityLabel: '2024.12.12',
+  }),
   createDocumentRow({
     id: 'doc-refund-window',
     title: '환불 가능 기간 안내',
@@ -29,19 +39,8 @@ export const DOCUMENT_ROW_FIXTURES: readonly DocumentRowData[] = [
       { kind: 'channel', label: '결제' },
       { kind: 'folder', label: '환불' },
     ],
-    tags: ['환불'],
+    ownerName: '이진수',
     lastActivityLabel: '어제',
-  }),
-  createDocumentRow({
-    id: 'doc-sso-conflict',
-    title: 'SSO 로그인 제한 정책',
-    breadcrumbs: [
-      { kind: 'channel', label: '계정' },
-      { kind: 'folder', label: '인증' },
-    ],
-    hasConflictIcon: true,
-    tags: ['SSO', '보안'],
-    lastActivityLabel: '15분 전',
   }),
 ];
 
@@ -88,11 +87,11 @@ export const REVIEW_QUEUE_ITEM_FIXTURES: readonly ReviewQueueItemData[] = [
   }),
 ];
 
+// 시안의 지표 3종. 시트에는 "검토 대기" 카드가 2장(일러스트 상이) 있으나 지표로는 1종이다
 export const REVIEW_STAT_CARD_FIXTURES: readonly ReviewStatCardData[] = [
-  { id: 'stat-pending-review', label: '검토 대기', count: 12 },
-  { id: 'stat-open-contradictions', label: '미해결 충돌', count: 3 },
-  { id: 'stat-untagged', label: '태그 미분류', count: 8 },
-  { id: 'stat-stale-documents', label: '장기 미변경 문서', count: 5 },
+  { id: 'stat-pending-review', label: '검토 대기', count: 7 },
+  { id: 'stat-my-assigned', label: '내 담당', count: 150 },
+  { id: 'stat-unassigned', label: '담당자 미지정', count: 7 },
 ];
 
 /**

@@ -2,8 +2,8 @@ import type { Meta, StoryObj } from '@storybook/nextjs-vite';
 import { expect, fn, userEvent, within } from 'storybook/test';
 
 import { catchupParameters } from '../../../../../.storybook/catchupStoryParameters';
-import { createDocumentRow } from '../../fixtures/llmWikiFixtures';
-import DashboardDocumentRow from './DashboardDocumentRow';
+import { createDocumentRow, DOCUMENT_ROW_FIXTURES } from '../../fixtures/llmWikiFixtures';
+import DashboardDocumentRow, { DashboardDocumentTableHeader } from './DashboardDocumentRow';
 
 const meta = {
   title: 'Compositions/LLM Wiki/Document/DashboardDocumentRow',
@@ -19,36 +19,34 @@ const meta = {
       dataProfile: 'static',
       designSource: 'figma',
       figma: {
-        url: 'https://www.figma.com/design/7UwupbVvmHkElmP2OBJQio/Design-System?node-id=17762-102993',
+        url: 'https://www.figma.com/design/7UwupbVvmHkElmP2OBJQio/Design-System?node-id=17606-149816',
         fileKey: '7UwupbVvmHkElmP2OBJQio',
-        nodeId: '17762:102993',
+        nodeId: '17606:149816',
       },
-      viewport: { width: 1040, height: 140 },
-      states: ['default', 'with-error-icon(rule-tbd)'],
+      viewport: { width: 1040, height: 240 },
+      states: ['default(reviewed)', 'pending-review', 'table-alignment', 'long-title-narrow-slot'],
       reuseNotes: [
-        '대시보드 문서 표(17606:149822) 전용 행이다. 문서_폴더 메인(17762:104801)·문서_채널 메인(17762:103743) 행은 3열이 "연결 VOC & 고객사 수"이고 breadcrumbs가 없어 같은 컴포넌트가 아니다 — 스펙 미결로 분리됐다.',
-        '상태 배지는 DocumentStatusBadge(17762:103484)를 그대로 쓴다.',
-        'error_filled·file_filled·arrow_right2는 리포에 이미 있는 에셋을 재사용했다. wiki_channel만 신규 export.',
+        '상태 배지는 DocumentStatusBadge를 그대로 쓴다 — 새 표 행의 배지(18122:60892)가 기존 md 규격(px-2 py-1·gap-2·아이콘 20)과 일치함을 재실측.',
+        '담당자 아바타는 공용 Avatar(size small=25) + 시안 인스턴스 오버라이드(radius 12·line-assistive 링) — ReviewQueueRow와 같은 조합(중복 감사 #2의 DS 드리프트 기록 참조).',
+        'file_filled·arrow_right2·wiki_channel·folder 에셋 재사용 — 신규 export 없음. 표 헤더는 같은 파일의 DashboardDocumentTableHeader로 제공.',
       ],
       dataNotes: [
-        '로딩·빈 상태 스토리는 만들지 않는다 — 디자인 MISSING(감사 §7 금지 목록).',
-        '에러 아이콘과 "검토 완료" 배지의 공존 규칙은 UNKNOWN — 스토리 이름에 TBD 명시. Figma 대시보드 6개 행은 전부 배지를 달고 있고 그중 상단 3개만 에러 아이콘을 동반한다(17762:102993·17849:106474·17849:106512). 공존이 규칙인지 목업 나열인지 미확정.',
-        '태그는 첫 1개만 칩으로 보이고 나머지는 "+N"으로 접힌다 — Figma 태그 칸이 칩 1개(142) + gap 8 + "+2"(34) = 184로 정확히 채워져 있어 칩 슬롯이 1개로 고정이다.',
-        '신뢰도·유형 배지는 만들지 않는다 — Figma 행에 없다.',
+        '2026-08-13 재실측(대시보드 17595:148922): 태그 열이 소멸하고 담당자(아바타+이름) 열로 교체됐다 — tags·hasConflictIcon 계약 제거.',
+        '충돌(error) 아이콘 행이 새 표 15행 어디에도 없다 — 구 "배지·에러 공존 규칙" 질문은 "충돌 표시 이동처" 질문으로 대체(design-request).',
+        '담당자 미지정 행의 표시는 MISSING — 스탯 카드에 지표(담당자 미지정)는 있으나 행 시안이 없다. 발명하지 않고 디자이너 질문.',
+        '로딩·빈 상태 스토리는 만들지 않는다 — 디자인 MISSING 유지.',
       ],
       tokenNotes: [
-        '제목 #33363D = text-text-normal-normal, heading(sb)/small = text-heading-small.',
-        'breadcrumb 라벨 #464C53 = text-text-normal-neutral, 아이콘 #6D7882 = text-icon-normal-neutral, body(md)/xsmall = text-body-xsmall.',
-        '문서 아이콘틀 #F7F7F8/#B1B8BE = bg-fill-normal-strong/text-icon-normal-alternative, 충돌 행 #FFFAFA/#FF6363 = bg-accent-red-lighten/text-accent-red-default.',
-        '태그 칩 #E5F6FE/#00AEFF = bg-accent-light-blue-lighten/text-accent-light-blue-default, "+N" 칩만 배경이 #F7F7F8 = bg-fill-normal-strong.',
-        '최근 활동 #6D7882 = text-text-normal-alternative, 우측 정렬(Figma textAlign RIGHT).',
+        '제목 #33363D = text-text-normal-normal + heading(sb)/small 유지. 담당자명 #33363D + body(md)/small.',
+        '아바타 링 #F4F4F5 = border-line-normal-assistive, radius 12 = rounded-xl(DS 원본 rounded-full과 갈리는 화면 인스턴스 값).',
+        '최근 활동 #6D7882 = text-text-normal-alternative + body(md)/small, 우측 정렬(Figma textAlign RIGHT). 헤더 라벨도 같은 색·타이포.',
+        'breadcrumb 마디: 라벨 #464C53 = text-text-normal-neutral body(md)/xsmall, 아이콘 #6D7882 = text-icon-normal-neutral — 기존 값 유지.',
       ],
       layoutNotes: [
-        '4열 grid: minmax(0,1fr) | 194px | 184px | 96px + gap 16. Figma는 좌/우 두 덩어리가 각각 fill이라 1028 - 16 = 1012를 506씩 나눠 갖는데, 우측 506 = 194 + 16 + 184 + 16 + 96이라 4열 grid로 펴면 같은 값이 나온다(1028 - 48 - 474 = 506).',
-        '고정폭 3개(194/184/96)는 행끼리·헤더와 열을 맞추기 위한 것이다. 표 헤더가 생기면 DASHBOARD_DOCUMENT_ROW_GRID를 함께 import해 같은 템플릿을 쓴다.',
-        '폭 흡수는 문서 열 하나뿐(minmax(0,1fr) + min-w-0). 축소 순서는 제목 truncate → breadcrumb 라벨 truncate → 태그 칩 truncate 순이고, 가로 스크롤은 넣지 않았다.',
-        '행 높이 65는 결과값이다(p-1.5 6 + 아이콘틀 40 + 6 … 실제로는 제목 23 + gap 2 + breadcrumb 28 = 53). h-*로 못박지 않는다.',
-        'Figma 행 프레임은 fills=[] + borderRadius 8이라 hover 채움이 있을 법하지만 노드에 정의가 없다 — hover 시각을 발명하지 않았다(디자이너 확인 필요).',
+        '표는 2셀 구조다: 문서 열(fill, min-w 220) + 메타 셀(고정 428). 바깥 gap 36 = gap-9, 메타 안 gap 16 = gap-4 — gap이 달라 한 층 grid로 펼 수 없다.',
+        '메타 셀은 grid-cols-[140px_160px_96px]이고 헤더·행이 DASHBOARD_DOCUMENT_META_GRID 상수를 공유한다. 1040 검산: 6+564+36+140+16+160+16+96+6.',
+        '행 셸 시각 분리 약속 이행: rounded-lg는 행 버튼만 갖고 DASHBOARD_DOCUMENT_TABLE_SHELL은 레이아웃만 갖는다(헤더가 함께 쓴다).',
+        'breadcrumb 마디 max-w 80 신설(시안 Text Button max-width) — 초과분은 라벨 truncate. 폭 흡수는 문서 열 하나뿐이고 행 높이 65는 결과값.',
       ],
     }),
   },
@@ -69,12 +67,8 @@ export const Default: Story = {
     await expect(canvas.getByText('결제')).toBeInTheDocument();
     await expect(canvas.getByText('승인·실패 처리')).toBeInTheDocument();
     await expect(canvas.getByText('검토 완료')).toBeInTheDocument();
+    await expect(canvas.getByText('팀원F')).toBeInTheDocument();
     await expect(canvas.getByText('3시간 전')).toBeInTheDocument();
-
-    // 태그 3개 중 첫 칩만 보이고 나머지는 +2로 접힌다.
-    await expect(canvas.getByText('재시도 정책')).toBeInTheDocument();
-    await expect(canvas.getByText('+2')).toBeInTheDocument();
-    await expect(canvas.queryByText('결제 실패')).toBeNull();
 
     // 선두 아이콘은 viewBox로 구분한다 — 색 비교와 달리 테마에 흔들리지 않는다.
     const row = canvas.getByRole('button');
@@ -88,17 +82,46 @@ export const Default: Story = {
   },
 };
 
-/** 에러(충돌) 아이콘 행. 상태 배지와의 공존 규칙이 미확정이라 이름에 TBD를 남긴다. */
-export const WithErrorIconRuleTBD: Story = {
-  args: { document: createDocumentRow({ hasConflictIcon: true }) },
+/** 검토 대기 행. 표에 노출되는 두 번째 배지 상태다(시안 표의 다수 행). */
+export const PendingReview: Story = {
+  args: { document: DOCUMENT_ROW_FIXTURES[1] },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const row = canvas.getByRole('button');
 
-    // 선두 아이콘이 충돌 아이콘으로 바뀐다.
-    await expect(findIconSvg(row)).toHaveAttribute('viewBox', '0 0 24 24');
-    // 충돌 행도 상태 배지를 함께 단다.
-    await expect(canvas.getByText('검토 완료')).toBeInTheDocument();
+    await expect(canvas.getByText('검토 대기')).toBeInTheDocument();
+    await expect(canvas.getByText('직원10')).toBeInTheDocument();
+    // 새 시안의 날짜형 표기도 같은 문자열 계약으로 흐른다.
+    await expect(canvas.getByText('2024.12.12')).toBeInTheDocument();
+  },
+};
+
+/** 헤더 + 행 조합. 열 정렬은 눈이 아니라 공유 상수가 보장하는지 좌표로 잰다. */
+export const TableAlignment: Story = {
+  args: { document: DOCUMENT_ROW_FIXTURES[0] },
+  render: () => (
+    <div className="flex w-260 flex-col gap-1">
+      <DashboardDocumentTableHeader />
+      {DOCUMENT_ROW_FIXTURES.map((row) => (
+        <DashboardDocumentRow key={row.id} document={row} />
+      ))}
+    </div>
+  ),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    // 담당자 열: 헤더 셀 좌변 == 행의 담당자 셀 좌변.
+    const ownerHeader = canvas.getByText('담당자');
+    const ownerCell = canvas.getByText('팀원F').parentElement!;
+    await expect(ownerCell.getBoundingClientRect().left).toBeCloseTo(ownerHeader.getBoundingClientRect().left, 1);
+
+    // 최근 활동 열: 우측 정렬 열이라 우변으로 잰다.
+    const activityHeader = canvas.getByText('최근 활동');
+    const activityCell = canvas.getByText('3시간 전');
+    await expect(activityCell.getBoundingClientRect().right).toBeCloseTo(activityHeader.getBoundingClientRect().right, 1);
+
+    // 행마다 검산이 흔들리지 않는지 두 번째 행(검토 대기)도 같은 열에 있어야 한다.
+    const pendingOwnerCell = canvas.getByText('직원10').parentElement!;
+    await expect(pendingOwnerCell.getBoundingClientRect().left).toBeCloseTo(ownerHeader.getBoundingClientRect().left, 1);
   },
 };
 
@@ -107,11 +130,15 @@ export const LongTitleInNarrowSlot: Story = {
   args: {
     document: createDocumentRow({
       title: '결제 승인 실패 시 재시도 정책 및 PG사별 예외 처리와 고객 안내 문구 표준화 가이드 문서명 text text text',
+      breadcrumbs: [
+        { kind: 'channel', label: '아주 길게 늘어난 채널 이름 표본' },
+        { kind: 'folder', label: '아주 길게 늘어난 폴더 이름 표본' },
+      ],
     }),
   },
   decorators: [
     (Story) => (
-      <div className="w-160 overflow-hidden">
+      <div className="w-200 overflow-hidden">
         <Story />
       </div>
     ),
@@ -119,7 +146,7 @@ export const LongTitleInNarrowSlot: Story = {
   play: async ({ args, canvasElement }) => {
     const canvas = within(canvasElement);
     const row = canvas.getByRole('button');
-    const slot = canvasElement.querySelector('div.w-160') as HTMLElement;
+    const slot = canvasElement.querySelector('div.w-200') as HTMLElement;
     const heading = canvas.getByText(args.document.title);
 
     // 제목이 늘어나도 행은 슬롯을 넘지 않는다.
@@ -132,5 +159,11 @@ export const LongTitleInNarrowSlot: Story = {
     // truncate가 빠지면 줄바꿈으로 폭은 지키면서 행 높이가 자란다 — 넘침 없음만으로는 부족하다.
     await expect(heading.scrollWidth).toBeGreaterThan(heading.clientWidth);
     await expect(heading.getClientRects()).toHaveLength(1);
+
+    // breadcrumb 마디는 80 상한을 지키고 초과분은 라벨이 잘린다.
+    const crumbLabel = canvas.getByText('아주 길게 늘어난 채널 이름 표본');
+    const crumb = crumbLabel.parentElement!;
+    await expect(crumb.getBoundingClientRect().width).toBeLessThanOrEqual(80);
+    await expect(crumbLabel.scrollWidth).toBeGreaterThan(crumbLabel.clientWidth);
   },
 };
