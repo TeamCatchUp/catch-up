@@ -2905,8 +2905,8 @@ class SqlAlchemyArtifactDefinitionRepository:
     def list_definitions(self) -> tuple[StoredArtifactDefinition, ...]:
         """workspace의 정의를 식별자 사전순으로 모두 읽는다.
 
-        정렬을 DB에 맡긴다. 식별자를 문자열로 캐 순서를 정하므로 파이썬
-        쪽에서 다시 정렬하지 않아도 실행마다 같은 차례가 나온다.
+        정렬을 DB에 맡긴다. 식별자를 문자열로 캐 C 대조 규칙으로 줄을
+        세우므로, 서버 로케일이 달라도 실행마다 같은 차례가 나온다.
 
         선택 규칙 역직렬화가 던지면 그대로 올려 보낸다. 깨진 행 하나를
         건너뛰면 그 정의의 문서만 조용히 비기 때문이다.
@@ -2925,7 +2925,7 @@ class SqlAlchemyArtifactDefinitionRepository:
                 ArtifactDefinitionRow.selection_spec,
             )
             .where(ArtifactDefinitionRow.workspace_id == self._workspace_id)
-            .order_by(cast(ArtifactDefinitionRow.id, Text))
+            .order_by(collate(cast(ArtifactDefinitionRow.id, Text), "C"))
         )
         return tuple(
             StoredArtifactDefinition(

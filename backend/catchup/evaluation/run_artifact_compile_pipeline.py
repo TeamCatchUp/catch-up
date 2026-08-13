@@ -20,6 +20,38 @@ LLM을 부르지 않는다. 카드 본문은 이미 저장된 것을 정해진 �
 컴파일은 카드를 확정하지 않는다. 올라간 것은 전부 계류 중인 변경안이며,
 승인은 `review_artifact_proposals.py`가 맡는다.
 
+정의를 만드는 CLI나 API는 아직 없다. 그래서 정의가 한 줄도 없는
+workspace에서는 이 스크립트가 문서를 한 장도 만들지 않는다. 손으로
+한 줄 넣어 시작한다 — 아래 INSERT를 그대로 쓰되 채널·사용자 식별자만
+자기 것으로 바꾼다.
+
+    INSERT INTO artifact_definitions (
+        id, workspace_id, channel_id, kind, purpose,
+        selection_spec, created_by
+    ) VALUES (
+        gen_random_uuid(),
+        1,
+        '00000000-0000-0000-0000-000000000000',
+        'feature_request_card',
+        '요청 하나를 카드 한 장으로 본다',
+        '{
+           "entity_filter": {"entity_types": ["feature_request"]},
+           "relation_paths": [
+             {"steps": [{"type": "owned_by", "dir": "out"}]}
+           ],
+           "predicate_sections": ["status", "priority"]
+         }'::jsonb,
+        1
+    );
+
+selection_spec은 세 칸이 전부다. entity_filter.entity_types가 문서를
+세울 노드 종류이고, relation_paths는 관계 블록을 만들 걸음(dir은 out·
+in·any)이며, predicate_sections는 실을 절과 그 차례다. 셋 다 어휘에
+있는 이름이어야 한다 — 없는 이름은 컴파일에서 그 정의만 건너뛰게
+만든다. predicate_sections를 null로 두면 "고르지 않았다"는 뜻이라 모든
+절이 어휘가 정한 차례로 실리고, 빈 배열은 "하나도 싣지 않는다"는 뜻이라
+claim 절이 없는 문서가 된다. 채널 하나에 같은 kind의 정의는 하나뿐이다.
+
 개발과 평가 전용이다.
 
 실행:

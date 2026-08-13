@@ -273,6 +273,10 @@ def _compile_artifacts(
     읽은 정의가 하나도 없으면 그 자체를 실패 한 건으로 센다. 무엇을
     문서로 만들지는 정의가 정하므로, 정의가 없는 workspace는 카드가
     한 장도 없이 조용히 통과해 답이 빈 채로 채점된다.
+
+    정의를 만드는 CLI나 API는 아직 없다. 손으로 한 줄 넣는 INSERT 예시는
+    `catchup.evaluation.run_artifact_compile_pipeline`의 모듈 docstring에
+    있다.
     """
     result = compile_definition_artifacts(
         uow,
