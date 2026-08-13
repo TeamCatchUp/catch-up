@@ -17,6 +17,10 @@ frontier 노드를 한 번에 넘기면 노드 수만큼 왕복이 늘어나는 
 근거가 될 수 없다. 남은 이웃에 닿은 간선은 모두 남긴다 — 같은 노드로 가는
 간선이 둘이면 둘 다 그 노드가 문서에 실린 이유이기 때문이다.
 
+순회 결과를 문서 블록으로 옮기는 일도 이 모듈이 맡는다. 무엇을 모았는지와
+그것을 어떻게 적는지는 함께 바뀌기 때문이다 — 상한에 걸려 잘랐다는 사실이
+본문 마지막 줄이 되는 것이 그 예다.
+
 검색은 없다. 순회는 주입받은 저장소 포트만 쓰고 SQL도 session도 모른다.
 같은 입력이면 같은 결과가 나와야 하고, 그 재현성은 걸음마다의 사전순
 정렬에서 나온다.
@@ -28,6 +32,8 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime
 
+from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_RELATION_SECTION
+from catchup.knowledge_maintenance.domain.artifact import ArtifactBlock
 from catchup.knowledge_maintenance.domain.artifact_definition import DIRECTION_ANY
 from catchup.knowledge_maintenance.domain.artifact_definition import DIRECTION_IN
 from catchup.knowledge_maintenance.domain.artifact_definition import DIRECTION_OUT
@@ -132,6 +138,58 @@ def traverse_relation_path(
         relation_ids=tuple(relation_ids),
         assertion_lines=tuple(assertion_lines),
         truncated_steps=tuple(truncated_steps),
+    )
+
+
+def relation_section_block(
+    *,
+    path: RelationPath,
+    traversal: PathTraversal,
+    ontology_version: str | None,
+) -> ArtifactBlock | None:
+    """경로 하나의 순회 결과를 relation_section 블록으로 만든다.
+
+    제목은 경로 정의만으로 정해진다. 어떤 노드에 닿았는지와 무관하므로
+    같은 정의로 만든 문서는 지식이 달라도 같은 자리에 같은 제목의
+    섹션을 갖고, 판 사이의 비교가 제목에서 흔들리지 않는다.
+
+    본문은 근거 문장을 순회가 정한 차례 그대로 줄로 늘어놓는다. 잘린
+    걸음이 있으면 걸음마다 한 줄씩 오름차순으로 덧붙여, 문서가 자신이
+    완전하지 않음을 스스로 말하게 한다. 조용한 누락은 읽는 사람이
+    "이게 전부"라고 믿게 만들기 때문이다.
+
+    근거 장부는 relation_ids 하나뿐이다. 관계 서술의 근거는 관계에
+    붙은 문장 자체이므로 claim을 가리킬 것이 없고, 근거 종류를 하나로
+    못박아야 장부가 흐려지지 않는다.
+
+    빈 블록은 만들지 않는다. 도달한 노드도 잘린 걸음도 없으면 할 말이
+    없고, 근거로 삼을 관계가 하나도 없어도 마찬가지다 — 장부가 빈
+    블록은 근거 계약을 통과할 수 없다. 반대로 도달이 없어도 잘림이
+    있으면 블록을 남긴다. "여기서 끊겼다"는 사실 자체가 정보다.
+    """
+    if not traversal.reached and not traversal.truncated_steps:
+        return None
+    if not traversal.relation_ids:
+        return None
+
+    lines = list(traversal.assertion_lines)
+    for step_index in sorted(traversal.truncated_steps):
+        lines.append(
+            f"(step {step_index}에서 이웃 {MAX_NODES_PER_STEP}개"
+            " 상한 초과 — 일부만 따라감)"
+        )
+
+    return ArtifactBlock(
+        block_kind=BLOCK_KIND_RELATION_SECTION,
+        heading=" → ".join(
+            f"{step.relation_type}({step.direction})" for step in path.steps
+        ),
+        body="\n".join(lines),
+        claim_ids=(),
+        proposal_ids=(),
+        ontology_version=ontology_version,
+        sources=(),
+        relation_ids=traversal.relation_ids,
     )
 
 

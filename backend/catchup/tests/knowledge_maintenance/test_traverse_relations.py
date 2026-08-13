@@ -21,6 +21,8 @@ from datetime import timezone
 
 import pytest
 
+from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_RELATION_SECTION
+from catchup.knowledge_maintenance.domain.artifact import validate_blocks
 from catchup.knowledge_maintenance.domain.artifact_definition import DIRECTION_ANY
 from catchup.knowledge_maintenance.domain.artifact_definition import DIRECTION_IN
 from catchup.knowledge_maintenance.domain.artifact_definition import DIRECTION_OUT
@@ -28,6 +30,10 @@ from catchup.knowledge_maintenance.domain.artifact_definition import MAX_NODES_P
 from catchup.knowledge_maintenance.domain.artifact_definition import RelationPath
 from catchup.knowledge_maintenance.domain.artifact_definition import RelationStep
 from catchup.knowledge_maintenance.ports.relations import StoredRelationEdge
+from catchup.knowledge_maintenance.services.traverse_relations import PathTraversal
+from catchup.knowledge_maintenance.services.traverse_relations import (
+    relation_section_block,
+)
 from catchup.knowledge_maintenance.services.traverse_relations import (
     traverse_relation_path,
 )
@@ -379,3 +385,172 @@ def test_deterministic_ordering() -> None:
     assert first.reached == (node(4), node(7), node(9))
     assert first.relation_ids == (relation(3), relation(4), relation(5))
     assert first.assertion_lines == ("셋", "다섯")
+
+
+PATH_2HOP = RelationPath(
+    steps=(
+        RelationStep("owns", DIRECTION_OUT),
+        RelationStep("member_of", DIRECTION_IN),
+    )
+)
+
+
+def test_block_carries_full_relation_ledger() -> None:
+    """블록은 경로가 거쳐간 관계를 전부 근거 장부로 나른다."""
+    traversal = PathTraversal(
+        reached=(node(3),),
+        relation_ids=(relation(1), relation(2)),
+        assertion_lines=("A가 B를 맡는다", "C는 B 소속"),
+        truncated_steps=(),
+    )
+
+    block = relation_section_block(
+        path=PATH_2HOP, traversal=traversal, ontology_version="v1"
+    )
+
+    assert block is not None
+    assert block.block_kind == BLOCK_KIND_RELATION_SECTION
+    assert set(block.relation_ids) == {relation(1), relation(2)}
+    assert block.claim_ids == ()
+    assert block.sources == ()
+    assert block.proposal_ids == ()
+    assert block.ontology_version == "v1"
+    assert block.body == "A가 B를 맡는다\nC는 B 소속"
+    validate_blocks((block,))
+
+
+def test_heading_names_the_path_regardless_of_content() -> None:
+    """제목은 경로 정의만으로 정해진다 — 내용이 달라도 같다."""
+    first = relation_section_block(
+        path=PATH_2HOP,
+        traversal=PathTraversal(
+            reached=(node(3),),
+            relation_ids=(relation(1),),
+            assertion_lines=("첫째",),
+            truncated_steps=(),
+        ),
+        ontology_version=None,
+    )
+    second = relation_section_block(
+        path=PATH_2HOP,
+        traversal=PathTraversal(
+            reached=(node(4),),
+            relation_ids=(relation(2),),
+            assertion_lines=("둘째",),
+            truncated_steps=(),
+        ),
+        ontology_version=None,
+    )
+
+    assert first is not None
+    assert second is not None
+    assert first.heading == "owns(out) → member_of(in)"
+    assert first.heading == second.heading
+
+
+def test_truncation_appears_in_body() -> None:
+    """잘린 걸음은 본문 마지막 줄에 드러난다 — 조용한 누락 금지."""
+    block = relation_section_block(
+        path=PATH_2HOP,
+        traversal=PathTraversal(
+            reached=(node(3),),
+            relation_ids=(relation(1),),
+            assertion_lines=("A가 B를 맡는다",),
+            truncated_steps=(0,),
+        ),
+        ontology_version="v1",
+    )
+
+    assert block is not None
+    assert "상한 초과" in block.body
+    assert block.body.splitlines()[-1] == (
+        f"(step 0에서 이웃 {MAX_NODES_PER_STEP}개 상한 초과 — 일부만 따라감)"
+    )
+
+
+def test_every_truncated_step_gets_its_own_line() -> None:
+    """걸음이 여럿 잘리면 걸음마다 한 줄씩 오름차순으로 남는다."""
+    block = relation_section_block(
+        path=PATH_2HOP,
+        traversal=PathTraversal(
+            reached=(node(3),),
+            relation_ids=(relation(1),),
+            assertion_lines=(),
+            truncated_steps=(1, 0),
+        ),
+        ontology_version="v1",
+    )
+
+    assert block is not None
+    assert block.body.splitlines() == [
+        f"(step 0에서 이웃 {MAX_NODES_PER_STEP}개 상한 초과 — 일부만 따라감)",
+        f"(step 1에서 이웃 {MAX_NODES_PER_STEP}개 상한 초과 — 일부만 따라감)",
+    ]
+    validate_blocks((block,))
+
+
+def test_truncation_alone_still_makes_a_block() -> None:
+    """도달이 없어도 잘림 자체가 정보이므로 블록은 남는다."""
+    block = relation_section_block(
+        path=PATH_2HOP,
+        traversal=PathTraversal(
+            reached=(),
+            relation_ids=(relation(1),),
+            assertion_lines=(),
+            truncated_steps=(0,),
+        ),
+        ontology_version="v1",
+    )
+
+    assert block is not None
+    assert "상한 초과" in block.body
+    validate_blocks((block,))
+
+
+def test_empty_traversal_returns_none() -> None:
+    """도달도 잘림도 없으면 블록을 만들지 않는다."""
+    empty = PathTraversal(
+        reached=(),
+        relation_ids=(),
+        assertion_lines=(),
+        truncated_steps=(),
+    )
+
+    assert (
+        relation_section_block(
+            path=PATH_2HOP, traversal=empty, ontology_version="v1"
+        )
+        is None
+    )
+
+
+def test_reached_without_relation_ledger_returns_none() -> None:
+    """근거 장부가 비면 블록을 만들지 않는다 — 빈 경로의 시작 노드."""
+    block = relation_section_block(
+        path=RelationPath(steps=()),
+        traversal=PathTraversal(
+            reached=(node(1),),
+            relation_ids=(),
+            assertion_lines=(),
+            truncated_steps=(),
+        ),
+        ontology_version="v1",
+    )
+
+    assert block is None
+
+
+def test_dropped_reach_without_truncation_returns_none() -> None:
+    """사이클로 도달이 사라지고 잘림도 없으면 블록이 없다."""
+    block = relation_section_block(
+        path=PATH_2HOP,
+        traversal=PathTraversal(
+            reached=(),
+            relation_ids=(relation(1),),
+            assertion_lines=("A가 B를 맡는다",),
+            truncated_steps=(),
+        ),
+        ontology_version="v1",
+    )
+
+    assert block is None
