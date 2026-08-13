@@ -5,10 +5,17 @@ import { useRouter } from 'next/navigation';
 
 import DocumentStatusBadge from '@/features/llm-wiki/components/document/DocumentStatusBadge';
 import WikiPageHeader from '@/features/llm-wiki/components/header/WikiPageHeader';
+import ChangeSummaryCard from '@/features/llm-wiki/components/review-queue/ChangeSummaryCard';
 import BlockDiffSection from '@/features/llm-wiki/components/review-queue/diff/BlockDiffSection';
+import DocumentLocationCard from '@/features/llm-wiki/components/review-queue/DocumentLocationCard';
+import ReviewParticipantsCard, {
+  type ReviewParticipant,
+} from '@/features/llm-wiki/components/review-queue/ReviewParticipantsCard';
+import ReviewPublishBar from '@/features/llm-wiki/components/review-queue/ReviewPublishBar';
 import ReviewQueueFilterDropdown, {
   type ReviewQueueFilterSection,
 } from '@/features/llm-wiki/components/review-queue/ReviewQueueFilterDropdown';
+import ReviewQueueListHeader from '@/features/llm-wiki/components/review-queue/ReviewQueueListHeader';
 import ReviewQueueRow from '@/features/llm-wiki/components/review-queue/ReviewQueueRow';
 import {
   BASE_WIKI_BLOCKS,
@@ -27,20 +34,14 @@ import {
 import type { WikiBlock } from '@/features/llm-wiki/types/llmWikiDiff';
 import type { DocumentBreadcrumb } from '@/features/llm-wiki/types/llmWikiModel';
 import { computeBlockDiff } from '@/features/llm-wiki/utils/diff/computeBlockDiff';
-import IconAi from '@/public/icons/icon/ai.svg';
 import IconArrowDown from '@/public/icons/icon/arrow_down.svg';
 import IconArrowUp from '@/public/icons/icon/arrow_up.svg';
 import IconCalendarClock from '@/public/icons/icon/calendar_clock.svg';
-import IconFile from '@/public/icons/icon/file.svg';
-import IconFolder from '@/public/icons/icon/folder.svg';
 import IconPerson from '@/public/icons/icon/person.svg';
 import IconPersonFilled from '@/public/icons/icon/person_filled.svg';
 import IconWikiChannel from '@/public/icons/icon/wiki_channel.svg';
-import NavTree, { type NavTreeNode } from '@/shared/components/navigation/NavTree';
 import { Avatar } from '@/shared/components/ui/avatar';
-import { AvatarGroup } from '@/shared/components/ui/avatar-group';
 import { Button } from '@/shared/components/ui/button';
-import { cn } from '@/shared/utils/cn';
 
 /** 검토 대상 문서 mock — "문서 직접 수정" 라우팅과 breadcrumb·문서 위치의 원천이다 */
 const REVIEW_TARGET_DOCUMENT = WIKI_DOCUMENT_FIXTURES[0];
@@ -78,21 +79,11 @@ const CHANGE_SUMMARY_MOCK = {
 };
 
 /** 참여자 카드 mock — 참여자 API·fixture가 없어 페이지 로컬 데이터다 */
-const PARTICIPANTS_MOCK = [
-  { id: 'participant-author', name: '직원10', description: '1일 전 수정', editing: false, role: '작성자' as const },
-  { id: 'participant-reviewer', name: '팀원F', description: '현재 수정 중', editing: true, role: '리뷰어' as const },
+const PARTICIPANTS_MOCK: readonly ReviewParticipant[] = [
+  { id: 'participant-author', name: '직원10', description: '1일 전 수정', editing: false, role: '작성자' },
+  { id: 'participant-reviewer', name: '팀원F', description: '현재 수정 중', editing: true, role: '리뷰어' },
 ];
 const PARTICIPANT_STACK_MOCK = Array.from({ length: 6 }, () => ({ src: null }));
-
-const LOCATION_ICON = { channel: IconWikiChannel, folder: IconFolder, document: IconFile } as const;
-
-/** breadcrumb 경로를 NavTree 중첩 노드로 바꾼다. 마지막 마디가 최심 leaf다 */
-function toLocationNodes(crumbs: readonly DocumentBreadcrumb[]): NavTreeNode[] {
-  return crumbs.reduceRight<NavTreeNode[]>((children, crumb, index) => {
-    const Icon = LOCATION_ICON[crumb.kind as keyof typeof LOCATION_ICON];
-    return [{ id: `location-${index}`, label: crumb.label, Icon, children }];
-  }, []);
-}
 
 export default function Page() {
   const router = useRouter();
@@ -197,22 +188,19 @@ export default function Page() {
     <div className="flex h-full">
       {/* 좌측 — 요청된 변경사항 목록 */}
       <aside className="border-line-normal-neutral flex w-75 shrink-0 flex-col border-r">
-        <div className="border-line-normal-neutral flex h-13 shrink-0 items-center gap-5 border-b py-2 pr-2 pl-4">
-          <div className="flex min-w-0 flex-1 items-center gap-3">
-            <h1 className="text-heading-small text-text-normal-alternative truncate">요청된 변경사항</h1>
-            <span className="bg-fill-normal-interaction-hover text-heading-small text-text-normal-alternative flex h-6 shrink-0 items-center rounded-lg px-2">
-              {REVIEW_QUEUE_ITEM_FIXTURES.length}
-            </span>
-          </div>
-          <ReviewQueueFilterDropdown
-            sections={filterSections}
-            onSelect={(sectionId, optionId) => {
-              if (sectionId === 'waiting') setWaitingId(optionId);
-            }}
-            onToggle={toggleMultiFilter}
-            filtered={filtered}
-          />
-        </div>
+        <ReviewQueueListHeader
+          count={REVIEW_QUEUE_ITEM_FIXTURES.length}
+          filter={
+            <ReviewQueueFilterDropdown
+              sections={filterSections}
+              onSelect={(sectionId, optionId) => {
+                if (sectionId === 'waiting') setWaitingId(optionId);
+              }}
+              onToggle={toggleMultiFilter}
+              filtered={filtered}
+            />
+          }
+        />
         <div className="min-h-0 flex-1 overflow-y-auto">
           {REVIEW_QUEUE_ITEM_FIXTURES.map((item) => (
             <ReviewQueueRow key={item.id} item={item} selected={item.id === selectedId} onSelect={selectProposal} />
@@ -262,21 +250,11 @@ export default function Page() {
               </div>
             </div>
 
-            {/* AI 변경 요약 카드 */}
-            <section className="border-line-normal-neutral flex flex-col gap-3 rounded-xl border px-5 py-4">
-              <div className="flex items-center gap-3">
-                <IconAi aria-hidden className="text-icon-normal-normal size-6 shrink-0" />
-                <h3 className="text-heading-small text-text-normal-normal min-w-0 flex-1 truncate">
-                  이렇게 바뀌었어요
-                </h3>
-                <div className="text-body-xsmall text-text-primary-assistive flex shrink-0 items-center gap-1.5">
-                  <span>변경 {displayedEntries.length}건</span>
-                  <span aria-hidden className="bg-fill-primary-normal-interaction-inactive size-1 rounded-full" />
-                  <span>{CHANGE_SUMMARY_MOCK.affectedDocumentsLabel}</span>
-                </div>
-              </div>
-              <p className="text-body-small text-text-normal-neutral">{CHANGE_SUMMARY_MOCK.body}</p>
-            </section>
+            <ChangeSummaryCard
+              changeCount={displayedEntries.length}
+              affectedDocumentsLabel={CHANGE_SUMMARY_MOCK.affectedDocumentsLabel}
+              body={CHANGE_SUMMARY_MOCK.body}
+            />
 
             <BlockDiffSection
               entries={displayedEntries}
@@ -287,52 +265,13 @@ export default function Page() {
           </div>
         </div>
 
-        <div className="border-line-normal-neutral flex shrink-0 items-center justify-end border-t px-8 py-3">
-          <Button variant="box-solid-primary" size="lg" className="h-10" onClick={handlePublish}>
-            최종 내보내기
-          </Button>
-        </div>
+        <ReviewPublishBar onPublish={handlePublish} />
       </div>
 
       {/* 우측 — 문서 위치·참여자 */}
       <aside className="border-line-normal-neutral flex w-87.5 shrink-0 flex-col overflow-y-auto border-l">
-        <section className="border-line-normal-neutral flex flex-col gap-4 border-b p-4">
-          <h3 className="text-body-small text-text-normal-alternative">문서 위치</h3>
-          <NavTree nodes={toLocationNodes(REVIEW_TARGET_DOCUMENT.breadcrumbs)} />
-        </section>
-
-        <section className="flex flex-col gap-4 p-4">
-          <div className="flex items-center gap-4">
-            <h3 className="text-body-small text-text-normal-alternative min-w-0 flex-1">참여자</h3>
-            <AvatarGroup avatars={PARTICIPANT_STACK_MOCK} size="small" />
-          </div>
-          {PARTICIPANTS_MOCK.map((participant) => (
-            <div key={participant.id} className="flex items-center gap-4">
-              <Avatar size="xlarge" src={null} className="rounded-xl" />
-              <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                <span className="text-body-small text-text-normal-neutral truncate">{participant.name}</span>
-                <span
-                  className={cn(
-                    'text-body-small truncate',
-                    participant.editing ? 'text-text-primary-normal' : 'text-text-normal-assistive',
-                  )}
-                >
-                  {participant.description}
-                </span>
-              </div>
-              <span
-                className={cn(
-                  'rounded-md2 text-body-xsmall flex shrink-0 items-center px-1.5 py-0.5',
-                  participant.role === '리뷰어'
-                    ? 'bg-fill-primary-normal-neutral text-text-primary-normal'
-                    : 'bg-fill-normal-strong text-text-normal-alternative',
-                )}
-              >
-                {participant.role}
-              </span>
-            </div>
-          ))}
-        </section>
+        <DocumentLocationCard breadcrumbs={REVIEW_TARGET_DOCUMENT.breadcrumbs} />
+        <ReviewParticipantsCard participants={PARTICIPANTS_MOCK} stackAvatars={PARTICIPANT_STACK_MOCK} />
       </aside>
     </div>
   );
