@@ -48,6 +48,9 @@ export const WIKI_CHANNEL_FIXTURE: WikiChannelListItem = {
   folders: CHANNEL_FOLDER_ROW_FIXTURES.map(({ id, name }) => ({ id, name, channelId: 'channel-payment' })),
 };
 
+/** 폴더 페이지 대상 폴더 — 채널 mock의 첫 폴더를 그대로 쓴다(channelId 정합) */
+export const WIKI_FOLDER_FIXTURE = WIKI_CHANNEL_FIXTURE.folders[0];
+
 /** 폴더 페이지의 문서 행 표본 */
 export const FOLDER_DOCUMENT_ROW_FIXTURES: readonly FolderDocumentRowItem[] = [
   createFolderDocumentRow({
