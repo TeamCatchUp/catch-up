@@ -253,6 +253,23 @@ def compile_definition_artifacts(
                     # 이 문서만 접는다. 정의 하나가 어긋났을 때와 같은
                     # 격리다 — 허브 노드 하나가 그 정의의 카드 전부를
                     # 멈추게 두지 않는다.
+                    #
+                    # 앞선 실행이 올려 둔 계류 변경안도 함께 거둔다. 그
+                    # 행은 검토 큐에 그대로 보이고 자동 승인이 도는
+                    # 자리에서는 판으로 확정되므로, 두면 방금 불완전하다고
+                    # 판정한 내용이 그 길로 발행된다. 문서를 찾기만 하고
+                    # 만들지는 않는다 — 한 번도 선 적 없는 문서를 실패로
+                    # 세우면 제목만 있고 내용이 없는 카드가 남는다.
+                    dropped = 0
+                    existing = uow.artifacts.find_definition_artifact(
+                        definition_id=definition.id,
+                        subject_node_id=source.node_id,
+                    )
+                    if existing is not None:
+                        dropped = uow.artifacts.abandon_pending_proposals(
+                            artifact_id=existing,
+                        )
+                        abandoned += dropped
                     logger.warning(
                         "artifact_compile_node_failed_truncated_path",
                         workspace_id=workspace_id,
@@ -260,6 +277,7 @@ def compile_definition_artifacts(
                         node_id=str(source.node_id),
                         path_index=error.path_index,
                         truncated_steps=list(error.truncated_steps),
+                        proposals_abandoned=dropped,
                     )
                     nodes_failed += 1
                     continue

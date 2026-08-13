@@ -2458,6 +2458,25 @@ class SqlAlchemyArtifactRepository:
         self._session.flush()
         return artifact_id
 
+    def find_definition_artifact(
+        self,
+        *,
+        definition_id: uuid.UUID,
+        subject_node_id: uuid.UUID,
+    ) -> uuid.UUID | None:
+        """정의가 대상에 만든 문서를 찾기만 한다. 없으면 None이다.
+
+        찾는 기준은 `get_or_create_definition_artifact`와 같은 (정의,
+        대상)이고, 없을 때 행을 만들지 않는 것만 다르다.
+        """
+        return self._session.scalar(
+            select(KnowledgeArtifactRow.id).where(
+                KnowledgeArtifactRow.workspace_id == self._workspace_id,
+                KnowledgeArtifactRow.definition_id == definition_id,
+                KnowledgeArtifactRow.subject_node_id == subject_node_id,
+            )
+        )
+
     def find_latest_revision_id_and_number(
         self,
         *,

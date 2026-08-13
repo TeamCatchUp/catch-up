@@ -139,6 +139,24 @@ class ArtifactRepository(Protocol):
         """
         ...
 
+    def find_definition_artifact(
+        self,
+        *,
+        definition_id: uuid.UUID,
+        subject_node_id: uuid.UUID,
+    ) -> uuid.UUID | None:
+        """정의가 대상에 만든 문서를 찾기만 한다. 없으면 None이다.
+
+        찾는 기준은 `get_or_create_definition_artifact`와 같은 (정의,
+        대상)이다. 다른 기준을 쓰면 같은 짝을 두 함수가 다르게 가리켜,
+        한쪽이 만든 문서를 다른 쪽이 못 찾는다.
+
+        만들지 않는 것이 이 함수의 존재 이유다. 문서를 세울 수 없다고
+        판정한 자리에서 예전 변경안을 거두려면 문서를 먼저 찾아야 하는데,
+        그때 없는 문서를 새로 만들면 제목만 있고 내용이 없는 카드가 선다.
+        """
+        ...
+
     def find_latest_revision_id_and_number(
         self,
         *,

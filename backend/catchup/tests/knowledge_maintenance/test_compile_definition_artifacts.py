@@ -469,6 +469,41 @@ def _dead_end_after_truncation(
     )
 
 
+def _two_hop_completing(node_id: uuid.UUID) -> FakeRelationRepository:
+    """두 걸음을 끝까지 완주하는 그래프를 만든다.
+
+    잘림도 끊김도 없으므로 관계 절이 그대로 선다.
+    """
+    middle = uuid.UUID("00000000-0000-4000-8000-000000009001")
+    last = uuid.UUID("00000000-0000-4000-8000-000000009002")
+    return FakeRelationRepository(
+        [
+            (
+                "owned_by",
+                StoredRelationEdge(
+                    id=uuid.UUID("ffffffff-0000-4000-8000-000000009001"),
+                    source_node_id=node_id,
+                    target_node_id=middle,
+                    assertion_text="요청 A는 결제팀이 맡는다",
+                    source_display_name="요청 A",
+                    target_display_name="결제팀",
+                ),
+            ),
+            (
+                "owned_by",
+                StoredRelationEdge(
+                    id=uuid.UUID("ffffffff-0000-4000-8000-000000009002"),
+                    source_node_id=middle,
+                    target_node_id=last,
+                    assertion_text="결제팀은 플랫폼실 소속이다",
+                    source_display_name="결제팀",
+                    target_display_name="플랫폼실",
+                ),
+            ),
+        ]
+    )
+
+
 def test_truncated_path_without_ledger_fails_the_document() -> None:
     """잘렸는데 완주가 없으면 그 문서의 컴파일이 실패한다.
 
@@ -531,6 +566,63 @@ def test_truncated_path_failure_does_not_stop_other_nodes() -> None:
     assert result.nodes_considered == 2
     assert result.nodes_failed == 1
     assert result.proposals_created == 1
+
+
+def test_truncation_failure_abandons_earlier_pending_proposal() -> None:
+    """잘림으로 접힌 문서는 앞서 올려 둔 계류 변경안까지 거둔다.
+
+    계류 변경안은 검토 큐에 그대로 보이고, 자동 승인이 도는 자리에서는
+    판으로 확정된다. 방금 불완전하다고 판정한 내용이 그 길로 발행되면
+    fail-closed는 이름뿐이다.
+    """
+    node_id = uuid.uuid4()
+    uow = FakeDefinitionUnitOfWork(
+        definitions=[_definition_row(spec=TRUNCATED_PATH_SPEC)],
+        nodes=[(node_id, "요청 A", "feature_request", "active")],
+        claims=[_claim(node_id=node_id)],
+        relations=_two_hop_completing(node_id),
+    )
+
+    first = _run(uow)
+
+    assert first.proposals_created == 1
+    assert len(uow.artifacts.pending_rows()) == 1
+    artifact_id = uow.artifacts.pending_rows()[0]["artifact_id"]
+
+    # 지식이 바뀌어 경로가 잘리고 완주가 사라진다.
+    uow.relations = _dead_end_after_truncation(node_id)
+    second = _run(uow)
+
+    assert second.nodes_failed == 1
+    assert second.proposals_created == 0
+    assert second.proposals_abandoned == 1
+    assert [
+        row
+        for row in uow.artifacts.pending_rows()
+        if row["artifact_id"] == artifact_id
+    ] == []
+    # 자동 승인이 보는 자리에서도 비어 있어야 한다.
+    assert uow.artifacts.list_pending_proposals() == []
+
+
+def test_first_ever_truncation_failure_creates_no_artifact() -> None:
+    """한 번도 선 적 없는 문서는 실패로도 행을 만들지 않는다.
+
+    빈 문서 행은 검토자에게 제목만 있고 내용이 없는 카드로 보인다.
+    """
+    node_id = uuid.uuid4()
+    uow = FakeDefinitionUnitOfWork(
+        definitions=[_definition_row(spec=TRUNCATED_PATH_SPEC)],
+        nodes=[(node_id, "요청 A", "feature_request", "active")],
+        claims=[_claim(node_id=node_id)],
+        relations=_dead_end_after_truncation(node_id),
+    )
+
+    result = _run(uow)
+
+    assert result.nodes_failed == 1
+    assert result.proposals_abandoned == 0
+    assert uow.artifacts.artifact_rows == {}
 
 
 def test_dead_path_without_truncation_stays_silent() -> None:
@@ -1064,3 +1156,100 @@ def test_same_input_twice_all_skipped(
     ]
     assert len(relation_blocks) == 1
     assert relation_blocks[0]["relation_ids"] == [str(relation_id)]
+
+
+def test_truncation_failure_abandons_pending_in_postgres(
+    workspace_id: int,
+    user_id: int,
+    session_factory: Callable[[], Session],
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+) -> None:
+    """실 DB에서도 잘림 실패가 앞선 계류 변경안을 거둔다.
+
+    fake는 접기 호출이 불렸는지만 보여 준다. 그 호출이 실제로 행 상태를
+    바꾸는지, 그래서 검토 큐 조회에서 빠지는지는 실 DB에서 확인해야
+    한다.
+
+    두 걸음 경로를 쓴다. 첫 실행은 이웃이 하나뿐이라 잘리지 않고, 둘째
+    걸음이 비어 관계 절 없이 claim 절만으로 문서가 선다. 그다음 막다른
+    이웃을 상한 너머로 더해 첫 걸음이 잘리게 만들면, 완주한 가지가
+    없는 채로 잘림만 남는다 — 관계를 지우거나 다시 심지 않고 행을
+    더하기만 해서 그 상태에 닿는 가장 싼 길이다.
+    """
+    channel_id = _channel(session_factory, workspace_id, user_id)
+    with session_factory() as session:
+        session.add(
+            ArtifactDefinition(
+                id=FIRST_DEFINITION_ID,
+                workspace_id=workspace_id,
+                channel_id=channel_id,
+                kind=DEFINITION_KIND,
+                selection_spec=_spec(
+                    relation_paths=[
+                        {
+                            "steps": [
+                                {"type": "owned_by", "dir": "out"},
+                                {"type": "owned_by", "dir": "out"},
+                            ]
+                        }
+                    ],
+                    predicate_sections=["status"],
+                ),
+                created_by=user_id,
+            )
+        )
+        run_id = _pg_extraction_run(session, workspace_id)
+        subject_id = _pg_node(session, workspace_id, "요청 A", "feature_request")
+        _pg_claim(session, workspace_id, run_id, subject_id, "status", "검토 중")
+        team_id = _pg_node(session, workspace_id, "결제팀", "team")
+        _pg_relation(
+            session,
+            workspace_id,
+            run_id,
+            relation_id=uuid.uuid4(),
+            source_node_id=subject_id,
+            target_node_id=team_id,
+        )
+        session.commit()
+
+    first = compile_definition_artifacts(
+        uow_factory(), workspace_id=workspace_id, vocabulary=VOCABULARY
+    )
+
+    assert first.proposals_created == 1
+    with uow_factory() as uow:
+        assert len(uow.artifacts.list_pending_proposals()) == 1
+
+    # 막다른 이웃을 상한 너머로 더해 첫 걸음을 자른다.
+    with session_factory() as session:
+        for _ in range(MAX_NODES_PER_STEP):
+            _pg_relation(
+                session,
+                workspace_id,
+                run_id,
+                relation_id=uuid.uuid4(),
+                source_node_id=subject_id,
+                target_node_id=_pg_node(
+                    session, workspace_id, f"팀-{uuid.uuid4().hex[:6]}", "team"
+                ),
+            )
+        session.commit()
+
+    second = compile_definition_artifacts(
+        uow_factory(), workspace_id=workspace_id, vocabulary=VOCABULARY
+    )
+
+    assert second.nodes_failed == 1
+    assert second.proposals_created == 0
+    assert second.proposals_abandoned == 1
+    with uow_factory() as uow:
+        assert uow.artifacts.list_pending_proposals() == []
+    with session_factory() as session:
+        statuses = session.execute(
+            text(
+                "SELECT status FROM knowledge_artifact_change_proposals"
+                " WHERE workspace_id = :workspace"
+            ),
+            {"workspace": workspace_id},
+        ).scalars().all()
+    assert statuses == ["abandoned"]

@@ -224,6 +224,17 @@ class FakeArtifactRepository:
         )
         return artifact_id
 
+    def find_definition_artifact(
+        self,
+        *,
+        definition_id: uuid.UUID,
+        subject_node_id: uuid.UUID,
+    ) -> uuid.UUID | None:
+        """정의가 대상에 만든 문서를 찾기만 한다. 없으면 None이다."""
+        return self.definition_artifacts.get(
+            (definition_id, subject_node_id)
+        )
+
     def _remember(
         self,
         artifact_id: uuid.UUID,
