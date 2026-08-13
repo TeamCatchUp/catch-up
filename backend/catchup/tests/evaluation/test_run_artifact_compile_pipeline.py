@@ -10,13 +10,22 @@ DB도 LLM도 부르지 않는다.
 
 from __future__ import annotations
 
+import sys
 import uuid
 from typing import Any
 
+import pytest
+
+from catchup.evaluation import run_artifact_compile_pipeline as runner
 from catchup.evaluation.run_artifact_compile_pipeline import only_definition
+from catchup.knowledge_maintenance.contracts.extraction import ExtractionVocabulary
+from catchup.knowledge_maintenance.contracts.extraction import PredicateEntry
 from catchup.knowledge_maintenance.domain.artifact_definition import SelectionSpec
 from catchup.knowledge_maintenance.ports.artifact_definitions import (
     StoredArtifactDefinition,
+)
+from catchup.knowledge_maintenance.services.compile_entity_artifacts import (
+    ArtifactCompileResult,
 )
 
 FIRST_ID = uuid.UUID("00000000-0000-4000-8000-000000000001")
@@ -112,3 +121,122 @@ def test_other_repositories_and_boundary_pass_through() -> None:
     assert inner.entered == 1
     assert inner.exited == 1
     assert inner.committed == 1
+
+
+class _FakeEngine:
+    """engine을 대신한다. 닫혔는지만 기억한다."""
+
+    def __init__(self) -> None:
+        self.disposed = 0
+
+    def dispose(self) -> None:
+        self.disposed += 1
+
+
+class _FakeRunUnitOfWork:
+    """러너가 여닫기만 하는 UnitOfWork를 대신한다."""
+
+    def __enter__(self) -> _FakeRunUnitOfWork:
+        return self
+
+    def __exit__(self, exc_type: Any, exc_value: Any, traceback: Any) -> None:
+        return None
+
+
+def _stub_run(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    result: ArtifactCompileResult,
+) -> _FakeEngine:
+    """DB와 컴파일을 대신 세워 main을 부를 수 있게 만든다."""
+    engine = _FakeEngine()
+    monkeypatch.setattr(runner, "create_engine", lambda url: engine)
+    monkeypatch.setattr(runner, "sessionmaker", lambda **kwargs: object())
+    monkeypatch.setattr(
+        runner,
+        "KnowledgeMaintenanceUnitOfWork",
+        lambda *args, **kwargs: _FakeRunUnitOfWork(),
+    )
+    monkeypatch.setattr(
+        runner,
+        "_load_vocabulary",
+        lambda *args, **kwargs: ExtractionVocabulary(
+            snapshot_id="1",
+            predicate_entries=(
+                PredicateEntry(
+                    name="status", definition="지금 상태다.", value_type="text"
+                ),
+            ),
+        ),
+    )
+    monkeypatch.setattr(
+        runner, "compile_definition_artifacts", lambda *a, **kw: result
+    )
+    monkeypatch.setattr(runner, "_print_pending_cards", lambda uow: None)
+    monkeypatch.setattr(
+        sys, "argv", ["run", "--workspace-id", "1", "--ontology-version", "1"]
+    )
+    return engine
+
+
+def test_failed_nodes_are_printed_and_exit_code_is_one(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """접힌 노드가 있으면 결과에 적히고 종료 코드가 1이다.
+
+    이 러너가 지금 유일한 실행 입구다. 조용히 0으로 끝나면 문서가 빠진
+    실행을 사람도 자동화도 성공으로 기록한다.
+    """
+    engine = _stub_run(
+        monkeypatch,
+        result=ArtifactCompileResult(
+            definitions_considered=1,
+            nodes_considered=2,
+            proposals_created=1,
+            nodes_failed=1,
+        ),
+    )
+
+    code = runner.main()
+
+    assert code == 1
+    assert "실패 노드 1" in capsys.readouterr().out
+    assert engine.disposed == 1
+
+
+def test_clean_run_exits_zero(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """접힌 노드가 없으면 종료 코드가 0이다."""
+    _stub_run(
+        monkeypatch,
+        result=ArtifactCompileResult(
+            definitions_considered=1,
+            nodes_considered=2,
+            proposals_created=2,
+        ),
+    )
+
+    code = runner.main()
+
+    assert code == 0
+    assert "실패 노드 0" in capsys.readouterr().out
+
+
+def test_zero_definitions_still_exits_zero(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """정의가 없는 실행은 그대로 0으로 끝난다.
+
+    정의가 없는 것은 아직 걸어 두지 않았다는 뜻이지 문서가 빠진 실행이
+    아니다. 종료 코드를 움직이는 것은 접힌 노드뿐이다.
+    """
+    _stub_run(monkeypatch, result=ArtifactCompileResult())
+
+    code = runner.main()
+
+    assert code == 0
+    assert "읽은 정의가 없다" in capsys.readouterr().out

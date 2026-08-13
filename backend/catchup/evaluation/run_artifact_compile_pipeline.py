@@ -20,6 +20,12 @@ LLM을 부르지 않는다. 카드 본문은 이미 저장된 것을 정해진 �
 컴파일은 카드를 확정하지 않는다. 올라간 것은 전부 계류 중인 변경안이며,
 승인은 `review_artifact_proposals.py`가 맡는다.
 
+종료 코드를 움직이는 것은 접힌 노드뿐이다. 문서를 세울 수 없어 컴파일을
+접은 노드가 하나라도 있으면 1로 끝난다 — 그만큼 카드가 비는데 0으로
+끝나면 사람도 자동화도 그 실행을 성공으로 기록한다. 정의를 하나도 읽지
+못했거나 `--definition-id`가 가리키는 정의가 없는 경우는 그대로 0이다.
+아직 정의를 걸어 두지 않았다는 뜻이지 문서가 빠진 실행이 아니다.
+
 정의를 만드는 CLI나 API는 아직 없다. 그래서 정의가 한 줄도 없는
 workspace에서는 이 스크립트가 문서를 한 장도 만들지 않는다. 손으로
 한 줄 넣어 시작한다 — 아래 INSERT를 그대로 쓰되 채널·사용자 식별자만
@@ -200,7 +206,7 @@ def _print_pending_cards(uow: KnowledgeMaintenanceUnitOfWork) -> None:
         print(render_proposal_card(proposal))
 
 
-def main() -> None:
+def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--workspace-id", type=int, default=1)
     parser.add_argument(
@@ -244,7 +250,7 @@ def main() -> None:
             "run_vocabulary_convergence_pipeline을 먼저 돌린다."
         )
         engine.dispose()
-        return
+        return 0
 
     vocabulary = _load_vocabulary(
         uow,
@@ -257,7 +263,7 @@ def main() -> None:
             f"run_vocabulary_convergence_pipeline을 먼저 돌린다."
         )
         engine.dispose()
-        return
+        return 0
     if not vocabulary.predicate_entries:
         # 사전이 비면 카드는 만들어지지만 predicate 순서를 사람이 정한
         # 대로 놓지 못하고 이름순으로 떨어진다. 그 사실을 미리 알린다.
@@ -302,11 +308,17 @@ def main() -> None:
     # 반려된 내용과 지문이 같아 카드에서 빠진 블록 수다. 조용히 사라지면
     # 카드가 왜 짧아졌는지 알 길이 없으므로 함께 적는다.
     print(f"  반려 재등장 차단 블록 {result.blocks_suppressed}")
+    # 문서를 세울 수 없어 컴파일을 접은 노드 수다. 그만큼 카드가 비므로
+    # 실행 전체를 실패로 끝낸다.
+    print(f"  실패 노드 {result.nodes_failed}")
 
     _print_pending_cards(uow)
 
     engine.dispose()
+    if result.nodes_failed:
+        return 1
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
