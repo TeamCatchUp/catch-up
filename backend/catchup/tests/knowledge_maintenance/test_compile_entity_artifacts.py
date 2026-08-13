@@ -177,11 +177,19 @@ class FakeArtifactRepository:
         )
         return hashes
 
-    def abandon_pending_proposals(self, *, artifact_id: uuid.UUID) -> int:
+    def abandon_pending_proposals(
+        self,
+        *,
+        artifact_id: uuid.UUID,
+        except_content_hash: str | None = None,
+    ) -> int:
         abandoned = 0
         for row in self.by_key.values():
             if row["artifact_id"] == artifact_id and (
                 row["status"] == "pending"
+            ) and (
+                except_content_hash is None
+                or row["content_hash"] != except_content_hash
             ):
                 row["status"] = "abandoned"
                 abandoned += 1
@@ -1113,6 +1121,28 @@ def test_skipped_node_abandons_stale_pending() -> None:
     assert result.proposals_revived == 0
     assert uow.artifacts.by_id[stale_id]["status"] == "abandoned"
     assert uow.artifacts.pending_rows() == []
+
+
+def test_skipped_node_keeps_matching_pending_and_abandons_other_pending() -> None:
+    """현재 내용의 계류안은 남기고 함께 남은 낡은 계류안만 접는다."""
+    node_id = uuid.uuid4()
+    claim = _claim(node_id=node_id, value=60)
+    uow = FakeUnitOfWork(sources=[_source(node_id)], claims=[claim])
+    _run(uow)
+    matching = _only_pending(uow)
+
+    uow.knowledge_candidates.claims = [replace(claim, value=120)]
+    _run(uow)
+    stale = _only_pending(uow)
+    matching["status"] = "pending"
+
+    uow.knowledge_candidates.claims = [claim]
+    result = _run(uow)
+
+    assert result.unchanged_skipped == 1
+    assert result.proposals_abandoned == 1
+    assert matching["status"] == "pending"
+    assert stale["status"] == "abandoned"
 
 
 def test_fake_refuses_to_revive_decided_rows() -> None:

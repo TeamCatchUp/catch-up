@@ -558,6 +558,32 @@ def test_abandon_pending_proposals_counts_only_pending(
     assert stored.rejection_reason == "근거가 부족하다"
 
 
+def test_abandon_pending_proposals_keeps_requested_content_hash(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+) -> None:
+    """현재 내용과 같은 계류안은 남기고 다른 계류안만 접는다."""
+    artifact_id = _artifact_id(uow_factory, session_factory, workspace_id)
+
+    with uow_factory() as uow:
+        kept_id, kept_hash = _add(uow, artifact_id, _blocks("현재"))
+        stale_id, _ = _add(uow, artifact_id, _blocks("이전"))
+        uow.commit()
+
+    with uow_factory() as uow:
+        abandoned = uow.artifacts.abandon_pending_proposals(
+            artifact_id=artifact_id,
+            except_content_hash=kept_hash,
+        )
+        uow.commit()
+
+    with session_factory() as session:
+        assert abandoned == 1
+        assert session.get(ProposalRow, kept_id).status == "pending"
+        assert session.get(ProposalRow, stale_id).status == "abandoned"
+
+
 def test_find_latest_content_hashes_covers_revision_and_open_reviews(
     workspace_id: int,
     session_factory: Callable[[], Session],
