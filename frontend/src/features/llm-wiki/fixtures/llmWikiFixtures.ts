@@ -1,3 +1,4 @@
+import type { ReviewQueueFilterOption } from '../components/review-queue/ReviewQueueFilterSearchPanel';
 import type { DocumentRowData, ReviewQueueItemData, ReviewStatCardData, TagItem } from '../types/llmWikiModel';
 
 const BASE_DOCUMENT_ROW: DocumentRowData = {
@@ -92,6 +93,31 @@ export const REVIEW_STAT_CARD_FIXTURES: readonly ReviewStatCardData[] = [
   { id: 'stat-pending-review', label: '검토 대기', count: 7 },
   { id: 'stat-my-assigned', label: '내 담당', count: 150 },
   { id: 'stat-unassigned', label: '담당자 미지정', count: 7 },
+];
+
+/**
+ * 검토 큐 필터 담당자 축 표본. trailingLabel은 시안의 직책("PM") 자리이고 공급원은 미정이다.
+ * 동명이인이 있어야 "id로 선택한다"는 계약이 스토리에서 실제로 밟힌다.
+ */
+export const REVIEW_QUEUE_ASSIGNEE_OPTIONS: readonly ReviewQueueFilterOption[] = [
+  { id: 'u-seoyeon', label: '직원10', trailingLabel: 'PM' },
+  { id: 'u-jinsu', label: '이진수', trailingLabel: 'PM' },
+  { id: 'u-jinsu-2', label: '이진수', trailingLabel: 'BE' },
+  { id: 'u-sibin', label: '팀원F', trailingLabel: 'FE' },
+  { id: 'u-rogan', label: '팀원G', trailingLabel: 'FE' },
+  { id: 'u-haeun', label: '김하은', trailingLabel: 'Design' },
+  { id: 'u-minu', label: '최민우', trailingLabel: 'BE' },
+  // 직책이 비는 행 — trailingLabel이 optional임을 스토리가 밟는다
+  { id: 'u-external', label: '외부 협력자' },
+];
+
+/** 검토 큐 필터 대상 채널 축 표본. 채널은 직책이 없어 trailingLabel을 두지 않는다. */
+export const REVIEW_QUEUE_CHANNEL_OPTIONS: readonly ReviewQueueFilterOption[] = [
+  { id: 'ch-billing', label: '결제' },
+  { id: 'ch-refund', label: '환불' },
+  { id: 'ch-account', label: '계정' },
+  { id: 'ch-notification', label: '알림' },
+  { id: 'ch-onboarding', label: '온보딩' },
 ];
 
 /**

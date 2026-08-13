@@ -16,10 +16,9 @@ import {
 } from '@/shared/components/ui/dropdown-menu';
 import { cn } from '@/shared/utils/cn';
 
-export interface ReviewQueueFilterOption {
-  id: string;
-  label: string;
-}
+import ReviewQueueFilterSearchPanel, { type ReviewQueueFilterOption } from './ReviewQueueFilterSearchPanel';
+
+export type { ReviewQueueFilterOption };
 
 export interface ReviewQueueFilterSection {
   id: string;
@@ -29,13 +28,22 @@ export interface ReviewQueueFilterSection {
   Icon?: ComponentType<SVGProps<SVGSVGElement>>;
   /** 축의 현재값 요약(예: "전체"). 축 행 우측, 화살표 앞에 놓인다. */
   valueLabel?: string;
-  /** 현재 적용된 옵션. 옵션 목록에서 지속 하이라이트된다. */
+  /** 단일 선택 축의 현재 적용 옵션. 옵션 목록에서 지속 하이라이트된다. */
   selectedOptionId?: string;
+  /** 값이 있으면 검색 멀티셀렉트 축이 되고, 이 문자열이 검색창 placeholder다. */
+  searchPlaceholder?: string;
+  /** 검색 멀티셀렉트 축의 현재 선택 목록. valueLabel을 주지 않으면 여기서 요약을 만든다. */
+  selectedOptionIds?: readonly string[];
+  /** 검색 패널의 옵션 글리프. 없으면 축 아이콘을 쓴다. */
+  OptionIcon?: ComponentType<SVGProps<SVGSVGElement>>;
 }
 
 interface ReviewQueueFilterDropdownProps {
   sections: readonly ReviewQueueFilterSection[];
+  /** 단일 선택 축의 선택 신호. */
   onSelect?: (sectionId: string, optionId: string) => void;
+  /** 검색 멀티셀렉트 축의 선택·해제 신호. 이미 선택된 id가 오면 해제다. */
+  onToggle?: (sectionId: string, optionId: string) => void;
   /** 필터가 걸려 있으면 트리거 글리프가 파란 원형(filled)으로 바뀐다. */
   filtered?: boolean;
 }
@@ -47,6 +55,7 @@ interface ReviewQueueFilterDropdownProps {
 export default function ReviewQueueFilterDropdown({
   sections,
   onSelect,
+  onToggle,
   filtered = false,
 }: ReviewQueueFilterDropdownProps) {
   return (
@@ -65,34 +74,65 @@ export default function ReviewQueueFilterDropdown({
 
       {/* 카드 폭 250·radius 12는 시안 고정값 — 래퍼 기본(min-w 200·radius 16)을 덮는다. */}
       <DropdownMenuContent align="start" className="w-62.5 rounded-xl">
-        {sections.map(({ id, label, options, Icon, valueLabel, selectedOptionId }) => (
-          <DropdownMenuSub key={id}>
-            {/* 항목 높이는 패딩+아이콘의 결과값이다 — h-*로 못박지 않는다. */}
-            <DropdownMenuSubTrigger className="gap-1">
-              <span className="flex min-w-0 flex-1 items-center gap-2.5">
-                {Icon && <Icon aria-hidden className="text-icon-normal-normal size-6 shrink-0" />}
-                <span className="min-w-0 flex-1 truncate">{label}</span>
-              </span>
-              {valueLabel && (
-                <span className="text-body-xsmall text-text-normal-alternative max-w-19.5 shrink-0 truncate">
-                  {valueLabel}
+        {sections.map((section) => {
+          const { id, label, options, Icon, selectedOptionId, searchPlaceholder, selectedOptionIds, OptionIcon } =
+            section;
+          const selectedIds = selectedOptionIds ?? [];
+          // 검색 축의 요약은 선택 목록에서 파생한다 — 소비처가 같은 문자열을 두 번 만들지 않게.
+          const valueLabel =
+            section.valueLabel ??
+            (selectedIds.length > 0
+              ? options
+                  .filter((option) => selectedIds.includes(option.id))
+                  .map((option) => option.label)
+                  .join(', ')
+              : undefined);
+
+          return (
+            <DropdownMenuSub key={id}>
+              {/* 항목 높이는 패딩+아이콘의 결과값이다 — h-*로 못박지 않는다. */}
+              <DropdownMenuSubTrigger className="gap-1">
+                <span className="flex min-w-0 flex-1 items-center gap-2.5">
+                  {Icon && <Icon aria-hidden className="text-icon-normal-normal size-6 shrink-0" />}
+                  <span className="min-w-0 flex-1 truncate">{label}</span>
                 </span>
+                {valueLabel && (
+                  <span className="text-body-xsmall text-text-normal-alternative max-w-19.5 shrink-0 truncate">
+                    {valueLabel}
+                  </span>
+                )}
+                <IconArrowRight aria-hidden className="text-icon-normal-alternative size-6 shrink-0" />
+              </DropdownMenuSubTrigger>
+
+              {searchPlaceholder ? (
+                <DropdownMenuSubContent className="shadow-modal w-75 rounded-xl px-0 py-2.5">
+                  {/* Radix 메뉴의 타이핑 탐색이 검색 입력을 가로채므로 여기서 키를 끊는다 */}
+                  <div onKeyDown={(event) => event.stopPropagation()}>
+                    <ReviewQueueFilterSearchPanel
+                      options={options}
+                      selectedIds={selectedIds}
+                      onToggle={(optionId) => onToggle?.(id, optionId)}
+                      placeholder={searchPlaceholder}
+                      OptionIcon={OptionIcon ?? Icon ?? IconFilterList}
+                    />
+                  </div>
+                </DropdownMenuSubContent>
+              ) : (
+                <DropdownMenuSubContent className="w-50 rounded-xl">
+                  {options.map((option) => (
+                    <DropdownMenuItem
+                      key={option.id}
+                      onSelect={() => onSelect?.(id, option.id)}
+                      className={cn(option.id === selectedOptionId && 'bg-fill-normal-interaction-hover')}
+                    >
+                      <span className="min-w-0 flex-1 truncate">{option.label}</span>
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuSubContent>
               )}
-              <IconArrowRight aria-hidden className="text-icon-normal-alternative size-6 shrink-0" />
-            </DropdownMenuSubTrigger>
-            <DropdownMenuSubContent className="w-50 rounded-xl">
-              {options.map((option) => (
-                <DropdownMenuItem
-                  key={option.id}
-                  onSelect={() => onSelect?.(id, option.id)}
-                  className={cn(option.id === selectedOptionId && 'bg-fill-normal-interaction-hover')}
-                >
-                  <span className="min-w-0 flex-1 truncate">{option.label}</span>
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuSubContent>
-          </DropdownMenuSub>
-        ))}
+            </DropdownMenuSub>
+          );
+        })}
       </DropdownMenuContent>
     </DropdownMenu>
   );

@@ -1,35 +1,33 @@
+import { useState } from 'react';
 import type { Meta, StoryObj } from '@storybook/nextjs-vite';
 import { expect, fn, userEvent, within } from 'storybook/test';
 
 import IconCalendarClock from '@/public/icons/icon/calendar_clock.svg';
 import IconPerson from '@/public/icons/icon/person.svg';
+import IconPersonFilled from '@/public/icons/icon/person_filled.svg';
 import IconWikiChannel from '@/public/icons/icon/wiki_channel.svg';
 
 import { catchupParameters } from '../../../../../.storybook/catchupStoryParameters';
+import { REVIEW_QUEUE_ASSIGNEE_OPTIONS, REVIEW_QUEUE_CHANNEL_OPTIONS } from '../../fixtures/llmWikiFixtures';
 import ReviewQueueFilterDropdown, { type ReviewQueueFilterSection } from './ReviewQueueFilterDropdown';
 
-/**
- * 필터 축과 옵션은 전부 fixture다 — 컴포넌트는 축 목록을 알지 못한다.
- * 대기 기간 옵션 4개만 시안 실측값이고, 담당자·대상 채널 옵션은 자리 표본이다(아래 dataNotes).
- */
+/** 필터 축과 옵션은 전부 fixture다 — 컴포넌트는 축 목록을 알지 못한다. */
 const SECTIONS: readonly ReviewQueueFilterSection[] = [
   {
     id: 'target-channel',
     label: '대상 채널',
     Icon: IconWikiChannel,
-    options: [
-      { id: 'ch-billing', label: '결제' },
-      { id: 'ch-refund', label: '환불' },
-    ],
+    searchPlaceholder: '부서명 검색',
+    OptionIcon: IconWikiChannel,
+    options: REVIEW_QUEUE_CHANNEL_OPTIONS,
   },
   {
     id: 'assignee',
     label: '담당자',
     Icon: IconPerson,
-    options: [
-      { id: 'u-seoyeon', label: '직원10' },
-      { id: 'u-jinsu', label: '이진수' },
-    ],
+    searchPlaceholder: '담당자 검색',
+    OptionIcon: IconPersonFilled,
+    options: REVIEW_QUEUE_ASSIGNEE_OPTIONS,
   },
   {
     id: 'waiting',
@@ -50,7 +48,7 @@ const meta = {
   title: 'Compositions/LLM Wiki/ReviewQueue/ReviewQueueFilterDropdown',
   component: ReviewQueueFilterDropdown,
   tags: ['autodocs'],
-  args: { sections: SECTIONS, onSelect: fn() },
+  args: { sections: SECTIONS, onSelect: fn(), onToggle: fn() },
   parameters: {
     ...catchupParameters({
       level: 'composition',
@@ -65,16 +63,17 @@ const meta = {
         nodeId: '17762:105579',
       },
       viewport: { width: 360, height: 400 },
-      states: ['closed', 'open', 'submenu-select', 'filtered-trigger', 'long-label-truncation'],
+      states: ['closed', 'open', 'submenu-select', 'search-axis', 'filtered-trigger', 'long-label-truncation'],
       reuseNotes: [
         '공용 래퍼 `shared/components/ui/dropdown-menu`만 쓴다(@radix-ui 직접 import 금지). 서브메뉴 구성은 Sub/SubTrigger/SubContent.',
-        'wiki_channel·person·calendar_clock·arrow_right 에셋 재사용. filter_list_filled.svg만 신규 — 시안의 "필터링 걸려 있을 때" 글리프(408:2216)를 그대로 내리고 fill을 currentColor로 바꿨다(dash-circle 선례).',
+        'wiki_channel·person·person_filled·calendar_clock·arrow_right 에셋 재사용. filter_list_filled.svg만 신규 — 시안의 "필터링 걸려 있을 때" 글리프(408:2216)를 그대로 내리고 fill을 currentColor로 바꿨다(dash-circle 선례).',
+        '검색 멀티셀렉트 축의 2차 패널은 ReviewQueueFilterSearchPanel에 분리했다 — 그쪽 스토리가 검색·칩·빈 결과·초기화를 Radix 없이 단독으로 잰다.',
       ],
       dataNotes: [
         '2026-08-13 재실측: 축이 4개→3개다 — 신뢰도 축이 시트(17762:105579)에서 소멸했다. 순서는 대상 채널→담당자→대기 기간.',
         '대기 기간 옵션(전체·오늘·7일 이내·이전)은 시안 실측값이다(18112:48066). 첫 항목이 지속 하이라이트 — 축 행의 현재값 "전체"와 함께 읽어 선택 상태로 판정했다(hover 목업 가능성은 interactionNotes).',
-        '담당자·대상 채널의 2차 패널은 검색 입력+선택 칩+목록의 멀티셀렉트다(17762:105579 시트) — 빈 검색 결과·칩 초과·행 "PM" 라벨 의미가 전부 미정의라 구현을 이연하고 옵션 평면 목록이 자리를 지킨다. design-request 질문 등록.',
-        '"결과 없음"·로딩 스토리는 만들지 않는다(감사 금지 목록).',
+        '담당자·대상 채널은 검색 멀티셀렉트 축이다(18112:47410·47865). 축마다 옵션·글리프·placeholder를 fixture로 주입하고, 컴포넌트는 축의 종류를 searchPlaceholder 유무로만 가른다.',
+        '"결과 없음"·로딩 스토리는 만들지 않는다(감사 금지 목록). 검색 패널의 "검색 결과가 없습니다."는 리포 관례 채택분이고 패널 스토리에 dev-preview로 표기했다.',
       ],
       tokenNotes: [
         '카드: Fill/Normal/Normal 흰 배경 + Line/Normal/Normal 테두리(래퍼 기본값), radius 12 = rounded-xl — 래퍼 기본 16(rounded-2xl)을 시안값으로 덮는다.',
@@ -167,6 +166,57 @@ export const SubmenuSelect: Story = {
 
     await userEvent.click(body.getByText('오늘'));
     await expect(args.onSelect).toHaveBeenCalledWith('waiting', 'today');
+  },
+};
+
+/**
+ * 검색 멀티셀렉트 축. 축 행을 열면 300 카드의 검색 패널이 뜨고, 선택은 축 행 요약으로 되올라온다.
+ * 선택 상태는 소비처가 들기 때문에 이 스토리만 로컬 state를 쓴다.
+ */
+export const SearchAxis: Story = {
+  render: function SearchAxisStory(args) {
+    const [selectedIds, setSelectedIds] = useState<readonly string[]>([]);
+
+    return (
+      <ReviewQueueFilterDropdown
+        {...args}
+        sections={SECTIONS.map((section) =>
+          section.id === 'assignee' ? { ...section, selectedOptionIds: selectedIds } : section,
+        )}
+        onToggle={(sectionId, optionId) => {
+          args.onToggle?.(sectionId, optionId);
+          setSelectedIds((prev) =>
+            prev.includes(optionId) ? prev.filter((id) => id !== optionId) : [...prev, optionId],
+          );
+        }}
+      />
+    );
+  },
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement);
+    const body = within(canvasElement.ownerDocument.body);
+
+    await userEvent.click(canvas.getByRole('button', { name: '필터' }));
+    await userEvent.click(await body.findByText('담당자'));
+
+    // 검색 패널이 뜬다 — Radix 메뉴가 타이핑을 가로채면 입력값이 남지 않는다.
+    const input = await body.findByPlaceholderText('담당자 검색');
+    await userEvent.type(input, '박서');
+    await expect(input).toHaveValue('박서');
+    await expect(body.getAllByRole('option')).toHaveLength(1);
+
+    // 선택해도 메뉴가 닫히지 않는다 — 다중 선택 축이라 계속 고를 수 있어야 한다.
+    await userEvent.click(body.getByText('직원10'));
+    await expect(args.onToggle).toHaveBeenCalledWith('assignee', 'u-seoyeon');
+    await expect(body.getByPlaceholderText('담당자 검색')).toBeInTheDocument();
+
+    // 선택이 축 행의 현재값 요약으로 되올라온다.
+    const assigneeRow = body.getByText('담당자').closest('[role=menuitem]') as HTMLElement;
+    await expect(within(assigneeRow).getByText('직원10')).toBeInTheDocument();
+
+    // 2차 카드는 300 고정이다(1차 250과 다른 값).
+    const panelMenu = input.closest('[role=menu]') as HTMLElement;
+    await expect(window.getComputedStyle(panelMenu).width).toBe('300px');
   },
 };
 
