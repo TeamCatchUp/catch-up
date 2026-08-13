@@ -70,4 +70,10 @@ export const FOLDER_DOCUMENT_ROW_FIXTURES: readonly FolderDocumentRowItem[] = [
     ownerName: '이진수',
     lastActivityLabel: '2024.12.12',
   }),
+  // 문서 라우트 픽스처(llmWikiDocumentFixtures)와 id가 이어지는 행 — mock 앱에서 문서 화면까지 이동된다
+  createFolderDocumentRow({
+    id: 'doc-billing-failure',
+    name: '결제 실패 대응 가이드',
+    lastActivityLabel: '23시간 전',
+  }),
 ];

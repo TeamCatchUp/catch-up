@@ -29,6 +29,7 @@ export default function WikiSpaceTableFooter({
   );
 
   return (
+    // 1fr/auto/1fr: 좌측 컨트롤 폭과 무관하게 페이지네이션을 바 중앙에 고정하기 위한 템플릿
     <div className="grid grid-cols-[1fr_auto_1fr] items-center">
       <div className="flex items-center gap-1 justify-self-start">
         {onPageSizeClick ? (
