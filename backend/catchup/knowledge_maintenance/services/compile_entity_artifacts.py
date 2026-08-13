@@ -31,6 +31,7 @@ proposal을 가리키므로, 저장 전에 그 계약을 이 자리에서 먼저
 from __future__ import annotations
 
 import uuid
+from collections.abc import Callable
 from collections.abc import Iterable
 from collections.abc import Mapping
 from collections.abc import Sequence
@@ -130,6 +131,7 @@ def compile_entity_artifacts(
     workspace_id: int,
     vocabulary: ExtractionVocabulary,
     limit: int = 2,
+    clock: Callable[[], datetime] | None = None,
 ) -> ArtifactCompileResult:
     """claim이 많은 entity의 요약 카드를 변경안으로 올린다.
 
@@ -149,7 +151,7 @@ def compile_entity_artifacts(
     skipped = 0
     conflicted = 0
     suppressed = 0
-    now = datetime.now(timezone.utc)
+    now = (clock or _utcnow)()
     with uow:
         sources = uow.artifacts.find_top_entity_nodes(limit=limit)
         claims = uow.knowledge_candidates.find_claim_candidates(
@@ -789,3 +791,7 @@ def _value_sources(
             )
         )
     return tuple(sources)
+
+
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc)
