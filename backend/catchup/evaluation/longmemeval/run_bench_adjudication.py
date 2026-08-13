@@ -28,9 +28,13 @@ DB CHECK를 우회하게 된다. 자동 판정도 감사 대상이라는 뜻에�
 from __future__ import annotations
 
 import argparse
+import json
+import uuid
 from collections.abc import Callable
 
 from sqlalchemy import create_engine
+from sqlalchemy import text
+from sqlalchemy.orm import Session
 from sqlalchemy.orm import sessionmaker
 
 from catchup.configs.config import settings
@@ -47,6 +51,14 @@ from catchup.knowledge_maintenance.adapters.postgres.unit_of_work import (
     KnowledgeMaintenanceUnitOfWork,
 )
 from catchup.knowledge_maintenance.contracts.extraction import ExtractionVocabulary
+from catchup.knowledge_maintenance.domain.artifact_definition import SelectionSpec
+from catchup.knowledge_maintenance.domain.artifact_definition import SelectionSpecError
+from catchup.knowledge_maintenance.domain.artifact_definition import (
+    serialize_selection_spec,
+)
+from catchup.knowledge_maintenance.domain.artifact_definition import (
+    validate_selection_spec,
+)
 from catchup.knowledge_maintenance.services.apply_mutation_proposals import (
     apply_mutation_proposals,
 )
@@ -89,6 +101,205 @@ DEFAULT_WORKSPACE_ID = 902
 
 DECISION_EVENT = "bench_adjudication_decided"
 TIE_EXHAUSTED_EVENT = "bench_adjudication_tie_exhausted"
+
+TEMPLATE_WORKSPACE_ID = 1
+"""채널을 만든 사람을 베껴 올 기준 workspace를 나타낸다.
+
+문항별 workspace는 러너가 찍어 내는 것이라 채널을 만들 사람이 없다.
+`run_ingestion`이 company_id를 1번에서 베껴 오는 것과 같은 관례다.
+"""
+
+BENCH_SEED_NAMESPACE = uuid.UUID("2f3c9a2e-4d6b-4f31-9a37-6c1d0b5a7e42")
+"""벤치 씨앗 행의 식별자를 유도할 이름공간을 나타낸다."""
+
+BENCH_CHANNEL_NAME = "bench-llm-wiki"
+BENCH_DEFINITION_KIND = "bench_entity_card"
+BENCH_DEFINITION_PURPOSE = (
+    "벤치마크가 만든 entity 하나를 카드 한 장으로 본다"
+)
+
+ENSURE_BENCH_CHANNEL_SQL = text(
+    """
+    INSERT INTO channels (id, workspace_id, name, created_by)
+    VALUES (:channel_id, :workspace_id, :name, :created_by)
+    ON CONFLICT DO NOTHING
+    """
+)
+
+ENSURE_BENCH_DEFINITION_SQL = text(
+    """
+    INSERT INTO artifact_definitions (
+        id, workspace_id, channel_id, kind, purpose,
+        selection_spec, created_by
+    )
+    VALUES (
+        :definition_id, :workspace_id, :channel_id, :kind, :purpose,
+        CAST(:selection_spec AS jsonb), :created_by
+    )
+    ON CONFLICT ON CONSTRAINT uq_artifact_definitions_channel_kind
+    DO UPDATE SET selection_spec = EXCLUDED.selection_spec
+    """
+)
+
+BENCH_AUTHOR_SQL = text(
+    """
+    SELECT user_id
+    FROM user_workspaces
+    WHERE workspace_id = :template_workspace_id
+    ORDER BY user_id
+    LIMIT 1
+    """
+)
+
+FALLBACK_AUTHOR_SQL = text("SELECT min(id) FROM users")
+
+BENCH_CHANNEL_ID_SQL = text(
+    """
+    SELECT id
+    FROM channels
+    WHERE workspace_id = :workspace_id AND name = :name
+    """
+)
+
+
+class BenchDefinitionError(RuntimeError):
+    """벤치 workspace에 카드 정의를 마련하지 못했음을 나타낸다."""
+
+
+def bench_channel_id(workspace_id: int) -> uuid.UUID:
+    """문항 workspace의 벤치 채널 식별자를 번호에서 만든다.
+
+    실행마다 새 uuid를 뽑으면 두 번째 실행이 채널 이름 UNIQUE에 걸려
+    깨진다. 번호에서 유도하면 몇 번을 돌려도 같은 행을 가리킨다.
+    """
+    return uuid.uuid5(BENCH_SEED_NAMESPACE, f"channel:{workspace_id}")
+
+
+def bench_definition_id(workspace_id: int) -> uuid.UUID:
+    """문항 workspace의 벤치 정의 식별자를 번호에서 만든다."""
+    return uuid.uuid5(BENCH_SEED_NAMESPACE, f"definition:{workspace_id}")
+
+
+def bench_selection_spec(vocabulary: ExtractionVocabulary) -> SelectionSpec:
+    """어휘의 entity 종류를 하나도 빠뜨리지 않는 선택 규칙을 만든다.
+
+    종류를 골라 넣으면 고르지 않은 종류의 카드가 조용히 사라지고,
+    벤치마크는 그만큼 지식이 빠진 채로 점수를 낸다. 관계 경로는 두지
+    않고 절도 고르지 않는다 — 절을 고르지 않음(None)은 어휘의 모든
+    절을 싣는다는 뜻이라, 이 한 벌이 정의 없이 전부 싣던 예전 컴파일러와
+    같은 범위가 된다.
+    """
+    return SelectionSpec(
+        entity_types=tuple(
+            entry.name for entry in vocabulary.entity_type_entries
+        ),
+        relation_paths=(),
+        predicate_sections=None,
+    )
+
+
+def _bench_author_id(session: Session) -> int:
+    """씨앗 행의 작성자로 쓸 사용자를 고른다.
+
+    Raises:
+        BenchDefinitionError: 쓸 수 있는 사용자가 하나도 없을 때 던진다.
+            채널의 created_by는 NOT NULL FK라 사람 없이는 행이 서지
+            않는다.
+    """
+    found = session.execute(
+        BENCH_AUTHOR_SQL,
+        {"template_workspace_id": TEMPLATE_WORKSPACE_ID},
+    ).scalar()
+    if found is None:
+        found = session.execute(FALLBACK_AUTHOR_SQL).scalar()
+    if found is None:
+        raise BenchDefinitionError(
+            "채널을 만들 사용자가 DB에 하나도 없다. 벤치 workspace에 카드"
+            " 정의를 넣으려면 users 행이 최소 하나 필요하다."
+        )
+    return int(found)
+
+
+def ensure_bench_definition(
+    session_factory: Callable[[], Session],
+    *,
+    workspace_id: int,
+    vocabulary: ExtractionVocabulary,
+) -> None:
+    """문항 workspace에 벤치용 채널과 카드 정의를 마련한다.
+
+    무엇을 문서로 만들지는 정의가 정하는데, 문항별 workspace는 러너가
+    찍어 내는 것이라 정의를 넣어 줄 사람이 없다. 정의가 없으면 컴파일
+    단계가 매번 실패로 끝나고 회차 전체가 실패로 기록된다.
+
+    정의는 채널 아래에 놓이므로 채널을 먼저 세운다. 둘 다 식별자를
+    workspace 번호에서 유도하고 충돌을 흘려보내므로 몇 번을 돌려도
+    행은 한 벌뿐이다. 정의의 선택 규칙만은 덮어쓴다 — 어휘에 종류가
+    늘면 카드 범위도 함께 늘어야 한다.
+
+    선택 규칙은 넣기 전에 어휘로 검사한다. 컴파일러는 어긋난 정의를
+    건너뛰기만 하므로, 여기서 막지 않으면 정의가 있는데도 카드가 한
+    장도 나오지 않는 자리가 생긴다.
+
+    Raises:
+        BenchDefinitionError: 어휘에 entity 종류가 없거나, 선택 규칙이
+            어휘와 어긋나거나, 작성자로 쓸 사용자가 없을 때 던진다.
+    """
+    spec = bench_selection_spec(vocabulary)
+    if not spec.entity_types:
+        raise BenchDefinitionError(
+            f"어휘 스냅샷에 entity 종류가 없다. workspace {workspace_id}의"
+            " 어휘를 먼저 발행한다."
+        )
+    try:
+        validate_selection_spec(spec, vocabulary)
+    except SelectionSpecError as error:
+        raise BenchDefinitionError(
+            f"벤치 카드 정의가 어휘와 어긋난다: {error}"
+        ) from error
+
+    definition_id = bench_definition_id(workspace_id)
+    with session_factory() as session:
+        created_by = _bench_author_id(session)
+        session.execute(
+            ENSURE_BENCH_CHANNEL_SQL,
+            {
+                "channel_id": bench_channel_id(workspace_id),
+                "workspace_id": workspace_id,
+                "name": BENCH_CHANNEL_NAME,
+                "created_by": created_by,
+            },
+        )
+        # 이름이 같은 채널이 이미 다른 식별자로 있으면 위 INSERT는
+        # 조용히 흘러간다. 유도한 식별자를 그대로 쓰면 정의가 없는
+        # 채널을 가리키므로, 실제로 선 행을 다시 읽어 쓴다.
+        channel_id = session.execute(
+            BENCH_CHANNEL_ID_SQL,
+            {"workspace_id": workspace_id, "name": BENCH_CHANNEL_NAME},
+        ).scalar_one()
+        session.execute(
+            ENSURE_BENCH_DEFINITION_SQL,
+            {
+                "definition_id": definition_id,
+                "workspace_id": workspace_id,
+                "channel_id": channel_id,
+                "kind": BENCH_DEFINITION_KIND,
+                "purpose": BENCH_DEFINITION_PURPOSE,
+                "selection_spec": json.dumps(
+                    serialize_selection_spec(spec), ensure_ascii=False
+                ),
+                "created_by": created_by,
+            },
+        )
+        session.commit()
+
+    logger.info(
+        "bench_adjudication_definition_seeded",
+        workspace_id=workspace_id,
+        channel_id=str(channel_id),
+        kind=BENCH_DEFINITION_KIND,
+        entity_types=list(spec.entity_types),
+    )
 
 
 def _load_vocabulary(
@@ -272,11 +483,9 @@ def _compile_artifacts(
 
     읽은 정의가 하나도 없으면 그 자체를 실패 한 건으로 센다. 무엇을
     문서로 만들지는 정의가 정하므로, 정의가 없는 workspace는 카드가
-    한 장도 없이 조용히 통과해 답이 빈 채로 채점된다.
-
-    정의를 만드는 CLI나 API는 아직 없다. 손으로 한 줄 넣는 INSERT 예시는
-    `catchup.evaluation.run_artifact_compile_pipeline`의 모듈 docstring에
-    있다.
+    한 장도 없이 조용히 통과해 답이 빈 채로 채점된다. 벤치 정의는
+    `ensure_bench_definition`이 회차 시작 전에 마련하므로, 여기 걸린다면
+    씨앗 넣기가 건너뛰어졌다는 뜻이다.
     """
     result = compile_definition_artifacts(
         uow,
@@ -426,6 +635,18 @@ def main() -> int:
                 f"어휘 스냅샷 v{args.ontology_version}에 predicate 사전 "
                 f"항목이 없다. 치역을 담은 사전을 먼저 발행한다."
             )
+            return 1
+
+        # 카드 정의는 판정보다 먼저 서 있어야 한다. 컴파일 단계에 와서야
+        # 없다는 것을 알면 그 회차는 이미 실패로 끝난다.
+        try:
+            ensure_bench_definition(
+                session_factory,
+                workspace_id=args.workspace_id,
+                vocabulary=vocabulary,
+            )
+        except BenchDefinitionError as error:
+            print(str(error))
             return 1
 
         steps = AdjudicationSteps(
