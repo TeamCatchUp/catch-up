@@ -6,7 +6,12 @@ import IconCheck from '@/public/icons/icon/check.svg';
 import IconClock from '@/public/icons/icon/clock.svg';
 import IconInfoFilled from '@/public/icons/icon/info_filled.svg';
 
-import type { OnboardingChannelRow, OnboardingStepInfo, ScheduleFieldData } from '../../types/llmWikiOnboarding';
+import type {
+  OnboardingChannelListStatus,
+  OnboardingChannelRow,
+  OnboardingStepInfo,
+  ScheduleFieldData,
+} from '../../types/llmWikiOnboarding';
 import OnboardingChannelTable from './OnboardingChannelTable';
 import OnboardingFieldLabel from './OnboardingFieldLabel';
 import OnboardingStepper from './OnboardingStepper';
@@ -46,6 +51,8 @@ interface WikiOnboardingSourceStepProps {
   onOpenChannelPicker?: () => void;
   channelTableHeaders: { name: string; lastModified: string };
   channelRows: readonly OnboardingChannelRow[];
+  channelListStatus?: OnboardingChannelListStatus;
+  onRetryChannelList?: () => void;
   scheduleFields: readonly ScheduleFieldData[];
   onOpenScheduleField?: (id: string) => void;
   /** 실행 시간 아래 결과 문장 — 값 조합별 변형 규칙은 미확정이라 문자열로 받는다 */
@@ -63,6 +70,8 @@ export default function WikiOnboardingSourceStep({
   onOpenChannelPicker,
   channelTableHeaders,
   channelRows,
+  channelListStatus,
+  onRetryChannelList,
   scheduleFields,
   onOpenScheduleField,
   resultText,
@@ -92,7 +101,12 @@ export default function WikiOnboardingSourceStep({
             </span>
             <IconArrowDown className="text-icon-normal-normal size-6 shrink-0" />
           </button>
-          <OnboardingChannelTable headers={channelTableHeaders} rows={channelRows} />
+          <OnboardingChannelTable
+            headers={channelTableHeaders}
+            rows={channelRows}
+            status={channelListStatus}
+            onRetry={onRetryChannelList}
+          />
         </div>
 
         <div className="grid grid-cols-2 gap-x-6">

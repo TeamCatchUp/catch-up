@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite';
-import { expect, fn, within } from 'storybook/test';
+import { expect, fn, userEvent, within } from 'storybook/test';
 
 import { catchupParameters } from '../../../../../.storybook/catchupStoryParameters';
 import {
@@ -49,11 +49,12 @@ const meta = {
         nodeId: '18071:83320',
       },
       viewport: { width: 1200 },
-      states: ['default'],
+      states: ['default', 'channel-list-loading', 'channel-list-error'],
       dataNotes: [
         '채널 라벨·수집 범위 캡션·백필 배너·결과 문장·"지금부터"는 시안 실카피. 채널 행·주기/실행 시간 표시값("1분")은 필러라 카피 미정(TBD) — 스토리명에 반영. 명세 기본값은 매일/자정이나 시안이 우선.',
         '드롭다운은 닫힌 트리거만 그린다 — 열림 메뉴·옵션 집합·백필 비활성 옵션은 시안에 없다(감사 UNKNOWN, 발명 금지).',
         '결과 문장의 값 조합별 변형 규칙은 미확정이라 문자열 props로만 받는다.',
+        '⚠️ 채널 목록의 로딩·빈·에러는 Figma 근거 없이 2026-08-13 사용자 승인으로 구현했다 — 디자이너 승인본이 아니다. 상세는 OnboardingChannelTable 스토리.',
       ],
       layoutNotes: [
         '주기·백필 2열 = grid-cols-2 gap-x-6(시안 열 간격 24). 트리거 높이 46 = h-11.5(ChannelTalk 드롭다운과 동일 규격), 채널 피커는 54 = h-13.5.',
@@ -90,5 +91,29 @@ export const DefaultCopyTBD: Story = {
     await expect(canvas.queryByRole('button', { name: '다음단계' })).not.toBeInTheDocument();
     await expect(canvas.queryByRole('button', { name: '완료' })).not.toBeInTheDocument();
     await expect(canvas.queryByRole('button', { name: '위키 만들기' })).not.toBeInTheDocument();
+  },
+};
+
+/** 채널 목록만 로딩이고 나머지 폼은 그대로 조작 가능한지 — 로딩이 화면 전체를 덮지 않는다 */
+export const ChannelListLoading: Story = {
+  args: { ...baseArgs, channelRows: [], channelListStatus: 'loading' },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByRole('status', { name: '채널 목록 불러오는 중' })).toBeInTheDocument();
+
+    // 일정 필드와 결과 문장은 목록과 무관하게 계속 보인다
+    await expect(canvas.getByText('얼마나 자주 갱신할까요?')).toBeInTheDocument();
+    await expect(canvas.getByText(SCHEDULE_RESULT_TEXT)).toBeInTheDocument();
+  },
+};
+
+export const ChannelListError: Story = {
+  args: { ...baseArgs, channelRows: [], channelListStatus: 'error', onRetryChannelList: fn() },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByRole('alert')).toHaveTextContent('채널 목록을 불러오지 못했습니다');
+
+    await userEvent.click(canvas.getByRole('button', { name: '다시 시도' }));
+    await expect(args.onRetryChannelList).toHaveBeenCalled();
   },
 };

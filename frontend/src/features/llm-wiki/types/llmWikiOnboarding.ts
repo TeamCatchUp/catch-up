@@ -44,6 +44,12 @@ export interface OnboardingChannelRow {
   lastModifiedLabel: string;
 }
 
+/**
+ * 채널 목록 조회 상태. 시안에 없고 사용자 승인으로 들어간 상태다(감사 §3 참조).
+ * 빈 목록은 별도 값이 아니라 ready + 행 0으로 판정한다 — 로딩과 구분되는 지점이 그것뿐이다.
+ */
+export type OnboardingChannelListStatus = 'loading' | 'ready' | 'error';
+
 /** 2단계 수집 일정 필드 하나(닫힌 드롭다운 트리거). 열림 상태는 시안에 없다 */
 export interface ScheduleFieldData {
   id: string;
