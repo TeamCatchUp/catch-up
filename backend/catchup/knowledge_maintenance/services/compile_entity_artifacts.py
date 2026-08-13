@@ -411,14 +411,10 @@ def _abandon_stale_pending(
     지금 지문과 같은 계류가 있으면 아무것도 접지 않는다. 그 행이 곧
     이번 내용이라 접으면 검토 큐가 이유 없이 비기 때문이다.
     """
-    hashes = {
-        proposal.content_hash
-        for proposal in uow.artifacts.list_pending_proposals()
-        if proposal.artifact_id == artifact_id
-    }
-    if not hashes or content_hash in hashes:
-        return 0
-    return uow.artifacts.abandon_pending_proposals(artifact_id=artifact_id)
+    return uow.artifacts.abandon_pending_proposals(
+        artifact_id=artifact_id,
+        except_content_hash=content_hash,
+    )
 
 
 def _group_claims_by_node(

@@ -2615,18 +2615,25 @@ class SqlAlchemyArtifactRepository:
         )
         return hashes
 
-    def abandon_pending_proposals(self, *, artifact_id: uuid.UUID) -> int:
-        """문서에 계류 중인 변경안을 모두 접고 접은 수를 돌려준다."""
-        result = self._session.execute(
-            update(KnowledgeArtifactChangeProposalRow)
-            .where(
+    def abandon_pending_proposals(
+        self,
+        *,
+        artifact_id: uuid.UUID,
+        except_content_hash: str | None = None,
+    ) -> int:
+        """문서의 계류안을 접되 지정한 현재 내용은 남긴다."""
+        statement = update(KnowledgeArtifactChangeProposalRow).where(
                 KnowledgeArtifactChangeProposalRow.workspace_id
                 == self._workspace_id,
                 KnowledgeArtifactChangeProposalRow.artifact_id == artifact_id,
                 KnowledgeArtifactChangeProposalRow.status == "pending",
             )
-            .values(status="abandoned")
-        )
+        if except_content_hash is not None:
+            statement = statement.where(
+                KnowledgeArtifactChangeProposalRow.content_hash
+                != except_content_hash
+            )
+        result = self._session.execute(statement.values(status="abandoned"))
         self._session.flush()
         return result.rowcount
 

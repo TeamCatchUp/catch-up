@@ -161,8 +161,13 @@ class ArtifactRepository(Protocol):
         """
         ...
 
-    def abandon_pending_proposals(self, *, artifact_id: uuid.UUID) -> int:
-        """문서에 계류 중인 변경안을 모두 접고 접은 수를 돌려준다."""
+    def abandon_pending_proposals(
+        self,
+        *,
+        artifact_id: uuid.UUID,
+        except_content_hash: str | None = None,
+    ) -> int:
+        """문서의 계류안을 접되 지정한 현재 내용은 남긴다."""
         ...
 
     def add_or_revive_proposal(
